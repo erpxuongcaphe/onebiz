@@ -341,14 +341,14 @@ export function EmployeeForm({ isOpen, onClose, onSave, employee, isSaving = fal
                 onClick={onClose}
             />
 
-            <div className="relative w-full max-w-4xl bg-white rounded-2xl shadow-2xl flex flex-col max-h-[90vh] animate-scale-in">
+            <div className="relative w-full max-w-4xl bg-white dark:bg-slate-800 rounded-2xl shadow-2xl flex flex-col max-h-[90vh] animate-scale-in">
                 {/* Header */}
-                <div className="flex items-center justify-between px-4 md:px-6 py-3 md:py-4 border-b border-slate-100 flex-shrink-0">
+                <div className="flex items-center justify-between px-4 md:px-6 py-3 md:py-4 border-b border-slate-100 dark:border-slate-700 flex-shrink-0">
                     <div className="flex-1 min-w-0">
-                        <h2 className="text-lg md:text-xl font-bold text-slate-900 truncate">
+                        <h2 className="text-lg md:text-xl font-bold text-slate-900 dark:text-white truncate">
                             {isEditing ? 'Chỉnh sửa hồ sơ' : 'Thêm nhân viên'}
                         </h2>
-                        <p className="text-xs md:text-sm text-slate-500 mt-0.5 truncate hidden md:block">
+                        <p className="text-xs md:text-sm text-slate-500 dark:text-slate-400 mt-0.5 truncate hidden md:block">
                             {isEditing ? `Cập nhật thông tin cho ${employee?.name}` : 'Nhập thông tin nhân viên mới vào hệ thống'}
                         </p>
                     </div>
@@ -370,13 +370,13 @@ export function EmployeeForm({ isOpen, onClose, onSave, employee, isSaving = fal
                     </div>
 
                     {/* Desktop: Only close button */}
-                    <button onClick={onClose} className="hidden md:block p-2 text-slate-400 hover:text-slate-600 hover:bg-slate-100 rounded-lg transition-colors">
+                    <button onClick={onClose} className="hidden md:block p-2 text-slate-400 hover:text-slate-600 dark:hover:text-slate-300 hover:bg-slate-100 dark:hover:bg-slate-700 rounded-lg transition-colors">
                         <X className="w-6 h-6" />
                     </button>
                 </div>
 
                 {/* Mobile Tabs - OUTSIDE the flex row container */}
-                <div className="md:hidden flex overflow-x-auto border-b border-slate-200 p-2 gap-2 flex-shrink-0 bg-slate-50">
+                <div className="md:hidden flex overflow-x-auto border-b border-slate-200 dark:border-slate-700 p-2 gap-2 flex-shrink-0 bg-slate-50 dark:bg-slate-900/50">
                     {tabs.map((tab) => (
                         <button
                             key={tab.id}
@@ -384,8 +384,8 @@ export function EmployeeForm({ isOpen, onClose, onSave, employee, isSaving = fal
                             className={cn(
                                 "flex-shrink-0 flex items-center gap-2 px-3 py-2 text-sm font-medium rounded-lg whitespace-nowrap",
                                 activeTab === tab.id
-                                    ? "bg-white text-blue-600 shadow-sm"
-                                    : "text-slate-600"
+                                    ? "bg-white dark:bg-slate-800 text-blue-600 dark:text-blue-400 shadow-sm"
+                                    : "text-slate-600 dark:text-slate-400"
                             )}
                         >
                             <tab.icon className="w-4 h-4" />
@@ -396,7 +396,7 @@ export function EmployeeForm({ isOpen, onClose, onSave, employee, isSaving = fal
 
                 <div className="flex flex-1 overflow-hidden">
                     {/* Sidebar Tabs - Desktop only */}
-                    <div className="w-64 bg-slate-50 border-r border-slate-200 p-4 flex-shrink-0 hidden md:block overflow-y-auto">
+                    <div className="w-64 bg-slate-50 dark:bg-slate-900/50 border-r border-slate-200 dark:border-slate-700 p-4 flex-shrink-0 hidden md:block overflow-y-auto">
                         <div className="space-y-1">
                             {tabs.map((tab) => (
                                 <button
@@ -405,8 +405,8 @@ export function EmployeeForm({ isOpen, onClose, onSave, employee, isSaving = fal
                                     className={cn(
                                         "w-full flex items-center gap-3 px-4 py-3 text-sm font-medium rounded-xl transition-all",
                                         activeTab === tab.id
-                                            ? "bg-white text-blue-600 shadow-sm ring-1 ring-slate-200"
-                                            : "text-slate-600 hover:bg-slate-100 hover:text-slate-900"
+                                            ? "bg-white dark:bg-slate-800 text-blue-600 dark:text-blue-400 shadow-sm ring-1 ring-slate-200 dark:ring-slate-700"
+                                            : "text-slate-600 dark:text-slate-400 hover:bg-slate-100 dark:hover:bg-slate-800 hover:text-slate-900 dark:hover:text-white"
                                     )}
                                 >
                                     <tab.icon className={cn("w-4 h-4", activeTab === tab.id ? "text-blue-500" : "text-slate-400")} />
@@ -427,7 +427,7 @@ export function EmployeeForm({ isOpen, onClose, onSave, employee, isSaving = fal
                                     <div className="flex justify-center">
                                         <div className="text-center">
                                             <div
-                                                className="relative w-32 h-40 mx-auto mb-3 rounded-xl overflow-hidden border-2 border-dashed border-slate-300 hover:border-blue-400 transition-colors cursor-pointer bg-slate-50"
+                                                className="relative w-32 h-40 mx-auto mb-3 rounded-xl overflow-hidden border-2 border-dashed border-slate-300 dark:border-slate-600 hover:border-blue-400 dark:hover:border-blue-400 transition-colors cursor-pointer bg-slate-50 dark:bg-slate-900/50"
                                                 onClick={() => fileInputRef.current?.click()}
                                             >
                                                 {isUploadingPhoto ? (
@@ -471,18 +471,18 @@ export function EmployeeForm({ isOpen, onClose, onSave, employee, isSaving = fal
 
                                     <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
                                         <div className="md:col-span-2">
-                                            <label className="block text-sm font-medium text-slate-700 mb-1">Họ và tên <span className="text-red-500">*</span></label>
+                                            <label className="block text-sm font-medium text-slate-700 dark:text-slate-300 mb-1">Họ và tên <span className="text-red-500">*</span></label>
                                             <input
                                                 type="text"
                                                 required
                                                 value={formData.name || ''}
                                                 onChange={e => setFormData({ ...formData, name: e.target.value })}
-                                                className="w-full px-4 py-2.5 text-sm border border-slate-200 rounded-xl focus:border-blue-500 focus:ring-2 focus:ring-blue-500/20 outline-none transition-all"
+                                                className="w-full px-4 py-2.5 text-sm border border-slate-200 dark:border-slate-600 rounded-xl focus:border-blue-500 bg-white dark:bg-slate-700 dark:text-white shadow-sm outline-none transition-all"
                                                 placeholder="Nguyễn Văn A"
                                             />
                                         </div>
                                         <div>
-                                            <label className="block text-sm font-medium text-slate-700 mb-1">Mã nhân viên <span className="text-red-500">*</span></label>
+                                            <label className="block text-sm font-medium text-slate-700 dark:text-slate-300 mb-1">Mã nhân viên <span className="text-red-500">*</span></label>
                                             <input
                                                 type="text"
                                                 required
@@ -492,17 +492,17 @@ export function EmployeeForm({ isOpen, onClose, onSave, employee, isSaving = fal
                                                     setValidationErrors({ ...validationErrors, id: '' });
                                                 }}
                                                 className={cn(
-                                                    "w-full px-4 py-2.5 text-sm border rounded-xl focus:ring-2 outline-none transition-all",
+                                                    "w-full px-4 py-2.5 text-sm border rounded-xl focus:ring-2 outline-none transition-all bg-white dark:bg-slate-700 dark:text-white",
                                                     validationErrors.id
                                                         ? "border-red-500 focus:border-red-500 focus:ring-red-500/20"
-                                                        : "border-slate-200 focus:border-blue-500 focus:ring-blue-500/20"
+                                                        : "border-slate-200 dark:border-slate-600 focus:border-blue-500"
                                                 )}
                                                 placeholder="XCPxxxxx"
                                             />
                                             {validationErrors.id && <p className="text-xs text-red-500 mt-1">{validationErrors.id}</p>}
                                         </div>
                                         <div>
-                                            <label className="block text-sm font-medium text-slate-700 mb-1">Số CCCD/CMND</label>
+                                            <label className="block text-sm font-medium text-slate-700 dark:text-slate-300 mb-1">Số CCCD/CMND</label>
                                             <div className="relative">
                                                 <CreditCard className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-slate-400" />
                                                 <input
@@ -513,10 +513,10 @@ export function EmployeeForm({ isOpen, onClose, onSave, employee, isSaving = fal
                                                         setValidationErrors({ ...validationErrors, identity_card: '' });
                                                     }}
                                                     className={cn(
-                                                        "w-full pl-10 pr-4 py-2.5 text-sm border rounded-xl focus:ring-2 outline-none transition-all",
+                                                        "w-full pl-10 pr-4 py-2.5 text-sm border rounded-xl focus:ring-2 outline-none transition-all bg-white dark:bg-slate-700 dark:text-white",
                                                         validationErrors.identity_card
                                                             ? "border-red-500 focus:border-red-500 focus:ring-red-500/20"
-                                                            : "border-slate-200 focus:border-blue-500 focus:ring-blue-500/20"
+                                                            : "border-slate-200 dark:border-slate-600 focus:border-blue-500"
                                                     )}
                                                     placeholder="012345678910"
                                                 />
@@ -573,17 +573,17 @@ export function EmployeeForm({ isOpen, onClose, onSave, employee, isSaving = fal
                                 <div className="space-y-6 animate-fade-in">
                                     <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
                                         <div>
-                                            <label className="block text-sm font-medium text-slate-700 mb-1">Email</label>
+                                            <label className="block text-sm font-medium text-slate-700 dark:text-slate-300 mb-1">Email</label>
                                             <input
                                                 type="email"
                                                 value={formData.email || ''}
                                                 onChange={e => setFormData({ ...formData, email: e.target.value })}
-                                                className="w-full px-4 py-2.5 text-sm border border-slate-200 rounded-xl focus:border-blue-500 focus:ring-2 focus:ring-blue-500/20 outline-none transition-all"
+                                                className="w-full px-4 py-2.5 text-sm border border-slate-200 dark:border-slate-600 bg-white dark:bg-slate-700 dark:text-white rounded-xl focus:border-blue-500 outline-none transition-all"
                                                 placeholder="example@email.com"
                                             />
                                         </div>
                                         <div>
-                                            <label className="block text-sm font-medium text-slate-700 mb-1">Số điện thoại <span className="text-red-500">*</span></label>
+                                            <label className="block text-sm font-medium text-slate-700 dark:text-slate-300 mb-1">Số điện thoại <span className="text-red-500">*</span></label>
                                             <input
                                                 type="tel"
                                                 required
@@ -593,10 +593,10 @@ export function EmployeeForm({ isOpen, onClose, onSave, employee, isSaving = fal
                                                     setValidationErrors({ ...validationErrors, phone: '' });
                                                 }}
                                                 className={cn(
-                                                    "w-full px-4 py-2.5 text-sm border rounded-xl focus:ring-2 outline-none transition-all",
+                                                    "w-full px-4 py-2.5 text-sm border rounded-xl focus:ring-2 outline-none transition-all bg-white dark:bg-slate-700 dark:text-white",
                                                     validationErrors.phone
                                                         ? "border-red-500 focus:border-red-500 focus:ring-red-500/20"
-                                                        : "border-slate-200 focus:border-blue-500 focus:ring-blue-500/20"
+                                                        : "border-slate-200 dark:border-slate-600 focus:border-blue-500"
                                                 )}
                                             />
                                             {validationErrors.phone && <p className="text-xs text-red-500 mt-1">{validationErrors.phone}</p>}

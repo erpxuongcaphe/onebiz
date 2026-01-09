@@ -103,15 +103,15 @@ export function MobileBottomNav() {
 
             {/* Menu Drawer */}
             <div className={cn(
-                "fixed bottom-0 left-0 right-0 z-50 md:hidden bg-white rounded-t-3xl shadow-2xl transition-transform duration-300 ease-out",
+                "fixed bottom-0 left-0 right-0 z-50 md:hidden bg-white dark:bg-slate-900 rounded-t-3xl shadow-2xl transition-transform duration-300 ease-out",
                 isMenuOpen ? "translate-y-0" : "translate-y-full"
             )}>
                 {/* Drawer Header */}
-                <div className="flex items-center justify-between px-6 py-4 border-b border-slate-100">
-                    <h3 className="text-lg font-bold text-slate-900">Menu</h3>
+                <div className="flex items-center justify-between px-6 py-4 border-b border-slate-100 dark:border-slate-800">
+                    <h3 className="text-lg font-bold text-slate-900 dark:text-white">Menu</h3>
                     <button
                         onClick={() => setIsMenuOpen(false)}
-                        className="p-2 text-slate-400 hover:text-slate-600 hover:bg-slate-100 rounded-lg"
+                        className="p-2 text-slate-400 hover:text-slate-600 dark:hover:text-slate-300 hover:bg-slate-100 dark:hover:bg-slate-800 rounded-lg"
                     >
                         <X className="w-5 h-5" />
                     </button>
@@ -132,8 +132,8 @@ export function MobileBottomNav() {
                                     className={cn(
                                         "flex flex-col items-center gap-2 p-4 rounded-2xl transition-all",
                                         isActive
-                                            ? "bg-blue-50 text-blue-600"
-                                            : "bg-slate-50 text-slate-600 hover:bg-slate-100"
+                                            ? "bg-blue-50 dark:bg-blue-900/20 text-blue-600 dark:text-blue-400"
+                                            : "bg-slate-50 dark:bg-slate-800 text-slate-600 dark:text-slate-400 hover:bg-slate-100 dark:hover:bg-slate-700"
                                     )}
                                 >
                                     <Icon className="w-6 h-6" />
@@ -146,7 +146,7 @@ export function MobileBottomNav() {
                     {/* Logout button */}
                     <button
                         onClick={handleLogout}
-                        className="mt-4 w-full flex items-center justify-center gap-2 py-3 bg-red-50 text-red-600 font-medium rounded-xl hover:bg-red-100 transition-colors"
+                        className="mt-4 w-full flex items-center justify-center gap-2 py-3 bg-red-50 dark:bg-red-900/10 text-red-600 dark:text-red-400 font-medium rounded-xl hover:bg-red-100 dark:hover:bg-red-900/20 transition-colors"
                     >
                         <LogOut className="w-5 h-5" />
                         Đăng xuất
@@ -187,7 +187,7 @@ export function MobileBottomNav() {
                 </div>
 
                 {/* Navigation Bar */}
-                <nav className="bg-white/95 backdrop-blur-lg border-t border-slate-200 shadow-lg">
+                <nav className="bg-white/95 dark:bg-slate-900/95 backdrop-blur-lg border-t border-slate-200 dark:border-slate-800 shadow-lg">
                     <div className="flex items-end justify-around px-2 pt-2 pb-6 safe-area-bottom">
                         {visibleMainItems.map((item) => {
                             const Icon = item.icon;
@@ -239,13 +239,13 @@ export function MobileBottomNav() {
                                     className={cn(
                                         "flex flex-col items-center gap-1 px-3 py-2 rounded-xl transition-all duration-200 min-w-[60px]",
                                         isActive
-                                            ? "text-blue-600"
-                                            : "text-slate-400 hover:text-slate-600"
+                                            ? "text-blue-600 dark:text-blue-400"
+                                            : "text-slate-400 dark:text-slate-500 hover:text-slate-600 dark:hover:text-slate-300"
                                     )}
                                 >
                                     <div className={cn(
                                         "p-2 rounded-xl transition-all duration-200",
-                                        isActive && "bg-blue-50"
+                                        isActive && "bg-blue-50 dark:bg-blue-900/20"
                                     )}>
                                         <Icon className={cn(
                                             "w-5 h-5 transition-all",

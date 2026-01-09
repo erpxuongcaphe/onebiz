@@ -208,7 +208,7 @@ export function ImportDropdown({ onImport, isImporting }: ImportDropdownProps) {
                 <button
                     onClick={() => setIsOpen(!isOpen)}
                     disabled={isImporting || isChecking}
-                    className="inline-flex items-center gap-2 px-4 py-3 text-sm text-slate-600 bg-white border border-slate-200 rounded-xl hover:bg-slate-50 hover:border-slate-300 transition-all disabled:opacity-50"
+                    className="inline-flex items-center gap-2 px-4 py-3 text-sm text-slate-600 dark:text-slate-300 bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-xl hover:bg-slate-50 dark:hover:bg-slate-700 hover:border-slate-300 dark:hover:border-slate-600 transition-all disabled:opacity-50"
                 >
                     {(isImporting || isChecking) ? <Loader2 className="w-4 h-4 animate-spin" /> : <Upload className="w-4 h-4" />}
                     {isChecking ? 'Đang kiểm tra...' : 'Nhập dữ liệu'}
@@ -216,19 +216,19 @@ export function ImportDropdown({ onImport, isImporting }: ImportDropdownProps) {
                 {isOpen && (
                     <>
                         <div className="fixed inset-0 z-10" onClick={() => setIsOpen(false)} />
-                        <div className="absolute right-0 mt-2 w-56 bg-white rounded-xl shadow-lg border border-slate-200 z-20 py-2 animate-scale-in">
+                        <div className="absolute right-0 mt-2 w-56 bg-white dark:bg-slate-800 rounded-xl shadow-lg border border-slate-200 dark:border-slate-700 z-20 py-2 animate-scale-in">
                             <button
                                 onClick={downloadTemplate}
-                                className="w-full flex items-center gap-3 px-4 py-2.5 text-sm text-slate-700 hover:bg-slate-50 transition-colors"
+                                className="w-full flex items-center gap-3 px-4 py-2.5 text-sm text-slate-700 dark:text-slate-300 hover:bg-slate-50 dark:hover:bg-slate-700 transition-colors"
                             >
-                                <FileDown className="w-4 h-4 text-blue-600" />
+                                <FileDown className="w-4 h-4 text-blue-600 dark:text-blue-400" />
                                 Tải mẫu Excel
                             </button>
                             <button
                                 onClick={() => fileInputRef.current?.click()}
-                                className="w-full flex items-center gap-3 px-4 py-2.5 text-sm text-slate-700 hover:bg-slate-50 transition-colors"
+                                className="w-full flex items-center gap-3 px-4 py-2.5 text-sm text-slate-700 dark:text-slate-300 hover:bg-slate-50 dark:hover:bg-slate-700 transition-colors"
                             >
-                                <Upload className="w-4 h-4 text-green-600" />
+                                <Upload className="w-4 h-4 text-green-600 dark:text-green-400" />
                                 Nhập từ Excel
                             </button>
                         </div>
@@ -243,23 +243,23 @@ export function ImportDropdown({ onImport, isImporting }: ImportDropdownProps) {
                         className="fixed inset-0 bg-black/50 backdrop-blur-sm z-50"
                         onClick={handleCancelImport}
                     />
-                    <div className="fixed inset-x-4 top-1/2 -translate-y-1/2 md:inset-x-auto md:left-1/2 md:-translate-x-1/2 md:w-full md:max-w-lg bg-white rounded-2xl shadow-2xl z-50 overflow-hidden">
+                    <div className="fixed inset-x-4 top-1/2 -translate-y-1/2 md:inset-x-auto md:left-1/2 md:-translate-x-1/2 md:w-full md:max-w-lg bg-white dark:bg-slate-800 rounded-2xl shadow-2xl z-50 overflow-hidden">
                         {/* Header */}
-                        <div className="flex items-center gap-3 p-4 border-b border-slate-100 bg-amber-50">
-                            <div className="p-2 bg-amber-100 rounded-lg">
-                                <AlertTriangle className="w-5 h-5 text-amber-600" />
+                        <div className="flex items-center gap-3 p-4 border-b border-slate-100 dark:border-slate-700 bg-amber-50 dark:bg-amber-900/10">
+                            <div className="p-2 bg-amber-100 dark:bg-amber-900/30 rounded-lg">
+                                <AlertTriangle className="w-5 h-5 text-amber-600 dark:text-amber-400" />
                             </div>
                             <div className="flex-1">
-                                <h3 className="font-semibold text-slate-900">Phát hiện nhân viên trùng</h3>
-                                <p className="text-sm text-slate-500">
+                                <h3 className="font-semibold text-slate-900 dark:text-white">Phát hiện nhân viên trùng</h3>
+                                <p className="text-sm text-slate-500 dark:text-slate-400">
                                     {duplicateInfo.duplicates.length} nhân viên đã tồn tại trong hệ thống
                                 </p>
                             </div>
                             <button
                                 onClick={handleCancelImport}
-                                className="p-2 hover:bg-amber-100 rounded-lg transition-colors"
+                                className="p-2 hover:bg-amber-100 dark:hover:bg-amber-900/30 rounded-lg transition-colors"
                             >
-                                <X className="w-5 h-5 text-slate-500" />
+                                <X className="w-5 h-5 text-slate-500 dark:text-slate-400" />
                             </button>
                         </div>
 
@@ -298,10 +298,10 @@ export function ImportDropdown({ onImport, isImporting }: ImportDropdownProps) {
                         </div>
 
                         {/* Footer */}
-                        <div className="flex gap-3 p-4 border-t border-slate-100 bg-slate-50">
+                        <div className="flex gap-3 p-4 border-t border-slate-100 dark:border-slate-700 bg-slate-50 dark:bg-slate-900/50">
                             <button
                                 onClick={handleCancelImport}
-                                className="flex-1 px-4 py-2.5 text-sm font-medium text-slate-700 bg-white border border-slate-200 rounded-lg hover:bg-slate-50 transition-colors"
+                                className="flex-1 px-4 py-2.5 text-sm font-medium text-slate-700 dark:text-slate-300 bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-lg hover:bg-slate-50 dark:hover:bg-slate-700 transition-colors"
                             >
                                 Hủy bỏ
                             </button>

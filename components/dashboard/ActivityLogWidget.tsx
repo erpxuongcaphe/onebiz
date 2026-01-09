@@ -128,18 +128,18 @@ export default function ActivityLogWidget({ compact = false }: ActivityLogWidget
     return (
         <>
             {/* Widget Card */}
-            <div className="bg-white rounded-2xl border border-slate-100 shadow-sm overflow-hidden">
+            <div className="bg-white dark:bg-slate-800 rounded-2xl border border-slate-100 dark:border-slate-700 shadow-sm overflow-hidden">
                 <div className={cn(
                     "flex items-center justify-between",
-                    compact ? "p-4 border-b border-slate-100" : "p-5 border-b border-slate-100"
+                    compact ? "p-4 border-b border-slate-100 dark:border-slate-700" : "p-5 border-b border-slate-100 dark:border-slate-700"
                 )}>
                     <div className="flex items-center gap-2">
                         <History className="w-4 h-4 text-amber-500" />
-                        <h3 className="font-semibold text-slate-900 text-sm">Lịch sử thao tác</h3>
+                        <h3 className="font-semibold text-slate-900 dark:text-white text-sm">Lịch sử thao tác</h3>
                     </div>
                     <button
                         onClick={() => setShowModal(true)}
-                        className="text-xs text-blue-600 hover:text-blue-700 flex items-center gap-1"
+                        className="text-xs text-blue-600 dark:text-blue-400 hover:text-blue-700 dark:hover:text-blue-300 flex items-center gap-1"
                     >
                         Xem tất cả
                         <ChevronRight className="w-3 h-3" />
@@ -151,17 +151,17 @@ export default function ActivityLogWidget({ compact = false }: ActivityLogWidget
                         <Loader2 className="w-5 h-5 animate-spin text-slate-400" />
                     </div>
                 ) : logs.length === 0 ? (
-                    <div className={cn("text-center text-slate-500 text-sm", compact ? "py-4 px-4" : "py-6")}>
+                    <div className={cn("text-center text-slate-500 dark:text-slate-400 text-sm", compact ? "py-4 px-4" : "py-6")}>
                         Chưa có hoạt động nào
                     </div>
                 ) : (
-                    <div className="divide-y divide-slate-50">
+                    <div className="divide-y divide-slate-50 dark:divide-slate-700">
                         {logs.map((log) => {
                             const actionInfo = formatAction(log.action);
                             return (
                                 <div
                                     key={log.id}
-                                    className="flex items-start gap-2 p-3 hover:bg-slate-50 transition-colors cursor-pointer"
+                                    className="flex items-start gap-2 p-3 hover:bg-slate-50 dark:hover:bg-slate-700/50 transition-colors cursor-pointer"
                                     onClick={() => {
                                         setSelectedLog(log);
                                         setShowModal(true);
@@ -169,7 +169,7 @@ export default function ActivityLogWidget({ compact = false }: ActivityLogWidget
                                 >
                                     <span className="text-sm flex-shrink-0">{actionInfo.icon}</span>
                                     <div className="flex-1 min-w-0">
-                                        <p className="text-xs text-slate-700 truncate">
+                                        <p className="text-xs text-slate-700 dark:text-slate-300 truncate">
                                             <span className="font-medium">{log.user_name || 'User'}</span>
                                             <span className={cn("ml-1", actionInfo.color)}>{actionInfo.label.toLowerCase()}</span>
                                             {log.entity_name && (
@@ -194,18 +194,18 @@ export default function ActivityLogWidget({ compact = false }: ActivityLogWidget
                         className="fixed inset-0 bg-black/50 backdrop-blur-sm z-50"
                         onClick={() => { setShowModal(false); setSelectedLog(null); }}
                     />
-                    <div className="fixed inset-x-4 top-1/2 -translate-y-1/2 md:inset-x-auto md:left-1/2 md:-translate-x-1/2 md:w-full md:max-w-2xl bg-white rounded-2xl shadow-2xl z-50 max-h-[80vh] overflow-hidden flex flex-col">
+                    <div className="fixed inset-x-4 top-1/2 -translate-y-1/2 md:inset-x-auto md:left-1/2 md:-translate-x-1/2 md:w-full md:max-w-2xl bg-white dark:bg-slate-800 rounded-2xl shadow-2xl z-50 max-h-[80vh] overflow-hidden flex flex-col">
                         {/* Header */}
-                        <div className="flex items-center justify-between p-4 border-b border-slate-100">
+                        <div className="flex items-center justify-between p-4 border-b border-slate-100 dark:border-slate-700">
                             <div>
-                                <h2 className="font-semibold text-slate-900">Lịch sử thao tác</h2>
-                                <p className="text-xs text-slate-500 mt-0.5">{totalLogs} hoạt động</p>
+                                <h2 className="font-semibold text-slate-900 dark:text-white">Lịch sử thao tác</h2>
+                                <p className="text-xs text-slate-500 dark:text-slate-400 mt-0.5">{totalLogs} hoạt động</p>
                             </div>
                             <button
                                 onClick={() => { setShowModal(false); setSelectedLog(null); }}
-                                className="p-2 hover:bg-slate-100 rounded-lg transition-colors"
+                                className="p-2 hover:bg-slate-100 dark:hover:bg-slate-700 rounded-lg transition-colors"
                             >
-                                <X className="w-5 h-5 text-slate-500" />
+                                <X className="w-5 h-5 text-slate-500 dark:text-slate-400" />
                             </button>
                         </div>
 
@@ -215,7 +215,7 @@ export default function ActivityLogWidget({ compact = false }: ActivityLogWidget
                                 <div className="p-4 space-y-4">
                                     <button
                                         onClick={() => setSelectedLog(null)}
-                                        className="text-sm text-blue-600 hover:text-blue-700 flex items-center gap-1"
+                                        className="text-sm text-blue-600 dark:text-blue-400 hover:text-blue-700 dark:hover:text-blue-300 flex items-center gap-1"
                                     >
                                         ← Quay lại
                                     </button>
@@ -223,35 +223,35 @@ export default function ActivityLogWidget({ compact = false }: ActivityLogWidget
                                         <div className="flex items-center gap-3">
                                             <span className="text-2xl">{formatAction(selectedLog.action).icon}</span>
                                             <div>
-                                                <p className="font-medium text-slate-900">{selectedLog.user_name || selectedLog.user_id}</p>
-                                                <p className="text-sm text-slate-500">{selectedLog.user_role ? (roleNames[selectedLog.user_role] || selectedLog.user_role) : 'Unknown'}</p>
+                                                <p className="font-medium text-slate-900 dark:text-white">{selectedLog.user_name || selectedLog.user_id}</p>
+                                                <p className="text-sm text-slate-500 dark:text-slate-400">{selectedLog.user_role ? (roleNames[selectedLog.user_role] || selectedLog.user_role) : 'Unknown'}</p>
                                             </div>
                                         </div>
                                         <div className="grid grid-cols-2 gap-3 text-sm">
-                                            <div className="p-3 bg-slate-50 rounded-lg">
-                                                <p className="text-slate-500 text-xs">Hành động</p>
+                                            <div className="p-3 bg-slate-50 dark:bg-slate-700/50 rounded-lg">
+                                                <p className="text-slate-500 dark:text-slate-400 text-xs">Hành động</p>
                                                 <p className={cn("font-medium", formatAction(selectedLog.action).color)}>
                                                     {formatAction(selectedLog.action).label}
                                                 </p>
                                             </div>
-                                            <div className="p-3 bg-slate-50 rounded-lg">
-                                                <p className="text-slate-500 text-xs">Đối tượng</p>
-                                                <p className="font-medium text-slate-900">{formatEntityType(selectedLog.entity_type)}</p>
+                                            <div className="p-3 bg-slate-50 dark:bg-slate-700/50 rounded-lg">
+                                                <p className="text-slate-500 dark:text-slate-400 text-xs">Đối tượng</p>
+                                                <p className="font-medium text-slate-900 dark:text-white">{formatEntityType(selectedLog.entity_type)}</p>
                                             </div>
                                             {selectedLog.entity_name && (
-                                                <div className="p-3 bg-slate-50 rounded-lg col-span-2">
-                                                    <p className="text-slate-500 text-xs">Tên</p>
-                                                    <p className="font-medium text-slate-900">{selectedLog.entity_name}</p>
+                                                <div className="p-3 bg-slate-50 dark:bg-slate-700/50 rounded-lg col-span-2">
+                                                    <p className="text-slate-500 dark:text-slate-400 text-xs">Tên</p>
+                                                    <p className="font-medium text-slate-900 dark:text-white">{selectedLog.entity_name}</p>
                                                 </div>
                                             )}
-                                            <div className="p-3 bg-slate-50 rounded-lg col-span-2">
-                                                <p className="text-slate-500 text-xs">Thời gian</p>
-                                                <p className="font-medium text-slate-900">{formatFullDateTime(selectedLog.created_at)}</p>
+                                            <div className="p-3 bg-slate-50 dark:bg-slate-700/50 rounded-lg col-span-2">
+                                                <p className="text-slate-500 dark:text-slate-400 text-xs">Thời gian</p>
+                                                <p className="font-medium text-slate-900 dark:text-white">{formatFullDateTime(selectedLog.created_at)}</p>
                                             </div>
                                         </div>
                                         {selectedLog.details && Object.keys(selectedLog.details).length > 0 && (
-                                            <div className="p-3 bg-slate-50 rounded-lg">
-                                                <p className="text-slate-500 text-xs mb-2">Chi tiết</p>
+                                            <div className="p-3 bg-slate-50 dark:bg-slate-700/50 rounded-lg">
+                                                <p className="text-slate-500 dark:text-slate-400 text-xs mb-2">Chi tiết</p>
                                                 <div className="space-y-2 max-h-64 overflow-auto">
                                                     {Object.entries(selectedLog.details).map(([key, value]) => {
                                                         // Translate common keys to Vietnamese
@@ -302,8 +302,8 @@ export default function ActivityLogWidget({ compact = false }: ActivityLogWidget
                                                         }
                                                         return (
                                                             <div key={key} className="flex items-start gap-2 text-sm">
-                                                                <span className="text-slate-500 min-w-[100px]">{displayKey}:</span>
-                                                                <span className="text-slate-900 font-medium">{String(displayValue)}</span>
+                                                                <span className="text-slate-500 dark:text-slate-400 min-w-[100px]">{displayKey}:</span>
+                                                                <span className="text-slate-900 dark:text-white font-medium">{String(displayValue)}</span>
                                                             </div>
                                                         );
                                                     })}
@@ -317,22 +317,22 @@ export default function ActivityLogWidget({ compact = false }: ActivityLogWidget
                                     <Loader2 className="w-6 h-6 animate-spin text-slate-400" />
                                 </div>
                             ) : allLogs.length === 0 ? (
-                                <div className="text-center py-12 text-slate-500">
+                                <div className="text-center py-12 text-slate-500 dark:text-slate-400">
                                     Chưa có hoạt động nào
                                 </div>
                             ) : (
-                                <div className="divide-y divide-slate-100">
+                                <div className="divide-y divide-slate-100 dark:divide-slate-700">
                                     {allLogs.map((log) => {
                                         const actionInfo = formatAction(log.action);
                                         return (
                                             <div
                                                 key={log.id}
-                                                className="flex items-start gap-3 p-4 hover:bg-slate-50 transition-colors cursor-pointer"
+                                                className="flex items-start gap-3 p-4 hover:bg-slate-50 dark:hover:bg-slate-700/50 transition-colors cursor-pointer"
                                                 onClick={() => setSelectedLog(log)}
                                             >
                                                 <span className="text-lg flex-shrink-0">{actionInfo.icon}</span>
                                                 <div className="flex-1 min-w-0">
-                                                    <p className="text-sm text-slate-800">
+                                                    <p className="text-sm text-slate-800 dark:text-slate-200">
                                                         <span className="font-medium">{log.user_name || log.user_id}</span>
                                                         <span className={cn("ml-1", actionInfo.color)}>{actionInfo.label.toLowerCase()}</span>
                                                         <span className="ml-1">{formatEntityType(log.entity_type).toLowerCase()}</span>
@@ -353,21 +353,21 @@ export default function ActivityLogWidget({ compact = false }: ActivityLogWidget
 
                         {/* Pagination */}
                         {!selectedLog && totalPages > 1 && (
-                            <div className="flex items-center justify-between p-4 border-t border-slate-100">
+                            <div className="flex items-center justify-between p-4 border-t border-slate-100 dark:border-slate-700">
                                 <button
                                     onClick={() => fetchAllLogs(currentPage - 1)}
                                     disabled={currentPage === 1 || allLogsLoading}
-                                    className="px-3 py-1.5 text-sm text-slate-600 hover:bg-slate-100 rounded-lg disabled:opacity-50"
+                                    className="px-3 py-1.5 text-sm text-slate-600 dark:text-slate-300 hover:bg-slate-100 dark:hover:bg-slate-700 rounded-lg disabled:opacity-50"
                                 >
                                     Trước
                                 </button>
-                                <span className="text-sm text-slate-500">
+                                <span className="text-sm text-slate-500 dark:text-slate-400">
                                     Trang {currentPage} / {totalPages}
                                 </span>
                                 <button
                                     onClick={() => fetchAllLogs(currentPage + 1)}
                                     disabled={currentPage === totalPages || allLogsLoading}
-                                    className="px-3 py-1.5 text-sm text-slate-600 hover:bg-slate-100 rounded-lg disabled:opacity-50"
+                                    className="px-3 py-1.5 text-sm text-slate-600 dark:text-slate-300 hover:bg-slate-100 dark:hover:bg-slate-700 rounded-lg disabled:opacity-50"
                                 >
                                     Sau
                                 </button>

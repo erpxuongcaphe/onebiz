@@ -35,7 +35,7 @@ export default function DashboardLayout({
 
     if (isLoading) {
         return (
-            <div className="min-h-screen flex items-center justify-center bg-slate-50">
+            <div className="min-h-screen flex items-center justify-center bg-slate-50 dark:bg-slate-900">
                 <div className="animate-spin w-8 h-8 border-4 border-blue-500 border-t-transparent rounded-full" />
             </div>
         );
@@ -46,7 +46,7 @@ export default function DashboardLayout({
     }
 
     return (
-        <div className="min-h-screen bg-slate-50/50">
+        <div className="min-h-screen bg-slate-50 dark:bg-slate-900">
             <ToastProvider />
             <Sidebar />
             <main className="md:pl-72 min-h-screen transition-all duration-300">

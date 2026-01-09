@@ -176,24 +176,24 @@ export function MyLeavesContent() {
                     return (
                         <div
                             key={type.id}
-                            className="bg-white rounded-xl border border-slate-200 p-4"
+                            className="bg-white dark:bg-slate-800 rounded-xl border border-slate-200 dark:border-slate-700 p-4"
                         >
                             <div className="flex items-center gap-2 mb-2">
                                 <div
                                     className="w-3 h-3 rounded-full"
                                     style={{ backgroundColor: type.color || "#3b82f6" }}
                                 />
-                                <span className="text-sm font-medium text-slate-700 truncate">
+                                <span className="text-sm font-medium text-slate-700 dark:text-slate-300 truncate">
                                     {type.name}
                                 </span>
                             </div>
-                            <div className="text-2xl font-bold text-slate-900">
+                            <div className="text-2xl font-bold text-slate-900 dark:text-white">
                                 {remaining}{" "}
-                                <span className="text-sm font-normal text-slate-500">
+                                <span className="text-sm font-normal text-slate-500 dark:text-slate-400">
                                     / {total} ngày
                                 </span>
                             </div>
-                            <div className="mt-2 h-1.5 bg-slate-100 rounded-full overflow-hidden">
+                            <div className="mt-2 h-1.5 bg-slate-100 dark:bg-slate-700 rounded-full overflow-hidden">
                                 <div
                                     className="h-full rounded-full transition-all"
                                     style={{
@@ -209,7 +209,7 @@ export function MyLeavesContent() {
 
             {/* Action Button */}
             <div className="flex justify-between items-center">
-                <h3 className="font-semibold text-slate-900">Lịch sử nghỉ phép</h3>
+                <h3 className="font-semibold text-slate-900 dark:text-white">Lịch sử nghỉ phép</h3>
                 <button
                     onClick={() => setShowCreateModal(true)}
                     className="inline-flex items-center gap-2 px-4 py-2 bg-blue-500 text-white text-sm font-medium rounded-lg hover:bg-blue-600 transition"
@@ -220,10 +220,10 @@ export function MyLeavesContent() {
             </div>
 
             {/* Requests List */}
-            <div className="bg-white rounded-xl border border-slate-200 divide-y divide-slate-100">
+            <div className="bg-white dark:bg-slate-800 rounded-xl border border-slate-200 dark:border-slate-700 divide-y divide-slate-100 dark:divide-slate-700">
                 {requests.length === 0 ? (
-                    <div className="p-8 text-center text-slate-500">
-                        <Calendar className="w-12 h-12 text-slate-300 mx-auto mb-3" />
+                    <div className="p-8 text-center text-slate-500 dark:text-slate-400">
+                        <Calendar className="w-12 h-12 text-slate-300 dark:text-slate-600 mx-auto mb-3" />
                         <p>Chưa có đơn nghỉ phép nào</p>
                     </div>
                 ) : (
@@ -240,7 +240,7 @@ export function MyLeavesContent() {
                         return (
                             <div
                                 key={request.id}
-                                className="p-4 flex items-center justify-between hover:bg-slate-50"
+                                className="p-4 flex items-center justify-between hover:bg-slate-50 dark:hover:bg-slate-700/50 transition-colors"
                             >
                                 <div className="flex items-center gap-4">
                                     <div
@@ -255,10 +255,10 @@ export function MyLeavesContent() {
                                         />
                                     </div>
                                     <div>
-                                        <div className="font-medium text-slate-900">
+                                        <div className="font-medium text-slate-900 dark:text-white">
                                             {leaveType?.name || "Nghỉ phép"}
                                         </div>
-                                        <div className="text-sm text-slate-500 flex items-center gap-2">
+                                        <div className="text-sm text-slate-500 dark:text-slate-400 flex items-center gap-2">
                                             <span>{formatDate(request.start_date)}</span>
                                             {request.start_date !== request.end_date && (
                                                 <>
@@ -297,10 +297,10 @@ export function MyLeavesContent() {
 
             {/* Create Modal */}
             {showCreateModal && (
-                <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50 p-4">
-                    <div className="bg-white rounded-2xl max-w-lg w-full max-h-[90vh] overflow-y-auto">
-                        <div className="p-6 border-b border-slate-200 flex items-center justify-between">
-                            <h2 className="text-lg font-semibold text-slate-900">
+                <div className="fixed inset-0 bg-black/50 backdrop-blur-sm flex items-center justify-center z-50 p-4">
+                    <div className="bg-white dark:bg-slate-800 rounded-2xl max-w-lg w-full max-h-[90vh] overflow-y-auto shadow-2xl">
+                        <div className="p-6 border-b border-slate-200 dark:border-slate-700 flex items-center justify-between">
+                            <h2 className="text-lg font-semibold text-slate-900 dark:text-white">
                                 Tạo đơn nghỉ phép
                             </h2>
                             <button
@@ -308,7 +308,7 @@ export function MyLeavesContent() {
                                     setShowCreateModal(false);
                                     resetForm();
                                 }}
-                                className="p-2 text-slate-400 hover:text-slate-600 rounded-lg"
+                                className="p-2 text-slate-400 hover:text-slate-600 dark:hover:text-slate-300 hover:bg-slate-100 dark:hover:bg-slate-700 rounded-lg"
                             >
                                 <X className="w-5 h-5" />
                             </button>
@@ -316,7 +316,7 @@ export function MyLeavesContent() {
                         <div className="p-6 space-y-4">
                             {/* Leave Type */}
                             <div>
-                                <label className="block text-sm font-medium text-slate-700 mb-1">
+                                <label className="block text-sm font-medium text-slate-700 dark:text-slate-300 mb-1">
                                     Loại nghỉ phép <span className="text-red-500">*</span>
                                 </label>
                                 <select
@@ -325,10 +325,10 @@ export function MyLeavesContent() {
                                         setForm({ ...form, leaveTypeId: e.target.value })
                                     }
                                     className={cn(
-                                        "w-full px-3 py-2 border rounded-lg focus:ring-2 focus:ring-blue-500 focus:outline-none",
+                                        "w-full px-3 py-2 border rounded-lg focus:ring-2 focus:ring-blue-500 focus:outline-none bg-white dark:bg-slate-700 dark:text-white",
                                         formErrors.leaveTypeId
-                                            ? "border-red-300"
-                                            : "border-slate-200"
+                                            ? "border-red-300 dark:border-red-500/50"
+                                            : "border-slate-200 dark:border-slate-600"
                                     )}
                                 >
                                     <option value="">Chọn loại nghỉ phép</option>
@@ -349,7 +349,7 @@ export function MyLeavesContent() {
                             {/* Dates */}
                             <div className="grid grid-cols-2 gap-4">
                                 <div>
-                                    <label className="block text-sm font-medium text-slate-700 mb-1">
+                                    <label className="block text-sm font-medium text-slate-700 dark:text-slate-300 mb-1">
                                         Từ ngày <span className="text-red-500">*</span>
                                     </label>
                                     <input
@@ -359,10 +359,10 @@ export function MyLeavesContent() {
                                             setForm({ ...form, startDate: e.target.value })
                                         }
                                         className={cn(
-                                            "w-full px-3 py-2 border rounded-lg focus:ring-2 focus:ring-blue-500 focus:outline-none",
+                                            "w-full px-3 py-2 border rounded-lg focus:ring-2 focus:ring-blue-500 focus:outline-none bg-white dark:bg-slate-700 dark:text-white",
                                             formErrors.startDate
-                                                ? "border-red-300"
-                                                : "border-slate-200"
+                                                ? "border-red-300 dark:border-red-500/50"
+                                                : "border-slate-200 dark:border-slate-600"
                                         )}
                                     />
                                     {formErrors.startDate && (
@@ -372,7 +372,7 @@ export function MyLeavesContent() {
                                     )}
                                 </div>
                                 <div>
-                                    <label className="block text-sm font-medium text-slate-700 mb-1">
+                                    <label className="block text-sm font-medium text-slate-700 dark:text-slate-300 mb-1">
                                         Đến ngày <span className="text-red-500">*</span>
                                     </label>
                                     <input
@@ -382,10 +382,10 @@ export function MyLeavesContent() {
                                             setForm({ ...form, endDate: e.target.value })
                                         }
                                         className={cn(
-                                            "w-full px-3 py-2 border rounded-lg focus:ring-2 focus:ring-blue-500 focus:outline-none",
+                                            "w-full px-3 py-2 border rounded-lg focus:ring-2 focus:ring-blue-500 focus:outline-none bg-white dark:bg-slate-700 dark:text-white",
                                             formErrors.endDate
-                                                ? "border-red-300"
-                                                : "border-slate-200"
+                                                ? "border-red-300 dark:border-red-500/50"
+                                                : "border-slate-200 dark:border-slate-600"
                                         )}
                                     />
                                     {formErrors.endDate && (
@@ -405,11 +405,11 @@ export function MyLeavesContent() {
                                     onChange={(e) =>
                                         setForm({ ...form, isHalfDay: e.target.checked })
                                     }
-                                    className="w-4 h-4 rounded border-slate-300 text-blue-500 focus:ring-blue-500"
+                                    className="w-4 h-4 rounded border-slate-300 dark:border-slate-600 text-blue-500 focus:ring-blue-500 dark:bg-slate-700"
                                 />
                                 <label
                                     htmlFor="isHalfDay"
-                                    className="text-sm text-slate-700"
+                                    className="text-sm text-slate-700 dark:text-slate-300"
                                 >
                                     Nghỉ nửa ngày
                                 </label>
@@ -422,7 +422,7 @@ export function MyLeavesContent() {
                                                 halfDayPeriod: e.target.value as "morning" | "afternoon",
                                             })
                                         }
-                                        className="ml-auto px-3 py-1 border border-slate-200 rounded-lg text-sm"
+                                        className="ml-auto px-3 py-1 border border-slate-200 dark:border-slate-600 bg-white dark:bg-slate-700 text-slate-700 dark:text-white rounded-lg text-sm"
                                     >
                                         <option value="morning">Buổi sáng</option>
                                         <option value="afternoon">Buổi chiều</option>
@@ -432,7 +432,7 @@ export function MyLeavesContent() {
 
                             {/* Reason */}
                             <div>
-                                <label className="block text-sm font-medium text-slate-700 mb-1">
+                                <label className="block text-sm font-medium text-slate-700 dark:text-slate-300 mb-1">
                                     Lý do <span className="text-red-500">*</span>
                                 </label>
                                 <textarea
@@ -443,10 +443,10 @@ export function MyLeavesContent() {
                                     rows={3}
                                     placeholder="Nhập lý do nghỉ phép..."
                                     className={cn(
-                                        "w-full px-3 py-2 border rounded-lg focus:ring-2 focus:ring-blue-500 focus:outline-none resize-none",
+                                        "w-full px-3 py-2 border rounded-lg focus:ring-2 focus:ring-blue-500 focus:outline-none resize-none bg-white dark:bg-slate-700 dark:text-white",
                                         formErrors.reason
-                                            ? "border-red-300"
-                                            : "border-slate-200"
+                                            ? "border-red-300 dark:border-red-500/50"
+                                            : "border-slate-200 dark:border-slate-600"
                                     )}
                                 />
                                 {formErrors.reason && (
@@ -456,13 +456,13 @@ export function MyLeavesContent() {
                                 )}
                             </div>
                         </div>
-                        <div className="p-6 border-t border-slate-200 flex justify-end gap-3">
+                        <div className="p-6 border-t border-slate-200 dark:border-slate-700 flex justify-end gap-3">
                             <button
                                 onClick={() => {
                                     setShowCreateModal(false);
                                     resetForm();
                                 }}
-                                className="px-4 py-2 text-slate-600 hover:bg-slate-100 rounded-lg transition"
+                                className="px-4 py-2 text-slate-600 dark:text-slate-300 hover:bg-slate-100 dark:hover:bg-slate-700 rounded-lg transition"
                             >
                                 Hủy
                             </button>

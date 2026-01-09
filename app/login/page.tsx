@@ -68,26 +68,26 @@ export default function LoginPage() {
                 {/* Content */}
                 <div className="relative z-10 flex flex-col justify-center px-16 text-white">
                     <div className="flex items-center gap-4 mb-8">
-                        <div className="w-14 h-14 rounded-2xl bg-gradient-to-br from-blue-500 to-cyan-400 flex items-center justify-center shadow-xl shadow-blue-500/30">
-                            <span className="text-2xl font-bold">H</span>
+                        <div className="w-14 h-14 rounded-2xl bg-gradient-to-br from-amber-500 to-orange-500 flex items-center justify-center shadow-xl shadow-amber-500/30">
+                            <span className="text-2xl font-bold">X</span>
                         </div>
                         <div>
-                            <h1 className="text-3xl font-bold">HRM System</h1>
-                            <div className="flex items-center gap-1.5 text-blue-300 text-sm">
+                            <h1 className="text-3xl font-bold">Xưởng Cà Phê</h1>
+                            <div className="flex items-center gap-1.5 text-amber-300 text-sm">
                                 <Sparkles className="w-4 h-4" />
-                                <span>Enterprise Edition</span>
+                                <span>ERP System</span>
                             </div>
                         </div>
                     </div>
 
                     <h2 className="text-4xl font-bold leading-tight mb-4">
                         Hệ thống quản lý<br />
-                        <span className="text-transparent bg-clip-text bg-gradient-to-r from-blue-400 to-cyan-300">
-                            nhân sự thông minh
+                        <span className="text-transparent bg-clip-text bg-gradient-to-r from-amber-400 to-orange-300">
+                            doanh nghiệp toàn diện
                         </span>
                     </h2>
                     <p className="text-slate-400 text-lg max-w-md">
-                        Quản lý nhân viên, chấm công, và lương thưởng một cách hiệu quả với giao diện hiện đại.
+                        Quản lý bán hàng, tồn kho, nhân sự và tài chính - Một nền tảng duy nhất cho tất cả.
                     </p>
 
                     <div className="mt-12 grid grid-cols-3 gap-6">
@@ -112,10 +112,10 @@ export default function LoginPage() {
                 <div className="w-full max-w-md">
                     {/* Mobile Logo */}
                     <div className="lg:hidden flex items-center gap-3 justify-center mb-10">
-                        <div className="w-12 h-12 rounded-xl bg-gradient-to-br from-blue-600 to-cyan-500 flex items-center justify-center shadow-lg">
-                            <span className="text-xl font-bold text-white">H</span>
+                        <div className="w-12 h-12 rounded-xl bg-gradient-to-br from-amber-500 to-orange-500 flex items-center justify-center shadow-lg">
+                            <span className="text-xl font-bold text-white">X</span>
                         </div>
-                        <span className="text-2xl font-bold text-slate-900">HRM System</span>
+                        <span className="text-2xl font-bold text-slate-900">Xưởng Cà Phê</span>
                     </div>
 
                     <div className="bg-white rounded-3xl shadow-xl shadow-slate-200/50 p-8 border border-slate-100">
@@ -216,7 +216,7 @@ export default function LoginPage() {
                     </div>
 
                     <p className="text-center text-sm text-slate-400 mt-8">
-                        © 2024 HRM System. All rights reserved.
+                        © 2026 Xưởng Cà Phê ERP. All rights reserved.
                     </p>
                 </div>
             </div>

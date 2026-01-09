@@ -19,7 +19,7 @@ export function AnimatedCard({
     return (
         <div
             className={cn(
-                "bg-white rounded-xl border border-slate-200 shadow-sm opacity-0 animate-slide-up",
+                "bg-white dark:bg-slate-800 rounded-xl border border-slate-200 dark:border-slate-700 shadow-sm opacity-0 animate-slide-up",
                 hover && "hover-lift cursor-pointer",
                 className
             )}
@@ -52,15 +52,15 @@ export function StatCard({
     iconColor = "bg-blue-50 text-blue-600",
 }: StatCardProps) {
     const changeColors = {
-        positive: "bg-green-50 text-green-700",
-        negative: "bg-red-50 text-red-700",
-        neutral: "bg-slate-100 text-slate-600",
+        positive: "bg-green-50 dark:bg-green-900/30 text-green-700 dark:text-green-400",
+        negative: "bg-red-50 dark:bg-red-900/30 text-red-700 dark:text-red-400",
+        neutral: "bg-slate-100 dark:bg-slate-700 text-slate-600 dark:text-slate-400",
     };
 
     return (
         <AnimatedCard delay={delay} className="p-6">
             <div className="flex items-center justify-between mb-4">
-                <div className={cn("p-2.5 rounded-lg transition-transform duration-200 hover:scale-110", iconColor)}>
+                <div className={cn("p-2.5 rounded-lg transition-transform duration-200 hover:scale-110", iconColor, "dark:bg-opacity-20")}>
                     {icon}
                 </div>
                 {change && (
@@ -74,9 +74,9 @@ export function StatCard({
                     </span>
                 )}
             </div>
-            <h3 className="text-sm font-medium text-slate-500">{title}</h3>
-            <p className="text-2xl font-bold text-slate-900 mt-1">{value}</p>
-            {subtext && <p className="text-xs text-slate-400 mt-1">{subtext}</p>}
+            <h3 className="text-sm font-medium text-slate-500 dark:text-slate-400">{title}</h3>
+            <p className="text-2xl font-bold text-slate-900 dark:text-white mt-1">{value}</p>
+            {subtext && <p className="text-xs text-slate-400 dark:text-slate-500 mt-1">{subtext}</p>}
         </AnimatedCard>
     );
 }

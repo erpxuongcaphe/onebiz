@@ -65,11 +65,11 @@ export function ConfirmDialog({
             />
 
             {/* Dialog */}
-            <div className="relative bg-white rounded-2xl shadow-2xl max-w-md w-full animate-in zoom-in-95 fade-in duration-200">
+            <div className="relative bg-white dark:bg-slate-800 rounded-2xl shadow-2xl max-w-md w-full animate-in zoom-in-95 fade-in duration-200">
                 {/* Close button */}
                 <button
                     onClick={() => onOpenChange(false)}
-                    className="absolute top-4 right-4 p-1.5 rounded-lg hover:bg-slate-100 transition-colors"
+                    className="absolute top-4 right-4 p-1.5 rounded-lg hover:bg-slate-100 dark:hover:bg-slate-700 transition-colors"
                     disabled={loading}
                 >
                     <X className="w-4 h-4 text-slate-400" />
@@ -82,22 +82,22 @@ export function ConfirmDialog({
                         <div className={cn(
                             "flex-shrink-0 w-12 h-12 rounded-full flex items-center justify-center",
                             variant === 'destructive'
-                                ? "bg-red-100"
-                                : "bg-blue-100"
+                                ? "bg-red-100 dark:bg-red-900/30"
+                                : "bg-blue-100 dark:bg-blue-900/30"
                         )}>
                             <AlertTriangle className={cn(
                                 "w-6 h-6",
                                 variant === 'destructive'
-                                    ? "text-red-600"
-                                    : "text-blue-600"
+                                    ? "text-red-600 dark:text-red-400"
+                                    : "text-blue-600 dark:text-blue-400"
                             )} />
                         </div>
                         <div className="flex-1 pt-1">
-                            <h3 className="text-lg font-semibold text-slate-900">
+                            <h3 className="text-lg font-semibold text-slate-900 dark:text-white">
                                 {title}
                             </h3>
                             {description && (
-                                <p className="mt-2 text-sm text-slate-600 leading-relaxed">
+                                <p className="mt-2 text-sm text-slate-600 dark:text-slate-400 leading-relaxed">
                                     {description}
                                 </p>
                             )}
@@ -109,7 +109,7 @@ export function ConfirmDialog({
                         <button
                             onClick={() => onOpenChange(false)}
                             disabled={loading}
-                            className="flex-1 px-4 py-2.5 text-sm font-medium text-slate-700 bg-slate-100 hover:bg-slate-200 rounded-xl transition-colors disabled:opacity-50"
+                            className="flex-1 px-4 py-2.5 text-sm font-medium text-slate-700 dark:text-slate-200 bg-slate-100 dark:bg-slate-700 hover:bg-slate-200 dark:hover:bg-slate-600 rounded-xl transition-colors disabled:opacity-50"
                         >
                             {cancelText}
                         </button>

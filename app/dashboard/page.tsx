@@ -74,10 +74,10 @@ function RealTimeClock() {
 
     return (
         <div className="text-right">
-            <p className="text-3xl font-bold text-slate-900 tabular-nums">
+            <p className="text-3xl font-bold text-slate-900 dark:text-white tabular-nums">
                 {time.toLocaleTimeString("vi-VN", { hour: "2-digit", minute: "2-digit" })}
             </p>
-            <p className="text-sm text-slate-500">
+            <p className="text-sm text-slate-500 dark:text-slate-400">
                 {time.toLocaleDateString("vi-VN", { weekday: "long", day: "numeric", month: "long", year: "numeric" })}
             </p>
         </div>
@@ -94,12 +94,12 @@ function MobileRealTimeClock() {
     }, []);
 
     return (
-        <div className="flex items-center gap-2 text-sm bg-slate-100 px-3 py-1.5 rounded-full">
-            <span className="font-bold text-slate-900 tabular-nums">
+        <div className="flex items-center gap-2 text-sm bg-slate-100 dark:bg-slate-800 px-3 py-1.5 rounded-full">
+            <span className="font-bold text-slate-900 dark:text-white tabular-nums">
                 {time.toLocaleTimeString("vi-VN", { hour: "2-digit", minute: "2-digit" })}
             </span>
             <span className="text-slate-400">•</span>
-            <span className="text-slate-600">
+            <span className="text-slate-600 dark:text-slate-300">
                 {time.toLocaleDateString("vi-VN", { weekday: "short", day: "numeric", month: "numeric" })}
             </span>
         </div>
@@ -238,14 +238,14 @@ export default function DashboardPage() {
             {/* Header - Compact on mobile */}
             <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-2 sm:gap-4 animate-fade-in">
                 <div className="flex items-center justify-between sm:block">
-                    <h1 className="text-xl sm:text-2xl md:text-3xl font-bold tracking-tight text-slate-900">
-                        Xin chào, <span className="text-blue-600">{greeting}</span> 👋
+                    <h1 className="text-xl sm:text-2xl md:text-3xl font-bold tracking-tight text-slate-900 dark:text-white">
+                        Xin chào, <span className="text-blue-600 dark:text-blue-400">{greeting}</span> 👋
                     </h1>
                     {/* Mobile Clock - inline with greeting */}
                     <div className="sm:hidden">
                         <MobileRealTimeClock />
                     </div>
-                    <p className="text-slate-500 mt-1 text-sm md:text-base hidden sm:block">
+                    <p className="text-slate-500 dark:text-slate-400 mt-1 text-sm md:text-base hidden sm:block">
                         {isMember ? "Chúc bạn ngày làm việc hiệu quả!" : "Đây là báo cáo nhân sự hôm nay của bạn."}
                     </p>
                 </div>
@@ -285,22 +285,22 @@ export default function DashboardPage() {
                         return (
                             <div
                                 key={stat.name}
-                                className="bg-white p-3 md:p-6 rounded-xl md:rounded-2xl border border-slate-100 shadow-sm hover-lift opacity-0 animate-slide-up"
+                                className="bg-white dark:bg-slate-800 p-3 md:p-6 rounded-xl md:rounded-2xl border border-slate-100 dark:border-slate-700 shadow-sm hover-lift opacity-0 animate-slide-up"
                                 style={{ animationDelay: `${index * 100}ms`, animationFillMode: "forwards" }}
                             >
                                 {/* Mobile: Compact inline layout */}
                                 <div className="flex items-start justify-between gap-2 mb-2 md:mb-4">
-                                    <div className={cn("p-2 md:p-3 rounded-lg md:rounded-xl transition-transform duration-200 hover:scale-110", stat.bgColor)}>
+                                    <div className={cn("p-2 md:p-3 rounded-lg md:rounded-xl transition-transform duration-200 hover:scale-110", stat.bgColor, "dark:bg-opacity-20")}>
                                         <Icon className={cn("w-4 h-4 md:w-6 md:h-6", stat.textColor)} />
                                     </div>
                                     <span
                                         className={cn(
                                             "inline-flex items-center gap-0.5 text-[10px] md:text-xs font-medium px-1.5 md:px-2.5 py-0.5 md:py-1 rounded-full",
                                             stat.changeType === "positive"
-                                                ? "bg-green-50 text-green-700"
+                                                ? "bg-green-50 dark:bg-green-900/30 text-green-700 dark:text-green-400"
                                                 : stat.changeType === "negative"
-                                                    ? "bg-red-50 text-red-700"
-                                                    : "bg-slate-100 text-slate-600"
+                                                    ? "bg-red-50 dark:bg-red-900/30 text-red-700 dark:text-red-400"
+                                                    : "bg-slate-100 dark:bg-slate-700 text-slate-600 dark:text-slate-300"
                                         )}
                                     >
                                         {stat.changeType === "positive" && <TrendingUp className="w-2.5 h-2.5 md:w-3 md:h-3" />}
@@ -308,8 +308,8 @@ export default function DashboardPage() {
                                         <span className="hidden sm:inline">{stat.change}</span>
                                     </span>
                                 </div>
-                                <h3 className="text-xs md:text-sm font-medium text-slate-500 truncate">{stat.name}</h3>
-                                <p className="text-lg md:text-2xl font-bold text-slate-900 mt-0.5 md:mt-1">{stat.value}</p>
+                                <h3 className="text-xs md:text-sm font-medium text-slate-500 dark:text-slate-400 truncate">{stat.name}</h3>
+                                <p className="text-lg md:text-2xl font-bold text-slate-900 dark:text-white mt-0.5 md:mt-1">{stat.value}</p>
                                 <p className="text-[10px] md:text-xs text-slate-400 mt-0.5 md:mt-1 truncate hidden sm:block">{stat.subtext}</p>
                             </div>
                         );
@@ -321,19 +321,19 @@ export default function DashboardPage() {
             {!isMember && (
                 <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
                     {/* Main Chart */}
-                    <div className="lg:col-span-2 bg-white rounded-2xl border border-slate-100 shadow-sm p-6 opacity-0 animate-slide-up stagger-4" style={{ animationFillMode: "forwards" }}>
+                    <div className="lg:col-span-2 bg-white dark:bg-slate-800 rounded-2xl border border-slate-100 dark:border-slate-700 shadow-sm p-6 opacity-0 animate-slide-up stagger-4" style={{ animationFillMode: "forwards" }}>
                         <div className="flex items-center justify-between mb-6">
                             <div>
-                                <h3 className="font-semibold text-slate-900">Biến động nhân sự</h3>
-                                <p className="text-sm text-slate-500 mt-1">12 tháng gần đây</p>
+                                <h3 className="font-semibold text-slate-900 dark:text-white">Biến động nhân sự</h3>
+                                <p className="text-sm text-slate-500 dark:text-slate-400 mt-1">12 tháng gần đây</p>
                             </div>
                             <div className="flex items-center gap-2">
-                                <span className="flex items-center gap-1.5 text-xs text-slate-500">
+                                <span className="flex items-center gap-1.5 text-xs text-slate-500 dark:text-slate-400">
                                     <span className="w-2.5 h-2.5 rounded-full bg-blue-500" />
                                     Nhân viên mới
                                 </span>
-                                <span className="flex items-center gap-1.5 text-xs text-slate-500">
-                                    <span className="w-2.5 h-2.5 rounded-full bg-slate-300" />
+                                <span className="flex items-center gap-1.5 text-xs text-slate-500 dark:text-slate-400">
+                                    <span className="w-2.5 h-2.5 rounded-full bg-slate-300 dark:bg-slate-600" />
                                     Nghỉ việc
                                 </span>
                             </div>
@@ -354,7 +354,7 @@ export default function DashboardPage() {
                                             }}
                                         />
                                         <div
-                                            className="w-full bg-slate-200 rounded-t-md transition-all duration-700 opacity-0 animate-slide-up"
+                                            className="w-full bg-slate-200 dark:bg-slate-600 rounded-t-md transition-all duration-700 opacity-0 animate-slide-up"
                                             style={{
                                                 height: `${((70 - value) / 70) * 60}%`,
                                                 minHeight: "8px",
@@ -370,34 +370,34 @@ export default function DashboardPage() {
                     </div>
 
                     {/* Recent Activity (Replaced with Recent Employees) */}
-                    <div className="bg-white rounded-2xl border border-slate-100 shadow-sm overflow-hidden opacity-0 animate-slide-up stagger-5" style={{ animationFillMode: "forwards" }}>
-                        <div className="flex items-center justify-between p-5 border-b border-slate-100">
-                            <h3 className="font-semibold text-slate-900">Nhân viên mới</h3>
+                    <div className="bg-white dark:bg-slate-800 rounded-2xl border border-slate-100 dark:border-slate-700 shadow-sm overflow-hidden opacity-0 animate-slide-up stagger-5" style={{ animationFillMode: "forwards" }}>
+                        <div className="flex items-center justify-between p-5 border-b border-slate-100 dark:border-slate-700">
+                            <h3 className="font-semibold text-slate-900 dark:text-white">Nhân viên mới</h3>
                             <Activity className="w-5 h-5 text-slate-400" />
                         </div>
-                        <div className="divide-y divide-slate-50">
+                        <div className="divide-y divide-slate-50 dark:divide-slate-700">
                             {recentEmployees.length > 0 ? recentEmployees.map((emp, index) => (
                                 <div
                                     key={emp.id}
-                                    className="flex items-center gap-3 p-4 hover:bg-slate-50 transition-colors cursor-pointer opacity-0 animate-slide-in"
+                                    className="flex items-center gap-3 p-4 hover:bg-slate-50 dark:hover:bg-slate-700/50 transition-colors cursor-pointer opacity-0 animate-slide-in"
                                     style={{ animationDelay: `${700 + index * 100}ms`, animationFillMode: "forwards" }}
                                 >
                                     <div className="w-10 h-10 rounded-xl gradient-primary flex items-center justify-center text-white text-xs font-bold shadow-md">
                                         {emp.avatar}
                                     </div>
                                     <div className="flex-1 min-w-0">
-                                        <p className="text-sm text-slate-900 truncate">
+                                        <p className="text-sm text-slate-900 dark:text-white truncate">
                                             <span className="font-medium">{emp.name}</span>
                                         </p>
-                                        <p className="text-xs text-slate-500 mt-0.5">{emp.position} · {new Date(emp.joinDate).toLocaleDateString('vi-VN')}</p>
+                                        <p className="text-xs text-slate-500 dark:text-slate-400 mt-0.5">{emp.position} · {new Date(emp.joinDate).toLocaleDateString('vi-VN')}</p>
                                     </div>
                                 </div>
                             )) : (
-                                <div className="p-4 text-center text-sm text-slate-500">Chưa có nhân viên nào</div>
+                                <div className="p-4 text-center text-sm text-slate-500 dark:text-slate-400">Chưa có nhân viên nào</div>
                             )}
                         </div>
-                        <div className="p-4 border-t border-slate-100">
-                            <a href="/dashboard/personnel" className="flex items-center justify-center gap-2 w-full py-2.5 text-sm font-medium text-blue-600 hover:bg-blue-50 rounded-xl transition-colors group">
+                        <div className="p-4 border-t border-slate-100 dark:border-slate-700">
+                            <a href="/dashboard/personnel" className="flex items-center justify-center gap-2 w-full py-2.5 text-sm font-medium text-blue-600 dark:text-blue-400 hover:bg-blue-50 dark:hover:bg-blue-900/20 rounded-xl transition-colors group">
                                 Xem tất cả nhân sự
                                 <ArrowRight className="w-4 h-4 transition-transform group-hover:translate-x-0.5" />
                             </a>
@@ -415,12 +415,12 @@ export default function DashboardPage() {
 
             {/* Member View - Simple welcome message */}
             {isMember && (
-                <div className="bg-white rounded-2xl border border-slate-100 shadow-sm p-8 text-center">
-                    <div className="w-20 h-20 bg-blue-100 rounded-full flex items-center justify-center mx-auto mb-4">
-                        <Users className="w-10 h-10 text-blue-600" />
+                <div className="bg-white dark:bg-slate-800 rounded-2xl border border-slate-100 dark:border-slate-700 shadow-sm p-8 text-center">
+                    <div className="w-20 h-20 bg-blue-100 dark:bg-blue-900/30 rounded-full flex items-center justify-center mx-auto mb-4">
+                        <Users className="w-10 h-10 text-blue-600 dark:text-blue-400" />
                     </div>
-                    <h2 className="text-xl font-semibold text-slate-900 mb-2">Chào mừng bạn đến với HRM System</h2>
-                    <p className="text-slate-500 mb-6 max-w-md mx-auto">
+                    <h2 className="text-xl font-semibold text-slate-900 dark:text-white mb-2">Chào mừng bạn đến với Xưởng Cà Phê</h2>
+                    <p className="text-slate-500 dark:text-slate-400 mb-6 max-w-md mx-auto">
                         Sử dụng menu bên trái để chấm công, xem lịch làm việc và cập nhật thông tin cá nhân.
                     </p>
                     <div className="flex flex-wrap justify-center gap-3">
@@ -428,7 +428,7 @@ export default function DashboardPage() {
                             <Clock className="w-4 h-4" />
                             Chấm công
                         </a>
-                        <a href="/dashboard/my-profile" className="inline-flex items-center gap-2 px-5 py-2.5 bg-slate-100 text-slate-700 text-sm font-medium rounded-xl hover:bg-slate-200 transition-all">
+                        <a href="/dashboard/my-profile" className="inline-flex items-center gap-2 px-5 py-2.5 bg-slate-100 dark:bg-slate-700 text-slate-700 dark:text-slate-200 text-sm font-medium rounded-xl hover:bg-slate-200 dark:hover:bg-slate-600 transition-all">
                             <FileText className="w-4 h-4" />
                             Thông tin cá nhân
                         </a>

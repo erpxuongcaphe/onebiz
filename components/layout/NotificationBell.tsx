@@ -109,8 +109,8 @@ export function NotificationBell() {
                 className={cn(
                     "relative p-2 rounded-xl transition-all duration-200",
                     isOpen
-                        ? "bg-blue-100 text-blue-600"
-                        : "text-slate-500 hover:bg-slate-100 hover:text-slate-700"
+                        ? "bg-blue-100 dark:bg-blue-900/30 text-blue-600 dark:text-blue-400"
+                        : "text-slate-500 dark:text-slate-400 hover:bg-slate-100 dark:hover:bg-slate-800 hover:text-slate-700 dark:hover:text-slate-200"
                 )}
             >
                 <Bell className="w-5 h-5" />
@@ -123,10 +123,10 @@ export function NotificationBell() {
 
             {/* Dropdown */}
             {isOpen && (
-                <div className="absolute right-0 mt-2 w-80 sm:w-96 bg-white rounded-2xl shadow-2xl border border-slate-200 overflow-hidden z-50 animate-in fade-in slide-in-from-top-2 duration-200">
+                <div className="absolute right-0 mt-2 w-80 sm:w-96 bg-white dark:bg-slate-800 rounded-2xl shadow-2xl border border-slate-200 dark:border-slate-700 overflow-hidden z-50 animate-in fade-in slide-in-from-top-2 duration-200">
                     {/* Header */}
-                    <div className="flex items-center justify-between px-4 py-3 border-b border-slate-100 bg-slate-50">
-                        <h3 className="font-semibold text-slate-900">Thông báo</h3>
+                    <div className="flex items-center justify-between px-4 py-3 border-b border-slate-100 dark:border-slate-700 bg-slate-50 dark:bg-slate-900/50">
+                        <h3 className="font-semibold text-slate-900 dark:text-white">Thông báo</h3>
                         <div className="flex items-center gap-1">
                             {unreadCount > 0 && (
                                 <button
@@ -139,7 +139,7 @@ export function NotificationBell() {
                             )}
                             <button
                                 onClick={() => setIsOpen(false)}
-                                className="p-1.5 text-slate-400 hover:bg-slate-100 rounded-lg transition-colors"
+                                className="p-1.5 text-slate-400 hover:bg-slate-100 dark:hover:bg-slate-700 rounded-lg transition-colors"
                             >
                                 <X className="w-4 h-4" />
                             </button>
@@ -164,8 +164,8 @@ export function NotificationBell() {
                                         key={notification.id}
                                         onClick={() => handleMarkAsRead(notification)}
                                         className={cn(
-                                            "p-4 hover:bg-slate-50 transition-colors cursor-pointer",
-                                            !notification.is_read && "bg-blue-50/50"
+                                            "p-4 hover:bg-slate-50 dark:hover:bg-slate-700/50 transition-colors cursor-pointer",
+                                            !notification.is_read && "bg-blue-50/50 dark:bg-blue-900/10"
                                         )}
                                     >
                                         <div className="flex gap-3">
@@ -182,17 +182,17 @@ export function NotificationBell() {
                                             {/* Content */}
                                             <div className="flex-1 min-w-0">
                                                 <div className="flex items-start justify-between gap-2">
-                                                    <p className="font-medium text-slate-900 text-sm">
+                                                    <p className="font-medium text-slate-900 dark:text-white text-sm">
                                                         {notification.title}
                                                     </p>
                                                     {!notification.is_read && (
                                                         <span className="w-2 h-2 rounded-full bg-blue-500 shrink-0 mt-1.5" />
                                                     )}
                                                 </div>
-                                                <p className="text-sm text-slate-600 line-clamp-2 mt-0.5">
+                                                <p className="text-sm text-slate-600 dark:text-slate-400 line-clamp-2 mt-0.5">
                                                     {notification.message}
                                                 </p>
-                                                <p className="text-xs text-slate-400 mt-1">
+                                                <p className="text-xs text-slate-400 dark:text-slate-500 mt-1">
                                                     {formatNotificationTime(notification.created_at)}
                                                 </p>
                                             </div>
@@ -220,11 +220,11 @@ export function NotificationBell() {
                     </div>
 
                     {/* Footer */}
-                    <div className="p-3 border-t border-slate-100 bg-slate-50">
+                    <div className="p-3 border-t border-slate-100 dark:border-slate-700 bg-slate-50 dark:bg-slate-900/50">
                         <Link
                             href="/dashboard/notifications"
                             onClick={() => setIsOpen(false)}
-                            className="block w-full text-center text-sm font-medium text-blue-600 hover:text-blue-700 py-2 hover:bg-blue-50 rounded-lg transition-colors"
+                            className="block w-full text-center text-sm font-medium text-blue-600 dark:text-blue-400 hover:text-blue-700 dark:hover:text-blue-300 py-2 hover:bg-blue-50 dark:hover:bg-blue-900/20 rounded-lg transition-colors"
                         >
                             Xem tất cả thông báo
                         </Link>

@@ -50,4 +50,4 @@ CREATE POLICY "Enable all access for office_settings" ON office_settings FOR ALL
 
 -- Comments
 COMMENT ON TABLE office_settings IS 'Cấu hình giờ hành chính - có thể thay đổi bởi Admin';
-COMMENT ON COLUMN office_settings.work_days IS 'Các ngày làm việc: 0=Chủ nhật, 1=Thứ 2, 2=Thứ 3, ...';
+-- Note: work_days is stored as a key-value pair, not a column

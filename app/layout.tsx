@@ -1,13 +1,19 @@
 import type { Metadata } from "next";
+import { Inter } from "next/font/google";
 import localFont from "next/font/local";
 import "./globals.css";
 import { AuthProvider } from "@/contexts/AuthContext";
+import { BranchProvider } from "@/contexts/BranchContext";
+import { ThemeProvider } from "@/components/providers/ThemeProvider";
 
-const geistSans = localFont({
-  src: "./fonts/GeistVF.woff",
-  variable: "--font-geist-sans",
-  weight: "100 900",
+// Inter font - professional, web-friendly alternative to Calibri
+const inter = Inter({
+  subsets: ['latin', 'vietnamese'],
+  variable: "--font-inter",
+  display: 'swap',
 });
+
+// Keep Geist Mono for code/monospace elements
 const geistMono = localFont({
   src: "./fonts/GeistMonoVF.woff",
   variable: "--font-geist-mono",
@@ -15,8 +21,8 @@ const geistMono = localFont({
 });
 
 export const metadata: Metadata = {
-  title: "HRM System - Hệ thống Quản lý Nhân sự",
-  description: "Hệ thống quản lý nhân sự nội bộ",
+  title: "Xưởng Cà Phê - Hệ thống ERP",
+  description: "Hệ thống quản trị doanh nghiệp Xưởng Cà Phê",
 };
 
 export default function RootLayout({
@@ -25,14 +31,19 @@ export default function RootLayout({
   children: React.ReactNode;
 }>) {
   return (
-    <html lang="vi">
+    <html lang="vi" suppressHydrationWarning>
       <body
-        className={`${geistSans.variable} ${geistMono.variable} antialiased`}
+        className={`${inter.variable} ${geistMono.variable} font-sans antialiased`}
       >
-        <AuthProvider>
-          {children}
-        </AuthProvider>
+        <ThemeProvider>
+          <AuthProvider>
+            <BranchProvider>
+              {children}
+            </BranchProvider>
+          </AuthProvider>
+        </ThemeProvider>
       </body>
     </html>
   );
 }
+
