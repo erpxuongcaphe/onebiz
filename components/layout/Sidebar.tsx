@@ -368,7 +368,7 @@ export function Sidebar() {
             {/* Sidebar Container */}
             <div
                 className={cn(
-                    "fixed inset-y-0 left-0 z-40 w-72 gradient-dark text-slate-100 transform transition-all duration-300 ease-out md:translate-x-0 shadow-2xl",
+                    "fixed inset-y-0 left-0 z-40 w-72 bg-slate-900/95 backdrop-blur-2xl border-r border-white/5 text-slate-100 transform transition-all duration-300 ease-out md:translate-x-0 shadow-2xl",
                     isMobileOpen ? "translate-x-0" : "-translate-x-full"
                 )}
             >

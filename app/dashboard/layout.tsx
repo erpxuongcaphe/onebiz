@@ -46,15 +46,31 @@ export default function DashboardLayout({
     }
 
     return (
-        <div className="min-h-screen bg-slate-50 dark:bg-slate-900">
+        <div className="min-h-screen bg-slate-50 dark:bg-slate-950 relative overflow-hidden font-sans selection:bg-blue-500/30">
+            {/* Global Animated Background */}
+            <div className="fixed inset-0 z-0 pointer-events-none overflow-hidden">
+                <div className="absolute top-[-20%] left-[-10%] w-[50vw] h-[50vw] bg-blue-500/5 dark:bg-blue-500/10 rounded-full blur-[120px] animate-pulse-subtle" />
+                <div className="absolute bottom-[-20%] right-[-10%] w-[50vw] h-[50vw] bg-purple-500/5 dark:bg-purple-500/10 rounded-full blur-[120px] animate-pulse-subtle stagger-2" />
+                <div className="absolute top-[30%] right-[20%] w-[30vw] h-[30vw] bg-cyan-500/5 dark:bg-cyan-500/5 rounded-full blur-[100px] animate-float" />
+            </div>
+
             <ToastProvider />
-            <Sidebar />
-            <main className="md:pl-72 min-h-screen transition-all duration-300">
-                <div className="container mx-auto p-4 md:p-10 pb-24 md:pb-10 max-w-7xl">
+
+            {/* Sidebar wrapper with higher z-index */}
+            <div className="relative z-40">
+                <Sidebar />
+            </div>
+
+            <main className="relative z-10 md:pl-72 min-h-screen transition-all duration-300">
+                <div className="container mx-auto p-4 md:p-8 pb-32 md:pb-10 max-w-7xl animate-fade-in">
                     {children}
                 </div>
             </main>
-            <MobileBottomNav />
+
+            <div className="relative z-50">
+                <MobileBottomNav />
+            </div>
         </div>
     );
+
 }
