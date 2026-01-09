@@ -442,4 +442,18 @@
     @apply bg-amber-500;
     box-shadow: 0 0 0 2px rgba(245, 158, 11, 0.2);
   }
+
+  /* Mobile Safe Area */
+  .pb-safe {
+    padding-bottom: env(safe-area-inset-bottom);
+  }
+
+  /* Hide Scrollbar but allow scrolling */
+  .no-scrollbar::-webkit-scrollbar {
+    display: none;
+  }
+  .no-scrollbar {
+    -ms-overflow-style: none;
+    scrollbar-width: none;
+  }
 }
