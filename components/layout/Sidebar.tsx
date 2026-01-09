@@ -29,6 +29,7 @@ import {
     Package,
     ArrowRightLeft,
     AlertTriangle,
+    ShoppingCart,
 } from "lucide-react";
 import { useState, useEffect, useCallback } from "react";
 
@@ -60,6 +61,15 @@ const baseNavigation: MenuItem[] = [
         icon: LayoutDashboard,
         description: "Thống kê cá nhân của bạn",
         roles: ["member"]
+    },
+
+    // === 🛒 BÁN HÀNG (POS) ===
+    {
+        name: "Bán hàng (POS)",
+        href: "/dashboard/pos",
+        icon: ShoppingCart,
+        description: "Bán hàng tại quầy",
+        roles: ["admin", "branch_manager", "accountant"]
     },
 
     // === 📦 KHO HÀNG ===
