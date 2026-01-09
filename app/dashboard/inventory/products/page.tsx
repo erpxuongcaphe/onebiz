@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useEffect } from "react";
+import { useState, useEffect, useCallback } from "react";
 import { useBranch } from "@/contexts/BranchContext";
 import { getProducts, getCategories, deleteProduct } from "@/lib/api/inventory";
 import { Product, Category } from "@/lib/types/inventory";
@@ -19,7 +19,7 @@ export default function ProductListPage() {
     const [isFormOpen, setIsFormOpen] = useState(false);
     const [editingProduct, setEditingProduct] = useState<Product | undefined>(undefined);
 
-    const fetchData = async () => {
+    const fetchData = useCallback(async () => {
         if (!currentBranch) return;
         setIsLoading(true);
         try {
@@ -38,14 +38,14 @@ export default function ProductListPage() {
         } finally {
             setIsLoading(false);
         }
-    };
+    }, [currentBranch, searchTerm, selectedCategory]);
 
     useEffect(() => {
         const timer = setTimeout(() => {
             fetchData();
         }, 300); // Debounce search
         return () => clearTimeout(timer);
-    }, [currentBranch, searchTerm, selectedCategory]);
+    }, [fetchData]);
 
     const handleDelete = async (id: string) => {
         if (!confirm("Bạn có chắc chắn muốn xóa sản phẩm này không?")) return;

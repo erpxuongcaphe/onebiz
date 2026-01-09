@@ -48,7 +48,7 @@ export function StockMovement() {
             fetchProds();
         }, 300);
         return () => clearTimeout(timer);
-    }, [searchTerm, currentBranch]);
+    }, [searchTerm, currentBranch, selectedProduct]);
 
     const handleSubmit = async (e: React.FormEvent) => {
         e.preventDefault();
