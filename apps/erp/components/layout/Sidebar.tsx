@@ -44,23 +44,16 @@ type MenuItem = {
     badgeKey?: 'leaveRequests' | 'attendance' | 'shiftRegistrations' | 'total'; // Key for pending badge
 };
 
-// Grouped navigation structure - ERP 2025 Best Practices
-// Based on Odoo 17, ERPNext patterns: role-based, max 2 levels, icon+text
+// Grouped navigation structure - Optimized for clarity
+// Separated "My Account" from "HR Management" for cleaner UX
 const baseNavigation: MenuItem[] = [
     // === 🏠 TỔNG QUAN ===
     {
         name: "Tổng quan",
         href: "/dashboard",
         icon: LayoutDashboard,
-        description: "Xem tổng quan hệ thống",
-        roles: ["admin", "accountant", "branch_manager"]
-    },
-    {
-        name: "Tổng quan của tôi",
-        href: "/dashboard/my-dashboard",
-        icon: LayoutDashboard,
-        description: "Thống kê cá nhân của bạn",
-        roles: ["member"]
+        description: "Dashboard tổng hợp",
+        roles: ["admin", "accountant", "branch_manager", "member"]
     },
 
     // === 🛒 BÁN HÀNG (POS) ===
@@ -76,59 +69,55 @@ const baseNavigation: MenuItem[] = [
     {
         name: "Kho hàng",
         icon: Package,
-        description: "Quản lý kho hàng & tồn kho",
+        description: "Quản lý kho & tồn kho",
         roles: ["admin", "branch_manager", "accountant"],
         children: [
-            { name: "Sản phẩm & Tồn kho", href: "/dashboard/inventory/products", icon: Package, description: "Danh sách sản phẩm", roles: ["admin", "branch_manager", "accountant"] },
+            { name: "Sản phẩm", href: "/dashboard/inventory/products", icon: Package, description: "Danh sách sản phẩm", roles: ["admin", "branch_manager", "accountant"] },
             { name: "Nhập/Xuất kho", href: "/dashboard/inventory/movements", icon: ArrowRightLeft, description: "Tạo phiếu nhập xuất", roles: ["admin", "branch_manager", "accountant"] },
-            { name: "Cảnh báo tồn kho", href: "/dashboard/inventory/alerts", icon: AlertTriangle, description: "SP sắp hết hàng", roles: ["admin", "branch_manager", "accountant"] },
-            { name: "Cấu hình kho", href: "/dashboard/inventory/settings", icon: Settings, description: "Danh mục & cài đặt", roles: ["admin", "branch_manager"] },
+            { name: "Cảnh báo", href: "/dashboard/inventory/alerts", icon: AlertTriangle, description: "SP sắp hết hàng", roles: ["admin", "branch_manager"] },
         ]
     },
 
-    // === 👥 NHÂN SỰ (HR) - Main HR module with all HR features ===
+    // === 👤 TÀI KHOẢN CỦA TÔI (ALL ROLES) ===
     {
-        name: "Nhân sự (HR)",
+        name: "Tài khoản",
         icon: Users,
-        description: "Quản lý nhân sự & Lương",
-        roles: ["admin", "branch_manager", "accountant", "member"],
+        description: "Thông tin cá nhân",
+        roles: ["admin", "accountant", "branch_manager", "member"],
+        children: [
+            { name: "Hồ sơ", href: "/dashboard/my-profile", icon: Users, description: "Thông tin cá nhân", roles: ["admin", "accountant", "branch_manager", "member"] },
+            { name: "Lịch làm việc", href: "/dashboard/my-schedule", icon: Calendar, description: "Xem lịch của tôi", roles: ["admin", "accountant", "branch_manager", "member"] },
+            { name: "Chấm công", href: "/dashboard/my-attendance", icon: Clock, description: "Xem chấm công", roles: ["admin", "accountant", "branch_manager", "member"] },
+            { name: "Nghỉ phép", href: "/dashboard/my-leaves", icon: CalendarCheck, description: "Đơn nghỉ của tôi", roles: ["admin", "accountant", "branch_manager", "member"] },
+            { name: "Phiếu lương", href: "/dashboard/my-salary", icon: Wallet, description: "Xem lương cá nhân", roles: ["admin", "accountant", "branch_manager", "member"] },
+        ]
+    },
+
+    // === 👥 QUẢN LÝ HR (Admin/Manager only) ===
+    {
+        name: "Quản lý HR",
+        icon: Users,
+        description: "Quản lý nhân sự",
+        roles: ["admin", "branch_manager", "accountant"],
         badgeKey: "total",
         children: [
-            // Hồ sơ cá nhân - ALL ROLES (gom vào HR)
-            { name: "Hồ sơ của tôi", href: "/dashboard/my-profile", icon: Users, description: "Thông tin cá nhân", roles: ["admin", "accountant", "branch_manager", "member"] },
-
-            // Lịch làm việc
-            { name: "Lịch của tôi", href: "/dashboard/my-schedule", icon: Calendar, description: "Xem lịch làm việc", roles: ["member"] },
-            { name: "Lịch làm việc", href: "/dashboard/schedules", icon: Calendar, description: "Xếp lịch & Ca làm việc", roles: ["admin", "branch_manager"] },
-
-            // Chấm công
-            { name: "Chấm công của tôi", href: "/dashboard/my-attendance", icon: Clock, description: "Xem chấm công cá nhân", roles: ["member"] },
-            { name: "Bảng chấm công", href: "/dashboard/timekeeping", icon: Clock, description: "Xem toàn bộ chấm công", roles: ["admin", "accountant", "branch_manager"] },
-            { name: "Duyệt chấm công", href: "/dashboard/approval", icon: Shield, description: "Duyệt công nhân viên", roles: ["admin", "accountant", "branch_manager"], badgeKey: "attendance" },
-
-            // Nghỉ phép
-            { name: "Nghỉ phép của tôi", href: "/dashboard/my-leaves", icon: CalendarCheck, description: "Đơn nghỉ của tôi", roles: ["member"] },
+            { name: "Nhân viên", href: "/dashboard/personnel", icon: Users, description: "Danh sách NV", roles: ["admin", "branch_manager"] },
+            { name: "Lịch làm việc", href: "/dashboard/schedules", icon: Calendar, description: "Xếp ca làm", roles: ["admin", "branch_manager"] },
+            { name: "Bảng chấm công", href: "/dashboard/timekeeping", icon: Clock, description: "Chấm công toàn bộ", roles: ["admin", "accountant", "branch_manager"] },
+            { name: "Duyệt công", href: "/dashboard/approval", icon: Shield, description: "Duyệt chấm công", roles: ["admin", "accountant", "branch_manager"], badgeKey: "attendance" },
             { name: "Duyệt nghỉ phép", href: "/dashboard/leaves", icon: CalendarCheck, description: "Duyệt đơn nghỉ", roles: ["admin", "branch_manager"], badgeKey: "leaveRequests" },
-
-            // Lương & KPI
-            { name: "Phiếu lương của tôi", href: "/dashboard/my-salary", icon: Wallet, description: "Xem phiếu lương cá nhân", roles: ["member"] },
-            { name: "Bảng lương", href: "/dashboard/salary", icon: Wallet, description: "Tính lương & Phiếu lương", roles: ["admin", "accountant"] },
-            { name: "Đánh giá KPI", href: "/dashboard/performance", icon: Star, description: "Đánh giá hiệu suất", roles: ["admin", "branch_manager"] },
-
-            // Quản lý nhân sự (Admin/Manager only)
-            { name: "Danh sách nhân viên", href: "/dashboard/personnel", icon: Users, description: "Quản lý hồ sơ NV", roles: ["admin", "branch_manager"] },
+            { name: "Bảng lương", href: "/dashboard/salary", icon: Wallet, description: "Tính lương", roles: ["admin", "accountant"] },
+            { name: "Đánh giá KPI", href: "/dashboard/performance", icon: Star, description: "Hiệu suất NV", roles: ["admin", "branch_manager"] },
         ]
     },
 
-    // === 📊 BÁO CÁO & TÀI CHÍNH ===
+    // === 📊 BÁO CÁO ===
     {
         name: "Báo cáo",
+        href: "/dashboard/reports",
         icon: BarChart3,
         description: "Báo cáo & Thống kê",
-        roles: ["admin", "accountant", "branch_manager"],
-        children: [
-            { name: "Báo cáo tổng hợp", href: "/dashboard/reports", icon: BarChart3, description: "Báo cáo chung", roles: ["admin", "accountant", "branch_manager"] },
-        ]
+        roles: ["admin", "accountant", "branch_manager"]
     },
 
     // === 🔔 THÔNG BÁO ===
@@ -136,24 +125,24 @@ const baseNavigation: MenuItem[] = [
         name: "Thông báo",
         href: "/dashboard/notifications",
         icon: Bell,
-        description: "Xem tất cả thông báo",
+        description: "Xem thông báo",
         roles: ["admin", "accountant", "branch_manager", "member"]
     },
 
-    // === ⚙️ CÀI ĐẶT (Admin only - kept at bottom as per ERP standard) ===
+    // === ⚙️ CÀI ĐẶT (Admin only) ===
     {
         name: "Cài đặt",
         icon: Settings,
         description: "Cấu hình hệ thống",
         roles: ["admin"],
         children: [
-            { name: "Cấu hình giờ làm", href: "/dashboard/settings", icon: Clock, description: "Giờ làm & nghỉ trưa", roles: ["admin"] },
-            { name: "Chi nhánh", href: "/dashboard/branches", icon: Building2, description: "Quản lý chi nhánh", roles: ["admin"] },
-            { name: "Phòng ban & Chức vụ", href: "/dashboard/categories", icon: FolderTree, description: "Danh mục nhân sự", roles: ["admin"] },
-            { name: "Loại nghỉ phép", href: "/dashboard/leave-types", icon: CalendarCheck, description: "Cấu hình nghỉ phép", roles: ["admin"] },
-            { name: "Mẫu phiếu lương", href: "/dashboard/payslip-template", icon: FileText, description: "Template phiếu lương", roles: ["admin", "accountant"] },
-            { name: "Phân quyền", href: "/dashboard/permissions", icon: Shield, description: "Phân quyền người dùng", roles: ["admin"] },
-            { name: "Quản lý Users", href: "/dashboard/users", icon: UserCog, description: "Tài khoản đăng nhập", roles: ["admin"] },
+            { name: "Giờ làm việc", href: "/dashboard/settings", icon: Clock, description: "Cấu hình giờ", roles: ["admin"] },
+            { name: "Chi nhánh", href: "/dashboard/branches", icon: Building2, description: "Quản lý CN", roles: ["admin"] },
+            { name: "Phòng ban", href: "/dashboard/categories", icon: FolderTree, description: "Phòng & Chức vụ", roles: ["admin"] },
+            { name: "Loại nghỉ phép", href: "/dashboard/leave-types", icon: CalendarCheck, description: "Cấu hình nghỉ", roles: ["admin"] },
+            { name: "Mẫu phiếu lương", href: "/dashboard/payslip-template", icon: FileText, description: "Template lương", roles: ["admin", "accountant"] },
+            { name: "Phân quyền", href: "/dashboard/permissions", icon: Shield, description: "Quản lý quyền", roles: ["admin"] },
+            { name: "Users", href: "/dashboard/users", icon: UserCog, description: "Tài khoản", roles: ["admin"] },
         ]
     },
 ];
