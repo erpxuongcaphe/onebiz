@@ -1,0 +1,25 @@
+{
+    "name": "@onebiz/ui",
+    "version": "1.0.0",
+    "private": true,
+    "main": "./index.tsx",
+    "types": "./index.tsx",
+    "exports": {
+        ".": "./index.tsx",
+        "./*": "./*"
+    },
+    "peerDependencies": {
+        "react": "^18",
+        "react-dom": "^18"
+    },
+    "dependencies": {
+        "clsx": "^2.1.1",
+        "lucide-react": "^0.562.0",
+        "tailwind-merge": "^3.4.0"
+    },
+    "devDependencies": {
+        "@types/react": "^18",
+        "@types/react-dom": "^18",
+        "typescript": "^5"
+    }
+}
