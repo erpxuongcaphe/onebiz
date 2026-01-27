@@ -14,7 +14,6 @@ const MAIN_DESKTOP: NavItem[] = [
   { id: Tab.DASHBOARD, label: 'Tổng quan', icon: LayoutDashboard },
   { id: Tab.INVENTORY, label: 'Kho hàng', icon: Package },
   { id: Tab.ORDERS, label: 'Đơn hàng', icon: ShoppingCart },
-  { id: Tab.POS, label: 'POS', icon: Store },
   { id: Tab.REPORTS, label: 'Báo cáo', icon: BarChart2 },
   { id: Tab.FINANCE, label: 'Tài chính', icon: Wallet },
   { id: Tab.CUSTOMERS, label: 'Khách hàng', icon: Users },
@@ -32,7 +31,6 @@ const MAIN_MOBILE: NavItem[] = [
   { id: Tab.DASHBOARD, label: 'Tổng quan', icon: LayoutDashboard },
   { id: Tab.INVENTORY, label: 'Kho hàng', icon: Package },
   { id: Tab.ORDERS, label: 'Đơn hàng', icon: ShoppingCart },
-  { id: Tab.POS, label: 'POS', icon: Store },
   { id: Tab.REPORTS, label: 'Báo cáo', icon: BarChart2 },
 ];
 
