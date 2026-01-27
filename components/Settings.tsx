@@ -198,6 +198,8 @@ const Settings: React.FC = () => {
         'Đăng xuất quá lâu. Vui lòng kiểm tra mạng và thử lại.'
       );
       if (signOutError) throw signOutError;
+      // Success - reload page to clear auth state
+      window.location.reload();
     } catch (e: any) {
       try {
         await supabase.auth.signOut({ scope: 'local' });
