@@ -13,7 +13,6 @@ const LazyReports = React.lazy(() => import('./components/Reports'));
 const LazyFinance = React.lazy(() => import('./components/Finance'));
 const LazyCustomers = React.lazy(() => import('./components/Customers'));
 const LazySettings = React.lazy(() => import('./components/Settings'));
-const LazyAIChat = React.lazy(() => import('./components/AIChat'));
 
 const PageFallback = () => (
   <div className="text-[11px] text-slate-500 dark:text-slate-400 animate-fade-in">Đang tải...</div>
@@ -114,9 +113,6 @@ function App() {
         </div>
       </main>
 
-      <Suspense fallback={null}>
-        <LazyAIChat />
-      </Suspense>
     </div>
   );
 }

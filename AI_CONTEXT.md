@@ -9,7 +9,7 @@
 - **Styling:** Tailwind CSS (Custom config in `index.html` for `safe-area` and font sizes).
 - **Icons:** Lucide React (Stroke width 1.5 or 2 depending on density).
 - **Charts:** Recharts (Responsive containers).
-- **AI:** Google GenAI SDK (`@google/genai`).
+
 - **Font:** Be Vietnam Pro (Google Fonts).
 
 ## 3. Critical Design Rules (DO NOT BREAK)
@@ -39,7 +39,7 @@ This is an ERP, not a landing page. Information density is priority.
 ## 4. Component Architecture
 - **`App.tsx`:** Layout manager. Handles `activeTab` state and renders `MobileNav` + `Sidebar`.
 - **`MobileNav.tsx`:** Fixed bottom bar. Critical for mobile UX.
-- **`AIChat.tsx`:** Floating AI assistant.
+
     - **Positioning:** `bottom-20` on mobile (to clear nav), `bottom-4` on desktop.
 - **`Drawer.tsx`:** Used for details (Inventory items, Orders) to prevent page navigation context loss.
 - **`Dashboard.tsx`:** Contains KPI Cards and Charts. Note the "Quick Actions" toolbar on mobile.
@@ -47,7 +47,7 @@ This is an ERP, not a landing page. Information density is priority.
 ## 5. Next Steps for Development
 1.  **State Management:** Currently using local state (`useState`). Consider migrating to Context API or Zustand if complexity grows.
 2.  **Backend Integration:** Connect `MOCK_PRODUCTS` and `MOCK_ORDERS` to a real API (Supabase/Firebase).
-3.  **AI Features:** The `AIChat.tsx` is wired to Gemini API. Expand the `context` variable to include real-time filtered data from the table.
+
 
 ## 6. Typography
 Font family is set globally in `index.html` to **Be Vietnam Pro**. Ensure `font-sans` is used (default).

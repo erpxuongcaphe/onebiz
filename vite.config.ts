@@ -33,15 +33,10 @@ export default defineConfig(({ mode }) => {
               if (id.includes('@supabase/supabase-js')) return 'supabase';
               if (id.includes('recharts')) return 'charts';
               if (id.includes('lucide-react')) return 'icons';
-              if (id.includes('@google/genai')) return 'ai';
               return 'vendor';
             },
           },
         },
-      },
-      define: {
-        'process.env.API_KEY': JSON.stringify(env.GEMINI_API_KEY),
-        'process.env.GEMINI_API_KEY': JSON.stringify(env.GEMINI_API_KEY)
       },
       resolve: {
         alias: {

@@ -1,24 +1,29 @@
 {
-  "name": "onebiz",
-  "version": "1.0.0",
+  "name": "onebiz-erp---mobile-first-edition",
   "private": true,
-  "workspaces": [
-    "apps/*",
-    "packages/*"
-  ],
+  "version": "0.0.0",
+  "type": "module",
   "scripts": {
-    "dev": "turbo run dev",
-    "dev:erp": "turbo run dev --filter=erp",
-    "dev:pos": "turbo run dev --filter=pos",
-    "build": "turbo run build",
-    "build:erp": "turbo run build --filter=erp",
-    "build:pos": "turbo run build --filter=pos",
-    "lint": "turbo run lint",
-    "clean": "turbo run clean && rimraf node_modules"
+    "dev": "vite",
+    "dev:main": "vite --mode main",
+    "dev:pos": "vite --mode pos",
+    "build": "node --max-old-space-size=4096 ./node_modules/vite/bin/vite.js build",
+    "build:main": "node --max-old-space-size=4096 ./node_modules/vite/bin/vite.js build --mode main",
+    "build:pos": "node --max-old-space-size=4096 ./node_modules/vite/bin/vite.js build --mode pos",
+    "typecheck": "tsc -p tsconfig.json --noEmit",
+    "preview": "vite preview"
+  },
+  "dependencies": {
+    "@supabase/supabase-js": "^2.91.1",
+    "lucide-react": "^0.563.0",
+    "react": "^19.2.3",
+    "react-dom": "^19.2.3",
+    "recharts": "^3.7.0"
   },
   "devDependencies": {
-    "turbo": "^2.7.3",
-    "rimraf": "^5.0.0"
-  },
-  "packageManager": "npm@10.2.0"
+    "@types/node": "^22.14.0",
+    "@vitejs/plugin-react": "^5.0.0",
+    "typescript": "~5.8.2",
+    "vite": "^6.2.0"
+  }
 }
