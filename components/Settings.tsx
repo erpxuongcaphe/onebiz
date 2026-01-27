@@ -25,6 +25,12 @@ const Settings: React.FC = () => {
   const [profiles, setProfiles] = useState<ProfileLite[]>([]);
   const [userRoles, setUserRoles] = useState<UserRole[]>([]);
   const [branches, setBranches] = useState<Branch[]>([]);
+  const [draftRolesByUser, setDraftRolesByUser] = useState<Record<string, Set<string>>>({});
+  const [draftBranchByUser, setDraftBranchByUser] = useState<Record<string, string | null>>({});
+  const [dirtyByUser, setDirtyByUser] = useState<Record<string, boolean>>({});
+  const [savingByUser, setSavingByUser] = useState<Record<string, boolean>>({});
+  const [errorByUser, setErrorByUser] = useState<Record<string, string | null>>({});
+  const [successByUser, setSuccessByUser] = useState<Record<string, boolean>>({});
   const [roleError, setRoleError] = useState<string | null>(null);
   const [roleBusyKey, setRoleBusyKey] = useState<string>('');
   const [rolesLoading, setRolesLoading] = useState(false);
@@ -80,6 +86,24 @@ const Settings: React.FC = () => {
         setProfiles(profileList);
         setUserRoles(userRoleList);
         setBranches(branchList);
+        const draftRoles: Record<string, Set<string>> = {};
+        const draftBranches: Record<string, string | null> = {};
+        const dirtyMap: Record<string, boolean> = {};
+        const errorMap: Record<string, string | null> = {};
+        const successMap: Record<string, boolean> = {};
+        profileList.forEach((p) => {
+          const roleSet = new Set<string>(userRoleList.filter((ur) => ur.user_id === p.id).map((ur) => ur.role_id));
+          draftRoles[p.id] = roleSet;
+          draftBranches[p.id] = p.branch_id ?? null;
+          dirtyMap[p.id] = false;
+          errorMap[p.id] = null;
+          successMap[p.id] = false;
+        });
+        setDraftRolesByUser(draftRoles);
+        setDraftBranchByUser(draftBranches);
+        setDirtyByUser(dirtyMap);
+        setErrorByUser(errorMap);
+        setSuccessByUser(successMap);
       } catch (e: any) {
         setRoleError(e?.message ?? 'Không tải được dữ liệu phân quyền.');
       } finally {
@@ -175,7 +199,13 @@ const Settings: React.FC = () => {
       );
       if (signOutError) throw signOutError;
     } catch (e: any) {
-      setError(e?.message ?? 'Đăng xuất thất bại.');
+      try {
+        await supabase.auth.signOut({ scope: 'local' });
+        window.location.reload();
+        return;
+      } catch (localErr: any) {
+        setError(localErr?.message ?? e?.message ?? 'Đăng xuất thất bại.');
+      }
     } finally {
       setSubmitting(false);
     }
@@ -183,30 +213,16 @@ const Settings: React.FC = () => {
 
   const tenantId = tenant?.id ?? getCachedTenantId() ?? null;
 
-  const handleToggleRole = async (targetUserId: string, roleId: string, enabled: boolean) => {
-    if (!tenantId) {
-      setRoleError('Chưa xác định tenant.');
-      return;
-    }
-    const busyKey = `${targetUserId}:${roleId}`;
-    setRoleBusyKey(busyKey);
-    setRoleError(null);
-    try {
-      const ok = await setUserRole({ tenantId, userId: targetUserId, roleId, enabled });
-      if (!ok) {
-        setRoleError('Không cập nhật được vai trò (kiểm tra quyền).');
-        return;
-      }
-      setUserRoles((prev) => {
-        if (enabled) {
-          if (prev.some((ur) => ur.user_id === targetUserId && ur.role_id === roleId)) return prev;
-          return [...prev, { user_id: targetUserId, role_id: roleId }];
-        }
-        return prev.filter((ur) => !(ur.user_id === targetUserId && ur.role_id === roleId));
-      });
-    } finally {
-      setRoleBusyKey('');
-    }
+  const handleToggleRole = (targetUserId: string, roleId: string, enabled: boolean) => {
+    setDraftRolesByUser((prev) => {
+      const current = new Set<string>(prev[targetUserId] ?? []);
+      if (enabled) current.add(roleId);
+      else current.delete(roleId);
+      return { ...prev, [targetUserId]: current };
+    });
+    setDirtyByUser((prev) => ({ ...prev, [targetUserId]: true }));
+    setSuccessByUser((prev) => ({ ...prev, [targetUserId]: false }));
+    setErrorByUser((prev) => ({ ...prev, [targetUserId]: null }));
   };
 
   const handleBootstrapRole = async () => {
@@ -233,27 +249,58 @@ const Settings: React.FC = () => {
     }
   };
 
-  const handleChangeBranch = async (targetUserId: string, nextBranchId: string) => {
+  const handleChangeBranch = (targetUserId: string, nextBranchId: string) => {
+    setDraftBranchByUser((prev) => ({ ...prev, [targetUserId]: nextBranchId || null }));
+    setDirtyByUser((prev) => ({ ...prev, [targetUserId]: true }));
+    setSuccessByUser((prev) => ({ ...prev, [targetUserId]: false }));
+    setErrorByUser((prev) => ({ ...prev, [targetUserId]: null }));
+  };
+
+  const handleSaveUser = async (targetUserId: string) => {
     if (!tenantId) {
-      setRoleError('Chưa xác định tenant.');
+      setErrorByUser((prev) => ({ ...prev, [targetUserId]: 'Chưa xác định tenant.' }));
       return;
     }
-    const busyKey = `${targetUserId}:branch`;
-    setRoleBusyKey(busyKey);
-    setRoleError(null);
+    const draftRoles = (draftRolesByUser[targetUserId] ?? new Set<string>()) as Set<string>;
+    const currentRoles = new Set<string>(userRoles.filter((ur) => ur.user_id === targetUserId).map((ur) => ur.role_id));
+    const toAdd = Array.from(draftRoles.values()).filter((r) => !currentRoles.has(r));
+    const toRemove = Array.from(currentRoles.values()).filter((r) => !draftRoles.has(r));
+    const nextBranch = draftBranchByUser[targetUserId] ?? null;
+    const currentBranch = profiles.find((p) => p.id === targetUserId)?.branch_id ?? null;
+
+    setSavingByUser((prev) => ({ ...prev, [targetUserId]: true }));
+    setErrorByUser((prev) => ({ ...prev, [targetUserId]: null }));
+    setSuccessByUser((prev) => ({ ...prev, [targetUserId]: false }));
+
     try {
-      const ok = await setUserBranch({
-        tenantId,
-        userId: targetUserId,
-        branchId: nextBranchId || null,
-      });
-      if (!ok) {
-        setRoleError('Không cập nhật được chi nhánh (kiểm tra quyền).');
-        return;
+      for (const roleId of toAdd) {
+        const ok = await setUserRole({ tenantId, userId: targetUserId, roleId, enabled: true });
+        if (!ok) throw new Error(`Không thêm được role ${roleId}`);
       }
-      setProfiles((prev) => prev.map((p) => (p.id === targetUserId ? { ...p, branch_id: nextBranchId || null } : p)));
+      for (const roleId of toRemove) {
+        const ok = await setUserRole({ tenantId, userId: targetUserId, roleId, enabled: false });
+        if (!ok) throw new Error(`Không gỡ được role ${roleId}`);
+      }
+      if (nextBranch !== currentBranch) {
+        const ok = await setUserBranch({ tenantId, userId: targetUserId, branchId: nextBranch });
+        if (!ok) throw new Error('Không cập nhật được chi nhánh.');
+      }
+
+      const [profileList, userRoleList, branchList] = await Promise.all([
+        fetchProfiles(),
+        fetchUserRoles(),
+        fetchBranches(),
+      ]);
+      setProfiles(profileList);
+      setUserRoles(userRoleList);
+      setBranches(branchList);
+
+      setDirtyByUser((prev) => ({ ...prev, [targetUserId]: false }));
+      setSuccessByUser((prev) => ({ ...prev, [targetUserId]: true }));
+    } catch (e: any) {
+      setErrorByUser((prev) => ({ ...prev, [targetUserId]: e?.message ?? 'Lưu thất bại.' }));
     } finally {
-      setRoleBusyKey('');
+      setSavingByUser((prev) => ({ ...prev, [targetUserId]: false }));
     }
   };
 
@@ -437,6 +484,24 @@ on conflict (id) do nothing;`}
                       setProfiles(profileList);
                       setUserRoles(userRoleList);
                       setBranches(branchList);
+                      const draftRoles: Record<string, Set<string>> = {};
+                      const draftBranches: Record<string, string | null> = {};
+                      const dirtyMap: Record<string, boolean> = {};
+                      const errorMap: Record<string, string | null> = {};
+                      const successMap: Record<string, boolean> = {};
+                      profileList.forEach((p) => {
+                        const roleSet = new Set<string>(userRoleList.filter((ur) => ur.user_id === p.id).map((ur) => ur.role_id));
+                        draftRoles[p.id] = roleSet;
+                        draftBranches[p.id] = p.branch_id ?? null;
+                        dirtyMap[p.id] = false;
+                        errorMap[p.id] = null;
+                        successMap[p.id] = false;
+                      });
+                      setDraftRolesByUser(draftRoles);
+                      setDraftBranchByUser(draftBranches);
+                      setDirtyByUser(dirtyMap);
+                      setErrorByUser(errorMap);
+                      setSuccessByUser(successMap);
                     } catch (e: any) {
                       setRoleError(e?.message ?? 'Không tải được dữ liệu phân quyền.');
                     } finally {
@@ -480,7 +545,11 @@ on conflict (id) do nothing;`}
                   <div className="text-[11px] text-slate-500 dark:text-slate-400">Chưa có người dùng.</div>
                 )}
                 {profiles.map((p) => {
-                  const roleSet = new Set(userRoles.filter((ur) => ur.user_id === p.id).map((ur) => ur.role_id));
+                  const roleSet = draftRolesByUser[p.id] ?? new Set<string>(userRoles.filter((ur) => ur.user_id === p.id).map((ur) => ur.role_id));
+                  const isDirty = Boolean(dirtyByUser[p.id]);
+                  const isSaving = Boolean(savingByUser[p.id]);
+                  const errorMessage = errorByUser[p.id];
+                  const isSuccess = Boolean(successByUser[p.id]);
                   return (
                     <div key={p.id} className="border border-slate-200 dark:border-slate-800 rounded-lg p-2.5">
                       <div className="flex items-center justify-between gap-2">
@@ -492,10 +561,22 @@ on conflict (id) do nothing;`}
                           {p.status}
                         </div>
                       </div>
+                      <div className="mt-1 flex items-center gap-2">
+                        {isDirty && <div className="text-[10px] font-semibold text-amber-600 dark:text-amber-400">Đã thay đổi (chưa lưu)</div>}
+                        {isSaving && <div className="text-[10px] font-semibold text-slate-500 dark:text-slate-400">Đang lưu...</div>}
+                        {isSuccess && !isDirty && !isSaving && (
+                          <div className="text-[10px] font-semibold text-emerald-600 dark:text-emerald-400">Lưu thành công</div>
+                        )}
+                      </div>
+                      {errorMessage && (
+                        <div className="mt-1 text-[10px] text-rose-700 dark:text-rose-400 bg-rose-50 dark:bg-rose-900/20 border border-rose-200 dark:border-rose-900/40 rounded-lg p-2">
+                          Lỗi: {errorMessage}
+                        </div>
+                      )}
                       <div className="mt-2 flex flex-wrap gap-2">
                         {roles.map((r) => {
                           const checked = roleSet.has(r.id);
-                          const busy = roleBusyKey === `${p.id}:${r.id}`;
+                          const busy = isSaving;
                           return (
                             <label key={r.id} className={`flex items-center gap-1.5 px-2 py-1 rounded-md border text-[10px] font-bold ${checked ? 'bg-indigo-50 dark:bg-indigo-900/20 border-indigo-200 dark:border-indigo-800 text-indigo-700 dark:text-indigo-300' : 'bg-white dark:bg-slate-900 border-slate-200 dark:border-slate-800 text-slate-600 dark:text-slate-300'}`}>
                               <input
@@ -503,7 +584,7 @@ on conflict (id) do nothing;`}
                                 className="accent-indigo-600"
                                 checked={checked}
                                 disabled={busy}
-                                onChange={(e) => void handleToggleRole(p.id, r.id, e.target.checked)}
+                                onChange={(e) => handleToggleRole(p.id, r.id, e.target.checked)}
                               />
                               <span>{r.name}</span>
                             </label>
@@ -513,9 +594,9 @@ on conflict (id) do nothing;`}
                       <div className="mt-2">
                         <div className="text-[10px] font-bold text-slate-500 dark:text-slate-400 mb-1">Chi nhánh</div>
                         <select
-                          value={p.branch_id ?? ''}
-                          disabled={roleBusyKey === `${p.id}:branch` || branches.length === 0}
-                          onChange={(e) => void handleChangeBranch(p.id, e.target.value)}
+                          value={draftBranchByUser[p.id] ?? p.branch_id ?? ''}
+                          disabled={isSaving || branches.length === 0}
+                          onChange={(e) => handleChangeBranch(p.id, e.target.value)}
                           className="w-full px-2.5 py-1.5 rounded-lg bg-slate-50 dark:bg-slate-900 border border-slate-200 dark:border-slate-800 text-[11px]"
                         >
                           <option value="">Chưa gán</option>
@@ -525,6 +606,15 @@ on conflict (id) do nothing;`}
                             </option>
                           ))}
                         </select>
+                      </div>
+                      <div className="mt-2 flex items-center justify-end">
+                        <button
+                          onClick={() => void handleSaveUser(p.id)}
+                          disabled={!isDirty || isSaving}
+                          className="px-3 py-1.5 rounded-lg bg-indigo-600 hover:bg-indigo-700 disabled:opacity-50 text-white text-[11px] font-bold"
+                        >
+                          Lưu
+                        </button>
                       </div>
                     </div>
                   );

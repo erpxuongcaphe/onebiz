@@ -32,3 +32,4 @@ erp.zip
 # Local assistant config
 .claude
 .claude/
+.env*.local
