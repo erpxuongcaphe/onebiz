@@ -25,6 +25,45 @@ export interface Order {
   total: number;
   status: OrderStatus;
   items: number;
+  // Extended fields for full ERP
+  customerId?: string;
+  branchId?: string;
+  warehouseId?: string;
+  paymentStatus?: 'pending' | 'partial' | 'paid' | 'overdue';
+  amountPaid?: number;
+  dueDate?: string;
+}
+
+export type PaymentStatus = 'pending' | 'partial' | 'paid' | 'overdue';
+
+export interface InvoicePayment {
+  id: string;
+  orderId: string;
+  amount: number;
+  method: 'cash' | 'bank_transfer' | 'card' | 'momo' | 'zalopay' | 'other';
+  paidAt: string;
+  reference?: string;
+  notes?: string;
+}
+
+export interface AccountsReceivable {
+  customerId: string;
+  customerName: string;
+  totalReceivable: number;
+  totalPaid: number;
+  totalOutstanding: number;
+  invoiceCount: number;
+  oldestInvoiceDate?: string;
+}
+
+export interface AgingReport {
+  customerId: string;
+  customerName: string;
+  current07: number;
+  days830: number;
+  days3160: number;
+  daysOver60: number;
+  totalOutstanding: number;
 }
 
 export interface KPI {

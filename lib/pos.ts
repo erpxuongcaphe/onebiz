@@ -178,63 +178,6 @@ export async function closeShift(params: { shiftId: string; closingCash: number 
   return !error;
 }
 
-export async function createPaidOrder(params: {
-  branchId: string;
-  shiftId: string | null;
-  lines: Array<{ product_id: string; sku?: string; name?: string; quantity: number; unit_price: number }>;
-  payment: { method: string; amount: number };
-}): Promise<string | null> {
-  if (!supabase) return null;
-  const { data: sessionData } = await supabase.auth.getSession();
-  if (!sessionData.session) return null;
-
-  const orderNumber = `POS-${new Date().toISOString().slice(0, 10).replace(/-/g, '')}-${Math.random().toString(16).slice(2, 6).toUpperCase()}`;
-  const total = params.lines.reduce((acc, l) => acc + l.quantity * l.unit_price, 0);
-
-  const { data: order, error: orderErr } = await supabase
-    .from('pos_orders')
-    .insert({
-      branch_id: params.branchId,
-      shift_id: params.shiftId,
-      order_number: orderNumber,
-      status: 'paid',
-      subtotal: total,
-      total,
-      created_by: sessionData.session.user.id,
-    })
-    .select('id')
-    .single();
-
-  if (orderErr) return null;
-  const orderId = (order as any)?.id as string | undefined;
-  if (!orderId) return null;
-
-  const { error: itemsErr } = await supabase
-    .from('pos_order_items')
-    .insert(
-      params.lines.map((l) => ({
-        order_id: orderId,
-        product_id: l.product_id,
-        sku: l.sku ?? null,
-        name: l.name ?? null,
-        quantity: l.quantity,
-        unit_price: l.unit_price,
-      }))
-    );
-  if (itemsErr) return null;
-
-  const { error: payErr } = await supabase
-    .from('pos_payments')
-    .insert({
-      order_id: orderId,
-      method: params.payment.method,
-      amount: params.payment.amount,
-    });
-  if (payErr) return null;
-
-  return orderId;
-}
-
 export async function createPosSale(params: {
   branchId: string;
   warehouseId: string;
