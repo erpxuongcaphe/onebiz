@@ -1,5 +1,5 @@
 // Salary Configuration API functions
-import { supabase } from '../supabase';
+import { supabase } from '../supabaseClient';
 
 export type PayType = 'hourly' | 'monthly';
 

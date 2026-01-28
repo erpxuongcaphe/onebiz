@@ -1,5 +1,5 @@
 // Activity Logs API
-import { supabase } from '../supabase';
+import { supabase } from '../supabaseClient';
 import { UserRole } from '../database.types';
 
 // Types

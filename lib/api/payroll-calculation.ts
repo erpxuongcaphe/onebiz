@@ -1,7 +1,7 @@
 // Payroll Calculation API
 // Centralized logic for calculating employee payroll with attendance, OT, leaves, insurance, and tax
 
-import { supabase } from '../supabase';
+import { supabase } from '../supabaseClient';
 import { Database } from '../database.types';
 import { getAttendanceRecords } from './timekeeping';
 import { getLeaveRequests } from './leave-management';

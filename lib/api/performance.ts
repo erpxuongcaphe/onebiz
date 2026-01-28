@@ -1,5 +1,5 @@
 /* eslint-disable @typescript-eslint/no-explicit-any */
-import { supabase } from '../supabase';
+import { supabase } from '../supabaseClient';
 
 // Note: These tables are created via migrations but not in database.types.ts
 // Using 'as any' for Supabase calls until types are regenerated

@@ -1,7 +1,7 @@
 // Reminder System API
 // Functions for creating reminder notifications based on pending items
 
-import { supabase } from '../supabase';
+import { supabase } from '../supabaseClient';
 import { createBulkNotifications, NotificationType } from './notifications';
 
 // Key to track when we last ran reminders (per session)

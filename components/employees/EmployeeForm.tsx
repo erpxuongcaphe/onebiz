@@ -8,7 +8,7 @@ import { Employee, EmployeeInsert } from "@/lib/database.types";
 import { getDepartments, getPositions, Department, Position } from "@/lib/api/categories";
 import { getBranches, Branch } from "@/lib/api/timekeeping";
 import { getNextEmployeeId, checkEmployeeExistence } from "@/lib/api/employees";
-import { supabase } from "@/lib/supabase";
+import { supabase } from "@/lib/supabaseClient";
 
 interface EmployeeFormProps {
     isOpen: boolean;

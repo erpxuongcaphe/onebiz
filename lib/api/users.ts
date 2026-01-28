@@ -1,4 +1,4 @@
-import { supabase } from '../supabase';
+import { supabase } from '../supabaseClient';
 import { DbUser, DbUserInsert, DbUserUpdate, UserRole } from '../database.types';
 
 // Application User type (without password_hash for client-side)

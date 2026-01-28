@@ -1,6 +1,5 @@
 import type { Order } from '../types';
 import { OrderStatus } from '../types';
-import { MOCK_ORDERS } from '../constants';
 import { supabase } from './supabaseClient';
 
 type DbOrder = {
@@ -40,9 +39,15 @@ function mapOrderStatus(status: string): OrderStatus {
 }
 
 export async function fetchOrders(): Promise<Order[]> {
-  if (!supabase) return MOCK_ORDERS;
+  if (!supabase) {
+    console.error('Supabase not configured');
+    return [];
+  }
   const { data: sessionData } = await supabase.auth.getSession();
-  if (!sessionData.session) return MOCK_ORDERS;
+  if (!sessionData.session) {
+    console.warn('No active session - returning empty order list');
+    return [];
+  }
 
   const { data, error } = await supabase
     .from('sales_orders')
@@ -50,7 +55,10 @@ export async function fetchOrders(): Promise<Order[]> {
     .order('created_at', { ascending: false })
     .returns<DbOrder[]>();
 
-  if (error) return MOCK_ORDERS;
+  if (error) {
+    console.error('Error fetching orders:', error);
+    return [];
+  }
 
   const orders = data ?? [];
 

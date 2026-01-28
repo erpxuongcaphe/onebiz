@@ -1,4 +1,4 @@
-import { supabase } from '../supabase';
+import { supabase } from '../supabaseClient';
 import { Database } from '../database.types';
 
 export type MonthlySalary = Database['public']['Tables']['monthly_salaries']['Row'];

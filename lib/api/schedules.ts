@@ -1,5 +1,5 @@
 // Work Schedule API functions
-import { supabase } from '../supabase';
+import { supabase } from '../supabaseClient';
 
 // Types
 export type WorkSchedule = {

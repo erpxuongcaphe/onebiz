@@ -216,6 +216,7 @@ export async function createPosSale(params: {
   const { data: sessionData } = await supabase.auth.getSession();
   if (!sessionData.session) return null;
 
+  // Try using the stored procedure first (recommended for atomicity)
   const { data, error } = await supabase.rpc('pos_create_sale', {
     p_branch_id: params.branchId,
     p_warehouse_id: params.warehouseId,
@@ -225,8 +226,124 @@ export async function createPosSale(params: {
     p_payment_amount: params.paymentAmount,
   });
 
-  if (error) return null;
-  return (data as any) ?? null;
+  // If RPC exists and works, return its result
+  if (!error && data) {
+    return (data as any) ?? null;
+  }
+
+  // Fallback: Manual creation if RPC doesn't exist
+  // WARNING: This is not atomic and has race condition risks
+  console.warn('pos_create_sale RPC failed, using fallback:', error?.message);
+
+  try {
+    // 1. Validate stock availability
+    for (const line of params.lines) {
+      const { data: stockData } = await supabase
+        .from('inventory_stock')
+        .select('quantity')
+        .eq('warehouse_id', params.warehouseId)
+        .eq('product_id', line.product_id)
+        .single();
+
+      const currentQty = toNumber(stockData?.quantity);
+      if (currentQty < line.quantity) {
+        console.error(`Insufficient stock for product ${line.product_id}: have ${currentQty}, need ${line.quantity}`);
+        return null;
+      }
+    }
+
+    // 2. Create order
+    const orderNumber = `POS-${new Date().toISOString().slice(0, 10).replace(/-/g, '')}-${Math.random().toString(16).slice(2, 6).toUpperCase()}`;
+    const total = params.lines.reduce((acc, l) => acc + l.quantity * l.unit_price, 0);
+
+    const { data: order, error: orderErr } = await supabase
+      .from('pos_orders')
+      .insert({
+        branch_id: params.branchId,
+        shift_id: params.shiftId,
+        order_number: orderNumber,
+        status: 'paid',
+        subtotal: total,
+        total,
+        created_by: sessionData.session.user.id,
+      })
+      .select('id')
+      .single();
+
+    if (orderErr || !order) {
+      console.error('Failed to create order:', orderErr);
+      return null;
+    }
+
+    const orderId = (order as any).id as string;
+
+    // 3. Create order items
+    const { error: itemsErr } = await supabase
+      .from('pos_order_items')
+      .insert(
+        params.lines.map((l) => ({
+          order_id: orderId,
+          product_id: l.product_id,
+          quantity: l.quantity,
+          unit_price: l.unit_price,
+        }))
+      );
+
+    if (itemsErr) {
+      console.error('Failed to create order items:', itemsErr);
+      return null;
+    }
+
+    // 4. Create payment record
+    const { error: payErr } = await supabase
+      .from('pos_payments')
+      .insert({
+        order_id: orderId,
+        method: params.paymentMethod,
+        amount: params.paymentAmount,
+      });
+
+    if (payErr) {
+      console.error('Failed to create payment:', payErr);
+      return null;
+    }
+
+    // 5. Deduct stock from inventory_stock
+    for (const line of params.lines) {
+      const { data: currentStock } = await supabase
+        .from('inventory_stock')
+        .select('id, quantity')
+        .eq('warehouse_id', params.warehouseId)
+        .eq('product_id', line.product_id)
+        .single();
+
+      if (currentStock) {
+        const newQty = toNumber(currentStock.quantity) - line.quantity;
+        await supabase
+          .from('inventory_stock')
+          .update({ quantity: newQty })
+          .eq('id', currentStock.id);
+      }
+
+      // 6. Record stock movement
+      await supabase
+        .from('inventory_stock_movements')
+        .insert({
+          product_id: line.product_id,
+          warehouse_id: params.warehouseId,
+          movement_type: 'sale',
+          quantity: -line.quantity,
+          reference_type: 'pos_order',
+          reference_id: orderId,
+          notes: `POS Sale: ${orderNumber}`,
+        });
+    }
+
+    return orderId;
+  } catch (err) {
+    console.error('Fallback POS sale creation failed:', err);
+    return null;
+  }
 }
 
 export async function fetchPosOrders(params: {

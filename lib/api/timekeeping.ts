@@ -1,6 +1,6 @@
 /* eslint-disable @typescript-eslint/no-explicit-any */
 // Branch and Shift API functions
-import { supabase } from '../supabase';
+import { supabase } from '../supabaseClient';
 
 // Types
 export type Branch = {

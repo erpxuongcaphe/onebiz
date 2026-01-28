@@ -1,5 +1,5 @@
 // Payslips API - Templates, Monthly Payslips, and Export
-import { supabase } from '../supabase';
+import { supabase } from '../supabaseClient';
 
 // ==========================================
 // TYPES

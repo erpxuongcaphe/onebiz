@@ -1,5 +1,4 @@
 import type { Product } from '../types';
-import { MOCK_PRODUCTS } from '../constants';
 import { supabase } from './supabaseClient';
 
 type Result<T> = { data: T; error: null } | { data: null; error: string };
@@ -71,11 +70,16 @@ export async function fetchInventoryProducts(options?: {
   toDate?: string;
   categoryId?: string;
 }): Promise<Product[]> {
-  if (!supabase) return MOCK_PRODUCTS;
+  if (!supabase) {
+    console.error('Supabase not configured');
+    return [];
+  }
 
-  // If not logged in / no profile yet, fall back to mock (keeps UI usable during setup).
   const { data: sessionData } = await supabase.auth.getSession();
-  if (!sessionData.session) return MOCK_PRODUCTS;
+  if (!sessionData.session) {
+    console.warn('No active session - returning empty product list');
+    return [];
+  }
 
   let q = supabase
     .from('inventory_products')
@@ -97,8 +101,8 @@ export async function fetchInventoryProducts(options?: {
     : await q.neq('status', 'inactive').returns<DbProduct[]>());
 
   if (productsError) {
-    // Keep UI working even if DB/RLS isn't ready.
-    return MOCK_PRODUCTS;
+    console.error('Error fetching products:', productsError);
+    return [];
   }
 
   const productIds = (products ?? []).map((p) => p.id);
@@ -410,6 +414,7 @@ export async function applyStockMovement(params: {
   const { data: sessionData } = await supabase.auth.getSession();
   if (!sessionData.session) return { data: null, error: 'Bạn chưa đăng nhập.' };
 
+  // Try using the stored procedure first (recommended for atomicity)
   const { error } = await supabase.rpc('inventory_apply_stock_movement', {
     p_product_id: params.productId,
     p_warehouse_id: params.warehouseId,
@@ -420,6 +425,79 @@ export async function applyStockMovement(params: {
     p_notes: params.notes ?? null,
   });
 
-  if (error) return { data: null, error: formatError(error) };
-  return { data: true, error: null };
+  // If RPC exists and works, return success
+  if (!error) {
+    return { data: true, error: null };
+  }
+
+  // Fallback: Manual stock movement if RPC doesn't exist
+  console.warn('inventory_apply_stock_movement RPC failed, using fallback:', error.message);
+
+  try {
+    // Determine if this is an increase or decrease
+    const isIncrease = ['purchase', 'return', 'adjustment_in', 'transfer_in'].includes(params.movementType);
+    const quantityDelta = isIncrease ? Math.abs(params.quantity) : -Math.abs(params.quantity);
+
+    // 1. Get current stock
+    const { data: currentStock } = await supabase
+      .from('inventory_stock')
+      .select('id, quantity')
+      .eq('warehouse_id', params.warehouseId)
+      .eq('product_id', params.productId)
+      .single();
+
+    const currentQty = toNumber(currentStock?.quantity);
+    const newQty = currentQty + quantityDelta;
+
+    // Validate: cannot go negative
+    if (newQty < 0) {
+      return { data: null, error: `Không đủ tồn kho. Hiện có: ${currentQty}, cần: ${Math.abs(quantityDelta)}` };
+    }
+
+    // 2. Update or insert stock record
+    if (currentStock?.id) {
+      const { error: updateErr } = await supabase
+        .from('inventory_stock')
+        .update({ quantity: newQty })
+        .eq('id', currentStock.id);
+
+      if (updateErr) {
+        return { data: null, error: formatError(updateErr) };
+      }
+    } else {
+      // Insert new stock record
+      const { error: insertErr } = await supabase
+        .from('inventory_stock')
+        .insert({
+          warehouse_id: params.warehouseId,
+          product_id: params.productId,
+          quantity: newQty,
+        });
+
+      if (insertErr) {
+        return { data: null, error: formatError(insertErr) };
+      }
+    }
+
+    // 3. Record the movement
+    const { error: movementErr } = await supabase
+      .from('inventory_stock_movements')
+      .insert({
+        product_id: params.productId,
+        warehouse_id: params.warehouseId,
+        movement_type: params.movementType,
+        quantity: quantityDelta,
+        notes: params.notes ?? null,
+      });
+
+    if (movementErr) {
+      console.error('Failed to record movement (stock already updated):', movementErr);
+      // Don't fail the whole operation if just movement recording fails
+    }
+
+    return { data: true, error: null };
+  } catch (err) {
+    console.error('Fallback stock movement failed:', err);
+    return { data: null, error: formatError(err) };
+  }
 }

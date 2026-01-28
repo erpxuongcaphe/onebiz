@@ -1,5 +1,5 @@
 // Shift Registration API functions
-import { supabase } from '../supabase';
+import { supabase } from '../supabaseClient';
 
 export interface ShiftRegistration {
     id: string;

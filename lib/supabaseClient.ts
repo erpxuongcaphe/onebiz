@@ -1,9 +1,14 @@
-import { createClient } from '@supabase/supabase-js';
+import { createClient, SupabaseClient } from '@supabase/supabase-js';
 
+// Vite environment variables
 const supabaseUrl = import.meta.env.VITE_SUPABASE_URL as string | undefined;
 const supabaseAnonKey = import.meta.env.VITE_SUPABASE_ANON_KEY as string | undefined;
 
-export const supabase = (supabaseUrl && supabaseAnonKey)
+export const isSupabaseConfigured = Boolean(supabaseUrl && supabaseAnonKey);
+
+// Main Supabase client - untyped for flexibility
+// TODO: Add proper typing when database.types.ts is regenerated
+export const supabase: SupabaseClient | null = (supabaseUrl && supabaseAnonKey)
   ? createClient(supabaseUrl, supabaseAnonKey, {
       auth: {
         persistSession: true,
@@ -13,4 +18,5 @@ export const supabase = (supabaseUrl && supabaseAnonKey)
     })
   : null;
 
-export const isSupabaseConfigured = Boolean(supabaseUrl && supabaseAnonKey);
+// Alias for backwards compatibility with old imports
+export const supabaseUntyped = supabase;

@@ -1,4 +1,4 @@
-import { supabase } from '../supabase';
+import { supabase } from '../supabaseClient';
 import { Employee, EmployeeInsert, EmployeeUpdate } from '../database.types';
 
 // Re-export Employee for convenience

@@ -1,7 +1,7 @@
 // Payroll History API
 // Functions for managing and querying payroll history
 
-import { supabase } from '../supabase';
+import { supabase } from '../supabaseClient';
 import { Database } from '../database.types';
 
 type MonthlySalary = Database['public']['Tables']['monthly_salaries']['Row'];

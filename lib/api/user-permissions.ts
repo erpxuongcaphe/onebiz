@@ -1,4 +1,4 @@
-import { supabase } from '../supabase';
+import { supabase } from '../supabaseClient';
 import { UserRole } from '../database.types';
 
 // All available permission codes - granular permissions for each action

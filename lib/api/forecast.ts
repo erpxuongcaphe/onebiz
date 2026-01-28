@@ -1,6 +1,6 @@
 /* eslint-disable @typescript-eslint/no-explicit-any */
 // Birthday and Event Forecast APIs
-import { supabase } from '../supabase';
+import { supabase } from '../supabaseClient';
 import { Employee } from '../database.types';
 
 export interface BirthdayForecast {

@@ -1,7 +1,7 @@
 // Payslip Export API
 // Functions for exporting payslips in PDF (HTML-based) and Excel formats
 
-import { supabase } from '../supabase';
+import { supabase } from '../supabaseClient';
 import { MonthlySalary, MonthlySalaryWithEmployee } from './monthly-salaries';
 import * as XLSX from 'xlsx';
 

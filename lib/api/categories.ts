@@ -1,5 +1,5 @@
 // Department and Position API functions
-import { supabase } from '../supabase';
+import { supabase } from '../supabaseClient';
 
 // Department types (inline until database.types.ts is updated)
 export type Department = {
