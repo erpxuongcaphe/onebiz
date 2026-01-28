@@ -24,6 +24,37 @@ export type PosOrder = {
   status: 'draft' | 'paid' | 'void' | 'refunded';
   total: number;
   created_at: string;
+  customer_name?: string | null;
+  notes?: string | null;
+};
+
+export type PosOrderItem = {
+  sku: string | null;
+  name: string | null;
+  quantity: number;
+  unit_price: number;
+};
+
+export type PosPayment = {
+  method: string;
+  amount: number;
+  payment_number?: string | null;
+};
+
+export type PosOrderReceipt = {
+  order: PosOrder;
+  items: PosOrderItem[];
+  payment: PosPayment;
+  branch_name?: string | null;
+  vat_rate?: number | null;
+  vat_amount?: number | null;
+  company: {
+    name?: string;
+    tax_code?: string;
+    address?: string;
+    phone?: string;
+    logo_url?: string | null;
+  };
 };
 
 export type PosCatalogItem = {
@@ -378,4 +409,67 @@ export async function fetchPosOrders(params: {
     total: toNumber(o.total),
     created_at: o.created_at,
   }));
+}
+
+export async function fetchPosReceipt(orderId: string): Promise<PosOrderReceipt | null> {
+  if (!supabase) return null;
+  const { data: sessionData } = await supabase.auth.getSession();
+  if (!sessionData.session) return null;
+
+  const { data: order, error: orderErr } = await supabase
+    .from('pos_orders')
+    .select('id, branch_id, shift_id, order_number, status, total, created_at')
+    .eq('id', orderId)
+    .maybeSingle();
+
+  if (orderErr || !order) return null;
+
+  const { data: items } = await supabase
+    .from('pos_order_items')
+    .select('sku, name, quantity, unit_price')
+    .eq('order_id', orderId)
+    .order('created_at', { ascending: true });
+
+  const { data: payment } = await supabase
+    .from('pos_payments')
+    .select('method, amount')
+    .eq('order_id', orderId)
+    .order('paid_at', { ascending: false })
+    .limit(1)
+    .maybeSingle();
+
+  const { data: branch } = await supabase
+    .from('branches')
+    .select('name')
+    .eq('id', order.branch_id)
+    .maybeSingle();
+
+  return {
+    order: {
+      id: order.id,
+      branch_id: order.branch_id,
+      shift_id: order.shift_id,
+      order_number: order.order_number,
+      status: order.status,
+      total: toNumber(order.total),
+      created_at: order.created_at,
+      customer_name: null,
+      notes: null,
+    },
+    items: (items ?? []).map((i: any) => ({
+      sku: i.sku ?? null,
+      name: i.name ?? null,
+      quantity: toNumber(i.quantity),
+      unit_price: toNumber(i.unit_price),
+    })),
+    payment: {
+      method: payment?.method ?? 'cash',
+      amount: toNumber(payment?.amount),
+      payment_number: null,
+    },
+    branch_name: branch?.name ?? null,
+    vat_rate: 0,
+    vat_amount: 0,
+    company: {},
+  };
 }

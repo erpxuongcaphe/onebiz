@@ -1,6 +1,6 @@
-import path from 'path';
 import { defineConfig, loadEnv } from 'vite';
 import react from '@vitejs/plugin-react';
+import path from 'node:path';
 
 export default defineConfig(({ mode }) => {
     const env = loadEnv(mode, '.', '');
@@ -14,6 +14,7 @@ export default defineConfig(({ mode }) => {
       build: {
         sourcemap: false,
         reportCompressedSize: false,
+        chunkSizeWarningLimit: 1100,
         rollupOptions: {
           output: {
             manualChunks(id) {
@@ -30,9 +31,10 @@ export default defineConfig(({ mode }) => {
               ) {
                 return 'react';
               }
-              if (id.includes('@supabase/supabase-js')) return 'supabase';
               if (id.includes('recharts')) return 'charts';
               if (id.includes('lucide-react')) return 'icons';
+              if (id.includes('/xlsx/')) return 'xlsx';
+              if (id.includes('html2pdf') || id.includes('html2canvas') || id.includes('jspdf')) return 'print';
               return 'vendor';
             },
           },

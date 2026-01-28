@@ -21,6 +21,10 @@ import {
 } from '../lib/inventoryDocuments';
 import { useAuth } from '../lib/auth';
 import { withTimeout } from '../lib/async';
+import { ensureDefaultTemplates, fetchDocumentTemplates, getActiveTemplate, type DocumentTemplate, type PaperSize, type TemplateType } from '../lib/documentTemplates';
+import { renderDocumentHtml, openPrintWindow, downloadPdf, exportToExcel } from '../lib/documentPrint';
+import { buildInventoryDocumentPayload } from '../lib/documentPayloads';
+import { createDocumentPrint } from '../lib/documentPrintStore';
 import Drawer from './Drawer';
 
 type TimePreset = 'today' | 'month' | 'year' | 'range' | 'all';
@@ -54,6 +58,8 @@ const InventoryDocuments: React.FC = () => {
   const [selected, setSelected] = useState<InventoryDocument | null>(null);
   const [lines, setLines] = useState<InventoryDocumentLine[]>([]);
   const [products, setProducts] = useState<ProductPick[]>([]);
+  const [templates, setTemplates] = useState<DocumentTemplate[]>([]);
+  const [templatePaperSize, setTemplatePaperSize] = useState<PaperSize>('A5');
 
   const [createOpen, setCreateOpen] = useState(false);
   const [createType, setCreateType] = useState<'receipt' | 'issue' | 'transfer'>('receipt');
@@ -93,6 +99,19 @@ const InventoryDocuments: React.FC = () => {
       setToDate(`${yyyy}-${mm}-${dd}`);
     }
   }, [timePreset]);
+
+  useEffect(() => {
+    let isMounted = true;
+    const loadTemplates = async () => {
+      await ensureDefaultTemplates();
+      const list = await fetchDocumentTemplates();
+      if (isMounted) setTemplates(list);
+    };
+    void loadTemplates();
+    return () => {
+      isMounted = false;
+    };
+  }, []);
 
   const reload = async () => {
     setLoadingTooLong(false);
@@ -216,57 +235,70 @@ const InventoryDocuments: React.FC = () => {
     URL.revokeObjectURL(url);
   };
 
-  const printDocument = (doc: InventoryDocument, docLines: InventoryDocumentLine[]) => {
-    const w = window.open('', '_blank', 'noopener,noreferrer');
-    if (!w) return;
-
+  const printDocument = async (doc: InventoryDocument, docLines: InventoryDocumentLine[], mode: 'print' | 'pdf' | 'excel') => {
     const whName = (id: string | null) => warehouses.find((x) => x.id === id)?.name ?? (id ?? '-');
+    const branchName = branches.find((b) => b.id === doc.branch_id)?.name ?? null;
+    const productNameById: Record<string, string> = {};
+    products.forEach((p) => {
+      productNameById[p.id] = p.name;
+    });
 
-    const html = `
-<!doctype html>
-<html>
-<head>
-  <meta charset="utf-8" />
-  <title>${doc.doc_number}</title>
-  <style>
-    body { font-family: Arial, sans-serif; padding: 24px; }
-    h1 { font-size: 18px; margin: 0 0 4px; }
-    .meta { color: #555; font-size: 12px; margin-bottom: 16px; }
-    table { width: 100%; border-collapse: collapse; }
-    th, td { border: 1px solid #ddd; padding: 8px; font-size: 12px; }
-    th { background: #f6f6f6; text-align: left; }
-  </style>
-</head>
-<body>
-  <h1>${typeLabel(doc.doc_type)} - ${doc.doc_number}</h1>
-  <div class="meta">Ngay: ${doc.doc_date} | Trang thai: ${doc.status} | Kho: ${whName(doc.warehouse_from_id)} ${doc.doc_type === 'transfer' ? '-> ' + whName(doc.warehouse_to_id) : (doc.doc_type === 'receipt' ? '' : '')} ${doc.doc_type === 'receipt' ? whName(doc.warehouse_to_id) : ''}</div>
-  <div class="meta">Ghi chu: ${(doc.notes ?? '').replace(/</g, '&lt;')}</div>
-  <table>
-    <thead>
-      <tr>
-        <th>SKU</th>
-        <th>Ten</th>
-        <th>SL</th>
-        <th>Gia</th>
-      </tr>
-    </thead>
-    <tbody>
-      ${docLines
-        .map((l) => {
-          const p = products.find((x) => x.id === l.product_id);
-          return `<tr><td>${(p?.sku ?? '').replace(/</g, '&lt;')}</td><td>${(p?.name ?? '').replace(/</g, '&lt;')}</td><td>${l.quantity}</td><td>${l.unit_cost || ''}</td></tr>`;
-        })
-        .join('')}
-    </tbody>
-  </table>
-</body>
-</html>`;
+    const templateType: TemplateType =
+      doc.doc_type === 'receipt'
+        ? 'inventory_receipt'
+        : doc.doc_type === 'issue'
+          ? 'inventory_issue'
+          : 'inventory_transfer';
 
-    w.document.open();
-    w.document.write(html);
-    w.document.close();
-    w.focus();
-    w.print();
+    const template = getActiveTemplate(templates, templateType, templatePaperSize);
+    if (!template) {
+      setError('Chưa có mẫu chứng từ phù hợp. Vui lòng tạo trong Cài đặt.');
+      return;
+    }
+
+    const company = {
+      name: template.settings.company_name,
+      tax_code: template.settings.company_tax_code,
+      address: template.settings.company_address,
+      phone: template.settings.company_phone,
+      logo_url: template.settings.logo_url ?? null,
+    };
+
+    const payload = buildInventoryDocumentPayload({
+      doc,
+      lines: docLines,
+      productNameById,
+      warehouseFrom: whName(doc.warehouse_from_id),
+      warehouseTo: whName(doc.warehouse_to_id),
+      branchName,
+      company,
+    });
+
+    const html = renderDocumentHtml(payload, {
+      paperSize: template.paper_size,
+      layout: template.layout,
+      settings: template.settings,
+    });
+
+    if (mode === 'excel') {
+      await exportToExcel(payload, `${doc.doc_number}.xlsx`);
+      return;
+    }
+
+    if (mode === 'pdf') {
+      await downloadPdf(html, `${doc.doc_number}.pdf`, template.paper_size);
+      return;
+    }
+
+    openPrintWindow(html, doc.doc_number);
+    await createDocumentPrint({
+      template_id: template.id,
+      template_type: template.template_type,
+      paper_size: template.paper_size,
+      source_type: 'manual',
+      source_id: doc.id,
+      payload,
+    });
   };
 
   return (
@@ -526,13 +558,41 @@ const InventoryDocuments: React.FC = () => {
               )}
             </div>
 
-            <div className="grid grid-cols-2 gap-2">
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
+              <label className="block">
+                <div className="text-[10px] font-bold text-slate-500 dark:text-slate-400 mb-1">Khổ giấy</div>
+                <select
+                  value={templatePaperSize}
+                  onChange={(e) => setTemplatePaperSize(e.target.value as PaperSize)}
+                  className="w-full px-3 py-2 rounded-lg bg-slate-50 dark:bg-slate-950 border border-slate-200 dark:border-slate-800 text-xs"
+                >
+                  <option value="A5">A5</option>
+                  <option value="A4">A4</option>
+                </select>
+              </label>
+            </div>
+
+            <div className="grid grid-cols-2 sm:grid-cols-3 gap-2">
               <button
                 disabled={busy}
-                onClick={() => printDocument(selected, lines)}
+                onClick={() => void printDocument(selected, lines, 'print')}
                 className="bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 hover:bg-slate-50 dark:hover:bg-slate-800 text-slate-700 dark:text-slate-200 py-2 rounded-lg text-xs font-bold"
               >
                 In phiếu
+              </button>
+              <button
+                disabled={busy}
+                onClick={() => void printDocument(selected, lines, 'pdf')}
+                className="bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 hover:bg-slate-50 dark:hover:bg-slate-800 text-slate-700 dark:text-slate-200 py-2 rounded-lg text-xs font-bold"
+              >
+                Xuất PDF
+              </button>
+              <button
+                disabled={busy}
+                onClick={() => void printDocument(selected, lines, 'excel')}
+                className="bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 hover:bg-slate-50 dark:hover:bg-slate-800 text-slate-700 dark:text-slate-200 py-2 rounded-lg text-xs font-bold"
+              >
+                Xuất Excel
               </button>
               <button
                 disabled={busy || !can('inventory.document.void')}
@@ -553,7 +613,7 @@ const InventoryDocuments: React.FC = () => {
                     setBusy(false);
                   }
                 }}
-                className="bg-rose-50 dark:bg-rose-900/20 border border-rose-200 dark:border-rose-900/40 text-rose-700 dark:text-rose-300 hover:bg-rose-100/60 dark:hover:bg-rose-900/30 py-2 rounded-lg text-xs font-bold"
+                className="sm:col-span-3 bg-rose-50 dark:bg-rose-900/20 border border-rose-200 dark:border-rose-900/40 text-rose-700 dark:text-rose-300 hover:bg-rose-100/60 dark:hover:bg-rose-900/30 py-2 rounded-lg text-xs font-bold"
               >
                 Hủy phiếu
               </button>

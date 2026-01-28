@@ -7,11 +7,13 @@ import { fetchCurrentBranchId } from '../lib/branches';
 import { withTimeout } from '../lib/async';
 import { bootstrapSuperAdmin, fetchProfiles, fetchRoles, fetchUserRoles, setUserBranch, setUserRole, type ProfileLite, type Role, type UserRole } from '../lib/roles';
 import { fetchBranches, type Branch } from '../lib/branches';
+import { ensureDefaultTemplates, fetchDocumentTemplates, getActiveTemplate, upsertTemplate, type DocumentTemplate, type PaperSize, type TemplateSettings, type TemplateType } from '../lib/documentTemplates';
 
 const Settings: React.FC = () => {
   const { user, loading, isConfigured, permissionPatterns } = useAuth();
   const [roleUiUnlocked, setRoleUiUnlocked] = useState(false);
   const canManageRoles = roleUiUnlocked || permissionPatterns.some((p) => p === '*' || p.startsWith('roles.'));
+  const canManageTemplates = permissionPatterns.some((p) => p === '*' || p.startsWith('settings.'));
   const { tenant } = useTenant();
   const [mode, setMode] = useState<'signIn' | 'signUp'>('signIn');
   const [email, setEmail] = useState('');
@@ -34,6 +36,15 @@ const Settings: React.FC = () => {
   const [roleError, setRoleError] = useState<string | null>(null);
   const [roleBusyKey, setRoleBusyKey] = useState<string>('');
   const [rolesLoading, setRolesLoading] = useState(false);
+  const tenantId = tenant?.id ?? getCachedTenantId() ?? null;
+  const [templates, setTemplates] = useState<DocumentTemplate[]>([]);
+  const [templatesLoading, setTemplatesLoading] = useState(false);
+  const [templatesError, setTemplatesError] = useState<string | null>(null);
+  const [templateType, setTemplateType] = useState<TemplateType>('invoice_sale');
+  const [paperSize, setPaperSize] = useState<PaperSize>('A5');
+  const [templateName, setTemplateName] = useState('');
+  const [templateSettings, setTemplateSettings] = useState<TemplateSettings>({});
+  const [templateSaving, setTemplateSaving] = useState(false);
 
   useEffect(() => {
     if (!supabase || !user) {
@@ -112,6 +123,38 @@ const Settings: React.FC = () => {
     };
     void loadRoleData();
   }, [user, isConfigured, canManageRoles]);
+
+  useEffect(() => {
+    if (!supabase || !user || !isConfigured || !canManageTemplates) return;
+    let isMounted = true;
+    const loadTemplates = async () => {
+      setTemplatesLoading(true);
+      setTemplatesError(null);
+      try {
+        await ensureDefaultTemplates(tenantId ?? undefined);
+        const list = await fetchDocumentTemplates(tenantId ?? undefined);
+        if (!isMounted) return;
+        setTemplates(list);
+      } catch (e: any) {
+        if (!isMounted) return;
+        setTemplatesError(e?.message ?? 'Không tải được mẫu chứng từ.');
+      } finally {
+        if (isMounted) setTemplatesLoading(false);
+      }
+    };
+    void loadTemplates();
+    return () => {
+      isMounted = false;
+    };
+  }, [user, isConfigured, canManageTemplates, tenantId]);
+
+  useEffect(() => {
+    if (!templates.length) return;
+    const active = getActiveTemplate(templates, templateType, paperSize);
+    if (!active) return;
+    setTemplateName(active.name);
+    setTemplateSettings(active.settings ?? {});
+  }, [templates, templateType, paperSize]);
 
   const status = useMemo(() => {
     if (loading) return { tone: 'muted', label: 'Đang kiểm tra đăng nhập...' };
@@ -212,8 +255,6 @@ const Settings: React.FC = () => {
       setSubmitting(false);
     }
   };
-
-  const tenantId = tenant?.id ?? getCachedTenantId() ?? null;
 
   const handleToggleRole = (targetUserId: string, roleId: string, enabled: boolean) => {
     setDraftRolesByUser((prev) => {
@@ -626,6 +667,215 @@ on conflict (id) do nothing;`}
                 </div>
               </div>
             )}
+          </div>
+        </div>
+      </div>
+
+      <div className="bg-white dark:bg-slate-900 rounded-xl shadow-soft border border-slate-200 dark:border-slate-800 overflow-hidden">
+        <div className="p-3 border-b border-slate-100 dark:border-slate-800 flex items-center justify-between gap-2">
+          <div className="text-[11px] font-semibold text-slate-700 dark:text-slate-200">Mẫu chứng từ</div>
+          <button
+            onClick={async () => {
+              if (!tenantId) return;
+              setTemplatesLoading(true);
+              setTemplatesError(null);
+              try {
+                await ensureDefaultTemplates(tenantId);
+                setTemplates(await fetchDocumentTemplates(tenantId));
+              } catch (e: any) {
+                setTemplatesError(e?.message ?? 'Không tải được mẫu chứng từ.');
+              } finally {
+                setTemplatesLoading(false);
+              }
+            }}
+            disabled={!canManageTemplates || templatesLoading}
+            className="px-2.5 py-1.5 rounded-lg text-[11px] font-bold border border-slate-200 dark:border-slate-700 text-slate-600 dark:text-slate-300 hover:bg-slate-50 dark:hover:bg-slate-800 disabled:opacity-50"
+          >
+            Tải lại
+          </button>
+        </div>
+        <div className="p-3 space-y-3">
+          {!canManageTemplates && (
+            <div className="text-[11px] text-amber-700 dark:text-amber-400 bg-amber-50 dark:bg-amber-900/20 border border-amber-200 dark:border-amber-900/40 rounded-lg p-2.5">
+              Cần quyền `settings.*` để quản lý mẫu chứng từ.
+            </div>
+          )}
+          {templatesError && (
+            <div className="text-[11px] text-rose-700 dark:text-rose-400 bg-rose-50 dark:bg-rose-900/20 border border-rose-200 dark:border-rose-900/40 rounded-lg p-2.5">
+              {templatesError}
+            </div>
+          )}
+          <div className="grid grid-cols-1 sm:grid-cols-3 gap-2">
+            <label className="block">
+              <div className="text-[10px] font-bold text-slate-500 dark:text-slate-400 mb-1">Loại chứng từ</div>
+              <select
+                value={templateType}
+                onChange={(e) => setTemplateType(e.target.value as TemplateType)}
+                className="w-full px-2.5 py-1.5 rounded-lg bg-slate-50 dark:bg-slate-900 border border-slate-200 dark:border-slate-800 text-[11px]"
+                disabled={!canManageTemplates}
+              >
+                <option value="invoice_sale">Hóa đơn bán hàng</option>
+                <option value="payment_slip">Phiếu thanh toán</option>
+                <option value="payment_receipt">Phiếu thu</option>
+                <option value="payment_voucher">Phiếu chi</option>
+                <option value="delivery_note">Phiếu giao hàng</option>
+                <option value="purchase_order">Phiếu đặt hàng</option>
+                <option value="transfer_note">Phiếu chuyển hàng</option>
+                <option value="void_note">Phiếu hủy hàng</option>
+                <option value="production_order">Phiếu sản xuất</option>
+                <option value="inventory_receipt">Phiếu nhập kho</option>
+                <option value="inventory_issue">Phiếu xuất kho</option>
+                <option value="inventory_transfer">Phiếu chuyển kho</option>
+              </select>
+            </label>
+            <label className="block">
+              <div className="text-[10px] font-bold text-slate-500 dark:text-slate-400 mb-1">Khổ giấy</div>
+              <select
+                value={paperSize}
+                onChange={(e) => setPaperSize(e.target.value as PaperSize)}
+                className="w-full px-2.5 py-1.5 rounded-lg bg-slate-50 dark:bg-slate-900 border border-slate-200 dark:border-slate-800 text-[11px]"
+                disabled={!canManageTemplates}
+              >
+                <option value="A4">A4</option>
+                <option value="A5">A5</option>
+                {templateType === 'payment_slip' && <option value="80mm">80mm</option>}
+              </select>
+            </label>
+            <label className="block">
+              <div className="text-[10px] font-bold text-slate-500 dark:text-slate-400 mb-1">Tên mẫu</div>
+              <input
+                value={templateName}
+                onChange={(e) => setTemplateName(e.target.value)}
+                className="w-full px-2.5 py-1.5 rounded-lg bg-slate-50 dark:bg-slate-900 border border-slate-200 dark:border-slate-800 text-[11px]"
+                disabled={!canManageTemplates}
+              />
+            </label>
+          </div>
+
+          <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
+            <label className="block">
+              <div className="text-[10px] font-bold text-slate-500 dark:text-slate-400 mb-1">Tên đơn vị</div>
+              <input
+                value={templateSettings.company_name ?? ''}
+                onChange={(e) => setTemplateSettings((prev) => ({ ...prev, company_name: e.target.value }))}
+                className="w-full px-2.5 py-1.5 rounded-lg bg-slate-50 dark:bg-slate-900 border border-slate-200 dark:border-slate-800 text-[11px]"
+                disabled={!canManageTemplates}
+              />
+            </label>
+            <label className="block">
+              <div className="text-[10px] font-bold text-slate-500 dark:text-slate-400 mb-1">Mã số thuế</div>
+              <input
+                value={templateSettings.company_tax_code ?? ''}
+                onChange={(e) => setTemplateSettings((prev) => ({ ...prev, company_tax_code: e.target.value }))}
+                className="w-full px-2.5 py-1.5 rounded-lg bg-slate-50 dark:bg-slate-900 border border-slate-200 dark:border-slate-800 text-[11px]"
+                disabled={!canManageTemplates}
+              />
+            </label>
+            <label className="block sm:col-span-2">
+              <div className="text-[10px] font-bold text-slate-500 dark:text-slate-400 mb-1">Địa chỉ</div>
+              <input
+                value={templateSettings.company_address ?? ''}
+                onChange={(e) => setTemplateSettings((prev) => ({ ...prev, company_address: e.target.value }))}
+                className="w-full px-2.5 py-1.5 rounded-lg bg-slate-50 dark:bg-slate-900 border border-slate-200 dark:border-slate-800 text-[11px]"
+                disabled={!canManageTemplates}
+              />
+            </label>
+            <label className="block">
+              <div className="text-[10px] font-bold text-slate-500 dark:text-slate-400 mb-1">Hotline</div>
+              <input
+                value={templateSettings.company_phone ?? ''}
+                onChange={(e) => setTemplateSettings((prev) => ({ ...prev, company_phone: e.target.value }))}
+                className="w-full px-2.5 py-1.5 rounded-lg bg-slate-50 dark:bg-slate-900 border border-slate-200 dark:border-slate-800 text-[11px]"
+                disabled={!canManageTemplates}
+              />
+            </label>
+            <label className="block">
+              <div className="text-[10px] font-bold text-slate-500 dark:text-slate-400 mb-1">Logo URL</div>
+              <input
+                value={templateSettings.logo_url ?? ''}
+                onChange={(e) => setTemplateSettings((prev) => ({ ...prev, logo_url: e.target.value }))}
+                className="w-full px-2.5 py-1.5 rounded-lg bg-slate-50 dark:bg-slate-900 border border-slate-200 dark:border-slate-800 text-[11px]"
+                disabled={!canManageTemplates}
+              />
+            </label>
+          </div>
+
+          <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
+            <label className="block sm:col-span-2">
+              <div className="text-[10px] font-bold text-slate-500 dark:text-slate-400 mb-1">Header</div>
+              <input
+                value={templateSettings.header_text ?? ''}
+                onChange={(e) => setTemplateSettings((prev) => ({ ...prev, header_text: e.target.value }))}
+                className="w-full px-2.5 py-1.5 rounded-lg bg-slate-50 dark:bg-slate-900 border border-slate-200 dark:border-slate-800 text-[11px]"
+                disabled={!canManageTemplates}
+              />
+            </label>
+            <label className="block sm:col-span-2">
+              <div className="text-[10px] font-bold text-slate-500 dark:text-slate-400 mb-1">Footer</div>
+              <input
+                value={templateSettings.footer_text ?? ''}
+                onChange={(e) => setTemplateSettings((prev) => ({ ...prev, footer_text: e.target.value }))}
+                className="w-full px-2.5 py-1.5 rounded-lg bg-slate-50 dark:bg-slate-900 border border-slate-200 dark:border-slate-800 text-[11px]"
+                disabled={!canManageTemplates}
+              />
+            </label>
+          </div>
+
+          <div className="flex flex-wrap items-center gap-3">
+            <label className="flex items-center gap-2 text-[11px] font-semibold text-slate-600 dark:text-slate-300">
+              <input
+                type="checkbox"
+                checked={Boolean(templateSettings.show_vat)}
+                onChange={(e) => setTemplateSettings((prev) => ({ ...prev, show_vat: e.target.checked }))}
+                disabled={!canManageTemplates}
+                className="accent-indigo-600"
+              />
+              Hiện VAT
+            </label>
+            <label className="flex items-center gap-2 text-[11px] font-semibold text-slate-600 dark:text-slate-300">
+              VAT %
+              <input
+                type="number"
+                value={templateSettings.vat_rate ?? 10}
+                onChange={(e) => setTemplateSettings((prev) => ({ ...prev, vat_rate: Number(e.target.value) }))}
+                disabled={!canManageTemplates}
+                className="w-16 px-2 py-1 rounded-lg bg-slate-50 dark:bg-slate-900 border border-slate-200 dark:border-slate-800 text-[11px]"
+              />
+            </label>
+          </div>
+
+          <div className="flex items-center justify-end">
+            <button
+              onClick={async () => {
+                if (!tenantId) return;
+                setTemplateSaving(true);
+                setTemplatesError(null);
+                try {
+                  const active = getActiveTemplate(templates, templateType, paperSize);
+                  const ok = await upsertTemplate({
+                    id: active?.id,
+                    tenant_id: tenantId,
+                    template_type: templateType,
+                    paper_size: paperSize,
+                    name: templateName || active?.name || 'Mẫu chứng từ',
+                    settings: templateSettings,
+                    layout: active?.layout ?? { columns: [], show_totals: true },
+                    version: active?.version ?? 1,
+                    is_active: true,
+                  });
+                  if (!ok) throw new Error('Lưu mẫu thất bại.');
+                  setTemplates(await fetchDocumentTemplates(tenantId));
+                } catch (e: any) {
+                  setTemplatesError(e?.message ?? 'Lưu mẫu thất bại.');
+                } finally {
+                  setTemplateSaving(false);
+                }
+              }}
+              disabled={!canManageTemplates || templateSaving}
+              className="px-3 py-1.5 rounded-lg bg-indigo-600 hover:bg-indigo-700 disabled:opacity-50 text-white text-[11px] font-bold"
+            >
+              {templateSaving ? 'Đang lưu...' : 'Lưu mẫu'}
+            </button>
           </div>
         </div>
       </div>

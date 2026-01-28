@@ -4,7 +4,11 @@ import { formatCurrency } from '../constants';
 import { useAuth } from '../lib/auth';
 import { fetchBranches, fetchCurrentBranchId } from '../lib/branches';
 import { fetchInventoryWarehouses } from '../lib/inventory';
-import { createPosSale, fetchCatalogForWarehouse, fetchOpenShift, openShift, type PosCatalogItem } from '../lib/pos';
+import { createPosSale, fetchCatalogForWarehouse, fetchOpenShift, openShift, fetchPosReceipt, type PosCatalogItem } from '../lib/pos';
+import { ensureDefaultTemplates, fetchDocumentTemplates, getActiveTemplate, type DocumentTemplate, type PaperSize } from '../lib/documentTemplates';
+import { renderDocumentHtml, openPrintWindow, downloadPdf, exportToExcel } from '../lib/documentPrint';
+import { buildPaymentSlipPayload, buildPosInvoicePayload } from '../lib/documentPayloads';
+import { createDocumentPrint } from '../lib/documentPrintStore';
 
 type TimePreset = 'today' | 'month' | 'year' | 'range' | 'all';
 
@@ -32,6 +36,11 @@ const POS: React.FC = () => {
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [paymentMethod, setPaymentMethod] = useState<'cash' | 'bank_transfer' | 'card' | 'momo' | 'zalopay' | 'other'>('cash');
+  const [templates, setTemplates] = useState<DocumentTemplate[]>([]);
+  const [invoicePaperSize, setInvoicePaperSize] = useState<PaperSize>('A5');
+  const [slipPaperSize, setSlipPaperSize] = useState<PaperSize>('80mm');
+  const [lastOrderId, setLastOrderId] = useState<string | null>(null);
+  const [printBusy, setPrintBusy] = useState(false);
 
   useEffect(() => {
     if (timePreset === 'range') return;
@@ -78,6 +87,80 @@ const POS: React.FC = () => {
       isMounted = false;
     };
   }, []);
+
+  useEffect(() => {
+    let isMounted = true;
+    const loadTemplates = async () => {
+      await ensureDefaultTemplates();
+      const list = await fetchDocumentTemplates();
+      if (isMounted) setTemplates(list);
+    };
+    void loadTemplates();
+    return () => {
+      isMounted = false;
+    };
+  }, []);
+
+  const printPosDocument = async (mode: 'print' | 'pdf' | 'excel', docType: 'invoice' | 'payment_slip') => {
+    if (!lastOrderId) return;
+    setPrintBusy(true);
+    try {
+      const receipt = await fetchPosReceipt(lastOrderId);
+      if (!receipt) {
+        setError('Không lấy được dữ liệu hóa đơn.');
+        return;
+      }
+      const templateType = docType === 'invoice' ? 'invoice_sale' : 'payment_slip';
+      const size = docType === 'invoice' ? invoicePaperSize : slipPaperSize;
+      const template = getActiveTemplate(templates, templateType, size);
+      if (!template) {
+        setError('Chưa có mẫu chứng từ phù hợp. Vui lòng tạo trong Cài đặt.');
+        return;
+      }
+
+      const company = {
+        name: template.settings.company_name,
+        tax_code: template.settings.company_tax_code,
+        address: template.settings.company_address,
+        phone: template.settings.company_phone,
+        logo_url: template.settings.logo_url ?? null,
+      };
+
+      const payload = docType === 'invoice'
+        ? buildPosInvoicePayload(receipt, company)
+        : buildPaymentSlipPayload(receipt, company);
+
+      const html = renderDocumentHtml(payload, {
+        paperSize: template.paper_size,
+        layout: template.layout,
+        settings: template.settings,
+      });
+
+      if (mode === 'excel') {
+        await exportToExcel(payload, `${payload.doc_no}.xlsx`);
+        return;
+      }
+
+      if (mode === 'pdf') {
+        await downloadPdf(html, `${payload.doc_no}.pdf`, template.paper_size);
+        return;
+      }
+
+      openPrintWindow(html, payload.doc_no);
+      if (docType === 'payment_slip') {
+        await createDocumentPrint({
+          template_id: template.id,
+          template_type: template.template_type,
+          paper_size: template.paper_size,
+          source_type: 'pos_payment',
+          source_id: lastOrderId,
+          payload,
+        });
+      }
+    } finally {
+      setPrintBusy(false);
+    }
+  };
 
   useEffect(() => {
     if (!branchId) return;
@@ -395,6 +478,7 @@ const POS: React.FC = () => {
                     return;
                   }
                   setCart([]);
+                  setLastOrderId(orderId);
                 } finally {
                   setBusy(false);
                 }
@@ -405,6 +489,88 @@ const POS: React.FC = () => {
           </div>
         </div>
       </div>
+
+      {lastOrderId && (
+        <div className="bg-white dark:bg-slate-900 rounded-xl shadow-soft border border-slate-200 dark:border-slate-800 p-3 space-y-2">
+          <div className="text-[11px] font-bold text-slate-700 dark:text-slate-200">In chứng từ</div>
+          <div className="grid grid-cols-1 lg:grid-cols-2 gap-2">
+            <div className="p-2 rounded-lg border border-slate-200 dark:border-slate-800">
+              <div className="text-[10px] font-semibold text-slate-500 dark:text-slate-400 mb-1">Hóa đơn</div>
+              <div className="flex items-center gap-2 mb-2">
+                <select
+                  value={invoicePaperSize}
+                  onChange={(e) => setInvoicePaperSize(e.target.value as PaperSize)}
+                  className="px-2 py-1.5 rounded-lg bg-slate-50 dark:bg-slate-900 border border-slate-200 dark:border-slate-800 text-[11px]"
+                >
+                  <option value="A5">A5</option>
+                  <option value="A4">A4</option>
+                </select>
+              </div>
+              <div className="flex flex-wrap gap-2">
+                <button
+                  disabled={printBusy}
+                  onClick={() => void printPosDocument('print', 'invoice')}
+                  className="px-3 py-1.5 rounded-lg bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 text-slate-700 dark:text-slate-200 text-[11px] font-bold"
+                >
+                  In hóa đơn
+                </button>
+                <button
+                  disabled={printBusy}
+                  onClick={() => void printPosDocument('pdf', 'invoice')}
+                  className="px-3 py-1.5 rounded-lg bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 text-slate-700 dark:text-slate-200 text-[11px] font-bold"
+                >
+                  PDF
+                </button>
+                <button
+                  disabled={printBusy}
+                  onClick={() => void printPosDocument('excel', 'invoice')}
+                  className="px-3 py-1.5 rounded-lg bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 text-slate-700 dark:text-slate-200 text-[11px] font-bold"
+                >
+                  Excel
+                </button>
+              </div>
+            </div>
+
+            <div className="p-2 rounded-lg border border-slate-200 dark:border-slate-800">
+              <div className="text-[10px] font-semibold text-slate-500 dark:text-slate-400 mb-1">Phiếu thanh toán</div>
+              <div className="flex items-center gap-2 mb-2">
+                <select
+                  value={slipPaperSize}
+                  onChange={(e) => setSlipPaperSize(e.target.value as PaperSize)}
+                  className="px-2 py-1.5 rounded-lg bg-slate-50 dark:bg-slate-900 border border-slate-200 dark:border-slate-800 text-[11px]"
+                >
+                  <option value="80mm">80mm</option>
+                  <option value="A5">A5</option>
+                  <option value="A4">A4</option>
+                </select>
+              </div>
+              <div className="flex flex-wrap gap-2">
+                <button
+                  disabled={printBusy}
+                  onClick={() => void printPosDocument('print', 'payment_slip')}
+                  className="px-3 py-1.5 rounded-lg bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 text-slate-700 dark:text-slate-200 text-[11px] font-bold"
+                >
+                  In phiếu
+                </button>
+                <button
+                  disabled={printBusy}
+                  onClick={() => void printPosDocument('pdf', 'payment_slip')}
+                  className="px-3 py-1.5 rounded-lg bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 text-slate-700 dark:text-slate-200 text-[11px] font-bold"
+                >
+                  PDF
+                </button>
+                <button
+                  disabled={printBusy}
+                  onClick={() => void printPosDocument('excel', 'payment_slip')}
+                  className="px-3 py-1.5 rounded-lg bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 text-slate-700 dark:text-slate-200 text-[11px] font-bold"
+                >
+                  Excel
+                </button>
+              </div>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   );
 };
