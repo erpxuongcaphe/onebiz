@@ -1,5 +1,5 @@
 import React, { useEffect, useMemo, useState } from 'react';
-import { KeyRound, LogOut, Database, AlertTriangle, CheckCircle2, UserPlus } from 'lucide-react';
+import { AlertTriangle, CheckCircle2, ChevronDown, Database, FileText, KeyRound, LogOut, Shield, UserPlus } from 'lucide-react';
 import { useAuth } from '../lib/auth';
 import { supabase, isSupabaseConfigured } from '../lib/supabaseClient';
 import { useTenant, getCachedTenantId } from '../lib/tenantContext';
@@ -8,6 +8,41 @@ import { withTimeout } from '../lib/async';
 import { bootstrapSuperAdmin, fetchProfiles, fetchRoles, fetchUserRoles, setUserBranch, setUserRole, type ProfileLite, type Role, type UserRole } from '../lib/roles';
 import { fetchBranches, type Branch } from '../lib/branches';
 import { ensureDefaultTemplates, fetchDocumentTemplates, getActiveTemplate, upsertTemplate, type DocumentTemplate, type PaperSize, type TemplateSettings, type TemplateType } from '../lib/documentTemplates';
+
+type SectionCardProps = {
+  title: string;
+  subtitle?: string;
+  icon?: React.ReactNode;
+  right?: React.ReactNode;
+  defaultOpen?: boolean;
+  children: React.ReactNode;
+};
+
+function SectionCard({ title, subtitle, icon, right, defaultOpen = false, children }: SectionCardProps) {
+  const [open, setOpen] = useState(defaultOpen);
+  return (
+    <div className="bg-white dark:bg-slate-900 rounded-xl shadow-soft border border-slate-200 dark:border-slate-800 overflow-hidden">
+      <button
+        type="button"
+        onClick={() => setOpen((v) => !v)}
+        className="w-full p-3 border-b border-slate-100 dark:border-slate-800 flex items-center justify-between gap-3 text-left"
+      >
+        <div className="flex items-start gap-2 min-w-0">
+          {icon ? <div className="mt-0.5 text-slate-400">{icon}</div> : null}
+          <div className="min-w-0">
+            <div className="text-[11px] font-semibold text-slate-700 dark:text-slate-200 truncate">{title}</div>
+            {subtitle ? <div className="text-[10px] text-slate-500 dark:text-slate-400 truncate mt-0.5">{subtitle}</div> : null}
+          </div>
+        </div>
+        <div className="flex items-center gap-2 shrink-0">
+          {right ? <div onClick={(e) => e.stopPropagation()}>{right}</div> : null}
+          <ChevronDown className={`w-4 h-4 text-slate-400 transition-transform ${open ? 'rotate-180' : ''}`} />
+        </div>
+      </button>
+      {open ? <div className="p-3 space-y-3">{children}</div> : null}
+    </div>
+  );
+}
 
 const Settings: React.FC = () => {
   const { user, loading, isConfigured, permissionPatterns } = useAuth();
@@ -45,6 +80,7 @@ const Settings: React.FC = () => {
   const [templateName, setTemplateName] = useState('');
   const [templateSettings, setTemplateSettings] = useState<TemplateSettings>({});
   const [templateSaving, setTemplateSaving] = useState(false);
+  const [showPerms, setShowPerms] = useState(false);
 
   useEffect(() => {
     if (!supabase || !user) {
@@ -351,47 +387,74 @@ const Settings: React.FC = () => {
     <div className="space-y-3 lg:space-y-5 animate-fade-in pb-10">
       <div>
         <h1 className="text-lg lg:text-xl font-bold text-slate-900 dark:text-white">Cài đặt</h1>
-        <p className="text-slate-500 dark:text-slate-400 text-[11px] mt-0.5">Kết nối tài khoản và cấu hình hệ thống.</p>
+        <p className="text-slate-500 dark:text-slate-400 text-[11px] mt-0.5">Kết nối tài khoản, phân quyền và mẫu chứng từ.</p>
       </div>
 
       <div className="bg-white dark:bg-slate-900 rounded-xl shadow-soft border border-slate-200 dark:border-slate-800 overflow-hidden">
-        <div className="p-3 border-b border-slate-100 dark:border-slate-800 flex items-center justify-between gap-2">
-          <div className="flex items-center gap-2">
-            <Database className="w-4 h-4 text-slate-400" />
-            <div className="text-[11px] font-semibold text-slate-700 dark:text-slate-200">Supabase</div>
-          </div>
-          <div className={`px-2 py-1 rounded-full text-[10px] font-bold ${statusBadgeClass} flex items-center gap-1.5`}>
+        <div className="p-3 flex flex-col sm:flex-row gap-2 sm:items-center sm:justify-between">
+          <div className="text-[11px] font-semibold text-slate-700 dark:text-slate-200">Thông tin hệ thống</div>
+          <div className={`px-2 py-1 rounded-full text-[10px] font-bold ${statusBadgeClass} flex items-center gap-1.5 w-fit`}>
             {status.tone === 'ok' ? <CheckCircle2 className="w-3 h-3" /> : status.tone === 'warn' ? <AlertTriangle className="w-3 h-3" /> : null}
             {status.label}
           </div>
         </div>
-
-        <div className="p-3 space-y-3">
+        <div className="px-3 pb-3">
           <div className="text-[11px] text-slate-600 dark:text-slate-300 bg-slate-50 dark:bg-slate-800/50 border border-slate-200 dark:border-slate-800 rounded-lg p-2.5">
-            <div className="font-bold text-slate-800 dark:text-slate-200">Thông tin hệ thống</div>
-            <div className="mt-1 grid grid-cols-1 sm:grid-cols-2 gap-1">
-              <div><span className="text-slate-500 dark:text-slate-400">Tenant:</span> <span className="font-mono">{tenant?.id ?? getCachedTenantId() ?? '-'}</span></div>
-              <div><span className="text-slate-500 dark:text-slate-400">Branch:</span> <span className="font-mono">{branchId ?? '-'}</span></div>
-              <div className="sm:col-span-2"><span className="text-slate-500 dark:text-slate-400">Permissions:</span> <span className="font-mono">{permissionPatterns.length ? permissionPatterns.join(', ') : '-'}</span></div>
+            <div className="grid grid-cols-1 sm:grid-cols-3 gap-2">
+              <div>
+                <div className="text-[10px] font-bold text-slate-500 dark:text-slate-400">Tenant</div>
+                <div className="font-mono text-[10px] mt-0.5 break-all">{tenant?.id ?? getCachedTenantId() ?? '-'}</div>
+              </div>
+              <div>
+                <div className="text-[10px] font-bold text-slate-500 dark:text-slate-400">Branch</div>
+                <div className="font-mono text-[10px] mt-0.5 break-all">{branchId ?? '-'}</div>
+              </div>
+              <div className="flex items-start justify-between gap-2">
+                <div>
+                  <div className="text-[10px] font-bold text-slate-500 dark:text-slate-400">Permissions</div>
+                  <div className="text-[10px] mt-0.5">{permissionPatterns.length ? `${permissionPatterns.length} quyền` : '-'}</div>
+                </div>
+                <button
+                  type="button"
+                  onClick={() => setShowPerms((v) => !v)}
+                  className="px-2 py-1 rounded-md border border-slate-200 dark:border-slate-700 text-[10px] font-bold text-slate-600 dark:text-slate-300 hover:bg-white/60 dark:hover:bg-slate-900"
+                >
+                  {showPerms ? 'Ẩn' : 'Xem'}
+                </button>
+              </div>
             </div>
+            {showPerms ? (
+              <div className="mt-2 pt-2 border-t border-slate-200 dark:border-slate-700">
+                <div className="font-mono text-[10px] break-words">{permissionPatterns.length ? permissionPatterns.join(', ') : '-'}</div>
+              </div>
+            ) : null}
           </div>
-          {!isSupabaseConfigured && (
-            <div className="text-[11px] text-slate-600 dark:text-slate-300 bg-slate-50 dark:bg-slate-800/50 border border-slate-200 dark:border-slate-800 rounded-lg p-2.5">
-              <div className="font-bold text-slate-800 dark:text-slate-200">Thiếu biến môi trường</div>
-              <div className="mt-1">Tạo `.env.local` từ `.env.example` và điền:</div>
-              <div className="mt-1 font-mono text-[10px]">VITE_SUPABASE_URL, VITE_SUPABASE_ANON_KEY</div>
-            </div>
-          )}
+        </div>
+      </div>
 
-          {error && (
-            <div className="text-[11px] text-rose-700 dark:text-rose-400 bg-rose-50 dark:bg-rose-900/20 border border-rose-200 dark:border-rose-900/40 rounded-lg p-2.5">
-              {error}
-            </div>
-          )}
+      <SectionCard
+        title="Tài khoản & kết nối"
+        subtitle="Đăng nhập/đăng xuất và cấu hình Supabase"
+        icon={<Database className="w-4 h-4" />}
+        defaultOpen
+      >
+        {!isSupabaseConfigured && (
+          <div className="text-[11px] text-slate-600 dark:text-slate-300 bg-slate-50 dark:bg-slate-800/50 border border-slate-200 dark:border-slate-800 rounded-lg p-2.5">
+            <div className="font-bold text-slate-800 dark:text-slate-200">Thiếu biến môi trường</div>
+            <div className="mt-1">Tạo `.env.local` từ `.env.example` và điền:</div>
+            <div className="mt-1 font-mono text-[10px]">VITE_SUPABASE_URL, VITE_SUPABASE_ANON_KEY</div>
+          </div>
+        )}
 
-          {!user ? (
-            <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
-              <div className="sm:col-span-2 flex items-center justify-between">
+        {error && (
+          <div className="text-[11px] text-rose-700 dark:text-rose-400 bg-rose-50 dark:bg-rose-900/20 border border-rose-200 dark:border-rose-900/40 rounded-lg p-2.5">
+            {error}
+          </div>
+        )}
+
+        {!user ? (
+          <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
+            <div className="sm:col-span-2 flex items-center justify-between">
                 <div className="inline-flex rounded-lg border border-slate-200 dark:border-slate-800 overflow-hidden">
                   <button
                     onClick={() => {
@@ -475,13 +538,13 @@ const Settings: React.FC = () => {
                   {mode === 'signUp' ? 'Tạo tài khoản' : 'Đăng nhập'}
                 </button>
               </div>
-            </div>
-          ) : (
-            <div className="space-y-3">
-              <div className="flex items-center justify-between">
-                <div className="text-[11px] text-slate-600 dark:text-slate-300">
-                  Tài khoản hiện tại: <span className="font-bold">{user.email}</span>
-                </div>
+          </div>
+        ) : (
+          <div className="space-y-3">
+            <div className="flex items-center justify-between">
+              <div className="text-[11px] text-slate-600 dark:text-slate-300">
+                Tài khoản hiện tại: <span className="font-bold">{user.email}</span>
+              </div>
                 <button
                   onClick={() => void handleSignOut()}
                   disabled={submitting}
@@ -505,12 +568,21 @@ on conflict (id) do nothing;`}
                   </div>
                 </div>
               )}
-            </div>
-          )}
+          </div>
+        )}
+      </SectionCard>
 
-          <div className="pt-3 border-t border-slate-100 dark:border-slate-800 space-y-2">
+      <SectionCard
+        title="Phân quyền"
+        subtitle="Role + chi nhánh cho từng user"
+        icon={<Shield className="w-4 h-4" />}
+      >
+        {!user ? (
+          <div className="text-[11px] text-slate-600 dark:text-slate-300">Vui lòng đăng nhập để quản lý phân quyền.</div>
+        ) : (
+          <div className="space-y-2">
             <div className="flex items-center justify-between">
-              <div className="text-[11px] font-semibold text-slate-700 dark:text-slate-200">Phân quyền người dùng</div>
+              <div className="text-[11px] font-semibold text-slate-700 dark:text-slate-200">Người dùng</div>
               {canManageRoles && (
                 <button
                   onClick={async () => {
@@ -668,12 +740,14 @@ on conflict (id) do nothing;`}
               </div>
             )}
           </div>
-        </div>
-      </div>
+        )}
+      </SectionCard>
 
-      <div className="bg-white dark:bg-slate-900 rounded-xl shadow-soft border border-slate-200 dark:border-slate-800 overflow-hidden">
-        <div className="p-3 border-b border-slate-100 dark:border-slate-800 flex items-center justify-between gap-2">
-          <div className="text-[11px] font-semibold text-slate-700 dark:text-slate-200">Mẫu chứng từ</div>
+      <SectionCard
+        title="Mẫu chứng từ"
+        subtitle="Tùy chỉnh tên đơn vị, VAT, logo, header/footer (A4/A5; 80mm cho Phiếu thanh toán)"
+        icon={<FileText className="w-4 h-4" />}
+        right={
           <button
             onClick={async () => {
               if (!tenantId) return;
@@ -693,192 +767,205 @@ on conflict (id) do nothing;`}
           >
             Tải lại
           </button>
-        </div>
-        <div className="p-3 space-y-3">
-          {!canManageTemplates && (
-            <div className="text-[11px] text-amber-700 dark:text-amber-400 bg-amber-50 dark:bg-amber-900/20 border border-amber-200 dark:border-amber-900/40 rounded-lg p-2.5">
-              Cần quyền `settings.*` để quản lý mẫu chứng từ.
+        }
+      >
+        {!user ? (
+          <div className="text-[11px] text-slate-600 dark:text-slate-300">Vui lòng đăng nhập để quản lý mẫu chứng từ.</div>
+        ) : (
+          <>
+            {!canManageTemplates && (
+              <div className="text-[11px] text-amber-700 dark:text-amber-400 bg-amber-50 dark:bg-amber-900/20 border border-amber-200 dark:border-amber-900/40 rounded-lg p-2.5">
+                Cần quyền `settings.*` để quản lý mẫu chứng từ.
+              </div>
+            )}
+            {templatesError && (
+              <div className="text-[11px] text-rose-700 dark:text-rose-400 bg-rose-50 dark:bg-rose-900/20 border border-rose-200 dark:border-rose-900/40 rounded-lg p-2.5">
+                {templatesError}
+              </div>
+            )}
+
+            <div className="grid grid-cols-1 sm:grid-cols-3 gap-2">
+              <label className="block">
+                <div className="text-[10px] font-bold text-slate-500 dark:text-slate-400 mb-1">Loại chứng từ</div>
+                <select
+                  value={templateType}
+                  onChange={(e) => setTemplateType(e.target.value as TemplateType)}
+                  className="w-full px-2.5 py-2 rounded-lg bg-slate-50 dark:bg-slate-900 border border-slate-200 dark:border-slate-800 text-[11px]"
+                  disabled={!canManageTemplates}
+                >
+                  <option value="invoice_sale">Hóa đơn bán hàng</option>
+                  <option value="payment_slip">Phiếu thanh toán</option>
+                  <option value="payment_receipt">Phiếu thu</option>
+                  <option value="payment_voucher">Phiếu chi</option>
+                  <option value="delivery_note">Phiếu giao hàng</option>
+                  <option value="purchase_order">Phiếu đặt hàng</option>
+                  <option value="transfer_note">Phiếu chuyển hàng</option>
+                  <option value="void_note">Phiếu hủy hàng</option>
+                  <option value="production_order">Phiếu sản xuất</option>
+                  <option value="inventory_receipt">Phiếu nhập kho</option>
+                  <option value="inventory_issue">Phiếu xuất kho</option>
+                  <option value="inventory_transfer">Phiếu chuyển kho</option>
+                </select>
+              </label>
+              <label className="block">
+                <div className="text-[10px] font-bold text-slate-500 dark:text-slate-400 mb-1">Khổ giấy</div>
+                <select
+                  value={paperSize}
+                  onChange={(e) => setPaperSize(e.target.value as PaperSize)}
+                  className="w-full px-2.5 py-2 rounded-lg bg-slate-50 dark:bg-slate-900 border border-slate-200 dark:border-slate-800 text-[11px]"
+                  disabled={!canManageTemplates}
+                >
+                  <option value="A4">A4</option>
+                  <option value="A5">A5</option>
+                  {templateType === 'payment_slip' ? <option value="80mm">80mm</option> : null}
+                </select>
+              </label>
+              <label className="block">
+                <div className="text-[10px] font-bold text-slate-500 dark:text-slate-400 mb-1">Tên mẫu</div>
+                <input
+                  value={templateName}
+                  onChange={(e) => setTemplateName(e.target.value)}
+                  className="w-full px-2.5 py-2 rounded-lg bg-slate-50 dark:bg-slate-900 border border-slate-200 dark:border-slate-800 text-[11px]"
+                  disabled={!canManageTemplates}
+                />
+              </label>
             </div>
-          )}
-          {templatesError && (
-            <div className="text-[11px] text-rose-700 dark:text-rose-400 bg-rose-50 dark:bg-rose-900/20 border border-rose-200 dark:border-rose-900/40 rounded-lg p-2.5">
-              {templatesError}
+
+            <div className="grid grid-cols-1 lg:grid-cols-2 gap-2">
+              <div className="border border-slate-200 dark:border-slate-800 rounded-lg p-2.5">
+                <div className="text-[11px] font-semibold text-slate-700 dark:text-slate-200">Thông tin đơn vị</div>
+                <div className="mt-2 grid grid-cols-1 sm:grid-cols-2 gap-2">
+                  <label className="block">
+                    <div className="text-[10px] font-bold text-slate-500 dark:text-slate-400 mb-1">Tên đơn vị</div>
+                    <input
+                      value={templateSettings.company_name ?? ''}
+                      onChange={(e) => setTemplateSettings((prev) => ({ ...prev, company_name: e.target.value }))}
+                      className="w-full px-2.5 py-2 rounded-lg bg-slate-50 dark:bg-slate-900 border border-slate-200 dark:border-slate-800 text-[11px]"
+                      disabled={!canManageTemplates}
+                    />
+                  </label>
+                  <label className="block">
+                    <div className="text-[10px] font-bold text-slate-500 dark:text-slate-400 mb-1">Mã số thuế</div>
+                    <input
+                      value={templateSettings.company_tax_code ?? ''}
+                      onChange={(e) => setTemplateSettings((prev) => ({ ...prev, company_tax_code: e.target.value }))}
+                      className="w-full px-2.5 py-2 rounded-lg bg-slate-50 dark:bg-slate-900 border border-slate-200 dark:border-slate-800 text-[11px]"
+                      disabled={!canManageTemplates}
+                    />
+                  </label>
+                  <label className="block sm:col-span-2">
+                    <div className="text-[10px] font-bold text-slate-500 dark:text-slate-400 mb-1">Địa chỉ</div>
+                    <input
+                      value={templateSettings.company_address ?? ''}
+                      onChange={(e) => setTemplateSettings((prev) => ({ ...prev, company_address: e.target.value }))}
+                      className="w-full px-2.5 py-2 rounded-lg bg-slate-50 dark:bg-slate-900 border border-slate-200 dark:border-slate-800 text-[11px]"
+                      disabled={!canManageTemplates}
+                    />
+                  </label>
+                  <label className="block">
+                    <div className="text-[10px] font-bold text-slate-500 dark:text-slate-400 mb-1">Hotline</div>
+                    <input
+                      value={templateSettings.company_phone ?? ''}
+                      onChange={(e) => setTemplateSettings((prev) => ({ ...prev, company_phone: e.target.value }))}
+                      className="w-full px-2.5 py-2 rounded-lg bg-slate-50 dark:bg-slate-900 border border-slate-200 dark:border-slate-800 text-[11px]"
+                      disabled={!canManageTemplates}
+                    />
+                  </label>
+                  <label className="block">
+                    <div className="text-[10px] font-bold text-slate-500 dark:text-slate-400 mb-1">Logo URL</div>
+                    <input
+                      value={templateSettings.logo_url ?? ''}
+                      onChange={(e) => setTemplateSettings((prev) => ({ ...prev, logo_url: e.target.value }))}
+                      className="w-full px-2.5 py-2 rounded-lg bg-slate-50 dark:bg-slate-900 border border-slate-200 dark:border-slate-800 text-[11px]"
+                      disabled={!canManageTemplates}
+                    />
+                  </label>
+                </div>
+              </div>
+
+              <div className="border border-slate-200 dark:border-slate-800 rounded-lg p-2.5">
+                <div className="text-[11px] font-semibold text-slate-700 dark:text-slate-200">Hiển thị & nội dung</div>
+                <div className="mt-2 grid grid-cols-1 gap-2">
+                  <label className="block">
+                    <div className="text-[10px] font-bold text-slate-500 dark:text-slate-400 mb-1">Header</div>
+                    <input
+                      value={templateSettings.header_text ?? ''}
+                      onChange={(e) => setTemplateSettings((prev) => ({ ...prev, header_text: e.target.value }))}
+                      className="w-full px-2.5 py-2 rounded-lg bg-slate-50 dark:bg-slate-900 border border-slate-200 dark:border-slate-800 text-[11px]"
+                      disabled={!canManageTemplates}
+                    />
+                  </label>
+                  <label className="block">
+                    <div className="text-[10px] font-bold text-slate-500 dark:text-slate-400 mb-1">Footer</div>
+                    <input
+                      value={templateSettings.footer_text ?? ''}
+                      onChange={(e) => setTemplateSettings((prev) => ({ ...prev, footer_text: e.target.value }))}
+                      className="w-full px-2.5 py-2 rounded-lg bg-slate-50 dark:bg-slate-900 border border-slate-200 dark:border-slate-800 text-[11px]"
+                      disabled={!canManageTemplates}
+                    />
+                  </label>
+                  <div className="flex flex-wrap items-center gap-3 pt-1">
+                    <label className="flex items-center gap-2 text-[11px] font-semibold text-slate-600 dark:text-slate-300">
+                      <input
+                        type="checkbox"
+                        checked={Boolean(templateSettings.show_vat)}
+                        onChange={(e) => setTemplateSettings((prev) => ({ ...prev, show_vat: e.target.checked }))}
+                        disabled={!canManageTemplates}
+                        className="accent-indigo-600"
+                      />
+                      Hiện VAT
+                    </label>
+                    <label className="flex items-center gap-2 text-[11px] font-semibold text-slate-600 dark:text-slate-300">
+                      VAT %
+                      <input
+                        type="number"
+                        value={templateSettings.vat_rate ?? 10}
+                        onChange={(e) => setTemplateSettings((prev) => ({ ...prev, vat_rate: Number(e.target.value) }))}
+                        disabled={!canManageTemplates}
+                        className="w-16 px-2 py-1 rounded-lg bg-slate-50 dark:bg-slate-900 border border-slate-200 dark:border-slate-800 text-[11px]"
+                      />
+                    </label>
+                  </div>
+                </div>
+              </div>
             </div>
-          )}
-          <div className="grid grid-cols-1 sm:grid-cols-3 gap-2">
-            <label className="block">
-              <div className="text-[10px] font-bold text-slate-500 dark:text-slate-400 mb-1">Loại chứng từ</div>
-              <select
-                value={templateType}
-                onChange={(e) => setTemplateType(e.target.value as TemplateType)}
-                className="w-full px-2.5 py-1.5 rounded-lg bg-slate-50 dark:bg-slate-900 border border-slate-200 dark:border-slate-800 text-[11px]"
-                disabled={!canManageTemplates}
+
+            <div className="flex items-center justify-end">
+              <button
+                onClick={async () => {
+                  if (!tenantId) return;
+                  setTemplateSaving(true);
+                  setTemplatesError(null);
+                  try {
+                    const active = getActiveTemplate(templates, templateType, paperSize);
+                    const ok = await upsertTemplate({
+                      id: active?.id,
+                      tenant_id: tenantId,
+                      template_type: templateType,
+                      paper_size: paperSize,
+                      name: templateName || active?.name || 'Mẫu chứng từ',
+                      settings: templateSettings,
+                      layout: active?.layout ?? { columns: [], show_totals: true },
+                      version: active?.version ?? 1,
+                      is_active: true,
+                    });
+                    if (!ok) throw new Error('Lưu mẫu thất bại.');
+                    setTemplates(await fetchDocumentTemplates(tenantId));
+                  } catch (e: any) {
+                    setTemplatesError(e?.message ?? 'Lưu mẫu thất bại.');
+                  } finally {
+                    setTemplateSaving(false);
+                  }
+                }}
+                disabled={!canManageTemplates || templateSaving}
+                className="px-3 py-2 rounded-lg bg-indigo-600 hover:bg-indigo-700 disabled:opacity-50 text-white text-[11px] font-bold"
               >
-                <option value="invoice_sale">Hóa đơn bán hàng</option>
-                <option value="payment_slip">Phiếu thanh toán</option>
-                <option value="payment_receipt">Phiếu thu</option>
-                <option value="payment_voucher">Phiếu chi</option>
-                <option value="delivery_note">Phiếu giao hàng</option>
-                <option value="purchase_order">Phiếu đặt hàng</option>
-                <option value="transfer_note">Phiếu chuyển hàng</option>
-                <option value="void_note">Phiếu hủy hàng</option>
-                <option value="production_order">Phiếu sản xuất</option>
-                <option value="inventory_receipt">Phiếu nhập kho</option>
-                <option value="inventory_issue">Phiếu xuất kho</option>
-                <option value="inventory_transfer">Phiếu chuyển kho</option>
-              </select>
-            </label>
-            <label className="block">
-              <div className="text-[10px] font-bold text-slate-500 dark:text-slate-400 mb-1">Khổ giấy</div>
-              <select
-                value={paperSize}
-                onChange={(e) => setPaperSize(e.target.value as PaperSize)}
-                className="w-full px-2.5 py-1.5 rounded-lg bg-slate-50 dark:bg-slate-900 border border-slate-200 dark:border-slate-800 text-[11px]"
-                disabled={!canManageTemplates}
-              >
-                <option value="A4">A4</option>
-                <option value="A5">A5</option>
-                {templateType === 'payment_slip' && <option value="80mm">80mm</option>}
-              </select>
-            </label>
-            <label className="block">
-              <div className="text-[10px] font-bold text-slate-500 dark:text-slate-400 mb-1">Tên mẫu</div>
-              <input
-                value={templateName}
-                onChange={(e) => setTemplateName(e.target.value)}
-                className="w-full px-2.5 py-1.5 rounded-lg bg-slate-50 dark:bg-slate-900 border border-slate-200 dark:border-slate-800 text-[11px]"
-                disabled={!canManageTemplates}
-              />
-            </label>
-          </div>
-
-          <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
-            <label className="block">
-              <div className="text-[10px] font-bold text-slate-500 dark:text-slate-400 mb-1">Tên đơn vị</div>
-              <input
-                value={templateSettings.company_name ?? ''}
-                onChange={(e) => setTemplateSettings((prev) => ({ ...prev, company_name: e.target.value }))}
-                className="w-full px-2.5 py-1.5 rounded-lg bg-slate-50 dark:bg-slate-900 border border-slate-200 dark:border-slate-800 text-[11px]"
-                disabled={!canManageTemplates}
-              />
-            </label>
-            <label className="block">
-              <div className="text-[10px] font-bold text-slate-500 dark:text-slate-400 mb-1">Mã số thuế</div>
-              <input
-                value={templateSettings.company_tax_code ?? ''}
-                onChange={(e) => setTemplateSettings((prev) => ({ ...prev, company_tax_code: e.target.value }))}
-                className="w-full px-2.5 py-1.5 rounded-lg bg-slate-50 dark:bg-slate-900 border border-slate-200 dark:border-slate-800 text-[11px]"
-                disabled={!canManageTemplates}
-              />
-            </label>
-            <label className="block sm:col-span-2">
-              <div className="text-[10px] font-bold text-slate-500 dark:text-slate-400 mb-1">Địa chỉ</div>
-              <input
-                value={templateSettings.company_address ?? ''}
-                onChange={(e) => setTemplateSettings((prev) => ({ ...prev, company_address: e.target.value }))}
-                className="w-full px-2.5 py-1.5 rounded-lg bg-slate-50 dark:bg-slate-900 border border-slate-200 dark:border-slate-800 text-[11px]"
-                disabled={!canManageTemplates}
-              />
-            </label>
-            <label className="block">
-              <div className="text-[10px] font-bold text-slate-500 dark:text-slate-400 mb-1">Hotline</div>
-              <input
-                value={templateSettings.company_phone ?? ''}
-                onChange={(e) => setTemplateSettings((prev) => ({ ...prev, company_phone: e.target.value }))}
-                className="w-full px-2.5 py-1.5 rounded-lg bg-slate-50 dark:bg-slate-900 border border-slate-200 dark:border-slate-800 text-[11px]"
-                disabled={!canManageTemplates}
-              />
-            </label>
-            <label className="block">
-              <div className="text-[10px] font-bold text-slate-500 dark:text-slate-400 mb-1">Logo URL</div>
-              <input
-                value={templateSettings.logo_url ?? ''}
-                onChange={(e) => setTemplateSettings((prev) => ({ ...prev, logo_url: e.target.value }))}
-                className="w-full px-2.5 py-1.5 rounded-lg bg-slate-50 dark:bg-slate-900 border border-slate-200 dark:border-slate-800 text-[11px]"
-                disabled={!canManageTemplates}
-              />
-            </label>
-          </div>
-
-          <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
-            <label className="block sm:col-span-2">
-              <div className="text-[10px] font-bold text-slate-500 dark:text-slate-400 mb-1">Header</div>
-              <input
-                value={templateSettings.header_text ?? ''}
-                onChange={(e) => setTemplateSettings((prev) => ({ ...prev, header_text: e.target.value }))}
-                className="w-full px-2.5 py-1.5 rounded-lg bg-slate-50 dark:bg-slate-900 border border-slate-200 dark:border-slate-800 text-[11px]"
-                disabled={!canManageTemplates}
-              />
-            </label>
-            <label className="block sm:col-span-2">
-              <div className="text-[10px] font-bold text-slate-500 dark:text-slate-400 mb-1">Footer</div>
-              <input
-                value={templateSettings.footer_text ?? ''}
-                onChange={(e) => setTemplateSettings((prev) => ({ ...prev, footer_text: e.target.value }))}
-                className="w-full px-2.5 py-1.5 rounded-lg bg-slate-50 dark:bg-slate-900 border border-slate-200 dark:border-slate-800 text-[11px]"
-                disabled={!canManageTemplates}
-              />
-            </label>
-          </div>
-
-          <div className="flex flex-wrap items-center gap-3">
-            <label className="flex items-center gap-2 text-[11px] font-semibold text-slate-600 dark:text-slate-300">
-              <input
-                type="checkbox"
-                checked={Boolean(templateSettings.show_vat)}
-                onChange={(e) => setTemplateSettings((prev) => ({ ...prev, show_vat: e.target.checked }))}
-                disabled={!canManageTemplates}
-                className="accent-indigo-600"
-              />
-              Hiện VAT
-            </label>
-            <label className="flex items-center gap-2 text-[11px] font-semibold text-slate-600 dark:text-slate-300">
-              VAT %
-              <input
-                type="number"
-                value={templateSettings.vat_rate ?? 10}
-                onChange={(e) => setTemplateSettings((prev) => ({ ...prev, vat_rate: Number(e.target.value) }))}
-                disabled={!canManageTemplates}
-                className="w-16 px-2 py-1 rounded-lg bg-slate-50 dark:bg-slate-900 border border-slate-200 dark:border-slate-800 text-[11px]"
-              />
-            </label>
-          </div>
-
-          <div className="flex items-center justify-end">
-            <button
-              onClick={async () => {
-                if (!tenantId) return;
-                setTemplateSaving(true);
-                setTemplatesError(null);
-                try {
-                  const active = getActiveTemplate(templates, templateType, paperSize);
-                  const ok = await upsertTemplate({
-                    id: active?.id,
-                    tenant_id: tenantId,
-                    template_type: templateType,
-                    paper_size: paperSize,
-                    name: templateName || active?.name || 'Mẫu chứng từ',
-                    settings: templateSettings,
-                    layout: active?.layout ?? { columns: [], show_totals: true },
-                    version: active?.version ?? 1,
-                    is_active: true,
-                  });
-                  if (!ok) throw new Error('Lưu mẫu thất bại.');
-                  setTemplates(await fetchDocumentTemplates(tenantId));
-                } catch (e: any) {
-                  setTemplatesError(e?.message ?? 'Lưu mẫu thất bại.');
-                } finally {
-                  setTemplateSaving(false);
-                }
-              }}
-              disabled={!canManageTemplates || templateSaving}
-              className="px-3 py-1.5 rounded-lg bg-indigo-600 hover:bg-indigo-700 disabled:opacity-50 text-white text-[11px] font-bold"
-            >
-              {templateSaving ? 'Đang lưu...' : 'Lưu mẫu'}
-            </button>
-          </div>
-        </div>
-      </div>
+                {templateSaving ? 'Đang lưu...' : 'Lưu mẫu'}
+              </button>
+            </div>
+          </>
+        )}
+      </SectionCard>
     </div>
   );
 };
