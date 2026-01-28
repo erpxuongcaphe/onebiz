@@ -242,6 +242,7 @@ export async function createPosSale(params: {
   lines: Array<{ product_id: string; quantity: number; unit_price: number }>;
   paymentMethod: string;
   paymentAmount: number;
+  customerId: string;
 }): Promise<string | null> {
   if (!supabase) return null;
   const { data: sessionData } = await supabase.auth.getSession();
@@ -255,6 +256,7 @@ export async function createPosSale(params: {
     p_lines: params.lines,
     p_payment_method: params.paymentMethod,
     p_payment_amount: params.paymentAmount,
+    p_customer_id: params.customerId,
   });
 
   // If RPC exists and works, return its result
@@ -289,15 +291,16 @@ export async function createPosSale(params: {
 
     const { data: order, error: orderErr } = await supabase
       .from('pos_orders')
-      .insert({
-        branch_id: params.branchId,
-        shift_id: params.shiftId,
-        order_number: orderNumber,
-        status: 'paid',
-        subtotal: total,
-        total,
-        created_by: sessionData.session.user.id,
-      })
+        .insert({
+          branch_id: params.branchId,
+          shift_id: params.shiftId,
+          order_number: orderNumber,
+          status: 'paid',
+          subtotal: total,
+          total,
+          customer_id: params.customerId,
+          created_by: sessionData.session.user.id,
+        })
       .select('id')
       .single();
 
@@ -418,7 +421,7 @@ export async function fetchPosReceipt(orderId: string): Promise<PosOrderReceipt 
 
   const { data: order, error: orderErr } = await supabase
     .from('pos_orders')
-    .select('id, branch_id, shift_id, order_number, status, total, created_at')
+    .select('id, branch_id, shift_id, order_number, status, total, created_at, customer_id')
     .eq('id', orderId)
     .maybeSingle();
 
@@ -444,6 +447,12 @@ export async function fetchPosReceipt(orderId: string): Promise<PosOrderReceipt 
     .eq('id', order.branch_id)
     .maybeSingle();
 
+  const { data: customer } = await supabase
+    .from('sales_customers')
+    .select('name')
+    .eq('id', order.customer_id)
+    .maybeSingle();
+
   return {
     order: {
       id: order.id,
@@ -453,7 +462,7 @@ export async function fetchPosReceipt(orderId: string): Promise<PosOrderReceipt 
       status: order.status,
       total: toNumber(order.total),
       created_at: order.created_at,
-      customer_name: null,
+      customer_name: customer?.name ?? null,
       notes: null,
     },
     items: (items ?? []).map((i: any) => ({

@@ -1,5 +1,6 @@
 export enum OrderStatus {
   PENDING = 'Chờ xử lý',
+  WAITING_PICK = 'Chờ kho chuẩn bị',
   PROCESSING = 'Đang xử lý',
   COMPLETED = 'Hoàn thành',
   CANCELLED = 'Đã hủy'

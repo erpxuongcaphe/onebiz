@@ -28,6 +28,10 @@ function mapOrderStatus(status: string): OrderStatus {
       return OrderStatus.CANCELLED;
     case 'delivered':
       return OrderStatus.COMPLETED;
+    case 'completed':
+      return OrderStatus.COMPLETED;
+    case 'waiting_pick':
+      return OrderStatus.WAITING_PICK;
     case 'processing':
     case 'shipped':
       return OrderStatus.PROCESSING;

@@ -9,6 +9,8 @@ import { ensureDefaultTemplates, fetchDocumentTemplates, getActiveTemplate, type
 import { renderDocumentHtml, openPrintWindow, downloadPdf, exportToExcel } from '../lib/documentPrint';
 import { buildPaymentSlipPayload, buildPosInvoicePayload } from '../lib/documentPayloads';
 import { createDocumentPrint } from '../lib/documentPrintStore';
+import { createCustomer, fetchCustomers, getWalkInCustomer, type CustomerRow } from '../lib/sales';
+import { createInvoiceFromOrder, createSalesOrder, fetchSalesOrders, type SalesOrderRow } from '../lib/salesOrders';
 
 type TimePreset = 'today' | 'month' | 'year' | 'range' | 'all';
 
@@ -16,6 +18,8 @@ type CartLine = {
   item: PosCatalogItem;
   qty: number;
 };
+
+type SaleMode = 'pos' | 'order' | 'pick';
 
 const POS: React.FC = () => {
   const { can } = useAuth();
@@ -25,6 +29,7 @@ const POS: React.FC = () => {
   const [fromDate, setFromDate] = useState('');
   const [toDate, setToDate] = useState('');
   const [cart, setCart] = useState<CartLine[]>([]);
+  const [saleMode, setSaleMode] = useState<SaleMode>('pos');
 
   const [branches, setBranches] = useState<Array<{ id: string; name: string }>>([]);
   const [branchId, setBranchId] = useState('');
@@ -36,6 +41,13 @@ const POS: React.FC = () => {
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [paymentMethod, setPaymentMethod] = useState<'cash' | 'bank_transfer' | 'card' | 'momo' | 'zalopay' | 'other'>('cash');
+  const [dueDate, setDueDate] = useState('');
+  const [customers, setCustomers] = useState<CustomerRow[]>([]);
+  const [selectedCustomerId, setSelectedCustomerId] = useState('');
+  const [quickCustomerName, setQuickCustomerName] = useState('');
+  const [quickCustomerPhone, setQuickCustomerPhone] = useState('');
+  const [savingCustomer, setSavingCustomer] = useState(false);
+  const [pickList, setPickList] = useState<SalesOrderRow[]>([]);
   const [templates, setTemplates] = useState<DocumentTemplate[]>([]);
   const [invoicePaperSize, setInvoicePaperSize] = useState<PaperSize>('A5');
   const [slipPaperSize, setSlipPaperSize] = useState<PaperSize>('80mm');
@@ -100,6 +112,36 @@ const POS: React.FC = () => {
       isMounted = false;
     };
   }, []);
+
+  useEffect(() => {
+    let isMounted = true;
+    const loadCustomers = async () => {
+      const list = await fetchCustomers();
+      const walkin = await getWalkInCustomer();
+      const merged = walkin ? [walkin, ...list.filter((c) => c.id !== walkin.id)] : list;
+      if (!isMounted) return;
+      setCustomers(merged);
+      if (walkin && !selectedCustomerId) setSelectedCustomerId(walkin.id);
+      if (!walkin && list[0] && !selectedCustomerId) setSelectedCustomerId(list[0].id);
+    };
+    void loadCustomers();
+    return () => {
+      isMounted = false;
+    };
+  }, [selectedCustomerId]);
+
+  useEffect(() => {
+    if (saleMode !== 'pick') return;
+    let isMounted = true;
+    const loadPickList = async () => {
+      const rows = await fetchSalesOrders({ status: 'waiting_pick' });
+      if (isMounted) setPickList(rows);
+    };
+    void loadPickList();
+    return () => {
+      isMounted = false;
+    };
+  }, [saleMode]);
 
   const printPosDocument = async (mode: 'print' | 'pdf' | 'excel', docType: 'invoice' | 'payment_slip') => {
     if (!lastOrderId) return;
@@ -296,6 +338,27 @@ const POS: React.FC = () => {
         </button>
       </div>
 
+      <div className="flex flex-wrap gap-2">
+        {([
+          { key: 'pos', label: 'Bán trực tiếp' },
+          { key: 'order', label: 'Đặt hàng' },
+          { key: 'pick', label: 'Kho chuẩn bị' },
+        ] as const).map((m) => (
+          <button
+            key={m.key}
+            onClick={() => setSaleMode(m.key)}
+            className={`px-3 py-1.5 rounded-lg text-[11px] font-bold border transition-colors ${
+              saleMode === m.key
+                ? 'bg-indigo-600 border-indigo-600 text-white'
+                : 'bg-white dark:bg-slate-900 border-slate-200 dark:border-slate-800 text-slate-600 dark:text-slate-300 hover:bg-slate-50 dark:hover:bg-slate-800'
+            }`}
+          >
+            {m.label}
+          </button>
+        ))}
+      </div>
+
+      {saleMode !== 'pick' && (
       <div className="grid grid-cols-1 lg:grid-cols-3 gap-3">
         {/* Catalog */}
         <div className="lg:col-span-2 bg-white dark:bg-slate-900 rounded-xl shadow-soft border border-slate-200 dark:border-slate-800 overflow-hidden">
@@ -391,6 +454,61 @@ const POS: React.FC = () => {
           </div>
 
           <div className="p-2 space-y-2 flex-1 overflow-y-auto custom-scrollbar">
+            <div className="border border-slate-200 dark:border-slate-800 rounded-lg p-2">
+              <div className="text-[10px] font-semibold text-slate-500 dark:text-slate-400">Khách hàng</div>
+              <div className="mt-1 grid grid-cols-1 gap-2">
+                <select
+                  value={selectedCustomerId}
+                  onChange={(e) => setSelectedCustomerId(e.target.value)}
+                  className="w-full px-2.5 py-2 rounded-lg bg-slate-50 dark:bg-slate-900 border border-slate-200 dark:border-slate-800 text-[11px]"
+                >
+                  {customers.map((c) => (
+                    <option key={c.id} value={c.id}>
+                      {c.name} ({c.code})
+                    </option>
+                  ))}
+                </select>
+                <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
+                  <input
+                    value={quickCustomerName}
+                    onChange={(e) => setQuickCustomerName(e.target.value)}
+                    placeholder="Tạo nhanh tên khách"
+                    className="w-full px-2.5 py-2 rounded-lg bg-slate-50 dark:bg-slate-900 border border-slate-200 dark:border-slate-800 text-[11px]"
+                  />
+                  <input
+                    value={quickCustomerPhone}
+                    onChange={(e) => setQuickCustomerPhone(e.target.value)}
+                    placeholder="SĐT (không bắt buộc)"
+                    className="w-full px-2.5 py-2 rounded-lg bg-slate-50 dark:bg-slate-900 border border-slate-200 dark:border-slate-800 text-[11px]"
+                  />
+                </div>
+                <button
+                  disabled={savingCustomer || quickCustomerName.trim().length === 0}
+                  onClick={async () => {
+                    setSavingCustomer(true);
+                    try {
+                      const created = await createCustomer({
+                        name: quickCustomerName.trim(),
+                        phone: quickCustomerPhone.trim() || undefined,
+                      });
+                      if (!created) {
+                        setError('Không tạo được khách hàng.');
+                        return;
+                      }
+                      setCustomers((prev) => [created, ...prev]);
+                      setSelectedCustomerId(created.id);
+                      setQuickCustomerName('');
+                      setQuickCustomerPhone('');
+                    } finally {
+                      setSavingCustomer(false);
+                    }
+                  }}
+                  className="px-3 py-2 rounded-lg bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 text-[11px] font-bold"
+                >
+                  {savingCustomer ? 'Đang tạo...' : 'Tạo nhanh khách'}
+                </button>
+              </div>
+            </div>
             {cart.length === 0 && (
               <div className="text-[11px] text-slate-500 dark:text-slate-400">Chưa có sản phẩm. Click bên trái để thêm.</div>
             )}
@@ -433,62 +551,163 @@ const POS: React.FC = () => {
               <div className="text-sm font-bold text-indigo-600 dark:text-indigo-400 tabular-nums">{formatCurrency(total)}</div>
             </div>
             <div className="mt-2 flex gap-2">
-              <select
-                value={paymentMethod}
-                onChange={(e) => setPaymentMethod(e.target.value as any)}
-                className="flex-1 px-3 py-2 rounded-lg bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 text-xs"
-              >
-                <option value="cash">Tiền mặt</option>
-                <option value="bank_transfer">Chuyển khoản</option>
-                <option value="card">Thẻ</option>
-                <option value="momo">MoMo</option>
-                <option value="zalopay">ZaloPay</option>
-                <option value="other">Khác</option>
-              </select>
+              {saleMode === 'pos' && (
+                <select
+                  value={paymentMethod}
+                  onChange={(e) => setPaymentMethod(e.target.value as any)}
+                  className="flex-1 px-3 py-2 rounded-lg bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 text-xs"
+                >
+                  <option value="cash">Tiền mặt</option>
+                  <option value="bank_transfer">Chuyển khoản</option>
+                  <option value="card">Thẻ</option>
+                  <option value="momo">MoMo</option>
+                  <option value="zalopay">ZaloPay</option>
+                  <option value="other">Khác</option>
+                </select>
+              )}
+              {saleMode === 'order' && (
+                <input
+                  type="date"
+                  value={dueDate}
+                  onChange={(e) => setDueDate(e.target.value)}
+                  className="flex-1 px-3 py-2 rounded-lg bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 text-xs"
+                />
+              )}
             </div>
             <button
-              disabled={cart.length === 0 || busy || !can('pos.order.create') || !can('pos.payment.record') || !shiftId}
+              disabled={cart.length === 0 || busy || !selectedCustomerId || !can('pos.order.create') || (saleMode === 'pos' && (!can('pos.payment.record') || !shiftId))}
               className="mt-2 w-full bg-indigo-600 hover:bg-indigo-700 disabled:opacity-60 text-white py-2 rounded-lg text-xs font-bold transition-colors"
               onClick={async () => {
                 setError(null);
-                if (!shiftId) {
-                  setError('Chưa mở ca.');
-                  return;
-                }
                 if (!warehouseId) {
                   setError('Chưa chọn kho.');
                   return;
                 }
+                if (!selectedCustomerId) {
+                  setError('Vui lòng chọn khách hàng.');
+                  return;
+                }
+                if (saleMode === 'pos' && !shiftId) {
+                  setError('Chưa mở ca.');
+                  return;
+                }
                 setBusy(true);
                 try {
-                  const orderId = await createPosSale({
-                    branchId,
-                    warehouseId,
-                    shiftId,
-                    lines: cart.map((l) => ({
-                      product_id: l.item.product_id,
-                      quantity: l.qty,
-                      unit_price: l.item.price,
-                    })),
-                    paymentMethod,
-                    paymentAmount: total,
-                  });
-                  if (!orderId) {
-                    setError('Không thanh toán được (kiểm tra quyền/tồn kho).');
-                    return;
+                  if (saleMode === 'pos') {
+                    const orderId = await createPosSale({
+                      branchId,
+                      warehouseId,
+                      shiftId: shiftId ?? '',
+                      customerId: selectedCustomerId,
+                      lines: cart.map((l) => ({
+                        product_id: l.item.product_id,
+                        quantity: l.qty,
+                        unit_price: l.item.price,
+                      })),
+                      paymentMethod,
+                      paymentAmount: total,
+                    });
+                    if (!orderId) {
+                      setError('Không thanh toán được (kiểm tra quyền/tồn kho).');
+                      return;
+                    }
+                    setCart([]);
+                    setLastOrderId(orderId);
+                  } else {
+                    const orderId = await createSalesOrder({
+                      branchId,
+                      warehouseId,
+                      customerId: selectedCustomerId,
+                      lines: cart.map((l) => ({
+                        product_id: l.item.product_id,
+                        quantity: l.qty,
+                        unit_price: l.item.price,
+                      })),
+                      dueDate: dueDate || null,
+                    });
+                    if (!orderId) {
+                      setError('Không tạo được đơn đặt hàng.');
+                      return;
+                    }
+                    setCart([]);
+                    setSaleMode('pick');
+                    setDueDate('');
                   }
-                  setCart([]);
-                  setLastOrderId(orderId);
                 } finally {
                   setBusy(false);
                 }
               }}
             >
-              {busy ? 'Đang xử lý...' : 'Thanh toán'}
+              {busy ? 'Đang xử lý...' : saleMode === 'pos' ? 'Thanh toán' : 'Xác nhận đặt hàng'}
             </button>
           </div>
         </div>
       </div>
+      )}
+
+      {saleMode === 'pick' && (
+        <div className="bg-white dark:bg-slate-900 rounded-xl shadow-soft border border-slate-200 dark:border-slate-800 overflow-hidden">
+          <div className="p-3 border-b border-slate-100 dark:border-slate-800 flex items-center justify-between">
+            <div>
+              <div className="text-[11px] font-bold text-slate-900 dark:text-slate-200">Kho chuẩn bị</div>
+              <div className="text-[10px] text-slate-500 dark:text-slate-400">Đơn đang chờ kho chuẩn bị hàng</div>
+            </div>
+            <button
+              onClick={async () => setPickList(await fetchSalesOrders({ status: 'waiting_pick' }))}
+              className="px-2.5 py-1.5 rounded-lg text-[11px] font-bold border border-slate-200 dark:border-slate-700 text-slate-600 dark:text-slate-300 hover:bg-slate-50 dark:hover:bg-slate-800"
+            >
+              Tải lại
+            </button>
+          </div>
+          <div className="overflow-x-auto">
+            <table className="w-full text-left border-collapse">
+              <thead className="bg-slate-50 dark:bg-slate-800 text-slate-500 dark:text-slate-400 font-bold border-b border-slate-200 dark:border-slate-700 text-[10px]">
+                <tr>
+                  <th className="px-3 py-2">Mã đơn</th>
+                  <th className="px-3 py-2">Khách hàng</th>
+                  <th className="px-3 py-2">Ngày</th>
+                  <th className="px-3 py-2 text-center">SL</th>
+                  <th className="px-3 py-2 text-right">Tổng tiền</th>
+                  <th className="px-3 py-2 text-center">Hành động</th>
+                </tr>
+              </thead>
+              <tbody className="divide-y divide-slate-100 dark:divide-slate-800">
+                {pickList.length === 0 && (
+                  <tr>
+                    <td className="px-3 py-3 text-[11px] text-slate-500 dark:text-slate-400" colSpan={6}>
+                      Chưa có đơn chờ chuẩn bị.
+                    </td>
+                  </tr>
+                )}
+                {pickList.map((o) => (
+                  <tr key={o.id} className="hover:bg-slate-50 dark:hover:bg-slate-800/50">
+                    <td className="px-3 py-2 font-mono text-[11px] text-indigo-600 dark:text-indigo-400">{o.order_number}</td>
+                    <td className="px-3 py-2 text-[11px] font-semibold text-slate-700 dark:text-slate-200">{o.customer_name}</td>
+                    <td className="px-3 py-2 text-[11px] text-slate-500 dark:text-slate-400">{o.order_date}</td>
+                    <td className="px-3 py-2 text-center text-[11px] text-slate-600 dark:text-slate-300">{o.items}</td>
+                    <td className="px-3 py-2 text-right text-[11px] font-bold text-slate-900 dark:text-slate-200">{formatCurrency(o.total)}</td>
+                    <td className="px-3 py-2 text-center">
+                      <button
+                        onClick={async () => {
+                          const invoiceId = await createInvoiceFromOrder({ orderId: o.id, shiftId });
+                          if (!invoiceId) {
+                            setError('Không tạo được hóa đơn từ đơn đặt hàng.');
+                            return;
+                          }
+                          setPickList(await fetchSalesOrders({ status: 'waiting_pick' }));
+                        }}
+                        className="px-2.5 py-1.5 rounded-lg bg-indigo-600 hover:bg-indigo-700 text-white text-[11px] font-bold"
+                      >
+                        Tạo hóa đơn
+                      </button>
+                    </td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
+        </div>
+      )}
 
       {lastOrderId && (
         <div className="bg-white dark:bg-slate-900 rounded-xl shadow-soft border border-slate-200 dark:border-slate-800 p-3 space-y-2">

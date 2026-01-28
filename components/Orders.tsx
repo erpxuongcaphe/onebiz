@@ -24,6 +24,7 @@ const Orders: React.FC = () => {
   const getStatusStyle = (status: OrderStatus) => {
     switch (status) {
       case OrderStatus.COMPLETED: return 'bg-emerald-50 dark:bg-emerald-900/20 text-emerald-700 dark:text-emerald-400';
+      case OrderStatus.WAITING_PICK: return 'bg-purple-50 dark:bg-purple-900/20 text-purple-700 dark:text-purple-400';
       case OrderStatus.PROCESSING: return 'bg-blue-50 dark:bg-blue-900/20 text-blue-700 dark:text-blue-400';
       case OrderStatus.PENDING: return 'bg-amber-50 dark:bg-amber-900/20 text-amber-700 dark:text-amber-400';
       case OrderStatus.CANCELLED: return 'bg-slate-100 dark:bg-slate-800 text-slate-600 dark:text-slate-400 line-through';
