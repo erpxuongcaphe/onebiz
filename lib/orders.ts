@@ -15,6 +15,29 @@ type DbOrderItem = {
   order_id: string;
 };
 
+export type OrderDetailItem = {
+  id: string;
+  sku: string;
+  name: string;
+  quantity: number;
+  unitPrice: number;
+  total: number;
+};
+
+export type OrderDetail = {
+  id: string;
+  orderNumber: string;
+  orderDate: string;
+  status: string;
+  total: number;
+  customerId: string | null;
+  customerName: string;
+  customerPhone: string | null;
+  items: OrderDetailItem[];
+  paymentStatus?: string;
+  amountPaid?: number;
+};
+
 function toNumber(value: number | string | null | undefined): number {
   if (value === null || value === undefined) return 0;
   if (typeof value === 'number') return value;
@@ -89,4 +112,52 @@ export async function fetchOrders(): Promise<Order[]> {
     status: mapOrderStatus(o.status),
     items: itemCountByOrder.get(o.id) ?? 0,
   }));
+}
+
+export async function fetchOrderDetail(orderNumber: string): Promise<OrderDetail | null> {
+  if (!supabase) return null;
+  const { data: sessionData } = await supabase.auth.getSession();
+  if (!sessionData.session) return null;
+
+  const cleanNumber = orderNumber.replace(/^#/, '');
+
+  const { data: order, error } = await supabase
+    .from('sales_orders')
+    .select(`
+      id, order_number, order_date, total, status, customer_id, payment_status, amount_paid,
+      customer:sales_customers(name, phone)
+    `)
+    .eq('order_number', cleanNumber)
+    .maybeSingle();
+
+  if (error || !order) return null;
+
+  const { data: items } = await supabase
+    .from('sales_order_items')
+    .select('id, sku, product_name, quantity, unit_price')
+    .eq('order_id', order.id)
+    .order('created_at', { ascending: true });
+
+  const customer = order.customer as { name?: string; phone?: string } | null;
+
+  return {
+    id: order.id,
+    orderNumber: order.order_number,
+    orderDate: order.order_date,
+    status: order.status,
+    total: toNumber(order.total),
+    customerId: order.customer_id,
+    customerName: customer?.name ?? 'Khách hàng',
+    customerPhone: customer?.phone ?? null,
+    items: (items ?? []).map((i: any) => ({
+      id: i.id,
+      sku: i.sku ?? '',
+      name: i.product_name ?? 'Sản phẩm',
+      quantity: toNumber(i.quantity),
+      unitPrice: toNumber(i.unit_price),
+      total: toNumber(i.quantity) * toNumber(i.unit_price),
+    })),
+    paymentStatus: order.payment_status,
+    amountPaid: toNumber(order.amount_paid),
+  };
 }
