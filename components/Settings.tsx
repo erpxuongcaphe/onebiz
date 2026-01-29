@@ -1,971 +1,117 @@
-import React, { useEffect, useMemo, useState } from 'react';
-import { AlertTriangle, CheckCircle2, ChevronDown, Database, FileText, KeyRound, LogOut, Shield, UserPlus } from 'lucide-react';
+import React, { useEffect, useState } from 'react';
 import { useAuth } from '../lib/auth';
-import { supabase, isSupabaseConfigured } from '../lib/supabaseClient';
 import { useTenant, getCachedTenantId } from '../lib/tenantContext';
 import { fetchCurrentBranchId } from '../lib/branches';
-import { withTimeout } from '../lib/async';
-import { bootstrapSuperAdmin, fetchProfiles, fetchRoles, fetchUserRoles, setUserBranch, setUserRole, type ProfileLite, type Role, type UserRole } from '../lib/roles';
-import { fetchBranches, type Branch } from '../lib/branches';
-import { ensureDefaultTemplates, fetchDocumentTemplates, getActiveTemplate, upsertTemplate, type DocumentTemplate, type PaperSize, type TemplateSettings, type TemplateType } from '../lib/documentTemplates';
-
-type SectionCardProps = {
-  title: string;
-  subtitle?: string;
-  icon?: React.ReactNode;
-  right?: React.ReactNode;
-  defaultOpen?: boolean;
-  children: React.ReactNode;
-};
-
-function SectionCard({ title, subtitle, icon, right, defaultOpen = false, children }: SectionCardProps) {
-  const [open, setOpen] = useState(defaultOpen);
-  return (
-    <div className="bg-white dark:bg-slate-900 rounded-xl shadow-soft border border-slate-200 dark:border-slate-800 overflow-hidden">
-      <button
-        type="button"
-        onClick={() => setOpen((v) => !v)}
-        className="w-full p-3 border-b border-slate-100 dark:border-slate-800 flex items-center justify-between gap-3 text-left"
-      >
-        <div className="flex items-start gap-2 min-w-0">
-          {icon ? <div className="mt-0.5 text-slate-400">{icon}</div> : null}
-          <div className="min-w-0">
-            <div className="text-[11px] font-semibold text-slate-700 dark:text-slate-200 truncate">{title}</div>
-            {subtitle ? <div className="text-[10px] text-slate-500 dark:text-slate-400 truncate mt-0.5">{subtitle}</div> : null}
-          </div>
-        </div>
-        <div className="flex items-center gap-2 shrink-0">
-          {right ? <div onClick={(e) => e.stopPropagation()}>{right}</div> : null}
-          <ChevronDown className={`w-4 h-4 text-slate-400 transition-transform ${open ? 'rotate-180' : ''}`} />
-        </div>
-      </button>
-      {open ? <div className="p-3 space-y-3">{children}</div> : null}
-    </div>
-  );
-}
+import { TabNav, type Tab } from './settings/TabNav';
+import { ProfileTab } from './settings/ProfileTab';
+import { CompanyTab } from './settings/CompanyTab';
+import { UsersTab } from './settings/UsersTab';
+import { TemplatesTab } from './settings/TemplatesTab';
+import { AdvancedTab } from './settings/AdvancedTab';
+import { bootstrapSuperAdmin } from '../lib/roles';
 
 const Settings: React.FC = () => {
   const { user, loading, isConfigured, permissionPatterns } = useAuth();
+  const { tenant } = useTenant();
+  const [activeTab, setActiveTab] = useState<Tab>('profile');
+  const [branchId, setBranchId] = useState<string | null>(null);
   const [roleUiUnlocked, setRoleUiUnlocked] = useState(false);
+
+  const tenantId = tenant?.id ?? getCachedTenantId() ?? null;
   const canManageRoles = roleUiUnlocked || permissionPatterns.some((p) => p === '*' || p.startsWith('roles.'));
   const canManageTemplates = permissionPatterns.some((p) => p === '*' || p.startsWith('settings.'));
-  const { tenant } = useTenant();
-  const [mode, setMode] = useState<'signIn' | 'signUp'>('signIn');
-  const [email, setEmail] = useState('');
-  const [password, setPassword] = useState('');
-  const [fullName, setFullName] = useState('');
-  const [submitting, setSubmitting] = useState(false);
-  const [error, setError] = useState<string | null>(null);
-  const [hasProfile, setHasProfile] = useState<boolean | null>(null);
-  const [branchId, setBranchId] = useState<string | null>(null);
-  const [roles, setRoles] = useState<Role[]>([]);
-  const [profiles, setProfiles] = useState<ProfileLite[]>([]);
-  const [userRoles, setUserRoles] = useState<UserRole[]>([]);
-  const [branches, setBranches] = useState<Branch[]>([]);
-  const [draftRolesByUser, setDraftRolesByUser] = useState<Record<string, Set<string>>>({});
-  const [draftBranchByUser, setDraftBranchByUser] = useState<Record<string, string | null>>({});
-  const [dirtyByUser, setDirtyByUser] = useState<Record<string, boolean>>({});
-  const [savingByUser, setSavingByUser] = useState<Record<string, boolean>>({});
-  const [errorByUser, setErrorByUser] = useState<Record<string, string | null>>({});
-  const [successByUser, setSuccessByUser] = useState<Record<string, boolean>>({});
-  const [roleError, setRoleError] = useState<string | null>(null);
-  const [roleBusyKey, setRoleBusyKey] = useState<string>('');
-  const [rolesLoading, setRolesLoading] = useState(false);
-  const tenantId = tenant?.id ?? getCachedTenantId() ?? null;
-  const [templates, setTemplates] = useState<DocumentTemplate[]>([]);
-  const [templatesLoading, setTemplatesLoading] = useState(false);
-  const [templatesError, setTemplatesError] = useState<string | null>(null);
-  const [templateType, setTemplateType] = useState<TemplateType>('invoice_sale');
-  const [paperSize, setPaperSize] = useState<PaperSize>('A5');
-  const [templateName, setTemplateName] = useState('');
-  const [templateSettings, setTemplateSettings] = useState<TemplateSettings>({});
-  const [templateSaving, setTemplateSaving] = useState(false);
-  const [showPerms, setShowPerms] = useState(false);
+  const isSuperAdmin = permissionPatterns.includes('*');
+  const isAdmin = canManageRoles || canManageTemplates || isSuperAdmin;
 
   useEffect(() => {
-    if (!supabase || !user) {
-      setHasProfile(null);
-      return;
-    }
-
-    let isMounted = true;
-    supabase
-      .from('profiles')
-      .select('id')
-      .eq('id', user.id)
-      .maybeSingle()
-      .then(({ data, error: profileError }) => {
-        if (!isMounted) return;
-        if (profileError) {
-          setHasProfile(false);
-          return;
-        }
-        setHasProfile(Boolean(data?.id));
-      });
-
-    return () => {
-      isMounted = false;
-    };
-  }, [user]);
-
-  useEffect(() => {
-    if (!supabase || !user) {
+    if (!user) {
       setBranchId(null);
       return;
     }
     fetchCurrentBranchId().then((id) => setBranchId(id));
   }, [user]);
 
-  useEffect(() => {
-    if (!supabase || !user || !isConfigured) return;
-    if (!canManageRoles) return;
-    const loadRoleData = async () => {
-      setRolesLoading(true);
-      setRoleError(null);
-      try {
-        const [roleList, profileList, userRoleList, branchList] = await Promise.all([
-          fetchRoles(),
-          fetchProfiles(),
-          fetchUserRoles(),
-          fetchBranches(),
-        ]);
-        setRoles(roleList);
-        setProfiles(profileList);
-        setUserRoles(userRoleList);
-        setBranches(branchList);
-        const draftRoles: Record<string, Set<string>> = {};
-        const draftBranches: Record<string, string | null> = {};
-        const dirtyMap: Record<string, boolean> = {};
-        const errorMap: Record<string, string | null> = {};
-        const successMap: Record<string, boolean> = {};
-        profileList.forEach((p) => {
-          const roleSet = new Set<string>(userRoleList.filter((ur) => ur.user_id === p.id).map((ur) => ur.role_id));
-          draftRoles[p.id] = roleSet;
-          draftBranches[p.id] = p.branch_id ?? null;
-          dirtyMap[p.id] = false;
-          errorMap[p.id] = null;
-          successMap[p.id] = false;
-        });
-        setDraftRolesByUser(draftRoles);
-        setDraftBranchByUser(draftBranches);
-        setDirtyByUser(dirtyMap);
-        setErrorByUser(errorMap);
-        setSuccessByUser(successMap);
-      } catch (e: any) {
-        setRoleError(e?.message ?? 'Không tải được dữ liệu phân quyền.');
-      } finally {
-        setRolesLoading(false);
-      }
-    };
-    void loadRoleData();
-  }, [user, isConfigured, canManageRoles]);
-
-  useEffect(() => {
-    if (!supabase || !user || !isConfigured || !canManageTemplates) return;
-    let isMounted = true;
-    const loadTemplates = async () => {
-      setTemplatesLoading(true);
-      setTemplatesError(null);
-      try {
-        await ensureDefaultTemplates(tenantId ?? undefined);
-        const list = await fetchDocumentTemplates(tenantId ?? undefined);
-        if (!isMounted) return;
-        setTemplates(list);
-      } catch (e: any) {
-        if (!isMounted) return;
-        setTemplatesError(e?.message ?? 'Không tải được mẫu chứng từ.');
-      } finally {
-        if (isMounted) setTemplatesLoading(false);
-      }
-    };
-    void loadTemplates();
-    return () => {
-      isMounted = false;
-    };
-  }, [user, isConfigured, canManageTemplates, tenantId]);
-
-  useEffect(() => {
-    if (!templates.length) return;
-    const active = getActiveTemplate(templates, templateType, paperSize);
-    if (!active) return;
-    setTemplateName(active.name);
-    setTemplateSettings(active.settings ?? {});
-  }, [templates, templateType, paperSize]);
-
-  const status = useMemo(() => {
-    if (loading) return { tone: 'muted', label: 'Đang kiểm tra đăng nhập...' };
-    if (!isConfigured) return { tone: 'warn', label: 'Chưa cấu hình Supabase (.env.local)' };
-    if (!user) return { tone: 'muted', label: 'Chưa đăng nhập' };
-    return { tone: 'ok', label: `Đăng nhập: ${user.email ?? 'unknown'}` };
-  }, [loading, isConfigured, user]);
-
-  const statusBadgeClass =
-    status.tone === 'ok'
-      ? 'bg-emerald-50 dark:bg-emerald-900/20 text-emerald-700 dark:text-emerald-400'
-      : status.tone === 'warn'
-        ? 'bg-amber-50 dark:bg-amber-900/20 text-amber-700 dark:text-amber-400'
-        : 'bg-slate-100 dark:bg-slate-800 text-slate-600 dark:text-slate-300';
-
-  const handleSignIn = async () => {
-    setError(null);
-    if (!supabase) {
-      setError('Chưa cấu hình Supabase. Vui lòng thêm VITE_SUPABASE_URL và VITE_SUPABASE_ANON_KEY.');
-      return;
-    }
-    if (!email.trim() || !password) {
-      setError('Vui lòng nhập email và mật khẩu.');
-      return;
-    }
-
-    setSubmitting(true);
-    try {
-      const { error: signInError } = await supabase.auth.signInWithPassword({
-        email: email.trim(),
-        password,
-      });
-      if (signInError) throw signInError;
-      setPassword('');
-    } catch (e: any) {
-      setError(e?.message ?? 'Đăng nhập thất bại.');
-    } finally {
-      setSubmitting(false);
-    }
-  };
-
-  const handleSignUp = async () => {
-    setError(null);
-    if (!supabase) {
-      setError('Chưa cấu hình Supabase. Vui lòng thêm VITE_SUPABASE_URL và VITE_SUPABASE_ANON_KEY.');
-      return;
-    }
-    if (!email.trim() || !password) {
-      setError('Vui lòng nhập email và mật khẩu.');
-      return;
-    }
-
-    setSubmitting(true);
-    try {
-      const tenantId = tenant?.id ?? getCachedTenantId();
-      const { error: signUpError } = await supabase.auth.signUp({
-        email: email.trim(),
-        password,
-        options: {
-          data: {
-            full_name: fullName.trim() || undefined,
-            tenant_id: tenantId || undefined,
-          },
-        },
-      });
-      if (signUpError) throw signUpError;
-      setPassword('');
-      setMode('signIn');
-    } catch (e: any) {
-      setError(e?.message ?? 'Tạo tài khoản thất bại.');
-    } finally {
-      setSubmitting(false);
-    }
-  };
-
-  const handleSignOut = async () => {
-    setError(null);
-    if (!supabase) return;
-    setSubmitting(true);
-    try {
-      const { error: signOutError } = await withTimeout(
-        supabase.auth.signOut(),
-        8000,
-        'Đăng xuất quá lâu. Vui lòng kiểm tra mạng và thử lại.'
-      );
-      if (signOutError) throw signOutError;
-      // Success - reload page to clear auth state
-      window.location.reload();
-    } catch (e: any) {
-      try {
-        await supabase.auth.signOut({ scope: 'local' });
-        window.location.reload();
-        return;
-      } catch (localErr: any) {
-        setError(localErr?.message ?? e?.message ?? 'Đăng xuất thất bại.');
-      }
-    } finally {
-      setSubmitting(false);
-    }
-  };
-
-  const handleToggleRole = (targetUserId: string, roleId: string, enabled: boolean) => {
-    setDraftRolesByUser((prev) => {
-      const current = new Set<string>(prev[targetUserId] ?? []);
-      if (enabled) current.add(roleId);
-      else current.delete(roleId);
-      return { ...prev, [targetUserId]: current };
-    });
-    setDirtyByUser((prev) => ({ ...prev, [targetUserId]: true }));
-    setSuccessByUser((prev) => ({ ...prev, [targetUserId]: false }));
-    setErrorByUser((prev) => ({ ...prev, [targetUserId]: null }));
-  };
-
-  const handleBootstrapRole = async () => {
-    setRoleBusyKey('bootstrap');
-    setRoleError(null);
-    try {
-      const ok = await bootstrapSuperAdmin();
-      if (!ok) {
-        setRoleError('Không bootstrap được vai trò (có thể tenant đã có role).');
-        return;
-      }
+  const handleBootstrapSuperAdmin = async () => {
+    const ok = await bootstrapSuperAdmin();
+    if (ok) {
       setRoleUiUnlocked(true);
-      const [roleList, profileList, userRoleList] = await Promise.all([
-        fetchRoles(),
-        fetchProfiles(),
-        fetchUserRoles(),
-      ]);
-      setRoles(roleList);
-      setProfiles(profileList);
-      setUserRoles(userRoleList);
-      setBranches(await fetchBranches());
-    } finally {
-      setRoleBusyKey('');
+      // Optionally switch to users tab after successful bootstrap
+      setActiveTab('users');
     }
   };
 
-  const handleChangeBranch = (targetUserId: string, nextBranchId: string) => {
-    setDraftBranchByUser((prev) => ({ ...prev, [targetUserId]: nextBranchId || null }));
-    setDirtyByUser((prev) => ({ ...prev, [targetUserId]: true }));
-    setSuccessByUser((prev) => ({ ...prev, [targetUserId]: false }));
-    setErrorByUser((prev) => ({ ...prev, [targetUserId]: null }));
-  };
-
-  const handleSaveUser = async (targetUserId: string) => {
-    if (!tenantId) {
-      setErrorByUser((prev) => ({ ...prev, [targetUserId]: 'Chưa xác định tenant.' }));
-      return;
-    }
-    const draftRoles = (draftRolesByUser[targetUserId] ?? new Set<string>()) as Set<string>;
-    const currentRoles = new Set<string>(userRoles.filter((ur) => ur.user_id === targetUserId).map((ur) => ur.role_id));
-    const toAdd = Array.from(draftRoles.values()).filter((r) => !currentRoles.has(r));
-    const toRemove = Array.from(currentRoles.values()).filter((r) => !draftRoles.has(r));
-    const nextBranch = draftBranchByUser[targetUserId] ?? null;
-    const currentBranch = profiles.find((p) => p.id === targetUserId)?.branch_id ?? null;
-
-    setSavingByUser((prev) => ({ ...prev, [targetUserId]: true }));
-    setErrorByUser((prev) => ({ ...prev, [targetUserId]: null }));
-    setSuccessByUser((prev) => ({ ...prev, [targetUserId]: false }));
-
-    try {
-      for (const roleId of toAdd) {
-        const ok = await setUserRole({ tenantId, userId: targetUserId, roleId, enabled: true });
-        if (!ok) throw new Error(`Không thêm được role ${roleId}`);
-      }
-      for (const roleId of toRemove) {
-        const ok = await setUserRole({ tenantId, userId: targetUserId, roleId, enabled: false });
-        if (!ok) throw new Error(`Không gỡ được role ${roleId}`);
-      }
-      if (nextBranch !== currentBranch) {
-        const ok = await setUserBranch({ tenantId, userId: targetUserId, branchId: nextBranch });
-        if (!ok) throw new Error('Không cập nhật được chi nhánh.');
-      }
-
-      const [profileList, userRoleList, branchList] = await Promise.all([
-        fetchProfiles(),
-        fetchUserRoles(),
-        fetchBranches(),
-      ]);
-      setProfiles(profileList);
-      setUserRoles(userRoleList);
-      setBranches(branchList);
-
-      setDirtyByUser((prev) => ({ ...prev, [targetUserId]: false }));
-      setSuccessByUser((prev) => ({ ...prev, [targetUserId]: true }));
-    } catch (e: any) {
-      setErrorByUser((prev) => ({ ...prev, [targetUserId]: e?.message ?? 'Lưu thất bại.' }));
-    } finally {
-      setSavingByUser((prev) => ({ ...prev, [targetUserId]: false }));
-    }
-  };
+  // If not logged in, show only profile tab which will show login form
+  if (!user) {
+    return (
+      <div className="space-y-4 animate-fade-in pb-10">
+        <div>
+          <h1 className="text-lg lg:text-xl font-bold text-slate-900 dark:text-white">Cài Đặt</h1>
+          <p className="text-slate-500 dark:text-slate-400 text-xs mt-0.5">
+            Vui lòng đăng nhập để truy cập cài đặt.
+          </p>
+        </div>
+        <div className="bg-white dark:bg-slate-900 rounded-xl shadow-soft border border-slate-200 dark:border-slate-800 p-8 text-center">
+          <div className="text-sm text-slate-600 dark:text-slate-400">
+            Chức năng đăng nhập sẽ được bổ sung trong phiên bản tiếp theo.
+          </div>
+        </div>
+      </div>
+    );
+  }
 
   return (
-    <div className="space-y-3 lg:space-y-5 animate-fade-in pb-10">
+    <div className="space-y-4 animate-fade-in pb-10">
+      {/* Header */}
       <div>
-        <h1 className="text-lg lg:text-xl font-bold text-slate-900 dark:text-white">Cài đặt</h1>
-        <p className="text-slate-500 dark:text-slate-400 text-[11px] mt-0.5">Kết nối tài khoản, phân quyền và mẫu chứng từ.</p>
+        <h1 className="text-lg lg:text-xl font-bold text-slate-900 dark:text-white">Cài Đặt</h1>
+        <p className="text-slate-500 dark:text-slate-400 text-xs mt-0.5">
+          Quản lý thông tin cá nhân, công ty, và hệ thống.
+        </p>
       </div>
 
-      <div className="bg-white dark:bg-slate-900 rounded-xl shadow-soft border border-slate-200 dark:border-slate-800 overflow-hidden">
-        <div className="p-3 flex flex-col sm:flex-row gap-2 sm:items-center sm:justify-between">
-          <div className="text-[11px] font-semibold text-slate-700 dark:text-slate-200">Thông tin hệ thống</div>
-          <div className={`px-2 py-1 rounded-full text-[10px] font-bold ${statusBadgeClass} flex items-center gap-1.5 w-fit`}>
-            {status.tone === 'ok' ? <CheckCircle2 className="w-3 h-3" /> : status.tone === 'warn' ? <AlertTriangle className="w-3 h-3" /> : null}
-            {status.label}
-          </div>
-        </div>
-        <div className="px-3 pb-3">
-          <div className="text-[11px] text-slate-600 dark:text-slate-300 bg-slate-50 dark:bg-slate-800/50 border border-slate-200 dark:border-slate-800 rounded-lg p-2.5">
-            <div className="grid grid-cols-1 sm:grid-cols-3 gap-2">
-              <div>
-                <div className="text-[10px] font-bold text-slate-500 dark:text-slate-400">Tenant</div>
-                <div className="font-mono text-[10px] mt-0.5 break-all">{tenant?.id ?? getCachedTenantId() ?? '-'}</div>
-              </div>
-              <div>
-                <div className="text-[10px] font-bold text-slate-500 dark:text-slate-400">Branch</div>
-                <div className="font-mono text-[10px] mt-0.5 break-all">{branchId ?? '-'}</div>
-              </div>
-              <div className="flex items-start justify-between gap-2">
-                <div>
-                  <div className="text-[10px] font-bold text-slate-500 dark:text-slate-400">Permissions</div>
-                  <div className="text-[10px] mt-0.5">{permissionPatterns.length ? `${permissionPatterns.length} quyền` : '-'}</div>
-                </div>
-                <button
-                  type="button"
-                  onClick={() => setShowPerms((v) => !v)}
-                  className="px-2 py-1 rounded-md border border-slate-200 dark:border-slate-700 text-[10px] font-bold text-slate-600 dark:text-slate-300 hover:bg-white/60 dark:hover:bg-slate-900"
-                >
-                  {showPerms ? 'Ẩn' : 'Xem'}
-                </button>
-              </div>
-            </div>
-            {showPerms ? (
-              <div className="mt-2 pt-2 border-t border-slate-200 dark:border-slate-700">
-                <div className="font-mono text-[10px] break-words">{permissionPatterns.length ? permissionPatterns.join(', ') : '-'}</div>
-              </div>
-            ) : null}
-          </div>
-        </div>
+      {/* Tab Navigation */}
+      <TabNav
+        activeTab={activeTab}
+        onTabChange={setActiveTab}
+        isAdmin={isAdmin}
+        isSuperAdmin={isSuperAdmin}
+      />
+
+      {/* Tab Content */}
+      <div>
+        {activeTab === 'profile' && (
+          <ProfileTab
+            branchName={branchId ? 'Chi nhánh' : undefined}
+            roleName={canManageRoles ? 'Quản trị viên' : 'Người dùng'}
+          />
+        )}
+
+        {activeTab === 'company' && <CompanyTab />}
+
+        {activeTab === 'users' && (
+          <UsersTab
+            tenantId={tenantId}
+            canManageRoles={canManageRoles}
+            onBootstrapSuccess={() => setRoleUiUnlocked(true)}
+          />
+        )}
+
+        {activeTab === 'templates' && (
+          <TemplatesTab
+            tenantId={tenantId}
+            canManageTemplates={canManageTemplates}
+          />
+        )}
+
+        {activeTab === 'advanced' && (
+          <AdvancedTab
+            tenantId={tenantId}
+            branchId={branchId}
+            permissionPatterns={permissionPatterns}
+            onBootstrapSuperAdmin={handleBootstrapSuperAdmin}
+          />
+        )}
       </div>
-
-      <SectionCard
-        title="Tài khoản & kết nối"
-        subtitle="Đăng nhập/đăng xuất và cấu hình Supabase"
-        icon={<Database className="w-4 h-4" />}
-        defaultOpen
-      >
-        {!isSupabaseConfigured && (
-          <div className="text-[11px] text-slate-600 dark:text-slate-300 bg-slate-50 dark:bg-slate-800/50 border border-slate-200 dark:border-slate-800 rounded-lg p-2.5">
-            <div className="font-bold text-slate-800 dark:text-slate-200">Thiếu biến môi trường</div>
-            <div className="mt-1">Tạo `.env.local` từ `.env.example` và điền:</div>
-            <div className="mt-1 font-mono text-[10px]">VITE_SUPABASE_URL, VITE_SUPABASE_ANON_KEY</div>
-          </div>
-        )}
-
-        {error && (
-          <div className="text-[11px] text-rose-700 dark:text-rose-400 bg-rose-50 dark:bg-rose-900/20 border border-rose-200 dark:border-rose-900/40 rounded-lg p-2.5">
-            {error}
-          </div>
-        )}
-
-        {!user ? (
-          <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
-            <div className="sm:col-span-2 flex items-center justify-between">
-                <div className="inline-flex rounded-lg border border-slate-200 dark:border-slate-800 overflow-hidden">
-                  <button
-                    onClick={() => {
-                      setMode('signIn');
-                      setError(null);
-                    }}
-                    className={`px-3 py-1.5 text-[11px] font-bold ${mode === 'signIn' ? 'bg-slate-100 dark:bg-slate-800 text-slate-900 dark:text-white' : 'bg-white dark:bg-slate-900 text-slate-600 dark:text-slate-300'}`}
-                  >
-                    Đăng nhập
-                  </button>
-                  <button
-                    onClick={() => {
-                      setMode('signUp');
-                      setError(null);
-                    }}
-                    className={`px-3 py-1.5 text-[11px] font-bold ${mode === 'signUp' ? 'bg-slate-100 dark:bg-slate-800 text-slate-900 dark:text-white' : 'bg-white dark:bg-slate-900 text-slate-600 dark:text-slate-300'}`}
-                  >
-                    Tạo tài khoản
-                  </button>
-                </div>
-                <div className="text-[10px] text-slate-500 dark:text-slate-400">
-                  {mode === 'signUp' ? 'Tạo user + auto tạo profiles' : 'Supabase Auth'}
-                </div>
-              </div>
-
-              {mode === 'signUp' && (
-                <label className="block sm:col-span-2">
-                  <div className="text-[10px] font-bold text-slate-500 dark:text-slate-400 mb-1">Họ tên</div>
-                  <input
-                    value={fullName}
-                    onChange={(e) => setFullName(e.target.value)}
-                    className="w-full px-3 py-2 rounded-lg bg-slate-50 dark:bg-slate-950 border border-slate-200 dark:border-slate-800 text-xs"
-                    placeholder="Nguyễn Admin"
-                    autoComplete="name"
-                  />
-                </label>
-              )}
-              <label className="block">
-                <div className="text-[10px] font-bold text-slate-500 dark:text-slate-400 mb-1">Email</div>
-                <input
-                  value={email}
-                  onChange={(e) => setEmail(e.target.value)}
-                  className="w-full px-3 py-2 rounded-lg bg-slate-50 dark:bg-slate-950 border border-slate-200 dark:border-slate-800 text-xs"
-                  placeholder="admin@company.vn"
-                  autoComplete="email"
-                />
-              </label>
-              <label className="block">
-                <div className="text-[10px] font-bold text-slate-500 dark:text-slate-400 mb-1">Mật khẩu</div>
-                <input
-                  value={password}
-                  onChange={(e) => setPassword(e.target.value)}
-                  className="w-full px-3 py-2 rounded-lg bg-slate-50 dark:bg-slate-950 border border-slate-200 dark:border-slate-800 text-xs"
-                  type="password"
-                  placeholder="••••••••"
-                  autoComplete="current-password"
-                  onKeyDown={(e) => {
-                    if (e.key === 'Enter') {
-                      if (mode === 'signUp') void handleSignUp();
-                      else void handleSignIn();
-                    }
-                  }}
-                />
-              </label>
-
-              <div className="sm:col-span-2 flex items-center justify-between gap-2">
-                <div className="text-[10px] text-slate-500 dark:text-slate-400">
-                  {mode === 'signUp'
-                    ? 'Sau khi tạo tài khoản, profile sẽ tự sinh nếu đã chạy 006_triggers.sql.'
-                    : 'Login dùng Supabase Auth (sau này sẽ dùng SSO giữa domain/subdomain).'}
-                </div>
-                <button
-                  onClick={() => {
-                    if (mode === 'signUp') void handleSignUp();
-                    else void handleSignIn();
-                  }}
-                  disabled={submitting || !isSupabaseConfigured}
-                  className="flex items-center gap-2 px-3 py-2 rounded-lg bg-indigo-600 hover:bg-indigo-700 disabled:opacity-50 text-white text-xs font-bold"
-                >
-                  {mode === 'signUp' ? <UserPlus className="w-4 h-4" /> : <KeyRound className="w-4 h-4" />}
-                  {mode === 'signUp' ? 'Tạo tài khoản' : 'Đăng nhập'}
-                </button>
-              </div>
-          </div>
-        ) : (
-          <div className="space-y-3">
-            <div className="flex items-center justify-between">
-              <div className="text-[11px] text-slate-600 dark:text-slate-300">
-                Tài khoản hiện tại: <span className="font-bold">{user.email}</span>
-              </div>
-                <button
-                  onClick={() => void handleSignOut()}
-                  disabled={submitting}
-                  className="flex items-center gap-2 px-3 py-2 rounded-lg bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 hover:bg-slate-50 dark:hover:bg-slate-800 text-slate-700 dark:text-slate-200 text-xs font-bold"
-                >
-                  <LogOut className="w-4 h-4" />
-                  Đăng xuất
-                </button>
-              </div>
-
-              {isConfigured && hasProfile === false && (
-                <div className="text-[11px] text-amber-700 dark:text-amber-400 bg-amber-50 dark:bg-amber-900/20 border border-amber-200 dark:border-amber-900/40 rounded-lg p-2.5 space-y-1">
-                  <div className="font-bold">Thiếu hồ sơ (profiles)</div>
-                  <div>Để bật dữ liệu thật theo tenant, cần tạo record trong `public.profiles` cho user này.</div>
-                  <div className="font-mono text-[10px] bg-white/70 dark:bg-slate-950/40 border border-amber-200/60 dark:border-amber-900/40 rounded p-2 mt-1 overflow-x-auto">
-                    {`insert into public.profiles (id, tenant_id, email, full_name)
-select '${user.id}', t.id, '${user.email ?? ''}', 'Admin'
-from public.tenants t
-where t.custom_domain = 'onebiz.com.vn'
-on conflict (id) do nothing;`}
-                  </div>
-                </div>
-              )}
-          </div>
-        )}
-      </SectionCard>
-
-      <SectionCard
-        title="Phân quyền"
-        subtitle="Role + chi nhánh cho từng user"
-        icon={<Shield className="w-4 h-4" />}
-      >
-        {!user ? (
-          <div className="text-[11px] text-slate-600 dark:text-slate-300">Vui lòng đăng nhập để quản lý phân quyền.</div>
-        ) : (
-          <div className="space-y-2">
-            <div className="flex items-center justify-between">
-              <div className="text-[11px] font-semibold text-slate-700 dark:text-slate-200">Người dùng</div>
-              {canManageRoles && (
-                <button
-                  onClick={async () => {
-                    setRolesLoading(true);
-                    setRoleError(null);
-                    try {
-                      const [roleList, profileList, userRoleList, branchList] = await Promise.all([
-                        fetchRoles(),
-                        fetchProfiles(),
-                        fetchUserRoles(),
-                        fetchBranches(),
-                      ]);
-                      setRoles(roleList);
-                      setProfiles(profileList);
-                      setUserRoles(userRoleList);
-                      setBranches(branchList);
-                      const draftRoles: Record<string, Set<string>> = {};
-                      const draftBranches: Record<string, string | null> = {};
-                      const dirtyMap: Record<string, boolean> = {};
-                      const errorMap: Record<string, string | null> = {};
-                      const successMap: Record<string, boolean> = {};
-                      profileList.forEach((p) => {
-                        const roleSet = new Set<string>(userRoleList.filter((ur) => ur.user_id === p.id).map((ur) => ur.role_id));
-                        draftRoles[p.id] = roleSet;
-                        draftBranches[p.id] = p.branch_id ?? null;
-                        dirtyMap[p.id] = false;
-                        errorMap[p.id] = null;
-                        successMap[p.id] = false;
-                      });
-                      setDraftRolesByUser(draftRoles);
-                      setDraftBranchByUser(draftBranches);
-                      setDirtyByUser(dirtyMap);
-                      setErrorByUser(errorMap);
-                      setSuccessByUser(successMap);
-                    } catch (e: any) {
-                      setRoleError(e?.message ?? 'Không tải được dữ liệu phân quyền.');
-                    } finally {
-                      setRolesLoading(false);
-                    }
-                  }}
-                  className="px-2.5 py-1.5 rounded-lg text-[11px] font-bold border border-slate-200 dark:border-slate-700 text-slate-600 dark:text-slate-300 hover:bg-slate-50 dark:hover:bg-slate-800"
-                  disabled={rolesLoading}
-                >
-                  Tải lại
-                </button>
-              )}
-            </div>
-
-            {!canManageRoles && (
-              <div className="text-[11px] text-amber-700 dark:text-amber-400 bg-amber-50 dark:bg-amber-900/20 border border-amber-200 dark:border-amber-900/40 rounded-lg p-2.5 space-y-2">
-                <div className="font-bold">Chưa có quyền quản trị vai trò</div>
-                <div>Nhấn nút dưới đây để bootstrap Super Admin cho user hiện tại nếu tenant chưa có role nào.</div>
-                <button
-                  onClick={() => void handleBootstrapRole()}
-                  disabled={roleBusyKey === 'bootstrap'}
-                  className="px-3 py-1.5 rounded-lg bg-indigo-600 hover:bg-indigo-700 text-white text-[11px] font-bold"
-                >
-                  Cấp Super Admin cho tôi
-                </button>
-              </div>
-            )}
-
-            {roleError && (
-              <div className="text-[11px] text-rose-700 dark:text-rose-400 bg-rose-50 dark:bg-rose-900/20 border border-rose-200 dark:border-rose-900/40 rounded-lg p-2.5">
-                {roleError}
-              </div>
-            )}
-
-            {canManageRoles && (
-              <div className="space-y-2">
-                {rolesLoading && (
-                  <div className="text-[11px] text-slate-500 dark:text-slate-400">Đang tải dữ liệu phân quyền...</div>
-                )}
-                {!rolesLoading && profiles.length === 0 && (
-                  <div className="text-[11px] text-slate-500 dark:text-slate-400">Chưa có người dùng.</div>
-                )}
-                {profiles.map((p) => {
-                  const roleSet = draftRolesByUser[p.id] ?? new Set<string>(userRoles.filter((ur) => ur.user_id === p.id).map((ur) => ur.role_id));
-                  const isDirty = Boolean(dirtyByUser[p.id]);
-                  const isSaving = Boolean(savingByUser[p.id]);
-                  const errorMessage = errorByUser[p.id];
-                  const isSuccess = Boolean(successByUser[p.id]);
-                  return (
-                    <div key={p.id} className="border border-slate-200 dark:border-slate-800 rounded-lg p-2.5">
-                      <div className="flex items-center justify-between gap-2">
-                        <div className="min-w-0">
-                          <div className="text-[11px] font-bold text-slate-800 dark:text-slate-200 truncate">{p.full_name}</div>
-                          <div className="text-[10px] text-slate-500 dark:text-slate-400 truncate">{p.email}</div>
-                        </div>
-                        <div className={`text-[10px] font-bold ${p.status === 'active' ? 'text-emerald-600 dark:text-emerald-400' : 'text-slate-400'}`}>
-                          {p.status}
-                        </div>
-                      </div>
-                      <div className="mt-1 flex items-center gap-2">
-                        {isDirty && <div className="text-[10px] font-semibold text-amber-600 dark:text-amber-400">Đã thay đổi (chưa lưu)</div>}
-                        {isSaving && <div className="text-[10px] font-semibold text-slate-500 dark:text-slate-400">Đang lưu...</div>}
-                        {isSuccess && !isDirty && !isSaving && (
-                          <div className="text-[10px] font-semibold text-emerald-600 dark:text-emerald-400">Lưu thành công</div>
-                        )}
-                      </div>
-                      {errorMessage && (
-                        <div className="mt-1 text-[10px] text-rose-700 dark:text-rose-400 bg-rose-50 dark:bg-rose-900/20 border border-rose-200 dark:border-rose-900/40 rounded-lg p-2">
-                          Lỗi: {errorMessage}
-                        </div>
-                      )}
-                      <div className="mt-2 flex flex-wrap gap-2">
-                        {roles.map((r) => {
-                          const checked = roleSet.has(r.id);
-                          const busy = isSaving;
-                          return (
-                            <label key={r.id} className={`flex items-center gap-1.5 px-2 py-1 rounded-md border text-[10px] font-bold ${checked ? 'bg-indigo-50 dark:bg-indigo-900/20 border-indigo-200 dark:border-indigo-800 text-indigo-700 dark:text-indigo-300' : 'bg-white dark:bg-slate-900 border-slate-200 dark:border-slate-800 text-slate-600 dark:text-slate-300'}`}>
-                              <input
-                                type="checkbox"
-                                className="accent-indigo-600"
-                                checked={checked}
-                                disabled={busy}
-                                onChange={(e) => handleToggleRole(p.id, r.id, e.target.checked)}
-                              />
-                              <span>{r.name}</span>
-                            </label>
-                          );
-                        })}
-                      </div>
-                      <div className="mt-2">
-                        <div className="text-[10px] font-bold text-slate-500 dark:text-slate-400 mb-1">Chi nhánh</div>
-                        <select
-                          value={draftBranchByUser[p.id] ?? p.branch_id ?? ''}
-                          disabled={isSaving || branches.length === 0}
-                          onChange={(e) => handleChangeBranch(p.id, e.target.value)}
-                          className="w-full px-2.5 py-1.5 rounded-lg bg-slate-50 dark:bg-slate-900 border border-slate-200 dark:border-slate-800 text-[11px]"
-                        >
-                          <option value="">Chưa gán</option>
-                          {branches.map((b) => (
-                            <option key={b.id} value={b.id}>
-                              {b.name}
-                            </option>
-                          ))}
-                        </select>
-                      </div>
-                      <div className="mt-2 flex items-center justify-end">
-                        <button
-                          onClick={() => void handleSaveUser(p.id)}
-                          disabled={!isDirty || isSaving}
-                          className="px-3 py-1.5 rounded-lg bg-indigo-600 hover:bg-indigo-700 disabled:opacity-50 text-white text-[11px] font-bold"
-                        >
-                          Lưu
-                        </button>
-                      </div>
-                    </div>
-                  );
-                })}
-                <div className="text-[10px] text-slate-500 dark:text-slate-400">
-                  Sau khi đổi quyền, user nên đăng xuất/đăng nhập lại để cập nhật permission mới.
-                </div>
-              </div>
-            )}
-          </div>
-        )}
-      </SectionCard>
-
-      <SectionCard
-        title="Mẫu chứng từ"
-        subtitle="Tùy chỉnh tên đơn vị, VAT, logo, header/footer (A4/A5; 80mm cho Phiếu thanh toán)"
-        icon={<FileText className="w-4 h-4" />}
-        right={
-          <button
-            onClick={async () => {
-              if (!tenantId) return;
-              setTemplatesLoading(true);
-              setTemplatesError(null);
-              try {
-                await ensureDefaultTemplates(tenantId);
-                setTemplates(await fetchDocumentTemplates(tenantId));
-              } catch (e: any) {
-                setTemplatesError(e?.message ?? 'Không tải được mẫu chứng từ.');
-              } finally {
-                setTemplatesLoading(false);
-              }
-            }}
-            disabled={!canManageTemplates || templatesLoading}
-            className="px-2.5 py-1.5 rounded-lg text-[11px] font-bold border border-slate-200 dark:border-slate-700 text-slate-600 dark:text-slate-300 hover:bg-slate-50 dark:hover:bg-slate-800 disabled:opacity-50"
-          >
-            Tải lại
-          </button>
-        }
-      >
-        {!user ? (
-          <div className="text-[11px] text-slate-600 dark:text-slate-300">Vui lòng đăng nhập để quản lý mẫu chứng từ.</div>
-        ) : (
-          <>
-            {!canManageTemplates && (
-              <div className="text-[11px] text-amber-700 dark:text-amber-400 bg-amber-50 dark:bg-amber-900/20 border border-amber-200 dark:border-amber-900/40 rounded-lg p-2.5">
-                Cần quyền `settings.*` để quản lý mẫu chứng từ.
-              </div>
-            )}
-            {templatesError && (
-              <div className="text-[11px] text-rose-700 dark:text-rose-400 bg-rose-50 dark:bg-rose-900/20 border border-rose-200 dark:border-rose-900/40 rounded-lg p-2.5">
-                {templatesError}
-              </div>
-            )}
-
-            <div className="grid grid-cols-1 sm:grid-cols-3 gap-2">
-              <label className="block">
-                <div className="text-[10px] font-bold text-slate-500 dark:text-slate-400 mb-1">Loại chứng từ</div>
-                <select
-                  value={templateType}
-                  onChange={(e) => setTemplateType(e.target.value as TemplateType)}
-                  className="w-full px-2.5 py-2 rounded-lg bg-slate-50 dark:bg-slate-900 border border-slate-200 dark:border-slate-800 text-[11px]"
-                  disabled={!canManageTemplates}
-                >
-                  <option value="invoice_sale">Hóa đơn bán hàng</option>
-                  <option value="payment_slip">Phiếu thanh toán</option>
-                  <option value="payment_receipt">Phiếu thu</option>
-                  <option value="payment_voucher">Phiếu chi</option>
-                  <option value="delivery_note">Phiếu giao hàng</option>
-                  <option value="purchase_order">Phiếu đặt hàng</option>
-                  <option value="transfer_note">Phiếu chuyển hàng</option>
-                  <option value="void_note">Phiếu hủy hàng</option>
-                  <option value="production_order">Phiếu sản xuất</option>
-                  <option value="inventory_receipt">Phiếu nhập kho</option>
-                  <option value="inventory_issue">Phiếu xuất kho</option>
-                  <option value="inventory_transfer">Phiếu chuyển kho</option>
-                </select>
-              </label>
-              <label className="block">
-                <div className="text-[10px] font-bold text-slate-500 dark:text-slate-400 mb-1">Khổ giấy</div>
-                <select
-                  value={paperSize}
-                  onChange={(e) => setPaperSize(e.target.value as PaperSize)}
-                  className="w-full px-2.5 py-2 rounded-lg bg-slate-50 dark:bg-slate-900 border border-slate-200 dark:border-slate-800 text-[11px]"
-                  disabled={!canManageTemplates}
-                >
-                  <option value="A4">A4</option>
-                  <option value="A5">A5</option>
-                  {templateType === 'payment_slip' ? <option value="80mm">80mm</option> : null}
-                </select>
-              </label>
-              <label className="block">
-                <div className="text-[10px] font-bold text-slate-500 dark:text-slate-400 mb-1">Tên mẫu</div>
-                <input
-                  value={templateName}
-                  onChange={(e) => setTemplateName(e.target.value)}
-                  className="w-full px-2.5 py-2 rounded-lg bg-slate-50 dark:bg-slate-900 border border-slate-200 dark:border-slate-800 text-[11px]"
-                  disabled={!canManageTemplates}
-                />
-              </label>
-            </div>
-
-            <div className="grid grid-cols-1 lg:grid-cols-2 gap-2">
-              <div className="border border-slate-200 dark:border-slate-800 rounded-lg p-2.5">
-                <div className="text-[11px] font-semibold text-slate-700 dark:text-slate-200">Thông tin đơn vị</div>
-                <div className="mt-2 grid grid-cols-1 sm:grid-cols-2 gap-2">
-                  <label className="block">
-                    <div className="text-[10px] font-bold text-slate-500 dark:text-slate-400 mb-1">Tên đơn vị</div>
-                    <input
-                      value={templateSettings.company_name ?? ''}
-                      onChange={(e) => setTemplateSettings((prev) => ({ ...prev, company_name: e.target.value }))}
-                      className="w-full px-2.5 py-2 rounded-lg bg-slate-50 dark:bg-slate-900 border border-slate-200 dark:border-slate-800 text-[11px]"
-                      disabled={!canManageTemplates}
-                    />
-                  </label>
-                  <label className="block">
-                    <div className="text-[10px] font-bold text-slate-500 dark:text-slate-400 mb-1">Mã số thuế</div>
-                    <input
-                      value={templateSettings.company_tax_code ?? ''}
-                      onChange={(e) => setTemplateSettings((prev) => ({ ...prev, company_tax_code: e.target.value }))}
-                      className="w-full px-2.5 py-2 rounded-lg bg-slate-50 dark:bg-slate-900 border border-slate-200 dark:border-slate-800 text-[11px]"
-                      disabled={!canManageTemplates}
-                    />
-                  </label>
-                  <label className="block sm:col-span-2">
-                    <div className="text-[10px] font-bold text-slate-500 dark:text-slate-400 mb-1">Địa chỉ</div>
-                    <input
-                      value={templateSettings.company_address ?? ''}
-                      onChange={(e) => setTemplateSettings((prev) => ({ ...prev, company_address: e.target.value }))}
-                      className="w-full px-2.5 py-2 rounded-lg bg-slate-50 dark:bg-slate-900 border border-slate-200 dark:border-slate-800 text-[11px]"
-                      disabled={!canManageTemplates}
-                    />
-                  </label>
-                  <label className="block">
-                    <div className="text-[10px] font-bold text-slate-500 dark:text-slate-400 mb-1">Hotline</div>
-                    <input
-                      value={templateSettings.company_phone ?? ''}
-                      onChange={(e) => setTemplateSettings((prev) => ({ ...prev, company_phone: e.target.value }))}
-                      className="w-full px-2.5 py-2 rounded-lg bg-slate-50 dark:bg-slate-900 border border-slate-200 dark:border-slate-800 text-[11px]"
-                      disabled={!canManageTemplates}
-                    />
-                  </label>
-                  <label className="block">
-                    <div className="text-[10px] font-bold text-slate-500 dark:text-slate-400 mb-1">Logo URL</div>
-                    <input
-                      value={templateSettings.logo_url ?? ''}
-                      onChange={(e) => setTemplateSettings((prev) => ({ ...prev, logo_url: e.target.value }))}
-                      className="w-full px-2.5 py-2 rounded-lg bg-slate-50 dark:bg-slate-900 border border-slate-200 dark:border-slate-800 text-[11px]"
-                      disabled={!canManageTemplates}
-                    />
-                  </label>
-                </div>
-              </div>
-
-              <div className="border border-slate-200 dark:border-slate-800 rounded-lg p-2.5">
-                <div className="text-[11px] font-semibold text-slate-700 dark:text-slate-200">Hiển thị & nội dung</div>
-                <div className="mt-2 grid grid-cols-1 gap-2">
-                  <label className="block">
-                    <div className="text-[10px] font-bold text-slate-500 dark:text-slate-400 mb-1">Header</div>
-                    <input
-                      value={templateSettings.header_text ?? ''}
-                      onChange={(e) => setTemplateSettings((prev) => ({ ...prev, header_text: e.target.value }))}
-                      className="w-full px-2.5 py-2 rounded-lg bg-slate-50 dark:bg-slate-900 border border-slate-200 dark:border-slate-800 text-[11px]"
-                      disabled={!canManageTemplates}
-                    />
-                  </label>
-                  <label className="block">
-                    <div className="text-[10px] font-bold text-slate-500 dark:text-slate-400 mb-1">Footer</div>
-                    <input
-                      value={templateSettings.footer_text ?? ''}
-                      onChange={(e) => setTemplateSettings((prev) => ({ ...prev, footer_text: e.target.value }))}
-                      className="w-full px-2.5 py-2 rounded-lg bg-slate-50 dark:bg-slate-900 border border-slate-200 dark:border-slate-800 text-[11px]"
-                      disabled={!canManageTemplates}
-                    />
-                  </label>
-                  <div className="flex flex-wrap items-center gap-3 pt-1">
-                    <label className="flex items-center gap-2 text-[11px] font-semibold text-slate-600 dark:text-slate-300">
-                      <input
-                        type="checkbox"
-                        checked={Boolean(templateSettings.show_vat)}
-                        onChange={(e) => setTemplateSettings((prev) => ({ ...prev, show_vat: e.target.checked }))}
-                        disabled={!canManageTemplates}
-                        className="accent-indigo-600"
-                      />
-                      Hiện VAT
-                    </label>
-                    <label className="flex items-center gap-2 text-[11px] font-semibold text-slate-600 dark:text-slate-300">
-                      VAT %
-                      <input
-                        type="number"
-                        value={templateSettings.vat_rate ?? 10}
-                        onChange={(e) => setTemplateSettings((prev) => ({ ...prev, vat_rate: Number(e.target.value) }))}
-                        disabled={!canManageTemplates}
-                        className="w-16 px-2 py-1 rounded-lg bg-slate-50 dark:bg-slate-900 border border-slate-200 dark:border-slate-800 text-[11px]"
-                      />
-                    </label>
-                  </div>
-                </div>
-              </div>
-            </div>
-
-            <div className="flex items-center justify-end">
-              <button
-                onClick={async () => {
-                  if (!tenantId) return;
-                  setTemplateSaving(true);
-                  setTemplatesError(null);
-                  try {
-                    const active = getActiveTemplate(templates, templateType, paperSize);
-                    const ok = await upsertTemplate({
-                      id: active?.id,
-                      tenant_id: tenantId,
-                      template_type: templateType,
-                      paper_size: paperSize,
-                      name: templateName || active?.name || 'Mẫu chứng từ',
-                      settings: templateSettings,
-                      layout: active?.layout ?? { columns: [], show_totals: true },
-                      version: active?.version ?? 1,
-                      is_active: true,
-                    });
-                    if (!ok) throw new Error('Lưu mẫu thất bại.');
-                    setTemplates(await fetchDocumentTemplates(tenantId));
-                  } catch (e: any) {
-                    setTemplatesError(e?.message ?? 'Lưu mẫu thất bại.');
-                  } finally {
-                    setTemplateSaving(false);
-                  }
-                }}
-                disabled={!canManageTemplates || templateSaving}
-                className="px-3 py-2 rounded-lg bg-indigo-600 hover:bg-indigo-700 disabled:opacity-50 text-white text-[11px] font-bold"
-              >
-                {templateSaving ? 'Đang lưu...' : 'Lưu mẫu'}
-              </button>
-            </div>
-          </>
-        )}
-      </SectionCard>
     </div>
   );
 };
