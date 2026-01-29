@@ -102,7 +102,7 @@ const Sidebar: React.FC<SidebarProps> = ({ isOpen, setIsOpen }) => {
                               }
                             `}
                           >
-                            <Icon className={`h-4 w-4 shrink-0 ${isActive ? 'text-white' : 'text-slate-500 group-hover:text-slate-300'}`} aria-hidden="true" />
+                            <Icon className={`h-4 w-4 shrink-0 ${isActive ? 'text-white' : 'text-slate-500 dark:text-slate-500 group-hover:text-slate-900 dark:group-hover:text-slate-300'}`} aria-hidden="true" />
                             {item.label}
                           </button>
                         </li>
@@ -111,14 +111,14 @@ const Sidebar: React.FC<SidebarProps> = ({ isOpen, setIsOpen }) => {
                   </ul>
                 </li>
 
-                <li className="mt-auto space-y-1 border-t border-slate-800/50 pt-4">
+                <li className="mt-auto space-y-1 border-t border-slate-200 dark:border-slate-800/50 pt-4">
 
                   <button
                     type="button"
                     onClick={() => void handleSignOut()}
-                    className="group -mx-2 flex gap-x-3 rounded-lg p-2 text-xs font-semibold leading-6 text-slate-400 hover:bg-slate-900 hover:text-slate-200 w-full"
+                    className="group -mx-2 flex gap-x-3 rounded-lg p-2 text-xs font-semibold leading-6 text-slate-600 dark:text-slate-400 hover:bg-slate-100 dark:hover:bg-slate-900 hover:text-slate-900 dark:hover:text-slate-200 w-full"
                   >
-                    <LogOut className="h-4 w-4 shrink-0 text-slate-500 group-hover:text-slate-300" aria-hidden="true" />
+                    <LogOut className="h-4 w-4 shrink-0 text-slate-400 dark:text-slate-500 group-hover:text-slate-600 dark:group-hover:text-slate-300" aria-hidden="true" />
                     Đăng xuất
                   </button>
                 </li>
