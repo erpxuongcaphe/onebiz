@@ -1,6 +1,7 @@
 import React from 'react';
 import ReactDOM from 'react-dom/client';
 import App from './App';
+import { BrowserRouter } from 'react-router-dom';
 import { AuthProvider } from './lib/auth';
 import { TenantProvider } from './lib/tenantContext';
 
@@ -14,7 +15,9 @@ root.render(
   <React.StrictMode>
     <TenantProvider>
       <AuthProvider>
-        <App />
+        <BrowserRouter>
+          <App />
+        </BrowserRouter>
       </AuthProvider>
     </TenantProvider>
   </React.StrictMode>

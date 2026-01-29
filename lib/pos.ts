@@ -76,16 +76,25 @@ export async function fetchCatalogForWarehouse(params: {
   if (!sessionData.session) return [];
   if (!params.warehouseId) return [];
 
-  const { data, error } = await supabase
+  let query = supabase
     .from('inventory_stock')
     .select(
-      'quantity, product:inventory_products(id, sku, name, selling_price, status, category:inventory_categories(name))'
+      'quantity, product:inventory_products!inner(id, sku, name, selling_price, status, category:inventory_categories(name))'
     )
     .eq('warehouse_id', params.warehouseId);
 
+  const qStr = (params.search ?? '').trim();
+  if (qStr) {
+    query = query.or(`name.ilike.%${qStr}%,sku.ilike.%${qStr}%`, { foreignTable: 'product' });
+  }
+
+  // Note: Category filtering by name on 3rd level nesting is tricky in one go, 
+  // so we keep it in memory or would need another !inner join chain. 
+  // For now, let's keep category filter in JS, but search is now DB-optimized.
+
+  const { data, error } = await query;
   if (error || !data) return [];
 
-  const q = (params.search ?? '').trim().toLowerCase();
   const cat = (params.category ?? '').trim();
 
   const items: PosCatalogItem[] = [];
@@ -93,15 +102,14 @@ export async function fetchCatalogForWarehouse(params: {
     const p = row.product;
     if (!p) continue;
     if ((p.status ?? 'active') === 'inactive') continue;
+
     const categoryName = p.category?.name ?? 'Khác';
     if (cat && categoryName !== cat) continue;
-    const sku = String(p.sku ?? '');
-    const name = String(p.name ?? '');
-    if (q && !name.toLowerCase().includes(q) && !sku.toLowerCase().includes(q)) continue;
+
     items.push({
       product_id: p.id,
-      sku,
-      name,
+      sku: String(p.sku ?? ''),
+      name: String(p.name ?? ''),
       category: categoryName,
       price: toNumber(p.selling_price),
       stock: toNumber(row.quantity),
@@ -207,120 +215,10 @@ export async function createPosSale(params: {
     return (data as any) ?? null;
   }
 
-  // Fallback: Manual creation if RPC doesn't exist
-  // WARNING: This is not atomic and has race condition risks
-  console.warn('pos_create_sale RPC failed, using fallback:', error?.message);
-
-  try {
-    // 1. Validate stock availability
-    for (const line of params.lines) {
-      const { data: stockData } = await supabase
-        .from('inventory_stock')
-        .select('quantity')
-        .eq('warehouse_id', params.warehouseId)
-        .eq('product_id', line.product_id)
-        .single();
-
-      const currentQty = toNumber(stockData?.quantity);
-      if (currentQty < line.quantity) {
-        console.error(`Insufficient stock for product ${line.product_id}: have ${currentQty}, need ${line.quantity}`);
-        return null;
-      }
-    }
-
-    // 2. Create order
-    const orderNumber = `POS-${new Date().toISOString().slice(0, 10).replace(/-/g, '')}-${Math.random().toString(16).slice(2, 6).toUpperCase()}`;
-    const total = params.lines.reduce((acc, l) => acc + l.quantity * l.unit_price, 0);
-
-    const { data: order, error: orderErr } = await supabase
-      .from('pos_orders')
-        .insert({
-          branch_id: params.branchId,
-          shift_id: params.shiftId,
-          order_number: orderNumber,
-          status: 'paid',
-          subtotal: total,
-          total,
-          customer_id: params.customerId,
-          created_by: sessionData.session.user.id,
-        })
-      .select('id')
-      .single();
-
-    if (orderErr || !order) {
-      console.error('Failed to create order:', orderErr);
-      return null;
-    }
-
-    const orderId = (order as any).id as string;
-
-    // 3. Create order items
-    const { error: itemsErr } = await supabase
-      .from('pos_order_items')
-      .insert(
-        params.lines.map((l) => ({
-          order_id: orderId,
-          product_id: l.product_id,
-          quantity: l.quantity,
-          unit_price: l.unit_price,
-        }))
-      );
-
-    if (itemsErr) {
-      console.error('Failed to create order items:', itemsErr);
-      return null;
-    }
-
-    // 4. Create payment record
-    const { error: payErr } = await supabase
-      .from('pos_payments')
-      .insert({
-        order_id: orderId,
-        method: params.paymentMethod,
-        amount: params.paymentAmount,
-      });
-
-    if (payErr) {
-      console.error('Failed to create payment:', payErr);
-      return null;
-    }
-
-    // 5. Deduct stock from inventory_stock
-    for (const line of params.lines) {
-      const { data: currentStock } = await supabase
-        .from('inventory_stock')
-        .select('id, quantity')
-        .eq('warehouse_id', params.warehouseId)
-        .eq('product_id', line.product_id)
-        .single();
-
-      if (currentStock) {
-        const newQty = toNumber(currentStock.quantity) - line.quantity;
-        await supabase
-          .from('inventory_stock')
-          .update({ quantity: newQty })
-          .eq('id', currentStock.id);
-      }
-
-      // 6. Record stock movement
-      await supabase
-        .from('inventory_stock_movements')
-        .insert({
-          product_id: line.product_id,
-          warehouse_id: params.warehouseId,
-          movement_type: 'sale',
-          quantity: -line.quantity,
-          reference_type: 'pos_order',
-          reference_id: orderId,
-          notes: `POS Sale: ${orderNumber}`,
-        });
-    }
-
-    return orderId;
-  } catch (err) {
-    console.error('Fallback POS sale creation failed:', err);
-    return null;
-  }
+  // Fallback has been DISABLED due to race condition risks.
+  // If the RPC fails, we must fail the transaction to prevent data corruption.
+  console.error('pos_create_sale RPC failed:', error?.message);
+  return null;
 }
 
 export async function fetchPosOrders(params: {

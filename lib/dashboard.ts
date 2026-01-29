@@ -83,10 +83,11 @@ export async function fetchDashboardOverview(): Promise<DashboardOverview | null
   const revenueTrend: 'up' | 'down' = revenueThis >= revenuePrev ? 'up' : 'down';
 
   // Simple profit estimate until COGS exists
-  const profitThis = Math.max(0, Math.round(revenueThis * 0.25));
-  const profitPrev = Math.max(0, Math.round(revenuePrev * 0.25));
-  const profitChange = pctChange(profitThis, profitPrev);
-  const profitTrend: 'up' | 'down' = profitThis >= profitPrev ? 'up' : 'down';
+  // Simple profit estimate until COGS exists
+  const profitThis = 0; // Not calculated yet
+  const profitPrev = 0;
+  const profitChange = '0%';
+  const profitTrend: 'up' | 'down' = 'up';
 
   const [{ data: txThis, error: txThisErr }, { data: txPrev, error: txPrevErr }] = await Promise.all([
     supabase

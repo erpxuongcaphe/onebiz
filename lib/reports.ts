@@ -47,19 +47,41 @@ export type ReportKpis = {
   changeExpense: string;
 };
 
-export async function fetchReportsOverview(): Promise<{ kpis: ReportKpis; rows: ReportRow[] } | null> {
+export async function fetchReportsOverview(fromDate?: string, toDate?: string): Promise<{ kpis: ReportKpis; rows: ReportRow[] } | null> {
   if (!supabase) return null;
   const { data: sessionData } = await supabase.auth.getSession();
   if (!sessionData.session) return null;
 
-  const now = new Date();
-  const thisStart = startOfMonth(now);
-  const nextStart = addMonths(thisStart, 1);
-  const prevStart = addMonths(thisStart, -1);
+  let thisStartIso: string;
+  let nextStartIso: string;
+  let prevStartIso: string;
 
-  const thisStartIso = toISODate(thisStart);
-  const nextStartIso = toISODate(nextStart);
-  const prevStartIso = toISODate(prevStart);
+  if (fromDate && toDate) {
+    thisStartIso = fromDate;
+    // toDate is inclusive in UI, but queries use < nextStart.
+    // So nextStart should be toDate + 1 day.
+    const end = new Date(toDate);
+    end.setDate(end.getDate() + 1);
+    nextStartIso = toISODate(end);
+
+    // Calculate previous period duration
+    const start = new Date(fromDate);
+    const durationMs = end.getTime() - start.getTime();
+    const prevStart = new Date(start.getTime() - durationMs);
+    prevStartIso = toISODate(prevStart);
+  } else {
+    const now = new Date();
+    const thisStart = startOfMonth(now);
+    const nextStart = addMonths(thisStart, 1);
+    const prevStart = addMonths(thisStart, -1);
+
+    thisStartIso = toISODate(thisStart);
+    nextStartIso = toISODate(nextStart);
+    prevStartIso = toISODate(prevStart);
+  }
+
+  // Re-construct thisStart for the graph logic below (which uses addMonths)
+  const thisStart = new Date(thisStartIso);
 
   const [{ data: thisOrders, error: thisOrdersErr }, { data: prevOrders, error: prevOrdersErr }] = await Promise.all([
     supabase
@@ -108,7 +130,7 @@ export async function fetchReportsOverview(): Promise<{ kpis: ReportKpis; rows: 
   const expensePrev = sumExpense(prevTx as any[]);
 
   // Profit/debt are placeholders until AR/AP & COGS are modeled
-  const profitThis = Math.max(0, Math.round(revenueThis * 0.25));
+  const profitThis = 0; // Not calculated yet
   const debtThis = 0;
 
   // Recent report rows: last 4 months revenue

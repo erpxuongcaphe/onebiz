@@ -3,23 +3,18 @@ import { Search, Filter, Plus, Phone, Mail } from 'lucide-react';
 import { formatCurrency } from '../constants';
 import { fetchCustomers } from '../lib/sales';
 
-const MOCK_CUSTOMERS = [
-  { id: 'CUST-001', name: 'Công ty TNHH XYZ', email: 'contact@xyz.vn', phone: '0901 234 567', debt: 12500000, status: 'Đang giao dịch' },
-  { id: 'CUST-002', name: 'Nguyễn Văn A', email: 'nva@gmail.com', phone: '0987 222 111', debt: 0, status: 'Bình thường' },
-  { id: 'CUST-003', name: 'Trần Thị B', email: 'ttb@gmail.com', phone: '0933 888 555', debt: 5400000, status: 'Cần thu' },
-  { id: 'CUST-004', name: 'Công ty CP Hòa Bình', email: 'sales@hoabinh.vn', phone: '0912 555 999', debt: 98000000, status: 'Công nợ cao' },
-];
+
 
 const Customers: React.FC = () => {
   const [searchTerm, setSearchTerm] = useState('');
-  const [rows, setRows] = useState<typeof MOCK_CUSTOMERS | null>(null);
+  const [rows, setRows] = useState<{ id: string; name: string; email: string; phone: string; debt: number; status: string }[] | null>(null);
 
   useEffect(() => {
     let isMounted = true;
     fetchCustomers().then((data) => {
       if (!isMounted) return;
       if (data.length === 0) {
-        setRows(MOCK_CUSTOMERS);
+        setRows([]);
         return;
       }
       // Map DB customers to the current UI shape (debt is a placeholder until AR/AP tables exist)

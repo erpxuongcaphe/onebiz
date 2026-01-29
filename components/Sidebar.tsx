@@ -8,18 +8,22 @@ import { getPosBaseUrl } from '../lib/posUrl';
 import { supabase } from '../lib/supabaseClient';
 import { withTimeout } from '../lib/async';
 
+import { useNavigate, useLocation } from 'react-router-dom';
+
 interface SidebarProps {
-  activeTab: Tab;
-  setActiveTab: (tab: Tab) => void;
   isOpen: boolean;
   setIsOpen: (isOpen: boolean) => void;
 }
 
-const Sidebar: React.FC<SidebarProps> = ({ activeTab, setActiveTab, isOpen, setIsOpen }) => {
+const Sidebar: React.FC<SidebarProps> = ({ isOpen, setIsOpen }) => {
   const { tenant } = useTenant();
+  const navigate = useNavigate();
+  const location = useLocation();
   const menuItems = getDesktopNavItems();
   const appMode = getAppMode();
   const posUrl = getPosBaseUrl({ tenant, hostname: window.location.hostname });
+
+  const activePath = location.pathname === '/' ? '/dashboard' : location.pathname;
 
   const handleSignOut = async () => {
     if (!supabase) {
@@ -42,8 +46,8 @@ const Sidebar: React.FC<SidebarProps> = ({ activeTab, setActiveTab, isOpen, setI
   return (
     <div className={`relative z-50 lg:hidden ${isOpen ? 'block' : 'hidden'}`} role="dialog" aria-modal="true">
       {/* Background backdrop */}
-      <div 
-        className="fixed inset-0 bg-slate-900/80 backdrop-blur-sm transition-opacity opacity-100" 
+      <div
+        className="fixed inset-0 bg-slate-900/80 backdrop-blur-sm transition-opacity opacity-100"
         onClick={() => setIsOpen(false)}
       />
 
@@ -63,20 +67,20 @@ const Sidebar: React.FC<SidebarProps> = ({ activeTab, setActiveTab, isOpen, setI
 
           <div className="flex grow flex-col gap-y-4 overflow-y-auto bg-slate-950 px-4 pb-4 border-r border-slate-800">
             <div className="flex h-14 shrink-0 items-center gap-2 border-b border-slate-800/50">
-               <div className="bg-gradient-to-br from-indigo-600 to-violet-600 p-1 rounded-md shadow-lg shadow-indigo-900/50">
-                 <Hexagon className="w-4 h-4 text-white fill-current" />
-               </div>
-                <span className="text-base font-bold tracking-tight text-white font-sans">{tenant?.name ?? 'OneBiz'} ERP</span>
+              <div className="bg-gradient-to-br from-indigo-600 to-violet-600 p-1 rounded-md shadow-lg shadow-indigo-900/50">
+                <Hexagon className="w-4 h-4 text-white fill-current" />
+              </div>
+              <span className="text-base font-bold tracking-tight text-white font-sans">{tenant?.name ?? 'OneBiz'} ERP</span>
             </div>
-            
+
             <nav className="flex flex-1 flex-col">
               <ul role="list" className="flex flex-1 flex-col gap-y-6">
                 <li>
                   <ul role="list" className="-mx-2 space-y-1">
                     {menuItems.map((item) => {
-                       const Icon = item.icon;
-                       const isActive = activeTab === item.id;
-                       return (
+                      const Icon = item.icon;
+                      const isActive = activePath.startsWith(item.path);
+                      return (
                         <li key={item.id}>
                           <button
                             onClick={() => {
@@ -84,13 +88,13 @@ const Sidebar: React.FC<SidebarProps> = ({ activeTab, setActiveTab, isOpen, setI
                                 window.open(posUrl, '_blank', 'noopener,noreferrer');
                                 return;
                               }
-                              setActiveTab(item.id);
+                              navigate(item.path);
                               setIsOpen(false);
                             }}
                             className={`
                               group flex gap-x-3 rounded-lg p-2 text-xs font-semibold w-full items-center transition-all duration-200
-                              ${isActive 
-                                ? 'bg-indigo-600 text-white shadow-md shadow-indigo-900/30' 
+                              ${isActive
+                                ? 'bg-indigo-600 text-white shadow-md shadow-indigo-900/30'
                                 : 'text-slate-400 hover:text-slate-200 hover:bg-slate-900'
                               }
                             `}
@@ -99,18 +103,18 @@ const Sidebar: React.FC<SidebarProps> = ({ activeTab, setActiveTab, isOpen, setI
                             {item.label}
                           </button>
                         </li>
-                       )
+                      )
                     })}
                   </ul>
                 </li>
-                
+
                 <li className="mt-auto space-y-1 border-t border-slate-800/50 pt-4">
-                  <button 
+                  <button
                     onClick={() => {
-                        setActiveTab(Tab.SETTINGS);
-                        setIsOpen(false);
+                      navigate('/settings');
+                      setIsOpen(false);
                     }}
-                    className={`group -mx-2 flex gap-x-3 rounded-lg p-2 text-xs font-semibold leading-6 w-full ${activeTab === Tab.SETTINGS ? 'bg-slate-900 text-white' : 'text-slate-400 hover:bg-slate-900 hover:text-slate-200'}`}
+                    className={`group -mx-2 flex gap-x-3 rounded-lg p-2 text-xs font-semibold leading-6 w-full ${activePath === '/settings' ? 'bg-slate-900 text-white' : 'text-slate-400 hover:bg-slate-900 hover:text-slate-200'}`}
                   >
                     <Settings className="h-4 w-4 shrink-0" aria-hidden="true" />
                     Cài đặt

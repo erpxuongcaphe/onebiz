@@ -3,7 +3,7 @@ import { formatCurrency } from '../constants';
 import { Order, OrderStatus, ViewMode } from '../types';
 import { Download, LayoutList, AlignJustify, Loader2 } from 'lucide-react';
 import Drawer from './Drawer';
-import { fetchOrders, fetchOrderDetail, type OrderDetail } from '../lib/orders';
+import { fetchOrders, fetchOrderDetail, processOrder, type OrderDetail } from '../lib/orders';
 
 const Orders: React.FC = () => {
   const [viewMode, setViewMode] = useState<ViewMode>('compact');
@@ -11,6 +11,31 @@ const Orders: React.FC = () => {
   const [orderDetail, setOrderDetail] = useState<OrderDetail | null>(null);
   const [loadingDetail, setLoadingDetail] = useState(false);
   const [orders, setOrders] = useState<Order[] | null>(null);
+  const [processingId, setProcessingId] = useState<string | null>(null);
+
+  const handleProcessOrder = async () => {
+    if (!selectedOrder) return;
+    setProcessingId(selectedOrder.id);
+    const orderIdToProcess = orderDetail?.id; // Use UUID from detail if available
+
+    // Fallback if detail not loaded yet (should rarely happen as drawer opens detail)
+    if (!orderIdToProcess) {
+      alert('Đang tải thông tin đơn hàng...');
+      setProcessingId(null);
+      return;
+    }
+
+    const result = await processOrder(orderIdToProcess);
+    setProcessingId(null);
+
+    if (result.success) {
+      // Refresh orders
+      fetchOrders().then(setOrders);
+      setSelectedOrder(null); // Close drawer
+    } else {
+      alert(`Lỗi: ${result.message}`);
+    }
+  };
 
   useEffect(() => {
     let isMounted = true;
@@ -55,26 +80,26 @@ const Orders: React.FC = () => {
 
   return (
     <div className="space-y-3 lg:space-y-5 animate-fade-in pb-10">
-       <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-3">
+      <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-3">
         <div>
           <h1 className="text-lg lg:text-xl font-bold text-slate-900 dark:text-white">Đơn hàng</h1>
           <p className="text-slate-500 dark:text-slate-400 text-[11px] mt-0.5">Quản lý & xử lý đơn hàng.</p>
         </div>
         <div className="bg-white dark:bg-slate-900 p-0.5 rounded-lg border border-slate-200 dark:border-slate-800 flex">
-            <button
-                onClick={() => setViewMode('comfort')}
-                className={`p-1.5 rounded-md transition-all ${viewMode === 'comfort' ? 'bg-slate-100 dark:bg-slate-800 text-indigo-600 dark:text-indigo-400 shadow-sm' : 'text-slate-400 hover:text-slate-600'}`}
-                title="Chế độ Thoáng"
-            >
-                <LayoutList className="w-4 h-4" />
-            </button>
-            <button
-                onClick={() => setViewMode('compact')}
-                className={`p-1.5 rounded-md transition-all ${viewMode === 'compact' ? 'bg-slate-100 dark:bg-slate-800 text-indigo-600 dark:text-indigo-400 shadow-sm' : 'text-slate-400 hover:text-slate-600'}`}
-                title="Chế độ Excel"
-            >
-                <AlignJustify className="w-4 h-4" />
-            </button>
+          <button
+            onClick={() => setViewMode('comfort')}
+            className={`p-1.5 rounded-md transition-all ${viewMode === 'comfort' ? 'bg-slate-100 dark:bg-slate-800 text-indigo-600 dark:text-indigo-400 shadow-sm' : 'text-slate-400 hover:text-slate-600'}`}
+            title="Chế độ Thoáng"
+          >
+            <LayoutList className="w-4 h-4" />
+          </button>
+          <button
+            onClick={() => setViewMode('compact')}
+            className={`p-1.5 rounded-md transition-all ${viewMode === 'compact' ? 'bg-slate-100 dark:bg-slate-800 text-indigo-600 dark:text-indigo-400 shadow-sm' : 'text-slate-400 hover:text-slate-600'}`}
+            title="Chế độ Excel"
+          >
+            <AlignJustify className="w-4 h-4" />
+          </button>
         </div>
       </div>
 
@@ -108,19 +133,19 @@ const Orders: React.FC = () => {
               )}
               {(orders ?? []).map((order) => (
                 <tr
-                    key={order.id}
-                    onClick={() => setSelectedOrder(order)}
-                    className="hover:bg-slate-50 dark:hover:bg-slate-800/50 transition-colors cursor-pointer group"
+                  key={order.id}
+                  onClick={() => setSelectedOrder(order)}
+                  className="hover:bg-slate-50 dark:hover:bg-slate-800/50 transition-colors cursor-pointer group"
                 >
                   <td className={`${tablePadding} font-mono font-bold text-indigo-600 dark:text-indigo-400 whitespace-nowrap text-[10px] lg:text-[11px]`}>{order.id}</td>
                   <td className={tablePadding}>
                     <div className="flex items-center gap-2">
                       <div className="w-5 h-5 rounded-full bg-indigo-50 dark:bg-indigo-900/50 text-indigo-600 dark:text-indigo-300 flex items-center justify-center text-[9px] font-bold shrink-0">
-                            {order.customer.charAt(0)}
+                        {order.customer.charAt(0)}
                       </div>
                       <div className="min-w-0">
-                         <span className="text-slate-900 dark:text-slate-200 font-semibold block truncate max-w-[110px] sm:max-w-xs">{order.customer}</span>
-                         <span className="text-[9px] text-slate-400 sm:hidden block mt-0.5">{order.date}</span>
+                        <span className="text-slate-900 dark:text-slate-200 font-semibold block truncate max-w-[110px] sm:max-w-xs">{order.customer}</span>
+                        <span className="text-[9px] text-slate-400 sm:hidden block mt-0.5">{order.date}</span>
                       </div>
                     </div>
                   </td>
@@ -139,92 +164,96 @@ const Orders: React.FC = () => {
         </div>
       </div>
 
-       {/* Order Detail Drawer */}
-       <Drawer
+      {/* Order Detail Drawer */}
+      <Drawer
         isOpen={!!selectedOrder}
         onClose={() => setSelectedOrder(null)}
         title={`${selectedOrder?.id}`}
       >
         {selectedOrder && (
-            <div className="space-y-4">
-                <div className="flex items-center justify-between p-2.5 bg-slate-50 dark:bg-slate-800 rounded-lg border border-slate-100 dark:border-slate-700">
-                    <div>
-                        <p className="text-[10px] text-slate-500 dark:text-slate-400 uppercase tracking-wider font-bold">Trạng thái</p>
-                        <span className={`inline-block mt-0.5 px-1.5 py-0.5 rounded text-[10px] font-bold ${getStatusStyle(selectedOrder.status)}`}>
-                            {selectedOrder.status}
-                        </span>
+          <div className="space-y-4">
+            <div className="flex items-center justify-between p-2.5 bg-slate-50 dark:bg-slate-800 rounded-lg border border-slate-100 dark:border-slate-700">
+              <div>
+                <p className="text-[10px] text-slate-500 dark:text-slate-400 uppercase tracking-wider font-bold">Trạng thái</p>
+                <span className={`inline-block mt-0.5 px-1.5 py-0.5 rounded text-[10px] font-bold ${getStatusStyle(selectedOrder.status)}`}>
+                  {selectedOrder.status}
+                </span>
+              </div>
+              <div className="text-right">
+                <p className="text-[10px] text-slate-500 dark:text-slate-400 uppercase tracking-wider font-bold">Tổng tiền</p>
+                <p className="text-base font-bold text-indigo-600 dark:text-indigo-400">{formatCurrency(selectedOrder.total)}</p>
+              </div>
+            </div>
+
+            <div className="space-y-1.5">
+              <h4 className="text-xs font-bold text-slate-900 dark:text-white uppercase tracking-wide">Thông tin khách hàng</h4>
+              <div className="bg-white dark:bg-slate-900 p-2.5 rounded-lg border border-slate-100 dark:border-slate-800 space-y-1.5">
+                <div className="flex justify-between text-xs">
+                  <span className="text-slate-500 dark:text-slate-400 font-medium">Tên:</span>
+                  <span className="font-bold text-slate-900 dark:text-slate-200">
+                    {orderDetail?.customerName ?? selectedOrder.customer}
+                  </span>
+                </div>
+                <div className="flex justify-between text-xs">
+                  <span className="text-slate-500 dark:text-slate-400 font-medium">Ngày đặt:</span>
+                  <span className="font-semibold text-slate-700 dark:text-slate-300 tabular-nums">
+                    {orderDetail?.orderDate ?? selectedOrder.date}
+                  </span>
+                </div>
+                {orderDetail?.customerPhone && (
+                  <div className="flex justify-between text-xs">
+                    <span className="text-slate-500 dark:text-slate-400 font-medium">SĐT:</span>
+                    <span className="font-semibold text-slate-700 dark:text-slate-300 tabular-nums">{orderDetail.customerPhone}</span>
+                  </div>
+                )}
+              </div>
+            </div>
+
+            <div className="space-y-2">
+              <h4 className="text-xs font-bold text-slate-900 dark:text-white uppercase tracking-wide">
+                Danh sách sản phẩm ({orderDetail?.items.length ?? selectedOrder.items})
+              </h4>
+              <div className="space-y-2">
+                {loadingDetail && (
+                  <div className="flex items-center justify-center py-4 text-slate-400">
+                    <Loader2 className="w-5 h-5 animate-spin" />
+                  </div>
+                )}
+                {!loadingDetail && orderDetail?.items.map((item) => (
+                  <div key={item.id} className="flex items-center gap-2.5 p-2 hover:bg-slate-50 dark:hover:bg-slate-800 rounded-lg transition-colors border border-transparent hover:border-slate-100 dark:hover:border-slate-700">
+                    <div className="w-9 h-9 bg-slate-100 dark:bg-slate-800 rounded-md flex-shrink-0 border border-slate-200 dark:border-slate-700 flex items-center justify-center text-[10px] font-bold text-slate-400">
+                      {item.quantity}
+                    </div>
+                    <div className="flex-1 min-w-0">
+                      <p className="text-xs font-bold text-slate-900 dark:text-slate-200 truncate">{item.name}</p>
+                      <p className="text-[10px] text-slate-500 dark:text-slate-400 font-mono">{item.sku}</p>
                     </div>
                     <div className="text-right">
-                        <p className="text-[10px] text-slate-500 dark:text-slate-400 uppercase tracking-wider font-bold">Tổng tiền</p>
-                        <p className="text-base font-bold text-indigo-600 dark:text-indigo-400">{formatCurrency(selectedOrder.total)}</p>
+                      <p className="text-xs font-bold text-slate-900 dark:text-slate-200 tabular-nums">{formatCurrency(item.total)}</p>
+                      <p className="text-[10px] text-slate-500 tabular-nums">x{item.quantity}</p>
                     </div>
-                </div>
-
-                <div className="space-y-1.5">
-                     <h4 className="text-xs font-bold text-slate-900 dark:text-white uppercase tracking-wide">Thông tin khách hàng</h4>
-                     <div className="bg-white dark:bg-slate-900 p-2.5 rounded-lg border border-slate-100 dark:border-slate-800 space-y-1.5">
-                         <div className="flex justify-between text-xs">
-                             <span className="text-slate-500 dark:text-slate-400 font-medium">Tên:</span>
-                             <span className="font-bold text-slate-900 dark:text-slate-200">
-                               {orderDetail?.customerName ?? selectedOrder.customer}
-                             </span>
-                         </div>
-                         <div className="flex justify-between text-xs">
-                             <span className="text-slate-500 dark:text-slate-400 font-medium">Ngày đặt:</span>
-                             <span className="font-semibold text-slate-700 dark:text-slate-300 tabular-nums">
-                               {orderDetail?.orderDate ?? selectedOrder.date}
-                             </span>
-                         </div>
-                         {orderDetail?.customerPhone && (
-                           <div className="flex justify-between text-xs">
-                               <span className="text-slate-500 dark:text-slate-400 font-medium">SĐT:</span>
-                               <span className="font-semibold text-slate-700 dark:text-slate-300 tabular-nums">{orderDetail.customerPhone}</span>
-                           </div>
-                         )}
-                     </div>
-                </div>
-
-                <div className="space-y-2">
-                     <h4 className="text-xs font-bold text-slate-900 dark:text-white uppercase tracking-wide">
-                       Danh sách sản phẩm ({orderDetail?.items.length ?? selectedOrder.items})
-                     </h4>
-                     <div className="space-y-2">
-                        {loadingDetail && (
-                          <div className="flex items-center justify-center py-4 text-slate-400">
-                            <Loader2 className="w-5 h-5 animate-spin" />
-                          </div>
-                        )}
-                        {!loadingDetail && orderDetail?.items.map((item) => (
-                            <div key={item.id} className="flex items-center gap-2.5 p-2 hover:bg-slate-50 dark:hover:bg-slate-800 rounded-lg transition-colors border border-transparent hover:border-slate-100 dark:hover:border-slate-700">
-                                <div className="w-9 h-9 bg-slate-100 dark:bg-slate-800 rounded-md flex-shrink-0 border border-slate-200 dark:border-slate-700 flex items-center justify-center text-[10px] font-bold text-slate-400">
-                                  {item.quantity}
-                                </div>
-                                <div className="flex-1 min-w-0">
-                                    <p className="text-xs font-bold text-slate-900 dark:text-slate-200 truncate">{item.name}</p>
-                                    <p className="text-[10px] text-slate-500 dark:text-slate-400 font-mono">{item.sku}</p>
-                                </div>
-                                <div className="text-right">
-                                    <p className="text-xs font-bold text-slate-900 dark:text-slate-200 tabular-nums">{formatCurrency(item.total)}</p>
-                                    <p className="text-[10px] text-slate-500 tabular-nums">x{item.quantity}</p>
-                                </div>
-                            </div>
-                        ))}
-                        {!loadingDetail && !orderDetail && selectedOrder.items > 0 && (
-                          <div className="text-[11px] text-slate-500 text-center py-2">Không tải được chi tiết</div>
-                        )}
-                     </div>
-                </div>
-
-                <div className="pt-2 flex gap-2 sticky bottom-0 bg-white dark:bg-slate-900 pb-4 border-t border-slate-100 dark:border-slate-800 mt-auto">
-                     <button className="flex-1 bg-white dark:bg-slate-800 border border-slate-300 dark:border-slate-600 text-slate-700 dark:text-slate-300 hover:bg-slate-50 dark:hover:bg-slate-700 py-2 rounded-lg text-xs font-bold transition-colors flex items-center justify-center gap-2">
-                        <Download className="w-3.5 h-3.5" />
-                        In đơn
-                     </button>
-                     <button className="flex-1 bg-indigo-600 hover:bg-indigo-700 text-white py-2 rounded-lg text-xs font-bold transition-colors">
-                        Xử lý đơn
-                     </button>
-                </div>
+                  </div>
+                ))}
+                {!loadingDetail && !orderDetail && selectedOrder.items > 0 && (
+                  <div className="text-[11px] text-slate-500 text-center py-2">Không tải được chi tiết</div>
+                )}
+              </div>
             </div>
+
+            <div className="pt-2 flex gap-2 sticky bottom-0 bg-white dark:bg-slate-900 pb-4 border-t border-slate-100 dark:border-slate-800 mt-auto">
+              <button className="flex-1 bg-white dark:bg-slate-800 border border-slate-300 dark:border-slate-600 text-slate-700 dark:text-slate-300 hover:bg-slate-50 dark:hover:bg-slate-700 py-2 rounded-lg text-xs font-bold transition-colors flex items-center justify-center gap-2">
+                <Download className="w-3.5 h-3.5" />
+                In đơn
+              </button>
+              <button
+                onClick={handleProcessOrder}
+                disabled={!!processingId}
+                className="flex-1 bg-indigo-600 hover:bg-indigo-700 text-white py-2 rounded-lg text-xs font-bold transition-colors disabled:opacity-50"
+              >
+                {processingId ? 'Đang xử lý...' : 'Xử lý đơn'}
+              </button>
+            </div>
+          </div>
         )}
       </Drawer>
     </div>

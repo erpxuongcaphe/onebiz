@@ -36,30 +36,51 @@ const KPI: React.FC<KPIProps> = ({ title, value, change, trend, icon: Icon }) =>
   );
 };
 
-const FALLBACK_ROWS: ReportRow[] = [
-  { id: 'RPT-2024-12', name: 'Báo cáo tháng 12', type: 'Doanh thu', total: 285000000, trend: 'up', change: '+8.2%' },
-  { id: 'RPT-2024-11', name: 'Báo cáo tháng 11', type: 'Công nợ', total: 98000000, trend: 'down', change: '-3.4%' },
-  { id: 'RPT-2024-10', name: 'Báo cáo tháng 10', type: 'Chi phí', total: 124000000, trend: 'up', change: '+2.1%' },
-  { id: 'RPT-2024-09', name: 'Báo cáo tháng 9', type: 'Tồn kho', total: 410000000, trend: 'down', change: '-1.8%' },
-];
+
 
 const Reports: React.FC = () => {
   const [rows, setRows] = useState<ReportRow[] | null>(null);
   const [kpis, setKpis] = useState<{ revenue: number; profit: number; debt: number; expense: number; changeRevenue: string; changeExpense: string } | null>(null);
 
+  const [timePreset, setTimePreset] = useState<'this_month' | 'last_month' | 'range'>('this_month');
+  const [fromDate, setFromDate] = useState('');
+  const [toDate, setToDate] = useState('');
+
   useEffect(() => {
+    const now = new Date();
+    const yyyy = now.getFullYear();
+    const mm = now.getMonth();
+
+    const toIso = (d: Date) => `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`;
+
+    if (timePreset === 'this_month') {
+      const start = new Date(yyyy, mm, 1);
+      const end = new Date(yyyy, mm + 1, 0);
+      setFromDate(toIso(start));
+      setToDate(toIso(end));
+    } else if (timePreset === 'last_month') {
+      const start = new Date(yyyy, mm - 1, 1);
+      const end = new Date(yyyy, mm, 0);
+      setFromDate(toIso(start));
+      setToDate(toIso(end));
+    }
+  }, [timePreset]);
+
+  useEffect(() => {
+    if (!fromDate || !toDate) return;
     let isMounted = true;
-    fetchReportsOverview().then((res) => {
+    setRows(null); // Show loading
+    fetchReportsOverview(fromDate, toDate).then((res) => {
       if (!isMounted) return;
       if (!res) {
-        setRows(FALLBACK_ROWS);
+        setRows([]);
         setKpis({
-          revenue: 285000000,
-          profit: 72000000,
-          debt: 98000000,
-          expense: 124000000,
-          changeRevenue: '+8.2%',
-          changeExpense: '+2.1%',
+          revenue: 0,
+          profit: 0,
+          debt: 0,
+          expense: 0,
+          changeRevenue: '0%',
+          changeExpense: '0%',
         });
         return;
       }
@@ -69,12 +90,12 @@ const Reports: React.FC = () => {
     return () => {
       isMounted = false;
     };
-  }, []);
+  }, [fromDate, toDate]);
 
-  const revenueKpi = kpis?.revenue ?? 285000000;
-  const profitKpi = kpis?.profit ?? 72000000;
-  const debtKpi = kpis?.debt ?? 98000000;
-  const expenseKpi = kpis?.expense ?? 124000000;
+  const revenueKpi = kpis?.revenue ?? 0;
+  const profitKpi = kpis?.profit ?? 0;
+  const debtKpi = kpis?.debt ?? 0;
+  const expenseKpi = kpis?.expense ?? 0;
 
   return (
     <div className="space-y-3 lg:space-y-5 animate-fade-in pb-10">
@@ -83,22 +104,38 @@ const Reports: React.FC = () => {
           <h1 className="text-lg lg:text-xl font-bold text-slate-900 dark:text-white">Báo cáo</h1>
           <p className="text-slate-500 dark:text-slate-400 text-[11px] mt-0.5">Tổng hợp hiệu quả kinh doanh theo kỳ.</p>
         </div>
-        <div className="flex gap-2 w-full sm:w-auto">
-          <button className="flex items-center gap-2 px-3 py-1.5 border border-slate-200 dark:border-slate-700 rounded-lg text-[11px] font-semibold text-slate-600 dark:text-slate-300 bg-white dark:bg-slate-900">
-            <Calendar className="w-3.5 h-3.5" />
-            Tháng này
-          </button>
-          <button className="flex items-center gap-2 px-3 py-1.5 border border-slate-200 dark:border-slate-700 rounded-lg text-[11px] font-semibold text-slate-600 dark:text-slate-300 bg-white dark:bg-slate-900">
-            <Filter className="w-3.5 h-3.5" />
-            Bộ lọc
-          </button>
-          <button className="flex items-center gap-2 px-3 py-1.5 rounded-lg text-[11px] font-semibold bg-indigo-600 hover:bg-indigo-700 text-white shadow-sm">
+        <div className="flex gap-2 w-full sm:w-auto overflow-x-auto no-scrollbar">
+          <select
+            value={timePreset}
+            onChange={(e) => setTimePreset(e.target.value as any)}
+            className="px-3 py-1.5 border border-slate-200 dark:border-slate-700 rounded-lg text-[11px] font-semibold text-slate-600 dark:text-slate-300 bg-white dark:bg-slate-900 focus:outline-none"
+          >
+            <option value="this_month">Tháng này</option>
+            <option value="last_month">Tháng trước</option>
+            <option value="range">Tùy chọn</option>
+          </select>
+          {timePreset === 'range' && (
+            <>
+              <input
+                type="date"
+                value={fromDate}
+                onChange={(e) => setFromDate(e.target.value)}
+                className="px-2 py-1.5 bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-700 rounded-lg text-xs text-slate-700 dark:text-slate-200"
+              />
+              <input
+                type="date"
+                value={toDate}
+                onChange={(e) => setToDate(e.target.value)}
+                className="px-2 py-1.5 bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-700 rounded-lg text-xs text-slate-700 dark:text-slate-200"
+              />
+            </>
+          )}
+          <button className="flex items-center gap-2 px-3 py-1.5 rounded-lg text-[11px] font-semibold bg-indigo-600 hover:bg-indigo-700 text-white shadow-sm shrink-0">
             <Download className="w-3.5 h-3.5" />
             Xuất báo cáo
           </button>
         </div>
       </div>
-
       <div className="grid grid-cols-2 lg:grid-cols-4 gap-2">
         <KPI title="Doanh thu" value={formatCurrency(revenueKpi)} change={kpis?.changeRevenue ?? '+0%'} trend={(kpis?.revenue ?? 0) >= 0 ? 'up' : 'down'} icon={TrendingUp} />
         <KPI title="Lợi nhuận (ước tính)" value={formatCurrency(profitKpi)} change="+0%" trend="up" icon={BarChart3} />

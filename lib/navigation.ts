@@ -8,19 +8,20 @@ export type NavItem = {
   id: Tab;
   label: string;
   icon: LucideIcon;
+  path: string;
 };
 
 const MAIN_DESKTOP: NavItem[] = [
-  { id: Tab.DASHBOARD, label: 'Tổng quan', icon: LayoutDashboard },
-  { id: Tab.INVENTORY, label: 'Kho hàng', icon: Package },
-  { id: Tab.ORDERS, label: 'Đơn hàng', icon: ShoppingCart },
-  { id: Tab.REPORTS, label: 'Báo cáo', icon: BarChart2 },
-  { id: Tab.FINANCE, label: 'Tài chính', icon: Wallet },
-  { id: Tab.CUSTOMERS, label: 'Khách hàng', icon: Users },
+  { id: Tab.DASHBOARD, label: 'Tổng quan', icon: LayoutDashboard, path: '/dashboard' },
+  { id: Tab.INVENTORY, label: 'Kho hàng', icon: Package, path: '/inventory' },
+  { id: Tab.ORDERS, label: 'Đơn hàng', icon: ShoppingCart, path: '/orders' },
+  { id: Tab.REPORTS, label: 'Báo cáo', icon: BarChart2, path: '/reports' },
+  { id: Tab.FINANCE, label: 'Tài chính', icon: Wallet, path: '/finance' },
+  { id: Tab.CUSTOMERS, label: 'Khách hàng', icon: Users, path: '/customers' },
 ];
 
 const POS_DESKTOP: NavItem[] = [
-  { id: Tab.POS, label: 'POS', icon: Store },
+  { id: Tab.POS, label: 'POS', icon: Store, path: '/pos' },
 ];
 
 export function getDesktopNavItems(): NavItem[] {
@@ -28,14 +29,14 @@ export function getDesktopNavItems(): NavItem[] {
 }
 
 const MAIN_MOBILE: NavItem[] = [
-  { id: Tab.DASHBOARD, label: 'Tổng quan', icon: LayoutDashboard },
-  { id: Tab.INVENTORY, label: 'Kho hàng', icon: Package },
-  { id: Tab.ORDERS, label: 'Đơn hàng', icon: ShoppingCart },
-  { id: Tab.REPORTS, label: 'Báo cáo', icon: BarChart2 },
+  { id: Tab.DASHBOARD, label: 'Tổng quan', icon: LayoutDashboard, path: '/dashboard' },
+  { id: Tab.INVENTORY, label: 'Kho hàng', icon: Package, path: '/inventory' },
+  { id: Tab.ORDERS, label: 'Đơn hàng', icon: ShoppingCart, path: '/orders' },
+  { id: Tab.REPORTS, label: 'Báo cáo', icon: BarChart2, path: '/reports' },
 ];
 
 const POS_MOBILE: NavItem[] = [
-  { id: Tab.POS, label: 'POS', icon: Store },
+  { id: Tab.POS, label: 'POS', icon: Store, path: '/pos' },
 ];
 
 export function getMobileNavItems(): NavItem[] {

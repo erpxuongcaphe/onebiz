@@ -24,6 +24,7 @@ type SaleMode = 'pos' | 'order' | 'pick';
 const POS: React.FC = () => {
   const { can } = useAuth();
   const [search, setSearch] = useState('');
+  const [debouncedSearch, setDebouncedSearch] = useState('');
   const [category, setCategory] = useState('');
   const [timePreset, setTimePreset] = useState<TimePreset>('today');
   const [fromDate, setFromDate] = useState('');
@@ -81,6 +82,14 @@ const POS: React.FC = () => {
       setToDate(`${yyyy}-${mm}-${dd}`);
     }
   }, [timePreset]);
+
+  // Debounce search
+  useEffect(() => {
+    const timer = setTimeout(() => {
+      setDebouncedSearch(search);
+    }, 500);
+    return () => clearTimeout(timer);
+  }, [search]);
 
   useEffect(() => {
     let isMounted = true;
@@ -223,7 +232,7 @@ const POS: React.FC = () => {
       return;
     }
     setCatalog(null);
-    fetchCatalogForWarehouse({ warehouseId, search, category })
+    fetchCatalogForWarehouse({ warehouseId, search: debouncedSearch, category })
       .then((data) => {
         if (!isMounted) return;
         setCatalog(data);
@@ -231,7 +240,7 @@ const POS: React.FC = () => {
     return () => {
       isMounted = false;
     };
-  }, [warehouseId, search, category]);
+  }, [warehouseId, debouncedSearch, category]);
 
   const categories = useMemo(() => {
     const set = new Set<string>();
@@ -347,11 +356,10 @@ const POS: React.FC = () => {
           <button
             key={m.key}
             onClick={() => setSaleMode(m.key)}
-            className={`px-3 py-1.5 rounded-lg text-[11px] font-bold border transition-colors ${
-              saleMode === m.key
-                ? 'bg-indigo-600 border-indigo-600 text-white'
-                : 'bg-white dark:bg-slate-900 border-slate-200 dark:border-slate-800 text-slate-600 dark:text-slate-300 hover:bg-slate-50 dark:hover:bg-slate-800'
-            }`}
+            className={`px-3 py-1.5 rounded-lg text-[11px] font-bold border transition-colors ${saleMode === m.key
+              ? 'bg-indigo-600 border-indigo-600 text-white'
+              : 'bg-white dark:bg-slate-900 border-slate-200 dark:border-slate-800 text-slate-600 dark:text-slate-300 hover:bg-slate-50 dark:hover:bg-slate-800'
+              }`}
           >
             {m.label}
           </button>
@@ -359,290 +367,290 @@ const POS: React.FC = () => {
       </div>
 
       {saleMode !== 'pick' && (
-      <div className="grid grid-cols-1 lg:grid-cols-3 gap-3">
-        {/* Catalog */}
-        <div className="lg:col-span-2 bg-white dark:bg-slate-900 rounded-xl shadow-soft border border-slate-200 dark:border-slate-800 overflow-hidden">
-          <div className="p-2 border-b border-slate-100 dark:border-slate-800 flex flex-col sm:flex-row gap-2 justify-between">
-            <div className="relative w-full sm:w-72">
-              <Search className="absolute left-2.5 top-1/2 -translate-y-1/2 w-3.5 h-3.5 text-slate-400" />
-              <input
-                value={search}
-                onChange={(e) => setSearch(e.target.value)}
-                className="w-full pl-8 pr-3 py-1.5 bg-slate-50 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-lg text-xs focus:outline-none focus:ring-2 focus:ring-indigo-500 dark:text-white transition-all placeholder:text-slate-400"
-                placeholder="Tìm SKU, tên sản phẩm..."
-              />
-            </div>
-            <div className="flex gap-2 w-full sm:w-auto overflow-x-auto no-scrollbar">
-              <select
-                value={timePreset}
-                onChange={(e) => setTimePreset(e.target.value as TimePreset)}
-                className="whitespace-nowrap px-3 py-1.5 border border-slate-200 dark:border-slate-700 rounded-lg text-[11px] font-semibold text-slate-600 dark:text-slate-300 bg-white dark:bg-slate-900"
-              >
-                <option value="today">Hôm nay</option>
-                <option value="month">Tháng này</option>
-                <option value="year">Năm nay</option>
-                <option value="range">Khoảng</option>
-                <option value="all">Tất cả</option>
-              </select>
-              {timePreset === 'range' && (
-                <>
-                  <input
-                    type="date"
-                    value={fromDate}
-                    onChange={(e) => setFromDate(e.target.value)}
-                    className="px-2 py-1.5 bg-slate-50 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-lg text-xs text-slate-700 dark:text-slate-200"
-                  />
-                  <input
-                    type="date"
-                    value={toDate}
-                    onChange={(e) => setToDate(e.target.value)}
-                    className="px-2 py-1.5 bg-slate-50 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-lg text-xs text-slate-700 dark:text-slate-200"
-                  />
-                </>
-              )}
-              <select
-                value={category}
-                onChange={(e) => setCategory(e.target.value)}
-                className="whitespace-nowrap px-3 py-1.5 border border-slate-200 dark:border-slate-700 rounded-lg text-[11px] font-semibold text-slate-600 dark:text-slate-300 bg-white dark:bg-slate-900"
-              >
-                <option value="">Tất cả danh mục</option>
-                {categories.map((c) => (
-                  <option key={c} value={c}>
-                    {c}
-                  </option>
-                ))}
-              </select>
-            </div>
-          </div>
-
-          <div className="p-2 grid grid-cols-2 sm:grid-cols-3 xl:grid-cols-4 gap-2">
-            {catalog === null && (
-              <div className="col-span-2 sm:col-span-3 xl:col-span-4 text-[11px] text-slate-500 dark:text-slate-400 flex items-center gap-2">
-                <Loader2 className="w-4 h-4 animate-spin" />
-                Đang tải sản phẩm...
+        <div className="grid grid-cols-1 lg:grid-cols-3 gap-3">
+          {/* Catalog */}
+          <div className="lg:col-span-2 bg-white dark:bg-slate-900 rounded-xl shadow-soft border border-slate-200 dark:border-slate-800 overflow-hidden">
+            <div className="p-2 border-b border-slate-100 dark:border-slate-800 flex flex-col sm:flex-row gap-2 justify-between">
+              <div className="relative w-full sm:w-72">
+                <Search className="absolute left-2.5 top-1/2 -translate-y-1/2 w-3.5 h-3.5 text-slate-400" />
+                <input
+                  value={search}
+                  onChange={(e) => setSearch(e.target.value)}
+                  className="w-full pl-8 pr-3 py-1.5 bg-slate-50 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-lg text-xs focus:outline-none focus:ring-2 focus:ring-indigo-500 dark:text-white transition-all placeholder:text-slate-400"
+                  placeholder="Tìm SKU, tên sản phẩm..."
+                />
               </div>
-            )}
-            {(catalog ?? []).map((i) => (
-              <button
-                key={i.product_id}
-                onClick={() => addToCart(i)}
-                className="text-left p-2 rounded-lg border border-slate-200 dark:border-slate-800 hover:bg-slate-50 dark:hover:bg-slate-800/40 transition-colors"
-              >
-                <div className="text-[10px] text-slate-500 dark:text-slate-400 font-mono">{i.sku}</div>
-                <div className="text-[11px] font-bold text-slate-900 dark:text-slate-200 mt-0.5 line-clamp-2">{i.name}</div>
-                <div className="mt-1 text-[11px] font-bold text-indigo-600 dark:text-indigo-400 tabular-nums">{formatCurrency(i.price)}</div>
-                <div className="mt-1 text-[10px] text-slate-500 dark:text-slate-400">{i.category} • SL: {i.stock}</div>
-              </button>
-            ))}
-          </div>
-        </div>
-
-        {/* Cart */}
-        <div className="bg-white dark:bg-slate-900 rounded-xl shadow-soft border border-slate-200 dark:border-slate-800 overflow-hidden flex flex-col">
-          <div className="p-2 border-b border-slate-100 dark:border-slate-800 flex items-center justify-between">
-            <div className="flex items-center gap-2">
-              <ShoppingCart className="w-4 h-4 text-slate-400" />
-              <div className="text-[11px] font-bold text-slate-900 dark:text-white">Giỏ hàng</div>
-            </div>
-            <button
-              onClick={() => setCart([])}
-              className="p-1.5 rounded-lg text-rose-600 hover:bg-rose-50 dark:text-rose-400 dark:hover:bg-rose-900/20"
-              title="Xóa giỏ"
-            >
-              <Trash2 className="w-4 h-4" />
-            </button>
-          </div>
-
-          <div className="p-2 space-y-2 flex-1 overflow-y-auto custom-scrollbar">
-            <div className="border border-slate-200 dark:border-slate-800 rounded-lg p-2">
-              <div className="text-[10px] font-semibold text-slate-500 dark:text-slate-400">Khách hàng</div>
-              <div className="mt-1 grid grid-cols-1 gap-2">
+              <div className="flex gap-2 w-full sm:w-auto overflow-x-auto no-scrollbar">
                 <select
-                  value={selectedCustomerId}
-                  onChange={(e) => setSelectedCustomerId(e.target.value)}
-                  className="w-full px-2.5 py-2 rounded-lg bg-slate-50 dark:bg-slate-900 border border-slate-200 dark:border-slate-800 text-[11px]"
+                  value={timePreset}
+                  onChange={(e) => setTimePreset(e.target.value as TimePreset)}
+                  className="whitespace-nowrap px-3 py-1.5 border border-slate-200 dark:border-slate-700 rounded-lg text-[11px] font-semibold text-slate-600 dark:text-slate-300 bg-white dark:bg-slate-900"
                 >
-                  {customers.map((c) => (
-                    <option key={c.id} value={c.id}>
-                      {c.name} ({c.code})
+                  <option value="today">Hôm nay</option>
+                  <option value="month">Tháng này</option>
+                  <option value="year">Năm nay</option>
+                  <option value="range">Khoảng</option>
+                  <option value="all">Tất cả</option>
+                </select>
+                {timePreset === 'range' && (
+                  <>
+                    <input
+                      type="date"
+                      value={fromDate}
+                      onChange={(e) => setFromDate(e.target.value)}
+                      className="px-2 py-1.5 bg-slate-50 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-lg text-xs text-slate-700 dark:text-slate-200"
+                    />
+                    <input
+                      type="date"
+                      value={toDate}
+                      onChange={(e) => setToDate(e.target.value)}
+                      className="px-2 py-1.5 bg-slate-50 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-lg text-xs text-slate-700 dark:text-slate-200"
+                    />
+                  </>
+                )}
+                <select
+                  value={category}
+                  onChange={(e) => setCategory(e.target.value)}
+                  className="whitespace-nowrap px-3 py-1.5 border border-slate-200 dark:border-slate-700 rounded-lg text-[11px] font-semibold text-slate-600 dark:text-slate-300 bg-white dark:bg-slate-900"
+                >
+                  <option value="">Tất cả danh mục</option>
+                  {categories.map((c) => (
+                    <option key={c} value={c}>
+                      {c}
                     </option>
                   ))}
                 </select>
-                <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
-                  <input
-                    value={quickCustomerName}
-                    onChange={(e) => setQuickCustomerName(e.target.value)}
-                    placeholder="Tạo nhanh tên khách"
-                    className="w-full px-2.5 py-2 rounded-lg bg-slate-50 dark:bg-slate-900 border border-slate-200 dark:border-slate-800 text-[11px]"
-                  />
-                  <input
-                    value={quickCustomerPhone}
-                    onChange={(e) => setQuickCustomerPhone(e.target.value)}
-                    placeholder="SĐT (không bắt buộc)"
-                    className="w-full px-2.5 py-2 rounded-lg bg-slate-50 dark:bg-slate-900 border border-slate-200 dark:border-slate-800 text-[11px]"
-                  />
-                </div>
-                <button
-                  disabled={savingCustomer || quickCustomerName.trim().length === 0}
-                  onClick={async () => {
-                    setSavingCustomer(true);
-                    try {
-                      const created = await createCustomer({
-                        name: quickCustomerName.trim(),
-                        phone: quickCustomerPhone.trim() || undefined,
-                      });
-                      if (!created) {
-                        setError('Không tạo được khách hàng.');
-                        return;
-                      }
-                      setCustomers((prev) => [created, ...prev]);
-                      setSelectedCustomerId(created.id);
-                      setQuickCustomerName('');
-                      setQuickCustomerPhone('');
-                    } finally {
-                      setSavingCustomer(false);
-                    }
-                  }}
-                  className="px-3 py-2 rounded-lg bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 text-[11px] font-bold"
-                >
-                  {savingCustomer ? 'Đang tạo...' : 'Tạo nhanh khách'}
-                </button>
               </div>
             </div>
-            {cart.length === 0 && (
-              <div className="text-[11px] text-slate-500 dark:text-slate-400">Chưa có sản phẩm. Click bên trái để thêm.</div>
-            )}
-            {cart.map((l) => (
-              <div key={l.item.product_id} className="p-2 rounded-lg border border-slate-200 dark:border-slate-800">
-                <div className="flex items-start justify-between gap-2">
-                  <div className="min-w-0">
-                    <div className="text-[11px] font-bold text-slate-900 dark:text-slate-200 truncate">{l.item.name}</div>
-                    <div className="text-[10px] text-slate-500 dark:text-slate-400 font-mono">{l.item.sku}</div>
-                  </div>
-                  <div className="text-[11px] font-bold text-slate-900 dark:text-slate-200 tabular-nums whitespace-nowrap">
-                    {formatCurrency(l.item.price * l.qty)}
-                  </div>
+
+            <div className="p-2 grid grid-cols-2 sm:grid-cols-3 xl:grid-cols-4 gap-2">
+              {catalog === null && (
+                <div className="col-span-2 sm:col-span-3 xl:col-span-4 text-[11px] text-slate-500 dark:text-slate-400 flex items-center gap-2">
+                  <Loader2 className="w-4 h-4 animate-spin" />
+                  Đang tải sản phẩm...
                 </div>
-                <div className="mt-2 flex items-center justify-between">
-                  <div className="text-[10px] text-slate-500 dark:text-slate-400 tabular-nums">{formatCurrency(l.item.price)} / sp</div>
-                  <div className="flex items-center gap-1">
-                    <button
-                      onClick={() => setQty(l.item.product_id, l.qty - 1)}
-                      className="w-8 h-8 rounded-lg border border-slate-200 dark:border-slate-800 hover:bg-slate-50 dark:hover:bg-slate-800/40 flex items-center justify-center"
-                    >
-                      <Minus className="w-4 h-4" />
-                    </button>
-                    <div className="w-10 text-center text-[11px] font-bold tabular-nums">{l.qty}</div>
-                    <button
-                      onClick={() => setQty(l.item.product_id, l.qty + 1)}
-                      className="w-8 h-8 rounded-lg border border-slate-200 dark:border-slate-800 hover:bg-slate-50 dark:hover:bg-slate-800/40 flex items-center justify-center"
-                    >
-                      <Plus className="w-4 h-4" />
-                    </button>
-                  </div>
-                </div>
-              </div>
-            ))}
+              )}
+              {(catalog ?? []).map((i) => (
+                <button
+                  key={i.product_id}
+                  onClick={() => addToCart(i)}
+                  className="text-left p-2 rounded-lg border border-slate-200 dark:border-slate-800 hover:bg-slate-50 dark:hover:bg-slate-800/40 transition-colors"
+                >
+                  <div className="text-[10px] text-slate-500 dark:text-slate-400 font-mono">{i.sku}</div>
+                  <div className="text-[11px] font-bold text-slate-900 dark:text-slate-200 mt-0.5 line-clamp-2">{i.name}</div>
+                  <div className="mt-1 text-[11px] font-bold text-indigo-600 dark:text-indigo-400 tabular-nums">{formatCurrency(i.price)}</div>
+                  <div className="mt-1 text-[10px] text-slate-500 dark:text-slate-400">{i.category} • SL: {i.stock}</div>
+                </button>
+              ))}
+            </div>
           </div>
 
-          <div className="p-2 border-t border-slate-100 dark:border-slate-800">
-            <div className="flex items-center justify-between">
-              <div className="text-[11px] text-slate-500 dark:text-slate-400">Tổng</div>
-              <div className="text-sm font-bold text-indigo-600 dark:text-indigo-400 tabular-nums">{formatCurrency(total)}</div>
+          {/* Cart */}
+          <div className="bg-white dark:bg-slate-900 rounded-xl shadow-soft border border-slate-200 dark:border-slate-800 overflow-hidden flex flex-col">
+            <div className="p-2 border-b border-slate-100 dark:border-slate-800 flex items-center justify-between">
+              <div className="flex items-center gap-2">
+                <ShoppingCart className="w-4 h-4 text-slate-400" />
+                <div className="text-[11px] font-bold text-slate-900 dark:text-white">Giỏ hàng</div>
+              </div>
+              <button
+                onClick={() => setCart([])}
+                className="p-1.5 rounded-lg text-rose-600 hover:bg-rose-50 dark:text-rose-400 dark:hover:bg-rose-900/20"
+                title="Xóa giỏ"
+              >
+                <Trash2 className="w-4 h-4" />
+              </button>
             </div>
-            <div className="mt-2 flex gap-2">
-              {saleMode === 'pos' && (
-                <select
-                  value={paymentMethod}
-                  onChange={(e) => setPaymentMethod(e.target.value as any)}
-                  className="flex-1 px-3 py-2 rounded-lg bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 text-xs"
-                >
-                  <option value="cash">Tiền mặt</option>
-                  <option value="bank_transfer">Chuyển khoản</option>
-                  <option value="card">Thẻ</option>
-                  <option value="momo">MoMo</option>
-                  <option value="zalopay">ZaloPay</option>
-                  <option value="other">Khác</option>
-                </select>
+
+            <div className="p-2 space-y-2 flex-1 overflow-y-auto custom-scrollbar">
+              <div className="border border-slate-200 dark:border-slate-800 rounded-lg p-2">
+                <div className="text-[10px] font-semibold text-slate-500 dark:text-slate-400">Khách hàng</div>
+                <div className="mt-1 grid grid-cols-1 gap-2">
+                  <select
+                    value={selectedCustomerId}
+                    onChange={(e) => setSelectedCustomerId(e.target.value)}
+                    className="w-full px-2.5 py-2 rounded-lg bg-slate-50 dark:bg-slate-900 border border-slate-200 dark:border-slate-800 text-[11px]"
+                  >
+                    {customers.map((c) => (
+                      <option key={c.id} value={c.id}>
+                        {c.name} ({c.code})
+                      </option>
+                    ))}
+                  </select>
+                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
+                    <input
+                      value={quickCustomerName}
+                      onChange={(e) => setQuickCustomerName(e.target.value)}
+                      placeholder="Tạo nhanh tên khách"
+                      className="w-full px-2.5 py-2 rounded-lg bg-slate-50 dark:bg-slate-900 border border-slate-200 dark:border-slate-800 text-[11px]"
+                    />
+                    <input
+                      value={quickCustomerPhone}
+                      onChange={(e) => setQuickCustomerPhone(e.target.value)}
+                      placeholder="SĐT (không bắt buộc)"
+                      className="w-full px-2.5 py-2 rounded-lg bg-slate-50 dark:bg-slate-900 border border-slate-200 dark:border-slate-800 text-[11px]"
+                    />
+                  </div>
+                  <button
+                    disabled={savingCustomer || quickCustomerName.trim().length === 0}
+                    onClick={async () => {
+                      setSavingCustomer(true);
+                      try {
+                        const created = await createCustomer({
+                          name: quickCustomerName.trim(),
+                          phone: quickCustomerPhone.trim() || undefined,
+                        });
+                        if (!created) {
+                          setError('Không tạo được khách hàng.');
+                          return;
+                        }
+                        setCustomers((prev) => [created, ...prev]);
+                        setSelectedCustomerId(created.id);
+                        setQuickCustomerName('');
+                        setQuickCustomerPhone('');
+                      } finally {
+                        setSavingCustomer(false);
+                      }
+                    }}
+                    className="px-3 py-2 rounded-lg bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 text-[11px] font-bold"
+                  >
+                    {savingCustomer ? 'Đang tạo...' : 'Tạo nhanh khách'}
+                  </button>
+                </div>
+              </div>
+              {cart.length === 0 && (
+                <div className="text-[11px] text-slate-500 dark:text-slate-400">Chưa có sản phẩm. Click bên trái để thêm.</div>
               )}
-              {saleMode === 'order' && (
-                <input
-                  type="date"
-                  value={dueDate}
-                  onChange={(e) => setDueDate(e.target.value)}
-                  className="flex-1 px-3 py-2 rounded-lg bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 text-xs"
-                />
-              )}
+              {cart.map((l) => (
+                <div key={l.item.product_id} className="p-2 rounded-lg border border-slate-200 dark:border-slate-800">
+                  <div className="flex items-start justify-between gap-2">
+                    <div className="min-w-0">
+                      <div className="text-[11px] font-bold text-slate-900 dark:text-slate-200 truncate">{l.item.name}</div>
+                      <div className="text-[10px] text-slate-500 dark:text-slate-400 font-mono">{l.item.sku}</div>
+                    </div>
+                    <div className="text-[11px] font-bold text-slate-900 dark:text-slate-200 tabular-nums whitespace-nowrap">
+                      {formatCurrency(l.item.price * l.qty)}
+                    </div>
+                  </div>
+                  <div className="mt-2 flex items-center justify-between">
+                    <div className="text-[10px] text-slate-500 dark:text-slate-400 tabular-nums">{formatCurrency(l.item.price)} / sp</div>
+                    <div className="flex items-center gap-1">
+                      <button
+                        onClick={() => setQty(l.item.product_id, l.qty - 1)}
+                        className="w-8 h-8 rounded-lg border border-slate-200 dark:border-slate-800 hover:bg-slate-50 dark:hover:bg-slate-800/40 flex items-center justify-center"
+                      >
+                        <Minus className="w-4 h-4" />
+                      </button>
+                      <div className="w-10 text-center text-[11px] font-bold tabular-nums">{l.qty}</div>
+                      <button
+                        onClick={() => setQty(l.item.product_id, l.qty + 1)}
+                        className="w-8 h-8 rounded-lg border border-slate-200 dark:border-slate-800 hover:bg-slate-50 dark:hover:bg-slate-800/40 flex items-center justify-center"
+                      >
+                        <Plus className="w-4 h-4" />
+                      </button>
+                    </div>
+                  </div>
+                </div>
+              ))}
             </div>
-            <button
-              disabled={cart.length === 0 || busy || !selectedCustomerId || !can('pos.order.create') || (saleMode === 'pos' && (!can('pos.payment.record') || !shiftId))}
-              className="mt-2 w-full bg-indigo-600 hover:bg-indigo-700 disabled:opacity-60 text-white py-2 rounded-lg text-xs font-bold transition-colors"
-              onClick={async () => {
-                setError(null);
-                if (!warehouseId) {
-                  setError('Chưa chọn kho.');
-                  return;
-                }
-                if (!selectedCustomerId) {
-                  setError('Vui lòng chọn khách hàng.');
-                  return;
-                }
-                if (saleMode === 'pos' && !shiftId) {
-                  setError('Chưa mở ca.');
-                  return;
-                }
-                setBusy(true);
-                try {
-                  if (saleMode === 'pos') {
-                    const orderId = await createPosSale({
-                      branchId,
-                      warehouseId,
-                      shiftId: shiftId ?? '',
-                      customerId: selectedCustomerId,
-                      lines: cart.map((l) => ({
-                        product_id: l.item.product_id,
-                        quantity: l.qty,
-                        unit_price: l.item.price,
-                      })),
-                      paymentMethod,
-                      paymentAmount: total,
-                    });
-                    if (!orderId) {
-                      setError('Không thanh toán được (kiểm tra quyền/tồn kho).');
-                      return;
-                    }
-                    setCart([]);
-                    setLastOrderId(orderId);
-                  } else {
-                    const orderId = await createSalesOrder({
-                      branchId,
-                      warehouseId,
-                      customerId: selectedCustomerId,
-                      lines: cart.map((l) => ({
-                        product_id: l.item.product_id,
-                        quantity: l.qty,
-                        unit_price: l.item.price,
-                      })),
-                      dueDate: dueDate || null,
-                    });
-                    if (!orderId) {
-                      setError('Không tạo được đơn đặt hàng.');
-                      return;
-                    }
-                    setCart([]);
-                    setSaleMode('pick');
-                    setDueDate('');
+
+            <div className="p-2 border-t border-slate-100 dark:border-slate-800">
+              <div className="flex items-center justify-between">
+                <div className="text-[11px] text-slate-500 dark:text-slate-400">Tổng</div>
+                <div className="text-sm font-bold text-indigo-600 dark:text-indigo-400 tabular-nums">{formatCurrency(total)}</div>
+              </div>
+              <div className="mt-2 flex gap-2">
+                {saleMode === 'pos' && (
+                  <select
+                    value={paymentMethod}
+                    onChange={(e) => setPaymentMethod(e.target.value as any)}
+                    className="flex-1 px-3 py-2 rounded-lg bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 text-xs"
+                  >
+                    <option value="cash">Tiền mặt</option>
+                    <option value="bank_transfer">Chuyển khoản</option>
+                    <option value="card">Thẻ</option>
+                    <option value="momo">MoMo</option>
+                    <option value="zalopay">ZaloPay</option>
+                    <option value="other">Khác</option>
+                  </select>
+                )}
+                {saleMode === 'order' && (
+                  <input
+                    type="date"
+                    value={dueDate}
+                    onChange={(e) => setDueDate(e.target.value)}
+                    className="flex-1 px-3 py-2 rounded-lg bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 text-xs"
+                  />
+                )}
+              </div>
+              <button
+                disabled={cart.length === 0 || busy || !selectedCustomerId || !can('pos.order.create') || (saleMode === 'pos' && (!can('pos.payment.record') || !shiftId))}
+                className="mt-2 w-full bg-indigo-600 hover:bg-indigo-700 disabled:opacity-60 text-white py-2 rounded-lg text-xs font-bold transition-colors"
+                onClick={async () => {
+                  setError(null);
+                  if (!warehouseId) {
+                    setError('Chưa chọn kho.');
+                    return;
                   }
-                } finally {
-                  setBusy(false);
-                }
-              }}
-            >
-              {busy ? 'Đang xử lý...' : saleMode === 'pos' ? 'Thanh toán' : 'Xác nhận đặt hàng'}
-            </button>
+                  if (!selectedCustomerId) {
+                    setError('Vui lòng chọn khách hàng.');
+                    return;
+                  }
+                  if (saleMode === 'pos' && !shiftId) {
+                    setError('Chưa mở ca.');
+                    return;
+                  }
+                  setBusy(true);
+                  try {
+                    if (saleMode === 'pos') {
+                      const orderId = await createPosSale({
+                        branchId,
+                        warehouseId,
+                        shiftId: shiftId ?? '',
+                        customerId: selectedCustomerId,
+                        lines: cart.map((l) => ({
+                          product_id: l.item.product_id,
+                          quantity: l.qty,
+                          unit_price: l.item.price,
+                        })),
+                        paymentMethod,
+                        paymentAmount: total,
+                      });
+                      if (!orderId) {
+                        setError('Không thanh toán được (kiểm tra quyền/tồn kho).');
+                        return;
+                      }
+                      setCart([]);
+                      setLastOrderId(orderId);
+                    } else {
+                      const orderId = await createSalesOrder({
+                        branchId,
+                        warehouseId,
+                        customerId: selectedCustomerId,
+                        lines: cart.map((l) => ({
+                          product_id: l.item.product_id,
+                          quantity: l.qty,
+                          unit_price: l.item.price,
+                        })),
+                        dueDate: dueDate || null,
+                      });
+                      if (!orderId) {
+                        setError('Không tạo được đơn đặt hàng.');
+                        return;
+                      }
+                      setCart([]);
+                      setSaleMode('pick');
+                      setDueDate('');
+                    }
+                  } finally {
+                    setBusy(false);
+                  }
+                }}
+              >
+                {busy ? 'Đang xử lý...' : saleMode === 'pos' ? 'Thanh toán' : 'Xác nhận đặt hàng'}
+              </button>
+            </div>
           </div>
         </div>
-      </div>
       )}
 
       {saleMode === 'pick' && (

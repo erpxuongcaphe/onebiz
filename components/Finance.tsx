@@ -80,8 +80,13 @@ const Finance: React.FC = () => {
       ]);
       setTxns(overviewRes.txns);
     } else {
-      setCards(FINANCE_CARDS);
-      setTxns(TRANSACTIONS);
+      setCards([
+        { id: 'cash', label: 'Tiền mặt', value: 0, trend: 'up', change: '0%', icon: Wallet },
+        { id: 'bank', label: 'Ngân hàng', value: 0, trend: 'up', change: '0%', icon: CreditCard },
+        { id: 'receivable', label: 'Phải thu', value: 0, trend: 'up', change: '0%', icon: Receipt },
+        { id: 'payable', label: 'Phải trả', value: 0, trend: 'up', change: '0%', icon: Receipt },
+      ]);
+      setTxns([]);
     }
 
     setReceivables(receivablesRes);
@@ -124,8 +129,8 @@ const Finance: React.FC = () => {
     setPaymentAmount(invoice.outstanding.toString());
   };
 
-  const shownCards = cards ?? FINANCE_CARDS;
-  const shownTxns: Array<FinanceTxn | Transaction> = txns ?? TRANSACTIONS;
+  const shownCards = cards ?? [];
+  const shownTxns: Array<FinanceTxn | Transaction> = txns ?? [];
 
   // Group invoices by customer for expanded view
   const invoicesByCustomer = unpaidInvoices.reduce((acc, inv) => {
@@ -267,21 +272,19 @@ const Finance: React.FC = () => {
       <div className="flex gap-1 bg-slate-100 dark:bg-slate-800 p-1 rounded-lg w-fit">
         <button
           onClick={() => setActiveTab('overview')}
-          className={`px-3 py-1.5 text-[11px] font-semibold rounded-md transition-colors ${
-            activeTab === 'overview'
-              ? 'bg-white dark:bg-slate-900 text-slate-900 dark:text-white shadow-sm'
-              : 'text-slate-600 dark:text-slate-400 hover:text-slate-900 dark:hover:text-white'
-          }`}
+          className={`px-3 py-1.5 text-[11px] font-semibold rounded-md transition-colors ${activeTab === 'overview'
+            ? 'bg-white dark:bg-slate-900 text-slate-900 dark:text-white shadow-sm'
+            : 'text-slate-600 dark:text-slate-400 hover:text-slate-900 dark:hover:text-white'
+            }`}
         >
           Tổng quan
         </button>
         <button
           onClick={() => setActiveTab('receivable')}
-          className={`px-3 py-1.5 text-[11px] font-semibold rounded-md transition-colors flex items-center gap-1.5 ${
-            activeTab === 'receivable'
-              ? 'bg-white dark:bg-slate-900 text-slate-900 dark:text-white shadow-sm'
-              : 'text-slate-600 dark:text-slate-400 hover:text-slate-900 dark:hover:text-white'
-          }`}
+          className={`px-3 py-1.5 text-[11px] font-semibold rounded-md transition-colors flex items-center gap-1.5 ${activeTab === 'receivable'
+            ? 'bg-white dark:bg-slate-900 text-slate-900 dark:text-white shadow-sm'
+            : 'text-slate-600 dark:text-slate-400 hover:text-slate-900 dark:hover:text-white'
+            }`}
         >
           <Users className="w-3.5 h-3.5" />
           Công nợ phải thu
@@ -492,11 +495,10 @@ const Finance: React.FC = () => {
                         <td className="px-3 py-2 text-right tabular-nums text-emerald-600">{formatCurrency(inv.amountPaid)}</td>
                         <td className="px-3 py-2 text-right tabular-nums font-semibold text-rose-600">{formatCurrency(inv.outstanding)}</td>
                         <td className="px-3 py-2 text-center">
-                          <span className={`inline-flex px-1.5 py-0.5 rounded text-[9px] font-semibold ${
-                            inv.paymentStatus === 'partial'
-                              ? 'bg-amber-100 dark:bg-amber-900/30 text-amber-700 dark:text-amber-400'
-                              : 'bg-rose-100 dark:bg-rose-900/30 text-rose-700 dark:text-rose-400'
-                          }`}>
+                          <span className={`inline-flex px-1.5 py-0.5 rounded text-[9px] font-semibold ${inv.paymentStatus === 'partial'
+                            ? 'bg-amber-100 dark:bg-amber-900/30 text-amber-700 dark:text-amber-400'
+                            : 'bg-rose-100 dark:bg-rose-900/30 text-rose-700 dark:text-rose-400'
+                            }`}>
                             {inv.paymentStatus === 'partial' ? 'Một phần' : 'Chưa thu'}
                           </span>
                         </td>
