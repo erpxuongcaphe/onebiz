@@ -1,7 +1,7 @@
 import React from 'react';
 import { Settings, LogOut, Hexagon, X } from 'lucide-react';
 import { Tab } from '../types';
-import { getDesktopNavItems } from '../lib/navigation';
+import { getDesktopNavItems, getMobileNavItems } from '../lib/navigation';
 import { useTenant } from '../lib/tenantContext';
 import { getAppMode } from '../lib/appMode';
 import { getPosBaseUrl } from '../lib/posUrl';
