@@ -19,7 +19,10 @@ const Sidebar: React.FC<SidebarProps> = ({ isOpen, setIsOpen }) => {
   const { tenant } = useTenant();
   const navigate = useNavigate();
   const location = useLocation();
-  const menuItems = getDesktopNavItems();
+  const desktopItems = getDesktopNavItems();
+  const mobileItems = getMobileNavItems();
+  const mobileItemIds = new Set(mobileItems.map(i => i.id));
+  const menuItems = desktopItems.filter(item => !mobileItemIds.has(item.id));
   const appMode = getAppMode();
   const posUrl = getPosBaseUrl({ tenant, hostname: window.location.hostname });
 
@@ -109,16 +112,7 @@ const Sidebar: React.FC<SidebarProps> = ({ isOpen, setIsOpen }) => {
                 </li>
 
                 <li className="mt-auto space-y-1 border-t border-slate-800/50 pt-4">
-                  <button
-                    onClick={() => {
-                      navigate('/settings');
-                      setIsOpen(false);
-                    }}
-                    className={`group -mx-2 flex gap-x-3 rounded-lg p-2 text-xs font-semibold leading-6 w-full ${activePath === '/settings' ? 'bg-slate-900 text-white' : 'text-slate-400 hover:bg-slate-900 hover:text-slate-200'}`}
-                  >
-                    <Settings className="h-4 w-4 shrink-0" aria-hidden="true" />
-                    Cài đặt
-                  </button>
+
                   <button
                     type="button"
                     onClick={() => void handleSignOut()}
