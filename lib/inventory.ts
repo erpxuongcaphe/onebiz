@@ -27,6 +27,13 @@ export type InventoryWarehouse = {
   created_at?: string;
 };
 
+export type InventoryUnit = {
+  id: string;
+  name: string;
+  code: string;
+  created_at?: string;
+};
+
 export type InventoryMovement = {
   id: string;
   movement_type: string;
@@ -38,12 +45,16 @@ export type InventoryMovement = {
 type DbProduct = {
   id: string;
   sku: string;
+  barcode: string | null;
   name: string;
   image_url: string | null;
+  cost_price: number | string | null;
   selling_price: number | string | null;
   min_stock_level: number | string | null;
   status?: string | null;
+  type?: string | null;
   category: { name: string } | null;
+  unit: { name: string } | null; // Joined
 };
 
 type DbStockRow = {
@@ -83,7 +94,7 @@ export async function fetchInventoryProducts(options?: {
 
   let q = supabase
     .from('inventory_products')
-    .select('id, sku, name, image_url, selling_price, min_stock_level, status, category:inventory_categories(name)')
+    .select('id, sku, barcode, name, image_url, cost_price, selling_price, min_stock_level, status, type, category:inventory_categories(name), unit_id, unit:inventory_units(name)')
     .order('created_at', { ascending: false });
 
   if (options?.categoryId) {
@@ -127,11 +138,17 @@ export async function fetchInventoryProducts(options?: {
     return {
       id: p.id,
       sku: p.sku,
+      barcode: p.barcode,
       name: p.name,
       category: p.category?.name ?? 'Khác',
+      unit: p.unit?.name ?? '',
+      unitId: (p as any).unit_id,
       stock,
-      price: toNumber(p.selling_price),
+      price: toNumber(p.selling_price), // For backward combat in lists
+      costPrice: toNumber(p.cost_price),
+      sellingPrice: toNumber(p.selling_price),
       status: computeStatus(stock, minStockLevel),
+      type: p.type ?? 'product',
       image: p.image_url ?? 'https://picsum.photos/100/100?random=1',
       archived: (p.status ?? 'active') === 'inactive',
     };
@@ -183,11 +200,15 @@ export async function ensureDefaultWarehouse(): Promise<string | null> {
 
 export type CreateInventoryProductInput = {
   sku: string;
+  barcode?: string | null;
   name: string;
   category_id: string | null;
+  unit_id: string | null;
+  cost_price: number;
   selling_price: number;
   min_stock_level: number;
   image_url: string | null;
+  type: 'product' | 'material';
 };
 
 export type UpdateInventoryProductPatch = Partial<CreateInventoryProductInput> & {
@@ -203,11 +224,15 @@ export async function createInventoryProduct(input: CreateInventoryProductInput)
     .from('inventory_products')
     .insert({
       sku: input.sku,
+      barcode: input.barcode ?? null,
       name: input.name,
       category_id: input.category_id,
+      unit_id: input.unit_id,
+      cost_price: input.cost_price,
       selling_price: input.selling_price,
       min_stock_level: input.min_stock_level,
       image_url: input.image_url,
+      type: input.type,
     })
     .select('id')
     .single();
@@ -253,6 +278,21 @@ export async function deleteInventoryProductPermanently(productId: string): Prom
     return { data: null, error: formatError(error) };
   }
   return { data: true, error: null };
+}
+
+export async function fetchInventoryUnits(): Promise<InventoryUnit[]> {
+  if (!supabase) return [];
+  const { data: sessionData } = await supabase.auth.getSession();
+  if (!sessionData.session) return [];
+
+  const { data, error } = await supabase
+    .from('inventory_units')
+    .select('id, name, code, created_at')
+    .order('name', { ascending: true })
+    .returns<InventoryUnit[]>();
+
+  if (error) return [];
+  return data ?? [];
 }
 
 export async function createInventoryCategory(input: { name: string; code?: string | null }): Promise<Result<{ id: string }>> {
@@ -375,6 +415,51 @@ export async function deleteInventoryWarehouse(warehouseId: string): Promise<Res
     .from('inventory_warehouses')
     .delete()
     .eq('id', warehouseId);
+
+  if (error) return { data: null, error: formatError(error) };
+  return { data: true, error: null };
+}
+
+export async function createInventoryUnit(input: { name: string; code: string }): Promise<Result<{ id: string }>> {
+  if (!supabase) return { data: null, error: 'Chưa cấu hình Supabase.' };
+  const { data: sessionData } = await supabase.auth.getSession();
+  if (!sessionData.session) return { data: null, error: 'Bạn chưa đăng nhập.' };
+
+  const { data, error } = await supabase
+    .from('inventory_units')
+    .insert({ name: input.name, code: input.code })
+    .select('id')
+    .single();
+
+  if (error) return { data: null, error: formatError(error) };
+  const id = (data as any)?.id as string | undefined;
+  if (!id) return { data: null, error: 'Không tạo được đơn vị.' };
+  return { data: { id }, error: null };
+}
+
+export async function updateInventoryUnit(unitId: string, patch: { name?: string; code?: string }): Promise<Result<true>> {
+  if (!supabase) return { data: null, error: 'Chưa cấu hình Supabase.' };
+  const { data: sessionData } = await supabase.auth.getSession();
+  if (!sessionData.session) return { data: null, error: 'Bạn chưa đăng nhập.' };
+
+  const { error } = await supabase
+    .from('inventory_units')
+    .update(patch)
+    .eq('id', unitId);
+
+  if (error) return { data: null, error: formatError(error) };
+  return { data: true, error: null };
+}
+
+export async function deleteInventoryUnit(unitId: string): Promise<Result<true>> {
+  if (!supabase) return { data: null, error: 'Chưa cấu hình Supabase.' };
+  const { data: sessionData } = await supabase.auth.getSession();
+  if (!sessionData.session) return { data: null, error: 'Bạn chưa đăng nhập.' };
+
+  const { error } = await supabase
+    .from('inventory_units')
+    .delete()
+    .eq('id', unitId);
 
   if (error) return { data: null, error: formatError(error) };
   return { data: true, error: null };

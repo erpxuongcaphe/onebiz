@@ -93,14 +93,14 @@ function App() {
 
       {/* Admin Routes */}
       <Route element={<MainLayout />}>
-        <Route path="/" element={<Navigate to={appMode === 'pos' ? "/pos" : "/dashboard"} replace />} />
-        <Route path="/dashboard" element={<LazyDashboard />} />
-        <Route path="/inventory" element={<LazyInventory />} />
-        <Route path="/orders" element={<LazyOrders />} />
-        <Route path="/reports" element={<LazyReports />} />
-        <Route path="/finance" element={<LazyFinance />} />
-        <Route path="/customers" element={<LazyCustomers />} />
-        <Route path="/settings" element={<LazySettings />} />
+        <Route index element={<Navigate to={appMode === 'pos' ? "/pos" : "/dashboard"} replace />} />
+        <Route path="dashboard" element={<LazyDashboard />} />
+        <Route path="inventory" element={<LazyInventory />} />
+        <Route path="orders" element={<LazyOrders />} />
+        <Route path="reports" element={<LazyReports />} />
+        <Route path="finance" element={<LazyFinance />} />
+        <Route path="customers" element={<LazyCustomers />} />
+        <Route path="settings" element={<LazySettings />} />
         <Route path="*" element={<FeaturePending />} />
       </Route>
     </Routes>

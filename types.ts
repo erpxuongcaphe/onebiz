@@ -10,10 +10,16 @@ export interface Product {
   id: string;
   name: string;
   sku: string;
+  barcode?: string | null;
   category: string;
+  unit?: string;
+  unitId?: string;
   stock: number;
   price: number;
+  costPrice?: number;
+  sellingPrice?: number;
   status: 'In Stock' | 'Low Stock' | 'Out of Stock';
+  type?: string;
   image: string;
   archived?: boolean;
 }
