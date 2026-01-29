@@ -76,11 +76,20 @@ export async function fetchOrders(): Promise<Order[]> {
     return [];
   }
 
+  // Optimized query with JOIN to get orders + item count in one go
   const { data, error } = await supabase
     .from('sales_orders')
-    .select('id, order_number, order_date, total, status, customer:sales_customers(name)')
+    .select(`
+      id, 
+      order_number, 
+      order_date, 
+      total, 
+      status, 
+      customer:sales_customers(name),
+      items:sales_order_items(id)
+    `)
     .order('created_at', { ascending: false })
-    .returns<DbOrder[]>();
+    .returns<any[]>();
 
   if (error) {
     console.error('Error fetching orders:', error);
@@ -89,29 +98,18 @@ export async function fetchOrders(): Promise<Order[]> {
 
   const orders = data ?? [];
 
-  const orderIds = orders.map((o) => o.id);
-  const itemCountByOrder = new Map<string, number>();
+  return orders.map((o) => {
+    const itemCount = Array.isArray(o.items) ? o.items.length : 0;
 
-  if (orderIds.length > 0) {
-    const { data: items } = await supabase
-      .from('sales_order_items')
-      .select('order_id')
-      .in('order_id', orderIds)
-      .returns<DbOrderItem[]>();
-
-    for (const it of items ?? []) {
-      itemCountByOrder.set(it.order_id, (itemCountByOrder.get(it.order_id) ?? 0) + 1);
-    }
-  }
-
-  return orders.map((o) => ({
-    id: o.order_number.startsWith('#') ? o.order_number : `#${o.order_number}`,
-    customer: o.customer?.name ?? 'Khách hàng',
-    date: o.order_date,
-    total: toNumber(o.total),
-    status: mapOrderStatus(o.status),
-    items: itemCountByOrder.get(o.id) ?? 0,
-  }));
+    return {
+      id: o.order_number.startsWith('#') ? o.order_number : `#${o.order_number}`,
+      customer: o.customer?.name ?? 'Khách hàng',
+      date: o.order_date,
+      total: toNumber(o.total),
+      status: mapOrderStatus(o.status),
+      items: itemCount,
+    };
+  });
 }
 
 export async function fetchOrderDetail(orderNumber: string): Promise<OrderDetail | null> {

@@ -92,9 +92,16 @@ export async function fetchInventoryProducts(options?: {
     return [];
   }
 
+  // Single optimized query with JOIN to get products + stock in one go
   let q = supabase
     .from('inventory_products')
-    .select('id, sku, barcode, name, image_url, cost_price, selling_price, min_stock_level, status, type, category:inventory_categories(name), unit_id, unit:inventory_units(name)')
+    .select(`
+      id, sku, barcode, name, image_url, cost_price, selling_price, min_stock_level, status, type, 
+      category:inventory_categories(name), 
+      unit_id, 
+      unit:inventory_units(name),
+      stock:inventory_stock(quantity)
+    `)
     .order('created_at', { ascending: false });
 
   if (options?.categoryId) {
@@ -108,33 +115,23 @@ export async function fetchInventoryProducts(options?: {
   }
 
   const { data: products, error: productsError } = (options?.includeInactive
-    ? await q.returns<DbProduct[]>()
-    : await q.neq('status', 'inactive').returns<DbProduct[]>());
+    ? await q
+    : await q.neq('status', 'inactive'));
 
   if (productsError) {
     console.error('Error fetching products:', productsError);
     return [];
   }
 
-  const productIds = (products ?? []).map((p) => p.id);
-  if (productIds.length === 0) return [];
+  if (!products || products.length === 0) return [];
 
-  const { data: stockRows, error: stockError } = await supabase
-    .from('inventory_stock')
-    .select('product_id, quantity')
-    .in('product_id', productIds)
-    .returns<DbStockRow[]>();
-
-  const byProduct = new Map<string, number>();
-  if (!stockError && stockRows) {
-    for (const row of stockRows) {
-      byProduct.set(row.product_id, (byProduct.get(row.product_id) ?? 0) + toNumber(row.quantity));
-    }
-  }
-
-  return (products ?? []).map((p) => {
-    const stock = byProduct.get(p.id) ?? 0;
+  // Map products with aggregated stock
+  return products.map((p: any) => {
+    // Aggregate stock from all warehouses
+    const stockRecords = Array.isArray(p.stock) ? p.stock : (p.stock ? [p.stock] : []);
+    const totalStock = stockRecords.reduce((sum: number, s: any) => sum + toNumber(s.quantity), 0);
     const minStockLevel = toNumber(p.min_stock_level);
+
     return {
       id: p.id,
       sku: p.sku,
@@ -142,12 +139,12 @@ export async function fetchInventoryProducts(options?: {
       name: p.name,
       category: p.category?.name ?? 'Khác',
       unit: p.unit?.name ?? '',
-      unitId: (p as any).unit_id,
-      stock,
-      price: toNumber(p.selling_price), // For backward combat in lists
+      unitId: p.unit_id,
+      stock: totalStock,
+      price: toNumber(p.selling_price),
       costPrice: toNumber(p.cost_price),
       sellingPrice: toNumber(p.selling_price),
-      status: computeStatus(stock, minStockLevel),
+      status: computeStatus(totalStock, minStockLevel),
       type: p.type ?? 'product',
       image: p.image_url ?? 'https://picsum.photos/100/100?random=1',
       archived: (p.status ?? 'active') === 'inactive',

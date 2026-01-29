@@ -51,45 +51,48 @@ export async function fetchSalesOrders(params?: {
   const { data: sessionData } = await supabase.auth.getSession();
   if (!sessionData.session) return [];
 
+  // Optimized query with JOIN to get orders + item count in one go
   let query = supabase
     .from('sales_orders')
-    .select('id, order_number, order_date, total, status, customer_id, branch_id, warehouse_id, due_date, customer:sales_customers(name)')
+    .select(`
+      id, 
+      order_number, 
+      order_date, 
+      total, 
+      status, 
+      customer_id, 
+      branch_id, 
+      warehouse_id, 
+      due_date, 
+      customer:sales_customers(name),
+      items:sales_order_items(id)
+    `)
     .order('created_at', { ascending: false });
 
   if (params?.status) query = query.eq('status', params.status);
 
-  const { data, error } = await query.returns<DbOrder[]>();
+  const { data, error } = await query.returns<any[]>();
   if (error || !data) return [];
 
   const orders = data ?? [];
-  const orderIds = orders.map((o) => o.id);
-  const itemCountByOrder = new Map<string, number>();
 
-  if (orderIds.length > 0) {
-    const { data: items } = await supabase
-      .from('sales_order_items')
-      .select('order_id')
-      .in('order_id', orderIds)
-      .returns<DbOrderItem[]>();
+  return orders.map((o) => {
+    const itemCount = Array.isArray(o.items) ? o.items.length : 0;
 
-    for (const it of items ?? []) {
-      itemCountByOrder.set(it.order_id, (itemCountByOrder.get(it.order_id) ?? 0) + 1);
-    }
-  }
-
-  return orders.map((o) => ({
-    id: o.id,
-    order_number: o.order_number,
-    order_date: o.order_date,
-    total: toNumber(o.total),
-    status: o.status,
-    customer_name: o.customer?.name ?? 'Khách hàng',
-    items: itemCountByOrder.get(o.id) ?? 0,
-    branch_id: o.branch_id ?? null,
-    warehouse_id: o.warehouse_id ?? null,
-    due_date: o.due_date ?? null,
-    customer_id: o.customer_id,
-  }));
+    return {
+      id: o.id,
+      order_number: o.order_number,
+      order_date: o.order_date,
+      total: toNumber(o.total),
+      status: o.status,
+      customer_name: o.customer?.name ?? 'Khách hàng',
+      items: itemCount,
+      branch_id: o.branch_id ?? null,
+      warehouse_id: o.warehouse_id ?? null,
+      due_date: o.due_date ?? null,
+      customer_id: o.customer_id,
+    };
+  });
 }
 
 export async function createSalesOrder(params: {
