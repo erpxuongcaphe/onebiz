@@ -68,8 +68,8 @@ const Sidebar: React.FC<SidebarProps> = ({ isOpen, setIsOpen }) => {
             </button>
           </div>
 
-          <div className="flex grow flex-col gap-y-4 overflow-y-auto bg-slate-950 px-4 pb-4 border-r border-slate-800">
-            <div className="flex h-14 shrink-0 items-center gap-2 border-b border-slate-800/50">
+          <div className="flex grow flex-col gap-y-4 overflow-y-auto bg-white dark:bg-slate-950 px-4 pb-4 border-r border-slate-200 dark:border-slate-800">
+            <div className="flex h-14 shrink-0 items-center gap-2 border-b border-slate-200 dark:border-slate-800/50">
               <div className="bg-gradient-to-br from-indigo-600 to-violet-600 p-1 rounded-md shadow-lg shadow-indigo-900/50">
                 <Hexagon className="w-4 h-4 text-white fill-current" />
               </div>
@@ -98,7 +98,7 @@ const Sidebar: React.FC<SidebarProps> = ({ isOpen, setIsOpen }) => {
                               group flex gap-x-3 rounded-lg p-2 text-xs font-semibold w-full items-center transition-all duration-200
                               ${isActive
                                 ? 'bg-indigo-600 text-white shadow-md shadow-indigo-900/30'
-                                : 'text-slate-400 hover:text-slate-200 hover:bg-slate-900'
+                                : 'text-slate-600 dark:text-slate-400 hover:text-slate-900 dark:hover:text-slate-200 hover:bg-slate-100 dark:hover:bg-slate-900'
                               }
                             `}
                           >
