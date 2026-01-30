@@ -1,60 +1,37 @@
 -- Sales Module Permissions
--- RBAC permissions for sales orders and delivery orders
+-- Add sales permissions to default roles
 
 -- =====================================================
--- SALES ORDERS PERMISSIONS
+-- UPDATE DEFAULT ROLES WITH SALES PERMISSIONS
 -- =====================================================
 
--- View sales orders
-INSERT INTO permissions (name, description, category)
-VALUES ('sales_orders.view', 'Xem đơn bán hàng', 'sales')
-ON CONFLICT (name) DO NOTHING;
+-- Super Admin already has "*" (all permissions)
 
--- Create sales orders
-INSERT INTO permissions (name, description, category)
-VALUES ('sales_orders.create', 'Tạo đơn bán hàng mới', 'sales')
-ON CONFLICT (name) DO NOTHING;
+-- Admin: Add sales permissions
+UPDATE public.roles
+SET permissions = permissions || '["sales_orders.*", "delivery_orders.*"]'::jsonb
+WHERE is_system = true 
+  AND name = 'Admin'
+  AND NOT (permissions ? 'sales_orders.*');
 
--- Update sales orders
-INSERT INTO permissions (name, description, category)
-VALUES ('sales_orders.update', 'Sửa đơn bán hàng', 'sales')
-ON CONFLICT (name) DO NOTHING;
+-- Manager: Add read-only sales permissions
+UPDATE public.roles
+SET permissions = permissions || '["sales_orders.view", "sales_orders.create", "delivery_orders.view", "delivery_orders.create"]'::jsonb
+WHERE is_system = true 
+  AND name = 'Manager'
+  AND NOT (permissions ? 'sales_orders.view');
 
--- Delete sales orders
-INSERT INTO permissions (name, description, category)
-VALUES ('sales_orders.delete', 'Xóa đơn bán hàng nháp', 'sales')
-ON CONFLICT (name) DO NOTHING;
-
--- Confirm sales orders
-INSERT INTO permissions (name, description, category)
-VALUES ('sales_orders.confirm', 'Xác nhận đơn bán hàng', 'sales')
-ON CONFLICT (name) DO NOTHING;
-
--- Cancel sales orders
-INSERT INTO permissions (name, description, category)
-VALUES ('sales_orders.cancel', 'Hủy đơn bán hàng', 'sales')
-ON CONFLICT (name) DO NOTHING;
-
--- =====================================================
--- DELIVERY ORDERS PERMISSIONS
--- =====================================================
-
--- View delivery orders
-INSERT INTO permissions (name, description, category)
-VALUES ('delivery_orders.view', 'Xem phiếu xuất kho', 'sales')
-ON CONFLICT (name) DO NOTHING;
-
--- Create delivery orders
-INSERT INTO permissions (name, description, category)
-VALUES ('delivery_orders.create', 'Tạo phiếu xuất kho', 'sales')
-ON CONFLICT (name) DO NOTHING;
-
--- Complete delivery orders
-INSERT INTO permissions (name, description, category)
-VALUES ('delivery_orders.complete', 'Hoàn tất giao hàng', 'sales')
-ON CONFLICT (name) DO NOTHING;
-
--- Cancel delivery orders
-INSERT INTO permissions (name, description, category)
-VALUES ('delivery_orders.cancel', 'Hủy phiếu xuất kho', 'sales')
-ON CONFLICT (name) DO NOTHING;
+-- Note: Permissions are stored as JSON patterns in roles.permissions
+-- Example patterns:
+--   "sales_orders.*"         -> All sales order permissions
+--   "sales_orders.view"      -> View sales orders
+--   "sales_orders.create"    -> Create sales orders
+--   "sales_orders.update"    -> Update sales orders
+--   "sales_orders.delete"    -> Delete sales orders
+--   "sales_orders.confirm"   -> Confirm sales orders
+--   "sales_orders.cancel"    -> Cancel sales orders
+--   "delivery_orders.*"      -> All delivery order permissions
+--   "delivery_orders.view"   -> View delivery orders
+--   "delivery_orders.create" -> Create delivery orders
+--   "delivery_orders.complete" -> Complete delivery orders
+--   "delivery_orders.cancel" -> Cancel delivery orders
