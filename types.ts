@@ -92,6 +92,11 @@ export interface Activity {
 export enum Tab {
   DASHBOARD = 'dashboard',
   INVENTORY = 'inventory',
+  SUPPLIERS = 'suppliers',
+  PURCHASE_ORDERS = 'purchase_orders',
+  GOODS_RECEIPTS = 'goods_receipts',
+  SALES_ORDERS = 'sales_orders',
+  DELIVERY_ORDERS = 'delivery_orders',
   ORDERS = 'orders',
   POS = 'pos',
   REPORTS = 'reports',

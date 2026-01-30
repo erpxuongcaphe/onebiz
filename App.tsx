@@ -7,6 +7,11 @@ import { getAppMode } from './lib/appMode';
 
 const LazyDashboard = React.lazy(() => import('./components/Dashboard'));
 const LazyInventory = React.lazy(() => import('./components/Inventory'));
+const LazySuppliers = React.lazy(() => import('./components/Suppliers'));
+const LazyPurchaseOrders = React.lazy(() => import('./components/PurchaseOrders'));
+const LazyGoodsReceipts = React.lazy(() => import('./components/GoodsReceipts'));
+const LazySalesOrders = React.lazy(() => import('./components/SalesOrders'));
+const LazyDeliveryOrders = React.lazy(() => import('./components/DeliveryOrders'));
 const LazyOrders = React.lazy(() => import('./components/Orders'));
 const LazyPOS = React.lazy(() => import('./components/POS'));
 const LazyReports = React.lazy(() => import('./components/Reports'));
@@ -96,6 +101,11 @@ function App() {
         <Route index element={<Navigate to={appMode === 'pos' ? "/pos" : "/dashboard"} replace />} />
         <Route path="dashboard" element={<LazyDashboard />} />
         <Route path="inventory" element={<LazyInventory />} />
+        <Route path="suppliers" element={<LazySuppliers />} />
+        <Route path="purchase-orders" element={<LazyPurchaseOrders />} />
+        <Route path="goods-receipts" element={<LazyGoodsReceipts />} />
+        <Route path="sales-orders" element={<LazySalesOrders />} />
+        <Route path="delivery-orders" element={<LazyDeliveryOrders />} />
         <Route path="orders" element={<LazyOrders />} />
         <Route path="reports" element={<LazyReports />} />
         <Route path="finance" element={<LazyFinance />} />

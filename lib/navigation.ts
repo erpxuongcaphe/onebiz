@@ -1,4 +1,4 @@
-import { BarChart2, LayoutDashboard, Package, ShoppingCart, Users, Wallet } from 'lucide-react';
+import { BarChart2, LayoutDashboard, Package, ShoppingCart, Users, Wallet, Building2, FileText, Truck } from 'lucide-react';
 import { Store } from 'lucide-react';
 import type { LucideIcon } from 'lucide-react';
 import { Tab } from '../types';
@@ -14,7 +14,12 @@ export type NavItem = {
 const MAIN_DESKTOP: NavItem[] = [
   { id: Tab.DASHBOARD, label: 'Tổng quan', icon: LayoutDashboard, path: '/dashboard' },
   { id: Tab.INVENTORY, label: 'Kho hàng', icon: Package, path: '/inventory' },
-  { id: Tab.ORDERS, label: 'Đơn hàng', icon: ShoppingCart, path: '/orders' },
+  { id: Tab.SUPPLIERS, label: 'Nhà cung cấp', icon: Building2, path: '/suppliers' },
+  { id: Tab.PURCHASE_ORDERS, label: 'Đơn đặt hàng', icon: FileText, path: '/purchase-orders' },
+  { id: Tab.GOODS_RECEIPTS, label: 'Phiếu nhập kho', icon: Package, path: '/goods-receipts' },
+  { id: Tab.SALES_ORDERS, label: 'Đơn bán hàng', icon: ShoppingCart, path: '/sales-orders' },
+  { id: Tab.DELIVERY_ORDERS, label: 'Phiếu giao hàng', icon: Truck, path: '/delivery-orders' },
+  { id: Tab.ORDERS, label: 'Đơn bán hàng (cũ)', icon: ShoppingCart, path: '/orders' },
   { id: Tab.REPORTS, label: 'Báo cáo', icon: BarChart2, path: '/reports' },
   { id: Tab.FINANCE, label: 'Tài chính', icon: Wallet, path: '/finance' },
   { id: Tab.CUSTOMERS, label: 'Khách hàng', icon: Users, path: '/customers' },
