@@ -1,7 +1,7 @@
-import React from 'react';
-import { Settings, LogOut, Hexagon, X } from 'lucide-react';
+import React, { useState } from 'react';
+import { Settings, LogOut, Hexagon, X, ChevronRight } from 'lucide-react';
 import { Tab } from '../types';
-import { getDesktopNavItems, getMobileNavItems } from '../lib/navigation';
+import { getDesktopNavItems, getMobileNavItems, isNavGroup, type NavEntry, type NavGroup, type NavItem } from '../lib/navigation';
 import { useTenant } from '../lib/tenantContext';
 import { getAppMode } from '../lib/appMode';
 import { getPosBaseUrl } from '../lib/posUrl';
@@ -22,11 +22,31 @@ const Sidebar: React.FC<SidebarProps> = ({ isOpen, setIsOpen }) => {
   const desktopItems = getDesktopNavItems();
   const mobileItems = getMobileNavItems();
   const mobileItemIds = new Set(mobileItems.map(i => i.id));
-  const menuItems = desktopItems.filter(item => !mobileItemIds.has(item.id));
+  const menuItems = desktopItems.filter(item => {
+    if (isNavGroup(item)) {
+      // Include groups that have at least one item not in mobile
+      return item.items.some(i => !mobileItemIds.has(i.id));
+    }
+    return !mobileItemIds.has(item.id);
+  });
   const appMode = getAppMode();
   const posUrl = getPosBaseUrl({ tenant, hostname: window.location.hostname });
 
+  const [openGroups, setOpenGroups] = useState<Set<string>>(new Set());
+
   const activePath = location.pathname === '/' ? '/dashboard' : location.pathname;
+
+  const toggleGroup = (groupId: string) => {
+    setOpenGroups(prev => {
+      const next = new Set(prev);
+      if (next.has(groupId)) {
+        next.delete(groupId);
+      } else {
+        next.add(groupId);
+      }
+      return next;
+    });
+  };
 
   const handleSignOut = async () => {
     if (!supabase) {
@@ -44,6 +64,75 @@ const Sidebar: React.FC<SidebarProps> = ({ isOpen, setIsOpen }) => {
     } catch (e: any) {
       window.alert(e?.message ?? 'Đăng xuất thất bại.');
     }
+  };
+
+  const renderNavItem = (item: NavItem, isSubItem = false) => {
+    const Icon = item.icon;
+    const isActive = activePath.startsWith(item.path);
+    return (
+      <li key={item.id}>
+        <button
+          onClick={() => {
+            if (item.id === Tab.POS && appMode === 'main') {
+              window.open(posUrl, '_blank', 'noopener,noreferrer');
+              return;
+            }
+            navigate(item.path);
+            setIsOpen(false);
+          }}
+          className={`
+            group flex gap-x-3 rounded-lg p-2 text-xs font-semibold w-full items-center transition-all duration-200
+            ${isSubItem ? 'pl-8' : ''}
+            ${isActive
+              ? 'bg-indigo-600 text-white shadow-md shadow-indigo-900/30'
+              : 'text-slate-600 dark:text-slate-400 hover:text-slate-900 dark:hover:text-slate-200 hover:bg-slate-100 dark:hover:bg-slate-900'
+            }
+          `}
+        >
+          <Icon className={`h-4 w-4 shrink-0 ${isActive ? 'text-white' : 'text-slate-500 dark:text-slate-500 group-hover:text-slate-900 dark:group-hover:text-slate-300'}`} aria-hidden="true" />
+          {item.label}
+        </button>
+      </li>
+    );
+  };
+
+  const renderNavGroup = (group: NavGroup) => {
+    const Icon = group.icon;
+    const isOpen = openGroups.has(group.id);
+    const hasActiveChild = group.items.some(item => activePath.startsWith(item.path));
+
+    return (
+      <li key={group.id}>
+        <button
+          onClick={() => toggleGroup(group.id)}
+          className={`
+            group flex gap-x-3 rounded-lg p-2 text-xs font-semibold w-full items-center transition-all duration-200 justify-between
+            ${hasActiveChild
+              ? 'bg-indigo-50 dark:bg-indigo-900/10 text-indigo-600 dark:text-indigo-400'
+              : 'text-slate-600 dark:text-slate-400 hover:text-slate-900 dark:hover:text-slate-200 hover:bg-slate-100 dark:hover:bg-slate-900'
+            }
+          `}
+        >
+          <div className="flex gap-x-3 items-center">
+            <Icon className={`h-4 w-4 shrink-0 ${hasActiveChild ? 'text-indigo-600 dark:text-indigo-400' : 'text-slate-500 dark:text-slate-500 group-hover:text-slate-900 dark:group-hover:text-slate-300'}`} aria-hidden="true" />
+            {group.label}
+          </div>
+          <ChevronRight className={`h-3 w-3 transition-transform duration-200 ${isOpen ? 'rotate-90' : ''}`} />
+        </button>
+        {isOpen && (
+          <ul className="mt-1 space-y-1">
+            {group.items.map(item => renderNavItem(item, true))}
+          </ul>
+        )}
+      </li>
+    );
+  };
+
+  const renderNavEntry = (entry: NavEntry) => {
+    if (isNavGroup(entry)) {
+      return renderNavGroup(entry);
+    }
+    return renderNavItem(entry);
   };
 
   return (
@@ -80,34 +169,7 @@ const Sidebar: React.FC<SidebarProps> = ({ isOpen, setIsOpen }) => {
               <ul role="list" className="flex flex-1 flex-col gap-y-6">
                 <li>
                   <ul role="list" className="-mx-2 space-y-1">
-                    {menuItems.map((item) => {
-                      const Icon = item.icon;
-                      const isActive = activePath.startsWith(item.path);
-                      return (
-                        <li key={item.id}>
-                          <button
-                            onClick={() => {
-                              if (item.id === Tab.POS && appMode === 'main') {
-                                window.open(posUrl, '_blank', 'noopener,noreferrer');
-                                return;
-                              }
-                              navigate(item.path);
-                              setIsOpen(false);
-                            }}
-                            className={`
-                              group flex gap-x-3 rounded-lg p-2 text-xs font-semibold w-full items-center transition-all duration-200
-                              ${isActive
-                                ? 'bg-indigo-600 text-white shadow-md shadow-indigo-900/30'
-                                : 'text-slate-600 dark:text-slate-400 hover:text-slate-900 dark:hover:text-slate-200 hover:bg-slate-100 dark:hover:bg-slate-900'
-                              }
-                            `}
-                          >
-                            <Icon className={`h-4 w-4 shrink-0 ${isActive ? 'text-white' : 'text-slate-500 dark:text-slate-500 group-hover:text-slate-900 dark:group-hover:text-slate-300'}`} aria-hidden="true" />
-                            {item.label}
-                          </button>
-                        </li>
-                      )
-                    })}
+                    {menuItems.map(entry => renderNavEntry(entry))}
                   </ul>
                 </li>
 

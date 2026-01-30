@@ -12,7 +12,6 @@ const LazyPurchaseOrders = React.lazy(() => import('./components/PurchaseOrders'
 const LazyGoodsReceipts = React.lazy(() => import('./components/GoodsReceipts'));
 const LazySalesOrders = React.lazy(() => import('./components/SalesOrders'));
 const LazyDeliveryOrders = React.lazy(() => import('./components/DeliveryOrders'));
-const LazyOrders = React.lazy(() => import('./components/Orders'));
 const LazyPOS = React.lazy(() => import('./components/POS'));
 const LazyReports = React.lazy(() => import('./components/Reports'));
 const LazyFinance = React.lazy(() => import('./components/Finance'));
@@ -106,7 +105,6 @@ function App() {
         <Route path="goods-receipts" element={<LazyGoodsReceipts />} />
         <Route path="sales-orders" element={<LazySalesOrders />} />
         <Route path="delivery-orders" element={<LazyDeliveryOrders />} />
-        <Route path="orders" element={<LazyOrders />} />
         <Route path="reports" element={<LazyReports />} />
         <Route path="finance" element={<LazyFinance />} />
         <Route path="customers" element={<LazyCustomers />} />

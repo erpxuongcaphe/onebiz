@@ -1,7 +1,7 @@
-import React from 'react';
-import { Settings, Moon, Sun, Bell, Search, Hexagon, Menu } from 'lucide-react';
+import React, { useState, useRef, useEffect } from 'react';
+import { Settings, Moon, Sun, Bell, Search, Hexagon, Menu, ChevronDown } from 'lucide-react';
 import { Tab } from '../types';
-import { getDesktopNavItems } from '../lib/navigation';
+import { getDesktopNavItems, isNavGroup, type NavEntry, type NavGroup, type NavItem } from '../lib/navigation';
 import AuthStatus from './AuthStatus';
 import { useTenant } from '../lib/tenantContext';
 import { getAppMode } from '../lib/appMode';
@@ -22,7 +22,109 @@ const Navbar: React.FC<NavbarProps> = ({ isDarkMode, toggleTheme, onMenuClick })
   const appMode = getAppMode();
   const posUrl = getPosBaseUrl({ tenant, hostname: window.location.hostname });
 
+  const [openGroup, setOpenGroup] = useState<string | null>(null);
+  const dropdownRef = useRef<HTMLDivElement>(null);
+
   const activePath = location.pathname === '/' ? '/dashboard' : location.pathname;
+
+  // Close dropdown when clicking outside
+  useEffect(() => {
+    const handleClickOutside = (event: MouseEvent) => {
+      if (dropdownRef.current && !dropdownRef.current.contains(event.target as Node)) {
+        setOpenGroup(null);
+      }
+    };
+
+    document.addEventListener('mousedown', handleClickOutside);
+    return () => document.removeEventListener('mousedown', handleClickOutside);
+  }, []);
+
+  const handleNavItemClick = (item: NavItem) => {
+    if (item.id === Tab.POS && appMode === 'main') {
+      window.open(posUrl, '_blank', 'noopener,noreferrer');
+      return;
+    }
+    navigate(item.path);
+    setOpenGroup(null);
+  };
+
+  const renderNavItem = (item: NavItem) => {
+    const Icon = item.icon;
+    const isActive = activePath.startsWith(item.path);
+    return (
+      <button
+        key={item.id}
+        onClick={() => handleNavItemClick(item)}
+        className={`
+          flex items-center gap-2 px-3 py-1.5 rounded-lg text-xs font-semibold transition-all duration-200 ease-in-out whitespace-nowrap
+          ${isActive
+            ? 'bg-white dark:bg-slate-700 text-indigo-600 dark:text-indigo-400 shadow-sm ring-1 ring-slate-200 dark:ring-slate-600'
+            : 'text-slate-600 dark:text-slate-400 hover:text-slate-900 dark:hover:text-slate-200 hover:bg-white/50 dark:hover:bg-slate-700/50'
+          }
+        `}
+      >
+        <Icon className={`w-3.5 h-3.5 ${isActive ? 'text-indigo-600 dark:text-indigo-400' : 'text-slate-400 dark:text-slate-500'}`} />
+        {item.label}
+      </button>
+    );
+  };
+
+  const renderNavGroup = (group: NavGroup) => {
+    const Icon = group.icon;
+    const isOpen = openGroup === group.id;
+    const hasActiveChild = group.items.some(item => activePath.startsWith(item.path));
+
+    return (
+      <div key={group.id} className="relative" ref={isOpen ? dropdownRef : null}>
+        <button
+          onClick={() => setOpenGroup(isOpen ? null : group.id)}
+          className={`
+            flex items-center gap-2 px-3 py-1.5 rounded-lg text-xs font-semibold transition-all duration-200 ease-in-out whitespace-nowrap
+            ${hasActiveChild
+              ? 'bg-white dark:bg-slate-700 text-indigo-600 dark:text-indigo-400 shadow-sm ring-1 ring-slate-200 dark:ring-slate-600'
+              : 'text-slate-600 dark:text-slate-400 hover:text-slate-900 dark:hover:text-slate-200 hover:bg-white/50 dark:hover:bg-slate-700/50'
+            }
+          `}
+        >
+          <Icon className={`w-3.5 h-3.5 ${hasActiveChild ? 'text-indigo-600 dark:text-indigo-400' : 'text-slate-400 dark:text-slate-500'}`} />
+          {group.label}
+          <ChevronDown className={`w-3 h-3 transition-transform duration-200 ${isOpen ? 'rotate-180' : ''}`} />
+        </button>
+
+        {isOpen && (
+          <div className="absolute top-full left-0 mt-1 w-48 bg-white dark:bg-slate-800 rounded-lg shadow-lg ring-1 ring-slate-200 dark:ring-slate-700 py-1 z-50">
+            {group.items.map(item => {
+              const ItemIcon = item.icon;
+              const isActive = activePath.startsWith(item.path);
+              return (
+                <button
+                  key={item.id}
+                  onClick={() => handleNavItemClick(item)}
+                  className={`
+                    w-full flex items-center gap-2 px-3 py-2 text-xs font-medium transition-colors
+                    ${isActive
+                      ? 'bg-indigo-50 dark:bg-indigo-900/20 text-indigo-600 dark:text-indigo-400'
+                      : 'text-slate-600 dark:text-slate-300 hover:bg-slate-50 dark:hover:bg-slate-700/50'
+                    }
+                  `}
+                >
+                  <ItemIcon className={`w-3.5 h-3.5 ${isActive ? 'text-indigo-600 dark:text-indigo-400' : 'text-slate-400 dark:text-slate-500'}`} />
+                  {item.label}
+                </button>
+              );
+            })}
+          </div>
+        )}
+      </div>
+    );
+  };
+
+  const renderNavEntry = (entry: NavEntry) => {
+    if (isNavGroup(entry)) {
+      return renderNavGroup(entry);
+    }
+    return renderNavItem(entry);
+  };
 
   return (
     <nav className="sticky top-0 z-40 w-full bg-white/80 dark:bg-slate-900/90 backdrop-blur-xl border-b border-slate-200/60 dark:border-slate-800 transition-colors duration-200">
@@ -49,32 +151,7 @@ const Navbar: React.FC<NavbarProps> = ({ isDarkMode, toggleTheme, onMenuClick })
 
           {/* Desktop Navigation */}
           <div className="hidden lg:flex items-center space-x-1 mx-6 bg-slate-100/50 dark:bg-slate-800/50 p-1 rounded-xl border border-slate-200/50 dark:border-slate-700/50">
-            {menuItems.map((item) => {
-              const Icon = item.icon;
-              const isActive = activePath.startsWith(item.path);
-              return (
-                <button
-                  key={item.id}
-                  onClick={() => {
-                    if (item.id === Tab.POS && appMode === 'main') {
-                      window.open(posUrl, '_blank', 'noopener,noreferrer');
-                      return;
-                    }
-                    navigate(item.path);
-                  }}
-                  className={`
-                    flex items-center gap-2 px-3 py-1.5 rounded-lg text-xs font-semibold transition-all duration-200 ease-in-out
-                    ${isActive
-                      ? 'bg-white dark:bg-slate-700 text-indigo-600 dark:text-indigo-400 shadow-sm ring-1 ring-slate-200 dark:ring-slate-600'
-                      : 'text-slate-600 dark:text-slate-400 hover:text-slate-900 dark:hover:text-slate-200 hover:bg-white/50 dark:hover:bg-slate-700/50'
-                    }
-                  `}
-                >
-                  <Icon className={`w-3.5 h-3.5 ${isActive ? 'text-indigo-600 dark:text-indigo-400' : 'text-slate-400 dark:text-slate-500'}`} />
-                  {item.label}
-                </button>
-              );
-            })}
+            {menuItems.map(entry => renderNavEntry(entry))}
           </div>
 
           {/* Right Actions */}

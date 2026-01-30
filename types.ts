@@ -97,7 +97,6 @@ export enum Tab {
   GOODS_RECEIPTS = 'goods_receipts',
   SALES_ORDERS = 'sales_orders',
   DELIVERY_ORDERS = 'delivery_orders',
-  ORDERS = 'orders',
   POS = 'pos',
   REPORTS = 'reports',
   FINANCE = 'finance',
