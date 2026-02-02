@@ -1,20 +1,51 @@
 -- OneBiz ERP - RBAC core helpers
 
 -- Collect permission patterns (strings) for current user
+-- Includes both role-based permissions AND user-specific permissions
 create or replace function public.get_my_permission_patterns()
 returns text[]
-language sql
+language plpgsql
 stable
 security definer
 set search_path = public
 as $$
+declare
+  role_patterns text[];
+  user_perms record;
+  result text[];
+begin
+  -- 1. Get permissions from roles
   select coalesce(array_agg(distinct p), array[]::text[])
+  into role_patterns
   from (
     select jsonb_array_elements_text(r.permissions) as p
     from public.user_roles ur
     join public.roles r on r.id = ur.role_id
     where ur.user_id = auth.uid()
   ) s;
+
+  result := role_patterns;
+
+  -- 2. Apply user_permissions overrides
+  for user_perms in
+    select permission_code, granted
+    from public.user_permissions
+    where user_id = auth.uid()
+      and tenant_id = public.current_tenant_id()
+  loop
+    if user_perms.granted then
+      -- Grant: add if not already present
+      if not (user_perms.permission_code = any(result)) then
+        result := array_append(result, user_perms.permission_code);
+      end if;
+    else
+      -- Deny: remove from list
+      result := array_remove(result, user_perms.permission_code);
+    end if;
+  end loop;
+
+  return result;
+end;
 $$;
 
 -- Match permission against patterns supporting '*' wildcard

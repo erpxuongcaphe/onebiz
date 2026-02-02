@@ -3,6 +3,7 @@ import { LogOut, KeyRound, AlertTriangle } from 'lucide-react';
 import { useAuth } from '../../lib/auth';
 import { supabase } from '../../lib/supabaseClient';
 import { withTimeout } from '../../lib/async';
+import { validatePassword } from '../../lib/validation';
 
 type ProfileTabProps = {
     branchName?: string;
@@ -45,13 +46,22 @@ export function ProfileTab({ branchName, roleName }: ProfileTabProps) {
 
     const handleChangePassword = async () => {
         setError(null);
-        if (!supabase) return;
+        if (!supabase || !user?.email) return;
 
-        if (!newPassword || newPassword.length < 6) {
-            setError('Mật khẩu mới phải có ít nhất 6 ký tự.');
+        // 1. Validate current password is provided
+        if (!currentPassword.trim()) {
+            setError('Vui lòng nhập mật khẩu hiện tại.');
             return;
         }
 
+        // 2. Validate new password strength
+        const validation = validatePassword(newPassword);
+        if (!validation.valid) {
+            setError(validation.errors.join(', '));
+            return;
+        }
+
+        // 3. Check password confirmation
         if (newPassword !== confirmPassword) {
             setError('Mật khẩu xác nhận không khớp.');
             return;
@@ -59,11 +69,26 @@ export function ProfileTab({ branchName, roleName }: ProfileTabProps) {
 
         setSubmitting(true);
         try {
+            // 4. Verify current password by re-authenticating
+            const { error: reAuthError } = await supabase.auth.signInWithPassword({
+                email: user.email,
+                password: currentPassword
+            });
+
+            if (reAuthError) {
+                setError('Mật khẩu hiện tại không đúng.');
+                setSubmitting(false);
+                return;
+            }
+
+            // 5. Update to new password
             const { error: updateError } = await supabase.auth.updateUser({
                 password: newPassword,
             });
+
             if (updateError) throw updateError;
 
+            // Success - reset form
             setShowChangePassword(false);
             setCurrentPassword('');
             setNewPassword('');
@@ -138,20 +163,38 @@ export function ProfileTab({ branchName, roleName }: ProfileTabProps) {
 
                         <div>
                             <label className="text-xs font-semibold text-slate-500 dark:text-slate-400 mb-1 block">
+                                Mật khẩu hiện tại
+                                <span className="text-rose-500 ml-0.5">*</span>
+                            </label>
+                            <input
+                                type="password"
+                                value={currentPassword}
+                                onChange={(e) => setCurrentPassword(e.target.value)}
+                                className="w-full px-3 py-2 rounded-lg bg-slate-50 dark:bg-slate-950 border border-slate-200 dark:border-slate-800 text-sm"
+                                placeholder="Nhập mật khẩu hiện tại"
+                                autoComplete="current-password"
+                            />
+                        </div>
+
+                        <div>
+                            <label className="text-xs font-semibold text-slate-500 dark:text-slate-400 mb-1 block">
                                 Mật khẩu mới
+                                <span className="text-rose-500 ml-0.5">*</span>
                             </label>
                             <input
                                 type="password"
                                 value={newPassword}
                                 onChange={(e) => setNewPassword(e.target.value)}
                                 className="w-full px-3 py-2 rounded-lg bg-slate-50 dark:bg-slate-950 border border-slate-200 dark:border-slate-800 text-sm"
-                                placeholder="Tối thiểu 6 ký tự"
+                                placeholder="Tối thiểu 8 ký tự, có chữ hoa, chữ thường, số"
+                                autoComplete="new-password"
                             />
                         </div>
 
                         <div>
                             <label className="text-xs font-semibold text-slate-500 dark:text-slate-400 mb-1 block">
-                                Xác nhận mật khẩu
+                                Xác nhận mật khẩu mới
+                                <span className="text-rose-500 ml-0.5">*</span>
                             </label>
                             <input
                                 type="password"
@@ -159,6 +202,7 @@ export function ProfileTab({ branchName, roleName }: ProfileTabProps) {
                                 onChange={(e) => setConfirmPassword(e.target.value)}
                                 className="w-full px-3 py-2 rounded-lg bg-slate-50 dark:bg-slate-950 border border-slate-200 dark:border-slate-800 text-sm"
                                 placeholder="Nhập lại mật khẩu mới"
+                                autoComplete="new-password"
                             />
                         </div>
 
@@ -174,10 +218,12 @@ export function ProfileTab({ branchName, roleName }: ProfileTabProps) {
                                 onClick={() => {
                                     setShowChangePassword(false);
                                     setError(null);
+                                    setCurrentPassword('');
                                     setNewPassword('');
                                     setConfirmPassword('');
                                 }}
-                                className="px-3 py-2 rounded-lg bg-slate-100 dark:bg-slate-800 hover:bg-slate-200 dark:hover:bg-slate-700 text-slate-700 dark:text-slate-200 text-xs font-semibold"
+                                disabled={submitting}
+                                className="px-3 py-2 rounded-lg bg-slate-100 dark:bg-slate-800 hover:bg-slate-200 dark:hover:bg-slate-700 text-slate-700 dark:text-slate-200 text-xs font-semibold disabled:opacity-50"
                             >
                                 Hủy
                             </button>

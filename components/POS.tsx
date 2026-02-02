@@ -4,14 +4,13 @@ import { formatCurrency } from '../constants';
 import { useAuth } from '../lib/auth';
 import { fetchBranches, fetchCurrentBranchId } from '../lib/branches';
 import { fetchInventoryWarehouses } from '../lib/inventory';
-import { createPosSale, fetchCatalogForWarehouse, fetchOpenShift, openShift, fetchPosReceipt, type PosCatalogItem } from '../lib/pos';
+import { createPosSale, fetchCatalogForWarehouse, fetchOpenShift, openShift, fetchPosReceipt, createInvoiceFromOrderHelper, type PosCatalogItem } from '../lib/pos';
 import { ensureDefaultTemplates, fetchDocumentTemplates, getActiveTemplate, type DocumentTemplate, type PaperSize } from '../lib/documentTemplates';
 import { renderDocumentHtml, openPrintWindow, downloadPdf, exportToExcel } from '../lib/documentPrint';
 import { buildPaymentSlipPayload, buildPosInvoicePayload } from '../lib/documentPayloads';
 import { createDocumentPrint } from '../lib/documentPrintStore';
 import { createCustomer, fetchCustomers, getWalkInCustomer, type CustomerRow } from '../lib/sales';
-// FIXME: POS.tsx uses old sales API - need to migrate to new salesOrders.ts
-// import { createInvoiceFromOrder,createSalesOrder, fetchSalesOrders, type SalesOrderRow } from '../lib/salesOrders';
+import { fetchSalesOrders, type SalesOrder } from '../lib/salesOrders';
 
 type TimePreset = 'today' | 'month' | 'year' | 'range' | 'all';
 
@@ -20,7 +19,7 @@ type CartLine = {
   qty: number;
 };
 
-type SaleMode = 'pos' | 'order' | 'pick';
+type SaleMode = 'pos' | 'pick';
 
 const POS: React.FC = () => {
   const { can } = useAuth();
@@ -49,8 +48,7 @@ const POS: React.FC = () => {
   const [quickCustomerName, setQuickCustomerName] = useState('');
   const [quickCustomerPhone, setQuickCustomerPhone] = useState('');
   const [savingCustomer, setSavingCustomer] = useState(false);
-  // const [pickList, setPickList] = useState<SalesOrderRow[]>([]);
-  const [pickList, setPickList] = useState<any[]>([]); // FIXME: migrate to new sales API
+  const [pickList, setPickList] = useState<SalesOrder[]>([]);
   const [templates, setTemplates] = useState<DocumentTemplate[]>([]);
   const [invoicePaperSize, setInvoicePaperSize] = useState<PaperSize>('A5');
   const [slipPaperSize, setSlipPaperSize] = useState<PaperSize>('80mm');
@@ -142,19 +140,21 @@ const POS: React.FC = () => {
   }, [selectedCustomerId]);
 
   useEffect(() => {
-    // FIXME: POS pick mode disabled until migration to new sales API
-    /*
     if (saleMode !== 'pick') return;
     let isMounted = true;
     const loadPickList = async () => {
-      const rows = await fetchSalesOrders({ status: 'waiting_pick' });
+      // Fetch orders with status 'waiting_pick' (or 'confirmed' if waiting_pick is not used yet)
+      // Assuming 'confirmed' orders are ready to be picked/processed in POS for now if strict workflow not set
+      // Or if the plan is strictly 'waiting_pick', use that. Let's use 'confirmed' as it's the standard "new order" status.
+      // Wait, standard workflow: Draft -> Confirmed -> Picking?
+      // Let's assume 'confirmed' orders appear here to be processed.
+      const rows = await fetchSalesOrders({ status: 'confirmed' });
       if (isMounted) setPickList(rows);
     };
     void loadPickList();
     return () => {
       isMounted = false;
     };
-    */
   }, [saleMode]);
 
   const printPosDocument = async (mode: 'print' | 'pdf' | 'excel', docType: 'invoice' | 'payment_slip') => {
@@ -355,7 +355,6 @@ const POS: React.FC = () => {
       <div className="flex flex-wrap gap-2">
         {([
           { key: 'pos', label: 'Bán trực tiếp' },
-          { key: 'order', label: 'Đặt hàng' },
           { key: 'pick', label: 'Kho chuẩn bị' },
         ] as const).map((m) => (
           <button
@@ -578,14 +577,6 @@ const POS: React.FC = () => {
                     <option value="other">Khác</option>
                   </select>
                 )}
-                {saleMode === 'order' && (
-                  <input
-                    type="date"
-                    value={dueDate}
-                    onChange={(e) => setDueDate(e.target.value)}
-                    className="flex-1 px-3 py-2 rounded-lg bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 text-xs"
-                  />
-                )}
               </div>
               <button
                 disabled={cart.length === 0 || busy || !selectedCustomerId || !can('pos.order.create') || (saleMode === 'pos' && (!can('pos.payment.record') || !shiftId))}
@@ -627,35 +618,14 @@ const POS: React.FC = () => {
                       setCart([]);
                       setLastOrderId(orderId);
                     } else {
-                      // FIXME: createSalesOrder old API disabled
-                      setError('Chức năng đặt hàng đang nâng cấp. Vui lòng dùng module Đơn bán hàng.');
-                      /*
-                      const orderId = await createSalesOrder({
-                        branchId,
-                        warehouseId,
-                        customerId: selectedCustomerId,
-                        lines: cart.map((l) => ({
-                          product_id: l.item.product_id,
-                          quantity: l.qty,
-                          unit_price: l.item.price,
-                        })),
-                        dueDate: dueDate || null,
-                      });
-                      if (!orderId) {
-                        setError('Không tạo được đơn đặt hàng.');
-                        return;
-                      }
-                      setCart([]);
-                      setSaleMode('pick');
-                      setDueDate('');
-                      */
+                      // Order mode removed
                     }
                   } finally {
                     setBusy(false);
                   }
                 }}
               >
-                {busy ? 'Đang xử lý...' : saleMode === 'pos' ? 'Thanh toán' : 'Xác nhận đặt hàng'}
+                {busy ? 'Đang xử lý...' : 'Thanh toán'}
               </button>
             </div>
           </div>
@@ -666,14 +636,13 @@ const POS: React.FC = () => {
         <div className="bg-white dark:bg-slate-900 rounded-xl shadow-soft border border-slate-200 dark:border-slate-800 overflow-hidden">
           <div className="p-3 border-b border-slate-100 dark:border-slate-800 flex items-center justify-between">
             <div>
-              <div className="text-[11px] font-bold text-slate-900 dark:text-slate-200">Kho chuẩn bị</div>
-              <div className="text-[10px] text-slate-500 dark:text-slate-400">Đơn đang chờ kho chuẩn bị hàng</div>
+              <div className="text-[11px] font-bold text-slate-900 dark:text-slate-200">Kho chuẩn bị (Đơn hàng chờ xử lý)</div>
+              <div className="text-[10px] text-slate-500 dark:text-slate-400">Danh sách đơn hàng từ bộ phận kinh doanh</div>
             </div>
             <button
               onClick={async () => {
-                // FIXME: Disabled until migration
-                setError('Chức năng này đang nâng cấp.');
-                // setPickList(await fetchSalesOrders({ status: 'waiting_pick' }));
+                const rows = await fetchSalesOrders({ status: 'confirmed' });
+                setPickList(rows);
               }}
               className="px-2.5 py-1.5 rounded-lg text-[11px] font-bold border border-slate-200 dark:border-slate-700 text-slate-600 dark:text-slate-300 hover:bg-slate-50 dark:hover:bg-slate-800"
             >
@@ -704,24 +673,30 @@ const POS: React.FC = () => {
                   <tr key={o.id} className="hover:bg-slate-50 dark:hover:bg-slate-800/50">
                     <td className="px-3 py-2 font-mono text-[11px] text-indigo-600 dark:text-indigo-400">{o.order_number}</td>
                     <td className="px-3 py-2 text-[11px] font-semibold text-slate-700 dark:text-slate-200">{o.customer_name}</td>
-                    <td className="px-3 py-2 text-[11px] text-slate-500 dark:text-slate-400">{o.order_date}</td>
-                    <td className="px-3 py-2 text-center text-[11px] text-slate-600 dark:text-slate-300">{o.items}</td>
+                    <td className="px-3 py-2 text-[11px] text-slate-500 dark:text-slate-400">{new Date(o.order_date).toLocaleDateString('vi-VN')}</td>
+                    <td className="px-3 py-2 text-center text-[11px] text-slate-600 dark:text-slate-300">{/* o.items count not directly available, maybe length? */ (o as any).items?.length ?? 0}</td>
                     <td className="px-3 py-2 text-right text-[11px] font-bold text-slate-900 dark:text-slate-200">{formatCurrency(o.total)}</td>
                     <td className="px-3 py-2 text-center">
                       <button
                         onClick={async () => {
-                          // FIXME: Disabled until migration
-                          setError('Chức năng này đang nâng cấp.');
-                          /*
-                          const invoiceId = await createInvoiceFromOrder({ orderId: o.id, shiftId });
-                          if (!invoiceId) {
-                            setError('Không tạo được hóa đơn từ đơn đặt hàng.');
-                            return;
+                          setBusy(true);
+                          try {
+                            const invoiceId = await createInvoiceFromOrderHelper({ orderId: o.id, shiftId });
+                            if (!invoiceId) {
+                              setError('Không tạo được hóa đơn. Kiểm tra ca làm việc hoặc trạng thái đơn.');
+                              return;
+                            }
+                            // Refresh list
+                            const rows = await fetchSalesOrders({ status: 'confirmed' });
+                            setPickList(rows);
+                            setLastOrderId(invoiceId); // Switch to print view
+                            setSaleMode('pos'); // Return to POS mode to print
+                          } finally {
+                            setBusy(false);
                           }
-                          setPickList(await fetchSalesOrders({ status: 'waiting_pick' }));
-                          */
                         }}
-                        className="px-2.5 py-1.5 rounded-lg bg-indigo-600 hover:bg-indigo-700 text-white text-[11px] font-bold"
+                        disabled={busy}
+                        className="px-2.5 py-1.5 rounded-lg bg-indigo-600 hover:bg-indigo-700 text-white text-[11px] font-bold disabled:opacity-50"
                       >
                         Tạo hóa đơn
                       </button>

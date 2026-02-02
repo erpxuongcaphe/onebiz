@@ -88,10 +88,6 @@ export async function fetchCatalogForWarehouse(params: {
     query = query.or(`name.ilike.%${qStr}%,sku.ilike.%${qStr}%`, { foreignTable: 'product' });
   }
 
-  // Note: Category filtering by name on 3rd level nesting is tricky in one go, 
-  // so we keep it in memory or would need another !inner join chain. 
-  // For now, let's keep category filter in JS, but search is now DB-optimized.
-
   const { data, error } = await query;
   if (error || !data) return [];
 
@@ -199,7 +195,7 @@ export async function createPosSale(params: {
   const { data: sessionData } = await supabase.auth.getSession();
   if (!sessionData.session) return null;
 
-  // Try using the stored procedure first (recommended for atomicity)
+  // Use the stored procedure which handles stock deduction atomically
   const { data, error } = await supabase.rpc('pos_create_sale', {
     p_branch_id: params.branchId,
     p_warehouse_id: params.warehouseId,
@@ -210,13 +206,10 @@ export async function createPosSale(params: {
     p_customer_id: params.customerId,
   });
 
-  // If RPC exists and works, return its result
   if (!error && data) {
     return (data as any) ?? null;
   }
 
-  // Fallback has been DISABLED due to race condition risks.
-  // If the RPC fails, we must fail the transaction to prevent data corruption.
   console.error('pos_create_sale RPC failed:', error?.message);
   return null;
 }
@@ -322,4 +315,24 @@ export async function fetchPosReceipt(orderId: string): Promise<PosOrderReceipt 
     vat_amount: 0,
     company: {},
   };
+}
+
+export async function createInvoiceFromOrderHelper(params: {
+  orderId: string;
+  shiftId?: string | null;
+}): Promise<string | null> {
+  if (!supabase) return null;
+  const { data: sessionData } = await supabase.auth.getSession();
+  if (!sessionData.session) return null;
+
+  const { data, error } = await supabase.rpc('pos_create_invoice_from_order', {
+    p_order_id: params.orderId,
+    p_shift_id: params.shiftId ?? null,
+  });
+
+  if (!error && data) {
+    return (data as any) ?? null;
+  }
+  console.error('pos_create_invoice_from_order RPC failed:', error?.message);
+  return null;
 }

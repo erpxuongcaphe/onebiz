@@ -14,6 +14,9 @@ export type ProfileLite = {
   full_name: string;
   status: string;
   branch_id: string | null;
+  is_locked: boolean;
+  locked_until: string | null;
+  last_login_at: string | null;
 };
 
 export type UserRole = {
@@ -42,7 +45,7 @@ export async function fetchProfiles(): Promise<ProfileLite[]> {
   if (!supabase) return [];
   const { data, error } = await supabase
     .from('profiles')
-    .select('id, email, full_name, status, branch_id')
+    .select('id, email, full_name, status, branch_id, is_locked, locked_until, last_login_at')
     .order('created_at', { ascending: true });
 
   if (error || !data) return [];

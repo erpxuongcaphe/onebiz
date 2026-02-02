@@ -37,6 +37,7 @@ export function TenantProvider({ children }: { children: React.ReactNode }) {
         if (t?.id) {
           try {
             localStorage.setItem('onebiz.tenant_id', t.id);
+            localStorage.setItem('onebiz.hostname', hostname);
           } catch {
             // ignore
           }
@@ -65,7 +66,18 @@ export function useTenant() {
 
 export function getCachedTenantId(): string | null {
   try {
-    return localStorage.getItem('onebiz.tenant_id');
+    const cachedTenantId = localStorage.getItem('onebiz.tenant_id');
+    const cachedHostname = localStorage.getItem('onebiz.hostname');
+    const currentHostname = window.location.hostname;
+
+    // Invalidate cache if hostname has changed
+    if (cachedHostname !== currentHostname) {
+      localStorage.removeItem('onebiz.tenant_id');
+      localStorage.removeItem('onebiz.hostname');
+      return null;
+    }
+
+    return cachedTenantId;
   } catch {
     return null;
   }

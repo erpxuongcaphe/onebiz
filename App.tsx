@@ -4,6 +4,7 @@ import Navbar from './components/Navbar';
 import Sidebar from './components/Sidebar';
 import MobileNav from './components/MobileNav';
 import { getAppMode } from './lib/appMode';
+import { useAuth } from './lib/auth';
 
 const LazyDashboard = React.lazy(() => import('./components/Dashboard'));
 const LazyInventory = React.lazy(() => import('./components/Inventory'));
@@ -17,9 +18,21 @@ const LazyReports = React.lazy(() => import('./components/Reports'));
 const LazyFinance = React.lazy(() => import('./components/Finance'));
 const LazyCustomers = React.lazy(() => import('./components/Customers'));
 const LazySettings = React.lazy(() => import('./components/Settings'));
+const LazyLoginPage = React.lazy(() => import('./components/LoginPage'));
+const LazyForgotPasswordPage = React.lazy(() => import('./components/ForgotPasswordPage'));
+const LazyResetPasswordPage = React.lazy(() => import('./components/ResetPasswordPage'));
 
 const PageFallback = () => (
   <div className="text-[11px] text-slate-500 dark:text-slate-400 animate-fade-in">Đang tải...</div>
+);
+
+const LoadingScreen = () => (
+  <div className="min-h-screen bg-slate-50/50 dark:bg-slate-950 flex items-center justify-center">
+    <div className="text-center animate-fade-in">
+      <div className="inline-block w-12 h-12 border-4 border-indigo-600 border-t-transparent rounded-full animate-spin mb-4"></div>
+      <p className="text-sm text-slate-600 dark:text-slate-400">Đang tải...</p>
+    </div>
+  </div>
 );
 
 const FeaturePending = () => (
@@ -83,21 +96,74 @@ function MainLayout() {
   );
 }
 
+/**
+ * Protected Route Wrapper
+ * Redirects to login if user is not authenticated
+ */
+function ProtectedRoute({ children }: { children: React.ReactNode }) {
+  const { user, loading } = useAuth();
+
+  if (loading) {
+    return <LoadingScreen />;
+  }
+
+  if (!user) {
+    return <Navigate to="/login" replace />;
+  }
+
+  return <>{children}</>;
+}
+
 function App() {
   const appMode = getAppMode();
 
   return (
     <Routes>
-      {/* POS Route - Standalone or different layout if needed */}
-      <Route path="/pos" element={
-        <Suspense fallback={<PageFallback />}>
-          <LazyPOS />
-        </Suspense>
-      } />
+      {/* Public Routes */}
+      <Route
+        path="/login"
+        element={
+          <Suspense fallback={<LoadingScreen />}>
+            <LazyLoginPage />
+          </Suspense>
+        }
+      />
+      <Route
+        path="/forgot-password"
+        element={
+          <Suspense fallback={<LoadingScreen />}>
+            <LazyForgotPasswordPage />
+          </Suspense>
+        }
+      />
+      <Route
+        path="/reset-password"
+        element={
+          <Suspense fallback={<LoadingScreen />}>
+            <LazyResetPasswordPage />
+          </Suspense>
+        }
+      />
 
-      {/* Admin Routes */}
-      <Route element={<MainLayout />}>
-        <Route index element={<Navigate to={appMode === 'pos' ? "/pos" : "/dashboard"} replace />} />
+      {/* POS Route - Standalone (can be protected or public based on requirements) */}
+      <Route
+        path="/pos"
+        element={
+          <Suspense fallback={<PageFallback />}>
+            <LazyPOS />
+          </Suspense>
+        }
+      />
+
+      {/* Protected Admin Routes */}
+      <Route
+        element={
+          <ProtectedRoute>
+            <MainLayout />
+          </ProtectedRoute>
+        }
+      >
+        <Route index element={<Navigate to={appMode === 'pos' ? '/pos' : '/dashboard'} replace />} />
         <Route path="dashboard" element={<LazyDashboard />} />
         <Route path="inventory" element={<LazyInventory />} />
         <Route path="suppliers" element={<LazySuppliers />} />
