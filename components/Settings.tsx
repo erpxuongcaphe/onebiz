@@ -18,6 +18,11 @@ const Settings: React.FC = () => {
   const [roleUiUnlocked, setRoleUiUnlocked] = useState(false);
 
   const tenantId = tenant?.id ?? null;
+
+  // Safety net: Should never reach here due to ProtectedRoute, but just in case
+  if (!user && !loading) {
+    return null;
+  }
   const canManageRoles = roleUiUnlocked || permissionPatterns.some((p) => p === '*' || p.startsWith('roles.'));
   const canManageTemplates = permissionPatterns.some((p) => p === '*' || p.startsWith('settings.'));
   const isSuperAdmin = permissionPatterns.includes('*');

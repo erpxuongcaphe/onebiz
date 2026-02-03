@@ -4,7 +4,6 @@ import { useAuth } from '../../lib/auth';
 import { supabase } from '../../lib/supabaseClient';
 import { withTimeout } from '../../lib/async';
 import { validatePassword } from '../../lib/validation';
-import { useNavigate } from 'react-router-dom';
 
 type ProfileTabProps = {
     branchName?: string;
@@ -13,7 +12,6 @@ type ProfileTabProps = {
 
 export function ProfileTab({ branchName, roleName }: ProfileTabProps) {
     const { user } = useAuth();
-    const navigate = useNavigate();
     const [submitting, setSubmitting] = useState(false);
     const [error, setError] = useState<string | null>(null);
     const [showChangePassword, setShowChangePassword] = useState(false);
@@ -32,12 +30,11 @@ export function ProfileTab({ branchName, roleName }: ProfileTabProps) {
                 'Đăng xuất quá lâu. Vui lòng kiểm tra mạng và thử lại.'
             );
             if (signOutError) throw signOutError;
-            // Redirect to login page after successful logout
-            navigate('/login');
+            // ProtectedRoute will auto redirect to /login
         } catch (e: any) {
             try {
                 await supabase.auth.signOut({ scope: 'local' });
-                navigate('/login');
+                // ProtectedRoute will auto redirect to /login
                 return;
             } catch (localErr: any) {
                 setError(localErr?.message ?? e?.message ?? 'Đăng xuất thất bại.');

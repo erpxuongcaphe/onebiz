@@ -1,5 +1,5 @@
 import React, { useState, useRef, useEffect } from 'react';
-import { Settings, Moon, Sun, Bell, Search, Hexagon, Menu, ChevronDown, User } from 'lucide-react';
+import { Settings, Moon, Sun, Bell, Search, Hexagon, Menu, ChevronDown } from 'lucide-react';
 import { Tab } from '../types';
 import { getDesktopNavItems, isNavGroup, type NavEntry, type NavGroup, type NavItem } from '../lib/navigation';
 import AuthStatus from './AuthStatus';
