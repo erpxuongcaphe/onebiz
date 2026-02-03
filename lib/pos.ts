@@ -336,3 +336,101 @@ export async function createInvoiceFromOrderHelper(params: {
   console.error('pos_create_invoice_from_order RPC failed:', error?.message);
   return null;
 }
+
+// =====================================================
+// PHASE 2: SHIFT CLOSE & ORDER SEARCH
+// =====================================================
+
+export type ShiftSummary = {
+  shift_id: string;
+  shift_code: string;
+  cashier_name: string;
+  opened_at: string;
+  opening_cash: number;
+  total_orders: number;
+  total_sales: number;
+  cash_sales: number;
+  bank_sales: number;
+  card_sales: number;
+  momo_sales: number;
+  zalopay_sales: number;
+  other_sales: number;
+  expected_cash: number;
+};
+
+export async function fetchShiftSummary(shiftId: string): Promise<ShiftSummary | null> {
+  if (!supabase) return null;
+  const { data: sessionData } = await supabase.auth.getSession();
+  if (!sessionData.session) return null;
+
+  const { data, error } = await supabase.rpc('pos_get_shift_summary', {
+    p_shift_id: shiftId,
+  });
+
+  if (error || !data || data.length === 0) {
+    console.error('pos_get_shift_summary failed:', error?.message);
+    return null;
+  }
+
+  return data[0] as ShiftSummary;
+}
+
+export async function closeShiftWithReconciliation(params: {
+  shiftId: string;
+  actualCash: number;
+  varianceNotes?: string;
+}): Promise<boolean> {
+  if (!supabase) return false;
+  const { data: sessionData } = await supabase.auth.getSession();
+  if (!sessionData.session) return false;
+
+  const { data, error } = await supabase.rpc('pos_close_shift', {
+    p_shift_id: params.shiftId,
+    p_actual_cash: params.actualCash,
+    p_variance_notes: params.varianceNotes || null,
+  });
+
+  if (error) {
+    console.error('pos_close_shift failed:', error.message);
+    return false;
+  }
+
+  return data === true;
+}
+
+export type OrderSearchResult = {
+  order_id: string;
+  order_number: string;
+  customer_name: string;
+  total: number;
+  payment_method: string;
+  status: string;
+  created_at: string;
+};
+
+export async function searchPosOrders(params: {
+  branchId: string;
+  searchText?: string;
+  fromDate?: string;
+  toDate?: string;
+  limit?: number;
+}): Promise<OrderSearchResult[]> {
+  if (!supabase) return [];
+  const { data: sessionData } = await supabase.auth.getSession();
+  if (!sessionData.session) return [];
+
+  const { data, error } = await supabase.rpc('pos_search_orders', {
+    p_branch_id: params.branchId,
+    p_search_text: params.searchText || null,
+    p_from_date: params.fromDate || null,
+    p_to_date: params.toDate || null,
+    p_limit: params.limit || 50,
+  });
+
+  if (error || !data) {
+    console.error('pos_search_orders failed:', error?.message);
+    return [];
+  }
+
+  return data as OrderSearchResult[];
+}

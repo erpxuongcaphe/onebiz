@@ -1,16 +1,20 @@
 import React, { useEffect, useMemo, useState } from 'react';
-import { Calendar, Filter, Loader2, Minus, Plus, Search, ShoppingCart, Trash2 } from 'lucide-react';
+import { Calendar, Filter, Loader2, Minus, Plus, Search, ShoppingCart, Trash2, WifiOff, Wifi } from 'lucide-react';
 import { formatCurrency } from '../constants';
 import { useAuth } from '../lib/auth';
 import { fetchBranches, fetchCurrentBranchId } from '../lib/branches';
 import { fetchInventoryWarehouses } from '../lib/inventory';
 import { createPosSale, fetchCatalogForWarehouse, fetchOpenShift, openShift, fetchPosReceipt, createInvoiceFromOrderHelper, type PosCatalogItem } from '../lib/pos';
+import { CloseShiftModal } from './pos/CloseShiftModal';
+import { OrderSearchModal } from './pos/OrderSearchModal';
 import { ensureDefaultTemplates, fetchDocumentTemplates, getActiveTemplate, type DocumentTemplate, type PaperSize } from '../lib/documentTemplates';
 import { renderDocumentHtml, openPrintWindow, downloadPdf, exportToExcel } from '../lib/documentPrint';
 import { buildPaymentSlipPayload, buildPosInvoicePayload } from '../lib/documentPayloads';
 import { createDocumentPrint } from '../lib/documentPrintStore';
 import { createCustomer, fetchCustomers, getWalkInCustomer, type CustomerRow } from '../lib/sales';
 import { fetchSalesOrders, type SalesOrder } from '../lib/salesOrders';
+import { useOnlineStatus } from '../lib/networkStatus';
+import { saveOfflineOrder, cacheProducts, getCachedProducts, getPendingOrders, markOrderSynced } from '../lib/offlineDB';
 
 type TimePreset = 'today' | 'month' | 'year' | 'range' | 'all';
 
@@ -54,6 +58,15 @@ const POS: React.FC = () => {
   const [slipPaperSize, setSlipPaperSize] = useState<PaperSize>('80mm');
   const [lastOrderId, setLastOrderId] = useState<string | null>(null);
   const [printBusy, setPrintBusy] = useState(false);
+
+  // Offline POS states
+  const isOnline = useOnlineStatus();
+  const [offlineMode, setOfflineMode] = useState(false);
+  const [pendingOrdersCount, setPendingOrdersCount] = useState(0);
+
+  // Modal states
+  const [showCloseShiftModal, setShowCloseShiftModal] = useState(false);
+  const [showOrderSearchModal, setShowOrderSearchModal] = useState(false);
 
   useEffect(() => {
     if (timePreset === 'range') return;
@@ -230,22 +243,139 @@ const POS: React.FC = () => {
     void fetchOpenShift(branchId).then((s) => setShiftId(s?.id ?? null));
   }, [branchId]);
 
+  // Cache products when online and load from cache when offline
   useEffect(() => {
     let isMounted = true;
     if (!warehouseId) {
       setCatalog([]);
       return;
     }
-    setCatalog(null);
-    fetchCatalogForWarehouse({ warehouseId, search: debouncedSearch, category })
-      .then((data) => {
+
+    if (isOnline) {
+      // Online: Fetch from server and cache
+      setCatalog(null);
+      fetchCatalogForWarehouse({ warehouseId, search: debouncedSearch, category })
+        .then(async (data) => {
+          if (!isMounted) return;
+          setCatalog(data);
+
+          // Cache products to IndexedDB for offline use
+          if (data && data.length > 0) {
+            try {
+              await cacheProducts(data.map(item => ({
+                id: item.product_id,
+                name: item.name,
+                price: item.price,
+                stock: item.stock,
+                category: item.category,
+                image_url: item.image_url || null,
+                cached_at: new Date().toISOString()
+              })));
+            } catch (err) {
+              console.error('Failed to cache products:', err);
+            }
+          }
+        });
+    } else {
+      // Offline: Load from cache
+      setOfflineMode(true);
+      getCachedProducts().then((cached) => {
         if (!isMounted) return;
-        setCatalog(data);
+        // Convert cached products back to PosCatalogItem format
+        setCatalog(cached.map(p => ({
+          product_id: p.id,
+          name: p.name,
+          price: p.price,
+          stock: p.stock,
+          category: p.category,
+          image_url: p.image_url,
+          variant_id: null,
+          variant_name: null,
+          sku: ''
+        })));
       });
+    }
+
     return () => {
       isMounted = false;
     };
-  }, [warehouseId, debouncedSearch, category]);
+  }, [warehouseId, debouncedSearch, category, isOnline]);
+
+  // Auto-refresh catalog after successful sale to update stock
+  useEffect(() => {
+    if (lastOrderId && warehouseId && isOnline) {
+      const timer = setTimeout(() => {
+        fetchCatalogForWarehouse({ warehouseId, search: debouncedSearch, category })
+          .then(data => {
+            if (data) setCatalog(data);
+          })
+          .catch(err => {
+            console.error('Failed to refresh catalog:', err);
+          });
+      }, 1000);
+      return () => clearTimeout(timer);
+    }
+  }, [lastOrderId, warehouseId, isOnline, debouncedSearch, category]);
+
+  // Track online/offline status
+  useEffect(() => {
+    if (isOnline) {
+      setOfflineMode(false);
+    } else {
+      setOfflineMode(true);
+    }
+  }, [isOnline]);
+
+  // Load pending orders count on mount
+  useEffect(() => {
+    getPendingOrders().then((pending) => {
+      setPendingOrdersCount(pending.length);
+    });
+  }, []);
+
+  // Sync pending orders when back online
+  useEffect(() => {
+    if (isOnline && pendingOrdersCount > 0) {
+      syncPendingOrders();
+    }
+  }, [isOnline]);
+
+  async function syncPendingOrders() {
+    const pending = await getPendingOrders();
+    let synced = 0;
+
+    for (const order of pending) {
+      try {
+        // Create sale online
+        await createPosSale({
+          branchId: branchId,
+          warehouseId: warehouseId,
+          shiftId: shiftId || '',
+          customerId: order.customer_id || '',
+          lines: order.cart.map(item => ({
+            product_id: item.item.product_id,
+            quantity: item.qty,
+            unit_price: item.item.price
+          })),
+          paymentMethod: order.payment_method as any
+        });
+
+        // Mark as synced
+        await markOrderSynced(order.id);
+        synced++;
+      } catch (err) {
+        console.error('Sync failed for order:', order.id, err);
+      }
+    }
+
+    if (synced > 0) {
+      alert(`✅ Đã đồng bộ ${synced}/${pending.length} đơn hàng offline`);
+    }
+
+    // Refresh count
+    const remaining = await getPendingOrders();
+    setPendingOrdersCount(remaining.length);
+  }
 
   const categories = useMemo(() => {
     const set = new Set<string>();
@@ -284,16 +414,48 @@ const POS: React.FC = () => {
           <p className="text-slate-500 dark:text-slate-400 text-[11px] mt-0.5">Bán nhanh tại quầy, sẵn sàng cho nhiều chi nhánh.</p>
         </div>
         <div className="flex gap-2 w-full sm:w-auto">
-          <button className="flex items-center gap-2 px-3 py-1.5 border border-slate-200 dark:border-slate-700 rounded-lg text-[11px] font-semibold text-slate-600 dark:text-slate-300 bg-white dark:bg-slate-900">
+          <button
+            onClick={() => setShowCloseShiftModal(true)}
+            disabled={!can('pos.shift.update') || !shiftId}
+            className="flex items-center gap-2 px-3 py-1.5 border border-amber-500 dark:border-amber-600 rounded-lg text-[11px] font-semibold text-amber-700 dark:text-amber-400 bg-amber-50 dark:bg-amber-900/20 hover:bg-amber-100 dark:hover:bg-amber-900/30 disabled:opacity-50 disabled:cursor-not-allowed"
+          >
             <Calendar className="w-3.5 h-3.5" />
-            Ca hôm nay
+            Đóng Ca
           </button>
-          <button className="flex items-center gap-2 px-3 py-1.5 border border-slate-200 dark:border-slate-700 rounded-lg text-[11px] font-semibold text-slate-600 dark:text-slate-300 bg-white dark:bg-slate-900">
-            <Filter className="w-3.5 h-3.5" />
-            Bộ lọc
+          <button
+            onClick={() => setShowOrderSearchModal(true)}
+            className="flex items-center gap-2 px-3 py-1.5 border border-slate-200 dark:border-slate-700 rounded-lg text-[11px] font-semibold text-slate-600 dark:text-slate-300 bg-white dark:bg-slate-900 hover:bg-slate-50 dark:hover:bg-slate-800"
+          >
+            <Search className="w-3.5 h-3.5" />
+            Tra Cứu Đơn
           </button>
         </div>
       </div>
+
+      {/* Offline Mode Indicator */}
+      {offlineMode && (
+        <div className="text-[11px] text-amber-700 dark:text-amber-400 bg-amber-50 dark:bg-amber-900/20 border border-amber-200 dark:border-amber-900/40 rounded-lg p-2.5 flex items-center gap-2">
+          <WifiOff className="w-4 h-4" />
+          <span>
+            ⚠️ Chế độ Offline - Đơn hàng sẽ được đồng bộ khi có mạng{' '}
+            {pendingOrdersCount > 0 && (
+              <strong className="text-amber-900 dark:text-amber-300">
+                ({pendingOrdersCount} đơn chờ sync)
+              </strong>
+            )}
+          </span>
+        </div>
+      )}
+
+      {/* Online Sync Success */}
+      {isOnline && !offlineMode && pendingOrdersCount > 0 && (
+        <div className="text-[11px] text-blue-700 dark:text-blue-400 bg-blue-50 dark:bg-blue-900/20 border border-blue-200 dark:border-blue-900/40 rounded-lg p-2.5 flex items-center gap-2">
+          <Wifi className="w-4 h-4" />
+          <span>
+            ✅ Đã kết nối - Đang đồng bộ {pendingOrdersCount} đơn hàng...
+          </span>
+        </div>
+      )}
 
       {error && (
         <div className="text-[11px] text-rose-700 dark:text-rose-400 bg-rose-50 dark:bg-rose-900/20 border border-rose-200 dark:border-rose-900/40 rounded-lg p-2.5">
@@ -437,13 +599,50 @@ const POS: React.FC = () => {
               {(catalog ?? []).map((i) => (
                 <button
                   key={i.product_id}
-                  onClick={() => addToCart(i)}
-                  className="text-left p-2 rounded-lg border border-slate-200 dark:border-slate-800 hover:bg-slate-50 dark:hover:bg-slate-800/40 transition-colors"
+                  onClick={() => {
+                    // Check stock availability before adding
+                    if (i.stock === 0) {
+                      alert('Sản phẩm đã hết hàng');
+                      return;
+                    }
+
+                    const currentQty = cart.find(l => l.item.product_id === i.product_id)?.qty || 0;
+                    if (currentQty + 1 > i.stock) {
+                      alert(`Chỉ còn ${i.stock} sản phẩm trong kho`);
+                      return;
+                    }
+
+                    addToCart(i);
+                  }}
+                  disabled={i.stock === 0}
+                  className={`relative text-left p-2 rounded-lg border border-slate-200 dark:border-slate-800 transition-colors ${
+                    i.stock === 0
+                      ? 'opacity-50 cursor-not-allowed'
+                      : 'hover:bg-slate-50 dark:hover:bg-slate-800/40'
+                  }`}
                 >
+                  {/* Stock Badge */}
+                  <div className="absolute top-2 right-2 px-1.5 py-0.5 bg-white/90 dark:bg-slate-800/90 rounded text-[10px] font-semibold">
+                    {i.stock > 0 ? (
+                      <span className={i.stock < 5 ? 'text-red-600 dark:text-red-400' : 'text-green-600 dark:text-green-400'}>
+                        Còn: {i.stock}
+                      </span>
+                    ) : (
+                      <span className="text-red-600 dark:text-red-400">Hết hàng</span>
+                    )}
+                  </div>
+
                   <div className="text-[10px] text-slate-500 dark:text-slate-400 font-mono">{i.sku}</div>
-                  <div className="text-[11px] font-bold text-slate-900 dark:text-slate-200 mt-0.5 line-clamp-2">{i.name}</div>
+                  <div className="text-[11px] font-bold text-slate-900 dark:text-slate-200 mt-0.5 line-clamp-2 pr-16">{i.name}</div>
                   <div className="mt-1 text-[11px] font-bold text-indigo-600 dark:text-indigo-400 tabular-nums">{formatCurrency(i.price)}</div>
-                  <div className="mt-1 text-[10px] text-slate-500 dark:text-slate-400">{i.category} • SL: {i.stock}</div>
+                  <div className="mt-1 text-[10px] text-slate-500 dark:text-slate-400">{i.category}</div>
+
+                  {/* Out of stock overlay */}
+                  {i.stock === 0 && (
+                    <div className="absolute inset-0 bg-gray-900/50 dark:bg-gray-900/70 flex items-center justify-center rounded-lg">
+                      <span className="text-white font-bold text-xs">HẾT HÀNG</span>
+                    </div>
+                  )}
                 </button>
               ))}
             </div>
@@ -595,6 +794,45 @@ const POS: React.FC = () => {
                     setError('Chưa mở ca.');
                     return;
                   }
+
+                  // ========== OFFLINE MODE: Save to IndexedDB ==========
+                  if (!isOnline) {
+                    try {
+                      const customerName = customers.find(c => c.id === selectedCustomerId)?.name || 'Khách vãng lai';
+
+                      const offlineOrder = {
+                        id: crypto.randomUUID(),
+                        cart: cart.map(l => ({
+                          item: {
+                            product_id: l.item.product_id,
+                            name: l.item.name,
+                            price: l.item.price,
+                            stock: l.item.stock
+                          },
+                          qty: l.qty
+                        })),
+                        payment_method: paymentMethod,
+                        customer_id: selectedCustomerId,
+                        customer_name: customerName,
+                        total: total,
+                        created_at: new Date().toISOString(),
+                        synced: false
+                      };
+
+                      await saveOfflineOrder(offlineOrder);
+                      setPendingOrdersCount(prev => prev + 1);
+
+                      setCart([]);
+                      alert(`✅ Đơn hàng đã lưu offline (${customerName} - ${formatCurrency(total)})\n\nSẽ tự động đồng bộ khi có mạng.`);
+                      return;
+                    } catch (err) {
+                      console.error('Failed to save offline order:', err);
+                      setError('Lỗi lưu đơn offline. Vui lòng thử lại.');
+                      return;
+                    }
+                  }
+
+                  // ========== ONLINE MODE: Create sale normally ==========
                   setBusy(true);
                   try {
                     if (saleMode === 'pos') {
@@ -789,6 +1027,31 @@ const POS: React.FC = () => {
             </div>
           </div>
         </div>
+      )}
+
+      {/* Close Shift Modal */}
+      {showCloseShiftModal && shiftId && (
+        <CloseShiftModal
+          shiftId={shiftId}
+          onClose={() => setShowCloseShiftModal(false)}
+          onSuccess={() => {
+            setShowCloseShiftModal(false);
+            setShiftId(null);
+            alert('✅ Đã đóng ca thành công! Vui lòng mở ca mới để tiếp tục.');
+          }}
+        />
+      )}
+
+      {/* Order Search Modal */}
+      {showOrderSearchModal && (
+        <OrderSearchModal
+          branchId={branchId}
+          onClose={() => setShowOrderSearchModal(false)}
+          onReprint={(orderId) => {
+            setLastOrderId(orderId);
+            setShowOrderSearchModal(false);
+          }}
+        />
       )}
     </div>
   );
