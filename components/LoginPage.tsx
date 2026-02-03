@@ -95,8 +95,9 @@ const LoginPage: React.FC = () => {
         if (phoneLoginError) throw phoneLoginError;
       }
 
-      // Success - navigation will be handled by AuthProvider
+      // Success - clear form and redirect to dashboard
       setPassword('');
+      navigate('/dashboard');
     } catch (e: any) {
       setError(e?.message ?? 'Đăng nhập thất bại.');
     } finally {

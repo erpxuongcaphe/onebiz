@@ -61,7 +61,8 @@ const Sidebar: React.FC<SidebarProps> = ({ isOpen, setIsOpen }) => {
       );
       if (signOutError) throw signOutError;
       setIsOpen(false);
-      // ProtectedRoute will auto redirect to /login when user becomes null
+      // Redirect immediately after successful signOut
+      navigate('/login');
     } catch (e: any) {
       window.alert(e?.message ?? 'Đăng xuất thất bại.');
     }
