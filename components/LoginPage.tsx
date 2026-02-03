@@ -1,44 +1,31 @@
 import React, { useState } from 'react';
 import { Link, useNavigate } from 'react-router-dom';
-import { Database, KeyRound, UserPlus, AlertTriangle, Mail, Phone } from 'lucide-react';
+import { AlertTriangle, Mail, Phone } from 'lucide-react';
 import { supabase, isSupabaseConfigured } from '../lib/supabaseClient';
 import { useTenant, getCachedTenantId } from '../lib/tenantContext';
 import {
   validateEmail,
   validatePhone,
-  validatePassword,
   detectLoginType,
-  getPasswordStrengthText,
-  getPasswordStrengthColor
 } from '../lib/validation';
 import { loginWithPhone } from '../lib/phoneLogin';
-
-type Mode = 'signIn' | 'signUp';
 
 const LoginPage: React.FC = () => {
   const navigate = useNavigate();
   const { tenant } = useTenant();
 
   // Form state
-  const [mode, setMode] = useState<Mode>('signIn');
   const [identifier, setIdentifier] = useState(''); // Email or Phone
   const [password, setPassword] = useState('');
-  const [confirmPassword, setConfirmPassword] = useState('');
-  const [fullName, setFullName] = useState('');
-  const [phone, setPhone] = useState('');
 
   // UI state
   const [submitting, setSubmitting] = useState(false);
   const [error, setError] = useState<string | null>(null);
-  const [showPasswordStrength, setShowPasswordStrength] = useState(false);
 
   const tenantId = tenant?.id ?? getCachedTenantId() ?? null;
 
   // Detect login type from identifier
   const loginType = detectLoginType(identifier);
-
-  // Get password validation
-  const passwordValidation = validatePassword(password);
 
   const handleSignIn = async () => {
     setError(null);
@@ -75,25 +62,27 @@ const LoginPage: React.FC = () => {
 
     try {
       if (loginType === 'email') {
-        // Check if user is locked before login
-        const { data: profile } = await supabase
-          .from('profiles')
-          .select('is_locked')
-          .eq('email', identifier.trim())
-          .eq('tenant_id', tenantId)
-          .single();
-
-        if (profile?.is_locked) {
-          throw new Error('Tài khoản đã bị khóa. Vui lòng liên hệ quản trị viên.');
-        }
-
-        // Login with email directly
+        // Login with email directly (faster - check lock after login)
         const { error: signInError } = await supabase.auth.signInWithPassword({
           email: identifier.trim(),
           password,
         });
 
         if (signInError) throw signInError;
+
+        // Check lock status after successful login
+        const { data: profile } = await supabase
+          .from('profiles')
+          .select('is_locked')
+          .eq('email', identifier.trim())
+          .eq('tenant_id', tenantId)
+          .maybeSingle();
+
+        if (profile?.is_locked) {
+          // Logout immediately if locked
+          await supabase.auth.signOut();
+          throw new Error('Tài khoản đã bị khóa. Vui lòng liên hệ quản trị viên.');
+        }
       } else {
         // Login with phone (query email first)
         // Note: phoneLogin.ts already checks is_locked
@@ -115,79 +104,9 @@ const LoginPage: React.FC = () => {
     }
   };
 
-  const handleSignUp = async () => {
-    setError(null);
-
-    if (!supabase) {
-      setError('Chưa cấu hình Supabase.');
-      return;
-    }
-
-    if (!identifier.trim() || !password) {
-      setError('Vui lòng nhập đầy đủ thông tin.');
-      return;
-    }
-
-    // Email is required for signup
-    if (!validateEmail(identifier)) {
-      setError('Vui lòng nhập email hợp lệ để đăng ký.');
-      return;
-    }
-
-    // Validate password
-    if (!passwordValidation.valid) {
-      setError(passwordValidation.errors.join(', '));
-      return;
-    }
-
-    // Check password confirmation
-    if (password !== confirmPassword) {
-      setError('Mật khẩu xác nhận không khớp.');
-      return;
-    }
-
-    // Validate phone if provided
-    if (phone.trim() && !validatePhone(phone)) {
-      setError('Số điện thoại không đúng định dạng.');
-      return;
-    }
-
-    setSubmitting(true);
-
-    try {
-      const { error: signUpError } = await supabase.auth.signUp({
-        email: identifier.trim(),
-        password,
-        options: {
-          data: {
-            full_name: fullName.trim() || undefined,
-            tenant_id: tenantId || undefined,
-            phone: phone.trim() || undefined,
-          },
-        },
-      });
-
-      if (signUpError) throw signUpError;
-
-      // Success
-      setPassword('');
-      setConfirmPassword('');
-      setMode('signIn');
-      setError(null);
-    } catch (e: any) {
-      setError(e?.message ?? 'Tạo tài khoản thất bại.');
-    } finally {
-      setSubmitting(false);
-    }
-  };
-
   const handleSubmit = (e: React.FormEvent) => {
     e.preventDefault();
-    if (mode === 'signIn') {
-      handleSignIn();
-    } else {
-      handleSignUp();
-    }
+    handleSignIn();
   };
 
   return (
@@ -199,7 +118,7 @@ const LoginPage: React.FC = () => {
             OneBiz ERP
           </h1>
           <p className="text-sm text-slate-600 dark:text-slate-400">
-            {mode === 'signIn' ? 'Đăng nhập vào hệ thống' : 'Tạo tài khoản mới'}
+            Đăng nhập vào hệ thống
           </p>
         </div>
 
@@ -222,51 +141,12 @@ const LoginPage: React.FC = () => {
             </div>
           )}
 
-          {/* Mode Toggle */}
-          <div className="flex items-center justify-center mb-6">
-            <div className="inline-flex rounded-lg border border-slate-200 dark:border-slate-800 overflow-hidden">
-              <button
-                onClick={() => {
-                  setMode('signIn');
-                  setError(null);
-                }}
-                className={`px-4 py-2 text-xs font-semibold transition-colors ${
-                  mode === 'signIn'
-                    ? 'bg-indigo-600 text-white'
-                    : 'bg-white dark:bg-slate-900 text-slate-700 dark:text-slate-300 hover:bg-slate-50 dark:hover:bg-slate-800'
-                }`}
-              >
-                <div className="flex items-center gap-2">
-                  <KeyRound className="w-3.5 h-3.5" />
-                  Đăng Nhập
-                </div>
-              </button>
-              <button
-                onClick={() => {
-                  setMode('signUp');
-                  setError(null);
-                }}
-                className={`px-4 py-2 text-xs font-semibold transition-colors ${
-                  mode === 'signUp'
-                    ? 'bg-indigo-600 text-white'
-                    : 'bg-white dark:bg-slate-900 text-slate-700 dark:text-slate-300 hover:bg-slate-50 dark:hover:bg-slate-800'
-                }`}
-              >
-                <div className="flex items-center gap-2">
-                  <UserPlus className="w-3.5 h-3.5" />
-                  Đăng Ký
-                </div>
-              </button>
-            </div>
-          </div>
-
           {/* Form */}
           <form onSubmit={handleSubmit} className="space-y-4">
             {/* Email/Phone Input */}
             <div>
               <label className="block text-xs font-semibold text-slate-700 dark:text-slate-300 mb-1.5">
-                {mode === 'signIn' ? 'Email hoặc Số điện thoại' : 'Email'}
-                {mode === 'signUp' && <span className="text-rose-500 ml-0.5">*</span>}
+                Email hoặc Số điện thoại
               </label>
               <div className="relative">
                 <input
@@ -274,7 +154,7 @@ const LoginPage: React.FC = () => {
                   value={identifier}
                   onChange={(e) => setIdentifier(e.target.value)}
                   className="w-full pl-10 pr-3 py-2.5 rounded-lg bg-slate-50 dark:bg-slate-950 border border-slate-200 dark:border-slate-800 text-sm focus:ring-2 focus:ring-indigo-500 focus:border-transparent"
-                  placeholder={mode === 'signIn' ? 'user@example.com hoặc 0987654321' : 'user@example.com'}
+                  placeholder="user@example.com hoặc 0987654321"
                   disabled={submitting}
                 />
                 <div className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-400">
@@ -285,124 +165,27 @@ const LoginPage: React.FC = () => {
                   )}
                 </div>
               </div>
-              {mode === 'signIn' && identifier && (
+              {identifier && (
                 <p className="text-xs text-slate-500 dark:text-slate-400 mt-1">
                   {loginType === 'email' ? '📧 Đăng nhập bằng email' : '📱 Đăng nhập bằng số điện thoại'}
                 </p>
               )}
             </div>
 
-            {/* Phone Input (Signup only, optional) */}
-            {mode === 'signUp' && (
-              <div>
-                <label className="block text-xs font-semibold text-slate-700 dark:text-slate-300 mb-1.5">
-                  Số điện thoại (tùy chọn)
-                </label>
-                <input
-                  type="tel"
-                  value={phone}
-                  onChange={(e) => setPhone(e.target.value)}
-                  className="w-full px-3 py-2.5 rounded-lg bg-slate-50 dark:bg-slate-950 border border-slate-200 dark:border-slate-800 text-sm focus:ring-2 focus:ring-indigo-500 focus:border-transparent"
-                  placeholder="0987654321"
-                  disabled={submitting}
-                />
-                <p className="text-xs text-slate-500 dark:text-slate-400 mt-1">
-                  Có thể dùng để đăng nhập sau này
-                </p>
-              </div>
-            )}
-
-            {/* Full Name (Signup only) */}
-            {mode === 'signUp' && (
-              <div>
-                <label className="block text-xs font-semibold text-slate-700 dark:text-slate-300 mb-1.5">
-                  Họ và tên
-                </label>
-                <input
-                  type="text"
-                  value={fullName}
-                  onChange={(e) => setFullName(e.target.value)}
-                  className="w-full px-3 py-2.5 rounded-lg bg-slate-50 dark:bg-slate-950 border border-slate-200 dark:border-slate-800 text-sm focus:ring-2 focus:ring-indigo-500 focus:border-transparent"
-                  placeholder="Nguyễn Văn A"
-                  disabled={submitting}
-                />
-              </div>
-            )}
-
             {/* Password Input */}
             <div>
               <label className="block text-xs font-semibold text-slate-700 dark:text-slate-300 mb-1.5">
                 Mật khẩu
-                {mode === 'signUp' && <span className="text-rose-500 ml-0.5">*</span>}
               </label>
               <input
                 type="password"
                 value={password}
-                onChange={(e) => {
-                  setPassword(e.target.value);
-                  if (mode === 'signUp') setShowPasswordStrength(true);
-                }}
+                onChange={(e) => setPassword(e.target.value)}
                 className="w-full px-3 py-2.5 rounded-lg bg-slate-50 dark:bg-slate-950 border border-slate-200 dark:border-slate-800 text-sm focus:ring-2 focus:ring-indigo-500 focus:border-transparent"
                 placeholder="••••••••"
                 disabled={submitting}
               />
-
-              {/* Password Strength Meter (Signup only) */}
-              {mode === 'signUp' && showPasswordStrength && password && (
-                <div className="mt-2">
-                  <div className="flex gap-1 h-1">
-                    <div
-                      className={`flex-1 rounded ${
-                        password.length > 0 ? getPasswordStrengthColor(passwordValidation.strength) : 'bg-slate-200'
-                      }`}
-                    />
-                    <div
-                      className={`flex-1 rounded ${
-                        passwordValidation.strength !== 'weak' ? getPasswordStrengthColor(passwordValidation.strength) : 'bg-slate-200'
-                      }`}
-                    />
-                    <div
-                      className={`flex-1 rounded ${
-                        passwordValidation.strength === 'strong' ? getPasswordStrengthColor(passwordValidation.strength) : 'bg-slate-200'
-                      }`}
-                    />
-                  </div>
-                  <p className="text-xs text-slate-600 dark:text-slate-400 mt-1">
-                    {getPasswordStrengthText(passwordValidation.strength)}
-                  </p>
-                  {passwordValidation.errors.length > 0 && (
-                    <ul className="text-xs text-rose-600 dark:text-rose-400 mt-1 space-y-0.5">
-                      {passwordValidation.errors.map((err) => (
-                        <li key={err}>• {err}</li>
-                      ))}
-                    </ul>
-                  )}
-                </div>
-              )}
             </div>
-
-            {/* Confirm Password (Signup only) */}
-            {mode === 'signUp' && (
-              <div>
-                <label className="block text-xs font-semibold text-slate-700 dark:text-slate-300 mb-1.5">
-                  Xác nhận mật khẩu
-                  <span className="text-rose-500 ml-0.5">*</span>
-                </label>
-                <input
-                  type="password"
-                  value={confirmPassword}
-                  onChange={(e) => setConfirmPassword(e.target.value)}
-                  className="w-full px-3 py-2.5 rounded-lg bg-slate-50 dark:bg-slate-950 border border-slate-200 dark:border-slate-800 text-sm focus:ring-2 focus:ring-indigo-500 focus:border-transparent"
-                  placeholder="••••••••"
-                  disabled={submitting}
-                />
-                {confirmPassword && password !== confirmPassword && (
-                  <p className="text-xs text-rose-600 dark:text-rose-400 mt-1">
-                    Mật khẩu không khớp
-                  </p>
-                )}
-              </div>
-            )}
 
             {/* Submit Button */}
             <button
@@ -410,20 +193,18 @@ const LoginPage: React.FC = () => {
               disabled={submitting || !isSupabaseConfigured}
               className="w-full py-2.5 px-4 rounded-lg bg-indigo-600 hover:bg-indigo-700 disabled:opacity-50 disabled:cursor-not-allowed text-white text-sm font-semibold transition-colors"
             >
-              {submitting ? 'Đang xử lý...' : mode === 'signIn' ? 'Đăng Nhập' : 'Tạo Tài Khoản'}
+              {submitting ? 'Đang xử lý...' : 'Đăng Nhập'}
             </button>
 
-            {/* Forgot Password Link (SignIn only) */}
-            {mode === 'signIn' && (
-              <div className="text-center">
-                <Link
-                  to="/forgot-password"
-                  className="text-xs text-indigo-600 dark:text-indigo-400 hover:underline"
-                >
-                  Quên mật khẩu?
-                </Link>
-              </div>
-            )}
+            {/* Forgot Password Link */}
+            <div className="text-center">
+              <Link
+                to="/forgot-password"
+                className="text-xs text-indigo-600 dark:text-indigo-400 hover:underline"
+              >
+                Quên mật khẩu?
+              </Link>
+            </div>
           </form>
         </div>
 

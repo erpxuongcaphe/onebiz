@@ -61,6 +61,8 @@ const Sidebar: React.FC<SidebarProps> = ({ isOpen, setIsOpen }) => {
       );
       if (signOutError) throw signOutError;
       setIsOpen(false);
+      // Redirect to login page after logout
+      navigate('/login');
     } catch (e: any) {
       window.alert(e?.message ?? 'Đăng xuất thất bại.');
     }

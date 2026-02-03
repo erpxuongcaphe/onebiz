@@ -1,5 +1,5 @@
 import React, { useState, useRef, useEffect } from 'react';
-import { Settings, Moon, Sun, Bell, Search, Hexagon, Menu, ChevronDown } from 'lucide-react';
+import { Settings, Moon, Sun, Bell, Search, Hexagon, Menu, ChevronDown, User } from 'lucide-react';
 import { Tab } from '../types';
 import { getDesktopNavItems, isNavGroup, type NavEntry, type NavGroup, type NavItem } from '../lib/navigation';
 import AuthStatus from './AuthStatus';
@@ -7,6 +7,7 @@ import { useTenant } from '../lib/tenantContext';
 import { getAppMode } from '../lib/appMode';
 import { getPosBaseUrl } from '../lib/posUrl';
 import { useNavigate, useLocation } from 'react-router-dom';
+import { useAuth } from '../lib/auth';
 
 interface NavbarProps {
   isDarkMode: boolean;
@@ -16,6 +17,7 @@ interface NavbarProps {
 
 const Navbar: React.FC<NavbarProps> = ({ isDarkMode, toggleTheme, onMenuClick }) => {
   const { tenant } = useTenant();
+  const { user } = useAuth();
   const navigate = useNavigate();
   const location = useLocation();
   const menuItems = getDesktopNavItems();
@@ -26,6 +28,11 @@ const Navbar: React.FC<NavbarProps> = ({ isDarkMode, toggleTheme, onMenuClick })
   const dropdownRef = useRef<HTMLDivElement>(null);
 
   const activePath = location.pathname === '/' ? '/dashboard' : location.pathname;
+
+  // Get user display name and avatar
+  const userName = user?.user_metadata?.full_name || user?.email?.split('@')[0] || 'User';
+  const userAvatar = user?.user_metadata?.avatar_url;
+  const userInitial = userName.charAt(0).toUpperCase();
 
   // Close dropdown when clicking outside
   useEffect(() => {
@@ -194,12 +201,21 @@ const Navbar: React.FC<NavbarProps> = ({ isDarkMode, toggleTheme, onMenuClick })
 
             <div className="h-4 w-px bg-slate-200 dark:bg-slate-700 hidden sm:block mx-1"></div>
 
-            <button className="flex items-center gap-2 pl-1 group">
-              <img
-                src="https://picsum.photos/40/40?grayscale"
-                alt="Profile"
-                className="w-6 h-6 lg:w-7 lg:h-7 rounded-full border border-slate-200 dark:border-slate-700 group-hover:ring-2 ring-indigo-500/50 transition-all"
-              />
+            <button
+              onClick={() => navigate('/settings')}
+              className="flex items-center gap-2 pl-1 group"
+            >
+              {userAvatar ? (
+                <img
+                  src={userAvatar}
+                  alt={userName}
+                  className="w-6 h-6 lg:w-7 lg:h-7 rounded-full border border-slate-200 dark:border-slate-700 group-hover:ring-2 ring-indigo-500/50 transition-all object-cover"
+                />
+              ) : (
+                <div className="w-6 h-6 lg:w-7 lg:h-7 rounded-full border border-slate-200 dark:border-slate-700 bg-indigo-100 dark:bg-indigo-900 text-indigo-600 dark:text-indigo-300 flex items-center justify-center text-xs font-semibold group-hover:ring-2 ring-indigo-500/50 transition-all">
+                  {userInitial}
+                </div>
+              )}
             </button>
           </div>
         </div>

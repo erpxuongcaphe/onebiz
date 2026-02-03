@@ -28,23 +28,36 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
 
     let isMounted = true;
     const fallbackTimer = window.setTimeout(() => {
-      // Avoid getting stuck forever if network/power issues hang auth calls.
+      // Reduced timeout from 6s to 3s for faster initial load
       if (!isMounted) return;
       setLoading(false);
-    }, 6000);
+    }, 3000);
 
+    // Get initial session
     supabase.auth.getSession().then(async ({ data }) => {
       if (!isMounted) return;
       setSession(data.session ?? null);
       setUser(data.session?.user ?? null);
+
+      // Load permissions in background, don't block UI
       if (data.session) {
+        // Show UI first, load permissions async
+        setLoading(false);
+        window.clearTimeout(fallbackTimer);
+
         const perms = await fetchMyPermissionPatterns();
         if (isMounted) setPermissionPatterns(perms);
       } else {
         setPermissionPatterns([]);
+        setLoading(false);
+        window.clearTimeout(fallbackTimer);
       }
-      setLoading(false);
-      window.clearTimeout(fallbackTimer);
+    }).catch(() => {
+      // If getSession fails, still show UI
+      if (isMounted) {
+        setLoading(false);
+        window.clearTimeout(fallbackTimer);
+      }
     });
 
     const { data: sub } = supabase.auth.onAuthStateChange(async (_event, nextSession) => {
