@@ -5,8 +5,7 @@ import { getDesktopNavItems, getMobileNavItems, isNavGroup, type NavEntry, type 
 import { useTenant } from '../lib/tenantContext';
 import { getAppMode } from '../lib/appMode';
 import { getPosBaseUrl } from '../lib/posUrl';
-import { supabase } from '../lib/supabaseClient';
-import { withTimeout } from '../lib/async';
+import { forceLogout } from '../lib/logout';
 
 import { useNavigate, useLocation } from 'react-router-dom';
 
@@ -49,23 +48,15 @@ const Sidebar: React.FC<SidebarProps> = ({ isOpen, setIsOpen }) => {
   };
 
   const handleSignOut = async () => {
-    if (!supabase) {
-      window.alert('Chưa cấu hình Supabase.');
-      return;
-    }
-    try {
-      const { error: signOutError } = await withTimeout(
-        supabase.auth.signOut(),
-        8000,
-        'Đăng xuất quá lâu. Vui lòng kiểm tra mạng và thử lại.'
-      );
-      if (signOutError) throw signOutError;
-      setIsOpen(false);
-      // Redirect immediately after successful signOut
-      navigate('/login');
-    } catch (e: any) {
-      window.alert(e?.message ?? 'Đăng xuất thất bại.');
-    }
+    // Close sidebar before logout
+    setIsOpen(false);
+
+    // Use forceLogout helper to clear browser cache and redirect
+    // This fixes browser-specific localStorage issues where stale tokens
+    // prevent proper logout
+    await forceLogout();
+
+    // Note: Page will reload, so no need for additional cleanup
   };
 
   const renderNavItem = (item: NavItem, isSubItem = false) => {

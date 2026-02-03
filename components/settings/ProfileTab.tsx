@@ -4,7 +4,7 @@ import { useAuth } from '../../lib/auth';
 import { supabase } from '../../lib/supabaseClient';
 import { withTimeout } from '../../lib/async';
 import { validatePassword } from '../../lib/validation';
-import { useNavigate } from 'react-router-dom';
+import { forceLogout } from '../../lib/logout';
 
 type ProfileTabProps = {
     branchName?: string;
@@ -13,7 +13,6 @@ type ProfileTabProps = {
 
 export function ProfileTab({ branchName, roleName }: ProfileTabProps) {
     const { user } = useAuth();
-    const navigate = useNavigate();
     const [submitting, setSubmitting] = useState(false);
     const [error, setError] = useState<string | null>(null);
     const [showChangePassword, setShowChangePassword] = useState(false);
@@ -23,28 +22,14 @@ export function ProfileTab({ branchName, roleName }: ProfileTabProps) {
 
     const handleSignOut = async () => {
         setError(null);
-        if (!supabase) return;
         setSubmitting(true);
-        try {
-            const { error: signOutError } = await withTimeout(
-                supabase.auth.signOut(),
-                8000,
-                'Đăng xuất quá lâu. Vui lòng kiểm tra mạng và thử lại.'
-            );
-            if (signOutError) throw signOutError;
-            // Redirect immediately after successful logout
-            navigate('/login');
-        } catch (e: any) {
-            try {
-                await supabase.auth.signOut({ scope: 'local' });
-                navigate('/login');
-                return;
-            } catch (localErr: any) {
-                setError(localErr?.message ?? e?.message ?? 'Đăng xuất thất bại.');
-            }
-        } finally {
-            setSubmitting(false);
-        }
+
+        // Use forceLogout helper to clear browser cache and redirect
+        // This fixes browser-specific localStorage issues where stale tokens
+        // prevent proper logout
+        await forceLogout();
+
+        // Note: No need to setSubmitting(false) because page will reload
     };
 
     const handleChangePassword = async () => {
