@@ -28,11 +28,32 @@ const Navbar: React.FC<NavbarProps> = ({ isDarkMode, toggleTheme, onMenuClick })
   const [openGroup, setOpenGroup] = useState<string | null>(null);
   const [avatarOpen, setAvatarOpen] = useState(false);
   const [bellOpen, setBellOpen] = useState(false);
+  const [searchQuery, setSearchQuery] = useState('');
   const dropdownRef = useRef<HTMLDivElement>(null);
   const avatarRef = useRef<HTMLDivElement>(null);
   const bellRef = useRef<HTMLDivElement>(null);
+  const searchRef = useRef<HTMLDivElement>(null);
 
   const activePath = location.pathname === '/' ? '/dashboard' : location.pathname;
+
+  // Flatten all nav entries (including group children) for search
+  const allNavItems: NavItem[] = React.useMemo(() => {
+    const items: NavItem[] = [];
+    for (const entry of menuItems) {
+      if (isNavGroup(entry)) {
+        items.push(...entry.items);
+      } else {
+        items.push(entry);
+      }
+    }
+    return items;
+  }, [menuItems]);
+
+  const searchResults = React.useMemo(() => {
+    if (!searchQuery.trim()) return [];
+    const q = searchQuery.trim().toLowerCase();
+    return allNavItems.filter(item => item.label.toLowerCase().includes(q));
+  }, [searchQuery, allNavItems]);
 
   // Get user display name and avatar
   const userName = user?.user_metadata?.full_name || user?.email?.split('@')[0] || 'User';
@@ -50,6 +71,9 @@ const Navbar: React.FC<NavbarProps> = ({ isDarkMode, toggleTheme, onMenuClick })
       }
       if (bellRef.current && !bellRef.current.contains(event.target as Node)) {
         setBellOpen(false);
+      }
+      if (searchRef.current && !searchRef.current.contains(event.target as Node)) {
+        setSearchQuery('');
       }
     };
 
@@ -179,12 +203,41 @@ const Navbar: React.FC<NavbarProps> = ({ isDarkMode, toggleTheme, onMenuClick })
               <Search className="w-3.5 h-3.5" />
             </button>
 
-            <div className="hidden md:flex items-center bg-slate-100 dark:bg-slate-800 rounded-lg px-2.5 py-1.5 focus-within:ring-2 focus-within:ring-indigo-500/20 border border-transparent focus-within:border-indigo-500 transition-all w-48 group">
-              <Search className="w-3 h-3 text-slate-400 group-focus-within:text-indigo-500 transition-colors" />
-              <input
-                className="bg-transparent border-none outline-none text-xs ml-2 w-full text-slate-700 dark:text-slate-200 placeholder:text-slate-400"
-                placeholder="Tìm kiếm..."
-              />
+            <div className="hidden md:block relative" ref={searchRef}>
+              <div className="flex items-center bg-slate-100 dark:bg-slate-800 rounded-lg px-2.5 py-1.5 focus-within:ring-2 focus-within:ring-indigo-500/20 border border-transparent focus-within:border-indigo-500 transition-all w-48 group">
+                <Search className="w-3 h-3 text-slate-400 group-focus-within:text-indigo-500 transition-colors" />
+                <input
+                  value={searchQuery}
+                  onChange={(e) => setSearchQuery(e.target.value)}
+                  onKeyDown={(e) => { if (e.key === 'Escape') setSearchQuery(''); }}
+                  className="bg-transparent border-none outline-none text-xs ml-2 w-full text-slate-700 dark:text-slate-200 placeholder:text-slate-400"
+                  placeholder="Tìm kiếm..."
+                />
+              </div>
+
+              {searchResults.length > 0 && (
+                <div className="absolute top-full left-0 mt-1 w-56 bg-white dark:bg-slate-800 rounded-lg shadow-lg ring-1 ring-slate-200 dark:ring-slate-700 py-1 z-50">
+                  {searchResults.map(item => {
+                    const Icon = item.icon;
+                    return (
+                      <button
+                        key={item.id}
+                        onClick={() => { navigate(item.path); setSearchQuery(''); }}
+                        className="w-full flex items-center gap-2 px-3 py-2 text-xs text-slate-600 dark:text-slate-300 hover:bg-indigo-50 dark:hover:bg-indigo-900/20 hover:text-indigo-600 dark:hover:text-indigo-400 transition-colors"
+                      >
+                        <Icon className="w-3.5 h-3.5 text-slate-400 dark:text-slate-500" />
+                        {item.label}
+                      </button>
+                    );
+                  })}
+                </div>
+              )}
+
+              {searchQuery.trim() && searchResults.length === 0 && (
+                <div className="absolute top-full left-0 mt-1 w-56 bg-white dark:bg-slate-800 rounded-lg shadow-lg ring-1 ring-slate-200 dark:ring-slate-700 py-3 z-50">
+                  <p className="text-center text-xs text-slate-400 dark:text-slate-500">Không tìm thấy kết quả</p>
+                </div>
+              )}
             </div>
 
             <div className="flex items-center gap-0.5">

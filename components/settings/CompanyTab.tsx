@@ -1,23 +1,46 @@
-import React, { useState } from 'react';
-import { Building2, Save } from 'lucide-react';
+import React, { useState, useEffect } from 'react';
+import { Building2, Save, CheckCircle2 } from 'lucide-react';
+import { useTenant } from '../../lib/tenantContext';
+import { supabase } from '../../lib/supabaseClient';
 
-type CompanyTabProps = {
-    // Will expand later with actual company data
-};
-
-export function CompanyTab({ }: CompanyTabProps) {
-    const [companyName, setCompanyName] = useState('OneBiz ERP');
+export function CompanyTab() {
+    const { tenant } = useTenant();
+    const [companyName, setCompanyName] = useState('');
     const [taxCode, setTaxCode] = useState('');
     const [address, setAddress] = useState('');
     const [phone, setPhone] = useState('');
     const [saving, setSaving] = useState(false);
+    const [saved, setSaved] = useState(false);
+    const [error, setError] = useState<string | null>(null);
+
+    // Populate form when tenant data arrives
+    useEffect(() => {
+        if (!tenant) return;
+        setCompanyName(tenant.name || '');
+        setTaxCode(tenant.settings?.tax_code || '');
+        setAddress(tenant.settings?.address || '');
+        setPhone(tenant.settings?.phone || '');
+    }, [tenant]);
 
     const handleSave = async () => {
+        if (!supabase) return;
         setSaving(true);
-        // TODO: Implement save company settings API
-        await new Promise((resolve) => setTimeout(resolve, 1000));
-        setSaving(false);
-        alert('Lưu thành công! (Tính năng đang phát triển)');
+        setError(null);
+        try {
+            const { error: rpcErr } = await supabase.rpc('update_company_settings', {
+                p_name: companyName,
+                p_tax_code: taxCode,
+                p_address: address,
+                p_phone: phone,
+            });
+            if (rpcErr) throw rpcErr;
+            setSaved(true);
+            setTimeout(() => setSaved(false), 2500);
+        } catch (e: any) {
+            setError(e?.message || 'Không thể lưu cấu hình');
+        } finally {
+            setSaving(false);
+        }
     };
 
     return (
@@ -82,14 +105,20 @@ export function CompanyTab({ }: CompanyTabProps) {
                         />
                     </div>
 
-                    <button
-                        onClick={handleSave}
-                        disabled={saving}
-                        className="flex items-center gap-2 px-4 py-2 rounded-lg bg-indigo-600 hover:bg-indigo-700 disabled:opacity-50 text-white text-sm font-semibold"
-                    >
-                        <Save className="w-4 h-4" />
-                        {saving ? 'Đang lưu...' : 'Lưu Cấu Hình'}
-                    </button>
+                    {error && (
+                        <p className="text-xs text-rose-600 dark:text-rose-400">{error}</p>
+                    )}
+
+                    <div className="flex items-center gap-3">
+                        <button
+                            onClick={handleSave}
+                            disabled={saving || saved}
+                            className="flex items-center gap-2 px-4 py-2 rounded-lg bg-indigo-600 hover:bg-indigo-700 disabled:opacity-50 text-white text-sm font-semibold"
+                        >
+                            {saved ? <CheckCircle2 className="w-4 h-4" /> : <Save className="w-4 h-4" />}
+                            {saving ? 'Đang lưu...' : saved ? 'Đã lưu' : 'Lưu Cấu Hình'}
+                        </button>
+                    </div>
                 </div>
             </div>
 
