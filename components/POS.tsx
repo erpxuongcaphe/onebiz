@@ -1,10 +1,11 @@
 import React, { useEffect, useMemo, useState } from 'react';
-import { Calendar, Filter, Loader2, Minus, Plus, Search, ShoppingCart, Trash2, WifiOff, Wifi } from 'lucide-react';
+import { Calendar, Filter, Loader2, Minus, Plus, Search, ShoppingCart, Trash2, WifiOff, Wifi, LayoutGrid } from 'lucide-react';
 import { formatCurrency } from '../constants';
 import { useAuth } from '../lib/auth';
 import { fetchBranches, fetchCurrentBranchId } from '../lib/branches';
 import { fetchInventoryWarehouses } from '../lib/inventory';
 import { createPosSale, fetchCatalogForWarehouse, fetchOpenShift, openShift, fetchPosReceipt, createInvoiceFromOrderHelper, type PosCatalogItem } from '../lib/pos';
+import { getMainDashboardUrl } from '../lib/posUrl';
 import { CloseShiftModal } from './pos/CloseShiftModal';
 import { OrderSearchModal } from './pos/OrderSearchModal';
 import { OpenShiftModal } from './pos/OpenShiftModal';
@@ -442,6 +443,15 @@ const POS: React.FC = () => {
               Mở Ca
             </button>
           )}
+          {can('dashboard.view') && (
+            <a
+              href={getMainDashboardUrl(window.location.hostname)}
+              className="flex items-center gap-2 px-3 py-1.5 border border-slate-200 dark:border-slate-700 rounded-lg text-[11px] font-semibold text-slate-600 dark:text-slate-300 bg-white dark:bg-slate-900 hover:bg-slate-50 dark:hover:bg-slate-800 transition-colors"
+            >
+              <LayoutGrid className="w-3.5 h-3.5" />
+              <span className="hidden sm:inline">Quản trị</span>
+            </a>
+          )}
           <button
             onClick={() => setShowOrderSearchModal(true)}
             className="flex items-center gap-2 px-3 py-1.5 border border-slate-200 dark:border-slate-700 rounded-lg text-[11px] font-semibold text-slate-600 dark:text-slate-300 bg-white dark:bg-slate-900 hover:bg-slate-50 dark:hover:bg-slate-800"
@@ -616,8 +626,8 @@ const POS: React.FC = () => {
                   }}
                   disabled={i.stock === 0}
                   className={`relative text-left p-2 rounded-lg border border-slate-200 dark:border-slate-800 transition-colors ${i.stock === 0
-                      ? 'opacity-50 cursor-not-allowed'
-                      : 'hover:bg-slate-50 dark:hover:bg-slate-800/40'
+                    ? 'opacity-50 cursor-not-allowed'
+                    : 'hover:bg-slate-50 dark:hover:bg-slate-800/40'
                     }`}
                 >
                   {/* Stock Badge */}

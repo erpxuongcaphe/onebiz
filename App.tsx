@@ -5,6 +5,7 @@ import Sidebar from './components/Sidebar';
 import MobileNav from './components/MobileNav';
 import { getAppMode } from './lib/appMode';
 import { useAuth } from './lib/auth';
+import DomainGuard from './components/utility/DomainGuard';
 
 const LazyDashboard = React.lazy(() => import('./components/Dashboard'));
 const LazyInventory = React.lazy(() => import('./components/Inventory'));
@@ -150,9 +151,11 @@ function App() {
         path="/pos"
         element={
           <ProtectedRoute>
-            <Suspense fallback={<LoadingScreen />}>
-              <LazyPOS />
-            </Suspense>
+            <DomainGuard allowedMode="pos">
+              <Suspense fallback={<LoadingScreen />}>
+                <LazyPOS />
+              </Suspense>
+            </DomainGuard>
           </ProtectedRoute>
         }
       />
@@ -161,7 +164,9 @@ function App() {
       <Route
         element={
           <ProtectedRoute>
-            <MainLayout />
+            <DomainGuard allowedMode="main">
+              <MainLayout />
+            </DomainGuard>
           </ProtectedRoute>
         }
       >

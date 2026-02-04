@@ -1,4 +1,5 @@
 import { createClient, SupabaseClient } from '@supabase/supabase-js';
+import { cookieStorage } from './cookieStorage';
 
 // Vite environment variables
 const supabaseUrl = import.meta.env.VITE_SUPABASE_URL as string | undefined;
@@ -17,15 +18,16 @@ function fetchWithTimeout(input: RequestInfo | URL, init?: RequestInit): Promise
 // Main Supabase client - untyped for flexibility
 export const supabase: SupabaseClient | null = (supabaseUrl && supabaseAnonKey)
   ? createClient(supabaseUrl, supabaseAnonKey, {
-      auth: {
-        persistSession: true,
-        autoRefreshToken: true,
-        detectSessionInUrl: true,
-      },
-      global: {
-        fetch: fetchWithTimeout,
-      },
-    })
+    auth: {
+      persistSession: true,
+      autoRefreshToken: true,
+      detectSessionInUrl: true,
+      storage: cookieStorage, // Use cookies for multi-domain session sharing
+    },
+    global: {
+      fetch: fetchWithTimeout,
+    },
+  })
   : null;
 
 // Alias for backwards compatibility with old imports
