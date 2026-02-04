@@ -89,6 +89,46 @@ export function ProfileTab({ branchName, roleName }: ProfileTabProps) {
         }
     };
 
+    const [fullName, setFullName] = useState('');
+    const [phone, setPhone] = useState('');
+    const [savingProfile, setSavingProfile] = useState(false);
+
+    // Initialize profile data
+    React.useEffect(() => {
+        if (user) {
+            setFullName(user.user_metadata?.full_name || user.email?.split('@')[0] || '');
+            setPhone(user.user_metadata?.phone || '');
+            // Optionally fetch from DB if metadata is stale, but metadata is usually faster for UI
+        }
+    }, [user]);
+
+    const handleUpdateProfile = async () => {
+        if (!supabase) return;
+        setSavingProfile(true);
+        setError(null);
+
+        try {
+            // 1. Update in Database via RPC
+            const { error: rpcError } = await supabase.rpc('user_update_own_profile', {
+                p_full_name: fullName,
+                p_phone: phone
+            });
+            if (rpcError) throw rpcError;
+
+            // 2. Update Auth Metadata (to keep session in sync without relogin)
+            const { error: authError } = await supabase.auth.updateUser({
+                data: { full_name: fullName, phone: phone }
+            });
+            if (authError) throw authError;
+
+            alert('Cập nhật thông tin thành công!');
+        } catch (e: any) {
+            setError(e?.message ?? 'Cập nhật thất bại.');
+        } finally {
+            setSavingProfile(false);
+        }
+    };
+
     if (!user) {
         return (
             <div className="text-center py-12 text-slate-500 dark:text-slate-400">
@@ -101,12 +141,48 @@ export function ProfileTab({ branchName, roleName }: ProfileTabProps) {
         <div className="space-y-4">
             {/* Profile Info */}
             <div className="bg-white dark:bg-slate-900 rounded-xl shadow-soft border border-slate-200 dark:border-slate-800 p-4">
-                <h3 className="text-sm font-bold text-slate-900 dark:text-white mb-3">Thông Tin Cá Nhân</h3>
+                <div className="flex items-center justify-between mb-4">
+                    <h3 className="text-sm font-bold text-slate-900 dark:text-white">Thông Tin Cá Nhân</h3>
+                    <button
+                        onClick={handleUpdateProfile}
+                        disabled={savingProfile}
+                        className="px-3 py-1.5 rounded-lg bg-indigo-600 hover:bg-indigo-700 disabled:opacity-50 text-white text-xs font-semibold"
+                    >
+                        {savingProfile ? 'Đang lưu...' : 'Lưu Thông Tin'}
+                    </button>
+                </div>
 
                 <div className="space-y-3">
+                    {/* Editable Fields */}
                     <div>
-                        <div className="text-xs font-semibold text-slate-500 dark:text-slate-400 mb-1">Email</div>
-                        <div className="text-sm text-slate-900 dark:text-white font-medium">{user.email}</div>
+                        <label className="text-xs font-semibold text-slate-500 dark:text-slate-400 mb-1 block">
+                            Họ và Tên
+                        </label>
+                        <input
+                            value={fullName}
+                            onChange={(e) => setFullName(e.target.value)}
+                            className="w-full px-3 py-2 rounded-lg bg-slate-50 dark:bg-slate-950 border border-slate-200 dark:border-slate-800 text-sm text-slate-900 dark:text-white"
+                            placeholder="Nhập họ và tên"
+                        />
+                    </div>
+
+                    <div>
+                        <label className="text-xs font-semibold text-slate-500 dark:text-slate-400 mb-1 block">
+                            Số Điện Thoại
+                        </label>
+                        <input
+                            value={phone}
+                            onChange={(e) => setPhone(e.target.value)}
+                            className="w-full px-3 py-2 rounded-lg bg-slate-50 dark:bg-slate-950 border border-slate-200 dark:border-slate-800 text-sm text-slate-900 dark:text-white"
+                            placeholder="Nhập số điện thoại"
+                        />
+                    </div>
+
+                    <div>
+                        <label className="text-xs font-semibold text-slate-500 dark:text-slate-400 mb-1 block">Email</label>
+                        <div className="w-full px-3 py-2 rounded-lg bg-slate-100 dark:bg-slate-800 text-sm text-slate-500 cursor-not-allowed">
+                            {user.email}
+                        </div>
                     </div>
 
                     {branchName && (

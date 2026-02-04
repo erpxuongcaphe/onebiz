@@ -15,11 +15,24 @@ export function CompanyTab() {
 
     // Populate form when tenant data arrives
     useEffect(() => {
-        if (!tenant) return;
-        setCompanyName(tenant.name || '');
-        setTaxCode(tenant.settings?.tax_code || '');
-        setAddress(tenant.settings?.address || '');
-        setPhone(tenant.settings?.phone || '');
+        // Fetch from company_info table directly or RPC
+        const loadInfo = async () => {
+            if (!supabase) return;
+            const { data, error } = await supabase.from('company_info').select('*').single();
+            if (data) {
+                setCompanyName(data.name || '');
+                setTaxCode(data.tax_code || '');
+                setAddress(data.address || '');
+                setPhone(data.phone || '');
+            } else if (tenant) {
+                // Fallback to tenant context if DB is empty
+                setCompanyName(tenant.name || '');
+                setTaxCode(tenant.settings?.tax_code || '');
+                setAddress(tenant.settings?.address || '');
+                setPhone(tenant.settings?.phone || '');
+            }
+        };
+        loadInfo();
     }, [tenant]);
 
     const handleSave = async () => {
