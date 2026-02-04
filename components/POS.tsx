@@ -359,7 +359,8 @@ const POS: React.FC = () => {
             quantity: item.qty,
             unit_price: item.item.price
           })),
-          paymentMethod: order.payment_method as any
+          paymentMethod: order.payment_method as any,
+          paymentAmount: order.total
         });
 
         // Mark as synced
@@ -614,11 +615,10 @@ const POS: React.FC = () => {
                     addToCart(i);
                   }}
                   disabled={i.stock === 0}
-                  className={`relative text-left p-2 rounded-lg border border-slate-200 dark:border-slate-800 transition-colors ${
-                    i.stock === 0
+                  className={`relative text-left p-2 rounded-lg border border-slate-200 dark:border-slate-800 transition-colors ${i.stock === 0
                       ? 'opacity-50 cursor-not-allowed'
                       : 'hover:bg-slate-50 dark:hover:bg-slate-800/40'
-                  }`}
+                    }`}
                 >
                   {/* Stock Badge */}
                   <div className="absolute top-2 right-2 px-1.5 py-0.5 bg-white/90 dark:bg-slate-800/90 rounded text-[10px] font-semibold">

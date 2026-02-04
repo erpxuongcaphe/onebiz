@@ -65,6 +65,7 @@ export type PosCatalogItem = {
   category: string;
   price: number;
   stock: number;
+  image_url?: string | null;
 };
 
 export async function fetchCatalogForWarehouse(params: {
@@ -111,6 +112,7 @@ export async function fetchCatalogForWarehouse(params: {
         category: p.category?.name ?? 'Khác',
         price: toNumber(p.selling_price),
         stock: toNumber(row.quantity),
+        image_url: null, // Basic mapping, extend if product table has image
       };
     });
 
@@ -290,10 +292,10 @@ export async function fetchPosReceipt(orderId: string): Promise<PosOrderReceipt 
       .maybeSingle(),
     order.customer_id
       ? supabase
-          .from('sales_customers')
-          .select('name')
-          .eq('id', order.customer_id)
-          .maybeSingle()
+        .from('sales_customers')
+        .select('name')
+        .eq('id', order.customer_id)
+        .maybeSingle()
       : Promise.resolve({ data: null }),
   ]);
 
