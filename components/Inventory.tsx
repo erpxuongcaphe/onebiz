@@ -82,38 +82,34 @@ const Inventory: React.FC = () => {
     setToDate(d.to);
   }, [timePreset]);
 
-  const reload = async () => {
-    const [p, c, w, u] = await Promise.all([
-      fetchInventoryProducts({ includeInactive, fromDate, toDate, categoryId: categoryFilter || undefined }),
+  // Static data — fetch once on mount (categories, warehouses, units don't change with filters)
+  useEffect(() => {
+    let isMounted = true;
+    Promise.all([
       fetchInventoryCategories(),
       fetchInventoryWarehouses(),
       fetchInventoryUnits(),
-    ]);
-    setProducts(p);
-    setCategories(c);
-    setWarehouses(w);
-    setUnits(u);
-  };
-
-  useEffect(() => {
-    let isMounted = true;
-    (async () => {
-      const [p, c, w, u] = await Promise.all([
-        fetchInventoryProducts({ includeInactive, fromDate, toDate, categoryId: categoryFilter || undefined }),
-        fetchInventoryCategories(),
-        fetchInventoryWarehouses(),
-        fetchInventoryUnits(),
-      ]);
+    ]).then(([c, w, u]) => {
       if (!isMounted) return;
-      setProducts(p);
       setCategories(c);
       setWarehouses(w);
       setUnits(u);
-    })();
-    return () => {
-      isMounted = false;
-    };
+    });
+    return () => { isMounted = false; };
+  }, []);
+
+  // Dynamic data — refetch products when filters change
+  useEffect(() => {
+    let isMounted = true;
+    fetchInventoryProducts({ includeInactive, fromDate, toDate, categoryId: categoryFilter || undefined })
+      .then((p) => { if (isMounted) setProducts(p); });
+    return () => { isMounted = false; };
   }, [includeInactive, fromDate, toDate, categoryFilter]);
+
+  const reload = async () => {
+    const p = await fetchInventoryProducts({ includeInactive, fromDate, toDate, categoryId: categoryFilter || undefined });
+    setProducts(p);
+  };
 
   useEffect(() => {
     if (!selectedProduct) {

@@ -1,5 +1,5 @@
 import React, { useEffect, useState, useMemo } from 'react';
-import { Users, RefreshCw, AlertTriangle, CheckCircle2, KeyRound, Search, Lock, Unlock } from 'lucide-react';
+import { Users, RefreshCw, AlertTriangle, CheckCircle2, KeyRound, Search, Lock, Unlock, UserPlus, Edit2, Trash2, X } from 'lucide-react';
 import {
     bootstrapSuperAdmin,
     fetchProfiles,
@@ -10,6 +10,10 @@ import {
     type ProfileLite,
     type Role,
     type UserRole,
+    createUser,
+    updateUserProfile,
+    deactivateUser,
+    reactivateUser,
 } from '../../lib/roles';
 import { fetchBranches, type Branch } from '../../lib/branches';
 import { adminResetPassword } from '../../lib/adminPasswordReset';
@@ -62,6 +66,37 @@ export function UsersTab({ tenantId, canManageRoles, onBootstrapSuccess }: Users
     const [lockFilter, setLockFilter] = useState<string>('');
     const [searching, setSearching] = useState(false);
     const [lockingByUser, setLockingByUser] = useState<Record<string, boolean>>({});
+
+    // Create User Modal States
+    const [showCreateModal, setShowCreateModal] = useState(false);
+    const [creating, setCreating] = useState(false);
+    const [createData, setCreateData] = useState({
+        email: '',
+        password: '',
+        full_name: '',
+        phone: '',
+        branch_id: '',
+        role_ids: [] as string[]
+    });
+    const [createError, setCreateError] = useState<string | null>(null);
+
+    // Edit User Modal States
+    const [showEditModal, setShowEditModal] = useState(false);
+    const [editing, setEditing] = useState(false);
+    const [editUserId, setEditUserId] = useState<string | null>(null);
+    const [editData, setEditData] = useState({
+        full_name: '',
+        phone: '',
+        email: ''
+    });
+    const [editError, setEditError] = useState<string | null>(null);
+
+    // Deactivate User Modal States
+    const [showDeactivateModal, setShowDeactivateModal] = useState(false);
+    const [deactivating, setDeactivating] = useState(false);
+    const [deactivateUserId, setDeactivateUserId] = useState<string | null>(null);
+    const [deactivateReason, setDeactivateReason] = useState('');
+    const [deactivateError, setDeactivateError] = useState<string | null>(null);
 
     const loadRoleData = async () => {
         setRolesLoading(true);
@@ -273,6 +308,161 @@ export function UsersTab({ tenantId, canManageRoles, onBootstrapSuccess }: Users
         }
     };
 
+    // ========== CREATE USER HANDLERS ==========
+    const handleCreateUser = async () => {
+        setCreateError(null);
+
+        // Validate required fields
+        if (!createData.email || !createData.password || !createData.full_name) {
+            setCreateError('Vui lòng điền đầy đủ email, mật khẩu và họ tên');
+            return;
+        }
+
+        // Validate email format
+        const emailRegex = /^[A-Za-z0-9._%+-]+@[A-Za-z0-9.-]+\.[A-Za-z]{2,}$/;
+        if (!emailRegex.test(createData.email)) {
+            setCreateError('Email không hợp lệ');
+            return;
+        }
+
+        // Validate password strength
+        if (createData.password.length < 8) {
+            setCreateError('Mật khẩu phải có ít nhất 8 ký tự');
+            return;
+        }
+
+        setCreating(true);
+        try {
+            const result = await createUser({
+                email: createData.email,
+                password: createData.password,
+                full_name: createData.full_name,
+                phone: createData.phone || undefined,
+                branch_id: createData.branch_id || undefined,
+                role_ids: createData.role_ids.length > 0 ? createData.role_ids : undefined
+            });
+
+            if (!result.success) {
+                setCreateError(result.error || 'Tạo user thất bại');
+                return;
+            }
+
+            // Success
+            alert(`✅ Đã tạo nhân viên: ${createData.full_name}\nEmail: ${createData.email}\nMật khẩu: ${createData.password}\n\nVui lòng lưu lại mật khẩu này!`);
+
+            // Reset form
+            setCreateData({
+                email: '',
+                password: '',
+                full_name: '',
+                phone: '',
+                branch_id: '',
+                role_ids: []
+            });
+            setShowCreateModal(false);
+
+            // Reload data
+            await loadRoleData();
+        } catch (e: any) {
+            setCreateError(e?.message ?? 'Tạo user thất bại');
+        } finally {
+            setCreating(false);
+        }
+    };
+
+    // ========== EDIT USER HANDLERS ==========
+    const openEditModal = (userId: string) => {
+        const profile = profiles.find(p => p.id === userId);
+        if (!profile) return;
+
+        setEditUserId(userId);
+        setEditData({
+            full_name: profile.full_name,
+            phone: '', // Will be loaded from profile if available
+            email: profile.email
+        });
+        setEditError(null);
+        setShowEditModal(true);
+    };
+
+    const handleEditUser = async () => {
+        if (!editUserId) return;
+
+        setEditError(null);
+
+        // Validate required fields
+        if (!editData.full_name) {
+            setEditError('Họ và tên không được để trống');
+            return;
+        }
+
+        setEditing(true);
+        try {
+            await updateUserProfile({
+                user_id: editUserId,
+                full_name: editData.full_name,
+                phone: editData.phone || undefined,
+                email: editData.email || undefined
+            });
+
+            // Success
+            alert(`✅ Đã cập nhật thông tin nhân viên`);
+
+            setShowEditModal(false);
+            await loadRoleData();
+        } catch (e: any) {
+            setEditError(e?.message ?? 'Cập nhật thất bại');
+        } finally {
+            setEditing(false);
+        }
+    };
+
+    // ========== DEACTIVATE USER HANDLERS ==========
+    const openDeactivateModal = (userId: string) => {
+        setDeactivateUserId(userId);
+        setDeactivateReason('');
+        setDeactivateError(null);
+        setShowDeactivateModal(true);
+    };
+
+    const handleDeactivateUser = async () => {
+        if (!deactivateUserId) return;
+
+        setDeactivateError(null);
+        setDeactivating(true);
+
+        try {
+            await deactivateUser({
+                user_id: deactivateUserId,
+                reason: deactivateReason || undefined
+            });
+
+            // Success
+            const profile = profiles.find(p => p.id === deactivateUserId);
+            alert(`✅ Đã vô hiệu hóa nhân viên: ${profile?.full_name}`);
+
+            setShowDeactivateModal(false);
+            await loadRoleData();
+        } catch (e: any) {
+            setDeactivateError(e?.message ?? 'Vô hiệu hóa thất bại');
+        } finally {
+            setDeactivating(false);
+        }
+    };
+
+    const handleReactivateUser = async (userId: string) => {
+        if (!confirm('Bạn có chắc muốn kích hoạt lại user này?')) return;
+
+        try {
+            await reactivateUser(userId);
+            const profile = profiles.find(p => p.id === userId);
+            alert(`✅ Đã kích hoạt lại nhân viên: ${profile?.full_name}`);
+            await loadRoleData();
+        } catch (e: any) {
+            alert(`❌ Kích hoạt lại thất bại: ${e?.message}`);
+        }
+    };
+
     if (!canManageRoles) {
         return (
             <div className="bg-amber-50 dark:bg-amber-900/20 border border-amber-200 dark:border-amber-900/40 rounded-xl p-4">
@@ -306,14 +496,23 @@ export function UsersTab({ tenantId, canManageRoles, onBootstrapSuccess }: Users
                     <Users className="w-5 h-5 text-indigo-600" />
                     <h3 className="text-sm font-bold text-slate-900 dark:text-white">Quản Lý Người Dùng</h3>
                 </div>
-                <button
-                    onClick={loadRoleData}
-                    disabled={rolesLoading}
-                    className="flex items-center gap-2 px-3 py-1.5 rounded-lg border border-slate-200 dark:border-slate-700 text-slate-600 dark:text-slate-300 hover:bg-slate-50 dark:hover:bg-slate-800 disabled:opacity-50 text-xs font-semibold"
-                >
-                    <RefreshCw className={`w-3.5 h-3.5 ${rolesLoading ? 'animate-spin' : ''}`} />
-                    Tải Lại
-                </button>
+                <div className="flex items-center gap-2">
+                    <button
+                        onClick={() => setShowCreateModal(true)}
+                        className="flex items-center gap-2 px-3 py-1.5 rounded-lg bg-indigo-600 hover:bg-indigo-700 text-white text-xs font-semibold transition-colors"
+                    >
+                        <UserPlus className="w-3.5 h-3.5" />
+                        Tạo Nhân Viên
+                    </button>
+                    <button
+                        onClick={loadRoleData}
+                        disabled={rolesLoading}
+                        className="flex items-center gap-2 px-3 py-1.5 rounded-lg border border-slate-200 dark:border-slate-700 text-slate-600 dark:text-slate-300 hover:bg-slate-50 dark:hover:bg-slate-800 disabled:opacity-50 text-xs font-semibold"
+                    >
+                        <RefreshCw className={`w-3.5 h-3.5 ${rolesLoading ? 'animate-spin' : ''}`} />
+                        Tải Lại
+                    </button>
+                </div>
             </div>
 
             {/* Error */}
@@ -517,10 +716,19 @@ export function UsersTab({ tenantId, canManageRoles, onBootstrapSuccess }: Users
 
                                 {/* Action Buttons */}
                                 <div className="flex justify-between items-center gap-2 flex-wrap">
-                                    <div className="flex gap-2">
+                                    <div className="flex gap-2 flex-wrap">
+                                        <button
+                                            onClick={() => openEditModal(p.id)}
+                                            disabled={isSaving || lockingByUser[p.id] || p.status === 'inactive'}
+                                            className="px-3 py-2 rounded-lg border border-indigo-500 text-indigo-600 dark:text-indigo-400 hover:bg-indigo-50 dark:hover:bg-indigo-900/10 disabled:opacity-50 text-xs font-semibold flex items-center gap-1.5 transition-colors"
+                                        >
+                                            <Edit2 className="w-3.5 h-3.5" />
+                                            Sửa
+                                        </button>
+
                                         <button
                                             onClick={() => handleResetPassword(p.id)}
-                                            disabled={isSaving || lockingByUser[p.id]}
+                                            disabled={isSaving || lockingByUser[p.id] || p.status === 'inactive'}
                                             className="px-3 py-2 rounded-lg border border-amber-500 text-amber-600 dark:text-amber-400 hover:bg-amber-50 dark:hover:bg-amber-900/10 disabled:opacity-50 text-xs font-semibold flex items-center gap-1.5 transition-colors"
                                         >
                                             <KeyRound className="w-3.5 h-3.5" />
@@ -529,7 +737,7 @@ export function UsersTab({ tenantId, canManageRoles, onBootstrapSuccess }: Users
 
                                         <button
                                             onClick={() => handleToggleLock(p.id, p.is_locked)}
-                                            disabled={isSaving || lockingByUser[p.id]}
+                                            disabled={isSaving || lockingByUser[p.id] || p.status === 'inactive'}
                                             className={`px-3 py-2 rounded-lg text-xs font-semibold flex items-center gap-1.5 transition-colors ${
                                                 p.is_locked
                                                     ? 'bg-emerald-600 hover:bg-emerald-700 text-white'
@@ -550,6 +758,27 @@ export function UsersTab({ tenantId, canManageRoles, onBootstrapSuccess }: Users
                                                 </>
                                             )}
                                         </button>
+
+                                        {/* Deactivate/Reactivate Button */}
+                                        {p.status === 'active' ? (
+                                            <button
+                                                onClick={() => openDeactivateModal(p.id)}
+                                                disabled={isSaving || lockingByUser[p.id]}
+                                                className="px-3 py-2 rounded-lg border border-slate-300 dark:border-slate-700 text-slate-600 dark:text-slate-400 hover:bg-slate-50 dark:hover:bg-slate-800 disabled:opacity-50 text-xs font-semibold flex items-center gap-1.5 transition-colors"
+                                            >
+                                                <Trash2 className="w-3.5 h-3.5" />
+                                                Vô hiệu hóa
+                                            </button>
+                                        ) : (
+                                            <button
+                                                onClick={() => handleReactivateUser(p.id)}
+                                                disabled={isSaving}
+                                                className="px-3 py-2 rounded-lg bg-green-600 hover:bg-green-700 text-white disabled:opacity-50 text-xs font-semibold flex items-center gap-1.5 transition-colors"
+                                            >
+                                                <CheckCircle2 className="w-3.5 h-3.5" />
+                                                Kích hoạt lại
+                                            </button>
+                                        )}
                                     </div>
 
                                     <button
@@ -580,6 +809,274 @@ export function UsersTab({ tenantId, canManageRoles, onBootstrapSuccess }: Users
                         setGeneratedPassword(null);
                     }}
                 />
+            )}
+
+            {/* Create User Modal */}
+            {showCreateModal && (
+                <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50 p-4">
+                    <div className="bg-white dark:bg-slate-900 rounded-xl shadow-xl max-w-lg w-full max-h-[90vh] overflow-y-auto">
+                        <div className="p-4 border-b border-slate-200 dark:border-slate-800 flex items-center justify-between sticky top-0 bg-white dark:bg-slate-900">
+                            <h3 className="text-lg font-bold text-slate-900 dark:text-white">Tạo Nhân Viên Mới</h3>
+                            <button
+                                onClick={() => setShowCreateModal(false)}
+                                className="p-1 rounded-lg hover:bg-slate-100 dark:hover:bg-slate-800"
+                            >
+                                <X className="w-5 h-5" />
+                            </button>
+                        </div>
+
+                        <div className="p-4 space-y-3">
+                            {createError && (
+                                <div className="text-xs text-rose-700 dark:text-rose-400 bg-rose-50 dark:bg-rose-900/20 border border-rose-200 dark:border-rose-900/40 rounded-lg p-2.5">
+                                    {createError}
+                                </div>
+                            )}
+
+                            <div>
+                                <label className="block text-xs font-semibold text-slate-500 dark:text-slate-400 mb-1">Email (*)</label>
+                                <input
+                                    type="email"
+                                    value={createData.email}
+                                    onChange={(e) => setCreateData({...createData, email: e.target.value})}
+                                    placeholder="employee@company.com"
+                                    className="w-full px-3 py-2 rounded-lg bg-slate-50 dark:bg-slate-950 border border-slate-200 dark:border-slate-800 text-sm"
+                                    required
+                                />
+                            </div>
+
+                            <div>
+                                <label className="block text-xs font-semibold text-slate-500 dark:text-slate-400 mb-1">Họ và Tên (*)</label>
+                                <input
+                                    type="text"
+                                    value={createData.full_name}
+                                    onChange={(e) => setCreateData({...createData, full_name: e.target.value})}
+                                    placeholder="Nguyễn Văn A"
+                                    className="w-full px-3 py-2 rounded-lg bg-slate-50 dark:bg-slate-950 border border-slate-200 dark:border-slate-800 text-sm"
+                                    required
+                                />
+                            </div>
+
+                            <div>
+                                <label className="block text-xs font-semibold text-slate-500 dark:text-slate-400 mb-1">Số Điện Thoại</label>
+                                <input
+                                    type="tel"
+                                    value={createData.phone}
+                                    onChange={(e) => setCreateData({...createData, phone: e.target.value})}
+                                    placeholder="0912345678"
+                                    className="w-full px-3 py-2 rounded-lg bg-slate-50 dark:bg-slate-950 border border-slate-200 dark:border-slate-800 text-sm"
+                                />
+                            </div>
+
+                            <div>
+                                <label className="block text-xs font-semibold text-slate-500 dark:text-slate-400 mb-1">Mật Khẩu (*)</label>
+                                <input
+                                    type="password"
+                                    value={createData.password}
+                                    onChange={(e) => setCreateData({...createData, password: e.target.value})}
+                                    placeholder="Tối thiểu 8 ký tự"
+                                    className="w-full px-3 py-2 rounded-lg bg-slate-50 dark:bg-slate-950 border border-slate-200 dark:border-slate-800 text-sm"
+                                    required
+                                    minLength={8}
+                                />
+                                <div className="mt-1 text-xs text-slate-500 dark:text-slate-400">
+                                    Yêu cầu: Tối thiểu 8 ký tự
+                                </div>
+                            </div>
+
+                            <div>
+                                <label className="block text-xs font-semibold text-slate-500 dark:text-slate-400 mb-1">Chi Nhánh</label>
+                                <select
+                                    value={createData.branch_id}
+                                    onChange={(e) => setCreateData({...createData, branch_id: e.target.value})}
+                                    className="w-full px-3 py-2 rounded-lg bg-slate-50 dark:bg-slate-950 border border-slate-200 dark:border-slate-800 text-sm"
+                                >
+                                    <option value="">-- Chưa chọn --</option>
+                                    {branches.map(b => (
+                                        <option key={b.id} value={b.id}>{b.name}</option>
+                                    ))}
+                                </select>
+                            </div>
+
+                            <div>
+                                <label className="block text-xs font-semibold text-slate-500 dark:text-slate-400 mb-2">Vai Trò</label>
+                                <div className="space-y-2 max-h-40 overflow-y-auto border border-slate-200 dark:border-slate-800 rounded-lg p-2">
+                                    {roles.map(r => (
+                                        <label key={r.id} className="flex items-center gap-2 cursor-pointer">
+                                            <input
+                                                type="checkbox"
+                                                checked={createData.role_ids.includes(r.id)}
+                                                onChange={(e) => {
+                                                    if (e.target.checked) {
+                                                        setCreateData({...createData, role_ids: [...createData.role_ids, r.id]});
+                                                    } else {
+                                                        setCreateData({...createData, role_ids: createData.role_ids.filter(id => id !== r.id)});
+                                                    }
+                                                }}
+                                                className="rounded"
+                                            />
+                                            <span className="text-sm text-slate-900 dark:text-white">{r.name}</span>
+                                        </label>
+                                    ))}
+                                </div>
+                            </div>
+
+                            <div className="flex gap-2 pt-2">
+                                <button
+                                    onClick={() => setShowCreateModal(false)}
+                                    className="flex-1 px-4 py-2 rounded-lg border border-slate-200 dark:border-slate-700 text-slate-600 dark:text-slate-300 hover:bg-slate-50 dark:hover:bg-slate-800 text-sm font-semibold"
+                                >
+                                    Hủy
+                                </button>
+                                <button
+                                    onClick={handleCreateUser}
+                                    disabled={creating}
+                                    className="flex-1 px-4 py-2 rounded-lg bg-indigo-600 hover:bg-indigo-700 disabled:opacity-50 text-white text-sm font-semibold"
+                                >
+                                    {creating ? 'Đang tạo...' : 'Tạo Nhân Viên'}
+                                </button>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            )}
+
+            {/* Edit User Modal */}
+            {showEditModal && editUserId && (
+                <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50 p-4">
+                    <div className="bg-white dark:bg-slate-900 rounded-xl shadow-xl max-w-lg w-full">
+                        <div className="p-4 border-b border-slate-200 dark:border-slate-800 flex items-center justify-between">
+                            <h3 className="text-lg font-bold text-slate-900 dark:text-white">Sửa Thông Tin Nhân Viên</h3>
+                            <button
+                                onClick={() => setShowEditModal(false)}
+                                className="p-1 rounded-lg hover:bg-slate-100 dark:hover:bg-slate-800"
+                            >
+                                <X className="w-5 h-5" />
+                            </button>
+                        </div>
+
+                        <div className="p-4 space-y-3">
+                            {editError && (
+                                <div className="text-xs text-rose-700 dark:text-rose-400 bg-rose-50 dark:bg-rose-900/20 border border-rose-200 dark:border-rose-900/40 rounded-lg p-2.5">
+                                    {editError}
+                                </div>
+                            )}
+
+                            <div>
+                                <label className="block text-xs font-semibold text-slate-500 dark:text-slate-400 mb-1">Họ và Tên (*)</label>
+                                <input
+                                    type="text"
+                                    value={editData.full_name}
+                                    onChange={(e) => setEditData({...editData, full_name: e.target.value})}
+                                    className="w-full px-3 py-2 rounded-lg bg-slate-50 dark:bg-slate-950 border border-slate-200 dark:border-slate-800 text-sm"
+                                    required
+                                />
+                            </div>
+
+                            <div>
+                                <label className="block text-xs font-semibold text-slate-500 dark:text-slate-400 mb-1">Email (*)</label>
+                                <input
+                                    type="email"
+                                    value={editData.email}
+                                    disabled
+                                    className="w-full px-3 py-2 rounded-lg bg-slate-100 dark:bg-slate-950 border border-slate-200 dark:border-slate-800 text-sm opacity-60 cursor-not-allowed"
+                                />
+                                <div className="mt-1 text-xs text-slate-500 dark:text-slate-400">
+                                    Email không thể thay đổi
+                                </div>
+                            </div>
+
+                            <div>
+                                <label className="block text-xs font-semibold text-slate-500 dark:text-slate-400 mb-1">Số Điện Thoại</label>
+                                <input
+                                    type="tel"
+                                    value={editData.phone}
+                                    onChange={(e) => setEditData({...editData, phone: e.target.value})}
+                                    placeholder="0912345678"
+                                    className="w-full px-3 py-2 rounded-lg bg-slate-50 dark:bg-slate-950 border border-slate-200 dark:border-slate-800 text-sm"
+                                />
+                            </div>
+
+                            <div className="flex gap-2 pt-2">
+                                <button
+                                    onClick={() => setShowEditModal(false)}
+                                    className="flex-1 px-4 py-2 rounded-lg border border-slate-200 dark:border-slate-700 text-slate-600 dark:text-slate-300 hover:bg-slate-50 dark:hover:bg-slate-800 text-sm font-semibold"
+                                >
+                                    Hủy
+                                </button>
+                                <button
+                                    onClick={handleEditUser}
+                                    disabled={editing}
+                                    className="flex-1 px-4 py-2 rounded-lg bg-indigo-600 hover:bg-indigo-700 disabled:opacity-50 text-white text-sm font-semibold"
+                                >
+                                    {editing ? 'Đang lưu...' : 'Lưu Thay Đổi'}
+                                </button>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            )}
+
+            {/* Deactivate User Modal */}
+            {showDeactivateModal && deactivateUserId && (
+                <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50 p-4">
+                    <div className="bg-white dark:bg-slate-900 rounded-xl shadow-xl max-w-lg w-full">
+                        <div className="p-4 border-b border-slate-200 dark:border-slate-800 flex items-center justify-between">
+                            <h3 className="text-lg font-bold text-slate-900 dark:text-white">Vô Hiệu Hóa Nhân Viên</h3>
+                            <button
+                                onClick={() => setShowDeactivateModal(false)}
+                                className="p-1 rounded-lg hover:bg-slate-100 dark:hover:bg-slate-800"
+                            >
+                                <X className="w-5 h-5" />
+                            </button>
+                        </div>
+
+                        <div className="p-4 space-y-3">
+                            {deactivateError && (
+                                <div className="text-xs text-rose-700 dark:text-rose-400 bg-rose-50 dark:bg-rose-900/20 border border-rose-200 dark:border-rose-900/40 rounded-lg p-2.5">
+                                    {deactivateError}
+                                </div>
+                            )}
+
+                            <p className="text-sm text-slate-900 dark:text-white">
+                                Bạn có chắc muốn vô hiệu hóa nhân viên{' '}
+                                <strong>{profiles.find(p => p.id === deactivateUserId)?.full_name}</strong>?
+                            </p>
+
+                            <div className="bg-amber-50 dark:bg-amber-900/20 border border-amber-200 dark:border-amber-900/40 rounded-lg p-3 text-xs text-amber-800 dark:text-amber-300">
+                                ⚠️ Người này sẽ không thể đăng nhập vào hệ thống nữa.
+                            </div>
+
+                            <div>
+                                <label className="block text-xs font-semibold text-slate-500 dark:text-slate-400 mb-1">
+                                    Lý do vô hiệu hóa (tùy chọn)
+                                </label>
+                                <textarea
+                                    value={deactivateReason}
+                                    onChange={(e) => setDeactivateReason(e.target.value)}
+                                    placeholder="VD: Nghỉ việc, chuyển chi nhánh..."
+                                    className="w-full px-3 py-2 rounded-lg bg-slate-50 dark:bg-slate-950 border border-slate-200 dark:border-slate-800 text-sm resize-none"
+                                    rows={3}
+                                />
+                            </div>
+
+                            <div className="flex gap-2 pt-2">
+                                <button
+                                    onClick={() => setShowDeactivateModal(false)}
+                                    className="flex-1 px-4 py-2 rounded-lg border border-slate-200 dark:border-slate-700 text-slate-600 dark:text-slate-300 hover:bg-slate-50 dark:hover:bg-slate-800 text-sm font-semibold"
+                                >
+                                    Hủy
+                                </button>
+                                <button
+                                    onClick={handleDeactivateUser}
+                                    disabled={deactivating}
+                                    className="flex-1 px-4 py-2 rounded-lg bg-rose-600 hover:bg-rose-700 disabled:opacity-50 text-white text-sm font-semibold"
+                                >
+                                    {deactivating ? 'Đang xử lý...' : 'Vô Hiệu Hóa'}
+                                </button>
+                            </div>
+                        </div>
+                    </div>
+                </div>
             )}
         </div>
     );

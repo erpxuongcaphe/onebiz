@@ -1,5 +1,5 @@
 import React, { useState, useRef, useEffect } from 'react';
-import { Settings, Moon, Sun, Bell, Search, Hexagon, Menu, ChevronDown } from 'lucide-react';
+import { Settings, Moon, Sun, Bell, Search, Hexagon, Menu, ChevronDown, LogOut } from 'lucide-react';
 import { Tab } from '../types';
 import { getDesktopNavItems, isNavGroup, type NavEntry, type NavGroup, type NavItem } from '../lib/navigation';
 import AuthStatus from './AuthStatus';
@@ -8,6 +8,7 @@ import { getAppMode } from '../lib/appMode';
 import { getPosBaseUrl } from '../lib/posUrl';
 import { useNavigate, useLocation } from 'react-router-dom';
 import { useAuth } from '../lib/auth';
+import { forceLogout } from '../lib/logout';
 
 interface NavbarProps {
   isDarkMode: boolean;
@@ -25,7 +26,11 @@ const Navbar: React.FC<NavbarProps> = ({ isDarkMode, toggleTheme, onMenuClick })
   const posUrl = getPosBaseUrl({ tenant, hostname: window.location.hostname });
 
   const [openGroup, setOpenGroup] = useState<string | null>(null);
+  const [avatarOpen, setAvatarOpen] = useState(false);
+  const [bellOpen, setBellOpen] = useState(false);
   const dropdownRef = useRef<HTMLDivElement>(null);
+  const avatarRef = useRef<HTMLDivElement>(null);
+  const bellRef = useRef<HTMLDivElement>(null);
 
   const activePath = location.pathname === '/' ? '/dashboard' : location.pathname;
 
@@ -34,11 +39,17 @@ const Navbar: React.FC<NavbarProps> = ({ isDarkMode, toggleTheme, onMenuClick })
   const userAvatar = user?.user_metadata?.avatar_url;
   const userInitial = userName.charAt(0).toUpperCase();
 
-  // Close dropdown when clicking outside
+  // Close dropdowns when clicking outside
   useEffect(() => {
     const handleClickOutside = (event: MouseEvent) => {
       if (dropdownRef.current && !dropdownRef.current.contains(event.target as Node)) {
         setOpenGroup(null);
+      }
+      if (avatarRef.current && !avatarRef.current.contains(event.target as Node)) {
+        setAvatarOpen(false);
+      }
+      if (bellRef.current && !bellRef.current.contains(event.target as Node)) {
+        setBellOpen(false);
       }
     };
 
@@ -191,32 +202,72 @@ const Navbar: React.FC<NavbarProps> = ({ isDarkMode, toggleTheme, onMenuClick })
                 <Settings className="w-3.5 h-3.5" />
               </button>
 
-              <button className="relative p-1.5 text-slate-500 dark:text-slate-400 hover:bg-slate-100 dark:hover:bg-slate-800 rounded-full transition-colors">
-                <Bell className="w-3.5 h-3.5" />
-                <span className="absolute top-1.5 right-1.5 w-1.5 h-1.5 bg-rose-500 rounded-full ring-1 ring-white dark:ring-slate-900"></span>
-              </button>
+              <div className="relative" ref={bellRef}>
+                <button
+                  onClick={() => { setBellOpen(!bellOpen); setAvatarOpen(false); }}
+                  className="relative p-1.5 text-slate-500 dark:text-slate-400 hover:bg-slate-100 dark:hover:bg-slate-800 rounded-full transition-colors"
+                >
+                  <Bell className="w-3.5 h-3.5" />
+                </button>
+
+                {bellOpen && (
+                  <div className="absolute top-full right-0 mt-2 w-64 bg-white dark:bg-slate-800 rounded-lg shadow-lg ring-1 ring-slate-200 dark:ring-slate-700 z-50">
+                    <div className="flex items-center justify-between px-3 py-2 border-b border-slate-100 dark:border-slate-700">
+                      <span className="text-xs font-bold text-slate-900 dark:text-white">Thông báo</span>
+                    </div>
+                    <div className="px-3 py-4 text-center">
+                      <p className="text-xs text-slate-500 dark:text-slate-400">Không có thông báo mới</p>
+                    </div>
+                  </div>
+                )}
+              </div>
             </div>
 
             <AuthStatus />
 
             <div className="h-4 w-px bg-slate-200 dark:bg-slate-700 hidden sm:block mx-1"></div>
 
-            <button
-              onClick={() => navigate('/settings')}
-              className="flex items-center gap-2 pl-1 group"
-            >
-              {userAvatar ? (
-                <img
-                  src={userAvatar}
-                  alt={userName}
-                  className="w-6 h-6 lg:w-7 lg:h-7 rounded-full border border-slate-200 dark:border-slate-700 group-hover:ring-2 ring-indigo-500/50 transition-all object-cover"
-                />
-              ) : (
-                <div className="w-6 h-6 lg:w-7 lg:h-7 rounded-full border border-slate-200 dark:border-slate-700 bg-indigo-100 dark:bg-indigo-900 text-indigo-600 dark:text-indigo-300 flex items-center justify-center text-xs font-semibold group-hover:ring-2 ring-indigo-500/50 transition-all">
-                  {userInitial}
+            <div className="relative" ref={avatarRef}>
+              <button
+                onClick={() => setAvatarOpen(!avatarOpen)}
+                className="flex items-center gap-2 pl-1 group"
+              >
+                {userAvatar ? (
+                  <img
+                    src={userAvatar}
+                    alt={userName}
+                    className={`w-6 h-6 lg:w-7 lg:h-7 rounded-full border border-slate-200 dark:border-slate-700 transition-all object-cover ${avatarOpen ? 'ring-2 ring-indigo-500/50' : 'group-hover:ring-2 ring-indigo-500/50'}`}
+                  />
+                ) : (
+                  <div className={`w-6 h-6 lg:w-7 lg:h-7 rounded-full border border-slate-200 dark:border-slate-700 bg-indigo-100 dark:bg-indigo-900 text-indigo-600 dark:text-indigo-300 flex items-center justify-center text-xs font-semibold transition-all ${avatarOpen ? 'ring-2 ring-indigo-500/50' : 'group-hover:ring-2 ring-indigo-500/50'}`}>
+                    {userInitial}
+                  </div>
+                )}
+              </button>
+
+              {avatarOpen && (
+                <div className="absolute top-full right-0 mt-2 w-44 bg-white dark:bg-slate-800 rounded-lg shadow-lg ring-1 ring-slate-200 dark:ring-slate-700 py-1 z-50">
+                  <div className="px-3 py-2 border-b border-slate-100 dark:border-slate-700">
+                    <p className="text-xs font-semibold text-slate-900 dark:text-white truncate">{userName}</p>
+                    <p className="text-[10px] text-slate-500 dark:text-slate-400 truncate">{user?.email}</p>
+                  </div>
+                  <button
+                    onClick={() => { setAvatarOpen(false); navigate('/settings'); }}
+                    className="w-full flex items-center gap-2 px-3 py-2 text-xs text-slate-600 dark:text-slate-300 hover:bg-slate-50 dark:hover:bg-slate-700/50 transition-colors"
+                  >
+                    <Settings className="w-3.5 h-3.5 text-slate-400 dark:text-slate-500" />
+                    Thiết lập
+                  </button>
+                  <button
+                    onClick={() => { setAvatarOpen(false); forceLogout(); }}
+                    className="w-full flex items-center gap-2 px-3 py-2 text-xs text-rose-600 dark:text-rose-400 hover:bg-rose-50 dark:hover:bg-rose-900/20 transition-colors"
+                  >
+                    <LogOut className="w-3.5 h-3.5" />
+                    Đăng xuất
+                  </button>
                 </div>
               )}
-            </button>
+            </div>
           </div>
         </div>
       </div>

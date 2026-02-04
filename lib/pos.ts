@@ -1,4 +1,5 @@
 import { supabase } from './supabaseClient';
+import { getCachedSession } from './fetcher';
 
 function toNumber(value: number | string | null | undefined): number {
   if (value === null || value === undefined) return 0;
@@ -72,8 +73,8 @@ export async function fetchCatalogForWarehouse(params: {
   category?: string;
 }): Promise<PosCatalogItem[]> {
   if (!supabase) return [];
-  const { data: sessionData } = await supabase.auth.getSession();
-  if (!sessionData.session) return [];
+  const session = await getCachedSession();
+  if (!session) return [];
   if (!params.warehouseId) return [];
 
   let query = supabase
@@ -81,36 +82,37 @@ export async function fetchCatalogForWarehouse(params: {
     .select(
       'quantity, product:inventory_products!inner(id, sku, name, selling_price, status, category:inventory_categories(name))'
     )
-    .eq('warehouse_id', params.warehouseId);
+    .eq('warehouse_id', params.warehouseId)
+    .neq('product.status', 'inactive');
 
   const qStr = (params.search ?? '').trim();
   if (qStr) {
     query = query.or(`name.ilike.%${qStr}%,sku.ilike.%${qStr}%`, { foreignTable: 'product' });
   }
 
+  const cat = (params.category ?? '').trim();
+  if (cat) {
+    query = query.eq('product.category.name', cat);
+  }
+
+  query = query.limit(200);
+
   const { data, error } = await query;
   if (error || !data) return [];
 
-  const cat = (params.category ?? '').trim();
-
-  const items: PosCatalogItem[] = [];
-  for (const row of data as any[]) {
-    const p = row.product;
-    if (!p) continue;
-    if ((p.status ?? 'active') === 'inactive') continue;
-
-    const categoryName = p.category?.name ?? 'Khác';
-    if (cat && categoryName !== cat) continue;
-
-    items.push({
-      product_id: p.id,
-      sku: String(p.sku ?? ''),
-      name: String(p.name ?? ''),
-      category: categoryName,
-      price: toNumber(p.selling_price),
-      stock: toNumber(row.quantity),
+  const items: PosCatalogItem[] = (data as any[])
+    .filter((row) => row.product)
+    .map((row) => {
+      const p = row.product;
+      return {
+        product_id: p.id,
+        sku: String(p.sku ?? ''),
+        name: String(p.name ?? ''),
+        category: p.category?.name ?? 'Khác',
+        price: toNumber(p.selling_price),
+        stock: toNumber(row.quantity),
+      };
     });
-  }
 
   items.sort((a, b) => a.name.localeCompare(b.name));
   return items;
@@ -250,9 +252,10 @@ export async function fetchPosOrders(params: {
 
 export async function fetchPosReceipt(orderId: string): Promise<PosOrderReceipt | null> {
   if (!supabase) return null;
-  const { data: sessionData } = await supabase.auth.getSession();
-  if (!sessionData.session) return null;
+  const session = await getCachedSession();
+  if (!session) return null;
 
+  // Fetch order first (need branch_id + customer_id for parallel queries)
   const { data: order, error: orderErr } = await supabase
     .from('pos_orders')
     .select('id, branch_id, shift_id, order_number, status, total, created_at, customer_id')
@@ -261,31 +264,38 @@ export async function fetchPosReceipt(orderId: string): Promise<PosOrderReceipt 
 
   if (orderErr || !order) return null;
 
-  const { data: items } = await supabase
-    .from('pos_order_items')
-    .select('sku, name, quantity, unit_price')
-    .eq('order_id', orderId)
-    .order('created_at', { ascending: true });
-
-  const { data: payment } = await supabase
-    .from('pos_payments')
-    .select('method, amount')
-    .eq('order_id', orderId)
-    .order('paid_at', { ascending: false })
-    .limit(1)
-    .maybeSingle();
-
-  const { data: branch } = await supabase
-    .from('branches')
-    .select('name')
-    .eq('id', order.branch_id)
-    .maybeSingle();
-
-  const { data: customer } = await supabase
-    .from('sales_customers')
-    .select('name')
-    .eq('id', order.customer_id)
-    .maybeSingle();
+  // Parallel: items, payment, branch, customer — all independent after order
+  const [
+    { data: items },
+    { data: payment },
+    { data: branch },
+    { data: customer },
+  ] = await Promise.all([
+    supabase
+      .from('pos_order_items')
+      .select('sku, name, quantity, unit_price')
+      .eq('order_id', orderId)
+      .order('created_at', { ascending: true }),
+    supabase
+      .from('pos_payments')
+      .select('method, amount')
+      .eq('order_id', orderId)
+      .order('paid_at', { ascending: false })
+      .limit(1)
+      .maybeSingle(),
+    supabase
+      .from('branches')
+      .select('name')
+      .eq('id', order.branch_id)
+      .maybeSingle(),
+    order.customer_id
+      ? supabase
+          .from('sales_customers')
+          .select('name')
+          .eq('id', order.customer_id)
+          .maybeSingle()
+      : Promise.resolve({ data: null }),
+  ]);
 
   return {
     order: {
@@ -296,7 +306,7 @@ export async function fetchPosReceipt(orderId: string): Promise<PosOrderReceipt 
       status: order.status,
       total: toNumber(order.total),
       created_at: order.created_at,
-      customer_name: customer?.name ?? null,
+      customer_name: (customer as any)?.name ?? null,
       notes: null,
     },
     items: (items ?? []).map((i: any) => ({
@@ -306,11 +316,11 @@ export async function fetchPosReceipt(orderId: string): Promise<PosOrderReceipt 
       unit_price: toNumber(i.unit_price),
     })),
     payment: {
-      method: payment?.method ?? 'cash',
-      amount: toNumber(payment?.amount),
+      method: (payment as any)?.method ?? 'cash',
+      amount: toNumber((payment as any)?.amount),
       payment_number: null,
     },
-    branch_name: branch?.name ?? null,
+    branch_name: (branch as any)?.name ?? null,
     vat_rate: 0,
     vat_amount: 0,
     company: {},

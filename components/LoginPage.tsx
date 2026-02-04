@@ -9,6 +9,7 @@ import {
   detectLoginType,
 } from '../lib/validation';
 import { loginWithPhone } from '../lib/phoneLogin';
+import { getAppMode } from '../lib/appMode';
 
 const LoginPage: React.FC = () => {
   const navigate = useNavigate();
@@ -95,9 +96,9 @@ const LoginPage: React.FC = () => {
         if (phoneLoginError) throw phoneLoginError;
       }
 
-      // Success - clear form and redirect to dashboard
+      // Success - clear form and redirect based on app mode
       setPassword('');
-      navigate('/dashboard');
+      navigate(getAppMode() === 'pos' ? '/pos' : '/dashboard');
     } catch (e: any) {
       setError(e?.message ?? 'Đăng nhập thất bại.');
     } finally {

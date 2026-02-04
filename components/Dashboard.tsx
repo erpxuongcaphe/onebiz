@@ -6,6 +6,7 @@ import { Activity } from '../types';
 import { fetchDashboardOverview } from '../lib/dashboard';
 import { useTenant } from '../lib/tenantContext';
 import { getPosBaseUrl } from '../lib/posUrl';
+import { useNavigate } from 'react-router-dom';
 
 const KPICard = ({ title, value, change, trend, icon: Icon, variant = 'default' }: any) => {
     const isPrimary = variant === 'primary';
@@ -92,6 +93,7 @@ const ActivityItem: React.FC<{ activity: Activity }> = ({ activity }) => {
 
 const Dashboard: React.FC = () => {
     const { tenant } = useTenant();
+    const navigate = useNavigate();
     const posUrl = useMemo(() => getPosBaseUrl({ tenant, hostname: window.location.hostname }), [tenant]);
     const [overview, setOverview] = useState<null | {
         revenue7d: number;
@@ -156,7 +158,7 @@ const Dashboard: React.FC = () => {
                         icon={BarChart2}
                         title="Báo cáo"
                         colorClass="bg-violet-100 text-violet-600 dark:bg-violet-900/40 dark:text-violet-400"
-                        onClick={() => console.log('Nav to Reports')}
+                        onClick={() => navigate('/reports')}
                     />
                     <button className="flex items-center justify-center w-7 h-7 rounded-md border border-dashed border-slate-300 dark:border-slate-700 hover:border-indigo-400 hover:text-indigo-500 text-slate-400 transition-colors shrink-0">
                         <Plus className="w-3.5 h-3.5" />

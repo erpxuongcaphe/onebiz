@@ -72,6 +72,7 @@ export const PERMISSION_DEFINITIONS: Record<string, PermissionModule> = {
     permissions: [
       { code: 'pos.*', label: 'POS (tất cả)' },
       { code: 'pos.shift.open', label: 'Mở ca' },
+      { code: 'pos.shift.update', label: 'Đóng ca' },
       { code: 'pos.order.create', label: 'Tạo đơn POS' },
       { code: 'pos.payment.record', label: 'Ghi nhận thanh toán' },
     ]

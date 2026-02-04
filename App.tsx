@@ -145,13 +145,15 @@ function App() {
         }
       />
 
-      {/* POS Route - Standalone (can be protected or public based on requirements) */}
+      {/* POS Route - Standalone, protected */}
       <Route
         path="/pos"
         element={
-          <Suspense fallback={<PageFallback />}>
-            <LazyPOS />
-          </Suspense>
+          <ProtectedRoute>
+            <Suspense fallback={<LoadingScreen />}>
+              <LazyPOS />
+            </Suspense>
+          </ProtectedRoute>
         }
       />
 

@@ -1,5 +1,6 @@
 import type { Product } from '../types';
 import { supabase } from './supabaseClient';
+import { getCachedSession } from './fetcher';
 
 type Result<T> = { data: T; error: null } | { data: null; error: string };
 
@@ -86,8 +87,8 @@ export async function fetchInventoryProducts(options?: {
     return [];
   }
 
-  const { data: sessionData } = await supabase.auth.getSession();
-  if (!sessionData.session) {
+  const session = await getCachedSession();
+  if (!session) {
     console.warn('No active session - returning empty product list');
     return [];
   }
@@ -96,13 +97,14 @@ export async function fetchInventoryProducts(options?: {
   let q = supabase
     .from('inventory_products')
     .select(`
-      id, sku, barcode, name, image_url, cost_price, selling_price, min_stock_level, status, type, 
-      category:inventory_categories(name), 
-      unit_id, 
+      id, sku, barcode, name, image_url, cost_price, selling_price, min_stock_level, status, type,
+      category:inventory_categories(name),
+      unit_id,
       unit:inventory_units(name),
       stock:inventory_stock(quantity)
     `)
-    .order('created_at', { ascending: false });
+    .order('created_at', { ascending: false })
+    .limit(200);
 
   if (options?.categoryId) {
     q = q.eq('category_id', options.categoryId);
@@ -154,13 +156,14 @@ export async function fetchInventoryProducts(options?: {
 
 export async function fetchInventoryCategories(): Promise<InventoryCategory[]> {
   if (!supabase) return [];
-  const { data: sessionData } = await supabase.auth.getSession();
-  if (!sessionData.session) return [];
+  const session = await getCachedSession();
+  if (!session) return [];
 
   const { data, error } = await supabase
     .from('inventory_categories')
     .select('id, name, code, created_at')
     .order('name', { ascending: true })
+    .limit(100)
     .returns<InventoryCategory[]>();
 
   if (error) return [];
@@ -169,13 +172,14 @@ export async function fetchInventoryCategories(): Promise<InventoryCategory[]> {
 
 export async function fetchInventoryWarehouses(): Promise<InventoryWarehouse[]> {
   if (!supabase) return [];
-  const { data: sessionData } = await supabase.auth.getSession();
-  if (!sessionData.session) return [];
+  const session = await getCachedSession();
+  if (!session) return [];
 
   const { data, error } = await supabase
     .from('inventory_warehouses')
     .select('id, name, code, branch_id, address, status, created_at')
     .order('created_at', { ascending: true })
+    .limit(100)
     .returns<InventoryWarehouse[]>();
 
   if (error) return [];
@@ -279,13 +283,14 @@ export async function deleteInventoryProductPermanently(productId: string): Prom
 
 export async function fetchInventoryUnits(): Promise<InventoryUnit[]> {
   if (!supabase) return [];
-  const { data: sessionData } = await supabase.auth.getSession();
-  if (!sessionData.session) return [];
+  const session = await getCachedSession();
+  if (!session) return [];
 
   const { data, error } = await supabase
     .from('inventory_units')
     .select('id, name, code, created_at')
     .order('name', { ascending: true })
+    .limit(100)
     .returns<InventoryUnit[]>();
 
   if (error) return [];

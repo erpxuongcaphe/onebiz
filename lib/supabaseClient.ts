@@ -6,14 +6,24 @@ const supabaseAnonKey = import.meta.env.VITE_SUPABASE_ANON_KEY as string | undef
 
 export const isSupabaseConfigured = Boolean(supabaseUrl && supabaseAnonKey);
 
+const FETCH_TIMEOUT_MS = 15000; // 15s — abort hanging requests on slow/dead networks
+
+function fetchWithTimeout(input: RequestInfo | URL, init?: RequestInit): Promise<Response> {
+  const controller = new AbortController();
+  const id = setTimeout(() => controller.abort(), FETCH_TIMEOUT_MS);
+  return fetch(input, { ...init, signal: controller.signal }).finally(() => clearTimeout(id));
+}
+
 // Main Supabase client - untyped for flexibility
-// TODO: Add proper typing when database.types.ts is regenerated
 export const supabase: SupabaseClient | null = (supabaseUrl && supabaseAnonKey)
   ? createClient(supabaseUrl, supabaseAnonKey, {
       auth: {
         persistSession: true,
         autoRefreshToken: true,
         detectSessionInUrl: true,
+      },
+      global: {
+        fetch: fetchWithTimeout,
       },
     })
   : null;

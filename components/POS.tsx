@@ -7,6 +7,7 @@ import { fetchInventoryWarehouses } from '../lib/inventory';
 import { createPosSale, fetchCatalogForWarehouse, fetchOpenShift, openShift, fetchPosReceipt, createInvoiceFromOrderHelper, type PosCatalogItem } from '../lib/pos';
 import { CloseShiftModal } from './pos/CloseShiftModal';
 import { OrderSearchModal } from './pos/OrderSearchModal';
+import { OpenShiftModal } from './pos/OpenShiftModal';
 import { ensureDefaultTemplates, fetchDocumentTemplates, getActiveTemplate, type DocumentTemplate, type PaperSize } from '../lib/documentTemplates';
 import { renderDocumentHtml, openPrintWindow, downloadPdf, exportToExcel } from '../lib/documentPrint';
 import { buildPaymentSlipPayload, buildPosInvoicePayload } from '../lib/documentPayloads';
@@ -67,6 +68,7 @@ const POS: React.FC = () => {
   // Modal states
   const [showCloseShiftModal, setShowCloseShiftModal] = useState(false);
   const [showOrderSearchModal, setShowOrderSearchModal] = useState(false);
+  const [showOpenShiftModal, setShowOpenShiftModal] = useState(false);
 
   useEffect(() => {
     if (timePreset === 'range') return;
@@ -414,14 +416,31 @@ const POS: React.FC = () => {
           <p className="text-slate-500 dark:text-slate-400 text-[11px] mt-0.5">Bán nhanh tại quầy, sẵn sàng cho nhiều chi nhánh.</p>
         </div>
         <div className="flex gap-2 w-full sm:w-auto">
-          <button
-            onClick={() => setShowCloseShiftModal(true)}
-            disabled={!can('pos.shift.update') || !shiftId}
-            className="flex items-center gap-2 px-3 py-1.5 border border-amber-500 dark:border-amber-600 rounded-lg text-[11px] font-semibold text-amber-700 dark:text-amber-400 bg-amber-50 dark:bg-amber-900/20 hover:bg-amber-100 dark:hover:bg-amber-900/30 disabled:opacity-50 disabled:cursor-not-allowed"
-          >
-            <Calendar className="w-3.5 h-3.5" />
-            Đóng Ca
-          </button>
+          {shiftId ? (
+            <>
+              <span className="flex items-center gap-1.5 px-2.5 py-1.5 rounded-lg bg-emerald-50 dark:bg-emerald-900/20 border border-emerald-200 dark:border-emerald-800">
+                <span className="w-2 h-2 bg-emerald-500 rounded-full animate-pulse"></span>
+                <span className="text-[11px] font-semibold text-emerald-700 dark:text-emerald-400">Ca đang mở</span>
+              </span>
+              <button
+                onClick={() => setShowCloseShiftModal(true)}
+                disabled={!can('pos.shift.update')}
+                className="flex items-center gap-2 px-3 py-1.5 border border-amber-500 dark:border-amber-600 rounded-lg text-[11px] font-semibold text-amber-700 dark:text-amber-400 bg-amber-50 dark:bg-amber-900/20 hover:bg-amber-100 dark:hover:bg-amber-900/30 disabled:opacity-50 disabled:cursor-not-allowed"
+              >
+                <Calendar className="w-3.5 h-3.5" />
+                Đóng Ca
+              </button>
+            </>
+          ) : (
+            <button
+              onClick={() => setShowOpenShiftModal(true)}
+              disabled={!can('pos.shift.open')}
+              className="flex items-center gap-2 px-3 py-1.5 border border-emerald-500 dark:border-emerald-600 rounded-lg text-[11px] font-semibold text-emerald-700 dark:text-emerald-400 bg-emerald-50 dark:bg-emerald-900/20 hover:bg-emerald-100 dark:hover:bg-emerald-900/30 disabled:opacity-50 disabled:cursor-not-allowed"
+            >
+              <Calendar className="w-3.5 h-3.5" />
+              Mở Ca
+            </button>
+          )}
           <button
             onClick={() => setShowOrderSearchModal(true)}
             className="flex items-center gap-2 px-3 py-1.5 border border-slate-200 dark:border-slate-700 rounded-lg text-[11px] font-semibold text-slate-600 dark:text-slate-300 bg-white dark:bg-slate-900 hover:bg-slate-50 dark:hover:bg-slate-800"
@@ -491,27 +510,7 @@ const POS: React.FC = () => {
             ))}
         </select>
 
-        <button
-          disabled={!can('pos.shift.open') || busy}
-          onClick={async () => {
-            setError(null);
-            if (shiftId) return;
-            setBusy(true);
-            try {
-              const id = await openShift({ branchId, openingCash: 0 });
-              if (!id) {
-                setError('Không mở ca được (kiểm tra quyền).');
-                return;
-              }
-              setShiftId(id);
-            } finally {
-              setBusy(false);
-            }
-          }}
-          className="px-3 py-2 rounded-lg bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 text-xs font-bold hover:bg-slate-50 dark:hover:bg-slate-800 disabled:opacity-60"
-        >
-          {shiftId ? 'Ca đang mở' : 'Mở ca'}
-        </button>
+        {/* Shift open/close managed from header buttons above */}
       </div>
 
       <div className="flex flex-wrap gap-2">
@@ -1027,6 +1026,18 @@ const POS: React.FC = () => {
             </div>
           </div>
         </div>
+      )}
+
+      {/* Open Shift Modal */}
+      {showOpenShiftModal && !shiftId && (
+        <OpenShiftModal
+          branchId={branchId}
+          onClose={() => setShowOpenShiftModal(false)}
+          onSuccess={(newShiftId) => {
+            setShowOpenShiftModal(false);
+            setShiftId(newShiftId);
+          }}
+        />
       )}
 
       {/* Close Shift Modal */}
