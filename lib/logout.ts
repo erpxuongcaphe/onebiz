@@ -1,40 +1,47 @@
 import { supabase } from './supabaseClient';
 
 /**
- * Force logout — bullet-proof version.
+ * Force logout — synchronous, fire-and-forget version.
  *
- * Why so aggressive?
- * - Auth session lives in cookies (cookieStorage adapter), NOT localStorage.
- * - supabase.auth.signOut() must run FIRST to stop the internal
- *   auto-refresh timer; otherwise the timer re-writes the cookie
- *   from the in-memory session cache even after we clear it.
- * - js-cookie helpers can silently fail to remove domain-scoped cookies,
- *   so we fall back to raw document.cookie manipulation.
+ * Critical design decisions:
+ * - signOut() is intentionally NOT awaited.  In @supabase/supabase-js v2 it may
+ *   internally attempt a token-refresh before POSTing /logout; that refresh can
+ *   hang indefinitely (network dead, CORS, stale token).  Awaiting it blocks
+ *   every line that follows — cookies never get cleared, redirect never fires.
+ * - Cookie clearing uses BOTH max-age=0 AND expires epoch (browser compat).
+ * - window.location.replace() is used so the browser does a hard navigation;
+ *   React Router cannot intercept it.
  */
-export async function forceLogout(): Promise<void> {
-  // ── 1. signOut first — stops refresh timer + clears in-memory cache ──
+export function forceLogout(): void {
+  // ── 1. Fire signOut in background (stops refresh timer + server revoke) ──
+  //        Do NOT await — it may hang.  .catch() swallows unhandled rejection.
   try {
     if (supabase) {
-      await supabase.auth.signOut();
+      supabase.auth.signOut().catch(() => {});
     }
   } catch {
-    // network timeout / offline → continue with local cleanup
+    // signOut() itself threw synchronously (shouldn't happen, but be safe)
   }
 
-  // ── 2. Nuke every cookie via document.cookie (bypasses js-cookie) ──
+  // ── 2. Nuke every cookie via native document.cookie ──
+  //        js-cookie's Cookies.remove() silently fails on domain-scoped cookies
+  //        in some browsers, so we go native and try both max-age + expires.
   const parts = document.cookie.split(';');
   for (const part of parts) {
     const name = part.split('=')[0].trim();
     if (!name) continue;
-    // Expire on current domain
+    // Current domain
+    document.cookie = `${name}=;max-age=0;path=/`;
     document.cookie = `${name}=;expires=Thu, 01 Jan 1970 00:00:00 GMT;path=/`;
-    // Expire on parent domain — covers subdomain-scoped cookies
+    // Parent domain — covers *.onebiz.com.vn
+    document.cookie = `${name}=;max-age=0;path=/;domain=.onebiz.com.vn`;
     document.cookie = `${name}=;expires=Thu, 01 Jan 1970 00:00:00 GMT;path=/;domain=.onebiz.com.vn`;
   }
 
-  // ── 3. Nuke localStorage (belt & suspenders) ──
+  // ── 3. Nuke all web storage ──
   localStorage.clear();
+  sessionStorage.clear();
 
-  // ── 4. Hard redirect → full page reload, kills all React state ──
-  window.location.href = '/login';
+  // ── 4. Hard navigate → kills every React component + JS state ──
+  window.location.replace('/login');
 }
