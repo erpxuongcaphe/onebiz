@@ -1,52 +1,42 @@
+import Cookies from 'js-cookie';
 import { supabase } from './supabaseClient';
 
+const COOKIE_DOMAIN = '.onebiz.com.vn';
+const isProduction = typeof window !== 'undefined' && window.location.hostname.includes('onebiz.com.vn');
+
 /**
- * Force logout with explicit localStorage cleanup
- *
- * This function handles browser-specific localStorage cache issues
- * where stale Supabase tokens prevent proper logout.
- *
- * Strategy:
- * 1. Clear all Supabase localStorage keys manually
- * 2. Call Supabase signOut API to invalidate server session
- * 3. Hard redirect to /login (forces page reload, clears React state)
- *
- * @returns Promise<void>
+ * Force logout — clears cookie-based session (cookieStorage) + localStorage,
+ * invalidates server session, then hard-redirects to /login.
  */
 export async function forceLogout(): Promise<void> {
-  try {
-    // Step 1: Clear all Supabase localStorage keys
-    // This fixes browser cache issues where signOut() doesn't clear tokens properly
-    const keysToRemove: string[] = [];
-    for (let i = 0; i < localStorage.length; i++) {
-      const key = localStorage.key(i);
-      if (key && key.startsWith('supabase')) {
-        keysToRemove.push(key);
-      }
+  // 1. Clear all Supabase cookies (session lives here via cookieStorage)
+  const allCookies = Cookies.get();
+  Object.keys(allCookies).forEach(key => {
+    if (key.startsWith('supabase')) {
+      Cookies.remove(key, {
+        domain: isProduction ? COOKIE_DOMAIN : undefined,
+        path: '/',
+      });
     }
-    keysToRemove.forEach(key => localStorage.removeItem(key));
+  });
 
-    // Step 2: Call Supabase signOut API
+  // 2. Belt-and-suspenders: clear localStorage too
+  for (let i = localStorage.length - 1; i >= 0; i--) {
+    const key = localStorage.key(i);
+    if (key && key.startsWith('supabase')) {
+      localStorage.removeItem(key);
+    }
+  }
+
+  // 3. Invalidate server session (best-effort — cookies already wiped above)
+  try {
     if (supabase) {
       await supabase.auth.signOut();
     }
-  } catch (error) {
-    // Even if API fails, we've already cleared localStorage
-    // This ensures logout works even offline
-    console.error('Logout error:', error);
-
-    // Fallback: Nuclear option - clear all localStorage
-    try {
-      localStorage.clear();
-    } catch (clearError) {
-      console.error('Failed to clear localStorage:', clearError);
-    }
-  } finally {
-    // Step 3: Always redirect to login
-    // Hard redirect (not navigate) forces page reload which:
-    // - Clears all React state
-    // - Prevents auto-restore from any remaining stale tokens
-    // - Ensures clean slate for next login
-    window.location.href = '/login';
+  } catch {
+    // Ignored: local state already cleared, server token will expire naturally
   }
+
+  // 4. Hard redirect — forces full page reload, kills all React state
+  window.location.href = '/login';
 }

@@ -13,26 +13,13 @@ export function CompanyTab() {
     const [saved, setSaved] = useState(false);
     const [error, setError] = useState<string | null>(null);
 
-    // Populate form when tenant data arrives
+    // Populate form from tenant context (name + settings JSONB)
     useEffect(() => {
-        // Fetch from company_info table directly or RPC
-        const loadInfo = async () => {
-            if (!supabase) return;
-            const { data, error } = await supabase.from('company_info').select('*').single();
-            if (data) {
-                setCompanyName(data.name || '');
-                setTaxCode(data.tax_code || '');
-                setAddress(data.address || '');
-                setPhone(data.phone || '');
-            } else if (tenant) {
-                // Fallback to tenant context if DB is empty
-                setCompanyName(tenant.name || '');
-                setTaxCode(tenant.settings?.tax_code || '');
-                setAddress(tenant.settings?.address || '');
-                setPhone(tenant.settings?.phone || '');
-            }
-        };
-        loadInfo();
+        if (!tenant) return;
+        setCompanyName(tenant.name || '');
+        setTaxCode(tenant.settings?.tax_code || '');
+        setAddress(tenant.settings?.address || '');
+        setPhone(tenant.settings?.phone || '');
     }, [tenant]);
 
     const handleSave = async () => {
