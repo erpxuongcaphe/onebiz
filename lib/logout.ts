@@ -1,42 +1,40 @@
-import Cookies from 'js-cookie';
 import { supabase } from './supabaseClient';
 
-const COOKIE_DOMAIN = '.onebiz.com.vn';
-const isProduction = typeof window !== 'undefined' && window.location.hostname.includes('onebiz.com.vn');
-
 /**
- * Force logout — clears cookie-based session (cookieStorage) + localStorage,
- * invalidates server session, then hard-redirects to /login.
+ * Force logout — bullet-proof version.
+ *
+ * Why so aggressive?
+ * - Auth session lives in cookies (cookieStorage adapter), NOT localStorage.
+ * - supabase.auth.signOut() must run FIRST to stop the internal
+ *   auto-refresh timer; otherwise the timer re-writes the cookie
+ *   from the in-memory session cache even after we clear it.
+ * - js-cookie helpers can silently fail to remove domain-scoped cookies,
+ *   so we fall back to raw document.cookie manipulation.
  */
 export async function forceLogout(): Promise<void> {
-  // 1. Clear all Supabase cookies (session lives here via cookieStorage)
-  const allCookies = Cookies.get();
-  Object.keys(allCookies).forEach(key => {
-    if (key.startsWith('supabase')) {
-      Cookies.remove(key, {
-        domain: isProduction ? COOKIE_DOMAIN : undefined,
-        path: '/',
-      });
-    }
-  });
-
-  // 2. Belt-and-suspenders: clear localStorage too
-  for (let i = localStorage.length - 1; i >= 0; i--) {
-    const key = localStorage.key(i);
-    if (key && key.startsWith('supabase')) {
-      localStorage.removeItem(key);
-    }
-  }
-
-  // 3. Invalidate server session (best-effort — cookies already wiped above)
+  // ── 1. signOut first — stops refresh timer + clears in-memory cache ──
   try {
     if (supabase) {
       await supabase.auth.signOut();
     }
   } catch {
-    // Ignored: local state already cleared, server token will expire naturally
+    // network timeout / offline → continue with local cleanup
   }
 
-  // 4. Hard redirect — forces full page reload, kills all React state
+  // ── 2. Nuke every cookie via document.cookie (bypasses js-cookie) ──
+  const parts = document.cookie.split(';');
+  for (const part of parts) {
+    const name = part.split('=')[0].trim();
+    if (!name) continue;
+    // Expire on current domain
+    document.cookie = `${name}=;expires=Thu, 01 Jan 1970 00:00:00 GMT;path=/`;
+    // Expire on parent domain — covers subdomain-scoped cookies
+    document.cookie = `${name}=;expires=Thu, 01 Jan 1970 00:00:00 GMT;path=/;domain=.onebiz.com.vn`;
+  }
+
+  // ── 3. Nuke localStorage (belt & suspenders) ──
+  localStorage.clear();
+
+  // ── 4. Hard redirect → full page reload, kills all React state ──
   window.location.href = '/login';
 }
