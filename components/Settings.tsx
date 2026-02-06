@@ -78,7 +78,7 @@ const Settings: React.FC = () => {
         {activeTab === 'profile' && (
           <ProfileTab
             branchName={branchId ? 'Chi nhánh' : undefined}
-            roleName={canManageRoles ? 'Quản trị viên' : 'Người dùng'}
+            roleName={isSuperAdmin ? 'Super Admin' : (canManageRoles ? 'Quản trị viên' : 'Người dùng')}
           />
         )}
 
