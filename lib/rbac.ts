@@ -10,8 +10,7 @@ export type PermissionPattern = string;
  * - Bypasses RLS issues with get_my_permission_patterns() RPC
  * - Faster (reads from JWT, no DB round-trip)
  * - Works offline once JWT is loaded
- *
- * Trade-off: User must re-login after role change to refresh JWT
+ * - Auto-refreshes token if permissions missing (fixes Ctrl+F5 losing permissions)
  */
 export async function fetchMyPermissionPatterns(): Promise<PermissionPattern[]> {
   if (!supabase) return [];
@@ -20,13 +19,33 @@ export async function fetchMyPermissionPatterns(): Promise<PermissionPattern[]> 
   if (!session?.user) return [];
 
   // Read from user.user_metadata.permissions (synced from DB via trigger)
-  const permissions = session.user.user_metadata?.permissions;
+  let permissions = session.user.user_metadata?.permissions;
 
-  if (Array.isArray(permissions)) {
+  // If permissions missing or empty → force token refresh
+  // This handles cases like:
+  // - Ctrl+F5 hard refresh (browser clears cache but keeps old JWT)
+  // - User assigned role before migration 069 ran
+  // - JWT issued before trigger synced permissions
+  if (!Array.isArray(permissions) || permissions.length === 0) {
+    console.warn('[rbac] Permissions missing in JWT, forcing token refresh...');
+    try {
+      const { data: refreshData, error } = await supabase.auth.refreshSession();
+      if (error) {
+        console.error('[rbac] Token refresh failed:', error);
+      } else if (refreshData.session) {
+        permissions = refreshData.session.user.user_metadata?.permissions;
+        console.log('[rbac] Token refreshed, permissions:', permissions);
+      }
+    } catch (e) {
+      console.error('[rbac] Token refresh error:', e);
+    }
+  }
+
+  if (Array.isArray(permissions) && permissions.length > 0) {
     return permissions as PermissionPattern[];
   }
 
-  // Fallback: empty array if no permissions in metadata yet
+  // Final fallback: empty array (user has no roles assigned)
   return [];
 }
 
