@@ -46,6 +46,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
         window.clearTimeout(fallbackTimer);
 
         const perms = await fetchMyPermissionPatterns();
+        console.log('[AuthProvider] Permissions loaded:', perms);
         if (isMounted) setPermissionPatterns(perms);
       } else {
         setPermissionPatterns([]);
@@ -65,6 +66,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
       setUser(nextSession?.user ?? null);
       if (nextSession) {
         const perms = await fetchMyPermissionPatterns();
+        console.log('[AuthProvider] Permissions refreshed:', perms);
         setPermissionPatterns(perms);
       } else {
         setPermissionPatterns([]);

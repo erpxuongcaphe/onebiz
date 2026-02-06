@@ -1,4 +1,4 @@
-import React, { useEffect, useState } from 'react';
+import React, { useEffect, useState, useMemo } from 'react';
 import { useAuth } from '../lib/auth';
 import { fetchCurrentBranchId } from '../lib/branches';
 import { useTenant } from '../lib/tenantContext';
@@ -23,10 +23,21 @@ const Settings: React.FC = () => {
   if (!user && !loading) {
     return null;
   }
-  const canManageRoles = roleUiUnlocked || permissionPatterns.some((p) => p === '*' || p.startsWith('roles.'));
-  const canManageTemplates = permissionPatterns.some((p) => p === '*' || p.startsWith('settings.'));
-  const isSuperAdmin = permissionPatterns.includes('*');
-  const isAdmin = canManageRoles || canManageTemplates || isSuperAdmin;
+  const canManageRoles = useMemo(() =>
+    roleUiUnlocked || permissionPatterns.some((p) => p === '*' || p.startsWith('roles.'))
+  , [roleUiUnlocked, permissionPatterns]);
+
+  const canManageTemplates = useMemo(() =>
+    permissionPatterns.some((p) => p === '*' || p.startsWith('settings.'))
+  , [permissionPatterns]);
+
+  const isSuperAdmin = useMemo(() =>
+    permissionPatterns.includes('*')
+  , [permissionPatterns]);
+
+  const isAdmin = useMemo(() =>
+    canManageRoles || canManageTemplates || isSuperAdmin
+  , [canManageRoles, canManageTemplates, isSuperAdmin]);
 
   useEffect(() => {
     if (!user) {
