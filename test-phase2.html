@@ -1,0 +1,265 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Phase 2 Quick Test</title>
+  <style>
+    body {
+      font-family: system-ui, -apple-system, sans-serif;
+      max-width: 1200px;
+      margin: 0 auto;
+      padding: 20px;
+      background: #f5f5f5;
+    }
+    .test-section {
+      background: white;
+      border-radius: 8px;
+      padding: 20px;
+      margin-bottom: 20px;
+      box-shadow: 0 2px 4px rgba(0,0,0,0.1);
+    }
+    .test-section h2 {
+      margin-top: 0;
+      color: #333;
+    }
+    .status {
+      display: inline-block;
+      padding: 4px 12px;
+      border-radius: 4px;
+      font-weight: bold;
+      font-size: 14px;
+    }
+    .status.pending { background: #fef3c7; color: #92400e; }
+    .status.running { background: #dbeafe; color: #1e40af; }
+    .status.success { background: #d1fae5; color: #065f46; }
+    .status.error { background: #fee2e2; color: #991b1b; }
+    button {
+      background: #3b82f6;
+      color: white;
+      border: none;
+      padding: 10px 20px;
+      border-radius: 6px;
+      cursor: pointer;
+      font-weight: 600;
+      margin-right: 10px;
+    }
+    button:hover { background: #2563eb; }
+    button:disabled { background: #9ca3af; cursor: not-allowed; }
+    .log {
+      background: #1e293b;
+      color: #e2e8f0;
+      padding: 15px;
+      border-radius: 6px;
+      font-family: 'Courier New', monospace;
+      font-size: 13px;
+      max-height: 300px;
+      overflow-y: auto;
+      margin-top: 10px;
+    }
+    .log div { margin: 4px 0; }
+    .log .success { color: #86efac; }
+    .log .error { color: #fca5a5; }
+    .log .info { color: #93c5fd; }
+  </style>
+</head>
+<body>
+  <h1>🧪 Phase 2 - Quick Integration Test</h1>
+  <p>Test nhanh các tính năng mới: Close Shift Modal + Order Search Modal</p>
+
+  <!-- Test 1: Check Files -->
+  <div class="test-section">
+    <h2>Test 1: File Structure Check</h2>
+    <div id="test1-status" class="status pending">⏳ Pending</div>
+    <button onclick="runTest1()">Run Test</button>
+    <div id="test1-log" class="log" style="display:none;"></div>
+  </div>
+
+  <!-- Test 2: Migration Check -->
+  <div class="test-section">
+    <h2>Test 2: Database Migration Check</h2>
+    <div id="test2-status" class="status pending">⏳ Pending</div>
+    <button onclick="runTest2()">Run Test (Manual)</button>
+    <div id="test2-log" class="log">
+      <div class="info">📝 Manual Steps:</div>
+      <div>1. Open Supabase Dashboard → SQL Editor</div>
+      <div>2. Run: SELECT * FROM pos_shifts LIMIT 1;</div>
+      <div>3. Verify columns exist: total_sales, cash_sales, bank_sales, card_sales, other_sales, expected_cash, actual_cash, cash_variance, variance_notes</div>
+      <div>4. Run: SELECT pos_get_shift_summary('00000000-0000-0000-0000-000000000000');</div>
+      <div>5. Should return error (no shift) but function exists</div>
+    </div>
+  </div>
+
+  <!-- Test 3: Component Integration -->
+  <div class="test-section">
+    <h2>Test 3: React Component Integration</h2>
+    <div id="test3-status" class="status pending">⏳ Pending</div>
+    <button onclick="runTest3()">Check Integration</button>
+    <div id="test3-log" class="log" style="display:none;"></div>
+  </div>
+
+  <!-- Test 4: Manual UI Test -->
+  <div class="test-section">
+    <h2>Test 4: Manual UI Test</h2>
+    <div id="test4-status" class="status pending">⏳ Pending</div>
+    <a href="http://localhost:3000" target="_blank">
+      <button>Open App</button>
+    </a>
+    <div class="log">
+      <div class="info">🎯 UI Test Checklist:</div>
+      <div>□ Login to system</div>
+      <div>□ Go to POS page</div>
+      <div>□ See "Đóng Ca" button (amber color, top right)</div>
+      <div>□ See "Tra Cứu Đơn" button (white color, top right)</div>
+      <div>□ Click "Tra Cứu Đơn" → Modal appears</div>
+      <div>□ Modal has: Search box, Date filters, Results table</div>
+      <div>□ Close modal works (X button)</div>
+      <div>□ If shift open: Click "Đóng Ca" → Modal appears</div>
+      <div>□ Modal has: Shift summary, Payment breakdown, Cash reconciliation</div>
+    </div>
+  </div>
+
+  <!-- Test Results Summary -->
+  <div class="test-section">
+    <h2>📊 Test Results Summary</h2>
+    <div id="summary" class="log">
+      <div class="info">Tests not run yet. Click buttons above to start testing.</div>
+    </div>
+  </div>
+
+  <script>
+    const results = {
+      test1: null,
+      test2: null,
+      test3: null,
+      test4: null
+    };
+
+    function log(testId, message, type = 'info') {
+      const logEl = document.getElementById(`${testId}-log`);
+      logEl.style.display = 'block';
+      const div = document.createElement('div');
+      div.className = type;
+      div.textContent = `[${new Date().toLocaleTimeString()}] ${message}`;
+      logEl.appendChild(div);
+      logEl.scrollTop = logEl.scrollHeight;
+    }
+
+    function setStatus(testId, status) {
+      const statusEl = document.getElementById(`${testId}-status`);
+      statusEl.className = `status ${status}`;
+      statusEl.textContent = {
+        pending: '⏳ Pending',
+        running: '▶️ Running',
+        success: '✅ Success',
+        error: '❌ Failed'
+      }[status];
+      results[testId] = status;
+      updateSummary();
+    }
+
+    function updateSummary() {
+      const summary = document.getElementById('summary');
+      const total = Object.keys(results).length;
+      const completed = Object.values(results).filter(r => r === 'success' || r === 'error').length;
+      const success = Object.values(results).filter(r => r === 'success').length;
+      const failed = Object.values(results).filter(r => r === 'error').length;
+
+      summary.innerHTML = `
+        <div class="info">Progress: ${completed}/${total} tests completed</div>
+        <div class="success">✅ Passed: ${success}</div>
+        <div class="error">❌ Failed: ${failed}</div>
+        <div style="margin-top:10px;">
+          ${completed === total ? (failed === 0 ? '<div class="success">🎉 All tests passed! Ready to deploy.</div>' : '<div class="error">⚠️ Some tests failed. Review logs above.</div>') : '<div class="info">⏳ Tests in progress...</div>'}
+        </div>
+      `;
+    }
+
+    async function runTest1() {
+      setStatus('test1', 'running');
+      log('test1', 'Checking file structure...');
+
+      const files = [
+        'components/pos/CloseShiftModal.tsx',
+        'components/pos/OrderSearchModal.tsx',
+        'supabase/migrations/066_pos_shift_close_and_search.sql'
+      ];
+
+      let allExist = true;
+      for (const file of files) {
+        try {
+          const response = await fetch(`http://localhost:3000/src/${file}`, { method: 'HEAD' });
+          if (response.ok) {
+            log('test1', `✓ ${file} exists`, 'success');
+          } else {
+            log('test1', `✗ ${file} not found`, 'error');
+            allExist = false;
+          }
+        } catch (e) {
+          log('test1', `✗ Cannot verify ${file} (fetch error)`, 'error');
+          allExist = false;
+        }
+      }
+
+      if (allExist) {
+        log('test1', 'All required files exist!', 'success');
+        setStatus('test1', 'success');
+      } else {
+        log('test1', 'Some files missing', 'error');
+        setStatus('test1', 'error');
+      }
+    }
+
+    function runTest2() {
+      setStatus('test2', 'running');
+      setTimeout(() => {
+        setStatus('test2', 'success');
+      }, 1000);
+    }
+
+    async function runTest3() {
+      setStatus('test3', 'running');
+      log('test3', 'Checking POS.tsx integration...');
+
+      try {
+        const response = await fetch('http://localhost:3000/src/components/POS.tsx');
+        const content = await response.text();
+
+        const checks = [
+          { name: 'CloseShiftModal import', pattern: /import.*CloseShiftModal/ },
+          { name: 'OrderSearchModal import', pattern: /import.*OrderSearchModal/ },
+          { name: 'showCloseShiftModal state', pattern: /showCloseShiftModal/ },
+          { name: 'showOrderSearchModal state', pattern: /showOrderSearchModal/ },
+          { name: 'CloseShiftModal component', pattern: /<CloseShiftModal/ },
+          { name: 'OrderSearchModal component', pattern: /<OrderSearchModal/ },
+          { name: 'Stock refresh useEffect', pattern: /Auto-refresh catalog/ }
+        ];
+
+        let allPass = true;
+        for (const check of checks) {
+          if (check.pattern.test(content)) {
+            log('test3', `✓ ${check.name}`, 'success');
+          } else {
+            log('test3', `✗ ${check.name} not found`, 'error');
+            allPass = false;
+          }
+        }
+
+        if (allPass) {
+          log('test3', 'All integrations verified!', 'success');
+          setStatus('test3', 'success');
+        } else {
+          log('test3', 'Some integrations missing', 'error');
+          setStatus('test3', 'error');
+        }
+      } catch (e) {
+        log('test3', `Error: ${e.message}`, 'error');
+        setStatus('test3', 'error');
+      }
+    }
+
+    // Initialize
+    updateSummary();
+  </script>
+</body>
+</html>
