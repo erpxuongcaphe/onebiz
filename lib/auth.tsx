@@ -39,15 +39,16 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
       setSession(data.session ?? null);
       setUser(data.session?.user ?? null);
 
-      // Load permissions in background, don't block UI
+      // Load permissions BEFORE unlocking UI (fixes Ctrl+F5 race condition)
       if (data.session) {
-        // Show UI first, load permissions async
-        setLoading(false);
-        window.clearTimeout(fallbackTimer);
-
+        // Wait for permissions to load before showing UI
         const perms = await fetchMyPermissionPatterns();
         console.log('[AuthProvider] Permissions loaded:', perms);
-        if (isMounted) setPermissionPatterns(perms);
+        if (isMounted) {
+          setPermissionPatterns(perms);
+          setLoading(false);
+          window.clearTimeout(fallbackTimer);
+        }
       } else {
         setPermissionPatterns([]);
         setLoading(false);
