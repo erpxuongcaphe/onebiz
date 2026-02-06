@@ -34,7 +34,18 @@ export async function fetchMyPermissionPatterns(): Promise<PermissionPattern[]> 
         console.error('[rbac] Token refresh failed:', error);
       } else if (refreshData.session) {
         permissions = refreshData.session.user.user_metadata?.permissions;
-        console.log('[rbac] Token refreshed, permissions:', permissions);
+        console.log('[rbac] Token refreshed successfully');
+        console.log('[rbac] New permissions:', permissions);
+
+        // CRITICAL: Manually update session to trigger onAuthStateChange
+        // refreshSession() doesn't fire auth state change event automatically
+        // This ensures AuthProvider re-fetches permissions and updates UI
+        if (permissions && Array.isArray(permissions) && permissions.length > 0) {
+          await supabase.auth.setSession({
+            access_token: refreshData.session.access_token,
+            refresh_token: refreshData.session.refresh_token
+          });
+        }
       }
     } catch (e) {
       console.error('[rbac] Token refresh error:', e);
