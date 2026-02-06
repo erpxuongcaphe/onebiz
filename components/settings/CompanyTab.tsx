@@ -23,20 +23,28 @@ export function CompanyTab() {
     }, [tenant]);
 
     const handleSave = async () => {
-        if (!supabase) return;
+        console.log('[CompanyTab] handleSave called', { companyName, taxCode, address, phone });
+        if (!supabase) {
+            console.error('[CompanyTab] Supabase not initialized');
+            setError('Supabase chưa được khởi tạo');
+            return;
+        }
         setSaving(true);
         setError(null);
         try {
+            console.log('[CompanyTab] Calling RPC update_company_settings...');
             const { error: rpcErr } = await supabase.rpc('update_company_settings', {
                 p_name: companyName,
                 p_tax_code: taxCode,
                 p_address: address,
                 p_phone: phone,
             });
+            console.log('[CompanyTab] RPC response:', { error: rpcErr });
             if (rpcErr) throw rpcErr;
             setSaved(true);
             setTimeout(() => setSaved(false), 2500);
         } catch (e: any) {
+            console.error('[CompanyTab] Save error:', e);
             setError(e?.message || 'Không thể lưu cấu hình');
         } finally {
             setSaving(false);
