@@ -21,7 +21,7 @@ export async function fetchMyPermissionPatterns(): Promise<PermissionPattern[]> 
   // Read from user.user_metadata.permissions (synced from DB via trigger)
   let permissions = session.user.user_metadata?.permissions;
 
-  // If permissions missing or empty → force token refresh
+  // If permissions missing or empty → force token refresh (Option A fix)
   // This handles cases like:
   // - Ctrl+F5 hard refresh (browser clears cache but keeps old JWT)
   // - User assigned role before migration 069 ran
@@ -30,33 +30,42 @@ export async function fetchMyPermissionPatterns(): Promise<PermissionPattern[]> 
     console.warn('[rbac] Permissions missing in JWT, forcing token refresh...');
     try {
       const { data: refreshData, error } = await supabase.auth.refreshSession();
+
       if (error) {
         console.error('[rbac] Token refresh failed:', error);
-      } else if (refreshData.session) {
-        permissions = refreshData.session.user.user_metadata?.permissions;
-        console.log('[rbac] Token refreshed successfully');
-        console.log('[rbac] New permissions:', permissions);
+        return []; // Failed refresh → return empty
+      }
 
-        // CRITICAL: Manually update session to trigger onAuthStateChange
-        // refreshSession() doesn't fire auth state change event automatically
-        // This ensures AuthProvider re-fetches permissions and updates UI
-        if (permissions && Array.isArray(permissions) && permissions.length > 0) {
-          await supabase.auth.setSession({
-            access_token: refreshData.session.access_token,
-            refresh_token: refreshData.session.refresh_token
-          });
-        }
+      if (!refreshData.session) {
+        console.error('[rbac] No session after refresh');
+        return []; // No session → return empty
+      }
+
+      // ✅ CRITICAL FIX: Read from REFRESHED session (not old `permissions` variable)
+      permissions = refreshData.session.user.user_metadata?.permissions;
+      console.log('[rbac] Token refreshed successfully');
+      console.log('[rbac] Permissions after refresh:', permissions);
+
+      // Update session in Supabase client to trigger onAuthStateChange
+      if (permissions && Array.isArray(permissions) && permissions.length > 0) {
+        await supabase.auth.setSession({
+          access_token: refreshData.session.access_token,
+          refresh_token: refreshData.session.refresh_token
+        });
       }
     } catch (e) {
       console.error('[rbac] Token refresh error:', e);
+      return []; // Exception → return empty
     }
   }
 
+  // Final check: return permissions if valid
   if (Array.isArray(permissions) && permissions.length > 0) {
     return permissions as PermissionPattern[];
   }
 
-  // Final fallback: empty array (user has no roles assigned)
+  // If still empty after refresh → user genuinely has no permissions
+  console.warn('[rbac] No permissions found after refresh');
   return [];
 }
 

@@ -39,15 +39,24 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
       setSession(data.session ?? null);
       setUser(data.session?.user ?? null);
 
-      // Load permissions BEFORE unlocking UI (fixes Ctrl+F5 race condition)
+      // PRE-LOAD permissions from JWT synchronously (Option B - instant fix)
       if (data.session) {
-        // Wait for permissions to load before showing UI
+        // ✅ Pre-load permissions from JWT IMMEDIATELY (no network delay)
+        const jwtPerms = data.session.user.user_metadata?.permissions;
+        if (Array.isArray(jwtPerms) && jwtPerms.length > 0) {
+          console.log('[AuthProvider] Pre-loaded permissions from JWT:', jwtPerms);
+          setPermissionPatterns(jwtPerms);
+        }
+
+        // Unlock UI with pre-loaded permissions (fast path)
+        setLoading(false);
+        window.clearTimeout(fallbackTimer);
+
+        // Still fetch in background for validation/refresh (Option A)
         const perms = await fetchMyPermissionPatterns();
-        console.log('[AuthProvider] Permissions loaded:', perms);
-        if (isMounted) {
-          setPermissionPatterns(perms);
-          setLoading(false);
-          window.clearTimeout(fallbackTimer);
+        console.log('[AuthProvider] Permissions refreshed:', perms);
+        if (isMounted && perms.length > 0) {
+          setPermissionPatterns(perms); // Update if changed after refresh
         }
       } else {
         setPermissionPatterns([]);
@@ -75,10 +84,28 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
       setLoading(false);
     });
 
+    // Option C: Listen for permission changes via Realtime (no re-login needed!)
+    const channel = supabase
+      .channel('permissions')
+      .on('postgres_changes',
+        { event: '*', schema: 'public', table: 'user_roles' },
+        async (payload) => {
+          console.log('[AuthProvider] Permission change detected:', payload);
+          // Refresh permissions in real-time
+          const perms = await fetchMyPermissionPatterns();
+          if (perms.length > 0) {
+            console.log('[AuthProvider] Real-time permissions updated:', perms);
+            setPermissionPatterns(perms);
+          }
+        }
+      )
+      .subscribe();
+
     return () => {
       isMounted = false;
       window.clearTimeout(fallbackTimer);
       sub.subscription.unsubscribe();
+      channel.unsubscribe(); // Clean up Realtime listener
     };
   }, []);
 
