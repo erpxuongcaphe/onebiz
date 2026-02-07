@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState, useMemo } from 'react';
 import { LogOut, KeyRound, AlertTriangle } from 'lucide-react';
 import { useAuth } from '../../lib/auth';
 import { supabase } from '../../lib/supabaseClient';
@@ -12,7 +12,22 @@ type ProfileTabProps = {
 };
 
 export function ProfileTab({ branchName, roleName }: ProfileTabProps) {
-    const { user } = useAuth();
+    const { user, permissionPatterns } = useAuth();
+
+    // ✅ NUCLEAR FIX: Compute roleName DIRECTLY from permissionPatterns
+    // This bypasses all prop passing and context propagation issues
+    const computedRoleName = useMemo(() => {
+        const isSuperAdmin = permissionPatterns.includes('*');
+        const canManageRoles = permissionPatterns.some((p) => p === '*' || p.startsWith('roles.'));
+
+        if (isSuperAdmin) return 'Super Admin';
+        if (canManageRoles) return 'Quản trị viên';
+        return 'Người dùng';
+    }, [permissionPatterns]);
+
+    // Use computed role instead of prop (prop kept for backward compatibility)
+    const displayRoleName = computedRoleName || roleName || 'Người dùng';
+
     const [submitting, setSubmitting] = useState(false);
     const [error, setError] = useState<string | null>(null);
     const [showChangePassword, setShowChangePassword] = useState(false);
@@ -192,10 +207,10 @@ export function ProfileTab({ branchName, roleName }: ProfileTabProps) {
                         </div>
                     )}
 
-                    {roleName && (
+                    {displayRoleName && (
                         <div>
                             <div className="text-xs font-semibold text-slate-500 dark:text-slate-400 mb-1">Vai Trò</div>
-                            <div className="text-sm text-slate-900 dark:text-white">{roleName}</div>
+                            <div className="text-sm text-slate-900 dark:text-white">{displayRoleName}</div>
                         </div>
                     )}
                 </div>
