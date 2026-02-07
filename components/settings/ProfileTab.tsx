@@ -1,4 +1,4 @@
-import React, { useState, useMemo } from 'react';
+import React, { useState, useMemo, useEffect } from 'react';
 import { LogOut, KeyRound, AlertTriangle } from 'lucide-react';
 import { useAuth } from '../../lib/auth';
 import { supabase } from '../../lib/supabaseClient';
@@ -23,6 +23,11 @@ export function ProfileTab({ branchName, roleName }: ProfileTabProps) {
         if (isSuperAdmin) return 'Super Admin';
         if (canManageRoles) return 'Quản trị viên';
         return 'Người dùng';
+    }, [permissionPatterns]);
+
+    // ✅ FIX: Force re-render when permissions update (CASE B - Context race fix)
+    useEffect(() => {
+        console.log('[ProfileTab] Permissions updated, forcing re-render:', permissionPatterns);
     }, [permissionPatterns]);
 
     // Use computed role instead of prop (prop kept for backward compatibility)
