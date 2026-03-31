@@ -58,7 +58,23 @@
       "Bash(cp /tmp/onebiz-erp2/postcss.config.mjs /e/JD-erp/)",
       "Bash(cp /tmp/onebiz-erp2/next-env.d.ts /e/JD-erp/)",
       "Bash(cp -r /tmp/onebiz-erp2/src /e/JD-erp/)",
-      "Bash(npx shadcn@latest init -d)"
+      "Bash(npx shadcn@latest init -d)",
+      "Bash(npx shadcn@latest add dropdown-menu sheet input badge separator skeleton scroll-area checkbox select table card tabs avatar tooltip -y)",
+      "Bash(cd /e/JD-erp/src/app/'\\(main\\)')",
+      "Bash(mkdir -p hang-hoa/thiet-lap-gia hang-hoa/san-xuat hang-hoa/kiem-kho hang-hoa/xuat-dung-noi-bo hang-hoa/xuat-huy hang-hoa/hoa-don-dau-vao hang-hoa/nha-cung-cap hang-hoa/dat-hang-nhap hang-hoa/nhap-hang hang-hoa/tra-hang-nhap hang-hoa/'[id]' don-hang/dat-hang don-hang/hoa-don don-hang/tra-hang don-hang/doi-tac-giao-hang don-hang/van-don khach-hang/'[id]' so-quy phan-tich ban-online)",
+      "Bash(ls \"E:/JD-erp/src/app/\\(main\\)/hang-hoa\")",
+      "Bash(ls \"E:/JD-erp/src/app/\\(main\\)/don-hang\")",
+      "Bash(ls \"E:/JD-erp/src/app/\\(main\\)/khach-hang\")",
+      "mcp__Claude_Preview__preview_start",
+      "Bash(netstat -ano)",
+      "Bash(taskkill //F //PID 12744)",
+      "Bash(npx next:*)",
+      "Bash(ls -la \"E:\\\\JD-erp\\\\src\\\\app\\\\\\(main\\)\\\\hang-hoa\\\\[id]\"\")",
+      "Bash(ls \"E:/JD-erp/src/app/\\(main\\)/hang-hoa/nha-cung-cap\")",
+      "Bash(ls \"E:/JD-erp/src/app/\\(main\\)/page.tsx\")",
+      "Bash(echo \"exit: $?\")",
+      "Bash(find \"E:/JD-erp/src/app/\\(main\\)/cai-dat\" -name \"*.tsx\")",
+      "Bash(ls -la \"E:\\\\JD-erp\\\\src\\\\app\\\\\\(main\\)\")"
     ]
   }
 }
