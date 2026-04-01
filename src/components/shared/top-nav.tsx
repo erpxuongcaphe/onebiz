@@ -224,7 +224,6 @@ function UserDropdown() {
           className="cursor-pointer"
           onSelect={() => {
             logout();
-            router.push("/dang-nhap");
           }}
         >
           <LogOut className="h-4 w-4" />
