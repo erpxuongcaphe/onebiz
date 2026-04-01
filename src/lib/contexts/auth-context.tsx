@@ -18,7 +18,7 @@ import type { User } from "@supabase/supabase-js";
 interface AuthState {
   /** Supabase auth user */
   authUser: User | null;
-  /** App-level profile (from profiles table, mock for now) */
+  /** App-level profile (from profiles table) */
   user: UserProfile | null;
   tenant: Tenant | null;
   branches: Branch[];
@@ -32,61 +32,6 @@ interface AuthContextValue extends AuthState {
   logout: () => Promise<void>;
 }
 
-// --- Mock profile data (will be replaced by DB queries in Phase C) ---
-
-function buildMockProfile(authUser: User): UserProfile {
-  const meta = authUser.user_metadata ?? {};
-  return {
-    id: authUser.id,
-    tenantId: "tenant_001",
-    branchId: "branch_main",
-    fullName: meta.full_name ?? authUser.email?.split("@")[0] ?? "User",
-    email: authUser.email ?? "",
-    phone: meta.phone ?? null,
-    role: "owner",
-    isActive: true,
-    createdAt: authUser.created_at,
-  };
-}
-
-const mockTenant: Tenant = {
-  id: "tenant_001",
-  name: "Cửa hàng ABC",
-  slug: "cua-hang-abc",
-  settings: {},
-  createdAt: "2024-01-01",
-};
-
-const mockBranches: Branch[] = [
-  {
-    id: "branch_main",
-    tenantId: "tenant_001",
-    name: "Chi nhánh chính",
-    address: "123 Nguyễn Huệ, Q1, TP.HCM",
-    phone: "0909 123 456",
-    isDefault: true,
-    createdAt: "2024-01-01",
-  },
-  {
-    id: "branch_hcm",
-    tenantId: "tenant_001",
-    name: "Chi nhánh HCM",
-    address: "456 Lê Lợi, Q1, TP.HCM",
-    phone: "0909 234 567",
-    isDefault: false,
-    createdAt: "2024-03-01",
-  },
-  {
-    id: "branch_hn",
-    tenantId: "tenant_001",
-    name: "Chi nhánh HN",
-    address: "789 Hoàn Kiếm, HN",
-    phone: "0909 345 678",
-    isDefault: false,
-    createdAt: "2024-06-01",
-  },
-];
-
 // --- Context ---
 
 const AuthContext = createContext<AuthContextValue | null>(null);
@@ -98,11 +43,91 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   const [authUser, setAuthUser] = useState<User | null>(null);
   const [user, setUser] = useState<UserProfile | null>(null);
   const [tenant, setTenant] = useState<Tenant | null>(null);
-  const [branches] = useState<Branch[]>(mockBranches);
-  const [currentBranch, setCurrentBranch] = useState<Branch | null>(
-    mockBranches[0]
-  );
+  const [branches, setBranches] = useState<Branch[]>([]);
+  const [currentBranch, setCurrentBranch] = useState<Branch | null>(null);
   const [isLoading, setIsLoading] = useState(true);
+
+  // Load profile, tenant, branches from Supabase
+  const loadUserData = useCallback(
+    async (authUser: User) => {
+      try {
+        // 1. Load profile
+        const { data: profile } = await supabase
+          .from("profiles")
+          .select("*")
+          .eq("id", authUser.id)
+          .single();
+
+        if (!profile) {
+          // Profile not yet created (handle_new_user trigger hasn't fired or failed)
+          setUser(buildFallbackProfile(authUser));
+          return;
+        }
+
+        setUser({
+          id: profile.id,
+          tenantId: profile.tenant_id,
+          branchId: profile.branch_id ?? undefined,
+          fullName: profile.full_name,
+          email: profile.email,
+          phone: profile.phone ?? undefined,
+          role: profile.role,
+          isActive: profile.is_active,
+          createdAt: profile.created_at,
+        });
+
+        // 2. Load tenant
+        const { data: tenantData } = await supabase
+          .from("tenants")
+          .select("*")
+          .eq("id", profile.tenant_id)
+          .single();
+
+        if (tenantData) {
+          setTenant({
+            id: tenantData.id,
+            name: tenantData.name,
+            slug: tenantData.slug,
+            settings: tenantData.settings as Record<string, unknown>,
+            createdAt: tenantData.created_at,
+          });
+        }
+
+        // 3. Load branches
+        const { data: branchData } = await supabase
+          .from("branches")
+          .select("*")
+          .eq("tenant_id", profile.tenant_id)
+          .eq("is_active", true)
+          .order("is_default", { ascending: false });
+
+        if (branchData && branchData.length > 0) {
+          const mappedBranches: Branch[] = branchData.map((b) => ({
+            id: b.id,
+            tenantId: b.tenant_id,
+            name: b.name,
+            address: b.address ?? undefined,
+            phone: b.phone ?? undefined,
+            isDefault: b.is_default,
+            createdAt: b.created_at,
+          }));
+          setBranches(mappedBranches);
+
+          // Set current branch: use profile.branch_id or default branch
+          const savedBranchId = profile.branch_id;
+          const currentBr =
+            mappedBranches.find((b) => b.id === savedBranchId) ??
+            mappedBranches.find((b) => b.isDefault) ??
+            mappedBranches[0];
+          setCurrentBranch(currentBr);
+        }
+      } catch {
+        // If DB queries fail (e.g., tables not created yet), use fallback
+        setUser(buildFallbackProfile(authUser));
+      }
+    },
+    [supabase]
+  );
 
   // Listen to Supabase auth state changes
   useEffect(() => {
@@ -110,11 +135,10 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     supabase.auth.getUser().then(({ data: { user: initialUser } }) => {
       if (initialUser) {
         setAuthUser(initialUser);
-        setUser(buildMockProfile(initialUser));
-        setTenant(mockTenant);
-        setCurrentBranch(mockBranches[0]);
+        loadUserData(initialUser).finally(() => setIsLoading(false));
+      } else {
+        setIsLoading(false);
       }
-      setIsLoading(false);
     });
 
     // Subscribe to auth changes
@@ -125,18 +149,17 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       setAuthUser(sessionUser);
 
       if (sessionUser) {
-        setUser(buildMockProfile(sessionUser));
-        setTenant(mockTenant);
-        setCurrentBranch(mockBranches[0]);
+        loadUserData(sessionUser);
       } else {
         setUser(null);
         setTenant(null);
+        setBranches([]);
         setCurrentBranch(null);
       }
     });
 
     return () => subscription.unsubscribe();
-  }, [supabase]);
+  }, [supabase, loadUserData]);
 
   const switchBranch = useCallback(
     (branchId: string) => {
@@ -178,4 +201,20 @@ export function useAuth() {
     throw new Error("useAuth must be used within AuthProvider");
   }
   return ctx;
+}
+
+// --- Fallback profile (when DB not ready) ---
+
+function buildFallbackProfile(authUser: User): UserProfile {
+  const meta = authUser.user_metadata ?? {};
+  return {
+    id: authUser.id,
+    tenantId: "",
+    fullName: meta.full_name ?? authUser.email?.split("@")[0] ?? "User",
+    email: authUser.email ?? "",
+    phone: meta.phone ?? null,
+    role: "owner",
+    isActive: true,
+    createdAt: authUser.created_at,
+  };
 }

@@ -1,2 +1,3 @@
-// Switch this import to './supabase' when ready for production
-export * from "./mock";
+// Switch back to './mock' for offline development without Supabase
+// export * from "./mock";
+export * from "./supabase";

@@ -1,0 +1,95 @@
+/**
+ * Supabase service: Cash Transactions (Sổ quỹ)
+ */
+
+import type { CashBookEntry, QueryParams, QueryResult } from "@/lib/types";
+import { getClient, getPaginationRange, handleError } from "./base";
+
+export async function getCashBookEntries(params: QueryParams): Promise<QueryResult<CashBookEntry>> {
+  const supabase = getClient();
+  const { from, to } = getPaginationRange(params);
+
+  let query = supabase
+    .from("cash_transactions")
+    .select("*", { count: "exact" });
+
+  // Search
+  if (params.search) {
+    query = query.or(`code.ilike.%${params.search}%,counterparty.ilike.%${params.search}%`);
+  }
+
+  // Filter: type
+  if (params.filters?.type && params.filters.type !== "all") {
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    query = query.eq("type", params.filters.type as any);
+  }
+
+  // Sort & paginate
+  query = query
+    .order("created_at", { ascending: false })
+    .range(from, to);
+
+  const { data, count, error } = await query;
+  if (error) handleError(error, "getCashBookEntries");
+
+  const entries: CashBookEntry[] = (data ?? []).map(mapCashEntry);
+  return { data: entries, total: count ?? 0 };
+}
+
+export function getCashBookTypes() {
+  return [
+    { value: "all", label: "Tất cả" },
+    { value: "receipt", label: "Phiếu thu" },
+    { value: "payment", label: "Phiếu chi" },
+  ];
+}
+
+/**
+ * Get cash book summary synchronously (zero fallback).
+ * Used in components where async isn't ergonomic.
+ * For real data, use getCashBookSummaryAsync().
+ */
+export function getCashBookSummary() {
+  return { totalReceipt: 0, totalPayment: 0 };
+}
+
+/**
+ * Get cash book summary from DB (async).
+ */
+export async function getCashBookSummaryAsync() {
+  const supabase = getClient();
+
+  const { data, error } = await supabase
+    .from("cash_transactions")
+    .select("type, amount");
+
+  if (error) handleError(error, "getCashBookSummaryAsync");
+
+  const totalReceipt = (data ?? [])
+    .filter((e) => e.type === "receipt")
+    .reduce((sum, e) => sum + e.amount, 0);
+
+  const totalPayment = (data ?? [])
+    .filter((e) => e.type === "payment")
+    .reduce((sum, e) => sum + e.amount, 0);
+
+  return { totalReceipt, totalPayment };
+}
+
+// --- Mapper ---
+
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
+function mapCashEntry(row: any): CashBookEntry {
+  return {
+    id: row.id,
+    code: row.code,
+    date: row.created_at,
+    type: row.type,
+    typeName: row.type === "receipt" ? "Phiếu thu" : "Phiếu chi",
+    category: row.category,
+    counterparty: row.counterparty ?? "",
+    amount: row.amount,
+    note: row.note ?? undefined,
+    createdBy: row.created_by,
+  };
+}
