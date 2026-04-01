@@ -14,19 +14,8 @@ import {
   DateRangeFilter,
 } from "@/components/shared/filter-sidebar";
 import { formatCurrency, formatDate } from "@/lib/format";
-
-// === Types ===
-interface PurchaseReturn {
-  id: string;
-  code: string;
-  date: string;
-  importCode: string;
-  supplierName: string;
-  totalAmount: number;
-  status: "completed" | "draft";
-  statusName: string;
-  createdBy: string;
-}
+import { getPurchaseReturns, getPurchaseReturnStatuses } from "@/lib/services";
+import type { PurchaseReturn } from "@/lib/types";
 
 // === Status config ===
 const statusMap: Record<
@@ -37,44 +26,7 @@ const statusMap: Record<
   draft: { label: "Phiếu tạm", variant: "secondary" },
 };
 
-const statusOptions = [
-  { label: "Hoàn thành", value: "completed" },
-  { label: "Phiếu tạm", value: "draft" },
-];
-
-// === Mock data ===
-const mockData: PurchaseReturn[] = [
-  { id: "1", code: "THN000001", date: "2026-03-30T10:00:00", importCode: "NH000012", supplierName: "Công ty TNHH Phát Đạt", totalAmount: 8500000, status: "completed", statusName: "Hoàn thành", createdBy: "Nguyễn Văn A" },
-  { id: "2", code: "THN000002", date: "2026-03-28T14:30:00", importCode: "NH000015", supplierName: "Công ty CP Thành Công", totalAmount: 3200000, status: "completed", statusName: "Hoàn thành", createdBy: "Trần Thị B" },
-  { id: "3", code: "THN000003", date: "2026-03-27T09:00:00", importCode: "NH000018", supplierName: "Công ty TNHH Minh Quang", totalAmount: 12500000, status: "draft", statusName: "Phiếu tạm", createdBy: "Lê Văn C" },
-  { id: "4", code: "THN000004", date: "2026-03-25T16:15:00", importCode: "NH000020", supplierName: "Công ty TNHH Hòa Bình", totalAmount: 4800000, status: "completed", statusName: "Hoàn thành", createdBy: "Phạm Thị D" },
-  { id: "5", code: "THN000005", date: "2026-03-24T11:30:00", importCode: "NH000022", supplierName: "Công ty CP Đại Việt", totalAmount: 15600000, status: "draft", statusName: "Phiếu tạm", createdBy: "Nguyễn Văn A" },
-  { id: "6", code: "THN000006", date: "2026-03-22T08:45:00", importCode: "NH000025", supplierName: "Công ty TNHH An Phú", totalAmount: 6700000, status: "completed", statusName: "Hoàn thành", createdBy: "Trần Thị B" },
-  { id: "7", code: "THN000007", date: "2026-03-20T13:00:00", importCode: "NH000028", supplierName: "Công ty TNHH Phát Đạt", totalAmount: 9200000, status: "completed", statusName: "Hoàn thành", createdBy: "Lê Văn C" },
-  { id: "8", code: "THN000008", date: "2026-03-19T15:30:00", importCode: "NH000030", supplierName: "Công ty CP Thành Công", totalAmount: 2100000, status: "draft", statusName: "Phiếu tạm", createdBy: "Phạm Thị D" },
-  { id: "9", code: "THN000009", date: "2026-03-17T10:15:00", importCode: "NH000033", supplierName: "Công ty TNHH Minh Quang", totalAmount: 18300000, status: "completed", statusName: "Hoàn thành", createdBy: "Nguyễn Văn A" },
-  { id: "10", code: "THN000010", date: "2026-03-16T09:00:00", importCode: "NH000035", supplierName: "Công ty TNHH Hòa Bình", totalAmount: 5400000, status: "completed", statusName: "Hoàn thành", createdBy: "Trần Thị B" },
-];
-
-async function fetchPurchaseReturns(params: {
-  page: number;
-  pageSize: number;
-  search: string;
-  statusFilter: string;
-}): Promise<{ data: PurchaseReturn[]; total: number }> {
-  await new Promise((resolve) => setTimeout(resolve, 300));
-  let filtered = [...mockData];
-  if (params.search) {
-    const s = params.search.toLowerCase();
-    filtered = filtered.filter((item) => item.code.toLowerCase().includes(s));
-  }
-  if (params.statusFilter && params.statusFilter !== "all") {
-    filtered = filtered.filter((item) => item.status === params.statusFilter);
-  }
-  const total = filtered.length;
-  const start = params.page * params.pageSize;
-  return { data: filtered.slice(start, start + params.pageSize), total };
-}
+const statusOptions = getPurchaseReturnStatuses();
 
 // === Columns ===
 const columns: ColumnDef<PurchaseReturn, unknown>[] = [
@@ -140,11 +92,13 @@ export default function TraHangNhapPage() {
 
   const fetchData = useCallback(async () => {
     setLoading(true);
-    const result = await fetchPurchaseReturns({
+    const result = await getPurchaseReturns({
       page,
       pageSize,
       search,
-      statusFilter,
+      filters: {
+        ...(statusFilter !== "all" && { status: statusFilter }),
+      },
     });
     setData(result.data);
     setTotal(result.total);

@@ -9,29 +9,7 @@ import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { PageHeader } from "@/components/shared/page-header";
 import { DataTable } from "@/components/shared/data-table";
 import { formatCurrency, formatDate } from "@/lib/format";
-
-// === Channel Type ===
-interface SalesChannel {
-  id: string;
-  name: string;
-  color: string;
-  connected: boolean;
-  ordersToday: number;
-  revenueToday: number;
-}
-
-// === Online Order Type ===
-interface OnlineOrder {
-  id: string;
-  code: string;
-  channel: string;
-  channelColor: string;
-  customerName: string;
-  totalAmount: number;
-  status: "pending" | "confirmed" | "shipping" | "completed" | "cancelled";
-  statusName: string;
-  date: string;
-}
+import type { SalesChannel, OnlineOrder } from "@/lib/types";
 
 // === Mock Channels ===
 const channels: SalesChannel[] = [

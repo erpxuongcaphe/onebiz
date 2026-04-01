@@ -13,8 +13,9 @@ import {
   CheckboxFilter,
   DateRangeFilter,
 } from "@/components/shared/filter-sidebar";
+import { CreateInvoiceDialog } from "@/components/shared/dialogs";
 import { formatCurrency, formatDate } from "@/lib/format";
-import { getInvoices, getInvoiceStatuses } from "@/lib/mock/invoices";
+import { getInvoices, getInvoiceStatuses } from "@/lib/services";
 import type { Invoice } from "@/lib/types";
 
 const statusMap: Record<
@@ -93,6 +94,8 @@ export default function HoaDonPage() {
   const [page, setPage] = useState(0);
   const [pageSize, setPageSize] = useState(20);
 
+  const [createOpen, setCreateOpen] = useState(false);
+
   // Filters
   const [selectedStatuses, setSelectedStatuses] = useState<string[]>([]);
   const [datePreset, setDatePreset] = useState<
@@ -128,6 +131,7 @@ export default function HoaDonPage() {
   const totalDiscount = data.reduce((sum, inv) => sum + inv.discount, 0);
 
   return (
+    <>
     <ListPageLayout
       sidebar={
         <FilterSidebar>
@@ -158,6 +162,7 @@ export default function HoaDonPage() {
             label: "Tạo hóa đơn",
             icon: <Plus className="h-4 w-4" />,
             variant: "default",
+            onClick: () => setCreateOpen(true),
           },
           {
             label: "Xuất file",
@@ -186,5 +191,12 @@ export default function HoaDonPage() {
         }}
       />
     </ListPageLayout>
+
+    <CreateInvoiceDialog
+      open={createOpen}
+      onOpenChange={setCreateOpen}
+      onSuccess={fetchData}
+    />
+    </>
   );
 }

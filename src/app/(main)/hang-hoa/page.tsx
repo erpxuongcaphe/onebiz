@@ -14,8 +14,9 @@ import {
   DateRangeFilter,
   SelectFilter,
 } from "@/components/shared/filter-sidebar";
+import { CreateProductDialog } from "@/components/shared/dialogs";
 import { formatCurrency, formatDate } from "@/lib/format";
-import { getProducts, getProductCategories } from "@/lib/mock/products";
+import { getProducts, getProductCategories } from "@/lib/services";
 import type { Product } from "@/lib/types";
 
 const columns: ColumnDef<Product, unknown>[] = [
@@ -87,6 +88,8 @@ export default function HangHoaPage() {
   const [stockFilter, setStockFilter] = useState("all");
   const [datePreset, setDatePreset] = useState<"today" | "this_week" | "this_month" | "all" | "custom">("all");
 
+  const [createOpen, setCreateOpen] = useState(false);
+
   const categories = getProductCategories();
 
   const fetchData = useCallback(async () => {
@@ -117,6 +120,7 @@ export default function HangHoaPage() {
   const totalOrdered = data.reduce((sum, p) => sum + p.ordered, 0);
 
   return (
+    <>
     <ListPageLayout
       sidebar={
         <FilterSidebar>
@@ -156,7 +160,7 @@ export default function HangHoaPage() {
         searchValue={search}
         onSearchChange={setSearch}
         actions={[
-          { label: "Tạo mới", icon: <Plus className="h-4 w-4" />, variant: "default" },
+          { label: "Tạo mới", icon: <Plus className="h-4 w-4" />, variant: "default", onClick: () => setCreateOpen(true) },
           { label: "Import file", icon: <Upload className="h-4 w-4" /> },
           { label: "Xuất file", icon: <Download className="h-4 w-4" /> },
         ]}
@@ -183,5 +187,12 @@ export default function HangHoaPage() {
         onRowClick={(row) => router.push(`/hang-hoa/${row.id}`)}
       />
     </ListPageLayout>
+
+    <CreateProductDialog
+      open={createOpen}
+      onOpenChange={setCreateOpen}
+      onSuccess={fetchData}
+    />
+  </>
   );
 }

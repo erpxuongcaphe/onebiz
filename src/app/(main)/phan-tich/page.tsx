@@ -10,7 +10,26 @@ import {
   TabsTrigger,
 } from "@/components/ui/tabs";
 import { PageHeader } from "@/components/shared/page-header";
-import { formatCurrency } from "@/lib/format";
+import {
+  formatCurrency,
+  formatChartCurrency,
+  formatChartTooltipCurrency,
+} from "@/lib/format";
+import {
+  LineChart,
+  Line,
+  BarChart,
+  Bar,
+  PieChart,
+  Pie,
+  Cell,
+  XAxis,
+  YAxis,
+  CartesianGrid,
+  Tooltip,
+  Legend,
+  ResponsiveContainer,
+} from "recharts";
 
 // === KPI Data ===
 const kpiData = [
@@ -60,7 +79,33 @@ const kpiData = [
   },
 ];
 
-// === Top 10 Revenue data ===
+// === 30-day revenue trend ===
+const revenueTrend = Array.from({ length: 30 }, (_, i) => {
+  const d = i + 1;
+  // Simulate realistic daily revenue with weekend bumps
+  const base = 28_000_000;
+  const dayOfWeek = (d + 1) % 7; // approx
+  const weekendBoost = dayOfWeek >= 5 ? 15_000_000 : 0;
+  const noise = Math.round((Math.sin(d * 1.3) * 8_000_000 + Math.cos(d * 0.7) * 5_000_000));
+  const revenue = base + weekendBoost + noise + d * 200_000;
+  return {
+    day: `${d.toString().padStart(2, "0")}/03`,
+    revenue: Math.max(revenue, 15_000_000),
+  };
+});
+
+// === Revenue by category ===
+const revenueByCategory = [
+  { category: "Cà phê", revenue: 185000000 },
+  { category: "Trà", revenue: 92000000 },
+  { category: "Cacao & Socola", revenue: 45000000 },
+  { category: "Phụ kiện", revenue: 28000000 },
+  { category: "Bánh & Snack", revenue: 18500000 },
+];
+
+const CATEGORY_COLORS = ["#2563eb", "#16a34a", "#ea580c", "#9333ea", "#0891b2"];
+
+// === Top 10 products by revenue (horizontal bar) ===
 const topRevenueProducts = [
   { rank: 1, name: "Cà phê Arabica hạt rang", revenue: 45200000, qty: 320 },
   { rank: 2, name: "Cà phê Robusta nguyên chất", revenue: 38700000, qty: 285 },
@@ -74,6 +119,18 @@ const topRevenueProducts = [
   { rank: 10, name: "Bộ phin cà phê inox", revenue: 9800000, qty: 49 },
 ];
 
+// === Products by category distribution (PieChart) ===
+const productsByCategory = [
+  { name: "Cà phê", value: 42 },
+  { name: "Trà", value: 28 },
+  { name: "Cacao & Socola", value: 12 },
+  { name: "Phụ kiện", value: 10 },
+  { name: "Bánh & Snack", value: 8 },
+];
+
+const PIE_COLORS = ["#2563eb", "#16a34a", "#ea580c", "#9333ea", "#0891b2"];
+
+// === Top 10 products by qty ===
 const topProducts = [
   { rank: 1, name: "Cà phê sữa đá hòa tan", qty: 632, revenue: 15800000 },
   { rank: 2, name: "Cacao sữa 3in1 hộp", qty: 456, revenue: 22800000 },
@@ -87,6 +144,7 @@ const topProducts = [
   { rank: 10, name: "Bộ phin cà phê inox", qty: 49, revenue: 9800000 },
 ];
 
+// === Top 10 customers ===
 const topCustomers = [
   { rank: 1, name: "Chuỗi The Coffee House clone", orders: 128, revenue: 350000000 },
   { rank: 2, name: "Công ty Phân Phối Miền Nam", orders: 95, revenue: 500000000 },
@@ -99,6 +157,165 @@ const topCustomers = [
   { rank: 9, name: "Trần Thị Hoa", orders: 15, revenue: 8200000 },
   { rank: 10, name: "Phạm Ngọc Anh", orders: 12, revenue: 6700000 },
 ];
+
+// === Top customers spending (for bar chart) ===
+const topCustomersChart = topCustomers.slice(0, 10).map((c) => ({
+  name: c.name.length > 18 ? c.name.slice(0, 18) + "..." : c.name,
+  fullName: c.name,
+  revenue: c.revenue,
+}));
+
+// === New customers per month (last 6 months) ===
+const newCustomersMonthly = [
+  { month: "T10/2025", count: 12 },
+  { month: "T11/2025", count: 18 },
+  { month: "T12/2025", count: 15 },
+  { month: "T01/2026", count: 22 },
+  { month: "T02/2026", count: 19 },
+  { month: "T03/2026", count: 23 },
+];
+
+// === Custom Tooltips ===
+
+function RevenueTrendTooltip({
+  active,
+  payload,
+  label,
+}: {
+  active?: boolean;
+  payload?: Array<{ value: number }>;
+  label?: string;
+}) {
+  if (!active || !payload?.length) return null;
+  return (
+    <div className="rounded-lg border bg-background p-3 shadow-md">
+      <p className="text-xs text-muted-foreground mb-1">Ngày {label}</p>
+      <p className="text-sm font-bold text-blue-600">
+        {formatChartTooltipCurrency(payload[0].value)}
+      </p>
+    </div>
+  );
+}
+
+function CategoryRevenueTooltip({
+  active,
+  payload,
+  label,
+}: {
+  active?: boolean;
+  payload?: Array<{ value: number }>;
+  label?: string;
+}) {
+  if (!active || !payload?.length) return null;
+  return (
+    <div className="rounded-lg border bg-background p-3 shadow-md">
+      <p className="text-xs text-muted-foreground mb-1">{label}</p>
+      <p className="text-sm font-bold text-green-600">
+        {formatChartTooltipCurrency(payload[0].value)}
+      </p>
+    </div>
+  );
+}
+
+function ProductRevenueTooltip({
+  active,
+  payload,
+}: {
+  active?: boolean;
+  payload?: Array<{ value: number; payload: { name: string } }>;
+}) {
+  if (!active || !payload?.length) return null;
+  return (
+    <div className="rounded-lg border bg-background p-3 shadow-md">
+      <p className="text-xs text-muted-foreground mb-1">
+        {payload[0].payload.name}
+      </p>
+      <p className="text-sm font-bold text-blue-600">
+        Doanh thu: {formatChartTooltipCurrency(payload[0].value)}
+      </p>
+    </div>
+  );
+}
+
+function PieTooltip({
+  active,
+  payload,
+}: {
+  active?: boolean;
+  payload?: Array<{ name: string; value: number }>;
+}) {
+  if (!active || !payload?.length) return null;
+  return (
+    <div className="rounded-lg border bg-background p-3 shadow-md">
+      <p className="text-xs text-muted-foreground mb-1">{payload[0].name}</p>
+      <p className="text-sm font-bold">
+        {payload[0].value} sản phẩm
+      </p>
+    </div>
+  );
+}
+
+function CustomerRevenueTooltip({
+  active,
+  payload,
+}: {
+  active?: boolean;
+  payload?: Array<{ value: number; payload: { fullName: string } }>;
+}) {
+  if (!active || !payload?.length) return null;
+  return (
+    <div className="rounded-lg border bg-background p-3 shadow-md">
+      <p className="text-xs text-muted-foreground mb-1">
+        {payload[0].payload.fullName}
+      </p>
+      <p className="text-sm font-bold text-orange-600">
+        Doanh thu: {formatChartTooltipCurrency(payload[0].value)}
+      </p>
+    </div>
+  );
+}
+
+function NewCustomerTooltip({
+  active,
+  payload,
+  label,
+}: {
+  active?: boolean;
+  payload?: Array<{ value: number }>;
+  label?: string;
+}) {
+  if (!active || !payload?.length) return null;
+  return (
+    <div className="rounded-lg border bg-background p-3 shadow-md">
+      <p className="text-xs text-muted-foreground mb-1">{label}</p>
+      <p className="text-sm font-bold text-purple-600">
+        {payload[0].value} khách mới
+      </p>
+    </div>
+  );
+}
+
+// Pie chart custom label
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
+function renderPieLabel(props: any) {
+  const cx = props.cx as number;
+  const cy = props.cy as number;
+  const midAngle = (props.midAngle as number) ?? 0;
+  const innerRadius = props.innerRadius as number;
+  const outerRadius = props.outerRadius as number;
+  const percent = (props.percent as number) ?? 0;
+
+  const RADIAN = Math.PI / 180;
+  const radius = innerRadius + (outerRadius - innerRadius) * 0.5;
+  const x = cx + radius * Math.cos(-midAngle * RADIAN);
+  const y = cy + radius * Math.sin(-midAngle * RADIAN);
+  if (percent < 0.08) return null;
+  return (
+    <text x={x} y={y} fill="white" textAnchor="middle" dominantBaseline="central" fontSize={12} fontWeight={600}>
+      {`${(percent * 100).toFixed(0)}%`}
+    </text>
+  );
+}
 
 export default function PhanTichPage() {
   const [activeTab, setActiveTab] = useState("revenue");
@@ -139,21 +356,97 @@ export default function PhanTichPage() {
             <TabsTrigger value="customers">Khách hàng</TabsTrigger>
           </TabsList>
 
-          {/* Doanh thu Tab */}
+          {/* === Doanh thu Tab === */}
           <TabsContent value="revenue" className="mt-4 space-y-4">
+            {/* Revenue trend line chart - 30 days */}
             <Card>
               <CardHeader className="pb-2">
                 <CardTitle className="text-sm">
-                  Biểu đồ doanh thu theo ngày
+                  Xu hướng doanh thu 30 ngày (Tháng 03/2026)
                 </CardTitle>
               </CardHeader>
               <CardContent>
-                <div className="h-48 md:h-64 border-2 border-dashed rounded-lg flex items-center justify-center text-muted-foreground text-sm">
-                  Biểu đồ doanh thu sẽ hiển thị ở đây
+                <div className="h-48 md:h-72">
+                  <ResponsiveContainer width="100%" height="100%">
+                    <LineChart
+                      data={revenueTrend}
+                      margin={{ top: 5, right: 10, left: 0, bottom: 0 }}
+                    >
+                      <CartesianGrid strokeDasharray="3 3" vertical={false} />
+                      <XAxis
+                        dataKey="day"
+                        tick={{ fontSize: 11 }}
+                        tickLine={false}
+                        axisLine={false}
+                        interval={4}
+                      />
+                      <YAxis
+                        tickFormatter={(v: number) => formatChartCurrency(v)}
+                        tick={{ fontSize: 11 }}
+                        tickLine={false}
+                        axisLine={false}
+                        width={50}
+                      />
+                      <Tooltip content={<RevenueTrendTooltip />} />
+                      <Line
+                        type="monotone"
+                        dataKey="revenue"
+                        stroke="#2563eb"
+                        strokeWidth={2}
+                        dot={false}
+                        activeDot={{ r: 5, fill: "#2563eb" }}
+                        name="Doanh thu"
+                      />
+                    </LineChart>
+                  </ResponsiveContainer>
                 </div>
               </CardContent>
             </Card>
 
+            {/* Revenue by category bar chart */}
+            <Card>
+              <CardHeader className="pb-2">
+                <CardTitle className="text-sm">
+                  Doanh thu theo nhóm hàng (Top 5)
+                </CardTitle>
+              </CardHeader>
+              <CardContent>
+                <div className="h-48 md:h-64">
+                  <ResponsiveContainer width="100%" height="100%">
+                    <BarChart
+                      data={revenueByCategory}
+                      margin={{ top: 5, right: 10, left: 0, bottom: 0 }}
+                    >
+                      <CartesianGrid strokeDasharray="3 3" vertical={false} />
+                      <XAxis
+                        dataKey="category"
+                        tick={{ fontSize: 12 }}
+                        tickLine={false}
+                        axisLine={false}
+                      />
+                      <YAxis
+                        tickFormatter={(v: number) => formatChartCurrency(v)}
+                        tick={{ fontSize: 11 }}
+                        tickLine={false}
+                        axisLine={false}
+                        width={50}
+                      />
+                      <Tooltip content={<CategoryRevenueTooltip />} />
+                      <Bar dataKey="revenue" radius={[6, 6, 0, 0]} name="Doanh thu">
+                        {revenueByCategory.map((_, index) => (
+                          <Cell
+                            key={`cell-${index}`}
+                            fill={CATEGORY_COLORS[index % CATEGORY_COLORS.length]}
+                          />
+                        ))}
+                      </Bar>
+                    </BarChart>
+                  </ResponsiveContainer>
+                </div>
+              </CardContent>
+            </Card>
+
+            {/* Table kept as-is */}
             <Card>
               <CardHeader className="pb-2">
                 <CardTitle className="text-sm">
@@ -201,21 +494,98 @@ export default function PhanTichPage() {
             </Card>
           </TabsContent>
 
-          {/* Hàng hóa Tab */}
+          {/* === Hang hoa Tab === */}
           <TabsContent value="products" className="mt-4 space-y-4">
-            <Card>
-              <CardHeader className="pb-2">
-                <CardTitle className="text-sm">
-                  Biểu đồ hàng hóa bán chạy
-                </CardTitle>
-              </CardHeader>
-              <CardContent>
-                <div className="h-48 md:h-64 border-2 border-dashed rounded-lg flex items-center justify-center text-muted-foreground text-sm">
-                  Biểu đồ hàng hóa sẽ hiển thị ở đây
-                </div>
-              </CardContent>
-            </Card>
+            <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
+              {/* Top 10 products by revenue - horizontal bar */}
+              <Card>
+                <CardHeader className="pb-2">
+                  <CardTitle className="text-sm">
+                    Top 10 sản phẩm theo doanh thu
+                  </CardTitle>
+                </CardHeader>
+                <CardContent>
+                  <div className="h-72 md:h-96">
+                    <ResponsiveContainer width="100%" height="100%">
+                      <BarChart
+                        data={[...topRevenueProducts].reverse()}
+                        layout="vertical"
+                        margin={{ top: 5, right: 10, left: 0, bottom: 0 }}
+                      >
+                        <CartesianGrid strokeDasharray="3 3" horizontal={false} />
+                        <XAxis
+                          type="number"
+                          tickFormatter={(v: number) => formatChartCurrency(v)}
+                          tick={{ fontSize: 11 }}
+                          tickLine={false}
+                          axisLine={false}
+                        />
+                        <YAxis
+                          type="category"
+                          dataKey="name"
+                          tick={{ fontSize: 11 }}
+                          tickLine={false}
+                          axisLine={false}
+                          width={130}
+                        />
+                        <Tooltip content={<ProductRevenueTooltip />} />
+                        <Bar
+                          dataKey="revenue"
+                          fill="#2563eb"
+                          radius={[0, 6, 6, 0]}
+                          name="Doanh thu"
+                        />
+                      </BarChart>
+                    </ResponsiveContainer>
+                  </div>
+                </CardContent>
+              </Card>
 
+              {/* Products by category - PieChart */}
+              <Card>
+                <CardHeader className="pb-2">
+                  <CardTitle className="text-sm">
+                    Phân bổ sản phẩm theo nhóm hàng
+                  </CardTitle>
+                </CardHeader>
+                <CardContent>
+                  <div className="h-72 md:h-96">
+                    <ResponsiveContainer width="100%" height="100%">
+                      <PieChart>
+                        <Pie
+                          data={productsByCategory}
+                          cx="50%"
+                          cy="50%"
+                          labelLine={false}
+                          label={renderPieLabel}
+                          outerRadius="80%"
+                          dataKey="value"
+                          nameKey="name"
+                          strokeWidth={2}
+                          stroke="#fff"
+                        >
+                          {productsByCategory.map((_, index) => (
+                            <Cell
+                              key={`cell-${index}`}
+                              fill={PIE_COLORS[index % PIE_COLORS.length]}
+                            />
+                          ))}
+                        </Pie>
+                        <Tooltip content={<PieTooltip />} />
+                        <Legend
+                          verticalAlign="bottom"
+                          formatter={(value: string) => (
+                            <span className="text-xs">{value}</span>
+                          )}
+                        />
+                      </PieChart>
+                    </ResponsiveContainer>
+                  </div>
+                </CardContent>
+              </Card>
+            </div>
+
+            {/* Table */}
             <Card>
               <CardHeader className="pb-2">
                 <CardTitle className="text-sm">
@@ -263,21 +633,98 @@ export default function PhanTichPage() {
             </Card>
           </TabsContent>
 
-          {/* Khách hàng Tab */}
+          {/* === Khach hang Tab === */}
           <TabsContent value="customers" className="mt-4 space-y-4">
-            <Card>
-              <CardHeader className="pb-2">
-                <CardTitle className="text-sm">
-                  Biểu đồ khách hàng mua nhiều
-                </CardTitle>
-              </CardHeader>
-              <CardContent>
-                <div className="h-48 md:h-64 border-2 border-dashed rounded-lg flex items-center justify-center text-muted-foreground text-sm">
-                  Biểu đồ khách hàng sẽ hiển thị ở đây
-                </div>
-              </CardContent>
-            </Card>
+            <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
+              {/* Top customers by spending - bar chart */}
+              <Card>
+                <CardHeader className="pb-2">
+                  <CardTitle className="text-sm">
+                    Top 10 khách hàng theo doanh thu
+                  </CardTitle>
+                </CardHeader>
+                <CardContent>
+                  <div className="h-72 md:h-96">
+                    <ResponsiveContainer width="100%" height="100%">
+                      <BarChart
+                        data={[...topCustomersChart].reverse()}
+                        layout="vertical"
+                        margin={{ top: 5, right: 10, left: 0, bottom: 0 }}
+                      >
+                        <CartesianGrid strokeDasharray="3 3" horizontal={false} />
+                        <XAxis
+                          type="number"
+                          tickFormatter={(v: number) => formatChartCurrency(v)}
+                          tick={{ fontSize: 11 }}
+                          tickLine={false}
+                          axisLine={false}
+                        />
+                        <YAxis
+                          type="category"
+                          dataKey="name"
+                          tick={{ fontSize: 11 }}
+                          tickLine={false}
+                          axisLine={false}
+                          width={140}
+                        />
+                        <Tooltip content={<CustomerRevenueTooltip />} />
+                        <Bar
+                          dataKey="revenue"
+                          fill="#ea580c"
+                          radius={[0, 6, 6, 0]}
+                          name="Doanh thu"
+                        />
+                      </BarChart>
+                    </ResponsiveContainer>
+                  </div>
+                </CardContent>
+              </Card>
 
+              {/* New customers per month - line chart */}
+              <Card>
+                <CardHeader className="pb-2">
+                  <CardTitle className="text-sm">
+                    Khách hàng mới theo tháng (6 tháng gần nhất)
+                  </CardTitle>
+                </CardHeader>
+                <CardContent>
+                  <div className="h-72 md:h-96">
+                    <ResponsiveContainer width="100%" height="100%">
+                      <LineChart
+                        data={newCustomersMonthly}
+                        margin={{ top: 5, right: 10, left: 0, bottom: 0 }}
+                      >
+                        <CartesianGrid strokeDasharray="3 3" vertical={false} />
+                        <XAxis
+                          dataKey="month"
+                          tick={{ fontSize: 12 }}
+                          tickLine={false}
+                          axisLine={false}
+                        />
+                        <YAxis
+                          tick={{ fontSize: 12 }}
+                          tickLine={false}
+                          axisLine={false}
+                          width={30}
+                        />
+                        <Tooltip content={<NewCustomerTooltip />} />
+                        <Line
+                          type="monotone"
+                          dataKey="count"
+                          stroke="#9333ea"
+                          strokeWidth={2}
+                          dot={{ fill: "#9333ea", r: 4 }}
+                          activeDot={{ r: 6, fill: "#9333ea" }}
+                          name="Khách mới"
+                        />
+                      </LineChart>
+                    </ResponsiveContainer>
+                  </div>
+                </CardContent>
+              </Card>
+            </div>
+
+            {/* Table */}
             <Card>
               <CardHeader className="pb-2">
                 <CardTitle className="text-sm">

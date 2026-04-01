@@ -13,20 +13,7 @@ import { Badge } from "@/components/ui/badge";
 import { Separator } from "@/components/ui/separator";
 import { Plus, ChevronDown, ChevronUp, Users, Shield } from "lucide-react";
 import { cn } from "@/lib/utils";
-
-interface Permission {
-  label: string;
-  allowed: boolean;
-}
-
-interface Role {
-  id: string;
-  name: string;
-  description: string;
-  memberCount: number;
-  color: string;
-  permissions: { group: string; items: Permission[] }[];
-}
+import type { Permission, Role } from "@/lib/types";
 
 const roles: Role[] = [
   {

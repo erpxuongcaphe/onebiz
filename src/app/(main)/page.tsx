@@ -12,8 +12,26 @@ import {
 } from "lucide-react";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
-import { formatCurrency } from "@/lib/format";
+import {
+  formatCurrency,
+  formatChartCurrency,
+  formatChartTooltipCurrency,
+} from "@/lib/format";
+import {
+  AreaChart,
+  Area,
+  BarChart,
+  Bar,
+  XAxis,
+  YAxis,
+  CartesianGrid,
+  Tooltip,
+  Legend,
+  ResponsiveContainer,
+} from "recharts";
+import type { DateRange } from "@/lib/types";
 
+// === KPI Data ===
 const kpiData = [
   {
     label: "Doanh thu",
@@ -57,6 +75,28 @@ const kpiData = [
     changeLabel: "vs hôm qua",
     changeColor: "text-green-600",
   },
+];
+
+// === 7-day revenue data ===
+const revenueData = [
+  { day: "T2 (24/03)", revenue: 38200000 },
+  { day: "T3 (25/03)", revenue: 42500000 },
+  { day: "T4 (26/03)", revenue: 35800000 },
+  { day: "T5 (27/03)", revenue: 48900000 },
+  { day: "T6 (28/03)", revenue: 52300000 },
+  { day: "T7 (29/03)", revenue: 61500000 },
+  { day: "CN (30/03)", revenue: 45250000 },
+];
+
+// === 7-day orders data ===
+const ordersData = [
+  { day: "T2", hoànThành: 22, đãHủy: 2 },
+  { day: "T3", hoànThành: 25, đãHủy: 1 },
+  { day: "T4", hoànThành: 19, đãHủy: 3 },
+  { day: "T5", hoànThành: 30, đãHủy: 2 },
+  { day: "T6", hoànThành: 34, đãHủy: 1 },
+  { day: "T7", hoànThành: 38, đãHủy: 4 },
+  { day: "CN", hoànThành: 26, đãHủy: 2 },
 ];
 
 const topProducts = [
@@ -123,7 +163,50 @@ const recentActivities = [
   },
 ];
 
-type DateRange = "today" | "week" | "month";
+// Custom tooltip for revenue chart
+function RevenueTooltip({
+  active,
+  payload,
+  label,
+}: {
+  active?: boolean;
+  payload?: Array<{ value: number }>;
+  label?: string;
+}) {
+  if (!active || !payload?.length) return null;
+  return (
+    <div className="rounded-lg border bg-background p-3 shadow-md">
+      <p className="text-sm font-medium text-muted-foreground mb-1">{label}</p>
+      <p className="text-sm font-bold text-blue-600">
+        Doanh thu: {formatChartTooltipCurrency(payload[0].value)}
+      </p>
+    </div>
+  );
+}
+
+// Custom tooltip for orders chart
+function OrdersTooltip({
+  active,
+  payload,
+  label,
+}: {
+  active?: boolean;
+  payload?: Array<{ value: number; dataKey: string; color: string }>;
+  label?: string;
+}) {
+  if (!active || !payload?.length) return null;
+  return (
+    <div className="rounded-lg border bg-background p-3 shadow-md">
+      <p className="text-sm font-medium text-muted-foreground mb-1">{label}</p>
+      {payload.map((entry) => (
+        <p key={entry.dataKey} className="text-sm" style={{ color: entry.color }}>
+          {entry.dataKey === "hoànThành" ? "Hoàn thành" : "Đã hủy"}:{" "}
+          <span className="font-bold">{entry.value}</span>
+        </p>
+      ))}
+    </div>
+  );
+}
 
 export default function TongQuanPage() {
   const [dateRange, setDateRange] = useState<DateRange>("today");
@@ -219,24 +302,98 @@ export default function TongQuanPage() {
 
       {/* Charts row */}
       <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
+        {/* Revenue AreaChart */}
         <Card>
           <CardHeader>
             <CardTitle>Doanh thu 7 ngày gần nhất</CardTitle>
           </CardHeader>
           <CardContent>
-            <div className="flex h-64 items-center justify-center rounded-lg border border-dashed text-muted-foreground">
-              Biểu đồ doanh thu
+            <div className="h-64">
+              <ResponsiveContainer width="100%" height="100%">
+                <AreaChart
+                  data={revenueData}
+                  margin={{ top: 5, right: 10, left: 0, bottom: 0 }}
+                >
+                  <defs>
+                    <linearGradient id="revenueGradient" x1="0" y1="0" x2="0" y2="1">
+                      <stop offset="5%" stopColor="#2563eb" stopOpacity={0.3} />
+                      <stop offset="95%" stopColor="#2563eb" stopOpacity={0} />
+                    </linearGradient>
+                  </defs>
+                  <CartesianGrid strokeDasharray="3 3" vertical={false} />
+                  <XAxis
+                    dataKey="day"
+                    tick={{ fontSize: 12 }}
+                    tickLine={false}
+                    axisLine={false}
+                  />
+                  <YAxis
+                    tickFormatter={(v: number) => formatChartCurrency(v)}
+                    tick={{ fontSize: 12 }}
+                    tickLine={false}
+                    axisLine={false}
+                    width={50}
+                  />
+                  <Tooltip content={<RevenueTooltip />} />
+                  <Area
+                    type="monotone"
+                    dataKey="revenue"
+                    stroke="#2563eb"
+                    strokeWidth={2}
+                    fill="url(#revenueGradient)"
+                    name="Doanh thu"
+                  />
+                </AreaChart>
+              </ResponsiveContainer>
             </div>
           </CardContent>
         </Card>
 
+        {/* Orders BarChart */}
         <Card>
           <CardHeader>
             <CardTitle>Đơn hàng theo trạng thái</CardTitle>
           </CardHeader>
           <CardContent>
-            <div className="flex h-64 items-center justify-center rounded-lg border border-dashed text-muted-foreground">
-              Biểu đồ trạng thái đơn hàng
+            <div className="h-64">
+              <ResponsiveContainer width="100%" height="100%">
+                <BarChart
+                  data={ordersData}
+                  margin={{ top: 5, right: 10, left: 0, bottom: 0 }}
+                >
+                  <CartesianGrid strokeDasharray="3 3" vertical={false} />
+                  <XAxis
+                    dataKey="day"
+                    tick={{ fontSize: 12 }}
+                    tickLine={false}
+                    axisLine={false}
+                  />
+                  <YAxis
+                    tick={{ fontSize: 12 }}
+                    tickLine={false}
+                    axisLine={false}
+                    width={30}
+                  />
+                  <Tooltip content={<OrdersTooltip />} />
+                  <Legend
+                    formatter={(value: string) =>
+                      value === "hoànThành" ? "Hoàn thành" : "Đã hủy"
+                    }
+                  />
+                  <Bar
+                    dataKey="hoànThành"
+                    fill="#22c55e"
+                    radius={[4, 4, 0, 0]}
+                    name="hoànThành"
+                  />
+                  <Bar
+                    dataKey="đãHủy"
+                    fill="#ef4444"
+                    radius={[4, 4, 0, 0]}
+                    name="đãHủy"
+                  />
+                </BarChart>
+              </ResponsiveContainer>
             </div>
           </CardContent>
         </Card>
@@ -244,7 +401,7 @@ export default function TongQuanPage() {
 
       {/* Top products & Recent activities */}
       <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
-        {/* Top 10 sản phẩm bán chạy */}
+        {/* Top 10 san pham ban chay */}
         <Card>
           <CardHeader>
             <CardTitle>Top 10 sản phẩm bán chạy</CardTitle>
@@ -284,7 +441,7 @@ export default function TongQuanPage() {
           </CardContent>
         </Card>
 
-        {/* Hoạt động gần đây */}
+        {/* Hoat dong gan day */}
         <Card>
           <CardHeader>
             <CardTitle>Hoạt động gần đây</CardTitle>

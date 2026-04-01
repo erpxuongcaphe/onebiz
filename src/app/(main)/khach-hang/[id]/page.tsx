@@ -25,19 +25,8 @@ import { Separator } from "@/components/ui/separator";
 import { Skeleton } from "@/components/ui/skeleton";
 import { DataTable } from "@/components/shared/data-table";
 import { formatCurrency, formatDate, formatShortDate } from "@/lib/format";
-import { getCustomerById } from "@/lib/mock/customers";
-import type { Customer } from "@/lib/types";
-
-// === Purchase History Type ===
-interface PurchaseHistory {
-  id: string;
-  invoiceCode: string;
-  date: string;
-  totalAmount: number;
-  status: "completed" | "cancelled" | "returned";
-  statusName: string;
-  createdBy: string;
-}
+import { getCustomerById } from "@/lib/services";
+import type { Customer, PurchaseHistory } from "@/lib/types";
 
 // === Generate mock purchase history ===
 function generatePurchaseHistory(): PurchaseHistory[] {

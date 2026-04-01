@@ -15,22 +15,7 @@ import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Separator } from "@/components/ui/separator";
 import { Tabs, TabsList, TabsTrigger, TabsContent } from "@/components/ui/tabs";
-
-type NotificationType =
-  | "order_new"
-  | "order_completed"
-  | "stock_low"
-  | "customer_new"
-  | "payment_received";
-
-interface Notification {
-  id: number;
-  type: NotificationType;
-  title: string;
-  description: string;
-  timeAgo: string;
-  read: boolean;
-}
+import type { NotificationType, Notification } from "@/lib/types";
 
 const typeConfig: Record<
   NotificationType,

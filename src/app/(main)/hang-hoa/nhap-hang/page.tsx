@@ -15,7 +15,7 @@ import {
   DateRangeFilter,
 } from "@/components/shared/filter-sidebar";
 import { formatCurrency, formatDate } from "@/lib/format";
-import { getPurchaseOrders, getPurchaseOrderStatuses } from "@/lib/mock/purchase-orders";
+import { getPurchaseOrders, getPurchaseOrderStatuses } from "@/lib/services";
 import type { PurchaseOrder } from "@/lib/types";
 
 const statusMap: Record<

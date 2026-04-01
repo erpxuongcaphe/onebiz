@@ -7,18 +7,7 @@ import { Badge } from "@/components/ui/badge";
 import { PageHeader } from "@/components/shared/page-header";
 import { DataTable } from "@/components/shared/data-table";
 import { formatDate } from "@/lib/format";
-
-interface PriceBook {
-  id: string;
-  name: string;
-  startDate: string;
-  endDate?: string;
-  status: "active" | "inactive" | "scheduled";
-  statusName: string;
-  productCount: number;
-  createdBy: string;
-  createdAt: string;
-}
+import type { PriceBook } from "@/lib/types";
 
 const mockPriceBooks: PriceBook[] = [
   {

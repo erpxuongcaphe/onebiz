@@ -22,28 +22,7 @@ import { Input } from "@/components/ui/input";
 import { ScrollArea } from "@/components/ui/scroll-area";
 import { formatCurrency } from "@/lib/format";
 import { cn } from "@/lib/utils";
-
-// --- Types ---
-
-interface CartItem {
-  id: string;
-  productId: string;
-  name: string;
-  quantity: number;
-  price: number;
-  discount: number;
-}
-
-interface OrderTab {
-  id: string;
-  label: string;
-  cart: CartItem[];
-  customerId: string | null;
-  customerName: string;
-}
-
-type SaleMode = "quick" | "normal" | "delivery";
-type PaymentMethod = "cash" | "transfer" | "card";
+import type { CartItem, OrderTab, SaleMode, PaymentMethod } from "@/lib/types";
 
 // --- Mock Data ---
 

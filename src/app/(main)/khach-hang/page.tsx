@@ -14,8 +14,9 @@ import {
   SelectFilter,
   DateRangeFilter,
 } from "@/components/shared/filter-sidebar";
+import { CreateCustomerDialog } from "@/components/shared/dialogs";
 import { formatCurrency, formatDate } from "@/lib/format";
-import { getCustomers, getCustomerGroups } from "@/lib/mock/customers";
+import { getCustomers, getCustomerGroups } from "@/lib/services";
 import type { Customer } from "@/lib/types";
 
 const columns: ColumnDef<Customer, unknown>[] = [
@@ -81,6 +82,8 @@ export default function KhachHangPage() {
   const [debtFilter, setDebtFilter] = useState("all");
   const [datePreset, setDatePreset] = useState<"today" | "this_week" | "this_month" | "all" | "custom">("all");
 
+  const [createOpen, setCreateOpen] = useState(false);
+
   const customerGroups = getCustomerGroups();
 
   const fetchData = useCallback(async () => {
@@ -113,6 +116,7 @@ export default function KhachHangPage() {
   const totalSalesMinusReturns = data.reduce((sum, c) => sum + c.totalSalesMinusReturns, 0);
 
   return (
+    <>
     <ListPageLayout
       sidebar={
         <FilterSidebar>
@@ -163,7 +167,7 @@ export default function KhachHangPage() {
         searchValue={search}
         onSearchChange={setSearch}
         actions={[
-          { label: "Tạo mới", icon: <Plus className="h-4 w-4" />, variant: "default" },
+          { label: "Tạo mới", icon: <Plus className="h-4 w-4" />, variant: "default", onClick: () => setCreateOpen(true) },
           { label: "Import", icon: <Upload className="h-4 w-4" /> },
           { label: "Xuất file", icon: <Download className="h-4 w-4" /> },
         ]}
@@ -191,5 +195,12 @@ export default function KhachHangPage() {
         onRowClick={(row) => router.push(`/khach-hang/${row.id}`)}
       />
     </ListPageLayout>
+
+    <CreateCustomerDialog
+      open={createOpen}
+      onOpenChange={setCreateOpen}
+      onSuccess={fetchData}
+    />
+    </>
   );
 }

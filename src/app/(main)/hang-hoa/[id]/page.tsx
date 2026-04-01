@@ -28,7 +28,7 @@ import {
   getProductById,
   getStockMovements,
   getSalesHistory,
-} from "@/lib/mock/products";
+} from "@/lib/services";
 import type { ProductDetail, StockMovement, SalesHistory } from "@/lib/types";
 
 // === Stock Movement Columns ===

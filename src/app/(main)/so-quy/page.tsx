@@ -13,94 +13,10 @@ import {
   SelectFilter,
   DateRangeFilter,
 } from "@/components/shared/filter-sidebar";
+import { CreateCashTransactionDialog } from "@/components/shared/dialogs";
 import { formatCurrency, formatDate } from "@/lib/format";
-
-// === Types ===
-interface CashBookEntry {
-  id: string;
-  code: string;
-  date: string;
-  type: "receipt" | "payment";
-  typeName: string;
-  category: string;
-  counterparty: string;
-  amount: number;
-  note?: string;
-  createdBy: string;
-}
-
-// === Generate 30 mock entries ===
-function generateCashBookData(): CashBookEntry[] {
-  const receiptCategories = [
-    "Thu tiền khách hàng",
-    "Thu tiền mặt",
-    "Thu khác",
-  ];
-  const paymentCategories = [
-    "Chi trả NCC",
-    "Chi phí vận chuyển",
-    "Chi phí khác",
-  ];
-  const counterparties = [
-    "Nguyễn Minh Tuấn",
-    "Trần Thị Hoa",
-    "Công ty TNHH ABC Coffee",
-    "Lê Văn Đức",
-    "Phạm Mai Lan",
-    "Hoàng Anh Dũng",
-    "NCC Đại Phát",
-    "NCC Minh Long",
-    "Vũ Thị Ngọc",
-    "Quán Cà Phê Bùi Thanh Tâm",
-    "Công ty Phân Phối Miền Nam",
-    "Giao Hàng Nhanh",
-    "Viettel Post",
-    "Đỗ Quang Huy",
-    "Lê Hoàng Phúc",
-  ];
-  const creators = ["Nguyễn Văn A", "Trần Thị B", "Lê Văn C", "Phạm Thị D"];
-  const notes = [
-    "Thanh toán đơn hàng",
-    "Thu nợ cũ",
-    "Thanh toán công nợ NCC",
-    "Phí giao hàng tháng 3",
-    "Chi phí thuê kho",
-    "Thu tiền trả hàng",
-    undefined,
-    undefined,
-    "Tạm ứng",
-    "Hoàn tiền khách",
-  ];
-
-  return Array.from({ length: 30 }, (_, i) => {
-    const isReceipt = Math.random() > 0.45;
-    const type: "receipt" | "payment" = isReceipt ? "receipt" : "payment";
-    const categories = isReceipt ? receiptCategories : paymentCategories;
-    const daysAgo = Math.floor(Math.random() * 60);
-    const date = new Date();
-    date.setDate(date.getDate() - daysAgo);
-    date.setHours(
-      Math.floor(Math.random() * 12) + 7,
-      Math.floor(Math.random() * 60)
-    );
-
-    return {
-      id: `cb_${i + 1}`,
-      code: `${isReceipt ? "PT" : "PC"}${String(i + 1).padStart(5, "0")}`,
-      date: date.toISOString(),
-      type,
-      typeName: isReceipt ? "Phiếu thu" : "Phiếu chi",
-      category: categories[Math.floor(Math.random() * categories.length)],
-      counterparty:
-        counterparties[Math.floor(Math.random() * counterparties.length)],
-      amount: Math.floor(Math.random() * 20000000) + 500000,
-      note: notes[Math.floor(Math.random() * notes.length)],
-      createdBy: creators[Math.floor(Math.random() * creators.length)],
-    };
-  }).sort((a, b) => new Date(b.date).getTime() - new Date(a.date).getTime());
-}
-
-const allEntries = generateCashBookData();
+import { getCashBookEntries, getCashBookTypes, getCashBookSummary } from "@/lib/services";
+import type { CashBookEntry } from "@/lib/types";
 
 // === Columns ===
 const columns: ColumnDef<CashBookEntry, unknown>[] = [
@@ -180,6 +96,9 @@ export default function SoQuyPage() {
   const [pageSize, setPageSize] = useState(20);
   const [search, setSearch] = useState("");
 
+  const [createOpen, setCreateOpen] = useState(false);
+  const [createType, setCreateType] = useState<"receipt" | "payment">("receipt");
+
   // Filters
   const [typeFilter, setTypeFilter] = useState("all");
   const [datePreset, setDatePreset] = useState<
@@ -188,31 +107,20 @@ export default function SoQuyPage() {
   const [dateFrom, setDateFrom] = useState("");
   const [dateTo, setDateTo] = useState("");
 
+  const typeOptions = getCashBookTypes();
+
   const fetchData = useCallback(async () => {
     setLoading(true);
-    await new Promise((r) => setTimeout(r, 200));
-
-    let filtered = [...allEntries];
-
-    if (search) {
-      const q = search.toLowerCase();
-      filtered = filtered.filter(
-        (e) =>
-          e.code.toLowerCase().includes(q) ||
-          e.counterparty.toLowerCase().includes(q)
-      );
-    }
-
-    if (typeFilter !== "all") {
-      filtered = filtered.filter((e) => e.type === typeFilter);
-    }
-
-    const totalFiltered = filtered.length;
-    const start = page * pageSize;
-    const paged = filtered.slice(start, start + pageSize);
-
-    setData(paged);
-    setTotal(totalFiltered);
+    const result = await getCashBookEntries({
+      page,
+      pageSize,
+      search,
+      filters: {
+        ...(typeFilter !== "all" && { type: typeFilter }),
+      },
+    });
+    setData(result.data);
+    setTotal(result.total);
     setLoading(false);
   }, [search, typeFilter, page, pageSize]);
 
@@ -221,12 +129,7 @@ export default function SoQuyPage() {
   }, [fetchData]);
 
   // Summary calculations
-  const totalReceipt = allEntries
-    .filter((e) => e.type === "receipt")
-    .reduce((sum, e) => sum + e.amount, 0);
-  const totalPayment = allEntries
-    .filter((e) => e.type === "payment")
-    .reduce((sum, e) => sum + e.amount, 0);
+  const { totalReceipt, totalPayment } = getCashBookSummary();
 
   const summaryRow: Record<string, string | number> = {
     code: "Tổng cộng",
@@ -240,15 +143,13 @@ export default function SoQuyPage() {
   };
 
   return (
+    <>
     <ListPageLayout
       sidebar={
         <FilterSidebar>
           <FilterGroup label="Loại phiếu">
             <SelectFilter
-              options={[
-                { label: "Phiếu thu", value: "receipt" },
-                { label: "Phiếu chi", value: "payment" },
-              ]}
+              options={typeOptions}
               value={typeFilter}
               onChange={setTypeFilter}
               placeholder="Tất cả"
@@ -280,11 +181,13 @@ export default function SoQuyPage() {
             label: "Tạo phiếu thu",
             icon: <Plus className="h-4 w-4" />,
             variant: "default",
+            onClick: () => { setCreateType("receipt"); setCreateOpen(true); },
           },
           {
             label: "Tạo phiếu chi",
             icon: <Plus className="h-4 w-4" />,
             variant: "outline",
+            onClick: () => { setCreateType("payment"); setCreateOpen(true); },
           },
         ]}
       />
@@ -304,5 +207,13 @@ export default function SoQuyPage() {
         summaryRow={summaryRow}
       />
     </ListPageLayout>
+
+    <CreateCashTransactionDialog
+      open={createOpen}
+      onOpenChange={setCreateOpen}
+      defaultType={createType}
+      onSuccess={fetchData}
+    />
+    </>
   );
 }

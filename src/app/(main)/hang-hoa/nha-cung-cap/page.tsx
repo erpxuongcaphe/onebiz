@@ -13,8 +13,9 @@ import {
   SelectFilter,
   DateRangeFilter,
 } from "@/components/shared/filter-sidebar";
+import { CreateSupplierDialog } from "@/components/shared/dialogs";
 import { formatCurrency, formatDate } from "@/lib/format";
-import { getSuppliers } from "@/lib/mock/suppliers";
+import { getSuppliers } from "@/lib/services";
 import type { Supplier } from "@/lib/types";
 
 const columns: ColumnDef<Supplier, unknown>[] = [
@@ -69,6 +70,8 @@ export default function NhaCungCapPage() {
   const [page, setPage] = useState(0);
   const [pageSize, setPageSize] = useState(20);
 
+  const [createOpen, setCreateOpen] = useState(false);
+
   // Filters
   const [debtFilter, setDebtFilter] = useState("all");
   const [datePreset, setDatePreset] = useState<"today" | "this_week" | "this_month" | "all" | "custom">("all");
@@ -100,6 +103,7 @@ export default function NhaCungCapPage() {
   const totalPurchases = data.reduce((sum, s) => sum + s.totalPurchases, 0);
 
   return (
+    <>
     <ListPageLayout
       sidebar={
         <FilterSidebar>
@@ -130,7 +134,7 @@ export default function NhaCungCapPage() {
         searchValue={search}
         onSearchChange={setSearch}
         actions={[
-          { label: "Tạo mới", icon: <Plus className="h-4 w-4" />, variant: "default" },
+          { label: "Tạo mới", icon: <Plus className="h-4 w-4" />, variant: "default", onClick: () => setCreateOpen(true) },
           { label: "Import file", icon: <Upload className="h-4 w-4" /> },
           { label: "Xuất file", icon: <Download className="h-4 w-4" /> },
         ]}
@@ -157,5 +161,12 @@ export default function NhaCungCapPage() {
         onRowClick={(row) => router.push(`/hang-hoa/nha-cung-cap/${row.id}`)}
       />
     </ListPageLayout>
+
+    <CreateSupplierDialog
+      open={createOpen}
+      onOpenChange={setCreateOpen}
+      onSuccess={fetchData}
+    />
+    </>
   );
 }

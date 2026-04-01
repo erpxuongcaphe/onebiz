@@ -14,20 +14,8 @@ import {
   DateRangeFilter,
 } from "@/components/shared/filter-sidebar";
 import { formatCurrency, formatDate } from "@/lib/format";
-
-// === Types ===
-interface ManufacturingOrder {
-  id: string;
-  code: string;
-  date: string;
-  productName: string;
-  productCode: string;
-  quantity: number;
-  status: "completed" | "processing" | "cancelled";
-  statusName: string;
-  costAmount: number;
-  createdBy: string;
-}
+import { getManufacturingOrders, getManufacturingStatuses } from "@/lib/services";
+import type { ManufacturingOrder } from "@/lib/types";
 
 // === Status config ===
 const statusMap: Record<
@@ -39,50 +27,7 @@ const statusMap: Record<
   cancelled: { label: "Đã hủy", variant: "destructive" },
 };
 
-const statusOptions = [
-  { label: "Hoàn thành", value: "completed" },
-  { label: "Đang xử lý", value: "processing" },
-  { label: "Đã hủy", value: "cancelled" },
-];
-
-// === Mock data ===
-const mockData: ManufacturingOrder[] = [
-  { id: "1", code: "PSX000001", date: "2026-03-30T14:20:00", productName: "Bánh mì ngọt", productCode: "SP001", quantity: 200, status: "completed", statusName: "Hoàn thành", costAmount: 3000000, createdBy: "Nguyễn Văn A" },
-  { id: "2", code: "PSX000002", date: "2026-03-29T09:15:00", productName: "Bánh mì mặn", productCode: "SP002", quantity: 150, status: "completed", statusName: "Hoàn thành", costAmount: 2700000, createdBy: "Trần Thị B" },
-  { id: "3", code: "PSX000003", date: "2026-03-28T16:30:00", productName: "Nước ép cam", productCode: "SP003", quantity: 500, status: "processing", statusName: "Đang xử lý", costAmount: 5000000, createdBy: "Lê Văn C" },
-  { id: "4", code: "PSX000004", date: "2026-03-27T08:45:00", productName: "Sữa chua trái cây", productCode: "SP004", quantity: 300, status: "completed", statusName: "Hoàn thành", costAmount: 4500000, createdBy: "Phạm Thị D" },
-  { id: "5", code: "PSX000005", date: "2026-03-26T11:00:00", productName: "Bánh quy bơ", productCode: "SP005", quantity: 100, status: "cancelled", statusName: "Đã hủy", costAmount: 1500000, createdBy: "Nguyễn Văn A" },
-  { id: "6", code: "PSX000006", date: "2026-03-25T13:30:00", productName: "Bánh mì ngọt", productCode: "SP001", quantity: 250, status: "completed", statusName: "Hoàn thành", costAmount: 3750000, createdBy: "Trần Thị B" },
-  { id: "7", code: "PSX000007", date: "2026-03-24T10:00:00", productName: "Nước ép dưa hấu", productCode: "SP006", quantity: 400, status: "processing", statusName: "Đang xử lý", costAmount: 3200000, createdBy: "Lê Văn C" },
-  { id: "8", code: "PSX000008", date: "2026-03-23T15:45:00", productName: "Kem socola", productCode: "SP007", quantity: 80, status: "completed", statusName: "Hoàn thành", costAmount: 2400000, createdBy: "Phạm Thị D" },
-  { id: "9", code: "PSX000009", date: "2026-03-22T07:30:00", productName: "Bánh bông lan", productCode: "SP008", quantity: 120, status: "completed", statusName: "Hoàn thành", costAmount: 1800000, createdBy: "Nguyễn Văn A" },
-  { id: "10", code: "PSX000010", date: "2026-03-21T09:00:00", productName: "Sữa đậu nành", productCode: "SP009", quantity: 600, status: "processing", statusName: "Đang xử lý", costAmount: 4200000, createdBy: "Trần Thị B" },
-  { id: "11", code: "PSX000011", date: "2026-03-20T14:15:00", productName: "Bánh cuốn", productCode: "SP010", quantity: 180, status: "completed", statusName: "Hoàn thành", costAmount: 2160000, createdBy: "Lê Văn C" },
-  { id: "12", code: "PSX000012", date: "2026-03-19T11:30:00", productName: "Nước ép cam", productCode: "SP003", quantity: 350, status: "cancelled", statusName: "Đã hủy", costAmount: 3500000, createdBy: "Phạm Thị D" },
-  { id: "13", code: "PSX000013", date: "2026-03-18T08:00:00", productName: "Bánh mì mặn", productCode: "SP002", quantity: 200, status: "completed", statusName: "Hoàn thành", costAmount: 3600000, createdBy: "Nguyễn Văn A" },
-  { id: "14", code: "PSX000014", date: "2026-03-17T16:00:00", productName: "Kem vani", productCode: "SP011", quantity: 90, status: "processing", statusName: "Đang xử lý", costAmount: 2700000, createdBy: "Trần Thị B" },
-  { id: "15", code: "PSX000015", date: "2026-03-16T10:45:00", productName: "Bánh quy bơ", productCode: "SP005", quantity: 160, status: "completed", statusName: "Hoàn thành", costAmount: 2400000, createdBy: "Lê Văn C" },
-];
-
-async function fetchManufacturingOrders(params: {
-  page: number;
-  pageSize: number;
-  search: string;
-  statusFilter: string;
-}): Promise<{ data: ManufacturingOrder[]; total: number }> {
-  await new Promise((resolve) => setTimeout(resolve, 300));
-  let filtered = [...mockData];
-  if (params.search) {
-    const s = params.search.toLowerCase();
-    filtered = filtered.filter((item) => item.code.toLowerCase().includes(s));
-  }
-  if (params.statusFilter && params.statusFilter !== "all") {
-    filtered = filtered.filter((item) => item.status === params.statusFilter);
-  }
-  const total = filtered.length;
-  const start = params.page * params.pageSize;
-  return { data: filtered.slice(start, start + params.pageSize), total };
-}
+const statusOptions = getManufacturingStatuses();
 
 // === Columns ===
 const columns: ColumnDef<ManufacturingOrder, unknown>[] = [
@@ -153,11 +98,13 @@ export default function SanXuatPage() {
 
   const fetchData = useCallback(async () => {
     setLoading(true);
-    const result = await fetchManufacturingOrders({
+    const result = await getManufacturingOrders({
       page,
       pageSize,
       search,
-      statusFilter,
+      filters: {
+        ...(statusFilter !== "all" && { status: statusFilter }),
+      },
     });
     setData(result.data);
     setTotal(result.total);
