@@ -3,7 +3,7 @@
 import { useEffect, useState, useCallback } from "react";
 import { useRouter } from "next/navigation";
 import { ColumnDef } from "@tanstack/react-table";
-import { Plus, Upload, Download } from "lucide-react";
+import { Plus, Upload, Download, Eye, Pencil, PackagePlus, Trash2 } from "lucide-react";
 import { PageHeader } from "@/components/shared/page-header";
 import { ListPageLayout } from "@/components/shared/list-page-layout";
 import { DataTable } from "@/components/shared/data-table";
@@ -159,6 +159,12 @@ export default function NhaCungCapPage() {
           totalPurchases: formatCurrency(totalPurchases),
         }}
         onRowClick={(row) => router.push(`/hang-hoa/nha-cung-cap/${row.id}`)}
+        rowActions={(row) => [
+          { label: "Xem chi tiết", icon: <Eye className="h-4 w-4" />, onClick: () => router.push(`/hang-hoa/nha-cung-cap/${row.id}`) },
+          { label: "Sửa", icon: <Pencil className="h-4 w-4" />, onClick: () => {} },
+          { label: "Xem nhập hàng", icon: <PackagePlus className="h-4 w-4" />, onClick: () => {} },
+          { label: "Xóa", icon: <Trash2 className="h-4 w-4" />, onClick: () => {}, variant: "destructive", separator: true },
+        ]}
       />
     </ListPageLayout>
 

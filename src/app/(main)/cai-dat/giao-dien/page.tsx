@@ -1,11 +1,12 @@
 "use client";
 
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Separator } from "@/components/ui/separator";
 import { Save, Check, Sun, Moon, Monitor } from "lucide-react";
 import { cn } from "@/lib/utils";
+import { useSettings, useToast } from "@/lib/contexts";
 
 const themes = [
   {
@@ -57,11 +58,37 @@ const borderRadii = [
 ];
 
 export default function AppearanceSettingsPage() {
-  const [theme, setTheme] = useState("light");
-  const [accentColor, setAccentColor] = useState("blue");
-  const [navLayout, setNavLayout] = useState("horizontal");
-  const [fontSize, setFontSize] = useState("medium");
-  const [borderRadius, setBorderRadius] = useState("md");
+  const { settings, updateSettings } = useSettings();
+  const { toast } = useToast();
+
+  const [theme, setTheme] = useState(settings.appearance.theme);
+  const [accentColor, setAccentColor] = useState(settings.appearance.accentColor);
+  const [navLayout, setNavLayout] = useState(settings.appearance.navLayout);
+  const [fontSize, setFontSize] = useState(settings.appearance.fontSize);
+  const [borderRadius, setBorderRadius] = useState(settings.appearance.borderRadius);
+
+  useEffect(() => {
+    setTheme(settings.appearance.theme);
+    setAccentColor(settings.appearance.accentColor);
+    setNavLayout(settings.appearance.navLayout);
+    setFontSize(settings.appearance.fontSize);
+    setBorderRadius(settings.appearance.borderRadius);
+  }, [settings.appearance]);
+
+  const handleSave = () => {
+    updateSettings("appearance", {
+      theme: theme as "light" | "dark" | "system",
+      accentColor,
+      navLayout: navLayout as "horizontal" | "vertical",
+      fontSize: fontSize as "small" | "medium" | "large",
+      borderRadius: borderRadius as "none" | "sm" | "md" | "lg",
+    });
+    toast({
+      title: "Đã lưu",
+      description: "Cài đặt giao diện đã được cập nhật",
+      variant: "success",
+    });
+  };
 
   return (
     <div className="space-y-6">
@@ -85,7 +112,7 @@ export default function AppearanceSettingsPage() {
                 <button
                   key={t.id}
                   type="button"
-                  onClick={() => setTheme(t.id)}
+                  onClick={() => setTheme(t.id as "light" | "dark" | "system")}
                   className={cn(
                     "group relative rounded-lg border-2 p-3 text-left transition-all",
                     isSelected
@@ -167,7 +194,7 @@ export default function AppearanceSettingsPage() {
               <button
                 key={layout.id}
                 type="button"
-                onClick={() => setNavLayout(layout.id)}
+                onClick={() => setNavLayout(layout.id as "horizontal" | "vertical")}
                 className={cn(
                   "flex items-start gap-3 rounded-lg border p-4 text-left transition-colors",
                   navLayout === layout.id
@@ -209,7 +236,7 @@ export default function AppearanceSettingsPage() {
               <button
                 key={fs.id}
                 type="button"
-                onClick={() => setFontSize(fs.id)}
+                onClick={() => setFontSize(fs.id as "small" | "medium" | "large")}
                 className={cn(
                   "flex-1 rounded-lg border p-3 text-center transition-colors",
                   fontSize === fs.id
@@ -234,7 +261,7 @@ export default function AppearanceSettingsPage() {
               <button
                 key={br.id}
                 type="button"
-                onClick={() => setBorderRadius(br.id)}
+                onClick={() => setBorderRadius(br.id as "none" | "sm" | "md" | "lg")}
                 className={cn(
                   "flex-1 flex flex-col items-center gap-2 rounded-lg border p-3 transition-colors",
                   borderRadius === br.id
@@ -316,7 +343,7 @@ export default function AppearanceSettingsPage() {
       <Separator />
 
       <div className="flex justify-end">
-        <Button>
+        <Button onClick={handleSave}>
           <Save className="h-4 w-4 mr-1.5" />
           Lưu thay đổi
         </Button>

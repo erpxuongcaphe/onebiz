@@ -1,8 +1,9 @@
 "use client";
 
 import { useEffect, useState, useCallback } from "react";
+import { useRouter } from "next/navigation";
 import { ColumnDef } from "@tanstack/react-table";
-import { Plus, Download } from "lucide-react";
+import { Plus, Eye, PackagePlus, XCircle } from "lucide-react";
 import { Badge } from "@/components/ui/badge";
 import { PageHeader } from "@/components/shared/page-header";
 import { ListPageLayout } from "@/components/shared/list-page-layout";
@@ -15,6 +16,7 @@ import {
   DateRangeFilter,
 } from "@/components/shared/filter-sidebar";
 import { formatCurrency, formatDate } from "@/lib/format";
+import { exportToExcel, exportToCsv } from "@/lib/utils/export";
 import { getPurchaseOrders, getPurchaseOrderStatuses } from "@/lib/services";
 import type { PurchaseOrder } from "@/lib/types";
 
@@ -75,6 +77,7 @@ const columns: ColumnDef<PurchaseOrder, unknown>[] = [
 ];
 
 export default function NhapHangPage() {
+  const router = useRouter();
   const [data, setData] = useState<PurchaseOrder[]>([]);
   const [total, setTotal] = useState(0);
   const [loading, setLoading] = useState(true);
@@ -113,6 +116,18 @@ export default function NhapHangPage() {
 
   const totalAmountOwed = data.reduce((sum, o) => sum + o.amountOwed, 0);
 
+  const handleExport = (type: "excel" | "csv") => {
+    const exportColumns = [
+      { header: "Mã PN", key: "code", width: 15 },
+      { header: "Thời gian", key: "date", width: 18, format: (v: string) => formatDate(v) },
+      { header: "NCC", key: "supplierName", width: 25 },
+      { header: "Cần trả", key: "amountOwed", width: 15, format: (v: number) => v },
+      { header: "Trạng thái", key: "status", width: 15, format: (v: PurchaseOrder["status"]) => statusMap[v]?.label ?? v },
+    ];
+    if (type === "excel") exportToExcel(data, exportColumns, "danh-sach-nhap-hang");
+    else exportToCsv(data, exportColumns, "danh-sach-nhap-hang");
+  };
+
   return (
     <ListPageLayout
       sidebar={
@@ -139,9 +154,9 @@ export default function NhapHangPage() {
         searchPlaceholder="Theo mã phiếu, NCC"
         searchValue={search}
         onSearchChange={setSearch}
+        onExport={{ excel: () => handleExport("excel"), csv: () => handleExport("csv") }}
         actions={[
           { label: "Nhập hàng", icon: <Plus className="h-4 w-4" />, variant: "default" },
-          { label: "Xuất file", icon: <Download className="h-4 w-4" /> },
         ]}
       />
 
@@ -162,6 +177,12 @@ export default function NhapHangPage() {
         summaryRow={{
           amountOwed: formatCurrency(totalAmountOwed),
         }}
+        onRowClick={(row) => router.push(`/hang-hoa/nhap-hang/${row.id}`)}
+        rowActions={(row) => [
+          { label: "Xem chi tiết", icon: <Eye className="h-4 w-4" />, onClick: () => router.push(`/hang-hoa/nhap-hang/${row.id}`) },
+          { label: "Nhập hàng", icon: <PackagePlus className="h-4 w-4" />, onClick: () => {} },
+          { label: "Hủy", icon: <XCircle className="h-4 w-4" />, onClick: () => {}, variant: "destructive", separator: true },
+        ]}
       />
     </ListPageLayout>
   );

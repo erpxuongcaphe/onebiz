@@ -3,7 +3,7 @@
 import { useEffect, useState, useCallback } from "react";
 import { useRouter } from "next/navigation";
 import { ColumnDef } from "@tanstack/react-table";
-import { Plus, Upload, Download } from "lucide-react";
+import { Plus, Upload, Eye, Pencil, ShoppingCart, Trash2 } from "lucide-react";
 import { PageHeader } from "@/components/shared/page-header";
 import { ListPageLayout } from "@/components/shared/list-page-layout";
 import { DataTable } from "@/components/shared/data-table";
@@ -16,6 +16,7 @@ import {
 } from "@/components/shared/filter-sidebar";
 import { CreateCustomerDialog } from "@/components/shared/dialogs";
 import { formatCurrency, formatDate } from "@/lib/format";
+import { exportToExcel, exportToCsv } from "@/lib/utils/export";
 import { getCustomers, getCustomerGroups } from "@/lib/services";
 import type { Customer } from "@/lib/types";
 
@@ -115,6 +116,20 @@ export default function KhachHangPage() {
   const totalSales = data.reduce((sum, c) => sum + c.totalSales, 0);
   const totalSalesMinusReturns = data.reduce((sum, c) => sum + c.totalSalesMinusReturns, 0);
 
+  const handleExport = (type: "excel" | "csv") => {
+    const exportColumns = [
+      { header: "Mã KH", key: "code", width: 12 },
+      { header: "Tên khách hàng", key: "name", width: 25 },
+      { header: "SĐT", key: "phone", width: 15 },
+      { header: "Email", key: "email", width: 25 },
+      { header: "Nợ hiện tại", key: "currentDebt", width: 15, format: (v: number) => v },
+      { header: "Tổng bán", key: "totalSales", width: 15, format: (v: number) => v },
+      { header: "Nhóm", key: "groupName", width: 20 },
+    ];
+    if (type === "excel") exportToExcel(data, exportColumns, "danh-sach-khach-hang");
+    else exportToCsv(data, exportColumns, "danh-sach-khach-hang");
+  };
+
   return (
     <>
     <ListPageLayout
@@ -166,10 +181,10 @@ export default function KhachHangPage() {
         searchPlaceholder="Theo mã, tên, SĐT"
         searchValue={search}
         onSearchChange={setSearch}
+        onExport={{ excel: () => handleExport("excel"), csv: () => handleExport("csv") }}
         actions={[
           { label: "Tạo mới", icon: <Plus className="h-4 w-4" />, variant: "default", onClick: () => setCreateOpen(true) },
           { label: "Import", icon: <Upload className="h-4 w-4" /> },
-          { label: "Xuất file", icon: <Download className="h-4 w-4" /> },
         ]}
       />
 
@@ -193,6 +208,12 @@ export default function KhachHangPage() {
           totalSalesMinusReturns: formatCurrency(totalSalesMinusReturns),
         }}
         onRowClick={(row) => router.push(`/khach-hang/${row.id}`)}
+        rowActions={(row) => [
+          { label: "Xem chi tiết", icon: <Eye className="h-4 w-4" />, onClick: () => router.push(`/khach-hang/${row.id}`) },
+          { label: "Sửa", icon: <Pencil className="h-4 w-4" />, onClick: () => {} },
+          { label: "Xem đơn hàng", icon: <ShoppingCart className="h-4 w-4" />, onClick: () => {} },
+          { label: "Xóa", icon: <Trash2 className="h-4 w-4" />, onClick: () => {}, variant: "destructive", separator: true },
+        ]}
       />
     </ListPageLayout>
 

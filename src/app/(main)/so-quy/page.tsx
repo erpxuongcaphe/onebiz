@@ -2,7 +2,7 @@
 
 import { useEffect, useState, useCallback } from "react";
 import { ColumnDef } from "@tanstack/react-table";
-import { Plus } from "lucide-react";
+import { Plus, Eye, Printer, Trash2 } from "lucide-react";
 import { Badge } from "@/components/ui/badge";
 import { PageHeader } from "@/components/shared/page-header";
 import { ListPageLayout } from "@/components/shared/list-page-layout";
@@ -15,6 +15,7 @@ import {
 } from "@/components/shared/filter-sidebar";
 import { CreateCashTransactionDialog } from "@/components/shared/dialogs";
 import { formatCurrency, formatDate } from "@/lib/format";
+import { exportToExcel, exportToCsv } from "@/lib/utils/export";
 import { getCashBookEntries, getCashBookTypes, getCashBookSummary } from "@/lib/services";
 import type { CashBookEntry } from "@/lib/types";
 
@@ -128,6 +129,19 @@ export default function SoQuyPage() {
     fetchData();
   }, [fetchData]);
 
+  const handleExport = (type: "excel" | "csv") => {
+    const exportColumns = [
+      { header: "Mã phiếu", key: "code", width: 15 },
+      { header: "Thời gian", key: "date", width: 18, format: (v: string) => formatDate(v) },
+      { header: "Loại", key: "typeName", width: 12 },
+      { header: "Danh mục", key: "category", width: 20 },
+      { header: "Đối tượng", key: "counterparty", width: 22 },
+      { header: "Số tiền", key: "amount", width: 15, format: (v: number) => v },
+    ];
+    if (type === "excel") exportToExcel(data, exportColumns, "so-quy");
+    else exportToCsv(data, exportColumns, "so-quy");
+  };
+
   // Summary calculations
   const { totalReceipt, totalPayment } = getCashBookSummary();
 
@@ -176,6 +190,7 @@ export default function SoQuyPage() {
           setSearch(v);
           setPage(0);
         }}
+        onExport={{ excel: () => handleExport("excel"), csv: () => handleExport("csv") }}
         actions={[
           {
             label: "Tạo phiếu thu",
@@ -205,6 +220,11 @@ export default function SoQuyPage() {
           setPage(0);
         }}
         summaryRow={summaryRow}
+        rowActions={(row) => [
+          { label: "Xem chi tiết", icon: <Eye className="h-4 w-4" />, onClick: () => {} },
+          { label: "In phiếu", icon: <Printer className="h-4 w-4" />, onClick: () => {} },
+          { label: "Xóa", icon: <Trash2 className="h-4 w-4" />, onClick: () => {}, variant: "destructive", separator: true },
+        ]}
       />
     </ListPageLayout>
 

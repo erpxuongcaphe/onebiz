@@ -1,8 +1,9 @@
 "use client";
 
 import { useEffect, useState, useCallback } from "react";
+import { useRouter } from "next/navigation";
 import { ColumnDef } from "@tanstack/react-table";
-import { Plus, Download } from "lucide-react";
+import { Plus, Download, Eye, CheckCircle, FileText, XCircle } from "lucide-react";
 import { Badge } from "@/components/ui/badge";
 import { PageHeader } from "@/components/shared/page-header";
 import { ListPageLayout } from "@/components/shared/list-page-layout";
@@ -82,6 +83,7 @@ const columns: ColumnDef<Order, unknown>[] = [
 // --- Page ---
 
 export default function DatHangPage() {
+  const router = useRouter();
   const [data, setData] = useState<Order[]>([]);
   const [total, setTotal] = useState(0);
   const [loading, setLoading] = useState(true);
@@ -177,6 +179,13 @@ export default function DatHangPage() {
         summaryRow={{
           totalAmount: formatCurrency(totalAmount),
         }}
+        onRowClick={(row) => router.push(`/don-hang/dat-hang/${row.id}`)}
+        rowActions={(row) => [
+          { label: "Xem chi tiết", icon: <Eye className="h-4 w-4" />, onClick: () => router.push(`/don-hang/dat-hang/${row.id}`) },
+          { label: "Xác nhận", icon: <CheckCircle className="h-4 w-4" />, onClick: () => {} },
+          { label: "Tạo hóa đơn", icon: <FileText className="h-4 w-4" />, onClick: () => {} },
+          { label: "Hủy", icon: <XCircle className="h-4 w-4" />, onClick: () => {}, variant: "destructive", separator: true },
+        ]}
       />
     </ListPageLayout>
   );

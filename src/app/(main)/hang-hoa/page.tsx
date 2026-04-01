@@ -3,7 +3,7 @@
 import { useEffect, useState, useCallback } from "react";
 import { useRouter } from "next/navigation";
 import { ColumnDef } from "@tanstack/react-table";
-import { Plus, Upload, Download } from "lucide-react";
+import { Plus, Upload, Eye, Pencil, Copy, Printer, Trash2 } from "lucide-react";
 import { PageHeader } from "@/components/shared/page-header";
 import { ListPageLayout } from "@/components/shared/list-page-layout";
 import { DataTable } from "@/components/shared/data-table";
@@ -16,6 +16,7 @@ import {
 } from "@/components/shared/filter-sidebar";
 import { CreateProductDialog } from "@/components/shared/dialogs";
 import { formatCurrency, formatDate } from "@/lib/format";
+import { exportToExcel, exportToCsv } from "@/lib/utils/export";
 import { getProducts, getProductCategories } from "@/lib/services";
 import type { Product } from "@/lib/types";
 
@@ -119,6 +120,19 @@ export default function HangHoaPage() {
   const totalStock = data.reduce((sum, p) => sum + p.stock, 0);
   const totalOrdered = data.reduce((sum, p) => sum + p.ordered, 0);
 
+  const handleExport = (type: "excel" | "csv") => {
+    const exportColumns = [
+      { header: "Mã hàng", key: "code", width: 12 },
+      { header: "Tên hàng", key: "name", width: 30 },
+      { header: "Giá bán", key: "sellPrice", width: 15, format: (v: number) => v },
+      { header: "Giá vốn", key: "costPrice", width: 15, format: (v: number) => v },
+      { header: "Tồn kho", key: "stock", width: 10 },
+      { header: "Nhóm", key: "categoryName", width: 20 },
+    ];
+    if (type === "excel") exportToExcel(data, exportColumns, "danh-sach-hang-hoa");
+    else exportToCsv(data, exportColumns, "danh-sach-hang-hoa");
+  };
+
   return (
     <>
     <ListPageLayout
@@ -159,10 +173,10 @@ export default function HangHoaPage() {
         searchPlaceholder="Theo mã, tên hàng"
         searchValue={search}
         onSearchChange={setSearch}
+        onExport={{ excel: () => handleExport("excel"), csv: () => handleExport("csv") }}
         actions={[
           { label: "Tạo mới", icon: <Plus className="h-4 w-4" />, variant: "default", onClick: () => setCreateOpen(true) },
           { label: "Import file", icon: <Upload className="h-4 w-4" /> },
-          { label: "Xuất file", icon: <Download className="h-4 w-4" /> },
         ]}
       />
 
@@ -185,6 +199,13 @@ export default function HangHoaPage() {
           ordered: formatCurrency(totalOrdered),
         }}
         onRowClick={(row) => router.push(`/hang-hoa/${row.id}`)}
+        rowActions={(row) => [
+          { label: "Xem chi tiết", icon: <Eye className="h-4 w-4" />, onClick: () => router.push(`/hang-hoa/${row.id}`) },
+          { label: "Sửa", icon: <Pencil className="h-4 w-4" />, onClick: () => {} },
+          { label: "Nhân bản", icon: <Copy className="h-4 w-4" />, onClick: () => {} },
+          { label: "In mã vạch", icon: <Printer className="h-4 w-4" />, onClick: () => {} },
+          { label: "Xóa", icon: <Trash2 className="h-4 w-4" />, onClick: () => {}, variant: "destructive", separator: true },
+        ]}
       />
     </ListPageLayout>
 

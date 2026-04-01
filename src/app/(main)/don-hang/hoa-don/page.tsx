@@ -1,8 +1,9 @@
 "use client";
 
 import { useEffect, useState, useCallback } from "react";
+import { useRouter } from "next/navigation";
 import { ColumnDef } from "@tanstack/react-table";
-import { Plus, Download } from "lucide-react";
+import { Plus, Eye, Printer, Undo2, XCircle } from "lucide-react";
 import { Badge } from "@/components/ui/badge";
 import { PageHeader } from "@/components/shared/page-header";
 import { ListPageLayout } from "@/components/shared/list-page-layout";
@@ -15,6 +16,7 @@ import {
 } from "@/components/shared/filter-sidebar";
 import { CreateInvoiceDialog } from "@/components/shared/dialogs";
 import { formatCurrency, formatDate } from "@/lib/format";
+import { exportToExcel, exportToCsv } from "@/lib/utils/export";
 import { getInvoices, getInvoiceStatuses } from "@/lib/services";
 import type { Invoice } from "@/lib/types";
 
@@ -87,6 +89,7 @@ const columns: ColumnDef<Invoice, unknown>[] = [
 ];
 
 export default function HoaDonPage() {
+  const router = useRouter();
   const [data, setData] = useState<Invoice[]>([]);
   const [total, setTotal] = useState(0);
   const [loading, setLoading] = useState(true);
@@ -130,6 +133,19 @@ export default function HoaDonPage() {
   const totalAmount = data.reduce((sum, inv) => sum + inv.totalAmount, 0);
   const totalDiscount = data.reduce((sum, inv) => sum + inv.discount, 0);
 
+  const handleExport = (type: "excel" | "csv") => {
+    const exportColumns = [
+      { header: "Mã HD", key: "code", width: 15 },
+      { header: "Thời gian", key: "date", width: 18, format: (v: string) => formatDate(v) },
+      { header: "Khách hàng", key: "customerName", width: 25 },
+      { header: "Tổng tiền", key: "totalAmount", width: 15, format: (v: number) => v },
+      { header: "Giảm giá", key: "discount", width: 15, format: (v: number) => v },
+      { header: "Trạng thái", key: "status", width: 15, format: (v: Invoice["status"]) => statusMap[v]?.label ?? v },
+    ];
+    if (type === "excel") exportToExcel(data, exportColumns, "danh-sach-hoa-don");
+    else exportToCsv(data, exportColumns, "danh-sach-hoa-don");
+  };
+
   return (
     <>
     <ListPageLayout
@@ -157,16 +173,13 @@ export default function HoaDonPage() {
         searchPlaceholder="Theo mã hóa đơn, khách hàng"
         searchValue={search}
         onSearchChange={setSearch}
+        onExport={{ excel: () => handleExport("excel"), csv: () => handleExport("csv") }}
         actions={[
           {
             label: "Tạo hóa đơn",
             icon: <Plus className="h-4 w-4" />,
             variant: "default",
             onClick: () => setCreateOpen(true),
-          },
-          {
-            label: "Xuất file",
-            icon: <Download className="h-4 w-4" />,
           },
         ]}
       />
@@ -189,6 +202,13 @@ export default function HoaDonPage() {
           totalAmount: formatCurrency(totalAmount),
           discount: formatCurrency(totalDiscount),
         }}
+        onRowClick={(row) => router.push(`/don-hang/hoa-don/${row.id}`)}
+        rowActions={(row) => [
+          { label: "Xem chi tiết", icon: <Eye className="h-4 w-4" />, onClick: () => router.push(`/don-hang/hoa-don/${row.id}`) },
+          { label: "In hóa đơn", icon: <Printer className="h-4 w-4" />, onClick: () => {} },
+          { label: "Trả hàng", icon: <Undo2 className="h-4 w-4" />, onClick: () => {} },
+          { label: "Hủy", icon: <XCircle className="h-4 w-4" />, onClick: () => {}, variant: "destructive", separator: true },
+        ]}
       />
     </ListPageLayout>
 

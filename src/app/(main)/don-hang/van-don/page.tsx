@@ -1,8 +1,9 @@
 "use client";
 
 import { useEffect, useState, useCallback } from "react";
+import { useRouter } from "next/navigation";
 import { ColumnDef } from "@tanstack/react-table";
-import { Plus, Download } from "lucide-react";
+import { Plus, Download, Eye, MapPin, XCircle } from "lucide-react";
 import { Badge } from "@/components/ui/badge";
 import { PageHeader } from "@/components/shared/page-header";
 import { ListPageLayout } from "@/components/shared/list-page-layout";
@@ -94,6 +95,7 @@ const columns: ColumnDef<ShippingOrder, unknown>[] = [
 // --- Page ---
 
 export default function VanDonPage() {
+  const router = useRouter();
   const [data, setData] = useState<ShippingOrder[]>([]);
   const [total, setTotal] = useState(0);
   const [loading, setLoading] = useState(true);
@@ -202,6 +204,12 @@ export default function VanDonPage() {
           fee: formatCurrency(totalFee),
           cod: formatCurrency(totalCod),
         }}
+        onRowClick={(row) => router.push(`/don-hang/van-don/${row.id}`)}
+        rowActions={(row) => [
+          { label: "Xem chi tiết", icon: <Eye className="h-4 w-4" />, onClick: () => router.push(`/don-hang/van-don/${row.id}`) },
+          { label: "Theo dõi", icon: <MapPin className="h-4 w-4" />, onClick: () => {} },
+          { label: "Hủy", icon: <XCircle className="h-4 w-4" />, onClick: () => {}, variant: "destructive", separator: true },
+        ]}
       />
     </ListPageLayout>
   );

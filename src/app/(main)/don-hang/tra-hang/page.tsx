@@ -1,8 +1,9 @@
 "use client";
 
 import { useEffect, useState, useCallback } from "react";
+import { useRouter } from "next/navigation";
 import { ColumnDef } from "@tanstack/react-table";
-import { Plus } from "lucide-react";
+import { Plus, Eye, Printer } from "lucide-react";
 import { Badge } from "@/components/ui/badge";
 import { PageHeader } from "@/components/shared/page-header";
 import { ListPageLayout } from "@/components/shared/list-page-layout";
@@ -79,6 +80,7 @@ const columns: ColumnDef<ReturnOrder, unknown>[] = [
 // --- Page ---
 
 export default function TraHangPage() {
+  const router = useRouter();
   const [data, setData] = useState<ReturnOrder[]>([]);
   const [total, setTotal] = useState(0);
   const [loading, setLoading] = useState(true);
@@ -170,6 +172,11 @@ export default function TraHangPage() {
         summaryRow={{
           totalAmount: formatCurrency(totalReturnAmount),
         }}
+        onRowClick={(row) => router.push(`/don-hang/tra-hang/${row.id}`)}
+        rowActions={(row) => [
+          { label: "Xem chi tiết", icon: <Eye className="h-4 w-4" />, onClick: () => router.push(`/don-hang/tra-hang/${row.id}`) },
+          { label: "In phiếu trả", icon: <Printer className="h-4 w-4" />, onClick: () => {} },
+        ]}
       />
     </ListPageLayout>
   );

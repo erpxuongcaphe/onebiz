@@ -7,6 +7,7 @@ import { Checkbox } from "@/components/ui/checkbox";
 import { Separator } from "@/components/ui/separator";
 import { Save } from "lucide-react";
 import { cn } from "@/lib/utils";
+import { useSettings, useToast } from "@/lib/contexts";
 
 function Toggle({
   checked,
@@ -49,24 +50,37 @@ function Toggle({
 }
 
 export default function NotificationSettingsPage() {
-  // Order notifications
-  const [newOrder, setNewOrder] = useState(true);
-  const [completedOrder, setCompletedOrder] = useState(true);
+  const { settings, updateSettings } = useSettings();
+  const { toast } = useToast();
+
+  // Mapped from settings context
+  const [newOrder, setNewOrder] = useState(settings.notification.orderNew);
+  const [completedOrder, setCompletedOrder] = useState(settings.notification.orderCompleted);
+  const [lowStock, setLowStock] = useState(settings.notification.stockLow);
+  const [paymentSuccess, setPaymentSuccess] = useState(settings.notification.paymentReceived);
+  const [channelEmail, setChannelEmail] = useState(settings.notification.emailNotify);
+
+  // Local-only state (no mapping in settings context yet)
   const [cancelledOrder, setCancelledOrder] = useState(true);
-
-  // Inventory notifications
   const [outOfStock, setOutOfStock] = useState(true);
-  const [lowStock, setLowStock] = useState(true);
   const [newImport, setNewImport] = useState(false);
-
-  // Financial notifications
-  const [paymentSuccess, setPaymentSuccess] = useState(true);
   const [overdueDebt, setOverdueDebt] = useState(true);
-
-  // Channels
-  const [channelEmail, setChannelEmail] = useState(true);
   const [channelSms, setChannelSms] = useState(false);
   const [channelPush, setChannelPush] = useState(true);
+
+  function handleSave() {
+    updateSettings("notification", {
+      orderNew: newOrder,
+      orderCompleted: completedOrder,
+      stockLow: lowStock,
+      paymentReceived: paymentSuccess,
+      emailNotify: channelEmail,
+    });
+    toast({
+      title: "Đã lưu",
+      description: "Cài đặt thông báo đã được cập nhật thành công.",
+    });
+  }
 
   return (
     <div className="space-y-6">
@@ -205,7 +219,7 @@ export default function NotificationSettingsPage() {
       <Separator />
 
       <div className="flex justify-end">
-        <Button>
+        <Button onClick={handleSave}>
           <Save className="h-4 w-4 mr-1.5" />
           Lưu thay đổi
         </Button>

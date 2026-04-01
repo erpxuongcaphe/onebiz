@@ -1,6 +1,6 @@
 "use client";
 
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
 import { Button } from "@/components/ui/button";
@@ -13,17 +13,46 @@ import {
 } from "@/components/ui/select";
 import { Separator } from "@/components/ui/separator";
 import { Upload, Save } from "lucide-react";
+import { useSettings, useToast } from "@/lib/contexts";
 
 export default function StoreSettingsPage() {
-  const [storeName, setStoreName] = useState("OneBiz Shop HCM");
-  const [phone, setPhone] = useState("0909 123 456");
-  const [email, setEmail] = useState("contact@onebiz.vn");
-  const [address, setAddress] = useState(
-    "123 Nguyễn Huệ, Phường Bến Nghé, Quận 1, TP.HCM"
-  );
-  const [taxCode, setTaxCode] = useState("0312345678");
-  const [businessType, setBusinessType] = useState("retail");
-  const [foundingDate, setFoundingDate] = useState("2020-01-15");
+  const { settings, updateSettings } = useSettings();
+  const { toast } = useToast();
+
+  const [storeName, setStoreName] = useState(settings.store.name);
+  const [phone, setPhone] = useState(settings.store.phone);
+  const [email, setEmail] = useState(settings.store.email);
+  const [address, setAddress] = useState(settings.store.address);
+  const [taxCode, setTaxCode] = useState(settings.store.taxCode);
+  const [businessType, setBusinessType] = useState(settings.store.businessType);
+  const [foundingDate, setFoundingDate] = useState(settings.store.foundingDate);
+
+  // Sync local state when settings change (e.g. after hydration from localStorage)
+  useEffect(() => {
+    setStoreName(settings.store.name);
+    setPhone(settings.store.phone);
+    setEmail(settings.store.email);
+    setAddress(settings.store.address);
+    setTaxCode(settings.store.taxCode);
+    setBusinessType(settings.store.businessType);
+    setFoundingDate(settings.store.foundingDate);
+  }, [settings.store]);
+
+  const handleSave = () => {
+    updateSettings("store", {
+      name: storeName,
+      phone,
+      email,
+      address,
+      taxCode,
+      businessType,
+      foundingDate,
+    });
+    toast({
+      title: "Đã lưu thay đổi",
+      description: "Thông tin cửa hàng đã được cập nhật thành công.",
+    });
+  };
 
   return (
     <div className="space-y-6">
@@ -133,7 +162,7 @@ export default function StoreSettingsPage() {
       <Separator />
 
       <div className="flex justify-end">
-        <Button>
+        <Button onClick={handleSave}>
           <Save className="h-4 w-4 mr-1.5" />
           Lưu thay đổi
         </Button>

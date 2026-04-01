@@ -1,6 +1,6 @@
 "use client";
 
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import {
@@ -13,6 +13,7 @@ import {
 import { Separator } from "@/components/ui/separator";
 import { Save } from "lucide-react";
 import { cn } from "@/lib/utils";
+import { useSettings, useToast } from "@/lib/contexts";
 
 const languages = [
   { id: "vi", label: "Tiếng Việt", flag: "\u{1F1FB}\u{1F1F3}" },
@@ -20,12 +21,72 @@ const languages = [
   { id: "ja", label: "\u65E5\u672C\u8A9E", flag: "\u{1F1EF}\u{1F1F5}" },
 ];
 
+// Mapping between UI date format values and settings date format values
+const dateFormatToSettings: Record<string, "DD/MM/YYYY" | "MM/DD/YYYY" | "YYYY-MM-DD"> = {
+  "dd/MM/yyyy": "DD/MM/YYYY",
+  "MM/dd/yyyy": "MM/DD/YYYY",
+  "yyyy-MM-dd": "YYYY-MM-DD",
+};
+
+const dateFormatFromSettings: Record<string, string> = {
+  "DD/MM/YYYY": "dd/MM/yyyy",
+  "MM/DD/YYYY": "MM/dd/yyyy",
+  "YYYY-MM-DD": "yyyy-MM-dd",
+};
+
+// Mapping between UI timezone values and settings timezone values
+const timezoneToSettings: Record<string, string> = {
+  "asia-hcm": "Asia/Ho_Chi_Minh",
+  "asia-tokyo": "Asia/Tokyo",
+  "utc": "UTC",
+};
+
+const timezoneFromSettings: Record<string, string> = {
+  "Asia/Ho_Chi_Minh": "asia-hcm",
+  "Asia/Tokyo": "asia-tokyo",
+  "UTC": "utc",
+};
+
 export default function LanguageSettingsPage() {
-  const [language, setLanguage] = useState("vi");
+  const { settings, updateSettings } = useSettings();
+  const { toast } = useToast();
+
+  // Initialize local form state from settings
+  const [language, setLanguage] = useState(settings.language.locale);
   const [numberFormat, setNumberFormat] = useState("vi");
-  const [dateFormat, setDateFormat] = useState("dd/MM/yyyy");
-  const [timezone, setTimezone] = useState("asia-hcm");
-  const [currency, setCurrency] = useState("VND");
+  const [dateFormat, setDateFormat] = useState(
+    dateFormatFromSettings[settings.language.dateFormat] ?? "dd/MM/yyyy"
+  );
+  const [timezone, setTimezone] = useState(
+    timezoneFromSettings[settings.language.timezone] ?? "asia-hcm"
+  );
+  const [currency, setCurrency] = useState(settings.language.currency);
+
+  // Sync local state when settings change externally
+  useEffect(() => {
+    setLanguage(settings.language.locale);
+    setCurrency(settings.language.currency);
+    setDateFormat(
+      dateFormatFromSettings[settings.language.dateFormat] ?? "dd/MM/yyyy"
+    );
+    setTimezone(
+      timezoneFromSettings[settings.language.timezone] ?? "asia-hcm"
+    );
+  }, [settings.language]);
+
+  const handleSave = () => {
+    updateSettings("language", {
+      locale: language as "vi" | "en",
+      currency: currency as "VND" | "USD",
+      dateFormat: dateFormatToSettings[dateFormat] ?? "DD/MM/YYYY",
+      timezone: timezoneToSettings[timezone] ?? "Asia/Ho_Chi_Minh",
+    });
+    toast({
+      title: "Đã lưu thay đổi",
+      description: "Cài đặt ngôn ngữ & vùng đã được cập nhật.",
+      variant: "success",
+    });
+  };
 
   return (
     <div className="space-y-6">
@@ -46,7 +107,7 @@ export default function LanguageSettingsPage() {
               <button
                 key={lang.id}
                 type="button"
-                onClick={() => setLanguage(lang.id)}
+                onClick={() => setLanguage(lang.id as "vi" | "en")}
                 className={cn(
                   "flex items-center gap-3 rounded-lg border p-4 text-left transition-colors",
                   language === lang.id
@@ -129,7 +190,7 @@ export default function LanguageSettingsPage() {
       <Separator />
 
       <div className="flex justify-end">
-        <Button>
+        <Button onClick={handleSave}>
           <Save className="h-4 w-4 mr-1.5" />
           Lưu thay đổi
         </Button>

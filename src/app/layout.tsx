@@ -1,6 +1,6 @@
 import type { Metadata } from "next";
 import { Be_Vietnam_Pro } from "next/font/google";
-import { TooltipProvider } from "@/components/ui/tooltip";
+import { Providers } from "./providers";
 import "./globals.css";
 
 const beVietnamPro = Be_Vietnam_Pro({
@@ -22,7 +22,7 @@ export default function RootLayout({
   return (
     <html lang="vi" className={`${beVietnamPro.variable} h-full antialiased`}>
       <body className="min-h-full flex flex-col font-sans">
-        <TooltipProvider>{children}</TooltipProvider>
+        <Providers>{children}</Providers>
       </body>
     </html>
   );

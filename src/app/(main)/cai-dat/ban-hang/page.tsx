@@ -15,6 +15,7 @@ import {
 } from "@/components/ui/select";
 import { Save } from "lucide-react";
 import { cn } from "@/lib/utils";
+import { useSettings, useToast } from "@/lib/contexts";
 
 function Toggle({
   checked,
@@ -57,18 +58,63 @@ function Toggle({
 }
 
 export default function SalesSettingsPage() {
-  const [allowSellOutOfStock, setAllowSellOutOfStock] = useState(false);
-  const [requireCustomer, setRequireCustomer] = useState(false);
-  const [autoPrintInvoice, setAutoPrintInvoice] = useState(true);
-  const [showCostOnPos, setShowCostOnPos] = useState(false);
+  const { settings, updateSettings } = useSettings();
+  const { toast } = useToast();
 
-  const [discountType, setDiscountType] = useState("percent");
-  const [maxDiscount, setMaxDiscount] = useState("50");
+  const [allowSellOutOfStock, setAllowSellOutOfStock] = useState(
+    settings.sales.allowSellOutOfStock
+  );
+  const [requireCustomer, setRequireCustomer] = useState(
+    settings.sales.requireCustomer
+  );
+  const [autoPrintInvoice, setAutoPrintInvoice] = useState(
+    settings.sales.autoPrintInvoice
+  );
+  const [showCostOnPos, setShowCostOnPos] = useState(
+    settings.sales.showCostOnPos
+  );
 
-  const [paymentCash, setPaymentCash] = useState(true);
-  const [paymentTransfer, setPaymentTransfer] = useState(true);
-  const [paymentCard, setPaymentCard] = useState(true);
-  const [paymentEwallet, setPaymentEwallet] = useState(false);
+  const [discountType, setDiscountType] = useState<"percent" | "fixed">(
+    settings.sales.discountType
+  );
+  const [maxDiscount, setMaxDiscount] = useState(
+    String(settings.sales.maxDiscount)
+  );
+
+  const [paymentCash, setPaymentCash] = useState(
+    settings.sales.paymentMethods.cash
+  );
+  const [paymentTransfer, setPaymentTransfer] = useState(
+    settings.sales.paymentMethods.transfer
+  );
+  const [paymentCard, setPaymentCard] = useState(
+    settings.sales.paymentMethods.card
+  );
+  const [paymentEwallet, setPaymentEwallet] = useState(
+    settings.sales.paymentMethods.ewallet
+  );
+
+  function handleSave() {
+    updateSettings("sales", {
+      allowSellOutOfStock,
+      requireCustomer,
+      autoPrintInvoice,
+      showCostOnPos,
+      discountType,
+      maxDiscount: Number(maxDiscount),
+      paymentMethods: {
+        cash: paymentCash,
+        transfer: paymentTransfer,
+        card: paymentCard,
+        ewallet: paymentEwallet,
+      },
+    });
+    toast({
+      title: "Lưu thành công",
+      description: "Cài đặt bán hàng đã được cập nhật.",
+      variant: "success",
+    });
+  }
 
   return (
     <div className="space-y-6">
@@ -121,7 +167,7 @@ export default function SalesSettingsPage() {
           <div className="grid gap-4 sm:grid-cols-2">
             <div className="space-y-2">
               <label className="text-sm font-medium">Loại giảm giá</label>
-              <Select value={discountType} onValueChange={(v) => v && setDiscountType(v)}>
+              <Select value={discountType} onValueChange={(v) => v && setDiscountType(v as "percent" | "fixed")}>
                 <SelectTrigger className="w-full">
                   <SelectValue />
                 </SelectTrigger>
@@ -193,7 +239,7 @@ export default function SalesSettingsPage() {
       <Separator />
 
       <div className="flex justify-end">
-        <Button>
+        <Button onClick={handleSave}>
           <Save className="h-4 w-4 mr-1.5" />
           Lưu thay đổi
         </Button>

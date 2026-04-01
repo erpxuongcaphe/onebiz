@@ -2,7 +2,7 @@
 
 import { useEffect, useState, useCallback } from "react";
 import { ColumnDef } from "@tanstack/react-table";
-import { Plus } from "lucide-react";
+import { Plus, Pencil, Copy, Trash2 } from "lucide-react";
 import { Badge } from "@/components/ui/badge";
 import { PageHeader } from "@/components/shared/page-header";
 import { DataTable } from "@/components/shared/data-table";
@@ -212,6 +212,11 @@ export default function ThietLapGiaPage() {
           setPageSize(size);
           setPage(0);
         }}
+        rowActions={(row) => [
+          { label: "Sửa", icon: <Pencil className="h-4 w-4" />, onClick: () => {} },
+          { label: "Nhân bản", icon: <Copy className="h-4 w-4" />, onClick: () => {} },
+          { label: "Xóa", icon: <Trash2 className="h-4 w-4" />, onClick: () => {}, variant: "destructive", separator: true },
+        ]}
       />
     </div>
   );

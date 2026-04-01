@@ -1,16 +1,37 @@
 "use client";
 
-import { ReactNode } from "react";
-import { Search, SlidersHorizontal } from "lucide-react";
+import { ReactNode, useRef } from "react";
+import {
+  Search,
+  SlidersHorizontal,
+  Download,
+  Upload,
+  FileSpreadsheet,
+  FileText,
+  FileDown,
+} from "lucide-react";
 import { Input } from "@/components/ui/input";
 import { Button } from "@/components/ui/button";
+import {
+  DropdownMenu,
+  DropdownMenuTrigger,
+  DropdownMenuContent,
+  DropdownMenuItem,
+} from "@/components/ui/dropdown-menu";
 import { cn } from "@/lib/utils";
 
-interface ActionButton {
+interface PageAction {
   label: string;
   icon?: ReactNode;
-  onClick?: () => void;
   variant?: "default" | "outline" | "ghost";
+  onClick?: () => void;
+  href?: string;
+}
+
+interface ExportHandlers {
+  excel?: () => void;
+  csv?: () => void;
+  pdf?: () => void;
 }
 
 interface PageHeaderProps {
@@ -18,9 +39,109 @@ interface PageHeaderProps {
   searchPlaceholder?: string;
   searchValue?: string;
   onSearchChange?: (value: string) => void;
-  actions?: ActionButton[];
+  actions?: PageAction[];
+  onExport?: ExportHandlers;
+  onImport?: (file: File) => void;
   children?: ReactNode;
   className?: string;
+}
+
+function ActionButton({ action }: { action: PageAction }) {
+  const handleClick = () => {
+    if (action.onClick) {
+      action.onClick();
+    } else if (action.href) {
+      window.location.href = action.href;
+    }
+  };
+
+  return (
+    <Button
+      variant={action.variant || "outline"}
+      size="sm"
+      onClick={handleClick}
+      className="gap-1.5 shrink-0"
+    >
+      {action.icon}
+      {action.label}
+    </Button>
+  );
+}
+
+function ExportButton({ onExport }: { onExport: ExportHandlers }) {
+  return (
+    <DropdownMenu>
+      <DropdownMenuTrigger
+        className={cn(
+          "inline-flex items-center justify-center gap-1.5 shrink-0",
+          "rounded-md text-sm font-medium",
+          "border border-input bg-background hover:bg-accent hover:text-accent-foreground",
+          "h-8 px-3 cursor-pointer"
+        )}
+      >
+        <Download className="h-4 w-4" />
+        Xuất file
+      </DropdownMenuTrigger>
+      <DropdownMenuContent align="end">
+        {onExport.excel && (
+          <DropdownMenuItem onClick={onExport.excel}>
+            <FileSpreadsheet className="h-4 w-4" />
+            Xuất Excel (.xlsx)
+          </DropdownMenuItem>
+        )}
+        {onExport.csv && (
+          <DropdownMenuItem onClick={onExport.csv}>
+            <FileText className="h-4 w-4" />
+            Xuất CSV
+          </DropdownMenuItem>
+        )}
+        {onExport.pdf && (
+          <DropdownMenuItem onClick={onExport.pdf}>
+            <FileDown className="h-4 w-4" />
+            Xuất PDF
+          </DropdownMenuItem>
+        )}
+      </DropdownMenuContent>
+    </DropdownMenu>
+  );
+}
+
+function ImportButton({ onImport }: { onImport: (file: File) => void }) {
+  const fileInputRef = useRef<HTMLInputElement>(null);
+
+  const handleClick = () => {
+    fileInputRef.current?.click();
+  };
+
+  const handleFileChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (file) {
+      onImport(file);
+      // Reset so the same file can be selected again
+      e.target.value = "";
+    }
+  };
+
+  return (
+    <>
+      <input
+        ref={fileInputRef}
+        type="file"
+        className="hidden"
+        onChange={handleFileChange}
+        accept=".xlsx,.xls,.csv"
+      />
+      <Button
+        variant="outline"
+        size="sm"
+        onClick={handleClick}
+        className="gap-1.5 shrink-0"
+      >
+        <Upload className="h-4 w-4" />
+        Nhập file
+      </Button>
+    </>
+  );
 }
 
 export function PageHeader({
@@ -29,6 +150,8 @@ export function PageHeader({
   searchValue,
   onSearchChange,
   actions = [],
+  onExport,
+  onImport,
   children,
   className,
 }: PageHeaderProps) {
@@ -41,17 +164,10 @@ export function PageHeader({
           <h1 className="text-xl font-semibold">{title}</h1>
           {/* Desktop actions */}
           <div className="hidden md:flex items-center gap-2">
+            {onImport && <ImportButton onImport={onImport} />}
+            {onExport && <ExportButton onExport={onExport} />}
             {actions.map((action, i) => (
-              <Button
-                key={i}
-                variant={action.variant || "outline"}
-                size="sm"
-                onClick={action.onClick}
-                className="gap-1.5"
-              >
-                {action.icon}
-                {action.label}
-              </Button>
+              <ActionButton key={i} action={action} />
             ))}
           </div>
         </div>
@@ -75,19 +191,12 @@ export function PageHeader({
         )}
 
         {/* Mobile actions */}
-        {actions.length > 0 && (
+        {(actions.length > 0 || onExport || onImport) && (
           <div className="flex items-center gap-2 md:hidden overflow-x-auto">
+            {onImport && <ImportButton onImport={onImport} />}
+            {onExport && <ExportButton onExport={onExport} />}
             {actions.map((action, i) => (
-              <Button
-                key={i}
-                variant={action.variant || "outline"}
-                size="sm"
-                onClick={action.onClick}
-                className="gap-1.5 shrink-0"
-              >
-                {action.icon}
-                {action.label}
-              </Button>
+              <ActionButton key={i} action={action} />
             ))}
           </div>
         )}

@@ -2,7 +2,7 @@
 
 import { useEffect, useState, useCallback } from "react";
 import { ColumnDef } from "@tanstack/react-table";
-import { Plus } from "lucide-react";
+import { Plus, Pencil, Ban } from "lucide-react";
 import { Badge } from "@/components/ui/badge";
 import { PageHeader } from "@/components/shared/page-header";
 import { DataTable } from "@/components/shared/data-table";
@@ -133,6 +133,10 @@ export default function DoiTacGiaoHangPage() {
           setPage(0);
         }}
         selectable
+        rowActions={(row) => [
+          { label: "Sửa", icon: <Pencil className="h-4 w-4" />, onClick: () => {} },
+          { label: "Vô hiệu hóa", icon: <Ban className="h-4 w-4" />, onClick: () => {}, variant: "destructive", separator: true },
+        ]}
       />
     </div>
   );

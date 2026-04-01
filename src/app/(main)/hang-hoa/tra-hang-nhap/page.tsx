@@ -2,7 +2,7 @@
 
 import { useEffect, useState, useCallback } from "react";
 import { ColumnDef } from "@tanstack/react-table";
-import { Plus } from "lucide-react";
+import { Plus, Eye, Printer } from "lucide-react";
 import { Badge } from "@/components/ui/badge";
 import { PageHeader } from "@/components/shared/page-header";
 import { ListPageLayout } from "@/components/shared/list-page-layout";
@@ -159,6 +159,10 @@ export default function TraHangNhapPage() {
           setPage(0);
         }}
         selectable
+        rowActions={(row) => [
+          { label: "Xem chi tiết", icon: <Eye className="h-4 w-4" />, onClick: () => {} },
+          { label: "In phiếu", icon: <Printer className="h-4 w-4" />, onClick: () => {} },
+        ]}
       />
     </ListPageLayout>
   );
