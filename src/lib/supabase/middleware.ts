@@ -35,7 +35,7 @@ export async function updateSession(request: NextRequest) {
   } = await supabase.auth.getUser();
 
   // Public routes - không cần auth
-  const publicPaths = ["/dang-nhap", "/dang-ky", "/quen-mat-khau", "/dat-lai-mat-khau"];
+  const publicPaths = ["/dang-nhap", "/quen-mat-khau", "/dat-lai-mat-khau"];
   const isPublicPath = publicPaths.some((path) =>
     request.nextUrl.pathname.startsWith(path)
   );
