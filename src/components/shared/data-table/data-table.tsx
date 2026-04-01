@@ -9,8 +9,9 @@ import {
   useReactTable,
   RowSelectionState,
   VisibilityState,
+  Row,
 } from "@tanstack/react-table";
-import { useState, useMemo } from "react";
+import { useState, useMemo, ReactNode, Fragment } from "react";
 import {
   ArrowUpDown,
   ArrowUp,
@@ -44,7 +45,7 @@ import { DataTablePagination } from "./pagination";
 
 export interface RowAction<TData> {
   label: string;
-  icon?: React.ReactNode;
+  icon?: ReactNode;
   onClick: () => void;
   variant?: "default" | "destructive";
   separator?: boolean;
@@ -52,7 +53,7 @@ export interface RowAction<TData> {
 
 export interface BulkAction<TData> {
   label: string;
-  icon?: React.ReactNode;
+  icon?: ReactNode;
   onClick: (selectedRows: TData[]) => void;
   variant?: "default" | "destructive";
 }
@@ -69,10 +70,18 @@ interface DataTableProps<TData, TValue> {
   total?: number;
   selectable?: boolean;
   summaryRow?: Record<string, string | number>;
-  onRowClick?: (row: TData) => void;
+  onRowClick?: (row: TData, index: number) => void;
   rowActions?: (row: TData) => RowAction<TData>[];
   bulkActions?: BulkAction<TData>[];
   columnToggle?: boolean;
+  /** Inline detail panel — render function receives the row data */
+  renderDetail?: (row: TData, onClose: () => void) => ReactNode;
+  /** Currently expanded row index (controlled) */
+  expandedRow?: number | null;
+  /** Callback when expanded row changes */
+  onExpandedRowChange?: (index: number | null) => void;
+  /** Get unique row ID for tracking (defaults to index) */
+  getRowId?: (row: TData) => string;
 }
 
 export function DataTable<TData, TValue>({
@@ -91,10 +100,19 @@ export function DataTable<TData, TValue>({
   rowActions,
   bulkActions,
   columnToggle = false,
+  renderDetail,
+  expandedRow: controlledExpanded,
+  onExpandedRowChange,
+  getRowId,
 }: DataTableProps<TData, TValue>) {
   const [sorting, setSorting] = useState<SortingState>([]);
   const [rowSelection, setRowSelection] = useState<RowSelectionState>({});
   const [columnVisibility, setColumnVisibility] = useState<VisibilityState>({});
+  const [internalExpanded, setInternalExpanded] = useState<number | null>(null);
+
+  const expandedRowIdx =
+    controlledExpanded !== undefined ? controlledExpanded : internalExpanded;
+  const setExpandedRowIdx = onExpandedRowChange || setInternalExpanded;
 
   // Build the full column list with optional select + actions columns
   const allColumns = useMemo(() => {
@@ -147,7 +165,7 @@ export function DataTable<TData, TValue>({
               </DropdownMenuTrigger>
               <DropdownMenuContent align="end" side="bottom" sideOffset={4}>
                 {actions.map((action, idx) => (
-                  <div key={idx}>
+                  <Fragment key={idx}>
                     {action.separator && idx > 0 && <DropdownMenuSeparator />}
                     <DropdownMenuItem
                       variant={action.variant}
@@ -161,7 +179,7 @@ export function DataTable<TData, TValue>({
                       )}
                       {action.label}
                     </DropdownMenuItem>
-                  </div>
+                  </Fragment>
                 ))}
               </DropdownMenuContent>
             </DropdownMenu>
@@ -173,9 +191,10 @@ export function DataTable<TData, TValue>({
     return cols;
   }, [columns, selectable, rowActions]);
 
-  const table = useReactTable({
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  const table = useReactTable<TData>({
     data,
-    columns: allColumns,
+    columns: allColumns as any,
     getCoreRowModel: getCoreRowModel(),
     getSortedRowModel: getSortedRowModel(),
     onSortingChange: setSorting,
@@ -189,6 +208,7 @@ export function DataTable<TData, TValue>({
       columnVisibility,
       pagination: { pageIndex, pageSize },
     },
+    ...(getRowId ? { getRowId: (row) => getRowId(row) } : {}),
   });
 
   // Derive selected rows for bulk actions
@@ -197,7 +217,8 @@ export function DataTable<TData, TValue>({
       .getRowModel()
       .rows.filter((row) => row.getIsSelected())
       .map((row) => row.original);
-  }, [table, rowSelection, data]);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [rowSelection, data]);
 
   const selectedCount = Object.keys(rowSelection).filter(
     (key) => rowSelection[key]
@@ -207,6 +228,15 @@ export function DataTable<TData, TValue>({
   const toggleableColumns = table
     .getAllColumns()
     .filter((col) => col.getCanHide());
+
+  const totalColSpan = allColumns.length;
+
+  const handleRowClick = (row: TData, index: number) => {
+    if (renderDetail) {
+      setExpandedRowIdx(expandedRowIdx === index ? null : index);
+    }
+    onRowClick?.(row, index);
+  };
 
   return (
     <div className="relative flex flex-col h-full">
@@ -224,9 +254,7 @@ export function DataTable<TData, TValue>({
               {toggleableColumns.map((column) => {
                 const headerDef = column.columnDef.header;
                 const label =
-                  typeof headerDef === "string"
-                    ? headerDef
-                    : column.id;
+                  typeof headerDef === "string" ? headerDef : column.id;
                 return (
                   <DropdownMenuCheckboxItem
                     key={column.id}
@@ -293,7 +321,7 @@ export function DataTable<TData, TValue>({
           <TableBody>
             {/* Summary row */}
             {summaryRow && (
-              <TableRow className="bg-muted/30 font-semibold">
+              <TableRow className="bg-muted/30 font-semibold hover:bg-muted/30">
                 {table
                   .getHeaderGroups()[0]
                   ?.headers.map((header) => {
@@ -324,29 +352,64 @@ export function DataTable<TData, TValue>({
             ) : table.getRowModel().rows.length === 0 ? (
               <TableRow>
                 <TableCell
-                  colSpan={allColumns.length}
+                  colSpan={totalColSpan}
                   className="h-32 text-center text-muted-foreground"
                 >
-                  Không có dữ liệu
+                  <div className="flex flex-col items-center gap-2">
+                    <div className="h-16 w-16 rounded-full bg-blue-50 flex items-center justify-center">
+                      <svg
+                        className="h-8 w-8 text-blue-300"
+                        fill="none"
+                        viewBox="0 0 24 24"
+                        stroke="currentColor"
+                        strokeWidth={1.5}
+                      >
+                        <path d="M20 7l-8-4-8 4m16 0l-8 4m8-4v10l-8 4m0-10L4 7m8 4v10M4 7v10l8 4" />
+                      </svg>
+                    </div>
+                    <p className="font-medium">Không tìm thấy kết quả</p>
+                    <p className="text-xs">
+                      Không tìm thấy giao dịch nào phù hợp.
+                    </p>
+                  </div>
                 </TableCell>
               </TableRow>
             ) : (
-              table.getRowModel().rows.map((row) => (
-                <TableRow
-                  key={row.id}
-                  data-state={row.getIsSelected() && "selected"}
-                  className={cn(onRowClick && "cursor-pointer")}
-                  onClick={() => onRowClick?.(row.original)}
-                >
-                  {row.getVisibleCells().map((cell) => (
-                    <TableCell key={cell.id} className="text-sm py-2.5">
-                      {flexRender(
-                        cell.column.columnDef.cell,
-                        cell.getContext()
-                      )}
-                    </TableCell>
-                  ))}
-                </TableRow>
+              table.getRowModel().rows.map((row, rowIndex) => (
+                <Fragment key={row.id}>
+                  <TableRow
+                    data-state={row.getIsSelected() && "selected"}
+                    className={cn(
+                      (onRowClick || renderDetail) && "cursor-pointer",
+                      expandedRowIdx === rowIndex &&
+                        "bg-blue-50/60 border-l-2 border-l-[hsl(217,91%,40%)]"
+                    )}
+                    onClick={() => handleRowClick(row.original, rowIndex)}
+                  >
+                    {row.getVisibleCells().map((cell) => (
+                      <TableCell key={cell.id} className="text-sm py-2.5">
+                        {flexRender(
+                          cell.column.columnDef.cell,
+                          cell.getContext()
+                        )}
+                      </TableCell>
+                    ))}
+                  </TableRow>
+
+                  {/* Inline detail panel */}
+                  {renderDetail && expandedRowIdx === rowIndex && (
+                    <TableRow className="hover:bg-transparent">
+                      <TableCell
+                        colSpan={totalColSpan}
+                        className="p-0 border-l-2 border-l-[hsl(217,91%,40%)]"
+                      >
+                        {renderDetail(row.original, () =>
+                          setExpandedRowIdx(null)
+                        )}
+                      </TableCell>
+                    </TableRow>
+                  )}
+                </Fragment>
               ))
             )}
           </TableBody>
@@ -365,109 +428,134 @@ export function DataTable<TData, TValue>({
           ))
         ) : data.length === 0 ? (
           <div className="text-center text-muted-foreground py-12">
-            Không có dữ liệu
+            <div className="flex flex-col items-center gap-2">
+              <div className="h-16 w-16 rounded-full bg-blue-50 flex items-center justify-center">
+                <svg
+                  className="h-8 w-8 text-blue-300"
+                  fill="none"
+                  viewBox="0 0 24 24"
+                  stroke="currentColor"
+                  strokeWidth={1.5}
+                >
+                  <path d="M20 7l-8-4-8 4m16 0l-8 4m8-4v10l-8 4m0-10L4 7m8 4v10M4 7v10l8 4" />
+                </svg>
+              </div>
+              <p className="font-medium">Không tìm thấy kết quả</p>
+            </div>
           </div>
         ) : (
-          table.getRowModel().rows.map((row) => (
-            <div
-              key={row.id}
-              className={cn(
-                "bg-card rounded-lg border p-3",
-                onRowClick && "cursor-pointer active:bg-muted/50"
-              )}
-              onClick={() => onRowClick?.(row.original)}
-            >
-              {/* Mobile: selection checkbox + action menu in top row */}
-              {(selectable || rowActions) && (
-                <div className="flex items-center justify-between mb-2">
-                  {selectable ? (
-                    <Checkbox
-                      checked={row.getIsSelected()}
-                      onCheckedChange={(value) =>
-                        row.toggleSelected(!!value)
-                      }
-                      onClick={(e) => e.stopPropagation()}
-                    />
-                  ) : (
-                    <div />
-                  )}
-                  {rowActions && (
-                    <DropdownMenu>
-                      <DropdownMenuTrigger
-                        className="inline-flex items-center justify-center rounded-md p-1.5 hover:bg-muted focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
+          table.getRowModel().rows.map((row, rowIndex) => (
+            <Fragment key={row.id}>
+              <div
+                className={cn(
+                  "bg-card rounded-lg border p-3",
+                  (onRowClick || renderDetail) &&
+                    "cursor-pointer active:bg-muted/50",
+                  expandedRowIdx === rowIndex &&
+                    "ring-2 ring-[hsl(217,91%,40%)] bg-blue-50/30"
+                )}
+                onClick={() => handleRowClick(row.original, rowIndex)}
+              >
+                {/* Mobile: selection checkbox + action menu in top row */}
+                {(selectable || rowActions) && (
+                  <div className="flex items-center justify-between mb-2">
+                    {selectable ? (
+                      <Checkbox
+                        checked={row.getIsSelected()}
+                        onCheckedChange={(value) =>
+                          row.toggleSelected(!!value)
+                        }
                         onClick={(e) => e.stopPropagation()}
-                      >
-                        <MoreHorizontal className="h-4 w-4 text-muted-foreground" />
-                      </DropdownMenuTrigger>
-                      <DropdownMenuContent
-                        align="end"
-                        side="bottom"
-                        sideOffset={4}
-                      >
-                        {rowActions(row.original).map((action, idx) => (
-                          <div key={idx}>
-                            {action.separator && idx > 0 && (
-                              <DropdownMenuSeparator />
-                            )}
-                            <DropdownMenuItem
-                              variant={action.variant}
-                              onClick={(e) => {
-                                e.stopPropagation();
-                                action.onClick();
-                              }}
-                            >
-                              {action.icon && (
-                                <span className="mr-1.5">
-                                  {action.icon}
-                                </span>
+                      />
+                    ) : (
+                      <div />
+                    )}
+                    {rowActions && (
+                      <DropdownMenu>
+                        <DropdownMenuTrigger
+                          className="inline-flex items-center justify-center rounded-md p-1.5 hover:bg-muted focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
+                          onClick={(e) => e.stopPropagation()}
+                        >
+                          <MoreHorizontal className="h-4 w-4 text-muted-foreground" />
+                        </DropdownMenuTrigger>
+                        <DropdownMenuContent
+                          align="end"
+                          side="bottom"
+                          sideOffset={4}
+                        >
+                          {rowActions(row.original).map((action, idx) => (
+                            <Fragment key={idx}>
+                              {action.separator && idx > 0 && (
+                                <DropdownMenuSeparator />
                               )}
-                              {action.label}
-                            </DropdownMenuItem>
-                          </div>
-                        ))}
-                      </DropdownMenuContent>
-                    </DropdownMenu>
-                  )}
+                              <DropdownMenuItem
+                                variant={action.variant}
+                                onClick={(e) => {
+                                  e.stopPropagation();
+                                  action.onClick();
+                                }}
+                              >
+                                {action.icon && (
+                                  <span className="mr-1.5">
+                                    {action.icon}
+                                  </span>
+                                )}
+                                {action.label}
+                              </DropdownMenuItem>
+                            </Fragment>
+                          ))}
+                        </DropdownMenuContent>
+                      </DropdownMenu>
+                    )}
+                  </div>
+                )}
+
+                {/* Mobile: data fields */}
+                <div className="space-y-1">
+                  {row.getVisibleCells().map((cell) => {
+                    if (
+                      cell.column.id === "select" ||
+                      cell.column.id === "actions" ||
+                      cell.column.id === "star"
+                    )
+                      return null;
+                    const header = cell.column.columnDef.header;
+                    const headerText =
+                      typeof header === "string" ? header : "";
+                    return (
+                      <div
+                        key={cell.id}
+                        className="flex items-center justify-between text-sm"
+                      >
+                        {headerText && (
+                          <span className="text-muted-foreground text-xs">
+                            {headerText}
+                          </span>
+                        )}
+                        <span className="font-medium">
+                          {flexRender(
+                            cell.column.columnDef.cell,
+                            cell.getContext()
+                          )}
+                        </span>
+                      </div>
+                    );
+                  })}
+                </div>
+              </div>
+
+              {/* Mobile inline detail */}
+              {renderDetail && expandedRowIdx === rowIndex && (
+                <div className="bg-white border rounded-lg -mt-1 overflow-hidden">
+                  {renderDetail(row.original, () => setExpandedRowIdx(null))}
                 </div>
               )}
-
-              {/* Mobile: data fields */}
-              <div className="space-y-1">
-                {row.getVisibleCells().map((cell) => {
-                  if (
-                    cell.column.id === "select" ||
-                    cell.column.id === "actions"
-                  )
-                    return null;
-                  const header = cell.column.columnDef.header;
-                  const headerText =
-                    typeof header === "string" ? header : "";
-                  return (
-                    <div
-                      key={cell.id}
-                      className="flex items-center justify-between text-sm"
-                    >
-                      {headerText && (
-                        <span className="text-muted-foreground text-xs">
-                          {headerText}
-                        </span>
-                      )}
-                      <span className="font-medium">
-                        {flexRender(
-                          cell.column.columnDef.cell,
-                          cell.getContext()
-                        )}
-                      </span>
-                    </div>
-                  );
-                })}
-              </div>
-            </div>
+            </Fragment>
           ))
         )}
       </div>
 
-      {/* Pagination */}
+      {/* Pagination — KiotViet style: "Hiển thị X dòng" */}
       {total > 0 && (
         <DataTablePagination
           pageIndex={pageIndex}
@@ -480,56 +568,59 @@ export function DataTable<TData, TValue>({
       )}
 
       {/* Bulk action bar */}
-      {selectable && selectedCount > 0 && bulkActions && bulkActions.length > 0 && (
-        <div
-          className={cn(
-            "fixed bottom-0 left-0 right-0 z-50 md:left-auto md:right-4 md:bottom-4 md:max-w-xl md:rounded-lg",
-            "bg-foreground text-background shadow-2xl",
-            "transform transition-all duration-300 ease-out",
-            "animate-in slide-in-from-bottom-4 fade-in-0"
-          )}
-        >
-          <div className="flex items-center gap-2 px-4 py-3 flex-wrap">
-            <span className="text-sm font-medium whitespace-nowrap">
-              Đã chọn {selectedCount} mục
-            </span>
+      {selectable &&
+        selectedCount > 0 &&
+        bulkActions &&
+        bulkActions.length > 0 && (
+          <div
+            className={cn(
+              "fixed bottom-0 left-0 right-0 z-50 md:left-auto md:right-4 md:bottom-4 md:max-w-xl md:rounded-lg",
+              "bg-foreground text-background shadow-2xl",
+              "transform transition-all duration-300 ease-out",
+              "animate-in slide-in-from-bottom-4 fade-in-0"
+            )}
+          >
+            <div className="flex items-center gap-2 px-4 py-3 flex-wrap">
+              <span className="text-sm font-medium whitespace-nowrap">
+                Đã chọn {selectedCount} mục
+              </span>
 
-            <div className="h-4 w-px bg-background/20 mx-1 hidden sm:block" />
+              <div className="h-4 w-px bg-background/20 mx-1 hidden sm:block" />
 
-            <div className="flex items-center gap-1.5 flex-wrap">
-              {bulkActions.map((action, idx) => (
-                <button
-                  key={idx}
-                  type="button"
-                  className={cn(
-                    "inline-flex items-center gap-1.5 rounded-md px-3 py-1.5 text-sm font-medium transition-colors",
-                    action.variant === "destructive"
-                      ? "bg-destructive text-destructive-foreground hover:bg-destructive/90"
-                      : "bg-background/15 hover:bg-background/25 text-background"
-                  )}
-                  onClick={() => action.onClick(selectedRows)}
-                >
-                  {action.icon && (
-                    <span className="[&_svg]:h-4 [&_svg]:w-4">
-                      {action.icon}
-                    </span>
-                  )}
-                  {action.label}
-                </button>
-              ))}
+              <div className="flex items-center gap-1.5 flex-wrap">
+                {bulkActions.map((action, idx) => (
+                  <button
+                    key={idx}
+                    type="button"
+                    className={cn(
+                      "inline-flex items-center gap-1.5 rounded-md px-3 py-1.5 text-sm font-medium transition-colors",
+                      action.variant === "destructive"
+                        ? "bg-destructive text-destructive-foreground hover:bg-destructive/90"
+                        : "bg-background/15 hover:bg-background/25 text-background"
+                    )}
+                    onClick={() => action.onClick(selectedRows)}
+                  >
+                    {action.icon && (
+                      <span className="[&_svg]:h-4 [&_svg]:w-4">
+                        {action.icon}
+                      </span>
+                    )}
+                    {action.label}
+                  </button>
+                ))}
+              </div>
+
+              <button
+                type="button"
+                className="ml-auto inline-flex items-center gap-1 rounded-md px-2 py-1.5 text-sm hover:bg-background/15 transition-colors text-background/70 hover:text-background"
+                onClick={() => table.toggleAllRowsSelected(false)}
+              >
+                <X className="h-4 w-4" />
+                <span className="hidden sm:inline">Bỏ chọn</span>
+              </button>
             </div>
-
-            <button
-              type="button"
-              className="ml-auto inline-flex items-center gap-1 rounded-md px-2 py-1.5 text-sm hover:bg-background/15 transition-colors text-background/70 hover:text-background"
-              onClick={() => table.toggleAllRowsSelected(false)}
-            >
-              <X className="h-4 w-4" />
-              <span className="hidden sm:inline">Bỏ chọn</span>
-            </button>
           </div>
-        </div>
-      )}
+        )}
     </div>
   );
 }

@@ -1,81 +1,219 @@
 "use client";
 
 import { useEffect, useState, useCallback } from "react";
-import { useRouter } from "next/navigation";
 import { ColumnDef } from "@tanstack/react-table";
-import { Plus, Upload, Download, Eye, Pencil, PackagePlus, Trash2 } from "lucide-react";
+import { Plus, Upload, Download, Pencil, Trash2 } from "lucide-react";
 import { PageHeader } from "@/components/shared/page-header";
 import { ListPageLayout } from "@/components/shared/list-page-layout";
 import { DataTable } from "@/components/shared/data-table";
 import {
   FilterSidebar,
   FilterGroup,
+  CheckboxFilter,
   SelectFilter,
-  DateRangeFilter,
+  DatePresetFilter,
+  RangeFilter,
+  type DatePresetValue,
 } from "@/components/shared/filter-sidebar";
+import {
+  InlineDetailPanel,
+  DetailTabs,
+  DetailHeader,
+  DetailInfoGrid,
+} from "@/components/shared/inline-detail-panel";
+import type { DetailTab } from "@/components/shared/inline-detail-panel";
 import { CreateSupplierDialog } from "@/components/shared/dialogs";
 import { formatCurrency, formatDate } from "@/lib/format";
+import { exportToExcel, exportToCsv } from "@/lib/utils/export";
 import { getSuppliers } from "@/lib/services";
 import type { Supplier } from "@/lib/types";
 
-const columns: ColumnDef<Supplier, unknown>[] = [
-  {
-    accessorKey: "code",
-    header: "Mã NCC",
-    size: 110,
-    cell: ({ row }) => (
-      <span className="font-medium text-primary">{row.original.code}</span>
-    ),
-  },
-  {
-    accessorKey: "name",
-    header: "Tên NCC",
-    size: 280,
-  },
-  {
-    accessorKey: "phone",
-    header: "Điện thoại",
-    size: 130,
-  },
-  {
-    accessorKey: "currentDebt",
-    header: "Nợ hiện tại",
-    cell: ({ row }) => {
-      const debt = row.original.currentDebt;
-      return (
-        <span className={debt > 0 ? "text-destructive" : ""}>
-          {formatCurrency(debt)}
-        </span>
-      );
+/* ------------------------------------------------------------------ */
+/*  Inline detail                                                      */
+/* ------------------------------------------------------------------ */
+function SupplierDetail({
+  supplier,
+  onClose,
+}: {
+  supplier: Supplier;
+  onClose: () => void;
+}) {
+  const tabs: DetailTab[] = [
+    {
+      id: "info",
+      label: "Thông tin",
+      content: (
+        <DetailInfoGrid
+          columns={3}
+          fields={[
+            { label: "Mã NCC", value: supplier.code },
+            { label: "Tên NCC", value: supplier.name },
+            { label: "Điện thoại", value: supplier.phone },
+            { label: "Email", value: supplier.email || "" },
+            { label: "Địa chỉ", value: supplier.address || "", fullWidth: true },
+            {
+              label: "Nợ cần trả hiện tại",
+              value: (
+                <span
+                  className={
+                    supplier.currentDebt > 0
+                      ? "text-destructive"
+                      : "text-muted-foreground"
+                  }
+                >
+                  {formatCurrency(supplier.currentDebt)}
+                </span>
+              ),
+            },
+            {
+              label: "Tổng mua",
+              value: formatCurrency(supplier.totalPurchases),
+            },
+            { label: "Ngày tạo", value: formatDate(supplier.createdAt) },
+          ]}
+        />
+      ),
     },
-  },
-  {
-    accessorKey: "totalPurchases",
-    header: "Tổng mua hàng",
-    cell: ({ row }) => formatCurrency(row.original.totalPurchases),
-  },
-  {
-    accessorKey: "createdAt",
-    header: "Ngày tạo",
-    cell: ({ row }) => formatDate(row.original.createdAt),
-  },
-];
+    {
+      id: "purchase_history",
+      label: "Lịch sử mua hàng",
+      content: (
+        <div className="text-sm text-muted-foreground py-4 text-center">
+          Chưa có lịch sử mua hàng
+        </div>
+      ),
+    },
+    {
+      id: "debt",
+      label: "Công nợ",
+      content: (
+        <DetailInfoGrid
+          columns={2}
+          fields={[
+            {
+              label: "Nợ cần trả hiện tại",
+              value: (
+                <span
+                  className={
+                    supplier.currentDebt > 0
+                      ? "text-destructive"
+                      : "text-muted-foreground"
+                  }
+                >
+                  {formatCurrency(supplier.currentDebt)}
+                </span>
+              ),
+            },
+            {
+              label: "Tổng mua",
+              value: formatCurrency(supplier.totalPurchases),
+            },
+          ]}
+        />
+      ),
+    },
+  ];
 
+  return (
+    <InlineDetailPanel open onClose={onClose}>
+      <div className="p-4 space-y-4">
+        <DetailHeader
+          title={supplier.name}
+          code={supplier.code}
+          subtitle={supplier.phone}
+          meta={
+            <span>
+              Ngày tạo: {formatDate(supplier.createdAt)}
+            </span>
+          }
+        />
+        <DetailTabs tabs={tabs} defaultTab="info" />
+      </div>
+    </InlineDetailPanel>
+  );
+}
+
+/* ------------------------------------------------------------------ */
+/*  Page                                                               */
+/* ------------------------------------------------------------------ */
 export default function NhaCungCapPage() {
-  const router = useRouter();
   const [data, setData] = useState<Supplier[]>([]);
   const [total, setTotal] = useState(0);
   const [loading, setLoading] = useState(true);
   const [search, setSearch] = useState("");
   const [page, setPage] = useState(0);
-  const [pageSize, setPageSize] = useState(20);
+  const [pageSize, setPageSize] = useState(15);
 
+  // Inline detail
+  const [expandedRow, setExpandedRow] = useState<number | null>(null);
+
+  // Dialog
   const [createOpen, setCreateOpen] = useState(false);
 
   // Filters
-  const [debtFilter, setDebtFilter] = useState("all");
-  const [datePreset, setDatePreset] = useState<"today" | "this_week" | "this_month" | "all" | "custom">("all");
+  const [supplierGroupFilter, setSupplierGroupFilter] = useState("all");
+  const [totalBuyFrom, setTotalBuyFrom] = useState("");
+  const [totalBuyTo, setTotalBuyTo] = useState("");
+  const [datePreset, setDatePreset] = useState<DatePresetValue>("all");
+  const [dateFrom, setDateFrom] = useState("");
+  const [dateTo, setDateTo] = useState("");
+  const [debtFrom, setDebtFrom] = useState("");
+  const [debtTo, setDebtTo] = useState("");
+  const [selectedStatuses, setSelectedStatuses] = useState<string[]>([
+    "active",
+    "inactive",
+  ]);
 
+  /* ---- Columns ---- */
+  const columns: ColumnDef<Supplier, unknown>[] = [
+    {
+      accessorKey: "code",
+      header: "Mã NCC",
+      size: 110,
+      cell: ({ row }) => (
+        <span className="font-medium text-primary">{row.original.code}</span>
+      ),
+    },
+    {
+      accessorKey: "name",
+      header: "Tên NCC",
+      size: 280,
+    },
+    {
+      accessorKey: "phone",
+      header: "Điện thoại",
+      size: 130,
+    },
+    {
+      accessorKey: "email",
+      header: "Email",
+      size: 200,
+      cell: ({ row }) => row.original.email || "—",
+    },
+    {
+      accessorKey: "currentDebt",
+      header: "Nợ cần trả hiện tại",
+      cell: ({ row }) => {
+        const debt = row.original.currentDebt;
+        return (
+          <span
+            className={
+              debt > 0 ? "text-destructive" : "text-muted-foreground"
+            }
+          >
+            {formatCurrency(debt)}
+          </span>
+        );
+      },
+    },
+    {
+      accessorKey: "totalPurchases",
+      header: "Tổng mua",
+      cell: ({ row }) => formatCurrency(row.original.totalPurchases),
+    },
+  ];
+
+  /* ---- Fetch data ---- */
   const fetchData = useCallback(async () => {
     setLoading(true);
     const result = await getSuppliers({
@@ -83,13 +221,14 @@ export default function NhaCungCapPage() {
       pageSize,
       search,
       filters: {
-        ...(debtFilter !== "all" && { debt: debtFilter }),
+        ...(supplierGroupFilter !== "all" && { group: supplierGroupFilter }),
+        ...(selectedStatuses.length > 0 && { status: selectedStatuses }),
       },
     });
     setData(result.data);
     setTotal(result.total);
     setLoading(false);
-  }, [page, pageSize, search, debtFilter]);
+  }, [page, pageSize, search, supplierGroupFilter, selectedStatuses]);
 
   useEffect(() => {
     fetchData();
@@ -97,82 +236,175 @@ export default function NhaCungCapPage() {
 
   useEffect(() => {
     setPage(0);
-  }, [search, debtFilter]);
+    setExpandedRow(null);
+  }, [search, supplierGroupFilter, selectedStatuses, datePreset, totalBuyFrom, totalBuyTo, debtFrom, debtTo]);
 
+  /* ---- Summary ---- */
   const totalDebt = data.reduce((sum, s) => sum + s.currentDebt, 0);
   const totalPurchases = data.reduce((sum, s) => sum + s.totalPurchases, 0);
 
+  /* ---- Export ---- */
+  const handleExport = (type: "excel" | "csv") => {
+    const exportColumns = [
+      { header: "Mã NCC", key: "code", width: 12 },
+      { header: "Tên NCC", key: "name", width: 25 },
+      { header: "Điện thoại", key: "phone", width: 15 },
+      { header: "Email", key: "email", width: 25 },
+      { header: "Nợ cần trả hiện tại", key: "currentDebt", width: 18, format: (v: number) => v },
+      { header: "Tổng mua", key: "totalPurchases", width: 15, format: (v: number) => v },
+    ];
+    if (type === "excel") exportToExcel(data, exportColumns, "danh-sach-nha-cung-cap");
+    else exportToCsv(data, exportColumns, "danh-sach-nha-cung-cap");
+  };
+
+  /* ---- Inline detail renderer ---- */
+  const renderDetail = (supplier: Supplier, onClose: () => void) => (
+    <SupplierDetail supplier={supplier} onClose={onClose} />
+  );
+
+  /* ---- Render ---- */
   return (
     <>
-    <ListPageLayout
-      sidebar={
-        <FilterSidebar>
-          <FilterGroup label="Công nợ">
-            <SelectFilter
-              options={[
-                { label: "Đang nợ", value: "has_debt" },
-                { label: "Không nợ", value: "no_debt" },
-              ]}
-              value={debtFilter}
-              onChange={setDebtFilter}
-              placeholder="Tất cả"
-            />
-          </FilterGroup>
+      <ListPageLayout
+        sidebar={
+          <FilterSidebar>
+            <FilterGroup label="Nhóm NCC">
+              <SelectFilter
+                options={[
+                  { label: "Nhóm mặc định", value: "default" },
+                ]}
+                value={supplierGroupFilter}
+                onChange={setSupplierGroupFilter}
+                placeholder="Tất cả các nhóm"
+              />
+            </FilterGroup>
 
-          <FilterGroup label="Thời gian tạo">
-            <DateRangeFilter
-              preset={datePreset}
-              onPresetChange={setDatePreset}
-            />
-          </FilterGroup>
-        </FilterSidebar>
-      }
-    >
-      <PageHeader
-        title="Nhà cung cấp"
-        searchPlaceholder="Theo mã, tên, SĐT NCC"
-        searchValue={search}
-        onSearchChange={setSearch}
-        actions={[
-          { label: "Tạo mới", icon: <Plus className="h-4 w-4" />, variant: "default", onClick: () => setCreateOpen(true) },
-          { label: "Import file", icon: <Upload className="h-4 w-4" /> },
-          { label: "Xuất file", icon: <Download className="h-4 w-4" /> },
-        ]}
+            <FilterGroup label="Tổng mua">
+              <RangeFilter
+                fromValue={totalBuyFrom}
+                toValue={totalBuyTo}
+                onFromChange={setTotalBuyFrom}
+                onToChange={setTotalBuyTo}
+                fromPlaceholder="Giá trị"
+                toPlaceholder="Giá trị"
+              />
+            </FilterGroup>
+
+            <FilterGroup label="Thời gian">
+              <DatePresetFilter
+                value={datePreset}
+                onChange={setDatePreset}
+                from={dateFrom}
+                to={dateTo}
+                onFromChange={setDateFrom}
+                onToChange={setDateTo}
+                presets={[
+                  { label: "Tất cả", value: "all" },
+                  { label: "Hôm nay", value: "today" },
+                  { label: "Hôm qua", value: "yesterday" },
+                  { label: "Tuần này", value: "this_week" },
+                  { label: "Tháng này", value: "this_month" },
+                  { label: "Tháng trước", value: "last_month" },
+                  { label: "Tùy chỉnh", value: "custom" },
+                ]}
+              />
+            </FilterGroup>
+
+            <FilterGroup label="Nợ hiện tại">
+              <RangeFilter
+                fromValue={debtFrom}
+                toValue={debtTo}
+                onFromChange={setDebtFrom}
+                onToChange={setDebtTo}
+                fromPlaceholder="Nhập giá trị"
+                toPlaceholder="Nhập giá trị"
+              />
+            </FilterGroup>
+
+            <FilterGroup label="Trạng thái">
+              <CheckboxFilter
+                options={[
+                  { label: "Đang giao dịch", value: "active" },
+                  { label: "Ngừng giao dịch", value: "inactive" },
+                ]}
+                selected={selectedStatuses}
+                onChange={setSelectedStatuses}
+              />
+            </FilterGroup>
+          </FilterSidebar>
+        }
+      >
+        <PageHeader
+          title="Nhà cung cấp"
+          searchPlaceholder="Theo mã, tên, SĐT NCC"
+          searchValue={search}
+          onSearchChange={setSearch}
+          onExport={{
+            excel: () => handleExport("excel"),
+            csv: () => handleExport("csv"),
+          }}
+          actions={[
+            {
+              label: "Nhà cung cấp",
+              icon: <Plus className="h-4 w-4" />,
+              variant: "default",
+              onClick: () => setCreateOpen(true),
+            },
+            {
+              label: "Import file",
+              icon: <Upload className="h-4 w-4" />,
+            },
+            {
+              label: "Xuất file",
+              icon: <Download className="h-4 w-4" />,
+            },
+          ]}
+        />
+
+        <DataTable
+          columns={columns}
+          data={data}
+          loading={loading}
+          total={total}
+          pageIndex={page}
+          pageSize={pageSize}
+          pageCount={Math.ceil(total / pageSize)}
+          onPageChange={setPage}
+          onPageSizeChange={(size) => {
+            setPageSize(size);
+            setPage(0);
+          }}
+          selectable
+          summaryRow={{
+            currentDebt: formatCurrency(totalDebt),
+            totalPurchases: formatCurrency(totalPurchases),
+          }}
+          expandedRow={expandedRow}
+          onExpandedRowChange={setExpandedRow}
+          renderDetail={renderDetail}
+          getRowId={(row) => row.id}
+          rowActions={(row) => [
+            {
+              label: "Sửa",
+              icon: <Pencil className="h-4 w-4" />,
+              onClick: () => {},
+            },
+            {
+              label: "Xóa",
+              icon: <Trash2 className="h-4 w-4" />,
+              onClick: () => {},
+              variant: "destructive",
+              separator: true,
+            },
+          ]}
+        />
+      </ListPageLayout>
+
+      <CreateSupplierDialog
+        open={createOpen}
+        onOpenChange={setCreateOpen}
+        onSuccess={fetchData}
       />
-
-      <DataTable
-        columns={columns}
-        data={data}
-        loading={loading}
-        total={total}
-        pageIndex={page}
-        pageSize={pageSize}
-        pageCount={Math.ceil(total / pageSize)}
-        onPageChange={setPage}
-        onPageSizeChange={(size) => {
-          setPageSize(size);
-          setPage(0);
-        }}
-        selectable
-        summaryRow={{
-          currentDebt: formatCurrency(totalDebt),
-          totalPurchases: formatCurrency(totalPurchases),
-        }}
-        onRowClick={(row) => router.push(`/hang-hoa/nha-cung-cap/${row.id}`)}
-        rowActions={(row) => [
-          { label: "Xem chi tiết", icon: <Eye className="h-4 w-4" />, onClick: () => router.push(`/hang-hoa/nha-cung-cap/${row.id}`) },
-          { label: "Sửa", icon: <Pencil className="h-4 w-4" />, onClick: () => {} },
-          { label: "Xem nhập hàng", icon: <PackagePlus className="h-4 w-4" />, onClick: () => {} },
-          { label: "Xóa", icon: <Trash2 className="h-4 w-4" />, onClick: () => {}, variant: "destructive", separator: true },
-        ]}
-      />
-    </ListPageLayout>
-
-    <CreateSupplierDialog
-      open={createOpen}
-      onOpenChange={setCreateOpen}
-      onSuccess={fetchData}
-    />
     </>
   );
 }

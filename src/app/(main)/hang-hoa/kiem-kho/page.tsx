@@ -2,116 +2,287 @@
 
 import { useEffect, useState, useCallback } from "react";
 import { ColumnDef } from "@tanstack/react-table";
-import { Plus, Download, Eye, PlayCircle, Trash2 } from "lucide-react";
-import { Badge } from "@/components/ui/badge";
+import { Plus, Download, Printer, XCircle } from "lucide-react";
 import { PageHeader } from "@/components/shared/page-header";
 import { ListPageLayout } from "@/components/shared/list-page-layout";
-import { DataTable } from "@/components/shared/data-table";
+import { DataTable, StarCell } from "@/components/shared/data-table";
 import {
   FilterSidebar,
   FilterGroup,
-  SelectFilter,
-  DateRangeFilter,
+  CheckboxFilter,
+  DatePresetFilter,
+  PersonFilter,
+  type DatePresetValue,
 } from "@/components/shared/filter-sidebar";
+import {
+  InlineDetailPanel,
+  DetailTabs,
+  DetailHeader,
+  DetailInfoGrid,
+} from "@/components/shared/inline-detail-panel";
+import type { DetailTab } from "@/components/shared/inline-detail-panel";
 import { formatCurrency, formatDate } from "@/lib/format";
+import { exportToExcel, exportToCsv } from "@/lib/utils/export";
 import { getInventoryChecks, getInventoryCheckStatuses } from "@/lib/services";
 import type { InventoryCheck } from "@/lib/types";
 
-// --------------- Status config ---------------
-
+/* ------------------------------------------------------------------ */
+/*  Status config                                                      */
+/* ------------------------------------------------------------------ */
 const statusMap: Record<
   InventoryCheck["status"],
-  { label: string; variant: "default" | "destructive" | "secondary" }
+  { label: string; variant: "secondary" | "default" | "destructive" }
 > = {
-  balanced: { label: "Đã cân bằng", variant: "default" },
-  unbalanced: { label: "Lệch", variant: "destructive" },
-  processing: { label: "Đang xử lý", variant: "secondary" },
+  processing: { label: "Phiếu tạm", variant: "secondary" },
+  balanced: { label: "Đã cân bằng kho", variant: "default" },
+  unbalanced: { label: "Đã hủy", variant: "destructive" },
 };
 
-const statusOptions = getInventoryCheckStatuses();
+/* ------------------------------------------------------------------ */
+/*  Starred set                                                        */
+/* ------------------------------------------------------------------ */
+function useStarredSet() {
+  const [starred, setStarred] = useState<Set<string>>(new Set());
+  const toggle = (id: string) =>
+    setStarred((prev) => {
+      const next = new Set(prev);
+      if (next.has(id)) next.delete(id);
+      else next.add(id);
+      return next;
+    });
+  return { starred, toggle };
+}
 
-// --------------- Column definitions ---------------
+/* ------------------------------------------------------------------ */
+/*  Inline detail                                                      */
+/* ------------------------------------------------------------------ */
+function InventoryCheckDetail({
+  item,
+  onClose,
+}: {
+  item: InventoryCheck;
+  onClose: () => void;
+}) {
+  const status = statusMap[item.status];
 
-const columns: ColumnDef<InventoryCheck, unknown>[] = [
-  {
-    accessorKey: "code",
-    header: "Mã phiếu",
-    size: 130,
-    cell: ({ row }) => (
-      <span className="font-medium text-primary">{row.original.code}</span>
-    ),
-  },
-  {
-    accessorKey: "date",
-    header: "Thời gian",
-    size: 150,
-    cell: ({ row }) => formatDate(row.original.date),
-  },
-  {
-    accessorKey: "status",
-    header: "Trạng thái",
-    size: 130,
-    cell: ({ row }) => {
-      const { label, variant } = statusMap[row.original.status];
-      return <Badge variant={variant}>{label}</Badge>;
+  const tabs: DetailTab[] = [
+    {
+      id: "info",
+      label: "Thong tin",
+      content: (
+        <div className="space-y-4">
+          <DetailHeader
+            title={`Phieu kiem kho ${item.code}`}
+            code={item.code}
+            status={{
+              label: status.label,
+              variant: status.variant,
+              className:
+                status.variant === "default"
+                  ? "bg-blue-100 text-blue-700 border-blue-200"
+                  : undefined,
+            }}
+            subtitle="Chi nhanh trung tam"
+            meta={
+              <div className="flex items-center gap-4 flex-wrap text-xs">
+                <span>
+                  Nguoi tao: <strong>{item.createdBy}</strong>
+                </span>
+                <span>
+                  Thoi gian: <strong>{formatDate(item.date)}</strong>
+                </span>
+              </div>
+            }
+          />
+
+          <DetailInfoGrid
+            fields={[
+              { label: "Ma kiem kho", value: item.code },
+              { label: "Thoi gian", value: formatDate(item.date) },
+              { label: "Trang thai", value: status.label },
+              { label: "Nguoi tao", value: item.createdBy },
+              {
+                label: "Tong san pham",
+                value: String(item.totalProducts),
+              },
+              {
+                label: "SL lech tang",
+                value: (
+                  <span className="text-green-600">
+                    {item.increaseQty}
+                  </span>
+                ),
+              },
+              {
+                label: "SL lech giam",
+                value: (
+                  <span className="text-red-600">{item.decreaseQty}</span>
+                ),
+              },
+              {
+                label: "GT tang",
+                value: (
+                  <span className="text-green-600">
+                    {formatCurrency(item.increaseAmount)}
+                  </span>
+                ),
+              },
+              {
+                label: "GT giam",
+                value: (
+                  <span className="text-red-600">
+                    {formatCurrency(item.decreaseAmount)}
+                  </span>
+                ),
+              },
+              {
+                label: "Tong chenh lech",
+                value: formatCurrency(
+                  item.increaseAmount - item.decreaseAmount
+                ),
+              },
+              ...(item.note
+                ? [{ label: "Ghi chu", value: item.note, fullWidth: true }]
+                : []),
+            ]}
+          />
+        </div>
+      ),
     },
-  },
-  {
-    accessorKey: "totalProducts",
-    header: "Tổng SP",
-    size: 90,
-  },
-  {
-    accessorKey: "increaseQty",
-    header: "SL tăng",
-    size: 90,
-    cell: ({ row }) => (
-      <span className="text-green-600">{row.original.increaseQty}</span>
-    ),
-  },
-  {
-    accessorKey: "decreaseQty",
-    header: "SL giảm",
-    size: 90,
-    cell: ({ row }) => (
-      <span className="text-red-600">{row.original.decreaseQty}</span>
-    ),
-  },
-  {
-    accessorKey: "increaseAmount",
-    header: "GT tăng",
-    size: 120,
-    cell: ({ row }) => formatCurrency(row.original.increaseAmount),
-  },
-  {
-    accessorKey: "decreaseAmount",
-    header: "GT giảm",
-    size: 120,
-    cell: ({ row }) => formatCurrency(row.original.decreaseAmount),
-  },
-  {
-    accessorKey: "createdBy",
-    header: "Người tạo",
-    size: 150,
-  },
-];
+    {
+      id: "history",
+      label: "Lich su",
+      content: (
+        <div className="text-sm text-muted-foreground py-4 text-center">
+          Chua co lich su
+        </div>
+      ),
+    },
+  ];
 
-// --------------- Page component ---------------
+  return (
+    <InlineDetailPanel open onClose={onClose}>
+      <div className="p-4 space-y-4">
+        <DetailTabs tabs={tabs} defaultTab="info" />
+      </div>
+    </InlineDetailPanel>
+  );
+}
 
+/* ------------------------------------------------------------------ */
+/*  Page                                                               */
+/* ------------------------------------------------------------------ */
 export default function KiemKhoPage() {
   const [data, setData] = useState<InventoryCheck[]>([]);
   const [total, setTotal] = useState(0);
   const [loading, setLoading] = useState(true);
   const [search, setSearch] = useState("");
   const [page, setPage] = useState(0);
-  const [pageSize, setPageSize] = useState(20);
+  const [pageSize, setPageSize] = useState(15);
+
+  // Inline detail
+  const [expandedRow, setExpandedRow] = useState<number | null>(null);
+
+  // Stars
+  const { starred, toggle: toggleStar } = useStarredSet();
 
   // Filters
-  const [selectedStatus, setSelectedStatus] = useState("");
-  const [datePreset, setDatePreset] = useState<
-    "today" | "this_week" | "this_month" | "all" | "custom"
-  >("all");
+  const [selectedStatuses, setSelectedStatuses] = useState<string[]>([
+    "processing",
+    "balanced",
+  ]);
+  const [datePreset, setDatePreset] = useState<DatePresetValue>("this_month");
+  const [dateFrom, setDateFrom] = useState("");
+  const [dateTo, setDateTo] = useState("");
+  const [creatorFilter, setCreatorFilter] = useState("");
 
+  const statuses = getInventoryCheckStatuses();
+
+  /* ---- Columns ---- */
+  const columns: ColumnDef<InventoryCheck, unknown>[] = [
+    {
+      id: "star",
+      header: "",
+      size: 36,
+      enableSorting: false,
+      enableHiding: false,
+      cell: ({ row }) => (
+        <StarCell
+          starred={starred.has(row.original.id)}
+          onToggle={() => toggleStar(row.original.id)}
+        />
+      ),
+    },
+    {
+      accessorKey: "code",
+      header: "Ma kiem kho",
+      size: 130,
+      cell: ({ row }) => (
+        <span className="font-medium text-primary">{row.original.code}</span>
+      ),
+    },
+    {
+      accessorKey: "date",
+      header: "Thoi gian",
+      size: 150,
+      cell: ({ row }) => formatDate(row.original.date),
+    },
+    {
+      id: "balanceDate",
+      header: "Ngay can bang",
+      size: 150,
+      cell: ({ row }) =>
+        row.original.status === "balanced"
+          ? formatDate(row.original.date)
+          : "—",
+    },
+    {
+      accessorKey: "totalProducts",
+      header: "SL thuc te",
+      size: 100,
+      cell: ({ row }) => (
+        <span className="font-medium">{row.original.totalProducts}</span>
+      ),
+    },
+    {
+      id: "totalActual",
+      header: "Tong thuc te",
+      size: 130,
+      cell: ({ row }) =>
+        formatCurrency(row.original.increaseAmount + row.original.decreaseAmount),
+    },
+    {
+      id: "totalDiff",
+      header: "Tong chenh lech",
+      size: 130,
+      cell: ({ row }) => {
+        const diff = row.original.increaseAmount - row.original.decreaseAmount;
+        return (
+          <span className={diff >= 0 ? "text-green-600" : "text-red-600"}>
+            {formatCurrency(diff)}
+          </span>
+        );
+      },
+    },
+    {
+      accessorKey: "increaseQty",
+      header: "SL lech tang",
+      size: 100,
+      cell: ({ row }) => (
+        <span className="text-green-600">{row.original.increaseQty}</span>
+      ),
+    },
+    {
+      accessorKey: "decreaseQty",
+      header: "SL lech giam",
+      size: 100,
+      cell: ({ row }) => (
+        <span className="text-red-600">{row.original.decreaseQty}</span>
+      ),
+    },
+  ];
+
+  /* ---- Fetch data ---- */
   const fetchData = useCallback(async () => {
     setLoading(true);
     const result = await getInventoryChecks({
@@ -119,13 +290,14 @@ export default function KiemKhoPage() {
       pageSize,
       search,
       filters: {
-        ...(selectedStatus && { status: selectedStatus }),
+        ...(selectedStatuses.length > 0 && { status: selectedStatuses }),
+        ...(creatorFilter && { createdBy: creatorFilter }),
       },
     });
     setData(result.data);
     setTotal(result.total);
     setLoading(false);
-  }, [page, pageSize, search, selectedStatus]);
+  }, [page, pageSize, search, selectedStatuses, creatorFilter]);
 
   useEffect(() => {
     fetchData();
@@ -133,42 +305,93 @@ export default function KiemKhoPage() {
 
   useEffect(() => {
     setPage(0);
-  }, [search, selectedStatus]);
+    setExpandedRow(null);
+  }, [search, selectedStatuses, datePreset, creatorFilter]);
 
+  /* ---- Export ---- */
+  const handleExport = (type: "excel" | "csv") => {
+    const exportColumns = [
+      { header: "Ma kiem kho", key: "code", width: 15 },
+      { header: "Thoi gian", key: "date", width: 18, format: (v: string) => formatDate(v) },
+      { header: "Trang thai", key: "status", width: 15, format: (v: InventoryCheck["status"]) => statusMap[v]?.label ?? v },
+      { header: "Tong SP", key: "totalProducts", width: 10 },
+      { header: "SL lech tang", key: "increaseQty", width: 12 },
+      { header: "SL lech giam", key: "decreaseQty", width: 12 },
+      { header: "GT tang", key: "increaseAmount", width: 15, format: (v: number) => v },
+      { header: "GT giam", key: "decreaseAmount", width: 15, format: (v: number) => v },
+    ];
+    if (type === "excel") exportToExcel(data, exportColumns, "phieu-kiem-kho");
+    else exportToCsv(data, exportColumns, "phieu-kiem-kho");
+  };
+
+  /* ---- Inline detail renderer ---- */
+  const renderDetail = (item: InventoryCheck, onClose: () => void) => (
+    <InventoryCheckDetail item={item} onClose={onClose} />
+  );
+
+  /* ---- Render ---- */
   return (
     <ListPageLayout
       sidebar={
         <FilterSidebar>
-          <FilterGroup label="Trạng thái">
-            <SelectFilter
-              options={statusOptions}
-              value={selectedStatus}
-              onChange={setSelectedStatus}
+          <FilterGroup label="Ngay tao">
+            <DatePresetFilter
+              value={datePreset}
+              onChange={setDatePreset}
+              from={dateFrom}
+              to={dateTo}
+              onFromChange={setDateFrom}
+              onToChange={setDateTo}
+              presets={[
+                { label: "Thang nay", value: "this_month" },
+                { label: "Hom nay", value: "today" },
+                { label: "Hom qua", value: "yesterday" },
+                { label: "Tuan nay", value: "this_week" },
+                { label: "Thang truoc", value: "last_month" },
+                { label: "Tuy chinh", value: "custom" },
+              ]}
             />
           </FilterGroup>
 
-          <FilterGroup label="Thời gian">
-            <DateRangeFilter
-              preset={datePreset}
-              onPresetChange={setDatePreset}
+          <FilterGroup label="Trang thai">
+            <CheckboxFilter
+              options={statuses}
+              selected={selectedStatuses}
+              onChange={setSelectedStatuses}
+            />
+          </FilterGroup>
+
+          <FilterGroup label="Nguoi tao">
+            <PersonFilter
+              value={creatorFilter}
+              onChange={setCreatorFilter}
+              placeholder="Chon nguoi tao"
+              suggestions={[
+                { label: "Admin", value: "admin" },
+                { label: "Cao Thi Huyen Trang", value: "trang" },
+              ]}
             />
           </FilterGroup>
         </FilterSidebar>
       }
     >
       <PageHeader
-        title="Kiểm kho"
-        searchPlaceholder="Theo mã phiếu kiểm kho"
+        title="Phieu kiem kho"
+        searchPlaceholder="Theo ma phieu kiem kho"
         searchValue={search}
         onSearchChange={setSearch}
+        onExport={{
+          excel: () => handleExport("excel"),
+          csv: () => handleExport("csv"),
+        }}
         actions={[
           {
-            label: "Kiểm kho",
+            label: "Kiem kho",
             icon: <Plus className="h-4 w-4" />,
             variant: "default",
           },
           {
-            label: "Xuất file",
+            label: "Xuat file",
             icon: <Download className="h-4 w-4" />,
           },
         ]}
@@ -188,10 +411,23 @@ export default function KiemKhoPage() {
           setPage(0);
         }}
         selectable
+        expandedRow={expandedRow}
+        onExpandedRowChange={setExpandedRow}
+        renderDetail={renderDetail}
+        getRowId={(row) => row.id}
         rowActions={(row) => [
-          { label: "Xem chi tiết", icon: <Eye className="h-4 w-4" />, onClick: () => {} },
-          { label: "Tiếp tục kiểm", icon: <PlayCircle className="h-4 w-4" />, onClick: () => {} },
-          { label: "Xóa", icon: <Trash2 className="h-4 w-4" />, onClick: () => {}, variant: "destructive", separator: true },
+          {
+            label: "In phieu",
+            icon: <Printer className="h-4 w-4" />,
+            onClick: () => {},
+          },
+          {
+            label: "Huy",
+            icon: <XCircle className="h-4 w-4" />,
+            onClick: () => {},
+            variant: "destructive",
+            separator: true,
+          },
         ]}
       />
     </ListPageLayout>

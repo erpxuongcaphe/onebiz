@@ -6,109 +6,188 @@ import { Plus, Eye, Printer, Trash2 } from "lucide-react";
 import { Badge } from "@/components/ui/badge";
 import { PageHeader } from "@/components/shared/page-header";
 import { ListPageLayout } from "@/components/shared/list-page-layout";
-import { DataTable } from "@/components/shared/data-table";
+import { DataTable, StarCell } from "@/components/shared/data-table";
 import {
   FilterSidebar,
   FilterGroup,
+  RadioFilter,
+  CheckboxFilter,
   SelectFilter,
-  DateRangeFilter,
+  DatePresetFilter,
+  type DatePresetValue,
 } from "@/components/shared/filter-sidebar";
+import {
+  InlineDetailPanel,
+  DetailTabs,
+  DetailHeader,
+  DetailInfoGrid,
+  DetailItemsTable,
+} from "@/components/shared/inline-detail-panel";
 import { CreateCashTransactionDialog } from "@/components/shared/dialogs";
 import { formatCurrency, formatDate } from "@/lib/format";
 import { exportToExcel, exportToCsv } from "@/lib/utils/export";
-import { getCashBookEntries, getCashBookTypes, getCashBookSummary } from "@/lib/services";
+import {
+  getCashBookEntries,
+  getCashBookTypes,
+  getCashBookSummary,
+} from "@/lib/services";
 import type { CashBookEntry } from "@/lib/types";
 
-// === Columns ===
-const columns: ColumnDef<CashBookEntry, unknown>[] = [
-  {
-    accessorKey: "code",
-    header: "Mã phiếu",
-    size: 120,
-    cell: ({ row }) => (
-      <span className="font-medium text-primary">{row.original.code}</span>
-    ),
-  },
-  {
-    accessorKey: "date",
-    header: "Thời gian",
-    size: 150,
-    cell: ({ row }) => formatDate(row.original.date),
-  },
-  {
-    accessorKey: "typeName",
-    header: "Loại",
-    size: 110,
-    cell: ({ row }) => {
-      const variant =
-        row.original.type === "receipt" ? "default" : "destructive";
-      return <Badge variant={variant}>{row.original.typeName}</Badge>;
-    },
-  },
-  {
-    accessorKey: "category",
-    header: "Danh mục",
-    size: 160,
-  },
-  {
-    accessorKey: "counterparty",
-    header: "Đối tượng",
-    size: 180,
-  },
-  {
-    accessorKey: "amount",
-    header: "Số tiền",
-    cell: ({ row }) => {
-      const isReceipt = row.original.type === "receipt";
-      return (
-        <span
-          className={`font-medium ${
-            isReceipt ? "text-green-600" : "text-destructive"
-          }`}
-        >
-          {isReceipt ? "+" : "-"}
-          {formatCurrency(row.original.amount)}
-        </span>
-      );
-    },
-  },
-  {
-    accessorKey: "note",
-    header: "Ghi chú",
-    size: 180,
-    cell: ({ row }) => (
-      <span className="text-muted-foreground">
-        {row.original.note || "—"}
-      </span>
-    ),
-  },
-  {
-    accessorKey: "createdBy",
-    header: "Người tạo",
-    size: 130,
-  },
+// === Status map ===
+const statusMap: Record<
+  string,
+  { label: string; variant: "default" | "secondary" | "destructive" }
+> = {
+  completed: { label: "Hoàn thành", variant: "default" },
+  pending: { label: "Phiếu tạm", variant: "secondary" },
+  cancelled: { label: "Đã hủy", variant: "destructive" },
+};
+
+// === Fund type options ===
+const fundTypeOptions = [
+  { label: "Tiền mặt", value: "cash" },
+  { label: "Ngân hàng", value: "bank" },
+  { label: "Ví điện tử", value: "ewallet" },
+  { label: "Tổng quỹ", value: "all" },
 ];
 
+// === Document type options ===
+const documentTypeOptions = [
+  { label: "Phiếu thu", value: "receipt" },
+  { label: "Phiếu chi", value: "payment" },
+];
+
+// === Thu chi category options ===
+const thuChiCategoryOptions = [
+  { value: "all", label: "Tất cả" },
+  { value: "thu_tien_khach", label: "Thu tiền khách hàng" },
+  { value: "thu_tien_mat", label: "Thu tiền mặt" },
+  { value: "thu_khac", label: "Thu khác" },
+  { value: "chi_tra_ncc", label: "Chi trả NCC" },
+  { value: "chi_phi_van_chuyen", label: "Chi phí vận chuyển" },
+  { value: "chi_phi_khac", label: "Chi phí khác" },
+];
+
+// === Status filter options ===
+const statusFilterOptions = [
+  { label: "Hoàn thành", value: "completed" },
+  { label: "Phiếu tạm", value: "pending" },
+  { label: "Đã hủy", value: "cancelled" },
+];
+
+// === Inline Detail ===
+function TransactionDetail({
+  entry,
+  onClose,
+}: {
+  entry: CashBookEntry;
+  onClose: () => void;
+}) {
+  const isReceipt = entry.type === "receipt";
+
+  return (
+    <InlineDetailPanel open onClose={onClose}>
+      <DetailTabs
+        tabs={[
+          {
+            id: "info",
+            label: "Thông tin",
+            content: (
+              <div className="space-y-4">
+                <DetailHeader
+                  title={entry.counterparty}
+                  code={entry.code}
+                  status={{
+                    label: isReceipt ? "Phiếu thu" : "Phiếu chi",
+                    variant: isReceipt ? "default" : "destructive",
+                    className: isReceipt
+                      ? "bg-green-100 text-green-700 border-green-200"
+                      : undefined,
+                  }}
+                  subtitle="Chi nhánh trung tâm"
+                  meta={
+                    <div className="flex items-center gap-4 flex-wrap text-xs">
+                      <span>
+                        Người tạo: <strong>{entry.createdBy}</strong>
+                      </span>
+                      <span>
+                        Ngày tạo: <strong>{formatDate(entry.date)}</strong>
+                      </span>
+                      <span>
+                        Loại thu chi: <strong>{entry.category}</strong>
+                      </span>
+                    </div>
+                  }
+                />
+
+                <DetailInfoGrid
+                  fields={[
+                    { label: "Mã phiếu", value: entry.code },
+                    { label: "Loại phiếu", value: entry.typeName },
+                    { label: "Người nộp/nhận", value: entry.counterparty },
+                    { label: "Loại thu chi", value: entry.category },
+                    {
+                      label: "Giá trị",
+                      value: formatCurrency(entry.amount),
+                    },
+                    { label: "Ghi chú", value: entry.note || "---" },
+                  ]}
+                />
+
+                {/* Notes area */}
+                <div className="border rounded-md p-3">
+                  <textarea
+                    placeholder="Ghi chú..."
+                    defaultValue={entry.note ?? ""}
+                    className="w-full text-sm resize-none bg-transparent outline-none min-h-[60px]"
+                  />
+                </div>
+              </div>
+            ),
+          },
+          {
+            id: "history",
+            label: "Lịch sử",
+            content: (
+              <div className="text-sm text-muted-foreground py-4 text-center">
+                Chưa có lịch sử thay đổi
+              </div>
+            ),
+          },
+        ]}
+      />
+    </InlineDetailPanel>
+  );
+}
+
+// === Page Component ===
 export default function SoQuyPage() {
   const [data, setData] = useState<CashBookEntry[]>([]);
   const [total, setTotal] = useState(0);
   const [loading, setLoading] = useState(true);
   const [page, setPage] = useState(0);
-  const [pageSize, setPageSize] = useState(20);
+  const [pageSize, setPageSize] = useState(15);
   const [search, setSearch] = useState("");
+  const [expandedRow, setExpandedRow] = useState<number | null>(null);
+  const [starred, setStarred] = useState<Set<string>>(new Set());
 
   const [createOpen, setCreateOpen] = useState(false);
-  const [createType, setCreateType] = useState<"receipt" | "payment">("receipt");
+  const [createType, setCreateType] = useState<"receipt" | "payment">(
+    "receipt",
+  );
 
   // Filters
-  const [typeFilter, setTypeFilter] = useState("all");
-  const [datePreset, setDatePreset] = useState<
-    "today" | "this_week" | "this_month" | "all" | "custom"
-  >("all");
-  const [dateFrom, setDateFrom] = useState("");
-  const [dateTo, setDateTo] = useState("");
-
-  const typeOptions = getCashBookTypes();
+  const [fundType, setFundType] = useState("all");
+  const [datePreset, setDatePreset] = useState<DatePresetValue>("this_month");
+  const [selectedDocTypes, setSelectedDocTypes] = useState<string[]>([
+    "receipt",
+    "payment",
+  ]);
+  const [thuChiCategory, setThuChiCategory] = useState("all");
+  const [selectedStatuses, setSelectedStatuses] = useState<string[]>([
+    "completed",
+    "pending",
+  ]);
 
   const fetchData = useCallback(async () => {
     setLoading(true);
@@ -117,123 +196,272 @@ export default function SoQuyPage() {
       pageSize,
       search,
       filters: {
-        ...(typeFilter !== "all" && { type: typeFilter }),
+        ...(selectedDocTypes.length === 1 && { type: selectedDocTypes[0] }),
       },
     });
     setData(result.data);
     setTotal(result.total);
     setLoading(false);
-  }, [search, typeFilter, page, pageSize]);
+  }, [search, selectedDocTypes, page, pageSize]);
 
   useEffect(() => {
     fetchData();
   }, [fetchData]);
 
+  useEffect(() => {
+    setPage(0);
+    setExpandedRow(null);
+  }, [search, fundType, datePreset, selectedDocTypes, thuChiCategory, selectedStatuses]);
+
+  const toggleStar = (id: string) => {
+    setStarred((prev) => {
+      const next = new Set(prev);
+      if (next.has(id)) next.delete(id);
+      else next.add(id);
+      return next;
+    });
+  };
+
+  // Summary calculations
+  const { totalReceipt, totalPayment } = getCashBookSummary();
+  const openingBalance = 5000000; // Quỹ đầu kỳ placeholder
+  const closingBalance = openingBalance + totalReceipt - totalPayment;
+
   const handleExport = (type: "excel" | "csv") => {
     const exportColumns = [
       { header: "Mã phiếu", key: "code", width: 15 },
-      { header: "Thời gian", key: "date", width: 18, format: (v: string) => formatDate(v) },
-      { header: "Loại", key: "typeName", width: 12 },
-      { header: "Danh mục", key: "category", width: 20 },
-      { header: "Đối tượng", key: "counterparty", width: 22 },
-      { header: "Số tiền", key: "amount", width: 15, format: (v: number) => v },
+      {
+        header: "Thời gian",
+        key: "date",
+        width: 18,
+        format: (v: string) => formatDate(v),
+      },
+      { header: "Loại thu chi", key: "category", width: 20 },
+      { header: "Người nộp/nhận", key: "counterparty", width: 22 },
+      {
+        header: "Giá trị",
+        key: "amount",
+        width: 15,
+        format: (v: number) => v,
+      },
     ];
     if (type === "excel") exportToExcel(data, exportColumns, "so-quy");
     else exportToCsv(data, exportColumns, "so-quy");
   };
 
-  // Summary calculations
-  const { totalReceipt, totalPayment } = getCashBookSummary();
-
-  const summaryRow: Record<string, string | number> = {
-    code: "Tổng cộng",
-    typeName: "",
-    category: "",
-    counterparty: "",
-    amount: "",
-    note: `Thu: ${formatCurrency(totalReceipt)} | Chi: ${formatCurrency(totalPayment)}`,
-    createdBy: "",
-    date: "",
-  };
+  // === Columns ===
+  const columns: ColumnDef<CashBookEntry, unknown>[] = [
+    {
+      id: "star",
+      header: "",
+      size: 36,
+      enableSorting: false,
+      enableHiding: false,
+      cell: ({ row }) => (
+        <StarCell
+          starred={starred.has(row.original.id)}
+          onToggle={() => toggleStar(row.original.id)}
+        />
+      ),
+    },
+    {
+      accessorKey: "code",
+      header: "Mã phiếu",
+      size: 130,
+      cell: ({ row }) => (
+        <span className="font-medium text-primary">{row.original.code}</span>
+      ),
+    },
+    {
+      accessorKey: "date",
+      header: "Thời gian",
+      size: 150,
+      cell: ({ row }) => formatDate(row.original.date),
+    },
+    {
+      accessorKey: "category",
+      header: "Loại thu chi",
+      size: 180,
+    },
+    {
+      accessorKey: "counterparty",
+      header: "Người nộp/nhận",
+      size: 180,
+    },
+    {
+      accessorKey: "amount",
+      header: "Giá trị",
+      cell: ({ row }) => {
+        const isReceipt = row.original.type === "receipt";
+        const displayAmount = isReceipt
+          ? row.original.amount
+          : -row.original.amount;
+        return (
+          <span
+            className={`font-medium text-right block ${
+              displayAmount < 0 ? "text-red-600" : "text-foreground"
+            }`}
+          >
+            {formatCurrency(displayAmount)}
+          </span>
+        );
+      },
+    },
+  ];
 
   return (
     <>
-    <ListPageLayout
-      sidebar={
-        <FilterSidebar>
-          <FilterGroup label="Loại phiếu">
-            <SelectFilter
-              options={typeOptions}
-              value={typeFilter}
-              onChange={setTypeFilter}
-              placeholder="Tất cả"
-            />
-          </FilterGroup>
-          <FilterGroup label="Thời gian">
-            <DateRangeFilter
-              preset={datePreset}
-              onPresetChange={setDatePreset}
-              from={dateFrom}
-              to={dateTo}
-              onFromChange={setDateFrom}
-              onToChange={setDateTo}
-            />
-          </FilterGroup>
-        </FilterSidebar>
-      }
-    >
-      <PageHeader
-        title="Sổ quỹ"
-        searchPlaceholder="Theo mã phiếu, đối tượng"
-        searchValue={search}
-        onSearchChange={(v) => {
-          setSearch(v);
-          setPage(0);
-        }}
-        onExport={{ excel: () => handleExport("excel"), csv: () => handleExport("csv") }}
-        actions={[
-          {
-            label: "Tạo phiếu thu",
-            icon: <Plus className="h-4 w-4" />,
-            variant: "default",
-            onClick: () => { setCreateType("receipt"); setCreateOpen(true); },
-          },
-          {
-            label: "Tạo phiếu chi",
-            icon: <Plus className="h-4 w-4" />,
-            variant: "outline",
-            onClick: () => { setCreateType("payment"); setCreateOpen(true); },
-          },
-        ]}
-      />
-      <DataTable
-        columns={columns}
-        data={data}
-        loading={loading}
-        total={total}
-        pageIndex={page}
-        pageSize={pageSize}
-        pageCount={Math.ceil(total / pageSize)}
-        onPageChange={setPage}
-        onPageSizeChange={(size) => {
-          setPageSize(size);
-          setPage(0);
-        }}
-        summaryRow={summaryRow}
-        rowActions={(row) => [
-          { label: "Xem chi tiết", icon: <Eye className="h-4 w-4" />, onClick: () => {} },
-          { label: "In phiếu", icon: <Printer className="h-4 w-4" />, onClick: () => {} },
-          { label: "Xóa", icon: <Trash2 className="h-4 w-4" />, onClick: () => {}, variant: "destructive", separator: true },
-        ]}
-      />
-    </ListPageLayout>
+      <ListPageLayout
+        sidebar={
+          <FilterSidebar>
+            <FilterGroup label="Quỹ tiền">
+              <RadioFilter
+                options={fundTypeOptions}
+                value={fundType}
+                onChange={setFundType}
+                name="fund-type"
+              />
+            </FilterGroup>
 
-    <CreateCashTransactionDialog
-      open={createOpen}
-      onOpenChange={setCreateOpen}
-      defaultType={createType}
-      onSuccess={fetchData}
-    />
+            <FilterGroup label="Thời gian">
+              <DatePresetFilter
+                value={datePreset}
+                onChange={setDatePreset}
+              />
+            </FilterGroup>
+
+            <FilterGroup label="Loại chứng từ">
+              <CheckboxFilter
+                options={documentTypeOptions}
+                selected={selectedDocTypes}
+                onChange={setSelectedDocTypes}
+              />
+            </FilterGroup>
+
+            <FilterGroup label="Loại thu chi">
+              <SelectFilter
+                options={thuChiCategoryOptions}
+                value={thuChiCategory}
+                onChange={setThuChiCategory}
+                placeholder="Tất cả"
+              />
+            </FilterGroup>
+
+            <FilterGroup label="Trạng thái">
+              <CheckboxFilter
+                options={statusFilterOptions}
+                selected={selectedStatuses}
+                onChange={setSelectedStatuses}
+              />
+            </FilterGroup>
+          </FilterSidebar>
+        }
+      >
+        <PageHeader
+          title="Sổ quỹ tiền mặt"
+          searchPlaceholder="Theo mã phiếu, người nộp/nhận"
+          searchValue={search}
+          onSearchChange={setSearch}
+          onExport={{
+            excel: () => handleExport("excel"),
+            csv: () => handleExport("csv"),
+          }}
+          actions={[
+            {
+              label: "+ Phiếu thu",
+              icon: <Plus className="h-4 w-4" />,
+              variant: "default",
+              onClick: () => {
+                setCreateType("receipt");
+                setCreateOpen(true);
+              },
+            },
+            {
+              label: "+ Phiếu chi",
+              icon: <Plus className="h-4 w-4" />,
+              variant: "outline",
+              onClick: () => {
+                setCreateType("payment");
+                setCreateOpen(true);
+              },
+            },
+          ]}
+        />
+
+        {/* Summary row */}
+        <div className="flex items-center gap-6 px-4 py-2 border-b bg-muted/30 text-sm">
+          <div>
+            Quỹ đầu kỳ:{" "}
+            <span className="font-semibold">
+              {formatCurrency(openingBalance)}
+            </span>
+          </div>
+          <div>
+            Tổng thu:{" "}
+            <span className="font-semibold text-blue-600">
+              {formatCurrency(totalReceipt)}
+            </span>
+          </div>
+          <div>
+            Tổng chi:{" "}
+            <span className="font-semibold text-red-600">
+              {formatCurrency(totalPayment)}
+            </span>
+          </div>
+          <div>
+            Tồn quỹ:{" "}
+            <span className="font-semibold">
+              {formatCurrency(closingBalance)}
+            </span>
+          </div>
+        </div>
+
+        <DataTable
+          columns={columns}
+          data={data}
+          loading={loading}
+          total={total}
+          pageIndex={page}
+          pageSize={pageSize}
+          pageCount={Math.ceil(total / pageSize)}
+          onPageChange={setPage}
+          onPageSizeChange={(size) => {
+            setPageSize(size);
+            setPage(0);
+          }}
+          expandedRow={expandedRow}
+          onExpandedRowChange={setExpandedRow}
+          renderDetail={(entry, onClose) => (
+            <TransactionDetail entry={entry} onClose={onClose} />
+          )}
+          rowActions={(row) => [
+            {
+              label: "Xem chi tiết",
+              icon: <Eye className="h-4 w-4" />,
+              onClick: () => {},
+            },
+            {
+              label: "In phiếu",
+              icon: <Printer className="h-4 w-4" />,
+              onClick: () => {},
+            },
+            {
+              label: "Xóa",
+              icon: <Trash2 className="h-4 w-4" />,
+              onClick: () => {},
+              variant: "destructive",
+              separator: true,
+            },
+          ]}
+        />
+      </ListPageLayout>
+
+      <CreateCashTransactionDialog
+        open={createOpen}
+        onOpenChange={setCreateOpen}
+        defaultType={createType}
+        onSuccess={fetchData}
+      />
     </>
   );
 }
