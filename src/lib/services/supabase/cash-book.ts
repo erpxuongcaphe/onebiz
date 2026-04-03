@@ -2,8 +2,11 @@
  * Supabase service: Cash Transactions (Sổ quỹ)
  */
 
-import type { CashBookEntry, QueryParams, QueryResult } from "@/lib/types";
+import type { CashBookEntry, CashTransaction, QueryParams, QueryResult } from "@/lib/types";
+import type { Database } from "@/lib/supabase/types";
 import { getClient, getPaginationRange, handleError } from "./base";
+
+type CashTransactionInsert = Database["public"]["Tables"]["cash_transactions"]["Insert"];
 
 export async function getCashBookEntries(params: QueryParams): Promise<QueryResult<CashBookEntry>> {
   const supabase = getClient();
@@ -74,6 +77,37 @@ export async function getCashBookSummaryAsync() {
     .reduce((sum, e) => sum + e.amount, 0);
 
   return { totalReceipt, totalPayment };
+}
+
+// --- Write Operations ---
+
+/**
+ * Tạo phiếu thu/chi mới.
+ */
+export async function createCashTransaction(tx: Partial<CashTransaction>): Promise<CashBookEntry> {
+  const supabase = getClient();
+
+  const { data, error } = await supabase
+    .from("cash_transactions")
+    .insert({
+      tenant_id: "", // RLS sẽ tự fill qua policy
+      branch_id: "", // RLS sẽ tự fill qua policy
+      code: tx.code!,
+      type: tx.type!,
+      category: tx.category!,
+      amount: tx.amount!,
+      counterparty: tx.counterparty || null,
+      payment_method: (tx.paymentMethod as "cash" | "transfer" | "card") ?? "cash",
+      reference_type: tx.referenceType || null,
+      reference_id: tx.referenceId || null,
+      note: tx.note || null,
+      created_by: tx.createdBy!,
+    } satisfies CashTransactionInsert)
+    .select()
+    .single();
+
+  if (error) handleError(error, "createCashTransaction");
+  return mapCashEntry(data);
 }
 
 // --- Mapper ---

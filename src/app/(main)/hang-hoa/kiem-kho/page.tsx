@@ -25,6 +25,7 @@ import { formatCurrency, formatDate } from "@/lib/format";
 import { exportToExcel, exportToCsv } from "@/lib/utils/export";
 import { getInventoryChecks, getInventoryCheckStatuses } from "@/lib/services";
 import type { InventoryCheck } from "@/lib/types";
+import { CreateInventoryCheckDialog } from "@/components/shared/dialogs";
 
 /* ------------------------------------------------------------------ */
 /*  Status config                                                      */
@@ -179,6 +180,7 @@ export default function KiemKhoPage() {
   const [search, setSearch] = useState("");
   const [page, setPage] = useState(0);
   const [pageSize, setPageSize] = useState(15);
+  const [createOpen, setCreateOpen] = useState(false);
 
   // Inline detail
   const [expandedRow, setExpandedRow] = useState<number | null>(null);
@@ -331,6 +333,7 @@ export default function KiemKhoPage() {
 
   /* ---- Render ---- */
   return (
+    <>
     <ListPageLayout
       sidebar={
         <FilterSidebar>
@@ -389,6 +392,7 @@ export default function KiemKhoPage() {
             label: "Kiem kho",
             icon: <Plus className="h-4 w-4" />,
             variant: "default",
+            onClick: () => setCreateOpen(true),
           },
           {
             label: "Xuat file",
@@ -431,5 +435,12 @@ export default function KiemKhoPage() {
         ]}
       />
     </ListPageLayout>
+
+    <CreateInventoryCheckDialog
+      open={createOpen}
+      onOpenChange={setCreateOpen}
+      onSuccess={fetchData}
+    />
+    </>
   );
 }

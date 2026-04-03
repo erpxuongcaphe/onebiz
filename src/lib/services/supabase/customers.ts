@@ -3,7 +3,11 @@
  */
 
 import type { Customer, QueryParams, QueryResult } from "@/lib/types";
+import type { Database } from "@/lib/supabase/types";
 import { getClient, getPaginationRange, handleError } from "./base";
+
+type CustomerInsert = Database["public"]["Tables"]["customers"]["Insert"];
+type CustomerUpdate = Database["public"]["Tables"]["customers"]["Update"];
 
 export async function getCustomers(params: QueryParams): Promise<QueryResult<Customer>> {
   const supabase = getClient();
@@ -95,6 +99,76 @@ export async function getCustomerById(id: string): Promise<Customer | null> {
   }
 
   return data ? mapCustomer(data) : null;
+}
+
+// --- Write Operations ---
+
+/**
+ * Tạo khách hàng mới.
+ */
+export async function createCustomer(customer: Partial<Customer>): Promise<Customer> {
+  const supabase = getClient();
+
+  const { data, error } = await supabase
+    .from("customers")
+    .insert({
+      tenant_id: "", // RLS sẽ tự fill qua policy
+      code: customer.code!,
+      name: customer.name!,
+      phone: customer.phone || null,
+      email: customer.email || null,
+      address: customer.address || null,
+      group_id: customer.groupId || null,
+      gender: customer.gender || null,
+      customer_type: customer.type ?? "individual",
+      is_active: true,
+    } satisfies CustomerInsert)
+    .select("*, customer_groups!customers_group_id_fkey(name)")
+    .single();
+
+  if (error) handleError(error, "createCustomer");
+  return mapCustomer(data);
+}
+
+/**
+ * Cập nhật khách hàng.
+ */
+export async function updateCustomer(id: string, updates: Partial<Customer>): Promise<Customer> {
+  const supabase = getClient();
+
+  const payload: CustomerUpdate = {};
+  if (updates.code !== undefined) payload.code = updates.code;
+  if (updates.name !== undefined) payload.name = updates.name;
+  if (updates.phone !== undefined) payload.phone = updates.phone || null;
+  if (updates.email !== undefined) payload.email = updates.email || null;
+  if (updates.address !== undefined) payload.address = updates.address || null;
+  if (updates.groupId !== undefined) payload.group_id = updates.groupId || null;
+  if (updates.gender !== undefined) payload.gender = updates.gender || null;
+  if (updates.type !== undefined) payload.customer_type = updates.type;
+
+  const { data, error } = await supabase
+    .from("customers")
+    .update(payload)
+    .eq("id", id)
+    .select("*, customer_groups!customers_group_id_fkey(name)")
+    .single();
+
+  if (error) handleError(error, "updateCustomer");
+  return mapCustomer(data);
+}
+
+/**
+ * Xóa khách hàng.
+ */
+export async function deleteCustomer(id: string): Promise<void> {
+  const supabase = getClient();
+
+  const { error } = await supabase
+    .from("customers")
+    .delete()
+    .eq("id", id);
+
+  if (error) handleError(error, "deleteCustomer");
 }
 
 // --- Mapper ---

@@ -26,6 +26,7 @@ import { formatCurrency, formatDate } from "@/lib/format";
 import { exportToExcel, exportToCsv } from "@/lib/utils/export";
 import { getManufacturingOrders, getManufacturingStatuses } from "@/lib/services";
 import type { ManufacturingOrder } from "@/lib/types";
+import { CreateManufacturingOrderDialog } from "@/components/shared/dialogs";
 
 /* ------------------------------------------------------------------ */
 /*  Status config                                                      */
@@ -149,6 +150,7 @@ export default function SanXuatPage() {
   const [search, setSearch] = useState("");
   const [page, setPage] = useState(0);
   const [pageSize, setPageSize] = useState(15);
+  const [createOpen, setCreateOpen] = useState(false);
 
   // Inline detail
   const [expandedRow, setExpandedRow] = useState<number | null>(null);
@@ -328,6 +330,7 @@ export default function SanXuatPage() {
             label: "San xuat",
             icon: <Plus className="h-4 w-4" />,
             variant: "default",
+            onClick: () => setCreateOpen(true),
           },
           {
             label: "Xuat file",
@@ -368,6 +371,12 @@ export default function SanXuatPage() {
             separator: true,
           },
         ]}
+      />
+
+      <CreateManufacturingOrderDialog
+        open={createOpen}
+        onOpenChange={setCreateOpen}
+        onSuccess={fetchData}
       />
     </ListPageLayout>
   );

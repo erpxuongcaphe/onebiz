@@ -27,6 +27,7 @@ import { formatCurrency, formatDate } from "@/lib/format";
 import { exportToExcel, exportToCsv } from "@/lib/utils/export";
 import { getPurchaseOrders, getPurchaseOrderStatuses } from "@/lib/services";
 import type { PurchaseOrder } from "@/lib/types";
+import { CreatePurchaseOrderDialog } from "@/components/shared/dialogs";
 
 /* ------------------------------------------------------------------ */
 /*  Status config                                                      */
@@ -195,6 +196,7 @@ export default function NhapHangPage() {
   const [search, setSearch] = useState("");
   const [page, setPage] = useState(0);
   const [pageSize, setPageSize] = useState(15);
+  const [createOpen, setCreateOpen] = useState(false);
 
   // Inline detail
   const [expandedRow, setExpandedRow] = useState<number | null>(null);
@@ -346,6 +348,7 @@ export default function NhapHangPage() {
 
   /* ---- Render ---- */
   return (
+    <>
     <ListPageLayout
       sidebar={
         <FilterSidebar>
@@ -428,6 +431,7 @@ export default function NhapHangPage() {
             label: "Nhập hàng",
             icon: <Plus className="h-4 w-4" />,
             variant: "default",
+            onClick: () => setCreateOpen(true),
           },
           {
             label: "Xuất file",
@@ -478,5 +482,12 @@ export default function NhapHangPage() {
         ]}
       />
     </ListPageLayout>
+
+    <CreatePurchaseOrderDialog
+      open={createOpen}
+      onOpenChange={setCreateOpen}
+      onSuccess={fetchData}
+    />
+    </>
   );
 }

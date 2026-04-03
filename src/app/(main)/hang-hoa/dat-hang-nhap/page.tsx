@@ -15,6 +15,7 @@ import {
 } from "@/components/shared/filter-sidebar";
 import { formatCurrency, formatDate } from "@/lib/format";
 import { getPurchaseOrderEntries, getPurchaseEntryStatuses } from "@/lib/services";
+import { CreatePurchaseEntryDialog } from "@/components/shared/dialogs";
 import type { PurchaseOrderEntry } from "@/lib/types";
 
 // === Status config ===
@@ -85,6 +86,7 @@ export default function DatHangNhapPage() {
   const [search, setSearch] = useState("");
   const [page, setPage] = useState(0);
   const [pageSize, setPageSize] = useState(20);
+  const [createOpen, setCreateOpen] = useState(false);
 
   // Filters
   const [statusFilter, setStatusFilter] = useState("all");
@@ -141,8 +143,14 @@ export default function DatHangNhapPage() {
         searchValue={search}
         onSearchChange={setSearch}
         actions={[
-          { label: "Đặt hàng", icon: <Plus className="h-4 w-4" />, variant: "default" },
+          { label: "Đặt hàng", icon: <Plus className="h-4 w-4" />, variant: "default", onClick: () => setCreateOpen(true) },
         ]}
+      />
+
+      <CreatePurchaseEntryDialog
+        open={createOpen}
+        onOpenChange={setCreateOpen}
+        onSuccess={fetchData}
       />
 
       <DataTable

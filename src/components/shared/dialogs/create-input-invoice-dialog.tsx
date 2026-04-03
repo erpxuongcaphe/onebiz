@@ -11,34 +11,26 @@ import {
 } from "@/components/ui/dialog";
 import { Input } from "@/components/ui/input";
 import { Button } from "@/components/ui/button";
-import {
-  Select,
-  SelectTrigger,
-  SelectValue,
-  SelectContent,
-  SelectItem,
-} from "@/components/ui/select";
 import { Trash2, Search, Loader2 } from "lucide-react";
 import { formatCurrency } from "@/lib/format";
 import { useToast } from "@/lib/contexts";
 import { getClient } from "@/lib/services/supabase/base";
 import type { Database } from "@/lib/supabase/types";
 
-type InvoiceInsert = Database["public"]["Tables"]["invoices"]["Insert"];
-type InvoiceItemInsert = Database["public"]["Tables"]["invoice_items"]["Insert"];
+type PurchaseOrderInsert = Database["public"]["Tables"]["purchase_orders"]["Insert"];
+type PurchaseOrderItemInsert = Database["public"]["Tables"]["purchase_order_items"]["Insert"];
 
-interface CreateInvoiceDialogProps {
+interface CreateInputInvoiceDialogProps {
   open: boolean;
   onOpenChange: (open: boolean) => void;
   onSuccess?: () => void;
 }
 
-interface InvoiceLineItem {
+interface LineItem {
   id: string;
   productName: string;
   quantity: number;
   price: number;
-  discount: number;
 }
 
 interface SearchProduct {
@@ -47,73 +39,76 @@ interface SearchProduct {
   price: number;
 }
 
-interface SearchCustomer {
+interface SearchSupplier {
   id: string;
   name: string;
   phone: string;
 }
 
-function generateInvoiceCode() {
+const paymentMethods = [
+  { value: "cash", label: "Tiền mặt" },
+  { value: "bank_transfer", label: "Chuyển khoản" },
+  { value: "credit", label: "Công nợ" },
+];
+
+function generateInputInvoiceCode() {
   const num = Math.floor(Math.random() * 99999) + 1;
-  return `HD${String(num).padStart(6, "0")}`;
+  return `HDDV${String(num).padStart(5, "0")}`;
 }
 
-export function CreateInvoiceDialog({
+export function CreateInputInvoiceDialog({
   open,
   onOpenChange,
   onSuccess,
-}: CreateInvoiceDialogProps) {
+}: CreateInputInvoiceDialogProps) {
   const { toast } = useToast();
   const [code, setCode] = useState("");
-  const [customerSearch, setCustomerSearch] = useState("");
-  const [selectedCustomer, setSelectedCustomer] = useState("");
-  const [showCustomerDropdown, setShowCustomerDropdown] = useState(false);
+  const [supplierSearch, setSupplierSearch] = useState("");
+  const [selectedSupplier, setSelectedSupplier] = useState<{ id: string; name: string } | null>(null);
+  const [showSupplierDropdown, setShowSupplierDropdown] = useState(false);
+  const [filteredSuppliers, setFilteredSuppliers] = useState<SearchSupplier[]>([]);
   const [productSearch, setProductSearch] = useState("");
   const [showProductDropdown, setShowProductDropdown] = useState(false);
-  const [items, setItems] = useState<InvoiceLineItem[]>([]);
+  const [filteredProducts, setFilteredProducts] = useState<SearchProduct[]>([]);
+  const [items, setItems] = useState<LineItem[]>([]);
   const [paymentMethod, setPaymentMethod] = useState("cash");
-  const [discountType, setDiscountType] = useState<"fixed" | "percent">("fixed");
-  const [discountValue, setDiscountValue] = useState("");
   const [notes, setNotes] = useState("");
   const [errors, setErrors] = useState<Record<string, string>>({});
   const [saving, setSaving] = useState(false);
-  const [filteredCustomers, setFilteredCustomers] = useState<SearchCustomer[]>([]);
-  const [filteredProducts, setFilteredProducts] = useState<SearchProduct[]>([]);
 
   useEffect(() => {
     if (open) {
-      setCode(generateInvoiceCode());
-      setCustomerSearch("");
-      setSelectedCustomer("");
-      setShowCustomerDropdown(false);
+      setCode(generateInputInvoiceCode());
+      setSupplierSearch("");
+      setSelectedSupplier(null);
+      setShowSupplierDropdown(false);
+      setFilteredSuppliers([]);
       setProductSearch("");
       setShowProductDropdown(false);
+      setFilteredProducts([]);
       setItems([]);
       setPaymentMethod("cash");
-      setDiscountType("fixed");
-      setDiscountValue("");
       setNotes("");
       setErrors({});
       setSaving(false);
-      setFilteredCustomers([]);
-      setFilteredProducts([]);
     }
   }, [open]);
 
-  // Live search customers
+  // Live search suppliers
   useEffect(() => {
-    if (!customerSearch || customerSearch.length < 1) { setFilteredCustomers([]); return; }
+    if (!supplierSearch || supplierSearch.length < 1) { setFilteredSuppliers([]); return; }
     const timer = setTimeout(async () => {
       const supabase = getClient();
       const { data } = await supabase
-        .from("customers")
+        .from("suppliers")
         .select("id, name, phone")
-        .or(`name.ilike.%${customerSearch}%,phone.ilike.%${customerSearch}%`)
+        .or(`name.ilike.%${supplierSearch}%,phone.ilike.%${supplierSearch}%`)
+        .eq("is_active", true)
         .limit(8);
-      setFilteredCustomers((data ?? []).map(c => ({ id: c.id, name: c.name, phone: c.phone ?? "" })));
+      setFilteredSuppliers((data ?? []).map(s => ({ id: s.id, name: s.name, phone: s.phone ?? "" })));
     }, 300);
     return () => clearTimeout(timer);
-  }, [customerSearch]);
+  }, [supplierSearch]);
 
   // Live search products
   useEffect(() => {
@@ -122,11 +117,11 @@ export function CreateInvoiceDialog({
       const supabase = getClient();
       const { data } = await supabase
         .from("products")
-        .select("id, name, sell_price")
+        .select("id, name, cost_price")
         .or(`name.ilike.%${productSearch}%,code.ilike.%${productSearch}%`)
         .eq("is_active", true)
         .limit(10);
-      setFilteredProducts((data ?? []).map(p => ({ id: p.id, name: p.name, price: p.sell_price })));
+      setFilteredProducts((data ?? []).map(p => ({ id: p.id, name: p.name, price: p.cost_price })));
     }, 300);
     return () => clearTimeout(timer);
   }, [productSearch]);
@@ -136,62 +131,32 @@ export function CreateInvoiceDialog({
     if (existing) {
       setItems(
         items.map((item) =>
-          item.id === product.id
-            ? { ...item, quantity: item.quantity + 1 }
-            : item
+          item.id === product.id ? { ...item, quantity: item.quantity + 1 } : item
         )
       );
     } else {
-      setItems([
-        ...items,
-        {
-          id: product.id,
-          productName: product.name,
-          quantity: 1,
-          price: product.price,
-          discount: 0,
-        },
-      ]);
+      setItems([...items, { id: product.id, productName: product.name, quantity: 1, price: product.price }]);
     }
     setProductSearch("");
     setShowProductDropdown(false);
   }
 
-  function updateItem(
-    id: string,
-    field: keyof InvoiceLineItem,
-    value: string | number
-  ) {
-    setItems(
-      items.map((item) => (item.id === id ? { ...item, [field]: value } : item))
-    );
+  function updateItem(id: string, field: keyof LineItem, value: string | number) {
+    setItems(items.map((item) => (item.id === id ? { ...item, [field]: value } : item)));
   }
 
   function removeItem(id: string) {
     setItems(items.filter((item) => item.id !== id));
   }
 
-  const subtotal = useMemo(
-    () =>
-      items.reduce(
-        (sum, item) => sum + item.quantity * item.price - item.discount,
-        0
-      ),
+  const total = useMemo(
+    () => items.reduce((sum, item) => sum + item.quantity * item.price, 0),
     [items]
   );
 
-  const discountAmount = useMemo(() => {
-    const val = Number(discountValue) || 0;
-    if (discountType === "percent") {
-      return Math.round((subtotal * val) / 100);
-    }
-    return val;
-  }, [subtotal, discountType, discountValue]);
-
-  const total = Math.max(0, subtotal - discountAmount);
-
   function validate(): boolean {
     const newErrors: Record<string, string> = {};
+    if (!selectedSupplier) newErrors.supplier = "Vui lòng chọn nhà cung cấp";
     if (items.length === 0) newErrors.items = "Chưa có sản phẩm nào";
     setErrors(newErrors);
     return Object.keys(newErrors).length === 0;
@@ -203,59 +168,59 @@ export function CreateInvoiceDialog({
     try {
       const supabase = getClient();
       const { data: { user } } = await supabase.auth.getUser();
-      const customerObj = filteredCustomers.find(c => c.id === selectedCustomer);
 
-      // Insert invoice
-      const { data: invoice, error: invoiceErr } = await supabase
-        .from("invoices")
+      const paid = paymentMethod !== "credit" ? total : 0;
+      const debt = paymentMethod === "credit" ? total : 0;
+
+      const { data: po, error: poErr } = await supabase
+        .from("purchase_orders")
         .insert({
           tenant_id: "",
           branch_id: "",
           code,
-          customer_id: selectedCustomer || null,
-          customer_name: customerObj?.name ?? "Khách lẻ",
+          supplier_id: selectedSupplier!.id,
+          supplier_name: selectedSupplier!.name,
           status: "completed" as const,
-          subtotal,
-          discount_amount: discountAmount,
+          subtotal: total,
+          discount_amount: 0,
           total,
-          paid: total,
-          debt: 0,
-          payment_method: paymentMethod as "cash" | "transfer" | "card" | "mixed",
-          note: notes || null,
+          paid,
+          debt,
+          note: notes ? `[${paymentMethods.find(m => m.value === paymentMethod)?.label}] ${notes}` : `[${paymentMethods.find(m => m.value === paymentMethod)?.label}]`,
           created_by: user?.id ?? "",
-        } satisfies InvoiceInsert)
+        } satisfies PurchaseOrderInsert)
         .select("id")
         .single();
 
-      if (invoiceErr) throw new Error(invoiceErr.message);
+      if (poErr) throw new Error(poErr.message);
 
-      // Insert invoice items
-      if (invoice && items.length > 0) {
+      if (po && items.length > 0) {
         const { error: itemsErr } = await supabase
-          .from("invoice_items")
+          .from("purchase_order_items")
           .insert(items.map(item => ({
-            invoice_id: invoice.id,
+            purchase_order_id: po.id,
             product_id: item.id,
             product_name: item.productName,
             unit: "Cái",
             quantity: item.quantity,
+            received_quantity: item.quantity,
             unit_price: item.price,
-            discount: item.discount,
-            total: item.quantity * item.price - item.discount,
-          } satisfies InvoiceItemInsert)));
+            discount: 0,
+            total: item.quantity * item.price,
+          } satisfies PurchaseOrderItemInsert)));
         if (itemsErr) throw new Error(itemsErr.message);
       }
 
       onOpenChange(false);
       toast({
-        title: "Tạo hóa đơn thành công",
+        title: "Tạo hóa đơn đầu vào thành công",
         description: `Đã tạo hóa đơn ${code}`,
         variant: "success",
       });
       onSuccess?.();
     } catch (err) {
       toast({
-        title: "Lỗi tạo hóa đơn",
+        title: "Lỗi tạo hóa đơn đầu vào",
         description: err instanceof Error ? err.message : "Vui lòng thử lại",
         variant: "error",
       });
@@ -268,58 +233,62 @@ export function CreateInvoiceDialog({
     <Dialog open={open} onOpenChange={onOpenChange}>
       <DialogContent className="sm:max-w-2xl max-h-[90vh] overflow-y-auto">
         <DialogHeader>
-          <DialogTitle>Tạo hóa đơn mới</DialogTitle>
+          <DialogTitle>Tạo hóa đơn đầu vào</DialogTitle>
           <DialogDescription>
             Mã hóa đơn: {code}
           </DialogDescription>
         </DialogHeader>
 
         <div className="grid gap-4 py-2">
-          {/* Customer search */}
+          {/* Supplier search */}
           <div className="space-y-1.5">
-            <label className="text-sm font-medium">Khách hàng</label>
+            <label className="text-sm font-medium">
+              Nhà cung cấp <span className="text-destructive">*</span>
+            </label>
             <div className="relative">
               <Search className="absolute left-2.5 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
               <Input
-                value={customerSearch}
+                value={supplierSearch}
                 onChange={(e) => {
-                  setCustomerSearch(e.target.value);
-                  setShowCustomerDropdown(true);
+                  setSupplierSearch(e.target.value);
+                  setShowSupplierDropdown(true);
                 }}
-                onFocus={() => setShowCustomerDropdown(true)}
-                onBlur={() =>
-                  setTimeout(() => setShowCustomerDropdown(false), 200)
-                }
-                placeholder="Tìm khách hàng theo tên, SĐT..."
+                onFocus={() => setShowSupplierDropdown(true)}
+                onBlur={() => setTimeout(() => setShowSupplierDropdown(false), 200)}
+                placeholder="Tìm nhà cung cấp theo tên, SĐT..."
                 className="pl-8"
+                aria-invalid={!!errors.supplier}
               />
-              {showCustomerDropdown && customerSearch && (
+              {showSupplierDropdown && supplierSearch && (
                 <div className="absolute z-10 mt-1 w-full rounded-lg border bg-popover shadow-md max-h-40 overflow-y-auto">
-                  {filteredCustomers.length === 0 ? (
+                  {filteredSuppliers.length === 0 ? (
                     <div className="px-3 py-2 text-sm text-muted-foreground">
-                      Không tìm thấy khách hàng
+                      Không tìm thấy nhà cung cấp
                     </div>
                   ) : (
-                    filteredCustomers.map((c) => (
+                    filteredSuppliers.map((s) => (
                       <button
-                        key={c.id}
+                        key={s.id}
                         type="button"
                         className="flex w-full items-center justify-between px-3 py-2 text-sm hover:bg-accent cursor-pointer"
                         onMouseDown={(e) => e.preventDefault()}
                         onClick={() => {
-                          setSelectedCustomer(c.id);
-                          setCustomerSearch(c.name);
-                          setShowCustomerDropdown(false);
+                          setSelectedSupplier({ id: s.id, name: s.name });
+                          setSupplierSearch(s.name);
+                          setShowSupplierDropdown(false);
                         }}
                       >
-                        <span>{c.name}</span>
-                        <span className="text-muted-foreground">{c.phone}</span>
+                        <span>{s.name}</span>
+                        <span className="text-muted-foreground">{s.phone}</span>
                       </button>
                     ))
                   )}
                 </div>
               )}
             </div>
+            {errors.supplier && (
+              <p className="text-xs text-destructive">{errors.supplier}</p>
+            )}
           </div>
 
           {/* Product search + add */}
@@ -336,10 +305,8 @@ export function CreateInvoiceDialog({
                 onFocus={() => {
                   if (productSearch) setShowProductDropdown(true);
                 }}
-                onBlur={() =>
-                  setTimeout(() => setShowProductDropdown(false), 200)
-                }
-                placeholder="Tìm sản phẩm theo tên..."
+                onBlur={() => setTimeout(() => setShowProductDropdown(false), 200)}
+                placeholder="Tìm sản phẩm theo tên, mã hàng..."
                 className="pl-8"
               />
               {showProductDropdown && productSearch && (
@@ -375,17 +342,16 @@ export function CreateInvoiceDialog({
           {/* Line items */}
           {items.length > 0 && (
             <div className="rounded-lg border overflow-hidden">
-              <div className="grid grid-cols-[1fr_70px_100px_90px_36px] gap-2 px-3 py-2 bg-muted/50 text-xs font-medium text-muted-foreground">
+              <div className="grid grid-cols-[1fr_70px_100px_36px] gap-2 px-3 py-2 bg-muted/50 text-xs font-medium text-muted-foreground">
                 <span>Sản phẩm</span>
                 <span className="text-center">SL</span>
                 <span className="text-right">Đơn giá</span>
-                <span className="text-right">Giảm giá</span>
                 <span />
               </div>
               {items.map((item) => (
                 <div
                   key={item.id}
-                  className="grid grid-cols-[1fr_70px_100px_90px_36px] gap-2 items-center px-3 py-2 border-t"
+                  className="grid grid-cols-[1fr_70px_100px_36px] gap-2 items-center px-3 py-2 border-t"
                 >
                   <span className="text-sm truncate">{item.productName}</span>
                   <Input
@@ -393,11 +359,7 @@ export function CreateInvoiceDialog({
                     min={1}
                     value={item.quantity}
                     onChange={(e) =>
-                      updateItem(
-                        item.id,
-                        "quantity",
-                        Math.max(1, Number(e.target.value) || 1)
-                      )
+                      updateItem(item.id, "quantity", Math.max(1, Number(e.target.value) || 1))
                     }
                     className="h-7 text-center px-1"
                   />
@@ -406,18 +368,6 @@ export function CreateInvoiceDialog({
                     value={item.price}
                     onChange={(e) =>
                       updateItem(item.id, "price", Number(e.target.value) || 0)
-                    }
-                    className="h-7 text-right px-1"
-                  />
-                  <Input
-                    type="number"
-                    value={item.discount}
-                    onChange={(e) =>
-                      updateItem(
-                        item.id,
-                        "discount",
-                        Number(e.target.value) || 0
-                      )
                     }
                     className="h-7 text-right px-1"
                   />
@@ -434,75 +384,30 @@ export function CreateInvoiceDialog({
             </div>
           )}
 
-          {/* Totals section */}
+          {/* Payment method */}
+          <div className="space-y-1.5">
+            <label className="text-sm font-medium">Phương thức thanh toán</label>
+            <select
+              value={paymentMethod}
+              onChange={(e) => setPaymentMethod(e.target.value)}
+              className="flex h-9 w-full rounded-lg border border-input bg-transparent px-2.5 py-1.5 text-sm transition-colors outline-none focus-visible:border-ring focus-visible:ring-3 focus-visible:ring-ring/50"
+            >
+              {paymentMethods.map((m) => (
+                <option key={m.value} value={m.value}>
+                  {m.label}
+                </option>
+              ))}
+            </select>
+          </div>
+
+          {/* Total */}
           <div className="space-y-3 rounded-lg border p-3">
-            <div className="flex items-center justify-between text-sm">
-              <span className="text-muted-foreground">Tạm tính</span>
-              <span>{formatCurrency(subtotal)}</span>
-            </div>
-
-            <div className="flex items-center gap-2">
-              <span className="text-sm text-muted-foreground shrink-0">
-                Giảm giá
-              </span>
-              <div className="flex items-center gap-1 ml-auto">
-                <Select
-                  value={discountType}
-                  onValueChange={(v) =>
-                    setDiscountType((v ?? "fixed") as "fixed" | "percent")
-                  }
-                >
-                  <SelectTrigger className="h-7 w-20 text-xs">
-                    <SelectValue />
-                  </SelectTrigger>
-                  <SelectContent>
-                    <SelectItem value="fixed">VNĐ</SelectItem>
-                    <SelectItem value="percent">%</SelectItem>
-                  </SelectContent>
-                </Select>
-                <Input
-                  type="number"
-                  value={discountValue}
-                  onChange={(e) => setDiscountValue(e.target.value)}
-                  placeholder="0"
-                  className="h-7 w-24 text-right"
-                />
-              </div>
-            </div>
-
-            {discountAmount > 0 && (
-              <div className="flex items-center justify-between text-sm">
-                <span className="text-muted-foreground">Giảm</span>
-                <span className="text-orange-600">
-                  -{formatCurrency(discountAmount)}
-                </span>
-              </div>
-            )}
-
             <div className="flex items-center justify-between border-t pt-2">
               <span className="font-medium">Tổng cộng</span>
               <span className="text-lg font-semibold text-primary">
                 {formatCurrency(total)}
               </span>
             </div>
-          </div>
-
-          {/* Payment method */}
-          <div className="space-y-1.5">
-            <label className="text-sm font-medium">
-              Phương thức thanh toán
-            </label>
-            <Select value={paymentMethod} onValueChange={(v) => setPaymentMethod(v ?? "cash")}>
-              <SelectTrigger className="w-full">
-                <SelectValue />
-              </SelectTrigger>
-              <SelectContent>
-                <SelectItem value="cash">Tiền mặt</SelectItem>
-                <SelectItem value="transfer">Chuyển khoản</SelectItem>
-                <SelectItem value="card">Thẻ</SelectItem>
-                <SelectItem value="mixed">Kết hợp</SelectItem>
-              </SelectContent>
-            </Select>
           </div>
 
           {/* Notes */}
@@ -512,7 +417,7 @@ export function CreateInvoiceDialog({
               className="flex min-h-[50px] w-full rounded-lg border border-input bg-transparent px-2.5 py-2 text-sm transition-colors outline-none placeholder:text-muted-foreground focus-visible:border-ring focus-visible:ring-3 focus-visible:ring-ring/50"
               value={notes}
               onChange={(e) => setNotes(e.target.value)}
-              placeholder="Ghi chú đơn hàng"
+              placeholder="Ghi chú hóa đơn"
               rows={2}
             />
           </div>

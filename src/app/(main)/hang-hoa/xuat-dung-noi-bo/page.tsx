@@ -26,6 +26,7 @@ import { formatCurrency, formatDate } from "@/lib/format";
 import { exportToExcel, exportToCsv } from "@/lib/utils/export";
 import { getInternalExports, getInternalExportStatuses } from "@/lib/services";
 import type { InternalExport } from "@/lib/types";
+import { CreateInternalExportDialog } from "@/components/shared/dialogs";
 
 /* ------------------------------------------------------------------ */
 /*  Status config                                                      */
@@ -151,6 +152,7 @@ export default function XuatDungNoiBoPage() {
   const [search, setSearch] = useState("");
   const [page, setPage] = useState(0);
   const [pageSize, setPageSize] = useState(15);
+  const [createOpen, setCreateOpen] = useState(false);
 
   // Inline detail
   const [expandedRow, setExpandedRow] = useState<number | null>(null);
@@ -329,6 +331,7 @@ export default function XuatDungNoiBoPage() {
             label: "Xuat dung noi bo",
             icon: <Plus className="h-4 w-4" />,
             variant: "default",
+            onClick: () => setCreateOpen(true),
           },
           {
             label: "Xuat file",
@@ -369,6 +372,12 @@ export default function XuatDungNoiBoPage() {
             separator: true,
           },
         ]}
+      />
+
+      <CreateInternalExportDialog
+        open={createOpen}
+        onOpenChange={setCreateOpen}
+        onSuccess={fetchData}
       />
     </ListPageLayout>
   );

@@ -26,6 +26,7 @@ import { formatCurrency, formatDate } from "@/lib/format";
 import { exportToExcel, exportToCsv } from "@/lib/utils/export";
 import { getDisposalExports, getDisposalStatuses } from "@/lib/services";
 import type { DisposalExport } from "@/lib/types";
+import { CreateDisposalDialog } from "@/components/shared/dialogs";
 
 /* ------------------------------------------------------------------ */
 /*  Status config                                                      */
@@ -157,6 +158,7 @@ export default function XuatHuyPage() {
   const [search, setSearch] = useState("");
   const [page, setPage] = useState(0);
   const [pageSize, setPageSize] = useState(15);
+  const [createOpen, setCreateOpen] = useState(false);
 
   // Inline detail
   const [expandedRow, setExpandedRow] = useState<number | null>(null);
@@ -336,6 +338,7 @@ export default function XuatHuyPage() {
             label: "Xuat huy",
             icon: <Plus className="h-4 w-4" />,
             variant: "default",
+            onClick: () => setCreateOpen(true),
           },
           {
             label: "Xuat file",
@@ -376,6 +379,12 @@ export default function XuatHuyPage() {
             separator: true,
           },
         ]}
+      />
+
+      <CreateDisposalDialog
+        open={createOpen}
+        onOpenChange={setCreateOpen}
+        onSuccess={fetchData}
       />
     </ListPageLayout>
   );

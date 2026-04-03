@@ -18,7 +18,9 @@ import {
   SelectContent,
   SelectItem,
 } from "@/components/ui/select";
+import { Loader2 } from "lucide-react";
 import { useToast } from "@/lib/contexts";
+import { createCustomer } from "@/lib/services";
 
 interface CreateCustomerDialogProps {
   open: boolean;
@@ -53,6 +55,7 @@ export function CreateCustomerDialog({
   const [type, setType] = useState<"individual" | "company">("individual");
   const [gender, setGender] = useState("");
   const [errors, setErrors] = useState<Record<string, string>>({});
+  const [saving, setSaving] = useState(false);
 
   useEffect(() => {
     if (open) {
@@ -76,25 +79,36 @@ export function CreateCustomerDialog({
     return Object.keys(newErrors).length === 0;
   }
 
-  function handleSave() {
+  async function handleSave() {
     if (!validate()) return;
-    console.log("Tạo khách hàng:", {
-      code,
-      name,
-      phone,
-      email,
-      address,
-      group,
-      type,
-      gender,
-    });
-    onOpenChange(false);
-    toast({
-      title: "Tạo khách hàng thành công",
-      description: `Đã thêm khách hàng ${name} (${code})`,
-      variant: "success",
-    });
-    onSuccess?.();
+    setSaving(true);
+    try {
+      await createCustomer({
+        code,
+        name,
+        phone: phone || undefined,
+        email: email || undefined,
+        address: address || undefined,
+        groupId: group || undefined,
+        type,
+        gender: (gender as "male" | "female") || undefined,
+      });
+      onOpenChange(false);
+      toast({
+        title: "Tạo khách hàng thành công",
+        description: `Đã thêm khách hàng ${name} (${code})`,
+        variant: "success",
+      });
+      onSuccess?.();
+    } catch (err) {
+      toast({
+        title: "Lỗi tạo khách hàng",
+        description: err instanceof Error ? err.message : "Vui lòng thử lại",
+        variant: "error",
+      });
+    } finally {
+      setSaving(false);
+    }
   }
 
   return (
@@ -225,7 +239,10 @@ export function CreateCustomerDialog({
           <Button variant="outline" onClick={() => onOpenChange(false)}>
             Hủy
           </Button>
-          <Button onClick={handleSave}>Lưu</Button>
+          <Button onClick={handleSave} disabled={saving}>
+            {saving && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
+            Lưu
+          </Button>
         </DialogFooter>
       </DialogContent>
     </Dialog>

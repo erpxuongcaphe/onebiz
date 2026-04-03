@@ -26,6 +26,7 @@ import { formatCurrency, formatDate } from "@/lib/format";
 import { exportToExcel, exportToCsv } from "@/lib/utils/export";
 import { getReturns, getReturnStatuses } from "@/lib/services";
 import type { ReturnOrder } from "@/lib/types";
+import { CreateReturnDialog } from "@/components/shared/dialogs";
 
 // --- Status config ---
 
@@ -195,6 +196,7 @@ export default function TraHangPage() {
   const [pageSize, setPageSize] = useState(15);
   const [expandedRow, setExpandedRow] = useState<number | null>(null);
   const [starred, setStarred] = useState<Set<string>>(new Set());
+  const [createOpen, setCreateOpen] = useState(false);
 
   // Filters
   const [selectedTypes, setSelectedTypes] = useState<string[]>([
@@ -341,6 +343,7 @@ export default function TraHangPage() {
   ];
 
   return (
+    <>
     <ListPageLayout
       sidebar={
         <FilterSidebar>
@@ -399,6 +402,7 @@ export default function TraHangPage() {
             label: "Tra hang",
             icon: <Plus className="h-4 w-4" />,
             variant: "default",
+            onClick: () => setCreateOpen(true),
           },
         ]}
       />
@@ -435,5 +439,12 @@ export default function TraHangPage() {
         ]}
       />
     </ListPageLayout>
+
+    <CreateReturnDialog
+      open={createOpen}
+      onOpenChange={setCreateOpen}
+      onSuccess={fetchData}
+    />
+    </>
   );
 }

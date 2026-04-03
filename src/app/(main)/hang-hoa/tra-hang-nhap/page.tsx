@@ -16,6 +16,7 @@ import {
 import { formatCurrency, formatDate } from "@/lib/format";
 import { getPurchaseReturns, getPurchaseReturnStatuses } from "@/lib/services";
 import type { PurchaseReturn } from "@/lib/types";
+import { CreatePurchaseReturnDialog } from "@/components/shared/dialogs";
 
 // === Status config ===
 const statusMap: Record<
@@ -85,6 +86,7 @@ export default function TraHangNhapPage() {
   const [search, setSearch] = useState("");
   const [page, setPage] = useState(0);
   const [pageSize, setPageSize] = useState(20);
+  const [createOpen, setCreateOpen] = useState(false);
 
   // Filters
   const [statusFilter, setStatusFilter] = useState("all");
@@ -141,7 +143,7 @@ export default function TraHangNhapPage() {
         searchValue={search}
         onSearchChange={setSearch}
         actions={[
-          { label: "Tạo phiếu trả", icon: <Plus className="h-4 w-4" />, variant: "default" },
+          { label: "Tạo phiếu trả", icon: <Plus className="h-4 w-4" />, variant: "default", onClick: () => setCreateOpen(true) },
         ]}
       />
 
@@ -163,6 +165,12 @@ export default function TraHangNhapPage() {
           { label: "Xem chi tiết", icon: <Eye className="h-4 w-4" />, onClick: () => {} },
           { label: "In phiếu", icon: <Printer className="h-4 w-4" />, onClick: () => {} },
         ]}
+      />
+
+      <CreatePurchaseReturnDialog
+        open={createOpen}
+        onOpenChange={setCreateOpen}
+        onSuccess={fetchData}
       />
     </ListPageLayout>
   );

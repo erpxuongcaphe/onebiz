@@ -11,7 +11,9 @@ import {
 } from "@/components/ui/dialog";
 import { Input } from "@/components/ui/input";
 import { Button } from "@/components/ui/button";
+import { Loader2 } from "lucide-react";
 import { useToast } from "@/lib/contexts";
+import { createSupplier } from "@/lib/services";
 
 interface CreateSupplierDialogProps {
   open: boolean;
@@ -38,6 +40,7 @@ export function CreateSupplierDialog({
   const [taxCode, setTaxCode] = useState("");
   const [note, setNote] = useState("");
   const [errors, setErrors] = useState<Record<string, string>>({});
+  const [saving, setSaving] = useState(false);
 
   useEffect(() => {
     if (open) {
@@ -59,24 +62,33 @@ export function CreateSupplierDialog({
     return Object.keys(newErrors).length === 0;
   }
 
-  function handleSave() {
+  async function handleSave() {
     if (!validate()) return;
-    console.log("Tạo nhà cung cấp:", {
-      code,
-      name,
-      phone,
-      email,
-      address,
-      taxCode,
-      note,
-    });
-    onOpenChange(false);
-    toast({
-      title: "Tạo nhà cung cấp thành công",
-      description: `Đã thêm nhà cung cấp ${name} (${code})`,
-      variant: "success",
-    });
-    onSuccess?.();
+    setSaving(true);
+    try {
+      await createSupplier({
+        code,
+        name,
+        phone: phone || undefined,
+        email: email || undefined,
+        address: address || undefined,
+      });
+      onOpenChange(false);
+      toast({
+        title: "Tạo nhà cung cấp thành công",
+        description: `Đã thêm nhà cung cấp ${name} (${code})`,
+        variant: "success",
+      });
+      onSuccess?.();
+    } catch (err) {
+      toast({
+        title: "Lỗi tạo nhà cung cấp",
+        description: err instanceof Error ? err.message : "Vui lòng thử lại",
+        variant: "error",
+      });
+    } finally {
+      setSaving(false);
+    }
   }
 
   return (
@@ -164,7 +176,10 @@ export function CreateSupplierDialog({
           <Button variant="outline" onClick={() => onOpenChange(false)}>
             Hủy
           </Button>
-          <Button onClick={handleSave}>Lưu</Button>
+          <Button onClick={handleSave} disabled={saving}>
+            {saving && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
+            Lưu
+          </Button>
         </DialogFooter>
       </DialogContent>
     </Dialog>

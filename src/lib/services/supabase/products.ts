@@ -3,7 +3,11 @@
  */
 
 import type { Product, ProductDetail, StockMovement, SalesHistory, QueryParams, QueryResult } from "@/lib/types";
+import type { Database } from "@/lib/supabase/types";
 import { getClient, getPaginationRange, handleError } from "./base";
+
+type ProductInsert = Database["public"]["Tables"]["products"]["Insert"];
+type ProductUpdate = Database["public"]["Tables"]["products"]["Update"];
 
 // --- Products ---
 
@@ -247,4 +251,86 @@ function mapMovementType(dbType: string): StockMovement["type"] {
     transfer: "transfer",
   };
   return map[dbType] ?? "import";
+}
+
+// --- Write Operations ---
+
+/**
+ * Tạo sản phẩm mới.
+ */
+export async function createProduct(product: Partial<Product & ProductDetail>): Promise<Product> {
+  const supabase = getClient();
+
+  const { data, error } = await supabase
+    .from("products")
+    .insert({
+      tenant_id: "", // RLS sẽ tự fill qua policy
+      code: product.code!,
+      name: product.name!,
+      sell_price: product.sellPrice!,
+      cost_price: product.costPrice ?? 0,
+      category_id: product.categoryId || null,
+      unit: product.unit ?? "Cái",
+      stock: product.stock ?? 0,
+      min_stock: product.minStock ?? 0,
+      max_stock: product.maxStock ?? 1000,
+      barcode: product.barcode,
+      weight: product.weight,
+      description: product.description,
+      image_url: product.image,
+      allow_sale: product.allowSale ?? true,
+      is_active: true,
+    } satisfies ProductInsert)
+    .select("*, categories!products_category_id_fkey(name)")
+    .single();
+
+  if (error) handleError(error, "createProduct");
+  return mapProduct(data);
+}
+
+/**
+ * Cập nhật sản phẩm.
+ */
+export async function updateProduct(id: string, updates: Partial<Product & ProductDetail>): Promise<Product> {
+  const supabase = getClient();
+
+  const payload: ProductUpdate = {};
+  if (updates.code !== undefined) payload.code = updates.code;
+  if (updates.name !== undefined) payload.name = updates.name;
+  if (updates.sellPrice !== undefined) payload.sell_price = updates.sellPrice;
+  if (updates.costPrice !== undefined) payload.cost_price = updates.costPrice;
+  if (updates.categoryId !== undefined) payload.category_id = updates.categoryId || null;
+  if (updates.unit !== undefined) payload.unit = updates.unit;
+  if (updates.stock !== undefined) payload.stock = updates.stock;
+  if (updates.minStock !== undefined) payload.min_stock = updates.minStock;
+  if (updates.maxStock !== undefined) payload.max_stock = updates.maxStock;
+  if (updates.barcode !== undefined) payload.barcode = updates.barcode;
+  if (updates.weight !== undefined) payload.weight = updates.weight;
+  if (updates.description !== undefined) payload.description = updates.description;
+  if (updates.image !== undefined) payload.image_url = updates.image;
+  if (updates.allowSale !== undefined) payload.allow_sale = updates.allowSale;
+
+  const { data, error } = await supabase
+    .from("products")
+    .update(payload)
+    .eq("id", id)
+    .select("*, categories!products_category_id_fkey(name)")
+    .single();
+
+  if (error) handleError(error, "updateProduct");
+  return mapProduct(data);
+}
+
+/**
+ * Xóa sản phẩm.
+ */
+export async function deleteProduct(id: string): Promise<void> {
+  const supabase = getClient();
+
+  const { error } = await supabase
+    .from("products")
+    .delete()
+    .eq("id", id);
+
+  if (error) handleError(error, "deleteProduct");
 }

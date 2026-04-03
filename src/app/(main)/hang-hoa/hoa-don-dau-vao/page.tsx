@@ -15,6 +15,7 @@ import {
 } from "@/components/shared/filter-sidebar";
 import { formatCurrency, formatDate } from "@/lib/format";
 import { getInputInvoices, getInputInvoiceStatuses } from "@/lib/services";
+import { CreateInputInvoiceDialog } from "@/components/shared/dialogs";
 import type { InputInvoice } from "@/lib/types";
 
 // === Status config ===
@@ -82,6 +83,7 @@ export default function HoaDonDauVaoPage() {
   const [search, setSearch] = useState("");
   const [page, setPage] = useState(0);
   const [pageSize, setPageSize] = useState(20);
+  const [createOpen, setCreateOpen] = useState(false);
 
   // Filters
   const [statusFilter, setStatusFilter] = useState("all");
@@ -138,8 +140,14 @@ export default function HoaDonDauVaoPage() {
         searchValue={search}
         onSearchChange={setSearch}
         actions={[
-          { label: "Tạo mới", icon: <Plus className="h-4 w-4" />, variant: "default" },
+          { label: "Tạo mới", icon: <Plus className="h-4 w-4" />, variant: "default", onClick: () => setCreateOpen(true) },
         ]}
+      />
+
+      <CreateInputInvoiceDialog
+        open={createOpen}
+        onOpenChange={setCreateOpen}
+        onSuccess={fetchData}
       />
 
       <DataTable

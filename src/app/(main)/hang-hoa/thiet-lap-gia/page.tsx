@@ -8,6 +8,7 @@ import { PageHeader } from "@/components/shared/page-header";
 import { DataTable } from "@/components/shared/data-table";
 import { formatDate } from "@/lib/format";
 import type { PriceBook } from "@/lib/types";
+import { CreatePriceBookDialog } from "@/components/shared/dialogs";
 
 const mockPriceBooks: PriceBook[] = [
   {
@@ -166,6 +167,7 @@ export default function ThietLapGiaPage() {
   const [search, setSearch] = useState("");
   const [page, setPage] = useState(0);
   const [pageSize, setPageSize] = useState(20);
+  const [createOpen, setCreateOpen] = useState(false);
 
   const fetchData = useCallback(async () => {
     setLoading(true);
@@ -195,6 +197,7 @@ export default function ThietLapGiaPage() {
             label: "Thêm bảng giá",
             icon: <Plus className="h-4 w-4" />,
             variant: "default",
+            onClick: () => setCreateOpen(true),
           },
         ]}
       />
@@ -217,6 +220,12 @@ export default function ThietLapGiaPage() {
           { label: "Nhân bản", icon: <Copy className="h-4 w-4" />, onClick: () => {} },
           { label: "Xóa", icon: <Trash2 className="h-4 w-4" />, onClick: () => {}, variant: "destructive", separator: true },
         ]}
+      />
+
+      <CreatePriceBookDialog
+        open={createOpen}
+        onOpenChange={setCreateOpen}
+        onSuccess={fetchData}
       />
     </div>
   );

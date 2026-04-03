@@ -1,12 +1,12 @@
-export { getProducts, getProductCategories, getProductById, getStockMovements, getSalesHistory } from "./products";
-export { getCustomers, getCustomerGroups, getCustomerById } from "./customers";
-export { getSuppliers, getSupplierById } from "./suppliers";
+export { getProducts, getProductCategories, getProductById, getStockMovements, getSalesHistory, createProduct, updateProduct, deleteProduct } from "./products";
+export { getCustomers, getCustomerGroups, getCustomerById, createCustomer, updateCustomer, deleteCustomer } from "./customers";
+export { getSuppliers, getSupplierById, createSupplier, updateSupplier, deleteSupplier } from "./suppliers";
 export { getInvoices, getInvoiceStatuses } from "./invoices";
 export { getPurchaseOrders, getPurchaseOrderStatuses } from "./purchase-orders";
 export { getOrders, getOrderStatuses } from "./orders";
 export { getReturns, getReturnStatuses } from "./returns";
 export { getShippingOrders, getShippingStatuses, getDeliveryPartners, getPartnerOptions } from "./shipping";
-export { getCashBookEntries, getCashBookTypes, getCashBookSummary } from "./cash-book";
+export { getCashBookEntries, getCashBookTypes, getCashBookSummary, createCashTransaction } from "./cash-book";
 export { getInventoryChecks, getInventoryCheckStatuses, getManufacturingOrders, getManufacturingStatuses, getDisposalExports, getDisposalStatuses, getInternalExports, getInternalExportStatuses } from "./inventory";
 export { getPurchaseOrderEntries, getPurchaseEntryStatuses, getPurchaseReturns, getPurchaseReturnStatuses, getInputInvoices, getInputInvoiceStatuses } from "./purchase-entries";
 export { getFavorites, isFavorite, toggleFavorite, getFavoriteIds } from "./favorites";

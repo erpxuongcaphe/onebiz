@@ -25,6 +25,7 @@ import {
 import { formatCurrency, formatDate } from "@/lib/format";
 import { exportToExcel, exportToCsv } from "@/lib/utils/export";
 import { getDeliveryPartners } from "@/lib/services";
+import { CreateDeliveryPartnerDialog } from "@/components/shared/dialogs";
 import type { DeliveryPartner } from "@/lib/types";
 
 // --- Status config ---
@@ -165,6 +166,7 @@ export default function DoiTacGiaoHangPage() {
   const [page, setPage] = useState(0);
   const [pageSize, setPageSize] = useState(15);
   const [expandedRow, setExpandedRow] = useState<number | null>(null);
+  const [createOpen, setCreateOpen] = useState(false);
 
   // Stars
   const { starred, toggle: toggleStar } = useStarredSet();
@@ -356,8 +358,15 @@ export default function DoiTacGiaoHangPage() {
             label: "Đối tác giao hàng",
             icon: <Plus className="h-4 w-4" />,
             variant: "default",
+            onClick: () => setCreateOpen(true),
           },
         ]}
+      />
+
+      <CreateDeliveryPartnerDialog
+        open={createOpen}
+        onOpenChange={setCreateOpen}
+        onSuccess={fetchData}
       />
 
       <DataTable

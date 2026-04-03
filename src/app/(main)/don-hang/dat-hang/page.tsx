@@ -26,6 +26,7 @@ import { formatCurrency, formatDate } from "@/lib/format";
 import { exportToExcel, exportToCsv } from "@/lib/utils/export";
 import { getOrders } from "@/lib/services";
 import type { SalesOrder } from "@/lib/types";
+import { CreateOrderDialog } from "@/components/shared/dialogs";
 
 // --- Status config ---
 
@@ -214,6 +215,7 @@ export default function DatHangPage() {
   const [pageSize, setPageSize] = useState(15);
   const [expandedRow, setExpandedRow] = useState<number | null>(null);
   const [starred, setStarred] = useState<Set<string>>(new Set());
+  const [createOpen, setCreateOpen] = useState(false);
 
   // Filters
   const [selectedStatuses, setSelectedStatuses] = useState<string[]>([
@@ -361,6 +363,7 @@ export default function DatHangPage() {
   ];
 
   return (
+    <>
     <ListPageLayout
       sidebar={
         <FilterSidebar>
@@ -417,6 +420,7 @@ export default function DatHangPage() {
             label: "Dat hang",
             icon: <Plus className="h-4 w-4" />,
             variant: "default",
+            onClick: () => setCreateOpen(true),
           },
           {
             label: "Gop don",
@@ -464,5 +468,12 @@ export default function DatHangPage() {
         ]}
       />
     </ListPageLayout>
+
+    <CreateOrderDialog
+      open={createOpen}
+      onOpenChange={setCreateOpen}
+      onSuccess={fetchData}
+    />
+    </>
   );
 }

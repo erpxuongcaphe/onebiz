@@ -27,18 +27,17 @@ import type { Database } from "@/lib/supabase/types";
 type InvoiceInsert = Database["public"]["Tables"]["invoices"]["Insert"];
 type InvoiceItemInsert = Database["public"]["Tables"]["invoice_items"]["Insert"];
 
-interface CreateInvoiceDialogProps {
+interface CreateOrderDialogProps {
   open: boolean;
   onOpenChange: (open: boolean) => void;
   onSuccess?: () => void;
 }
 
-interface InvoiceLineItem {
+interface OrderLineItem {
   id: string;
   productName: string;
   quantity: number;
   price: number;
-  discount: number;
 }
 
 interface SearchProduct {
@@ -53,50 +52,63 @@ interface SearchCustomer {
   phone: string;
 }
 
-function generateInvoiceCode() {
-  const num = Math.floor(Math.random() * 99999) + 1;
-  return `HD${String(num).padStart(6, "0")}`;
+interface DeliveryPartner {
+  id: string;
+  name: string;
 }
 
-export function CreateInvoiceDialog({
+function generateOrderCode() {
+  const num = Math.floor(Math.random() * 99999) + 1;
+  return `DH${String(num).padStart(6, "0")}`;
+}
+
+export function CreateOrderDialog({
   open,
   onOpenChange,
   onSuccess,
-}: CreateInvoiceDialogProps) {
+}: CreateOrderDialogProps) {
   const { toast } = useToast();
   const [code, setCode] = useState("");
   const [customerSearch, setCustomerSearch] = useState("");
-  const [selectedCustomer, setSelectedCustomer] = useState("");
+  const [selectedCustomer, setSelectedCustomer] = useState<{ id: string; name: string } | null>(null);
   const [showCustomerDropdown, setShowCustomerDropdown] = useState(false);
+  const [filteredCustomers, setFilteredCustomers] = useState<SearchCustomer[]>([]);
   const [productSearch, setProductSearch] = useState("");
   const [showProductDropdown, setShowProductDropdown] = useState(false);
-  const [items, setItems] = useState<InvoiceLineItem[]>([]);
-  const [paymentMethod, setPaymentMethod] = useState("cash");
-  const [discountType, setDiscountType] = useState<"fixed" | "percent">("fixed");
-  const [discountValue, setDiscountValue] = useState("");
+  const [filteredProducts, setFilteredProducts] = useState<SearchProduct[]>([]);
+  const [items, setItems] = useState<OrderLineItem[]>([]);
+  const [deliveryPartners, setDeliveryPartners] = useState<DeliveryPartner[]>([]);
+  const [selectedPartner, setSelectedPartner] = useState("");
   const [notes, setNotes] = useState("");
   const [errors, setErrors] = useState<Record<string, string>>({});
   const [saving, setSaving] = useState(false);
-  const [filteredCustomers, setFilteredCustomers] = useState<SearchCustomer[]>([]);
-  const [filteredProducts, setFilteredProducts] = useState<SearchProduct[]>([]);
 
   useEffect(() => {
     if (open) {
-      setCode(generateInvoiceCode());
+      setCode(generateOrderCode());
       setCustomerSearch("");
-      setSelectedCustomer("");
+      setSelectedCustomer(null);
       setShowCustomerDropdown(false);
+      setFilteredCustomers([]);
       setProductSearch("");
       setShowProductDropdown(false);
+      setFilteredProducts([]);
       setItems([]);
-      setPaymentMethod("cash");
-      setDiscountType("fixed");
-      setDiscountValue("");
+      setSelectedPartner("");
       setNotes("");
       setErrors({});
       setSaving(false);
-      setFilteredCustomers([]);
-      setFilteredProducts([]);
+
+      // Load delivery partners
+      (async () => {
+        const supabase = getClient();
+        const { data } = await supabase
+          .from("delivery_partners")
+          .select("id, name")
+          .eq("is_active", true)
+          .limit(20);
+        setDeliveryPartners((data ?? []).map(d => ({ id: d.id, name: d.name })));
+      })();
     }
   }, [open]);
 
@@ -136,59 +148,28 @@ export function CreateInvoiceDialog({
     if (existing) {
       setItems(
         items.map((item) =>
-          item.id === product.id
-            ? { ...item, quantity: item.quantity + 1 }
-            : item
+          item.id === product.id ? { ...item, quantity: item.quantity + 1 } : item
         )
       );
     } else {
-      setItems([
-        ...items,
-        {
-          id: product.id,
-          productName: product.name,
-          quantity: 1,
-          price: product.price,
-          discount: 0,
-        },
-      ]);
+      setItems([...items, { id: product.id, productName: product.name, quantity: 1, price: product.price }]);
     }
     setProductSearch("");
     setShowProductDropdown(false);
   }
 
-  function updateItem(
-    id: string,
-    field: keyof InvoiceLineItem,
-    value: string | number
-  ) {
-    setItems(
-      items.map((item) => (item.id === id ? { ...item, [field]: value } : item))
-    );
+  function updateItem(id: string, field: keyof OrderLineItem, value: string | number) {
+    setItems(items.map((item) => (item.id === id ? { ...item, [field]: value } : item)));
   }
 
   function removeItem(id: string) {
     setItems(items.filter((item) => item.id !== id));
   }
 
-  const subtotal = useMemo(
-    () =>
-      items.reduce(
-        (sum, item) => sum + item.quantity * item.price - item.discount,
-        0
-      ),
+  const total = useMemo(
+    () => items.reduce((sum, item) => sum + item.quantity * item.price, 0),
     [items]
   );
-
-  const discountAmount = useMemo(() => {
-    const val = Number(discountValue) || 0;
-    if (discountType === "percent") {
-      return Math.round((subtotal * val) / 100);
-    }
-    return val;
-  }, [subtotal, discountType, discountValue]);
-
-  const total = Math.max(0, subtotal - discountAmount);
 
   function validate(): boolean {
     const newErrors: Record<string, string> = {};
@@ -203,24 +184,22 @@ export function CreateInvoiceDialog({
     try {
       const supabase = getClient();
       const { data: { user } } = await supabase.auth.getUser();
-      const customerObj = filteredCustomers.find(c => c.id === selectedCustomer);
 
-      // Insert invoice
       const { data: invoice, error: invoiceErr } = await supabase
         .from("invoices")
         .insert({
           tenant_id: "",
           branch_id: "",
           code,
-          customer_id: selectedCustomer || null,
-          customer_name: customerObj?.name ?? "Khách lẻ",
-          status: "completed" as const,
-          subtotal,
-          discount_amount: discountAmount,
+          customer_id: selectedCustomer?.id || null,
+          customer_name: selectedCustomer?.name ?? "Khách lẻ",
+          status: "draft" as const,
+          subtotal: total,
+          discount_amount: 0,
           total,
-          paid: total,
-          debt: 0,
-          payment_method: paymentMethod as "cash" | "transfer" | "card" | "mixed",
+          paid: 0,
+          debt: total,
+          payment_method: "cash" as const,
           note: notes || null,
           created_by: user?.id ?? "",
         } satisfies InvoiceInsert)
@@ -229,7 +208,6 @@ export function CreateInvoiceDialog({
 
       if (invoiceErr) throw new Error(invoiceErr.message);
 
-      // Insert invoice items
       if (invoice && items.length > 0) {
         const { error: itemsErr } = await supabase
           .from("invoice_items")
@@ -240,22 +218,22 @@ export function CreateInvoiceDialog({
             unit: "Cái",
             quantity: item.quantity,
             unit_price: item.price,
-            discount: item.discount,
-            total: item.quantity * item.price - item.discount,
+            discount: 0,
+            total: item.quantity * item.price,
           } satisfies InvoiceItemInsert)));
         if (itemsErr) throw new Error(itemsErr.message);
       }
 
       onOpenChange(false);
       toast({
-        title: "Tạo hóa đơn thành công",
-        description: `Đã tạo hóa đơn ${code}`,
+        title: "Tạo đơn đặt hàng thành công",
+        description: `Đã tạo đơn đặt hàng ${code}`,
         variant: "success",
       });
       onSuccess?.();
     } catch (err) {
       toast({
-        title: "Lỗi tạo hóa đơn",
+        title: "Lỗi tạo đơn đặt hàng",
         description: err instanceof Error ? err.message : "Vui lòng thử lại",
         variant: "error",
       });
@@ -268,9 +246,9 @@ export function CreateInvoiceDialog({
     <Dialog open={open} onOpenChange={onOpenChange}>
       <DialogContent className="sm:max-w-2xl max-h-[90vh] overflow-y-auto">
         <DialogHeader>
-          <DialogTitle>Tạo hóa đơn mới</DialogTitle>
+          <DialogTitle>Tạo đơn đặt hàng</DialogTitle>
           <DialogDescription>
-            Mã hóa đơn: {code}
+            Mã đơn hàng: {code}
           </DialogDescription>
         </DialogHeader>
 
@@ -287,9 +265,7 @@ export function CreateInvoiceDialog({
                   setShowCustomerDropdown(true);
                 }}
                 onFocus={() => setShowCustomerDropdown(true)}
-                onBlur={() =>
-                  setTimeout(() => setShowCustomerDropdown(false), 200)
-                }
+                onBlur={() => setTimeout(() => setShowCustomerDropdown(false), 200)}
                 placeholder="Tìm khách hàng theo tên, SĐT..."
                 className="pl-8"
               />
@@ -307,7 +283,7 @@ export function CreateInvoiceDialog({
                         className="flex w-full items-center justify-between px-3 py-2 text-sm hover:bg-accent cursor-pointer"
                         onMouseDown={(e) => e.preventDefault()}
                         onClick={() => {
-                          setSelectedCustomer(c.id);
+                          setSelectedCustomer({ id: c.id, name: c.name });
                           setCustomerSearch(c.name);
                           setShowCustomerDropdown(false);
                         }}
@@ -336,9 +312,7 @@ export function CreateInvoiceDialog({
                 onFocus={() => {
                   if (productSearch) setShowProductDropdown(true);
                 }}
-                onBlur={() =>
-                  setTimeout(() => setShowProductDropdown(false), 200)
-                }
+                onBlur={() => setTimeout(() => setShowProductDropdown(false), 200)}
                 placeholder="Tìm sản phẩm theo tên..."
                 className="pl-8"
               />
@@ -375,17 +349,16 @@ export function CreateInvoiceDialog({
           {/* Line items */}
           {items.length > 0 && (
             <div className="rounded-lg border overflow-hidden">
-              <div className="grid grid-cols-[1fr_70px_100px_90px_36px] gap-2 px-3 py-2 bg-muted/50 text-xs font-medium text-muted-foreground">
+              <div className="grid grid-cols-[1fr_70px_100px_36px] gap-2 px-3 py-2 bg-muted/50 text-xs font-medium text-muted-foreground">
                 <span>Sản phẩm</span>
                 <span className="text-center">SL</span>
                 <span className="text-right">Đơn giá</span>
-                <span className="text-right">Giảm giá</span>
                 <span />
               </div>
               {items.map((item) => (
                 <div
                   key={item.id}
-                  className="grid grid-cols-[1fr_70px_100px_90px_36px] gap-2 items-center px-3 py-2 border-t"
+                  className="grid grid-cols-[1fr_70px_100px_36px] gap-2 items-center px-3 py-2 border-t"
                 >
                   <span className="text-sm truncate">{item.productName}</span>
                   <Input
@@ -393,11 +366,7 @@ export function CreateInvoiceDialog({
                     min={1}
                     value={item.quantity}
                     onChange={(e) =>
-                      updateItem(
-                        item.id,
-                        "quantity",
-                        Math.max(1, Number(e.target.value) || 1)
-                      )
+                      updateItem(item.id, "quantity", Math.max(1, Number(e.target.value) || 1))
                     }
                     className="h-7 text-center px-1"
                   />
@@ -406,18 +375,6 @@ export function CreateInvoiceDialog({
                     value={item.price}
                     onChange={(e) =>
                       updateItem(item.id, "price", Number(e.target.value) || 0)
-                    }
-                    className="h-7 text-right px-1"
-                  />
-                  <Input
-                    type="number"
-                    value={item.discount}
-                    onChange={(e) =>
-                      updateItem(
-                        item.id,
-                        "discount",
-                        Number(e.target.value) || 0
-                      )
                     }
                     className="h-7 text-right px-1"
                   />
@@ -434,52 +391,9 @@ export function CreateInvoiceDialog({
             </div>
           )}
 
-          {/* Totals section */}
+          {/* Total */}
           <div className="space-y-3 rounded-lg border p-3">
-            <div className="flex items-center justify-between text-sm">
-              <span className="text-muted-foreground">Tạm tính</span>
-              <span>{formatCurrency(subtotal)}</span>
-            </div>
-
-            <div className="flex items-center gap-2">
-              <span className="text-sm text-muted-foreground shrink-0">
-                Giảm giá
-              </span>
-              <div className="flex items-center gap-1 ml-auto">
-                <Select
-                  value={discountType}
-                  onValueChange={(v) =>
-                    setDiscountType((v ?? "fixed") as "fixed" | "percent")
-                  }
-                >
-                  <SelectTrigger className="h-7 w-20 text-xs">
-                    <SelectValue />
-                  </SelectTrigger>
-                  <SelectContent>
-                    <SelectItem value="fixed">VNĐ</SelectItem>
-                    <SelectItem value="percent">%</SelectItem>
-                  </SelectContent>
-                </Select>
-                <Input
-                  type="number"
-                  value={discountValue}
-                  onChange={(e) => setDiscountValue(e.target.value)}
-                  placeholder="0"
-                  className="h-7 w-24 text-right"
-                />
-              </div>
-            </div>
-
-            {discountAmount > 0 && (
-              <div className="flex items-center justify-between text-sm">
-                <span className="text-muted-foreground">Giảm</span>
-                <span className="text-orange-600">
-                  -{formatCurrency(discountAmount)}
-                </span>
-              </div>
-            )}
-
-            <div className="flex items-center justify-between border-t pt-2">
+            <div className="flex items-center justify-between">
               <span className="font-medium">Tổng cộng</span>
               <span className="text-lg font-semibold text-primary">
                 {formatCurrency(total)}
@@ -487,20 +401,19 @@ export function CreateInvoiceDialog({
             </div>
           </div>
 
-          {/* Payment method */}
+          {/* Delivery partner */}
           <div className="space-y-1.5">
-            <label className="text-sm font-medium">
-              Phương thức thanh toán
-            </label>
-            <Select value={paymentMethod} onValueChange={(v) => setPaymentMethod(v ?? "cash")}>
+            <label className="text-sm font-medium">Đối tác giao hàng</label>
+            <Select value={selectedPartner} onValueChange={(v) => setSelectedPartner(v ?? "")}>
               <SelectTrigger className="w-full">
-                <SelectValue />
+                <SelectValue placeholder="Chọn đối tác giao hàng" />
               </SelectTrigger>
               <SelectContent>
-                <SelectItem value="cash">Tiền mặt</SelectItem>
-                <SelectItem value="transfer">Chuyển khoản</SelectItem>
-                <SelectItem value="card">Thẻ</SelectItem>
-                <SelectItem value="mixed">Kết hợp</SelectItem>
+                {deliveryPartners.map((dp) => (
+                  <SelectItem key={dp.id} value={dp.id}>
+                    {dp.name}
+                  </SelectItem>
+                ))}
               </SelectContent>
             </Select>
           </div>
@@ -524,7 +437,7 @@ export function CreateInvoiceDialog({
           </Button>
           <Button onClick={handleSave} disabled={saving}>
             {saving && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
-            Tạo hóa đơn
+            Tạo đơn hàng
           </Button>
         </DialogFooter>
       </DialogContent>

@@ -2,7 +2,7 @@
 
 import { useEffect, useState, useCallback } from "react";
 import { ColumnDef } from "@tanstack/react-table";
-import { Download } from "lucide-react";
+import { Download, Plus } from "lucide-react";
 import { Badge } from "@/components/ui/badge";
 import { PageHeader } from "@/components/shared/page-header";
 import { ListPageLayout } from "@/components/shared/list-page-layout";
@@ -23,6 +23,7 @@ import {
 import { formatCurrency, formatDate } from "@/lib/format";
 import { exportToExcel, exportToCsv } from "@/lib/utils/export";
 import { getShippingOrders, getShippingStatuses, getPartnerOptions } from "@/lib/services";
+import { CreateShippingOrderDialog } from "@/components/shared/dialogs";
 import type { ShippingOrder } from "@/lib/types";
 
 // --- Status config ---
@@ -152,6 +153,7 @@ export default function VanDonPage() {
   const [page, setPage] = useState(0);
   const [pageSize, setPageSize] = useState(15);
   const [expandedRow, setExpandedRow] = useState<number | null>(null);
+  const [createOpen, setCreateOpen] = useState(false);
 
   // Stars
   const { starred, toggle: toggleStar } = useStarredSet();
@@ -332,6 +334,20 @@ export default function VanDonPage() {
           excel: () => handleExport("excel"),
           csv: () => handleExport("csv"),
         }}
+        actions={[
+          {
+            label: "Tạo vận đơn",
+            icon: <Plus className="h-4 w-4" />,
+            variant: "default",
+            onClick: () => setCreateOpen(true),
+          },
+        ]}
+      />
+
+      <CreateShippingOrderDialog
+        open={createOpen}
+        onOpenChange={setCreateOpen}
+        onSuccess={fetchData}
       />
 
       <DataTable

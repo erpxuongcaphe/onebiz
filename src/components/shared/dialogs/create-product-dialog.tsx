@@ -19,8 +19,9 @@ import {
   SelectItem,
 } from "@/components/ui/select";
 import { Checkbox } from "@/components/ui/checkbox";
-import { ImagePlus } from "lucide-react";
+import { ImagePlus, Loader2 } from "lucide-react";
 import { useToast } from "@/lib/contexts";
+import { createProduct } from "@/lib/services";
 
 interface CreateProductDialogProps {
   open: boolean;
@@ -59,6 +60,7 @@ export function CreateProductDialog({
   const [barcode, setBarcode] = useState("");
   const [allowSale, setAllowSale] = useState(true);
   const [errors, setErrors] = useState<Record<string, string>>({});
+  const [saving, setSaving] = useState(false);
 
   useEffect(() => {
     if (open) {
@@ -86,28 +88,39 @@ export function CreateProductDialog({
     return Object.keys(newErrors).length === 0;
   }
 
-  function handleSave() {
+  async function handleSave() {
     if (!validate()) return;
-    console.log("Tạo sản phẩm:", {
-      code,
-      name,
-      category,
-      sellPrice: Number(sellPrice),
-      costPrice: Number(costPrice) || 0,
-      initialStock: Number(initialStock) || 0,
-      unit,
-      weight: Number(weight) || 0,
-      description,
-      barcode,
-      allowSale,
-    });
-    onOpenChange(false);
-    toast({
-      title: "Tạo hàng hóa thành công",
-      description: `Đã thêm sản phẩm ${name} (${code})`,
-      variant: "success",
-    });
-    onSuccess?.();
+    setSaving(true);
+    try {
+      await createProduct({
+        code,
+        name,
+        barcode: barcode || undefined,
+        categoryId: category || "",
+        unit: unit || "Cái",
+        costPrice: Number(costPrice) || 0,
+        sellPrice: Number(sellPrice),
+        stock: Number(initialStock) || 0,
+        weight: Number(weight) || undefined,
+        description: description || undefined,
+        allowSale,
+      });
+      onOpenChange(false);
+      toast({
+        title: "Tạo hàng hóa thành công",
+        description: `Đã thêm sản phẩm ${name} (${code})`,
+        variant: "success",
+      });
+      onSuccess?.();
+    } catch (err) {
+      toast({
+        title: "Lỗi tạo hàng hóa",
+        description: err instanceof Error ? err.message : "Vui lòng thử lại",
+        variant: "error",
+      });
+    } finally {
+      setSaving(false);
+    }
   }
 
   return (
@@ -259,7 +272,10 @@ export function CreateProductDialog({
           <Button variant="outline" onClick={() => onOpenChange(false)}>
             Hủy
           </Button>
-          <Button onClick={handleSave}>Lưu</Button>
+          <Button onClick={handleSave} disabled={saving}>
+            {saving && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
+            Lưu
+          </Button>
         </DialogFooter>
       </DialogContent>
     </Dialog>

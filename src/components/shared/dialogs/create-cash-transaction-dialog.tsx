@@ -18,7 +18,9 @@ import {
   SelectContent,
   SelectItem,
 } from "@/components/ui/select";
+import { Loader2 } from "lucide-react";
 import { useToast } from "@/lib/contexts";
+import { createCashTransaction } from "@/lib/services";
 
 interface CreateCashTransactionDialogProps {
   open: boolean;
@@ -61,6 +63,7 @@ export function CreateCashTransactionDialog({
   const [category, setCategory] = useState("");
   const [note, setNote] = useState("");
   const [errors, setErrors] = useState<Record<string, string>>({});
+  const [saving, setSaving] = useState(false);
 
   useEffect(() => {
     if (open) {
@@ -91,24 +94,35 @@ export function CreateCashTransactionDialog({
     return Object.keys(newErrors).length === 0;
   }
 
-  function handleSave() {
+  async function handleSave() {
     if (!validate()) return;
-    console.log("Tạo phiếu:", {
-      type,
-      code,
-      amount: Number(amount),
-      counterparty,
-      method,
-      category,
-      note,
-    });
-    onOpenChange(false);
-    toast({
-      title: type === "receipt" ? "Tạo phiếu thu thành công" : "Tạo phiếu chi thành công",
-      description: `Đã tạo ${type === "receipt" ? "phiếu thu" : "phiếu chi"} ${code}`,
-      variant: "success",
-    });
-    onSuccess?.();
+    setSaving(true);
+    try {
+      await createCashTransaction({
+        code,
+        type,
+        category: category || "other",
+        amount: Number(amount),
+        counterparty: counterparty || "",
+        paymentMethod: method as "cash" | "transfer" | "card",
+        note: note || undefined,
+      });
+      onOpenChange(false);
+      toast({
+        title: type === "receipt" ? "Tạo phiếu thu thành công" : "Tạo phiếu chi thành công",
+        description: `Đã tạo ${type === "receipt" ? "phiếu thu" : "phiếu chi"} ${code}`,
+        variant: "success",
+      });
+      onSuccess?.();
+    } catch (err) {
+      toast({
+        title: "Lỗi tạo phiếu",
+        description: err instanceof Error ? err.message : "Vui lòng thử lại",
+        variant: "error",
+      });
+    } finally {
+      setSaving(false);
+    }
   }
 
   return (
@@ -235,7 +249,10 @@ export function CreateCashTransactionDialog({
           <Button variant="outline" onClick={() => onOpenChange(false)}>
             Hủy
           </Button>
-          <Button onClick={handleSave}>Lưu</Button>
+          <Button onClick={handleSave} disabled={saving}>
+            {saving && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
+            Lưu
+          </Button>
         </DialogFooter>
       </DialogContent>
     </Dialog>
