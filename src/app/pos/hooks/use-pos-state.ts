@@ -13,6 +13,8 @@ import { formatCurrency } from "@/lib/format";
 import { useAuth, useToast } from "@/lib/contexts";
 import { posCheckout, validateCoupon } from "@/lib/services";
 import { createClient } from "@/lib/supabase/client";
+import { printReceiptDirect } from "@/components/shared/print-receipt";
+import type { ReceiptData } from "@/components/shared/print-receipt";
 
 // --- Product type from Supabase ---
 export interface Product {
@@ -443,6 +445,30 @@ export function usePosState() {
         description: `Hóa đơn ${result.invoiceCode} - ${formatCurrency(totalDue)}`,
         variant: "success",
       });
+
+      // Print receipt
+      const receiptData: ReceiptData = {
+        invoiceCode: result.invoiceCode,
+        storeName: "OneBiz",
+        customerName: activeTab.customerName ?? "Khách lẻ",
+        cashierName: user?.fullName ?? undefined,
+        items: cart.map((item) => ({
+          name: item.name,
+          quantity: item.quantity,
+          unitPrice: item.price,
+          discount: item.discount,
+          total: item.quantity * item.price - item.discount,
+        })),
+        subtotal,
+        discountAmount: totalDiscount,
+        total: totalDue,
+        paid: customerPaymentNum,
+        change: changeAmount,
+        paymentMethod,
+        date: new Date().toLocaleString("vi-VN"),
+        note: appliedCoupon ? `Mã giảm giá: ${appliedCoupon.code}` : undefined,
+      };
+      printReceiptDirect(receiptData);
 
       setCart([]);
       resetOrderState();
