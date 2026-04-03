@@ -1,6 +1,7 @@
 "use client";
 
-import { TrendingUp, Package, Receipt, RotateCcw } from "lucide-react";
+import { useState, useEffect, useCallback } from "react";
+import { TrendingUp, Package, Receipt, RotateCcw, Loader2 } from "lucide-react";
 import {
   LineChart,
   Line,
@@ -21,35 +22,33 @@ import {
   formatChartCurrency,
   formatChartTooltipCurrency,
 } from "@/lib/format";
+import {
+  getSalesKpis,
+  getDailyRevenue,
+  getSalesRevenueByWeekday,
+  getSalesRevenueByHour,
+  getTopInvoices,
+} from "@/lib/services";
+import type {
+  MonthlyRevenuePoint,
+  ChartPoint,
+  TopInvoice,
+} from "@/lib/services/supabase/analytics";
 
-// === Mock Data ===
+// === Helpers ===
 
-// 30-day daily revenue
-const dailyRevenue = Array.from({ length: 30 }, (_, i) => {
-  const d = i + 1;
-  const base = 32_000_000;
-  const dayOfWeek = (d + 2) % 7;
-  const weekendBoost = dayOfWeek >= 5 ? 12_000_000 : 0;
-  const noise = Math.round(
-    Math.sin(d * 1.2) * 7_000_000 + Math.cos(d * 0.8) * 4_000_000
-  );
-  const revenue = base + weekendBoost + noise + d * 150_000;
+function calcChangePct(
+  current: number,
+  previous: number,
+): { text: string; positive: boolean } {
+  if (previous === 0)
+    return { text: current > 0 ? "+100%" : "0%", positive: current >= 0 };
+  const pct = ((current - previous) / previous) * 100;
   return {
-    day: `${d.toString().padStart(2, "0")}/03`,
-    revenue: Math.max(revenue, 18_000_000),
+    text: `${pct >= 0 ? "+" : ""}${pct.toFixed(1)}%`,
+    positive: pct >= 0,
   };
-});
-
-// Revenue by day of week
-const revenueByDayOfWeek = [
-  { day: "Thứ 2", revenue: 28_500_000 },
-  { day: "Thứ 3", revenue: 31_200_000 },
-  { day: "Thứ 4", revenue: 29_800_000 },
-  { day: "Thứ 5", revenue: 33_100_000 },
-  { day: "Thứ 6", revenue: 38_500_000 },
-  { day: "Thứ 7", revenue: 45_200_000 },
-  { day: "CN", revenue: 42_800_000 },
-];
+}
 
 const DAY_COLORS = [
   "#64748b",
@@ -59,42 +58,6 @@ const DAY_COLORS = [
   "#3b82f6",
   "#16a34a",
   "#16a34a",
-];
-
-// Revenue by hour (0-23h)
-const revenueByHour = Array.from({ length: 24 }, (_, h) => {
-  let base = 500_000;
-  if (h >= 7 && h <= 11)
-    base =
-      3_500_000 + (h === 9 ? 1_800_000 : 0) + (h === 10 ? 1_200_000 : 0);
-  if (h >= 12 && h <= 13) base = 2_200_000;
-  if (h >= 14 && h <= 17)
-    base =
-      3_000_000 + (h === 15 ? 1_500_000 : 0) + (h === 16 ? 1_000_000 : 0);
-  if (h >= 18 && h <= 20) base = 1_800_000;
-  if (h >= 21 && h <= 22) base = 800_000;
-  if (h >= 0 && h <= 5) base = 200_000 + h * 50_000;
-  if (h === 6) base = 1_200_000;
-
-  const noise = Math.round(Math.sin(h * 2.1) * 300_000);
-  return {
-    hour: `${h.toString().padStart(2, "0")}h`,
-    revenue: Math.max(base + noise, 100_000),
-  };
-});
-
-// Top 10 invoices
-const topInvoices = [
-  { code: "HD-03-0847", customer: "Chuỗi Highland Coffee", value: 18_500_000, date: "28/03/2026" },
-  { code: "HD-03-0812", customer: "Công ty TNHH Phân Phối Miền Nam", value: 15_200_000, date: "25/03/2026" },
-  { code: "HD-03-0791", customer: "Quán The Mỏi Coffee", value: 12_800_000, date: "22/03/2026" },
-  { code: "HD-03-0835", customer: "Siêu thị WinMart Tân Bình", value: 11_400_000, date: "27/03/2026" },
-  { code: "HD-03-0768", customer: "Công ty CP Đại Phát", value: 9_800_000, date: "20/03/2026" },
-  { code: "HD-03-0801", customer: "Nguyễn Văn Tùng (Sỉ)", value: 8_500_000, date: "23/03/2026" },
-  { code: "HD-03-0756", customer: "Quán Cà Phê Sài Gòn Xưa", value: 7_200_000, date: "18/03/2026" },
-  { code: "HD-03-0823", customer: "Trần Thị Mai - Đại lý Q7", value: 6_900_000, date: "26/03/2026" },
-  { code: "HD-03-0744", customer: "Lê Hoàng Phúc", value: 6_500_000, date: "16/03/2026" },
-  { code: "HD-03-0839", customer: "Công ty TNHH Hương Việt", value: 6_200_000, date: "27/03/2026" },
 ];
 
 // === Custom Tooltips ===
@@ -161,7 +124,98 @@ function HourlyTooltip({
 
 // === Page ===
 
+interface SalesKpisData {
+  netRevenue: number;
+  prevNetRevenue: number;
+  soldQty: number;
+  prevSoldQty: number;
+  avgOrderValue: number;
+  prevAvgOrderValue: number;
+  returnRate: number;
+  prevReturnRate: number;
+}
+
 export default function BanHangPage() {
+  const [loading, setLoading] = useState(true);
+  const [kpis, setKpis] = useState<SalesKpisData | null>(null);
+  const [dailyRevenue, setDailyRevenue] = useState<MonthlyRevenuePoint[]>([]);
+  const [revenueByWeekday, setRevenueByWeekday] = useState<ChartPoint[]>([]);
+  const [revenueByHour, setRevenueByHour] = useState<ChartPoint[]>([]);
+  const [topInvoicesList, setTopInvoicesList] = useState<TopInvoice[]>([]);
+
+  const fetchData = useCallback(async () => {
+    setLoading(true);
+    try {
+      const [kpisData, daily, weekday, hourly, invoices] = await Promise.all([
+        getSalesKpis(),
+        getDailyRevenue(30),
+        getSalesRevenueByWeekday(),
+        getSalesRevenueByHour(),
+        getTopInvoices(10),
+      ]);
+      setKpis(kpisData);
+      setDailyRevenue(daily);
+      setRevenueByWeekday(weekday);
+      setRevenueByHour(hourly);
+      setTopInvoicesList(invoices);
+    } catch (err) {
+      console.error("Failed to fetch sales analytics:", err);
+    } finally {
+      setLoading(false);
+    }
+  }, []);
+
+  useEffect(() => {
+    fetchData();
+  }, [fetchData]);
+
+  if (loading) {
+    return (
+      <div className="flex flex-col h-[calc(100vh-48px)] items-center justify-center">
+        <Loader2 className="h-8 w-8 animate-spin text-muted-foreground" />
+        <p className="mt-3 text-sm text-muted-foreground">
+          Đang tải dữ liệu phân tích...
+        </p>
+      </div>
+    );
+  }
+
+  const hasData =
+    kpis ||
+    dailyRevenue.length > 0 ||
+    revenueByWeekday.length > 0 ||
+    revenueByHour.length > 0 ||
+    topInvoicesList.length > 0;
+
+  if (!hasData) {
+    return (
+      <div className="flex flex-col h-[calc(100vh-48px)]">
+        <DateRangeBar
+          title="Phân tích bán hàng"
+          subtitle="Thống kê doanh thu và đơn hàng theo thời gian"
+        />
+        <div className="flex-1 flex items-center justify-center">
+          <p className="text-muted-foreground">
+            Chưa có dữ liệu bán hàng trong khoảng thời gian này.
+          </p>
+        </div>
+      </div>
+    );
+  }
+
+  const revenueChange = kpis
+    ? calcChangePct(kpis.netRevenue, kpis.prevNetRevenue)
+    : { text: "0%", positive: true };
+  const qtyChange = kpis
+    ? calcChangePct(kpis.soldQty, kpis.prevSoldQty)
+    : { text: "0%", positive: true };
+  const avgChange = kpis
+    ? calcChangePct(kpis.avgOrderValue, kpis.prevAvgOrderValue)
+    : { text: "0%", positive: true };
+  const returnChange = kpis
+    ? calcChangePct(kpis.returnRate, kpis.prevReturnRate)
+    : { text: "0%", positive: true };
+
   return (
     <div className="flex flex-col h-[calc(100vh-48px)] overflow-y-auto">
       <DateRangeBar
@@ -174,9 +228,9 @@ export default function BanHangPage() {
         <div className="grid grid-cols-2 lg:grid-cols-4 gap-3">
           <KpiCard
             label="Doanh thu thuần"
-            value={formatCurrency(856_200_000) + "đ"}
-            change="+15,3% so với tháng trước"
-            positive
+            value={formatCurrency(kpis?.netRevenue ?? 0) + "đ"}
+            change={`${revenueChange.text} so với tháng trước`}
+            positive={revenueChange.positive}
             icon={TrendingUp}
             bg="bg-blue-50"
             iconColor="text-blue-600"
@@ -184,9 +238,9 @@ export default function BanHangPage() {
           />
           <KpiCard
             label="Số lượng bán"
-            value="2.847"
-            change="+234 sản phẩm"
-            positive
+            value={(kpis?.soldQty ?? 0).toLocaleString("vi-VN")}
+            change={`${qtyChange.text} so với tháng trước`}
+            positive={qtyChange.positive}
             icon={Package}
             bg="bg-green-50"
             iconColor="text-green-600"
@@ -194,9 +248,9 @@ export default function BanHangPage() {
           />
           <KpiCard
             label="Giá trị trung bình/đơn"
-            value={formatCurrency(1_250_000) + "đ"}
-            change="+3,2% so với tháng trước"
-            positive
+            value={formatCurrency(kpis?.avgOrderValue ?? 0) + "đ"}
+            change={`${avgChange.text} so với tháng trước`}
+            positive={avgChange.positive}
             icon={Receipt}
             bg="bg-purple-50"
             iconColor="text-purple-600"
@@ -204,9 +258,9 @@ export default function BanHangPage() {
           />
           <KpiCard
             label="Tỷ lệ trả hàng"
-            value="1,8%"
-            change="-0,3% so với tháng trước"
-            positive
+            value={`${(kpis?.returnRate ?? 0).toFixed(1)}%`}
+            change={`${returnChange.text} so với tháng trước`}
+            positive={!returnChange.positive}
             icon={RotateCcw}
             bg="bg-orange-50"
             iconColor="text-orange-600"
@@ -215,64 +269,24 @@ export default function BanHangPage() {
         </div>
 
         {/* Daily Revenue Trend */}
-        <ChartCard
-          title="Xu hướng doanh thu 30 ngày"
-          subtitle="Tháng 03/2026"
-        >
-          <div className="h-56 md:h-72">
-            <ResponsiveContainer width="100%" height="100%">
-              <LineChart
-                data={dailyRevenue}
-                margin={{ top: 5, right: 10, left: 0, bottom: 0 }}
-              >
-                <CartesianGrid strokeDasharray="3 3" vertical={false} />
-                <XAxis
-                  dataKey="day"
-                  tick={{ fontSize: 11 }}
-                  tickLine={false}
-                  axisLine={false}
-                  interval={4}
-                />
-                <YAxis
-                  tickFormatter={(v: number) => formatChartCurrency(v)}
-                  tick={{ fontSize: 11 }}
-                  tickLine={false}
-                  axisLine={false}
-                  width={50}
-                />
-                <Tooltip content={<RevenueTooltip />} />
-                <Line
-                  type="monotone"
-                  dataKey="revenue"
-                  stroke="#2563eb"
-                  strokeWidth={2}
-                  dot={false}
-                  activeDot={{ r: 5, fill: "#2563eb" }}
-                  name="Doanh thu"
-                />
-              </LineChart>
-            </ResponsiveContainer>
-          </div>
-        </ChartCard>
-
-        <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
-          {/* Revenue by Day of Week */}
+        {dailyRevenue.length > 0 && (
           <ChartCard
-            title="Doanh thu theo thứ trong tuần"
-            subtitle="Trung bình tháng 03/2026"
+            title="Xu hướng doanh thu 30 ngày"
+            subtitle="Dữ liệu thực tế"
           >
             <div className="h-56 md:h-72">
               <ResponsiveContainer width="100%" height="100%">
-                <BarChart
-                  data={revenueByDayOfWeek}
+                <LineChart
+                  data={dailyRevenue}
                   margin={{ top: 5, right: 10, left: 0, bottom: 0 }}
                 >
                   <CartesianGrid strokeDasharray="3 3" vertical={false} />
                   <XAxis
-                    dataKey="day"
-                    tick={{ fontSize: 12 }}
+                    dataKey="date"
+                    tick={{ fontSize: 11 }}
                     tickLine={false}
                     axisLine={false}
+                    interval={4}
                   />
                   <YAxis
                     tickFormatter={(v: number) => formatChartCurrency(v)}
@@ -281,114 +295,173 @@ export default function BanHangPage() {
                     axisLine={false}
                     width={50}
                   />
-                  <Tooltip content={<DayOfWeekTooltip />} />
-                  <Bar dataKey="revenue" radius={[6, 6, 0, 0]} name="Doanh thu">
-                    {revenueByDayOfWeek.map((_, index) => (
-                      <Cell key={`cell-${index}`} fill={DAY_COLORS[index]} />
-                    ))}
-                  </Bar>
-                </BarChart>
-              </ResponsiveContainer>
-            </div>
-          </ChartCard>
-
-          {/* Revenue by Hour */}
-          <ChartCard
-            title="Doanh thu theo giờ trong ngày"
-            subtitle="Trung bình 30 ngày gần nhất"
-          >
-            <div className="h-56 md:h-72">
-              <ResponsiveContainer width="100%" height="100%">
-                <AreaChart
-                  data={revenueByHour}
-                  margin={{ top: 5, right: 10, left: 0, bottom: 0 }}
-                >
-                  <CartesianGrid strokeDasharray="3 3" vertical={false} />
-                  <XAxis
-                    dataKey="hour"
-                    tick={{ fontSize: 11 }}
-                    tickLine={false}
-                    axisLine={false}
-                    interval={2}
-                  />
-                  <YAxis
-                    tickFormatter={(v: number) => formatChartCurrency(v)}
-                    tick={{ fontSize: 11 }}
-                    tickLine={false}
-                    axisLine={false}
-                    width={45}
-                  />
-                  <Tooltip content={<HourlyTooltip />} />
-                  <defs>
-                    <linearGradient
-                      id="colorRevHour"
-                      x1="0"
-                      y1="0"
-                      x2="0"
-                      y2="1"
-                    >
-                      <stop
-                        offset="5%"
-                        stopColor="#9333ea"
-                        stopOpacity={0.3}
-                      />
-                      <stop
-                        offset="95%"
-                        stopColor="#9333ea"
-                        stopOpacity={0.05}
-                      />
-                    </linearGradient>
-                  </defs>
-                  <Area
+                  <Tooltip content={<RevenueTooltip />} />
+                  <Line
                     type="monotone"
                     dataKey="revenue"
-                    stroke="#9333ea"
+                    stroke="#2563eb"
                     strokeWidth={2}
-                    fill="url(#colorRevHour)"
+                    dot={false}
+                    activeDot={{ r: 5, fill: "#2563eb" }}
                     name="Doanh thu"
                   />
-                </AreaChart>
+                </LineChart>
               </ResponsiveContainer>
             </div>
           </ChartCard>
+        )}
+
+        <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
+          {/* Revenue by Day of Week */}
+          {revenueByWeekday.length > 0 && (
+            <ChartCard
+              title="Doanh thu theo thứ trong tuần"
+              subtitle="Trung bình 30 ngày gần nhất"
+            >
+              <div className="h-56 md:h-72">
+                <ResponsiveContainer width="100%" height="100%">
+                  <BarChart
+                    data={revenueByWeekday}
+                    margin={{ top: 5, right: 10, left: 0, bottom: 0 }}
+                  >
+                    <CartesianGrid strokeDasharray="3 3" vertical={false} />
+                    <XAxis
+                      dataKey="label"
+                      tick={{ fontSize: 12 }}
+                      tickLine={false}
+                      axisLine={false}
+                    />
+                    <YAxis
+                      tickFormatter={(v: number) => formatChartCurrency(v)}
+                      tick={{ fontSize: 11 }}
+                      tickLine={false}
+                      axisLine={false}
+                      width={50}
+                    />
+                    <Tooltip content={<DayOfWeekTooltip />} />
+                    <Bar
+                      dataKey="value"
+                      radius={[6, 6, 0, 0]}
+                      name="Doanh thu"
+                    >
+                      {revenueByWeekday.map((_, index) => (
+                        <Cell
+                          key={`cell-${index}`}
+                          fill={DAY_COLORS[index % DAY_COLORS.length]}
+                        />
+                      ))}
+                    </Bar>
+                  </BarChart>
+                </ResponsiveContainer>
+              </div>
+            </ChartCard>
+          )}
+
+          {/* Revenue by Hour */}
+          {revenueByHour.length > 0 && (
+            <ChartCard
+              title="Doanh thu theo giờ trong ngày"
+              subtitle="Trung bình 30 ngày gần nhất"
+            >
+              <div className="h-56 md:h-72">
+                <ResponsiveContainer width="100%" height="100%">
+                  <AreaChart
+                    data={revenueByHour}
+                    margin={{ top: 5, right: 10, left: 0, bottom: 0 }}
+                  >
+                    <CartesianGrid strokeDasharray="3 3" vertical={false} />
+                    <XAxis
+                      dataKey="label"
+                      tick={{ fontSize: 11 }}
+                      tickLine={false}
+                      axisLine={false}
+                      interval={2}
+                    />
+                    <YAxis
+                      tickFormatter={(v: number) => formatChartCurrency(v)}
+                      tick={{ fontSize: 11 }}
+                      tickLine={false}
+                      axisLine={false}
+                      width={45}
+                    />
+                    <Tooltip content={<HourlyTooltip />} />
+                    <defs>
+                      <linearGradient
+                        id="colorRevHour"
+                        x1="0"
+                        y1="0"
+                        x2="0"
+                        y2="1"
+                      >
+                        <stop
+                          offset="5%"
+                          stopColor="#9333ea"
+                          stopOpacity={0.3}
+                        />
+                        <stop
+                          offset="95%"
+                          stopColor="#9333ea"
+                          stopOpacity={0.05}
+                        />
+                      </linearGradient>
+                    </defs>
+                    <Area
+                      type="monotone"
+                      dataKey="value"
+                      stroke="#9333ea"
+                      strokeWidth={2}
+                      fill="url(#colorRevHour)"
+                      name="Doanh thu"
+                    />
+                  </AreaChart>
+                </ResponsiveContainer>
+              </div>
+            </ChartCard>
+          )}
         </div>
 
         {/* Top 10 Invoices Table */}
-        <ChartCard
-          title="Top 10 hóa đơn giá trị cao nhất"
-          subtitle="Tháng 03/2026"
-        >
-          <div className="overflow-x-auto">
-            <table className="w-full text-sm">
-              <thead>
-                <tr className="border-b text-muted-foreground">
-                  <th className="text-left py-2 pr-4 font-medium">Mã HĐ</th>
-                  <th className="text-left py-2 pr-4 font-medium">
-                    Khách hàng
-                  </th>
-                  <th className="text-right py-2 pr-4 font-medium">Giá trị</th>
-                  <th className="text-right py-2 font-medium">Ngày</th>
-                </tr>
-              </thead>
-              <tbody>
-                {topInvoices.map((inv) => (
-                  <tr key={inv.code} className="border-b last:border-0">
-                    <td className="py-2.5 pr-4 font-mono text-xs text-blue-600">
-                      {inv.code}
-                    </td>
-                    <td className="py-2.5 pr-4 font-medium">{inv.customer}</td>
-                    <td className="py-2.5 pr-4 text-right font-medium text-primary">
-                      {formatCurrency(inv.value)}đ
-                    </td>
-                    <td className="py-2.5 text-right text-muted-foreground">
-                      {inv.date}
-                    </td>
+        {topInvoicesList.length > 0 && (
+          <ChartCard
+            title="Top 10 hóa đơn giá trị cao nhất"
+            subtitle="Tháng hiện tại"
+          >
+            <div className="overflow-x-auto">
+              <table className="w-full text-sm">
+                <thead>
+                  <tr className="border-b text-muted-foreground">
+                    <th className="text-left py-2 pr-4 font-medium">Mã HĐ</th>
+                    <th className="text-left py-2 pr-4 font-medium">
+                      Khách hàng
+                    </th>
+                    <th className="text-right py-2 pr-4 font-medium">
+                      Giá trị
+                    </th>
+                    <th className="text-right py-2 font-medium">Ngày</th>
                   </tr>
-                ))}
-              </tbody>
-            </table>
-          </div>
-        </ChartCard>
+                </thead>
+                <tbody>
+                  {topInvoicesList.map((inv) => (
+                    <tr key={inv.code} className="border-b last:border-0">
+                      <td className="py-2.5 pr-4 font-mono text-xs text-blue-600">
+                        {inv.code}
+                      </td>
+                      <td className="py-2.5 pr-4 font-medium">
+                        {inv.customer}
+                      </td>
+                      <td className="py-2.5 pr-4 text-right font-medium text-primary">
+                        {formatCurrency(inv.value)}đ
+                      </td>
+                      <td className="py-2.5 text-right text-muted-foreground">
+                        {inv.date}
+                      </td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
+          </ChartCard>
+        )}
       </div>
     </div>
   );

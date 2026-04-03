@@ -38,6 +38,7 @@ export default function PosPage() {
             searchRef={pos.searchRef}
             searchQuery={pos.searchQuery}
             selectedCategory={pos.selectedCategory}
+            categories={pos.categories}
             filteredProducts={pos.filteredProducts}
             addedProductId={pos.addedProductId}
             mobileView={pos.mobileView}

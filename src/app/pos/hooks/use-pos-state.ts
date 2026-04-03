@@ -10,55 +10,26 @@ import type {
   CouponInfo,
 } from "@/lib/types";
 import { formatCurrency } from "@/lib/format";
+import { useAuth, useToast } from "@/lib/contexts";
+import { posCheckout, validateCoupon } from "@/lib/services";
+import { createClient } from "@/lib/supabase/client";
 
-// --- Mock Data ---
+// --- Product type from Supabase ---
+export interface Product {
+  id: string;
+  name: string;
+  price: number;
+  stock: number;
+  categoryId: string;
+  image: string;
+}
 
-export const CATEGORIES = [
-  { id: "all", name: "Tất cả" },
-  { id: "cat-1", name: "Cà phê nguyên chất" },
-  { id: "cat-2", name: "Cà phê pha trộn" },
-  { id: "cat-3", name: "Trà & đồ uống" },
-  { id: "cat-4", name: "Vật tư" },
-  { id: "cat-5", name: "Phụ kiện" },
-  { id: "cat-6", name: "Nguyên liệu" },
-];
+export interface Category {
+  id: string;
+  name: string;
+}
 
-export const PRODUCTS = [
-  { id: "p1", name: "Cà phê Robusta rang xay", price: 85000, stock: 150, categoryId: "cat-1", image: "" },
-  { id: "p2", name: "Cà phê Arabica Cầu Đất", price: 120000, stock: 80, categoryId: "cat-1", image: "" },
-  { id: "p3", name: "Cà phê Moka Lâm Đồng", price: 135000, stock: 45, categoryId: "cat-1", image: "" },
-  { id: "p4", name: "Cà phê Culi nguyên chất", price: 95000, stock: 60, categoryId: "cat-1", image: "" },
-  { id: "p5", name: "Cà phê Cherry đặc biệt", price: 160000, stock: 30, categoryId: "cat-1", image: "" },
-  { id: "p6", name: "Cà phê sữa 3in1 hộp 20 gói", price: 65000, stock: 200, categoryId: "cat-2", image: "" },
-  { id: "p7", name: "Cà phê trộn bơ hạt", price: 75000, stock: 120, categoryId: "cat-2", image: "" },
-  { id: "p8", name: "Cà phê trộn cacao", price: 78000, stock: 90, categoryId: "cat-2", image: "" },
-  { id: "p9", name: "Cà phê hòa tan Gold", price: 55000, stock: 300, categoryId: "cat-2", image: "" },
-  { id: "p10", name: "Cà phê trộn vanilla", price: 82000, stock: 75, categoryId: "cat-2", image: "" },
-  { id: "p11", name: "Trà sen Tây Hồ", price: 110000, stock: 50, categoryId: "cat-3", image: "" },
-  { id: "p12", name: "Trà ô long Đài Loan", price: 145000, stock: 40, categoryId: "cat-3", image: "" },
-  { id: "p13", name: "Trà lài Thái Nguyên", price: 68000, stock: 100, categoryId: "cat-3", image: "" },
-  { id: "p14", name: "Trà đào cam sả (gói)", price: 45000, stock: 180, categoryId: "cat-3", image: "" },
-  { id: "p15", name: "Matcha latte bột", price: 95000, stock: 65, categoryId: "cat-3", image: "" },
-  { id: "p16", name: "Sữa đặc Ông Thọ thùng", price: 320000, stock: 25, categoryId: "cat-6", image: "" },
-  { id: "p17", name: "Sữa tươi TH True Milk thùng", price: 285000, stock: 30, categoryId: "cat-6", image: "" },
-  { id: "p18", name: "Đường cát trắng 1kg", price: 22000, stock: 200, categoryId: "cat-6", image: "" },
-  { id: "p19", name: "Bột kem béo Nestle 1kg", price: 85000, stock: 50, categoryId: "cat-6", image: "" },
-  { id: "p20", name: "Syrup caramel Monin 700ml", price: 175000, stock: 35, categoryId: "cat-6", image: "" },
-  { id: "p21", name: "Ly giấy 12oz (50 cái)", price: 55000, stock: 100, categoryId: "cat-4", image: "" },
-  { id: "p22", name: "Nắp ly nhựa (50 cái)", price: 25000, stock: 150, categoryId: "cat-4", image: "" },
-  { id: "p23", name: "Ống hút giấy (100 cái)", price: 35000, stock: 120, categoryId: "cat-4", image: "" },
-  { id: "p24", name: "Túi zip đựng cà phê 250g (100c)", price: 95000, stock: 80, categoryId: "cat-4", image: "" },
-  { id: "p25", name: "Phin cà phê inox", price: 45000, stock: 60, categoryId: "cat-5", image: "" },
-  { id: "p26", name: "Bình giữ nhiệt 500ml", price: 185000, stock: 25, categoryId: "cat-5", image: "" },
-  { id: "p27", name: "Máy xay cà phê mini", price: 450000, stock: 10, categoryId: "cat-5", image: "" },
-  { id: "p28", name: "Bộ drip cà phê V60", price: 250000, stock: 15, categoryId: "cat-5", image: "" },
-  { id: "p29", name: "Cà phê Honey Process", price: 195000, stock: 20, categoryId: "cat-1", image: "" },
-  { id: "p30", name: "Cold Brew túi ngâm (10 túi)", price: 88000, stock: 70, categoryId: "cat-2", image: "" },
-];
-
-export type Product = (typeof PRODUCTS)[0];
-
-// Mock delivery partners
+// Mock delivery partners (will be from DB later)
 export const DELIVERY_PARTNERS = [
   { id: "ghn", name: "Giao Hàng Nhanh" },
   { id: "ghtk", name: "Giao Hàng Tiết Kiệm" },
@@ -67,13 +38,6 @@ export const DELIVERY_PARTNERS = [
   { id: "best", name: "BEST Express" },
   { id: "ninja", name: "Ninja Van" },
   { id: "self", name: "Tự giao hàng" },
-];
-
-// Mock coupons
-const MOCK_COUPONS: CouponInfo[] = [
-  { code: "GIAM10", type: "percent", value: 10, maxDiscountAmount: 50000 },
-  { code: "GIAM20K", type: "fixed", value: 20000, minOrderAmount: 100000 },
-  { code: "FREESHIP", type: "fixed", value: 30000 },
 ];
 
 // --- Helpers ---
@@ -114,11 +78,55 @@ export function roundUpTo(value: number, nearest: number): number {
 // --- Hook ---
 
 export function usePosState() {
+  const { user, currentBranch } = useAuth();
+  const { toast } = useToast();
+
+  // Products & Categories from Supabase
+  const [products, setProducts] = useState<Product[]>([]);
+  const [categories, setCategories] = useState<Category[]>([]);
+  const [productsLoading, setProductsLoading] = useState(true);
+
+  // Load products and categories from Supabase
+  useEffect(() => {
+    async function loadProducts() {
+      const supabase = createClient();
+      const [{ data: prodData }, { data: catData }] = await Promise.all([
+        supabase
+          .from("products")
+          .select("id, name, sell_price, stock, category_id, image_url")
+          .eq("is_active", true)
+          .order("name"),
+        supabase
+          .from("categories")
+          .select("id, name")
+          .order("name"),
+      ]);
+
+      setProducts(
+        (prodData ?? []).map((p) => ({
+          id: p.id,
+          name: p.name,
+          price: p.sell_price ?? 0,
+          stock: p.stock ?? 0,
+          categoryId: p.category_id ?? "",
+          image: p.image_url ?? "",
+        }))
+      );
+
+      setCategories([
+        { id: "all", name: "Tất cả" },
+        ...(catData ?? []).map((c) => ({ id: c.id, name: c.name })),
+      ]);
+
+      setProductsLoading(false);
+    }
+    loadProducts();
+  }, []);
+
   // Order tabs
   const [tabs, setTabs] = useState<OrderTab[]>(() => [createEmptyTab(1)]);
   const [activeTabId, setActiveTabId] = useState(() => `tab-${Date.now()}-1`);
 
-  // Ensure activeTabId is synced on first render
   useEffect(() => {
     setActiveTabId(tabs[0].id);
     // eslint-disable-next-line react-hooks/exhaustive-deps
@@ -137,13 +145,14 @@ export function usePosState() {
   const [showDiscountInput, setShowDiscountInput] = useState(false);
   const [customerPayment, setCustomerPayment] = useState<string>("");
   const [addedProductId, setAddedProductId] = useState<string | null>(null);
+  const [checkingOut, setCheckingOut] = useState(false);
 
   // Coupon state
   const [couponCode, setCouponCode] = useState("");
   const [appliedCoupon, setAppliedCoupon] = useState<CouponInfo | null>(null);
   const [couponError, setCouponError] = useState("");
 
-  // Shipping state (for delivery mode)
+  // Shipping state
   const [shipping, setShipping] = useState<ShippingInfo>(createDefaultShipping());
 
   const searchRef = useRef<HTMLInputElement>(null);
@@ -190,7 +199,6 @@ export function usePosState() {
         e.preventDefault();
         searchRef.current?.focus();
       }
-      // F9 = checkout
       if (e.key === "F9") {
         e.preventDefault();
         handleCheckout();
@@ -203,16 +211,17 @@ export function usePosState() {
 
   // Filtered products
   const filteredProducts = useMemo(() => {
-    return PRODUCTS.filter((p) => {
+    return products.filter((p) => {
       const matchesCategory =
         selectedCategory === "all" || p.categoryId === selectedCategory;
+      const query = searchQuery.toLowerCase();
       const matchesSearch =
-        !searchQuery ||
-        p.name.toLowerCase().includes(searchQuery.toLowerCase()) ||
-        p.id.toLowerCase().includes(searchQuery.toLowerCase());
+        !query ||
+        p.name.toLowerCase().includes(query) ||
+        p.id.toLowerCase().includes(query);
       return matchesCategory && matchesSearch;
     });
-  }, [selectedCategory, searchQuery]);
+  }, [selectedCategory, searchQuery, products]);
 
   // Cart calculations
   const subtotal = useMemo(
@@ -224,14 +233,12 @@ export function usePosState() {
     [cart]
   );
 
-  // Order discount (manual)
   const orderDiscountAmount = useMemo(() => {
     if (discountType === "percent")
       return Math.round((subtotal * discountValue) / 100);
     return discountValue;
   }, [subtotal, discountValue, discountType]);
 
-  // Coupon discount
   const couponDiscountAmount = useMemo(() => {
     if (!appliedCoupon) return 0;
     if (appliedCoupon.minOrderAmount && subtotal < appliedCoupon.minOrderAmount)
@@ -282,7 +289,6 @@ export function usePosState() {
     });
     setAddedProductId(product.id);
     setTimeout(() => setAddedProductId(null), 300);
-    // On mobile quick mode, switch to cart after adding
     if (saleMode === "quick") {
       setMobileView("cart");
     }
@@ -354,27 +360,33 @@ export function usePosState() {
     setShipping(createDefaultShipping());
   }
 
-  // Coupon actions
-  function applyCoupon() {
+  // Coupon actions — use Supabase validate_coupon RPC
+  async function applyCoupon() {
     if (!couponCode.trim()) {
       setCouponError("Vui lòng nhập mã giảm giá");
       return;
     }
-    const found = MOCK_COUPONS.find(
-      (c) => c.code.toLowerCase() === couponCode.trim().toLowerCase()
-    );
-    if (!found) {
-      setCouponError("Mã giảm giá không hợp lệ");
-      return;
-    }
-    if (found.minOrderAmount && subtotal < found.minOrderAmount) {
-      setCouponError(
-        `Đơn hàng tối thiểu ${formatCurrency(found.minOrderAmount)}`
+    try {
+      const result = await validateCoupon(
+        couponCode.trim(),
+        subtotal,
+        activeTab.customerId ?? undefined
       );
-      return;
+      if (!result.valid) {
+        setCouponError(result.error ?? "Mã giảm giá không hợp lệ");
+        return;
+      }
+      setAppliedCoupon({
+        code: couponCode.trim().toUpperCase(),
+        type: result.type === "percent" ? "percent" : "fixed",
+        value: result.value ?? 0,
+        maxDiscountAmount: result.discount_amount ?? undefined,
+        minOrderAmount: undefined,
+      });
+      setCouponError("");
+    } catch {
+      setCouponError("Mã giảm giá không hợp lệ");
     }
-    setAppliedCoupon(found);
-    setCouponError("");
   }
 
   function removeCoupon() {
@@ -383,33 +395,66 @@ export function usePosState() {
     setCouponError("");
   }
 
-  // Shipping actions
   function updateShipping(updates: Partial<ShippingInfo>) {
     setShipping((prev) => ({ ...prev, ...updates }));
   }
 
-  function handleCheckout() {
+  // Real checkout: write to Supabase
+  async function handleCheckout() {
     if (cart.length === 0) return;
-    const methodLabel =
-      paymentMethod === "cash"
-        ? "Tiền mặt"
-        : paymentMethod === "transfer"
-          ? "Chuyển khoản"
-          : "Thẻ";
+    if (checkingOut) return;
 
-    let message = `Thanh toán thành công!\n\nTổng: ${formatCurrency(totalDue)}\nKhách đưa: ${formatCurrency(customerPaymentNum)}\nTiền thừa: ${formatCurrency(changeAmount)}\nPhương thức: ${methodLabel}`;
-
-    if (saleMode === "delivery") {
-      message += `\n\nGiao hàng:\nNgười nhận: ${shipping.recipientName}\nSĐT: ${shipping.recipientPhone}\nĐịa chỉ: ${shipping.recipientAddress}\nĐối tác: ${shipping.deliveryPartnerName || "Chưa chọn"}\nPhí ship: ${formatCurrency(shipping.shippingFee)}\nCOD: ${shipping.isCod ? formatCurrency(shipping.codAmount) : "Không"}`;
+    if (!user?.tenantId || !currentBranch?.id) {
+      toast({
+        title: "Lỗi",
+        description: "Không xác định được chi nhánh. Vui lòng đăng nhập lại.",
+        variant: "error",
+      });
+      return;
     }
 
-    if (appliedCoupon) {
-      message += `\nMã giảm giá: ${appliedCoupon.code} (-${formatCurrency(couponDiscountAmount)})`;
-    }
+    setCheckingOut(true);
+    try {
+      const result = await posCheckout({
+        tenantId: user.tenantId,
+        branchId: currentBranch.id,
+        createdBy: user.id,
+        customerId: activeTab.customerId,
+        customerName: activeTab.customerName ?? "Khách lẻ",
+        items: cart.map((item) => ({
+          productId: item.productId,
+          productName: item.name,
+          quantity: item.quantity,
+          unitPrice: item.price,
+          discount: item.discount,
+        })),
+        paymentMethod,
+        subtotal,
+        discountAmount: totalDiscount,
+        total: totalDue,
+        paid: customerPaymentNum,
+        note: appliedCoupon
+          ? `Mã giảm giá: ${appliedCoupon.code}`
+          : undefined,
+      });
 
-    alert(message);
-    setCart([]);
-    resetOrderState();
+      toast({
+        title: "Thanh toán thành công!",
+        description: `Hóa đơn ${result.invoiceCode} - ${formatCurrency(totalDue)}`,
+        variant: "success",
+      });
+
+      setCart([]);
+      resetOrderState();
+    } catch (err) {
+      toast({
+        title: "Lỗi thanh toán",
+        description: err instanceof Error ? err.message : "Vui lòng thử lại",
+        variant: "error",
+      });
+    } finally {
+      setCheckingOut(false);
+    }
   }
 
   return {
@@ -441,6 +486,12 @@ export function usePosState() {
     customerPaymentNum,
     changeAmount,
     cartItemCount,
+    checkingOut,
+
+    // Products & Categories
+    products,
+    categories,
+    productsLoading,
 
     // Coupon
     couponCode,

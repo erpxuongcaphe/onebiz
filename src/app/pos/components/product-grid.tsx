@@ -7,12 +7,13 @@ import { ScrollArea } from "@/components/ui/scroll-area";
 import { formatCurrency } from "@/lib/format";
 import { cn } from "@/lib/utils";
 import { useState } from "react";
-import { CATEGORIES, type Product } from "../hooks/use-pos-state";
+import type { Product, Category } from "../hooks/use-pos-state";
 
 interface ProductGridProps {
   searchRef: RefObject<HTMLInputElement | null>;
   searchQuery: string;
   selectedCategory: string;
+  categories: Category[];
   filteredProducts: Product[];
   addedProductId: string | null;
   mobileView: "products" | "cart";
@@ -25,6 +26,7 @@ export function ProductGrid({
   searchRef,
   searchQuery,
   selectedCategory,
+  categories,
   filteredProducts,
   addedProductId,
   mobileView,
@@ -82,7 +84,7 @@ export function ProductGrid({
       {/* Category Pills */}
       <div className="px-2 py-1.5 bg-white border-b">
         <div className="flex gap-1.5 overflow-x-auto [&::-webkit-scrollbar]:hidden [-ms-overflow-style:none] [scrollbar-width:none] pb-0.5">
-          {CATEGORIES.map((cat) => (
+          {categories.map((cat) => (
             <button
               key={cat.id}
               onClick={() => onSelectCategory(cat.id)}

@@ -1,6 +1,6 @@
 "use client";
 
-import { useState } from "react";
+import { useState, useEffect, useCallback } from "react";
 import {
   TrendingUp,
   ShoppingCart,
@@ -12,6 +12,7 @@ import {
   AlertTriangle,
   ArrowRight,
   BarChart3,
+  Loader2,
 } from "lucide-react";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
@@ -34,142 +35,34 @@ import {
 } from "recharts";
 import { cn } from "@/lib/utils";
 import Link from "next/link";
+import {
+  getDashboardKpis,
+  getRevenueByDay,
+  getRevenueByHour,
+  getRevenueByWeekday,
+  getOrdersByWeekday,
+  getTopProducts,
+  getLowStockProducts,
+  getRecentActivities,
+} from "@/lib/services";
+import type {
+  DashboardKpis,
+  ChartPoint,
+  OrderChartPoint,
+  TopProduct,
+  LowStockProduct,
+  RecentActivity,
+} from "@/lib/services/supabase/dashboard";
 
-// === KPI Data ===
-const kpiData = [
-  {
-    label: "Doanh thu",
-    value: 45250000,
-    icon: TrendingUp,
-    color: "text-green-600",
-    bg: "bg-green-100",
-    change: "+12.5%",
-    changeLabel: "vs hôm qua",
-    positive: true,
-  },
-  {
-    label: "Đơn hàng",
-    value: 28,
-    icon: ShoppingCart,
-    color: "text-blue-600",
-    bg: "bg-blue-100",
-    change: "+3",
-    changeLabel: "vs hôm qua",
-    positive: true,
-    isCurrency: false,
-  },
-  {
-    label: "Khách hàng mới",
-    value: 5,
-    icon: Users,
-    color: "text-purple-600",
-    bg: "bg-purple-100",
-    change: "+2",
-    changeLabel: "vs hôm qua",
-    positive: true,
-    isCurrency: false,
-  },
-  {
-    label: "Lợi nhuận",
-    value: 18500000,
-    icon: DollarSign,
-    color: "text-orange-600",
-    bg: "bg-orange-100",
-    change: "+8.2%",
-    changeLabel: "vs hôm qua",
-    positive: true,
-  },
-];
-
-// === Chart data by view mode ===
 type ChartView = "day" | "hour" | "weekday";
 
-const revenueByDay = [
-  { label: "24/03", value: 38200000 },
-  { label: "25/03", value: 42500000 },
-  { label: "26/03", value: 35800000 },
-  { label: "27/03", value: 48900000 },
-  { label: "28/03", value: 52300000 },
-  { label: "29/03", value: 61500000 },
-  { label: "30/03", value: 45250000 },
-];
-
-const revenueByHour = [
-  { label: "7h", value: 2100000 },
-  { label: "8h", value: 5800000 },
-  { label: "9h", value: 7200000 },
-  { label: "10h", value: 6500000 },
-  { label: "11h", value: 4800000 },
-  { label: "12h", value: 3200000 },
-  { label: "13h", value: 2800000 },
-  { label: "14h", value: 4500000 },
-  { label: "15h", value: 5200000 },
-  { label: "16h", value: 4900000 },
-  { label: "17h", value: 3800000 },
-  { label: "18h", value: 2500000 },
-  { label: "19h", value: 1800000 },
-  { label: "20h", value: 1200000 },
-  { label: "21h", value: 850000 },
-];
-
-const revenueByWeekday = [
-  { label: "Thứ 2", value: 38200000 },
-  { label: "Thứ 3", value: 42500000 },
-  { label: "Thứ 4", value: 35800000 },
-  { label: "Thứ 5", value: 48900000 },
-  { label: "Thứ 6", value: 52300000 },
-  { label: "Thứ 7", value: 61500000 },
-  { label: "CN", value: 45250000 },
-];
-
-const CHART_DATA: Record<ChartView, typeof revenueByDay> = {
-  day: revenueByDay,
-  hour: revenueByHour,
-  weekday: revenueByWeekday,
+const ENTITY_ICONS: Record<string, typeof FileText> = {
+  invoice: FileText,
+  product: Package,
+  customer: Users,
+  purchase_order: Package,
+  cash_transaction: DollarSign,
 };
-
-// === Orders data ===
-const ordersData = [
-  { day: "T2", completed: 22, cancelled: 2 },
-  { day: "T3", completed: 25, cancelled: 1 },
-  { day: "T4", completed: 19, cancelled: 3 },
-  { day: "T5", completed: 30, cancelled: 2 },
-  { day: "T6", completed: 34, cancelled: 1 },
-  { day: "T7", completed: 38, cancelled: 4 },
-  { day: "CN", completed: 26, cancelled: 2 },
-];
-
-const topProducts = [
-  { name: "Cà phê Robusta rang xay", qty: 156, revenue: 13260000 },
-  { name: "Cà phê Arabica Cầu Đất", qty: 132, revenue: 15840000 },
-  { name: "Cà phê Moka Lâm Đồng", qty: 98, revenue: 13230000 },
-  { name: "Trà sen Tây Hồ", qty: 87, revenue: 9570000 },
-  { name: "Cà phê sữa 3in1", qty: 76, revenue: 4940000 },
-  { name: "Trà đào cam sả", qty: 65, revenue: 2925000 },
-  { name: "Cà phê trộn bơ hạt", qty: 54, revenue: 4050000 },
-  { name: "Cold Brew túi ngâm", qty: 48, revenue: 4224000 },
-  { name: "Matcha latte bột", qty: 43, revenue: 4085000 },
-  { name: "Cà phê Honey Process", qty: 38, revenue: 7410000 },
-];
-
-const lowStockProducts = [
-  { name: "Máy xay cà phê mini", stock: 3, minStock: 5 },
-  { name: "Bộ drip cà phê V60", stock: 4, minStock: 10 },
-  { name: "Cà phê Cherry đặc biệt", stock: 5, minStock: 15 },
-  { name: "Sữa đặc Ông Thọ thùng", stock: 6, minStock: 10 },
-  { name: "Cà phê Honey Process", stock: 8, minStock: 15 },
-];
-
-const recentActivities = [
-  { name: "Nguyễn Văn A", action: "tạo hóa đơn HD005023", time: "5 phút trước", icon: FileText },
-  { name: "Trần Thị B", action: "nhập hàng PN001005", time: "12 phút trước", icon: Package },
-  { name: "Lê Văn C", action: "tạo hóa đơn HD005024", time: "25 phút trước", icon: FileText },
-  { name: "Phạm Thị D", action: "cập nhật giá SP0042", time: "1 giờ trước", icon: Package },
-  { name: "Hoàng Văn E", action: "tạo đơn hàng DH003091", time: "1 giờ trước", icon: ShoppingCart },
-  { name: "Nguyễn Thị F", action: "thêm khách hàng KH00892", time: "2 giờ trước", icon: Users },
-  { name: "Đỗ Văn G", action: "xuất kho XK000412", time: "3 giờ trước", icon: Package },
-  { name: "Vũ Thị H", action: "tạo hóa đơn HD005025", time: "4 giờ trước", icon: FileText },
-];
 
 // Custom tooltips
 function RevenueTooltip({ active, payload, label }: { active?: boolean; payload?: Array<{ value: number }>; label?: string }) {
@@ -199,9 +92,62 @@ function OrdersTooltip({ active, payload, label }: { active?: boolean; payload?:
   );
 }
 
+function calcChange(current: number, previous: number): { text: string; positive: boolean } {
+  if (previous === 0) return { text: current > 0 ? "+100%" : "0%", positive: current >= 0 };
+  const pct = ((current - previous) / previous) * 100;
+  const sign = pct >= 0 ? "+" : "";
+  return { text: `${sign}${pct.toFixed(1)}%`, positive: pct >= 0 };
+}
+
+function calcDiff(current: number, previous: number): { text: string; positive: boolean } {
+  const diff = current - previous;
+  const sign = diff >= 0 ? "+" : "";
+  return { text: `${sign}${diff}`, positive: diff >= 0 };
+}
+
 export default function TongQuanPage() {
-  const [dateRange, setDateRange] = useState<"today" | "week" | "month">("today");
   const [chartView, setChartView] = useState<ChartView>("day");
+  const [loading, setLoading] = useState(true);
+
+  // Data state
+  const [kpis, setKpis] = useState<DashboardKpis | null>(null);
+  const [revenueDay, setRevenueDay] = useState<ChartPoint[]>([]);
+  const [revenueHour, setRevenueHour] = useState<ChartPoint[]>([]);
+  const [revenueWeekday, setRevenueWeekday] = useState<ChartPoint[]>([]);
+  const [orders, setOrders] = useState<OrderChartPoint[]>([]);
+  const [topProds, setTopProds] = useState<TopProduct[]>([]);
+  const [lowStock, setLowStock] = useState<LowStockProduct[]>([]);
+  const [activities, setActivities] = useState<RecentActivity[]>([]);
+
+  const fetchData = useCallback(async () => {
+    setLoading(true);
+    try {
+      const [kpiRes, dayRes, hourRes, weekdayRes, ordersRes, topRes, lowRes, actRes] = await Promise.all([
+        getDashboardKpis(),
+        getRevenueByDay(),
+        getRevenueByHour(),
+        getRevenueByWeekday(),
+        getOrdersByWeekday(),
+        getTopProducts(10),
+        getLowStockProducts(5),
+        getRecentActivities(8),
+      ]);
+      setKpis(kpiRes);
+      setRevenueDay(dayRes);
+      setRevenueHour(hourRes);
+      setRevenueWeekday(weekdayRes);
+      setOrders(ordersRes);
+      setTopProds(topRes);
+      setLowStock(lowRes);
+      setActivities(actRes);
+    } catch {
+      // Silently fail — show empty state
+    } finally {
+      setLoading(false);
+    }
+  }, []);
+
+  useEffect(() => { fetchData(); }, [fetchData]);
 
   const today = new Date();
   const formattedDate = new Intl.DateTimeFormat("vi-VN", {
@@ -211,45 +157,77 @@ export default function TongQuanPage() {
     year: "numeric",
   }).format(today);
 
-  const chartData = CHART_DATA[chartView];
+  const chartData: Record<ChartView, ChartPoint[]> = {
+    day: revenueDay,
+    hour: revenueHour,
+    weekday: revenueWeekday,
+  };
+
+  const kpiCards = kpis
+    ? [
+        {
+          label: "Doanh thu",
+          value: kpis.todayRevenue,
+          icon: TrendingUp,
+          color: "text-green-600",
+          bg: "bg-green-100",
+          ...calcChange(kpis.todayRevenue, kpis.yesterdayRevenue),
+          changeLabel: "vs hôm qua",
+          isCurrency: true,
+        },
+        {
+          label: "Đơn hàng",
+          value: kpis.todayOrders,
+          icon: ShoppingCart,
+          color: "text-blue-600",
+          bg: "bg-blue-100",
+          ...calcDiff(kpis.todayOrders, kpis.yesterdayOrders),
+          changeLabel: "vs hôm qua",
+          isCurrency: false,
+        },
+        {
+          label: "Khách hàng mới",
+          value: kpis.newCustomers,
+          icon: Users,
+          color: "text-purple-600",
+          bg: "bg-purple-100",
+          ...calcDiff(kpis.newCustomers, kpis.yesterdayNewCustomers),
+          changeLabel: "vs hôm qua",
+          isCurrency: false,
+        },
+        {
+          label: "Lợi nhuận",
+          value: kpis.todayProfit,
+          icon: DollarSign,
+          color: "text-orange-600",
+          bg: "bg-orange-100",
+          ...calcChange(kpis.todayProfit, kpis.yesterdayProfit),
+          changeLabel: "vs hôm qua",
+          isCurrency: true,
+        },
+      ]
+    : [];
+
+  if (loading) {
+    return (
+      <div className="flex items-center justify-center h-64">
+        <Loader2 className="size-8 animate-spin text-muted-foreground" />
+      </div>
+    );
+  }
 
   return (
     <div className="p-4 md:p-6 space-y-4">
-      {/* Date selector row */}
-      <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3">
-        <div className="flex items-center gap-2">
-          <Clock className="size-5 text-muted-foreground" />
-          <span className="text-sm text-muted-foreground capitalize">{formattedDate}</span>
-        </div>
-        <div className="flex items-center gap-1.5">
-          {(
-            [
-              { key: "today", label: "Hôm nay" },
-              { key: "week", label: "Tuần này" },
-              { key: "month", label: "Tháng này" },
-            ] as const
-          ).map((item) => (
-            <button
-              key={item.key}
-              onClick={() => setDateRange(item.key)}
-              className={cn(
-                "px-3 py-1.5 rounded-md text-sm font-medium transition-colors",
-                dateRange === item.key
-                  ? "bg-primary text-primary-foreground"
-                  : "bg-muted text-muted-foreground hover:bg-muted/80"
-              )}
-            >
-              {item.label}
-            </button>
-          ))}
-        </div>
+      {/* Date display */}
+      <div className="flex items-center gap-2">
+        <Clock className="size-5 text-muted-foreground" />
+        <span className="text-sm text-muted-foreground capitalize">{formattedDate}</span>
       </div>
 
       {/* KPI Cards */}
       <div className="grid grid-cols-2 lg:grid-cols-4 gap-3">
-        {kpiData.map((kpi) => {
+        {kpiCards.map((kpi) => {
           const Icon = kpi.icon;
-          const isCurrency = kpi.isCurrency !== false;
           return (
             <Card key={kpi.label}>
               <CardContent className="pt-0">
@@ -257,14 +235,12 @@ export default function TongQuanPage() {
                   <div className="space-y-1">
                     <p className="text-xs text-muted-foreground">{kpi.label}</p>
                     <p className="text-xl lg:text-2xl font-bold">
-                      {isCurrency ? formatCurrency(kpi.value) : kpi.value.toLocaleString("vi-VN")}
+                      {kpi.isCurrency ? formatCurrency(kpi.value) : kpi.value.toLocaleString("vi-VN")}
                     </p>
-                    {kpi.change && (
-                      <p className={cn("text-[11px]", kpi.positive ? "text-green-600" : "text-red-500")}>
-                        {kpi.change}{" "}
-                        <span className="text-muted-foreground">{kpi.changeLabel}</span>
-                      </p>
-                    )}
+                    <p className={cn("text-[11px]", kpi.positive ? "text-green-600" : "text-red-500")}>
+                      {kpi.text}{" "}
+                      <span className="text-muted-foreground">{kpi.changeLabel}</span>
+                    </p>
                   </div>
                   <div className={cn("flex size-9 shrink-0 items-center justify-center rounded-full", kpi.bg)}>
                     <Icon className={cn("size-5", kpi.color)} />
@@ -310,7 +286,7 @@ export default function TongQuanPage() {
           <CardContent>
             <div className="h-60">
               <ResponsiveContainer width="100%" height="100%">
-                <AreaChart data={chartData} margin={{ top: 5, right: 10, left: 0, bottom: 0 }}>
+                <AreaChart data={chartData[chartView]} margin={{ top: 5, right: 10, left: 0, bottom: 0 }}>
                   <defs>
                     <linearGradient id="revenueGradient" x1="0" y1="0" x2="0" y2="1">
                       <stop offset="5%" stopColor="#2563eb" stopOpacity={0.3} />
@@ -336,7 +312,7 @@ export default function TongQuanPage() {
           <CardContent>
             <div className="h-60">
               <ResponsiveContainer width="100%" height="100%">
-                <BarChart data={ordersData} margin={{ top: 5, right: 10, left: 0, bottom: 0 }}>
+                <BarChart data={orders} margin={{ top: 5, right: 10, left: 0, bottom: 0 }}>
                   <CartesianGrid strokeDasharray="3 3" vertical={false} />
                   <XAxis dataKey="day" tick={{ fontSize: 11 }} tickLine={false} axisLine={false} />
                   <YAxis tick={{ fontSize: 11 }} tickLine={false} axisLine={false} width={30} />
@@ -364,20 +340,24 @@ export default function TongQuanPage() {
             </div>
           </CardHeader>
           <CardContent>
-            <div className="space-y-2">
-              {topProducts.slice(0, 7).map((product, index) => (
-                <div key={product.name} className="flex items-center gap-2.5 py-1">
-                  <span className={cn(
-                    "size-5 rounded-full flex items-center justify-center text-[10px] font-bold shrink-0",
-                    index < 3 ? "bg-primary text-white" : "bg-muted text-muted-foreground"
-                  )}>
-                    {index + 1}
-                  </span>
-                  <span className="text-sm flex-1 truncate">{product.name}</span>
-                  <span className="text-xs text-muted-foreground shrink-0">{product.qty} sp</span>
-                </div>
-              ))}
-            </div>
+            {topProds.length === 0 ? (
+              <p className="text-sm text-muted-foreground text-center py-4">Chưa có dữ liệu bán hàng</p>
+            ) : (
+              <div className="space-y-2">
+                {topProds.slice(0, 7).map((product, index) => (
+                  <div key={product.name} className="flex items-center gap-2.5 py-1">
+                    <span className={cn(
+                      "size-5 rounded-full flex items-center justify-center text-[10px] font-bold shrink-0",
+                      index < 3 ? "bg-primary text-white" : "bg-muted text-muted-foreground"
+                    )}>
+                      {index + 1}
+                    </span>
+                    <span className="text-sm flex-1 truncate">{product.name}</span>
+                    <span className="text-xs text-muted-foreground shrink-0">{product.qty} sp</span>
+                  </div>
+                ))}
+              </div>
+            )}
           </CardContent>
         </Card>
 
@@ -390,29 +370,33 @@ export default function TongQuanPage() {
                 Hàng sắp hết
               </CardTitle>
               <Badge variant="destructive" className="text-[10px] px-1.5 py-0">
-                {lowStockProducts.length}
+                {lowStock.length}
               </Badge>
             </div>
           </CardHeader>
           <CardContent>
-            <div className="space-y-2.5">
-              {lowStockProducts.map((product) => (
-                <div key={product.name} className="flex items-center justify-between py-1">
-                  <div className="flex-1 min-w-0">
-                    <p className="text-sm truncate">{product.name}</p>
-                    <p className="text-[11px] text-muted-foreground">
-                      Cảnh báo: dưới {product.minStock}
-                    </p>
+            {lowStock.length === 0 ? (
+              <p className="text-sm text-muted-foreground text-center py-4">Không có hàng sắp hết</p>
+            ) : (
+              <div className="space-y-2.5">
+                {lowStock.map((product) => (
+                  <div key={product.name} className="flex items-center justify-between py-1">
+                    <div className="flex-1 min-w-0">
+                      <p className="text-sm truncate">{product.name}</p>
+                      <p className="text-[11px] text-muted-foreground">
+                        Cảnh báo: dưới {product.minStock}
+                      </p>
+                    </div>
+                    <Badge variant="destructive" className="text-xs shrink-0 ml-2">
+                      Còn {product.stock}
+                    </Badge>
                   </div>
-                  <Badge variant="destructive" className="text-xs shrink-0 ml-2">
-                    Còn {product.stock}
-                  </Badge>
-                </div>
-              ))}
-              <Link href="/hang-hoa" className="text-xs text-primary hover:underline flex items-center gap-0.5 pt-1">
-                Quản lý tồn kho <ArrowRight className="size-3" />
-              </Link>
-            </div>
+                ))}
+                <Link href="/hang-hoa" className="text-xs text-primary hover:underline flex items-center gap-0.5 pt-1">
+                  Quản lý tồn kho <ArrowRight className="size-3" />
+                </Link>
+              </div>
+            )}
           </CardContent>
         </Card>
 
@@ -427,25 +411,29 @@ export default function TongQuanPage() {
             </div>
           </CardHeader>
           <CardContent>
-            <div className="space-y-3">
-              {recentActivities.slice(0, 6).map((activity, index) => {
-                const Icon = activity.icon;
-                return (
-                  <div key={index} className="flex items-start gap-2.5">
-                    <div className="flex size-7 shrink-0 items-center justify-center rounded-full bg-muted">
-                      <Icon className="size-3.5 text-muted-foreground" />
+            {activities.length === 0 ? (
+              <p className="text-sm text-muted-foreground text-center py-4">Chưa có hoạt động nào</p>
+            ) : (
+              <div className="space-y-3">
+                {activities.slice(0, 6).map((activity) => {
+                  const Icon = ENTITY_ICONS[activity.entityType] ?? FileText;
+                  return (
+                    <div key={activity.id} className="flex items-start gap-2.5">
+                      <div className="flex size-7 shrink-0 items-center justify-center rounded-full bg-muted">
+                        <Icon className="size-3.5 text-muted-foreground" />
+                      </div>
+                      <div className="flex-1 min-w-0">
+                        <p className="text-xs">
+                          <span className="font-medium">{activity.userName}</span>{" "}
+                          <span className="text-muted-foreground">{activity.action}</span>
+                        </p>
+                        <p className="text-[10px] text-muted-foreground">{activity.time}</p>
+                      </div>
                     </div>
-                    <div className="flex-1 min-w-0">
-                      <p className="text-xs">
-                        <span className="font-medium">{activity.name}</span>{" "}
-                        <span className="text-muted-foreground">{activity.action}</span>
-                      </p>
-                      <p className="text-[10px] text-muted-foreground">{activity.time}</p>
-                    </div>
-                  </div>
-                );
-              })}
-            </div>
+                  );
+                })}
+              </div>
+            )}
           </CardContent>
         </Card>
       </div>

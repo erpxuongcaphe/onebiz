@@ -1,4 +1,4 @@
-export { getProducts, getProductCategories, getProductById, getStockMovements, getSalesHistory, createProduct, updateProduct, deleteProduct } from "./products";
+export { getProducts, getProductCategories, getProductById, getStockMovements as getProductStockMovements, getSalesHistory, createProduct, updateProduct, deleteProduct } from "./products";
 export { getCustomers, getCustomerGroups, getCustomerById, createCustomer, updateCustomer, deleteCustomer } from "./customers";
 export { getSuppliers, getSupplierById, createSupplier, updateSupplier, deleteSupplier } from "./suppliers";
 export { getInvoices, getInvoiceStatuses } from "./invoices";
@@ -15,3 +15,26 @@ export { getPromotions, getActivePromotions, createPromotion, updatePromotion, d
 export { getLoyaltySettings, upsertLoyaltySettings, getLoyaltyTiers, createLoyaltyTier, updateLoyaltyTier, deleteLoyaltyTier, getLoyaltyTransactions, earnLoyaltyPoints } from "./loyalty";
 export { getOnlineOrders, getOnlineOrderById, updateOnlineOrderStatus, updateOnlineOrderPaymentStatus, getOnlineOrderStats } from "./online-orders";
 export { getConversations, getConversationMessages, sendMessage, markConversationRead } from "./conversations";
+export { getDashboardKpis, getRevenueByDay, getRevenueByHour, getRevenueByWeekday, getOrdersByWeekday, getTopProducts, getLowStockProducts, getRecentActivities } from "./dashboard";
+export {
+  // Overview
+  getOverviewKpis, getDailyRevenue, getRevenueByCategory,
+  // Sales
+  getSalesKpis, getRevenueByWeekday as getSalesRevenueByWeekday, getRevenueByHour as getSalesRevenueByHour, getTopInvoices,
+  // End of day
+  getEndOfDayStats, getTodayTopProducts,
+  // Orders
+  getOrdersKpis, getDailyOrderVolume, getOrderStatusDistribution, getRecentOrders,
+  // Inventory
+  getInventoryKpis, getTopProductsByRevenue, getCategoryDistribution, getStockMovements, getLowStockProducts as getAnalyticsLowStock,
+  // Channels
+  getChannelRevenue, getChannelPerformance,
+  // Customers
+  getCustomerKpis, getNewCustomersMonthly, getCustomerSegments, getTopCustomersByRevenue, getTopDebtors,
+  // Suppliers
+  getSupplierKpis, getPurchaseByMonth, getTopSuppliersByPurchase, getSupplierPaymentStatus, getSupplierSummary,
+  // Finance
+  getFinanceKpis, getRevenueVsExpense, getExpenseBreakdown, getMonthlyProfit, getCashFlow,
+} from "./analytics";
+export { posCheckout } from "./pos-checkout";
+export type { PosCheckoutInput, PosCheckoutResult } from "./pos-checkout";

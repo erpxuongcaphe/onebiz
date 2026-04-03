@@ -1,6 +1,7 @@
 "use client";
 
-import { DollarSign, ShoppingCart, Users, TrendingUp } from "lucide-react";
+import { useState, useEffect } from "react";
+import { DollarSign, ShoppingCart, Users, TrendingUp, Loader2 } from "lucide-react";
 import {
   LineChart,
   Line,
@@ -19,41 +20,25 @@ import {
   formatChartTooltipCurrency,
 } from "@/lib/format";
 import { DateRangeBar, KpiCard, ChartCard } from "./_components";
+import {
+  getOverviewKpis,
+  getDailyRevenue,
+  getRevenueByCategory,
+  getTopProductsByRevenue,
+} from "@/lib/services";
+import type {
+  MonthlyRevenuePoint,
+  CategoryRevenue,
+  TopProductRevenue,
+} from "@/lib/services/supabase/analytics";
 
-// === Mock: 30 ngày doanh thu ===
-const revenueByDay = Array.from({ length: 30 }, (_, i) => {
-  const d = new Date(2026, 2, i + 1);
-  const base = 25_000_000 + Math.sin(i * 0.5) * 8_000_000;
-  const noise = (Math.random() - 0.5) * 6_000_000;
-  return {
-    date: `${String(d.getDate()).padStart(2, "0")}/${String(d.getMonth() + 1).padStart(2, "0")}`,
-    revenue: Math.round(base + noise),
-  };
-});
+// === Helpers ===
 
-// === Mock: Doanh thu theo danh mục ===
-const revenueByCategory = [
-  { category: "Cà phê rang xay", revenue: 185_000_000 },
-  { category: "Cà phê hoà tan", revenue: 92_000_000 },
-  { category: "Trà & Thảo mộc", revenue: 58_000_000 },
-  { category: "Máy pha cà phê", revenue: 45_000_000 },
-  { category: "Phụ kiện pha chế", revenue: 32_000_000 },
-  { category: "Bánh & Snack", revenue: 21_000_000 },
-];
-
-// === Mock: Top 10 sản phẩm ===
-const topProducts = [
-  { name: "Cà phê Robusta Đắk Lắk 500g", qty: 342, revenue: 68_400_000 },
-  { name: "Cà phê Arabica Cầu Đất 250g", qty: 285, revenue: 57_000_000 },
-  { name: "Cà phê sữa hoà tan 3in1 (hộp 20)", qty: 264, revenue: 39_600_000 },
-  { name: "Trà ô long Bảo Lộc 200g", qty: 198, revenue: 29_700_000 },
-  { name: "Cà phê Blend House đặc biệt 1kg", qty: 156, revenue: 46_800_000 },
-  { name: "Phin nhôm cao cấp", qty: 148, revenue: 14_800_000 },
-  { name: "Cà phê Moka Lâm Đồng 250g", qty: 132, revenue: 33_000_000 },
-  { name: "Bộ drip V60 Hario", qty: 95, revenue: 28_500_000 },
-  { name: "Bánh quy bơ hạnh nhân (hộp)", qty: 87, revenue: 8_700_000 },
-  { name: "Cà phê Cold Brew chai 500ml", qty: 76, revenue: 11_400_000 },
-];
+function calcChange(current: number, previous: number): string {
+  if (previous === 0) return current > 0 ? "+100%" : "0%";
+  const pct = ((current - previous) / previous) * 100;
+  return `${pct >= 0 ? "+" : ""}${pct.toFixed(1)}% so với tháng trước`;
+}
 
 // === Custom tooltip ===
 function RevenueTooltip({ active, payload, label }: any) {
@@ -71,6 +56,50 @@ function RevenueTooltip({ active, payload, label }: any) {
 }
 
 export default function TongQuanPage() {
+  const [loading, setLoading] = useState(true);
+  const [kpis, setKpis] = useState<{
+    revenue: number; prevRevenue: number;
+    orders: number; prevOrders: number;
+    newCustomers: number; prevNewCustomers: number;
+    profit: number; prevProfit: number;
+  } | null>(null);
+  const [dailyRevenue, setDailyRevenue] = useState<MonthlyRevenuePoint[]>([]);
+  const [categoryRevenue, setCategoryRevenue] = useState<CategoryRevenue[]>([]);
+  const [topProducts, setTopProducts] = useState<TopProductRevenue[]>([]);
+
+  useEffect(() => {
+    async function fetchData() {
+      try {
+        const [kpiData, daily, category, products] = await Promise.all([
+          getOverviewKpis(),
+          getDailyRevenue(),
+          getRevenueByCategory(),
+          getTopProductsByRevenue(),
+        ]);
+        setKpis(kpiData);
+        setDailyRevenue(daily);
+        setCategoryRevenue(category);
+        setTopProducts(products);
+      } catch (err) {
+        console.error("Failed to fetch analytics data:", err);
+      } finally {
+        setLoading(false);
+      }
+    }
+    fetchData();
+  }, []);
+
+  if (loading) {
+    return (
+      <div className="flex flex-col h-full">
+        <DateRangeBar title="Tổng quan" subtitle="Phân tích kinh doanh tổng hợp" />
+        <div className="flex-1 flex items-center justify-center">
+          <Loader2 className="h-8 w-8 animate-spin text-gray-400" />
+        </div>
+      </div>
+    );
+  }
+
   return (
     <div className="flex flex-col h-full">
       <DateRangeBar title="Tổng quan" subtitle="Phân tích kinh doanh tổng hợp" />
@@ -80,9 +109,9 @@ export default function TongQuanPage() {
         <div className="grid grid-cols-2 lg:grid-cols-4 gap-3">
           <KpiCard
             label="Doanh thu"
-            value={formatCurrency(856_000_000) + "đ"}
-            change="+12,5% so với tháng trước"
-            positive
+            value={formatCurrency(kpis?.revenue ?? 0) + "đ"}
+            change={calcChange(kpis?.revenue ?? 0, kpis?.prevRevenue ?? 0)}
+            positive={(kpis?.revenue ?? 0) >= (kpis?.prevRevenue ?? 0)}
             icon={DollarSign}
             bg="bg-blue-50"
             iconColor="text-blue-600"
@@ -90,9 +119,9 @@ export default function TongQuanPage() {
           />
           <KpiCard
             label="Đơn hàng"
-            value="1.247"
-            change="+8,3% so với tháng trước"
-            positive
+            value={(kpis?.orders ?? 0).toLocaleString("vi-VN")}
+            change={calcChange(kpis?.orders ?? 0, kpis?.prevOrders ?? 0)}
+            positive={(kpis?.orders ?? 0) >= (kpis?.prevOrders ?? 0)}
             icon={ShoppingCart}
             bg="bg-emerald-50"
             iconColor="text-emerald-600"
@@ -100,9 +129,9 @@ export default function TongQuanPage() {
           />
           <KpiCard
             label="Khách mới"
-            value="186"
-            change="+23,1% so với tháng trước"
-            positive
+            value={(kpis?.newCustomers ?? 0).toLocaleString("vi-VN")}
+            change={calcChange(kpis?.newCustomers ?? 0, kpis?.prevNewCustomers ?? 0)}
+            positive={(kpis?.newCustomers ?? 0) >= (kpis?.prevNewCustomers ?? 0)}
             icon={Users}
             bg="bg-violet-50"
             iconColor="text-violet-600"
@@ -110,9 +139,9 @@ export default function TongQuanPage() {
           />
           <KpiCard
             label="Lợi nhuận"
-            value={formatCurrency(214_000_000) + "đ"}
-            change="-2,4% so với tháng trước"
-            positive={false}
+            value={formatCurrency(kpis?.profit ?? 0) + "đ"}
+            change={calcChange(kpis?.profit ?? 0, kpis?.prevProfit ?? 0)}
+            positive={(kpis?.profit ?? 0) >= (kpis?.prevProfit ?? 0)}
             icon={TrendingUp}
             bg="bg-amber-50"
             iconColor="text-amber-600"
@@ -124,90 +153,106 @@ export default function TongQuanPage() {
         <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
           {/* Revenue line chart */}
           <ChartCard title="Doanh thu theo ngày" subtitle="30 ngày gần nhất">
-            <ResponsiveContainer width="100%" height={280}>
-              <LineChart data={revenueByDay}>
-                <CartesianGrid strokeDasharray="3 3" stroke="#f0f0f0" />
-                <XAxis
-                  dataKey="date"
-                  tick={{ fontSize: 11 }}
-                  interval={4}
-                />
-                <YAxis
-                  tickFormatter={formatChartCurrency}
-                  tick={{ fontSize: 11 }}
-                  width={48}
-                />
-                <Tooltip content={<RevenueTooltip />} />
-                <Legend
-                  wrapperStyle={{ fontSize: 12 }}
-                />
-                <Line
-                  type="monotone"
-                  dataKey="revenue"
-                  name="Doanh thu"
-                  stroke="#2563eb"
-                  strokeWidth={2}
-                  dot={false}
-                  activeDot={{ r: 4 }}
-                />
-              </LineChart>
-            </ResponsiveContainer>
+            {dailyRevenue.length === 0 ? (
+              <div className="flex items-center justify-center h-[280px] text-sm text-gray-400">
+                Chưa có dữ liệu doanh thu theo ngày
+              </div>
+            ) : (
+              <ResponsiveContainer width="100%" height={280}>
+                <LineChart data={dailyRevenue}>
+                  <CartesianGrid strokeDasharray="3 3" stroke="#f0f0f0" />
+                  <XAxis
+                    dataKey="date"
+                    tick={{ fontSize: 11 }}
+                    interval={4}
+                  />
+                  <YAxis
+                    tickFormatter={formatChartCurrency}
+                    tick={{ fontSize: 11 }}
+                    width={48}
+                  />
+                  <Tooltip content={<RevenueTooltip />} />
+                  <Legend wrapperStyle={{ fontSize: 12 }} />
+                  <Line
+                    type="monotone"
+                    dataKey="revenue"
+                    name="Doanh thu"
+                    stroke="#2563eb"
+                    strokeWidth={2}
+                    dot={false}
+                    activeDot={{ r: 4 }}
+                  />
+                </LineChart>
+              </ResponsiveContainer>
+            )}
           </ChartCard>
 
           {/* Revenue by category bar chart */}
           <ChartCard title="Doanh thu theo danh mục" subtitle="Tháng hiện tại">
-            <ResponsiveContainer width="100%" height={280}>
-              <BarChart data={revenueByCategory} layout="vertical">
-                <CartesianGrid strokeDasharray="3 3" stroke="#f0f0f0" />
-                <XAxis
-                  type="number"
-                  tickFormatter={formatChartCurrency}
-                  tick={{ fontSize: 11 }}
-                />
-                <YAxis
-                  type="category"
-                  dataKey="category"
-                  width={120}
-                  tick={{ fontSize: 11 }}
-                />
-                <Tooltip content={<RevenueTooltip />} />
-                <Bar
-                  dataKey="revenue"
-                  name="Doanh thu"
-                  fill="#2563eb"
-                  radius={[0, 4, 4, 0]}
-                />
-              </BarChart>
-            </ResponsiveContainer>
+            {categoryRevenue.length === 0 ? (
+              <div className="flex items-center justify-center h-[280px] text-sm text-gray-400">
+                Chưa có dữ liệu doanh thu theo danh mục
+              </div>
+            ) : (
+              <ResponsiveContainer width="100%" height={280}>
+                <BarChart data={categoryRevenue} layout="vertical">
+                  <CartesianGrid strokeDasharray="3 3" stroke="#f0f0f0" />
+                  <XAxis
+                    type="number"
+                    tickFormatter={formatChartCurrency}
+                    tick={{ fontSize: 11 }}
+                  />
+                  <YAxis
+                    type="category"
+                    dataKey="category"
+                    width={120}
+                    tick={{ fontSize: 11 }}
+                  />
+                  <Tooltip content={<RevenueTooltip />} />
+                  <Bar
+                    dataKey="revenue"
+                    name="Doanh thu"
+                    fill="#2563eb"
+                    radius={[0, 4, 4, 0]}
+                  />
+                </BarChart>
+              </ResponsiveContainer>
+            )}
           </ChartCard>
         </div>
 
         {/* Top 10 products table */}
         <ChartCard title="Top 10 sản phẩm bán chạy" subtitle="Theo doanh thu tháng này">
-          <div className="overflow-x-auto">
-            <table className="w-full text-sm">
-              <thead>
-                <tr className="border-b text-left text-xs text-gray-500">
-                  <th className="pb-2 pr-4 font-medium w-8">#</th>
-                  <th className="pb-2 pr-4 font-medium">Sản phẩm</th>
-                  <th className="pb-2 pr-4 font-medium text-right">SL bán</th>
-                  <th className="pb-2 font-medium text-right">Doanh thu</th>
-                </tr>
-              </thead>
-              <tbody>
-                {topProducts.map((p, i) => (
-                  <tr key={i} className="border-b last:border-0 hover:bg-gray-50">
-                    <td className="py-2 pr-4 text-gray-400 text-xs">{i + 1}</td>
-                    <td className="py-2 pr-4 font-medium text-gray-800">{p.name}</td>
-                    <td className="py-2 pr-4 text-right text-gray-600">{p.qty}</td>
-                    <td className="py-2 text-right font-semibold text-blue-700">
-                      {formatCurrency(p.revenue)}đ
-                    </td>
+          {topProducts.length === 0 ? (
+            <div className="flex items-center justify-center h-32 text-sm text-gray-400">
+              Chưa có dữ liệu sản phẩm bán chạy
+            </div>
+          ) : (
+            <div className="overflow-x-auto">
+              <table className="w-full text-sm">
+                <thead>
+                  <tr className="border-b text-left text-xs text-gray-500">
+                    <th className="pb-2 pr-4 font-medium w-8">#</th>
+                    <th className="pb-2 pr-4 font-medium">Sản phẩm</th>
+                    <th className="pb-2 pr-4 font-medium text-right">SL bán</th>
+                    <th className="pb-2 font-medium text-right">Doanh thu</th>
                   </tr>
-                ))}
-              </tbody>
-            </table>
-          </div>
+                </thead>
+                <tbody>
+                  {topProducts.map((p, i) => (
+                    <tr key={i} className="border-b last:border-0 hover:bg-gray-50">
+                      <td className="py-2 pr-4 text-gray-400 text-xs">{i + 1}</td>
+                      <td className="py-2 pr-4 font-medium text-gray-800">{p.name}</td>
+                      <td className="py-2 pr-4 text-right text-gray-600">{p.qty}</td>
+                      <td className="py-2 text-right font-semibold text-blue-700">
+                        {formatCurrency(p.revenue)}đ
+                      </td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
+          )}
         </ChartCard>
       </div>
     </div>

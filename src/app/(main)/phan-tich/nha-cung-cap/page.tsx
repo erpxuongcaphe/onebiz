@@ -1,6 +1,7 @@
 "use client";
 
-import { Truck, ShoppingBag, Wallet, RotateCcw } from "lucide-react";
+import { useState, useEffect, useCallback } from "react";
+import { Truck, ShoppingBag, Wallet, RotateCcw, Loader2 } from "lucide-react";
 import {
   LineChart,
   Line,
@@ -22,44 +23,27 @@ import {
   formatChartCurrency,
   formatChartTooltipCurrency,
 } from "@/lib/format";
+import {
+  getSupplierKpis,
+  getPurchaseByMonth,
+  getTopSuppliersByPurchase,
+  getSupplierPaymentStatus,
+  getSupplierSummary,
+} from "@/lib/services";
+import type {
+  ChartPoint,
+  SupplierSummaryRow,
+} from "@/lib/services/supabase/analytics";
 
-// === Mock Data ===
-
-const purchaseByMonth = [
-  { month: "T10/2025", amount: 320000000 },
-  { month: "T11/2025", amount: 285000000 },
-  { month: "T12/2025", amount: 410000000 },
-  { month: "T01/2026", amount: 365000000 },
-  { month: "T02/2026", amount: 295000000 },
-  { month: "T03/2026", amount: 445000000 },
-];
-
-const topSuppliers = [
-  { name: "CT CP Cà Phê Dầu Nguồn", fullName: "Công ty CP Cà Phê Dầu Nguồn", amount: 680000000 },
-  { name: "Nông trại Lâm Đồng", fullName: "Nông trại Cà Phê Lâm Đồng", amount: 520000000 },
-  { name: "CT TNHH Bao Bì Xanh", fullName: "Công ty TNHH Bao Bì Xanh", amount: 185000000 },
-  { name: "CT Vận Chuyển Nhanh", fullName: "Công ty Vận Chuyển Nhanh", amount: 145000000 },
-  { name: "CT CP Trà Ô Long VN", fullName: "Công ty CP Trà Ô Long Việt Nam", amount: 98000000 },
-];
-
-const paymentStatus = [
-  { name: "Đã thanh toán", value: 1250000000 },
-  { name: "Còn nợ", value: 320000000 },
-  { name: "Quá hạn", value: 85000000 },
-];
+// === Helpers ===
 
 const PAYMENT_COLORS = ["#16a34a", "#f59e0b", "#ef4444"];
 
-const supplierTable = [
-  { rank: 1, name: "Công ty CP Cà Phê Dầu Nguồn", total: 680000000, debt: 120000000, orders: 48 },
-  { rank: 2, name: "Nông trại Cà Phê Lâm Đồng", total: 520000000, debt: 85000000, orders: 36 },
-  { rank: 3, name: "Công ty TNHH Bao Bì Xanh", total: 185000000, debt: 42000000, orders: 24 },
-  { rank: 4, name: "Công ty Vận Chuyển Nhanh", total: 145000000, debt: 38000000, orders: 52 },
-  { rank: 5, name: "Công ty CP Trà Ô Long Việt Nam", total: 98000000, debt: 15000000, orders: 18 },
-  { rank: 6, name: "Cơ sở Cacao Đắk Lắk", total: 76000000, debt: 20000000, orders: 12 },
-  { rank: 7, name: "CT TNHH Vật Tư Pha Chế", total: 58000000, debt: 0, orders: 15 },
-  { rank: 8, name: "Công ty In Ấn Phú Thọ", total: 42000000, debt: 0, orders: 8 },
-];
+function calcChange(current: number, previous: number): string {
+  if (previous === 0) return current > 0 ? "+100%" : "0%";
+  const pct = ((current - previous) / previous) * 100;
+  return `${pct >= 0 ? "+" : ""}${pct.toFixed(1)}% so với tháng trước`;
+}
 
 // === Custom Tooltips ===
 
@@ -88,13 +72,13 @@ function SupplierAmountTooltip({
   payload,
 }: {
   active?: boolean;
-  payload?: Array<{ value: number; payload: { fullName: string } }>;
+  payload?: Array<{ value: number; payload: { name: string } }>;
 }) {
   if (!active || !payload?.length) return null;
   return (
     <div className="rounded-lg border bg-background p-3 shadow-md">
       <p className="text-xs text-muted-foreground mb-1">
-        {payload[0].payload.fullName}
+        {payload[0].payload.name}
       </p>
       <p className="text-sm font-bold text-orange-600">
         {formatChartTooltipCurrency(payload[0].value)}
@@ -143,6 +127,60 @@ function renderPieLabel(props: any) {
 }
 
 export default function NhaCungCapPage() {
+  const [loading, setLoading] = useState(true);
+  const [kpis, setKpis] = useState<{
+    totalSuppliers: number;
+    purchaseThisMonth: number;
+    prevPurchase: number;
+    totalDebt: number;
+    prevDebt: number;
+    returnCount: number;
+  } | null>(null);
+  const [purchaseByMonth, setPurchaseByMonth] = useState<ChartPoint[]>([]);
+  const [topSuppliers, setTopSuppliers] = useState<{ name: string; amount: number }[]>([]);
+  const [paymentStatus, setPaymentStatus] = useState<{ name: string; value: number }[]>([]);
+  const [supplierTable, setSupplierTable] = useState<SupplierSummaryRow[]>([]);
+
+  const fetchData = useCallback(async () => {
+    try {
+      setLoading(true);
+      const [kpiData, purchase, top, payment, summary] = await Promise.all([
+        getSupplierKpis(),
+        getPurchaseByMonth(),
+        getTopSuppliersByPurchase(),
+        getSupplierPaymentStatus(),
+        getSupplierSummary(),
+      ]);
+      setKpis(kpiData);
+      setPurchaseByMonth(purchase);
+      setTopSuppliers(top);
+      setPaymentStatus(payment);
+      setSupplierTable(summary);
+    } catch (err) {
+      console.error("Failed to fetch supplier analytics:", err);
+    } finally {
+      setLoading(false);
+    }
+  }, []);
+
+  useEffect(() => {
+    fetchData();
+  }, [fetchData]);
+
+  if (loading) {
+    return (
+      <div className="flex flex-col h-[calc(100vh-48px)]">
+        <DateRangeBar
+          title="Phân tích nhà cung cấp"
+          subtitle="Thống kê mua hàng và công nợ nhà cung cấp"
+        />
+        <div className="flex-1 flex items-center justify-center">
+          <Loader2 className="h-8 w-8 animate-spin text-gray-400" />
+        </div>
+      </div>
+    );
+  }
+
   return (
     <div className="flex flex-col h-[calc(100vh-48px)] overflow-y-auto">
       <DateRangeBar
@@ -155,8 +193,8 @@ export default function NhaCungCapPage() {
         <div className="grid grid-cols-2 lg:grid-cols-4 gap-3">
           <KpiCard
             label="Tổng NCC"
-            value="24"
-            change="+2 nhà cung cấp mới"
+            value={String(kpis?.totalSuppliers ?? 0)}
+            change={`${kpis?.totalSuppliers ?? 0} nhà cung cấp`}
             positive
             icon={Truck}
             bg="bg-blue-50"
@@ -165,9 +203,9 @@ export default function NhaCungCapPage() {
           />
           <KpiCard
             label="Tổng mua tháng"
-            value={formatCurrency(445000000)}
-            change="+50.8% so với tháng trước"
-            positive
+            value={formatCurrency(kpis?.purchaseThisMonth ?? 0)}
+            change={calcChange(kpis?.purchaseThisMonth ?? 0, kpis?.prevPurchase ?? 0)}
+            positive={(kpis?.purchaseThisMonth ?? 0) >= (kpis?.prevPurchase ?? 0)}
             icon={ShoppingBag}
             bg="bg-green-50"
             iconColor="text-green-600"
@@ -175,9 +213,9 @@ export default function NhaCungCapPage() {
           />
           <KpiCard
             label="Công nợ NCC"
-            value={formatCurrency(320000000)}
-            change="-12% so với tháng trước"
-            positive
+            value={formatCurrency(kpis?.totalDebt ?? 0)}
+            change={calcChange(kpis?.totalDebt ?? 0, kpis?.prevDebt ?? 0)}
+            positive={(kpis?.totalDebt ?? 0) <= (kpis?.prevDebt ?? 0)}
             icon={Wallet}
             bg="bg-orange-50"
             iconColor="text-orange-600"
@@ -185,8 +223,8 @@ export default function NhaCungCapPage() {
           />
           <KpiCard
             label="Trả hàng NCC"
-            value={formatCurrency(12500000)}
-            change="3 phiếu trả hàng"
+            value={String(kpis?.returnCount ?? 0)}
+            change={`${kpis?.returnCount ?? 0} phiếu trả hàng`}
             positive={false}
             icon={RotateCcw}
             bg="bg-red-50"
@@ -199,74 +237,86 @@ export default function NhaCungCapPage() {
           {/* Purchase volume by month */}
           <ChartCard title="Giá trị mua hàng theo tháng" subtitle="6 tháng gần nhất">
             <div className="h-64">
-              <ResponsiveContainer width="100%" height="100%">
-                <LineChart
-                  data={purchaseByMonth}
-                  margin={{ top: 5, right: 10, left: 0, bottom: 0 }}
-                >
-                  <CartesianGrid strokeDasharray="3 3" vertical={false} />
-                  <XAxis
-                    dataKey="month"
-                    tick={{ fontSize: 12 }}
-                    tickLine={false}
-                    axisLine={false}
-                  />
-                  <YAxis
-                    tickFormatter={(v: number) => formatChartCurrency(v)}
-                    tick={{ fontSize: 11 }}
-                    tickLine={false}
-                    axisLine={false}
-                    width={50}
-                  />
-                  <Tooltip content={<PurchaseTooltip />} />
-                  <Line
-                    type="monotone"
-                    dataKey="amount"
-                    stroke="#2563eb"
-                    strokeWidth={2}
-                    dot={{ fill: "#2563eb", r: 4 }}
-                    activeDot={{ r: 6, fill: "#2563eb" }}
-                    name="Giá trị mua"
-                  />
-                </LineChart>
-              </ResponsiveContainer>
+              {purchaseByMonth.length === 0 ? (
+                <div className="h-full flex items-center justify-center text-sm text-muted-foreground">
+                  Chưa có dữ liệu mua hàng
+                </div>
+              ) : (
+                <ResponsiveContainer width="100%" height="100%">
+                  <LineChart
+                    data={purchaseByMonth}
+                    margin={{ top: 5, right: 10, left: 0, bottom: 0 }}
+                  >
+                    <CartesianGrid strokeDasharray="3 3" vertical={false} />
+                    <XAxis
+                      dataKey="label"
+                      tick={{ fontSize: 12 }}
+                      tickLine={false}
+                      axisLine={false}
+                    />
+                    <YAxis
+                      tickFormatter={(v: number) => formatChartCurrency(v)}
+                      tick={{ fontSize: 11 }}
+                      tickLine={false}
+                      axisLine={false}
+                      width={50}
+                    />
+                    <Tooltip content={<PurchaseTooltip />} />
+                    <Line
+                      type="monotone"
+                      dataKey="value"
+                      stroke="#2563eb"
+                      strokeWidth={2}
+                      dot={{ fill: "#2563eb", r: 4 }}
+                      activeDot={{ r: 6, fill: "#2563eb" }}
+                      name="Giá trị mua"
+                    />
+                  </LineChart>
+                </ResponsiveContainer>
+              )}
             </div>
           </ChartCard>
 
           {/* Top 5 suppliers horizontal bar */}
           <ChartCard title="Top 5 nhà cung cấp" subtitle="Theo giá trị mua hàng">
             <div className="h-64">
-              <ResponsiveContainer width="100%" height="100%">
-                <BarChart
-                  data={[...topSuppliers].reverse()}
-                  layout="vertical"
-                  margin={{ top: 5, right: 10, left: 0, bottom: 0 }}
-                >
-                  <CartesianGrid strokeDasharray="3 3" horizontal={false} />
-                  <XAxis
-                    type="number"
-                    tickFormatter={(v: number) => formatChartCurrency(v)}
-                    tick={{ fontSize: 11 }}
-                    tickLine={false}
-                    axisLine={false}
-                  />
-                  <YAxis
-                    type="category"
-                    dataKey="name"
-                    tick={{ fontSize: 11 }}
-                    tickLine={false}
-                    axisLine={false}
-                    width={150}
-                  />
-                  <Tooltip content={<SupplierAmountTooltip />} />
-                  <Bar
-                    dataKey="amount"
-                    fill="#ea580c"
-                    radius={[0, 6, 6, 0]}
-                    name="Giá trị mua"
-                  />
-                </BarChart>
-              </ResponsiveContainer>
+              {topSuppliers.length === 0 ? (
+                <div className="h-full flex items-center justify-center text-sm text-muted-foreground">
+                  Chưa có dữ liệu nhà cung cấp
+                </div>
+              ) : (
+                <ResponsiveContainer width="100%" height="100%">
+                  <BarChart
+                    data={[...topSuppliers].reverse()}
+                    layout="vertical"
+                    margin={{ top: 5, right: 10, left: 0, bottom: 0 }}
+                  >
+                    <CartesianGrid strokeDasharray="3 3" horizontal={false} />
+                    <XAxis
+                      type="number"
+                      tickFormatter={(v: number) => formatChartCurrency(v)}
+                      tick={{ fontSize: 11 }}
+                      tickLine={false}
+                      axisLine={false}
+                    />
+                    <YAxis
+                      type="category"
+                      dataKey="name"
+                      tick={{ fontSize: 11 }}
+                      tickLine={false}
+                      axisLine={false}
+                      width={150}
+                    />
+                    <Tooltip content={<SupplierAmountTooltip />} />
+                    <Bar
+                      dataKey="amount"
+                      fill="#ea580c"
+                      radius={[0, 6, 6, 0]}
+                      name="Giá trị mua"
+                    />
+                  </BarChart>
+                </ResponsiveContainer>
+              )}
             </div>
           </ChartCard>
         </div>
@@ -274,73 +324,85 @@ export default function NhaCungCapPage() {
         {/* Payment status pie chart */}
         <ChartCard title="Tình trạng thanh toán NCC" subtitle="Tổng hợp công nợ">
           <div className="h-72">
-            <ResponsiveContainer width="100%" height="100%">
-              <PieChart>
-                <Pie
-                  data={paymentStatus}
-                  cx="50%"
-                  cy="50%"
-                  labelLine={false}
-                  label={renderPieLabel}
-                  outerRadius="80%"
-                  dataKey="value"
-                  nameKey="name"
-                  strokeWidth={2}
-                  stroke="#fff"
-                >
-                  {paymentStatus.map((_, index) => (
-                    <Cell
-                      key={`cell-${index}`}
-                      fill={PAYMENT_COLORS[index % PAYMENT_COLORS.length]}
-                    />
-                  ))}
-                </Pie>
-                <Tooltip content={<PaymentTooltip />} />
-                <Legend
-                  verticalAlign="bottom"
-                  formatter={(value: string) => (
-                    <span className="text-xs">{value}</span>
-                  )}
-                />
-              </PieChart>
-            </ResponsiveContainer>
+            {paymentStatus.length === 0 ? (
+              <div className="h-full flex items-center justify-center text-sm text-muted-foreground">
+                Chưa có dữ liệu thanh toán
+              </div>
+            ) : (
+              <ResponsiveContainer width="100%" height="100%">
+                <PieChart>
+                  <Pie
+                    data={paymentStatus}
+                    cx="50%"
+                    cy="50%"
+                    labelLine={false}
+                    label={renderPieLabel}
+                    outerRadius="80%"
+                    dataKey="value"
+                    nameKey="name"
+                    strokeWidth={2}
+                    stroke="#fff"
+                  >
+                    {paymentStatus.map((_, index) => (
+                      <Cell
+                        key={`cell-${index}`}
+                        fill={PAYMENT_COLORS[index % PAYMENT_COLORS.length]}
+                      />
+                    ))}
+                  </Pie>
+                  <Tooltip content={<PaymentTooltip />} />
+                  <Legend
+                    verticalAlign="bottom"
+                    formatter={(value: string) => (
+                      <span className="text-xs">{value}</span>
+                    )}
+                  />
+                </PieChart>
+              </ResponsiveContainer>
+            )}
           </div>
         </ChartCard>
 
         {/* Supplier table */}
         <ChartCard title="Bảng tổng hợp nhà cung cấp">
-          <div className="overflow-x-auto">
-            <table className="w-full text-sm">
-              <thead>
-                <tr className="border-b text-muted-foreground">
-                  <th className="text-left py-2 pr-4 font-medium">#</th>
-                  <th className="text-left py-2 pr-4 font-medium">NCC</th>
-                  <th className="text-right py-2 pr-4 font-medium">Tổng mua</th>
-                  <th className="text-right py-2 pr-4 font-medium">Công nợ</th>
-                  <th className="text-right py-2 font-medium">Số đơn</th>
-                </tr>
-              </thead>
-              <tbody>
-                {supplierTable.map((item) => (
-                  <tr key={item.rank} className="border-b last:border-0">
-                    <td className="py-2.5 pr-4 text-muted-foreground">{item.rank}</td>
-                    <td className="py-2.5 pr-4 font-medium">{item.name}</td>
-                    <td className="py-2.5 pr-4 text-right font-medium text-primary">
-                      {formatCurrency(item.total)}
-                    </td>
-                    <td className="py-2.5 pr-4 text-right">
-                      {item.debt > 0 ? (
-                        <span className="text-red-600 font-medium">{formatCurrency(item.debt)}</span>
-                      ) : (
-                        <span className="text-green-600">0</span>
-                      )}
-                    </td>
-                    <td className="py-2.5 text-right">{item.orders}</td>
+          {supplierTable.length === 0 ? (
+            <div className="py-8 text-center text-sm text-muted-foreground">
+              Chưa có dữ liệu nhà cung cấp
+            </div>
+          ) : (
+            <div className="overflow-x-auto">
+              <table className="w-full text-sm">
+                <thead>
+                  <tr className="border-b text-muted-foreground">
+                    <th className="text-left py-2 pr-4 font-medium">#</th>
+                    <th className="text-left py-2 pr-4 font-medium">NCC</th>
+                    <th className="text-right py-2 pr-4 font-medium">Tổng mua</th>
+                    <th className="text-right py-2 pr-4 font-medium">Công nợ</th>
+                    <th className="text-right py-2 font-medium">Số đơn</th>
                   </tr>
-                ))}
-              </tbody>
-            </table>
-          </div>
+                </thead>
+                <tbody>
+                  {supplierTable.map((item) => (
+                    <tr key={item.rank} className="border-b last:border-0">
+                      <td className="py-2.5 pr-4 text-muted-foreground">{item.rank}</td>
+                      <td className="py-2.5 pr-4 font-medium">{item.name}</td>
+                      <td className="py-2.5 pr-4 text-right font-medium text-primary">
+                        {formatCurrency(item.total)}
+                      </td>
+                      <td className="py-2.5 pr-4 text-right">
+                        {item.debt > 0 ? (
+                          <span className="text-red-600 font-medium">{formatCurrency(item.debt)}</span>
+                        ) : (
+                          <span className="text-green-600">0</span>
+                        )}
+                      </td>
+                      <td className="py-2.5 text-right">{item.orders}</td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
+          )}
         </ChartCard>
       </div>
     </div>

@@ -1,5 +1,6 @@
 "use client";
 
+import { useState, useEffect, useCallback } from "react";
 import {
   DollarSign,
   ShoppingCart,
@@ -8,6 +9,7 @@ import {
   Landmark,
   RotateCcw,
 } from "lucide-react";
+import { Loader2 } from "lucide-react";
 import {
   BarChart,
   Bar,
@@ -27,48 +29,22 @@ import {
   formatChartTooltipCurrency,
 } from "@/lib/format";
 import { DateRangeBar, KpiCard, ChartCard } from "../_components";
+import {
+  getEndOfDayStats,
+  getSalesRevenueByHour,
+  getTodayTopProducts,
+} from "@/lib/services";
+import type { EndOfDayStats, ChartPoint } from "@/lib/services/supabase/analytics";
 
-// === Mock: Doanh thu theo giờ ===
-const revenueByHour = Array.from({ length: 24 }, (_, h) => {
-  let base = 0;
-  if (h >= 7 && h <= 9) base = 3_500_000 + Math.random() * 1_500_000; // sáng sớm
-  else if (h >= 10 && h <= 12) base = 4_000_000 + Math.random() * 2_000_000; // trưa
-  else if (h >= 13 && h <= 15) base = 2_500_000 + Math.random() * 1_000_000; // chiều
-  else if (h >= 16 && h <= 19) base = 3_800_000 + Math.random() * 1_500_000; // chiều tối
-  else if (h >= 20 && h <= 22) base = 2_000_000 + Math.random() * 800_000; // tối
-  else base = 200_000 + Math.random() * 300_000; // khuya/sáng sớm
-  return {
-    hour: `${String(h).padStart(2, "0")}:00`,
-    revenue: Math.round(base),
-  };
-});
+/* ---------- helpers ---------- */
 
-const totalRevenue = revenueByHour.reduce((s, h) => s + h.revenue, 0);
+function calcChangePct(current: number, previous: number): number {
+  if (previous === 0) return current > 0 ? 100 : 0;
+  return ((current - previous) / previous) * 100;
+}
 
-// === Mock: Phương thức thanh toán ===
-const cashAmount = Math.round(totalRevenue * 0.65);
-const transferAmount = Math.round(totalRevenue * 0.25);
-const cardAmount = totalRevenue - cashAmount - transferAmount;
+/* ---------- custom tooltips ---------- */
 
-const paymentMethods = [
-  { name: "Tiền mặt", value: cashAmount, color: "#22c55e" },
-  { name: "Chuyển khoản", value: transferAmount, color: "#3b82f6" },
-  { name: "Thẻ", value: cardAmount, color: "#f59e0b" },
-];
-
-// === Mock: Top 5 sản phẩm hôm nay ===
-const topProducts = [
-  { name: "Cà phê Robusta Đắk Lắk 500g", qty: 28 },
-  { name: "Cà phê sữa hoà tan 3in1", qty: 24 },
-  { name: "Cà phê Arabica Cầu Đất 250g", qty: 19 },
-  { name: "Trà ô long Bảo Lộc 200g", qty: 15 },
-  { name: "Cà phê Cold Brew chai 500ml", qty: 12 },
-];
-
-const returnAmount = Math.round(totalRevenue * 0.02);
-const totalOrders = 47;
-
-// === Custom tooltips ===
 function HourTooltip({ active, payload, label }: any) {
   if (!active || !payload?.length) return null;
   return (
@@ -86,11 +62,12 @@ function HourTooltip({ active, payload, label }: any) {
 function PieTooltip({ active, payload }: any) {
   if (!active || !payload?.length) return null;
   const d = payload[0];
+  const total = d.payload.total as number;
   return (
     <div className="bg-white border rounded-lg shadow-lg p-2.5 text-xs">
       <p className="font-semibold text-gray-700 mb-1">{d.name}</p>
       <p style={{ color: d.payload.color }}>
-        {formatChartTooltipCurrency(d.value)} ({((d.value / totalRevenue) * 100).toFixed(1)}%)
+        {formatChartTooltipCurrency(d.value)} ({total > 0 ? ((d.value / total) * 100).toFixed(1) : 0}%)
       </p>
     </div>
   );
@@ -108,7 +85,92 @@ function ProductTooltip({ active, payload, label }: any) {
   );
 }
 
+/* ---------- main page ---------- */
+
 export default function CuoiNgayPage() {
+  const [stats, setStats] = useState<EndOfDayStats | null>(null);
+  const [revenueByHour, setRevenueByHour] = useState<ChartPoint[]>([]);
+  const [topProducts, setTopProducts] = useState<{ name: string; qty: number }[]>([]);
+  const [loading, setLoading] = useState(true);
+
+  const fetchData = useCallback(async () => {
+    setLoading(true);
+    try {
+      const [statsData, hourData, productsData] = await Promise.all([
+        getEndOfDayStats(),
+        getSalesRevenueByHour(),
+        getTodayTopProducts(),
+      ]);
+      setStats(statsData);
+      setRevenueByHour(hourData);
+      setTopProducts(productsData);
+    } catch (err) {
+      console.error("Failed to fetch end-of-day data", err);
+    } finally {
+      setLoading(false);
+    }
+  }, []);
+
+  useEffect(() => {
+    fetchData();
+  }, [fetchData]);
+
+  /* --- loading state --- */
+  if (loading) {
+    return (
+      <div className="flex flex-col h-full">
+        <DateRangeBar
+          title="Báo cáo cuối ngày"
+          subtitle="Tổng kết hoạt động kinh doanh trong ngày"
+        />
+        <div className="flex-1 flex items-center justify-center">
+          <Loader2 className="size-8 animate-spin text-gray-400" />
+        </div>
+      </div>
+    );
+  }
+
+  /* --- empty state --- */
+  if (!stats) {
+    return (
+      <div className="flex flex-col h-full">
+        <DateRangeBar
+          title="Báo cáo cuối ngày"
+          subtitle="Tổng kết hoạt động kinh doanh trong ngày"
+        />
+        <div className="flex-1 flex items-center justify-center text-gray-500 text-sm">
+          Không có dữ liệu cuối ngày.
+        </div>
+      </div>
+    );
+  }
+
+  /* --- derived data --- */
+  const {
+    totalRevenue,
+    totalOrders,
+    cashAmount,
+    transferAmount,
+    cardAmount,
+    returnAmount,
+    previousRevenue,
+    previousOrders,
+  } = stats;
+
+  const revenuePct = calcChangePct(totalRevenue, previousRevenue);
+  const ordersDiff = totalOrders - previousOrders;
+
+  const paymentMethods = [
+    { name: "Tiền mặt", value: cashAmount, color: "#22c55e", total: totalRevenue },
+    { name: "Chuyển khoản", value: transferAmount, color: "#3b82f6", total: totalRevenue },
+    { name: "Thẻ", value: cardAmount, color: "#f97316", total: totalRevenue },
+  ];
+
+  const hourChartData = revenueByHour.map((p) => ({
+    hour: p.label,
+    revenue: p.value,
+  }));
+
   return (
     <div className="flex flex-col h-full">
       <DateRangeBar
@@ -122,8 +184,8 @@ export default function CuoiNgayPage() {
           <KpiCard
             label="Tổng doanh thu"
             value={formatCurrency(totalRevenue) + "đ"}
-            change="+5,2% so với hôm qua"
-            positive
+            change={`${revenuePct >= 0 ? "+" : ""}${revenuePct.toFixed(1)}% so với hôm qua`}
+            positive={revenuePct >= 0}
             icon={DollarSign}
             bg="bg-blue-50"
             iconColor="text-blue-600"
@@ -132,8 +194,8 @@ export default function CuoiNgayPage() {
           <KpiCard
             label="Tổng đơn hàng"
             value={String(totalOrders)}
-            change="+3 đơn so với hôm qua"
-            positive
+            change={`${ordersDiff >= 0 ? "+" : ""}${ordersDiff} đơn so với hôm qua`}
+            positive={ordersDiff >= 0}
             icon={ShoppingCart}
             bg="bg-emerald-50"
             iconColor="text-emerald-600"
@@ -166,7 +228,6 @@ export default function CuoiNgayPage() {
           <KpiCard
             label="Trả hàng"
             value={formatCurrency(returnAmount) + "đ"}
-            change="2 đơn trả hàng"
             positive={false}
             icon={RotateCcw}
             bg="bg-red-50"
@@ -179,55 +240,67 @@ export default function CuoiNgayPage() {
         <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
           {/* Revenue by hour */}
           <ChartCard title="Doanh thu theo giờ" subtitle="Phân bổ doanh thu trong ngày">
-            <ResponsiveContainer width="100%" height={280}>
-              <BarChart data={revenueByHour}>
-                <CartesianGrid strokeDasharray="3 3" stroke="#f0f0f0" />
-                <XAxis
-                  dataKey="hour"
-                  tick={{ fontSize: 10 }}
-                  interval={2}
-                />
-                <YAxis
-                  tickFormatter={formatChartCurrency}
-                  tick={{ fontSize: 11 }}
-                  width={48}
-                />
-                <Tooltip content={<HourTooltip />} />
-                <Bar
-                  dataKey="revenue"
-                  name="Doanh thu"
-                  fill="#2563eb"
-                  radius={[3, 3, 0, 0]}
-                />
-              </BarChart>
-            </ResponsiveContainer>
+            {hourChartData.length > 0 ? (
+              <ResponsiveContainer width="100%" height={280}>
+                <BarChart data={hourChartData}>
+                  <CartesianGrid strokeDasharray="3 3" stroke="#f0f0f0" />
+                  <XAxis
+                    dataKey="hour"
+                    tick={{ fontSize: 10 }}
+                    interval={2}
+                  />
+                  <YAxis
+                    tickFormatter={formatChartCurrency}
+                    tick={{ fontSize: 11 }}
+                    width={48}
+                  />
+                  <Tooltip content={<HourTooltip />} />
+                  <Bar
+                    dataKey="revenue"
+                    name="Doanh thu"
+                    fill="#2563eb"
+                    radius={[3, 3, 0, 0]}
+                  />
+                </BarChart>
+              </ResponsiveContainer>
+            ) : (
+              <div className="h-[280px] flex items-center justify-center text-gray-400 text-sm">
+                Chưa có dữ liệu doanh thu theo giờ.
+              </div>
+            )}
           </ChartCard>
 
           {/* Payment method pie */}
           <ChartCard title="Phương thức thanh toán" subtitle="Tỷ lệ theo giá trị">
-            <ResponsiveContainer width="100%" height={280}>
-              <PieChart>
-                <Pie
-                  data={paymentMethods}
-                  cx="50%"
-                  cy="50%"
-                  innerRadius={60}
-                  outerRadius={100}
-                  paddingAngle={3}
-                  dataKey="value"
-                  nameKey="name"
-                  label={({ name, percent }: any) =>
-                    `${name} ${(percent * 100).toFixed(0)}%`
-                  }
-                >
-                  {paymentMethods.map((entry, i) => (
-                    <Cell key={i} fill={entry.color} />
-                  ))}
-                </Pie>
-                <Tooltip content={<PieTooltip />} />
-                <Legend wrapperStyle={{ fontSize: 12 }} />
-              </PieChart>
-            </ResponsiveContainer>
+            {totalRevenue > 0 ? (
+              <ResponsiveContainer width="100%" height={280}>
+                <PieChart>
+                  <Pie
+                    data={paymentMethods}
+                    cx="50%"
+                    cy="50%"
+                    innerRadius={60}
+                    outerRadius={100}
+                    paddingAngle={3}
+                    dataKey="value"
+                    nameKey="name"
+                    label={({ name, percent }: any) =>
+                      `${name} ${(percent * 100).toFixed(0)}%`
+                    }
+                  >
+                    {paymentMethods.map((entry, i) => (
+                      <Cell key={i} fill={entry.color} />
+                    ))}
+                  </Pie>
+                  <Tooltip content={<PieTooltip />} />
+                  <Legend wrapperStyle={{ fontSize: 12 }} />
+                </PieChart>
+              </ResponsiveContainer>
+            ) : (
+              <div className="h-[280px] flex items-center justify-center text-gray-400 text-sm">
+                Chưa có dữ liệu thanh toán.
+              </div>
+            )}
           </ChartCard>
         </div>
 
@@ -260,7 +333,7 @@ export default function CuoiNgayPage() {
                         {formatCurrency(m.value)}đ
                       </td>
                       <td className="py-2.5 text-right text-gray-500">
-                        {((m.value / totalRevenue) * 100).toFixed(1)}%
+                        {totalRevenue > 0 ? ((m.value / totalRevenue) * 100).toFixed(1) : "0.0"}%
                       </td>
                     </tr>
                   ))}
@@ -277,7 +350,7 @@ export default function CuoiNgayPage() {
                       -{formatCurrency(returnAmount)}đ
                     </td>
                     <td className="py-2.5 text-right">
-                      {((returnAmount / totalRevenue) * 100).toFixed(1)}%
+                      {totalRevenue > 0 ? ((returnAmount / totalRevenue) * 100).toFixed(1) : "0.0"}%
                     </td>
                   </tr>
                   <tr className="border-t-2 font-bold text-emerald-700">
@@ -286,7 +359,9 @@ export default function CuoiNgayPage() {
                       {formatCurrency(totalRevenue - returnAmount)}đ
                     </td>
                     <td className="py-2.5 text-right">
-                      {(((totalRevenue - returnAmount) / totalRevenue) * 100).toFixed(1)}%
+                      {totalRevenue > 0
+                        ? (((totalRevenue - returnAmount) / totalRevenue) * 100).toFixed(1)
+                        : "0.0"}%
                     </td>
                   </tr>
                 </tbody>
@@ -296,25 +371,31 @@ export default function CuoiNgayPage() {
 
           {/* Top 5 products horizontal bar */}
           <ChartCard title="Top 5 sản phẩm bán chạy hôm nay" subtitle="Theo số lượng bán">
-            <ResponsiveContainer width="100%" height={280}>
-              <BarChart data={topProducts} layout="vertical">
-                <CartesianGrid strokeDasharray="3 3" stroke="#f0f0f0" />
-                <XAxis type="number" tick={{ fontSize: 11 }} />
-                <YAxis
-                  type="category"
-                  dataKey="name"
-                  width={160}
-                  tick={{ fontSize: 11 }}
-                />
-                <Tooltip content={<ProductTooltip />} />
-                <Bar
-                  dataKey="qty"
-                  name="Số lượng"
-                  fill="#10b981"
-                  radius={[0, 4, 4, 0]}
-                />
-              </BarChart>
-            </ResponsiveContainer>
+            {topProducts.length > 0 ? (
+              <ResponsiveContainer width="100%" height={280}>
+                <BarChart data={topProducts} layout="vertical">
+                  <CartesianGrid strokeDasharray="3 3" stroke="#f0f0f0" />
+                  <XAxis type="number" tick={{ fontSize: 11 }} />
+                  <YAxis
+                    type="category"
+                    dataKey="name"
+                    width={160}
+                    tick={{ fontSize: 11 }}
+                  />
+                  <Tooltip content={<ProductTooltip />} />
+                  <Bar
+                    dataKey="qty"
+                    name="Số lượng"
+                    fill="#10b981"
+                    radius={[0, 4, 4, 0]}
+                  />
+                </BarChart>
+              </ResponsiveContainer>
+            ) : (
+              <div className="h-[280px] flex items-center justify-center text-gray-400 text-sm">
+                Chưa có sản phẩm bán hôm nay.
+              </div>
+            )}
           </ChartCard>
         </div>
       </div>
