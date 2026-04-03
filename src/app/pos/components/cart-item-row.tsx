@@ -78,10 +78,7 @@ export function CartItemRow({
                 }}
                 onKeyDown={(e) => {
                   if (e.key === "Enter") {
-                    onUpdatePrice(
-                      item.id,
-                      parseInt(priceInput) || item.price
-                    );
+                    onUpdatePrice(item.id, parseInt(priceInput) || item.price);
                     setEditingPrice(false);
                   }
                   if (e.key === "Escape") {
@@ -116,12 +113,12 @@ export function CartItemRow({
                 onClick={() => setShowItemDiscount(true)}
                 className="text-[11px] text-muted-foreground hover:text-primary transition-colors"
               >
-                + Giam gia
+                + Giảm giá
               </button>
             ) : (
               <div className="flex items-center gap-1.5">
                 <span className="text-[11px] text-muted-foreground shrink-0">
-                  Giam:
+                  Giảm:
                 </span>
                 <input
                   type="number"

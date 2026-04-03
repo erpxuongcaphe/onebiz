@@ -15,6 +15,37 @@ export interface OrderTab {
   cart: CartItem[];
   customerId: string | null;
   customerName: string;
+  /** Thông tin giao hàng (chỉ dùng trong mode delivery) */
+  shipping?: ShippingInfo;
+}
+
+// Thông tin giao hàng
+export interface ShippingInfo {
+  recipientName: string;
+  recipientPhone: string;
+  recipientAddress: string;
+  deliveryPartnerId: string;
+  deliveryPartnerName: string;
+  shippingFee: number;
+  codAmount: number;
+  isCod: boolean;
+  note: string;
+}
+
+// Đối tác giao hàng (dùng trong POS)
+export interface PosDeliveryPartner {
+  id: string;
+  name: string;
+  logo?: string;
+}
+
+// Mã giảm giá / Coupon
+export interface CouponInfo {
+  code: string;
+  type: "fixed" | "percent";
+  value: number;
+  minOrderAmount?: number;
+  maxDiscountAmount?: number;
 }
 
 // Chế độ bán hàng

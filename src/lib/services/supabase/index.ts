@@ -9,3 +9,9 @@ export { getShippingOrders, getShippingStatuses, getDeliveryPartners, getPartner
 export { getCashBookEntries, getCashBookTypes, getCashBookSummary } from "./cash-book";
 export { getInventoryChecks, getInventoryCheckStatuses, getManufacturingOrders, getManufacturingStatuses, getDisposalExports, getDisposalStatuses, getInternalExports, getInternalExportStatuses } from "./inventory";
 export { getPurchaseOrderEntries, getPurchaseEntryStatuses, getPurchaseReturns, getPurchaseReturnStatuses, getInputInvoices, getInputInvoiceStatuses } from "./purchase-entries";
+export { getFavorites, isFavorite, toggleFavorite, getFavoriteIds } from "./favorites";
+export { getCoupons, getCouponById, createCoupon, updateCoupon, deleteCoupon, validateCoupon, getCouponUsages } from "./coupons";
+export { getPromotions, getActivePromotions, createPromotion, updatePromotion, deletePromotion } from "./promotions";
+export { getLoyaltySettings, upsertLoyaltySettings, getLoyaltyTiers, createLoyaltyTier, updateLoyaltyTier, deleteLoyaltyTier, getLoyaltyTransactions, earnLoyaltyPoints } from "./loyalty";
+export { getOnlineOrders, getOnlineOrderById, updateOnlineOrderStatus, updateOnlineOrderPaymentStatus, getOnlineOrderStats } from "./online-orders";
+export { getConversations, getConversationMessages, sendMessage, markConversationRead } from "./conversations";

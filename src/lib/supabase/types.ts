@@ -312,6 +312,8 @@ export interface Database {
           debt: number;
           total_spent: number;
           total_orders: number;
+          loyalty_points: number;
+          loyalty_tier_id: string | null;
           note: string | null;
           is_active: boolean;
           created_at: string;
@@ -331,6 +333,8 @@ export interface Database {
           debt?: number;
           total_spent?: number;
           total_orders?: number;
+          loyalty_points?: number;
+          loyalty_tier_id?: string | null;
           note?: string | null;
           is_active?: boolean;
         };
@@ -344,6 +348,8 @@ export interface Database {
           gender?: "male" | "female" | null;
           customer_type?: "individual" | "company";
           debt?: number;
+          loyalty_points?: number;
+          loyalty_tier_id?: string | null;
           total_spent?: number;
           total_orders?: number;
           note?: string | null;
@@ -898,6 +904,507 @@ export interface Database {
         Update: never;
         Relationships: [];
       };
+      // ============ NEW TABLES (migration 00004) ============
+      favorites: {
+        Row: {
+          id: string;
+          tenant_id: string;
+          user_id: string;
+          entity_type: string;
+          entity_id: string;
+          created_at: string;
+        };
+        Insert: {
+          id?: string;
+          tenant_id: string;
+          user_id: string;
+          entity_type: string;
+          entity_id: string;
+          created_at?: string;
+        };
+        Update: {
+          entity_type?: string;
+          entity_id?: string;
+        };
+        Relationships: [
+          {
+            foreignKeyName: "favorites_tenant_id_fkey";
+            columns: ["tenant_id"];
+            referencedRelation: "tenants";
+            referencedColumns: ["id"];
+          },
+        ];
+      };
+      coupons: {
+        Row: {
+          id: string;
+          tenant_id: string;
+          code: string;
+          name: string;
+          description: string | null;
+          type: "fixed" | "percent";
+          value: number;
+          min_order_amount: number;
+          max_discount_amount: number | null;
+          max_uses: number | null;
+          used_count: number;
+          max_uses_per_customer: number | null;
+          start_date: string | null;
+          end_date: string | null;
+          is_active: boolean;
+          applies_to: "all" | "category" | "product";
+          applies_to_ids: string[];
+          created_by: string | null;
+          created_at: string;
+          updated_at: string;
+        };
+        Insert: {
+          id?: string;
+          tenant_id: string;
+          code: string;
+          name: string;
+          description?: string | null;
+          type: "fixed" | "percent";
+          value: number;
+          min_order_amount?: number;
+          max_discount_amount?: number | null;
+          max_uses?: number | null;
+          used_count?: number;
+          max_uses_per_customer?: number | null;
+          start_date?: string | null;
+          end_date?: string | null;
+          is_active?: boolean;
+          applies_to?: "all" | "category" | "product";
+          applies_to_ids?: string[];
+          created_by?: string | null;
+        };
+        Update: {
+          code?: string;
+          name?: string;
+          description?: string | null;
+          type?: "fixed" | "percent";
+          value?: number;
+          min_order_amount?: number;
+          max_discount_amount?: number | null;
+          max_uses?: number | null;
+          used_count?: number;
+          max_uses_per_customer?: number | null;
+          start_date?: string | null;
+          end_date?: string | null;
+          is_active?: boolean;
+          applies_to?: "all" | "category" | "product";
+          applies_to_ids?: string[];
+        };
+        Relationships: [
+          {
+            foreignKeyName: "coupons_tenant_id_fkey";
+            columns: ["tenant_id"];
+            referencedRelation: "tenants";
+            referencedColumns: ["id"];
+          },
+        ];
+      };
+      coupon_usages: {
+        Row: {
+          id: string;
+          tenant_id: string;
+          coupon_id: string;
+          invoice_id: string | null;
+          customer_id: string | null;
+          discount_amount: number;
+          used_at: string;
+        };
+        Insert: {
+          id?: string;
+          tenant_id: string;
+          coupon_id: string;
+          invoice_id?: string | null;
+          customer_id?: string | null;
+          discount_amount: number;
+          used_at?: string;
+        };
+        Update: {
+          discount_amount?: number;
+        };
+        Relationships: [
+          {
+            foreignKeyName: "coupon_usages_coupon_id_fkey";
+            columns: ["coupon_id"];
+            referencedRelation: "coupons";
+            referencedColumns: ["id"];
+          },
+        ];
+      };
+      promotions: {
+        Row: {
+          id: string;
+          tenant_id: string;
+          name: string;
+          description: string | null;
+          type: "discount_percent" | "discount_fixed" | "buy_x_get_y" | "gift";
+          value: number;
+          min_order_amount: number;
+          buy_quantity: number | null;
+          get_quantity: number | null;
+          applies_to: "all" | "category" | "product";
+          applies_to_ids: string[];
+          start_date: string;
+          end_date: string;
+          is_active: boolean;
+          auto_apply: boolean;
+          priority: number;
+          created_by: string | null;
+          created_at: string;
+          updated_at: string;
+        };
+        Insert: {
+          id?: string;
+          tenant_id: string;
+          name: string;
+          description?: string | null;
+          type: "discount_percent" | "discount_fixed" | "buy_x_get_y" | "gift";
+          value: number;
+          min_order_amount?: number;
+          buy_quantity?: number | null;
+          get_quantity?: number | null;
+          applies_to?: "all" | "category" | "product";
+          applies_to_ids?: string[];
+          start_date: string;
+          end_date: string;
+          is_active?: boolean;
+          auto_apply?: boolean;
+          priority?: number;
+          created_by?: string | null;
+        };
+        Update: {
+          name?: string;
+          description?: string | null;
+          type?: "discount_percent" | "discount_fixed" | "buy_x_get_y" | "gift";
+          value?: number;
+          min_order_amount?: number;
+          buy_quantity?: number | null;
+          get_quantity?: number | null;
+          applies_to?: "all" | "category" | "product";
+          applies_to_ids?: string[];
+          start_date?: string;
+          end_date?: string;
+          is_active?: boolean;
+          auto_apply?: boolean;
+          priority?: number;
+        };
+        Relationships: [
+          {
+            foreignKeyName: "promotions_tenant_id_fkey";
+            columns: ["tenant_id"];
+            referencedRelation: "tenants";
+            referencedColumns: ["id"];
+          },
+        ];
+      };
+      loyalty_settings: {
+        Row: {
+          id: string;
+          tenant_id: string;
+          is_enabled: boolean;
+          points_per_amount: number;
+          amount_per_point: number;
+          redemption_points: number;
+          redemption_value: number;
+          max_redemption_percent: number;
+          created_at: string;
+          updated_at: string;
+        };
+        Insert: {
+          id?: string;
+          tenant_id: string;
+          is_enabled?: boolean;
+          points_per_amount?: number;
+          amount_per_point?: number;
+          redemption_points?: number;
+          redemption_value?: number;
+          max_redemption_percent?: number;
+        };
+        Update: {
+          is_enabled?: boolean;
+          points_per_amount?: number;
+          amount_per_point?: number;
+          redemption_points?: number;
+          redemption_value?: number;
+          max_redemption_percent?: number;
+        };
+        Relationships: [
+          {
+            foreignKeyName: "loyalty_settings_tenant_id_fkey";
+            columns: ["tenant_id"];
+            referencedRelation: "tenants";
+            referencedColumns: ["id"];
+          },
+        ];
+      };
+      loyalty_tiers: {
+        Row: {
+          id: string;
+          tenant_id: string;
+          name: string;
+          min_points: number;
+          discount_percent: number;
+          sort_order: number;
+          is_active: boolean;
+          created_at: string;
+        };
+        Insert: {
+          id?: string;
+          tenant_id: string;
+          name: string;
+          min_points?: number;
+          discount_percent?: number;
+          sort_order?: number;
+          is_active?: boolean;
+        };
+        Update: {
+          name?: string;
+          min_points?: number;
+          discount_percent?: number;
+          sort_order?: number;
+          is_active?: boolean;
+        };
+        Relationships: [
+          {
+            foreignKeyName: "loyalty_tiers_tenant_id_fkey";
+            columns: ["tenant_id"];
+            referencedRelation: "tenants";
+            referencedColumns: ["id"];
+          },
+        ];
+      };
+      loyalty_transactions: {
+        Row: {
+          id: string;
+          tenant_id: string;
+          customer_id: string;
+          type: "earn" | "redeem" | "adjust" | "expire";
+          points: number;
+          balance_after: number;
+          reference_type: string | null;
+          reference_id: string | null;
+          note: string | null;
+          created_by: string | null;
+          created_at: string;
+        };
+        Insert: {
+          id?: string;
+          tenant_id: string;
+          customer_id: string;
+          type: "earn" | "redeem" | "adjust" | "expire";
+          points: number;
+          balance_after?: number;
+          reference_type?: string | null;
+          reference_id?: string | null;
+          note?: string | null;
+          created_by?: string | null;
+        };
+        Update: {
+          note?: string | null;
+        };
+        Relationships: [
+          {
+            foreignKeyName: "loyalty_transactions_customer_id_fkey";
+            columns: ["customer_id"];
+            referencedRelation: "customers";
+            referencedColumns: ["id"];
+          },
+        ];
+      };
+      online_orders: {
+        Row: {
+          id: string;
+          tenant_id: string;
+          channel_id: string | null;
+          channel_name: string;
+          external_order_id: string | null;
+          code: string;
+          customer_id: string | null;
+          customer_name: string;
+          customer_phone: string | null;
+          customer_address: string | null;
+          items: Json;
+          subtotal: number;
+          discount_amount: number;
+          shipping_fee: number;
+          total_amount: number;
+          status: "pending" | "confirmed" | "shipping" | "completed" | "cancelled";
+          payment_status: "unpaid" | "paid" | "refunded";
+          note: string | null;
+          invoice_id: string | null;
+          shipping_order_id: string | null;
+          created_by: string | null;
+          created_at: string;
+          updated_at: string;
+        };
+        Insert: {
+          id?: string;
+          tenant_id: string;
+          channel_id?: string | null;
+          channel_name: string;
+          external_order_id?: string | null;
+          code: string;
+          customer_id?: string | null;
+          customer_name: string;
+          customer_phone?: string | null;
+          customer_address?: string | null;
+          items?: Json;
+          subtotal?: number;
+          discount_amount?: number;
+          shipping_fee?: number;
+          total_amount?: number;
+          status?: "pending" | "confirmed" | "shipping" | "completed" | "cancelled";
+          payment_status?: "unpaid" | "paid" | "refunded";
+          note?: string | null;
+          invoice_id?: string | null;
+          shipping_order_id?: string | null;
+          created_by?: string | null;
+        };
+        Update: {
+          channel_name?: string;
+          customer_name?: string;
+          customer_phone?: string | null;
+          customer_address?: string | null;
+          items?: Json;
+          subtotal?: number;
+          discount_amount?: number;
+          shipping_fee?: number;
+          total_amount?: number;
+          status?: "pending" | "confirmed" | "shipping" | "completed" | "cancelled";
+          payment_status?: "unpaid" | "paid" | "refunded";
+          note?: string | null;
+          invoice_id?: string | null;
+          shipping_order_id?: string | null;
+        };
+        Relationships: [
+          {
+            foreignKeyName: "online_orders_tenant_id_fkey";
+            columns: ["tenant_id"];
+            referencedRelation: "tenants";
+            referencedColumns: ["id"];
+          },
+          {
+            foreignKeyName: "online_orders_customer_id_fkey";
+            columns: ["customer_id"];
+            referencedRelation: "customers";
+            referencedColumns: ["id"];
+          },
+        ];
+      };
+      conversations: {
+        Row: {
+          id: string;
+          tenant_id: string;
+          channel_name: "facebook" | "zalo";
+          external_id: string | null;
+          customer_id: string | null;
+          customer_name: string;
+          customer_avatar: string | null;
+          last_message: string | null;
+          last_message_at: string | null;
+          unread_count: number;
+          status: "open" | "closed" | "archived";
+          assigned_to: string | null;
+          created_at: string;
+          updated_at: string;
+        };
+        Insert: {
+          id?: string;
+          tenant_id: string;
+          channel_name: "facebook" | "zalo";
+          external_id?: string | null;
+          customer_id?: string | null;
+          customer_name: string;
+          customer_avatar?: string | null;
+          last_message?: string | null;
+          last_message_at?: string | null;
+          unread_count?: number;
+          status?: "open" | "closed" | "archived";
+          assigned_to?: string | null;
+        };
+        Update: {
+          customer_name?: string;
+          customer_avatar?: string | null;
+          last_message?: string | null;
+          last_message_at?: string | null;
+          unread_count?: number;
+          status?: "open" | "closed" | "archived";
+          assigned_to?: string | null;
+        };
+        Relationships: [
+          {
+            foreignKeyName: "conversations_tenant_id_fkey";
+            columns: ["tenant_id"];
+            referencedRelation: "tenants";
+            referencedColumns: ["id"];
+          },
+        ];
+      };
+      conversation_messages: {
+        Row: {
+          id: string;
+          conversation_id: string;
+          sender_type: "customer" | "shop" | "system";
+          sender_name: string | null;
+          content: string;
+          message_type: "text" | "image" | "product" | "order";
+          metadata: Json | null;
+          created_at: string;
+        };
+        Insert: {
+          id?: string;
+          conversation_id: string;
+          sender_type: "customer" | "shop" | "system";
+          sender_name?: string | null;
+          content: string;
+          message_type?: "text" | "image" | "product" | "order";
+          metadata?: Json | null;
+          created_at?: string;
+        };
+        Update: {
+          content?: string;
+          metadata?: Json | null;
+        };
+        Relationships: [
+          {
+            foreignKeyName: "messages_conversation_id_fkey";
+            columns: ["conversation_id"];
+            referencedRelation: "conversations";
+            referencedColumns: ["id"];
+          },
+        ];
+      };
+      sales_channels: {
+        Row: {
+          id: string;
+          tenant_id: string;
+          name: string;
+          type: string;
+          config: Json;
+          is_active: boolean;
+          created_at: string;
+          updated_at: string;
+        };
+        Insert: {
+          id?: string;
+          tenant_id: string;
+          name: string;
+          type: string;
+          config?: Json;
+          is_active?: boolean;
+        };
+        Update: {
+          name?: string;
+          type?: string;
+          config?: Json;
+          is_active?: boolean;
+        };
+        Relationships: [];
+      };
     };
     Views: Record<string, never>;
     Functions: {
@@ -907,6 +1414,29 @@ export interface Database {
           p_entity_type: string;
         };
         Returns: string;
+      };
+      toggle_favorite: {
+        Args: {
+          p_entity_type: string;
+          p_entity_id: string;
+        };
+        Returns: boolean;
+      };
+      validate_coupon: {
+        Args: {
+          p_code: string;
+          p_order_amount: number;
+          p_customer_id?: string;
+        };
+        Returns: Json;
+      };
+      earn_loyalty_points: {
+        Args: {
+          p_customer_id: string;
+          p_invoice_id: string;
+          p_amount: number;
+        };
+        Returns: number;
       };
     };
     Enums: Record<string, never>;

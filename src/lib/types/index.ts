@@ -59,6 +59,21 @@ export type { CashBookEntry, CashTransaction } from "./finance";
 // Online sales domain
 export type { SalesChannel, OnlineOrder } from "./online";
 
+// Coupons domain
+export type { Coupon, CouponUsage, CouponValidation } from "./coupons";
+
+// Promotions domain
+export type { Promotion } from "./promotions";
+
+// Loyalty domain
+export type { LoyaltySettings, LoyaltyTier, LoyaltyTransaction } from "./loyalty";
+
+// Favorites domain
+export type { Favorite } from "./favorites";
+
+// Conversations domain
+export type { Conversation, ConversationMessage } from "./conversations";
+
 // Settings domain
 export type {
   Permission,
@@ -69,7 +84,15 @@ export type {
 } from "./settings";
 
 // POS domain
-export type { CartItem, OrderTab, SaleMode, PaymentMethod } from "./pos";
+export type {
+  CartItem,
+  OrderTab,
+  ShippingInfo,
+  PosDeliveryPartner,
+  CouponInfo,
+  SaleMode,
+  PaymentMethod,
+} from "./pos";
 
 // Auth domain
 export type { UserProfile, Tenant, Branch } from "./auth";

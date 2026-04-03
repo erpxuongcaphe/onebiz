@@ -4,6 +4,9 @@ import {
   Banknote,
   ArrowLeftRight,
   CreditCard,
+  Tag,
+  X,
+  Truck,
 } from "lucide-react";
 import { Plus } from "lucide-react";
 import { Button } from "@/components/ui/button";
@@ -11,11 +14,15 @@ import { Input } from "@/components/ui/input";
 import { formatCurrency } from "@/lib/format";
 import { cn } from "@/lib/utils";
 import { roundUpTo } from "../hooks/use-pos-state";
-import type { PaymentMethod } from "@/lib/types";
+import type { PaymentMethod, CouponInfo, SaleMode } from "@/lib/types";
 
 interface PaymentSectionProps {
+  saleMode: SaleMode;
   subtotal: number;
-  discountAmount: number;
+  orderDiscountAmount: number;
+  couponDiscountAmount: number;
+  totalDiscount: number;
+  shippingFee: number;
   discountType: "fixed" | "percent";
   discountValue: number;
   showDiscountInput: boolean;
@@ -25,17 +32,30 @@ interface PaymentSectionProps {
   changeAmount: number;
   paymentMethod: PaymentMethod;
   cartLength: number;
+  // Coupon
+  couponCode: string;
+  appliedCoupon: CouponInfo | null;
+  couponError: string;
+  onSetCouponCode: (code: string) => void;
+  onApplyCoupon: () => void;
+  onRemoveCoupon: () => void;
+  // Discount
   onSetDiscountType: (type: "fixed" | "percent") => void;
   onSetDiscountValue: (value: number) => void;
   onSetShowDiscountInput: (show: boolean) => void;
+  // Payment
   onSetCustomerPayment: (value: string) => void;
   onSetPaymentMethod: (method: PaymentMethod) => void;
   onCheckout: () => void;
 }
 
 export function PaymentSection({
+  saleMode,
   subtotal,
-  discountAmount,
+  orderDiscountAmount,
+  couponDiscountAmount,
+  totalDiscount,
+  shippingFee,
   discountType,
   discountValue,
   showDiscountInput,
@@ -45,6 +65,12 @@ export function PaymentSection({
   changeAmount,
   paymentMethod,
   cartLength,
+  couponCode,
+  appliedCoupon,
+  couponError,
+  onSetCouponCode,
+  onApplyCoupon,
+  onRemoveCoupon,
   onSetDiscountType,
   onSetDiscountValue,
   onSetShowDiscountInput,
@@ -57,22 +83,22 @@ export function PaymentSection({
       <div className="p-2.5 space-y-1.5 text-sm">
         {/* Subtotal */}
         <div className="flex justify-between">
-          <span className="text-muted-foreground">Tong tien hang</span>
+          <span className="text-muted-foreground">Tổng tiền hàng</span>
           <span>{formatCurrency(subtotal)}</span>
         </div>
 
-        {/* Discount */}
+        {/* Manual Discount */}
         <div className="flex justify-between items-center">
           <button
             onClick={() => onSetShowDiscountInput(!showDiscountInput)}
             className="text-muted-foreground hover:text-primary text-sm flex items-center gap-1"
           >
-            Giam gia
+            Giảm giá
             {!showDiscountInput && <Plus className="size-3" />}
           </button>
-          {discountAmount > 0 && (
+          {orderDiscountAmount > 0 && (
             <span className="text-red-500">
-              -{formatCurrency(discountAmount)}
+              -{formatCurrency(orderDiscountAmount)}
             </span>
           )}
         </div>
@@ -97,7 +123,7 @@ export function PaymentSection({
                     : "hover:bg-gray-200"
                 )}
               >
-                d
+                đ
               </button>
               <button
                 onClick={() => onSetDiscountType("percent")}
@@ -114,9 +140,77 @@ export function PaymentSection({
           </div>
         )}
 
+        {/* Coupon / Mã giảm giá */}
+        {!appliedCoupon ? (
+          <div className="space-y-1">
+            <div className="flex items-center gap-1.5">
+              <div className="relative flex-1">
+                <Tag className="absolute left-2 top-1/2 -translate-y-1/2 size-3 text-muted-foreground" />
+                <Input
+                  value={couponCode}
+                  onChange={(e) => onSetCouponCode(e.target.value.toUpperCase())}
+                  placeholder="Mã giảm giá"
+                  className="h-7 text-xs pl-7 uppercase"
+                  onKeyDown={(e) => {
+                    if (e.key === "Enter") onApplyCoupon();
+                  }}
+                />
+              </div>
+              <Button
+                variant="outline"
+                size="sm"
+                className="h-7 text-xs px-2.5 shrink-0"
+                onClick={onApplyCoupon}
+              >
+                Áp dụng
+              </Button>
+            </div>
+            {couponError && (
+              <p className="text-[11px] text-red-500 pl-1">{couponError}</p>
+            )}
+          </div>
+        ) : (
+          <div className="flex items-center justify-between bg-green-50 border border-green-200 rounded px-2 py-1">
+            <div className="flex items-center gap-1.5">
+              <Tag className="size-3 text-green-600" />
+              <span className="text-xs font-medium text-green-700">
+                {appliedCoupon.code}
+              </span>
+              <span className="text-xs text-green-600">
+                (-{formatCurrency(couponDiscountAmount)})
+              </span>
+            </div>
+            <button
+              onClick={onRemoveCoupon}
+              className="text-green-600 hover:text-red-500 transition-colors"
+            >
+              <X className="size-3.5" />
+            </button>
+          </div>
+        )}
+
+        {/* Shipping fee (delivery mode only) */}
+        {saleMode === "delivery" && shippingFee > 0 && (
+          <div className="flex justify-between items-center">
+            <span className="text-muted-foreground flex items-center gap-1">
+              <Truck className="size-3" />
+              Phí giao hàng
+            </span>
+            <span>{formatCurrency(shippingFee)}</span>
+          </div>
+        )}
+
+        {/* Total Discount summary */}
+        {totalDiscount > 0 && (
+          <div className="flex justify-between text-red-500 text-xs">
+            <span>Tổng giảm</span>
+            <span>-{formatCurrency(totalDiscount)}</span>
+          </div>
+        )}
+
         {/* Total Due */}
         <div className="flex justify-between items-baseline pt-1.5 border-t">
-          <span className="font-semibold">Khach can tra</span>
+          <span className="font-semibold">Khách cần trả</span>
           <span className="text-xl font-bold text-primary">
             {formatCurrency(totalDue)}
           </span>
@@ -125,7 +219,7 @@ export function PaymentSection({
         {/* Customer Payment */}
         <div className="space-y-1.5 pt-1">
           <span className="text-muted-foreground text-xs">
-            Tien khach dua
+            Tiền khách đưa
           </span>
           <Input
             type="number"
@@ -156,9 +250,7 @@ export function PaymentSection({
                 .map((rounded) => (
                   <button
                     key={rounded}
-                    onClick={() =>
-                      onSetCustomerPayment(rounded.toString())
-                    }
+                    onClick={() => onSetCustomerPayment(rounded.toString())}
                     className="px-2 py-1 rounded bg-gray-100 text-xs hover:bg-gray-200 transition-colors"
                   >
                     {formatCurrency(rounded)}
@@ -170,7 +262,7 @@ export function PaymentSection({
           {/* Change */}
           {customerPaymentNum > totalDue && totalDue > 0 && (
             <div className="flex justify-between text-sm pt-0.5">
-              <span className="text-muted-foreground">Tien thua</span>
+              <span className="text-muted-foreground">Tiền thừa</span>
               <span className="font-medium text-green-600">
                 {formatCurrency(changeAmount)}
               </span>
@@ -182,13 +274,9 @@ export function PaymentSection({
         <div className="flex gap-1.5 pt-1.5">
           {(
             [
-              { key: "cash", label: "Tien mat", icon: Banknote },
-              {
-                key: "transfer",
-                label: "Chuyen khoan",
-                icon: ArrowLeftRight,
-              },
-              { key: "card", label: "The", icon: CreditCard },
+              { key: "cash", label: "Tiền mặt", icon: Banknote },
+              { key: "transfer", label: "Chuyển khoản", icon: ArrowLeftRight },
+              { key: "card", label: "Thẻ", icon: CreditCard },
             ] as const
           ).map(({ key, label, icon: Icon }) => (
             <button
@@ -213,7 +301,7 @@ export function PaymentSection({
           disabled={cartLength === 0}
           className="w-full h-12 bg-green-600 hover:bg-green-700 text-white text-base font-bold rounded-lg border-0 disabled:opacity-50 mt-1"
         >
-          THANH TOAN
+          THANH TOÁN (F9)
         </Button>
       </div>
     </div>

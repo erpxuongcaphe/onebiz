@@ -1,7 +1,7 @@
 "use client";
 
 import Link from "next/link";
-import { Plus, X, User, ChevronLeft, Clock } from "lucide-react";
+import { Plus, X, User, ChevronLeft, Clock, Zap, ShoppingBag, Truck } from "lucide-react";
 import { cn } from "@/lib/utils";
 import type { OrderTab, SaleMode } from "@/lib/types";
 
@@ -16,6 +16,12 @@ interface PosTopBarProps {
   onSetSaleMode: (mode: SaleMode) => void;
 }
 
+const SALE_MODES = [
+  { key: "quick" as const, label: "Bán nhanh", shortLabel: "Nhanh", icon: Zap },
+  { key: "normal" as const, label: "Bán thường", shortLabel: "Thường", icon: ShoppingBag },
+  { key: "delivery" as const, label: "Giao hàng", shortLabel: "GH", icon: Truck },
+];
+
 export function PosTopBar({
   tabs,
   activeTabId,
@@ -27,14 +33,14 @@ export function PosTopBar({
   onSetSaleMode,
 }: PosTopBarProps) {
   return (
-    <div className="h-10 bg-[hsl(217,91%,40%)] flex items-center px-2 text-white shrink-0 gap-2">
+    <div className="h-11 bg-[hsl(217,91%,40%)] flex items-center px-2 text-white shrink-0 gap-2">
       {/* Left: Logo + Back */}
       <Link
         href="/"
-        className="flex items-center gap-1 text-white/90 hover:text-white text-sm shrink-0 mr-2"
+        className="flex items-center gap-1 text-white/90 hover:text-white text-sm shrink-0 mr-1"
       >
         <ChevronLeft className="size-4" />
-        <span className="hidden sm:inline">Quan ly</span>
+        <span className="hidden sm:inline">Quản lý</span>
       </Link>
       <span className="font-bold text-sm shrink-0 hidden md:inline mr-2">
         OneBiz POS
@@ -75,45 +81,46 @@ export function PosTopBar({
         <button
           onClick={onAddTab}
           className="shrink-0 size-7 flex items-center justify-center rounded text-white/70 hover:bg-white/10 hover:text-white transition-colors"
+          title="Thêm hóa đơn mới"
         >
           <Plus className="size-4" />
         </button>
       </div>
 
       {/* Right: Sale Mode + Clock + Avatar */}
-      <div className="flex items-center gap-1 shrink-0">
-        {/* Sale mode toggle - desktop only */}
-        <div className="hidden lg:flex items-center bg-white/10 rounded h-7 overflow-hidden">
-          {(
-            [
-              { key: "quick", label: "Ban nhanh" },
-              { key: "normal", label: "Ban thuong" },
-              { key: "delivery", label: "Giao hang" },
-            ] as const
-          ).map((mode) => (
-            <button
-              key={mode.key}
-              onClick={() => onSetSaleMode(mode.key)}
-              className={cn(
-                "px-2.5 h-full text-xs whitespace-nowrap transition-colors",
-                saleMode === mode.key
-                  ? "bg-white/25 text-white font-medium"
-                  : "text-white/70 hover:text-white"
-              )}
-            >
-              {mode.label}
-            </button>
-          ))}
+      <div className="flex items-center gap-1.5 shrink-0">
+        {/* Sale mode toggle */}
+        <div className="flex items-center bg-white/10 rounded-lg h-8 overflow-hidden">
+          {SALE_MODES.map((mode) => {
+            const Icon = mode.icon;
+            return (
+              <button
+                key={mode.key}
+                onClick={() => onSetSaleMode(mode.key)}
+                className={cn(
+                  "flex items-center gap-1 px-2 lg:px-2.5 h-full text-xs whitespace-nowrap transition-colors",
+                  saleMode === mode.key
+                    ? "bg-white/25 text-white font-medium"
+                    : "text-white/60 hover:text-white hover:bg-white/10"
+                )}
+                title={mode.label}
+              >
+                <Icon className="size-3.5" />
+                <span className="hidden lg:inline">{mode.label}</span>
+                <span className="lg:hidden">{mode.shortLabel}</span>
+              </button>
+            );
+          })}
         </div>
 
         {/* Clock */}
-        <div className="hidden sm:flex items-center gap-1 text-xs text-white/80 ml-2">
+        <div className="hidden sm:flex items-center gap-1 text-xs text-white/80 ml-1">
           <Clock className="size-3.5" />
           <span className="font-mono w-[60px]">{currentTime}</span>
         </div>
 
         {/* User avatar */}
-        <div className="size-7 rounded-full bg-white/20 flex items-center justify-center ml-1">
+        <div className="size-7 rounded-full bg-white/20 flex items-center justify-center ml-0.5">
           <User className="size-4 text-white/80" />
         </div>
       </div>
