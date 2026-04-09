@@ -2,10 +2,21 @@
 
 import { useEffect, useState, useCallback } from "react";
 import { ColumnDef } from "@tanstack/react-table";
-import { Plus, Download, Printer, Undo2, XCircle } from "lucide-react";
+import {
+  Plus,
+  Download,
+  Printer,
+  Undo2,
+  XCircle,
+  List,
+  Kanban,
+  ArrowRight,
+} from "lucide-react";
 import { PageHeader } from "@/components/shared/page-header";
 import { ListPageLayout } from "@/components/shared/list-page-layout";
 import { DataTable, StarCell } from "@/components/shared/data-table";
+import { KanbanBoard, type KanbanColumn } from "@/components/shared/kanban-board";
+import { PipelineStatusBadge } from "@/components/shared/pipeline";
 import {
   FilterSidebar,
   FilterGroup,
@@ -23,23 +34,25 @@ import {
   DetailItemsTable,
 } from "@/components/shared/inline-detail-panel";
 import type { DetailTab } from "@/components/shared/inline-detail-panel";
+import { useToast } from "@/lib/contexts";
 import { formatCurrency, formatDate } from "@/lib/format";
 import { exportToExcel, exportToCsv } from "@/lib/utils/export";
-import { getPurchaseOrders, getPurchaseOrderStatuses } from "@/lib/services";
-import type { PurchaseOrder } from "@/lib/types";
+import {
+  getPurchaseOrders,
+  getPurchaseOrderStatuses,
+  getPurchaseOrderStatusMeta,
+  updatePurchaseOrderStatus,
+  canTransitionPurchaseStatus,
+} from "@/lib/services";
+import type { PurchaseOrder, PurchaseOrderStatus } from "@/lib/types";
 import { CreatePurchaseOrderDialog } from "@/components/shared/dialogs";
 
+type ViewMode = "list" | "kanban";
+
 /* ------------------------------------------------------------------ */
-/*  Status config                                                      */
+/*  Status config — full pipeline                                      */
 /* ------------------------------------------------------------------ */
-const statusMap: Record<
-  PurchaseOrder["status"],
-  { label: string; variant: "secondary" | "default" | "destructive" }
-> = {
-  draft: { label: "Phiếu tạm", variant: "secondary" },
-  imported: { label: "Đã nhập hàng", variant: "default" },
-  cancelled: { label: "Đã hủy", variant: "destructive" },
-};
+const STATUS_META = getPurchaseOrderStatusMeta();
 
 /* ------------------------------------------------------------------ */
 /*  Starred set                                                        */
@@ -66,7 +79,7 @@ function PurchaseOrderDetail({
   order: PurchaseOrder;
   onClose: () => void;
 }) {
-  const status = statusMap[order.status];
+  const status = STATUS_META[order.status];
 
   const tabs: DetailTab[] = [
     {
@@ -79,11 +92,8 @@ function PurchaseOrderDetail({
             code={order.code}
             status={{
               label: status.label,
-              variant: status.variant,
-              className:
-                status.variant === "default"
-                  ? "bg-blue-100 text-blue-700 border-blue-200"
-                  : undefined,
+              variant: "default",
+              className: "",
             }}
             subtitle="Chi nhánh trung tâm"
             meta={
@@ -190,6 +200,7 @@ function PurchaseOrderDetail({
 /*  Page                                                               */
 /* ------------------------------------------------------------------ */
 export default function NhapHangPage() {
+  const { toast } = useToast();
   const [data, setData] = useState<PurchaseOrder[]>([]);
   const [total, setTotal] = useState(0);
   const [loading, setLoading] = useState(true);
@@ -197,6 +208,7 @@ export default function NhapHangPage() {
   const [page, setPage] = useState(0);
   const [pageSize, setPageSize] = useState(15);
   const [createOpen, setCreateOpen] = useState(false);
+  const [viewMode, setViewMode] = useState<ViewMode>("list");
 
   // Inline detail
   const [expandedRow, setExpandedRow] = useState<number | null>(null);
@@ -204,10 +216,12 @@ export default function NhapHangPage() {
   // Stars
   const { starred, toggle: toggleStar } = useStarredSet();
 
-  // Filters
+  // Filters — default = pipeline thực sự (loại trừ cancelled)
   const [selectedStatuses, setSelectedStatuses] = useState<string[]>([
     "draft",
-    "imported",
+    "ordered",
+    "partial",
+    "completed",
   ]);
   const [datePreset, setDatePreset] = useState<DatePresetValue>("this_month");
   const [dateFrom, setDateFrom] = useState("");
@@ -276,16 +290,10 @@ export default function NhapHangPage() {
     {
       accessorKey: "status",
       header: "Trạng thái",
-      size: 130,
+      size: 150,
       cell: ({ row }) => {
-        const { label } = statusMap[row.original.status];
-        if (row.original.status === "imported") {
-          return <span className="text-blue-600 font-medium">{label}</span>;
-        }
-        if (row.original.status === "cancelled") {
-          return <span className="text-destructive">{label}</span>;
-        }
-        return <span className="text-muted-foreground">{label}</span>;
+        const meta = STATUS_META[row.original.status];
+        return <PipelineStatusBadge name={meta.label} color={meta.color} size="sm" />;
       },
     },
   ];
@@ -334,7 +342,7 @@ export default function NhapHangPage() {
         header: "Trạng thái",
         key: "status",
         width: 15,
-        format: (v: PurchaseOrder["status"]) => statusMap[v]?.label ?? v,
+        format: (v: PurchaseOrderStatus) => STATUS_META[v]?.label ?? v,
       },
     ];
     if (type === "excel") exportToExcel(data, exportColumns, "danh-sach-nhap-hang");
@@ -345,6 +353,66 @@ export default function NhapHangPage() {
   const renderDetail = (order: PurchaseOrder, onClose: () => void) => (
     <PurchaseOrderDetail order={order} onClose={onClose} />
   );
+
+  /* ---- Kanban derivation ---- */
+  const KANBAN_STATUSES: PurchaseOrderStatus[] = [
+    "draft",
+    "ordered",
+    "partial",
+    "completed",
+  ];
+
+  const kanbanColumns: KanbanColumn<PurchaseOrder>[] = KANBAN_STATUSES.map(
+    (status) => ({
+      id: status,
+      label: STATUS_META[status].label,
+      color: STATUS_META[status].color,
+      items: data.filter((o) => o.status === status),
+    })
+  );
+
+  const handleCardMove = async (
+    itemId: string,
+    _from: string,
+    to: string
+  ) => {
+    try {
+      await updatePurchaseOrderStatus(itemId, to as PurchaseOrderStatus);
+      toast({
+        title: "Đã chuyển trạng thái",
+        description: STATUS_META[to as PurchaseOrderStatus].label,
+        variant: "success",
+      });
+      fetchData();
+    } catch (err) {
+      toast({
+        title: "Không thể chuyển trạng thái",
+        description: err instanceof Error ? err.message : "Vui lòng thử lại",
+        variant: "error",
+      });
+    }
+  };
+
+  const handleAdvanceStatus = async (
+    order: PurchaseOrder,
+    target: PurchaseOrderStatus
+  ) => {
+    try {
+      await updatePurchaseOrderStatus(order.id, target);
+      toast({
+        title: "Đã chuyển trạng thái",
+        description: `${order.code} → ${STATUS_META[target].label}`,
+        variant: "success",
+      });
+      fetchData();
+    } catch (err) {
+      toast({
+        title: "Không thể chuyển trạng thái",
+        description: err instanceof Error ? err.message : "Vui lòng thử lại",
+        variant: "error",
+      });
+    }
+  };
 
   /* ---- Render ---- */
   return (
@@ -428,6 +496,17 @@ export default function NhapHangPage() {
         }}
         actions={[
           {
+            label: viewMode === "list" ? "Xem Kanban" : "Xem danh sách",
+            icon:
+              viewMode === "list" ? (
+                <Kanban className="h-4 w-4" />
+              ) : (
+                <List className="h-4 w-4" />
+              ),
+            variant: "outline",
+            onClick: () => setViewMode(viewMode === "list" ? "kanban" : "list"),
+          },
+          {
             label: "Nhập hàng",
             icon: <Plus className="h-4 w-4" />,
             variant: "default",
@@ -440,6 +519,45 @@ export default function NhapHangPage() {
         ]}
       />
 
+      {viewMode === "kanban" ? (
+        <div className="p-4">
+          <KanbanBoard
+            columns={kanbanColumns}
+            getItemId={(o) => o.id}
+            onCardMove={handleCardMove}
+            canDrop={(_id, from, to) => canTransitionPurchaseStatus(from, to)}
+            emptyMessage="Không có phiếu"
+            renderCard={(order) => (
+              <div className="space-y-1">
+                <div className="flex items-start justify-between gap-2">
+                  <span className="font-medium text-primary text-xs">
+                    {order.code}
+                  </span>
+                  <span className="text-[10px] text-muted-foreground">
+                    {formatDate(order.date)}
+                  </span>
+                </div>
+                <div className="text-sm font-medium truncate">
+                  {order.supplierName}
+                </div>
+                {order.orderCode && (
+                  <div className="text-xs text-muted-foreground truncate">
+                    DH: {order.orderCode}
+                  </div>
+                )}
+                <div className="flex items-center justify-between pt-1 border-t mt-1">
+                  <span className="text-xs text-muted-foreground">
+                    Cần trả
+                  </span>
+                  <span className="text-xs font-semibold">
+                    {formatCurrency(order.amountOwed)}
+                  </span>
+                </div>
+              </div>
+            )}
+          />
+        </div>
+      ) : (
       <DataTable
         columns={columns}
         data={data}
@@ -461,26 +579,56 @@ export default function NhapHangPage() {
         onExpandedRowChange={setExpandedRow}
         renderDetail={renderDetail}
         getRowId={(row) => row.id}
-        rowActions={(row) => [
-          {
+        rowActions={(row) => {
+          const actions = [];
+          // Advance to next valid status
+          if (row.status === "draft") {
+            actions.push({
+              label: "Xác nhận đặt hàng",
+              icon: <ArrowRight className="h-4 w-4" />,
+              onClick: () => handleAdvanceStatus(row, "ordered"),
+            });
+          } else if (row.status === "ordered") {
+            actions.push({
+              label: "Nhập một phần",
+              icon: <ArrowRight className="h-4 w-4" />,
+              onClick: () => handleAdvanceStatus(row, "partial"),
+            });
+            actions.push({
+              label: "Hoàn thành nhập",
+              icon: <ArrowRight className="h-4 w-4" />,
+              onClick: () => handleAdvanceStatus(row, "completed"),
+            });
+          } else if (row.status === "partial") {
+            actions.push({
+              label: "Hoàn thành nhập",
+              icon: <ArrowRight className="h-4 w-4" />,
+              onClick: () => handleAdvanceStatus(row, "completed"),
+            });
+          }
+          actions.push({
             label: "In phiếu",
             icon: <Printer className="h-4 w-4" />,
             onClick: () => {},
-          },
-          {
+          });
+          actions.push({
             label: "Trả hàng nhập",
             icon: <Undo2 className="h-4 w-4" />,
             onClick: () => {},
-          },
-          {
-            label: "Hủy",
-            icon: <XCircle className="h-4 w-4" />,
-            onClick: () => {},
-            variant: "destructive",
-            separator: true,
-          },
-        ]}
+          });
+          if (row.status !== "completed" && row.status !== "cancelled") {
+            actions.push({
+              label: "Hủy",
+              icon: <XCircle className="h-4 w-4" />,
+              onClick: () => handleAdvanceStatus(row, "cancelled"),
+              variant: "destructive" as const,
+              separator: true,
+            });
+          }
+          return actions;
+        }}
       />
+      )}
     </ListPageLayout>
 
     <CreatePurchaseOrderDialog

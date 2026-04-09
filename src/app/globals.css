@@ -18,11 +18,24 @@
   --color-sidebar-primary: var(--sidebar-primary);
   --color-sidebar-foreground: var(--sidebar-foreground);
   --color-sidebar: var(--sidebar);
+  --color-chart-6: var(--chart-6);
   --color-chart-5: var(--chart-5);
   --color-chart-4: var(--chart-4);
   --color-chart-3: var(--chart-3);
   --color-chart-2: var(--chart-2);
   --color-chart-1: var(--chart-1);
+  --color-primary-hover: var(--primary-hover);
+  --color-primary-subtle: var(--primary-subtle);
+  --color-accent-warm: var(--accent-warm);
+  --color-status-success: var(--status-success);
+  --color-status-warning: var(--status-warning);
+  --color-status-error: var(--status-error);
+  --color-status-info: var(--status-info);
+  --color-status-neutral: var(--status-neutral);
+  --color-module-inventory: var(--module-inventory);
+  --color-module-production: var(--module-production);
+  --color-module-customers: var(--module-customers);
+  --color-module-finance: var(--module-finance);
   --color-ring: var(--ring);
   --color-input: var(--input);
   --color-border: var(--border);
@@ -52,43 +65,75 @@
 }
 
 :root {
-  --background: oklch(0.985 0 0);
-  --foreground: oklch(0.145 0 0);
+  /* Surface */
+  --background: oklch(0.988 0.002 90);
+  --foreground: oklch(0.175 0.005 260);
   --card: oklch(1 0 0);
-  --card-foreground: oklch(0.145 0 0);
+  --card-foreground: oklch(0.175 0.005 260);
   --popover: oklch(1 0 0);
-  --popover-foreground: oklch(0.145 0 0);
-  --primary: oklch(0.398 0.164 259.71);
+  --popover-foreground: oklch(0.175 0.005 260);
+
+  /* Xưởng Blue — Primary */
+  --primary: oklch(0.585 0.156 255);
   --primary-foreground: oklch(1 0 0);
-  --secondary: oklch(0.97 0 0);
-  --secondary-foreground: oklch(0.205 0 0);
-  --muted: oklch(0.97 0 0);
-  --muted-foreground: oklch(0.556 0 0);
-  --accent: oklch(0.97 0 0);
-  --accent-foreground: oklch(0.205 0 0);
-  --destructive: oklch(0.577 0.245 27.325);
-  --border: oklch(0.922 0 0);
-  --input: oklch(0.922 0 0);
-  --ring: oklch(0.398 0.164 259.71);
-  --chart-1: oklch(0.398 0.164 259.71);
-  --chart-2: oklch(0.6 0.2 150);
-  --chart-3: oklch(0.7 0.15 60);
-  --chart-4: oklch(0.65 0.2 330);
-  --chart-5: oklch(0.55 0.15 200);
+  --primary-hover: oklch(0.535 0.170 255);
+  --primary-subtle: oklch(0.935 0.035 255);
+
+  /* Neutral */
+  --secondary: oklch(0.97 0.002 90);
+  --secondary-foreground: oklch(0.205 0.005 260);
+  --muted: oklch(0.96 0.002 90);
+  --muted-foreground: oklch(0.50 0.005 260);
+  --accent: oklch(0.96 0.002 90);
+  --accent-foreground: oklch(0.205 0.005 260);
+
+  /* Accent CTA */
+  --accent-warm: oklch(0.700 0.155 50);
+
+  /* Destructive */
+  --destructive: oklch(0.580 0.220 25);
+
+  /* Borders & Input */
+  --border: oklch(0.915 0.005 260);
+  --input: oklch(0.915 0.005 260);
+  --ring: oklch(0.585 0.156 255);
+
+  /* Status Colors */
+  --status-success: oklch(0.620 0.160 145);
+  --status-warning: oklch(0.750 0.160 75);
+  --status-error: oklch(0.580 0.220 25);
+  --status-info: oklch(0.620 0.140 240);
+  --status-neutral: oklch(0.650 0 0);
+
+  /* Module Accent */
+  --module-inventory: oklch(0.620 0.130 160);
+  --module-production: oklch(0.650 0.140 310);
+  --module-customers: oklch(0.660 0.130 50);
+  --module-finance: oklch(0.620 0.150 145);
+
+  /* Chart Colors */
+  --chart-1: oklch(0.585 0.156 255);
+  --chart-2: oklch(0.620 0.160 145);
+  --chart-3: oklch(0.700 0.155 50);
+  --chart-4: oklch(0.650 0.140 310);
+  --chart-5: oklch(0.620 0.130 160);
+  --chart-6: oklch(0.580 0.220 25);
+
   --radius: 0.5rem;
 
-  /* KiotViet brand blue */
-  --kiotviet: oklch(0.398 0.164 259.71);
+  /* Legacy KiotViet alias → now Xưởng Blue */
+  --kiotviet: oklch(0.585 0.156 255);
   --kiotviet-foreground: oklch(1 0 0);
-  --kiotviet-hover: oklch(0.35 0.164 259.71);
+  --kiotviet-hover: oklch(0.535 0.170 255);
 
-  --sidebar: oklch(0.985 0 0);
-  --sidebar-foreground: oklch(0.145 0 0);
-  --sidebar-primary: oklch(0.398 0.164 259.71);
+  /* Sidebar */
+  --sidebar: oklch(0.988 0.002 90);
+  --sidebar-foreground: oklch(0.175 0.005 260);
+  --sidebar-primary: oklch(0.585 0.156 255);
   --sidebar-primary-foreground: oklch(1 0 0);
-  --sidebar-accent: oklch(0.97 0 0);
-  --sidebar-accent-foreground: oklch(0.205 0 0);
-  --sidebar-border: oklch(0.922 0 0);
+  --sidebar-accent: oklch(0.96 0.002 90);
+  --sidebar-accent-foreground: oklch(0.205 0.005 260);
+  --sidebar-border: oklch(0.915 0.005 260);
   --sidebar-ring: oklch(0.708 0 0);
 }
 

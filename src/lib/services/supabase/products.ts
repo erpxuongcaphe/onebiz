@@ -24,6 +24,11 @@ export async function getProducts(params: QueryParams): Promise<QueryResult<Prod
     query = query.or(`name.ilike.%${params.search}%,code.ilike.%${params.search}%`);
   }
 
+  // Filter: product_type (nvl | sku)
+  if (params.filters?.productType && params.filters.productType !== "all") {
+    query = query.eq("product_type", params.filters.productType as string);
+  }
+
   // Filter: category
   if (params.filters?.category && params.filters.category !== "all") {
     const cats = Array.isArray(params.filters.category)
@@ -38,6 +43,12 @@ export async function getProducts(params: QueryParams): Promise<QueryResult<Prod
     if (stockFilter === "in_stock") query = query.gt("stock", 0);
     else if (stockFilter === "out_of_stock") query = query.eq("stock", 0);
     else if (stockFilter === "low_stock") query = query.gt("stock", 0).lte("stock", 5);
+  }
+
+  // Filter: status (active | inactive) — map sang cột is_active boolean
+  if (params.filters?.status && params.filters.status !== "all") {
+    const isActive = params.filters.status === "active";
+    query = query.eq("is_active", isActive);
   }
 
   // Sort
@@ -68,24 +79,28 @@ export function getProductCategories() {
 /**
  * Get product categories from DB (async).
  */
-export async function getProductCategoriesAsync() {
+export async function getProductCategoriesAsync(scope?: "nvl" | "sku") {
   const supabase = getClient();
 
-  const { data: categories, error } = await supabase
+  let catQuery = supabase
     .from("categories")
-    .select("id, name")
+    .select("id, name, code, scope")
     .order("sort_order", { ascending: true });
 
+  if (scope) catQuery = catQuery.eq("scope", scope);
+
+  const { data: categories, error } = await catQuery;
   if (error) handleError(error, "getProductCategoriesAsync");
 
-  // Get counts per category
-  const { data: products } = await supabase
-    .from("products")
-    .select("category_id");
+  // Get counts per category (filter by product_type if scope set)
+  let prodQuery = supabase.from("products").select("category_id, product_type");
+  if (scope) prodQuery = prodQuery.eq("product_type", scope);
+  const { data: products } = await prodQuery;
 
   return (categories ?? []).map((cat) => ({
     label: cat.name,
     value: cat.id,
+    code: cat.code ?? undefined,
     count: (products ?? []).filter((p) => p.category_id === cat.id).length,
   }));
 }
@@ -221,7 +236,21 @@ function mapProduct(row: any): Product {
     ordered: 0, // Calculated field - would need aggregation
     categoryId: row.category_id ?? "",
     categoryName: row.categories?.name ?? "Chưa phân loại",
+    categoryCode: row.categories?.code ?? undefined,
     unit: row.unit,
+    productType: row.product_type ?? "nvl",
+    hasBom: row.has_bom ?? false,
+    // Map cột boolean `is_active` sang trường `status` (active|inactive) cho FE.
+    // FE filter "Trạng thái" + badge "Đang bán/Ngừng bán" đọc từ trường này.
+    status: row.is_active === false ? "inactive" : "active",
+    purchaseUnit: row.purchase_unit ?? undefined,
+    stockUnit: row.stock_unit ?? undefined,
+    sellUnit: row.sell_unit ?? undefined,
+    shelfLifeDays: row.shelf_life_days ?? undefined,
+    shelfLifeUnit: row.shelf_life_unit ?? undefined,
+    oldCode: row.old_code ?? undefined,
+    groupCode: row.group_code ?? undefined,
+    supplierId: row.supplier_id ?? undefined,
     createdAt: row.created_at,
   };
 }
@@ -260,14 +289,16 @@ function mapMovementType(dbType: string): StockMovement["type"] {
  */
 export async function createProduct(product: Partial<Product & ProductDetail>): Promise<Product> {
   const supabase = getClient();
+  const { getCurrentTenantId } = await import("./base");
+  const tenantId = await getCurrentTenantId();
 
   const { data, error } = await supabase
     .from("products")
     .insert({
-      tenant_id: "", // RLS sẽ tự fill qua policy
+      tenant_id: tenantId,
       code: product.code!,
       name: product.name!,
-      sell_price: product.sellPrice!,
+      sell_price: product.sellPrice ?? 0,
       cost_price: product.costPrice ?? 0,
       category_id: product.categoryId || null,
       unit: product.unit ?? "Cái",
@@ -280,6 +311,13 @@ export async function createProduct(product: Partial<Product & ProductDetail>): 
       image_url: product.image,
       allow_sale: product.allowSale ?? true,
       is_active: true,
+      product_type: product.productType ?? "nvl",
+      has_bom: product.hasBom ?? false,
+      group_code: product.groupCode,
+      purchase_unit: product.purchaseUnit,
+      stock_unit: product.stockUnit,
+      sell_unit: product.sellUnit,
+      shelf_life_days: product.shelfLifeDays,
     } satisfies ProductInsert)
     .select("*, categories!products_category_id_fkey(name)")
     .single();
@@ -309,6 +347,7 @@ export async function updateProduct(id: string, updates: Partial<Product & Produ
   if (updates.description !== undefined) payload.description = updates.description;
   if (updates.image !== undefined) payload.image_url = updates.image;
   if (updates.allowSale !== undefined) payload.allow_sale = updates.allowSale;
+  if (updates.status !== undefined) payload.is_active = updates.status === "active";
 
   const { data, error } = await supabase
     .from("products")
@@ -333,4 +372,76 @@ export async function deleteProduct(id: string): Promise<void> {
     .eq("id", id);
 
   if (error) handleError(error, "deleteProduct");
+}
+
+// --- Bulk Mutations ---
+
+/**
+ * Đổi nhóm hàng hàng loạt cho danh sách sản phẩm.
+ * Trả về số dòng đã cập nhật thực tế (nếu RLS chặn → có thể nhỏ hơn `ids.length`).
+ */
+export async function bulkUpdateCategory(
+  ids: string[],
+  categoryId: string
+): Promise<{ count: number }> {
+  if (ids.length === 0) return { count: 0 };
+  const supabase = getClient();
+
+  const { data, error } = await supabase
+    .from("products")
+    .update({ category_id: categoryId || null })
+    .in("id", ids)
+    .select("id");
+
+  if (error) handleError(error, "bulkUpdateCategory");
+  return { count: data?.length ?? 0 };
+}
+
+/**
+ * Đổi giá hàng loạt — chỉ cập nhật field nào được truyền vào.
+ * Truyền `sellPrice` thì update giá bán, truyền `costPrice` thì update giá vốn.
+ */
+export async function bulkUpdatePrice(
+  ids: string[],
+  updates: { sellPrice?: number; costPrice?: number }
+): Promise<{ count: number }> {
+  if (ids.length === 0) return { count: 0 };
+  if (updates.sellPrice === undefined && updates.costPrice === undefined) {
+    return { count: 0 };
+  }
+  const supabase = getClient();
+
+  const payload: ProductUpdate = {};
+  if (updates.sellPrice !== undefined) payload.sell_price = updates.sellPrice;
+  if (updates.costPrice !== undefined) payload.cost_price = updates.costPrice;
+
+  const { data, error } = await supabase
+    .from("products")
+    .update(payload)
+    .in("id", ids)
+    .select("id");
+
+  if (error) handleError(error, "bulkUpdatePrice");
+  return { count: data?.length ?? 0 };
+}
+
+/**
+ * Xoá sản phẩm hàng loạt.
+ * Lưu ý: nếu sản phẩm đang được tham chiếu bởi đơn hàng / kho / BOM,
+ * Supabase sẽ trả về lỗi FK constraint — caller cần catch để hiển thị toast.
+ */
+export async function bulkDeleteProducts(
+  ids: string[]
+): Promise<{ count: number }> {
+  if (ids.length === 0) return { count: 0 };
+  const supabase = getClient();
+
+  const { data, error } = await supabase
+    .from("products")
+    .delete()
+    .in("id", ids)
+    .select("id");
+
+  if (error) handleError(error, "bulkDeleteProducts");
+  return { count: data?.length ?? 0 };
 }

@@ -1,19 +1,34 @@
 // Các kiểu dữ liệu liên quan đến hàng hoá, kho, sản xuất
 
+export type ProductType = 'nvl' | 'sku';
+export type ProductStatus = 'active' | 'inactive';
+
 export interface Product {
   id: string;
   code: string;
   name: string;
   image?: string;
+  productType: ProductType;
+  hasBom: boolean;
+  /** Trạng thái kinh doanh — dùng cho filter "Đang bán / Ngừng bán" */
+  status?: ProductStatus;
   sellPrice: number;
   costPrice: number;
   stock: number;
   ordered: number;
   categoryId: string;
   categoryName: string;
+  categoryCode?: string;
   supplierId?: string;
   supplierName?: string;
   unit: string;
+  purchaseUnit?: string;
+  stockUnit?: string;
+  sellUnit?: string;
+  shelfLifeDays?: number;
+  shelfLifeUnit?: 'day' | 'month' | 'year';
+  oldCode?: string;
+  groupCode?: string;
   createdAt: string;
 }
 
@@ -29,6 +44,17 @@ export interface ProductDetail extends Product {
   properties?: { name: string; value: string }[];
   priceBooks?: { name: string; price: number }[];
   images: string[];
+}
+
+// Category with scope
+export interface ProductCategory {
+  id: string;
+  name: string;
+  code?: string;
+  scope?: 'nvl' | 'sku' | 'customer' | 'supplier';
+  parentId?: string;
+  sortOrder: number;
+  productCount?: number;
 }
 
 // Lịch sử xuất nhập kho

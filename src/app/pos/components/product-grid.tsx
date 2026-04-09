@@ -1,176 +1,244 @@
 "use client";
 
-import { RefObject } from "react";
-import { Search, Barcode, LayoutGrid, List, Package } from "lucide-react";
-import { Input } from "@/components/ui/input";
-import { ScrollArea } from "@/components/ui/scroll-area";
-import { formatCurrency } from "@/lib/format";
+/**
+ * ProductGrid — KiotViet-style product browsing panel
+ *
+ * Top: horizontal scrollable category pills
+ * Body: responsive tile grid (image + name + price)
+ * Clicking a tile fires onAddProduct
+ */
+
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import { Package, Search, Loader2 } from "lucide-react";
 import { cn } from "@/lib/utils";
-import { useState } from "react";
-import type { Product, Category } from "../hooks/use-pos-state";
+import { formatCurrency } from "@/lib/format";
+import type { Product, ProductCategory } from "@/lib/types";
+import { getProducts } from "@/lib/services/supabase/products";
+import { getCategoriesByScope } from "@/lib/services/supabase/categories";
 
 interface ProductGridProps {
-  searchRef: RefObject<HTMLInputElement | null>;
   searchQuery: string;
-  selectedCategory: string;
-  categories: Category[];
-  filteredProducts: Product[];
-  addedProductId: string | null;
-  mobileView: "products" | "cart";
-  onSearchChange: (value: string) => void;
-  onSelectCategory: (id: string) => void;
-  onAddToCart: (product: Product) => void;
+  onAddProduct: (product: Product) => void;
 }
 
-export function ProductGrid({
-  searchRef,
-  searchQuery,
-  selectedCategory,
-  categories,
-  filteredProducts,
-  addedProductId,
-  mobileView,
-  onSearchChange,
-  onSelectCategory,
-  onAddToCart,
-}: ProductGridProps) {
-  const [viewMode, setViewMode] = useState<"grid" | "list">("grid");
+export function ProductGrid({ searchQuery, onAddProduct }: ProductGridProps) {
+  const [categories, setCategories] = useState<ProductCategory[]>([]);
+  const [selectedCategory, setSelectedCategory] = useState<string>("all");
+  const [products, setProducts] = useState<Product[]>([]);
+  const [loading, setLoading] = useState(true);
+  const [totalProducts, setTotalProducts] = useState(0);
+  const debounceRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+
+  // ---- Fetch categories on mount ----
+  useEffect(() => {
+    getCategoriesByScope("sku")
+      .then((cats) => setCategories(cats))
+      .catch(() => {});
+  }, []);
+
+  // ---- Fetch products (debounced when search changes) ----
+  const fetchProducts = useCallback(
+    async (catId: string, search: string) => {
+      setLoading(true);
+      try {
+        const filters: Record<string, string | string[]> = { status: "active" };
+        if (catId !== "all") filters.category = catId;
+        const result = await getProducts({
+          page: 0,
+          pageSize: 50,
+          search: search || undefined,
+          sortBy: "name",
+          sortOrder: "asc",
+          filters,
+        });
+        setProducts(result.data);
+        setTotalProducts(result.total);
+      } catch {
+        setProducts([]);
+      } finally {
+        setLoading(false);
+      }
+    },
+    []
+  );
+
+  useEffect(() => {
+    if (debounceRef.current) clearTimeout(debounceRef.current);
+    debounceRef.current = setTimeout(() => {
+      fetchProducts(selectedCategory, searchQuery);
+    }, searchQuery ? 250 : 0);
+    return () => {
+      if (debounceRef.current) clearTimeout(debounceRef.current);
+    };
+  }, [selectedCategory, searchQuery, fetchProducts]);
+
+  // ---- Filter: only products with sell_price > 0 for POS ----
+  const displayProducts = useMemo(
+    () => products.filter((p) => (p.sellPrice ?? 0) > 0),
+    [products]
+  );
 
   return (
-    <div
-      className={cn(
-        "flex-1 flex flex-col min-w-0 bg-gray-50",
-        mobileView === "cart" ? "hidden md:flex" : "flex"
-      )}
-    >
-      {/* Search Bar */}
-      <div className="p-2 bg-white border-b flex gap-2 items-center">
-        <div className="flex-1 relative">
-          <Search className="absolute left-2.5 top-1/2 -translate-y-1/2 size-4 text-muted-foreground" />
-          <Input
-            ref={searchRef}
-            value={searchQuery}
-            onChange={(e) => onSearchChange(e.target.value)}
-            placeholder="Tìm hàng hóa (F3)"
-            className="pl-9 pr-9 h-9"
+    <div className="flex flex-col h-full bg-gray-50">
+      {/* ── Category pills ── */}
+      <div className="flex items-center gap-1.5 px-3 py-1.5 overflow-x-auto border-b bg-white shrink-0 scrollbar-none">
+        <CategoryPill
+          label="Tất cả"
+          count={totalProducts}
+          active={selectedCategory === "all"}
+          onClick={() => setSelectedCategory("all")}
+        />
+        {categories.map((cat) => (
+          <CategoryPill
+            key={cat.id}
+            label={cat.name}
+            count={cat.productCount}
+            active={selectedCategory === cat.id}
+            onClick={() => setSelectedCategory(cat.id)}
           />
-          <Barcode className="absolute right-2.5 top-1/2 -translate-y-1/2 size-4 text-muted-foreground cursor-pointer hover:text-primary transition-colors" />
-        </div>
-        {/* View toggle */}
-        <div className="hidden sm:flex items-center bg-gray-100 rounded h-8 overflow-hidden">
-          <button
-            onClick={() => setViewMode("grid")}
-            className={cn(
-              "p-1.5 transition-colors",
-              viewMode === "grid" ? "bg-primary text-white" : "text-gray-500 hover:text-gray-700"
-            )}
-            title="Xem dạng lưới"
-          >
-            <LayoutGrid className="size-4" />
-          </button>
-          <button
-            onClick={() => setViewMode("list")}
-            className={cn(
-              "p-1.5 transition-colors",
-              viewMode === "list" ? "bg-primary text-white" : "text-gray-500 hover:text-gray-700"
-            )}
-            title="Xem dạng danh sách"
-          >
-            <List className="size-4" />
-          </button>
-        </div>
+        ))}
       </div>
 
-      {/* Category Pills */}
-      <div className="px-2 py-1.5 bg-white border-b">
-        <div className="flex gap-1.5 overflow-x-auto [&::-webkit-scrollbar]:hidden [-ms-overflow-style:none] [scrollbar-width:none] pb-0.5">
-          {categories.map((cat) => (
-            <button
-              key={cat.id}
-              onClick={() => onSelectCategory(cat.id)}
-              className={cn(
-                "shrink-0 px-3 py-1 rounded-full text-xs font-medium transition-colors",
-                selectedCategory === cat.id
-                  ? "bg-primary text-white"
-                  : "bg-gray-100 text-gray-600 hover:bg-gray-200"
-              )}
-            >
-              {cat.name}
-            </button>
-          ))}
-        </div>
-      </div>
-
-      {/* Products */}
-      <ScrollArea className="flex-1">
-        {viewMode === "grid" ? (
-          /* Grid View */
-          <div className="p-2 grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-4 xl:grid-cols-5 gap-2">
-            {filteredProducts.map((product) => (
-              <button
-                key={product.id}
-                onClick={() => onAddToCart(product)}
-                className={cn(
-                  "bg-white border rounded-lg p-2.5 text-left hover:shadow-md hover:border-primary/30 transition-all duration-150 active:scale-[0.97]",
-                  addedProductId === product.id &&
-                    "ring-2 ring-primary/50 scale-[0.97]"
-                )}
-              >
-                {/* Image placeholder */}
-                <div className="aspect-square rounded bg-gray-50 border border-gray-100 flex items-center justify-center mb-2">
-                  <Package className="size-8 text-gray-300" />
-                </div>
-                <div className="text-sm font-medium line-clamp-2 min-h-[2.5rem] leading-tight">
-                  {product.name}
-                </div>
-                <div className="mt-1 text-sm font-bold text-primary">
-                  {formatCurrency(product.price)}
-                </div>
-                <div className="text-[11px] text-muted-foreground mt-0.5">
-                  Tồn: {product.stock}
-                </div>
-              </button>
-            ))}
-            {filteredProducts.length === 0 && (
-              <div className="col-span-full text-center py-12 text-muted-foreground">
-                <Package className="size-10 mx-auto mb-2 opacity-30" />
-                <p className="text-sm">Không tìm thấy sản phẩm</p>
-              </div>
-            )}
+      {/* ── Product tiles grid ── */}
+      <div className="flex-1 overflow-y-auto p-2">
+        {loading ? (
+          <div className="flex items-center justify-center h-32">
+            <Loader2 className="h-5 w-5 animate-spin text-blue-500" />
+          </div>
+        ) : displayProducts.length === 0 ? (
+          <div className="flex flex-col items-center justify-center h-32 text-gray-400">
+            <Package className="h-8 w-8 mb-2" />
+            <p className="text-xs">
+              {searchQuery
+                ? "Không tìm thấy sản phẩm"
+                : "Danh mục trống"}
+            </p>
           </div>
         ) : (
-          /* List View */
-          <div className="divide-y">
-            {filteredProducts.map((product) => (
-              <button
+          <div className="grid grid-cols-4 lg:grid-cols-5 xl:grid-cols-6 2xl:grid-cols-7 gap-1.5">
+            {displayProducts.map((product) => (
+              <ProductTile
                 key={product.id}
-                onClick={() => onAddToCart(product)}
-                className={cn(
-                  "w-full flex items-center gap-3 px-3 py-2.5 text-left hover:bg-blue-50/50 transition-colors active:bg-blue-50",
-                  addedProductId === product.id && "bg-blue-50"
-                )}
-              >
-                <div className="size-10 rounded bg-gray-50 border border-gray-100 flex items-center justify-center shrink-0">
-                  <Package className="size-5 text-gray-300" />
-                </div>
-                <div className="flex-1 min-w-0">
-                  <div className="text-sm font-medium truncate">{product.name}</div>
-                  <div className="text-[11px] text-muted-foreground">Tồn: {product.stock}</div>
-                </div>
-                <div className="text-sm font-bold text-primary shrink-0">
-                  {formatCurrency(product.price)}
-                </div>
-              </button>
+                product={product}
+                onClick={() => onAddProduct(product)}
+              />
             ))}
-            {filteredProducts.length === 0 && (
-              <div className="text-center py-12 text-muted-foreground">
-                <Package className="size-10 mx-auto mb-2 opacity-30" />
-                <p className="text-sm">Không tìm thấy sản phẩm</p>
-              </div>
-            )}
           </div>
         )}
-      </ScrollArea>
+      </div>
     </div>
+  );
+}
+
+// ── Category pill button ──
+function CategoryPill({
+  label,
+  count,
+  active,
+  onClick,
+}: {
+  label: string;
+  count?: number;
+  active: boolean;
+  onClick: () => void;
+}) {
+  return (
+    <button
+      type="button"
+      onClick={onClick}
+      className={cn(
+        "shrink-0 px-2.5 py-1 rounded-full text-[11px] font-medium transition-all whitespace-nowrap",
+        active
+          ? "bg-blue-600 text-white shadow-sm"
+          : "bg-gray-100 text-gray-600 hover:bg-gray-200"
+      )}
+    >
+      {label}
+      {typeof count === "number" && (
+        <span
+          className={cn(
+            "ml-1 text-[10px]",
+            active ? "text-blue-200" : "text-gray-400"
+          )}
+        >
+          {count}
+        </span>
+      )}
+    </button>
+  );
+}
+
+// ── Product tile card — KiotViet-style with stock + code ──
+function ProductTile({
+  product,
+  onClick,
+}: {
+  product: Product;
+  onClick: () => void;
+}) {
+  const outOfStock = (product.stock ?? 0) <= 0;
+  const stock = product.stock ?? 0;
+
+  return (
+    <button
+      type="button"
+      onClick={onClick}
+      className={cn(
+        "flex flex-col bg-white rounded border border-gray-200 overflow-hidden transition-all text-left group",
+        "hover:border-blue-400 hover:shadow active:scale-[0.97]",
+        outOfStock && "opacity-60"
+      )}
+    >
+      {/* Image — compact 3:2 ratio */}
+      <div className="relative aspect-[3/2] bg-gray-50 flex items-center justify-center overflow-hidden">
+        {product.image ? (
+          <img
+            src={product.image}
+            alt={product.name}
+            className="h-full w-full object-cover group-hover:scale-105 transition-transform"
+            loading="lazy"
+          />
+        ) : (
+          <Package className="h-5 w-5 text-gray-300" />
+        )}
+        {outOfStock && (
+          <div className="absolute inset-0 bg-white/60 flex items-center justify-center">
+            <span className="text-[9px] font-bold text-red-500 bg-red-50 px-1.5 py-0.5 rounded-full border border-red-200">
+              Hết hàng
+            </span>
+          </div>
+        )}
+        {/* Stock badge — always show when in stock (KiotViet style) */}
+        {!outOfStock && (
+          <div className="absolute top-0.5 right-0.5">
+            <span className={cn(
+              "text-[8px] font-medium px-1 py-0.5 rounded-full border",
+              stock <= 5
+                ? "text-amber-700 bg-amber-50 border-amber-200"
+                : "text-gray-500 bg-white/80 border-gray-200"
+            )}>
+              {stock}
+            </span>
+          </div>
+        )}
+      </div>
+
+      {/* Info — compact with code */}
+      <div className="px-1.5 py-1 flex-1 flex flex-col min-h-[40px]">
+        <p className="text-[11px] font-medium text-gray-800 line-clamp-2 leading-tight flex-1">
+          {product.name}
+        </p>
+        <div className="flex items-center justify-between mt-0.5 gap-1">
+          <p className="text-[11px] font-bold text-blue-600">
+            {formatCurrency(product.sellPrice ?? 0)}
+          </p>
+          {product.code && (
+            <p className="text-[8px] text-gray-400 font-mono truncate max-w-[60px]">
+              {product.code}
+            </p>
+          )}
+        </div>
+      </div>
+    </button>
   );
 }

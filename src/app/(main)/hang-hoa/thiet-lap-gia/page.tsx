@@ -1,181 +1,215 @@
 "use client";
 
+// Pricing Engine page — Quản lý bảng giá B2B (price tiers)
+// Real Supabase data via getPriceTiers + getPriceTierItems
+// Inline detail panel hiển thị danh sách item của từng tier với add/edit/delete
+
 import { useEffect, useState, useCallback } from "react";
 import { ColumnDef } from "@tanstack/react-table";
-import { Plus, Pencil, Copy, Trash2 } from "lucide-react";
+import {
+  Plus,
+  Pencil,
+  Trash2,
+  Tag,
+  Loader2,
+  Package,
+} from "lucide-react";
 import { Badge } from "@/components/ui/badge";
+import { Button } from "@/components/ui/button";
 import { PageHeader } from "@/components/shared/page-header";
 import { DataTable } from "@/components/shared/data-table";
-import { formatDate } from "@/lib/format";
-import type { PriceBook } from "@/lib/types";
-import { CreatePriceBookDialog } from "@/components/shared/dialogs";
+import {
+  InlineDetailPanel,
+  DetailHeader,
+} from "@/components/shared/inline-detail-panel";
+import {
+  PriceTierDialog,
+  AddPriceTierItemDialog,
+} from "@/components/shared/dialogs";
+import { formatCurrency, formatDate } from "@/lib/format";
+import { useToast } from "@/lib/contexts";
+import {
+  getPriceTiers,
+  getPriceTierItems,
+  deletePriceTier,
+  deletePriceTierItem,
+} from "@/lib/services";
+import type { PriceTier, PriceTierItem } from "@/lib/types";
 
-const mockPriceBooks: PriceBook[] = [
-  {
-    id: "BG001",
-    name: "Giá bán lẻ",
-    startDate: "2024-01-01T00:00:00",
-    status: "active",
-    statusName: "Đang áp dụng",
-    productCount: 1250,
-    createdBy: "Nguyễn Văn A",
-    createdAt: "2023-12-20T09:30:00",
-  },
-  {
-    id: "BG002",
-    name: "Giá bán buôn",
-    startDate: "2024-01-01T00:00:00",
-    status: "active",
-    statusName: "Đang áp dụng",
-    productCount: 980,
-    createdBy: "Nguyễn Văn A",
-    createdAt: "2023-12-20T10:15:00",
-  },
-  {
-    id: "BG003",
-    name: "Giá VIP",
-    startDate: "2024-03-01T00:00:00",
-    status: "active",
-    statusName: "Đang áp dụng",
-    productCount: 540,
-    createdBy: "Trần Thị B",
-    createdAt: "2024-02-15T14:00:00",
-  },
-  {
-    id: "BG004",
-    name: "Giá đại lý",
-    startDate: "2024-02-01T00:00:00",
-    status: "active",
-    statusName: "Đang áp dụng",
-    productCount: 870,
-    createdBy: "Trần Thị B",
-    createdAt: "2024-01-25T08:45:00",
-  },
-  {
-    id: "BG005",
-    name: "Giá khuyến mãi Tết",
-    startDate: "2025-01-15T00:00:00",
-    endDate: "2025-02-15T23:59:59",
-    status: "inactive",
-    statusName: "Ngừng áp dụng",
-    productCount: 320,
-    createdBy: "Lê Văn C",
-    createdAt: "2024-12-10T16:30:00",
-  },
-  {
-    id: "BG006",
-    name: "Giá khuyến mãi hè",
-    startDate: "2026-06-01T00:00:00",
-    endDate: "2026-08-31T23:59:59",
-    status: "scheduled",
-    statusName: "Chờ áp dụng",
-    productCount: 450,
-    createdBy: "Lê Văn C",
-    createdAt: "2026-03-20T11:00:00",
-  },
-  {
-    id: "BG007",
-    name: "Giá nhân viên",
-    startDate: "2024-06-01T00:00:00",
-    status: "active",
-    statusName: "Đang áp dụng",
-    productCount: 1100,
-    createdBy: "Nguyễn Văn A",
-    createdAt: "2024-05-20T09:00:00",
-  },
-  {
-    id: "BG008",
-    name: "Giá đối tác",
-    startDate: "2024-04-01T00:00:00",
-    status: "inactive",
-    statusName: "Ngừng áp dụng",
-    productCount: 650,
-    createdBy: "Trần Thị B",
-    createdAt: "2024-03-15T13:20:00",
-  },
-];
+// ---------------------------------------------------------------------------
+// Inline detail — danh sách items của một tier
+// ---------------------------------------------------------------------------
 
-async function fetchPriceBooks(search: string): Promise<{ data: PriceBook[]; total: number }> {
-  await new Promise((resolve) => setTimeout(resolve, 300));
-  const filtered = mockPriceBooks.filter((pb) =>
-    pb.name.toLowerCase().includes(search.toLowerCase())
+function PriceTierDetail({
+  tier,
+  onClose,
+  onChange,
+}: {
+  tier: PriceTier;
+  onClose: () => void;
+  onChange: () => void;
+}) {
+  const { toast } = useToast();
+  const [items, setItems] = useState<PriceTierItem[]>([]);
+  const [loading, setLoading] = useState(true);
+  const [addOpen, setAddOpen] = useState(false);
+
+  const load = useCallback(async () => {
+    setLoading(true);
+    try {
+      const data = await getPriceTierItems(tier.id);
+      setItems(data);
+    } catch (err) {
+      toast({
+        title: "Lỗi tải sản phẩm",
+        description: err instanceof Error ? err.message : "Vui lòng thử lại",
+        variant: "error",
+      });
+    } finally {
+      setLoading(false);
+    }
+  }, [tier.id, toast]);
+
+  useEffect(() => {
+    load();
+  }, [load]);
+
+  async function handleDeleteItem(itemId: string) {
+    try {
+      await deletePriceTierItem(itemId);
+      toast({ title: "Đã xóa sản phẩm khỏi bảng giá", variant: "success" });
+      await load();
+      onChange();
+    } catch (err) {
+      toast({
+        title: "Lỗi xóa",
+        description: err instanceof Error ? err.message : "Vui lòng thử lại",
+        variant: "error",
+      });
+    }
+  }
+
+  return (
+    <InlineDetailPanel open onClose={onClose}>
+      <div className="space-y-4 p-4">
+        <DetailHeader
+          title={tier.name}
+          code={tier.code}
+          subtitle={tier.description ?? "Không có mô tả"}
+        />
+
+        <div className="flex items-center justify-between border-b pb-2">
+          <h3 className="text-sm font-semibold">
+            Sản phẩm áp dụng ({items.length})
+          </h3>
+          <Button size="sm" onClick={() => setAddOpen(true)}>
+            <Plus className="h-4 w-4 mr-1" />
+            Thêm sản phẩm
+          </Button>
+        </div>
+
+        {loading ? (
+          <div className="flex items-center justify-center py-8 text-muted-foreground">
+            <Loader2 className="h-4 w-4 animate-spin mr-2" />
+            <span className="text-sm">Đang tải...</span>
+          </div>
+        ) : items.length === 0 ? (
+          <div className="flex flex-col items-center justify-center py-10 text-muted-foreground">
+            <Package className="h-10 w-10 mb-2 opacity-30" />
+            <p className="text-sm">Chưa có sản phẩm nào trong bảng giá</p>
+            <Button size="sm" variant="outline" className="mt-3" onClick={() => setAddOpen(true)}>
+              <Plus className="h-4 w-4 mr-1" />
+              Thêm sản phẩm đầu tiên
+            </Button>
+          </div>
+        ) : (
+          <div className="border rounded-lg overflow-hidden">
+            <table className="w-full text-sm">
+              <thead className="bg-muted/30">
+                <tr>
+                  <th className="text-left p-2 font-medium">Sản phẩm</th>
+                  <th className="text-right p-2 font-medium">Giá riêng</th>
+                  <th className="text-right p-2 font-medium">SL tối thiểu</th>
+                  <th className="text-right p-2 font-medium w-12"></th>
+                </tr>
+              </thead>
+              <tbody>
+                {items.map((item) => (
+                  <tr key={item.id} className="border-t">
+                    <td className="p-2">
+                      <div className="font-medium">{item.productName ?? "—"}</div>
+                      <div className="text-xs text-muted-foreground">
+                        {item.productCode}
+                      </div>
+                    </td>
+                    <td className="p-2 text-right font-medium">
+                      {formatCurrency(item.price)}
+                    </td>
+                    <td className="p-2 text-right text-muted-foreground">
+                      {item.minQty}
+                    </td>
+                    <td className="p-2 text-right">
+                      <button
+                        onClick={() => handleDeleteItem(item.id)}
+                        className="text-muted-foreground hover:text-destructive transition-colors"
+                        title="Xóa"
+                      >
+                        <Trash2 className="h-3.5 w-3.5" />
+                      </button>
+                    </td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
+        )}
+      </div>
+
+      <AddPriceTierItemDialog
+        open={addOpen}
+        onOpenChange={setAddOpen}
+        tierId={tier.id}
+        tierName={tier.name}
+        onSuccess={() => {
+          load();
+          onChange();
+        }}
+      />
+    </InlineDetailPanel>
   );
-  return { data: filtered, total: filtered.length };
 }
 
-const statusVariantMap: Record<PriceBook["status"], "default" | "secondary" | "outline"> = {
-  active: "default",
-  inactive: "secondary",
-  scheduled: "outline",
-};
-
-const columns: ColumnDef<PriceBook, unknown>[] = [
-  {
-    accessorKey: "name",
-    header: "Tên bảng giá",
-    size: 200,
-    cell: ({ row }) => (
-      <span className="font-medium">{row.original.name}</span>
-    ),
-  },
-  {
-    accessorKey: "startDate",
-    header: "Ngày bắt đầu",
-    size: 150,
-    cell: ({ row }) => formatDate(row.original.startDate),
-  },
-  {
-    accessorKey: "endDate",
-    header: "Ngày kết thúc",
-    size: 150,
-    cell: ({ row }) =>
-      row.original.endDate ? formatDate(row.original.endDate) : "Không giới hạn",
-  },
-  {
-    accessorKey: "status",
-    header: "Trạng thái",
-    size: 140,
-    cell: ({ row }) => (
-      <Badge variant={statusVariantMap[row.original.status]}>
-        {row.original.statusName}
-      </Badge>
-    ),
-  },
-  {
-    accessorKey: "productCount",
-    header: "Số SP áp dụng",
-    size: 120,
-    cell: ({ row }) => row.original.productCount.toLocaleString("vi-VN"),
-  },
-  {
-    accessorKey: "createdBy",
-    header: "Người tạo",
-    size: 150,
-  },
-  {
-    accessorKey: "createdAt",
-    header: "Ngày tạo",
-    size: 150,
-    cell: ({ row }) => formatDate(row.original.createdAt),
-  },
-];
+// ---------------------------------------------------------------------------
+// Page
+// ---------------------------------------------------------------------------
 
 export default function ThietLapGiaPage() {
-  const [data, setData] = useState<PriceBook[]>([]);
-  const [total, setTotal] = useState(0);
+  const { toast } = useToast();
+  const [data, setData] = useState<PriceTier[]>([]);
   const [loading, setLoading] = useState(true);
   const [search, setSearch] = useState("");
   const [page, setPage] = useState(0);
   const [pageSize, setPageSize] = useState(20);
+  const [expandedRow, setExpandedRow] = useState<number | null>(null);
+
   const [createOpen, setCreateOpen] = useState(false);
+  const [editingTier, setEditingTier] = useState<PriceTier | null>(null);
 
   const fetchData = useCallback(async () => {
     setLoading(true);
-    const result = await fetchPriceBooks(search);
-    setData(result.data);
-    setTotal(result.total);
-    setLoading(false);
-  }, [search]);
+    try {
+      const result = await getPriceTiers();
+      setData(result);
+    } catch (err) {
+      toast({
+        title: "Lỗi tải bảng giá",
+        description: err instanceof Error ? err.message : "Vui lòng thử lại",
+        variant: "error",
+      });
+    } finally {
+      setLoading(false);
+    }
+  }, [toast]);
 
   useEffect(() => {
     fetchData();
@@ -183,48 +217,172 @@ export default function ThietLapGiaPage() {
 
   useEffect(() => {
     setPage(0);
+    setExpandedRow(null);
   }, [search]);
+
+  const filtered = data.filter((t) => {
+    if (!search) return true;
+    const q = search.toLowerCase();
+    return (
+      t.name.toLowerCase().includes(q) ||
+      t.code.toLowerCase().includes(q) ||
+      (t.description ?? "").toLowerCase().includes(q)
+    );
+  });
+
+  const pagedData = filtered.slice(page * pageSize, (page + 1) * pageSize);
+
+  async function handleDelete(tier: PriceTier) {
+    if (!confirm(`Xóa bảng giá "${tier.name}"?`)) return;
+    try {
+      await deletePriceTier(tier.id);
+      toast({ title: "Đã xóa bảng giá", variant: "success" });
+      fetchData();
+    } catch (err) {
+      toast({
+        title: "Lỗi xóa",
+        description: err instanceof Error ? err.message : "Vui lòng thử lại",
+        variant: "error",
+      });
+    }
+  }
+
+  const columns: ColumnDef<PriceTier, unknown>[] = [
+    {
+      accessorKey: "code",
+      header: "Mã",
+      size: 130,
+      cell: ({ row }) => (
+        <span className="font-mono text-xs text-primary font-medium">
+          {row.original.code}
+        </span>
+      ),
+    },
+    {
+      accessorKey: "name",
+      header: "Tên bảng giá",
+      size: 240,
+      cell: ({ row }) => (
+        <div>
+          <div className="font-medium">{row.original.name}</div>
+          {row.original.description && (
+            <div className="text-xs text-muted-foreground truncate">
+              {row.original.description}
+            </div>
+          )}
+        </div>
+      ),
+    },
+    {
+      id: "itemCount",
+      header: "SP áp dụng",
+      size: 110,
+      cell: ({ row }) => (
+        <Badge variant="secondary" className="font-medium">
+          {row.original.itemCount ?? 0}
+        </Badge>
+      ),
+    },
+    {
+      accessorKey: "priority",
+      header: "Ưu tiên",
+      size: 90,
+      cell: ({ row }) => (
+        <span className="text-muted-foreground">{row.original.priority}</span>
+      ),
+    },
+    {
+      accessorKey: "createdAt",
+      header: "Ngày tạo",
+      size: 140,
+      cell: ({ row }) => formatDate(row.original.createdAt),
+    },
+  ];
 
   return (
     <div className="h-[calc(100vh-48px)] flex flex-col">
       <PageHeader
-        title="Thiết lập giá"
-        searchPlaceholder="Theo tên bảng giá"
+        title="Bảng giá (Price Tiers)"
+        searchPlaceholder="Theo tên hoặc mã bảng giá..."
         searchValue={search}
         onSearchChange={setSearch}
         actions={[
           {
-            label: "Thêm bảng giá",
+            label: "Tạo bảng giá",
             icon: <Plus className="h-4 w-4" />,
             variant: "default",
-            onClick: () => setCreateOpen(true),
+            onClick: () => {
+              setEditingTier(null);
+              setCreateOpen(true);
+            },
           },
         ]}
       />
 
-      <DataTable
-        columns={columns}
-        data={data}
-        loading={loading}
-        total={total}
-        pageIndex={page}
-        pageSize={pageSize}
-        pageCount={Math.ceil(total / pageSize)}
-        onPageChange={setPage}
-        onPageSizeChange={(size) => {
-          setPageSize(size);
-          setPage(0);
-        }}
-        rowActions={(row) => [
-          { label: "Sửa", icon: <Pencil className="h-4 w-4" />, onClick: () => {} },
-          { label: "Nhân bản", icon: <Copy className="h-4 w-4" />, onClick: () => {} },
-          { label: "Xóa", icon: <Trash2 className="h-4 w-4" />, onClick: () => {}, variant: "destructive", separator: true },
-        ]}
-      />
+      {!loading && filtered.length === 0 ? (
+        <div className="flex-1 flex flex-col items-center justify-center text-muted-foreground">
+          <Tag className="h-12 w-12 mb-3 opacity-30" />
+          <p className="text-sm">Chưa có bảng giá nào</p>
+          <Button
+            size="sm"
+            className="mt-3"
+            onClick={() => {
+              setEditingTier(null);
+              setCreateOpen(true);
+            }}
+          >
+            <Plus className="h-4 w-4 mr-1" />
+            Tạo bảng giá đầu tiên
+          </Button>
+        </div>
+      ) : (
+        <DataTable
+          columns={columns}
+          data={pagedData}
+          loading={loading}
+          total={filtered.length}
+          pageIndex={page}
+          pageSize={pageSize}
+          pageCount={Math.ceil(filtered.length / pageSize)}
+          onPageChange={setPage}
+          onPageSizeChange={(size) => {
+            setPageSize(size);
+            setPage(0);
+          }}
+          expandedRow={expandedRow}
+          onExpandedRowChange={setExpandedRow}
+          getRowId={(row) => row.id}
+          renderDetail={(tier, onClose) => (
+            <PriceTierDetail
+              tier={tier}
+              onClose={onClose}
+              onChange={fetchData}
+            />
+          )}
+          rowActions={(row) => [
+            {
+              label: "Sửa",
+              icon: <Pencil className="h-4 w-4" />,
+              onClick: () => {
+                setEditingTier(row);
+                setCreateOpen(true);
+              },
+            },
+            {
+              label: "Xóa",
+              icon: <Trash2 className="h-4 w-4" />,
+              onClick: () => handleDelete(row),
+              variant: "destructive",
+              separator: true,
+            },
+          ]}
+        />
+      )}
 
-      <CreatePriceBookDialog
+      <PriceTierDialog
         open={createOpen}
         onOpenChange={setCreateOpen}
+        tier={editingTier}
         onSuccess={fetchData}
       />
     </div>

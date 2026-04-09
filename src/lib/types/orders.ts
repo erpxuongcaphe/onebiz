@@ -38,6 +38,14 @@ export interface InvoiceDetail extends Invoice {
   timeline: StatusChange[];
 }
 
+// Trạng thái đơn nhập hàng (khớp DB enum)
+export type PurchaseOrderStatus =
+  | "draft"
+  | "ordered"
+  | "partial"
+  | "completed"
+  | "cancelled";
+
 // Mục trong danh sách đơn nhập hàng
 export interface PurchaseOrder {
   id: string;
@@ -48,7 +56,9 @@ export interface PurchaseOrder {
   supplierCode: string;
   supplierName: string;
   amountOwed: number;
-  status: "draft" | "imported" | "cancelled";
+  total: number;
+  paid: number;
+  status: PurchaseOrderStatus;
   createdBy: string;
   importedBy?: string;
 }

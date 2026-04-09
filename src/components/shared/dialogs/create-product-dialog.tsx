@@ -19,9 +19,11 @@ import {
   SelectItem,
 } from "@/components/ui/select";
 import { Checkbox } from "@/components/ui/checkbox";
+import { Tabs, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { ImagePlus, Loader2 } from "lucide-react";
 import { useToast } from "@/lib/contexts";
-import { createProduct } from "@/lib/services";
+import { createProduct, getProductCategoriesAsync } from "@/lib/services";
+import { nextGroupCode } from "@/lib/services/supabase/base";
 
 interface CreateProductDialogProps {
   open: boolean;
@@ -29,18 +31,8 @@ interface CreateProductDialogProps {
   onSuccess?: () => void;
 }
 
-const productCategories = [
-  { label: "Đồ uống", value: "drinks" },
-  { label: "Thực phẩm", value: "food" },
-  { label: "Nguyên liệu", value: "ingredients" },
-  { label: "Phụ kiện", value: "accessories" },
-  { label: "Khác", value: "other" },
-];
-
-function generateProductCode() {
-  const num = Math.floor(Math.random() * 99999) + 1;
-  return `SP${String(num).padStart(6, "0")}`;
-}
+type ProductScope = "nvl" | "sku";
+type CategoryOption = { label: string; value: string; code?: string; count: number };
 
 export function CreateProductDialog({
   open,
@@ -48,67 +40,103 @@ export function CreateProductDialog({
   onSuccess,
 }: CreateProductDialogProps) {
   const { toast } = useToast();
-  const [code, setCode] = useState("");
+  const [scope, setScope] = useState<ProductScope>("nvl");
+  const [categories, setCategories] = useState<CategoryOption[]>([]);
+  const [loadingCats, setLoadingCats] = useState(false);
+
+  const [categoryId, setCategoryId] = useState("");
   const [name, setName] = useState("");
-  const [category, setCategory] = useState("");
   const [sellPrice, setSellPrice] = useState("");
   const [costPrice, setCostPrice] = useState("");
   const [initialStock, setInitialStock] = useState("");
-  const [unit, setUnit] = useState("");
-  const [weight, setWeight] = useState("");
-  const [description, setDescription] = useState("");
+  const [purchaseUnit, setPurchaseUnit] = useState("");
+  const [stockUnit, setStockUnit] = useState("");
+  const [sellUnit, setSellUnit] = useState("");
+  const [shelfLifeDays, setShelfLifeDays] = useState("");
+  const [hasBom, setHasBom] = useState(false);
   const [barcode, setBarcode] = useState("");
+  const [description, setDescription] = useState("");
   const [allowSale, setAllowSale] = useState(true);
   const [errors, setErrors] = useState<Record<string, string>>({});
   const [saving, setSaving] = useState(false);
 
+  // Reset form when dialog opens
   useEffect(() => {
     if (open) {
-      setCode(generateProductCode());
+      setScope("nvl");
+      setCategoryId("");
       setName("");
-      setCategory("");
       setSellPrice("");
       setCostPrice("");
       setInitialStock("");
-      setUnit("");
-      setWeight("");
-      setDescription("");
+      setPurchaseUnit("");
+      setStockUnit("");
+      setSellUnit("");
+      setShelfLifeDays("");
+      setHasBom(false);
       setBarcode("");
+      setDescription("");
       setAllowSale(true);
       setErrors({});
     }
   }, [open]);
 
+  // Load categories whenever scope changes
+  useEffect(() => {
+    if (!open) return;
+    setLoadingCats(true);
+    setCategoryId("");
+    getProductCategoriesAsync(scope)
+      .then((cats) => setCategories(cats as CategoryOption[]))
+      .finally(() => setLoadingCats(false));
+  }, [open, scope]);
+
+  const selectedCategory = categories.find((c) => c.value === categoryId);
+
   function validate(): boolean {
-    const newErrors: Record<string, string> = {};
-    if (!name.trim()) newErrors.name = "Tên hàng là bắt buộc";
-    if (!sellPrice.trim() || isNaN(Number(sellPrice)) || Number(sellPrice) <= 0)
-      newErrors.sellPrice = "Giá bán không hợp lệ";
-    setErrors(newErrors);
-    return Object.keys(newErrors).length === 0;
+    const e: Record<string, string> = {};
+    if (!name.trim()) e.name = "Tên hàng là bắt buộc";
+    if (!categoryId) e.category = "Chọn nhóm hàng";
+    if (!selectedCategory?.code) e.category = "Nhóm hàng chưa có code";
+    if (scope === "sku") {
+      if (!sellPrice.trim() || isNaN(Number(sellPrice)) || Number(sellPrice) <= 0)
+        e.sellPrice = "Giá bán không hợp lệ";
+    }
+    setErrors(e);
+    return Object.keys(e).length === 0;
   }
 
   async function handleSave() {
     if (!validate()) return;
     setSaving(true);
     try {
+      const prefix = scope === "nvl" ? "NVL" : "SKU";
+      const code = await nextGroupCode(prefix, selectedCategory!.code!);
+
       await createProduct({
         code,
         name,
+        productType: scope,
+        hasBom: scope === "sku" ? hasBom : false,
+        groupCode: selectedCategory!.code,
+        categoryId,
+        unit: stockUnit || purchaseUnit || "Cái",
+        purchaseUnit: purchaseUnit || undefined,
+        stockUnit: stockUnit || undefined,
+        sellUnit: sellUnit || undefined,
+        shelfLifeDays: shelfLifeDays ? Number(shelfLifeDays) : undefined,
         barcode: barcode || undefined,
-        categoryId: category || "",
-        unit: unit || "Cái",
+        sellPrice: scope === "sku" ? Number(sellPrice) : 0,
         costPrice: Number(costPrice) || 0,
-        sellPrice: Number(sellPrice),
         stock: Number(initialStock) || 0,
-        weight: Number(weight) || undefined,
         description: description || undefined,
-        allowSale,
+        allowSale: scope === "sku" ? allowSale : false,
       });
+
       onOpenChange(false);
       toast({
         title: "Tạo hàng hóa thành công",
-        description: `Đã thêm sản phẩm ${name} (${code})`,
+        description: `Đã thêm ${scope === "nvl" ? "NVL" : "SKU"} ${name} (${code})`,
         variant: "success",
       });
       onSuccess?.();
@@ -125,37 +153,32 @@ export function CreateProductDialog({
 
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
-      <DialogContent className="sm:max-w-lg max-h-[90vh] overflow-y-auto">
+      <DialogContent className="sm:max-w-2xl max-h-[90vh] overflow-y-auto">
         <DialogHeader>
           <DialogTitle>Thêm hàng hóa mới</DialogTitle>
           <DialogDescription>
-            Điền thông tin sản phẩm. Các trường có dấu * là bắt buộc.
+            Chọn loại hàng (NVL hoặc SKU) và điền thông tin. Mã sẽ tự sinh theo nhóm.
           </DialogDescription>
         </DialogHeader>
 
+        <Tabs value={scope} onValueChange={(v) => setScope(v as ProductScope)}>
+          <TabsList className="w-full">
+            <TabsTrigger value="nvl" className="flex-1">
+              Nguyên vật liệu (NVL)
+            </TabsTrigger>
+            <TabsTrigger value="sku" className="flex-1">
+              Hàng bán (SKU)
+            </TabsTrigger>
+          </TabsList>
+        </Tabs>
+
         <div className="grid gap-4 py-2">
-          {/* Image upload placeholder */}
           <div className="flex justify-center">
             <div className="flex h-24 w-24 cursor-pointer items-center justify-center rounded-lg border-2 border-dashed border-muted-foreground/30 text-muted-foreground hover:border-primary/50 hover:text-primary transition-colors">
               <div className="flex flex-col items-center gap-1">
                 <ImagePlus className="h-6 w-6" />
                 <span className="text-xs">Ảnh</span>
               </div>
-            </div>
-          </div>
-
-          <div className="grid grid-cols-2 gap-4">
-            <div className="space-y-1.5">
-              <label className="text-sm font-medium">Mã hàng</label>
-              <Input value={code} onChange={(e) => setCode(e.target.value)} />
-            </div>
-            <div className="space-y-1.5">
-              <label className="text-sm font-medium">Mã vạch</label>
-              <Input
-                value={barcode}
-                onChange={(e) => setBarcode(e.target.value)}
-                placeholder="Nhập hoặc quét mã vạch"
-              />
             </div>
           </div>
 
@@ -166,46 +189,89 @@ export function CreateProductDialog({
             <Input
               value={name}
               onChange={(e) => setName(e.target.value)}
-              placeholder="Nhập tên hàng hóa"
+              placeholder={
+                scope === "nvl"
+                  ? "VD: Cà phê hạt Robusta S18 60kg/bao"
+                  : "VD: Robusta Rang Xay 1kg"
+              }
               aria-invalid={!!errors.name}
             />
-            {errors.name && (
-              <p className="text-xs text-destructive">{errors.name}</p>
-            )}
-          </div>
-
-          <div className="space-y-1.5">
-            <label className="text-sm font-medium">Nhóm hàng</label>
-            <Select value={category} onValueChange={(v) => setCategory(v ?? "")}>
-              <SelectTrigger className="w-full">
-                <SelectValue placeholder="Chọn nhóm hàng" />
-              </SelectTrigger>
-              <SelectContent>
-                {productCategories.map((cat) => (
-                  <SelectItem key={cat.value} value={cat.value}>
-                    {cat.label}
-                  </SelectItem>
-                ))}
-              </SelectContent>
-            </Select>
+            {errors.name && <p className="text-xs text-destructive">{errors.name}</p>}
           </div>
 
           <div className="grid grid-cols-2 gap-4">
             <div className="space-y-1.5">
               <label className="text-sm font-medium">
-                Giá bán <span className="text-destructive">*</span>
+                Nhóm hàng <span className="text-destructive">*</span>
               </label>
-              <Input
-                type="number"
-                value={sellPrice}
-                onChange={(e) => setSellPrice(e.target.value)}
-                placeholder="0"
-                aria-invalid={!!errors.sellPrice}
-              />
-              {errors.sellPrice && (
-                <p className="text-xs text-destructive">{errors.sellPrice}</p>
+              <Select value={categoryId} onValueChange={(v) => setCategoryId(v ?? "")}>
+                <SelectTrigger className="w-full">
+                  <SelectValue
+                    placeholder={loadingCats ? "Đang tải..." : "Chọn nhóm hàng"}
+                  />
+                </SelectTrigger>
+                <SelectContent>
+                  {categories.map((cat) => (
+                    <SelectItem key={cat.value} value={cat.value}>
+                      {cat.code ? `${cat.code} — ` : ""}
+                      {cat.label}
+                    </SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+              {errors.category && (
+                <p className="text-xs text-destructive">{errors.category}</p>
+              )}
+              {selectedCategory?.code && (
+                <p className="text-xs text-muted-foreground">
+                  Mã sẽ là: {scope === "nvl" ? "NVL" : "SKU"}-{selectedCategory.code}-XXX
+                </p>
               )}
             </div>
+
+            <div className="space-y-1.5">
+              <label className="text-sm font-medium">Mã vạch</label>
+              <Input
+                value={barcode}
+                onChange={(e) => setBarcode(e.target.value)}
+                placeholder="Nhập hoặc quét mã vạch"
+              />
+            </div>
+          </div>
+
+          {/* UOM 3 đơn vị */}
+          <div className="grid grid-cols-3 gap-4">
+            <div className="space-y-1.5">
+              <label className="text-sm font-medium">ĐVT mua</label>
+              <Input
+                value={purchaseUnit}
+                onChange={(e) => setPurchaseUnit(e.target.value)}
+                placeholder="thùng, bao..."
+              />
+            </div>
+            <div className="space-y-1.5">
+              <label className="text-sm font-medium">
+                ĐVT kho <span className="text-muted-foreground">(chuẩn)</span>
+              </label>
+              <Input
+                value={stockUnit}
+                onChange={(e) => setStockUnit(e.target.value)}
+                placeholder="lon, gói, kg..."
+              />
+            </div>
+            <div className="space-y-1.5">
+              <label className="text-sm font-medium">ĐVT bán</label>
+              <Input
+                value={sellUnit}
+                onChange={(e) => setSellUnit(e.target.value)}
+                placeholder="thùng, lốc..."
+                disabled={scope === "nvl"}
+              />
+            </div>
+          </div>
+
+          {/* Pricing */}
+          <div className="grid grid-cols-3 gap-4">
             <div className="space-y-1.5">
               <label className="text-sm font-medium">Giá vốn</label>
               <Input
@@ -215,9 +281,23 @@ export function CreateProductDialog({
                 placeholder="0"
               />
             </div>
-          </div>
-
-          <div className="grid grid-cols-3 gap-4">
+            <div className="space-y-1.5">
+              <label className="text-sm font-medium">
+                Giá bán
+                {scope === "sku" && <span className="text-destructive"> *</span>}
+              </label>
+              <Input
+                type="number"
+                value={sellPrice}
+                onChange={(e) => setSellPrice(e.target.value)}
+                placeholder="0"
+                disabled={scope === "nvl"}
+                aria-invalid={!!errors.sellPrice}
+              />
+              {errors.sellPrice && (
+                <p className="text-xs text-destructive">{errors.sellPrice}</p>
+              )}
+            </div>
             <div className="space-y-1.5">
               <label className="text-sm font-medium">Tồn kho ban đầu</label>
               <Input
@@ -227,23 +307,33 @@ export function CreateProductDialog({
                 placeholder="0"
               />
             </div>
+          </div>
+
+          {/* Shelf life */}
+          <div className="grid grid-cols-2 gap-4">
             <div className="space-y-1.5">
-              <label className="text-sm font-medium">Đơn vị tính</label>
-              <Input
-                value={unit}
-                onChange={(e) => setUnit(e.target.value)}
-                placeholder="Cái, hộp, kg..."
-              />
-            </div>
-            <div className="space-y-1.5">
-              <label className="text-sm font-medium">Trọng lượng</label>
+              <label className="text-sm font-medium">HSD mặc định (ngày)</label>
               <Input
                 type="number"
-                value={weight}
-                onChange={(e) => setWeight(e.target.value)}
-                placeholder="gram"
+                value={shelfLifeDays}
+                onChange={(e) => setShelfLifeDays(e.target.value)}
+                placeholder="VD: 365"
               />
             </div>
+            {scope === "sku" && (
+              <div className="space-y-1.5 flex flex-col justify-end">
+                <label className="flex items-center gap-2 text-sm font-medium cursor-pointer pb-2">
+                  <Checkbox
+                    checked={hasBom}
+                    onCheckedChange={(c) => setHasBom(!!c)}
+                  />
+                  Có công thức sản xuất (BOM)
+                </label>
+                <p className="text-xs text-muted-foreground -mt-1">
+                  Bật nếu SKU này tự sản xuất từ NVL
+                </p>
+              </div>
+            )}
           </div>
 
           <div className="space-y-1.5">
@@ -257,15 +347,17 @@ export function CreateProductDialog({
             />
           </div>
 
-          <div className="flex items-center gap-2">
-            <Checkbox
-              checked={allowSale}
-              onCheckedChange={(checked) => setAllowSale(!!checked)}
-            />
-            <label className="text-sm font-medium cursor-pointer">
-              Cho phép bán
-            </label>
-          </div>
+          {scope === "sku" && (
+            <div className="flex items-center gap-2">
+              <Checkbox
+                checked={allowSale}
+                onCheckedChange={(checked) => setAllowSale(!!checked)}
+              />
+              <label className="text-sm font-medium cursor-pointer">
+                Cho phép bán
+              </label>
+            </div>
+          )}
         </div>
 
         <DialogFooter>

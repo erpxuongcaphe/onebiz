@@ -11,7 +11,7 @@ import {
   VisibilityState,
   Row,
 } from "@tanstack/react-table";
-import { useState, useMemo, ReactNode, Fragment } from "react";
+import { useState, useMemo, useEffect, ReactNode, Fragment } from "react";
 import {
   ArrowUpDown,
   ArrowUp,
@@ -82,6 +82,12 @@ interface DataTableProps<TData, TValue> {
   onExpandedRowChange?: (index: number | null) => void;
   /** Get unique row ID for tracking (defaults to index) */
   getRowId?: (row: TData) => string;
+  /**
+   * Counter prop — bất kỳ thay đổi nào về số sẽ buộc DataTable
+   * gọi `toggleAllRowsSelected(false)` để xoá toàn bộ checkbox đã chọn.
+   * Dùng sau khi parent thực thi xong một bulk action thành công.
+   */
+  clearSelectionTrigger?: number;
 }
 
 export function DataTable<TData, TValue>({
@@ -104,6 +110,7 @@ export function DataTable<TData, TValue>({
   expandedRow: controlledExpanded,
   onExpandedRowChange,
   getRowId,
+  clearSelectionTrigger,
 }: DataTableProps<TData, TValue>) {
   const [sorting, setSorting] = useState<SortingState>([]);
   const [rowSelection, setRowSelection] = useState<RowSelectionState>({});
@@ -191,9 +198,9 @@ export function DataTable<TData, TValue>({
     return cols;
   }, [columns, selectable, rowActions]);
 
-  // eslint-disable-next-line @typescript-eslint/no-explicit-any
   const table = useReactTable<TData>({
     data,
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
     columns: allColumns as any,
     getCoreRowModel: getCoreRowModel(),
     getSortedRowModel: getSortedRowModel(),
@@ -210,6 +217,13 @@ export function DataTable<TData, TValue>({
     },
     ...(getRowId ? { getRowId: (row) => getRowId(row) } : {}),
   });
+
+  // Reset selection externally — parent ↑ trigger sau khi bulk action xong
+  useEffect(() => {
+    if (clearSelectionTrigger === undefined) return;
+    table.toggleAllRowsSelected(false);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [clearSelectionTrigger]);
 
   // Derive selected rows for bulk actions
   const selectedRows = useMemo(() => {

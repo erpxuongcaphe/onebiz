@@ -43,6 +43,8 @@ interface ExportHandlers {
 
 interface PageHeaderProps {
   title: string;
+  /** Optional tabs rendered next to the title (e.g. NVL/SKU) */
+  tabs?: ReactNode;
   searchPlaceholder?: string;
   searchValue?: string;
   onSearchChange?: (value: string) => void;
@@ -183,6 +185,7 @@ function IconButton({
 
 export function PageHeader({
   title,
+  tabs,
   searchPlaceholder = "Tìm kiếm...",
   searchValue,
   onSearchChange,
@@ -207,6 +210,8 @@ export function PageHeader({
         {/* Title row: Title (left) + Search (center) + Actions (right) */}
         <div className="flex items-center gap-3">
           <h1 className="text-lg font-semibold shrink-0">{title}</h1>
+
+          {tabs && <div className="shrink-0">{tabs}</div>}
 
           {/* Search bar — centered */}
           {onSearchChange !== undefined && (

@@ -53,6 +53,8 @@ export interface Database {
           phone: string | null;
           is_default: boolean;
           is_active: boolean;
+          code: string | null;
+          branch_type: string;
           created_at: string;
           updated_at: string;
         };
@@ -64,6 +66,8 @@ export interface Database {
           phone?: string | null;
           is_default?: boolean;
           is_active?: boolean;
+          code?: string | null;
+          branch_type?: string;
         };
         Update: {
           name?: string;
@@ -71,6 +75,8 @@ export interface Database {
           phone?: string | null;
           is_default?: boolean;
           is_active?: boolean;
+          code?: string | null;
+          branch_type?: string;
         };
         Relationships: [
           {
@@ -136,6 +142,8 @@ export interface Database {
           name: string;
           parent_id: string | null;
           sort_order: number;
+          code: string | null;
+          scope: string | null;
           created_at: string;
         };
         Insert: {
@@ -144,11 +152,15 @@ export interface Database {
           name: string;
           parent_id?: string | null;
           sort_order?: number;
+          code?: string | null;
+          scope?: string | null;
         };
         Update: {
           name?: string;
           parent_id?: string | null;
           sort_order?: number;
+          code?: string | null;
+          scope?: string | null;
         };
         Relationships: [];
       };
@@ -171,6 +183,16 @@ export interface Database {
           image_url: string | null;
           allow_sale: boolean;
           is_active: boolean;
+          product_type: string;
+          has_bom: boolean;
+          old_code: string | null;
+          group_code: string | null;
+          purchase_unit: string | null;
+          stock_unit: string | null;
+          sell_unit: string | null;
+          shelf_life_days: number | null;
+          shelf_life_unit: string;
+          supplier_id: string | null;
           created_at: string;
           updated_at: string;
         };
@@ -192,6 +214,16 @@ export interface Database {
           image_url?: string | null;
           allow_sale?: boolean;
           is_active?: boolean;
+          product_type?: string;
+          has_bom?: boolean;
+          old_code?: string | null;
+          group_code?: string | null;
+          purchase_unit?: string | null;
+          stock_unit?: string | null;
+          sell_unit?: string | null;
+          shelf_life_days?: number | null;
+          shelf_life_unit?: string;
+          supplier_id?: string | null;
         };
         Update: {
           code?: string;
@@ -209,6 +241,16 @@ export interface Database {
           image_url?: string | null;
           allow_sale?: boolean;
           is_active?: boolean;
+          product_type?: string;
+          has_bom?: boolean;
+          old_code?: string | null;
+          group_code?: string | null;
+          purchase_unit?: string | null;
+          stock_unit?: string | null;
+          sell_unit?: string | null;
+          shelf_life_days?: number | null;
+          shelf_life_unit?: string;
+          supplier_id?: string | null;
         };
         Relationships: [
           {
@@ -238,6 +280,8 @@ export interface Database {
           debt: number;
           note: string | null;
           is_active: boolean;
+          group_code: string | null;
+          group_id: string | null;
           created_at: string;
           updated_at: string;
         };
@@ -253,6 +297,8 @@ export interface Database {
           debt?: number;
           note?: string | null;
           is_active?: boolean;
+          group_code?: string | null;
+          group_id?: string | null;
         };
         Update: {
           code?: string;
@@ -264,6 +310,8 @@ export interface Database {
           debt?: number;
           note?: string | null;
           is_active?: boolean;
+          group_code?: string | null;
+          group_id?: string | null;
         };
         Relationships: [
           {
@@ -1405,6 +1453,651 @@ export interface Database {
         };
         Relationships: [];
       };
+      // ============ NEW TABLES (manufacturing, variants, lots, pipelines) ============
+      product_variants: {
+        Row: {
+          id: string;
+          tenant_id: string;
+          product_id: string;
+          sku: string | null;
+          name: string;
+          packaging_type: string | null;
+          packaging_size: string | null;
+          unit_count: number;
+          barcode: string | null;
+          sell_price: number;
+          cost_price: number;
+          weight: number | null;
+          is_default: boolean;
+          is_active: boolean;
+          sort_order: number;
+          created_at: string;
+          updated_at: string;
+        };
+        Insert: {
+          id?: string;
+          tenant_id: string;
+          product_id: string;
+          sku?: string | null;
+          name: string;
+          packaging_type?: string | null;
+          packaging_size?: string | null;
+          unit_count?: number;
+          barcode?: string | null;
+          sell_price: number;
+          cost_price?: number;
+          weight?: number | null;
+          is_default?: boolean;
+          is_active?: boolean;
+          sort_order?: number;
+        };
+        Update: {
+          product_id?: string;
+          sku?: string | null;
+          name?: string;
+          packaging_type?: string | null;
+          packaging_size?: string | null;
+          unit_count?: number;
+          barcode?: string | null;
+          sell_price?: number;
+          cost_price?: number;
+          weight?: number | null;
+          is_default?: boolean;
+          is_active?: boolean;
+          sort_order?: number;
+        };
+        Relationships: [];
+      };
+      bom: {
+        Row: {
+          id: string;
+          tenant_id: string;
+          product_id: string;
+          variant_id: string | null;
+          code: string | null;
+          name: string;
+          version: number;
+          is_active: boolean;
+          batch_size: number;
+          yield_qty: number;
+          yield_unit: string;
+          note: string | null;
+          created_at: string;
+          updated_at: string;
+        };
+        Insert: {
+          id?: string;
+          tenant_id: string;
+          product_id: string;
+          variant_id?: string | null;
+          code?: string | null;
+          name: string;
+          version?: number;
+          is_active?: boolean;
+          batch_size?: number;
+          yield_qty?: number;
+          yield_unit?: string;
+          note?: string | null;
+        };
+        Update: {
+          product_id?: string;
+          variant_id?: string | null;
+          code?: string | null;
+          name?: string;
+          version?: number;
+          is_active?: boolean;
+          batch_size?: number;
+          yield_qty?: number;
+          yield_unit?: string;
+          note?: string | null;
+        };
+        Relationships: [];
+      };
+      bom_items: {
+        Row: {
+          id: string;
+          bom_id: string;
+          material_id: string;
+          quantity: number;
+          unit: string;
+          waste_percent: number;
+          sort_order: number;
+          note: string | null;
+        };
+        Insert: {
+          id?: string;
+          bom_id: string;
+          material_id: string;
+          quantity: number;
+          unit?: string;
+          waste_percent?: number;
+          sort_order?: number;
+          note?: string | null;
+        };
+        Update: {
+          bom_id?: string;
+          material_id?: string;
+          quantity?: number;
+          unit?: string;
+          waste_percent?: number;
+          sort_order?: number;
+          note?: string | null;
+        };
+        Relationships: [];
+      };
+      uom_conversions: {
+        Row: {
+          id: string;
+          tenant_id: string;
+          product_id: string;
+          from_unit: string;
+          to_unit: string;
+          factor: number;
+          is_active: boolean;
+          created_at: string;
+        };
+        Insert: {
+          id?: string;
+          tenant_id: string;
+          product_id: string;
+          from_unit: string;
+          to_unit: string;
+          factor: number;
+          is_active?: boolean;
+        };
+        Update: {
+          product_id?: string;
+          from_unit?: string;
+          to_unit?: string;
+          factor?: number;
+          is_active?: boolean;
+        };
+        Relationships: [];
+      };
+      branch_stock: {
+        Row: {
+          id: string;
+          tenant_id: string;
+          branch_id: string;
+          product_id: string;
+          variant_id: string | null;
+          quantity: number;
+          reserved: number;
+          updated_at: string;
+        };
+        Insert: {
+          id?: string;
+          tenant_id: string;
+          branch_id: string;
+          product_id: string;
+          variant_id?: string | null;
+          quantity?: number;
+          reserved?: number;
+        };
+        Update: {
+          branch_id?: string;
+          product_id?: string;
+          variant_id?: string | null;
+          quantity?: number;
+          reserved?: number;
+        };
+        Relationships: [];
+      };
+      group_code_sequences: {
+        Row: {
+          id: string;
+          tenant_id: string;
+          prefix: string;
+          group_code: string;
+          current_number: number;
+          padding: number;
+        };
+        Insert: {
+          id?: string;
+          tenant_id: string;
+          prefix: string;
+          group_code: string;
+          current_number?: number;
+          padding?: number;
+        };
+        Update: {
+          prefix?: string;
+          group_code?: string;
+          current_number?: number;
+          padding?: number;
+        };
+        Relationships: [];
+      };
+      production_orders: {
+        Row: {
+          id: string;
+          tenant_id: string;
+          code: string;
+          branch_id: string;
+          bom_id: string;
+          product_id: string;
+          variant_id: string | null;
+          planned_qty: number;
+          completed_qty: number;
+          status: string;
+          lot_number: string | null;
+          planned_start: string | null;
+          planned_end: string | null;
+          actual_start: string | null;
+          actual_end: string | null;
+          notes: string | null;
+          created_by: string | null;
+          created_at: string;
+          updated_at: string;
+        };
+        Insert: {
+          id?: string;
+          tenant_id: string;
+          code: string;
+          branch_id: string;
+          bom_id: string;
+          product_id: string;
+          variant_id?: string | null;
+          planned_qty: number;
+          completed_qty?: number;
+          status?: string;
+          lot_number?: string | null;
+          planned_start?: string | null;
+          planned_end?: string | null;
+          actual_start?: string | null;
+          actual_end?: string | null;
+          notes?: string | null;
+          created_by?: string | null;
+        };
+        Update: {
+          code?: string;
+          branch_id?: string;
+          bom_id?: string;
+          product_id?: string;
+          variant_id?: string | null;
+          planned_qty?: number;
+          completed_qty?: number;
+          status?: string;
+          lot_number?: string | null;
+          planned_start?: string | null;
+          planned_end?: string | null;
+          actual_start?: string | null;
+          actual_end?: string | null;
+          notes?: string | null;
+          created_by?: string | null;
+        };
+        Relationships: [];
+      };
+      production_order_materials: {
+        Row: {
+          id: string;
+          production_order_id: string;
+          product_id: string;
+          planned_qty: number;
+          actual_qty: number | null;
+          unit: string;
+          note: string | null;
+        };
+        Insert: {
+          id?: string;
+          production_order_id: string;
+          product_id: string;
+          planned_qty: number;
+          actual_qty?: number | null;
+          unit: string;
+          note?: string | null;
+        };
+        Update: {
+          production_order_id?: string;
+          product_id?: string;
+          planned_qty?: number;
+          actual_qty?: number | null;
+          unit?: string;
+          note?: string | null;
+        };
+        Relationships: [];
+      };
+      product_lots: {
+        Row: {
+          id: string;
+          tenant_id: string;
+          product_id: string;
+          variant_id: string | null;
+          lot_number: string;
+          source_type: string;
+          production_order_id: string | null;
+          purchase_order_id: string | null;
+          supplier_id: string | null;
+          manufactured_date: string | null;
+          expiry_date: string | null;
+          received_date: string;
+          initial_qty: number;
+          current_qty: number;
+          branch_id: string;
+          status: string;
+          note: string | null;
+          created_at: string;
+          updated_at: string;
+        };
+        Insert: {
+          id?: string;
+          tenant_id: string;
+          product_id: string;
+          variant_id?: string | null;
+          lot_number: string;
+          source_type: string;
+          production_order_id?: string | null;
+          purchase_order_id?: string | null;
+          supplier_id?: string | null;
+          manufactured_date?: string | null;
+          expiry_date?: string | null;
+          received_date: string;
+          initial_qty: number;
+          current_qty?: number;
+          branch_id: string;
+          status?: string;
+          note?: string | null;
+        };
+        Update: {
+          product_id?: string;
+          variant_id?: string | null;
+          lot_number?: string;
+          source_type?: string;
+          production_order_id?: string | null;
+          purchase_order_id?: string | null;
+          supplier_id?: string | null;
+          manufactured_date?: string | null;
+          expiry_date?: string | null;
+          received_date?: string;
+          initial_qty?: number;
+          current_qty?: number;
+          branch_id?: string;
+          status?: string;
+          note?: string | null;
+        };
+        Relationships: [];
+      };
+      lot_allocations: {
+        Row: {
+          id: string;
+          tenant_id: string;
+          lot_id: string;
+          source_type: string;
+          source_id: string;
+          quantity: number;
+          allocated_at: string;
+          allocated_by: string | null;
+        };
+        Insert: {
+          id?: string;
+          tenant_id: string;
+          lot_id: string;
+          source_type: string;
+          source_id: string;
+          quantity: number;
+          allocated_at?: string;
+          allocated_by?: string | null;
+        };
+        Update: {
+          lot_id?: string;
+          source_type?: string;
+          source_id?: string;
+          quantity?: number;
+          allocated_at?: string;
+          allocated_by?: string | null;
+        };
+        Relationships: [];
+      };
+      price_tiers: {
+        Row: {
+          id: string;
+          tenant_id: string;
+          name: string;
+          code: string;
+          description: string | null;
+          priority: number;
+          is_active: boolean;
+          created_at: string;
+          updated_at: string;
+        };
+        Insert: {
+          id?: string;
+          tenant_id: string;
+          name: string;
+          code: string;
+          description?: string | null;
+          priority?: number;
+          is_active?: boolean;
+        };
+        Update: {
+          name?: string;
+          code?: string;
+          description?: string | null;
+          priority?: number;
+          is_active?: boolean;
+        };
+        Relationships: [];
+      };
+      price_tier_items: {
+        Row: {
+          id: string;
+          price_tier_id: string;
+          product_id: string;
+          variant_id: string | null;
+          price: number;
+          min_qty: number;
+          created_at: string;
+        };
+        Insert: {
+          id?: string;
+          price_tier_id: string;
+          product_id: string;
+          variant_id?: string | null;
+          price: number;
+          min_qty?: number;
+        };
+        Update: {
+          price_tier_id?: string;
+          product_id?: string;
+          variant_id?: string | null;
+          price?: number;
+          min_qty?: number;
+        };
+        Relationships: [];
+      };
+      pipelines: {
+        Row: {
+          id: string;
+          tenant_id: string;
+          entity_type: string;
+          name: string;
+          description: string | null;
+          is_active: boolean;
+          created_at: string;
+        };
+        Insert: {
+          id?: string;
+          tenant_id: string;
+          entity_type: string;
+          name: string;
+          description?: string | null;
+          is_active?: boolean;
+        };
+        Update: {
+          entity_type?: string;
+          name?: string;
+          description?: string | null;
+          is_active?: boolean;
+        };
+        Relationships: [];
+      };
+      pipeline_stages: {
+        Row: {
+          id: string;
+          pipeline_id: string;
+          code: string;
+          name: string;
+          color: string | null;
+          icon: string | null;
+          sort_order: number;
+          is_initial: boolean;
+          is_final: boolean;
+          validation_rules: Json | null;
+          metadata: Json | null;
+        };
+        Insert: {
+          id?: string;
+          pipeline_id: string;
+          code: string;
+          name: string;
+          color?: string | null;
+          icon?: string | null;
+          sort_order?: number;
+          is_initial?: boolean;
+          is_final?: boolean;
+          validation_rules?: Json | null;
+          metadata?: Json | null;
+        };
+        Update: {
+          pipeline_id?: string;
+          code?: string;
+          name?: string;
+          color?: string | null;
+          icon?: string | null;
+          sort_order?: number;
+          is_initial?: boolean;
+          is_final?: boolean;
+          validation_rules?: Json | null;
+          metadata?: Json | null;
+        };
+        Relationships: [];
+      };
+      pipeline_transitions: {
+        Row: {
+          id: string;
+          pipeline_id: string;
+          from_stage_id: string;
+          to_stage_id: string;
+          name: string | null;
+          required_role: string | null;
+          conditions: Json | null;
+          auto_trigger: boolean;
+        };
+        Insert: {
+          id?: string;
+          pipeline_id: string;
+          from_stage_id: string;
+          to_stage_id: string;
+          name?: string | null;
+          required_role?: string | null;
+          conditions?: Json | null;
+          auto_trigger?: boolean;
+        };
+        Update: {
+          pipeline_id?: string;
+          from_stage_id?: string;
+          to_stage_id?: string;
+          name?: string | null;
+          required_role?: string | null;
+          conditions?: Json | null;
+          auto_trigger?: boolean;
+        };
+        Relationships: [];
+      };
+      pipeline_items: {
+        Row: {
+          id: string;
+          tenant_id: string;
+          pipeline_id: string;
+          entity_id: string;
+          current_stage_id: string;
+          dimensions: Json;
+          entered_at: string;
+          updated_at: string;
+        };
+        Insert: {
+          id?: string;
+          tenant_id: string;
+          pipeline_id: string;
+          entity_id: string;
+          current_stage_id: string;
+          dimensions?: Json;
+        };
+        Update: {
+          pipeline_id?: string;
+          entity_id?: string;
+          current_stage_id?: string;
+          dimensions?: Json;
+        };
+        Relationships: [];
+      };
+      pipeline_history: {
+        Row: {
+          id: string;
+          pipeline_item_id: string;
+          from_stage_id: string | null;
+          to_stage_id: string;
+          transition_id: string | null;
+          changed_by: string | null;
+          changed_at: string;
+          note: string | null;
+          metadata: Json | null;
+        };
+        Insert: {
+          id?: string;
+          pipeline_item_id: string;
+          from_stage_id?: string | null;
+          to_stage_id: string;
+          transition_id?: string | null;
+          changed_by?: string | null;
+          changed_at?: string;
+          note?: string | null;
+          metadata?: Json | null;
+        };
+        Update: {
+          pipeline_item_id?: string;
+          from_stage_id?: string | null;
+          to_stage_id?: string;
+          transition_id?: string | null;
+          changed_by?: string | null;
+          changed_at?: string;
+          note?: string | null;
+          metadata?: Json | null;
+        };
+        Relationships: [];
+      };
+      pipeline_automations: {
+        Row: {
+          id: string;
+          tenant_id: string;
+          name: string;
+          trigger_pipeline_id: string;
+          trigger_stage_id: string;
+          action_type: string;
+          action_config: Json;
+          is_active: boolean;
+          created_at: string;
+        };
+        Insert: {
+          id?: string;
+          tenant_id: string;
+          name: string;
+          trigger_pipeline_id: string;
+          trigger_stage_id: string;
+          action_type: string;
+          action_config: Json;
+          is_active?: boolean;
+        };
+        Update: {
+          name?: string;
+          trigger_pipeline_id?: string;
+          trigger_stage_id?: string;
+          action_type?: string;
+          action_config?: Json;
+          is_active?: boolean;
+        };
+        Relationships: [];
+      };
     };
     Views: Record<string, never>;
     Functions: {
@@ -1437,6 +2130,90 @@ export interface Database {
           p_amount: number;
         };
         Returns: number;
+      };
+      next_group_code: {
+        Args: {
+          p_tenant_id: string;
+          p_prefix: string;
+          p_group_code: string;
+        };
+        Returns: string;
+      };
+      calculate_bom_cost: {
+        Args: {
+          p_bom_id: string;
+        };
+        Returns: Json;
+      };
+      consume_production_materials: {
+        Args: {
+          p_production_order_id: string;
+        };
+        Returns: undefined;
+      };
+      complete_production_order: {
+        Args: {
+          p_production_order_id: string;
+          p_completed_qty: number;
+          p_lot_number?: string;
+          p_manufactured_date?: string;
+          p_expiry_date?: string;
+        };
+        Returns: string;
+      };
+      allocate_lots_fifo: {
+        Args: {
+          p_tenant_id: string;
+          p_product_id: string;
+          p_branch_id: string;
+          p_quantity: number;
+          p_source_type: string;
+          p_source_id: string;
+          p_allocated_by?: string;
+        };
+        Returns: Json;
+      };
+      get_lots_for_product: {
+        Args: {
+          p_product_id: string;
+          p_branch_id?: string;
+        };
+        Returns: Json;
+      };
+      check_expiring_lots: {
+        Args: {
+          p_tenant_id: string;
+          p_days_threshold?: number;
+        };
+        Returns: Json;
+      };
+      pipeline_transition: {
+        Args: {
+          p_pipeline_item_id: string;
+          p_to_stage_id: string;
+          p_changed_by?: string;
+          p_note?: string;
+          p_dimensions?: Json;
+        };
+        Returns: Json;
+      };
+      pipeline_get_allowed_transitions: {
+        Args: {
+          p_pipeline_item_id: string;
+        };
+        Returns: Json;
+      };
+      pipeline_get_board: {
+        Args: {
+          p_pipeline_id: string;
+        };
+        Returns: Json;
+      };
+      pipeline_get_timeline: {
+        Args: {
+          p_pipeline_item_id: string;
+        };
+        Returns: Json;
       };
     };
     Enums: Record<string, never>;

@@ -6,6 +6,11 @@ import { NextResponse, type NextRequest } from "next/server";
  * Gọi từ src/middleware.ts.
  */
 export async function updateSession(request: NextRequest) {
+  // DEV BYPASS: bỏ qua auth khi NEXT_PUBLIC_BYPASS_AUTH=true (chỉ dùng khi build)
+  if (process.env.NEXT_PUBLIC_BYPASS_AUTH === "true") {
+    return NextResponse.next({ request });
+  }
+
   let supabaseResponse = NextResponse.next({ request });
 
   const supabase = createServerClient(

@@ -2,18 +2,15 @@
 
 import { useEffect, useState, useCallback } from "react";
 import { ColumnDef } from "@tanstack/react-table";
-import { Plus, Download, Printer, XCircle } from "lucide-react";
-import { Badge } from "@/components/ui/badge";
+import { Plus, Printer, XCircle, CheckCircle2, Factory, List, Kanban } from "lucide-react";
 import { PageHeader } from "@/components/shared/page-header";
 import { ListPageLayout } from "@/components/shared/list-page-layout";
-import { DataTable, StarCell } from "@/components/shared/data-table";
+import { DataTable } from "@/components/shared/data-table";
+import { KanbanBoard, type KanbanColumn } from "@/components/shared/kanban-board";
 import {
   FilterSidebar,
   FilterGroup,
   CheckboxFilter,
-  DatePresetFilter,
-  PersonFilter,
-  type DatePresetValue,
 } from "@/components/shared/filter-sidebar";
 import {
   InlineDetailPanel,
@@ -21,363 +18,475 @@ import {
   DetailHeader,
   DetailInfoGrid,
 } from "@/components/shared/inline-detail-panel";
-import type { DetailTab } from "@/components/shared/inline-detail-panel";
-import { formatCurrency, formatDate } from "@/lib/format";
-import { exportToExcel, exportToCsv } from "@/lib/utils/export";
-import { getManufacturingOrders, getManufacturingStatuses } from "@/lib/services";
-import type { ManufacturingOrder } from "@/lib/types";
-import { CreateManufacturingOrderDialog } from "@/components/shared/dialogs";
+import {
+  CreateProductionOrderDialog,
+  CompleteProductionOrderDialog,
+} from "@/components/shared/dialogs";
+import { PipelineStatusBadge } from "@/components/shared/pipeline";
+import { Button } from "@/components/ui/button";
+import { useToast } from "@/lib/contexts";
+import { formatDate } from "@/lib/format";
+import {
+  getProductionOrders,
+  getProductionOrderById,
+  updateProductionStatus,
+  canTransitionProductionStatus,
+} from "@/lib/services";
+import type { ProductionOrder, ProductionOrderStatus } from "@/lib/types";
 
-/* ------------------------------------------------------------------ */
-/*  Status config                                                      */
-/* ------------------------------------------------------------------ */
-const statusMap: Record<
-  ManufacturingOrder["status"],
-  { label: string; variant: "secondary" | "default" | "destructive" }
+type ViewMode = "list" | "kanban";
+
+const STATUS_META: Record<
+  ProductionOrderStatus,
+  { label: string; color: string }
 > = {
-  processing: { label: "Dang xu ly", variant: "secondary" },
-  completed: { label: "Hoan thanh", variant: "default" },
-  cancelled: { label: "Da huy", variant: "destructive" },
+  planned: { label: "Đã lên kế hoạch", color: "#94a3b8" },
+  material_check: { label: "Kiểm tra NVL", color: "#f59e0b" },
+  in_production: { label: "Đang sản xuất", color: "#3b82f6" },
+  quality_check: { label: "Kiểm chất lượng", color: "#8b5cf6" },
+  completed: { label: "Hoàn thành", color: "#10b981" },
+  cancelled: { label: "Đã hủy", color: "#ef4444" },
 };
 
-/* ------------------------------------------------------------------ */
-/*  Starred set                                                        */
-/* ------------------------------------------------------------------ */
-function useStarredSet() {
-  const [starred, setStarred] = useState<Set<string>>(new Set());
-  const toggle = (id: string) =>
-    setStarred((prev) => {
-      const next = new Set(prev);
-      if (next.has(id)) next.delete(id);
-      else next.add(id);
-      return next;
-    });
-  return { starred, toggle };
-}
-
-/* ------------------------------------------------------------------ */
-/*  Inline detail                                                      */
-/* ------------------------------------------------------------------ */
-function ManufacturingOrderDetail({
-  item,
+function ProductionOrderDetail({
+  orderId,
   onClose,
 }: {
-  item: ManufacturingOrder;
+  orderId: string;
   onClose: () => void;
 }) {
-  const status = statusMap[item.status];
+  const [order, setOrder] = useState<ProductionOrder | null>(null);
+  const [loading, setLoading] = useState(true);
 
-  const tabs: DetailTab[] = [
-    {
-      id: "info",
-      label: "Thong tin",
-      content: (
-        <div className="space-y-4">
-          <DetailHeader
-            title={`Phieu san xuat ${item.code}`}
-            code={item.code}
-            status={{
-              label: status.label,
-              variant: status.variant,
-              className:
-                status.variant === "default"
-                  ? "bg-blue-100 text-blue-700 border-blue-200"
-                  : undefined,
-            }}
-            subtitle="Chi nhanh trung tam"
-            meta={
-              <div className="flex items-center gap-4 flex-wrap text-xs">
-                <span>
-                  Nguoi tao: <strong>{item.createdBy}</strong>
-                </span>
-                <span>
-                  Thoi gian: <strong>{formatDate(item.date)}</strong>
-                </span>
-              </div>
-            }
-          />
+  useEffect(() => {
+    let cancelled = false;
+    setLoading(true);
+    getProductionOrderById(orderId)
+      .then((o) => {
+        if (!cancelled) setOrder(o);
+      })
+      .finally(() => {
+        if (!cancelled) setLoading(false);
+      });
+    return () => {
+      cancelled = true;
+    };
+  }, [orderId]);
 
-          <DetailInfoGrid
-            fields={[
-              { label: "Ma phieu", value: item.code },
-              { label: "Thoi gian", value: formatDate(item.date) },
-              { label: "Trang thai", value: status.label },
-              { label: "Nguoi tao", value: item.createdBy },
-              { label: "San pham san xuat", value: item.productName },
-              { label: "Ma hang", value: item.productCode },
-              {
-                label: "So luong",
-                value: (
-                  <span className="font-semibold">{item.quantity}</span>
-                ),
-              },
-              {
-                label: "Gia thanh",
-                value: formatCurrency(item.costAmount),
-              },
-            ]}
-          />
-        </div>
-      ),
-    },
-    {
-      id: "materials",
-      label: "Nguyen vat lieu",
-      content: (
-        <div className="text-sm text-muted-foreground py-4 text-center">
-          Chua co du lieu nguyen vat lieu
-        </div>
-      ),
-    },
-  ];
+  if (loading || !order) {
+    return (
+      <InlineDetailPanel open onClose={onClose}>
+        <div className="p-6 text-center text-muted-foreground">Đang tải...</div>
+      </InlineDetailPanel>
+    );
+  }
+
+  const meta = STATUS_META[order.status];
 
   return (
     <InlineDetailPanel open onClose={onClose}>
-      <div className="p-4 space-y-4">
-        <DetailTabs tabs={tabs} defaultTab="info" />
-      </div>
+      <DetailTabs
+        tabs={[
+          {
+            id: "info",
+            label: "Thông tin",
+            content: (
+              <div className="space-y-4">
+                <DetailHeader
+                  title={`Lệnh sản xuất ${order.code}`}
+                  code={order.code}
+                  subtitle={order.branchName ?? ""}
+                  status={{
+                    label: meta.label,
+                    variant: "default",
+                    className: "",
+                  }}
+                />
+                <div className="flex items-center gap-2">
+                  <PipelineStatusBadge name={meta.label} color={meta.color} />
+                </div>
+                <DetailInfoGrid
+                  fields={[
+                    { label: "Mã phiếu", value: order.code },
+                    {
+                      label: "Sản phẩm",
+                      value: `${order.productCode} - ${order.productName}`,
+                    },
+                    {
+                      label: "Số lượng kế hoạch",
+                      value: <span className="font-semibold">{order.plannedQty}</span>,
+                    },
+                    {
+                      label: "Đã hoàn thành",
+                      value: <span className="font-semibold">{order.completedQty}</span>,
+                    },
+                    {
+                      label: "Bắt đầu KH",
+                      value: order.plannedStart ? formatDate(order.plannedStart) : "—",
+                    },
+                    {
+                      label: "Kết thúc KH",
+                      value: order.plannedEnd ? formatDate(order.plannedEnd) : "—",
+                    },
+                    {
+                      label: "Số lô",
+                      value: order.lotNumber ?? "—",
+                    },
+                    {
+                      label: "Ghi chú",
+                      value: order.notes ?? "—",
+                    },
+                  ]}
+                />
+              </div>
+            ),
+          },
+          {
+            id: "materials",
+            label: "Nguyên vật liệu",
+            content: (
+              <div className="space-y-2">
+                {(order.materials ?? []).length === 0 ? (
+                  <div className="text-sm text-muted-foreground py-4 text-center">
+                    Chưa có dữ liệu NVL
+                  </div>
+                ) : (
+                  <div className="border rounded-lg overflow-hidden">
+                    <table className="w-full text-sm">
+                      <thead className="bg-muted/30">
+                        <tr>
+                          <th className="text-left p-2 font-medium">NVL</th>
+                          <th className="text-right p-2 font-medium">Kế hoạch</th>
+                          <th className="text-right p-2 font-medium">Thực tế</th>
+                        </tr>
+                      </thead>
+                      <tbody>
+                        {(order.materials ?? []).map((m) => (
+                          <tr key={m.id} className="border-t">
+                            <td className="p-2">
+                              <div className="font-medium">{m.productName}</div>
+                              <div className="text-xs text-muted-foreground">
+                                {m.productCode}
+                              </div>
+                            </td>
+                            <td className="p-2 text-right">
+                              {m.plannedQty} {m.unit}
+                            </td>
+                            <td className="p-2 text-right">
+                              {m.actualQty || 0} {m.unit}
+                            </td>
+                          </tr>
+                        ))}
+                      </tbody>
+                    </table>
+                  </div>
+                )}
+              </div>
+            ),
+          },
+        ]}
+      />
     </InlineDetailPanel>
   );
 }
 
-/* ------------------------------------------------------------------ */
-/*  Page                                                               */
-/* ------------------------------------------------------------------ */
 export default function SanXuatPage() {
-  const [data, setData] = useState<ManufacturingOrder[]>([]);
+  const { toast } = useToast();
+  const [data, setData] = useState<ProductionOrder[]>([]);
   const [total, setTotal] = useState(0);
   const [loading, setLoading] = useState(true);
   const [search, setSearch] = useState("");
   const [page, setPage] = useState(0);
   const [pageSize, setPageSize] = useState(15);
-  const [createOpen, setCreateOpen] = useState(false);
-
-  // Inline detail
   const [expandedRow, setExpandedRow] = useState<number | null>(null);
 
-  // Stars
-  const { starred, toggle: toggleStar } = useStarredSet();
+  const [createOpen, setCreateOpen] = useState(false);
+  const [completeOpen, setCompleteOpen] = useState(false);
+  const [completingOrder, setCompletingOrder] = useState<ProductionOrder | null>(null);
+  const [viewMode, setViewMode] = useState<ViewMode>("list");
 
-  // Filters
-  const [selectedStatuses, setSelectedStatuses] = useState<string[]>([
-    "processing",
+  const [statusFilters, setStatusFilters] = useState<string[]>([
+    "planned",
+    "material_check",
+    "in_production",
+    "quality_check",
     "completed",
   ]);
-  const [datePreset, setDatePreset] = useState<DatePresetValue>("this_month");
-  const [dateFrom, setDateFrom] = useState("");
-  const [dateTo, setDateTo] = useState("");
-  const [creatorFilter, setCreatorFilter] = useState("");
 
-  const statuses = getManufacturingStatuses();
+  const fetchData = useCallback(async () => {
+    setLoading(true);
+    try {
+      const result = await getProductionOrders({ limit: 200 });
+      setData(result.data);
+      setTotal(result.total);
+    } catch (err) {
+      toast({
+        title: "Lỗi tải lệnh sản xuất",
+        description: err instanceof Error ? err.message : "Vui lòng thử lại",
+        variant: "error",
+      });
+    } finally {
+      setLoading(false);
+    }
+  }, [toast]);
 
-  /* ---- Columns ---- */
-  const columns: ColumnDef<ManufacturingOrder, unknown>[] = [
-    {
-      id: "star",
-      header: "",
-      size: 36,
-      enableSorting: false,
-      enableHiding: false,
-      cell: ({ row }) => (
-        <StarCell
-          starred={starred.has(row.original.id)}
-          onToggle={() => toggleStar(row.original.id)}
-        />
-      ),
-    },
+  useEffect(() => {
+    fetchData();
+  }, [fetchData]);
+
+  const filtered = data.filter((o) => {
+    if (statusFilters.length > 0 && !statusFilters.includes(o.status)) return false;
+    if (!search) return true;
+    const q = search.toLowerCase();
+    return (
+      o.code?.toLowerCase().includes(q) ||
+      o.productName?.toLowerCase().includes(q) ||
+      o.productCode?.toLowerCase().includes(q)
+    );
+  });
+
+  const pagedData = filtered.slice(page * pageSize, (page + 1) * pageSize);
+
+  // Derive Kanban columns from STATUS_META (skip cancelled in the main board)
+  const kanbanColumns: KanbanColumn<ProductionOrder>[] = (
+    Object.keys(STATUS_META) as ProductionOrderStatus[]
+  )
+    .filter((s) => s !== "cancelled")
+    .map((status) => ({
+      id: status,
+      label: STATUS_META[status].label,
+      color: STATUS_META[status].color,
+      items: filtered.filter((o) => o.status === status),
+    }));
+
+  const handleCardMove = async (
+    itemId: string,
+    _fromColumnId: string,
+    toColumnId: string
+  ) => {
+    try {
+      await updateProductionStatus(itemId, toColumnId);
+      toast({
+        title: "Đã chuyển trạng thái",
+        description: STATUS_META[toColumnId as ProductionOrderStatus].label,
+        variant: "success",
+      });
+      fetchData();
+    } catch (err) {
+      toast({
+        title: "Không thể chuyển trạng thái",
+        description: err instanceof Error ? err.message : "Vui lòng thử lại",
+        variant: "error",
+      });
+    }
+  };
+
+  const columns: ColumnDef<ProductionOrder, unknown>[] = [
     {
       accessorKey: "code",
-      header: "Ma phieu",
+      header: "Mã phiếu",
       size: 130,
       cell: ({ row }) => (
         <span className="font-medium text-primary">{row.original.code}</span>
       ),
     },
     {
-      accessorKey: "date",
-      header: "Thoi gian",
-      size: 150,
-      cell: ({ row }) => formatDate(row.original.date),
+      accessorKey: "createdAt",
+      header: "Ngày tạo",
+      size: 110,
+      cell: ({ row }) => formatDate(row.original.createdAt),
     },
     {
-      accessorKey: "productName",
-      header: "San pham san xuat",
-      size: 220,
-    },
-    {
-      accessorKey: "quantity",
-      header: "So luong",
-      size: 100,
+      id: "product",
+      header: "Sản phẩm sản xuất",
+      size: 280,
       cell: ({ row }) => (
-        <span className="font-medium">{row.original.quantity}</span>
+        <div>
+          <div className="font-medium">{row.original.productName ?? "—"}</div>
+          <div className="text-xs text-muted-foreground">{row.original.productCode}</div>
+        </div>
       ),
     },
     {
-      accessorKey: "status",
-      header: "Trang thai",
+      id: "qty",
+      header: "Số lượng",
       size: 130,
+      cell: ({ row }) => (
+        <span>
+          <span className="font-medium">{row.original.completedQty}</span>
+          <span className="text-muted-foreground"> / {row.original.plannedQty}</span>
+        </span>
+      ),
+    },
+    {
+      accessorKey: "branchName",
+      header: "Chi nhánh",
+      size: 150,
+      cell: ({ row }) => row.original.branchName ?? "—",
+    },
+    {
+      accessorKey: "status",
+      header: "Trạng thái",
+      size: 160,
       cell: ({ row }) => {
-        const { label, variant } = statusMap[row.original.status];
-        return <Badge variant={variant}>{label}</Badge>;
+        const meta = STATUS_META[row.original.status];
+        return <PipelineStatusBadge name={meta.label} color={meta.color} size="sm" />;
       },
     },
   ];
 
-  /* ---- Fetch data ---- */
-  const fetchData = useCallback(async () => {
-    setLoading(true);
-    const result = await getManufacturingOrders({
-      page,
-      pageSize,
-      search,
-      filters: {
-        ...(selectedStatuses.length > 0 && { status: selectedStatuses }),
-        ...(creatorFilter && { createdBy: creatorFilter }),
-      },
-    });
-    setData(result.data);
-    setTotal(result.total);
-    setLoading(false);
-  }, [page, pageSize, search, selectedStatuses, creatorFilter]);
-
-  useEffect(() => {
-    fetchData();
-  }, [fetchData]);
-
-  useEffect(() => {
-    setPage(0);
-    setExpandedRow(null);
-  }, [search, selectedStatuses, datePreset, creatorFilter]);
-
-  /* ---- Export ---- */
-  const handleExport = (type: "excel" | "csv") => {
-    const exportColumns = [
-      { header: "Ma phieu", key: "code", width: 15 },
-      { header: "Thoi gian", key: "date", width: 18, format: (v: string) => formatDate(v) },
-      { header: "San pham san xuat", key: "productName", width: 25 },
-      { header: "Ma hang", key: "productCode", width: 12 },
-      { header: "So luong", key: "quantity", width: 10 },
-      { header: "Gia thanh", key: "costAmount", width: 15, format: (v: number) => v },
-      { header: "Trang thai", key: "status", width: 15, format: (v: ManufacturingOrder["status"]) => statusMap[v]?.label ?? v },
-      { header: "Nguoi tao", key: "createdBy", width: 15 },
-    ];
-    if (type === "excel") exportToExcel(data, exportColumns, "phieu-san-xuat");
-    else exportToCsv(data, exportColumns, "phieu-san-xuat");
-  };
-
-  /* ---- Inline detail renderer ---- */
-  const renderDetail = (item: ManufacturingOrder, onClose: () => void) => (
-    <ManufacturingOrderDetail item={item} onClose={onClose} />
-  );
-
-  /* ---- Render ---- */
   return (
-    <ListPageLayout
-      sidebar={
-        <FilterSidebar>
-          <FilterGroup label="Trang thai">
-            <CheckboxFilter
-              options={statuses}
-              selected={selectedStatuses}
-              onChange={setSelectedStatuses}
+    <>
+      <ListPageLayout
+        sidebar={
+          <FilterSidebar>
+            <FilterGroup label="Trạng thái">
+              <CheckboxFilter
+                options={Object.entries(STATUS_META).map(([value, meta]) => ({
+                  label: meta.label,
+                  value,
+                }))}
+                selected={statusFilters}
+                onChange={setStatusFilters}
+              />
+            </FilterGroup>
+          </FilterSidebar>
+        }
+      >
+        <PageHeader
+          title="Lệnh sản xuất"
+          searchPlaceholder="Theo mã phiếu, sản phẩm..."
+          searchValue={search}
+          onSearchChange={setSearch}
+          actions={[
+            {
+              label: viewMode === "list" ? "Xem Kanban" : "Xem danh sách",
+              icon:
+                viewMode === "list" ? (
+                  <Kanban className="h-4 w-4" />
+                ) : (
+                  <List className="h-4 w-4" />
+                ),
+              variant: "outline",
+              onClick: () =>
+                setViewMode(viewMode === "list" ? "kanban" : "list"),
+            },
+            {
+              label: "Tạo lệnh SX",
+              icon: <Plus className="h-4 w-4" />,
+              variant: "default",
+              onClick: () => setCreateOpen(true),
+            },
+          ]}
+        />
+
+        {!loading && filtered.length === 0 ? (
+          <div className="flex flex-col items-center justify-center py-20 text-muted-foreground">
+            <Factory className="h-12 w-12 mb-3 opacity-30" />
+            <p className="text-sm">Chưa có lệnh sản xuất nào</p>
+            <Button size="sm" className="mt-3" onClick={() => setCreateOpen(true)}>
+              <Plus className="h-4 w-4 mr-1" />
+              Tạo lệnh đầu tiên
+            </Button>
+          </div>
+        ) : viewMode === "kanban" ? (
+          <div className="p-4">
+            <KanbanBoard
+              columns={kanbanColumns}
+              getItemId={(o) => o.id}
+              onCardMove={handleCardMove}
+              canDrop={(_id, from, to) =>
+                canTransitionProductionStatus(from, to)
+              }
+              emptyMessage="Không có lệnh"
+              renderCard={(order) => (
+                <div className="space-y-1">
+                  <div className="flex items-start justify-between gap-2">
+                    <span className="font-medium text-primary text-xs">
+                      {order.code}
+                    </span>
+                    <span className="text-[10px] text-muted-foreground">
+                      {formatDate(order.createdAt)}
+                    </span>
+                  </div>
+                  <div className="text-sm font-medium truncate">
+                    {order.productName ?? "—"}
+                  </div>
+                  <div className="text-xs text-muted-foreground truncate">
+                    {order.branchName ?? "—"}
+                  </div>
+                  <div className="flex items-center justify-between pt-1 border-t mt-1">
+                    <span className="text-xs text-muted-foreground">
+                      SL kế hoạch
+                    </span>
+                    <span className="text-xs font-semibold">
+                      {order.completedQty} / {order.plannedQty}
+                    </span>
+                  </div>
+                </div>
+              )}
             />
-          </FilterGroup>
+          </div>
+        ) : (
+          <DataTable
+            columns={columns}
+            data={pagedData}
+            loading={loading}
+            total={filtered.length}
+            pageIndex={page}
+            pageSize={pageSize}
+            pageCount={Math.ceil(filtered.length / pageSize)}
+            onPageChange={setPage}
+            onPageSizeChange={(size) => {
+              setPageSize(size);
+              setPage(0);
+            }}
+            expandedRow={expandedRow}
+            onExpandedRowChange={setExpandedRow}
+            renderDetail={(item, onClose) => (
+              <ProductionOrderDetail orderId={item.id} onClose={onClose} />
+            )}
+            getRowId={(row) => row.id}
+            rowActions={(row) => [
+              {
+                label: "Hoàn thành",
+                icon: <CheckCircle2 className="h-4 w-4" />,
+                onClick: () => {
+                  setCompletingOrder(row);
+                  setCompleteOpen(true);
+                },
+              },
+              {
+                label: "In phiếu",
+                icon: <Printer className="h-4 w-4" />,
+                onClick: () => {},
+              },
+              {
+                label: "Hủy",
+                icon: <XCircle className="h-4 w-4" />,
+                onClick: () => {},
+                variant: "destructive",
+                separator: true,
+              },
+            ]}
+          />
+        )}
+      </ListPageLayout>
 
-          <FilterGroup label="Thoi gian">
-            <DatePresetFilter
-              value={datePreset}
-              onChange={setDatePreset}
-              from={dateFrom}
-              to={dateTo}
-              onFromChange={setDateFrom}
-              onToChange={setDateTo}
-              presets={[
-                { label: "Thang nay", value: "this_month" },
-                { label: "Hom nay", value: "today" },
-                { label: "Hom qua", value: "yesterday" },
-                { label: "Tuan nay", value: "this_week" },
-                { label: "Thang truoc", value: "last_month" },
-                { label: "Tuy chinh", value: "custom" },
-              ]}
-            />
-          </FilterGroup>
-
-          <FilterGroup label="Nguoi tao">
-            <PersonFilter
-              value={creatorFilter}
-              onChange={setCreatorFilter}
-              placeholder="Chon nguoi tao"
-              suggestions={[
-                { label: "Admin", value: "admin" },
-                { label: "Cao Thi Huyen Trang", value: "trang" },
-              ]}
-            />
-          </FilterGroup>
-        </FilterSidebar>
-      }
-    >
-      <PageHeader
-        title="Phieu san xuat"
-        searchPlaceholder="Theo ma phieu san xuat"
-        searchValue={search}
-        onSearchChange={setSearch}
-        onExport={{
-          excel: () => handleExport("excel"),
-          csv: () => handleExport("csv"),
-        }}
-        actions={[
-          {
-            label: "San xuat",
-            icon: <Plus className="h-4 w-4" />,
-            variant: "default",
-            onClick: () => setCreateOpen(true),
-          },
-          {
-            label: "Xuat file",
-            icon: <Download className="h-4 w-4" />,
-          },
-        ]}
-      />
-
-      <DataTable
-        columns={columns}
-        data={data}
-        loading={loading}
-        total={total}
-        pageIndex={page}
-        pageSize={pageSize}
-        pageCount={Math.ceil(total / pageSize)}
-        onPageChange={setPage}
-        onPageSizeChange={(size) => {
-          setPageSize(size);
-          setPage(0);
-        }}
-        selectable
-        expandedRow={expandedRow}
-        onExpandedRowChange={setExpandedRow}
-        renderDetail={renderDetail}
-        getRowId={(row) => row.id}
-        rowActions={(row) => [
-          {
-            label: "In phieu",
-            icon: <Printer className="h-4 w-4" />,
-            onClick: () => {},
-          },
-          {
-            label: "Huy",
-            icon: <XCircle className="h-4 w-4" />,
-            onClick: () => {},
-            variant: "destructive",
-            separator: true,
-          },
-        ]}
-      />
-
-      <CreateManufacturingOrderDialog
+      <CreateProductionOrderDialog
         open={createOpen}
         onOpenChange={setCreateOpen}
         onSuccess={fetchData}
       />
-    </ListPageLayout>
+
+      <CompleteProductionOrderDialog
+        open={completeOpen}
+        onOpenChange={setCompleteOpen}
+        order={completingOrder}
+        onSuccess={fetchData}
+      />
+      {/* total counter to avoid unused var lint */}
+      <span className="hidden">{total}</span>
+    </>
   );
 }

@@ -5,6 +5,8 @@ export type { QueryParams, QueryResult, StatusChange, BaseLineItem, DateRange } 
 export type {
   Product,
   ProductDetail,
+  ProductType,
+  ProductCategory,
   StockMovement,
   SalesHistory,
   PriceBook,
@@ -13,6 +15,44 @@ export type {
   DisposalExport,
   InternalExport,
 } from "./products";
+
+// Pipeline Engine
+export type {
+  Pipeline,
+  PipelineStage,
+  PipelineTransition,
+  PipelineItem,
+  PipelineHistory,
+  PipelineBoard,
+  PipelineBoardColumn,
+  PipelineBoardItem,
+  AllowedTransition,
+  TimelineEntry,
+  PipelineAutomation,
+} from "./pipeline";
+
+// Production / BOM / Lot
+export type {
+  BOM,
+  BOMItem,
+  ProductionOrder,
+  ProductionOrderStatus,
+  ProductionOrderMaterial,
+  ProductLot,
+  LotAllocation,
+  BOMCostBreakdown,
+  ExpiringLot,
+} from "./production";
+
+// Pricing / Variants / UOM
+export type {
+  PriceTier,
+  PriceTierItem,
+  ProductVariant,
+  UOMConversion,
+  BranchStock,
+  PackagingType,
+} from "./pricing";
 
 // Customer domain
 export type { Customer, PurchaseHistory } from "./customers";
@@ -35,6 +75,7 @@ export type {
   InvoiceLineItem,
   InvoiceDetail,
   PurchaseOrder,
+  PurchaseOrderStatus,
   POLineItem,
   ImportHistory,
   PurchaseOrderDetail,
