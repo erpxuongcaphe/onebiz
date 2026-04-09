@@ -213,6 +213,9 @@ export default function PosPage() {
   // Keyboard shortcut helper
   const [showShortcuts, setShowShortcuts] = useState(false);
 
+  // Mobile/tablet: toggle cart panel visibility (slide-over)
+  const [mobileCartOpen, setMobileCartOpen] = useState(false);
+
   // Submit state — React state for UI + synchronous ref for double-call guard
   const [submitting, setSubmitting] = useState<"draft" | "complete" | null>(null);
   const submitLockRef = useRef(false);
@@ -278,6 +281,7 @@ export default function PosPage() {
 
       toast({ title: "Đã lưu nháp", variant: "success" });
       state.clearCart();
+      setMobileCartOpen(false);
     } catch (err: any) {
       toast({ title: "Lưu nháp thất bại", description: err.message, variant: "error" });
     } finally {
@@ -365,6 +369,7 @@ export default function PosPage() {
       toast({ title: `Hoá đơn ${invoiceCode} thành công!`, variant: "success" });
       state.clearCart();
       setSearchQuery("");
+      setMobileCartOpen(false);
     } catch (err: any) {
       toast({ title: "Thanh toán thất bại", description: err.message, variant: "error" });
     } finally {
@@ -441,6 +446,8 @@ export default function PosPage() {
           setCustomerModalOpen(false);
         } else if (draftModalOpen) {
           setDraftModalOpen(false);
+        } else if (mobileCartOpen) {
+          setMobileCartOpen(false);
         } else {
           router.push("/");
         }
@@ -453,6 +460,7 @@ export default function PosPage() {
     customerModalOpen,
     draftModalOpen,
     showShortcuts,
+    mobileCartOpen,
     state.lines.length,
     handleSaveDraft,
     handleComplete,
@@ -530,17 +538,19 @@ export default function PosPage() {
           </div>
         </div>
 
-        {/* Draft button + Stats + Shortcuts */}
+        {/* Draft button — always visible */}
+        <button
+          type="button"
+          onClick={() => setDraftModalOpen(true)}
+          className="inline-flex items-center gap-1 px-2 py-1 rounded text-white/70 hover:bg-white/10 hover:text-white transition-colors shrink-0 text-[11px]"
+        >
+          <Save className="h-3 w-3" />
+          <span className="hidden sm:inline">Nháp</span>
+          <kbd className="hidden sm:inline font-mono text-[8px] bg-white/10 border border-white/20 rounded px-0.5 text-white/50">F3</kbd>
+        </button>
+
+        {/* Stats + Shortcuts — desktop only */}
         <div className="hidden md:flex items-center gap-2 shrink-0 text-[11px]">
-          <button
-            type="button"
-            onClick={() => setDraftModalOpen(true)}
-            className="inline-flex items-center gap-1 px-2 py-1 rounded text-white/70 hover:bg-white/10 hover:text-white transition-colors"
-          >
-            <Save className="h-3 w-3" />
-            <span>Nháp</span>
-            <kbd className="font-mono text-[8px] bg-white/10 border border-white/20 rounded px-0.5 text-white/50">F3</kbd>
-          </button>
           <div className="h-3 w-px bg-white/20" />
           <div className="flex items-center gap-1 text-white/70">
             <ShoppingCart className="h-3 w-3" />
@@ -594,8 +604,16 @@ export default function PosPage() {
         </div>
       </header>
 
-      {/* ═══════════ BODY 2-COLUMN ═══════════ */}
-      <div className="flex-1 flex min-h-0">
+      {/* ═══════════ BODY ═══════════ */}
+      <div className="flex-1 flex min-h-0 relative">
+        {/* Mobile cart backdrop */}
+        {mobileCartOpen && (
+          <div
+            className="fixed inset-0 bg-black/40 z-30 lg:hidden"
+            onClick={() => setMobileCartOpen(false)}
+          />
+        )}
+
         {/* ─── LEFT: Product Grid ─── */}
         <div className="flex-1 min-w-0">
           <ProductGrid
@@ -617,10 +635,27 @@ export default function PosPage() {
           />
         </div>
 
-        {/* ─── RIGHT: Cart + Payment Panel (360px) ─── */}
-        <aside className="pos-panel w-[380px] bg-white border-l border-gray-200 shrink-0 flex flex-col">
+        {/* ─── RIGHT: Cart + Payment Panel ─── */}
+        <aside className={cn(
+          "pos-panel bg-white flex flex-col",
+          // Desktop: inline fixed-width panel
+          "lg:w-[380px] lg:shrink-0 lg:border-l lg:border-gray-200 lg:static lg:translate-x-0 lg:z-auto lg:shadow-none",
+          // Mobile/Tablet: slide-over from right
+          "fixed inset-y-0 right-0 z-40 w-full sm:w-[400px] shadow-2xl",
+          "transition-transform duration-300 ease-in-out",
+          mobileCartOpen ? "translate-x-0" : "translate-x-full lg:translate-x-0"
+        )}>
           {/* ── Invoice tabs bar — KiotViet multi-tab ── */}
           <div className="flex items-center bg-gray-50 border-b border-gray-200 shrink-0 min-h-[32px]">
+            {/* Mobile back button */}
+            <button
+              type="button"
+              onClick={() => setMobileCartOpen(false)}
+              className="lg:hidden shrink-0 h-8 w-8 flex items-center justify-center text-gray-500 hover:text-blue-600 hover:bg-blue-50 transition-colors border-r border-gray-200"
+              title="Quay lại sản phẩm"
+            >
+              <ArrowLeft className="h-4 w-4" />
+            </button>
             <div className="flex-1 flex items-center overflow-x-auto scrollbar-none">
               {tabs.map((tab) => {
                 const isActive = tab.id === activeTabId;
@@ -1042,6 +1077,38 @@ export default function PosPage() {
           </div>
         </aside>
       </div>
+
+      {/* ═══════════ FLOATING CART BUTTON — mobile/tablet only ═══════════ */}
+      {!mobileCartOpen && (
+        <button
+          type="button"
+          onClick={() => setMobileCartOpen(true)}
+          className={cn(
+            "lg:hidden fixed z-30 left-4 right-4 rounded-xl shadow-lg",
+            "flex items-center justify-between px-4 active:scale-[0.98] transition-all",
+            state.lines.length > 0
+              ? "bottom-12 h-12 bg-blue-600 text-white"
+              : "bottom-12 h-10 bg-white/95 backdrop-blur border border-gray-200 text-gray-600"
+          )}
+        >
+          <div className="flex items-center gap-2">
+            <div className="relative">
+              <ShoppingCart className="h-5 w-5" />
+              {state.itemCount > 0 && (
+                <span className="absolute -top-1.5 -right-1.5 h-4 min-w-[16px] rounded-full bg-red-500 text-white text-[9px] font-bold flex items-center justify-center px-0.5">
+                  {state.itemCount}
+                </span>
+              )}
+            </div>
+            <span className="font-semibold text-sm">
+              {state.lines.length > 0 ? `${state.itemCount} sản phẩm` : "Xem giỏ hàng"}
+            </span>
+          </div>
+          {state.lines.length > 0 && (
+            <span className="font-bold text-sm tabular-nums">{formatCurrency(state.total)} ₫</span>
+          )}
+        </button>
+      )}
 
       {/* ═══════════ SELLING MODE TABS (bottom bar) ═══════════ */}
       <div className="h-8 bg-white border-t border-gray-200 flex items-stretch px-3 gap-0 shrink-0">
