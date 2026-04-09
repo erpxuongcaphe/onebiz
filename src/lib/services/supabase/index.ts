@@ -23,7 +23,7 @@ export type { DraftOrderSummary, DraftOrderDetail } from "./orders";
 export { getReturns, getReturnStatuses } from "./returns";
 export { getShippingOrders, getShippingStatuses, getDeliveryPartners, getPartnerOptions } from "./shipping";
 export { getCashBookEntries, getCashBookTypes, getCashBookSummary, createCashTransaction } from "./cash-book";
-export { getInventoryChecks, getInventoryCheckStatuses, getManufacturingOrders, getManufacturingStatuses, getDisposalExports, getDisposalStatuses, getInternalExports, getInternalExportStatuses } from "./inventory";
+export { getInventoryChecks, getInventoryCheckStatuses, applyInventoryCheck, getManufacturingOrders, getManufacturingStatuses, getDisposalExports, getDisposalStatuses, getInternalExports, getInternalExportStatuses } from "./inventory";
 export { getPurchaseOrderEntries, getPurchaseEntryStatuses, getPurchaseReturns, getPurchaseReturnStatuses, getInputInvoices, getInputInvoiceStatuses } from "./purchase-entries";
 export { getFavorites, isFavorite, toggleFavorite, getFavoriteIds } from "./favorites";
 export { getCoupons, getCouponById, createCoupon, updateCoupon, deleteCoupon, validateCoupon, getCouponUsages } from "./coupons";

@@ -12,7 +12,8 @@ import {
 import { Button } from "@/components/ui/button";
 import { Loader2 } from "lucide-react";
 import { useToast } from "@/lib/contexts";
-import { getClient } from "@/lib/services/supabase/base";
+import { getClient, getCurrentContext } from "@/lib/services/supabase/base";
+import { nextEntityCode } from "@/lib/services/supabase/stock-adjustments";
 import type { Database } from "@/lib/supabase/types";
 
 type InventoryCheckInsert = Database["public"]["Tables"]["inventory_checks"]["Insert"];
@@ -23,10 +24,9 @@ interface CreateInventoryCheckDialogProps {
   onSuccess?: () => void;
 }
 
-function generateInventoryCheckCode() {
-  const num = Math.floor(Math.random() * 99999) + 1;
-  return `KK${String(num).padStart(6, "0")}`;
-}
+// Placeholder shown in the dialog header before save. Real code is generated
+// via `next_code('inventory')` at save time.
+const PENDING_CODE_PLACEHOLDER = "KK —";
 
 export function CreateInventoryCheckDialog({
   open,
@@ -41,7 +41,7 @@ export function CreateInventoryCheckDialog({
 
   useEffect(() => {
     if (open) {
-      setCode(generateInventoryCheckCode());
+      setCode(PENDING_CODE_PLACEHOLDER);
       setNotes("");
       setErrors({});
       setSaving(false);
@@ -60,17 +60,19 @@ export function CreateInventoryCheckDialog({
     setSaving(true);
     try {
       const supabase = getClient();
-      const { data: { user } } = await supabase.auth.getUser();
+      const ctx = await getCurrentContext();
+      const realCode = await nextEntityCode("inventory", { tenantId: ctx.tenantId });
+      setCode(realCode);
 
       const { error: checkErr } = await supabase
         .from("inventory_checks")
         .insert({
-          tenant_id: "",
-          branch_id: "",
-          code,
+          tenant_id: ctx.tenantId,
+          branch_id: ctx.branchId,
+          code: realCode,
           status: "in_progress" as const,
           note: notes || null,
-          created_by: user?.id ?? "",
+          created_by: ctx.userId,
         } satisfies InventoryCheckInsert);
 
       if (checkErr) throw new Error(checkErr.message);
@@ -78,7 +80,7 @@ export function CreateInventoryCheckDialog({
       onOpenChange(false);
       toast({
         title: "Tạo phiếu kiểm kho thành công",
-        description: `Đã tạo phiếu kiểm kho ${code}. Bạn có thể thêm sản phẩm kiểm kho sau.`,
+        description: `Đã tạo phiếu kiểm kho ${realCode}. Bạn có thể thêm sản phẩm kiểm kho sau.`,
         variant: "success",
       });
       onSuccess?.();

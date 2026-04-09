@@ -2,7 +2,7 @@
 
 import { useEffect, useState, useCallback } from "react";
 import { ColumnDef } from "@tanstack/react-table";
-import { Plus, Download, Printer, XCircle } from "lucide-react";
+import { Plus, Download, Printer, XCircle, CheckCircle2 } from "lucide-react";
 import { PageHeader } from "@/components/shared/page-header";
 import { ListPageLayout } from "@/components/shared/list-page-layout";
 import { DataTable, StarCell } from "@/components/shared/data-table";
@@ -23,9 +23,10 @@ import {
 import type { DetailTab } from "@/components/shared/inline-detail-panel";
 import { formatCurrency, formatDate } from "@/lib/format";
 import { exportToExcel, exportToCsv } from "@/lib/utils/export";
-import { getInventoryChecks, getInventoryCheckStatuses } from "@/lib/services";
+import { getInventoryChecks, getInventoryCheckStatuses, applyInventoryCheck } from "@/lib/services";
 import type { InventoryCheck } from "@/lib/types";
 import { CreateInventoryCheckDialog } from "@/components/shared/dialogs";
+import { useToast } from "@/lib/contexts";
 
 /* ------------------------------------------------------------------ */
 /*  Status config                                                      */
@@ -174,6 +175,7 @@ function InventoryCheckDetail({
 /*  Page                                                               */
 /* ------------------------------------------------------------------ */
 export default function KiemKhoPage() {
+  const { toast } = useToast();
   const [data, setData] = useState<InventoryCheck[]>([]);
   const [total, setTotal] = useState(0);
   const [loading, setLoading] = useState(true);
@@ -181,6 +183,7 @@ export default function KiemKhoPage() {
   const [page, setPage] = useState(0);
   const [pageSize, setPageSize] = useState(15);
   const [createOpen, setCreateOpen] = useState(false);
+  const [applyingId, setApplyingId] = useState<string | null>(null);
 
   // Inline detail
   const [expandedRow, setExpandedRow] = useState<number | null>(null);
@@ -326,6 +329,29 @@ export default function KiemKhoPage() {
     else exportToCsv(data, exportColumns, "phieu-kiem-kho");
   };
 
+  /* ---- Apply inventory check (G7) ---- */
+  const handleApply = async (row: InventoryCheck) => {
+    if (applyingId) return; // prevent double-click while one is in-flight
+    setApplyingId(row.id);
+    try {
+      await applyInventoryCheck(row.id);
+      toast({
+        title: "Áp dụng kiểm kê thành công",
+        description: `Đã cân bằng kho theo phiếu ${row.code}`,
+        variant: "success",
+      });
+      await fetchData();
+    } catch (err) {
+      toast({
+        title: "Lỗi áp dụng kiểm kê",
+        description: err instanceof Error ? err.message : "Vui lòng thử lại",
+        variant: "error",
+      });
+    } finally {
+      setApplyingId(null);
+    }
+  };
+
   /* ---- Inline detail renderer ---- */
   const renderDetail = (item: InventoryCheck, onClose: () => void) => (
     <InventoryCheckDetail item={item} onClose={onClose} />
@@ -420,6 +446,15 @@ export default function KiemKhoPage() {
         renderDetail={renderDetail}
         getRowId={(row) => row.id}
         rowActions={(row) => [
+          ...(row.status === "processing"
+            ? [
+                {
+                  label: applyingId === row.id ? "Đang áp dụng..." : "Áp dụng kiểm kê",
+                  icon: <CheckCircle2 className="h-4 w-4" />,
+                  onClick: () => handleApply(row),
+                },
+              ]
+            : []),
           {
             label: "In phieu",
             icon: <Printer className="h-4 w-4" />,
