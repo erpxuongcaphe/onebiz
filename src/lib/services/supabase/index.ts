@@ -7,6 +7,7 @@ export {
   getPurchaseOrderStatuses,
   getPurchaseOrderStatusMeta,
   updatePurchaseOrderStatus,
+  receivePurchaseOrder,
   canTransitionPurchaseStatus,
 } from "./purchase-orders";
 export {

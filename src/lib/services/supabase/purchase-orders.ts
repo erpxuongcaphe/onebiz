@@ -1,11 +1,72 @@
 /**
- * Supabase service: Purchase Orders (Nhập hàng)
+ * Supabase service: Purchase Orders (Đặt hàng / Nhập hàng)
+ *
+ * State machine — khớp DB enum (draft, ordered, partial, completed, cancelled).
+ *
+ * Stock effects:
+ *   - draft/ordered/partial/cancelled → NO stock change (informational statuses)
+ *   - ordered|partial → completed    → `receivePurchaseOrder` commits the full
+ *     receipt: +stock for each line item, +branch_stock, stock_movements ledger,
+ *     and a new `product_lots` row for FIFO tracking.
+ *
+ * Phase 3 fix (G6): the legacy `updatePurchaseOrderStatus` only flipped the
+ * status column, so marking a PO completed never affected inventory. The
+ * page now routes "completed" transitions through `receivePurchaseOrder`
+ * which performs the atomic stock + lot write via `applyManualStockMovement`.
  */
 
-import type { PurchaseOrder, QueryParams, QueryResult } from "@/lib/types";
-import { getClient, getPaginationRange, handleError } from "./base";
+import type {
+  PurchaseOrder,
+  PurchaseOrderStatus,
+  QueryParams,
+  QueryResult,
+} from "@/lib/types";
+import {
+  getClient,
+  getCurrentContext,
+  getPaginationRange,
+  handleError,
+} from "./base";
+import { applyManualStockMovement } from "./stock-adjustments";
 
-export async function getPurchaseOrders(params: QueryParams): Promise<QueryResult<PurchaseOrder>> {
+/* ------------------------------------------------------------------ */
+/*  State machine                                                      */
+/* ------------------------------------------------------------------ */
+
+const VALID_PURCHASE_TRANSITIONS: Record<PurchaseOrderStatus, PurchaseOrderStatus[]> = {
+  draft: ["ordered", "cancelled"],
+  ordered: ["partial", "completed", "cancelled"],
+  partial: ["completed", "cancelled"],
+  completed: [],
+  cancelled: [],
+};
+
+export function canTransitionPurchaseStatus(from: string, to: string): boolean {
+  const allowed = VALID_PURCHASE_TRANSITIONS[from as PurchaseOrderStatus];
+  if (!allowed) return false;
+  return allowed.includes(to as PurchaseOrderStatus);
+}
+
+export function getPurchaseOrderStatusMeta(): Record<
+  PurchaseOrderStatus,
+  { label: string; color: string }
+> {
+  return {
+    draft: { label: "Phiếu tạm", color: "#94a3b8" },
+    ordered: { label: "Đã đặt hàng", color: "#3b82f6" },
+    partial: { label: "Nhập một phần", color: "#f59e0b" },
+    completed: { label: "Hoàn thành", color: "#10b981" },
+    cancelled: { label: "Đã hủy", color: "#ef4444" },
+  };
+}
+
+/* ------------------------------------------------------------------ */
+/*  Queries                                                            */
+/* ------------------------------------------------------------------ */
+
+export async function getPurchaseOrders(
+  params: QueryParams
+): Promise<QueryResult<PurchaseOrder>> {
   const supabase = getClient();
   const { from, to } = getPaginationRange(params);
 
@@ -13,27 +74,27 @@ export async function getPurchaseOrders(params: QueryParams): Promise<QueryResul
     .from("purchase_orders")
     .select("*", { count: "exact" });
 
-  // Search
   if (params.search) {
-    query = query.or(`code.ilike.%${params.search}%,supplier_name.ilike.%${params.search}%`);
+    query = query.or(
+      `code.ilike.%${params.search}%,supplier_name.ilike.%${params.search}%`
+    );
   }
 
-  // Filter: status
-  if (params.filters?.status && params.filters.status !== "all") {
+  const statusFilter = params.filters?.status;
+  if (Array.isArray(statusFilter) && statusFilter.length > 0) {
     // eslint-disable-next-line @typescript-eslint/no-explicit-any
-    query = query.eq("status", params.filters.status as any);
+    query = query.in("status", statusFilter as any);
+  } else if (typeof statusFilter === "string" && statusFilter !== "all") {
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    query = query.eq("status", statusFilter as any);
   }
 
-  // Filter: supplier
   if (params.filters?.supplier && params.filters.supplier !== "all") {
     // eslint-disable-next-line @typescript-eslint/no-explicit-any
     query = query.eq("supplier_name", params.filters.supplier as any);
   }
 
-  // Sort & paginate
-  query = query
-    .order("created_at", { ascending: false })
-    .range(from, to);
+  query = query.order("created_at", { ascending: false }).range(from, to);
 
   const { data, count, error } = await query;
   if (error) handleError(error, "getPurchaseOrders");
@@ -43,34 +104,202 @@ export async function getPurchaseOrders(params: QueryParams): Promise<QueryResul
 }
 
 export function getPurchaseOrderStatuses() {
-  return [
-    { label: "Phiếu tạm", value: "draft", count: 0 },
-    { label: "Đã nhập hàng", value: "completed", count: 0 },
-    { label: "Đã hủy", value: "cancelled", count: 0 },
-  ];
+  const meta = getPurchaseOrderStatusMeta();
+  return (Object.keys(meta) as PurchaseOrderStatus[]).map((value) => ({
+    label: meta[value].label,
+    value,
+    count: 0,
+  }));
 }
 
-// --- Mapper ---
+/* ------------------------------------------------------------------ */
+/*  Mutations                                                          */
+/* ------------------------------------------------------------------ */
+
+export async function updatePurchaseOrderStatus(
+  orderId: string,
+  newStatus: PurchaseOrderStatus
+): Promise<void> {
+  // "completed" transitions are special: they commit real inventory, so we
+  // route them through `receivePurchaseOrder` instead of a plain status flip.
+  // This keeps all callers (Kanban drag, row action menu) safe by default.
+  if (newStatus === "completed") {
+    await receivePurchaseOrder(orderId);
+    return;
+  }
+
+  const supabase = getClient();
+
+  const { data: current, error: readErr } = await supabase
+    .from("purchase_orders")
+    .select("status")
+    .eq("id", orderId)
+    .single();
+
+  if (readErr) handleError(readErr, "updatePurchaseOrderStatus.read");
+  if (!current) throw new Error("Không tìm thấy đơn nhập hàng");
+
+  const fromStatus = current.status as PurchaseOrderStatus;
+  if (!canTransitionPurchaseStatus(fromStatus, newStatus)) {
+    throw new Error(
+      `Không thể chuyển từ "${fromStatus}" sang "${newStatus}"`
+    );
+  }
+
+  const { error: updateErr } = await supabase
+    .from("purchase_orders")
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    .update({ status: newStatus as any })
+    .eq("id", orderId);
+
+  if (updateErr) handleError(updateErr, "updatePurchaseOrderStatus.update");
+}
+
+/* ------------------------------------------------------------------ */
+/*  Receive (G6 fix) — commits real inventory                          */
+/* ------------------------------------------------------------------ */
+
+/**
+ * Mark a purchase order as fully received:
+ *   1. Validate status (must be 'ordered' or 'partial')
+ *   2. For each PO item:
+ *      - Apply stock-in via `applyManualStockMovement` (updates
+ *        products.stock + branch_stock + writes stock_movements)
+ *      - Create a `product_lots` row for FIFO tracking (source='purchase')
+ *      - Update `received_quantity = quantity` on the line item
+ *   3. Flip `purchase_orders.status = 'completed'`
+ *
+ * NOT atomic (fetch-then-update loop). Acceptable for single-cashier
+ * workflows; a future RPC will wrap this in a single transaction.
+ *
+ * Throws if the PO has no items, or if any item has `quantity <= 0`.
+ */
+export async function receivePurchaseOrder(orderId: string): Promise<void> {
+  const supabase = getClient();
+
+  // 1. Read PO + status guard
+  const { data: po, error: poErr } = await supabase
+    .from("purchase_orders")
+    .select("id, code, status, supplier_id")
+    .eq("id", orderId)
+    .single();
+  if (poErr) handleError(poErr, "receivePurchaseOrder.read");
+  if (!po) throw new Error("Không tìm thấy đơn nhập hàng");
+
+  const fromStatus = po.status as PurchaseOrderStatus;
+  if (fromStatus !== "ordered" && fromStatus !== "partial") {
+    throw new Error(
+      `Chỉ có thể nhập hàng khi đơn đang ở trạng thái "đã đặt" hoặc "nhập một phần" (hiện tại: ${fromStatus})`
+    );
+  }
+
+  // 2. Read PO items
+  const { data: items, error: itemsErr } = await supabase
+    .from("purchase_order_items")
+    .select("id, product_id, product_name, quantity, received_quantity, unit_price")
+    .eq("purchase_order_id", orderId);
+  if (itemsErr) handleError(itemsErr, "receivePurchaseOrder.items");
+  if (!items || items.length === 0) {
+    throw new Error("Đơn nhập hàng không có sản phẩm nào để nhập");
+  }
+
+  // Compute remaining quantity per line (quantity - already-received)
+  const pending = items
+    .map((it) => ({
+      id: it.id,
+      productId: it.product_id,
+      productName: it.product_name,
+      remaining: Number(it.quantity ?? 0) - Number(it.received_quantity ?? 0),
+      fullQty: Number(it.quantity ?? 0),
+      unitPrice: Number(it.unit_price ?? 0),
+    }))
+    .filter((it) => it.remaining > 0);
+
+  if (pending.length === 0) {
+    // All items already received — just flip status
+    const { error: flipErr } = await supabase
+      .from("purchase_orders")
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      .update({ status: "completed" as any })
+      .eq("id", orderId);
+    if (flipErr) handleError(flipErr, "receivePurchaseOrder.flip");
+    return;
+  }
+
+  // 3. Apply stock-in via shared helper (writes products.stock + branch_stock + stock_movements)
+  const ctx = await getCurrentContext();
+  await applyManualStockMovement(
+    pending.map((it) => ({
+      productId: it.productId,
+      quantity: it.remaining,
+      type: "in" as const,
+      referenceType: "purchase_order",
+      referenceId: orderId,
+      note: `${po.code} - Nhập hàng từ NCC - ${it.productName}`,
+    })),
+    {
+      tenantId: ctx.tenantId,
+      branchId: ctx.branchId,
+      createdBy: ctx.userId,
+    }
+  );
+
+  // 4. Create product_lots (one lot per line item) for FIFO
+  const today = new Date().toISOString().split("T")[0];
+  const lotRows = pending.map((it, idx) => ({
+    tenant_id: ctx.tenantId,
+    product_id: it.productId,
+    variant_id: null,
+    lot_number: `${po.code}-${today.replace(/-/g, "")}-${String(idx + 1).padStart(2, "0")}`,
+    source_type: "purchase" as const,
+    purchase_order_id: orderId,
+    supplier_id: po.supplier_id ?? null,
+    received_date: today,
+    initial_qty: it.remaining,
+    current_qty: it.remaining,
+    branch_id: ctx.branchId,
+    status: "active" as const,
+    note: `Nhập từ ${po.code}`,
+  }));
+  const { error: lotErr } = await supabase.from("product_lots").insert(lotRows);
+  if (lotErr) handleError(lotErr, "receivePurchaseOrder.lots");
+
+  // 5. Update received_quantity on line items
+  for (const it of pending) {
+    const { error: updErr } = await supabase
+      .from("purchase_order_items")
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      .update({ received_quantity: it.fullQty } as any)
+      .eq("id", it.id);
+    if (updErr) handleError(updErr, "receivePurchaseOrder.item_update");
+  }
+
+  // 6. Flip PO status to completed
+  const { error: statusErr } = await supabase
+    .from("purchase_orders")
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    .update({ status: "completed" as any })
+    .eq("id", orderId);
+  if (statusErr) handleError(statusErr, "receivePurchaseOrder.status");
+}
+
+/* ------------------------------------------------------------------ */
+/*  Mapper                                                             */
+/* ------------------------------------------------------------------ */
 
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
 function mapPurchaseOrder(row: any): PurchaseOrder {
-  const statusMap: Record<string, PurchaseOrder["status"]> = {
-    draft: "draft",
-    ordered: "draft",
-    partial: "draft",
-    completed: "imported",
-    cancelled: "cancelled",
-  };
-
   return {
     id: row.id,
     code: row.code,
     date: row.created_at,
     supplierId: row.supplier_id,
-    supplierCode: "", // Would need join to suppliers
+    supplierCode: "",
     supplierName: row.supplier_name,
-    amountOwed: row.debt,
-    status: statusMap[row.status] ?? "draft",
-    createdBy: row.created_by,
+    amountOwed: Number(row.debt ?? 0),
+    total: Number(row.total ?? 0),
+    paid: Number(row.paid ?? 0),
+    status: (row.status ?? "draft") as PurchaseOrderStatus,
+    createdBy: row.created_by ?? "",
   };
 }
