@@ -102,11 +102,20 @@ export async function applyStockDecrement(
     .insert(stockMovements);
   if (stockError) handleError(stockError, "applyStockDecrement:movements");
 
-  // 2. Decrement products.stock (per-row fetch-then-update loop)
+  // 2. Decrement BOTH products.stock (company snapshot) AND branch_stock (per-branch).
+  //
   // Stock CAN go negative — represents "owe to warehouse" / oversold state.
   // Frontend warns the cashier; backend records the truth so the ledger
-  // (stock_movements) and the snapshot field (products.stock) stay in sync.
+  // (stock_movements) and both snapshot tables stay in sync.
+  //
+  // Mirror logic of `consume_production_materials` / `complete_production_order`
+  // RPCs in 00007_rpc_functions.sql which already update both tables. Without
+  // this branch_stock sync, multi-branch reports drift after every POS sale.
+  //
+  // NOT atomic across items (fetch-then-update loop). Acceptable for a single-
+  // cashier terminal; a future RPC will harden this.
   for (const item of items) {
+    // 2a. Update products.stock (company-wide snapshot)
     const { data: product, error: selErr } = await supabase
       .from("products")
       .select("stock")
@@ -123,6 +132,43 @@ export async function applyStockDecrement(
       .update({ stock: nextStock } as any)
       .eq("id", item.productId);
     if (updErr) handleError(updErr, "applyStockDecrement:update");
+
+    // 2b. Update branch_stock (per-branch snapshot) — Phase 1 fix (G1).
+    // Resilient: insert a new row if the branch never had stock for this
+    // product (qty becomes negative — represents oversell from a branch
+    // that never received inventory). Update existing row otherwise.
+    // POS sales always operate on the no-variant path (variant_id IS NULL).
+    const { data: bsRow, error: bsSelErr } = await supabase
+      .from("branch_stock")
+      .select("id, quantity")
+      .eq("branch_id", ctx.branchId)
+      .eq("product_id", item.productId)
+      .is("variant_id", null)
+      .maybeSingle();
+    if (bsSelErr) handleError(bsSelErr, "applyStockDecrement:branch_stock_select");
+
+    if (bsRow) {
+      const nextBranchQty = (bsRow.quantity ?? 0) - item.quantity;
+      const { error: bsUpdErr } = await supabase
+        .from("branch_stock")
+        .update({
+          quantity: nextBranchQty,
+          updated_at: new Date().toISOString(),
+        })
+        .eq("id", bsRow.id);
+      if (bsUpdErr) handleError(bsUpdErr, "applyStockDecrement:branch_stock_update");
+    } else {
+      const { error: bsInsErr } = await supabase
+        .from("branch_stock")
+        .insert({
+          tenant_id: ctx.tenantId,
+          branch_id: ctx.branchId,
+          product_id: item.productId,
+          quantity: -item.quantity,
+          reserved: 0,
+        });
+      if (bsInsErr) handleError(bsInsErr, "applyStockDecrement:branch_stock_insert");
+    }
   }
 }
 
