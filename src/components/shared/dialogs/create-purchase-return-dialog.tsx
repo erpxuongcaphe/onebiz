@@ -16,9 +16,10 @@ import { Search, Loader2 } from "lucide-react";
 import { formatCurrency } from "@/lib/format";
 import { useToast } from "@/lib/contexts";
 import { getClient } from "@/lib/services/supabase/base";
-import type { Database } from "@/lib/supabase/types";
-
-type StockMovementInsert = Database["public"]["Tables"]["stock_movements"]["Insert"];
+import {
+  applyManualStockMovement,
+  nextEntityCode,
+} from "@/lib/services/supabase/stock-adjustments";
 
 interface CreatePurchaseReturnDialogProps {
   open: boolean;
@@ -45,10 +46,9 @@ interface POLineItem {
   returnQty: number;
 }
 
-function generateReturnCode() {
-  const num = Math.floor(Math.random() * 99999) + 1;
-  return `THN${String(num).padStart(5, "0")}`;
-}
+// Placeholder shown in the dialog header before save. Real code is generated
+// via `next_code('purchase_return')` at save time.
+const PENDING_CODE_PLACEHOLDER = "THN —";
 
 export function CreatePurchaseReturnDialog({
   open,
@@ -69,7 +69,7 @@ export function CreatePurchaseReturnDialog({
 
   useEffect(() => {
     if (open) {
-      setCode(generateReturnCode());
+      setCode(PENDING_CODE_PLACEHOLDER);
       setPOSearch("");
       setShowPODropdown(false);
       setFilteredPOs([]);
@@ -160,31 +160,24 @@ export function CreatePurchaseReturnDialog({
     if (!validate()) return;
     setSaving(true);
     try {
-      const supabase = getClient();
-      const { data: { user } } = await supabase.auth.getUser();
+      const realCode = await nextEntityCode("purchase_return");
+      setCode(realCode);
 
-      const movements = selectedItems.map(item => ({
-        tenant_id: "",
-        branch_id: "",
-        product_id: item.product_id,
-        type: "out" as const,
-        quantity: item.returnQty,
-        reference_type: "purchase_return",
-        reference_id: selectedPO!.id,
-        note: `${code} - Trả hàng nhập ${selectedPO!.code}${reason ? ` - ${reason}` : ""}${notes ? ` - ${notes}` : ""}`,
-        created_by: user?.id ?? "",
-      } satisfies StockMovementInsert));
-
-      const { error: insertErr } = await supabase
-        .from("stock_movements")
-        .insert(movements);
-
-      if (insertErr) throw new Error(insertErr.message);
+      await applyManualStockMovement(
+        selectedItems.map((item) => ({
+          productId: item.product_id,
+          quantity: item.returnQty,
+          type: "out",
+          referenceType: "purchase_return",
+          referenceId: selectedPO!.id,
+          note: `${realCode} - Trả hàng nhập ${selectedPO!.code}${reason ? ` - ${reason}` : ""}${notes ? ` - ${notes}` : ""}`,
+        }))
+      );
 
       onOpenChange(false);
       toast({
         title: "Tạo phiếu trả hàng nhập thành công",
-        description: `Đã tạo phiếu trả hàng nhập ${code}`,
+        description: `Đã tạo phiếu trả hàng nhập ${realCode}`,
         variant: "success",
       });
       onSuccess?.();

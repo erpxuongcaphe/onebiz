@@ -15,9 +15,10 @@ import { Search, Loader2, X } from "lucide-react";
 import { formatCurrency } from "@/lib/format";
 import { useToast } from "@/lib/contexts";
 import { getClient } from "@/lib/services/supabase/base";
-import type { Database } from "@/lib/supabase/types";
-
-type StockMovementInsert = Database["public"]["Tables"]["stock_movements"]["Insert"];
+import {
+  applyManualStockMovement,
+  nextEntityCode,
+} from "@/lib/services/supabase/stock-adjustments";
 
 interface CreateInternalExportDialogProps {
   open: boolean;
@@ -44,10 +45,10 @@ interface ExportItem {
   quantity: number;
 }
 
-function generateExportCode() {
-  const num = Math.floor(Math.random() * 99999) + 1;
-  return `XNB${String(num).padStart(5, "0")}`;
-}
+// Placeholder code shown in the header before the user clicks Save.
+// The real, monotonic code is generated via `next_code('internal_export')`
+// at save time so concurrent users can never collide.
+const PENDING_CODE_PLACEHOLDER = "XNB —";
 
 export function CreateInternalExportDialog({
   open,
@@ -67,7 +68,7 @@ export function CreateInternalExportDialog({
 
   useEffect(() => {
     if (open) {
-      setCode(generateExportCode());
+      setCode(PENDING_CODE_PLACEHOLDER);
       setProductSearch("");
       setShowProductDropdown(false);
       setFilteredProducts([]);
@@ -143,30 +144,24 @@ export function CreateInternalExportDialog({
     if (!validate()) return;
     setSaving(true);
     try {
-      const supabase = getClient();
-      const { data: { user } } = await supabase.auth.getUser();
+      // Generate the real code via RPC at save-time (atomic, monotonic)
+      const realCode = await nextEntityCode("internal_export");
+      setCode(realCode);
 
-      const movements = items.map(item => ({
-        tenant_id: "",
-        branch_id: "",
-        product_id: item.product_id,
-        type: "out" as const,
-        quantity: item.quantity,
-        reference_type: "internal",
-        note: `${code} - Xuất nội bộ - ${destination}${notes ? ` - ${notes}` : ""}`,
-        created_by: user?.id ?? "",
-      } satisfies StockMovementInsert));
-
-      const { error: insertErr } = await supabase
-        .from("stock_movements")
-        .insert(movements);
-
-      if (insertErr) throw new Error(insertErr.message);
+      await applyManualStockMovement(
+        items.map((item) => ({
+          productId: item.product_id,
+          quantity: item.quantity,
+          type: "out",
+          referenceType: "internal_export",
+          note: `${realCode} - Xuất nội bộ - ${destination}${notes ? ` - ${notes}` : ""}`,
+        }))
+      );
 
       onOpenChange(false);
       toast({
         title: "Tạo phiếu xuất nội bộ thành công",
-        description: `Đã tạo phiếu xuất nội bộ ${code}`,
+        description: `Đã tạo phiếu xuất nội bộ ${realCode}`,
         variant: "success",
       });
       onSuccess?.();

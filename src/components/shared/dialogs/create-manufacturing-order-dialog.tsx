@@ -14,9 +14,10 @@ import { Button } from "@/components/ui/button";
 import { Search, Loader2 } from "lucide-react";
 import { useToast } from "@/lib/contexts";
 import { getClient } from "@/lib/services/supabase/base";
-import type { Database } from "@/lib/supabase/types";
-
-type StockMovementInsert = Database["public"]["Tables"]["stock_movements"]["Insert"];
+import {
+  applyManualStockMovement,
+  nextEntityCode,
+} from "@/lib/services/supabase/stock-adjustments";
 
 interface CreateManufacturingOrderDialogProps {
   open: boolean;
@@ -31,10 +32,13 @@ interface ProductResult {
   unit: string;
 }
 
-function generateManufacturingCode() {
-  const num = Math.floor(Math.random() * 99999) + 1;
-  return `SX${String(num).padStart(5, "0")}`;
-}
+// Placeholder shown in the dialog header before save. Real code is generated
+// via `next_code('manufacturing')` at save time.
+//
+// NOTE: This dialog records an ad-hoc "+stock" event for a finished SKU and
+// does NOT consume BOM materials. The full BOM-driven production flow lives
+// in the production_orders module (see `complete_production_order` RPC).
+const PENDING_CODE_PLACEHOLDER = "SX —";
 
 export function CreateManufacturingOrderDialog({
   open,
@@ -54,7 +58,7 @@ export function CreateManufacturingOrderDialog({
 
   useEffect(() => {
     if (open) {
-      setCode(generateManufacturingCode());
+      setCode(PENDING_CODE_PLACEHOLDER);
       setProductSearch("");
       setShowProductDropdown(false);
       setFilteredProducts([]);
@@ -99,28 +103,23 @@ export function CreateManufacturingOrderDialog({
     if (!validate()) return;
     setSaving(true);
     try {
-      const supabase = getClient();
-      const { data: { user } } = await supabase.auth.getUser();
+      const realCode = await nextEntityCode("manufacturing");
+      setCode(realCode);
 
-      const { error: insertErr } = await supabase
-        .from("stock_movements")
-        .insert({
-          tenant_id: "",
-          branch_id: "",
-          product_id: selectedProduct!.id,
-          type: "in" as const,
+      await applyManualStockMovement([
+        {
+          productId: selectedProduct!.id,
           quantity,
-          reference_type: "manufacturing",
-          note: `${code} - Sản xuất ${selectedProduct!.name} x${quantity}${notes ? ` - ${notes}` : ""}`,
-          created_by: user?.id ?? "",
-        } satisfies StockMovementInsert);
-
-      if (insertErr) throw new Error(insertErr.message);
+          type: "in",
+          referenceType: "manufacturing",
+          note: `${realCode} - Sản xuất ${selectedProduct!.name} x${quantity}${notes ? ` - ${notes}` : ""}`,
+        },
+      ]);
 
       onOpenChange(false);
       toast({
         title: "Tạo phiếu sản xuất thành công",
-        description: `Đã tạo phiếu sản xuất ${code}`,
+        description: `Đã tạo phiếu sản xuất ${realCode}`,
         variant: "success",
       });
       onSuccess?.();

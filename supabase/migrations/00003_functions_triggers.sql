@@ -79,17 +79,22 @@ begin
 
   -- Tạo code sequences mặc định
   insert into public.code_sequences (tenant_id, entity_type, prefix, padding) values
-    (new_tenant_id, 'product',        'SP',  6),
-    (new_tenant_id, 'customer',       'KH',  6),
-    (new_tenant_id, 'supplier',       'NCC', 5),
-    (new_tenant_id, 'invoice',        'HD',  6),
-    (new_tenant_id, 'purchase_order', 'PN',  6),
-    (new_tenant_id, 'sales_order',    'DH',  6),
-    (new_tenant_id, 'return',         'TH',  6),
-    (new_tenant_id, 'shipping',       'VD',  6),
-    (new_tenant_id, 'cash_receipt',   'PT',  5),
-    (new_tenant_id, 'cash_payment',   'PC',  5),
-    (new_tenant_id, 'inventory',      'KK',  5);
+    (new_tenant_id, 'product',         'SP',  6),
+    (new_tenant_id, 'customer',        'KH',  6),
+    (new_tenant_id, 'supplier',        'NCC', 5),
+    (new_tenant_id, 'invoice',         'HD',  6),
+    (new_tenant_id, 'purchase_order',  'PN',  6),
+    (new_tenant_id, 'sales_order',     'DH',  6),
+    (new_tenant_id, 'return',          'TH',  6),
+    (new_tenant_id, 'shipping',        'VD',  6),
+    (new_tenant_id, 'cash_receipt',    'PT',  5),
+    (new_tenant_id, 'cash_payment',    'PC',  5),
+    (new_tenant_id, 'inventory',       'KK',  5),
+    -- Warehouse dialogs (Phase 2 — manual stock adjustments)
+    (new_tenant_id, 'internal_export', 'XNB', 5),
+    (new_tenant_id, 'disposal',        'XH',  5),
+    (new_tenant_id, 'purchase_return', 'THN', 5),
+    (new_tenant_id, 'manufacturing',   'SX',  5);
 
   return new;
 end;

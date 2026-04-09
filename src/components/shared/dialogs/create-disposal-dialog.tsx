@@ -15,9 +15,10 @@ import { Search, Loader2, X } from "lucide-react";
 import { formatCurrency } from "@/lib/format";
 import { useToast } from "@/lib/contexts";
 import { getClient } from "@/lib/services/supabase/base";
-import type { Database } from "@/lib/supabase/types";
-
-type StockMovementInsert = Database["public"]["Tables"]["stock_movements"]["Insert"];
+import {
+  applyManualStockMovement,
+  nextEntityCode,
+} from "@/lib/services/supabase/stock-adjustments";
 
 interface CreateDisposalDialogProps {
   open: boolean;
@@ -44,10 +45,9 @@ interface DisposalItem {
   quantity: number;
 }
 
-function generateDisposalCode() {
-  const num = Math.floor(Math.random() * 99999) + 1;
-  return `XH${String(num).padStart(5, "0")}`;
-}
+// Placeholder shown in the dialog header before save. Real code is generated
+// via `next_code('disposal')` at save time so concurrent users never collide.
+const PENDING_CODE_PLACEHOLDER = "XH —";
 
 export function CreateDisposalDialog({
   open,
@@ -67,7 +67,7 @@ export function CreateDisposalDialog({
 
   useEffect(() => {
     if (open) {
-      setCode(generateDisposalCode());
+      setCode(PENDING_CODE_PLACEHOLDER);
       setProductSearch("");
       setShowProductDropdown(false);
       setFilteredProducts([]);
@@ -143,30 +143,23 @@ export function CreateDisposalDialog({
     if (!validate()) return;
     setSaving(true);
     try {
-      const supabase = getClient();
-      const { data: { user } } = await supabase.auth.getUser();
+      const realCode = await nextEntityCode("disposal");
+      setCode(realCode);
 
-      const movements = items.map(item => ({
-        tenant_id: "",
-        branch_id: "",
-        product_id: item.product_id,
-        type: "out" as const,
-        quantity: item.quantity,
-        reference_type: "disposal",
-        note: `${code} - Xuất hủy${reason ? ` - ${reason}` : ""}${notes ? ` - ${notes}` : ""}`,
-        created_by: user?.id ?? "",
-      } satisfies StockMovementInsert));
-
-      const { error: insertErr } = await supabase
-        .from("stock_movements")
-        .insert(movements);
-
-      if (insertErr) throw new Error(insertErr.message);
+      await applyManualStockMovement(
+        items.map((item) => ({
+          productId: item.product_id,
+          quantity: item.quantity,
+          type: "out",
+          referenceType: "disposal",
+          note: `${realCode} - Xuất hủy${reason ? ` - ${reason}` : ""}${notes ? ` - ${notes}` : ""}`,
+        }))
+      );
 
       onOpenChange(false);
       toast({
         title: "Tạo phiếu xuất hủy thành công",
-        description: `Đã tạo phiếu xuất hủy ${code}`,
+        description: `Đã tạo phiếu xuất hủy ${realCode}`,
         variant: "success",
       });
       onSuccess?.();
