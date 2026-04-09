@@ -97,21 +97,31 @@ export function getInventoryCheckStatuses() {
 export async function applyInventoryCheck(checkId: string): Promise<void> {
   const supabase = getClient();
 
-  // 1. Read check + status guard
-  const { data: check, error: readErr } = await supabase
+  // 1. ATOMIC status flip — claim this check by flipping status to 'balanced'
+  //    FIRST. If two concurrent calls race, only one will match the WHERE
+  //    clause (status IN draft/in_progress) and succeed. The loser gets 0 rows
+  //    and bails out, preventing double stock adjustment.
+  const { data: claimed, error: claimErr } = await supabase
     .from("inventory_checks")
-    .select("id, code, status")
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    .update({ status: "balanced" as any })
     .eq("id", checkId)
-    .single();
-  if (readErr) handleError(readErr, "applyInventoryCheck.read");
-  if (!check) throw new Error("Không tìm thấy phiếu kiểm kho");
-
-  const status = check.status as string;
-  if (status !== "draft" && status !== "in_progress") {
+    .in("status", ["draft", "in_progress"])
+    .select("id, code, status")
+    .maybeSingle();
+  if (claimErr) handleError(claimErr, "applyInventoryCheck.claim");
+  if (!claimed) {
+    const { data: existing } = await supabase
+      .from("inventory_checks")
+      .select("status")
+      .eq("id", checkId)
+      .single();
+    if (!existing) throw new Error("Không tìm thấy phiếu kiểm kho");
     throw new Error(
-      `Chỉ có thể áp dụng phiếu kiểm kho ở trạng thái "Phiếu tạm" hoặc "Đang xử lý" (hiện tại: ${status})`
+      `Phiếu kiểm kho đã được xử lý (trạng thái: ${existing.status}). Không thể áp dụng lại.`
     );
   }
+  const check = claimed;
 
   // 2. Read check items
   // NOTE: `inventory_check_items` is not in the generated Database types yet
@@ -150,13 +160,7 @@ export async function applyInventoryCheck(checkId: string): Promise<void> {
     .filter((m): m is { productId: string; productName: string; quantity: number; type: "in" | "out" } => m !== null);
 
   if (movements.length === 0) {
-    // Nothing to apply — just flip the status
-    const { error: flipErr } = await supabase
-      .from("inventory_checks")
-      // eslint-disable-next-line @typescript-eslint/no-explicit-any
-      .update({ status: "balanced" as any })
-      .eq("id", checkId);
-    if (flipErr) handleError(flipErr, "applyInventoryCheck.flip");
+    // Nothing to apply — status already flipped to 'balanced' at step 1.
     return;
   }
 
@@ -172,13 +176,8 @@ export async function applyInventoryCheck(checkId: string): Promise<void> {
     }))
   );
 
-  // 5. Flip check status to balanced
-  const { error: statusErr } = await supabase
-    .from("inventory_checks")
-    // eslint-disable-next-line @typescript-eslint/no-explicit-any
-    .update({ status: "balanced" as any })
-    .eq("id", checkId);
-  if (statusErr) handleError(statusErr, "applyInventoryCheck.status");
+  // 5. Status already flipped to 'balanced' at step 1 (atomic claim).
+  //    No further status update needed.
 }
 
 // --- Mapper ---

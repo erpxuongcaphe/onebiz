@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useEffect } from "react";
+import { useState, useEffect, useRef } from "react";
 import {
   Dialog,
   DialogContent,
@@ -65,6 +65,7 @@ export function CreateInternalExportDialog({
   const [notes, setNotes] = useState("");
   const [errors, setErrors] = useState<Record<string, string>>({});
   const [saving, setSaving] = useState(false);
+  const saveLockRef = useRef(false);
 
   useEffect(() => {
     if (open) {
@@ -141,7 +142,9 @@ export function CreateInternalExportDialog({
   }
 
   async function handleSave() {
+    if (saveLockRef.current) return;
     if (!validate()) return;
+    saveLockRef.current = true;
     setSaving(true);
     try {
       // Generate the real code via RPC at save-time (atomic, monotonic)
@@ -172,6 +175,7 @@ export function CreateInternalExportDialog({
         variant: "error",
       });
     } finally {
+      saveLockRef.current = false;
       setSaving(false);
     }
   }

@@ -104,71 +104,34 @@ export async function applyStockDecrement(
 
   // 2. Decrement BOTH products.stock (company snapshot) AND branch_stock (per-branch).
   //
+  // FIX: Use SQL atomic increment (`stock = stock + delta`) via RPCs to
+  // prevent race conditions when two concurrent POS sales decrement the
+  // same product. The old read-compute-write pattern could lose decrements
+  // when interleaved.
+  //
   // Stock CAN go negative — represents "owe to warehouse" / oversold state.
   // Frontend warns the cashier; backend records the truth so the ledger
   // (stock_movements) and both snapshot tables stay in sync.
-  //
-  // Mirror logic of `consume_production_materials` / `complete_production_order`
-  // RPCs in 00007_rpc_functions.sql which already update both tables. Without
-  // this branch_stock sync, multi-branch reports drift after every POS sale.
-  //
-  // NOT atomic across items (fetch-then-update loop). Acceptable for a single-
-  // cashier terminal; a future RPC will harden this.
   for (const item of items) {
-    // 2a. Update products.stock (company-wide snapshot)
-    const { data: product, error: selErr } = await supabase
-      .from("products")
-      .select("stock")
-      .eq("id", item.productId)
-      .single();
-    if (selErr) handleError(selErr, "applyStockDecrement:select");
-    if (!product) continue;
+    const delta = -item.quantity; // POS sale always decrements
 
-    const currentStock = product.stock ?? 0;
-    const nextStock = currentStock - item.quantity;
-    const { error: updErr } = await supabase
-      .from("products")
-      // eslint-disable-next-line @typescript-eslint/no-explicit-any
-      .update({ stock: nextStock } as any)
-      .eq("id", item.productId);
-    if (updErr) handleError(updErr, "applyStockDecrement:update");
+    // 2a. products.stock — atomic SQL increment
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    const { error: updErr } = await (supabase.rpc as any)("increment_product_stock", {
+      p_product_id: item.productId,
+      p_delta: delta,
+    });
+    if (updErr) handleError(updErr, "applyStockDecrement:product_update");
 
-    // 2b. Update branch_stock (per-branch snapshot) — Phase 1 fix (G1).
-    // Resilient: insert a new row if the branch never had stock for this
-    // product (qty becomes negative — represents oversell from a branch
-    // that never received inventory). Update existing row otherwise.
-    // POS sales always operate on the no-variant path (variant_id IS NULL).
-    const { data: bsRow, error: bsSelErr } = await supabase
-      .from("branch_stock")
-      .select("id, quantity")
-      .eq("branch_id", ctx.branchId)
-      .eq("product_id", item.productId)
-      .is("variant_id", null)
-      .maybeSingle();
-    if (bsSelErr) handleError(bsSelErr, "applyStockDecrement:branch_stock_select");
-
-    if (bsRow) {
-      const nextBranchQty = (bsRow.quantity ?? 0) - item.quantity;
-      const { error: bsUpdErr } = await supabase
-        .from("branch_stock")
-        .update({
-          quantity: nextBranchQty,
-          updated_at: new Date().toISOString(),
-        })
-        .eq("id", bsRow.id);
-      if (bsUpdErr) handleError(bsUpdErr, "applyStockDecrement:branch_stock_update");
-    } else {
-      const { error: bsInsErr } = await supabase
-        .from("branch_stock")
-        .insert({
-          tenant_id: ctx.tenantId,
-          branch_id: ctx.branchId,
-          product_id: item.productId,
-          quantity: -item.quantity,
-          reserved: 0,
-        });
-      if (bsInsErr) handleError(bsInsErr, "applyStockDecrement:branch_stock_insert");
-    }
+    // 2b. branch_stock — atomic upsert
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    const { error: bsErr } = await (supabase.rpc as any)("upsert_branch_stock", {
+      p_tenant_id: ctx.tenantId,
+      p_branch_id: ctx.branchId,
+      p_product_id: item.productId,
+      p_delta: delta,
+    });
+    if (bsErr) handleError(bsErr, "applyStockDecrement:branch_stock");
   }
 }
 

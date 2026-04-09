@@ -267,37 +267,54 @@ export async function completeDraftOrder(
 ): Promise<{ invoiceCode: string }> {
   const supabase = getClient();
 
-  // 1. Load invoice + items
-  const { data: invoice, error: loadErr } = await supabase
-    .from("invoices")
-    .select("id, code, status, total, customer_name, branch_id, tenant_id, invoice_items(*)")
-    .eq("id", invoiceId)
-    .single();
-  if (loadErr) handleError(loadErr, "completeDraftOrder:load");
-  if (!invoice) throw new Error("Không tìm thấy đơn nháp");
-  if (invoice.status !== "draft") {
-    throw new Error(`Đơn này không ở trạng thái nháp (đang: ${invoice.status})`);
-  }
-
-  const total = invoice.total ?? 0;
+  // 1. ATOMIC status flip: UPDATE + WHERE status='draft' claims this invoice.
+  //    If two concurrent calls race, only one matches and succeeds.
   const paid = payment.paid;
-  const debt = Math.max(0, total - paid);
 
-  // 2. UPDATE invoices
-  const { error: updErr } = await supabase
+  const { data: invoice, error: updErr } = await supabase
     .from("invoices")
     .update({
       status: "completed",
       paid,
-      debt,
+      debt: 0, // placeholder — will recompute below
       payment_method: payment.method,
     })
-    .eq("id", invoiceId);
+    .eq("id", invoiceId)
+    .eq("status", "draft")
+    .select("id, code, status, total, customer_name, branch_id, tenant_id")
+    .maybeSingle();
   if (updErr) handleError(updErr, "completeDraftOrder:update");
+  if (!invoice) {
+    // Either not found or already completed by another call
+    const { data: existing } = await supabase
+      .from("invoices")
+      .select("status")
+      .eq("id", invoiceId)
+      .single();
+    if (!existing) throw new Error("Không tìm thấy đơn nháp");
+    throw new Error(`Đơn này đã được xử lý (trạng thái: ${existing.status}). Không thể hoàn tất lại.`);
+  }
+
+  const total = invoice.total ?? 0;
+  const debt = Math.max(0, total - paid);
+
+  // Update debt (computed from real total)
+  if (debt !== 0) {
+    await supabase
+      .from("invoices")
+      .update({ debt })
+      .eq("id", invoiceId);
+  }
+
+  // Load invoice_items for stock decrement
+  const { data: itemsRaw, error: itemsErr } = await supabase
+    .from("invoice_items")
+    .select("*")
+    .eq("invoice_id", invoiceId);
+  if (itemsErr) handleError(itemsErr, "completeDraftOrder:items");
 
   // 3. Build items payload for stock decrement
-  // eslint-disable-next-line @typescript-eslint/no-explicit-any
-  const rawItems = (invoice as any).invoice_items ?? [];
+  const rawItems = itemsRaw ?? [];
   const items: PosCheckoutItem[] = rawItems.map(
     // eslint-disable-next-line @typescript-eslint/no-explicit-any
     (it: any) => ({
@@ -343,35 +360,20 @@ export async function completeDraftOrder(
 export async function deleteDraftOrder(invoiceId: string): Promise<void> {
   const supabase = getClient();
 
-  // 1. Pre-check: only proceed if invoice is actually a draft.
-  //    Without this guard, step 2 would wipe invoice_items of a *completed*
-  //    invoice (the items DELETE has no status filter), corrupting the row.
-  const { data: invoice, error: readErr } = await supabase
-    .from("invoices")
-    .select("id, status")
-    .eq("id", invoiceId)
-    .single();
-  if (readErr) handleError(readErr, "deleteDraftOrder:read");
-  if (!invoice) return; // Already gone — nothing to do.
-  if (invoice.status !== "draft") {
-    throw new Error(
-      `Không thể xóa: hóa đơn này không ở trạng thái nháp (đang: ${invoice.status})`
-    );
-  }
-
-  // 2. Delete items (safe now — we know status='draft')
-  const { error: itemsErr } = await supabase
-    .from("invoice_items")
-    .delete()
-    .eq("invoice_id", invoiceId);
-  if (itemsErr) handleError(itemsErr, "deleteDraftOrder:items");
-
-  // 3. Delete invoice — keep the status=draft guard as defense in depth
-  //    (race condition: someone could complete the draft between step 1 and 3)
-  const { error: invErr } = await supabase
+  // ATOMIC: Delete invoice WHERE status='draft' FIRST to claim it.
+  // If a concurrent completeDraftOrder already flipped status to 'completed',
+  // this delete matches 0 rows and we bail safely.
+  // invoice_items have ON DELETE CASCADE from the FK, so they are auto-deleted.
+  const { data: deleted, error: invErr } = await supabase
     .from("invoices")
     .delete()
     .eq("id", invoiceId)
-    .eq("status", "draft");
+    .eq("status", "draft")
+    .select("id")
+    .maybeSingle();
   if (invErr) handleError(invErr, "deleteDraftOrder:invoice");
+  if (!deleted) {
+    // Either not found or not a draft — safe to ignore
+    return;
+  }
 }

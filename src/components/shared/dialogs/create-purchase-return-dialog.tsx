@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useEffect, useMemo } from "react";
+import { useState, useEffect, useMemo, useRef } from "react";
 import {
   Dialog,
   DialogContent,
@@ -66,6 +66,7 @@ export function CreatePurchaseReturnDialog({
   const [notes, setNotes] = useState("");
   const [errors, setErrors] = useState<Record<string, string>>({});
   const [saving, setSaving] = useState(false);
+  const saveLockRef = useRef(false);
 
   useEffect(() => {
     if (open) {
@@ -157,7 +158,9 @@ export function CreatePurchaseReturnDialog({
   }
 
   async function handleSave() {
+    if (saveLockRef.current) return;
     if (!validate()) return;
+    saveLockRef.current = true;
     setSaving(true);
     try {
       const realCode = await nextEntityCode("purchase_return");
@@ -188,6 +191,7 @@ export function CreatePurchaseReturnDialog({
         variant: "error",
       });
     } finally {
+      saveLockRef.current = false;
       setSaving(false);
     }
   }

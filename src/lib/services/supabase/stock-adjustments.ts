@@ -83,6 +83,9 @@ export async function applyManualStockMovement(
   if (smErr) handleError(smErr, "applyManualStockMovement:movements");
 
   // 2 + 3. Update products.stock and branch_stock per item
+  // FIX: Use SQL atomic increment (`stock = stock + delta`) instead of
+  // read-compute-write to prevent race conditions when two concurrent
+  // mutations operate on the same product.
   for (const item of inputs) {
     const delta =
       item.type === "in" ? item.quantity
@@ -90,55 +93,23 @@ export async function applyManualStockMovement(
       : 0; // 'adjust' is a no-op for delta math
     if (delta === 0) continue;
 
-    // 2. products.stock (company-wide snapshot)
-    const { data: product, error: selErr } = await supabase
-      .from("products")
-      .select("stock")
-      .eq("id", item.productId)
-      .single();
-    if (selErr) handleError(selErr, "applyManualStockMovement:product_select");
-    if (!product) continue;
-
-    const nextStock = (product.stock ?? 0) + delta;
-    const { error: updErr } = await supabase
-      .from("products")
-      // eslint-disable-next-line @typescript-eslint/no-explicit-any
-      .update({ stock: nextStock } as any)
-      .eq("id", item.productId);
+    // 2. products.stock — atomic SQL increment via RPC
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    const { error: updErr } = await (supabase.rpc as any)("increment_product_stock", {
+      p_product_id: item.productId,
+      p_delta: delta,
+    });
     if (updErr) handleError(updErr, "applyManualStockMovement:product_update");
 
-    // 3. branch_stock (per-branch snapshot) — resilient insert/update
-    const { data: bsRow, error: bsSelErr } = await supabase
-      .from("branch_stock")
-      .select("id, quantity")
-      .eq("branch_id", resolved.branchId)
-      .eq("product_id", item.productId)
-      .is("variant_id", null)
-      .maybeSingle();
-    if (bsSelErr) handleError(bsSelErr, "applyManualStockMovement:branch_stock_select");
-
-    if (bsRow) {
-      const nextBranchQty = (bsRow.quantity ?? 0) + delta;
-      const { error: bsUpdErr } = await supabase
-        .from("branch_stock")
-        .update({
-          quantity: nextBranchQty,
-          updated_at: new Date().toISOString(),
-        })
-        .eq("id", bsRow.id);
-      if (bsUpdErr) handleError(bsUpdErr, "applyManualStockMovement:branch_stock_update");
-    } else {
-      const { error: bsInsErr } = await supabase
-        .from("branch_stock")
-        .insert({
-          tenant_id: resolved.tenantId,
-          branch_id: resolved.branchId,
-          product_id: item.productId,
-          quantity: delta,
-          reserved: 0,
-        });
-      if (bsInsErr) handleError(bsInsErr, "applyManualStockMovement:branch_stock_insert");
-    }
+    // 3. branch_stock — atomic upsert via RPC
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    const { error: bsErr } = await (supabase.rpc as any)("upsert_branch_stock", {
+      p_tenant_id: resolved.tenantId,
+      p_branch_id: resolved.branchId,
+      p_product_id: item.productId,
+      p_delta: delta,
+    });
+    if (bsErr) handleError(bsErr, "applyManualStockMovement:branch_stock");
   }
 }
 

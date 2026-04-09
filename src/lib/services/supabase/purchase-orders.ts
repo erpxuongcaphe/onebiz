@@ -177,21 +177,31 @@ export async function updatePurchaseOrderStatus(
 export async function receivePurchaseOrder(orderId: string): Promise<void> {
   const supabase = getClient();
 
-  // 1. Read PO + status guard
-  const { data: po, error: poErr } = await supabase
+  // 1. ATOMIC status flip — claim this PO as "being received" by flipping
+  //    status to 'completed' FIRST. If two concurrent calls race, only one
+  //    will match the WHERE clause and succeed. The loser gets 0 rows updated
+  //    and bails out, preventing double stock-in.
+  const { data: claimed, error: claimErr } = await supabase
     .from("purchase_orders")
-    .select("id, code, status, supplier_id")
+    .update({ status: "completed" as PurchaseOrderStatus } as Record<string, unknown>)
     .eq("id", orderId)
-    .single();
-  if (poErr) handleError(poErr, "receivePurchaseOrder.read");
-  if (!po) throw new Error("Không tìm thấy đơn nhập hàng");
-
-  const fromStatus = po.status as PurchaseOrderStatus;
-  if (fromStatus !== "ordered" && fromStatus !== "partial") {
+    .in("status", ["ordered", "partial"])
+    .select("id, code, status, supplier_id")
+    .maybeSingle();
+  if (claimErr) handleError(claimErr, "receivePurchaseOrder.claim");
+  if (!claimed) {
+    // Either not found, or already completed/cancelled by another call
+    const { data: existing } = await supabase
+      .from("purchase_orders")
+      .select("status")
+      .eq("id", orderId)
+      .single();
+    if (!existing) throw new Error("Không tìm thấy đơn nhập hàng");
     throw new Error(
-      `Chỉ có thể nhập hàng khi đơn đang ở trạng thái "đã đặt" hoặc "nhập một phần" (hiện tại: ${fromStatus})`
+      `Đơn nhập hàng đã được xử lý (trạng thái: ${existing.status}). Không thể nhập lại.`
     );
   }
+  const po = claimed;
 
   // 2. Read PO items
   const { data: items, error: itemsErr } = await supabase
@@ -216,13 +226,7 @@ export async function receivePurchaseOrder(orderId: string): Promise<void> {
     .filter((it) => it.remaining > 0);
 
   if (pending.length === 0) {
-    // All items already received — just flip status
-    const { error: flipErr } = await supabase
-      .from("purchase_orders")
-      // eslint-disable-next-line @typescript-eslint/no-explicit-any
-      .update({ status: "completed" as any })
-      .eq("id", orderId);
-    if (flipErr) handleError(flipErr, "receivePurchaseOrder.flip");
+    // All items already received — status already flipped at step 1.
     return;
   }
 
@@ -274,13 +278,8 @@ export async function receivePurchaseOrder(orderId: string): Promise<void> {
     if (updErr) handleError(updErr, "receivePurchaseOrder.item_update");
   }
 
-  // 6. Flip PO status to completed
-  const { error: statusErr } = await supabase
-    .from("purchase_orders")
-    // eslint-disable-next-line @typescript-eslint/no-explicit-any
-    .update({ status: "completed" as any })
-    .eq("id", orderId);
-  if (statusErr) handleError(statusErr, "receivePurchaseOrder.status");
+  // 6. Status already flipped to 'completed' at step 1 (atomic claim).
+  //    No further status update needed.
 }
 
 /* ------------------------------------------------------------------ */

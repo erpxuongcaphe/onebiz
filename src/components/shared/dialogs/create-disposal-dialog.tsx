@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useEffect } from "react";
+import { useState, useEffect, useRef } from "react";
 import {
   Dialog,
   DialogContent,
@@ -64,6 +64,7 @@ export function CreateDisposalDialog({
   const [notes, setNotes] = useState("");
   const [errors, setErrors] = useState<Record<string, string>>({});
   const [saving, setSaving] = useState(false);
+  const saveLockRef = useRef(false);
 
   useEffect(() => {
     if (open) {
@@ -140,7 +141,9 @@ export function CreateDisposalDialog({
   }
 
   async function handleSave() {
+    if (saveLockRef.current) return;
     if (!validate()) return;
+    saveLockRef.current = true;
     setSaving(true);
     try {
       const realCode = await nextEntityCode("disposal");
@@ -170,6 +173,7 @@ export function CreateDisposalDialog({
         variant: "error",
       });
     } finally {
+      saveLockRef.current = false;
       setSaving(false);
     }
   }

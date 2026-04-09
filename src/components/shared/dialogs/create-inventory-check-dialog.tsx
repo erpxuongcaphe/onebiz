@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useEffect } from "react";
+import { useState, useEffect, useRef } from "react";
 import {
   Dialog,
   DialogContent,
@@ -38,6 +38,7 @@ export function CreateInventoryCheckDialog({
   const [notes, setNotes] = useState("");
   const [errors, setErrors] = useState<Record<string, string>>({});
   const [saving, setSaving] = useState(false);
+  const saveLockRef = useRef(false);
 
   useEffect(() => {
     if (open) {
@@ -56,7 +57,9 @@ export function CreateInventoryCheckDialog({
   }
 
   async function handleSave() {
+    if (saveLockRef.current) return;
     if (!validate()) return;
+    saveLockRef.current = true;
     setSaving(true);
     try {
       const supabase = getClient();
@@ -91,6 +94,7 @@ export function CreateInventoryCheckDialog({
         variant: "error",
       });
     } finally {
+      saveLockRef.current = false;
       setSaving(false);
     }
   }
