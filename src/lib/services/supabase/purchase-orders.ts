@@ -278,7 +278,39 @@ export async function receivePurchaseOrder(orderId: string): Promise<void> {
     if (updErr) handleError(updErr, "receivePurchaseOrder.item_update");
   }
 
-  // 6. Status already flipped to 'completed' at step 1 (atomic claim).
+  // 6. Auto-create input invoice (hóa đơn đầu vào) — Sprint 6 "Cầu Nối"
+  const totalPO = pending.reduce(
+    (s, it) => s + it.remaining * it.unitPrice,
+    0
+  );
+  if (totalPO > 0) {
+    const { data: invCode, error: invCodeErr } = await supabase.rpc("next_code", {
+      p_tenant_id: ctx.tenantId,
+      p_entity_type: "input_invoice",
+    });
+    if (invCodeErr) handleError(invCodeErr, "receivePurchaseOrder.input_invoice_code");
+    const inputInvoiceCode = invCode ?? `HDV${Date.now()}`;
+
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    const { error: iiErr } = await (supabase as any)
+      .from("input_invoices")
+      .insert({
+        tenant_id: ctx.tenantId,
+        branch_id: ctx.branchId,
+        code: inputInvoiceCode,
+        supplier_id: po.supplier_id ?? null,
+        supplier_name: "", // will be filled by trigger or display logic
+        total_amount: totalPO,
+        tax_amount: 0,
+        status: "unrecorded",
+        purchase_order_id: orderId,
+        note: `Tạo tự động khi nhập hàng ${po.code}`,
+        created_by: ctx.userId,
+      });
+    if (iiErr) handleError(iiErr, "receivePurchaseOrder.input_invoice");
+  }
+
+  // 7. Status already flipped to 'completed' at step 1 (atomic claim).
   //    No further status update needed.
 }
 

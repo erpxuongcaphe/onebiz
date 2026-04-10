@@ -11,6 +11,8 @@ import {
   ClipboardList,
   Globe,
   CalendarCheck,
+  FileText,
+  AlertTriangle,
 } from "lucide-react";
 import {
   ModuleSidebarLayout,
@@ -24,6 +26,8 @@ const analyticsNav: ModuleNavGroup[] = [
       { label: "Tổng quan", href: "/phan-tich", icon: BarChart3, exact: true },
       { label: "Cuối ngày", href: "/phan-tich/cuoi-ngay", icon: CalendarCheck },
       { label: "Tài chính", href: "/phan-tich/tai-chinh", icon: Wallet },
+      { label: "Báo cáo P&L", href: "/phan-tich/bao-cao-tai-chinh", icon: FileText },
+      { label: "Cảnh báo", href: "/phan-tich/canh-bao", icon: AlertTriangle },
     ],
   },
   {

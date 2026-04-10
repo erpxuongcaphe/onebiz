@@ -3,9 +3,8 @@
  *
  * Two responsibilities:
  *
- *   1. Legacy: re-export `getOrders` / `getOrderStatuses` from mocks —
- *      a dedicated `sales_orders` table doesn't exist yet. Listing pages
- *      still hit those mocks.
+ *   1. `getOrders` / `getOrderStatuses` — real Supabase queries against
+ *      the `sales_orders` table (migration 00012).
  *
  *   2. NEW (POS sprint): thin wrapper around `posCheckout` plus draft
  *      order management. POS uses the existing `invoices` + `invoice_items`
@@ -19,7 +18,8 @@
  *      - `posCheckout`         (re-export — F10 on a fresh cart)
  */
 
-import { getClient, handleError } from "./base";
+import type { SalesOrder, QueryParams, QueryResult } from "@/lib/types";
+import { getClient, getPaginationRange, handleError } from "./base";
 import {
   posCheckout,
   applyStockDecrement,
@@ -34,9 +34,245 @@ type InvoiceInsert = Database["public"]["Tables"]["invoices"]["Insert"];
 type InvoiceItemInsert = Database["public"]["Tables"]["invoice_items"]["Insert"];
 
 // ============================================================
-// Legacy mock re-export (kept for listing pages)
+// Sales Orders — real Supabase queries against `sales_orders`
 // ============================================================
-export { getOrders, getOrderStatuses } from "../mock/orders";
+
+const STATUS_LABEL: Record<string, string> = {
+  new: "Mới",
+  confirmed: "Đã xác nhận",
+  delivering: "Đang giao",
+  completed: "Hoàn thành",
+  cancelled: "Đã hủy",
+};
+
+export async function getOrders(
+  params: QueryParams
+): Promise<QueryResult<SalesOrder>> {
+  const supabase = getClient();
+  const { from, to } = getPaginationRange(params);
+
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  let query = (supabase as any)
+    .from("sales_orders")
+    .select("*", { count: "exact" });
+
+  // Search by code or customer_name
+  if (params.search) {
+    query = query.or(
+      `code.ilike.%${params.search}%,customer_name.ilike.%${params.search}%`
+    );
+  }
+
+  // Filter: status
+  if (params.filters?.status && params.filters.status !== "all") {
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    query = query.eq("status", params.filters.status as any);
+  }
+
+  // Sort & paginate
+  query = query
+    .order("created_at", { ascending: false })
+    .range(from, to);
+
+  const { data, count, error } = await query;
+  if (error) handleError(error, "getOrders");
+
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  const orders: SalesOrder[] = (data ?? []).map((row: any) => ({
+    id: row.id,
+    code: row.code,
+    date: row.created_at,
+    customerName: row.customer_name ?? "",
+    customerPhone: row.customer_phone ?? "",
+    totalAmount: row.total ?? 0,
+    status: row.status,
+    statusName: STATUS_LABEL[row.status] ?? row.status,
+    createdBy: row.created_by ?? "---",
+  }));
+
+  return { data: orders, total: count ?? 0 };
+}
+
+export function getOrderStatuses() {
+  return [
+    { value: "all", label: "Tất cả" },
+    { value: "new", label: "Mới" },
+    { value: "confirmed", label: "Đã xác nhận" },
+    { value: "delivering", label: "Đang giao" },
+    { value: "completed", label: "Hoàn thành" },
+    { value: "cancelled", label: "Đã hủy" },
+  ];
+}
+
+// ============================================================
+// Complete Sales Order → auto Invoice + Stock + Cash
+// ============================================================
+
+/**
+ * Hoàn thành đơn hàng bán (sales_orders):
+ *   1. Atomic claim: UPDATE status='completed' WHERE status IN (confirmed, delivering)
+ *   2. Load sales_order_items
+ *   3. Create invoice (completed) + invoice_items
+ *   4. Decrement stock via applyStockDecrement
+ *   5. Create cash receipt via createAutoCashReceipt
+ *
+ * Kết quả: 1 sales order → 1 invoice + stock trừ + sổ quỹ ghi phiếu thu.
+ */
+export async function completeSalesOrder(
+  orderId: string
+): Promise<{ invoiceId: string; invoiceCode: string }> {
+  const supabase = getClient();
+
+  // 1. ATOMIC claim — flip sales_order status
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  const sb = supabase as any;
+  const { data: claimed, error: claimErr } = await sb
+    .from("sales_orders")
+    .update({ status: "completed" })
+    .eq("id", orderId)
+    .in("status", ["confirmed", "delivering"])
+    .select("id, code, customer_id, customer_name, total, tenant_id, branch_id, created_by")
+    .maybeSingle();
+  if (claimErr) handleError(claimErr, "completeSalesOrder:claim");
+  if (!claimed) {
+    const { data: existing } = await sb
+      .from("sales_orders")
+      .select("status")
+      .eq("id", orderId)
+      .single();
+    if (!existing) throw new Error("Không tìm thấy đơn hàng bán");
+    throw new Error(
+      `Đơn hàng đã được xử lý (trạng thái: ${existing.status}). Không thể hoàn tất lại.`
+    );
+  }
+  const order = claimed;
+
+  // 2. Load sales_order_items
+  const { data: soItems, error: soItemsErr } = await sb
+    .from("sales_order_items")
+    .select("id, product_id, product_name, unit, quantity, unit_price, discount, total")
+    .eq("order_id", orderId);
+  if (soItemsErr) handleError(soItemsErr, "completeSalesOrder:items");
+  if (!soItems || soItems.length === 0) {
+    throw new Error("Đơn hàng không có sản phẩm nào");
+  }
+
+  // 3. Create invoice (completed)
+  const { data: invCode, error: codeErr } = await supabase.rpc("next_code", {
+    p_tenant_id: order.tenant_id,
+    p_entity_type: "invoice",
+  });
+  if (codeErr) handleError(codeErr, "completeSalesOrder:invoice_code");
+  const invoiceCode = invCode ?? `HD${Date.now()}`;
+
+  const totalAmount = Number(order.total ?? 0);
+
+  const invoiceData: InvoiceInsert = {
+    tenant_id: order.tenant_id,
+    branch_id: order.branch_id,
+    code: invoiceCode,
+    customer_id: order.customer_id ?? null,
+    customer_name: order.customer_name || "Khách lẻ",
+    status: "completed",
+    subtotal: totalAmount,
+    discount_amount: 0,
+    total: totalAmount,
+    paid: totalAmount,
+    debt: 0,
+    payment_method: "cash",
+    note: `Tạo tự động từ đơn hàng ${order.code}`,
+    created_by: order.created_by,
+  };
+
+  const { data: invoice, error: invErr } = await supabase
+    .from("invoices")
+    .insert(invoiceData)
+    .select("id, code")
+    .single();
+  if (invErr) handleError(invErr, "completeSalesOrder:invoice_insert");
+  if (!invoice) throw new Error("Không tạo được hóa đơn");
+
+  // 4. Create invoice_items from SO items
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  const invoiceItems: InvoiceItemInsert[] = (soItems as any[]).map((it: any) => ({
+    invoice_id: invoice.id,
+    product_id: it.product_id,
+    product_name: it.product_name ?? "",
+    unit: it.unit ?? "Cái",
+    quantity: Number(it.quantity ?? 0),
+    unit_price: Number(it.unit_price ?? 0),
+    discount: Number(it.discount ?? 0),
+    total: Number(it.total ?? 0),
+  }));
+
+  const { error: iiErr } = await supabase.from("invoice_items").insert(invoiceItems);
+  if (iiErr) handleError(iiErr, "completeSalesOrder:invoice_items");
+
+  // 5. Decrement stock
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  const checkoutItems: PosCheckoutItem[] = (soItems as any[]).map((it: any) => ({
+    productId: it.product_id,
+    productName: it.product_name ?? "",
+    unit: it.unit ?? "Cái",
+    quantity: Number(it.quantity ?? 0),
+    unitPrice: Number(it.unit_price ?? 0),
+    discount: Number(it.discount ?? 0),
+  }));
+
+  await applyStockDecrement(supabase, invoice.id, checkoutItems, {
+    tenantId: order.tenant_id,
+    branchId: order.branch_id,
+    createdBy: order.created_by,
+    invoiceCode: invoice.code,
+  });
+
+  // 6. Auto cash receipt
+  await createAutoCashReceipt(
+    supabase,
+    invoice.id,
+    invoice.code,
+    totalAmount,
+    "cash",
+    {
+      tenantId: order.tenant_id,
+      branchId: order.branch_id,
+      createdBy: order.created_by,
+      customerName: order.customer_name || "Khách lẻ",
+    }
+  );
+
+  return { invoiceId: invoice.id, invoiceCode: invoice.code };
+}
+
+// ============================================================
+// Cancel Sales Order
+// ============================================================
+
+export async function cancelSalesOrder(orderId: string): Promise<void> {
+  const supabase = getClient();
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  const sb = supabase as any;
+
+  const { data: claimed, error: claimErr } = await sb
+    .from("sales_orders")
+    .update({ status: "cancelled" })
+    .eq("id", orderId)
+    .in("status", ["new", "confirmed"])
+    .select("id")
+    .maybeSingle();
+  if (claimErr) handleError(claimErr, "cancelSalesOrder");
+  if (!claimed) {
+    const { data: existing } = await sb
+      .from("sales_orders")
+      .select("status")
+      .eq("id", orderId)
+      .single();
+    if (!existing) throw new Error("Không tìm thấy đơn hàng bán");
+    throw new Error(
+      `Không thể hủy đơn ở trạng thái "${existing.status}".`
+    );
+  }
+}
 
 // ============================================================
 // Re-export from pos-checkout for convenience
@@ -263,6 +499,8 @@ export async function completeDraftOrder(
     tenantId: string;
     branchId: string;
     createdBy: string;
+    /** Tách thanh toán hỗn hợp — truyền khi method="mixed" */
+    paymentBreakdown?: import("./pos-checkout").PaymentBreakdownItem[];
   }
 ): Promise<{ invoiceCode: string }> {
   const supabase = getClient();
@@ -335,7 +573,7 @@ export async function completeDraftOrder(
     invoiceCode: invoice.code,
   });
 
-  // 5. Cash transaction
+  // 5. Cash transaction — hỗ trợ tách thanh toán hỗn hợp
   await createAutoCashReceipt(
     supabase,
     invoiceId,
@@ -347,7 +585,8 @@ export async function completeDraftOrder(
       branchId: payment.branchId,
       createdBy: payment.createdBy,
       customerName: invoice.customer_name ?? "Khách lẻ",
-    }
+    },
+    payment.paymentBreakdown
   );
 
   return { invoiceCode: invoice.code };

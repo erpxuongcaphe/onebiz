@@ -13,10 +13,20 @@ import {
   SelectFilter,
   DateRangeFilter,
 } from "@/components/shared/filter-sidebar";
+import {
+  InlineDetailPanel,
+  DetailTabs,
+  DetailHeader,
+  DetailInfoGrid,
+} from "@/components/shared/inline-detail-panel";
+import type { DetailTab } from "@/components/shared/inline-detail-panel";
 import { formatCurrency, formatDate } from "@/lib/format";
 import { getPurchaseReturns, getPurchaseReturnStatuses } from "@/lib/services";
 import type { PurchaseReturn } from "@/lib/types";
 import { CreatePurchaseReturnDialog } from "@/components/shared/dialogs";
+import { useToast } from "@/lib/contexts";
+import { printDocument } from "@/lib/print-document";
+import { buildPurchaseReturnPrintData } from "@/lib/print-templates";
 
 // === Status config ===
 const statusMap: Record<
@@ -28,6 +38,70 @@ const statusMap: Record<
 };
 
 const statusOptions = getPurchaseReturnStatuses();
+
+// === Inline Detail ===
+function PurchaseReturnDetail({
+  item,
+  onClose,
+}: {
+  item: PurchaseReturn;
+  onClose: () => void;
+}) {
+  const st = statusMap[item.status];
+  const tabs: DetailTab[] = [
+    {
+      id: "info",
+      label: "Thông tin",
+      content: (
+        <div className="space-y-4">
+          <DetailHeader
+            title={`Trả hàng nhập ${item.code}`}
+            code={item.code}
+            status={{ label: st.label, variant: st.variant }}
+            subtitle="Chi nhánh trung tâm"
+            meta={
+              <div className="flex items-center gap-4 flex-wrap text-xs">
+                <span>
+                  Người tạo: <strong>{item.createdBy}</strong>
+                </span>
+                <span>
+                  Ngày tạo: <strong>{formatDate(item.date)}</strong>
+                </span>
+              </div>
+            }
+          />
+          <DetailInfoGrid
+            fields={[
+              { label: "Mã trả hàng", value: item.code },
+              { label: "Ngày trả", value: formatDate(item.date) },
+              { label: "Mã nhập hàng", value: item.importCode },
+              { label: "Nhà cung cấp", value: item.supplierName },
+              { label: "Tổng tiền trả", value: formatCurrency(item.totalAmount) },
+              { label: "Trạng thái", value: st.label },
+              { label: "Người tạo", value: item.createdBy },
+            ]}
+          />
+        </div>
+      ),
+    },
+    {
+      id: "history",
+      label: "Lịch sử",
+      content: (
+        <div className="text-sm text-muted-foreground py-4 text-center">
+          Chưa có lịch sử thay đổi
+        </div>
+      ),
+    },
+  ];
+  return (
+    <InlineDetailPanel open onClose={onClose}>
+      <div className="p-4 space-y-4">
+        <DetailTabs tabs={tabs} defaultTab="info" />
+      </div>
+    </InlineDetailPanel>
+  );
+}
 
 // === Columns ===
 const columns: ColumnDef<PurchaseReturn, unknown>[] = [
@@ -80,6 +154,7 @@ const columns: ColumnDef<PurchaseReturn, unknown>[] = [
 ];
 
 export default function TraHangNhapPage() {
+  const { toast } = useToast();
   const [data, setData] = useState<PurchaseReturn[]>([]);
   const [total, setTotal] = useState(0);
   const [loading, setLoading] = useState(true);
@@ -87,6 +162,7 @@ export default function TraHangNhapPage() {
   const [page, setPage] = useState(0);
   const [pageSize, setPageSize] = useState(20);
   const [createOpen, setCreateOpen] = useState(false);
+  const [expandedRow, setExpandedRow] = useState<number | null>(null);
 
   // Filters
   const [statusFilter, setStatusFilter] = useState("all");
@@ -113,6 +189,7 @@ export default function TraHangNhapPage() {
 
   useEffect(() => {
     setPage(0);
+    setExpandedRow(null);
   }, [search, statusFilter]);
 
   return (
@@ -161,9 +238,21 @@ export default function TraHangNhapPage() {
           setPage(0);
         }}
         selectable
+        expandedRow={expandedRow}
+        onExpandedRowChange={setExpandedRow}
+        renderDetail={(item, onClose) => (
+          <PurchaseReturnDetail item={item} onClose={onClose} />
+        )}
         rowActions={(row) => [
-          { label: "Xem chi tiết", icon: <Eye className="h-4 w-4" />, onClick: () => {} },
-          { label: "In phiếu", icon: <Printer className="h-4 w-4" />, onClick: () => {} },
+          {
+            label: "Xem chi tiết",
+            icon: <Eye className="h-4 w-4" />,
+            onClick: () => {
+              const idx = data.findIndex((d) => d.id === row.id);
+              setExpandedRow(expandedRow === idx ? null : idx);
+            },
+          },
+          { label: "In phiếu", icon: <Printer className="h-4 w-4" />, onClick: () => printDocument(buildPurchaseReturnPrintData(row)) },
         ]}
       />
 

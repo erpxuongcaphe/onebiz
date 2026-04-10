@@ -22,10 +22,11 @@ import {
   DetailInfoGrid,
 } from "@/components/shared/inline-detail-panel";
 import type { DetailTab } from "@/components/shared/inline-detail-panel";
-import { CreateCustomerDialog } from "@/components/shared/dialogs";
+import { CreateCustomerDialog, ConfirmDialog } from "@/components/shared/dialogs";
+import { useToast } from "@/lib/contexts";
 import { formatCurrency, formatDate } from "@/lib/format";
 import { exportToExcel, exportToCsv } from "@/lib/utils/export";
-import { getCustomers, getCustomerGroups } from "@/lib/services";
+import { getCustomers, getCustomerGroups, deleteCustomer } from "@/lib/services";
 import type { Customer } from "@/lib/types";
 
 /* ------------------------------------------------------------------ */
@@ -47,6 +48,7 @@ function useStarredSet() {
 /*  Page                                                               */
 /* ------------------------------------------------------------------ */
 export default function KhachHangPage() {
+  const { toast } = useToast();
   const [data, setData] = useState<Customer[]>([]);
   const [total, setTotal] = useState(0);
   const [loading, setLoading] = useState(true);
@@ -69,6 +71,11 @@ export default function KhachHangPage() {
 
   // Dialog
   const [createOpen, setCreateOpen] = useState(false);
+  const [editingCustomer, setEditingCustomer] = useState<Customer | null>(null);
+
+  // Delete
+  const [deletingCustomer, setDeletingCustomer] = useState<Customer | null>(null);
+  const [deleteLoading, setDeleteLoading] = useState(false);
 
   // Stars
   const { starred, toggle: toggleStar } = useStarredSet();
@@ -92,7 +99,7 @@ export default function KhachHangPage() {
     },
     {
       accessorKey: "code",
-      header: "Ma KH",
+      header: "Mã KH",
       size: 110,
       cell: ({ row }) => (
         <span className="font-medium text-primary">{row.original.code}</span>
@@ -100,17 +107,17 @@ export default function KhachHangPage() {
     },
     {
       accessorKey: "name",
-      header: "Ten KH",
+      header: "Tên KH",
       size: 240,
     },
     {
       accessorKey: "phone",
-      header: "Dien thoai",
+      header: "Điện thoại",
       size: 130,
     },
     {
       accessorKey: "currentDebt",
-      header: "No hien tai",
+      header: "Nợ hiện tại",
       cell: ({ row }) => {
         const debt = row.original.currentDebt;
         return (
@@ -126,12 +133,12 @@ export default function KhachHangPage() {
     },
     {
       accessorKey: "totalSales",
-      header: "Tong ban",
+      header: "Tổng bán",
       cell: ({ row }) => formatCurrency(row.original.totalSales),
     },
     {
       accessorKey: "totalSalesMinusReturns",
-      header: "Tong ban tru tra hang",
+      header: "Tổng bán trừ trả hàng",
       cell: ({ row }) => formatCurrency(row.original.totalSalesMinusReturns),
     },
   ];
@@ -184,13 +191,13 @@ export default function KhachHangPage() {
   /* ---- Export ---- */
   const handleExport = (type: "excel" | "csv") => {
     const exportColumns = [
-      { header: "Ma KH", key: "code", width: 12 },
-      { header: "Ten khach hang", key: "name", width: 25 },
-      { header: "SDT", key: "phone", width: 15 },
+      { header: "Mã KH", key: "code", width: 12 },
+      { header: "Tên khách hàng", key: "name", width: 25 },
+      { header: "SĐT", key: "phone", width: 15 },
       { header: "Email", key: "email", width: 25 },
-      { header: "No hien tai", key: "currentDebt", width: 15, format: (v: number) => v },
-      { header: "Tong ban", key: "totalSales", width: 15, format: (v: number) => v },
-      { header: "Nhom", key: "groupName", width: 20 },
+      { header: "Nợ hiện tại", key: "currentDebt", width: 15, format: (v: number) => v },
+      { header: "Tổng bán", key: "totalSales", width: 15, format: (v: number) => v },
+      { header: "Nhóm", key: "groupName", width: 20 },
     ];
     if (type === "excel") exportToExcel(data, exportColumns, "danh-sach-khach-hang");
     else exportToCsv(data, exportColumns, "danh-sach-khach-hang");
@@ -201,62 +208,62 @@ export default function KhachHangPage() {
     const tabs: DetailTab[] = [
       {
         id: "info",
-        label: "Thong tin",
+        label: "Thông tin",
         content: (
           <DetailInfoGrid
             columns={3}
             fields={[
-              { label: "Ma khach hang", value: customer.code },
-              { label: "Ten khach hang", value: customer.name },
-              { label: "Dien thoai", value: customer.phone },
+              { label: "Mã khách hàng", value: customer.code },
+              { label: "Tên khách hàng", value: customer.name },
+              { label: "Điện thoại", value: customer.phone },
               { label: "Email", value: customer.email || "" },
-              { label: "Dia chi", value: customer.address || "", fullWidth: true },
-              { label: "Nhom khach hang", value: customer.groupName || "" },
+              { label: "Địa chỉ", value: customer.address || "", fullWidth: true },
+              { label: "Nhóm khách hàng", value: customer.groupName || "" },
               {
-                label: "Loai khach hang",
-                value: customer.type === "company" ? "Cong ty" : "Ca nhan",
+                label: "Loại khách hàng",
+                value: customer.type === "company" ? "Công ty" : "Cá nhân",
               },
               {
-                label: "Gioi tinh",
+                label: "Giới tính",
                 value:
                   customer.gender === "male"
                     ? "Nam"
                     : customer.gender === "female"
-                      ? "Nu"
+                      ? "Nữ"
                       : "",
               },
-              { label: "Ngay tao", value: formatDate(customer.createdAt) },
+              { label: "Ngày tạo", value: formatDate(customer.createdAt) },
             ]}
           />
         ),
       },
       {
         id: "address",
-        label: "Dia chi nhan hang",
+        label: "Địa chỉ nhận hàng",
         content: (
           <div className="text-sm text-muted-foreground py-4">
-            {customer.address || "Chua co dia chi nhan hang nao."}
+            {customer.address || "Chưa có địa chỉ nhận hàng nào."}
           </div>
         ),
       },
       {
         id: "sales-history",
-        label: "Lich su ban/tra hang",
+        label: "Lịch sử bán/trả hàng",
         content: (
           <div className="text-sm text-muted-foreground py-4">
-            Chua co lich su ban/tra hang.
+            Chưa có lịch sử bán/trả hàng.
           </div>
         ),
       },
       {
         id: "debt",
-        label: "No can thu tu khach",
+        label: "Nợ cần thu từ khách",
         content: (
           <DetailInfoGrid
             columns={2}
             fields={[
               {
-                label: "No hien tai",
+                label: "Nợ hiện tại",
                 value: (
                   <span
                     className={
@@ -270,7 +277,7 @@ export default function KhachHangPage() {
                 ),
               },
               {
-                label: "Tong ban",
+                label: "Tổng bán",
                 value: formatCurrency(customer.totalSales),
               },
             ]}
@@ -279,10 +286,10 @@ export default function KhachHangPage() {
       },
       {
         id: "points",
-        label: "Lich su tich diem",
+        label: "Lịch sử tích điểm",
         content: (
           <div className="text-sm text-muted-foreground py-4">
-            Chua co lich su tich diem.
+            Chưa có lịch sử tích điểm.
           </div>
         ),
       },
@@ -297,7 +304,7 @@ export default function KhachHangPage() {
             subtitle={customer.groupName}
             meta={
               <span>
-                Ngay tao: {formatDate(customer.createdAt)}
+                Ngày tạo: {formatDate(customer.createdAt)}
               </span>
             }
           />
@@ -313,7 +320,7 @@ export default function KhachHangPage() {
       <ListPageLayout
         sidebar={
           <FilterSidebar>
-            <FilterGroup label="Nhom khach hang">
+            <FilterGroup label="Nhóm khách hàng">
               <CheckboxFilter
                 options={customerGroups}
                 selected={selectedGroups}
@@ -321,31 +328,31 @@ export default function KhachHangPage() {
               />
             </FilterGroup>
 
-            <FilterGroup label="Loai khach hang">
+            <FilterGroup label="Loại khách hàng">
               <ChipToggleFilter
                 options={[
-                  { label: "Tat ca", value: "all" },
-                  { label: "Ca nhan", value: "individual" },
-                  { label: "Cong ty", value: "company" },
+                  { label: "Tất cả", value: "all" },
+                  { label: "Cá nhân", value: "individual" },
+                  { label: "Công ty", value: "company" },
                 ]}
                 value={typeFilter}
                 onChange={setTypeFilter}
               />
             </FilterGroup>
 
-            <FilterGroup label="Gioi tinh">
+            <FilterGroup label="Giới tính">
               <ChipToggleFilter
                 options={[
-                  { label: "Tat ca", value: "all" },
+                  { label: "Tất cả", value: "all" },
                   { label: "Nam", value: "male" },
-                  { label: "Nu", value: "female" },
+                  { label: "Nữ", value: "female" },
                 ]}
                 value={genderFilter}
                 onChange={setGenderFilter}
               />
             </FilterGroup>
 
-            <FilterGroup label="Thoi gian">
+            <FilterGroup label="Thời gian">
               <DatePresetFilter
                 value={datePreset}
                 onChange={setDatePreset}
@@ -354,25 +361,25 @@ export default function KhachHangPage() {
                 onFromChange={setDateFrom}
                 onToChange={setDateTo}
                 presets={[
-                  { label: "Tat ca", value: "all" },
-                  { label: "Hom nay", value: "today" },
-                  { label: "Hom qua", value: "yesterday" },
-                  { label: "Tuan nay", value: "this_week" },
-                  { label: "Thang nay", value: "this_month" },
-                  { label: "Thang truoc", value: "last_month" },
-                  { label: "Tuy chinh", value: "custom" },
+                  { label: "Tất cả", value: "all" },
+                  { label: "Hôm nay", value: "today" },
+                  { label: "Hôm qua", value: "yesterday" },
+                  { label: "Tuần này", value: "this_week" },
+                  { label: "Tháng này", value: "this_month" },
+                  { label: "Tháng trước", value: "last_month" },
+                  { label: "Tùy chỉnh", value: "custom" },
                 ]}
               />
             </FilterGroup>
 
-            <FilterGroup label="Nguoi tao">
+            <FilterGroup label="Người tạo">
               <PersonFilter
                 value={creatorFilter}
                 onChange={setCreatorFilter}
-                placeholder="Chon nguoi tao"
+                placeholder="Chọn người tạo"
                 suggestions={[
                   { label: "Admin", value: "admin" },
-                  { label: "Cao Thi Huyen Trang", value: "trang" },
+                  { label: "Cao Thị Huyền Trang", value: "trang" },
                 ]}
               />
             </FilterGroup>
@@ -380,8 +387,8 @@ export default function KhachHangPage() {
         }
       >
         <PageHeader
-          title="Khach hang"
-          searchPlaceholder="Theo ma, ten, SDT"
+          title="Khách hàng"
+          searchPlaceholder="Theo mã, tên, SĐT"
           searchValue={search}
           onSearchChange={setSearch}
           onExport={{
@@ -390,7 +397,7 @@ export default function KhachHangPage() {
           }}
           actions={[
             {
-              label: "Tao moi",
+              label: "Tạo mới",
               icon: <Plus className="h-4 w-4" />,
               variant: "default",
               onClick: () => setCreateOpen(true),
@@ -424,14 +431,17 @@ export default function KhachHangPage() {
           getRowId={(row) => row.id}
           rowActions={(row) => [
             {
-              label: "Sua",
+              label: "Sửa",
               icon: <Pencil className="h-4 w-4" />,
-              onClick: () => {},
+              onClick: () => {
+                setEditingCustomer(row);
+                setCreateOpen(true);
+              },
             },
             {
-              label: "Xoa",
+              label: "Xóa",
               icon: <Trash2 className="h-4 w-4" />,
-              onClick: () => {},
+              onClick: () => setDeletingCustomer(row),
               variant: "destructive",
               separator: true,
             },
@@ -441,8 +451,36 @@ export default function KhachHangPage() {
 
       <CreateCustomerDialog
         open={createOpen}
-        onOpenChange={setCreateOpen}
+        onOpenChange={(open) => {
+          setCreateOpen(open);
+          if (!open) setEditingCustomer(null);
+        }}
         onSuccess={fetchData}
+        initialData={editingCustomer ?? undefined}
+      />
+
+      <ConfirmDialog
+        open={!!deletingCustomer}
+        onOpenChange={(open) => { if (!open) setDeletingCustomer(null); }}
+        title="Xóa khách hàng"
+        description={`Xóa khách hàng ${deletingCustomer?.code} — ${deletingCustomer?.name}?`}
+        confirmLabel="Xóa"
+        variant="destructive"
+        loading={deleteLoading}
+        onConfirm={async () => {
+          if (!deletingCustomer) return;
+          setDeleteLoading(true);
+          try {
+            await deleteCustomer(deletingCustomer.id);
+            toast({ title: "Đã xóa khách hàng", description: `${deletingCustomer.code} — ${deletingCustomer.name}`, variant: "success" });
+            setDeletingCustomer(null);
+            fetchData();
+          } catch (err) {
+            toast({ title: "Lỗi xóa khách hàng", description: err instanceof Error ? err.message : "Vui lòng thử lại", variant: "error" });
+          } finally {
+            setDeleteLoading(false);
+          }
+        }}
       />
     </>
   );

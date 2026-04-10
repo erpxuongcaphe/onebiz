@@ -23,10 +23,12 @@ import {
 import type { DetailTab } from "@/components/shared/inline-detail-panel";
 import { formatCurrency, formatDate } from "@/lib/format";
 import { exportToExcel, exportToCsv } from "@/lib/utils/export";
-import { getInventoryChecks, getInventoryCheckStatuses, applyInventoryCheck } from "@/lib/services";
+import { getInventoryChecks, getInventoryCheckStatuses, applyInventoryCheck, cancelInventoryCheck } from "@/lib/services";
 import type { InventoryCheck } from "@/lib/types";
-import { CreateInventoryCheckDialog } from "@/components/shared/dialogs";
+import { CreateInventoryCheckDialog, ConfirmDialog } from "@/components/shared/dialogs";
 import { useToast } from "@/lib/contexts";
+import { printDocument } from "@/lib/print-document";
+import { buildInventoryCheckPrintData } from "@/lib/print-templates";
 
 /* ------------------------------------------------------------------ */
 /*  Status config                                                      */
@@ -70,11 +72,11 @@ function InventoryCheckDetail({
   const tabs: DetailTab[] = [
     {
       id: "info",
-      label: "Thong tin",
+      label: "Thông tin",
       content: (
         <div className="space-y-4">
           <DetailHeader
-            title={`Phieu kiem kho ${item.code}`}
+            title={`Phiếu kiểm kho ${item.code}`}
             code={item.code}
             status={{
               label: status.label,
@@ -84,14 +86,14 @@ function InventoryCheckDetail({
                   ? "bg-blue-100 text-blue-700 border-blue-200"
                   : undefined,
             }}
-            subtitle="Chi nhanh trung tam"
+            subtitle="Chi nhánh trung tâm"
             meta={
               <div className="flex items-center gap-4 flex-wrap text-xs">
                 <span>
-                  Nguoi tao: <strong>{item.createdBy}</strong>
+                  Người tạo: <strong>{item.createdBy}</strong>
                 </span>
                 <span>
-                  Thoi gian: <strong>{formatDate(item.date)}</strong>
+                  Thời gian: <strong>{formatDate(item.date)}</strong>
                 </span>
               </div>
             }
@@ -99,16 +101,16 @@ function InventoryCheckDetail({
 
           <DetailInfoGrid
             fields={[
-              { label: "Ma kiem kho", value: item.code },
-              { label: "Thoi gian", value: formatDate(item.date) },
-              { label: "Trang thai", value: status.label },
-              { label: "Nguoi tao", value: item.createdBy },
+              { label: "Mã kiểm kho", value: item.code },
+              { label: "Thời gian", value: formatDate(item.date) },
+              { label: "Trạng thái", value: status.label },
+              { label: "Người tạo", value: item.createdBy },
               {
-                label: "Tong san pham",
+                label: "Tổng sản phẩm",
                 value: String(item.totalProducts),
               },
               {
-                label: "SL lech tang",
+                label: "SL lệch tăng",
                 value: (
                   <span className="text-green-600">
                     {item.increaseQty}
@@ -116,13 +118,13 @@ function InventoryCheckDetail({
                 ),
               },
               {
-                label: "SL lech giam",
+                label: "SL lệch giảm",
                 value: (
                   <span className="text-red-600">{item.decreaseQty}</span>
                 ),
               },
               {
-                label: "GT tang",
+                label: "GT tăng",
                 value: (
                   <span className="text-green-600">
                     {formatCurrency(item.increaseAmount)}
@@ -130,7 +132,7 @@ function InventoryCheckDetail({
                 ),
               },
               {
-                label: "GT giam",
+                label: "GT giảm",
                 value: (
                   <span className="text-red-600">
                     {formatCurrency(item.decreaseAmount)}
@@ -138,13 +140,13 @@ function InventoryCheckDetail({
                 ),
               },
               {
-                label: "Tong chenh lech",
+                label: "Tổng chênh lệch",
                 value: formatCurrency(
                   item.increaseAmount - item.decreaseAmount
                 ),
               },
               ...(item.note
-                ? [{ label: "Ghi chu", value: item.note, fullWidth: true }]
+                ? [{ label: "Ghi chú", value: item.note, fullWidth: true }]
                 : []),
             ]}
           />
@@ -153,10 +155,10 @@ function InventoryCheckDetail({
     },
     {
       id: "history",
-      label: "Lich su",
+      label: "Lịch sử",
       content: (
         <div className="text-sm text-muted-foreground py-4 text-center">
-          Chua co lich su
+          Chưa có lịch sử
         </div>
       ),
     },
@@ -184,6 +186,8 @@ export default function KiemKhoPage() {
   const [pageSize, setPageSize] = useState(15);
   const [createOpen, setCreateOpen] = useState(false);
   const [applyingId, setApplyingId] = useState<string | null>(null);
+  const [cancellingItem, setCancellingItem] = useState<InventoryCheck | null>(null);
+  const [cancelLoading, setCancelLoading] = useState(false);
 
   // Inline detail
   const [expandedRow, setExpandedRow] = useState<number | null>(null);
@@ -220,7 +224,7 @@ export default function KiemKhoPage() {
     },
     {
       accessorKey: "code",
-      header: "Ma kiem kho",
+      header: "Mã kiểm kho",
       size: 130,
       cell: ({ row }) => (
         <span className="font-medium text-primary">{row.original.code}</span>
@@ -228,13 +232,13 @@ export default function KiemKhoPage() {
     },
     {
       accessorKey: "date",
-      header: "Thoi gian",
+      header: "Thời gian",
       size: 150,
       cell: ({ row }) => formatDate(row.original.date),
     },
     {
       id: "balanceDate",
-      header: "Ngay can bang",
+      header: "Ngày cân bằng",
       size: 150,
       cell: ({ row }) =>
         row.original.status === "balanced"
@@ -243,7 +247,7 @@ export default function KiemKhoPage() {
     },
     {
       accessorKey: "totalProducts",
-      header: "SL thuc te",
+      header: "SL thực tế",
       size: 100,
       cell: ({ row }) => (
         <span className="font-medium">{row.original.totalProducts}</span>
@@ -251,14 +255,14 @@ export default function KiemKhoPage() {
     },
     {
       id: "totalActual",
-      header: "Tong thuc te",
+      header: "Tổng thực tế",
       size: 130,
       cell: ({ row }) =>
         formatCurrency(row.original.increaseAmount + row.original.decreaseAmount),
     },
     {
       id: "totalDiff",
-      header: "Tong chenh lech",
+      header: "Tổng chênh lệch",
       size: 130,
       cell: ({ row }) => {
         const diff = row.original.increaseAmount - row.original.decreaseAmount;
@@ -271,7 +275,7 @@ export default function KiemKhoPage() {
     },
     {
       accessorKey: "increaseQty",
-      header: "SL lech tang",
+      header: "SL lệch tăng",
       size: 100,
       cell: ({ row }) => (
         <span className="text-green-600">{row.original.increaseQty}</span>
@@ -279,7 +283,7 @@ export default function KiemKhoPage() {
     },
     {
       accessorKey: "decreaseQty",
-      header: "SL lech giam",
+      header: "SL lệch giảm",
       size: 100,
       cell: ({ row }) => (
         <span className="text-red-600">{row.original.decreaseQty}</span>
@@ -316,14 +320,14 @@ export default function KiemKhoPage() {
   /* ---- Export ---- */
   const handleExport = (type: "excel" | "csv") => {
     const exportColumns = [
-      { header: "Ma kiem kho", key: "code", width: 15 },
-      { header: "Thoi gian", key: "date", width: 18, format: (v: string) => formatDate(v) },
-      { header: "Trang thai", key: "status", width: 15, format: (v: InventoryCheck["status"]) => statusMap[v]?.label ?? v },
-      { header: "Tong SP", key: "totalProducts", width: 10 },
-      { header: "SL lech tang", key: "increaseQty", width: 12 },
-      { header: "SL lech giam", key: "decreaseQty", width: 12 },
-      { header: "GT tang", key: "increaseAmount", width: 15, format: (v: number) => v },
-      { header: "GT giam", key: "decreaseAmount", width: 15, format: (v: number) => v },
+      { header: "Mã kiểm kho", key: "code", width: 15 },
+      { header: "Thời gian", key: "date", width: 18, format: (v: string) => formatDate(v) },
+      { header: "Trạng thái", key: "status", width: 15, format: (v: InventoryCheck["status"]) => statusMap[v]?.label ?? v },
+      { header: "Tổng SP", key: "totalProducts", width: 10 },
+      { header: "SL lệch tăng", key: "increaseQty", width: 12 },
+      { header: "SL lệch giảm", key: "decreaseQty", width: 12 },
+      { header: "GT tăng", key: "increaseAmount", width: 15, format: (v: number) => v },
+      { header: "GT giảm", key: "decreaseAmount", width: 15, format: (v: number) => v },
     ];
     if (type === "excel") exportToExcel(data, exportColumns, "phieu-kiem-kho");
     else exportToCsv(data, exportColumns, "phieu-kiem-kho");
@@ -363,7 +367,7 @@ export default function KiemKhoPage() {
     <ListPageLayout
       sidebar={
         <FilterSidebar>
-          <FilterGroup label="Ngay tao">
+          <FilterGroup label="Ngày tạo">
             <DatePresetFilter
               value={datePreset}
               onChange={setDatePreset}
@@ -372,17 +376,17 @@ export default function KiemKhoPage() {
               onFromChange={setDateFrom}
               onToChange={setDateTo}
               presets={[
-                { label: "Thang nay", value: "this_month" },
-                { label: "Hom nay", value: "today" },
-                { label: "Hom qua", value: "yesterday" },
-                { label: "Tuan nay", value: "this_week" },
-                { label: "Thang truoc", value: "last_month" },
-                { label: "Tuy chinh", value: "custom" },
+                { label: "Tháng này", value: "this_month" },
+                { label: "Hôm nay", value: "today" },
+                { label: "Hôm qua", value: "yesterday" },
+                { label: "Tuần này", value: "this_week" },
+                { label: "Tháng trước", value: "last_month" },
+                { label: "Tùy chỉnh", value: "custom" },
               ]}
             />
           </FilterGroup>
 
-          <FilterGroup label="Trang thai">
+          <FilterGroup label="Trạng thái">
             <CheckboxFilter
               options={statuses}
               selected={selectedStatuses}
@@ -390,14 +394,14 @@ export default function KiemKhoPage() {
             />
           </FilterGroup>
 
-          <FilterGroup label="Nguoi tao">
+          <FilterGroup label="Người tạo">
             <PersonFilter
               value={creatorFilter}
               onChange={setCreatorFilter}
-              placeholder="Chon nguoi tao"
+              placeholder="Chọn người tạo"
               suggestions={[
                 { label: "Admin", value: "admin" },
-                { label: "Cao Thi Huyen Trang", value: "trang" },
+                { label: "Cao Thị Huyền Trang", value: "trang" },
               ]}
             />
           </FilterGroup>
@@ -405,8 +409,8 @@ export default function KiemKhoPage() {
       }
     >
       <PageHeader
-        title="Phieu kiem kho"
-        searchPlaceholder="Theo ma phieu kiem kho"
+        title="Phiếu kiểm kho"
+        searchPlaceholder="Theo mã phiếu kiểm kho"
         searchValue={search}
         onSearchChange={setSearch}
         onExport={{
@@ -415,13 +419,13 @@ export default function KiemKhoPage() {
         }}
         actions={[
           {
-            label: "Kiem kho",
+            label: "Kiểm kho",
             icon: <Plus className="h-4 w-4" />,
             variant: "default",
             onClick: () => setCreateOpen(true),
           },
           {
-            label: "Xuat file",
+            label: "Xuất file",
             icon: <Download className="h-4 w-4" />,
           },
         ]}
@@ -456,17 +460,21 @@ export default function KiemKhoPage() {
               ]
             : []),
           {
-            label: "In phieu",
+            label: "In phiếu",
             icon: <Printer className="h-4 w-4" />,
-            onClick: () => {},
+            onClick: () => printDocument(buildInventoryCheckPrintData(row)),
           },
-          {
-            label: "Huy",
-            icon: <XCircle className="h-4 w-4" />,
-            onClick: () => {},
-            variant: "destructive",
-            separator: true,
-          },
+          ...(row.status === "processing"
+            ? [
+                {
+                  label: "Hủy",
+                  icon: <XCircle className="h-4 w-4" />,
+                  onClick: () => setCancellingItem(row),
+                  variant: "destructive" as const,
+                  separator: true,
+                },
+              ]
+            : []),
         ]}
       />
     </ListPageLayout>
@@ -475,6 +483,39 @@ export default function KiemKhoPage() {
       open={createOpen}
       onOpenChange={setCreateOpen}
       onSuccess={fetchData}
+    />
+
+    <ConfirmDialog
+      open={!!cancellingItem}
+      onOpenChange={(open) => { if (!open) setCancellingItem(null); }}
+      title="Hủy phiếu kiểm kho"
+      description={`Bạn có chắc muốn hủy phiếu kiểm kho ${cancellingItem?.code ?? ""}? Thao tác này không thể hoàn tác.`}
+      confirmLabel="Hủy phiếu"
+      cancelLabel="Đóng"
+      variant="destructive"
+      loading={cancelLoading}
+      onConfirm={async () => {
+        if (!cancellingItem) return;
+        setCancelLoading(true);
+        try {
+          await cancelInventoryCheck(cancellingItem.id);
+          toast({
+            title: "Đã hủy phiếu kiểm kho",
+            description: `Phiếu ${cancellingItem.code} đã được hủy thành công`,
+            variant: "success",
+          });
+          await fetchData();
+        } catch (err) {
+          toast({
+            title: "Lỗi hủy phiếu kiểm kho",
+            description: err instanceof Error ? err.message : "Vui lòng thử lại",
+            variant: "error",
+          });
+        } finally {
+          setCancelLoading(false);
+          setCancellingItem(null);
+        }
+      }}
     />
     </>
   );

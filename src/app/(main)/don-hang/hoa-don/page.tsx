@@ -1,6 +1,7 @@
 "use client";
 
 import { useEffect, useState, useCallback } from "react";
+import { useRouter } from "next/navigation";
 import { ColumnDef } from "@tanstack/react-table";
 import { Plus, Eye, Printer, Undo2, XCircle } from "lucide-react";
 import { Badge } from "@/components/ui/badge";
@@ -21,10 +22,13 @@ import {
   DetailInfoGrid,
   DetailItemsTable,
 } from "@/components/shared/inline-detail-panel";
-import { CreateInvoiceDialog } from "@/components/shared/dialogs";
+import { CreateInvoiceDialog, ConfirmDialog } from "@/components/shared/dialogs";
 import { formatCurrency, formatDate } from "@/lib/format";
 import { exportToExcel, exportToCsv } from "@/lib/utils/export";
-import { getInvoices, getInvoiceStatuses } from "@/lib/services";
+import { getInvoices, getInvoiceStatuses, cancelInvoice } from "@/lib/services";
+import { useToast } from "@/lib/contexts";
+import { printDocument } from "@/lib/print-document";
+import { buildInvoicePrintData } from "@/lib/print-templates";
 import type { Invoice } from "@/lib/types";
 
 const statusMap: Record<
@@ -190,6 +194,8 @@ function InvoiceDetail({
 }
 
 export default function HoaDonPage() {
+  const { toast } = useToast();
+  const router = useRouter();
   const [data, setData] = useState<Invoice[]>([]);
   const [total, setTotal] = useState(0);
   const [loading, setLoading] = useState(true);
@@ -200,6 +206,8 @@ export default function HoaDonPage() {
   const [starred, setStarred] = useState<Set<string>>(new Set());
 
   const [createOpen, setCreateOpen] = useState(false);
+  const [cancellingItem, setCancellingItem] = useState<Invoice | null>(null);
+  const [cancelLoading, setCancelLoading] = useState(false);
 
   // Filters
   const [selectedStatuses, setSelectedStatuses] = useState<string[]>([
@@ -455,20 +463,24 @@ export default function HoaDonPage() {
             {
               label: "In hóa đơn",
               icon: <Printer className="h-4 w-4" />,
-              onClick: () => {},
+              onClick: () => printDocument(buildInvoicePrintData(row)),
             },
             {
               label: "Trả hàng",
               icon: <Undo2 className="h-4 w-4" />,
-              onClick: () => {},
+              onClick: () => { toast({ variant: "info", title: "Chuyển đến trang trả hàng" }); router.push("/don-hang/tra-hang"); },
             },
-            {
-              label: "Hủy",
-              icon: <XCircle className="h-4 w-4" />,
-              onClick: () => {},
-              variant: "destructive",
-              separator: true,
-            },
+            ...(row.status !== "completed" && row.status !== "cancelled"
+              ? [
+                  {
+                    label: "Hủy",
+                    icon: <XCircle className="h-4 w-4" />,
+                    onClick: () => setCancellingItem(row),
+                    variant: "destructive" as const,
+                    separator: true,
+                  },
+                ]
+              : []),
           ]}
         />
       </ListPageLayout>
@@ -477,6 +489,39 @@ export default function HoaDonPage() {
         open={createOpen}
         onOpenChange={setCreateOpen}
         onSuccess={fetchData}
+      />
+
+      <ConfirmDialog
+        open={!!cancellingItem}
+        onOpenChange={(open) => { if (!open) setCancellingItem(null); }}
+        title="Hủy hoá đơn"
+        description={`Bạn có chắc muốn hủy hoá đơn ${cancellingItem?.code ?? ""}? Thao tác này không thể hoàn tác.`}
+        confirmLabel="Hủy hoá đơn"
+        cancelLabel="Đóng"
+        variant="destructive"
+        loading={cancelLoading}
+        onConfirm={async () => {
+          if (!cancellingItem) return;
+          setCancelLoading(true);
+          try {
+            await cancelInvoice(cancellingItem.id);
+            toast({
+              title: "Đã hủy hoá đơn",
+              description: `Hoá đơn ${cancellingItem.code} đã được hủy thành công`,
+              variant: "success",
+            });
+            await fetchData();
+          } catch (err) {
+            toast({
+              title: "Lỗi hủy hoá đơn",
+              description: err instanceof Error ? err.message : "Vui lòng thử lại",
+              variant: "error",
+            });
+          } finally {
+            setCancelLoading(false);
+            setCancellingItem(null);
+          }
+        }}
       />
     </>
   );

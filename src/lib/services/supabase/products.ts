@@ -125,7 +125,85 @@ export async function getProductById(id: string): Promise<ProductDetail | null> 
   return mapProductDetail(data, []);
 }
 
-// --- Stock Movements ---
+// --- Stock Movement (enriched) type for all-movements page ---
+
+export interface AllStockMovementRow extends StockMovement {
+  productName: string;
+  productCode: string;
+  referenceType?: string;
+  referenceId?: string;
+  branchId?: string;
+}
+
+// --- All Stock Movements (cross-product) ---
+
+export async function getAllStockMovements(
+  params: QueryParams & { movementType?: string; branchId?: string }
+): Promise<QueryResult<AllStockMovementRow>> {
+  const supabase = getClient();
+  const { from, to } = getPaginationRange(params);
+
+  let query = supabase
+    .from("stock_movements")
+    .select("*, products!inner(name, code)", { count: "exact" });
+
+  // Search by product name/code or note
+  if (params.search) {
+    query = query.or(
+      `note.ilike.%${params.search}%,products.name.ilike.%${params.search}%,products.code.ilike.%${params.search}%`
+    );
+  }
+
+  // Filter by movement type
+  if (params.movementType && params.movementType !== "all") {
+    query = query.eq("type", params.movementType as "in" | "out" | "adjust" | "transfer");
+  }
+
+  // Filter by branch
+  if (params.branchId && params.branchId !== "all") {
+    query = query.eq("branch_id", params.branchId);
+  }
+
+  // Sort
+  query = query.order("created_at", { ascending: false });
+
+  // Paginate
+  query = query.range(from, to);
+
+  const { data, count, error } = await query;
+  if (error) handleError(error, "getAllStockMovements");
+
+  const typeNameMap: Record<string, string> = {
+    in: "Nhập hàng",
+    out: "Xuất hàng",
+    adjust: "Kiểm kho",
+    transfer: "Chuyển kho",
+  };
+
+  const movements: AllStockMovementRow[] = (data ?? []).map((row: any) => ({
+    id: row.id,
+    code: row.reference_type
+      ? `${row.reference_type.toUpperCase().slice(0, 2)}${row.id.slice(0, 6)}`
+      : row.id.slice(0, 10),
+    type: mapMovementType(row.type),
+    typeName: typeNameMap[row.type] ?? row.type,
+    quantity: row.quantity,
+    costPrice: 0,
+    totalAmount: 0,
+    date: row.created_at,
+    note: row.note ?? undefined,
+    createdBy: row.created_by,
+    productName: row.products?.name ?? "—",
+    productCode: row.products?.code ?? "—",
+    referenceType: row.reference_type ?? undefined,
+    referenceId: row.reference_id ?? undefined,
+    branchId: row.branch_id ?? undefined,
+  }));
+
+  return { data: movements, total: count ?? 0 };
+}
+
+// --- Stock Movements (per product) ---
 
 export async function getStockMovements(
   productId: string,

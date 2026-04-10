@@ -206,6 +206,62 @@ export async function consumeProductionMaterials(productionOrderId: string) {
 // Lot Tracking
 // ============================================================
 
+/** Query ALL product lots across all products — for the lots listing page */
+export async function getAllProductLots(options?: {
+  search?: string;
+  status?: string;
+  sourceType?: string;
+}): Promise<(ProductLot & { productName: string; productCode: string })[]> {
+  const tenantId = await getCurrentTenantId();
+
+  let query = supabase
+    .from("product_lots")
+    .select("*, products!inner(name, code)")
+    .eq("tenant_id", tenantId)
+    .order("created_at", { ascending: false })
+    .limit(200);
+
+  if (options?.status && options.status !== "all") {
+    query = query.eq("status", options.status);
+  }
+  if (options?.sourceType && options.sourceType !== "all") {
+    query = query.eq("source_type", options.sourceType);
+  }
+  if (options?.search) {
+    query = query.or(
+      `lot_number.ilike.%${options.search}%,products.name.ilike.%${options.search}%`
+    );
+  }
+
+  const { data, error } = await query;
+  if (error) throw error;
+
+  return (data ?? []).map((row: Record<string, unknown>) => {
+    const product = row.products as Record<string, unknown> | null;
+    return {
+      id: row.id as string,
+      tenantId: row.tenant_id as string,
+      productId: row.product_id as string,
+      productName: (product?.name as string) ?? "",
+      productCode: (product?.code as string) ?? "",
+      lotNumber: row.lot_number as string,
+      sourceType: row.source_type as "production" | "purchase",
+      productionOrderId: row.production_order_id as string | undefined,
+      purchaseOrderId: row.purchase_order_id as string | undefined,
+      manufacturedDate: row.manufactured_date as string | undefined,
+      expiryDate: row.expiry_date as string | undefined,
+      receivedDate: row.received_date as string,
+      initialQty: row.initial_qty as number,
+      currentQty: row.current_qty as number,
+      branchId: row.branch_id as string,
+      branchName: "",
+      status: (row.status as ProductLot["status"]) ?? "active",
+      createdAt: row.created_at as string,
+      updatedAt: row.updated_at as string,
+    };
+  });
+}
+
 export async function getProductLots(
   productId: string,
   branchId?: string

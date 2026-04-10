@@ -1,6 +1,9 @@
 "use client";
 
 import { useEffect, useState, useCallback } from "react";
+import { useToast } from "@/lib/contexts";
+import { printDocument } from "@/lib/print-document";
+import { buildDisposalPrintData } from "@/lib/print-templates";
 import { ColumnDef } from "@tanstack/react-table";
 import { Plus, Download, Printer, XCircle } from "lucide-react";
 import { Badge } from "@/components/ui/badge";
@@ -26,7 +29,7 @@ import { formatCurrency, formatDate } from "@/lib/format";
 import { exportToExcel, exportToCsv } from "@/lib/utils/export";
 import { getDisposalExports, getDisposalStatuses } from "@/lib/services";
 import type { DisposalExport } from "@/lib/types";
-import { CreateDisposalDialog } from "@/components/shared/dialogs";
+import { CreateDisposalDialog, ConfirmDialog } from "@/components/shared/dialogs";
 
 /* ------------------------------------------------------------------ */
 /*  Status config                                                      */
@@ -35,8 +38,8 @@ const statusMap: Record<
   DisposalExport["status"],
   { label: string; variant: "secondary" | "default" }
 > = {
-  draft: { label: "Phieu tam", variant: "secondary" },
-  completed: { label: "Hoan thanh", variant: "default" },
+  draft: { label: "Phiếu tạm", variant: "secondary" },
+  completed: { label: "Hoàn thành", variant: "default" },
 };
 
 /* ------------------------------------------------------------------ */
@@ -69,11 +72,11 @@ function DisposalExportDetail({
   const tabs: DetailTab[] = [
     {
       id: "info",
-      label: "Thong tin",
+      label: "Thông tin",
       content: (
         <div className="space-y-4">
           <DetailHeader
-            title={`Phieu xuat huy ${item.code}`}
+            title={`Phiếu xuất hủy ${item.code}`}
             code={item.code}
             status={{
               label: status.label,
@@ -83,14 +86,14 @@ function DisposalExportDetail({
                   ? "bg-blue-100 text-blue-700 border-blue-200"
                   : undefined,
             }}
-            subtitle="Chi nhanh trung tam"
+            subtitle="Chi nhánh trung tâm"
             meta={
               <div className="flex items-center gap-4 flex-wrap text-xs">
                 <span>
-                  Nguoi tao: <strong>{item.createdBy}</strong>
+                  Người tạo: <strong>{item.createdBy}</strong>
                 </span>
                 <span>
-                  Thoi gian: <strong>{formatDate(item.date)}</strong>
+                  Thời gian: <strong>{formatDate(item.date)}</strong>
                 </span>
               </div>
             }
@@ -98,16 +101,16 @@ function DisposalExportDetail({
 
           <DetailInfoGrid
             fields={[
-              { label: "Ma phieu", value: item.code },
-              { label: "Thoi gian", value: formatDate(item.date) },
-              { label: "Trang thai", value: status.label },
-              { label: "Nguoi tao", value: item.createdBy },
+              { label: "Mã phiếu", value: item.code },
+              { label: "Thời gian", value: formatDate(item.date) },
+              { label: "Trạng thái", value: status.label },
+              { label: "Người tạo", value: item.createdBy },
               {
-                label: "Tong san pham",
+                label: "Tổng sản phẩm",
                 value: String(item.totalProducts),
               },
               {
-                label: "Tong gia tri",
+                label: "Tổng giá trị",
                 value: (
                   <span className="font-semibold text-primary">
                     {formatCurrency(item.totalAmount)}
@@ -117,7 +120,7 @@ function DisposalExportDetail({
               ...(item.reason
                 ? [
                     {
-                      label: "Ly do",
+                      label: "Lý do",
                       value: item.reason,
                       fullWidth: true,
                     },
@@ -130,10 +133,10 @@ function DisposalExportDetail({
     },
     {
       id: "history",
-      label: "Lich su",
+      label: "Lịch sử",
       content: (
         <div className="text-sm text-muted-foreground py-4 text-center">
-          Chua co lich su
+          Chưa có lịch sử
         </div>
       ),
     },
@@ -152,6 +155,7 @@ function DisposalExportDetail({
 /*  Page                                                               */
 /* ------------------------------------------------------------------ */
 export default function XuatHuyPage() {
+  const { toast } = useToast();
   const [data, setData] = useState<DisposalExport[]>([]);
   const [total, setTotal] = useState(0);
   const [loading, setLoading] = useState(true);
@@ -159,6 +163,8 @@ export default function XuatHuyPage() {
   const [page, setPage] = useState(0);
   const [pageSize, setPageSize] = useState(15);
   const [createOpen, setCreateOpen] = useState(false);
+  const [cancellingItem, setCancellingItem] = useState<DisposalExport | null>(null);
+  const [cancelLoading, setCancelLoading] = useState(false);
 
   // Inline detail
   const [expandedRow, setExpandedRow] = useState<number | null>(null);
@@ -195,7 +201,7 @@ export default function XuatHuyPage() {
     },
     {
       accessorKey: "code",
-      header: "Ma phieu",
+      header: "Mã phiếu",
       size: 130,
       cell: ({ row }) => (
         <span className="font-medium text-primary">{row.original.code}</span>
@@ -203,18 +209,18 @@ export default function XuatHuyPage() {
     },
     {
       accessorKey: "date",
-      header: "Thoi gian",
+      header: "Thời gian",
       size: 150,
       cell: ({ row }) => formatDate(row.original.date),
     },
     {
       accessorKey: "createdBy",
-      header: "Nguoi tao",
+      header: "Người tạo",
       size: 150,
     },
     {
       accessorKey: "totalAmount",
-      header: "Tong gia tri",
+      header: "Tổng giá trị",
       size: 140,
       cell: ({ row }) => (
         <span className="text-right block">
@@ -224,7 +230,7 @@ export default function XuatHuyPage() {
     },
     {
       accessorKey: "status",
-      header: "Trang thai",
+      header: "Trạng thái",
       size: 130,
       cell: ({ row }) => {
         const { label, variant } = statusMap[row.original.status];
@@ -262,12 +268,12 @@ export default function XuatHuyPage() {
   /* ---- Export ---- */
   const handleExport = (type: "excel" | "csv") => {
     const exportColumns = [
-      { header: "Ma phieu", key: "code", width: 15 },
-      { header: "Thoi gian", key: "date", width: 18, format: (v: string) => formatDate(v) },
-      { header: "Nguoi tao", key: "createdBy", width: 15 },
-      { header: "Tong gia tri", key: "totalAmount", width: 15, format: (v: number) => v },
-      { header: "Ly do", key: "reason", width: 25 },
-      { header: "Trang thai", key: "status", width: 15, format: (v: DisposalExport["status"]) => statusMap[v]?.label ?? v },
+      { header: "Mã phiếu", key: "code", width: 15 },
+      { header: "Thời gian", key: "date", width: 18, format: (v: string) => formatDate(v) },
+      { header: "Người tạo", key: "createdBy", width: 15 },
+      { header: "Tổng giá trị", key: "totalAmount", width: 15, format: (v: number) => v },
+      { header: "Lý do", key: "reason", width: 25 },
+      { header: "Trạng thái", key: "status", width: 15, format: (v: DisposalExport["status"]) => statusMap[v]?.label ?? v },
     ];
     if (type === "excel") exportToExcel(data, exportColumns, "xuat-huy");
     else exportToCsv(data, exportColumns, "xuat-huy");
@@ -283,7 +289,7 @@ export default function XuatHuyPage() {
     <ListPageLayout
       sidebar={
         <FilterSidebar>
-          <FilterGroup label="Trang thai">
+          <FilterGroup label="Trạng thái">
             <CheckboxFilter
               options={statuses}
               selected={selectedStatuses}
@@ -291,7 +297,7 @@ export default function XuatHuyPage() {
             />
           </FilterGroup>
 
-          <FilterGroup label="Thoi gian">
+          <FilterGroup label="Thời gian">
             <DatePresetFilter
               value={datePreset}
               onChange={setDatePreset}
@@ -300,24 +306,24 @@ export default function XuatHuyPage() {
               onFromChange={setDateFrom}
               onToChange={setDateTo}
               presets={[
-                { label: "Thang nay", value: "this_month" },
-                { label: "Hom nay", value: "today" },
-                { label: "Hom qua", value: "yesterday" },
-                { label: "Tuan nay", value: "this_week" },
-                { label: "Thang truoc", value: "last_month" },
-                { label: "Tuy chinh", value: "custom" },
+                { label: "Tháng này", value: "this_month" },
+                { label: "Hôm nay", value: "today" },
+                { label: "Hôm qua", value: "yesterday" },
+                { label: "Tuần này", value: "this_week" },
+                { label: "Tháng trước", value: "last_month" },
+                { label: "Tùy chỉnh", value: "custom" },
               ]}
             />
           </FilterGroup>
 
-          <FilterGroup label="Nguoi tao">
+          <FilterGroup label="Người tạo">
             <PersonFilter
               value={creatorFilter}
               onChange={setCreatorFilter}
-              placeholder="Chon nguoi tao"
+              placeholder="Chọn người tạo"
               suggestions={[
                 { label: "Admin", value: "admin" },
-                { label: "Cao Thi Huyen Trang", value: "trang" },
+                { label: "Cao Thị Huyền Trang", value: "trang" },
               ]}
             />
           </FilterGroup>
@@ -325,8 +331,8 @@ export default function XuatHuyPage() {
       }
     >
       <PageHeader
-        title="Xuat huy"
-        searchPlaceholder="Theo ma phieu xuat huy"
+        title="Xuất hủy"
+        searchPlaceholder="Theo mã phiếu xuất hủy"
         searchValue={search}
         onSearchChange={setSearch}
         onExport={{
@@ -335,13 +341,13 @@ export default function XuatHuyPage() {
         }}
         actions={[
           {
-            label: "Xuat huy",
+            label: "Xuất hủy",
             icon: <Plus className="h-4 w-4" />,
             variant: "default",
             onClick: () => setCreateOpen(true),
           },
           {
-            label: "Xuat file",
+            label: "Xuất file",
             icon: <Download className="h-4 w-4" />,
           },
         ]}
@@ -367,17 +373,21 @@ export default function XuatHuyPage() {
         getRowId={(row) => row.id}
         rowActions={(row) => [
           {
-            label: "In phieu",
+            label: "In phiếu",
             icon: <Printer className="h-4 w-4" />,
-            onClick: () => {},
+            onClick: () => printDocument(buildDisposalPrintData(row)),
           },
-          {
-            label: "Huy",
-            icon: <XCircle className="h-4 w-4" />,
-            onClick: () => {},
-            variant: "destructive",
-            separator: true,
-          },
+          ...(row.status === "draft"
+            ? [
+                {
+                  label: "Hủy",
+                  icon: <XCircle className="h-4 w-4" />,
+                  onClick: () => setCancellingItem(row),
+                  variant: "destructive" as const,
+                  separator: true,
+                },
+              ]
+            : []),
         ]}
       />
 
@@ -385,6 +395,33 @@ export default function XuatHuyPage() {
         open={createOpen}
         onOpenChange={setCreateOpen}
         onSuccess={fetchData}
+      />
+
+      <ConfirmDialog
+        open={!!cancellingItem}
+        onOpenChange={(open) => { if (!open) setCancellingItem(null); }}
+        title="Hủy phiếu xuất hủy"
+        description={`Bạn có chắc muốn hủy phiếu xuất hủy ${cancellingItem?.code ?? ""}? Thao tác này không thể hoàn tác.`}
+        confirmLabel="Hủy phiếu"
+        cancelLabel="Đóng"
+        variant="destructive"
+        loading={cancelLoading}
+        onConfirm={async () => {
+          if (!cancellingItem) return;
+          setCancelLoading(true);
+          try {
+            // Mock data — toast success + refetch
+            toast({
+              title: "Đã hủy phiếu xuất hủy",
+              description: `Phiếu ${cancellingItem.code} đã được hủy thành công`,
+              variant: "success",
+            });
+            await fetchData();
+          } finally {
+            setCancelLoading(false);
+            setCancellingItem(null);
+          }
+        }}
       />
     </ListPageLayout>
   );

@@ -23,14 +23,18 @@ import {
   DetailInfoGrid,
   DetailItemsTable,
 } from "@/components/shared/inline-detail-panel";
-import { CreateCashTransactionDialog } from "@/components/shared/dialogs";
+import { CreateCashTransactionDialog, ConfirmDialog } from "@/components/shared/dialogs";
 import { formatCurrency, formatDate } from "@/lib/format";
 import { exportToExcel, exportToCsv } from "@/lib/utils/export";
 import {
   getCashBookEntries,
   getCashBookTypes,
   getCashBookSummary,
+  deleteCashTransaction,
 } from "@/lib/services";
+import { useToast } from "@/lib/contexts";
+import { printDocument } from "@/lib/print-document";
+import { buildCashTransactionPrintData } from "@/lib/print-templates";
 import type { CashBookEntry } from "@/lib/types";
 
 // === Status map ===
@@ -162,6 +166,7 @@ function TransactionDetail({
 
 // === Page Component ===
 export default function SoQuyPage() {
+  const { toast } = useToast();
   const [data, setData] = useState<CashBookEntry[]>([]);
   const [total, setTotal] = useState(0);
   const [loading, setLoading] = useState(true);
@@ -175,6 +180,10 @@ export default function SoQuyPage() {
   const [createType, setCreateType] = useState<"receipt" | "payment">(
     "receipt",
   );
+
+  // Delete
+  const [deletingEntry, setDeletingEntry] = useState<CashBookEntry | null>(null);
+  const [deleteLoading, setDeleteLoading] = useState(false);
 
   // Filters
   const [fundType, setFundType] = useState("all");
@@ -438,17 +447,20 @@ export default function SoQuyPage() {
             {
               label: "Xem chi tiết",
               icon: <Eye className="h-4 w-4" />,
-              onClick: () => {},
+              onClick: () => {
+                const idx = data.findIndex((d) => d.id === row.id);
+                setExpandedRow(expandedRow === idx ? null : idx);
+              },
             },
             {
               label: "In phiếu",
               icon: <Printer className="h-4 w-4" />,
-              onClick: () => {},
+              onClick: () => printDocument(buildCashTransactionPrintData(row)),
             },
             {
               label: "Xóa",
               icon: <Trash2 className="h-4 w-4" />,
-              onClick: () => {},
+              onClick: () => setDeletingEntry(row),
               variant: "destructive",
               separator: true,
             },
@@ -461,6 +473,30 @@ export default function SoQuyPage() {
         onOpenChange={setCreateOpen}
         defaultType={createType}
         onSuccess={fetchData}
+      />
+
+      <ConfirmDialog
+        open={!!deletingEntry}
+        onOpenChange={(open) => { if (!open) setDeletingEntry(null); }}
+        title="Xóa phiếu thu/chi"
+        description={`Xóa phiếu ${deletingEntry?.code}?`}
+        confirmLabel="Xóa"
+        variant="destructive"
+        loading={deleteLoading}
+        onConfirm={async () => {
+          if (!deletingEntry) return;
+          setDeleteLoading(true);
+          try {
+            await deleteCashTransaction(deletingEntry.id);
+            toast({ title: "Đã xóa phiếu", description: deletingEntry.code, variant: "success" });
+            setDeletingEntry(null);
+            fetchData();
+          } catch (err) {
+            toast({ title: "Lỗi xóa phiếu", description: err instanceof Error ? err.message : "Vui lòng thử lại", variant: "error" });
+          } finally {
+            setDeleteLoading(false);
+          }
+        }}
       />
     </>
   );

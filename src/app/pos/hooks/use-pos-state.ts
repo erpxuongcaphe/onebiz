@@ -20,12 +20,19 @@ import type { DraftOrderDetail } from "@/lib/services/supabase";
 // Types
 // ============================================================
 
+/** Một dòng trong bảng tách thanh toán hỗn hợp */
+export interface PaymentBreakdownItem {
+  method: "cash" | "transfer" | "card";
+  amount: number;
+}
+
 /** Snapshot of the entire POS state — used by multi-tab to save/restore tabs */
 export interface PosSnapshot {
   lines: OrderLine[];
   customer: Customer | null;
   paymentMethod: PaymentMethod;
   paid: number;
+  paymentBreakdown: PaymentBreakdownItem[];
   orderDiscount: DiscountInput;
   note: string;
   loadedDraftId: string | null;
@@ -102,6 +109,11 @@ export function usePosState() {
     mode: "amount",
     value: 0,
   });
+  const [paymentBreakdown, setPaymentBreakdown] = useState<PaymentBreakdownItem[]>([
+    { method: "cash", amount: 0 },
+    { method: "transfer", amount: 0 },
+    { method: "card", amount: 0 },
+  ]);
   const [note, setNote] = useState<string>("");
   const [loadedDraftId, setLoadedDraftId] = useState<string | null>(null);
   const [sellingMode, setSellingMode] = useState<SellingMode>("normal");
@@ -182,6 +194,11 @@ export function usePosState() {
     setLines([]);
     setCustomer(null);
     setPaid(0);
+    setPaymentBreakdown([
+      { method: "cash", amount: 0 },
+      { method: "transfer", amount: 0 },
+      { method: "card", amount: 0 },
+    ]);
     setOrderDiscount({ mode: "amount", value: 0 });
     setNote("");
     setLoadedDraftId(null);
@@ -262,23 +279,51 @@ export function usePosState() {
 
   // --- Snapshot: save/restore for multi-tab ---
 
+  /** Cập nhật số tiền cho 1 phương thức trong breakdown, tự tính lại paid */
+  const updateBreakdownAmount = useCallback(
+    (method: "cash" | "transfer" | "card", amount: number): void => {
+      setPaymentBreakdown((prev) => {
+        const next = prev.map((b) =>
+          b.method === method ? { ...b, amount: Math.max(0, amount) } : b
+        );
+        // Auto-sync paid = tổng breakdown
+        const totalBreakdown = next.reduce((s, b) => s + b.amount, 0);
+        setPaid(totalBreakdown);
+        return next;
+      });
+    },
+    []
+  );
+
+  /** Tổng số tiền đã nhập trong breakdown */
+  const breakdownTotal = useMemo(
+    () => paymentBreakdown.reduce((s, b) => s + b.amount, 0),
+    [paymentBreakdown]
+  );
+
   const getSnapshot = useCallback((): PosSnapshot => ({
     lines,
     customer,
     paymentMethod,
     paid,
+    paymentBreakdown,
     orderDiscount,
     note,
     loadedDraftId,
     sellingMode,
     deliveryInfo,
-  }), [lines, customer, paymentMethod, paid, orderDiscount, note, loadedDraftId, sellingMode, deliveryInfo]);
+  }), [lines, customer, paymentMethod, paid, paymentBreakdown, orderDiscount, note, loadedDraftId, sellingMode, deliveryInfo]);
 
   const restoreSnapshot = useCallback((snap: PosSnapshot): void => {
     setLines(snap.lines);
     setCustomer(snap.customer);
     setPaymentMethod(snap.paymentMethod);
     setPaid(snap.paid);
+    setPaymentBreakdown(snap.paymentBreakdown ?? [
+      { method: "cash", amount: 0 },
+      { method: "transfer", amount: 0 },
+      { method: "card", amount: 0 },
+    ]);
     setOrderDiscount(snap.orderDiscount);
     setNote(snap.note);
     setLoadedDraftId(snap.loadedDraftId);
@@ -292,6 +337,7 @@ export function usePosState() {
     customer,
     paymentMethod,
     paid,
+    paymentBreakdown,
     orderDiscount,
     note,
     loadedDraftId,
@@ -307,15 +353,20 @@ export function usePosState() {
     debt,
     change,
     itemCount,
+    breakdownTotal,
 
     // Setters
     setCustomer,
     setPaymentMethod,
     setPaid,
+    setPaymentBreakdown,
     setOrderDiscount,
     setNote,
     setSellingMode,
     setDeliveryInfo,
+
+    // Mixed payment helpers
+    updateBreakdownAmount,
 
     // Actions
     addLine,

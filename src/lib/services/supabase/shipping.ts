@@ -118,6 +118,46 @@ export async function getPartnerOptionsAsync() {
   ];
 }
 
+// --- Write Operations ---
+
+/**
+ * Cập nhật đối tác giao hàng.
+ */
+export async function updateDeliveryPartner(
+  id: string,
+  updates: Partial<DeliveryPartner>,
+): Promise<DeliveryPartner> {
+  const supabase = getClient();
+
+  const payload: Record<string, unknown> = {};
+  if (updates.name !== undefined) payload.name = updates.name;
+  if (updates.phone !== undefined) payload.phone = updates.phone || null;
+
+  const { data, error } = await supabase
+    .from("delivery_partners")
+    .update(payload)
+    .eq("id", id)
+    .select()
+    .single();
+
+  if (error) handleError(error, "updateDeliveryPartner");
+  return mapDeliveryPartner(data);
+}
+
+/**
+ * Ngừng hoạt động đối tác giao hàng (set is_active = false).
+ */
+export async function deactivateDeliveryPartner(id: string): Promise<void> {
+  const supabase = getClient();
+
+  const { error } = await supabase
+    .from("delivery_partners")
+    .update({ is_active: false })
+    .eq("id", id);
+
+  if (error) handleError(error, "deactivateDeliveryPartner");
+}
+
 // --- Mappers ---
 
 const shippingStatusNameMap: Record<string, string> = {

@@ -20,12 +20,14 @@ import {
 } from "@/components/ui/select";
 import { Loader2 } from "lucide-react";
 import { useToast } from "@/lib/contexts";
-import { createCustomer } from "@/lib/services";
+import { createCustomer, updateCustomer } from "@/lib/services";
+import type { Customer } from "@/lib/types";
 
 interface CreateCustomerDialogProps {
   open: boolean;
   onOpenChange: (open: boolean) => void;
   onSuccess?: () => void;
+  initialData?: Customer;
 }
 
 const customerGroups = [
@@ -44,7 +46,9 @@ export function CreateCustomerDialog({
   open,
   onOpenChange,
   onSuccess,
+  initialData,
 }: CreateCustomerDialogProps) {
+  const isEditing = !!initialData;
   const { toast } = useToast();
   const [code, setCode] = useState("");
   const [name, setName] = useState("");
@@ -59,17 +63,28 @@ export function CreateCustomerDialog({
 
   useEffect(() => {
     if (open) {
-      setCode(generateCustomerCode());
-      setName("");
-      setPhone("");
-      setEmail("");
-      setAddress("");
-      setGroup("");
-      setType("individual");
-      setGender("");
+      if (initialData) {
+        setCode(initialData.code);
+        setName(initialData.name);
+        setPhone(initialData.phone || "");
+        setEmail(initialData.email || "");
+        setAddress(initialData.address || "");
+        setGroup(initialData.groupId || "");
+        setType(initialData.type || "individual");
+        setGender(initialData.gender || "");
+      } else {
+        setCode(generateCustomerCode());
+        setName("");
+        setPhone("");
+        setEmail("");
+        setAddress("");
+        setGroup("");
+        setType("individual");
+        setGender("");
+      }
       setErrors({});
     }
-  }, [open]);
+  }, [open, initialData]);
 
   function validate(): boolean {
     const newErrors: Record<string, string> = {};
@@ -83,26 +98,44 @@ export function CreateCustomerDialog({
     if (!validate()) return;
     setSaving(true);
     try {
-      await createCustomer({
-        code,
-        name,
-        phone: phone || undefined,
-        email: email || undefined,
-        address: address || undefined,
-        groupId: group || undefined,
-        type,
-        gender: (gender as "male" | "female") || undefined,
-      });
-      onOpenChange(false);
-      toast({
-        title: "Tạo khách hàng thành công",
-        description: `Đã thêm khách hàng ${name} (${code})`,
-        variant: "success",
-      });
+      if (isEditing) {
+        await updateCustomer(initialData!.id, {
+          name,
+          phone: phone || undefined,
+          email: email || undefined,
+          address: address || undefined,
+          groupId: group || undefined,
+          type,
+          gender: (gender as "male" | "female") || undefined,
+        });
+        onOpenChange(false);
+        toast({
+          title: "Cập nhật khách hàng thành công",
+          description: `Đã cập nhật khách hàng ${name} (${code})`,
+          variant: "success",
+        });
+      } else {
+        await createCustomer({
+          code,
+          name,
+          phone: phone || undefined,
+          email: email || undefined,
+          address: address || undefined,
+          groupId: group || undefined,
+          type,
+          gender: (gender as "male" | "female") || undefined,
+        });
+        onOpenChange(false);
+        toast({
+          title: "Tạo khách hàng thành công",
+          description: `Đã thêm khách hàng ${name} (${code})`,
+          variant: "success",
+        });
+      }
       onSuccess?.();
     } catch (err) {
       toast({
-        title: "Lỗi tạo khách hàng",
+        title: isEditing ? "Lỗi cập nhật khách hàng" : "Lỗi tạo khách hàng",
         description: err instanceof Error ? err.message : "Vui lòng thử lại",
         variant: "error",
       });
@@ -115,16 +148,16 @@ export function CreateCustomerDialog({
     <Dialog open={open} onOpenChange={onOpenChange}>
       <DialogContent className="sm:max-w-lg max-h-[90vh] overflow-y-auto">
         <DialogHeader>
-          <DialogTitle>Thêm khách hàng mới</DialogTitle>
+          <DialogTitle>{isEditing ? "Sửa khách hàng" : "Thêm khách hàng mới"}</DialogTitle>
           <DialogDescription>
-            Điền thông tin khách hàng. Các trường có dấu * là bắt buộc.
+            {isEditing ? "Chỉnh sửa thông tin khách hàng." : "Điền thông tin khách hàng. Các trường có dấu * là bắt buộc."}
           </DialogDescription>
         </DialogHeader>
 
         <div className="grid gap-4 py-2">
           <div className="space-y-1.5">
             <label className="text-sm font-medium">Mã khách hàng</label>
-            <Input value={code} onChange={(e) => setCode(e.target.value)} />
+            <Input value={code} onChange={(e) => setCode(e.target.value)} readOnly={isEditing} className={isEditing ? "bg-muted/50" : ""} />
           </div>
 
           <div className="space-y-1.5">
@@ -241,7 +274,7 @@ export function CreateCustomerDialog({
           </Button>
           <Button onClick={handleSave} disabled={saving}>
             {saving && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
-            Lưu
+            {isEditing ? "Cập nhật" : "Lưu"}
           </Button>
         </DialogFooter>
       </DialogContent>

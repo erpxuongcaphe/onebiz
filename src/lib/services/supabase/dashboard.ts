@@ -82,8 +82,8 @@ export async function getDashboardKpis(): Promise<DashboardKpis> {
   const today = todayRange();
   const yesterday = yesterdayRange();
 
-  // Parallel queries
-  const [todayInvoices, yesterdayInvoices, todayCustomers, yesterdayCustomers] = await Promise.all([
+  // Parallel queries — including cash_transactions for real profit
+  const [todayInvoices, yesterdayInvoices, todayCustomers, yesterdayCustomers, todayCash, yesterdayCash] = await Promise.all([
     supabase
       .from("invoices")
       .select("total, discount_amount, status")
@@ -102,6 +102,16 @@ export async function getDashboardKpis(): Promise<DashboardKpis> {
     supabase
       .from("customers")
       .select("id", { count: "exact", head: true })
+      .gte("created_at", yesterday.start)
+      .lt("created_at", yesterday.end),
+    supabase
+      .from("cash_transactions")
+      .select("type, amount")
+      .gte("created_at", today.start)
+      .lt("created_at", today.end),
+    supabase
+      .from("cash_transactions")
+      .select("type, amount")
       .gte("created_at", yesterday.start)
       .lt("created_at", yesterday.end),
   ]);
@@ -114,19 +124,26 @@ export async function getDashboardKpis(): Promise<DashboardKpis> {
   const calcOrders = (data: { status: string }[] | null) =>
     (data ?? []).filter((inv) => inv.status === "completed").length;
 
-  // Profit ≈ Revenue - Cost (simplified: use discount as proxy or 60% margin)
+  const calcExpenses = (data: { type: string; amount: number }[] | null) =>
+    (data ?? [])
+      .filter((c) => c.type === "payment")
+      .reduce((sum, c) => sum + (c.amount ?? 0), 0);
+
+  // Profit = Revenue - Expenses (real calculation from cash_transactions)
   const todayRev = calcRevenue(todayInvoices.data);
   const yesterdayRev = calcRevenue(yesterdayInvoices.data);
+  const todayExp = calcExpenses(todayCash.data);
+  const yesterdayExp = calcExpenses(yesterdayCash.data);
 
   return {
     todayRevenue: todayRev,
     todayOrders: calcOrders(todayInvoices.data),
     newCustomers: todayCustomers.count ?? 0,
-    todayProfit: Math.round(todayRev * 0.4), // ~40% margin estimate
+    todayProfit: Math.round(todayRev - todayExp),
     yesterdayRevenue: yesterdayRev,
     yesterdayOrders: calcOrders(yesterdayInvoices.data),
     yesterdayNewCustomers: yesterdayCustomers.count ?? 0,
-    yesterdayProfit: Math.round(yesterdayRev * 0.4),
+    yesterdayProfit: Math.round(yesterdayRev - yesterdayExp),
   };
 }
 

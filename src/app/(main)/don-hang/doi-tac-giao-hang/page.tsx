@@ -24,8 +24,9 @@ import {
 } from "@/components/shared/inline-detail-panel";
 import { formatCurrency, formatDate } from "@/lib/format";
 import { exportToExcel, exportToCsv } from "@/lib/utils/export";
-import { getDeliveryPartners } from "@/lib/services";
-import { CreateDeliveryPartnerDialog } from "@/components/shared/dialogs";
+import { getDeliveryPartners, deactivateDeliveryPartner } from "@/lib/services";
+import { CreateDeliveryPartnerDialog, ConfirmDialog } from "@/components/shared/dialogs";
+import { useToast } from "@/lib/contexts";
 import type { DeliveryPartner } from "@/lib/types";
 
 // --- Status config ---
@@ -159,6 +160,7 @@ function PartnerDetail({
 /*  Page                                                               */
 /* ------------------------------------------------------------------ */
 export default function DoiTacGiaoHangPage() {
+  const { toast } = useToast();
   const [data, setData] = useState<DeliveryPartner[]>([]);
   const [total, setTotal] = useState(0);
   const [loading, setLoading] = useState(true);
@@ -167,6 +169,9 @@ export default function DoiTacGiaoHangPage() {
   const [pageSize, setPageSize] = useState(15);
   const [expandedRow, setExpandedRow] = useState<number | null>(null);
   const [createOpen, setCreateOpen] = useState(false);
+  const [editingPartner, setEditingPartner] = useState<DeliveryPartner | null>(null);
+  const [deactivatingPartner, setDeactivatingPartner] = useState<DeliveryPartner | null>(null);
+  const [deactivateLoading, setDeactivateLoading] = useState(false);
 
   // Stars
   const { starred, toggle: toggleStar } = useStarredSet();
@@ -365,8 +370,12 @@ export default function DoiTacGiaoHangPage() {
 
       <CreateDeliveryPartnerDialog
         open={createOpen}
-        onOpenChange={setCreateOpen}
+        onOpenChange={(open) => {
+          setCreateOpen(open);
+          if (!open) setEditingPartner(null);
+        }}
         onSuccess={fetchData}
+        initialData={editingPartner ?? undefined}
       />
 
       <DataTable
@@ -393,16 +402,52 @@ export default function DoiTacGiaoHangPage() {
           {
             label: "Sửa",
             icon: <Pencil className="h-4 w-4" />,
-            onClick: () => {},
+            onClick: () => {
+              setEditingPartner(row);
+              setCreateOpen(true);
+            },
           },
           {
             label: "Ngừng hoạt động",
             icon: <Ban className="h-4 w-4" />,
-            onClick: () => {},
+            onClick: () => setDeactivatingPartner(row),
             variant: "destructive",
             separator: true,
           },
         ]}
+      />
+
+      <ConfirmDialog
+        open={!!deactivatingPartner}
+        onOpenChange={(open) => { if (!open) setDeactivatingPartner(null); }}
+        title="Ngừng hoạt động đối tác"
+        description={`Ngừng hoạt động đối tác ${deactivatingPartner?.name ?? ""}?`}
+        confirmLabel="Ngừng hoạt động"
+        cancelLabel="Đóng"
+        variant="destructive"
+        loading={deactivateLoading}
+        onConfirm={async () => {
+          if (!deactivatingPartner) return;
+          setDeactivateLoading(true);
+          try {
+            await deactivateDeliveryPartner(deactivatingPartner.id);
+            toast({
+              title: "Đã ngừng hoạt động",
+              description: `Đối tác ${deactivatingPartner.name} đã được ngừng hoạt động`,
+              variant: "success",
+            });
+            setDeactivatingPartner(null);
+            fetchData();
+          } catch (err) {
+            toast({
+              title: "Lỗi ngừng hoạt động",
+              description: err instanceof Error ? err.message : "Vui lòng thử lại",
+              variant: "error",
+            });
+          } finally {
+            setDeactivateLoading(false);
+          }
+        }}
       />
     </ListPageLayout>
   );

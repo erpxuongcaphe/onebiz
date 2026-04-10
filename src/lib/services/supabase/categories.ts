@@ -78,6 +78,26 @@ export async function deleteCategory(id: string) {
   if (error) throw error;
 }
 
+/** Get categories for a scope together with product counts (join). */
+export async function getCategoriesWithCounts(
+  scope: "nvl" | "sku"
+): Promise<ProductCategory[]> {
+  const { data, error } = await supabase
+    .from("categories")
+    .select("*, products(count)")
+    .eq("scope", scope)
+    .order("sort_order");
+
+  if (error) throw error;
+  return (data ?? []).map((row: Record<string, unknown>) => {
+    const mapped = mapCategory(row);
+    // Supabase returns [{count: N}] for aggregated relations
+    const productsAgg = row.products as { count: number }[] | undefined;
+    mapped.productCount = productsAgg?.[0]?.count ?? 0;
+    return mapped;
+  });
+}
+
 function mapCategory(row: Record<string, unknown>): ProductCategory {
   return {
     id: row.id as string,
@@ -86,5 +106,6 @@ function mapCategory(row: Record<string, unknown>): ProductCategory {
     scope: row.scope as ProductCategory["scope"],
     parentId: (row.parent_id as string) ?? undefined,
     sortOrder: (row.sort_order as number) ?? 0,
+    createdAt: (row.created_at as string) ?? undefined,
   };
 }

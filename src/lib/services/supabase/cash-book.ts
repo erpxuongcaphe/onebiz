@@ -4,7 +4,7 @@
 
 import type { CashBookEntry, CashTransaction, QueryParams, QueryResult } from "@/lib/types";
 import type { Database } from "@/lib/supabase/types";
-import { getClient, getPaginationRange, handleError } from "./base";
+import { getClient, getCurrentContext, getPaginationRange, handleError } from "./base";
 
 type CashTransactionInsert = Database["public"]["Tables"]["cash_transactions"]["Insert"];
 
@@ -86,12 +86,13 @@ export async function getCashBookSummaryAsync() {
  */
 export async function createCashTransaction(tx: Partial<CashTransaction>): Promise<CashBookEntry> {
   const supabase = getClient();
+  const ctx = await getCurrentContext();
 
   const { data, error } = await supabase
     .from("cash_transactions")
     .insert({
-      tenant_id: "", // RLS sẽ tự fill qua policy
-      branch_id: "", // RLS sẽ tự fill qua policy
+      tenant_id: ctx.tenantId,
+      branch_id: ctx.branchId,
       code: tx.code!,
       type: tx.type!,
       category: tx.category!,
@@ -101,13 +102,27 @@ export async function createCashTransaction(tx: Partial<CashTransaction>): Promi
       reference_type: tx.referenceType || null,
       reference_id: tx.referenceId || null,
       note: tx.note || null,
-      created_by: tx.createdBy!,
+      created_by: tx.createdBy || ctx.userId,
     } satisfies CashTransactionInsert)
     .select()
     .single();
 
   if (error) handleError(error, "createCashTransaction");
   return mapCashEntry(data);
+}
+
+/**
+ * Xóa phiếu thu/chi.
+ */
+export async function deleteCashTransaction(id: string): Promise<void> {
+  const supabase = getClient();
+
+  const { error } = await supabase
+    .from("cash_transactions")
+    .delete()
+    .eq("id", id);
+
+  if (error) handleError(error, "deleteCashTransaction");
 }
 
 // --- Mapper ---

@@ -13,9 +13,17 @@ import {
   SelectFilter,
   DateRangeFilter,
 } from "@/components/shared/filter-sidebar";
+import {
+  InlineDetailPanel,
+  DetailTabs,
+  DetailHeader,
+  DetailInfoGrid,
+} from "@/components/shared/inline-detail-panel";
+import type { DetailTab } from "@/components/shared/inline-detail-panel";
 import { formatCurrency, formatDate } from "@/lib/format";
-import { getInputInvoices, getInputInvoiceStatuses } from "@/lib/services";
-import { CreateInputInvoiceDialog } from "@/components/shared/dialogs";
+import { getInputInvoices, getInputInvoiceStatuses, deleteInputInvoice, recordInputInvoice } from "@/lib/services";
+import { CreateInputInvoiceDialog, ConfirmDialog } from "@/components/shared/dialogs";
+import { useToast } from "@/lib/contexts";
 import type { InputInvoice } from "@/lib/types";
 
 // === Status config ===
@@ -28,6 +36,70 @@ const statusMap: Record<
 };
 
 const statusOptions = getInputInvoiceStatuses();
+
+// === Inline Detail ===
+function InputInvoiceDetail({
+  item,
+  onClose,
+}: {
+  item: InputInvoice;
+  onClose: () => void;
+}) {
+  const st = statusMap[item.status];
+  const tabs: DetailTab[] = [
+    {
+      id: "info",
+      label: "Thông tin",
+      content: (
+        <div className="space-y-4">
+          <DetailHeader
+            title={`Hóa đơn đầu vào ${item.code}`}
+            code={item.code}
+            status={{ label: st.label, variant: st.variant }}
+            subtitle="Chi nhánh trung tâm"
+            meta={
+              <div className="flex items-center gap-4 flex-wrap text-xs">
+                <span>
+                  Người tạo: <strong>{item.createdBy}</strong>
+                </span>
+                <span>
+                  Ngày tạo: <strong>{formatDate(item.date)}</strong>
+                </span>
+              </div>
+            }
+          />
+          <DetailInfoGrid
+            fields={[
+              { label: "Mã hóa đơn", value: item.code },
+              { label: "Ngày hóa đơn", value: formatDate(item.date) },
+              { label: "Nhà cung cấp", value: item.supplierName },
+              { label: "Tổng tiền hàng", value: formatCurrency(item.totalAmount) },
+              { label: "Thuế", value: formatCurrency(item.taxAmount) },
+              { label: "Trạng thái", value: st.label },
+              { label: "Người tạo", value: item.createdBy },
+            ]}
+          />
+        </div>
+      ),
+    },
+    {
+      id: "history",
+      label: "Lịch sử",
+      content: (
+        <div className="text-sm text-muted-foreground py-4 text-center">
+          Chưa có lịch sử thay đổi
+        </div>
+      ),
+    },
+  ];
+  return (
+    <InlineDetailPanel open onClose={onClose}>
+      <div className="p-4 space-y-4">
+        <DetailTabs tabs={tabs} defaultTab="info" />
+      </div>
+    </InlineDetailPanel>
+  );
+}
 
 // === Columns ===
 const columns: ColumnDef<InputInvoice, unknown>[] = [
@@ -77,6 +149,7 @@ const columns: ColumnDef<InputInvoice, unknown>[] = [
 ];
 
 export default function HoaDonDauVaoPage() {
+  const { toast } = useToast();
   const [data, setData] = useState<InputInvoice[]>([]);
   const [total, setTotal] = useState(0);
   const [loading, setLoading] = useState(true);
@@ -84,6 +157,15 @@ export default function HoaDonDauVaoPage() {
   const [page, setPage] = useState(0);
   const [pageSize, setPageSize] = useState(20);
   const [createOpen, setCreateOpen] = useState(false);
+  const [expandedRow, setExpandedRow] = useState<number | null>(null);
+
+  // Delete
+  const [deletingInvoice, setDeletingInvoice] = useState<InputInvoice | null>(null);
+  const [deleteLoading, setDeleteLoading] = useState(false);
+
+  // Record
+  const [recordingInvoice, setRecordingInvoice] = useState<InputInvoice | null>(null);
+  const [recordLoading, setRecordLoading] = useState(false);
 
   // Filters
   const [statusFilter, setStatusFilter] = useState("all");
@@ -110,6 +192,7 @@ export default function HoaDonDauVaoPage() {
 
   useEffect(() => {
     setPage(0);
+    setExpandedRow(null);
   }, [search, statusFilter]);
 
   return (
@@ -164,11 +247,79 @@ export default function HoaDonDauVaoPage() {
           setPage(0);
         }}
         selectable
+        expandedRow={expandedRow}
+        onExpandedRowChange={setExpandedRow}
+        renderDetail={(item, onClose) => (
+          <InputInvoiceDetail item={item} onClose={onClose} />
+        )}
         rowActions={(row) => [
-          { label: "Xem chi tiết", icon: <Eye className="h-4 w-4" />, onClick: () => {} },
-          { label: "Ghi nhận", icon: <BookOpen className="h-4 w-4" />, onClick: () => {} },
-          { label: "Xóa", icon: <Trash2 className="h-4 w-4" />, onClick: () => {}, variant: "destructive", separator: true },
+          {
+            label: "Xem chi tiết",
+            icon: <Eye className="h-4 w-4" />,
+            onClick: () => {
+              const idx = data.findIndex((d) => d.id === row.id);
+              setExpandedRow(expandedRow === idx ? null : idx);
+            },
+          },
+          { label: "Ghi nhận", icon: <BookOpen className="h-4 w-4" />, onClick: () => setRecordingInvoice(row) },
+          { label: "Xóa", icon: <Trash2 className="h-4 w-4" />, onClick: () => setDeletingInvoice(row), variant: "destructive", separator: true },
         ]}
+      />
+
+      <ConfirmDialog
+        open={!!deletingInvoice}
+        onOpenChange={(open) => { if (!open) setDeletingInvoice(null); }}
+        title="Xóa hoá đơn đầu vào"
+        description={`Xóa hoá đơn đầu vào ${deletingInvoice?.code}?`}
+        confirmLabel="Xóa"
+        variant="destructive"
+        loading={deleteLoading}
+        onConfirm={async () => {
+          if (!deletingInvoice) return;
+          setDeleteLoading(true);
+          try {
+            await deleteInputInvoice(deletingInvoice.id);
+            toast({ title: "Đã xóa hoá đơn đầu vào", description: deletingInvoice.code, variant: "success" });
+            setDeletingInvoice(null);
+            fetchData();
+          } catch (err) {
+            toast({ title: "Lỗi xóa hoá đơn đầu vào", description: err instanceof Error ? err.message : "Vui lòng thử lại", variant: "error" });
+          } finally {
+            setDeleteLoading(false);
+          }
+        }}
+      />
+
+      <ConfirmDialog
+        open={!!recordingInvoice}
+        onOpenChange={(open) => { if (!open) setRecordingInvoice(null); }}
+        title="Ghi nhận hoá đơn đầu vào"
+        description={`Ghi nhận hoá đơn đầu vào ${recordingInvoice?.code ?? ""}?`}
+        confirmLabel="Ghi nhận"
+        cancelLabel="Đóng"
+        loading={recordLoading}
+        onConfirm={async () => {
+          if (!recordingInvoice) return;
+          setRecordLoading(true);
+          try {
+            await recordInputInvoice(recordingInvoice.id);
+            toast({
+              title: "Đã ghi nhận hoá đơn đầu vào",
+              description: recordingInvoice.code,
+              variant: "success",
+            });
+            setRecordingInvoice(null);
+            fetchData();
+          } catch (err) {
+            toast({
+              title: "Lỗi ghi nhận hoá đơn",
+              description: err instanceof Error ? err.message : "Vui lòng thử lại",
+              variant: "error",
+            });
+          } finally {
+            setRecordLoading(false);
+          }
+        }}
       />
     </ListPageLayout>
   );

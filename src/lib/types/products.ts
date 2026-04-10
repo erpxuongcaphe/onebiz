@@ -55,6 +55,7 @@ export interface ProductCategory {
   parentId?: string;
   sortOrder: number;
   productCount?: number;
+  createdAt?: string;
 }
 
 // Lịch sử xuất nhập kho

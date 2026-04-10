@@ -22,11 +22,14 @@ import {
   DetailInfoGrid,
   DetailItemsTable,
 } from "@/components/shared/inline-detail-panel";
+import { useToast } from "@/lib/contexts";
+import { printDocument } from "@/lib/print-document";
+import { buildSalesOrderPrintData } from "@/lib/print-templates";
 import { formatCurrency, formatDate } from "@/lib/format";
 import { exportToExcel, exportToCsv } from "@/lib/utils/export";
 import { getOrders } from "@/lib/services";
 import type { SalesOrder } from "@/lib/types";
-import { CreateOrderDialog } from "@/components/shared/dialogs";
+import { CreateOrderDialog, ConfirmDialog } from "@/components/shared/dialogs";
 
 // --- Status config ---
 
@@ -156,7 +159,7 @@ function OrderDetail({
                     [
                       {
                         code: "SP001",
-                        name: "San pham mau",
+                        name: "Sản phẩm mẫu",
                         quantity: 1,
                         unitPrice: order.totalAmount,
                         total: order.totalAmount,
@@ -165,16 +168,16 @@ function OrderDetail({
                   }
                   summary={[
                     {
-                      label: "Tong tien hang (1)",
+                      label: "Tổng tiền hàng (1)",
                       value: formatCurrency(order.totalAmount),
                     },
                     {
-                      label: "Khach can tra",
+                      label: "Khách cần trả",
                       value: formatCurrency(order.totalAmount),
                       className: "font-bold text-base",
                     },
                     {
-                      label: "Khach da tra",
+                      label: "Khách đã trả",
                       value: formatCurrency(0),
                     },
                   ]}
@@ -182,7 +185,7 @@ function OrderDetail({
 
                 <div className="border rounded-md p-3">
                   <textarea
-                    placeholder="Ghi chu..."
+                    placeholder="Ghi chú..."
                     className="w-full text-sm resize-none bg-transparent outline-none min-h-[60px]"
                   />
                 </div>
@@ -191,10 +194,10 @@ function OrderDetail({
           },
           {
             id: "payment_history",
-            label: "Lich su thanh toan",
+            label: "Lịch sử thanh toán",
             content: (
               <div className="text-sm text-muted-foreground py-4 text-center">
-                Chua co lich su thanh toan
+                Chưa có lịch sử thanh toán
               </div>
             ),
           },
@@ -207,6 +210,7 @@ function OrderDetail({
 // --- Page ---
 
 export default function DatHangPage() {
+  const { toast } = useToast();
   const [data, setData] = useState<SalesOrder[]>([]);
   const [total, setTotal] = useState(0);
   const [loading, setLoading] = useState(true);
@@ -216,6 +220,8 @@ export default function DatHangPage() {
   const [expandedRow, setExpandedRow] = useState<number | null>(null);
   const [starred, setStarred] = useState<Set<string>>(new Set());
   const [createOpen, setCreateOpen] = useState(false);
+  const [cancellingItem, setCancellingItem] = useState<SalesOrder | null>(null);
+  const [cancelLoading, setCancelLoading] = useState(false);
 
   // Filters
   const [selectedStatuses, setSelectedStatuses] = useState<string[]>([
@@ -266,22 +272,22 @@ export default function DatHangPage() {
 
   const handleExport = (type: "excel" | "csv") => {
     const exportColumns = [
-      { header: "Ma dat hang", key: "code", width: 15 },
+      { header: "Mã đặt hàng", key: "code", width: 15 },
       {
-        header: "Thoi gian",
+        header: "Thời gian",
         key: "date",
         width: 18,
         format: (v: string) => formatDate(v),
       },
-      { header: "Khach hang", key: "customerName", width: 25 },
+      { header: "Khách hàng", key: "customerName", width: 25 },
       {
-        header: "Tong tien",
+        header: "Tổng tiền",
         key: "totalAmount",
         width: 15,
         format: (v: number) => v,
       },
       {
-        header: "Trang thai",
+        header: "Trạng thái",
         key: "status",
         width: 15,
         format: (v: string) => statusMap[v]?.label ?? v,
@@ -310,7 +316,7 @@ export default function DatHangPage() {
     },
     {
       accessorKey: "code",
-      header: "Ma dat hang",
+      header: "Mã đặt hàng",
       size: 130,
       cell: ({ row }) => (
         <span className="font-medium text-primary">{row.original.code}</span>
@@ -318,24 +324,24 @@ export default function DatHangPage() {
     },
     {
       accessorKey: "date",
-      header: "Thoi gian",
+      header: "Thời gian",
       size: 150,
       cell: ({ row }) => formatDate(row.original.date),
     },
     {
       accessorKey: "customerCode",
-      header: "Ma KH",
+      header: "Mã KH",
       size: 100,
       cell: () => "—",
     },
     {
       accessorKey: "customerName",
-      header: "Khach hang",
+      header: "Khách hàng",
       size: 180,
     },
     {
       accessorKey: "totalAmount",
-      header: "Khach can tra",
+      header: "Khách cần trả",
       cell: ({ row }) => (
         <span className="text-right block">
           {formatCurrency(row.original.totalAmount)}
@@ -344,14 +350,14 @@ export default function DatHangPage() {
     },
     {
       id: "paidAmount",
-      header: "Khach da tra",
+      header: "Khách đã trả",
       cell: () => (
         <span className="text-right block">{formatCurrency(0)}</span>
       ),
     },
     {
       accessorKey: "status",
-      header: "Trang thai",
+      header: "Trạng thái",
       cell: ({ row }) => {
         const s = statusMap[row.original.status] ?? {
           label: row.original.statusName,
@@ -367,11 +373,11 @@ export default function DatHangPage() {
     <ListPageLayout
       sidebar={
         <FilterSidebar>
-          <FilterGroup label="Thoi gian">
+          <FilterGroup label="Thời gian">
             <DatePresetFilter value={datePreset} onChange={setDatePreset} />
           </FilterGroup>
 
-          <FilterGroup label="Trang thai">
+          <FilterGroup label="Trạng thái">
             <CheckboxFilter
               options={statusFilterOptions}
               selected={selectedStatuses}
@@ -379,36 +385,36 @@ export default function DatHangPage() {
             />
           </FilterGroup>
 
-          <FilterGroup label="Doi tac giao hang">
+          <FilterGroup label="Đối tác giao hàng">
             <SelectFilter
               options={deliveryPartnerOptions}
               value={deliveryPartner}
               onChange={setDeliveryPartner}
-              placeholder="Chon doi tac giao hang"
+              placeholder="Chọn đối tác giao hàng"
             />
           </FilterGroup>
 
-          <FilterGroup label="Thoi gian giao hang">
+          <FilterGroup label="Thời gian giao hàng">
             <DatePresetFilter
               value={deliveryDatePreset}
               onChange={setDeliveryDatePreset}
             />
           </FilterGroup>
 
-          <FilterGroup label="Khu vuc giao hang">
+          <FilterGroup label="Khu vực giao hàng">
             <SelectFilter
               options={deliveryAreaOptions}
               value={deliveryArea}
               onChange={setDeliveryArea}
-              placeholder="Chon khu vuc"
+              placeholder="Chọn khu vực"
             />
           </FilterGroup>
         </FilterSidebar>
       }
     >
       <PageHeader
-        title="Dat hang"
-        searchPlaceholder="Theo ma don, khach hang"
+        title="Đặt hàng"
+        searchPlaceholder="Theo mã đơn, khách hàng"
         searchValue={search}
         onSearchChange={setSearch}
         onExport={{
@@ -417,15 +423,16 @@ export default function DatHangPage() {
         }}
         actions={[
           {
-            label: "Dat hang",
+            label: "Đặt hàng",
             icon: <Plus className="h-4 w-4" />,
             variant: "default",
             onClick: () => setCreateOpen(true),
           },
           {
-            label: "Gop don",
+            label: "Gộp đơn",
             icon: <Layers className="h-4 w-4" />,
             variant: "outline",
+            onClick: () => toast({ variant: "info", title: "Tính năng gộp đơn sẽ có trong phiên bản tới" }),
           },
         ]}
       />
@@ -454,17 +461,21 @@ export default function DatHangPage() {
         )}
         rowActions={(row) => [
           {
-            label: "In phieu",
+            label: "In phiếu",
             icon: <Printer className="h-4 w-4" />,
-            onClick: () => {},
+            onClick: () => printDocument(buildSalesOrderPrintData(row)),
           },
-          {
-            label: "Huy",
-            icon: <XCircle className="h-4 w-4" />,
-            onClick: () => {},
-            variant: "destructive",
-            separator: true,
-          },
+          ...(row.status !== "completed" && row.status !== "cancelled"
+            ? [
+                {
+                  label: "Hủy",
+                  icon: <XCircle className="h-4 w-4" />,
+                  onClick: () => setCancellingItem(row),
+                  variant: "destructive" as const,
+                  separator: true,
+                },
+              ]
+            : []),
         ]}
       />
     </ListPageLayout>
@@ -473,6 +484,33 @@ export default function DatHangPage() {
       open={createOpen}
       onOpenChange={setCreateOpen}
       onSuccess={fetchData}
+    />
+
+    <ConfirmDialog
+      open={!!cancellingItem}
+      onOpenChange={(open) => { if (!open) setCancellingItem(null); }}
+      title="Hủy đơn đặt hàng"
+      description={`Bạn có chắc muốn hủy đơn đặt hàng ${cancellingItem?.code ?? ""}? Thao tác này không thể hoàn tác.`}
+      confirmLabel="Hủy đơn"
+      cancelLabel="Đóng"
+      variant="destructive"
+      loading={cancelLoading}
+      onConfirm={async () => {
+        if (!cancellingItem) return;
+        setCancelLoading(true);
+        try {
+          // Mock data — toast success + refetch
+          toast({
+            title: "Đã hủy đơn đặt hàng",
+            description: `Đơn ${cancellingItem.code} đã được hủy thành công`,
+            variant: "success",
+          });
+          await fetchData();
+        } finally {
+          setCancelLoading(false);
+          setCancellingItem(null);
+        }
+      }}
     />
     </>
   );

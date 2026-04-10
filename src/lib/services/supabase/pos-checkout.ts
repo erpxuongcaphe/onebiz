@@ -30,6 +30,12 @@ export interface PosCheckoutItem {
   discount: number;
 }
 
+/** Một dòng trong bảng tách thanh toán hỗn hợp */
+export interface PaymentBreakdownItem {
+  method: "cash" | "transfer" | "card";
+  amount: number;
+}
+
 export interface PosCheckoutInput {
   tenantId: string;
   branchId: string;
@@ -38,6 +44,8 @@ export interface PosCheckoutInput {
   customerName: string;
   items: PosCheckoutItem[];
   paymentMethod: "cash" | "transfer" | "card" | "mixed";
+  /** Khi paymentMethod="mixed", tách chi tiết từng phương thức */
+  paymentBreakdown?: PaymentBreakdownItem[];
   subtotal: number;
   discountAmount: number;
   total: number;
@@ -140,14 +148,14 @@ export async function applyStockDecrement(
 // ============================================================
 
 /**
- * Create a "phiếu thu" (income cash transaction) tied to the invoice.
+ * Create "phiếu thu" (income cash transaction) tied to the invoice.
  * Called whenever a sale actually receives money (paid > 0).
  *
  * Keeps sổ quỹ automatically in sync with doanh thu POS.
  *
- * Note: `cash_transactions.payment_method` only accepts cash | transfer | card.
- * POS "mixed" gets mapped to "cash" (dominant default) — a future improvement
- * can split the row when partial multi-method payments are supported.
+ * **Thanh toán hỗn hợp:** Khi paymentMethod="mixed" VÀ có paymentBreakdown,
+ * tạo N phiếu thu riêng biệt — mỗi phiếu ghi đúng phương thức và số tiền.
+ * Nếu không có breakdown (legacy), fallback về 1 phiếu "cash" như cũ.
  */
 export async function createAutoCashReceipt(
   supabase: SupabaseClient<Database>,
@@ -155,11 +163,54 @@ export async function createAutoCashReceipt(
   invoiceCode: string,
   amount: number,
   paymentMethod: "cash" | "transfer" | "card" | "mixed",
-  ctx: { tenantId: string; branchId: string; createdBy: string; customerName: string }
+  ctx: { tenantId: string; branchId: string; createdBy: string; customerName: string },
+  paymentBreakdown?: PaymentBreakdownItem[]
 ): Promise<void> {
   if (amount <= 0) return; // Nợ 100% — chưa thu tiền
 
-  // 1. Generate code PT00001
+  // Mixed + có breakdown → tạo N phiếu thu riêng
+  if (paymentMethod === "mixed" && paymentBreakdown && paymentBreakdown.length > 0) {
+    const validItems = paymentBreakdown.filter((b) => b.amount > 0);
+    if (validItems.length === 0) return;
+
+    const METHOD_LABELS: Record<string, string> = {
+      cash: "tiền mặt",
+      transfer: "chuyển khoản",
+      card: "thẻ",
+    };
+
+    for (const item of validItems) {
+      const { data: code, error: codeErr } = await supabase.rpc("next_code", {
+        p_tenant_id: ctx.tenantId,
+        p_entity_type: "cash_receipt",
+      });
+      if (codeErr) handleError(codeErr, "createAutoCashReceipt:next_code:mixed");
+      const cashCode = code ?? `PT${Date.now()}`;
+
+      const cashData: CashTransactionInsert = {
+        tenant_id: ctx.tenantId,
+        branch_id: ctx.branchId,
+        code: cashCode,
+        type: "receipt",
+        category: "Bán hàng",
+        amount: item.amount,
+        counterparty: ctx.customerName,
+        payment_method: item.method,
+        reference_type: "invoice",
+        reference_id: invoiceId,
+        note: `Thu tiền hoá đơn ${invoiceCode} (${METHOD_LABELS[item.method] ?? item.method})`,
+        created_by: ctx.createdBy,
+      };
+
+      const { error: cashErr } = await supabase
+        .from("cash_transactions")
+        .insert(cashData);
+      if (cashErr) handleError(cashErr, "createAutoCashReceipt:insert:mixed");
+    }
+    return;
+  }
+
+  // Single method (cash / transfer / card) hoặc mixed legacy fallback
   const { data: code, error: codeErr } = await supabase.rpc("next_code", {
     p_tenant_id: ctx.tenantId,
     p_entity_type: "cash_receipt",
@@ -167,7 +218,6 @@ export async function createAutoCashReceipt(
   if (codeErr) handleError(codeErr, "createAutoCashReceipt:next_code");
   const cashCode = code ?? `PT${Date.now()}`;
 
-  // 2. Map mixed → cash for cash_transactions schema
   const cashPaymentMethod: "cash" | "transfer" | "card" =
     paymentMethod === "mixed" ? "cash" : paymentMethod;
 
@@ -258,7 +308,7 @@ export async function posCheckout(input: PosCheckoutInput): Promise<PosCheckoutR
     invoiceCode: invoice.code,
   });
 
-  // 5. Auto-create cash transaction (phiếu thu) — M4.C
+  // 5. Auto-create cash transaction (phiếu thu) — hỗ trợ tách thanh toán hỗn hợp
   await createAutoCashReceipt(
     supabase,
     invoice.id,
@@ -270,7 +320,8 @@ export async function posCheckout(input: PosCheckoutInput): Promise<PosCheckoutR
       branchId: input.branchId,
       createdBy: input.createdBy,
       customerName: input.customerName || "Khách lẻ",
-    }
+    },
+    input.paymentBreakdown
   );
 
   return {

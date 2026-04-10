@@ -1,6 +1,7 @@
 "use client";
 
 import { useEffect, useState, useCallback } from "react";
+import { useRouter } from "next/navigation";
 import { ColumnDef } from "@tanstack/react-table";
 import {
   Plus,
@@ -35,6 +36,8 @@ import {
 } from "@/components/shared/inline-detail-panel";
 import type { DetailTab } from "@/components/shared/inline-detail-panel";
 import { useToast } from "@/lib/contexts";
+import { printDocument } from "@/lib/print-document";
+import { buildGoodsReceiptPrintData } from "@/lib/print-templates";
 import { formatCurrency, formatDate } from "@/lib/format";
 import { exportToExcel, exportToCsv } from "@/lib/utils/export";
 import {
@@ -201,6 +204,7 @@ function PurchaseOrderDetail({
 /* ------------------------------------------------------------------ */
 export default function NhapHangPage() {
   const { toast } = useToast();
+  const router = useRouter();
   const [data, setData] = useState<PurchaseOrder[]>([]);
   const [total, setTotal] = useState(0);
   const [loading, setLoading] = useState(true);
@@ -609,12 +613,15 @@ export default function NhapHangPage() {
           actions.push({
             label: "In phiếu",
             icon: <Printer className="h-4 w-4" />,
-            onClick: () => {},
+            onClick: () => printDocument(buildGoodsReceiptPrintData(row)),
           });
           actions.push({
             label: "Trả hàng nhập",
             icon: <Undo2 className="h-4 w-4" />,
-            onClick: () => {},
+            onClick: () => {
+              toast({ variant: "info", title: "Chuyển đến trang trả hàng nhập", description: "Tạo phiếu trả cho phiếu nhập " + row.code });
+              router.push("/hang-hoa/tra-hang-nhap");
+            },
           });
           if (row.status !== "completed" && row.status !== "cancelled") {
             actions.push({

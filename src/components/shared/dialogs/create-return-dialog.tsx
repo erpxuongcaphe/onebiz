@@ -15,7 +15,9 @@ import { Checkbox } from "@/components/ui/checkbox";
 import { Search, Loader2 } from "lucide-react";
 import { formatCurrency } from "@/lib/format";
 import { useToast } from "@/lib/contexts";
-import { getClient } from "@/lib/services/supabase/base";
+import { getClient, getCurrentContext } from "@/lib/services/supabase/base";
+import { nextEntityCode } from "@/lib/services/supabase/stock-adjustments";
+import { completeReturn } from "@/lib/services/supabase/returns-completion";
 import type { Database } from "@/lib/supabase/types";
 
 type SalesReturnInsert = Database["public"]["Tables"]["sales_returns"]["Insert"];
@@ -46,10 +48,7 @@ interface InvoiceLineItem {
   returnQty: number;
 }
 
-function generateReturnCode() {
-  const num = Math.floor(Math.random() * 99999) + 1;
-  return `TH${String(num).padStart(6, "0")}`;
-}
+// Code generation moved to nextEntityCode("sales_return") in handleSave
 
 export function CreateReturnDialog({
   open,
@@ -70,7 +69,7 @@ export function CreateReturnDialog({
 
   useEffect(() => {
     if (open) {
-      setCode(generateReturnCode());
+      setCode("TH...");
       setInvoiceSearch("");
       setShowInvoiceDropdown(false);
       setFilteredInvoices([]);
@@ -162,14 +161,18 @@ export function CreateReturnDialog({
     setSaving(true);
     try {
       const supabase = getClient();
-      const { data: { user } } = await supabase.auth.getUser();
+      const ctx = await getCurrentContext();
+
+      // Generate monotonic return code via next_code RPC
+      const returnCode = await nextEntityCode("sales_return", { tenantId: ctx.tenantId });
+      setCode(returnCode);
 
       const { data: salesReturn, error: returnErr } = await supabase
         .from("sales_returns")
         .insert({
-          tenant_id: "",
-          branch_id: "",
-          code,
+          tenant_id: ctx.tenantId,
+          branch_id: ctx.branchId,
+          code: returnCode,
           invoice_id: selectedInvoice!.id,
           customer_id: selectedInvoice!.customer_id,
           customer_name: selectedInvoice!.customer_name,
@@ -178,7 +181,7 @@ export function CreateReturnDialog({
           refunded: returnTotal,
           reason: reason || null,
           note: notes || null,
-          created_by: user?.id ?? "",
+          created_by: ctx.userId,
         } satisfies SalesReturnInsert)
         .select("id")
         .single();
@@ -198,12 +201,27 @@ export function CreateReturnDialog({
             total: item.returnQty * item.unit_price,
           } satisfies ReturnItemInsert)));
         if (itemsErr) throw new Error(itemsErr.message);
+
+        // Complete return: increment stock + create cash refund payment
+        await completeReturn({
+          returnId: salesReturn.id,
+          returnCode,
+          invoiceCode: selectedInvoice!.code,
+          customerName: selectedInvoice!.customer_name,
+          items: selectedItems.map(item => ({
+            productId: item.product_id,
+            productName: item.product_name,
+            quantity: item.returnQty,
+            unitPrice: item.unit_price,
+          })),
+          refundAmount: returnTotal,
+        });
       }
 
       onOpenChange(false);
       toast({
         title: "Tạo phiếu trả hàng thành công",
-        description: `Đã tạo phiếu trả hàng ${code}`,
+        description: `Đã tạo phiếu trả hàng ${returnCode} — Kho đã cộng lại, sổ quỹ đã ghi nhận hoàn tiền`,
         variant: "success",
       });
       onSuccess?.();

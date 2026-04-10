@@ -43,6 +43,7 @@ import {
   Truck,
   MapPin,
   Phone,
+  Layers,
 } from "lucide-react";
 
 import {
@@ -301,6 +302,12 @@ export default function PosPage() {
       const paid = state.paid || state.total;
       let invoiceCode: string;
 
+      // Build breakdown for mixed payments
+      const breakdown =
+        state.paymentMethod === "mixed"
+          ? state.paymentBreakdown.filter((b) => b.amount > 0)
+          : undefined;
+
       if (state.loadedDraftId) {
         // ── Completing an existing draft → update in-place (no new invoice) ──
         const result = await completeDraftOrder(state.loadedDraftId, {
@@ -309,6 +316,7 @@ export default function PosPage() {
           tenantId: ctx.tenantId,
           branchId: ctx.branchId,
           createdBy: ctx.userId,
+          paymentBreakdown: breakdown,
         });
         invoiceCode = result.invoiceCode;
       } else {
@@ -330,6 +338,7 @@ export default function PosPage() {
               : l.discount.value,
           })),
           paymentMethod: state.paymentMethod,
+          paymentBreakdown: breakdown,
           subtotal: state.subtotal,
           discountAmount: state.orderDiscountAmount + state.lineDiscountTotal,
           total: state.total,
@@ -901,7 +910,7 @@ export default function PosPage() {
           {state.sellingMode !== "fast" && (
             <div className="border-t border-gray-200 px-3 py-2 space-y-2">
               {/* Payment method */}
-              <div className="grid grid-cols-3 gap-1.5">
+              <div className="grid grid-cols-4 gap-1.5">
                 <PaymentBtn
                   icon={<Banknote className="h-3.5 w-3.5" />}
                   label="Tiền mặt"
@@ -920,65 +929,135 @@ export default function PosPage() {
                   active={state.paymentMethod === "card"}
                   onClick={() => state.setPaymentMethod("card")}
                 />
-              </div>
-
-              {/* Paid amount */}
-              <div>
-                <div className="flex items-center justify-between mb-1">
-                  <label className="text-[10px] font-medium text-gray-500 uppercase tracking-wider">
-                    Khách đưa
-                  </label>
-                  {state.paid > 0 && state.change > 0 && (
-                    <span className="text-[11px] font-bold text-emerald-600 bg-emerald-50 px-1.5 py-0.5 rounded">
-                      Thừa: {formatCurrency(state.change)} ₫
-                    </span>
-                  )}
-                  {state.paid > 0 && state.debt > 0 && (
-                    <span className="text-[11px] font-bold text-amber-600 bg-amber-50 px-1.5 py-0.5 rounded">
-                      Nợ: {formatCurrency(state.debt)} ₫
-                    </span>
-                  )}
-                </div>
-                <input
-                  type="number"
-                  inputMode="numeric"
-                  value={state.paid || ""}
-                  onChange={(e) =>
-                    state.setPaid(Math.max(0, parseInt(e.target.value) || 0))
-                  }
-                  placeholder={formatCurrency(state.total)}
-                  data-allow-hotkeys="true"
-                  className={cn(
-                    "w-full h-9 px-3 rounded border text-right text-sm font-bold outline-none focus:ring-2 focus:ring-blue-500/30 focus:border-blue-500 tabular-nums transition-colors",
-                    state.paid > 0 && state.paid >= state.total
-                      ? "border-emerald-400 bg-emerald-50/50"
-                      : state.paid > 0 && state.paid < state.total
-                      ? "border-amber-400 bg-amber-50/50"
-                      : "border-gray-300"
-                  )}
+                <PaymentBtn
+                  icon={<Layers className="h-3.5 w-3.5" />}
+                  label="Hỗn hợp"
+                  active={state.paymentMethod === "mixed"}
+                  onClick={() => state.setPaymentMethod("mixed")}
                 />
               </div>
 
-              {/* Denomination buttons */}
-              <div className="flex gap-1">
-                {DENOMINATIONS.map((d) => (
-                  <button
-                    key={d.value}
-                    type="button"
-                    onClick={() => state.setPaid(d.value)}
-                    className="flex-1 h-7 rounded border border-gray-200 bg-gray-50 text-[10px] font-medium text-gray-600 hover:bg-blue-50 hover:border-blue-300 hover:text-blue-600 transition-colors"
-                  >
-                    {d.label}
-                  </button>
-                ))}
-                <button
-                  type="button"
-                  onClick={() => state.setPaid(state.total)}
-                  className="flex-1 h-7 rounded border border-blue-200 bg-blue-50 text-[10px] font-bold text-blue-600 hover:bg-blue-100 transition-colors"
-                >
-                  Đủ
-                </button>
-              </div>
+              {/* Mixed payment breakdown */}
+              {state.paymentMethod === "mixed" ? (
+                <div className="space-y-1.5">
+                  <label className="text-[10px] font-medium text-gray-500 uppercase tracking-wider">
+                    Chi tiết thanh toán
+                  </label>
+                  {([
+                    { method: "cash" as const, label: "Tiền mặt", icon: <Banknote className="h-3 w-3 text-green-600" /> },
+                    { method: "transfer" as const, label: "Chuyển khoản", icon: <Building2 className="h-3 w-3 text-blue-600" /> },
+                    { method: "card" as const, label: "Thẻ", icon: <CreditCard className="h-3 w-3 text-purple-600" /> },
+                  ]).map((pm) => {
+                    const item = state.paymentBreakdown.find((b) => b.method === pm.method);
+                    return (
+                      <div key={pm.method} className="flex items-center gap-2">
+                        <div className="flex items-center gap-1 w-20 shrink-0">
+                          {pm.icon}
+                          <span className="text-[10px] text-gray-600">{pm.label}</span>
+                        </div>
+                        <input
+                          type="number"
+                          inputMode="numeric"
+                          value={item?.amount || ""}
+                          onChange={(e) =>
+                            state.updateBreakdownAmount(
+                              pm.method,
+                              Math.max(0, parseInt(e.target.value) || 0)
+                            )
+                          }
+                          placeholder="0"
+                          data-allow-hotkeys="true"
+                          className="flex-1 h-7 px-2 rounded border border-gray-300 text-right text-xs font-bold outline-none focus:ring-2 focus:ring-blue-500/30 focus:border-blue-500 tabular-nums"
+                        />
+                      </div>
+                    );
+                  })}
+                  {/* Breakdown summary */}
+                  <div className="flex items-center justify-between pt-1 border-t border-dashed border-gray-200">
+                    <span className="text-[10px] text-gray-500">Tổng đã nhập</span>
+                    <span
+                      className={cn(
+                        "text-xs font-bold tabular-nums",
+                        state.breakdownTotal >= state.total
+                          ? "text-emerald-600"
+                          : "text-amber-600"
+                      )}
+                    >
+                      {formatCurrency(state.breakdownTotal)} / {formatCurrency(state.total)} ₫
+                    </span>
+                  </div>
+                  {state.breakdownTotal > 0 && state.breakdownTotal < state.total && (
+                    <p className="text-[10px] text-amber-600">
+                      Còn thiếu {formatCurrency(state.total - state.breakdownTotal)} ₫
+                    </p>
+                  )}
+                  {state.breakdownTotal > state.total && (
+                    <p className="text-[10px] text-emerald-600">
+                      Thừa {formatCurrency(state.breakdownTotal - state.total)} ₫
+                    </p>
+                  )}
+                </div>
+              ) : (
+                <>
+                  {/* Single-method: Paid amount */}
+                  <div>
+                    <div className="flex items-center justify-between mb-1">
+                      <label className="text-[10px] font-medium text-gray-500 uppercase tracking-wider">
+                        Khách đưa
+                      </label>
+                      {state.paid > 0 && state.change > 0 && (
+                        <span className="text-[11px] font-bold text-emerald-600 bg-emerald-50 px-1.5 py-0.5 rounded">
+                          Thừa: {formatCurrency(state.change)} ₫
+                        </span>
+                      )}
+                      {state.paid > 0 && state.debt > 0 && (
+                        <span className="text-[11px] font-bold text-amber-600 bg-amber-50 px-1.5 py-0.5 rounded">
+                          Nợ: {formatCurrency(state.debt)} ₫
+                        </span>
+                      )}
+                    </div>
+                    <input
+                      type="number"
+                      inputMode="numeric"
+                      value={state.paid || ""}
+                      onChange={(e) =>
+                        state.setPaid(Math.max(0, parseInt(e.target.value) || 0))
+                      }
+                      placeholder={formatCurrency(state.total)}
+                      data-allow-hotkeys="true"
+                      className={cn(
+                        "w-full h-9 px-3 rounded border text-right text-sm font-bold outline-none focus:ring-2 focus:ring-blue-500/30 focus:border-blue-500 tabular-nums transition-colors",
+                        state.paid > 0 && state.paid >= state.total
+                          ? "border-emerald-400 bg-emerald-50/50"
+                          : state.paid > 0 && state.paid < state.total
+                          ? "border-amber-400 bg-amber-50/50"
+                          : "border-gray-300"
+                      )}
+                    />
+                  </div>
+
+                  {/* Denomination buttons */}
+                  <div className="flex gap-1">
+                    {DENOMINATIONS.map((d) => (
+                      <button
+                        key={d.value}
+                        type="button"
+                        onClick={() => state.setPaid(d.value)}
+                        className="flex-1 h-7 rounded border border-gray-200 bg-gray-50 text-[10px] font-medium text-gray-600 hover:bg-blue-50 hover:border-blue-300 hover:text-blue-600 transition-colors"
+                      >
+                        {d.label}
+                      </button>
+                    ))}
+                    <button
+                      type="button"
+                      onClick={() => state.setPaid(state.total)}
+                      className="flex-1 h-7 rounded border border-blue-200 bg-blue-50 text-[10px] font-bold text-blue-600 hover:bg-blue-100 transition-colors"
+                    >
+                      Đủ
+                    </button>
+                  </div>
+                </>
+              )}
 
               {/* Note toggle + auto print — inline */}
               <div className="flex items-center justify-between">

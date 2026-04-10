@@ -87,7 +87,7 @@ export function getPurchaseReturnStatuses() {
 
 // ==================== Input Invoices (Hóa đơn đầu vào) ====================
 
-const mockInputInvoices: InputInvoice[] = [
+let mockInputInvoices: InputInvoice[] = [
   { id: "1", code: "HDDV000001", date: "2026-03-30T10:00:00", supplierName: "Công ty TNHH Phát Đạt", totalAmount: 25000000, taxAmount: 2500000, status: "recorded", statusName: "Đã ghi sổ", createdBy: "Nguyễn Văn A" },
   { id: "2", code: "HDDV000002", date: "2026-03-29T14:30:00", supplierName: "Công ty CP Thành Công", totalAmount: 18500000, taxAmount: 1850000, status: "recorded", statusName: "Đã ghi sổ", createdBy: "Trần Thị B" },
   { id: "3", code: "HDDV000003", date: "2026-03-28T09:00:00", supplierName: "Công ty TNHH Minh Quang", totalAmount: 42000000, taxAmount: 4200000, status: "unrecorded", statusName: "Chưa ghi sổ", createdBy: "Lê Văn C" },
@@ -114,6 +114,21 @@ export async function getInputInvoices(params: QueryParams): Promise<QueryResult
   }
 
   return paginateData(filtered, params.page, params.pageSize);
+}
+
+export async function deleteInputInvoice(id: string): Promise<void> {
+  await simulateDelay();
+  const idx = mockInputInvoices.findIndex((item) => item.id === id);
+  if (idx !== -1) mockInputInvoices.splice(idx, 1);
+}
+
+export async function recordInputInvoice(id: string): Promise<void> {
+  await simulateDelay();
+  const item = mockInputInvoices.find((inv) => inv.id === id);
+  if (item && item.status === "unrecorded") {
+    item.status = "recorded";
+    item.statusName = "Đã ghi sổ";
+  }
 }
 
 export function getInputInvoiceStatuses() {

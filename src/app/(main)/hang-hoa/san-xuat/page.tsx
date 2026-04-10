@@ -21,10 +21,13 @@ import {
 import {
   CreateProductionOrderDialog,
   CompleteProductionOrderDialog,
+  ConfirmDialog,
 } from "@/components/shared/dialogs";
 import { PipelineStatusBadge } from "@/components/shared/pipeline";
 import { Button } from "@/components/ui/button";
 import { useToast } from "@/lib/contexts";
+import { printDocument } from "@/lib/print-document";
+import { buildProductionOrderPrintData } from "@/lib/print-templates";
 import { formatDate } from "@/lib/format";
 import {
   getProductionOrders,
@@ -203,6 +206,8 @@ export default function SanXuatPage() {
   const [createOpen, setCreateOpen] = useState(false);
   const [completeOpen, setCompleteOpen] = useState(false);
   const [completingOrder, setCompletingOrder] = useState<ProductionOrder | null>(null);
+  const [cancellingItem, setCancellingItem] = useState<ProductionOrder | null>(null);
+  const [cancelLoading, setCancelLoading] = useState(false);
   const [viewMode, setViewMode] = useState<ViewMode>("list");
 
   const [statusFilters, setStatusFilters] = useState<string[]>([
@@ -459,15 +464,30 @@ export default function SanXuatPage() {
               {
                 label: "In phiếu",
                 icon: <Printer className="h-4 w-4" />,
-                onClick: () => {},
+                onClick: () => printDocument(buildProductionOrderPrintData({
+                  id: row.id,
+                  code: row.code,
+                  date: row.createdAt,
+                  productName: row.productName ?? "",
+                  productCode: row.productCode ?? "",
+                  quantity: row.plannedQty,
+                  status: row.status as "completed" | "processing" | "cancelled",
+                  statusName: STATUS_META[row.status]?.label ?? row.status,
+                  costAmount: 0,
+                  createdBy: row.createdBy ?? "",
+                })),
               },
-              {
-                label: "Hủy",
-                icon: <XCircle className="h-4 w-4" />,
-                onClick: () => {},
-                variant: "destructive",
-                separator: true,
-              },
+              ...(canTransitionProductionStatus(row.status, "cancelled")
+                ? [
+                    {
+                      label: "Hủy",
+                      icon: <XCircle className="h-4 w-4" />,
+                      onClick: () => setCancellingItem(row),
+                      variant: "destructive" as const,
+                      separator: true,
+                    },
+                  ]
+                : []),
             ]}
           />
         )}
@@ -484,6 +504,39 @@ export default function SanXuatPage() {
         onOpenChange={setCompleteOpen}
         order={completingOrder}
         onSuccess={fetchData}
+      />
+
+      <ConfirmDialog
+        open={!!cancellingItem}
+        onOpenChange={(open) => { if (!open) setCancellingItem(null); }}
+        title="Hủy lệnh sản xuất"
+        description={`Bạn có chắc muốn hủy lệnh sản xuất ${cancellingItem?.code ?? ""}? Thao tác này không thể hoàn tác.`}
+        confirmLabel="Hủy lệnh"
+        cancelLabel="Đóng"
+        variant="destructive"
+        loading={cancelLoading}
+        onConfirm={async () => {
+          if (!cancellingItem) return;
+          setCancelLoading(true);
+          try {
+            await updateProductionStatus(cancellingItem.id, "cancelled");
+            toast({
+              title: "Đã hủy lệnh sản xuất",
+              description: `Lệnh ${cancellingItem.code} đã được hủy thành công`,
+              variant: "success",
+            });
+            await fetchData();
+          } catch (err) {
+            toast({
+              title: "Lỗi hủy lệnh sản xuất",
+              description: err instanceof Error ? err.message : "Vui lòng thử lại",
+              variant: "error",
+            });
+          } finally {
+            setCancelLoading(false);
+            setCancellingItem(null);
+          }
+        }}
       />
       {/* total counter to avoid unused var lint */}
       <span className="hidden">{total}</span>

@@ -53,6 +53,7 @@ import {
   bulkUpdateCategory,
   bulkUpdatePrice,
   bulkDeleteProducts,
+  deleteProduct,
 } from "@/lib/services";
 import { useToast } from "@/lib/contexts";
 import type { Product } from "@/lib/types";
@@ -69,6 +70,7 @@ function ProductDetail({
   product: Product;
   onClose: () => void;
 }) {
+  const { toast } = useToast();
   return (
     <InlineDetailPanel open onClose={onClose}>
       <DetailTabs
@@ -97,7 +99,7 @@ function ProductDetail({
                   tags={["Combo - đóng gói", "Bán trực tiếp", "Tích điểm"]}
                   actionLink={{
                     label: "Xem phân tích",
-                    onClick: () => {},
+                    onClick: () => { window.location.href = "/phan-tich/hang-hoa"; },
                   }}
                 />
 
@@ -180,8 +182,14 @@ export default function HangHoaPage() {
   const [starred, setStarred] = useState<Set<string>>(new Set());
 
   const [createOpen, setCreateOpen] = useState(false);
+  const [editingProduct, setEditingProduct] = useState<Product | null>(null);
   const [importOpen, setImportOpen] = useState(false);
   const [aiBannerDismissed, setAiBannerDismissed] = useState(false);
+
+  // Single-row delete confirm
+  const [deleteConfirmOpen, setDeleteConfirmOpen] = useState(false);
+  const [deletingProduct, setDeletingProduct] = useState<Product | null>(null);
+  const [deleteLoading, setDeleteLoading] = useState(false);
 
   // Bulk action state — phase 2: wire backend mutations
   const { toast } = useToast();
@@ -346,6 +354,23 @@ export default function HangHoaPage() {
       setBulkLoading(false);
     }
   }, [bulkSellPriceValue, bulkCostPriceValue, selectedRowsForBulk, toast, finishBulkSuccess, finishBulkError]);
+
+  const handleConfirmSingleDelete = useCallback(async () => {
+    if (!deletingProduct) return;
+    setDeleteLoading(true);
+    try {
+      await deleteProduct(deletingProduct.id);
+      setDeleteConfirmOpen(false);
+      setDeletingProduct(null);
+      toast({ variant: "success", title: "Đã xoá sản phẩm", description: `${deletingProduct.code} — ${deletingProduct.name}` });
+      await fetchData();
+    } catch (err) {
+      const message = err instanceof Error ? err.message : "Vui lòng thử lại sau.";
+      toast({ variant: "error", title: "Xoá sản phẩm thất bại", description: message });
+    } finally {
+      setDeleteLoading(false);
+    }
+  }, [deletingProduct, toast, fetchData]);
 
   const handleConfirmBulkDelete = useCallback(async () => {
     const ids = selectedRowsForBulk.map((p) => p.id);
@@ -779,22 +804,32 @@ export default function HangHoaPage() {
             {
               label: "Sửa",
               icon: <Pencil className="h-4 w-4" />,
-              onClick: () => {},
+              onClick: () => {
+                setEditingProduct(row);
+                setCreateOpen(true);
+              },
             },
             {
               label: "Nhân bản",
               icon: <Copy className="h-4 w-4" />,
-              onClick: () => {},
+              onClick: () => {
+                toast({ variant: "info", title: "Đang phát triển", description: "Tính năng nhân bản đang được phát triển" });
+              },
             },
             {
               label: "In mã vạch",
               icon: <Printer className="h-4 w-4" />,
-              onClick: () => {},
+              onClick: () => {
+                toast({ variant: "info", title: "Đang phát triển", description: "Đang phát triển tính năng in mã vạch" });
+              },
             },
             {
               label: "Xóa",
               icon: <Trash2 className="h-4 w-4" />,
-              onClick: () => {},
+              onClick: () => {
+                setDeletingProduct(row);
+                setDeleteConfirmOpen(true);
+              },
               variant: "destructive",
               separator: true,
             },
@@ -804,9 +839,53 @@ export default function HangHoaPage() {
 
       <CreateProductDialog
         open={createOpen}
-        onOpenChange={setCreateOpen}
+        onOpenChange={(open) => {
+          setCreateOpen(open);
+          if (!open) setEditingProduct(null);
+        }}
         onSuccess={fetchData}
       />
+
+      {/* --- Single-row delete confirm --- */}
+      <Dialog
+        open={deleteConfirmOpen}
+        onOpenChange={(o) => {
+          if (deleteLoading) return;
+          setDeleteConfirmOpen(o);
+          if (!o) setDeletingProduct(null);
+        }}
+      >
+        <DialogContent className="sm:max-w-md">
+          <DialogHeader>
+            <DialogTitle>Xoá sản phẩm?</DialogTitle>
+            <DialogDescription>
+              Bạn có chắc chắn muốn xoá sản phẩm{" "}
+              <strong>{deletingProduct?.code}</strong> —{" "}
+              <strong>{deletingProduct?.name}</strong>? Hành động này không thể
+              hoàn tác.
+            </DialogDescription>
+          </DialogHeader>
+          <DialogFooter>
+            <Button
+              variant="outline"
+              disabled={deleteLoading}
+              onClick={() => {
+                setDeleteConfirmOpen(false);
+                setDeletingProduct(null);
+              }}
+            >
+              Huỷ
+            </Button>
+            <Button
+              variant="destructive"
+              disabled={deleteLoading}
+              onClick={handleConfirmSingleDelete}
+            >
+              {deleteLoading ? "Đang xoá..." : "Xoá"}
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
 
       {/* ============================================================ */}
       {/* AI Import Dialog — mở từ nút "Import bằng AI" hoặc banner     */}

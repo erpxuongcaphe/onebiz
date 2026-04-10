@@ -22,6 +22,9 @@ import {
   DetailInfoGrid,
   DetailItemsTable,
 } from "@/components/shared/inline-detail-panel";
+import { useToast } from "@/lib/contexts";
+import { printDocument } from "@/lib/print-document";
+import { buildReturnPrintData } from "@/lib/print-templates";
 import { formatCurrency, formatDate } from "@/lib/format";
 import { exportToExcel, exportToCsv } from "@/lib/utils/export";
 import { getReturns, getReturnStatuses } from "@/lib/services";
@@ -34,19 +37,19 @@ const statusMap: Record<
   string,
   { label: string; variant: "default" | "secondary" | "destructive" }
 > = {
-  completed: { label: "Da tra", variant: "default" },
-  cancelled: { label: "Da huy", variant: "destructive" },
+  completed: { label: "Đã trả", variant: "default" },
+  cancelled: { label: "Đã hủy", variant: "destructive" },
 };
 
 const returnTypeOptions = [
-  { label: "Theo hoa don", value: "by_invoice" },
-  { label: "Tra nhanh", value: "quick_return" },
-  { label: "Chuyen hoan", value: "reverse" },
+  { label: "Theo hóa đơn", value: "by_invoice" },
+  { label: "Trả nhanh", value: "quick_return" },
+  { label: "Chuyển hoàn", value: "reverse" },
 ];
 
 const returnStatusOptions = [
-  { label: "Da tra", value: "completed" },
-  { label: "Da huy", value: "cancelled" },
+  { label: "Đã trả", value: "completed" },
+  { label: "Đã hủy", value: "cancelled" },
 ];
 
 // --- Inline Detail ---
@@ -69,7 +72,7 @@ function ReturnDetail({
         tabs={[
           {
             id: "info",
-            label: "Thong tin",
+            label: "Thông tin",
             content: (
               <div className="space-y-4">
                 <DetailHeader
@@ -85,23 +88,23 @@ function ReturnDetail({
                           ? "bg-red-100 text-red-700 border-red-200"
                           : undefined,
                   }}
-                  subtitle="Chi nhanh trung tam"
+                  subtitle="Chi nhánh trung tâm"
                   meta={
                     <div className="flex items-center gap-4 flex-wrap text-xs">
                       <span>
-                        Nguoi tao:{" "}
+                        Người tạo:{" "}
                         <strong>{returnOrder.createdBy}</strong>
                       </span>
                       <span>
-                        Nguoi nhan tra:{" "}
+                        Người nhận trả:{" "}
                         <strong>{returnOrder.createdBy}</strong>
                       </span>
                       <span>
-                        Ngay tra:{" "}
+                        Ngày trả:{" "}
                         <strong>{formatDate(returnOrder.date)}</strong>
                       </span>
                       <span>
-                        Hoa don goc:{" "}
+                        Hóa đơn gốc:{" "}
                         <strong>{returnOrder.invoiceCode}</strong>
                       </span>
                     </div>
@@ -110,21 +113,21 @@ function ReturnDetail({
 
                 <DetailItemsTable
                   columns={[
-                    { header: "Ma hang", accessor: "code" as never },
-                    { header: "Ten hang", accessor: "name" as never },
+                    { header: "Mã hàng", accessor: "code" as never },
+                    { header: "Tên hàng", accessor: "name" as never },
                     {
-                      header: "So luong",
+                      header: "Số lượng",
                       accessor: "quantity" as never,
                       align: "right",
                     },
                     {
-                      header: "Don gia",
+                      header: "Đơn giá",
                       accessor: (item: Record<string, unknown>) =>
                         formatCurrency(item.unitPrice as number),
                       align: "right",
                     },
                     {
-                      header: "Thanh tien",
+                      header: "Thành tiền",
                       accessor: (item: Record<string, unknown>) => (
                         <span className="text-primary font-semibold">
                           {formatCurrency(item.total as number)}
@@ -137,7 +140,7 @@ function ReturnDetail({
                     [
                       {
                         code: "SP001",
-                        name: "San pham mau",
+                        name: "Sản phẩm mẫu",
                         quantity: 1,
                         unitPrice: returnOrder.totalAmount,
                         total: returnOrder.totalAmount,
@@ -146,16 +149,16 @@ function ReturnDetail({
                   }
                   summary={[
                     {
-                      label: "Tong tien hang (1)",
+                      label: "Tổng tiền hàng (1)",
                       value: formatCurrency(returnOrder.totalAmount),
                     },
                     {
-                      label: "Can tra khach",
+                      label: "Cần trả khách",
                       value: formatCurrency(returnOrder.totalAmount),
                       className: "font-bold text-base",
                     },
                     {
-                      label: "Da tra khach",
+                      label: "Đã trả khách",
                       value: formatCurrency(returnOrder.totalAmount),
                     },
                   ]}
@@ -163,7 +166,7 @@ function ReturnDetail({
 
                 <div className="border rounded-md p-3">
                   <textarea
-                    placeholder="Ghi chu..."
+                    placeholder="Ghi chú..."
                     className="w-full text-sm resize-none bg-transparent outline-none min-h-[60px]"
                   />
                 </div>
@@ -172,10 +175,10 @@ function ReturnDetail({
           },
           {
             id: "payment_history",
-            label: "Lich su thanh toan",
+            label: "Lịch sử thanh toán",
             content: (
               <div className="text-sm text-muted-foreground py-4 text-center">
-                Chua co lich su thanh toan
+                Chưa có lịch sử thanh toán
               </div>
             ),
           },
@@ -188,6 +191,7 @@ function ReturnDetail({
 // --- Page ---
 
 export default function TraHangPage() {
+  const { toast } = useToast();
   const [data, setData] = useState<ReturnOrder[]>([]);
   const [total, setTotal] = useState(0);
   const [loading, setLoading] = useState(true);
@@ -249,23 +253,23 @@ export default function TraHangPage() {
 
   const handleExport = (type: "excel" | "csv") => {
     const exportColumns = [
-      { header: "Ma tra hang", key: "code", width: 15 },
-      { header: "Nguoi ban", key: "createdBy", width: 18 },
+      { header: "Mã trả hàng", key: "code", width: 15 },
+      { header: "Người bán", key: "createdBy", width: 18 },
       {
-        header: "Thoi gian",
+        header: "Thời gian",
         key: "date",
         width: 18,
         format: (v: string) => formatDate(v),
       },
-      { header: "Khach hang", key: "customerName", width: 25 },
+      { header: "Khách hàng", key: "customerName", width: 25 },
       {
-        header: "Tong tien hang",
+        header: "Tổng tiền hàng",
         key: "totalAmount",
         width: 15,
         format: (v: number) => v,
       },
       {
-        header: "Trang thai",
+        header: "Trạng thái",
         key: "status",
         width: 15,
         format: (v: string) => statusMap[v]?.label ?? v,
@@ -292,7 +296,7 @@ export default function TraHangPage() {
     },
     {
       accessorKey: "code",
-      header: "Ma tra hang",
+      header: "Mã trả hàng",
       size: 130,
       cell: ({ row }) => (
         <span className="font-medium text-primary">{row.original.code}</span>
@@ -300,18 +304,18 @@ export default function TraHangPage() {
     },
     {
       accessorKey: "createdBy",
-      header: "Nguoi ban",
+      header: "Người bán",
       size: 130,
     },
     {
       accessorKey: "date",
-      header: "Thoi gian",
+      header: "Thời gian",
       size: 150,
       cell: ({ row }) => formatDate(row.original.date),
     },
     {
       accessorKey: "customerCode",
-      header: "Ma KH",
+      header: "Mã KH",
       size: 100,
       cell: ({ row }) =>
         (row.original as ReturnOrder & { customerCode?: string })
@@ -319,12 +323,12 @@ export default function TraHangPage() {
     },
     {
       accessorKey: "customerName",
-      header: "Khach hang",
+      header: "Khách hàng",
       size: 180,
     },
     {
       accessorKey: "totalAmount",
-      header: "Tong tien hang",
+      header: "Tổng tiền hàng",
       cell: ({ row }) => (
         <span className="text-right block">
           {formatCurrency(row.original.totalAmount)}
@@ -333,7 +337,7 @@ export default function TraHangPage() {
     },
     {
       id: "refundAmount",
-      header: "Can tra khach",
+      header: "Cần trả khách",
       cell: ({ row }) => (
         <span className="text-right block text-primary font-semibold">
           {formatCurrency(row.original.totalAmount)}
@@ -347,7 +351,7 @@ export default function TraHangPage() {
     <ListPageLayout
       sidebar={
         <FilterSidebar>
-          <FilterGroup label="Loai tra hang">
+          <FilterGroup label="Loại trả hàng">
             <CheckboxFilter
               options={returnTypeOptions}
               selected={selectedTypes}
@@ -355,7 +359,7 @@ export default function TraHangPage() {
             />
           </FilterGroup>
 
-          <FilterGroup label="Trang thai">
+          <FilterGroup label="Trạng thái">
             <CheckboxFilter
               options={returnStatusOptions}
               selected={selectedStatuses}
@@ -363,34 +367,34 @@ export default function TraHangPage() {
             />
           </FilterGroup>
 
-          <FilterGroup label="Thoi gian">
+          <FilterGroup label="Thời gian">
             <DatePresetFilter
               value={datePreset}
               onChange={setDatePreset}
             />
           </FilterGroup>
 
-          <FilterGroup label="Nguoi tao">
+          <FilterGroup label="Người tạo">
             <PersonFilter
               value={createdBy}
               onChange={setCreatedBy}
-              placeholder="Chon nguoi tao"
+              placeholder="Chọn người tạo"
             />
           </FilterGroup>
 
-          <FilterGroup label="Nguoi nhan tra">
+          <FilterGroup label="Người nhận trả">
             <PersonFilter
               value={receiver}
               onChange={setReceiver}
-              placeholder="Chon nguoi nhan tra"
+              placeholder="Chọn người nhận trả"
             />
           </FilterGroup>
         </FilterSidebar>
       }
     >
       <PageHeader
-        title="Tra hang"
-        searchPlaceholder="Theo ma phieu tra, hoa don, khach hang"
+        title="Trả hàng"
+        searchPlaceholder="Theo mã phiếu trả, hóa đơn, khách hàng"
         searchValue={search}
         onSearchChange={setSearch}
         onExport={{
@@ -399,7 +403,7 @@ export default function TraHangPage() {
         }}
         actions={[
           {
-            label: "Tra hang",
+            label: "Trả hàng",
             icon: <Plus className="h-4 w-4" />,
             variant: "default",
             onClick: () => setCreateOpen(true),
@@ -432,9 +436,15 @@ export default function TraHangPage() {
         )}
         rowActions={(row) => [
           {
-            label: "In phieu tra",
+            label: "In phiếu trả",
             icon: <Printer className="h-4 w-4" />,
-            onClick: () => {},
+            onClick: () => printDocument(buildReturnPrintData({
+              code: row.code,
+              date: row.date,
+              customerName: row.customerName,
+              totalRefund: row.totalAmount,
+              createdBy: row.createdBy,
+            })),
           },
         ]}
       />

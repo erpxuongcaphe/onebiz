@@ -22,10 +22,11 @@ import {
   DetailInfoGrid,
 } from "@/components/shared/inline-detail-panel";
 import type { DetailTab } from "@/components/shared/inline-detail-panel";
-import { CreateSupplierDialog } from "@/components/shared/dialogs";
+import { CreateSupplierDialog, ConfirmDialog } from "@/components/shared/dialogs";
 import { formatCurrency, formatDate } from "@/lib/format";
 import { exportToExcel, exportToCsv } from "@/lib/utils/export";
-import { getSuppliers } from "@/lib/services";
+import { getSuppliers, deleteSupplier } from "@/lib/services";
+import { useToast } from "@/lib/contexts";
 import type { Supplier } from "@/lib/types";
 
 /* ------------------------------------------------------------------ */
@@ -137,6 +138,7 @@ function SupplierDetail({
 /*  Page                                                               */
 /* ------------------------------------------------------------------ */
 export default function NhaCungCapPage() {
+  const { toast } = useToast();
   const [data, setData] = useState<Supplier[]>([]);
   const [total, setTotal] = useState(0);
   const [loading, setLoading] = useState(true);
@@ -149,6 +151,11 @@ export default function NhaCungCapPage() {
 
   // Dialog
   const [createOpen, setCreateOpen] = useState(false);
+  const [editingSupplier, setEditingSupplier] = useState<Supplier | null>(null);
+
+  // Delete
+  const [deletingSupplier, setDeletingSupplier] = useState<Supplier | null>(null);
+  const [deleteLoading, setDeleteLoading] = useState(false);
 
   // Filters
   const [supplierGroupFilter, setSupplierGroupFilter] = useState("all");
@@ -387,12 +394,15 @@ export default function NhaCungCapPage() {
             {
               label: "Sửa",
               icon: <Pencil className="h-4 w-4" />,
-              onClick: () => {},
+              onClick: () => {
+                setEditingSupplier(row);
+                setCreateOpen(true);
+              },
             },
             {
               label: "Xóa",
               icon: <Trash2 className="h-4 w-4" />,
-              onClick: () => {},
+              onClick: () => setDeletingSupplier(row),
               variant: "destructive",
               separator: true,
             },
@@ -402,8 +412,36 @@ export default function NhaCungCapPage() {
 
       <CreateSupplierDialog
         open={createOpen}
-        onOpenChange={setCreateOpen}
+        onOpenChange={(open) => {
+          setCreateOpen(open);
+          if (!open) setEditingSupplier(null);
+        }}
         onSuccess={fetchData}
+        initialData={editingSupplier ?? undefined}
+      />
+
+      <ConfirmDialog
+        open={!!deletingSupplier}
+        onOpenChange={(open) => { if (!open) setDeletingSupplier(null); }}
+        title="Xóa nhà cung cấp"
+        description={`Xóa nhà cung cấp ${deletingSupplier?.code} — ${deletingSupplier?.name}?`}
+        confirmLabel="Xóa"
+        variant="destructive"
+        loading={deleteLoading}
+        onConfirm={async () => {
+          if (!deletingSupplier) return;
+          setDeleteLoading(true);
+          try {
+            await deleteSupplier(deletingSupplier.id);
+            toast({ title: "Đã xóa nhà cung cấp", description: `${deletingSupplier.code} — ${deletingSupplier.name}`, variant: "success" });
+            setDeletingSupplier(null);
+            fetchData();
+          } catch (err) {
+            toast({ title: "Lỗi xóa nhà cung cấp", description: err instanceof Error ? err.message : "Vui lòng thử lại", variant: "error" });
+          } finally {
+            setDeleteLoading(false);
+          }
+        }}
       />
     </>
   );

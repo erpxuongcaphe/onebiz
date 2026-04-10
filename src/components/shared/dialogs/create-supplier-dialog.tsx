@@ -13,12 +13,14 @@ import { Input } from "@/components/ui/input";
 import { Button } from "@/components/ui/button";
 import { Loader2 } from "lucide-react";
 import { useToast } from "@/lib/contexts";
-import { createSupplier } from "@/lib/services";
+import { createSupplier, updateSupplier } from "@/lib/services";
+import type { Supplier } from "@/lib/types";
 
 interface CreateSupplierDialogProps {
   open: boolean;
   onOpenChange: (open: boolean) => void;
   onSuccess?: () => void;
+  initialData?: Supplier;
 }
 
 function generateSupplierCode() {
@@ -30,7 +32,9 @@ export function CreateSupplierDialog({
   open,
   onOpenChange,
   onSuccess,
+  initialData,
 }: CreateSupplierDialogProps) {
+  const isEditing = !!initialData;
   const { toast } = useToast();
   const [code, setCode] = useState("");
   const [name, setName] = useState("");
@@ -44,16 +48,26 @@ export function CreateSupplierDialog({
 
   useEffect(() => {
     if (open) {
-      setCode(generateSupplierCode());
-      setName("");
-      setPhone("");
-      setEmail("");
-      setAddress("");
-      setTaxCode("");
-      setNote("");
+      if (initialData) {
+        setCode(initialData.code);
+        setName(initialData.name);
+        setPhone(initialData.phone || "");
+        setEmail(initialData.email || "");
+        setAddress(initialData.address || "");
+        setTaxCode("");
+        setNote("");
+      } else {
+        setCode(generateSupplierCode());
+        setName("");
+        setPhone("");
+        setEmail("");
+        setAddress("");
+        setTaxCode("");
+        setNote("");
+      }
       setErrors({});
     }
-  }, [open]);
+  }, [open, initialData]);
 
   function validate(): boolean {
     const newErrors: Record<string, string> = {};
@@ -66,23 +80,38 @@ export function CreateSupplierDialog({
     if (!validate()) return;
     setSaving(true);
     try {
-      await createSupplier({
-        code,
-        name,
-        phone: phone || undefined,
-        email: email || undefined,
-        address: address || undefined,
-      });
-      onOpenChange(false);
-      toast({
-        title: "Tạo nhà cung cấp thành công",
-        description: `Đã thêm nhà cung cấp ${name} (${code})`,
-        variant: "success",
-      });
+      if (isEditing) {
+        await updateSupplier(initialData!.id, {
+          name,
+          phone: phone || undefined,
+          email: email || undefined,
+          address: address || undefined,
+        });
+        onOpenChange(false);
+        toast({
+          title: "Cập nhật nhà cung cấp thành công",
+          description: `Đã cập nhật nhà cung cấp ${name} (${code})`,
+          variant: "success",
+        });
+      } else {
+        await createSupplier({
+          code,
+          name,
+          phone: phone || undefined,
+          email: email || undefined,
+          address: address || undefined,
+        });
+        onOpenChange(false);
+        toast({
+          title: "Tạo nhà cung cấp thành công",
+          description: `Đã thêm nhà cung cấp ${name} (${code})`,
+          variant: "success",
+        });
+      }
       onSuccess?.();
     } catch (err) {
       toast({
-        title: "Lỗi tạo nhà cung cấp",
+        title: isEditing ? "Lỗi cập nhật nhà cung cấp" : "Lỗi tạo nhà cung cấp",
         description: err instanceof Error ? err.message : "Vui lòng thử lại",
         variant: "error",
       });
@@ -95,16 +124,16 @@ export function CreateSupplierDialog({
     <Dialog open={open} onOpenChange={onOpenChange}>
       <DialogContent className="sm:max-w-md max-h-[90vh] overflow-y-auto">
         <DialogHeader>
-          <DialogTitle>Thêm nhà cung cấp mới</DialogTitle>
+          <DialogTitle>{isEditing ? "Sửa nhà cung cấp" : "Thêm nhà cung cấp mới"}</DialogTitle>
           <DialogDescription>
-            Điền thông tin nhà cung cấp. Các trường có dấu * là bắt buộc.
+            {isEditing ? "Chỉnh sửa thông tin nhà cung cấp." : "Điền thông tin nhà cung cấp. Các trường có dấu * là bắt buộc."}
           </DialogDescription>
         </DialogHeader>
 
         <div className="grid gap-4 py-2">
           <div className="space-y-1.5">
             <label className="text-sm font-medium">Mã NCC</label>
-            <Input value={code} onChange={(e) => setCode(e.target.value)} />
+            <Input value={code} onChange={(e) => setCode(e.target.value)} readOnly={isEditing} className={isEditing ? "bg-muted/50" : ""} />
           </div>
 
           <div className="space-y-1.5">
@@ -178,7 +207,7 @@ export function CreateSupplierDialog({
           </Button>
           <Button onClick={handleSave} disabled={saving}>
             {saving && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
-            Lưu
+            {isEditing ? "Cập nhật" : "Lưu"}
           </Button>
         </DialogFooter>
       </DialogContent>

@@ -46,6 +46,40 @@ export function getInvoiceStatuses() {
   ];
 }
 
+/**
+ * Hủy hóa đơn — chỉ cho phép hủy hóa đơn ở trạng thái draft hoặc confirmed.
+ * Hóa đơn đã hoàn thành (completed) hoặc đã hủy (cancelled) sẽ bị từ chối.
+ */
+export async function cancelInvoice(id: string): Promise<void> {
+  const supabase = getClient();
+
+  // Check current status first
+  const { data: existing, error: fetchErr } = await supabase
+    .from("invoices")
+    .select("status")
+    .eq("id", id)
+    .single();
+
+  if (fetchErr) handleError(fetchErr, "cancelInvoice.fetch");
+  if (!existing) throw new Error("Không tìm thấy hóa đơn");
+
+  const allowCancel = ["draft", "confirmed"];
+  if (!allowCancel.includes(existing.status)) {
+    throw new Error(
+      `Không thể hủy hóa đơn ở trạng thái "${existing.status}". Chỉ cho phép hủy hóa đơn phiếu tạm hoặc đã xác nhận.`
+    );
+  }
+
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  const { error } = await supabase
+    .from("invoices")
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    .update({ status: "cancelled" as any })
+    .eq("id", id);
+
+  if (error) handleError(error, "cancelInvoice.update");
+}
+
 // --- Mapper ---
 
 // eslint-disable-next-line @typescript-eslint/no-explicit-any

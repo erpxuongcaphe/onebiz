@@ -14,7 +14,9 @@ import { Button } from "@/components/ui/button";
 import { Loader2 } from "lucide-react";
 import { useToast } from "@/lib/contexts";
 import { getClient } from "@/lib/services/supabase/base";
+import { updateDeliveryPartner } from "@/lib/services";
 import type { Database } from "@/lib/supabase/types";
+import type { DeliveryPartner } from "@/lib/types";
 
 type DeliveryPartnerInsert = Database["public"]["Tables"]["delivery_partners"]["Insert"];
 
@@ -22,6 +24,7 @@ interface CreateDeliveryPartnerDialogProps {
   open: boolean;
   onOpenChange: (open: boolean) => void;
   onSuccess?: () => void;
+  initialData?: DeliveryPartner;
 }
 
 function generatePartnerCode() {
@@ -33,7 +36,9 @@ export function CreateDeliveryPartnerDialog({
   open,
   onOpenChange,
   onSuccess,
+  initialData,
 }: CreateDeliveryPartnerDialogProps) {
+  const isEditing = !!initialData;
   const { toast } = useToast();
   const [code, setCode] = useState("");
   const [name, setName] = useState("");
@@ -43,13 +48,19 @@ export function CreateDeliveryPartnerDialog({
 
   useEffect(() => {
     if (open) {
-      setCode(generatePartnerCode());
-      setName("");
-      setPhone("");
+      if (initialData) {
+        setCode(initialData.id);
+        setName(initialData.name);
+        setPhone(initialData.phone || "");
+      } else {
+        setCode(generatePartnerCode());
+        setName("");
+        setPhone("");
+      }
       setErrors({});
       setSaving(false);
     }
-  }, [open]);
+  }, [open, initialData]);
 
   function validate(): boolean {
     const newErrors: Record<string, string> = {};
@@ -62,29 +73,42 @@ export function CreateDeliveryPartnerDialog({
     if (!validate()) return;
     setSaving(true);
     try {
-      const supabase = getClient();
-
-      const { error: insertErr } = await supabase
-        .from("delivery_partners")
-        .insert({
-          tenant_id: "",
+      if (isEditing) {
+        await updateDeliveryPartner(initialData!.id, {
           name: name.trim(),
-          code,
-          phone: phone.trim() || null,
-        } satisfies DeliveryPartnerInsert);
+          phone: phone.trim() || "",
+        });
+        onOpenChange(false);
+        toast({
+          title: "Cập nhật đối tác giao hàng thành công",
+          description: `Đã cập nhật đối tác ${name}`,
+          variant: "success",
+        });
+      } else {
+        const supabase = getClient();
 
-      if (insertErr) throw new Error(insertErr.message);
+        const { error: insertErr } = await supabase
+          .from("delivery_partners")
+          .insert({
+            tenant_id: "",
+            name: name.trim(),
+            code,
+            phone: phone.trim() || null,
+          } satisfies DeliveryPartnerInsert);
 
-      onOpenChange(false);
-      toast({
-        title: "Tạo đối tác giao hàng thành công",
-        description: `Đã tạo đối tác ${name}`,
-        variant: "success",
-      });
+        if (insertErr) throw new Error(insertErr.message);
+
+        onOpenChange(false);
+        toast({
+          title: "Tạo đối tác giao hàng thành công",
+          description: `Đã tạo đối tác ${name}`,
+          variant: "success",
+        });
+      }
       onSuccess?.();
     } catch (err) {
       toast({
-        title: "Lỗi tạo đối tác giao hàng",
+        title: isEditing ? "Lỗi cập nhật đối tác giao hàng" : "Lỗi tạo đối tác giao hàng",
         description: err instanceof Error ? err.message : "Vui lòng thử lại",
         variant: "error",
       });
@@ -97,9 +121,9 @@ export function CreateDeliveryPartnerDialog({
     <Dialog open={open} onOpenChange={onOpenChange}>
       <DialogContent className="sm:max-w-lg max-h-[90vh] overflow-y-auto">
         <DialogHeader>
-          <DialogTitle>Tạo đối tác giao hàng</DialogTitle>
+          <DialogTitle>{isEditing ? "Sửa đối tác giao hàng" : "Tạo đối tác giao hàng"}</DialogTitle>
           <DialogDescription>
-            Thêm đối tác giao hàng mới. Mã đối tác: {code}
+            {isEditing ? `Chỉnh sửa thông tin đối tác. Mã đối tác: ${code}` : `Thêm đối tác giao hàng mới. Mã đối tác: ${code}`}
           </DialogDescription>
         </DialogHeader>
 
@@ -145,7 +169,7 @@ export function CreateDeliveryPartnerDialog({
           </Button>
           <Button onClick={handleSave} disabled={saving}>
             {saving && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
-            Tạo đối tác
+            {isEditing ? "Cập nhật" : "Tạo đối tác"}
           </Button>
         </DialogFooter>
       </DialogContent>

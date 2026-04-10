@@ -13,6 +13,10 @@ import {
   ArrowRight,
   BarChart3,
   Loader2,
+  Plus,
+  ArrowLeftRight,
+  Receipt,
+  Boxes,
 } from "lucide-react";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
@@ -44,6 +48,7 @@ import {
   getTopProducts,
   getLowStockProducts,
   getRecentActivities,
+  getFinancialAlerts,
 } from "@/lib/services";
 import type {
   DashboardKpis,
@@ -53,6 +58,10 @@ import type {
   LowStockProduct,
   RecentActivity,
 } from "@/lib/services/supabase/dashboard";
+import type { FinancialAlert } from "@/lib/services/supabase/reports";
+import { getInventoryTurnover } from "@/lib/services/supabase/reports";
+import type { InventoryTurnoverResult } from "@/lib/services/supabase/reports";
+import { Button } from "@/components/ui/button";
 
 type ChartView = "day" | "hour" | "weekday";
 
@@ -118,11 +127,13 @@ export default function TongQuanPage() {
   const [topProds, setTopProds] = useState<TopProduct[]>([]);
   const [lowStock, setLowStock] = useState<LowStockProduct[]>([]);
   const [activities, setActivities] = useState<RecentActivity[]>([]);
+  const [financialAlerts, setFinancialAlerts] = useState<FinancialAlert[]>([]);
+  const [turnover, setTurnover] = useState<InventoryTurnoverResult | null>(null);
 
   const fetchData = useCallback(async () => {
     setLoading(true);
     try {
-      const [kpiRes, dayRes, hourRes, weekdayRes, ordersRes, topRes, lowRes, actRes] = await Promise.all([
+      const [kpiRes, dayRes, hourRes, weekdayRes, ordersRes, topRes, lowRes, actRes, alertRes, turnoverRes] = await Promise.all([
         getDashboardKpis(),
         getRevenueByDay(),
         getRevenueByHour(),
@@ -131,6 +142,8 @@ export default function TongQuanPage() {
         getTopProducts(10),
         getLowStockProducts(5),
         getRecentActivities(8),
+        getFinancialAlerts().catch(() => [] as FinancialAlert[]),
+        getInventoryTurnover().catch(() => null as InventoryTurnoverResult | null),
       ]);
       setKpis(kpiRes);
       setRevenueDay(dayRes);
@@ -140,6 +153,8 @@ export default function TongQuanPage() {
       setTopProds(topRes);
       setLowStock(lowRes);
       setActivities(actRes);
+      setFinancialAlerts(alertRes);
+      setTurnover(turnoverRes);
     } catch {
       // Silently fail — show empty state
     } finally {
@@ -252,6 +267,88 @@ export default function TongQuanPage() {
         })}
       </div>
 
+      {/* Quick Actions + Inventory Turnover */}
+      <div className="grid grid-cols-1 lg:grid-cols-4 gap-3">
+        {/* Quick Actions */}
+        <Card className="lg:col-span-3">
+          <CardHeader className="pb-2">
+            <CardTitle className="text-sm">Thao tác nhanh</CardTitle>
+          </CardHeader>
+          <CardContent>
+            <div className="flex flex-wrap gap-2">
+              <Link href="/pos">
+                <Button size="sm" className="gap-1.5 h-8">
+                  <ShoppingCart className="size-3.5" /> Bán hàng POS
+                </Button>
+              </Link>
+              <Link href="/don-hang/dat-hang">
+                <Button size="sm" variant="outline" className="gap-1.5 h-8">
+                  <Plus className="size-3.5" /> Tạo đơn hàng
+                </Button>
+              </Link>
+              <Link href="/hang-hoa/nhap-hang">
+                <Button size="sm" variant="outline" className="gap-1.5 h-8">
+                  <Boxes className="size-3.5" /> Nhập hàng
+                </Button>
+              </Link>
+              <Link href="/hang-hoa/chuyen-kho">
+                <Button size="sm" variant="outline" className="gap-1.5 h-8">
+                  <ArrowLeftRight className="size-3.5" /> Chuyển kho
+                </Button>
+              </Link>
+              <Link href="/tai-chinh/so-quy">
+                <Button size="sm" variant="outline" className="gap-1.5 h-8">
+                  <Receipt className="size-3.5" /> Sổ quỹ
+                </Button>
+              </Link>
+              <Link href="/phan-tich/bao-cao-tai-chinh">
+                <Button size="sm" variant="outline" className="gap-1.5 h-8">
+                  <BarChart3 className="size-3.5" /> Báo cáo P&L
+                </Button>
+              </Link>
+            </div>
+          </CardContent>
+        </Card>
+
+        {/* Inventory Turnover Widget */}
+        <Card>
+          <CardHeader className="pb-2">
+            <CardTitle className="text-sm flex items-center gap-1.5">
+              <Package className="size-4 text-indigo-500" />
+              Vòng quay kho
+            </CardTitle>
+          </CardHeader>
+          <CardContent>
+            {turnover ? (
+              <div className="space-y-2">
+                <p className="text-3xl font-bold text-indigo-600">
+                  {turnover.turnoverRatio.toFixed(1)}x
+                </p>
+                <div className="space-y-1 text-xs text-muted-foreground">
+                  <div className="flex justify-between">
+                    <span>COGS</span>
+                    <span className="font-medium">{formatCurrency(turnover.totalCogsPeriod)}</span>
+                  </div>
+                  <div className="flex justify-between">
+                    <span>Giá trị kho TB</span>
+                    <span className="font-medium">{formatCurrency(turnover.avgInventoryValue)}</span>
+                  </div>
+                </div>
+                <p className="text-[10px] text-muted-foreground pt-1 border-t">
+                  {turnover.turnoverRatio >= 4
+                    ? "Tốt — hàng xoay nhanh"
+                    : turnover.turnoverRatio >= 2
+                      ? "Trung bình — cần cải thiện"
+                      : "Chậm — cần xem lại tồn kho"}
+                </p>
+              </div>
+            ) : (
+              <p className="text-sm text-muted-foreground py-2">Chưa có dữ liệu</p>
+            )}
+          </CardContent>
+        </Card>
+      </div>
+
       {/* Charts row */}
       <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
         {/* Revenue chart with view toggle */}
@@ -326,6 +423,64 @@ export default function TongQuanPage() {
           </CardContent>
         </Card>
       </div>
+
+      {/* Financial Alerts Widget */}
+      {financialAlerts.length > 0 && (
+        <Card>
+          <CardHeader className="pb-2">
+            <div className="flex items-center justify-between">
+              <CardTitle className="text-sm flex items-center gap-1.5">
+                <AlertTriangle className="size-4 text-amber-500" />
+                Cảnh báo tài chính
+                <Badge variant="destructive" className="text-[10px] px-1.5 py-0 ml-1">
+                  {financialAlerts.length}
+                </Badge>
+              </CardTitle>
+              <Link
+                href="/phan-tich/canh-bao"
+                className="text-xs text-primary hover:underline flex items-center gap-0.5"
+              >
+                Xem tất cả <ArrowRight className="size-3" />
+              </Link>
+            </div>
+          </CardHeader>
+          <CardContent>
+            <div className="space-y-2">
+              {financialAlerts.slice(0, 4).map((alert) => (
+                <div
+                  key={alert.id}
+                  className={cn(
+                    "flex items-center gap-3 p-2.5 rounded-lg border",
+                    alert.severity === "critical"
+                      ? "bg-red-50 border-red-200"
+                      : "bg-amber-50 border-amber-200"
+                  )}
+                >
+                  <AlertTriangle
+                    className={cn(
+                      "size-4 shrink-0",
+                      alert.severity === "critical"
+                        ? "text-red-600"
+                        : "text-amber-600"
+                    )}
+                  />
+                  <div className="flex-1 min-w-0">
+                    <p className="text-xs font-medium truncate">{alert.title}</p>
+                    <p className="text-[10px] text-muted-foreground truncate">
+                      {alert.description}
+                    </p>
+                  </div>
+                  {alert.link && (
+                    <Link href={alert.link}>
+                      <ArrowRight className="size-3.5 text-muted-foreground hover:text-primary shrink-0" />
+                    </Link>
+                  )}
+                </div>
+              ))}
+            </div>
+          </CardContent>
+        </Card>
+      )}
 
       {/* 3-column: Top products, Low stock alerts, Activity feed */}
       <div className="grid grid-cols-1 lg:grid-cols-3 gap-4">

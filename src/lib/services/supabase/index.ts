@@ -1,7 +1,8 @@
-export { getProducts, getProductCategories, getProductCategoriesAsync, getProductById, getStockMovements as getProductStockMovements, getSalesHistory, createProduct, updateProduct, deleteProduct, bulkUpdateCategory, bulkUpdatePrice, bulkDeleteProducts } from "./products";
+export { getProducts, getProductCategories, getProductCategoriesAsync, getProductById, getAllStockMovements, getStockMovements as getProductStockMovements, getSalesHistory, createProduct, updateProduct, deleteProduct, bulkUpdateCategory, bulkUpdatePrice, bulkDeleteProducts } from "./products";
+export type { AllStockMovementRow } from "./products";
 export { getCustomers, getCustomerGroups, getCustomerById, createCustomer, updateCustomer, deleteCustomer } from "./customers";
 export { getSuppliers, getSupplierById, createSupplier, updateSupplier, deleteSupplier } from "./suppliers";
-export { getInvoices, getInvoiceStatuses } from "./invoices";
+export { getInvoices, getInvoiceStatuses, cancelInvoice } from "./invoices";
 export {
   getPurchaseOrders,
   getPurchaseOrderStatuses,
@@ -18,13 +19,21 @@ export {
   getDraftOrderById,
   completeDraftOrder,
   deleteDraftOrder,
+  completeSalesOrder,
+  cancelSalesOrder,
 } from "./orders";
 export type { DraftOrderSummary, DraftOrderDetail } from "./orders";
 export { getReturns, getReturnStatuses } from "./returns";
-export { getShippingOrders, getShippingStatuses, getDeliveryPartners, getPartnerOptions } from "./shipping";
-export { getCashBookEntries, getCashBookTypes, getCashBookSummary, createCashTransaction } from "./cash-book";
-export { getInventoryChecks, getInventoryCheckStatuses, applyInventoryCheck, getManufacturingOrders, getManufacturingStatuses, getDisposalExports, getDisposalStatuses, getInternalExports, getInternalExportStatuses } from "./inventory";
-export { getPurchaseOrderEntries, getPurchaseEntryStatuses, getPurchaseReturns, getPurchaseReturnStatuses, getInputInvoices, getInputInvoiceStatuses } from "./purchase-entries";
+export { completeReturn } from "./returns-completion";
+export { getShippingOrders, getShippingStatuses, getDeliveryPartners, getPartnerOptions, updateDeliveryPartner, deactivateDeliveryPartner } from "./shipping";
+export { getCashBookEntries, getCashBookTypes, getCashBookSummary, createCashTransaction, deleteCashTransaction } from "./cash-book";
+export {
+  getInventoryChecks, getInventoryCheckStatuses, applyInventoryCheck, cancelInventoryCheck,
+  getDisposalExports, getDisposalStatuses, completeDisposalExport, cancelDisposalExport,
+  getInternalExports, getInternalExportStatuses, completeInternalExport, cancelInternalExport,
+} from "./inventory";
+// Manufacturing handled by production.ts (getProductionOrders)
+export { getPurchaseOrderEntries, getPurchaseEntryStatuses, getPurchaseReturns, getPurchaseReturnStatuses, getInputInvoices, getInputInvoiceStatuses, deleteInputInvoice, recordInputInvoice } from "./purchase-entries";
 export { getFavorites, isFavorite, toggleFavorite, getFavoriteIds } from "./favorites";
 export { getCoupons, getCouponById, createCoupon, updateCoupon, deleteCoupon, validateCoupon, getCouponUsages } from "./coupons";
 export { getPromotions, getActivePromotions, createPromotion, updatePromotion, deletePromotion } from "./promotions";
@@ -53,7 +62,7 @@ export {
   getFinanceKpis, getRevenueVsExpense, getExpenseBreakdown, getMonthlyProfit, getCashFlow,
 } from "./analytics";
 export { posCheckout } from "./pos-checkout";
-export type { PosCheckoutInput, PosCheckoutResult, PosCheckoutItem } from "./pos-checkout";
+export type { PosCheckoutInput, PosCheckoutResult, PosCheckoutItem, PaymentBreakdownItem } from "./pos-checkout";
 
 // Manual stock adjustments (warehouse dialogs: internal export, disposal, return, manufacturing)
 export { applyManualStockMovement, nextEntityCode } from "./stock-adjustments";
@@ -76,7 +85,7 @@ export {
 } from "./pipeline";
 
 // Categories (scoped: nvl, sku, customer, supplier)
-export { getCategoriesByScope, getAllCategories, createCategory, updateCategory, deleteCategory } from "./categories";
+export { getCategoriesByScope, getAllCategories, getCategoriesWithCounts, createCategory, updateCategory, deleteCategory } from "./categories";
 
 // Packaging Variants
 export { getVariantsByProduct, createVariant, updateVariant, deleteVariant } from "./variants";
@@ -88,7 +97,7 @@ export { getAllBOMs, getBOMsByProduct, getBOMById, createBOM, updateBOM, deleteB
 export {
   getProductionOrders, getProductionOrderById, createProductionOrder, completeProductionOrder, consumeProductionMaterials,
   updateProductionStatus, canTransitionProductionStatus,
-  getProductLots, allocateLotsFIFO, getExpiringLots, createPurchaseLot,
+  getProductLots, getAllProductLots, allocateLotsFIFO, getExpiringLots, createPurchaseLot,
 } from "./production";
 
 // Pricing (Price Tiers)
@@ -97,6 +106,12 @@ export {
   createPriceTier, updatePriceTier, deletePriceTier,
   addPriceTierItem, updatePriceTierItem, deletePriceTierItem,
 } from "./pricing";
+
+// Reports & Financial Intelligence
+export {
+  getProfitAndLoss, getCOGSBreakdown, getGrossMarginTrend,
+  getInventoryTurnover, getDSO, getFinancialAlerts,
+} from "./reports";
 
 // UOM Conversions
 export { getUOMConversions, createUOMConversion, updateUOMConversion, deleteUOMConversion, convertQuantity } from "./uom";
@@ -109,3 +124,23 @@ export type { BranchStockRow } from "./branch-stock";
 export { getBranches, createBranch, updateBranch } from "./branches";
 export type { BranchDetail } from "./branches";
 export { BRANCH_TYPE_LABELS, BRANCH_CODE_PREFIX } from "./branches";
+
+// ============================================================
+// v7 Toàn Cảnh — Sprint 7 services
+// ============================================================
+
+// Stock Transfers (Chuyển kho giữa chi nhánh)
+export {
+  getStockTransfers, getTransferStatuses, getTransferStatusMeta,
+  createStockTransfer, completeStockTransfer, cancelStockTransfer,
+  updateTransferStatus, canTransitionTransfer,
+} from "./transfers";
+export type { StockTransfer, StockTransferStatus, StockTransferItem, CreateStockTransferInput } from "./transfers";
+
+// Audit Log (Lịch sử thao tác)
+export { getAuditLogs, getAuditStats, getActionOptions, getEntityTypeOptions } from "./audit";
+export type { AuditLogEntry, AuditFilters } from "./audit";
+
+// Debt Aging (Phân tích tuổi nợ)
+export { getDebtAging, getTopDebtors as getDebtAgingDebtors } from "./debt";
+export type { DebtAgingReport, AgingBucket, DebtorDetail } from "./debt";

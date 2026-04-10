@@ -1,3 +1,4 @@
+export { ConfirmDialog } from "./confirm-dialog";
 export { CreateProductDialog } from "./create-product-dialog";
 export { CreateCustomerDialog } from "./create-customer-dialog";
 export { CreateSupplierDialog } from "./create-supplier-dialog";
