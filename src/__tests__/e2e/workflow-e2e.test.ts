@@ -359,8 +359,11 @@ describe("Flow B: Draft → Complete with Mixed Payment", () => {
     );
 
     await completeDraftOrder("inv-draft", {
+      method: "mixed",
       paid: 1_000_000,
-      paymentMethod: "mixed",
+      tenantId: "tenant-1",
+      branchId: "branch-1",
+      createdBy: "user-1",
       paymentBreakdown: [
         { method: "cash", amount: 500_000 },
         { method: "transfer", amount: 300_000 },
