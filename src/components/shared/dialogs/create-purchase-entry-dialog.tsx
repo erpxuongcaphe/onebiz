@@ -14,7 +14,8 @@ import { Button } from "@/components/ui/button";
 import { Trash2, Search, Loader2 } from "lucide-react";
 import { formatCurrency } from "@/lib/format";
 import { useToast } from "@/lib/contexts";
-import { getClient } from "@/lib/services/supabase/base";
+import { getClient, getCurrentContext } from "@/lib/services/supabase/base";
+import { nextEntityCode } from "@/lib/services/supabase/stock-adjustments";
 import type { Database } from "@/lib/supabase/types";
 
 type PurchaseOrderInsert = Database["public"]["Tables"]["purchase_orders"]["Insert"];
@@ -45,11 +46,6 @@ interface SearchSupplier {
   phone: string;
 }
 
-function generatePurchaseEntryCode() {
-  const num = Math.floor(Math.random() * 99999) + 1;
-  return `DHN${String(num).padStart(6, "0")}`;
-}
-
 export function CreatePurchaseEntryDialog({
   open,
   onOpenChange,
@@ -71,7 +67,8 @@ export function CreatePurchaseEntryDialog({
 
   useEffect(() => {
     if (open) {
-      setCode(generatePurchaseEntryCode());
+      // Generate monotonic code via RPC
+      nextEntityCode("purchase_order").then((c) => setCode(c)).catch(() => setCode(`DHN${Date.now()}`));
       setSupplierSearch("");
       setSelectedSupplier(null);
       setShowSupplierDropdown(false);
@@ -159,13 +156,13 @@ export function CreatePurchaseEntryDialog({
     setSaving(true);
     try {
       const supabase = getClient();
-      const { data: { user } } = await supabase.auth.getUser();
+      const ctx = await getCurrentContext();
 
       const { data: po, error: poErr } = await supabase
         .from("purchase_orders")
         .insert({
-          tenant_id: "",
-          branch_id: "",
+          tenant_id: ctx.tenantId,
+          branch_id: ctx.branchId,
           code,
           supplier_id: selectedSupplier!.id,
           supplier_name: selectedSupplier!.name,
@@ -176,7 +173,7 @@ export function CreatePurchaseEntryDialog({
           paid: 0,
           debt: total,
           note: notes || null,
-          created_by: user?.id ?? "",
+          created_by: ctx.userId,
         } satisfies PurchaseOrderInsert)
         .select("id")
         .single();

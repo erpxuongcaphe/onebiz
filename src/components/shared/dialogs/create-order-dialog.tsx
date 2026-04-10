@@ -21,7 +21,8 @@ import {
 import { Trash2, Search, Loader2 } from "lucide-react";
 import { formatCurrency } from "@/lib/format";
 import { useToast } from "@/lib/contexts";
-import { getClient } from "@/lib/services/supabase/base";
+import { getClient, getCurrentContext } from "@/lib/services/supabase/base";
+import { nextEntityCode } from "@/lib/services/supabase/stock-adjustments";
 import type { Database } from "@/lib/supabase/types";
 
 type InvoiceInsert = Database["public"]["Tables"]["invoices"]["Insert"];
@@ -57,11 +58,6 @@ interface DeliveryPartner {
   name: string;
 }
 
-function generateOrderCode() {
-  const num = Math.floor(Math.random() * 99999) + 1;
-  return `DH${String(num).padStart(6, "0")}`;
-}
-
 export function CreateOrderDialog({
   open,
   onOpenChange,
@@ -85,7 +81,7 @@ export function CreateOrderDialog({
 
   useEffect(() => {
     if (open) {
-      setCode(generateOrderCode());
+      nextEntityCode("invoice").then((c) => setCode(c)).catch(() => setCode(`DH${Date.now()}`));
       setCustomerSearch("");
       setSelectedCustomer(null);
       setShowCustomerDropdown(false);
@@ -183,13 +179,13 @@ export function CreateOrderDialog({
     setSaving(true);
     try {
       const supabase = getClient();
-      const { data: { user } } = await supabase.auth.getUser();
+      const ctx = await getCurrentContext();
 
       const { data: invoice, error: invoiceErr } = await supabase
         .from("invoices")
         .insert({
-          tenant_id: "",
-          branch_id: "",
+          tenant_id: ctx.tenantId,
+          branch_id: ctx.branchId,
           code,
           customer_id: selectedCustomer?.id || null,
           customer_name: selectedCustomer?.name ?? "Khách lẻ",
@@ -201,7 +197,7 @@ export function CreateOrderDialog({
           debt: total,
           payment_method: "cash" as const,
           note: notes || null,
-          created_by: user?.id ?? "",
+          created_by: ctx.userId,
         } satisfies InvoiceInsert)
         .select("id")
         .single();

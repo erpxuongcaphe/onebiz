@@ -13,7 +13,8 @@ import { Input } from "@/components/ui/input";
 import { Button } from "@/components/ui/button";
 import { Search, Loader2 } from "lucide-react";
 import { useToast } from "@/lib/contexts";
-import { getClient } from "@/lib/services/supabase/base";
+import { getClient, getCurrentContext } from "@/lib/services/supabase/base";
+import { nextEntityCode } from "@/lib/services/supabase/stock-adjustments";
 import type { Database } from "@/lib/supabase/types";
 
 type ShippingOrderInsert = Database["public"]["Tables"]["shipping_orders"]["Insert"];
@@ -33,11 +34,6 @@ interface SearchInvoice {
 interface SearchPartner {
   id: string;
   name: string;
-}
-
-function generateShippingCode() {
-  const num = Math.floor(Math.random() * 99999) + 1;
-  return `VD${String(num).padStart(6, "0")}`;
 }
 
 export function CreateShippingOrderDialog({
@@ -64,7 +60,7 @@ export function CreateShippingOrderDialog({
 
   useEffect(() => {
     if (open) {
-      setCode(generateShippingCode());
+      nextEntityCode("shipping").then((c) => setCode(c)).catch(() => setCode(`VD${Date.now()}`));
       setInvoiceSearch("");
       setSelectedInvoice(null);
       setShowInvoiceDropdown(false);
@@ -132,11 +128,12 @@ export function CreateShippingOrderDialog({
     setSaving(true);
     try {
       const supabase = getClient();
+      const ctx = await getCurrentContext();
 
       const { error: insertErr } = await supabase
         .from("shipping_orders")
         .insert({
-          tenant_id: "",
+          tenant_id: ctx.tenantId,
           invoice_id: selectedInvoice!.id,
           partner_id: selectedPartnerId || null,
           code,
