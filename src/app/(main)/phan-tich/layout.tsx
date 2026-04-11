@@ -13,6 +13,7 @@ import {
   CalendarCheck,
   FileText,
   AlertTriangle,
+  ArrowLeftRight,
 } from "lucide-react";
 import {
   ModuleSidebarLayout,
@@ -27,6 +28,7 @@ const analyticsNav: ModuleNavGroup[] = [
       { label: "Cuối ngày", href: "/phan-tich/cuoi-ngay", icon: CalendarCheck },
       { label: "Tài chính", href: "/phan-tich/tai-chinh", icon: Wallet },
       { label: "Báo cáo P&L", href: "/phan-tich/bao-cao-tai-chinh", icon: FileText },
+      { label: "Luồng tiền", href: "/phan-tich/luong-tien", icon: ArrowLeftRight },
       { label: "Cảnh báo", href: "/phan-tich/canh-bao", icon: AlertTriangle },
     ],
   },

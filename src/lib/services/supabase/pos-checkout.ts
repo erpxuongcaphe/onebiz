@@ -28,6 +28,7 @@ export interface PosCheckoutItem {
   quantity: number;
   unitPrice: number;
   discount: number;
+  vatRate?: number; // Thuế suất GTGT (%) — 0, 5, 8, 10
 }
 
 /** Một dòng trong bảng tách thanh toán hỗn hợp */
@@ -140,6 +141,23 @@ export async function applyStockDecrement(
       p_delta: delta,
     });
     if (bsErr) handleError(bsErr, "applyStockDecrement:branch_stock");
+
+    // 2c. FIFO lot allocation — consume from earliest-expiry lots first.
+    // Best-effort: if no lots exist for this product (non-lot-tracked item),
+    // the RPC returns shortage = full qty and we continue silently.
+    try {
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      await (supabase.rpc as any)("allocate_lots_fifo", {
+        p_tenant_id: ctx.tenantId,
+        p_product_id: item.productId,
+        p_branch_id: ctx.branchId,
+        p_quantity: item.quantity,
+        p_source_type: "invoice",
+        p_source_id: invoiceId,
+      });
+    } catch {
+      // Silent — product may not have lots
+    }
   }
 }
 
@@ -257,7 +275,14 @@ export async function posCheckout(input: PosCheckoutInput): Promise<PosCheckoutR
   if (codeError) handleError(codeError, "posCheckout:next_code");
   const invoiceCode = code ?? `HD${Date.now()}`;
 
-  // 2. Insert invoice (status = completed)
+  // 2. Tính thuế GTGT từ items
+  const taxAmount = input.items.reduce((sum, item) => {
+    const rate = item.vatRate ?? 0;
+    const lineBeforeTax = item.quantity * item.unitPrice - item.discount;
+    return sum + Math.round(lineBeforeTax * rate / 100);
+  }, 0);
+
+  // 3. Insert invoice (status = completed) — total đã bao gồm thuế
   const invoiceData = {
     tenant_id: input.tenantId,
     branch_id: input.branchId,
@@ -267,6 +292,7 @@ export async function posCheckout(input: PosCheckoutInput): Promise<PosCheckoutR
     status: "completed" as const,
     subtotal: input.subtotal,
     discount_amount: input.discountAmount,
+    tax_amount: taxAmount,
     total: input.total,
     paid: input.paid,
     debt: Math.max(0, input.total - input.paid),
@@ -283,24 +309,31 @@ export async function posCheckout(input: PosCheckoutInput): Promise<PosCheckoutR
   if (invoiceError) handleError(invoiceError, "posCheckout:invoice");
   if (!invoice) throw new Error("Không tạo được hóa đơn");
 
-  // 3. Insert invoice_items
-  const itemsData: InvoiceItemInsert[] = input.items.map((item) => ({
-    invoice_id: invoice.id,
-    product_id: item.productId,
-    product_name: item.productName,
-    unit: item.unit ?? "Cái",
-    quantity: item.quantity,
-    unit_price: item.unitPrice,
-    discount: item.discount,
-    total: item.quantity * item.unitPrice - item.discount,
-  }));
+  // 4. Insert invoice_items (với VAT)
+  const itemsData: InvoiceItemInsert[] = input.items.map((item) => {
+    const lineBeforeTax = item.quantity * item.unitPrice - item.discount;
+    const vatRate = item.vatRate ?? 0;
+    const vatAmt = Math.round(lineBeforeTax * vatRate / 100);
+    return {
+      invoice_id: invoice.id,
+      product_id: item.productId,
+      product_name: item.productName,
+      unit: item.unit ?? "Cái",
+      quantity: item.quantity,
+      unit_price: item.unitPrice,
+      discount: item.discount,
+      vat_rate: vatRate,
+      vat_amount: vatAmt,
+      total: lineBeforeTax,
+    };
+  });
 
   const { error: itemsError } = await supabase
     .from("invoice_items")
     .insert(itemsData);
   if (itemsError) handleError(itemsError, "posCheckout:items");
 
-  // 4. Decrement stock (+ stock_movements)
+  // 5. Decrement stock (+ stock_movements)
   await applyStockDecrement(supabase, invoice.id, input.items, {
     tenantId: input.tenantId,
     branchId: input.branchId,
@@ -308,7 +341,7 @@ export async function posCheckout(input: PosCheckoutInput): Promise<PosCheckoutR
     invoiceCode: invoice.code,
   });
 
-  // 5. Auto-create cash transaction (phiếu thu) — hỗ trợ tách thanh toán hỗn hợp
+  // 6. Auto-create cash transaction (phiếu thu) — hỗ trợ tách thanh toán hỗn hợp
   await createAutoCashReceipt(
     supabase,
     invoice.id,

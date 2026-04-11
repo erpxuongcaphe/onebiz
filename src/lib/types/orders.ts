@@ -11,6 +11,7 @@ export interface Invoice {
   customerName: string;
   totalAmount: number;
   discount: number;
+  taxAmount: number;
   paid: number;
   debt: number;
   status: "processing" | "completed" | "cancelled" | "delivery_failed";
@@ -23,6 +24,8 @@ export interface Invoice {
 export interface InvoiceLineItem extends BaseLineItem {
   unitPrice: number;
   discount: number;
+  vatRate: number;
+  vatAmount: number;
   total: number;
 }
 
@@ -58,6 +61,7 @@ export interface PurchaseOrder {
   supplierCode: string;
   supplierName: string;
   amountOwed: number;
+  taxAmount: number;
   total: number;
   paid: number;
   status: PurchaseOrderStatus;
@@ -68,6 +72,8 @@ export interface PurchaseOrder {
 // Dòng sản phẩm trong đơn nhập hàng
 export interface POLineItem extends BaseLineItem {
   costPrice: number;
+  vatRate: number;
+  vatAmount: number;
   total: number;
 }
 

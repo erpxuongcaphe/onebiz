@@ -336,6 +336,7 @@ export default function PosPage() {
             discount: l.discount.mode === "percent"
               ? Math.round((l.quantity * l.unitPrice * l.discount.value) / 100)
               : l.discount.value,
+            vatRate: l.vatRate ?? 0,
           })),
           paymentMethod: state.paymentMethod,
           paymentBreakdown: breakdown,
@@ -386,6 +387,62 @@ export default function PosPage() {
       submitLockRef.current = false;
     }
   }, [state, toast, autoPrint]);
+
+  const handleDebtCheckout = useCallback(async () => {
+    if (submitLockRef.current) return;
+    if (!state.customer) {
+      toast({ title: "Vui lòng chọn khách hàng để ghi nợ", variant: "error" });
+      return;
+    }
+    submitLockRef.current = true;
+    setSubmitting("complete");
+    try {
+      const ctx = await getCurrentContext();
+      if (!ctx) throw new Error("Không xác định được chi nhánh");
+
+      const breakdown =
+        state.paymentMethod === "mixed"
+          ? state.paymentBreakdown.filter((b) => b.amount > 0)
+          : undefined;
+
+      const input: PosCheckoutInput = {
+        tenantId: ctx.tenantId,
+        branchId: ctx.branchId,
+        createdBy: ctx.userId,
+        customerId: state.customer.id,
+        customerName: state.customer.name,
+        items: state.lines.map((l) => ({
+          productId: l.productId,
+          productName: l.productName,
+          unit: l.unit,
+          quantity: l.quantity,
+          unitPrice: l.unitPrice,
+          discount: l.discount.mode === "percent"
+            ? Math.round((l.quantity * l.unitPrice * l.discount.value) / 100)
+            : l.discount.value,
+          vatRate: l.vatRate ?? 0,
+        })),
+        paymentMethod: state.paymentMethod,
+        paymentBreakdown: breakdown,
+        subtotal: state.subtotal,
+        discountAmount: state.orderDiscountAmount + state.lineDiscountTotal,
+        total: state.total,
+        paid: 0, // Ghi nợ 100%
+        note: state.note ? `[Ghi nợ] ${state.note}` : "[Ghi nợ]",
+      };
+      const result = await posCheckout(input);
+
+      toast({ title: `Ghi nợ ${result.invoiceCode} thành công!`, variant: "success" });
+      state.clearCart();
+      setSearchQuery("");
+      setMobileCartOpen(false);
+    } catch (err: any) {
+      toast({ title: "Ghi nợ thất bại", description: err.message, variant: "error" });
+    } finally {
+      setSubmitting(null);
+      submitLockRef.current = false;
+    }
+  }, [state, toast]);
 
   // ============================================================
   // Hotkeys
@@ -897,6 +954,16 @@ export default function PosPage() {
               </div>
             )}
 
+            {/* VAT */}
+            {state.taxAmount > 0 && (
+              <div className="flex justify-between text-xs text-gray-500">
+                <span>Thuế GTGT</span>
+                <span className="tabular-nums">
+                  +{formatCurrency(state.taxAmount)}
+                </span>
+              </div>
+            )}
+
             {/* Total */}
             <div className="flex justify-between items-baseline pt-1.5 border-t border-gray-200">
               <span className="text-sm font-bold text-gray-800">Khách cần trả</span>
@@ -1106,9 +1173,9 @@ export default function PosPage() {
             "px-3 py-2 border-t border-gray-200 shrink-0 bg-white",
             state.sellingMode === "fast"
               ? "flex flex-col gap-1.5"
-              : "grid grid-cols-[1fr_2fr] gap-1.5"
+              : "grid grid-cols-[1fr_1fr_2fr] gap-1.5"
           )}>
-            {/* Draft button — compact in fast mode, normal in others */}
+            {/* Draft button */}
             <button
               type="button"
               onClick={handleSaveDraft}
@@ -1123,10 +1190,24 @@ export default function PosPage() {
               ) : (
                 <Save className="h-3.5 w-3.5" />
               )}
-              Lưu nháp
+              Nháp
               <kbd className="font-mono text-[8px] bg-gray-100 border border-gray-200 rounded px-0.5 text-gray-400">
                 F9
               </kbd>
+            </button>
+            {/* Debt button — ghi nợ 100% */}
+            <button
+              type="button"
+              onClick={handleDebtCheckout}
+              disabled={state.lines.length === 0 || submitting !== null || !state.customer}
+              title={!state.customer ? "Chọn khách hàng để ghi nợ" : "Ghi nợ toàn bộ"}
+              className={cn(
+                "rounded border border-amber-400 bg-amber-50 text-xs font-semibold text-amber-700 hover:bg-amber-100 disabled:opacity-40 disabled:cursor-not-allowed inline-flex items-center justify-center gap-1 transition-colors",
+                state.sellingMode === "fast" ? "h-8" : "h-10"
+              )}
+            >
+              <CreditCard className="h-3.5 w-3.5" />
+              Ghi nợ
             </button>
             {/* Checkout button — prominent in fast mode */}
             <button

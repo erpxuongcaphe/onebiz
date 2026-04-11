@@ -61,7 +61,7 @@ export {
   // Suppliers
   getSupplierKpis, getPurchaseByMonth, getTopSuppliersByPurchase, getSupplierPaymentStatus, getSupplierSummary,
   // Finance
-  getFinanceKpis, getRevenueVsExpense, getExpenseBreakdown, getMonthlyProfit, getCashFlow,
+  getFinanceKpis, getRevenueVsExpense, getExpenseBreakdown, getMonthlyProfit, getCashFlow, getCashFlowDetailed,
 } from "./analytics";
 export { posCheckout } from "./pos-checkout";
 export type { PosCheckoutInput, PosCheckoutResult, PosCheckoutItem, PaymentBreakdownItem } from "./pos-checkout";

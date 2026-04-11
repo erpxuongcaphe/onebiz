@@ -8,3 +8,5 @@ dist
 .vercel
 .DS_Store
 tsconfig.tsbuildinfo
+
+.vercel

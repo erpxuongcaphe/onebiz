@@ -328,6 +328,7 @@ function mapPurchaseOrder(row: any): PurchaseOrder {
     supplierCode: "",
     supplierName: row.supplier_name,
     amountOwed: Number(row.debt ?? 0),
+    taxAmount: Number(row.tax_amount ?? 0),
     total: Number(row.total ?? 0),
     paid: Number(row.paid ?? 0),
     status: (row.status ?? "draft") as PurchaseOrderStatus,

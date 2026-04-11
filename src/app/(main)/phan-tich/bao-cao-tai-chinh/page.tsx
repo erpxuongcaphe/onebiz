@@ -10,7 +10,16 @@ import {
   RotateCcw,
   Clock,
   Loader2,
+  Building2,
 } from "lucide-react";
+import {
+  Select,
+  SelectTrigger,
+  SelectValue,
+  SelectContent,
+  SelectItem,
+} from "@/components/ui/select";
+import { getClient } from "@/lib/services/supabase/base";
 import {
   LineChart,
   Line,
@@ -104,6 +113,8 @@ function COGSTooltip({
 
 export default function BaoCaoTaiChinhPage() {
   const [loading, setLoading] = useState(true);
+  const [branchId, setBranchId] = useState<string>("all");
+  const [branches, setBranches] = useState<{ id: string; name: string }[]>([]);
   const [pnl, setPnl] = useState<{
     current: ProfitAndLoss;
     previous: ProfitAndLoss;
@@ -113,12 +124,22 @@ export default function BaoCaoTaiChinhPage() {
   const [turnover, setTurnover] = useState<InventoryTurnoverResult | null>(null);
   const [dso, setDso] = useState<DSOResult | null>(null);
 
+  // Fetch branches once
+  useEffect(() => {
+    (async () => {
+      const supabase = getClient();
+      const { data } = await supabase.from("branches").select("id, name").eq("is_active", true);
+      setBranches((data ?? []).map(b => ({ id: b.id, name: b.name })));
+    })();
+  }, []);
+
   const fetchData = useCallback(async () => {
     try {
       setLoading(true);
+      const bid = branchId === "all" ? undefined : branchId;
       const [pnlRes, cogsRes, marginRes, turnoverRes, dsoRes] =
         await Promise.all([
-          getProfitAndLoss(),
+          getProfitAndLoss(bid),
           getCOGSBreakdown(10),
           getGrossMarginTrend(6),
           getInventoryTurnover(),
@@ -134,7 +155,7 @@ export default function BaoCaoTaiChinhPage() {
     } finally {
       setLoading(false);
     }
-  }, []);
+  }, [branchId]);
 
   useEffect(() => {
     fetchData();
@@ -160,6 +181,24 @@ export default function BaoCaoTaiChinhPage() {
         title="Báo cáo tài chính (P&L)"
         subtitle="Lãi/Lỗ, Giá vốn, Biên lợi nhuận"
       />
+
+      {/* Branch filter */}
+      {branches.length > 1 && (
+        <div className="px-4 md:px-6 pt-3 flex items-center gap-2">
+          <Building2 className="h-4 w-4 text-muted-foreground" />
+          <Select value={branchId} onValueChange={(v) => setBranchId(v ?? "all")}>
+            <SelectTrigger className="w-52 h-8 text-xs">
+              <SelectValue placeholder="Tất cả chi nhánh" />
+            </SelectTrigger>
+            <SelectContent>
+              <SelectItem value="all">Tất cả chi nhánh</SelectItem>
+              {branches.map((b) => (
+                <SelectItem key={b.id} value={b.id}>{b.name}</SelectItem>
+              ))}
+            </SelectContent>
+          </Select>
+        </div>
+      )}
 
       <div className="flex-1 p-4 md:p-6 space-y-4">
         {/* KPI Cards */}

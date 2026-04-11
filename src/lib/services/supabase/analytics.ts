@@ -1222,3 +1222,76 @@ export async function getCashFlow(months: number = 6): Promise<CashFlowRow[]> {
     ton: (thuMap.get(month) ?? 0) - (chiMap.get(month) ?? 0),
   }));
 }
+
+// === Cash Flow chi tiết phân loại theo danh mục ===
+
+export interface CashFlowByCategory {
+  category: string;
+  type: "receipt" | "payment";
+  amount: number;
+}
+
+export interface CashFlowDetailedRow {
+  month: string;
+  receipts: { category: string; amount: number }[];
+  payments: { category: string; amount: number }[];
+  totalReceipt: number;
+  totalPayment: number;
+  net: number;
+  cumulativeBalance: number;
+}
+
+export async function getCashFlowDetailed(months: number = 6): Promise<CashFlowDetailedRow[]> {
+  const supabase = getClient();
+  const range = lastNMonthsRange(months);
+
+  const { data, error } = await supabase
+    .from("cash_transactions")
+    .select("created_at, type, amount, category")
+    .gte("created_at", range.start)
+    .lt("created_at", range.end);
+
+  if (error) handleError(error, "getCashFlowDetailed");
+
+  const now = new Date();
+  const monthKeys: string[] = [];
+  for (let i = months - 1; i >= 0; i--) {
+    const d = new Date(now.getFullYear(), now.getMonth() - i, 1);
+    monthKeys.push(`T${d.getMonth() + 1}`);
+  }
+
+  // Group by month → type → category
+  const grouped = new Map<string, Map<string, number>>();
+  for (const key of monthKeys) {
+    grouped.set(`${key}_receipt`, new Map());
+    grouped.set(`${key}_payment`, new Map());
+  }
+
+  (data ?? []).forEach(c => {
+    const d = new Date(c.created_at);
+    const mKey = `T${d.getMonth() + 1}`;
+    const type = c.type === "receipt" ? "receipt" : "payment";
+    const cat = c.category ?? "Khác";
+    const mapKey = `${mKey}_${type}`;
+    const catMap = grouped.get(mapKey);
+    if (catMap) {
+      catMap.set(cat, (catMap.get(cat) ?? 0) + (c.amount ?? 0));
+    }
+  });
+
+  let cumulativeBalance = 0;
+  return monthKeys.map(month => {
+    const receiptMap = grouped.get(`${month}_receipt`) ?? new Map();
+    const paymentMap = grouped.get(`${month}_payment`) ?? new Map();
+
+    const receipts = Array.from(receiptMap.entries()).map(([category, amount]) => ({ category, amount }));
+    const payments = Array.from(paymentMap.entries()).map(([category, amount]) => ({ category, amount }));
+
+    const totalReceipt = receipts.reduce((s, r) => s + r.amount, 0);
+    const totalPayment = payments.reduce((s, p) => s + p.amount, 0);
+    const net = totalReceipt - totalPayment;
+    cumulativeBalance += net;
+
+    return { month, receipts, payments, totalReceipt, totalPayment, net, cumulativeBalance };
+  });
+}

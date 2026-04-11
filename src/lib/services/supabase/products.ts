@@ -328,6 +328,7 @@ function mapProduct(row: any): Product {
     shelfLifeUnit: row.shelf_life_unit ?? undefined,
     oldCode: row.old_code ?? undefined,
     groupCode: row.group_code ?? undefined,
+    vatRate: row.vat_rate ?? 0,
     supplierId: row.supplier_id ?? undefined,
     createdAt: row.created_at,
   };
@@ -383,6 +384,7 @@ export async function createProduct(product: Partial<Product & ProductDetail>): 
       stock: product.stock ?? 0,
       min_stock: product.minStock ?? 0,
       max_stock: product.maxStock ?? 1000,
+      vat_rate: product.vatRate ?? 0,
       barcode: product.barcode,
       weight: product.weight,
       description: product.description,
@@ -420,6 +422,7 @@ export async function updateProduct(id: string, updates: Partial<Product & Produ
   if (updates.stock !== undefined) payload.stock = updates.stock;
   if (updates.minStock !== undefined) payload.min_stock = updates.minStock;
   if (updates.maxStock !== undefined) payload.max_stock = updates.maxStock;
+  if (updates.vatRate !== undefined) payload.vat_rate = updates.vatRate;
   if (updates.barcode !== undefined) payload.barcode = updates.barcode;
   if (updates.weight !== undefined) payload.weight = updates.weight;
   if (updates.description !== undefined) payload.description = updates.description;

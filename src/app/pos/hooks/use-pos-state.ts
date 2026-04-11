@@ -58,6 +58,7 @@ export interface OrderLine {
   availableStock: number;
   quantity: number;
   unitPrice: number;
+  vatRate: number;
   discount: DiscountInput;
 }
 
@@ -154,6 +155,7 @@ export function usePosState() {
           availableStock: product.stock ?? 0,
           quantity: 1,
           unitPrice: product.sellPrice ?? 0,
+          vatRate: product.vatRate ?? 0,
           discount: { mode: "amount", value: 0 },
         },
       ];
@@ -226,6 +228,7 @@ export function usePosState() {
         availableStock: 0, // unknown from draft row — oversell check will re-fetch if needed
         quantity: it.quantity,
         unitPrice: it.unitPrice,
+        vatRate: (it as any).vatRate ?? 0,
         discount: { mode: "amount", value: it.discount },
       }))
     );
@@ -271,8 +274,16 @@ export function usePosState() {
     return Math.max(0, orderDiscount.value);
   }, [orderDiscount, afterLineDiscount]);
 
+  const taxAmount = useMemo(
+    () => lines.reduce((sum, l) => {
+      const lineBeforeTax = l.quantity * l.unitPrice - computeLineDiscount(l);
+      return sum + Math.round(lineBeforeTax * (l.vatRate ?? 0) / 100);
+    }, 0),
+    [lines]
+  );
+
   const shippingFee = sellingMode === "delivery" ? deliveryInfo.shippingFee : 0;
-  const total = Math.max(0, afterLineDiscount - orderDiscountAmount + shippingFee);
+  const total = Math.max(0, afterLineDiscount - orderDiscountAmount + taxAmount + shippingFee);
   const debt = Math.max(0, total - paid);
   const change = Math.max(0, paid - total);
   const itemCount = lines.reduce((sum, l) => sum + l.quantity, 0);
@@ -348,6 +359,7 @@ export function usePosState() {
     subtotal,
     lineDiscountTotal,
     orderDiscountAmount,
+    taxAmount,
     shippingFee,
     total,
     debt,

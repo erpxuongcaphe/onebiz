@@ -91,7 +91,7 @@ function prevMonthRange(): { start: string; end: string } {
  * - OpEx = SUM(cash_transactions.amount) where type=payment (loại trừ category 'Nhập hàng')
  * - Net Profit = Gross Profit - OpEx
  */
-export async function getProfitAndLoss(): Promise<{
+export async function getProfitAndLoss(branchId?: string): Promise<{
   current: ProfitAndLoss;
   previous: ProfitAndLoss;
 }> {
@@ -100,23 +100,28 @@ export async function getProfitAndLoss(): Promise<{
   const prevMonth = prevMonthRange();
   const now = new Date();
 
+  // Helper: apply optional branch filter
+  function branchFilter(q: any) {
+    return branchId ? q.eq("branch_id", branchId) : q;
+  }
+
   // Fetch all data in parallel
   const [thisInv, prevInv, thisItems, prevItems, thisCash, prevCash] =
     await Promise.all([
       // Revenue: completed invoices this month
-      supabase
+      branchFilter(supabase
         .from("invoices")
         .select("id, total")
         .eq("status", "completed")
         .gte("created_at", thisMonth.start)
-        .lt("created_at", thisMonth.end),
+        .lt("created_at", thisMonth.end)),
       // Revenue: completed invoices prev month
-      supabase
+      branchFilter(supabase
         .from("invoices")
         .select("id, total")
         .eq("status", "completed")
         .gte("created_at", prevMonth.start)
-        .lt("created_at", prevMonth.end),
+        .lt("created_at", prevMonth.end)),
       // COGS: invoice items with product cost_price this month
       supabase
         .from("invoice_items")
@@ -130,36 +135,36 @@ export async function getProfitAndLoss(): Promise<{
         .gte("created_at", prevMonth.start)
         .lt("created_at", prevMonth.end),
       // OpEx: cash transactions (payments) this month
-      supabase
+      branchFilter(supabase
         .from("cash_transactions")
         .select("category, amount")
         .eq("type", "payment")
         .gte("created_at", thisMonth.start)
-        .lt("created_at", thisMonth.end),
+        .lt("created_at", thisMonth.end)),
       // OpEx: cash transactions (payments) prev month
-      supabase
+      branchFilter(supabase
         .from("cash_transactions")
         .select("category, amount")
         .eq("type", "payment")
         .gte("created_at", prevMonth.start)
-        .lt("created_at", prevMonth.end),
+        .lt("created_at", prevMonth.end)),
     ]);
 
   // Build set of completed invoice IDs for filtering items
-  const thisInvIds = new Set(
-    (thisInv.data ?? []).map((i) => i.id as string)
+  const thisInvIds = new Set<string>(
+    (thisInv.data ?? []).map((i: any) => i.id as string)
   );
-  const prevInvIds = new Set(
-    (prevInv.data ?? []).map((i) => i.id as string)
+  const prevInvIds = new Set<string>(
+    (prevInv.data ?? []).map((i: any) => i.id as string)
   );
 
   // Calculate revenue
   const thisRevenue = (thisInv.data ?? []).reduce(
-    (s, i) => s + ((i.total as number) ?? 0),
+    (s: number, i: any) => s + ((i.total as number) ?? 0),
     0
   );
   const prevRevenue = (prevInv.data ?? []).reduce(
-    (s, i) => s + ((i.total as number) ?? 0),
+    (s: number, i: any) => s + ((i.total as number) ?? 0),
     0
   );
 

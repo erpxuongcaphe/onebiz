@@ -100,6 +100,7 @@ function mapInvoice(row: any): Invoice {
     customerName: row.customer_name,
     totalAmount: row.total,
     discount: row.discount_amount,
+    taxAmount: Number(row.tax_amount ?? 0),
     paid: Number(row.paid ?? 0),
     debt: Number(row.debt ?? 0),
     status: (statusMap[row.status] ?? row.status) as Invoice["status"],

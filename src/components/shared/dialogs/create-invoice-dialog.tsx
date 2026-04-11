@@ -39,12 +39,14 @@ interface InvoiceLineItem {
   quantity: number;
   price: number;
   discount: number;
+  vatRate: number;
 }
 
 interface SearchProduct {
   id: string;
   name: string;
   price: number;
+  vatRate: number;
 }
 
 interface SearchCustomer {
@@ -122,11 +124,11 @@ export function CreateInvoiceDialog({
       const supabase = getClient();
       const { data } = await supabase
         .from("products")
-        .select("id, name, sell_price")
+        .select("id, name, sell_price, vat_rate")
         .or(`name.ilike.%${productSearch}%,code.ilike.%${productSearch}%`)
         .eq("is_active", true)
         .limit(10);
-      setFilteredProducts((data ?? []).map(p => ({ id: p.id, name: p.name, price: p.sell_price })));
+      setFilteredProducts((data ?? []).map(p => ({ id: p.id, name: p.name, price: p.sell_price, vatRate: p.vat_rate ?? 0 })));
     }, 300);
     return () => clearTimeout(timer);
   }, [productSearch]);
@@ -150,6 +152,7 @@ export function CreateInvoiceDialog({
           quantity: 1,
           price: product.price,
           discount: 0,
+          vatRate: product.vatRate,
         },
       ]);
     }
@@ -188,7 +191,16 @@ export function CreateInvoiceDialog({
     return val;
   }, [subtotal, discountType, discountValue]);
 
-  const total = Math.max(0, subtotal - discountAmount);
+  const taxAmount = useMemo(
+    () =>
+      items.reduce((sum, item) => {
+        const lineBeforeTax = item.quantity * item.price - item.discount;
+        return sum + Math.round(lineBeforeTax * item.vatRate / 100);
+      }, 0),
+    [items]
+  );
+
+  const total = Math.max(0, subtotal - discountAmount + taxAmount);
 
   function validate(): boolean {
     const newErrors: Record<string, string> = {};
@@ -217,6 +229,7 @@ export function CreateInvoiceDialog({
           status: "completed" as const,
           subtotal,
           discount_amount: discountAmount,
+          tax_amount: taxAmount,
           total,
           paid: total,
           debt: 0,
@@ -233,16 +246,22 @@ export function CreateInvoiceDialog({
       if (invoice && items.length > 0) {
         const { error: itemsErr } = await supabase
           .from("invoice_items")
-          .insert(items.map(item => ({
-            invoice_id: invoice.id,
-            product_id: item.id,
-            product_name: item.productName,
-            unit: "Cái",
-            quantity: item.quantity,
-            unit_price: item.price,
-            discount: item.discount,
-            total: item.quantity * item.price - item.discount,
-          } satisfies InvoiceItemInsert)));
+          .insert(items.map(item => {
+            const lineBeforeTax = item.quantity * item.price - item.discount;
+            const vatAmt = Math.round(lineBeforeTax * item.vatRate / 100);
+            return {
+              invoice_id: invoice.id,
+              product_id: item.id,
+              product_name: item.productName,
+              unit: "Cái",
+              quantity: item.quantity,
+              unit_price: item.price,
+              discount: item.discount,
+              vat_rate: item.vatRate,
+              vat_amount: vatAmt,
+              total: lineBeforeTax,
+            } satisfies InvoiceItemInsert;
+          }));
         if (itemsErr) throw new Error(itemsErr.message);
       }
 
@@ -375,17 +394,18 @@ export function CreateInvoiceDialog({
           {/* Line items */}
           {items.length > 0 && (
             <div className="rounded-lg border overflow-hidden">
-              <div className="grid grid-cols-[1fr_70px_100px_90px_36px] gap-2 px-3 py-2 bg-muted/50 text-xs font-medium text-muted-foreground">
+              <div className="grid grid-cols-[1fr_60px_90px_80px_65px_36px] gap-2 px-3 py-2 bg-muted/50 text-xs font-medium text-muted-foreground">
                 <span>Sản phẩm</span>
                 <span className="text-center">SL</span>
                 <span className="text-right">Đơn giá</span>
                 <span className="text-right">Giảm giá</span>
+                <span className="text-right">VAT%</span>
                 <span />
               </div>
               {items.map((item) => (
                 <div
                   key={item.id}
-                  className="grid grid-cols-[1fr_70px_100px_90px_36px] gap-2 items-center px-3 py-2 border-t"
+                  className="grid grid-cols-[1fr_60px_90px_80px_65px_36px] gap-2 items-center px-3 py-2 border-t"
                 >
                   <span className="text-sm truncate">{item.productName}</span>
                   <Input
@@ -421,6 +441,20 @@ export function CreateInvoiceDialog({
                     }
                     className="h-7 text-right px-1"
                   />
+                  <Select
+                    value={String(item.vatRate)}
+                    onValueChange={(v) => updateItem(item.id, "vatRate", Number(v))}
+                  >
+                    <SelectTrigger className="h-7 text-xs px-1">
+                      <SelectValue />
+                    </SelectTrigger>
+                    <SelectContent>
+                      <SelectItem value="0">0%</SelectItem>
+                      <SelectItem value="5">5%</SelectItem>
+                      <SelectItem value="8">8%</SelectItem>
+                      <SelectItem value="10">10%</SelectItem>
+                    </SelectContent>
+                  </Select>
                   <Button
                     variant="ghost"
                     size="icon-sm"
@@ -476,6 +510,13 @@ export function CreateInvoiceDialog({
                 <span className="text-orange-600">
                   -{formatCurrency(discountAmount)}
                 </span>
+              </div>
+            )}
+
+            {taxAmount > 0 && (
+              <div className="flex items-center justify-between text-sm">
+                <span className="text-muted-foreground">Thuế GTGT</span>
+                <span>{formatCurrency(taxAmount)}</span>
               </div>
             )}
 

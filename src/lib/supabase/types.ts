@@ -193,6 +193,7 @@ export interface Database {
           shelf_life_days: number | null;
           shelf_life_unit: string;
           supplier_id: string | null;
+          vat_rate: number;
           created_at: string;
           updated_at: string;
         };
@@ -224,6 +225,7 @@ export interface Database {
           shelf_life_days?: number | null;
           shelf_life_unit?: string;
           supplier_id?: string | null;
+          vat_rate?: number;
         };
         Update: {
           code?: string;
@@ -251,6 +253,7 @@ export interface Database {
           shelf_life_days?: number | null;
           shelf_life_unit?: string;
           supplier_id?: string | null;
+          vat_rate?: number;
         };
         Relationships: [
           {
@@ -429,6 +432,7 @@ export interface Database {
           status: "draft" | "confirmed" | "completed" | "cancelled";
           subtotal: number;
           discount_amount: number;
+          tax_amount: number;
           total: number;
           paid: number;
           debt: number;
@@ -448,6 +452,7 @@ export interface Database {
           status?: "draft" | "confirmed" | "completed" | "cancelled";
           subtotal?: number;
           discount_amount?: number;
+          tax_amount?: number;
           total?: number;
           paid?: number;
           debt?: number;
@@ -459,6 +464,7 @@ export interface Database {
           status?: "draft" | "confirmed" | "completed" | "cancelled";
           subtotal?: number;
           discount_amount?: number;
+          tax_amount?: number;
           total?: number;
           paid?: number;
           debt?: number;
@@ -496,6 +502,8 @@ export interface Database {
           quantity: number;
           unit_price: number;
           discount: number;
+          vat_rate: number;
+          vat_amount: number;
           total: number;
         };
         Insert: {
@@ -507,12 +515,16 @@ export interface Database {
           quantity: number;
           unit_price: number;
           discount?: number;
+          vat_rate?: number;
+          vat_amount?: number;
           total: number;
         };
         Update: {
           quantity?: number;
           unit_price?: number;
           discount?: number;
+          vat_rate?: number;
+          vat_amount?: number;
           total?: number;
         };
         Relationships: [
@@ -541,6 +553,7 @@ export interface Database {
           status: "draft" | "ordered" | "partial" | "completed" | "cancelled";
           subtotal: number;
           discount_amount: number;
+          tax_amount: number;
           total: number;
           paid: number;
           debt: number;
@@ -559,6 +572,7 @@ export interface Database {
           status?: "draft" | "ordered" | "partial" | "completed" | "cancelled";
           subtotal?: number;
           discount_amount?: number;
+          tax_amount?: number;
           total?: number;
           paid?: number;
           debt?: number;
@@ -569,6 +583,7 @@ export interface Database {
           status?: "draft" | "ordered" | "partial" | "completed" | "cancelled";
           subtotal?: number;
           discount_amount?: number;
+          tax_amount?: number;
           total?: number;
           paid?: number;
           debt?: number;
@@ -600,6 +615,8 @@ export interface Database {
           received_quantity: number;
           unit_price: number;
           discount: number;
+          vat_rate: number;
+          vat_amount: number;
           total: number;
         };
         Insert: {
@@ -612,6 +629,8 @@ export interface Database {
           received_quantity?: number;
           unit_price: number;
           discount?: number;
+          vat_rate?: number;
+          vat_amount?: number;
           total: number;
         };
         Update: {
@@ -619,6 +638,8 @@ export interface Database {
           received_quantity?: number;
           unit_price?: number;
           discount?: number;
+          vat_rate?: number;
+          vat_amount?: number;
           total?: number;
         };
         Relationships: [

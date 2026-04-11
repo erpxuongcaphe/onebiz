@@ -27,6 +27,7 @@ export interface Product {
   sellUnit?: string;
   shelfLifeDays?: number;
   shelfLifeUnit?: 'day' | 'month' | 'year';
+  vatRate: number;
   oldCode?: string;
   groupCode?: string;
   createdAt: string;

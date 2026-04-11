@@ -11,6 +11,13 @@ import {
 } from "@/components/ui/dialog";
 import { Input } from "@/components/ui/input";
 import { Button } from "@/components/ui/button";
+import {
+  Select,
+  SelectTrigger,
+  SelectValue,
+  SelectContent,
+  SelectItem,
+} from "@/components/ui/select";
 import { Trash2, Search, Loader2 } from "lucide-react";
 import { formatCurrency } from "@/lib/format";
 import { useToast } from "@/lib/contexts";
@@ -20,10 +27,19 @@ import type { Database } from "@/lib/supabase/types";
 type PurchaseOrderInsert = Database["public"]["Tables"]["purchase_orders"]["Insert"];
 type PurchaseOrderItemInsert = Database["public"]["Tables"]["purchase_order_items"]["Insert"];
 
+interface EditingPO {
+  id: string;
+  code: string;
+  supplierId: string;
+  supplierName: string;
+  note?: string;
+}
+
 interface CreatePurchaseOrderDialogProps {
   open: boolean;
   onOpenChange: (open: boolean) => void;
   onSuccess?: () => void;
+  editingPO?: EditingPO | null;
 }
 
 interface LineItem {
@@ -31,12 +47,14 @@ interface LineItem {
   productName: string;
   quantity: number;
   price: number;
+  vatRate: number;
 }
 
 interface SearchProduct {
   id: string;
   name: string;
   price: number;
+  vatRate: number;
 }
 
 interface SearchSupplier {
@@ -54,7 +72,9 @@ export function CreatePurchaseOrderDialog({
   open,
   onOpenChange,
   onSuccess,
+  editingPO,
 }: CreatePurchaseOrderDialogProps) {
+  const isEdit = !!editingPO;
   const { toast } = useToast();
   const [code, setCode] = useState("");
   const [supplierSearch, setSupplierSearch] = useState("");
@@ -71,19 +91,45 @@ export function CreatePurchaseOrderDialog({
 
   useEffect(() => {
     if (open) {
-      setCode(generatePurchaseOrderCode());
-      setSupplierSearch("");
-      setSelectedSupplier(null);
+      if (editingPO) {
+        // Edit mode — pre-fill from existing PO
+        setCode(editingPO.code);
+        setSupplierSearch(editingPO.supplierName);
+        setSelectedSupplier({ id: editingPO.supplierId, name: editingPO.supplierName });
+        setNotes(editingPO.note ?? "");
+        // Load existing items
+        (async () => {
+          const supabase = getClient();
+          const { data } = await supabase
+            .from("purchase_order_items")
+            .select("product_id, product_name, quantity, unit_price, vat_rate")
+            .eq("purchase_order_id", editingPO.id);
+          if (data) {
+            setItems(data.map((d: any) => ({
+              id: d.product_id,
+              productName: d.product_name,
+              quantity: d.quantity,
+              price: d.unit_price,
+              vatRate: d.vat_rate ?? 0,
+            })));
+          }
+        })();
+      } else {
+        setCode(generatePurchaseOrderCode());
+        setNotes("");
+        setSelectedSupplier(null);
+        setItems([]);
+      }
+      setSupplierSearch(editingPO?.supplierName ?? "");
       setShowSupplierDropdown(false);
       setFilteredSuppliers([]);
       setProductSearch("");
       setShowProductDropdown(false);
       setFilteredProducts([]);
-      setItems([]);
-      setNotes("");
       setErrors({});
       setSaving(false);
     }
+  // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [open]);
 
   // Live search suppliers
@@ -109,11 +155,11 @@ export function CreatePurchaseOrderDialog({
       const supabase = getClient();
       const { data } = await supabase
         .from("products")
-        .select("id, name, cost_price")
+        .select("id, name, cost_price, vat_rate")
         .or(`name.ilike.%${productSearch}%,code.ilike.%${productSearch}%`)
         .eq("is_active", true)
         .limit(10);
-      setFilteredProducts((data ?? []).map(p => ({ id: p.id, name: p.name, price: p.cost_price })));
+      setFilteredProducts((data ?? []).map(p => ({ id: p.id, name: p.name, price: p.cost_price, vatRate: p.vat_rate ?? 0 })));
     }, 300);
     return () => clearTimeout(timer);
   }, [productSearch]);
@@ -127,7 +173,7 @@ export function CreatePurchaseOrderDialog({
         )
       );
     } else {
-      setItems([...items, { id: product.id, productName: product.name, quantity: 1, price: product.price }]);
+      setItems([...items, { id: product.id, productName: product.name, quantity: 1, price: product.price, vatRate: product.vatRate }]);
     }
     setProductSearch("");
     setShowProductDropdown(false);
@@ -141,10 +187,20 @@ export function CreatePurchaseOrderDialog({
     setItems(items.filter((item) => item.id !== id));
   }
 
-  const total = useMemo(
+  const subtotal = useMemo(
     () => items.reduce((sum, item) => sum + item.quantity * item.price, 0),
     [items]
   );
+
+  const taxAmount = useMemo(
+    () => items.reduce((sum, item) => {
+      const lineBeforeTax = item.quantity * item.price;
+      return sum + Math.round(lineBeforeTax * item.vatRate / 100);
+    }, 0),
+    [items]
+  );
+
+  const total = subtotal + taxAmount;
 
   function validate(): boolean {
     const newErrors: Record<string, string> = {};
@@ -159,57 +215,88 @@ export function CreatePurchaseOrderDialog({
     setSaving(true);
     try {
       const supabase = getClient();
-      const { data: { user } } = await supabase.auth.getUser();
+      let poId: string;
 
-      const { data: po, error: poErr } = await supabase
-        .from("purchase_orders")
-        .insert({
-          tenant_id: "",
-          branch_id: "",
-          code,
-          supplier_id: selectedSupplier!.id,
-          supplier_name: selectedSupplier!.name,
-          status: "draft" as const,
-          subtotal: total,
-          discount_amount: 0,
-          total,
-          paid: 0,
-          debt: total,
-          note: notes || null,
-          created_by: user?.id ?? "",
-        } satisfies PurchaseOrderInsert)
-        .select("id")
-        .single();
+      if (isEdit && editingPO) {
+        // UPDATE existing PO
+        const { error: poErr } = await supabase
+          .from("purchase_orders")
+          .update({
+            supplier_id: selectedSupplier!.id,
+            supplier_name: selectedSupplier!.name,
+            subtotal,
+            discount_amount: 0,
+            tax_amount: taxAmount,
+            total,
+            debt: total, // recalc — draft PO hasn't been paid
+            note: notes || null,
+          })
+          .eq("id", editingPO.id);
+        if (poErr) throw new Error(poErr.message);
+        poId = editingPO.id;
 
-      if (poErr) throw new Error(poErr.message);
+        // Delete old items then re-insert
+        await supabase.from("purchase_order_items").delete().eq("purchase_order_id", poId);
+      } else {
+        // INSERT new PO
+        const { data: { user } } = await supabase.auth.getUser();
+        const { data: po, error: poErr } = await supabase
+          .from("purchase_orders")
+          .insert({
+            tenant_id: "",
+            branch_id: "",
+            code,
+            supplier_id: selectedSupplier!.id,
+            supplier_name: selectedSupplier!.name,
+            status: "draft" as const,
+            subtotal,
+            discount_amount: 0,
+            tax_amount: taxAmount,
+            total,
+            paid: 0,
+            debt: total,
+            note: notes || null,
+            created_by: user?.id ?? "",
+          } satisfies PurchaseOrderInsert)
+          .select("id")
+          .single();
+        if (poErr) throw new Error(poErr.message);
+        poId = po!.id;
+      }
 
-      if (po && items.length > 0) {
+      if (items.length > 0) {
         const { error: itemsErr } = await supabase
           .from("purchase_order_items")
-          .insert(items.map(item => ({
-            purchase_order_id: po.id,
-            product_id: item.id,
-            product_name: item.productName,
-            unit: "Cái",
-            quantity: item.quantity,
-            received_quantity: 0,
-            unit_price: item.price,
-            discount: 0,
-            total: item.quantity * item.price,
-          } satisfies PurchaseOrderItemInsert)));
+          .insert(items.map(item => {
+            const lineBeforeTax = item.quantity * item.price;
+            const vatAmt = Math.round(lineBeforeTax * item.vatRate / 100);
+            return {
+              purchase_order_id: poId,
+              product_id: item.id,
+              product_name: item.productName,
+              unit: "Cái",
+              quantity: item.quantity,
+              received_quantity: 0,
+              unit_price: item.price,
+              discount: 0,
+              vat_rate: item.vatRate,
+              vat_amount: vatAmt,
+              total: lineBeforeTax,
+            } satisfies PurchaseOrderItemInsert;
+          }));
         if (itemsErr) throw new Error(itemsErr.message);
       }
 
       onOpenChange(false);
       toast({
-        title: "Tạo phiếu nhập hàng thành công",
-        description: `Đã tạo phiếu nhập ${code}`,
+        title: isEdit ? "Cập nhật phiếu nhập thành công" : "Tạo phiếu nhập hàng thành công",
+        description: isEdit ? `Đã cập nhật ${code}` : `Đã tạo phiếu nhập ${code}`,
         variant: "success",
       });
       onSuccess?.();
     } catch (err) {
       toast({
-        title: "Lỗi tạo phiếu nhập hàng",
+        title: isEdit ? "Lỗi cập nhật phiếu nhập" : "Lỗi tạo phiếu nhập hàng",
         description: err instanceof Error ? err.message : "Vui lòng thử lại",
         variant: "error",
       });
@@ -222,7 +309,7 @@ export function CreatePurchaseOrderDialog({
     <Dialog open={open} onOpenChange={onOpenChange}>
       <DialogContent className="sm:max-w-2xl max-h-[90vh] overflow-y-auto">
         <DialogHeader>
-          <DialogTitle>Tạo phiếu nhập hàng</DialogTitle>
+          <DialogTitle>{isEdit ? "Sửa phiếu nhập hàng" : "Tạo phiếu nhập hàng"}</DialogTitle>
           <DialogDescription>
             Mã phiếu nhập: {code}
           </DialogDescription>
@@ -331,16 +418,17 @@ export function CreatePurchaseOrderDialog({
           {/* Line items */}
           {items.length > 0 && (
             <div className="rounded-lg border overflow-hidden">
-              <div className="grid grid-cols-[1fr_70px_100px_36px] gap-2 px-3 py-2 bg-muted/50 text-xs font-medium text-muted-foreground">
+              <div className="grid grid-cols-[1fr_60px_90px_65px_36px] gap-2 px-3 py-2 bg-muted/50 text-xs font-medium text-muted-foreground">
                 <span>Sản phẩm</span>
                 <span className="text-center">SL</span>
                 <span className="text-right">Đơn giá</span>
+                <span className="text-right">VAT%</span>
                 <span />
               </div>
               {items.map((item) => (
                 <div
                   key={item.id}
-                  className="grid grid-cols-[1fr_70px_100px_36px] gap-2 items-center px-3 py-2 border-t"
+                  className="grid grid-cols-[1fr_60px_90px_65px_36px] gap-2 items-center px-3 py-2 border-t"
                 >
                   <span className="text-sm truncate">{item.productName}</span>
                   <Input
@@ -360,6 +448,20 @@ export function CreatePurchaseOrderDialog({
                     }
                     className="h-7 text-right px-1"
                   />
+                  <Select
+                    value={String(item.vatRate)}
+                    onValueChange={(v) => updateItem(item.id, "vatRate", Number(v))}
+                  >
+                    <SelectTrigger className="h-7 text-xs px-1">
+                      <SelectValue />
+                    </SelectTrigger>
+                    <SelectContent>
+                      <SelectItem value="0">0%</SelectItem>
+                      <SelectItem value="5">5%</SelectItem>
+                      <SelectItem value="8">8%</SelectItem>
+                      <SelectItem value="10">10%</SelectItem>
+                    </SelectContent>
+                  </Select>
                   <Button
                     variant="ghost"
                     size="icon-sm"
@@ -375,6 +477,16 @@ export function CreatePurchaseOrderDialog({
 
           {/* Total */}
           <div className="space-y-3 rounded-lg border p-3">
+            <div className="flex items-center justify-between text-sm">
+              <span className="text-muted-foreground">Tạm tính</span>
+              <span>{formatCurrency(subtotal)}</span>
+            </div>
+            {taxAmount > 0 && (
+              <div className="flex items-center justify-between text-sm">
+                <span className="text-muted-foreground">Thuế GTGT</span>
+                <span>{formatCurrency(taxAmount)}</span>
+              </div>
+            )}
             <div className="flex items-center justify-between border-t pt-2">
               <span className="font-medium">Tổng cộng</span>
               <span className="text-lg font-semibold text-primary">
@@ -402,7 +514,7 @@ export function CreatePurchaseOrderDialog({
           </Button>
           <Button onClick={handleSave} disabled={saving}>
             {saving && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
-            Tạo phiếu nhập
+            {isEdit ? "Lưu thay đổi" : "Tạo phiếu nhập"}
           </Button>
         </DialogFooter>
       </DialogContent>

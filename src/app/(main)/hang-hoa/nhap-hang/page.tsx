@@ -13,6 +13,7 @@ import {
   Kanban,
   ArrowRight,
   Banknote,
+  Pencil,
 } from "lucide-react";
 import { PageHeader } from "@/components/shared/page-header";
 import { ListPageLayout } from "@/components/shared/list-page-layout";
@@ -214,6 +215,7 @@ export default function NhapHangPage() {
   const [page, setPage] = useState(0);
   const [pageSize, setPageSize] = useState(15);
   const [createOpen, setCreateOpen] = useState(false);
+  const [editingPO, setEditingPO] = useState<{ id: string; code: string; supplierId: string; supplierName: string; note?: string } | null>(null);
   const [viewMode, setViewMode] = useState<ViewMode>("list");
   const [payingItem, setPayingItem] = useState<PurchaseOrder | null>(null);
 
@@ -591,6 +593,19 @@ export default function NhapHangPage() {
           // Advance to next valid status
           if (row.status === "draft") {
             actions.push({
+              label: "Sửa",
+              icon: <Pencil className="h-4 w-4" />,
+              onClick: () => {
+                setEditingPO({
+                  id: row.id,
+                  code: row.code,
+                  supplierId: row.supplierId,
+                  supplierName: row.supplierName,
+                });
+                setCreateOpen(true);
+              },
+            });
+            actions.push({
               label: "Xác nhận đặt hàng",
               icon: <ArrowRight className="h-4 w-4" />,
               onClick: () => handleAdvanceStatus(row, "ordered"),
@@ -650,8 +665,12 @@ export default function NhapHangPage() {
 
     <CreatePurchaseOrderDialog
       open={createOpen}
-      onOpenChange={setCreateOpen}
+      onOpenChange={(open) => {
+        setCreateOpen(open);
+        if (!open) setEditingPO(null);
+      }}
       onSuccess={fetchData}
+      editingPO={editingPO}
     />
 
     {payingItem && (
