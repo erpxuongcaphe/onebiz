@@ -16,10 +16,7 @@ import { Search, Loader2 } from "lucide-react";
 import { formatCurrency } from "@/lib/format";
 import { useToast } from "@/lib/contexts";
 import { getClient } from "@/lib/services/supabase/base";
-import {
-  applyManualStockMovement,
-  nextEntityCode,
-} from "@/lib/services/supabase/stock-adjustments";
+import { completeSupplierReturn } from "@/lib/services/supabase/purchase-entries";
 
 interface CreatePurchaseReturnDialogProps {
   open: boolean;
@@ -163,24 +160,27 @@ export function CreatePurchaseReturnDialog({
     saveLockRef.current = true;
     setSaving(true);
     try {
-      const realCode = await nextEntityCode("purchase_return");
-      setCode(realCode);
-
-      await applyManualStockMovement(
-        selectedItems.map((item) => ({
+      const { returnCode } = await completeSupplierReturn({
+        purchaseOrderId: selectedPO!.id,
+        purchaseOrderCode: selectedPO!.code,
+        supplierId: selectedPO!.supplier_id,
+        supplierName: selectedPO!.supplier_name,
+        items: selectedItems.map((item) => ({
           productId: item.product_id,
+          productName: item.product_name,
+          unit: item.unit,
           quantity: item.returnQty,
-          type: "out",
-          referenceType: "purchase_return",
-          referenceId: selectedPO!.id,
-          note: `${realCode} - Trả hàng nhập ${selectedPO!.code}${reason ? ` - ${reason}` : ""}${notes ? ` - ${notes}` : ""}`,
-        }))
-      );
+          unitPrice: item.unit_price,
+        })),
+        reason: reason || undefined,
+        note: notes || undefined,
+      });
+      setCode(returnCode);
 
       onOpenChange(false);
       toast({
         title: "Tạo phiếu trả hàng nhập thành công",
-        description: `Đã tạo phiếu trả hàng nhập ${realCode}`,
+        description: `Đã tạo phiếu trả hàng nhập ${returnCode}`,
         variant: "success",
       });
       onSuccess?.();

@@ -11,6 +11,8 @@ export interface Invoice {
   customerName: string;
   totalAmount: number;
   discount: number;
+  paid: number;
+  debt: number;
   status: "processing" | "completed" | "cancelled" | "delivery_failed";
   deliveryType: "no_delivery" | "delivery";
   deliveryStatus?: "pending" | "shipping" | "delivered" | "failed";

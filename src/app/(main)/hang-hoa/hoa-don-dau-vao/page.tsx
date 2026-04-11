@@ -2,7 +2,7 @@
 
 import { useEffect, useState, useCallback } from "react";
 import { ColumnDef } from "@tanstack/react-table";
-import { Plus, Eye, BookOpen, Trash2 } from "lucide-react";
+import { Plus, Eye, BookOpen, Trash2, Printer } from "lucide-react";
 import { Badge } from "@/components/ui/badge";
 import { PageHeader } from "@/components/shared/page-header";
 import { ListPageLayout } from "@/components/shared/list-page-layout";
@@ -21,6 +21,9 @@ import {
 } from "@/components/shared/inline-detail-panel";
 import type { DetailTab } from "@/components/shared/inline-detail-panel";
 import { formatCurrency, formatDate } from "@/lib/format";
+import { exportToExcel, exportToCsv } from "@/lib/utils/export";
+import { printDocument } from "@/lib/print-document";
+import { buildInputInvoicePrintData } from "@/lib/print-templates";
 import { getInputInvoices, getInputInvoiceStatuses, deleteInputInvoice, recordInputInvoice } from "@/lib/services";
 import { CreateInputInvoiceDialog, ConfirmDialog } from "@/components/shared/dialogs";
 import { useToast } from "@/lib/contexts";
@@ -222,6 +225,30 @@ export default function HoaDonDauVaoPage() {
         searchPlaceholder="Theo mã HĐ, NCC"
         searchValue={search}
         onSearchChange={setSearch}
+        onExport={{
+          excel: () => {
+            const cols = [
+              { header: "Mã HĐ", key: "code", width: 15 },
+              { header: "Ngày", key: "date", width: 18, format: (v: string) => formatDate(v) },
+              { header: "NCC", key: "supplierName", width: 25 },
+              { header: "Tiền hàng", key: "totalAmount", width: 18, format: (v: number) => v },
+              { header: "Thuế", key: "taxAmount", width: 15, format: (v: number) => v },
+              { header: "Trạng thái", key: "statusName", width: 15 },
+            ];
+            exportToExcel(data, cols, "hoa-don-dau-vao");
+          },
+          csv: () => {
+            const cols = [
+              { header: "Mã HĐ", key: "code", width: 15 },
+              { header: "Ngày", key: "date", width: 18, format: (v: string) => formatDate(v) },
+              { header: "NCC", key: "supplierName", width: 25 },
+              { header: "Tiền hàng", key: "totalAmount", width: 18, format: (v: number) => v },
+              { header: "Thuế", key: "taxAmount", width: 15, format: (v: number) => v },
+              { header: "Trạng thái", key: "statusName", width: 15 },
+            ];
+            exportToCsv(data, cols, "hoa-don-dau-vao");
+          },
+        }}
         actions={[
           { label: "Tạo mới", icon: <Plus className="h-4 w-4" />, variant: "default", onClick: () => setCreateOpen(true) },
         ]}
@@ -261,6 +288,7 @@ export default function HoaDonDauVaoPage() {
               setExpandedRow(expandedRow === idx ? null : idx);
             },
           },
+          { label: "In phiếu", icon: <Printer className="h-4 w-4" />, onClick: () => printDocument(buildInputInvoicePrintData(row)) },
           { label: "Ghi nhận", icon: <BookOpen className="h-4 w-4" />, onClick: () => setRecordingInvoice(row) },
           { label: "Xóa", icon: <Trash2 className="h-4 w-4" />, onClick: () => setDeletingInvoice(row), variant: "destructive", separator: true },
         ]}

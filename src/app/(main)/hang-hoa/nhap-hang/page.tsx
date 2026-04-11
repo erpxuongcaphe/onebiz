@@ -12,6 +12,7 @@ import {
   List,
   Kanban,
   ArrowRight,
+  Banknote,
 } from "lucide-react";
 import { PageHeader } from "@/components/shared/page-header";
 import { ListPageLayout } from "@/components/shared/list-page-layout";
@@ -49,6 +50,7 @@ import {
 } from "@/lib/services";
 import type { PurchaseOrder, PurchaseOrderStatus } from "@/lib/types";
 import { CreatePurchaseOrderDialog } from "@/components/shared/dialogs";
+import { RecordPaymentDialog } from "@/components/shared/dialogs/record-payment-dialog";
 
 type ViewMode = "list" | "kanban";
 
@@ -213,6 +215,7 @@ export default function NhapHangPage() {
   const [pageSize, setPageSize] = useState(15);
   const [createOpen, setCreateOpen] = useState(false);
   const [viewMode, setViewMode] = useState<ViewMode>("list");
+  const [payingItem, setPayingItem] = useState<PurchaseOrder | null>(null);
 
   // Inline detail
   const [expandedRow, setExpandedRow] = useState<number | null>(null);
@@ -623,6 +626,13 @@ export default function NhapHangPage() {
               router.push("/hang-hoa/tra-hang-nhap");
             },
           });
+          if (row.amountOwed > 0) {
+            actions.push({
+              label: "Trả nợ NCC",
+              icon: <Banknote className="h-4 w-4" />,
+              onClick: () => setPayingItem(row),
+            });
+          }
           if (row.status !== "completed" && row.status !== "cancelled") {
             actions.push({
               label: "Hủy",
@@ -643,6 +653,19 @@ export default function NhapHangPage() {
       onOpenChange={setCreateOpen}
       onSuccess={fetchData}
     />
+
+    {payingItem && (
+      <RecordPaymentDialog
+        open={!!payingItem}
+        onOpenChange={(open) => { if (!open) setPayingItem(null); }}
+        onSuccess={fetchData}
+        type="purchase_order"
+        referenceId={payingItem.id}
+        referenceCode={payingItem.code}
+        counterpartyName={payingItem.supplierName}
+        currentDebt={payingItem.amountOwed}
+      />
+    )}
     </>
   );
 }

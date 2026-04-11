@@ -16,6 +16,7 @@ import {
 import { Badge } from "@/components/ui/badge";
 import { useToast } from "@/lib/contexts";
 import { formatCurrency, formatDate } from "@/lib/format";
+import { exportToExcel, exportToCsv } from "@/lib/utils/export";
 import { getBranchStockRows, getBranches } from "@/lib/services";
 import type { BranchStockRow, BranchDetail } from "@/lib/services/supabase";
 
@@ -253,6 +254,33 @@ export default function TonKhoPage() {
         searchPlaceholder="Theo mã hàng, tên hàng..."
         searchValue={search}
         onSearchChange={setSearch}
+        onExport={{
+          excel: () => {
+            const cols = [
+              { header: "Mã hàng", key: "productCode", width: 15 },
+              { header: "Tên hàng", key: "productName", width: 30 },
+              { header: "Loại", key: "productType", width: 8 },
+              { header: "Chi nhánh", key: "branchName", width: 20 },
+              { header: "Tồn kho", key: "quantity", width: 12, format: (v: number) => v },
+              { header: "Đặt trước", key: "reserved", width: 12, format: (v: number) => v },
+              { header: "Khả dụng", key: "available", width: 12, format: (v: number) => v },
+              { header: "Định mức", key: "minStock", width: 12, format: (v: number | undefined) => v ?? 0 },
+              { header: "Giá trị tồn", key: "stockValue", width: 15, format: (v: number) => v },
+            ];
+            exportToExcel(rows, cols, "ton-kho");
+          },
+          csv: () => {
+            const cols = [
+              { header: "Mã hàng", key: "productCode", width: 15 },
+              { header: "Tên hàng", key: "productName", width: 30 },
+              { header: "Chi nhánh", key: "branchName", width: 20 },
+              { header: "Tồn kho", key: "quantity", width: 12, format: (v: number) => v },
+              { header: "Khả dụng", key: "available", width: 12, format: (v: number) => v },
+              { header: "Giá trị tồn", key: "stockValue", width: 15, format: (v: number) => v },
+            ];
+            exportToCsv(rows, cols, "ton-kho");
+          },
+        }}
       />
 
       {/* Summary cards */}

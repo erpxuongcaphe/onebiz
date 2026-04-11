@@ -3,7 +3,7 @@
 import { useEffect, useState, useCallback } from "react";
 import { useRouter } from "next/navigation";
 import { ColumnDef } from "@tanstack/react-table";
-import { Plus, Eye, PackagePlus, XCircle } from "lucide-react";
+import { Plus, Eye, PackagePlus, XCircle, Printer } from "lucide-react";
 import { Badge } from "@/components/ui/badge";
 import { PageHeader } from "@/components/shared/page-header";
 import { ListPageLayout } from "@/components/shared/list-page-layout";
@@ -22,6 +22,9 @@ import {
 } from "@/components/shared/inline-detail-panel";
 import type { DetailTab } from "@/components/shared/inline-detail-panel";
 import { formatCurrency, formatDate } from "@/lib/format";
+import { exportToExcel, exportToCsv } from "@/lib/utils/export";
+import { printDocument } from "@/lib/print-document";
+import { buildPurchaseEntryPrintData } from "@/lib/print-templates";
 import { getPurchaseOrderEntries, getPurchaseEntryStatuses } from "@/lib/services";
 import { CreatePurchaseEntryDialog, ConfirmDialog } from "@/components/shared/dialogs";
 import { useToast } from "@/lib/contexts";
@@ -221,6 +224,28 @@ export default function DatHangNhapPage() {
         searchPlaceholder="Theo mã, NCC"
         searchValue={search}
         onSearchChange={setSearch}
+        onExport={{
+          excel: () => {
+            const cols = [
+              { header: "Mã", key: "code", width: 15 },
+              { header: "Ngày", key: "date", width: 18, format: (v: string) => formatDate(v) },
+              { header: "NCC", key: "supplierName", width: 25 },
+              { header: "Tổng tiền", key: "totalAmount", width: 18, format: (v: number) => v },
+              { header: "Trạng thái", key: "statusName", width: 15 },
+            ];
+            exportToExcel(data, cols, "dat-hang-nhap");
+          },
+          csv: () => {
+            const cols = [
+              { header: "Mã", key: "code", width: 15 },
+              { header: "Ngày", key: "date", width: 18, format: (v: string) => formatDate(v) },
+              { header: "NCC", key: "supplierName", width: 25 },
+              { header: "Tổng tiền", key: "totalAmount", width: 18, format: (v: number) => v },
+              { header: "Trạng thái", key: "statusName", width: 15 },
+            ];
+            exportToCsv(data, cols, "dat-hang-nhap");
+          },
+        }}
         actions={[
           { label: "Đặt hàng", icon: <Plus className="h-4 w-4" />, variant: "default", onClick: () => setCreateOpen(true) },
         ]}
@@ -260,6 +285,7 @@ export default function DatHangNhapPage() {
               setExpandedRow(expandedRow === idx ? null : idx);
             },
           },
+          { label: "In phiếu", icon: <Printer className="h-4 w-4" />, onClick: () => printDocument(buildPurchaseEntryPrintData(row)) },
           { label: "Nhập hàng", icon: <PackagePlus className="h-4 w-4" />, onClick: () => { toast({ variant: "info", title: "Chuyển đến trang nhập hàng" }); router.push("/hang-hoa/nhap-hang"); } },
           ...(row.status !== "completed" && row.status !== "cancelled"
             ? [

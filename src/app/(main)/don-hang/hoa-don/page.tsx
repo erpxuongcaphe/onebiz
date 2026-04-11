@@ -3,7 +3,7 @@
 import { useEffect, useState, useCallback } from "react";
 import { useRouter } from "next/navigation";
 import { ColumnDef } from "@tanstack/react-table";
-import { Plus, Eye, Printer, Undo2, XCircle } from "lucide-react";
+import { Plus, Eye, Printer, Undo2, XCircle, Banknote } from "lucide-react";
 import { Badge } from "@/components/ui/badge";
 import { PageHeader } from "@/components/shared/page-header";
 import { ListPageLayout } from "@/components/shared/list-page-layout";
@@ -23,6 +23,7 @@ import {
   DetailItemsTable,
 } from "@/components/shared/inline-detail-panel";
 import { CreateInvoiceDialog, ConfirmDialog } from "@/components/shared/dialogs";
+import { RecordPaymentDialog } from "@/components/shared/dialogs/record-payment-dialog";
 import { formatCurrency, formatDate } from "@/lib/format";
 import { exportToExcel, exportToCsv } from "@/lib/utils/export";
 import { getInvoices, getInvoiceStatuses, cancelInvoice } from "@/lib/services";
@@ -208,6 +209,7 @@ export default function HoaDonPage() {
   const [createOpen, setCreateOpen] = useState(false);
   const [cancellingItem, setCancellingItem] = useState<Invoice | null>(null);
   const [cancelLoading, setCancelLoading] = useState(false);
+  const [payingItem, setPayingItem] = useState<Invoice | null>(null);
 
   // Filters
   const [selectedStatuses, setSelectedStatuses] = useState<string[]>([
@@ -362,6 +364,20 @@ export default function HoaDonPage() {
         );
       },
     },
+    {
+      accessorKey: "debt",
+      header: "Công nợ",
+      cell: ({ row }) => {
+        const debt = row.original.debt;
+        return debt > 0 ? (
+          <span className="text-destructive font-medium text-right block">
+            {formatCurrency(debt)}
+          </span>
+        ) : (
+          <span className="text-emerald-600 text-right block">Đã TT</span>
+        );
+      },
+    },
   ];
 
   return (
@@ -465,6 +481,15 @@ export default function HoaDonPage() {
               icon: <Printer className="h-4 w-4" />,
               onClick: () => printDocument(buildInvoicePrintData(row)),
             },
+            ...(row.debt > 0
+              ? [
+                  {
+                    label: "Thu nợ",
+                    icon: <Banknote className="h-4 w-4" />,
+                    onClick: () => setPayingItem(row),
+                  },
+                ]
+              : []),
             {
               label: "Trả hàng",
               icon: <Undo2 className="h-4 w-4" />,
@@ -490,6 +515,19 @@ export default function HoaDonPage() {
         onOpenChange={setCreateOpen}
         onSuccess={fetchData}
       />
+
+      {payingItem && (
+        <RecordPaymentDialog
+          open={!!payingItem}
+          onOpenChange={(open) => { if (!open) setPayingItem(null); }}
+          onSuccess={fetchData}
+          type="invoice"
+          referenceId={payingItem.id}
+          referenceCode={payingItem.code}
+          counterpartyName={payingItem.customerName}
+          currentDebt={payingItem.debt}
+        />
+      )}
 
       <ConfirmDialog
         open={!!cancellingItem}

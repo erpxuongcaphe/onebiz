@@ -472,10 +472,10 @@ export async function getFinancialAlerts(): Promise<FinancialAlert[]> {
       .gt("debt", 0)
       .order("debt", { ascending: false })
       .limit(20),
-    // 2. Products where stock <= min_stock
+    // 2. Products where stock <= min_stock or stock > max_stock
     supabase
       .from("products")
-      .select("id, name, stock, min_stock, unit")
+      .select("id, name, stock, min_stock, max_stock, unit")
       .filter("is_active", "eq", true),
     // 3. Expiring lots (shelf_life products)
     // eslint-disable-next-line @typescript-eslint/no-explicit-any
@@ -551,6 +551,33 @@ export async function getFinancialAlerts(): Promise<FinancialAlert[]> {
         .join(", "),
       value: lowItems.length,
       link: "/hang-hoa",
+    });
+  }
+
+  // --- 2b. Over-stock alerts (stock > max_stock) ---
+  const overStockItems = (lowStockProducts.data ?? []).filter(
+    (p) => {
+      const stock = (p.stock as number) ?? 0;
+      const maxStock = (p.max_stock as number) ?? 0;
+      return maxStock > 0 && stock > maxStock;
+    }
+  );
+
+  if (overStockItems.length > 0) {
+    alerts.push({
+      id: "over_stock_summary",
+      type: "low_stock",
+      severity: "info",
+      title: `${overStockItems.length} sản phẩm vượt định mức tồn kho`,
+      description: overStockItems
+        .slice(0, 3)
+        .map(
+          (p) =>
+            `${p.name}: tồn ${p.stock}/${p.max_stock} ${(p.unit as string) || "sp"}`
+        )
+        .join(", "),
+      value: overStockItems.length,
+      link: "/hang-hoa/ton-kho",
     });
   }
 
@@ -660,4 +687,88 @@ function formatNum(n: number): string {
   if (n >= 1_000_000) return `${(n / 1_000_000).toFixed(1)}M`;
   if (n >= 1_000) return `${(n / 1_000).toFixed(0)}K`;
   return n.toString();
+}
+
+// ==================== Stock Alerts (per-product detail) ====================
+
+export interface StockAlert {
+  productId: string;
+  productName: string;
+  productCode: string;
+  unit: string;
+  currentStock: number;
+  minStock: number;
+  maxStock: number;
+  type: "low" | "out" | "over";
+  severity: "critical" | "warning" | "info";
+}
+
+/**
+ * Returns per-product stock alerts:
+ *  - "out": stock = 0 and minStock > 0 → critical
+ *  - "low": 0 < stock <= minStock → warning
+ *  - "over": stock > maxStock → info
+ */
+export async function getStockAlerts(): Promise<StockAlert[]> {
+  const supabase = getClient();
+
+  const { data, error } = await supabase
+    .from("products")
+    .select("id, code, name, stock, min_stock, max_stock, unit")
+    .eq("is_active", true)
+    .order("name");
+
+  if (error) handleError(error, "getStockAlerts");
+
+  const alerts: StockAlert[] = [];
+
+  for (const p of data ?? []) {
+    const stock = Number(p.stock ?? 0);
+    const minStock = Number(p.min_stock ?? 0);
+    const maxStock = Number(p.max_stock ?? 0);
+
+    if (minStock > 0 && stock === 0) {
+      alerts.push({
+        productId: p.id,
+        productName: p.name,
+        productCode: p.code,
+        unit: p.unit ?? "",
+        currentStock: stock,
+        minStock,
+        maxStock,
+        type: "out",
+        severity: "critical",
+      });
+    } else if (minStock > 0 && stock > 0 && stock <= minStock) {
+      alerts.push({
+        productId: p.id,
+        productName: p.name,
+        productCode: p.code,
+        unit: p.unit ?? "",
+        currentStock: stock,
+        minStock,
+        maxStock,
+        type: "low",
+        severity: "warning",
+      });
+    } else if (maxStock > 0 && stock > maxStock) {
+      alerts.push({
+        productId: p.id,
+        productName: p.name,
+        productCode: p.code,
+        unit: p.unit ?? "",
+        currentStock: stock,
+        minStock,
+        maxStock,
+        type: "over",
+        severity: "info",
+      });
+    }
+  }
+
+  // Sort: critical first, then warning, then info
+  const severityOrder = { critical: 0, warning: 1, info: 2 };
+  alerts.sort((a, b) => severityOrder[a.severity] - severityOrder[b.severity]);
+
+  return alerts;
 }

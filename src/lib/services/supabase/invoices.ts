@@ -100,6 +100,8 @@ function mapInvoice(row: any): Invoice {
     customerName: row.customer_name,
     totalAmount: row.total,
     discount: row.discount_amount,
+    paid: Number(row.paid ?? 0),
+    debt: Number(row.debt ?? 0),
     status: (statusMap[row.status] ?? row.status) as Invoice["status"],
     deliveryType: "no_delivery", // Would need join to shipping_orders
     createdBy: (row.profiles as { full_name: string } | null)?.full_name ?? "---",

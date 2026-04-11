@@ -33,7 +33,9 @@ export {
   getInternalExports, getInternalExportStatuses, completeInternalExport, cancelInternalExport,
 } from "./inventory";
 // Manufacturing handled by production.ts (getProductionOrders)
-export { getPurchaseOrderEntries, getPurchaseEntryStatuses, getPurchaseReturns, getPurchaseReturnStatuses, getInputInvoices, getInputInvoiceStatuses, deleteInputInvoice, recordInputInvoice } from "./purchase-entries";
+export { getPurchaseOrderEntries, getPurchaseEntryStatuses, getPurchaseReturns, getPurchaseReturnStatuses, getInputInvoices, getInputInvoiceStatuses, deleteInputInvoice, recordInputInvoice, completeSupplierReturn } from "./purchase-entries";
+export { recordInvoicePayment, recordPurchasePayment, getPaymentHistory } from "./payments";
+export type { RecordPaymentInput, RecordPaymentResult } from "./payments";
 export { getFavorites, isFavorite, toggleFavorite, getFavoriteIds } from "./favorites";
 export { getCoupons, getCouponById, createCoupon, updateCoupon, deleteCoupon, validateCoupon, getCouponUsages } from "./coupons";
 export { getPromotions, getActivePromotions, createPromotion, updatePromotion, deletePromotion } from "./promotions";
@@ -110,7 +112,7 @@ export {
 // Reports & Financial Intelligence
 export {
   getProfitAndLoss, getCOGSBreakdown, getGrossMarginTrend,
-  getInventoryTurnover, getDSO, getFinancialAlerts,
+  getInventoryTurnover, getDSO, getFinancialAlerts, getStockAlerts,
 } from "./reports";
 
 // UOM Conversions
