@@ -92,6 +92,7 @@ export interface Database {
           id: string;
           tenant_id: string;
           branch_id: string | null;
+          role_id: string | null;
           full_name: string;
           email: string;
           phone: string | null;
@@ -105,6 +106,7 @@ export interface Database {
           id: string;
           tenant_id: string;
           branch_id?: string | null;
+          role_id?: string | null;
           full_name: string;
           email: string;
           phone?: string | null;
@@ -114,11 +116,13 @@ export interface Database {
         };
         Update: {
           branch_id?: string | null;
+          role_id?: string | null;
           full_name?: string;
           phone?: string | null;
           avatar_url?: string | null;
           role?: "owner" | "admin" | "manager" | "staff" | "cashier";
           is_active?: boolean;
+          updated_at?: string;
         };
         Relationships: [
           {
@@ -131,6 +135,67 @@ export interface Database {
             foreignKeyName: "profiles_branch_id_fkey";
             columns: ["branch_id"];
             referencedRelation: "branches";
+            referencedColumns: ["id"];
+          },
+          {
+            foreignKeyName: "profiles_role_id_fkey";
+            columns: ["role_id"];
+            referencedRelation: "roles";
+            referencedColumns: ["id"];
+          },
+        ];
+      };
+      roles: {
+        Row: {
+          id: string;
+          tenant_id: string;
+          name: string;
+          description: string | null;
+          is_system: boolean;
+          color: string;
+          created_at: string;
+          updated_at: string;
+        };
+        Insert: {
+          tenant_id: string;
+          name: string;
+          description?: string | null;
+          is_system?: boolean;
+          color?: string;
+        };
+        Update: {
+          name?: string;
+          description?: string | null;
+          color?: string;
+          updated_at?: string;
+        };
+        Relationships: [
+          {
+            foreignKeyName: "roles_tenant_id_fkey";
+            columns: ["tenant_id"];
+            referencedRelation: "tenants";
+            referencedColumns: ["id"];
+          },
+        ];
+      };
+      role_permissions: {
+        Row: {
+          id: string;
+          role_id: string;
+          permission_code: string;
+        };
+        Insert: {
+          role_id: string;
+          permission_code: string;
+        };
+        Update: {
+          permission_code?: string;
+        };
+        Relationships: [
+          {
+            foreignKeyName: "role_permissions_role_id_fkey";
+            columns: ["role_id"];
+            referencedRelation: "roles";
             referencedColumns: ["id"];
           },
         ];
@@ -283,6 +348,8 @@ export interface Database {
           debt: number;
           note: string | null;
           is_active: boolean;
+          is_internal: boolean;
+          branch_id: string | null;
           group_code: string | null;
           group_id: string | null;
           created_at: string;
@@ -300,6 +367,8 @@ export interface Database {
           debt?: number;
           note?: string | null;
           is_active?: boolean;
+          is_internal?: boolean;
+          branch_id?: string | null;
           group_code?: string | null;
           group_id?: string | null;
         };
@@ -313,6 +382,8 @@ export interface Database {
           debt?: number;
           note?: string | null;
           is_active?: boolean;
+          is_internal?: boolean;
+          branch_id?: string | null;
           group_code?: string | null;
           group_id?: string | null;
         };
@@ -367,6 +438,8 @@ export interface Database {
           loyalty_tier_id: string | null;
           note: string | null;
           is_active: boolean;
+          is_internal: boolean;
+          branch_id: string | null;
           created_at: string;
           updated_at: string;
         };
@@ -388,6 +461,8 @@ export interface Database {
           loyalty_tier_id?: string | null;
           note?: string | null;
           is_active?: boolean;
+          is_internal?: boolean;
+          branch_id?: string | null;
         };
         Update: {
           code?: string;
@@ -405,6 +480,8 @@ export interface Database {
           total_orders?: number;
           note?: string | null;
           is_active?: boolean;
+          is_internal?: boolean;
+          branch_id?: string | null;
         };
         Relationships: [
           {
@@ -437,16 +514,26 @@ export interface Database {
           paid: number;
           debt: number;
           payment_method: "cash" | "transfer" | "card" | "mixed";
+          source: "pos" | "fnb" | "online" | "internal";
           note: string | null;
           created_by: string;
           created_at: string;
           updated_at: string;
+          delivery_fee: number;
+          platform_commission: number;
+          discount_type: "fixed" | "percent";
+          discount_percent: number;
+          void_reason: string | null;
+          voided_at: string | null;
+          voided_by: string | null;
+          shift_id: string | null;
         };
         Insert: {
           id?: string;
           tenant_id: string;
           branch_id: string;
           code: string;
+          shift_id?: string | null;
           customer_id?: string | null;
           customer_name?: string;
           status?: "draft" | "confirmed" | "completed" | "cancelled";
@@ -457,8 +544,13 @@ export interface Database {
           paid?: number;
           debt?: number;
           payment_method?: "cash" | "transfer" | "card" | "mixed";
+          source?: "pos" | "fnb" | "online" | "internal";
           note?: string | null;
           created_by: string;
+          delivery_fee?: number;
+          platform_commission?: number;
+          discount_type?: "fixed" | "percent";
+          discount_percent?: number;
         };
         Update: {
           status?: "draft" | "confirmed" | "completed" | "cancelled";
@@ -470,6 +562,13 @@ export interface Database {
           debt?: number;
           payment_method?: "cash" | "transfer" | "card" | "mixed";
           note?: string | null;
+          delivery_fee?: number;
+          platform_commission?: number;
+          discount_type?: "fixed" | "percent";
+          discount_percent?: number;
+          void_reason?: string | null;
+          voided_at?: string | null;
+          voided_by?: string | null;
         };
         Relationships: [
           {
@@ -2119,9 +2218,342 @@ export interface Database {
         };
         Relationships: [];
       };
+      // ── F&B Tables ──
+      restaurant_tables: {
+        Row: {
+          id: string;
+          tenant_id: string;
+          branch_id: string;
+          table_number: number;
+          name: string;
+          zone: string | null;
+          capacity: number;
+          status: "available" | "occupied" | "reserved" | "cleaning";
+          current_order_id: string | null;
+          position_x: number;
+          position_y: number;
+          sort_order: number;
+          is_active: boolean;
+          created_at: string;
+          updated_at: string;
+        };
+        Insert: {
+          id?: string;
+          tenant_id: string;
+          branch_id: string;
+          table_number: number;
+          name: string;
+          zone?: string | null;
+          capacity?: number;
+          status?: "available" | "occupied" | "reserved" | "cleaning";
+          current_order_id?: string | null;
+          position_x?: number;
+          position_y?: number;
+          sort_order?: number;
+          is_active?: boolean;
+        };
+        Update: {
+          name?: string;
+          zone?: string | null;
+          capacity?: number;
+          status?: "available" | "occupied" | "reserved" | "cleaning";
+          current_order_id?: string | null;
+          position_x?: number;
+          position_y?: number;
+          sort_order?: number;
+          is_active?: boolean;
+        };
+        Relationships: [];
+      };
+      shifts: {
+        Row: {
+          id: string;
+          tenant_id: string;
+          branch_id: string;
+          cashier_id: string;
+          status: "open" | "closed";
+          opened_at: string;
+          closed_at: string | null;
+          starting_cash: number;
+          expected_cash: number | null;
+          actual_cash: number | null;
+          cash_difference: number | null;
+          total_sales: number;
+          total_orders: number;
+          sales_by_method: Record<string, number>;
+          note: string | null;
+          created_at: string;
+        };
+        Insert: {
+          tenant_id: string;
+          branch_id: string;
+          cashier_id: string;
+          starting_cash?: number;
+          status?: "open" | "closed";
+        };
+        Update: {
+          status?: "open" | "closed";
+          closed_at?: string;
+          expected_cash?: number;
+          actual_cash?: number;
+          cash_difference?: number;
+          total_sales?: number;
+          total_orders?: number;
+          sales_by_method?: Record<string, number>;
+          note?: string | null;
+        };
+        Relationships: [
+          {
+            foreignKeyName: "shifts_tenant_id_fkey";
+            columns: ["tenant_id"];
+            referencedRelation: "tenants";
+            referencedColumns: ["id"];
+          },
+          {
+            foreignKeyName: "shifts_branch_id_fkey";
+            columns: ["branch_id"];
+            referencedRelation: "branches";
+            referencedColumns: ["id"];
+          },
+          {
+            foreignKeyName: "shifts_cashier_id_fkey";
+            columns: ["cashier_id"];
+            referencedRelation: "profiles";
+            referencedColumns: ["id"];
+          },
+        ];
+      };
+      kitchen_orders: {
+        Row: {
+          id: string;
+          tenant_id: string;
+          branch_id: string;
+          invoice_id: string | null;
+          table_id: string | null;
+          order_number: string;
+          order_type: "dine_in" | "takeaway" | "delivery";
+          status: "pending" | "preparing" | "ready" | "served" | "completed" | "cancelled";
+          note: string | null;
+          created_by: string;
+          created_at: string;
+          updated_at: string;
+          discount_amount: number;
+          discount_reason: string | null;
+          delivery_platform: "shopee_food" | "grab_food" | "gojek" | "be" | "direct" | null;
+          delivery_fee: number;
+          platform_commission: number;
+          merged_into_id: string | null;
+          original_table_id: string | null;
+          parent_order_id: string | null;
+        };
+        Insert: {
+          id?: string;
+          tenant_id: string;
+          branch_id: string;
+          invoice_id?: string | null;
+          table_id?: string | null;
+          order_number: string;
+          order_type?: "dine_in" | "takeaway" | "delivery";
+          status?: "pending" | "preparing" | "ready" | "served" | "completed" | "cancelled";
+          note?: string | null;
+          created_by: string;
+          discount_amount?: number;
+          discount_reason?: string | null;
+          delivery_platform?: "shopee_food" | "grab_food" | "gojek" | "be" | "direct" | null;
+          delivery_fee?: number;
+          platform_commission?: number;
+          merged_into_id?: string | null;
+          original_table_id?: string | null;
+          parent_order_id?: string | null;
+        };
+        Update: {
+          invoice_id?: string | null;
+          table_id?: string | null;
+          status?: "pending" | "preparing" | "ready" | "served" | "completed" | "cancelled";
+          note?: string | null;
+          discount_amount?: number;
+          discount_reason?: string | null;
+          delivery_platform?: "shopee_food" | "grab_food" | "gojek" | "be" | "direct" | null;
+          delivery_fee?: number;
+          platform_commission?: number;
+          merged_into_id?: string | null;
+          original_table_id?: string | null;
+          parent_order_id?: string | null;
+        };
+        Relationships: [];
+      };
+      kitchen_order_items: {
+        Row: {
+          id: string;
+          kitchen_order_id: string;
+          product_id: string;
+          product_name: string;
+          variant_id: string | null;
+          variant_label: string | null;
+          quantity: number;
+          unit_price: number;
+          note: string | null;
+          toppings: unknown;
+          status: "pending" | "preparing" | "ready";
+          started_at: string | null;
+          completed_at: string | null;
+          cancelled_qty: number;
+        };
+        Insert: {
+          id?: string;
+          kitchen_order_id: string;
+          product_id: string;
+          product_name: string;
+          variant_id?: string | null;
+          variant_label?: string | null;
+          quantity?: number;
+          unit_price?: number;
+          note?: string | null;
+          toppings?: unknown;
+          status?: "pending" | "preparing" | "ready";
+          cancelled_qty?: number;
+        };
+        Update: {
+          kitchen_order_id?: string;
+          quantity?: number;
+          unit_price?: number;
+          note?: string | null;
+          toppings?: unknown;
+          status?: "pending" | "preparing" | "ready";
+          started_at?: string | null;
+          completed_at?: string | null;
+          cancelled_qty?: number;
+        };
+        Relationships: [];
+      };
+      internal_sales: {
+        Row: {
+          id: string;
+          tenant_id: string;
+          code: string;
+          from_branch_id: string;
+          to_branch_id: string;
+          invoice_id: string | null;
+          input_invoice_id: string | null;
+          status: "draft" | "confirmed" | "completed" | "cancelled";
+          subtotal: number;
+          tax_amount: number;
+          total: number;
+          note: string | null;
+          created_by: string;
+          created_at: string;
+          updated_at: string;
+        };
+        Insert: {
+          id?: string;
+          tenant_id: string;
+          code: string;
+          from_branch_id: string;
+          to_branch_id: string;
+          invoice_id?: string | null;
+          input_invoice_id?: string | null;
+          status?: "draft" | "confirmed" | "completed" | "cancelled";
+          subtotal?: number;
+          tax_amount?: number;
+          total?: number;
+          note?: string | null;
+          created_by: string;
+        };
+        Update: {
+          code?: string;
+          from_branch_id?: string;
+          to_branch_id?: string;
+          invoice_id?: string | null;
+          input_invoice_id?: string | null;
+          status?: "draft" | "confirmed" | "completed" | "cancelled";
+          subtotal?: number;
+          tax_amount?: number;
+          total?: number;
+          note?: string | null;
+        };
+        Relationships: [
+          {
+            foreignKeyName: "internal_sales_tenant_id_fkey";
+            columns: ["tenant_id"];
+            referencedRelation: "tenants";
+            referencedColumns: ["id"];
+          },
+          {
+            foreignKeyName: "internal_sales_from_branch_id_fkey";
+            columns: ["from_branch_id"];
+            referencedRelation: "branches";
+            referencedColumns: ["id"];
+          },
+          {
+            foreignKeyName: "internal_sales_to_branch_id_fkey";
+            columns: ["to_branch_id"];
+            referencedRelation: "branches";
+            referencedColumns: ["id"];
+          },
+        ];
+      };
+      internal_sale_items: {
+        Row: {
+          id: string;
+          internal_sale_id: string;
+          product_id: string;
+          product_code: string;
+          product_name: string;
+          unit: string;
+          quantity: number;
+          unit_price: number;
+          vat_rate: number;
+          amount: number;
+          note: string | null;
+        };
+        Insert: {
+          id?: string;
+          internal_sale_id: string;
+          product_id: string;
+          product_code: string;
+          product_name: string;
+          unit?: string;
+          quantity: number;
+          unit_price: number;
+          vat_rate?: number;
+          amount: number;
+          note?: string | null;
+        };
+        Update: {
+          product_id?: string;
+          product_code?: string;
+          product_name?: string;
+          unit?: string;
+          quantity?: number;
+          unit_price?: number;
+          vat_rate?: number;
+          amount?: number;
+          note?: string | null;
+        };
+        Relationships: [
+          {
+            foreignKeyName: "internal_sale_items_internal_sale_id_fkey";
+            columns: ["internal_sale_id"];
+            referencedRelation: "internal_sales";
+            referencedColumns: ["id"];
+          },
+        ];
+      };
     };
     Views: Record<string, never>;
     Functions: {
+      seed_internal_entities: {
+        Args: {
+          p_tenant_id: string;
+        };
+        Returns: undefined;
+      };
+      get_user_permissions: {
+        Args: {
+          p_user_id: string;
+        };
+        Returns: string[];
+      };
       next_code: {
         Args: {
           p_tenant_id: string;

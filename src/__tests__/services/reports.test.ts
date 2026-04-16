@@ -11,10 +11,16 @@ function createChain(resolvedValue: unknown = { data: [], error: null }) {
   chain.gt = vi.fn(self);
   chain.gte = vi.fn(self);
   chain.lt = vi.fn(self);
+  chain.in = vi.fn(self);
+  chain.or = vi.fn(self);
   chain.not = vi.fn(self);
   chain.filter = vi.fn(self);
   chain.order = vi.fn(self);
   chain.limit = vi.fn(self);
+  chain.ilike = vi.fn(self);
+  chain.range = vi.fn(self);
+  chain.single = vi.fn(self);
+  chain.maybeSingle = vi.fn(self);
   chain.then = (resolve: (v: unknown) => void) => resolve(resolvedValue);
   return chain;
 }

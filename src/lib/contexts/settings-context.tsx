@@ -62,6 +62,21 @@ export interface AppSettings {
     showBarcode: boolean;
     showQr: boolean;
     copies: number;
+    // Printer connection
+    connectionType: "usb" | "wifi" | "lan";
+    printerName: string;
+    printerIp: string;
+    printerPort: number;
+    // FnB auto-print
+    autoPrintKitchen: boolean;
+    autoPrintReceipt: boolean;
+    autoPrintPreBill: boolean;
+    // Kitchen ticket style
+    kitchenTicketStyle: "compact" | "standard" | "detailed";
+    // Receipt style
+    receiptStyle: "minimal" | "standard" | "full";
+    // Footer message
+    receiptFooter: string;
   };
   // Giao hàng (delivery)
   delivery: {
@@ -104,7 +119,7 @@ const defaultSettings: AppSettings = {
   store: {
     name: "OneBiz Shop HCM",
     phone: "0909 123 456",
-    email: "contact@onebiz.vn",
+    email: "contact@onebiz.com.vn",
     address: "123 Nguyễn Huệ, Phường Bến Nghé, Quận 1, TP.HCM",
     taxCode: "0312345678",
     businessType: "retail",
@@ -146,6 +161,16 @@ const defaultSettings: AppSettings = {
     showBarcode: true,
     showQr: false,
     copies: 1,
+    connectionType: "usb",
+    printerName: "",
+    printerIp: "",
+    printerPort: 9100,
+    autoPrintKitchen: true,
+    autoPrintReceipt: false,
+    autoPrintPreBill: false,
+    kitchenTicketStyle: "standard",
+    receiptStyle: "standard",
+    receiptFooter: "Cảm ơn quý khách! Hẹn gặp lại!",
   },
   delivery: {
     defaultFee: 30000,

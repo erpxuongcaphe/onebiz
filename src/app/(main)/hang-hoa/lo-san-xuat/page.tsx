@@ -17,7 +17,7 @@ import {
   SelectFilter,
 } from "@/components/shared/filter-sidebar";
 import { Badge } from "@/components/ui/badge";
-import { useToast } from "@/lib/contexts";
+import { useToast, useBranchFilter } from "@/lib/contexts";
 import { formatDate } from "@/lib/format";
 import { getAllProductLots } from "@/lib/services";
 import type { ProductLot } from "@/lib/types";
@@ -45,6 +45,7 @@ const statusMap: Record<string, { label: string; variant: "default" | "secondary
 
 export default function LoSanXuatPage() {
   const { toast } = useToast();
+  const { activeBranchId } = useBranchFilter();
   const [data, setData] = useState<LotRow[]>([]);
   const [loading, setLoading] = useState(true);
   const [search, setSearch] = useState("");
@@ -54,18 +55,22 @@ export default function LoSanXuatPage() {
   const fetchData = useCallback(async () => {
     setLoading(true);
     try {
-      const lots = await getAllProductLots({
+      let lots = await getAllProductLots({
         search: search || undefined,
         status: statusFilter !== "all" ? statusFilter : undefined,
         sourceType: sourceFilter !== "all" ? sourceFilter : undefined,
       });
+      // Client-side branch filter (getAllProductLots doesn't support branchId yet)
+      if (activeBranchId) {
+        lots = lots.filter((l) => l.branchId === activeBranchId);
+      }
       setData(lots);
     } catch {
       toast({ variant: "error", title: "Lỗi tải danh sách lô" });
     } finally {
       setLoading(false);
     }
-  }, [search, statusFilter, sourceFilter, toast]);
+  }, [search, statusFilter, sourceFilter, activeBranchId, toast]);
 
   useEffect(() => {
     fetchData();
@@ -73,6 +78,17 @@ export default function LoSanXuatPage() {
 
   const activeLots = data.filter((l) => l.status === "active").length;
   const totalQty = data.reduce((sum, l) => sum + (l.currentQty ?? 0), 0);
+
+  // Expiry heatmap counts
+  const now = Date.now();
+  const expiredCount = data.filter(
+    (l) => l.expiryDate && new Date(l.expiryDate).getTime() <= now && l.currentQty > 0,
+  ).length;
+  const nearExpiryCount = data.filter((l) => {
+    if (!l.expiryDate || l.currentQty <= 0) return false;
+    const days = (new Date(l.expiryDate).getTime() - now) / 86400000;
+    return days > 0 && days <= 30;
+  }).length;
 
   const columns: ColumnDef<LotRow>[] = [
     {
@@ -111,6 +127,14 @@ export default function LoSanXuatPage() {
             {row.original.sourceType === "production" ? "Sản xuất" : "Mua hàng"}
           </span>
         </div>
+      ),
+    },
+    {
+      accessorKey: "branchName",
+      header: "Chi nhánh",
+      size: 120,
+      cell: ({ row }) => (
+        <span className="text-xs text-muted-foreground">{row.original.branchName || "—"}</span>
       ),
     },
     {
@@ -212,6 +236,18 @@ export default function LoSanXuatPage() {
           <div className="text-2xl font-bold text-gray-800">{totalQty.toLocaleString("vi-VN")}</div>
           <div className="text-xs text-muted-foreground">Tổng SL hiện tại</div>
         </div>
+        {expiredCount > 0 && (
+          <div className="bg-red-50 rounded-lg border border-red-200 p-3">
+            <div className="text-2xl font-bold text-red-600">{expiredCount}</div>
+            <div className="text-xs text-red-500">Đã hết hạn</div>
+          </div>
+        )}
+        {nearExpiryCount > 0 && (
+          <div className="bg-amber-50 rounded-lg border border-amber-200 p-3">
+            <div className="text-2xl font-bold text-amber-600">{nearExpiryCount}</div>
+            <div className="text-xs text-amber-500">Sắp hết hạn (30 ngày)</div>
+          </div>
+        )}
       </div>
 
       <DataTable columns={columns} data={data} loading={loading} />

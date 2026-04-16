@@ -53,7 +53,7 @@ const activeSessions = [
 export default function HoSoPage() {
   const [profile, setProfile] = useState({
     name: "Nguyễn Văn Admin",
-    email: "admin@onebiz.vn",
+    email: "admin@onebiz.com.vn",
     phone: "0912 345 678",
   });
 

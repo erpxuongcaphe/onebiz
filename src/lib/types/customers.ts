@@ -14,6 +14,8 @@ export interface Customer {
   groupName?: string;
   type: "individual" | "company";
   gender?: "male" | "female";
+  isInternal?: boolean;
+  branchId?: string;
   createdAt: string;
 }
 

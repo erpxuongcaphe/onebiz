@@ -164,7 +164,7 @@ export default function WebsitePage() {
               <div>
                 <p className="text-xs text-muted-foreground mb-0.5">URL</p>
                 <p className="text-sm font-medium text-green-600 flex items-center gap-1">
-                  onebiz.vn
+                  onebiz.com.vn
                   <ExternalLink className="size-3" />
                 </p>
               </div>
