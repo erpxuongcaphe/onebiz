@@ -9,7 +9,7 @@
  */
 
 import { useState, useEffect, useCallback, useRef } from "react";
-import { Loader2, Volume2, VolumeX, ArrowLeft, ChefHat } from "lucide-react";
+import { Loader2, Volume2, VolumeX, ArrowLeft, ChefHat, Wifi, WifiOff } from "lucide-react";
 import Link from "next/link";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
@@ -22,6 +22,8 @@ import {
   updateKitchenOrderStatus,
   updateKitchenItemStatus,
 } from "@/lib/services/supabase/kitchen-orders";
+import { getClient } from "@/lib/services/supabase/base";
+import { hapticTap, hapticSuccess } from "@/lib/offline";
 import type {
   KitchenOrder,
   KitchenOrderItem,
@@ -31,7 +33,8 @@ import type {
 
 // ── Constants ──
 
-const POLL_INTERVAL = 5_000;
+// Fallback polling if Realtime subscription fails
+const POLL_INTERVAL = 30_000;
 const ACTIVE_STATUSES: KitchenOrderStatus[] = ["pending", "preparing", "ready", "served"];
 
 type FilterTab = "all" | "pending" | "preparing" | "ready";
@@ -94,6 +97,7 @@ export default function KdsPage() {
   const [filter, setFilter] = useState<FilterTab>("all");
   const [soundOn, setSoundOn] = useState(true);
   const [now, setNow] = useState(Date.now());
+  const [realtimeConnected, setRealtimeConnected] = useState(false);
   const prevOrderIdsRef = useRef<Set<string>>(new Set());
 
   // ── Poll orders ──
@@ -135,9 +139,52 @@ export default function KdsPage() {
 
   useEffect(() => {
     fetchOrders();
+    // Fallback polling (reduced to 30s since Realtime handles updates)
     const interval = setInterval(fetchOrders, POLL_INTERVAL);
     return () => clearInterval(interval);
   }, [fetchOrders]);
+
+  // ── Supabase Realtime subscription (replaces aggressive polling) ──
+  useEffect(() => {
+    if (!branchId) return;
+    const client = getClient();
+
+    const channel = client
+      .channel(`kds-${branchId}`)
+      .on(
+        "postgres_changes",
+        {
+          event: "*",
+          schema: "public",
+          table: "kitchen_orders",
+          filter: `branch_id=eq.${branchId}`,
+        },
+        () => {
+          // Any kitchen_orders change → refetch
+          fetchOrders();
+        }
+      )
+      .on(
+        "postgres_changes",
+        {
+          event: "*",
+          schema: "public",
+          table: "kitchen_order_items",
+        },
+        () => {
+          // Any kitchen_order_items change → refetch
+          fetchOrders();
+        }
+      )
+      .subscribe((status) => {
+        setRealtimeConnected(status === "SUBSCRIBED");
+      });
+
+    return () => {
+      client.removeChannel(channel);
+      setRealtimeConnected(false);
+    };
+  }, [branchId, fetchOrders]);
 
   // Timer tick every second
   useEffect(() => {
@@ -156,6 +203,7 @@ export default function KdsPage() {
       const next = nextStatus[item.status];
       if (next === item.status) return;
 
+      hapticTap();
       await updateKitchenItemStatus(item.id, next);
 
       // Optimistic update
@@ -177,6 +225,7 @@ export default function KdsPage() {
 
   // ── Mark order served ──
   const handleServed = useCallback(async (orderId: string) => {
+    hapticSuccess();
     await updateKitchenOrderStatus(orderId, "served");
     setOrders((prev) =>
       prev.map((o) =>
@@ -237,6 +286,20 @@ export default function KdsPage() {
           <Badge variant="outline" className="text-gray-400 border-gray-600 text-xs">
             {filtered.length} đơn
           </Badge>
+          <span
+            className={cn(
+              "flex items-center gap-1 text-xs px-2 py-0.5 rounded",
+              realtimeConnected ? "text-green-400" : "text-gray-500"
+            )}
+            title={realtimeConnected ? "Realtime đang hoạt động" : "Chế độ polling fallback"}
+          >
+            {realtimeConnected ? (
+              <Wifi className="h-3 w-3" />
+            ) : (
+              <WifiOff className="h-3 w-3" />
+            )}
+            {realtimeConnected ? "Live" : "Polling"}
+          </span>
         </div>
 
         <div className="flex items-center gap-2 w-full sm:w-auto">

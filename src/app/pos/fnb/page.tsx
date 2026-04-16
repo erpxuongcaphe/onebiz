@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useEffect, useCallback, useMemo } from "react";
+import { useState, useEffect, useCallback, useMemo, lazy, Suspense } from "react";
 import { Loader2, Package, ShoppingCart, X, Keyboard } from "lucide-react";
 import { useAuth, useToast } from "@/lib/contexts";
 import { useSettings } from "@/lib/contexts/settings-context";
@@ -34,14 +34,20 @@ import { FnbHeader } from "./components/fnb-header";
 import { FnbCategoryTabs, type FnbCategory } from "./components/fnb-category-tabs";
 import { FnbProductGrid, type FnbProduct } from "./components/fnb-product-grid";
 import { FnbCart } from "./components/fnb-cart";
-import { FnbItemDialog, type FnbItemConfirmPayload } from "./components/fnb-item-dialog";
-import { FnbPaymentDialog, type FnbPaymentConfirmPayload } from "./components/fnb-payment-dialog";
-import { TableFloorPlan } from "./components/table-floor-plan";
-import { SplitBillDialog, type SplitItem } from "./components/split-bill-dialog";
-import { OpenShiftDialog, CloseShiftDialog } from "./components/shift-dialog";
-import { FnbSearchModal } from "./components/fnb-search-modal";
-import { FnbCustomerPicker } from "./components/fnb-customer-picker";
+import type { FnbItemConfirmPayload } from "./components/fnb-item-dialog";
+import type { FnbPaymentConfirmPayload } from "./components/fnb-payment-dialog";
+import type { SplitItem } from "./components/split-bill-dialog";
 import { ConnectionStatusBar } from "./components/connection-status-bar";
+
+// Lazy load heavy dialogs (only loaded when user opens them)
+const FnbItemDialog = lazy(() => import("./components/fnb-item-dialog").then(m => ({ default: m.FnbItemDialog })));
+const FnbPaymentDialog = lazy(() => import("./components/fnb-payment-dialog").then(m => ({ default: m.FnbPaymentDialog })));
+const TableFloorPlan = lazy(() => import("./components/table-floor-plan").then(m => ({ default: m.TableFloorPlan })));
+const SplitBillDialog = lazy(() => import("./components/split-bill-dialog").then(m => ({ default: m.SplitBillDialog })));
+const OpenShiftDialog = lazy(() => import("./components/shift-dialog").then(m => ({ default: m.OpenShiftDialog })));
+const CloseShiftDialog = lazy(() => import("./components/shift-dialog").then(m => ({ default: m.CloseShiftDialog })));
+const FnbSearchModal = lazy(() => import("./components/fnb-search-modal").then(m => ({ default: m.FnbSearchModal })));
+const FnbCustomerPicker = lazy(() => import("./components/fnb-customer-picker").then(m => ({ default: m.FnbCustomerPicker })));
 
 export default function FnbPosPage() {
   const { user, tenant, currentBranch } = useAuth();
@@ -644,10 +650,12 @@ export default function FnbPosPage() {
         {/* Left panel: menu grid OR floor plan */}
         <div className="flex-1 flex flex-col min-w-0">
           {showFloorPlan ? (
-            <TableFloorPlan
-              tables={tables}
-              onSelectTable={handleTableSelect}
-            />
+            <Suspense fallback={<div className="flex-1 flex items-center justify-center"><Loader2 className="h-6 w-6 animate-spin text-gray-400" /></div>}>
+              <TableFloorPlan
+                tables={tables}
+                onSelectTable={handleTableSelect}
+              />
+            </Suspense>
           ) : (
             <>
               <FnbCategoryTabs
@@ -683,67 +691,95 @@ export default function FnbPosPage() {
         />
       </div>
 
-      {/* Item dialog */}
-      <FnbItemDialog
-        open={itemDialogOpen}
-        onOpenChange={setItemDialogOpen}
-        product={selectedProduct}
-        variants={itemVariants.length > 0 ? itemVariants : undefined}
-        toppings={toppingProducts.length > 0 ? toppingProducts : undefined}
-        onConfirm={handleItemConfirm}
-      />
+      {/* Item dialog — lazy loaded */}
+      {itemDialogOpen && (
+        <Suspense fallback={null}>
+          <FnbItemDialog
+            open={itemDialogOpen}
+            onOpenChange={setItemDialogOpen}
+            product={selectedProduct}
+            variants={itemVariants.length > 0 ? itemVariants : undefined}
+            toppings={toppingProducts.length > 0 ? toppingProducts : undefined}
+            onConfirm={handleItemConfirm}
+          />
+        </Suspense>
+      )}
 
-      {/* Payment dialog */}
-      <FnbPaymentDialog
-        open={paymentOpen}
-        onOpenChange={setPaymentOpen}
-        subtotal={pos.subtotal}
-        discountAmount={pos.orderDiscountAmount}
-        total={pos.total}
-        lineCount={pos.lineCount}
-        orderNumber={pos.activeTab?.kitchenOrderId ? pos.activeTab.label : undefined}
-        onConfirm={handlePayment}
-      />
+      {/* Payment dialog — lazy loaded */}
+      {paymentOpen && (
+        <Suspense fallback={null}>
+          <FnbPaymentDialog
+            open={paymentOpen}
+            onOpenChange={setPaymentOpen}
+            subtotal={pos.subtotal}
+            discountAmount={pos.orderDiscountAmount}
+            total={pos.total}
+            lineCount={pos.lineCount}
+            orderNumber={pos.activeTab?.kitchenOrderId ? pos.activeTab.label : undefined}
+            onConfirm={handlePayment}
+          />
+        </Suspense>
+      )}
 
-      {/* Split bill dialog */}
-      <SplitBillDialog
-        open={splitBillOpen}
-        onOpenChange={setSplitBillOpen}
-        items={splitItems}
-        onSplitByItems={handleSplitByItems}
-        onSplitEqually={handleSplitEqually}
-      />
+      {/* Split bill dialog — lazy loaded */}
+      {splitBillOpen && (
+        <Suspense fallback={null}>
+          <SplitBillDialog
+            open={splitBillOpen}
+            onOpenChange={setSplitBillOpen}
+            items={splitItems}
+            onSplitByItems={handleSplitByItems}
+            onSplitEqually={handleSplitEqually}
+          />
+        </Suspense>
+      )}
 
-      {/* Shift dialogs */}
-      <OpenShiftDialog
-        open={openShiftDialogOpen}
-        onOpenChange={setOpenShiftDialogOpen}
-        onConfirm={handleOpenShift}
-      />
-      <CloseShiftDialog
-        open={closeShiftDialogOpen}
-        onOpenChange={setCloseShiftDialogOpen}
-        currentShift={currentShift}
-        onConfirm={handleCloseShift}
-      />
+      {/* Shift dialogs — lazy loaded */}
+      {openShiftDialogOpen && (
+        <Suspense fallback={null}>
+          <OpenShiftDialog
+            open={openShiftDialogOpen}
+            onOpenChange={setOpenShiftDialogOpen}
+            onConfirm={handleOpenShift}
+          />
+        </Suspense>
+      )}
+      {closeShiftDialogOpen && (
+        <Suspense fallback={null}>
+          <CloseShiftDialog
+            open={closeShiftDialogOpen}
+            onOpenChange={setCloseShiftDialogOpen}
+            currentShift={currentShift}
+            onConfirm={handleCloseShift}
+          />
+        </Suspense>
+      )}
 
-      {/* Search modal (F3) */}
-      <FnbSearchModal
-        open={searchModalOpen}
-        products={products}
-        onSelect={(product) => {
-          handleSelectProduct(product);
-          setSearchModalOpen(false);
-        }}
-        onClose={() => setSearchModalOpen(false)}
-      />
+      {/* Search modal (F3) — lazy loaded */}
+      {searchModalOpen && (
+        <Suspense fallback={null}>
+          <FnbSearchModal
+            open={searchModalOpen}
+            products={products}
+            onSelect={(product) => {
+              handleSelectProduct(product);
+              setSearchModalOpen(false);
+            }}
+            onClose={() => setSearchModalOpen(false)}
+          />
+        </Suspense>
+      )}
 
-      {/* Customer picker (F4) */}
-      <FnbCustomerPicker
-        open={customerPickerOpen}
-        onSelect={handleCustomerSelect}
-        onClose={() => setCustomerPickerOpen(false)}
-      />
+      {/* Customer picker (F4) — lazy loaded */}
+      {customerPickerOpen && (
+        <Suspense fallback={null}>
+          <FnbCustomerPicker
+            open={customerPickerOpen}
+            onSelect={handleCustomerSelect}
+            onClose={() => setCustomerPickerOpen(false)}
+          />
+        </Suspense>
+      )}
 
       {/* Mobile cart overlay */}
       {mobileCartOpen && (
