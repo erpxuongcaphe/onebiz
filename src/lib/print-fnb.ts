@@ -50,6 +50,8 @@ export interface FnbReceiptData extends PreBillData {
   showBarcode?: boolean;
   showQr?: boolean;
   bankInfo?: { bankName: string; bankAccount: string; bankHolder: string };
+  /** true = payment saved offline, will sync when online */
+  isOffline?: boolean;
 }
 
 export interface KitchenTicketDataV2 {
@@ -64,6 +66,8 @@ export interface KitchenTicketDataV2 {
   paperSize?: "58mm" | "80mm";
   /** true = this is a supplement order (bổ sung) */
   isSupplement?: boolean;
+  /** true = order saved offline, will sync when online */
+  isOffline?: boolean;
 }
 
 // ============================================================
@@ -254,6 +258,7 @@ export function printFnbReceipt(data: FnbReceiptData): void {
 .invoice-code{font-size:14px;margin:2px 0}
 </style></head><body>
 
+${data.isOffline ? `<div class="center" style="background:#f59e0b;color:#000;padding:4px;font-size:13px;font-weight:bold;letter-spacing:2px;border:2px dashed #000;margin-bottom:4px">● PENDING SYNC ●</div>` : ""}
 ${data.storeName ? `<div class="center bold" style="font-size:14px">${data.storeName}</div>` : ""}
 ${data.storeAddress ? `<div class="center" style="font-size:10px;color:#666">${data.storeAddress}</div>` : ""}
 ${data.storePhone ? `<div class="center" style="font-size:10px;color:#666">ĐT: ${data.storePhone}</div>` : ""}
@@ -348,6 +353,10 @@ export function printKitchenTicketV2(data: KitchenTicketDataV2): void {
     ? `<div class="center" style="background:#000;color:#fff;padding:6px;font-size:18px;font-weight:bold;letter-spacing:3px">BỔ SUNG</div>`
     : "";
 
+  const offlineBanner = data.isOffline
+    ? `<div class="center" style="background:#f59e0b;color:#000;padding:4px;font-size:13px;font-weight:bold;letter-spacing:2px;border:2px dashed #000;margin-bottom:4px">● PENDING SYNC ●</div>`
+    : "";
+
   const html = `<!DOCTYPE html>
 <html><head><meta charset="utf-8"><title>Kitchen ${data.orderNumber}</title>
 <style>${baseStyles(width, pageSize)}
@@ -365,6 +374,7 @@ export function printKitchenTicketV2(data: KitchenTicketDataV2): void {
 .time{font-size:16px;font-weight:bold}
 </style></head><body>
 
+${offlineBanner}
 ${supplementBanner}
 
 <div class="center">

@@ -6,8 +6,21 @@ import { useAuth, useToast } from "@/lib/contexts";
 import { useSettings } from "@/lib/contexts/settings-context";
 import { getProductCategoriesAsync } from "@/lib/services/supabase/products";
 import { getVariantsByProduct } from "@/lib/services/supabase/variants";
-import { sendToKitchen, fnbPayment } from "@/lib/services/supabase/fnb-checkout";
+import { fnbPayment } from "@/lib/services/supabase/fnb-checkout";
 import { getTablesByBranch, markTableAvailable } from "@/lib/services/supabase/fnb-tables";
+import {
+  useNetworkStatus,
+  offlineSendToKitchen,
+  offlineFnbPayment,
+  prefetchMenuData,
+  prefetchTableData,
+  getMenuFromCache,
+  getTablesFromCache,
+  shouldRefreshMenu,
+  hapticTap,
+  hapticSuccess,
+  hapticError,
+} from "@/lib/offline";
 import { splitByItems, splitEqually } from "@/lib/services/supabase/split-bill";
 import { getKitchenOrderById } from "@/lib/services/supabase/kitchen-orders";
 import { getOpenShift, openShift, closeShift } from "@/lib/services/supabase/shifts";
@@ -28,11 +41,13 @@ import { SplitBillDialog, type SplitItem } from "./components/split-bill-dialog"
 import { OpenShiftDialog, CloseShiftDialog } from "./components/shift-dialog";
 import { FnbSearchModal } from "./components/fnb-search-modal";
 import { FnbCustomerPicker } from "./components/fnb-customer-picker";
+import { ConnectionStatusBar } from "./components/connection-status-bar";
 
 export default function FnbPosPage() {
   const { user, tenant, currentBranch } = useAuth();
   const { toast } = useToast();
   const { settings } = useSettings();
+  const networkStatus = useNetworkStatus();
   const pos = useFnbPosState();
 
   // ── Data state ──
@@ -63,69 +78,95 @@ export default function FnbPosPage() {
   const tenantId = tenant?.id ?? "";
   const userId = user?.id ?? "";
 
-  // ── Load data ──
+  // ── Load data (cache-first, then network refresh) ──
   useEffect(() => {
     if (!tenantId) return;
     (async () => {
       setLoading(true);
       try {
-        // Load F&B categories (scope=sku for finished goods)
-        const cats = await getProductCategoriesAsync("sku");
-        setCategories(
-          cats.map((c) => ({ id: c.value, name: c.label, code: c.value }))
-        );
+        // Step 1: Load from IndexedDB cache instantly
+        try {
+          const cached = await getMenuFromCache();
+          if (cached.products.length > 0) {
+            setCategories(cached.categories);
+            setProducts(cached.products);
+            setToppingProducts(cached.toppings);
+            setLoading(false); // Show cached data immediately
+          }
+          if (branchId) {
+            const cachedTables = await getTablesFromCache(branchId);
+            if (cachedTables.length > 0) {
+              setTables(cachedTables as RestaurantTable[]);
+            }
+          }
+        } catch {
+          // IndexedDB not available — continue with network
+        }
 
-        // Load all F&B products (BAN codes)
-        const supabase = getClient();
-        const { data: prods } = await supabase
-          .from("products")
-          .select("id, name, code, sell_price, image_url, stock, category_id")
-          .eq("is_active", true)
-          .eq("product_type", "sku")
-          .order("name");
-        setProducts(
-          (prods ?? []).map((p) => ({
-            id: p.id,
-            name: p.name,
-            code: p.code,
-            sell_price: p.sell_price,
-            image_url: (p as Record<string, unknown>).image_url as string | undefined,
-            stock: p.stock,
-            category_id: p.category_id,
-          }))
-        );
+        // Step 2: Background refresh from Supabase (if online)
+        if (networkStatus.isOnline) {
+          const needsRefresh = await shouldRefreshMenu().catch(() => true);
 
-        // Load toppings (NVL with TPP category or product_type=nvl + category code TPP)
-        const { data: toppings } = await supabase
-          .from("products")
-          .select("id, name, sell_price")
-          .eq("is_active", true)
-          .ilike("code", "NVL-TOP%");
-        setToppingProducts(
-          (toppings ?? []).map((t) => ({
-            id: t.id,
-            name: t.name,
-            price: t.sell_price,
-          }))
-        );
+          if (needsRefresh) {
+            // Fetch fresh data
+            const cats = await getProductCategoriesAsync("sku");
+            const mappedCats = cats.map((c) => ({ id: c.value, name: c.label, code: c.value }));
+            setCategories(mappedCats);
 
-        // Load tables + shift
-        if (branchId) {
-          const tbls = await getTablesByBranch(branchId);
-          setTables(tbls);
-          // Load current shift
-          if (userId) {
-            const shift = await getOpenShift(branchId, userId);
-            setCurrentShift(shift);
+            const supabase = getClient();
+            const { data: prods } = await supabase
+              .from("products")
+              .select("id, name, code, sell_price, image_url, stock, category_id")
+              .eq("is_active", true)
+              .eq("product_type", "sku")
+              .order("name");
+            setProducts(
+              (prods ?? []).map((p) => ({
+                id: p.id,
+                name: p.name,
+                code: p.code,
+                sell_price: p.sell_price,
+                image_url: (p as Record<string, unknown>).image_url as string | undefined,
+                stock: p.stock,
+                category_id: p.category_id,
+              }))
+            );
+
+            const { data: toppings } = await supabase
+              .from("products")
+              .select("id, name, sell_price")
+              .eq("is_active", true)
+              .ilike("code", "NVL-TOP%");
+            setToppingProducts(
+              (toppings ?? []).map((t) => ({
+                id: t.id,
+                name: t.name,
+                price: t.sell_price,
+              }))
+            );
+
+            // Update cache in background
+            prefetchMenuData().catch(() => {});
+          }
+
+          // Load tables + shift (always fresh when online)
+          if (branchId) {
+            const tbls = await getTablesByBranch(branchId);
+            setTables(tbls);
+            prefetchTableData(branchId).catch(() => {});
+            if (userId) {
+              const shift = await getOpenShift(branchId, userId);
+              setCurrentShift(shift);
+            }
           }
         }
       } catch {
-        // silent
+        // silent — cached data already shown
       } finally {
         setLoading(false);
       }
     })();
-  }, [tenantId, branchId]);
+  }, [tenantId, branchId, networkStatus.isOnline]);
 
   // ── Filtered products ──
   const filteredProducts = useMemo(() => {
@@ -136,6 +177,7 @@ export default function FnbPosPage() {
   // ── Product select → open item dialog ──
   const handleSelectProduct = useCallback(
     async (product: FnbProduct) => {
+      hapticTap();
       setSelectedProduct(product);
       // Load variants for this product
       try {
@@ -173,13 +215,13 @@ export default function FnbPosPage() {
     [pos]
   );
 
-  // ── Send to kitchen ──
+  // ── Send to kitchen (offline-aware) ──
   const handleSendToKitchen = useCallback(async () => {
     const tab = pos.activeTab;
     if (!tab || tab.lines.length === 0) return;
 
     try {
-      const result = await sendToKitchen({
+      const result = await offlineSendToKitchen({
         tenantId,
         branchId: branchId!,
         createdBy: userId,
@@ -200,7 +242,7 @@ export default function FnbPosPage() {
             price: t.price,
           })),
         })),
-      });
+      }, networkStatus.isOnline);
 
       pos.updateTabMeta(tab.id, { kitchenOrderId: result.kitchenOrderId });
 
@@ -222,15 +264,23 @@ export default function FnbPosPage() {
           cashierName: user?.fullName,
           style: settings.print.kitchenTicketStyle,
           paperSize: settings.print.paperSize === "58mm" ? "58mm" : "80mm",
+          isOffline: !networkStatus.isOnline,
         });
       }
 
       pos.clearCart();
-      toast({ title: "Đã gửi bếp", description: `Đơn ${result.orderNumber ?? ""} đã gửi bếp thành công`, variant: "success" });
+      hapticSuccess();
+
+      if (!networkStatus.isOnline) {
+        toast({ title: "Đã lưu ngoại tuyến", description: `Đơn ${result.orderNumber} sẽ đồng bộ khi có mạng`, variant: "default" });
+      } else {
+        toast({ title: "Đã gửi bếp", description: `Đơn ${result.orderNumber ?? ""} đã gửi bếp thành công`, variant: "success" });
+      }
     } catch (err) {
+      hapticError();
       toast({ title: "Gửi bếp thất bại", description: (err as Error).message, variant: "error" });
     }
-  }, [pos, tenantId, branchId, userId, toast, settings, user]);
+  }, [pos, tenantId, branchId, userId, toast, settings, user, networkStatus.isOnline]);
 
   // ── Print pre-bill ──
   const handlePrintPreBill = useCallback(() => {
@@ -277,7 +327,7 @@ export default function FnbPosPage() {
 
       try {
         const tab = pos.activeTab;
-        const payResult = await fnbPayment({
+        const payResult = await offlineFnbPayment({
           kitchenOrderId: koId,
           tenantId,
           branchId: branchId!,
@@ -291,7 +341,7 @@ export default function FnbPosPage() {
             : undefined,
           paid: payload.paid,
           discountAmount: pos.orderDiscountAmount > 0 ? pos.orderDiscountAmount : undefined,
-        });
+        }, networkStatus.isOnline);
 
         // Auto-print receipt if enabled
         if (settings.print.autoPrintReceipt && tab) {
@@ -336,14 +386,21 @@ export default function FnbPosPage() {
 
         setPaymentOpen(false);
         pos.closeTab(pos.activeTabId);
-        toast({ title: "Thanh toán thành công", variant: "success" });
-        // Refresh tables (status may have changed to cleaning)
-        if (branchId) getTablesByBranch(branchId).then(setTables);
+        hapticSuccess();
+
+        if (!networkStatus.isOnline) {
+          toast({ title: "Đã lưu thanh toán ngoại tuyến", description: "Sẽ đồng bộ khi có mạng", variant: "default" });
+        } else {
+          toast({ title: "Thanh toán thành công", variant: "success" });
+          // Refresh tables (status may have changed to cleaning)
+          if (branchId) getTablesByBranch(branchId).then(setTables);
+        }
       } catch (err) {
+        hapticError();
         toast({ title: "Thanh toán thất bại", description: (err as Error).message, variant: "error" });
       }
     },
-    [pos, tenantId, branchId, userId, handleSendToKitchen, toast, settings, user]
+    [pos, tenantId, branchId, userId, handleSendToKitchen, toast, settings, user, networkStatus.isOnline]
   );
 
   // ── Table select (from floor plan) ──
@@ -569,6 +626,7 @@ export default function FnbPosPage() {
 
   return (
     <div className="flex flex-col h-screen bg-gray-50">
+      <ConnectionStatusBar status={networkStatus} />
       <FnbHeader
         tabs={pos.tabs}
         activeTabId={pos.activeTabId}
