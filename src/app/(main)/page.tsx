@@ -17,6 +17,7 @@ import {
   ArrowLeftRight,
   Receipt,
   Boxes,
+  Coffee,
 } from "lucide-react";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
@@ -50,6 +51,7 @@ import {
   getRecentActivities,
   getFinancialAlerts,
 } from "@/lib/services";
+import { useBranchFilter } from "@/lib/contexts";
 import type {
   DashboardKpis,
   ChartPoint,
@@ -115,6 +117,7 @@ function calcDiff(current: number, previous: number): { text: string; positive: 
 }
 
 export default function TongQuanPage() {
+  const { activeBranchId } = useBranchFilter();
   const [chartView, setChartView] = useState<ChartView>("day");
   const [loading, setLoading] = useState(true);
 
@@ -134,12 +137,12 @@ export default function TongQuanPage() {
     setLoading(true);
     try {
       const [kpiRes, dayRes, hourRes, weekdayRes, ordersRes, topRes, lowRes, actRes, alertRes, turnoverRes] = await Promise.all([
-        getDashboardKpis(),
-        getRevenueByDay(),
-        getRevenueByHour(),
-        getRevenueByWeekday(),
-        getOrdersByWeekday(),
-        getTopProducts(10),
+        getDashboardKpis(activeBranchId),
+        getRevenueByDay(7, activeBranchId),
+        getRevenueByHour(activeBranchId),
+        getRevenueByWeekday(activeBranchId),
+        getOrdersByWeekday(activeBranchId),
+        getTopProducts(10, activeBranchId),
         getLowStockProducts(5),
         getRecentActivities(8),
         getFinancialAlerts().catch(() => [] as FinancialAlert[]),
@@ -160,7 +163,7 @@ export default function TongQuanPage() {
     } finally {
       setLoading(false);
     }
-  }, []);
+  }, [activeBranchId]);
 
   useEffect(() => { fetchData(); }, [fetchData]);
 
@@ -233,14 +236,54 @@ export default function TongQuanPage() {
 
   return (
     <div className="p-4 md:p-6 space-y-4">
-      {/* Date display */}
-      <div className="flex items-center gap-2">
-        <Clock className="size-5 text-muted-foreground" />
-        <span className="text-sm text-muted-foreground capitalize">{formattedDate}</span>
+      {/* ── Hero: Date + Quick Actions ── */}
+      <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3">
+        <div className="flex items-center gap-2">
+          <Clock className="size-5 text-muted-foreground" />
+          <span className="text-sm text-muted-foreground capitalize">{formattedDate}</span>
+        </div>
+        <div className="flex flex-wrap items-center gap-2">
+          <Link href="/pos">
+            <Button size="sm" className="gap-1.5 h-9 shadow-sm">
+              <ShoppingCart className="size-3.5" /> POS Retail
+            </Button>
+          </Link>
+          <Link href="/pos/fnb">
+            <Button size="sm" className="gap-1.5 h-9 shadow-sm bg-amber-600 hover:bg-amber-700 text-white">
+              <Coffee className="size-3.5" /> POS F&B
+            </Button>
+          </Link>
+          <div className="hidden sm:block h-5 w-px bg-border" />
+          <Link href="/don-hang/dat-hang">
+            <Button size="sm" variant="outline" className="gap-1.5 h-9">
+              <Plus className="size-3.5" /> Đơn hàng
+            </Button>
+          </Link>
+          <Link href="/hang-hoa/nhap-hang">
+            <Button size="sm" variant="outline" className="gap-1.5 h-9">
+              <Boxes className="size-3.5" /> Nhập hàng
+            </Button>
+          </Link>
+          <Link href="/hang-hoa/chuyen-kho">
+            <Button size="sm" variant="outline" className="gap-1.5 h-9">
+              <ArrowLeftRight className="size-3.5" /> Chuyển kho
+            </Button>
+          </Link>
+          <Link href="/tai-chinh/so-quy">
+            <Button size="sm" variant="outline" className="gap-1.5 h-9">
+              <Receipt className="size-3.5" /> Sổ quỹ
+            </Button>
+          </Link>
+          <Link href="/phan-tich/bao-cao-tai-chinh">
+            <Button size="sm" variant="outline" className="gap-1.5 h-9">
+              <BarChart3 className="size-3.5" /> P&L
+            </Button>
+          </Link>
+        </div>
       </div>
 
-      {/* KPI Cards */}
-      <div className="grid grid-cols-2 lg:grid-cols-4 gap-3">
+      {/* KPI Cards + Inventory Turnover */}
+      <div className="grid grid-cols-2 lg:grid-cols-5 gap-3">
         {kpiCards.map((kpi) => {
           const Icon = kpi.icon;
           return (
@@ -265,86 +308,28 @@ export default function TongQuanPage() {
             </Card>
           );
         })}
-      </div>
 
-      {/* Quick Actions + Inventory Turnover */}
-      <div className="grid grid-cols-1 lg:grid-cols-4 gap-3">
-        {/* Quick Actions */}
-        <Card className="lg:col-span-3">
-          <CardHeader className="pb-2">
-            <CardTitle className="text-sm">Thao tác nhanh</CardTitle>
-          </CardHeader>
-          <CardContent>
-            <div className="flex flex-wrap gap-2">
-              <Link href="/pos">
-                <Button size="sm" className="gap-1.5 h-8">
-                  <ShoppingCart className="size-3.5" /> Bán hàng POS
-                </Button>
-              </Link>
-              <Link href="/don-hang/dat-hang">
-                <Button size="sm" variant="outline" className="gap-1.5 h-8">
-                  <Plus className="size-3.5" /> Tạo đơn hàng
-                </Button>
-              </Link>
-              <Link href="/hang-hoa/nhap-hang">
-                <Button size="sm" variant="outline" className="gap-1.5 h-8">
-                  <Boxes className="size-3.5" /> Nhập hàng
-                </Button>
-              </Link>
-              <Link href="/hang-hoa/chuyen-kho">
-                <Button size="sm" variant="outline" className="gap-1.5 h-8">
-                  <ArrowLeftRight className="size-3.5" /> Chuyển kho
-                </Button>
-              </Link>
-              <Link href="/tai-chinh/so-quy">
-                <Button size="sm" variant="outline" className="gap-1.5 h-8">
-                  <Receipt className="size-3.5" /> Sổ quỹ
-                </Button>
-              </Link>
-              <Link href="/phan-tich/bao-cao-tai-chinh">
-                <Button size="sm" variant="outline" className="gap-1.5 h-8">
-                  <BarChart3 className="size-3.5" /> Báo cáo P&L
-                </Button>
-              </Link>
-            </div>
-          </CardContent>
-        </Card>
-
-        {/* Inventory Turnover Widget */}
-        <Card>
-          <CardHeader className="pb-2">
-            <CardTitle className="text-sm flex items-center gap-1.5">
-              <Package className="size-4 text-indigo-500" />
-              Vòng quay kho
-            </CardTitle>
-          </CardHeader>
-          <CardContent>
-            {turnover ? (
-              <div className="space-y-2">
-                <p className="text-3xl font-bold text-indigo-600">
-                  {turnover.turnoverRatio.toFixed(1)}x
+        {/* Inventory Turnover — inline as 5th card */}
+        <Card className="col-span-2 lg:col-span-1">
+          <CardContent className="pt-0">
+            <div className="flex items-start justify-between">
+              <div className="space-y-1">
+                <p className="text-xs text-muted-foreground">Vòng quay kho</p>
+                <p className="text-xl lg:text-2xl font-bold text-indigo-600">
+                  {turnover ? `${turnover.turnoverRatio.toFixed(1)}x` : "—"}
                 </p>
-                <div className="space-y-1 text-xs text-muted-foreground">
-                  <div className="flex justify-between">
-                    <span>COGS</span>
-                    <span className="font-medium">{formatCurrency(turnover.totalCogsPeriod)}</span>
-                  </div>
-                  <div className="flex justify-between">
-                    <span>Giá trị kho TB</span>
-                    <span className="font-medium">{formatCurrency(turnover.avgInventoryValue)}</span>
-                  </div>
-                </div>
-                <p className="text-[10px] text-muted-foreground pt-1 border-t">
-                  {turnover.turnoverRatio >= 4
-                    ? "Tốt — hàng xoay nhanh"
-                    : turnover.turnoverRatio >= 2
-                      ? "Trung bình — cần cải thiện"
-                      : "Chậm — cần xem lại tồn kho"}
-                </p>
+                {turnover ? (
+                  <p className="text-[11px] text-muted-foreground">
+                    COGS {formatChartCurrency(turnover.totalCogsPeriod)}
+                  </p>
+                ) : (
+                  <p className="text-[11px] text-muted-foreground">Chưa có dữ liệu</p>
+                )}
               </div>
-            ) : (
-              <p className="text-sm text-muted-foreground py-2">Chưa có dữ liệu</p>
-            )}
+              <div className="flex size-9 shrink-0 items-center justify-center rounded-full bg-indigo-100">
+                <Package className="size-5 text-indigo-500" />
+              </div>
+            </div>
           </CardContent>
         </Card>
       </div>

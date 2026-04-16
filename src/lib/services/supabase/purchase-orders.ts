@@ -94,6 +94,11 @@ export async function getPurchaseOrders(
     query = query.eq("supplier_name", params.filters.supplier as any);
   }
 
+  // Filter: branch
+  if (params.branchId) {
+    query = query.eq("branch_id", params.branchId);
+  }
+
   query = query.order("created_at", { ascending: false }).range(from, to);
 
   const { data, count, error } = await query;

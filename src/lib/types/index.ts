@@ -135,5 +135,16 @@ export type {
   PaymentMethod,
 } from "./pos";
 
+// Internal Sales domain
+export type { InternalSale, InternalSaleItem } from "./internal-sales";
+
 // Auth domain
 export type { UserProfile, Tenant, Branch } from "./auth";
+
+// F&B domain
+export type {
+  TableStatus, RestaurantTable,
+  KitchenOrderStatus, KitchenItemStatus, OrderType,
+  ToppingAttachment, KitchenOrderItem, KitchenOrder,
+  FnbCartTopping, FnbOrderLine, FnbTabSnapshot,
+} from "./fnb";

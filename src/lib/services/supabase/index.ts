@@ -113,7 +113,9 @@ export {
 export {
   getProfitAndLoss, getCOGSBreakdown, getGrossMarginTrend,
   getInventoryTurnover, getDSO, getFinancialAlerts, getStockAlerts,
+  getConsolidatedPnL, getBranchPnLComparison,
 } from "./reports";
+export type { ConsolidatedPnL, BranchPnLRow } from "./reports";
 
 // UOM Conversions
 export { getUOMConversions, createUOMConversion, updateUOMConversion, deleteUOMConversion, convertQuantity } from "./uom";
@@ -123,7 +125,7 @@ export { getBranchStock, getBranchStockRows, getProductStockByBranch } from "./b
 export type { BranchStockRow } from "./branch-stock";
 
 // Branches (enhanced)
-export { getBranches, createBranch, updateBranch } from "./branches";
+export { getBranches, createBranch, updateBranch, syncInternalEntities } from "./branches";
 export type { BranchDetail } from "./branches";
 export { BRANCH_TYPE_LABELS, BRANCH_CODE_PREFIX } from "./branches";
 
@@ -146,3 +148,54 @@ export type { AuditLogEntry, AuditFilters } from "./audit";
 // Debt Aging (Phân tích tuổi nợ)
 export { getDebtAging, getTopDebtors as getDebtAgingDebtors } from "./debt";
 export type { DebtAgingReport, AgingBucket, DebtorDetail } from "./debt";
+
+// ============================================================
+// F&B POS — Sprint A
+// ============================================================
+
+// Restaurant Tables
+export {
+  getTablesByBranch, createTable, updateTable, deleteTable,
+  updateTableStatus, claimTable, releaseTable, markTableAvailable,
+  getZonesByBranch, bulkCreateTables, renameZone, deleteZone,
+} from "./fnb-tables";
+
+// Kitchen Orders
+export {
+  getKitchenOrders, getKitchenOrderById,
+  createKitchenOrder, addItemsToOrder,
+  updateKitchenOrderStatus, updateKitchenItemStatus,
+  linkInvoiceToOrder,
+  updateOrderItemQty, removeOrderItem,
+  cancelKitchenOrder, transferTable, mergeKitchenOrders,
+  applyOrderDiscount, setDeliveryPlatform,
+} from "./kitchen-orders";
+export type { CreateKitchenOrderInput } from "./kitchen-orders";
+
+// F&B Checkout (2-step flow)
+export { sendToKitchen, fnbPayment, addItemsToExistingOrder, voidFnbInvoice } from "./fnb-checkout";
+export type { SendToKitchenInput, SendToKitchenResult, FnbPaymentInput, FnbPaymentResult } from "./fnb-checkout";
+
+// Shift Management
+export { getOpenShift, getAnyOpenShift, openShift, closeShift, getShiftHistory } from "./shifts";
+
+// Split Bill
+export { splitByItems, splitEqually, areAllTableOrdersCompleted } from "./split-bill";
+
+// F&B Analytics
+export { getFnbKpis, getRevenueByMenuItem, getRevenueByTable, getRevenueByHourFnb, getCashierPerformance, getTableTurnover } from "./fnb-analytics";
+
+// Internal Sales (Bán hàng nội bộ giữa chi nhánh)
+export { getInternalSales, getInternalSaleById, createInternalSale, cancelInternalSale } from "./internal-sales";
+export type { InternalSaleItemInput, CreateInternalSaleInput, InternalSaleResult } from "./internal-sales";
+
+// Production Dashboard
+export { getProductionKpis, getNvlStock, getProductionTrend, getTopOutputProducts } from "./production-dashboard";
+export type { ProductionKpis, NvlStockRow, ProductionTrend, TopOutputProduct } from "./production-dashboard";
+
+// RBAC Roles & Permissions
+export {
+  getRoles, getRoleById, createRole, updateRole, deleteRole,
+  setRolePermissions, getUserPermissions, assignRoleToUser, getTenantUsers,
+} from "./roles";
+export type { DbRole, DbRoleDetail, CreateRoleInput, UpdateRoleInput } from "./roles";

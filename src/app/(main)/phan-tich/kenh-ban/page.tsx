@@ -18,6 +18,7 @@ import {
   ResponsiveContainer,
 } from "recharts";
 import { DateRangeBar, KpiCard, ChartCard } from "../_components";
+import { useBranchFilter } from "@/lib/contexts";
 import {
   formatCurrency,
   formatChartTooltipCurrency,
@@ -107,6 +108,7 @@ function renderPieLabel(props: any) {
 }
 
 export default function KenhBanPage() {
+  const { activeBranchId } = useBranchFilter();
   const [loading, setLoading] = useState(true);
   const [channelRevenue, setChannelRevenue] = useState<ChartPoint[]>([]);
   const [channelPerformance, setChannelPerformance] = useState<ChannelPerformanceRow[]>([]);
@@ -115,8 +117,8 @@ export default function KenhBanPage() {
     setLoading(true);
     try {
       const [revenueRes, perfRes] = await Promise.all([
-        getChannelRevenue(),
-        getChannelPerformance(),
+        getChannelRevenue(activeBranchId),
+        getChannelPerformance(activeBranchId),
       ]);
       setChannelRevenue(revenueRes);
       setChannelPerformance(perfRes);
@@ -125,7 +127,7 @@ export default function KenhBanPage() {
     } finally {
       setLoading(false);
     }
-  }, []);
+  }, [activeBranchId]);
 
   useEffect(() => {
     fetchData();

@@ -52,6 +52,8 @@ export interface PosCheckoutInput {
   total: number;
   paid: number;
   note?: string;
+  /** Nguồn: 'pos' (mặc định), 'fnb', 'online' */
+  source?: "pos" | "fnb" | "online";
 }
 
 export interface PosCheckoutResult {
@@ -297,6 +299,7 @@ export async function posCheckout(input: PosCheckoutInput): Promise<PosCheckoutR
     paid: input.paid,
     debt: Math.max(0, input.total - input.paid),
     payment_method: input.paymentMethod,
+    source: input.source ?? "pos",
     note: input.note ?? null,
     created_by: input.createdBy,
   } satisfies InvoiceInsert;

@@ -53,7 +53,8 @@ import { cn } from "@/lib/utils";
 // ---------------------------------------------------------------------------
 
 function BranchSelector() {
-  const { tenant, branches, currentBranch, switchBranch } = useAuth();
+  const { tenant, branches, currentBranch, switchBranch, user } = useAuth();
+  const canViewAll = user?.role === "owner" || user?.role === "admin";
 
   return (
     <DropdownMenu>
@@ -62,12 +63,23 @@ function BranchSelector() {
         <span className="truncate max-w-[160px]">
           <span className="font-semibold">{tenant?.name ?? "OneBiz"}</span>
           <span className="text-white/60 mx-1">|</span>
-          <span className="text-white/80">{currentBranch?.name ?? "---"}</span>
+          <span className="text-white/80">{currentBranch?.name ?? "Tất cả"}</span>
         </span>
         <ChevronDown className="h-3 w-3 shrink-0" />
       </DropdownMenuTrigger>
       <DropdownMenuContent align="start" sideOffset={6} className="min-w-[220px]">
         <DropdownMenuLabel>Chọn chi nhánh</DropdownMenuLabel>
+        {canViewAll && (
+          <DropdownMenuItem
+            className="cursor-pointer"
+            onSelect={() => switchBranch(null)}
+          >
+            <span className="flex-1">Tất cả chi nhánh</span>
+            {currentBranch === null && (
+              <Check className="h-4 w-4 text-primary" />
+            )}
+          </DropdownMenuItem>
+        )}
         {branches.map((branch) => (
           <DropdownMenuItem
             key={branch.id}
@@ -239,8 +251,9 @@ function MobileLeafLink({
 
 function MobileNav() {
   const pathname = usePathname();
-  const { branches, currentBranch, switchBranch } = useAuth();
+  const { branches, currentBranch, switchBranch, user } = useAuth();
   const [open, setOpen] = useState(false);
+  const canViewAll = user?.role === "owner" || user?.role === "admin";
 
   return (
     <Sheet open={open} onOpenChange={setOpen}>
@@ -255,6 +268,23 @@ function MobileNav() {
             <div className="px-3 py-1 text-[10px] font-semibold text-muted-foreground uppercase tracking-wider">
               Chi nhánh
             </div>
+            {canViewAll && (
+              <button
+                onClick={() => switchBranch(null)}
+                className={cn(
+                  "w-full text-left flex items-center gap-2 px-3 py-1.5 rounded-md text-sm",
+                  currentBranch === null
+                    ? "bg-primary/10 text-primary font-medium"
+                    : "text-muted-foreground hover:bg-muted hover:text-foreground"
+                )}
+              >
+                <Building2 className="h-3.5 w-3.5" />
+                Tất cả chi nhánh
+                {currentBranch === null && (
+                  <Check className="h-3.5 w-3.5 ml-auto" />
+                )}
+              </button>
+            )}
             {branches.map((branch) => (
               <button
                 key={branch.id}

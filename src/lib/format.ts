@@ -50,6 +50,10 @@ export function formatChartTooltipCurrency(value: number): string {
   return new Intl.NumberFormat("vi-VN").format(value) + "đ";
 }
 
+export function formatNumber(n: number): string {
+  return n.toLocaleString("vi-VN");
+}
+
 export function formatPhone(phone: string): string {
   if (phone.length === 10) {
     return `${phone.slice(0, 4)} ${phone.slice(4, 7)} ${phone.slice(7)}`;

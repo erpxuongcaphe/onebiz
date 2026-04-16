@@ -32,7 +32,7 @@ import {
   getCashBookSummary,
   deleteCashTransaction,
 } from "@/lib/services";
-import { useToast } from "@/lib/contexts";
+import { useToast, useBranchFilter } from "@/lib/contexts";
 import { printDocument } from "@/lib/print-document";
 import { buildCashTransactionPrintData } from "@/lib/print-templates";
 import type { CashBookEntry } from "@/lib/types";
@@ -167,6 +167,7 @@ function TransactionDetail({
 // === Page Component ===
 export default function SoQuyPage() {
   const { toast } = useToast();
+  const { activeBranchId } = useBranchFilter();
   const [data, setData] = useState<CashBookEntry[]>([]);
   const [total, setTotal] = useState(0);
   const [loading, setLoading] = useState(true);
@@ -204,6 +205,7 @@ export default function SoQuyPage() {
       page,
       pageSize,
       search,
+      branchId: activeBranchId,
       filters: {
         ...(selectedDocTypes.length === 1 && { type: selectedDocTypes[0] }),
       },
@@ -211,7 +213,7 @@ export default function SoQuyPage() {
     setData(result.data);
     setTotal(result.total);
     setLoading(false);
-  }, [search, selectedDocTypes, page, pageSize]);
+  }, [search, selectedDocTypes, page, pageSize, activeBranchId]);
 
   useEffect(() => {
     fetchData();

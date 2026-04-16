@@ -27,6 +27,11 @@ export async function getCashBookEntries(params: QueryParams): Promise<QueryResu
     query = query.eq("type", params.filters.type as any);
   }
 
+  // Filter: branch
+  if (params.branchId) {
+    query = query.eq("branch_id", params.branchId);
+  }
+
   // Sort & paginate
   query = query
     .order("created_at", { ascending: false })

@@ -22,7 +22,7 @@ import {
   DetailInfoGrid,
   DetailItemsTable,
 } from "@/components/shared/inline-detail-panel";
-import { useToast } from "@/lib/contexts";
+import { useToast, useBranchFilter } from "@/lib/contexts";
 import { printDocument } from "@/lib/print-document";
 import { buildReturnPrintData } from "@/lib/print-templates";
 import { formatCurrency, formatDate } from "@/lib/format";
@@ -192,6 +192,7 @@ function ReturnDetail({
 
 export default function TraHangPage() {
   const { toast } = useToast();
+  const { activeBranchId } = useBranchFilter();
   const [data, setData] = useState<ReturnOrder[]>([]);
   const [total, setTotal] = useState(0);
   const [loading, setLoading] = useState(true);
@@ -221,6 +222,7 @@ export default function TraHangPage() {
       page,
       pageSize,
       search,
+      branchId: activeBranchId,
       filters: {
         ...(selectedStatuses.length > 0 && { status: selectedStatuses }),
         ...(selectedTypes.length > 0 && { type: selectedTypes }),
@@ -229,7 +231,7 @@ export default function TraHangPage() {
     setData(result.data);
     setTotal(result.total);
     setLoading(false);
-  }, [page, pageSize, search, selectedStatuses, selectedTypes]);
+  }, [page, pageSize, search, selectedStatuses, selectedTypes, activeBranchId]);
 
   useEffect(() => {
     fetchData();

@@ -15,6 +15,7 @@ import {
   ResponsiveContainer,
 } from "recharts";
 import { KpiCard, ChartCard } from "../_components";
+import { useBranchFilter } from "@/lib/contexts";
 import { formatCurrency, formatChartCurrency, formatChartTooltipCurrency } from "@/lib/format";
 import { getCashFlowDetailed } from "@/lib/services/supabase/analytics";
 import type { CashFlowDetailedRow } from "@/lib/services/supabase/analytics";
@@ -37,20 +38,21 @@ function CashFlowTooltip({ active, payload, label }: any) {
 }
 
 export default function LuongTienPage() {
+  const { activeBranchId } = useBranchFilter();
   const [data, setData] = useState<CashFlowDetailedRow[]>([]);
   const [loading, setLoading] = useState(true);
 
   const fetchData = useCallback(async () => {
     setLoading(true);
     try {
-      const result = await getCashFlowDetailed(6);
+      const result = await getCashFlowDetailed(6, activeBranchId);
       setData(result);
     } catch {
       // silent fail — data stays empty
     } finally {
       setLoading(false);
     }
-  }, []);
+  }, [activeBranchId]);
 
   useEffect(() => {
     fetchData();

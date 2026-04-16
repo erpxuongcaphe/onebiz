@@ -16,6 +16,7 @@ import {
   ResponsiveContainer,
 } from "recharts";
 import { DateRangeBar, KpiCard, ChartCard } from "../_components";
+import { useBranchFilter } from "@/lib/contexts";
 import {
   formatCurrency,
   formatChartCurrency,
@@ -117,6 +118,7 @@ function renderPieLabel(props: any) {
 }
 
 export default function KhachHangPage() {
+  const { activeBranchId } = useBranchFilter();
   const [loading, setLoading] = useState(true);
   const [kpis, setKpis] = useState<{
     totalCustomers: number;
@@ -135,10 +137,10 @@ export default function KhachHangPage() {
     try {
       setLoading(true);
       const [kpiData, monthly, segments, customers, debtors] = await Promise.all([
-        getCustomerKpis(),
-        getNewCustomersMonthly(),
+        getCustomerKpis(activeBranchId),
+        getNewCustomersMonthly(6, activeBranchId),
         getCustomerSegments(),
-        getTopCustomersByRevenue(),
+        getTopCustomersByRevenue(10, activeBranchId),
         getTopDebtors(),
       ]);
       setKpis(kpiData);
@@ -151,7 +153,7 @@ export default function KhachHangPage() {
     } finally {
       setLoading(false);
     }
-  }, []);
+  }, [activeBranchId]);
 
   useEffect(() => {
     fetchData();

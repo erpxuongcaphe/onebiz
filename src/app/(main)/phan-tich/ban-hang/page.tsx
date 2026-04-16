@@ -17,6 +17,7 @@ import {
   ResponsiveContainer,
 } from "recharts";
 import { DateRangeBar, KpiCard, ChartCard } from "../_components";
+import { useBranchFilter } from "@/lib/contexts";
 import {
   formatCurrency,
   formatChartCurrency,
@@ -136,6 +137,7 @@ interface SalesKpisData {
 }
 
 export default function BanHangPage() {
+  const { activeBranchId } = useBranchFilter();
   const [loading, setLoading] = useState(true);
   const [kpis, setKpis] = useState<SalesKpisData | null>(null);
   const [dailyRevenue, setDailyRevenue] = useState<MonthlyRevenuePoint[]>([]);
@@ -147,11 +149,11 @@ export default function BanHangPage() {
     setLoading(true);
     try {
       const [kpisData, daily, weekday, hourly, invoices] = await Promise.all([
-        getSalesKpis(),
-        getDailyRevenue(30),
-        getSalesRevenueByWeekday(),
-        getSalesRevenueByHour(),
-        getTopInvoices(10),
+        getSalesKpis(activeBranchId),
+        getDailyRevenue(30, activeBranchId),
+        getSalesRevenueByWeekday(activeBranchId),
+        getSalesRevenueByHour(activeBranchId),
+        getTopInvoices(10, activeBranchId),
       ]);
       setKpis(kpisData);
       setDailyRevenue(daily);
@@ -163,7 +165,7 @@ export default function BanHangPage() {
     } finally {
       setLoading(false);
     }
-  }, []);
+  }, [activeBranchId]);
 
   useEffect(() => {
     fetchData();

@@ -3,6 +3,7 @@ export interface UserProfile {
   id: string;
   tenantId: string;
   branchId?: string;
+  roleId?: string;
   fullName: string;
   email: string;
   phone?: string;

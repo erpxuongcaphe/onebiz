@@ -29,6 +29,7 @@ import {
   formatChartTooltipCurrency,
 } from "@/lib/format";
 import { DateRangeBar, KpiCard, ChartCard } from "../_components";
+import { useBranchFilter } from "@/lib/contexts";
 import {
   getEndOfDayStats,
   getSalesRevenueByHour,
@@ -88,6 +89,7 @@ function ProductTooltip({ active, payload, label }: any) {
 /* ---------- main page ---------- */
 
 export default function CuoiNgayPage() {
+  const { activeBranchId } = useBranchFilter();
   const [stats, setStats] = useState<EndOfDayStats | null>(null);
   const [revenueByHour, setRevenueByHour] = useState<ChartPoint[]>([]);
   const [topProducts, setTopProducts] = useState<{ name: string; qty: number }[]>([]);
@@ -97,9 +99,9 @@ export default function CuoiNgayPage() {
     setLoading(true);
     try {
       const [statsData, hourData, productsData] = await Promise.all([
-        getEndOfDayStats(),
-        getSalesRevenueByHour(),
-        getTodayTopProducts(),
+        getEndOfDayStats(activeBranchId),
+        getSalesRevenueByHour(activeBranchId),
+        getTodayTopProducts(5, activeBranchId),
       ]);
       setStats(statsData);
       setRevenueByHour(hourData);
@@ -109,7 +111,7 @@ export default function CuoiNgayPage() {
     } finally {
       setLoading(false);
     }
-  }, []);
+  }, [activeBranchId]);
 
   useEffect(() => {
     fetchData();

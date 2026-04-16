@@ -83,7 +83,7 @@ const referenceTypeLabels: Record<string, string> = {
   internal_export: "Xuất nội bộ",
   transfer: "Chuyển kho",
   return: "Trả hàng",
-  pos: "Bán hàng POS",
+  pos: "POS Retail",
 };
 
 export default function LichSuKhoPage() {

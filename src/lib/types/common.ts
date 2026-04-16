@@ -7,6 +7,8 @@ export interface QueryParams {
   sortBy?: string;
   sortOrder?: "asc" | "desc";
   filters?: Record<string, string | string[]>;
+  /** Lọc theo chi nhánh — undefined = tất cả chi nhánh (CEO view) */
+  branchId?: string;
 }
 
 export interface QueryResult<T> {

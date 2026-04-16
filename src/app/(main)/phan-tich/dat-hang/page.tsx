@@ -22,6 +22,7 @@ import {
   ResponsiveContainer,
 } from "recharts";
 import { DateRangeBar, KpiCard, ChartCard } from "../_components";
+import { useBranchFilter } from "@/lib/contexts";
 import { formatCurrency } from "@/lib/format";
 import {
   getOrdersKpis,
@@ -151,6 +152,7 @@ function renderPieLabel(props: any) {
 // === Page ===
 
 export default function DatHangPage() {
+  const { activeBranchId } = useBranchFilter();
   const [loading, setLoading] = useState(true);
   const [kpis, setKpis] = useState<OrdersKpis | null>(null);
   const [orderVolume, setOrderVolume] = useState<ChartPoint[]>([]);
@@ -161,10 +163,10 @@ export default function DatHangPage() {
     try {
       setLoading(true);
       const [kpisData, volumeData, statusData, ordersData] = await Promise.all([
-        getOrdersKpis(),
-        getDailyOrderVolume(30),
-        getOrderStatusDistribution(),
-        getRecentOrders(10),
+        getOrdersKpis(activeBranchId),
+        getDailyOrderVolume(30, activeBranchId),
+        getOrderStatusDistribution(activeBranchId),
+        getRecentOrders(10, activeBranchId),
       ]);
       setKpis(kpisData);
       setOrderVolume(volumeData);
@@ -175,7 +177,7 @@ export default function DatHangPage() {
     } finally {
       setLoading(false);
     }
-  }, []);
+  }, [activeBranchId]);
 
   useEffect(() => {
     fetchData();

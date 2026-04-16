@@ -3,3 +3,6 @@ export { SettingsProvider, useSettings, defaultSettings } from "./settings-conte
 export type { AppSettings } from "./settings-context";
 export { ToastProvider, useToast } from "./toast-context";
 export type { Toast, ToastVariant } from "./toast-context";
+
+// Re-export convenience hook for branch filtering
+export { useBranchFilter } from "./use-branch-filter";

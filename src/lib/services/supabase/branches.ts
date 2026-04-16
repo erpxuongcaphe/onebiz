@@ -112,3 +112,14 @@ export const BRANCH_CODE_PREFIX: Record<BranchDetail["branchType"], string> = {
   factory: "XRA",
   office: "BOF",
 };
+
+/**
+ * Gọi RPC seed_internal_entities để tạo customer/supplier nội bộ cho mỗi branch.
+ * Idempotent — gọi nhiều lần không lỗi.
+ */
+export async function syncInternalEntities(tenantId: string): Promise<void> {
+  const { error } = await supabase.rpc("seed_internal_entities", {
+    p_tenant_id: tenantId,
+  });
+  if (error) throw error;
+}

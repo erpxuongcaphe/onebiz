@@ -182,7 +182,7 @@ function lastNMonthsRange(n: number): { start: string; end: string } {
 // TỔNG QUAN (Overview) - /phan-tich
 // ========================================
 
-export async function getOverviewKpis(): Promise<{
+export async function getOverviewKpis(branchId?: string): Promise<{
   revenue: number; prevRevenue: number;
   orders: number; prevOrders: number;
   newCustomers: number; prevNewCustomers: number;
@@ -194,9 +194,12 @@ export async function getOverviewKpis(): Promise<{
   const prevStart = new Date(now.getFullYear(), now.getMonth() - 1, 1);
   const prevEnd = new Date(now.getFullYear(), now.getMonth(), 1);
 
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  function bq<T>(query: T): T { return branchId ? (query as any).eq("branch_id", branchId) : query; }
+
   const [thisInvoices, prevInvoices, thisCustomers, prevCustomers] = await Promise.all([
-    supabase.from("invoices").select("total, status").gte("created_at", thisMonth.start).lt("created_at", thisMonth.end),
-    supabase.from("invoices").select("total, status").gte("created_at", prevStart.toISOString()).lt("created_at", prevEnd.toISOString()),
+    bq(supabase.from("invoices").select("total, status").gte("created_at", thisMonth.start).lt("created_at", thisMonth.end)),
+    bq(supabase.from("invoices").select("total, status").gte("created_at", prevStart.toISOString()).lt("created_at", prevEnd.toISOString())),
     supabase.from("customers").select("id", { count: "exact", head: true }).gte("created_at", thisMonth.start).lt("created_at", thisMonth.end),
     supabase.from("customers").select("id", { count: "exact", head: true }).gte("created_at", prevStart.toISOString()).lt("created_at", prevEnd.toISOString()),
   ]);
@@ -217,16 +220,18 @@ export async function getOverviewKpis(): Promise<{
   };
 }
 
-export async function getDailyRevenue(days: number = 30): Promise<MonthlyRevenuePoint[]> {
+export async function getDailyRevenue(days: number = 30, branchId?: string): Promise<MonthlyRevenuePoint[]> {
   const supabase = getClient();
   const range = lastNDaysRange(days);
 
-  const { data, error } = await supabase
+  let query = supabase
     .from("invoices")
     .select("created_at, total")
     .eq("status", "completed")
     .gte("created_at", range.start)
     .lt("created_at", range.end);
+  if (branchId) query = query.eq("branch_id", branchId);
+  const { data, error } = await query;
 
   if (error) handleError(error, "getDailyRevenue");
 
@@ -248,15 +253,17 @@ export async function getDailyRevenue(days: number = 30): Promise<MonthlyRevenue
   return Array.from(grouped.entries()).map(([date, revenue]) => ({ date, revenue }));
 }
 
-export async function getRevenueByCategory(): Promise<CategoryRevenue[]> {
+export async function getRevenueByCategory(branchId?: string): Promise<CategoryRevenue[]> {
   const supabase = getClient();
   const range = thisMonthRange();
 
-  const { data, error } = await supabase
+  let query = supabase
     .from("invoice_items")
-    .select("total, products!inner(category_id, categories(name)), invoices!inner(created_at, status)")
+    .select("total, products!inner(category_id, categories(name)), invoices!inner(created_at, status, branch_id)")
     .gte("invoices.created_at", range.start)
     .eq("invoices.status", "completed");
+  if (branchId) query = query.eq("invoices.branch_id", branchId);
+  const { data, error } = await query;
 
   if (error) {
     // Fallback: category join might not exist
@@ -280,7 +287,7 @@ export async function getRevenueByCategory(): Promise<CategoryRevenue[]> {
 // BÁN HÀNG (Sales) - /phan-tich/ban-hang
 // ========================================
 
-export async function getSalesKpis(): Promise<{
+export async function getSalesKpis(branchId?: string): Promise<{
   netRevenue: number; prevNetRevenue: number;
   soldQty: number; prevSoldQty: number;
   avgOrderValue: number; prevAvgOrderValue: number;
@@ -292,13 +299,18 @@ export async function getSalesKpis(): Promise<{
   const prevStart = new Date(now.getFullYear(), now.getMonth() - 1, 1);
   const prevEnd = new Date(now.getFullYear(), now.getMonth(), 1);
 
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  function bq<T>(query: T): T { return branchId ? (query as any).eq("branch_id", branchId) : query; }
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  function bqJoin<T>(query: T): T { return branchId ? (query as any).eq("invoices.branch_id", branchId) : query; }
+
   const [thisInv, prevInv, thisItems, prevItems, thisReturns, prevReturns] = await Promise.all([
-    supabase.from("invoices").select("total, status").gte("created_at", thisMonth.start).lt("created_at", thisMonth.end),
-    supabase.from("invoices").select("total, status").gte("created_at", prevStart.toISOString()).lt("created_at", prevEnd.toISOString()),
-    supabase.from("invoice_items").select("quantity, invoices!inner(created_at, status)").gte("invoices.created_at", thisMonth.start).eq("invoices.status", "completed"),
-    supabase.from("invoice_items").select("quantity, invoices!inner(created_at, status)").gte("invoices.created_at", prevStart.toISOString()).lt("invoices.created_at", prevEnd.toISOString()).eq("invoices.status", "completed"),
-    supabase.from("sales_returns").select("id", { count: "exact", head: true }).gte("created_at", thisMonth.start).lt("created_at", thisMonth.end),
-    supabase.from("sales_returns").select("id", { count: "exact", head: true }).gte("created_at", prevStart.toISOString()).lt("created_at", prevEnd.toISOString()),
+    bq(supabase.from("invoices").select("total, status").gte("created_at", thisMonth.start).lt("created_at", thisMonth.end)),
+    bq(supabase.from("invoices").select("total, status").gte("created_at", prevStart.toISOString()).lt("created_at", prevEnd.toISOString())),
+    bqJoin(supabase.from("invoice_items").select("quantity, invoices!inner(created_at, status, branch_id)").gte("invoices.created_at", thisMonth.start).eq("invoices.status", "completed")),
+    bqJoin(supabase.from("invoice_items").select("quantity, invoices!inner(created_at, status, branch_id)").gte("invoices.created_at", prevStart.toISOString()).lt("invoices.created_at", prevEnd.toISOString()).eq("invoices.status", "completed")),
+    bq(supabase.from("sales_returns").select("id", { count: "exact", head: true }).gte("created_at", thisMonth.start).lt("created_at", thisMonth.end)),
+    bq(supabase.from("sales_returns").select("id", { count: "exact", head: true }).gte("created_at", prevStart.toISOString()).lt("created_at", prevEnd.toISOString())),
   ]);
 
   const calcRev = (d: { total: number; status: string }[] | null) => (d ?? []).filter(i => i.status === "completed").reduce((s, i) => s + (i.total ?? 0), 0);
@@ -320,13 +332,15 @@ export async function getSalesKpis(): Promise<{
   };
 }
 
-export async function getRevenueByWeekday(): Promise<ChartPoint[]> {
+export async function getRevenueByWeekday(branchId?: string): Promise<ChartPoint[]> {
   const supabase = getClient();
   const range = lastNDaysRange(30);
 
-  const { data, error } = await supabase
+  let query = supabase
     .from("invoices").select("created_at, total").eq("status", "completed")
     .gte("created_at", range.start).lt("created_at", range.end);
+  if (branchId) query = query.eq("branch_id", branchId);
+  const { data, error } = await query;
 
   if (error) handleError(error, "getRevenueByWeekday");
 
@@ -342,13 +356,15 @@ export async function getRevenueByWeekday(): Promise<ChartPoint[]> {
   return [1, 2, 3, 4, 5, 6, 0].map((d) => ({ label: weekdays[d], value: grouped.get(d) ?? 0 }));
 }
 
-export async function getRevenueByHour(): Promise<ChartPoint[]> {
+export async function getRevenueByHour(branchId?: string): Promise<ChartPoint[]> {
   const supabase = getClient();
   const today = todayRange();
 
-  const { data, error } = await supabase
+  let query = supabase
     .from("invoices").select("created_at, total").eq("status", "completed")
     .gte("created_at", today.start).lt("created_at", today.end);
+  if (branchId) query = query.eq("branch_id", branchId);
+  const { data, error } = await query;
 
   if (error) handleError(error, "getRevenueByHour");
 
@@ -360,11 +376,11 @@ export async function getRevenueByHour(): Promise<ChartPoint[]> {
   return hours;
 }
 
-export async function getTopInvoices(limit: number = 10): Promise<TopInvoice[]> {
+export async function getTopInvoices(limit: number = 10, branchId?: string): Promise<TopInvoice[]> {
   const supabase = getClient();
   const range = thisMonthRange();
 
-  const { data, error } = await supabase
+  let query = supabase
     .from("invoices")
     .select("code, total, created_at, customers(name)")
     .eq("status", "completed")
@@ -372,6 +388,8 @@ export async function getTopInvoices(limit: number = 10): Promise<TopInvoice[]> 
     .lt("created_at", range.end)
     .order("total", { ascending: false })
     .limit(limit);
+  if (branchId) query = query.eq("branch_id", branchId);
+  const { data, error } = await query;
 
   if (error) handleError(error, "getTopInvoices");
 
@@ -391,15 +409,18 @@ export async function getTopInvoices(limit: number = 10): Promise<TopInvoice[]> 
 // CUỐI NGÀY (End of Day) - /phan-tich/cuoi-ngay
 // ========================================
 
-export async function getEndOfDayStats(): Promise<EndOfDayStats> {
+export async function getEndOfDayStats(branchId?: string): Promise<EndOfDayStats> {
   const supabase = getClient();
   const today = todayRange();
   const yesterday = yesterdayRange();
 
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  function bq<T>(query: T): T { return branchId ? (query as any).eq("branch_id", branchId) : query; }
+
   const [todayInv, yesterdayInv, todayReturns] = await Promise.all([
-    supabase.from("invoices").select("total, status, payment_method").gte("created_at", today.start).lt("created_at", today.end),
-    supabase.from("invoices").select("total, status, payment_method").gte("created_at", yesterday.start).lt("created_at", yesterday.end),
-    supabase.from("sales_returns").select("refunded").gte("created_at", today.start).lt("created_at", today.end),
+    bq(supabase.from("invoices").select("total, status, payment_method").gte("created_at", today.start).lt("created_at", today.end)),
+    bq(supabase.from("invoices").select("total, status, payment_method").gte("created_at", yesterday.start).lt("created_at", yesterday.end)),
+    bq(supabase.from("sales_returns").select("refunded").gte("created_at", today.start).lt("created_at", today.end)),
   ]);
 
   const completed = (todayInv.data ?? []).filter(i => i.status === "completed");
@@ -423,16 +444,18 @@ export async function getEndOfDayStats(): Promise<EndOfDayStats> {
   };
 }
 
-export async function getTodayTopProducts(limit: number = 5): Promise<{ name: string; qty: number }[]> {
+export async function getTodayTopProducts(limit: number = 5, branchId?: string): Promise<{ name: string; qty: number }[]> {
   const supabase = getClient();
   const today = todayRange();
 
-  const { data, error } = await supabase
+  let query = supabase
     .from("invoice_items")
-    .select("product_name, quantity, invoices!inner(created_at, status)")
+    .select("product_name, quantity, invoices!inner(created_at, status, branch_id)")
     .gte("invoices.created_at", today.start)
     .lt("invoices.created_at", today.end)
     .eq("invoices.status", "completed");
+  if (branchId) query = query.eq("invoices.branch_id", branchId);
+  const { data, error } = await query;
 
   if (error) handleError(error, "getTodayTopProducts");
 
@@ -452,7 +475,7 @@ export async function getTodayTopProducts(limit: number = 5): Promise<{ name: st
 // ĐẶT HÀNG (Orders) - /phan-tich/dat-hang
 // ========================================
 
-export async function getOrdersKpis(): Promise<{
+export async function getOrdersKpis(branchId?: string): Promise<{
   total: number; prevTotal: number;
   completed: number; completedPct: number;
   inTransit: number; inTransitPct: number;
@@ -461,11 +484,13 @@ export async function getOrdersKpis(): Promise<{
   const supabase = getClient();
   const range = thisMonthRange();
 
-  const { data, error } = await supabase
+  let query = supabase
     .from("invoices")
     .select("status")
     .gte("created_at", range.start)
     .lt("created_at", range.end);
+  if (branchId) query = query.eq("branch_id", branchId);
+  const { data, error } = await query;
 
   if (error) handleError(error, "getOrdersKpis");
 
@@ -473,11 +498,13 @@ export async function getOrdersKpis(): Promise<{
   const prevStart = new Date(now.getFullYear(), now.getMonth() - 1, 1);
   const prevEnd = new Date(now.getFullYear(), now.getMonth(), 1);
 
-  const { count: prevTotal } = await supabase
+  let prevQuery = supabase
     .from("invoices")
     .select("id", { count: "exact", head: true })
     .gte("created_at", prevStart.toISOString())
     .lt("created_at", prevEnd.toISOString());
+  if (branchId) prevQuery = prevQuery.eq("branch_id", branchId);
+  const { count: prevTotal } = await prevQuery;
 
   const all = data ?? [];
   const total = all.length;
@@ -493,15 +520,17 @@ export async function getOrdersKpis(): Promise<{
   };
 }
 
-export async function getDailyOrderVolume(days: number = 30): Promise<ChartPoint[]> {
+export async function getDailyOrderVolume(days: number = 30, branchId?: string): Promise<ChartPoint[]> {
   const supabase = getClient();
   const range = lastNDaysRange(days);
 
-  const { data, error } = await supabase
+  let query = supabase
     .from("invoices")
     .select("created_at")
     .gte("created_at", range.start)
     .lt("created_at", range.end);
+  if (branchId) query = query.eq("branch_id", branchId);
+  const { data, error } = await query;
 
   if (error) handleError(error, "getDailyOrderVolume");
 
@@ -523,15 +552,17 @@ export async function getDailyOrderVolume(days: number = 30): Promise<ChartPoint
   return Array.from(grouped.entries()).map(([label, value]) => ({ label, value }));
 }
 
-export async function getOrderStatusDistribution(): Promise<OrderStatusItem[]> {
+export async function getOrderStatusDistribution(branchId?: string): Promise<OrderStatusItem[]> {
   const supabase = getClient();
   const range = thisMonthRange();
 
-  const { data, error } = await supabase
+  let query = supabase
     .from("invoices")
     .select("status")
     .gte("created_at", range.start)
     .lt("created_at", range.end);
+  if (branchId) query = query.eq("branch_id", branchId);
+  const { data, error } = await query;
 
   if (error) handleError(error, "getOrderStatusDistribution");
 
@@ -551,14 +582,16 @@ export async function getOrderStatusDistribution(): Promise<OrderStatusItem[]> {
   return Array.from(counts.entries()).map(([name, value]) => ({ name, value }));
 }
 
-export async function getRecentOrders(limit: number = 10): Promise<RecentOrder[]> {
+export async function getRecentOrders(limit: number = 10, branchId?: string): Promise<RecentOrder[]> {
   const supabase = getClient();
 
-  const { data, error } = await supabase
+  let query = supabase
     .from("invoices")
     .select("id, code, total, status, created_at, customers(name)")
     .order("created_at", { ascending: false })
     .limit(limit);
+  if (branchId) query = query.eq("branch_id", branchId);
+  const { data, error } = await query;
 
   if (error) handleError(error, "getRecentOrders");
 
@@ -620,15 +653,17 @@ export async function getInventoryKpis(): Promise<{
   };
 }
 
-export async function getTopProductsByRevenue(limit: number = 10): Promise<TopProductRevenue[]> {
+export async function getTopProductsByRevenue(limit: number = 10, branchId?: string): Promise<TopProductRevenue[]> {
   const supabase = getClient();
   const range = thisMonthRange();
 
-  const { data, error } = await supabase
+  let query = supabase
     .from("invoice_items")
-    .select("product_name, quantity, total, invoices!inner(created_at, status)")
+    .select("product_name, quantity, total, invoices!inner(created_at, status, branch_id)")
     .gte("invoices.created_at", range.start)
     .eq("invoices.status", "completed");
+  if (branchId) query = query.eq("invoices.branch_id", branchId);
+  const { data, error } = await query;
 
   if (error) handleError(error, "getTopProductsByRevenue");
 
@@ -667,15 +702,17 @@ export async function getCategoryDistribution(): Promise<{ name: string; value: 
   return Array.from(map.entries()).map(([name, value]) => ({ name, value }));
 }
 
-export async function getStockMovements(days: number = 30): Promise<StockMovementPoint[]> {
+export async function getStockMovements(days: number = 30, branchId?: string): Promise<StockMovementPoint[]> {
   const supabase = getClient();
   const range = lastNDaysRange(days);
 
-  const { data, error } = await supabase
+  let query = supabase
     .from("stock_movements")
     .select("created_at, type, quantity")
     .gte("created_at", range.start)
     .lt("created_at", range.end);
+  if (branchId) query = query.eq("branch_id", branchId);
+  const { data, error } = await query;
 
   if (error) handleError(error, "getStockMovements");
 
@@ -735,26 +772,31 @@ export async function getLowStockProducts(limit: number = 10): Promise<LowStockI
 // KÊNH BÁN (Sales Channels) - /phan-tich/kenh-ban
 // ========================================
 
-export async function getChannelRevenue(): Promise<ChartPoint[]> {
+export async function getChannelRevenue(branchId?: string): Promise<ChartPoint[]> {
   const supabase = getClient();
   const range = thisMonthRange();
 
   // Main invoices = "Tại quầy" (POS)
-  const { data: posData } = await supabase
+  let posQuery = supabase
     .from("invoices")
     .select("total")
     .eq("status", "completed")
     .gte("created_at", range.start)
     .lt("created_at", range.end);
+  if (branchId) posQuery = posQuery.eq("branch_id", branchId);
+  const { data: posData } = await posQuery;
 
   const posRevenue = (posData ?? []).reduce((s, i) => s + (i.total ?? 0), 0);
 
   // Online orders by channel
-  const { data: onlineData } = await supabase
+  let onlineQuery = supabase
     .from("online_orders")
     .select("channel_name, total_amount")
     .gte("created_at", range.start)
     .lt("created_at", range.end);
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  if (branchId) onlineQuery = (onlineQuery as any).eq("branch_id", branchId);
+  const { data: onlineData } = await onlineQuery;
 
   const channelMap = new Map<string, number>();
   channelMap.set("Tại quầy", posRevenue);
@@ -767,25 +809,30 @@ export async function getChannelRevenue(): Promise<ChartPoint[]> {
   return Array.from(channelMap.entries()).map(([label, value]) => ({ label, value }));
 }
 
-export async function getChannelPerformance(): Promise<{ channel: string; revenue: number; orders: number; avgValue: number }[]> {
+export async function getChannelPerformance(branchId?: string): Promise<{ channel: string; revenue: number; orders: number; avgValue: number }[]> {
   const supabase = getClient();
   const range = thisMonthRange();
 
-  const { data: posData } = await supabase
+  let posQuery = supabase
     .from("invoices")
     .select("total")
     .eq("status", "completed")
     .gte("created_at", range.start)
     .lt("created_at", range.end);
+  if (branchId) posQuery = posQuery.eq("branch_id", branchId);
+  const { data: posData } = await posQuery;
 
   const posRev = (posData ?? []).reduce((s, i) => s + (i.total ?? 0), 0);
   const posCount = posData?.length ?? 0;
 
-  const { data: onlineData } = await supabase
+  let onlineQuery = supabase
     .from("online_orders")
     .select("channel_name, total_amount")
     .gte("created_at", range.start)
     .lt("created_at", range.end);
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  if (branchId) onlineQuery = (onlineQuery as any).eq("branch_id", branchId);
+  const { data: onlineData } = await onlineQuery;
 
   const map = new Map<string, { revenue: number; orders: number }>();
   map.set("Tại quầy", { revenue: posRev, orders: posCount });
@@ -807,7 +854,7 @@ export async function getChannelPerformance(): Promise<{ channel: string; revenu
 // KHÁCH HÀNG (Customers) - /phan-tich/khach-hang
 // ========================================
 
-export async function getCustomerKpis(): Promise<{
+export async function getCustomerKpis(branchId?: string): Promise<{
   totalCustomers: number;
   newThisMonth: number; prevNewMonth: number;
   returningPct: number;
@@ -829,7 +876,9 @@ export async function getCustomerKpis(): Promise<{
   const totalDebt = (debt.data ?? []).reduce((s, c) => s + ((c.debt as number) ?? 0), 0);
 
   // Returning customers: have >1 invoice
-  const { data: repeatData } = await supabase.from("invoices").select("customer_id").eq("status", "completed").not("customer_id", "is", null);
+  let repeatQuery = supabase.from("invoices").select("customer_id").eq("status", "completed").not("customer_id", "is", null);
+  if (branchId) repeatQuery = repeatQuery.eq("branch_id", branchId);
+  const { data: repeatData } = await repeatQuery;
   const custInvCount = new Map<string, number>();
   (repeatData ?? []).forEach(i => {
     if (i.customer_id) custInvCount.set(i.customer_id, (custInvCount.get(i.customer_id) ?? 0) + 1);
@@ -847,7 +896,7 @@ export async function getCustomerKpis(): Promise<{
   };
 }
 
-export async function getNewCustomersMonthly(months: number = 6): Promise<ChartPoint[]> {
+export async function getNewCustomersMonthly(months: number = 6, branchId?: string): Promise<ChartPoint[]> {
   const supabase = getClient();
   const range = lastNMonthsRange(months);
 
@@ -897,14 +946,16 @@ export async function getCustomerSegments(): Promise<CustomerSegment[]> {
   return Array.from(counts.entries()).map(([name, value]) => ({ name, value }));
 }
 
-export async function getTopCustomersByRevenue(limit: number = 10): Promise<TopCustomer[]> {
+export async function getTopCustomersByRevenue(limit: number = 10, branchId?: string): Promise<TopCustomer[]> {
   const supabase = getClient();
 
-  const { data, error } = await supabase
+  let query = supabase
     .from("invoices")
     .select("customer_id, total, customers(name)")
     .eq("status", "completed")
     .not("customer_id", "is", null);
+  if (branchId) query = query.eq("branch_id", branchId);
+  const { data, error } = await query;
 
   if (error) handleError(error, "getTopCustomersByRevenue");
 
@@ -943,7 +994,7 @@ export async function getTopDebtors(limit: number = 5): Promise<TopDebtor[]> {
 // NHÀ CUNG CẤP (Suppliers) - /phan-tich/nha-cung-cap
 // ========================================
 
-export async function getSupplierKpis(): Promise<{
+export async function getSupplierKpis(branchId?: string): Promise<{
   totalSuppliers: number;
   purchaseThisMonth: number; prevPurchase: number;
   totalDebt: number; prevDebt: number;
@@ -955,10 +1006,13 @@ export async function getSupplierKpis(): Promise<{
   const prevStart = new Date(now.getFullYear(), now.getMonth() - 1, 1);
   const prevEnd = new Date(now.getFullYear(), now.getMonth(), 1);
 
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  function bq<T>(query: T): T { return branchId ? (query as any).eq("branch_id", branchId) : query; }
+
   const [total, thisPO, prevPO, debt] = await Promise.all([
     supabase.from("suppliers").select("id", { count: "exact", head: true }),
-    supabase.from("purchase_orders").select("total").gte("created_at", thisMonth.start).lt("created_at", thisMonth.end).eq("status", "completed"),
-    supabase.from("purchase_orders").select("total").gte("created_at", prevStart.toISOString()).lt("created_at", prevEnd.toISOString()).eq("status", "completed"),
+    bq(supabase.from("purchase_orders").select("total").gte("created_at", thisMonth.start).lt("created_at", thisMonth.end).eq("status", "completed")),
+    bq(supabase.from("purchase_orders").select("total").gte("created_at", prevStart.toISOString()).lt("created_at", prevEnd.toISOString()).eq("status", "completed")),
     supabase.from("suppliers").select("debt"),
   ]);
 
@@ -976,16 +1030,18 @@ export async function getSupplierKpis(): Promise<{
   };
 }
 
-export async function getPurchaseByMonth(months: number = 6): Promise<ChartPoint[]> {
+export async function getPurchaseByMonth(months: number = 6, branchId?: string): Promise<ChartPoint[]> {
   const supabase = getClient();
   const range = lastNMonthsRange(months);
 
-  const { data, error } = await supabase
+  let query = supabase
     .from("purchase_orders")
     .select("created_at, total")
     .eq("status", "completed")
     .gte("created_at", range.start)
     .lt("created_at", range.end);
+  if (branchId) query = query.eq("branch_id", branchId);
+  const { data, error } = await query;
 
   if (error) handleError(error, "getPurchaseByMonth");
 
@@ -1006,13 +1062,15 @@ export async function getPurchaseByMonth(months: number = 6): Promise<ChartPoint
   return Array.from(grouped.entries()).map(([label, value]) => ({ label, value }));
 }
 
-export async function getTopSuppliersByPurchase(limit: number = 5): Promise<{ name: string; amount: number }[]> {
+export async function getTopSuppliersByPurchase(limit: number = 5, branchId?: string): Promise<{ name: string; amount: number }[]> {
   const supabase = getClient();
 
-  const { data, error } = await supabase
+  let query = supabase
     .from("purchase_orders")
     .select("total, suppliers(name)")
     .eq("status", "completed");
+  if (branchId) query = query.eq("branch_id", branchId);
+  const { data, error } = await query;
 
   if (error) handleError(error, "getTopSuppliersByPurchase");
 
@@ -1047,11 +1105,13 @@ export async function getSupplierPaymentStatus(): Promise<{ name: string; value:
   ];
 }
 
-export async function getSupplierSummary(limit: number = 8): Promise<SupplierSummaryRow[]> {
+export async function getSupplierSummary(limit: number = 8, branchId?: string): Promise<SupplierSummaryRow[]> {
   const supabase = getClient();
 
   const { data: suppliers } = await supabase.from("suppliers").select("id, name, debt");
-  const { data: poData } = await supabase.from("purchase_orders").select("supplier_id, total").eq("status", "completed");
+  let poQuery = supabase.from("purchase_orders").select("supplier_id, total").eq("status", "completed");
+  if (branchId) poQuery = poQuery.eq("branch_id", branchId);
+  const { data: poData } = await poQuery;
 
   const map = new Map<string, { name: string; total: number; debt: number; orders: number }>();
   (suppliers ?? []).forEach(s => {
@@ -1076,7 +1136,7 @@ export async function getSupplierSummary(limit: number = 8): Promise<SupplierSum
 // TÀI CHÍNH (Finance) - /phan-tich/tai-chinh
 // ========================================
 
-export async function getFinanceKpis(): Promise<{
+export async function getFinanceKpis(branchId?: string): Promise<{
   revenue: number; prevRevenue: number;
   expense: number; prevExpense: number;
   profit: number; prevProfit: number;
@@ -1088,11 +1148,14 @@ export async function getFinanceKpis(): Promise<{
   const prevStart = new Date(now.getFullYear(), now.getMonth() - 1, 1);
   const prevEnd = new Date(now.getFullYear(), now.getMonth(), 1);
 
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  function bq<T>(query: T): T { return branchId ? (query as any).eq("branch_id", branchId) : query; }
+
   const [thisInv, prevInv, thisCash, prevCash] = await Promise.all([
-    supabase.from("invoices").select("total").eq("status", "completed").gte("created_at", thisMonth.start).lt("created_at", thisMonth.end),
-    supabase.from("invoices").select("total").eq("status", "completed").gte("created_at", prevStart.toISOString()).lt("created_at", prevEnd.toISOString()),
-    supabase.from("cash_transactions").select("type, amount").gte("created_at", thisMonth.start).lt("created_at", thisMonth.end),
-    supabase.from("cash_transactions").select("type, amount").gte("created_at", prevStart.toISOString()).lt("created_at", prevEnd.toISOString()),
+    bq(supabase.from("invoices").select("total").eq("status", "completed").gte("created_at", thisMonth.start).lt("created_at", thisMonth.end)),
+    bq(supabase.from("invoices").select("total").eq("status", "completed").gte("created_at", prevStart.toISOString()).lt("created_at", prevEnd.toISOString())),
+    bq(supabase.from("cash_transactions").select("type, amount").gte("created_at", thisMonth.start).lt("created_at", thisMonth.end)),
+    bq(supabase.from("cash_transactions").select("type, amount").gte("created_at", prevStart.toISOString()).lt("created_at", prevEnd.toISOString())),
   ]);
 
   const revenue = (thisInv.data ?? []).reduce((s, i) => s + (i.total ?? 0), 0);
@@ -1111,13 +1174,16 @@ export async function getFinanceKpis(): Promise<{
   };
 }
 
-export async function getRevenueVsExpense(months: number = 12): Promise<MultiSeriesPoint[]> {
+export async function getRevenueVsExpense(months: number = 12, branchId?: string): Promise<MultiSeriesPoint[]> {
   const supabase = getClient();
   const range = lastNMonthsRange(months);
 
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  function bq<T>(query: T): T { return branchId ? (query as any).eq("branch_id", branchId) : query; }
+
   const [invData, cashData] = await Promise.all([
-    supabase.from("invoices").select("created_at, total").eq("status", "completed").gte("created_at", range.start).lt("created_at", range.end),
-    supabase.from("cash_transactions").select("created_at, type, amount").gte("created_at", range.start).lt("created_at", range.end),
+    bq(supabase.from("invoices").select("created_at, total").eq("status", "completed").gte("created_at", range.start).lt("created_at", range.end)),
+    bq(supabase.from("cash_transactions").select("created_at, type, amount").gte("created_at", range.start).lt("created_at", range.end)),
   ]);
 
   const now = new Date();
@@ -1151,16 +1217,18 @@ export async function getRevenueVsExpense(months: number = 12): Promise<MultiSer
   }));
 }
 
-export async function getExpenseBreakdown(): Promise<{ name: string; value: number }[]> {
+export async function getExpenseBreakdown(branchId?: string): Promise<{ name: string; value: number }[]> {
   const supabase = getClient();
   const range = thisMonthRange();
 
-  const { data, error } = await supabase
+  let query = supabase
     .from("cash_transactions")
     .select("category, amount")
     .eq("type", "payment")
     .gte("created_at", range.start)
     .lt("created_at", range.end);
+  if (branchId) query = query.eq("branch_id", branchId);
+  const { data, error } = await query;
 
   if (error) handleError(error, "getExpenseBreakdown");
 
@@ -1175,23 +1243,25 @@ export async function getExpenseBreakdown(): Promise<{ name: string; value: numb
     .sort((a, b) => b.value - a.value);
 }
 
-export async function getMonthlyProfit(months: number = 12): Promise<ChartPoint[]> {
-  const data = await getRevenueVsExpense(months);
+export async function getMonthlyProfit(months: number = 12, branchId?: string): Promise<ChartPoint[]> {
+  const data = await getRevenueVsExpense(months, branchId);
   return data.map(d => ({
     label: d.label as string,
     value: (d.revenue as number) - (d.expense as number),
   }));
 }
 
-export async function getCashFlow(months: number = 6): Promise<CashFlowRow[]> {
+export async function getCashFlow(months: number = 6, branchId?: string): Promise<CashFlowRow[]> {
   const supabase = getClient();
   const range = lastNMonthsRange(months);
 
-  const { data, error } = await supabase
+  let query = supabase
     .from("cash_transactions")
     .select("created_at, type, amount")
     .gte("created_at", range.start)
     .lt("created_at", range.end);
+  if (branchId) query = query.eq("branch_id", branchId);
+  const { data, error } = await query;
 
   if (error) handleError(error, "getCashFlow");
 
@@ -1241,15 +1311,17 @@ export interface CashFlowDetailedRow {
   cumulativeBalance: number;
 }
 
-export async function getCashFlowDetailed(months: number = 6): Promise<CashFlowDetailedRow[]> {
+export async function getCashFlowDetailed(months: number = 6, branchId?: string): Promise<CashFlowDetailedRow[]> {
   const supabase = getClient();
   const range = lastNMonthsRange(months);
 
-  const { data, error } = await supabase
+  let query = supabase
     .from("cash_transactions")
     .select("created_at, type, amount, category")
     .gte("created_at", range.start)
     .lt("created_at", range.end);
+  if (branchId) query = query.eq("branch_id", branchId);
+  const { data, error } = await query;
 
   if (error) handleError(error, "getCashFlowDetailed");
 

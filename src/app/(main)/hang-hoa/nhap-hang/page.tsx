@@ -37,7 +37,7 @@ import {
   DetailItemsTable,
 } from "@/components/shared/inline-detail-panel";
 import type { DetailTab } from "@/components/shared/inline-detail-panel";
-import { useToast } from "@/lib/contexts";
+import { useToast, useBranchFilter } from "@/lib/contexts";
 import { printDocument } from "@/lib/print-document";
 import { buildGoodsReceiptPrintData } from "@/lib/print-templates";
 import { formatCurrency, formatDate } from "@/lib/format";
@@ -207,6 +207,7 @@ function PurchaseOrderDetail({
 /* ------------------------------------------------------------------ */
 export default function NhapHangPage() {
   const { toast } = useToast();
+  const { activeBranchId } = useBranchFilter();
   const router = useRouter();
   const [data, setData] = useState<PurchaseOrder[]>([]);
   const [total, setTotal] = useState(0);
@@ -314,6 +315,7 @@ export default function NhapHangPage() {
       page,
       pageSize,
       search,
+      branchId: activeBranchId,
       filters: {
         ...(selectedStatuses.length > 0 && { status: selectedStatuses }),
         ...(creatorFilter && { createdBy: creatorFilter }),
@@ -324,7 +326,7 @@ export default function NhapHangPage() {
     setData(result.data);
     setTotal(result.total);
     setLoading(false);
-  }, [page, pageSize, search, selectedStatuses, creatorFilter, importerFilter, costReturnFilter]);
+  }, [page, pageSize, search, selectedStatuses, creatorFilter, importerFilter, costReturnFilter, activeBranchId]);
 
   useEffect(() => {
     fetchData();

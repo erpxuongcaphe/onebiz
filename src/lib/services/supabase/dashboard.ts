@@ -77,23 +77,28 @@ function last7DaysRange(): { start: string; end: string } {
 
 // === KPIs ===
 
-export async function getDashboardKpis(): Promise<DashboardKpis> {
+export async function getDashboardKpis(branchId?: string): Promise<DashboardKpis> {
   const supabase = getClient();
   const today = todayRange();
   const yesterday = yesterdayRange();
 
+  // Helper: apply optional branch filter
+  function bq<T>(query: T): T {
+    return branchId ? (query as any).eq("branch_id", branchId) : query;
+  }
+
   // Parallel queries — including cash_transactions for real profit
   const [todayInvoices, yesterdayInvoices, todayCustomers, yesterdayCustomers, todayCash, yesterdayCash] = await Promise.all([
-    supabase
+    bq(supabase
       .from("invoices")
       .select("total, discount_amount, status")
       .gte("created_at", today.start)
-      .lt("created_at", today.end),
-    supabase
+      .lt("created_at", today.end)),
+    bq(supabase
       .from("invoices")
       .select("total, discount_amount, status")
       .gte("created_at", yesterday.start)
-      .lt("created_at", yesterday.end),
+      .lt("created_at", yesterday.end)),
     supabase
       .from("customers")
       .select("id", { count: "exact", head: true })
@@ -104,16 +109,16 @@ export async function getDashboardKpis(): Promise<DashboardKpis> {
       .select("id", { count: "exact", head: true })
       .gte("created_at", yesterday.start)
       .lt("created_at", yesterday.end),
-    supabase
+    bq(supabase
       .from("cash_transactions")
       .select("type, amount")
       .gte("created_at", today.start)
-      .lt("created_at", today.end),
-    supabase
+      .lt("created_at", today.end)),
+    bq(supabase
       .from("cash_transactions")
       .select("type, amount")
       .gte("created_at", yesterday.start)
-      .lt("created_at", yesterday.end),
+      .lt("created_at", yesterday.end)),
   ]);
 
   const calcRevenue = (data: { total: number; status: string }[] | null) =>
@@ -149,17 +154,20 @@ export async function getDashboardKpis(): Promise<DashboardKpis> {
 
 // === Revenue chart data ===
 
-export async function getRevenueByDay(days: number = 7): Promise<ChartPoint[]> {
+export async function getRevenueByDay(days: number = 7, branchId?: string): Promise<ChartPoint[]> {
   const supabase = getClient();
   const range = last7DaysRange();
 
-  const { data, error } = await supabase
+  let query = supabase
     .from("invoices")
     .select("created_at, total, status")
     .eq("status", "completed")
     .gte("created_at", range.start)
     .lt("created_at", range.end)
     .order("created_at", { ascending: true });
+  if (branchId) query = query.eq("branch_id", branchId);
+
+  const { data, error } = await query;
 
   if (error) handleError(error, "getRevenueByDay");
 
@@ -182,16 +190,19 @@ export async function getRevenueByDay(days: number = 7): Promise<ChartPoint[]> {
   return Array.from(grouped.entries()).map(([label, value]) => ({ label, value }));
 }
 
-export async function getRevenueByHour(): Promise<ChartPoint[]> {
+export async function getRevenueByHour(branchId?: string): Promise<ChartPoint[]> {
   const supabase = getClient();
   const today = todayRange();
 
-  const { data, error } = await supabase
+  let query = supabase
     .from("invoices")
     .select("created_at, total")
     .eq("status", "completed")
     .gte("created_at", today.start)
     .lt("created_at", today.end);
+  if (branchId) query = query.eq("branch_id", branchId);
+
+  const { data, error } = await query;
 
   if (error) handleError(error, "getRevenueByHour");
 
@@ -206,16 +217,19 @@ export async function getRevenueByHour(): Promise<ChartPoint[]> {
   return hours;
 }
 
-export async function getRevenueByWeekday(): Promise<ChartPoint[]> {
+export async function getRevenueByWeekday(branchId?: string): Promise<ChartPoint[]> {
   const supabase = getClient();
   const range = last7DaysRange();
 
-  const { data, error } = await supabase
+  let query = supabase
     .from("invoices")
     .select("created_at, total")
     .eq("status", "completed")
     .gte("created_at", range.start)
     .lt("created_at", range.end);
+  if (branchId) query = query.eq("branch_id", branchId);
+
+  const { data, error } = await query;
 
   if (error) handleError(error, "getRevenueByWeekday");
 
@@ -237,15 +251,18 @@ export async function getRevenueByWeekday(): Promise<ChartPoint[]> {
 
 // === Orders chart ===
 
-export async function getOrdersByWeekday(): Promise<OrderChartPoint[]> {
+export async function getOrdersByWeekday(branchId?: string): Promise<OrderChartPoint[]> {
   const supabase = getClient();
   const range = last7DaysRange();
 
-  const { data, error } = await supabase
+  let query = supabase
     .from("invoices")
     .select("created_at, status")
     .gte("created_at", range.start)
     .lt("created_at", range.end);
+  if (branchId) query = query.eq("branch_id", branchId);
+
+  const { data, error } = await query;
 
   if (error) handleError(error, "getOrdersByWeekday");
 
@@ -269,15 +286,18 @@ export async function getOrdersByWeekday(): Promise<OrderChartPoint[]> {
 
 // === Top products ===
 
-export async function getTopProducts(limit: number = 10): Promise<TopProduct[]> {
+export async function getTopProducts(limit: number = 10, branchId?: string): Promise<TopProduct[]> {
   const supabase = getClient();
   const range = last7DaysRange();
 
-  const { data, error } = await supabase
+  let query = supabase
     .from("invoice_items")
-    .select("product_name, quantity, total, invoices!inner(created_at, status)")
+    .select("product_name, quantity, total, invoices!inner(created_at, status, branch_id)")
     .gte("invoices.created_at", range.start)
     .eq("invoices.status", "completed");
+  if (branchId) query = query.eq("invoices.branch_id", branchId);
+
+  const { data, error } = await query;
 
   if (error) handleError(error, "getTopProducts");
 

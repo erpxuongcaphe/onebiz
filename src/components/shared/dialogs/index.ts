@@ -22,3 +22,4 @@ export { CompleteProductionOrderDialog } from "./complete-production-order-dialo
 export { CreatePriceBookDialog } from "./create-price-book-dialog";
 export { PriceTierDialog } from "./price-tier-dialog";
 export { AddPriceTierItemDialog } from "./add-price-tier-item-dialog";
+export { CreateInternalSaleDialog } from "./create-internal-sale-dialog";

@@ -4,6 +4,7 @@ import {
   BarChart3,
   TrendingUp,
   ShoppingCart,
+  Coffee,
   Package,
   Users,
   Truck,
@@ -36,6 +37,7 @@ const analyticsNav: ModuleNavGroup[] = [
     label: "Bán hàng",
     items: [
       { label: "Bán hàng", href: "/phan-tich/ban-hang", icon: TrendingUp },
+      { label: "F&B", href: "/phan-tich/fnb", icon: Coffee },
       { label: "Đặt hàng", href: "/phan-tich/dat-hang", icon: ClipboardList },
       { label: "Kênh bán", href: "/phan-tich/kenh-ban", icon: Globe },
     ],

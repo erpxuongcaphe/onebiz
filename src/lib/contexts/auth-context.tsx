@@ -12,6 +12,7 @@ import { useRouter } from "next/navigation";
 import { createClient } from "@/lib/supabase/client";
 import type { UserProfile, Tenant, Branch } from "@/lib/types";
 import type { User } from "@supabase/supabase-js";
+import { getUserPermissions } from "@/lib/services/supabase/roles";
 
 // --- Types ---
 
@@ -23,12 +24,19 @@ interface AuthState {
   tenant: Tenant | null;
   branches: Branch[];
   currentBranch: Branch | null;
+  /** Cached permission codes for current user */
+  permissions: Set<string>;
   isLoading: boolean;
   isAuthenticated: boolean;
 }
 
 interface AuthContextValue extends AuthState {
-  switchBranch: (branchId: string) => void;
+  /** Switch to a specific branch, or null = "Tất cả chi nhánh" (CEO view) */
+  switchBranch: (branchId: string | null) => void;
+  /** Branch ID to filter data queries — undefined means show all branches */
+  activeBranchId: string | undefined;
+  /** Check if current user has a specific permission */
+  hasPermission: (code: string) => boolean;
   logout: () => Promise<void>;
 }
 
@@ -45,6 +53,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   const [tenant, setTenant] = useState<Tenant | null>(null);
   const [branches, setBranches] = useState<Branch[]>([]);
   const [currentBranch, setCurrentBranch] = useState<Branch | null>(null);
+  const [permissions, setPermissions] = useState<Set<string>>(new Set());
   const [isLoading, setIsLoading] = useState(true);
 
   // Load profile, tenant, branches from Supabase
@@ -64,17 +73,31 @@ export function AuthProvider({ children }: { children: ReactNode }) {
           return;
         }
 
-        setUser({
+        const userProfile: UserProfile = {
           id: profile.id,
           tenantId: profile.tenant_id,
           branchId: profile.branch_id ?? undefined,
+          roleId: profile.role_id ?? undefined,
           fullName: profile.full_name,
           email: profile.email,
           phone: profile.phone ?? undefined,
           role: profile.role,
           isActive: profile.is_active,
           createdAt: profile.created_at,
-        });
+        };
+        setUser(userProfile);
+
+        // Load permissions (owner auto-gets all via "*" wildcard)
+        if (profile.role === "owner") {
+          setPermissions(new Set(["*"]));
+        } else {
+          try {
+            const perms = await getUserPermissions(profile.id);
+            setPermissions(perms);
+          } catch {
+            setPermissions(new Set());
+          }
+        }
 
         // 2. Load tenant
         const { data: tenantData } = await supabase
@@ -113,13 +136,21 @@ export function AuthProvider({ children }: { children: ReactNode }) {
           }));
           setBranches(mappedBranches);
 
-          // Set current branch: use profile.branch_id or default branch
-          const savedBranchId = profile.branch_id;
-          const currentBr =
-            mappedBranches.find((b) => b.id === savedBranchId) ??
-            mappedBranches.find((b) => b.isDefault) ??
-            mappedBranches[0];
-          setCurrentBranch(currentBr);
+          // Set current branch: localStorage > profile.branch_id > default
+          let storedBranchId: string | null = null;
+          try { storedBranchId = localStorage.getItem("active_branch_id"); } catch {}
+
+          if (storedBranchId === "__all__") {
+            // CEO previously selected "Tất cả chi nhánh"
+            setCurrentBranch(null);
+          } else {
+            const currentBr =
+              mappedBranches.find((b) => b.id === storedBranchId) ??
+              mappedBranches.find((b) => b.id === profile.branch_id) ??
+              mappedBranches.find((b) => b.isDefault) ??
+              mappedBranches[0];
+            setCurrentBranch(currentBr);
+          }
         }
       } catch {
         // If DB queries fail (e.g., tables not created yet), use fallback
@@ -155,6 +186,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
         setTenant(null);
         setBranches([]);
         setCurrentBranch(null);
+        setPermissions(new Set());
       }
     });
 
@@ -162,13 +194,33 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   }, [supabase, loadUserData]);
 
   const switchBranch = useCallback(
-    (branchId: string) => {
-      const branch = branches.find((b) => b.id === branchId);
-      if (branch) {
-        setCurrentBranch(branch);
+    (branchId: string | null) => {
+      if (branchId === null) {
+        // "Tất cả chi nhánh" — CEO view
+        setCurrentBranch(null);
+        try { localStorage.setItem("active_branch_id", "__all__"); } catch {}
+      } else {
+        const branch = branches.find((b) => b.id === branchId);
+        if (branch) {
+          setCurrentBranch(branch);
+          try { localStorage.setItem("active_branch_id", branchId); } catch {}
+        }
       }
     },
     [branches]
+  );
+
+  // Derived: branchId for data queries (undefined = no filter = all branches)
+  const activeBranchId = currentBranch?.id;
+
+  // Permission check helper
+  const hasPermission = useCallback(
+    (code: string): boolean => {
+      if (user?.role === "owner") return true;
+      if (permissions.has("*")) return true;
+      return permissions.has(code);
+    },
+    [user?.role, permissions]
   );
 
   const logout = useCallback(async () => {
@@ -184,9 +236,12 @@ export function AuthProvider({ children }: { children: ReactNode }) {
         tenant,
         branches,
         currentBranch,
+        permissions,
         isLoading,
         isAuthenticated: !!authUser,
         switchBranch,
+        activeBranchId,
+        hasPermission,
         logout,
       }}
     >

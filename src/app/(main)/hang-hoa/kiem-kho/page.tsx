@@ -26,7 +26,7 @@ import { exportToExcel, exportToCsv } from "@/lib/utils/export";
 import { getInventoryChecks, getInventoryCheckStatuses, applyInventoryCheck, cancelInventoryCheck } from "@/lib/services";
 import type { InventoryCheck } from "@/lib/types";
 import { CreateInventoryCheckDialog, ConfirmDialog } from "@/components/shared/dialogs";
-import { useToast } from "@/lib/contexts";
+import { useToast, useBranchFilter } from "@/lib/contexts";
 import { printDocument } from "@/lib/print-document";
 import { buildInventoryCheckPrintData } from "@/lib/print-templates";
 
@@ -178,6 +178,7 @@ function InventoryCheckDetail({
 /* ------------------------------------------------------------------ */
 export default function KiemKhoPage() {
   const { toast } = useToast();
+  const { activeBranchId } = useBranchFilter();
   const [data, setData] = useState<InventoryCheck[]>([]);
   const [total, setTotal] = useState(0);
   const [loading, setLoading] = useState(true);
@@ -298,6 +299,7 @@ export default function KiemKhoPage() {
       page,
       pageSize,
       search,
+      branchId: activeBranchId,
       filters: {
         ...(selectedStatuses.length > 0 && { status: selectedStatuses }),
         ...(creatorFilter && { createdBy: creatorFilter }),
@@ -306,7 +308,7 @@ export default function KiemKhoPage() {
     setData(result.data);
     setTotal(result.total);
     setLoading(false);
-  }, [page, pageSize, search, selectedStatuses, creatorFilter]);
+  }, [page, pageSize, search, selectedStatuses, creatorFilter, activeBranchId]);
 
   useEffect(() => {
     fetchData();

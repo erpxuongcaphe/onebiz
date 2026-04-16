@@ -18,6 +18,7 @@ import {
   ResponsiveContainer,
 } from "recharts";
 import { DateRangeBar, KpiCard, ChartCard } from "../_components";
+import { useBranchFilter } from "@/lib/contexts";
 import {
   formatCurrency,
   formatChartCurrency,
@@ -149,6 +150,7 @@ interface InventoryKpis {
 }
 
 export default function HangHoaPage() {
+  const { activeBranchId } = useBranchFilter();
   const [loading, setLoading] = useState(true);
   const [kpis, setKpis] = useState<InventoryKpis | null>(null);
   const [topProducts, setTopProducts] = useState<TopProductRevenue[]>([]);
@@ -161,9 +163,9 @@ export default function HangHoaPage() {
     try {
       const [kpiData, topData, catData, moveData, lowData] = await Promise.all([
         getInventoryKpis(),
-        getTopProductsByRevenue(),
+        getTopProductsByRevenue(10, activeBranchId),
         getCategoryDistribution(),
-        getStockMovements(),
+        getStockMovements(30, activeBranchId),
         getAnalyticsLowStock(),
       ]);
       setKpis(kpiData);
@@ -176,7 +178,7 @@ export default function HangHoaPage() {
     } finally {
       setLoading(false);
     }
-  }, []);
+  }, [activeBranchId]);
 
   useEffect(() => {
     fetchData();

@@ -22,7 +22,7 @@ import {
   DetailInfoGrid,
   DetailItemsTable,
 } from "@/components/shared/inline-detail-panel";
-import { useToast } from "@/lib/contexts";
+import { useToast, useBranchFilter } from "@/lib/contexts";
 import { printDocument } from "@/lib/print-document";
 import { buildSalesOrderPrintData } from "@/lib/print-templates";
 import { formatCurrency, formatDate } from "@/lib/format";
@@ -211,6 +211,7 @@ function OrderDetail({
 
 export default function DatHangPage() {
   const { toast } = useToast();
+  const { activeBranchId } = useBranchFilter();
   const [data, setData] = useState<SalesOrder[]>([]);
   const [total, setTotal] = useState(0);
   const [loading, setLoading] = useState(true);
@@ -241,6 +242,7 @@ export default function DatHangPage() {
       page,
       pageSize,
       search,
+      branchId: activeBranchId,
       filters: {
         ...(selectedStatuses.length > 0 && { status: selectedStatuses }),
       },
@@ -248,7 +250,7 @@ export default function DatHangPage() {
     setData(result.data);
     setTotal(result.total);
     setLoading(false);
-  }, [page, pageSize, search, selectedStatuses]);
+  }, [page, pageSize, search, selectedStatuses, activeBranchId]);
 
   useEffect(() => {
     fetchData();

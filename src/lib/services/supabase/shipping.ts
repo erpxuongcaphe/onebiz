@@ -36,6 +36,12 @@ export async function getShippingOrders(params: QueryParams): Promise<QueryResul
     query = query.eq("partner_id", params.filters.partner as any);
   }
 
+  // Filter: branch
+  if (params.branchId) {
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    query = (query as any).eq("branch_id", params.branchId);
+  }
+
   // Sort & paginate
   query = query
     .order("created_at", { ascending: false })

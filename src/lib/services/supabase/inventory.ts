@@ -64,6 +64,11 @@ export async function getDisposalExports(params: QueryParams): Promise<QueryResu
     query = query.eq("status", params.filters.status);
   }
 
+  // Filter: branch
+  if (params.branchId) {
+    query = query.eq("branch_id", params.branchId);
+  }
+
   // Sort & paginate
   query = query
     .order("created_at", { ascending: false })
@@ -124,6 +129,11 @@ export async function getInternalExports(params: QueryParams): Promise<QueryResu
   // Filter: status
   if (params.filters?.status && params.filters.status !== "all" && params.filters.status !== "") {
     query = query.eq("status", params.filters.status);
+  }
+
+  // Filter: branch
+  if (params.branchId) {
+    query = query.eq("branch_id", params.branchId);
   }
 
   // Sort & paginate
@@ -335,6 +345,11 @@ export async function getInventoryChecks(params: QueryParams): Promise<QueryResu
   if (params.filters?.status && params.filters.status !== "all" && params.filters.status !== "") {
     // eslint-disable-next-line @typescript-eslint/no-explicit-any
     query = query.eq("status", params.filters.status as any);
+  }
+
+  // Filter: branch
+  if (params.branchId) {
+    query = query.eq("branch_id", params.branchId);
   }
 
   // Sort & paginate

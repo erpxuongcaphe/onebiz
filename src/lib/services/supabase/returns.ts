@@ -24,6 +24,11 @@ export async function getReturns(params: QueryParams): Promise<QueryResult<Retur
     query = query.eq("status", params.filters.status as any);
   }
 
+  // Filter: branch
+  if (params.branchId) {
+    query = query.eq("branch_id", params.branchId);
+  }
+
   // Sort & paginate
   query = query
     .order("created_at", { ascending: false })

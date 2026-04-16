@@ -64,6 +64,7 @@ import { useToast } from "@/lib/contexts";
 import { formatCurrency } from "@/lib/format";
 import { cn } from "@/lib/utils";
 import { printReceiptDirect, type ReceiptData } from "@/components/shared/print-receipt";
+import { PosBranchSelector } from "@/components/shared/pos-branch-selector";
 
 import { usePosState, type OrderLine, type DiscountInput, type SellingMode, type DeliveryInfo, type PosSnapshot } from "./hooks/use-pos-state";
 import { ProductGrid } from "./components/product-grid";
@@ -561,10 +562,12 @@ export default function PosPage() {
           <span className="hidden sm:inline">Quay lại</span>
         </Link>
 
-        {/* Title */}
+        {/* Branch selector + Title */}
+        <PosBranchSelector variant="dark" />
+        <div className="h-4 w-px bg-white/20 shrink-0" />
         <div className="flex items-center gap-1.5 shrink-0">
           <ShoppingCart className="h-3.5 w-3.5" />
-          <span className="text-[13px] font-bold tracking-wide">POS</span>
+          <span className="text-[13px] font-bold tracking-wide">POS Retail</span>
         </div>
 
         {/* Search bar */}

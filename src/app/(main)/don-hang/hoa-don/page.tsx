@@ -27,7 +27,7 @@ import { RecordPaymentDialog } from "@/components/shared/dialogs/record-payment-
 import { formatCurrency, formatDate } from "@/lib/format";
 import { exportToExcel, exportToCsv } from "@/lib/utils/export";
 import { getInvoices, getInvoiceStatuses, cancelInvoice } from "@/lib/services";
-import { useToast } from "@/lib/contexts";
+import { useToast, useBranchFilter } from "@/lib/contexts";
 import { printDocument } from "@/lib/print-document";
 import { buildInvoicePrintData } from "@/lib/print-templates";
 import type { Invoice } from "@/lib/types";
@@ -196,6 +196,7 @@ function InvoiceDetail({
 
 export default function HoaDonPage() {
   const { toast } = useToast();
+  const { activeBranchId } = useBranchFilter();
   const router = useRouter();
   const [data, setData] = useState<Invoice[]>([]);
   const [total, setTotal] = useState(0);
@@ -230,6 +231,7 @@ export default function HoaDonPage() {
       page,
       pageSize,
       search,
+      branchId: activeBranchId,
       filters: {
         ...(selectedStatuses.length > 0 && { status: selectedStatuses }),
       },
@@ -237,7 +239,7 @@ export default function HoaDonPage() {
     setData(result.data);
     setTotal(result.total);
     setLoading(false);
-  }, [page, pageSize, search, selectedStatuses]);
+  }, [page, pageSize, search, selectedStatuses, activeBranchId]);
 
   useEffect(() => {
     fetchData();

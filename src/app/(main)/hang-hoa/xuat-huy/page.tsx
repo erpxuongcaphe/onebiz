@@ -1,7 +1,7 @@
 "use client";
 
 import { useEffect, useState, useCallback } from "react";
-import { useToast } from "@/lib/contexts";
+import { useToast, useBranchFilter } from "@/lib/contexts";
 import { printDocument } from "@/lib/print-document";
 import { buildDisposalPrintData } from "@/lib/print-templates";
 import { ColumnDef } from "@tanstack/react-table";
@@ -156,6 +156,7 @@ function DisposalExportDetail({
 /* ------------------------------------------------------------------ */
 export default function XuatHuyPage() {
   const { toast } = useToast();
+  const { activeBranchId } = useBranchFilter();
   const [data, setData] = useState<DisposalExport[]>([]);
   const [total, setTotal] = useState(0);
   const [loading, setLoading] = useState(true);
@@ -246,6 +247,7 @@ export default function XuatHuyPage() {
       page,
       pageSize,
       search,
+      branchId: activeBranchId,
       filters: {
         ...(selectedStatuses.length > 0 && { status: selectedStatuses }),
         ...(creatorFilter && { createdBy: creatorFilter }),
@@ -254,7 +256,7 @@ export default function XuatHuyPage() {
     setData(result.data);
     setTotal(result.total);
     setLoading(false);
-  }, [page, pageSize, search, selectedStatuses, creatorFilter]);
+  }, [page, pageSize, search, selectedStatuses, creatorFilter, activeBranchId]);
 
   useEffect(() => {
     fetchData();

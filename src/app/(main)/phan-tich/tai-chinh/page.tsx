@@ -18,6 +18,7 @@ import {
   ResponsiveContainer,
 } from "recharts";
 import { DateRangeBar, KpiCard, ChartCard } from "../_components";
+import { useBranchFilter } from "@/lib/contexts";
 import {
   formatCurrency,
   formatChartCurrency,
@@ -143,6 +144,7 @@ interface FinanceKpis {
 }
 
 export default function TaiChinhPage() {
+  const { activeBranchId } = useBranchFilter();
   const [loading, setLoading] = useState(true);
   const [kpis, setKpis] = useState<FinanceKpis | null>(null);
   const [revenueVsExpenseData, setRevenueVsExpenseData] = useState<MultiSeriesPoint[]>([]);
@@ -155,11 +157,11 @@ export default function TaiChinhPage() {
       setLoading(true);
       const [kpiResult, revExpResult, expBkResult, profitResult, cashResult] =
         await Promise.all([
-          getFinanceKpis(),
-          getRevenueVsExpense(),
-          getExpenseBreakdown(),
-          getMonthlyProfit(),
-          getCashFlow(),
+          getFinanceKpis(activeBranchId),
+          getRevenueVsExpense(12, activeBranchId),
+          getExpenseBreakdown(activeBranchId),
+          getMonthlyProfit(12, activeBranchId),
+          getCashFlow(6, activeBranchId),
         ]);
       setKpis(kpiResult);
       setRevenueVsExpenseData(revExpResult);
@@ -171,7 +173,7 @@ export default function TaiChinhPage() {
     } finally {
       setLoading(false);
     }
-  }, []);
+  }, [activeBranchId]);
 
   useEffect(() => {
     fetchData();

@@ -5,6 +5,7 @@ import { usePathname } from "next/navigation";
 import { useEffect, useMemo, useRef, useState } from "react";
 import { ChevronDown, PanelLeftClose, PanelLeftOpen } from "lucide-react";
 import { cn } from "@/lib/utils";
+import { useAuth } from "@/lib/contexts";
 import {
   sidebarNavGroups,
   isHrefActive,
@@ -130,11 +131,15 @@ function LeafLink({
 function SubGroupSection({
   subGroup,
   pathname,
+  filterPerm,
 }: {
   subGroup: SidebarSubGroup;
   pathname: string;
+  filterPerm?: (code: string) => boolean;
 }) {
   const SubIcon = subGroup.icon;
+  const visibleItems = subGroup.items.filter((l) => !l.permission || !filterPerm || filterPerm(l.permission));
+  if (visibleItems.length === 0) return null;
   return (
     <div className="mt-1">
       <div className="flex items-center gap-1.5 px-2 pt-2 pb-1 text-[10px] font-semibold text-muted-foreground uppercase tracking-wider">
@@ -142,7 +147,7 @@ function SubGroupSection({
         {subGroup.label}
       </div>
       <div className="space-y-0.5">
-        {subGroup.items.map((leaf) => (
+        {visibleItems.map((leaf) => (
           <LeafLink key={leaf.href} leaf={leaf} pathname={pathname} indent={1} />
         ))}
       </div>
@@ -159,11 +164,13 @@ function GroupExpanded({
   open,
   onToggle,
   pathname,
+  filterPerm,
 }: {
   group: SidebarGroup;
   open: boolean;
   onToggle: () => void;
   pathname: string;
+  filterPerm?: (code: string) => boolean;
 }) {
   const Icon = group.icon;
   const active = isGroupActive(pathname, group);
@@ -192,11 +199,11 @@ function GroupExpanded({
 
       {open && (
         <div className="mt-0.5 mb-1 space-y-0.5 pl-1">
-          {group.items?.map((leaf) => (
+          {group.items?.filter((l) => !l.permission || !filterPerm || filterPerm(l.permission)).map((leaf) => (
             <LeafLink key={leaf.href} leaf={leaf} pathname={pathname} indent={1} />
           ))}
           {group.subGroups?.map((sg) => (
-            <SubGroupSection key={sg.label} subGroup={sg} pathname={pathname} />
+            <SubGroupSection key={sg.label} subGroup={sg} pathname={pathname} filterPerm={filterPerm} />
           ))}
         </div>
       )}
@@ -313,6 +320,7 @@ function GroupCollapsed({
 
 export function AppSidebar() {
   const pathname = usePathname();
+  const { hasPermission } = useAuth();
   const [collapsed, setCollapsed] = usePersistedCollapsed(false);
 
   // Track which top-level groups are open in expanded mode.
@@ -404,6 +412,7 @@ export function AppSidebar() {
                 open={openGroups.has(g.label)}
                 onToggle={() => toggleGroup(g.label)}
                 pathname={pathname}
+                filterPerm={hasPermission}
               />
             )
           )}
@@ -423,6 +432,7 @@ export function AppSidebar() {
                 open={openGroups.has(g.label)}
                 onToggle={() => toggleGroup(g.label)}
                 pathname={pathname}
+                filterPerm={hasPermission}
               />
             )
           )}

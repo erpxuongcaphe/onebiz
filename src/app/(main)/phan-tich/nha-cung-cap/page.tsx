@@ -18,6 +18,7 @@ import {
   ResponsiveContainer,
 } from "recharts";
 import { DateRangeBar, KpiCard, ChartCard } from "../_components";
+import { useBranchFilter } from "@/lib/contexts";
 import {
   formatCurrency,
   formatChartCurrency,
@@ -127,6 +128,7 @@ function renderPieLabel(props: any) {
 }
 
 export default function NhaCungCapPage() {
+  const { activeBranchId } = useBranchFilter();
   const [loading, setLoading] = useState(true);
   const [kpis, setKpis] = useState<{
     totalSuppliers: number;
@@ -145,11 +147,11 @@ export default function NhaCungCapPage() {
     try {
       setLoading(true);
       const [kpiData, purchase, top, payment, summary] = await Promise.all([
-        getSupplierKpis(),
-        getPurchaseByMonth(),
-        getTopSuppliersByPurchase(),
+        getSupplierKpis(activeBranchId),
+        getPurchaseByMonth(6, activeBranchId),
+        getTopSuppliersByPurchase(5, activeBranchId),
         getSupplierPaymentStatus(),
-        getSupplierSummary(),
+        getSupplierSummary(8, activeBranchId),
       ]);
       setKpis(kpiData);
       setPurchaseByMonth(purchase);
@@ -161,7 +163,7 @@ export default function NhaCungCapPage() {
     } finally {
       setLoading(false);
     }
-  }, []);
+  }, [activeBranchId]);
 
   useEffect(() => {
     fetchData();

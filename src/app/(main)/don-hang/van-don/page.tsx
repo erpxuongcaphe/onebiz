@@ -25,6 +25,7 @@ import { exportToExcel, exportToCsv } from "@/lib/utils/export";
 import { getShippingOrders, getShippingStatuses, getPartnerOptions } from "@/lib/services";
 import { CreateShippingOrderDialog } from "@/components/shared/dialogs";
 import type { ShippingOrder } from "@/lib/types";
+import { useBranchFilter } from "@/lib/contexts";
 
 // --- Status config ---
 
@@ -146,6 +147,7 @@ function ShippingOrderDetail({
 /*  Page                                                               */
 /* ------------------------------------------------------------------ */
 export default function VanDonPage() {
+  const { activeBranchId } = useBranchFilter();
   const [data, setData] = useState<ShippingOrder[]>([]);
   const [total, setTotal] = useState(0);
   const [loading, setLoading] = useState(true);
@@ -171,6 +173,7 @@ export default function VanDonPage() {
       page,
       pageSize,
       search,
+      branchId: activeBranchId,
       filters: {
         ...(statusFilter !== "all" && { status: statusFilter }),
         ...(partnerFilter !== "all" && { partner: partnerFilter }),
@@ -180,7 +183,7 @@ export default function VanDonPage() {
     setData(result.data);
     setTotal(result.total);
     setLoading(false);
-  }, [page, pageSize, search, statusFilter, partnerFilter, regionFilter]);
+  }, [page, pageSize, search, statusFilter, partnerFilter, regionFilter, activeBranchId]);
 
   useEffect(() => {
     fetchData();

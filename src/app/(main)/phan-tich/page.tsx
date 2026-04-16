@@ -20,6 +20,7 @@ import {
   formatChartTooltipCurrency,
 } from "@/lib/format";
 import { DateRangeBar, KpiCard, ChartCard } from "./_components";
+import { useBranchFilter } from "@/lib/contexts";
 import {
   getOverviewKpis,
   getDailyRevenue,
@@ -56,6 +57,7 @@ function RevenueTooltip({ active, payload, label }: any) {
 }
 
 export default function TongQuanPage() {
+  const { activeBranchId } = useBranchFilter();
   const [loading, setLoading] = useState(true);
   const [kpis, setKpis] = useState<{
     revenue: number; prevRevenue: number;
@@ -69,12 +71,13 @@ export default function TongQuanPage() {
 
   useEffect(() => {
     async function fetchData() {
+      setLoading(true);
       try {
         const [kpiData, daily, category, products] = await Promise.all([
-          getOverviewKpis(),
-          getDailyRevenue(),
-          getRevenueByCategory(),
-          getTopProductsByRevenue(),
+          getOverviewKpis(activeBranchId),
+          getDailyRevenue(30, activeBranchId),
+          getRevenueByCategory(activeBranchId),
+          getTopProductsByRevenue(10, activeBranchId),
         ]);
         setKpis(kpiData);
         setDailyRevenue(daily);
@@ -87,7 +90,7 @@ export default function TongQuanPage() {
       }
     }
     fetchData();
-  }, []);
+  }, [activeBranchId]);
 
   if (loading) {
     return (
