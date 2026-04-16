@@ -1,6 +1,7 @@
 import type { Metadata } from "next";
 import { Be_Vietnam_Pro } from "next/font/google";
 import { Providers } from "./providers";
+import { PwaHead } from "@/components/shared/pwa-head";
 import "./globals.css";
 
 const beVietnamPro = Be_Vietnam_Pro({
@@ -21,6 +22,9 @@ export default function RootLayout({
 }>) {
   return (
     <html lang="vi" className={`${beVietnamPro.variable} h-full antialiased`}>
+      <head>
+        <PwaHead />
+      </head>
       <body className="min-h-full flex flex-col font-sans">
         <Providers>{children}</Providers>
       </body>

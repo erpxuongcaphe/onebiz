@@ -9,6 +9,8 @@ export interface Supplier {
   address?: string;
   currentDebt: number;
   totalPurchases: number;
+  isInternal?: boolean;
+  branchId?: string;
   createdAt: string;
 }
 
