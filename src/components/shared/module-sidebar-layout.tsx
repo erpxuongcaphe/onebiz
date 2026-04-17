@@ -10,14 +10,15 @@
 
 import Link from "next/link";
 import { usePathname } from "next/navigation";
-import type { LucideIcon } from "lucide-react";
+import { Icon } from "@/components/ui/icon";
 import { ScrollArea, ScrollBar } from "@/components/ui/scroll-area";
 import { cn } from "@/lib/utils";
 
 export interface ModuleNavItem {
   label: string;
   href: string;
-  icon: LucideIcon;
+  /** Material Symbols icon name (e.g. "dashboard", "shopping_cart") */
+  icon: string;
   /** Match exact (cho trang gốc của module) */
   exact?: boolean;
 }
@@ -60,7 +61,6 @@ export function ModuleSidebarLayout({
         <ScrollArea className="w-full">
           <div className="flex gap-1 p-2">
             {flatItems.map((item) => {
-              const Icon = item.icon;
               const active = isActive(item);
               return (
                 <Link
@@ -69,11 +69,11 @@ export function ModuleSidebarLayout({
                   className={cn(
                     "flex flex-col items-center gap-1 px-3 py-2 rounded-lg text-xs font-medium whitespace-nowrap transition-colors min-w-[64px]",
                     active
-                      ? "bg-primary/10 text-primary"
-                      : "text-muted-foreground hover:bg-muted hover:text-foreground"
+                      ? "bg-primary-fixed text-primary"
+                      : "text-muted-foreground hover:bg-surface-container hover:text-foreground"
                   )}
                 >
-                  <Icon className="h-4 w-4" />
+                  <Icon name={item.icon} size={16} fill={active} weight={active ? 500 : 400} />
                   <span>{item.label}</span>
                 </Link>
               );
@@ -98,20 +98,19 @@ export function ModuleSidebarLayout({
                   )}
                   <div className="space-y-0.5">
                     {group.items.map((item) => {
-                      const Icon = item.icon;
                       const active = isActive(item);
                       return (
                         <Link
                           key={item.href}
                           href={item.href}
                           className={cn(
-                            "flex items-center gap-3 px-3 py-2 rounded-lg text-sm font-medium transition-colors",
+                            "flex items-center gap-3 px-3 py-2 rounded-lg text-sm font-medium transition-colors press-scale-sm",
                             active
-                              ? "bg-primary/10 text-primary"
-                              : "text-muted-foreground hover:bg-muted hover:text-foreground"
+                              ? "bg-primary-fixed text-primary"
+                              : "text-muted-foreground hover:bg-surface-container hover:text-foreground"
                           )}
                         >
-                          <Icon className="h-4 w-4 shrink-0" />
+                          <Icon name={item.icon} size={18} fill={active} weight={active ? 500 : 400} className="shrink-0" />
                           <span className="truncate">{item.label}</span>
                         </Link>
                       );
