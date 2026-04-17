@@ -187,7 +187,7 @@ export default function FacebookPage() {
           <div className="h-7 w-7 rounded-full bg-primary flex items-center justify-center text-white text-xs font-bold">
             F
           </div>
-          <h1 className="text-lg font-bold text-gray-900">
+          <h1 className="text-lg font-bold text-foreground">
             Quản lý bán hàng Facebook
           </h1>
         </div>
@@ -264,7 +264,7 @@ export default function FacebookPage() {
                         className={cn(
                           "text-sm truncate",
                           conv.unread > 0
-                            ? "font-semibold text-gray-900"
+                            ? "font-semibold text-foreground"
                             : "font-medium text-foreground"
                         )}
                       >
@@ -307,7 +307,7 @@ export default function FacebookPage() {
                 NT
               </div>
               <div>
-                <p className="text-sm font-semibold text-gray-900">
+                <p className="text-sm font-semibold text-foreground">
                   Nguyễn Thanh Tùng
                 </p>
                 <p className="text-[11px] text-green-600">Đang hoạt động</p>
@@ -335,7 +335,7 @@ export default function FacebookPage() {
                       "max-w-[75%] rounded-2xl px-4 py-2.5",
                       msg.sender === "shop"
                         ? "bg-primary text-white"
-                        : "bg-white text-gray-900 border"
+                        : "bg-white text-foreground border"
                     )}
                   >
                     <p className="text-sm leading-relaxed">{msg.text}</p>
@@ -390,7 +390,7 @@ export default function FacebookPage() {
                       <span className="text-2xl">☕</span>
                     </div>
                     <div className="p-2.5">
-                      <p className="text-xs font-medium text-gray-900 line-clamp-1">
+                      <p className="text-xs font-medium text-foreground line-clamp-1">
                         {product.name}
                       </p>
                       <p className="text-xs text-primary font-bold mt-0.5">

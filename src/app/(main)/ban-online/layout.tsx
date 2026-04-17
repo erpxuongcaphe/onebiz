@@ -33,7 +33,7 @@ export default function BanOnlineLayout({
       {/* Sidebar */}
       <aside className="hidden md:flex w-48 lg:w-52 border-r bg-white shrink-0 flex-col">
         <div className="px-4 py-3 border-b">
-          <h2 className="text-sm font-bold text-gray-800 flex items-center gap-2">
+          <h2 className="text-sm font-bold text-foreground flex items-center gap-2">
             <Icon name="public" className="size-4 text-primary" />
             Bán online
           </h2>

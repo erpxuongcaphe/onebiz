@@ -24,7 +24,7 @@ export default function RootError({
             <Icon name="error" size={32} className="text-red-600" />
           </div>
           <div>
-            <h1 className="text-2xl font-bold text-gray-900">
+            <h1 className="text-2xl font-bold text-foreground">
               Đã xảy ra lỗi
             </h1>
             <p className="mt-2 text-sm text-foreground">

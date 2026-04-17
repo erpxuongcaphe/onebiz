@@ -177,7 +177,7 @@ export default function BanOnlinePage() {
     <div className="flex flex-col h-[calc(100vh-64px)] overflow-y-auto">
       {/* Header */}
       <div className="px-4 md:px-6 pt-4 md:pt-6 pb-2">
-        <h1 className="text-lg font-bold text-gray-900">
+        <h1 className="text-lg font-bold text-foreground">
           Tổng quan bán online
         </h1>
         <p className="text-sm text-muted-foreground mt-0.5">
@@ -209,7 +209,7 @@ export default function BanOnlinePage() {
                       </span>
                     )}
                   </div>
-                  <p className="text-2xl font-bold text-gray-900">
+                  <p className="text-2xl font-bold text-foreground">
                     {kpi.value}
                   </p>
                   <p className="text-xs text-muted-foreground mt-1">
@@ -226,7 +226,7 @@ export default function BanOnlinePage() {
 
         {/* Channel Cards */}
         <div>
-          <h2 className="text-sm font-semibold text-gray-800 mb-3">
+          <h2 className="text-sm font-semibold text-foreground mb-3">
             Kênh bán hàng
           </h2>
           <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
@@ -244,7 +244,7 @@ export default function BanOnlinePage() {
                         {channel.letter}
                       </div>
                       <div>
-                        <p className="font-semibold text-gray-900">
+                        <p className="font-semibold text-foreground">
                           {channel.name}
                         </p>
                         <Badge

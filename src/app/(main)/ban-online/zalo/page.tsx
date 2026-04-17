@@ -183,7 +183,7 @@ export default function ZaloPage() {
           >
             Z
           </div>
-          <h1 className="text-lg font-bold text-gray-900">
+          <h1 className="text-lg font-bold text-foreground">
             Quản lý bán hàng Zalo
           </h1>
         </div>
@@ -263,7 +263,7 @@ export default function ZaloPage() {
                         className={cn(
                           "text-xs truncate",
                           conv.unread > 0
-                            ? "text-gray-900 font-medium"
+                            ? "text-foreground font-medium"
                             : "text-muted-foreground"
                         )}
                       >
@@ -329,7 +329,7 @@ export default function ZaloPage() {
                       "max-w-[75%] rounded-2xl px-3.5 py-2",
                       msg.sender === "shop"
                         ? "text-white"
-                        : "bg-white border text-gray-900"
+                        : "bg-white border text-foreground"
                     )}
                     style={
                       msg.sender === "shop"

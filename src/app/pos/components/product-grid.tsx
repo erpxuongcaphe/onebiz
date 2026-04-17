@@ -230,7 +230,7 @@ function ProductTile({
 
       {/* Info — compact with code */}
       <div className="px-1.5 py-1 flex-1 flex flex-col min-h-[40px]">
-        <p className="text-[11px] font-medium text-gray-800 line-clamp-2 leading-tight flex-1">
+        <p className="text-[11px] font-medium text-foreground line-clamp-2 leading-tight flex-1">
           {product.name}
         </p>
         <div className="flex items-center justify-between mt-0.5 gap-1">

@@ -108,7 +108,7 @@ export default function DonHangOnlinePage() {
       {/* Header */}
       <div className="border-b bg-white px-4 md:px-6 py-3">
         <div className="flex items-center justify-between mb-3">
-          <h1 className="text-lg font-bold text-gray-900">Đơn hàng online</h1>
+          <h1 className="text-lg font-bold text-foreground">Đơn hàng online</h1>
         </div>
 
         {/* Filter tabs */}

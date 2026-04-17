@@ -116,7 +116,7 @@ export default function WebsitePage() {
           <div className="size-8 rounded-lg bg-green-600 flex items-center justify-center text-white">
             <Icon name="public" className="size-4" />
           </div>
-          <h1 className="text-lg font-bold text-gray-900">
+          <h1 className="text-lg font-bold text-foreground">
             Quản lý Website bán hàng
           </h1>
         </div>

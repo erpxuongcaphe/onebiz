@@ -65,7 +65,7 @@ export function FnbCart({
       {/* ── Header ── */}
       <div className="flex items-center justify-between px-3 py-2 border-b bg-surface-container-low shrink-0">
         <div className="flex items-center gap-2 min-w-0">
-          <span className="text-sm font-semibold text-gray-800 truncate">
+          <span className="text-sm font-semibold text-foreground truncate">
             {activeTab?.label ?? "Đơn hàng"}
           </span>
           <Badge variant="secondary" className="text-[10px] shrink-0">
@@ -141,7 +141,7 @@ export function FnbCart({
 
         {/* Total */}
         <div className="flex items-center justify-between border-t pt-1.5">
-          <span className="text-sm font-semibold text-gray-800">Khách cần trả</span>
+          <span className="text-sm font-semibold text-foreground">Khách cần trả</span>
           <span className="text-lg font-bold text-primary tabular-nums">
             {formatCurrency(total)}
           </span>
@@ -281,7 +281,7 @@ function CartLineItem({
       <div className="flex items-start justify-between gap-2">
         {/* Name + variant */}
         <div className="flex-1 min-w-0">
-          <p className="text-sm font-medium text-gray-800 leading-tight">
+          <p className="text-sm font-medium text-foreground leading-tight">
             {line.productName}
           </p>
           {line.variantLabel && (

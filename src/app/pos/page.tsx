@@ -984,7 +984,7 @@ export default function PosPage() {
 
             {/* Total */}
             <div className="flex justify-between items-baseline pt-1.5 border-t border-border">
-              <span className="text-sm font-bold text-gray-800">Khách cần trả</span>
+              <span className="text-sm font-bold text-foreground">Khách cần trả</span>
               <span className="text-base font-bold text-primary tabular-nums">
                 {formatCurrency(state.total)} ₫
               </span>
@@ -1380,7 +1380,7 @@ function CartItem({
 
       {/* Name + code + unit */}
       <div className="min-w-0 pr-1">
-        <p className="text-[11px] font-medium text-gray-800 truncate leading-tight">
+        <p className="text-[11px] font-medium text-foreground truncate leading-tight">
           {line.productName}
         </p>
         <p className="text-[9px] text-muted-foreground font-mono truncate leading-tight">
@@ -1450,7 +1450,7 @@ function CartItem({
 
       {/* Line total */}
       <div className="text-right">
-        <span className="text-[11px] font-bold text-gray-800 tabular-nums">
+        <span className="text-[11px] font-bold text-foreground tabular-nums">
           {formatCurrency(lineTotal)}
         </span>
       </div>
@@ -1742,7 +1742,7 @@ function DraftListModal({
         <div className="flex items-center justify-between px-4 py-3 border-b">
           <div className="flex items-center gap-2">
             <Icon name="save" size={16} className="text-primary" />
-            <h2 className="text-sm font-bold text-gray-800">Đơn nháp đã lưu</h2>
+            <h2 className="text-sm font-bold text-foreground">Đơn nháp đã lưu</h2>
             <kbd className="font-mono text-[9px] bg-muted border border-border rounded px-1 py-0.5 text-muted-foreground">
               F3
             </kbd>
@@ -1800,7 +1800,7 @@ function DraftListModal({
 
                   {/* Total */}
                   <div className="text-right shrink-0">
-                    <span className="text-xs font-bold text-gray-800 tabular-nums">
+                    <span className="text-xs font-bold text-foreground tabular-nums">
                       {formatCurrency(draft.total)}
                     </span>
                   </div>

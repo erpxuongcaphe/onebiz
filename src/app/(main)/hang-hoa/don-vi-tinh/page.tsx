@@ -89,7 +89,7 @@ export default function DonViTinhPage() {
       cell: ({ row }) => (
         <div className="flex items-center gap-2">
           <Icon name="straighten" size={14} className="text-primary shrink-0" />
-          <span className="font-semibold text-gray-900">{row.original.unit}</span>
+          <span className="font-semibold text-foreground">{row.original.unit}</span>
         </div>
       ),
     },
@@ -131,7 +131,7 @@ export default function DonViTinhPage() {
           <div className="text-xs text-muted-foreground">Đơn vị tính</div>
         </div>
         <div className="bg-white rounded-lg border p-3">
-          <div className="text-2xl font-bold text-gray-800">
+          <div className="text-2xl font-bold text-foreground">
             {units.reduce((sum, u) => sum + u.productCount, 0)}
           </div>
           <div className="text-xs text-muted-foreground">Lần sử dụng</div>

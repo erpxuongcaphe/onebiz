@@ -107,7 +107,7 @@ export default function LoSanXuatPage() {
       size: 240,
       cell: ({ row }) => (
         <div className="min-w-0">
-          <p className="text-sm font-medium text-gray-800 truncate">{row.original.productName}</p>
+          <p className="text-sm font-medium text-foreground truncate">{row.original.productName}</p>
           <p className="text-[10px] text-muted-foreground font-mono">{row.original.productCode}</p>
         </div>
       ),
@@ -233,7 +233,7 @@ export default function LoSanXuatPage() {
           <div className="text-xs text-muted-foreground">Đang hoạt động</div>
         </div>
         <div className="bg-white rounded-lg border p-3">
-          <div className="text-2xl font-bold text-gray-800">{totalQty.toLocaleString("vi-VN")}</div>
+          <div className="text-2xl font-bold text-foreground">{totalQty.toLocaleString("vi-VN")}</div>
           <div className="text-xs text-muted-foreground">Tổng SL hiện tại</div>
         </div>
         {expiredCount > 0 && (

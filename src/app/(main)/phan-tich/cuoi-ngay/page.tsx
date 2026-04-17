@@ -320,10 +320,10 @@ export default function CuoiNgayPage() {
                             className="size-2.5 rounded-full shrink-0"
                             style={{ backgroundColor: m.color }}
                           />
-                          <span className="font-medium text-gray-800">{m.name}</span>
+                          <span className="font-medium text-foreground">{m.name}</span>
                         </div>
                       </td>
-                      <td className="py-2.5 pr-4 text-right font-semibold text-gray-800">
+                      <td className="py-2.5 pr-4 text-right font-semibold text-foreground">
                         {formatCurrency(m.value)}đ
                       </td>
                       <td className="py-2.5 text-right text-muted-foreground">
@@ -332,11 +332,11 @@ export default function CuoiNgayPage() {
                     </tr>
                   ))}
                   <tr className="border-t-2 font-bold">
-                    <td className="py-2.5 pr-4 text-gray-800">Tổng cộng</td>
+                    <td className="py-2.5 pr-4 text-foreground">Tổng cộng</td>
                     <td className="py-2.5 pr-4 text-right text-primary">
                       {formatCurrency(totalRevenue)}đ
                     </td>
-                    <td className="py-2.5 text-right text-gray-800">100%</td>
+                    <td className="py-2.5 text-right text-foreground">100%</td>
                   </tr>
                   <tr className="text-red-500">
                     <td className="py-2.5 pr-4">Trả hàng</td>
