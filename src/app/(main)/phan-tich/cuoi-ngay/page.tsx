@@ -42,7 +42,7 @@ function HourTooltip({ active, payload, label }: any) {
   if (!active || !payload?.length) return null;
   return (
     <div className="bg-white border rounded-lg shadow-lg p-2.5 text-xs">
-      <p className="font-semibold text-gray-700 mb-1">{label}</p>
+      <p className="font-semibold text-foreground mb-1">{label}</p>
       {payload.map((entry: any, i: number) => (
         <p key={i} style={{ color: entry.color }}>
           {entry.name}: {formatChartTooltipCurrency(entry.value)}
@@ -58,7 +58,7 @@ function PieTooltip({ active, payload }: any) {
   const total = d.payload.total as number;
   return (
     <div className="bg-white border rounded-lg shadow-lg p-2.5 text-xs">
-      <p className="font-semibold text-gray-700 mb-1">{d.name}</p>
+      <p className="font-semibold text-foreground mb-1">{d.name}</p>
       <p style={{ color: d.payload.color }}>
         {formatChartTooltipCurrency(d.value)} ({total > 0 ? ((d.value / total) * 100).toFixed(1) : 0}%)
       </p>
@@ -70,7 +70,7 @@ function ProductTooltip({ active, payload, label }: any) {
   if (!active || !payload?.length) return null;
   return (
     <div className="bg-white border rounded-lg shadow-lg p-2.5 text-xs">
-      <p className="font-semibold text-gray-700 mb-1">{label}</p>
+      <p className="font-semibold text-foreground mb-1">{label}</p>
       <p style={{ color: payload[0].color }}>
         Số lượng: {payload[0].value}
       </p>
@@ -118,7 +118,7 @@ export default function CuoiNgayPage() {
           subtitle="Tổng kết hoạt động kinh doanh trong ngày"
         />
         <div className="flex-1 flex items-center justify-center">
-          <Icon name="progress_activity" className="size-8 animate-spin text-gray-400" />
+          <Icon name="progress_activity" className="size-8 animate-spin text-muted-foreground" />
         </div>
       </div>
     );
@@ -132,7 +132,7 @@ export default function CuoiNgayPage() {
           title="Báo cáo cuối ngày"
           subtitle="Tổng kết hoạt động kinh doanh trong ngày"
         />
-        <div className="flex-1 flex items-center justify-center text-gray-500 text-sm">
+        <div className="flex-1 flex items-center justify-center text-muted-foreground text-sm">
           Không có dữ liệu cuối ngày.
         </div>
       </div>
@@ -258,7 +258,7 @@ export default function CuoiNgayPage() {
                 </BarChart>
               </ResponsiveContainer>
             ) : (
-              <div className="h-[280px] flex items-center justify-center text-gray-400 text-sm">
+              <div className="h-[280px] flex items-center justify-center text-muted-foreground text-sm">
                 Chưa có dữ liệu doanh thu theo giờ.
               </div>
             )}
@@ -291,7 +291,7 @@ export default function CuoiNgayPage() {
                 </PieChart>
               </ResponsiveContainer>
             ) : (
-              <div className="h-[280px] flex items-center justify-center text-gray-400 text-sm">
+              <div className="h-[280px] flex items-center justify-center text-muted-foreground text-sm">
                 Chưa có dữ liệu thanh toán.
               </div>
             )}
@@ -305,7 +305,7 @@ export default function CuoiNgayPage() {
             <div className="overflow-x-auto">
               <table className="w-full text-sm">
                 <thead>
-                  <tr className="border-b text-left text-xs text-gray-500">
+                  <tr className="border-b text-left text-xs text-muted-foreground">
                     <th className="pb-2 pr-4 font-medium">Phương thức</th>
                     <th className="pb-2 pr-4 font-medium text-right">Số tiền</th>
                     <th className="pb-2 font-medium text-right">Tỷ lệ</th>
@@ -326,7 +326,7 @@ export default function CuoiNgayPage() {
                       <td className="py-2.5 pr-4 text-right font-semibold text-gray-800">
                         {formatCurrency(m.value)}đ
                       </td>
-                      <td className="py-2.5 text-right text-gray-500">
+                      <td className="py-2.5 text-right text-muted-foreground">
                         {totalRevenue > 0 ? ((m.value / totalRevenue) * 100).toFixed(1) : "0.0"}%
                       </td>
                     </tr>
@@ -386,7 +386,7 @@ export default function CuoiNgayPage() {
                 </BarChart>
               </ResponsiveContainer>
             ) : (
-              <div className="h-[280px] flex items-center justify-center text-gray-400 text-sm">
+              <div className="h-[280px] flex items-center justify-center text-muted-foreground text-sm">
                 Chưa có sản phẩm bán hôm nay.
               </div>
             )}

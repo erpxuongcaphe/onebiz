@@ -130,8 +130,8 @@ export default function CanhBaoPage() {
               label: "Tổng cảnh báo",
               value: alerts.length,
               iconName: "warning",
-              bg: "bg-gray-100",
-              color: "text-gray-700",
+              bg: "bg-muted",
+              color: "text-foreground",
             },
             {
               label: "Nghiêm trọng",

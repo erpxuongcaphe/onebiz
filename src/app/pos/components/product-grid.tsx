@@ -84,7 +84,7 @@ export function ProductGrid({ searchQuery, onAddProduct }: ProductGridProps) {
   );
 
   return (
-    <div className="flex flex-col h-full bg-gray-50">
+    <div className="flex flex-col h-full bg-surface-container-low">
       {/* ── Category pills ── */}
       <div className="flex items-center gap-1.5 px-3 py-1.5 overflow-x-auto border-b bg-white shrink-0 scrollbar-none">
         <CategoryPill
@@ -111,7 +111,7 @@ export function ProductGrid({ searchQuery, onAddProduct }: ProductGridProps) {
             <Icon name="progress_activity" className="animate-spin text-primary" />
           </div>
         ) : displayProducts.length === 0 ? (
-          <div className="flex flex-col items-center justify-center h-32 text-gray-400">
+          <div className="flex flex-col items-center justify-center h-32 text-muted-foreground">
             <Icon name="inventory_2" size={32} className="mb-2" />
             <p className="text-xs">
               {searchQuery
@@ -155,7 +155,7 @@ function CategoryPill({
         "shrink-0 px-2.5 py-1 rounded-full text-[11px] font-medium transition-all whitespace-nowrap",
         active
           ? "bg-primary text-white shadow-sm"
-          : "bg-gray-100 text-gray-600 hover:bg-gray-200"
+          : "bg-muted text-foreground hover:bg-muted"
       )}
     >
       {label}
@@ -163,7 +163,7 @@ function CategoryPill({
         <span
           className={cn(
             "ml-1 text-[10px]",
-            active ? "text-primary-fixed" : "text-gray-400"
+            active ? "text-primary-fixed" : "text-muted-foreground"
           )}
         >
           {count}
@@ -189,13 +189,13 @@ function ProductTile({
       type="button"
       onClick={onClick}
       className={cn(
-        "flex flex-col bg-white rounded border border-gray-200 overflow-hidden transition-all text-left group",
+        "flex flex-col bg-white rounded border border-border overflow-hidden transition-all text-left group",
         "hover:border-primary hover:shadow active:scale-[0.97]",
         outOfStock && "opacity-60"
       )}
     >
       {/* Image — compact 3:2 ratio */}
-      <div className="relative aspect-[3/2] bg-gray-50 flex items-center justify-center overflow-hidden">
+      <div className="relative aspect-[3/2] bg-surface-container-low flex items-center justify-center overflow-hidden">
         {product.image ? (
           <img
             src={product.image}
@@ -220,7 +220,7 @@ function ProductTile({
               "text-[8px] font-medium px-1 py-0.5 rounded-full border",
               stock <= 5
                 ? "text-amber-700 bg-amber-50 border-amber-200"
-                : "text-gray-500 bg-white/80 border-gray-200"
+                : "text-muted-foreground bg-white/80 border-border"
             )}>
               {stock}
             </span>
@@ -238,7 +238,7 @@ function ProductTile({
             {formatCurrency(product.sellPrice ?? 0)}
           </p>
           {product.code && (
-            <p className="text-[8px] text-gray-400 font-mono truncate max-w-[60px]">
+            <p className="text-[8px] text-muted-foreground font-mono truncate max-w-[60px]">
               {product.code}
             </p>
           )}

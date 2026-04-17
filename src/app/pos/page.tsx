@@ -711,19 +711,19 @@ export default function PosPage() {
         <aside className={cn(
           "pos-panel bg-white flex flex-col",
           // Desktop: inline fixed-width panel
-          "lg:w-[380px] lg:shrink-0 lg:border-l lg:border-gray-200 lg:static lg:translate-x-0 lg:z-auto lg:shadow-none",
+          "lg:w-[380px] lg:shrink-0 lg:border-l lg:border-border lg:static lg:translate-x-0 lg:z-auto lg:shadow-none",
           // Mobile/Tablet: slide-over from right
           "fixed inset-y-0 right-0 z-40 w-full sm:w-[400px] shadow-2xl",
           "transition-transform duration-300 ease-in-out",
           mobileCartOpen ? "translate-x-0" : "translate-x-full lg:translate-x-0"
         )}>
           {/* ── Invoice tabs bar — KiotViet multi-tab ── */}
-          <div className="flex items-center bg-gray-50 border-b border-gray-200 shrink-0 min-h-[32px]">
+          <div className="flex items-center bg-surface-container-low border-b border-border shrink-0 min-h-[32px]">
             {/* Mobile back button */}
             <button
               type="button"
               onClick={() => setMobileCartOpen(false)}
-              className="lg:hidden shrink-0 h-8 w-8 flex items-center justify-center text-gray-500 hover:text-primary hover:bg-primary-fixed transition-colors border-r border-gray-200"
+              className="lg:hidden shrink-0 h-8 w-8 flex items-center justify-center text-muted-foreground hover:text-primary hover:bg-primary-fixed transition-colors border-r border-border"
               title="Quay lại sản phẩm"
             >
               <Icon name="arrow_back" size={16} />
@@ -741,14 +741,14 @@ export default function PosPage() {
                       "relative group inline-flex items-center gap-1 px-3 h-8 text-[11px] font-medium whitespace-nowrap transition-all border-b-2 shrink-0",
                       isActive
                         ? "bg-white text-primary border-primary"
-                        : "text-gray-500 border-transparent hover:text-gray-700 hover:bg-gray-100"
+                        : "text-muted-foreground border-transparent hover:text-foreground hover:bg-muted"
                     )}
                   >
                     {tab.label}
                     {count > 0 && (
                       <span className={cn(
                         "inline-flex items-center justify-center h-4 min-w-[16px] px-1 rounded-full text-[9px] font-bold",
-                        isActive ? "bg-primary-fixed text-primary" : "bg-gray-200 text-gray-500"
+                        isActive ? "bg-primary-fixed text-primary" : "bg-muted text-muted-foreground"
                       )}>
                         {count}
                       </span>
@@ -761,7 +761,7 @@ export default function PosPage() {
                           e.stopPropagation();
                           closeTab(tab.id);
                         }}
-                        className="ml-0.5 p-0.5 rounded opacity-0 group-hover:opacity-100 hover:bg-red-100 hover:text-red-500 text-gray-400 transition-all"
+                        className="ml-0.5 p-0.5 rounded opacity-0 group-hover:opacity-100 hover:bg-red-100 hover:text-red-500 text-muted-foreground transition-all"
                       >
                         <Icon name="close" size={10} />
                       </span>
@@ -774,7 +774,7 @@ export default function PosPage() {
             <button
               type="button"
               onClick={addTab}
-              className="shrink-0 h-8 w-8 flex items-center justify-center text-gray-400 hover:text-primary hover:bg-primary-fixed transition-colors border-l border-gray-200"
+              className="shrink-0 h-8 w-8 flex items-center justify-center text-muted-foreground hover:text-primary hover:bg-primary-fixed transition-colors border-l border-border"
               title="Tạo hoá đơn mới"
             >
               <Icon name="add" size={14} />
@@ -806,7 +806,7 @@ export default function PosPage() {
           )}
 
           {/* ── Customer picker row ── */}
-          <div className="px-3 py-2 border-b border-gray-100">
+          <div className="px-3 py-2 border-b border-border">
             <div className="flex items-center gap-1.5">
               <button
                 type="button"
@@ -815,7 +815,7 @@ export default function PosPage() {
                   "flex-1 flex items-center gap-2 px-2.5 h-8 rounded border text-xs transition-colors",
                   state.customer
                     ? "bg-emerald-50 border-emerald-200 text-emerald-800"
-                    : "border-dashed border-gray-300 text-gray-500 hover:border-primary hover:bg-primary-fixed/50"
+                    : "border-dashed border-border text-muted-foreground hover:border-primary hover:bg-primary-fixed/50"
                 )}
               >
                 {state.customer ? (
@@ -826,7 +826,7 @@ export default function PosPage() {
                 <span className="flex-1 text-left truncate font-medium">
                   {state.customer?.name ?? "Khách lẻ"}
                 </span>
-                <kbd className="font-mono text-[9px] bg-gray-100 border border-gray-200 rounded px-1 py-0.5 text-gray-400 shrink-0">
+                <kbd className="font-mono text-[9px] bg-muted border border-border rounded px-1 py-0.5 text-muted-foreground shrink-0">
                   F4
                 </kbd>
               </button>
@@ -834,7 +834,7 @@ export default function PosPage() {
                 <button
                   type="button"
                   onClick={() => state.setCustomer(null)}
-                  className="p-1 rounded text-gray-400 hover:text-red-500 hover:bg-red-50 transition-colors"
+                  className="p-1 rounded text-muted-foreground hover:text-red-500 hover:bg-red-50 transition-colors"
                   title="Gỡ khách"
                 >
                   <Icon name="close" size={14} />
@@ -843,7 +843,7 @@ export default function PosPage() {
             </div>
             {/* Customer info strip — show phone + debt when selected */}
             {state.customer && (
-              <div className="flex items-center gap-3 mt-1 px-1 text-[10px] text-gray-500">
+              <div className="flex items-center gap-3 mt-1 px-1 text-[10px] text-muted-foreground">
                 {state.customer.phone && (
                   <span className="flex items-center gap-0.5">
                     <Icon name="call" size={10} />
@@ -856,7 +856,7 @@ export default function PosPage() {
                   </span>
                 )}
                 {state.customer.code && (
-                  <span className="text-gray-400 font-mono">{state.customer.code}</span>
+                  <span className="text-muted-foreground font-mono">{state.customer.code}</span>
                 )}
               </div>
             )}
@@ -872,8 +872,8 @@ export default function PosPage() {
 
           {/* ── Cart table header ── */}
           {state.lines.length > 0 && (
-            <div className="flex items-center border-b border-gray-200 bg-gray-50 shrink-0">
-              <div className="flex-1 grid grid-cols-[20px_1fr_66px_44px_60px_66px_18px] gap-0 px-2 py-1 text-[9px] font-semibold text-gray-400 uppercase tracking-wider items-center">
+            <div className="flex items-center border-b border-border bg-surface-container-low shrink-0">
+              <div className="flex-1 grid grid-cols-[20px_1fr_66px_44px_60px_66px_18px] gap-0 px-2 py-1 text-[9px] font-semibold text-muted-foreground uppercase tracking-wider items-center">
                 <span className="text-center">#</span>
                 <span>Tên hàng</span>
                 <span className="text-right">Đơn giá</span>
@@ -895,7 +895,7 @@ export default function PosPage() {
                     }
                   )
                 }
-                className="shrink-0 px-1.5 py-0.5 mr-1 rounded text-[9px] text-gray-400 hover:text-red-500 hover:bg-red-50 transition-colors"
+                className="shrink-0 px-1.5 py-0.5 mr-1 rounded text-[9px] text-muted-foreground hover:text-red-500 hover:bg-red-50 transition-colors"
                 title="Xoá tất cả (cần xác nhận)"
               >
                 <Icon name="delete" size={12} />
@@ -906,9 +906,9 @@ export default function PosPage() {
           {/* ── Cart items list ── */}
           <div ref={cartScrollRef} className="flex-1 overflow-y-auto min-h-0">
             {state.lines.length === 0 ? (
-              <div className="flex flex-col items-center justify-center h-full text-gray-400 px-6">
+              <div className="flex flex-col items-center justify-center h-full text-muted-foreground px-6">
                 <Icon name="shopping_cart" size={32} className="mb-2 text-gray-200" />
-                <p className="text-xs font-medium text-gray-400">Giỏ hàng trống</p>
+                <p className="text-xs font-medium text-muted-foreground">Giỏ hàng trống</p>
                 <p className="text-[10px] text-gray-300 mt-0.5 text-center">
                   Chọn sản phẩm bên trái hoặc nhấn F2 để tìm
                 </p>
@@ -932,16 +932,16 @@ export default function PosPage() {
           </div>
 
           {/* ── Totals section ── */}
-          <div className="border-t border-gray-200 px-3 py-2 space-y-1 bg-gray-50/50">
-            <div className="flex justify-between text-xs text-gray-500">
+          <div className="border-t border-border px-3 py-2 space-y-1 bg-surface-container-low/50">
+            <div className="flex justify-between text-xs text-muted-foreground">
               <span>Tổng tiền hàng ({state.itemCount} SP)</span>
-              <span className="font-medium text-gray-700 tabular-nums">
+              <span className="font-medium text-foreground tabular-nums">
                 {formatCurrency(state.subtotal)}
               </span>
             </div>
 
             {/* Giảm giá — always visible like KiotViet */}
-            <div className="flex justify-between text-xs text-gray-500">
+            <div className="flex justify-between text-xs text-muted-foreground">
               <span>Giảm giá</span>
               <span className={cn("tabular-nums", (state.lineDiscountTotal + state.orderDiscountAmount) > 0 && "text-orange-500")}>
                 {(state.lineDiscountTotal + state.orderDiscountAmount) > 0
@@ -954,7 +954,7 @@ export default function PosPage() {
             {/* Order discount — hidden in fast mode */}
             {state.sellingMode !== "fast" && (
               <div className="flex items-center justify-between">
-                <span className="text-xs text-gray-500">Chiết khấu đơn</span>
+                <span className="text-xs text-muted-foreground">Chiết khấu đơn</span>
                 <OrderDiscountInput
                   value={state.orderDiscount}
                   onChange={state.setOrderDiscount}
@@ -964,7 +964,7 @@ export default function PosPage() {
 
             {/* Shipping fee */}
             {state.sellingMode === "delivery" && (
-              <div className="flex justify-between text-xs text-gray-500">
+              <div className="flex justify-between text-xs text-muted-foreground">
                 <span>Phí giao hàng</span>
                 <span className="tabular-nums">
                   {state.shippingFee > 0 ? `+${formatCurrency(state.shippingFee)}` : "0"}
@@ -974,7 +974,7 @@ export default function PosPage() {
 
             {/* VAT */}
             {state.taxAmount > 0 && (
-              <div className="flex justify-between text-xs text-gray-500">
+              <div className="flex justify-between text-xs text-muted-foreground">
                 <span>Thuế GTGT</span>
                 <span className="tabular-nums">
                   +{formatCurrency(state.taxAmount)}
@@ -983,7 +983,7 @@ export default function PosPage() {
             )}
 
             {/* Total */}
-            <div className="flex justify-between items-baseline pt-1.5 border-t border-gray-200">
+            <div className="flex justify-between items-baseline pt-1.5 border-t border-border">
               <span className="text-sm font-bold text-gray-800">Khách cần trả</span>
               <span className="text-base font-bold text-primary tabular-nums">
                 {formatCurrency(state.total)} ₫
@@ -993,7 +993,7 @@ export default function PosPage() {
 
           {/* ── Payment section (hidden in fast mode) ── */}
           {state.sellingMode !== "fast" && (
-            <div className="border-t border-gray-200 px-3 py-2 space-y-2">
+            <div className="border-t border-border px-3 py-2 space-y-2">
               {/* Payment method */}
               <div className="grid grid-cols-4 gap-1.5">
                 <PaymentBtn
@@ -1025,7 +1025,7 @@ export default function PosPage() {
               {/* Mixed payment breakdown */}
               {state.paymentMethod === "mixed" ? (
                 <div className="space-y-1.5">
-                  <label className="text-[10px] font-medium text-gray-500 uppercase tracking-wider">
+                  <label className="text-[10px] font-medium text-muted-foreground uppercase tracking-wider">
                     Chi tiết thanh toán
                   </label>
                   {([
@@ -1038,7 +1038,7 @@ export default function PosPage() {
                       <div key={pm.method} className="flex items-center gap-2">
                         <div className="flex items-center gap-1 w-20 shrink-0">
                           {pm.icon}
-                          <span className="text-[10px] text-gray-600">{pm.label}</span>
+                          <span className="text-[10px] text-foreground">{pm.label}</span>
                         </div>
                         <input
                           type="number"
@@ -1052,14 +1052,14 @@ export default function PosPage() {
                           }
                           placeholder="0"
                           data-allow-hotkeys="true"
-                          className="flex-1 h-7 px-2 rounded border border-gray-300 text-right text-xs font-bold outline-none focus:ring-2 focus:ring-primary/30 focus:border-primary tabular-nums"
+                          className="flex-1 h-7 px-2 rounded border border-border text-right text-xs font-bold outline-none focus:ring-2 focus:ring-primary/30 focus:border-primary tabular-nums"
                         />
                       </div>
                     );
                   })}
                   {/* Breakdown summary */}
-                  <div className="flex items-center justify-between pt-1 border-t border-dashed border-gray-200">
-                    <span className="text-[10px] text-gray-500">Tổng đã nhập</span>
+                  <div className="flex items-center justify-between pt-1 border-t border-dashed border-border">
+                    <span className="text-[10px] text-muted-foreground">Tổng đã nhập</span>
                     <span
                       className={cn(
                         "text-xs font-bold tabular-nums",
@@ -1087,7 +1087,7 @@ export default function PosPage() {
                   {/* Single-method: Paid amount */}
                   <div>
                     <div className="flex items-center justify-between mb-1">
-                      <label className="text-[10px] font-medium text-gray-500 uppercase tracking-wider">
+                      <label className="text-[10px] font-medium text-muted-foreground uppercase tracking-wider">
                         Khách đưa
                       </label>
                       {state.paid > 0 && state.change > 0 && (
@@ -1116,7 +1116,7 @@ export default function PosPage() {
                           ? "border-emerald-400 bg-emerald-50/50"
                           : state.paid > 0 && state.paid < state.total
                           ? "border-amber-400 bg-amber-50/50"
-                          : "border-gray-300"
+                          : "border-border"
                       )}
                     />
                   </div>
@@ -1128,7 +1128,7 @@ export default function PosPage() {
                         key={d.value}
                         type="button"
                         onClick={() => state.setPaid(d.value)}
-                        className="flex-1 h-7 rounded border border-gray-200 bg-gray-50 text-[10px] font-medium text-gray-600 hover:bg-primary-fixed hover:border-primary hover:text-primary transition-colors"
+                        className="flex-1 h-7 rounded border border-border bg-surface-container-low text-[10px] font-medium text-foreground hover:bg-primary-fixed hover:border-primary hover:text-primary transition-colors"
                       >
                         {d.label}
                       </button>
@@ -1149,7 +1149,7 @@ export default function PosPage() {
                 <button
                   type="button"
                   onClick={() => setNoteOpen(!noteOpen)}
-                  className="flex items-center gap-1 text-[10px] text-gray-400 hover:text-gray-600 transition-colors"
+                  className="flex items-center gap-1 text-[10px] text-muted-foreground hover:text-foreground transition-colors"
                 >
                   <Icon name="expand_more"
                     className={cn(
@@ -1159,7 +1159,7 @@ export default function PosPage() {
                   />
                   Ghi chú
                 </button>
-                <label className="flex items-center gap-1.5 text-[10px] text-gray-400 cursor-pointer select-none">
+                <label className="flex items-center gap-1.5 text-[10px] text-muted-foreground cursor-pointer select-none">
                   <input
                     type="checkbox"
                     checked={autoPrint}
@@ -1168,7 +1168,7 @@ export default function PosPage() {
                       setAutoPrint(next);
                       localStorage.setItem("pos.autoPrint", String(next));
                     }}
-                    className="h-3 w-3 rounded border-gray-300 text-primary focus:ring-primary"
+                    className="h-3 w-3 rounded border-border text-primary focus:ring-primary"
                   />
                   In bill
                 </label>
@@ -1179,7 +1179,7 @@ export default function PosPage() {
                   onChange={(e) => state.setNote(e.target.value)}
                   rows={2}
                   data-allow-hotkeys="true"
-                  className="w-full px-2.5 py-1.5 rounded border border-gray-200 text-xs resize-none outline-none focus:ring-2 focus:ring-primary/30 focus:border-primary"
+                  className="w-full px-2.5 py-1.5 rounded border border-border text-xs resize-none outline-none focus:ring-2 focus:ring-primary/30 focus:border-primary"
                   placeholder="Ghi chú cho đơn hàng..."
                 />
               )}
@@ -1188,7 +1188,7 @@ export default function PosPage() {
 
           {/* ── Action buttons ── */}
           <div className={cn(
-            "px-3 py-2 border-t border-gray-200 shrink-0 bg-white",
+            "px-3 py-2 border-t border-border shrink-0 bg-white",
             state.sellingMode === "fast"
               ? "flex flex-col gap-1.5"
               : "grid grid-cols-[1fr_1fr_2fr] gap-1.5"
@@ -1199,7 +1199,7 @@ export default function PosPage() {
               onClick={handleSaveDraft}
               disabled={state.lines.length === 0 || submitting !== null}
               className={cn(
-                "rounded border border-gray-300 bg-white text-xs font-semibold text-gray-600 hover:bg-gray-50 disabled:opacity-40 disabled:cursor-not-allowed inline-flex items-center justify-center gap-1 transition-colors",
+                "rounded border border-border bg-white text-xs font-semibold text-foreground hover:bg-surface-container-low disabled:opacity-40 disabled:cursor-not-allowed inline-flex items-center justify-center gap-1 transition-colors",
                 state.sellingMode === "fast" ? "h-8" : "h-10"
               )}
             >
@@ -1209,7 +1209,7 @@ export default function PosPage() {
                 <Icon name="save" size={14} />
               )}
               Nháp
-              <kbd className="font-mono text-[8px] bg-gray-100 border border-gray-200 rounded px-0.5 text-gray-400">
+              <kbd className="font-mono text-[8px] bg-muted border border-border rounded px-0.5 text-muted-foreground">
                 F9
               </kbd>
             </button>
@@ -1266,7 +1266,7 @@ export default function PosPage() {
             "flex items-center justify-between px-4 active:scale-[0.98] transition-all",
             state.lines.length > 0
               ? "bottom-12 h-12 bg-primary text-primary-foreground"
-              : "bottom-12 h-10 bg-white/95 backdrop-blur border border-gray-200 text-gray-600"
+              : "bottom-12 h-10 bg-white/95 backdrop-blur border border-border text-foreground"
           )}
         >
           <div className="flex items-center gap-2">
@@ -1289,7 +1289,7 @@ export default function PosPage() {
       )}
 
       {/* ═══════════ SELLING MODE TABS (bottom bar) ═══════════ */}
-      <div className="h-8 bg-white border-t border-gray-200 flex items-stretch px-3 gap-0 shrink-0">
+      <div className="h-8 bg-white border-t border-border flex items-stretch px-3 gap-0 shrink-0">
         <SellingModeTab
           icon={<Icon name="bolt" size={12} />}
           label="Bán nhanh"
@@ -1376,17 +1376,17 @@ function CartItem({
       )}
     >
       {/* Line number */}
-      <span className="text-[10px] text-gray-400 text-center tabular-nums">{index}</span>
+      <span className="text-[10px] text-muted-foreground text-center tabular-nums">{index}</span>
 
       {/* Name + code + unit */}
       <div className="min-w-0 pr-1">
         <p className="text-[11px] font-medium text-gray-800 truncate leading-tight">
           {line.productName}
         </p>
-        <p className="text-[9px] text-gray-400 font-mono truncate leading-tight">
+        <p className="text-[9px] text-muted-foreground font-mono truncate leading-tight">
           {line.productCode && <span>{line.productCode}</span>}
           {line.unit && (
-            <span className="text-gray-400 ml-1">({line.unit})</span>
+            <span className="text-muted-foreground ml-1">({line.unit})</span>
           )}
           {oversold && (
             <span className="text-amber-600 ml-1">Tồn: {line.availableStock}</span>
@@ -1401,7 +1401,7 @@ function CartItem({
         value={line.unitPrice || ""}
         onChange={(e) => onPriceChange(parseInt(e.target.value) || 0)}
         data-allow-hotkeys="true"
-        className="h-6 w-full px-1 text-right text-[10px] font-medium tabular-nums outline-none bg-transparent border border-transparent hover:border-gray-200 focus:border-primary focus:bg-white rounded transition-colors"
+        className="h-6 w-full px-1 text-right text-[10px] font-medium tabular-nums outline-none bg-transparent border border-transparent hover:border-border focus:border-primary focus:bg-white rounded transition-colors"
       />
 
       {/* Qty */}
@@ -1412,7 +1412,7 @@ function CartItem({
           value={line.quantity}
           onChange={(e) => onQtyChange(parseInt(e.target.value) || 1)}
           data-allow-hotkeys="true"
-          className="h-6 w-10 text-center text-[11px] font-semibold tabular-nums outline-none bg-transparent border border-transparent hover:border-gray-200 focus:border-primary focus:bg-white rounded transition-colors"
+          className="h-6 w-10 text-center text-[11px] font-semibold tabular-nums outline-none bg-transparent border border-transparent hover:border-border focus:border-primary focus:bg-white rounded transition-colors"
         />
       </div>
 
@@ -1427,7 +1427,7 @@ function CartItem({
           }
           data-allow-hotkeys="true"
           placeholder="0"
-          className="h-6 w-10 px-0.5 text-right text-[10px] tabular-nums outline-none bg-transparent border border-transparent hover:border-gray-200 focus:border-primary focus:bg-white rounded-l transition-colors"
+          className="h-6 w-10 px-0.5 text-right text-[10px] tabular-nums outline-none bg-transparent border border-transparent hover:border-border focus:border-primary focus:bg-white rounded-l transition-colors"
         />
         <button
           type="button"
@@ -1441,7 +1441,7 @@ function CartItem({
             "h-6 w-5 flex items-center justify-center text-[9px] font-bold border rounded-r transition-colors shrink-0",
             line.discount.mode === "percent"
               ? "bg-primary-fixed text-primary border-primary-fixed"
-              : "bg-gray-50 text-gray-400 border-gray-200 hover:bg-gray-100"
+              : "bg-surface-container-low text-muted-foreground border-border hover:bg-muted"
           )}
         >
           {line.discount.mode === "percent" ? "%" : "₫"}
@@ -1477,7 +1477,7 @@ function OrderDiscountInput({
   onChange: (d: DiscountInput) => void;
 }) {
   return (
-    <div className="inline-flex items-stretch h-6 rounded border border-gray-200 overflow-hidden bg-white">
+    <div className="inline-flex items-stretch h-6 rounded border border-border overflow-hidden bg-white">
       <input
         type="number"
         min={0}
@@ -1498,10 +1498,10 @@ function OrderDiscountInput({
           })
         }
         className={cn(
-          "w-6 flex items-center justify-center text-[10px] border-l border-gray-200 font-bold transition-colors",
+          "w-6 flex items-center justify-center text-[10px] border-l border-border font-bold transition-colors",
           value.mode === "percent"
             ? "bg-primary-fixed text-primary"
-            : "bg-gray-50 text-gray-500 hover:bg-gray-100"
+            : "bg-surface-container-low text-muted-foreground hover:bg-muted"
         )}
       >
         {value.mode === "percent" ? "%" : "₫"}
@@ -1530,7 +1530,7 @@ function PaymentBtn({
         "h-7 rounded border text-[10px] font-medium transition-all inline-flex items-center justify-center gap-1",
         active
           ? "border-primary bg-primary text-white shadow-sm"
-          : "border-gray-200 bg-white text-gray-500 hover:bg-gray-50 hover:border-gray-300"
+          : "border-border bg-white text-muted-foreground hover:bg-surface-container-low hover:border-border"
       )}
     >
       {icon}
@@ -1559,7 +1559,7 @@ function SellingModeTab({
         "relative inline-flex items-center gap-1.5 px-4 text-[11px] font-medium transition-all",
         active
           ? "text-primary"
-          : "text-gray-500 hover:text-gray-700"
+          : "text-muted-foreground hover:text-foreground"
       )}
     >
       {icon}
@@ -1584,7 +1584,7 @@ function DeliveryForm({
     onChange({ ...value, [field]: val });
 
   return (
-    <div className="border-b border-gray-200 bg-orange-50/30 px-3 py-2 space-y-1.5">
+    <div className="border-b border-border bg-orange-50/30 px-3 py-2 space-y-1.5">
       <div className="flex items-center gap-1.5 text-[11px] font-semibold text-orange-700">
         <Icon name="local_shipping" size={12} />
         Thông tin giao hàng
@@ -1597,9 +1597,9 @@ function DeliveryForm({
             onChange={(e) => update("recipientName", e.target.value)}
             placeholder="Tên người nhận"
             data-allow-hotkeys="true"
-            className="w-full h-7 px-2 pl-7 rounded border border-gray-200 text-[11px] outline-none focus:border-primary bg-white"
+            className="w-full h-7 px-2 pl-7 rounded border border-border text-[11px] outline-none focus:border-primary bg-white"
           />
-          <Icon name="person" size={12} className="absolute left-2 top-1/2 -translate-y-1/2 text-gray-400" />
+          <Icon name="person" size={12} className="absolute left-2 top-1/2 -translate-y-1/2 text-muted-foreground" />
         </div>
         <div className="relative">
           <input
@@ -1608,9 +1608,9 @@ function DeliveryForm({
             onChange={(e) => update("recipientPhone", e.target.value)}
             placeholder="Số điện thoại"
             data-allow-hotkeys="true"
-            className="w-full h-7 px-2 pl-7 rounded border border-gray-200 text-[11px] outline-none focus:border-primary bg-white"
+            className="w-full h-7 px-2 pl-7 rounded border border-border text-[11px] outline-none focus:border-primary bg-white"
           />
-          <Icon name="call" size={12} className="absolute left-2 top-1/2 -translate-y-1/2 text-gray-400" />
+          <Icon name="call" size={12} className="absolute left-2 top-1/2 -translate-y-1/2 text-muted-foreground" />
         </div>
       </div>
       <div className="relative">
@@ -1620,9 +1620,9 @@ function DeliveryForm({
           onChange={(e) => update("address", e.target.value)}
           placeholder="Địa chỉ giao hàng (số nhà, đường, phường/xã)"
           data-allow-hotkeys="true"
-          className="w-full h-7 px-2 pl-7 rounded border border-gray-200 text-[11px] outline-none focus:border-primary bg-white"
+          className="w-full h-7 px-2 pl-7 rounded border border-border text-[11px] outline-none focus:border-primary bg-white"
         />
-        <Icon name="location_on" size={12} className="absolute left-2 top-1/2 -translate-y-1/2 text-gray-400" />
+        <Icon name="location_on" size={12} className="absolute left-2 top-1/2 -translate-y-1/2 text-muted-foreground" />
       </div>
       <div className="grid grid-cols-2 gap-1.5">
         <input
@@ -1631,7 +1631,7 @@ function DeliveryForm({
           onChange={(e) => update("district", e.target.value)}
           placeholder="Khu vực / Quận"
           data-allow-hotkeys="true"
-          className="w-full h-7 px-2 rounded border border-gray-200 text-[11px] outline-none focus:border-primary bg-white"
+          className="w-full h-7 px-2 rounded border border-border text-[11px] outline-none focus:border-primary bg-white"
         />
         <input
           type="text"
@@ -1639,7 +1639,7 @@ function DeliveryForm({
           onChange={(e) => update("ward", e.target.value)}
           placeholder="Phường / Xã"
           data-allow-hotkeys="true"
-          className="w-full h-7 px-2 rounded border border-gray-200 text-[11px] outline-none focus:border-primary bg-white"
+          className="w-full h-7 px-2 rounded border border-border text-[11px] outline-none focus:border-primary bg-white"
         />
       </div>
       <div className="flex items-center gap-2">
@@ -1651,15 +1651,15 @@ function DeliveryForm({
             onChange={(e) => update("shippingFee", Math.max(0, parseInt(e.target.value) || 0))}
             placeholder="Phí giao hàng"
             data-allow-hotkeys="true"
-            className="w-full h-7 px-2 rounded border border-gray-200 text-[11px] outline-none focus:border-primary bg-white tabular-nums"
+            className="w-full h-7 px-2 rounded border border-border text-[11px] outline-none focus:border-primary bg-white tabular-nums"
           />
         </div>
-        <label className="flex items-center gap-1 text-[10px] text-gray-600 whitespace-nowrap cursor-pointer select-none">
+        <label className="flex items-center gap-1 text-[10px] text-foreground whitespace-nowrap cursor-pointer select-none">
           <input
             type="checkbox"
             checked={value.codEnabled}
             onChange={(e) => update("codEnabled", e.target.checked)}
-            className="h-3 w-3 rounded border-gray-300 text-primary"
+            className="h-3 w-3 rounded border-border text-primary"
           />
           COD
         </label>
@@ -1670,7 +1670,7 @@ function DeliveryForm({
         onChange={(e) => update("deliveryNote", e.target.value)}
         placeholder="Ghi chú cho bưu tá..."
         data-allow-hotkeys="true"
-        className="w-full h-7 px-2 rounded border border-gray-200 text-[11px] outline-none focus:border-primary bg-white"
+        className="w-full h-7 px-2 rounded border border-border text-[11px] outline-none focus:border-primary bg-white"
       />
     </div>
   );
@@ -1743,14 +1743,14 @@ function DraftListModal({
           <div className="flex items-center gap-2">
             <Icon name="save" size={16} className="text-primary" />
             <h2 className="text-sm font-bold text-gray-800">Đơn nháp đã lưu</h2>
-            <kbd className="font-mono text-[9px] bg-gray-100 border border-gray-200 rounded px-1 py-0.5 text-gray-400">
+            <kbd className="font-mono text-[9px] bg-muted border border-border rounded px-1 py-0.5 text-muted-foreground">
               F3
             </kbd>
           </div>
           <button
             type="button"
             onClick={onClose}
-            className="p-1 rounded hover:bg-gray-100 text-gray-400 hover:text-gray-600 transition-colors"
+            className="p-1 rounded hover:bg-muted text-muted-foreground hover:text-foreground transition-colors"
           >
             <Icon name="close" size={16} />
           </button>
@@ -1763,7 +1763,7 @@ function DraftListModal({
               <Icon name="progress_activity" className="animate-spin text-primary" />
             </div>
           ) : drafts.length === 0 ? (
-            <div className="flex flex-col items-center justify-center py-12 text-gray-400">
+            <div className="flex flex-col items-center justify-center py-12 text-muted-foreground">
               <Icon name="save" size={32} className="mb-2 text-gray-200" />
               <p className="text-xs">Chưa có đơn nháp nào</p>
             </div>
@@ -1778,23 +1778,23 @@ function DraftListModal({
                   <div className="flex-1 min-w-0 cursor-pointer" onClick={() => handleLoad(draft.id)}>
                     <div className="flex items-center gap-2">
                       <span className="text-xs font-bold text-primary">{draft.code}</span>
-                      <span className="text-[10px] text-gray-400">
+                      <span className="text-[10px] text-muted-foreground">
                         {new Date(draft.createdAt).toLocaleString("vi-VN", {
                           day: "2-digit", month: "2-digit", hour: "2-digit", minute: "2-digit",
                         })}
                       </span>
                     </div>
                     <div className="flex items-center gap-2 mt-0.5">
-                      <span className="text-[11px] text-gray-600 truncate">
+                      <span className="text-[11px] text-foreground truncate">
                         {draft.customerName || "Khách lẻ"}
                       </span>
-                      <span className="text-[10px] text-gray-400">·</span>
-                      <span className="text-[10px] text-gray-400">
+                      <span className="text-[10px] text-muted-foreground">·</span>
+                      <span className="text-[10px] text-muted-foreground">
                         {draft.itemCount} SP
                       </span>
                     </div>
                     {draft.note && (
-                      <p className="text-[10px] text-gray-400 truncate mt-0.5">{draft.note}</p>
+                      <p className="text-[10px] text-muted-foreground truncate mt-0.5">{draft.note}</p>
                     )}
                   </div>
 

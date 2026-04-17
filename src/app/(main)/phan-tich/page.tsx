@@ -46,7 +46,7 @@ function RevenueTooltip({ active, payload, label }: any) {
   if (!active || !payload?.length) return null;
   return (
     <div className="bg-white border rounded-lg shadow-lg p-2.5 text-xs">
-      <p className="font-semibold text-gray-700 mb-1">{label}</p>
+      <p className="font-semibold text-foreground mb-1">{label}</p>
       {payload.map((entry: any, i: number) => (
         <p key={i} style={{ color: entry.color }}>
           {entry.name}: {formatChartTooltipCurrency(entry.value)}
@@ -97,7 +97,7 @@ export default function TongQuanPage() {
       <div className="flex flex-col h-full">
         <DateRangeBar title="Tổng quan" subtitle="Phân tích kinh doanh tổng hợp" />
         <div className="flex-1 flex items-center justify-center">
-          <Icon name="progress_activity" size={32} className="animate-spin text-gray-400" />
+          <Icon name="progress_activity" size={32} className="animate-spin text-muted-foreground" />
         </div>
       </div>
     );
@@ -157,7 +157,7 @@ export default function TongQuanPage() {
           {/* Revenue line chart */}
           <ChartCard title="Doanh thu theo ngày" subtitle="30 ngày gần nhất">
             {dailyRevenue.length === 0 ? (
-              <div className="flex items-center justify-center h-[280px] text-sm text-gray-400">
+              <div className="flex items-center justify-center h-[280px] text-sm text-muted-foreground">
                 Chưa có dữ liệu doanh thu theo ngày
               </div>
             ) : (
@@ -193,7 +193,7 @@ export default function TongQuanPage() {
           {/* Revenue by category bar chart */}
           <ChartCard title="Doanh thu theo danh mục" subtitle="Tháng hiện tại">
             {categoryRevenue.length === 0 ? (
-              <div className="flex items-center justify-center h-[280px] text-sm text-gray-400">
+              <div className="flex items-center justify-center h-[280px] text-sm text-muted-foreground">
                 Chưa có dữ liệu doanh thu theo danh mục
               </div>
             ) : (
@@ -227,14 +227,14 @@ export default function TongQuanPage() {
         {/* Top 10 products table */}
         <ChartCard title="Top 10 sản phẩm bán chạy" subtitle="Theo doanh thu tháng này">
           {topProducts.length === 0 ? (
-            <div className="flex items-center justify-center h-32 text-sm text-gray-400">
+            <div className="flex items-center justify-center h-32 text-sm text-muted-foreground">
               Chưa có dữ liệu sản phẩm bán chạy
             </div>
           ) : (
             <div className="overflow-x-auto">
               <table className="w-full text-sm">
                 <thead>
-                  <tr className="border-b text-left text-xs text-gray-500">
+                  <tr className="border-b text-left text-xs text-muted-foreground">
                     <th className="pb-2 pr-4 font-medium w-8">#</th>
                     <th className="pb-2 pr-4 font-medium">Sản phẩm</th>
                     <th className="pb-2 pr-4 font-medium text-right">SL bán</th>
@@ -243,10 +243,10 @@ export default function TongQuanPage() {
                 </thead>
                 <tbody>
                   {topProducts.map((p, i) => (
-                    <tr key={i} className="border-b last:border-0 hover:bg-gray-50">
-                      <td className="py-2 pr-4 text-gray-400 text-xs">{i + 1}</td>
+                    <tr key={i} className="border-b last:border-0 hover:bg-surface-container-low">
+                      <td className="py-2 pr-4 text-muted-foreground text-xs">{i + 1}</td>
                       <td className="py-2 pr-4 font-medium text-gray-800">{p.name}</td>
-                      <td className="py-2 pr-4 text-right text-gray-600">{p.qty}</td>
+                      <td className="py-2 pr-4 text-right text-foreground">{p.qty}</td>
                       <td className="py-2 text-right font-semibold text-primary">
                         {formatCurrency(p.revenue)}đ
                       </td>

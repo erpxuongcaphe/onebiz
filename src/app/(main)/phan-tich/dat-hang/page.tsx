@@ -72,7 +72,7 @@ const STATUS_BADGE: Record<string, string> = {
   "Chờ xử lý": "bg-yellow-100 text-yellow-700",
   "Đang giao": "bg-orange-100 text-orange-700",
   "Đã xác nhận": "bg-primary-fixed text-primary",
-  "Nháp": "bg-gray-100 text-gray-700",
+  "Nháp": "bg-muted text-foreground",
   "Đã hủy": "bg-red-100 text-red-600",
 };
 

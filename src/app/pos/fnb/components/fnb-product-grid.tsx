@@ -25,7 +25,7 @@ export function FnbProductGrid({
 }: FnbProductGridProps) {
   if (products.length === 0) {
     return (
-      <div className="flex flex-col items-center justify-center h-48 text-gray-400">
+      <div className="flex flex-col items-center justify-center h-48 text-muted-foreground">
         <Icon name="local_cafe" size={40} className="mb-3" />
         <p className="text-sm">Không có sản phẩm nào</p>
       </div>
@@ -59,7 +59,7 @@ function ProductCard({
       type="button"
       onClick={onClick}
       className={cn(
-        "relative flex flex-col items-center bg-white rounded-lg border border-gray-200 overflow-hidden transition-all text-center group",
+        "relative flex flex-col items-center bg-white rounded-lg border border-border overflow-hidden transition-all text-center group",
         "hover:border-primary hover:shadow-md active:scale-[0.97]",
         "px-2 py-3 md:px-1.5 md:py-2 min-h-[88px] md:min-h-[72px]",
         outOfStock && "opacity-50"
@@ -94,7 +94,7 @@ function ProductCard({
       </p>
 
       {/* Name */}
-      <p className="text-xs md:text-[11px] font-medium text-gray-700 line-clamp-2 leading-tight mt-0.5">
+      <p className="text-xs md:text-[11px] font-medium text-foreground line-clamp-2 leading-tight mt-0.5">
         {product.name}
       </p>
     </button>

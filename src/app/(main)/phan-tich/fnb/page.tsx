@@ -197,19 +197,19 @@ export default function FnbAnalyticsPage() {
                 const pct = (t.revenue / maxRevenue) * 100;
                 return (
                   <div key={idx} className="flex items-center gap-3">
-                    <span className="text-xs text-gray-600 w-20 shrink-0 truncate">
+                    <span className="text-xs text-foreground w-20 shrink-0 truncate">
                       {t.tableName}
                     </span>
-                    <div className="flex-1 h-5 bg-gray-100 rounded-full overflow-hidden">
+                    <div className="flex-1 h-5 bg-muted rounded-full overflow-hidden">
                       <div
                         className="h-full bg-primary rounded-full"
                         style={{ width: `${pct}%` }}
                       />
                     </div>
-                    <span className="text-xs font-medium text-gray-700 shrink-0 w-24 text-right">
+                    <span className="text-xs font-medium text-foreground shrink-0 w-24 text-right">
                       {formatCurrency(t.revenue)}
                     </span>
-                    <span className="text-[10px] text-gray-400 shrink-0">
+                    <span className="text-[10px] text-muted-foreground shrink-0">
                       {t.orders} đơn
                     </span>
                   </div>
@@ -228,10 +228,10 @@ export default function FnbAnalyticsPage() {
               <table className="w-full text-sm">
                 <thead>
                   <tr className="border-b text-left">
-                    <th className="py-2 text-xs font-medium text-gray-500">Nhân viên</th>
-                    <th className="py-2 text-xs font-medium text-gray-500 text-right">Doanh thu</th>
-                    <th className="py-2 text-xs font-medium text-gray-500 text-right">Số đơn</th>
-                    <th className="py-2 text-xs font-medium text-gray-500 text-right">TB/đơn</th>
+                    <th className="py-2 text-xs font-medium text-muted-foreground">Nhân viên</th>
+                    <th className="py-2 text-xs font-medium text-muted-foreground text-right">Doanh thu</th>
+                    <th className="py-2 text-xs font-medium text-muted-foreground text-right">Số đơn</th>
+                    <th className="py-2 text-xs font-medium text-muted-foreground text-right">TB/đơn</th>
                   </tr>
                 </thead>
                 <tbody>

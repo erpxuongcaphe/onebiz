@@ -45,7 +45,7 @@ const CHANNEL_STYLES: Record<string, { bg: string; iconColor: string; valueColor
   "Website": { bg: "bg-purple-50", iconColor: "text-purple-600", valueColor: "text-purple-700" },
 };
 
-const DEFAULT_STYLE = { bg: "bg-gray-50", iconColor: "text-gray-600", valueColor: "text-gray-700" };
+const DEFAULT_STYLE = { bg: "bg-surface-container-low", iconColor: "text-foreground", valueColor: "text-foreground" };
 
 // === Tooltips ===
 

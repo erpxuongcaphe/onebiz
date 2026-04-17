@@ -467,24 +467,24 @@ export default function QuanLyBanPage() {
                           ? "border-red-200 bg-red-50"
                           : table.status === "reserved"
                             ? "border-orange-200 bg-orange-50"
-                            : "border-gray-200 bg-gray-50"
+                            : "border-border bg-surface-container-low"
                     )}
                   >
                     {/* Grip handle (visual) */}
                     <Icon name="drag_indicator" className="absolute top-1 left-1 size-3 text-gray-300 opacity-0 group-hover:opacity-100 transition-opacity" />
 
                     {/* Table number */}
-                    <span className="text-lg font-bold text-gray-700">
+                    <span className="text-lg font-bold text-foreground">
                       {table.tableNumber}
                     </span>
 
                     {/* Name */}
-                    <span className="text-[10px] text-gray-500 truncate max-w-full">
+                    <span className="text-[10px] text-muted-foreground truncate max-w-full">
                       {table.name}
                     </span>
 
                     {/* Capacity */}
-                    <span className="flex items-center gap-0.5 text-[10px] text-gray-400">
+                    <span className="flex items-center gap-0.5 text-[10px] text-muted-foreground">
                       <Icon name="group" className="size-2.5" />
                       {table.capacity} chỗ
                     </span>
@@ -497,7 +497,7 @@ export default function QuanLyBanPage() {
                         table.status === "available" && "text-green-600 border-green-300",
                         table.status === "occupied" && "text-red-600 border-red-300",
                         table.status === "reserved" && "text-orange-600 border-orange-300",
-                        table.status === "cleaning" && "text-gray-500 border-gray-300"
+                        table.status === "cleaning" && "text-muted-foreground border-border"
                       )}
                     >
                       {table.status === "available"
@@ -513,7 +513,7 @@ export default function QuanLyBanPage() {
                     <div className="flex items-center gap-1 mt-1 opacity-0 group-hover:opacity-100 transition-opacity">
                       <button
                         type="button"
-                        className="p-1 rounded hover:bg-white/80 text-gray-400 hover:text-primary"
+                        className="p-1 rounded hover:bg-white/80 text-muted-foreground hover:text-primary"
                         onClick={() => openEditTable(table)}
                         title="Sửa"
                       >
@@ -521,7 +521,7 @@ export default function QuanLyBanPage() {
                       </button>
                       <button
                         type="button"
-                        className="p-1 rounded hover:bg-white/80 text-gray-400 hover:text-red-600"
+                        className="p-1 rounded hover:bg-white/80 text-muted-foreground hover:text-red-600"
                         onClick={() => handleDeleteTable(table)}
                         title="Xóa"
                       >

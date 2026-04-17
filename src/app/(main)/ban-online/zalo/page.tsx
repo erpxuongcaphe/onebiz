@@ -234,7 +234,7 @@ export default function ZaloPage() {
                   key={conv.id}
                   onClick={() => setActiveConv(conv.id)}
                   className={cn(
-                    "w-full flex items-start gap-3 px-3 py-3 text-left transition-colors hover:bg-gray-50",
+                    "w-full flex items-start gap-3 px-3 py-3 text-left transition-colors hover:bg-surface-container-low",
                     activeConv === conv.id && "bg-primary-fixed"
                   )}
                 >
@@ -286,7 +286,7 @@ export default function ZaloPage() {
         </div>
 
         {/* RIGHT: Chat detail */}
-        <div className="flex-1 flex flex-col bg-gray-50 min-w-0">
+        <div className="flex-1 flex flex-col bg-surface-container-low min-w-0">
           {/* Chat header */}
           <div className="bg-white border-b px-4 py-2.5 flex items-center justify-between">
             <div className="flex items-center gap-2">
@@ -364,7 +364,7 @@ export default function ZaloPage() {
               {suggestedProducts.map((product) => (
                 <div
                   key={product.id}
-                  className="flex items-center gap-2 border rounded-lg px-3 py-2 bg-gray-50 shrink-0"
+                  className="flex items-center gap-2 border rounded-lg px-3 py-2 bg-surface-container-low shrink-0"
                 >
                   <div className="size-9 rounded bg-orange-100 flex items-center justify-center">
                     <Icon name="inventory_2" className="size-4 text-orange-600" />

@@ -131,7 +131,7 @@ export default function AuditPage() {
       size: 120,
       cell: ({ row }) => {
         const colorCls =
-          ACTION_COLORS[row.original.action] ?? "bg-gray-100 text-gray-800";
+          ACTION_COLORS[row.original.action] ?? "bg-muted text-gray-800";
         return (
           <Badge variant="secondary" className={`text-[11px] ${colorCls}`}>
             {row.original.actionLabel}
@@ -302,7 +302,7 @@ export default function AuditPage() {
                       variant="secondary"
                       className={
                         ACTION_COLORS[selectedEntry.action] ??
-                        "bg-gray-100 text-gray-800"
+                        "bg-muted text-gray-800"
                       }
                     >
                       {selectedEntry.actionLabel}

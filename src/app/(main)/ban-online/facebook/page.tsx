@@ -248,13 +248,13 @@ export default function FacebookPage() {
                   key={conv.id}
                   onClick={() => setActiveConversation(conv.id)}
                   className={cn(
-                    "w-full flex items-start gap-3 p-3 text-left hover:bg-gray-50 transition-colors",
+                    "w-full flex items-start gap-3 p-3 text-left hover:bg-surface-container-low transition-colors",
                     activeConversation === conv.id &&
                       "bg-primary-fixed/60 border-l-2 border-l-primary"
                   )}
                 >
                   {/* Avatar */}
-                  <div className="h-10 w-10 rounded-full bg-gray-200 flex items-center justify-center text-sm font-medium text-gray-600 shrink-0">
+                  <div className="h-10 w-10 rounded-full bg-muted flex items-center justify-center text-sm font-medium text-foreground shrink-0">
                     {conv.avatar}
                   </div>
                   {/* Info */}
@@ -265,7 +265,7 @@ export default function FacebookPage() {
                           "text-sm truncate",
                           conv.unread > 0
                             ? "font-semibold text-gray-900"
-                            : "font-medium text-gray-700"
+                            : "font-medium text-foreground"
                         )}
                       >
                         {conv.name}
@@ -279,7 +279,7 @@ export default function FacebookPage() {
                         className={cn(
                           "text-xs truncate",
                           conv.unread > 0
-                            ? "text-gray-700 font-medium"
+                            ? "text-foreground font-medium"
                             : "text-muted-foreground"
                         )}
                       >
@@ -299,11 +299,11 @@ export default function FacebookPage() {
         </div>
 
         {/* RIGHT: Conversation detail */}
-        <div className="flex-1 flex flex-col min-w-0 bg-gray-50/50">
+        <div className="flex-1 flex flex-col min-w-0 bg-surface-container-low/50">
           {/* Chat header */}
           <div className="flex items-center justify-between px-4 py-3 border-b bg-white">
             <div className="flex items-center gap-3">
-              <div className="h-9 w-9 rounded-full bg-gray-200 flex items-center justify-center text-sm font-medium text-gray-600">
+              <div className="h-9 w-9 rounded-full bg-muted flex items-center justify-center text-sm font-medium text-foreground">
                 NT
               </div>
               <div>

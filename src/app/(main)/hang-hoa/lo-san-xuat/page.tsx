@@ -152,7 +152,7 @@ export default function LoSanXuatPage() {
         return (
           <div className="flex items-center gap-2">
             <span className="text-xs font-bold tabular-nums">{row.original.currentQty}</span>
-            <div className="w-12 h-1.5 bg-gray-200 rounded-full overflow-hidden">
+            <div className="w-12 h-1.5 bg-muted rounded-full overflow-hidden">
               <div className="h-full bg-primary rounded-full" style={{ width: `${Math.min(100, pct)}%` }} />
             </div>
           </div>

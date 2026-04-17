@@ -44,7 +44,7 @@ const filterTabs: { key: OrderStatus; label: string; count: number }[] = [
 ];
 
 const summaryCards = [
-  { label: "Tổng đơn", value: 156, icon: ShoppingBag, color: "text-gray-700", bg: "bg-gray-50" },
+  { label: "Tổng đơn", value: 156, icon: ShoppingBag, color: "text-foreground", bg: "bg-surface-container-low" },
   { label: "Chờ xử lý", value: 8, icon: Clock, color: "text-yellow-600", bg: "bg-yellow-50" },
   { label: "Đang giao", value: 23, icon: Truck, color: "text-purple-600", bg: "bg-purple-50" },
   { label: "Hoàn thành", value: 118, icon: CheckCircle2, color: "text-green-600", bg: "bg-green-50" },
@@ -127,7 +127,7 @@ export default function DonHangOnlinePage() {
                   "ml-1.5 text-[10px] rounded-full px-1.5 py-0.5",
                   activeFilter === tab.key
                     ? "bg-white/20 text-white"
-                    : "bg-gray-100 text-gray-600"
+                    : "bg-muted text-foreground"
                 )}
               >
                 {tab.count}
@@ -177,7 +177,7 @@ export default function DonHangOnlinePage() {
             <div className="overflow-x-auto">
               <table className="w-full text-sm">
                 <thead>
-                  <tr className="border-b bg-gray-50/50">
+                  <tr className="border-b bg-surface-container-low/50">
                     <th className="text-left px-4 py-2.5 font-medium text-muted-foreground">
                       Mã đơn
                     </th>
@@ -205,7 +205,7 @@ export default function DonHangOnlinePage() {
                   {filteredOrders.map((order) => (
                     <tr
                       key={order.id}
-                      className="hover:bg-gray-50 transition-colors"
+                      className="hover:bg-surface-container-low transition-colors"
                     >
                       <td className="px-4 py-2.5 font-medium text-primary">
                         {order.code}

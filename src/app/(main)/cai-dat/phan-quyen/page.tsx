@@ -307,7 +307,7 @@ export default function PermissionSettingsPage() {
                                     "h-4 w-4 rounded border-2 flex items-center justify-center shrink-0 transition-colors",
                                     editPerms.has(perm.code)
                                       ? "bg-green-500 border-green-500 text-white"
-                                      : "border-gray-300 bg-white"
+                                      : "border-border bg-white"
                                   )}
                                 >
                                   {editPerms.has(perm.code) && (

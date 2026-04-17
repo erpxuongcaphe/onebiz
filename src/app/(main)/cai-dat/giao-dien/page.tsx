@@ -14,8 +14,8 @@ const themes = [
     id: "light",
     label: "Sáng",
     icon: Sun,
-    preview: "bg-white border-gray-200",
-    previewInner: "bg-gray-100",
+    preview: "bg-white border-border",
+    previewInner: "bg-muted",
   },
   {
     id: "dark",

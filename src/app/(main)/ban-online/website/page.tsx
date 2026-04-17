@@ -255,7 +255,7 @@ export default function WebsitePage() {
             <div className="overflow-x-auto">
               <table className="w-full text-sm">
                 <thead>
-                  <tr className="border-b bg-gray-50/50">
+                  <tr className="border-b bg-surface-container-low/50">
                     <th className="text-left px-4 py-2.5 font-medium text-muted-foreground">
                       Mã đơn
                     </th>
@@ -275,7 +275,7 @@ export default function WebsitePage() {
                 </thead>
                 <tbody className="divide-y">
                   {recentOrders.map((order) => (
-                    <tr key={order.id} className="hover:bg-gray-50 transition-colors">
+                    <tr key={order.id} className="hover:bg-surface-container-low transition-colors">
                       <td className="px-4 py-2.5 font-medium text-green-600">
                         {order.code}
                       </td>

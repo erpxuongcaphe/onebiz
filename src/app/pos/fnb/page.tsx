@@ -647,7 +647,7 @@ export default function FnbPosPage() {
   // CEO chưa chọn chi nhánh → hiện layout POS với prompt chọn chi nhánh
   if (!branchId) {
     return (
-      <div className="flex flex-col h-screen bg-gray-50">
+      <div className="flex flex-col h-screen bg-surface-container-low">
         <FnbHeader
           tabs={[]}
           activeTabId=""
@@ -669,14 +669,14 @@ export default function FnbPosPage() {
 
   if (loading) {
     return (
-      <div className="flex items-center justify-center h-screen bg-gray-50">
+      <div className="flex items-center justify-center h-screen bg-surface-container-low">
         <Icon name="progress_activity" size={32} className="animate-spin text-muted-foreground" />
       </div>
     );
   }
 
   return (
-    <div className="flex flex-col h-screen bg-gray-50">
+    <div className="flex flex-col h-screen bg-surface-container-low">
       <ConnectionStatusBar status={networkStatus} />
       <FnbHeader
         tabs={pos.tabs}
@@ -695,7 +695,7 @@ export default function FnbPosPage() {
         {/* Left panel: menu grid OR floor plan */}
         <div className="flex-1 flex flex-col min-w-0">
           {showFloorPlan ? (
-            <Suspense fallback={<div className="flex-1 flex items-center justify-center"><Icon name="progress_activity" size={24} className="animate-spin text-gray-400" /></div>}>
+            <Suspense fallback={<div className="flex-1 flex items-center justify-center"><Icon name="progress_activity" size={24} className="animate-spin text-muted-foreground" /></div>}>
               <TableFloorPlan
                 tables={tables}
                 onSelectTable={handleTableSelect}
@@ -829,12 +829,12 @@ export default function FnbPosPage() {
       {/* Mobile cart overlay */}
       {mobileCartOpen && (
         <div className="fixed inset-0 z-40 lg:hidden flex flex-col bg-white">
-          <div className="flex items-center justify-between px-3 py-2 border-b bg-gray-50">
+          <div className="flex items-center justify-between px-3 py-2 border-b bg-surface-container-low">
             <span className="text-sm font-semibold">Giỏ hàng</span>
             <button
               type="button"
               onClick={() => setMobileCartOpen(false)}
-              className="h-8 w-8 rounded flex items-center justify-center hover:bg-gray-200"
+              className="h-8 w-8 rounded flex items-center justify-center hover:bg-muted"
             >
               <Icon name="close" size={16} />
             </button>
@@ -882,7 +882,7 @@ export default function FnbPosPage() {
               <h3 className="text-sm font-semibold flex items-center gap-1.5">
                 <Icon name="keyboard" size={16} /> Phím tắt
               </h3>
-              <button type="button" onClick={() => setKeyboardHelpOpen(false)} className="text-gray-400 hover:text-gray-600">
+              <button type="button" onClick={() => setKeyboardHelpOpen(false)} className="text-muted-foreground hover:text-foreground">
                 <Icon name="close" size={16} />
               </button>
             </div>
@@ -900,8 +900,8 @@ export default function FnbPosPage() {
                 ["Esc", "Đóng popup"],
               ].map(([key, desc]) => (
                 <div key={key} className="flex items-center justify-between py-0.5">
-                  <kbd className="px-1.5 py-0.5 bg-gray-100 border rounded text-[11px] font-mono">{key}</kbd>
-                  <span className="text-gray-600">{desc}</span>
+                  <kbd className="px-1.5 py-0.5 bg-muted border rounded text-[11px] font-mono">{key}</kbd>
+                  <span className="text-foreground">{desc}</span>
                 </div>
               ))}
             </div>

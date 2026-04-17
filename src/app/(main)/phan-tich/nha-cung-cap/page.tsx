@@ -177,7 +177,7 @@ export default function NhaCungCapPage() {
           subtitle="Thống kê mua hàng và công nợ nhà cung cấp"
         />
         <div className="flex-1 flex items-center justify-center">
-          <Icon name="progress_activity" size={32} className="animate-spin text-gray-400" />
+          <Icon name="progress_activity" size={32} className="animate-spin text-muted-foreground" />
         </div>
       </div>
     );

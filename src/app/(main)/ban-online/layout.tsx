@@ -53,7 +53,7 @@ export default function BanOnlineLayout({
                     "flex items-center gap-2.5 px-3 py-2 rounded-md text-sm transition-colors",
                     isActive
                       ? "bg-primary/10 text-primary font-medium"
-                      : "text-gray-600 hover:bg-gray-100 hover:text-gray-900"
+                      : "text-foreground hover:bg-muted hover:text-foreground"
                   )}
                 >
                   <Icon className="size-4 shrink-0" />
@@ -79,7 +79,7 @@ export default function BanOnlineLayout({
                 href={item.href}
                 className={cn(
                   "flex flex-col items-center gap-0.5 px-2 py-1.5 rounded text-[10px] transition-colors",
-                  isActive ? "text-primary font-medium" : "text-gray-500"
+                  isActive ? "text-primary font-medium" : "text-muted-foreground"
                 )}
               >
                 <Icon className="size-4" />

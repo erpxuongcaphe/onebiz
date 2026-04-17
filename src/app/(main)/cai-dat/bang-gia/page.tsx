@@ -105,7 +105,7 @@ export default function PriceBookSettingsPage() {
                         "text-xs",
                         book.status === "active"
                           ? "bg-green-100 text-green-700 hover:bg-green-100"
-                          : "bg-gray-100 text-gray-500 hover:bg-gray-100"
+                          : "bg-muted text-muted-foreground hover:bg-muted"
                       )}
                     >
                       {book.status === "active" ? "Đang áp dụng" : "Tạm ngưng"}
