@@ -27,7 +27,7 @@ export function PosBranchSelector({ variant = "dark" }: PosBranchSelectorProps) 
           "flex items-center gap-1.5 px-2.5 py-1.5 text-sm rounded-md transition-colors cursor-pointer outline-none shrink-0",
           isDark
             ? "text-slate-300 hover:text-white hover:bg-slate-800"
-            : "text-gray-700 hover:text-gray-900 hover:bg-gray-100 border border-gray-200"
+            : "text-foreground hover:text-on-surface hover:bg-surface-container border border-border"
         )}
       >
         <Icon name="apartment" size={14} className="shrink-0" />
