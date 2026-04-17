@@ -2,12 +2,6 @@
 
 import { useState, useEffect, useCallback } from "react";
 import {
-  Factory,
-  Clock,
-  Boxes,
-  TrendingUp
-} from "lucide-react";
-import {
   BarChart,
   Bar,
   XAxis,
@@ -84,8 +78,8 @@ function useProductionLabels() {
 function TrendTooltip({ active, payload, label }: any) {
   if (!active || !payload?.length) return null;
   return (
-    <div className="rounded-lg border bg-background p-3 shadow-md text-xs">
-      <p className="font-semibold text-gray-700 mb-1">{label}</p>
+    <div className="rounded-xl border bg-surface-container-lowest p-3 ambient-shadow text-xs">
+      <p className="font-semibold text-foreground mb-1">{label}</p>
       {payload.map((p: any, i: number) => (
         <p key={i} style={{ color: p.color }}>
           {p.name}: {formatNumber(p.value)}
@@ -146,24 +140,24 @@ export default function ProductionDashboardPage() {
     <div className="space-y-6">
       <PageHeader title={`Dashboard ${labels.title}`} />
 
-      {/* KPI Row */}
+      {/* KPI Row — Stitch: primary-fixed tint cho tile chính + semantic token cho status */}
       <div className="grid grid-cols-2 lg:grid-cols-4 gap-3">
         <KpiCard
           label={`${labels.orderLabel} tháng này`}
           value={String(kpis?.ordersThisMonth ?? 0)}
           change={`${kpis?.completedThisMonth ?? 0} hoàn thành`}
           positive
-          icon={Factory}
-          bg="bg-blue-50"
-          iconColor="text-blue-600"
-          valueColor="text-blue-700"
+          icon="factory"
+          bg="bg-primary-fixed"
+          iconColor="text-primary"
+          valueColor="text-primary"
         />
         <KpiCard
           label="Đang thực hiện"
           value={String(kpis?.activeOrders ?? 0)}
           change={`${labels.ordersLabel}`}
           positive
-          icon={Clock}
+          icon="schedule"
           bg="bg-amber-50"
           iconColor="text-amber-600"
           valueColor="text-amber-700"
@@ -173,7 +167,7 @@ export default function ProductionDashboardPage() {
           value={`${kpis?.yieldRate ?? 0}%`}
           change={`SL: ${formatNumber(kpis?.totalOutputQty ?? 0)}`}
           positive={(kpis?.yieldRate ?? 0) >= 90}
-          icon={TrendingUp}
+          icon="trending_up"
           bg="bg-green-50"
           iconColor="text-green-600"
           valueColor="text-green-700"
@@ -187,7 +181,7 @@ export default function ProductionDashboardPage() {
               : "Đủ tồn kho"
           }
           positive={(kpis?.nvlLowStockCount ?? 0) === 0}
-          icon={Boxes}
+          icon="inventory_2"
           bg="bg-purple-50"
           iconColor="text-purple-600"
           valueColor="text-purple-700"
@@ -229,8 +223,9 @@ export default function ProductionDashboardPage() {
               <YAxis fontSize={12} />
               <Tooltip content={<TrendTooltip />} />
               <Legend />
-              <Bar dataKey="planned" name="Kế hoạch" fill="#93c5fd" radius={[4, 4, 0, 0]} />
-              <Bar dataKey="completed" name="Hoàn thành" fill="#3b82f6" radius={[4, 4, 0, 0]} />
+              {/* Stitch palette: primary tint (#9CB9FF) cho planned, primary (#004AC6) cho completed */}
+              <Bar dataKey="planned" name="Kế hoạch" fill="#9CB9FF" radius={[6, 6, 0, 0]} />
+              <Bar dataKey="completed" name="Hoàn thành" fill="#004AC6" radius={[6, 6, 0, 0]} />
             </BarChart>
           </ResponsiveContainer>
         </ChartCard>
@@ -282,19 +277,19 @@ export default function ProductionDashboardPage() {
       >
         <div className="overflow-x-auto">
           <table className="w-full text-sm">
-            <thead className="bg-muted/30">
+            <thead className="bg-surface-container-low">
               <tr>
-                <th className="text-left p-2 font-medium">Nguyên liệu</th>
-                <th className="text-left p-2 font-medium">Chi nhánh</th>
-                <th className="text-right p-2 font-medium">Tồn kho</th>
-                <th className="text-right p-2 font-medium">Tối thiểu</th>
-                <th className="text-right p-2 font-medium">Giá trị</th>
-                <th className="text-center p-2 font-medium">Trạng thái</th>
+                <th className="text-left p-2 text-xs font-semibold text-muted-foreground uppercase tracking-wider">Nguyên liệu</th>
+                <th className="text-left p-2 text-xs font-semibold text-muted-foreground uppercase tracking-wider">Chi nhánh</th>
+                <th className="text-right p-2 text-xs font-semibold text-muted-foreground uppercase tracking-wider">Tồn kho</th>
+                <th className="text-right p-2 text-xs font-semibold text-muted-foreground uppercase tracking-wider">Tối thiểu</th>
+                <th className="text-right p-2 text-xs font-semibold text-muted-foreground uppercase tracking-wider">Giá trị</th>
+                <th className="text-center p-2 text-xs font-semibold text-muted-foreground uppercase tracking-wider">Trạng thái</th>
               </tr>
             </thead>
             <tbody>
               {(lowStockNvl.length > 0 ? lowStockNvl : nvl.slice(0, 15)).map((r, i) => (
-                <tr key={i} className="border-t hover:bg-muted/20">
+                <tr key={i} className="border-t border-border hover:bg-surface-container-low">
                   <td className="p-2">
                     <div className="font-medium">{r.productName}</div>
                     <div className="text-xs text-muted-foreground">{r.productCode} · {r.unit}</div>
