@@ -118,7 +118,7 @@ export function FnbPaymentDialog({
             )}
             <div className="flex justify-between font-bold border-t pt-1">
               <span>Tổng cộng</span>
-              <span className="text-blue-600 tabular-nums">{formatCurrency(total)}</span>
+              <span className="text-primary tabular-nums">{formatCurrency(total)}</span>
             </div>
           </div>
 

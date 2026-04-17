@@ -221,7 +221,7 @@ export const DEFAULT_ROLE_TEMPLATES: RoleTemplate[] = [
     name: "Quản lý",
     description: "Quản lý hoạt động cửa hàng và chi nhánh",
     legacyRole: "manager",
-    color: "bg-blue-500",
+    color: "bg-primary",
     permissions: [
       // POS full
       ...ALL_PERMISSION_CODES.filter((c) => c.startsWith("pos_")),

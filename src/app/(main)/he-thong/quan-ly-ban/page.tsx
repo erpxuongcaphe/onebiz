@@ -348,8 +348,8 @@ export default function QuanLyBanPage() {
         <Card>
           <CardContent className="pt-0">
             <div className="flex items-center gap-3">
-              <div className="flex size-10 items-center justify-center rounded-full bg-blue-100">
-                <Icon name="grid_view" className="size-5 text-blue-600" />
+              <div className="flex size-10 items-center justify-center rounded-full bg-primary-fixed">
+                <Icon name="grid_view" className="size-5 text-primary" />
               </div>
               <div>
                 <p className="text-2xl font-bold">{zones.length}</p>
@@ -513,7 +513,7 @@ export default function QuanLyBanPage() {
                     <div className="flex items-center gap-1 mt-1 opacity-0 group-hover:opacity-100 transition-opacity">
                       <button
                         type="button"
-                        className="p-1 rounded hover:bg-white/80 text-gray-400 hover:text-blue-600"
+                        className="p-1 rounded hover:bg-white/80 text-gray-400 hover:text-primary"
                         onClick={() => openEditTable(table)}
                         title="Sửa"
                       >

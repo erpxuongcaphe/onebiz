@@ -139,21 +139,21 @@ const stats = [
     value: "8",
     icon: MessageCircle,
     color: "text-[#0068FF]",
-    bg: "bg-blue-50",
+    bg: "bg-primary-fixed",
   },
   {
     label: "Đơn từ Zalo",
     value: "15",
     icon: ShoppingCart,
     color: "text-[#0068FF]",
-    bg: "bg-blue-50",
+    bg: "bg-primary-fixed",
   },
   {
     label: "Doanh thu",
     value: "28.500.000",
     icon: DollarSign,
     color: "text-[#0068FF]",
-    bg: "bg-blue-50",
+    bg: "bg-primary-fixed",
     suffix: "đ",
   },
 ];
@@ -235,7 +235,7 @@ export default function ZaloPage() {
                   onClick={() => setActiveConv(conv.id)}
                   className={cn(
                     "w-full flex items-start gap-3 px-3 py-3 text-left transition-colors hover:bg-gray-50",
-                    activeConv === conv.id && "bg-blue-50"
+                    activeConv === conv.id && "bg-primary-fixed"
                   )}
                 >
                   <div
@@ -342,7 +342,7 @@ export default function ZaloPage() {
                       className={cn(
                         "text-[10px] mt-1",
                         msg.sender === "shop"
-                          ? "text-blue-100"
+                          ? "text-primary-fixed"
                           : "text-muted-foreground"
                       )}
                     >

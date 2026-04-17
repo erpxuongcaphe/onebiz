@@ -38,7 +38,7 @@ const movementTypeBadge: Record<
   },
   adjust: {
     label: "Kiểm kho",
-    className: "bg-blue-50 text-blue-700 border-blue-200",
+    className: "bg-primary-fixed text-primary border-primary-fixed",
   },
   transfer: {
     label: "Chuyển kho",
@@ -238,7 +238,7 @@ export default function LichSuKhoPage() {
           ? "text-green-600"
           : isOut
           ? "text-red-600"
-          : "text-blue-600";
+          : "text-primary";
         return (
           <span className={`font-semibold ${color}`}>
             {prefix}

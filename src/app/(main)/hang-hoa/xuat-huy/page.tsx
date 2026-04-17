@@ -83,7 +83,7 @@ function DisposalExportDetail({
               variant: status.variant,
               className:
                 status.variant === "default"
-                  ? "bg-blue-100 text-blue-700 border-blue-200"
+                  ? "bg-primary-fixed text-primary border-primary-fixed"
                   : undefined,
             }}
             subtitle="Chi nhánh trung tâm"

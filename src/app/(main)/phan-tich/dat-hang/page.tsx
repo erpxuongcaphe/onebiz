@@ -71,7 +71,7 @@ const STATUS_BADGE: Record<string, string> = {
   "Đang xử lý": "bg-yellow-100 text-yellow-700",
   "Chờ xử lý": "bg-yellow-100 text-yellow-700",
   "Đang giao": "bg-orange-100 text-orange-700",
-  "Đã xác nhận": "bg-blue-100 text-blue-700",
+  "Đã xác nhận": "bg-primary-fixed text-primary",
   "Nháp": "bg-gray-100 text-gray-700",
   "Đã hủy": "bg-red-100 text-red-600",
 };
@@ -91,7 +91,7 @@ function OrderVolumeTooltip({
   return (
     <div className="rounded-lg border bg-background p-3 shadow-md">
       <p className="text-xs text-muted-foreground mb-1">Ngày {label}</p>
-      <p className="text-sm font-bold text-blue-600">
+      <p className="text-sm font-bold text-primary">
         {payload[0].value} đơn hàng
       </p>
     </div>

@@ -46,7 +46,7 @@ function HourTooltip({
     <div className="rounded-lg border bg-background p-3 shadow-md">
       <p className="text-xs text-muted-foreground mb-1">{label}</p>
       {payload.map((p) => (
-        <p key={p.dataKey} className="text-sm font-bold text-blue-600">
+        <p key={p.dataKey} className="text-sm font-bold text-primary">
           {p.dataKey === "revenue"
             ? formatChartTooltipCurrency(p.value)
             : `${p.value} đơn`}
@@ -202,7 +202,7 @@ export default function FnbAnalyticsPage() {
                     </span>
                     <div className="flex-1 h-5 bg-gray-100 rounded-full overflow-hidden">
                       <div
-                        className="h-full bg-blue-500 rounded-full"
+                        className="h-full bg-primary rounded-full"
                         style={{ width: `${pct}%` }}
                       />
                     </div>

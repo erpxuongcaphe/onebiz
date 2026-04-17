@@ -333,7 +333,7 @@ export default function CuoiNgayPage() {
                   ))}
                   <tr className="border-t-2 font-bold">
                     <td className="py-2.5 pr-4 text-gray-800">Tổng cộng</td>
-                    <td className="py-2.5 pr-4 text-right text-blue-700">
+                    <td className="py-2.5 pr-4 text-right text-primary">
                       {formatCurrency(totalRevenue)}đ
                     </td>
                     <td className="py-2.5 text-right text-gray-800">100%</td>

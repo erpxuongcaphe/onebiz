@@ -198,7 +198,7 @@ export default function LuongTienPage() {
                   <td className={`py-2 px-3 text-right font-bold ${row.net >= 0 ? "text-green-600" : "text-red-500"}`}>
                     {row.net >= 0 ? "+" : ""}{formatCurrency(row.net)}
                   </td>
-                  <td className={`py-2 px-3 text-right font-medium ${row.cumulativeBalance >= 0 ? "text-blue-600" : "text-red-500"}`}>
+                  <td className={`py-2 px-3 text-right font-medium ${row.cumulativeBalance >= 0 ? "text-primary" : "text-red-500"}`}>
                     {formatCurrency(row.cumulativeBalance)}
                   </td>
                   <td className="py-2 px-3">

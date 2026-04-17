@@ -21,8 +21,8 @@ const stats = [
     label: "Tin nhắn mới",
     value: "12",
     icon: MessageCircle,
-    color: "text-blue-600",
-    bg: "bg-blue-50",
+    color: "text-primary",
+    bg: "bg-primary-fixed",
   },
   {
     label: "Đơn từ Facebook",
@@ -184,7 +184,7 @@ export default function FacebookPage() {
       {/* Header */}
       <div className="px-4 md:px-6 pt-4 md:pt-6 pb-3 border-b">
         <div className="flex items-center gap-2 mb-1">
-          <div className="h-7 w-7 rounded-full bg-blue-600 flex items-center justify-center text-white text-xs font-bold">
+          <div className="h-7 w-7 rounded-full bg-primary flex items-center justify-center text-white text-xs font-bold">
             F
           </div>
           <h1 className="text-lg font-bold text-gray-900">
@@ -250,7 +250,7 @@ export default function FacebookPage() {
                   className={cn(
                     "w-full flex items-start gap-3 p-3 text-left hover:bg-gray-50 transition-colors",
                     activeConversation === conv.id &&
-                      "bg-blue-50/60 border-l-2 border-l-blue-600"
+                      "bg-primary-fixed/60 border-l-2 border-l-primary"
                   )}
                 >
                   {/* Avatar */}
@@ -286,7 +286,7 @@ export default function FacebookPage() {
                         {conv.lastMessage}
                       </p>
                       {conv.unread > 0 && (
-                        <Badge className="h-5 min-w-5 px-1.5 text-[10px] rounded-full bg-blue-600 ml-2 shrink-0">
+                        <Badge className="h-5 min-w-5 px-1.5 text-[10px] rounded-full bg-primary ml-2 shrink-0">
                           {conv.unread}
                         </Badge>
                       )}
@@ -334,7 +334,7 @@ export default function FacebookPage() {
                     className={cn(
                       "max-w-[75%] rounded-2xl px-4 py-2.5",
                       msg.sender === "shop"
-                        ? "bg-blue-600 text-white"
+                        ? "bg-primary text-white"
                         : "bg-white text-gray-900 border"
                     )}
                   >
@@ -343,7 +343,7 @@ export default function FacebookPage() {
                       className={cn(
                         "text-[10px] mt-1",
                         msg.sender === "shop"
-                          ? "text-blue-200"
+                          ? "text-primary-fixed"
                           : "text-muted-foreground"
                       )}
                     >

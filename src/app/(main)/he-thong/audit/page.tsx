@@ -33,7 +33,7 @@ const PAGE_SIZE = 25;
 
 const ACTION_COLORS: Record<string, string> = {
   create: "bg-green-100 text-green-800",
-  update: "bg-blue-100 text-blue-800",
+  update: "bg-primary-fixed text-primary",
   delete: "bg-red-100 text-red-800",
   complete: "bg-emerald-100 text-emerald-800",
   cancel: "bg-amber-100 text-amber-800",
@@ -192,10 +192,10 @@ export default function AuditPage() {
       {stats && (
         <div className="grid grid-cols-2 md:grid-cols-4 gap-3 px-4 pt-4">
           <StatCard
-            icon={<Icon name="monitoring" size={16} className="text-blue-600" />}
+            icon={<Icon name="monitoring" size={16} className="text-primary" />}
             label="Hôm nay"
             value={`${stats.totalToday} thao tác`}
-            bg="bg-blue-50 border-blue-200"
+            bg="bg-primary-fixed border-primary-fixed"
           />
           <StatCard
             icon={<Icon name="calendar_today" size={16} className="text-emerald-600" />}

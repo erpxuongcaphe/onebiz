@@ -71,7 +71,7 @@ export function FnbHeader({
           className={cn(
             "flex items-center gap-1 px-2.5 py-1.5 text-xs font-medium rounded-l-md transition-colors",
             viewMode === "floorplan"
-              ? "bg-blue-600 text-white"
+              ? "bg-primary text-white"
               : "bg-slate-800 text-slate-400 hover:bg-slate-700 hover:text-slate-200"
           )}
         >
@@ -84,7 +84,7 @@ export function FnbHeader({
           className={cn(
             "flex items-center gap-1 px-2.5 py-1.5 text-xs font-medium rounded-r-md transition-colors",
             viewMode === "menu"
-              ? "bg-blue-600 text-white"
+              ? "bg-primary text-white"
               : "bg-slate-800 text-slate-400 hover:bg-slate-700 hover:text-slate-200"
           )}
         >
@@ -117,7 +117,7 @@ export function FnbHeader({
               className={cn(
                 "flex items-center gap-1 px-2.5 py-1 rounded text-xs font-medium whitespace-nowrap transition-colors shrink-0",
                 isActive
-                  ? "bg-blue-600 text-white"
+                  ? "bg-primary text-white"
                   : "bg-slate-800 text-slate-400 hover:bg-slate-700 hover:text-slate-200"
               )}
             >
@@ -137,7 +137,7 @@ export function FnbHeader({
                 }}
                 className={cn(
                   "ml-0.5 rounded-full p-0.5 hover:bg-white/20 transition-colors",
-                  isActive ? "text-blue-200" : "text-slate-500"
+                  isActive ? "text-primary-fixed" : "text-slate-500"
                 )}
               >
                 <Icon name="close" size={14} className="sm:h-3 sm:w-3" />

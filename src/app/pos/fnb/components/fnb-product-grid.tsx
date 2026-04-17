@@ -60,7 +60,7 @@ function ProductCard({
       onClick={onClick}
       className={cn(
         "relative flex flex-col items-center bg-white rounded-lg border border-gray-200 overflow-hidden transition-all text-center group",
-        "hover:border-blue-400 hover:shadow-md active:scale-[0.97]",
+        "hover:border-primary hover:shadow-md active:scale-[0.97]",
         "px-2 py-3 md:px-1.5 md:py-2 min-h-[88px] md:min-h-[72px]",
         outOfStock && "opacity-50"
       )}
@@ -89,7 +89,7 @@ function ProductCard({
       )}
 
       {/* Price — prominent, on top */}
-      <p className="text-sm md:text-xs font-bold text-blue-600 tabular-nums">
+      <p className="text-sm md:text-xs font-bold text-primary tabular-nums">
         {formatCurrency(product.sell_price)}
       </p>
 

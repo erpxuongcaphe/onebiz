@@ -233,7 +233,7 @@ export default function BaoCaoTaiChinhPage() {
                 type="checkbox"
                 checked={ceoView}
                 onChange={(e) => setCeoView(e.target.checked)}
-                className="h-3.5 w-3.5 rounded border-gray-300 accent-blue-600 cursor-pointer"
+                className="h-3.5 w-3.5 rounded border-border accent-primary cursor-pointer"
               />
               <span className="text-muted-foreground">
                 Chỉ số CEO (loại trừ doanh thu nội bộ)
@@ -315,7 +315,7 @@ export default function BaoCaoTaiChinhPage() {
                             </div>
                           </div>
                         </td>
-                        <td className="py-2.5 pr-3 text-right font-medium text-blue-700">
+                        <td className="py-2.5 pr-3 text-right font-medium text-primary">
                           {formatCurrency(b.revenue)}
                         </td>
                         <td className="py-2.5 pr-3 text-right text-orange-700">
@@ -371,7 +371,7 @@ export default function BaoCaoTaiChinhPage() {
                         <td className="py-2.5 pr-3">
                           Tổng toàn chuỗi ({branchPnL.length})
                         </td>
-                        <td className="py-2.5 pr-3 text-right text-blue-800">
+                        <td className="py-2.5 pr-3 text-right text-primary">
                           {formatCurrency(sum.revenue)}
                         </td>
                         <td className="py-2.5 pr-3 text-right text-orange-800">
@@ -495,7 +495,7 @@ export default function BaoCaoTaiChinhPage() {
                     cur: cur?.revenue ?? 0,
                     prev: prev?.revenue ?? 0,
                     bold: true,
-                    color: "text-blue-700",
+                    color: "text-primary",
                   },
                   {
                     label: "(-) Giá vốn hàng bán (COGS)",

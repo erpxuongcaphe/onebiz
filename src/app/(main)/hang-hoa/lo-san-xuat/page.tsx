@@ -96,7 +96,7 @@ export default function LoSanXuatPage() {
       header: "Số lô",
       size: 140,
       cell: ({ row }) => (
-        <span className="font-mono text-xs font-semibold text-blue-600">
+        <span className="font-mono text-xs font-semibold text-primary">
           {row.original.lotNumber}
         </span>
       ),
@@ -153,7 +153,7 @@ export default function LoSanXuatPage() {
           <div className="flex items-center gap-2">
             <span className="text-xs font-bold tabular-nums">{row.original.currentQty}</span>
             <div className="w-12 h-1.5 bg-gray-200 rounded-full overflow-hidden">
-              <div className="h-full bg-blue-500 rounded-full" style={{ width: `${Math.min(100, pct)}%` }} />
+              <div className="h-full bg-primary rounded-full" style={{ width: `${Math.min(100, pct)}%` }} />
             </div>
           </div>
         );
@@ -225,7 +225,7 @@ export default function LoSanXuatPage() {
       {/* Summary */}
       <div className="grid grid-cols-2 md:grid-cols-4 gap-3 px-4 pt-4">
         <div className="bg-white rounded-lg border p-3">
-          <div className="text-2xl font-bold text-blue-600">{data.length}</div>
+          <div className="text-2xl font-bold text-primary">{data.length}</div>
           <div className="text-xs text-muted-foreground">Tổng lô</div>
         </div>
         <div className="bg-white rounded-lg border p-3">

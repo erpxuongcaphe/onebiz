@@ -76,7 +76,7 @@ function RevenueTooltip({
   return (
     <div className="rounded-lg border bg-background p-3 shadow-md">
       <p className="text-xs text-muted-foreground mb-1">Ngày {label}</p>
-      <p className="text-sm font-bold text-blue-600">
+      <p className="text-sm font-bold text-primary">
         {formatChartTooltipCurrency(payload[0].value)}
       </p>
     </div>
@@ -445,7 +445,7 @@ export default function BanHangPage() {
                 <tbody>
                   {topInvoicesList.map((inv) => (
                     <tr key={inv.code} className="border-b last:border-0">
-                      <td className="py-2.5 pr-4 font-mono text-xs text-blue-600">
+                      <td className="py-2.5 pr-4 font-mono text-xs text-primary">
                         {inv.code}
                       </td>
                       <td className="py-2.5 pr-4 font-medium">

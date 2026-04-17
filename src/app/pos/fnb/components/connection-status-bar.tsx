@@ -51,7 +51,7 @@ export function ConnectionStatusBar({ status }: ConnectionStatusBarProps) {
       className={cn(
         "flex items-center justify-center gap-2 px-3 py-1.5 text-xs font-medium transition-all shrink-0",
         isSyncing
-          ? "bg-blue-500 text-white animate-pulse"
+          ? "bg-primary text-white animate-pulse"
           : isOnline
             ? pendingCount > 0
               ? "bg-amber-500 text-white"

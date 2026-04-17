@@ -88,7 +88,7 @@ export default function DonViTinhPage() {
       size: 200,
       cell: ({ row }) => (
         <div className="flex items-center gap-2">
-          <Icon name="straighten" size={14} className="text-blue-500 shrink-0" />
+          <Icon name="straighten" size={14} className="text-primary shrink-0" />
           <span className="font-semibold text-gray-900">{row.original.unit}</span>
         </div>
       ),
@@ -127,7 +127,7 @@ export default function DonViTinhPage() {
       {/* Summary */}
       <div className="grid grid-cols-2 gap-3 px-4 pt-4">
         <div className="bg-white rounded-lg border p-3">
-          <div className="text-2xl font-bold text-blue-600">{units.length}</div>
+          <div className="text-2xl font-bold text-primary">{units.length}</div>
           <div className="text-xs text-muted-foreground">Đơn vị tính</div>
         </div>
         <div className="bg-white rounded-lg border p-3">
@@ -139,11 +139,11 @@ export default function DonViTinhPage() {
       </div>
 
       {/* Info */}
-      <div className="mx-4 mt-3 flex items-start gap-2 p-3 bg-blue-50 border border-blue-200 rounded-lg text-xs text-blue-700">
+      <div className="mx-4 mt-3 flex items-start gap-2 p-3 bg-primary-fixed border border-primary-fixed rounded-lg text-xs text-primary">
         <Icon name="info" size={16} className="shrink-0 mt-0.5" />
         <div>
           <p className="font-medium">Đơn vị tính được quản lý tại từng sản phẩm</p>
-          <p className="mt-0.5 text-blue-500">
+          <p className="mt-0.5 text-primary">
             Mỗi sản phẩm có thể có 3 đơn vị: Mua hàng, Kho, Bán hàng.
             Quy đổi đơn vị được thiết lập trong chi tiết từng sản phẩm.
           </p>

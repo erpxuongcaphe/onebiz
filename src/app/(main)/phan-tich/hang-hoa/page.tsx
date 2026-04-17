@@ -61,7 +61,7 @@ function ProductRevenueTooltip({
       <p className="text-xs text-muted-foreground mb-1">
         {payload[0].payload.name}
       </p>
-      <p className="text-sm font-bold text-blue-600">
+      <p className="text-sm font-bold text-primary">
         {formatChartTooltipCurrency(payload[0].value)}
       </p>
     </div>

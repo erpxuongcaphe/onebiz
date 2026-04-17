@@ -34,10 +34,10 @@ const variantStyles: Record<
     iconColor: "text-amber-600",
   },
   info: {
-    bg: "bg-blue-50",
-    border: "border-blue-200",
+    bg: "bg-primary-fixed",
+    border: "border-primary-fixed",
     icon: Info,
-    iconColor: "text-blue-600",
+    iconColor: "text-primary",
   },
 };
 

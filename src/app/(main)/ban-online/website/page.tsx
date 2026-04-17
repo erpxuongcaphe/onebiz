@@ -90,7 +90,7 @@ const recentOrders: WebOrder[] = [
 
 const statusColor: Record<WebOrder["status"], string> = {
   pending: "bg-yellow-100 text-yellow-800",
-  confirmed: "bg-blue-100 text-blue-800",
+  confirmed: "bg-primary-fixed text-primary",
   shipping: "bg-purple-100 text-purple-800",
   completed: "bg-green-100 text-green-800",
 };

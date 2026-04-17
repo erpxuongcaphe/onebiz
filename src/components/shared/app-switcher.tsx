@@ -38,7 +38,7 @@ const APPS: AppTile[] = [
     label: "Tổng quan",
     href: "/",
     icon: LayoutDashboard,
-    gradient: "from-blue-500 to-blue-600",
+    gradient: "from-primary to-primary",
   },
   {
     label: "Hàng hóa",

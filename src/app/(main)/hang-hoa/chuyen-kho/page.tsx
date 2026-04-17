@@ -131,7 +131,7 @@ export default function ChuyenKhoPage() {
       header: "Mã phiếu",
       size: 120,
       cell: ({ row }) => (
-        <span className="font-mono text-xs text-blue-600 font-medium">
+        <span className="font-mono text-xs text-primary font-medium">
           {row.original.code}
         </span>
       ),

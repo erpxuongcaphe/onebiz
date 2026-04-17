@@ -211,7 +211,7 @@ export default function CongNoPage() {
           variant="secondary"
           className={
             row.original.type === "customer"
-              ? "bg-blue-100 text-blue-800"
+              ? "bg-primary-fixed text-primary"
               : "bg-amber-100 text-amber-800"
           }
         >
@@ -414,10 +414,10 @@ export default function CongNoPage() {
             <>
               {/* Aging summary row */}
               <div className="grid grid-cols-1 md:grid-cols-3 gap-3">
-                <Card className="border-blue-200 bg-blue-50/50">
+                <Card className="border-primary-fixed bg-primary-fixed/50">
                   <CardContent className="pt-4">
                     <p className="text-xs text-muted-foreground">Tổng công nợ</p>
-                    <p className="text-xl font-bold text-blue-700">
+                    <p className="text-xl font-bold text-primary">
                       {formatCurrency(aging.totalDebt)}
                     </p>
                     <p className="text-[11px] text-muted-foreground mt-1">

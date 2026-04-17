@@ -94,7 +94,7 @@ export function SplitBillDialog({
       <DialogContent className="sm:max-w-lg">
         <DialogHeader>
           <DialogTitle className="flex items-center gap-2">
-            <Icon name="content_cut" className="text-blue-600" />
+            <Icon name="content_cut" className="text-primary" />
             Tách bill
           </DialogTitle>
         </DialogHeader>
@@ -138,7 +138,7 @@ export function SplitBillDialog({
                     key={item.id}
                     className={cn(
                       "flex items-center gap-3 px-3 py-2 rounded-md cursor-pointer transition-colors",
-                      selectedIds.has(item.id) ? "bg-blue-50 border border-blue-200" : "bg-muted/30 hover:bg-muted/50"
+                      selectedIds.has(item.id) ? "bg-primary-fixed border border-primary-fixed" : "bg-muted/30 hover:bg-muted/50"
                     )}
                   >
                     <input

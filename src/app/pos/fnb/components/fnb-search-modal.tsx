@@ -139,7 +139,7 @@ export function FnbSearchModal({
                   onClick={() => commitSelection(idx)}
                   className={cn(
                     "px-4 py-2 cursor-pointer border-b border-slate-100 last:border-0 flex items-center gap-3",
-                    highlighted === idx && "bg-blue-50"
+                    highlighted === idx && "bg-primary-fixed"
                   )}
                 >
                   <span className="text-[11px] text-slate-400 font-mono w-20 shrink-0 truncate">
@@ -148,7 +148,7 @@ export function FnbSearchModal({
                   <span className="flex-1 text-sm text-slate-900 truncate">
                     {product.name}
                   </span>
-                  <span className="text-sm font-semibold text-blue-600 tabular-nums shrink-0">
+                  <span className="text-sm font-semibold text-primary tabular-nums shrink-0">
                     {formatCurrency(product.sell_price)}
                   </span>
                 </li>

@@ -35,7 +35,7 @@ const themes = [
 ];
 
 const accentColors = [
-  { id: "blue", label: "Xanh dương", color: "bg-blue-500" },
+  { id: "blue", label: "Xanh dương", color: "bg-primary" },
   { id: "indigo", label: "Chàm", color: "bg-indigo-500" },
   { id: "purple", label: "Tím", color: "bg-purple-500" },
   { id: "pink", label: "Hồng", color: "bg-pink-500" },

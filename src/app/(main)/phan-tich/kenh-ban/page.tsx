@@ -29,7 +29,7 @@ type ChannelPerformanceRow = {
   avgValue: number;
 };
 
-const CHANNEL_COLORS = ["#2563eb", "#6366f1", "#0ea5e9", "#9333ea", "#f59e0b", "#10b981"];
+const CHANNEL_COLORS = ["#004AC6", "#6366f1", "#0ea5e9", "#9333ea", "#f59e0b", "#10b981"];
 
 const CHANNEL_ICONS: Record<string, string> = {
   "Tại quầy": "shopping_cart",
@@ -39,7 +39,7 @@ const CHANNEL_ICONS: Record<string, string> = {
 };
 
 const CHANNEL_STYLES: Record<string, { bg: string; iconColor: string; valueColor: string }> = {
-  "Tại quầy": { bg: "bg-blue-50", iconColor: "text-blue-600", valueColor: "text-blue-700" },
+  "Tại quầy": { bg: "bg-primary-fixed", iconColor: "text-primary", valueColor: "text-primary" },
   "Facebook": { bg: "bg-indigo-50", iconColor: "text-indigo-600", valueColor: "text-indigo-700" },
   "Zalo": { bg: "bg-sky-50", iconColor: "text-sky-600", valueColor: "text-sky-700" },
   "Website": { bg: "bg-purple-50", iconColor: "text-purple-600", valueColor: "text-purple-700" },

@@ -11,8 +11,8 @@ export default function ThietLapPlaceholderPage() {
     <div className="flex-1 flex items-center justify-center p-8">
       <div className="max-w-xl w-full bg-white rounded-xl border shadow-sm p-8">
         <div className="flex items-center gap-3 mb-4">
-          <div className="h-12 w-12 rounded-lg bg-blue-100 flex items-center justify-center">
-            <Icon name="settings" size={24} className="text-blue-600" />
+          <div className="h-12 w-12 rounded-lg bg-primary-fixed flex items-center justify-center">
+            <Icon name="settings" size={24} className="text-primary" />
           </div>
           <div>
             <h1 className="text-xl font-semibold">Thiết lập chung</h1>
@@ -44,15 +44,15 @@ export default function ThietLapPlaceholderPage() {
 
         <div className="flex flex-wrap items-center gap-2 pt-4 border-t">
           <span className="text-xs text-muted-foreground">Tạm thời dùng:</span>
-          <Link href="/cai-dat" className="text-xs font-medium text-blue-600 hover:underline">
+          <Link href="/cai-dat" className="text-xs font-medium text-primary hover:underline">
             Cài đặt
           </Link>
           <span className="text-xs text-muted-foreground">·</span>
-          <Link href="/cai-dat/ngon-ngu" className="text-xs font-medium text-blue-600 hover:underline">
+          <Link href="/cai-dat/ngon-ngu" className="text-xs font-medium text-primary hover:underline">
             Ngôn ngữ
           </Link>
           <span className="text-xs text-muted-foreground">·</span>
-          <Link href="/cai-dat/giao-dien" className="text-xs font-medium text-blue-600 hover:underline">
+          <Link href="/cai-dat/giao-dien" className="text-xs font-medium text-primary hover:underline">
             Giao diện
           </Link>
         </div>

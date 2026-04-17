@@ -50,7 +50,7 @@ export function OpenShiftDialog({ open, onOpenChange, onConfirm }: OpenShiftDial
       <DialogContent className="sm:max-w-md">
         <DialogHeader>
           <DialogTitle className="flex items-center gap-2">
-            <Icon name="schedule" className="text-blue-600" />
+            <Icon name="schedule" className="text-primary" />
             Mở ca làm việc
           </DialogTitle>
         </DialogHeader>

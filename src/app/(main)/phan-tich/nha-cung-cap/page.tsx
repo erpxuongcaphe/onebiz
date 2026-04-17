@@ -61,7 +61,7 @@ function PurchaseTooltip({
   return (
     <div className="rounded-lg border bg-background p-3 shadow-md">
       <p className="text-xs text-muted-foreground mb-1">{label}</p>
-      <p className="text-sm font-bold text-blue-600">
+      <p className="text-sm font-bold text-primary">
         {formatChartTooltipCurrency(payload[0].value)}
       </p>
     </div>

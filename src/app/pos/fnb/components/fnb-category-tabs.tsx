@@ -68,7 +68,7 @@ function CategoryPill({
       className={cn(
         "shrink-0 px-4 py-2 sm:px-3 sm:py-1.5 rounded-full text-sm sm:text-xs font-medium transition-all whitespace-nowrap active:scale-95",
         active
-          ? "bg-blue-600 text-white shadow-sm"
+          ? "bg-primary text-white shadow-sm"
           : "bg-gray-100 text-gray-600 hover:bg-gray-200 active:bg-gray-300"
       )}
     >

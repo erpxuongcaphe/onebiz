@@ -162,7 +162,7 @@ export function ProductUomConversionsTab({ product }: Props) {
         </div>
 
         {showAdd && (
-          <div className="p-3 border-b bg-blue-50/30 grid grid-cols-12 gap-2 items-end">
+          <div className="p-3 border-b bg-primary-fixed/30 grid grid-cols-12 gap-2 items-end">
             <div className="col-span-3">
               <label className="text-[11px] text-muted-foreground block mb-0.5">
                 Từ ĐVT

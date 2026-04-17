@@ -152,7 +152,7 @@ export function CustomerPicker({ open, onSelect, onClose }: CustomerPickerProps)
               onClick={() => commitSelection(0)}
               className={cn(
                 "px-4 py-2.5 cursor-pointer border-b border-slate-100 flex items-center gap-3",
-                highlighted === 0 && "bg-blue-50"
+                highlighted === 0 && "bg-primary-fixed"
               )}
             >
               <div className="h-8 w-8 rounded-full bg-slate-100 flex items-center justify-center shrink-0">
@@ -174,7 +174,7 @@ export function CustomerPicker({ open, onSelect, onClose }: CustomerPickerProps)
                   onClick={() => commitSelection(idx)}
                   className={cn(
                     "px-4 py-2.5 cursor-pointer border-b border-slate-100 last:border-0 flex items-center gap-3",
-                    highlighted === idx && "bg-blue-50"
+                    highlighted === idx && "bg-primary-fixed"
                   )}
                 >
                   <div className="h-8 w-8 rounded-full bg-emerald-100 flex items-center justify-center shrink-0">

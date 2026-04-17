@@ -142,7 +142,7 @@ export function FnbCart({
         {/* Total */}
         <div className="flex items-center justify-between border-t pt-1.5">
           <span className="text-sm font-semibold text-gray-800">Khách cần trả</span>
-          <span className="text-lg font-bold text-blue-600 tabular-nums">
+          <span className="text-lg font-bold text-primary tabular-nums">
             {formatCurrency(total)}
           </span>
         </div>
@@ -178,7 +178,7 @@ export function FnbCart({
             disabled={isEmpty}
             className={cn(
               "flex-1 h-12 text-sm font-semibold",
-              "bg-blue-600 hover:bg-blue-700 text-white"
+              "bg-primary hover:bg-primary/90 text-white"
             )}
           >
             <span className="flex flex-col items-center leading-tight">
@@ -252,7 +252,7 @@ function DiscountRow({
         className={cn(
           "h-9 w-9 md:h-7 md:w-7 rounded border flex items-center justify-center shrink-0 transition-colors",
           mode === "percent"
-            ? "bg-blue-50 border-blue-300 text-blue-600"
+            ? "bg-primary-fixed border-primary text-primary"
             : "bg-gray-50 border-gray-300 text-gray-500"
         )}
         title={mode === "percent" ? "Phần trăm" : "Số tiền"}

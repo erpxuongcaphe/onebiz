@@ -15,8 +15,8 @@ function mapOnlineOrder(row: Record<string, unknown>): OnlineOrder {
     cancelled: "Đã hủy",
   };
   const channelColorMap: Record<string, string> = {
-    facebook: "bg-blue-600",
-    zalo: "bg-blue-500",
+    facebook: "bg-primary",
+    zalo: "bg-primary",
     website: "bg-green-600",
   };
 

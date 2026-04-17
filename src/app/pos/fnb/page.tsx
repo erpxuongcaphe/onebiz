@@ -865,7 +865,7 @@ export default function FnbPosPage() {
         <button
           type="button"
           onClick={() => setMobileCartOpen(true)}
-          className="fixed bottom-4 right-4 z-30 lg:hidden h-14 w-14 rounded-full bg-blue-600 text-white shadow-lg flex items-center justify-center hover:bg-blue-700 transition-colors"
+          className="fixed bottom-4 right-4 z-30 lg:hidden h-14 w-14 rounded-full bg-primary text-white shadow-lg flex items-center justify-center hover:bg-primary/90 transition-colors"
         >
           <Icon name="shopping_cart" size={24} />
           <span className="absolute -top-1 -right-1 h-5 min-w-5 px-1 rounded-full bg-red-500 text-[10px] font-bold flex items-center justify-center">

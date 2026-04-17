@@ -130,7 +130,7 @@ export default function TonKhoPage() {
             className={
               t === "nvl"
                 ? "bg-amber-50 text-amber-700 border-amber-200"
-                : "bg-blue-50 text-blue-700 border-blue-200"
+                : "bg-primary-fixed text-primary border-primary-fixed"
             }
           >
             {t.toUpperCase()}

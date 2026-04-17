@@ -27,9 +27,9 @@ const SEVERITY_CONFIG = {
   },
   info: {
     icon: "info" as const,
-    bg: "bg-blue-50 border-blue-200",
-    iconColor: "text-blue-600",
-    badgeBg: "bg-blue-100 text-blue-800",
+    bg: "bg-primary-fixed border-primary-fixed",
+    iconColor: "text-primary",
+    badgeBg: "bg-primary-fixed text-primary",
     label: "Thông tin",
   },
 };

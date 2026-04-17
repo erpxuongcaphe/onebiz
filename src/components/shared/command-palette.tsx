@@ -247,7 +247,7 @@ function CommandPaletteDialog({
             kind: "product",
             label: p.name,
             description: `${p.code} · ${p.categoryName ?? "Không nhóm"}`,
-            icon: <Icon name="inventory_2" size={16} className="text-blue-600" />,
+            icon: <Icon name="inventory_2" size={16} className="text-primary" />,
             onSelect: () => go(`/hang-hoa?focus=${p.id}`),
           });
         }

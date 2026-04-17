@@ -62,26 +62,26 @@ const statusBadge: Record<
 };
 
 const channelDot: Record<string, string> = {
-  Facebook: "bg-blue-500",
+  Facebook: "bg-primary",
   Zalo: "bg-[#0068FF]",
   Website: "bg-green-500",
 };
 
 const orders: OnlineOrderRow[] = [
   { id: "o01", code: "OL02015", channel: "Zalo", channelColor: "bg-[#0068FF]", customer: "Nguyễn Thị Hương", phone: "0901234567", total: 555000, status: "pending", statusName: "Chờ xử lý", date: "02/04/2026 09:15" },
-  { id: "o02", code: "OL02014", channel: "Facebook", channelColor: "bg-blue-500", customer: "Trần Minh Đức", phone: "0912345678", total: 370000, status: "pending", statusName: "Chờ xử lý", date: "02/04/2026 08:50" },
+  { id: "o02", code: "OL02014", channel: "Facebook", channelColor: "bg-primary", customer: "Trần Minh Đức", phone: "0912345678", total: 370000, status: "pending", statusName: "Chờ xử lý", date: "02/04/2026 08:50" },
   { id: "o03", code: "OL02013", channel: "Website", channelColor: "bg-green-500", customer: "Lê Thị Ngọc Mai", phone: "0923456789", total: 640000, status: "shipping", statusName: "Đang giao", date: "02/04/2026 08:30" },
   { id: "o04", code: "OL02012", channel: "Zalo", channelColor: "bg-[#0068FF]", customer: "Phạm Văn Hùng", phone: "0934567890", total: 185000, status: "shipping", statusName: "Đang giao", date: "01/04/2026 16:20" },
-  { id: "o05", code: "OL02011", channel: "Facebook", channelColor: "bg-blue-500", customer: "Hoàng Thị Lan Anh", phone: "0945678901", total: 960000, status: "completed", statusName: "Hoàn thành", date: "01/04/2026 14:45" },
+  { id: "o05", code: "OL02011", channel: "Facebook", channelColor: "bg-primary", customer: "Hoàng Thị Lan Anh", phone: "0945678901", total: 960000, status: "completed", statusName: "Hoàn thành", date: "01/04/2026 14:45" },
   { id: "o06", code: "OL02010", channel: "Website", channelColor: "bg-green-500", customer: "Đỗ Hoàng Nam", phone: "0956789012", total: 320000, status: "completed", statusName: "Hoàn thành", date: "01/04/2026 11:30" },
   { id: "o07", code: "OL02009", channel: "Zalo", channelColor: "bg-[#0068FF]", customer: "Võ Quốc Thắng", phone: "0967890123", total: 480000, status: "completed", statusName: "Hoàn thành", date: "01/04/2026 09:10" },
-  { id: "o08", code: "OL02008", channel: "Facebook", channelColor: "bg-blue-500", customer: "Bùi Quang Huy", phone: "0978901234", total: 1250000, status: "shipping", statusName: "Đang giao", date: "31/03/2026 17:00" },
+  { id: "o08", code: "OL02008", channel: "Facebook", channelColor: "bg-primary", customer: "Bùi Quang Huy", phone: "0978901234", total: 1250000, status: "shipping", statusName: "Đang giao", date: "31/03/2026 17:00" },
   { id: "o09", code: "OL02007", channel: "Website", channelColor: "bg-green-500", customer: "Trương Thị Hạnh", phone: "0989012345", total: 520000, status: "completed", statusName: "Hoàn thành", date: "31/03/2026 15:20" },
   { id: "o10", code: "OL02006", channel: "Zalo", channelColor: "bg-[#0068FF]", customer: "Ngô Thị Yến Nhi", phone: "0390123456", total: 195000, status: "cancelled", statusName: "Đã hủy", date: "31/03/2026 13:40" },
-  { id: "o11", code: "OL02005", channel: "Facebook", channelColor: "bg-blue-500", customer: "Đinh Công Sơn", phone: "0381234567", total: 740000, status: "completed", statusName: "Hoàn thành", date: "31/03/2026 10:15" },
+  { id: "o11", code: "OL02005", channel: "Facebook", channelColor: "bg-primary", customer: "Đinh Công Sơn", phone: "0381234567", total: 740000, status: "completed", statusName: "Hoàn thành", date: "31/03/2026 10:15" },
   { id: "o12", code: "OL02004", channel: "Zalo", channelColor: "bg-[#0068FF]", customer: "Lý Thị Bích Ngọc", phone: "0372345678", total: 350000, status: "completed", statusName: "Hoàn thành", date: "30/03/2026 16:30" },
   { id: "o13", code: "OL02003", channel: "Website", channelColor: "bg-green-500", customer: "Phan Thanh Tùng", phone: "0363456789", total: 890000, status: "pending", statusName: "Chờ xử lý", date: "30/03/2026 14:00" },
-  { id: "o14", code: "OL02002", channel: "Facebook", channelColor: "bg-blue-500", customer: "Mai Thị Thu Hà", phone: "0354567890", total: 165000, status: "cancelled", statusName: "Đã hủy", date: "30/03/2026 11:45" },
+  { id: "o14", code: "OL02002", channel: "Facebook", channelColor: "bg-primary", customer: "Mai Thị Thu Hà", phone: "0354567890", total: 165000, status: "cancelled", statusName: "Đã hủy", date: "30/03/2026 11:45" },
   { id: "o15", code: "OL02001", channel: "Zalo", channelColor: "bg-[#0068FF]", customer: "Dương Văn Phú", phone: "0345678901", total: 1100000, status: "completed", statusName: "Hoàn thành", date: "30/03/2026 09:00" },
 ];
 

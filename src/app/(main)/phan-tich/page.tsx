@@ -247,7 +247,7 @@ export default function TongQuanPage() {
                       <td className="py-2 pr-4 text-gray-400 text-xs">{i + 1}</td>
                       <td className="py-2 pr-4 font-medium text-gray-800">{p.name}</td>
                       <td className="py-2 pr-4 text-right text-gray-600">{p.qty}</td>
-                      <td className="py-2 text-right font-semibold text-blue-700">
+                      <td className="py-2 text-right font-semibold text-primary">
                         {formatCurrency(p.revenue)}đ
                       </td>
                     </tr>

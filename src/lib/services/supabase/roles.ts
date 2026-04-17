@@ -74,7 +74,7 @@ export async function getRoles(tenantId: string): Promise<DbRole[]> {
     name: r.name,
     description: r.description,
     isSystem: r.is_system,
-    color: r.color ?? "bg-blue-500",
+    color: r.color ?? "bg-primary",
     memberCount: memberCounts[r.id] ?? 0,
     createdAt: r.created_at,
   }));
@@ -108,7 +108,7 @@ export async function getRoleById(roleId: string): Promise<DbRoleDetail> {
     name: role.name,
     description: role.description,
     isSystem: role.is_system,
-    color: role.color ?? "bg-blue-500",
+    color: role.color ?? "bg-primary",
     memberCount: count ?? 0,
     permissions: (perms ?? []).map((p) => p.permission_code),
     createdAt: role.created_at,
@@ -125,7 +125,7 @@ export async function createRole(input: CreateRoleInput): Promise<DbRole> {
       tenant_id: input.tenantId,
       name: input.name,
       description: input.description ?? null,
-      color: input.color ?? "bg-blue-500",
+      color: input.color ?? "bg-primary",
       is_system: false,
     })
     .select()
@@ -148,7 +148,7 @@ export async function createRole(input: CreateRoleInput): Promise<DbRole> {
     name: role.name,
     description: role.description,
     isSystem: false,
-    color: role.color ?? "bg-blue-500",
+    color: role.color ?? "bg-primary",
     memberCount: 0,
     createdAt: role.created_at,
   };

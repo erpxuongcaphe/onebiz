@@ -108,7 +108,7 @@ export function ProductGrid({ searchQuery, onAddProduct }: ProductGridProps) {
       <div className="flex-1 overflow-y-auto p-2">
         {loading ? (
           <div className="flex items-center justify-center h-32">
-            <Icon name="progress_activity" className="animate-spin text-blue-500" />
+            <Icon name="progress_activity" className="animate-spin text-primary" />
           </div>
         ) : displayProducts.length === 0 ? (
           <div className="flex flex-col items-center justify-center h-32 text-gray-400">
@@ -154,7 +154,7 @@ function CategoryPill({
       className={cn(
         "shrink-0 px-2.5 py-1 rounded-full text-[11px] font-medium transition-all whitespace-nowrap",
         active
-          ? "bg-blue-600 text-white shadow-sm"
+          ? "bg-primary text-white shadow-sm"
           : "bg-gray-100 text-gray-600 hover:bg-gray-200"
       )}
     >
@@ -163,7 +163,7 @@ function CategoryPill({
         <span
           className={cn(
             "ml-1 text-[10px]",
-            active ? "text-blue-200" : "text-gray-400"
+            active ? "text-primary-fixed" : "text-gray-400"
           )}
         >
           {count}
@@ -190,7 +190,7 @@ function ProductTile({
       onClick={onClick}
       className={cn(
         "flex flex-col bg-white rounded border border-gray-200 overflow-hidden transition-all text-left group",
-        "hover:border-blue-400 hover:shadow active:scale-[0.97]",
+        "hover:border-primary hover:shadow active:scale-[0.97]",
         outOfStock && "opacity-60"
       )}
     >
@@ -234,7 +234,7 @@ function ProductTile({
           {product.name}
         </p>
         <div className="flex items-center justify-between mt-0.5 gap-1">
-          <p className="text-[11px] font-bold text-blue-600">
+          <p className="text-[11px] font-bold text-primary">
             {formatCurrency(product.sellPrice ?? 0)}
           </p>
           {product.code && (

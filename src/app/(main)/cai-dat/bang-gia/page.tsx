@@ -92,7 +92,7 @@ export default function PriceBookSettingsPage() {
                     {book.isDefault && (
                       <Badge
                         variant="default"
-                        className="bg-blue-100 text-blue-700 hover:bg-blue-100 text-xs"
+                        className="bg-primary-fixed text-primary hover:bg-primary-fixed text-xs"
                       >
                         Mặc định
                       </Badge>

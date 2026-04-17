@@ -53,7 +53,7 @@ function NewCustomerTooltip({
   return (
     <div className="rounded-lg border bg-background p-3 shadow-md">
       <p className="text-xs text-muted-foreground mb-1">{label}</p>
-      <p className="text-sm font-bold text-blue-600">
+      <p className="text-sm font-bold text-primary">
         {payload[0].value} khách mới
       </p>
     </div>

@@ -40,7 +40,7 @@ export function PersonFilter({
   return (
     <div className="relative">
       {value && selectedLabel ? (
-        <div className="flex items-center gap-1.5 px-2 py-1.5 text-sm bg-blue-50 text-primary rounded-md border border-blue-200">
+        <div className="flex items-center gap-1.5 px-2 py-1.5 text-sm bg-primary-fixed text-primary rounded-md border border-primary-fixed">
           <span className="flex-1 truncate">{selectedLabel}</span>
           <button
             type="button"
