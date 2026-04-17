@@ -3,7 +3,6 @@
 import Link from "next/link";
 import { usePathname } from "next/navigation";
 import { useEffect, useMemo, useRef, useState } from "react";
-import { ChevronDown, PanelLeftClose, PanelLeftOpen } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { useAuth } from "@/lib/contexts";
 import {
@@ -14,6 +13,7 @@ import {
   type SidebarLeaf,
   type SidebarSubGroup,
 } from "./nav-config";
+import { Icon } from "@/components/ui/icon";
 
 const COLLAPSED_KEY = "onebiz.sidebar.collapsed";
 
@@ -62,12 +62,19 @@ function LeafLink({
   indent?: number;
 }) {
   const active = isHrefActive(pathname, leaf.href);
-  const Icon = leaf.icon;
   const disabled = !!leaf.disabled;
 
   const inner = (
     <>
-      {Icon && <Icon className={cn("h-4 w-4 shrink-0", active && "text-primary")} />}
+      {leaf.icon && (
+        <Icon
+          name={leaf.icon}
+          size={18}
+          fill={active}
+          weight={active ? 500 : 400}
+          className={cn("shrink-0", active ? "text-primary" : "text-foreground/70")}
+        />
+      )}
       <span className="truncate flex-1">{leaf.label}</span>
       {leaf.comingSoon && (
         <span className="text-[9px] font-semibold uppercase tracking-wider rounded px-1.5 py-0.5 bg-amber-100 text-amber-700 border border-amber-200">
@@ -91,12 +98,17 @@ function LeafLink({
     </>
   );
 
+  // Stitch style (dashboard_qu_n_tr_desktop mockup):
+  // - active: bg-primary-fixed + text-primary + font-bold + border-r-4 border-primary
+  //   (accent bar phải để visual-emphasis mạnh hơn chỉ bg-tint)
+  // - hover inactive: text-primary + bg-surface-container-low (subtle blue-tint)
+  // - press-scale từ globals cho tactile feedback khi click
   const baseClass = cn(
-    "group flex items-center gap-2 rounded-md text-sm transition-colors",
-    "h-8 px-2",
+    "group press-scale-sm flex items-center gap-3 rounded-lg text-sm",
+    "h-9 pr-3",
     active
-      ? "bg-primary/10 text-primary font-medium"
-      : "text-foreground/80 hover:bg-muted hover:text-foreground",
+      ? "bg-primary-fixed text-primary font-semibold border-r-4 border-primary"
+      : "text-foreground/80 hover:bg-surface-container-low hover:text-primary",
     disabled && "opacity-50 pointer-events-none"
   );
 
@@ -104,7 +116,7 @@ function LeafLink({
     return (
       <div
         className={baseClass}
-        style={{ paddingLeft: `${indent * 12 + 8}px` }}
+        style={{ paddingLeft: `${indent * 12 + 12}px` }}
         aria-disabled="true"
       >
         {inner}
@@ -116,7 +128,7 @@ function LeafLink({
     <Link
       href={leaf.href}
       className={baseClass}
-      style={{ paddingLeft: `${indent * 12 + 8}px` }}
+      style={{ paddingLeft: `${indent * 12 + 12}px` }}
       target={leaf.mode === "pos" ? "_self" : undefined}
     >
       {inner}
@@ -137,13 +149,12 @@ function SubGroupSection({
   pathname: string;
   filterPerm?: (code: string) => boolean;
 }) {
-  const SubIcon = subGroup.icon;
   const visibleItems = subGroup.items.filter((l) => !l.permission || !filterPerm || filterPerm(l.permission));
   if (visibleItems.length === 0) return null;
   return (
     <div className="mt-1">
-      <div className="flex items-center gap-1.5 px-2 pt-2 pb-1 text-[10px] font-semibold text-muted-foreground uppercase tracking-wider">
-        {SubIcon && <SubIcon className="h-3 w-3" />}
+      <div className="flex items-center gap-1.5 px-3 pt-2 pb-1 text-[10px] font-semibold text-muted-foreground uppercase tracking-wider">
+        {subGroup.icon && <Icon name={subGroup.icon} size={12} />}
         {subGroup.label}
       </div>
       <div className="space-y-0.5">
@@ -172,7 +183,6 @@ function GroupExpanded({
   pathname: string;
   filterPerm?: (code: string) => boolean;
 }) {
-  const Icon = group.icon;
   const active = isGroupActive(pathname, group);
 
   return (
@@ -181,24 +191,32 @@ function GroupExpanded({
         type="button"
         onClick={onToggle}
         className={cn(
-          "w-full flex items-center gap-2 h-9 px-2 rounded-md text-sm font-medium transition-colors",
+          "w-full press-scale-sm flex items-center gap-3 h-10 px-3 rounded-lg text-sm font-medium",
           active
-            ? "text-primary"
-            : "text-foreground/90 hover:bg-muted hover:text-foreground"
+            ? "text-primary font-semibold"
+            : "text-foreground/90 hover:bg-surface-container-low hover:text-foreground"
         )}
       >
-        <Icon className={cn("h-4 w-4 shrink-0", active && "text-primary")} />
+        <Icon
+          name={group.icon}
+          size={20}
+          fill={active}
+          weight={active ? 500 : 400}
+          className={cn("shrink-0", active && "text-primary")}
+        />
         <span className="flex-1 text-left truncate">{group.label}</span>
-        <ChevronDown
+        <Icon
+          name="expand_more"
+          size={16}
           className={cn(
-            "h-3.5 w-3.5 shrink-0 transition-transform",
+            "shrink-0 transition-transform duration-150",
             open ? "rotate-0" : "-rotate-90"
           )}
         />
       </button>
 
       {open && (
-        <div className="mt-0.5 mb-1 space-y-0.5 pl-1">
+        <div className="mt-0.5 mb-1 space-y-0.5 pl-1 stitch-fade-in">
           {group.items?.filter((l) => !l.permission || !filterPerm || filterPerm(l.permission)).map((leaf) => (
             <LeafLink key={leaf.href} leaf={leaf} pathname={pathname} indent={1} />
           ))}
@@ -225,7 +243,6 @@ function GroupCollapsed({
   const [open, setOpen] = useState(false);
   const [pos, setPos] = useState<{ top: number; left: number } | null>(null);
   const buttonRef = useRef<HTMLButtonElement>(null);
-  const Icon = group.icon;
   const active = isGroupActive(pathname, group);
   const closeTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
 
@@ -274,23 +291,23 @@ function GroupCollapsed({
         type="button"
         title={group.label}
         className={cn(
-          "w-10 h-10 mx-auto flex items-center justify-center rounded-md transition-colors",
+          "w-10 h-10 mx-auto press-scale-sm flex items-center justify-center rounded-lg",
           active
-            ? "bg-primary/10 text-primary"
-            : "text-foreground/80 hover:bg-muted hover:text-foreground"
+            ? "bg-primary-fixed text-primary"
+            : "text-foreground/80 hover:bg-surface-container-low hover:text-foreground"
         )}
       >
-        <Icon className="h-5 w-5" />
+        <Icon name={group.icon} size={22} fill={active} weight={active ? 500 : 400} />
       </button>
 
       {open && pos && (
         <div
-          className="fixed z-[100]"
+          className="fixed z-[100] stitch-fade-in"
           style={{ top: pos.top, left: pos.left }}
           onMouseEnter={cancelClose}
           onMouseLeave={scheduleClose}
         >
-          <div className="bg-white rounded-lg shadow-xl border min-w-[240px] max-w-[280px] py-2">
+          <div className="bg-surface-container-lowest rounded-xl ambient-shadow-lg min-w-[240px] max-w-[280px] py-2">
             <div className="px-3 py-1.5 text-xs font-semibold text-muted-foreground uppercase tracking-wider border-b mb-1">
               {group.label}
             </div>
@@ -362,34 +379,37 @@ export function AppSidebar() {
     <aside
       data-collapsed={collapsed ? "true" : "false"}
       className={cn(
-        "hidden lg:flex flex-col bg-white border-r border-border shrink-0 transition-[width] duration-200",
-        collapsed ? "w-14" : "w-60"
+        "hidden lg:flex flex-col bg-surface-container-lowest border-r border-border shrink-0 transition-[width] duration-200",
+        collapsed ? "w-16" : "w-64"
       )}
     >
-      {/* Header / collapse toggle */}
-      <div className="flex items-center justify-between h-12 px-2 border-b">
+      {/* Stitch header — p-4 generous, bigger logo badge (rounded-xl O mark) */}
+      <div className={cn("flex items-center justify-between h-16 border-b border-border", collapsed ? "px-2" : "px-4")}>
         {!collapsed && (
-          <Link href="/" className="flex items-center gap-2 px-1.5">
-            <span className="h-7 w-7 rounded-md bg-primary text-primary-foreground flex items-center justify-center text-xs font-bold">
-              1B
+          <Link href="/" className="flex items-center gap-3 group press-scale-sm">
+            <span className="h-10 w-10 rounded-xl bg-primary text-primary-foreground flex items-center justify-center text-lg font-bold ambient-shadow">
+              O
             </span>
-            <span className="font-bold tracking-tight text-sm">OneBiz ERP</span>
+            <div className="flex flex-col leading-tight">
+              <span className="font-bold tracking-tight text-base text-foreground">OneBiz</span>
+              <span className="text-[10px] font-medium text-muted-foreground uppercase tracking-wider">ERP Suite</span>
+            </div>
           </Link>
         )}
         <button
           type="button"
           onClick={() => setCollapsed(!collapsed)}
           className={cn(
-            "h-8 w-8 inline-flex items-center justify-center rounded-md text-muted-foreground hover:bg-muted hover:text-foreground transition-colors",
+            "h-9 w-9 press-scale-sm inline-flex items-center justify-center rounded-lg text-muted-foreground hover:bg-surface-container-low hover:text-foreground",
             collapsed && "mx-auto"
           )}
           aria-label={collapsed ? "Mở rộng sidebar" : "Thu gọn sidebar"}
           title={collapsed ? "Mở rộng (Ctrl+B)" : "Thu gọn (Ctrl+B)"}
         >
           {collapsed ? (
-            <PanelLeftOpen className="h-4 w-4" />
+            <Icon name="left_panel_open" size={20} />
           ) : (
-            <PanelLeftClose className="h-4 w-4" />
+            <Icon name="left_panel_close" size={20} />
           )}
         </button>
       </div>
@@ -397,8 +417,8 @@ export function AppSidebar() {
       {/* Top groups */}
       <nav
         className={cn(
-          "flex-1 overflow-y-auto overflow-x-visible py-2",
-          collapsed ? "px-1.5" : "px-2"
+          "flex-1 overflow-y-auto overflow-x-visible py-3",
+          collapsed ? "px-1.5" : "px-3"
         )}
       >
         <div className="space-y-0.5">
@@ -420,7 +440,7 @@ export function AppSidebar() {
       </nav>
 
       {/* Bottom-pinned groups (Hệ thống) */}
-      <div className={cn("border-t py-2", collapsed ? "px-1.5" : "px-2")}>
+      <div className={cn("border-t border-border py-3", collapsed ? "px-1.5" : "px-3")}>
         <div className="space-y-0.5">
           {bottomGroups.map((g) =>
             collapsed ? (

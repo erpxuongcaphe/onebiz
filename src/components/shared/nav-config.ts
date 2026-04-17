@@ -111,55 +111,16 @@ export const mainNavItems: NavGroup[] = [
 // ============================================================
 // SIDEBAR V2 — for app-sidebar.tsx (M2 onwards)
 // 5 phân hệ + Hệ thống pinned bottom
+// Icons → Material Symbols Outlined (string names). Render via <Icon name=... />
 // ============================================================
-
-import type { LucideIcon } from "lucide-react";
-import {
-  Sparkles,
-  ShoppingCart,
-  Package,
-  ArrowLeftRight,
-  Users,
-  Settings,
-  Home,
-  BarChart3,
-  Upload,
-  MessageCircle,
-  Tags,
-  Ruler,
-  DollarSign,
-  Warehouse,
-  History,
-  ClipboardCheck,
-  CalendarClock,
-  Trash2,
-  PackageOpen,
-  PackagePlus,
-  ScrollText,
-  Receipt,
-  RotateCcw,
-  Globe,
-  Truck,
-  Factory,
-  Workflow,
-  Boxes,
-  Banknote,
-  CreditCard,
-  Building2,
-  UserCog,
-  Plug,
-  FileClock,
-  Coffee,
-  ChefHat,
-  Armchair,
-} from "lucide-react";
 
 export type SidebarMode = "admin" | "pos";
 
 export interface SidebarLeaf {
   label: string;
   href: string;
-  icon?: LucideIcon;
+  /** Material Symbols Outlined name, e.g. "home", "shopping_cart" */
+  icon?: string;
   /** Disable click + dim style. Combine with `comingSoon` to show "Soon" badge. */
   disabled?: boolean;
   comingSoon?: boolean;
@@ -173,13 +134,13 @@ export interface SidebarLeaf {
 
 export interface SidebarSubGroup {
   label: string;
-  icon?: LucideIcon;
+  icon?: string;
   items: SidebarLeaf[];
 }
 
 export interface SidebarGroup {
   label: string;
-  icon: LucideIcon;
+  icon: string;
   /** Either flat items OR sub-groups (mutually exclusive). */
   items?: SidebarLeaf[];
   subGroups?: SidebarSubGroup[];
@@ -191,15 +152,15 @@ export const sidebarNavGroups: SidebarGroup[] = [
   // 1. Tổng quan AI
   {
     label: "Tổng quan AI",
-    icon: Sparkles,
+    icon: "auto_awesome",
     items: [
-      { label: "Trang chủ AI", href: "/", icon: Home },
-      { label: "Phân tích kinh doanh", href: "/ai/phan-tich", icon: BarChart3 },
-      { label: "Import dữ liệu", href: "/ai/import", icon: Upload },
+      { label: "Trang chủ AI", href: "/", icon: "home" },
+      { label: "Phân tích kinh doanh", href: "/ai/phan-tich", icon: "bar_chart" },
+      { label: "Import dữ liệu", href: "/ai/import", icon: "upload" },
       {
         label: "Trò chuyện AI",
         href: "/ai/chat",
-        icon: MessageCircle,
+        icon: "chat",
         disabled: true,
         comingSoon: true,
       },
@@ -209,53 +170,53 @@ export const sidebarNavGroups: SidebarGroup[] = [
   // 2. Bán hàng — REV 2: bỏ POS lẻ, focus B2B + Online
   {
     label: "Bán hàng",
-    icon: ShoppingCart,
+    icon: "shopping_cart",
     items: [
-      { label: "POS", href: "/pos", icon: PackagePlus, mode: "pos", permission: "pos_retail.checkout" },
-      { label: "POS F&B", href: "/pos/fnb", icon: Coffee, mode: "pos", permission: "pos_fnb.send_kitchen" },
-      { label: "Màn hình bếp (KDS)", href: "/pos/fnb/kds", icon: ChefHat, mode: "pos", permission: "pos_fnb.view_orders" },
-      { label: "Bán online", href: "/ban-online", icon: Globe },
-      { label: "Đơn đặt hàng", href: "/don-hang/dat-hang", icon: ScrollText },
-      { label: "Hóa đơn", href: "/don-hang/hoa-don", icon: Receipt },
-      { label: "Trả hàng", href: "/don-hang/tra-hang", icon: RotateCcw },
+      { label: "POS", href: "/pos", icon: "point_of_sale", mode: "pos", permission: "pos_retail.checkout" },
+      { label: "POS F&B", href: "/pos/fnb", icon: "coffee", mode: "pos", permission: "pos_fnb.send_kitchen" },
+      { label: "Màn hình bếp (KDS)", href: "/pos/fnb/kds", icon: "restaurant", mode: "pos", permission: "pos_fnb.view_orders" },
+      { label: "Bán online", href: "/ban-online", icon: "public" },
+      { label: "Đơn đặt hàng", href: "/don-hang/dat-hang", icon: "description" },
+      { label: "Hóa đơn", href: "/don-hang/hoa-don", icon: "receipt_long" },
+      { label: "Trả hàng", href: "/don-hang/tra-hang", icon: "undo" },
     ],
   },
 
   // 3. Hàng hóa
   {
     label: "Hàng hóa",
-    icon: Package,
+    icon: "inventory_2",
     subGroups: [
       {
         label: "Sản phẩm",
-        icon: Boxes,
+        icon: "category",
         items: [
-          { label: "Danh sách hàng", href: "/hang-hoa", icon: Package },
-          { label: "Nhóm hàng", href: "/hang-hoa/nhom", icon: Tags },
-          { label: "Đơn vị tính", href: "/hang-hoa/don-vi-tinh", icon: Ruler },
-          { label: "Bảng giá", href: "/hang-hoa/thiet-lap-gia", icon: DollarSign },
+          { label: "Danh sách hàng", href: "/hang-hoa", icon: "inventory_2" },
+          { label: "Nhóm hàng", href: "/hang-hoa/nhom", icon: "sell" },
+          { label: "Đơn vị tính", href: "/hang-hoa/don-vi-tinh", icon: "straighten" },
+          { label: "Bảng giá", href: "/hang-hoa/thiet-lap-gia", icon: "attach_money" },
         ],
       },
       {
         label: "Kho",
-        icon: Warehouse,
+        icon: "warehouse",
         items: [
-          { label: "Tồn kho", href: "/hang-hoa/ton-kho", icon: Warehouse },
-          { label: "Lịch sử kho", href: "/hang-hoa/lich-su-kho", icon: History },
-          { label: "Kiểm kho", href: "/hang-hoa/kiem-kho", icon: ClipboardCheck },
-          { label: "Hạn sử dụng (HSD)", href: "/hang-hoa/hsd", icon: CalendarClock },
-          { label: "Xuất hủy", href: "/hang-hoa/xuat-huy", icon: Trash2 },
-          { label: "Xuất dùng nội bộ", href: "/hang-hoa/xuat-dung-noi-bo", icon: PackageOpen },
+          { label: "Tồn kho", href: "/hang-hoa/ton-kho", icon: "warehouse" },
+          { label: "Lịch sử kho", href: "/hang-hoa/lich-su-kho", icon: "history" },
+          { label: "Kiểm kho", href: "/hang-hoa/kiem-kho", icon: "fact_check" },
+          { label: "Hạn sử dụng (HSD)", href: "/hang-hoa/hsd", icon: "event_note" },
+          { label: "Xuất hủy", href: "/hang-hoa/xuat-huy", icon: "delete" },
+          { label: "Xuất dùng nội bộ", href: "/hang-hoa/xuat-dung-noi-bo", icon: "inventory" },
         ],
       },
       {
         label: "Sản xuất",
-        icon: Factory,
+        icon: "factory",
         items: [
-          { label: "Dashboard Sản xuất", href: "/san-xuat", icon: BarChart3 },
-          { label: "Lệnh sản xuất", href: "/hang-hoa/san-xuat", icon: Factory },
-          { label: "Công thức (BOM)", href: "/hang-hoa/cong-thuc", icon: Workflow },
-          { label: "Lô sản xuất", href: "/hang-hoa/lo-san-xuat", icon: Boxes },
+          { label: "Dashboard Sản xuất", href: "/san-xuat", icon: "bar_chart" },
+          { label: "Lệnh sản xuất", href: "/hang-hoa/san-xuat", icon: "factory" },
+          { label: "Công thức (BOM)", href: "/hang-hoa/cong-thuc", icon: "schema" },
+          { label: "Lô sản xuất", href: "/hang-hoa/lo-san-xuat", icon: "inventory_2" },
         ],
       },
     ],
@@ -264,38 +225,38 @@ export const sidebarNavGroups: SidebarGroup[] = [
   // 4. Giao dịch
   {
     label: "Giao dịch",
-    icon: ArrowLeftRight,
+    icon: "swap_horiz",
     subGroups: [
       {
         label: "Nội bộ",
-        icon: ArrowLeftRight,
+        icon: "swap_horiz",
         items: [
-          { label: "Bán nội bộ", href: "/hang-hoa/ban-noi-bo", icon: ArrowLeftRight },
-          { label: "Chuyển kho", href: "/hang-hoa/chuyen-kho", icon: Truck },
+          { label: "Bán nội bộ", href: "/hang-hoa/ban-noi-bo", icon: "swap_horiz" },
+          { label: "Chuyển kho", href: "/hang-hoa/chuyen-kho", icon: "local_shipping" },
         ],
       },
       {
         label: "Mua hàng",
-        icon: PackagePlus,
+        icon: "add_box",
         items: [
-          { label: "Đặt hàng nhập", href: "/hang-hoa/dat-hang-nhap", icon: ScrollText },
-          { label: "Nhập hàng", href: "/hang-hoa/nhap-hang", icon: PackagePlus },
-          { label: "Trả hàng nhập", href: "/hang-hoa/tra-hang-nhap", icon: RotateCcw },
+          { label: "Đặt hàng nhập", href: "/hang-hoa/dat-hang-nhap", icon: "description" },
+          { label: "Nhập hàng", href: "/hang-hoa/nhap-hang", icon: "add_box" },
+          { label: "Trả hàng nhập", href: "/hang-hoa/tra-hang-nhap", icon: "undo" },
         ],
       },
       {
         label: "Vận chuyển",
-        icon: Truck,
+        icon: "local_shipping",
         items: [
-          { label: "Vận đơn", href: "/don-hang/van-don", icon: Truck },
+          { label: "Vận đơn", href: "/don-hang/van-don", icon: "local_shipping" },
         ],
       },
       {
         label: "Tài chính",
-        icon: Banknote,
+        icon: "payments",
         items: [
-          { label: "Sổ quỹ", href: "/so-quy", icon: Banknote },
-          { label: "Công nợ", href: "/tai-chinh/cong-no", icon: CreditCard },
+          { label: "Sổ quỹ", href: "/so-quy", icon: "payments" },
+          { label: "Công nợ", href: "/tai-chinh/cong-no", icon: "credit_card" },
         ],
       },
     ],
@@ -304,27 +265,27 @@ export const sidebarNavGroups: SidebarGroup[] = [
   // 5. Đối tác
   {
     label: "Đối tác",
-    icon: Users,
+    icon: "group",
     items: [
-      { label: "Khách hàng", href: "/khach-hang", icon: Users },
-      { label: "Nhóm khách hàng", href: "/khach-hang/nhom", icon: Tags },
-      { label: "Nhà cung cấp", href: "/doi-tac/ncc", icon: Building2 },
-      { label: "Đối tác giao hàng", href: "/doi-tac/giao-hang", icon: Truck },
+      { label: "Khách hàng", href: "/khach-hang", icon: "group" },
+      { label: "Nhóm khách hàng", href: "/khach-hang/nhom", icon: "sell" },
+      { label: "Nhà cung cấp", href: "/doi-tac/ncc", icon: "apartment" },
+      { label: "Đối tác giao hàng", href: "/doi-tac/giao-hang", icon: "local_shipping" },
     ],
   },
 
   // 6. Hệ thống — pinned bottom
   {
     label: "Hệ thống",
-    icon: Settings,
+    icon: "settings",
     pinBottom: true,
     items: [
-      { label: "Người dùng & phân quyền", href: "/he-thong/users", icon: UserCog, permission: "system.manage_users" },
-      { label: "Chi nhánh", href: "/he-thong/chi-nhanh", icon: Building2, permission: "system.manage_branches" },
-      { label: "Bàn & Khu vực F&B", href: "/he-thong/quan-ly-ban", icon: Armchair },
-      { label: "Thiết lập chung", href: "/he-thong/thiet-lap", icon: Settings },
-      { label: "Tích hợp", href: "/he-thong/tich-hop", icon: Plug },
-      { label: "Lịch sử thao tác", href: "/he-thong/audit", icon: FileClock, permission: "system.view_audit" },
+      { label: "Người dùng & phân quyền", href: "/he-thong/users", icon: "manage_accounts", permission: "system.manage_users" },
+      { label: "Chi nhánh", href: "/he-thong/chi-nhanh", icon: "apartment", permission: "system.manage_branches" },
+      { label: "Bàn & Khu vực F&B", href: "/he-thong/quan-ly-ban", icon: "chair" },
+      { label: "Thiết lập chung", href: "/he-thong/thiet-lap", icon: "settings" },
+      { label: "Tích hợp", href: "/he-thong/tich-hop", icon: "power" },
+      { label: "Lịch sử thao tác", href: "/he-thong/audit", icon: "pending_actions", permission: "system.view_audit" },
     ],
   },
 ];

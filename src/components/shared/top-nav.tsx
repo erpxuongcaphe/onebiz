@@ -1,30 +1,15 @@
 "use client";
 
 // ---------------------------------------------------------------------------
-// TopNav v2 — Header thanh lịch 48px
-// - Đã LOẠI BỎ desktop mega-menu (sidebar v2 đã thay thế role này)
-// - Layout: AppSwitcher | Logo | BranchSelector | [Global Search] | Quick Import + Bell + Help + User + Bán hàng
+// TopNav v3 — Stitch style header h-16 bg-surface-container-lowest
+// - Light bg (white-ish) + dark text, primary blue accents
+// - Layout: AppSwitcher | BranchSelector | [Global Search] | Import + Bell + Help + User + POS CTA
 // - Mobile sheet vẫn dùng sidebarNavGroups để có cùng IA với desktop sidebar
 // ---------------------------------------------------------------------------
 
 import Link from "next/link";
 import { usePathname, useRouter } from "next/navigation";
 import { useState } from "react";
-import {
-  ShoppingCart,
-  Bell,
-  Menu,
-  ChevronDown,
-  Search,
-  CircleHelp,
-  Building2,
-  LogOut,
-  UserCircle,
-  Settings,
-  Check,
-  Upload,
-  ChevronRight,
-} from "lucide-react";
 import { useAuth } from "@/lib/contexts";
 import { Button } from "@/components/ui/button";
 import {
@@ -47,6 +32,7 @@ import { useCommandPalette } from "./command-palette";
 import { AppSwitcher } from "./app-switcher";
 import { ImportDataDialog } from "./import-data-dialog";
 import { cn } from "@/lib/utils";
+import { Icon } from "@/components/ui/icon";
 
 // ---------------------------------------------------------------------------
 // Branch selector
@@ -58,16 +44,16 @@ function BranchSelector() {
 
   return (
     <DropdownMenu>
-      <DropdownMenuTrigger className="hidden md:flex items-center gap-1.5 px-2.5 py-1.5 text-sm text-white/90 hover:text-white hover:bg-white/10 rounded-md transition-colors cursor-pointer outline-none">
-        <Building2 className="h-3.5 w-3.5 shrink-0" />
-        <span className="truncate max-w-[160px]">
-          <span className="font-semibold">{tenant?.name ?? "OneBiz"}</span>
-          <span className="text-white/60 mx-1">|</span>
-          <span className="text-white/80">{currentBranch?.name ?? "Tất cả"}</span>
+      <DropdownMenuTrigger className="hidden md:flex press-scale-sm items-center gap-1.5 px-3 h-9 text-sm text-foreground/80 hover:text-primary hover:bg-surface-container-low rounded-lg cursor-pointer outline-none">
+        <Icon name="apartment" size={16} className="shrink-0 text-muted-foreground" />
+        <span className="truncate max-w-[180px]">
+          <span className="font-semibold text-foreground">{tenant?.name ?? "OneBiz"}</span>
+          <span className="text-muted-foreground mx-1.5">/</span>
+          <span className="text-foreground/80">{currentBranch?.name ?? "Tất cả"}</span>
         </span>
-        <ChevronDown className="h-3 w-3 shrink-0" />
+        <Icon name="expand_more" size={14} className="shrink-0 text-muted-foreground" />
       </DropdownMenuTrigger>
-      <DropdownMenuContent align="start" sideOffset={6} className="min-w-[220px]">
+      <DropdownMenuContent align="start" sideOffset={8} className="min-w-[220px]">
         <DropdownMenuLabel>Chọn chi nhánh</DropdownMenuLabel>
         {canViewAll && (
           <DropdownMenuItem
@@ -76,7 +62,7 @@ function BranchSelector() {
           >
             <span className="flex-1">Tất cả chi nhánh</span>
             {currentBranch === null && (
-              <Check className="h-4 w-4 text-primary" />
+              <Icon name="check" size={16} className="text-primary" />
             )}
           </DropdownMenuItem>
         )}
@@ -88,7 +74,7 @@ function BranchSelector() {
           >
             <span className="flex-1">{branch.name}</span>
             {currentBranch?.id === branch.id && (
-              <Check className="h-4 w-4 text-primary" />
+              <Icon name="check" size={16} className="text-primary" />
             )}
           </DropdownMenuItem>
         ))}
@@ -98,7 +84,8 @@ function BranchSelector() {
 }
 
 // ---------------------------------------------------------------------------
-// Global Search bar (center) — opens command palette on click
+// Global Search bar (center) — opens command palette on click.
+// Stitch style: pill rounded-full bg-surface-container border subtle.
 // ---------------------------------------------------------------------------
 
 function GlobalSearchBar() {
@@ -109,17 +96,17 @@ function GlobalSearchBar() {
       type="button"
       onClick={openPalette}
       className={cn(
-        "hidden md:flex items-center gap-2.5 h-8 w-full max-w-md px-3 rounded-md",
-        "bg-white/15 hover:bg-white/25 border border-white/20 hover:border-white/30",
-        "text-white/90 hover:text-white text-sm transition-colors text-left",
-        "focus:outline-none focus:ring-2 focus:ring-white/30"
+        "hidden md:flex press-scale-sm items-center gap-3 h-10 w-full max-w-md px-4 rounded-full",
+        "bg-surface-container-low hover:bg-surface-container border border-border hover:border-primary-fixed-dim",
+        "text-muted-foreground hover:text-foreground text-sm text-left",
+        "focus:outline-none focus:ring-2 focus:ring-primary/30"
       )}
     >
-      <Search className="h-4 w-4 shrink-0 text-white/70" />
-      <span className="flex-1 truncate text-white/70">
+      <Icon name="search" size={18} className="shrink-0 text-muted-foreground" />
+      <span className="flex-1 truncate">
         Tìm sản phẩm, khách hàng, đơn hàng...
       </span>
-      <kbd className="hidden lg:inline-flex font-mono items-center gap-0.5 bg-white/10 border border-white/20 rounded px-1.5 py-0.5 text-[10px] font-medium">
+      <kbd className="hidden lg:inline-flex font-sans items-center gap-0.5 bg-surface-container-high border border-border rounded-md px-1.5 py-0.5 text-[10px] font-semibold text-muted-foreground">
         Ctrl K
       </kbd>
     </button>
@@ -153,17 +140,17 @@ function UserDropdown() {
 
   return (
     <DropdownMenu>
-      <DropdownMenuTrigger className="flex items-center gap-2 px-1.5 py-1 rounded-md text-white/90 hover:text-white hover:bg-white/10 transition-colors cursor-pointer outline-none">
-        <span className="h-7 w-7 rounded-full bg-white/20 flex items-center justify-center text-xs font-bold text-white shrink-0">
+      <DropdownMenuTrigger className="flex press-scale-sm items-center gap-2 pl-1 pr-2 py-1 rounded-full text-foreground hover:bg-surface-container-low cursor-pointer outline-none">
+        <span className="h-8 w-8 rounded-full bg-primary-fixed text-primary flex items-center justify-center text-xs font-bold shrink-0">
           {initials}
         </span>
         <span className="hidden xl:block text-sm font-medium truncate max-w-[100px]">
           {user?.fullName ?? "---"}
         </span>
-        <ChevronDown className="h-3 w-3 hidden xl:block shrink-0" />
+        <Icon name="expand_more" size={14} className="hidden xl:block shrink-0 text-muted-foreground" />
       </DropdownMenuTrigger>
-      <DropdownMenuContent align="end" sideOffset={6} className="min-w-[220px]">
-        <div className="px-2 py-2">
+      <DropdownMenuContent align="end" sideOffset={8} className="min-w-[240px]">
+        <div className="px-3 py-3">
           <p className="text-sm font-semibold">{user?.fullName}</p>
           <p className="text-xs text-muted-foreground">
             {user ? roleLabels[user.role] ?? user.role : ""}
@@ -175,14 +162,14 @@ function UserDropdown() {
             className="cursor-pointer"
             onSelect={() => router.push("/ho-so")}
           >
-            <UserCircle className="h-4 w-4" />
+            <Icon name="account_circle" size={16} />
             Hồ sơ cá nhân
           </DropdownMenuItem>
           <DropdownMenuItem
             className="cursor-pointer"
             onSelect={() => router.push("/cai-dat")}
           >
-            <Settings className="h-4 w-4" />
+            <Icon name="settings" size={16} />
             Cài đặt
           </DropdownMenuItem>
         </DropdownMenuGroup>
@@ -194,7 +181,7 @@ function UserDropdown() {
             logout();
           }}
         >
-          <LogOut className="h-4 w-4" />
+          <Icon name="logout" size={16} />
           Đăng xuất
         </DropdownMenuItem>
       </DropdownMenuContent>
@@ -216,12 +203,11 @@ function MobileLeafLink({
   onClose: () => void;
 }) {
   const active = isHrefActive(pathname, leaf.href);
-  const Icon = leaf.icon;
 
   if (leaf.disabled) {
     return (
-      <div className="flex items-center gap-2 px-3 py-1.5 rounded-md text-sm text-muted-foreground opacity-50">
-        {Icon && <Icon className="h-4 w-4" />}
+      <div className="flex items-center gap-3 px-3 py-2 rounded-lg text-sm text-muted-foreground opacity-50">
+        {leaf.icon && <Icon name={leaf.icon} size={18} />}
         <span className="flex-1">{leaf.label}</span>
         {leaf.comingSoon && (
           <span className="text-[9px] font-semibold uppercase rounded px-1.5 py-0.5 bg-amber-100 text-amber-700 border border-amber-200">
@@ -237,13 +223,13 @@ function MobileLeafLink({
       href={leaf.href}
       onClick={onClose}
       className={cn(
-        "flex items-center gap-2 px-3 py-1.5 rounded-md text-sm",
+        "flex press-scale-sm items-center gap-3 px-3 py-2 rounded-lg text-sm",
         active
-          ? "bg-primary/10 text-primary font-medium"
-          : "text-muted-foreground hover:bg-muted hover:text-foreground"
+          ? "bg-primary-fixed text-primary font-semibold"
+          : "text-foreground/80 hover:bg-surface-container-low hover:text-primary"
       )}
     >
-      {Icon && <Icon className="h-4 w-4" />}
+      {leaf.icon && <Icon name={leaf.icon} size={18} fill={active} />}
       <span className="flex-1">{leaf.label}</span>
     </Link>
   );
@@ -257,31 +243,31 @@ function MobileNav() {
 
   return (
     <Sheet open={open} onOpenChange={setOpen}>
-      <SheetTrigger className="lg:hidden inline-flex items-center justify-center h-9 w-9 rounded-md text-white hover:bg-white/10 transition-colors">
-        <Menu className="h-5 w-5" />
+      <SheetTrigger className="lg:hidden press-scale-sm inline-flex items-center justify-center h-10 w-10 rounded-lg text-foreground hover:bg-surface-container-low">
+        <Icon name="menu" size={22} />
       </SheetTrigger>
-      <SheetContent side="left" className="w-[300px] p-0">
-        <SheetTitle className="px-4 py-3 border-b font-semibold">Menu</SheetTitle>
-        <nav className="p-3 space-y-2 overflow-y-auto max-h-[calc(100vh-60px)]">
+      <SheetContent side="left" className="w-[320px] p-0">
+        <SheetTitle className="px-5 py-4 border-b font-semibold text-base">Menu</SheetTitle>
+        <nav className="p-4 space-y-3 overflow-y-auto max-h-[calc(100vh-60px)]">
           {/* Branch selector for mobile */}
           <div className="pb-3 border-b">
-            <div className="px-3 py-1 text-[10px] font-semibold text-muted-foreground uppercase tracking-wider">
+            <div className="px-2 py-1 text-[10px] font-semibold text-muted-foreground uppercase tracking-wider">
               Chi nhánh
             </div>
             {canViewAll && (
               <button
                 onClick={() => switchBranch(null)}
                 className={cn(
-                  "w-full text-left flex items-center gap-2 px-3 py-1.5 rounded-md text-sm",
+                  "w-full press-scale-sm text-left flex items-center gap-3 px-3 py-2 rounded-lg text-sm",
                   currentBranch === null
-                    ? "bg-primary/10 text-primary font-medium"
-                    : "text-muted-foreground hover:bg-muted hover:text-foreground"
+                    ? "bg-primary-fixed text-primary font-semibold"
+                    : "text-foreground/80 hover:bg-surface-container-low"
                 )}
               >
-                <Building2 className="h-3.5 w-3.5" />
+                <Icon name="apartment" size={18} />
                 Tất cả chi nhánh
                 {currentBranch === null && (
-                  <Check className="h-3.5 w-3.5 ml-auto" />
+                  <Icon name="check" size={16} className="ml-auto" />
                 )}
               </button>
             )}
@@ -290,69 +276,66 @@ function MobileNav() {
                 key={branch.id}
                 onClick={() => switchBranch(branch.id)}
                 className={cn(
-                  "w-full text-left flex items-center gap-2 px-3 py-1.5 rounded-md text-sm",
+                  "w-full press-scale-sm text-left flex items-center gap-3 px-3 py-2 rounded-lg text-sm",
                   currentBranch?.id === branch.id
-                    ? "bg-primary/10 text-primary font-medium"
-                    : "text-muted-foreground hover:bg-muted hover:text-foreground"
+                    ? "bg-primary-fixed text-primary font-semibold"
+                    : "text-foreground/80 hover:bg-surface-container-low"
                 )}
               >
-                <Building2 className="h-3.5 w-3.5" />
+                <Icon name="apartment" size={18} />
                 {branch.name}
                 {currentBranch?.id === branch.id && (
-                  <Check className="h-3.5 w-3.5 ml-auto" />
+                  <Icon name="check" size={16} className="ml-auto" />
                 )}
               </button>
             ))}
           </div>
 
           {/* Sidebar groups */}
-          {sidebarNavGroups.map((group) => {
-            const GroupIcon = group.icon;
-            return (
-              <div key={group.label}>
-                <div className="flex items-center gap-2 px-3 py-1.5 text-sm font-semibold text-foreground">
-                  <GroupIcon className="h-4 w-4" />
-                  {group.label}
-                </div>
-                <div className="ml-1 space-y-0.5">
-                  {group.items?.map((leaf) => (
-                    <MobileLeafLink
-                      key={leaf.href}
-                      leaf={leaf}
-                      pathname={pathname}
-                      onClose={() => setOpen(false)}
-                    />
-                  ))}
-                  {group.subGroups?.map((sg) => (
-                    <div key={sg.label} className="mt-1">
-                      <div className="px-3 py-1 text-[10px] font-semibold uppercase tracking-wider text-muted-foreground">
-                        {sg.label}
-                      </div>
-                      {sg.items.map((leaf) => (
-                        <MobileLeafLink
-                          key={leaf.href}
-                          leaf={leaf}
-                          pathname={pathname}
-                          onClose={() => setOpen(false)}
-                        />
-                      ))}
-                    </div>
-                  ))}
-                </div>
+          {sidebarNavGroups.map((group) => (
+            <div key={group.label}>
+              <div className="flex items-center gap-3 px-3 py-2 text-sm font-semibold text-foreground">
+                <Icon name={group.icon} size={18} />
+                {group.label}
               </div>
-            );
-          })}
+              <div className="ml-1 space-y-0.5">
+                {group.items?.map((leaf) => (
+                  <MobileLeafLink
+                    key={leaf.href}
+                    leaf={leaf}
+                    pathname={pathname}
+                    onClose={() => setOpen(false)}
+                  />
+                ))}
+                {group.subGroups?.map((sg) => (
+                  <div key={sg.label} className="mt-1">
+                    <div className="px-3 py-1 text-[10px] font-semibold uppercase tracking-wider text-muted-foreground">
+                      {sg.label}
+                    </div>
+                    {sg.items.map((leaf) => (
+                      <MobileLeafLink
+                        key={leaf.href}
+                        leaf={leaf}
+                        pathname={pathname}
+                        onClose={() => setOpen(false)}
+                      />
+                    ))}
+                  </div>
+                ))}
+              </div>
+            </div>
+          ))}
 
           {/* B2B Order Terminal shortcut */}
           <div className="pt-3 border-t">
             <Link
               href="/pos"
-              className="flex items-center gap-2 px-3 py-2 rounded-md text-sm font-medium bg-emerald-600 text-white hover:bg-emerald-700"
+              className="flex press-scale items-center gap-2 px-4 py-3 rounded-xl text-sm font-semibold bg-primary text-primary-foreground hover:bg-primary-hover ambient-shadow"
               onClick={() => setOpen(false)}
             >
-              <ShoppingCart className="h-4 w-4" />
+              <Icon name="point_of_sale" size={18} />
               Mở POS
-              <ChevronRight className="h-4 w-4 ml-auto" />
+              <Icon name="chevron_right" size={18} className="ml-auto" />
             </Link>
           </div>
         </nav>
@@ -362,7 +345,7 @@ function MobileNav() {
 }
 
 // ---------------------------------------------------------------------------
-// Main TopNav v2
+// Main TopNav v3 — Stitch white header with blue accents
 // ---------------------------------------------------------------------------
 
 export function TopNav() {
@@ -370,15 +353,20 @@ export function TopNav() {
 
   return (
     <>
-      <header className="bg-[hsl(217,91%,40%)] text-white sticky top-0 z-40">
-        <div className="flex items-center gap-2 h-12 px-3">
+      {/* Stitch style: bg-surface-container-lowest (white) + subtle bottom border.
+          h-16 để nghỉ mắt hơn so với h-12 cũ. */}
+      <header className="bg-surface-container-lowest/85 backdrop-blur-md text-foreground sticky top-0 z-40 border-b border-border">
+        <div className="flex items-center gap-3 h-16 px-4 md:px-6">
           {/* Left: Mobile menu + AppSwitcher + Logo + BranchSelector */}
           <MobileNav />
           <AppSwitcher />
-          <Link href="/" className="flex items-center gap-2 ml-1 mr-1 shrink-0">
-            <span className="text-lg font-bold tracking-tight">OneBiz</span>
+          <Link href="/" className="flex items-center gap-2 ml-1 shrink-0 press-scale-sm">
+            <span className="hidden sm:flex h-9 w-9 rounded-xl bg-primary text-primary-foreground items-center justify-center text-sm font-bold ambient-shadow">
+              O
+            </span>
+            <span className="text-lg font-bold tracking-tight text-foreground hidden sm:block">OneBiz</span>
           </Link>
-          <div className="hidden md:block w-px h-5 bg-white/20" />
+          <div className="hidden md:block w-px h-6 bg-border ml-2" />
           <BranchSelector />
 
           {/* Center: Global Search bar (flex-1 to fill) */}
@@ -387,19 +375,18 @@ export function TopNav() {
           </div>
 
           {/* Right: Quick Import + Bell + Help + User + Bán hàng */}
-          <div className="flex items-center gap-0.5 shrink-0">
+          <div className="flex items-center gap-1 shrink-0">
             {/* Quick Import — prominent (M3 core feature) */}
             <button
               type="button"
               onClick={() => setImportOpen(true)}
               className={cn(
-                "hidden md:inline-flex items-center gap-1.5 h-8 px-2.5 rounded-md text-xs font-medium",
-                "bg-white/15 hover:bg-white/25 border border-white/20 hover:border-white/30",
-                "text-white transition-colors"
+                "hidden md:inline-flex press-scale-sm items-center gap-2 h-9 px-3 rounded-lg text-xs font-medium",
+                "bg-primary-fixed text-primary hover:bg-primary-fixed-dim"
               )}
               title="Import dữ liệu cho AI (Excel/CSV)"
             >
-              <Upload className="h-3.5 w-3.5" />
+              <Icon name="upload" size={16} />
               <span className="hidden lg:inline">Import dữ liệu</span>
             </button>
 
@@ -408,10 +395,10 @@ export function TopNav() {
               variant="ghost"
               size="icon"
               onClick={() => setImportOpen(true)}
-              className="text-white/80 hover:text-white hover:bg-white/10 md:hidden"
+              className="text-foreground/70 hover:text-foreground hover:bg-surface-container-low md:hidden"
               title="Import dữ liệu"
             >
-              <Upload className="h-4 w-4" />
+              <Icon name="upload" size={18} />
             </Button>
 
             {/* Notification bell */}
@@ -419,12 +406,12 @@ export function TopNav() {
               <Button
                 variant="ghost"
                 size="icon"
-                className="text-white/80 hover:text-white hover:bg-white/10"
+                className="text-foreground/70 hover:text-foreground hover:bg-surface-container-low"
                 title="Thông báo"
               >
-                <Bell className="h-4 w-4" />
+                <Icon name="notifications" size={18} />
               </Button>
-              <span className="absolute -top-0.5 -right-0.5 h-4 w-4 rounded-full bg-red-500 text-[10px] font-bold text-white flex items-center justify-center pointer-events-none">
+              <span className="absolute top-1 right-1 h-4 w-4 rounded-full bg-destructive text-[10px] font-bold text-primary-foreground flex items-center justify-center pointer-events-none">
                 3
               </span>
             </Link>
@@ -434,26 +421,26 @@ export function TopNav() {
               <Button
                 variant="ghost"
                 size="icon"
-                className="text-white/80 hover:text-white hover:bg-white/10"
+                className="text-foreground/70 hover:text-foreground hover:bg-surface-container-low"
                 title="Trợ giúp"
               >
-                <CircleHelp className="h-4 w-4" />
+                <Icon name="help" size={18} />
               </Button>
             </Link>
 
             {/* Divider */}
-            <div className="hidden sm:block w-px h-5 bg-white/20 mx-1" />
+            <div className="hidden sm:block w-px h-6 bg-border mx-1" />
 
             {/* User dropdown */}
             <UserDropdown />
 
-            {/* POS shortcut */}
-            <Link href="/pos" className="hidden sm:flex ml-1.5">
+            {/* POS shortcut — Stitch primary CTA */}
+            <Link href="/pos" className="hidden sm:flex ml-2">
               <Button
-                size="sm"
-                className="bg-emerald-500 text-white hover:bg-emerald-600 font-semibold shadow-sm"
+                size="default"
+                className="rounded-xl font-semibold ambient-shadow"
               >
-                <ShoppingCart className="h-4 w-4 mr-1.5" />
+                <Icon name="point_of_sale" size={18} className="mr-1.5" />
                 Bán hàng
               </Button>
             </Link>
