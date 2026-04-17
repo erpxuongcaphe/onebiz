@@ -282,14 +282,14 @@ export function DataTable<TData, TValue>({
       {/* Desktop table */}
       <div className="hidden md:block flex-1 overflow-auto">
         <Table>
-          <TableHeader className="sticky top-0 bg-muted/50 z-10">
+          <TableHeader className="sticky top-0 bg-surface-container-low z-10">
             {table.getHeaderGroups().map((headerGroup) => (
               <TableRow key={headerGroup.id}>
                 {headerGroup.headers.map((header) => (
                   <TableHead
                     key={header.id}
                     className={cn(
-                      "text-xs font-semibold text-muted-foreground whitespace-nowrap",
+                      "text-[11px] font-semibold text-muted-foreground whitespace-nowrap uppercase tracking-wider",
                       header.column.getCanSort() &&
                         "cursor-pointer select-none"
                     )}
@@ -363,16 +363,8 @@ export function DataTable<TData, TValue>({
                   className="h-32 text-center text-muted-foreground"
                 >
                   <div className="flex flex-col items-center gap-2">
-                    <div className="h-16 w-16 rounded-full bg-blue-50 flex items-center justify-center">
-                      <svg
-                        className="h-8 w-8 text-blue-300"
-                        fill="none"
-                        viewBox="0 0 24 24"
-                        stroke="currentColor"
-                        strokeWidth={1.5}
-                      >
-                        <path d="M20 7l-8-4-8 4m16 0l-8 4m8-4v10l-8 4m0-10L4 7m8 4v10M4 7v10l8 4" />
-                      </svg>
+                    <div className="h-16 w-16 rounded-full bg-primary-fixed flex items-center justify-center">
+                      <Icon name="inventory_2" size={28} className="text-primary/60" />
                     </div>
                     <p className="font-medium">Không tìm thấy kết quả</p>
                     <p className="text-xs">
@@ -387,9 +379,9 @@ export function DataTable<TData, TValue>({
                   <TableRow
                     data-state={row.getIsSelected() && "selected"}
                     className={cn(
-                      (onRowClick || renderDetail) && "cursor-pointer",
+                      (onRowClick || renderDetail) && "cursor-pointer hover:bg-surface-container-low",
                       expandedRowIdx === rowIndex &&
-                        "bg-blue-50/60 border-l-2 border-l-primary"
+                        "bg-primary-fixed/60 border-l-2 border-l-primary"
                     )}
                     onClick={() => handleRowClick(row.original, rowIndex)}
                   >
@@ -436,16 +428,8 @@ export function DataTable<TData, TValue>({
         ) : data.length === 0 ? (
           <div className="text-center text-muted-foreground py-12">
             <div className="flex flex-col items-center gap-2">
-              <div className="h-16 w-16 rounded-full bg-blue-50 flex items-center justify-center">
-                <svg
-                  className="h-8 w-8 text-blue-300"
-                  fill="none"
-                  viewBox="0 0 24 24"
-                  stroke="currentColor"
-                  strokeWidth={1.5}
-                >
-                  <path d="M20 7l-8-4-8 4m16 0l-8 4m8-4v10l-8 4m0-10L4 7m8 4v10M4 7v10l8 4" />
-                </svg>
+              <div className="h-16 w-16 rounded-full bg-primary-fixed flex items-center justify-center">
+                <Icon name="inventory_2" size={28} className="text-primary/60" />
               </div>
               <p className="font-medium">Không tìm thấy kết quả</p>
             </div>
@@ -455,11 +439,11 @@ export function DataTable<TData, TValue>({
             <Fragment key={row.id}>
               <div
                 className={cn(
-                  "bg-card rounded-lg border p-3",
+                  "bg-card rounded-xl border p-3 ambient-shadow",
                   (onRowClick || renderDetail) &&
-                    "cursor-pointer active:bg-muted/50",
+                    "cursor-pointer active:bg-surface-container-low press-scale-sm",
                   expandedRowIdx === rowIndex &&
-                    "ring-2 ring-primary bg-blue-50/30"
+                    "ring-2 ring-primary bg-primary-fixed/40"
                 )}
                 onClick={() => handleRowClick(row.original, rowIndex)}
               >
