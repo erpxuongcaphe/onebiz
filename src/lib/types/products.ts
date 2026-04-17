@@ -2,6 +2,13 @@
 
 export type ProductType = 'nvl' | 'sku';
 export type ProductStatus = 'active' | 'inactive';
+/**
+ * Kênh bán của SKU:
+ *   'fnb'    — món pha chế tại quán (Caramel Macchiato, Cà phê sữa đá…) — chỉ hiện trên POS FnB
+ *   'retail' — hàng đóng gói bán lẻ/sỉ (Rang xay 250g, Hộp quà, Syrup chai…) — chỉ hiện trên POS Retail
+ *   undefined/null — NVL (nguyên liệu nội bộ), không bán ra ngoài
+ */
+export type ProductChannel = 'fnb' | 'retail';
 
 export interface Product {
   id: string;
@@ -9,6 +16,8 @@ export interface Product {
   name: string;
   image?: string;
   productType: ProductType;
+  /** Kênh bán (chỉ áp dụng cho SKU). Xem ProductChannel. */
+  channel?: ProductChannel;
   hasBom: boolean;
   /** Trạng thái kinh doanh — dùng cho filter "Đang bán / Ngừng bán" */
   status?: ProductStatus;

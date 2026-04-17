@@ -17,6 +17,13 @@ export async function getSuppliers(params: QueryParams): Promise<QueryResult<Sup
     .from("suppliers")
     .select("*", { count: "exact" });
 
+  // Ẩn nhà cung cấp nội bộ (is_internal=true) khỏi list thường.
+  // Internal suppliers chỉ dùng cho internal_sales service (chi nhánh bán cho nhau).
+  // Opt-in hiển thị qua filters.includeInternal = true.
+  if (!params.filters?.includeInternal) {
+    query = query.or("is_internal.is.null,is_internal.eq.false");
+  }
+
   // Search
   if (params.search) {
     query = query.or(`name.ilike.%${params.search}%,code.ilike.%${params.search}%,phone.ilike.%${params.search}%`);

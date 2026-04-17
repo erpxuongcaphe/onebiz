@@ -249,6 +249,7 @@ export interface Database {
           allow_sale: boolean;
           is_active: boolean;
           product_type: string;
+          channel: string | null;
           has_bom: boolean;
           old_code: string | null;
           group_code: string | null;
@@ -281,6 +282,7 @@ export interface Database {
           allow_sale?: boolean;
           is_active?: boolean;
           product_type?: string;
+          channel?: string | null;
           has_bom?: boolean;
           old_code?: string | null;
           group_code?: string | null;
@@ -309,6 +311,7 @@ export interface Database {
           allow_sale?: boolean;
           is_active?: boolean;
           product_type?: string;
+          channel?: string | null;
           has_bom?: boolean;
           old_code?: string | null;
           group_code?: string | null;

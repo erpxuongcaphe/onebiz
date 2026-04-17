@@ -42,12 +42,13 @@ export async function prefetchMenuData(): Promise<void> {
     .eq("scope", "sku")
     .order("sort_order");
 
-  // Fetch products
+  // Fetch products — chỉ FnB menu (channel='fnb')
   const { data: prods } = await supabase
     .from("products")
     .select("id, name, code, sell_price, image_url, stock, category_id")
     .eq("is_active", true)
     .eq("product_type", "sku")
+    .eq("channel", "fnb")
     .order("name");
 
   // Fetch toppings

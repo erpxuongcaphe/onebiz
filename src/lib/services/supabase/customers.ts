@@ -17,6 +17,13 @@ export async function getCustomers(params: QueryParams): Promise<QueryResult<Cus
     .from("customers")
     .select("*, customer_groups!customers_group_id_fkey(name)", { count: "exact" });
 
+  // Ẩn khách hàng nội bộ (is_internal=true) khỏi list thường.
+  // Internal customers chỉ dùng cho internal_sales service, không hiển thị ở trang khách hàng chung.
+  // Opt-in hiển thị qua filters.includeInternal = true.
+  if (!params.filters?.includeInternal) {
+    query = query.or("is_internal.is.null,is_internal.eq.false");
+  }
+
   // Search
   if (params.search) {
     query = query.or(`name.ilike.%${params.search}%,code.ilike.%${params.search}%,phone.ilike.%${params.search}%`);

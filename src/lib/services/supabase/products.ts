@@ -29,6 +29,12 @@ export async function getProducts(params: QueryParams): Promise<QueryResult<Prod
     query = query.eq("product_type", params.filters.productType as string);
   }
 
+  // Filter: channel (fnb | retail) — phân tách sản phẩm theo kênh bán
+  // Dùng ở POS FnB (channel='fnb') và POS Retail (channel='retail').
+  if (params.filters?.channel && params.filters.channel !== "all") {
+    query = query.eq("channel", params.filters.channel as string);
+  }
+
   // Filter: category
   if (params.filters?.category && params.filters.category !== "all") {
     const cats = Array.isArray(params.filters.category)
@@ -317,6 +323,7 @@ function mapProduct(row: any): Product {
     categoryCode: row.categories?.code ?? undefined,
     unit: row.unit,
     productType: row.product_type ?? "nvl",
+    channel: row.channel ?? undefined,
     hasBom: row.has_bom ?? false,
     // Map cột boolean `is_active` sang trường `status` (active|inactive) cho FE.
     // FE filter "Trạng thái" + badge "Đang bán/Ngừng bán" đọc từ trường này.
@@ -392,6 +399,8 @@ export async function createProduct(product: Partial<Product & ProductDetail>): 
       allow_sale: product.allowSale ?? true,
       is_active: true,
       product_type: product.productType ?? "nvl",
+      // Kênh bán: chỉ gán cho SKU (fnb/retail). NVL giữ NULL.
+      channel: product.productType === "sku" ? (product.channel ?? null) : null,
       has_bom: product.hasBom ?? false,
       group_code: product.groupCode,
       purchase_unit: product.purchaseUnit,
@@ -429,6 +438,10 @@ export async function updateProduct(id: string, updates: Partial<Product & Produ
   if (updates.image !== undefined) payload.image_url = updates.image;
   if (updates.allowSale !== undefined) payload.allow_sale = updates.allowSale;
   if (updates.status !== undefined) payload.is_active = updates.status === "active";
+  // Kênh bán fnb|retail (hoặc null khi quay về NVL)
+  if (updates.channel !== undefined) {
+    payload.channel = updates.channel ?? null;
+  }
 
   const { data, error } = await supabase
     .from("products")
