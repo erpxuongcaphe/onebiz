@@ -4,9 +4,6 @@ import { useState } from "react";
 import { Card, CardContent } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
-import {
-  MessageCircle
-} from "lucide-react";
 import { cn } from "@/lib/utils";
 import { Icon } from "@/components/ui/icon";
 
@@ -32,7 +29,7 @@ const integrations: Integration[] = [
     id: "zalo",
     name: "Zalo OA",
     description: "Kết nối Zalo Official Account",
-    icon: <MessageCircle className="h-5 w-5 text-blue-600" />,
+    icon: <Icon name="chat_bubble" className="text-blue-600" />,
     iconBg: "bg-blue-100",
     connected: true,
   },

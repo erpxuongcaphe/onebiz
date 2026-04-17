@@ -8,10 +8,6 @@
  */
 
 import { useState, useEffect, useCallback } from "react";
-import {
-  LayoutGrid,
-  GripVertical,
-} from "lucide-react";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
@@ -342,7 +338,7 @@ export default function QuanLyBanPage() {
             });
             setBulkAddOpen(true);
           }}>
-            <LayoutGrid className="size-4 mr-1.5" /> Tạo hàng loạt
+            <Icon name="grid_view" className="size-4 mr-1.5" /> Tạo hàng loạt
           </Button>
         </div>
       </div>
@@ -353,7 +349,7 @@ export default function QuanLyBanPage() {
           <CardContent className="pt-0">
             <div className="flex items-center gap-3">
               <div className="flex size-10 items-center justify-center rounded-full bg-blue-100">
-                <LayoutGrid className="size-5 text-blue-600" />
+                <Icon name="grid_view" className="size-5 text-blue-600" />
               </div>
               <div>
                 <p className="text-2xl font-bold">{zones.length}</p>
@@ -475,7 +471,7 @@ export default function QuanLyBanPage() {
                     )}
                   >
                     {/* Grip handle (visual) */}
-                    <GripVertical className="absolute top-1 left-1 size-3 text-gray-300 opacity-0 group-hover:opacity-100 transition-opacity" />
+                    <Icon name="drag_indicator" className="absolute top-1 left-1 size-3 text-gray-300 opacity-0 group-hover:opacity-100 transition-opacity" />
 
                     {/* Table number */}
                     <span className="text-lg font-bold text-gray-700">

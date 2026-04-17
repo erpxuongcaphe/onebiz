@@ -9,9 +9,6 @@
 
 import { useEffect, useState, useCallback } from "react";
 import { ColumnDef } from "@tanstack/react-table";
-import {
-  BarChart3
-} from "lucide-react";
 import { PageHeader } from "@/components/shared/page-header";
 import { DataTable } from "@/components/shared/data-table";
 import {
@@ -373,7 +370,7 @@ export default function CongNoPage() {
             NCC ({suppliers.length})
           </TabsTrigger>
           <TabsTrigger value="aging" className="gap-2">
-            <BarChart3 className="h-4 w-4" />
+            <Icon name="bar_chart" size={16} />
             Phân tích tuổi nợ
           </TabsTrigger>
         </TabsList>
@@ -456,7 +453,7 @@ export default function CongNoPage() {
               <Card>
                 <CardHeader className="pb-2">
                   <CardTitle className="text-sm flex items-center gap-2">
-                    <BarChart3 className="h-4 w-4" />
+                    <Icon name="bar_chart" size={16} />
                     Phân tích theo tuổi nợ
                   </CardTitle>
                 </CardHeader>

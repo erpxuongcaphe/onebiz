@@ -5,11 +5,6 @@
  */
 
 import { useState, useEffect, useCallback } from "react";
-import {
-  UserCog,
-  Shield,
-  MoreHorizontal
-} from "lucide-react";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
@@ -181,7 +176,7 @@ export default function UsersPage() {
       <Card>
         <CardHeader>
           <CardTitle className="text-base flex items-center gap-2">
-            <UserCog className="h-4 w-4" />
+            <Icon name="manage_accounts" size={16} />
             Danh sách nhân viên
           </CardTitle>
         </CardHeader>
@@ -207,7 +202,7 @@ export default function UsersPage() {
                     <td className="py-2.5">
                       {user.roleName ? (
                         <Badge variant="secondary" className="text-xs">
-                          <Shield className="h-3 w-3 mr-1" />
+                          <Icon name="shield" size={12} className="mr-1" />
                           {user.roleName}
                         </Badge>
                       ) : (
@@ -230,7 +225,7 @@ export default function UsersPage() {
                     <td className="py-2.5">
                       <DropdownMenu>
                         <DropdownMenuTrigger className="inline-flex items-center justify-center h-7 w-7 rounded-md hover:bg-muted transition-colors">
-                          <MoreHorizontal className="h-4 w-4" />
+                          <Icon name="more_horiz" size={16} />
                         </DropdownMenuTrigger>
                         <DropdownMenuContent align="end">
                           <DropdownMenuLabel>Thao tác</DropdownMenuLabel>
@@ -241,7 +236,7 @@ export default function UsersPage() {
                               setAssignOpen(true);
                             }}
                           >
-                            <Shield className="h-4 w-4 mr-2" />
+                            <Icon name="shield" size={16} className="mr-2" />
                             Gán vai trò
                           </DropdownMenuItem>
                           <DropdownMenuSeparator />

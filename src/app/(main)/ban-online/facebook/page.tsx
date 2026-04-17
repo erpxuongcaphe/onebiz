@@ -4,8 +4,7 @@ import { useState } from "react";
 import {
   MessageCircle,
   ShoppingCart,
-  TrendingUp,
-  Send
+  TrendingUp
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent } from "@/components/ui/card";
@@ -372,7 +371,7 @@ export default function FacebookPage() {
                 }}
               />
               <Button size="icon" className="shrink-0">
-                <Send className="h-4 w-4" />
+                <Icon name="send" size={16} />
               </Button>
             </div>
           </div>

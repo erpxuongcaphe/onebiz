@@ -16,14 +16,14 @@ import {
   Wallet,
   Settings,
   PackagePlus,
-  Globe,
-  Grid3x3,
+  Globe
 } from "lucide-react";
 import {
   DropdownMenu,
   DropdownMenuTrigger,
   DropdownMenuContent,
 } from "@/components/ui/dropdown-menu";
+import { Icon } from "@/components/ui/icon";
 
 interface AppTile {
   label: string;
@@ -97,7 +97,7 @@ export function AppSwitcher() {
         className="hidden md:inline-flex items-center justify-center h-8 w-8 rounded-md text-white/80 hover:text-white hover:bg-white/10 transition-colors cursor-pointer outline-none"
         title="Chuyển ứng dụng"
       >
-        <Grid3x3 className="h-4 w-4" />
+        <Icon name="grid_view" size={16} />
       </DropdownMenuTrigger>
       <DropdownMenuContent
         align="end"

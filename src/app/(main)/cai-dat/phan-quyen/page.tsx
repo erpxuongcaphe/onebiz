@@ -9,9 +9,6 @@
 
 import { useState, useEffect, useCallback } from "react";
 import {
-  Shield
-} from "lucide-react";
-import {
   Card,
   CardContent,
   CardHeader,
@@ -237,7 +234,7 @@ export default function PermissionSettingsPage() {
                           role.color
                         )}
                       >
-                        <Shield className="h-4 w-4" />
+                        <Icon name="shield" size={16} />
                       </div>
                       <div>
                         <CardTitle className="text-sm">{role.name}</CardTitle>

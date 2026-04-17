@@ -2,9 +2,6 @@
 
 import { useEffect, useState, useCallback } from "react";
 import { ColumnDef } from "@tanstack/react-table";
-import {
-  Copy
-} from "lucide-react";
 import { PageHeader } from "@/components/shared/page-header";
 import { ListPageLayout } from "@/components/shared/list-page-layout";
 import { DataTable, StarCell } from "@/components/shared/data-table";
@@ -803,7 +800,7 @@ export default function HangHoaPage() {
             },
             {
               label: "Nhân bản",
-              icon: <Copy className="h-4 w-4" />,
+              icon: <Icon name="content_copy" size={16} />,
               onClick: () => {
                 toast({ variant: "info", title: "Đang phát triển", description: "Tính năng nhân bản đang được phát triển" });
               },

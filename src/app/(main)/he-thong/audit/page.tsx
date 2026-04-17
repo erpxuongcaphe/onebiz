@@ -7,10 +7,6 @@
 
 import { useEffect, useState, useCallback } from "react";
 import { ColumnDef } from "@tanstack/react-table";
-import {
-  FileClock,
-  Activity
-} from "lucide-react";
 import { PageHeader } from "@/components/shared/page-header";
 import { DataTable } from "@/components/shared/data-table";
 import { Badge } from "@/components/ui/badge";
@@ -196,7 +192,7 @@ export default function AuditPage() {
       {stats && (
         <div className="grid grid-cols-2 md:grid-cols-4 gap-3 px-4 pt-4">
           <StatCard
-            icon={<Activity className="h-4 w-4 text-blue-600" />}
+            icon={<Icon name="monitoring" size={16} className="text-blue-600" />}
             label="Hôm nay"
             value={`${stats.totalToday} thao tác`}
             bg="bg-blue-50 border-blue-200"
@@ -208,13 +204,13 @@ export default function AuditPage() {
             bg="bg-emerald-50 border-emerald-200"
           />
           <StatCard
-            icon={<FileClock className="h-4 w-4 text-purple-600" />}
+            icon={<Icon name="file_present" size={16} className="text-purple-600" />}
             label="Hành động phổ biến"
             value={stats.topAction}
             bg="bg-purple-50 border-purple-200"
           />
           <StatCard
-            icon={<FileClock className="h-4 w-4 text-amber-600" />}
+            icon={<Icon name="file_present" size={16} className="text-amber-600" />}
             label="Đối tượng phổ biến"
             value={stats.topEntity}
             bg="bg-amber-50 border-amber-200"
@@ -276,7 +272,7 @@ export default function AuditPage() {
         <DialogContent className="max-w-lg">
           <DialogHeader>
             <DialogTitle className="flex items-center gap-2">
-              <FileClock className="h-5 w-5" />
+              <Icon name="file_present" />
               Chi tiết thao tác
             </DialogTitle>
           </DialogHeader>

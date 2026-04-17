@@ -4,7 +4,6 @@ import { useState } from "react";
 import {
   MessageCircle,
   ShoppingCart,
-  Send,
   DollarSign
 } from "lucide-react";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
@@ -403,7 +402,7 @@ export default function ZaloPage() {
                 style={{ backgroundColor: ZALO_BLUE }}
                 className="text-white hover:opacity-90"
               >
-                <Send className="size-4 mr-1.5" />
+                <Icon name="send" className="size-4 mr-1.5" />
                 Gửi
               </Button>
             </div>

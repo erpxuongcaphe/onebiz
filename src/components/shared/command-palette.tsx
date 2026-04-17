@@ -18,10 +18,6 @@ import {
   type ReactNode,
 } from "react";
 import { useRouter } from "next/navigation";
-import {
-  Box,
-  Command as CommandIcon
-} from "lucide-react";
 import { Dialog, DialogContent, DialogTitle } from "@/components/ui/dialog";
 import { mainNavItems } from "./nav-config";
 import { getProducts, getCustomers, getSuppliers } from "@/lib/services";
@@ -380,7 +376,7 @@ function CommandPaletteDialog({
         >
           {flatItems.length === 0 ? (
             <div className="flex flex-col items-center justify-center py-12 text-muted-foreground">
-              <CommandIcon className="h-8 w-8 mb-2 opacity-30" />
+              <Icon name="keyboard_command_key" className="h-8 w-8 mb-2 opacity-30" />
               <p className="text-sm">
                 {query
                   ? "Không tìm thấy kết quả"
@@ -452,7 +448,7 @@ function CommandPaletteDialog({
             đóng
           </span>
           <span className="ml-auto flex items-center gap-1">
-            <Box className="h-3 w-3" />
+            <Icon name="inventory_2" size={12} />
             OneBiz Command
           </span>
         </div>
