@@ -51,7 +51,7 @@ interface InternalSaleRow {
 
 const STATUS_META: Record<string, { label: string; color: string }> = {
   draft: { label: "Nháp", color: "#6b7280" },
-  confirmed: { label: "Xác nhận", color: "#3b82f6" },
+  confirmed: { label: "Xác nhận", color: "#004AC6" },
   completed: { label: "Hoàn thành", color: "#22c55e" },
   cancelled: { label: "Đã huỷ", color: "#ef4444" },
 };

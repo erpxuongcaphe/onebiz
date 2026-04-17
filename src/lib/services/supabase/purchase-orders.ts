@@ -53,7 +53,7 @@ export function getPurchaseOrderStatusMeta(): Record<
 > {
   return {
     draft: { label: "Phiếu tạm", color: "#94a3b8" },
-    ordered: { label: "Đã đặt hàng", color: "#3b82f6" },
+    ordered: { label: "Đã đặt hàng", color: "#004AC6" },
     partial: { label: "Nhập một phần", color: "#f59e0b" },
     completed: { label: "Hoàn thành", color: "#10b981" },
     cancelled: { label: "Đã hủy", color: "#ef4444" },

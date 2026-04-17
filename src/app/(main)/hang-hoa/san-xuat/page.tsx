@@ -45,7 +45,7 @@ const STATUS_META: Record<
 > = {
   planned: { label: "Đã lên kế hoạch", color: "#94a3b8" },
   material_check: { label: "Kiểm tra NVL", color: "#f59e0b" },
-  in_production: { label: "Đang sản xuất", color: "#3b82f6" },
+  in_production: { label: "Đang sản xuất", color: "#004AC6" },
   quality_check: { label: "Kiểm chất lượng", color: "#8b5cf6" },
   completed: { label: "Hoàn thành", color: "#10b981" },
   cancelled: { label: "Đã hủy", color: "#ef4444" },

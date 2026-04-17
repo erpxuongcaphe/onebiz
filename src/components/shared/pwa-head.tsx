@@ -24,11 +24,11 @@ export function PwaHead() {
     // Set theme-color meta
     const themeMeta = document.querySelector('meta[name="theme-color"]');
     if (themeMeta) {
-      themeMeta.setAttribute("content", isFnb ? "#0f172a" : "#2563eb");
+      themeMeta.setAttribute("content", isFnb ? "#0f172a" : "#004AC6");
     } else {
       const meta = document.createElement("meta");
       meta.name = "theme-color";
-      meta.content = isFnb ? "#0f172a" : "#2563eb";
+      meta.content = isFnb ? "#0f172a" : "#004AC6";
       document.head.appendChild(meta);
     }
 

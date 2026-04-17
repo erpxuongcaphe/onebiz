@@ -28,14 +28,14 @@ const DEFAULT_VALUE_COLORS: Record<string, string> = {
   unpaid: "#ef4444",
   partial: "#f59e0b",
   pending: "#94a3b8",
-  ready: "#3b82f6",
+  ready: "#004AC6",
   shipped: "#8b5cf6",
   delivered: "#10b981",
   ok: "#10b981",
   failed: "#ef4444",
   hot: "#ef4444",
   warm: "#f59e0b",
-  cold: "#3b82f6",
+  cold: "#004AC6",
 };
 
 /**
