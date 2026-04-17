@@ -28,8 +28,8 @@ const typeConfig: Record<
   },
   order_completed: {
     icon: Package,
-    color: "text-blue-600",
-    bgColor: "bg-blue-100",
+    color: "text-primary",
+    bgColor: "bg-primary-fixed",
   },
   stock_low: {
     icon: AlertTriangle,
@@ -188,8 +188,8 @@ export default function ThongBaoPage() {
                       <div key={notification.id}>
                         <button
                           onClick={() => handleToggleRead(notification.id)}
-                          className={`w-full flex items-start gap-3 p-4 text-left transition-colors hover:bg-muted/50 ${
-                            !notification.read ? "bg-blue-50/50" : ""
+                          className={`w-full flex items-start gap-3 p-4 text-left transition-colors hover:bg-surface-container-low ${
+                            !notification.read ? "bg-primary-fixed/40" : ""
                           }`}
                         >
                           <div
@@ -209,7 +209,7 @@ export default function ThongBaoPage() {
                                 {notification.title}
                               </p>
                               {!notification.read && (
-                                <span className="shrink-0 mt-1 h-2 w-2 rounded-full bg-blue-500" />
+                                <span className="shrink-0 mt-1 h-2 w-2 rounded-full bg-primary" />
                               )}
                             </div>
                             <p className="text-sm text-muted-foreground mt-0.5 truncate">

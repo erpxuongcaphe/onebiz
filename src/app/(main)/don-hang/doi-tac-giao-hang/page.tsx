@@ -126,7 +126,7 @@ function PartnerDetail({
                     {
                       label: "Đơn đang giao",
                       value: (
-                        <span className={partner.activeOrders > 0 ? "text-blue-600 font-medium" : ""}>
+                        <span className={partner.activeOrders > 0 ? "text-primary font-medium" : ""}>
                           {String(partner.activeOrders)}
                         </span>
                       ),

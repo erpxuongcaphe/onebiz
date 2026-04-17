@@ -409,7 +409,7 @@ export default function SoQuyPage() {
           </div>
           <div>
             Tổng thu:{" "}
-            <span className="font-semibold text-blue-600">
+            <span className="font-semibold text-primary">
               {formatCurrency(totalReceipt)}
             </span>
           </div>
