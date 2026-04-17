@@ -10,6 +10,28 @@
   --font-sans: var(--font-sans);
   --font-mono: var(--font-geist-mono);
   --font-heading: var(--font-sans);
+
+  /* Stitch (Material Design 3) surface-container scale.
+     Dùng cho các trang mới build theo Stitch style:
+     - surface-container-lowest: cards, dialogs (white)
+     - surface-container-low: sidebar, hover states
+     - surface-container: zebra rows, input backgrounds
+     - surface-container-high: nested panels
+     - surface-container-highest: most elevated (dropdown, tooltip bg)
+     Token `on-*` là màu text nên đặt trên surface đó. */
+  --color-surface-container-lowest: var(--surface-container-lowest);
+  --color-surface-container-low: var(--surface-container-low);
+  --color-surface-container: var(--surface-container);
+  --color-surface-container-high: var(--surface-container-high);
+  --color-surface-container-highest: var(--surface-container-highest);
+  --color-on-surface: var(--on-surface);
+  --color-on-surface-variant: var(--on-surface-variant);
+  --color-on-primary: var(--on-primary);
+  --color-outline: var(--outline);
+  --color-outline-variant: var(--outline-variant);
+  --color-primary-fixed: var(--primary-fixed);
+  --color-primary-fixed-dim: var(--primary-fixed-dim);
+
   --color-sidebar-ring: var(--sidebar-ring);
   --color-sidebar-border: var(--sidebar-border);
   --color-sidebar-accent-foreground: var(--sidebar-accent-foreground);
@@ -65,19 +87,37 @@
 }
 
 :root {
-  /* Surface */
-  --background: oklch(0.988 0.002 90);
-  --foreground: oklch(0.175 0.005 260);
+  /* Surface — blue-tinted theo Stitch brand (không phải neutral gray) */
+  --background: oklch(0.985 0.008 265); /* ≈ #F8F9FF */
+  --foreground: oklch(0.175 0.015 260);
   --card: oklch(1 0 0);
-  --card-foreground: oklch(0.175 0.005 260);
+  --card-foreground: oklch(0.175 0.015 260);
   --popover: oklch(1 0 0);
-  --popover-foreground: oklch(0.175 0.005 260);
+  --popover-foreground: oklch(0.175 0.015 260);
 
-  /* Xưởng Blue — Primary */
-  --primary: oklch(0.585 0.156 255);
+  /* Stitch / Material Design 3 surface-container scale.
+     Giá trị chính xác từ mockup Stitch (tailwind.config inline):
+     - lowest #ffffff, low #eff4ff, default #e6eeff,
+       high #dce9ff, highest #d5e3fc
+     Surface có BLUE-TINT (không phải neutral gray) → khớp với Stitch brand. */
+  --surface-container-lowest: oklch(1 0 0);          /* #FFFFFF */
+  --surface-container-low: oklch(0.97 0.015 265);    /* ≈ #EFF4FF */
+  --surface-container: oklch(0.95 0.025 265);        /* ≈ #E6EEFF */
+  --surface-container-high: oklch(0.93 0.035 265);   /* ≈ #DCE9FF */
+  --surface-container-highest: oklch(0.91 0.045 265);/* ≈ #D5E3FC */
+  --on-surface: oklch(0.175 0.015 260);              /* ≈ #0D1C2E dark blue-gray */
+  --on-surface-variant: oklch(0.40 0.012 260);       /* ≈ #434654 */
+  --on-primary: oklch(1 0 0);
+  --outline: oklch(0.60 0.012 260);                  /* ≈ #747685 */
+  --outline-variant: oklch(0.83 0.018 260);          /* ≈ #C3C6D6 */
+  --primary-fixed: oklch(0.91 0.050 265);            /* ≈ #DBE1FF (Stitch exact) */
+  --primary-fixed-dim: oklch(0.80 0.085 265);        /* ≈ #B4C5FF */
+
+  /* Xưởng Blue — Primary. Cập nhật về Stitch #004AC6 ≈ oklch(0.43 0.19 263) */
+  --primary: oklch(0.43 0.19 263);
   --primary-foreground: oklch(1 0 0);
-  --primary-hover: oklch(0.535 0.170 255);
-  --primary-subtle: oklch(0.935 0.035 255);
+  --primary-hover: oklch(0.38 0.19 263);
+  --primary-subtle: oklch(0.93 0.035 265);
 
   /* Neutral */
   --secondary: oklch(0.97 0.002 90);
@@ -96,7 +136,7 @@
   /* Borders & Input */
   --border: oklch(0.915 0.005 260);
   --input: oklch(0.915 0.005 260);
-  --ring: oklch(0.585 0.156 255);
+  --ring: oklch(0.43 0.19 263);
 
   /* Status Colors */
   --status-success: oklch(0.620 0.160 145);
@@ -112,7 +152,7 @@
   --module-finance: oklch(0.620 0.150 145);
 
   /* Chart Colors */
-  --chart-1: oklch(0.585 0.156 255);
+  --chart-1: oklch(0.43 0.19 263);
   --chart-2: oklch(0.620 0.160 145);
   --chart-3: oklch(0.700 0.155 50);
   --chart-4: oklch(0.650 0.140 310);
@@ -121,20 +161,185 @@
 
   --radius: 0.5rem;
 
-  /* Legacy KiotViet alias → now Xưởng Blue */
-  --kiotviet: oklch(0.585 0.156 255);
+  /* Legacy KiotViet alias → now Stitch primary */
+  --kiotviet: oklch(0.43 0.19 263);
   --kiotviet-foreground: oklch(1 0 0);
-  --kiotviet-hover: oklch(0.535 0.170 255);
+  --kiotviet-hover: oklch(0.38 0.19 263);
 
-  /* Sidebar */
-  --sidebar: oklch(0.988 0.002 90);
+  /* Sidebar — theo Stitch dùng surface-container-low */
+  --sidebar: oklch(0.985 0.002 260);
   --sidebar-foreground: oklch(0.175 0.005 260);
-  --sidebar-primary: oklch(0.585 0.156 255);
+  --sidebar-primary: oklch(0.43 0.19 263);
   --sidebar-primary-foreground: oklch(1 0 0);
-  --sidebar-accent: oklch(0.96 0.002 90);
+  --sidebar-accent: oklch(0.96 0.002 260);
   --sidebar-accent-foreground: oklch(0.205 0.005 260);
   --sidebar-border: oklch(0.915 0.005 260);
   --sidebar-ring: oklch(0.708 0 0);
+}
+
+/* ============================================================
+   Stitch Dark Mode (MD3 dark surfaces + preserved primary).
+   Áp dụng qua `.dark` class trên <html> (bật bởi AppSettings).
+   Đặc biệt được sử dụng cho KDS (bếp) vì đứng xa màn hình nhìn tối
+   dễ đọc hơn + giảm mỏi mắt cho ca đêm.
+   ============================================================ */
+.dark {
+  /* Surface scale — dark MD3 elevation scale */
+  --background: oklch(0.13 0.015 260);              /* ≈ #0B0F1A */
+  --foreground: oklch(0.96 0.005 260);
+  --card: oklch(0.18 0.015 260);                     /* ≈ #141A27 */
+  --card-foreground: oklch(0.96 0.005 260);
+  --popover: oklch(0.20 0.015 260);
+  --popover-foreground: oklch(0.96 0.005 260);
+
+  --surface-container-lowest: oklch(0.13 0.015 260);
+  --surface-container-low: oklch(0.18 0.015 260);
+  --surface-container: oklch(0.22 0.020 260);
+  --surface-container-high: oklch(0.26 0.025 260);
+  --surface-container-highest: oklch(0.30 0.030 260);
+  --on-surface: oklch(0.96 0.005 260);
+  --on-surface-variant: oklch(0.78 0.015 260);
+  --on-primary: oklch(0.13 0.015 260);
+  --outline: oklch(0.55 0.015 260);
+  --outline-variant: oklch(0.35 0.015 260);
+  --primary-fixed: oklch(0.30 0.080 263);            /* Dark primary container */
+  --primary-fixed-dim: oklch(0.40 0.120 263);
+
+  /* Primary sáng hơn trên nền dark để có đủ contrast */
+  --primary: oklch(0.70 0.180 263);
+  --primary-foreground: oklch(0.13 0.015 260);
+  --primary-hover: oklch(0.75 0.180 263);
+  --primary-subtle: oklch(0.26 0.025 260);
+
+  /* Neutral */
+  --secondary: oklch(0.22 0.005 260);
+  --secondary-foreground: oklch(0.96 0.005 260);
+  --muted: oklch(0.20 0.005 260);
+  --muted-foreground: oklch(0.70 0.005 260);
+  --accent: oklch(0.22 0.005 260);
+  --accent-foreground: oklch(0.96 0.005 260);
+
+  --accent-warm: oklch(0.780 0.180 50);
+  --destructive: oklch(0.680 0.220 25);
+
+  --border: oklch(0.28 0.010 260);
+  --input: oklch(0.28 0.010 260);
+  --ring: oklch(0.70 0.180 263);
+
+  --status-success: oklch(0.720 0.180 145);
+  --status-warning: oklch(0.820 0.160 75);
+  --status-error: oklch(0.680 0.220 25);
+  --status-info: oklch(0.720 0.160 240);
+  --status-neutral: oklch(0.75 0 0);
+
+  --module-inventory: oklch(0.72 0.150 160);
+  --module-production: oklch(0.75 0.150 310);
+  --module-customers: oklch(0.76 0.140 50);
+  --module-finance: oklch(0.72 0.160 145);
+
+  --chart-1: oklch(0.70 0.180 263);
+  --chart-2: oklch(0.720 0.180 145);
+  --chart-3: oklch(0.780 0.180 50);
+  --chart-4: oklch(0.75 0.150 310);
+  --chart-5: oklch(0.72 0.150 160);
+  --chart-6: oklch(0.680 0.220 25);
+
+  --sidebar: oklch(0.13 0.015 260);
+  --sidebar-foreground: oklch(0.96 0.005 260);
+  --sidebar-primary: oklch(0.70 0.180 263);
+  --sidebar-primary-foreground: oklch(0.13 0.015 260);
+  --sidebar-accent: oklch(0.22 0.005 260);
+  --sidebar-accent-foreground: oklch(0.96 0.005 260);
+  --sidebar-border: oklch(0.28 0.010 260);
+  --sidebar-ring: oklch(0.70 0.180 263);
+
+  --kiotviet: oklch(0.70 0.180 263);
+  --kiotviet-foreground: oklch(0.13 0.015 260);
+  --kiotviet-hover: oklch(0.75 0.180 263);
+}
+
+@layer utilities {
+  /* Stitch soft ambient shadow — dùng cho cards, dialogs */
+  .ambient-shadow {
+    box-shadow: 0 8px 24px rgba(0, 0, 0, 0.04),
+      0 1px 2px rgba(0, 0, 0, 0.04);
+  }
+  .ambient-shadow-lg {
+    box-shadow: 0 12px 32px rgba(0, 0, 0, 0.08),
+      0 4px 8px rgba(0, 0, 0, 0.04);
+  }
+  /* Stitch glass panel — dùng cho modal overlay, floating panels */
+  .glass-panel {
+    background-color: oklch(from var(--surface-container-low) l c h / 0.7);
+    backdrop-filter: blur(20px);
+    -webkit-backdrop-filter: blur(20px);
+  }
+
+  /* Stitch motion system — MD3 emphasized easing + press feedback.
+     Apply `.press-scale` cho bất kỳ button/tile/link nào cần haptic feel. */
+  .press-scale {
+    transition: transform 150ms cubic-bezier(0.2, 0, 0, 1),
+      box-shadow 150ms cubic-bezier(0.2, 0, 0, 1),
+      background-color 150ms cubic-bezier(0.2, 0, 0, 1),
+      color 150ms cubic-bezier(0.2, 0, 0, 1);
+  }
+  .press-scale:active {
+    transform: scale(0.97);
+  }
+  .press-scale-sm {
+    transition: transform 120ms cubic-bezier(0.2, 0, 0, 1),
+      box-shadow 120ms cubic-bezier(0.2, 0, 0, 1);
+  }
+  .press-scale-sm:active {
+    transform: scale(0.985);
+  }
+
+  /* Stitch scrollbar — thin 6px, rounded, blue-tinted.
+     Áp dụng globally trên WebKit + Firefox. */
+  * {
+    scrollbar-width: thin;
+    scrollbar-color: oklch(0.80 0.025 265) transparent;
+  }
+  *::-webkit-scrollbar {
+    width: 6px;
+    height: 6px;
+  }
+  *::-webkit-scrollbar-track {
+    background: transparent;
+  }
+  *::-webkit-scrollbar-thumb {
+    background-color: oklch(0.80 0.025 265);
+    border-radius: 9999px;
+  }
+  *::-webkit-scrollbar-thumb:hover {
+    background-color: oklch(0.70 0.040 265);
+  }
+  *::-webkit-scrollbar-corner {
+    background: transparent;
+  }
+  /* Hide scrollbar khi cần (ví dụ horizontal tab bars) */
+  .no-scrollbar {
+    scrollbar-width: none;
+    -ms-overflow-style: none;
+  }
+  .no-scrollbar::-webkit-scrollbar {
+    display: none;
+  }
+
+  /* Stitch stack transition utilities */
+  .stitch-fade-in {
+    animation: stitch-fade-in 200ms cubic-bezier(0.2, 0, 0, 1) both;
+  }
+  @keyframes stitch-fade-in {
+    from {
+      opacity: 0;
+      transform: translateY(4px);
+    }
+    to {
+      opacity: 1;
+      transform: translateY(0);
+    }
+  }
 }
 
 @layer base {

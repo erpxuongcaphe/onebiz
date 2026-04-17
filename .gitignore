@@ -10,3 +10,20 @@ dist
 tsconfig.tsbuildinfo
 
 .vercel
+
+# Claude agent local state
+.claude/settings.local.json
+.claude/scheduled_tasks.lock
+
+# Stitch design mockups (reference-only, 12MB; excluded from repo)
+stitch_onebiz_ux_ui_optimization/
+
+# Supabase tooling artefacts (temp base64 chunks, CLI cache)
+supabase/.temp/
+supabase/chunks_js/
+supabase/b64part_*
+supabase/piece_*
+supabase/seed_chunk_*
+supabase/*.b64
+supabase/remaining_part*.txt
+supabase/_migrations_phase1.sql
