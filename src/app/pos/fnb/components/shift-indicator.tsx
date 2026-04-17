@@ -1,13 +1,7 @@
 "use client";
-
-/**
- * ShiftIndicator — Small badge in header showing current shift status.
- * Click to view/close shift.
- */
-
-import { Clock } from "lucide-react";
 import { cn } from "@/lib/utils";
 import type { Shift } from "@/lib/types/shift";
+import { Icon } from "@/components/ui/icon";
 
 interface ShiftIndicatorProps {
   shift: Shift | null;
@@ -22,7 +16,7 @@ export function ShiftIndicator({ shift, onClick }: ShiftIndicatorProps) {
         onClick={onClick}
         className="flex items-center gap-1 px-2 py-1 rounded text-xs bg-red-600/80 text-white hover:bg-red-600 transition-colors shrink-0"
       >
-        <Clock className="h-3 w-3" />
+        <Icon name="schedule" size={12} />
         <span>Chưa mở ca</span>
       </button>
     );
@@ -41,7 +35,7 @@ export function ShiftIndicator({ shift, onClick }: ShiftIndicatorProps) {
       className="flex items-center gap-1 px-2 py-1 rounded text-xs bg-green-600/80 text-white hover:bg-green-600 transition-colors shrink-0"
       title={`Ca: ${shift.cashierName ?? "—"} • ${hours}h${mins}p`}
     >
-      <Clock className="h-3 w-3" />
+      <Icon name="schedule" size={12} />
       <span className="hidden sm:inline">{hours}h{mins}p</span>
     </button>
   );

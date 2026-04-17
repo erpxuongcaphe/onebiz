@@ -9,9 +9,9 @@
  */
 
 import { useState, useEffect } from "react";
-import { Wifi, WifiOff, Loader2, CloudOff } from "lucide-react";
 import { cn } from "@/lib/utils";
 import type { NetworkStatus } from "@/lib/offline";
+import { Icon } from "@/components/ui/icon";
 
 interface ConnectionStatusBarProps {
   status: NetworkStatus;
@@ -61,24 +61,24 @@ export function ConnectionStatusBar({ status }: ConnectionStatusBarProps) {
     >
       {isSyncing ? (
         <>
-          <Loader2 className="h-3.5 w-3.5 animate-spin" />
+          <Icon name="progress_activity" size={14} className="animate-spin" />
           <span>Đang đồng bộ... ({pendingCount} đơn)</span>
         </>
       ) : isOnline ? (
         pendingCount > 0 ? (
           <>
-            <CloudOff className="h-3.5 w-3.5" />
+            <Icon name="cloud_off" size={14} />
             <span>{pendingCount} đơn chờ đồng bộ</span>
           </>
         ) : (
           <>
-            <Wifi className="h-3.5 w-3.5" />
+            <Icon name="wifi" size={14} />
             <span>Đã kết nối</span>
           </>
         )
       ) : (
         <>
-          <WifiOff className="h-3.5 w-3.5" />
+          <Icon name="wifi_off" size={14} />
           <span>
             Ngoại tuyến
             {pendingCount > 0 && ` — ${pendingCount} đơn chờ đồng bộ`}

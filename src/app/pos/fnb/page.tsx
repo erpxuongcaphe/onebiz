@@ -1,7 +1,6 @@
 "use client";
 
 import { useState, useEffect, useCallback, useMemo, lazy, Suspense } from "react";
-import { Loader2, Package, ShoppingCart, X, Keyboard } from "lucide-react";
 import { useAuth, useToast } from "@/lib/contexts";
 import { useSettings } from "@/lib/contexts/settings-context";
 import { getProductCategoriesAsync } from "@/lib/services/supabase/products";
@@ -38,6 +37,7 @@ import type { FnbItemConfirmPayload } from "./components/fnb-item-dialog";
 import type { FnbPaymentConfirmPayload } from "./components/fnb-payment-dialog";
 import type { SplitItem } from "./components/split-bill-dialog";
 import { ConnectionStatusBar } from "./components/connection-status-bar";
+import { Icon } from "@/components/ui/icon";
 
 // Lazy load heavy dialogs (only loaded when user opens them)
 const FnbItemDialog = lazy(() => import("./components/fnb-item-dialog").then(m => ({ default: m.FnbItemDialog })));
@@ -125,6 +125,7 @@ export default function FnbPosPage() {
               .select("id, name, code, sell_price, image_url, stock, category_id")
               .eq("is_active", true)
               .eq("product_type", "sku")
+              .eq("channel", "fnb")
               .order("name");
             setProducts(
               (prods ?? []).map((p) => ({
@@ -166,13 +167,23 @@ export default function FnbPosPage() {
             }
           }
         }
-      } catch {
-        // silent — cached data already shown
+      } catch (err) {
+        // Nếu đã có cached data → chỉ cảnh báo nhẹ, không block UI.
+        // Nếu chưa có gì → toast lỗi để nhân viên biết menu có thể cũ.
+        console.error("FnB data load error:", err);
+        toast({
+          title: "Không tải được dữ liệu mới",
+          description:
+            networkStatus.isOnline
+              ? "Đang dùng menu đã lưu. Thử tải lại trang nếu thiếu món."
+              : "Đang offline — dùng menu đã cache.",
+          variant: "warning",
+        });
       } finally {
         setLoading(false);
       }
     })();
-  }, [tenantId, branchId, networkStatus.isOnline]);
+  }, [tenantId, branchId, networkStatus.isOnline, toast]);
 
   // ── Filtered products ──
   const filteredProducts = useMemo(() => {
@@ -195,12 +206,18 @@ export default function FnbPosPage() {
             sell_price: v.sellPrice,
           }))
         );
-      } catch {
+      } catch (err) {
+        console.error("getVariantsByProduct error:", err);
         setItemVariants([]);
+        toast({
+          title: "Không tải được size/biến thể",
+          description: "Món sẽ được thêm với giá chuẩn.",
+          variant: "warning",
+        });
       }
       setItemDialogOpen(true);
     },
-    []
+    [toast]
   );
 
   // ── Add to cart from item dialog ──
@@ -349,45 +366,68 @@ export default function FnbPosPage() {
           discountAmount: pos.orderDiscountAmount > 0 ? pos.orderDiscountAmount : undefined,
         }, networkStatus.isOnline);
 
-        // Auto-print receipt if enabled
+        // Auto-print receipt if enabled.
+        // Bọc print trong try/catch riêng: lỗi in KHÔNG được làm hỏng
+        // flow thanh toán (payment đã success → không được hiển thị "Thanh toán thất bại").
         if (settings.print.autoPrintReceipt && tab) {
-          printFnbReceipt({
-            invoiceCode: payResult.invoiceCode,
-            orderNumber: tab.label,
-            tableName: tab.label,
-            orderType: tab.orderType,
-            items: tab.lines.map((l) => ({
-              name: l.productName,
-              variant: l.variantLabel,
-              quantity: l.quantity,
-              unitPrice: l.unitPrice,
-              toppings: l.toppings.map((t) => ({ name: t.name, quantity: t.quantity, price: t.price })),
-              note: l.note,
-            })),
-            subtotal: pos.subtotal,
-            discountAmount: pos.orderDiscountAmount,
-            deliveryFee: 0,
-            total: pos.total,
-            createdAt: new Date().toISOString(),
-            cashierName: user?.fullName,
-            paymentMethod: payload.paymentMethod,
-            paid: payload.paid,
-            change: Math.max(0, payload.paid - pos.total),
-            customerName: payload.customerName,
-            storeName: settings.print.showStoreName ? settings.store.name : undefined,
-            storeAddress: settings.print.showStoreAddress ? settings.store.address : undefined,
-            storePhone: settings.print.showStorePhone ? settings.store.phone : undefined,
-            paperSize: settings.print.paperSize === "58mm" ? "58mm" : "80mm",
-            footer: settings.print.receiptFooter,
-            receiptStyle: settings.print.receiptStyle,
-            showBarcode: settings.print.showBarcode,
-            showQr: settings.print.showQr,
-            bankInfo: settings.print.showQr ? {
-              bankName: settings.payment.bankName,
-              bankAccount: settings.payment.bankAccount,
-              bankHolder: settings.payment.bankHolder,
-            } : undefined,
-          });
+          try {
+            printFnbReceipt({
+              invoiceCode: payResult.invoiceCode,
+              orderNumber: tab.label,
+              tableName: tab.label,
+              orderType: tab.orderType,
+              items: tab.lines.map((l) => ({
+                name: l.productName,
+                variant: l.variantLabel,
+                quantity: l.quantity,
+                unitPrice: l.unitPrice,
+                toppings: l.toppings.map((t) => ({ name: t.name, quantity: t.quantity, price: t.price })),
+                note: l.note,
+              })),
+              subtotal: pos.subtotal,
+              discountAmount: pos.orderDiscountAmount,
+              deliveryFee: 0,
+              total: pos.total,
+              createdAt: new Date().toISOString(),
+              cashierName: user?.fullName,
+              paymentMethod: payload.paymentMethod,
+              paid: payload.paid,
+              change: Math.max(0, payload.paid - pos.total),
+              customerName: payload.customerName,
+              storeName: settings.print.showStoreName ? settings.store.name : undefined,
+              storeAddress: settings.print.showStoreAddress ? settings.store.address : undefined,
+              storePhone: settings.print.showStorePhone ? settings.store.phone : undefined,
+              paperSize: settings.print.paperSize === "58mm" ? "58mm" : "80mm",
+              footer: settings.print.receiptFooter,
+              receiptStyle: settings.print.receiptStyle,
+              showBarcode: settings.print.showBarcode,
+              showQr: settings.print.showQr,
+              bankInfo: settings.print.showQr ? {
+                bankName: settings.payment.bankName,
+                bankAccount: settings.payment.bankAccount,
+                bankHolder: settings.payment.bankHolder,
+              } : undefined,
+            });
+          } catch (printErr) {
+            console.error("printFnbReceipt error:", printErr);
+            toast({
+              title: "Thanh toán OK nhưng in hoá đơn lỗi",
+              description: "Anh/chị có thể in lại từ màn hình hoá đơn.",
+              variant: "warning",
+            });
+          }
+        }
+
+        // Cập nhật trạng thái bàn ngay (optimistic) để floor plan không còn
+        // hiển thị bàn đỏ khi đã thanh toán xong — kể cả chế độ offline.
+        if (tab?.tableId) {
+          setTables((prev) =>
+            prev.map((t) =>
+              t.id === tab.tableId
+                ? { ...t, status: "cleaning" as const, currentOrderId: null }
+                : t
+            )
+          );
         }
 
         setPaymentOpen(false);
@@ -398,8 +438,8 @@ export default function FnbPosPage() {
           toast({ title: "Đã lưu thanh toán ngoại tuyến", description: "Sẽ đồng bộ khi có mạng", variant: "default" });
         } else {
           toast({ title: "Thanh toán thành công", variant: "success" });
-          // Refresh tables (status may have changed to cleaning)
-          if (branchId) getTablesByBranch(branchId).then(setTables);
+          // Refresh tables từ server để đồng bộ status chính xác
+          if (branchId) getTablesByBranch(branchId).then(setTables).catch(() => {});
         }
       } catch (err) {
         hapticError();
@@ -495,8 +535,13 @@ export default function FnbPosPage() {
       setSplitBillOpen(true);
     } catch (err) {
       console.error("openSplitBill error:", err);
+      toast({
+        title: "Không tải được chi tiết đơn",
+        description: "Không thể tách bill. Vui lòng thử lại.",
+        variant: "error",
+      });
     }
-  }, [pos]);
+  }, [pos, toast]);
 
   const handleSplitByItems = useCallback(
     async (itemIds: string[]) => {
@@ -613,7 +658,7 @@ export default function FnbPosPage() {
           onSearch={() => setSearchModalOpen(true)}
         />
         <div className="flex-1 flex flex-col items-center justify-center gap-3">
-          <Package className="h-12 w-12 text-muted-foreground" />
+          <Icon name="inventory_2" size={48} className="text-muted-foreground" />
           <p className="text-lg font-medium text-muted-foreground">
             Chọn chi nhánh trên thanh header để bắt đầu bán hàng
           </p>
@@ -625,7 +670,7 @@ export default function FnbPosPage() {
   if (loading) {
     return (
       <div className="flex items-center justify-center h-screen bg-gray-50">
-        <Loader2 className="h-8 w-8 animate-spin text-muted-foreground" />
+        <Icon name="progress_activity" size={32} className="animate-spin text-muted-foreground" />
       </div>
     );
   }
@@ -650,7 +695,7 @@ export default function FnbPosPage() {
         {/* Left panel: menu grid OR floor plan */}
         <div className="flex-1 flex flex-col min-w-0">
           {showFloorPlan ? (
-            <Suspense fallback={<div className="flex-1 flex items-center justify-center"><Loader2 className="h-6 w-6 animate-spin text-gray-400" /></div>}>
+            <Suspense fallback={<div className="flex-1 flex items-center justify-center"><Icon name="progress_activity" size={24} className="animate-spin text-gray-400" /></div>}>
               <TableFloorPlan
                 tables={tables}
                 onSelectTable={handleTableSelect}
@@ -791,7 +836,7 @@ export default function FnbPosPage() {
               onClick={() => setMobileCartOpen(false)}
               className="h-8 w-8 rounded flex items-center justify-center hover:bg-gray-200"
             >
-              <X className="h-4 w-4" />
+              <Icon name="close" size={16} />
             </button>
           </div>
           <div className="flex-1 flex flex-col min-h-0">
@@ -822,7 +867,7 @@ export default function FnbPosPage() {
           onClick={() => setMobileCartOpen(true)}
           className="fixed bottom-4 right-4 z-30 lg:hidden h-14 w-14 rounded-full bg-blue-600 text-white shadow-lg flex items-center justify-center hover:bg-blue-700 transition-colors"
         >
-          <ShoppingCart className="h-6 w-6" />
+          <Icon name="shopping_cart" size={24} />
           <span className="absolute -top-1 -right-1 h-5 min-w-5 px-1 rounded-full bg-red-500 text-[10px] font-bold flex items-center justify-center">
             {pos.lineCount}
           </span>
@@ -835,10 +880,10 @@ export default function FnbPosPage() {
           <div className="bg-white rounded-lg shadow-xl w-[360px] max-w-[90vw] p-4" onClick={(e) => e.stopPropagation()}>
             <div className="flex items-center justify-between mb-3">
               <h3 className="text-sm font-semibold flex items-center gap-1.5">
-                <Keyboard className="h-4 w-4" /> Phím tắt
+                <Icon name="keyboard" size={16} /> Phím tắt
               </h3>
               <button type="button" onClick={() => setKeyboardHelpOpen(false)} className="text-gray-400 hover:text-gray-600">
-                <X className="h-4 w-4" />
+                <Icon name="close" size={16} />
               </button>
             </div>
             <div className="space-y-1.5 text-xs">

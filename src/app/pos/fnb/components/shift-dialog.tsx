@@ -8,7 +8,6 @@
  */
 
 import { useState } from "react";
-import { DollarSign, Clock, AlertTriangle, CheckCircle2, Loader2 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
@@ -22,6 +21,7 @@ import {
 import { cn } from "@/lib/utils";
 import { formatCurrency } from "@/lib/format";
 import type { Shift } from "@/lib/types/shift";
+import { Icon } from "@/components/ui/icon";
 
 // ── Open Shift Dialog ──
 
@@ -50,7 +50,7 @@ export function OpenShiftDialog({ open, onOpenChange, onConfirm }: OpenShiftDial
       <DialogContent className="sm:max-w-md">
         <DialogHeader>
           <DialogTitle className="flex items-center gap-2">
-            <Clock className="h-5 w-5 text-blue-600" />
+            <Icon name="schedule" className="text-blue-600" />
             Mở ca làm việc
           </DialogTitle>
         </DialogHeader>
@@ -58,7 +58,7 @@ export function OpenShiftDialog({ open, onOpenChange, onConfirm }: OpenShiftDial
           <div>
             <Label>Số dư đầu ca (tiền mặt trong ngăn kéo)</Label>
             <div className="relative mt-1">
-              <DollarSign className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
+              <Icon name="attach_money" size={16} className="absolute left-3 top-1/2 -translate-y-1/2 text-muted-foreground" />
               <Input
                 type="number"
                 min={0}
@@ -79,7 +79,7 @@ export function OpenShiftDialog({ open, onOpenChange, onConfirm }: OpenShiftDial
             Hủy
           </Button>
           <Button onClick={handleConfirm} disabled={loading}>
-            {loading && <Loader2 className="h-4 w-4 mr-1 animate-spin" />}
+            {loading && <Icon name="progress_activity" size={16} className="mr-1 animate-spin" />}
             Bắt đầu ca
           </Button>
         </DialogFooter>
@@ -131,7 +131,7 @@ export function CloseShiftDialog({
       <DialogContent className="sm:max-w-lg">
         <DialogHeader>
           <DialogTitle className="flex items-center gap-2">
-            <CheckCircle2 className="h-5 w-5 text-green-600" />
+            <Icon name="check_circle" className="text-green-600" />
             Đóng ca làm việc
           </DialogTitle>
         </DialogHeader>
@@ -152,7 +152,7 @@ export function CloseShiftDialog({
           <div>
             <Label>Tiền mặt thực tế trong ngăn kéo</Label>
             <div className="relative mt-1">
-              <DollarSign className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
+              <Icon name="attach_money" size={16} className="absolute left-3 top-1/2 -translate-y-1/2 text-muted-foreground" />
               <Input
                 type="number"
                 min={0}
@@ -181,7 +181,7 @@ export function CloseShiftDialog({
             Hủy
           </Button>
           <Button onClick={handleConfirm} disabled={loading}>
-            {loading && <Loader2 className="h-4 w-4 mr-1 animate-spin" />}
+            {loading && <Icon name="progress_activity" size={16} className="mr-1 animate-spin" />}
             Đóng ca
           </Button>
         </DialogFooter>

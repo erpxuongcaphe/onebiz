@@ -1,16 +1,8 @@
 "use client";
-
-/**
- * FnbProductGrid — Dense grid of F&B product cards (KiotViet-style).
- *
- * 6 columns on desktop. Price on top (prominent blue), name centered,
- * variant label below. Compact cards optimized for fast tap-to-order.
- */
-
-import { Coffee, Package } from "lucide-react";
 import { Badge } from "@/components/ui/badge";
 import { cn } from "@/lib/utils";
 import { formatCurrency } from "@/lib/format";
+import { Icon } from "@/components/ui/icon";
 
 export interface FnbProduct {
   id: string;
@@ -34,7 +26,7 @@ export function FnbProductGrid({
   if (products.length === 0) {
     return (
       <div className="flex flex-col items-center justify-center h-48 text-gray-400">
-        <Coffee className="h-10 w-10 mb-3" />
+        <Icon name="local_cafe" size={40} className="mb-3" />
         <p className="text-sm">Không có sản phẩm nào</p>
       </div>
     );
@@ -93,7 +85,7 @@ function ProductCard({
           />
         </div>
       ) : (
-        <Package className="h-6 w-6 md:h-5 md:w-5 text-muted-foreground/30 mb-1 shrink-0" />
+        <Icon name="inventory_2" size={24} className="md:h-5 md:w-5 text-muted-foreground/30 mb-1 shrink-0" />
       )}
 
       {/* Price — prominent, on top */}

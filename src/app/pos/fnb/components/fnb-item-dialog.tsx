@@ -1,7 +1,6 @@
 "use client";
 
 import { useCallback, useEffect, useMemo, useState } from "react";
-import { Minus, Plus, StickyNote } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import { Label } from "@/components/ui/label";
@@ -10,6 +9,7 @@ import { Badge } from "@/components/ui/badge";
 import { cn } from "@/lib/utils";
 import { formatCurrency } from "@/lib/format";
 import type { FnbCartTopping } from "@/lib/types/fnb";
+import { Icon } from "@/components/ui/icon";
 
 // ── Types ──
 
@@ -122,12 +122,12 @@ export function FnbItemDialog({
             <div className="flex items-center gap-3">
               <Button variant="outline" size="icon" className="h-10 w-10 sm:h-8 sm:w-8"
                 onClick={() => setQuantity((q) => Math.max(1, q - 1))}>
-                <Minus className="h-4 w-4" />
+                <Icon name="remove" size={16} />
               </Button>
               <span className="w-10 text-center text-lg sm:text-base font-semibold tabular-nums">{quantity}</span>
               <Button variant="outline" size="icon" className="h-10 w-10 sm:h-8 sm:w-8"
                 onClick={() => setQuantity((q) => q + 1)}>
-                <Plus className="h-4 w-4" />
+                <Icon name="add" size={16} />
               </Button>
             </div>
           </div>
@@ -157,7 +157,7 @@ export function FnbItemDialog({
           {/* Note */}
           <div className="space-y-2">
             <Label className="text-sm font-medium flex items-center gap-1.5">
-              <StickyNote className="h-3.5 w-3.5" /> Ghi chú
+              <Icon name="sticky_note_2" size={14} /> Ghi chú
             </Label>
             <Textarea value={note} onChange={(e) => setNote(e.target.value)}
               placeholder="Ghi chú: ít đá, 70% đường..." rows={2} className="resize-none text-sm" />

@@ -9,7 +9,6 @@
  */
 
 import Link from "next/link";
-import { ArrowLeft, Plus, X, Armchair, UtensilsCrossed, Search, ChefHat, Settings } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { cn } from "@/lib/utils";
 import type { FnbTabSnapshot } from "@/lib/types/fnb";
@@ -17,6 +16,7 @@ import type { Shift } from "@/lib/types/shift";
 import { PosBranchSelector } from "@/components/shared/pos-branch-selector";
 import { ShiftIndicator } from "./shift-indicator";
 import { useFnbSubdomain } from "@/lib/hooks/use-fnb-subdomain";
+import { Icon } from "@/components/ui/icon";
 
 interface FnbHeaderProps {
   tabs: FnbTabSnapshot[];
@@ -53,7 +53,7 @@ export function FnbHeader({
           href="/"
           className="flex items-center gap-1 text-sm text-slate-300 hover:text-white transition-colors shrink-0"
         >
-          <ArrowLeft className="h-4 w-4" />
+          <Icon name="arrow_back" size={16} />
         </Link>
       )}
 
@@ -75,7 +75,7 @@ export function FnbHeader({
               : "bg-slate-800 text-slate-400 hover:bg-slate-700 hover:text-slate-200"
           )}
         >
-          <Armchair className="h-3.5 w-3.5" />
+          <Icon name="chair" size={14} />
           <span className="hidden sm:inline">Phòng bàn</span>
         </button>
         <button
@@ -88,7 +88,7 @@ export function FnbHeader({
               : "bg-slate-800 text-slate-400 hover:bg-slate-700 hover:text-slate-200"
           )}
         >
-          <UtensilsCrossed className="h-3.5 w-3.5" />
+          <Icon name="restaurant" size={14} />
           <span className="hidden sm:inline">Thực đơn</span>
         </button>
       </div>
@@ -99,7 +99,7 @@ export function FnbHeader({
         onClick={onSearch}
         className="flex items-center gap-2 px-3 py-2 sm:py-1.5 bg-slate-800 hover:bg-slate-700 active:bg-slate-600 rounded-md text-sm sm:text-xs text-slate-400 transition-colors shrink-0 min-w-0 sm:min-w-[140px] lg:min-w-[200px]"
       >
-        <Search className="h-3.5 w-3.5" />
+        <Icon name="search" size={14} />
         <span>Tìm món (F3)</span>
       </button>
 
@@ -140,7 +140,7 @@ export function FnbHeader({
                   isActive ? "text-blue-200" : "text-slate-500"
                 )}
               >
-                <X className="h-3.5 w-3.5 sm:h-3 sm:w-3" />
+                <Icon name="close" size={14} className="sm:h-3 sm:w-3" />
               </span>
             </button>
           );
@@ -153,7 +153,7 @@ export function FnbHeader({
           className="flex items-center justify-center h-8 w-8 sm:h-6 sm:w-6 rounded bg-slate-800 text-slate-400 hover:bg-slate-700 hover:text-white active:bg-slate-600 transition-colors shrink-0"
           title="Thêm đơn mới"
         >
-          <Plus className="h-3.5 w-3.5" />
+          <Icon name="add" size={14} />
         </button>
       </div>
 
@@ -167,7 +167,7 @@ export function FnbHeader({
             size="sm"
             className="h-8 px-2 text-slate-300 hover:text-white hover:bg-slate-800"
           >
-            <ChefHat className="h-4 w-4 mr-1" />
+            <Icon name="restaurant_menu" size={16} className="mr-1" />
             <span className="hidden lg:inline text-xs">Màn bếp</span>
           </Button>
         </Link>
@@ -179,7 +179,7 @@ export function FnbHeader({
               className="h-8 w-8 text-slate-300 hover:text-white hover:bg-slate-800"
               title="Quản lý bàn"
             >
-              <Settings className="h-4 w-4" />
+              <Icon name="settings" size={16} />
             </Button>
           </Link>
         )}

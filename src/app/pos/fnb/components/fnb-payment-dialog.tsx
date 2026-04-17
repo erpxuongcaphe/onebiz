@@ -1,13 +1,14 @@
 "use client";
 
 import { useEffect, useMemo, useState } from "react";
-import { Banknote, CreditCard, ArrowRightLeft, Layers, User } from "lucide-react";
+import { Banknote, CreditCard, ArrowRightLeft, Layers } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { cn } from "@/lib/utils";
 import { formatCurrency } from "@/lib/format";
+import { Icon } from "@/components/ui/icon";
 
 // ── Types ──
 
@@ -191,7 +192,7 @@ export function FnbPaymentDialog({
           {/* Customer name */}
           <div className="space-y-1.5">
             <Label className="text-sm flex items-center gap-1.5">
-              <User className="h-3.5 w-3.5" /> Tên khách hàng
+              <Icon name="person" size={14} /> Tên khách hàng
             </Label>
             <Input value={customerName} onChange={(e) => setCustomerName(e.target.value)}
               placeholder="Khách lẻ" />

@@ -9,12 +9,11 @@
  */
 
 import { useState, useEffect, useCallback, useRef } from "react";
-import { Loader2, Volume2, VolumeX, ArrowLeft, ChefHat, Wifi, WifiOff } from "lucide-react";
 import Link from "next/link";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { cn } from "@/lib/utils";
-import { useAuth } from "@/lib/contexts";
+import { useAuth, useToast } from "@/lib/contexts";
 import { PosBranchSelector } from "@/components/shared/pos-branch-selector";
 import {
   getKitchenOrders,
@@ -30,6 +29,7 @@ import type {
   KitchenOrderStatus,
   KitchenItemStatus,
 } from "@/lib/types/fnb";
+import { Icon } from "@/components/ui/icon";
 
 // ── Constants ──
 
@@ -90,6 +90,7 @@ interface KdsOrder extends KitchenOrder {
 
 export default function KdsPage() {
   const { currentBranch } = useAuth();
+  const { toast } = useToast();
   const branchId = currentBranch?.id;
 
   const [orders, setOrders] = useState<KdsOrder[]>([]);
@@ -99,6 +100,9 @@ export default function KdsPage() {
   const [now, setNow] = useState(Date.now());
   const [realtimeConnected, setRealtimeConnected] = useState(false);
   const prevOrderIdsRef = useRef<Set<string>>(new Set());
+  // Track lỗi liên tiếp để chỉ hiện toast 1 lần, không spam mỗi 30s khi Supabase
+  // sập hoặc quán mất mạng.
+  const fetchErrorShownRef = useRef(false);
 
   // ── Poll orders ──
   const fetchOrders = useCallback(async () => {
@@ -130,12 +134,24 @@ export default function KdsPage() {
       prevOrderIdsRef.current = newIds;
 
       setOrders(enriched);
-    } catch {
-      // silent
+      // Reset cờ khi fetch thành công để lần fail tiếp theo lại toast.
+      fetchErrorShownRef.current = false;
+    } catch (err) {
+      console.error("KDS fetchOrders error:", err);
+      // Chỉ toast 1 lần để tránh spam khi polling 30s gặp outage kéo dài.
+      if (!fetchErrorShownRef.current) {
+        fetchErrorShownRef.current = true;
+        toast({
+          title: "Không tải được đơn bếp",
+          description:
+            "Danh sách có thể không phải bản mới nhất. Kiểm tra kết nối.",
+          variant: "error",
+        });
+      }
     } finally {
       setLoading(false);
     }
-  }, [branchId, soundOn]);
+  }, [branchId, soundOn, toast]);
 
   useEffect(() => {
     fetchOrders();
@@ -248,16 +264,16 @@ export default function KdsPage() {
       <div className="flex flex-col h-screen bg-gray-900 text-white">
         <header className="h-12 bg-gray-800 flex items-center px-4 gap-3 shrink-0">
           <Link href="/pos/fnb" className="text-gray-400 hover:text-white text-sm flex items-center gap-1">
-            <ArrowLeft className="h-4 w-4" />
+            <Icon name="arrow_back" size={16} />
             POS
           </Link>
           <PosBranchSelector variant="dark" />
           <div className="flex-1" />
-          <ChefHat className="h-5 w-5 text-gray-400" />
+          <Icon name="restaurant_menu" className="text-gray-400" />
           <span className="text-sm font-medium text-gray-300">Màn hình bếp</span>
         </header>
         <div className="flex-1 flex flex-col items-center justify-center gap-3">
-          <ChefHat className="h-12 w-12 text-gray-600" />
+          <Icon name="restaurant_menu" size={48} className="text-gray-600" />
           <p className="text-lg font-medium text-gray-400">
             Chọn chi nhánh trên thanh header để xem đơn bếp
           </p>
@@ -269,7 +285,7 @@ export default function KdsPage() {
   if (loading) {
     return (
       <div className="flex items-center justify-center h-screen bg-gray-900">
-        <Loader2 className="h-8 w-8 animate-spin text-gray-400" />
+        <Icon name="progress_activity" size={32} className="animate-spin text-gray-400" />
       </div>
     );
   }
@@ -280,7 +296,7 @@ export default function KdsPage() {
       <header className="flex flex-col sm:flex-row items-start sm:items-center justify-between px-4 py-2 bg-gray-800 border-b border-gray-700 shrink-0 gap-2 sm:gap-0">
         <div className="flex items-center gap-3">
           <Link href="/pos/fnb" className="text-gray-400 hover:text-white transition-colors p-1">
-            <ArrowLeft className="h-5 w-5" />
+            <Icon name="arrow_back" />
           </Link>
           <h1 className="text-base font-bold tracking-wide">Bar — KDS</h1>
           <Badge variant="outline" className="text-gray-400 border-gray-600 text-xs">
@@ -294,9 +310,9 @@ export default function KdsPage() {
             title={realtimeConnected ? "Realtime đang hoạt động" : "Chế độ polling fallback"}
           >
             {realtimeConnected ? (
-              <Wifi className="h-3 w-3" />
+              <Icon name="wifi" size={12} />
             ) : (
-              <WifiOff className="h-3 w-3" />
+              <Icon name="wifi_off" size={12} />
             )}
             {realtimeConnected ? "Live" : "Polling"}
           </span>
@@ -328,9 +344,9 @@ export default function KdsPage() {
             title={soundOn ? "Tắt âm" : "Bật âm"}
           >
             {soundOn ? (
-              <Volume2 className="h-5 w-5 sm:h-4 sm:w-4 text-green-400" />
+              <Icon name="volume_up" className="sm:h-4 sm:w-4 text-green-400" />
             ) : (
-              <VolumeX className="h-5 w-5 sm:h-4 sm:w-4 text-gray-500" />
+              <Icon name="volume_off" className="sm:h-4 sm:w-4 text-gray-500" />
             )}
           </button>
         </div>

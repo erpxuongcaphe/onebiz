@@ -8,12 +8,12 @@
  */
 
 import { useCallback, useEffect, useRef, useState } from "react";
-import { Search, PackageSearch, Loader2 } from "lucide-react";
 import { getProducts } from "@/lib/services/supabase";
 import type { Product } from "@/lib/types";
 import { useDebounce } from "@/lib/utils/use-debounce";
 import { formatCurrency } from "@/lib/format";
 import { cn } from "@/lib/utils";
+import { Icon } from "@/components/ui/icon";
 
 interface ProductAutocompleteProps {
   open: boolean;
@@ -138,7 +138,7 @@ export function ProductAutocomplete({
         <div className="rounded-lg bg-white border border-slate-200 shadow-2xl overflow-hidden">
           {/* Search input */}
           <div className="flex items-center gap-2 px-4 h-12 border-b border-slate-200">
-            <Search className="h-4 w-4 text-slate-400 shrink-0" />
+            <Icon name="search" size={16} className="text-slate-400 shrink-0" />
             <input
               ref={inputRef}
               type="text"
@@ -149,7 +149,7 @@ export function ProductAutocomplete({
               placeholder="Quét mã hoặc nhập tên sản phẩm..."
               className="flex-1 bg-transparent text-base outline-none placeholder:text-slate-400"
             />
-            {loading && <Loader2 className="h-4 w-4 animate-spin text-slate-400" />}
+            {loading && <Icon name="progress_activity" size={16} className="animate-spin text-slate-400" />}
             <kbd className="font-mono text-[10px] bg-slate-100 border border-slate-200 rounded px-1.5 py-0.5 text-slate-500">
               Esc
             </kbd>
@@ -159,7 +159,7 @@ export function ProductAutocomplete({
           <ul ref={listRef} className="max-h-96 overflow-y-auto">
             {results.length === 0 && debouncedQuery && !loading && (
               <li className="px-4 py-8 text-center text-sm text-slate-500 flex flex-col items-center gap-2">
-                <PackageSearch className="h-6 w-6 text-slate-300" />
+                <Icon name="pageview" size={24} className="text-slate-300" />
                 Không tìm thấy sản phẩm nào
               </li>
             )}

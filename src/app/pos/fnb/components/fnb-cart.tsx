@@ -3,7 +3,6 @@
 /** FnbCart — Right sidebar cart panel for F&B POS */
 
 import { useState } from "react";
-import { Coffee, Minus, Plus, Scissors, Trash2, User, Percent, DollarSign, FileText } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { ScrollArea } from "@/components/ui/scroll-area";
@@ -11,6 +10,7 @@ import { Input } from "@/components/ui/input";
 import { cn } from "@/lib/utils";
 import { formatCurrency } from "@/lib/format";
 import type { FnbTabSnapshot, FnbOrderLine, FnbDiscountInput } from "@/lib/types/fnb";
+import { Icon } from "@/components/ui/icon";
 
 interface FnbCartProps {
   activeTab: FnbTabSnapshot | undefined;
@@ -85,7 +85,7 @@ export function FnbCart({
         onClick={onCustomerClick}
         className="flex items-center gap-2 px-3 py-1.5 border-b text-xs text-gray-600 hover:bg-gray-50 transition-colors shrink-0"
       >
-        <User className="h-3.5 w-3.5 text-gray-400" />
+        <Icon name="person" size={14} className="text-gray-400" />
         <span className="truncate">{activeTab?.customerName ?? "Khách lẻ"}</span>
         <span className="ml-auto text-[10px] text-gray-400">F4</span>
       </button>
@@ -93,7 +93,7 @@ export function FnbCart({
       {/* ── Cart lines ── */}
       {isEmpty ? (
         <div className="flex-1 flex flex-col items-center justify-center text-gray-400 gap-3">
-          <Coffee className="h-10 w-10" />
+          <Icon name="local_cafe" size={40} />
           <p className="text-sm">Chưa có món nào</p>
         </div>
       ) : (
@@ -155,7 +155,7 @@ export function FnbCart({
                 onClick={onPrintPreBill}
                 className="flex-1 h-8 text-xs"
               >
-                <FileText className="h-3.5 w-3.5 mr-1" />
+                <Icon name="description" size={14} className="mr-1" />
                 In tạm tính
               </Button>
             )}
@@ -165,7 +165,7 @@ export function FnbCart({
                 onClick={onSplitBill}
                 className="flex-1 h-8 text-xs"
               >
-                <Scissors className="h-3.5 w-3.5 mr-1" />
+                <Icon name="content_cut" size={14} className="mr-1" />
                 Tách bill
               </Button>
             )}
@@ -258,7 +258,7 @@ function DiscountRow({
         title={mode === "percent" ? "Phần trăm" : "Số tiền"}
       >
         {mode === "percent" ? (
-          <Percent className="h-3.5 w-3.5 md:h-3 md:w-3" />
+          <Icon name="percent" size={14} className="md:h-3 md:w-3" />
         ) : (
           <span className="text-xs md:text-[10px] font-bold">đ</span>
         )}
@@ -319,7 +319,7 @@ function CartLineItem({
             onClick={() => onUpdateQty(line.quantity - 1)}
             className="h-9 w-9 md:h-7 md:w-7 rounded border border-gray-300 flex items-center justify-center text-gray-500 hover:bg-gray-100 active:bg-gray-200 transition-colors"
           >
-            <Minus className="h-4 w-4 md:h-3 md:w-3" />
+            <Icon name="remove" size={16} className="md:h-3 md:w-3" />
           </button>
           <span className="text-sm font-medium w-7 md:w-6 text-center tabular-nums">
             {line.quantity}
@@ -329,7 +329,7 @@ function CartLineItem({
             onClick={() => onUpdateQty(line.quantity + 1)}
             className="h-9 w-9 md:h-7 md:w-7 rounded border border-gray-300 flex items-center justify-center text-gray-500 hover:bg-gray-100 active:bg-gray-200 transition-colors"
           >
-            <Plus className="h-4 w-4 md:h-3 md:w-3" />
+            <Icon name="add" size={16} className="md:h-3 md:w-3" />
           </button>
         </div>
 
@@ -339,7 +339,7 @@ function CartLineItem({
           className="h-9 w-9 md:h-7 md:w-7 rounded flex items-center justify-center text-red-400 md:text-gray-400 hover:text-red-500 hover:bg-red-50 active:bg-red-100 transition-colors md:opacity-0 md:group-hover:opacity-100"
           title="Xoá"
         >
-          <Trash2 className="h-4 w-4 md:h-3.5 md:w-3.5" />
+          <Icon name="delete" size={16} className="md:h-3.5 md:w-3.5" />
         </button>
       </div>
     </div>

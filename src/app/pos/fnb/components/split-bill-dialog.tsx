@@ -7,7 +7,6 @@
  */
 
 import { useState } from "react";
-import { Scissors, Users, Loader2 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
@@ -20,6 +19,7 @@ import {
 } from "@/components/ui/dialog";
 import { cn } from "@/lib/utils";
 import { formatCurrency } from "@/lib/format";
+import { Icon } from "@/components/ui/icon";
 
 export interface SplitItem {
   id: string;
@@ -94,7 +94,7 @@ export function SplitBillDialog({
       <DialogContent className="sm:max-w-lg">
         <DialogHeader>
           <DialogTitle className="flex items-center gap-2">
-            <Scissors className="h-5 w-5 text-blue-600" />
+            <Icon name="content_cut" className="text-blue-600" />
             Tách bill
           </DialogTitle>
         </DialogHeader>
@@ -109,7 +109,7 @@ export function SplitBillDialog({
               activeTab === "items" ? "bg-white shadow-sm" : "text-muted-foreground"
             )}
           >
-            <Scissors className="h-3.5 w-3.5 inline mr-1" />
+            <Icon name="content_cut" size={14} className="inline mr-1" />
             Tách theo món
           </button>
           <button
@@ -120,7 +120,7 @@ export function SplitBillDialog({
               activeTab === "equal" ? "bg-white shadow-sm" : "text-muted-foreground"
             )}
           >
-            <Users className="h-3.5 w-3.5 inline mr-1" />
+            <Icon name="group" size={14} className="inline mr-1" />
             Chia đều
           </button>
         </div>
@@ -198,12 +198,12 @@ export function SplitBillDialog({
           </Button>
           {activeTab === "items" ? (
             <Button onClick={handleSplitItems} disabled={selectedIds.size === 0 || loading}>
-              {loading && <Loader2 className="h-4 w-4 mr-1 animate-spin" />}
+              {loading && <Icon name="progress_activity" size={16} className="mr-1 animate-spin" />}
               Tách {selectedIds.size} món
             </Button>
           ) : (
             <Button onClick={handleSplitEqual} disabled={numberOfWays < 2 || loading}>
-              {loading && <Loader2 className="h-4 w-4 mr-1 animate-spin" />}
+              {loading && <Icon name="progress_activity" size={16} className="mr-1 animate-spin" />}
               Chia {numberOfWays} phần
             </Button>
           )}

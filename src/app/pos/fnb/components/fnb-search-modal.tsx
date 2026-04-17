@@ -8,11 +8,11 @@
  */
 
 import { useCallback, useEffect, useRef, useState } from "react";
-import { Search, Loader2 } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { formatCurrency } from "@/lib/format";
 import { useDebounce } from "@/lib/utils/use-debounce";
 import type { FnbProduct } from "./fnb-product-grid";
+import { Icon } from "@/components/ui/icon";
 
 interface FnbSearchModalProps {
   open: boolean;
@@ -108,7 +108,7 @@ export function FnbSearchModal({
         <div className="rounded-lg bg-white border border-slate-200 shadow-2xl overflow-hidden">
           {/* Search input */}
           <div className="flex items-center gap-2 px-4 h-12 border-b border-slate-200">
-            <Search className="h-4 w-4 text-slate-400 shrink-0" />
+            <Icon name="search" size={16} className="text-slate-400 shrink-0" />
             <input
               ref={inputRef}
               type="text"

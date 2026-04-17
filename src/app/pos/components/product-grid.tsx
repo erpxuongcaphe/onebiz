@@ -9,12 +9,12 @@
  */
 
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
-import { Package, Search, Loader2 } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { formatCurrency } from "@/lib/format";
 import type { Product, ProductCategory } from "@/lib/types";
 import { getProducts } from "@/lib/services/supabase/products";
 import { getCategoriesByScope } from "@/lib/services/supabase/categories";
+import { Icon } from "@/components/ui/icon";
 
 interface ProductGridProps {
   searchQuery: string;
@@ -41,7 +41,12 @@ export function ProductGrid({ searchQuery, onAddProduct }: ProductGridProps) {
     async (catId: string, search: string) => {
       setLoading(true);
       try {
-        const filters: Record<string, string | string[]> = { status: "active" };
+        // Retail POS chỉ hiển thị SKU channel='retail' (hàng đóng gói bán lẻ/sỉ).
+        // Món FnB pha chế tại quán (channel='fnb') được POS FnB xử lý riêng.
+        const filters: Record<string, string | string[]> = {
+          status: "active",
+          channel: "retail",
+        };
         if (catId !== "all") filters.category = catId;
         const result = await getProducts({
           page: 0,
@@ -103,11 +108,11 @@ export function ProductGrid({ searchQuery, onAddProduct }: ProductGridProps) {
       <div className="flex-1 overflow-y-auto p-2">
         {loading ? (
           <div className="flex items-center justify-center h-32">
-            <Loader2 className="h-5 w-5 animate-spin text-blue-500" />
+            <Icon name="progress_activity" className="animate-spin text-blue-500" />
           </div>
         ) : displayProducts.length === 0 ? (
           <div className="flex flex-col items-center justify-center h-32 text-gray-400">
-            <Package className="h-8 w-8 mb-2" />
+            <Icon name="inventory_2" size={32} className="mb-2" />
             <p className="text-xs">
               {searchQuery
                 ? "Không tìm thấy sản phẩm"
@@ -199,7 +204,7 @@ function ProductTile({
             loading="lazy"
           />
         ) : (
-          <Package className="h-5 w-5 text-gray-300" />
+          <Icon name="inventory_2" className="text-gray-300" />
         )}
         {outOfStock && (
           <div className="absolute inset-0 bg-white/60 flex items-center justify-center">

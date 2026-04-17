@@ -8,11 +8,11 @@
  */
 
 import { useCallback, useEffect, useRef, useState } from "react";
-import { Search, User, UserPlus, Loader2 } from "lucide-react";
 import { getCustomers } from "@/lib/services/supabase";
 import type { Customer } from "@/lib/types";
 import { useDebounce } from "@/lib/utils/use-debounce";
 import { cn } from "@/lib/utils";
+import { Icon } from "@/components/ui/icon";
 
 interface CustomerPickerProps {
   open: boolean;
@@ -127,7 +127,7 @@ export function CustomerPicker({ open, onSelect, onClose }: CustomerPickerProps)
       <div className="fixed inset-x-0 top-16 mx-auto z-50 max-w-2xl px-4">
         <div className="rounded-lg bg-white border border-slate-200 shadow-2xl overflow-hidden">
           <div className="flex items-center gap-2 px-4 h-12 border-b border-slate-200">
-            <Search className="h-4 w-4 text-slate-400 shrink-0" />
+            <Icon name="search" size={16} className="text-slate-400 shrink-0" />
             <input
               ref={inputRef}
               type="text"
@@ -138,7 +138,7 @@ export function CustomerPicker({ open, onSelect, onClose }: CustomerPickerProps)
               placeholder="Tìm tên / SĐT / mã khách hàng..."
               className="flex-1 bg-transparent text-base outline-none placeholder:text-slate-400"
             />
-            {loading && <Loader2 className="h-4 w-4 animate-spin text-slate-400" />}
+            {loading && <Icon name="progress_activity" size={16} className="animate-spin text-slate-400" />}
             <kbd className="font-mono text-[10px] bg-slate-100 border border-slate-200 rounded px-1.5 py-0.5 text-slate-500">
               Esc
             </kbd>
@@ -156,7 +156,7 @@ export function CustomerPicker({ open, onSelect, onClose }: CustomerPickerProps)
               )}
             >
               <div className="h-8 w-8 rounded-full bg-slate-100 flex items-center justify-center shrink-0">
-                <UserPlus className="h-4 w-4 text-slate-500" />
+                <Icon name="person_add" size={16} className="text-slate-500" />
               </div>
               <div className="flex-1">
                 <div className="text-sm font-medium text-slate-900">Khách lẻ</div>
@@ -178,7 +178,7 @@ export function CustomerPicker({ open, onSelect, onClose }: CustomerPickerProps)
                   )}
                 >
                   <div className="h-8 w-8 rounded-full bg-emerald-100 flex items-center justify-center shrink-0">
-                    <User className="h-4 w-4 text-emerald-600" />
+                    <Icon name="person" size={16} className="text-emerald-600" />
                   </div>
                   <div className="min-w-0 flex-1">
                     <div className="text-sm font-medium text-slate-900 truncate">

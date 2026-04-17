@@ -11,9 +11,9 @@
  */
 
 import { useMemo } from "react";
-import { Users, Clock, Sparkles } from "lucide-react";
 import { cn } from "@/lib/utils";
 import type { RestaurantTable, TableStatus } from "@/lib/types/fnb";
+import { Icon } from "@/components/ui/icon";
 
 interface TableFloorPlanProps {
   tables: RestaurantTable[];
@@ -145,7 +145,7 @@ export function TableFloorPlan({
 
         {tables.length === 0 && (
           <div className="flex flex-col items-center justify-center py-16 text-gray-400">
-            <Users className="h-10 w-10 mb-2" />
+            <Icon name="group" size={40} className="mb-2" />
             <p className="text-sm">Chưa có bàn nào</p>
           </div>
         )}
@@ -199,7 +199,7 @@ function TableCard({
       {/* Timer for occupied tables */}
       {elapsed && (
         <span className="flex items-center gap-0.5 text-[10px] text-red-600 font-medium mt-1">
-          <Clock className="h-2.5 w-2.5" />
+          <Icon name="schedule" size={10} />
           {elapsed}
         </span>
       )}
@@ -207,14 +207,14 @@ function TableCard({
       {/* Cleaning indicator */}
       {table.status === "cleaning" && (
         <span className="flex items-center gap-0.5 text-[10px] text-gray-400 mt-1">
-          <Sparkles className="h-2.5 w-2.5" />
+          <Icon name="auto_awesome" size={10} />
           Dọn
         </span>
       )}
 
       {/* Capacity */}
       <span className="flex items-center gap-0.5 text-[9px] text-gray-400 mt-0.5">
-        <Users className="h-2.5 w-2.5" />
+        <Icon name="group" size={10} />
         {table.capacity}
       </span>
     </button>
