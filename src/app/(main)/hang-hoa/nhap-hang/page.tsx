@@ -3,18 +3,6 @@
 import { useEffect, useState, useCallback } from "react";
 import { useRouter } from "next/navigation";
 import { ColumnDef } from "@tanstack/react-table";
-import {
-  Plus,
-  Download,
-  Printer,
-  Undo2,
-  XCircle,
-  List,
-  Kanban,
-  ArrowRight,
-  Banknote,
-  Pencil,
-} from "lucide-react";
 import { PageHeader } from "@/components/shared/page-header";
 import { ListPageLayout } from "@/components/shared/list-page-layout";
 import { DataTable, StarCell } from "@/components/shared/data-table";
@@ -52,6 +40,7 @@ import {
 import type { PurchaseOrder, PurchaseOrderStatus } from "@/lib/types";
 import { CreatePurchaseOrderDialog } from "@/components/shared/dialogs";
 import { RecordPaymentDialog } from "@/components/shared/dialogs/record-payment-dialog";
+import { Icon } from "@/components/ui/icon";
 
 type ViewMode = "list" | "kanban";
 
@@ -510,22 +499,22 @@ export default function NhapHangPage() {
             label: viewMode === "list" ? "Xem Kanban" : "Xem danh sách",
             icon:
               viewMode === "list" ? (
-                <Kanban className="h-4 w-4" />
+                <Icon name="view_kanban" size={16} />
               ) : (
-                <List className="h-4 w-4" />
+                <Icon name="list" size={16} />
               ),
             variant: "outline",
             onClick: () => setViewMode(viewMode === "list" ? "kanban" : "list"),
           },
           {
             label: "Nhập hàng",
-            icon: <Plus className="h-4 w-4" />,
+            icon: <Icon name="add" size={16} />,
             variant: "default",
             onClick: () => setCreateOpen(true),
           },
           {
             label: "Xuất file",
-            icon: <Download className="h-4 w-4" />,
+            icon: <Icon name="download" size={16} />,
           },
         ]}
       />
@@ -596,7 +585,7 @@ export default function NhapHangPage() {
           if (row.status === "draft") {
             actions.push({
               label: "Sửa",
-              icon: <Pencil className="h-4 w-4" />,
+              icon: <Icon name="edit" size={16} />,
               onClick: () => {
                 setEditingPO({
                   id: row.id,
@@ -609,35 +598,35 @@ export default function NhapHangPage() {
             });
             actions.push({
               label: "Xác nhận đặt hàng",
-              icon: <ArrowRight className="h-4 w-4" />,
+              icon: <Icon name="arrow_forward" size={16} />,
               onClick: () => handleAdvanceStatus(row, "ordered"),
             });
           } else if (row.status === "ordered") {
             actions.push({
               label: "Nhập một phần",
-              icon: <ArrowRight className="h-4 w-4" />,
+              icon: <Icon name="arrow_forward" size={16} />,
               onClick: () => handleAdvanceStatus(row, "partial"),
             });
             actions.push({
               label: "Hoàn thành nhập",
-              icon: <ArrowRight className="h-4 w-4" />,
+              icon: <Icon name="arrow_forward" size={16} />,
               onClick: () => handleAdvanceStatus(row, "completed"),
             });
           } else if (row.status === "partial") {
             actions.push({
               label: "Hoàn thành nhập",
-              icon: <ArrowRight className="h-4 w-4" />,
+              icon: <Icon name="arrow_forward" size={16} />,
               onClick: () => handleAdvanceStatus(row, "completed"),
             });
           }
           actions.push({
             label: "In phiếu",
-            icon: <Printer className="h-4 w-4" />,
+            icon: <Icon name="print" size={16} />,
             onClick: () => printDocument(buildGoodsReceiptPrintData(row)),
           });
           actions.push({
             label: "Trả hàng nhập",
-            icon: <Undo2 className="h-4 w-4" />,
+            icon: <Icon name="undo" size={16} />,
             onClick: () => {
               toast({ variant: "info", title: "Chuyển đến trang trả hàng nhập", description: "Tạo phiếu trả cho phiếu nhập " + row.code });
               router.push("/hang-hoa/tra-hang-nhap");
@@ -646,14 +635,14 @@ export default function NhapHangPage() {
           if (row.amountOwed > 0) {
             actions.push({
               label: "Trả nợ NCC",
-              icon: <Banknote className="h-4 w-4" />,
+              icon: <Icon name="payments" size={16} />,
               onClick: () => setPayingItem(row),
             });
           }
           if (row.status !== "completed" && row.status !== "cancelled") {
             actions.push({
               label: "Hủy",
-              icon: <XCircle className="h-4 w-4" />,
+              icon: <Icon name="cancel" size={16} />,
               onClick: () => handleAdvanceStatus(row, "cancelled"),
               variant: "destructive" as const,
               separator: true,

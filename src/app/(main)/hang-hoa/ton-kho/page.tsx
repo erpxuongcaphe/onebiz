@@ -4,7 +4,6 @@
 
 import { useEffect, useState, useCallback, useMemo } from "react";
 import { ColumnDef } from "@tanstack/react-table";
-import { Boxes, AlertTriangle } from "lucide-react";
 import { PageHeader } from "@/components/shared/page-header";
 import { ListPageLayout } from "@/components/shared/list-page-layout";
 import { DataTable } from "@/components/shared/data-table";
@@ -19,6 +18,7 @@ import { formatCurrency, formatDate } from "@/lib/format";
 import { exportToExcel, exportToCsv } from "@/lib/utils/export";
 import { getBranchStockRows, getBranches } from "@/lib/services";
 import type { BranchStockRow, BranchDetail } from "@/lib/services/supabase";
+import { Icon } from "@/components/ui/icon";
 
 type ProductTypeFilter = "all" | "nvl" | "sku";
 
@@ -286,18 +286,18 @@ export default function TonKhoPage() {
       {/* Summary cards */}
       <div className="grid grid-cols-1 md:grid-cols-3 gap-3 px-4 pt-4">
         <SummaryCard
-          icon={<Boxes className="h-4 w-4" />}
+          icon={<Icon name="inventory" size={16} />}
           label="Tổng SP"
           value={rows.length.toString()}
         />
         <SummaryCard
-          icon={<Boxes className="h-4 w-4" />}
+          icon={<Icon name="inventory" size={16} />}
           label="Tổng giá trị tồn"
           value={formatCurrency(totalValue)}
           highlight
         />
         <SummaryCard
-          icon={<AlertTriangle className="h-4 w-4 text-destructive" />}
+          icon={<Icon name="warning" size={16} className="text-destructive" />}
           label="Dưới định mức"
           value={lowStockCount.toString()}
           danger={lowStockCount > 0}

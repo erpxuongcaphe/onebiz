@@ -4,7 +4,6 @@
 
 import { useEffect, useState, useCallback, useMemo } from "react";
 import { ColumnDef } from "@tanstack/react-table";
-import { History, ArrowDownCircle, ArrowUpCircle, PackageCheck } from "lucide-react";
 import { PageHeader } from "@/components/shared/page-header";
 import { ListPageLayout } from "@/components/shared/list-page-layout";
 import { DataTable } from "@/components/shared/data-table";
@@ -22,6 +21,7 @@ import { exportToExcel, exportToCsv } from "@/lib/utils/export";
 import { getAllStockMovements, getBranches } from "@/lib/services";
 import type { AllStockMovementRow } from "@/lib/services/supabase";
 import type { BranchDetail } from "@/lib/services/supabase";
+import { Icon } from "@/components/ui/icon";
 
 // === Movement type badge config ===
 const movementTypeBadge: Record<
@@ -336,18 +336,18 @@ export default function LichSuKhoPage() {
       {/* Summary cards */}
       <div className="grid grid-cols-1 md:grid-cols-3 gap-3 px-4 pt-4">
         <SummaryCard
-          icon={<History className="h-4 w-4" />}
+          icon={<Icon name="history" size={16} />}
           label="Tổng phiếu"
           value={total.toString()}
         />
         <SummaryCard
-          icon={<ArrowDownCircle className="h-4 w-4 text-green-600" />}
+          icon={<Icon name="arrow_circle_down" size={16} className="text-green-600" />}
           label="Tổng nhập"
           value={`+${totalIn}`}
           highlight
         />
         <SummaryCard
-          icon={<ArrowUpCircle className="h-4 w-4 text-red-600" />}
+          icon={<Icon name="arrow_circle_up" size={16} className="text-red-600" />}
           label="Tổng xuất"
           value={`-${totalOut}`}
           danger={totalOut > 0}

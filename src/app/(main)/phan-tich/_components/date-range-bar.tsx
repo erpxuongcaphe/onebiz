@@ -1,9 +1,9 @@
 "use client";
 
 import { useState } from "react";
-import { Calendar, ChevronLeft, ChevronRight } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { cn } from "@/lib/utils";
+import { Icon } from "@/components/ui/icon";
 
 export type DatePreset = "today" | "yesterday" | "thisWeek" | "thisMonth" | "lastMonth" | "thisQuarter" | "thisYear" | "custom";
 
@@ -38,14 +38,14 @@ export function DateRangeBar({ title, subtitle, actions }: DateRangeBarProps) {
         <div className="flex items-center gap-2">
           {actions}
           <Button variant="outline" size="sm" className="h-8 text-xs gap-1.5">
-            <Calendar className="size-3.5" />
+            <Icon name="calendar_today" className="size-3.5" />
             Xuất báo cáo
           </Button>
         </div>
       </div>
       <div className="flex items-center gap-1 overflow-x-auto [&::-webkit-scrollbar]:hidden [-ms-overflow-style:none] [scrollbar-width:none]">
         <button className="p-1 rounded hover:bg-gray-100 text-gray-400 shrink-0">
-          <ChevronLeft className="size-4" />
+          <Icon name="chevron_left" className="size-4" />
         </button>
         {PRESETS.map((p) => (
           <button
@@ -62,7 +62,7 @@ export function DateRangeBar({ title, subtitle, actions }: DateRangeBarProps) {
           </button>
         ))}
         <button className="p-1 rounded hover:bg-gray-100 text-gray-400 shrink-0">
-          <ChevronRight className="size-4" />
+          <Icon name="chevron_right" className="size-4" />
         </button>
       </div>
     </div>

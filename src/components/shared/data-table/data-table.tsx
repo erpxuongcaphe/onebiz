@@ -13,14 +13,6 @@ import {
 } from "@tanstack/react-table";
 import { useState, useMemo, useEffect, ReactNode, Fragment } from "react";
 import {
-  ArrowUpDown,
-  ArrowUp,
-  ArrowDown,
-  MoreHorizontal,
-  Settings2,
-  X,
-} from "lucide-react";
-import {
   Table,
   TableBody,
   TableCell,
@@ -42,6 +34,7 @@ import {
 } from "@/components/ui/dropdown-menu";
 import { cn } from "@/lib/utils";
 import { DataTablePagination } from "./pagination";
+import { Icon } from "@/components/ui/icon";
 
 export interface RowAction<TData> {
   label: string;
@@ -167,7 +160,7 @@ export function DataTable<TData, TValue>({
                 className="inline-flex items-center justify-center rounded-md p-1.5 hover:bg-muted focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
                 onClick={(e) => e.stopPropagation()}
               >
-                <MoreHorizontal className="h-4 w-4 text-muted-foreground" />
+                <Icon name="more_horiz" size={16} className="text-muted-foreground" />
                 <span className="sr-only">Mở menu</span>
               </DropdownMenuTrigger>
               <DropdownMenuContent align="end" side="bottom" sideOffset={4}>
@@ -259,7 +252,7 @@ export function DataTable<TData, TValue>({
         <div className="flex justify-end px-4 py-2">
           <DropdownMenu>
             <DropdownMenuTrigger className="inline-flex items-center gap-1.5 rounded-md border border-input bg-background px-3 py-1.5 text-sm font-medium hover:bg-accent hover:text-accent-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring">
-              <Settings2 className="h-4 w-4" />
+              <Icon name="tune" size={16} />
               <span className="hidden sm:inline">Hiển thị cột</span>
             </DropdownMenuTrigger>
             <DropdownMenuContent align="end" side="bottom" sideOffset={4}>
@@ -318,11 +311,11 @@ export function DataTable<TData, TValue>({
                       {header.column.getCanSort() && (
                         <span className="text-muted-foreground/50">
                           {header.column.getIsSorted() === "asc" ? (
-                            <ArrowUp className="h-3 w-3" />
+                            <Icon name="arrow_upward" size={12} />
                           ) : header.column.getIsSorted() === "desc" ? (
-                            <ArrowDown className="h-3 w-3" />
+                            <Icon name="arrow_downward" size={12} />
                           ) : (
-                            <ArrowUpDown className="h-3 w-3" />
+                            <Icon name="unfold_more" size={12} />
                           )}
                         </span>
                       )}
@@ -396,7 +389,7 @@ export function DataTable<TData, TValue>({
                     className={cn(
                       (onRowClick || renderDetail) && "cursor-pointer",
                       expandedRowIdx === rowIndex &&
-                        "bg-blue-50/60 border-l-2 border-l-[hsl(217,91%,40%)]"
+                        "bg-blue-50/60 border-l-2 border-l-primary"
                     )}
                     onClick={() => handleRowClick(row.original, rowIndex)}
                   >
@@ -415,7 +408,7 @@ export function DataTable<TData, TValue>({
                     <TableRow className="hover:bg-transparent">
                       <TableCell
                         colSpan={totalColSpan}
-                        className="p-0 border-l-2 border-l-[hsl(217,91%,40%)]"
+                        className="p-0 border-l-2 border-l-primary"
                       >
                         {renderDetail(row.original, () =>
                           setExpandedRowIdx(null)
@@ -466,7 +459,7 @@ export function DataTable<TData, TValue>({
                   (onRowClick || renderDetail) &&
                     "cursor-pointer active:bg-muted/50",
                   expandedRowIdx === rowIndex &&
-                    "ring-2 ring-[hsl(217,91%,40%)] bg-blue-50/30"
+                    "ring-2 ring-primary bg-blue-50/30"
                 )}
                 onClick={() => handleRowClick(row.original, rowIndex)}
               >
@@ -490,7 +483,7 @@ export function DataTable<TData, TValue>({
                           className="inline-flex items-center justify-center rounded-md p-1.5 hover:bg-muted focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
                           onClick={(e) => e.stopPropagation()}
                         >
-                          <MoreHorizontal className="h-4 w-4 text-muted-foreground" />
+                          <Icon name="more_horiz" size={16} className="text-muted-foreground" />
                         </DropdownMenuTrigger>
                         <DropdownMenuContent
                           align="end"
@@ -629,7 +622,7 @@ export function DataTable<TData, TValue>({
                 className="ml-auto inline-flex items-center gap-1 rounded-md px-2 py-1.5 text-sm hover:bg-background/15 transition-colors text-background/70 hover:text-background"
                 onClick={() => table.toggleAllRowsSelected(false)}
               >
-                <X className="h-4 w-4" />
+                <Icon name="close" size={16} />
                 <span className="hidden sm:inline">Bỏ chọn</span>
               </button>
             </div>

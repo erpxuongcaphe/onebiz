@@ -18,11 +18,11 @@ import {
   SelectContent,
   SelectItem,
 } from "@/components/ui/select";
-import { Trash2, Search, Loader2 } from "lucide-react";
 import { formatCurrency } from "@/lib/format";
 import { useToast } from "@/lib/contexts";
 import { getClient } from "@/lib/services/supabase/base";
 import type { Database } from "@/lib/supabase/types";
+import { Icon } from "@/components/ui/icon";
 
 type PurchaseOrderInsert = Database["public"]["Tables"]["purchase_orders"]["Insert"];
 type PurchaseOrderItemInsert = Database["public"]["Tables"]["purchase_order_items"]["Insert"];
@@ -322,7 +322,7 @@ export function CreatePurchaseOrderDialog({
               Nhà cung cấp <span className="text-destructive">*</span>
             </label>
             <div className="relative">
-              <Search className="absolute left-2.5 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
+              <Icon name="search" size={16} className="absolute left-2.5 top-1/2 -translate-y-1/2 text-muted-foreground" />
               <Input
                 value={supplierSearch}
                 onChange={(e) => {
@@ -371,7 +371,7 @@ export function CreatePurchaseOrderDialog({
           <div className="space-y-1.5">
             <label className="text-sm font-medium">Thêm sản phẩm</label>
             <div className="relative">
-              <Search className="absolute left-2.5 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
+              <Icon name="search" size={16} className="absolute left-2.5 top-1/2 -translate-y-1/2 text-muted-foreground" />
               <Input
                 value={productSearch}
                 onChange={(e) => {
@@ -468,7 +468,7 @@ export function CreatePurchaseOrderDialog({
                     onClick={() => removeItem(item.id)}
                     className="text-muted-foreground hover:text-destructive"
                   >
-                    <Trash2 className="h-3.5 w-3.5" />
+                    <Icon name="delete" size={14} />
                   </Button>
                 </div>
               ))}
@@ -513,7 +513,7 @@ export function CreatePurchaseOrderDialog({
             Hủy
           </Button>
           <Button onClick={handleSave} disabled={saving}>
-            {saving && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
+            {saving && <Icon name="progress_activity" size={16} className="mr-2 animate-spin" />}
             {isEdit ? "Lưu thay đổi" : "Tạo phiếu nhập"}
           </Button>
         </DialogFooter>

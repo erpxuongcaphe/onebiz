@@ -13,7 +13,6 @@ import { Input } from "@/components/ui/input";
 import { Button } from "@/components/ui/button";
 import { Checkbox } from "@/components/ui/checkbox";
 import { Badge } from "@/components/ui/badge";
-import { Loader2, AlertTriangle, CheckCircle2, ArrowRight } from "lucide-react";
 import { useToast, useAuth } from "@/lib/contexts";
 import {
   completeProductionOrder,
@@ -26,6 +25,7 @@ import type { ProductionOrder } from "@/lib/types";
 import type { BranchDetail } from "@/lib/services";
 import { getClient } from "@/lib/services/supabase/base";
 import { formatNumber } from "@/lib/format";
+import { Icon } from "@/components/ui/icon";
 
 interface CompleteProductionOrderDialogProps {
   open: boolean;
@@ -284,7 +284,7 @@ export function CompleteProductionOrderDialog({
               <div className="px-3 py-2 bg-muted/30 text-xs font-medium flex items-center justify-between">
                 <span>Kiểm tra nguyên vật liệu</span>
                 {checking ? (
-                  <Loader2 className="h-3 w-3 animate-spin" />
+                  <Icon name="progress_activity" size={12} className="animate-spin" />
                 ) : hasShortage ? (
                   <Badge variant="outline" className="text-amber-600 border-amber-300 bg-amber-50 text-[10px]">
                     Thiếu NVL
@@ -308,9 +308,9 @@ export function CompleteProductionOrderDialog({
                       </td>
                       <td className="px-3 py-1.5 text-center w-8">
                         {m.sufficient ? (
-                          <CheckCircle2 className="h-3.5 w-3.5 text-green-500" />
+                          <Icon name="check_circle" size={14} className="text-green-500" />
                         ) : (
-                          <AlertTriangle className="h-3.5 w-3.5 text-amber-500" />
+                          <Icon name="warning" size={14} className="text-amber-500" />
                         )}
                       </td>
                     </tr>
@@ -349,7 +349,7 @@ export function CompleteProductionOrderDialog({
                 </select>
                 {targetBranchId && (
                   <div className="text-xs text-muted-foreground flex items-center gap-1">
-                    <ArrowRight className="h-3 w-3" />
+                    <Icon name="arrow_forward" size={12} />
                     Sẽ tạo đơn bán nội bộ (ghi nợ) sau khi hoàn thành
                   </div>
                 )}
@@ -367,7 +367,7 @@ export function CompleteProductionOrderDialog({
             Hủy
           </Button>
           <Button onClick={handleComplete} disabled={saving}>
-            {saving && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
+            {saving && <Icon name="progress_activity" size={16} className="mr-2 animate-spin" />}
             Hoàn thành
           </Button>
         </DialogFooter>

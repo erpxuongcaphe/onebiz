@@ -5,10 +5,10 @@
 // Sort FIFO theo expiry_date, kèm badge HSD + cảnh báo.
 
 import { useEffect, useState } from "react";
-import { AlertTriangle, CalendarClock, CheckCircle2, Loader2, Package } from "lucide-react";
 import { getProductLots } from "@/lib/services";
 import { formatCurrency, formatDate } from "@/lib/format";
 import type { ProductLot } from "@/lib/types";
+import { Icon } from "@/components/ui/icon";
 
 interface ProductLotsTabProps {
   productId: string;
@@ -44,7 +44,7 @@ export function ProductLotsTab({ productId, branchId }: ProductLotsTabProps) {
   if (loading) {
     return (
       <div className="flex items-center justify-center py-8 text-muted-foreground">
-        <Loader2 className="h-4 w-4 animate-spin mr-2" />
+        <Icon name="progress_activity" size={16} className="animate-spin mr-2" />
         <span className="text-sm">Đang tải lô...</span>
       </div>
     );
@@ -53,7 +53,7 @@ export function ProductLotsTab({ productId, branchId }: ProductLotsTabProps) {
   if (error) {
     return (
       <div className="text-sm text-destructive bg-destructive/5 rounded-lg p-3 flex items-center gap-2">
-        <AlertTriangle className="h-4 w-4" />
+        <Icon name="warning" size={16} />
         {error}
       </div>
     );
@@ -62,7 +62,7 @@ export function ProductLotsTab({ productId, branchId }: ProductLotsTabProps) {
   if (lots.length === 0) {
     return (
       <div className="flex flex-col items-center justify-center py-10 text-muted-foreground">
-        <Package className="h-10 w-10 mb-2 opacity-30" />
+        <Icon name="inventory_2" size={40} className="mb-2 opacity-30" />
         <p className="text-sm">Sản phẩm chưa có lô nào</p>
         <p className="text-xs mt-1">
           Lô sẽ được tạo khi nhập hàng từ NCC hoặc hoàn thành lệnh sản xuất
@@ -193,7 +193,7 @@ function ExpiryBadge({
   if (status === "expired") {
     return (
       <span className="inline-flex items-center gap-1 text-destructive text-xs font-medium">
-        <AlertTriangle className="h-3.5 w-3.5" />
+        <Icon name="warning" size={14} />
         Hết hạn
         {typeof daysUntilExpiry === "number" && ` ${Math.abs(daysUntilExpiry)}d`}
       </span>
@@ -202,14 +202,14 @@ function ExpiryBadge({
   if (status === "expiring_soon") {
     return (
       <span className="inline-flex items-center gap-1 text-yellow-600 text-xs font-medium">
-        <CalendarClock className="h-3.5 w-3.5" />
+        <Icon name="event" size={14} />
         Còn {daysUntilExpiry ?? 0} ngày
       </span>
     );
   }
   return (
     <span className="inline-flex items-center gap-1 text-green-600 text-xs">
-      <CheckCircle2 className="h-3.5 w-3.5" />
+      <Icon name="check_circle" size={14} />
       {typeof daysUntilExpiry === "number" ? `${daysUntilExpiry}d` : "OK"}
     </span>
   );

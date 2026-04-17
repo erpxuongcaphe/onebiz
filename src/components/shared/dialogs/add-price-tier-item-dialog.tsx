@@ -3,7 +3,6 @@
 // AddPriceTierItemDialog — thêm sản phẩm vào bảng giá với giá riêng + min qty
 
 import { useEffect, useState } from "react";
-import { Loader2, Search } from "lucide-react";
 import {
   Dialog,
   DialogContent,
@@ -18,6 +17,7 @@ import { useToast } from "@/lib/contexts";
 import { addPriceTierItem, getProducts } from "@/lib/services";
 import { formatCurrency } from "@/lib/format";
 import type { Product } from "@/lib/types";
+import { Icon } from "@/components/ui/icon";
 
 interface AddPriceTierItemDialogProps {
   open: boolean;
@@ -146,7 +146,7 @@ export function AddPriceTierItemDialog({
               Sản phẩm <span className="text-destructive">*</span>
             </label>
             <div className="relative">
-              <Search className="absolute left-2.5 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
+              <Icon name="search" size={16} className="absolute left-2.5 top-1/2 -translate-y-1/2 text-muted-foreground" />
               <Input
                 value={search}
                 onChange={(e) => {
@@ -264,7 +264,7 @@ export function AddPriceTierItemDialog({
             Hủy
           </Button>
           <Button onClick={handleSave} disabled={saving}>
-            {saving && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
+            {saving && <Icon name="progress_activity" size={16} className="mr-2 animate-spin" />}
             Thêm vào bảng giá
           </Button>
         </DialogFooter>

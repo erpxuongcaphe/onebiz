@@ -18,7 +18,6 @@ import {
   SelectContent,
   SelectItem,
 } from "@/components/ui/select";
-import { Loader2, AlertTriangle, CheckCircle2 } from "lucide-react";
 import { useToast } from "@/lib/contexts";
 import {
   getAllBOMs,
@@ -30,6 +29,7 @@ import {
 import { formatCurrency } from "@/lib/format";
 import type { BOM } from "@/lib/types";
 import type { BranchDetail } from "@/lib/services/supabase/branches";
+import { Icon } from "@/components/ui/icon";
 
 interface CreateProductionOrderDialogProps {
   open: boolean;
@@ -304,7 +304,7 @@ export function CreateProductionOrderDialog({
               <div className="flex items-center justify-between">
                 <h3 className="text-sm font-medium">NVL cần dùng</h3>
                 {computing && (
-                  <Loader2 className="h-3.5 w-3.5 animate-spin text-muted-foreground" />
+                  <Icon name="progress_activity" size={14} className="animate-spin text-muted-foreground" />
                 )}
               </div>
 
@@ -343,12 +343,12 @@ export function CreateProductionOrderDialog({
                           <td className="p-2 text-center">
                             {m.shortage ? (
                               <span className="inline-flex items-center gap-1 text-destructive text-xs">
-                                <AlertTriangle className="h-3.5 w-3.5" />
+                                <Icon name="warning" size={14} />
                                 Thiếu
                               </span>
                             ) : (
                               <span className="inline-flex items-center gap-1 text-green-600 text-xs">
-                                <CheckCircle2 className="h-3.5 w-3.5" />
+                                <Icon name="check_circle" size={14} />
                                 Đủ
                               </span>
                             )}
@@ -362,7 +362,7 @@ export function CreateProductionOrderDialog({
 
               {hasShortage && (
                 <div className="text-xs text-destructive flex items-center gap-1.5 bg-destructive/5 rounded p-2">
-                  <AlertTriangle className="h-3.5 w-3.5" />
+                  <Icon name="warning" size={14} />
                   Có NVL không đủ tồn kho — bạn vẫn có thể tạo lệnh nhưng cần nhập kho trước khi sản xuất
                 </div>
               )}
@@ -385,7 +385,7 @@ export function CreateProductionOrderDialog({
             Hủy
           </Button>
           <Button onClick={handleSave} disabled={saving || computing}>
-            {saving && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
+            {saving && <Icon name="progress_activity" size={16} className="mr-2 animate-spin" />}
             Tạo lệnh sản xuất
           </Button>
         </DialogFooter>

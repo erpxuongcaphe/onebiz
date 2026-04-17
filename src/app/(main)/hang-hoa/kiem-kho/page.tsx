@@ -2,7 +2,6 @@
 
 import { useEffect, useState, useCallback } from "react";
 import { ColumnDef } from "@tanstack/react-table";
-import { Plus, Download, Printer, XCircle, CheckCircle2 } from "lucide-react";
 import { PageHeader } from "@/components/shared/page-header";
 import { ListPageLayout } from "@/components/shared/list-page-layout";
 import { DataTable, StarCell } from "@/components/shared/data-table";
@@ -29,6 +28,7 @@ import { CreateInventoryCheckDialog, ConfirmDialog } from "@/components/shared/d
 import { useToast, useBranchFilter } from "@/lib/contexts";
 import { printDocument } from "@/lib/print-document";
 import { buildInventoryCheckPrintData } from "@/lib/print-templates";
+import { Icon } from "@/components/ui/icon";
 
 /* ------------------------------------------------------------------ */
 /*  Status config                                                      */
@@ -422,13 +422,13 @@ export default function KiemKhoPage() {
         actions={[
           {
             label: "Kiểm kho",
-            icon: <Plus className="h-4 w-4" />,
+            icon: <Icon name="add" size={16} />,
             variant: "default",
             onClick: () => setCreateOpen(true),
           },
           {
             label: "Xuất file",
-            icon: <Download className="h-4 w-4" />,
+            icon: <Icon name="download" size={16} />,
           },
         ]}
       />
@@ -456,21 +456,21 @@ export default function KiemKhoPage() {
             ? [
                 {
                   label: applyingId === row.id ? "Đang áp dụng..." : "Áp dụng kiểm kê",
-                  icon: <CheckCircle2 className="h-4 w-4" />,
+                  icon: <Icon name="check_circle" size={16} />,
                   onClick: () => handleApply(row),
                 },
               ]
             : []),
           {
             label: "In phiếu",
-            icon: <Printer className="h-4 w-4" />,
+            icon: <Icon name="print" size={16} />,
             onClick: () => printDocument(buildInventoryCheckPrintData(row)),
           },
           ...(row.status === "processing"
             ? [
                 {
                   label: "Hủy",
-                  icon: <XCircle className="h-4 w-4" />,
+                  icon: <Icon name="cancel" size={16} />,
                   onClick: () => setCancellingItem(row),
                   variant: "destructive" as const,
                   separator: true,

@@ -1,9 +1,9 @@
 "use client";
 
 import { useEffect } from "react";
-import { AlertCircle, RotateCcw, Home } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import Link from "next/link";
+import { Icon } from "@/components/ui/icon";
 
 export default function MainError({
   error,
@@ -20,7 +20,7 @@ export default function MainError({
     <div className="flex-1 flex items-center justify-center p-4">
       <div className="max-w-md w-full text-center space-y-6">
         <div className="mx-auto h-16 w-16 rounded-full bg-red-100 flex items-center justify-center">
-          <AlertCircle className="h-8 w-8 text-red-600" />
+          <Icon name="error" size={32} className="text-red-600" />
         </div>
         <div>
           <h2 className="text-xl font-bold">Đã xảy ra lỗi</h2>
@@ -35,12 +35,12 @@ export default function MainError({
         </div>
         <div className="flex flex-col sm:flex-row gap-3 justify-center">
           <Button onClick={reset}>
-            <RotateCcw className="h-4 w-4 mr-1.5" />
+            <Icon name="undo" size={16} className="mr-1.5" />
             Thử lại
           </Button>
           <Link href="/">
             <Button variant="outline">
-              <Home className="h-4 w-4 mr-1.5" />
+              <Icon name="home" size={16} className="mr-1.5" />
               Về trang chủ
             </Button>
           </Link>

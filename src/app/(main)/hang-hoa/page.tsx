@@ -3,16 +3,7 @@
 import { useEffect, useState, useCallback } from "react";
 import { ColumnDef } from "@tanstack/react-table";
 import {
-  Plus,
-  Pencil,
-  Copy,
-  Printer,
-  Trash2,
-  Package,
-  Tags,
-  DollarSign,
-  Sparkles,
-  X,
+  Copy
 } from "lucide-react";
 import { PageHeader } from "@/components/shared/page-header";
 import { ListPageLayout } from "@/components/shared/list-page-layout";
@@ -57,6 +48,7 @@ import {
 } from "@/lib/services";
 import { useToast } from "@/lib/contexts";
 import type { Product } from "@/lib/types";
+import { Icon } from "@/components/ui/icon";
 
 type ProductScope = "nvl" | "sku";
 
@@ -93,7 +85,7 @@ function ProductDetail({
                         className="h-full w-full object-cover"
                       />
                     ) : (
-                      <Package className="h-8 w-8 text-muted-foreground/40" />
+                      <Icon name="inventory_2" size={32} className="text-muted-foreground/40" />
                     )
                   }
                   tags={["Combo - đóng gói", "Bán trực tiếp", "Tích điểm"]}
@@ -466,7 +458,7 @@ export default function HangHoaPage() {
               className="h-full w-full object-cover"
             />
           ) : (
-            <Package className="h-4 w-4 text-muted-foreground/40" />
+            <Icon name="inventory_2" size={16} className="text-muted-foreground/40" />
           )}
         </div>
       ),
@@ -698,13 +690,13 @@ export default function HangHoaPage() {
           actions={[
             {
               label: "Tạo mới",
-              icon: <Plus className="h-4 w-4" />,
+              icon: <Icon name="add" size={16} />,
               variant: "default",
               onClick: () => setCreateOpen(true),
             },
             {
               label: "Import bằng AI",
-              icon: <Sparkles className="h-4 w-4" />,
+              icon: <Icon name="auto_awesome" size={16} />,
               onClick: () => setImportOpen(true),
             },
           ]}
@@ -717,7 +709,7 @@ export default function HangHoaPage() {
           <div className="mb-3 shrink-0 relative overflow-hidden rounded-lg border border-violet-200 bg-gradient-to-r from-violet-50 via-fuchsia-50 to-amber-50 px-4 py-3">
             <div className="flex items-center gap-3">
               <div className="h-9 w-9 shrink-0 rounded-md bg-gradient-to-br from-violet-500 to-fuchsia-500 flex items-center justify-center shadow-sm">
-                <Sparkles className="h-4 w-4 text-white" />
+                <Icon name="auto_awesome" size={16} className="text-white" />
               </div>
               <div className="flex-1 min-w-0">
                 <div className="text-sm font-semibold text-violet-900 leading-tight">
@@ -732,7 +724,7 @@ export default function HangHoaPage() {
                 onClick={() => setImportOpen(true)}
                 className="shrink-0 inline-flex items-center gap-1.5 h-8 px-3 rounded-md bg-gradient-to-r from-violet-600 to-fuchsia-600 text-white text-xs font-semibold shadow-sm hover:from-violet-700 hover:to-fuchsia-700 transition-colors"
               >
-                <Sparkles className="h-3.5 w-3.5" />
+                <Icon name="auto_awesome" size={14} />
                 Tải file lên
               </button>
               <button
@@ -742,7 +734,7 @@ export default function HangHoaPage() {
                 aria-label="Đóng banner"
                 title="Ẩn banner"
               >
-                <X className="h-3.5 w-3.5" />
+                <Icon name="close" size={14} />
               </button>
             </div>
           </div>
@@ -767,7 +759,7 @@ export default function HangHoaPage() {
           bulkActions={[
             {
               label: "Đổi nhóm",
-              icon: <Tags className="h-4 w-4" />,
+              icon: <Icon name="label" size={16} />,
               onClick: (rows) => {
                 setSelectedRowsForBulk(rows);
                 setBulkChangeCategoryOpen(true);
@@ -775,7 +767,7 @@ export default function HangHoaPage() {
             },
             {
               label: "Đổi giá",
-              icon: <DollarSign className="h-4 w-4" />,
+              icon: <Icon name="attach_money" size={16} />,
               onClick: (rows) => {
                 setSelectedRowsForBulk(rows);
                 setBulkChangePriceOpen(true);
@@ -783,7 +775,7 @@ export default function HangHoaPage() {
             },
             {
               label: "Xóa",
-              icon: <Trash2 className="h-4 w-4" />,
+              icon: <Icon name="delete" size={16} />,
               variant: "destructive",
               onClick: (rows) => {
                 setSelectedRowsForBulk(rows);
@@ -803,7 +795,7 @@ export default function HangHoaPage() {
           rowActions={(row) => [
             {
               label: "Sửa",
-              icon: <Pencil className="h-4 w-4" />,
+              icon: <Icon name="edit" size={16} />,
               onClick: () => {
                 setEditingProduct(row);
                 setCreateOpen(true);
@@ -818,14 +810,14 @@ export default function HangHoaPage() {
             },
             {
               label: "In mã vạch",
-              icon: <Printer className="h-4 w-4" />,
+              icon: <Icon name="print" size={16} />,
               onClick: () => {
                 toast({ variant: "info", title: "Đang phát triển", description: "Đang phát triển tính năng in mã vạch" });
               },
             },
             {
               label: "Xóa",
-              icon: <Trash2 className="h-4 w-4" />,
+              icon: <Icon name="delete" size={16} />,
               onClick: () => {
                 setDeletingProduct(row);
                 setDeleteConfirmOpen(true);

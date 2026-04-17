@@ -2,7 +2,6 @@
 
 import { useEffect, useState, useCallback } from "react";
 import { ColumnDef } from "@tanstack/react-table";
-import { Plus, Printer } from "lucide-react";
 import { Badge } from "@/components/ui/badge";
 import { PageHeader } from "@/components/shared/page-header";
 import { ListPageLayout } from "@/components/shared/list-page-layout";
@@ -30,6 +29,7 @@ import { exportToExcel, exportToCsv } from "@/lib/utils/export";
 import { getReturns, getReturnStatuses } from "@/lib/services";
 import type { ReturnOrder } from "@/lib/types";
 import { CreateReturnDialog } from "@/components/shared/dialogs";
+import { Icon } from "@/components/ui/icon";
 
 // --- Status config ---
 
@@ -406,7 +406,7 @@ export default function TraHangPage() {
         actions={[
           {
             label: "Trả hàng",
-            icon: <Plus className="h-4 w-4" />,
+            icon: <Icon name="add" size={16} />,
             variant: "default",
             onClick: () => setCreateOpen(true),
           },
@@ -439,7 +439,7 @@ export default function TraHangPage() {
         rowActions={(row) => [
           {
             label: "In phiếu trả",
-            icon: <Printer className="h-4 w-4" />,
+            icon: <Icon name="print" size={16} />,
             onClick: () => printDocument(buildReturnPrintData({
               code: row.code,
               date: row.date,

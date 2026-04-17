@@ -9,11 +9,7 @@ import { useEffect, useState, useCallback } from "react";
 import { ColumnDef } from "@tanstack/react-table";
 import {
   FileClock,
-  Calendar,
-  User,
-  Activity,
-  Eye,
-  ChevronDown,
+  Activity
 } from "lucide-react";
 import { PageHeader } from "@/components/shared/page-header";
 import { DataTable } from "@/components/shared/data-table";
@@ -35,6 +31,7 @@ import {
   getEntityTypeOptions,
 } from "@/lib/services/supabase/audit";
 import type { AuditLogEntry } from "@/lib/services/supabase/audit";
+import { Icon } from "@/components/ui/icon";
 
 const PAGE_SIZE = 25;
 
@@ -127,7 +124,7 @@ export default function AuditPage() {
       size: 160,
       cell: ({ row }) => (
         <div className="flex items-center gap-1.5">
-          <User className="h-3.5 w-3.5 text-muted-foreground" />
+          <Icon name="person" size={14} className="text-muted-foreground" />
           <span className="text-sm font-medium">{row.original.userName}</span>
         </div>
       ),
@@ -175,7 +172,7 @@ export default function AuditPage() {
           className="h-7 w-7 p-0"
           onClick={() => setSelectedEntry(row.original)}
         >
-          <Eye className="h-3.5 w-3.5" />
+          <Icon name="visibility" size={14} />
         </Button>
       ),
     },
@@ -205,7 +202,7 @@ export default function AuditPage() {
             bg="bg-blue-50 border-blue-200"
           />
           <StatCard
-            icon={<Calendar className="h-4 w-4 text-emerald-600" />}
+            icon={<Icon name="calendar_today" size={16} className="text-emerald-600" />}
             label="7 ngày qua"
             value={`${stats.totalWeek} thao tác`}
             bg="bg-emerald-50 border-emerald-200"
@@ -423,7 +420,7 @@ function FilterSelect({
           </option>
         ))}
       </select>
-      <ChevronDown className="h-3.5 w-3.5 text-muted-foreground absolute right-2 top-1/2 -translate-y-1/2 pointer-events-none" />
+      <Icon name="expand_more" size={14} className="text-muted-foreground absolute right-2 top-1/2 -translate-y-1/2 pointer-events-none" />
     </div>
   );
 }

@@ -2,7 +2,6 @@
 
 import { useEffect, useState, useCallback } from "react";
 import { ColumnDef } from "@tanstack/react-table";
-import { Plus, Pencil, Trash2, FlaskConical } from "lucide-react";
 import { PageHeader } from "@/components/shared/page-header";
 import { ListPageLayout } from "@/components/shared/list-page-layout";
 import { DataTable } from "@/components/shared/data-table";
@@ -16,6 +15,7 @@ import { useToast } from "@/lib/contexts";
 import { getAllBOMs, deleteBOM } from "@/lib/services";
 import { formatDate } from "@/lib/format";
 import type { BOM } from "@/lib/types";
+import { Icon } from "@/components/ui/icon";
 
 export default function CongThucPage() {
   const { toast } = useToast();
@@ -150,7 +150,7 @@ export default function CongThucPage() {
           actions={[
             {
               label: "Tạo công thức",
-              icon: <Plus className="h-4 w-4" />,
+              icon: <Icon name="add" size={16} />,
               variant: "default",
               onClick: () => {
                 setEditingId(undefined);
@@ -166,7 +166,7 @@ export default function CongThucPage() {
           </div>
         ) : filtered.length === 0 ? (
           <div className="flex flex-col items-center justify-center py-20 text-muted-foreground">
-            <FlaskConical className="h-12 w-12 mb-3 opacity-30" />
+            <Icon name="science" size={48} className="mb-3 opacity-30" />
             <p className="text-sm">Chưa có công thức nào</p>
             <Button
               size="sm"
@@ -176,7 +176,7 @@ export default function CongThucPage() {
                 setEditorOpen(true);
               }}
             >
-              <Plus className="h-4 w-4 mr-1" />
+              <Icon name="add" size={16} className="mr-1" />
               Tạo công thức đầu tiên
             </Button>
           </div>
@@ -197,7 +197,7 @@ export default function CongThucPage() {
             rowActions={(row) => [
               {
                 label: "Sửa",
-                icon: <Pencil className="h-4 w-4" />,
+                icon: <Icon name="edit" size={16} />,
                 onClick: () => {
                   setEditingId(row.id);
                   setEditorOpen(true);
@@ -205,7 +205,7 @@ export default function CongThucPage() {
               },
               {
                 label: "Xóa",
-                icon: <Trash2 className="h-4 w-4" />,
+                icon: <Icon name="delete" size={16} />,
                 onClick: () => handleDelete(row.id, row.name),
                 variant: "destructive",
                 separator: true,

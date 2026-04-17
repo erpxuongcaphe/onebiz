@@ -2,7 +2,6 @@
 
 import { useEffect, useState, useCallback } from "react";
 import { ColumnDef } from "@tanstack/react-table";
-import { AlertTriangle, CalendarClock, Package } from "lucide-react";
 import { PageHeader } from "@/components/shared/page-header";
 import { ListPageLayout } from "@/components/shared/list-page-layout";
 import { DataTable } from "@/components/shared/data-table";
@@ -15,6 +14,7 @@ import { useToast } from "@/lib/contexts";
 import { getExpiringLots } from "@/lib/services";
 import { formatDate, formatCurrency } from "@/lib/format";
 import type { ExpiringLot } from "@/lib/types";
+import { Icon } from "@/components/ui/icon";
 
 export default function HSDPage() {
   const { toast } = useToast();
@@ -106,7 +106,7 @@ export default function HSDPage() {
         if (row.original.isExpired) {
           return (
             <span className="inline-flex items-center gap-1 text-destructive font-medium">
-              <AlertTriangle className="h-3.5 w-3.5" />
+              <Icon name="warning" size={14} />
               Hết hạn {Math.abs(d)} ngày
             </span>
           );
@@ -173,9 +173,9 @@ export default function HSDPage() {
 
       {!loading && filtered.length === 0 ? (
         <div className="flex flex-col items-center justify-center py-20 text-muted-foreground">
-          <CalendarClock className="h-12 w-12 mb-3 opacity-30" />
+          <Icon name="event" size={48} className="mb-3 opacity-30" />
           <p className="text-sm">Không có lô nào sắp hết hạn trong {thresholdDays} ngày tới</p>
-          <Package className="h-4 w-4 mt-1 opacity-0" />
+          <Icon name="inventory_2" size={16} className="mt-1 opacity-0" />
         </div>
       ) : (
         <DataTable

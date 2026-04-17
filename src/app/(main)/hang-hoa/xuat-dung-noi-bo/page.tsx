@@ -2,7 +2,6 @@
 
 import { useEffect, useState, useCallback } from "react";
 import { ColumnDef } from "@tanstack/react-table";
-import { Plus, Download, Printer, XCircle } from "lucide-react";
 import { Badge } from "@/components/ui/badge";
 import { PageHeader } from "@/components/shared/page-header";
 import { ListPageLayout } from "@/components/shared/list-page-layout";
@@ -30,6 +29,7 @@ import { CreateInternalExportDialog, ConfirmDialog } from "@/components/shared/d
 import { useToast, useBranchFilter } from "@/lib/contexts";
 import { printDocument } from "@/lib/print-document";
 import { buildInternalExportPrintData } from "@/lib/print-templates";
+import { Icon } from "@/components/ui/icon";
 
 /* ------------------------------------------------------------------ */
 /*  Status config                                                      */
@@ -337,13 +337,13 @@ export default function XuatDungNoiBoPage() {
         actions={[
           {
             label: "Xuất dùng nội bộ",
-            icon: <Plus className="h-4 w-4" />,
+            icon: <Icon name="add" size={16} />,
             variant: "default",
             onClick: () => setCreateOpen(true),
           },
           {
             label: "Xuất file",
-            icon: <Download className="h-4 w-4" />,
+            icon: <Icon name="download" size={16} />,
           },
         ]}
       />
@@ -369,14 +369,14 @@ export default function XuatDungNoiBoPage() {
         rowActions={(row) => [
           {
             label: "In phiếu",
-            icon: <Printer className="h-4 w-4" />,
+            icon: <Icon name="print" size={16} />,
             onClick: () => printDocument(buildInternalExportPrintData(row)),
           },
           ...(row.status === "draft"
             ? [
                 {
                   label: "Hủy",
-                  icon: <XCircle className="h-4 w-4" />,
+                  icon: <Icon name="cancel" size={16} />,
                   onClick: () => setCancellingItem(row),
                   variant: "destructive" as const,
                   separator: true,

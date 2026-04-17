@@ -1,7 +1,7 @@
 "use client";
 
 import { useState, useEffect, useCallback } from "react";
-import { Truck, ShoppingBag, Wallet, RotateCcw, Loader2 } from "lucide-react";
+import { Truck, ShoppingBag, Wallet, RotateCcw } from "lucide-react";
 import {
   LineChart,
   Line,
@@ -35,6 +35,7 @@ import type {
   ChartPoint,
   SupplierSummaryRow,
 } from "@/lib/services/supabase/analytics";
+import { Icon } from "@/components/ui/icon";
 
 // === Helpers ===
 
@@ -177,7 +178,7 @@ export default function NhaCungCapPage() {
           subtitle="Thống kê mua hàng và công nợ nhà cung cấp"
         />
         <div className="flex-1 flex items-center justify-center">
-          <Loader2 className="h-8 w-8 animate-spin text-gray-400" />
+          <Icon name="progress_activity" size={32} className="animate-spin text-gray-400" />
         </div>
       </div>
     );

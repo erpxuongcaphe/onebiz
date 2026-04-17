@@ -1,12 +1,4 @@
 "use client";
-
-/**
- * PosBranchSelector — Inline branch picker for POS pages.
- * POS requires a specific branch (no "Tất cả chi nhánh" option).
- * Supports dark (FnB header) and light (retail/admin) variants.
- */
-
-import { Building2, ChevronDown, Check } from "lucide-react";
 import { useAuth } from "@/lib/contexts";
 import {
   DropdownMenu,
@@ -17,6 +9,7 @@ import {
   DropdownMenuLabel,
 } from "@/components/ui/dropdown-menu";
 import { cn } from "@/lib/utils";
+import { Icon } from "@/components/ui/icon";
 
 interface PosBranchSelectorProps {
   variant?: "light" | "dark";
@@ -37,11 +30,11 @@ export function PosBranchSelector({ variant = "dark" }: PosBranchSelectorProps) 
             : "text-gray-700 hover:text-gray-900 hover:bg-gray-100 border border-gray-200"
         )}
       >
-        <Building2 className="h-3.5 w-3.5 shrink-0" />
+        <Icon name="apartment" size={14} className="shrink-0" />
         <span className="truncate max-w-[140px] font-medium">
           {currentBranch?.name ?? "Chọn chi nhánh"}
         </span>
-        <ChevronDown className="h-3 w-3 shrink-0" />
+        <Icon name="expand_more" size={12} className="shrink-0" />
       </DropdownMenuTrigger>
       <DropdownMenuContent align="start" sideOffset={6} className="min-w-[200px]">
         <DropdownMenuGroup>
@@ -54,7 +47,7 @@ export function PosBranchSelector({ variant = "dark" }: PosBranchSelectorProps) 
             >
               <span className="flex-1">{branch.name}</span>
               {currentBranch?.id === branch.id && (
-                <Check className="h-4 w-4 text-primary" />
+                <Icon name="check" size={16} className="text-primary" />
               )}
             </DropdownMenuItem>
           ))}

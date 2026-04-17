@@ -1,19 +1,6 @@
 "use client";
 
 import { ReactNode, useRef } from "react";
-import {
-  Search,
-  SlidersHorizontal,
-  Download,
-  Upload,
-  FileSpreadsheet,
-  FileText,
-  FileDown,
-  MoreHorizontal,
-  List,
-  Settings,
-  HelpCircle,
-} from "lucide-react";
 import { Input } from "@/components/ui/input";
 import { Button } from "@/components/ui/button";
 import {
@@ -24,6 +11,7 @@ import {
   DropdownMenuSeparator,
 } from "@/components/ui/dropdown-menu";
 import { cn } from "@/lib/utils";
+import { Icon } from "@/components/ui/icon";
 
 interface PageAction {
   label: string;
@@ -97,25 +85,25 @@ function ExportButton({ onExport }: { onExport: ExportHandlers }) {
           "h-8 px-3 cursor-pointer"
         )}
       >
-        <Download className="h-4 w-4" />
+        <Icon name="download" size={16} />
         Xuất file
       </DropdownMenuTrigger>
       <DropdownMenuContent align="end">
         {onExport.excel && (
           <DropdownMenuItem onClick={onExport.excel}>
-            <FileSpreadsheet className="h-4 w-4" />
+            <Icon name="table_view" size={16} />
             Xuất Excel (.xlsx)
           </DropdownMenuItem>
         )}
         {onExport.csv && (
           <DropdownMenuItem onClick={onExport.csv}>
-            <FileText className="h-4 w-4" />
+            <Icon name="description" size={16} />
             Xuất CSV
           </DropdownMenuItem>
         )}
         {onExport.pdf && (
           <DropdownMenuItem onClick={onExport.pdf}>
-            <FileDown className="h-4 w-4" />
+            <Icon name="picture_as_pdf" size={16} />
             Xuất PDF
           </DropdownMenuItem>
         )}
@@ -154,7 +142,7 @@ function ImportButton({ onImport }: { onImport: (file: File) => void }) {
         onClick={handleClick}
         className="gap-1.5 shrink-0"
       >
-        <Upload className="h-4 w-4" />
+        <Icon name="upload" size={16} />
         Import file
       </Button>
     </>
@@ -205,18 +193,20 @@ export function PageHeader({
   const overflowActions = actions.filter((a) => a.overflow);
 
   return (
-    <div className={cn("border-b bg-white", className)}>
+    // Stitch style: bg-surface-container-lowest + ambient-shadow thay border-b;
+    // title font-medium nhẹ nhàng hơn font-semibold.
+    <div className={cn("bg-surface-container-lowest border-b", className)}>
       <div className="p-4 space-y-3">
         {/* Title row: Title (left) + Search (center) + Actions (right) */}
         <div className="flex items-center gap-3">
-          <h1 className="text-lg font-semibold shrink-0">{title}</h1>
+          <h1 className="text-lg font-medium shrink-0 text-on-surface">{title}</h1>
 
           {tabs && <div className="shrink-0">{tabs}</div>}
 
           {/* Search bar — centered */}
           {onSearchChange !== undefined && (
             <div className="relative flex-1 max-w-md">
-              <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
+              <Icon name="search" size={16} className="absolute left-3 top-1/2 -translate-y-1/2 text-muted-foreground" />
               <Input
                 value={searchValue}
                 onChange={(e) => onSearchChange(e.target.value)}
@@ -228,7 +218,7 @@ export function PageHeader({
                 size="icon"
                 className="absolute right-1 top-1/2 -translate-y-1/2 h-7 w-7 text-muted-foreground"
               >
-                <SlidersHorizontal className="h-3.5 w-3.5" />
+                <Icon name="tune" size={14} />
               </Button>
             </div>
           )}
@@ -251,7 +241,7 @@ export function PageHeader({
                     "h-8 w-8 shrink-0 cursor-pointer"
                   )}
                 >
-                  <MoreHorizontal className="h-4 w-4" />
+                  <Icon name="more_horiz" size={16} />
                 </DropdownMenuTrigger>
                 <DropdownMenuContent align="end">
                   {overflowActions.map((action, i) => (
@@ -269,21 +259,21 @@ export function PageHeader({
             {/* Icon buttons — KiotViet style */}
             {showColumnToggle && (
               <IconButton
-                icon={<List className="h-4 w-4" />}
+                icon={<Icon name="list" size={16} />}
                 tooltip="Hiển thị cột"
                 onClick={onColumnToggle}
               />
             )}
             {showSettings && (
               <IconButton
-                icon={<Settings className="h-4 w-4" />}
+                icon={<Icon name="settings" size={16} />}
                 tooltip="Cài đặt"
                 onClick={onSettings}
               />
             )}
             {showHelp && (
               <IconButton
-                icon={<HelpCircle className="h-4 w-4" />}
+                icon={<Icon name="help" size={16} />}
                 tooltip="Trợ giúp"
                 onClick={onHelp}
               />

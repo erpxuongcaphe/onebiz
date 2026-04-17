@@ -2,7 +2,6 @@
 
 import { useEffect, useState, useCallback } from "react";
 import { ColumnDef } from "@tanstack/react-table";
-import { Plus, Eye, Printer, Trash2 } from "lucide-react";
 import { Badge } from "@/components/ui/badge";
 import { PageHeader } from "@/components/shared/page-header";
 import { ListPageLayout } from "@/components/shared/list-page-layout";
@@ -36,6 +35,7 @@ import { useToast, useBranchFilter } from "@/lib/contexts";
 import { printDocument } from "@/lib/print-document";
 import { buildCashTransactionPrintData } from "@/lib/print-templates";
 import type { CashBookEntry } from "@/lib/types";
+import { Icon } from "@/components/ui/icon";
 
 // === Status map ===
 const statusMap: Record<
@@ -380,7 +380,7 @@ export default function SoQuyPage() {
           actions={[
             {
               label: "+ Phiếu thu",
-              icon: <Plus className="h-4 w-4" />,
+              icon: <Icon name="add" size={16} />,
               variant: "default",
               onClick: () => {
                 setCreateType("receipt");
@@ -389,7 +389,7 @@ export default function SoQuyPage() {
             },
             {
               label: "+ Phiếu chi",
-              icon: <Plus className="h-4 w-4" />,
+              icon: <Icon name="add" size={16} />,
               variant: "outline",
               onClick: () => {
                 setCreateType("payment");
@@ -448,7 +448,7 @@ export default function SoQuyPage() {
           rowActions={(row) => [
             {
               label: "Xem chi tiết",
-              icon: <Eye className="h-4 w-4" />,
+              icon: <Icon name="visibility" size={16} />,
               onClick: () => {
                 const idx = data.findIndex((d) => d.id === row.id);
                 setExpandedRow(expandedRow === idx ? null : idx);
@@ -456,12 +456,12 @@ export default function SoQuyPage() {
             },
             {
               label: "In phiếu",
-              icon: <Printer className="h-4 w-4" />,
+              icon: <Icon name="print" size={16} />,
               onClick: () => printDocument(buildCashTransactionPrintData(row)),
             },
             {
               label: "Xóa",
-              icon: <Trash2 className="h-4 w-4" />,
+              icon: <Icon name="delete" size={16} />,
               onClick: () => setDeletingEntry(row),
               variant: "destructive",
               separator: true,

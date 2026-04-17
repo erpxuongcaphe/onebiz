@@ -1,7 +1,7 @@
 "use client";
 
 import { useState, useEffect, useCallback } from "react";
-import { Users, UserPlus, RefreshCw, CreditCard, Loader2 } from "lucide-react";
+import { Users, UserPlus, RefreshCw, CreditCard } from "lucide-react";
 import {
   BarChart,
   Bar,
@@ -35,6 +35,7 @@ import type {
   TopCustomer,
   TopDebtor,
 } from "@/lib/services/supabase/analytics";
+import { Icon } from "@/components/ui/icon";
 
 const SEGMENT_COLORS = ["#f59e0b", "#2563eb", "#16a34a", "#8b5cf6"];
 
@@ -167,7 +168,7 @@ export default function KhachHangPage() {
           subtitle="Thống kê và phân loại khách hàng"
         />
         <div className="flex-1 flex items-center justify-center">
-          <Loader2 className="h-8 w-8 animate-spin text-muted-foreground" />
+          <Icon name="progress_activity" size={32} className="animate-spin text-muted-foreground" />
         </div>
       </div>
     );

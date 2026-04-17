@@ -1,11 +1,5 @@
 "use client";
 
-import {
-  ChevronLeft,
-  ChevronRight,
-  ChevronsLeft,
-  ChevronsRight,
-} from "lucide-react";
 import { Button } from "@/components/ui/button";
 import {
   Select,
@@ -14,6 +8,7 @@ import {
   SelectTrigger,
   SelectValue,
 } from "@/components/ui/select";
+import { Icon } from "@/components/ui/icon";
 
 interface DataTablePaginationProps {
   pageIndex: number;
@@ -33,7 +28,7 @@ export function DataTablePagination({
   onPageSizeChange,
 }: DataTablePaginationProps) {
   return (
-    <div className="border-t bg-white px-4 py-2 flex items-center justify-between gap-4 text-sm">
+    <div className="border-t bg-surface-container-lowest px-4 py-2 flex items-center justify-between gap-4 text-sm">
       {/* KiotViet style: "Hiển thị 15 dòng" */}
       <div className="flex items-center gap-2 text-muted-foreground">
         <span className="hidden sm:inline">Hiển thị</span>
@@ -67,7 +62,7 @@ export function DataTablePagination({
           disabled={pageIndex === 0}
           onClick={() => onPageChange?.(0)}
         >
-          <ChevronsLeft className="h-3.5 w-3.5" />
+          <Icon name="keyboard_double_arrow_left" size={14} />
         </Button>
         <Button
           variant="outline"
@@ -76,7 +71,7 @@ export function DataTablePagination({
           disabled={pageIndex === 0}
           onClick={() => onPageChange?.(pageIndex - 1)}
         >
-          <ChevronLeft className="h-3.5 w-3.5" />
+          <Icon name="chevron_left" size={14} />
         </Button>
         <span className="px-2 text-xs min-w-[50px] text-center text-muted-foreground">
           {pageIndex + 1} / {pageCount}
@@ -88,7 +83,7 @@ export function DataTablePagination({
           disabled={pageIndex >= pageCount - 1}
           onClick={() => onPageChange?.(pageIndex + 1)}
         >
-          <ChevronRight className="h-3.5 w-3.5" />
+          <Icon name="chevron_right" size={14} />
         </Button>
         <Button
           variant="outline"
@@ -97,7 +92,7 @@ export function DataTablePagination({
           disabled={pageIndex >= pageCount - 1}
           onClick={() => onPageChange?.(pageCount - 1)}
         >
-          <ChevronsRight className="h-3.5 w-3.5" />
+          <Icon name="keyboard_double_arrow_right" size={14} />
         </Button>
       </div>
     </div>

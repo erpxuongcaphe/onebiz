@@ -11,10 +11,10 @@ import {
 } from "@/components/ui/dialog";
 import { Input } from "@/components/ui/input";
 import { Button } from "@/components/ui/button";
-import { Search, Loader2 } from "lucide-react";
 import { formatCurrency } from "@/lib/format";
 import { useToast } from "@/lib/contexts";
 import { getClient } from "@/lib/services/supabase/base";
+import { Icon } from "@/components/ui/icon";
 
 interface CreatePriceBookDialogProps {
   open: boolean;
@@ -162,7 +162,7 @@ export function CreatePriceBookDialog({
               Sản phẩm <span className="text-destructive">*</span>
             </label>
             <div className="relative">
-              <Search className="absolute left-2.5 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
+              <Icon name="search" size={16} className="absolute left-2.5 top-1/2 -translate-y-1/2 text-muted-foreground" />
               <Input
                 value={productSearch}
                 onChange={(e) => {
@@ -273,7 +273,7 @@ export function CreatePriceBookDialog({
             Hủy
           </Button>
           <Button onClick={handleSave} disabled={saving}>
-            {saving && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
+            {saving && <Icon name="progress_activity" size={16} className="mr-2 animate-spin" />}
             Cập nhật giá
           </Button>
         </DialogFooter>

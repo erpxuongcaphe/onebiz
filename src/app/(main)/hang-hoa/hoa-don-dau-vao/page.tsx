@@ -2,7 +2,6 @@
 
 import { useEffect, useState, useCallback } from "react";
 import { ColumnDef } from "@tanstack/react-table";
-import { Plus, Eye, BookOpen, Trash2, Printer } from "lucide-react";
 import { Badge } from "@/components/ui/badge";
 import { PageHeader } from "@/components/shared/page-header";
 import { ListPageLayout } from "@/components/shared/list-page-layout";
@@ -28,6 +27,7 @@ import { getInputInvoices, getInputInvoiceStatuses, deleteInputInvoice, recordIn
 import { CreateInputInvoiceDialog, ConfirmDialog } from "@/components/shared/dialogs";
 import { useToast } from "@/lib/contexts";
 import type { InputInvoice } from "@/lib/types";
+import { Icon } from "@/components/ui/icon";
 
 // === Status config ===
 const statusMap: Record<
@@ -250,7 +250,7 @@ export default function HoaDonDauVaoPage() {
           },
         }}
         actions={[
-          { label: "Tạo mới", icon: <Plus className="h-4 w-4" />, variant: "default", onClick: () => setCreateOpen(true) },
+          { label: "Tạo mới", icon: <Icon name="add" size={16} />, variant: "default", onClick: () => setCreateOpen(true) },
         ]}
       />
 
@@ -282,15 +282,15 @@ export default function HoaDonDauVaoPage() {
         rowActions={(row) => [
           {
             label: "Xem chi tiết",
-            icon: <Eye className="h-4 w-4" />,
+            icon: <Icon name="visibility" size={16} />,
             onClick: () => {
               const idx = data.findIndex((d) => d.id === row.id);
               setExpandedRow(expandedRow === idx ? null : idx);
             },
           },
-          { label: "In phiếu", icon: <Printer className="h-4 w-4" />, onClick: () => printDocument(buildInputInvoicePrintData(row)) },
-          { label: "Ghi nhận", icon: <BookOpen className="h-4 w-4" />, onClick: () => setRecordingInvoice(row) },
-          { label: "Xóa", icon: <Trash2 className="h-4 w-4" />, onClick: () => setDeletingInvoice(row), variant: "destructive", separator: true },
+          { label: "In phiếu", icon: <Icon name="print" size={16} />, onClick: () => printDocument(buildInputInvoicePrintData(row)) },
+          { label: "Ghi nhận", icon: <Icon name="menu_book" size={16} />, onClick: () => setRecordingInvoice(row) },
+          { label: "Xóa", icon: <Icon name="delete" size={16} />, onClick: () => setDeletingInvoice(row), variant: "destructive", separator: true },
         ]}
       />
 

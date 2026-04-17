@@ -5,7 +5,6 @@
 // Inline list + add form, không cần dialog riêng
 
 import { useEffect, useState } from "react";
-import { ArrowRight, Loader2, Plus, Repeat, Trash2 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { useToast } from "@/lib/contexts";
@@ -15,6 +14,7 @@ import {
   deleteUOMConversion,
 } from "@/lib/services";
 import type { UOMConversion, Product } from "@/lib/types";
+import { Icon } from "@/components/ui/icon";
 
 interface Props {
   product: Product;
@@ -140,9 +140,9 @@ export function ProductUomConversionsTab({ product }: Props) {
         </div>
         <div className="flex items-center gap-2 text-sm">
           <UnitChip label="ĐVT mua" value={product.purchaseUnit ?? "—"} />
-          <ArrowRight className="h-3.5 w-3.5 text-muted-foreground" />
+          <Icon name="arrow_forward" size={14} className="text-muted-foreground" />
           <UnitChip label="ĐVT kho" value={product.stockUnit ?? product.unit ?? "—"} />
-          <ArrowRight className="h-3.5 w-3.5 text-muted-foreground" />
+          <Icon name="arrow_forward" size={14} className="text-muted-foreground" />
           <UnitChip label="ĐVT bán" value={product.sellUnit ?? "—"} />
         </div>
       </div>
@@ -155,7 +155,7 @@ export function ProductUomConversionsTab({ product }: Props) {
           </h3>
           {!showAdd && (
             <Button size="sm" variant="outline" onClick={() => setShowAdd(true)}>
-              <Plus className="h-4 w-4 mr-1" />
+              <Icon name="add" size={16} className="mr-1" />
               Thêm quy đổi
             </Button>
           )}
@@ -175,7 +175,7 @@ export function ProductUomConversionsTab({ product }: Props) {
               />
             </div>
             <div className="col-span-1 flex items-center justify-center pb-2">
-              <ArrowRight className="h-4 w-4 text-muted-foreground" />
+              <Icon name="arrow_forward" size={16} className="text-muted-foreground" />
             </div>
             <div className="col-span-3">
               <label className="text-[11px] text-muted-foreground block mb-0.5">
@@ -207,7 +207,7 @@ export function ProductUomConversionsTab({ product }: Props) {
                 disabled={saving}
                 className="flex-1"
               >
-                {saving ? <Loader2 className="h-3 w-3 animate-spin" /> : "Lưu"}
+                {saving ? <Icon name="progress_activity" size={12} className="animate-spin" /> : "Lưu"}
               </Button>
               <Button size="sm" variant="ghost" onClick={resetForm}>
                 Hủy
@@ -231,12 +231,12 @@ export function ProductUomConversionsTab({ product }: Props) {
 
         {loading ? (
           <div className="flex items-center justify-center py-8 text-muted-foreground">
-            <Loader2 className="h-4 w-4 animate-spin mr-2" />
+            <Icon name="progress_activity" size={16} className="animate-spin mr-2" />
             <span className="text-sm">Đang tải...</span>
           </div>
         ) : items.length === 0 ? (
           <div className="flex flex-col items-center justify-center py-8 text-muted-foreground">
-            <Repeat className="h-8 w-8 mb-2 opacity-30" />
+            <Icon name="repeat" size={32} className="mb-2 opacity-30" />
             <p className="text-sm">Chưa có quy đổi nào</p>
             <p className="text-xs mt-1">
               Quy đổi giúp nhập theo thùng/lốc, bán theo lon/chai
@@ -258,7 +258,7 @@ export function ProductUomConversionsTab({ product }: Props) {
                 <tr key={c.id} className="border-t">
                   <td className="p-2 font-medium">{c.fromUnit}</td>
                   <td className="p-2 text-center">
-                    <ArrowRight className="h-3.5 w-3.5 text-muted-foreground inline" />
+                    <Icon name="arrow_forward" size={14} className="text-muted-foreground inline" />
                   </td>
                   <td className="p-2 font-medium">{c.toUnit}</td>
                   <td className="p-2 text-right">
@@ -273,7 +273,7 @@ export function ProductUomConversionsTab({ product }: Props) {
                       className="text-muted-foreground hover:text-destructive transition-colors"
                       title="Xóa"
                     >
-                      <Trash2 className="h-3.5 w-3.5" />
+                      <Icon name="delete" size={14} />
                     </button>
                   </td>
                 </tr>

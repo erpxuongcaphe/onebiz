@@ -2,8 +2,8 @@
 
 import Link from "next/link";
 import { useRouter } from "next/navigation";
-import { FileQuestion } from "lucide-react";
 import { Button } from "@/components/ui/button";
+import { Icon } from "@/components/ui/icon";
 
 export default function NotFound() {
   const router = useRouter();
@@ -12,7 +12,7 @@ export default function NotFound() {
     <div className="min-h-screen flex items-center justify-center p-4">
       <div className="text-center space-y-6 max-w-md">
         <div className="flex justify-center">
-          <FileQuestion className="h-20 w-20 text-muted-foreground/50" />
+          <Icon name="quiz" size={80} className="text-muted-foreground/50" />
         </div>
         <div className="space-y-2">
           <h1 className="text-7xl font-bold tracking-tighter text-foreground">

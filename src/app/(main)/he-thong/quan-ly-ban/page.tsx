@@ -9,15 +9,7 @@
 
 import { useState, useEffect, useCallback } from "react";
 import {
-  Plus,
-  Pencil,
-  Trash2,
-  Loader2,
-  Armchair,
-  Users,
   LayoutGrid,
-  ChevronDown,
-  ChevronRight,
   GripVertical,
 } from "lucide-react";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
@@ -52,6 +44,7 @@ import {
   deleteZone,
 } from "@/lib/services/supabase/fnb-tables";
 import type { RestaurantTable } from "@/lib/types/fnb";
+import { Icon } from "@/components/ui/icon";
 
 // ── Types ──
 
@@ -311,7 +304,7 @@ export default function QuanLyBanPage() {
           <PosBranchSelector variant="light" />
         </div>
         <div className="flex flex-col items-center justify-center h-48 gap-3">
-          <Armchair className="h-10 w-10 text-muted-foreground" />
+          <Icon name="chair" size={40} className="text-muted-foreground" />
           <p className="text-muted-foreground">Chọn chi nhánh ở góc phải để bắt đầu</p>
         </div>
       </div>
@@ -321,7 +314,7 @@ export default function QuanLyBanPage() {
   if (loading) {
     return (
       <div className="flex items-center justify-center h-64">
-        <Loader2 className="size-8 animate-spin text-muted-foreground" />
+        <Icon name="progress_activity" className="size-8 animate-spin text-muted-foreground" />
       </div>
     );
   }
@@ -338,7 +331,7 @@ export default function QuanLyBanPage() {
         </div>
         <div className="flex items-center gap-2">
           <Button variant="outline" onClick={() => setAddZoneOpen(true)}>
-            <Plus className="size-4 mr-1.5" /> Thêm khu vực
+            <Icon name="add" className="size-4 mr-1.5" /> Thêm khu vực
           </Button>
           <Button onClick={() => {
             setBulkForm({
@@ -373,7 +366,7 @@ export default function QuanLyBanPage() {
           <CardContent className="pt-0">
             <div className="flex items-center gap-3">
               <div className="flex size-10 items-center justify-center rounded-full bg-green-100">
-                <Armchair className="size-5 text-green-600" />
+                <Icon name="chair" className="size-5 text-green-600" />
               </div>
               <div>
                 <p className="text-2xl font-bold">{totalTables}</p>
@@ -386,7 +379,7 @@ export default function QuanLyBanPage() {
           <CardContent className="pt-0">
             <div className="flex items-center gap-3">
               <div className="flex size-10 items-center justify-center rounded-full bg-purple-100">
-                <Users className="size-5 text-purple-600" />
+                <Icon name="group" className="size-5 text-purple-600" />
               </div>
               <div>
                 <p className="text-2xl font-bold">{totalCapacity}</p>
@@ -401,7 +394,7 @@ export default function QuanLyBanPage() {
       {zones.length === 0 && (
         <Card>
           <CardContent className="py-12 text-center">
-            <Armchair className="size-12 text-muted-foreground mx-auto mb-3" />
+            <Icon name="chair" className="size-12 text-muted-foreground mx-auto mb-3" />
             <p className="text-lg font-medium text-muted-foreground">Chưa có khu vực nào</p>
             <p className="text-sm text-muted-foreground mt-1">
               Bấm &quot;Thêm khu vực&quot; hoặc &quot;Tạo hàng loạt&quot; để bắt đầu
@@ -420,9 +413,9 @@ export default function QuanLyBanPage() {
                 onClick={() => toggleZone(zone.name)}
               >
                 {zone.expanded ? (
-                  <ChevronDown className="size-4 text-muted-foreground" />
+                  <Icon name="expand_more" className="size-4 text-muted-foreground" />
                 ) : (
-                  <ChevronRight className="size-4 text-muted-foreground" />
+                  <Icon name="chevron_right" className="size-4 text-muted-foreground" />
                 )}
                 <CardTitle className="text-base">{zone.name}</CardTitle>
                 <Badge variant="secondary" className="text-xs">
@@ -439,7 +432,7 @@ export default function QuanLyBanPage() {
                   className="h-8 px-2"
                   onClick={() => openAddTable(zone.name)}
                 >
-                  <Plus className="size-3.5 mr-1" /> Thêm bàn
+                  <Icon name="add" className="size-3.5 mr-1" /> Thêm bàn
                 </Button>
                 <Button
                   variant="ghost"
@@ -450,7 +443,7 @@ export default function QuanLyBanPage() {
                     setRenameZoneOpen(true);
                   }}
                 >
-                  <Pencil className="size-3.5" />
+                  <Icon name="edit" className="size-3.5" />
                 </Button>
                 <Button
                   variant="ghost"
@@ -458,7 +451,7 @@ export default function QuanLyBanPage() {
                   className="h-8 px-2 text-red-500 hover:text-red-600 hover:bg-red-50"
                   onClick={() => handleDeleteZone(zone.name)}
                 >
-                  <Trash2 className="size-3.5" />
+                  <Icon name="delete" className="size-3.5" />
                 </Button>
               </div>
             </div>
@@ -496,7 +489,7 @@ export default function QuanLyBanPage() {
 
                     {/* Capacity */}
                     <span className="flex items-center gap-0.5 text-[10px] text-gray-400">
-                      <Users className="size-2.5" />
+                      <Icon name="group" className="size-2.5" />
                       {table.capacity} chỗ
                     </span>
 
@@ -528,7 +521,7 @@ export default function QuanLyBanPage() {
                         onClick={() => openEditTable(table)}
                         title="Sửa"
                       >
-                        <Pencil className="size-3" />
+                        <Icon name="edit" className="size-3" />
                       </button>
                       <button
                         type="button"
@@ -536,7 +529,7 @@ export default function QuanLyBanPage() {
                         onClick={() => handleDeleteTable(table)}
                         title="Xóa"
                       >
-                        <Trash2 className="size-3" />
+                        <Icon name="delete" className="size-3" />
                       </button>
                     </div>
                   </div>

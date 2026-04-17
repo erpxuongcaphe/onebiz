@@ -2,7 +2,6 @@
 
 import { useEffect, useState, useCallback } from "react";
 import { ColumnDef } from "@tanstack/react-table";
-import { Plus, Layers, Printer, XCircle } from "lucide-react";
 import { Badge } from "@/components/ui/badge";
 import { PageHeader } from "@/components/shared/page-header";
 import { ListPageLayout } from "@/components/shared/list-page-layout";
@@ -30,6 +29,7 @@ import { exportToExcel, exportToCsv } from "@/lib/utils/export";
 import { getOrders } from "@/lib/services";
 import type { SalesOrder } from "@/lib/types";
 import { CreateOrderDialog, ConfirmDialog } from "@/components/shared/dialogs";
+import { Icon } from "@/components/ui/icon";
 
 // --- Status config ---
 
@@ -426,13 +426,13 @@ export default function DatHangPage() {
         actions={[
           {
             label: "Đặt hàng",
-            icon: <Plus className="h-4 w-4" />,
+            icon: <Icon name="add" size={16} />,
             variant: "default",
             onClick: () => setCreateOpen(true),
           },
           {
             label: "Gộp đơn",
-            icon: <Layers className="h-4 w-4" />,
+            icon: <Icon name="layers" size={16} />,
             variant: "outline",
             onClick: () => toast({ variant: "info", title: "Tính năng gộp đơn sẽ có trong phiên bản tới" }),
           },
@@ -464,14 +464,14 @@ export default function DatHangPage() {
         rowActions={(row) => [
           {
             label: "In phiếu",
-            icon: <Printer className="h-4 w-4" />,
+            icon: <Icon name="print" size={16} />,
             onClick: () => printDocument(buildSalesOrderPrintData(row)),
           },
           ...(row.status !== "completed" && row.status !== "cancelled"
             ? [
                 {
                   label: "Hủy",
-                  icon: <XCircle className="h-4 w-4" />,
+                  icon: <Icon name="cancel" size={16} />,
                   onClick: () => setCancellingItem(row),
                   variant: "destructive" as const,
                   separator: true,

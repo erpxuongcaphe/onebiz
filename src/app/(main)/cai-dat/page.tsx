@@ -12,8 +12,8 @@ import {
   SelectValue,
 } from "@/components/ui/select";
 import { Separator } from "@/components/ui/separator";
-import { Upload, Save } from "lucide-react";
 import { useSettings, useToast } from "@/lib/contexts";
+import { Icon } from "@/components/ui/icon";
 
 export default function StoreSettingsPage() {
   const { settings, updateSettings } = useSettings();
@@ -115,7 +115,7 @@ export default function StoreSettingsPage() {
         </CardHeader>
         <CardContent>
           <div className="border-2 border-dashed border-muted-foreground/25 rounded-lg p-8 text-center hover:border-primary/50 transition-colors cursor-pointer">
-            <Upload className="h-8 w-8 mx-auto text-muted-foreground mb-2" />
+            <Icon name="upload" size={32} className="mx-auto text-muted-foreground mb-2" />
             <p className="text-sm font-medium">
               Kéo thả hoặc nhấn để tải lên
             </p>
@@ -163,7 +163,7 @@ export default function StoreSettingsPage() {
 
       <div className="flex justify-end">
         <Button onClick={handleSave}>
-          <Save className="h-4 w-4 mr-1.5" />
+          <Icon name="save" size={16} className="mr-1.5" />
           Lưu thay đổi
         </Button>
       </div>

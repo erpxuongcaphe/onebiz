@@ -3,7 +3,6 @@
 import { useEffect, useState, useCallback } from "react";
 import { useRouter } from "next/navigation";
 import { ColumnDef } from "@tanstack/react-table";
-import { Plus, Eye, Printer, Undo2, XCircle, Banknote } from "lucide-react";
 import { Badge } from "@/components/ui/badge";
 import { PageHeader } from "@/components/shared/page-header";
 import { ListPageLayout } from "@/components/shared/list-page-layout";
@@ -31,6 +30,7 @@ import { useToast, useBranchFilter } from "@/lib/contexts";
 import { printDocument } from "@/lib/print-document";
 import { buildInvoicePrintData } from "@/lib/print-templates";
 import type { Invoice } from "@/lib/types";
+import { Icon } from "@/components/ui/icon";
 
 const statusMap: Record<
   Invoice["status"],
@@ -447,7 +447,7 @@ export default function HoaDonPage() {
           actions={[
             {
               label: "Tạo mới",
-              icon: <Plus className="h-4 w-4" />,
+              icon: <Icon name="add" size={16} />,
               variant: "default",
               onClick: () => setCreateOpen(true),
             },
@@ -480,28 +480,28 @@ export default function HoaDonPage() {
           rowActions={(row) => [
             {
               label: "In hóa đơn",
-              icon: <Printer className="h-4 w-4" />,
+              icon: <Icon name="print" size={16} />,
               onClick: () => printDocument(buildInvoicePrintData(row)),
             },
             ...(row.debt > 0
               ? [
                   {
                     label: "Thu nợ",
-                    icon: <Banknote className="h-4 w-4" />,
+                    icon: <Icon name="payments" size={16} />,
                     onClick: () => setPayingItem(row),
                   },
                 ]
               : []),
             {
               label: "Trả hàng",
-              icon: <Undo2 className="h-4 w-4" />,
+              icon: <Icon name="undo" size={16} />,
               onClick: () => { toast({ variant: "info", title: "Chuyển đến trang trả hàng" }); router.push("/don-hang/tra-hang"); },
             },
             ...(row.status !== "completed" && row.status !== "cancelled"
               ? [
                   {
                     label: "Hủy",
-                    icon: <XCircle className="h-4 w-4" />,
+                    icon: <Icon name="cancel" size={16} />,
                     onClick: () => setCancellingItem(row),
                     variant: "destructive" as const,
                     separator: true,

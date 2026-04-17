@@ -11,11 +11,11 @@ import {
 } from "@/components/ui/dialog";
 import { Input } from "@/components/ui/input";
 import { Button } from "@/components/ui/button";
-import { Search, Loader2 } from "lucide-react";
 import { useToast } from "@/lib/contexts";
 import { getClient, getCurrentContext } from "@/lib/services/supabase/base";
 import { nextEntityCode } from "@/lib/services/supabase/stock-adjustments";
 import type { Database } from "@/lib/supabase/types";
+import { Icon } from "@/components/ui/icon";
 
 type ShippingOrderInsert = Database["public"]["Tables"]["shipping_orders"]["Insert"];
 
@@ -183,7 +183,7 @@ export function CreateShippingOrderDialog({
               Hóa đơn <span className="text-destructive">*</span>
             </label>
             <div className="relative">
-              <Search className="absolute left-2.5 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
+              <Icon name="search" size={16} className="absolute left-2.5 top-1/2 -translate-y-1/2 text-muted-foreground" />
               <Input
                 value={invoiceSearch}
                 onChange={(e) => {
@@ -334,7 +334,7 @@ export function CreateShippingOrderDialog({
             Hủy
           </Button>
           <Button onClick={handleSave} disabled={saving}>
-            {saving && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
+            {saving && <Icon name="progress_activity" size={16} className="mr-2 animate-spin" />}
             Tạo vận đơn
           </Button>
         </DialogFooter>

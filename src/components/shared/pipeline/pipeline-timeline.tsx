@@ -1,10 +1,10 @@
 "use client";
 
 import { useEffect, useState } from "react";
-import { Loader2 } from "lucide-react";
 import { getPipelineTimeline } from "@/lib/services";
 import type { TimelineEntry } from "@/lib/types";
 import { formatDate } from "@/lib/format";
+import { Icon } from "@/components/ui/icon";
 
 interface PipelineTimelineProps {
   pipelineItemId: string;
@@ -38,7 +38,7 @@ export function PipelineTimeline({ pipelineItemId }: PipelineTimelineProps) {
   if (loading) {
     return (
       <div className="flex items-center justify-center py-8 text-muted-foreground">
-        <Loader2 className="h-4 w-4 animate-spin" />
+        <Icon name="progress_activity" size={16} className="animate-spin" />
       </div>
     );
   }

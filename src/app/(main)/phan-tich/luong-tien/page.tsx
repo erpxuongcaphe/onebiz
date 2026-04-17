@@ -1,7 +1,7 @@
 "use client";
 
 import { useState, useEffect, useCallback } from "react";
-import { Loader2, TrendingUp, TrendingDown, Wallet, ArrowUpRight, ArrowDownRight } from "lucide-react";
+import { TrendingUp, TrendingDown, Wallet, ArrowUpRight, ArrowDownRight } from "lucide-react";
 import {
   BarChart,
   Bar,
@@ -19,6 +19,7 @@ import { useBranchFilter } from "@/lib/contexts";
 import { formatCurrency, formatChartCurrency, formatChartTooltipCurrency } from "@/lib/format";
 import { getCashFlowDetailed } from "@/lib/services/supabase/analytics";
 import type { CashFlowDetailedRow } from "@/lib/services/supabase/analytics";
+import { Icon } from "@/components/ui/icon";
 
 // ── Custom Tooltip ──
 function CashFlowTooltip({ active, payload, label }: any) {
@@ -83,7 +84,7 @@ export default function LuongTienPage() {
   if (loading) {
     return (
       <div className="flex items-center justify-center h-[50vh]">
-        <Loader2 className="h-8 w-8 animate-spin text-muted-foreground" />
+        <Icon name="progress_activity" size={32} className="animate-spin text-muted-foreground" />
       </div>
     );
   }

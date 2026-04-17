@@ -2,7 +2,6 @@
 
 import { useEffect, useState, useCallback } from "react";
 import { ColumnDef } from "@tanstack/react-table";
-import { Plus, Upload, Download, Pencil, Ban } from "lucide-react";
 import { Badge } from "@/components/ui/badge";
 import { PageHeader } from "@/components/shared/page-header";
 import { ListPageLayout } from "@/components/shared/list-page-layout";
@@ -28,6 +27,7 @@ import { getDeliveryPartners, deactivateDeliveryPartner } from "@/lib/services";
 import { CreateDeliveryPartnerDialog, ConfirmDialog } from "@/components/shared/dialogs";
 import { useToast } from "@/lib/contexts";
 import type { DeliveryPartner } from "@/lib/types";
+import { Icon } from "@/components/ui/icon";
 
 // --- Status config ---
 
@@ -361,7 +361,7 @@ export default function DoiTacGiaoHangPage() {
         actions={[
           {
             label: "Đối tác giao hàng",
-            icon: <Plus className="h-4 w-4" />,
+            icon: <Icon name="add" size={16} />,
             variant: "default",
             onClick: () => setCreateOpen(true),
           },
@@ -401,7 +401,7 @@ export default function DoiTacGiaoHangPage() {
         rowActions={(row) => [
           {
             label: "Sửa",
-            icon: <Pencil className="h-4 w-4" />,
+            icon: <Icon name="edit" size={16} />,
             onClick: () => {
               setEditingPartner(row);
               setCreateOpen(true);
@@ -409,7 +409,7 @@ export default function DoiTacGiaoHangPage() {
           },
           {
             label: "Ngừng hoạt động",
-            icon: <Ban className="h-4 w-4" />,
+            icon: <Icon name="block" size={16} />,
             onClick: () => setDeactivatingPartner(row),
             variant: "destructive",
             separator: true,

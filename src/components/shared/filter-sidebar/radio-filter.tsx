@@ -31,7 +31,7 @@ export function RadioFilter({
             name={name}
             checked={value === option.value}
             onChange={() => onChange(option.value)}
-            className="h-3.5 w-3.5 accent-[hsl(217,91%,40%)] cursor-pointer"
+            className="h-3.5 w-3.5 accent-primary cursor-pointer"
           />
           <span
             className={cn(

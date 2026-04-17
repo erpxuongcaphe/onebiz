@@ -12,13 +12,13 @@ import {
 import { Input } from "@/components/ui/input";
 import { Button } from "@/components/ui/button";
 import { Checkbox } from "@/components/ui/checkbox";
-import { Search, Loader2 } from "lucide-react";
 import { formatCurrency } from "@/lib/format";
 import { useToast } from "@/lib/contexts";
 import { getClient, getCurrentContext } from "@/lib/services/supabase/base";
 import { nextEntityCode } from "@/lib/services/supabase/stock-adjustments";
 import { completeReturn } from "@/lib/services/supabase/returns-completion";
 import type { Database } from "@/lib/supabase/types";
+import { Icon } from "@/components/ui/icon";
 
 type SalesReturnInsert = Database["public"]["Tables"]["sales_returns"]["Insert"];
 type ReturnItemInsert = Database["public"]["Tables"]["return_items"]["Insert"];
@@ -253,7 +253,7 @@ export function CreateReturnDialog({
               Hóa đơn gốc <span className="text-destructive">*</span>
             </label>
             <div className="relative">
-              <Search className="absolute left-2.5 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
+              <Icon name="search" size={16} className="absolute left-2.5 top-1/2 -translate-y-1/2 text-muted-foreground" />
               <Input
                 value={invoiceSearch}
                 onChange={(e) => {
@@ -391,7 +391,7 @@ export function CreateReturnDialog({
             Hủy
           </Button>
           <Button onClick={handleSave} disabled={saving}>
-            {saving && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
+            {saving && <Icon name="progress_activity" size={16} className="mr-2 animate-spin" />}
             Tạo phiếu trả
           </Button>
         </DialogFooter>

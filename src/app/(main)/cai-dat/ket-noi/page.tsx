@@ -5,13 +5,10 @@ import { Card, CardContent } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import {
-  Globe,
-  MessageCircle,
-  Truck,
-  CreditCard,
-  FileSpreadsheet,
+  MessageCircle
 } from "lucide-react";
 import { cn } from "@/lib/utils";
+import { Icon } from "@/components/ui/icon";
 
 interface Integration {
   id: string;
@@ -27,7 +24,7 @@ const integrations: Integration[] = [
     id: "facebook",
     name: "Facebook",
     description: "Kết nối fanpage để bán hàng",
-    icon: <Globe className="h-5 w-5 text-blue-600" />,
+    icon: <Icon name="public" className="text-blue-600" />,
     iconBg: "bg-blue-100",
     connected: true,
   },
@@ -43,7 +40,7 @@ const integrations: Integration[] = [
     id: "ghn",
     name: "GHN",
     description: "Giao Hàng Nhanh",
-    icon: <Truck className="h-5 w-5 text-orange-600" />,
+    icon: <Icon name="local_shipping" className="text-orange-600" />,
     iconBg: "bg-orange-100",
     connected: true,
   },
@@ -51,7 +48,7 @@ const integrations: Integration[] = [
     id: "ghtk",
     name: "GHTK",
     description: "Giao Hàng Tiết Kiệm",
-    icon: <Truck className="h-5 w-5 text-green-600" />,
+    icon: <Icon name="local_shipping" className="text-green-600" />,
     iconBg: "bg-green-100",
     connected: false,
   },
@@ -59,7 +56,7 @@ const integrations: Integration[] = [
     id: "vnpay",
     name: "VNPay",
     description: "Cổng thanh toán VNPay",
-    icon: <CreditCard className="h-5 w-5 text-red-600" />,
+    icon: <Icon name="credit_card" className="text-red-600" />,
     iconBg: "bg-red-100",
     connected: false,
   },
@@ -67,7 +64,7 @@ const integrations: Integration[] = [
     id: "google-sheets",
     name: "Google Sheets",
     description: "Đồng bộ dữ liệu",
-    icon: <FileSpreadsheet className="h-5 w-5 text-green-600" />,
+    icon: <Icon name="table_view" className="text-green-600" />,
     iconBg: "bg-green-100",
     connected: false,
   },

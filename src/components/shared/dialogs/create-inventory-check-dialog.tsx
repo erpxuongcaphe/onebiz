@@ -10,11 +10,11 @@ import {
   DialogFooter,
 } from "@/components/ui/dialog";
 import { Button } from "@/components/ui/button";
-import { Loader2 } from "lucide-react";
 import { useToast } from "@/lib/contexts";
 import { getClient, getCurrentContext } from "@/lib/services/supabase/base";
 import { nextEntityCode } from "@/lib/services/supabase/stock-adjustments";
 import type { Database } from "@/lib/supabase/types";
+import { Icon } from "@/components/ui/icon";
 
 type InventoryCheckInsert = Database["public"]["Tables"]["inventory_checks"]["Insert"];
 
@@ -136,7 +136,7 @@ export function CreateInventoryCheckDialog({
             Hủy
           </Button>
           <Button onClick={handleSave} disabled={saving}>
-            {saving && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
+            {saving && <Icon name="progress_activity" size={16} className="mr-2 animate-spin" />}
             Tạo phiếu kiểm kho
           </Button>
         </DialogFooter>

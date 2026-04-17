@@ -20,10 +20,10 @@ import {
 } from "@/components/ui/select";
 import { Checkbox } from "@/components/ui/checkbox";
 import { Tabs, TabsList, TabsTrigger } from "@/components/ui/tabs";
-import { ImagePlus, Loader2 } from "lucide-react";
 import { useToast } from "@/lib/contexts";
 import { createProduct, getProductCategoriesAsync } from "@/lib/services";
 import { nextGroupCode } from "@/lib/services/supabase/base";
+import { Icon } from "@/components/ui/icon";
 
 interface CreateProductDialogProps {
   open: boolean;
@@ -32,6 +32,7 @@ interface CreateProductDialogProps {
 }
 
 type ProductScope = "nvl" | "sku";
+type ProductChannel = "fnb" | "retail";
 type CategoryOption = { label: string; value: string; code?: string; count: number };
 
 export function CreateProductDialog({
@@ -54,6 +55,8 @@ export function CreateProductDialog({
   const [sellUnit, setSellUnit] = useState("");
   const [shelfLifeDays, setShelfLifeDays] = useState("");
   const [hasBom, setHasBom] = useState(false);
+  // Kênh bán — chỉ áp dụng cho SKU. NVL luôn null.
+  const [channel, setChannel] = useState<ProductChannel>("fnb");
   const [barcode, setBarcode] = useState("");
   const [description, setDescription] = useState("");
   const [allowSale, setAllowSale] = useState(true);
@@ -74,6 +77,7 @@ export function CreateProductDialog({
       setSellUnit("");
       setShelfLifeDays("");
       setHasBom(false);
+      setChannel("fnb");
       setBarcode("");
       setDescription("");
       setAllowSale(true);
@@ -117,6 +121,8 @@ export function CreateProductDialog({
         code,
         name,
         productType: scope,
+        // NVL không có kênh bán (nội bộ). SKU bắt buộc fnb hoặc retail.
+        channel: scope === "sku" ? channel : undefined,
         hasBom: scope === "sku" ? hasBom : false,
         groupCode: selectedCategory!.code,
         categoryId,
@@ -176,7 +182,7 @@ export function CreateProductDialog({
           <div className="flex justify-center">
             <div className="flex h-24 w-24 cursor-pointer items-center justify-center rounded-lg border-2 border-dashed border-muted-foreground/30 text-muted-foreground hover:border-primary/50 hover:text-primary transition-colors">
               <div className="flex flex-col items-center gap-1">
-                <ImagePlus className="h-6 w-6" />
+                <Icon name="add_photo_alternate" size={24} />
                 <span className="text-xs">Ảnh</span>
               </div>
             </div>
@@ -238,6 +244,36 @@ export function CreateProductDialog({
               />
             </div>
           </div>
+
+          {/* Kênh bán — chỉ hiển thị cho SKU. Tách FnB vs bán lẻ/sỉ để POS hiển thị đúng danh sách. */}
+          {scope === "sku" && (
+            <div className="space-y-1.5">
+              <label className="text-sm font-medium">
+                Kênh bán <span className="text-destructive">*</span>
+              </label>
+              <Select
+                value={channel}
+                onValueChange={(v) => setChannel(v as ProductChannel)}
+              >
+                <SelectTrigger className="w-full">
+                  <SelectValue />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="fnb">
+                    Quán FnB — pha chế tại quán (Caramel Macchiato, Cà phê sữa đá…)
+                  </SelectItem>
+                  <SelectItem value="retail">
+                    Bán lẻ / Sỉ — đóng gói (Rang xay 250g, Hộp quà, Syrup chai…)
+                  </SelectItem>
+                </SelectContent>
+              </Select>
+              <p className="text-xs text-muted-foreground">
+                {channel === "fnb"
+                  ? "Chỉ hiện trên POS FnB của quán."
+                  : "Chỉ hiện trên POS bán lẻ của kho tổng."}
+              </p>
+            </div>
+          )}
 
           {/* UOM 3 đơn vị */}
           <div className="grid grid-cols-3 gap-4">
@@ -365,7 +401,7 @@ export function CreateProductDialog({
             Hủy
           </Button>
           <Button onClick={handleSave} disabled={saving}>
-            {saving && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
+            {saving && <Icon name="progress_activity" size={16} className="mr-2 animate-spin" />}
             Lưu
           </Button>
         </DialogFooter>

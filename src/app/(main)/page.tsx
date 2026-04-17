@@ -8,16 +8,7 @@ import {
   DollarSign,
   Package,
   FileText,
-  Clock,
-  AlertTriangle,
-  ArrowRight,
-  BarChart3,
-  Loader2,
-  Plus,
-  ArrowLeftRight,
-  Receipt,
-  Boxes,
-  Coffee,
+  BarChart3
 } from "lucide-react";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
@@ -64,6 +55,7 @@ import type { FinancialAlert } from "@/lib/services/supabase/reports";
 import { getInventoryTurnover } from "@/lib/services/supabase/reports";
 import type { InventoryTurnoverResult } from "@/lib/services/supabase/reports";
 import { Button } from "@/components/ui/button";
+import { Icon } from "@/components/ui/icon";
 
 type ChartView = "day" | "hour" | "weekday";
 
@@ -81,7 +73,7 @@ function RevenueTooltip({ active, payload, label }: { active?: boolean; payload?
   return (
     <div className="rounded-lg border bg-background p-3 shadow-md">
       <p className="text-xs text-muted-foreground mb-1">{label}</p>
-      <p className="text-sm font-bold text-blue-600">
+      <p className="text-sm font-bold text-primary">
         {formatChartTooltipCurrency(payload[0].value)}
       </p>
     </div>
@@ -197,8 +189,8 @@ export default function TongQuanPage() {
           label: "Đơn hàng",
           value: kpis.todayOrders,
           icon: ShoppingCart,
-          color: "text-blue-600",
-          bg: "bg-blue-100",
+          color: "text-primary",
+          bg: "bg-primary-fixed",
           ...calcDiff(kpis.todayOrders, kpis.yesterdayOrders),
           changeLabel: "vs hôm qua",
           isCurrency: false,
@@ -229,7 +221,7 @@ export default function TongQuanPage() {
   if (loading) {
     return (
       <div className="flex items-center justify-center h-64">
-        <Loader2 className="size-8 animate-spin text-muted-foreground" />
+        <Icon name="progress_activity" className="size-8 animate-spin text-muted-foreground" />
       </div>
     );
   }
@@ -239,39 +231,39 @@ export default function TongQuanPage() {
       {/* ── Hero: Date + Quick Actions ── */}
       <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3">
         <div className="flex items-center gap-2">
-          <Clock className="size-5 text-muted-foreground" />
+          <Icon name="schedule" className="size-5 text-muted-foreground" />
           <span className="text-sm text-muted-foreground capitalize">{formattedDate}</span>
         </div>
         <div className="flex flex-wrap items-center gap-2">
           <Link href="/pos">
             <Button size="sm" className="gap-1.5 h-9 shadow-sm">
-              <ShoppingCart className="size-3.5" /> POS Retail
+              <Icon name="shopping_cart" className="size-3.5" /> POS Retail
             </Button>
           </Link>
           <Link href="/pos/fnb">
             <Button size="sm" className="gap-1.5 h-9 shadow-sm bg-amber-600 hover:bg-amber-700 text-white">
-              <Coffee className="size-3.5" /> POS F&B
+              <Icon name="local_cafe" className="size-3.5" /> POS F&B
             </Button>
           </Link>
           <div className="hidden sm:block h-5 w-px bg-border" />
           <Link href="/don-hang/dat-hang">
             <Button size="sm" variant="outline" className="gap-1.5 h-9">
-              <Plus className="size-3.5" /> Đơn hàng
+              <Icon name="add" className="size-3.5" /> Đơn hàng
             </Button>
           </Link>
           <Link href="/hang-hoa/nhap-hang">
             <Button size="sm" variant="outline" className="gap-1.5 h-9">
-              <Boxes className="size-3.5" /> Nhập hàng
+              <Icon name="inventory" className="size-3.5" /> Nhập hàng
             </Button>
           </Link>
           <Link href="/hang-hoa/chuyen-kho">
             <Button size="sm" variant="outline" className="gap-1.5 h-9">
-              <ArrowLeftRight className="size-3.5" /> Chuyển kho
+              <Icon name="swap_horiz" className="size-3.5" /> Chuyển kho
             </Button>
           </Link>
           <Link href="/tai-chinh/so-quy">
             <Button size="sm" variant="outline" className="gap-1.5 h-9">
-              <Receipt className="size-3.5" /> Sổ quỹ
+              <Icon name="receipt" className="size-3.5" /> Sổ quỹ
             </Button>
           </Link>
           <Link href="/phan-tich/bao-cao-tai-chinh">
@@ -327,7 +319,7 @@ export default function TongQuanPage() {
                 )}
               </div>
               <div className="flex size-9 shrink-0 items-center justify-center rounded-full bg-indigo-100">
-                <Package className="size-5 text-indigo-500" />
+                <Icon name="inventory_2" className="size-5 text-indigo-500" />
               </div>
             </div>
           </CardContent>
@@ -415,7 +407,7 @@ export default function TongQuanPage() {
           <CardHeader className="pb-2">
             <div className="flex items-center justify-between">
               <CardTitle className="text-sm flex items-center gap-1.5">
-                <AlertTriangle className="size-4 text-amber-500" />
+                <Icon name="warning" className="size-4 text-amber-500" />
                 Cảnh báo tài chính
                 <Badge variant="destructive" className="text-[10px] px-1.5 py-0 ml-1">
                   {financialAlerts.length}
@@ -425,7 +417,7 @@ export default function TongQuanPage() {
                 href="/phan-tich/canh-bao"
                 className="text-xs text-primary hover:underline flex items-center gap-0.5"
               >
-                Xem tất cả <ArrowRight className="size-3" />
+                Xem tất cả <Icon name="arrow_forward" className="size-3" />
               </Link>
             </div>
           </CardHeader>
@@ -441,13 +433,13 @@ export default function TongQuanPage() {
                       : "bg-amber-50 border-amber-200"
                   )}
                 >
-                  <AlertTriangle
+                  <Icon name="warning"
                     className={cn(
-                      "size-4 shrink-0",
-                      alert.severity === "critical"
-                        ? "text-red-600"
-                        : "text-amber-600"
-                    )}
+                                                                      "size-4 shrink-0",
+                                                                      alert.severity === "critical"
+                                                                        ? "text-red-600"
+                                                                        : "text-amber-600"
+                                                                    )}
                   />
                   <div className="flex-1 min-w-0">
                     <p className="text-xs font-medium truncate">{alert.title}</p>
@@ -457,7 +449,7 @@ export default function TongQuanPage() {
                   </div>
                   {alert.link && (
                     <Link href={alert.link}>
-                      <ArrowRight className="size-3.5 text-muted-foreground hover:text-primary shrink-0" />
+                      <Icon name="arrow_forward" className="size-3.5 text-muted-foreground hover:text-primary shrink-0" />
                     </Link>
                   )}
                 </div>
@@ -475,7 +467,7 @@ export default function TongQuanPage() {
             <div className="flex items-center justify-between">
               <CardTitle className="text-sm">Top sản phẩm bán chạy</CardTitle>
               <Link href="/phan-tich/hang-hoa" className="text-xs text-primary hover:underline flex items-center gap-0.5">
-                Xem thêm <ArrowRight className="size-3" />
+                Xem thêm <Icon name="arrow_forward" className="size-3" />
               </Link>
             </div>
           </CardHeader>
@@ -506,7 +498,7 @@ export default function TongQuanPage() {
           <CardHeader className="pb-2">
             <div className="flex items-center justify-between">
               <CardTitle className="text-sm flex items-center gap-1.5">
-                <AlertTriangle className="size-4 text-amber-500" />
+                <Icon name="warning" className="size-4 text-amber-500" />
                 Hàng sắp hết
               </CardTitle>
               <Badge variant="destructive" className="text-[10px] px-1.5 py-0">
@@ -533,7 +525,7 @@ export default function TongQuanPage() {
                   </div>
                 ))}
                 <Link href="/hang-hoa" className="text-xs text-primary hover:underline flex items-center gap-0.5 pt-1">
-                  Quản lý tồn kho <ArrowRight className="size-3" />
+                  Quản lý tồn kho <Icon name="arrow_forward" className="size-3" />
                 </Link>
               </div>
             )}

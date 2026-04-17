@@ -1,8 +1,9 @@
 "use client";
 
 import { useToast, type ToastVariant } from "@/lib/contexts";
-import { X, CheckCircle2, AlertCircle, AlertTriangle, Info } from "lucide-react";
+import { CheckCircle2, AlertCircle, AlertTriangle, Info } from "lucide-react";
 import { cn } from "@/lib/utils";
+import { Icon } from "@/components/ui/icon";
 
 const variantStyles: Record<
   ToastVariant,
@@ -74,7 +75,7 @@ export function ToastContainer() {
               className="shrink-0 rounded-md p-1 hover:bg-black/5 transition-colors"
               aria-label="Đóng"
             >
-              <X className="h-4 w-4 text-muted-foreground" />
+              <Icon name="close" size={16} className="text-muted-foreground" />
             </button>
           </div>
         );

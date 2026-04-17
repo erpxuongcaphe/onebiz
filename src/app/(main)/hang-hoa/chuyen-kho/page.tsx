@@ -11,16 +11,6 @@
 
 import { useEffect, useState, useCallback } from "react";
 import { ColumnDef } from "@tanstack/react-table";
-import {
-  ArrowLeftRight,
-  Plus,
-  CheckCircle2,
-  XCircle,
-  ArrowRight,
-  Loader2,
-  Trash2,
-  Package,
-} from "lucide-react";
 import { PageHeader } from "@/components/shared/page-header";
 import { ListPageLayout } from "@/components/shared/list-page-layout";
 import { DataTable } from "@/components/shared/data-table";
@@ -60,6 +50,7 @@ import type {
   StockTransferItem,
 } from "@/lib/services/supabase/transfers";
 import type { BranchDetail } from "@/lib/services/supabase/branches";
+import { Icon } from "@/components/ui/icon";
 
 const STATUS_META = getTransferStatusMeta();
 const PAGE_SIZE = 25;
@@ -154,7 +145,7 @@ export default function ChuyenKhoPage() {
           <span className="font-medium truncate max-w-[120px]">
             {row.original.fromBranchName}
           </span>
-          <ArrowRight className="h-3.5 w-3.5 text-muted-foreground shrink-0" />
+          <Icon name="arrow_forward" size={14} className="text-muted-foreground shrink-0" />
           <span className="font-medium truncate max-w-[120px]">
             {row.original.toBranchName}
           </span>
@@ -222,7 +213,7 @@ export default function ChuyenKhoPage() {
               onClick={() => handleComplete(row.original.id)}
               title="Hoàn thành"
             >
-              <CheckCircle2 className="h-3.5 w-3.5" />
+              <Icon name="check_circle" size={14} />
             </Button>
             <Button
               variant="ghost"
@@ -231,7 +222,7 @@ export default function ChuyenKhoPage() {
               onClick={() => handleCancel(row.original.id)}
               title="Hủy"
             >
-              <XCircle className="h-3.5 w-3.5" />
+              <Icon name="cancel" size={14} />
             </Button>
           </div>
         );
@@ -280,7 +271,7 @@ export default function ChuyenKhoPage() {
         actions={[
           {
             label: "Tạo phiếu chuyển kho",
-            icon: <Plus className="h-4 w-4" />,
+            icon: <Icon name="add" size={16} />,
             variant: "default",
             onClick: () => setShowCreate(true),
           },
@@ -484,7 +475,7 @@ function CreateTransferDialog({
       <DialogContent className="max-w-2xl max-h-[90vh] overflow-y-auto">
         <DialogHeader>
           <DialogTitle className="flex items-center gap-2">
-            <ArrowLeftRight className="h-5 w-5" />
+            <Icon name="swap_horiz" />
             Tạo phiếu chuyển kho
           </DialogTitle>
         </DialogHeader>
@@ -542,7 +533,7 @@ function CreateTransferDialog({
                 onChange={(e) => setProductSearch(e.target.value)}
               />
               {searching && (
-                <Loader2 className="h-4 w-4 animate-spin absolute right-3 top-1/2 -translate-y-1/2 text-muted-foreground" />
+                <Icon name="progress_activity" size={16} className="animate-spin absolute right-3 top-1/2 -translate-y-1/2 text-muted-foreground" />
               )}
             </div>
             {searchResults.length > 0 && (
@@ -592,7 +583,7 @@ function CreateTransferDialog({
                     <tr key={item.id} className="border-t">
                       <td className="px-3 py-2">
                         <div className="flex items-center gap-2">
-                          <Package className="h-3.5 w-3.5 text-muted-foreground" />
+                          <Icon name="inventory_2" size={14} className="text-muted-foreground" />
                           <div>
                             <p className="font-medium text-xs">
                               {item.productName}
@@ -624,7 +615,7 @@ function CreateTransferDialog({
                           className="h-6 w-6 p-0 text-red-400 hover:text-red-600"
                           onClick={() => removeItem(item.id)}
                         >
-                          <Trash2 className="h-3 w-3" />
+                          <Icon name="delete" size={12} />
                         </Button>
                       </td>
                     </tr>
@@ -657,7 +648,7 @@ function CreateTransferDialog({
             Hủy
           </Button>
           <Button onClick={handleSubmit} disabled={!isValid || creating}>
-            {creating && <Loader2 className="h-4 w-4 animate-spin mr-1.5" />}
+            {creating && <Icon name="progress_activity" size={16} className="animate-spin mr-1.5" />}
             Tạo phiếu
           </Button>
         </DialogFooter>

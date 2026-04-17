@@ -1,9 +1,9 @@
 "use client";
 
 import { useState } from "react";
-import { Search, X } from "lucide-react";
 import { Input } from "@/components/ui/input";
 import { cn } from "@/lib/utils";
+import { Icon } from "@/components/ui/icon";
 
 interface PersonFilterProps {
   value: string;
@@ -47,12 +47,12 @@ export function PersonFilter({
             onClick={clear}
             className="shrink-0 hover:text-destructive"
           >
-            <X className="h-3.5 w-3.5" />
+            <Icon name="close" size={14} />
           </button>
         </div>
       ) : (
         <div className="relative">
-          <Search className="absolute left-2 top-1/2 -translate-y-1/2 h-3.5 w-3.5 text-muted-foreground" />
+          <Icon name="search" size={14} className="absolute left-2 top-1/2 -translate-y-1/2 text-muted-foreground" />
           <Input
             value={query}
             onChange={(e) => {

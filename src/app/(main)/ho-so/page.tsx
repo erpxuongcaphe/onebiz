@@ -1,7 +1,6 @@
 "use client";
 
 import { useState } from "react";
-import { Save } from "lucide-react";
 import {
   Card,
   CardHeader,
@@ -20,6 +19,7 @@ import {
   TableRow,
   TableCell,
 } from "@/components/ui/table";
+import { Icon } from "@/components/ui/icon";
 
 const recentActivities = [
   { action: "Đăng nhập hệ thống", time: "Hôm nay, 08:30" },
@@ -122,7 +122,7 @@ export default function HoSoPage() {
             </div>
             <div className="flex justify-end">
               <Button size="sm" className="gap-1.5">
-                <Save className="h-4 w-4" />
+                <Icon name="save" size={16} />
                 Lưu thay đổi
               </Button>
             </div>
@@ -172,7 +172,7 @@ export default function HoSoPage() {
             </div>
             <div className="flex justify-end">
               <Button size="sm" className="gap-1.5">
-                <Save className="h-4 w-4" />
+                <Icon name="save" size={16} />
                 Cập nhật mật khẩu
               </Button>
             </div>

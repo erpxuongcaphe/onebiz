@@ -2,20 +2,17 @@
 
 import { useState } from "react";
 import {
-  Globe,
   Eye,
   ShoppingBag,
   DollarSign,
-  TrendingUp,
-  Package,
-  ExternalLink,
-  Pencil,
+  TrendingUp
 } from "lucide-react";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { formatCurrency } from "@/lib/format";
 import { cn } from "@/lib/utils";
+import { Icon } from "@/components/ui/icon";
 
 /* ------------------------------------------------------------------ */
 /*  Mock data                                                          */
@@ -117,7 +114,7 @@ export default function WebsitePage() {
       <div className="border-b bg-white px-4 md:px-6 py-3">
         <div className="flex items-center gap-2 mb-3">
           <div className="size-8 rounded-lg bg-green-600 flex items-center justify-center text-white">
-            <Globe className="size-4" />
+            <Icon name="public" className="size-4" />
           </div>
           <h1 className="text-lg font-bold text-gray-900">
             Quản lý Website bán hàng
@@ -165,7 +162,7 @@ export default function WebsitePage() {
                 <p className="text-xs text-muted-foreground mb-0.5">URL</p>
                 <p className="text-sm font-medium text-green-600 flex items-center gap-1">
                   onebiz.com.vn
-                  <ExternalLink className="size-3" />
+                  <Icon name="open_in_new" className="size-3" />
                 </p>
               </div>
               <div>
@@ -178,7 +175,7 @@ export default function WebsitePage() {
               </div>
               <div>
                 <Button variant="outline" size="sm">
-                  <Pencil className="size-3.5 mr-1.5" />
+                  <Icon name="edit" className="size-3.5 mr-1.5" />
                   Chỉnh sửa website
                 </Button>
               </div>
@@ -208,7 +205,7 @@ export default function WebsitePage() {
                 >
                   <div className="flex items-start gap-3">
                     <div className="size-12 rounded-lg bg-orange-50 flex items-center justify-center shrink-0">
-                      <Package className="size-5 text-orange-500" />
+                      <Icon name="inventory_2" className="size-5 text-orange-500" />
                     </div>
                     <div className="flex-1 min-w-0">
                       <p className="text-sm font-medium leading-tight truncate">

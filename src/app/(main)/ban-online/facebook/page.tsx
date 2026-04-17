@@ -5,9 +5,7 @@ import {
   MessageCircle,
   ShoppingCart,
   TrendingUp,
-  Search,
-  Send,
-  Plus,
+  Send
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent } from "@/components/ui/card";
@@ -16,6 +14,7 @@ import { Badge } from "@/components/ui/badge";
 import { ScrollArea } from "@/components/ui/scroll-area";
 import { formatCurrency } from "@/lib/format";
 import { cn } from "@/lib/utils";
+import { Icon } from "@/components/ui/icon";
 
 // === Stats ===
 const stats = [
@@ -232,7 +231,7 @@ export default function FacebookPage() {
           {/* Search */}
           <div className="p-3 border-b">
             <div className="relative">
-              <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
+              <Icon name="search" size={16} className="absolute left-3 top-1/2 -translate-y-1/2 text-muted-foreground" />
               <Input
                 placeholder="Tìm cuộc hội thoại"
                 value={searchQuery}
@@ -316,7 +315,7 @@ export default function FacebookPage() {
               </div>
             </div>
             <Button size="sm" className="gap-1.5">
-              <Plus className="h-4 w-4" />
+              <Icon name="add" size={16} />
               Tạo đơn hàng
             </Button>
           </div>
@@ -403,7 +402,7 @@ export default function FacebookPage() {
                         size="sm"
                         className="w-full mt-2 h-7 text-xs gap-1"
                       >
-                        <Plus className="h-3 w-3" />
+                        <Icon name="add" size={12} />
                         Thêm vào đơn
                       </Button>
                     </div>

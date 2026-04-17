@@ -7,7 +7,6 @@
 
 import { useEffect, useState, useCallback } from "react";
 import { ColumnDef } from "@tanstack/react-table";
-import { Ruler, Info } from "lucide-react";
 import { PageHeader } from "@/components/shared/page-header";
 import { ListPageLayout } from "@/components/shared/list-page-layout";
 import { DataTable } from "@/components/shared/data-table";
@@ -15,6 +14,7 @@ import { FilterSidebar, FilterGroup } from "@/components/shared/filter-sidebar";
 import { Badge } from "@/components/ui/badge";
 import { useToast } from "@/lib/contexts";
 import { getProducts } from "@/lib/services";
+import { Icon } from "@/components/ui/icon";
 
 interface UnitSummary {
   unit: string;
@@ -88,7 +88,7 @@ export default function DonViTinhPage() {
       size: 200,
       cell: ({ row }) => (
         <div className="flex items-center gap-2">
-          <Ruler className="h-3.5 w-3.5 text-blue-500 shrink-0" />
+          <Icon name="straighten" size={14} className="text-blue-500 shrink-0" />
           <span className="font-semibold text-gray-900">{row.original.unit}</span>
         </div>
       ),
@@ -140,7 +140,7 @@ export default function DonViTinhPage() {
 
       {/* Info */}
       <div className="mx-4 mt-3 flex items-start gap-2 p-3 bg-blue-50 border border-blue-200 rounded-lg text-xs text-blue-700">
-        <Info className="h-4 w-4 shrink-0 mt-0.5" />
+        <Icon name="info" size={16} className="shrink-0 mt-0.5" />
         <div>
           <p className="font-medium">Đơn vị tính được quản lý tại từng sản phẩm</p>
           <p className="mt-0.5 text-blue-500">

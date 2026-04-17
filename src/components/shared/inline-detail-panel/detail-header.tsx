@@ -1,9 +1,9 @@
 "use client";
 
 import { ReactNode } from "react";
-import { ExternalLink } from "lucide-react";
 import { Badge } from "@/components/ui/badge";
 import { cn } from "@/lib/utils";
+import { Icon } from "@/components/ui/icon";
 
 interface DetailHeaderProps {
   /** Main title (e.g. customer name, product name) */
@@ -58,7 +58,7 @@ export function DetailHeader({
               <h3 className="text-base font-semibold">{title}</h3>
               {code && (
                 <span className="text-sm text-muted-foreground flex items-center gap-1">
-                  <ExternalLink className="h-3.5 w-3.5" />
+                  <Icon name="open_in_new" size={14} />
                   {code}
                 </span>
               )}

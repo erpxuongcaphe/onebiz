@@ -4,14 +4,14 @@ import {
   ShoppingCart,
   TrendingUp,
   CheckCircle,
-  Clock,
-  ArrowUpRight,
+  Clock
 } from "lucide-react";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { formatCurrency } from "@/lib/format";
 import { cn } from "@/lib/utils";
+import { Icon } from "@/components/ui/icon";
 
 // === KPI Data ===
 const kpiCards = [
@@ -204,7 +204,7 @@ export default function BanOnlinePage() {
                     </div>
                     {kpi.change && (
                       <span className="flex items-center gap-0.5 text-xs font-medium text-green-600">
-                        <ArrowUpRight className="h-3 w-3" />
+                        <Icon name="north_east" size={12} />
                         {kpi.change}
                       </span>
                     )}

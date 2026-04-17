@@ -1,7 +1,7 @@
 "use client";
 
 import { useState, useEffect, useCallback } from "react";
-import { TrendingUp, TrendingDown, DollarSign, Percent, Loader2 } from "lucide-react";
+import { TrendingUp, TrendingDown, DollarSign, Percent } from "lucide-react";
 import {
   LineChart,
   Line,
@@ -36,6 +36,7 @@ import type {
   ChartPoint,
   CashFlowRow,
 } from "@/lib/services/supabase/analytics";
+import { Icon } from "@/components/ui/icon";
 
 const EXPENSE_COLORS = ["#2563eb", "#ea580c", "#16a34a", "#9333ea", "#6b7280"];
 
@@ -182,7 +183,7 @@ export default function TaiChinhPage() {
   if (loading) {
     return (
       <div className="flex flex-col h-[calc(100vh-48px)] items-center justify-center">
-        <Loader2 className="h-8 w-8 animate-spin text-muted-foreground" />
+        <Icon name="progress_activity" size={32} className="animate-spin text-muted-foreground" />
         <p className="mt-2 text-sm text-muted-foreground">Đang tải dữ liệu...</p>
       </div>
     );

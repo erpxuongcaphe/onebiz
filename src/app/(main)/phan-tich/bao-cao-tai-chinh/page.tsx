@@ -7,10 +7,10 @@ import {
   DollarSign,
   Percent,
   BarChart3,
-  RotateCcw,
-  Clock,
-  Loader2,
-  Building2,
+  GitCompare,
+  Factory,
+  Warehouse,
+  Store,
 } from "lucide-react";
 import {
   Select,
@@ -45,6 +45,8 @@ import {
   getGrossMarginTrend,
   getInventoryTurnover,
   getDSO,
+  getConsolidatedPnL,
+  getBranchPnLComparison,
 } from "@/lib/services";
 import type {
   ProfitAndLoss,
@@ -52,7 +54,10 @@ import type {
   GrossMarginTrend,
   InventoryTurnoverResult,
   DSOResult,
+  ConsolidatedPnL,
+  BranchPnLRow,
 } from "@/lib/services/supabase/reports";
+import { Icon } from "@/components/ui/icon";
 
 // === Helpers ===
 
@@ -115,10 +120,18 @@ export default function BaoCaoTaiChinhPage() {
   const [loading, setLoading] = useState(true);
   const [branchId, setBranchId] = useState<string>("all");
   const [branches, setBranches] = useState<{ id: string; name: string }[]>([]);
+  // CEO view: khi bật, ở chế độ "Tất cả chi nhánh" sẽ dùng getConsolidatedPnL
+  // (loại trừ doanh thu/COGS nội bộ) thay vì getProfitAndLoss thông thường.
+  const [ceoView, setCeoView] = useState<boolean>(false);
   const [pnl, setPnl] = useState<{
     current: ProfitAndLoss;
     previous: ProfitAndLoss;
   } | null>(null);
+  const [consolidated, setConsolidated] = useState<{
+    current: ConsolidatedPnL;
+    previous: ConsolidatedPnL;
+  } | null>(null);
+  const [branchPnL, setBranchPnL] = useState<BranchPnLRow[]>([]);
   const [cogsItems, setCogsItems] = useState<COGSItem[]>([]);
   const [marginTrend, setMarginTrend] = useState<GrossMarginTrend[]>([]);
   const [turnover, setTurnover] = useState<InventoryTurnoverResult | null>(null);
@@ -137,19 +150,37 @@ export default function BaoCaoTaiChinhPage() {
     try {
       setLoading(true);
       const bid = branchId === "all" ? undefined : branchId;
-      const [pnlRes, cogsRes, marginRes, turnoverRes, dsoRes] =
-        await Promise.all([
-          getProfitAndLoss(bid),
-          getCOGSBreakdown(10),
-          getGrossMarginTrend(6),
-          getInventoryTurnover(),
-          getDSO(),
-        ]);
+      // Ở chế độ "Tất cả" mới load 2 report nội bộ; khi chọn 1 branch cụ thể
+      // các số liệu consolidated/so sánh branch không có ý nghĩa → skip.
+      const fetchConsolidated = branchId === "all";
+      const [
+        pnlRes,
+        cogsRes,
+        marginRes,
+        turnoverRes,
+        dsoRes,
+        consolidatedRes,
+        branchPnLRes,
+      ] = await Promise.all([
+        getProfitAndLoss(bid),
+        getCOGSBreakdown(10),
+        getGrossMarginTrend(6),
+        getInventoryTurnover(),
+        getDSO(),
+        fetchConsolidated
+          ? getConsolidatedPnL()
+          : Promise.resolve(null),
+        fetchConsolidated
+          ? getBranchPnLComparison()
+          : Promise.resolve([] as BranchPnLRow[]),
+      ]);
       setPnl(pnlRes);
       setCogsItems(cogsRes);
       setMarginTrend(marginRes);
       setTurnover(turnoverRes);
       setDso(dsoRes);
+      setConsolidated(consolidatedRes);
+      setBranchPnL(branchPnLRes);
     } catch (err) {
       console.error("Failed to fetch P&L data:", err);
     } finally {
@@ -164,7 +195,7 @@ export default function BaoCaoTaiChinhPage() {
   if (loading) {
     return (
       <div className="flex flex-col h-[calc(100vh-48px)] items-center justify-center">
-        <Loader2 className="h-8 w-8 animate-spin text-muted-foreground" />
+        <Icon name="progress_activity" size={32} className="animate-spin text-muted-foreground" />
         <p className="mt-2 text-sm text-muted-foreground">
           Đang tải báo cáo...
         </p>
@@ -172,8 +203,11 @@ export default function BaoCaoTaiChinhPage() {
     );
   }
 
-  const cur = pnl?.current;
-  const prev = pnl?.previous;
+  // CEO view chỉ áp dụng khi đang xem "Tất cả chi nhánh".
+  // Khi bật: số liệu KPI + bảng P&L dùng consolidated (đã loại trừ nội bộ).
+  const useConsolidated = ceoView && branchId === "all" && !!consolidated;
+  const cur = useConsolidated ? consolidated.current : pnl?.current;
+  const prev = useConsolidated ? consolidated.previous : pnl?.previous;
 
   return (
     <div className="flex flex-col h-[calc(100vh-48px)] overflow-y-auto">
@@ -182,25 +216,207 @@ export default function BaoCaoTaiChinhPage() {
         subtitle="Lãi/Lỗ, Giá vốn, Biên lợi nhuận"
       />
 
-      {/* Branch filter */}
+      {/* Branch filter + CEO toggle */}
       {branches.length > 1 && (
-        <div className="px-4 md:px-6 pt-3 flex items-center gap-2">
-          <Building2 className="h-4 w-4 text-muted-foreground" />
-          <Select value={branchId} onValueChange={(v) => setBranchId(v ?? "all")}>
-            <SelectTrigger className="w-52 h-8 text-xs">
-              <SelectValue placeholder="Tất cả chi nhánh" />
-            </SelectTrigger>
-            <SelectContent>
-              <SelectItem value="all">Tất cả chi nhánh</SelectItem>
-              {branches.map((b) => (
-                <SelectItem key={b.id} value={b.id}>{b.name}</SelectItem>
-              ))}
-            </SelectContent>
-          </Select>
+        <div className="px-4 md:px-6 pt-3 flex items-center gap-3 flex-wrap">
+          <div className="flex items-center gap-2">
+            <Icon name="apartment" size={16} className="text-muted-foreground" />
+            <Select value={branchId} onValueChange={(v) => setBranchId(v ?? "all")}>
+              <SelectTrigger className="w-52 h-8 text-xs">
+                <SelectValue placeholder="Tất cả chi nhánh" />
+              </SelectTrigger>
+              <SelectContent>
+                <SelectItem value="all">Tất cả chi nhánh</SelectItem>
+                {branches.map((b) => (
+                  <SelectItem key={b.id} value={b.id}>{b.name}</SelectItem>
+                ))}
+              </SelectContent>
+            </Select>
+          </div>
+
+          {/* CEO view toggle — chỉ enable khi xem tổng hợp tất cả branch */}
+          {branchId === "all" && (
+            <label
+              className="flex items-center gap-2 text-xs font-medium cursor-pointer select-none"
+              title="Loại trừ doanh thu/COGS nội bộ (xưởng bán cho kho, kho bán cho quán) để thấy số thật của toàn chuỗi."
+            >
+              <input
+                type="checkbox"
+                checked={ceoView}
+                onChange={(e) => setCeoView(e.target.checked)}
+                className="h-3.5 w-3.5 rounded border-gray-300 accent-blue-600 cursor-pointer"
+              />
+              <span className="text-muted-foreground">
+                Chỉ số CEO (loại trừ doanh thu nội bộ)
+              </span>
+            </label>
+          )}
         </div>
       )}
 
       <div className="flex-1 p-4 md:p-6 space-y-4">
+        {/* Consolidated banner — hiển thị doanh thu nội bộ đã bị loại trừ */}
+        {useConsolidated && consolidated && (
+          <div className="rounded-lg border border-blue-200 bg-blue-50 p-3 flex items-start gap-3">
+            <GitCompare className="h-5 w-5 text-blue-600 shrink-0 mt-0.5" />
+            <div className="flex-1 min-w-0">
+              <p className="text-sm font-semibold text-blue-900">
+                Đang xem số hợp nhất (CEO view)
+              </p>
+              <p className="text-xs text-blue-700 mt-0.5">
+                Đã loại trừ{" "}
+                <strong>
+                  {formatCurrency(consolidated.current.internalRevenue)}
+                </strong>{" "}
+                doanh thu nội bộ (xưởng bán cho kho, kho bán cho quán) trong tháng này.
+                Kỳ trước:{" "}
+                {formatCurrency(consolidated.previous.internalRevenue)}.
+              </p>
+            </div>
+          </div>
+        )}
+
+        {/* So sánh P&L các chi nhánh — chỉ hiển thị ở view "Tất cả" */}
+        {branchId === "all" && branchPnL.length > 0 && (
+          <ChartCard
+            title="So sánh lãi lỗ theo chi nhánh"
+            subtitle="Tháng hiện tại — xưởng rang, kho tổng, các quán FnB"
+          >
+            <div className="overflow-x-auto">
+              <table className="w-full text-sm">
+                <thead>
+                  <tr className="border-b text-muted-foreground">
+                    <th className="text-left py-2 pr-3 font-medium">Chi nhánh</th>
+                    <th className="text-right py-2 pr-3 font-medium">Doanh thu</th>
+                    <th className="text-right py-2 pr-3 font-medium">Giá vốn</th>
+                    <th className="text-right py-2 pr-3 font-medium">Lãi gộp</th>
+                    <th className="text-right py-2 pr-3 font-medium">Biên gộp</th>
+                    <th className="text-right py-2 pr-3 font-medium">Chi phí VH</th>
+                    <th className="text-right py-2 font-medium">Lãi ròng</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {branchPnL.map((b) => {
+                    const TypeIcon =
+                      b.branchType === "factory"
+                        ? Factory
+                        : b.branchType === "warehouse"
+                          ? Warehouse
+                          : Store;
+                    const typeLabel =
+                      b.branchType === "factory"
+                        ? "Xưởng"
+                        : b.branchType === "warehouse"
+                          ? "Kho"
+                          : "Quán";
+                    return (
+                      <tr
+                        key={b.branchId}
+                        className="border-b last:border-0 hover:bg-muted/30"
+                      >
+                        <td className="py-2.5 pr-3">
+                          <div className="flex items-center gap-2">
+                            <TypeIcon className="h-3.5 w-3.5 text-muted-foreground shrink-0" />
+                            <div className="min-w-0">
+                              <p className="font-medium truncate">{b.branchName}</p>
+                              <p className="text-[10px] text-muted-foreground uppercase tracking-wide">
+                                {typeLabel}
+                              </p>
+                            </div>
+                          </div>
+                        </td>
+                        <td className="py-2.5 pr-3 text-right font-medium text-blue-700">
+                          {formatCurrency(b.revenue)}
+                        </td>
+                        <td className="py-2.5 pr-3 text-right text-orange-700">
+                          {formatCurrency(b.cogs)}
+                        </td>
+                        <td className="py-2.5 pr-3 text-right font-medium text-green-700">
+                          {formatCurrency(b.grossProfit)}
+                        </td>
+                        <td className="py-2.5 pr-3 text-right text-xs">
+                          <span
+                            className={`inline-block px-1.5 py-0.5 rounded ${
+                              b.grossMargin >= 30
+                                ? "bg-green-50 text-green-700"
+                                : b.grossMargin >= 15
+                                  ? "bg-yellow-50 text-yellow-700"
+                                  : "bg-red-50 text-red-700"
+                            }`}
+                          >
+                            {b.grossMargin}%
+                          </span>
+                        </td>
+                        <td className="py-2.5 pr-3 text-right text-muted-foreground">
+                          {formatCurrency(b.opEx)}
+                        </td>
+                        <td
+                          className={`py-2.5 text-right font-semibold ${
+                            b.netProfit >= 0 ? "text-green-700" : "text-red-600"
+                          }`}
+                        >
+                          {formatCurrency(b.netProfit)}
+                        </td>
+                      </tr>
+                    );
+                  })}
+                  {/* Tổng cộng */}
+                  {(() => {
+                    const sum = branchPnL.reduce(
+                      (acc, b) => ({
+                        revenue: acc.revenue + b.revenue,
+                        cogs: acc.cogs + b.cogs,
+                        grossProfit: acc.grossProfit + b.grossProfit,
+                        opEx: acc.opEx + b.opEx,
+                        netProfit: acc.netProfit + b.netProfit,
+                      }),
+                      { revenue: 0, cogs: 0, grossProfit: 0, opEx: 0, netProfit: 0 }
+                    );
+                    const totalMargin =
+                      sum.revenue > 0
+                        ? Math.round((sum.grossProfit / sum.revenue) * 1000) / 10
+                        : 0;
+                    return (
+                      <tr className="bg-muted/40 font-semibold">
+                        <td className="py-2.5 pr-3">
+                          Tổng toàn chuỗi ({branchPnL.length})
+                        </td>
+                        <td className="py-2.5 pr-3 text-right text-blue-800">
+                          {formatCurrency(sum.revenue)}
+                        </td>
+                        <td className="py-2.5 pr-3 text-right text-orange-800">
+                          {formatCurrency(sum.cogs)}
+                        </td>
+                        <td className="py-2.5 pr-3 text-right text-green-800">
+                          {formatCurrency(sum.grossProfit)}
+                        </td>
+                        <td className="py-2.5 pr-3 text-right text-xs">
+                          {totalMargin}%
+                        </td>
+                        <td className="py-2.5 pr-3 text-right text-muted-foreground">
+                          {formatCurrency(sum.opEx)}
+                        </td>
+                        <td
+                          className={`py-2.5 text-right ${
+                            sum.netProfit >= 0 ? "text-green-800" : "text-red-700"
+                          }`}
+                        >
+                          {formatCurrency(sum.netProfit)}
+                        </td>
+                      </tr>
+                    );
+                  })()}
+                </tbody>
+              </table>
+              <p className="text-[11px] text-muted-foreground mt-2 italic">
+                Lưu ý: Tổng này <strong>chưa</strong> loại trừ doanh thu nội bộ
+                — nếu muốn xem số thật của toàn chuỗi, bật công tắc{" "}
+                <strong>&quot;Chỉ số CEO&quot;</strong> ở trên để so sánh.
+              </p>
+            </div>
+          </ChartCard>
+        )}
+
         {/* KPI Cards */}
         <div className="grid grid-cols-2 lg:grid-cols-4 gap-3">
           <KpiCard
@@ -525,7 +741,7 @@ export default function BaoCaoTaiChinhPage() {
             <div className="grid grid-cols-2 gap-4 py-4">
               <div className="text-center space-y-1">
                 <div className="flex items-center justify-center gap-1.5 text-muted-foreground">
-                  <RotateCcw className="size-4" />
+                  <Icon name="undo" className="size-4" />
                   <span className="text-xs">Vòng quay</span>
                 </div>
                 <p className="text-3xl font-bold text-primary">
@@ -535,7 +751,7 @@ export default function BaoCaoTaiChinhPage() {
               </div>
               <div className="text-center space-y-1">
                 <div className="flex items-center justify-center gap-1.5 text-muted-foreground">
-                  <Clock className="size-4" />
+                  <Icon name="schedule" className="size-4" />
                   <span className="text-xs">TB ngày bán hết</span>
                 </div>
                 <p className="text-3xl font-bold text-orange-600">
@@ -583,7 +799,7 @@ export default function BaoCaoTaiChinhPage() {
               </div>
               <div className="text-center space-y-1">
                 <div className="flex items-center justify-center gap-1.5 text-muted-foreground">
-                  <DollarSign className="size-4" />
+                  <Icon name="attach_money" className="size-4" />
                   <span className="text-xs">Phải thu</span>
                 </div>
                 <p className="text-3xl font-bold text-orange-600">

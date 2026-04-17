@@ -28,7 +28,7 @@ export function ChipToggleFilter({
           className={cn(
             "px-3 py-1 rounded-full text-xs font-medium transition-colors border",
             value === option.value
-              ? "bg-[hsl(217,91%,40%)] text-white border-[hsl(217,91%,40%)]"
+              ? "bg-primary text-on-primary border-primary"
               : "bg-white text-muted-foreground border-border hover:bg-muted hover:text-foreground"
           )}
         >

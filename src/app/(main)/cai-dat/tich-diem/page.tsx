@@ -6,9 +6,9 @@ import { Badge } from "@/components/ui/badge";
 import { Input } from "@/components/ui/input";
 import { Button } from "@/components/ui/button";
 import { Separator } from "@/components/ui/separator";
-import { Save, ArrowRight, Star } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { formatCurrency } from "@/lib/format";
+import { Icon } from "@/components/ui/icon";
 
 function Toggle({
   checked,
@@ -193,7 +193,7 @@ export default function LoyaltyPointsSettingsPage() {
                   <tr key={tier.name}>
                     <td className="py-3">
                       <div className="flex items-center gap-2">
-                        <Star className="h-4 w-4 text-amber-500" />
+                        <Icon name="star" size={16} className="text-amber-500" />
                         <span className="font-medium">{tier.name}</span>
                       </div>
                     </td>
@@ -231,7 +231,7 @@ export default function LoyaltyPointsSettingsPage() {
           </p>
           <Button variant="link" className="px-0 mt-2 text-sm">
             Xem lịch sử
-            <ArrowRight className="h-4 w-4 ml-1" />
+            <Icon name="arrow_forward" size={16} className="ml-1" />
           </Button>
         </CardContent>
       </Card>
@@ -240,7 +240,7 @@ export default function LoyaltyPointsSettingsPage() {
 
       <div className="flex justify-end">
         <Button>
-          <Save className="h-4 w-4 mr-1.5" />
+          <Icon name="save" size={16} className="mr-1.5" />
           Lưu cài đặt
         </Button>
       </div>

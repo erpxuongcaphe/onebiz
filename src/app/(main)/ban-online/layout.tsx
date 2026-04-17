@@ -11,6 +11,7 @@ import {
 } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { ScrollArea } from "@/components/ui/scroll-area";
+import { Icon } from "@/components/ui/icon";
 
 const ONLINE_NAV = [
   { href: "/ban-online", label: "Tổng quan", icon: LayoutDashboard, exact: true },
@@ -33,7 +34,7 @@ export default function BanOnlineLayout({
       <aside className="hidden md:flex w-48 lg:w-52 border-r bg-white shrink-0 flex-col">
         <div className="px-4 py-3 border-b">
           <h2 className="text-sm font-bold text-gray-800 flex items-center gap-2">
-            <Globe className="size-4 text-primary" />
+            <Icon name="public" className="size-4 text-primary" />
             Bán online
           </h2>
         </div>

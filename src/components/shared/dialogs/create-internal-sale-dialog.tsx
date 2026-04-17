@@ -12,12 +12,12 @@ import {
 import { Input } from "@/components/ui/input";
 import { Button } from "@/components/ui/button";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
-import { Search, Loader2, X, ArrowRight } from "lucide-react";
 import { formatCurrency } from "@/lib/format";
 import { useToast, useAuth } from "@/lib/contexts";
 import { getClient } from "@/lib/services/supabase/base";
 import { createInternalSale, getBranches, syncInternalEntities } from "@/lib/services";
 import type { BranchDetail } from "@/lib/services";
+import { Icon } from "@/components/ui/icon";
 
 interface CreateInternalSaleDialogProps {
   open: boolean;
@@ -228,7 +228,7 @@ export function CreateInternalSaleDialog({
               </SelectContent>
             </Select>
           </div>
-          <ArrowRight className="h-5 w-5 text-muted-foreground mb-2" />
+          <Icon name="arrow_forward" className="text-muted-foreground mb-2" />
           <div className="space-y-1.5">
             <label className="text-sm font-medium">Chi nhánh mua</label>
             <Select value={toBranchId} onValueChange={(v) => v && setToBranchId(v)}>
@@ -267,7 +267,7 @@ export function CreateInternalSaleDialog({
         <div className="space-y-1.5">
           <label className="text-sm font-medium">Thêm sản phẩm</label>
           <div className="relative">
-            <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
+            <Icon name="search" size={16} className="absolute left-3 top-1/2 -translate-y-1/2 text-muted-foreground" />
             <Input
               className="pl-9"
               placeholder="Tìm sản phẩm theo tên hoặc mã..."
@@ -346,7 +346,7 @@ export function CreateInternalSaleDialog({
                     </td>
                     <td className="p-2 text-center">
                       <button onClick={() => removeItem(item.productId)} className="text-muted-foreground hover:text-destructive">
-                        <X className="h-4 w-4" />
+                        <Icon name="close" size={16} />
                       </button>
                     </td>
                   </tr>
@@ -401,7 +401,7 @@ export function CreateInternalSaleDialog({
             Huỷ
           </Button>
           <Button onClick={handleSave} disabled={saving}>
-            {saving && <Loader2 className="h-4 w-4 animate-spin mr-2" />}
+            {saving && <Icon name="progress_activity" size={16} className="animate-spin mr-2" />}
             Tạo đơn nội bộ
           </Button>
         </DialogFooter>

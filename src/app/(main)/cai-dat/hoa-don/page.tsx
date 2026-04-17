@@ -12,8 +12,8 @@ import {
   SelectTrigger,
   SelectValue,
 } from "@/components/ui/select";
-import { Save, FileText } from "lucide-react";
 import { cn } from "@/lib/utils";
+import { Icon } from "@/components/ui/icon";
 
 function Toggle({
   checked,
@@ -121,7 +121,7 @@ export default function InvoiceSettingsPage() {
         </CardHeader>
         <CardContent>
           <div className="rounded-lg border bg-muted/30 p-6 text-center">
-            <FileText className="h-12 w-12 mx-auto text-muted-foreground mb-2" />
+            <Icon name="description" size={48} className="mx-auto text-muted-foreground mb-2" />
             <p className="text-sm text-muted-foreground">
               Xem trước mẫu hóa đơn
             </p>
@@ -181,7 +181,7 @@ export default function InvoiceSettingsPage() {
 
       <div className="flex justify-end">
         <Button>
-          <Save className="h-4 w-4 mr-1.5" />
+          <Icon name="save" size={16} className="mr-1.5" />
           Lưu thay đổi
         </Button>
       </div>

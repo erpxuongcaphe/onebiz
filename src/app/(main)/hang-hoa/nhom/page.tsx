@@ -2,7 +2,6 @@
 
 import { useEffect, useState, useCallback } from "react";
 import { ColumnDef } from "@tanstack/react-table";
-import { Plus, Pencil, Trash2, Tags, Loader2 } from "lucide-react";
 import { PageHeader } from "@/components/shared/page-header";
 import { DataTable } from "@/components/shared/data-table";
 import { Tabs, TabsList, TabsTrigger } from "@/components/ui/tabs";
@@ -25,6 +24,7 @@ import {
 } from "@/lib/services";
 import { useToast } from "@/lib/contexts";
 import type { ProductCategory } from "@/lib/types";
+import { Icon } from "@/components/ui/icon";
 
 type CategoryScope = "nvl" | "sku";
 
@@ -177,7 +177,7 @@ export default function NhomHangPage() {
       size: 300,
       cell: ({ row }) => (
         <div className="flex items-center gap-2">
-          <Tags className="h-4 w-4 text-muted-foreground shrink-0" />
+          <Icon name="label" size={16} className="text-muted-foreground shrink-0" />
           <span className="font-medium">{row.original.name}</span>
         </div>
       ),
@@ -229,7 +229,7 @@ export default function NhomHangPage() {
             }}
             title="Sửa"
           >
-            <Pencil className="h-3.5 w-3.5" />
+            <Icon name="edit" size={14} />
           </Button>
           <Button
             variant="ghost"
@@ -241,7 +241,7 @@ export default function NhomHangPage() {
             }}
             title="Xoá"
           >
-            <Trash2 className="h-3.5 w-3.5" />
+            <Icon name="delete" size={14} />
           </Button>
         </div>
       ),
@@ -276,7 +276,7 @@ export default function NhomHangPage() {
           actions={[
             {
               label: "Thêm nhóm",
-              icon: <Plus className="h-4 w-4" />,
+              icon: <Icon name="add" size={16} />,
               variant: "default",
               onClick: openCreate,
             },
@@ -353,7 +353,7 @@ export default function NhomHangPage() {
               Huỷ
             </Button>
             <Button onClick={handleSave} disabled={saving}>
-              {saving && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
+              {saving && <Icon name="progress_activity" size={16} className="mr-2 animate-spin" />}
               {editingCategory ? "Cập nhật" : "Tạo mới"}
             </Button>
           </DialogFooter>
@@ -406,7 +406,7 @@ export default function NhomHangPage() {
               disabled={deleting}
               onClick={handleDelete}
             >
-              {deleting && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
+              {deleting && <Icon name="progress_activity" size={16} className="mr-2 animate-spin" />}
               Xoá
             </Button>
           </DialogFooter>

@@ -11,12 +11,12 @@ import {
 } from "@/components/ui/dialog";
 import { Input } from "@/components/ui/input";
 import { Button } from "@/components/ui/button";
-import { Trash2, Search, Loader2 } from "lucide-react";
 import { formatCurrency } from "@/lib/format";
 import { useToast } from "@/lib/contexts";
 import { getClient, getCurrentContext } from "@/lib/services/supabase/base";
 import { nextEntityCode } from "@/lib/services/supabase/stock-adjustments";
 import type { Database } from "@/lib/supabase/types";
+import { Icon } from "@/components/ui/icon";
 
 type PurchaseOrderInsert = Database["public"]["Tables"]["purchase_orders"]["Insert"];
 type PurchaseOrderItemInsert = Database["public"]["Tables"]["purchase_order_items"]["Insert"];
@@ -232,7 +232,7 @@ export function CreatePurchaseEntryDialog({
               Nhà cung cấp <span className="text-destructive">*</span>
             </label>
             <div className="relative">
-              <Search className="absolute left-2.5 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
+              <Icon name="search" size={16} className="absolute left-2.5 top-1/2 -translate-y-1/2 text-muted-foreground" />
               <Input
                 value={supplierSearch}
                 onChange={(e) => {
@@ -281,7 +281,7 @@ export function CreatePurchaseEntryDialog({
           <div className="space-y-1.5">
             <label className="text-sm font-medium">Thêm sản phẩm</label>
             <div className="relative">
-              <Search className="absolute left-2.5 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
+              <Icon name="search" size={16} className="absolute left-2.5 top-1/2 -translate-y-1/2 text-muted-foreground" />
               <Input
                 value={productSearch}
                 onChange={(e) => {
@@ -363,7 +363,7 @@ export function CreatePurchaseEntryDialog({
                     onClick={() => removeItem(item.id)}
                     className="text-muted-foreground hover:text-destructive"
                   >
-                    <Trash2 className="h-3.5 w-3.5" />
+                    <Icon name="delete" size={14} />
                   </Button>
                 </div>
               ))}
@@ -398,7 +398,7 @@ export function CreatePurchaseEntryDialog({
             Hủy
           </Button>
           <Button onClick={handleSave} disabled={saving}>
-            {saving && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
+            {saving && <Icon name="progress_activity" size={16} className="mr-2 animate-spin" />}
             Tạo đơn đặt hàng
           </Button>
         </DialogFooter>

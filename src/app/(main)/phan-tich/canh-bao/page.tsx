@@ -8,9 +8,6 @@ import {
   Package,
   DollarSign,
   Clock,
-  ArrowRight,
-  Loader2,
-  CheckCircle2,
   TrendingDown,
   Wallet,
 } from "lucide-react";
@@ -21,6 +18,7 @@ import { formatCurrency } from "@/lib/format";
 import Link from "next/link";
 import { getFinancialAlerts } from "@/lib/services";
 import type { FinancialAlert } from "@/lib/services/supabase/reports";
+import { Icon } from "@/components/ui/icon";
 
 const SEVERITY_CONFIG = {
   critical: {
@@ -97,7 +95,7 @@ export default function CanhBaoPage() {
   if (loading) {
     return (
       <div className="flex flex-col h-[calc(100vh-48px)] items-center justify-center">
-        <Loader2 className="h-8 w-8 animate-spin text-muted-foreground" />
+        <Icon name="progress_activity" size={32} className="animate-spin text-muted-foreground" />
         <p className="mt-2 text-sm text-muted-foreground">
           Đang kiểm tra cảnh báo...
         </p>
@@ -112,7 +110,7 @@ export default function CanhBaoPage() {
         <div className="flex items-center justify-between">
           <div>
             <h1 className="text-lg font-semibold flex items-center gap-2">
-              <AlertTriangle className="size-5 text-amber-500" />
+              <Icon name="warning" className="size-5 text-amber-500" />
               Cảnh báo tài chính
             </h1>
             <p className="text-xs text-muted-foreground mt-0.5">
@@ -243,7 +241,7 @@ export default function CanhBaoPage() {
           <Card className="border-dashed">
             <CardContent className="pt-6">
               <div className="text-center py-8">
-                <CheckCircle2 className="size-12 text-green-500 mx-auto mb-3" />
+                <Icon name="check_circle" className="size-12 text-green-500 mx-auto mb-3" />
                 <p className="text-lg font-semibold text-green-700">
                   Không có cảnh báo
                 </p>
@@ -335,7 +333,7 @@ export default function CanhBaoPage() {
                         className="text-xs text-primary hover:underline flex items-center gap-0.5 ml-12"
                       >
                         Xem chi tiết
-                        <ArrowRight className="size-3" />
+                        <Icon name="arrow_forward" className="size-3" />
                       </Link>
                     </CardContent>
                   )}

@@ -2,7 +2,6 @@
 
 import { useEffect, useState, useCallback } from "react";
 import { ColumnDef } from "@tanstack/react-table";
-import { Plus, Upload, Download, Pencil, Trash2 } from "lucide-react";
 import { PageHeader } from "@/components/shared/page-header";
 import { ListPageLayout } from "@/components/shared/list-page-layout";
 import { DataTable } from "@/components/shared/data-table";
@@ -28,6 +27,7 @@ import { exportToExcel, exportToCsv } from "@/lib/utils/export";
 import { getSuppliers, deleteSupplier } from "@/lib/services";
 import { useToast } from "@/lib/contexts";
 import type { Supplier } from "@/lib/types";
+import { Icon } from "@/components/ui/icon";
 
 /* ------------------------------------------------------------------ */
 /*  Inline detail                                                      */
@@ -353,17 +353,17 @@ export default function NhaCungCapPage() {
           actions={[
             {
               label: "Nhà cung cấp",
-              icon: <Plus className="h-4 w-4" />,
+              icon: <Icon name="add" size={16} />,
               variant: "default",
               onClick: () => setCreateOpen(true),
             },
             {
               label: "Import file",
-              icon: <Upload className="h-4 w-4" />,
+              icon: <Icon name="upload" size={16} />,
             },
             {
               label: "Xuất file",
-              icon: <Download className="h-4 w-4" />,
+              icon: <Icon name="download" size={16} />,
             },
           ]}
         />
@@ -393,7 +393,7 @@ export default function NhaCungCapPage() {
           rowActions={(row) => [
             {
               label: "Sửa",
-              icon: <Pencil className="h-4 w-4" />,
+              icon: <Icon name="edit" size={16} />,
               onClick: () => {
                 setEditingSupplier(row);
                 setCreateOpen(true);
@@ -401,7 +401,7 @@ export default function NhaCungCapPage() {
             },
             {
               label: "Xóa",
-              icon: <Trash2 className="h-4 w-4" />,
+              icon: <Icon name="delete" size={16} />,
               onClick: () => setDeletingSupplier(row),
               variant: "destructive",
               separator: true,

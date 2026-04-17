@@ -1,7 +1,7 @@
 "use client";
 
 import { useState, useEffect, useCallback } from "react";
-import { TrendingUp, Package, Receipt, RotateCcw, Loader2 } from "lucide-react";
+import { TrendingUp, Package, Receipt, RotateCcw } from "lucide-react";
 import {
   LineChart,
   Line,
@@ -35,6 +35,7 @@ import type {
   ChartPoint,
   TopInvoice,
 } from "@/lib/services/supabase/analytics";
+import { Icon } from "@/components/ui/icon";
 
 // === Helpers ===
 
@@ -174,7 +175,7 @@ export default function BanHangPage() {
   if (loading) {
     return (
       <div className="flex flex-col h-[calc(100vh-48px)] items-center justify-center">
-        <Loader2 className="h-8 w-8 animate-spin text-muted-foreground" />
+        <Icon name="progress_activity" size={32} className="animate-spin text-muted-foreground" />
         <p className="mt-3 text-sm text-muted-foreground">
           Đang tải dữ liệu phân tích...
         </p>

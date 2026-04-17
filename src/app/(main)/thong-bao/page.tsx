@@ -6,8 +6,7 @@ import {
   ShoppingCart,
   AlertTriangle,
   Users,
-  DollarSign,
-  Check,
+  DollarSign
 } from "lucide-react";
 import { PageHeader } from "@/components/shared/page-header";
 import { Card } from "@/components/ui/card";
@@ -16,6 +15,7 @@ import { Button } from "@/components/ui/button";
 import { Separator } from "@/components/ui/separator";
 import { Tabs, TabsList, TabsTrigger, TabsContent } from "@/components/ui/tabs";
 import type { NotificationType, Notification } from "@/lib/types";
+import { Icon } from "@/components/ui/icon";
 
 const typeConfig: Record<
   NotificationType,
@@ -141,7 +141,7 @@ export default function ThongBaoPage() {
         actions={[
           {
             label: "Đánh dấu đã đọc",
-            icon: <Check className="h-4 w-4" />,
+            icon: <Icon name="check" size={16} />,
             variant: "outline",
             onClick: handleMarkAllRead,
           },

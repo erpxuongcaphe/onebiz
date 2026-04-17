@@ -1,8 +1,7 @@
 "use client";
-
-import { ChevronRight, Calendar } from "lucide-react";
 import { Input } from "@/components/ui/input";
 import { cn } from "@/lib/utils";
+import { Icon } from "@/components/ui/icon";
 
 export type DatePresetValue =
   | "this_month"
@@ -54,7 +53,7 @@ export function DatePresetFilter({
             name="date-preset-filter"
             checked={value === preset.value}
             onChange={() => onChange(preset.value)}
-            className="h-3.5 w-3.5 accent-[hsl(217,91%,40%)] cursor-pointer"
+            className="h-3.5 w-3.5 accent-primary cursor-pointer"
           />
           <span
             className={cn(
@@ -66,10 +65,10 @@ export function DatePresetFilter({
           >
             {preset.label}
             {preset.value !== "custom" && preset.value !== "all" && (
-              <ChevronRight className="h-3.5 w-3.5 ml-auto" />
+              <Icon name="chevron_right" size={14} className="ml-auto" />
             )}
             {preset.value === "custom" && (
-              <Calendar className="h-3.5 w-3.5 ml-auto" />
+              <Icon name="calendar_today" size={14} className="ml-auto" />
             )}
           </span>
         </label>

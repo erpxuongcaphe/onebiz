@@ -2,7 +2,6 @@
 
 import { useEffect, useState, useCallback } from "react";
 import { ColumnDef } from "@tanstack/react-table";
-import { Plus, ArrowRightLeft } from "lucide-react";
 import { Badge } from "@/components/ui/badge";
 import { PageHeader } from "@/components/shared/page-header";
 import { ListPageLayout } from "@/components/shared/list-page-layout";
@@ -23,6 +22,7 @@ import { formatCurrency, formatDate } from "@/lib/format";
 import { getInternalSales, getInternalSaleById } from "@/lib/services";
 import { CreateInternalSaleDialog } from "@/components/shared/dialogs";
 import { useToast, useBranchFilter } from "@/lib/contexts";
+import { Icon } from "@/components/ui/icon";
 
 /* ------------------------------------------------------------------ */
 /*  Types                                                               */
@@ -215,7 +215,7 @@ export default function InternalSalePage() {
       cell: ({ row }) => (
         <div className="flex items-center gap-1.5 text-sm">
           <span className="font-medium">{row.original.fromBranchName}</span>
-          <ArrowRightLeft className="h-3.5 w-3.5 text-muted-foreground shrink-0" />
+          <Icon name="swap_horiz" size={14} className="text-muted-foreground shrink-0" />
           <span className="font-medium">{row.original.toBranchName}</span>
         </div>
       ),
@@ -267,7 +267,7 @@ export default function InternalSalePage() {
         actions={[
           {
             label: "Tạo đơn nội bộ",
-            icon: <Plus className="h-4 w-4" />,
+            icon: <Icon name="add" size={16} />,
             onClick: () => setShowCreate(true),
           },
         ]}

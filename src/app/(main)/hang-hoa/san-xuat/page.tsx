@@ -2,7 +2,6 @@
 
 import { useEffect, useState, useCallback } from "react";
 import { ColumnDef } from "@tanstack/react-table";
-import { Plus, Printer, XCircle, CheckCircle2, Factory, List, Kanban } from "lucide-react";
 import { PageHeader } from "@/components/shared/page-header";
 import { ListPageLayout } from "@/components/shared/list-page-layout";
 import { DataTable } from "@/components/shared/data-table";
@@ -36,6 +35,7 @@ import {
   canTransitionProductionStatus,
 } from "@/lib/services";
 import type { ProductionOrder, ProductionOrderStatus } from "@/lib/types";
+import { Icon } from "@/components/ui/icon";
 
 type ViewMode = "list" | "kanban";
 
@@ -368,9 +368,9 @@ export default function SanXuatPage() {
               label: viewMode === "list" ? "Xem Kanban" : "Xem danh sách",
               icon:
                 viewMode === "list" ? (
-                  <Kanban className="h-4 w-4" />
+                  <Icon name="view_kanban" size={16} />
                 ) : (
-                  <List className="h-4 w-4" />
+                  <Icon name="list" size={16} />
                 ),
               variant: "outline",
               onClick: () =>
@@ -378,7 +378,7 @@ export default function SanXuatPage() {
             },
             {
               label: "Tạo lệnh SX",
-              icon: <Plus className="h-4 w-4" />,
+              icon: <Icon name="add" size={16} />,
               variant: "default",
               onClick: () => setCreateOpen(true),
             },
@@ -387,10 +387,10 @@ export default function SanXuatPage() {
 
         {!loading && filtered.length === 0 ? (
           <div className="flex flex-col items-center justify-center py-20 text-muted-foreground">
-            <Factory className="h-12 w-12 mb-3 opacity-30" />
+            <Icon name="factory" size={48} className="mb-3 opacity-30" />
             <p className="text-sm">Chưa có lệnh sản xuất nào</p>
             <Button size="sm" className="mt-3" onClick={() => setCreateOpen(true)}>
-              <Plus className="h-4 w-4 mr-1" />
+              <Icon name="add" size={16} className="mr-1" />
               Tạo lệnh đầu tiên
             </Button>
           </div>
@@ -455,7 +455,7 @@ export default function SanXuatPage() {
             rowActions={(row) => [
               {
                 label: "Hoàn thành",
-                icon: <CheckCircle2 className="h-4 w-4" />,
+                icon: <Icon name="check_circle" size={16} />,
                 onClick: () => {
                   setCompletingOrder(row);
                   setCompleteOpen(true);
@@ -463,7 +463,7 @@ export default function SanXuatPage() {
               },
               {
                 label: "In phiếu",
-                icon: <Printer className="h-4 w-4" />,
+                icon: <Icon name="print" size={16} />,
                 onClick: () => printDocument(buildProductionOrderPrintData({
                   id: row.id,
                   code: row.code,
@@ -481,7 +481,7 @@ export default function SanXuatPage() {
                 ? [
                     {
                       label: "Hủy",
-                      icon: <XCircle className="h-4 w-4" />,
+                      icon: <Icon name="cancel" size={16} />,
                       onClick: () => setCancellingItem(row),
                       variant: "destructive" as const,
                       separator: true,

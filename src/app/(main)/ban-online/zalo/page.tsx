@@ -5,10 +5,7 @@ import {
   MessageCircle,
   ShoppingCart,
   Send,
-  Search,
-  Package,
-  DollarSign,
-  FileText,
+  DollarSign
 } from "lucide-react";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
@@ -17,6 +14,7 @@ import { Input } from "@/components/ui/input";
 import { ScrollArea } from "@/components/ui/scroll-area";
 import { formatCurrency } from "@/lib/format";
 import { cn } from "@/lib/utils";
+import { Icon } from "@/components/ui/icon";
 
 /* ------------------------------------------------------------------ */
 /*  Mock data                                                          */
@@ -220,7 +218,7 @@ export default function ZaloPage() {
         <div className="w-72 lg:w-80 border-r bg-white flex flex-col shrink-0">
           <div className="p-3 border-b">
             <div className="relative">
-              <Search className="absolute left-2.5 top-1/2 -translate-y-1/2 size-4 text-muted-foreground" />
+              <Icon name="search" className="absolute left-2.5 top-1/2 -translate-y-1/2 size-4 text-muted-foreground" />
               <Input
                 placeholder="Tìm cuộc hội thoại"
                 value={searchText}
@@ -311,7 +309,7 @@ export default function ZaloPage() {
               style={{ backgroundColor: ZALO_BLUE }}
               className="text-white hover:opacity-90"
             >
-              <ShoppingCart className="size-4 mr-1.5" />
+              <Icon name="shopping_cart" className="size-4 mr-1.5" />
               Tạo đơn hàng
             </Button>
           </div>
@@ -360,7 +358,7 @@ export default function ZaloPage() {
           {/* Product suggestions */}
           <div className="border-t bg-white px-4 py-2.5">
             <p className="text-xs font-medium text-muted-foreground mb-2 flex items-center gap-1">
-              <Package className="size-3" />
+              <Icon name="inventory_2" className="size-3" />
               Gợi ý sản phẩm
             </p>
             <div className="flex gap-2 overflow-x-auto pb-1">
@@ -370,7 +368,7 @@ export default function ZaloPage() {
                   className="flex items-center gap-2 border rounded-lg px-3 py-2 bg-gray-50 shrink-0"
                 >
                   <div className="size-9 rounded bg-orange-100 flex items-center justify-center">
-                    <Package className="size-4 text-orange-600" />
+                    <Icon name="inventory_2" className="size-4 text-orange-600" />
                   </div>
                   <div>
                     <p className="text-xs font-medium leading-tight max-w-[140px] truncate">

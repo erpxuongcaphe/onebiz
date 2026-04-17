@@ -4,9 +4,10 @@ import { useState, useEffect } from "react";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Separator } from "@/components/ui/separator";
-import { Save, Check, Sun, Moon, Monitor } from "lucide-react";
+import { Sun, Moon, Monitor } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { useSettings, useToast } from "@/lib/contexts";
+import { Icon } from "@/components/ui/icon";
 
 const themes = [
   {
@@ -169,7 +170,7 @@ export default function AppearanceSettingsPage() {
                   )}
                 >
                   {accentColor === c.id && (
-                    <Check className="h-5 w-5 text-white" />
+                    <Icon name="check" className="text-white" />
                   )}
                 </div>
                 <span className="text-xs text-muted-foreground">
@@ -344,7 +345,7 @@ export default function AppearanceSettingsPage() {
 
       <div className="flex justify-end">
         <Button onClick={handleSave}>
-          <Save className="h-4 w-4 mr-1.5" />
+          <Icon name="save" size={16} className="mr-1.5" />
           Lưu thay đổi
         </Button>
       </div>

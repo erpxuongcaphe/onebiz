@@ -2,7 +2,6 @@
 
 import { useEffect, useState, useCallback } from "react";
 import { ColumnDef } from "@tanstack/react-table";
-import { Plus, Eye, Printer } from "lucide-react";
 import { Badge } from "@/components/ui/badge";
 import { PageHeader } from "@/components/shared/page-header";
 import { ListPageLayout } from "@/components/shared/list-page-layout";
@@ -27,6 +26,7 @@ import { CreatePurchaseReturnDialog } from "@/components/shared/dialogs";
 import { useToast } from "@/lib/contexts";
 import { printDocument } from "@/lib/print-document";
 import { buildPurchaseReturnPrintData } from "@/lib/print-templates";
+import { Icon } from "@/components/ui/icon";
 
 // === Status config ===
 const statusMap: Record<
@@ -220,7 +220,7 @@ export default function TraHangNhapPage() {
         searchValue={search}
         onSearchChange={setSearch}
         actions={[
-          { label: "Tạo phiếu trả", icon: <Plus className="h-4 w-4" />, variant: "default", onClick: () => setCreateOpen(true) },
+          { label: "Tạo phiếu trả", icon: <Icon name="add" size={16} />, variant: "default", onClick: () => setCreateOpen(true) },
         ]}
       />
 
@@ -246,13 +246,13 @@ export default function TraHangNhapPage() {
         rowActions={(row) => [
           {
             label: "Xem chi tiết",
-            icon: <Eye className="h-4 w-4" />,
+            icon: <Icon name="visibility" size={16} />,
             onClick: () => {
               const idx = data.findIndex((d) => d.id === row.id);
               setExpandedRow(expandedRow === idx ? null : idx);
             },
           },
-          { label: "In phiếu", icon: <Printer className="h-4 w-4" />, onClick: () => printDocument(buildPurchaseReturnPrintData(row)) },
+          { label: "In phiếu", icon: <Icon name="print" size={16} />, onClick: () => printDocument(buildPurchaseReturnPrintData(row)) },
         ]}
       />
 

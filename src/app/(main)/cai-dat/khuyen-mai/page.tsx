@@ -5,9 +5,9 @@ import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Separator } from "@/components/ui/separator";
-import { Save, Plus, Tag, Percent, Truck } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { formatCurrency } from "@/lib/format";
+import { Icon } from "@/components/ui/icon";
 
 function Toggle({
   checked,
@@ -100,11 +100,11 @@ const mockPromotions: Promotion[] = [
 function getTypeIcon(type: Promotion["type"]) {
   switch (type) {
     case "percent":
-      return <Percent className="h-4 w-4" />;
+      return <Icon name="percent" size={16} />;
     case "fixed":
-      return <Tag className="h-4 w-4" />;
+      return <Icon name="sell" size={16} />;
     case "freeship":
-      return <Truck className="h-4 w-4" />;
+      return <Icon name="local_shipping" size={16} />;
   }
 }
 
@@ -192,7 +192,7 @@ export default function PromotionSettingsPage() {
               ))}
 
               <Button variant="outline" className="w-full">
-                <Plus className="h-4 w-4 mr-1.5" />
+                <Icon name="add" size={16} className="mr-1.5" />
                 Thêm chương trình
               </Button>
             </div>
@@ -236,7 +236,7 @@ export default function PromotionSettingsPage() {
 
       <div className="flex justify-end">
         <Button>
-          <Save className="h-4 w-4 mr-1.5" />
+          <Icon name="save" size={16} className="mr-1.5" />
           Lưu cài đặt
         </Button>
       </div>

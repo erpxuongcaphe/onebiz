@@ -11,10 +11,10 @@ import {
 } from "@/components/ui/dialog";
 import { Input } from "@/components/ui/input";
 import { Button } from "@/components/ui/button";
-import { Loader2 } from "lucide-react";
 import { useToast } from "@/lib/contexts";
 import { createSupplier, updateSupplier } from "@/lib/services";
 import type { Supplier } from "@/lib/types";
+import { Icon } from "@/components/ui/icon";
 
 interface CreateSupplierDialogProps {
   open: boolean;
@@ -206,7 +206,7 @@ export function CreateSupplierDialog({
             Hủy
           </Button>
           <Button onClick={handleSave} disabled={saving}>
-            {saving && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
+            {saving && <Icon name="progress_activity" size={16} className="mr-2 animate-spin" />}
             {isEditing ? "Cập nhật" : "Lưu"}
           </Button>
         </DialogFooter>

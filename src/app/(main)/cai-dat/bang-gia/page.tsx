@@ -5,8 +5,8 @@ import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Separator } from "@/components/ui/separator";
-import { Save, Plus, Pencil, Eye } from "lucide-react";
 import { cn } from "@/lib/utils";
+import { Icon } from "@/components/ui/icon";
 
 interface PriceBook {
   id: string;
@@ -117,11 +117,11 @@ export default function PriceBookSettingsPage() {
                 </div>
                 <div className="flex items-center gap-2">
                   <Button variant="outline" size="sm">
-                    <Pencil className="h-3.5 w-3.5 mr-1" />
+                    <Icon name="edit" size={14} className="mr-1" />
                     Chỉnh sửa
                   </Button>
                   <Button variant="ghost" size="sm">
-                    <Eye className="h-3.5 w-3.5 mr-1" />
+                    <Icon name="visibility" size={14} className="mr-1" />
                     Xem giá
                   </Button>
                 </div>
@@ -129,7 +129,7 @@ export default function PriceBookSettingsPage() {
             ))}
 
             <Button variant="outline" className="w-full">
-              <Plus className="h-4 w-4 mr-1.5" />
+              <Icon name="add" size={16} className="mr-1.5" />
               Thêm bảng giá
             </Button>
           </div>
@@ -176,7 +176,7 @@ export default function PriceBookSettingsPage() {
 
       <div className="flex justify-end">
         <Button>
-          <Save className="h-4 w-4 mr-1.5" />
+          <Icon name="save" size={16} className="mr-1.5" />
           Lưu cài đặt
         </Button>
       </div>

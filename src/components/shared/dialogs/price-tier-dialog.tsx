@@ -3,7 +3,6 @@
 // PriceTierDialog — create / edit a price tier (B2B wholesale tier)
 
 import { useEffect, useState } from "react";
-import { Loader2 } from "lucide-react";
 import {
   Dialog,
   DialogContent,
@@ -17,6 +16,7 @@ import { Button } from "@/components/ui/button";
 import { useToast } from "@/lib/contexts";
 import { createPriceTier, updatePriceTier } from "@/lib/services";
 import type { PriceTier } from "@/lib/types";
+import { Icon } from "@/components/ui/icon";
 
 interface PriceTierDialogProps {
   open: boolean;
@@ -164,7 +164,7 @@ export function PriceTierDialog({
             Hủy
           </Button>
           <Button onClick={handleSave} disabled={saving}>
-            {saving && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
+            {saving && <Icon name="progress_activity" size={16} className="mr-2 animate-spin" />}
             {isEdit ? "Cập nhật" : "Tạo bảng giá"}
           </Button>
         </DialogFooter>

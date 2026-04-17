@@ -18,7 +18,6 @@ import {
   SelectContent,
   SelectItem,
 } from "@/components/ui/select";
-import { Trash2, Plus, Loader2 } from "lucide-react";
 import { useToast } from "@/lib/contexts";
 import {
   createBOM,
@@ -28,6 +27,7 @@ import {
 } from "@/lib/services";
 import { formatCurrency } from "@/lib/format";
 import type { Product, BOMCostBreakdown } from "@/lib/types";
+import { Icon } from "@/components/ui/icon";
 
 interface BOMEditorDialogProps {
   open: boolean;
@@ -326,7 +326,7 @@ export function BOMEditorDialog({
                 onClick={() => setPickerOpen(true)}
                 type="button"
               >
-                <Plus className="h-3.5 w-3.5 mr-1" />
+                <Icon name="add" size={14} className="mr-1" />
                 Thêm NVL
               </Button>
             </div>
@@ -400,7 +400,7 @@ export function BOMEditorDialog({
                               onClick={() => removeItem(idx)}
                               className="text-destructive hover:bg-destructive/10 rounded p-1"
                             >
-                              <Trash2 className="h-3.5 w-3.5" />
+                              <Icon name="delete" size={14} />
                             </button>
                           </td>
                         </tr>
@@ -458,7 +458,7 @@ export function BOMEditorDialog({
             Hủy
           </Button>
           <Button onClick={handleSave} disabled={saving}>
-            {saving && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
+            {saving && <Icon name="progress_activity" size={16} className="mr-2 animate-spin" />}
             Lưu công thức
           </Button>
         </DialogFooter>

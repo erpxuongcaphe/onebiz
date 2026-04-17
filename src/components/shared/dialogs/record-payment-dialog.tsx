@@ -18,13 +18,13 @@ import {
   SelectContent,
   SelectItem,
 } from "@/components/ui/select";
-import { Loader2 } from "lucide-react";
 import { formatCurrency } from "@/lib/format";
 import { useToast } from "@/lib/contexts";
 import {
   recordInvoicePayment,
   recordPurchasePayment,
 } from "@/lib/services/supabase/payments";
+import { Icon } from "@/components/ui/icon";
 
 interface RecordPaymentDialogProps {
   open: boolean;
@@ -191,7 +191,7 @@ export function RecordPaymentDialog({
             Hủy
           </Button>
           <Button onClick={handleSave} disabled={saving}>
-            {saving && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
+            {saving && <Icon name="progress_activity" size={16} className="mr-2 animate-spin" />}
             {isInvoice ? "Thu tiền" : "Trả tiền"}
           </Button>
         </DialogFooter>

@@ -5,9 +5,7 @@ import {
   ShoppingCart,
   Globe,
   MessageCircle,
-  Monitor,
-  Loader2,
-  Info,
+  Monitor
 } from "lucide-react";
 import {
   PieChart,
@@ -28,6 +26,7 @@ import {
   getChannelPerformance,
 } from "@/lib/services";
 import type { ChartPoint } from "@/lib/services/supabase/analytics";
+import { Icon } from "@/components/ui/icon";
 
 type ChannelPerformanceRow = {
   channel: string;
@@ -141,7 +140,7 @@ export default function KenhBanPage() {
           subtitle="So sánh hiệu suất các kênh bán hàng"
         />
         <div className="flex-1 flex items-center justify-center">
-          <Loader2 className="size-8 animate-spin text-muted-foreground" />
+          <Icon name="progress_activity" className="size-8 animate-spin text-muted-foreground" />
         </div>
       </div>
     );
@@ -243,7 +242,7 @@ export default function KenhBanPage() {
             subtitle="Dữ liệu lịch sử"
           >
             <div className="h-64 md:h-80 flex flex-col items-center justify-center text-muted-foreground gap-2">
-              <Info className="size-8" />
+              <Icon name="info" className="size-8" />
               <p className="text-sm text-center px-4">
                 Biểu đồ xu hướng theo tháng sẽ được bổ sung khi có đủ dữ liệu lịch sử.
               </p>

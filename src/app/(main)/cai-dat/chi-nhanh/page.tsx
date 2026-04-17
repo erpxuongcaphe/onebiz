@@ -10,7 +10,7 @@ import {
   TableHeader,
   TableRow,
 } from "@/components/ui/table";
-import { Plus, Pencil } from "lucide-react";
+import { Icon } from "@/components/ui/icon";
 
 const branches = [
   {
@@ -50,7 +50,7 @@ export default function BranchSettingsPage() {
           </p>
         </div>
         <Button>
-          <Plus className="h-4 w-4 mr-1.5" />
+          <Icon name="add" size={16} className="mr-1.5" />
           Thêm chi nhánh
         </Button>
       </div>
@@ -89,7 +89,7 @@ export default function BranchSettingsPage() {
                 </TableCell>
                 <TableCell>
                   <Button variant="ghost" size="icon-sm">
-                    <Pencil className="h-3.5 w-3.5" />
+                    <Icon name="edit" size={14} />
                   </Button>
                 </TableCell>
               </TableRow>

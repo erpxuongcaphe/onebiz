@@ -1,5 +1,6 @@
-import { Settings, Building, FileText, Globe, Bell } from "lucide-react";
+import { Building, FileText, Globe, Bell } from "lucide-react";
 import Link from "next/link";
+import { Icon } from "@/components/ui/icon";
 
 export const metadata = {
   title: "Thiết lập chung — OneBiz ERP",
@@ -11,7 +12,7 @@ export default function ThietLapPlaceholderPage() {
       <div className="max-w-xl w-full bg-white rounded-xl border shadow-sm p-8">
         <div className="flex items-center gap-3 mb-4">
           <div className="h-12 w-12 rounded-lg bg-blue-100 flex items-center justify-center">
-            <Settings className="h-6 w-6 text-blue-600" />
+            <Icon name="settings" size={24} className="text-blue-600" />
           </div>
           <div>
             <h1 className="text-xl font-semibold">Thiết lập chung</h1>

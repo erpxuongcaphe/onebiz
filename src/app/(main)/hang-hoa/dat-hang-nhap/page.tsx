@@ -3,7 +3,6 @@
 import { useEffect, useState, useCallback } from "react";
 import { useRouter } from "next/navigation";
 import { ColumnDef } from "@tanstack/react-table";
-import { Plus, Eye, PackagePlus, XCircle, Printer } from "lucide-react";
 import { Badge } from "@/components/ui/badge";
 import { PageHeader } from "@/components/shared/page-header";
 import { ListPageLayout } from "@/components/shared/list-page-layout";
@@ -29,6 +28,7 @@ import { getPurchaseOrderEntries, getPurchaseEntryStatuses } from "@/lib/service
 import { CreatePurchaseEntryDialog, ConfirmDialog } from "@/components/shared/dialogs";
 import { useToast } from "@/lib/contexts";
 import type { PurchaseOrderEntry } from "@/lib/types";
+import { Icon } from "@/components/ui/icon";
 
 // === Status config ===
 const statusMap: Record<
@@ -247,7 +247,7 @@ export default function DatHangNhapPage() {
           },
         }}
         actions={[
-          { label: "Đặt hàng", icon: <Plus className="h-4 w-4" />, variant: "default", onClick: () => setCreateOpen(true) },
+          { label: "Đặt hàng", icon: <Icon name="add" size={16} />, variant: "default", onClick: () => setCreateOpen(true) },
         ]}
       />
 
@@ -279,17 +279,17 @@ export default function DatHangNhapPage() {
         rowActions={(row) => [
           {
             label: "Xem chi tiết",
-            icon: <Eye className="h-4 w-4" />,
+            icon: <Icon name="visibility" size={16} />,
             onClick: () => {
               const idx = data.findIndex((d) => d.id === row.id);
               setExpandedRow(expandedRow === idx ? null : idx);
             },
           },
-          { label: "In phiếu", icon: <Printer className="h-4 w-4" />, onClick: () => printDocument(buildPurchaseEntryPrintData(row)) },
-          { label: "Nhập hàng", icon: <PackagePlus className="h-4 w-4" />, onClick: () => { toast({ variant: "info", title: "Chuyển đến trang nhập hàng" }); router.push("/hang-hoa/nhap-hang"); } },
+          { label: "In phiếu", icon: <Icon name="print" size={16} />, onClick: () => printDocument(buildPurchaseEntryPrintData(row)) },
+          { label: "Nhập hàng", icon: <Icon name="add_box" size={16} />, onClick: () => { toast({ variant: "info", title: "Chuyển đến trang nhập hàng" }); router.push("/hang-hoa/nhap-hang"); } },
           ...(row.status !== "completed" && row.status !== "cancelled"
             ? [
-                { label: "Hủy", icon: <XCircle className="h-4 w-4" />, onClick: () => setCancellingItem(row), variant: "destructive" as const, separator: true },
+                { label: "Hủy", icon: <Icon name="cancel" size={16} />, onClick: () => setCancellingItem(row), variant: "destructive" as const, separator: true },
               ]
             : []),
         ]}

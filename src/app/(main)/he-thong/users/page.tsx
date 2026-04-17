@@ -8,10 +8,7 @@ import { useState, useEffect, useCallback } from "react";
 import {
   UserCog,
   Shield,
-  Loader2,
-  MoreHorizontal,
-  UserPlus,
-  Check,
+  MoreHorizontal
 } from "lucide-react";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
@@ -47,6 +44,7 @@ import {
 } from "@/lib/services/supabase/roles";
 import type { DbRole } from "@/lib/services/supabase/roles";
 import { getClient } from "@/lib/services/supabase/base";
+import { Icon } from "@/components/ui/icon";
 
 interface UserRow {
   id: string;
@@ -130,7 +128,7 @@ export default function UsersPage() {
   if (loading) {
     return (
       <div className="flex items-center justify-center h-64">
-        <Loader2 className="h-8 w-8 animate-spin text-muted-foreground" />
+        <Icon name="progress_activity" size={32} className="animate-spin text-muted-foreground" />
       </div>
     );
   }
@@ -146,7 +144,7 @@ export default function UsersPage() {
           </p>
         </div>
         <Button disabled>
-          <UserPlus className="h-4 w-4 mr-1.5" />
+          <Icon name="person_add" size={16} className="mr-1.5" />
           Mời nhân viên
         </Button>
       </div>
@@ -298,7 +296,7 @@ export default function UsersPage() {
               Hủy
             </Button>
             <Button onClick={handleAssignRole}>
-              <Check className="h-4 w-4 mr-1.5" />
+              <Icon name="check" size={16} className="mr-1.5" />
               Xác nhận
             </Button>
           </DialogFooter>

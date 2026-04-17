@@ -3,14 +3,9 @@
 import { useState, useEffect, useCallback } from "react";
 import {
   Factory,
-  Package,
-  CheckCircle2,
-  AlertTriangle,
   Clock,
   Boxes,
-  TrendingUp,
-  Loader2,
-  ArrowRight,
+  TrendingUp
 } from "lucide-react";
 import {
   BarChart,
@@ -41,6 +36,7 @@ import type {
   TopOutputProduct,
 } from "@/lib/services";
 import Link from "next/link";
+import { Icon } from "@/components/ui/icon";
 
 // ────────────────────────────────────────────
 // Dynamic labels based on branch type
@@ -139,7 +135,7 @@ export default function ProductionDashboardPage() {
   if (loading) {
     return (
       <div className="flex items-center justify-center h-64">
-        <Loader2 className="h-8 w-8 animate-spin text-muted-foreground" />
+        <Icon name="progress_activity" size={32} className="animate-spin text-muted-foreground" />
       </div>
     );
   }
@@ -201,7 +197,7 @@ export default function ProductionDashboardPage() {
       {/* Lot alerts */}
       {((kpis?.expiredLots ?? 0) > 0 || (kpis?.expiringLots ?? 0) > 0) && (
         <div className="flex items-center gap-3 px-4 py-3 rounded-lg bg-amber-50 border border-amber-200">
-          <AlertTriangle className="h-5 w-5 text-amber-600 shrink-0" />
+          <Icon name="warning" className="text-amber-600 shrink-0" />
           <div className="text-sm">
             {(kpis?.expiredLots ?? 0) > 0 && (
               <span className="text-red-600 font-medium mr-3">
@@ -216,7 +212,7 @@ export default function ProductionDashboardPage() {
           </div>
           <Link href="/hang-hoa/hsd" className="ml-auto">
             <Button variant="outline" size="sm">
-              Xem HSD <ArrowRight className="h-3.5 w-3.5 ml-1" />
+              Xem HSD <Icon name="arrow_forward" size={14} className="ml-1" />
             </Button>
           </Link>
         </div>
@@ -279,7 +275,7 @@ export default function ProductionDashboardPage() {
         actions={
           <Link href="/hang-hoa/ton-kho">
             <Button variant="ghost" size="sm">
-              Xem tồn kho <ArrowRight className="h-3.5 w-3.5 ml-1" />
+              Xem tồn kho <Icon name="arrow_forward" size={14} className="ml-1" />
             </Button>
           </Link>
         }
@@ -338,22 +334,22 @@ export default function ProductionDashboardPage() {
       <div className="flex flex-wrap gap-3">
         <Link href="/hang-hoa/san-xuat">
           <Button variant="outline">
-            <Factory className="h-4 w-4 mr-2" /> {labels.orderLabel}
+            <Icon name="factory" size={16} className="mr-2" /> {labels.orderLabel}
           </Button>
         </Link>
         <Link href="/hang-hoa/cong-thuc">
           <Button variant="outline">
-            <Package className="h-4 w-4 mr-2" /> Công thức (BOM)
+            <Icon name="inventory_2" size={16} className="mr-2" /> Công thức (BOM)
           </Button>
         </Link>
         <Link href="/hang-hoa/lo-san-xuat">
           <Button variant="outline">
-            <Boxes className="h-4 w-4 mr-2" /> Lô sản phẩm
+            <Icon name="inventory" size={16} className="mr-2" /> Lô sản phẩm
           </Button>
         </Link>
         <Link href="/hang-hoa/hsd">
           <Button variant="outline">
-            <AlertTriangle className="h-4 w-4 mr-2" /> Hạn sử dụng
+            <Icon name="warning" size={16} className="mr-2" /> Hạn sử dụng
           </Button>
         </Link>
       </div>

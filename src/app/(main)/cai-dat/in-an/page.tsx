@@ -13,17 +13,13 @@ import {
 import { Input } from "@/components/ui/input";
 import { Separator } from "@/components/ui/separator";
 import {
-  Printer,
   Usb,
   Wifi,
-  Network,
-  FileText,
-  UtensilsCrossed,
-  Receipt,
-  CheckCircle2,
+  Network
 } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { useState } from "react";
+import { Icon } from "@/components/ui/icon";
 
 // ── Toggle component ──
 function Toggle({
@@ -159,7 +155,7 @@ ${print.connectionType !== "usb" ? `<p>IP: ${print.printerIp || "(chưa cấu h�
       <Card>
         <CardHeader>
           <CardTitle className="flex items-center gap-2">
-            <Printer className="h-5 w-5" />
+            <Icon name="print" />
             Kết nối máy in
           </CardTitle>
         </CardHeader>
@@ -243,12 +239,12 @@ ${print.connectionType !== "usb" ? `<p>IP: ${print.printerIp || "(chưa cấu h�
               onClick={handleTestPrint}
               disabled={testStatus === "testing"}
             >
-              <Printer className="h-4 w-4 mr-1.5" />
+              <Icon name="print" size={16} className="mr-1.5" />
               {testStatus === "testing" ? "Đang in..." : "In thử"}
             </Button>
             {testStatus === "success" && (
               <span className="flex items-center gap-1 text-sm text-green-600">
-                <CheckCircle2 className="h-4 w-4" /> Đã gửi lệnh in
+                <Icon name="check_circle" size={16} /> Đã gửi lệnh in
               </span>
             )}
             {testStatus === "error" && (
@@ -262,7 +258,7 @@ ${print.connectionType !== "usb" ? `<p>IP: ${print.printerIp || "(chưa cấu h�
       <Card>
         <CardHeader>
           <CardTitle className="flex items-center gap-2">
-            <FileText className="h-5 w-5" />
+            <Icon name="description" />
             Khổ giấy
           </CardTitle>
         </CardHeader>
@@ -311,7 +307,7 @@ ${print.connectionType !== "usb" ? `<p>IP: ${print.printerIp || "(chưa cấu h�
       <Card>
         <CardHeader>
           <CardTitle className="flex items-center gap-2">
-            <Receipt className="h-5 w-5" />
+            <Icon name="receipt" />
             Nội dung phiếu in
           </CardTitle>
         </CardHeader>
@@ -362,7 +358,7 @@ ${print.connectionType !== "usb" ? `<p>IP: ${print.printerIp || "(chưa cấu h�
       <Card>
         <CardHeader>
           <CardTitle className="flex items-center gap-2">
-            <UtensilsCrossed className="h-5 w-5" />
+            <Icon name="restaurant" />
             Cài đặt in F&B
           </CardTitle>
         </CardHeader>

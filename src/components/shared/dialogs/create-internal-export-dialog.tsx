@@ -11,7 +11,6 @@ import {
 } from "@/components/ui/dialog";
 import { Input } from "@/components/ui/input";
 import { Button } from "@/components/ui/button";
-import { Search, Loader2, X } from "lucide-react";
 import { formatCurrency } from "@/lib/format";
 import { useToast } from "@/lib/contexts";
 import { getClient } from "@/lib/services/supabase/base";
@@ -19,6 +18,7 @@ import {
   applyManualStockMovement,
   nextEntityCode,
 } from "@/lib/services/supabase/stock-adjustments";
+import { Icon } from "@/components/ui/icon";
 
 interface CreateInternalExportDialogProps {
   open: boolean;
@@ -221,7 +221,7 @@ export function CreateInternalExportDialog({
               Thêm sản phẩm <span className="text-destructive">*</span>
             </label>
             <div className="relative">
-              <Search className="absolute left-2.5 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
+              <Icon name="search" size={16} className="absolute left-2.5 top-1/2 -translate-y-1/2 text-muted-foreground" />
               <Input
                 value={productSearch}
                 onChange={(e) => {
@@ -293,7 +293,7 @@ export function CreateInternalExportDialog({
                       onClick={() => removeItem(item.product_id)}
                       className="text-muted-foreground hover:text-destructive"
                     >
-                      <X className="h-4 w-4" />
+                      <Icon name="close" size={16} />
                     </button>
                   </div>
                 ))}
@@ -331,7 +331,7 @@ export function CreateInternalExportDialog({
             Hủy
           </Button>
           <Button onClick={handleSave} disabled={saving}>
-            {saving && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
+            {saving && <Icon name="progress_activity" size={16} className="mr-2 animate-spin" />}
             Tạo phiếu xuất
           </Button>
         </DialogFooter>

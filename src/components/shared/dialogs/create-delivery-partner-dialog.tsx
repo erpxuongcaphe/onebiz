@@ -11,12 +11,12 @@ import {
 } from "@/components/ui/dialog";
 import { Input } from "@/components/ui/input";
 import { Button } from "@/components/ui/button";
-import { Loader2 } from "lucide-react";
 import { useToast } from "@/lib/contexts";
 import { getClient } from "@/lib/services/supabase/base";
 import { updateDeliveryPartner } from "@/lib/services";
 import type { Database } from "@/lib/supabase/types";
 import type { DeliveryPartner } from "@/lib/types";
+import { Icon } from "@/components/ui/icon";
 
 type DeliveryPartnerInsert = Database["public"]["Tables"]["delivery_partners"]["Insert"];
 
@@ -168,7 +168,7 @@ export function CreateDeliveryPartnerDialog({
             Hủy
           </Button>
           <Button onClick={handleSave} disabled={saving}>
-            {saving && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
+            {saving && <Icon name="progress_activity" size={16} className="mr-2 animate-spin" />}
             {isEditing ? "Cập nhật" : "Tạo đối tác"}
           </Button>
         </DialogFooter>

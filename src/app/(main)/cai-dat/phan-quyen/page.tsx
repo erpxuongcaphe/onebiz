@@ -9,14 +9,7 @@
 
 import { useState, useEffect, useCallback } from "react";
 import {
-  Plus,
-  ChevronDown,
-  ChevronUp,
-  Shield,
-  Users,
-  Trash2,
-  Loader2,
-  Save,
+  Shield
 } from "lucide-react";
 import {
   Card,
@@ -50,6 +43,7 @@ import {
 import type { DbRole, DbRoleDetail } from "@/lib/services/supabase/roles";
 import { PERMISSION_GROUPS, DEFAULT_ROLE_TEMPLATES } from "@/lib/permissions/constants";
 import type { PermissionCode } from "@/lib/permissions/constants";
+import { Icon } from "@/components/ui/icon";
 
 export default function PermissionSettingsPage() {
   const { tenant } = useAuth();
@@ -197,7 +191,7 @@ export default function PermissionSettingsPage() {
   if (loading) {
     return (
       <div className="flex items-center justify-center h-64">
-        <Loader2 className="h-8 w-8 animate-spin text-muted-foreground" />
+        <Icon name="progress_activity" size={32} className="animate-spin text-muted-foreground" />
       </div>
     );
   }
@@ -218,7 +212,7 @@ export default function PermissionSettingsPage() {
             </Button>
           )}
           <Button onClick={() => setCreateOpen(true)}>
-            <Plus className="h-4 w-4 mr-1.5" />
+            <Icon name="add" size={16} className="mr-1.5" />
             Thêm vai trò
           </Button>
         </div>
@@ -259,13 +253,13 @@ export default function PermissionSettingsPage() {
                         </Badge>
                       )}
                       <Badge variant="secondary">
-                        <Users className="h-3 w-3 mr-1" />
+                        <Icon name="group" size={12} className="mr-1" />
                         {role.memberCount}
                       </Badge>
                       {isExpanded ? (
-                        <ChevronUp className="h-4 w-4 text-muted-foreground" />
+                        <Icon name="expand_less" size={16} className="text-muted-foreground" />
                       ) : (
-                        <ChevronDown className="h-4 w-4 text-muted-foreground" />
+                        <Icon name="expand_more" size={16} className="text-muted-foreground" />
                       )}
                     </div>
                   </div>
@@ -342,7 +336,7 @@ export default function PermissionSettingsPage() {
                         className="text-red-600 hover:text-red-700 hover:bg-red-50"
                         onClick={() => handleDelete(role.id, role.name)}
                       >
-                        <Trash2 className="h-4 w-4 mr-1" />
+                        <Icon name="delete" size={16} className="mr-1" />
                         Xóa vai trò
                       </Button>
                     )}
@@ -353,9 +347,9 @@ export default function PermissionSettingsPage() {
                       size="sm"
                     >
                       {saving ? (
-                        <Loader2 className="h-4 w-4 mr-1 animate-spin" />
+                        <Icon name="progress_activity" size={16} className="mr-1 animate-spin" />
                       ) : (
-                        <Save className="h-4 w-4 mr-1" />
+                        <Icon name="save" size={16} className="mr-1" />
                       )}
                       Lưu thay đổi
                     </Button>
@@ -396,7 +390,7 @@ export default function PermissionSettingsPage() {
               Hủy
             </Button>
             <Button onClick={handleCreate} disabled={!newRoleName.trim()}>
-              <Plus className="h-4 w-4 mr-1.5" />
+              <Icon name="add" size={16} className="mr-1.5" />
               Tạo vai trò
             </Button>
           </DialogFooter>

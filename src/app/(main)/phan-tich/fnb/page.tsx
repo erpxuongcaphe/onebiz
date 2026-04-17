@@ -5,8 +5,7 @@ import {
   DollarSign,
   ShoppingCart,
   Receipt,
-  Clock,
-  Loader2,
+  Clock
 } from "lucide-react";
 import {
   BarChart,
@@ -35,6 +34,7 @@ import type {
   HourlyRevenue,
   CashierPerformance,
 } from "@/lib/services/supabase/fnb-analytics";
+import { Icon } from "@/components/ui/icon";
 
 // === Tooltips ===
 
@@ -104,7 +104,7 @@ export default function FnbAnalyticsPage() {
   if (loading) {
     return (
       <div className="flex items-center justify-center h-64">
-        <Loader2 className="h-8 w-8 animate-spin text-muted-foreground" />
+        <Icon name="progress_activity" size={32} className="animate-spin text-muted-foreground" />
       </div>
     );
   }

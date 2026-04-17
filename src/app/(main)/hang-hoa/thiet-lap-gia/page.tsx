@@ -6,14 +6,6 @@
 
 import { useEffect, useState, useCallback } from "react";
 import { ColumnDef } from "@tanstack/react-table";
-import {
-  Plus,
-  Pencil,
-  Trash2,
-  Tag,
-  Loader2,
-  Package,
-} from "lucide-react";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { PageHeader } from "@/components/shared/page-header";
@@ -35,6 +27,7 @@ import {
   deletePriceTierItem,
 } from "@/lib/services";
 import type { PriceTier, PriceTierItem } from "@/lib/types";
+import { Icon } from "@/components/ui/icon";
 
 // ---------------------------------------------------------------------------
 // Inline detail — danh sách items của một tier
@@ -103,22 +96,22 @@ function PriceTierDetail({
             Sản phẩm áp dụng ({items.length})
           </h3>
           <Button size="sm" onClick={() => setAddOpen(true)}>
-            <Plus className="h-4 w-4 mr-1" />
+            <Icon name="add" size={16} className="mr-1" />
             Thêm sản phẩm
           </Button>
         </div>
 
         {loading ? (
           <div className="flex items-center justify-center py-8 text-muted-foreground">
-            <Loader2 className="h-4 w-4 animate-spin mr-2" />
+            <Icon name="progress_activity" size={16} className="animate-spin mr-2" />
             <span className="text-sm">Đang tải...</span>
           </div>
         ) : items.length === 0 ? (
           <div className="flex flex-col items-center justify-center py-10 text-muted-foreground">
-            <Package className="h-10 w-10 mb-2 opacity-30" />
+            <Icon name="inventory_2" size={40} className="mb-2 opacity-30" />
             <p className="text-sm">Chưa có sản phẩm nào trong bảng giá</p>
             <Button size="sm" variant="outline" className="mt-3" onClick={() => setAddOpen(true)}>
-              <Plus className="h-4 w-4 mr-1" />
+              <Icon name="add" size={16} className="mr-1" />
               Thêm sản phẩm đầu tiên
             </Button>
           </div>
@@ -154,7 +147,7 @@ function PriceTierDetail({
                         className="text-muted-foreground hover:text-destructive transition-colors"
                         title="Xóa"
                       >
-                        <Trash2 className="h-3.5 w-3.5" />
+                        <Icon name="delete" size={14} />
                       </button>
                     </td>
                   </tr>
@@ -309,7 +302,7 @@ export default function ThietLapGiaPage() {
         actions={[
           {
             label: "Tạo bảng giá",
-            icon: <Plus className="h-4 w-4" />,
+            icon: <Icon name="add" size={16} />,
             variant: "default",
             onClick: () => {
               setEditingTier(null);
@@ -321,7 +314,7 @@ export default function ThietLapGiaPage() {
 
       {!loading && filtered.length === 0 ? (
         <div className="flex-1 flex flex-col items-center justify-center text-muted-foreground">
-          <Tag className="h-12 w-12 mb-3 opacity-30" />
+          <Icon name="sell" size={48} className="mb-3 opacity-30" />
           <p className="text-sm">Chưa có bảng giá nào</p>
           <Button
             size="sm"
@@ -331,7 +324,7 @@ export default function ThietLapGiaPage() {
               setCreateOpen(true);
             }}
           >
-            <Plus className="h-4 w-4 mr-1" />
+            <Icon name="add" size={16} className="mr-1" />
             Tạo bảng giá đầu tiên
           </Button>
         </div>
@@ -362,7 +355,7 @@ export default function ThietLapGiaPage() {
           rowActions={(row) => [
             {
               label: "Sửa",
-              icon: <Pencil className="h-4 w-4" />,
+              icon: <Icon name="edit" size={16} />,
               onClick: () => {
                 setEditingTier(row);
                 setCreateOpen(true);
@@ -370,7 +363,7 @@ export default function ThietLapGiaPage() {
             },
             {
               label: "Xóa",
-              icon: <Trash2 className="h-4 w-4" />,
+              icon: <Icon name="delete" size={16} />,
               onClick: () => handleDelete(row),
               variant: "destructive",
               separator: true,

@@ -1,5 +1,5 @@
-import { Plug, Webhook, Cloud, Zap } from "lucide-react";
 import Link from "next/link";
+import { Icon } from "@/components/ui/icon";
 
 export const metadata = {
   title: "Tích hợp — OneBiz ERP",
@@ -11,7 +11,7 @@ export default function TichHopPlaceholderPage() {
       <div className="max-w-xl w-full bg-white rounded-xl border shadow-sm p-8">
         <div className="flex items-center gap-3 mb-4">
           <div className="h-12 w-12 rounded-lg bg-emerald-100 flex items-center justify-center">
-            <Plug className="h-6 w-6 text-emerald-600" />
+            <Icon name="electrical_services" size={24} className="text-emerald-600" />
           </div>
           <div>
             <h1 className="text-xl font-semibold">Tích hợp</h1>
@@ -26,21 +26,21 @@ export default function TichHopPlaceholderPage() {
 
         <div className="space-y-2 mb-6">
           <div className="flex items-start gap-3 text-sm">
-            <Cloud className="h-4 w-4 mt-0.5 text-muted-foreground shrink-0" />
+            <Icon name="cloud" size={16} className="mt-0.5 text-muted-foreground shrink-0" />
             <div>
               <div className="font-medium">Sàn & social commerce</div>
               <div className="text-xs text-muted-foreground">Shopee, Lazada, TikTok Shop, Facebook, Zalo OA</div>
             </div>
           </div>
           <div className="flex items-start gap-3 text-sm">
-            <Zap className="h-4 w-4 mt-0.5 text-muted-foreground shrink-0" />
+            <Icon name="bolt" size={16} className="mt-0.5 text-muted-foreground shrink-0" />
             <div>
               <div className="font-medium">Thanh toán & vận chuyển</div>
               <div className="text-xs text-muted-foreground">VNPay, Momo, ZaloPay · GHN, GHTK, J&T, Viettel Post</div>
             </div>
           </div>
           <div className="flex items-start gap-3 text-sm">
-            <Webhook className="h-4 w-4 mt-0.5 text-muted-foreground shrink-0" />
+            <Icon name="webhook" size={16} className="mt-0.5 text-muted-foreground shrink-0" />
             <div>
               <div className="font-medium">Webhook & API</div>
               <div className="text-xs text-muted-foreground">Tự động đồng bộ đơn hàng, sản phẩm, tồn kho qua REST API</div>

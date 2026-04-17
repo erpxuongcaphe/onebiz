@@ -2,7 +2,6 @@
 
 import { useEffect, useState, useCallback } from "react";
 import { ColumnDef } from "@tanstack/react-table";
-import { Plus, Upload, Pencil, Trash2 } from "lucide-react";
 import { PageHeader } from "@/components/shared/page-header";
 import { ListPageLayout } from "@/components/shared/list-page-layout";
 import { DataTable, StarCell } from "@/components/shared/data-table";
@@ -28,6 +27,7 @@ import { formatCurrency, formatDate } from "@/lib/format";
 import { exportToExcel, exportToCsv } from "@/lib/utils/export";
 import { getCustomers, getCustomerGroups, deleteCustomer } from "@/lib/services";
 import type { Customer } from "@/lib/types";
+import { Icon } from "@/components/ui/icon";
 
 /* ------------------------------------------------------------------ */
 /*  Starred set (local state — could be persisted to backend later)   */
@@ -398,11 +398,11 @@ export default function KhachHangPage() {
           actions={[
             {
               label: "Tạo mới",
-              icon: <Plus className="h-4 w-4" />,
+              icon: <Icon name="add" size={16} />,
               variant: "default",
               onClick: () => setCreateOpen(true),
             },
-            { label: "Import", icon: <Upload className="h-4 w-4" /> },
+            { label: "Import", icon: <Icon name="upload" size={16} /> },
           ]}
         />
 
@@ -432,7 +432,7 @@ export default function KhachHangPage() {
           rowActions={(row) => [
             {
               label: "Sửa",
-              icon: <Pencil className="h-4 w-4" />,
+              icon: <Icon name="edit" size={16} />,
               onClick: () => {
                 setEditingCustomer(row);
                 setCreateOpen(true);
@@ -440,7 +440,7 @@ export default function KhachHangPage() {
             },
             {
               label: "Xóa",
-              icon: <Trash2 className="h-4 w-4" />,
+              icon: <Icon name="delete" size={16} />,
               onClick: () => setDeletingCustomer(row),
               variant: "destructive",
               separator: true,

@@ -7,7 +7,6 @@
 
 import { useEffect, useState, useCallback } from "react";
 import { ColumnDef } from "@tanstack/react-table";
-import { Boxes, Factory, ShoppingCart, AlertTriangle } from "lucide-react";
 import { PageHeader } from "@/components/shared/page-header";
 import { ListPageLayout } from "@/components/shared/list-page-layout";
 import { DataTable } from "@/components/shared/data-table";
@@ -21,6 +20,7 @@ import { useToast, useBranchFilter } from "@/lib/contexts";
 import { formatDate } from "@/lib/format";
 import { getAllProductLots } from "@/lib/services";
 import type { ProductLot } from "@/lib/types";
+import { Icon } from "@/components/ui/icon";
 
 type LotRow = ProductLot & { productName: string; productCode: string };
 
@@ -119,9 +119,9 @@ export default function LoSanXuatPage() {
       cell: ({ row }) => (
         <div className="flex items-center gap-1">
           {row.original.sourceType === "production" ? (
-            <Factory className="h-3 w-3 text-purple-500" />
+            <Icon name="factory" size={12} className="text-purple-500" />
           ) : (
-            <ShoppingCart className="h-3 w-3 text-green-500" />
+            <Icon name="shopping_cart" size={12} className="text-green-500" />
           )}
           <span className="text-xs">
             {row.original.sourceType === "production" ? "Sản xuất" : "Mua hàng"}
@@ -171,7 +171,7 @@ export default function LoSanXuatPage() {
         return (
           <div className="flex items-center gap-1">
             {(isExpired || isNearExpiry) && (
-              <AlertTriangle className={`h-3 w-3 ${isExpired ? "text-red-500" : "text-amber-500"}`} />
+              <Icon name="warning" className={`h-3 w-3 ${isExpired ? "text-red-500" : "text-amber-500"}`} />
             )}
             <span className={`text-xs ${isExpired ? "text-red-600 font-bold" : isNearExpiry ? "text-amber-600" : "text-muted-foreground"}`}>
               {formatDate(row.original.expiryDate)}

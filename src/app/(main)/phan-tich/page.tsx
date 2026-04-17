@@ -1,7 +1,7 @@
 "use client";
 
 import { useState, useEffect } from "react";
-import { DollarSign, ShoppingCart, Users, TrendingUp, Loader2 } from "lucide-react";
+import { DollarSign, ShoppingCart, Users, TrendingUp } from "lucide-react";
 import {
   LineChart,
   Line,
@@ -32,6 +32,7 @@ import type {
   CategoryRevenue,
   TopProductRevenue,
 } from "@/lib/services/supabase/analytics";
+import { Icon } from "@/components/ui/icon";
 
 // === Helpers ===
 
@@ -97,7 +98,7 @@ export default function TongQuanPage() {
       <div className="flex flex-col h-full">
         <DateRangeBar title="Tổng quan" subtitle="Phân tích kinh doanh tổng hợp" />
         <div className="flex-1 flex items-center justify-center">
-          <Loader2 className="h-8 w-8 animate-spin text-gray-400" />
+          <Icon name="progress_activity" size={32} className="animate-spin text-gray-400" />
         </div>
       </div>
     );

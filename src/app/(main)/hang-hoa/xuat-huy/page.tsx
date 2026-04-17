@@ -5,7 +5,6 @@ import { useToast, useBranchFilter } from "@/lib/contexts";
 import { printDocument } from "@/lib/print-document";
 import { buildDisposalPrintData } from "@/lib/print-templates";
 import { ColumnDef } from "@tanstack/react-table";
-import { Plus, Download, Printer, XCircle } from "lucide-react";
 import { Badge } from "@/components/ui/badge";
 import { PageHeader } from "@/components/shared/page-header";
 import { ListPageLayout } from "@/components/shared/list-page-layout";
@@ -30,6 +29,7 @@ import { exportToExcel, exportToCsv } from "@/lib/utils/export";
 import { getDisposalExports, getDisposalStatuses } from "@/lib/services";
 import type { DisposalExport } from "@/lib/types";
 import { CreateDisposalDialog, ConfirmDialog } from "@/components/shared/dialogs";
+import { Icon } from "@/components/ui/icon";
 
 /* ------------------------------------------------------------------ */
 /*  Status config                                                      */
@@ -344,13 +344,13 @@ export default function XuatHuyPage() {
         actions={[
           {
             label: "Xuất hủy",
-            icon: <Plus className="h-4 w-4" />,
+            icon: <Icon name="add" size={16} />,
             variant: "default",
             onClick: () => setCreateOpen(true),
           },
           {
             label: "Xuất file",
-            icon: <Download className="h-4 w-4" />,
+            icon: <Icon name="download" size={16} />,
           },
         ]}
       />
@@ -376,14 +376,14 @@ export default function XuatHuyPage() {
         rowActions={(row) => [
           {
             label: "In phiếu",
-            icon: <Printer className="h-4 w-4" />,
+            icon: <Icon name="print" size={16} />,
             onClick: () => printDocument(buildDisposalPrintData(row)),
           },
           ...(row.status === "draft"
             ? [
                 {
                   label: "Hủy",
-                  icon: <XCircle className="h-4 w-4" />,
+                  icon: <Icon name="cancel" size={16} />,
                   onClick: () => setCancellingItem(row),
                   variant: "destructive" as const,
                   separator: true,

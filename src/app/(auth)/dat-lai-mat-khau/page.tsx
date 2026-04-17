@@ -53,7 +53,7 @@ export default function ResetPasswordPage() {
   return (
     <Card className="w-full max-w-sm">
       <CardHeader className="text-center">
-        <div className="mx-auto mb-2 w-12 h-12 bg-[hsl(217,91%,40%)] rounded-xl flex items-center justify-center">
+        <div className="mx-auto mb-2 w-12 h-12 bg-primary rounded-xl flex items-center justify-center">
           <span className="text-white font-bold text-lg">O</span>
         </div>
         <CardTitle className="text-2xl">Đặt lại mật khẩu</CardTitle>

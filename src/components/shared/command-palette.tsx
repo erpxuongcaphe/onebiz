@@ -19,19 +19,14 @@ import {
 } from "react";
 import { useRouter } from "next/navigation";
 import {
-  ArrowRight,
   Box,
-  Command as CommandIcon,
-  Package,
-  Plus,
-  Search,
-  Truck,
-  User,
+  Command as CommandIcon
 } from "lucide-react";
 import { Dialog, DialogContent, DialogTitle } from "@/components/ui/dialog";
 import { mainNavItems } from "./nav-config";
 import { getProducts, getCustomers, getSuppliers } from "@/lib/services";
 import { cn } from "@/lib/utils";
+import { Icon } from "@/components/ui/icon";
 
 // ---------------------------------------------------------------------------
 // Types
@@ -157,7 +152,7 @@ function CommandPaletteDialog({
           label: group.label,
           description: group.href,
           keywords: group.label,
-          icon: <ArrowRight className="h-4 w-4 text-muted-foreground" />,
+          icon: <Icon name="arrow_forward" size={16} className="text-muted-foreground" />,
           onSelect: () => go(group.href!),
         });
       }
@@ -170,7 +165,7 @@ function CommandPaletteDialog({
               label: item.label,
               description: `${group.label}${sub.groupLabel ? ` · ${sub.groupLabel}` : ""}`,
               keywords: `${group.label} ${sub.groupLabel ?? ""} ${item.label}`,
-              icon: <ArrowRight className="h-4 w-4 text-muted-foreground" />,
+              icon: <Icon name="arrow_forward" size={16} className="text-muted-foreground" />,
               onSelect: () => go(item.href),
             });
           }
@@ -185,7 +180,7 @@ function CommandPaletteDialog({
         label: "Tạo sản phẩm mới",
         description: "Hàng hóa",
         keywords: "tao san pham moi product new hang hoa",
-        icon: <Plus className="h-4 w-4 text-primary" />,
+        icon: <Icon name="add" size={16} className="text-primary" />,
         onSelect: () => go("/hang-hoa?new=1"),
       },
       {
@@ -194,7 +189,7 @@ function CommandPaletteDialog({
         label: "Tạo công thức (BOM)",
         description: "Sản xuất",
         keywords: "bom cong thuc san xuat formula",
-        icon: <Plus className="h-4 w-4 text-primary" />,
+        icon: <Icon name="add" size={16} className="text-primary" />,
         onSelect: () => go("/hang-hoa/cong-thuc"),
       },
       {
@@ -203,7 +198,7 @@ function CommandPaletteDialog({
         label: "Tạo lệnh sản xuất",
         description: "Sản xuất",
         keywords: "lenh san xuat production order",
-        icon: <Plus className="h-4 w-4 text-primary" />,
+        icon: <Icon name="add" size={16} className="text-primary" />,
         onSelect: () => go("/hang-hoa/san-xuat"),
       },
       {
@@ -212,7 +207,7 @@ function CommandPaletteDialog({
         label: "Tạo hóa đơn",
         description: "Đơn hàng",
         keywords: "hoa don invoice",
-        icon: <Plus className="h-4 w-4 text-primary" />,
+        icon: <Icon name="add" size={16} className="text-primary" />,
         onSelect: () => go("/don-hang/hoa-don"),
       },
     ];
@@ -256,7 +251,7 @@ function CommandPaletteDialog({
             kind: "product",
             label: p.name,
             description: `${p.code} · ${p.categoryName ?? "Không nhóm"}`,
-            icon: <Package className="h-4 w-4 text-blue-600" />,
+            icon: <Icon name="inventory_2" size={16} className="text-blue-600" />,
             onSelect: () => go(`/hang-hoa?focus=${p.id}`),
           });
         }
@@ -266,7 +261,7 @@ function CommandPaletteDialog({
             kind: "customer",
             label: c.name,
             description: c.phone ?? c.email ?? "Khách hàng",
-            icon: <User className="h-4 w-4 text-emerald-600" />,
+            icon: <Icon name="person" size={16} className="text-emerald-600" />,
             onSelect: () => go(`/khach-hang?focus=${c.id}`),
           });
         }
@@ -276,7 +271,7 @@ function CommandPaletteDialog({
             kind: "supplier",
             label: s.name,
             description: s.phone ?? s.email ?? "Nhà cung cấp",
-            icon: <Truck className="h-4 w-4 text-amber-600" />,
+            icon: <Icon name="local_shipping" size={16} className="text-amber-600" />,
             onSelect: () => go(`/hang-hoa/nha-cung-cap?focus=${s.id}`),
           });
         }
@@ -360,7 +355,7 @@ function CommandPaletteDialog({
 
         {/* Search input */}
         <div className="flex items-center gap-2 px-4 py-3 border-b">
-          <Search className="h-4 w-4 text-muted-foreground shrink-0" />
+          <Icon name="search" size={16} className="text-muted-foreground shrink-0" />
           <input
             ref={inputRef}
             value={query}

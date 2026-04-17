@@ -13,8 +13,8 @@ import {
   TableRow,
 } from "@/components/ui/table";
 import { Separator } from "@/components/ui/separator";
-import { Save, QrCode } from "lucide-react";
 import { cn } from "@/lib/utils";
+import { Icon } from "@/components/ui/icon";
 
 function Toggle({
   checked,
@@ -194,7 +194,7 @@ export default function PaymentSettingsPage() {
           <div className="flex items-center justify-between">
             <div className="flex items-center gap-3">
               <div className="h-10 w-10 rounded-lg bg-muted flex items-center justify-center">
-                <QrCode className="h-5 w-5 text-muted-foreground" />
+                <Icon name="qr_code" className="text-muted-foreground" />
               </div>
               <div>
                 <div className="text-sm font-medium">Hiển thị mã QR</div>
@@ -216,7 +216,7 @@ export default function PaymentSettingsPage() {
 
       <div className="flex justify-end">
         <Button>
-          <Save className="h-4 w-4 mr-1.5" />
+          <Icon name="save" size={16} className="mr-1.5" />
           Lưu thay đổi
         </Button>
       </div>

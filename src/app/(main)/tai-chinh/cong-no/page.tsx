@@ -10,12 +10,7 @@
 import { useEffect, useState, useCallback } from "react";
 import { ColumnDef } from "@tanstack/react-table";
 import {
-  Users,
-  Truck,
-  TrendingDown,
-  TrendingUp,
-  BarChart3,
-  AlertTriangle,
+  BarChart3
 } from "lucide-react";
 import { PageHeader } from "@/components/shared/page-header";
 import { DataTable } from "@/components/shared/data-table";
@@ -34,6 +29,7 @@ import { getCustomers, getSuppliers } from "@/lib/services";
 import { getDebtAging, getTopDebtors } from "@/lib/services/supabase/debt";
 import type { Customer, Supplier } from "@/lib/types";
 import type { DebtAgingReport, DebtorDetail } from "@/lib/services/supabase/debt";
+import { Icon } from "@/components/ui/icon";
 
 type Mode = "customer" | "supplier" | "aging";
 
@@ -347,14 +343,14 @@ export default function CongNoPage() {
       {/* Summary */}
       <div className="grid grid-cols-1 md:grid-cols-2 gap-3 px-4 pt-4">
         <SummaryCard
-          icon={<TrendingUp className="h-4 w-4 text-emerald-600" />}
+          icon={<Icon name="trending_up" size={16} className="text-emerald-600" />}
           label="Khách hàng đang nợ"
           count={customers.length}
           value={formatCurrency(totalCustomerDebt)}
           tone="success"
         />
         <SummaryCard
-          icon={<TrendingDown className="h-4 w-4 text-amber-600" />}
+          icon={<Icon name="trending_down" size={16} className="text-amber-600" />}
           label="Phải trả NCC"
           count={suppliers.length}
           value={formatCurrency(totalSupplierDebt)}
@@ -369,11 +365,11 @@ export default function CongNoPage() {
       >
         <TabsList>
           <TabsTrigger value="customer" className="gap-2">
-            <Users className="h-4 w-4" />
+            <Icon name="group" size={16} />
             KH còn nợ ({customers.length})
           </TabsTrigger>
           <TabsTrigger value="supplier" className="gap-2">
-            <Truck className="h-4 w-4" />
+            <Icon name="local_shipping" size={16} />
             NCC ({suppliers.length})
           </TabsTrigger>
           <TabsTrigger value="aging" className="gap-2">
@@ -473,7 +469,7 @@ export default function CongNoPage() {
                       >
                         <div className="flex items-center gap-1.5 mb-2">
                           {idx >= 2 && (
-                            <AlertTriangle
+                            <Icon name="warning"
                               className={`h-3.5 w-3.5 ${BUCKET_TEXT_COLORS[idx]}`}
                             />
                           )}

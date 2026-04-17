@@ -6,9 +6,7 @@ import {
   Clock,
   Truck,
   CheckCircle2,
-  XCircle,
-  Search,
-  Filter,
+  XCircle
 } from "lucide-react";
 import { Card, CardContent } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
@@ -16,6 +14,7 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { formatCurrency } from "@/lib/format";
 import { cn } from "@/lib/utils";
+import { Icon } from "@/components/ui/icon";
 
 /* ------------------------------------------------------------------ */
 /*  Types & Mock data                                                  */
@@ -163,7 +162,7 @@ export default function DonHangOnlinePage() {
 
         {/* Search */}
         <div className="relative max-w-sm">
-          <Search className="absolute left-2.5 top-1/2 -translate-y-1/2 size-4 text-muted-foreground" />
+          <Icon name="search" className="absolute left-2.5 top-1/2 -translate-y-1/2 size-4 text-muted-foreground" />
           <Input
             placeholder="Tìm mã đơn, khách hàng, SĐT..."
             value={searchText}

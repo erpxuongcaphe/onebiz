@@ -13,9 +13,9 @@ import {
   SelectTrigger,
   SelectValue,
 } from "@/components/ui/select";
-import { Save } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { useSettings, useToast } from "@/lib/contexts";
+import { Icon } from "@/components/ui/icon";
 
 function Toggle({
   checked,
@@ -240,7 +240,7 @@ export default function SalesSettingsPage() {
 
       <div className="flex justify-end">
         <Button onClick={handleSave}>
-          <Save className="h-4 w-4 mr-1.5" />
+          <Icon name="save" size={16} className="mr-1.5" />
           Lưu thay đổi
         </Button>
       </div>

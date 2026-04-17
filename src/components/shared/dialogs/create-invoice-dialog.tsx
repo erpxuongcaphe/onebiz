@@ -18,11 +18,11 @@ import {
   SelectContent,
   SelectItem,
 } from "@/components/ui/select";
-import { Trash2, Search, Loader2 } from "lucide-react";
 import { formatCurrency } from "@/lib/format";
 import { useToast } from "@/lib/contexts";
 import { getClient } from "@/lib/services/supabase/base";
 import type { Database } from "@/lib/supabase/types";
+import { Icon } from "@/components/ui/icon";
 
 type InvoiceInsert = Database["public"]["Tables"]["invoices"]["Insert"];
 type InvoiceItemInsert = Database["public"]["Tables"]["invoice_items"]["Insert"];
@@ -298,7 +298,7 @@ export function CreateInvoiceDialog({
           <div className="space-y-1.5">
             <label className="text-sm font-medium">Khách hàng</label>
             <div className="relative">
-              <Search className="absolute left-2.5 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
+              <Icon name="search" size={16} className="absolute left-2.5 top-1/2 -translate-y-1/2 text-muted-foreground" />
               <Input
                 value={customerSearch}
                 onChange={(e) => {
@@ -345,7 +345,7 @@ export function CreateInvoiceDialog({
           <div className="space-y-1.5">
             <label className="text-sm font-medium">Thêm sản phẩm</label>
             <div className="relative">
-              <Search className="absolute left-2.5 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
+              <Icon name="search" size={16} className="absolute left-2.5 top-1/2 -translate-y-1/2 text-muted-foreground" />
               <Input
                 value={productSearch}
                 onChange={(e) => {
@@ -461,7 +461,7 @@ export function CreateInvoiceDialog({
                     onClick={() => removeItem(item.id)}
                     className="text-muted-foreground hover:text-destructive"
                   >
-                    <Trash2 className="h-3.5 w-3.5" />
+                    <Icon name="delete" size={14} />
                   </Button>
                 </div>
               ))}
@@ -564,7 +564,7 @@ export function CreateInvoiceDialog({
             Hủy
           </Button>
           <Button onClick={handleSave} disabled={saving}>
-            {saving && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
+            {saving && <Icon name="progress_activity" size={16} className="mr-2 animate-spin" />}
             Tạo hóa đơn
           </Button>
         </DialogFooter>

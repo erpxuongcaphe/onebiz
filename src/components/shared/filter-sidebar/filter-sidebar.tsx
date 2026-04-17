@@ -1,11 +1,11 @@
 "use client";
 
 import { ReactNode, useState } from "react";
-import { Filter, X } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Sheet, SheetContent, SheetTitle } from "@/components/ui/sheet";
 import { ScrollArea } from "@/components/ui/scroll-area";
 import { cn } from "@/lib/utils";
+import { Icon } from "@/components/ui/icon";
 
 interface FilterSidebarProps {
   children: ReactNode;
@@ -24,7 +24,7 @@ export function FilterSidebar({ children, className }: FilterSidebarProps) {
         className="md:hidden flex items-center gap-1.5"
         onClick={() => setMobileOpen(true)}
       >
-        <Filter className="h-4 w-4" />
+        <Icon name="filter_alt" size={16} />
         Bộ lọc
       </Button>
 
@@ -34,7 +34,7 @@ export function FilterSidebar({ children, className }: FilterSidebarProps) {
           <SheetTitle className="flex items-center justify-between px-4 py-3 border-b">
             <span className="font-semibold">Bộ lọc</span>
             <Button variant="ghost" size="icon" className="h-8 w-8" onClick={() => setMobileOpen(false)}>
-              <X className="h-4 w-4" />
+              <Icon name="close" size={16} />
             </Button>
           </SheetTitle>
           <ScrollArea className="h-[calc(100vh-57px)]">
@@ -46,7 +46,7 @@ export function FilterSidebar({ children, className }: FilterSidebarProps) {
       {/* Desktop sidebar */}
       <aside
         className={cn(
-          "hidden md:block w-[240px] shrink-0 border-r bg-white overflow-y-auto",
+          "hidden md:block w-[240px] shrink-0 border-r bg-surface-container-low overflow-y-auto",
           className
         )}
       >

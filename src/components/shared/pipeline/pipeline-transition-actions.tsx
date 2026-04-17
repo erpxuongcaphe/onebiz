@@ -1,7 +1,6 @@
 "use client";
 
 import { useEffect, useState } from "react";
-import { ChevronDown, Loader2, ArrowRight } from "lucide-react";
 import {
   DropdownMenu,
   DropdownMenuTrigger,
@@ -18,6 +17,7 @@ import {
   transitionPipelineItem,
 } from "@/lib/services";
 import type { AllowedTransition } from "@/lib/types";
+import { Icon } from "@/components/ui/icon";
 
 interface PipelineTransitionActionsProps {
   pipelineItemId: string;
@@ -84,7 +84,7 @@ export function PipelineTransitionActions({
   if (loading) {
     return (
       <Button size={size} variant={variant} disabled className="gap-1.5">
-        <Loader2 className="h-3.5 w-3.5 animate-spin" />
+        <Icon name="progress_activity" size={14} className="animate-spin" />
         Đang tải...
       </Button>
     );
@@ -110,12 +110,12 @@ export function PipelineTransitionActions({
         )}
       >
         {running ? (
-          <Loader2 className="h-3.5 w-3.5 animate-spin" />
+          <Icon name="progress_activity" size={14} className="animate-spin" />
         ) : (
-          <ArrowRight className="h-3.5 w-3.5" />
+          <Icon name="arrow_forward" size={14} />
         )}
         Chuyển trạng thái
-        <ChevronDown className="h-3.5 w-3.5" />
+        <Icon name="expand_more" size={14} />
       </DropdownMenuTrigger>
       <DropdownMenuContent align="end">
         {transitions.map((t) => (

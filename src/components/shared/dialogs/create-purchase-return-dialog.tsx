@@ -12,11 +12,11 @@ import {
 import { Input } from "@/components/ui/input";
 import { Button } from "@/components/ui/button";
 import { Checkbox } from "@/components/ui/checkbox";
-import { Search, Loader2 } from "lucide-react";
 import { formatCurrency } from "@/lib/format";
 import { useToast } from "@/lib/contexts";
 import { getClient } from "@/lib/services/supabase/base";
 import { completeSupplierReturn } from "@/lib/services/supabase/purchase-entries";
+import { Icon } from "@/components/ui/icon";
 
 interface CreatePurchaseReturnDialogProps {
   open: boolean;
@@ -213,7 +213,7 @@ export function CreatePurchaseReturnDialog({
               Đơn nhập hàng <span className="text-destructive">*</span>
             </label>
             <div className="relative">
-              <Search className="absolute left-2.5 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
+              <Icon name="search" size={16} className="absolute left-2.5 top-1/2 -translate-y-1/2 text-muted-foreground" />
               <Input
                 value={poSearch}
                 onChange={(e) => {
@@ -351,7 +351,7 @@ export function CreatePurchaseReturnDialog({
             Hủy
           </Button>
           <Button onClick={handleSave} disabled={saving}>
-            {saving && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
+            {saving && <Icon name="progress_activity" size={16} className="mr-2 animate-spin" />}
             Tạo phiếu trả
           </Button>
         </DialogFooter>

@@ -18,9 +18,9 @@ import {
   SelectContent,
   SelectItem,
 } from "@/components/ui/select";
-import { Loader2 } from "lucide-react";
 import { useToast } from "@/lib/contexts";
 import { createCashTransaction } from "@/lib/services";
+import { Icon } from "@/components/ui/icon";
 
 interface CreateCashTransactionDialogProps {
   open: boolean;
@@ -250,7 +250,7 @@ export function CreateCashTransactionDialog({
             Hủy
           </Button>
           <Button onClick={handleSave} disabled={saving}>
-            {saving && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
+            {saving && <Icon name="progress_activity" size={16} className="mr-2 animate-spin" />}
             Lưu
           </Button>
         </DialogFooter>

@@ -18,10 +18,10 @@ import {
   SelectContent,
   SelectItem,
 } from "@/components/ui/select";
-import { Loader2 } from "lucide-react";
 import { useToast } from "@/lib/contexts";
 import { createCustomer, updateCustomer } from "@/lib/services";
 import type { Customer } from "@/lib/types";
+import { Icon } from "@/components/ui/icon";
 
 interface CreateCustomerDialogProps {
   open: boolean;
@@ -273,7 +273,7 @@ export function CreateCustomerDialog({
             Hủy
           </Button>
           <Button onClick={handleSave} disabled={saving}>
-            {saving && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
+            {saving && <Icon name="progress_activity" size={16} className="mr-2 animate-spin" />}
             {isEditing ? "Cập nhật" : "Lưu"}
           </Button>
         </DialogFooter>

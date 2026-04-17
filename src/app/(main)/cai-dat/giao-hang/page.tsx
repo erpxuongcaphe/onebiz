@@ -14,7 +14,7 @@ import {
   TableRow,
 } from "@/components/ui/table";
 import { Separator } from "@/components/ui/separator";
-import { Save } from "lucide-react";
+import { Icon } from "@/components/ui/icon";
 
 const deliveryZones = [
   { id: 1, name: "Nội thành", fee: "15,000", distance: "0 - 10km" },
@@ -136,7 +136,7 @@ export default function DeliverySettingsPage() {
 
       <div className="flex justify-end">
         <Button>
-          <Save className="h-4 w-4 mr-1.5" />
+          <Icon name="save" size={16} className="mr-1.5" />
           Lưu thay đổi
         </Button>
       </div>

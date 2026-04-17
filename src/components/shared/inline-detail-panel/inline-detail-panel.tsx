@@ -1,8 +1,8 @@
 "use client";
 
 import { ReactNode, useEffect, useRef } from "react";
-import { X } from "lucide-react";
 import { cn } from "@/lib/utils";
+import { Icon } from "@/components/ui/icon";
 
 interface InlineDetailPanelProps {
   open: boolean;
@@ -35,7 +35,9 @@ export function InlineDetailPanel({
     <div
       ref={panelRef}
       className={cn(
-        "border-t border-b border-blue-200 bg-white",
+        // Stitch style: dùng surface-container-low (xám nhạt) để panel nổi trên
+        // row trắng, border primary-fixed thay vì blue-200 cứng.
+        "border-t border-b border-primary-fixed bg-surface-container-low",
         "animate-in slide-in-from-top-2 fade-in-0 duration-200",
         className
       )}
@@ -49,7 +51,7 @@ export function InlineDetailPanel({
           }}
           className="absolute right-3 top-3 z-10 rounded-md p-1 hover:bg-muted transition-colors"
         >
-          <X className="h-4 w-4 text-muted-foreground" />
+          <Icon name="close" size={16} className="text-muted-foreground" />
         </button>
         {children}
       </div>

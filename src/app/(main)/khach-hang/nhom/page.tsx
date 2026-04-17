@@ -5,7 +5,6 @@
 
 import { useEffect, useState, useCallback } from "react";
 import { ColumnDef } from "@tanstack/react-table";
-import { Plus, Pencil, Trash2, Users } from "lucide-react";
 import { PageHeader } from "@/components/shared/page-header";
 import { DataTable } from "@/components/shared/data-table";
 import { Button } from "@/components/ui/button";
@@ -25,6 +24,7 @@ import {
   deleteCategory,
 } from "@/lib/services";
 import type { ProductCategory } from "@/lib/types";
+import { Icon } from "@/components/ui/icon";
 
 export default function NhomKhachHangPage() {
   const { toast } = useToast();
@@ -100,7 +100,7 @@ export default function NhomKhachHangPage() {
       size: 320,
       cell: ({ row }) => (
         <div className="flex items-center gap-2">
-          <Users className="h-4 w-4 text-muted-foreground" />
+          <Icon name="group" size={16} className="text-muted-foreground" />
           <span className="font-medium">{row.original.name}</span>
         </div>
       ),
@@ -124,7 +124,7 @@ export default function NhomKhachHangPage() {
           actions={[
             {
               label: "Thêm nhóm",
-              icon: <Plus className="h-4 w-4" />,
+              icon: <Icon name="add" size={16} />,
               variant: "default",
               onClick: () => {
                 setEditing(null);
@@ -148,7 +148,7 @@ export default function NhomKhachHangPage() {
           rowActions={(row) => [
             {
               label: "Sửa",
-              icon: <Pencil className="h-4 w-4" />,
+              icon: <Icon name="edit" size={16} />,
               onClick: () => {
                 setEditing(row);
                 setDialogOpen(true);
@@ -156,7 +156,7 @@ export default function NhomKhachHangPage() {
             },
             {
               label: "Xóa",
-              icon: <Trash2 className="h-4 w-4" />,
+              icon: <Icon name="delete" size={16} />,
               onClick: () => handleDelete(row),
               variant: "destructive",
               separator: true,

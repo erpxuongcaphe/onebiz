@@ -10,8 +10,8 @@
  */
 
 import type { ReactNode } from "react";
-import { ShieldAlert } from "lucide-react";
 import { usePermissions } from "@/lib/permissions";
+import { Icon } from "@/components/ui/icon";
 
 interface PermissionPageProps {
   requires: string;
@@ -26,7 +26,7 @@ export function PermissionPage({ requires, children }: PermissionPageProps) {
   if (!hasPermission(requires)) {
     return (
       <div className="flex flex-col items-center justify-center h-64 gap-3">
-        <ShieldAlert className="h-10 w-10 text-muted-foreground" />
+        <Icon name="gpp_bad" size={40} className="text-muted-foreground" />
         <p className="text-lg font-medium text-muted-foreground">
           Không có quyền truy cập
         </p>

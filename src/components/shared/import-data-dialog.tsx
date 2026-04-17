@@ -9,7 +9,6 @@
 // ---------------------------------------------------------------------------
 
 import { useState, type ChangeEvent } from "react";
-import { Upload, FileSpreadsheet, X } from "lucide-react";
 import {
   Dialog,
   DialogContent,
@@ -18,6 +17,7 @@ import {
 } from "@/components/ui/dialog";
 import { Button } from "@/components/ui/button";
 import { cn } from "@/lib/utils";
+import { Icon } from "@/components/ui/icon";
 
 interface ImportDataDialogProps {
   open: boolean;
@@ -50,7 +50,7 @@ export function ImportDataDialog({ open, onOpenChange }: ImportDataDialogProps) 
       <DialogContent className="sm:max-w-lg">
         <div className="flex items-start gap-3">
           <div className="h-10 w-10 rounded-lg bg-primary/10 text-primary flex items-center justify-center shrink-0">
-            <Upload className="h-5 w-5" />
+            <Icon name="upload" />
           </div>
           <div className="flex-1 min-w-0">
             <DialogTitle>Import dữ liệu cho AI</DialogTitle>
@@ -76,7 +76,7 @@ export function ImportDataDialog({ open, onOpenChange }: ImportDataDialogProps) 
         >
           {file ? (
             <div className="flex items-center justify-center gap-3">
-              <FileSpreadsheet className="h-8 w-8 text-emerald-600" />
+              <Icon name="table_view" size={32} className="text-emerald-600" />
               <div className="text-left">
                 <p className="text-sm font-medium truncate max-w-[280px]">
                   {file.name}
@@ -91,12 +91,12 @@ export function ImportDataDialog({ open, onOpenChange }: ImportDataDialogProps) 
                 className="ml-2 h-6 w-6 rounded-md hover:bg-muted flex items-center justify-center"
                 aria-label="Xóa file"
               >
-                <X className="h-4 w-4" />
+                <Icon name="close" size={16} />
               </button>
             </div>
           ) : (
             <>
-              <Upload className="h-8 w-8 mx-auto text-muted-foreground mb-2" />
+              <Icon name="upload" size={32} className="mx-auto text-muted-foreground mb-2" />
               <p className="text-sm font-medium">Kéo thả file vào đây</p>
               <p className="text-xs text-muted-foreground mt-1">
                 Hỗ trợ Excel (.xlsx, .xls) và CSV
@@ -125,7 +125,7 @@ export function ImportDataDialog({ open, onOpenChange }: ImportDataDialogProps) 
             Hủy
           </Button>
           <Button disabled={!file} onClick={handleClose}>
-            <Upload className="h-4 w-4 mr-1.5" />
+            <Icon name="upload" size={16} className="mr-1.5" />
             Upload
           </Button>
         </div>
