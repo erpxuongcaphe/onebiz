@@ -177,7 +177,7 @@ export default function AuditPage() {
   const pageCount = Math.ceil(total / PAGE_SIZE);
 
   return (
-    <div className="flex flex-col h-[calc(100vh-48px)]">
+    <div className="flex flex-col h-[calc(100vh-64px)]">
       <PageHeader
         title="Lịch sử thao tác"
         searchPlaceholder="Tìm theo mã đối tượng, hành động..."

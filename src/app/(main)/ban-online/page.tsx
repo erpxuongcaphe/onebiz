@@ -174,7 +174,7 @@ const recentOrders = [
 
 export default function BanOnlinePage() {
   return (
-    <div className="flex flex-col h-[calc(100vh-48px)] overflow-y-auto">
+    <div className="flex flex-col h-[calc(100vh-64px)] overflow-y-auto">
       {/* Header */}
       <div className="px-4 md:px-6 pt-4 md:pt-6 pb-2">
         <h1 className="text-lg font-bold text-gray-900">

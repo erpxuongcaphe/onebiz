@@ -115,7 +115,7 @@ export default function NhomKhachHangPage() {
 
   return (
     <>
-      <div className="flex flex-col h-[calc(100vh-48px)]">
+      <div className="flex flex-col h-[calc(100vh-64px)]">
         <PageHeader
           title="Nhóm khách hàng"
           searchPlaceholder="Theo mã, tên nhóm..."

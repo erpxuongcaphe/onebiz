@@ -179,7 +179,7 @@ export default function DatHangPage() {
 
   if (loading) {
     return (
-      <div className="flex flex-col h-[calc(100vh-48px)]">
+      <div className="flex flex-col h-[calc(100vh-64px)]">
         <DateRangeBar
           title="Phân tích đặt hàng"
           subtitle="Theo dõi tình trạng và hiệu suất đơn hàng"
@@ -239,7 +239,7 @@ export default function DatHangPage() {
   ];
 
   return (
-    <div className="flex flex-col h-[calc(100vh-48px)] overflow-y-auto">
+    <div className="flex flex-col h-[calc(100vh-64px)] overflow-y-auto">
       <DateRangeBar
         title="Phân tích đặt hàng"
         subtitle="Theo dõi tình trạng và hiệu suất đơn hàng"

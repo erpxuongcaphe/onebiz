@@ -183,7 +183,7 @@ export default function BaoCaoTaiChinhPage() {
 
   if (loading) {
     return (
-      <div className="flex flex-col h-[calc(100vh-48px)] items-center justify-center">
+      <div className="flex flex-col h-[calc(100vh-64px)] items-center justify-center">
         <Icon name="progress_activity" size={32} className="animate-spin text-muted-foreground" />
         <p className="mt-2 text-sm text-muted-foreground">
           Đang tải báo cáo...
@@ -199,7 +199,7 @@ export default function BaoCaoTaiChinhPage() {
   const prev = useConsolidated ? consolidated.previous : pnl?.previous;
 
   return (
-    <div className="flex flex-col h-[calc(100vh-48px)] overflow-y-auto">
+    <div className="flex flex-col h-[calc(100vh-64px)] overflow-y-auto">
       <DateRangeBar
         title="Báo cáo tài chính (P&L)"
         subtitle="Lãi/Lỗ, Giá vốn, Biên lợi nhuận"

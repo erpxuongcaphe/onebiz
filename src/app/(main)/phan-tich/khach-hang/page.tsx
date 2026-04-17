@@ -161,7 +161,7 @@ export default function KhachHangPage() {
 
   if (loading) {
     return (
-      <div className="flex flex-col h-[calc(100vh-48px)]">
+      <div className="flex flex-col h-[calc(100vh-64px)]">
         <DateRangeBar
           title="Phân tích khách hàng"
           subtitle="Thống kê và phân loại khách hàng"
@@ -184,7 +184,7 @@ export default function KhachHangPage() {
       : 0;
 
   return (
-    <div className="flex flex-col h-[calc(100vh-48px)] overflow-y-auto">
+    <div className="flex flex-col h-[calc(100vh-64px)] overflow-y-auto">
       <DateRangeBar
         title="Phân tích khách hàng"
         subtitle="Thống kê và phân loại khách hàng"

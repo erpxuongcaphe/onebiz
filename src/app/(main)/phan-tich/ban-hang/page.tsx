@@ -173,7 +173,7 @@ export default function BanHangPage() {
 
   if (loading) {
     return (
-      <div className="flex flex-col h-[calc(100vh-48px)] items-center justify-center">
+      <div className="flex flex-col h-[calc(100vh-64px)] items-center justify-center">
         <Icon name="progress_activity" size={32} className="animate-spin text-muted-foreground" />
         <p className="mt-3 text-sm text-muted-foreground">
           Đang tải dữ liệu phân tích...
@@ -191,7 +191,7 @@ export default function BanHangPage() {
 
   if (!hasData) {
     return (
-      <div className="flex flex-col h-[calc(100vh-48px)]">
+      <div className="flex flex-col h-[calc(100vh-64px)]">
         <DateRangeBar
           title="Phân tích bán hàng"
           subtitle="Thống kê doanh thu và đơn hàng theo thời gian"
@@ -219,7 +219,7 @@ export default function BanHangPage() {
     : { text: "0%", positive: true };
 
   return (
-    <div className="flex flex-col h-[calc(100vh-48px)] overflow-y-auto">
+    <div className="flex flex-col h-[calc(100vh-64px)] overflow-y-auto">
       <DateRangeBar
         title="Phân tích bán hàng"
         subtitle="Thống kê doanh thu và đơn hàng theo thời gian"

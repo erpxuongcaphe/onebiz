@@ -173,7 +173,7 @@ export default function ZaloPage() {
   );
 
   return (
-    <div className="flex flex-col h-[calc(100vh-48px)] overflow-hidden">
+    <div className="flex flex-col h-[calc(100vh-64px)] overflow-hidden">
       {/* Header */}
       <div className="border-b bg-white px-4 md:px-6 py-3">
         <div className="flex items-center gap-2 mb-3">

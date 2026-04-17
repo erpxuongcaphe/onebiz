@@ -293,7 +293,7 @@ export default function ThietLapGiaPage() {
   ];
 
   return (
-    <div className="h-[calc(100vh-48px)] flex flex-col">
+    <div className="h-[calc(100vh-64px)] flex flex-col">
       <PageHeader
         title="Bảng giá (Price Tiers)"
         searchPlaceholder="Theo tên hoặc mã bảng giá..."

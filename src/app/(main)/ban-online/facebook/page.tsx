@@ -180,7 +180,7 @@ export default function FacebookPage() {
   );
 
   return (
-    <div className="flex flex-col h-[calc(100vh-48px)]">
+    <div className="flex flex-col h-[calc(100vh-64px)]">
       {/* Header */}
       <div className="px-4 md:px-6 pt-4 md:pt-6 pb-3 border-b">
         <div className="flex items-center gap-2 mb-1">

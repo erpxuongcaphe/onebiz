@@ -84,7 +84,7 @@ export default function CanhBaoPage() {
 
   if (loading) {
     return (
-      <div className="flex flex-col h-[calc(100vh-48px)] items-center justify-center">
+      <div className="flex flex-col h-[calc(100vh-64px)] items-center justify-center">
         <Icon name="progress_activity" size={32} className="animate-spin text-muted-foreground" />
         <p className="mt-2 text-sm text-muted-foreground">
           Đang kiểm tra cảnh báo...
@@ -94,7 +94,7 @@ export default function CanhBaoPage() {
   }
 
   return (
-    <div className="flex flex-col h-[calc(100vh-48px)] overflow-y-auto">
+    <div className="flex flex-col h-[calc(100vh-64px)] overflow-y-auto">
       {/* Header */}
       <div className="border-b px-4 md:px-6 py-3">
         <div className="flex items-center justify-between">

@@ -186,7 +186,7 @@ export default function HangHoaPage() {
 
   if (loading) {
     return (
-      <div className="flex flex-col h-[calc(100vh-48px)] items-center justify-center">
+      <div className="flex flex-col h-[calc(100vh-64px)] items-center justify-center">
         <Icon name="progress_activity" size={32} className="animate-spin text-muted-foreground" />
         <p className="mt-2 text-sm text-muted-foreground">Đang tải dữ liệu...</p>
       </div>
@@ -196,7 +196,7 @@ export default function HangHoaPage() {
   const totalProducts = kpis?.totalProducts ?? 0;
 
   return (
-    <div className="flex flex-col h-[calc(100vh-48px)] overflow-y-auto">
+    <div className="flex flex-col h-[calc(100vh-64px)] overflow-y-auto">
       <DateRangeBar
         title="Phân tích hàng hóa"
         subtitle="Thống kê sản phẩm, tồn kho và xuất nhập"

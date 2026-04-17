@@ -279,7 +279,7 @@ export default function CongNoPage() {
   ];
 
   return (
-    <div className="flex flex-col h-[calc(100vh-48px)]">
+    <div className="flex flex-col h-[calc(100vh-64px)]">
       <PageHeader
         title="Công nợ"
         searchPlaceholder={

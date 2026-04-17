@@ -171,7 +171,7 @@ export default function NhaCungCapPage() {
 
   if (loading) {
     return (
-      <div className="flex flex-col h-[calc(100vh-48px)]">
+      <div className="flex flex-col h-[calc(100vh-64px)]">
         <DateRangeBar
           title="Phân tích nhà cung cấp"
           subtitle="Thống kê mua hàng và công nợ nhà cung cấp"
@@ -184,7 +184,7 @@ export default function NhaCungCapPage() {
   }
 
   return (
-    <div className="flex flex-col h-[calc(100vh-48px)] overflow-y-auto">
+    <div className="flex flex-col h-[calc(100vh-64px)] overflow-y-auto">
       <DateRangeBar
         title="Phân tích nhà cung cấp"
         subtitle="Thống kê mua hàng và công nợ nhà cung cấp"

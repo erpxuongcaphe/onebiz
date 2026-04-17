@@ -12,11 +12,11 @@ export default function MainLayout({
     <CommandPaletteProvider>
       <TopNav />
       {/*
-        Cap chiều cao = viewport - TopNav (48px) để:
+        Cap chiều cao = viewport - TopNav (h-16 = 64px = 4rem) để:
         1. Sidebar nav scroll internal (không phình ra ngoài)
         2. "Hệ thống" pinned bottom luôn bám đáy viewport
       */}
-      <div className="flex h-[calc(100vh-3rem)] min-h-0">
+      <div className="flex h-[calc(100vh-4rem)] min-h-0">
         <AppSidebar />
         <main className="flex-1 min-w-0 overflow-y-auto overflow-x-auto">
           {children}

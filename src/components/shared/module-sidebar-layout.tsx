@@ -55,9 +55,9 @@ export function ModuleSidebarLayout({
   const flatItems = nav.flatMap((g) => g.items);
 
   return (
-    <div className="min-h-[calc(100vh-48px)]">
+    <div className="min-h-[calc(100vh-64px)]">
       {/* Mobile horizontal tabs */}
-      <div className="lg:hidden border-b bg-background sticky top-12 z-40">
+      <div className="lg:hidden border-b bg-background sticky top-16 z-40">
         <ScrollArea className="w-full">
           <div className="flex gap-1 p-2">
             {flatItems.map((item) => {
@@ -85,7 +85,7 @@ export function ModuleSidebarLayout({
 
       <div className="flex">
         {/* Desktop sidebar */}
-        <aside className="hidden lg:block w-60 shrink-0 border-r bg-background sticky top-12 h-[calc(100vh-48px)] overflow-y-auto">
+        <aside className="hidden lg:block w-60 shrink-0 border-r bg-background sticky top-16 h-[calc(100vh-64px)] overflow-y-auto">
           <div className="p-4">
             <h2 className="text-lg font-semibold mb-4">{title}</h2>
             <nav className="space-y-4">
