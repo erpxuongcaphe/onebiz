@@ -1,7 +1,6 @@
 "use client";
 
 import { useState, useEffect, useCallback } from "react";
-import { Users, UserPlus, RefreshCw, CreditCard } from "lucide-react";
 import {
   BarChart,
   Bar,
@@ -37,7 +36,7 @@ import type {
 } from "@/lib/services/supabase/analytics";
 import { Icon } from "@/components/ui/icon";
 
-const SEGMENT_COLORS = ["#f59e0b", "#2563eb", "#16a34a", "#8b5cf6"];
+const SEGMENT_COLORS = ["#f59e0b", "#004AC6", "#16a34a", "#8b5cf6"];
 
 // === Custom Tooltips ===
 
@@ -199,40 +198,40 @@ export default function KhachHangPage() {
             value={kpis ? String(kpis.totalCustomers) : "0"}
             change={kpis ? `+${kpis.newThisMonth} khách mới tháng này` : ""}
             positive
-            icon={Users}
-            bg="bg-blue-50"
-            iconColor="text-blue-600"
-            valueColor="text-blue-700"
+            icon="group"
+            bg="bg-primary-fixed"
+            iconColor="text-primary"
+            valueColor="text-foreground"
           />
           <KpiCard
             label="Khách mới tháng"
             value={kpis ? String(kpis.newThisMonth) : "0"}
             change={newMonthChange !== 0 ? `${newMonthChange > 0 ? "+" : ""}${newMonthChange}% so với tháng trước` : "Không có dữ liệu tháng trước"}
             positive={newMonthChange >= 0}
-            icon={UserPlus}
+            icon="person_add"
             bg="bg-green-50"
             iconColor="text-green-600"
-            valueColor="text-green-700"
+            valueColor="text-foreground"
           />
           <KpiCard
             label="Khách quay lại"
             value={kpis ? `${kpis.returningPct}%` : "0%"}
             change=""
             positive
-            icon={RefreshCw}
+            icon="refresh"
             bg="bg-purple-50"
             iconColor="text-purple-600"
-            valueColor="text-purple-700"
+            valueColor="text-foreground"
           />
           <KpiCard
             label="Nợ phải thu"
             value={kpis ? formatCurrency(kpis.totalDebt) : formatCurrency(0)}
             change={debtChange !== 0 ? `${debtChange > 0 ? "+" : ""}${debtChange}% so với tháng trước` : ""}
             positive={debtChange <= 0}
-            icon={CreditCard}
+            icon="credit_card"
             bg="bg-red-50"
             iconColor="text-red-600"
-            valueColor="text-red-700"
+            valueColor="text-foreground"
           />
         </div>
 
@@ -262,7 +261,7 @@ export default function KhachHangPage() {
                     <Tooltip content={<NewCustomerTooltip />} />
                     <Bar
                       dataKey="value"
-                      fill="#2563eb"
+                      fill="#004AC6"
                       radius={[6, 6, 0, 0]}
                       name="Khách mới"
                     />

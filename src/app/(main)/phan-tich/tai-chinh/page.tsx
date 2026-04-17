@@ -1,7 +1,6 @@
 "use client";
 
 import { useState, useEffect, useCallback } from "react";
-import { TrendingUp, TrendingDown, DollarSign, Percent } from "lucide-react";
 import {
   LineChart,
   Line,
@@ -38,7 +37,7 @@ import type {
 } from "@/lib/services/supabase/analytics";
 import { Icon } from "@/components/ui/icon";
 
-const EXPENSE_COLORS = ["#2563eb", "#ea580c", "#16a34a", "#9333ea", "#6b7280"];
+const EXPENSE_COLORS = ["#004AC6", "#ea580c", "#16a34a", "#9333ea", "#6b7280"];
 
 // === Helpers ===
 
@@ -208,10 +207,10 @@ export default function TaiChinhPage() {
                 : ""
             }
             positive={kpis ? kpis.revenue >= kpis.prevRevenue : true}
-            icon={TrendingUp}
-            bg="bg-blue-50"
-            iconColor="text-blue-600"
-            valueColor="text-blue-700"
+            icon="trending_up"
+            bg="bg-primary-fixed"
+            iconColor="text-primary"
+            valueColor="text-foreground"
           />
           <KpiCard
             label="Chi phí"
@@ -222,10 +221,10 @@ export default function TaiChinhPage() {
                 : ""
             }
             positive={kpis ? kpis.expense <= kpis.prevExpense : false}
-            icon={TrendingDown}
+            icon="trending_down"
             bg="bg-red-50"
             iconColor="text-red-600"
-            valueColor="text-red-700"
+            valueColor="text-foreground"
           />
           <KpiCard
             label="Lợi nhuận"
@@ -236,10 +235,10 @@ export default function TaiChinhPage() {
                 : ""
             }
             positive={kpis ? kpis.profit >= kpis.prevProfit : true}
-            icon={DollarSign}
+            icon="attach_money"
             bg="bg-green-50"
             iconColor="text-green-600"
-            valueColor="text-green-700"
+            valueColor="text-foreground"
           />
           <KpiCard
             label="Tỷ suất LN"
@@ -250,10 +249,10 @@ export default function TaiChinhPage() {
                 : ""
             }
             positive={kpis ? kpis.profitMargin >= kpis.prevProfitMargin : true}
-            icon={Percent}
+            icon="percent"
             bg="bg-purple-50"
             iconColor="text-purple-600"
-            valueColor="text-purple-700"
+            valueColor="text-foreground"
           />
         </div>
 
@@ -294,10 +293,10 @@ export default function TaiChinhPage() {
                   <Line
                     type="monotone"
                     dataKey="revenue"
-                    stroke="#2563eb"
+                    stroke="#004AC6"
                     strokeWidth={2}
-                    dot={{ fill: "#2563eb", r: 3 }}
-                    activeDot={{ r: 5, fill: "#2563eb" }}
+                    dot={{ fill: "#004AC6", r: 3 }}
+                    activeDot={{ r: 5, fill: "#004AC6" }}
                     name="Doanh thu"
                   />
                   <Line

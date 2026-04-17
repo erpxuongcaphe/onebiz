@@ -2,12 +2,6 @@
 
 import { useState, useEffect } from "react";
 import {
-  DollarSign,
-  ShoppingCart,
-  Receipt,
-  Clock
-} from "lucide-react";
-import {
   BarChart,
   Bar,
   Cell,
@@ -63,7 +57,7 @@ function HourTooltip({
 }
 
 const COLORS = [
-  "#3b82f6", "#10b981", "#f59e0b", "#ef4444", "#8b5cf6",
+  "#004AC6", "#10b981", "#f59e0b", "#ef4444", "#8b5cf6",
   "#06b6d4", "#ec4899", "#84cc16", "#f97316", "#6366f1",
   "#14b8a6", "#e11d48", "#a855f7", "#22c55e", "#eab308",
 ];
@@ -118,34 +112,34 @@ export default function FnbAnalyticsPage() {
         <KpiCard
           label="Tổng doanh thu F&B"
           value={formatCurrency(kpis?.totalRevenue ?? 0)}
-          icon={DollarSign}
-          bg="bg-blue-50"
-          iconColor="text-blue-600"
-          valueColor="text-blue-700"
+          icon="attach_money"
+          bg="bg-primary-fixed"
+          iconColor="text-primary"
+          valueColor="text-foreground"
         />
         <KpiCard
           label="Số đơn"
           value={String(kpis?.totalOrders ?? 0)}
-          icon={ShoppingCart}
+          icon="shopping_cart"
           bg="bg-green-50"
           iconColor="text-green-600"
-          valueColor="text-green-700"
+          valueColor="text-foreground"
         />
         <KpiCard
           label="Trung bình/đơn"
           value={formatCurrency(kpis?.avgTicket ?? 0)}
-          icon={Receipt}
+          icon="receipt"
           bg="bg-purple-50"
           iconColor="text-purple-600"
-          valueColor="text-purple-700"
+          valueColor="text-foreground"
         />
         <KpiCard
           label="Turnover trung bình"
           value={`${kpis?.avgTurnoverMinutes ?? 0} phút`}
-          icon={Clock}
+          icon="schedule"
           bg="bg-orange-50"
           iconColor="text-orange-600"
-          valueColor="text-orange-700"
+          valueColor="text-foreground"
         />
       </div>
 
@@ -160,7 +154,7 @@ export default function FnbAnalyticsPage() {
                 <XAxis dataKey="label" tick={{ fontSize: 11 }} />
                 <YAxis tickFormatter={formatChartCurrency} tick={{ fontSize: 11 }} />
                 <Tooltip content={<HourTooltip />} />
-                <Bar dataKey="revenue" fill="#3b82f6" radius={[4, 4, 0, 0]} />
+                <Bar dataKey="revenue" fill="#004AC6" radius={[4, 4, 0, 0]} />
               </BarChart>
             </ResponsiveContainer>
           </div>

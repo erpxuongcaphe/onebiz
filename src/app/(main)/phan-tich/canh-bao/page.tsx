@@ -1,16 +1,6 @@
 "use client";
 
 import { useState, useEffect, useCallback } from "react";
-import {
-  AlertTriangle,
-  ShieldAlert,
-  Info,
-  Package,
-  DollarSign,
-  Clock,
-  TrendingDown,
-  Wallet,
-} from "lucide-react";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { cn } from "@/lib/utils";
@@ -22,21 +12,21 @@ import { Icon } from "@/components/ui/icon";
 
 const SEVERITY_CONFIG = {
   critical: {
-    icon: ShieldAlert,
+    icon: "gpp_bad" as const,
     bg: "bg-red-50 border-red-200",
     iconColor: "text-red-600",
     badgeBg: "bg-red-100 text-red-800",
     label: "Nghiêm trọng",
   },
   warning: {
-    icon: AlertTriangle,
+    icon: "warning" as const,
     bg: "bg-amber-50 border-amber-200",
     iconColor: "text-amber-600",
     badgeBg: "bg-amber-100 text-amber-800",
     label: "Cảnh báo",
   },
   info: {
-    icon: Info,
+    icon: "info" as const,
     bg: "bg-blue-50 border-blue-200",
     iconColor: "text-blue-600",
     badgeBg: "bg-blue-100 text-blue-800",
@@ -44,12 +34,12 @@ const SEVERITY_CONFIG = {
   },
 };
 
-const TYPE_ICONS: Record<FinancialAlert["type"], typeof DollarSign> = {
-  overdue_debt: DollarSign,
-  low_stock: Package,
-  expiring_lot: Clock,
-  negative_cashflow: TrendingDown,
-  high_expense: Wallet,
+const TYPE_ICONS: Record<FinancialAlert["type"], string> = {
+  overdue_debt: "attach_money",
+  low_stock: "inventory_2",
+  expiring_lot: "schedule",
+  negative_cashflow: "trending_down",
+  high_expense: "account_balance_wallet",
 };
 
 const TYPE_LABELS: Record<FinancialAlert["type"], string> = {
@@ -139,67 +129,64 @@ export default function CanhBaoPage() {
             {
               label: "Tổng cảnh báo",
               value: alerts.length,
-              icon: AlertTriangle,
+              iconName: "warning",
               bg: "bg-gray-100",
               color: "text-gray-700",
             },
             {
               label: "Nghiêm trọng",
               value: criticalCount,
-              icon: ShieldAlert,
+              iconName: "gpp_bad",
               bg: "bg-red-100",
               color: "text-red-700",
             },
             {
               label: "Cảnh báo",
               value: warningCount,
-              icon: AlertTriangle,
+              iconName: "warning",
               bg: "bg-amber-100",
               color: "text-amber-700",
             },
             {
               label: "Công nợ",
               value: alerts.filter((a) => a.type === "overdue_debt").length,
-              icon: DollarSign,
-              bg: "bg-blue-100",
-              color: "text-blue-700",
+              iconName: "attach_money",
+              bg: "bg-primary-fixed",
+              color: "text-primary",
             },
             {
               label: "Tồn kho",
               value: alerts.filter(
                 (a) => a.type === "low_stock" || a.type === "expiring_lot"
               ).length,
-              icon: Package,
+              iconName: "inventory_2",
               bg: "bg-purple-100",
               color: "text-purple-700",
             },
-          ].map((card) => {
-            const Icon = card.icon;
-            return (
-              <Card key={card.label}>
-                <CardContent className="pt-0">
-                  <div className="flex items-center gap-2">
-                    <div
-                      className={cn(
-                        "flex size-8 shrink-0 items-center justify-center rounded-full",
-                        card.bg
-                      )}
-                    >
-                      <Icon className={cn("size-4", card.color)} />
-                    </div>
-                    <div>
-                      <p className="text-[11px] text-muted-foreground">
-                        {card.label}
-                      </p>
-                      <p className={cn("text-xl font-bold", card.color)}>
-                        {card.value}
-                      </p>
-                    </div>
+          ].map((card) => (
+            <Card key={card.label}>
+              <CardContent className="pt-0">
+                <div className="flex items-center gap-2">
+                  <div
+                    className={cn(
+                      "flex size-8 shrink-0 items-center justify-center rounded-xl",
+                      card.bg
+                    )}
+                  >
+                    <Icon name={card.iconName} size={16} className={cn(card.color)} />
                   </div>
-                </CardContent>
-              </Card>
-            );
-          })}
+                  <div>
+                    <p className="text-[11px] text-muted-foreground">
+                      {card.label}
+                    </p>
+                    <p className={cn("text-xl font-bold", card.color)}>
+                      {card.value}
+                    </p>
+                  </div>
+                </div>
+              </CardContent>
+            </Card>
+          ))}
         </div>
 
         {/* Filter tabs */}
@@ -257,26 +244,22 @@ export default function CanhBaoPage() {
           <div className="space-y-3">
             {filteredAlerts.map((alert) => {
               const severityCfg = SEVERITY_CONFIG[alert.severity];
-              const SeverityIcon = severityCfg.icon;
-              const TypeIcon =
-                TYPE_ICONS[alert.type] ?? AlertTriangle;
+              const typeIconName = TYPE_ICONS[alert.type] ?? "warning";
 
               return (
                 <Card
                   key={alert.id}
-                  className={cn("border", severityCfg.bg)}
+                  className={cn("border rounded-xl", severityCfg.bg)}
                 >
                   <CardHeader className="pb-1 pt-3 px-4">
                     <div className="flex items-start justify-between gap-2">
                       <div className="flex items-start gap-3">
                         <div
                           className={cn(
-                            "flex size-9 shrink-0 items-center justify-center rounded-full bg-white shadow-sm mt-0.5"
+                            "flex size-9 shrink-0 items-center justify-center rounded-xl bg-white shadow-sm mt-0.5"
                           )}
                         >
-                          <TypeIcon
-                            className={cn("size-4", severityCfg.iconColor)}
-                          />
+                          <Icon name={typeIconName} size={16} className={cn(severityCfg.iconColor)} />
                         </div>
                         <div>
                           <CardTitle className="text-sm flex items-center gap-2">
@@ -287,7 +270,7 @@ export default function CanhBaoPage() {
                                 severityCfg.badgeBg
                               )}
                             >
-                              <SeverityIcon className="size-2.5 mr-0.5" />
+                              <Icon name={severityCfg.icon} size={10} className="mr-0.5" />
                               {severityCfg.label}
                             </Badge>
                           </CardTitle>

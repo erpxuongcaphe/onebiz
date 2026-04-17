@@ -2,17 +2,6 @@
 
 import { useState, useEffect, useCallback } from "react";
 import {
-  TrendingUp,
-  TrendingDown,
-  DollarSign,
-  Percent,
-  BarChart3,
-  GitCompare,
-  Factory,
-  Warehouse,
-  Store,
-} from "lucide-react";
-import {
   Select,
   SelectTrigger,
   SelectValue,
@@ -257,13 +246,13 @@ export default function BaoCaoTaiChinhPage() {
       <div className="flex-1 p-4 md:p-6 space-y-4">
         {/* Consolidated banner — hiển thị doanh thu nội bộ đã bị loại trừ */}
         {useConsolidated && consolidated && (
-          <div className="rounded-lg border border-blue-200 bg-blue-50 p-3 flex items-start gap-3">
-            <GitCompare className="h-5 w-5 text-blue-600 shrink-0 mt-0.5" />
+          <div className="rounded-xl border border-primary/20 bg-primary-fixed p-3 flex items-start gap-3">
+            <Icon name="compare_arrows" size={20} className="text-primary shrink-0 mt-0.5" />
             <div className="flex-1 min-w-0">
-              <p className="text-sm font-semibold text-blue-900">
+              <p className="text-sm font-semibold text-primary">
                 Đang xem số hợp nhất (CEO view)
               </p>
-              <p className="text-xs text-blue-700 mt-0.5">
+              <p className="text-xs text-primary/80 mt-0.5">
                 Đã loại trừ{" "}
                 <strong>
                   {formatCurrency(consolidated.current.internalRevenue)}
@@ -297,12 +286,13 @@ export default function BaoCaoTaiChinhPage() {
                 </thead>
                 <tbody>
                   {branchPnL.map((b) => {
-                    const TypeIcon =
+                    // Map branch_type → Material Symbols icon name.
+                    const typeIconName =
                       b.branchType === "factory"
-                        ? Factory
+                        ? "factory"
                         : b.branchType === "warehouse"
-                          ? Warehouse
-                          : Store;
+                          ? "warehouse"
+                          : "storefront";
                     const typeLabel =
                       b.branchType === "factory"
                         ? "Xưởng"
@@ -312,11 +302,11 @@ export default function BaoCaoTaiChinhPage() {
                     return (
                       <tr
                         key={b.branchId}
-                        className="border-b last:border-0 hover:bg-muted/30"
+                        className="border-b last:border-0 hover:bg-surface-container-low"
                       >
                         <td className="py-2.5 pr-3">
                           <div className="flex items-center gap-2">
-                            <TypeIcon className="h-3.5 w-3.5 text-muted-foreground shrink-0" />
+                            <Icon name={typeIconName} size={14} className="text-muted-foreground shrink-0" />
                             <div className="min-w-0">
                               <p className="font-medium truncate">{b.branchName}</p>
                               <p className="text-[10px] text-muted-foreground uppercase tracking-wide">
@@ -428,10 +418,10 @@ export default function BaoCaoTaiChinhPage() {
                 : ""
             }
             positive={cur && prev ? cur.revenue >= prev.revenue : true}
-            icon={TrendingUp}
-            bg="bg-blue-50"
-            iconColor="text-blue-600"
-            valueColor="text-blue-700"
+            icon="trending_up"
+            bg="bg-primary-fixed"
+            iconColor="text-primary"
+            valueColor="text-primary"
           />
           <KpiCard
             label="Giá vốn (COGS)"
@@ -442,7 +432,7 @@ export default function BaoCaoTaiChinhPage() {
                 : ""
             }
             positive={cur && prev ? cur.cogs <= prev.cogs : true}
-            icon={TrendingDown}
+            icon="trending_down"
             bg="bg-orange-50"
             iconColor="text-orange-600"
             valueColor="text-orange-700"
@@ -456,7 +446,7 @@ export default function BaoCaoTaiChinhPage() {
                 : ""
             }
             positive={cur && prev ? cur.netProfit >= prev.netProfit : true}
-            icon={DollarSign}
+            icon="attach_money"
             bg="bg-green-50"
             iconColor="text-green-600"
             valueColor="text-green-700"
@@ -472,7 +462,7 @@ export default function BaoCaoTaiChinhPage() {
             positive={
               cur && prev ? cur.grossMargin >= prev.grossMargin : true
             }
-            icon={Percent}
+            icon="percent"
             bg="bg-purple-50"
             iconColor="text-purple-600"
             valueColor="text-purple-700"
@@ -636,13 +626,14 @@ export default function BaoCaoTaiChinhPage() {
                         <span className="text-xs">{value}</span>
                       )}
                     />
+                    {/* Stitch palette: Doanh thu dùng primary #004AC6, COGS orange, Biên gộp green. */}
                     <Line
                       yAxisId="left"
                       type="monotone"
                       dataKey="revenue"
-                      stroke="#2563eb"
+                      stroke="#004AC6"
                       strokeWidth={2}
-                      dot={{ fill: "#2563eb", r: 3 }}
+                      dot={{ fill: "#004AC6", r: 3 }}
                       name="Doanh thu"
                     />
                     <Line
@@ -787,7 +778,7 @@ export default function BaoCaoTaiChinhPage() {
             <div className="grid grid-cols-2 gap-4 py-4">
               <div className="text-center space-y-1">
                 <div className="flex items-center justify-center gap-1.5 text-muted-foreground">
-                  <BarChart3 className="size-4" />
+                  <Icon name="bar_chart" className="size-4" />
                   <span className="text-xs">DSO</span>
                 </div>
                 <p

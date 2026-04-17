@@ -1,6 +1,5 @@
 "use client";
 
-import { type LucideIcon } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { Icon as MSIcon } from "@/components/ui/icon";
 
@@ -9,8 +8,8 @@ interface KpiCardProps {
   value: string;
   change?: string;
   positive?: boolean;
-  /** Material Symbols name (string) or legacy LucideIcon component */
-  icon: LucideIcon | string;
+  /** Material Symbols icon name (e.g. "trending_up", "attach_money") */
+  icon: string;
   bg: string;
   iconColor: string;
   valueColor: string;
@@ -30,7 +29,7 @@ export function KpiCard({
   value,
   change,
   positive,
-  icon: Icon,
+  icon,
   bg,
   iconColor,
   valueColor,
@@ -69,11 +68,7 @@ export function KpiCard({
             bg,
           )}
         >
-          {typeof Icon === "string" ? (
-            <MSIcon name={Icon} size={22} className={cn(iconColor)} />
-          ) : (
-            <Icon className={cn("size-5", iconColor)} />
-          )}
+          <MSIcon name={icon} size={22} className={cn(iconColor)} />
         </div>
       </div>
     </div>

@@ -1,7 +1,6 @@
 "use client";
 
 import { useState, useEffect, useCallback } from "react";
-import { Truck, ShoppingBag, Wallet, RotateCcw } from "lucide-react";
 import {
   LineChart,
   Line,
@@ -199,40 +198,40 @@ export default function NhaCungCapPage() {
             value={String(kpis?.totalSuppliers ?? 0)}
             change={`${kpis?.totalSuppliers ?? 0} nhà cung cấp`}
             positive
-            icon={Truck}
-            bg="bg-blue-50"
-            iconColor="text-blue-600"
-            valueColor="text-blue-700"
+            icon="local_shipping"
+            bg="bg-primary-fixed"
+            iconColor="text-primary"
+            valueColor="text-foreground"
           />
           <KpiCard
             label="Tổng mua tháng"
             value={formatCurrency(kpis?.purchaseThisMonth ?? 0)}
             change={calcChange(kpis?.purchaseThisMonth ?? 0, kpis?.prevPurchase ?? 0)}
             positive={(kpis?.purchaseThisMonth ?? 0) >= (kpis?.prevPurchase ?? 0)}
-            icon={ShoppingBag}
+            icon="shopping_bag"
             bg="bg-green-50"
             iconColor="text-green-600"
-            valueColor="text-green-700"
+            valueColor="text-foreground"
           />
           <KpiCard
             label="Công nợ NCC"
             value={formatCurrency(kpis?.totalDebt ?? 0)}
             change={calcChange(kpis?.totalDebt ?? 0, kpis?.prevDebt ?? 0)}
             positive={(kpis?.totalDebt ?? 0) <= (kpis?.prevDebt ?? 0)}
-            icon={Wallet}
+            icon="account_balance_wallet"
             bg="bg-orange-50"
             iconColor="text-orange-600"
-            valueColor="text-orange-700"
+            valueColor="text-foreground"
           />
           <KpiCard
             label="Trả hàng NCC"
             value={String(kpis?.returnCount ?? 0)}
             change={`${kpis?.returnCount ?? 0} phiếu trả hàng`}
             positive={false}
-            icon={RotateCcw}
+            icon="undo"
             bg="bg-red-50"
             iconColor="text-red-600"
-            valueColor="text-red-700"
+            valueColor="text-foreground"
           />
         </div>
 
@@ -268,10 +267,10 @@ export default function NhaCungCapPage() {
                     <Line
                       type="monotone"
                       dataKey="value"
-                      stroke="#2563eb"
+                      stroke="#004AC6"
                       strokeWidth={2}
-                      dot={{ fill: "#2563eb", r: 4 }}
-                      activeDot={{ r: 6, fill: "#2563eb" }}
+                      dot={{ fill: "#004AC6", r: 4 }}
+                      activeDot={{ r: 6, fill: "#004AC6" }}
                       name="Giá trị mua"
                     />
                   </LineChart>

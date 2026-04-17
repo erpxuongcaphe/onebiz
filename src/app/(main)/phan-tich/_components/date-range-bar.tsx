@@ -27,24 +27,25 @@ export function DateRangeBar({ title, subtitle, actions }: DateRangeBarProps) {
   const [preset, setPreset] = useState<DatePreset>("thisMonth");
 
   return (
-    <div className="bg-white border-b px-4 lg:px-6 py-3 space-y-2">
+    <div className="bg-surface-container-lowest border-b border-border px-4 lg:px-6 py-3 space-y-2">
       <div className="flex items-center justify-between gap-4">
         <div>
-          <h1 className="text-lg font-bold text-gray-900">{title}</h1>
+          <h1 className="text-lg font-semibold text-foreground">{title}</h1>
           {subtitle && (
             <p className="text-xs text-muted-foreground mt-0.5">{subtitle}</p>
           )}
         </div>
         <div className="flex items-center gap-2">
           {actions}
-          <Button variant="outline" size="sm" className="h-8 text-xs gap-1.5">
+          <Button variant="outline" size="sm" className="h-8 text-xs gap-1.5 rounded-full">
             <Icon name="calendar_today" className="size-3.5" />
             Xuất báo cáo
           </Button>
         </div>
       </div>
-      <div className="flex items-center gap-1 overflow-x-auto [&::-webkit-scrollbar]:hidden [-ms-overflow-style:none] [scrollbar-width:none]">
-        <button className="p-1 rounded hover:bg-gray-100 text-gray-400 shrink-0">
+      {/* Stitch date preset pills — rounded-full + press-scale-sm, active dùng primary/primary-foreground */}
+      <div className="flex items-center gap-1.5 overflow-x-auto [&::-webkit-scrollbar]:hidden [-ms-overflow-style:none] [scrollbar-width:none]">
+        <button className="p-1 rounded-full press-scale-sm hover:bg-surface-container text-muted-foreground shrink-0">
           <Icon name="chevron_left" className="size-4" />
         </button>
         {PRESETS.map((p) => (
@@ -52,16 +53,16 @@ export function DateRangeBar({ title, subtitle, actions }: DateRangeBarProps) {
             key={p.key}
             onClick={() => setPreset(p.key)}
             className={cn(
-              "px-2.5 py-1 rounded text-xs font-medium whitespace-nowrap transition-colors shrink-0",
+              "px-3 py-1 rounded-full text-xs font-medium whitespace-nowrap transition-colors press-scale-sm shrink-0",
               preset === p.key
-                ? "bg-primary text-white"
-                : "text-gray-600 hover:bg-gray-100"
+                ? "bg-primary text-primary-foreground ambient-shadow"
+                : "text-muted-foreground hover:bg-surface-container"
             )}
           >
             {p.label}
           </button>
         ))}
-        <button className="p-1 rounded hover:bg-gray-100 text-gray-400 shrink-0">
+        <button className="p-1 rounded-full press-scale-sm hover:bg-surface-container text-muted-foreground shrink-0">
           <Icon name="chevron_right" className="size-4" />
         </button>
       </div>

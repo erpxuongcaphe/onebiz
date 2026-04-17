@@ -1,7 +1,6 @@
 "use client";
 
 import { useState, useEffect } from "react";
-import { DollarSign, ShoppingCart, Users, TrendingUp } from "lucide-react";
 import {
   LineChart,
   Line,
@@ -116,40 +115,40 @@ export default function TongQuanPage() {
             value={formatCurrency(kpis?.revenue ?? 0) + "đ"}
             change={calcChange(kpis?.revenue ?? 0, kpis?.prevRevenue ?? 0)}
             positive={(kpis?.revenue ?? 0) >= (kpis?.prevRevenue ?? 0)}
-            icon={DollarSign}
-            bg="bg-blue-50"
-            iconColor="text-blue-600"
-            valueColor="text-blue-700"
+            icon="attach_money"
+            bg="bg-primary-fixed"
+            iconColor="text-primary"
+            valueColor="text-foreground"
           />
           <KpiCard
             label="Đơn hàng"
             value={(kpis?.orders ?? 0).toLocaleString("vi-VN")}
             change={calcChange(kpis?.orders ?? 0, kpis?.prevOrders ?? 0)}
             positive={(kpis?.orders ?? 0) >= (kpis?.prevOrders ?? 0)}
-            icon={ShoppingCart}
+            icon="shopping_cart"
             bg="bg-emerald-50"
             iconColor="text-emerald-600"
-            valueColor="text-emerald-700"
+            valueColor="text-foreground"
           />
           <KpiCard
             label="Khách mới"
             value={(kpis?.newCustomers ?? 0).toLocaleString("vi-VN")}
             change={calcChange(kpis?.newCustomers ?? 0, kpis?.prevNewCustomers ?? 0)}
             positive={(kpis?.newCustomers ?? 0) >= (kpis?.prevNewCustomers ?? 0)}
-            icon={Users}
+            icon="group"
             bg="bg-violet-50"
             iconColor="text-violet-600"
-            valueColor="text-violet-700"
+            valueColor="text-foreground"
           />
           <KpiCard
             label="Lợi nhuận"
             value={formatCurrency(kpis?.profit ?? 0) + "đ"}
             change={calcChange(kpis?.profit ?? 0, kpis?.prevProfit ?? 0)}
             positive={(kpis?.profit ?? 0) >= (kpis?.prevProfit ?? 0)}
-            icon={TrendingUp}
+            icon="trending_up"
             bg="bg-amber-50"
             iconColor="text-amber-600"
-            valueColor="text-amber-700"
+            valueColor="text-foreground"
           />
         </div>
 
@@ -181,7 +180,7 @@ export default function TongQuanPage() {
                     type="monotone"
                     dataKey="revenue"
                     name="Doanh thu"
-                    stroke="#2563eb"
+                    stroke="#004AC6"
                     strokeWidth={2}
                     dot={false}
                     activeDot={{ r: 4 }}
@@ -216,7 +215,7 @@ export default function TongQuanPage() {
                   <Bar
                     dataKey="revenue"
                     name="Doanh thu"
-                    fill="#2563eb"
+                    fill="#004AC6"
                     radius={[0, 4, 4, 0]}
                   />
                 </BarChart>

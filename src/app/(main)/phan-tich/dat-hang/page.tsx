@@ -2,13 +2,6 @@
 
 import { useState, useEffect, useCallback } from "react";
 import {
-  ClipboardList,
-  CheckCircle,
-  Truck,
-  XCircle,
-} from "lucide-react";
-import { Loader2 } from "lucide-react";
-import {
   LineChart,
   Line,
   PieChart,
@@ -35,6 +28,7 @@ import type {
   OrderStatusItem,
   RecentOrder,
 } from "@/lib/services/supabase/analytics";
+import { Icon } from "@/components/ui/icon";
 
 // === Types ===
 
@@ -191,7 +185,7 @@ export default function DatHangPage() {
           subtitle="Theo dõi tình trạng và hiệu suất đơn hàng"
         />
         <div className="flex-1 flex items-center justify-center">
-          <Loader2 className="size-8 animate-spin text-muted-foreground" />
+          <Icon name="progress_activity" className="size-8 animate-spin text-muted-foreground" />
         </div>
       </div>
     );
@@ -207,40 +201,40 @@ export default function DatHangPage() {
       value: kpis ? kpis.total.toLocaleString("vi-VN") : "0",
       change: totalChange.text,
       positive: totalChange.positive,
-      icon: ClipboardList,
-      bg: "bg-blue-50",
-      iconColor: "text-blue-600",
-      valueColor: "text-blue-700",
+      icon: "assignment",
+      bg: "bg-primary-fixed",
+      iconColor: "text-primary",
+      valueColor: "text-foreground",
     },
     {
       label: "Đơn hoàn thành",
       value: kpis ? kpis.completed.toLocaleString("vi-VN") : "0",
       change: kpis ? `${kpis.completedPct}% tổng đơn` : "",
       positive: true,
-      icon: CheckCircle,
+      icon: "check_circle",
       bg: "bg-green-50",
       iconColor: "text-green-600",
-      valueColor: "text-green-700",
+      valueColor: "text-foreground",
     },
     {
       label: "Đơn đang xử lý",
       value: kpis ? kpis.inTransit.toLocaleString("vi-VN") : "0",
       change: kpis ? `${kpis.inTransitPct}% tổng đơn` : "",
       positive: true,
-      icon: Truck,
+      icon: "local_shipping",
       bg: "bg-orange-50",
       iconColor: "text-orange-600",
-      valueColor: "text-orange-700",
+      valueColor: "text-foreground",
     },
     {
       label: "Đơn hủy",
       value: kpis ? kpis.cancelled.toLocaleString("vi-VN") : "0",
       change: kpis ? `${kpis.cancelledPct}% tổng đơn` : "",
       positive: false,
-      icon: XCircle,
+      icon: "cancel",
       bg: "bg-red-50",
       iconColor: "text-red-500",
-      valueColor: "text-red-600",
+      valueColor: "text-foreground",
     },
   ];
 
@@ -289,10 +283,10 @@ export default function DatHangPage() {
                   <Line
                     type="monotone"
                     dataKey="value"
-                    stroke="#2563eb"
+                    stroke="#004AC6"
                     strokeWidth={2}
                     dot={false}
-                    activeDot={{ r: 5, fill: "#2563eb" }}
+                    activeDot={{ r: 5, fill: "#004AC6" }}
                     name="Đơn hàng"
                   />
                 </LineChart>
@@ -357,7 +351,7 @@ export default function DatHangPage() {
             subtitle="Tính năng đang phát triển"
           >
             <div className="h-64 md:h-80 flex flex-col items-center justify-center text-muted-foreground">
-              <ClipboardList className="size-10 mb-3 opacity-30" />
+              <Icon name="assignment" className="size-10 mb-3 opacity-30" />
               <p className="text-sm">Dữ liệu thời gian xử lý chưa khả dụng</p>
               <p className="text-xs mt-1">Tính năng sẽ được cập nhật sau</p>
             </div>

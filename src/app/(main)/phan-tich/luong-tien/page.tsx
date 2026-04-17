@@ -1,7 +1,6 @@
 "use client";
 
 import { useState, useEffect, useCallback } from "react";
-import { TrendingUp, TrendingDown, Wallet, ArrowUpRight, ArrowDownRight } from "lucide-react";
 import {
   BarChart,
   Bar,
@@ -103,39 +102,39 @@ export default function LuongTienPage() {
         <KpiCard
           label="Thu tháng này"
           value={formatCurrency(totalReceipt)}
-          icon={ArrowUpRight}
+          icon="north_east"
           bg="bg-green-50"
           iconColor="text-green-600"
-          valueColor="text-green-700"
+          valueColor="text-foreground"
           change={prev ? `${((totalReceipt - prev.totalReceipt) / Math.max(prev.totalReceipt, 1) * 100).toFixed(1)}%` : undefined}
           positive={prev ? totalReceipt >= prev.totalReceipt : undefined}
         />
         <KpiCard
           label="Chi tháng này"
           value={formatCurrency(totalPayment)}
-          icon={ArrowDownRight}
+          icon="south_east"
           bg="bg-red-50"
           iconColor="text-red-500"
-          valueColor="text-red-600"
+          valueColor="text-foreground"
           change={prev ? `${((totalPayment - prev.totalPayment) / Math.max(prev.totalPayment, 1) * 100).toFixed(1)}%` : undefined}
           positive={prev ? totalPayment <= prev.totalPayment : undefined}
         />
         <KpiCard
           label="Dòng tiền ròng"
           value={formatCurrency(net)}
-          icon={net >= 0 ? TrendingUp : TrendingDown}
-          bg={net >= 0 ? "bg-blue-50" : "bg-orange-50"}
-          iconColor={net >= 0 ? "text-blue-600" : "text-orange-600"}
-          valueColor={net >= 0 ? "text-blue-700" : "text-orange-700"}
+          icon={net >= 0 ? "trending_up" : "trending_down"}
+          bg={net >= 0 ? "bg-primary-fixed" : "bg-orange-50"}
+          iconColor={net >= 0 ? "text-primary" : "text-orange-600"}
+          valueColor="text-foreground"
           positive={net >= 0}
         />
         <KpiCard
           label="Số dư luỹ kế"
           value={formatCurrency(balance)}
-          icon={Wallet}
+          icon="account_balance_wallet"
           bg="bg-purple-50"
           iconColor="text-purple-600"
-          valueColor="text-purple-700"
+          valueColor="text-foreground"
           positive={balance >= 0}
         />
       </div>
@@ -164,7 +163,7 @@ export default function LuongTienPage() {
               <YAxis tickFormatter={formatChartCurrency} tick={{ fontSize: 11 }} width={70} />
               <Tooltip content={<CashFlowTooltip />} />
               <Legend wrapperStyle={{ fontSize: 11 }} />
-              <Line type="monotone" dataKey="Dòng tiền ròng" stroke="#3b82f6" strokeWidth={2} dot={{ r: 3 }} />
+              <Line type="monotone" dataKey="Dòng tiền ròng" stroke="#004AC6" strokeWidth={2} dot={{ r: 3 }} />
               <Line type="monotone" dataKey="Số dư luỹ kế" stroke="#8b5cf6" strokeWidth={2} dot={{ r: 3 }} />
             </LineChart>
           </ResponsiveContainer>

@@ -2,15 +2,6 @@
 
 import { useState, useEffect, useCallback } from "react";
 import {
-  DollarSign,
-  ShoppingCart,
-  Banknote,
-  CreditCard,
-  Landmark,
-  RotateCcw,
-} from "lucide-react";
-import { Loader2 } from "lucide-react";
-import {
   BarChart,
   Bar,
   PieChart,
@@ -36,6 +27,7 @@ import {
   getTodayTopProducts,
 } from "@/lib/services";
 import type { EndOfDayStats, ChartPoint } from "@/lib/services/supabase/analytics";
+import { Icon } from "@/components/ui/icon";
 
 /* ---------- helpers ---------- */
 
@@ -126,7 +118,7 @@ export default function CuoiNgayPage() {
           subtitle="Tổng kết hoạt động kinh doanh trong ngày"
         />
         <div className="flex-1 flex items-center justify-center">
-          <Loader2 className="size-8 animate-spin text-gray-400" />
+          <Icon name="progress_activity" className="size-8 animate-spin text-gray-400" />
         </div>
       </div>
     );
@@ -164,7 +156,7 @@ export default function CuoiNgayPage() {
 
   const paymentMethods = [
     { name: "Tiền mặt", value: cashAmount, color: "#22c55e", total: totalRevenue },
-    { name: "Chuyển khoản", value: transferAmount, color: "#3b82f6", total: totalRevenue },
+    { name: "Chuyển khoản", value: transferAmount, color: "#004AC6", total: totalRevenue },
     { name: "Thẻ", value: cardAmount, color: "#f97316", total: totalRevenue },
   ];
 
@@ -188,53 +180,53 @@ export default function CuoiNgayPage() {
             value={formatCurrency(totalRevenue) + "đ"}
             change={`${revenuePct >= 0 ? "+" : ""}${revenuePct.toFixed(1)}% so với hôm qua`}
             positive={revenuePct >= 0}
-            icon={DollarSign}
-            bg="bg-blue-50"
-            iconColor="text-blue-600"
-            valueColor="text-blue-700"
+            icon="attach_money"
+            bg="bg-primary-fixed"
+            iconColor="text-primary"
+            valueColor="text-foreground"
           />
           <KpiCard
             label="Tổng đơn hàng"
             value={String(totalOrders)}
             change={`${ordersDiff >= 0 ? "+" : ""}${ordersDiff} đơn so với hôm qua`}
             positive={ordersDiff >= 0}
-            icon={ShoppingCart}
+            icon="shopping_cart"
             bg="bg-emerald-50"
             iconColor="text-emerald-600"
-            valueColor="text-emerald-700"
+            valueColor="text-foreground"
           />
           <KpiCard
             label="Tiền mặt"
             value={formatCurrency(cashAmount) + "đ"}
-            icon={Banknote}
+            icon="payments"
             bg="bg-green-50"
             iconColor="text-green-600"
-            valueColor="text-green-700"
+            valueColor="text-foreground"
           />
           <KpiCard
             label="Chuyển khoản"
             value={formatCurrency(transferAmount) + "đ"}
-            icon={Landmark}
+            icon="account_balance"
             bg="bg-indigo-50"
             iconColor="text-indigo-600"
-            valueColor="text-indigo-700"
+            valueColor="text-foreground"
           />
           <KpiCard
             label="Thẻ"
             value={formatCurrency(cardAmount) + "đ"}
-            icon={CreditCard}
+            icon="credit_card"
             bg="bg-amber-50"
             iconColor="text-amber-600"
-            valueColor="text-amber-700"
+            valueColor="text-foreground"
           />
           <KpiCard
             label="Trả hàng"
             value={formatCurrency(returnAmount) + "đ"}
             positive={false}
-            icon={RotateCcw}
+            icon="undo"
             bg="bg-red-50"
             iconColor="text-red-500"
-            valueColor="text-red-600"
+            valueColor="text-foreground"
           />
         </div>
 
@@ -260,7 +252,7 @@ export default function CuoiNgayPage() {
                   <Bar
                     dataKey="revenue"
                     name="Doanh thu"
-                    fill="#2563eb"
+                    fill="#004AC6"
                     radius={[3, 3, 0, 0]}
                   />
                 </BarChart>

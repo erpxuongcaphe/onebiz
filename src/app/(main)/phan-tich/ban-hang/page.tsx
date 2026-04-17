@@ -1,7 +1,6 @@
 "use client";
 
 import { useState, useEffect, useCallback } from "react";
-import { TrendingUp, Package, Receipt, RotateCcw } from "lucide-react";
 import {
   LineChart,
   Line,
@@ -57,7 +56,7 @@ const DAY_COLORS = [
   "#64748b",
   "#64748b",
   "#64748b",
-  "#3b82f6",
+  "#004AC6",
   "#16a34a",
   "#16a34a",
 ];
@@ -234,40 +233,40 @@ export default function BanHangPage() {
             value={formatCurrency(kpis?.netRevenue ?? 0) + "đ"}
             change={`${revenueChange.text} so với tháng trước`}
             positive={revenueChange.positive}
-            icon={TrendingUp}
-            bg="bg-blue-50"
-            iconColor="text-blue-600"
-            valueColor="text-blue-700"
+            icon="trending_up"
+            bg="bg-primary-fixed"
+            iconColor="text-primary"
+            valueColor="text-foreground"
           />
           <KpiCard
             label="Số lượng bán"
             value={(kpis?.soldQty ?? 0).toLocaleString("vi-VN")}
             change={`${qtyChange.text} so với tháng trước`}
             positive={qtyChange.positive}
-            icon={Package}
+            icon="inventory_2"
             bg="bg-green-50"
             iconColor="text-green-600"
-            valueColor="text-green-700"
+            valueColor="text-foreground"
           />
           <KpiCard
             label="Giá trị trung bình/đơn"
             value={formatCurrency(kpis?.avgOrderValue ?? 0) + "đ"}
             change={`${avgChange.text} so với tháng trước`}
             positive={avgChange.positive}
-            icon={Receipt}
+            icon="receipt"
             bg="bg-purple-50"
             iconColor="text-purple-600"
-            valueColor="text-purple-700"
+            valueColor="text-foreground"
           />
           <KpiCard
             label="Tỷ lệ trả hàng"
             value={`${(kpis?.returnRate ?? 0).toFixed(1)}%`}
             change={`${returnChange.text} so với tháng trước`}
             positive={!returnChange.positive}
-            icon={RotateCcw}
+            icon="undo"
             bg="bg-orange-50"
             iconColor="text-orange-600"
-            valueColor="text-orange-700"
+            valueColor="text-foreground"
           />
         </div>
 
@@ -302,10 +301,10 @@ export default function BanHangPage() {
                   <Line
                     type="monotone"
                     dataKey="revenue"
-                    stroke="#2563eb"
+                    stroke="#004AC6"
                     strokeWidth={2}
                     dot={false}
-                    activeDot={{ r: 5, fill: "#2563eb" }}
+                    activeDot={{ r: 5, fill: "#004AC6" }}
                     name="Doanh thu"
                   />
                 </LineChart>

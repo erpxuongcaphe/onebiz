@@ -2,12 +2,6 @@
 
 import { useState, useEffect, useCallback } from "react";
 import {
-  ShoppingCart,
-  Globe,
-  MessageCircle,
-  Monitor
-} from "lucide-react";
-import {
   PieChart,
   Pie,
   Cell,
@@ -37,11 +31,11 @@ type ChannelPerformanceRow = {
 
 const CHANNEL_COLORS = ["#2563eb", "#6366f1", "#0ea5e9", "#9333ea", "#f59e0b", "#10b981"];
 
-const CHANNEL_ICONS: Record<string, typeof ShoppingCart> = {
-  "Tại quầy": ShoppingCart,
-  "Facebook": Globe,
-  "Zalo": MessageCircle,
-  "Website": Monitor,
+const CHANNEL_ICONS: Record<string, string> = {
+  "Tại quầy": "shopping_cart",
+  "Facebook": "public",
+  "Zalo": "chat_bubble",
+  "Website": "desktop_windows",
 };
 
 const CHANNEL_STYLES: Record<string, { bg: string; iconColor: string; valueColor: string }> = {
@@ -149,7 +143,7 @@ export default function KenhBanPage() {
   // Derive KPI cards from channelPerformance
   const kpiCards = channelPerformance.map((row) => {
     const style = CHANNEL_STYLES[row.channel] ?? DEFAULT_STYLE;
-    const icon = CHANNEL_ICONS[row.channel] ?? Monitor;
+    const icon = CHANNEL_ICONS[row.channel] ?? "desktop_windows";
     return {
       label: row.channel,
       value: formatCurrency(row.revenue),

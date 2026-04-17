@@ -1,7 +1,6 @@
 "use client";
 
 import { useState, useEffect, useCallback } from "react";
-import { Package, Star, AlertTriangle, Warehouse } from "lucide-react";
 import {
   LineChart,
   Line,
@@ -39,8 +38,8 @@ import type {
 import { Icon } from "@/components/ui/icon";
 
 const PIE_COLORS = [
-  "#2563eb",
-  "#3b82f6",
+  "#004AC6",
+  "#9CB9FF",
   "#16a34a",
   "#ea580c",
   "#9333ea",
@@ -211,40 +210,40 @@ export default function HangHoaPage() {
             value={String(totalProducts)}
             change={totalProducts > 0 ? `${totalProducts} sản phẩm` : "Chưa có dữ liệu"}
             positive={totalProducts > 0}
-            icon={Package}
-            bg="bg-blue-50"
-            iconColor="text-blue-600"
-            valueColor="text-blue-700"
+            icon="inventory_2"
+            bg="bg-primary-fixed"
+            iconColor="text-primary"
+            valueColor="text-foreground"
           />
           <KpiCard
             label="Hàng bán chạy"
             value={kpis?.bestSeller.name ?? "N/A"}
             change={kpis?.bestSeller.qty ? `${kpis.bestSeller.qty} sản phẩm/tháng` : "Chưa có dữ liệu"}
             positive={(kpis?.bestSeller.qty ?? 0) > 0}
-            icon={Star}
+            icon="star"
             bg="bg-green-50"
             iconColor="text-green-600"
-            valueColor="text-green-700"
+            valueColor="text-foreground"
           />
           <KpiCard
             label="Hàng tồn kho thấp"
             value={String(kpis?.lowStockCount ?? 0)}
             change={(kpis?.lowStockCount ?? 0) > 0 ? "Cần nhập thêm" : "Đủ hàng"}
             positive={(kpis?.lowStockCount ?? 0) === 0}
-            icon={AlertTriangle}
+            icon="warning"
             bg="bg-red-50"
             iconColor="text-red-600"
-            valueColor="text-red-700"
+            valueColor="text-foreground"
           />
           <KpiCard
             label="Giá trị tồn kho"
             value={formatCurrency(kpis?.stockValue ?? 0) + "đ"}
             change={(kpis?.stockValue ?? 0) > 0 ? "Giá trị hiện tại" : "Chưa có dữ liệu"}
             positive={(kpis?.stockValue ?? 0) > 0}
-            icon={Warehouse}
+            icon="warehouse"
             bg="bg-purple-50"
             iconColor="text-purple-600"
-            valueColor="text-purple-700"
+            valueColor="text-foreground"
           />
         </div>
 
@@ -285,7 +284,7 @@ export default function HangHoaPage() {
                     <Tooltip content={<ProductRevenueTooltip />} />
                     <Bar
                       dataKey="revenue"
-                      fill="#2563eb"
+                      fill="#004AC6"
                       radius={[0, 6, 6, 0]}
                       name="Doanh thu"
                     />
