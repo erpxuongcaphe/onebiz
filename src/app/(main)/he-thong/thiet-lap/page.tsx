@@ -3,7 +3,7 @@ import Link from "next/link";
 import { Icon } from "@/components/ui/icon";
 
 export const metadata = {
-  title: "Thiết lập chung — OneBiz ERP",
+  title: "Thiết lập chung",
 };
 
 export default function ThietLapPlaceholderPage() {

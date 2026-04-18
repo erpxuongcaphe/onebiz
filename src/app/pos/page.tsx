@@ -805,28 +805,28 @@ export default function PosPage() {
             </div>
           )}
 
-          {/* ── Customer picker row ── */}
-          <div className="px-3 py-2 border-b border-border">
+          {/* ── Customer picker row — Stitch pill ── */}
+          <div className="px-3 py-2 border-b border-outline-variant/20">
             <div className="flex items-center gap-1.5">
               <button
                 type="button"
                 onClick={() => setCustomerModalOpen(true)}
                 className={cn(
-                  "flex-1 flex items-center gap-2 px-2.5 h-8 rounded border text-xs transition-colors",
+                  "flex-1 flex items-center gap-2 px-2.5 h-9 rounded-lg text-xs transition-colors press-scale-sm",
                   state.customer
-                    ? "bg-emerald-50 border-emerald-200 text-emerald-800"
-                    : "border-dashed border-border text-muted-foreground hover:border-primary hover:bg-primary-fixed/50"
+                    ? "bg-primary-fixed text-primary font-semibold"
+                    : "bg-surface-container-low text-on-surface-variant hover:bg-surface-container hover:text-foreground"
                 )}
               >
                 {state.customer ? (
-                  <Icon name="person_check" size={14} className="text-emerald-600 shrink-0" />
+                  <Icon name="person_check" size={14} className="text-primary shrink-0" />
                 ) : (
                   <Icon name="person" size={14} className="shrink-0" />
                 )}
                 <span className="flex-1 text-left truncate font-medium">
                   {state.customer?.name ?? "Khách lẻ"}
                 </span>
-                <kbd className="font-mono text-[9px] bg-muted border border-border rounded px-1 py-0.5 text-muted-foreground shrink-0">
+                <kbd className="font-mono text-[9px] bg-surface-container-lowest border border-outline-variant/30 rounded px-1 py-0.5 text-muted-foreground shrink-0">
                   F4
                 </kbd>
               </button>
@@ -834,7 +834,7 @@ export default function PosPage() {
                 <button
                   type="button"
                   onClick={() => state.setCustomer(null)}
-                  className="p-1 rounded text-muted-foreground hover:text-red-500 hover:bg-red-50 transition-colors"
+                  className="p-1.5 rounded-lg text-muted-foreground hover:text-status-error hover:bg-status-error/10 transition-colors"
                   title="Gỡ khách"
                 >
                   <Icon name="close" size={14} />
@@ -851,7 +851,7 @@ export default function PosPage() {
                   </span>
                 )}
                 {(state.customer.currentDebt ?? 0) > 0 && (
-                  <span className="flex items-center gap-0.5 text-red-500 font-medium">
+                  <span className="flex items-center gap-0.5 text-status-error font-semibold">
                     Nợ cũ: {formatCurrency(state.customer.currentDebt ?? 0)}
                   </span>
                 )}
@@ -982,10 +982,10 @@ export default function PosPage() {
               </div>
             )}
 
-            {/* Total */}
-            <div className="flex justify-between items-baseline pt-1.5 border-t border-border">
-              <span className="text-sm font-bold text-foreground">Khách cần trả</span>
-              <span className="text-base font-bold text-primary tabular-nums">
+            {/* Total — Stitch font-heading extrabold primary */}
+            <div className="flex justify-between items-baseline pt-1.5 border-t border-outline-variant/20">
+              <span className="text-sm font-semibold text-foreground">Khách cần trả</span>
+              <span className="font-heading text-lg font-extrabold text-primary tabular-nums tracking-tight">
                 {formatCurrency(state.total)} ₫
               </span>
             </div>
@@ -1121,14 +1121,14 @@ export default function PosPage() {
                     />
                   </div>
 
-                  {/* Denomination buttons */}
+                  {/* Denomination buttons — Stitch pill group */}
                   <div className="flex gap-1">
                     {DENOMINATIONS.map((d) => (
                       <button
                         key={d.value}
                         type="button"
                         onClick={() => state.setPaid(d.value)}
-                        className="flex-1 h-7 rounded border border-border bg-surface-container-low text-[10px] font-medium text-foreground hover:bg-primary-fixed hover:border-primary hover:text-primary transition-colors"
+                        className="flex-1 h-8 rounded-lg bg-surface-container-low text-[10px] font-semibold text-on-surface-variant hover:bg-primary-fixed hover:text-primary transition-colors press-scale-sm"
                       >
                         {d.label}
                       </button>
@@ -1136,7 +1136,7 @@ export default function PosPage() {
                     <button
                       type="button"
                       onClick={() => state.setPaid(state.total)}
-                      className="flex-1 h-7 rounded border border-primary-fixed bg-primary-fixed text-[10px] font-bold text-primary hover:bg-primary-fixed transition-colors"
+                      className="flex-1 h-8 rounded-lg bg-primary-fixed text-[10px] font-bold text-primary hover:bg-primary-fixed/70 transition-colors press-scale-sm"
                     >
                       Đủ
                     </button>
@@ -1186,9 +1186,9 @@ export default function PosPage() {
             </div>
           )}
 
-          {/* ── Action buttons ── */}
+          {/* ── Action buttons — Stitch primary style ── */}
           <div className={cn(
-            "px-3 py-2 border-t border-border shrink-0 bg-white",
+            "px-3 py-2.5 border-t border-outline-variant/20 shrink-0 bg-surface-container-lowest",
             state.sellingMode === "fast"
               ? "flex flex-col gap-1.5"
               : "grid grid-cols-[1fr_1fr_2fr] gap-1.5"
@@ -1199,8 +1199,8 @@ export default function PosPage() {
               onClick={handleSaveDraft}
               disabled={state.lines.length === 0 || submitting !== null}
               className={cn(
-                "rounded border border-border bg-white text-xs font-semibold text-foreground hover:bg-surface-container-low disabled:opacity-40 disabled:cursor-not-allowed inline-flex items-center justify-center gap-1 transition-colors",
-                state.sellingMode === "fast" ? "h-8" : "h-10"
+                "rounded-lg bg-surface-container-low text-xs font-semibold text-on-surface-variant hover:bg-surface-container disabled:opacity-40 disabled:cursor-not-allowed inline-flex items-center justify-center gap-1 transition-all press-scale-sm",
+                state.sellingMode === "fast" ? "h-9" : "h-11"
               )}
             >
               {submitting === "draft" ? (
@@ -1209,7 +1209,7 @@ export default function PosPage() {
                 <Icon name="save" size={14} />
               )}
               Nháp
-              <kbd className="font-mono text-[8px] bg-muted border border-border rounded px-0.5 text-muted-foreground">
+              <kbd className="font-mono text-[8px] bg-surface-container-lowest border border-outline-variant/30 rounded px-0.5 text-muted-foreground">
                 F9
               </kbd>
             </button>
@@ -1220,23 +1220,23 @@ export default function PosPage() {
               disabled={state.lines.length === 0 || submitting !== null || !state.customer}
               title={!state.customer ? "Chọn khách hàng để ghi nợ" : "Ghi nợ toàn bộ"}
               className={cn(
-                "rounded border border-amber-400 bg-amber-50 text-xs font-semibold text-amber-700 hover:bg-amber-100 disabled:opacity-40 disabled:cursor-not-allowed inline-flex items-center justify-center gap-1 transition-colors",
-                state.sellingMode === "fast" ? "h-8" : "h-10"
+                "rounded-lg bg-status-warning/10 text-xs font-semibold text-status-warning hover:bg-status-warning/15 disabled:opacity-40 disabled:cursor-not-allowed inline-flex items-center justify-center gap-1 transition-all press-scale-sm",
+                state.sellingMode === "fast" ? "h-9" : "h-11"
               )}
             >
               <Icon name="credit_card" size={14} />
               Ghi nợ
             </button>
-            {/* Checkout button — prominent in fast mode */}
+            {/* Checkout button — primary Stitch */}
             <button
               type="button"
               onClick={handleComplete}
               disabled={state.lines.length === 0 || submitting !== null}
               className={cn(
-                "rounded bg-green-600 text-white font-bold hover:bg-green-700 disabled:opacity-40 disabled:cursor-not-allowed inline-flex items-center justify-center gap-1.5 transition-colors shadow-sm",
+                "rounded-xl bg-primary text-on-primary font-bold hover:bg-primary-hover disabled:opacity-40 disabled:cursor-not-allowed inline-flex items-center justify-center gap-1.5 transition-all ambient-shadow press-scale-sm",
                 state.sellingMode === "fast"
                   ? "h-12 text-base"
-                  : "h-10 text-[13px]"
+                  : "h-11 text-[13px]"
               )}
             >
               {submitting === "complete" ? (
@@ -1246,7 +1246,7 @@ export default function PosPage() {
               )}
               Thanh toán
               <kbd className={cn(
-                "font-mono bg-green-700 border border-green-500 rounded px-1 py-0.5",
+                "font-mono bg-on-primary/15 border border-on-primary/25 rounded px-1 py-0.5 text-on-primary/90",
                 state.sellingMode === "fast" ? "text-[10px]" : "text-[9px]"
               )}>
                 F10
@@ -1510,7 +1510,7 @@ function OrderDiscountInput({
   );
 }
 
-/** Payment method button */
+/** Payment method button — Stitch pill with primary-fixed inactive */
 function PaymentBtn({
   icon,
   label,
@@ -1527,10 +1527,10 @@ function PaymentBtn({
       type="button"
       onClick={onClick}
       className={cn(
-        "h-7 rounded border text-[10px] font-medium transition-all inline-flex items-center justify-center gap-1",
+        "h-8 rounded-lg text-[10px] font-semibold transition-all press-scale-sm inline-flex items-center justify-center gap-1",
         active
-          ? "border-primary bg-primary text-white shadow-sm"
-          : "border-border bg-white text-muted-foreground hover:bg-surface-container-low hover:border-border"
+          ? "bg-primary text-on-primary ambient-shadow"
+          : "bg-surface-container-low text-on-surface-variant hover:bg-surface-container hover:text-foreground"
       )}
     >
       {icon}
@@ -1539,7 +1539,7 @@ function PaymentBtn({
   );
 }
 
-/** Selling mode tab — bottom bar, KiotViet underline style */
+/** Selling mode tab — Stitch underline style, semibold MD3 */
 function SellingModeTab({
   icon,
   label,
@@ -1556,17 +1556,17 @@ function SellingModeTab({
       type="button"
       onClick={onClick}
       className={cn(
-        "relative inline-flex items-center gap-1.5 px-4 text-[11px] font-medium transition-all",
+        "relative inline-flex items-center gap-1.5 px-4 text-[11px] transition-colors",
         active
-          ? "text-primary"
-          : "text-muted-foreground hover:text-foreground"
+          ? "text-primary font-bold"
+          : "text-on-surface-variant font-semibold hover:text-foreground"
       )}
     >
       {icon}
       {label}
-      {/* Active underline indicator */}
+      {/* Active underline indicator — Stitch 3px rounded */}
       {active && (
-        <span className="absolute bottom-0 left-2 right-2 h-[2px] bg-primary rounded-t" />
+        <span className="absolute bottom-0 left-2 right-2 h-[3px] bg-primary rounded-full" />
       )}
     </button>
   );

@@ -1,8 +1,8 @@
 import type { Metadata } from "next";
 
 export const metadata: Metadata = {
-  title: "Màn hình bếp — OneBiz FnB",
-  description: "KDS Kitchen Display System — OneBiz",
+  title: "KDS — Màn hình bếp",
+  description: "Kitchen Display System",
 };
 
 /**

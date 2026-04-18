@@ -2,7 +2,7 @@ import Link from "next/link";
 import { Icon } from "@/components/ui/icon";
 
 export const metadata = {
-  title: "Tích hợp — OneBiz ERP",
+  title: "Tích hợp",
 };
 
 export default function TichHopPlaceholderPage() {

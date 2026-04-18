@@ -7,25 +7,28 @@ import "./globals.css";
 // Stitch design spec dùng 2 font:
 //   - Inter cho body + label (clean, hiện đại, geometric sans)
 //   - Be Vietnam Pro cho headline (hỗ trợ tiếng Việt dấu mảnh, dùng cho heading lớn)
-// Trước đây codebase dùng Be Vietnam Pro cho cả 2 → body tiếng Việt glyph
-// nhìn "có chân"/dày. Stitch mockup (stitch_onebiz_ux_ui_optimization/**/code.html)
-// luôn set fontFamily.body = ["Inter"], fontFamily.headline = ["Be Vietnam Pro"].
+// Tối ưu bandwidth: chỉ load weights thực sự dùng trong app
+//   - Inter: 400 (body), 500 (medium labels), 600 (semibold emphasis), 700 (bold)
+//   - Be Vietnam Pro: 600 (heading), 700 (strong heading), 800 (extrabold KPI/total)
+// Dùng `preload: true` cho font chủ đạo (Inter) để giảm FOUT ở paint đầu tiên.
 const inter = Inter({
   variable: "--font-sans",
   subsets: ["latin", "vietnamese"],
   weight: ["400", "500", "600", "700"],
   display: "swap",
+  preload: true,
 });
 
 const beVietnamPro = Be_Vietnam_Pro({
   variable: "--font-heading",
   subsets: ["latin", "vietnamese"],
-  weight: ["400", "500", "600", "700", "800", "900"],
+  weight: ["600", "700", "800"],
   display: "swap",
+  preload: false,
 });
 
 export const metadata: Metadata = {
-  title: "OneBiz ERP",
+  title: "OneBiz",
   description: "Hệ thống quản lý doanh nghiệp",
 };
 

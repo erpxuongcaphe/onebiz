@@ -383,19 +383,8 @@ export function AppSidebar() {
         collapsed ? "w-16" : "w-64"
       )}
     >
-      {/* Stitch header — p-4 generous, bigger logo badge (rounded-xl O mark) */}
-      <div className={cn("flex items-center justify-between h-16 border-b border-border", collapsed ? "px-2" : "px-4")}>
-        {!collapsed && (
-          <Link href="/" className="flex items-center gap-3 group press-scale-sm">
-            <span className="h-10 w-10 rounded-xl bg-primary text-primary-foreground flex items-center justify-center text-lg font-bold ambient-shadow">
-              O
-            </span>
-            <div className="flex flex-col leading-tight">
-              <span className="font-bold tracking-tight text-base text-foreground">OneBiz</span>
-              <span className="text-[10px] font-medium text-muted-foreground uppercase tracking-wider">ERP Suite</span>
-            </div>
-          </Link>
-        )}
+      {/* Stitch header — chỉ toggle button, logo đã có ở top-nav (tránh lặp brand) */}
+      <div className={cn("flex items-center justify-end h-14 border-b border-border", collapsed ? "px-2" : "px-3")}>
         <button
           type="button"
           onClick={() => setCollapsed(!collapsed)}

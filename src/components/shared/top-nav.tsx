@@ -39,17 +39,15 @@ import { Icon } from "@/components/ui/icon";
 // ---------------------------------------------------------------------------
 
 function BranchSelector() {
-  const { tenant, branches, currentBranch, switchBranch, user } = useAuth();
+  const { tenant: _tenant, branches, currentBranch, switchBranch, user } = useAuth();
   const canViewAll = user?.role === "owner" || user?.role === "admin";
 
   return (
     <DropdownMenu>
-      <DropdownMenuTrigger className="hidden md:flex press-scale-sm items-center gap-1.5 px-3 h-9 text-sm text-foreground/80 hover:text-primary hover:bg-surface-container-low rounded-lg cursor-pointer outline-none">
+      <DropdownMenuTrigger className="hidden md:flex press-scale-sm items-center gap-1.5 px-3 h-9 text-sm text-foreground/90 hover:text-primary hover:bg-surface-container-low rounded-lg cursor-pointer outline-none">
         <Icon name="apartment" size={16} className="shrink-0 text-muted-foreground" />
-        <span className="truncate max-w-[180px]">
-          <span className="font-semibold text-foreground">{tenant?.name ?? "OneBiz"}</span>
-          <span className="text-muted-foreground mx-1.5">/</span>
-          <span className="text-foreground/80">{currentBranch?.name ?? "Tất cả"}</span>
+        <span className="truncate max-w-[180px] font-semibold">
+          {currentBranch?.name ?? "Tất cả chi nhánh"}
         </span>
         <Icon name="expand_more" size={14} className="shrink-0 text-muted-foreground" />
       </DropdownMenuTrigger>
@@ -360,13 +358,16 @@ export function TopNav() {
           {/* Left: Mobile menu + AppSwitcher + Logo + BranchSelector */}
           <MobileNav />
           <AppSwitcher />
-          <Link href="/" className="flex items-center gap-2 ml-1 shrink-0 press-scale-sm">
-            <span className="hidden sm:flex h-9 w-9 rounded-xl bg-primary text-primary-foreground items-center justify-center text-sm font-bold ambient-shadow">
+          <Link
+            href="/"
+            className="flex items-center ml-1 shrink-0 press-scale-sm"
+            title="Trang chủ"
+          >
+            <span className="flex h-9 w-9 rounded-xl bg-primary text-primary-foreground items-center justify-center font-heading text-base font-extrabold ambient-shadow">
               O
             </span>
-            <span className="text-lg font-bold tracking-tight text-foreground hidden sm:block">OneBiz</span>
           </Link>
-          <div className="hidden md:block w-px h-6 bg-border ml-2" />
+          <div className="hidden md:block w-px h-6 bg-border ml-1" />
           <BranchSelector />
 
           {/* Center: Global Search bar (flex-1 to fill) */}
@@ -414,18 +415,6 @@ export function TopNav() {
               <span className="absolute top-1 right-1 h-4 w-4 rounded-full bg-destructive text-[10px] font-bold text-on-primary flex items-center justify-center pointer-events-none ring-2 ring-surface-container-lowest">
                 3
               </span>
-            </Link>
-
-            {/* Help */}
-            <Link href="/tro-giup" className="hidden sm:flex">
-              <Button
-                variant="ghost"
-                size="icon"
-                className="text-foreground/70 hover:text-foreground hover:bg-surface-container-low"
-                title="Trợ giúp"
-              >
-                <Icon name="help" size={18} />
-              </Button>
             </Link>
 
             {/* Divider */}

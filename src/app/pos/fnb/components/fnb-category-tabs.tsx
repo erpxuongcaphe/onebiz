@@ -28,10 +28,12 @@ export function FnbCategoryTabs({
 }: FnbCategoryTabsProps) {
   const scrollRef = useRef<HTMLDivElement>(null);
 
+  // Stitch FnB POS spec: tabs full `px-6 py-3 rounded-lg` (không phải pill tròn),
+  // active `bg-primary text-on-primary shadow-sm`, inactive `bg-surface-container-low`.
   return (
     <div
       ref={scrollRef}
-      className="flex flex-wrap gap-2 sm:gap-1.5 px-3 py-2.5 sm:py-2 max-h-[88px] sm:max-h-[72px] overflow-y-auto border-b bg-white shrink-0"
+      className="flex gap-2 px-3 sm:px-4 py-2.5 overflow-x-auto no-scrollbar border-b border-outline-variant/20 bg-surface-container-lowest shrink-0"
     >
       {/* "Tất cả" — always first */}
       <CategoryPill
@@ -66,10 +68,10 @@ function CategoryPill({
       type="button"
       onClick={onClick}
       className={cn(
-        "shrink-0 px-4 py-2 sm:px-3 sm:py-1.5 rounded-full text-sm sm:text-xs font-medium transition-all whitespace-nowrap active:scale-95",
+        "shrink-0 px-5 py-2.5 rounded-lg text-sm font-semibold transition-all whitespace-nowrap press-scale-sm",
         active
-          ? "bg-primary text-white shadow-sm"
-          : "bg-muted text-foreground hover:bg-muted active:bg-gray-300"
+          ? "bg-primary text-on-primary ambient-shadow"
+          : "bg-surface-container-low text-on-surface-variant hover:bg-surface-container hover:text-foreground"
       )}
     >
       {label}

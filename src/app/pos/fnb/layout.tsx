@@ -1,8 +1,8 @@
 import type { Metadata } from "next";
 
 export const metadata: Metadata = {
-  title: "OneBiz FnB — Quầy thu ngân",
-  description: "POS thu ngân F&B — OneBiz",
+  title: "FnB POS — Quầy thu ngân",
+  description: "POS thu ngân F&B",
 };
 
 export default function FnbPosLayout({
