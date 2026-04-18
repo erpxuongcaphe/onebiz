@@ -29,25 +29,25 @@ const STATUS_CONFIG: Record<
   { bg: string; border: string; text: string; label: string; dot: string }
 > = {
   available: {
-    bg: "bg-green-50 hover:bg-green-100",
-    border: "border-green-300",
-    text: "text-green-700",
+    bg: "bg-status-success/10 hover:bg-status-success/20",
+    border: "border-status-success/25",
+    text: "text-status-success",
     label: "Trống",
-    dot: "bg-green-500",
+    dot: "bg-status-success",
   },
   occupied: {
-    bg: "bg-red-50 hover:bg-red-100",
-    border: "border-red-300",
-    text: "text-red-700",
+    bg: "bg-status-error/10 hover:bg-status-error/20",
+    border: "border-status-error/25",
+    text: "text-status-error",
     label: "Đang dùng",
-    dot: "bg-red-500",
+    dot: "bg-status-error",
   },
   reserved: {
-    bg: "bg-orange-50 hover:bg-orange-100",
-    border: "border-orange-300",
-    text: "text-orange-700",
+    bg: "bg-status-warning/10 hover:bg-status-warning/20",
+    border: "border-status-warning/25",
+    text: "text-status-warning",
     label: "Đặt trước",
-    dot: "bg-orange-500",
+    dot: "bg-status-warning",
   },
   cleaning: {
     bg: "bg-muted hover:bg-muted",
@@ -198,7 +198,7 @@ function TableCard({
 
       {/* Timer for occupied tables */}
       {elapsed && (
-        <span className="flex items-center gap-0.5 text-[10px] text-red-600 font-medium mt-1">
+        <span className="flex items-center gap-0.5 text-[10px] text-status-error font-medium mt-1">
           <Icon name="schedule" size={10} />
           {elapsed}
         </span>

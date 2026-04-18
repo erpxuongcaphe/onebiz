@@ -177,8 +177,8 @@ export function CustomerPicker({ open, onSelect, onClose }: CustomerPickerProps)
                     highlighted === idx && "bg-primary-fixed"
                   )}
                 >
-                  <div className="h-8 w-8 rounded-full bg-emerald-100 flex items-center justify-center shrink-0">
-                    <Icon name="person" size={16} className="text-emerald-600" />
+                  <div className="h-8 w-8 rounded-full bg-status-success/10 flex items-center justify-center shrink-0">
+                    <Icon name="person" size={16} className="text-status-success" />
                   </div>
                   <div className="min-w-0 flex-1">
                     <div className="text-sm font-medium text-slate-900 truncate">
@@ -189,7 +189,7 @@ export function CustomerPicker({ open, onSelect, onClose }: CustomerPickerProps)
                     </div>
                   </div>
                   {c.currentDebt > 0 && (
-                    <div className="text-[11px] text-red-600 font-medium shrink-0">
+                    <div className="text-[11px] text-status-error font-medium shrink-0">
                       Nợ {new Intl.NumberFormat("vi-VN").format(c.currentDebt)} ₫
                     </div>
                   )}

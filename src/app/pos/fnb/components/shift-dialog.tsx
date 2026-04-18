@@ -131,7 +131,7 @@ export function CloseShiftDialog({
       <DialogContent className="sm:max-w-lg">
         <DialogHeader>
           <DialogTitle className="flex items-center gap-2">
-            <Icon name="check_circle" className="text-green-600" />
+            <Icon name="check_circle" className="text-status-success" />
             Đóng ca làm việc
           </DialogTitle>
         </DialogHeader>

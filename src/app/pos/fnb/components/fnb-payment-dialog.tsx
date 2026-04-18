@@ -111,7 +111,7 @@ export function FnbPaymentDialog({
               <span className="tabular-nums">{formatCurrency(subtotal)}</span>
             </div>
             {discountAmount > 0 && (
-              <div className="flex justify-between text-orange-600">
+              <div className="flex justify-between text-status-warning">
                 <span>Giảm giá</span>
                 <span className="tabular-nums">-{formatCurrency(discountAmount)}</span>
               </div>
@@ -149,7 +149,7 @@ export function FnbPaymentDialog({
               <div className="flex flex-wrap gap-2 sm:gap-1.5">
                 <button type="button"
                   onClick={() => setCashInput(String(total))}
-                  className="px-3 py-2 sm:px-2.5 sm:py-1.5 rounded-md border border-green-300 bg-green-50 text-sm sm:text-xs font-medium text-green-700 hover:bg-green-100 active:bg-green-200 transition-colors">
+                  className="px-3 py-2 sm:px-2.5 sm:py-1.5 rounded-md border border-status-success/25 bg-status-success/10 text-sm sm:text-xs font-medium text-status-success hover:bg-status-success/20 active:bg-status-success/30 transition-colors">
                   Đủ
                 </button>
                 {DENOMINATIONS.map((d) => (
@@ -183,7 +183,7 @@ export function FnbPaymentDialog({
           {(method === "cash" || method === "mixed") && totalPaid > 0 && (
             <div className="flex items-center justify-between rounded-lg bg-muted px-3 py-2 text-sm">
               <span className="text-muted-foreground">Tiền thừa</span>
-              <span className={cn("font-semibold", change > 0 && "text-green-600")}>
+              <span className={cn("font-semibold", change > 0 && "text-status-success")}>
                 {formatCurrency(change)}đ
               </span>
             </div>

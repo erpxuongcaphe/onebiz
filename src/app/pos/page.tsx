@@ -761,7 +761,7 @@ export default function PosPage() {
                           e.stopPropagation();
                           closeTab(tab.id);
                         }}
-                        className="ml-0.5 p-0.5 rounded opacity-0 group-hover:opacity-100 hover:bg-red-100 hover:text-red-500 text-muted-foreground transition-all"
+                        className="ml-0.5 p-0.5 rounded opacity-0 group-hover:opacity-100 hover:bg-status-error/10 hover:text-status-error text-muted-foreground transition-all"
                       >
                         <Icon name="close" size={10} />
                       </span>
@@ -783,9 +783,9 @@ export default function PosPage() {
 
           {/* ── Draft indicator (when loaded from F3) ── */}
           {state.loadedDraftId && (
-            <div className="flex items-center gap-2 px-3 py-1 bg-amber-50 border-b border-amber-200 text-[11px]">
-              <Icon name="save" size={12} className="text-amber-600" />
-              <span className="text-amber-700 font-medium">Đang sửa nháp</span>
+            <div className="flex items-center gap-2 px-3 py-1 bg-status-warning/10 border-b border-status-warning/25 text-[11px]">
+              <Icon name="save" size={12} className="text-status-warning" />
+              <span className="text-status-warning font-medium">Đang sửa nháp</span>
               <button
                 type="button"
                 onClick={() =>
@@ -798,7 +798,7 @@ export default function PosPage() {
                     }
                   )
                 }
-                className="ml-auto text-amber-500 hover:text-amber-700 text-[10px] underline"
+                className="ml-auto text-status-warning hover:text-status-warning text-[10px] underline"
               >
                 Huỷ
               </button>
@@ -895,7 +895,7 @@ export default function PosPage() {
                     }
                   )
                 }
-                className="shrink-0 px-1.5 py-0.5 mr-1 rounded text-[9px] text-muted-foreground hover:text-red-500 hover:bg-red-50 transition-colors"
+                className="shrink-0 px-1.5 py-0.5 mr-1 rounded text-[9px] text-muted-foreground hover:text-status-error hover:bg-status-error/10 transition-colors"
                 title="Xoá tất cả (cần xác nhận)"
               >
                 <Icon name="delete" size={12} />
@@ -943,7 +943,7 @@ export default function PosPage() {
             {/* Giảm giá — always visible like KiotViet */}
             <div className="flex justify-between text-xs text-muted-foreground">
               <span>Giảm giá</span>
-              <span className={cn("tabular-nums", (state.lineDiscountTotal + state.orderDiscountAmount) > 0 && "text-orange-500")}>
+              <span className={cn("tabular-nums", (state.lineDiscountTotal + state.orderDiscountAmount) > 0 && "text-status-warning")}>
                 {(state.lineDiscountTotal + state.orderDiscountAmount) > 0
                   ? `−${formatCurrency(state.lineDiscountTotal + state.orderDiscountAmount)}`
                   : "0"
@@ -1029,9 +1029,9 @@ export default function PosPage() {
                     Chi tiết thanh toán
                   </label>
                   {([
-                    { method: "cash" as const, label: "Tiền mặt", icon: <Icon name="payments" size={12} className="text-green-600" /> },
+                    { method: "cash" as const, label: "Tiền mặt", icon: <Icon name="payments" size={12} className="text-status-success" /> },
                     { method: "transfer" as const, label: "Chuyển khoản", icon: <Icon name="apartment" size={12} className="text-primary" /> },
-                    { method: "card" as const, label: "Thẻ", icon: <Icon name="credit_card" size={12} className="text-purple-600" /> },
+                    { method: "card" as const, label: "Thẻ", icon: <Icon name="credit_card" size={12} className="text-status-info" /> },
                   ]).map((pm) => {
                     const item = state.paymentBreakdown.find((b) => b.method === pm.method);
                     return (
@@ -1064,20 +1064,20 @@ export default function PosPage() {
                       className={cn(
                         "text-xs font-bold tabular-nums",
                         state.breakdownTotal >= state.total
-                          ? "text-emerald-600"
-                          : "text-amber-600"
+                          ? "text-status-success"
+                          : "text-status-warning"
                       )}
                     >
                       {formatCurrency(state.breakdownTotal)} / {formatCurrency(state.total)} ₫
                     </span>
                   </div>
                   {state.breakdownTotal > 0 && state.breakdownTotal < state.total && (
-                    <p className="text-[10px] text-amber-600">
+                    <p className="text-[10px] text-status-warning">
                       Còn thiếu {formatCurrency(state.total - state.breakdownTotal)} ₫
                     </p>
                   )}
                   {state.breakdownTotal > state.total && (
-                    <p className="text-[10px] text-emerald-600">
+                    <p className="text-[10px] text-status-success">
                       Thừa {formatCurrency(state.breakdownTotal - state.total)} ₫
                     </p>
                   )}
@@ -1091,12 +1091,12 @@ export default function PosPage() {
                         Khách đưa
                       </label>
                       {state.paid > 0 && state.change > 0 && (
-                        <span className="text-[11px] font-bold text-emerald-600 bg-emerald-50 px-1.5 py-0.5 rounded">
+                        <span className="text-[11px] font-bold text-status-success bg-status-success/10 px-1.5 py-0.5 rounded">
                           Thừa: {formatCurrency(state.change)} ₫
                         </span>
                       )}
                       {state.paid > 0 && state.debt > 0 && (
-                        <span className="text-[11px] font-bold text-amber-600 bg-amber-50 px-1.5 py-0.5 rounded">
+                        <span className="text-[11px] font-bold text-status-warning bg-status-warning/10 px-1.5 py-0.5 rounded">
                           Nợ: {formatCurrency(state.debt)} ₫
                         </span>
                       )}
@@ -1113,9 +1113,9 @@ export default function PosPage() {
                       className={cn(
                         "w-full h-9 px-3 rounded border text-right text-sm font-bold outline-none focus:ring-2 focus:ring-primary/30 focus:border-primary tabular-nums transition-colors",
                         state.paid > 0 && state.paid >= state.total
-                          ? "border-emerald-400 bg-emerald-50/50"
+                          ? "border-status-success/25 bg-status-success/10"
                           : state.paid > 0 && state.paid < state.total
-                          ? "border-amber-400 bg-amber-50/50"
+                          ? "border-status-warning/25 bg-status-warning/10"
                           : "border-border"
                       )}
                     />
@@ -1273,7 +1273,7 @@ export default function PosPage() {
             <div className="relative">
               <Icon name="shopping_cart" />
               {state.itemCount > 0 && (
-                <span className="absolute -top-1.5 -right-1.5 h-4 min-w-[16px] rounded-full bg-red-500 text-white text-[9px] font-bold flex items-center justify-center px-0.5">
+                <span className="absolute -top-1.5 -right-1.5 h-4 min-w-[16px] rounded-full bg-status-error text-white text-[9px] font-bold flex items-center justify-center px-0.5">
                   {state.itemCount}
                 </span>
               )}
@@ -1372,7 +1372,7 @@ function CartItem({
     <div
       className={cn(
         "grid grid-cols-[20px_1fr_66px_44px_60px_66px_18px] gap-0 px-2 py-1.5 hover:bg-primary-fixed/30 transition-colors group items-center",
-        oversold && "bg-amber-50/40"
+        oversold && "bg-status-warning/10"
       )}
     >
       {/* Line number */}
@@ -1389,7 +1389,7 @@ function CartItem({
             <span className="text-muted-foreground ml-1">({line.unit})</span>
           )}
           {oversold && (
-            <span className="text-amber-600 ml-1">Tồn: {line.availableStock}</span>
+            <span className="text-status-warning ml-1">Tồn: {line.availableStock}</span>
           )}
         </p>
       </div>
@@ -1459,7 +1459,7 @@ function CartItem({
       <button
         type="button"
         onClick={onRemove}
-        className="p-0.5 rounded text-gray-300 hover:text-red-500 hover:bg-red-50 opacity-0 group-hover:opacity-100 transition-all justify-self-center"
+        className="p-0.5 rounded text-gray-300 hover:text-status-error hover:bg-status-error/10 opacity-0 group-hover:opacity-100 transition-all justify-self-center"
         title="Xóa"
       >
         <Icon name="close" size={12} />
@@ -1584,8 +1584,8 @@ function DeliveryForm({
     onChange({ ...value, [field]: val });
 
   return (
-    <div className="border-b border-border bg-orange-50/30 px-3 py-2 space-y-1.5">
-      <div className="flex items-center gap-1.5 text-[11px] font-semibold text-orange-700">
+    <div className="border-b border-border bg-status-warning/10 px-3 py-2 space-y-1.5">
+      <div className="flex items-center gap-1.5 text-[11px] font-semibold text-status-warning">
         <Icon name="local_shipping" size={12} />
         Thông tin giao hàng
       </div>
@@ -1818,7 +1818,7 @@ function DraftListModal({
                       type="button"
                       onClick={() => handleDelete(draft.id)}
                       disabled={deleting === draft.id}
-                      className="p-1 rounded text-gray-300 hover:text-red-500 hover:bg-red-50 transition-colors disabled:opacity-50"
+                      className="p-1 rounded text-gray-300 hover:text-status-error hover:bg-status-error/10 transition-colors disabled:opacity-50"
                       title="Xóa nháp"
                     >
                       {deleting === draft.id ? (

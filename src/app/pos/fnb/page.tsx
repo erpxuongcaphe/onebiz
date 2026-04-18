@@ -868,7 +868,7 @@ export default function FnbPosPage() {
           className="fixed bottom-4 right-4 z-30 lg:hidden h-14 w-14 rounded-full bg-primary text-white shadow-lg flex items-center justify-center hover:bg-primary/90 transition-colors"
         >
           <Icon name="shopping_cart" size={24} />
-          <span className="absolute -top-1 -right-1 h-5 min-w-5 px-1 rounded-full bg-red-500 text-[10px] font-bold flex items-center justify-center">
+          <span className="absolute -top-1 -right-1 h-5 min-w-5 px-1 rounded-full bg-status-error text-[10px] font-bold flex items-center justify-center">
             {pos.lineCount}
           </span>
         </button>

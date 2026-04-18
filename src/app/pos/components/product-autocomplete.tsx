@@ -195,9 +195,9 @@ export function ProductAutocomplete({
                     className={cn(
                       "text-[11px]",
                       p.stock <= 0
-                        ? "text-red-600 font-medium"
+                        ? "text-status-error font-medium"
                         : p.stock <= 5
-                          ? "text-amber-600"
+                          ? "text-status-warning"
                           : "text-slate-500"
                     )}
                   >

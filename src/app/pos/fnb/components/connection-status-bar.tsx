@@ -54,9 +54,9 @@ export function ConnectionStatusBar({ status }: ConnectionStatusBarProps) {
           ? "bg-primary text-white animate-pulse"
           : isOnline
             ? pendingCount > 0
-              ? "bg-amber-500 text-white"
-              : "bg-green-500 text-white"
-            : "bg-red-500 text-white"
+              ? "bg-status-warning text-white"
+              : "bg-status-success text-white"
+            : "bg-status-error text-white"
       )}
     >
       {isSyncing ? (

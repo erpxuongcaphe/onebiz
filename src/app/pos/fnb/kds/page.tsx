@@ -307,7 +307,7 @@ export default function KdsPage() {
           <Icon
             name="progress_activity"
             size={36}
-            className="animate-spin text-blue-400"
+            className="animate-spin text-status-info"
           />
           <p className="text-sm text-slate-400">Đang tải đơn bếp…</p>
         </div>
@@ -336,7 +336,7 @@ export default function KdsPage() {
               <span
                 className={cn(
                   "size-2 rounded-full",
-                  realtimeConnected ? "bg-emerald-400 animate-pulse" : "bg-slate-500"
+                  realtimeConnected ? "bg-status-success animate-pulse" : "bg-slate-500"
                 )}
               />
               {realtimeConnected ? "Live" : "Polling"} · {filtered.length} đơn
@@ -356,7 +356,7 @@ export default function KdsPage() {
               className={cn(
                 "px-4 md:px-5 py-1.5 md:py-2 rounded-lg font-semibold text-xs md:text-sm transition-all press-scale-sm",
                 filter === tab.key
-                  ? "bg-blue-600 text-white shadow-md shadow-blue-900/30"
+                  ? "bg-status-info text-white shadow-md shadow-slate-900/30"
                   : "text-slate-400 hover:bg-slate-800 hover:text-slate-100"
               )}
             >
@@ -375,7 +375,7 @@ export default function KdsPage() {
             className={cn(
               "size-9 rounded-lg flex items-center justify-center transition-colors press-scale-sm",
               soundOn
-                ? "bg-blue-500/20 text-blue-300 hover:bg-blue-500/30"
+                ? "bg-status-info/20 text-status-info hover:bg-status-info/30"
                 : "bg-slate-800 text-slate-500 hover:bg-slate-700"
             )}
             title={soundOn ? "Tắt âm" : "Bật âm"}
@@ -394,7 +394,7 @@ export default function KdsPage() {
             className={cn(
               "shrink-0 px-4 py-2 rounded-lg font-semibold text-xs transition-all press-scale-sm",
               filter === tab.key
-                ? "bg-blue-600 text-white shadow"
+                ? "bg-status-info text-white shadow"
                 : "text-slate-400 hover:bg-slate-800 hover:text-slate-100"
             )}
           >
@@ -408,7 +408,7 @@ export default function KdsPage() {
         {filtered.length === 0 ? (
           <div className="flex flex-col items-center justify-center h-full gap-3">
             <div className="size-20 rounded-2xl bg-slate-700 flex items-center justify-center">
-              <Icon name="check_circle" size={40} className="text-emerald-400" />
+              <Icon name="check_circle" size={40} className="text-status-success" />
             </div>
             <p className="font-heading text-lg font-bold text-slate-300">
               Bếp đang thong thả
@@ -467,24 +467,24 @@ function KdsOrderCard({
   // Header color theme based on urgency
   const headerClass =
     urgency === "overdue"
-      ? "bg-red-950/80 border-b border-red-600/40"
+      ? "bg-status-error/80 border-b border-status-error/40"
       : urgency === "attention"
-        ? "bg-amber-950/60 border-b border-amber-600/30"
-        : "bg-blue-600";
+        ? "bg-status-warning/60 border-b border-status-warning/30"
+        : "bg-status-info";
 
   const headerTextClass =
     urgency === "overdue"
-      ? "text-red-100"
+      ? "text-status-error"
       : urgency === "attention"
-        ? "text-amber-100"
-        : "text-blue-50";
+        ? "text-status-warning"
+        : "text-status-info";
 
   const timerTextClass =
     urgency === "overdue"
-      ? "text-red-300 animate-pulse"
+      ? "text-status-error animate-pulse"
       : urgency === "attention"
-        ? "text-amber-200"
-        : "text-blue-100";
+        ? "text-status-warning"
+        : "text-status-info";
 
   return (
     <div
@@ -496,7 +496,7 @@ function KdsOrderCard({
     >
       {/* Overdue pulse bar */}
       {urgency === "overdue" && (
-        <div className="absolute top-0 left-0 right-0 h-1 bg-red-500 animate-pulse" />
+        <div className="absolute top-0 left-0 right-0 h-1 bg-status-error animate-pulse" />
       )}
 
       {/* ── Card Header — large table # ── */}
@@ -568,9 +568,9 @@ function KdsOrderCard({
             className={cn(
               "w-full py-3 rounded-lg font-bold text-sm transition-all press-scale-sm flex items-center justify-center gap-2",
               allReady
-                ? "bg-emerald-500 text-white hover:bg-emerald-400 ambient-shadow"
+                ? "bg-status-success text-white hover:bg-status-success/90 ambient-shadow"
                 : urgency === "overdue"
-                  ? "bg-red-600/80 text-red-50 hover:bg-red-600 ambient-shadow"
+                  ? "bg-status-error/80 text-white hover:bg-status-error ambient-shadow"
                   : "bg-slate-800 text-slate-400 cursor-not-allowed opacity-70"
             )}
           >
@@ -617,9 +617,9 @@ function KdsItemRow({
         className={cn(
           "size-6 rounded-md border-2 flex items-center justify-center shrink-0 mt-0.5 transition-all",
           isReady
-            ? "bg-emerald-500 border-emerald-500"
+            ? "bg-status-success border-status-success"
             : isPreparing
-              ? "bg-amber-500/20 border-amber-400"
+              ? "bg-status-warning/20 border-status-warning"
               : "border-slate-500"
         )}
       >
@@ -627,7 +627,7 @@ function KdsItemRow({
           <Icon name="check" size={14} className="text-white font-bold" />
         )}
         {isPreparing && (
-          <div className="size-2 rounded-full bg-amber-400 animate-pulse" />
+          <div className="size-2 rounded-full bg-status-warning animate-pulse" />
         )}
       </div>
 
@@ -660,14 +660,14 @@ function KdsItemRow({
         )}
         {/* Note */}
         {item.note && (
-          <p className="text-xs text-amber-300 italic mt-1 flex items-start gap-1">
+          <p className="text-xs text-status-warning italic mt-1 flex items-start gap-1">
             <Icon name="sticky_note_2" size={12} className="mt-0.5 shrink-0" />
             {item.note}
           </p>
         )}
         {/* Quantity badge */}
         {item.quantity > 1 && (
-          <span className="inline-flex items-center gap-0.5 mt-1.5 px-2 py-0.5 rounded-full bg-blue-500/20 text-blue-300 text-[10px] font-bold">
+          <span className="inline-flex items-center gap-0.5 mt-1.5 px-2 py-0.5 rounded-full bg-status-info/20 text-status-info text-[10px] font-bold">
             x{item.quantity}
           </span>
         )}

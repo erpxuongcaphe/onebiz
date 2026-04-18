@@ -208,7 +208,7 @@ function ProductTile({
         )}
         {outOfStock && (
           <div className="absolute inset-0 bg-white/60 flex items-center justify-center">
-            <span className="text-[9px] font-bold text-red-500 bg-red-50 px-1.5 py-0.5 rounded-full border border-red-200">
+            <span className="text-[9px] font-bold text-status-error bg-status-error/10 px-1.5 py-0.5 rounded-full border border-status-error/25">
               Hết hàng
             </span>
           </div>
@@ -219,7 +219,7 @@ function ProductTile({
             <span className={cn(
               "text-[8px] font-medium px-1 py-0.5 rounded-full border",
               stock <= 5
-                ? "text-amber-700 bg-amber-50 border-amber-200"
+                ? "text-status-warning bg-status-warning/10 border-status-warning/25"
                 : "text-muted-foreground bg-white/80 border-border"
             )}>
               {stock}
