@@ -12,17 +12,17 @@ import {
 import { Input } from "@/components/ui/input";
 import { Button } from "@/components/ui/button";
 import { Checkbox } from "@/components/ui/checkbox";
-import { Badge } from "@/components/ui/badge";
 import { useToast, useAuth } from "@/lib/contexts";
 import {
   completeProductionOrder,
   consumeProductionMaterials,
+  checkMaterialsAvailability,
   getBranches,
   createInternalSale,
   syncInternalEntities,
 } from "@/lib/services";
 import type { ProductionOrder } from "@/lib/types";
-import type { BranchDetail } from "@/lib/services";
+import type { BranchDetail, MaterialCheckResult } from "@/lib/services";
 import { getClient } from "@/lib/services/supabase/base";
 import { formatNumber } from "@/lib/format";
 import { Icon } from "@/components/ui/icon";
@@ -32,15 +32,6 @@ interface CompleteProductionOrderDialogProps {
   onOpenChange: (open: boolean) => void;
   order: ProductionOrder | null;
   onSuccess?: () => void;
-}
-
-interface MaterialCheck {
-  productId: string;
-  productName: string;
-  needed: number;
-  available: number;
-  unit: string;
-  sufficient: boolean;
 }
 
 export function CompleteProductionOrderDialog({
@@ -57,8 +48,8 @@ export function CompleteProductionOrderDialog({
   const [expiryDate, setExpiryDate] = useState("");
   const [saving, setSaving] = useState(false);
 
-  // Material check state
-  const [materialChecks, setMaterialChecks] = useState<MaterialCheck[]>([]);
+  // Material check state — dùng shared helper checkMaterialsAvailability
+  const [materialChecks, setMaterialChecks] = useState<MaterialCheckResult[]>([]);
   const [checking, setChecking] = useState(false);
 
   // Auto-sell state
@@ -99,28 +90,16 @@ export function CompleteProductionOrderDialog({
     }
     setChecking(true);
     try {
-      const supabase = getClient();
-      const checks: MaterialCheck[] = [];
-
-      for (const mat of prod.materials) {
-        // Check branch_stock for this material
-        const { data } = await supabase
-          .from("branch_stock")
-          .select("quantity")
-          .eq("branch_id", prod.branchId)
-          .eq("product_id", mat.productId)
-          .maybeSingle();
-
-        const available = Number(data?.quantity ?? 0);
-        checks.push({
-          productId: mat.productId,
-          productName: mat.productName ?? mat.productId,
-          needed: mat.plannedQty,
-          available,
-          unit: mat.unit ?? "",
-          sufficient: available >= mat.plannedQty,
-        });
-      }
+      // Batched single query qua helper chung (1 round-trip thay vì N queries)
+      const checks = await checkMaterialsAvailability(
+        prod.branchId,
+        prod.materials.map((m) => ({
+          productId: m.productId,
+          productName: m.productName,
+          plannedQty: m.plannedQty,
+          unit: m.unit,
+        })),
+      );
       setMaterialChecks(checks);
     } catch {
       // Silent fail — don't block the dialog
@@ -280,37 +259,42 @@ export function CompleteProductionOrderDialog({
 
           {/* Material availability check */}
           {materialChecks.length > 0 && (
-            <div className="border rounded-md overflow-hidden">
-              <div className="px-3 py-2 bg-muted/30 text-xs font-medium flex items-center justify-between">
-                <span>Kiểm tra nguyên vật liệu</span>
+            <div className="rounded-xl border border-border overflow-hidden bg-surface-container-lowest">
+              <div className="px-3 py-2 bg-surface-container-low text-xs font-semibold flex items-center justify-between">
+                <span className="flex items-center gap-1.5">
+                  <Icon name="inventory_2" size={14} className="text-muted-foreground" />
+                  Kiểm tra nguyên vật liệu
+                </span>
                 {checking ? (
                   <Icon name="progress_activity" size={12} className="animate-spin" />
                 ) : hasShortage ? (
-                  <Badge variant="outline" className="text-amber-600 border-amber-300 bg-amber-50 text-[10px]">
+                  <span className="inline-flex items-center gap-1 text-[10px] font-semibold px-2 py-0.5 rounded-full bg-status-warning/10 text-status-warning">
+                    <span className="size-1.5 rounded-full bg-status-warning" />
                     Thiếu NVL
-                  </Badge>
+                  </span>
                 ) : (
-                  <Badge variant="outline" className="text-green-600 border-green-300 bg-green-50 text-[10px]">
+                  <span className="inline-flex items-center gap-1 text-[10px] font-semibold px-2 py-0.5 rounded-full bg-status-success/10 text-status-success">
+                    <span className="size-1.5 rounded-full bg-status-success" />
                     Đủ NVL
-                  </Badge>
+                  </span>
                 )}
               </div>
               <table className="w-full text-xs">
                 <tbody>
                   {materialChecks.map((m) => (
-                    <tr key={m.productId} className="border-t">
+                    <tr key={m.productId} className="border-t border-border">
                       <td className="px-3 py-1.5 font-medium">{m.productName}</td>
-                      <td className="px-3 py-1.5 text-right text-muted-foreground">
+                      <td className="px-3 py-1.5 text-right text-muted-foreground tabular-nums">
                         Cần: {formatNumber(m.needed)} {m.unit}
                       </td>
-                      <td className="px-3 py-1.5 text-right">
+                      <td className="px-3 py-1.5 text-right tabular-nums">
                         Kho: {formatNumber(m.available)} {m.unit}
                       </td>
                       <td className="px-3 py-1.5 text-center w-8">
                         {m.sufficient ? (
-                          <Icon name="check_circle" size={14} className="text-green-500" />
+                          <Icon name="check_circle" size={14} className="text-status-success" />
                         ) : (
-                          <Icon name="warning" size={14} className="text-amber-500" />
+                          <Icon name="warning" size={14} className="text-status-warning" />
                         )}
                       </td>
                     </tr>
@@ -321,7 +305,7 @@ export function CompleteProductionOrderDialog({
           )}
 
           {/* Auto-sell to warehouse toggle */}
-          <div className="border rounded-md p-3 space-y-2">
+          <div className="rounded-xl border border-border p-3 space-y-2 bg-surface-container-lowest">
             <div className="flex items-center gap-2">
               <Checkbox
                 id="autoSell"
@@ -336,7 +320,7 @@ export function CompleteProductionOrderDialog({
               <div className="pl-6 space-y-1.5">
                 <label className="text-xs text-muted-foreground">Chi nhánh nhận</label>
                 <select
-                  className="w-full border rounded-md px-3 py-1.5 text-sm bg-background"
+                  className="w-full rounded-lg border border-border px-3 py-1.5 text-sm bg-surface-container-lowest focus:ring-2 focus:ring-primary/30 outline-none"
                   value={targetBranchId}
                   onChange={(e) => setTargetBranchId(e.target.value)}
                 >
@@ -357,8 +341,11 @@ export function CompleteProductionOrderDialog({
             )}
           </div>
 
-          <div className="text-xs text-muted-foreground bg-muted/30 rounded p-2">
-            Khi xác nhận: NVL sẽ bị trừ kho, SKU sẽ được cộng vào kho và lô mới sẽ được tạo.
+          <div className="text-xs text-muted-foreground bg-surface-container-low rounded-lg p-2.5 flex items-start gap-2">
+            <Icon name="info" size={14} className="mt-0.5 shrink-0 text-primary" />
+            <span>
+              Khi xác nhận: NVL sẽ bị trừ kho, SKU sẽ được cộng vào kho và lô mới sẽ được tạo.
+            </span>
           </div>
         </div>
 

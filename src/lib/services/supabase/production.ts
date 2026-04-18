@@ -203,6 +203,70 @@ export async function consumeProductionMaterials(productionOrderId: string) {
 }
 
 // ============================================================
+// Material Availability Check
+// ============================================================
+
+export interface MaterialCheckInput {
+  productId: string;
+  productName?: string;
+  plannedQty: number;
+  unit?: string;
+}
+
+export interface MaterialCheckResult {
+  productId: string;
+  productName: string;
+  needed: number;
+  available: number;
+  unit: string;
+  sufficient: boolean;
+  shortage: number;
+}
+
+/**
+ * Kiểm tra NVL có đủ tồn kho trước khi hoàn thành/bắt đầu lệnh SX.
+ * Query branch_stock theo branchId + productId, so với plannedQty.
+ *
+ * Dùng chung cho: CompleteProductionOrderDialog, future pre-start material
+ * check, batch production planning.
+ */
+export async function checkMaterialsAvailability(
+  branchId: string,
+  materials: MaterialCheckInput[],
+): Promise<MaterialCheckResult[]> {
+  if (!materials.length) return [];
+
+  const productIds = materials.map((m) => m.productId);
+  const { data, error } = await supabase
+    .from("branch_stock")
+    .select("product_id, quantity")
+    .eq("branch_id", branchId)
+    .in("product_id", productIds);
+
+  if (error) throw error;
+
+  const stockMap = new Map<string, number>();
+  for (const row of (data ?? []) as Array<{ product_id: string; quantity: number | string }>) {
+    stockMap.set(row.product_id, Number(row.quantity ?? 0));
+  }
+
+  return materials.map((mat) => {
+    const available = stockMap.get(mat.productId) ?? 0;
+    const needed = Number(mat.plannedQty ?? 0);
+    const shortage = Math.max(0, needed - available);
+    return {
+      productId: mat.productId,
+      productName: mat.productName ?? mat.productId,
+      needed,
+      available,
+      unit: mat.unit ?? "",
+      sufficient: available >= needed,
+      shortage,
+    };
+  });
+}
+
+// ============================================================
 // Lot Tracking
 // ============================================================
 

@@ -99,8 +99,10 @@ export { getAllBOMs, getBOMsByProduct, getBOMById, createBOM, updateBOM, deleteB
 export {
   getProductionOrders, getProductionOrderById, createProductionOrder, completeProductionOrder, consumeProductionMaterials,
   updateProductionStatus, canTransitionProductionStatus,
+  checkMaterialsAvailability,
   getProductLots, getAllProductLots, allocateLotsFIFO, getExpiringLots, createPurchaseLot,
 } from "./production";
+export type { MaterialCheckInput, MaterialCheckResult } from "./production";
 
 // Pricing (Price Tiers)
 export {
