@@ -134,16 +134,16 @@ function UserDropdown() {
         .slice(-2)
         .join("")
         .toUpperCase()
-    : "??";
+    : null;
 
   return (
     <DropdownMenu>
       <DropdownMenuTrigger className="flex press-scale-sm items-center gap-2 pl-1 pr-2 py-1 rounded-full text-foreground hover:bg-surface-container-low cursor-pointer outline-none">
         <span className="h-8 w-8 rounded-full bg-primary-fixed text-primary flex items-center justify-center text-xs font-bold shrink-0">
-          {initials}
+          {initials ?? <Icon name="person" size={18} />}
         </span>
         <span className="hidden xl:block text-sm font-medium truncate max-w-[100px]">
-          {user?.fullName ?? "---"}
+          {user?.fullName ?? "Tài khoản"}
         </span>
         <Icon name="expand_more" size={14} className="hidden xl:block shrink-0 text-muted-foreground" />
       </DropdownMenuTrigger>
