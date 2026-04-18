@@ -2542,10 +2542,227 @@ export interface Database {
           },
         ];
       };
+      agents: {
+        Row: {
+          id: string;
+          tenant_id: string;
+          code: string;
+          name: string;
+          role: "ceo" | "hr" | "marketing" | "sales" | "operations" | "finance" | "custom";
+          description: string | null;
+          prompt_template: string | null;
+          n8n_webhook_url: string | null;
+          n8n_workflow_id: string | null;
+          config: Json;
+          is_active: boolean;
+          last_run_at: string | null;
+          created_by: string | null;
+          created_at: string;
+          updated_at: string;
+        };
+        Insert: {
+          id?: string;
+          tenant_id: string;
+          code: string;
+          name: string;
+          role: "ceo" | "hr" | "marketing" | "sales" | "operations" | "finance" | "custom";
+          description?: string | null;
+          prompt_template?: string | null;
+          n8n_webhook_url?: string | null;
+          n8n_workflow_id?: string | null;
+          config?: Json;
+          is_active?: boolean;
+          last_run_at?: string | null;
+          created_by?: string | null;
+        };
+        Update: {
+          code?: string;
+          name?: string;
+          role?: "ceo" | "hr" | "marketing" | "sales" | "operations" | "finance" | "custom";
+          description?: string | null;
+          prompt_template?: string | null;
+          n8n_webhook_url?: string | null;
+          n8n_workflow_id?: string | null;
+          config?: Json;
+          is_active?: boolean;
+          last_run_at?: string | null;
+        };
+        Relationships: [];
+      };
+      kpi_breakdowns: {
+        Row: {
+          id: string;
+          tenant_id: string;
+          parent_id: string | null;
+          kpi_name: string;
+          kpi_type: "revenue" | "orders" | "customers" | "profit" | "inventory" | "tasks" | "custom";
+          period: "yearly" | "quarterly" | "monthly" | "weekly" | "daily";
+          period_start: string;
+          period_end: string;
+          target_value: number;
+          actual_value: number;
+          unit: string | null;
+          owner_role: string | null;
+          owner_user_id: string | null;
+          branch_id: string | null;
+          source_agent_id: string | null;
+          metadata: Json;
+          created_at: string;
+          updated_at: string;
+        };
+        Insert: {
+          id?: string;
+          tenant_id: string;
+          parent_id?: string | null;
+          kpi_name: string;
+          kpi_type: "revenue" | "orders" | "customers" | "profit" | "inventory" | "tasks" | "custom";
+          period: "yearly" | "quarterly" | "monthly" | "weekly" | "daily";
+          period_start: string;
+          period_end: string;
+          target_value: number;
+          actual_value?: number;
+          unit?: string | null;
+          owner_role?: string | null;
+          owner_user_id?: string | null;
+          branch_id?: string | null;
+          source_agent_id?: string | null;
+          metadata?: Json;
+        };
+        Update: {
+          parent_id?: string | null;
+          kpi_name?: string;
+          kpi_type?: "revenue" | "orders" | "customers" | "profit" | "inventory" | "tasks" | "custom";
+          period?: "yearly" | "quarterly" | "monthly" | "weekly" | "daily";
+          period_start?: string;
+          period_end?: string;
+          target_value?: number;
+          actual_value?: number;
+          unit?: string | null;
+          owner_role?: string | null;
+          owner_user_id?: string | null;
+          branch_id?: string | null;
+          source_agent_id?: string | null;
+          metadata?: Json;
+        };
+        Relationships: [];
+      };
+      agent_tasks: {
+        Row: {
+          id: string;
+          tenant_id: string;
+          agent_id: string | null;
+          kpi_breakdown_id: string | null;
+          task_date: string;
+          title: string;
+          description: string | null;
+          priority: "low" | "normal" | "high" | "urgent";
+          status: "pending" | "in_progress" | "done" | "skipped" | "blocked";
+          assigned_to_user_id: string | null;
+          assigned_to_role: string | null;
+          branch_id: string | null;
+          target_metric: string | null;
+          actual_metric: string | null;
+          due_time: string | null;
+          completed_at: string | null;
+          completed_by_user_id: string | null;
+          notes: string | null;
+          metadata: Json;
+          created_at: string;
+          updated_at: string;
+        };
+        Insert: {
+          id?: string;
+          tenant_id: string;
+          agent_id?: string | null;
+          kpi_breakdown_id?: string | null;
+          task_date: string;
+          title: string;
+          description?: string | null;
+          priority?: "low" | "normal" | "high" | "urgent";
+          status?: "pending" | "in_progress" | "done" | "skipped" | "blocked";
+          assigned_to_user_id?: string | null;
+          assigned_to_role?: string | null;
+          branch_id?: string | null;
+          target_metric?: string | null;
+          actual_metric?: string | null;
+          due_time?: string | null;
+          completed_at?: string | null;
+          completed_by_user_id?: string | null;
+          notes?: string | null;
+          metadata?: Json;
+        };
+        Update: {
+          agent_id?: string | null;
+          kpi_breakdown_id?: string | null;
+          task_date?: string;
+          title?: string;
+          description?: string | null;
+          priority?: "low" | "normal" | "high" | "urgent";
+          status?: "pending" | "in_progress" | "done" | "skipped" | "blocked";
+          assigned_to_user_id?: string | null;
+          assigned_to_role?: string | null;
+          branch_id?: string | null;
+          target_metric?: string | null;
+          actual_metric?: string | null;
+          due_time?: string | null;
+          completed_at?: string | null;
+          completed_by_user_id?: string | null;
+          notes?: string | null;
+          metadata?: Json;
+        };
+        Relationships: [];
+      };
+      agent_executions: {
+        Row: {
+          id: string;
+          tenant_id: string;
+          agent_id: string;
+          trigger_source: "n8n" | "manual" | "cron";
+          triggered_at: string;
+          duration_ms: number | null;
+          status: "running" | "success" | "failed" | "timeout";
+          input_data: Json;
+          output_data: Json;
+          error_message: string | null;
+          token_usage: Json | null;
+          completed_at: string | null;
+        };
+        Insert: {
+          id?: string;
+          tenant_id: string;
+          agent_id: string;
+          trigger_source?: "n8n" | "manual" | "cron";
+          triggered_at?: string;
+          duration_ms?: number | null;
+          status?: "running" | "success" | "failed" | "timeout";
+          input_data?: Json;
+          output_data?: Json;
+          error_message?: string | null;
+          token_usage?: Json | null;
+          completed_at?: string | null;
+        };
+        Update: {
+          trigger_source?: "n8n" | "manual" | "cron";
+          duration_ms?: number | null;
+          status?: "running" | "success" | "failed" | "timeout";
+          input_data?: Json;
+          output_data?: Json;
+          error_message?: string | null;
+          token_usage?: Json | null;
+          completed_at?: string | null;
+        };
+        Relationships: [];
+      };
     };
     Views: Record<string, never>;
     Functions: {
       seed_internal_entities: {
+        Args: {
+          p_tenant_id: string;
+        };
+        Returns: undefined;
+      };
+      seed_default_agents: {
         Args: {
           p_tenant_id: string;
         };

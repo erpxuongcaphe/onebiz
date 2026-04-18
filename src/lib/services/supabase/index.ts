@@ -201,3 +201,13 @@ export {
   setRolePermissions, getUserPermissions, assignRoleToUser, getTenantUsers,
 } from "./roles";
 export type { DbRole, DbRoleDetail, CreateRoleInput, UpdateRoleInput } from "./roles";
+
+// ============================================================
+// Phase Next — AI Agents (n8n integration)
+// ============================================================
+export {
+  getAgents, getAgentById, createAgent, updateAgent, deleteAgent, seedDefaultAgents,
+  getKpiBreakdowns, getKpiBreakdownTree, createKpiBreakdown, updateKpiActual, deleteKpiBreakdown,
+  getAgentTasks, createAgentTask, updateAgentTaskStatus, deleteAgentTask,
+  getAgentExecutions, recordAgentExecution, triggerAgent,
+} from "./ai-agents";

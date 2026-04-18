@@ -157,6 +157,9 @@ export const sidebarNavGroups: SidebarGroup[] = [
       { label: "Trang chủ AI", href: "/", icon: "home" },
       { label: "Phân tích kinh doanh", href: "/ai/phan-tich", icon: "bar_chart" },
       { label: "Import dữ liệu", href: "/ai/import", icon: "upload" },
+      { label: "AI Agents", href: "/ai-agents", icon: "smart_toy", badge: "New" },
+      { label: "KPI Breakdown", href: "/ai-agents/kpi", icon: "trending_up" },
+      { label: "Task hàng ngày", href: "/ai-agents/tasks", icon: "checklist" },
       {
         label: "Trò chuyện AI",
         href: "/ai/chat",
