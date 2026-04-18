@@ -190,8 +190,8 @@ export { getInternalSales, getInternalSaleById, createInternalSale, cancelIntern
 export type { InternalSaleItemInput, CreateInternalSaleInput, InternalSaleResult } from "./internal-sales";
 
 // Production Dashboard
-export { getProductionKpis, getNvlStock, getProductionTrend, getTopOutputProducts } from "./production-dashboard";
-export type { ProductionKpis, NvlStockRow, ProductionTrend, TopOutputProduct } from "./production-dashboard";
+export { getProductionKpis, getNvlStock, getProductionTrend, getTopOutputProducts, getActiveProductionOrders } from "./production-dashboard";
+export type { ProductionKpis, NvlStockRow, ProductionTrend, TopOutputProduct, ActiveProductionOrder } from "./production-dashboard";
 
 // RBAC Roles & Permissions
 export {

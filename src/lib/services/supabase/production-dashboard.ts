@@ -60,6 +60,26 @@ export interface TopOutputProduct {
   orderCount: number;
 }
 
+export interface ActiveProductionOrder {
+  id: string;
+  code: string;
+  status: string;
+  productName: string;
+  productCode: string;
+  branchName: string;
+  plannedQty: number;
+  completedQty: number;
+  unit: string;
+  plannedStart: string | null;
+  plannedEnd: string | null;
+  actualStart: string | null;
+  createdAt: string;
+  /** Tiến độ % (0-100) dựa completed_qty / planned_qty */
+  progressPct: number;
+  /** true nếu quá hạn (planned_end < now và chưa completed) */
+  isOverdue: boolean;
+}
+
 // ────────────────────────────────────────────
 // KPIs
 // ────────────────────────────────────────────
@@ -312,4 +332,65 @@ export async function getTopOutputProducts(
   return Array.from(map.values())
     .sort((a, b) => b.totalQty - a.totalQty)
     .slice(0, limit);
+}
+
+// ────────────────────────────────────────────
+// Active Production Orders (planned / in_production / quality_check)
+// ────────────────────────────────────────────
+
+export async function getActiveProductionOrders(
+  branchId?: string,
+  limit: number = 8,
+): Promise<ActiveProductionOrder[]> {
+  const supabase = getClient();
+
+  let query = supabase
+    .from("production_orders")
+    .select(
+      `id, code, status, planned_qty, completed_qty,
+       planned_start, planned_end, actual_start, created_at,
+       branches:branch_id (name),
+       products:product_id (code, name, unit)`,
+    )
+    .in("status", ["planned", "material_check", "in_production", "quality_check"])
+    .order("created_at", { ascending: false })
+    .limit(limit);
+
+  if (branchId) query = query.eq("branch_id", branchId);
+
+  const { data, error } = await query;
+  if (error) handleError(error, "getActiveProductionOrders");
+
+  const nowMs = Date.now();
+
+  return ((data ?? []) as any[]).map((row) => {
+    const product = (row.products as any) ?? {};
+    const branch = (row.branches as any) ?? {};
+    const plannedQty = Number(row.planned_qty ?? 0);
+    const completedQty = Number(row.completed_qty ?? 0);
+    const progressPct =
+      plannedQty > 0 ? Math.min(100, Math.round((completedQty / plannedQty) * 100)) : 0;
+    const isOverdue =
+      !!row.planned_end &&
+      new Date(row.planned_end).getTime() < nowMs &&
+      row.status !== "completed";
+
+    return {
+      id: row.id as string,
+      code: (row.code as string) ?? "",
+      status: (row.status as string) ?? "planned",
+      productName: product.name ?? "",
+      productCode: product.code ?? "",
+      branchName: branch.name ?? "",
+      plannedQty,
+      completedQty,
+      unit: product.unit ?? "",
+      plannedStart: row.planned_start ?? null,
+      plannedEnd: row.planned_end ?? null,
+      actualStart: row.actual_start ?? null,
+      createdAt: row.created_at as string,
+      progressPct,
+      isOverdue,
+    } satisfies ActiveProductionOrder;
+  });
 }

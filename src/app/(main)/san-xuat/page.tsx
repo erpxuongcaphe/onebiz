@@ -11,23 +11,24 @@ import {
   Legend,
   ResponsiveContainer,
 } from "recharts";
-import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { PageHeader } from "@/components/shared/page-header";
 import { KpiCard, ChartCard } from "@/app/(main)/phan-tich/_components";
-import { useBranchFilter, useAuth } from "@/lib/contexts";
+import { useBranchFilter } from "@/lib/contexts";
 import { formatCurrency, formatNumber } from "@/lib/format";
 import {
   getProductionKpis,
   getNvlStock,
   getProductionTrend,
   getTopOutputProducts,
+  getActiveProductionOrders,
 } from "@/lib/services";
 import type {
   ProductionKpis,
   NvlStockRow,
   ProductionTrend,
   TopOutputProduct,
+  ActiveProductionOrder,
 } from "@/lib/services";
 import Link from "next/link";
 import { Icon } from "@/components/ui/icon";
@@ -72,6 +73,92 @@ function useProductionLabels() {
 }
 
 // ────────────────────────────────────────────
+// Active order row (widget item)
+// ────────────────────────────────────────────
+
+const PROD_STATUS_META: Record<
+  string,
+  { label: string; bg: string; text: string; dot: string }
+> = {
+  planned: {
+    label: "Lên kế hoạch",
+    bg: "bg-surface-container",
+    text: "text-on-surface-variant",
+    dot: "bg-on-surface-variant",
+  },
+  material_check: {
+    label: "Kiểm NVL",
+    bg: "bg-status-info/10",
+    text: "text-status-info",
+    dot: "bg-status-info",
+  },
+  in_production: {
+    label: "Đang chạy",
+    bg: "bg-primary-fixed",
+    text: "text-primary",
+    dot: "bg-primary",
+  },
+  quality_check: {
+    label: "Kiểm chất lượng",
+    bg: "bg-status-warning/10",
+    text: "text-status-warning",
+    dot: "bg-status-warning",
+  },
+};
+
+function ActiveOrderRow({ order }: { order: ActiveProductionOrder }) {
+  const meta = PROD_STATUS_META[order.status] ?? PROD_STATUS_META.planned;
+  return (
+    <Link
+      href={`/hang-hoa/san-xuat?id=${order.id}`}
+      className={`group block rounded-xl border p-3 bg-surface-container-lowest hover:bg-surface-container-low transition-colors press-scale-sm ${
+        order.isOverdue ? "border-status-error/40" : "border-border"
+      }`}
+    >
+      <div className="flex items-center justify-between gap-2 mb-2">
+        <div className="flex items-center gap-2 min-w-0">
+          <span className="font-semibold text-sm tabular-nums truncate">{order.code}</span>
+          <span
+            className={`inline-flex items-center gap-1 text-[10px] font-medium px-2 py-0.5 rounded-full shrink-0 ${meta.bg} ${meta.text}`}
+          >
+            <span className={`size-1.5 rounded-full ${meta.dot}`} />
+            {meta.label}
+          </span>
+        </div>
+        {order.isOverdue && (
+          <span className="inline-flex items-center gap-0.5 text-[10px] font-semibold px-2 py-0.5 rounded-full bg-status-error/10 text-status-error shrink-0">
+            <Icon name="schedule" size={10} />
+            Quá hạn
+          </span>
+        )}
+      </div>
+
+      <div className="text-sm font-medium mb-0.5 truncate">{order.productName}</div>
+      <div className="text-xs text-muted-foreground mb-2 truncate">
+        {order.productCode} · {order.branchName}
+      </div>
+
+      <div className="space-y-1">
+        <div className="relative h-1.5 rounded-full bg-surface-container overflow-hidden">
+          <div
+            className={`absolute inset-y-0 left-0 rounded-full transition-all ${
+              order.isOverdue ? "bg-status-error" : "bg-primary"
+            }`}
+            style={{ width: `${Math.max(order.progressPct, 2)}%` }}
+          />
+        </div>
+        <div className="flex items-center justify-between text-[11px] text-muted-foreground tabular-nums">
+          <span>
+            {formatNumber(order.completedQty)} / {formatNumber(order.plannedQty)} {order.unit}
+          </span>
+          <span className="font-semibold text-foreground">{order.progressPct}%</span>
+        </div>
+      </div>
+    </Link>
+  );
+}
+
+// ────────────────────────────────────────────
 // Custom tooltip
 // ────────────────────────────────────────────
 
@@ -101,20 +188,23 @@ export default function ProductionDashboardPage() {
   const [nvl, setNvl] = useState<NvlStockRow[]>([]);
   const [trend, setTrend] = useState<ProductionTrend[]>([]);
   const [topProducts, setTopProducts] = useState<TopOutputProduct[]>([]);
+  const [activeOrders, setActiveOrders] = useState<ActiveProductionOrder[]>([]);
 
   const fetchData = useCallback(async () => {
     try {
       setLoading(true);
-      const [k, n, t, p] = await Promise.all([
+      const [k, n, t, p, a] = await Promise.all([
         getProductionKpis(activeBranchId),
         getNvlStock({ branchId: activeBranchId }),
         getProductionTrend(6, activeBranchId),
         getTopOutputProducts(8, activeBranchId),
+        getActiveProductionOrders(activeBranchId, 8),
       ]);
       setKpis(k);
       setNvl(n);
       setTrend(t);
       setTopProducts(p);
+      setActiveOrders(a);
     } catch (err) {
       console.error("Production dashboard error:", err);
     } finally {
@@ -190,22 +280,26 @@ export default function ProductionDashboardPage() {
 
       {/* Lot alerts */}
       {((kpis?.expiredLots ?? 0) > 0 || (kpis?.expiringLots ?? 0) > 0) && (
-        <div className="flex items-center gap-3 px-4 py-3 rounded-lg bg-amber-50 border border-amber-200">
-          <Icon name="warning" className="text-amber-600 shrink-0" />
-          <div className="text-sm">
+        <div className="flex items-center gap-3 px-4 py-3 rounded-xl bg-status-warning/10 border border-status-warning/25 ambient-shadow">
+          <span className="size-9 rounded-lg bg-status-warning/15 flex items-center justify-center shrink-0">
+            <Icon name="warning" size={20} className="text-status-warning" />
+          </span>
+          <div className="text-sm flex-1 min-w-0">
             {(kpis?.expiredLots ?? 0) > 0 && (
-              <span className="text-red-600 font-medium mr-3">
+              <span className="inline-flex items-center gap-1 text-status-error font-semibold mr-3">
+                <span className="size-1.5 rounded-full bg-status-error" />
                 {kpis?.expiredLots} lô đã hết hạn
               </span>
             )}
             {(kpis?.expiringLots ?? 0) > 0 && (
-              <span className="text-amber-700">
+              <span className="inline-flex items-center gap-1 text-status-warning font-medium">
+                <span className="size-1.5 rounded-full bg-status-warning" />
                 {kpis?.expiringLots} lô sắp hết hạn (30 ngày)
               </span>
             )}
           </div>
-          <Link href="/hang-hoa/hsd" className="ml-auto">
-            <Button variant="outline" size="sm">
+          <Link href="/hang-hoa/hsd" className="ml-auto shrink-0">
+            <Button variant="outline" size="sm" className="rounded-full">
               Xem HSD <Icon name="arrow_forward" size={14} className="ml-1" />
             </Button>
           </Link>
@@ -263,6 +357,40 @@ export default function ProductionDashboardPage() {
         </ChartCard>
       </div>
 
+      {/* Active production orders widget */}
+      <ChartCard
+        title={`${labels.orderLabel} đang chạy`}
+        subtitle={
+          activeOrders.length > 0
+            ? `${activeOrders.length} lệnh · ${activeOrders.filter((o) => o.isOverdue).length} quá hạn`
+            : "Không có lệnh nào đang chạy"
+        }
+        actions={
+          <Link href="/hang-hoa/san-xuat">
+            <Button variant="ghost" size="sm">
+              Quản lý <Icon name="arrow_forward" size={14} className="ml-1" />
+            </Button>
+          </Link>
+        }
+      >
+        {activeOrders.length > 0 ? (
+          <div className="grid md:grid-cols-2 gap-3">
+            {activeOrders.map((o) => (
+              <ActiveOrderRow key={o.id} order={o} />
+            ))}
+          </div>
+        ) : (
+          <div className="text-center text-muted-foreground py-10 text-sm">
+            <Icon
+              name="check_circle"
+              size={32}
+              className="text-status-success/60 mx-auto mb-2"
+            />
+            Tất cả lệnh đã hoàn thành hoặc chưa có lệnh mới
+          </div>
+        )}
+      </ChartCard>
+
       {/* NVL Stock Table */}
       <ChartCard
         title={`Tồn kho ${labels.nvlLabel}`}
@@ -300,15 +428,20 @@ export default function ProductionDashboardPage() {
                   <td className="p-2 text-right">{formatCurrency(r.stockValue)}</td>
                   <td className="p-2 text-center">
                     {r.isOut ? (
-                      <Badge variant="destructive" className="text-xs">Hết hàng</Badge>
+                      <span className="inline-flex items-center gap-1 text-[10px] font-semibold px-2 py-0.5 rounded-full bg-status-error/10 text-status-error">
+                        <span className="size-1.5 rounded-full bg-status-error" />
+                        Hết hàng
+                      </span>
                     ) : r.isLow ? (
-                      <Badge variant="outline" className="text-xs border-amber-300 text-amber-700 bg-amber-50">
+                      <span className="inline-flex items-center gap-1 text-[10px] font-semibold px-2 py-0.5 rounded-full bg-status-warning/10 text-status-warning">
+                        <span className="size-1.5 rounded-full bg-status-warning" />
                         Sắp hết
-                      </Badge>
+                      </span>
                     ) : (
-                      <Badge variant="outline" className="text-xs text-green-700 border-green-300 bg-green-50">
+                      <span className="inline-flex items-center gap-1 text-[10px] font-semibold px-2 py-0.5 rounded-full bg-status-success/10 text-status-success">
+                        <span className="size-1.5 rounded-full bg-status-success" />
                         Đủ
-                      </Badge>
+                      </span>
                     )}
                   </td>
                 </tr>
