@@ -15,7 +15,6 @@ import {
   FilterGroup,
   SelectFilter,
 } from "@/components/shared/filter-sidebar";
-import { Badge } from "@/components/ui/badge";
 import { useToast, useBranchFilter } from "@/lib/contexts";
 import { formatDate } from "@/lib/format";
 import { getAllProductLots } from "@/lib/services";
@@ -37,10 +36,25 @@ const sourceOptions = [
   { label: "Mua hàng", value: "purchase" },
 ];
 
-const statusMap: Record<string, { label: string; variant: "default" | "secondary" | "destructive" }> = {
-  active: { label: "Đang dùng", variant: "default" },
-  depleted: { label: "Đã hết", variant: "secondary" },
-  expired: { label: "Hết hạn", variant: "destructive" },
+const statusMap: Record<
+  string,
+  { label: string; tone: "success" | "neutral" | "error" }
+> = {
+  active: { label: "Đang dùng", tone: "success" },
+  depleted: { label: "Đã hết", tone: "neutral" },
+  expired: { label: "Hết hạn", tone: "error" },
+};
+
+const STATUS_TONE_CLASS: Record<"success" | "neutral" | "error", string> = {
+  success: "bg-status-success/10 text-status-success",
+  neutral: "bg-surface-container-high text-muted-foreground",
+  error: "bg-status-error/10 text-status-error",
+};
+
+const STATUS_DOT_CLASS: Record<"success" | "neutral" | "error", string> = {
+  success: "bg-status-success",
+  neutral: "bg-muted-foreground",
+  error: "bg-status-error",
 };
 
 export default function LoSanXuatPage() {
@@ -119,9 +133,9 @@ export default function LoSanXuatPage() {
       cell: ({ row }) => (
         <div className="flex items-center gap-1">
           {row.original.sourceType === "production" ? (
-            <Icon name="factory" size={12} className="text-purple-500" />
+            <Icon name="factory" size={12} className="text-primary" />
           ) : (
-            <Icon name="shopping_cart" size={12} className="text-green-500" />
+            <Icon name="shopping_cart" size={12} className="text-status-success" />
           )}
           <span className="text-xs">
             {row.original.sourceType === "production" ? "Sản xuất" : "Mua hàng"}
@@ -152,7 +166,7 @@ export default function LoSanXuatPage() {
         return (
           <div className="flex items-center gap-2">
             <span className="text-xs font-bold tabular-nums">{row.original.currentQty}</span>
-            <div className="w-12 h-1.5 bg-muted rounded-full overflow-hidden">
+            <div className="w-12 h-1.5 bg-surface-container-high rounded-full overflow-hidden">
               <div className="h-full bg-primary rounded-full" style={{ width: `${Math.min(100, pct)}%` }} />
             </div>
           </div>
@@ -171,9 +185,21 @@ export default function LoSanXuatPage() {
         return (
           <div className="flex items-center gap-1">
             {(isExpired || isNearExpiry) && (
-              <Icon name="warning" className={`h-3 w-3 ${isExpired ? "text-red-500" : "text-amber-500"}`} />
+              <Icon
+                name="warning"
+                size={12}
+                className={isExpired ? "text-status-error" : "text-status-warning"}
+              />
             )}
-            <span className={`text-xs ${isExpired ? "text-red-600 font-bold" : isNearExpiry ? "text-amber-600" : "text-muted-foreground"}`}>
+            <span
+              className={`text-xs ${
+                isExpired
+                  ? "text-status-error font-bold"
+                  : isNearExpiry
+                    ? "text-status-warning"
+                    : "text-muted-foreground"
+              }`}
+            >
               {formatDate(row.original.expiryDate)}
             </span>
           </div>
@@ -183,20 +209,16 @@ export default function LoSanXuatPage() {
     {
       accessorKey: "status",
       header: "Trạng thái",
-      size: 100,
+      size: 110,
       cell: ({ row }) => {
         const s = statusMap[row.original.status ?? "active"] ?? statusMap.active;
         return (
-          <Badge
-            variant={s.variant}
-            className={
-              s.variant === "default" ? "bg-green-100 text-green-700 border-green-200"
-              : s.variant === "destructive" ? "bg-red-100 text-red-700 border-red-200"
-              : undefined
-            }
+          <span
+            className={`inline-flex items-center gap-1 text-[10px] font-semibold px-2 py-0.5 rounded-full ${STATUS_TONE_CLASS[s.tone]}`}
           >
+            <span className={`size-1.5 rounded-full ${STATUS_DOT_CLASS[s.tone]}`} />
             {s.label}
-          </Badge>
+          </span>
         );
       },
     },
@@ -224,28 +246,76 @@ export default function LoSanXuatPage() {
 
       {/* Summary */}
       <div className="grid grid-cols-2 md:grid-cols-4 gap-3 px-4 pt-4">
-        <div className="bg-white rounded-lg border p-3">
-          <div className="text-2xl font-bold text-primary">{data.length}</div>
-          <div className="text-xs text-muted-foreground">Tổng lô</div>
-        </div>
-        <div className="bg-white rounded-lg border p-3">
-          <div className="text-2xl font-bold text-green-600">{activeLots}</div>
-          <div className="text-xs text-muted-foreground">Đang hoạt động</div>
-        </div>
-        <div className="bg-white rounded-lg border p-3">
-          <div className="text-2xl font-bold text-foreground">{totalQty.toLocaleString("vi-VN")}</div>
-          <div className="text-xs text-muted-foreground">Tổng SL hiện tại</div>
-        </div>
-        {expiredCount > 0 && (
-          <div className="bg-red-50 rounded-lg border border-red-200 p-3">
-            <div className="text-2xl font-bold text-red-600">{expiredCount}</div>
-            <div className="text-xs text-red-500">Đã hết hạn</div>
+        <div className="bg-surface-container-lowest rounded-xl border border-border p-3 ambient-shadow">
+          <div className="flex items-center gap-2">
+            <span className="inline-flex size-8 items-center justify-center rounded-lg bg-primary-fixed/15 text-primary">
+              <Icon name="inventory_2" size={16} />
+            </span>
+            <div>
+              <div className="text-2xl font-bold text-primary leading-tight">{data.length}</div>
+              <div className="text-xs text-muted-foreground">Tổng lô</div>
+            </div>
           </div>
-        )}
-        {nearExpiryCount > 0 && (
-          <div className="bg-amber-50 rounded-lg border border-amber-200 p-3">
-            <div className="text-2xl font-bold text-amber-600">{nearExpiryCount}</div>
-            <div className="text-xs text-amber-500">Sắp hết hạn (30 ngày)</div>
+        </div>
+        <div className="bg-surface-container-lowest rounded-xl border border-border p-3 ambient-shadow">
+          <div className="flex items-center gap-2">
+            <span className="inline-flex size-8 items-center justify-center rounded-lg bg-status-success/10 text-status-success">
+              <Icon name="check_circle" size={16} />
+            </span>
+            <div>
+              <div className="text-2xl font-bold text-status-success leading-tight">{activeLots}</div>
+              <div className="text-xs text-muted-foreground">Đang hoạt động</div>
+            </div>
+          </div>
+        </div>
+        <div className="bg-surface-container-lowest rounded-xl border border-border p-3 ambient-shadow">
+          <div className="flex items-center gap-2">
+            <span className="inline-flex size-8 items-center justify-center rounded-lg bg-surface-container-high text-foreground">
+              <Icon name="inventory" size={16} />
+            </span>
+            <div>
+              <div className="text-2xl font-bold text-foreground leading-tight">
+                {totalQty.toLocaleString("vi-VN")}
+              </div>
+              <div className="text-xs text-muted-foreground">Tổng SL hiện tại</div>
+            </div>
+          </div>
+        </div>
+        {expiredCount > 0 ? (
+          <div className="bg-status-error/10 rounded-xl border border-status-error/25 p-3 ambient-shadow">
+            <div className="flex items-center gap-2">
+              <span className="inline-flex size-8 items-center justify-center rounded-lg bg-status-error/15 text-status-error">
+                <Icon name="warning" size={16} />
+              </span>
+              <div>
+                <div className="text-2xl font-bold text-status-error leading-tight">{expiredCount}</div>
+                <div className="text-xs text-status-error/80">Đã hết hạn</div>
+              </div>
+            </div>
+          </div>
+        ) : nearExpiryCount > 0 ? (
+          <div className="bg-status-warning/10 rounded-xl border border-status-warning/25 p-3 ambient-shadow">
+            <div className="flex items-center gap-2">
+              <span className="inline-flex size-8 items-center justify-center rounded-lg bg-status-warning/15 text-status-warning">
+                <Icon name="schedule" size={16} />
+              </span>
+              <div>
+                <div className="text-2xl font-bold text-status-warning leading-tight">{nearExpiryCount}</div>
+                <div className="text-xs text-status-warning/80">Sắp hết hạn (30 ngày)</div>
+              </div>
+            </div>
+          </div>
+        ) : (
+          <div className="bg-surface-container-lowest rounded-xl border border-border p-3 ambient-shadow">
+            <div className="flex items-center gap-2">
+              <span className="inline-flex size-8 items-center justify-center rounded-lg bg-status-success/10 text-status-success">
+                <Icon name="verified" size={16} />
+              </span>
+              <div>
+                <div className="text-2xl font-bold text-status-success leading-tight">0</div>
+                <div className="text-xs text-muted-foreground">Không lô sắp hết hạn</div>
+              </div>
+            </div>
           </div>
         )}
       </div>
