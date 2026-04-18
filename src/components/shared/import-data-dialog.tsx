@@ -76,7 +76,7 @@ export function ImportDataDialog({ open, onOpenChange }: ImportDataDialogProps) 
         >
           {file ? (
             <div className="flex items-center justify-center gap-3">
-              <Icon name="table_view" size={32} className="text-emerald-600" />
+              <Icon name="table_view" size={32} className="text-status-success" />
               <div className="text-left">
                 <p className="text-sm font-medium truncate max-w-[280px]">
                   {file.name}
@@ -114,7 +114,7 @@ export function ImportDataDialog({ open, onOpenChange }: ImportDataDialogProps) 
           )}
         </div>
 
-        <div className="rounded-md bg-amber-50 border border-amber-200 p-3 text-xs text-amber-900">
+        <div className="rounded-md bg-status-warning/10 border border-status-warning/25 p-3 text-xs text-status-warning">
           <strong>Sắp ra mắt:</strong> AI Agent sẽ tự động phát hiện schema, map cột,
           và preview diff trước khi cập nhật. Hiện tại tính năng đang trong giai đoạn
           phát triển — file upload chưa được xử lý.

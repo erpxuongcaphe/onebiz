@@ -67,7 +67,7 @@ export default function ResetPasswordPage() {
             </div>
           )}
           {success && (
-            <div className="rounded-md bg-green-500/10 p-3 text-sm text-green-700 dark:text-green-400">
+            <div className="rounded-md bg-status-success/10 p-3 text-sm text-status-success">
               Đặt lại mật khẩu thành công. Đang chuyển hướng...
             </div>
           )}

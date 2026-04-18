@@ -216,7 +216,7 @@ export default function UsersPage() {
                         variant={user.isActive ? "default" : "secondary"}
                         className={cn(
                           "text-xs",
-                          user.isActive ? "bg-green-100 text-green-700 hover:bg-green-100" : ""
+                          user.isActive ? "bg-status-success/10 text-status-success hover:bg-status-success/10" : ""
                         )}
                       >
                         {user.isActive ? "Hoạt động" : "Vô hiệu"}
@@ -242,7 +242,7 @@ export default function UsersPage() {
                           <DropdownMenuSeparator />
                           <DropdownMenuItem
                             onSelect={() => handleToggleActive(user)}
-                            className={user.isActive ? "text-red-600" : "text-green-600"}
+                            className={user.isActive ? "text-status-error" : "text-status-success"}
                           >
                             {user.isActive ? "Vô hiệu hóa" : "Kích hoạt lại"}
                           </DropdownMenuItem>

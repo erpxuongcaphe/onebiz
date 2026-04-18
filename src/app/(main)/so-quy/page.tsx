@@ -105,7 +105,7 @@ function TransactionDetail({
                     label: isReceipt ? "Phiếu thu" : "Phiếu chi",
                     variant: isReceipt ? "default" : "destructive",
                     className: isReceipt
-                      ? "bg-green-100 text-green-700 border-green-200"
+                      ? "bg-status-success/10 text-status-success border-status-success/25"
                       : undefined,
                   }}
                   subtitle="Chi nhánh trung tâm"
@@ -310,7 +310,7 @@ export default function SoQuyPage() {
         return (
           <span
             className={`font-medium text-right block ${
-              displayAmount < 0 ? "text-red-600" : "text-foreground"
+              displayAmount < 0 ? "text-status-error" : "text-foreground"
             }`}
           >
             {formatCurrency(displayAmount)}
@@ -415,7 +415,7 @@ export default function SoQuyPage() {
           </div>
           <div>
             Tổng chi:{" "}
-            <span className="font-semibold text-red-600">
+            <span className="font-semibold text-status-error">
               {formatCurrency(totalPayment)}
             </span>
           </div>

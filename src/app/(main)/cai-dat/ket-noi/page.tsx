@@ -37,32 +37,32 @@ const integrations: Integration[] = [
     id: "ghn",
     name: "GHN",
     description: "Giao Hàng Nhanh",
-    icon: <Icon name="local_shipping" className="text-orange-600" />,
-    iconBg: "bg-orange-100",
+    icon: <Icon name="local_shipping" className="text-status-warning" />,
+    iconBg: "bg-status-warning/10",
     connected: true,
   },
   {
     id: "ghtk",
     name: "GHTK",
     description: "Giao Hàng Tiết Kiệm",
-    icon: <Icon name="local_shipping" className="text-green-600" />,
-    iconBg: "bg-green-100",
+    icon: <Icon name="local_shipping" className="text-status-success" />,
+    iconBg: "bg-status-success/10",
     connected: false,
   },
   {
     id: "vnpay",
     name: "VNPay",
     description: "Cổng thanh toán VNPay",
-    icon: <Icon name="credit_card" className="text-red-600" />,
-    iconBg: "bg-red-100",
+    icon: <Icon name="credit_card" className="text-status-error" />,
+    iconBg: "bg-status-error/10",
     connected: false,
   },
   {
     id: "google-sheets",
     name: "Google Sheets",
     description: "Đồng bộ dữ liệu",
-    icon: <Icon name="table_view" className="text-green-600" />,
-    iconBg: "bg-green-100",
+    icon: <Icon name="table_view" className="text-status-success" />,
+    iconBg: "bg-status-success/10",
     connected: false,
   },
 ];
@@ -109,7 +109,7 @@ export default function IntegrationSettingsPage() {
                           className={cn(
                             "text-xs",
                             isConnected
-                              ? "bg-green-100 text-green-700 hover:bg-green-100"
+                              ? "bg-status-success/10 text-status-success hover:bg-status-success/10"
                               : "bg-muted text-muted-foreground hover:bg-muted"
                           )}
                         >

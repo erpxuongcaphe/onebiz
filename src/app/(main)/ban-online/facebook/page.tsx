@@ -28,15 +28,15 @@ const stats = [
     label: "Đơn từ Facebook",
     value: "23",
     icon: ShoppingCart,
-    color: "text-green-600",
-    bg: "bg-green-50",
+    color: "text-status-success",
+    bg: "bg-status-success/10",
   },
   {
     label: "Doanh thu",
     value: "45,2M",
     icon: TrendingUp,
-    color: "text-purple-600",
-    bg: "bg-purple-50",
+    color: "text-status-info",
+    bg: "bg-status-info/10",
   },
 ];
 
@@ -310,7 +310,7 @@ export default function FacebookPage() {
                 <p className="text-sm font-semibold text-foreground">
                   Nguyễn Thanh Tùng
                 </p>
-                <p className="text-[11px] text-green-600">Đang hoạt động</p>
+                <p className="text-[11px] text-status-success">Đang hoạt động</p>
               </div>
             </div>
             <Button size="sm" className="gap-1.5">

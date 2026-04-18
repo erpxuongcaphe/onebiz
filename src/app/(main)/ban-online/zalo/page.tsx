@@ -300,7 +300,7 @@ export default function ZaloPage() {
                 <p className="text-sm font-semibold">
                   {activeConversation.name}
                 </p>
-                <p className="text-[11px] text-green-600">Đang hoạt động</p>
+                <p className="text-[11px] text-status-success">Đang hoạt động</p>
               </div>
             </div>
             <Button
@@ -366,8 +366,8 @@ export default function ZaloPage() {
                   key={product.id}
                   className="flex items-center gap-2 border rounded-lg px-3 py-2 bg-surface-container-low shrink-0"
                 >
-                  <div className="size-9 rounded bg-orange-100 flex items-center justify-center">
-                    <Icon name="inventory_2" className="size-4 text-orange-600" />
+                  <div className="size-9 rounded bg-status-warning/10 flex items-center justify-center">
+                    <Icon name="inventory_2" className="size-4 text-status-warning" />
                   </div>
                   <div>
                     <p className="text-xs font-medium leading-tight max-w-[140px] truncate">

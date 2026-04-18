@@ -20,8 +20,8 @@ export default function RootError({
     <html lang="vi">
       <body className="min-h-screen flex items-center justify-center bg-surface-container-low p-4">
         <div className="max-w-md w-full text-center space-y-6">
-          <div className="mx-auto h-16 w-16 rounded-full bg-red-100 flex items-center justify-center">
-            <Icon name="error" size={32} className="text-red-600" />
+          <div className="mx-auto h-16 w-16 rounded-full bg-status-error/10 flex items-center justify-center">
+            <Icon name="error" size={32} className="text-status-error" />
           </div>
           <div>
             <h1 className="text-2xl font-bold text-foreground">

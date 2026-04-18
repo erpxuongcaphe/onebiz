@@ -170,7 +170,7 @@ function SummaryCard({
     tone === "error"
       ? "text-destructive"
       : tone === "warning"
-        ? "text-yellow-600"
+        ? "text-status-warning"
         : "text-foreground";
   return (
     <div className="border rounded-lg p-2.5">
@@ -201,14 +201,14 @@ function ExpiryBadge({
   }
   if (status === "expiring_soon") {
     return (
-      <span className="inline-flex items-center gap-1 text-yellow-600 text-xs font-medium">
+      <span className="inline-flex items-center gap-1 text-status-warning text-xs font-medium">
         <Icon name="event" size={14} />
         Còn {daysUntilExpiry ?? 0} ngày
       </span>
     );
   }
   return (
-    <span className="inline-flex items-center gap-1 text-green-600 text-xs">
+    <span className="inline-flex items-center gap-1 text-status-success text-xs">
       <Icon name="check_circle" size={14} />
       {typeof daysUntilExpiry === "number" ? `${daysUntilExpiry}d` : "OK"}
     </span>

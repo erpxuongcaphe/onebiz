@@ -88,7 +88,7 @@ function PartnerDetail({
             variant: status.variant,
             className:
               status.variant === "default"
-                ? "bg-green-100 text-green-700 border-green-200"
+                ? "bg-status-success/10 text-status-success border-status-success/25"
                 : undefined,
           }}
           meta={

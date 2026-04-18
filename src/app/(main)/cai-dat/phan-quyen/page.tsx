@@ -298,7 +298,7 @@ export default function PermissionSettingsPage() {
                                 className={cn(
                                   "flex items-center gap-2 rounded-md px-3 py-2 text-sm cursor-pointer transition-colors text-left",
                                   editPerms.has(perm.code)
-                                    ? "bg-green-50 text-green-700 dark:bg-green-500/10 dark:text-green-400"
+                                    ? "bg-status-success/10 text-status-success dark:bg-status-success/10 dark:text-status-success"
                                     : "bg-muted text-muted-foreground"
                                 )}
                               >
@@ -306,7 +306,7 @@ export default function PermissionSettingsPage() {
                                   className={cn(
                                     "h-4 w-4 rounded border-2 flex items-center justify-center shrink-0 transition-colors",
                                     editPerms.has(perm.code)
-                                      ? "bg-green-500 border-green-500 text-white"
+                                      ? "bg-status-success border-status-success text-white"
                                       : "border-border bg-white"
                                   )}
                                 >
@@ -330,7 +330,7 @@ export default function PermissionSettingsPage() {
                       <Button
                         variant="ghost"
                         size="sm"
-                        className="text-red-600 hover:text-red-700 hover:bg-red-50"
+                        className="text-status-error hover:text-status-error hover:bg-status-error/10"
                         onClick={() => handleDelete(role.id, role.name)}
                       >
                         <Icon name="delete" size={16} className="mr-1" />

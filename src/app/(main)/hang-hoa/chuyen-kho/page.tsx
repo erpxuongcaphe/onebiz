@@ -209,7 +209,7 @@ export default function ChuyenKhoPage() {
             <Button
               variant="ghost"
               size="sm"
-              className="h-7 px-2 text-emerald-600 hover:text-emerald-700"
+              className="h-7 px-2 text-status-success hover:text-status-success"
               onClick={() => handleComplete(row.original.id)}
               title="Hoàn thành"
             >
@@ -218,7 +218,7 @@ export default function ChuyenKhoPage() {
             <Button
               variant="ghost"
               size="sm"
-              className="h-7 px-2 text-red-500 hover:text-red-600"
+              className="h-7 px-2 text-status-error hover:text-status-error"
               onClick={() => handleCancel(row.original.id)}
               title="Hủy"
             >
@@ -612,7 +612,7 @@ function CreateTransferDialog({
                         <Button
                           variant="ghost"
                           size="sm"
-                          className="h-6 w-6 p-0 text-red-400 hover:text-red-600"
+                          className="h-6 w-6 p-0 text-status-error hover:text-status-error"
                           onClick={() => removeItem(item.id)}
                         >
                           <Icon name="delete" size={12} />

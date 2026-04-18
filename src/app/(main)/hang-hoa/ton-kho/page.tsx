@@ -129,7 +129,7 @@ export default function TonKhoPage() {
             variant="outline"
             className={
               t === "nvl"
-                ? "bg-amber-50 text-amber-700 border-amber-200"
+                ? "bg-status-warning/10 text-status-warning border-status-warning/25"
                 : "bg-primary-fixed text-primary border-primary-fixed"
             }
           >

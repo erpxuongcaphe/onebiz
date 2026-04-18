@@ -77,7 +77,7 @@ function LeafLink({
       )}
       <span className="truncate flex-1">{leaf.label}</span>
       {leaf.comingSoon && (
-        <span className="text-[9px] font-semibold uppercase tracking-wider rounded px-1.5 py-0.5 bg-amber-100 text-amber-700 border border-amber-200">
+        <span className="text-[9px] font-semibold uppercase tracking-wider rounded px-1.5 py-0.5 bg-status-warning/10 text-status-warning border border-status-warning/25">
           Soon
         </span>
       )}
@@ -89,7 +89,7 @@ function LeafLink({
       {leaf.mode === "pos" && !leaf.comingSoon && (
         <span
           aria-hidden
-          className="text-[9px] font-semibold uppercase tracking-wider rounded px-1 py-0.5 bg-emerald-100 text-emerald-700 border border-emerald-200"
+          className="text-[9px] font-semibold uppercase tracking-wider rounded px-1 py-0.5 bg-status-success/10 text-status-success border border-status-success/25"
           title="Mở chế độ toàn màn hình"
         >
           B2B

@@ -31,17 +31,17 @@ import { Icon } from "@/components/ui/icon";
 type Mode = "customer" | "supplier" | "aging";
 
 const BUCKET_COLORS = [
-  "border-emerald-200 bg-emerald-50/50",
-  "border-amber-200 bg-amber-50/50",
-  "border-orange-200 bg-orange-50/50",
-  "border-red-200 bg-red-50/50",
+  "border-status-success/25 bg-status-success/10",
+  "border-status-warning/25 bg-status-warning/10",
+  "border-status-warning/25 bg-status-warning/10",
+  "border-status-error/25 bg-status-error/10",
 ];
 
 const BUCKET_TEXT_COLORS = [
-  "text-emerald-700",
-  "text-amber-700",
-  "text-orange-700",
-  "text-red-700",
+  "text-status-success",
+  "text-status-warning",
+  "text-status-warning",
+  "text-status-error",
 ];
 
 export default function CongNoPage() {
@@ -188,7 +188,7 @@ export default function CongNoPage() {
       header: "Cần trả NCC",
       size: 160,
       cell: ({ row }) => (
-        <span className="font-semibold text-amber-600">
+        <span className="font-semibold text-status-warning">
           {formatCurrency(row.original.currentDebt ?? 0)}
         </span>
       ),
@@ -212,7 +212,7 @@ export default function CongNoPage() {
           className={
             row.original.type === "customer"
               ? "bg-primary-fixed text-primary"
-              : "bg-amber-100 text-amber-800"
+              : "bg-status-warning/10 text-status-warning"
           }
         >
           {row.original.type === "customer" ? "KH" : "NCC"}
@@ -255,12 +255,12 @@ export default function CongNoPage() {
         const days = row.original.ageDays;
         const color =
           days > 90
-            ? "text-red-600"
+            ? "text-status-error"
             : days > 60
-              ? "text-orange-600"
+              ? "text-status-warning"
               : days > 30
-                ? "text-amber-600"
-                : "text-emerald-600";
+                ? "text-status-warning"
+                : "text-status-success";
         return (
           <span className={`font-medium text-sm ${color}`}>{days} ngày</span>
         );
@@ -340,14 +340,14 @@ export default function CongNoPage() {
       {/* Summary */}
       <div className="grid grid-cols-1 md:grid-cols-2 gap-3 px-4 pt-4">
         <SummaryCard
-          icon={<Icon name="trending_up" size={16} className="text-emerald-600" />}
+          icon={<Icon name="trending_up" size={16} className="text-status-success" />}
           label="Khách hàng đang nợ"
           count={customers.length}
           value={formatCurrency(totalCustomerDebt)}
           tone="success"
         />
         <SummaryCard
-          icon={<Icon name="trending_down" size={16} className="text-amber-600" />}
+          icon={<Icon name="trending_down" size={16} className="text-status-warning" />}
           label="Phải trả NCC"
           count={suppliers.length}
           value={formatCurrency(totalSupplierDebt)}
@@ -425,10 +425,10 @@ export default function CongNoPage() {
                     </p>
                   </CardContent>
                 </Card>
-                <Card className="border-emerald-200 bg-emerald-50/50">
+                <Card className="border-status-success/25 bg-status-success/10">
                   <CardContent className="pt-4">
                     <p className="text-xs text-muted-foreground">KH đang nợ</p>
-                    <p className="text-xl font-bold text-emerald-700">
+                    <p className="text-xl font-bold text-status-success">
                       {formatCurrency(aging.totalCustomerDebt)}
                     </p>
                     <p className="text-[11px] text-muted-foreground mt-1">
@@ -436,10 +436,10 @@ export default function CongNoPage() {
                     </p>
                   </CardContent>
                 </Card>
-                <Card className="border-amber-200 bg-amber-50/50">
+                <Card className="border-status-warning/25 bg-status-warning/10">
                   <CardContent className="pt-4">
                     <p className="text-xs text-muted-foreground">Phải trả NCC</p>
-                    <p className="text-xl font-bold text-amber-700">
+                    <p className="text-xl font-bold text-status-warning">
                       {formatCurrency(aging.totalSupplierDebt)}
                     </p>
                     <p className="text-[11px] text-muted-foreground mt-1">
@@ -541,8 +541,8 @@ function SummaryCard({
 }) {
   const accent =
     tone === "success"
-      ? "border-emerald-200 bg-emerald-50/50"
-      : "border-amber-200 bg-amber-50/50";
+      ? "border-status-success/25 bg-status-success/10"
+      : "border-status-warning/25 bg-status-warning/10";
   return (
     <div className={`border rounded-lg p-3 ${accent}`}>
       <div className="flex items-center gap-2 text-xs text-muted-foreground mb-1">

@@ -257,7 +257,7 @@ function CommandPaletteDialog({
             kind: "customer",
             label: c.name,
             description: c.phone ?? c.email ?? "Khách hàng",
-            icon: <Icon name="person" size={16} className="text-emerald-600" />,
+            icon: <Icon name="person" size={16} className="text-status-success" />,
             onSelect: () => go(`/khach-hang?focus=${c.id}`),
           });
         }
@@ -267,7 +267,7 @@ function CommandPaletteDialog({
             kind: "supplier",
             label: s.name,
             description: s.phone ?? s.email ?? "Nhà cung cấp",
-            icon: <Icon name="local_shipping" size={16} className="text-amber-600" />,
+            icon: <Icon name="local_shipping" size={16} className="text-status-warning" />,
             onSelect: () => go(`/hang-hoa/nha-cung-cap?focus=${s.id}`),
           });
         }

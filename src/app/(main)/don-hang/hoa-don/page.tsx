@@ -73,7 +73,7 @@ function InvoiceDetail({
                     variant: status.variant,
                     className:
                       status.variant === "default"
-                        ? "bg-green-100 text-green-700 border-green-200"
+                        ? "bg-status-success/10 text-status-success border-status-success/25"
                         : undefined,
                   }}
                   subtitle="Chi nhánh trung tâm"
@@ -358,7 +358,7 @@ export default function HoaDonPage() {
       cell: ({ row }) => {
         const discount = row.original.discount;
         return discount > 0 ? (
-          <span className="text-orange-600 text-right block">
+          <span className="text-status-warning text-right block">
             {formatCurrency(discount)}
           </span>
         ) : (
@@ -376,7 +376,7 @@ export default function HoaDonPage() {
             {formatCurrency(debt)}
           </span>
         ) : (
-          <span className="text-emerald-600 text-right block">Đã TT</span>
+          <span className="text-status-success text-right block">Đã TT</span>
         );
       },
     },

@@ -83,9 +83,9 @@ function ReturnDetail({
                     variant: status.variant,
                     className:
                       status.variant === "default"
-                        ? "bg-green-100 text-green-700 border-green-200"
+                        ? "bg-status-success/10 text-status-success border-status-success/25"
                         : status.variant === "destructive"
-                          ? "bg-red-100 text-red-700 border-red-200"
+                          ? "bg-status-error/10 text-status-error border-status-error/25"
                           : undefined,
                   }}
                   subtitle="Chi nhánh trung tâm"

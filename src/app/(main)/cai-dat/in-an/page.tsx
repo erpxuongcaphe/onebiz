@@ -243,12 +243,12 @@ ${print.connectionType !== "usb" ? `<p>IP: ${print.printerIp || "(chưa cấu h�
               {testStatus === "testing" ? "Đang in..." : "In thử"}
             </Button>
             {testStatus === "success" && (
-              <span className="flex items-center gap-1 text-sm text-green-600">
+              <span className="flex items-center gap-1 text-sm text-status-success">
                 <Icon name="check_circle" size={16} /> Đã gửi lệnh in
               </span>
             )}
             {testStatus === "error" && (
-              <span className="text-sm text-red-600">Lỗi — kiểm tra popup blocker</span>
+              <span className="text-sm text-status-error">Lỗi — kiểm tra popup blocker</span>
             )}
           </div>
         </CardContent>

@@ -32,13 +32,13 @@ import { Icon } from "@/components/ui/icon";
 const PAGE_SIZE = 25;
 
 const ACTION_COLORS: Record<string, string> = {
-  create: "bg-green-100 text-green-800",
+  create: "bg-status-success/10 text-status-success",
   update: "bg-primary-fixed text-primary",
-  delete: "bg-red-100 text-red-800",
-  complete: "bg-emerald-100 text-emerald-800",
-  cancel: "bg-amber-100 text-amber-800",
-  approve: "bg-purple-100 text-purple-800",
-  receive: "bg-indigo-100 text-indigo-800",
+  delete: "bg-status-error/10 text-status-error",
+  complete: "bg-status-success/10 text-status-success",
+  cancel: "bg-status-warning/10 text-status-warning",
+  approve: "bg-status-info/10 text-status-info",
+  receive: "bg-status-info/10 text-status-info",
   transfer: "bg-cyan-100 text-cyan-800",
 };
 
@@ -198,22 +198,22 @@ export default function AuditPage() {
             bg="bg-primary-fixed border-primary-fixed"
           />
           <StatCard
-            icon={<Icon name="calendar_today" size={16} className="text-emerald-600" />}
+            icon={<Icon name="calendar_today" size={16} className="text-status-success" />}
             label="7 ngày qua"
             value={`${stats.totalWeek} thao tác`}
-            bg="bg-emerald-50 border-emerald-200"
+            bg="bg-status-success/10 border-status-success/25"
           />
           <StatCard
-            icon={<Icon name="file_present" size={16} className="text-purple-600" />}
+            icon={<Icon name="file_present" size={16} className="text-status-info" />}
             label="Hành động phổ biến"
             value={stats.topAction}
-            bg="bg-purple-50 border-purple-200"
+            bg="bg-status-info/10 border-status-info/25"
           />
           <StatCard
-            icon={<Icon name="file_present" size={16} className="text-amber-600" />}
+            icon={<Icon name="file_present" size={16} className="text-status-warning" />}
             label="Đối tượng phổ biến"
             value={stats.topEntity}
-            bg="bg-amber-50 border-amber-200"
+            bg="bg-status-warning/10 border-status-warning/25"
           />
         </div>
       )}
@@ -345,7 +345,7 @@ export default function AuditPage() {
                       <p className="text-xs font-medium text-muted-foreground mb-1">
                         Dữ liệu cũ
                       </p>
-                      <pre className="text-[11px] bg-red-50 border border-red-200 rounded p-2 overflow-auto max-h-40">
+                      <pre className="text-[11px] bg-status-error/10 border border-status-error/25 rounded p-2 overflow-auto max-h-40">
                         {JSON.stringify(selectedEntry.oldData, null, 2)}
                       </pre>
                     </div>
@@ -355,7 +355,7 @@ export default function AuditPage() {
                       <p className="text-xs font-medium text-muted-foreground mb-1">
                         Dữ liệu mới
                       </p>
-                      <pre className="text-[11px] bg-green-50 border border-green-200 rounded p-2 overflow-auto max-h-40">
+                      <pre className="text-[11px] bg-status-success/10 border border-status-success/25 rounded p-2 overflow-auto max-h-40">
                         {JSON.stringify(selectedEntry.newData, null, 2)}
                       </pre>
                     </div>

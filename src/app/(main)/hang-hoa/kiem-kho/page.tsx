@@ -112,7 +112,7 @@ function InventoryCheckDetail({
               {
                 label: "SL lệch tăng",
                 value: (
-                  <span className="text-green-600">
+                  <span className="text-status-success">
                     {item.increaseQty}
                   </span>
                 ),
@@ -120,13 +120,13 @@ function InventoryCheckDetail({
               {
                 label: "SL lệch giảm",
                 value: (
-                  <span className="text-red-600">{item.decreaseQty}</span>
+                  <span className="text-status-error">{item.decreaseQty}</span>
                 ),
               },
               {
                 label: "GT tăng",
                 value: (
-                  <span className="text-green-600">
+                  <span className="text-status-success">
                     {formatCurrency(item.increaseAmount)}
                   </span>
                 ),
@@ -134,7 +134,7 @@ function InventoryCheckDetail({
               {
                 label: "GT giảm",
                 value: (
-                  <span className="text-red-600">
+                  <span className="text-status-error">
                     {formatCurrency(item.decreaseAmount)}
                   </span>
                 ),
@@ -268,7 +268,7 @@ export default function KiemKhoPage() {
       cell: ({ row }) => {
         const diff = row.original.increaseAmount - row.original.decreaseAmount;
         return (
-          <span className={diff >= 0 ? "text-green-600" : "text-red-600"}>
+          <span className={diff >= 0 ? "text-status-success" : "text-status-error"}>
             {formatCurrency(diff)}
           </span>
         );
@@ -279,7 +279,7 @@ export default function KiemKhoPage() {
       header: "SL lệch tăng",
       size: 100,
       cell: ({ row }) => (
-        <span className="text-green-600">{row.original.increaseQty}</span>
+        <span className="text-status-success">{row.original.increaseQty}</span>
       ),
     },
     {
@@ -287,7 +287,7 @@ export default function KiemKhoPage() {
       header: "SL lệch giảm",
       size: 100,
       cell: ({ row }) => (
-        <span className="text-red-600">{row.original.decreaseQty}</span>
+        <span className="text-status-error">{row.original.decreaseQty}</span>
       ),
     },
   ];

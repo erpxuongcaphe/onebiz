@@ -229,7 +229,7 @@ export default function TongQuanPage() {
             </Button>
           </Link>
           <Link href="/pos/fnb">
-            <Button size="sm" className="gap-1.5 h-9 shadow-sm bg-amber-600 hover:bg-amber-700 text-white">
+            <Button size="sm" className="gap-1.5 h-9 shadow-sm bg-status-warning hover:bg-status-warning text-white">
               <Icon name="local_cafe" className="size-3.5" /> POS F&B
             </Button>
           </Link>
@@ -399,7 +399,7 @@ export default function TongQuanPage() {
           <CardHeader className="pb-2">
             <div className="flex items-center justify-between">
               <CardTitle className="text-sm flex items-center gap-1.5">
-                <Icon name="warning" className="size-4 text-amber-500" />
+                <Icon name="warning" className="size-4 text-status-warning" />
                 Cảnh báo tài chính
                 <Badge variant="destructive" className="text-[10px] px-1.5 py-0 ml-1">
                   {financialAlerts.length}
@@ -421,16 +421,16 @@ export default function TongQuanPage() {
                   className={cn(
                     "flex items-center gap-3 p-2.5 rounded-lg border",
                     alert.severity === "critical"
-                      ? "bg-red-50 border-red-200"
-                      : "bg-amber-50 border-amber-200"
+                      ? "bg-status-error/10 border-status-error/25"
+                      : "bg-status-warning/10 border-status-warning/25"
                   )}
                 >
                   <Icon name="warning"
                     className={cn(
                                                                       "size-4 shrink-0",
                                                                       alert.severity === "critical"
-                                                                        ? "text-red-600"
-                                                                        : "text-amber-600"
+                                                                        ? "text-status-error"
+                                                                        : "text-status-warning"
                                                                     )}
                   />
                   <div className="flex-1 min-w-0">
@@ -490,7 +490,7 @@ export default function TongQuanPage() {
           <CardHeader className="pb-2">
             <div className="flex items-center justify-between">
               <CardTitle className="text-sm flex items-center gap-1.5">
-                <Icon name="warning" className="size-4 text-amber-500" />
+                <Icon name="warning" className="size-4 text-status-warning" />
                 Hàng sắp hết
               </CardTitle>
               <Badge variant="destructive" className="text-[10px] px-1.5 py-0">

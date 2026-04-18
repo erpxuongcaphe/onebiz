@@ -25,8 +25,8 @@ export function StarCell({ starred, onToggle }: StarCellProps) {
         className={cn(
                                   "h-4 w-4 transition-colors",
                                   starred
-                                    ? "fill-amber-400 text-amber-400"
-                                    : "fill-none text-muted-foreground/40 hover:text-amber-400"
+                                    ? "fill-status-warning text-status-warning"
+                                    : "fill-none text-muted-foreground/40 hover:text-status-warning"
                                 )}
       />
     </button>

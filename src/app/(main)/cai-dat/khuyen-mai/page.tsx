@@ -165,7 +165,7 @@ export default function PromotionSettingsPage() {
                         className={cn(
                           "text-xs",
                           promo.status === "active"
-                            ? "bg-green-100 text-green-700 hover:bg-green-100"
+                            ? "bg-status-success/10 text-status-success hover:bg-status-success/10"
                             : "bg-muted text-muted-foreground hover:bg-muted"
                         )}
                       >

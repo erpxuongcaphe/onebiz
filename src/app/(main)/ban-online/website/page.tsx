@@ -25,30 +25,30 @@ const stats = [
     label: "Lượt truy cập hôm nay",
     value: "234",
     icon: Eye,
-    color: "text-green-600",
-    bg: "bg-green-50",
+    color: "text-status-success",
+    bg: "bg-status-success/10",
   },
   {
     label: "Đơn từ website",
     value: "8",
     icon: ShoppingBag,
-    color: "text-green-600",
-    bg: "bg-green-50",
+    color: "text-status-success",
+    bg: "bg-status-success/10",
   },
   {
     label: "Doanh thu",
     value: "15.800.000",
     icon: DollarSign,
-    color: "text-green-600",
-    bg: "bg-green-50",
+    color: "text-status-success",
+    bg: "bg-status-success/10",
     suffix: "đ",
   },
   {
     label: "Tỷ lệ chuyển đổi",
     value: "3,4",
     icon: TrendingUp,
-    color: "text-green-600",
-    bg: "bg-green-50",
+    color: "text-status-success",
+    bg: "bg-status-success/10",
     suffix: "%",
   },
 ];
@@ -89,10 +89,10 @@ const recentOrders: WebOrder[] = [
 ];
 
 const statusColor: Record<WebOrder["status"], string> = {
-  pending: "bg-yellow-100 text-yellow-800",
+  pending: "bg-status-warning/10 text-status-warning",
   confirmed: "bg-primary-fixed text-primary",
-  shipping: "bg-purple-100 text-purple-800",
-  completed: "bg-green-100 text-green-800",
+  shipping: "bg-status-info/10 text-status-info",
+  completed: "bg-status-success/10 text-status-success",
 };
 
 /* ------------------------------------------------------------------ */
@@ -113,7 +113,7 @@ export default function WebsitePage() {
       {/* Header */}
       <div className="border-b bg-white px-4 md:px-6 py-3">
         <div className="flex items-center gap-2 mb-3">
-          <div className="size-8 rounded-lg bg-green-600 flex items-center justify-center text-white">
+          <div className="size-8 rounded-lg bg-status-success flex items-center justify-center text-white">
             <Icon name="public" className="size-4" />
           </div>
           <h1 className="text-lg font-bold text-foreground">
@@ -160,7 +160,7 @@ export default function WebsitePage() {
               </div>
               <div>
                 <p className="text-xs text-muted-foreground mb-0.5">URL</p>
-                <p className="text-sm font-medium text-green-600 flex items-center gap-1">
+                <p className="text-sm font-medium text-status-success flex items-center gap-1">
                   onebiz.com.vn
                   <Icon name="open_in_new" className="size-3" />
                 </p>
@@ -169,7 +169,7 @@ export default function WebsitePage() {
                 <p className="text-xs text-muted-foreground mb-0.5">
                   Trạng thái
                 </p>
-                <Badge className="bg-green-100 text-green-800 hover:bg-green-100">
+                <Badge className="bg-status-success/10 text-status-success hover:bg-status-success/10">
                   Đang hoạt động
                 </Badge>
               </div>
@@ -204,14 +204,14 @@ export default function WebsitePage() {
                   )}
                 >
                   <div className="flex items-start gap-3">
-                    <div className="size-12 rounded-lg bg-orange-50 flex items-center justify-center shrink-0">
-                      <Icon name="inventory_2" className="size-5 text-orange-500" />
+                    <div className="size-12 rounded-lg bg-status-warning/10 flex items-center justify-center shrink-0">
+                      <Icon name="inventory_2" className="size-5 text-status-warning" />
                     </div>
                     <div className="flex-1 min-w-0">
                       <p className="text-sm font-medium leading-tight truncate">
                         {product.name}
                       </p>
-                      <p className="text-sm font-bold text-green-600 mt-0.5">
+                      <p className="text-sm font-bold text-status-success mt-0.5">
                         {formatCurrency(product.price)}đ
                       </p>
                       <p className="text-xs text-muted-foreground mt-0.5">
@@ -227,7 +227,7 @@ export default function WebsitePage() {
                       onClick={() => toggleVisibility(product.id)}
                       className={cn(
                         "relative inline-flex h-5 w-9 items-center rounded-full transition-colors",
-                        product.visible ? "bg-green-500" : "bg-gray-300"
+                        product.visible ? "bg-status-success/100" : "bg-gray-300"
                       )}
                     >
                       <span
@@ -276,7 +276,7 @@ export default function WebsitePage() {
                 <tbody className="divide-y">
                   {recentOrders.map((order) => (
                     <tr key={order.id} className="hover:bg-surface-container-low transition-colors">
-                      <td className="px-4 py-2.5 font-medium text-green-600">
+                      <td className="px-4 py-2.5 font-medium text-status-success">
                         {order.code}
                       </td>
                       <td className="px-4 py-2.5">{order.customer}</td>
@@ -302,7 +302,7 @@ export default function WebsitePage() {
               </table>
             </div>
             <div className="px-4 py-3 border-t">
-              <button className="text-sm text-green-600 font-medium hover:underline">
+              <button className="text-sm text-status-success font-medium hover:underline">
                 Xem tất cả đơn hàng &rarr;
               </button>
             </div>

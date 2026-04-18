@@ -510,7 +510,7 @@ export default function HangHoaPage() {
       cell: ({ row }) => {
         const stock = row.original.stock;
         return (
-          <span className={stock === 0 ? "text-destructive" : stock <= 5 ? "text-yellow-600" : ""}>
+          <span className={stock === 0 ? "text-destructive" : stock <= 5 ? "text-status-warning" : ""}>
             {formatCurrency(stock)}
           </span>
         );
@@ -559,7 +559,7 @@ export default function HangHoaPage() {
       cell: ({ row }) => {
         const stock = row.original.stock;
         return (
-          <span className={stock === 0 ? "text-destructive" : stock <= 5 ? "text-yellow-600" : ""}>
+          <span className={stock === 0 ? "text-destructive" : stock <= 5 ? "text-status-warning" : ""}>
             {formatCurrency(stock)}
           </span>
         );

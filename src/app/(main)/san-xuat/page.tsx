@@ -248,9 +248,9 @@ export default function ProductionDashboardPage() {
           change={`${labels.ordersLabel}`}
           positive
           icon="schedule"
-          bg="bg-amber-50"
-          iconColor="text-amber-600"
-          valueColor="text-amber-700"
+          bg="bg-status-warning/10"
+          iconColor="text-status-warning"
+          valueColor="text-status-warning"
         />
         <KpiCard
           label="Tỷ lệ hoàn thành"
@@ -258,9 +258,9 @@ export default function ProductionDashboardPage() {
           change={`SL: ${formatNumber(kpis?.totalOutputQty ?? 0)}`}
           positive={(kpis?.yieldRate ?? 0) >= 90}
           icon="trending_up"
-          bg="bg-green-50"
-          iconColor="text-green-600"
-          valueColor="text-green-700"
+          bg="bg-status-success/10"
+          iconColor="text-status-success"
+          valueColor="text-status-success"
         />
         <KpiCard
           label={`Giá trị ${labels.nvlLabel}`}
@@ -272,9 +272,9 @@ export default function ProductionDashboardPage() {
           }
           positive={(kpis?.nvlLowStockCount ?? 0) === 0}
           icon="inventory_2"
-          bg="bg-purple-50"
-          iconColor="text-purple-600"
-          valueColor="text-purple-700"
+          bg="bg-status-info/10"
+          iconColor="text-status-info"
+          valueColor="text-status-info"
         />
       </div>
 

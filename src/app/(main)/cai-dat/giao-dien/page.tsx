@@ -36,12 +36,12 @@ const themes = [
 
 const accentColors = [
   { id: "blue", label: "Xanh dương", color: "bg-primary" },
-  { id: "indigo", label: "Chàm", color: "bg-indigo-500" },
-  { id: "purple", label: "Tím", color: "bg-purple-500" },
+  { id: "indigo", label: "Chàm", color: "bg-status-info" },
+  { id: "purple", label: "Tím", color: "bg-status-info" },
   { id: "pink", label: "Hồng", color: "bg-pink-500" },
-  { id: "red", label: "Đỏ", color: "bg-red-500" },
-  { id: "orange", label: "Cam", color: "bg-orange-500" },
-  { id: "green", label: "Xanh lá", color: "bg-green-500" },
+  { id: "red", label: "Đỏ", color: "bg-status-error" },
+  { id: "orange", label: "Cam", color: "bg-status-warning" },
+  { id: "green", label: "Xanh lá", color: "bg-status-success" },
   { id: "teal", label: "Xanh ngọc", color: "bg-teal-500" },
 ];
 

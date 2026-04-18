@@ -23,8 +23,8 @@ const typeConfig: Record<
 > = {
   order_new: {
     icon: ShoppingCart,
-    color: "text-green-600",
-    bgColor: "bg-green-100",
+    color: "text-status-success",
+    bgColor: "bg-status-success/10",
   },
   order_completed: {
     icon: Package,
@@ -33,18 +33,18 @@ const typeConfig: Record<
   },
   stock_low: {
     icon: AlertTriangle,
-    color: "text-orange-600",
-    bgColor: "bg-orange-100",
+    color: "text-status-warning",
+    bgColor: "bg-status-warning/10",
   },
   customer_new: {
     icon: Users,
-    color: "text-purple-600",
-    bgColor: "bg-purple-100",
+    color: "text-status-info",
+    bgColor: "bg-status-info/10",
   },
   payment_received: {
     icon: DollarSign,
-    color: "text-red-600",
-    bgColor: "bg-red-100",
+    color: "text-status-error",
+    bgColor: "bg-status-error/10",
   },
 };
 

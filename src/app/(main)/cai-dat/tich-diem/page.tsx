@@ -193,7 +193,7 @@ export default function LoyaltyPointsSettingsPage() {
                   <tr key={tier.name}>
                     <td className="py-3">
                       <div className="flex items-center gap-2">
-                        <Icon name="star" size={16} className="text-amber-500" />
+                        <Icon name="star" size={16} className="text-status-warning" />
                         <span className="font-medium">{tier.name}</span>
                       </div>
                     </td>
@@ -208,7 +208,7 @@ export default function LoyaltyPointsSettingsPage() {
                     <td className="py-3">
                       <Badge
                         variant="default"
-                        className="bg-green-100 text-green-700 hover:bg-green-100 text-xs"
+                        className="bg-status-success/10 text-status-success hover:bg-status-success/10 text-xs"
                       >
                         Đang áp dụng
                       </Badge>

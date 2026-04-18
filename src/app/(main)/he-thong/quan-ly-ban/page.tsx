@@ -361,8 +361,8 @@ export default function QuanLyBanPage() {
         <Card>
           <CardContent className="pt-0">
             <div className="flex items-center gap-3">
-              <div className="flex size-10 items-center justify-center rounded-full bg-green-100">
-                <Icon name="chair" className="size-5 text-green-600" />
+              <div className="flex size-10 items-center justify-center rounded-full bg-status-success/10">
+                <Icon name="chair" className="size-5 text-status-success" />
               </div>
               <div>
                 <p className="text-2xl font-bold">{totalTables}</p>
@@ -374,8 +374,8 @@ export default function QuanLyBanPage() {
         <Card>
           <CardContent className="pt-0">
             <div className="flex items-center gap-3">
-              <div className="flex size-10 items-center justify-center rounded-full bg-purple-100">
-                <Icon name="group" className="size-5 text-purple-600" />
+              <div className="flex size-10 items-center justify-center rounded-full bg-status-info/10">
+                <Icon name="group" className="size-5 text-status-info" />
               </div>
               <div>
                 <p className="text-2xl font-bold">{totalCapacity}</p>
@@ -444,7 +444,7 @@ export default function QuanLyBanPage() {
                 <Button
                   variant="ghost"
                   size="sm"
-                  className="h-8 px-2 text-red-500 hover:text-red-600 hover:bg-red-50"
+                  className="h-8 px-2 text-status-error hover:text-status-error hover:bg-status-error/10"
                   onClick={() => handleDeleteZone(zone.name)}
                 >
                   <Icon name="delete" className="size-3.5" />
@@ -462,11 +462,11 @@ export default function QuanLyBanPage() {
                     className={cn(
                       "relative group rounded-lg border-2 p-3 flex flex-col items-center gap-1 transition-all",
                       table.status === "available"
-                        ? "border-green-200 bg-green-50"
+                        ? "border-status-success/25 bg-status-success/10"
                         : table.status === "occupied"
-                          ? "border-red-200 bg-red-50"
+                          ? "border-status-error/25 bg-status-error/10"
                           : table.status === "reserved"
-                            ? "border-orange-200 bg-orange-50"
+                            ? "border-status-warning/25 bg-status-warning/10"
                             : "border-border bg-surface-container-low"
                     )}
                   >
@@ -494,9 +494,9 @@ export default function QuanLyBanPage() {
                       variant="outline"
                       className={cn(
                         "text-[9px] mt-0.5",
-                        table.status === "available" && "text-green-600 border-green-300",
-                        table.status === "occupied" && "text-red-600 border-red-300",
-                        table.status === "reserved" && "text-orange-600 border-orange-300",
+                        table.status === "available" && "text-status-success border-status-success/25",
+                        table.status === "occupied" && "text-status-error border-status-error/25",
+                        table.status === "reserved" && "text-status-warning border-status-warning/25",
                         table.status === "cleaning" && "text-muted-foreground border-border"
                       )}
                     >
@@ -521,7 +521,7 @@ export default function QuanLyBanPage() {
                       </button>
                       <button
                         type="button"
-                        className="p-1 rounded hover:bg-white/80 text-muted-foreground hover:text-red-600"
+                        className="p-1 rounded hover:bg-white/80 text-muted-foreground hover:text-status-error"
                         onClick={() => handleDeleteTable(table)}
                         title="Xóa"
                       >

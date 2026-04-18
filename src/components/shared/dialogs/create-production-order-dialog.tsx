@@ -347,7 +347,7 @@ export function CreateProductionOrderDialog({
                                 Thiếu
                               </span>
                             ) : (
-                              <span className="inline-flex items-center gap-1 text-green-600 text-xs">
+                              <span className="inline-flex items-center gap-1 text-status-success text-xs">
                                 <Icon name="check_circle" size={14} />
                                 Đủ
                               </span>

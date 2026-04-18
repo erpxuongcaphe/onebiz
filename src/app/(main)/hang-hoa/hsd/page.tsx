@@ -117,7 +117,7 @@ export default function HSDPage() {
               d <= 7
                 ? "text-destructive font-medium"
                 : d <= 30
-                  ? "text-yellow-600 font-medium"
+                  ? "text-status-warning font-medium"
                   : ""
             }
           >
@@ -156,8 +156,8 @@ export default function HSDPage() {
                 <span className="font-medium text-destructive">{expiredCount}</span>
               </div>
               <div className="flex items-center justify-between">
-                <span className="text-yellow-600">Sắp hết:</span>
-                <span className="font-medium text-yellow-600">{expiringCount}</span>
+                <span className="text-status-warning">Sắp hết:</span>
+                <span className="font-medium text-status-warning">{expiringCount}</span>
               </div>
             </div>
           </FilterGroup>

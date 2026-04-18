@@ -31,9 +31,9 @@ const kpiCards = [
     change: "+8,5%",
     subtitle: "so với tháng trước",
     icon: TrendingUp,
-    color: "text-green-600",
-    bg: "bg-green-50",
-    borderColor: "border-green-200",
+    color: "text-status-success",
+    bg: "bg-status-success/10",
+    borderColor: "border-status-success/25",
   },
   {
     title: "Tỷ lệ hoàn thành",
@@ -41,9 +41,9 @@ const kpiCards = [
     change: "+3%",
     subtitle: "so với tháng trước",
     icon: CheckCircle,
-    color: "text-purple-600",
-    bg: "bg-purple-50",
-    borderColor: "border-purple-200",
+    color: "text-status-info",
+    bg: "bg-status-info/10",
+    borderColor: "border-status-info/25",
   },
   {
     title: "Đơn chờ xử lý",
@@ -51,9 +51,9 @@ const kpiCards = [
     change: "",
     subtitle: "cần xử lý ngay",
     icon: Clock,
-    color: "text-orange-600",
-    bg: "bg-orange-50",
-    borderColor: "border-orange-200",
+    color: "text-status-warning",
+    bg: "bg-status-warning/10",
+    borderColor: "border-status-warning/25",
   },
 ];
 
@@ -81,7 +81,7 @@ const channels = [
     id: "web",
     name: "Website",
     letter: "W",
-    letterBg: "bg-green-600",
+    letterBg: "bg-status-success",
     connected: true,
     ordersToday: 8,
     revenueToday: 15800000,
@@ -97,7 +97,7 @@ const recentOrders = [
     customer: "Nguyễn Thanh Tùng",
     total: 1850000,
     status: "Hoàn thành",
-    statusColor: "bg-green-100 text-green-700",
+    statusColor: "bg-status-success/10 text-status-success",
     time: "14:32, 02/04/2026",
   },
   {
@@ -113,11 +113,11 @@ const recentOrders = [
   {
     code: "OL00154",
     channel: "Website",
-    channelColor: "bg-green-600",
+    channelColor: "bg-status-success",
     customer: "Phạm Quốc Đại",
     total: 985000,
     status: "Chờ xử lý",
-    statusColor: "bg-yellow-100 text-yellow-700",
+    statusColor: "bg-status-warning/10 text-status-warning",
     time: "12:48, 02/04/2026",
   },
   {
@@ -127,7 +127,7 @@ const recentOrders = [
     customer: "Lê Minh Châu",
     total: 3200000,
     status: "Hoàn thành",
-    statusColor: "bg-green-100 text-green-700",
+    statusColor: "bg-status-success/10 text-status-success",
     time: "11:20, 02/04/2026",
   },
   {
@@ -147,17 +147,17 @@ const recentOrders = [
     customer: "Vũ Thị Lan",
     total: 4750000,
     status: "Hoàn thành",
-    statusColor: "bg-green-100 text-green-700",
+    statusColor: "bg-status-success/10 text-status-success",
     time: "09:30, 02/04/2026",
   },
   {
     code: "OL00150",
     channel: "Website",
-    channelColor: "bg-green-600",
+    channelColor: "bg-status-success",
     customer: "Đặng Văn Thắng",
     total: 890000,
     status: "Đã hủy",
-    statusColor: "bg-red-100 text-red-700",
+    statusColor: "bg-status-error/10 text-status-error",
     time: "08:45, 02/04/2026",
   },
   {
@@ -167,7 +167,7 @@ const recentOrders = [
     customer: "Bùi Thị Mai",
     total: 2100000,
     status: "Chờ xử lý",
-    statusColor: "bg-yellow-100 text-yellow-700",
+    statusColor: "bg-status-warning/10 text-status-warning",
     time: "08:10, 02/04/2026",
   },
 ];
@@ -203,7 +203,7 @@ export default function BanOnlinePage() {
                       <Icon className={cn("h-5 w-5", kpi.color)} />
                     </div>
                     {kpi.change && (
-                      <span className="flex items-center gap-0.5 text-xs font-medium text-green-600">
+                      <span className="flex items-center gap-0.5 text-xs font-medium text-status-success">
                         <Icon name="north_east" size={12} />
                         {kpi.change}
                       </span>

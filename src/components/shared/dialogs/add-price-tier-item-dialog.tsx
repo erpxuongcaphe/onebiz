@@ -239,8 +239,8 @@ export function AddPriceTierItemDialog({
               <span
                 className={
                   Number(price) < selected.sellPrice
-                    ? "text-emerald-600 font-medium"
-                    : "text-amber-600 font-medium"
+                    ? "text-status-success font-medium"
+                    : "text-status-warning font-medium"
                 }
               >
                 {Number(price) < selected.sellPrice ? "-" : "+"}

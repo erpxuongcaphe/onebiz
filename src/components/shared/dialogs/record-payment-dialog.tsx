@@ -152,7 +152,7 @@ export function RecordPaymentDialog({
               </p>
             )}
             {amount === currentDebt && currentDebt > 0 && (
-              <p className="text-xs text-emerald-600">
+              <p className="text-xs text-status-success">
                 Thanh toán hết nợ
               </p>
             )}

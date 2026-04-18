@@ -30,11 +30,11 @@ const movementTypeBadge: Record<
 > = {
   in: {
     label: "Nhập",
-    className: "bg-green-50 text-green-700 border-green-200",
+    className: "bg-status-success/10 text-status-success border-status-success/25",
   },
   out: {
     label: "Xuất",
-    className: "bg-red-50 text-red-700 border-red-200",
+    className: "bg-status-error/10 text-status-error border-status-error/25",
   },
   adjust: {
     label: "Kiểm kho",
@@ -42,7 +42,7 @@ const movementTypeBadge: Record<
   },
   transfer: {
     label: "Chuyển kho",
-    className: "bg-purple-50 text-purple-700 border-purple-200",
+    className: "bg-status-info/10 text-status-info border-status-info/25",
   },
 };
 
@@ -235,9 +235,9 @@ export default function LichSuKhoPage() {
         const qty = row.original.quantity;
         const prefix = isIn ? "+" : isOut ? "-" : "";
         const color = isIn
-          ? "text-green-600"
+          ? "text-status-success"
           : isOut
-          ? "text-red-600"
+          ? "text-status-error"
           : "text-primary";
         return (
           <span className={`font-semibold ${color}`}>
@@ -341,13 +341,13 @@ export default function LichSuKhoPage() {
           value={total.toString()}
         />
         <SummaryCard
-          icon={<Icon name="arrow_circle_down" size={16} className="text-green-600" />}
+          icon={<Icon name="arrow_circle_down" size={16} className="text-status-success" />}
           label="Tổng nhập"
           value={`+${totalIn}`}
           highlight
         />
         <SummaryCard
-          icon={<Icon name="arrow_circle_up" size={16} className="text-red-600" />}
+          icon={<Icon name="arrow_circle_up" size={16} className="text-status-error" />}
           label="Tổng xuất"
           value={`-${totalOut}`}
           danger={totalOut > 0}

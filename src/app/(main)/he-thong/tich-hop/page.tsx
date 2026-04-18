@@ -10,8 +10,8 @@ export default function TichHopPlaceholderPage() {
     <div className="flex-1 flex items-center justify-center p-8">
       <div className="max-w-xl w-full bg-white rounded-xl border shadow-sm p-8">
         <div className="flex items-center gap-3 mb-4">
-          <div className="h-12 w-12 rounded-lg bg-emerald-100 flex items-center justify-center">
-            <Icon name="electrical_services" size={24} className="text-emerald-600" />
+          <div className="h-12 w-12 rounded-lg bg-status-success/10 flex items-center justify-center">
+            <Icon name="electrical_services" size={24} className="text-status-success" />
           </div>
           <div>
             <h1 className="text-xl font-semibold">Tích hợp</h1>
@@ -52,7 +52,7 @@ export default function TichHopPlaceholderPage() {
           <span className="text-xs text-muted-foreground">Hiện tại bạn có thể dùng tạm:</span>
           <Link
             href="/cai-dat/ket-noi"
-            className="text-xs font-medium text-emerald-600 hover:underline"
+            className="text-xs font-medium text-status-success hover:underline"
           >
             Cài đặt → Kết nối
           </Link>
