@@ -318,20 +318,20 @@ export default function BaoCaoTaiChinhPage() {
                         <td className="py-2.5 pr-3 text-right font-medium text-primary">
                           {formatCurrency(b.revenue)}
                         </td>
-                        <td className="py-2.5 pr-3 text-right text-orange-700">
+                        <td className="py-2.5 pr-3 text-right text-status-warning">
                           {formatCurrency(b.cogs)}
                         </td>
-                        <td className="py-2.5 pr-3 text-right font-medium text-green-700">
+                        <td className="py-2.5 pr-3 text-right font-medium text-status-success">
                           {formatCurrency(b.grossProfit)}
                         </td>
                         <td className="py-2.5 pr-3 text-right text-xs">
                           <span
                             className={`inline-block px-1.5 py-0.5 rounded ${
                               b.grossMargin >= 30
-                                ? "bg-green-50 text-green-700"
+                                ? "bg-status-success/10 text-status-success"
                                 : b.grossMargin >= 15
-                                  ? "bg-yellow-50 text-yellow-700"
-                                  : "bg-red-50 text-red-700"
+                                  ? "bg-status-warning/10 text-status-warning"
+                                  : "bg-status-error/10 text-status-error"
                             }`}
                           >
                             {b.grossMargin}%
@@ -342,7 +342,7 @@ export default function BaoCaoTaiChinhPage() {
                         </td>
                         <td
                           className={`py-2.5 text-right font-semibold ${
-                            b.netProfit >= 0 ? "text-green-700" : "text-red-600"
+                            b.netProfit >= 0 ? "text-status-success" : "text-status-error"
                           }`}
                         >
                           {formatCurrency(b.netProfit)}
@@ -374,10 +374,10 @@ export default function BaoCaoTaiChinhPage() {
                         <td className="py-2.5 pr-3 text-right text-primary">
                           {formatCurrency(sum.revenue)}
                         </td>
-                        <td className="py-2.5 pr-3 text-right text-orange-800">
+                        <td className="py-2.5 pr-3 text-right text-status-warning">
                           {formatCurrency(sum.cogs)}
                         </td>
-                        <td className="py-2.5 pr-3 text-right text-green-800">
+                        <td className="py-2.5 pr-3 text-right text-status-success">
                           {formatCurrency(sum.grossProfit)}
                         </td>
                         <td className="py-2.5 pr-3 text-right text-xs">
@@ -388,7 +388,7 @@ export default function BaoCaoTaiChinhPage() {
                         </td>
                         <td
                           className={`py-2.5 text-right ${
-                            sum.netProfit >= 0 ? "text-green-800" : "text-red-700"
+                            sum.netProfit >= 0 ? "text-status-success" : "text-status-error"
                           }`}
                         >
                           {formatCurrency(sum.netProfit)}
@@ -433,9 +433,9 @@ export default function BaoCaoTaiChinhPage() {
             }
             positive={cur && prev ? cur.cogs <= prev.cogs : true}
             icon="trending_down"
-            bg="bg-orange-50"
-            iconColor="text-orange-600"
-            valueColor="text-orange-700"
+            bg="bg-status-warning/10"
+            iconColor="text-status-warning"
+            valueColor="text-status-warning"
           />
           <KpiCard
             label="Lãi ròng"
@@ -447,9 +447,9 @@ export default function BaoCaoTaiChinhPage() {
             }
             positive={cur && prev ? cur.netProfit >= prev.netProfit : true}
             icon="attach_money"
-            bg="bg-green-50"
-            iconColor="text-green-600"
-            valueColor="text-green-700"
+            bg="bg-status-success/10"
+            iconColor="text-status-success"
+            valueColor="text-status-success"
           />
           <KpiCard
             label="Biên LN gộp"
@@ -463,9 +463,9 @@ export default function BaoCaoTaiChinhPage() {
               cur && prev ? cur.grossMargin >= prev.grossMargin : true
             }
             icon="percent"
-            bg="bg-purple-50"
-            iconColor="text-purple-600"
-            valueColor="text-purple-700"
+            bg="bg-status-info/10"
+            iconColor="text-status-info"
+            valueColor="text-status-info"
           />
         </div>
 
@@ -508,7 +508,7 @@ export default function BaoCaoTaiChinhPage() {
                     cur: cur?.grossProfit ?? 0,
                     prev: prev?.grossProfit ?? 0,
                     bold: true,
-                    color: "text-green-700",
+                    color: "text-status-success",
                   },
                   {
                     label: "   Biên LN gộp (%)",
@@ -527,7 +527,7 @@ export default function BaoCaoTaiChinhPage() {
                     cur: cur?.netProfit ?? 0,
                     prev: prev?.netProfit ?? 0,
                     bold: true,
-                    color: "text-green-700",
+                    color: "text-status-success",
                     highlight: true,
                   },
                   {
@@ -547,7 +547,7 @@ export default function BaoCaoTaiChinhPage() {
                   return (
                     <tr
                       key={row.label}
-                      className={`border-b last:border-0 ${row.highlight ? "bg-green-50/50" : ""}`}
+                      className={`border-b last:border-0 ${row.highlight ? "bg-status-success/5" : ""}`}
                     >
                       <td
                         className={`py-2.5 pr-4 ${row.bold ? "font-semibold" : ""} ${row.color ?? ""}`}
@@ -565,7 +565,7 @@ export default function BaoCaoTaiChinhPage() {
                           : formatCurrency(row.prev)}
                       </td>
                       <td
-                        className={`py-2.5 text-right text-xs font-medium ${isPositiveChange ? "text-green-600" : "text-red-600"}`}
+                        className={`py-2.5 text-right text-xs font-medium ${isPositiveChange ? "text-status-success" : "text-status-error"}`}
                       >
                         {change}
                       </td>
@@ -745,7 +745,7 @@ export default function BaoCaoTaiChinhPage() {
                   <Icon name="schedule" className="size-4" />
                   <span className="text-xs">TB ngày bán hết</span>
                 </div>
-                <p className="text-3xl font-bold text-orange-600">
+                <p className="text-3xl font-bold text-status-warning">
                   {turnover?.avgDaysToSell ?? 0}
                 </p>
                 <p className="text-xs text-muted-foreground">ngày</p>
@@ -782,7 +782,7 @@ export default function BaoCaoTaiChinhPage() {
                   <span className="text-xs">DSO</span>
                 </div>
                 <p
-                  className={`text-3xl font-bold ${(dso?.dso ?? 0) > 30 ? "text-red-600" : "text-green-600"}`}
+                  className={`text-3xl font-bold ${(dso?.dso ?? 0) > 30 ? "text-status-error" : "text-status-success"}`}
                 >
                   {dso?.dso ?? 0}
                 </p>
@@ -793,7 +793,7 @@ export default function BaoCaoTaiChinhPage() {
                   <Icon name="attach_money" className="size-4" />
                   <span className="text-xs">Phải thu</span>
                 </div>
-                <p className="text-3xl font-bold text-orange-600">
+                <p className="text-3xl font-bold text-status-warning">
                   {formatChartCurrency(dso?.totalReceivables ?? 0)}
                 </p>
                 <p className="text-xs text-muted-foreground">VND</p>
@@ -811,7 +811,7 @@ export default function BaoCaoTaiChinhPage() {
               <div className="flex justify-between text-sm">
                 <span className="text-muted-foreground">Đánh giá</span>
                 <span
-                  className={`font-medium ${(dso?.dso ?? 0) <= 15 ? "text-green-600" : (dso?.dso ?? 0) <= 30 ? "text-yellow-600" : "text-red-600"}`}
+                  className={`font-medium ${(dso?.dso ?? 0) <= 15 ? "text-status-success" : (dso?.dso ?? 0) <= 30 ? "text-status-warning" : "text-status-error"}`}
                 >
                   {(dso?.dso ?? 0) <= 15
                     ? "Tốt"
@@ -870,11 +870,11 @@ export default function BaoCaoTaiChinhPage() {
                       <td className="py-2.5 pr-4 text-right">
                         {formatCurrency(item.costPrice)}
                       </td>
-                      <td className="py-2.5 pr-4 text-right font-medium text-orange-700">
+                      <td className="py-2.5 pr-4 text-right font-medium text-status-warning">
                         {formatCurrency(item.totalCost)}
                       </td>
                       <td className="py-2.5 text-right">
-                        <span className="inline-block bg-orange-50 text-orange-700 px-1.5 py-0.5 rounded text-xs font-medium">
+                        <span className="inline-block bg-status-warning/10 text-status-warning px-1.5 py-0.5 rounded text-xs font-medium">
                           {item.pctOfCogs}%
                         </span>
                       </td>

@@ -81,7 +81,7 @@ function SupplierAmountTooltip({
       <p className="text-xs text-muted-foreground mb-1">
         {payload[0].payload.name}
       </p>
-      <p className="text-sm font-bold text-orange-600">
+      <p className="text-sm font-bold text-status-warning">
         {formatChartTooltipCurrency(payload[0].value)}
       </p>
     </div>
@@ -209,8 +209,8 @@ export default function NhaCungCapPage() {
             change={calcChange(kpis?.purchaseThisMonth ?? 0, kpis?.prevPurchase ?? 0)}
             positive={(kpis?.purchaseThisMonth ?? 0) >= (kpis?.prevPurchase ?? 0)}
             icon="shopping_bag"
-            bg="bg-green-50"
-            iconColor="text-green-600"
+            bg="bg-status-success/10"
+            iconColor="text-status-success"
             valueColor="text-foreground"
           />
           <KpiCard
@@ -219,8 +219,8 @@ export default function NhaCungCapPage() {
             change={calcChange(kpis?.totalDebt ?? 0, kpis?.prevDebt ?? 0)}
             positive={(kpis?.totalDebt ?? 0) <= (kpis?.prevDebt ?? 0)}
             icon="account_balance_wallet"
-            bg="bg-orange-50"
-            iconColor="text-orange-600"
+            bg="bg-status-warning/10"
+            iconColor="text-status-warning"
             valueColor="text-foreground"
           />
           <KpiCard
@@ -229,8 +229,8 @@ export default function NhaCungCapPage() {
             change={`${kpis?.returnCount ?? 0} phiếu trả hàng`}
             positive={false}
             icon="undo"
-            bg="bg-red-50"
-            iconColor="text-red-600"
+            bg="bg-status-error/10"
+            iconColor="text-status-error"
             valueColor="text-foreground"
           />
         </div>
@@ -393,9 +393,9 @@ export default function NhaCungCapPage() {
                       </td>
                       <td className="py-2.5 pr-4 text-right">
                         {item.debt > 0 ? (
-                          <span className="text-red-600 font-medium">{formatCurrency(item.debt)}</span>
+                          <span className="text-status-error font-medium">{formatCurrency(item.debt)}</span>
                         ) : (
-                          <span className="text-green-600">0</span>
+                          <span className="text-status-success">0</span>
                         )}
                       </td>
                       <td className="py-2.5 text-right">{item.orders}</td>

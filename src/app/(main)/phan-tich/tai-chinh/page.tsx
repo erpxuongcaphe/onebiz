@@ -102,7 +102,7 @@ function ProfitTooltip({
   return (
     <div className="rounded-lg border bg-background p-3 shadow-md">
       <p className="text-xs text-muted-foreground mb-1">{label}</p>
-      <p className={`text-sm font-bold ${value >= 0 ? "text-green-600" : "text-red-600"}`}>
+      <p className={`text-sm font-bold ${value >= 0 ? "text-status-success" : "text-status-error"}`}>
         {value >= 0 ? "+" : ""}{formatChartTooltipCurrency(value)}
       </p>
     </div>
@@ -222,8 +222,8 @@ export default function TaiChinhPage() {
             }
             positive={kpis ? kpis.expense <= kpis.prevExpense : false}
             icon="trending_down"
-            bg="bg-red-50"
-            iconColor="text-red-600"
+            bg="bg-status-error/10"
+            iconColor="text-status-error"
             valueColor="text-foreground"
           />
           <KpiCard
@@ -236,8 +236,8 @@ export default function TaiChinhPage() {
             }
             positive={kpis ? kpis.profit >= kpis.prevProfit : true}
             icon="attach_money"
-            bg="bg-green-50"
-            iconColor="text-green-600"
+            bg="bg-status-success/10"
+            iconColor="text-status-success"
             valueColor="text-foreground"
           />
           <KpiCard
@@ -250,8 +250,8 @@ export default function TaiChinhPage() {
             }
             positive={kpis ? kpis.profitMargin >= kpis.prevProfitMargin : true}
             icon="percent"
-            bg="bg-purple-50"
-            iconColor="text-purple-600"
+            bg="bg-status-info/10"
+            iconColor="text-status-info"
             valueColor="text-foreground"
           />
         </div>
@@ -425,10 +425,10 @@ export default function TaiChinhPage() {
                   {cashFlowData.map((item) => (
                     <tr key={item.month} className="border-b last:border-0">
                       <td className="py-2.5 pr-4 font-medium">{item.month}</td>
-                      <td className="py-2.5 pr-4 text-right text-green-600 font-medium">
+                      <td className="py-2.5 pr-4 text-right text-status-success font-medium">
                         +{formatCurrency(item.thu)}
                       </td>
-                      <td className="py-2.5 pr-4 text-right text-red-600 font-medium">
+                      <td className="py-2.5 pr-4 text-right text-status-error font-medium">
                         -{formatCurrency(item.chi)}
                       </td>
                       <td className="py-2.5 text-right font-bold text-primary">

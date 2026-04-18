@@ -103,8 +103,8 @@ export default function LuongTienPage() {
           label="Thu tháng này"
           value={formatCurrency(totalReceipt)}
           icon="north_east"
-          bg="bg-green-50"
-          iconColor="text-green-600"
+          bg="bg-status-success/10"
+          iconColor="text-status-success"
           valueColor="text-foreground"
           change={prev ? `${((totalReceipt - prev.totalReceipt) / Math.max(prev.totalReceipt, 1) * 100).toFixed(1)}%` : undefined}
           positive={prev ? totalReceipt >= prev.totalReceipt : undefined}
@@ -113,8 +113,8 @@ export default function LuongTienPage() {
           label="Chi tháng này"
           value={formatCurrency(totalPayment)}
           icon="south_east"
-          bg="bg-red-50"
-          iconColor="text-red-500"
+          bg="bg-status-error/10"
+          iconColor="text-status-error"
           valueColor="text-foreground"
           change={prev ? `${((totalPayment - prev.totalPayment) / Math.max(prev.totalPayment, 1) * 100).toFixed(1)}%` : undefined}
           positive={prev ? totalPayment <= prev.totalPayment : undefined}
@@ -123,8 +123,8 @@ export default function LuongTienPage() {
           label="Dòng tiền ròng"
           value={formatCurrency(net)}
           icon={net >= 0 ? "trending_up" : "trending_down"}
-          bg={net >= 0 ? "bg-primary-fixed" : "bg-orange-50"}
-          iconColor={net >= 0 ? "text-primary" : "text-orange-600"}
+          bg={net >= 0 ? "bg-primary-fixed" : "bg-status-warning/10"}
+          iconColor={net >= 0 ? "text-primary" : "text-status-warning"}
           valueColor="text-foreground"
           positive={net >= 0}
         />
@@ -132,8 +132,8 @@ export default function LuongTienPage() {
           label="Số dư luỹ kế"
           value={formatCurrency(balance)}
           icon="account_balance_wallet"
-          bg="bg-purple-50"
-          iconColor="text-purple-600"
+          bg="bg-status-info/10"
+          iconColor="text-status-info"
           valueColor="text-foreground"
           positive={balance >= 0}
         />
@@ -189,16 +189,16 @@ export default function LuongTienPage() {
               {data.map((row) => (
                 <tr key={row.month} className="border-b hover:bg-muted/50">
                   <td className="py-2 px-3 font-medium">{row.month}</td>
-                  <td className="py-2 px-3 text-right text-green-600 font-medium">
+                  <td className="py-2 px-3 text-right text-status-success font-medium">
                     {formatCurrency(row.totalReceipt)}
                   </td>
-                  <td className="py-2 px-3 text-right text-red-500 font-medium">
+                  <td className="py-2 px-3 text-right text-status-error font-medium">
                     {formatCurrency(row.totalPayment)}
                   </td>
-                  <td className={`py-2 px-3 text-right font-bold ${row.net >= 0 ? "text-green-600" : "text-red-500"}`}>
+                  <td className={`py-2 px-3 text-right font-bold ${row.net >= 0 ? "text-status-success" : "text-status-error"}`}>
                     {row.net >= 0 ? "+" : ""}{formatCurrency(row.net)}
                   </td>
-                  <td className={`py-2 px-3 text-right font-medium ${row.cumulativeBalance >= 0 ? "text-primary" : "text-red-500"}`}>
+                  <td className={`py-2 px-3 text-right font-medium ${row.cumulativeBalance >= 0 ? "text-primary" : "text-status-error"}`}>
                     {formatCurrency(row.cumulativeBalance)}
                   </td>
                   <td className="py-2 px-3">

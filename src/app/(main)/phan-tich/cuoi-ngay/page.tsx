@@ -191,32 +191,32 @@ export default function CuoiNgayPage() {
             change={`${ordersDiff >= 0 ? "+" : ""}${ordersDiff} đơn so với hôm qua`}
             positive={ordersDiff >= 0}
             icon="shopping_cart"
-            bg="bg-emerald-50"
-            iconColor="text-emerald-600"
+            bg="bg-status-success/10"
+            iconColor="text-status-success"
             valueColor="text-foreground"
           />
           <KpiCard
             label="Tiền mặt"
             value={formatCurrency(cashAmount) + "đ"}
             icon="payments"
-            bg="bg-green-50"
-            iconColor="text-green-600"
+            bg="bg-status-success/10"
+            iconColor="text-status-success"
             valueColor="text-foreground"
           />
           <KpiCard
             label="Chuyển khoản"
             value={formatCurrency(transferAmount) + "đ"}
             icon="account_balance"
-            bg="bg-indigo-50"
-            iconColor="text-indigo-600"
+            bg="bg-status-info/10"
+            iconColor="text-status-info"
             valueColor="text-foreground"
           />
           <KpiCard
             label="Thẻ"
             value={formatCurrency(cardAmount) + "đ"}
             icon="credit_card"
-            bg="bg-amber-50"
-            iconColor="text-amber-600"
+            bg="bg-status-warning/10"
+            iconColor="text-status-warning"
             valueColor="text-foreground"
           />
           <KpiCard
@@ -224,8 +224,8 @@ export default function CuoiNgayPage() {
             value={formatCurrency(returnAmount) + "đ"}
             positive={false}
             icon="undo"
-            bg="bg-red-50"
-            iconColor="text-red-500"
+            bg="bg-status-error/10"
+            iconColor="text-status-error"
             valueColor="text-foreground"
           />
         </div>
@@ -338,7 +338,7 @@ export default function CuoiNgayPage() {
                     </td>
                     <td className="py-2.5 text-right text-foreground">100%</td>
                   </tr>
-                  <tr className="text-red-500">
+                  <tr className="text-status-error">
                     <td className="py-2.5 pr-4">Trả hàng</td>
                     <td className="py-2.5 pr-4 text-right font-semibold">
                       -{formatCurrency(returnAmount)}đ
@@ -347,7 +347,7 @@ export default function CuoiNgayPage() {
                       {totalRevenue > 0 ? ((returnAmount / totalRevenue) * 100).toFixed(1) : "0.0"}%
                     </td>
                   </tr>
-                  <tr className="border-t-2 font-bold text-emerald-700">
+                  <tr className="border-t-2 font-bold text-status-success">
                     <td className="py-2.5 pr-4">Doanh thu thực</td>
                     <td className="py-2.5 pr-4 text-right">
                       {formatCurrency(totalRevenue - returnAmount)}đ

@@ -89,7 +89,7 @@ function DebtTooltip({
       <p className="text-xs text-muted-foreground mb-1">
         {payload[0].payload.name}
       </p>
-      <p className="text-sm font-bold text-red-600">
+      <p className="text-sm font-bold text-status-error">
         Nợ: {formatChartTooltipCurrency(payload[0].value)}
       </p>
     </div>
@@ -209,8 +209,8 @@ export default function KhachHangPage() {
             change={newMonthChange !== 0 ? `${newMonthChange > 0 ? "+" : ""}${newMonthChange}% so với tháng trước` : "Không có dữ liệu tháng trước"}
             positive={newMonthChange >= 0}
             icon="person_add"
-            bg="bg-green-50"
-            iconColor="text-green-600"
+            bg="bg-status-success/10"
+            iconColor="text-status-success"
             valueColor="text-foreground"
           />
           <KpiCard
@@ -219,8 +219,8 @@ export default function KhachHangPage() {
             change=""
             positive
             icon="refresh"
-            bg="bg-purple-50"
-            iconColor="text-purple-600"
+            bg="bg-status-info/10"
+            iconColor="text-status-info"
             valueColor="text-foreground"
           />
           <KpiCard
@@ -229,8 +229,8 @@ export default function KhachHangPage() {
             change={debtChange !== 0 ? `${debtChange > 0 ? "+" : ""}${debtChange}% so với tháng trước` : ""}
             positive={debtChange <= 0}
             icon="credit_card"
-            bg="bg-red-50"
-            iconColor="text-red-600"
+            bg="bg-status-error/10"
+            iconColor="text-status-error"
             valueColor="text-foreground"
           />
         </div>

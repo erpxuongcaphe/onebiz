@@ -96,7 +96,7 @@ function DayOfWeekTooltip({
   return (
     <div className="rounded-lg border bg-background p-3 shadow-md">
       <p className="text-xs text-muted-foreground mb-1">{label}</p>
-      <p className="text-sm font-bold text-green-600">
+      <p className="text-sm font-bold text-status-success">
         {formatChartTooltipCurrency(payload[0].value)}
       </p>
     </div>
@@ -116,7 +116,7 @@ function HourlyTooltip({
   return (
     <div className="rounded-lg border bg-background p-3 shadow-md">
       <p className="text-xs text-muted-foreground mb-1">{label}</p>
-      <p className="text-sm font-bold text-purple-600">
+      <p className="text-sm font-bold text-status-info">
         {formatChartTooltipCurrency(payload[0].value)}
       </p>
     </div>
@@ -244,8 +244,8 @@ export default function BanHangPage() {
             change={`${qtyChange.text} so với tháng trước`}
             positive={qtyChange.positive}
             icon="inventory_2"
-            bg="bg-green-50"
-            iconColor="text-green-600"
+            bg="bg-status-success/10"
+            iconColor="text-status-success"
             valueColor="text-foreground"
           />
           <KpiCard
@@ -254,8 +254,8 @@ export default function BanHangPage() {
             change={`${avgChange.text} so với tháng trước`}
             positive={avgChange.positive}
             icon="receipt"
-            bg="bg-purple-50"
-            iconColor="text-purple-600"
+            bg="bg-status-info/10"
+            iconColor="text-status-info"
             valueColor="text-foreground"
           />
           <KpiCard
@@ -264,8 +264,8 @@ export default function BanHangPage() {
             change={`${returnChange.text} so với tháng trước`}
             positive={!returnChange.positive}
             icon="undo"
-            bg="bg-orange-50"
-            iconColor="text-orange-600"
+            bg="bg-status-warning/10"
+            iconColor="text-status-warning"
             valueColor="text-foreground"
           />
         </div>

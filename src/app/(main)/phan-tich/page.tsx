@@ -45,7 +45,7 @@ function calcChange(current: number, previous: number): string {
 function RevenueTooltip({ active, payload, label }: any) {
   if (!active || !payload?.length) return null;
   return (
-    <div className="bg-white border rounded-lg shadow-lg p-2.5 text-xs">
+    <div className="bg-surface-container-lowest border border-border rounded-lg ambient-shadow p-2.5 text-xs">
       <p className="font-semibold text-foreground mb-1">{label}</p>
       {payload.map((entry: any, i: number) => (
         <p key={i} style={{ color: entry.color }}>
@@ -126,8 +126,8 @@ export default function TongQuanPage() {
             change={calcChange(kpis?.orders ?? 0, kpis?.prevOrders ?? 0)}
             positive={(kpis?.orders ?? 0) >= (kpis?.prevOrders ?? 0)}
             icon="shopping_cart"
-            bg="bg-emerald-50"
-            iconColor="text-emerald-600"
+            bg="bg-status-success/10"
+            iconColor="text-status-success"
             valueColor="text-foreground"
           />
           <KpiCard
@@ -136,8 +136,8 @@ export default function TongQuanPage() {
             change={calcChange(kpis?.newCustomers ?? 0, kpis?.prevNewCustomers ?? 0)}
             positive={(kpis?.newCustomers ?? 0) >= (kpis?.prevNewCustomers ?? 0)}
             icon="group"
-            bg="bg-violet-50"
-            iconColor="text-violet-600"
+            bg="bg-status-info/10"
+            iconColor="text-status-info"
             valueColor="text-foreground"
           />
           <KpiCard
@@ -146,8 +146,8 @@ export default function TongQuanPage() {
             change={calcChange(kpis?.profit ?? 0, kpis?.prevProfit ?? 0)}
             positive={(kpis?.profit ?? 0) >= (kpis?.prevProfit ?? 0)}
             icon="trending_up"
-            bg="bg-amber-50"
-            iconColor="text-amber-600"
+            bg="bg-status-warning/10"
+            iconColor="text-status-warning"
             valueColor="text-foreground"
           />
         </div>

@@ -67,13 +67,13 @@ function calcChangePct(
 const STATUS_COLORS = ["#16a34a", "#eab308", "#f97316", "#ef4444"];
 
 const STATUS_BADGE: Record<string, string> = {
-  "Hoàn thành": "bg-green-100 text-green-700",
-  "Đang xử lý": "bg-yellow-100 text-yellow-700",
-  "Chờ xử lý": "bg-yellow-100 text-yellow-700",
-  "Đang giao": "bg-orange-100 text-orange-700",
+  "Hoàn thành": "bg-status-success/10 text-status-success",
+  "Đang xử lý": "bg-status-warning/10 text-status-warning",
+  "Chờ xử lý": "bg-status-warning/10 text-status-warning",
+  "Đang giao": "bg-status-warning/10 text-status-warning",
   "Đã xác nhận": "bg-primary-fixed text-primary",
   "Nháp": "bg-muted text-foreground",
-  "Đã hủy": "bg-red-100 text-red-600",
+  "Đã hủy": "bg-status-error/10 text-status-error",
 };
 
 // === Tooltips ===
@@ -212,8 +212,8 @@ export default function DatHangPage() {
       change: kpis ? `${kpis.completedPct}% tổng đơn` : "",
       positive: true,
       icon: "check_circle",
-      bg: "bg-green-50",
-      iconColor: "text-green-600",
+      bg: "bg-status-success/10",
+      iconColor: "text-status-success",
       valueColor: "text-foreground",
     },
     {
@@ -222,8 +222,8 @@ export default function DatHangPage() {
       change: kpis ? `${kpis.inTransitPct}% tổng đơn` : "",
       positive: true,
       icon: "local_shipping",
-      bg: "bg-orange-50",
-      iconColor: "text-orange-600",
+      bg: "bg-status-warning/10",
+      iconColor: "text-status-warning",
       valueColor: "text-foreground",
     },
     {
@@ -232,8 +232,8 @@ export default function DatHangPage() {
       change: kpis ? `${kpis.cancelledPct}% tổng đơn` : "",
       positive: false,
       icon: "cancel",
-      bg: "bg-red-50",
-      iconColor: "text-red-500",
+      bg: "bg-status-error/10",
+      iconColor: "text-status-error",
       valueColor: "text-foreground",
     },
   ];

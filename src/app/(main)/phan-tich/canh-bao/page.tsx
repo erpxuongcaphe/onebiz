@@ -13,16 +13,16 @@ import { Icon } from "@/components/ui/icon";
 const SEVERITY_CONFIG = {
   critical: {
     icon: "gpp_bad" as const,
-    bg: "bg-red-50 border-red-200",
-    iconColor: "text-red-600",
-    badgeBg: "bg-red-100 text-red-800",
+    bg: "bg-status-error/10 border-status-error/25",
+    iconColor: "text-status-error",
+    badgeBg: "bg-status-error/10 text-status-error",
     label: "Nghiêm trọng",
   },
   warning: {
     icon: "warning" as const,
-    bg: "bg-amber-50 border-amber-200",
-    iconColor: "text-amber-600",
-    badgeBg: "bg-amber-100 text-amber-800",
+    bg: "bg-status-warning/10 border-status-warning/25",
+    iconColor: "text-status-warning",
+    badgeBg: "bg-status-warning/10 text-status-warning",
     label: "Cảnh báo",
   },
   info: {
@@ -100,7 +100,7 @@ export default function CanhBaoPage() {
         <div className="flex items-center justify-between">
           <div>
             <h1 className="text-lg font-semibold flex items-center gap-2">
-              <Icon name="warning" className="size-5 text-amber-500" />
+              <Icon name="warning" className="size-5 text-status-warning" />
               Cảnh báo tài chính
             </h1>
             <p className="text-xs text-muted-foreground mt-0.5">
@@ -114,7 +114,7 @@ export default function CanhBaoPage() {
               </Badge>
             )}
             {warningCount > 0 && (
-              <Badge className="bg-amber-100 text-amber-800 text-xs border-amber-200">
+              <Badge className="bg-status-warning/10 text-status-warning text-xs border-status-warning/25">
                 {warningCount} cảnh báo
               </Badge>
             )}
@@ -137,15 +137,15 @@ export default function CanhBaoPage() {
               label: "Nghiêm trọng",
               value: criticalCount,
               iconName: "gpp_bad",
-              bg: "bg-red-100",
-              color: "text-red-700",
+              bg: "bg-status-error/10",
+              color: "text-status-error",
             },
             {
               label: "Cảnh báo",
               value: warningCount,
               iconName: "warning",
-              bg: "bg-amber-100",
-              color: "text-amber-700",
+              bg: "bg-status-warning/10",
+              color: "text-status-warning",
             },
             {
               label: "Công nợ",
@@ -160,8 +160,8 @@ export default function CanhBaoPage() {
                 (a) => a.type === "low_stock" || a.type === "expiring_lot"
               ).length,
               iconName: "inventory_2",
-              bg: "bg-purple-100",
-              color: "text-purple-700",
+              bg: "bg-status-info/10",
+              color: "text-status-info",
             },
           ].map((card) => (
             <Card key={card.label}>
@@ -228,8 +228,8 @@ export default function CanhBaoPage() {
           <Card className="border-dashed">
             <CardContent className="pt-6">
               <div className="text-center py-8">
-                <Icon name="check_circle" className="size-12 text-green-500 mx-auto mb-3" />
-                <p className="text-lg font-semibold text-green-700">
+                <Icon name="check_circle" className="size-12 text-status-success mx-auto mb-3" />
+                <p className="text-lg font-semibold text-status-success">
                   Không có cảnh báo
                 </p>
                 <p className="text-sm text-muted-foreground mt-1">
@@ -284,8 +284,8 @@ export default function CanhBaoPage() {
                           className={cn(
                             "text-lg font-bold",
                             alert.severity === "critical"
-                              ? "text-red-700"
-                              : "text-amber-700"
+                              ? "text-status-error"
+                              : "text-status-warning"
                           )}
                         >
                           {alert.type === "high_expense"

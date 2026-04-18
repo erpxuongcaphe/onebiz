@@ -221,8 +221,8 @@ export default function HangHoaPage() {
             change={kpis?.bestSeller.qty ? `${kpis.bestSeller.qty} sản phẩm/tháng` : "Chưa có dữ liệu"}
             positive={(kpis?.bestSeller.qty ?? 0) > 0}
             icon="star"
-            bg="bg-green-50"
-            iconColor="text-green-600"
+            bg="bg-status-success/10"
+            iconColor="text-status-success"
             valueColor="text-foreground"
           />
           <KpiCard
@@ -231,8 +231,8 @@ export default function HangHoaPage() {
             change={(kpis?.lowStockCount ?? 0) > 0 ? "Cần nhập thêm" : "Đủ hàng"}
             positive={(kpis?.lowStockCount ?? 0) === 0}
             icon="warning"
-            bg="bg-red-50"
-            iconColor="text-red-600"
+            bg="bg-status-error/10"
+            iconColor="text-status-error"
             valueColor="text-foreground"
           />
           <KpiCard
@@ -241,8 +241,8 @@ export default function HangHoaPage() {
             change={(kpis?.stockValue ?? 0) > 0 ? "Giá trị hiện tại" : "Chưa có dữ liệu"}
             positive={(kpis?.stockValue ?? 0) > 0}
             icon="warehouse"
-            bg="bg-purple-50"
-            iconColor="text-purple-600"
+            bg="bg-status-info/10"
+            iconColor="text-status-info"
             valueColor="text-foreground"
           />
         </div>
@@ -438,8 +438,8 @@ export default function HangHoaPage() {
                           <span
                             className={
                               isCritical
-                                ? "text-red-600 font-bold"
-                                : "text-orange-600 font-medium"
+                                ? "text-status-error font-bold"
+                                : "text-status-warning font-medium"
                             }
                           >
                             {item.stock}
@@ -455,8 +455,8 @@ export default function HangHoaPage() {
                           <span
                             className={`inline-flex items-center px-2 py-0.5 rounded-full text-xs font-medium ${
                               isCritical
-                                ? "bg-red-100 text-red-700"
-                                : "bg-orange-100 text-orange-700"
+                                ? "bg-status-error/10 text-status-error"
+                                : "bg-status-warning/10 text-status-warning"
                             }`}
                           >
                             {isCritical ? "Sắp hết" : "Thấp"}

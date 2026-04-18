@@ -40,9 +40,9 @@ const CHANNEL_ICONS: Record<string, string> = {
 
 const CHANNEL_STYLES: Record<string, { bg: string; iconColor: string; valueColor: string }> = {
   "Tại quầy": { bg: "bg-primary-fixed", iconColor: "text-primary", valueColor: "text-primary" },
-  "Facebook": { bg: "bg-indigo-50", iconColor: "text-indigo-600", valueColor: "text-indigo-700" },
-  "Zalo": { bg: "bg-sky-50", iconColor: "text-sky-600", valueColor: "text-sky-700" },
-  "Website": { bg: "bg-purple-50", iconColor: "text-purple-600", valueColor: "text-purple-700" },
+  "Facebook": { bg: "bg-status-info/10", iconColor: "text-status-info", valueColor: "text-status-info" },
+  "Zalo": { bg: "bg-status-info/10", iconColor: "text-status-info", valueColor: "text-status-info" },
+  "Website": { bg: "bg-status-info/10", iconColor: "text-status-info", valueColor: "text-status-info" },
 };
 
 const DEFAULT_STYLE = { bg: "bg-surface-container-low", iconColor: "text-foreground", valueColor: "text-foreground" };

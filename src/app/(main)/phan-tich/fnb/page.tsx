@@ -121,24 +121,24 @@ export default function FnbAnalyticsPage() {
           label="Số đơn"
           value={String(kpis?.totalOrders ?? 0)}
           icon="shopping_cart"
-          bg="bg-green-50"
-          iconColor="text-green-600"
+          bg="bg-status-success/10"
+          iconColor="text-status-success"
           valueColor="text-foreground"
         />
         <KpiCard
           label="Trung bình/đơn"
           value={formatCurrency(kpis?.avgTicket ?? 0)}
           icon="receipt"
-          bg="bg-purple-50"
-          iconColor="text-purple-600"
+          bg="bg-status-info/10"
+          iconColor="text-status-info"
           valueColor="text-foreground"
         />
         <KpiCard
           label="Turnover trung bình"
           value={`${kpis?.avgTurnoverMinutes ?? 0} phút`}
           icon="schedule"
-          bg="bg-orange-50"
-          iconColor="text-orange-600"
+          bg="bg-status-warning/10"
+          iconColor="text-status-warning"
           valueColor="text-foreground"
         />
       </div>
