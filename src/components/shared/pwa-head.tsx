@@ -21,14 +21,15 @@ export function PwaHead() {
     link.href = isFnb ? "/manifest-fnb.json" : "/manifest.json";
     document.head.appendChild(link);
 
-    // Set theme-color meta
+    // Set theme-color meta — cả ERP + FnB dùng Stitch primary để brand đồng bộ.
+    const themeColor = "#004AC6";
     const themeMeta = document.querySelector('meta[name="theme-color"]');
     if (themeMeta) {
-      themeMeta.setAttribute("content", isFnb ? "#0f172a" : "#004AC6");
+      themeMeta.setAttribute("content", themeColor);
     } else {
       const meta = document.createElement("meta");
       meta.name = "theme-color";
-      meta.content = isFnb ? "#0f172a" : "#004AC6";
+      meta.content = themeColor;
       document.head.appendChild(meta);
     }
 
@@ -46,13 +47,20 @@ export function PwaHead() {
   return (
     <>
       <meta name="apple-mobile-web-app-capable" content="yes" />
+      <meta name="mobile-web-app-capable" content="yes" />
       <meta
         name="apple-mobile-web-app-status-bar-style"
-        content={isFnb ? "black-translucent" : "default"}
+        content="default"
       />
       <meta
         name="apple-mobile-web-app-title"
         content={isFnb ? "FnB POS" : "OneBiz"}
+      />
+      {/* Apple touch icon cho install prompt trên iOS */}
+      <link
+        rel="apple-touch-icon"
+        sizes="192x192"
+        href={isFnb ? "/icons/fnb-192.svg" : "/icons/fnb-192.svg"}
       />
     </>
   );

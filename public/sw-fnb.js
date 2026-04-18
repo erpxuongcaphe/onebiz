@@ -3,8 +3,10 @@
  * Strategy: Cache-first for static assets, network-first for API/data
  */
 
-const CACHE_NAME = "onebiz-fnb-v1";
+// Bump cache version mỗi lần thay đổi branding/icons.
+const CACHE_NAME = "onebiz-fnb-v2";
 const STATIC_ASSETS = [
+  "/",
   "/pos/fnb",
   "/manifest-fnb.json",
   "/icons/fnb-192.svg",
