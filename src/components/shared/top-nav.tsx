@@ -375,14 +375,14 @@ export function TopNav() {
           </div>
 
           {/* Right: Quick Import + Bell + Help + User + Bán hàng */}
-          <div className="flex items-center gap-1 shrink-0">
+          <div className="flex items-center gap-1.5 shrink-0">
             {/* Quick Import — prominent (M3 core feature) */}
             <button
               type="button"
               onClick={() => setImportOpen(true)}
               className={cn(
-                "hidden md:inline-flex press-scale-sm items-center gap-2 h-9 px-3 rounded-lg text-xs font-medium",
-                "bg-primary-fixed text-primary hover:bg-primary-fixed-dim"
+                "hidden md:inline-flex press-scale-sm items-center gap-2 h-9 px-3.5 rounded-lg text-xs font-semibold",
+                "bg-primary-fixed text-primary hover:bg-primary-fixed-dim transition-colors"
               )}
               title="Import dữ liệu cho AI (Excel/CSV)"
             >
@@ -411,7 +411,7 @@ export function TopNav() {
               >
                 <Icon name="notifications" size={18} />
               </Button>
-              <span className="absolute top-1 right-1 h-4 w-4 rounded-full bg-destructive text-[10px] font-bold text-primary-foreground flex items-center justify-center pointer-events-none">
+              <span className="absolute top-1 right-1 h-4 w-4 rounded-full bg-destructive text-[10px] font-bold text-on-primary flex items-center justify-center pointer-events-none ring-2 ring-surface-container-lowest">
                 3
               </span>
             </Link>

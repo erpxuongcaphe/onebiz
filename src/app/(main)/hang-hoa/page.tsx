@@ -703,23 +703,23 @@ export default function HangHoaPage() {
         {/* AI Import invitation banner — chỉ hiện trên tab NVL           */}
         {/* ============================================================ */}
         {scope === "nvl" && !aiBannerDismissed && (
-          <div className="mb-3 shrink-0 relative overflow-hidden rounded-lg border border-violet-200 bg-gradient-to-r from-violet-50 via-fuchsia-50 to-amber-50 px-4 py-3">
+          <div className="mb-3 shrink-0 relative overflow-hidden rounded-xl border border-primary-fixed bg-gradient-to-r from-primary-fixed/60 via-primary-fixed/30 to-surface-container-lowest px-4 py-3 ambient-shadow">
             <div className="flex items-center gap-3">
-              <div className="h-9 w-9 shrink-0 rounded-md bg-gradient-to-br from-violet-500 to-fuchsia-500 flex items-center justify-center shadow-sm">
-                <Icon name="auto_awesome" size={16} className="text-white" />
+              <div className="h-10 w-10 shrink-0 rounded-lg bg-primary flex items-center justify-center ambient-shadow">
+                <Icon name="auto_awesome" size={18} className="text-on-primary" />
               </div>
               <div className="flex-1 min-w-0">
-                <div className="text-sm font-semibold text-violet-900 leading-tight">
-                  Có file Excel danh sách nguyên vật liệu? Để AI tự đọc & cập nhật giúp bạn
+                <div className="text-sm font-semibold text-foreground leading-tight">
+                  Có file Excel danh sách nguyên vật liệu? Để AI tự đọc &amp; cập nhật giúp bạn
                 </div>
-                <div className="text-xs text-violet-700/80 mt-0.5">
+                <div className="text-xs text-muted-foreground mt-0.5">
                   Hỗ trợ .xlsx / .csv — AI tự nhận diện cột mã, tên, giá vốn, ĐVT, nhóm hàng và đề xuất ánh xạ
                 </div>
               </div>
               <button
                 type="button"
                 onClick={() => setImportOpen(true)}
-                className="shrink-0 inline-flex items-center gap-1.5 h-8 px-3 rounded-md bg-gradient-to-r from-violet-600 to-fuchsia-600 text-white text-xs font-semibold shadow-sm hover:from-violet-700 hover:to-fuchsia-700 transition-colors"
+                className="shrink-0 inline-flex items-center gap-1.5 h-9 px-4 rounded-lg bg-primary text-on-primary text-xs font-semibold ambient-shadow hover:bg-primary-hover transition-colors press-scale-sm"
               >
                 <Icon name="auto_awesome" size={14} />
                 Tải file lên
@@ -727,11 +727,11 @@ export default function HangHoaPage() {
               <button
                 type="button"
                 onClick={() => setAiBannerDismissed(true)}
-                className="shrink-0 h-7 w-7 inline-flex items-center justify-center rounded-md text-violet-700/60 hover:text-violet-900 hover:bg-violet-100 transition-colors"
+                className="shrink-0 h-8 w-8 inline-flex items-center justify-center rounded-lg text-muted-foreground hover:text-foreground hover:bg-surface-container-low transition-colors"
                 aria-label="Đóng banner"
                 title="Ẩn banner"
               >
-                <Icon name="close" size={14} />
+                <Icon name="close" size={16} />
               </button>
             </div>
           </div>

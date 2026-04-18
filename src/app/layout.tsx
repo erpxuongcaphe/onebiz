@@ -1,16 +1,26 @@
 import type { Metadata } from "next";
-import { Be_Vietnam_Pro } from "next/font/google";
+import { Be_Vietnam_Pro, Inter } from "next/font/google";
 import { Providers } from "./providers";
 import { PwaHead } from "@/components/shared/pwa-head";
 import "./globals.css";
 
-// Stitch dùng Be Vietnam Pro — match 1-1 với plan.
-// Mở rộng weight 200-900 để hỗ trợ uppercase tracking-wider labels (200/300),
-// headlines displayLarge (700/800/900) per Material Design 3.
-const beVietnamPro = Be_Vietnam_Pro({
+// Stitch design spec dùng 2 font:
+//   - Inter cho body + label (clean, hiện đại, geometric sans)
+//   - Be Vietnam Pro cho headline (hỗ trợ tiếng Việt dấu mảnh, dùng cho heading lớn)
+// Trước đây codebase dùng Be Vietnam Pro cho cả 2 → body tiếng Việt glyph
+// nhìn "có chân"/dày. Stitch mockup (stitch_onebiz_ux_ui_optimization/**/code.html)
+// luôn set fontFamily.body = ["Inter"], fontFamily.headline = ["Be Vietnam Pro"].
+const inter = Inter({
   variable: "--font-sans",
   subsets: ["latin", "vietnamese"],
-  weight: ["200", "300", "400", "500", "600", "700", "800", "900"],
+  weight: ["400", "500", "600", "700"],
+  display: "swap",
+});
+
+const beVietnamPro = Be_Vietnam_Pro({
+  variable: "--font-heading",
+  subsets: ["latin", "vietnamese"],
+  weight: ["400", "500", "600", "700", "800", "900"],
   display: "swap",
 });
 
@@ -25,7 +35,10 @@ export default function RootLayout({
   children: React.ReactNode;
 }>) {
   return (
-    <html lang="vi" className={`${beVietnamPro.variable} h-full antialiased`}>
+    <html
+      lang="vi"
+      className={`${inter.variable} ${beVietnamPro.variable} h-full antialiased`}
+    >
       <head>
         <PwaHead />
         {/* Material Symbols Outlined — icon system cho Stitch UI.

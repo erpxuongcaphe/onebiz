@@ -167,14 +167,14 @@ export default function TongQuanPage() {
 
   // KPI tiles — `icon` là Material Symbols name (string). `bg`/`color` giữ semantic colors
   // (success/warning/purple/orange) ngoài primary-fixed để phân loại trực quan nhanh.
+  // Stitch KPI card spec: icon `text-primary bg-primary-fixed p-2 rounded-lg`, uppercase label,
+  // font-headline bold number. All cards dùng cùng primary palette (không rainbow) để brand-consistent.
   const kpiCards = kpis
     ? [
         {
           label: "Doanh thu",
           value: kpis.todayRevenue,
           icon: "trending_up",
-          color: "text-green-600",
-          bg: "bg-green-100",
           ...calcChange(kpis.todayRevenue, kpis.yesterdayRevenue),
           changeLabel: "vs hôm qua",
           isCurrency: true,
@@ -183,8 +183,6 @@ export default function TongQuanPage() {
           label: "Đơn hàng",
           value: kpis.todayOrders,
           icon: "shopping_cart",
-          color: "text-primary",
-          bg: "bg-primary-fixed",
           ...calcDiff(kpis.todayOrders, kpis.yesterdayOrders),
           changeLabel: "vs hôm qua",
           isCurrency: false,
@@ -193,8 +191,6 @@ export default function TongQuanPage() {
           label: "Khách hàng mới",
           value: kpis.newCustomers,
           icon: "group",
-          color: "text-purple-600",
-          bg: "bg-purple-100",
           ...calcDiff(kpis.newCustomers, kpis.yesterdayNewCustomers),
           changeLabel: "vs hôm qua",
           isCurrency: false,
@@ -203,8 +199,6 @@ export default function TongQuanPage() {
           label: "Lợi nhuận",
           value: kpis.todayProfit,
           icon: "attach_money",
-          color: "text-orange-600",
-          bg: "bg-orange-100",
           ...calcChange(kpis.todayProfit, kpis.yesterdayProfit),
           changeLabel: "vs hôm qua",
           isCurrency: true,
@@ -268,51 +262,56 @@ export default function TongQuanPage() {
         </div>
       </div>
 
-      {/* KPI Cards + Inventory Turnover */}
-      <div className="grid grid-cols-2 lg:grid-cols-5 gap-3">
+      {/* KPI Cards + Inventory Turnover — Stitch spec: rounded-xl, padding rộng,
+          icon bg-primary-fixed text-primary, uppercase label widest tracking,
+          headline font + bold number. */}
+      <div className="grid grid-cols-2 lg:grid-cols-5 gap-4">
         {kpiCards.map((kpi) => (
-          <Card key={kpi.label}>
-            <CardContent className="pt-0">
-              <div className="flex items-start justify-between">
-                <div className="space-y-1">
-                  <p className="text-xs text-muted-foreground">{kpi.label}</p>
-                  <p className="text-xl lg:text-2xl font-bold">
-                    {kpi.isCurrency ? formatCurrency(kpi.value) : kpi.value.toLocaleString("vi-VN")}
-                  </p>
-                  <p className={cn("text-[11px]", kpi.positive ? "text-green-600" : "text-red-500")}>
-                    {kpi.text}{" "}
-                    <span className="text-muted-foreground">{kpi.changeLabel}</span>
-                  </p>
-                </div>
-                <div className={cn("flex size-9 shrink-0 items-center justify-center rounded-xl", kpi.bg)}>
-                  <Icon name={kpi.icon} size={20} className={cn(kpi.color)} />
+          <Card
+            key={kpi.label}
+            className="rounded-xl border-0 ambient-shadow bg-surface-container-lowest"
+          >
+            <CardContent className="p-5">
+              <div className="flex items-start justify-between mb-3">
+                <span className="text-[11px] font-semibold uppercase tracking-[0.08em] text-muted-foreground">
+                  {kpi.label}
+                </span>
+                <div className="flex size-9 shrink-0 items-center justify-center rounded-lg bg-primary-fixed">
+                  <Icon name={kpi.icon} size={18} className="text-primary" />
                 </div>
               </div>
+              <p className="font-heading text-2xl lg:text-3xl font-extrabold tracking-tight text-foreground leading-tight">
+                {kpi.isCurrency ? formatCurrency(kpi.value) : kpi.value.toLocaleString("vi-VN")}
+              </p>
+              <p className="mt-2 text-xs text-muted-foreground">
+                <span className={cn("font-semibold", kpi.positive ? "text-status-success" : "text-status-error")}>
+                  {kpi.text}
+                </span>{" "}
+                {kpi.changeLabel}
+              </p>
             </CardContent>
           </Card>
         ))}
 
         {/* Inventory Turnover — inline as 5th card */}
-        <Card className="col-span-2 lg:col-span-1">
-          <CardContent className="pt-0">
-            <div className="flex items-start justify-between">
-              <div className="space-y-1">
-                <p className="text-xs text-muted-foreground">Vòng quay kho</p>
-                <p className="text-xl lg:text-2xl font-bold text-indigo-600">
-                  {turnover ? `${turnover.turnoverRatio.toFixed(1)}x` : "—"}
-                </p>
-                {turnover ? (
-                  <p className="text-[11px] text-muted-foreground">
-                    COGS {formatChartCurrency(turnover.totalCogsPeriod)}
-                  </p>
-                ) : (
-                  <p className="text-[11px] text-muted-foreground">Chưa có dữ liệu</p>
-                )}
-              </div>
-              <div className="flex size-9 shrink-0 items-center justify-center rounded-xl bg-indigo-100">
-                <Icon name="inventory_2" className="size-5 text-indigo-500" />
+        <Card className="col-span-2 lg:col-span-1 rounded-xl border-0 ambient-shadow bg-surface-container-lowest">
+          <CardContent className="p-5">
+            <div className="flex items-start justify-between mb-3">
+              <span className="text-[11px] font-semibold uppercase tracking-[0.08em] text-muted-foreground">
+                Vòng quay kho
+              </span>
+              <div className="flex size-9 shrink-0 items-center justify-center rounded-lg bg-primary-fixed">
+                <Icon name="autorenew" size={18} className="text-primary" />
               </div>
             </div>
+            <p className="font-heading text-2xl lg:text-3xl font-extrabold tracking-tight text-foreground leading-tight">
+              {turnover ? `${turnover.turnoverRatio.toFixed(1)}x` : "—"}
+            </p>
+            <p className="mt-2 text-xs text-muted-foreground">
+              {turnover
+                ? `COGS ${formatChartCurrency(turnover.totalCogsPeriod)}`
+                : "Chưa có dữ liệu"}
+            </p>
           </CardContent>
         </Card>
       </div>

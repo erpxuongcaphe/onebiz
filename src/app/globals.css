@@ -7,9 +7,11 @@
 @theme inline {
   --color-background: var(--background);
   --color-foreground: var(--foreground);
+  /* Stitch spec: body/label dùng Inter, heading dùng Be Vietnam Pro.
+     Variable `--font-sans` = Inter (từ layout.tsx), `--font-heading` = Be Vietnam Pro. */
   --font-sans: var(--font-sans);
   --font-mono: var(--font-geist-mono);
-  --font-heading: var(--font-sans);
+  --font-heading: var(--font-heading);
 
   /* Stitch (Material Design 3) surface-container scale.
      Dùng cho các trang mới build theo Stitch style:
@@ -348,8 +350,26 @@
   }
   body {
     @apply bg-background text-foreground;
+    /* Render Inter với AA tối ưu — Stitch cần nét mảnh, hiện đại.
+       font-feature-settings bật "cv11" (curly tail 'l') + "ss01" (open 'a')
+       theo Inter variable spec để text nhìn sạch hơn. */
+    -webkit-font-smoothing: antialiased;
+    -moz-osx-font-smoothing: grayscale;
+    text-rendering: optimizeLegibility;
+    font-feature-settings: "cv11", "ss01", "ss03";
+    font-variant-ligatures: common-ligatures;
+    letter-spacing: -0.003em;
   }
   html {
     @apply font-sans;
+  }
+  /* Headline utility — dùng cho page title, KPI numbers, section heading.
+     Áp dụng qua class .font-heading hoặc Tailwind utility font-heading. */
+  .font-heading,
+  h1.font-heading,
+  h2.font-heading,
+  h3.font-heading {
+    font-family: var(--font-heading), var(--font-sans), ui-sans-serif, system-ui, sans-serif;
+    letter-spacing: -0.02em;
   }
 }
