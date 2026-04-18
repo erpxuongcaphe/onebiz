@@ -3,13 +3,22 @@
 import { useCallback, useEffect, useState } from "react";
 import Link from "next/link";
 import { Button } from "@/components/ui/button";
+import { Input } from "@/components/ui/input";
 import { PageHeader } from "@/components/shared/page-header";
 import { Icon } from "@/components/ui/icon";
+import { ConfirmDialog } from "@/components/shared/dialogs/confirm-dialog";
+import { CreateKpiBreakdownDialog } from "@/components/shared/dialogs/create-kpi-breakdown-dialog";
+import { CreateAgentTaskDialog } from "@/components/shared/dialogs/create-agent-task-dialog";
 import { formatCurrency, formatNumber } from "@/lib/format";
-import { getKpiBreakdownTree } from "@/lib/services";
+import {
+  deleteKpiBreakdown,
+  getKpiBreakdownTree,
+  updateKpiActual,
+} from "@/lib/services";
 import {
   KPI_PERIOD_LABELS,
   KPI_TYPE_LABELS,
+  type KpiBreakdown,
   type KpiBreakdownTreeNode,
   type KpiPeriod,
 } from "@/lib/types/ai-agents";
@@ -36,9 +45,19 @@ function formatKpiValue(node: KpiBreakdownTreeNode, value: number): string {
 function KpiNode({
   node,
   depth = 0,
+  onBreakdown,
+  onUpdateActual,
+  onCreateTask,
+  onDelete,
+  busy,
 }: {
   node: KpiBreakdownTreeNode;
   depth?: number;
+  onBreakdown: (node: KpiBreakdown) => void;
+  onUpdateActual: (node: KpiBreakdown) => void;
+  onCreateTask: (node: KpiBreakdown) => void;
+  onDelete: (node: KpiBreakdown) => void;
+  busy: boolean;
 }) {
   const pct = progressPct(node.actualValue, node.targetValue);
   const tone =
@@ -72,7 +91,7 @@ function KpiNode({
   return (
     <div>
       <div
-        className="rounded-xl bg-surface-container-lowest ambient-shadow border border-border p-4 mb-2"
+        className="rounded-xl bg-surface-container-lowest ambient-shadow border border-border p-4 mb-2 group"
         style={{ marginLeft: `${depth * 16}px` }}
       >
         <div className="flex items-start justify-between gap-3 mb-2">
@@ -122,16 +141,142 @@ function KpiNode({
             style={{ width: `${Math.max(pct, 2)}%` }}
           />
         </div>
+
+        {/* Action row — always visible mobile, hover-reveal desktop */}
+        <div className="flex flex-wrap items-center gap-1 mt-3 pt-3 border-t border-border/60 sm:opacity-0 sm:group-hover:opacity-100 sm:transition-opacity">
+          <Button
+            size="xs"
+            variant="ghost"
+            disabled={busy}
+            onClick={() => onBreakdown(node)}
+          >
+            <Icon name="account_tree" size={12} />
+            <span className="ml-1">Tạo KPI con</span>
+          </Button>
+          <Button
+            size="xs"
+            variant="ghost"
+            disabled={busy}
+            onClick={() => onUpdateActual(node)}
+          >
+            <Icon name="edit" size={12} />
+            <span className="ml-1">Cập nhật thực tế</span>
+          </Button>
+          <Button
+            size="xs"
+            variant="ghost"
+            disabled={busy}
+            onClick={() => onCreateTask(node)}
+          >
+            <Icon name="add_task" size={12} />
+            <span className="ml-1">Tạo task</span>
+          </Button>
+          <Button
+            size="xs"
+            variant="ghost"
+            disabled={busy}
+            onClick={() => onDelete(node)}
+            className="ml-auto text-status-error hover:text-status-error"
+          >
+            <Icon name="delete" size={12} />
+            <span className="ml-1">Xoá</span>
+          </Button>
+        </div>
       </div>
 
       {node.children.length > 0 && (
         <div className="border-l-2 border-border/40 ml-3 pl-2">
           {node.children.map((child) => (
-            <KpiNode key={child.id} node={child} depth={depth + 1} />
+            <KpiNode
+              key={child.id}
+              node={child}
+              depth={depth + 1}
+              onBreakdown={onBreakdown}
+              onUpdateActual={onUpdateActual}
+              onCreateTask={onCreateTask}
+              onDelete={onDelete}
+              busy={busy}
+            />
           ))}
         </div>
       )}
     </div>
+  );
+}
+
+// ────────────────────────────────────────────
+// Update-actual inline dialog (simple prompt-style)
+// ────────────────────────────────────────────
+function UpdateActualDialog({
+  open,
+  onOpenChange,
+  kpi,
+  onSaved,
+}: {
+  open: boolean;
+  onOpenChange: (o: boolean) => void;
+  kpi: KpiBreakdown | null;
+  onSaved: () => void;
+}) {
+  const { toast } = useToast();
+  const [value, setValue] = useState("");
+  const [saving, setSaving] = useState(false);
+
+  useEffect(() => {
+    if (open && kpi) setValue(String(kpi.actualValue ?? 0));
+  }, [open, kpi]);
+
+  const handleSave = async () => {
+    if (!kpi) return;
+    const v = Number(value);
+    if (!Number.isFinite(v) || v < 0) {
+      toast({ title: "Giá trị không hợp lệ", variant: "error" });
+      return;
+    }
+    setSaving(true);
+    try {
+      await updateKpiActual(kpi.id, v);
+      toast({ title: "Đã cập nhật thực tế", variant: "success" });
+      onOpenChange(false);
+      onSaved();
+    } catch (err) {
+      toast({
+        title: err instanceof Error ? err.message : "Lỗi cập nhật",
+        variant: "error",
+      });
+    } finally {
+      setSaving(false);
+    }
+  };
+
+  return (
+    <ConfirmDialog
+      open={open}
+      onOpenChange={onOpenChange}
+      title="Cập nhật giá trị thực tế"
+      description={
+        <div className="space-y-3">
+          <p className="text-sm text-muted-foreground">
+            KPI: <span className="font-semibold">{kpi?.kpiName}</span>
+            {kpi?.unit && (
+              <span className="text-muted-foreground"> ({kpi.unit})</span>
+            )}
+          </p>
+          <Input
+            type="number"
+            inputMode="numeric"
+            value={value}
+            onChange={(e) => setValue(e.target.value)}
+            placeholder="0"
+            autoFocus
+          />
+        </div>
+      }
+      confirmLabel="Lưu"
+      cancelLabel="Huỷ"
+      loading={saving}
+      onConfirm={handleSave}
+    />
   );
 }
 
@@ -142,6 +287,21 @@ export default function KpiBreakdownPage() {
   const { toast } = useToast();
   const [loading, setLoading] = useState(true);
   const [tree, setTree] = useState<KpiBreakdownTreeNode[]>([]);
+  const [busy, setBusy] = useState(false);
+
+  // Dialog state
+  const [kpiDialogOpen, setKpiDialogOpen] = useState(false);
+  const [parentKpi, setParentKpi] = useState<KpiBreakdown | null>(null);
+
+  const [taskDialogOpen, setTaskDialogOpen] = useState(false);
+  const [taskKpi, setTaskKpi] = useState<KpiBreakdown | null>(null);
+
+  const [actualDialogOpen, setActualDialogOpen] = useState(false);
+  const [actualKpi, setActualKpi] = useState<KpiBreakdown | null>(null);
+
+  const [deleteOpen, setDeleteOpen] = useState(false);
+  const [deleteKpi, setDeleteKpi] = useState<KpiBreakdown | null>(null);
+  const [deleting, setDeleting] = useState(false);
 
   const load = useCallback(async () => {
     setLoading(true);
@@ -161,6 +321,49 @@ export default function KpiBreakdownPage() {
   useEffect(() => {
     load();
   }, [load]);
+
+  const openCreateRoot = () => {
+    setParentKpi(null);
+    setKpiDialogOpen(true);
+  };
+
+  const openCreateChild = (node: KpiBreakdown) => {
+    setParentKpi(node);
+    setKpiDialogOpen(true);
+  };
+
+  const openUpdateActual = (node: KpiBreakdown) => {
+    setActualKpi(node);
+    setActualDialogOpen(true);
+  };
+
+  const openCreateTask = (node: KpiBreakdown) => {
+    setTaskKpi(node);
+    setTaskDialogOpen(true);
+  };
+
+  const openDelete = (node: KpiBreakdown) => {
+    setDeleteKpi(node);
+    setDeleteOpen(true);
+  };
+
+  const handleDelete = async () => {
+    if (!deleteKpi) return;
+    setDeleting(true);
+    try {
+      await deleteKpiBreakdown(deleteKpi.id);
+      toast({ title: "Đã xoá KPI", variant: "success" });
+      setDeleteOpen(false);
+      await load();
+    } catch (err) {
+      toast({
+        title: err instanceof Error ? err.message : "Lỗi xoá KPI",
+        variant: "error",
+      });
+    } finally {
+      setDeleting(false);
+    }
+  };
 
   if (loading) {
     return (
@@ -185,12 +388,19 @@ export default function KpiBreakdownPage() {
             variant: "outline",
             href: "/ai-agents",
           },
+          {
+            label: "Tạo KPI",
+            icon: <Icon name="add" size={16} />,
+            variant: "default",
+            onClick: openCreateRoot,
+          },
         ]}
       />
 
       <p className="text-sm text-muted-foreground px-1">
         Cây KPI do AI Agent tạo ra — mỗi KPI cha break down xuống các KPI
         con theo kỳ (quý/tháng/tuần/ngày) và có thể kéo xuống task cụ thể.
+        Hover vào card để thao tác.
       </p>
 
       {tree.length === 0 ? (
@@ -200,23 +410,99 @@ export default function KpiBreakdownPage() {
           </div>
           <h3 className="text-lg font-semibold mb-1">Chưa có KPI nào</h3>
           <p className="text-sm text-muted-foreground mb-6 max-w-md mx-auto">
-            Agent CEO sẽ tự đề xuất KPI tổng khi được chạy. Bạn cũng có thể
-            POST thủ công qua webhook <code className="font-mono">/api/ai-agent/kpi</code>.
+            Tạo KPI đầu tiên hoặc để agent CEO tự đề xuất KPI tổng. Bạn cũng
+            có thể POST thủ công qua webhook{" "}
+            <code className="font-mono">/api/ai-agent/kpi</code>.
           </p>
-          <Link href="/ai-agents">
-            <Button variant="default">
-              <Icon name="auto_awesome" size={16} />
-              <span className="ml-1">Chạy agent</span>
+          <div className="flex items-center justify-center gap-2">
+            <Button variant="default" onClick={openCreateRoot}>
+              <Icon name="add" size={16} />
+              <span className="ml-1">Tạo KPI đầu tiên</span>
             </Button>
-          </Link>
+            <Link href="/ai-agents">
+              <Button variant="outline">
+                <Icon name="auto_awesome" size={16} />
+                <span className="ml-1">Chạy agent</span>
+              </Button>
+            </Link>
+          </div>
         </div>
       ) : (
         <div>
           {tree.map((root) => (
-            <KpiNode key={root.id} node={root} />
+            <KpiNode
+              key={root.id}
+              node={root}
+              onBreakdown={openCreateChild}
+              onUpdateActual={openUpdateActual}
+              onCreateTask={openCreateTask}
+              onDelete={openDelete}
+              busy={busy || deleting}
+            />
           ))}
         </div>
       )}
+
+      {/* Dialogs */}
+      <CreateKpiBreakdownDialog
+        open={kpiDialogOpen}
+        onOpenChange={(o) => {
+          setKpiDialogOpen(o);
+          if (!o) setParentKpi(null);
+        }}
+        parentKpi={parentKpi}
+        onSuccess={() => {
+          setBusy(true);
+          load().finally(() => setBusy(false));
+        }}
+      />
+
+      <CreateAgentTaskDialog
+        open={taskDialogOpen}
+        onOpenChange={(o) => {
+          setTaskDialogOpen(o);
+          if (!o) setTaskKpi(null);
+        }}
+        kpiBreakdown={taskKpi}
+        onSuccess={() => {
+          toast({
+            title: "Task đã được thêm vào danh sách hàng ngày",
+            variant: "info",
+          });
+        }}
+      />
+
+      <UpdateActualDialog
+        open={actualDialogOpen}
+        onOpenChange={(o) => {
+          setActualDialogOpen(o);
+          if (!o) setActualKpi(null);
+        }}
+        kpi={actualKpi}
+        onSaved={() => {
+          setBusy(true);
+          load().finally(() => setBusy(false));
+        }}
+      />
+
+      <ConfirmDialog
+        open={deleteOpen}
+        onOpenChange={(o) => {
+          setDeleteOpen(o);
+          if (!o) setDeleteKpi(null);
+        }}
+        title="Xoá KPI"
+        description={
+          deleteKpi
+            ? `Xoá KPI "${deleteKpi.kpiName}"? Các KPI con và task gắn vào sẽ không tự động xoá theo.`
+            : ""
+        }
+        confirmLabel="Xoá"
+        cancelLabel="Huỷ"
+        variant="destructive"
+        loading={deleting}
+        onConfirm={handleDelete}
+      />
     </div>
   );
 }

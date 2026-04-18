@@ -4,7 +4,10 @@ import { useCallback, useEffect, useMemo, useState } from "react";
 import { Button } from "@/components/ui/button";
 import { PageHeader } from "@/components/shared/page-header";
 import { Icon } from "@/components/ui/icon";
+import { ConfirmDialog } from "@/components/shared/dialogs/confirm-dialog";
+import { CreateAgentTaskDialog } from "@/components/shared/dialogs/create-agent-task-dialog";
 import {
+  deleteAgentTask,
   getAgentTasks,
   updateAgentTaskStatus,
 } from "@/lib/services";
@@ -55,10 +58,12 @@ function formatDate(iso: string): string {
 function TaskRow({
   task,
   onChangeStatus,
+  onDelete,
   busy,
 }: {
   task: AgentTask;
   onChangeStatus: (id: string, status: AgentTaskStatus) => void;
+  onDelete: (task: AgentTask) => void;
   busy: boolean;
 }) {
   const tone = AGENT_TASK_STATUS_TONE[task.status];
@@ -168,6 +173,15 @@ function TaskRow({
             <span className="ml-1">Bỏ qua</span>
           </Button>
         )}
+        <Button
+          size="sm"
+          variant="ghost"
+          disabled={busy}
+          onClick={() => onDelete(task)}
+          className="ml-auto text-status-error hover:text-status-error"
+        >
+          <Icon name="delete" size={14} />
+        </Button>
       </div>
     </div>
   );
@@ -179,6 +193,12 @@ export default function AgentTasksPage() {
   const [tasks, setTasks] = useState<AgentTask[]>([]);
   const [filter, setFilter] = useState<AgentTaskStatus | "all">("all");
   const [busyId, setBusyId] = useState<string | null>(null);
+
+  // Dialog state
+  const [createOpen, setCreateOpen] = useState(false);
+  const [deleteOpen, setDeleteOpen] = useState(false);
+  const [taskToDelete, setTaskToDelete] = useState<AgentTask | null>(null);
+  const [deleting, setDeleting] = useState(false);
 
   const load = useCallback(async () => {
     setLoading(true);
@@ -212,6 +232,30 @@ export default function AgentTasksPage() {
       });
     } finally {
       setBusyId(null);
+    }
+  };
+
+  const openDelete = (task: AgentTask) => {
+    setTaskToDelete(task);
+    setDeleteOpen(true);
+  };
+
+  const handleDelete = async () => {
+    if (!taskToDelete) return;
+    setDeleting(true);
+    try {
+      await deleteAgentTask(taskToDelete.id);
+      toast({ title: "Đã xoá task", variant: "success" });
+      setDeleteOpen(false);
+      setTaskToDelete(null);
+      await load();
+    } catch (err) {
+      toast({
+        title: err instanceof Error ? err.message : "Lỗi xoá task",
+        variant: "error",
+      });
+    } finally {
+      setDeleting(false);
     }
   };
 
@@ -251,6 +295,12 @@ export default function AgentTasksPage() {
             variant: "outline",
             href: "/ai-agents",
           },
+          {
+            label: "Tạo task",
+            icon: <Icon name="add" size={16} />,
+            variant: "default",
+            onClick: () => setCreateOpen(true),
+          },
         ]}
       />
 
@@ -286,10 +336,17 @@ export default function AgentTasksPage() {
           <h3 className="text-lg font-semibold mb-1">
             {filter === "all" ? "Chưa có task nào" : "Không có task ở trạng thái này"}
           </h3>
-          <p className="text-sm text-muted-foreground max-w-md mx-auto">
-            AI Agent HR sẽ tự tạo task từ KPI. Bạn cũng có thể POST qua
-            webhook <code className="font-mono">/api/ai-agent/task</code>.
+          <p className="text-sm text-muted-foreground max-w-md mx-auto mb-6">
+            AI Agent HR sẽ tự tạo task từ KPI. Bạn cũng có thể tạo task thủ
+            công hoặc POST qua webhook{" "}
+            <code className="font-mono">/api/ai-agent/task</code>.
           </p>
+          {filter === "all" && (
+            <Button onClick={() => setCreateOpen(true)}>
+              <Icon name="add" size={16} />
+              <span className="ml-1">Tạo task đầu tiên</span>
+            </Button>
+          )}
         </div>
       ) : (
         <div className="grid gap-3">
@@ -298,11 +355,40 @@ export default function AgentTasksPage() {
               key={t.id}
               task={t}
               onChangeStatus={handleChangeStatus}
+              onDelete={openDelete}
               busy={busyId === t.id}
             />
           ))}
         </div>
       )}
+
+      {/* Dialogs */}
+      <CreateAgentTaskDialog
+        open={createOpen}
+        onOpenChange={setCreateOpen}
+        onSuccess={() => {
+          load();
+        }}
+      />
+
+      <ConfirmDialog
+        open={deleteOpen}
+        onOpenChange={(o) => {
+          setDeleteOpen(o);
+          if (!o) setTaskToDelete(null);
+        }}
+        title="Xoá task"
+        description={
+          taskToDelete
+            ? `Xoá task "${taskToDelete.title}"? Thao tác không thể hoàn tác.`
+            : ""
+        }
+        confirmLabel="Xoá"
+        cancelLabel="Huỷ"
+        variant="destructive"
+        loading={deleting}
+        onConfirm={handleDelete}
+      />
     </div>
   );
 }
