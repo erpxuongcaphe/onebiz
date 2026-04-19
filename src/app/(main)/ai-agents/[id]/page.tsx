@@ -11,20 +11,30 @@ import { Checkbox } from "@/components/ui/checkbox";
 import { PageHeader } from "@/components/shared/page-header";
 import { Icon } from "@/components/ui/icon";
 import { ConfirmDialog } from "@/components/shared/dialogs/confirm-dialog";
+import { EditPlaybookRuleDialog } from "@/components/shared/dialogs/edit-playbook-rule-dialog";
 import {
   deleteAgent,
   getAgentById,
   getAgentExecutions,
   triggerAgent,
   updateAgent,
+  getPlaybookRules,
+  savePlaybookRules,
+  runPlaybookForAgent,
+  defaultPlaybookForRole,
 } from "@/lib/services";
 import {
   AGENT_EXECUTION_STATUS_LABELS,
   AGENT_ROLE_ICONS,
   AGENT_ROLE_LABELS,
+  AGENT_TASK_PRIORITY_LABELS,
+  KPI_PERIOD_LABELS,
+  KPI_TYPE_LABELS,
+  PLAYBOOK_TRIGGER_LABELS,
   type Agent,
   type AgentExecution,
   type AgentRole,
+  type PlaybookRule,
 } from "@/lib/types/ai-agents";
 import { useToast } from "@/lib/contexts";
 import type { ToastVariant } from "@/lib/contexts/toast-context";
@@ -202,6 +212,14 @@ export default function AgentDetailPage() {
   const [deleteOpen, setDeleteOpen] = useState(false);
   const [deleting, setDeleting] = useState(false);
 
+  // Playbook state (Sprint AI-2)
+  const [playbookRules, setPlaybookRules] = useState<PlaybookRule[]>([]);
+  const [playbookDialogOpen, setPlaybookDialogOpen] = useState(false);
+  const [editingRule, setEditingRule] = useState<PlaybookRule | null>(null);
+  const [runningPlaybook, setRunningPlaybook] = useState(false);
+  const [savingRules, setSavingRules] = useState(false);
+  const [deletingRuleId, setDeletingRuleId] = useState<string | null>(null);
+
   const load = useCallback(async () => {
     if (!params.id) return;
     setLoading(true);
@@ -225,6 +243,7 @@ export default function AgentDetailPage() {
       setPromptTemplate(a.promptTemplate ?? "");
       setConfigJson(JSON.stringify(a.config ?? {}, null, 2));
       setIsActive(a.isActive);
+      setPlaybookRules(getPlaybookRules(a));
     } catch (err) {
       notify(err instanceof Error ? err.message : "Lỗi tải agent", "error");
     } finally {
@@ -326,6 +345,123 @@ export default function AgentDetailPage() {
     }
   };
 
+  // ─── Playbook handlers (Sprint AI-2) ───
+  const persistRules = async (nextRules: PlaybookRule[]) => {
+    if (!agent) return;
+    setSavingRules(true);
+    try {
+      await savePlaybookRules(agent.id, nextRules);
+      setPlaybookRules(nextRules);
+      // Cập nhật lại configJson trong form để đồng bộ với playbook vừa lưu
+      setConfigJson(
+        JSON.stringify(
+          { ...(agent.config ?? {}), playbook: nextRules },
+          null,
+          2,
+        ),
+      );
+    } catch (err) {
+      notify(err instanceof Error ? err.message : "Lỗi lưu rule", "error");
+      throw err;
+    } finally {
+      setSavingRules(false);
+    }
+  };
+
+  const handleOpenAddRule = () => {
+    setEditingRule(null);
+    setPlaybookDialogOpen(true);
+  };
+
+  const handleOpenEditRule = (rule: PlaybookRule) => {
+    setEditingRule(rule);
+    setPlaybookDialogOpen(true);
+  };
+
+  const handleSaveRule = async (rule: PlaybookRule) => {
+    const existingIdx = playbookRules.findIndex((r) => r.id === rule.id);
+    const next =
+      existingIdx >= 0
+        ? playbookRules.map((r, i) => (i === existingIdx ? rule : r))
+        : [...playbookRules, rule];
+    try {
+      await persistRules(next);
+      notify(
+        existingIdx >= 0 ? "Đã cập nhật rule" : "Đã thêm rule mới",
+        "success",
+      );
+    } catch {
+      /* already notified */
+    }
+  };
+
+  const handleDeleteRule = async (ruleId: string) => {
+    setDeletingRuleId(ruleId);
+    try {
+      const next = playbookRules.filter((r) => r.id !== ruleId);
+      await persistRules(next);
+      notify("Đã xoá rule", "success");
+    } catch {
+      /* already notified */
+    } finally {
+      setDeletingRuleId(null);
+    }
+  };
+
+  const handleToggleRule = async (ruleId: string) => {
+    const next = playbookRules.map((r) =>
+      r.id === ruleId ? { ...r, enabled: !r.enabled } : r,
+    );
+    try {
+      await persistRules(next);
+    } catch {
+      /* already notified */
+    }
+  };
+
+  const handleSeedDefaults = async () => {
+    const seeds = defaultPlaybookForRole(role);
+    if (seeds.length === 0) {
+      notify(
+        `Chưa có preset mặc định cho vai trò "${AGENT_ROLE_LABELS[role]}"`,
+        "default",
+      );
+      return;
+    }
+    // Gộp với rule hiện tại (không xoá cái cũ)
+    const next = [...playbookRules, ...seeds];
+    try {
+      await persistRules(next);
+      notify(`Đã thêm ${seeds.length} rule mẫu`, "success");
+    } catch {
+      /* already notified */
+    }
+  };
+
+  const handleRunPlaybook = async () => {
+    if (!agent) return;
+    if (playbookRules.filter((r) => r.enabled).length === 0) {
+      notify("Chưa có rule nào đang bật để chạy", "warning");
+      return;
+    }
+    setRunningPlaybook(true);
+    try {
+      const result = await runPlaybookForAgent(agent);
+      const msg =
+        `Đã tạo ${result.tasksCreated} task · bỏ qua ${result.skipped}` +
+        ` · quét ${result.kpisScanned} KPI với ${result.rulesEvaluated} rule`;
+      notify(msg, result.tasksCreated > 0 ? "success" : "default");
+      await load();
+    } catch (err) {
+      notify(
+        err instanceof Error ? err.message : "Lỗi chạy playbook",
+        "error",
+      );
+    } finally {
+      setRunningPlaybook(false);
+    }
+  };
+
   const copyWebhookExample = async () => {
     const origin =
       typeof window !== "undefined" ? window.location.origin : "";
@@ -387,6 +523,19 @@ export default function AgentDetailPage() {
             icon: <Icon name="arrow_back" size={16} />,
             variant: "outline",
             href: "/ai-agents",
+          },
+          {
+            label: runningPlaybook ? "Đang chạy playbook..." : "Chạy playbook",
+            icon: (
+              <Icon
+                name={runningPlaybook ? "progress_activity" : "play_circle"}
+                size={16}
+                className={runningPlaybook ? "animate-spin" : ""}
+              />
+            ),
+            variant: "outline",
+            onClick: handleRunPlaybook,
+            disabled: runningPlaybook || playbookRules.length === 0,
           },
           {
             label: triggering ? "Đang chạy..." : "Chạy thử",
@@ -584,6 +733,186 @@ export default function AgentDetailPage() {
             />
           </section>
 
+          {/* Playbook (Sprint AI-2) */}
+          <section className="bg-surface-container-lowest rounded-xl ambient-shadow border border-border p-5 space-y-4">
+            <div className="flex items-center justify-between gap-2 flex-wrap">
+              <div>
+                <h3 className="font-semibold flex items-center gap-2">
+                  <Icon
+                    name="rule"
+                    size={18}
+                    className="text-primary"
+                  />
+                  Playbook rules
+                  <span className="text-xs text-muted-foreground font-normal">
+                    ({playbookRules.length})
+                  </span>
+                </h3>
+                <p className="text-xs text-muted-foreground mt-0.5">
+                  Rule = điều kiện trigger + task tự tạo. Dùng &ldquo;Chạy
+                  playbook&rdquo; để quét tất cả KPI và tạo task phù hợp.
+                </p>
+              </div>
+              <div className="flex flex-wrap gap-2">
+                <Button
+                  size="sm"
+                  variant="outline"
+                  onClick={handleSeedDefaults}
+                  disabled={savingRules}
+                  title={`Thêm preset mặc định cho vai trò ${AGENT_ROLE_LABELS[role]}`}
+                >
+                  <Icon name="auto_awesome" size={14} className="mr-1" />
+                  Thêm preset mẫu
+                </Button>
+                <Button size="sm" onClick={handleOpenAddRule} disabled={savingRules}>
+                  <Icon name="add" size={14} className="mr-1" />
+                  Thêm rule
+                </Button>
+              </div>
+            </div>
+
+            {playbookRules.length === 0 ? (
+              <div className="text-center py-8 border border-dashed border-border rounded-xl text-sm text-muted-foreground">
+                <Icon
+                  name="playlist_add"
+                  size={28}
+                  className="mx-auto mb-2 opacity-50"
+                />
+                <div>Chưa có rule nào</div>
+                <div className="text-xs mt-1">
+                  Thêm rule để agent tự sinh task khi KPI chạm điều kiện
+                </div>
+              </div>
+            ) : (
+              <ul className="space-y-2">
+                {playbookRules.map((rule) => (
+                  <li
+                    key={rule.id}
+                    className={`rounded-xl border p-3 transition-colors ${
+                      rule.enabled
+                        ? "bg-surface-container-lowest border-border"
+                        : "bg-surface-container/40 border-border/60 opacity-70"
+                    }`}
+                  >
+                    <div className="flex items-start gap-3">
+                      <button
+                        type="button"
+                        onClick={() => handleToggleRule(rule.id)}
+                        disabled={savingRules}
+                        title={rule.enabled ? "Tắt rule" : "Bật rule"}
+                        className={`mt-0.5 size-8 rounded-lg flex items-center justify-center shrink-0 press-scale-sm transition-colors ${
+                          rule.enabled
+                            ? "bg-status-success/10 text-status-success hover:bg-status-success/20"
+                            : "bg-surface-container-high text-muted-foreground hover:bg-surface-container-highest"
+                        }`}
+                      >
+                        <Icon
+                          name={rule.enabled ? "toggle_on" : "toggle_off"}
+                          size={20}
+                        />
+                      </button>
+
+                      <div className="min-w-0 flex-1">
+                        <div className="flex items-center gap-2 flex-wrap">
+                          <span className="font-medium text-sm">
+                            {rule.name || "(chưa đặt tên)"}
+                          </span>
+                          <span className="text-[10px] uppercase tracking-wider font-semibold rounded-full px-2 py-0.5 bg-primary-fixed text-primary">
+                            {PLAYBOOK_TRIGGER_LABELS[rule.trigger]}
+                          </span>
+                          <span
+                            className={`text-[10px] uppercase tracking-wider font-semibold rounded-full px-2 py-0.5 ${
+                              rule.action.priority === "urgent"
+                                ? "bg-status-error/10 text-status-error"
+                                : rule.action.priority === "high"
+                                  ? "bg-status-warning/10 text-status-warning"
+                                  : rule.action.priority === "low"
+                                    ? "bg-surface-container-high text-muted-foreground"
+                                    : "bg-status-info/10 text-status-info"
+                            }`}
+                          >
+                            {AGENT_TASK_PRIORITY_LABELS[rule.action.priority]}
+                          </span>
+                        </div>
+
+                        <div className="text-xs text-muted-foreground mt-1 space-y-0.5">
+                          <div className="flex items-center gap-1 flex-wrap">
+                            <Icon name="filter_alt" size={12} />
+                            <span>
+                              {rule.kpiTypes.length === 0
+                                ? "Tất cả loại KPI"
+                                : rule.kpiTypes
+                                    .map((t) => KPI_TYPE_LABELS[t])
+                                    .join(", ")}
+                            </span>
+                            <span className="mx-1 opacity-40">·</span>
+                            <span>
+                              {rule.periods.length === 0
+                                ? "Tất cả kỳ"
+                                : rule.periods
+                                    .map((p) => KPI_PERIOD_LABELS[p])
+                                    .join(", ")}
+                            </span>
+                          </div>
+                          <div className="flex items-start gap-1">
+                            <Icon
+                              name="add_task"
+                              size={12}
+                              className="mt-0.5 shrink-0"
+                            />
+                            <span className="line-clamp-2 font-mono text-[11px]">
+                              {rule.action.titleTemplate ||
+                                "(chưa có tiêu đề task)"}
+                            </span>
+                          </div>
+                          {rule.action.assignedToRole && (
+                            <div className="flex items-center gap-1">
+                              <Icon name="person" size={12} />
+                              <span>
+                                Giao cho role: {rule.action.assignedToRole}
+                              </span>
+                            </div>
+                          )}
+                        </div>
+                      </div>
+
+                      <div className="flex items-center gap-1 shrink-0">
+                        <Button
+                          size="icon-sm"
+                          variant="ghost"
+                          onClick={() => handleOpenEditRule(rule)}
+                          title="Sửa rule"
+                          disabled={savingRules}
+                        >
+                          <Icon name="edit" size={14} />
+                        </Button>
+                        <Button
+                          size="icon-sm"
+                          variant="ghost"
+                          onClick={() => handleDeleteRule(rule.id)}
+                          title="Xoá rule"
+                          disabled={savingRules || deletingRuleId === rule.id}
+                        >
+                          <Icon
+                            name={
+                              deletingRuleId === rule.id
+                                ? "progress_activity"
+                                : "delete"
+                            }
+                            size={14}
+                            className={
+                              deletingRuleId === rule.id ? "animate-spin" : ""
+                            }
+                          />
+                        </Button>
+                      </div>
+                    </div>
+                  </li>
+                ))}
+              </ul>
+            )}
+          </section>
+
           {/* Config JSON */}
           <section className="bg-surface-container-lowest rounded-xl ambient-shadow border border-border p-5 space-y-3">
             <h3 className="font-semibold flex items-center gap-2">
@@ -592,6 +921,8 @@ export default function AgentDetailPage() {
             </h3>
             <p className="text-xs text-muted-foreground">
               Cấu hình riêng cho agent — VD model, temperature, threshold...
+              Playbook được quản lý ở mục trên; field <code>playbook</code> ở
+              đây chỉ đọc.
             </p>
             <Textarea
               value={configJson}
@@ -675,6 +1006,13 @@ export default function AgentDetailPage() {
         variant="destructive"
         loading={deleting}
         onConfirm={handleDelete}
+      />
+
+      <EditPlaybookRuleDialog
+        open={playbookDialogOpen}
+        onOpenChange={setPlaybookDialogOpen}
+        initialRule={editingRule}
+        onSave={handleSaveRule}
       />
     </div>
   );

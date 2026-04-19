@@ -13,6 +13,7 @@ import {
   getKpiBreakdowns,
   seedDefaultAgents,
   triggerAgent,
+  runAllPlaybooks,
 } from "@/lib/services";
 import {
   AGENT_ROLE_ICONS,
@@ -160,6 +161,7 @@ export default function AiAgentsPage() {
   const [executions, setExecutions] = useState<AgentExecution[]>([]);
   const [triggeringId, setTriggeringId] = useState<string | null>(null);
   const [seeding, setSeeding] = useState(false);
+  const [runningAll, setRunningAll] = useState(false);
   const [kpiCount, setKpiCount] = useState(0);
   const [taskCount, setTaskCount] = useState(0);
   const [pendingTaskCount, setPendingTaskCount] = useState(0);
@@ -205,6 +207,32 @@ export default function AiAgentsPage() {
       notify(err instanceof Error ? err.message : "Lỗi tạo agent", "error");
     } finally {
       setSeeding(false);
+    }
+  };
+
+  const handleRunAllPlaybooks = async () => {
+    setRunningAll(true);
+    try {
+      const results = await runAllPlaybooks();
+      if (results.length === 0) {
+        notify("Không có agent nào có playbook đang bật", "warning");
+        return;
+      }
+      const totalCreated = results.reduce((s, r) => s + r.tasksCreated, 0);
+      const totalSkipped = results.reduce((s, r) => s + r.skipped, 0);
+      const totalScanned = results.reduce((s, r) => s + r.kpisScanned, 0);
+      notify(
+        `Đã tạo ${totalCreated} task từ ${results.length} agent · bỏ qua ${totalSkipped} · quét ${totalScanned} KPI`,
+        totalCreated > 0 ? "success" : "default",
+      );
+      await loadData();
+    } catch (err) {
+      notify(
+        err instanceof Error ? err.message : "Lỗi chạy playbook",
+        "error",
+      );
+    } finally {
+      setRunningAll(false);
     }
   };
 
@@ -286,6 +314,25 @@ export default function AiAgentsPage() {
             variant: "outline" as const,
             href: "/ai-agents/tasks",
           },
+          ...(agents.length > 0
+            ? [
+                {
+                  label: runningAll
+                    ? "Đang chạy playbook..."
+                    : "Chạy tất cả playbook",
+                  icon: (
+                    <Icon
+                      name={runningAll ? "progress_activity" : "play_circle"}
+                      size={16}
+                      className={runningAll ? "animate-spin" : ""}
+                    />
+                  ),
+                  variant: "default" as const,
+                  onClick: handleRunAllPlaybooks,
+                  disabled: runningAll,
+                },
+              ]
+            : []),
         ]}
       />
       <p className="text-sm text-muted-foreground px-1">

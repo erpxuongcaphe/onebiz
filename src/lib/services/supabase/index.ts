@@ -239,3 +239,13 @@ export type {
   BreakdownStrategy,
   BranchDistribution,
 } from "./kpi-engine";
+
+// Playbook Engine — Rule-based task auto-generation (Sprint AI-2)
+export {
+  evaluateRule,
+  runPlaybookForAgent,
+  runAllPlaybooks,
+  getPlaybookRules,
+  savePlaybookRules,
+  defaultPlaybookForRole,
+} from "./playbook-engine";
