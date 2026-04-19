@@ -1,14 +1,17 @@
 "use client";
 
-// ---------------------------------------------------------------------------
-// ImportDataDialog — Quick Import (M3 placeholder)
-// - Mở từ Top Header "Import dữ liệu"
-// - Phase 1: chỉ nhận file Excel/CSV và đẩy vào AI queue (mock)
-// - Phase 1.5: AI parse → preview → confirm tạo records
-// - Hiện tại chỉ là khung UI để verify Header v2
-// ---------------------------------------------------------------------------
+/**
+ * ImportHubDialog — Trung tâm nhập dữ liệu Excel
+ *
+ * Thay thế ImportDataDialog cũ (AI placeholder) bằng hub schema-based:
+ *  - Hiển thị 6 module có hỗ trợ import (Products, Customers, Suppliers,
+ *    Initial Stock, Debt Opening, Cash Transactions).
+ *  - User tải file mẫu trực tiếp, hoặc bấm "Mở trang nhập" để đi vào
+ *    module tương ứng và sử dụng ImportExcelDialog ngay tại context đó.
+ *  - Giữ nguyên tên export `ImportDataDialog` để không phá top-nav binding.
+ */
 
-import { useState, type ChangeEvent } from "react";
+import { useRouter } from "next/navigation";
 import {
   Dialog,
   DialogContent,
@@ -16,117 +19,164 @@ import {
   DialogDescription,
 } from "@/components/ui/dialog";
 import { Button } from "@/components/ui/button";
-import { cn } from "@/lib/utils";
 import { Icon } from "@/components/ui/icon";
+import { downloadTemplate } from "@/lib/excel";
+import {
+  productExcelSchema,
+  customerExcelSchema,
+  supplierExcelSchema,
+  cashTransactionExcelSchema,
+  debtOpeningExcelSchema,
+  initialStockExcelSchema,
+} from "@/lib/excel/schemas";
+import type { ExcelSchema } from "@/lib/excel";
 
 interface ImportDataDialogProps {
   open: boolean;
   onOpenChange: (open: boolean) => void;
 }
 
+interface ImportModule {
+  id: string;
+  title: string;
+  icon: string;
+  description: string;
+  href: string;
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  schema: ExcelSchema<any>;
+}
+
+const IMPORT_MODULES: ImportModule[] = [
+  {
+    id: "products",
+    title: "Sản phẩm",
+    icon: "inventory_2",
+    description: "Tạo SP mới / cập nhật giá theo lô. Hỗ trợ NVL và SKU.",
+    href: "/hang-hoa",
+    schema: productExcelSchema,
+  },
+  {
+    id: "customers",
+    title: "Khách hàng",
+    icon: "group",
+    description: "Import database khách từ file cũ (tên, SĐT, email, nhóm).",
+    href: "/khach-hang",
+    schema: customerExcelSchema,
+  },
+  {
+    id: "suppliers",
+    title: "Nhà cung cấp",
+    icon: "local_shipping",
+    description: "Danh sách NCC (mã, tên, SĐT, mã số thuế, liên hệ).",
+    href: "/hang-hoa/nha-cung-cap",
+    schema: supplierExcelSchema,
+  },
+  {
+    id: "initial-stock",
+    title: "Tồn kho đầu kỳ",
+    icon: "warehouse",
+    description: "Khởi tạo tồn kho khi mở chi nhánh mới / chốt kiểm kê.",
+    href: "/hang-hoa/ton-kho",
+    schema: initialStockExcelSchema,
+  },
+  {
+    id: "debt-opening",
+    title: "Công nợ đầu kỳ",
+    icon: "receipt_long",
+    description: "Số dư nợ KH / NCC tại thời điểm bắt đầu dùng hệ thống.",
+    href: "/tai-chinh/cong-no",
+    schema: debtOpeningExcelSchema,
+  },
+  {
+    id: "cash-transactions",
+    title: "Giao dịch sổ quỹ",
+    icon: "account_balance_wallet",
+    description: "Nhập phiếu thu / phiếu chi từ data của tháng cũ.",
+    href: "/so-quy",
+    schema: cashTransactionExcelSchema,
+  },
+];
+
 export function ImportDataDialog({ open, onOpenChange }: ImportDataDialogProps) {
-  const [file, setFile] = useState<File | null>(null);
-  const [dragOver, setDragOver] = useState(false);
+  const router = useRouter();
 
-  const handleFileSelect = (e: ChangeEvent<HTMLInputElement>) => {
-    const f = e.target.files?.[0];
-    if (f) setFile(f);
-  };
+  const close = () => onOpenChange(false);
 
-  const handleDrop = (e: React.DragEvent<HTMLDivElement>) => {
-    e.preventDefault();
-    setDragOver(false);
-    const f = e.dataTransfer.files?.[0];
-    if (f) setFile(f);
-  };
-
-  const handleClose = () => {
-    setFile(null);
-    onOpenChange(false);
+  const goToModule = (href: string) => {
+    close();
+    router.push(href);
   };
 
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
-      <DialogContent className="sm:max-w-lg">
+      <DialogContent className="sm:max-w-3xl">
         <div className="flex items-start gap-3">
           <div className="h-10 w-10 rounded-lg bg-primary/10 text-primary flex items-center justify-center shrink-0">
-            <Icon name="upload" />
+            <Icon name="cloud_upload" />
           </div>
           <div className="flex-1 min-w-0">
-            <DialogTitle>Import dữ liệu cho AI</DialogTitle>
+            <DialogTitle>Trung tâm nhập dữ liệu Excel</DialogTitle>
             <DialogDescription className="mt-1">
-              Tải file Excel / CSV để AI phân tích và tự động cập nhật vào hệ thống.
+              Tải file mẫu để nhập chuẩn định dạng. File mẫu & file xuất dùng
+              cùng 1 schema — chỉnh sửa rồi upload lại vẫn đủ cột.
             </DialogDescription>
           </div>
         </div>
 
-        <div
-          onDragOver={(e) => {
-            e.preventDefault();
-            setDragOver(true);
-          }}
-          onDragLeave={() => setDragOver(false)}
-          onDrop={handleDrop}
-          className={cn(
-            "mt-2 rounded-lg border-2 border-dashed p-6 text-center transition-colors",
-            dragOver
-              ? "border-primary bg-primary/5"
-              : "border-border bg-muted/30 hover:bg-muted/50"
-          )}
-        >
-          {file ? (
-            <div className="flex items-center justify-center gap-3">
-              <Icon name="table_view" size={32} className="text-status-success" />
-              <div className="text-left">
-                <p className="text-sm font-medium truncate max-w-[280px]">
-                  {file.name}
-                </p>
-                <p className="text-xs text-muted-foreground">
-                  {(file.size / 1024).toFixed(1)} KB
-                </p>
+        <div className="grid grid-cols-1 md:grid-cols-2 gap-3 mt-2">
+          {IMPORT_MODULES.map((m) => (
+            <div
+              key={m.id}
+              className="border rounded-lg p-3 bg-background hover:border-primary/40 transition-colors"
+            >
+              <div className="flex items-start gap-2.5 mb-2">
+                <div className="h-9 w-9 rounded-md bg-primary-fixed text-primary flex items-center justify-center shrink-0">
+                  <Icon name={m.icon} size={18} />
+                </div>
+                <div className="flex-1 min-w-0">
+                  <p className="font-semibold text-sm leading-tight">
+                    {m.title}
+                  </p>
+                  <p className="text-[11px] text-muted-foreground leading-snug mt-0.5">
+                    {m.description}
+                  </p>
+                </div>
               </div>
-              <button
-                type="button"
-                onClick={() => setFile(null)}
-                className="ml-2 h-6 w-6 rounded-md hover:bg-muted flex items-center justify-center"
-                aria-label="Xóa file"
-              >
-                <Icon name="close" size={16} />
-              </button>
+              <div className="flex items-center gap-1.5 mt-2">
+                <Button
+                  type="button"
+                  variant="ghost"
+                  size="sm"
+                  className="flex-1 gap-1.5"
+                  onClick={() => downloadTemplate(m.schema)}
+                >
+                  <Icon name="description" size={14} />
+                  Tải mẫu
+                </Button>
+                <Button
+                  type="button"
+                  variant="outline"
+                  size="sm"
+                  className="flex-1 gap-1.5"
+                  onClick={() => goToModule(m.href)}
+                >
+                  <Icon name="arrow_forward" size={14} />
+                  Mở trang nhập
+                </Button>
+              </div>
             </div>
-          ) : (
-            <>
-              <Icon name="upload" size={32} className="mx-auto text-muted-foreground mb-2" />
-              <p className="text-sm font-medium">Kéo thả file vào đây</p>
-              <p className="text-xs text-muted-foreground mt-1">
-                Hỗ trợ Excel (.xlsx, .xls) và CSV
-              </p>
-              <label className="mt-3 inline-flex items-center gap-2 cursor-pointer text-xs font-medium text-primary hover:underline">
-                <input
-                  type="file"
-                  accept=".xlsx,.xls,.csv"
-                  className="hidden"
-                  onChange={handleFileSelect}
-                />
-                hoặc chọn file từ máy
-              </label>
-            </>
-          )}
+          ))}
         </div>
 
-        <div className="rounded-md bg-status-warning/10 border border-status-warning/25 p-3 text-xs text-status-warning">
-          <strong>Sắp ra mắt:</strong> AI Agent sẽ tự động phát hiện schema, map cột,
-          và preview diff trước khi cập nhật. Hiện tại tính năng đang trong giai đoạn
-          phát triển — file upload chưa được xử lý.
+        <div className="rounded-md bg-primary-fixed/40 border border-primary-fixed-dim p-2.5 text-[11px] text-foreground/80 leading-snug">
+          <strong className="text-primary">Quy trình:</strong> Tải mẫu →
+          điền dữ liệu → vào trang tương ứng → bấm &quot;Nhập Excel&quot; →
+          preview &amp; validate → xác nhận ghi DB.
         </div>
 
-        <div className="flex justify-end gap-2 mt-1">
-          <Button variant="outline" onClick={handleClose}>
-            Hủy
-          </Button>
-          <Button disabled={!file} onClick={handleClose}>
-            <Icon name="upload" size={16} className="mr-1.5" />
-            Upload
+        <div className="flex justify-end mt-1">
+          <Button variant="outline" onClick={close}>
+            Đóng
           </Button>
         </div>
       </DialogContent>

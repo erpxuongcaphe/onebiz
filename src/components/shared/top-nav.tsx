@@ -378,7 +378,7 @@ export function TopNav() {
 
           {/* Right: Quick Import + Bell + Help + User + Bán hàng */}
           <div className="flex items-center gap-1.5 shrink-0">
-            {/* Quick Import — prominent (M3 core feature) */}
+            {/* Quick Import — Trung tâm nhập Excel theo schema */}
             <button
               type="button"
               onClick={() => setImportOpen(true)}
@@ -386,10 +386,10 @@ export function TopNav() {
                 "hidden md:inline-flex press-scale-sm items-center gap-2 h-9 px-3.5 rounded-lg text-xs font-semibold",
                 "bg-primary-fixed text-primary hover:bg-primary-fixed-dim transition-colors"
               )}
-              title="Import dữ liệu cho AI (Excel/CSV)"
+              title="Trung tâm nhập Excel — tải mẫu & đi tới trang nhập"
             >
-              <Icon name="upload" size={16} />
-              <span className="hidden lg:inline">Import dữ liệu</span>
+              <Icon name="cloud_upload" size={16} />
+              <span className="hidden lg:inline">Nhập Excel</span>
             </button>
 
             {/* Mobile-only quick import button */}
@@ -398,9 +398,9 @@ export function TopNav() {
               size="icon"
               onClick={() => setImportOpen(true)}
               className="text-foreground/70 hover:text-foreground hover:bg-surface-container-low md:hidden"
-              title="Import dữ liệu"
+              title="Trung tâm nhập Excel"
             >
-              <Icon name="upload" size={18} />
+              <Icon name="cloud_upload" size={18} />
             </Button>
 
             {/* Notification bell */}
