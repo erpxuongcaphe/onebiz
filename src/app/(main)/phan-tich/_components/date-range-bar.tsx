@@ -21,10 +21,33 @@ interface DateRangeBarProps {
   title: string;
   subtitle?: string;
   actions?: React.ReactNode;
+  /** Controlled preset (optional). If set, also provide `onPresetChange`. */
+  preset?: DatePreset;
+  onPresetChange?: (preset: DatePreset) => void;
+  /** Callback for "Xuất báo cáo" button. If unset, button is hidden. */
+  onExport?: () => void;
+  /** Label for export button (default: "Xuất báo cáo") */
+  exportLabel?: string;
+  /** Disable export button (loading state) */
+  exportDisabled?: boolean;
 }
 
-export function DateRangeBar({ title, subtitle, actions }: DateRangeBarProps) {
-  const [preset, setPreset] = useState<DatePreset>("thisMonth");
+export function DateRangeBar({
+  title,
+  subtitle,
+  actions,
+  preset: controlledPreset,
+  onPresetChange,
+  onExport,
+  exportLabel = "Xuất báo cáo",
+  exportDisabled,
+}: DateRangeBarProps) {
+  const [uncontrolledPreset, setUncontrolledPreset] = useState<DatePreset>("thisMonth");
+  const preset = controlledPreset ?? uncontrolledPreset;
+  const setPreset = (next: DatePreset) => {
+    if (onPresetChange) onPresetChange(next);
+    else setUncontrolledPreset(next);
+  };
 
   return (
     <div className="bg-surface-container-lowest border-b border-border px-4 lg:px-6 py-3 space-y-2">
@@ -37,10 +60,18 @@ export function DateRangeBar({ title, subtitle, actions }: DateRangeBarProps) {
         </div>
         <div className="flex items-center gap-2">
           {actions}
-          <Button variant="outline" size="sm" className="h-8 text-xs gap-1.5 rounded-full">
-            <Icon name="calendar_today" className="size-3.5" />
-            Xuất báo cáo
-          </Button>
+          {onExport && (
+            <Button
+              variant="outline"
+              size="sm"
+              className="h-8 text-xs gap-1.5 rounded-full"
+              onClick={onExport}
+              disabled={exportDisabled}
+            >
+              <Icon name="download" className="size-3.5" />
+              {exportLabel}
+            </Button>
+          )}
         </div>
       </div>
       {/* Stitch date preset pills — rounded-full + press-scale-sm, active dùng primary/primary-foreground */}

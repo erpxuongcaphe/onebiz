@@ -1,6 +1,8 @@
 "use client";
 
 import { useState, useEffect, useCallback } from "react";
+import * as XLSX from "xlsx";
+import { saveAs } from "file-saver";
 import {
   Select,
   SelectTrigger,
@@ -47,6 +49,7 @@ import type {
   BranchPnLRow,
 } from "@/lib/services/supabase/reports";
 import { Icon } from "@/components/ui/icon";
+import { useToast } from "@/lib/contexts";
 
 // === Helpers ===
 
@@ -106,7 +109,9 @@ function COGSTooltip({
 }
 
 export default function BaoCaoTaiChinhPage() {
+  const { toast } = useToast();
   const [loading, setLoading] = useState(true);
+  const [exporting, setExporting] = useState(false);
   const [branchId, setBranchId] = useState<string>("all");
   const [branches, setBranches] = useState<{ id: string; name: string }[]>([]);
   // CEO view: khi bật, ở chế độ "Tất cả chi nhánh" sẽ dùng getConsolidatedPnL
@@ -152,10 +157,10 @@ export default function BaoCaoTaiChinhPage() {
         branchPnLRes,
       ] = await Promise.all([
         getProfitAndLoss(bid),
-        getCOGSBreakdown(10),
-        getGrossMarginTrend(6),
-        getInventoryTurnover(),
-        getDSO(),
+        getCOGSBreakdown(10, bid),
+        getGrossMarginTrend(6, bid),
+        getInventoryTurnover(bid),
+        getDSO(bid),
         fetchConsolidated
           ? getConsolidatedPnL()
           : Promise.resolve(null),
@@ -181,6 +186,125 @@ export default function BaoCaoTaiChinhPage() {
     fetchData();
   }, [fetchData]);
 
+  // CEO view chỉ áp dụng khi đang xem "Tất cả chi nhánh".
+  // Khi bật: số liệu KPI + bảng P&L dùng consolidated (đã loại trừ nội bộ).
+  const useConsolidated = ceoView && branchId === "all" && !!consolidated;
+  const cur = useConsolidated ? consolidated.current : pnl?.current;
+  const prev = useConsolidated ? consolidated.previous : pnl?.previous;
+
+  async function handleExport() {
+    if (!cur || !prev) {
+      toast({
+        title: "Chưa có dữ liệu để xuất",
+        description: "Vui lòng chờ báo cáo tải xong.",
+        variant: "error",
+      });
+      return;
+    }
+    setExporting(true);
+    try {
+      const wb = XLSX.utils.book_new();
+
+      // Sheet 1: P&L summary
+      const pnlRows = [
+        { "Khoản mục": "Doanh thu", [cur.period]: cur.revenue, [prev.period]: prev.revenue },
+        { "Khoản mục": "(-) Giá vốn hàng bán (COGS)", [cur.period]: cur.cogs, [prev.period]: prev.cogs },
+        { "Khoản mục": "= Lãi gộp", [cur.period]: cur.grossProfit, [prev.period]: prev.grossProfit },
+        { "Khoản mục": "   Biên LN gộp (%)", [cur.period]: cur.grossMargin, [prev.period]: prev.grossMargin },
+        { "Khoản mục": "(-) Chi phí vận hành", [cur.period]: cur.operatingExpense, [prev.period]: prev.operatingExpense },
+        { "Khoản mục": "= Lãi ròng", [cur.period]: cur.netProfit, [prev.period]: prev.netProfit },
+        { "Khoản mục": "   Biên LN ròng (%)", [cur.period]: cur.netMargin, [prev.period]: prev.netMargin },
+      ];
+      const pnlSheet = XLSX.utils.json_to_sheet(pnlRows);
+      pnlSheet["!cols"] = [{ wch: 32 }, { wch: 18 }, { wch: 18 }];
+      XLSX.utils.book_append_sheet(wb, pnlSheet, "Lãi-Lỗ");
+
+      // Sheet 2: Branch comparison (if available)
+      if (branchPnL.length > 0) {
+        const branchRows = branchPnL.map((b) => ({
+          "Chi nhánh": b.branchName,
+          "Loại":
+            b.branchType === "factory"
+              ? "Xưởng"
+              : b.branchType === "warehouse"
+                ? "Kho"
+                : "Quán",
+          "Doanh thu": b.revenue,
+          "Giá vốn": b.cogs,
+          "Lãi gộp": b.grossProfit,
+          "Biên gộp (%)": b.grossMargin,
+          "Chi phí VH": b.opEx,
+          "Lãi ròng": b.netProfit,
+        }));
+        const branchSheet = XLSX.utils.json_to_sheet(branchRows);
+        branchSheet["!cols"] = [
+          { wch: 22 }, { wch: 8 }, { wch: 16 }, { wch: 16 }, { wch: 16 }, { wch: 12 }, { wch: 16 }, { wch: 16 },
+        ];
+        XLSX.utils.book_append_sheet(wb, branchSheet, "Theo chi nhánh");
+      }
+
+      // Sheet 3: COGS by product
+      if (cogsItems.length > 0) {
+        const cogsRows = cogsItems.map((c, i) => ({
+          "STT": i + 1,
+          "Sản phẩm": c.productName,
+          "SL bán": c.qtySold,
+          "Giá vốn/sp": c.costPrice,
+          "Tổng giá vốn": c.totalCost,
+          "% COGS": c.pctOfCogs,
+        }));
+        const cogsSheet = XLSX.utils.json_to_sheet(cogsRows);
+        cogsSheet["!cols"] = [{ wch: 6 }, { wch: 28 }, { wch: 10 }, { wch: 14 }, { wch: 16 }, { wch: 10 }];
+        XLSX.utils.book_append_sheet(wb, cogsSheet, "Giá vốn theo SP");
+      }
+
+      // Sheet 4: Operational KPIs
+      const opKpiRows = [
+        { "Chỉ số": "Vòng quay tồn kho (lần/tháng)", "Giá trị": turnover?.turnoverRatio ?? 0 },
+        { "Chỉ số": "Số ngày bán hết TB", "Giá trị": turnover?.avgDaysToSell ?? 0 },
+        { "Chỉ số": "Giá vốn bán trong kỳ", "Giá trị": turnover?.totalCogsPeriod ?? 0 },
+        { "Chỉ số": "Giá trị tồn kho TB", "Giá trị": turnover?.avgInventoryValue ?? 0 },
+        { "Chỉ số": "Số ngày thu tiền TB (DSO)", "Giá trị": dso?.dso ?? 0 },
+        { "Chỉ số": "Tổng phải thu", "Giá trị": dso?.totalReceivables ?? 0 },
+        { "Chỉ số": "Doanh thu TB/ngày", "Giá trị": Math.round(dso?.avgDailyRevenue ?? 0) },
+      ];
+      const opSheet = XLSX.utils.json_to_sheet(opKpiRows);
+      opSheet["!cols"] = [{ wch: 32 }, { wch: 18 }];
+      XLSX.utils.book_append_sheet(wb, opSheet, "Chỉ số vận hành");
+
+      // Write file
+      const buffer = XLSX.write(wb, { bookType: "xlsx", type: "array" });
+      const blob = new Blob([buffer], {
+        type: "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+      });
+      const branchLabel =
+        branchId === "all"
+          ? "tat-ca-chi-nhanh"
+          : branches.find((b) => b.id === branchId)?.name
+              .toLowerCase()
+              .normalize("NFD")
+              .replace(/[\u0300-\u036f]/g, "")
+              .replace(/[^a-z0-9]+/g, "-")
+              .replace(/(^-|-$)/g, "") ?? "chi-nhanh";
+      const today = new Date().toISOString().slice(0, 10);
+      saveAs(blob, `bao-cao-tai-chinh-${branchLabel}-${today}.xlsx`);
+
+      toast({
+        title: "Đã xuất báo cáo tài chính",
+        description: "File Excel đã được tải xuống.",
+        variant: "success",
+      });
+    } catch (err) {
+      toast({
+        title: "Lỗi xuất báo cáo",
+        description: err instanceof Error ? err.message : "Vui lòng thử lại",
+        variant: "error",
+      });
+    } finally {
+      setExporting(false);
+    }
+  }
+
   if (loading) {
     return (
       <div className="flex flex-col h-[calc(100vh-64px)] items-center justify-center">
@@ -192,17 +316,13 @@ export default function BaoCaoTaiChinhPage() {
     );
   }
 
-  // CEO view chỉ áp dụng khi đang xem "Tất cả chi nhánh".
-  // Khi bật: số liệu KPI + bảng P&L dùng consolidated (đã loại trừ nội bộ).
-  const useConsolidated = ceoView && branchId === "all" && !!consolidated;
-  const cur = useConsolidated ? consolidated.current : pnl?.current;
-  const prev = useConsolidated ? consolidated.previous : pnl?.previous;
-
   return (
     <div className="flex flex-col h-[calc(100vh-64px)] overflow-y-auto">
       <DateRangeBar
         title="Báo cáo tài chính (P&L)"
         subtitle="Lãi/Lỗ, Giá vốn, Biên lợi nhuận"
+        onExport={handleExport}
+        exportDisabled={exporting || loading}
       />
 
       {/* Branch filter + CEO toggle */}
