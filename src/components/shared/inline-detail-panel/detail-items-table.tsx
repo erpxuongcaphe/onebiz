@@ -18,7 +18,7 @@ interface DetailItemsTableProps<T> {
   className?: string;
 }
 
-export function DetailItemsTable<T extends Record<string, unknown>>({
+export function DetailItemsTable<T>({
   columns,
   items,
   summary,

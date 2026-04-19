@@ -117,6 +117,25 @@ export function getPurchaseOrderStatuses() {
   }));
 }
 
+/**
+ * Lấy lịch sử đặt/nhập hàng từ 1 nhà cung cấp cụ thể (dùng trong tab chi tiết NCC).
+ */
+export async function getPurchaseOrdersForSupplier(
+  supplierId: string,
+  limit: number = 50
+): Promise<PurchaseOrder[]> {
+  const supabase = getClient();
+  const { data, error } = await supabase
+    .from("purchase_orders")
+    .select("*")
+    .eq("supplier_id", supplierId)
+    .order("created_at", { ascending: false })
+    .limit(limit);
+
+  if (error) handleError(error, "getPurchaseOrdersForSupplier");
+  return (data ?? []).map(mapPurchaseOrder);
+}
+
 /* ------------------------------------------------------------------ */
 /*  Item loader (for detail panel + partial receive)                   */
 /* ------------------------------------------------------------------ */

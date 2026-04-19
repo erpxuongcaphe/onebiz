@@ -19,8 +19,10 @@ import {
   DetailTabs,
   DetailHeader,
   DetailInfoGrid,
+  DetailItemsTable,
 } from "@/components/shared/inline-detail-panel";
 import type { DetailTab } from "@/components/shared/inline-detail-panel";
+import { Badge } from "@/components/ui/badge";
 import { CreateCustomerDialog, ConfirmDialog } from "@/components/shared/dialogs";
 import { ImportExcelDialog } from "@/components/shared/dialogs/import-excel-dialog";
 import { downloadTemplate } from "@/lib/excel";
@@ -29,8 +31,16 @@ import { bulkImportCustomers } from "@/lib/services/supabase/excel-import";
 import { useToast } from "@/lib/contexts";
 import { formatCurrency, formatDate } from "@/lib/format";
 import { exportToExcel, exportToCsv } from "@/lib/utils/export";
-import { getCustomers, getCustomerGroups, deleteCustomer } from "@/lib/services";
-import type { Customer } from "@/lib/types";
+import {
+  getCustomers,
+  getCustomerGroups,
+  deleteCustomer,
+  getInvoicesForCustomer,
+  getReturnsForCustomer,
+  getLoyaltyTransactions,
+  type CustomerReturn,
+} from "@/lib/services";
+import type { Customer, Invoice, LoyaltyTransaction } from "@/lib/types";
 import { Icon } from "@/components/ui/icon";
 
 /* ------------------------------------------------------------------ */
@@ -209,115 +219,9 @@ export default function KhachHangPage() {
   };
 
   /* ---- Inline detail renderer ---- */
-  const renderDetail = (customer: Customer, onClose: () => void) => {
-    const tabs: DetailTab[] = [
-      {
-        id: "info",
-        label: "Thông tin",
-        content: (
-          <DetailInfoGrid
-            columns={3}
-            fields={[
-              { label: "Mã khách hàng", value: customer.code },
-              { label: "Tên khách hàng", value: customer.name },
-              { label: "Điện thoại", value: customer.phone },
-              { label: "Email", value: customer.email || "" },
-              { label: "Địa chỉ", value: customer.address || "", fullWidth: true },
-              { label: "Nhóm khách hàng", value: customer.groupName || "" },
-              {
-                label: "Loại khách hàng",
-                value: customer.type === "company" ? "Công ty" : "Cá nhân",
-              },
-              {
-                label: "Giới tính",
-                value:
-                  customer.gender === "male"
-                    ? "Nam"
-                    : customer.gender === "female"
-                      ? "Nữ"
-                      : "",
-              },
-              { label: "Ngày tạo", value: formatDate(customer.createdAt) },
-            ]}
-          />
-        ),
-      },
-      {
-        id: "address",
-        label: "Địa chỉ nhận hàng",
-        content: (
-          <div className="text-sm text-muted-foreground py-4">
-            {customer.address || "Chưa có địa chỉ nhận hàng nào."}
-          </div>
-        ),
-      },
-      {
-        id: "sales-history",
-        label: "Lịch sử bán/trả hàng",
-        content: (
-          <div className="text-sm text-muted-foreground py-4">
-            Chưa có lịch sử bán/trả hàng.
-          </div>
-        ),
-      },
-      {
-        id: "debt",
-        label: "Nợ cần thu từ khách",
-        content: (
-          <DetailInfoGrid
-            columns={2}
-            fields={[
-              {
-                label: "Nợ hiện tại",
-                value: (
-                  <span
-                    className={
-                      customer.currentDebt > 0
-                        ? "text-destructive"
-                        : "text-muted-foreground"
-                    }
-                  >
-                    {formatCurrency(customer.currentDebt)}
-                  </span>
-                ),
-              },
-              {
-                label: "Tổng bán",
-                value: formatCurrency(customer.totalSales),
-              },
-            ]}
-          />
-        ),
-      },
-      {
-        id: "points",
-        label: "Lịch sử tích điểm",
-        content: (
-          <div className="text-sm text-muted-foreground py-4">
-            Chưa có lịch sử tích điểm.
-          </div>
-        ),
-      },
-    ];
-
-    return (
-      <InlineDetailPanel open onClose={onClose}>
-        <div className="p-4 space-y-4">
-          <DetailHeader
-            title={customer.name}
-            code={customer.code}
-            subtitle={customer.groupName}
-            meta={
-              <span>
-                Ngày tạo: {formatDate(customer.createdAt)}
-              </span>
-            }
-          />
-          <DetailTabs tabs={tabs} defaultTab="info" />
-        </div>
-      </InlineDetailPanel>
-    );
-  };
+  const renderDetail = (customer: Customer, onClose: () => void) => (
+    <CustomerDetailPanel customer={customer} onClose={onClose} />
+  );
 
   /* ---- Render ---- */
   return (
@@ -514,5 +418,417 @@ export default function KhachHangPage() {
         }}
       />
     </>
+  );
+}
+
+/* ------------------------------------------------------------------ */
+/*  CustomerDetailPanel — inline detail với lazy fetch các tab         */
+/* ------------------------------------------------------------------ */
+function CustomerDetailPanel({
+  customer,
+  onClose,
+}: {
+  customer: Customer;
+  onClose: () => void;
+}) {
+  const [invoices, setInvoices] = useState<Invoice[]>([]);
+  const [returns, setReturns] = useState<CustomerReturn[]>([]);
+  const [loyalty, setLoyalty] = useState<LoyaltyTransaction[]>([]);
+  const [salesLoading, setSalesLoading] = useState(true);
+  const [loyaltyLoading, setLoyaltyLoading] = useState(true);
+
+  useEffect(() => {
+    let cancelled = false;
+    setSalesLoading(true);
+    Promise.all([
+      getInvoicesForCustomer(customer.id, 30).catch(() => []),
+      getReturnsForCustomer(customer.id, 30).catch(() => []),
+    ])
+      .then(([inv, ret]) => {
+        if (cancelled) return;
+        setInvoices(inv);
+        setReturns(ret);
+      })
+      .finally(() => {
+        if (!cancelled) setSalesLoading(false);
+      });
+
+    setLoyaltyLoading(true);
+    getLoyaltyTransactions({
+      page: 0,
+      pageSize: 30,
+      customerId: customer.id,
+    })
+      .then((res) => {
+        if (cancelled) return;
+        setLoyalty(res.data);
+      })
+      .catch(() => {
+        if (!cancelled) setLoyalty([]);
+      })
+      .finally(() => {
+        if (!cancelled) setLoyaltyLoading(false);
+      });
+
+    return () => {
+      cancelled = true;
+    };
+  }, [customer.id]);
+
+  const outstandingInvoices = invoices.filter((i) => (i.debt ?? 0) > 0);
+  const totalOutstanding = outstandingInvoices.reduce(
+    (s, i) => s + (i.debt ?? 0),
+    0
+  );
+
+  const tabs: DetailTab[] = [
+    {
+      id: "info",
+      label: "Thông tin",
+      content: (
+        <DetailInfoGrid
+          columns={3}
+          fields={[
+            { label: "Mã khách hàng", value: customer.code },
+            { label: "Tên khách hàng", value: customer.name },
+            { label: "Điện thoại", value: customer.phone },
+            { label: "Email", value: customer.email || "" },
+            { label: "Địa chỉ", value: customer.address || "", fullWidth: true },
+            { label: "Nhóm khách hàng", value: customer.groupName || "" },
+            {
+              label: "Loại khách hàng",
+              value: customer.type === "company" ? "Công ty" : "Cá nhân",
+            },
+            {
+              label: "Giới tính",
+              value:
+                customer.gender === "male"
+                  ? "Nam"
+                  : customer.gender === "female"
+                    ? "Nữ"
+                    : "",
+            },
+            { label: "Ngày tạo", value: formatDate(customer.createdAt) },
+          ]}
+        />
+      ),
+    },
+    {
+      id: "address",
+      label: "Địa chỉ nhận hàng",
+      content: (
+        <div className="text-sm text-muted-foreground py-4">
+          {customer.address || "Chưa có địa chỉ nhận hàng nào."}
+        </div>
+      ),
+    },
+    {
+      id: "sales-history",
+      label: `Lịch sử bán/trả hàng (${invoices.length + returns.length})`,
+      content: salesLoading ? (
+        <div className="text-sm text-muted-foreground py-4 text-center">
+          Đang tải lịch sử...
+        </div>
+      ) : (
+        <div className="space-y-4">
+          <div>
+            <p className="text-xs font-semibold text-muted-foreground uppercase tracking-wide mb-2">
+              Hoá đơn bán hàng ({invoices.length})
+            </p>
+            <DetailItemsTable
+              items={invoices}
+              columns={[
+                {
+                  header: "Mã HĐ",
+                  accessor: (r) => (
+                    <span className="font-mono text-primary text-xs">
+                      {r.code}
+                    </span>
+                  ),
+                },
+                {
+                  header: "Ngày",
+                  accessor: (r) => formatDate(r.date),
+                },
+                {
+                  header: "Tổng tiền",
+                  align: "right",
+                  accessor: (r) => formatCurrency(r.totalAmount),
+                },
+                {
+                  header: "Đã trả",
+                  align: "right",
+                  accessor: (r) => formatCurrency(r.paid),
+                },
+                {
+                  header: "Còn nợ",
+                  align: "right",
+                  accessor: (r) =>
+                    (r.debt ?? 0) > 0 ? (
+                      <span className="text-destructive font-semibold">
+                        {formatCurrency(r.debt ?? 0)}
+                      </span>
+                    ) : (
+                      <span className="text-muted-foreground">—</span>
+                    ),
+                },
+                {
+                  header: "Trạng thái",
+                  accessor: (r) => (
+                    <Badge
+                      variant={
+                        r.status === "completed"
+                          ? "default"
+                          : r.status === "cancelled"
+                            ? "destructive"
+                            : "secondary"
+                      }
+                    >
+                      {r.status === "completed"
+                        ? "Hoàn thành"
+                        : r.status === "cancelled"
+                          ? "Đã hủy"
+                          : "Đang xử lý"}
+                    </Badge>
+                  ),
+                },
+              ]}
+            />
+          </div>
+
+          {returns.length > 0 && (
+            <div>
+              <p className="text-xs font-semibold text-muted-foreground uppercase tracking-wide mb-2">
+                Phiếu trả hàng ({returns.length})
+              </p>
+              <DetailItemsTable
+                items={returns}
+                columns={[
+                  {
+                    header: "Mã trả",
+                    accessor: (r) => (
+                      <span className="font-mono text-primary text-xs">
+                        {r.code}
+                      </span>
+                    ),
+                  },
+                  {
+                    header: "HĐ gốc",
+                    accessor: (r) => (
+                      <span className="text-xs text-muted-foreground">
+                        {r.invoiceCode}
+                      </span>
+                    ),
+                  },
+                  {
+                    header: "Ngày",
+                    accessor: (r) => formatDate(r.date),
+                  },
+                  {
+                    header: "Tổng tiền trả",
+                    align: "right",
+                    accessor: (r) => formatCurrency(r.totalAmount),
+                  },
+                  {
+                    header: "Trạng thái",
+                    accessor: (r) => (
+                      <Badge
+                        variant={
+                          r.status === "completed" ? "default" : "secondary"
+                        }
+                      >
+                        {r.status === "completed" ? "Hoàn thành" : "Phiếu tạm"}
+                      </Badge>
+                    ),
+                  },
+                ]}
+              />
+            </div>
+          )}
+        </div>
+      ),
+    },
+    {
+      id: "debt",
+      label: "Nợ cần thu từ khách",
+      content: (
+        <div className="space-y-4">
+          <DetailInfoGrid
+            columns={2}
+            fields={[
+              {
+                label: "Nợ hiện tại",
+                value: (
+                  <span
+                    className={
+                      customer.currentDebt > 0
+                        ? "text-destructive"
+                        : "text-muted-foreground"
+                    }
+                  >
+                    {formatCurrency(customer.currentDebt)}
+                  </span>
+                ),
+              },
+              {
+                label: "Tổng bán",
+                value: formatCurrency(customer.totalSales),
+              },
+            ]}
+          />
+          {!salesLoading && outstandingInvoices.length > 0 && (
+            <div>
+              <p className="text-xs font-semibold text-muted-foreground uppercase tracking-wide mb-2">
+                Hoá đơn còn nợ ({outstandingInvoices.length})
+              </p>
+              <DetailItemsTable
+                items={outstandingInvoices}
+                columns={[
+                  {
+                    header: "Mã HĐ",
+                    accessor: (r) => (
+                      <span className="font-mono text-primary text-xs">
+                        {r.code}
+                      </span>
+                    ),
+                  },
+                  {
+                    header: "Ngày",
+                    accessor: (r) => formatDate(r.date),
+                  },
+                  {
+                    header: "Tổng",
+                    align: "right",
+                    accessor: (r) => formatCurrency(r.totalAmount),
+                  },
+                  {
+                    header: "Đã trả",
+                    align: "right",
+                    accessor: (r) => formatCurrency(r.paid),
+                  },
+                  {
+                    header: "Còn nợ",
+                    align: "right",
+                    accessor: (r) => (
+                      <span className="text-destructive font-semibold">
+                        {formatCurrency(r.debt ?? 0)}
+                      </span>
+                    ),
+                  },
+                ]}
+                summary={[
+                  {
+                    label: "Tổng nợ từ các hoá đơn",
+                    value: (
+                      <span className="text-destructive">
+                        {formatCurrency(totalOutstanding)}
+                      </span>
+                    ),
+                  },
+                ]}
+              />
+            </div>
+          )}
+          {!salesLoading && outstandingInvoices.length === 0 && (
+            <div className="text-sm text-muted-foreground py-2 text-center">
+              Không có hoá đơn nào còn nợ.
+            </div>
+          )}
+        </div>
+      ),
+    },
+    {
+      id: "points",
+      label: `Lịch sử tích điểm${loyalty.length > 0 ? ` (${loyalty.length})` : ""}`,
+      content: loyaltyLoading ? (
+        <div className="text-sm text-muted-foreground py-4 text-center">
+          Đang tải điểm tích luỹ...
+        </div>
+      ) : loyalty.length === 0 ? (
+        <div className="text-sm text-muted-foreground py-4 text-center">
+          Chưa có lịch sử tích điểm.
+        </div>
+      ) : (
+        <DetailItemsTable
+          items={loyalty}
+          columns={[
+            {
+              header: "Ngày",
+              accessor: (r) => formatDate(r.createdAt),
+            },
+            {
+              header: "Loại",
+              accessor: (r) => (
+                <Badge
+                  variant={
+                    r.type === "earn"
+                      ? "default"
+                      : r.type === "redeem"
+                        ? "secondary"
+                        : r.type === "expire"
+                          ? "destructive"
+                          : "outline"
+                  }
+                >
+                  {r.type === "earn"
+                    ? "Tích"
+                    : r.type === "redeem"
+                      ? "Dùng"
+                      : r.type === "expire"
+                        ? "Hết hạn"
+                        : "Điều chỉnh"}
+                </Badge>
+              ),
+            },
+            {
+              header: "Điểm",
+              align: "right",
+              accessor: (r) => (
+                <span
+                  className={
+                    r.points > 0
+                      ? "text-status-success font-semibold"
+                      : "text-destructive font-semibold"
+                  }
+                >
+                  {r.points > 0 ? `+${r.points}` : r.points}
+                </span>
+              ),
+            },
+            {
+              header: "Tồn",
+              align: "right",
+              accessor: (r) => r.balanceAfter,
+            },
+            {
+              header: "Ghi chú",
+              accessor: (r) => (
+                <span className="text-xs text-muted-foreground">
+                  {r.note ?? "—"}
+                </span>
+              ),
+            },
+          ]}
+        />
+      ),
+    },
+  ];
+
+  return (
+    <InlineDetailPanel open onClose={onClose}>
+      <div className="p-4 space-y-4">
+        <DetailHeader
+          title={customer.name}
+          code={customer.code}
+          subtitle={customer.groupName}
+          meta={
+            <span>
+              Ngày tạo: {formatDate(customer.createdAt)}
+            </span>
+          }
+        />
+        <DetailTabs tabs={tabs} defaultTab="info" />
+      </div>
+    </InlineDetailPanel>
   );
 }

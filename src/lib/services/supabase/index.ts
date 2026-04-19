@@ -2,7 +2,14 @@ export { getProducts, getProductCategories, getProductCategoriesAsync, getProduc
 export type { AllStockMovementRow } from "./products";
 export { getCustomers, getCustomerGroups, getCustomerById, createCustomer, updateCustomer, deleteCustomer } from "./customers";
 export { getSuppliers, getSupplierById, createSupplier, updateSupplier, deleteSupplier } from "./suppliers";
-export { getInvoices, getInvoiceStatuses, cancelInvoice } from "./invoices";
+export {
+  getInvoices,
+  getInvoiceStatuses,
+  cancelInvoice,
+  getInvoicesForCustomer,
+  getReturnsForCustomer,
+} from "./invoices";
+export type { CustomerReturn } from "./invoices";
 export {
   getPurchaseOrders,
   getPurchaseOrderStatuses,
@@ -12,6 +19,7 @@ export {
   canTransitionPurchaseStatus,
   getPurchaseOrderItems,
   receivePurchaseOrderPartial,
+  getPurchaseOrdersForSupplier,
 } from "./purchase-orders";
 export type { PurchaseOrderItemRow, PartialReceiveLine } from "./purchase-orders";
 export {

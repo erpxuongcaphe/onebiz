@@ -19,8 +19,10 @@ import {
   DetailTabs,
   DetailHeader,
   DetailInfoGrid,
+  DetailItemsTable,
 } from "@/components/shared/inline-detail-panel";
 import type { DetailTab } from "@/components/shared/inline-detail-panel";
+import { Badge } from "@/components/ui/badge";
 import { CreateSupplierDialog, ConfirmDialog } from "@/components/shared/dialogs";
 import { ImportExcelDialog } from "@/components/shared/dialogs/import-excel-dialog";
 import { downloadTemplate } from "@/lib/excel";
@@ -28,9 +30,14 @@ import { supplierExcelSchema } from "@/lib/excel/schemas";
 import { bulkImportSuppliers } from "@/lib/services/supabase/excel-import";
 import { formatCurrency, formatDate } from "@/lib/format";
 import { exportToExcel, exportToCsv } from "@/lib/utils/export";
-import { getSuppliers, deleteSupplier } from "@/lib/services";
+import {
+  getSuppliers,
+  deleteSupplier,
+  getPurchaseOrdersForSupplier,
+  getPurchaseOrderStatusMeta,
+} from "@/lib/services";
 import { useToast } from "@/lib/contexts";
-import type { Supplier } from "@/lib/types";
+import type { Supplier, PurchaseOrder } from "@/lib/types";
 import { Icon } from "@/components/ui/icon";
 
 /* ------------------------------------------------------------------ */
@@ -43,6 +50,54 @@ function SupplierDetail({
   supplier: Supplier;
   onClose: () => void;
 }) {
+  const [orders, setOrders] = useState<PurchaseOrder[]>([]);
+  const [ordersLoading, setOrdersLoading] = useState(true);
+  const statusMeta = getPurchaseOrderStatusMeta();
+
+  useEffect(() => {
+    let cancelled = false;
+    setOrdersLoading(true);
+    getPurchaseOrdersForSupplier(supplier.id, 30)
+      .then((rows) => {
+        if (cancelled) return;
+        setOrders(rows);
+      })
+      .catch(() => {
+        if (cancelled) return;
+        setOrders([]);
+      })
+      .finally(() => {
+        if (cancelled) return;
+        setOrdersLoading(false);
+      });
+    return () => {
+      cancelled = true;
+    };
+  }, [supplier.id]);
+
+  const outstandingOrders = orders.filter((o) => o.amountOwed > 0);
+  const totalOrders = orders.length;
+  const totalOrderValue = orders.reduce((sum, o) => sum + o.total, 0);
+  const totalPaidAll = orders.reduce((sum, o) => sum + o.paid, 0);
+  const totalOwedAll = orders.reduce((sum, o) => sum + o.amountOwed, 0);
+
+  const statusBadge = (status: PurchaseOrder["status"]) => {
+    const meta = statusMeta[status];
+    if (!meta) return <span className="text-muted-foreground">{status}</span>;
+    return (
+      <Badge
+        style={{
+          backgroundColor: `${meta.color}20`,
+          color: meta.color,
+          border: `1px solid ${meta.color}40`,
+        }}
+        className="font-medium"
+      >
+        {meta.label}
+      </Badge>
+    );
+  };
+
   const tabs: DetailTab[] = [
     {
       id: "info",
@@ -81,40 +136,170 @@ function SupplierDetail({
     },
     {
       id: "purchase_history",
-      label: "Lịch sử mua hàng",
-      content: (
+      label: `Lịch sử mua hàng${totalOrders > 0 ? ` (${totalOrders})` : ""}`,
+      content: ordersLoading ? (
         <div className="text-sm text-muted-foreground py-4 text-center">
-          Chưa có lịch sử mua hàng
+          Đang tải lịch sử mua hàng...
         </div>
-      ),
-    },
-    {
-      id: "debt",
-      label: "Công nợ",
-      content: (
-        <DetailInfoGrid
-          columns={2}
-          fields={[
+      ) : (
+        <DetailItemsTable<PurchaseOrder>
+          items={orders}
+          columns={[
             {
-              label: "Nợ cần trả hiện tại",
-              value: (
+              header: "Mã PO",
+              accessor: (o) => (
+                <span className="font-medium text-primary">{o.code}</span>
+              ),
+            },
+            {
+              header: "Ngày",
+              accessor: (o) => formatDate(o.date),
+            },
+            {
+              header: "Tổng tiền",
+              align: "right",
+              accessor: (o) => formatCurrency(o.total),
+            },
+            {
+              header: "Đã trả",
+              align: "right",
+              accessor: (o) => formatCurrency(o.paid),
+            },
+            {
+              header: "Còn nợ",
+              align: "right",
+              accessor: (o) => (
                 <span
                   className={
-                    supplier.currentDebt > 0
-                      ? "text-destructive"
+                    o.amountOwed > 0
+                      ? "text-destructive font-medium"
                       : "text-muted-foreground"
                   }
                 >
-                  {formatCurrency(supplier.currentDebt)}
+                  {formatCurrency(o.amountOwed)}
                 </span>
               ),
             },
             {
-              label: "Tổng mua",
-              value: formatCurrency(supplier.totalPurchases),
+              header: "Trạng thái",
+              align: "center",
+              accessor: (o) => statusBadge(o.status),
             },
           ]}
+          summary={
+            orders.length > 0
+              ? [
+                  {
+                    label: "Tổng giá trị",
+                    value: formatCurrency(totalOrderValue),
+                  },
+                  {
+                    label: "Đã thanh toán",
+                    value: formatCurrency(totalPaidAll),
+                  },
+                  {
+                    label: "Còn nợ",
+                    value: (
+                      <span
+                        className={
+                          totalOwedAll > 0
+                            ? "text-destructive"
+                            : "text-muted-foreground"
+                        }
+                      >
+                        {formatCurrency(totalOwedAll)}
+                      </span>
+                    ),
+                  },
+                ]
+              : undefined
+          }
         />
+      ),
+    },
+    {
+      id: "debt",
+      label: `Công nợ${outstandingOrders.length > 0 ? ` (${outstandingOrders.length})` : ""}`,
+      content: (
+        <div className="space-y-4">
+          <DetailInfoGrid
+            columns={2}
+            fields={[
+              {
+                label: "Nợ cần trả hiện tại",
+                value: (
+                  <span
+                    className={
+                      supplier.currentDebt > 0
+                        ? "text-destructive"
+                        : "text-muted-foreground"
+                    }
+                  >
+                    {formatCurrency(supplier.currentDebt)}
+                  </span>
+                ),
+              },
+              {
+                label: "Tổng mua",
+                value: formatCurrency(supplier.totalPurchases),
+              },
+            ]}
+          />
+          {ordersLoading ? (
+            <div className="text-sm text-muted-foreground py-4 text-center">
+              Đang tải danh sách đơn còn nợ...
+            </div>
+          ) : outstandingOrders.length > 0 ? (
+            <div className="space-y-2">
+              <div className="text-xs font-semibold text-muted-foreground uppercase tracking-wide">
+                Đơn còn nợ NCC
+              </div>
+              <DetailItemsTable<PurchaseOrder>
+                items={outstandingOrders}
+                columns={[
+                  {
+                    header: "Mã PO",
+                    accessor: (o) => (
+                      <span className="font-medium text-primary">{o.code}</span>
+                    ),
+                  },
+                  {
+                    header: "Ngày",
+                    accessor: (o) => formatDate(o.date),
+                  },
+                  {
+                    header: "Tổng",
+                    align: "right",
+                    accessor: (o) => formatCurrency(o.total),
+                  },
+                  {
+                    header: "Đã trả",
+                    align: "right",
+                    accessor: (o) => formatCurrency(o.paid),
+                  },
+                  {
+                    header: "Còn nợ",
+                    align: "right",
+                    accessor: (o) => (
+                      <span className="text-destructive font-medium">
+                        {formatCurrency(o.amountOwed)}
+                      </span>
+                    ),
+                  },
+                  {
+                    header: "Trạng thái",
+                    align: "center",
+                    accessor: (o) => statusBadge(o.status),
+                  },
+                ]}
+              />
+            </div>
+          ) : (
+            <div className="text-sm text-muted-foreground py-4 text-center">
+              Không có đơn còn nợ
+            </div>
+          )}
+        </div>
       ),
     },
   ];

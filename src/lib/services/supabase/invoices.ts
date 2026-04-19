@@ -52,6 +52,65 @@ export function getInvoiceStatuses() {
 }
 
 /**
+ * Lấy lịch sử bán hàng của 1 khách hàng cụ thể (dùng trong tab chi tiết KH).
+ * Sắp xếp giảm dần theo ngày tạo, giới hạn mặc định 50 dòng.
+ */
+export async function getInvoicesForCustomer(
+  customerId: string,
+  limit: number = 50
+): Promise<Invoice[]> {
+  const supabase = getClient();
+  const { data, error } = await supabase
+    .from("invoices")
+    .select("*, profiles!invoices_created_by_fkey(full_name)")
+    .eq("customer_id", customerId)
+    .order("created_at", { ascending: false })
+    .limit(limit);
+
+  if (error) handleError(error, "getInvoicesForCustomer");
+  return (data ?? []).map(mapInvoice);
+}
+
+/**
+ * Lấy lịch sử trả hàng của 1 khách hàng cụ thể.
+ */
+export interface CustomerReturn {
+  id: string;
+  code: string;
+  invoiceCode: string;
+  date: string;
+  totalAmount: number;
+  status: string;
+}
+
+export async function getReturnsForCustomer(
+  customerId: string,
+  limit: number = 50
+): Promise<CustomerReturn[]> {
+  const supabase = getClient();
+  const { data, error } = await supabase
+    .from("sales_returns")
+    .select("id, code, total, status, created_at, invoices!sales_returns_invoice_id_fkey(code)")
+    .eq("customer_id", customerId)
+    .order("created_at", { ascending: false })
+    .limit(limit);
+
+  if (error) handleError(error, "getReturnsForCustomer");
+
+  return (data ?? []).map((row) => {
+    const inv = row.invoices as unknown as { code: string } | null;
+    return {
+      id: row.id,
+      code: row.code,
+      invoiceCode: inv?.code ?? "—",
+      date: row.created_at,
+      totalAmount: Number(row.total ?? 0),
+      status: row.status,
+    };
+  });
+}
+
+/**
  * Hủy hóa đơn — chỉ cho phép hủy hóa đơn ở trạng thái draft hoặc confirmed.
  * Hóa đơn đã hoàn thành (completed) hoặc đã hủy (cancelled) sẽ bị từ chối.
  */
