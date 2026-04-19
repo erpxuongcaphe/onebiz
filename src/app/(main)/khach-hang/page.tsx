@@ -22,6 +22,10 @@ import {
 } from "@/components/shared/inline-detail-panel";
 import type { DetailTab } from "@/components/shared/inline-detail-panel";
 import { CreateCustomerDialog, ConfirmDialog } from "@/components/shared/dialogs";
+import { ImportExcelDialog } from "@/components/shared/dialogs/import-excel-dialog";
+import { downloadTemplate } from "@/lib/excel";
+import { customerExcelSchema } from "@/lib/excel/schemas";
+import { bulkImportCustomers } from "@/lib/services/supabase/excel-import";
 import { useToast } from "@/lib/contexts";
 import { formatCurrency, formatDate } from "@/lib/format";
 import { exportToExcel, exportToCsv } from "@/lib/utils/export";
@@ -72,6 +76,7 @@ export default function KhachHangPage() {
   // Dialog
   const [createOpen, setCreateOpen] = useState(false);
   const [editingCustomer, setEditingCustomer] = useState<Customer | null>(null);
+  const [importOpen, setImportOpen] = useState(false);
 
   // Delete
   const [deletingCustomer, setDeletingCustomer] = useState<Customer | null>(null);
@@ -402,7 +407,17 @@ export default function KhachHangPage() {
               variant: "default",
               onClick: () => setCreateOpen(true),
             },
-            { label: "Import", icon: <Icon name="upload" size={16} /> },
+            {
+              label: "Tải mẫu",
+              icon: <Icon name="description" size={16} />,
+              variant: "ghost",
+              onClick: () => downloadTemplate(customerExcelSchema),
+            },
+            {
+              label: "Nhập Excel",
+              icon: <Icon name="upload" size={16} />,
+              onClick: () => setImportOpen(true),
+            },
           ]}
         />
 
@@ -480,6 +495,22 @@ export default function KhachHangPage() {
           } finally {
             setDeleteLoading(false);
           }
+        }}
+      />
+
+      <ImportExcelDialog
+        open={importOpen}
+        onOpenChange={setImportOpen}
+        schema={customerExcelSchema}
+        onCommit={bulkImportCustomers}
+        onFinished={() => {
+          setPage(0);
+          fetchData();
+          toast({
+            title: "Nhập Excel hoàn tất",
+            description: "Danh sách khách hàng đã được cập nhật.",
+            variant: "success",
+          });
         }}
       />
     </>

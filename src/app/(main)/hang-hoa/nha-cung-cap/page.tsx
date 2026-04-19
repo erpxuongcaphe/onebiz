@@ -22,6 +22,10 @@ import {
 } from "@/components/shared/inline-detail-panel";
 import type { DetailTab } from "@/components/shared/inline-detail-panel";
 import { CreateSupplierDialog, ConfirmDialog } from "@/components/shared/dialogs";
+import { ImportExcelDialog } from "@/components/shared/dialogs/import-excel-dialog";
+import { downloadTemplate } from "@/lib/excel";
+import { supplierExcelSchema } from "@/lib/excel/schemas";
+import { bulkImportSuppliers } from "@/lib/services/supabase/excel-import";
 import { formatCurrency, formatDate } from "@/lib/format";
 import { exportToExcel, exportToCsv } from "@/lib/utils/export";
 import { getSuppliers, deleteSupplier } from "@/lib/services";
@@ -152,6 +156,7 @@ export default function NhaCungCapPage() {
   // Dialog
   const [createOpen, setCreateOpen] = useState(false);
   const [editingSupplier, setEditingSupplier] = useState<Supplier | null>(null);
+  const [importOpen, setImportOpen] = useState(false);
 
   // Delete
   const [deletingSupplier, setDeletingSupplier] = useState<Supplier | null>(null);
@@ -358,12 +363,15 @@ export default function NhaCungCapPage() {
               onClick: () => setCreateOpen(true),
             },
             {
-              label: "Import file",
-              icon: <Icon name="upload" size={16} />,
+              label: "Tải mẫu",
+              icon: <Icon name="description" size={16} />,
+              variant: "ghost",
+              onClick: () => downloadTemplate(supplierExcelSchema),
             },
             {
-              label: "Xuất file",
-              icon: <Icon name="download" size={16} />,
+              label: "Nhập Excel",
+              icon: <Icon name="upload" size={16} />,
+              onClick: () => setImportOpen(true),
             },
           ]}
         />
@@ -441,6 +449,22 @@ export default function NhaCungCapPage() {
           } finally {
             setDeleteLoading(false);
           }
+        }}
+      />
+
+      <ImportExcelDialog
+        open={importOpen}
+        onOpenChange={setImportOpen}
+        schema={supplierExcelSchema}
+        onCommit={bulkImportSuppliers}
+        onFinished={() => {
+          setPage(0);
+          fetchData();
+          toast({
+            title: "Nhập Excel hoàn tất",
+            description: "Danh sách nhà cung cấp đã được cập nhật.",
+            variant: "success",
+          });
         }}
       />
     </>
