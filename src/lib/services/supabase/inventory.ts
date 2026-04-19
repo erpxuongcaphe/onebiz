@@ -480,6 +480,65 @@ export async function applyInventoryCheck(checkId: string): Promise<void> {
   //    No further status update needed.
 }
 
+/* ------------------------------------------------------------------ */
+/*  Per-item variance detail (for inline detail panel)                 */
+/* ------------------------------------------------------------------ */
+
+export interface InventoryCheckItemRow {
+  id: string;
+  productId: string;
+  productName: string;
+  productCode?: string;
+  unit?: string;
+  systemStock: number;
+  actualStock: number;
+  difference: number;
+  /** Latest cost × |difference| — signed same as difference */
+  valueImpact: number;
+  note?: string;
+}
+
+/**
+ * Fetch per-product rows for an inventory check, joined with products to pull
+ * code/unit/cost. Used by the detail panel to show a "sổ chênh lệch" table and
+ * by the apply-modal preview to show expected impact before committing.
+ */
+export async function getInventoryCheckItems(
+  checkId: string
+): Promise<InventoryCheckItemRow[]> {
+  const supabase = getClient();
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  const sb = supabase as any;
+
+  const { data, error } = await sb
+    .from("inventory_check_items")
+    .select(
+      "id, product_id, product_name, system_stock, actual_stock, difference, note, products(code, unit, cost)"
+    )
+    .eq("check_id", checkId)
+    .order("difference", { ascending: true });
+
+  if (error) handleError(error, "getInventoryCheckItems");
+
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  return (data ?? []).map((row: any) => {
+    const diff = Number(row.difference ?? 0);
+    const cost = Number(row.products?.cost ?? 0);
+    return {
+      id: row.id,
+      productId: row.product_id,
+      productName: row.product_name,
+      productCode: row.products?.code ?? undefined,
+      unit: row.products?.unit ?? undefined,
+      systemStock: Number(row.system_stock ?? 0),
+      actualStock: Number(row.actual_stock ?? 0),
+      difference: diff,
+      valueImpact: diff * cost,
+      note: row.note ?? undefined,
+    };
+  });
+}
+
 /**
  * Hủy phiếu kiểm kho — chỉ cho phép hủy khi phiếu ở trạng thái draft/in_progress.
  */

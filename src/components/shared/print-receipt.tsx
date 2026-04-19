@@ -25,6 +25,8 @@ export interface ReceiptData {
   paymentMethod: string;
   date: string;
   note?: string;
+  /** True when hoá đơn được tạo trong chế độ offline và chờ đồng bộ lên server. */
+  isOffline?: boolean;
 }
 
 interface PrintReceiptProps {
@@ -248,7 +250,7 @@ ${data.storeAddress ? `<div style="font-size:10px;margin-top:2px">${data.storeAd
 ${data.storePhone ? `<div style="font-size:10px">SDT: ${data.storePhone}</div>` : ""}
 </div>
 <div class="line"></div>
-<div class="center"><div class="bold" style="font-size:13px">${data.invoiceCode}</div><div style="font-size:10px">${data.date}</div></div>
+<div class="center"><div class="bold" style="font-size:13px">${data.invoiceCode}</div><div style="font-size:10px">${data.date}</div>${data.isOffline ? `<div class="bold" style="font-size:11px;color:#b45309;margin-top:2px;border:1px dashed #b45309;padding:2px 6px;display:inline-block">⚠ CHO DONG BO</div>` : ""}</div>
 <div class="line"></div>
 <div class="row"><span>Khach hang:</span><span>${data.customerName}</span></div>
 ${data.cashierName ? `<div class="row"><span>Thu ngan:</span><span>${data.cashierName}</span></div>` : ""}

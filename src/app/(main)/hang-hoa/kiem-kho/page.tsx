@@ -22,7 +22,8 @@ import {
 import type { DetailTab } from "@/components/shared/inline-detail-panel";
 import { formatCurrency, formatDate } from "@/lib/format";
 import { exportToExcel, exportToCsv } from "@/lib/utils/export";
-import { getInventoryChecks, getInventoryCheckStatuses, applyInventoryCheck, cancelInventoryCheck } from "@/lib/services";
+import { getInventoryChecks, getInventoryCheckStatuses, applyInventoryCheck, cancelInventoryCheck, getInventoryCheckItems } from "@/lib/services";
+import type { InventoryCheckItemRow } from "@/lib/services";
 import type { InventoryCheck } from "@/lib/types";
 import { CreateInventoryCheckDialog, ConfirmDialog } from "@/components/shared/dialogs";
 import { useToast, useBranchFilter } from "@/lib/contexts";
@@ -60,6 +61,199 @@ function useStarredSet() {
 /* ------------------------------------------------------------------ */
 /*  Inline detail                                                      */
 /* ------------------------------------------------------------------ */
+function VarianceTab({ checkId }: { checkId: string }) {
+  const [rows, setRows] = useState<InventoryCheckItemRow[]>([]);
+  const [loading, setLoading] = useState(true);
+  const [error, setError] = useState<string | null>(null);
+
+  useEffect(() => {
+    let cancelled = false;
+    setLoading(true);
+    setError(null);
+    getInventoryCheckItems(checkId)
+      .then((data) => {
+        if (!cancelled) setRows(data);
+      })
+      .catch((err) => {
+        if (!cancelled)
+          setError(err instanceof Error ? err.message : "Không tải được chi tiết");
+      })
+      .finally(() => {
+        if (!cancelled) setLoading(false);
+      });
+    return () => {
+      cancelled = true;
+    };
+  }, [checkId]);
+
+  if (loading) {
+    return (
+      <div className="flex items-center justify-center py-12 text-sm text-muted-foreground gap-2">
+        <Icon name="progress_activity" size={18} className="animate-spin" />
+        Đang tải chi tiết kiểm kê...
+      </div>
+    );
+  }
+
+  if (error) {
+    return (
+      <div className="flex items-center justify-center py-12 text-sm text-status-error gap-2">
+        <Icon name="error" size={18} />
+        {error}
+      </div>
+    );
+  }
+
+  if (rows.length === 0) {
+    return (
+      <div className="flex items-center justify-center py-12 text-sm text-muted-foreground">
+        Phiếu kiểm chưa có sản phẩm nào
+      </div>
+    );
+  }
+
+  const changed = rows.filter((r) => r.difference !== 0);
+  const matched = rows.filter((r) => r.difference === 0);
+  const totalIncrease = changed
+    .filter((r) => r.difference > 0)
+    .reduce((sum, r) => sum + r.valueImpact, 0);
+  const totalDecrease = changed
+    .filter((r) => r.difference < 0)
+    .reduce((sum, r) => sum + r.valueImpact, 0);
+  const netImpact = totalIncrease + totalDecrease;
+
+  return (
+    <div className="space-y-4">
+      {/* Summary chips */}
+      <div className="grid grid-cols-2 md:grid-cols-4 gap-2">
+        <div className="rounded-xl bg-surface-container p-3">
+          <div className="text-[10px] uppercase tracking-wider text-muted-foreground">
+            Tổng SP kiểm
+          </div>
+          <div className="text-lg font-semibold">{rows.length}</div>
+        </div>
+        <div className="rounded-xl bg-surface-container p-3">
+          <div className="text-[10px] uppercase tracking-wider text-muted-foreground">
+            Khớp kho
+          </div>
+          <div className="text-lg font-semibold">{matched.length}</div>
+        </div>
+        <div className="rounded-xl bg-status-success/10 p-3">
+          <div className="text-[10px] uppercase tracking-wider text-status-success">
+            Lệch tăng
+          </div>
+          <div className="text-lg font-semibold text-status-success">
+            {formatCurrency(totalIncrease)}
+          </div>
+        </div>
+        <div className="rounded-xl bg-status-error/10 p-3">
+          <div className="text-[10px] uppercase tracking-wider text-status-error">
+            Lệch giảm
+          </div>
+          <div className="text-lg font-semibold text-status-error">
+            {formatCurrency(totalDecrease)}
+          </div>
+        </div>
+      </div>
+
+      <div className="flex items-center justify-between px-1">
+        <span className="text-xs font-semibold">
+          Chênh lệch ròng:
+        </span>
+        <span
+          className={`text-sm font-bold font-mono ${
+            netImpact >= 0 ? "text-status-success" : "text-status-error"
+          }`}
+        >
+          {netImpact >= 0 ? "+" : ""}
+          {formatCurrency(netImpact)}
+        </span>
+      </div>
+
+      {/* Variance table */}
+      <div className="border rounded-xl overflow-hidden">
+        <table className="w-full text-xs">
+          <thead className="bg-surface-container-low border-b">
+            <tr>
+              <th className="text-left px-3 py-2 font-medium uppercase tracking-wider text-[10px]">
+                Sản phẩm
+              </th>
+              <th className="text-right px-3 py-2 font-medium uppercase tracking-wider text-[10px] w-20">
+                Hệ thống
+              </th>
+              <th className="text-right px-3 py-2 font-medium uppercase tracking-wider text-[10px] w-20">
+                Thực tế
+              </th>
+              <th className="text-right px-3 py-2 font-medium uppercase tracking-wider text-[10px] w-20">
+                Lệch
+              </th>
+              <th className="text-right px-3 py-2 font-medium uppercase tracking-wider text-[10px] w-28">
+                Ảnh hưởng
+              </th>
+            </tr>
+          </thead>
+          <tbody>
+            {rows.map((r) => {
+              const isZero = r.difference === 0;
+              const sign = r.difference > 0 ? "+" : "";
+              const diffColor =
+                r.difference > 0
+                  ? "text-status-success"
+                  : r.difference < 0
+                  ? "text-status-error"
+                  : "text-muted-foreground";
+              return (
+                <tr
+                  key={r.id}
+                  className={`border-b last:border-0 ${
+                    isZero ? "opacity-60" : ""
+                  } hover:bg-surface-container-low/60`}
+                >
+                  <td className="px-3 py-2">
+                    <div className="font-medium">{r.productName}</div>
+                    {r.productCode && (
+                      <div className="text-[10px] text-muted-foreground font-mono">
+                        {r.productCode}
+                      </div>
+                    )}
+                  </td>
+                  <td className="text-right px-3 py-2 font-mono text-muted-foreground">
+                    {r.systemStock}
+                    {r.unit ? ` ${r.unit}` : ""}
+                  </td>
+                  <td className="text-right px-3 py-2 font-mono font-medium">
+                    {r.actualStock}
+                    {r.unit ? ` ${r.unit}` : ""}
+                  </td>
+                  <td className={`text-right px-3 py-2 font-mono font-bold ${diffColor}`}>
+                    {sign}
+                    {r.difference}
+                  </td>
+                  <td
+                    className={`text-right px-3 py-2 font-mono ${
+                      r.valueImpact > 0
+                        ? "text-status-success"
+                        : r.valueImpact < 0
+                        ? "text-status-error"
+                        : "text-muted-foreground"
+                    }`}
+                  >
+                    {r.valueImpact === 0
+                      ? "—"
+                      : `${r.valueImpact > 0 ? "+" : ""}${formatCurrency(
+                          r.valueImpact
+                        )}`}
+                  </td>
+                </tr>
+              );
+            })}
+          </tbody>
+        </table>
+      </div>
+    </div>
+  );
+}
+
 function InventoryCheckDetail({
   item,
   onClose,
@@ -152,6 +346,11 @@ function InventoryCheckDetail({
           />
         </div>
       ),
+    },
+    {
+      id: "variance",
+      label: "Chi tiết kiểm kê",
+      content: <VarianceTab checkId={item.id} />,
     },
     {
       id: "history",

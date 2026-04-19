@@ -261,6 +261,50 @@ export default function KdsPage() {
     );
   }, []);
 
+  // ── Mark all items in an order as ready (bulk action) ──
+  const handleMarkAllReady = useCallback(
+    async (orderId: string) => {
+      const order = orders.find((o) => o.id === orderId);
+      if (!order) return;
+
+      const toMark = order.items.filter((i) => i.status !== "ready");
+      if (toMark.length === 0) return;
+
+      hapticTap();
+
+      // Optimistic UI: update locally first
+      setOrders((prev) =>
+        prev.map((o) =>
+          o.id === orderId
+            ? {
+                ...o,
+                items: o.items.map((i) =>
+                  i.status !== "ready" ? { ...i, status: "ready" as KitchenItemStatus } : i
+                ),
+              }
+            : o
+        )
+      );
+
+      try {
+        // Run in parallel for speed
+        await Promise.all(
+          toMark.map((i) => updateKitchenItemStatus(i.id, "ready"))
+        );
+        hapticSuccess();
+      } catch (err) {
+        // Rollback + toast
+        fetchOrders();
+        toast({
+          title: "Không đánh dấu được",
+          description: err instanceof Error ? err.message : "Lỗi không xác định",
+          variant: "error",
+        });
+      }
+    },
+    [orders, fetchOrders, toast]
+  );
+
   // ── Filtered orders ──
   const filtered = orders.filter((o) => {
     if (filter === "all") return o.status !== "served";
@@ -426,6 +470,7 @@ export default function KdsPage() {
                 now={now}
                 onItemToggle={handleItemToggle}
                 onServed={() => handleServed(order.id)}
+                onMarkAllReady={() => handleMarkAllReady(order.id)}
               />
             ))}
           </div>
@@ -444,14 +489,17 @@ function KdsOrderCard({
   now: _now,
   onItemToggle,
   onServed,
+  onMarkAllReady,
 }: {
   order: KdsOrder;
   now: number;
   onItemToggle: (item: KitchenOrderItem) => void;
   onServed: () => void;
+  onMarkAllReady: () => void;
 }) {
   const allReady =
     order.items.length > 0 && order.items.every((i) => i.status === "ready");
+  const pendingCount = order.items.filter((i) => i.status !== "ready").length;
   const urgency = getUrgency(order.createdAt);
 
   // Order type label
@@ -553,8 +601,24 @@ function KdsOrderCard({
         ))}
       </div>
 
-      {/* ── Action button ── */}
-      <div className="p-3 shrink-0 border-t border-slate-700/40 bg-slate-900">
+      {/* ── Action buttons ── */}
+      <div className="p-3 shrink-0 border-t border-slate-700/40 bg-slate-900 space-y-2">
+        {/* Bulk "Sẵn sàng hết" — only when there are still pending items */}
+        {order.status !== "served" && pendingCount > 0 && (
+          <button
+            type="button"
+            onClick={onMarkAllReady}
+            className={cn(
+              "w-full py-2.5 rounded-lg font-semibold text-xs transition-all press-scale-sm flex items-center justify-center gap-1.5",
+              "bg-slate-800 text-status-info hover:bg-slate-700 border border-status-info/40"
+            )}
+            title={`Đánh dấu sẵn sàng ${pendingCount} món còn lại`}
+          >
+            <Icon name="done_all" size={14} />
+            Sẵn sàng hết ({pendingCount})
+          </button>
+        )}
+
         {order.status === "served" ? (
           <div className="w-full py-3 rounded-lg bg-slate-800 text-slate-500 font-semibold text-sm text-center flex items-center justify-center gap-1.5">
             <Icon name="check_circle" size={16} />

@@ -29,6 +29,10 @@ export {
   enqueue,
   replayQueue,
   getPendingCount,
+  getFailedCount,
+  getQueueEntries,
+  retryFailedEntries,
+  deleteQueueEntry,
   clearCompleted,
 } from "./sync-manager";
 export type { SyncResult } from "./sync-manager";
@@ -41,6 +45,8 @@ export type { NetworkStatus } from "./use-network-status";
 export {
   offlineSendToKitchen,
   offlineFnbPayment,
+  offlineAddItemsToExistingOrder,
+  offlinePosCheckout,
 } from "./offline-checkout";
 
 // Haptic feedback

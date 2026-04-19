@@ -185,20 +185,76 @@ export async function deletePriceTierItem(id: string) {
   if (error) throw error;
 }
 
-// Get best price for a product based on customer group
+// Get best price for a product/variant (optionally scoped to a price tier).
+// If tierId provided → look up that tier's price for this product (or variant).
+// Else → fallback to lowest tier price across all active tiers (legacy behaviour).
 export async function getProductPriceForCustomer(
   productId: string,
   variantId?: string,
-  customerGroupId?: string
+  tierId?: string
 ): Promise<number | null> {
-  // For now, get the lowest tier price
-  const { data, error } = await supabase
+  let query = supabase
     .from("price_tier_items")
-    .select("price, min_qty")
-    .eq("product_id", productId)
-    .order("price", { ascending: true })
-    .limit(1);
+    .select("price, min_qty, variant_id, price_tier_id")
+    .eq("product_id", productId);
+
+  if (tierId) query = query.eq("price_tier_id", tierId);
+  if (variantId) {
+    // Prefer variant-specific price, fallback to base product
+    query = query.or(`variant_id.eq.${variantId},variant_id.is.null`);
+  }
+
+  const { data, error } = await query.order("price", { ascending: true }).limit(5);
 
   if (error || !data?.length) return null;
+
+  // If variant-specific rows exist, prefer those
+  const variantMatch = variantId
+    ? data.find((r) => r.variant_id === variantId)
+    : null;
+  if (variantMatch) return variantMatch.price;
+
   return data[0].price;
+}
+
+// Batch look-up: fetch all tier prices for a list of products+variants in a
+// single query. Used by the POS cart to re-price lines when the cashier picks
+// a tier or a customer with a tier association.
+export async function getTierPricesBatch(
+  tierId: string,
+  productIds: string[]
+): Promise<Map<string, { base: number | null; byVariant: Map<string, number> }>> {
+  if (productIds.length === 0) return new Map();
+
+  const { data, error } = await supabase
+    .from("price_tier_items")
+    .select("product_id, variant_id, price")
+    .eq("price_tier_id", tierId)
+    .in("product_id", productIds);
+
+  if (error || !data) return new Map();
+
+  const result = new Map<
+    string,
+    { base: number | null; byVariant: Map<string, number> }
+  >();
+
+  for (const row of data) {
+    const productId = row.product_id as string;
+    const variantId = row.variant_id as string | null;
+    const price = row.price as number;
+
+    if (!result.has(productId)) {
+      result.set(productId, { base: null, byVariant: new Map() });
+    }
+    const entry = result.get(productId)!;
+
+    if (variantId) {
+      entry.byVariant.set(variantId, price);
+    } else {
+      entry.base = price;
+    }
+  }
+
+  return result;
 }

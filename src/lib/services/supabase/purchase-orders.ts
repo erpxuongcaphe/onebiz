@@ -118,6 +118,183 @@ export function getPurchaseOrderStatuses() {
 }
 
 /* ------------------------------------------------------------------ */
+/*  Item loader (for detail panel + partial receive)                   */
+/* ------------------------------------------------------------------ */
+
+export interface PurchaseOrderItemRow {
+  id: string;
+  productId: string | null;
+  productCode: string;
+  productName: string;
+  unit: string;
+  quantity: number;
+  receivedQuantity: number;
+  remaining: number;
+  unitPrice: number;
+  lineTotal: number;
+}
+
+export async function getPurchaseOrderItems(
+  orderId: string,
+): Promise<PurchaseOrderItemRow[]> {
+  const supabase = getClient();
+  const { data, error } = await supabase
+    .from("purchase_order_items")
+    .select(
+      "id, product_id, product_name, quantity, received_quantity, unit_price, unit, products(code)",
+    )
+    .eq("purchase_order_id", orderId)
+    .order("id", { ascending: true });
+
+  if (error) handleError(error, "getPurchaseOrderItems");
+
+  return ((data ?? []) as unknown as Array<{
+    id: string;
+    product_id: string | null;
+    product_name: string;
+    quantity: number | string;
+    received_quantity: number | string;
+    unit_price: number | string;
+    unit: string | null;
+    products: { code: string } | null;
+  }>).map((row) => {
+    const qty = Number(row.quantity ?? 0);
+    const received = Number(row.received_quantity ?? 0);
+    const price = Number(row.unit_price ?? 0);
+    return {
+      id: row.id,
+      productId: row.product_id,
+      productCode: row.products?.code ?? "",
+      productName: row.product_name ?? "",
+      unit: row.unit ?? "cái",
+      quantity: qty,
+      receivedQuantity: received,
+      remaining: Math.max(0, qty - received),
+      unitPrice: price,
+      lineTotal: qty * price,
+    };
+  });
+}
+
+/* ------------------------------------------------------------------ */
+/*  Partial receive — nhập một phần với số lượng tuỳ chỉnh per-line     */
+/* ------------------------------------------------------------------ */
+
+export interface PartialReceiveLine {
+  itemId: string;
+  receiveQty: number; // 0 = skip, > remaining = clamped
+}
+
+/**
+ * Nhập một phần: tạo stock movement + lot cho từng line với số lượng tuỳ chọn.
+ * Sau khi xong, kiểm tra xem tất cả line đã received >= quantity chưa:
+ *   - Nếu CHƯA đủ → status = "partial"
+ *   - Nếu ĐỦ     → status = "completed"
+ */
+export async function receivePurchaseOrderPartial(
+  orderId: string,
+  lines: PartialReceiveLine[],
+): Promise<{ newStatus: PurchaseOrderStatus; receivedLines: number }> {
+  const supabase = getClient();
+  if (!lines || lines.length === 0) {
+    throw new Error("Không có dòng nào để nhập");
+  }
+
+  // Read current PO + items
+  const [{ data: po, error: poErr }, { data: items, error: itemsErr }] = await Promise.all([
+    supabase
+      .from("purchase_orders")
+      .select("id, status, branch_id, supplier_id, code")
+      .eq("id", orderId)
+      .single(),
+    supabase
+      .from("purchase_order_items")
+      .select("id, product_id, product_name, quantity, received_quantity, unit_price")
+      .eq("purchase_order_id", orderId),
+  ]);
+
+  if (poErr) handleError(poErr, "receivePurchaseOrderPartial.po");
+  if (itemsErr) handleError(itemsErr, "receivePurchaseOrderPartial.items");
+  if (!po) throw new Error("Không tìm thấy đơn nhập hàng");
+  if (!items || items.length === 0) throw new Error("Đơn không có sản phẩm");
+
+  const status = po.status as PurchaseOrderStatus;
+  if (status !== "ordered" && status !== "partial") {
+    throw new Error(`Không thể nhập hàng ở trạng thái "${status}"`);
+  }
+
+  const ctx = await getCurrentContext();
+  const lineMap = new Map(lines.map((l) => [l.itemId, l.receiveQty]));
+
+  let receivedCount = 0;
+  for (const it of items as Array<{
+    id: string;
+    product_id: string;
+    product_name: string;
+    quantity: number;
+    received_quantity: number | null;
+    unit_price: number;
+  }>) {
+    const requestedQty = Number(lineMap.get(it.id) ?? 0);
+    if (requestedQty <= 0) continue;
+
+    const currentReceived = Number(it.received_quantity ?? 0);
+    const fullQty = Number(it.quantity ?? 0);
+    const remaining = Math.max(0, fullQty - currentReceived);
+    const actualQty = Math.min(requestedQty, remaining);
+    if (actualQty <= 0) continue;
+
+    // Apply stock-in (dual-table sync products.stock + branch_stock + movements ledger)
+    await applyManualStockMovement(
+      [
+        {
+          productId: it.product_id,
+          quantity: actualQty,
+          type: "in",
+          referenceType: "purchase_order",
+          referenceId: orderId,
+          note: `Nhập một phần từ đơn ${po.code}`,
+        },
+      ],
+      {
+        tenantId: ctx.tenantId,
+        branchId: po.branch_id as string,
+        createdBy: ctx.userId,
+      },
+    );
+
+    // Update received_quantity
+    const newReceived = currentReceived + actualQty;
+    const { error: upErr } = await supabase
+      .from("purchase_order_items")
+      .update({ received_quantity: newReceived } as Record<string, unknown>)
+      .eq("id", it.id);
+    if (upErr) handleError(upErr, "receivePurchaseOrderPartial.updateItem");
+
+    receivedCount++;
+  }
+
+  // Re-read all items to compute new status (handles lines we didn't touch this run)
+  const { data: reread } = await supabase
+    .from("purchase_order_items")
+    .select("quantity, received_quantity")
+    .eq("purchase_order_id", orderId);
+
+  const allReceived = (reread ?? []).every(
+    (r) => Number(r.received_quantity ?? 0) >= Number(r.quantity ?? 0),
+  );
+  const newStatus: PurchaseOrderStatus = allReceived ? "completed" : "partial";
+
+  const { error: sErr } = await supabase
+    .from("purchase_orders")
+    .update({ status: newStatus } as Record<string, unknown>)
+    .eq("id", orderId);
+  if (sErr) handleError(sErr, "receivePurchaseOrderPartial.status");
+
+  return { newStatus, receivedLines: receivedCount };
+}
+
+/* ------------------------------------------------------------------ */
 /*  Mutations                                                          */
 /* ------------------------------------------------------------------ */
 

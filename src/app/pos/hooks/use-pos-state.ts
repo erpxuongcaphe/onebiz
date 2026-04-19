@@ -60,6 +60,19 @@ export interface OrderLine {
   unitPrice: number;
   vatRate: number;
   discount: DiscountInput;
+  /** Packaging variant (250g, 500g, …). If undefined, line uses base product. */
+  variantId?: string;
+  variantLabel?: string;
+}
+
+/** Optional overrides when adding a line — for variant-based pricing / labelling. */
+export interface AddLineOptions {
+  variantId?: string;
+  variantLabel?: string;
+  /** Overrides product.sellPrice (e.g., variant price or tier price). */
+  unitPrice?: number;
+  /** Quantity to add (default 1). */
+  quantity?: number;
 }
 
 export type PaymentMethod = "cash" | "transfer" | "card" | "mixed";
@@ -131,36 +144,46 @@ export function usePosState() {
 
   // --- Actions ---
 
-  const addLine = useCallback((product: Product): void => {
-    setLines((prev) => {
-      // If same product already in cart, bump quantity
-      const existingIdx = prev.findIndex((l) => l.productId === product.id);
-      if (existingIdx >= 0) {
-        const next = [...prev];
-        next[existingIdx] = {
-          ...next[existingIdx],
-          quantity: next[existingIdx].quantity + 1,
-        };
-        return next;
-      }
-      return [
-        ...prev,
-        {
-          lineId: nextLineId(),
-          productId: product.id,
-          productCode: product.code,
-          productName: product.name,
-          productImage: product.image,
-          unit: product.sellUnit ?? product.unit ?? "Cái",
-          availableStock: product.stock ?? 0,
-          quantity: 1,
-          unitPrice: product.sellPrice ?? 0,
-          vatRate: product.vatRate ?? 0,
-          discount: { mode: "amount", value: 0 },
-        },
-      ];
-    });
-  }, []);
+  const addLine = useCallback(
+    (product: Product, options?: AddLineOptions): void => {
+      const qtyDelta = options?.quantity ?? 1;
+      setLines((prev) => {
+        // Match both productId AND variantId so different variants are separate lines
+        const existingIdx = prev.findIndex(
+          (l) =>
+            l.productId === product.id &&
+            (l.variantId ?? null) === (options?.variantId ?? null)
+        );
+        if (existingIdx >= 0) {
+          const next = [...prev];
+          next[existingIdx] = {
+            ...next[existingIdx],
+            quantity: next[existingIdx].quantity + qtyDelta,
+          };
+          return next;
+        }
+        return [
+          ...prev,
+          {
+            lineId: nextLineId(),
+            productId: product.id,
+            productCode: product.code,
+            productName: product.name,
+            productImage: product.image,
+            unit: product.sellUnit ?? product.unit ?? "Cái",
+            availableStock: product.stock ?? 0,
+            quantity: qtyDelta,
+            unitPrice: options?.unitPrice ?? product.sellPrice ?? 0,
+            vatRate: product.vatRate ?? 0,
+            discount: { mode: "amount", value: 0 },
+            variantId: options?.variantId,
+            variantLabel: options?.variantLabel,
+          },
+        ];
+      });
+    },
+    []
+  );
 
   const removeLine = useCallback((lineId: string): void => {
     setLines((prev) => prev.filter((l) => l.lineId !== lineId));

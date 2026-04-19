@@ -12,6 +12,8 @@ export interface Customer {
   totalSalesMinusReturns: number;
   groupId?: string;
   groupName?: string;
+  /** Auto-applied discount % from customer group (0–100). */
+  groupDiscountPercent?: number;
   type: "individual" | "company";
   gender?: "male" | "female";
   isInternal?: boolean;

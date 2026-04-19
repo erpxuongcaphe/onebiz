@@ -73,7 +73,7 @@ export function FnbCart({
       {/* ── Header ── */}
       <div className="p-4 border-b border-outline-variant/20 bg-surface-container-lowest shrink-0">
         <div className="flex items-center justify-between mb-3">
-          <div className="flex items-center gap-2 min-w-0">
+          <div className="flex items-center gap-2 min-w-0 flex-wrap">
             <h2 className="font-heading text-base font-bold text-foreground truncate">
               {activeTab?.label ?? "Đơn hàng"}
             </h2>
@@ -84,6 +84,15 @@ export function FnbCart({
               >
                 {lineCount} món
               </Badge>
+            )}
+            {activeTab?.kitchenOrderId && (
+              <span
+                className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full bg-status-info/10 text-status-info text-[10px] font-semibold shrink-0"
+                title="Đơn đã được gửi xuống bếp. Thêm món sẽ gửi bổ sung."
+              >
+                <Icon name="ramen_dining" size={11} />
+                Đã gửi bếp
+              </span>
             )}
           </div>
         </div>
@@ -216,11 +225,15 @@ export function FnbCart({
             disabled={isEmpty}
             className={cn(
               "flex-[0.4] h-14 rounded-xl font-semibold text-sm flex flex-col items-center justify-center gap-0.5 transition-all press-scale-sm",
-              "bg-surface-container-high text-on-surface hover:bg-surface-container disabled:opacity-40 disabled:pointer-events-none"
+              activeTab?.kitchenOrderId
+                ? "bg-status-info/15 text-status-info hover:bg-status-info/25 disabled:opacity-40 disabled:pointer-events-none"
+                : "bg-surface-container-high text-on-surface hover:bg-surface-container disabled:opacity-40 disabled:pointer-events-none"
             )}
           >
-            <Icon name="notifications_active" size={18} />
-            <span className="text-xs leading-none">Bếp (F10)</span>
+            <Icon name={activeTab?.kitchenOrderId ? "add_circle" : "notifications_active"} size={18} />
+            <span className="text-xs leading-none">
+              {activeTab?.kitchenOrderId ? "Gửi thêm (F10)" : "Bếp (F10)"}
+            </span>
           </button>
           <button
             type="button"

@@ -67,6 +67,14 @@ export function CreateReturnDialog({
   const [errors, setErrors] = useState<Record<string, string>>({});
   const [saving, setSaving] = useState(false);
 
+  // Partial-refund state: default to full cashback; user can lower it.
+  // refundMode:
+  //   "full" → refundAmount = returnTotal (cashback toàn bộ)
+  //   "partial" → refundAmount user-set, remainder credits customer debt
+  //   "debt_only" → refundAmount = 0, all credits customer debt
+  const [refundMode, setRefundMode] = useState<"full" | "partial" | "debt_only">("full");
+  const [partialRefund, setPartialRefund] = useState(0);
+
   useEffect(() => {
     if (open) {
       setCode("TH...");
@@ -79,6 +87,8 @@ export function CreateReturnDialog({
       setNotes("");
       setErrors({});
       setSaving(false);
+      setRefundMode("full");
+      setPartialRefund(0);
     }
   }, [open]);
 
@@ -148,6 +158,16 @@ export function CreateReturnDialog({
     [selectedItems]
   );
 
+  // Derive actual cash refund from mode + user input.
+  // Clamp to [0, returnTotal] to prevent cashier overpayment.
+  const effectiveRefund = useMemo(() => {
+    if (refundMode === "full") return returnTotal;
+    if (refundMode === "debt_only") return 0;
+    return Math.max(0, Math.min(returnTotal, partialRefund));
+  }, [refundMode, returnTotal, partialRefund]);
+
+  const debtCredit = returnTotal - effectiveRefund;
+
   function validate(): boolean {
     const newErrors: Record<string, string> = {};
     if (!selectedInvoice) newErrors.invoice = "Vui lòng chọn hóa đơn gốc";
@@ -178,7 +198,7 @@ export function CreateReturnDialog({
           customer_name: selectedInvoice!.customer_name,
           status: "completed" as const,
           total: returnTotal,
-          refunded: returnTotal,
+          refunded: effectiveRefund,
           reason: reason || null,
           note: notes || null,
           created_by: ctx.userId,
@@ -202,11 +222,12 @@ export function CreateReturnDialog({
           } satisfies ReturnItemInsert)));
         if (itemsErr) throw new Error(itemsErr.message);
 
-        // Complete return: increment stock + create cash refund payment
+        // Complete return: increment stock + create cash refund payment (if any) + credit debt
         await completeReturn({
           returnId: salesReturn.id,
           returnCode,
           invoiceCode: selectedInvoice!.code,
+          customerId: selectedInvoice!.customer_id,
           customerName: selectedInvoice!.customer_name,
           items: selectedItems.map(item => ({
             productId: item.product_id,
@@ -214,14 +235,20 @@ export function CreateReturnDialog({
             quantity: item.returnQty,
             unitPrice: item.unit_price,
           })),
-          refundAmount: returnTotal,
+          refundAmount: effectiveRefund,
+          totalAmount: returnTotal,
         });
       }
 
       onOpenChange(false);
+      const descParts: string[] = [];
+      if (effectiveRefund > 0)
+        descParts.push(`hoàn ${formatCurrency(effectiveRefund)} tiền mặt`);
+      if (debtCredit > 0)
+        descParts.push(`trừ ${formatCurrency(debtCredit)} công nợ`);
       toast({
         title: "Tạo phiếu trả hàng thành công",
-        description: `Đã tạo phiếu trả hàng ${returnCode} — Kho đã cộng lại, sổ quỹ đã ghi nhận hoàn tiền`,
+        description: `${returnCode} — ${descParts.join(", ") || "đã nhập kho"}`,
         variant: "success",
       });
       onSuccess?.();
@@ -351,14 +378,92 @@ export function CreateReturnDialog({
             </div>
           )}
 
-          {/* Return total */}
+          {/* Return total + refund mode */}
           {selectedItems.length > 0 && (
-            <div className="space-y-3 rounded-lg border p-3">
+            <div className="space-y-3 rounded-xl border p-3">
               <div className="flex items-center justify-between">
                 <span className="font-medium">Tổng tiền trả</span>
                 <span className="text-lg font-semibold text-primary">
                   {formatCurrency(returnTotal)}
                 </span>
+              </div>
+
+              {/* Refund mode selector */}
+              <div className="space-y-1.5">
+                <label className="text-xs font-medium text-muted-foreground uppercase tracking-wider">
+                  Hình thức hoàn tiền
+                </label>
+                <div className="grid grid-cols-3 gap-1.5">
+                  {[
+                    { value: "full" as const, label: "Hoàn đủ tiền mặt", icon: "payments" },
+                    { value: "partial" as const, label: "Hoàn một phần", icon: "pie_chart" },
+                    { value: "debt_only" as const, label: "Khấu trừ công nợ", icon: "account_balance_wallet" },
+                  ].map((opt) => (
+                    <button
+                      key={opt.value}
+                      type="button"
+                      onClick={() => {
+                        setRefundMode(opt.value);
+                        if (opt.value === "partial" && partialRefund === 0) {
+                          // Default partial to half for convenience
+                          setPartialRefund(Math.round(returnTotal / 2));
+                        }
+                      }}
+                      className={`flex flex-col items-center justify-center gap-1 rounded-lg border-2 p-2 text-xs font-medium transition press-scale-sm ${
+                        refundMode === opt.value
+                          ? "border-primary bg-primary-fixed text-primary"
+                          : "border-transparent bg-surface-container hover:bg-surface-container-high"
+                      }`}
+                    >
+                      <Icon name={opt.icon} size={18} />
+                      <span className="leading-tight text-center">{opt.label}</span>
+                    </button>
+                  ))}
+                </div>
+              </div>
+
+              {/* Partial refund amount input */}
+              {refundMode === "partial" && (
+                <div className="space-y-1.5">
+                  <label className="text-xs font-medium">
+                    Số tiền hoàn bằng tiền mặt
+                  </label>
+                  <Input
+                    type="number"
+                    min={0}
+                    max={returnTotal}
+                    value={partialRefund}
+                    onChange={(e) =>
+                      setPartialRefund(Math.max(0, Number(e.target.value) || 0))
+                    }
+                    className="text-right font-mono"
+                  />
+                </div>
+              )}
+
+              {/* Breakdown preview */}
+              <div className="rounded-lg bg-surface-container-low p-2.5 text-xs space-y-1">
+                <div className="flex items-center justify-between">
+                  <span className="text-muted-foreground">Hoàn tiền mặt:</span>
+                  <span className="font-mono font-semibold text-status-success">
+                    {formatCurrency(effectiveRefund)}
+                  </span>
+                </div>
+                {debtCredit > 0 && (
+                  <div className="flex items-center justify-between">
+                    <span className="text-muted-foreground">
+                      Khấu trừ công nợ KH:
+                    </span>
+                    <span className="font-mono font-semibold text-status-info">
+                      {formatCurrency(debtCredit)}
+                    </span>
+                  </div>
+                )}
+                {debtCredit > 0 && !selectedInvoice?.customer_id && (
+                  <p className="text-[10px] text-status-warning mt-1">
+                    ⚠ Khách vãng lai không có công nợ — chỉ hoàn tiền mặt có ý nghĩa
+                  </p>
+                )}
               </div>
             </div>
           )}

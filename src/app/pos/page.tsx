@@ -17,9 +17,8 @@
 
 import Link from "next/link";
 import { useRouter } from "next/navigation";
-import { useCallback, useEffect, useRef, useState } from "react";
+import { lazy, Suspense, useCallback, useEffect, useRef, useState } from "react";
 import {
-  posCheckout,
   saveDraftOrder,
   listDraftOrders,
   getDraftOrderById,
@@ -37,12 +36,22 @@ import { formatCurrency } from "@/lib/format";
 import { cn } from "@/lib/utils";
 import { printReceiptDirect, type ReceiptData } from "@/components/shared/print-receipt";
 import { PosBranchSelector } from "@/components/shared/pos-branch-selector";
+import { useNetworkStatus, offlinePosCheckout } from "@/lib/offline";
 
 import { usePosState, type OrderLine, type DiscountInput, type SellingMode, type DeliveryInfo, type PosSnapshot } from "./hooks/use-pos-state";
 import { ProductGrid } from "./components/product-grid";
 import { CustomerPicker } from "./components/customer-picker";
+import { VariantPickerDialog } from "./components/variant-picker-dialog";
 import { ConfirmDialog } from "@/components/shared/dialogs";
 import { Icon } from "@/components/ui/icon";
+import { getVariantsByProduct } from "@/lib/services/supabase/variants";
+import type { Product, ProductVariant } from "@/lib/types";
+
+// Reuse FnB offline bar/drawer — both are generic over NetworkStatus.
+import { ConnectionStatusBar } from "./fnb/components/connection-status-bar";
+const SyncQueueDrawer = lazy(() =>
+  import("./fnb/components/sync-queue-drawer").then((m) => ({ default: m.SyncQueueDrawer }))
+);
 
 // ============================================================
 // Constants
@@ -221,9 +230,18 @@ export default function PosPage() {
   // Mobile/tablet: toggle cart panel visibility (slide-over)
   const [mobileCartOpen, setMobileCartOpen] = useState(false);
 
+  // Variant picker state — opens when a product with multiple variants is clicked
+  const [variantPickerProduct, setVariantPickerProduct] = useState<Product | null>(null);
+  const [variantPickerList, setVariantPickerList] = useState<ProductVariant[]>([]);
+  const [variantPickerLoading, setVariantPickerLoading] = useState(false);
+
   // Submit state — React state for UI + synchronous ref for double-call guard
   const [submitting, setSubmitting] = useState<"draft" | "complete" | null>(null);
   const submitLockRef = useRef(false);
+
+  // Offline/online status — for opportunistic checkout while network is down
+  const networkStatus = useNetworkStatus();
+  const [syncDrawerOpen, setSyncDrawerOpen] = useState(false);
 
   // Auto-print toggle
   const [autoPrint, setAutoPrint] = useState<boolean>(true);
@@ -232,6 +250,50 @@ export default function PosPage() {
     const saved = window.localStorage.getItem("pos.autoPrint");
     if (saved !== null) setAutoPrint(saved === "true");
   }, []);
+
+  // Handle product click — if variants exist, open picker; else add directly
+  const handleAddProduct = useCallback(
+    async (product: Product) => {
+      if (variantPickerLoading) return; // guard against double-tap
+
+      setVariantPickerLoading(true);
+      try {
+        const variants = await getVariantsByProduct(product.id);
+        if (variants.length === 0) {
+          // No variants → add base product directly
+          state.addLine(product);
+          setTimeout(() => {
+            cartScrollRef.current?.scrollTo({
+              top: cartScrollRef.current.scrollHeight,
+              behavior: "smooth",
+            });
+          }, 50);
+          if ((product.stock ?? 0) <= 0) {
+            toast({
+              title: "Hết hàng",
+              description: `"${product.name}" đã hết trong kho`,
+              variant: "warning",
+            });
+          }
+        } else {
+          // Open variant picker dialog
+          setVariantPickerProduct(product);
+          setVariantPickerList(variants);
+        }
+      } catch (err) {
+        // Fallback to base product on error (network issue etc.)
+        state.addLine(product);
+        toast({
+          title: "Không tải được biến thể",
+          description: err instanceof Error ? err.message : "Đã thêm sản phẩm gốc vào giỏ.",
+          variant: "warning",
+        });
+      } finally {
+        setVariantPickerLoading(false);
+      }
+    },
+    [state, toast, variantPickerLoading]
+  );
 
   // Auto-fill delivery info from customer when customer changes in delivery mode
   useEffect(() => {
@@ -247,6 +309,20 @@ export default function PosPage() {
       });
     }
   }, [state.customer?.id, state.sellingMode]); // eslint-disable-line react-hooks/exhaustive-deps
+
+  // Auto-apply customer-group discount when customer is selected.
+  // Safety: only overwrites orderDiscount if it's currently 0 (user hasn't set one).
+  useEffect(() => {
+    const pct = state.customer?.groupDiscountPercent ?? 0;
+    if (pct <= 0) return;
+    if (state.orderDiscount.value > 0) return; // respect manual override
+    state.setOrderDiscount({ mode: "percent", value: pct });
+    toast({
+      title: `Khách ${state.customer?.groupName ?? "VIP"}`,
+      description: `Áp dụng chiết khấu ${pct}% theo nhóm khách`,
+      variant: "default",
+    });
+  }, [state.customer?.id]); // eslint-disable-line react-hooks/exhaustive-deps
 
   // ============================================================
   // Handlers
@@ -305,6 +381,7 @@ export default function PosPage() {
 
       const paid = state.paid || state.total;
       let invoiceCode: string;
+      let isOfflineCheckout = false;
 
       // Build breakdown for mixed payments
       const breakdown =
@@ -313,6 +390,12 @@ export default function PosPage() {
           : undefined;
 
       if (state.loadedDraftId) {
+        // Drafts live server-side already; block offline completion to avoid dupe.
+        if (!networkStatus.isOnline) {
+          throw new Error(
+            "Đang offline: không thể hoàn tất phiếu nháp đã lưu. Vui lòng đợi mạng hoặc tạo hoá đơn mới."
+          );
+        }
         // ── Completing an existing draft → update in-place (no new invoice) ──
         const result = await completeDraftOrder(state.loadedDraftId, {
           method: state.paymentMethod,
@@ -333,7 +416,7 @@ export default function PosPage() {
           customerName: state.customer?.name ?? "Khách lẻ",
           items: state.lines.map((l) => ({
             productId: l.productId,
-            productName: l.productName,
+            productName: l.variantLabel ? `${l.productName} · ${l.variantLabel}` : l.productName,
             unit: l.unit,
             quantity: l.quantity,
             unitPrice: l.unitPrice,
@@ -350,8 +433,9 @@ export default function PosPage() {
           paid,
           note: state.note || "",
         };
-        const result = await posCheckout(input);
+        const result = await offlinePosCheckout(input, networkStatus.isOnline);
         invoiceCode = result.invoiceCode;
+        isOfflineCheckout = !!result.isOffline;
       }
 
       if (autoPrint && invoiceCode) {
@@ -375,12 +459,21 @@ export default function PosPage() {
             paid,
             change: Math.max(0, paid - state.total),
             paymentMethod: state.paymentMethod,
+            isOffline: isOfflineCheckout,
           };
           printReceiptDirect(receipt);
         } catch {}
       }
 
-      toast({ title: `Hoá đơn ${invoiceCode} thành công!`, variant: "success" });
+      toast({
+        title: isOfflineCheckout
+          ? `Hoá đơn ${invoiceCode} — đã lưu offline`
+          : `Hoá đơn ${invoiceCode} thành công!`,
+        description: isOfflineCheckout
+          ? "Đơn sẽ tự đồng bộ lên server khi có mạng"
+          : undefined,
+        variant: isOfflineCheckout ? "info" : "success",
+      });
       state.clearCart();
       setSearchQuery("");
       setMobileCartOpen(false);
@@ -390,7 +483,7 @@ export default function PosPage() {
       setSubmitting(null);
       submitLockRef.current = false;
     }
-  }, [state, toast, autoPrint]);
+  }, [state, toast, autoPrint, networkStatus.isOnline]);
 
   const handleDebtCheckout = useCallback(async () => {
     if (submitLockRef.current) return;
@@ -434,9 +527,17 @@ export default function PosPage() {
         paid: 0, // Ghi nợ 100%
         note: state.note ? `[Ghi nợ] ${state.note}` : "[Ghi nợ]",
       };
-      const result = await posCheckout(input);
+      const result = await offlinePosCheckout(input, networkStatus.isOnline);
 
-      toast({ title: `Ghi nợ ${result.invoiceCode} thành công!`, variant: "success" });
+      toast({
+        title: result.isOffline
+          ? `Ghi nợ ${result.invoiceCode} — đã lưu offline`
+          : `Ghi nợ ${result.invoiceCode} thành công!`,
+        description: result.isOffline
+          ? "Đơn sẽ tự đồng bộ lên server khi có mạng"
+          : undefined,
+        variant: result.isOffline ? "info" : "success",
+      });
       state.clearCart();
       setSearchQuery("");
       setMobileCartOpen(false);
@@ -446,7 +547,7 @@ export default function PosPage() {
       setSubmitting(null);
       submitLockRef.current = false;
     }
-  }, [state, toast]);
+  }, [state, toast, networkStatus.isOnline]);
 
   // ============================================================
   // Hotkeys
@@ -553,6 +654,12 @@ export default function PosPage() {
         .pos-panel input[type="number"]::-webkit-outer-spin-button { -webkit-appearance: none; margin: 0; }
         .pos-panel input[type="number"] { -moz-appearance: textfield; }
       `}</style>
+
+      {/* ═══════════ OFFLINE STATUS BAR ═══════════ */}
+      <ConnectionStatusBar
+        status={networkStatus}
+        onClick={() => setSyncDrawerOpen(true)}
+      />
 
       {/* ═══════════ HEADER 40px ═══════════ */}
       <header className="h-10 bg-primary text-primary-foreground flex items-center px-3 shrink-0 gap-3">
@@ -690,20 +797,7 @@ export default function PosPage() {
         <div className="flex-1 min-w-0">
           <ProductGrid
             searchQuery={searchQuery}
-            onAddProduct={(product) => {
-              state.addLine(product);
-              // Auto-scroll cart to bottom
-              setTimeout(() => {
-                cartScrollRef.current?.scrollTo({ top: cartScrollRef.current.scrollHeight, behavior: "smooth" });
-              }, 50);
-              if ((product.stock ?? 0) <= 0) {
-                toast({
-                  title: "Hết hàng",
-                  description: `"${product.name}" đã hết trong kho`,
-                  variant: "warning",
-                });
-              }
-            }}
+            onAddProduct={handleAddProduct}
           />
         </div>
 
@@ -857,6 +951,12 @@ export default function PosPage() {
                 )}
                 {state.customer.code && (
                   <span className="text-muted-foreground font-mono">{state.customer.code}</span>
+                )}
+                {(state.customer.groupDiscountPercent ?? 0) > 0 && (
+                  <span className="flex items-center gap-0.5 px-1.5 py-0.5 rounded-full bg-status-success/10 text-status-success font-semibold">
+                    <Icon name="loyalty" size={10} />
+                    {state.customer.groupName ?? "Nhóm"} −{state.customer.groupDiscountPercent}%
+                  </span>
                 )}
               </div>
             )}
@@ -1340,6 +1440,50 @@ export default function PosPage() {
           setConfirmOpen(false);
         }}
       />
+
+      {/* Variant picker — opens when clicking a product that has packaging variants */}
+      <VariantPickerDialog
+        open={!!variantPickerProduct}
+        onOpenChange={(open) => {
+          if (!open) {
+            setVariantPickerProduct(null);
+            setVariantPickerList([]);
+          }
+        }}
+        product={variantPickerProduct}
+        variants={variantPickerList}
+        onConfirm={(payload) => {
+          if (!variantPickerProduct) return;
+          state.addLine(variantPickerProduct, {
+            variantId: payload.variantId,
+            variantLabel: payload.variantLabel,
+            unitPrice: payload.unitPrice,
+            quantity: payload.quantity,
+          });
+          setTimeout(() => {
+            cartScrollRef.current?.scrollTo({
+              top: cartScrollRef.current.scrollHeight,
+              behavior: "smooth",
+            });
+          }, 50);
+          toast({
+            title: `Đã thêm ${variantPickerProduct.name}`,
+            description: `${payload.variantLabel} × ${payload.quantity}`,
+            variant: "success",
+          });
+        }}
+      />
+
+      {/* Sync queue drawer — opens when ConnectionStatusBar is clicked */}
+      {syncDrawerOpen && (
+        <Suspense fallback={null}>
+          <SyncQueueDrawer
+            open={syncDrawerOpen}
+            onOpenChange={setSyncDrawerOpen}
+            status={networkStatus}
+          />
+        </Suspense>
+      )}
     </>
   );
 }
@@ -1382,6 +1526,11 @@ function CartItem({
       <div className="min-w-0 pr-1">
         <p className="text-[11px] font-medium text-foreground truncate leading-tight">
           {line.productName}
+          {line.variantLabel && (
+            <span className="ml-1 px-1 py-0.5 rounded bg-primary-fixed/50 text-primary text-[9px] font-semibold">
+              {line.variantLabel}
+            </span>
+          )}
         </p>
         <p className="text-[9px] text-muted-foreground font-mono truncate leading-tight">
           {line.productCode && <span>{line.productCode}</span>}

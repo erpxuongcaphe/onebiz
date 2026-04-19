@@ -468,12 +468,21 @@ describe("FnbCart — component", () => {
     expect(screen.getByText("F4")).toBeDefined();
   });
 
-  it("hiện nút 'Thông báo bếp' + 'Thanh toán' với hint F10/F9", () => {
+  it("hiện nút 'Bếp (F10)' + 'Thanh toán (F9)'", () => {
     render(<FnbCart {...baseProps} />);
-    expect(screen.getByText("Thông báo bếp")).toBeDefined();
-    expect(screen.getByText("F10")).toBeDefined();
-    expect(screen.getByText("Thanh toán")).toBeDefined();
-    expect(screen.getByText("F9")).toBeDefined();
+    // Label gộp hotkey vào trong text (compact 40/60 split per Stitch)
+    expect(screen.getByText("Bếp (F10)")).toBeDefined();
+    expect(screen.getByText("Thanh toán (F9)")).toBeDefined();
+  });
+
+  it("đơn đã gửi bếp → nút chuyển thành 'Gửi thêm (F10)'", () => {
+    render(
+      <FnbCart
+        {...baseProps}
+        activeTab={{ ...baseTab, kitchenOrderId: "ko-1" }}
+      />
+    );
+    expect(screen.getByText("Gửi thêm (F10)")).toBeDefined();
   });
 
   it("hiện subtotal và total", () => {
@@ -501,18 +510,22 @@ describe("FnbCart — component", () => {
     expect(screen.queryByText("Giảm giá")).toBeNull();
   });
 
-  it("mobile=true → hiện trên mọi viewport (không có hidden)", () => {
+  it("mobile=true → hiện trên mọi viewport (không có class hidden độc lập)", () => {
     const { container } = render(<FnbCart {...baseProps} mobile />);
     const rootDiv = container.firstElementChild as HTMLElement;
-    expect(rootDiv.className).toContain("w-full");
-    expect(rootDiv.className).not.toContain("hidden");
+    const classes = rootDiv.className.split(/\s+/);
+    expect(classes).toContain("w-full");
+    // Không có class "hidden" độc lập (vẫn cho phép "overflow-hidden")
+    expect(classes).not.toContain("hidden");
+    expect(classes).not.toContain("lg:flex");
   });
 
   it("mobile=false (default) → hidden lg:flex", () => {
     const { container } = render(<FnbCart {...baseProps} />);
     const rootDiv = container.firstElementChild as HTMLElement;
-    expect(rootDiv.className).toContain("hidden");
-    expect(rootDiv.className).toContain("lg:flex");
+    const classes = rootDiv.className.split(/\s+/);
+    expect(classes).toContain("hidden");
+    expect(classes).toContain("lg:flex");
   });
 
   it("click customer bar → gọi onCustomerClick", () => {

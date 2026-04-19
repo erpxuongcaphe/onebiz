@@ -15,7 +15,7 @@ export async function getCustomers(params: QueryParams): Promise<QueryResult<Cus
 
   let query = supabase
     .from("customers")
-    .select("*, customer_groups!customers_group_id_fkey(name)", { count: "exact" });
+    .select("*, customer_groups!customers_group_id_fkey(name, discount_percent)", { count: "exact" });
 
   // Ẩn khách hàng nội bộ (is_internal=true) khỏi list thường.
   // Internal customers chỉ dùng cho internal_sales service, không hiển thị ở trang khách hàng chung.
@@ -96,7 +96,7 @@ export async function getCustomerById(id: string): Promise<Customer | null> {
 
   const { data, error } = await supabase
     .from("customers")
-    .select("*, customer_groups!customers_group_id_fkey(name)")
+    .select("*, customer_groups!customers_group_id_fkey(name, discount_percent)")
     .eq("id", id)
     .single();
 
@@ -130,7 +130,7 @@ export async function createCustomer(customer: Partial<Customer>): Promise<Custo
       customer_type: customer.type ?? "individual",
       is_active: true,
     } satisfies CustomerInsert)
-    .select("*, customer_groups!customers_group_id_fkey(name)")
+    .select("*, customer_groups!customers_group_id_fkey(name, discount_percent)")
     .single();
 
   if (error) handleError(error, "createCustomer");
@@ -157,7 +157,7 @@ export async function updateCustomer(id: string, updates: Partial<Customer>): Pr
     .from("customers")
     .update(payload)
     .eq("id", id)
-    .select("*, customer_groups!customers_group_id_fkey(name)")
+    .select("*, customer_groups!customers_group_id_fkey(name, discount_percent)")
     .single();
 
   if (error) handleError(error, "updateCustomer");
@@ -194,6 +194,10 @@ function mapCustomer(row: any): Customer {
     totalSalesMinusReturns: row.total_spent, // Simplified - would need returns aggregation
     groupId: row.group_id ?? undefined,
     groupName: row.customer_groups?.name ?? undefined,
+    groupDiscountPercent:
+      typeof row.customer_groups?.discount_percent === "number"
+        ? row.customer_groups.discount_percent
+        : undefined,
     type: row.customer_type,
     gender: row.gender ?? undefined,
     createdAt: row.created_at,

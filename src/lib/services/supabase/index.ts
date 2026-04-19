@@ -10,7 +10,10 @@ export {
   updatePurchaseOrderStatus,
   receivePurchaseOrder,
   canTransitionPurchaseStatus,
+  getPurchaseOrderItems,
+  receivePurchaseOrderPartial,
 } from "./purchase-orders";
+export type { PurchaseOrderItemRow, PartialReceiveLine } from "./purchase-orders";
 export {
   getOrders,
   getOrderStatuses,
@@ -29,9 +32,11 @@ export { getShippingOrders, getShippingStatuses, getDeliveryPartners, getPartner
 export { getCashBookEntries, getCashBookTypes, getCashBookSummary, createCashTransaction, deleteCashTransaction } from "./cash-book";
 export {
   getInventoryChecks, getInventoryCheckStatuses, applyInventoryCheck, cancelInventoryCheck,
+  getInventoryCheckItems,
   getDisposalExports, getDisposalStatuses, completeDisposalExport, cancelDisposalExport,
   getInternalExports, getInternalExportStatuses, completeInternalExport, cancelInternalExport,
 } from "./inventory";
+export type { InventoryCheckItemRow } from "./inventory";
 // Manufacturing handled by production.ts (getProductionOrders)
 export { getPurchaseOrderEntries, getPurchaseEntryStatuses, getPurchaseReturns, getPurchaseReturnStatuses, getInputInvoices, getInputInvoiceStatuses, deleteInputInvoice, recordInputInvoice, completeSupplierReturn } from "./purchase-entries";
 export { recordInvoicePayment, recordPurchasePayment, getPaymentHistory } from "./payments";
@@ -109,6 +114,7 @@ export {
   getPriceTiers, getPriceTierItems,
   createPriceTier, updatePriceTier, deletePriceTier,
   addPriceTierItem, updatePriceTierItem, deletePriceTierItem,
+  getProductPriceForCustomer, getTierPricesBatch,
 } from "./pricing";
 
 // Reports & Financial Intelligence

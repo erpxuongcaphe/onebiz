@@ -11,6 +11,7 @@ import {
   useNetworkStatus,
   offlineSendToKitchen,
   offlineFnbPayment,
+  offlineAddItemsToExistingOrder,
   prefetchMenuData,
   prefetchTableData,
   getMenuFromCache,
@@ -48,6 +49,7 @@ const OpenShiftDialog = lazy(() => import("./components/shift-dialog").then(m =>
 const CloseShiftDialog = lazy(() => import("./components/shift-dialog").then(m => ({ default: m.CloseShiftDialog })));
 const FnbSearchModal = lazy(() => import("./components/fnb-search-modal").then(m => ({ default: m.FnbSearchModal })));
 const FnbCustomerPicker = lazy(() => import("./components/fnb-customer-picker").then(m => ({ default: m.FnbCustomerPicker })));
+const SyncQueueDrawer = lazy(() => import("./components/sync-queue-drawer").then(m => ({ default: m.SyncQueueDrawer })));
 
 export default function FnbPosPage() {
   const { user, tenant, currentBranch } = useAuth();
@@ -79,6 +81,7 @@ export default function FnbPosPage() {
   const [customerPickerOpen, setCustomerPickerOpen] = useState(false);
   const [mobileCartOpen, setMobileCartOpen] = useState(false);
   const [keyboardHelpOpen, setKeyboardHelpOpen] = useState(false);
+  const [syncDrawerOpen, setSyncDrawerOpen] = useState(false);
 
   const branchId = currentBranch?.id;
   const tenantId = tenant?.id ?? "";
@@ -239,32 +242,90 @@ export default function FnbPosPage() {
   );
 
   // ── Send to kitchen (offline-aware) ──
+  // - Nếu tab chưa có kitchenOrderId → tạo đơn bếp mới (sendToKitchen)
+  // - Nếu tab đã có kitchenOrderId → gửi bổ sung (addItemsToExistingOrder)
   const handleSendToKitchen = useCallback(async () => {
     const tab = pos.activeTab;
     if (!tab || tab.lines.length === 0) return;
 
+    const mappedItems = tab.lines.map((l) => ({
+      productId: l.productId,
+      productName: l.productName,
+      variantId: l.variantId,
+      variantLabel: l.variantLabel,
+      quantity: l.quantity,
+      unitPrice: l.unitPrice,
+      note: l.note,
+      toppings: l.toppings.map((t) => ({
+        productId: t.productId,
+        name: t.name,
+        quantity: t.quantity,
+        price: t.price,
+      })),
+    }));
+
     try {
+      const isAddItems = !!tab.kitchenOrderId;
+
+      if (isAddItems) {
+        // ── Gửi bổ sung vào đơn đã tồn tại ──
+        await offlineAddItemsToExistingOrder(
+          tab.kitchenOrderId!,
+          mappedItems,
+          networkStatus.isOnline
+        );
+
+        // In ticket bổ sung (đánh dấu "BỔ SUNG")
+        if (settings.print.autoPrintKitchen) {
+          printKitchenTicketV2({
+            orderNumber: tab.label,
+            tableName: tab.label,
+            orderType: tab.orderType,
+            items: tab.lines.map((l) => ({
+              name: l.productName,
+              variant: l.variantLabel,
+              quantity: l.quantity,
+              unitPrice: l.unitPrice,
+              toppings: l.toppings.map((t) => ({ name: t.name, quantity: t.quantity, price: t.price })),
+              note: l.note,
+            })),
+            createdAt: new Date().toISOString(),
+            cashierName: user?.fullName,
+            style: settings.print.kitchenTicketStyle,
+            paperSize: settings.print.paperSize === "58mm" ? "58mm" : "80mm",
+            isOffline: !networkStatus.isOnline,
+            isSupplement: true,
+          });
+        }
+
+        pos.clearCart();
+        hapticSuccess();
+
+        const extraCount = mappedItems.length;
+        if (!networkStatus.isOnline) {
+          toast({
+            title: "Đã lưu ngoại tuyến",
+            description: `${extraCount} món bổ sung sẽ đồng bộ khi có mạng`,
+            variant: "default",
+          });
+        } else {
+          toast({
+            title: "Đã gửi thêm món",
+            description: `${extraCount} món đã được gửi bếp bổ sung cho ${tab.label}`,
+            variant: "success",
+          });
+        }
+        return;
+      }
+
+      // ── Tạo đơn bếp mới ──
       const result = await offlineSendToKitchen({
         tenantId,
         branchId: branchId!,
         createdBy: userId,
         tableId: tab.tableId,
         orderType: tab.orderType,
-        items: tab.lines.map((l) => ({
-          productId: l.productId,
-          productName: l.productName,
-          variantId: l.variantId,
-          variantLabel: l.variantLabel,
-          quantity: l.quantity,
-          unitPrice: l.unitPrice,
-          note: l.note,
-          toppings: l.toppings.map((t) => ({
-            productId: t.productId,
-            name: t.name,
-            quantity: t.quantity,
-            price: t.price,
-          })),
-        })),
+        items: mappedItems,
       }, networkStatus.isOnline);
 
       pos.updateTabMeta(tab.id, { kitchenOrderId: result.kitchenOrderId });
@@ -547,25 +608,85 @@ export default function FnbPosPage() {
     async (itemIds: string[]) => {
       const tab = pos.activeTab;
       if (!tab?.kitchenOrderId) return;
-      await splitByItems(tab.kitchenOrderId, itemIds);
-      // Create a new tab for the child order
-      pos.createTab(`${tab.label}-B`, tab.orderType, tab.tableId);
+      if (!networkStatus.isOnline) {
+        hapticError();
+        toast({
+          title: "Cần kết nối mạng",
+          description: "Tách bill không khả dụng khi ngoại tuyến. Vui lòng chờ khôi phục kết nối.",
+          variant: "warning",
+        });
+        return;
+      }
+      if (!itemIds || itemIds.length === 0) {
+        toast({ title: "Chọn ít nhất 1 món để tách", variant: "warning" });
+        return;
+      }
+      try {
+        await splitByItems(tab.kitchenOrderId, itemIds);
+        // Create a new tab for the child order
+        pos.createTab(`${tab.label}-B`, tab.orderType, tab.tableId);
+        hapticSuccess();
+        toast({
+          title: "Đã tách bill",
+          description: `${itemIds.length} món chuyển sang đơn ${tab.label}-B`,
+          variant: "success",
+        });
+      } catch (err) {
+        hapticError();
+        toast({
+          title: "Tách bill thất bại",
+          description: err instanceof Error ? err.message : "Lỗi không xác định",
+          variant: "error",
+        });
+      }
     },
-    [pos]
+    [pos, networkStatus.isOnline, toast]
   );
 
   const handleSplitEqually = useCallback(
     async (numberOfWays: number) => {
       const tab = pos.activeTab;
       if (!tab?.kitchenOrderId) return;
-      await splitEqually(tab.kitchenOrderId, numberOfWays);
-      // Create tabs for child orders
-      for (let i = 1; i < numberOfWays; i++) {
-        const suffix = String.fromCharCode(65 + i);
-        pos.createTab(`${tab.label}-${suffix}`, tab.orderType, tab.tableId);
+      if (!networkStatus.isOnline) {
+        hapticError();
+        toast({
+          title: "Cần kết nối mạng",
+          description: "Tách bill không khả dụng khi ngoại tuyến. Vui lòng chờ khôi phục kết nối.",
+          variant: "warning",
+        });
+        return;
+      }
+      if (numberOfWays < 2 || numberOfWays > 10) {
+        toast({
+          title: "Số lần tách không hợp lệ",
+          description: "Chỉ chấp nhận từ 2 đến 10 bill.",
+          variant: "warning",
+        });
+        return;
+      }
+      try {
+        await splitEqually(tab.kitchenOrderId, numberOfWays);
+        // Create tabs for child orders
+        for (let i = 1; i < numberOfWays; i++) {
+          const suffix = String.fromCharCode(65 + i);
+          pos.createTab(`${tab.label}-${suffix}`, tab.orderType, tab.tableId);
+        }
+        hapticSuccess();
+        toast({
+          title: "Đã tách bill",
+          description: `Đơn đã chia thành ${numberOfWays} phần bằng nhau`,
+          variant: "success",
+        });
+      } catch (err) {
+        hapticError();
+        toast({
+          title: "Tách bill thất bại",
+          description: err instanceof Error ? err.message : "Lỗi không xác định",
+          variant: "error",
+        });
       }
     },
-    [pos]
+    [pos, networkStatus.isOnline, toast]
   );
 
   // ── Keyboard shortcuts (F3/F4/F9/F10/Ctrl+Tab) ──
@@ -677,7 +798,10 @@ export default function FnbPosPage() {
 
   return (
     <div className="flex flex-col h-screen bg-surface-container-low">
-      <ConnectionStatusBar status={networkStatus} />
+      <ConnectionStatusBar
+        status={networkStatus}
+        onClick={() => setSyncDrawerOpen(true)}
+      />
       <FnbHeader
         tabs={pos.tabs}
         activeTabId={pos.activeTabId}
@@ -872,6 +996,17 @@ export default function FnbPosPage() {
             {pos.lineCount}
           </span>
         </button>
+      )}
+
+      {/* Sync queue drawer (mở từ ConnectionStatusBar) */}
+      {syncDrawerOpen && (
+        <Suspense fallback={null}>
+          <SyncQueueDrawer
+            open={syncDrawerOpen}
+            onOpenChange={setSyncDrawerOpen}
+            status={networkStatus}
+          />
+        </Suspense>
       )}
 
       {/* Keyboard help overlay (F1 / ?) */}

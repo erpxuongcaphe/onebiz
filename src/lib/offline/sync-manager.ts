@@ -9,6 +9,8 @@
 import { getDb, type SyncQueueEntry, type SyncAction } from "./db";
 import { sendToKitchen, fnbPayment, addItemsToExistingOrder } from "@/lib/services/supabase/fnb-checkout";
 import type { SendToKitchenInput, FnbPaymentInput } from "@/lib/services/supabase/fnb-checkout";
+import { posCheckout } from "@/lib/services/supabase/pos-checkout";
+import type { PosCheckoutInput } from "@/lib/services/supabase/pos-checkout";
 
 // ── Constants ──
 
@@ -143,6 +145,8 @@ async function executeAction(
       await addItemsToExistingOrder(p.kitchenOrderId, p.items);
       return { success: true };
     }
+    case "posCheckout":
+      return posCheckout(payload as PosCheckoutInput);
     default:
       throw new Error(`Unknown sync action: ${action}`);
   }
@@ -167,6 +171,15 @@ async function updatePendingOrder(
       updatedAt: new Date().toISOString(),
     });
   } else if (action === "fnbPayment") {
+    const data = serverData as { invoiceId: string; invoiceCode: string };
+    await db.put("pending_orders", {
+      ...order,
+      status: "synced",
+      serverInvoiceId: data.invoiceId,
+      serverInvoiceCode: data.invoiceCode,
+      updatedAt: new Date().toISOString(),
+    });
+  } else if (action === "posCheckout") {
     const data = serverData as { invoiceId: string; invoiceCode: string };
     await db.put("pending_orders", {
       ...order,
@@ -204,6 +217,50 @@ export async function getPendingCount(): Promise<number> {
     .index("by_status")
     .getAllKeys("syncing");
   return pending.length + syncing.length;
+}
+
+export async function getFailedCount(): Promise<number> {
+  const db = await getDb();
+  const failed = await db
+    .transaction("sync_queue")
+    .objectStore("sync_queue")
+    .index("by_status")
+    .getAllKeys("failed");
+  return failed.length;
+}
+
+export async function getQueueEntries(): Promise<SyncQueueEntry[]> {
+  const db = await getDb();
+  const all = await db.transaction("sync_queue").objectStore("sync_queue").getAll();
+  // Sort FIFO
+  return all.sort((a, b) => (a.id ?? 0) - (b.id ?? 0));
+}
+
+/**
+ * Manually retry failed entries — reset their status to pending so next replayQueue picks them up.
+ */
+export async function retryFailedEntries(): Promise<number> {
+  const db = await getDb();
+  const failed = await db
+    .transaction("sync_queue")
+    .objectStore("sync_queue")
+    .index("by_status")
+    .getAll("failed");
+
+  const tx = db.transaction("sync_queue", "readwrite");
+  for (const entry of failed) {
+    await tx.store.put({ ...entry, status: "pending", attempts: 0, error: null });
+  }
+  await tx.done;
+  return failed.length;
+}
+
+/**
+ * Delete a single queue entry (user-initiated abandonment).
+ */
+export async function deleteQueueEntry(id: number): Promise<void> {
+  const db = await getDb();
+  await db.delete("sync_queue", id);
 }
 
 export async function clearCompleted(): Promise<void> {

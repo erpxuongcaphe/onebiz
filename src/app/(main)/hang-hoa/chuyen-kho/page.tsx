@@ -42,6 +42,7 @@ import {
   createStockTransfer,
   completeStockTransfer,
   cancelStockTransfer,
+  updateTransferStatus,
   getTransferStatusMeta,
 } from "@/lib/services/supabase/transfers";
 import type {
@@ -96,6 +97,24 @@ export default function ChuyenKhoPage() {
   useEffect(() => {
     getBranches().then(setBranches).catch(() => {});
   }, []);
+
+  const handleStartTransit = async (id: string) => {
+    try {
+      await updateTransferStatus(id, "in_transit");
+      toast({
+        title: "Đã bắt đầu vận chuyển",
+        description: "Hàng đang trên đường tới kho nhận",
+        variant: "success",
+      });
+      fetchData();
+    } catch (err) {
+      toast({
+        title: "Lỗi cập nhật trạng thái",
+        description: err instanceof Error ? err.message : "Vui lòng thử lại",
+        variant: "error",
+      });
+    }
+  };
 
   const handleComplete = async (id: string) => {
     try {
@@ -200,27 +219,40 @@ export default function ChuyenKhoPage() {
     {
       id: "actions",
       header: "",
-      size: 100,
+      size: 140,
       cell: ({ row }) => {
         const st = row.original.status;
         if (st === "completed" || st === "cancelled") return null;
         return (
           <div className="flex items-center gap-1">
-            <Button
-              variant="ghost"
-              size="sm"
-              className="h-7 px-2 text-status-success hover:text-status-success"
-              onClick={() => handleComplete(row.original.id)}
-              title="Hoàn thành"
-            >
-              <Icon name="check_circle" size={14} />
-            </Button>
+            {st === "draft" && (
+              <Button
+                variant="ghost"
+                size="sm"
+                className="h-7 px-2 text-primary hover:text-primary"
+                onClick={() => handleStartTransit(row.original.id)}
+                title="Bắt đầu vận chuyển — hàng rời kho xuất"
+              >
+                <Icon name="local_shipping" size={14} />
+              </Button>
+            )}
+            {st === "in_transit" && (
+              <Button
+                variant="ghost"
+                size="sm"
+                className="h-7 px-2 text-status-success hover:text-status-success"
+                onClick={() => handleComplete(row.original.id)}
+                title="Xác nhận đã nhận hàng — hoàn thành nhập kho"
+              >
+                <Icon name="check_circle" size={14} />
+              </Button>
+            )}
             <Button
               variant="ghost"
               size="sm"
               className="h-7 px-2 text-status-error hover:text-status-error"
               onClick={() => handleCancel(row.original.id)}
-              title="Hủy"
+              title={st === "in_transit" ? "Hủy — hàng đã rời kho, cần xử lý thủ công" : "Hủy phiếu"}
             >
               <Icon name="cancel" size={14} />
             </Button>

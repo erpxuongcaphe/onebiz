@@ -31,11 +31,17 @@ export interface PendingOrder {
   tenantId: string;
   branchId: string;
   localOrderNumber: string;
-  orderType: "dine_in" | "takeaway" | "delivery";
+  /** "retail" added for POS bán lẻ offline checkout. */
+  orderType: "dine_in" | "takeaway" | "delivery" | "retail";
   tableId?: string;
   items: unknown[];
   note?: string;
-  status: "pending_kitchen" | "pending_payment" | "synced" | "failed";
+  status:
+    | "pending_kitchen"
+    | "pending_payment"
+    | "pending_retail_checkout"
+    | "synced"
+    | "failed";
   serverOrderId?: string;
   serverOrderNumber?: string;
   paymentData?: unknown;
@@ -50,7 +56,8 @@ export type SyncAction =
   | "fnbPayment"
   | "addItems"
   | "updateItemStatus"
-  | "updateOrderStatus";
+  | "updateOrderStatus"
+  | "posCheckout";
 
 export interface SyncQueueEntry {
   id?: number;

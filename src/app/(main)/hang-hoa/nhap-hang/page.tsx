@@ -36,10 +36,14 @@ import {
   getPurchaseOrderStatusMeta,
   updatePurchaseOrderStatus,
   canTransitionPurchaseStatus,
+  getPurchaseOrderItems,
+  type PurchaseOrderItemRow,
 } from "@/lib/services";
 import type { PurchaseOrder, PurchaseOrderStatus } from "@/lib/types";
 import { CreatePurchaseOrderDialog } from "@/components/shared/dialogs";
 import { RecordPaymentDialog } from "@/components/shared/dialogs/record-payment-dialog";
+import { PartialReceiveDialog } from "@/components/shared/dialogs/partial-receive-dialog";
+import { Button } from "@/components/ui/button";
 import { Icon } from "@/components/ui/icon";
 
 type ViewMode = "list" | "kanban";
@@ -70,11 +74,41 @@ function useStarredSet() {
 function PurchaseOrderDetail({
   order,
   onClose,
+  onRequestPartialReceive,
 }: {
   order: PurchaseOrder;
   onClose: () => void;
+  onRequestPartialReceive: () => void;
 }) {
   const status = STATUS_META[order.status];
+  const [items, setItems] = useState<PurchaseOrderItemRow[]>([]);
+  const [loading, setLoading] = useState(true);
+
+  useEffect(() => {
+    let cancelled = false;
+    setLoading(true);
+    getPurchaseOrderItems(order.id)
+      .then((rows) => {
+        if (!cancelled) setItems(rows);
+      })
+      .catch(() => {
+        if (!cancelled) setItems([]);
+      })
+      .finally(() => {
+        if (!cancelled) setLoading(false);
+      });
+    return () => {
+      cancelled = true;
+    };
+  }, [order.id]);
+
+  const totalOrdered = items.reduce((s, i) => s + i.lineTotal, 0);
+  const totalReceivedValue = items.reduce(
+    (s, i) => s + i.receivedQuantity * i.unitPrice,
+    0,
+  );
+  const totalRemaining = items.reduce((s, i) => s + i.remaining, 0);
+  const canPartialReceive = (order.status === "ordered" || order.status === "partial") && totalRemaining > 0;
 
   const tabs: DetailTab[] = [
     {
@@ -113,54 +147,81 @@ function PurchaseOrderDetail({
             }
           />
 
-          <DetailItemsTable
-            columns={[
-              { header: "Mã hàng", accessor: "code" as never },
-              { header: "Tên hàng", accessor: "name" as never },
-              {
-                header: "Số lượng",
-                accessor: "quantity" as never,
-                align: "right",
-              },
-              {
-                header: "Đơn giá",
-                accessor: (item: Record<string, unknown>) =>
-                  formatCurrency(item.unitPrice as number),
-                align: "right",
-              },
-              {
-                header: "Thành tiền",
-                accessor: (item: Record<string, unknown>) => (
-                  <span className="text-primary font-semibold">
-                    {formatCurrency(item.total as number)}
-                  </span>
-                ),
-                align: "right",
-              },
-            ]}
-            items={
-              [
-                {
-                  code: "SP001",
-                  name: "Sản phẩm mẫu",
-                  quantity: 1,
-                  unitPrice: order.amountOwed,
-                  total: order.amountOwed,
-                },
-              ] as Record<string, unknown>[]
-            }
-            summary={[
-              {
-                label: "Tổng tiền hàng",
-                value: formatCurrency(order.amountOwed),
-              },
-              {
-                label: "Cần trả NCC",
-                value: formatCurrency(order.amountOwed),
-                className: "font-bold text-base",
-              },
-            ]}
-          />
+          {loading ? (
+            <div className="flex items-center justify-center py-6">
+              <Icon name="progress_activity" size={20} className="animate-spin text-muted-foreground" />
+            </div>
+          ) : items.length === 0 ? (
+            <div className="rounded-lg border border-dashed border-border py-6 text-center text-sm text-muted-foreground">
+              Đơn này không có sản phẩm.
+            </div>
+          ) : (
+            <>
+              <div className="flex items-center justify-between">
+                <div className="text-xs text-muted-foreground">
+                  {items.length} mặt hàng · Đã nhập {items.filter((i) => i.receivedQuantity > 0).length} / {items.length}
+                </div>
+                {canPartialReceive && (
+                  <Button size="sm" variant="outline" onClick={onRequestPartialReceive}>
+                    <Icon name="call_received" size={14} />
+                    <span className="ml-1">Nhập một phần</span>
+                  </Button>
+                )}
+              </div>
+              <DetailItemsTable
+                columns={[
+                  { header: "Mã hàng", accessor: "productCode" as never },
+                  { header: "Tên hàng", accessor: "productName" as never },
+                  {
+                    header: "Đã nhập / SL",
+                    accessor: (item: Record<string, unknown>) => {
+                      const received = item.receivedQuantity as number;
+                      const total = item.quantity as number;
+                      const unit = (item.unit as string) || "";
+                      const done = received >= total;
+                      return (
+                        <span className={done ? "text-status-success font-semibold" : "text-status-warning"}>
+                          {received} / {total} {unit}
+                        </span>
+                      );
+                    },
+                    align: "right",
+                  },
+                  {
+                    header: "Đơn giá",
+                    accessor: (item: Record<string, unknown>) =>
+                      formatCurrency(item.unitPrice as number),
+                    align: "right",
+                  },
+                  {
+                    header: "Thành tiền",
+                    accessor: (item: Record<string, unknown>) => (
+                      <span className="text-primary font-semibold">
+                        {formatCurrency(item.lineTotal as number)}
+                      </span>
+                    ),
+                    align: "right",
+                  },
+                ]}
+                items={items as unknown as Record<string, unknown>[]}
+                summary={[
+                  {
+                    label: "Tổng tiền hàng",
+                    value: formatCurrency(totalOrdered),
+                  },
+                  {
+                    label: "Đã nhập",
+                    value: formatCurrency(totalReceivedValue),
+                  },
+                  {
+                    label: "Cần trả NCC",
+                    value: formatCurrency(order.amountOwed),
+                    className: "font-bold text-base",
+                  },
+                ]}
+              />
+            </>
+          )}
 
           <div className="border rounded-md p-3">
             <textarea
@@ -208,6 +269,7 @@ export default function NhapHangPage() {
   const [editingPO, setEditingPO] = useState<{ id: string; code: string; supplierId: string; supplierName: string; note?: string } | null>(null);
   const [viewMode, setViewMode] = useState<ViewMode>("list");
   const [payingItem, setPayingItem] = useState<PurchaseOrder | null>(null);
+  const [partialReceiveOrder, setPartialReceiveOrder] = useState<PurchaseOrder | null>(null);
 
   // Inline detail
   const [expandedRow, setExpandedRow] = useState<number | null>(null);
@@ -351,7 +413,11 @@ export default function NhapHangPage() {
 
   /* ---- Inline detail renderer ---- */
   const renderDetail = (order: PurchaseOrder, onClose: () => void) => (
-    <PurchaseOrderDetail order={order} onClose={onClose} />
+    <PurchaseOrderDetail
+      order={order}
+      onClose={onClose}
+      onRequestPartialReceive={() => setPartialReceiveOrder(order)}
+    />
   );
 
   /* ---- Kanban derivation ---- */
@@ -676,6 +742,19 @@ export default function NhapHangPage() {
         currentDebt={payingItem.amountOwed}
       />
     )}
+
+    <PartialReceiveDialog
+      open={!!partialReceiveOrder}
+      onOpenChange={(open) => {
+        if (!open) setPartialReceiveOrder(null);
+      }}
+      orderId={partialReceiveOrder?.id ?? null}
+      orderCode={partialReceiveOrder?.code ?? ""}
+      onSuccess={() => {
+        setPartialReceiveOrder(null);
+        fetchData();
+      }}
+    />
     </>
   );
 }

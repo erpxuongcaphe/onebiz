@@ -7,6 +7,9 @@
  *
  * 1. Increment stock for each returned item via applyManualStockMovement(type='in')
  * 2. Create auto cash payment (phiếu chi hoàn tiền) in cash_transactions
+ *    — only for the cash refund portion
+ * 3. If partial refund (refundAmount < totalAmount), the remainder becomes a
+ *    debt credit — reduces customer.debt by the offset amount
  */
 
 import { getClient, getCurrentContext, handleError } from "./base";
@@ -27,13 +30,18 @@ interface CompleteReturnInput {
   returnId: string;
   returnCode: string;
   invoiceCode: string;
+  customerId?: string | null;
   customerName: string;
   items: ReturnItem[];
+  /** Cashback amount paid back to customer. May be less than totalAmount. */
   refundAmount: number;
+  /** Grand total being returned — items × unitPrice sum. Used to derive debt credit. */
+  totalAmount?: number;
 }
 
 export async function completeReturn(input: CompleteReturnInput): Promise<void> {
   const ctx = await getCurrentContext();
+  const supabase = getClient();
 
   // 1. Stock increment — type='in' adds stock back
   const stockInputs: ManualStockMovementInput[] = input.items.map(item => ({
@@ -51,10 +59,8 @@ export async function completeReturn(input: CompleteReturnInput): Promise<void> 
     createdBy: ctx.userId,
   });
 
-  // 2. Auto cash payment (phiếu chi hoàn tiền)
+  // 2. Cash payment (phiếu chi hoàn tiền) — only for the cashback portion
   if (input.refundAmount > 0) {
-    const supabase = getClient();
-
     // Generate cash payment code via next_code RPC
     const cashCode = await nextEntityCode("cash_payment", { tenantId: ctx.tenantId });
 
@@ -75,5 +81,30 @@ export async function completeReturn(input: CompleteReturnInput): Promise<void> 
 
     const { error } = await supabase.from("cash_transactions").insert(cashData);
     if (error) handleError(error, "completeReturn:cash_payment");
+  }
+
+  // 3. Partial-refund: credit the delta against customer debt
+  const totalAmount = input.totalAmount ?? input.refundAmount;
+  const debtCredit = totalAmount - input.refundAmount;
+  if (debtCredit > 0 && input.customerId) {
+    // Best-effort: read current debt, decrement by debtCredit (floor at 0).
+    // Not wrapped in RPC — single-cashier workflow, race risk is negligible
+    // for sales returns and this matches the existing invoices.paid pattern.
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    const sb = supabase as any;
+    const { data: cust, error: readErr } = await sb
+      .from("customers")
+      .select("debt")
+      .eq("id", input.customerId)
+      .single();
+    if (!readErr && cust) {
+      const currentDebt = Number(cust.debt ?? 0);
+      const newDebt = Math.max(0, currentDebt - debtCredit);
+      const { error: updateErr } = await sb
+        .from("customers")
+        .update({ debt: newDebt })
+        .eq("id", input.customerId);
+      if (updateErr) handleError(updateErr, "completeReturn:customer_debt_credit");
+    }
   }
 }
