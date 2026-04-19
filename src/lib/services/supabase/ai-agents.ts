@@ -413,6 +413,51 @@ export async function deleteAgentTask(id: string): Promise<void> {
   if (error) handleError(error, "deleteAgentTask");
 }
 
+/**
+ * Cập nhật các field tổng quát của task (priority, description, assignedTo...).
+ * Dùng cho intervene actions — escalate, reassign, bump priority.
+ */
+export async function updateAgentTask(
+  id: string,
+  patch: Partial<{
+    title: string;
+    description: string | null;
+    priority: AgentTask["priority"];
+    assignedToUserId: string | null;
+    assignedToRole: string | null;
+    dueTime: string | null;
+    notes: string | null;
+    targetMetric: string | null;
+    branchId: string | null;
+    agentId: string | null;
+  }>,
+): Promise<AgentTask> {
+  const supabase = getClient();
+  const dbPatch: Record<string, unknown> = {};
+  if (patch.title !== undefined) dbPatch.title = patch.title;
+  if (patch.description !== undefined) dbPatch.description = patch.description;
+  if (patch.priority !== undefined) dbPatch.priority = patch.priority;
+  if (patch.assignedToUserId !== undefined)
+    dbPatch.assigned_to_user_id = patch.assignedToUserId;
+  if (patch.assignedToRole !== undefined)
+    dbPatch.assigned_to_role = patch.assignedToRole;
+  if (patch.dueTime !== undefined) dbPatch.due_time = patch.dueTime;
+  if (patch.notes !== undefined) dbPatch.notes = patch.notes;
+  if (patch.targetMetric !== undefined)
+    dbPatch.target_metric = patch.targetMetric;
+  if (patch.branchId !== undefined) dbPatch.branch_id = patch.branchId;
+  if (patch.agentId !== undefined) dbPatch.agent_id = patch.agentId;
+
+  const { data, error } = await supabase
+    .from("agent_tasks")
+    .update(dbPatch as never)
+    .eq("id", id)
+    .select()
+    .single();
+  if (error) handleError(error, "updateAgentTask");
+  return mapAgentTask(data);
+}
+
 // ────────────────────────────────────────────
 // Agent Executions (log)
 // ────────────────────────────────────────────

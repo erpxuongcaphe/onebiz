@@ -222,7 +222,7 @@ export type { DbRole, DbRoleDetail, CreateRoleInput, UpdateRoleInput } from "./r
 export {
   getAgents, getAgentById, createAgent, updateAgent, deleteAgent, seedDefaultAgents,
   getKpiBreakdowns, getKpiBreakdownTree, createKpiBreakdown, updateKpiActual, deleteKpiBreakdown,
-  getAgentTasks, createAgentTask, updateAgentTaskStatus, deleteAgentTask,
+  getAgentTasks, createAgentTask, updateAgentTask, updateAgentTaskStatus, deleteAgentTask,
   getAgentExecutions, recordAgentExecution, triggerAgent,
 } from "./ai-agents";
 
@@ -249,3 +249,18 @@ export {
   savePlaybookRules,
   defaultPlaybookForRole,
 } from "./playbook-engine";
+
+// Agent SLA — Task urgency + workload summary (Sprint AI-3)
+export {
+  taskUrgency,
+  summarizeWorkload,
+  summarizeKpiForAgent,
+  TASK_URGENCY_TONE,
+  TASK_URGENCY_LABELS,
+  TASK_URGENCY_ICON,
+} from "./agent-sla";
+export type {
+  TaskUrgency,
+  AgentWorkload,
+  AgentKpiSummary,
+} from "./agent-sla";

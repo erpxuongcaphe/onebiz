@@ -16,24 +16,37 @@ import {
   deleteAgent,
   getAgentById,
   getAgentExecutions,
+  getAgentTasks,
   triggerAgent,
   updateAgent,
+  updateAgentTask,
+  updateAgentTaskStatus,
   getPlaybookRules,
   savePlaybookRules,
   runPlaybookForAgent,
   defaultPlaybookForRole,
+  summarizeWorkload,
+  taskUrgency,
+  TASK_URGENCY_ICON,
+  TASK_URGENCY_LABELS,
+  TASK_URGENCY_TONE,
 } from "@/lib/services";
 import {
   AGENT_EXECUTION_STATUS_LABELS,
   AGENT_ROLE_ICONS,
   AGENT_ROLE_LABELS,
   AGENT_TASK_PRIORITY_LABELS,
+  AGENT_TASK_STATUS_LABELS,
+  AGENT_TASK_STATUS_TONE,
   KPI_PERIOD_LABELS,
   KPI_TYPE_LABELS,
   PLAYBOOK_TRIGGER_LABELS,
   type Agent,
   type AgentExecution,
   type AgentRole,
+  type AgentTask,
+  type AgentTaskPriority,
+  type AgentTaskStatus,
   type PlaybookRule,
 } from "@/lib/types/ai-agents";
 import { useToast } from "@/lib/contexts";
@@ -194,6 +207,11 @@ export default function AgentDetailPage() {
   const [loading, setLoading] = useState(true);
   const [agent, setAgent] = useState<Agent | null>(null);
   const [executions, setExecutions] = useState<AgentExecution[]>([]);
+  const [tasks, setTasks] = useState<AgentTask[]>([]);
+  const [taskBusyId, setTaskBusyId] = useState<string | null>(null);
+  const [taskFilter, setTaskFilter] = useState<
+    "active" | "overdue" | "all"
+  >("active");
 
   // Form state
   const [name, setName] = useState("");
@@ -224,9 +242,10 @@ export default function AgentDetailPage() {
     if (!params.id) return;
     setLoading(true);
     try {
-      const [a, execs] = await Promise.all([
+      const [a, execs, taskRows] = await Promise.all([
         getAgentById(params.id),
         getAgentExecutions({ agentId: params.id, limit: 20 }),
+        getAgentTasks({ agentId: params.id }),
       ]);
       if (!a) {
         notify("Không tìm thấy agent", "error");
@@ -235,6 +254,7 @@ export default function AgentDetailPage() {
       }
       setAgent(a);
       setExecutions(execs);
+      setTasks(taskRows);
       setName(a.name);
       setRole(a.role);
       setDescription(a.description ?? "");
@@ -342,6 +362,72 @@ export default function AgentDetailPage() {
     } catch (err) {
       notify(err instanceof Error ? err.message : "Lỗi xoá", "error");
       setDeleting(false);
+    }
+  };
+
+  // ─── Task intervene handlers (Sprint AI-3) ───
+  const handleTaskStatusChange = async (
+    taskId: string,
+    status: AgentTaskStatus,
+  ) => {
+    setTaskBusyId(taskId);
+    try {
+      await updateAgentTaskStatus(taskId, status);
+      notify("Đã cập nhật trạng thái task", "success");
+      await load();
+    } catch (err) {
+      notify(
+        err instanceof Error ? err.message : "Lỗi cập nhật task",
+        "error",
+      );
+    } finally {
+      setTaskBusyId(null);
+    }
+  };
+
+  const handleTaskPriorityChange = async (
+    taskId: string,
+    priority: AgentTaskPriority,
+  ) => {
+    setTaskBusyId(taskId);
+    try {
+      await updateAgentTask(taskId, { priority });
+      notify(`Đã đổi priority → ${AGENT_TASK_PRIORITY_LABELS[priority]}`, "success");
+      await load();
+    } catch (err) {
+      notify(
+        err instanceof Error ? err.message : "Lỗi đổi priority",
+        "error",
+      );
+    } finally {
+      setTaskBusyId(null);
+    }
+  };
+
+  const handleTaskReassignRole = async (taskId: string) => {
+    const current = tasks.find((t) => t.id === taskId)?.assignedToRole ?? "";
+    const next = window.prompt(
+      "Gán task cho role nào? (để trống = bỏ gán)",
+      current,
+    );
+    if (next === null) return; // user cancelled
+    setTaskBusyId(taskId);
+    try {
+      await updateAgentTask(taskId, {
+        assignedToRole: next.trim() || null,
+      });
+      notify(
+        next.trim() ? `Đã gán cho role ${next.trim()}` : "Đã bỏ gán role",
+        "success",
+      );
+      await load();
+    } catch (err) {
+      notify(
+        err instanceof Error ? err.message : "Lỗi reassign",
+        "error",
+      );
+    } finally {
+      setTaskBusyId(null);
     }
   };
 
@@ -732,6 +818,310 @@ export default function AgentDetailPage() {
               className="font-mono text-xs"
             />
           </section>
+
+          {/* Task queue (Sprint AI-3) */}
+          {(() => {
+            const workload = summarizeWorkload(agent.id, tasks);
+            const filteredTasks = tasks.filter((t) => {
+              if (taskFilter === "all") return true;
+              if (taskFilter === "overdue")
+                return taskUrgency(t) === "overdue";
+              return (
+                t.status === "pending" ||
+                t.status === "in_progress" ||
+                t.status === "blocked"
+              );
+            });
+            // Sort: overdue > due_today > due_soon > ok > done, then priority desc
+            const urgencyRank: Record<string, number> = {
+              overdue: 0,
+              due_today: 1,
+              due_soon: 2,
+              ok: 3,
+              done: 4,
+            };
+            const priorityRank: Record<AgentTaskPriority, number> = {
+              urgent: 0,
+              high: 1,
+              normal: 2,
+              low: 3,
+            };
+            const sorted = [...filteredTasks].sort((a, b) => {
+              const ua = urgencyRank[taskUrgency(a)] ?? 99;
+              const ub = urgencyRank[taskUrgency(b)] ?? 99;
+              if (ua !== ub) return ua - ub;
+              return (
+                (priorityRank[a.priority] ?? 99) -
+                (priorityRank[b.priority] ?? 99)
+              );
+            });
+
+            return (
+              <section className="bg-surface-container-lowest rounded-xl ambient-shadow border border-border p-5 space-y-4">
+                <div className="flex items-center justify-between gap-2 flex-wrap">
+                  <div>
+                    <h3 className="font-semibold flex items-center gap-2">
+                      <Icon name="task_alt" size={18} className="text-primary" />
+                      Task queue
+                      <span className="text-xs text-muted-foreground font-normal">
+                        ({workload.activeCount} đang làm · {workload.done} xong)
+                      </span>
+                    </h3>
+                    <p className="text-xs text-muted-foreground mt-0.5">
+                      Các task được gán/tự-sinh cho agent này — sắp theo mức
+                      cảnh báo.
+                    </p>
+                  </div>
+                  <div className="flex items-center gap-2 flex-wrap">
+                    {workload.overdue > 0 && (
+                      <span className="text-xs font-semibold rounded-full px-2.5 py-1 bg-status-error/10 text-status-error flex items-center gap-1">
+                        <Icon name="error" size={12} />
+                        {workload.overdue} quá hạn
+                      </span>
+                    )}
+                    {workload.dueToday > 0 && (
+                      <span className="text-xs font-semibold rounded-full px-2.5 py-1 bg-status-warning/10 text-status-warning flex items-center gap-1">
+                        <Icon name="schedule" size={12} />
+                        {workload.dueToday} hôm nay
+                      </span>
+                    )}
+                  </div>
+                </div>
+
+                <div className="flex items-center gap-2 flex-wrap">
+                  {(
+                    [
+                      { key: "active", label: `Đang làm (${workload.activeCount + workload.blocked})` },
+                      { key: "overdue", label: `Quá hạn (${workload.overdue})` },
+                      { key: "all", label: `Tất cả (${tasks.length})` },
+                    ] as const
+                  ).map((f) => (
+                    <button
+                      key={f.key}
+                      onClick={() => setTaskFilter(f.key)}
+                      className={`shrink-0 text-xs font-semibold rounded-full px-3 py-1.5 transition-colors ${
+                        taskFilter === f.key
+                          ? "bg-primary text-on-primary"
+                          : "bg-surface-container text-foreground/70 hover:bg-surface-container-high"
+                      }`}
+                    >
+                      {f.label}
+                    </button>
+                  ))}
+                </div>
+
+                {sorted.length === 0 ? (
+                  <div className="text-center py-8 border border-dashed border-border rounded-xl text-sm text-muted-foreground">
+                    <Icon
+                      name="inbox"
+                      size={28}
+                      className="mx-auto mb-2 opacity-50"
+                    />
+                    {taskFilter === "overdue"
+                      ? "Không có task quá hạn — rất tốt!"
+                      : taskFilter === "active"
+                        ? "Chưa có task đang làm"
+                        : "Chưa có task nào"}
+                  </div>
+                ) : (
+                  <ul className="space-y-2">
+                    {sorted.map((task) => {
+                      const urg = taskUrgency(task);
+                      const busy = taskBusyId === task.id;
+                      const nextStatus: AgentTaskStatus | null =
+                        task.status === "pending"
+                          ? "in_progress"
+                          : task.status === "in_progress"
+                            ? "done"
+                            : null;
+
+                      return (
+                        <li
+                          key={task.id}
+                          className="rounded-xl border border-border bg-surface-container-lowest p-3 space-y-2"
+                        >
+                          <div className="flex items-start gap-3">
+                            <div className="min-w-0 flex-1">
+                              <div className="flex items-center gap-2 flex-wrap">
+                                <span className="font-medium text-sm">
+                                  {task.title}
+                                </span>
+                                <span
+                                  className={`text-[10px] uppercase tracking-wider font-semibold rounded-full px-2 py-0.5 ${TASK_URGENCY_TONE[urg]}`}
+                                >
+                                  <Icon
+                                    name={TASK_URGENCY_ICON[urg]}
+                                    size={10}
+                                    className="inline-block mr-0.5"
+                                  />
+                                  {TASK_URGENCY_LABELS[urg]}
+                                </span>
+                                <span
+                                  className={`text-[10px] uppercase tracking-wider font-semibold rounded-full px-2 py-0.5 ${
+                                    task.priority === "urgent"
+                                      ? "bg-status-error/10 text-status-error"
+                                      : task.priority === "high"
+                                        ? "bg-status-warning/10 text-status-warning"
+                                        : task.priority === "low"
+                                          ? "bg-surface-container-high text-muted-foreground"
+                                          : "bg-status-info/10 text-status-info"
+                                  }`}
+                                >
+                                  {AGENT_TASK_PRIORITY_LABELS[task.priority]}
+                                </span>
+                                <span
+                                  className={`text-[10px] uppercase tracking-wider font-semibold rounded-full px-2 py-0.5 ${
+                                    AGENT_TASK_STATUS_TONE[task.status] === "neutral"
+                                      ? "bg-surface-container-high text-muted-foreground"
+                                      : AGENT_TASK_STATUS_TONE[task.status] === "info"
+                                        ? "bg-status-info/10 text-status-info"
+                                        : AGENT_TASK_STATUS_TONE[task.status] === "success"
+                                          ? "bg-status-success/10 text-status-success"
+                                          : AGENT_TASK_STATUS_TONE[task.status] === "warning"
+                                            ? "bg-status-warning/10 text-status-warning"
+                                            : "bg-status-error/10 text-status-error"
+                                  }`}
+                                >
+                                  {AGENT_TASK_STATUS_LABELS[task.status]}
+                                </span>
+                              </div>
+                              {task.description && (
+                                <p className="text-xs text-muted-foreground mt-1 line-clamp-2">
+                                  {task.description}
+                                </p>
+                              )}
+                              <div className="text-xs text-muted-foreground mt-1 flex flex-wrap gap-x-3 gap-y-1">
+                                <span>
+                                  <Icon
+                                    name="event"
+                                    size={12}
+                                    className="inline-block mr-0.5"
+                                  />
+                                  {new Date(
+                                    task.taskDate,
+                                  ).toLocaleDateString("vi-VN")}
+                                </span>
+                                {task.dueTime && (
+                                  <span>
+                                    <Icon
+                                      name="schedule"
+                                      size={12}
+                                      className="inline-block mr-0.5"
+                                    />
+                                    {task.dueTime}
+                                  </span>
+                                )}
+                                {task.assignedToRole && (
+                                  <span>
+                                    <Icon
+                                      name="person"
+                                      size={12}
+                                      className="inline-block mr-0.5"
+                                    />
+                                    {task.assignedToRole}
+                                  </span>
+                                )}
+                                {(() => {
+                                  const ruleName = (
+                                    task.metadata as Record<string, unknown>
+                                  )?.rule_name;
+                                  if (typeof ruleName !== "string") return null;
+                                  return (
+                                    <span className="italic">
+                                      <Icon
+                                        name="rule"
+                                        size={12}
+                                        className="inline-block mr-0.5"
+                                      />
+                                      Playbook: {ruleName}
+                                    </span>
+                                  );
+                                })()}
+                              </div>
+                            </div>
+                          </div>
+
+                          <div className="flex items-center gap-1.5 flex-wrap">
+                            {nextStatus && (
+                              <Button
+                                size="sm"
+                                variant="default"
+                                disabled={busy}
+                                onClick={() =>
+                                  handleTaskStatusChange(task.id, nextStatus)
+                                }
+                              >
+                                <Icon
+                                  name={
+                                    nextStatus === "done"
+                                      ? "check"
+                                      : "play_arrow"
+                                  }
+                                  size={14}
+                                />
+                                <span className="ml-1">
+                                  {nextStatus === "done" ? "Hoàn thành" : "Bắt đầu"}
+                                </span>
+                              </Button>
+                            )}
+                            {task.status !== "blocked" &&
+                              task.status !== "done" && (
+                                <Button
+                                  size="sm"
+                                  variant="outline"
+                                  disabled={busy}
+                                  onClick={() =>
+                                    handleTaskStatusChange(task.id, "blocked")
+                                  }
+                                >
+                                  <Icon name="block" size={14} />
+                                  <span className="ml-1">Tắc nghẽn</span>
+                                </Button>
+                              )}
+                            <select
+                              value={task.priority}
+                              disabled={busy}
+                              onChange={(e) =>
+                                handleTaskPriorityChange(
+                                  task.id,
+                                  e.target.value as AgentTaskPriority,
+                                )
+                              }
+                              title="Đổi priority"
+                              className="h-7 rounded-lg border border-input bg-surface-container-lowest px-2 text-xs outline-none focus-visible:border-primary"
+                            >
+                              {(
+                                [
+                                  "low",
+                                  "normal",
+                                  "high",
+                                  "urgent",
+                                ] as AgentTaskPriority[]
+                              ).map((p) => (
+                                <option key={p} value={p}>
+                                  {AGENT_TASK_PRIORITY_LABELS[p]}
+                                </option>
+                              ))}
+                            </select>
+                            <Button
+                              size="sm"
+                              variant="ghost"
+                              disabled={busy}
+                              onClick={() => handleTaskReassignRole(task.id)}
+                              title="Gán cho role khác"
+                            >
+                              <Icon name="swap_horiz" size={14} />
+                              <span className="ml-1">Reassign</span>
+                            </Button>
+                          </div>
+                        </li>
+                      );
+                    })}
+                  </ul>
+                )}
+              </section>
+            );
+          })()}
 
           {/* Playbook (Sprint AI-2) */}
           <section className="bg-surface-container-lowest rounded-xl ambient-shadow border border-border p-5 space-y-4">

@@ -14,12 +14,23 @@ import {
   seedDefaultAgents,
   triggerAgent,
   runAllPlaybooks,
+  summarizeWorkload,
+  summarizeKpiForAgent,
+  taskUrgency,
+  TASK_URGENCY_LABELS,
+  TASK_URGENCY_TONE,
+  TASK_URGENCY_ICON,
+  type AgentWorkload,
+  type AgentKpiSummary,
 } from "@/lib/services";
 import {
   AGENT_ROLE_ICONS,
   AGENT_ROLE_LABELS,
+  AGENT_TASK_PRIORITY_LABELS,
   type Agent,
   type AgentExecution,
+  type AgentTask,
+  type KpiBreakdown,
 } from "@/lib/types/ai-agents";
 import { useToast } from "@/lib/contexts";
 import type { ToastVariant } from "@/lib/contexts/toast-context";
@@ -50,11 +61,15 @@ function AgentCard({
   onTrigger,
   triggering,
   lastExec,
+  workload,
+  kpiSummary,
 }: {
   agent: Agent;
   onTrigger: (agent: Agent) => void;
   triggering: boolean;
   lastExec?: AgentExecution;
+  workload: AgentWorkload;
+  kpiSummary: AgentKpiSummary;
 }) {
   const iconName = AGENT_ROLE_ICONS[agent.role] ?? "smart_toy";
   const roleLabel = AGENT_ROLE_LABELS[agent.role] ?? agent.name;
@@ -104,23 +119,75 @@ function AgentCard({
         </p>
       )}
 
+      {/* Workload + KPI (Sprint AI-3) */}
       <div className="grid grid-cols-2 gap-2 text-xs">
-        <div className="rounded-lg bg-surface-container p-2">
-          <div className="text-muted-foreground">Lần chạy gần nhất</div>
+        <div
+          className={`rounded-lg p-2 ${
+            workload.overdue > 0
+              ? "bg-status-error/10"
+              : workload.activeCount > 0
+                ? "bg-status-info/10"
+                : "bg-surface-container"
+          }`}
+        >
+          <div className="text-muted-foreground flex items-center gap-1">
+            <Icon name="task_alt" size={12} />
+            Task đang làm
+          </div>
+          <div className="font-semibold mt-0.5 flex items-baseline gap-1">
+            <span>{workload.activeCount}</span>
+            {workload.overdue > 0 && (
+              <span className="text-[10px] font-semibold text-status-error">
+                · {workload.overdue} quá hạn
+              </span>
+            )}
+            {workload.dueToday > 0 && workload.overdue === 0 && (
+              <span className="text-[10px] font-semibold text-status-warning">
+                · {workload.dueToday} hôm nay
+              </span>
+            )}
+          </div>
+        </div>
+        <div
+          className={`rounded-lg p-2 ${
+            kpiSummary.kpiCount === 0
+              ? "bg-surface-container"
+              : kpiSummary.avgProgress >= 100
+                ? "bg-status-success/10"
+                : kpiSummary.avgProgress < 70
+                  ? "bg-status-warning/10"
+                  : "bg-status-info/10"
+          }`}
+        >
+          <div className="text-muted-foreground flex items-center gap-1">
+            <Icon name="trending_up" size={12} />
+            KPI tiến độ
+          </div>
           <div className="font-semibold mt-0.5">
-            {formatRelative(agent.lastRunAt)}
+            {kpiSummary.kpiCount > 0
+              ? `${kpiSummary.avgProgress.toFixed(1)}% (${kpiSummary.kpiCount} KPI)`
+              : "Chưa gán KPI"}
           </div>
         </div>
-        <div className="rounded-lg bg-surface-container p-2">
-          <div className="text-muted-foreground">Webhook</div>
-          <div
-            className={`font-semibold mt-0.5 ${
-              webhookConfigured ? "text-status-success" : "text-status-warning"
-            }`}
-          >
-            {webhookConfigured ? "Đã cấu hình" : "Chưa cấu hình"}
-          </div>
-        </div>
+      </div>
+
+      <div className="flex items-center justify-between text-[11px] text-muted-foreground">
+        <span>
+          <Icon name="history" size={11} className="inline-block mr-0.5" />
+          {formatRelative(agent.lastRunAt)}
+        </span>
+        <span
+          className={
+            webhookConfigured ? "text-status-success" : "text-status-warning"
+          }
+        >
+          <Icon
+            name={webhookConfigured ? "check_circle" : "warning"}
+            size={11}
+            className="inline-block mr-0.5"
+          />
+          {webhookConfigured ? "Webhook OK" : "Chưa có webhook"}
+        </span>
       </div>
 
       <div className="flex gap-2 mt-auto">
@@ -165,6 +232,8 @@ export default function AiAgentsPage() {
   const [kpiCount, setKpiCount] = useState(0);
   const [taskCount, setTaskCount] = useState(0);
   const [pendingTaskCount, setPendingTaskCount] = useState(0);
+  const [allTasks, setAllTasks] = useState<AgentTask[]>([]);
+  const [allKpis, setAllKpis] = useState<KpiBreakdown[]>([]);
 
   const loadData = useCallback(async () => {
     setLoading(true);
@@ -177,6 +246,8 @@ export default function AiAgentsPage() {
       ]);
       setAgents(rows);
       setExecutions(execs);
+      setAllTasks(tasks);
+      setAllKpis(kpis);
       setKpiCount(kpis.length);
       setTaskCount(tasks.length);
       setPendingTaskCount(
@@ -259,6 +330,45 @@ export default function AiAgentsPage() {
     }
     return map;
   }, [executions]);
+
+  // Workload + KPI summary per agent (Sprint AI-3)
+  const workloadByAgent = useMemo(() => {
+    const m = new Map<string, AgentWorkload>();
+    for (const a of agents) m.set(a.id, summarizeWorkload(a.id, allTasks));
+    return m;
+  }, [agents, allTasks]);
+
+  const kpiSummaryByAgent = useMemo(() => {
+    const m = new Map<string, AgentKpiSummary>();
+    for (const a of agents) m.set(a.id, summarizeKpiForAgent(a.id, allKpis));
+    return m;
+  }, [agents, allKpis]);
+
+  // Critical tasks: overdue or urgent pending across all agents
+  const criticalTasks = useMemo(() => {
+    return allTasks
+      .filter((t) => {
+        const u = taskUrgency(t);
+        return u === "overdue" || (u === "due_today" && t.priority === "urgent");
+      })
+      .sort((a, b) => {
+        // overdue first, then by taskDate asc (oldest first)
+        const ua = taskUrgency(a);
+        const ub = taskUrgency(b);
+        if (ua !== ub) return ua === "overdue" ? -1 : 1;
+        return a.taskDate.localeCompare(b.taskDate);
+      })
+      .slice(0, 8);
+  }, [allTasks]);
+
+  const totalOverdueCount = useMemo(
+    () => allTasks.filter((t) => taskUrgency(t) === "overdue").length,
+    [allTasks],
+  );
+  const totalDueTodayCount = useMemo(
+    () => allTasks.filter((t) => taskUrgency(t) === "due_today").length,
+    [allTasks],
+  );
 
   const activeCount = agents.filter((a) => a.isActive).length;
   const configuredCount = agents.filter(
@@ -372,14 +482,26 @@ export default function AiAgentsPage() {
           valueColor="text-status-success"
         />
         <KpiCard
-          label="Task hôm nay"
-          value={String(taskCount)}
-          change={`${pendingTaskCount} chưa hoàn thành`}
-          positive={pendingTaskCount === 0}
-          icon="checklist"
-          bg="bg-status-warning/10"
-          iconColor="text-status-warning"
-          valueColor="text-status-warning"
+          label="Task cần xử lý"
+          value={String(totalOverdueCount + totalDueTodayCount)}
+          change={
+            totalOverdueCount > 0
+              ? `${totalOverdueCount} quá hạn · ${totalDueTodayCount} hôm nay`
+              : totalDueTodayCount > 0
+                ? `${totalDueTodayCount} phải xong hôm nay`
+                : `${taskCount} total · ${pendingTaskCount} đang làm`
+          }
+          positive={totalOverdueCount === 0}
+          icon={totalOverdueCount > 0 ? "crisis_alert" : "checklist"}
+          bg={
+            totalOverdueCount > 0 ? "bg-status-error/10" : "bg-status-warning/10"
+          }
+          iconColor={
+            totalOverdueCount > 0 ? "text-status-error" : "text-status-warning"
+          }
+          valueColor={
+            totalOverdueCount > 0 ? "text-status-error" : "text-status-warning"
+          }
         />
       </div>
 
@@ -410,6 +532,86 @@ export default function AiAgentsPage() {
         </div>
       ) : (
         <>
+          {/* Critical tasks banner (Sprint AI-3) */}
+          {criticalTasks.length > 0 && (
+            <div className="bg-status-error/5 border border-status-error/30 rounded-xl p-4">
+              <div className="flex items-center gap-2 mb-3">
+                <Icon
+                  name="crisis_alert"
+                  size={18}
+                  className="text-status-error"
+                />
+                <h3 className="font-semibold text-status-error">
+                  Task cần xử lý gấp
+                </h3>
+                <span className="text-xs text-muted-foreground">
+                  ({totalOverdueCount} quá hạn · {totalDueTodayCount} hôm nay)
+                </span>
+              </div>
+              <ul className="space-y-1.5">
+                {criticalTasks.map((t) => {
+                  const u = taskUrgency(t);
+                  const agent = agents.find((a) => a.id === t.agentId);
+                  return (
+                    <li
+                      key={t.id}
+                      className="flex items-center gap-2 text-sm bg-surface-container-lowest rounded-lg px-3 py-2"
+                    >
+                      <span
+                        className={`text-[10px] uppercase tracking-wider font-semibold rounded-full px-2 py-0.5 shrink-0 ${TASK_URGENCY_TONE[u]}`}
+                      >
+                        <Icon
+                          name={TASK_URGENCY_ICON[u]}
+                          size={10}
+                          className="inline-block mr-0.5"
+                        />
+                        {TASK_URGENCY_LABELS[u]}
+                      </span>
+                      <span className="font-medium truncate flex-1">
+                        {t.title}
+                      </span>
+                      <span className="text-xs text-muted-foreground truncate max-w-[160px]">
+                        {agent?.name ?? "—"}
+                      </span>
+                      <span
+                        className={`text-[10px] uppercase tracking-wider font-semibold rounded-full px-2 py-0.5 shrink-0 ${
+                          t.priority === "urgent"
+                            ? "bg-status-error/10 text-status-error"
+                            : t.priority === "high"
+                              ? "bg-status-warning/10 text-status-warning"
+                              : "bg-status-info/10 text-status-info"
+                        }`}
+                      >
+                        {AGENT_TASK_PRIORITY_LABELS[t.priority]}
+                      </span>
+                      {agent && (
+                        <Link
+                          href={`/ai-agents/${agent.id}`}
+                          className="text-xs text-primary hover:underline shrink-0"
+                        >
+                          Xem →
+                        </Link>
+                      )}
+                    </li>
+                  );
+                })}
+              </ul>
+              {totalOverdueCount + totalDueTodayCount > criticalTasks.length && (
+                <p className="text-xs text-muted-foreground mt-2">
+                  Còn{" "}
+                  {totalOverdueCount + totalDueTodayCount - criticalTasks.length}{" "}
+                  task nữa —{" "}
+                  <Link
+                    href="/ai-agents/tasks"
+                    className="text-primary hover:underline"
+                  >
+                    xem tất cả
+                  </Link>
+                </p>
+              )}
+            </div>
+          )}
+
           {/* Agent grid */}
           <div className="grid sm:grid-cols-2 lg:grid-cols-3 gap-4">
             {agents.map((agent) => (
@@ -419,6 +621,27 @@ export default function AiAgentsPage() {
                 onTrigger={handleTrigger}
                 triggering={triggeringId === agent.id}
                 lastExec={lastExecByAgent.get(agent.id)}
+                workload={
+                  workloadByAgent.get(agent.id) ?? {
+                    agentId: agent.id,
+                    pending: 0,
+                    inProgress: 0,
+                    done: 0,
+                    blocked: 0,
+                    overdue: 0,
+                    dueToday: 0,
+                    activeCount: 0,
+                  }
+                }
+                kpiSummary={
+                  kpiSummaryByAgent.get(agent.id) ?? {
+                    agentId: agent.id,
+                    kpiCount: 0,
+                    avgProgress: 0,
+                    laggingCount: 0,
+                    overAchievedCount: 0,
+                  }
+                }
               />
             ))}
           </div>

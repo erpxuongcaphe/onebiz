@@ -10,6 +10,10 @@ import {
   deleteAgentTask,
   getAgentTasks,
   updateAgentTaskStatus,
+  taskUrgency,
+  TASK_URGENCY_ICON,
+  TASK_URGENCY_LABELS,
+  TASK_URGENCY_TONE,
 } from "@/lib/services";
 import {
   AGENT_TASK_PRIORITY_LABELS,
@@ -43,8 +47,12 @@ const STATUS_ICONS: Record<AgentTaskStatus, string> = {
   blocked: "block",
 };
 
-const STATUS_FILTERS: Array<{ key: AgentTaskStatus | "all"; label: string }> = [
+type TaskListFilter = AgentTaskStatus | "all" | "overdue" | "due_today";
+
+const STATUS_FILTERS: Array<{ key: TaskListFilter; label: string }> = [
   { key: "all", label: "Tất cả" },
+  { key: "overdue", label: "Quá hạn" },
+  { key: "due_today", label: "Hôm nay" },
   { key: "pending", label: "Chờ" },
   { key: "in_progress", label: "Đang làm" },
   { key: "done", label: "Hoàn thành" },
@@ -67,6 +75,7 @@ function TaskRow({
   busy: boolean;
 }) {
   const tone = AGENT_TASK_STATUS_TONE[task.status];
+  const urg = taskUrgency(task);
   const nextStatus: AgentTaskStatus | null =
     task.status === "pending"
       ? "in_progress"
@@ -80,6 +89,18 @@ function TaskRow({
         <div className="min-w-0 flex-1">
           <div className="flex items-center gap-2 flex-wrap">
             <span className="font-semibold truncate">{task.title}</span>
+            {urg !== "done" && urg !== "ok" && (
+              <span
+                className={`text-[10px] uppercase tracking-wider font-semibold rounded-full px-2 py-0.5 ${TASK_URGENCY_TONE[urg]}`}
+              >
+                <Icon
+                  name={TASK_URGENCY_ICON[urg]}
+                  size={10}
+                  className="inline-block mr-0.5"
+                />
+                {TASK_URGENCY_LABELS[urg]}
+              </span>
+            )}
             <span
               className={`text-[10px] uppercase tracking-wider font-semibold rounded-full px-2 py-0.5 ${TONE_CLASS[tone]}`}
             >
@@ -191,7 +212,7 @@ export default function AgentTasksPage() {
   const { toast } = useToast();
   const [loading, setLoading] = useState(true);
   const [tasks, setTasks] = useState<AgentTask[]>([]);
-  const [filter, setFilter] = useState<AgentTaskStatus | "all">("all");
+  const [filter, setFilter] = useState<TaskListFilter>("all");
   const [busyId, setBusyId] = useState<string | null>(null);
 
   // Dialog state
@@ -259,17 +280,45 @@ export default function AgentTasksPage() {
     }
   };
 
-  const filtered = useMemo(
-    () => (filter === "all" ? tasks : tasks.filter((t) => t.status === filter)),
-    [tasks, filter],
-  );
+  const filtered = useMemo(() => {
+    let list = tasks;
+    if (filter === "overdue") {
+      list = tasks.filter((t) => taskUrgency(t) === "overdue");
+    } else if (filter === "due_today") {
+      list = tasks.filter((t) => taskUrgency(t) === "due_today");
+    } else if (filter !== "all") {
+      list = tasks.filter((t) => t.status === filter);
+    }
+    // Sort by urgency then priority
+    const urgRank: Record<string, number> = {
+      overdue: 0,
+      due_today: 1,
+      due_soon: 2,
+      ok: 3,
+      done: 4,
+    };
+    const prRank = { urgent: 0, high: 1, normal: 2, low: 3 } as const;
+    return [...list].sort((a, b) => {
+      const ua = urgRank[taskUrgency(a)] ?? 99;
+      const ub = urgRank[taskUrgency(b)] ?? 99;
+      if (ua !== ub) return ua - ub;
+      return prRank[a.priority] - prRank[b.priority];
+    });
+  }, [tasks, filter]);
 
   const counts = useMemo((): Record<string, number> => {
     const byStatus = tasks.reduce<Record<string, number>>((acc, t) => {
       acc[t.status] = (acc[t.status] ?? 0) + 1;
       return acc;
     }, {});
-    return { total: tasks.length, ...byStatus };
+    let overdue = 0,
+      dueToday = 0;
+    for (const t of tasks) {
+      const u = taskUrgency(t);
+      if (u === "overdue") overdue += 1;
+      if (u === "due_today") dueToday += 1;
+    }
+    return { total: tasks.length, overdue, due_today: dueToday, ...byStatus };
   }, [tasks]);
 
   if (loading) {
