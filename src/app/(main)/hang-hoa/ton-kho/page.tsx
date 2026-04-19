@@ -19,6 +19,10 @@ import { exportToExcel, exportToCsv } from "@/lib/utils/export";
 import { getBranchStockRows, getBranches } from "@/lib/services";
 import type { BranchStockRow, BranchDetail } from "@/lib/services/supabase";
 import { Icon } from "@/components/ui/icon";
+import { ImportExcelDialog } from "@/components/shared/dialogs/import-excel-dialog";
+import { downloadTemplate } from "@/lib/excel";
+import { initialStockExcelSchema } from "@/lib/excel/schemas";
+import { bulkImportInitialStock } from "@/lib/services/supabase/excel-import";
 
 type ProductTypeFilter = "all" | "nvl" | "sku";
 
@@ -34,6 +38,8 @@ export default function TonKhoPage() {
   const [branchFilter, setBranchFilter] = useState<string>("all");
   const [typeFilter, setTypeFilter] = useState<ProductTypeFilter>("all");
   const [lowStockOnly, setLowStockOnly] = useState<string>("all"); // all | low
+
+  const [importOpen, setImportOpen] = useState(false);
 
   const fetchData = useCallback(async () => {
     setLoading(true);
@@ -254,6 +260,19 @@ export default function TonKhoPage() {
         searchPlaceholder="Theo mã hàng, tên hàng..."
         searchValue={search}
         onSearchChange={setSearch}
+        actions={[
+          {
+            label: "Tải mẫu tồn kho đầu kỳ",
+            icon: <Icon name="description" size={16} />,
+            variant: "ghost",
+            onClick: () => downloadTemplate(initialStockExcelSchema),
+          },
+          {
+            label: "Nhập tồn kho đầu kỳ",
+            icon: <Icon name="upload" size={16} />,
+            onClick: () => setImportOpen(true),
+          },
+        ]}
         onExport={{
           excel: () => {
             const cols = [
@@ -322,6 +341,22 @@ export default function TonKhoPage() {
           stockValue: formatCurrency(totalValue),
         }}
         getRowId={(r) => r.id}
+      />
+
+      <ImportExcelDialog
+        open={importOpen}
+        onOpenChange={setImportOpen}
+        schema={initialStockExcelSchema}
+        onCommit={bulkImportInitialStock}
+        onFinished={() => {
+          setPage(0);
+          fetchData();
+          toast({
+            title: "Nhập tồn kho đầu kỳ hoàn tất",
+            description: "Tồn kho các sản phẩm đã được cập nhật theo chi nhánh.",
+            variant: "success",
+          });
+        }}
       />
     </ListPageLayout>
   );

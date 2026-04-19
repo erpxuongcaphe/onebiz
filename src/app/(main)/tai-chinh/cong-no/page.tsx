@@ -27,6 +27,10 @@ import { getDebtAging, getTopDebtors } from "@/lib/services/supabase/debt";
 import type { Customer, Supplier } from "@/lib/types";
 import type { DebtAgingReport, DebtorDetail } from "@/lib/services/supabase/debt";
 import { Icon } from "@/components/ui/icon";
+import { ImportExcelDialog } from "@/components/shared/dialogs/import-excel-dialog";
+import { downloadTemplate } from "@/lib/excel";
+import { debtOpeningExcelSchema } from "@/lib/excel/schemas";
+import { bulkImportDebtOpening } from "@/lib/services/supabase/excel-import";
 
 type Mode = "customer" | "supplier" | "aging";
 
@@ -57,6 +61,9 @@ export default function CongNoPage() {
   const [aging, setAging] = useState<DebtAgingReport | null>(null);
   const [topDebtors, setTopDebtors] = useState<DebtorDetail[]>([]);
   const [agingLoading, setAgingLoading] = useState(false);
+
+  // Import opening debt
+  const [importOpen, setImportOpen] = useState(false);
 
   const fetchData = useCallback(async () => {
     setLoading(true);
@@ -291,6 +298,19 @@ export default function CongNoPage() {
         }
         searchValue={search}
         onSearchChange={setSearch}
+        actions={[
+          {
+            label: "Tải mẫu công nợ đầu kỳ",
+            icon: <Icon name="description" size={16} />,
+            variant: "ghost",
+            onClick: () => downloadTemplate(debtOpeningExcelSchema),
+          },
+          {
+            label: "Nhập công nợ đầu kỳ",
+            icon: <Icon name="upload" size={16} />,
+            onClick: () => setImportOpen(true),
+          },
+        ]}
         onExport={mode !== "aging" ? {
           excel: () => {
             if (mode === "customer") {
@@ -522,6 +542,22 @@ export default function CongNoPage() {
           )}
         </TabsContent>
       </Tabs>
+
+      <ImportExcelDialog
+        open={importOpen}
+        onOpenChange={setImportOpen}
+        schema={debtOpeningExcelSchema}
+        onCommit={bulkImportDebtOpening}
+        onFinished={() => {
+          fetchData();
+          toast({
+            title: "Nhập công nợ đầu kỳ hoàn tất",
+            description:
+              "Số dư nợ đầu kỳ đã được cập nhật cho các đối tượng KH/NCC.",
+            variant: "success",
+          });
+        }}
+      />
     </div>
   );
 }

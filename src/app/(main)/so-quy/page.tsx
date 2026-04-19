@@ -23,6 +23,10 @@ import {
   DetailItemsTable,
 } from "@/components/shared/inline-detail-panel";
 import { CreateCashTransactionDialog, ConfirmDialog } from "@/components/shared/dialogs";
+import { ImportExcelDialog } from "@/components/shared/dialogs/import-excel-dialog";
+import { downloadTemplate } from "@/lib/excel";
+import { cashTransactionExcelSchema } from "@/lib/excel/schemas";
+import { bulkImportCashTransactions } from "@/lib/services/supabase/excel-import";
 import { formatCurrency, formatDate } from "@/lib/format";
 import { exportToExcel, exportToCsv } from "@/lib/utils/export";
 import {
@@ -181,6 +185,7 @@ export default function SoQuyPage() {
   const [createType, setCreateType] = useState<"receipt" | "payment">(
     "receipt",
   );
+  const [importOpen, setImportOpen] = useState(false);
 
   // Delete
   const [deletingEntry, setDeletingEntry] = useState<CashBookEntry | null>(null);
@@ -396,6 +401,18 @@ export default function SoQuyPage() {
                 setCreateOpen(true);
               },
             },
+            {
+              label: "Tải mẫu",
+              icon: <Icon name="description" size={16} />,
+              variant: "ghost",
+              onClick: () => downloadTemplate(cashTransactionExcelSchema),
+            },
+            {
+              label: "Nhập Excel",
+              icon: <Icon name="upload" size={16} />,
+              variant: "ghost",
+              onClick: () => setImportOpen(true),
+            },
           ]}
         />
 
@@ -498,6 +515,22 @@ export default function SoQuyPage() {
           } finally {
             setDeleteLoading(false);
           }
+        }}
+      />
+
+      <ImportExcelDialog
+        open={importOpen}
+        onOpenChange={setImportOpen}
+        schema={cashTransactionExcelSchema}
+        onCommit={bulkImportCashTransactions}
+        onFinished={() => {
+          setPage(0);
+          fetchData();
+          toast({
+            title: "Nhập Excel hoàn tất",
+            description: "Sổ quỹ đã được cập nhật với các phiếu mới.",
+            variant: "success",
+          });
         }}
       />
     </>
