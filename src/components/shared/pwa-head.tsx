@@ -54,13 +54,14 @@ export function PwaHead() {
       />
       <meta
         name="apple-mobile-web-app-title"
-        content={isFnb ? "FnB POS" : "OneBiz"}
+        content={isFnb ? "FnB POS" : "ONEBIZ."}
       />
-      {/* Apple touch icon cho install prompt trên iOS */}
+      {/* Apple touch icon cho install prompt trên iOS.
+          ERP dùng brand icon ONEBIZ; FnB giữ icon riêng để user phân biệt trên home screen. */}
       <link
         rel="apple-touch-icon"
-        sizes="192x192"
-        href={isFnb ? "/icons/fnb-192.svg" : "/icons/fnb-192.svg"}
+        sizes="180x180"
+        href={isFnb ? "/icons/fnb-192.svg" : "/icons/erp-192.png"}
       />
     </>
   );

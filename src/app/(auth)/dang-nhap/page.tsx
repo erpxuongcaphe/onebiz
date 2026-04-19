@@ -10,9 +10,9 @@ import {
   Card,
   CardContent,
   CardHeader,
-  CardTitle,
   CardDescription,
 } from "@/components/ui/card";
+import { LogoWordmark } from "@/components/brand/logo";
 
 export default function LoginPage() {
   return (
@@ -54,11 +54,11 @@ function LoginForm() {
   return (
     <Card className="w-full max-w-sm">
       <CardHeader className="text-center">
-        <div className="mx-auto mb-2 w-12 h-12 bg-primary rounded-xl flex items-center justify-center">
-          <span className="text-white font-bold text-lg">O</span>
+        {/* Logo wordmark ONEBIZ. — brand navy + chấm xanh period */}
+        <div className="mx-auto mb-3">
+          <LogoWordmark height={32} />
         </div>
-        <CardTitle className="text-2xl">OneBiz ERP</CardTitle>
-        <CardDescription>Đăng nhập vào hệ thống quản lý</CardDescription>
+        <CardDescription>ERP Suite — Đăng nhập vào hệ thống quản lý</CardDescription>
       </CardHeader>
       <CardContent>
         <form onSubmit={handleSubmit} className="space-y-4">

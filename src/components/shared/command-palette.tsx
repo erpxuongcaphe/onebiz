@@ -449,7 +449,7 @@ function CommandPaletteDialog({
           </span>
           <span className="ml-auto flex items-center gap-1">
             <Icon name="inventory_2" size={12} />
-            OneBiz Command
+            ONEBIZ. Command
           </span>
         </div>
       </DialogContent>

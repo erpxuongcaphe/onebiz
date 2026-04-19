@@ -31,6 +31,7 @@ import { sidebarNavGroups, isHrefActive, type SidebarLeaf } from "./nav-config";
 import { useCommandPalette } from "./command-palette";
 import { AppSwitcher } from "./app-switcher";
 import { ImportDataDialog } from "./import-data-dialog";
+import { LogoIcon } from "@/components/brand/logo";
 import { cn } from "@/lib/utils";
 import { Icon } from "@/components/ui/icon";
 
@@ -361,11 +362,11 @@ export function TopNav() {
           <Link
             href="/"
             className="flex items-center ml-1 shrink-0 press-scale-sm"
-            title="Trang chủ"
+            title="Trang chủ ONEBIZ."
+            aria-label="ONEBIZ home"
           >
-            <span className="flex h-9 w-9 rounded-xl bg-primary text-primary-foreground items-center justify-center font-heading text-base font-extrabold ambient-shadow">
-              O
-            </span>
+            {/* Brand icon "O." — navy nền + chấm xanh, 36×36 khớp slot top-nav */}
+            <LogoIcon size={36} className="rounded-xl ambient-shadow" />
           </Link>
           <div className="hidden md:block w-px h-6 bg-border ml-1" />
           <BranchSelector />

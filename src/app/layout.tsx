@@ -28,8 +28,12 @@ const beVietnamPro = Be_Vietnam_Pro({
 });
 
 export const metadata: Metadata = {
-  title: "OneBiz",
-  description: "Hệ thống quản lý doanh nghiệp",
+  title: {
+    default: "ONEBIZ.",
+    template: "%s · ONEBIZ.",
+  },
+  description: "ERP Suite — Quản lý doanh nghiệp tất cả trong một",
+  applicationName: "ONEBIZ",
 };
 
 export default function RootLayout({
