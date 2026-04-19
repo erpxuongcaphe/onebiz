@@ -21,6 +21,8 @@ interface PageAction {
   href?: string;
   /** If true, rendered in the 3-dot overflow menu */
   overflow?: boolean;
+  /** Disable the button (useful for loading states) */
+  disabled?: boolean;
 }
 
 interface ExportHandlers {
@@ -66,6 +68,7 @@ function ActionButton({ action }: { action: PageAction }) {
       variant={action.variant || "outline"}
       size="sm"
       onClick={handleClick}
+      disabled={action.disabled}
       className="gap-1.5 shrink-0"
     >
       {action.icon}

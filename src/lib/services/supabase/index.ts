@@ -225,3 +225,17 @@ export {
   getAgentTasks, createAgentTask, updateAgentTaskStatus, deleteAgentTask,
   getAgentExecutions, recordAgentExecution, triggerAgent,
 } from "./ai-agents";
+
+// KPI Engine — Auto-breakdown + Actual sync (Sprint AI-1)
+export {
+  autoBreakdownKpi,
+  syncKpiActualsFromDb,
+  splitPeriod,
+} from "./kpi-engine";
+export type {
+  AutoBreakdownInput,
+  AutoBreakdownResult,
+  SyncKpiActualsResult,
+  BreakdownStrategy,
+  BranchDistribution,
+} from "./kpi-engine";

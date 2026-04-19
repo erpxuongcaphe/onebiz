@@ -9,10 +9,12 @@ import { Icon } from "@/components/ui/icon";
 import { ConfirmDialog } from "@/components/shared/dialogs/confirm-dialog";
 import { CreateKpiBreakdownDialog } from "@/components/shared/dialogs/create-kpi-breakdown-dialog";
 import { CreateAgentTaskDialog } from "@/components/shared/dialogs/create-agent-task-dialog";
+import { AutoBreakdownDialog } from "@/components/shared/dialogs/auto-breakdown-dialog";
 import { formatCurrency, formatNumber } from "@/lib/format";
 import {
   deleteKpiBreakdown,
   getKpiBreakdownTree,
+  syncKpiActualsFromDb,
   updateKpiActual,
 } from "@/lib/services";
 import {
@@ -46,6 +48,7 @@ function KpiNode({
   node,
   depth = 0,
   onBreakdown,
+  onAutoBreakdown,
   onUpdateActual,
   onCreateTask,
   onDelete,
@@ -54,6 +57,7 @@ function KpiNode({
   node: KpiBreakdownTreeNode;
   depth?: number;
   onBreakdown: (node: KpiBreakdown) => void;
+  onAutoBreakdown: (node: KpiBreakdown) => void;
   onUpdateActual: (node: KpiBreakdown) => void;
   onCreateTask: (node: KpiBreakdown) => void;
   onDelete: (node: KpiBreakdown) => void;
@@ -148,6 +152,15 @@ function KpiNode({
             size="xs"
             variant="ghost"
             disabled={busy}
+            onClick={() => onAutoBreakdown(node)}
+          >
+            <Icon name="auto_awesome" size={12} />
+            <span className="ml-1">Tự động chia nhỏ</span>
+          </Button>
+          <Button
+            size="xs"
+            variant="ghost"
+            disabled={busy}
             onClick={() => onBreakdown(node)}
           >
             <Icon name="account_tree" size={12} />
@@ -192,6 +205,7 @@ function KpiNode({
               node={child}
               depth={depth + 1}
               onBreakdown={onBreakdown}
+              onAutoBreakdown={onAutoBreakdown}
               onUpdateActual={onUpdateActual}
               onCreateTask={onCreateTask}
               onDelete={onDelete}
@@ -293,6 +307,9 @@ export default function KpiBreakdownPage() {
   const [kpiDialogOpen, setKpiDialogOpen] = useState(false);
   const [parentKpi, setParentKpi] = useState<KpiBreakdown | null>(null);
 
+  const [autoDialogOpen, setAutoDialogOpen] = useState(false);
+  const [autoParentKpi, setAutoParentKpi] = useState<KpiBreakdown | null>(null);
+
   const [taskDialogOpen, setTaskDialogOpen] = useState(false);
   const [taskKpi, setTaskKpi] = useState<KpiBreakdown | null>(null);
 
@@ -302,6 +319,8 @@ export default function KpiBreakdownPage() {
   const [deleteOpen, setDeleteOpen] = useState(false);
   const [deleteKpi, setDeleteKpi] = useState<KpiBreakdown | null>(null);
   const [deleting, setDeleting] = useState(false);
+
+  const [syncing, setSyncing] = useState(false);
 
   const load = useCallback(async () => {
     setLoading(true);
@@ -332,9 +351,44 @@ export default function KpiBreakdownPage() {
     setKpiDialogOpen(true);
   };
 
+  const openAutoBreakdown = (node: KpiBreakdown) => {
+    setAutoParentKpi(node);
+    setAutoDialogOpen(true);
+  };
+
   const openUpdateActual = (node: KpiBreakdown) => {
     setActualKpi(node);
     setActualDialogOpen(true);
+  };
+
+  const handleSyncActuals = async () => {
+    setSyncing(true);
+    try {
+      const result = await syncKpiActualsFromDb();
+      const errMsg =
+        result.errors.length > 0
+          ? ` · ${result.errors.length} lỗi`
+          : "";
+      toast({
+        title: `Đồng bộ xong: ${result.updated}/${result.totalScanned} KPI được cập nhật${errMsg}`,
+        description:
+          result.errors.length > 0
+            ? result.errors
+                .slice(0, 3)
+                .map((e) => `${e.kpiName}: ${e.error}`)
+                .join(" · ")
+            : `${result.skipped} KPI không đổi`,
+        variant: result.errors.length > 0 ? "warning" : "success",
+      });
+      await load();
+    } catch (err) {
+      toast({
+        title: err instanceof Error ? err.message : "Lỗi đồng bộ KPI",
+        variant: "error",
+      });
+    } finally {
+      setSyncing(false);
+    }
   };
 
   const openCreateTask = (node: KpiBreakdown) => {
@@ -389,6 +443,19 @@ export default function KpiBreakdownPage() {
             href: "/ai-agents",
           },
           {
+            label: syncing ? "Đang đồng bộ..." : "Đồng bộ thực tế",
+            icon: (
+              <Icon
+                name={syncing ? "progress_activity" : "sync"}
+                size={16}
+                className={syncing ? "animate-spin" : ""}
+              />
+            ),
+            variant: "outline",
+            onClick: handleSyncActuals,
+            disabled: syncing || loading,
+          },
+          {
             label: "Tạo KPI",
             icon: <Icon name="add" size={16} />,
             variant: "default",
@@ -434,10 +501,11 @@ export default function KpiBreakdownPage() {
               key={root.id}
               node={root}
               onBreakdown={openCreateChild}
+              onAutoBreakdown={openAutoBreakdown}
               onUpdateActual={openUpdateActual}
               onCreateTask={openCreateTask}
               onDelete={openDelete}
-              busy={busy || deleting}
+              busy={busy || deleting || syncing}
             />
           ))}
         </div>
@@ -451,6 +519,19 @@ export default function KpiBreakdownPage() {
           if (!o) setParentKpi(null);
         }}
         parentKpi={parentKpi}
+        onSuccess={() => {
+          setBusy(true);
+          load().finally(() => setBusy(false));
+        }}
+      />
+
+      <AutoBreakdownDialog
+        open={autoDialogOpen}
+        onOpenChange={(o) => {
+          setAutoDialogOpen(o);
+          if (!o) setAutoParentKpi(null);
+        }}
+        parentKpi={autoParentKpi}
         onSuccess={() => {
           setBusy(true);
           load().finally(() => setBusy(false));
