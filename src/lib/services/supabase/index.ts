@@ -152,7 +152,7 @@ export { BRANCH_TYPE_LABELS, BRANCH_CODE_PREFIX } from "./branches";
 
 // Stock Transfers (Chuyển kho giữa chi nhánh)
 export {
-  getStockTransfers, getTransferStatuses, getTransferStatusMeta,
+  getStockTransfers, getStockTransferById, getTransferStatuses, getTransferStatusMeta,
   createStockTransfer, completeStockTransfer, cancelStockTransfer,
   updateTransferStatus, canTransitionTransfer,
 } from "./transfers";

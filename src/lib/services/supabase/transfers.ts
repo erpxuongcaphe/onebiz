@@ -153,6 +153,67 @@ export function getTransferStatuses() {
   }));
 }
 
+/**
+ * Lấy chi tiết phiếu chuyển kho — bao gồm items — dùng cho InlineDetailPanel.
+ */
+export async function getStockTransferById(id: string): Promise<{
+  transfer: StockTransfer;
+  items: StockTransferItem[];
+} | null> {
+  const supabase = getClient();
+
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  const { data: headerRow, error: headerErr } = await (supabase as any)
+    .from("stock_transfers")
+    .select(
+      `*,
+       from_branch:from_branch_id(name),
+       to_branch:to_branch_id(name)`
+    )
+    .eq("id", id)
+    .single();
+
+  if (headerErr || !headerRow) {
+    if (headerErr) handleError(headerErr, "getStockTransferById:header");
+    return null;
+  }
+
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  const { data: itemRows, error: itemErr } = await (supabase as any)
+    .from("stock_transfer_items")
+    .select("product_id, product_name, product_code, unit, quantity, note")
+    .eq("transfer_id", id);
+
+  if (itemErr) handleError(itemErr, "getStockTransferById:items");
+
+  const transfer: StockTransfer = {
+    id: headerRow.id,
+    code: headerRow.code,
+    fromBranchId: headerRow.from_branch_id,
+    fromBranchName: headerRow.from_branch?.name ?? "—",
+    toBranchId: headerRow.to_branch_id,
+    toBranchName: headerRow.to_branch?.name ?? "—",
+    status: headerRow.status as StockTransferStatus,
+    totalItems: headerRow.total_items ?? 0,
+    note: headerRow.note ?? "",
+    createdBy: headerRow.created_by ?? "",
+    createdAt: headerRow.created_at,
+    completedAt: headerRow.completed_at ?? null,
+  };
+
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  const items: StockTransferItem[] = (itemRows ?? []).map((r: any) => ({
+    productId: r.product_id,
+    productName: r.product_name ?? "",
+    productCode: r.product_code ?? "",
+    unit: r.unit ?? undefined,
+    quantity: Number(r.quantity ?? 0),
+    note: r.note ?? undefined,
+  }));
+
+  return { transfer, items };
+}
+
 /* ------------------------------------------------------------------ */
 /*  Create                                                             */
 /* ------------------------------------------------------------------ */

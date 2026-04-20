@@ -7,6 +7,7 @@ import { ColumnDef } from "@tanstack/react-table";
 import { PageHeader } from "@/components/shared/page-header";
 import { ListPageLayout } from "@/components/shared/list-page-layout";
 import { DataTable } from "@/components/shared/data-table";
+import { SummaryCard } from "@/components/shared/summary-card";
 import {
   FilterSidebar,
   FilterGroup,
@@ -371,36 +372,3 @@ export default function TonKhoPage() {
   );
 }
 
-function SummaryCard({
-  icon,
-  label,
-  value,
-  highlight,
-  danger,
-}: {
-  icon: React.ReactNode;
-  label: string;
-  value: string;
-  highlight?: boolean;
-  danger?: boolean;
-}) {
-  return (
-    <div
-      className={`border rounded-lg p-3 bg-background ${
-        highlight ? "border-primary/30 bg-primary/5" : ""
-      } ${danger ? "border-destructive/30 bg-destructive/5" : ""}`}
-    >
-      <div className="flex items-center gap-2 text-xs text-muted-foreground mb-1">
-        {icon}
-        <span>{label}</span>
-      </div>
-      <div
-        className={`text-lg font-semibold ${
-          highlight ? "text-primary" : danger ? "text-destructive" : ""
-        }`}
-      >
-        {value}
-      </div>
-    </div>
-  );
-}

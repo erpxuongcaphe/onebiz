@@ -14,7 +14,15 @@ import { ColumnDef } from "@tanstack/react-table";
 import { PageHeader } from "@/components/shared/page-header";
 import { ListPageLayout } from "@/components/shared/list-page-layout";
 import { DataTable } from "@/components/shared/data-table";
+import { SummaryCard } from "@/components/shared/summary-card";
 import { FilterSidebar, FilterGroup } from "@/components/shared/filter-sidebar";
+import {
+  InlineDetailPanel,
+  DetailTabs,
+  DetailHeader,
+  DetailInfoGrid,
+  AuditHistoryTab,
+} from "@/components/shared/inline-detail-panel";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -39,6 +47,7 @@ import { formatDate } from "@/lib/format";
 import { getBranches, getBranchStockRows } from "@/lib/services";
 import {
   getStockTransfers,
+  getStockTransferById,
   createStockTransfer,
   completeStockTransfer,
   cancelStockTransfer,
@@ -50,6 +59,7 @@ import type {
   StockTransferStatus,
   StockTransferItem,
 } from "@/lib/services/supabase/transfers";
+import { formatUser } from "@/lib/format";
 import type { BranchDetail } from "@/lib/services/supabase/branches";
 import { Icon } from "@/components/ui/icon";
 
@@ -64,6 +74,7 @@ export default function ChuyenKhoPage() {
   const [search, setSearch] = useState("");
   const [page, setPage] = useState(0);
   const [statusFilter, setStatusFilter] = useState("all");
+  const [expandedRow, setExpandedRow] = useState<number | null>(null);
 
   // Branches for dialog
   const [branches, setBranches] = useState<BranchDetail[]>([]);
@@ -269,6 +280,23 @@ export default function ChuyenKhoPage() {
     label: m.label,
   }));
 
+  // KPI stats tính trên trang hiện tại (data đã load) — nhanh, không call extra query.
+  const now = Date.now();
+  const weekAgo = now - 7 * 24 * 3600 * 1000;
+  const sevenDaysMs = 7 * 24 * 3600 * 1000;
+  const kpi = {
+    total,
+    inTransit: data.filter((t) => t.status === "in_transit").length,
+    completedThisWeek: data.filter(
+      (t) => t.status === "completed" && new Date(t.createdAt).getTime() >= weekAgo,
+    ).length,
+    stuckTransit: data.filter(
+      (t) =>
+        t.status === "in_transit" &&
+        now - new Date(t.createdAt).getTime() > sevenDaysMs,
+    ).length,
+  };
+
   return (
     <ListPageLayout
       sidebar={
@@ -310,10 +338,30 @@ export default function ChuyenKhoPage() {
         ]}
       />
 
-      <div className="px-4 pt-3">
-        <Badge variant="secondary" className="font-mono">
-          {total} phiếu chuyển kho
-        </Badge>
+      <div className="grid grid-cols-2 md:grid-cols-4 gap-3 px-4 pt-4">
+        <SummaryCard
+          icon={<Icon name="swap_horiz" size={16} />}
+          label="Tổng phiếu"
+          value={kpi.total.toString()}
+        />
+        <SummaryCard
+          icon={<Icon name="local_shipping" size={16} />}
+          label="Đang chuyển"
+          value={kpi.inTransit.toString()}
+          highlight={kpi.inTransit > 0}
+        />
+        <SummaryCard
+          icon={<Icon name="check_circle" size={16} />}
+          label="Hoàn thành trong tuần"
+          value={kpi.completedThisWeek.toString()}
+        />
+        <SummaryCard
+          icon={<Icon name="warning" size={16} className="text-destructive" />}
+          label="Quá hạn (>7 ngày)"
+          value={kpi.stuckTransit.toString()}
+          danger={kpi.stuckTransit > 0}
+          hint={kpi.stuckTransit > 0 ? "Cần kiểm tra gấp" : undefined}
+        />
       </div>
 
       <div className="flex-1 min-h-0 px-4 pt-2 pb-4">
@@ -328,6 +376,11 @@ export default function ChuyenKhoPage() {
           onPageChange={setPage}
           onPageSizeChange={() => {}}
           getRowId={(r) => r.id}
+          expandedRow={expandedRow}
+          onExpandedRowChange={setExpandedRow}
+          renderDetail={(item, onClose) => (
+            <TransferDetail item={item} onClose={onClose} />
+          )}
         />
       </div>
 
@@ -360,6 +413,159 @@ export default function ChuyenKhoPage() {
         }}
       />
     </ListPageLayout>
+  );
+}
+
+/* ------------------------------------------------------------------ */
+/*  Transfer Detail Panel                                               */
+/* ------------------------------------------------------------------ */
+
+function TransferDetail({
+  item,
+  onClose,
+}: {
+  item: StockTransfer;
+  onClose: () => void;
+}) {
+  const [items, setItems] = useState<StockTransferItem[] | null>(null);
+  const [loadingItems, setLoadingItems] = useState(true);
+
+  useEffect(() => {
+    let cancelled = false;
+    setLoadingItems(true);
+    getStockTransferById(item.id)
+      .then((res) => {
+        if (cancelled) return;
+        setItems(res?.items ?? []);
+      })
+      .catch(() => {
+        if (!cancelled) setItems([]);
+      })
+      .finally(() => {
+        if (!cancelled) setLoadingItems(false);
+      });
+    return () => {
+      cancelled = true;
+    };
+  }, [item.id]);
+
+  const meta = STATUS_META[item.status];
+
+  return (
+    <InlineDetailPanel open onClose={onClose}>
+      <div className="p-4 space-y-4">
+        <DetailTabs
+          defaultTab="info"
+          tabs={[
+            {
+              id: "info",
+              label: "Thông tin",
+              content: (
+                <div className="space-y-4">
+                  <DetailHeader
+                    title={`Phiếu chuyển kho ${item.code}`}
+                    code={item.code}
+                    status={{
+                      label: meta.label,
+                      variant: "secondary",
+                      className: "",
+                    }}
+                    subtitle={`${item.fromBranchName} → ${item.toBranchName}`}
+                    meta={
+                      <div className="flex items-center gap-4 flex-wrap text-xs">
+                        <span>
+                          Người tạo:{" "}
+                          <strong>{formatUser(undefined, item.createdBy)}</strong>
+                        </span>
+                        <span>
+                          Ngày tạo: <strong>{formatDate(item.createdAt)}</strong>
+                        </span>
+                      </div>
+                    }
+                  />
+                  <DetailInfoGrid
+                    fields={[
+                      { label: "Mã phiếu", value: item.code },
+                      { label: "Kho xuất", value: item.fromBranchName },
+                      { label: "Kho nhận", value: item.toBranchName },
+                      { label: "Trạng thái", value: meta.label },
+                      {
+                        label: "Số mặt hàng",
+                        value: String(item.totalItems),
+                      },
+                      {
+                        label: "Ngày hoàn thành",
+                        value: item.completedAt
+                          ? formatDate(item.completedAt)
+                          : "—",
+                      },
+                      { label: "Ghi chú", value: item.note || "—" },
+                    ]}
+                  />
+                </div>
+              ),
+            },
+            {
+              id: "items",
+              label: "Sản phẩm",
+              content: (
+                <div className="space-y-2">
+                  {loadingItems ? (
+                    <div className="flex items-center justify-center py-8 text-muted-foreground text-sm">
+                      <Icon
+                        name="progress_activity"
+                        size={16}
+                        className="animate-spin mr-2"
+                      />
+                      Đang tải...
+                    </div>
+                  ) : !items || items.length === 0 ? (
+                    <div className="text-sm text-muted-foreground py-4 text-center">
+                      Phiếu chưa có sản phẩm
+                    </div>
+                  ) : (
+                    <div className="border rounded-lg overflow-hidden">
+                      <table className="w-full text-sm">
+                        <thead className="bg-muted/30">
+                          <tr>
+                            <th className="text-left p-2 font-medium">Sản phẩm</th>
+                            <th className="text-right p-2 font-medium w-24">
+                              Số lượng
+                            </th>
+                          </tr>
+                        </thead>
+                        <tbody>
+                          {items.map((it, idx) => (
+                            <tr key={`${it.productId}-${idx}`} className="border-t">
+                              <td className="p-2">
+                                <div className="font-medium">{it.productName}</div>
+                                <div className="text-xs text-muted-foreground font-mono">
+                                  {it.productCode}
+                                </div>
+                              </td>
+                              <td className="p-2 text-right tabular-nums">
+                                {it.quantity} {it.unit ?? ""}
+                              </td>
+                            </tr>
+                          ))}
+                        </tbody>
+                      </table>
+                    </div>
+                  )}
+                </div>
+              ),
+            },
+            {
+              id: "history",
+              label: "Lịch sử",
+              content: (
+                <AuditHistoryTab entityType="stock_transfer" entityId={item.id} />
+              ),
+            },
+          ]}
+        />
+      </div>
+    </InlineDetailPanel>
   );
 }
 

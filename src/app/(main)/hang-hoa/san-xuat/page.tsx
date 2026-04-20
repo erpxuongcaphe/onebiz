@@ -5,6 +5,7 @@ import { ColumnDef } from "@tanstack/react-table";
 import { PageHeader } from "@/components/shared/page-header";
 import { ListPageLayout } from "@/components/shared/list-page-layout";
 import { DataTable } from "@/components/shared/data-table";
+import { SummaryCard } from "@/components/shared/summary-card";
 import { KanbanBoard, type KanbanColumn } from "@/components/shared/kanban-board";
 import {
   FilterSidebar,
@@ -16,6 +17,7 @@ import {
   DetailTabs,
   DetailHeader,
   DetailInfoGrid,
+  AuditHistoryTab,
 } from "@/components/shared/inline-detail-panel";
 import {
   CreateProductionOrderDialog,
@@ -27,7 +29,7 @@ import { Button } from "@/components/ui/button";
 import { useToast, useBranchFilter } from "@/lib/contexts";
 import { printDocument } from "@/lib/print-document";
 import { buildProductionOrderPrintData } from "@/lib/print-templates";
-import { formatDate } from "@/lib/format";
+import { formatCurrency, formatDate } from "@/lib/format";
 import {
   getProductionOrders,
   getProductionOrderById,
@@ -143,6 +145,12 @@ function ProductionOrderDetail({
                       value: order.lotNumber ?? "—",
                     },
                     {
+                      label: "Tổng giá vốn NVL",
+                      value: order.cogsAmount
+                        ? formatCurrency(order.cogsAmount)
+                        : "—",
+                    },
+                    {
                       label: "Ghi chú",
                       value: order.notes ?? "—",
                     },
@@ -168,6 +176,7 @@ function ProductionOrderDetail({
                           <th className="text-left p-2 font-medium">NVL</th>
                           <th className="text-right p-2 font-medium">Kế hoạch</th>
                           <th className="text-right p-2 font-medium">Thực tế</th>
+                          <th className="text-right p-2 font-medium">Giá vốn/ĐV</th>
                         </tr>
                       </thead>
                       <tbody>
@@ -185,6 +194,9 @@ function ProductionOrderDetail({
                             <td className="p-2 text-right">
                               {m.actualQty || 0} {m.unit}
                             </td>
+                            <td className="p-2 text-right tabular-nums">
+                              {m.unitCost != null ? formatCurrency(m.unitCost) : "—"}
+                            </td>
                           </tr>
                         ))}
                       </tbody>
@@ -192,6 +204,13 @@ function ProductionOrderDetail({
                   </div>
                 )}
               </div>
+            ),
+          },
+          {
+            id: "history",
+            label: "Lịch sử",
+            content: (
+              <AuditHistoryTab entityType="production_order" entityId={order.id} />
             ),
           },
         ]}
@@ -264,6 +283,19 @@ export default function SanXuatPage() {
   });
 
   const pagedData = filtered.slice(page * pageSize, (page + 1) * pageSize);
+
+  // KPI stats — tính từ toàn bộ data (chưa filter) để luôn đồng nhất
+  const statsToday = new Date().toISOString().split("T")[0];
+  const kpi = {
+    total: data.length,
+    inProgress: data.filter(
+      (o) => o.status === "in_production" || o.status === "quality_check",
+    ).length,
+    completedToday: data.filter(
+      (o) => o.status === "completed" && (o.actualEnd ?? "").startsWith(statsToday),
+    ).length,
+    totalCogs: data.reduce((sum, o) => sum + (o.cogsAmount ?? 0), 0),
+  };
 
   // Derive Kanban columns from STATUS_META (skip cancelled in the main board)
   const kanbanColumns: KanbanColumn<ProductionOrder>[] = (
@@ -397,6 +429,32 @@ export default function SanXuatPage() {
             },
           ]}
         />
+
+        {!loading && data.length > 0 && (
+          <div className="grid grid-cols-2 md:grid-cols-4 gap-3 px-4 pt-4">
+            <SummaryCard
+              icon={<Icon name="factory" size={16} />}
+              label="Tổng lệnh SX"
+              value={kpi.total.toString()}
+            />
+            <SummaryCard
+              icon={<Icon name="precision_manufacturing" size={16} />}
+              label="Đang sản xuất"
+              value={kpi.inProgress.toString()}
+              highlight={kpi.inProgress > 0}
+            />
+            <SummaryCard
+              icon={<Icon name="check_circle" size={16} />}
+              label="Hoàn thành hôm nay"
+              value={kpi.completedToday.toString()}
+            />
+            <SummaryCard
+              icon={<Icon name="payments" size={16} />}
+              label="Tổng giá vốn SX"
+              value={formatCurrency(kpi.totalCogs)}
+            />
+          </div>
+        )}
 
         {!loading && filtered.length === 0 ? (
           <div className="flex flex-col items-center justify-center py-20 text-muted-foreground">
