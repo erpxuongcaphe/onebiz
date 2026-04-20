@@ -21,14 +21,14 @@ import {
   DetailInfoGrid,
   DetailItemsTable,
 } from "@/components/shared/inline-detail-panel";
-import { CreateInvoiceDialog, ConfirmDialog } from "@/components/shared/dialogs";
+import { CreateInvoiceDialog, EditInvoiceDialog, ConfirmDialog } from "@/components/shared/dialogs";
 import { RecordPaymentDialog } from "@/components/shared/dialogs/record-payment-dialog";
 import { formatCurrency, formatDate } from "@/lib/format";
 import { exportToExcel, exportToCsv } from "@/lib/utils/export";
 import { getInvoices, getInvoiceStatuses, cancelInvoice } from "@/lib/services";
 import { useToast, useBranchFilter } from "@/lib/contexts";
-import { printDocument } from "@/lib/print-document";
 import { buildInvoicePrintData } from "@/lib/print-templates";
+import { usePrintWithPicker } from "@/lib/hooks/use-print-with-picker";
 import type { Invoice } from "@/lib/types";
 import { Icon } from "@/components/ui/icon";
 
@@ -50,14 +50,24 @@ const invoiceTypeOptions = [
 function InvoiceDetail({
   invoice,
   onClose,
+  onEdit,
+  onDelete,
 }: {
   invoice: Invoice;
   onClose: () => void;
+  onEdit?: () => void;
+  onDelete?: () => void;
 }) {
   const status = statusMap[invoice.status];
 
   return (
-    <InlineDetailPanel open onClose={onClose}>
+    <InlineDetailPanel
+      open
+      onClose={onClose}
+      onEdit={onEdit}
+      onDelete={onDelete}
+      deleteLabel="Hủy"
+    >
       <DetailTabs
         tabs={[
           {
@@ -198,6 +208,7 @@ export default function HoaDonPage() {
   const { toast } = useToast();
   const { activeBranchId } = useBranchFilter();
   const router = useRouter();
+  const { printWithPicker, printerDialog } = usePrintWithPicker();
   const [data, setData] = useState<Invoice[]>([]);
   const [total, setTotal] = useState(0);
   const [loading, setLoading] = useState(true);
@@ -208,6 +219,7 @@ export default function HoaDonPage() {
   const [starred, setStarred] = useState<Set<string>>(new Set());
 
   const [createOpen, setCreateOpen] = useState(false);
+  const [editingItem, setEditingItem] = useState<Invoice | null>(null);
   const [cancellingItem, setCancellingItem] = useState<Invoice | null>(null);
   const [cancelLoading, setCancelLoading] = useState(false);
   const [payingItem, setPayingItem] = useState<Invoice | null>(null);
@@ -475,14 +487,36 @@ export default function HoaDonPage() {
           expandedRow={expandedRow}
           onExpandedRowChange={setExpandedRow}
           renderDetail={(invoice, onClose) => (
-            <InvoiceDetail invoice={invoice} onClose={onClose} />
+            <InvoiceDetail
+              invoice={invoice}
+              onClose={onClose}
+              onEdit={
+                invoice.status === "processing"
+                  ? () => setEditingItem(invoice)
+                  : undefined
+              }
+              onDelete={
+                invoice.status !== "completed" && invoice.status !== "cancelled"
+                  ? () => setCancellingItem(invoice)
+                  : undefined
+              }
+            />
           )}
           rowActions={(row) => [
             {
               label: "In hóa đơn",
               icon: <Icon name="print" size={16} />,
-              onClick: () => printDocument(buildInvoicePrintData(row)),
+              onClick: () => printWithPicker(buildInvoicePrintData(row), "In hóa đơn"),
             },
+            ...(row.status === "processing"
+              ? [
+                  {
+                    label: "Sửa",
+                    icon: <Icon name="edit" size={16} />,
+                    onClick: () => setEditingItem(row),
+                  },
+                ]
+              : []),
             ...(row.debt > 0
               ? [
                   {
@@ -517,6 +551,15 @@ export default function HoaDonPage() {
         onOpenChange={setCreateOpen}
         onSuccess={fetchData}
       />
+
+      <EditInvoiceDialog
+        open={!!editingItem}
+        onOpenChange={(open) => { if (!open) setEditingItem(null); }}
+        invoice={editingItem}
+        onSuccess={fetchData}
+      />
+
+      {printerDialog}
 
       {payingItem && (
         <RecordPaymentDialog

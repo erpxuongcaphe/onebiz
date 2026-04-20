@@ -54,9 +54,11 @@ const STATUS_META: Record<
 function ProductionOrderDetail({
   orderId,
   onClose,
+  onDelete,
 }: {
   orderId: string;
   onClose: () => void;
+  onDelete?: () => void;
 }) {
   const [order, setOrder] = useState<ProductionOrder | null>(null);
   const [loading, setLoading] = useState(true);
@@ -87,7 +89,12 @@ function ProductionOrderDetail({
   const meta = STATUS_META[order.status];
 
   return (
-    <InlineDetailPanel open onClose={onClose}>
+    <InlineDetailPanel
+      open
+      onClose={onClose}
+      onDelete={onDelete}
+      deleteLabel="Hủy"
+    >
       <DetailTabs
         tabs={[
           {
@@ -449,7 +456,15 @@ export default function SanXuatPage() {
             expandedRow={expandedRow}
             onExpandedRowChange={setExpandedRow}
             renderDetail={(item, onClose) => (
-              <ProductionOrderDetail orderId={item.id} onClose={onClose} />
+              <ProductionOrderDetail
+                orderId={item.id}
+                onClose={onClose}
+                onDelete={
+                  item.status !== "completed" && item.status !== "cancelled"
+                    ? () => setCancellingItem(item)
+                    : undefined
+                }
+              />
             )}
             getRowId={(row) => row.id}
             rowActions={(row) => [

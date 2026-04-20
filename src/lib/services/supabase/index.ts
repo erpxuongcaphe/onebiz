@@ -6,10 +6,11 @@ export {
   getInvoices,
   getInvoiceStatuses,
   cancelInvoice,
+  updateInvoice,
   getInvoicesForCustomer,
   getReturnsForCustomer,
 } from "./invoices";
-export type { CustomerReturn } from "./invoices";
+export type { CustomerReturn, UpdateInvoicePatch } from "./invoices";
 export {
   getPurchaseOrders,
   getPurchaseOrderStatuses,

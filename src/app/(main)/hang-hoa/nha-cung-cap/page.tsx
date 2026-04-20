@@ -46,9 +46,13 @@ import { Icon } from "@/components/ui/icon";
 function SupplierDetail({
   supplier,
   onClose,
+  onEdit,
+  onDelete,
 }: {
   supplier: Supplier;
   onClose: () => void;
+  onEdit?: () => void;
+  onDelete?: () => void;
 }) {
   const [orders, setOrders] = useState<PurchaseOrder[]>([]);
   const [ordersLoading, setOrdersLoading] = useState(true);
@@ -305,7 +309,7 @@ function SupplierDetail({
   ];
 
   return (
-    <InlineDetailPanel open onClose={onClose}>
+    <InlineDetailPanel open onClose={onClose} onEdit={onEdit} onDelete={onDelete}>
       <div className="p-4 space-y-4">
         <DetailHeader
           title={supplier.name}
@@ -456,7 +460,15 @@ export default function NhaCungCapPage() {
 
   /* ---- Inline detail renderer ---- */
   const renderDetail = (supplier: Supplier, onClose: () => void) => (
-    <SupplierDetail supplier={supplier} onClose={onClose} />
+    <SupplierDetail
+      supplier={supplier}
+      onClose={onClose}
+      onEdit={() => {
+        setEditingSupplier(supplier);
+        setCreateOpen(true);
+      }}
+      onDelete={() => setDeletingSupplier(supplier)}
+    />
   );
 
   /* ---- Render ---- */

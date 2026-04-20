@@ -144,6 +144,64 @@ export async function cancelInvoice(id: string): Promise<void> {
   if (error) handleError(error, "cancelInvoice.update");
 }
 
+/**
+ * Sửa hóa đơn — chỉ cho phép sửa khi status = draft hoặc confirmed.
+ * Hóa đơn đã completed/cancelled không thể sửa.
+ *
+ * Chỉ cho sửa các field "mềm" (customer info, discount, note, payment_method).
+ * Không cho sửa status / paid / debt / total / created_by qua hàm này — những
+ * field đó phải đi qua flow riêng (thu nợ, hủy, v.v.).
+ */
+export interface UpdateInvoicePatch {
+  customerId?: string | null;
+  customerName?: string;
+  discountAmount?: number;
+  paymentMethod?: "cash" | "transfer" | "card" | "mixed";
+  note?: string;
+}
+
+export async function updateInvoice(
+  id: string,
+  patch: UpdateInvoicePatch
+): Promise<void> {
+  const supabase = getClient();
+
+  // Check current status first
+  const { data: existing, error: fetchErr } = await supabase
+    .from("invoices")
+    .select("status")
+    .eq("id", id)
+    .single();
+
+  if (fetchErr) handleError(fetchErr, "updateInvoice.fetch");
+  if (!existing) throw new Error("Không tìm thấy hóa đơn");
+
+  const allowEdit = ["draft", "confirmed"];
+  if (!allowEdit.includes(existing.status)) {
+    throw new Error(
+      `Không thể sửa hóa đơn ở trạng thái "${existing.status}". Chỉ cho phép sửa hóa đơn phiếu tạm hoặc đã xác nhận.`
+    );
+  }
+
+  // Build DB patch (camelCase → snake_case)
+  const dbPatch: Record<string, unknown> = {
+    updated_at: new Date().toISOString(),
+  };
+  if (patch.customerId !== undefined) dbPatch.customer_id = patch.customerId;
+  if (patch.customerName !== undefined) dbPatch.customer_name = patch.customerName;
+  if (patch.discountAmount !== undefined) dbPatch.discount_amount = patch.discountAmount;
+  if (patch.paymentMethod !== undefined) dbPatch.payment_method = patch.paymentMethod;
+  if (patch.note !== undefined) dbPatch.note = patch.note;
+
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  const { error } = await supabase
+    .from("invoices")
+    .update(dbPatch as any)
+    .eq("id", id);
+
+  if (error) handleError(error, "updateInvoice.update");
+}
+
 // --- Mapper ---
 
 // eslint-disable-next-line @typescript-eslint/no-explicit-any

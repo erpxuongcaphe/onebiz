@@ -22,7 +22,7 @@ import {
   DetailItemsTable,
 } from "@/components/shared/inline-detail-panel";
 import { useToast, useBranchFilter } from "@/lib/contexts";
-import { printDocument } from "@/lib/print-document";
+import { usePrintWithPicker } from "@/lib/hooks/use-print-with-picker";
 import { buildReturnPrintData } from "@/lib/print-templates";
 import { formatCurrency, formatDate } from "@/lib/format";
 import { exportToExcel, exportToCsv } from "@/lib/utils/export";
@@ -193,6 +193,7 @@ function ReturnDetail({
 export default function TraHangPage() {
   const { toast } = useToast();
   const { activeBranchId } = useBranchFilter();
+  const { printWithPicker, printerDialog } = usePrintWithPicker();
   const [data, setData] = useState<ReturnOrder[]>([]);
   const [total, setTotal] = useState(0);
   const [loading, setLoading] = useState(true);
@@ -440,13 +441,13 @@ export default function TraHangPage() {
           {
             label: "In phiếu trả",
             icon: <Icon name="print" size={16} />,
-            onClick: () => printDocument(buildReturnPrintData({
+            onClick: () => printWithPicker(buildReturnPrintData({
               code: row.code,
               date: row.date,
               customerName: row.customerName,
               totalRefund: row.totalAmount,
               createdBy: row.createdBy,
-            })),
+            }), "In phiếu trả hàng"),
           },
         ]}
       />
@@ -457,6 +458,8 @@ export default function TraHangPage() {
       onOpenChange={setCreateOpen}
       onSuccess={fetchData}
     />
+
+    {printerDialog}
     </>
   );
 }

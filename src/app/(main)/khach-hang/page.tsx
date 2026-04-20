@@ -220,7 +220,15 @@ export default function KhachHangPage() {
 
   /* ---- Inline detail renderer ---- */
   const renderDetail = (customer: Customer, onClose: () => void) => (
-    <CustomerDetailPanel customer={customer} onClose={onClose} />
+    <CustomerDetailPanel
+      customer={customer}
+      onClose={onClose}
+      onEdit={() => {
+        setEditingCustomer(customer);
+        setCreateOpen(true);
+      }}
+      onDelete={() => setDeletingCustomer(customer)}
+    />
   );
 
   /* ---- Render ---- */
@@ -427,9 +435,13 @@ export default function KhachHangPage() {
 function CustomerDetailPanel({
   customer,
   onClose,
+  onEdit,
+  onDelete,
 }: {
   customer: Customer;
   onClose: () => void;
+  onEdit?: () => void;
+  onDelete?: () => void;
 }) {
   const [invoices, setInvoices] = useState<Invoice[]>([]);
   const [returns, setReturns] = useState<CustomerReturn[]>([]);
@@ -815,7 +827,7 @@ function CustomerDetailPanel({
   ];
 
   return (
-    <InlineDetailPanel open onClose={onClose}>
+    <InlineDetailPanel open onClose={onClose} onEdit={onEdit} onDelete={onDelete}>
       <div className="p-4 space-y-4">
         <DetailHeader
           title={customer.name}

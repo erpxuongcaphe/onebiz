@@ -71,14 +71,24 @@ function useStarredSet() {
 function PartnerDetail({
   partner,
   onClose,
+  onEdit,
+  onDelete,
 }: {
   partner: DeliveryPartner;
   onClose: () => void;
+  onEdit?: () => void;
+  onDelete?: () => void;
 }) {
   const status = statusMap[partner.status];
 
   return (
-    <InlineDetailPanel open onClose={onClose}>
+    <InlineDetailPanel
+      open
+      onClose={onClose}
+      onEdit={onEdit}
+      onDelete={onDelete}
+      deleteLabel="Ngừng hợp tác"
+    >
       <div className="p-4 space-y-4">
         <DetailHeader
           title={partner.name}
@@ -395,7 +405,19 @@ export default function DoiTacGiaoHangPage() {
         expandedRow={expandedRow}
         onExpandedRowChange={setExpandedRow}
         renderDetail={(partner, onClose) => (
-          <PartnerDetail partner={partner} onClose={onClose} />
+          <PartnerDetail
+            partner={partner}
+            onClose={onClose}
+            onEdit={() => {
+              setEditingPartner(partner);
+              setCreateOpen(true);
+            }}
+            onDelete={
+              partner.status === "active"
+                ? () => setDeactivatingPartner(partner)
+                : undefined
+            }
+          />
         )}
         getRowId={(row) => row.id}
         rowActions={(row) => [

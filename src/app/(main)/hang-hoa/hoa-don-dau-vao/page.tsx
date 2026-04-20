@@ -44,9 +44,11 @@ const statusOptions = getInputInvoiceStatuses();
 function InputInvoiceDetail({
   item,
   onClose,
+  onDelete,
 }: {
   item: InputInvoice;
   onClose: () => void;
+  onDelete?: () => void;
 }) {
   const st = statusMap[item.status];
   const tabs: DetailTab[] = [
@@ -96,7 +98,11 @@ function InputInvoiceDetail({
     },
   ];
   return (
-    <InlineDetailPanel open onClose={onClose}>
+    <InlineDetailPanel
+      open
+      onClose={onClose}
+      onDelete={onDelete}
+    >
       <div className="p-4 space-y-4">
         <DetailTabs tabs={tabs} defaultTab="info" />
       </div>
@@ -277,7 +283,11 @@ export default function HoaDonDauVaoPage() {
         expandedRow={expandedRow}
         onExpandedRowChange={setExpandedRow}
         renderDetail={(item, onClose) => (
-          <InputInvoiceDetail item={item} onClose={onClose} />
+          <InputInvoiceDetail
+            item={item}
+            onClose={onClose}
+            onDelete={() => setDeletingInvoice(item)}
+          />
         )}
         rowActions={(row) => [
           {

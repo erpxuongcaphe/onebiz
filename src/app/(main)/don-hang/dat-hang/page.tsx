@@ -22,7 +22,7 @@ import {
   DetailItemsTable,
 } from "@/components/shared/inline-detail-panel";
 import { useToast, useBranchFilter } from "@/lib/contexts";
-import { printDocument } from "@/lib/print-document";
+import { usePrintWithPicker } from "@/lib/hooks/use-print-with-picker";
 import { buildSalesOrderPrintData } from "@/lib/print-templates";
 import { formatCurrency, formatDate } from "@/lib/format";
 import { exportToExcel, exportToCsv } from "@/lib/utils/export";
@@ -68,9 +68,13 @@ const deliveryAreaOptions = [
 function OrderDetail({
   order,
   onClose,
+  onEdit,
+  onDelete,
 }: {
   order: SalesOrder;
   onClose: () => void;
+  onEdit?: () => void;
+  onDelete?: () => void;
 }) {
   const status = statusMap[order.status] ?? {
     label: order.statusName,
@@ -78,7 +82,7 @@ function OrderDetail({
   };
 
   return (
-    <InlineDetailPanel open onClose={onClose}>
+    <InlineDetailPanel open onClose={onClose} onEdit={onEdit} onDelete={onDelete}>
       <DetailTabs
         tabs={[
           {
@@ -212,6 +216,7 @@ function OrderDetail({
 export default function DatHangPage() {
   const { toast } = useToast();
   const { activeBranchId } = useBranchFilter();
+  const { printWithPicker, printerDialog } = usePrintWithPicker();
   const [data, setData] = useState<SalesOrder[]>([]);
   const [total, setTotal] = useState(0);
   const [loading, setLoading] = useState(true);
@@ -459,13 +464,21 @@ export default function DatHangPage() {
         expandedRow={expandedRow}
         onExpandedRowChange={setExpandedRow}
         renderDetail={(order, onClose) => (
-          <OrderDetail order={order} onClose={onClose} />
+          <OrderDetail
+            order={order}
+            onClose={onClose}
+            onDelete={
+              order.status !== "completed" && order.status !== "cancelled"
+                ? () => setCancellingItem(order)
+                : undefined
+            }
+          />
         )}
         rowActions={(row) => [
           {
             label: "In phiếu",
             icon: <Icon name="print" size={16} />,
-            onClick: () => printDocument(buildSalesOrderPrintData(row)),
+            onClick: () => printWithPicker(buildSalesOrderPrintData(row), "In đơn đặt hàng"),
           },
           ...(row.status !== "completed" && row.status !== "cancelled"
             ? [
@@ -514,6 +527,8 @@ export default function DatHangPage() {
         }
       }}
     />
+
+    {printerDialog}
     </>
   );
 }

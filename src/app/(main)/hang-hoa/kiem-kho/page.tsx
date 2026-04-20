@@ -27,7 +27,7 @@ import type { InventoryCheckItemRow } from "@/lib/services";
 import type { InventoryCheck } from "@/lib/types";
 import { CreateInventoryCheckDialog, ConfirmDialog } from "@/components/shared/dialogs";
 import { useToast, useBranchFilter } from "@/lib/contexts";
-import { printDocument } from "@/lib/print-document";
+import { usePrintWithPicker } from "@/lib/hooks/use-print-with-picker";
 import { buildInventoryCheckPrintData } from "@/lib/print-templates";
 import { Icon } from "@/components/ui/icon";
 
@@ -257,9 +257,11 @@ function VarianceTab({ checkId }: { checkId: string }) {
 function InventoryCheckDetail({
   item,
   onClose,
+  onDelete,
 }: {
   item: InventoryCheck;
   onClose: () => void;
+  onDelete?: () => void;
 }) {
   const status = statusMap[item.status];
 
@@ -364,7 +366,12 @@ function InventoryCheckDetail({
   ];
 
   return (
-    <InlineDetailPanel open onClose={onClose}>
+    <InlineDetailPanel
+      open
+      onClose={onClose}
+      onDelete={onDelete}
+      deleteLabel="Hủy"
+    >
       <div className="p-4 space-y-4">
         <DetailTabs tabs={tabs} defaultTab="info" />
       </div>
@@ -378,6 +385,7 @@ function InventoryCheckDetail({
 export default function KiemKhoPage() {
   const { toast } = useToast();
   const { activeBranchId } = useBranchFilter();
+  const { printWithPicker, printerDialog } = usePrintWithPicker();
   const [data, setData] = useState<InventoryCheck[]>([]);
   const [total, setTotal] = useState(0);
   const [loading, setLoading] = useState(true);
@@ -559,7 +567,13 @@ export default function KiemKhoPage() {
 
   /* ---- Inline detail renderer ---- */
   const renderDetail = (item: InventoryCheck, onClose: () => void) => (
-    <InventoryCheckDetail item={item} onClose={onClose} />
+    <InventoryCheckDetail
+      item={item}
+      onClose={onClose}
+      onDelete={
+        item.status === "processing" ? () => setCancellingItem(item) : undefined
+      }
+    />
   );
 
   /* ---- Render ---- */
@@ -663,7 +677,7 @@ export default function KiemKhoPage() {
           {
             label: "In phiếu",
             icon: <Icon name="print" size={16} />,
-            onClick: () => printDocument(buildInventoryCheckPrintData(row)),
+            onClick: () => printWithPicker(buildInventoryCheckPrintData(row), "In phiếu kiểm kho"),
           },
           ...(row.status === "processing"
             ? [
@@ -718,6 +732,8 @@ export default function KiemKhoPage() {
         }
       }}
     />
+
+    {printerDialog}
     </>
   );
 }

@@ -26,7 +26,7 @@ import {
 } from "@/components/shared/inline-detail-panel";
 import type { DetailTab } from "@/components/shared/inline-detail-panel";
 import { useToast, useBranchFilter } from "@/lib/contexts";
-import { printDocument } from "@/lib/print-document";
+import { usePrintWithPicker } from "@/lib/hooks/use-print-with-picker";
 import { buildGoodsReceiptPrintData } from "@/lib/print-templates";
 import { formatCurrency, formatDate } from "@/lib/format";
 import { exportToExcel, exportToCsv } from "@/lib/utils/export";
@@ -75,10 +75,14 @@ function PurchaseOrderDetail({
   order,
   onClose,
   onRequestPartialReceive,
+  onEdit,
+  onDelete,
 }: {
   order: PurchaseOrder;
   onClose: () => void;
   onRequestPartialReceive: () => void;
+  onEdit?: () => void;
+  onDelete?: () => void;
 }) {
   const status = STATUS_META[order.status];
   const [items, setItems] = useState<PurchaseOrderItemRow[]>([]);
@@ -244,7 +248,13 @@ function PurchaseOrderDetail({
   ];
 
   return (
-    <InlineDetailPanel open onClose={onClose}>
+    <InlineDetailPanel
+      open
+      onClose={onClose}
+      onEdit={onEdit}
+      onDelete={onDelete}
+      deleteLabel="Hủy"
+    >
       <div className="p-4 space-y-4">
         <DetailTabs tabs={tabs} defaultTab="info" />
       </div>
@@ -259,6 +269,7 @@ export default function NhapHangPage() {
   const { toast } = useToast();
   const { activeBranchId } = useBranchFilter();
   const router = useRouter();
+  const { printWithPicker, printerDialog } = usePrintWithPicker();
   const [data, setData] = useState<PurchaseOrder[]>([]);
   const [total, setTotal] = useState(0);
   const [loading, setLoading] = useState(true);
@@ -417,6 +428,24 @@ export default function NhapHangPage() {
       order={order}
       onClose={onClose}
       onRequestPartialReceive={() => setPartialReceiveOrder(order)}
+      onEdit={
+        order.status === "draft"
+          ? () => {
+              setEditingPO({
+                id: order.id,
+                code: order.code,
+                supplierId: order.supplierId,
+                supplierName: order.supplierName,
+              });
+              setCreateOpen(true);
+            }
+          : undefined
+      }
+      onDelete={
+        order.status !== "completed" && order.status !== "cancelled"
+          ? () => handleAdvanceStatus(order, "cancelled")
+          : undefined
+      }
     />
   );
 
@@ -688,7 +717,7 @@ export default function NhapHangPage() {
           actions.push({
             label: "In phiếu",
             icon: <Icon name="print" size={16} />,
-            onClick: () => printDocument(buildGoodsReceiptPrintData(row)),
+            onClick: () => printWithPicker(buildGoodsReceiptPrintData(row), "In phiếu nhập"),
           });
           actions.push({
             label: "Trả hàng nhập",
@@ -755,6 +784,8 @@ export default function NhapHangPage() {
         fetchData();
       }}
     />
+
+    {printerDialog}
     </>
   );
 }

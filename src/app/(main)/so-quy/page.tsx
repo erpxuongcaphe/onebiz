@@ -87,14 +87,16 @@ const statusFilterOptions = [
 function TransactionDetail({
   entry,
   onClose,
+  onDelete,
 }: {
   entry: CashBookEntry;
   onClose: () => void;
+  onDelete?: () => void;
 }) {
   const isReceipt = entry.type === "receipt";
 
   return (
-    <InlineDetailPanel open onClose={onClose}>
+    <InlineDetailPanel open onClose={onClose} onDelete={onDelete}>
       <DetailTabs
         tabs={[
           {
@@ -460,7 +462,11 @@ export default function SoQuyPage() {
           expandedRow={expandedRow}
           onExpandedRowChange={setExpandedRow}
           renderDetail={(entry, onClose) => (
-            <TransactionDetail entry={entry} onClose={onClose} />
+            <TransactionDetail
+              entry={entry}
+              onClose={onClose}
+              onDelete={() => setDeletingEntry(entry)}
+            />
           )}
           rowActions={(row) => [
             {

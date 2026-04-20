@@ -58,13 +58,17 @@ type ProductScope = "nvl" | "sku";
 function ProductDetail({
   product,
   onClose,
+  onEdit,
+  onDelete,
 }: {
   product: Product;
   onClose: () => void;
+  onEdit?: () => void;
+  onDelete?: () => void;
 }) {
   const { toast } = useToast();
   return (
-    <InlineDetailPanel open onClose={onClose}>
+    <InlineDetailPanel open onClose={onClose} onEdit={onEdit} onDelete={onDelete}>
       <DetailTabs
         tabs={[
           {
@@ -757,7 +761,18 @@ export default function HangHoaPage() {
           expandedRow={expandedRow}
           onExpandedRowChange={setExpandedRow}
           renderDetail={(product, onClose) => (
-            <ProductDetail product={product} onClose={onClose} />
+            <ProductDetail
+              product={product}
+              onClose={onClose}
+              onEdit={() => {
+                setEditingProduct(product);
+                setCreateOpen(true);
+              }}
+              onDelete={() => {
+                setDeletingProduct(product);
+                setDeleteConfirmOpen(true);
+              }}
+            />
           )}
           rowActions={(row) => [
             {

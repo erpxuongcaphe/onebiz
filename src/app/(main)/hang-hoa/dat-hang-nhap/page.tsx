@@ -47,9 +47,11 @@ const statusOptions = getPurchaseEntryStatuses();
 function PurchaseOrderEntryDetail({
   item,
   onClose,
+  onDelete,
 }: {
   item: PurchaseOrderEntry;
   onClose: () => void;
+  onDelete?: () => void;
 }) {
   const st = statusMap[item.status];
   const tabs: DetailTab[] = [
@@ -99,7 +101,12 @@ function PurchaseOrderEntryDetail({
     },
   ];
   return (
-    <InlineDetailPanel open onClose={onClose}>
+    <InlineDetailPanel
+      open
+      onClose={onClose}
+      onDelete={onDelete}
+      deleteLabel="Hủy"
+    >
       <div className="p-4 space-y-4">
         <DetailTabs tabs={tabs} defaultTab="info" />
       </div>
@@ -274,7 +281,15 @@ export default function DatHangNhapPage() {
         expandedRow={expandedRow}
         onExpandedRowChange={setExpandedRow}
         renderDetail={(item, onClose) => (
-          <PurchaseOrderEntryDetail item={item} onClose={onClose} />
+          <PurchaseOrderEntryDetail
+            item={item}
+            onClose={onClose}
+            onDelete={
+              item.status !== "completed" && item.status !== "cancelled"
+                ? () => setCancellingItem(item)
+                : undefined
+            }
+          />
         )}
         rowActions={(row) => [
           {
