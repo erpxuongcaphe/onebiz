@@ -17,12 +17,15 @@ import type {
   CustomerImportRow,
   DebtOpeningImportRow,
   InitialStockImportRow,
+  InternalSaleImportRow,
   ProductImportRow,
+  PurchaseOrderImportRow,
   SupplierImportRow,
 } from "@/lib/excel/schemas";
 import type { ImportBatchResult } from "@/lib/excel";
 import { getClient, getCurrentContext, getCurrentTenantId } from "./base";
 import { applyManualStockMovement } from "./stock-adjustments";
+import { createInternalSale } from "./internal-sales";
 
 /** Chạy executor cho từng row, collect error per-row. */
 async function runBulk<TRow>(
@@ -368,4 +371,256 @@ export async function bulkImportInitialStock(
       { tenantId: ctx.tenantId, branchId, createdBy: ctx.userId }
     );
   });
+}
+
+// ---------------------------------------------------------------------------
+// Purchase orders (đơn nhập hàng)
+//
+// Group rows theo mã đơn → mỗi group = 1 header + nhiều items.
+// Insert purchase_orders header (status='draft') + purchase_order_items.
+// User vào trang Đặt hàng nhập để confirm → nhận hàng.
+// ---------------------------------------------------------------------------
+
+interface ProductMini {
+  id: string;
+  name: string;
+  unit: string | null;
+}
+
+export async function bulkImportPurchaseOrders(
+  rows: PurchaseOrderImportRow[]
+): Promise<ImportBatchResult> {
+  const supabase = getClient();
+  const ctx = await getCurrentContext();
+
+  // Preload maps
+  const [suppRes, branchRes, prodRes] = await Promise.all([
+    supabase.from("suppliers").select("id, code, name"),
+    supabase.from("branches").select("id, code"),
+    supabase.from("products").select("id, code, name, unit"),
+  ]);
+  const suppMap = new Map<string, { id: string; name: string }>();
+  for (const s of suppRes.data ?? []) suppMap.set(s.code, { id: s.id, name: s.name });
+  const branchMap = new Map<string, string>();
+  for (const b of branchRes.data ?? []) {
+    if (b.code) branchMap.set(b.code, b.id);
+  }
+  const prodMap = new Map<string, ProductMini>();
+  for (const p of prodRes.data ?? []) {
+    prodMap.set(p.code, { id: p.id, name: p.name, unit: p.unit ?? null });
+  }
+
+  // Group theo mã đơn
+  const groups = new Map<string, PurchaseOrderImportRow[]>();
+  for (const r of rows) {
+    const arr = groups.get(r.code);
+    if (arr) arr.push(r);
+    else groups.set(r.code, [r]);
+  }
+
+  const errors: Array<{ rowIndex: number; message: string }> = [];
+  let successCount = 0;
+  let groupIdx = 0;
+
+  for (const [code, groupRows] of groups) {
+    groupIdx++;
+    try {
+      const first = groupRows[0];
+      const supplier = suppMap.get(first.supplierCode);
+      if (!supplier) {
+        throw new Error(`Mã NCC "${first.supplierCode}" chưa tồn tại`);
+      }
+      let branchId = ctx.branchId;
+      if (first.branchCode) {
+        const bid = branchMap.get(first.branchCode);
+        if (!bid) throw new Error(`Mã chi nhánh "${first.branchCode}" chưa tồn tại`);
+        branchId = bid;
+      }
+
+      // Build items + tính totals
+      const items = groupRows.map((r) => {
+        const prod = prodMap.get(r.productCode);
+        if (!prod) {
+          throw new Error(`Mã SP "${r.productCode}" chưa tồn tại (đơn "${code}")`);
+        }
+        const quantity = r.quantity;
+        const unitPrice = r.unitPrice;
+        const discount = r.discount ?? 0;
+        const vatRate = r.vatRate ?? 0;
+        const gross = quantity * unitPrice - discount;
+        const vatAmount = Math.round((gross * vatRate) / 100);
+        const total = gross + vatAmount;
+        return {
+          product_id: prod.id,
+          product_name: prod.name,
+          unit: prod.unit ?? "Cái",
+          quantity,
+          received_quantity: 0,
+          unit_price: unitPrice,
+          discount,
+          total: gross,
+          vat_rate: vatRate,
+          vat_amount: vatAmount,
+          _lineTotalWithVat: total,
+        };
+      });
+
+      const subtotal = items.reduce((s, it) => s + it.total, 0);
+      const taxAmount = items.reduce((s, it) => s + it.vat_amount, 0);
+      const total = subtotal + taxAmount;
+
+      // Insert header
+      const { data: poInserted, error: poErr } = await supabase
+        .from("purchase_orders")
+        .insert({
+          tenant_id: ctx.tenantId,
+          branch_id: branchId,
+          code,
+          supplier_id: supplier.id,
+          supplier_name: supplier.name,
+          status: "draft",
+          subtotal,
+          discount_amount: 0,
+          tax_amount: taxAmount,
+          total,
+          paid: 0,
+          debt: total,
+          note: first.note ?? null,
+          created_by: ctx.userId,
+        })
+        .select("id")
+        .single();
+      if (poErr) throw new Error(poErr.message);
+
+      // Insert items
+      const itemsInsert = items.map((it) => ({
+        purchase_order_id: poInserted.id,
+        product_id: it.product_id,
+        product_name: it.product_name,
+        unit: it.unit,
+        quantity: it.quantity,
+        received_quantity: 0,
+        unit_price: it.unit_price,
+        discount: it.discount,
+        total: it.total,
+        vat_rate: it.vat_rate,
+        vat_amount: it.vat_amount,
+      }));
+      const { error: itemsErr } = await supabase
+        .from("purchase_order_items")
+        .insert(itemsInsert);
+      if (itemsErr) {
+        // Rollback header nếu items fail
+        await supabase.from("purchase_orders").delete().eq("id", poInserted.id);
+        throw new Error(itemsErr.message);
+      }
+
+      successCount++;
+    } catch (e) {
+      errors.push({
+        rowIndex: groupIdx,
+        message: `Đơn "${code}": ${toVietnameseError(e)}`,
+      });
+    }
+  }
+
+  return {
+    successCount,
+    failureCount: errors.length,
+    errors,
+  };
+}
+
+// ---------------------------------------------------------------------------
+// Internal sales (đơn bán nội bộ)
+//
+// Group rows theo mã đơn → gọi createInternalSale() cho mỗi group.
+// Service tự generate code mới (mã trong Excel CHỈ DÙNG ĐỂ GROUP rows).
+// ---------------------------------------------------------------------------
+
+export async function bulkImportInternalSales(
+  rows: InternalSaleImportRow[]
+): Promise<ImportBatchResult> {
+  const supabase = getClient();
+
+  const [branchRes, prodRes] = await Promise.all([
+    supabase.from("branches").select("id, code"),
+    supabase.from("products").select("id, code, name, unit"),
+  ]);
+  const branchMap = new Map<string, string>();
+  for (const b of branchRes.data ?? []) {
+    if (b.code) branchMap.set(b.code, b.id);
+  }
+  const prodMap = new Map<string, ProductMini & { code: string }>();
+  for (const p of prodRes.data ?? []) {
+    prodMap.set(p.code, {
+      id: p.id,
+      code: p.code,
+      name: p.name,
+      unit: p.unit ?? null,
+    });
+  }
+
+  const groups = new Map<string, InternalSaleImportRow[]>();
+  for (const r of rows) {
+    const arr = groups.get(r.code);
+    if (arr) arr.push(r);
+    else groups.set(r.code, [r]);
+  }
+
+  const errors: Array<{ rowIndex: number; message: string }> = [];
+  let successCount = 0;
+  let groupIdx = 0;
+
+  for (const [code, groupRows] of groups) {
+    groupIdx++;
+    try {
+      const first = groupRows[0];
+      const fromBranchId = branchMap.get(first.fromBranchCode);
+      if (!fromBranchId) {
+        throw new Error(`Chi nhánh bán "${first.fromBranchCode}" chưa tồn tại`);
+      }
+      const toBranchId = branchMap.get(first.toBranchCode);
+      if (!toBranchId) {
+        throw new Error(`Chi nhánh mua "${first.toBranchCode}" chưa tồn tại`);
+      }
+
+      const items = groupRows.map((r) => {
+        const prod = prodMap.get(r.productCode);
+        if (!prod) {
+          throw new Error(`Mã SP "${r.productCode}" chưa tồn tại (đơn "${code}")`);
+        }
+        return {
+          productId: prod.id,
+          productCode: prod.code,
+          productName: prod.name,
+          unit: prod.unit ?? "cái",
+          quantity: r.quantity,
+          unitPrice: r.unitPrice,
+          vatRate: r.vatRate ?? 0,
+        };
+      });
+
+      await createInternalSale({
+        fromBranchId,
+        toBranchId,
+        items,
+        note: first.note ? `[Excel ${code}] ${first.note}` : `[Excel ${code}]`,
+        paymentMethod: first.paymentMethod ?? "debt",
+      });
+
+      successCount++;
+    } catch (e) {
+      errors.push({
+        rowIndex: groupIdx,
+        message: `Đơn "${code}": ${toVietnameseError(e)}`,
+      });
+    }
+  }
+
+  return {
+    successCount,
+    failureCount: errors.length,
+    errors,
+  };
 }

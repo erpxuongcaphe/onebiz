@@ -21,6 +21,9 @@ import type { DetailTab } from "@/components/shared/inline-detail-panel";
 import { formatCurrency, formatDate } from "@/lib/format";
 import { getInternalSales, getInternalSaleById } from "@/lib/services";
 import { CreateInternalSaleDialog } from "@/components/shared/dialogs";
+import { ImportExcelDialog } from "@/components/shared/dialogs/import-excel-dialog";
+import { internalSaleExcelSchema } from "@/lib/excel/schemas";
+import { bulkImportInternalSales } from "@/lib/services/supabase/excel-import";
 import { useToast, useBranchFilter } from "@/lib/contexts";
 import { Icon } from "@/components/ui/icon";
 
@@ -178,6 +181,7 @@ export default function InternalSalePage() {
   const [statusFilter, setStatusFilter] = useState<string[]>([]);
   const [selected, setSelected] = useState<InternalSaleRow | null>(null);
   const [showCreate, setShowCreate] = useState(false);
+  const [importOpen, setImportOpen] = useState(false);
 
   const fetchData = useCallback(async () => {
     try {
@@ -270,6 +274,12 @@ export default function InternalSalePage() {
             icon: <Icon name="add" size={16} />,
             onClick: () => setShowCreate(true),
           },
+          {
+            label: "Nhập Excel",
+            icon: <Icon name="upload_file" size={16} />,
+            variant: "outline",
+            onClick: () => setImportOpen(true),
+          },
         ]}
       />
 
@@ -308,6 +318,22 @@ export default function InternalSalePage() {
         open={showCreate}
         onOpenChange={setShowCreate}
         onSuccess={fetchData}
+      />
+
+      <ImportExcelDialog
+        open={importOpen}
+        onOpenChange={setImportOpen}
+        schema={internalSaleExcelSchema}
+        onCommit={bulkImportInternalSales}
+        onFinished={() => {
+          setPage(1);
+          fetchData();
+          toast({
+            title: "Nhập Excel hoàn tất",
+            description: "Danh sách đơn bán nội bộ đã được cập nhật.",
+            variant: "success",
+          });
+        }}
       />
     </>
   );

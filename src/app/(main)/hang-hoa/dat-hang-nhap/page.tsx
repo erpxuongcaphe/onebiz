@@ -26,6 +26,9 @@ import { printDocument } from "@/lib/print-document";
 import { buildPurchaseEntryPrintData } from "@/lib/print-templates";
 import { getPurchaseOrderEntries, getPurchaseEntryStatuses } from "@/lib/services";
 import { CreatePurchaseEntryDialog, ConfirmDialog } from "@/components/shared/dialogs";
+import { ImportExcelDialog } from "@/components/shared/dialogs/import-excel-dialog";
+import { purchaseOrderExcelSchema } from "@/lib/excel/schemas";
+import { bulkImportPurchaseOrders } from "@/lib/services/supabase/excel-import";
 import { useToast } from "@/lib/contexts";
 import type { PurchaseOrderEntry } from "@/lib/types";
 import { Icon } from "@/components/ui/icon";
@@ -170,6 +173,7 @@ export default function DatHangNhapPage() {
   const [page, setPage] = useState(0);
   const [pageSize, setPageSize] = useState(20);
   const [createOpen, setCreateOpen] = useState(false);
+  const [importOpen, setImportOpen] = useState(false);
   const [expandedRow, setExpandedRow] = useState<number | null>(null);
   const [cancellingItem, setCancellingItem] = useState<PurchaseOrderEntry | null>(null);
   const [cancelLoading, setCancelLoading] = useState(false);
@@ -255,6 +259,7 @@ export default function DatHangNhapPage() {
         }}
         actions={[
           { label: "Đặt hàng", icon: <Icon name="add" size={16} />, variant: "default", onClick: () => setCreateOpen(true) },
+          { label: "Nhập Excel", icon: <Icon name="upload_file" size={16} />, variant: "outline", onClick: () => setImportOpen(true) },
         ]}
       />
 
@@ -334,6 +339,22 @@ export default function DatHangNhapPage() {
             setCancelLoading(false);
             setCancellingItem(null);
           }
+        }}
+      />
+
+      <ImportExcelDialog
+        open={importOpen}
+        onOpenChange={setImportOpen}
+        schema={purchaseOrderExcelSchema}
+        onCommit={bulkImportPurchaseOrders}
+        onFinished={() => {
+          setPage(0);
+          fetchData();
+          toast({
+            title: "Nhập Excel hoàn tất",
+            description: "Danh sách đơn nhập đã được cập nhật.",
+            variant: "success",
+          });
         }}
       />
     </ListPageLayout>
