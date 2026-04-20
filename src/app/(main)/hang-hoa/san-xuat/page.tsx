@@ -24,7 +24,7 @@ import {
 } from "@/components/shared/dialogs";
 import { PipelineStatusBadge } from "@/components/shared/pipeline";
 import { Button } from "@/components/ui/button";
-import { useToast } from "@/lib/contexts";
+import { useToast, useBranchFilter } from "@/lib/contexts";
 import { printDocument } from "@/lib/print-document";
 import { buildProductionOrderPrintData } from "@/lib/print-templates";
 import { formatDate } from "@/lib/format";
@@ -202,6 +202,7 @@ function ProductionOrderDetail({
 
 export default function SanXuatPage() {
   const { toast } = useToast();
+  const { activeBranchId } = useBranchFilter();
   const [data, setData] = useState<ProductionOrder[]>([]);
   const [total, setTotal] = useState(0);
   const [loading, setLoading] = useState(true);
@@ -228,7 +229,12 @@ export default function SanXuatPage() {
   const fetchData = useCallback(async () => {
     setLoading(true);
     try {
-      const result = await getProductionOrders({ limit: 200 });
+      // Branch-aware: chỉ lấy production orders của chi nhánh đang active
+      // (Xưởng rang → coffee orders, Kho tổng → yaourt/siro orders).
+      const result = await getProductionOrders({
+        limit: 200,
+        branchId: activeBranchId || undefined,
+      });
       setData(result.data);
       setTotal(result.total);
     } catch (err) {
@@ -240,7 +246,7 @@ export default function SanXuatPage() {
     } finally {
       setLoading(false);
     }
-  }, [toast]);
+  }, [toast, activeBranchId]);
 
   useEffect(() => {
     fetchData();

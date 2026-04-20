@@ -47,7 +47,7 @@ export {
 } from "./inventory";
 export type { InventoryCheckItemRow } from "./inventory";
 // Manufacturing handled by production.ts (getProductionOrders)
-export { getPurchaseOrderEntries, getPurchaseOrdersForExport, getPurchaseEntryStatuses, getPurchaseReturns, getPurchaseReturnStatuses, getInputInvoices, getInputInvoiceStatuses, deleteInputInvoice, recordInputInvoice, completeSupplierReturn } from "./purchase-entries";
+export { getPurchaseOrderEntries, getPurchaseOrdersForExport, getPurchaseEntryStatuses, getPurchaseReturns, getPurchaseReturnStatuses, getInputInvoices, getInputInvoiceStatuses, deleteInputInvoice, recordInputInvoice, completeSupplierReturn, cancelPurchaseOrderEntry } from "./purchase-entries";
 export { recordInvoicePayment, recordPurchasePayment, getPaymentHistory } from "./payments";
 export type { RecordPaymentInput, RecordPaymentResult } from "./payments";
 export { getFavorites, isFavorite, toggleFavorite, getFavoriteIds } from "./favorites";
@@ -138,7 +138,7 @@ export type { ConsolidatedPnL, BranchPnLRow } from "./reports";
 export { getUOMConversions, createUOMConversion, updateUOMConversion, deleteUOMConversion, convertQuantity } from "./uom";
 
 // Branch Stock
-export { getBranchStock, getBranchStockRows, getProductStockByBranch } from "./branch-stock";
+export { getBranchStock, getBranchStockRows, getBranchStockPage, getBranchStockAggregates, getProductStockByBranch } from "./branch-stock";
 export type { BranchStockRow } from "./branch-stock";
 
 // Branches (enhanced)

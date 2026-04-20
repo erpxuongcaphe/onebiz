@@ -36,7 +36,7 @@ import {
 } from "@/components/ui/select";
 import { useToast } from "@/lib/contexts";
 import { formatDate } from "@/lib/format";
-import { getBranches, getProducts } from "@/lib/services";
+import { getBranches, getBranchStockRows } from "@/lib/services";
 import {
   getStockTransfers,
   createStockTransfer,
@@ -412,28 +412,34 @@ function CreateTransferDialog({
       setSearchResults([]);
       return;
     }
+    if (!fromBranch) {
+      setSearchResults([]);
+      return;
+    }
     setSearching(true);
     try {
-      const result = await getProducts({
-        page: 0,
-        pageSize: 10,
+      // Filter by fromBranch stock — chỉ show SP có tồn > 0 tại chi nhánh xuất
+      const rows = await getBranchStockRows({
+        branchId: fromBranch,
         search: productSearch,
       });
-      setSearchResults(
-        result.data.map((p) => ({
-          id: p.id,
-          code: p.code,
-          name: p.name,
-          unit: p.unit ?? undefined,
-          stock: p.stock ?? 0,
-        }))
-      );
+      const inStock = rows
+        .filter((r) => r.quantity > 0)
+        .slice(0, 10)
+        .map((r) => ({
+          id: r.productId,
+          code: r.productCode,
+          name: r.productName,
+          unit: r.unit ?? undefined,
+          stock: r.quantity,
+        }));
+      setSearchResults(inStock);
     } catch {
       setSearchResults([]);
     } finally {
       setSearching(false);
     }
-  }, [productSearch]);
+  }, [productSearch, fromBranch]);
 
   useEffect(() => {
     const timer = setTimeout(handleSearch, 300);
@@ -517,7 +523,16 @@ function CreateTransferDialog({
           <div className="grid grid-cols-2 gap-4">
             <div>
               <Label className="text-xs">Kho xuất</Label>
-              <Select value={fromBranch} onValueChange={(v) => setFromBranch(v ?? "")}>
+              <Select
+                value={fromBranch}
+                onValueChange={(v) => {
+                  setFromBranch(v ?? "");
+                  // Reset items — SP từ branch cũ có thể không còn valid ở branch mới
+                  setItems([]);
+                  setProductSearch("");
+                  setSearchResults([]);
+                }}
+              >
                 <SelectTrigger>
                   <SelectValue placeholder="Chọn chi nhánh xuất" />
                 </SelectTrigger>
@@ -560,14 +575,25 @@ function CreateTransferDialog({
             <Label className="text-xs">Thêm sản phẩm</Label>
             <div className="relative">
               <Input
-                placeholder="Tìm theo mã, tên sản phẩm..."
+                placeholder={fromBranch ? "Tìm theo mã, tên sản phẩm..." : "Chọn kho xuất trước"}
                 value={productSearch}
                 onChange={(e) => setProductSearch(e.target.value)}
+                disabled={!fromBranch}
               />
               {searching && (
                 <Icon name="progress_activity" size={16} className="animate-spin absolute right-3 top-1/2 -translate-y-1/2 text-muted-foreground" />
               )}
             </div>
+            {fromBranch && (
+              <p className="text-xs text-muted-foreground mt-1">
+                Chỉ hiển thị mặt hàng có tồn kho tại chi nhánh xuất.
+              </p>
+            )}
+            {fromBranch && productSearch.trim() && !searching && searchResults.length === 0 && (
+              <p className="text-xs text-destructive mt-1">
+                Không tìm thấy mặt hàng còn tồn tại chi nhánh này.
+              </p>
+            )}
             {searchResults.length > 0 && (
               <div className="mt-1 border rounded-md max-h-40 overflow-auto bg-background shadow-sm">
                 {searchResults.map((prod) => (

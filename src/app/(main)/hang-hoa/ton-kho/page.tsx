@@ -2,7 +2,7 @@
 
 // Tồn kho — xem tồn kho per chi nhánh, lọc theo NVL/SKU, sắp xếp & tổng giá trị tồn
 
-import { useEffect, useState, useCallback, useMemo } from "react";
+import { useEffect, useState, useCallback } from "react";
 import { ColumnDef } from "@tanstack/react-table";
 import { PageHeader } from "@/components/shared/page-header";
 import { ListPageLayout } from "@/components/shared/list-page-layout";
@@ -16,7 +16,7 @@ import { Badge } from "@/components/ui/badge";
 import { useToast } from "@/lib/contexts";
 import { formatCurrency, formatDate } from "@/lib/format";
 import { exportToCsv } from "@/lib/utils/export";
-import { getBranchStockRows, getBranches } from "@/lib/services";
+import { getBranchStockPage, getBranchStockAggregates, getBranchStockRows, getBranches } from "@/lib/services";
 import type { BranchStockRow, BranchDetail } from "@/lib/services/supabase";
 import { Icon } from "@/components/ui/icon";
 import { ImportExcelDialog } from "@/components/shared/dialogs/import-excel-dialog";
@@ -30,6 +30,10 @@ type ProductTypeFilter = "all" | "nvl" | "sku";
 export default function TonKhoPage() {
   const { toast } = useToast();
   const [rows, setRows] = useState<BranchStockRow[]>([]);
+  const [totalRows, setTotalRows] = useState(0);
+  const [totalQty, setTotalQty] = useState(0);
+  const [totalValue, setTotalValue] = useState(0);
+  const [lowStockCount, setLowStockCount] = useState(0);
   const [branches, setBranches] = useState<BranchDetail[]>([]);
   const [loading, setLoading] = useState(true);
   const [search, setSearch] = useState("");
@@ -45,13 +49,26 @@ export default function TonKhoPage() {
   const fetchData = useCallback(async () => {
     setLoading(true);
     try {
-      const data = await getBranchStockRows({
+      const filters = {
         branchId: branchFilter !== "all" ? branchFilter : undefined,
         productType: typeFilter !== "all" ? typeFilter : undefined,
         search: search || undefined,
-        lowStockOnly: lowStockOnly === "low",
-      });
-      setRows(data);
+      };
+      // Parallel: page rows + aggregates (server-side)
+      const [pageResult, aggregates] = await Promise.all([
+        getBranchStockPage({
+          ...filters,
+          lowStockOnly: lowStockOnly === "low",
+          offset: page * pageSize,
+          limit: pageSize,
+        }),
+        getBranchStockAggregates(filters),
+      ]);
+      setRows(pageResult.rows);
+      setTotalRows(pageResult.total);
+      setTotalQty(aggregates.totalQty);
+      setTotalValue(aggregates.totalValue);
+      setLowStockCount(aggregates.lowStockCount);
     } catch (err) {
       toast({
         title: "Lỗi tải tồn kho",
@@ -61,7 +78,7 @@ export default function TonKhoPage() {
     } finally {
       setLoading(false);
     }
-  }, [branchFilter, typeFilter, search, lowStockOnly, toast]);
+  }, [branchFilter, typeFilter, search, lowStockOnly, page, pageSize, toast]);
 
   useEffect(() => {
     getBranches()
@@ -76,27 +93,6 @@ export default function TonKhoPage() {
   useEffect(() => {
     setPage(0);
   }, [search, branchFilter, typeFilter, lowStockOnly]);
-
-  const pagedData = useMemo(
-    () => rows.slice(page * pageSize, (page + 1) * pageSize),
-    [rows, page, pageSize]
-  );
-
-  const totalValue = useMemo(
-    () => rows.reduce((sum, r) => sum + r.stockValue, 0),
-    [rows]
-  );
-  const totalQty = useMemo(
-    () => rows.reduce((sum, r) => sum + r.quantity, 0),
-    [rows]
-  );
-  const lowStockCount = useMemo(
-    () =>
-      rows.filter(
-        (r) => r.minStock !== undefined && r.quantity <= (r.minStock ?? 0)
-      ).length,
-    [rows]
-  );
 
   const columns: ColumnDef<BranchStockRow, unknown>[] = [
     {
@@ -275,10 +271,16 @@ export default function TonKhoPage() {
           },
         ]}
         onExport={{
-          excel: () => {
-            // Xuất theo schema "Tồn kho ban đầu" → user edit import lại giữ nguyên cấu trúc
-            const stockRows: InitialStockImportRow[] = rows
-              .filter((r) => r.branchCode) // schema yêu cầu branchCode
+          excel: async () => {
+            // Fetch full dataset (no pagination) for export
+            const all = await getBranchStockRows({
+              branchId: branchFilter !== "all" ? branchFilter : undefined,
+              productType: typeFilter !== "all" ? typeFilter : undefined,
+              search: search || undefined,
+              lowStockOnly: lowStockOnly === "low",
+            });
+            const stockRows: InitialStockImportRow[] = all
+              .filter((r) => r.branchCode)
               .map((r) => ({
                 productCode: r.productCode,
                 productName: r.productName,
@@ -289,7 +291,13 @@ export default function TonKhoPage() {
               }));
             exportToExcelFromSchema(stockRows, initialStockExcelSchema);
           },
-          csv: () => {
+          csv: async () => {
+            const all = await getBranchStockRows({
+              branchId: branchFilter !== "all" ? branchFilter : undefined,
+              productType: typeFilter !== "all" ? typeFilter : undefined,
+              search: search || undefined,
+              lowStockOnly: lowStockOnly === "low",
+            });
             const cols = [
               { header: "Mã hàng", key: "productCode", width: 15 },
               { header: "Tên hàng", key: "productName", width: 30 },
@@ -298,7 +306,7 @@ export default function TonKhoPage() {
               { header: "Khả dụng", key: "available", width: 12, format: (v: number) => v },
               { header: "Giá trị tồn", key: "stockValue", width: 15, format: (v: number) => v },
             ];
-            exportToCsv(rows, cols, "ton-kho");
+            exportToCsv(all, cols, "ton-kho");
           },
         }}
       />
@@ -308,7 +316,7 @@ export default function TonKhoPage() {
         <SummaryCard
           icon={<Icon name="inventory" size={16} />}
           label="Tổng SP"
-          value={rows.length.toString()}
+          value={totalRows.toString()}
         />
         <SummaryCard
           icon={<Icon name="inventory" size={16} />}
@@ -326,12 +334,12 @@ export default function TonKhoPage() {
 
       <DataTable
         columns={columns}
-        data={pagedData}
+        data={rows}
         loading={loading}
-        total={rows.length}
+        total={totalRows}
         pageIndex={page}
         pageSize={pageSize}
-        pageCount={Math.ceil(rows.length / pageSize)}
+        pageCount={Math.ceil(totalRows / pageSize)}
         onPageChange={setPage}
         onPageSizeChange={(size) => {
           setPageSize(size);

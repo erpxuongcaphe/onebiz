@@ -76,6 +76,34 @@ export function getPurchaseEntryStatuses() {
 }
 
 /**
+ * Huỷ đơn đặt hàng nhập.
+ *
+ * Chỉ cho phép huỷ khi đơn đang ở trạng thái draft / ordered / partial
+ * (không cho huỷ đơn đã completed hoặc đã cancelled trước đó).
+ *
+ * Lưu `reason` vào note để có audit trail — sau này Sprint KHO-2
+ * sẽ wire vào audit_log riêng thay vì ghi đè note.
+ */
+export async function cancelPurchaseOrderEntry(id: string, reason?: string): Promise<void> {
+  const supabase = getClient();
+  const { data: row, error } = await supabase
+    .from("purchase_orders")
+    .update({
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      status: "cancelled" as any,
+      note: reason ?? "Huỷ đơn đặt hàng nhập",
+    })
+    .eq("id", id)
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    .in("status", ["draft", "ordered", "partial"] as any)
+    .select("id")
+    .maybeSingle();
+
+  if (error) handleError(error, "cancelPurchaseOrderEntry");
+  if (!row) throw new Error("Không thể huỷ — đơn đã hoàn thành hoặc đã huỷ trước đó");
+}
+
+/**
  * Export đơn đặt hàng nhập — trả về rows phẳng theo schema Excel Import.
  *
  * Mỗi line item = 1 row. Các line cùng PO được gộp qua cột "code" khi import lại.

@@ -26,7 +26,7 @@ import {
 import type { DetailTab } from "@/components/shared/inline-detail-panel";
 import { formatCurrency, formatDate, formatUser } from "@/lib/format";
 import { exportToExcel, exportToCsv } from "@/lib/utils/export";
-import { getDisposalExports, getDisposalStatuses } from "@/lib/services";
+import { getDisposalExports, getDisposalStatuses, cancelDisposalExport } from "@/lib/services";
 import type { DisposalExport } from "@/lib/types";
 import { CreateDisposalDialog, ConfirmDialog } from "@/components/shared/dialogs";
 import { Icon } from "@/components/ui/icon";
@@ -412,13 +412,19 @@ export default function XuatHuyPage() {
           if (!cancellingItem) return;
           setCancelLoading(true);
           try {
-            // Mock data — toast success + refetch
+            await cancelDisposalExport(cancellingItem.id);
             toast({
               title: "Đã hủy phiếu xuất hủy",
               description: `Phiếu ${cancellingItem.code} đã được hủy thành công`,
               variant: "success",
             });
             await fetchData();
+          } catch (err) {
+            toast({
+              title: "Không thể hủy phiếu",
+              description: err instanceof Error ? err.message : "Đã xảy ra lỗi khi hủy phiếu",
+              variant: "error",
+            });
           } finally {
             setCancelLoading(false);
             setCancellingItem(null);

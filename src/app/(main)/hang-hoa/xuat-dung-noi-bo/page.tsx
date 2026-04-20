@@ -23,7 +23,7 @@ import {
 import type { DetailTab } from "@/components/shared/inline-detail-panel";
 import { formatCurrency, formatDate, formatUser } from "@/lib/format";
 import { exportToExcel, exportToCsv } from "@/lib/utils/export";
-import { getInternalExports, getInternalExportStatuses } from "@/lib/services";
+import { getInternalExports, getInternalExportStatuses, cancelInternalExport } from "@/lib/services";
 import type { InternalExport } from "@/lib/types";
 import { CreateInternalExportDialog, ConfirmDialog } from "@/components/shared/dialogs";
 import { useToast, useBranchFilter } from "@/lib/contexts";
@@ -405,13 +405,19 @@ export default function XuatDungNoiBoPage() {
           if (!cancellingItem) return;
           setCancelLoading(true);
           try {
-            // Mock data — toast success + refetch
+            await cancelInternalExport(cancellingItem.id);
             toast({
               title: "Đã hủy phiếu xuất nội bộ",
               description: `Phiếu ${cancellingItem.code} đã được hủy thành công`,
               variant: "success",
             });
             await fetchData();
+          } catch (err) {
+            toast({
+              title: "Không thể hủy phiếu",
+              description: err instanceof Error ? err.message : "Đã xảy ra lỗi khi hủy phiếu",
+              variant: "error",
+            });
           } finally {
             setCancelLoading(false);
             setCancellingItem(null);

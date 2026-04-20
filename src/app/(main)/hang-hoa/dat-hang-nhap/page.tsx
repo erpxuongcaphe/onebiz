@@ -25,7 +25,12 @@ import { exportToCsv } from "@/lib/utils/export";
 import { exportToExcelFromSchema } from "@/lib/excel";
 import { printDocument } from "@/lib/print-document";
 import { buildPurchaseEntryPrintData } from "@/lib/print-templates";
-import { getPurchaseOrderEntries, getPurchaseOrdersForExport, getPurchaseEntryStatuses } from "@/lib/services";
+import {
+  getPurchaseOrderEntries,
+  getPurchaseOrdersForExport,
+  getPurchaseEntryStatuses,
+  cancelPurchaseOrderEntry,
+} from "@/lib/services";
 import { CreatePurchaseEntryDialog, ConfirmDialog } from "@/components/shared/dialogs";
 import { ImportExcelDialog } from "@/components/shared/dialogs/import-excel-dialog";
 import { purchaseOrderExcelSchema } from "@/lib/excel/schemas";
@@ -345,13 +350,19 @@ export default function DatHangNhapPage() {
           if (!cancellingItem) return;
           setCancelLoading(true);
           try {
-            // Mock data — toast success + refetch
+            await cancelPurchaseOrderEntry(cancellingItem.id);
             toast({
               title: "Đã hủy đơn đặt hàng nhập",
               description: `Đơn ${cancellingItem.code} đã được hủy thành công`,
               variant: "success",
             });
             await fetchData();
+          } catch (err) {
+            toast({
+              title: "Không thể hủy đơn",
+              description: err instanceof Error ? err.message : "Đã xảy ra lỗi khi hủy đơn",
+              variant: "error",
+            });
           } finally {
             setCancelLoading(false);
             setCancellingItem(null);
