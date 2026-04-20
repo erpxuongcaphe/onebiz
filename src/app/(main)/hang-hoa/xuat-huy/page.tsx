@@ -22,6 +22,7 @@ import {
   DetailTabs,
   DetailHeader,
   DetailInfoGrid,
+  AuditHistoryTab,
 } from "@/components/shared/inline-detail-panel";
 import type { DetailTab } from "@/components/shared/inline-detail-panel";
 import { formatCurrency, formatDate, formatUser } from "@/lib/format";
@@ -134,11 +135,7 @@ function DisposalExportDetail({
     {
       id: "history",
       label: "Lịch sử",
-      content: (
-        <div className="text-sm text-muted-foreground py-4 text-center">
-          Chưa có lịch sử
-        </div>
-      ),
+      content: <AuditHistoryTab entityType="disposal_export" entityId={item.id} />,
     },
   ];
 

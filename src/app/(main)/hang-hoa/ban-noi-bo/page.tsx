@@ -18,6 +18,7 @@ import {
   DetailHeader,
   DetailInfoGrid,
   DetailItemsTable,
+  AuditHistoryTab,
 } from "@/components/shared/inline-detail-panel";
 import type { DetailTab } from "@/components/shared/inline-detail-panel";
 import type { ItemColumn } from "@/components/shared/inline-detail-panel";
@@ -237,11 +238,7 @@ function InternalSaleDetail({
     {
       id: "history",
       label: "Lịch sử",
-      content: (
-        <div className="p-4 text-center text-sm text-muted-foreground">
-          Chưa có lịch sử thay đổi
-        </div>
-      ),
+      content: <AuditHistoryTab entityType="internal_sale" entityId={item.id} />,
     },
   ];
 

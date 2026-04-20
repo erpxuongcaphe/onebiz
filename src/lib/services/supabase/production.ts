@@ -70,6 +70,7 @@ export async function getProductionOrderById(id: string) {
       plannedQty: row.planned_qty as number,
       actualQty: (row.actual_qty as number) ?? 0,
       unit: row.unit as string,
+      unitCost: (row.unit_cost as number) ?? undefined,
     };
   });
   return order;
@@ -485,6 +486,7 @@ function mapProductionOrder(row: Record<string, unknown>): ProductionOrder {
     actualStart: (row.actual_start as string) ?? undefined,
     actualEnd: (row.actual_end as string) ?? undefined,
     notes: (row.notes as string) ?? undefined,
+    cogsAmount: (row.cogs_amount as number) ?? undefined,
     createdBy: (row.created_by as string) ?? undefined,
     createdAt: row.created_at as string,
     updatedAt: row.updated_at as string,

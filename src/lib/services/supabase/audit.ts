@@ -71,6 +71,9 @@ const ENTITY_TYPE_LABELS: Record<string, string> = {
   internal_export: "Phiếu xuất nội bộ",
   return: "Phiếu trả hàng",
   input_invoice: "Hóa đơn đầu vào",
+  internal_sale: "Bán hàng nội bộ",
+  inventory_check: "Kiểm kho",
+  purchase_return: "Phiếu trả hàng nhập",
 };
 
 export function getActionOptions() {
@@ -162,6 +165,58 @@ export async function getAuditLogs(
   });
 
   return { data: entries, total: count ?? 0 };
+}
+
+/* ------------------------------------------------------------------ */
+/*  Lookup by entity — dùng cho InlineDetailPanel "Lịch sử" tab        */
+/* ------------------------------------------------------------------ */
+
+/**
+ * Lấy audit log của một entity cụ thể (theo entity_type + entity_id).
+ * Dùng cho tab "Lịch sử" trong InlineDetailPanel. Giới hạn 50 bản ghi
+ * gần nhất theo `created_at DESC`.
+ */
+export async function getAuditLogsByEntity(
+  entityType: string,
+  entityId: string,
+  limit: number = 50
+): Promise<AuditLogEntry[]> {
+  const supabase = getClient();
+  const { data, error } = await supabase
+    .from("audit_log")
+    .select(
+      "id, user_id, action, entity_type, entity_id, old_data, new_data, ip_address, created_at, profiles!audit_log_user_id_fkey(full_name)"
+    )
+    .eq("entity_type", entityType)
+    .eq("entity_id", entityId)
+    .order("created_at", { ascending: false })
+    .limit(limit);
+
+  if (error) {
+    console.warn("getAuditLogsByEntity error:", error.message);
+    return [];
+  }
+
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  return (data ?? []).map((row: any) => {
+    const profile = row.profiles as { full_name: string } | null;
+    const action = row.action as string;
+    const et = row.entity_type as string;
+    return {
+      id: row.id,
+      userId: row.user_id ?? "",
+      userName: profile?.full_name ?? "Hệ thống",
+      action,
+      actionLabel: ACTION_LABELS[action] ?? action,
+      entityType: et,
+      entityTypeLabel: ENTITY_TYPE_LABELS[et] ?? et,
+      entityId: row.entity_id ?? "",
+      oldData: row.old_data ?? null,
+      newData: row.new_data ?? null,
+      ipAddress: row.ip_address ?? null,
+      createdAt: row.created_at,
+    };
+  });
 }
 
 /* ------------------------------------------------------------------ */

@@ -17,6 +17,7 @@ import {
   DetailTabs,
   DetailHeader,
   DetailInfoGrid,
+  AuditHistoryTab,
 } from "@/components/shared/inline-detail-panel";
 import type { DetailTab } from "@/components/shared/inline-detail-panel";
 import { formatCurrency, formatDate, formatUser } from "@/lib/format";
@@ -90,11 +91,7 @@ function InputInvoiceDetail({
     {
       id: "history",
       label: "Lịch sử",
-      content: (
-        <div className="text-sm text-muted-foreground py-4 text-center">
-          Chưa có lịch sử thay đổi
-        </div>
-      ),
+      content: <AuditHistoryTab entityType="input_invoice" entityId={item.id} />,
     },
   ];
   return (

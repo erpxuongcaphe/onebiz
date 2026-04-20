@@ -55,6 +55,8 @@ export interface ProductionOrder {
   actualStart?: string;
   actualEnd?: string;
   notes?: string;
+  /** Tổng giá vốn NVL (sum unit_cost × actual_qty) — cập nhật khi tiêu hao NVL */
+  cogsAmount?: number;
   createdBy?: string;
   createdAt: string;
   updatedAt: string;
@@ -82,6 +84,8 @@ export interface ProductionOrderMaterial {
   plannedQty: number;
   actualQty?: number;
   unit: string;
+  /** Giá vốn/đơn vị NVL (snapshot từ products.cost_price khi tiêu hao). */
+  unitCost?: number;
   note?: string;
   // Joined
   productName?: string;
