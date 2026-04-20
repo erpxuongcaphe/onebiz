@@ -23,7 +23,7 @@ import {
 } from "@/components/shared/inline-detail-panel";
 import { CreateInvoiceDialog, EditInvoiceDialog, ConfirmDialog } from "@/components/shared/dialogs";
 import { RecordPaymentDialog } from "@/components/shared/dialogs/record-payment-dialog";
-import { formatCurrency, formatDate } from "@/lib/format";
+import { formatCurrency, formatDate, formatUser } from "@/lib/format";
 import { exportToExcel, exportToCsv } from "@/lib/utils/export";
 import { getInvoices, getInvoiceStatuses, cancelInvoice } from "@/lib/services";
 import { useToast, useBranchFilter } from "@/lib/contexts";
@@ -91,11 +91,11 @@ function InvoiceDetail({
                     <div className="flex items-center gap-4 flex-wrap text-xs">
                       <span>
                         Người tạo:{" "}
-                        <strong>{invoice.createdBy}</strong>
+                        <strong>{formatUser(undefined, invoice.createdBy)}</strong>
                       </span>
                       <span>
                         Người bán:{" "}
-                        <strong>{invoice.createdBy}</strong>
+                        <strong>{formatUser(undefined, invoice.createdBy)}</strong>
                       </span>
                       <span>
                         Ngày bán:{" "}

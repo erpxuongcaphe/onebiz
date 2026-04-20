@@ -28,7 +28,7 @@ import type { DetailTab } from "@/components/shared/inline-detail-panel";
 import { useToast, useBranchFilter } from "@/lib/contexts";
 import { usePrintWithPicker } from "@/lib/hooks/use-print-with-picker";
 import { buildGoodsReceiptPrintData } from "@/lib/print-templates";
-import { formatCurrency, formatDate } from "@/lib/format";
+import { formatCurrency, formatDate, formatUser } from "@/lib/format";
 import { exportToExcel, exportToCsv } from "@/lib/utils/export";
 import {
   getPurchaseOrders,
@@ -132,11 +132,11 @@ function PurchaseOrderDetail({
             meta={
               <div className="flex items-center gap-4 flex-wrap text-xs">
                 <span>
-                  Người tạo: <strong>{order.createdBy}</strong>
+                  Người tạo: <strong>{formatUser(undefined, order.createdBy)}</strong>
                 </span>
                 {order.importedBy && (
                   <span>
-                    Người nhập: <strong>{order.importedBy}</strong>
+                    Người nhập: <strong>{formatUser(undefined, order.importedBy)}</strong>
                   </span>
                 )}
                 <span>

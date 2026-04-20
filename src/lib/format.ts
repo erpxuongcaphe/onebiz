@@ -60,3 +60,24 @@ export function formatPhone(phone: string): string {
   }
   return phone;
 }
+
+/**
+ * Hiển thị tên người tạo đơn/phiếu. Ưu tiên name. Nếu chỉ có UUID → rút gọn.
+ * Pattern UUID của Supabase auth.users: xxxxxxxx-xxxx-xxxx-xxxx-xxxxxxxxxxxx (36 ký tự).
+ * Ta hiện "—" để UX sạch thay vì cipher dài.
+ *
+ * @example
+ *  formatUser(undefined, "Anh Dinh") // "Anh Dinh"
+ *  formatUser("a1b2c3d4-e5f6-7890-abcd-ef1234567890") // "—"
+ *  formatUser("admin") // "admin"
+ */
+export function formatUser(name?: string | null, fallback?: string | null): string {
+  if (name && name.trim()) return name.trim();
+  if (!fallback) return "—";
+  const t = fallback.trim();
+  // UUID v4/v5 check (8-4-4-4-12)
+  if (/^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(t)) {
+    return "—";
+  }
+  return t;
+}

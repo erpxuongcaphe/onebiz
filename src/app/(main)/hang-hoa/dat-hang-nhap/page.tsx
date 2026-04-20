@@ -20,7 +20,7 @@ import {
   DetailInfoGrid,
 } from "@/components/shared/inline-detail-panel";
 import type { DetailTab } from "@/components/shared/inline-detail-panel";
-import { formatCurrency, formatDate } from "@/lib/format";
+import { formatCurrency, formatDate, formatUser } from "@/lib/format";
 import { exportToCsv } from "@/lib/utils/export";
 import { exportToExcelFromSchema } from "@/lib/excel";
 import { printDocument } from "@/lib/print-document";
@@ -72,7 +72,7 @@ function PurchaseOrderEntryDetail({
             meta={
               <div className="flex items-center gap-4 flex-wrap text-xs">
                 <span>
-                  Người tạo: <strong>{item.createdBy}</strong>
+                  Người tạo: <strong>{formatUser(undefined, item.createdBy)}</strong>
                 </span>
                 <span>
                   Ngày tạo: <strong>{formatDate(item.date)}</strong>
@@ -88,7 +88,7 @@ function PurchaseOrderEntryDetail({
               { label: "Tổng tiền", value: formatCurrency(item.totalAmount) },
               { label: "Ngày dự kiến nhận", value: formatDate(item.expectedDate) },
               { label: "Trạng thái", value: st.label },
-              { label: "Người tạo", value: item.createdBy },
+              { label: "Người tạo", value: formatUser(undefined, item.createdBy) },
             ]}
           />
         </div>

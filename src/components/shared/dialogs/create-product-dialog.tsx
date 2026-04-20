@@ -21,14 +21,20 @@ import {
 import { Checkbox } from "@/components/ui/checkbox";
 import { Tabs, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { useToast } from "@/lib/contexts";
-import { createProduct, getProductCategoriesAsync } from "@/lib/services";
+import { createProduct, updateProduct, getProductCategoriesAsync } from "@/lib/services";
 import { nextGroupCode } from "@/lib/services/supabase/base";
 import { Icon } from "@/components/ui/icon";
+import type { Product } from "@/lib/types";
 
 interface CreateProductDialogProps {
   open: boolean;
   onOpenChange: (open: boolean) => void;
   onSuccess?: () => void;
+  /**
+   * Khi có initialData → dialog chuyển sang chế độ sửa.
+   * Scope (NVL/SKU) và nhóm hàng bị khóa vì code đã gắn với groupCode.
+   */
+  initialData?: Product | null;
 }
 
 type ProductScope = "nvl" | "sku";
@@ -39,7 +45,9 @@ export function CreateProductDialog({
   open,
   onOpenChange,
   onSuccess,
+  initialData,
 }: CreateProductDialogProps) {
+  const isEdit = !!initialData;
   const { toast } = useToast();
   const [scope, setScope] = useState<ProductScope>("nvl");
   const [categories, setCategories] = useState<CategoryOption[]>([]);
@@ -63,9 +71,27 @@ export function CreateProductDialog({
   const [errors, setErrors] = useState<Record<string, string>>({});
   const [saving, setSaving] = useState(false);
 
-  // Reset form when dialog opens
+  // Reset form khi dialog mở. Nếu có initialData → prefill từ sản phẩm đang sửa.
   useEffect(() => {
-    if (open) {
+    if (!open) return;
+    if (initialData) {
+      setScope(initialData.productType);
+      setCategoryId(initialData.categoryId || "");
+      setName(initialData.name);
+      setSellPrice(initialData.sellPrice ? String(initialData.sellPrice) : "");
+      setCostPrice(initialData.costPrice ? String(initialData.costPrice) : "");
+      setInitialStock(initialData.stock ? String(initialData.stock) : "");
+      setPurchaseUnit(initialData.purchaseUnit || "");
+      setStockUnit(initialData.stockUnit || initialData.unit || "");
+      setSellUnit(initialData.sellUnit || "");
+      setShelfLifeDays(initialData.shelfLifeDays ? String(initialData.shelfLifeDays) : "");
+      setHasBom(!!initialData.hasBom);
+      setChannel((initialData.channel as ProductChannel) || "fnb");
+      setBarcode("");
+      setDescription("");
+      setAllowSale(true);
+      setErrors({});
+    } else {
       setScope("nvl");
       setCategoryId("");
       setName("");
@@ -83,17 +109,17 @@ export function CreateProductDialog({
       setAllowSale(true);
       setErrors({});
     }
-  }, [open]);
+  }, [open, initialData]);
 
-  // Load categories whenever scope changes
+  // Load categories mỗi khi scope đổi. Edit mode: KHÔNG reset categoryId (đã prefill).
   useEffect(() => {
     if (!open) return;
     setLoadingCats(true);
-    setCategoryId("");
+    if (!isEdit) setCategoryId("");
     getProductCategoriesAsync(scope)
       .then((cats) => setCategories(cats as CategoryOption[]))
       .finally(() => setLoadingCats(false));
-  }, [open, scope]);
+  }, [open, scope, isEdit]);
 
   const selectedCategory = categories.find((c) => c.value === categoryId);
 
@@ -114,6 +140,34 @@ export function CreateProductDialog({
     if (!validate()) return;
     setSaving(true);
     try {
+      if (isEdit && initialData) {
+        // EDIT — giữ nguyên code/productType, không đổi groupCode. Chỉ update các field được phép sửa.
+        await updateProduct(initialData.id, {
+          name,
+          channel: scope === "sku" ? channel : undefined,
+          categoryId,
+          unit: stockUnit || purchaseUnit || initialData.unit || "Cái",
+          purchaseUnit: purchaseUnit || undefined,
+          stockUnit: stockUnit || undefined,
+          sellUnit: sellUnit || undefined,
+          shelfLifeDays: shelfLifeDays ? Number(shelfLifeDays) : undefined,
+          barcode: barcode || undefined,
+          sellPrice: scope === "sku" ? Number(sellPrice) : 0,
+          costPrice: Number(costPrice) || 0,
+          description: description || undefined,
+          allowSale: scope === "sku" ? allowSale : false,
+        });
+        onOpenChange(false);
+        toast({
+          title: "Cập nhật hàng hóa thành công",
+          description: `Đã lưu thay đổi ${name} (${initialData.code})`,
+          variant: "success",
+        });
+        onSuccess?.();
+        return;
+      }
+
+      // CREATE — sinh code mới theo groupCode.
       const prefix = scope === "nvl" ? "NVL" : "SKU";
       const code = await nextGroupCode(prefix, selectedCategory!.code!);
 
@@ -148,7 +202,7 @@ export function CreateProductDialog({
       onSuccess?.();
     } catch (err) {
       toast({
-        title: "Lỗi tạo hàng hóa",
+        title: isEdit ? "Lỗi cập nhật hàng hóa" : "Lỗi tạo hàng hóa",
         description: err instanceof Error ? err.message : "Vui lòng thử lại",
         variant: "error",
       });
@@ -161,18 +215,27 @@ export function CreateProductDialog({
     <Dialog open={open} onOpenChange={onOpenChange}>
       <DialogContent className="sm:max-w-2xl max-h-[90vh] overflow-y-auto">
         <DialogHeader>
-          <DialogTitle>Thêm hàng hóa mới</DialogTitle>
+          <DialogTitle>{isEdit ? `Sửa hàng hóa ${initialData?.code ?? ""}` : "Thêm hàng hóa mới"}</DialogTitle>
           <DialogDescription>
-            Chọn loại hàng (NVL hoặc SKU) và điền thông tin. Mã sẽ tự sinh theo nhóm.
+            {isEdit
+              ? "Cập nhật thông tin hàng hóa. Mã và loại (NVL/SKU) không thể đổi sau khi tạo."
+              : "Chọn loại hàng (NVL hoặc SKU) và điền thông tin. Mã sẽ tự sinh theo nhóm."}
           </DialogDescription>
         </DialogHeader>
 
-        <Tabs value={scope} onValueChange={(v) => setScope(v as ProductScope)}>
+        <Tabs
+          value={scope}
+          onValueChange={(v) => {
+            // Edit mode: không cho đổi NVL↔SKU vì code đã gắn với prefix.
+            if (isEdit) return;
+            setScope(v as ProductScope);
+          }}
+        >
           <TabsList className="w-full">
-            <TabsTrigger value="nvl" className="flex-1">
+            <TabsTrigger value="nvl" className="flex-1" disabled={isEdit && scope !== "nvl"}>
               Nguyên vật liệu (NVL)
             </TabsTrigger>
-            <TabsTrigger value="sku" className="flex-1">
+            <TabsTrigger value="sku" className="flex-1" disabled={isEdit && scope !== "sku"}>
               Hàng bán (SKU)
             </TabsTrigger>
           </TabsList>
@@ -335,13 +398,21 @@ export function CreateProductDialog({
               )}
             </div>
             <div className="space-y-1.5">
-              <label className="text-sm font-medium">Tồn kho ban đầu</label>
+              <label className="text-sm font-medium">
+                {isEdit ? "Tồn kho hiện tại" : "Tồn kho ban đầu"}
+              </label>
               <Input
                 type="number"
                 value={initialStock}
                 onChange={(e) => setInitialStock(e.target.value)}
                 placeholder="0"
+                disabled={isEdit}
               />
+              {isEdit && (
+                <p className="text-xs text-muted-foreground">
+                  Điều chỉnh tồn qua Kiểm kho / Nhập xuất kho.
+                </p>
+              )}
             </div>
           </div>
 

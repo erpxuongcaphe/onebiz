@@ -20,7 +20,7 @@ import {
   DetailInfoGrid,
 } from "@/components/shared/inline-detail-panel";
 import type { DetailTab } from "@/components/shared/inline-detail-panel";
-import { formatCurrency, formatDate } from "@/lib/format";
+import { formatCurrency, formatDate, formatUser } from "@/lib/format";
 import { exportToExcel, exportToCsv } from "@/lib/utils/export";
 import { getInventoryChecks, getInventoryCheckStatuses, applyInventoryCheck, cancelInventoryCheck, getInventoryCheckItems } from "@/lib/services";
 import type { InventoryCheckItemRow } from "@/lib/services";
@@ -286,7 +286,7 @@ function InventoryCheckDetail({
             meta={
               <div className="flex items-center gap-4 flex-wrap text-xs">
                 <span>
-                  Người tạo: <strong>{item.createdBy}</strong>
+                  Người tạo: <strong>{formatUser(undefined, item.createdBy)}</strong>
                 </span>
                 <span>
                   Thời gian: <strong>{formatDate(item.date)}</strong>
@@ -300,7 +300,7 @@ function InventoryCheckDetail({
               { label: "Mã kiểm kho", value: item.code },
               { label: "Thời gian", value: formatDate(item.date) },
               { label: "Trạng thái", value: status.label },
-              { label: "Người tạo", value: item.createdBy },
+              { label: "Người tạo", value: formatUser(undefined, item.createdBy) },
               {
                 label: "Tổng sản phẩm",
                 value: String(item.totalProducts),

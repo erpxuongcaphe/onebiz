@@ -831,6 +831,7 @@ export default function HangHoaPage() {
           if (!open) setEditingProduct(null);
         }}
         onSuccess={fetchData}
+        initialData={editingProduct}
       />
 
       {/* --- Single-row delete confirm --- */}

@@ -27,7 +27,7 @@ import { ImportExcelDialog } from "@/components/shared/dialogs/import-excel-dial
 import { downloadTemplate } from "@/lib/excel";
 import { cashTransactionExcelSchema } from "@/lib/excel/schemas";
 import { bulkImportCashTransactions } from "@/lib/services/supabase/excel-import";
-import { formatCurrency, formatDate } from "@/lib/format";
+import { formatCurrency, formatDate, formatUser } from "@/lib/format";
 import { exportToCsv } from "@/lib/utils/export";
 import { exportToExcelFromSchema } from "@/lib/excel";
 import type { CashTransactionImportRow } from "@/lib/excel/schemas";
@@ -120,7 +120,7 @@ function TransactionDetail({
                   meta={
                     <div className="flex items-center gap-4 flex-wrap text-xs">
                       <span>
-                        Người tạo: <strong>{entry.createdBy}</strong>
+                        Người tạo: <strong>{formatUser(undefined, entry.createdBy)}</strong>
                       </span>
                       <span>
                         Ngày tạo: <strong>{formatDate(entry.date)}</strong>
