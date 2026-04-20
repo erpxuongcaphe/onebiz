@@ -112,26 +112,58 @@ export default function FnbPosPage() {
           // IndexedDB not available — continue with network
         }
 
-        // Step 2: Background refresh from Supabase (if online)
+        // Step 2: Background refresh from Supabase (if online) — PARALLEL
         if (networkStatus.isOnline) {
           const needsRefresh = await shouldRefreshMenu().catch(() => true);
+          const supabase = getClient();
 
-          if (needsRefresh) {
-            // Fetch fresh data
-            const cats = await getProductCategoriesAsync("sku");
-            const mappedCats = cats.map((c) => ({ id: c.value, name: c.label, code: c.value }));
+          // Parallel fetch: catalog (cats + products + toppings) + branch-scoped (tables + shift)
+          const catalogPromise = needsRefresh
+            ? Promise.all([
+                getProductCategoriesAsync("sku"),
+                supabase
+                  .from("products")
+                  .select("id, name, code, sell_price, image_url, stock, category_id")
+                  .eq("is_active", true)
+                  .eq("product_type", "sku")
+                  .eq("channel", "fnb")
+                  .order("name")
+                  .limit(300),
+                supabase
+                  .from("products")
+                  .select("id, name, sell_price")
+                  .eq("is_active", true)
+                  .ilike("code", "NVL-TOP%")
+                  .limit(100),
+              ])
+            : Promise.resolve(null);
+
+          const tablesPromise = branchId
+            ? getTablesByBranch(branchId).catch(() => [] as RestaurantTable[])
+            : Promise.resolve([] as RestaurantTable[]);
+
+          const shiftPromise = branchId && userId
+            ? getOpenShift(branchId, userId).catch(() => null)
+            : Promise.resolve(null);
+
+          const [catalogResult, tbls, shift] = await Promise.all([
+            catalogPromise,
+            tablesPromise,
+            shiftPromise,
+          ]);
+
+          if (catalogResult) {
+            const [cats, prodsResp, toppingsResp] = catalogResult;
+            const mappedCats = cats.map((c) => ({
+              id: c.value,
+              name: c.label,
+              code: c.value,
+            }));
             setCategories(mappedCats);
 
-            const supabase = getClient();
-            const { data: prods } = await supabase
-              .from("products")
-              .select("id, name, code, sell_price, image_url, stock, category_id")
-              .eq("is_active", true)
-              .eq("product_type", "sku")
-              .eq("channel", "fnb")
-              .order("name");
+            const prods = prodsResp.data ?? [];
             setProducts(
-              (prods ?? []).map((p) => ({
+              prods.map((p) => ({
                 id: p.id,
                 name: p.name,
                 code: p.code,
@@ -142,13 +174,9 @@ export default function FnbPosPage() {
               }))
             );
 
-            const { data: toppings } = await supabase
-              .from("products")
-              .select("id, name, sell_price")
-              .eq("is_active", true)
-              .ilike("code", "NVL-TOP%");
+            const toppings = toppingsResp.data ?? [];
             setToppingProducts(
-              (toppings ?? []).map((t) => ({
+              toppings.map((t) => ({
                 id: t.id,
                 name: t.name,
                 price: t.sell_price,
@@ -159,15 +187,10 @@ export default function FnbPosPage() {
             prefetchMenuData().catch(() => {});
           }
 
-          // Load tables + shift (always fresh when online)
           if (branchId) {
-            const tbls = await getTablesByBranch(branchId);
             setTables(tbls);
             prefetchTableData(branchId).catch(() => {});
-            if (userId) {
-              const shift = await getOpenShift(branchId, userId);
-              setCurrentShift(shift);
-            }
+            if (userId) setCurrentShift(shift);
           }
         }
       } catch (err) {
@@ -194,33 +217,50 @@ export default function FnbPosPage() {
     return products.filter((p) => p.category_id === activeCategoryId);
   }, [products, activeCategoryId]);
 
-  // ── Product select → open item dialog ──
+  // ── Variant cache (in-memory, per session) — tránh refetch khi user mở lại dialog cùng SP ──
+  const variantCacheRef = useMemo(
+    () => new Map<string, { id: string; label: string; sell_price: number }[]>(),
+    []
+  );
+
+  // ── Product select → open item dialog (instant open, variants load in background) ──
   const handleSelectProduct = useCallback(
     async (product: FnbProduct) => {
       hapticTap();
       setSelectedProduct(product);
-      // Load variants for this product
-      try {
-        const variants = await getVariantsByProduct(product.id);
-        setItemVariants(
-          variants.map((v) => ({
-            id: v.id,
-            label: v.name,
-            sell_price: v.sellPrice,
-          }))
-        );
-      } catch (err) {
-        console.error("getVariantsByProduct error:", err);
+
+      // Open dialog immediately với variants từ cache (nếu có), sau đó refresh network.
+      const cached = variantCacheRef.get(product.id);
+      if (cached) {
+        setItemVariants(cached);
+      } else {
         setItemVariants([]);
-        toast({
-          title: "Không tải được size/biến thể",
-          description: "Món sẽ được thêm với giá chuẩn.",
-          variant: "warning",
-        });
       }
       setItemDialogOpen(true);
+
+      // Fetch / refresh variants in background
+      try {
+        const variants = await getVariantsByProduct(product.id);
+        const mapped = variants.map((v) => ({
+          id: v.id,
+          label: v.name,
+          sell_price: v.sellPrice,
+        }));
+        variantCacheRef.set(product.id, mapped);
+        setItemVariants(mapped);
+      } catch (err) {
+        console.error("getVariantsByProduct error:", err);
+        if (!cached) {
+          setItemVariants([]);
+          toast({
+            title: "Không tải được size/biến thể",
+            description: "Món sẽ được thêm với giá chuẩn.",
+            variant: "warning",
+          });
+        }
+      }
     },
-    [toast]
+    [toast, variantCacheRef]
   );
 
   // ── Add to cart from item dialog ──

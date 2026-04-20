@@ -1,8 +1,10 @@
 "use client";
+import { useState } from "react";
 import { Badge } from "@/components/ui/badge";
 import { cn } from "@/lib/utils";
 import { formatCurrency } from "@/lib/format";
 import { Icon } from "@/components/ui/icon";
+import { Skeleton } from "@/components/ui/skeleton";
 
 export interface FnbProduct {
   id: string;
@@ -56,6 +58,8 @@ function ProductCard({
   onClick: () => void;
 }) {
   const outOfStock = product.stock <= 0;
+  const [imageLoaded, setImageLoaded] = useState(false);
+  const [imageError, setImageError] = useState(false);
 
   return (
     <button
@@ -69,14 +73,27 @@ function ProductCard({
     >
       {/* Image area — aspect-square với padding Stitch style */}
       <div className="aspect-square overflow-hidden relative p-2">
-        {product.image_url ? (
-          // eslint-disable-next-line @next/next/no-img-element
-          <img
-            src={product.image_url}
-            alt={product.name}
-            className="h-full w-full object-cover rounded-lg group-hover:scale-105 transition-transform duration-500"
-            loading="lazy"
-          />
+        {product.image_url && !imageError ? (
+          <>
+            {!imageLoaded && (
+              <Skeleton className="absolute inset-2 rounded-lg" />
+            )}
+            {/* eslint-disable-next-line @next/next/no-img-element */}
+            <img
+              src={product.image_url}
+              alt={product.name}
+              className={cn(
+                "h-full w-full object-cover rounded-lg group-hover:scale-105 transition-transform duration-500",
+                !imageLoaded && "opacity-0"
+              )}
+              loading="lazy"
+              onLoad={() => setImageLoaded(true)}
+              onError={() => {
+                setImageError(true);
+                setImageLoaded(true);
+              }}
+            />
+          </>
         ) : (
           <div className="h-full w-full rounded-lg bg-primary-fixed/40 flex items-center justify-center">
             <Icon name="local_cafe" size={32} className="text-primary/60" />
