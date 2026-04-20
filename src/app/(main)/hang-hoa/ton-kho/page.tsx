@@ -15,13 +15,14 @@ import {
 import { Badge } from "@/components/ui/badge";
 import { useToast } from "@/lib/contexts";
 import { formatCurrency, formatDate } from "@/lib/format";
-import { exportToExcel, exportToCsv } from "@/lib/utils/export";
+import { exportToCsv } from "@/lib/utils/export";
 import { getBranchStockRows, getBranches } from "@/lib/services";
 import type { BranchStockRow, BranchDetail } from "@/lib/services/supabase";
 import { Icon } from "@/components/ui/icon";
 import { ImportExcelDialog } from "@/components/shared/dialogs/import-excel-dialog";
 import { downloadTemplate } from "@/lib/excel";
-import { initialStockExcelSchema } from "@/lib/excel/schemas";
+import { initialStockExcelSchema, type InitialStockImportRow } from "@/lib/excel/schemas";
+import { exportToExcelFromSchema } from "@/lib/excel";
 import { bulkImportInitialStock } from "@/lib/services/supabase/excel-import";
 
 type ProductTypeFilter = "all" | "nvl" | "sku";
@@ -275,18 +276,18 @@ export default function TonKhoPage() {
         ]}
         onExport={{
           excel: () => {
-            const cols = [
-              { header: "Mã hàng", key: "productCode", width: 15 },
-              { header: "Tên hàng", key: "productName", width: 30 },
-              { header: "Loại", key: "productType", width: 8 },
-              { header: "Chi nhánh", key: "branchName", width: 20 },
-              { header: "Tồn kho", key: "quantity", width: 12, format: (v: number) => v },
-              { header: "Đặt trước", key: "reserved", width: 12, format: (v: number) => v },
-              { header: "Khả dụng", key: "available", width: 12, format: (v: number) => v },
-              { header: "Định mức", key: "minStock", width: 12, format: (v: number | undefined) => v ?? 0 },
-              { header: "Giá trị tồn", key: "stockValue", width: 15, format: (v: number) => v },
-            ];
-            exportToExcel(rows, cols, "ton-kho");
+            // Xuất theo schema "Tồn kho ban đầu" → user edit import lại giữ nguyên cấu trúc
+            const stockRows: InitialStockImportRow[] = rows
+              .filter((r) => r.branchCode) // schema yêu cầu branchCode
+              .map((r) => ({
+                productCode: r.productCode,
+                productName: r.productName,
+                branchCode: r.branchCode ?? "",
+                quantity: r.quantity,
+                costPrice: r.costPrice ?? 0,
+                note: `Xuất từ tồn kho hiện tại — giá trị ${r.stockValue}`,
+              }));
+            exportToExcelFromSchema(stockRows, initialStockExcelSchema);
           },
           csv: () => {
             const cols = [

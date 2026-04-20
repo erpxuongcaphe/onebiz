@@ -29,7 +29,9 @@ import { downloadTemplate } from "@/lib/excel";
 import { supplierExcelSchema } from "@/lib/excel/schemas";
 import { bulkImportSuppliers } from "@/lib/services/supabase/excel-import";
 import { formatCurrency, formatDate } from "@/lib/format";
-import { exportToExcel, exportToCsv } from "@/lib/utils/export";
+import { exportToCsv } from "@/lib/utils/export";
+import { exportToExcelFromSchema } from "@/lib/excel";
+import type { SupplierImportRow } from "@/lib/excel/schemas";
 import {
   getSuppliers,
   deleteSupplier,
@@ -446,6 +448,18 @@ export default function NhaCungCapPage() {
 
   /* ---- Export ---- */
   const handleExport = (type: "excel" | "csv") => {
+    if (type === "excel") {
+      const rows: SupplierImportRow[] = data.map((s) => ({
+        code: s.code,
+        name: s.name,
+        phone: s.phone,
+        email: s.email,
+        address: s.address,
+        isActive: true,
+      }));
+      exportToExcelFromSchema(rows, supplierExcelSchema);
+      return;
+    }
     const exportColumns = [
       { header: "Mã NCC", key: "code", width: 12 },
       { header: "Tên NCC", key: "name", width: 25 },
@@ -454,8 +468,7 @@ export default function NhaCungCapPage() {
       { header: "Nợ cần trả hiện tại", key: "currentDebt", width: 18, format: (v: number) => v },
       { header: "Tổng mua", key: "totalPurchases", width: 15, format: (v: number) => v },
     ];
-    if (type === "excel") exportToExcel(data, exportColumns, "danh-sach-nha-cung-cap");
-    else exportToCsv(data, exportColumns, "danh-sach-nha-cung-cap");
+    exportToCsv(data, exportColumns, "danh-sach-nha-cung-cap");
   };
 
   /* ---- Inline detail renderer ---- */

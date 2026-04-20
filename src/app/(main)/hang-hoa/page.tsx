@@ -37,7 +37,9 @@ import {
 } from "@/components/ui/dialog";
 import { Button } from "@/components/ui/button";
 import { formatCurrency, formatDate } from "@/lib/format";
-import { exportToExcel, exportToCsv } from "@/lib/utils/export";
+import { exportToCsv } from "@/lib/utils/export";
+import { exportToExcelFromSchema } from "@/lib/excel";
+import type { ProductImportRow } from "@/lib/excel/schemas";
 import {
   getProducts,
   getProductCategoriesAsync,
@@ -408,27 +410,38 @@ export default function HangHoaPage() {
   const totalOrdered = data.reduce((sum, p) => sum + p.ordered, 0);
 
   const handleExport = (type: "excel" | "csv") => {
+    if (type === "excel") {
+      // Xuất theo schema import → user edit rồi upload lại không mất cột
+      const rows: ProductImportRow[] = data.map((p) => ({
+        code: p.code,
+        name: p.name,
+        productType: p.productType,
+        channel: p.channel,
+        categoryCode: p.categoryCode,
+        unit: p.unit,
+        sellPrice: p.sellPrice,
+        costPrice: p.costPrice,
+        stock: p.stock,
+        vatRate: p.vatRate,
+        groupCode: p.groupCode,
+        purchaseUnit: p.purchaseUnit,
+        stockUnit: p.stockUnit,
+        sellUnit: p.sellUnit,
+        isActive: p.status !== "inactive",
+      }));
+      exportToExcelFromSchema(rows, productExcelSchema);
+      return;
+    }
+    // CSV giữ format ngắn gọn cho báo cáo
     const exportColumns = [
       { header: "Mã hàng", key: "code", width: 12 },
       { header: "Tên hàng", key: "name", width: 30 },
-      {
-        header: "Giá bán",
-        key: "sellPrice",
-        width: 15,
-        format: (v: number) => v,
-      },
-      {
-        header: "Giá vốn",
-        key: "costPrice",
-        width: 15,
-        format: (v: number) => v,
-      },
+      { header: "Giá bán", key: "sellPrice", width: 15, format: (v: number) => v },
+      { header: "Giá vốn", key: "costPrice", width: 15, format: (v: number) => v },
       { header: "Tồn kho", key: "stock", width: 10 },
       { header: "Nhóm", key: "categoryName", width: 20 },
     ];
-    if (type === "excel")
-      exportToExcel(data, exportColumns, "danh-sach-hang-hoa");
-    else exportToCsv(data, exportColumns, "danh-sach-hang-hoa");
+    exportToCsv(data, exportColumns, "danh-sach-hang-hoa");
   };
 
   const baseColumns: ColumnDef<Product, unknown>[] = [

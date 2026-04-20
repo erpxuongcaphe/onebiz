@@ -28,7 +28,9 @@ import { downloadTemplate } from "@/lib/excel";
 import { cashTransactionExcelSchema } from "@/lib/excel/schemas";
 import { bulkImportCashTransactions } from "@/lib/services/supabase/excel-import";
 import { formatCurrency, formatDate } from "@/lib/format";
-import { exportToExcel, exportToCsv } from "@/lib/utils/export";
+import { exportToCsv } from "@/lib/utils/export";
+import { exportToExcelFromSchema } from "@/lib/excel";
+import type { CashTransactionImportRow } from "@/lib/excel/schemas";
 import {
   getCashBookEntries,
   getCashBookTypes,
@@ -246,25 +248,28 @@ export default function SoQuyPage() {
   const closingBalance = openingBalance + totalReceipt - totalPayment;
 
   const handleExport = (type: "excel" | "csv") => {
+    if (type === "excel") {
+      const rows: CashTransactionImportRow[] = data.map((e) => ({
+        code: e.code,
+        date: new Date(e.date),
+        type: e.type,
+        category: e.category,
+        amount: e.amount,
+        counterparty: e.counterparty,
+        paymentMethod: "cash",
+        note: e.note,
+      }));
+      exportToExcelFromSchema(rows, cashTransactionExcelSchema);
+      return;
+    }
     const exportColumns = [
       { header: "Mã phiếu", key: "code", width: 15 },
-      {
-        header: "Thời gian",
-        key: "date",
-        width: 18,
-        format: (v: string) => formatDate(v),
-      },
+      { header: "Thời gian", key: "date", width: 18, format: (v: string) => formatDate(v) },
       { header: "Loại thu chi", key: "category", width: 20 },
       { header: "Người nộp/nhận", key: "counterparty", width: 22 },
-      {
-        header: "Giá trị",
-        key: "amount",
-        width: 15,
-        format: (v: number) => v,
-      },
+      { header: "Giá trị", key: "amount", width: 15, format: (v: number) => v },
     ];
-    if (type === "excel") exportToExcel(data, exportColumns, "so-quy");
-    else exportToCsv(data, exportColumns, "so-quy");
+    exportToCsv(data, exportColumns, "so-quy");
   };
 
   // === Columns ===

@@ -30,7 +30,9 @@ import { customerExcelSchema } from "@/lib/excel/schemas";
 import { bulkImportCustomers } from "@/lib/services/supabase/excel-import";
 import { useToast } from "@/lib/contexts";
 import { formatCurrency, formatDate } from "@/lib/format";
-import { exportToExcel, exportToCsv } from "@/lib/utils/export";
+import { exportToCsv } from "@/lib/utils/export";
+import { exportToExcelFromSchema } from "@/lib/excel";
+import type { CustomerImportRow } from "@/lib/excel/schemas";
 import {
   getCustomers,
   getCustomerGroups,
@@ -205,6 +207,22 @@ export default function KhachHangPage() {
 
   /* ---- Export ---- */
   const handleExport = (type: "excel" | "csv") => {
+    if (type === "excel") {
+      // Xuất theo schema import → user edit rồi upload lại không mất field
+      const rows: CustomerImportRow[] = data.map((c) => ({
+        code: c.code,
+        name: c.name,
+        phone: c.phone,
+        email: c.email,
+        address: c.address,
+        customerType: c.type,
+        gender: c.gender,
+        groupCode: c.groupName, // bulk service match nhóm theo TÊN (không có code)
+        isActive: true,
+      }));
+      exportToExcelFromSchema(rows, customerExcelSchema);
+      return;
+    }
     const exportColumns = [
       { header: "Mã KH", key: "code", width: 12 },
       { header: "Tên khách hàng", key: "name", width: 25 },
@@ -214,8 +232,7 @@ export default function KhachHangPage() {
       { header: "Tổng bán", key: "totalSales", width: 15, format: (v: number) => v },
       { header: "Nhóm", key: "groupName", width: 20 },
     ];
-    if (type === "excel") exportToExcel(data, exportColumns, "danh-sach-khach-hang");
-    else exportToCsv(data, exportColumns, "danh-sach-khach-hang");
+    exportToCsv(data, exportColumns, "danh-sach-khach-hang");
   };
 
   /* ---- Inline detail renderer ---- */

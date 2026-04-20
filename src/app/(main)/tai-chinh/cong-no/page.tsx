@@ -21,7 +21,9 @@ import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { useToast } from "@/lib/contexts";
 import { formatCurrency } from "@/lib/format";
-import { exportToExcel, exportToCsv } from "@/lib/utils/export";
+import { exportToCsv } from "@/lib/utils/export";
+import { exportToExcelFromSchema } from "@/lib/excel";
+import type { DebtOpeningImportRow } from "@/lib/excel/schemas";
 import { getCustomers, getSuppliers } from "@/lib/services";
 import { getDebtAging, getTopDebtors } from "@/lib/services/supabase/debt";
 import type { Customer, Supplier } from "@/lib/types";
@@ -313,26 +315,29 @@ export default function CongNoPage() {
         ]}
         onExport={mode !== "aging" ? {
           excel: () => {
-            if (mode === "customer") {
-              const cols = [
-                { header: "Mã KH", key: "code", width: 15 },
-                { header: "Tên KH", key: "name", width: 25 },
-                { header: "SĐT", key: "phone", width: 15 },
-                { header: "Công nợ", key: "currentDebt", width: 18, format: (v: number) => v },
-                { header: "Tổng mua", key: "totalSales", width: 18, format: (v: number) => v },
-                { header: "Nhóm", key: "groupName", width: 15 },
-              ];
-              exportToExcel(customers, cols, "cong-no-khach-hang");
-            } else {
-              const cols = [
-                { header: "Mã NCC", key: "code", width: 15 },
-                { header: "Tên NCC", key: "name", width: 25 },
-                { header: "SĐT", key: "phone", width: 15 },
-                { header: "Cần trả NCC", key: "currentDebt", width: 18, format: (v: number) => v },
-                { header: "Tổng nhập", key: "totalPurchases", width: 18, format: (v: number) => v },
-              ];
-              exportToExcel(suppliers, cols, "cong-no-nha-cung-cap");
-            }
+            // Xuất theo schema "Công nợ đầu kỳ" → import lại không mất field
+            const today = new Date();
+            const rows: DebtOpeningImportRow[] =
+              mode === "customer"
+                ? customers
+                    .filter((c) => c.currentDebt !== 0)
+                    .map((c) => ({
+                      partyType: "customer",
+                      partyCode: c.code,
+                      partyName: c.name,
+                      openingDebt: c.currentDebt,
+                      openingDate: today,
+                    }))
+                : suppliers
+                    .filter((s) => s.currentDebt !== 0)
+                    .map((s) => ({
+                      partyType: "supplier",
+                      partyCode: s.code,
+                      partyName: s.name,
+                      openingDebt: s.currentDebt,
+                      openingDate: today,
+                    }));
+            exportToExcelFromSchema(rows, debtOpeningExcelSchema);
           },
           csv: () => {
             if (mode === "customer") {
