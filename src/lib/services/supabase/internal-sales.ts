@@ -10,6 +10,7 @@
  *   6. Internal sale header linking all
  */
 
+import type { InternalSaleImportRow } from "@/lib/excel/schemas";
 import { getClient, getCurrentContext, handleError } from "./base";
 import { applyManualStockMovement } from "./stock-adjustments";
 
@@ -122,6 +123,79 @@ export async function getInternalSaleById(id: string) {
       note: (it.note as string) ?? undefined,
     })),
   };
+}
+
+/**
+ * Export đơn bán nội bộ — trả về rows phẳng theo schema Excel Import.
+ *
+ * Mỗi line item = 1 row. Các row cùng "code" sẽ gộp thành 1 đơn khi import lại.
+ * Đảm bảo round-trip export/import (Plan 19/04 yêu cầu #2).
+ *
+ * Note: paymentMethod không được lưu trên internal_sales header (lưu ở invoice
+ * liên kết). Để đơn giản, export bỏ trống — user có thể chỉnh trong Excel
+ * trước khi import. Default "debt" khi import lại.
+ */
+export async function getInternalSalesForExport(params: {
+  search?: string;
+  status?: string;
+  branchId?: string;
+}): Promise<InternalSaleImportRow[]> {
+  const supabase = getClient();
+
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  let headerQuery: any = supabase
+    .from("internal_sales")
+    .select(
+      "id, code, note, status, from_branch:branches!internal_sales_from_branch_id_fkey(code), to_branch:branches!internal_sales_to_branch_id_fkey(code)"
+    )
+    .order("created_at", { ascending: false });
+
+  if (params.search) headerQuery = headerQuery.ilike("code", `%${params.search}%`);
+  if (params.status) headerQuery = headerQuery.eq("status", params.status);
+  if (params.branchId) {
+    headerQuery = headerQuery.or(
+      `from_branch_id.eq.${params.branchId},to_branch_id.eq.${params.branchId}`
+    );
+  }
+
+  const { data: headers, error: hErr } = await headerQuery;
+  if (hErr) handleError(hErr, "getInternalSalesForExport.headers");
+
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  const headerList = (headers ?? []) as any[];
+  if (headerList.length === 0) return [];
+
+  const saleIds = headerList.map((h) => h.id as string);
+
+  const { data: items, error: iErr } = await supabase
+    .from("internal_sale_items")
+    .select("internal_sale_id, product_code, quantity, unit_price, vat_rate")
+    .in("internal_sale_id", saleIds);
+  if (iErr) handleError(iErr, "getInternalSalesForExport.items");
+
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  const headerMap = new Map<string, any>();
+  for (const h of headerList) headerMap.set(h.id, h);
+
+  const rows: InternalSaleImportRow[] = [];
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  for (const it of (items ?? []) as any[]) {
+    const h = headerMap.get(it.internal_sale_id);
+    if (!h) continue;
+    rows.push({
+      code: h.code as string,
+      fromBranchCode: (h.from_branch?.code ?? "") as string,
+      toBranchCode: (h.to_branch?.code ?? "") as string,
+      note: (h.note ?? "") as string,
+      productCode: (it.product_code ?? "") as string,
+      quantity: Number(it.quantity ?? 0),
+      unitPrice: Number(it.unit_price ?? 0),
+      vatRate: Number(it.vat_rate ?? 0),
+    });
+  }
+
+  rows.sort((a, b) => a.code.localeCompare(b.code));
+  return rows;
 }
 
 // ────────────────────────────────────────────

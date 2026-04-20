@@ -47,7 +47,7 @@ export {
 } from "./inventory";
 export type { InventoryCheckItemRow } from "./inventory";
 // Manufacturing handled by production.ts (getProductionOrders)
-export { getPurchaseOrderEntries, getPurchaseEntryStatuses, getPurchaseReturns, getPurchaseReturnStatuses, getInputInvoices, getInputInvoiceStatuses, deleteInputInvoice, recordInputInvoice, completeSupplierReturn } from "./purchase-entries";
+export { getPurchaseOrderEntries, getPurchaseOrdersForExport, getPurchaseEntryStatuses, getPurchaseReturns, getPurchaseReturnStatuses, getInputInvoices, getInputInvoiceStatuses, deleteInputInvoice, recordInputInvoice, completeSupplierReturn } from "./purchase-entries";
 export { recordInvoicePayment, recordPurchasePayment, getPaymentHistory } from "./payments";
 export type { RecordPaymentInput, RecordPaymentResult } from "./payments";
 export { getFavorites, isFavorite, toggleFavorite, getFavoriteIds } from "./favorites";
@@ -203,7 +203,7 @@ export { splitByItems, splitEqually, areAllTableOrdersCompleted } from "./split-
 export { getFnbKpis, getRevenueByMenuItem, getRevenueByTable, getRevenueByHourFnb, getCashierPerformance, getTableTurnover } from "./fnb-analytics";
 
 // Internal Sales (Bán hàng nội bộ giữa chi nhánh)
-export { getInternalSales, getInternalSaleById, createInternalSale, cancelInternalSale } from "./internal-sales";
+export { getInternalSales, getInternalSaleById, getInternalSalesForExport, createInternalSale, cancelInternalSale } from "./internal-sales";
 export type { InternalSaleItemInput, CreateInternalSaleInput, InternalSaleResult } from "./internal-sales";
 
 // Production Dashboard

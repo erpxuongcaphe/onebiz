@@ -21,10 +21,11 @@ import {
 } from "@/components/shared/inline-detail-panel";
 import type { DetailTab } from "@/components/shared/inline-detail-panel";
 import { formatCurrency, formatDate } from "@/lib/format";
-import { exportToExcel, exportToCsv } from "@/lib/utils/export";
+import { exportToCsv } from "@/lib/utils/export";
+import { exportToExcelFromSchema } from "@/lib/excel";
 import { printDocument } from "@/lib/print-document";
 import { buildPurchaseEntryPrintData } from "@/lib/print-templates";
-import { getPurchaseOrderEntries, getPurchaseEntryStatuses } from "@/lib/services";
+import { getPurchaseOrderEntries, getPurchaseOrdersForExport, getPurchaseEntryStatuses } from "@/lib/services";
 import { CreatePurchaseEntryDialog, ConfirmDialog } from "@/components/shared/dialogs";
 import { ImportExcelDialog } from "@/components/shared/dialogs/import-excel-dialog";
 import { purchaseOrderExcelSchema } from "@/lib/excel/schemas";
@@ -236,15 +237,31 @@ export default function DatHangNhapPage() {
         searchValue={search}
         onSearchChange={setSearch}
         onExport={{
-          excel: () => {
-            const cols = [
-              { header: "Mã", key: "code", width: 15 },
-              { header: "Ngày", key: "date", width: 18, format: (v: string) => formatDate(v) },
-              { header: "NCC", key: "supplierName", width: 25 },
-              { header: "Tổng tiền", key: "totalAmount", width: 18, format: (v: number) => v },
-              { header: "Trạng thái", key: "statusName", width: 15 },
-            ];
-            exportToExcel(data, cols, "dat-hang-nhap");
+          excel: async () => {
+            // Export theo schema Import → mỗi dòng = 1 line item, gộp theo "code"
+            // User có thể edit + upload lại mà không mất field nào (round-trip)
+            try {
+              toast({
+                title: "Đang chuẩn bị file Excel…",
+                description: "Tải tất cả dòng hàng theo bộ lọc hiện tại",
+                variant: "info",
+              });
+              const rows = await getPurchaseOrdersForExport({
+                search: search || undefined,
+                status: statusFilter !== "all" ? statusFilter : undefined,
+              });
+              if (rows.length === 0) {
+                toast({ title: "Không có dữ liệu để xuất", variant: "info" });
+                return;
+              }
+              exportToExcelFromSchema(rows, purchaseOrderExcelSchema);
+            } catch (err) {
+              toast({
+                title: "Lỗi xuất Excel",
+                description: err instanceof Error ? err.message : "Vui lòng thử lại",
+                variant: "error",
+              });
+            }
           },
           csv: () => {
             const cols = [

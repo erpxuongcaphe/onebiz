@@ -19,11 +19,12 @@ import {
 } from "@/components/shared/inline-detail-panel";
 import type { DetailTab } from "@/components/shared/inline-detail-panel";
 import { formatCurrency, formatDate } from "@/lib/format";
-import { getInternalSales, getInternalSaleById } from "@/lib/services";
+import { getInternalSales, getInternalSaleById, getInternalSalesForExport } from "@/lib/services";
 import { CreateInternalSaleDialog } from "@/components/shared/dialogs";
 import { ImportExcelDialog } from "@/components/shared/dialogs/import-excel-dialog";
 import { internalSaleExcelSchema } from "@/lib/excel/schemas";
 import { bulkImportInternalSales } from "@/lib/services/supabase/excel-import";
+import { exportToExcelFromSchema } from "@/lib/excel";
 import { useToast, useBranchFilter } from "@/lib/contexts";
 import { Icon } from "@/components/ui/icon";
 
@@ -268,6 +269,34 @@ export default function InternalSalePage() {
         searchValue={search}
         onSearchChange={setSearch}
         searchPlaceholder="Tìm mã đơn..."
+        onExport={{
+          // Export theo schema Import → round-trip edit & re-upload không mất field
+          excel: async () => {
+            try {
+              toast({
+                title: "Đang chuẩn bị file Excel…",
+                description: "Tải tất cả dòng hàng theo bộ lọc hiện tại",
+                variant: "info",
+              });
+              const rows = await getInternalSalesForExport({
+                search: search || undefined,
+                status: statusFilter.length === 1 ? statusFilter[0] : undefined,
+                branchId: activeBranchId || undefined,
+              });
+              if (rows.length === 0) {
+                toast({ title: "Không có dữ liệu để xuất", variant: "info" });
+                return;
+              }
+              exportToExcelFromSchema(rows, internalSaleExcelSchema);
+            } catch (err) {
+              toast({
+                title: "Lỗi xuất Excel",
+                description: err instanceof Error ? err.message : "Vui lòng thử lại",
+                variant: "error",
+              });
+            }
+          },
+        }}
         actions={[
           {
             label: "Tạo đơn nội bộ",

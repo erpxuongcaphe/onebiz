@@ -14,6 +14,7 @@ import type {
   QueryResult,
 } from "@/lib/types";
 import type { Database } from "@/lib/supabase/types";
+import type { PurchaseOrderImportRow } from "@/lib/excel/schemas";
 import { getClient, getCurrentContext, getPaginationRange, handleError } from "./base";
 import { applyManualStockMovement, nextEntityCode } from "./stock-adjustments";
 
@@ -72,6 +73,88 @@ export function getPurchaseEntryStatuses() {
     { value: "completed", label: "Hoàn thành" },
     { value: "cancelled", label: "Đã hủy" },
   ];
+}
+
+/**
+ * Export đơn đặt hàng nhập — trả về rows phẳng theo schema Excel Import.
+ *
+ * Mỗi line item = 1 row. Các line cùng PO được gộp qua cột "code" khi import lại.
+ * Cho phép edit trong Excel rồi upload lại mà không mất field nào
+ * (Plan 19/04 yêu cầu #2 — round-trip export/import).
+ *
+ * Không phân trang — export toàn bộ dữ liệu match filter. Gọi async nên UI
+ * nên có toast báo "Đang chuẩn bị…" khi list lớn.
+ */
+export async function getPurchaseOrdersForExport(params: {
+  search?: string;
+  status?: string;
+}): Promise<PurchaseOrderImportRow[]> {
+  const supabase = getClient();
+
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  let headerQuery: any = supabase
+    .from("purchase_orders")
+    .select(
+      "id, code, note, status, supplier:suppliers(code), branch:branches(code)"
+    )
+    .order("created_at", { ascending: false });
+
+  if (params.search) {
+    headerQuery = headerQuery.or(
+      `code.ilike.%${params.search}%,supplier_name.ilike.%${params.search}%`
+    );
+  }
+
+  if (params.status && params.status !== "all") {
+    if (params.status === "pending") {
+      headerQuery = headerQuery.in("status", ["draft", "ordered"]);
+    } else {
+      headerQuery = headerQuery.eq("status", params.status);
+    }
+  }
+
+  const { data: headers, error: hErr } = await headerQuery;
+  if (hErr) handleError(hErr, "getPurchaseOrdersForExport.headers");
+
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  const headerList = (headers ?? []) as any[];
+  if (headerList.length === 0) return [];
+
+  const poIds = headerList.map((h) => h.id as string);
+
+  const { data: items, error: iErr } = await supabase
+    .from("purchase_order_items")
+    .select(
+      "purchase_order_id, quantity, unit_price, discount, vat_rate, product:products(code)"
+    )
+    .in("purchase_order_id", poIds);
+  if (iErr) handleError(iErr, "getPurchaseOrdersForExport.items");
+
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  const headerMap = new Map<string, any>();
+  for (const h of headerList) headerMap.set(h.id, h);
+
+  const rows: PurchaseOrderImportRow[] = [];
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  for (const it of (items ?? []) as any[]) {
+    const h = headerMap.get(it.purchase_order_id);
+    if (!h) continue;
+    rows.push({
+      code: h.code as string,
+      supplierCode: (h.supplier?.code ?? "") as string,
+      branchCode: (h.branch?.code ?? "") as string,
+      note: (h.note ?? "") as string,
+      productCode: (it.product?.code ?? "") as string,
+      quantity: Number(it.quantity ?? 0),
+      unitPrice: Number(it.unit_price ?? 0),
+      discount: Number(it.discount ?? 0),
+      vatRate: Number(it.vat_rate ?? 0),
+    });
+  }
+
+  // Sort theo mã đơn để các dòng cùng PO nằm liền kề
+  rows.sort((a, b) => a.code.localeCompare(b.code));
+  return rows;
 }
 
 // ==================== Purchase Returns (Trả hàng nhập) ====================
