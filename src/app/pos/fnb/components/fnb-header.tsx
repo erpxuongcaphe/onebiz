@@ -57,7 +57,8 @@ export function FnbHeader({
         </Link>
       )}
 
-      <PosBranchSelector variant="dark" />
+      {/* POS FnB: CHỈ cho chọn quán (store). Ẩn kho tổng + xưởng. */}
+      <PosBranchSelector variant="dark" filter={["store"]} showCode />
 
       {onShiftClick && (
         <ShiftIndicator shift={shift ?? null} onClick={onShiftClick} />

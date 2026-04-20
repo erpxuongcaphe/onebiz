@@ -139,7 +139,7 @@ export type {
 export type { InternalSale, InternalSaleItem } from "./internal-sales";
 
 // Auth domain
-export type { UserProfile, Tenant, Branch } from "./auth";
+export type { UserProfile, Tenant, Branch, BranchType } from "./auth";
 
 // F&B domain
 export type {

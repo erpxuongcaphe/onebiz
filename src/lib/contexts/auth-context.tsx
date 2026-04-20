@@ -129,6 +129,9 @@ export function AuthProvider({ children }: { children: ReactNode }) {
             id: b.id,
             tenantId: b.tenant_id,
             name: b.name,
+            // Fallback "store" cho chi nhánh cũ chưa set branch_type (backward compat).
+            branchType: (b.branch_type ?? "store") as Branch["branchType"],
+            code: b.code ?? undefined,
             address: b.address ?? undefined,
             phone: b.phone ?? undefined,
             isDefault: b.is_default,

@@ -325,7 +325,7 @@ export default function KdsPage() {
             <Icon name="arrow_back" size={16} />
             POS
           </Link>
-          <PosBranchSelector variant="dark" />
+          <PosBranchSelector variant="dark" filter={["store"]} showCode />
           <div className="flex-1" />
           <Icon name="soup_kitchen" size={20} className="text-slate-400" />
           <span className="font-heading text-base font-bold text-slate-100">
@@ -387,7 +387,7 @@ export default function KdsPage() {
             </span>
           </div>
           <div className="hidden lg:block">
-            <PosBranchSelector variant="dark" />
+            <PosBranchSelector variant="dark" filter={["store"]} showCode />
           </div>
         </div>
 

@@ -672,8 +672,8 @@ export default function PosPage() {
           <span className="hidden sm:inline">Quay lại</span>
         </Link>
 
-        {/* Branch selector + Title */}
-        <PosBranchSelector variant="dark" />
+        {/* Branch selector + Title — hiện rõ tên chi nhánh + code để user biết đang ghi nhận đơn ở đâu */}
+        <PosBranchSelector variant="dark" filter={["warehouse", "store"]} showCode />
         <div className="h-4 w-px bg-white/20 shrink-0" />
         <div className="flex items-center gap-1.5 shrink-0">
           <Icon name="shopping_cart" size={14} />
