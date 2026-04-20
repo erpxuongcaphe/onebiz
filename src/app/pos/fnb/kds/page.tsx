@@ -8,8 +8,8 @@
  * taps "Xong" to mark order as served.
  *
  * Stitch dark mode styling (per mockup m_n_h_nh_b_p_kds_fnb_dark_mode_chuy_n_d_ng):
- * - Main bg: slate-800 (inverse-surface tương đương MD3)
- * - Cards: slate-900 rounded-xl với colored header theo status
+ * - Main bg: bg-pos-chrome-bg-elevated (inverse-surface tương đương MD3)
+ * - Cards: bg-pos-chrome-bg rounded-xl với colored header theo status
  * - Timer: font-heading black 4xl, color theo threshold
  * - Item checkbox: w-6 h-6 rounded border-2 toggle
  */
@@ -316,27 +316,27 @@ export default function KdsPage() {
   // CEO chưa chọn chi nhánh
   if (!branchId) {
     return (
-      <div className="flex flex-col h-screen bg-slate-800 text-slate-100">
-        <header className="h-16 bg-slate-900/70 backdrop-blur flex items-center px-6 gap-3 shrink-0 border-b border-slate-700/50">
+      <div className="flex flex-col h-screen bg-pos-chrome-bg-elevated text-pos-chrome-fg">
+        <header className="h-16 bg-pos-chrome-bg/70 backdrop-blur flex items-center px-6 gap-3 shrink-0 border-b border-pos-chrome-border/50">
           <Link
             href="/pos/fnb"
-            className="text-slate-400 hover:text-slate-100 text-sm flex items-center gap-1.5 rounded-lg px-2 py-1 hover:bg-slate-800 transition-colors"
+            className="text-pos-chrome-fg-dim hover:text-pos-chrome-fg text-sm flex items-center gap-1.5 rounded-lg px-2 py-1 hover:bg-pos-chrome-bg-elevated transition-colors"
           >
             <Icon name="arrow_back" size={16} />
             POS
           </Link>
           <PosBranchSelector variant="dark" filter={["store"]} showCode />
           <div className="flex-1" />
-          <Icon name="soup_kitchen" size={20} className="text-slate-400" />
-          <span className="font-heading text-base font-bold text-slate-100">
+          <Icon name="soup_kitchen" size={20} className="text-pos-chrome-fg-dim" />
+          <span className="font-heading text-base font-bold text-pos-chrome-fg">
             KDS Bếp
           </span>
         </header>
         <div className="flex-1 flex flex-col items-center justify-center gap-4">
-          <div className="size-20 rounded-2xl bg-slate-700 flex items-center justify-center">
-            <Icon name="soup_kitchen" size={40} className="text-slate-400" />
+          <div className="size-20 rounded-2xl bg-pos-chrome-bg-hover flex items-center justify-center">
+            <Icon name="soup_kitchen" size={40} className="text-pos-chrome-fg-dim" />
           </div>
-          <p className="font-heading text-lg font-semibold text-slate-300">
+          <p className="font-heading text-lg font-semibold text-pos-chrome-fg-muted">
             Chọn chi nhánh trên thanh header để xem đơn bếp
           </p>
         </div>
@@ -346,41 +346,41 @@ export default function KdsPage() {
 
   if (loading) {
     return (
-      <div className="flex items-center justify-center h-screen bg-slate-800">
+      <div className="flex items-center justify-center h-screen bg-pos-chrome-bg-elevated">
         <div className="flex flex-col items-center gap-3">
           <Icon
             name="progress_activity"
             size={36}
             className="animate-spin text-status-info"
           />
-          <p className="text-sm text-slate-400">Đang tải đơn bếp…</p>
+          <p className="text-sm text-pos-chrome-fg-dim">Đang tải đơn bếp…</p>
         </div>
       </div>
     );
   }
 
   return (
-    <div className="flex flex-col h-screen bg-slate-800 text-slate-100 overflow-hidden">
+    <div className="flex flex-col h-screen bg-pos-chrome-bg-elevated text-pos-chrome-fg overflow-hidden">
       {/* ── Stitch Top Bar ── */}
-      <header className="h-16 md:h-20 px-4 md:px-8 flex items-center justify-between bg-slate-900/60 backdrop-blur-md border-b border-slate-700/50 shrink-0 gap-3">
+      <header className="h-16 md:h-20 px-4 md:px-8 flex items-center justify-between bg-pos-chrome-bg/60 backdrop-blur-md border-b border-pos-chrome-border/50 shrink-0 gap-3">
         {/* Left: title + status */}
         <div className="flex items-center gap-3 min-w-0">
           <Link
             href="/pos/fnb"
-            className="shrink-0 text-slate-400 hover:text-slate-100 rounded-lg p-2 hover:bg-slate-800 transition-colors"
+            className="shrink-0 text-pos-chrome-fg-dim hover:text-pos-chrome-fg rounded-lg p-2 hover:bg-pos-chrome-bg-elevated transition-colors"
             title="Quay về POS"
           >
             <Icon name="arrow_back" size={18} />
           </Link>
           <div className="flex flex-col min-w-0">
-            <h1 className="font-heading text-lg md:text-xl font-bold tracking-tight text-slate-50 truncate leading-tight">
+            <h1 className="font-heading text-lg md:text-xl font-bold tracking-tight text-pos-chrome-fg truncate leading-tight">
               KDS Bếp Chính
             </h1>
-            <span className="flex items-center gap-1.5 text-xs text-slate-400">
+            <span className="flex items-center gap-1.5 text-xs text-pos-chrome-fg-dim">
               <span
                 className={cn(
                   "size-2 rounded-full",
-                  realtimeConnected ? "bg-status-success animate-pulse" : "bg-slate-500"
+                  realtimeConnected ? "bg-status-success animate-pulse" : "bg-pos-chrome-fg-dim"
                 )}
               />
               {realtimeConnected ? "Live" : "Polling"} · {filtered.length} đơn
@@ -392,7 +392,7 @@ export default function KdsPage() {
         </div>
 
         {/* Center: filter pills — Stitch style */}
-        <div className="hidden sm:flex items-center gap-1 bg-slate-900/60 p-1 rounded-xl border border-slate-700/40">
+        <div className="hidden sm:flex items-center gap-1 bg-pos-chrome-bg/60 p-1 rounded-xl border border-pos-chrome-border/40">
           {FILTER_TABS.map((tab) => (
             <button
               key={tab.key}
@@ -400,8 +400,8 @@ export default function KdsPage() {
               className={cn(
                 "px-4 md:px-5 py-1.5 md:py-2 rounded-lg font-semibold text-xs md:text-sm transition-all press-scale-sm",
                 filter === tab.key
-                  ? "bg-status-info text-white shadow-md shadow-slate-900/30"
-                  : "text-slate-400 hover:bg-slate-800 hover:text-slate-100"
+                  ? "bg-status-info text-white shadow-md shadow-pos-chrome-bg/30"
+                  : "text-pos-chrome-fg-dim hover:bg-pos-chrome-bg-elevated hover:text-pos-chrome-fg"
               )}
             >
               {tab.label}
@@ -411,7 +411,7 @@ export default function KdsPage() {
 
         {/* Right: time + sound */}
         <div className="flex items-center gap-3 shrink-0">
-          <div className="font-heading font-bold text-xl md:text-2xl tabular-nums tracking-tight text-slate-50">
+          <div className="font-heading font-bold text-xl md:text-2xl tabular-nums tracking-tight text-pos-chrome-fg">
             {wallClock}
           </div>
           <button
@@ -420,7 +420,7 @@ export default function KdsPage() {
               "size-9 rounded-lg flex items-center justify-center transition-colors press-scale-sm",
               soundOn
                 ? "bg-status-info/20 text-status-info hover:bg-status-info/30"
-                : "bg-slate-800 text-slate-500 hover:bg-slate-700"
+                : "bg-pos-chrome-bg-elevated text-pos-chrome-fg0 hover:bg-pos-chrome-bg-hover"
             )}
             title={soundOn ? "Tắt âm" : "Bật âm"}
           >
@@ -430,7 +430,7 @@ export default function KdsPage() {
       </header>
 
       {/* Filter pills — mobile row (outside header) */}
-      <div className="flex sm:hidden items-center gap-1 bg-slate-900/60 mx-3 mt-3 p-1 rounded-xl overflow-x-auto no-scrollbar border border-slate-700/40 shrink-0">
+      <div className="flex sm:hidden items-center gap-1 bg-pos-chrome-bg/60 mx-3 mt-3 p-1 rounded-xl overflow-x-auto no-scrollbar border border-pos-chrome-border/40 shrink-0">
         {FILTER_TABS.map((tab) => (
           <button
             key={tab.key}
@@ -439,7 +439,7 @@ export default function KdsPage() {
               "shrink-0 px-4 py-2 rounded-lg font-semibold text-xs transition-all press-scale-sm",
               filter === tab.key
                 ? "bg-status-info text-white shadow"
-                : "text-slate-400 hover:bg-slate-800 hover:text-slate-100"
+                : "text-pos-chrome-fg-dim hover:bg-pos-chrome-bg-elevated hover:text-pos-chrome-fg"
             )}
           >
             {tab.label}
@@ -451,13 +451,13 @@ export default function KdsPage() {
       <div className="flex-1 overflow-x-auto overflow-y-hidden p-4 md:p-6">
         {filtered.length === 0 ? (
           <div className="flex flex-col items-center justify-center h-full gap-3">
-            <div className="size-20 rounded-2xl bg-slate-700 flex items-center justify-center">
+            <div className="size-20 rounded-2xl bg-pos-chrome-bg-hover flex items-center justify-center">
               <Icon name="check_circle" size={40} className="text-status-success" />
             </div>
-            <p className="font-heading text-lg font-bold text-slate-300">
+            <p className="font-heading text-lg font-bold text-pos-chrome-fg-muted">
               Bếp đang thong thả
             </p>
-            <p className="text-sm text-slate-500 max-w-xs text-center">
+            <p className="text-sm text-pos-chrome-fg0 max-w-xs text-center">
               Đơn mới sẽ tự động hiện trong vài giây. Âm thanh {soundOn ? "đang bật" : "đang tắt"}.
             </p>
           </div>
@@ -537,8 +537,8 @@ function KdsOrderCard({
   return (
     <div
       className={cn(
-        "w-[300px] md:w-[320px] shrink-0 bg-slate-900 rounded-xl overflow-hidden flex flex-col relative ambient-shadow-lg",
-        "border border-slate-700/40",
+        "w-[300px] md:w-[320px] shrink-0 bg-pos-chrome-bg rounded-xl overflow-hidden flex flex-col relative ambient-shadow-lg",
+        "border border-pos-chrome-border/40",
         order.status === "served" && "opacity-50"
       )}
     >
@@ -591,7 +591,7 @@ function KdsOrderCard({
       </div>
 
       {/* ── Items list ── */}
-      <div className="p-2 flex flex-col gap-1.5 bg-slate-900 flex-1 min-h-0 overflow-y-auto">
+      <div className="p-2 flex flex-col gap-1.5 bg-pos-chrome-bg flex-1 min-h-0 overflow-y-auto">
         {order.items.map((item) => (
           <KdsItemRow
             key={item.id}
@@ -602,7 +602,7 @@ function KdsOrderCard({
       </div>
 
       {/* ── Action buttons ── */}
-      <div className="p-3 shrink-0 border-t border-slate-700/40 bg-slate-900 space-y-2">
+      <div className="p-3 shrink-0 border-t border-pos-chrome-border/40 bg-pos-chrome-bg space-y-2">
         {/* Bulk "Sẵn sàng hết" — only when there are still pending items */}
         {order.status !== "served" && pendingCount > 0 && (
           <button
@@ -610,7 +610,7 @@ function KdsOrderCard({
             onClick={onMarkAllReady}
             className={cn(
               "w-full py-2.5 rounded-lg font-semibold text-xs transition-all press-scale-sm flex items-center justify-center gap-1.5",
-              "bg-slate-800 text-status-info hover:bg-slate-700 border border-status-info/40"
+              "bg-pos-chrome-bg-elevated text-status-info hover:bg-pos-chrome-bg-hover border border-status-info/40"
             )}
             title={`Đánh dấu sẵn sàng ${pendingCount} món còn lại`}
           >
@@ -620,7 +620,7 @@ function KdsOrderCard({
         )}
 
         {order.status === "served" ? (
-          <div className="w-full py-3 rounded-lg bg-slate-800 text-slate-500 font-semibold text-sm text-center flex items-center justify-center gap-1.5">
+          <div className="w-full py-3 rounded-lg bg-pos-chrome-bg-elevated text-pos-chrome-fg0 font-semibold text-sm text-center flex items-center justify-center gap-1.5">
             <Icon name="check_circle" size={16} />
             Đã phục vụ
           </div>
@@ -635,7 +635,7 @@ function KdsOrderCard({
                 ? "bg-status-success text-white hover:bg-status-success/90 ambient-shadow"
                 : urgency === "overdue"
                   ? "bg-status-error/80 text-white hover:bg-status-error ambient-shadow"
-                  : "bg-slate-800 text-slate-400 cursor-not-allowed opacity-70"
+                  : "bg-pos-chrome-bg-elevated text-pos-chrome-fg-dim cursor-not-allowed opacity-70"
             )}
           >
             <Icon
@@ -672,8 +672,8 @@ function KdsItemRow({
       className={cn(
         "flex items-start gap-3 w-full text-left rounded-lg p-3 transition-colors press-scale-sm",
         isReady
-          ? "bg-slate-800/40 cursor-default"
-          : "bg-slate-800 hover:bg-slate-700 cursor-pointer"
+          ? "bg-pos-chrome-bg-elevated/40 cursor-default"
+          : "bg-pos-chrome-bg-elevated hover:bg-pos-chrome-bg-hover cursor-pointer"
       )}
     >
       {/* Checkbox — Stitch style */}
@@ -684,7 +684,7 @@ function KdsItemRow({
             ? "bg-status-success border-status-success"
             : isPreparing
               ? "bg-status-warning/20 border-status-warning"
-              : "border-slate-500"
+              : "border-pos-chrome-fg-dim"
         )}
       >
         {isReady && (
@@ -701,20 +701,20 @@ function KdsItemRow({
           <span
             className={cn(
               "font-heading font-bold text-sm md:text-base leading-tight",
-              isReady ? "line-through text-slate-500" : "text-slate-50"
+              isReady ? "line-through text-pos-chrome-fg0" : "text-pos-chrome-fg"
             )}
           >
             {item.productName}
           </span>
         </div>
         {item.variantLabel && (
-          <span className="text-xs text-slate-400 block mt-0.5">
+          <span className="text-xs text-pos-chrome-fg-dim block mt-0.5">
             {item.variantLabel}
           </span>
         )}
         {/* Toppings */}
         {item.toppings.length > 0 && (
-          <div className="text-xs text-slate-400 mt-0.5">
+          <div className="text-xs text-pos-chrome-fg-dim mt-0.5">
             {item.toppings.map((t, i) => (
               <span key={i}>
                 {i > 0 && ", "}+{t.name}

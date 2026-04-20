@@ -79,6 +79,16 @@
   --color-kiotviet: var(--kiotviet);
   --color-kiotviet-foreground: var(--kiotviet-foreground);
   --color-kiotviet-hover: var(--kiotviet-hover);
+  /* POS chrome (KiotViet-style top bar) — always dark, indifferent to app theme.
+     Dùng cho POS FnB header + KDS + POS Retail nav để chrome luôn tối, dễ đọc
+     trong môi trường cafe ánh sáng thay đổi liên tục. */
+  --color-pos-chrome-bg: var(--pos-chrome-bg);
+  --color-pos-chrome-bg-elevated: var(--pos-chrome-bg-elevated);
+  --color-pos-chrome-bg-hover: var(--pos-chrome-bg-hover);
+  --color-pos-chrome-fg: var(--pos-chrome-fg);
+  --color-pos-chrome-fg-muted: var(--pos-chrome-fg-muted);
+  --color-pos-chrome-fg-dim: var(--pos-chrome-fg-dim);
+  --color-pos-chrome-border: var(--pos-chrome-border);
   --radius-sm: calc(var(--radius) * 0.6);
   --radius-md: calc(var(--radius) * 0.8);
   --radius-lg: var(--radius);
@@ -167,6 +177,15 @@
   --kiotviet: oklch(0.43 0.19 263);
   --kiotviet-foreground: oklch(1 0 0);
   --kiotviet-hover: oklch(0.38 0.19 263);
+
+  /* POS chrome palette — dark neutrals, always dark regardless of theme */
+  --pos-chrome-bg: oklch(0.17 0.015 260);           /* ≈ slate-900 */
+  --pos-chrome-bg-elevated: oklch(0.22 0.018 260);  /* ≈ slate-800 */
+  --pos-chrome-bg-hover: oklch(0.27 0.020 260);     /* ≈ slate-700 */
+  --pos-chrome-fg: oklch(1 0 0);                    /* white */
+  --pos-chrome-fg-muted: oklch(0.82 0.015 260);     /* ≈ slate-200/300 */
+  --pos-chrome-fg-dim: oklch(0.60 0.018 260);       /* ≈ slate-400 */
+  --pos-chrome-border: oklch(0.32 0.020 260);       /* ≈ slate-600/700 */
 
   /* Sidebar — theo Stitch dùng surface-container-low */
   --sidebar: oklch(0.985 0.002 260);

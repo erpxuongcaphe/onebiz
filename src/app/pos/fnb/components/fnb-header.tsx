@@ -46,12 +46,12 @@ export function FnbHeader({
   const { isFnb, fnbPath } = useFnbSubdomain();
 
   return (
-    <header className="h-12 bg-slate-900 text-white flex items-center px-2 gap-1.5 shrink-0">
+    <header className="h-12 bg-pos-chrome-bg text-pos-chrome-fg flex items-center px-2 gap-1.5 shrink-0">
       {/* ── Left: back + branch selector + view mode tabs ── */}
       {!isFnb && (
         <Link
           href="/"
-          className="flex items-center gap-1 text-sm text-slate-300 hover:text-white transition-colors shrink-0"
+          className="flex items-center gap-1 text-sm text-pos-chrome-fg-muted hover:text-pos-chrome-fg transition-colors shrink-0"
         >
           <Icon name="arrow_back" size={16} />
         </Link>
@@ -72,8 +72,8 @@ export function FnbHeader({
           className={cn(
             "flex items-center gap-1 px-2.5 py-1.5 text-xs font-medium rounded-l-md transition-colors",
             viewMode === "floorplan"
-              ? "bg-primary text-white"
-              : "bg-slate-800 text-slate-400 hover:bg-slate-700 hover:text-slate-200"
+              ? "bg-primary text-on-primary"
+              : "bg-pos-chrome-bg-elevated text-pos-chrome-fg-dim hover:bg-pos-chrome-bg-hover hover:text-pos-chrome-fg-muted"
           )}
         >
           <Icon name="chair" size={14} />
@@ -85,8 +85,8 @@ export function FnbHeader({
           className={cn(
             "flex items-center gap-1 px-2.5 py-1.5 text-xs font-medium rounded-r-md transition-colors",
             viewMode === "menu"
-              ? "bg-primary text-white"
-              : "bg-slate-800 text-slate-400 hover:bg-slate-700 hover:text-slate-200"
+              ? "bg-primary text-on-primary"
+              : "bg-pos-chrome-bg-elevated text-pos-chrome-fg-dim hover:bg-pos-chrome-bg-hover hover:text-pos-chrome-fg-muted"
           )}
         >
           <Icon name="restaurant" size={14} />
@@ -98,13 +98,13 @@ export function FnbHeader({
       <button
         type="button"
         onClick={onSearch}
-        className="flex items-center gap-2 px-3 py-2 sm:py-1.5 bg-slate-800 hover:bg-slate-700 active:bg-slate-600 rounded-md text-sm sm:text-xs text-slate-400 transition-colors shrink-0 min-w-0 sm:min-w-[140px] lg:min-w-[200px]"
+        className="flex items-center gap-2 px-3 py-2 sm:py-1.5 bg-pos-chrome-bg-elevated hover:bg-pos-chrome-bg-hover active:bg-pos-chrome-bg-hover rounded-md text-sm sm:text-xs text-pos-chrome-fg-dim transition-colors shrink-0 min-w-0 sm:min-w-[140px] lg:min-w-[200px]"
       >
         <Icon name="search" size={14} />
         <span>Tìm món (F3)</span>
       </button>
 
-      <div className="h-5 w-px bg-slate-700 shrink-0" />
+      <div className="h-5 w-px bg-pos-chrome-border shrink-0" />
 
       {/* ── Center: tab bar ── */}
       <div className="flex-1 flex items-center gap-1 overflow-x-auto scrollbar-none min-w-0">
@@ -118,8 +118,8 @@ export function FnbHeader({
               className={cn(
                 "flex items-center gap-1 px-2.5 py-1 rounded text-xs font-medium whitespace-nowrap transition-colors shrink-0",
                 isActive
-                  ? "bg-primary text-white"
-                  : "bg-slate-800 text-slate-400 hover:bg-slate-700 hover:text-slate-200"
+                  ? "bg-primary text-on-primary"
+                  : "bg-pos-chrome-bg-elevated text-pos-chrome-fg-dim hover:bg-pos-chrome-bg-hover hover:text-pos-chrome-fg-muted"
               )}
             >
               <span className="max-w-[100px] truncate">{tab.label}</span>
@@ -138,7 +138,7 @@ export function FnbHeader({
                 }}
                 className={cn(
                   "ml-0.5 rounded-full p-0.5 hover:bg-white/20 transition-colors",
-                  isActive ? "text-primary-fixed" : "text-slate-500"
+                  isActive ? "text-primary-fixed" : "text-pos-chrome-fg-dim"
                 )}
               >
                 <Icon name="close" size={14} className="sm:h-3 sm:w-3" />
@@ -151,14 +151,14 @@ export function FnbHeader({
         <button
           type="button"
           onClick={createTab}
-          className="flex items-center justify-center h-8 w-8 sm:h-6 sm:w-6 rounded bg-slate-800 text-slate-400 hover:bg-slate-700 hover:text-white active:bg-slate-600 transition-colors shrink-0"
+          className="flex items-center justify-center h-8 w-8 sm:h-6 sm:w-6 rounded bg-pos-chrome-bg-elevated text-pos-chrome-fg-dim hover:bg-pos-chrome-bg-hover hover:text-pos-chrome-fg active:bg-pos-chrome-bg-hover transition-colors shrink-0"
           title="Thêm đơn mới"
         >
           <Icon name="add" size={14} />
         </button>
       </div>
 
-      <div className="h-5 w-px bg-slate-700 shrink-0" />
+      <div className="h-5 w-px bg-pos-chrome-border shrink-0" />
 
       {/* ── Right: KDS + settings ── */}
       <div className="flex items-center gap-1 shrink-0">
@@ -166,7 +166,7 @@ export function FnbHeader({
           <Button
             variant="ghost"
             size="sm"
-            className="h-8 px-2 text-slate-300 hover:text-white hover:bg-slate-800"
+            className="h-8 px-2 text-pos-chrome-fg-muted hover:text-pos-chrome-fg hover:bg-pos-chrome-bg-elevated"
           >
             <Icon name="restaurant_menu" size={16} className="mr-1" />
             <span className="hidden lg:inline text-xs">Màn bếp</span>
@@ -177,7 +177,7 @@ export function FnbHeader({
             <Button
               variant="ghost"
               size="icon"
-              className="h-8 w-8 text-slate-300 hover:text-white hover:bg-slate-800"
+              className="h-8 w-8 text-pos-chrome-fg-muted hover:text-pos-chrome-fg hover:bg-pos-chrome-bg-elevated"
               title="Quản lý bàn"
             >
               <Icon name="settings" size={16} />

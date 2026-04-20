@@ -39,6 +39,12 @@ import type { FnbPaymentConfirmPayload } from "./components/fnb-payment-dialog";
 import type { SplitItem } from "./components/split-bill-dialog";
 import { ConnectionStatusBar } from "./components/connection-status-bar";
 import { Icon } from "@/components/ui/icon";
+import {
+  Dialog,
+  DialogContent,
+  DialogHeader,
+  DialogTitle,
+} from "@/components/ui/dialog";
 
 // Lazy load heavy dialogs (only loaded when user opens them)
 const FnbItemDialog = lazy(() => import("./components/fnb-item-dialog").then(m => ({ default: m.FnbItemDialog })));
@@ -1050,39 +1056,34 @@ export default function FnbPosPage() {
       )}
 
       {/* Keyboard help overlay (F1 / ?) */}
-      {keyboardHelpOpen && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50" onClick={() => setKeyboardHelpOpen(false)}>
-          <div className="bg-white rounded-lg shadow-xl w-[360px] max-w-[90vw] p-4" onClick={(e) => e.stopPropagation()}>
-            <div className="flex items-center justify-between mb-3">
-              <h3 className="text-sm font-semibold flex items-center gap-1.5">
-                <Icon name="keyboard" size={16} /> Phím tắt
-              </h3>
-              <button type="button" onClick={() => setKeyboardHelpOpen(false)} className="text-muted-foreground hover:text-foreground">
-                <Icon name="close" size={16} />
-              </button>
-            </div>
-            <div className="space-y-1.5 text-xs">
-              {[
-                ["F1 / ?", "Bảng phím tắt"],
-                ["F3", "Tìm món"],
-                ["F4", "Tìm khách hàng"],
-                ["F9", "Thanh toán"],
-                ["F10", "Gửi bếp"],
-                ["Ctrl+T", "Thêm đơn mới"],
-                ["Ctrl+W", "Đóng đơn hiện tại"],
-                ["Ctrl+Tab", "Chuyển đơn tiếp"],
-                ["Ctrl+Shift+Tab", "Chuyển đơn trước"],
-                ["Esc", "Đóng popup"],
-              ].map(([key, desc]) => (
-                <div key={key} className="flex items-center justify-between py-0.5">
-                  <kbd className="px-1.5 py-0.5 bg-muted border rounded text-[11px] font-mono">{key}</kbd>
-                  <span className="text-foreground">{desc}</span>
-                </div>
-              ))}
-            </div>
+      <Dialog open={keyboardHelpOpen} onOpenChange={setKeyboardHelpOpen}>
+        <DialogContent className="sm:max-w-sm">
+          <DialogHeader>
+            <DialogTitle className="text-sm font-semibold flex items-center gap-1.5">
+              <Icon name="keyboard" size={16} /> Phím tắt
+            </DialogTitle>
+          </DialogHeader>
+          <div className="space-y-1.5 text-xs">
+            {[
+              ["F1 / ?", "Bảng phím tắt"],
+              ["F3", "Tìm món"],
+              ["F4", "Tìm khách hàng"],
+              ["F9", "Thanh toán"],
+              ["F10", "Gửi bếp"],
+              ["Ctrl+T", "Thêm đơn mới"],
+              ["Ctrl+W", "Đóng đơn hiện tại"],
+              ["Ctrl+Tab", "Chuyển đơn tiếp"],
+              ["Ctrl+Shift+Tab", "Chuyển đơn trước"],
+              ["Esc", "Đóng popup"],
+            ].map(([key, desc]) => (
+              <div key={key} className="flex items-center justify-between py-0.5">
+                <kbd className="px-1.5 py-0.5 bg-muted border rounded text-[11px] font-mono">{key}</kbd>
+                <span className="text-foreground">{desc}</span>
+              </div>
+            ))}
           </div>
-        </div>
-      )}
+        </DialogContent>
+      </Dialog>
     </div>
   );
 }

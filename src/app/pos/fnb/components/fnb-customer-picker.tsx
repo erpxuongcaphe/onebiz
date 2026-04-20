@@ -127,9 +127,9 @@ export function FnbCustomerPicker({
       />
 
       <div className="fixed inset-x-0 top-14 mx-auto z-50 max-w-2xl px-4">
-        <div className="rounded-lg bg-white border border-slate-200 shadow-2xl overflow-hidden">
-          <div className="flex items-center gap-2 px-4 h-12 border-b border-slate-200">
-            <Icon name="search" size={16} className="text-slate-400 shrink-0" />
+        <div className="rounded-lg bg-white border border-border shadow-2xl overflow-hidden">
+          <div className="flex items-center gap-2 px-4 h-12 border-b border-border">
+            <Icon name="search" size={16} className="text-muted-foreground shrink-0" />
             <input
               ref={inputRef}
               type="text"
@@ -138,12 +138,12 @@ export function FnbCustomerPicker({
               onChange={(e) => setQuery(e.target.value)}
               onKeyDown={handleKeyDown}
               placeholder="Tìm tên / SĐT / mã khách hàng..."
-              className="flex-1 bg-transparent text-base outline-none placeholder:text-slate-400"
+              className="flex-1 bg-transparent text-base outline-none placeholder:text-muted-foreground"
             />
             {loading && (
-              <Icon name="progress_activity" size={16} className="animate-spin text-slate-400" />
+              <Icon name="progress_activity" size={16} className="animate-spin text-muted-foreground" />
             )}
-            <kbd className="font-mono text-[10px] bg-slate-100 border border-slate-200 rounded px-1.5 py-0.5 text-slate-500">
+            <kbd className="font-mono text-[10px] bg-muted border border-border rounded px-1.5 py-0.5 text-muted-foreground">
               Esc
             </kbd>
           </div>
@@ -155,18 +155,18 @@ export function FnbCustomerPicker({
               onMouseEnter={() => setHighlighted(0)}
               onClick={() => commitSelection(0)}
               className={cn(
-                "px-4 py-2.5 cursor-pointer border-b border-slate-100 flex items-center gap-3",
+                "px-4 py-2.5 cursor-pointer border-b border-border/40 flex items-center gap-3",
                 highlighted === 0 && "bg-primary-fixed"
               )}
             >
-              <div className="h-8 w-8 rounded-full bg-slate-100 flex items-center justify-center shrink-0">
-                <Icon name="person_add" size={16} className="text-slate-500" />
+              <div className="h-8 w-8 rounded-full bg-muted flex items-center justify-center shrink-0">
+                <Icon name="person_add" size={16} className="text-muted-foreground" />
               </div>
               <div className="flex-1">
-                <div className="text-sm font-medium text-slate-900">
+                <div className="text-sm font-medium text-foreground">
                   Khách lẻ
                 </div>
-                <div className="text-[11px] text-slate-500">
+                <div className="text-[11px] text-muted-foreground">
                   Không gán khách hàng
                 </div>
               </div>
@@ -181,7 +181,7 @@ export function FnbCustomerPicker({
                   onMouseEnter={() => setHighlighted(idx)}
                   onClick={() => commitSelection(idx)}
                   className={cn(
-                    "px-4 py-2.5 cursor-pointer border-b border-slate-100 last:border-0 flex items-center gap-3",
+                    "px-4 py-2.5 cursor-pointer border-b border-border/40 last:border-0 flex items-center gap-3",
                     highlighted === idx && "bg-primary-fixed"
                   )}
                 >
@@ -189,10 +189,10 @@ export function FnbCustomerPicker({
                     <Icon name="person" size={16} className="text-status-success" />
                   </div>
                   <div className="min-w-0 flex-1">
-                    <div className="text-sm font-medium text-slate-900 truncate">
+                    <div className="text-sm font-medium text-foreground truncate">
                       {c.name}
                     </div>
-                    <div className="text-[11px] text-slate-500">
+                    <div className="text-[11px] text-muted-foreground">
                       {c.phone || c.code || "—"}
                     </div>
                   </div>
@@ -206,22 +206,22 @@ export function FnbCustomerPicker({
             })}
           </ul>
 
-          <div className="flex items-center justify-between px-4 h-9 bg-slate-50 border-t border-slate-200 text-[11px] text-slate-500">
+          <div className="flex items-center justify-between px-4 h-9 bg-muted/50 border-t border-border text-[11px] text-muted-foreground">
             <div className="flex items-center gap-2.5">
               <span>
-                <kbd className="font-mono bg-white border border-slate-200 rounded px-1 text-[10px]">
+                <kbd className="font-mono bg-white border border-border rounded px-1 text-[10px]">
                   ↑ ↓
                 </kbd>{" "}
                 chọn
               </span>
               <span>
-                <kbd className="font-mono bg-white border border-slate-200 rounded px-1 text-[10px]">
+                <kbd className="font-mono bg-white border border-border rounded px-1 text-[10px]">
                   Enter
                 </kbd>{" "}
                 chọn KH
               </span>
               <span>
-                <kbd className="font-mono bg-white border border-slate-200 rounded px-1 text-[10px]">
+                <kbd className="font-mono bg-white border border-border rounded px-1 text-[10px]">
                   Esc
                 </kbd>{" "}
                 đóng
