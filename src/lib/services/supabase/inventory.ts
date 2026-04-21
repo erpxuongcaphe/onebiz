@@ -446,9 +446,16 @@ export async function applyInventoryCheck(checkId: string): Promise<void> {
   }
 
   // 3. Build movements — skip zero-diff rows (nothing to write)
+  //
+  // SECURITY: RECOMPUTE `difference` từ `actual_stock - system_stock` thay vì
+  // trust giá trị `it.difference` do client gửi. Kịch bản tấn công: user sửa
+  // devtools gửi `difference = 1000` dù actual=system → gây nhập kho ảo.
+  // Recompute ở đây đảm bảo delta luôn khớp với actual-system đã ghi ở bước tạo.
   const movements = items
     .map((it) => {
-      const diff = Number(it.difference ?? 0);
+      const actual = Number(it.actual_stock ?? 0);
+      const system = Number(it.system_stock ?? 0);
+      const diff = actual - system; // server-recomputed, KHÔNG dùng it.difference
       if (diff === 0) return null;
       return {
         productId: it.product_id,
