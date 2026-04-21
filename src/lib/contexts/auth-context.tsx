@@ -14,6 +14,7 @@ import { createClient } from "@/lib/supabase/client";
 import type { UserProfile, Tenant, Branch } from "@/lib/types";
 import type { User } from "@supabase/supabase-js";
 import { getUserPermissions } from "@/lib/services/supabase/roles";
+import { readDeviceBinding } from "@/lib/hooks/use-device-binding";
 
 // --- Types ---
 
@@ -140,20 +141,33 @@ export function AuthProvider({ children }: { children: ReactNode }) {
           }));
           setBranches(mappedBranches);
 
-          // Set current branch: localStorage > profile.branch_id > default
-          let storedBranchId: string | null = null;
-          try { storedBranchId = localStorage.getItem("active_branch_id"); } catch {}
+          // Device binding: nếu admin đã bind tablet này vào 1 chi nhánh cố
+          // định → force currentBranch về branch đó, bỏ qua localStorage +
+          // profile.branch_id. Chỉ nếu branch đã bind vẫn tồn tại trong tenant
+          // (tránh tablet zombie trỏ tới branch đã xoá).
+          const binding = readDeviceBinding();
+          const boundBranch = binding
+            ? mappedBranches.find((b) => b.id === binding.branchId)
+            : undefined;
 
-          if (storedBranchId === "__all__") {
-            // CEO previously selected "Tất cả chi nhánh"
-            setCurrentBranch(null);
+          if (boundBranch) {
+            setCurrentBranch(boundBranch);
           } else {
-            const currentBr =
-              mappedBranches.find((b) => b.id === storedBranchId) ??
-              mappedBranches.find((b) => b.id === profile.branch_id) ??
-              mappedBranches.find((b) => b.isDefault) ??
-              mappedBranches[0];
-            setCurrentBranch(currentBr);
+            // Set current branch: localStorage > profile.branch_id > default
+            let storedBranchId: string | null = null;
+            try { storedBranchId = localStorage.getItem("active_branch_id"); } catch {}
+
+            if (storedBranchId === "__all__") {
+              // CEO previously selected "Tất cả chi nhánh"
+              setCurrentBranch(null);
+            } else {
+              const currentBr =
+                mappedBranches.find((b) => b.id === storedBranchId) ??
+                mappedBranches.find((b) => b.id === profile.branch_id) ??
+                mappedBranches.find((b) => b.isDefault) ??
+                mappedBranches[0];
+              setCurrentBranch(currentBr);
+            }
           }
         }
       } catch {
@@ -225,6 +239,10 @@ export function AuthProvider({ children }: { children: ReactNode }) {
 
   const switchBranch = useCallback(
     (branchId: string | null) => {
+      // Device binding hard-stop — tablet đã khoá vào chi nhánh cụ thể,
+      // không cho đổi. Staff bấm dropdown cũng silent no-op (UI đã lock).
+      if (readDeviceBinding()) return;
+
       if (branchId === null) {
         // "Tất cả chi nhánh" — CEO view
         setCurrentBranch(null);

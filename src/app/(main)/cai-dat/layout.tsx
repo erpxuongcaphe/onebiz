@@ -22,6 +22,7 @@ const settingsNav: ModuleNavGroup[] = [
       { label: "Bán hàng", href: "/cai-dat/ban-hang", icon: "shopping_cart" },
       { label: "Hóa đơn", href: "/cai-dat/hoa-don", icon: "description" },
       { label: "In ấn", href: "/cai-dat/in-an", icon: "print" },
+      { label: "Thiết bị POS", href: "/cai-dat/thiet-bi-pos", icon: "lock" },
       { label: "Bảng giá", href: "/cai-dat/bang-gia", icon: "attach_money" },
       { label: "Khuyến mãi", href: "/cai-dat/khuyen-mai", icon: "sell" },
       { label: "Tích điểm", href: "/cai-dat/tich-diem", icon: "star" },

@@ -11,6 +11,7 @@ import {
 } from "@/components/ui/dropdown-menu";
 import { cn } from "@/lib/utils";
 import { Icon } from "@/components/ui/icon";
+import { useDeviceBinding } from "@/lib/hooks/use-device-binding";
 
 interface PosBranchSelectorProps {
   variant?: "light" | "dark";
@@ -34,8 +35,35 @@ export function PosBranchSelector({
   showCode = false,
 }: PosBranchSelectorProps) {
   const { branches, currentBranch, switchBranch } = useAuth();
+  const binding = useDeviceBinding();
 
   const isDark = variant === "dark";
+
+  // Device binding: render badge tĩnh (khoá) thay vì dropdown. Staff không đổi
+  // được — tránh lỡ tay switch sang quán khác giữa ca. Admin muốn đổi phải vào
+  // /cai-dat/thiet-bi-pos để unbind trước.
+  if (binding) {
+    return (
+      <div
+        className={cn(
+          "flex items-center gap-1.5 px-2.5 py-1.5 text-sm rounded-md shrink-0",
+          isDark
+            ? "bg-white/10 text-white ring-1 ring-white/15"
+            : "text-foreground bg-surface-container border border-border",
+        )}
+        title={`Thiết bị khoá: ${binding.deviceName} · Chi nhánh ${currentBranch?.name ?? "—"}`}
+      >
+        <Icon name="lock" size={14} className="shrink-0 opacity-80" />
+        <span className="truncate max-w-[240px] font-semibold tracking-tight">
+          {currentBranch
+            ? showCode && currentBranch.code
+              ? `${currentBranch.code} · ${currentBranch.name}`
+              : currentBranch.name
+            : binding.deviceName}
+        </span>
+      </div>
+    );
+  }
 
   // Filter theo type nếu prop có. Nếu hiện tại user đang ở branch không thuộc
   // filter (vd admin gán staff vào office rồi staff mở POS FnB), vẫn giữ branch
