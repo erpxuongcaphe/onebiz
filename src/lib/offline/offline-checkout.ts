@@ -7,6 +7,7 @@
 
 import { getDb, getMeta, setMeta } from "./db";
 import { enqueue } from "./sync-manager";
+import { withQuotaRecovery, isQuotaExceededError } from "./quota-manager";
 import {
   sendToKitchen,
   fnbPayment,
@@ -37,29 +38,40 @@ export async function offlineSendToKitchen(
   const localId = `local_${Date.now()}_${Math.random().toString(36).slice(2, 8)}`;
   const localOrderNumber = await getNextLocalOrderNumber();
 
-  // Store in pending_orders
-  const db = await getDb();
-  await db.put("pending_orders", {
-    localId,
-    tenantId: input.tenantId,
-    branchId: input.branchId,
-    localOrderNumber,
-    orderType: input.orderType,
-    tableId: input.tableId,
-    items: input.items,
-    note: input.note,
-    status: "pending_kitchen",
-    createdAt: new Date().toISOString(),
-    updatedAt: new Date().toISOString(),
-  });
+  try {
+    // Store in pending_orders — wrap quota recovery, đơn offline KHÔNG được mất.
+    await withQuotaRecovery(async () => {
+      const db = await getDb();
+      await db.put("pending_orders", {
+        localId,
+        tenantId: input.tenantId,
+        branchId: input.branchId,
+        localOrderNumber,
+        orderType: input.orderType,
+        tableId: input.tableId,
+        items: input.items,
+        note: input.note,
+        status: "pending_kitchen",
+        createdAt: new Date().toISOString(),
+        updatedAt: new Date().toISOString(),
+      });
+    });
 
-  // Enqueue for replay
-  await enqueue({
-    action: "sendToKitchen",
-    payload: input,
-    localId,
-    createdAt: new Date().toISOString(),
-  });
+    // Enqueue for replay
+    await enqueue({
+      action: "sendToKitchen",
+      payload: input,
+      localId,
+      createdAt: new Date().toISOString(),
+    });
+  } catch (err) {
+    if (isQuotaExceededError(err)) {
+      throw new Error(
+        "Hết dung lượng lưu trữ offline. Vui lòng kết nối mạng để đồng bộ đơn trước khi tạo đơn mới.",
+      );
+    }
+    throw err;
+  }
 
   return {
     kitchenOrderId: localId,
@@ -83,39 +95,50 @@ export async function offlineFnbPayment(
   const localId = input.kitchenOrderId; // may be a local ID
   const localInvoiceCode = await getNextLocalInvoiceNumber();
 
-  const db = await getDb();
-  const existingOrder = await db.get("pending_orders", localId);
+  try {
+    await withQuotaRecovery(async () => {
+      const db = await getDb();
+      const existingOrder = await db.get("pending_orders", localId);
 
-  if (existingOrder) {
-    await db.put("pending_orders", {
-      ...existingOrder,
-      status: "pending_payment",
-      paymentData: input,
-      updatedAt: new Date().toISOString(),
+      if (existingOrder) {
+        await db.put("pending_orders", {
+          ...existingOrder,
+          status: "pending_payment",
+          paymentData: input,
+          updatedAt: new Date().toISOString(),
+        });
+      } else {
+        // Payment for an order that was created online but paying offline
+        await db.put("pending_orders", {
+          localId,
+          tenantId: input.tenantId,
+          branchId: input.branchId,
+          localOrderNumber: "ONLINE",
+          orderType: "dine_in",
+          items: [],
+          status: "pending_payment",
+          paymentData: input,
+          createdAt: new Date().toISOString(),
+          updatedAt: new Date().toISOString(),
+        });
+      }
     });
-  } else {
-    // Payment for an order that was created online but paying offline
-    await db.put("pending_orders", {
+
+    // Enqueue for replay
+    await enqueue({
+      action: "fnbPayment",
+      payload: input,
       localId,
-      tenantId: input.tenantId,
-      branchId: input.branchId,
-      localOrderNumber: "ONLINE",
-      orderType: "dine_in",
-      items: [],
-      status: "pending_payment",
-      paymentData: input,
       createdAt: new Date().toISOString(),
-      updatedAt: new Date().toISOString(),
     });
+  } catch (err) {
+    if (isQuotaExceededError(err)) {
+      throw new Error(
+        "Hết dung lượng lưu trữ offline. Vui lòng kết nối mạng để đồng bộ trước khi thanh toán tiếp.",
+      );
+    }
+    throw err;
   }
-
-  // Enqueue for replay
-  await enqueue({
-    action: "fnbPayment",
-    payload: input,
-    localId,
-    createdAt: new Date().toISOString(),
-  });
 
   return {
     invoiceId: localId,
@@ -137,29 +160,40 @@ export async function offlineAddItemsToExistingOrder(
     return {};
   }
 
-  // Offline → update pending order + enqueue replay
-  const db = await getDb();
-  const existingOrder = await db.get("pending_orders", kitchenOrderId);
+  try {
+    // Offline → update pending order + enqueue replay
+    await withQuotaRecovery(async () => {
+      const db = await getDb();
+      const existingOrder = await db.get("pending_orders", kitchenOrderId);
 
-  if (existingOrder) {
-    // Append items to the offline order so UI can reflect new lines
-    const mergedItems = Array.isArray(existingOrder.items)
-      ? [...(existingOrder.items as unknown[]), ...items]
-      : [...items];
+      if (existingOrder) {
+        // Append items to the offline order so UI can reflect new lines
+        const mergedItems = Array.isArray(existingOrder.items)
+          ? [...(existingOrder.items as unknown[]), ...items]
+          : [...items];
 
-    await db.put("pending_orders", {
-      ...existingOrder,
-      items: mergedItems,
-      updatedAt: new Date().toISOString(),
+        await db.put("pending_orders", {
+          ...existingOrder,
+          items: mergedItems,
+          updatedAt: new Date().toISOString(),
+        });
+      }
     });
-  }
 
-  await enqueue({
-    action: "addItems",
-    payload: { kitchenOrderId, items },
-    localId: kitchenOrderId,
-    createdAt: new Date().toISOString(),
-  });
+    await enqueue({
+      action: "addItems",
+      payload: { kitchenOrderId, items },
+      localId: kitchenOrderId,
+      createdAt: new Date().toISOString(),
+    });
+  } catch (err) {
+    if (isQuotaExceededError(err)) {
+      throw new Error(
+        "Hết dung lượng lưu trữ offline. Vui lòng kết nối mạng để đồng bộ trước khi thêm món mới.",
+      );
+    }
+    throw err;
+  }
 
   return { isOffline: true };
 }
@@ -188,27 +222,38 @@ export async function offlinePosCheckout(
   const localId = `local_retail_${Date.now()}_${Math.random().toString(36).slice(2, 8)}`;
   const localInvoiceCode = await getNextLocalRetailInvoiceNumber();
 
-  const db = await getDb();
-  await db.put("pending_orders", {
-    localId,
-    tenantId: input.tenantId,
-    branchId: input.branchId,
-    localOrderNumber: localInvoiceCode,
-    orderType: "retail",
-    items: input.items,
-    note: input.note,
-    status: "pending_retail_checkout",
-    paymentData: input,
-    createdAt: new Date().toISOString(),
-    updatedAt: new Date().toISOString(),
-  });
+  try {
+    await withQuotaRecovery(async () => {
+      const db = await getDb();
+      await db.put("pending_orders", {
+        localId,
+        tenantId: input.tenantId,
+        branchId: input.branchId,
+        localOrderNumber: localInvoiceCode,
+        orderType: "retail",
+        items: input.items,
+        note: input.note,
+        status: "pending_retail_checkout",
+        paymentData: input,
+        createdAt: new Date().toISOString(),
+        updatedAt: new Date().toISOString(),
+      });
+    });
 
-  await enqueue({
-    action: "posCheckout",
-    payload: input,
-    localId,
-    createdAt: new Date().toISOString(),
-  });
+    await enqueue({
+      action: "posCheckout",
+      payload: input,
+      localId,
+      createdAt: new Date().toISOString(),
+    });
+  } catch (err) {
+    if (isQuotaExceededError(err)) {
+      throw new Error(
+        "Hết dung lượng lưu trữ offline. Vui lòng kết nối mạng để đồng bộ trước khi bán tiếp.",
+      );
+    }
+    throw err;
+  }
 
   return {
     invoiceId: localId,

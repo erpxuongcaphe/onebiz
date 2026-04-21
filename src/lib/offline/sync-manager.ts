@@ -7,6 +7,7 @@
  */
 
 import { getDb, type SyncQueueEntry, type SyncAction } from "./db";
+import { withQuotaRecovery, isQuotaExceededError } from "./quota-manager";
 import { sendToKitchen, fnbPayment, addItemsToExistingOrder } from "@/lib/services/supabase/fnb-checkout";
 import type { SendToKitchenInput, FnbPaymentInput } from "@/lib/services/supabase/fnb-checkout";
 import { posCheckout } from "@/lib/services/supabase/pos-checkout";
@@ -16,6 +17,9 @@ import type { PosCheckoutInput } from "@/lib/services/supabase/pos-checkout";
 
 const MAX_ATTEMPTS = 10;
 const MAX_BACKOFF_MS = 30_000;
+// Cap kích thước queue để tránh growth vô hạn nếu thiết bị offline lâu + sync fail.
+// Khi vượt ngưỡng, force-clear completed + oldest failed (giữ pending/syncing).
+const MAX_QUEUE_SIZE = 500;
 
 // ── Types ──
 
@@ -33,15 +37,67 @@ export interface SyncResult {
 export async function enqueue(
   entry: Omit<SyncQueueEntry, "id" | "status" | "attempts" | "lastAttempt" | "error">
 ): Promise<number> {
-  const db = await getDb();
-  const id = await db.add("sync_queue", {
-    ...entry,
-    status: "pending",
-    attempts: 0,
-    lastAttempt: null,
-    error: null,
-  } as SyncQueueEntry);
-  return id as number;
+  // Preemptive prune — tránh queue phình lớn trước khi kiểm tra quota.
+  await pruneIfOversized();
+
+  // withQuotaRecovery: nếu QuotaExceededError → cleanup menu_cache + completed
+  // entries rồi retry. Lần 2 fail sẽ throw — caller của enqueue (offlineCheckout)
+  // cần surface lỗi cho user: "Hết dung lượng lưu trữ, hãy sync trước khi
+  // tạo thêm đơn offline".
+  return withQuotaRecovery(async () => {
+    const db = await getDb();
+    const id = await db.add("sync_queue", {
+      ...entry,
+      status: "pending",
+      attempts: 0,
+      lastAttempt: null,
+      error: null,
+    } as SyncQueueEntry);
+    return id as number;
+  });
+}
+
+/**
+ * Nếu sync_queue vượt MAX_QUEUE_SIZE, xoá completed (đã sync xong, không cần replay)
+ * và oldest failed (đã retry đủ số lần, user chắc chắn biết qua UI). Giữ pending
+ * và syncing — đó là data chưa được ghi lên server.
+ */
+async function pruneIfOversized(): Promise<void> {
+  try {
+    const db = await getDb();
+    const count = await db.count("sync_queue");
+    if (count < MAX_QUEUE_SIZE) return;
+
+    const tx = db.transaction("sync_queue", "readwrite");
+    const store = tx.objectStore("sync_queue");
+
+    // 1. Xoá hết completed
+    const completedKeys = await store.index("by_status").getAllKeys("completed");
+    for (const key of completedKeys) {
+      await store.delete(key);
+    }
+
+    // 2. Nếu vẫn oversized, xoá failed cũ nhất cho đến khi size < MAX
+    const remaining = count - completedKeys.length;
+    if (remaining >= MAX_QUEUE_SIZE) {
+      const failed = await store.index("by_status").getAll("failed");
+      failed.sort((a, b) => (a.id ?? 0) - (b.id ?? 0));
+      const toRemove = remaining - MAX_QUEUE_SIZE + 1;
+      for (let i = 0; i < toRemove && i < failed.length; i++) {
+        const id = failed[i].id;
+        if (id != null) await store.delete(id);
+      }
+    }
+    await tx.done;
+  } catch (err) {
+    // Prune best-effort — không throw để không block enqueue. Nếu vẫn quota exceeded
+    // thì withQuotaRecovery sẽ catch ở vòng sau.
+    if (!isQuotaExceededError(err)) {
+      // log chỉ khi không phải quota (quota đã có cleanup riêng)
+      // eslint-disable-next-line no-console
+      console.warn("[sync-manager] prune failed:", err);
+    }
+  }
 }
 
 // ── Replay Queue ──

@@ -52,3 +52,21 @@ export {
 
 // Haptic feedback
 export { hapticTap, hapticSuccess, hapticError } from "./haptic";
+
+// Quota manager
+export {
+  isQuotaExceededError,
+  getStorageEstimate,
+  requestPersistentStorage,
+  performEmergencyCleanup,
+  withQuotaRecovery,
+  checkQuotaHealth,
+  formatBytes,
+  QUOTA_WARN_PERCENT,
+  QUOTA_CRITICAL_PERCENT,
+} from "./quota-manager";
+export type {
+  StorageEstimate,
+  EmergencyCleanupResult,
+  QuotaHealthCheck,
+} from "./quota-manager";
