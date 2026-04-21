@@ -2,7 +2,9 @@
  * F&B Checkout Service — 2-step flow (chuẩn KiotViet/Sapo)
  *
  * Bước 1: sendToKitchen()  — tạo kitchen_order + items, claim table, in ticket
- * Bước 2: fnbPayment()     — flatten items → posCheckout(source='fnb') → invoice + stock + cash
+ * Bước 2: fnbPayment()     — gọi RPC `fnb_complete_payment_atomic` bọc toàn bộ
+ *                             invoice + items + stock + cash + link + release table
+ *                             trong 1 transaction Postgres (all-or-nothing).
  *
  * Bổ sung: addItemsToExistingOrder() — gửi bếp bổ sung
  */
@@ -12,15 +14,10 @@ import {
   createKitchenOrder,
   getKitchenOrderById,
   addItemsToOrder,
-  linkInvoiceToOrder,
   type CreateKitchenOrderInput,
 } from "./kitchen-orders";
-import { claimTable, releaseTable } from "./fnb-tables";
-import {
-  posCheckout,
-  type PosCheckoutItem,
-  type PaymentBreakdownItem,
-} from "./pos-checkout";
+import { claimTable } from "./fnb-tables";
+import type { PaymentBreakdownItem } from "./pos-checkout";
 import type { ToppingAttachment, DeliveryPlatform } from "@/lib/types/fnb";
 
 // ============================================================
@@ -122,87 +119,42 @@ export async function sendToKitchen(input: SendToKitchenInput): Promise<SendToKi
 // ============================================================
 
 /**
- * Flatten kitchen_order items + toppings → invoice_items,
- * then call posCheckout(source='fnb') to create invoice + stock + cash.
+ * Atomic F&B payment: gọi RPC `fnb_complete_payment_atomic` bọc TOÀN BỘ
+ * (invoice + invoice_items + stock_movements + cash + link kitchen_order
+ * + release table) trong 1 transaction Postgres.
+ *
+ * Nếu bất kỳ bước nào fail (mạng drop, DB lỗi, constraint vi phạm) → rollback
+ * toàn bộ. Đây là fix CRITICAL cho lỗ hổng mất dữ liệu khi mạng gián đoạn
+ * giữa 4 round-trips của flow cũ.
  */
 export async function fnbPayment(input: FnbPaymentInput): Promise<FnbPaymentResult> {
-  // 1. Load kitchen order + items
-  const order = await getKitchenOrderById(input.kitchenOrderId);
+  const supabase = getClient();
 
-  if (order.status === "completed" || order.status === "cancelled") {
-    throw new Error(`Đơn bếp đã ${order.status === "completed" ? "thanh toán" : "hủy"}. Không thể thanh toán lại.`);
-  }
-
-  // 2. Flatten to PosCheckoutItems: each drink + each topping = separate line
-  const checkoutItems: PosCheckoutItem[] = [];
-
-  for (const item of order.items) {
-    // Main product line
-    checkoutItems.push({
-      productId: item.productId,
-      productName: item.variantLabel
-        ? `${item.productName} (${item.variantLabel})`
-        : item.productName,
-      quantity: item.quantity,
-      unitPrice: item.unitPrice,
-      discount: 0,
-    });
-
-    // Topping lines (each topping = separate invoice_item for stock tracking)
-    if (item.toppings && item.toppings.length > 0) {
-      for (const topping of item.toppings) {
-        if (topping.quantity <= 0) continue; // skip zero-qty toppings
-        checkoutItems.push({
-          productId: topping.productId,
-          productName: topping.name,
-          quantity: topping.quantity * item.quantity,
-          unitPrice: topping.price,
-          discount: 0,
-        });
-      }
-    }
-  }
-
-  // 3. Calculate totals (include order-level discount from kitchen order)
-  const subtotal = checkoutItems.reduce(
-    (sum, item) => sum + item.quantity * item.unitPrice,
-    0
-  );
-  const orderDiscount = order.discountAmount ?? 0;
-  const inputDiscount = input.discountAmount ?? 0;
-  const discountAmount = orderDiscount + inputDiscount;
-  const deliveryFee = order.deliveryFee ?? 0;
-  const total = subtotal - discountAmount + deliveryFee;
-
-  // 4. Call posCheckout with source='fnb'
-  const result = await posCheckout({
-    tenantId: input.tenantId,
-    branchId: input.branchId,
-    createdBy: input.createdBy,
-    customerId: input.customerId,
-    customerName: input.customerName || "Khách lẻ",
-    items: checkoutItems,
-    paymentMethod: input.paymentMethod,
-    paymentBreakdown: input.paymentBreakdown,
-    subtotal,
-    discountAmount,
-    total,
-    paid: input.paid,
-    note: input.note ?? `F&B - ${order.orderNumber}`,
-    source: "fnb",
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  const { data, error } = await (supabase.rpc as any)("fnb_complete_payment_atomic", {
+    p_kitchen_order_id: input.kitchenOrderId,
+    p_customer_id: input.customerId ?? null,
+    p_customer_name: input.customerName || "Khách lẻ",
+    p_payment_method: input.paymentMethod,
+    p_payment_breakdown: input.paymentBreakdown ?? null,
+    p_paid: input.paid,
+    p_discount_amount: input.discountAmount ?? 0,
+    p_note: input.note ?? null,
+    p_created_by: input.createdBy,
   });
 
-  // 5. Link invoice to kitchen order + mark completed
-  await linkInvoiceToOrder(input.kitchenOrderId, result.invoiceId);
+  if (error) handleError(error, "fnbPayment:atomic_rpc");
+  if (!data) throw new Error("Không nhận được phản hồi từ server khi thanh toán.");
 
-  // 6. Release table if dine_in
-  if (order.tableId) {
-    await releaseTable(order.tableId);
+  // RPC returns jsonb { invoice_id, invoice_code, total, paid, debt }
+  const result = data as { invoice_id: string; invoice_code: string };
+  if (!result.invoice_id || !result.invoice_code) {
+    throw new Error("Phản hồi thanh toán thiếu thông tin hoá đơn.");
   }
 
   return {
-    invoiceId: result.invoiceId,
-    invoiceCode: result.invoiceCode,
+    invoiceId: result.invoice_id,
+    invoiceCode: result.invoice_code,
   };
 }
 

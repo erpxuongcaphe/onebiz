@@ -37,6 +37,7 @@ import {
   updatePurchaseOrderStatus,
   canTransitionPurchaseStatus,
   getPurchaseOrderItems,
+  getPaymentHistory,
   type PurchaseOrderItemRow,
 } from "@/lib/services";
 import type { PurchaseOrder, PurchaseOrderStatus } from "@/lib/types";
@@ -66,6 +67,126 @@ function useStarredSet() {
       return next;
     });
   return { starred, toggle };
+}
+
+/* ------------------------------------------------------------------ */
+/*  Payment history tab                                                */
+/* ------------------------------------------------------------------ */
+type PaymentHistoryRow = Awaited<ReturnType<typeof getPaymentHistory>>[number];
+
+function PaymentHistoryTab({ orderId }: { orderId: string }) {
+  const [rows, setRows] = useState<PaymentHistoryRow[]>([]);
+  const [loading, setLoading] = useState(true);
+  const [error, setError] = useState<string | null>(null);
+
+  useEffect(() => {
+    let cancelled = false;
+    setLoading(true);
+    setError(null);
+    getPaymentHistory("purchase_order", orderId)
+      .then((data) => {
+        if (!cancelled) setRows(data);
+      })
+      .catch((err) => {
+        if (!cancelled)
+          setError(err instanceof Error ? err.message : "Không tải được lịch sử thanh toán");
+      })
+      .finally(() => {
+        if (!cancelled) setLoading(false);
+      });
+    return () => {
+      cancelled = true;
+    };
+  }, [orderId]);
+
+  if (loading) {
+    return (
+      <div className="flex items-center justify-center py-12 text-sm text-muted-foreground gap-2">
+        <Icon name="progress_activity" size={18} className="animate-spin" />
+        Đang tải lịch sử thanh toán...
+      </div>
+    );
+  }
+
+  if (error) {
+    return (
+      <div className="flex items-center justify-center py-12 text-sm text-status-error gap-2">
+        <Icon name="error" size={18} />
+        {error}
+      </div>
+    );
+  }
+
+  if (rows.length === 0) {
+    return (
+      <div className="text-sm text-muted-foreground py-8 text-center">
+        Chưa có lịch sử thanh toán
+      </div>
+    );
+  }
+
+  const totalPaid = rows.reduce((sum, r) => sum + Number(r.amount ?? 0), 0);
+  const paymentMethodLabel: Record<string, string> = {
+    cash: "Tiền mặt",
+    transfer: "Chuyển khoản",
+    card: "Thẻ",
+  };
+
+  return (
+    <div className="space-y-3">
+      {/* Summary */}
+      <div className="flex items-center justify-between rounded-xl bg-surface-container px-3 py-2">
+        <span className="text-xs text-muted-foreground">
+          {rows.length} lần thanh toán
+        </span>
+        <span className="text-sm font-semibold text-primary tabular-nums">
+          Tổng đã trả: {formatCurrency(totalPaid)}
+        </span>
+      </div>
+
+      {/* List */}
+      <div className="border rounded-xl overflow-hidden">
+        <table className="w-full text-xs">
+          <thead className="bg-surface-container-low border-b">
+            <tr>
+              <th className="text-left px-3 py-2 font-medium uppercase tracking-wider text-[10px]">
+                Mã phiếu
+              </th>
+              <th className="text-left px-3 py-2 font-medium uppercase tracking-wider text-[10px]">
+                Ngày
+              </th>
+              <th className="text-left px-3 py-2 font-medium uppercase tracking-wider text-[10px]">
+                Phương thức
+              </th>
+              <th className="text-right px-3 py-2 font-medium uppercase tracking-wider text-[10px]">
+                Số tiền
+              </th>
+              <th className="text-left px-3 py-2 font-medium uppercase tracking-wider text-[10px]">
+                Ghi chú
+              </th>
+            </tr>
+          </thead>
+          <tbody>
+            {rows.map((r) => (
+              <tr key={r.id} className="border-b last:border-0 hover:bg-surface-container-low/60">
+                <td className="px-3 py-2 font-mono text-primary">{r.code}</td>
+                <td className="px-3 py-2 text-muted-foreground">{formatDate(r.date)}</td>
+                <td className="px-3 py-2">
+                  {paymentMethodLabel[r.paymentMethod ?? ""] ?? r.paymentMethod ?? "—"}
+                </td>
+                <td className="px-3 py-2 text-right font-mono font-semibold text-status-error">
+                  -{formatCurrency(Number(r.amount ?? 0))}
+                </td>
+                <td className="px-3 py-2 text-muted-foreground truncate max-w-[220px]">
+                  {r.note ?? "—"}
+                </td>
+              </tr>
+            ))}
+          </tbody>
+        </table>
+      </div>
+    </div>
+  );
 }
 
 /* ------------------------------------------------------------------ */
@@ -239,11 +360,7 @@ function PurchaseOrderDetail({
     {
       id: "payment_history",
       label: "Lịch sử thanh toán",
-      content: (
-        <div className="text-sm text-muted-foreground py-4 text-center">
-          Chưa có lịch sử thanh toán
-        </div>
-      ),
+      content: <PaymentHistoryTab orderId={order.id} />,
     },
   ];
 

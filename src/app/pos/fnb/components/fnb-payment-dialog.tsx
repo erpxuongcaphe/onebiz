@@ -61,14 +61,21 @@ export function FnbPaymentDialog({
   const [transferInput, setTransferInput] = useState("");
   const [cardInput, setCardInput] = useState("");
   const [customerName, setCustomerName] = useState("Khách lẻ");
+  const [allowDebt, setAllowDebt] = useState(false);
 
   useEffect(() => {
     if (open) {
       setMethod("cash");
       setCashInput(""); setTransferInput(""); setCardInput("");
       setCustomerName("Khách lẻ");
+      setAllowDebt(false);
     }
   }, [open]);
+
+  // Reset allowDebt when switching method (fresh validation each time)
+  useEffect(() => {
+    setAllowDebt(false);
+  }, [method]);
 
   const cashAmount = parseAmount(cashInput);
   const transferAmount = parseAmount(transferInput);
@@ -81,7 +88,15 @@ export function FnbPaymentDialog({
   }, [method, cashAmount, transferAmount, cardAmount, total]);
 
   const change = Math.max(0, totalPaid - total);
-  const canConfirm = totalPaid >= total;
+  const debt = Math.max(0, total - totalPaid);
+  const isFullyPaid = totalPaid >= total;
+  // For mixed: each row must be ≥ 0 and at least one method used
+  const mixedHasAnyAmount = method === "mixed" ? (cashAmount + transferAmount + cardAmount) > 0 : true;
+  // Allow confirm if: fully paid OR user explicitly ticked "Ghi nợ"
+  const canConfirm =
+    mixedHasAnyAmount &&
+    totalPaid > 0 &&
+    (isFullyPaid || allowDebt);
 
   const handleConfirm = () => {
     const payload: FnbPaymentConfirmPayload = {
@@ -144,7 +159,15 @@ export function FnbPaymentDialog({
               <Label className="text-sm">{method === "mixed" ? "Tiền mặt" : "Tiền khách đưa"}</Label>
               <Input type="text" inputMode="numeric" placeholder="0"
                 value={cashInput} onChange={(e) => setCashInput(e.target.value)}
-                autoFocus={method === "cash"} />
+                autoFocus={method === "cash"}
+                className={cn(
+                  "tabular-nums",
+                  method === "cash" && cashAmount > 0 && cashAmount >= total
+                    && "border-status-success/40 bg-status-success/5",
+                  method === "cash" && cashAmount > 0 && cashAmount < total
+                    && "border-status-warning/40 bg-status-warning/5",
+                )}
+              />
               {/* Denomination quick buttons */}
               <div className="flex flex-wrap gap-2 sm:gap-1.5">
                 <button type="button"
@@ -169,24 +192,84 @@ export function FnbPaymentDialog({
               <div className="space-y-1.5">
                 <Label className="text-sm">Chuyển khoản</Label>
                 <Input type="text" inputMode="numeric" placeholder="0"
-                  value={transferInput} onChange={(e) => setTransferInput(e.target.value)} />
+                  value={transferInput} onChange={(e) => setTransferInput(e.target.value)}
+                  className="tabular-nums" />
               </div>
               <div className="space-y-1.5">
                 <Label className="text-sm">Thẻ</Label>
                 <Input type="text" inputMode="numeric" placeholder="0"
-                  value={cardInput} onChange={(e) => setCardInput(e.target.value)} />
+                  value={cardInput} onChange={(e) => setCardInput(e.target.value)}
+                  className="tabular-nums" />
+              </div>
+              {/* Mixed breakdown running total */}
+              <div className="rounded-lg border bg-surface-container px-3 py-2 space-y-1">
+                <div className="flex items-center justify-between text-xs">
+                  <span className="font-medium text-muted-foreground">Tổng đã nhập</span>
+                  <span
+                    className={cn(
+                      "font-bold tabular-nums",
+                      isFullyPaid ? "text-status-success" : "text-status-warning",
+                    )}
+                  >
+                    {formatCurrency(totalPaid)} / {formatCurrency(total)} ₫
+                  </span>
+                </div>
+                {totalPaid > 0 && totalPaid < total && (
+                  <p className="text-[11px] text-status-warning">
+                    Còn thiếu {formatCurrency(total - totalPaid)} ₫
+                  </p>
+                )}
+                {totalPaid > total && (
+                  <p className="text-[11px] text-status-success">
+                    Thừa {formatCurrency(totalPaid - total)} ₫
+                  </p>
+                )}
               </div>
             </>
           )}
 
-          {/* Change display */}
+          {/* Info display: transfer/card auto-fills */}
+          {(method === "transfer" || method === "card") && (
+            <div className="rounded-lg bg-surface-container px-3 py-2 text-xs text-muted-foreground flex items-center gap-2">
+              <Icon name="info" size={14} />
+              <span>Hệ thống tự ghi nhận số tiền bằng tổng hoá đơn.</span>
+            </div>
+          )}
+
+          {/* Change / Debt display */}
           {(method === "cash" || method === "mixed") && totalPaid > 0 && (
             <div className="flex items-center justify-between rounded-lg bg-muted px-3 py-2 text-sm">
-              <span className="text-muted-foreground">Tiền thừa</span>
-              <span className={cn("font-semibold", change > 0 && "text-status-success")}>
-                {formatCurrency(change)}đ
+              <span className="text-muted-foreground">
+                {debt > 0 ? "Còn nợ" : "Tiền thừa"}
+              </span>
+              <span
+                className={cn(
+                  "font-semibold tabular-nums",
+                  debt > 0
+                    ? "text-status-warning"
+                    : change > 0
+                      ? "text-status-success"
+                      : "text-foreground",
+                )}
+              >
+                {formatCurrency(debt > 0 ? debt : change)}đ
               </span>
             </div>
+          )}
+
+          {/* Debt opt-in (ghi nợ) */}
+          {!isFullyPaid && totalPaid > 0 && (
+            <label className="flex items-center gap-2 rounded-lg border border-status-warning/30 bg-status-warning/5 px-3 py-2 text-xs cursor-pointer">
+              <input
+                type="checkbox"
+                checked={allowDebt}
+                onChange={(e) => setAllowDebt(e.target.checked)}
+                className="h-4 w-4 accent-primary"
+              />
+              <span>
+                Ghi nợ {formatCurrency(total - totalPaid)}₫ — xác nhận thanh toán thiếu
+              </span>
+            </label>
           )}
 
           {/* Customer name */}

@@ -32,6 +32,7 @@ export {
   getFailedCount,
   getQueueEntries,
   retryFailedEntries,
+  retryQueueEntry,
   deleteQueueEntry,
   clearCompleted,
 } from "./sync-manager";

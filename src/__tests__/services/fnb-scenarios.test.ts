@@ -63,10 +63,16 @@ function createChain(resolvedValue: unknown = { data: null, error: null }) {
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
 let mockFromHandler: (table: string) => any;
 
+// RPC response overrides per test — keyed by fn name
+let rpcResponseOverrides: Record<string, { data: unknown; error: unknown }> = {};
+// Track what kitchen_order_ids received atomic payment calls (replaces releaseTableMock assertions)
+const atomicPaymentCalls: { kitchenOrderId: string; params: Record<string, unknown> }[] = [];
+
 vi.mock("@/lib/services/supabase/base", () => ({
   getClient: () => ({
     from: vi.fn((table: string) => mockFromHandler(table)),
     rpc: vi.fn((fn: string, args?: Record<string, unknown>) => {
+      if (rpcResponseOverrides[fn]) return rpcResponseOverrides[fn];
       if (fn === "next_code") {
         nextCodeCounter++;
         const entity = (args?.p_entity_type as string) ?? "inv";
@@ -75,6 +81,20 @@ vi.mock("@/lib/services/supabase/base", () => ({
       }
       if (fn === "increment_product_stock" || fn === "upsert_branch_stock" || fn === "allocate_lots_fifo") {
         return { data: null, error: null };
+      }
+      if (fn === "fnb_complete_payment_atomic") {
+        const koId = (args?.p_kitchen_order_id as string) ?? "ko-1";
+        atomicPaymentCalls.push({ kitchenOrderId: koId, params: args ?? {} });
+        return {
+          data: {
+            invoice_id: "inv-1",
+            invoice_code: "HD00001",
+            total: 35000,
+            paid: args?.p_paid ?? 35000,
+            debt: 0,
+          },
+          error: null,
+        };
       }
       return { data: null, error: null };
     }),
@@ -180,6 +200,8 @@ beforeEach(() => {
   insertCalls.length = 0;
   updateCalls.length = 0;
   deleteCalls.length = 0;
+  atomicPaymentCalls.length = 0;
+  rpcResponseOverrides = {};
   nextCodeCounter = 0;
   claimTableMock.mockReset();
   releaseTableMock.mockReset();
@@ -237,7 +259,9 @@ describe("Scenario: Basic dine-in flow (Bàn 5, CF Sữa Đá + topping)", () =>
     });
 
     expect(result.invoiceId).toBe("inv-1");
-    expect(releaseTableMock).toHaveBeenCalledWith("table-5");
+    // Release table now happens atomically inside RPC — verify RPC was called
+    expect(atomicPaymentCalls.length).toBe(1);
+    expect(atomicPaymentCalls[0].kitchenOrderId).toBe("ko-1");
   });
 });
 
@@ -680,25 +704,32 @@ describe("Scenario: Hoàn trả hoá đơn (void)", () => {
 
 describe("Scenario: Edge cases", () => {
   it("rejects payment on already completed order", async () => {
-    setupPaymentMocks({ status: "completed", invoice_id: "inv-old" });
+    // RPC raises when kitchen_order already paid
+    rpcResponseOverrides["fnb_complete_payment_atomic"] = {
+      data: null,
+      error: { message: "Kitchen order ko-1 already paid (invoice_id=inv-old)" },
+    };
 
     await expect(
       fnbPayment({
         kitchenOrderId: "ko-1", ...CTX,
         customerName: "Khách lẻ", paymentMethod: "cash", paid: 35000,
       })
-    ).rejects.toThrow("thanh toán");
+    ).rejects.toThrow("already paid");
   });
 
   it("rejects payment on cancelled order", async () => {
-    setupPaymentMocks({ status: "cancelled" });
+    rpcResponseOverrides["fnb_complete_payment_atomic"] = {
+      data: null,
+      error: { message: "Kitchen order ko-1 was cancelled — cannot pay" },
+    };
 
     await expect(
       fnbPayment({
         kitchenOrderId: "ko-1", ...CTX,
         customerName: "Khách lẻ", paymentMethod: "cash", paid: 35000,
       })
-    ).rejects.toThrow("hủy");
+    ).rejects.toThrow("cancelled");
   });
 
   it("handles topping-heavy order (3 toppings per drink)", async () => {

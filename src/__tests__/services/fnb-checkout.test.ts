@@ -4,6 +4,10 @@ import { describe, it, expect, vi, beforeEach } from "vitest";
 
 const insertCalls: { table: string; data: unknown }[] = [];
 let nextCodeCounter = 0;
+const rpcCalls: { fn: string; params: unknown }[] = [];
+
+// RPC response overrides per test — keyed by fn name
+let rpcResponses: Record<string, { data: unknown; error: unknown }> = {};
 
 function createChain(resolvedValue: unknown = { data: null, error: null }) {
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
@@ -38,13 +42,27 @@ let mockFromHandler: (table: string) => any;
 vi.mock("@/lib/services/supabase/base", () => ({
   getClient: () => ({
     from: vi.fn((table: string) => mockFromHandler(table)),
-    rpc: vi.fn((fn: string) => {
+    rpc: vi.fn((fn: string, params?: unknown) => {
+      rpcCalls.push({ fn, params });
+      if (rpcResponses[fn]) return rpcResponses[fn];
       if (fn === "next_code") {
         nextCodeCounter++;
         return { data: `KB${String(nextCodeCounter).padStart(5, "0")}`, error: null };
       }
       if (fn === "increment_product_stock" || fn === "upsert_branch_stock" || fn === "allocate_lots_fifo") {
         return { data: null, error: null };
+      }
+      if (fn === "fnb_complete_payment_atomic") {
+        return {
+          data: {
+            invoice_id: "inv-1",
+            invoice_code: "HD00001",
+            total: 51000,
+            paid: 51000,
+            debt: 0,
+          },
+          error: null,
+        };
       }
       return { data: null, error: null };
     }),
@@ -54,12 +72,11 @@ vi.mock("@/lib/services/supabase/base", () => ({
   },
 }));
 
-// Mock fnb-tables (claimTable, releaseTable)
+// Mock fnb-tables (claimTable still used by sendToKitchen)
 const claimTableMock = vi.fn();
-const releaseTableMock = vi.fn();
 vi.mock("@/lib/services/supabase/fnb-tables", () => ({
   claimTable: (...args: unknown[]) => claimTableMock(...args),
-  releaseTable: (...args: unknown[]) => releaseTableMock(...args),
+  releaseTable: vi.fn(),
   markTableAvailable: vi.fn(),
 }));
 
@@ -76,11 +93,11 @@ const CTX = {
 
 beforeEach(() => {
   insertCalls.length = 0;
+  rpcCalls.length = 0;
+  rpcResponses = {};
   nextCodeCounter = 0;
   claimTableMock.mockReset();
-  releaseTableMock.mockReset();
   claimTableMock.mockResolvedValue({ id: "table-1", status: "occupied" });
-  releaseTableMock.mockResolvedValue(undefined);
 
   // Default mock: kitchen_orders insert returns an order, items insert succeeds
   mockFromHandler = (table: string) => {
@@ -103,18 +120,6 @@ beforeEach(() => {
       });
     }
     if (table === "kitchen_order_items") {
-      return createChain({ data: null, error: null });
-    }
-    if (table === "invoices") {
-      return createChain({
-        data: { id: "inv-1", code: "HD00001" },
-        error: null,
-      });
-    }
-    if (table === "invoice_items" || table === "stock_movements" || table === "cash_transactions") {
-      return createChain({ data: null, error: null });
-    }
-    if (table === "restaurant_tables") {
       return createChain({ data: null, error: null });
     }
     return createChain();
@@ -223,141 +228,82 @@ describe("sendToKitchen", () => {
   });
 });
 
-describe("fnbPayment", () => {
-  beforeEach(() => {
-    // Mock getKitchenOrderById — returns order with items + toppings
-    mockFromHandler = (table: string) => {
-      if (table === "kitchen_orders") {
-        return createChain({
-          data: {
-            id: "ko-1",
-            order_number: "KB00001",
-            tenant_id: CTX.tenantId,
-            branch_id: CTX.branchId,
-            table_id: "table-5",
-            invoice_id: null,
-            order_type: "dine_in",
-            status: "pending",
-            note: null,
-            created_by: CTX.createdBy,
-            created_at: new Date().toISOString(),
-            updated_at: new Date().toISOString(),
-            restaurant_tables: { name: "Bàn 5" },
-          },
-          error: null,
-        });
-      }
-      if (table === "kitchen_order_items") {
-        return createChain({
-          data: [
-            {
-              id: "koi-1",
-              kitchen_order_id: "ko-1",
-              product_id: "p1",
-              product_name: "Cà Phê Sữa Đá",
-              variant_id: null,
-              variant_label: null,
-              quantity: 1,
-              unit_price: 35000,
-              note: "ít đá",
-              toppings: [
-                { productId: "tp1", name: "Trân châu", quantity: 1, price: 8000 },
-              ],
-              status: "ready",
-              started_at: null,
-              completed_at: null,
-            },
-            {
-              id: "koi-2",
-              kitchen_order_id: "ko-1",
-              product_id: "p2",
-              product_name: "Hồng Trà Đào",
-              variant_id: null,
-              variant_label: null,
-              quantity: 2,
-              unit_price: 29000,
-              note: null,
-              toppings: [],
-              status: "ready",
-              started_at: null,
-              completed_at: null,
-            },
-          ],
-          error: null,
-        });
-      }
-      if (table === "invoices") {
-        return createChain({
-          data: { id: "inv-1", code: "HD00001" },
-          error: null,
-        });
-      }
-      if (
-        table === "invoice_items" ||
-        table === "stock_movements" ||
-        table === "cash_transactions" ||
-        table === "restaurant_tables"
-      ) {
-        return createChain({ data: null, error: null });
-      }
-      return createChain();
-    };
-  });
+// ============================================================
+// fnbPayment — Atomic RPC tests
+// ============================================================
+//
+// fnbPayment() now delegates to `fnb_complete_payment_atomic` Postgres RPC.
+// Business logic (flatten items + toppings, create invoice, decrement stock,
+// cash_transactions, release table) is tested at DB layer via integration.
+// Here we only verify the TS wrapper: correct param mapping + response handling.
 
-  it("flattens drink + toppings into invoice items", async () => {
+describe("fnbPayment (atomic RPC wrapper)", () => {
+  it("calls fnb_complete_payment_atomic RPC with correct params", async () => {
     const result = await fnbPayment({
       kitchenOrderId: "ko-1",
       ...CTX,
-      customerName: "Khách lẻ",
+      customerId: "c1",
+      customerName: "Nguyễn Văn A",
       paymentMethod: "cash",
-      paid: 101000,
+      paid: 50000,
+      discountAmount: 5000,
+      note: "ghi chú",
     });
 
     expect(result.invoiceId).toBe("inv-1");
     expect(result.invoiceCode).toBe("HD00001");
 
-    // Should have 3 invoice items: CF Sữa Đá, Trân châu, Hồng Trà Đào
-    // (topping = separate line item for stock tracking)
+    const rpcCall = rpcCalls.find((c) => c.fn === "fnb_complete_payment_atomic");
+    expect(rpcCall).toBeDefined();
+    const params = rpcCall!.params as Record<string, unknown>;
+    expect(params.p_kitchen_order_id).toBe("ko-1");
+    expect(params.p_customer_id).toBe("c1");
+    expect(params.p_customer_name).toBe("Nguyễn Văn A");
+    expect(params.p_payment_method).toBe("cash");
+    expect(params.p_paid).toBe(50000);
+    expect(params.p_discount_amount).toBe(5000);
+    expect(params.p_note).toBe("ghi chú");
+    expect(params.p_created_by).toBe("u1");
   });
 
-  it("releases table after payment", async () => {
+  it("passes payment_breakdown for mixed payment", async () => {
+    const breakdown = [
+      { method: "cash" as const, amount: 30000 },
+      { method: "transfer" as const, amount: 20000 },
+    ];
     await fnbPayment({
       kitchenOrderId: "ko-1",
       ...CTX,
       customerName: "Khách lẻ",
-      paymentMethod: "cash",
-      paid: 101000,
+      paymentMethod: "mixed",
+      paymentBreakdown: breakdown,
+      paid: 50000,
     });
 
-    expect(releaseTableMock).toHaveBeenCalledWith("table-5");
+    const rpcCall = rpcCalls.find((c) => c.fn === "fnb_complete_payment_atomic");
+    const params = rpcCall!.params as Record<string, unknown>;
+    expect(params.p_payment_method).toBe("mixed");
+    expect(params.p_payment_breakdown).toEqual(breakdown);
   });
 
-  it("rejects payment for completed orders", async () => {
-    // Override to return completed status
-    mockFromHandler = (table: string) => {
-      if (table === "kitchen_orders") {
-        return createChain({
-          data: {
-            id: "ko-1",
-            order_number: "KB00001",
-            tenant_id: CTX.tenantId,
-            branch_id: CTX.branchId,
-            table_id: null,
-            invoice_id: "inv-old",
-            order_type: "takeaway",
-            status: "completed",
-            note: null,
-            created_by: CTX.createdBy,
-            created_at: new Date().toISOString(),
-            updated_at: new Date().toISOString(),
-          },
-          error: null,
-        });
-      }
-      if (table === "kitchen_order_items") {
-        return createChain({ data: [], error: null });
-      }
-      return createChain();
+  it("uses default customer name when empty string", async () => {
+    await fnbPayment({
+      kitchenOrderId: "ko-1",
+      ...CTX,
+      customerName: "",
+      paymentMethod: "cash",
+      paid: 50000,
+    });
+
+    const rpcCall = rpcCalls.find((c) => c.fn === "fnb_complete_payment_atomic");
+    const params = rpcCall!.params as Record<string, unknown>;
+    expect(params.p_customer_name).toBe("Khách lẻ");
+  });
+
+  it("throws khi RPC trả lỗi (already paid)", async () => {
+    rpcResponses["fnb_complete_payment_atomic"] = {
+      data: null,
+      error: { message: "Kitchen order ko-1 already paid (invoice_id=inv-old)" },
     };
 
     await expect(
@@ -368,83 +314,37 @@ describe("fnbPayment", () => {
         paymentMethod: "cash",
         paid: 50000,
       })
-    ).rejects.toThrow("thanh toán");
+    ).rejects.toThrow("already paid");
   });
-});
 
-describe("table lifecycle", () => {
-  it("table: available → occupied (gửi bếp) → cleaning (thanh toán)", async () => {
-    // Step 1: Send to kitchen → claims table
-    await sendToKitchen({
-      ...CTX,
-      orderType: "dine_in",
-      tableId: "table-3",
-      items: [
-        { productId: "p1", productName: "Espresso", quantity: 1, unitPrice: 40000 },
-      ],
-    });
+  it("throws khi RPC trả response rỗng", async () => {
+    rpcResponses["fnb_complete_payment_atomic"] = { data: null, error: null };
 
-    expect(claimTableMock).toHaveBeenCalledWith("table-3", "ko-1");
+    await expect(
+      fnbPayment({
+        kitchenOrderId: "ko-1",
+        ...CTX,
+        customerName: "Khách lẻ",
+        paymentMethod: "cash",
+        paid: 50000,
+      })
+    ).rejects.toThrow("phản hồi");
+  });
 
-    // Step 2: Payment → releases table
-    // Reset for payment mock
-    mockFromHandler = (table: string) => {
-      if (table === "kitchen_orders") {
-        return createChain({
-          data: {
-            id: "ko-1",
-            order_number: "KB00001",
-            tenant_id: CTX.tenantId,
-            branch_id: CTX.branchId,
-            table_id: "table-3",
-            invoice_id: null,
-            order_type: "dine_in",
-            status: "served",
-            note: null,
-            created_by: CTX.createdBy,
-            created_at: new Date().toISOString(),
-            updated_at: new Date().toISOString(),
-            restaurant_tables: { name: "Bàn 3" },
-          },
-          error: null,
-        });
-      }
-      if (table === "kitchen_order_items") {
-        return createChain({
-          data: [
-            {
-              id: "koi-1",
-              kitchen_order_id: "ko-1",
-              product_id: "p1",
-              product_name: "Espresso",
-              variant_id: null,
-              variant_label: null,
-              quantity: 1,
-              unit_price: 40000,
-              note: null,
-              toppings: [],
-              status: "ready",
-              started_at: null,
-              completed_at: null,
-            },
-          ],
-          error: null,
-        });
-      }
-      if (table === "invoices") {
-        return createChain({ data: { id: "inv-2", code: "HD00002" }, error: null });
-      }
-      return createChain({ data: null, error: null });
+  it("throws khi RPC response thiếu invoice_id", async () => {
+    rpcResponses["fnb_complete_payment_atomic"] = {
+      data: { invoice_code: "HD00001" }, // missing invoice_id
+      error: null,
     };
 
-    await fnbPayment({
-      kitchenOrderId: "ko-1",
-      ...CTX,
-      customerName: "Khách lẻ",
-      paymentMethod: "transfer",
-      paid: 40000,
-    });
-
-    expect(releaseTableMock).toHaveBeenCalledWith("table-3");
+    await expect(
+      fnbPayment({
+        kitchenOrderId: "ko-1",
+        ...CTX,
+        customerName: "Khách lẻ",
+        paymentMethod: "cash",
+        paid: 50000,
+      })
+    ).rejects.toThrow("thiếu thông tin");
   });
 });

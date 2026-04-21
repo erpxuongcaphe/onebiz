@@ -26,6 +26,7 @@ import {
   deleteQueueEntry,
   getQueueEntries,
   retryFailedEntries,
+  retryQueueEntry,
   type SyncQueueEntry,
   type NetworkStatus,
 } from "@/lib/offline";
@@ -153,6 +154,38 @@ export function SyncQueueDrawer({ open, onOpenChange, status }: SyncQueueDrawerP
     }
   };
 
+  const handleRetryOne = async (id?: number) => {
+    if (!id) return;
+    if (!status.isOnline) {
+      toast({
+        title: "Đang ngoại tuyến",
+        description: "Hãy kết nối mạng rồi thử lại.",
+        variant: "warning",
+      });
+      return;
+    }
+    try {
+      const reset = await retryQueueEntry(id);
+      if (!reset) {
+        toast({
+          title: "Không thể thử lại",
+          description: "Mục này đang đồng bộ hoặc đã hoàn tất.",
+          variant: "warning",
+        });
+        return;
+      }
+      await status.syncNow();
+      await load();
+      toast({ title: "Đã thử lại 1 mục", variant: "success" });
+    } catch (err) {
+      toast({
+        title: "Thử lại thất bại",
+        description: err instanceof Error ? err.message : "Lỗi không xác định",
+        variant: "error",
+      });
+    }
+  };
+
   const pending = entries.filter((e) => e.status === "pending" || e.status === "syncing");
   const failed = entries.filter((e) => e.status === "failed");
 
@@ -268,17 +301,31 @@ export function SyncQueueDrawer({ open, onOpenChange, status }: SyncQueueDrawerP
                           </div>
                         )}
                       </div>
-                      {(entry.status === "failed" || entry.status === "pending") && (
-                        <Button
-                          size="sm"
-                          variant="ghost"
-                          onClick={() => handleDelete(entry.id)}
-                          className="text-muted-foreground hover:text-status-error"
-                          title="Bỏ qua mục này"
-                        >
-                          <Icon name="close" size={14} />
-                        </Button>
-                      )}
+                      <div className="flex items-center gap-1 shrink-0">
+                        {entry.status === "failed" && (
+                          <Button
+                            size="sm"
+                            variant="ghost"
+                            onClick={() => handleRetryOne(entry.id)}
+                            disabled={!status.isOnline || status.isSyncing}
+                            className="text-muted-foreground hover:text-status-info"
+                            title="Thử lại mục này"
+                          >
+                            <Icon name="refresh" size={14} />
+                          </Button>
+                        )}
+                        {(entry.status === "failed" || entry.status === "pending") && (
+                          <Button
+                            size="sm"
+                            variant="ghost"
+                            onClick={() => handleDelete(entry.id)}
+                            className="text-muted-foreground hover:text-status-error"
+                            title="Bỏ qua mục này"
+                          >
+                            <Icon name="close" size={14} />
+                          </Button>
+                        )}
+                      </div>
                     </div>
                   </li>
                 );

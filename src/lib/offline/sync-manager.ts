@@ -263,6 +263,25 @@ export async function deleteQueueEntry(id: number): Promise<void> {
   await db.delete("sync_queue", id);
 }
 
+/**
+ * Retry a single queue entry — reset its status to pending so next replayQueue picks it up.
+ * Returns true if the entry was reset, false if it wasn't in a retry-eligible state.
+ */
+export async function retryQueueEntry(id: number): Promise<boolean> {
+  const db = await getDb();
+  const entry = await db.get("sync_queue", id);
+  if (!entry) return false;
+  // Only allow retry from failed/pending (syncing is in-flight — don't reset)
+  if (entry.status !== "failed" && entry.status !== "pending") return false;
+  await db.put("sync_queue", {
+    ...entry,
+    status: "pending",
+    attempts: 0,
+    error: null,
+  });
+  return true;
+}
+
 export async function clearCompleted(): Promise<void> {
   const db = await getDb();
   const completed = await db

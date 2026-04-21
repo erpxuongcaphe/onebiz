@@ -101,6 +101,206 @@ vi.mock("@/lib/services/supabase/base", () => ({
       if (fn === "increment_product_stock" || fn === "upsert_branch_stock" || fn === "allocate_lots_fifo") {
         return { data: null, error: null };
       }
+      if (fn === "fnb_complete_payment_atomic") {
+        const koId = (args?.p_kitchen_order_id as string) ?? "ko-1";
+        const paymentMethod = (args?.p_payment_method as string) ?? "cash";
+        const paid = (args?.p_paid as number) ?? 0;
+        const breakdown = args?.p_payment_breakdown as
+          | Array<{ method: string; amount: number }>
+          | null
+          | undefined;
+        const discountAmount = (args?.p_discount_amount as number) ?? 0;
+
+        // Lookup order + items via mockFromHandler to simulate server-side fetch
+        // eslint-disable-next-line @typescript-eslint/no-explicit-any
+        let orderRow: any = null;
+        // eslint-disable-next-line @typescript-eslint/no-explicit-any
+        let items: any[] = [];
+        try {
+          // eslint-disable-next-line @typescript-eslint/no-explicit-any
+          const chain = mockFromHandler("kitchen_orders") as any;
+          const r = chain?.single?.() ?? chain?.maybeSingle?.() ?? { data: null };
+          orderRow = r?.data ?? null;
+        } catch {
+          // ignore
+        }
+        try {
+          // eslint-disable-next-line @typescript-eslint/no-explicit-any
+          const chain = mockFromHandler("kitchen_order_items") as any;
+          const r = chain?.single?.() ?? chain?.maybeSingle?.() ?? { data: null };
+          const data = r?.data;
+          items = Array.isArray(data) ? data : [];
+        } catch {
+          // ignore
+        }
+
+        const tenantId = (orderRow?.tenant_id as string) ?? "tenant-xuong";
+        const branchId = (orderRow?.branch_id as string) ?? "br-q1";
+        const orderType = (orderRow?.order_type as string) ?? "takeaway";
+        const tableId = (orderRow?.table_id as string | null) ?? null;
+
+        // Compute totals
+        let subtotal = 0;
+        for (const it of items) {
+          subtotal += (it.quantity ?? 0) * (it.unit_price ?? 0);
+          const tops = Array.isArray(it.toppings) ? it.toppings : [];
+          for (const t of tops) {
+            subtotal += (t.quantity ?? 0) * (t.price ?? 0);
+          }
+        }
+        const total = Math.max(0, subtotal - discountAmount);
+
+        // Consult invoices fixture for id/code if test set one up
+        let invoiceId = `inv-${koId}`;
+        let invoiceCode = `HD${String(++nextCodeCounter).padStart(5, "0")}`;
+        try {
+          // eslint-disable-next-line @typescript-eslint/no-explicit-any
+          const chain = mockFromHandler("invoices") as any;
+          const r = chain?.single?.() ?? chain?.maybeSingle?.() ?? { data: null };
+          if (r?.data?.id) invoiceId = r.data.id as string;
+          if (r?.data?.code) invoiceCode = r.data.code as string;
+        } catch {
+          // ignore
+        }
+
+        // Simulate invoice insert
+        insertCalls.push({
+          table: "invoices",
+          data: {
+            id: invoiceId,
+            code: invoiceCode,
+            source: "fnb",
+            total,
+            paid,
+            status: paid >= total ? "completed" : "partial",
+            tenant_id: tenantId,
+            branch_id: branchId,
+          },
+        });
+
+        // Simulate invoice_items + stock_movements + RPC calls per line item (+ toppings)
+        for (const it of items) {
+          insertCalls.push({
+            table: "invoice_items",
+            data: {
+              invoice_id: invoiceId,
+              product_id: it.product_id,
+              product_name: it.product_name,
+              quantity: it.quantity,
+              unit_price: it.unit_price,
+            },
+          });
+          insertCalls.push({
+            table: "stock_movements",
+            data: {
+              type: "out",
+              product_id: it.product_id,
+              quantity: it.quantity,
+              reference_type: "invoice",
+              reference_id: invoiceId,
+              branch_id: branchId,
+            },
+          });
+          rpcCalls.push({
+            fn: "increment_product_stock",
+            args: { p_product_id: it.product_id, p_delta: -(it.quantity ?? 0) },
+          });
+          rpcCalls.push({
+            fn: "upsert_branch_stock",
+            args: {
+              p_tenant_id: tenantId,
+              p_branch_id: branchId,
+              p_product_id: it.product_id,
+              p_delta: -(it.quantity ?? 0),
+            },
+          });
+
+          const tops = Array.isArray(it.toppings) ? it.toppings : [];
+          for (const t of tops) {
+            insertCalls.push({
+              table: "invoice_items",
+              data: {
+                invoice_id: invoiceId,
+                product_id: t.productId,
+                product_name: t.name,
+                quantity: t.quantity,
+                unit_price: t.price,
+              },
+            });
+            insertCalls.push({
+              table: "stock_movements",
+              data: {
+                type: "out",
+                product_id: t.productId,
+                quantity: t.quantity,
+                reference_type: "invoice",
+                reference_id: invoiceId,
+                branch_id: branchId,
+              },
+            });
+            rpcCalls.push({
+              fn: "increment_product_stock",
+              args: { p_product_id: t.productId, p_delta: -(t.quantity ?? 0) },
+            });
+            rpcCalls.push({
+              fn: "upsert_branch_stock",
+              args: {
+                p_tenant_id: tenantId,
+                p_branch_id: branchId,
+                p_product_id: t.productId,
+                p_delta: -(t.quantity ?? 0),
+              },
+            });
+          }
+        }
+
+        // Simulate cash_transactions inserts
+        if (paymentMethod === "mixed" && Array.isArray(breakdown)) {
+          for (const entry of breakdown) {
+            insertCalls.push({
+              table: "cash_transactions",
+              data: {
+                type: "receipt",
+                payment_method: entry.method,
+                amount: entry.amount,
+                reference_type: "invoice",
+                reference_id: invoiceId,
+                tenant_id: tenantId,
+                branch_id: branchId,
+              },
+            });
+          }
+        } else if (paid > 0) {
+          insertCalls.push({
+            table: "cash_transactions",
+            data: {
+              type: "receipt",
+              payment_method: paymentMethod,
+              amount: paid,
+              reference_type: "invoice",
+              reference_id: invoiceId,
+              tenant_id: tenantId,
+              branch_id: branchId,
+            },
+          });
+        }
+
+        // Release table if dine_in
+        if (orderType === "dine_in" && tableId) {
+          releaseTableMock(tableId);
+        }
+
+        return {
+          data: {
+            invoice_id: invoiceId,
+            invoice_code: invoiceCode,
+            total,
+            paid,
+            debt: Math.max(0, total - paid),
+          },
+          error: null,
+        };
+      }
       return { data: null, error: null };
     }),
   }),

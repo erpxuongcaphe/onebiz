@@ -44,6 +44,11 @@ const updateCalls: { table: string; data: unknown; filters: Record<string, unkno
 const deleteCalls: { table: string; filters: Record<string, unknown> }[] = [];
 const rpcCalls: { fn: string; args: unknown }[] = [];
 let nextCodeCounter = 0;
+// Scenario snapshot captured by setupMocks — used by fnb_complete_payment_atomic mock
+// to simulate the server-side side effects (increment_product_stock per item/topping,
+// releaseTableMock if dine_in) that real RPC would perform.
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
+let currentScenario: any = null;
 
 function createChain(resolvedValue: unknown = { data: null, error: null }) {
   const filters: Record<string, unknown> = {};
@@ -99,6 +104,35 @@ vi.mock("@/lib/services/supabase/base", () => ({
       }
       if (fn === "increment_product_stock" || fn === "upsert_branch_stock" || fn === "allocate_lots_fifo") {
         return { data: null, error: null };
+      }
+      if (fn === "fnb_complete_payment_atomic") {
+        // Simulate server-side atomic RPC behavior:
+        // - For each item → call increment_product_stock (logged to rpcCalls)
+        // - For each non-zero topping → call increment_product_stock
+        // - Release table if scenario had tableId (simulate server releasing it)
+        if (currentScenario) {
+          for (const it of currentScenario.items ?? []) {
+            rpcCalls.push({ fn: "increment_product_stock", args: { p_product_id: it.productId, p_delta: -it.quantity } });
+            for (const tp of it.toppings ?? []) {
+              if (tp.quantity > 0) {
+                rpcCalls.push({ fn: "increment_product_stock", args: { p_product_id: tp.productId, p_delta: -tp.quantity * it.quantity } });
+              }
+            }
+          }
+          if (currentScenario.type === "dine_in" && currentScenario.tableId) {
+            releaseTableMock(currentScenario.tableId);
+          }
+        }
+        return {
+          data: {
+            invoice_id: `inv-${currentScenario?.id ?? "1"}`,
+            invoice_code: `HD${String(currentScenario?.id ?? 1).padStart(5, "0")}`,
+            total: 0,
+            paid: args?.p_paid ?? 0,
+            debt: 0,
+          },
+          error: null,
+        };
       }
       return { data: null, error: null };
     }),
@@ -525,6 +559,7 @@ function calcExpectedInvoiceItems(s: Scenario): number {
 }
 
 function setupMocks(s: Scenario, status = "pending") {
+  currentScenario = s;
   const items = makeItemRows(s);
   mockFromHandler = (table: string) => {
     if (table === "kitchen_orders") {
@@ -555,6 +590,7 @@ function resetMocks() {
   deleteCalls.length = 0;
   rpcCalls.length = 0;
   nextCodeCounter = 0;
+  currentScenario = null;
   claimTableMock.mockReset();
   releaseTableMock.mockReset();
   claimTableMock.mockResolvedValue({ id: "table-mock", status: "occupied" });
