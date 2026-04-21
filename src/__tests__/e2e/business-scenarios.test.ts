@@ -132,6 +132,134 @@ function createChain(resolvedValue: unknown = { data: null, error: null }) {
   return chain;
 }
 
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
+function simulateReceivePurchaseItemsAtomic(params: any): { data: unknown; error: unknown } {
+  const po = tableMocks.purchase_orders?.data;
+  if (!po) return { data: null, error: { message: "Purchase order not found" } };
+  if (!["ordered", "partial"].includes(po.status)) {
+    return { data: null, error: { message: `Bad status: ${po.status}` } };
+  }
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  const items: any[] = tableMocks.purchase_order_items?.data ?? [];
+  const lines = params.p_lines as Array<{ item_id: string; receive_qty: number }> | null;
+  const isFullReceive = !lines || !Array.isArray(lines) || lines.length === 0;
+
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  const stockInputs: any[] = [];
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  const lotRows: any[] = [];
+  let totalAmount = 0;
+  let receivedLines = 0;
+
+  for (const it of items) {
+    const fullQty = Number(it.quantity ?? 0);
+    const already = Number(it.received_quantity ?? 0);
+    const remaining = Math.max(0, fullQty - already);
+    if (remaining <= 0) continue;
+
+    let reqQty = 0;
+    if (isFullReceive) reqQty = remaining;
+    else {
+      const line = (lines ?? []).find((l) => l.item_id === it.id);
+      reqQty = line ? Number(line.receive_qty) : 0;
+    }
+    const actualQty = Math.min(Math.max(0, reqQty), remaining);
+    if (actualQty <= 0) continue;
+
+    stockInputs.push({
+      productId: it.product_id,
+      quantity: actualQty,
+      type: "in",
+      referenceType: "purchase_order",
+      referenceId: params.p_order_id,
+      note: `${po.code} - Nhập hàng NCC - ${it.product_name}`,
+    });
+    lotRows.push({
+      tenant_id: po.tenant_id,
+      product_id: it.product_id,
+      variant_id: null,
+      lot_number: `${po.code}-LOT-${lotRows.length + 1}`,
+      source_type: "purchase",
+      purchase_order_id: params.p_order_id,
+      supplier_id: po.supplier_id ?? null,
+      initial_qty: actualQty,
+      current_qty: actualQty,
+      branch_id: po.branch_id,
+      status: "active",
+    });
+    rpcCalls.push({
+      fn: "increment_product_stock",
+      params: { p_product_id: it.product_id, p_delta: actualQty },
+    });
+    rpcCalls.push({
+      fn: "upsert_branch_stock",
+      params: {
+        p_tenant_id: po.tenant_id,
+        p_branch_id: po.branch_id,
+        p_product_id: it.product_id,
+        p_delta: actualQty,
+      },
+    });
+    receivedLines++;
+    totalAmount += actualQty * Number(it.unit_price ?? 0);
+  }
+
+  if (stockInputs.length === 0) {
+    return { data: null, error: { message: "Không có dòng hợp lệ nào để nhập" } };
+  }
+
+  stockMovementCalls.push([
+    stockInputs,
+    { tenantId: po.tenant_id, branchId: po.branch_id, createdBy: params.p_created_by },
+  ]);
+  insertCalls.push({ table: "product_lots", data: lotRows });
+
+  const allReceived = items.every((it) => {
+    const fullQty = Number(it.quantity ?? 0);
+    const already = Number(it.received_quantity ?? 0);
+    const extra = stockInputs.find(
+      (s: { productId: string; quantity: number }) => s.productId === it.product_id,
+    )?.quantity ?? 0;
+    return already + extra >= fullQty;
+  });
+  const newStatus = allReceived ? "completed" : "partial";
+
+  let inputInvoiceCode: string | null = null;
+  const inputInvoiceId: string | null = newStatus === "completed" ? "ii-sim-1" : null;
+  if (newStatus === "completed" && totalAmount > 0) {
+    rpcCodeCounter++;
+    inputInvoiceCode = `CODE${String(rpcCodeCounter).padStart(5, "0")}`;
+    insertCalls.push({
+      table: "input_invoices",
+      data: {
+        tenant_id: po.tenant_id,
+        branch_id: po.branch_id,
+        code: inputInvoiceCode,
+        supplier_id: po.supplier_id ?? null,
+        supplier_name: "",
+        total_amount: totalAmount,
+        tax_amount: 0,
+        status: "unrecorded",
+        purchase_order_id: params.p_order_id,
+      },
+    });
+  }
+
+  return {
+    data: {
+      new_status: newStatus,
+      received_lines: receivedLines,
+      received_qty_total: stockInputs.reduce(
+        (s: number, x: { quantity: number }) => s + x.quantity,
+        0,
+      ),
+      input_invoice_id: inputInvoiceId,
+      input_invoice_code: inputInvoiceCode,
+    },
+    error: null,
+  };
+}
+
 vi.mock("@/lib/services/supabase/base", () => ({
   getClient: () => ({
     from: vi.fn((table: string) => {
@@ -142,6 +270,9 @@ vi.mock("@/lib/services/supabase/base", () => ({
     }),
     rpc: vi.fn((fn: string, params: unknown) => {
       rpcCalls.push({ fn, params });
+      if (fn === "receive_purchase_items_atomic") {
+        return simulateReceivePurchaseItemsAtomic(params);
+      }
       if (fn === "next_code") {
         rpcCodeCounter++;
         return {
