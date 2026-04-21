@@ -215,9 +215,15 @@ export function CreateInternalSaleDialog({
         <div className="grid grid-cols-[1fr_auto_1fr] gap-3 items-end">
           <div className="space-y-1.5">
             <label className="text-sm font-medium">Chi nhánh bán</label>
-            <Select value={fromBranchId} onValueChange={(v) => v && setFromBranchId(v)}>
+            <Select
+              value={fromBranchId || null}
+              onValueChange={(v) => v && setFromBranchId(v)}
+              items={branches.map((b) => ({ value: b.id, label: b.name }))}
+            >
               <SelectTrigger>
-                <SelectValue placeholder="Chọn bên bán..." />
+                <SelectValue placeholder="Chọn bên bán...">
+                  {(v) => branches.find((b) => b.id === v)?.name ?? "Chọn bên bán..."}
+                </SelectValue>
               </SelectTrigger>
               <SelectContent>
                 {branches.map((b) => (
@@ -231,9 +237,17 @@ export function CreateInternalSaleDialog({
           <Icon name="arrow_forward" className="text-muted-foreground mb-2" />
           <div className="space-y-1.5">
             <label className="text-sm font-medium">Chi nhánh mua</label>
-            <Select value={toBranchId} onValueChange={(v) => v && setToBranchId(v)}>
+            <Select
+              value={toBranchId || null}
+              onValueChange={(v) => v && setToBranchId(v)}
+              items={branches
+                .filter((b) => b.id !== fromBranchId)
+                .map((b) => ({ value: b.id, label: b.name }))}
+            >
               <SelectTrigger>
-                <SelectValue placeholder="Chọn bên mua..." />
+                <SelectValue placeholder="Chọn bên mua...">
+                  {(v) => branches.find((b) => b.id === v)?.name ?? "Chọn bên mua..."}
+                </SelectValue>
               </SelectTrigger>
               <SelectContent>
                 {branches

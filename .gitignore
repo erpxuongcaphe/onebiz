@@ -14,6 +14,7 @@ tsconfig.tsbuildinfo
 # Claude agent local state
 .claude/settings.local.json
 .claude/scheduled_tasks.lock
+.claude/worktrees/
 
 # Stitch design mockups (reference-only, 12MB; excluded from repo)
 stitch_onebiz_ux_ui_optimization/

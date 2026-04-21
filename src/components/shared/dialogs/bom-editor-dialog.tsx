@@ -255,12 +255,21 @@ export function BOMEditorDialog({
                 SKU đầu ra <span className="text-destructive">*</span>
               </label>
               <Select
-                value={productId}
+                value={productId || null}
                 onValueChange={(v) => setProductId(v ?? "")}
                 disabled={!!initialProductId || !!bomId}
+                items={skuOptions.map((p) => ({
+                  value: p.id,
+                  label: `${p.code} — ${p.name}`,
+                }))}
               >
                 <SelectTrigger className="w-full">
-                  <SelectValue placeholder="Chọn SKU" />
+                  <SelectValue placeholder="Chọn SKU">
+                    {(v) => {
+                      const match = skuOptions.find((p) => p.id === v);
+                      return match ? `${match.code} — ${match.name}` : "Chọn SKU";
+                    }}
+                  </SelectValue>
                 </SelectTrigger>
                 <SelectContent>
                   {skuOptions.map((p) => (
@@ -471,9 +480,21 @@ export function BOMEditorDialog({
             <DialogTitle>Chọn nguyên vật liệu</DialogTitle>
           </DialogHeader>
           <div className="space-y-2">
-            <Select value={pickerMaterialId} onValueChange={(v) => setPickerMaterialId(v ?? "")}>
+            <Select
+              value={pickerMaterialId || null}
+              onValueChange={(v) => setPickerMaterialId(v ?? "")}
+              items={nvlOptions.map((p) => ({
+                value: p.id,
+                label: `${p.code} — ${p.name}`,
+              }))}
+            >
               <SelectTrigger className="w-full">
-                <SelectValue placeholder="Chọn NVL từ danh mục..." />
+                <SelectValue placeholder="Chọn NVL từ danh mục...">
+                  {(v) => {
+                    const match = nvlOptions.find((p) => p.id === v);
+                    return match ? `${match.code} — ${match.name}` : "Chọn NVL từ danh mục...";
+                  }}
+                </SelectValue>
               </SelectTrigger>
               <SelectContent>
                 {nvlOptions.map((p) => (

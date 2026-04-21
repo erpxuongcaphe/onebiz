@@ -224,9 +224,21 @@ export function CreateProductionOrderDialog({
               <label className="text-sm font-medium">
                 Công thức (BOM) <span className="text-destructive">*</span>
               </label>
-              <Select value={bomId} onValueChange={(v) => setBomId(v ?? "")}>
+              <Select
+                value={bomId || null}
+                onValueChange={(v) => setBomId(v ?? "")}
+                items={boms.map((b) => ({
+                  value: b.id,
+                  label: `${b.name} — ${b.productCode}`,
+                }))}
+              >
                 <SelectTrigger className="w-full">
-                  <SelectValue placeholder="Chọn công thức..." />
+                  <SelectValue placeholder="Chọn công thức...">
+                    {(v) => {
+                      const match = boms.find((b) => b.id === v);
+                      return match ? `${match.name} — ${match.productCode}` : "Chọn công thức...";
+                    }}
+                  </SelectValue>
                 </SelectTrigger>
                 <SelectContent>
                   {boms.map((b) => (
@@ -243,9 +255,15 @@ export function CreateProductionOrderDialog({
               <label className="text-sm font-medium">
                 Chi nhánh sản xuất <span className="text-destructive">*</span>
               </label>
-              <Select value={branchId} onValueChange={(v) => setBranchId(v ?? "")}>
+              <Select
+                value={branchId || null}
+                onValueChange={(v) => setBranchId(v ?? "")}
+                items={branches.map((b) => ({ value: b.id, label: b.name }))}
+              >
                 <SelectTrigger className="w-full">
-                  <SelectValue placeholder="Chọn chi nhánh..." />
+                  <SelectValue placeholder="Chọn chi nhánh...">
+                    {(v) => branches.find((b) => b.id === v)?.name ?? "Chọn chi nhánh..."}
+                  </SelectValue>
                 </SelectTrigger>
                 <SelectContent>
                   {branches.map((b) => (

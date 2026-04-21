@@ -273,11 +273,28 @@ export function CreateProductDialog({
               <label className="text-sm font-medium">
                 Nhóm hàng <span className="text-destructive">*</span>
               </label>
-              <Select value={categoryId} onValueChange={(v) => setCategoryId(v ?? "")}>
+              <Select
+                value={categoryId || null}
+                onValueChange={(v) => setCategoryId(v ?? "")}
+                // items cho phép Base UI tự resolve UUID -> label, tránh trigger hiện UUID
+                // khi value set trước khi SelectContent mount (edit mode async load).
+                items={categories.map((cat) => ({
+                  value: cat.value,
+                  label: cat.code ? `${cat.code} — ${cat.label}` : cat.label,
+                }))}
+              >
                 <SelectTrigger className="w-full">
-                  <SelectValue
-                    placeholder={loadingCats ? "Đang tải..." : "Chọn nhóm hàng"}
-                  />
+                  <SelectValue placeholder={loadingCats ? "Đang tải..." : "Chọn nhóm hàng"}>
+                    {(v) => {
+                      const match = categories.find((c) => c.value === v);
+                      if (match) {
+                        return match.code ? `${match.code} — ${match.label}` : match.label;
+                      }
+                      // Value đặt nhưng chưa match (đang load hoặc category đã xoá) →
+                      // hiện placeholder thay vì UUID thô.
+                      return loadingCats ? "Đang tải..." : "Chọn nhóm hàng";
+                    }}
+                  </SelectValue>
                 </SelectTrigger>
                 <SelectContent>
                   {categories.map((cat) => (

@@ -265,9 +265,17 @@ export default function DoiTacGiaoHangPage() {
       accessorKey: "id",
       header: "Mã đối tác",
       size: 120,
-      cell: ({ row }) => (
-        <span className="font-medium text-primary">{row.original.id}</span>
-      ),
+      cell: ({ row }) => {
+        // DB dùng UUID làm PK — hiện 6 ký tự cuối để user có thể tham chiếu nhanh
+        // mà không làm chật cột / rò UUID đầy đủ.
+        const id = row.original.id;
+        const shortCode = id.includes("-") ? id.slice(-6).toUpperCase() : id;
+        return (
+          <span className="font-mono text-xs text-muted-foreground" title={id}>
+            #{shortCode}
+          </span>
+        );
+      },
     },
     {
       accessorKey: "name",

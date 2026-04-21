@@ -151,11 +151,22 @@ export default function AuditPage() {
       accessorKey: "entityId",
       header: "Mã",
       size: 120,
-      cell: ({ row }) => (
-        <span className="text-xs font-mono text-primary truncate max-w-[110px] block">
-          {row.original.entityId || "—"}
-        </span>
-      ),
+      cell: ({ row }) => {
+        // entityId là UUID nội bộ — hiện 6 ký tự cuối cho user dễ tham chiếu,
+        // full UUID ở tooltip. Tránh phô UUID đầy đủ trong bảng (khó đọc + bí mật
+        // không cần thiết).
+        const id = row.original.entityId;
+        if (!id) return <span className="text-xs text-muted-foreground">—</span>;
+        const shortCode = id.includes("-") ? id.slice(-6).toUpperCase() : id;
+        return (
+          <span
+            className="text-xs font-mono text-primary"
+            title={id}
+          >
+            #{shortCode}
+          </span>
+        );
+      },
     },
     {
       id: "detail",

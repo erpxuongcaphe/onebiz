@@ -400,9 +400,15 @@ export function CreateOrderDialog({
           {/* Delivery partner */}
           <div className="space-y-1.5">
             <label className="text-sm font-medium">Đối tác giao hàng</label>
-            <Select value={selectedPartner} onValueChange={(v) => setSelectedPartner(v ?? "")}>
+            <Select
+              value={selectedPartner || null}
+              onValueChange={(v) => setSelectedPartner(v ?? "")}
+              items={deliveryPartners.map((dp) => ({ value: dp.id, label: dp.name }))}
+            >
               <SelectTrigger className="w-full">
-                <SelectValue placeholder="Chọn đối tác giao hàng" />
+                <SelectValue placeholder="Chọn đối tác giao hàng">
+                  {(v) => deliveryPartners.find((dp) => dp.id === v)?.name ?? "Chọn đối tác giao hàng"}
+                </SelectValue>
               </SelectTrigger>
               <SelectContent>
                 {deliveryPartners.map((dp) => (
