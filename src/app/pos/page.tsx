@@ -38,6 +38,7 @@ import { printReceiptDirect, type ReceiptData } from "@/components/shared/print-
 import { printShiftReport } from "@/lib/print-shift-report";
 import { PosBranchSelector } from "@/components/shared/pos-branch-selector";
 import { useNetworkStatus, offlinePosCheckout } from "@/lib/offline";
+import { useBarcodeScanner } from "@/lib/hooks/use-barcode-scanner";
 import { useAuth } from "@/lib/contexts";
 import { useSettings } from "@/lib/contexts/settings-context";
 import { getOpenShift, openShift, closeShift } from "@/lib/services/supabase/shifts";
@@ -184,48 +185,65 @@ export default function PosPage() {
   const searchInputRef = useRef<HTMLInputElement>(null);
   const cartScrollRef = useRef<HTMLDivElement>(null);
 
-  // Barcode quick-add: Enter in search → fetch by code → auto-add first match
-  const handleSearchEnter = useCallback(async () => {
-    const q = searchQuery.trim();
-    if (!q) return;
-    try {
-      const result = await getProducts({
-        page: 0,
-        pageSize: 1,
-        search: q,
-        sortBy: "code",
-        sortOrder: "asc",
-        // Barcode quick-add ở POS Retail chỉ quét SKU channel='retail'.
-        filters: { status: "active", channel: "retail" },
-      });
-      if (result.data.length > 0) {
-        const product = result.data[0];
-        state.addLine(product);
-        setSearchQuery("");
-        searchInputRef.current?.focus();
-        // Auto-scroll cart to bottom
-        setTimeout(() => {
-          cartScrollRef.current?.scrollTo({ top: cartScrollRef.current.scrollHeight, behavior: "smooth" });
-        }, 50);
-        if ((product.stock ?? 0) <= 0) {
-          toast({ title: "Hết hàng", description: `"${product.name}" đã hết`, variant: "warning" });
+  // Barcode quick-add: lookup 1 sản phẩm theo tên/mã/barcode → add vào cart.
+  // Shared giữa handleSearchEnter (search box Enter) + useBarcodeScanner
+  // (USB scanner global). Nhận `query` trực tiếp để tránh race stale state.
+  const lookupAndAdd = useCallback(
+    async (query: string) => {
+      const q = query.trim();
+      if (!q) return;
+      try {
+        const result = await getProducts({
+          page: 0,
+          pageSize: 1,
+          search: q,
+          sortBy: "code",
+          sortOrder: "asc",
+          // Barcode quick-add ở POS Retail chỉ quét SKU channel='retail'.
+          filters: { status: "active", channel: "retail" },
+        });
+        if (result.data.length > 0) {
+          const product = result.data[0];
+          state.addLine(product);
+          setSearchQuery("");
+          searchInputRef.current?.focus();
+          // Auto-scroll cart to bottom
+          setTimeout(() => {
+            cartScrollRef.current?.scrollTo({ top: cartScrollRef.current.scrollHeight, behavior: "smooth" });
+          }, 50);
+          if ((product.stock ?? 0) <= 0) {
+            toast({ title: "Hết hàng", description: `"${product.name}" đã hết`, variant: "warning" });
+          }
+        } else {
+          toast({
+            title: "Không tìm thấy sản phẩm",
+            description: `Mã/tên "${q}" không khớp SKU nào.`,
+            variant: "warning",
+          });
         }
-      } else {
+      } catch (err) {
+        console.error("barcode quick-add error:", err);
         toast({
-          title: "Không tìm thấy sản phẩm",
-          description: `Mã/tên "${q}" không khớp SKU nào.`,
-          variant: "warning",
+          title: "Lỗi khi tìm sản phẩm",
+          description: (err as Error)?.message ?? "Vui lòng thử lại.",
+          variant: "error",
         });
       }
-    } catch (err) {
-      console.error("barcode quick-add error:", err);
-      toast({
-        title: "Lỗi khi tìm sản phẩm",
-        description: (err as Error)?.message ?? "Vui lòng thử lại.",
-        variant: "error",
-      });
-    }
-  }, [searchQuery, state, toast]);
+    },
+    [state, toast],
+  );
+
+  const handleSearchEnter = useCallback(
+    () => lookupAndAdd(searchQuery),
+    [searchQuery, lookupAndAdd],
+  );
+
+  // USB barcode scanner (keyboard-wedge) — listen global, kích hoạt ngay cả
+  // khi focus KHÔNG ở search box. Dùng heuristic fast-typing để tránh
+  // false-positive khi user gõ tay.
+  useBarcodeScanner({
+    onScan: (barcode) => lookupAndAdd(barcode),
+  });
 
   // Note toggle
   const [noteOpen, setNoteOpen] = useState(false);
