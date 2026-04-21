@@ -29,6 +29,7 @@ import {
 } from "@/components/ui/select";
 import { cn } from "@/lib/utils";
 import { useAuth, useBranchFilter, useToast } from "@/lib/contexts";
+import { ConfirmDialog } from "@/components/shared/dialogs/confirm-dialog";
 import { PosBranchSelector } from "@/components/shared/pos-branch-selector";
 import {
   getTablesByBranch,
@@ -84,6 +85,11 @@ export default function QuanLyBanPage() {
     capacity: 4,
   });
   const [renameForm, setRenameForm] = useState({ oldZone: "", newZone: "" });
+
+  // Confirm delete state cho Zone + Table
+  const [deletingTable, setDeletingTable] = useState<RestaurantTable | null>(null);
+  const [deletingZone, setDeletingZone] = useState<string | null>(null);
+  const [deleteBusy, setDeleteBusy] = useState(false);
 
   const tenantId = tenant?.id ?? "";
 
@@ -193,17 +199,28 @@ export default function QuanLyBanPage() {
     }
   };
 
-  const handleDeleteTable = async (table: RestaurantTable) => {
+  // Kiểm tra bàn có khả dụng để xoá không — trước khi mở ConfirmDialog.
+  // Nếu không available → toast lỗi ngay, không mở dialog.
+  const requestDeleteTable = (table: RestaurantTable) => {
     if (table.status !== "available") {
-      toast({ title: "Không thể xóa", description: "Bàn đang có đơn hoặc đang dọn", variant: "error" });
+      toast({ title: "Không thể xoá", description: "Bàn đang có đơn hoặc đang dọn", variant: "error" });
       return;
     }
+    setDeletingTable(table);
+  };
+
+  const handleDeleteTable = async () => {
+    if (!deletingTable) return;
+    setDeleteBusy(true);
     try {
-      await deleteTable(table.id);
-      toast({ title: "Đã xóa", description: table.name });
+      await deleteTable(deletingTable.id);
+      toast({ title: "Đã xoá", description: deletingTable.name });
+      setDeletingTable(null);
       loadTables();
     } catch {
-      toast({ title: "Lỗi", description: "Không xóa được bàn", variant: "error" });
+      toast({ title: "Lỗi", description: "Không xoá được bàn", variant: "error" });
+    } finally {
+      setDeleteBusy(false);
     }
   };
 
@@ -238,19 +255,29 @@ export default function QuanLyBanPage() {
     }
   };
 
-  const handleDeleteZone = async (zoneName: string) => {
+  // Kiểm tra khu vực còn bàn đang sử dụng không — trước khi mở ConfirmDialog.
+  const requestDeleteZone = (zoneName: string) => {
     if (!activeBranchId) return;
     const zone = zones.find((z) => z.name === zoneName);
     if (zone?.tables.some((t) => t.status !== "available")) {
-      toast({ title: "Không thể xóa", description: "Khu vực còn bàn đang sử dụng", variant: "error" });
+      toast({ title: "Không thể xoá", description: "Khu vực còn bàn đang sử dụng", variant: "error" });
       return;
     }
+    setDeletingZone(zoneName);
+  };
+
+  const handleDeleteZone = async () => {
+    if (!activeBranchId || !deletingZone) return;
+    setDeleteBusy(true);
     try {
-      await deleteZone(activeBranchId, zoneName);
-      toast({ title: "Đã xóa khu vực", description: zoneName });
+      await deleteZone(activeBranchId, deletingZone);
+      toast({ title: "Đã xoá khu vực", description: deletingZone });
+      setDeletingZone(null);
       loadTables();
     } catch {
-      toast({ title: "Lỗi", description: "Không xóa được khu vực", variant: "error" });
+      toast({ title: "Lỗi", description: "Không xoá được khu vực", variant: "error" });
+    } finally {
+      setDeleteBusy(false);
     }
   };
 
@@ -445,7 +472,7 @@ export default function QuanLyBanPage() {
                   variant="ghost"
                   size="sm"
                   className="h-8 px-2 text-status-error hover:text-status-error hover:bg-status-error/10"
-                  onClick={() => handleDeleteZone(zone.name)}
+                  onClick={() => requestDeleteZone(zone.name)}
                 >
                   <Icon name="delete" className="size-3.5" />
                 </Button>
@@ -522,7 +549,7 @@ export default function QuanLyBanPage() {
                       <button
                         type="button"
                         className="p-1 rounded hover:bg-white/80 text-muted-foreground hover:text-status-error"
-                        onClick={() => handleDeleteTable(table)}
+                        onClick={() => requestDeleteTable(table)}
                         title="Xóa"
                       >
                         <Icon name="delete" className="size-3" />
@@ -759,6 +786,43 @@ export default function QuanLyBanPage() {
           </DialogFooter>
         </DialogContent>
       </Dialog>
+
+      {/* Confirm xoá bàn / khu vực — không cho lỡ tay xoá config layout quán */}
+      <ConfirmDialog
+        open={deletingTable !== null}
+        onOpenChange={(o) => {
+          if (!o) setDeletingTable(null);
+        }}
+        title="Xoá bàn?"
+        description={
+          deletingTable
+            ? `Xoá bàn "${deletingTable.name}" khỏi chi nhánh này. Thao tác không thể hoàn tác.`
+            : ""
+        }
+        confirmLabel="Xoá bàn"
+        cancelLabel="Đóng"
+        variant="destructive"
+        loading={deleteBusy}
+        onConfirm={handleDeleteTable}
+      />
+
+      <ConfirmDialog
+        open={deletingZone !== null}
+        onOpenChange={(o) => {
+          if (!o) setDeletingZone(null);
+        }}
+        title="Xoá khu vực?"
+        description={
+          deletingZone
+            ? `Xoá khu vực "${deletingZone}". Các bàn thuộc khu vực sẽ chuyển sang "Chưa phân khu". Thao tác không thể hoàn tác.`
+            : ""
+        }
+        confirmLabel="Xoá khu vực"
+        cancelLabel="Đóng"
+        variant="destructive"
+        loading={deleteBusy}
+        onConfirm={handleDeleteZone}
+      />
     </div>
   );
 }

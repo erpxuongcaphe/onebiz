@@ -42,6 +42,7 @@ import {
   SelectTrigger,
   SelectValue,
 } from "@/components/ui/select";
+import { ConfirmDialog } from "@/components/shared/dialogs/confirm-dialog";
 import { useToast } from "@/lib/contexts";
 import { formatDate } from "@/lib/format";
 import { getBranches, getBranchStockRows } from "@/lib/services";
@@ -83,6 +84,15 @@ export default function ChuyenKhoPage() {
   const [showCreate, setShowCreate] = useState(false);
   const [creating, setCreating] = useState(false);
 
+  // Confirm dialog state cho action huỷ / hoàn thành / bắt đầu chuyển
+  // Mỗi action đều thao tác tồn kho thật (OUT / IN) — cần xác nhận trước khi fire.
+  type ConfirmAction = "start" | "complete" | "cancel";
+  const [pendingAction, setPendingAction] = useState<{
+    type: ConfirmAction;
+    transfer: StockTransfer;
+  } | null>(null);
+  const [actionBusy, setActionBusy] = useState(false);
+
   const fetchData = useCallback(async () => {
     setLoading(true);
     try {
@@ -109,51 +119,82 @@ export default function ChuyenKhoPage() {
     getBranches().then(setBranches).catch(() => {});
   }, []);
 
-  const handleStartTransit = async (id: string) => {
+  // Mở ConfirmDialog cho action tương ứng — không fire action thật ở đây.
+  const requestStartTransit = (t: StockTransfer) =>
+    setPendingAction({ type: "start", transfer: t });
+  const requestComplete = (t: StockTransfer) =>
+    setPendingAction({ type: "complete", transfer: t });
+  const requestCancel = (t: StockTransfer) =>
+    setPendingAction({ type: "cancel", transfer: t });
+
+  // Thực thi sau khi user xác nhận trong ConfirmDialog.
+  const executePendingAction = async () => {
+    if (!pendingAction) return;
+    const { type, transfer } = pendingAction;
+    setActionBusy(true);
     try {
-      await updateTransferStatus(id, "in_transit");
-      toast({
-        title: "Đã bắt đầu vận chuyển",
-        description: "Hàng đang trên đường tới kho nhận",
-        variant: "success",
-      });
+      if (type === "start") {
+        await updateTransferStatus(transfer.id, "in_transit");
+        toast({
+          title: "Đã bắt đầu vận chuyển",
+          description: "Hàng đang trên đường tới kho nhận",
+          variant: "success",
+        });
+      } else if (type === "complete") {
+        await completeStockTransfer(transfer.id);
+        toast({ title: "Đã hoàn thành chuyển kho", variant: "success" });
+      } else {
+        await cancelStockTransfer(transfer.id);
+        toast({ title: "Đã huỷ phiếu chuyển kho", variant: "success" });
+      }
+      setPendingAction(null);
       fetchData();
     } catch (err) {
+      const titleByType: Record<ConfirmAction, string> = {
+        start: "Lỗi cập nhật trạng thái",
+        complete: "Lỗi hoàn thành",
+        cancel: "Lỗi huỷ phiếu",
+      };
       toast({
-        title: "Lỗi cập nhật trạng thái",
+        title: titleByType[type],
         description: err instanceof Error ? err.message : "Vui lòng thử lại",
         variant: "error",
       });
+    } finally {
+      setActionBusy(false);
     }
   };
 
-  const handleComplete = async (id: string) => {
-    try {
-      await completeStockTransfer(id);
-      toast({ title: "Đã hoàn thành chuyển kho", variant: "success" });
-      fetchData();
-    } catch (err) {
-      toast({
-        title: "Lỗi hoàn thành",
-        description: err instanceof Error ? err.message : "Vui lòng thử lại",
-        variant: "error",
-      });
+  const pendingDialogConfig = (() => {
+    if (!pendingAction) return null;
+    const { type, transfer } = pendingAction;
+    const route = `${transfer.fromBranchName} → ${transfer.toBranchName}`;
+    if (type === "start") {
+      return {
+        title: "Bắt đầu vận chuyển?",
+        description: `Phiếu ${transfer.code} (${route}): hàng sẽ rời kho xuất và ghi nhận trạng thái “đang chuyển”. Bạn có chắc chắn?`,
+        confirmLabel: "Bắt đầu vận chuyển",
+        variant: "default" as const,
+      };
     }
-  };
-
-  const handleCancel = async (id: string) => {
-    try {
-      await cancelStockTransfer(id);
-      toast({ title: "Đã hủy phiếu chuyển kho", variant: "success" });
-      fetchData();
-    } catch (err) {
-      toast({
-        title: "Lỗi hủy phiếu",
-        description: err instanceof Error ? err.message : "Vui lòng thử lại",
-        variant: "error",
-      });
+    if (type === "complete") {
+      return {
+        title: "Xác nhận đã nhận hàng?",
+        description: `Phiếu ${transfer.code} (${route}): hệ thống sẽ trừ tồn kho xuất và cộng tồn kho nhận. Thao tác không thể hoàn tác — chỉ xác nhận khi đã nhận đủ hàng.`,
+        confirmLabel: "Hoàn thành nhập kho",
+        variant: "default" as const,
+      };
     }
-  };
+    return {
+      title: "Huỷ phiếu chuyển kho?",
+      description:
+        transfer.status === "in_transit"
+          ? `Phiếu ${transfer.code}: HÀNG ĐÃ RỜI KHO XUẤT. Huỷ phiếu sẽ không tự động trả hàng về — cần xử lý thủ công. Bạn có chắc chắn?`
+          : `Phiếu ${transfer.code} (${route}) sẽ bị huỷ. Thao tác không thể hoàn tác.`,
+      confirmLabel: "Huỷ phiếu",
+      variant: "destructive" as const,
+    };
+  })();
 
   const columns: ColumnDef<StockTransfer, unknown>[] = [
     {
@@ -241,7 +282,7 @@ export default function ChuyenKhoPage() {
                 variant="ghost"
                 size="sm"
                 className="h-7 px-2 text-primary hover:text-primary"
-                onClick={() => handleStartTransit(row.original.id)}
+                onClick={() => requestStartTransit(row.original)}
                 title="Bắt đầu vận chuyển — hàng rời kho xuất"
               >
                 <Icon name="local_shipping" size={14} />
@@ -252,7 +293,7 @@ export default function ChuyenKhoPage() {
                 variant="ghost"
                 size="sm"
                 className="h-7 px-2 text-status-success hover:text-status-success"
-                onClick={() => handleComplete(row.original.id)}
+                onClick={() => requestComplete(row.original)}
                 title="Xác nhận đã nhận hàng — hoàn thành nhập kho"
               >
                 <Icon name="check_circle" size={14} />
@@ -262,8 +303,8 @@ export default function ChuyenKhoPage() {
               variant="ghost"
               size="sm"
               className="h-7 px-2 text-status-error hover:text-status-error"
-              onClick={() => handleCancel(row.original.id)}
-              title={st === "in_transit" ? "Hủy — hàng đã rời kho, cần xử lý thủ công" : "Hủy phiếu"}
+              onClick={() => requestCancel(row.original)}
+              title={st === "in_transit" ? "Huỷ — hàng đã rời kho, cần xử lý thủ công" : "Huỷ phiếu"}
             >
               <Icon name="cancel" size={14} />
             </Button>
@@ -412,6 +453,24 @@ export default function ChuyenKhoPage() {
           }
         }}
       />
+
+      {/* Confirm destructive transfer actions (start / complete / cancel).
+          Ba action này đều ảnh hưởng tồn kho thật nên luôn yêu cầu xác nhận. */}
+      {pendingDialogConfig && (
+        <ConfirmDialog
+          open={pendingAction !== null}
+          onOpenChange={(o) => {
+            if (!o) setPendingAction(null);
+          }}
+          title={pendingDialogConfig.title}
+          description={pendingDialogConfig.description}
+          confirmLabel={pendingDialogConfig.confirmLabel}
+          cancelLabel="Đóng"
+          variant={pendingDialogConfig.variant}
+          loading={actionBusy}
+          onConfirm={executePendingAction}
+        />
+      )}
     </ListPageLayout>
   );
 }

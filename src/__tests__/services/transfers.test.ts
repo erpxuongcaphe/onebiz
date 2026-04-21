@@ -247,7 +247,7 @@ describe("createStockTransfer", () => {
           { productId: "p1", productName: "SP A", productCode: "SPA01", unit: "cái", quantity: 10 },
         ],
       }),
-    ).rejects.toThrow(/Không đủ tồn kho.*SP A.*cần 10.*còn 3/s);
+    ).rejects.toThrow(/Không đủ tồn kho[\s\S]*SP A[\s\S]*cần 10[\s\S]*còn 3/);
 
     // CRITICAL: phải fail trước khi ghi DB — tránh tạo phiếu lỗi
     expect(insertCalls.filter((c) => c.table === "stock_transfers")).toHaveLength(0);
@@ -272,7 +272,7 @@ describe("createStockTransfer", () => {
           { productId: "p2", productName: "SP B", productCode: "SPB01", quantity: 10 },
         ],
       }),
-    ).rejects.toThrow(/SP A.*SP B/s);
+    ).rejects.toThrow(/SP A[\s\S]*SP B/);
   });
 });
 

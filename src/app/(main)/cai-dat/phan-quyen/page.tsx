@@ -29,6 +29,7 @@ import {
 } from "@/components/ui/dialog";
 import { cn } from "@/lib/utils";
 import { useAuth, useToast } from "@/lib/contexts";
+import { ConfirmDialog } from "@/components/shared/dialogs/confirm-dialog";
 import {
   getRoles,
   getRoleById,
@@ -59,6 +60,10 @@ export default function PermissionSettingsPage() {
   const [createOpen, setCreateOpen] = useState(false);
   const [newRoleName, setNewRoleName] = useState("");
   const [newRoleDesc, setNewRoleDesc] = useState("");
+
+  // Delete confirmation — tránh xoá nhầm vai trò đang có member
+  const [deletingRole, setDeletingRole] = useState<DbRole | null>(null);
+  const [deleteBusy, setDeleteBusy] = useState(false);
 
   const load = useCallback(async () => {
     if (!tenantId) return;
@@ -150,17 +155,22 @@ export default function PermissionSettingsPage() {
   };
 
   // Delete role
-  const handleDelete = async (roleId: string, roleName: string) => {
+  const handleDelete = async () => {
+    if (!deletingRole) return;
+    setDeleteBusy(true);
     try {
-      await deleteRole(roleId);
-      toast({ title: "Đã xóa vai trò", description: roleName, variant: "success" });
-      if (expandedRole === roleId) {
+      await deleteRole(deletingRole.id);
+      toast({ title: "Đã xoá vai trò", description: deletingRole.name, variant: "success" });
+      if (expandedRole === deletingRole.id) {
         setExpandedRole(null);
         setRoleDetail(null);
       }
+      setDeletingRole(null);
       load();
     } catch (err) {
       toast({ title: "Lỗi", description: (err as Error).message, variant: "error" });
+    } finally {
+      setDeleteBusy(false);
     }
   };
 
@@ -331,10 +341,10 @@ export default function PermissionSettingsPage() {
                         variant="ghost"
                         size="sm"
                         className="text-status-error hover:text-status-error hover:bg-status-error/10"
-                        onClick={() => handleDelete(role.id, role.name)}
+                        onClick={() => setDeletingRole(role)}
                       >
                         <Icon name="delete" size={16} className="mr-1" />
-                        Xóa vai trò
+                        Xoá vai trò
                       </Button>
                     )}
                     {role.isSystem && <div />}
@@ -393,6 +403,24 @@ export default function PermissionSettingsPage() {
           </DialogFooter>
         </DialogContent>
       </Dialog>
+
+      <ConfirmDialog
+        open={deletingRole !== null}
+        onOpenChange={(o) => {
+          if (!o) setDeletingRole(null);
+        }}
+        title="Xoá vai trò?"
+        description={
+          deletingRole
+            ? `Xoá vai trò "${deletingRole.name}"${deletingRole.memberCount > 0 ? ` — hiện có ${deletingRole.memberCount} người dùng đang gắn vai trò này. Các user đó sẽ mất quyền gắn với vai trò.` : ""}. Thao tác không thể hoàn tác.`
+            : ""
+        }
+        confirmLabel="Xoá vai trò"
+        cancelLabel="Đóng"
+        variant="destructive"
+        loading={deleteBusy}
+        onConfirm={handleDelete}
+      />
     </div>
   );
 }

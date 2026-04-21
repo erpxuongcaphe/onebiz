@@ -18,6 +18,7 @@ import {
   PriceTierDialog,
   AddPriceTierItemDialog,
 } from "@/components/shared/dialogs";
+import { ConfirmDialog } from "@/components/shared/dialogs/confirm-dialog";
 import { formatCurrency, formatDate } from "@/lib/format";
 import { useToast } from "@/lib/contexts";
 import {
@@ -46,6 +47,8 @@ function PriceTierDetail({
   const [items, setItems] = useState<PriceTierItem[]>([]);
   const [loading, setLoading] = useState(true);
   const [addOpen, setAddOpen] = useState(false);
+  const [deletingItem, setDeletingItem] = useState<PriceTierItem | null>(null);
+  const [deleteBusy, setDeleteBusy] = useState(false);
 
   const load = useCallback(async () => {
     setLoading(true);
@@ -67,18 +70,23 @@ function PriceTierDetail({
     load();
   }, [load]);
 
-  async function handleDeleteItem(itemId: string) {
+  async function handleDeleteItem() {
+    if (!deletingItem) return;
+    setDeleteBusy(true);
     try {
-      await deletePriceTierItem(itemId);
-      toast({ title: "Đã xóa sản phẩm khỏi bảng giá", variant: "success" });
+      await deletePriceTierItem(deletingItem.id);
+      toast({ title: "Đã xoá sản phẩm khỏi bảng giá", variant: "success" });
+      setDeletingItem(null);
       await load();
       onChange();
     } catch (err) {
       toast({
-        title: "Lỗi xóa",
+        title: "Lỗi xoá",
         description: err instanceof Error ? err.message : "Vui lòng thử lại",
         variant: "error",
       });
+    } finally {
+      setDeleteBusy(false);
     }
   }
 
@@ -143,9 +151,9 @@ function PriceTierDetail({
                     </td>
                     <td className="p-2 text-right">
                       <button
-                        onClick={() => handleDeleteItem(item.id)}
+                        onClick={() => setDeletingItem(item)}
                         className="text-muted-foreground hover:text-destructive transition-colors"
-                        title="Xóa"
+                        title="Xoá"
                       >
                         <Icon name="delete" size={14} />
                       </button>
@@ -168,6 +176,24 @@ function PriceTierDetail({
           onChange();
         }}
       />
+
+      <ConfirmDialog
+        open={deletingItem !== null}
+        onOpenChange={(o) => {
+          if (!o) setDeletingItem(null);
+        }}
+        title="Xoá sản phẩm khỏi bảng giá?"
+        description={
+          deletingItem
+            ? `Xoá "${deletingItem.productName ?? deletingItem.productCode}" khỏi bảng giá "${tier.name}". Sản phẩm sẽ quay về giá niêm yết. Thao tác không thể hoàn tác.`
+            : ""
+        }
+        confirmLabel="Xoá"
+        cancelLabel="Đóng"
+        variant="destructive"
+        loading={deleteBusy}
+        onConfirm={handleDeleteItem}
+      />
     </InlineDetailPanel>
   );
 }
@@ -187,6 +213,8 @@ export default function ThietLapGiaPage() {
 
   const [createOpen, setCreateOpen] = useState(false);
   const [editingTier, setEditingTier] = useState<PriceTier | null>(null);
+  const [deletingTier, setDeletingTier] = useState<PriceTier | null>(null);
+  const [deleteTierBusy, setDeleteTierBusy] = useState(false);
 
   const fetchData = useCallback(async () => {
     setLoading(true);
@@ -225,18 +253,22 @@ export default function ThietLapGiaPage() {
 
   const pagedData = filtered.slice(page * pageSize, (page + 1) * pageSize);
 
-  async function handleDelete(tier: PriceTier) {
-    if (!confirm(`Xóa bảng giá "${tier.name}"?`)) return;
+  async function handleDelete() {
+    if (!deletingTier) return;
+    setDeleteTierBusy(true);
     try {
-      await deletePriceTier(tier.id);
-      toast({ title: "Đã xóa bảng giá", variant: "success" });
+      await deletePriceTier(deletingTier.id);
+      toast({ title: "Đã xoá bảng giá", variant: "success" });
+      setDeletingTier(null);
       fetchData();
     } catch (err) {
       toast({
-        title: "Lỗi xóa",
+        title: "Lỗi xoá",
         description: err instanceof Error ? err.message : "Vui lòng thử lại",
         variant: "error",
       });
+    } finally {
+      setDeleteTierBusy(false);
     }
   }
 
@@ -362,9 +394,9 @@ export default function ThietLapGiaPage() {
               },
             },
             {
-              label: "Xóa",
+              label: "Xoá",
               icon: <Icon name="delete" size={16} />,
-              onClick: () => handleDelete(row),
+              onClick: () => setDeletingTier(row),
               variant: "destructive",
               separator: true,
             },
@@ -377,6 +409,24 @@ export default function ThietLapGiaPage() {
         onOpenChange={setCreateOpen}
         tier={editingTier}
         onSuccess={fetchData}
+      />
+
+      <ConfirmDialog
+        open={deletingTier !== null}
+        onOpenChange={(o) => {
+          if (!o) setDeletingTier(null);
+        }}
+        title="Xoá bảng giá?"
+        description={
+          deletingTier
+            ? `Xoá bảng giá "${deletingTier.name}" (${deletingTier.code}). Các sản phẩm trong bảng giá sẽ quay về giá niêm yết. Thao tác không thể hoàn tác.`
+            : ""
+        }
+        confirmLabel="Xoá bảng giá"
+        cancelLabel="Đóng"
+        variant="destructive"
+        loading={deleteTierBusy}
+        onConfirm={handleDelete}
       />
     </div>
   );

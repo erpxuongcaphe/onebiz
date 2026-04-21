@@ -237,6 +237,8 @@ export default function AgentDetailPage() {
   const [runningPlaybook, setRunningPlaybook] = useState(false);
   const [savingRules, setSavingRules] = useState(false);
   const [deletingRuleId, setDeletingRuleId] = useState<string | null>(null);
+  // Rule cần confirm trước khi xoá — hỏi user để tránh lỡ tay xoá rule quan trọng.
+  const [deletingRule, setDeletingRule] = useState<PlaybookRule | null>(null);
 
   const load = useCallback(async () => {
     if (!params.id) return;
@@ -481,12 +483,13 @@ export default function AgentDetailPage() {
     }
   };
 
-  const handleDeleteRule = async (ruleId: string) => {
+  const executeDeleteRule = async (ruleId: string) => {
     setDeletingRuleId(ruleId);
     try {
       const next = playbookRules.filter((r) => r.id !== ruleId);
       await persistRules(next);
       notify("Đã xoá rule", "success");
+      setDeletingRule(null);
     } catch {
       /* already notified */
     } finally {
@@ -1279,7 +1282,7 @@ export default function AgentDetailPage() {
                         <Button
                           size="icon-sm"
                           variant="ghost"
-                          onClick={() => handleDeleteRule(rule.id)}
+                          onClick={() => setDeletingRule(rule)}
                           title="Xoá rule"
                           disabled={savingRules || deletingRuleId === rule.id}
                         >
@@ -1396,6 +1399,26 @@ export default function AgentDetailPage() {
         variant="destructive"
         loading={deleting}
         onConfirm={handleDelete}
+      />
+
+      <ConfirmDialog
+        open={deletingRule !== null}
+        onOpenChange={(o) => {
+          if (!o) setDeletingRule(null);
+        }}
+        title="Xoá rule?"
+        description={
+          deletingRule
+            ? `Xoá rule "${deletingRule.name}". Rule sẽ không còn chạy trong playbook. Thao tác không thể hoàn tác.`
+            : ""
+        }
+        confirmLabel="Xoá rule"
+        cancelLabel="Đóng"
+        variant="destructive"
+        loading={deletingRuleId !== null}
+        onConfirm={() => {
+          if (deletingRule) executeDeleteRule(deletingRule.id);
+        }}
       />
 
       <EditPlaybookRuleDialog

@@ -25,6 +25,7 @@ import {
   DropdownMenuContent,
   DropdownMenuItem,
 } from "@/components/ui/dropdown-menu";
+import { ConfirmDialog } from "@/components/shared/dialogs/confirm-dialog";
 import { formatCurrency, formatDate } from "@/lib/format";
 import { exportToExcel, exportToCsv } from "@/lib/utils/export";
 import {
@@ -97,6 +98,10 @@ function ShippingOrderDetail({
   const [logsLoading, setLogsLoading] = useState(true);
   const { toast } = useToast();
 
+  // Các transition terminal (delivered/returned/cancelled) là IRREVERSIBLE — cần confirm.
+  // Transition "on-the-way" (picked_up/in_transit) cũng confirm để tránh bấm nhầm vào UI cầm tay.
+  const [pendingNext, setPendingNext] = useState<ShippingStatus | null>(null);
+
   const loadLogs = useCallback(async () => {
     setLogsLoading(true);
     try {
@@ -111,7 +116,7 @@ function ShippingOrderDetail({
     loadLogs();
   }, [loadLogs]);
 
-  const handleTransition = async (next: ShippingStatus) => {
+  const executeTransition = async (next: ShippingStatus) => {
     if (busy) return;
     setBusy(true);
     try {
@@ -121,6 +126,7 @@ function ShippingOrderDetail({
         description: `${order.code}: ${SHIPPING_STATUS_LABEL[order.status]} → ${SHIPPING_STATUS_LABEL[next]}`,
         variant: "success",
       });
+      setPendingNext(null);
       await loadLogs();
       onStatusChanged();
     } catch (err) {
@@ -132,6 +138,44 @@ function ShippingOrderDetail({
     } finally {
       setBusy(false);
     }
+  };
+
+  const isTerminal = (s: ShippingStatus) =>
+    s === "delivered" || s === "returned" || s === "cancelled";
+
+  const transitionDialogProps = (next: ShippingStatus) => {
+    const fromLabel = SHIPPING_STATUS_LABEL[order.status];
+    const toLabel = SHIPPING_STATUS_LABEL[next];
+    if (next === "delivered") {
+      return {
+        title: "Xác nhận đã giao hàng?",
+        description: `Vận đơn ${order.code}: ${fromLabel} → ${toLabel}. Trạng thái sẽ được khoá — không thể chỉnh sửa sau khi xác nhận. Tiếp tục?`,
+        confirmLabel: "Đã giao",
+        variant: "default" as const,
+      };
+    }
+    if (next === "returned") {
+      return {
+        title: "Đánh dấu hoàn hàng?",
+        description: `Vận đơn ${order.code}: ${fromLabel} → ${toLabel}. Hàng đã rời kho, cần xử lý nhập lại kho thủ công. Tiếp tục?`,
+        confirmLabel: "Đã hoàn",
+        variant: "destructive" as const,
+      };
+    }
+    if (next === "cancelled") {
+      return {
+        title: "Huỷ vận đơn?",
+        description: `Vận đơn ${order.code}: ${fromLabel} → ${toLabel}. Thao tác không thể hoàn tác.`,
+        confirmLabel: "Huỷ vận đơn",
+        variant: "destructive" as const,
+      };
+    }
+    return {
+      title: "Đổi trạng thái vận đơn?",
+      description: `Vận đơn ${order.code}: ${fromLabel} → ${toLabel}.`,
+      confirmLabel: toLabel,
+      variant: "default" as const,
+    };
   };
 
   return (
@@ -156,7 +200,15 @@ function ShippingOrderDetail({
               {nextStatuses.map((s) => (
                 <DropdownMenuItem
                   key={s}
-                  onSelect={() => handleTransition(s)}
+                  onSelect={() => {
+                    // Terminal → luôn confirm. Non-terminal (picked_up / in_transit)
+                    // cũng confirm để tránh bấm nhầm trên tablet / touch-UI.
+                    if (isTerminal(s) || s === "picked_up" || s === "in_transit") {
+                      setPendingNext(s);
+                    } else {
+                      executeTransition(s);
+                    }
+                  }}
                   className="cursor-pointer"
                 >
                   <Icon
@@ -177,6 +229,18 @@ function ShippingOrderDetail({
           </DropdownMenu>
         )}
       </div>
+      {pendingNext && (
+        <ConfirmDialog
+          open
+          onOpenChange={(o) => {
+            if (!o) setPendingNext(null);
+          }}
+          {...transitionDialogProps(pendingNext)}
+          cancelLabel="Đóng"
+          loading={busy}
+          onConfirm={() => executeTransition(pendingNext)}
+        />
+      )}
       <DetailTabs
         tabs={[
           {
