@@ -282,3 +282,83 @@ export async function getTenantUsers(tenantId: string): Promise<{
     createdAt: p.created_at,
   }));
 }
+
+// ── Invite Staff ──
+
+export interface InviteStaffInput {
+  tenantId: string;
+  email: string;
+  fullName: string;
+  phone?: string;
+  branchId?: string;
+  roleId?: string;
+}
+
+/**
+ * Mời nhân viên vào tenant hiện tại qua magic link email.
+ *
+ * Flow:
+ *   1. Gọi supabase.auth.signInWithOtp với metadata đã set
+ *      `invited_tenant_id`, `invited_branch_id`, `invited_role_id`, `full_name`, `phone`
+ *   2. Supabase gửi email chứa link OTP về địa chỉ nhân viên
+ *   3. Nhân viên click link → auth.users.insert → trigger handle_new_user
+ *      đọc metadata và tạo profile link đúng tenant/branch/role
+ *
+ * Yêu cầu:
+ *   - Migration 00029 (handle_new_user hỗ trợ invited_tenant_id)
+ *   - Supabase Auth → Email Provider enabled
+ *   - Email sender config (SMTP) trong Supabase dashboard
+ */
+export async function inviteStaff(input: InviteStaffInput): Promise<void> {
+  const supabase = getClient();
+
+  // Validate email format cơ bản
+  const emailRe = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
+  if (!emailRe.test(input.email)) {
+    throw new Error("Email không hợp lệ");
+  }
+  if (!input.fullName.trim()) {
+    throw new Error("Họ tên không được để trống");
+  }
+
+  // Check trùng — nếu đã có profile với email này trong tenant → báo lỗi
+  const { data: existing } = await supabase
+    .from("profiles")
+    .select("id, tenant_id")
+    .eq("email", input.email)
+    .maybeSingle();
+
+  if (existing) {
+    if (existing.tenant_id === input.tenantId) {
+      throw new Error("Nhân viên này đã có trong cửa hàng của bạn");
+    }
+    // Email đã được dùng ở tenant khác — nghiệp vụ ERP thường cấm
+    throw new Error("Email này đã được sử dụng ở tài khoản khác");
+  }
+
+  const { error } = await supabase.auth.signInWithOtp({
+    email: input.email,
+    options: {
+      shouldCreateUser: true,
+      data: {
+        full_name: input.fullName.trim(),
+        phone: input.phone?.trim() || null,
+        invited_tenant_id: input.tenantId,
+        invited_branch_id: input.branchId || null,
+        invited_role_id: input.roleId || null,
+      },
+    },
+  });
+
+  if (error) {
+    // Map một số lỗi thường gặp sang Tiếng Việt
+    const msg = error.message.toLowerCase();
+    if (msg.includes("rate limit")) {
+      throw new Error("Đã gửi quá nhiều lời mời trong thời gian ngắn. Vui lòng thử lại sau vài phút.");
+    }
+    if (msg.includes("email") && msg.includes("not") && msg.includes("confirmed")) {
+      throw new Error("Supabase chưa cấu hình email — vui lòng bật Email provider trong Dashboard");
+    }
+    throw new Error(`Không gửi được lời mời: ${error.message}`);
+  }
+}

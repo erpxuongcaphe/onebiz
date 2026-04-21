@@ -56,7 +56,7 @@ function handleFnbSubdomain(
   const { pathname } = request.nextUrl;
 
   // Public auth routes — always allow
-  const publicPaths = ["/dang-nhap", "/quen-mat-khau", "/dat-lai-mat-khau"];
+  const publicPaths = ["/dang-nhap", "/dang-ky", "/quen-mat-khau", "/dat-lai-mat-khau"];
   const isPublicPath = publicPaths.some((p) => pathname.startsWith(p));
 
   // Unauthenticated → login
@@ -203,7 +203,7 @@ export async function updateSession(request: NextRequest) {
   }
 
   // ── Standard ERP routing ──
-  const publicPaths = ["/dang-nhap", "/quen-mat-khau", "/dat-lai-mat-khau"];
+  const publicPaths = ["/dang-nhap", "/dang-ky", "/quen-mat-khau", "/dat-lai-mat-khau"];
   const isPublicPath = publicPaths.some((path) =>
     request.nextUrl.pathname.startsWith(path)
   );

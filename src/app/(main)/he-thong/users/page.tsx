@@ -36,8 +36,11 @@ import {
   getRoles,
   getTenantUsers,
   assignRoleToUser,
+  inviteStaff,
 } from "@/lib/services/supabase/roles";
 import type { DbRole } from "@/lib/services/supabase/roles";
+import { Input } from "@/components/ui/input";
+import { Label } from "@/components/ui/label";
 import { getClient } from "@/lib/services/supabase/base";
 import { Icon } from "@/components/ui/icon";
 
@@ -68,6 +71,17 @@ export default function UsersPage() {
   const [selectedUser, setSelectedUser] = useState<UserRow | null>(null);
   const [selectedRoleId, setSelectedRoleId] = useState<string>("");
 
+  // Invite staff dialog
+  const [inviteOpen, setInviteOpen] = useState(false);
+  const [inviteBusy, setInviteBusy] = useState(false);
+  const [inviteForm, setInviteForm] = useState({
+    email: "",
+    fullName: "",
+    phone: "",
+    branchId: "",
+    roleId: "",
+  });
+
   const load = useCallback(async () => {
     if (!tenantId) return;
     setLoading(true);
@@ -96,6 +110,42 @@ export default function UsersPage() {
       load();
     } catch (err) {
       toast({ title: "Lỗi", description: (err as Error).message, variant: "error" });
+    }
+  };
+
+  const resetInviteForm = () =>
+    setInviteForm({ email: "", fullName: "", phone: "", branchId: "", roleId: "" });
+
+  const handleInvite = async () => {
+    if (!tenantId) return;
+    setInviteBusy(true);
+    try {
+      await inviteStaff({
+        tenantId,
+        email: inviteForm.email.trim(),
+        fullName: inviteForm.fullName,
+        phone: inviteForm.phone || undefined,
+        branchId: inviteForm.branchId || undefined,
+        roleId: inviteForm.roleId || undefined,
+      });
+      toast({
+        title: "Đã gửi lời mời",
+        description: `Email mời đã gửi đến ${inviteForm.email}. Nhân viên click link trong email để kích hoạt tài khoản.`,
+        variant: "success",
+        duration: 8000,
+      });
+      setInviteOpen(false);
+      resetInviteForm();
+      load();
+    } catch (err) {
+      toast({
+        title: "Không gửi được lời mời",
+        description: (err as Error).message,
+        variant: "error",
+        duration: 8000,
+      });
+    } finally {
+      setInviteBusy(false);
     }
   };
 
@@ -138,7 +188,7 @@ export default function UsersPage() {
             Quản lý tài khoản nhân viên, gán vai trò
           </p>
         </div>
-        <Button disabled>
+        <Button onClick={() => setInviteOpen(true)}>
           <Icon name="person_add" size={16} className="mr-1.5" />
           Mời nhân viên
         </Button>
@@ -293,6 +343,152 @@ export default function UsersPage() {
             <Button onClick={handleAssignRole}>
               <Icon name="check" size={16} className="mr-1.5" />
               Xác nhận
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
+      {/* Invite Staff Dialog */}
+      <Dialog
+        open={inviteOpen}
+        onOpenChange={(o) => {
+          setInviteOpen(o);
+          if (!o) resetInviteForm();
+        }}
+      >
+        <DialogContent className="sm:max-w-lg">
+          <DialogHeader>
+            <DialogTitle>Mời nhân viên mới</DialogTitle>
+          </DialogHeader>
+          <div className="space-y-4 py-2">
+            <p className="text-xs text-muted-foreground">
+              Nhân viên sẽ nhận email chứa link đăng nhập. Sau khi click link,
+              tài khoản tự động được kích hoạt và liên kết với cửa hàng.
+            </p>
+
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+              <div className="space-y-1.5 sm:col-span-2">
+                <Label htmlFor="invite-email">Email *</Label>
+                <Input
+                  id="invite-email"
+                  type="email"
+                  placeholder="nhanvien@email.com"
+                  value={inviteForm.email}
+                  onChange={(e) =>
+                    setInviteForm((f) => ({ ...f, email: e.target.value }))
+                  }
+                  disabled={inviteBusy}
+                />
+              </div>
+
+              <div className="space-y-1.5">
+                <Label htmlFor="invite-name">Họ và tên *</Label>
+                <Input
+                  id="invite-name"
+                  placeholder="Nguyễn Văn A"
+                  value={inviteForm.fullName}
+                  onChange={(e) =>
+                    setInviteForm((f) => ({ ...f, fullName: e.target.value }))
+                  }
+                  disabled={inviteBusy}
+                />
+              </div>
+
+              <div className="space-y-1.5">
+                <Label htmlFor="invite-phone">Số điện thoại</Label>
+                <Input
+                  id="invite-phone"
+                  type="tel"
+                  placeholder="0912xxxxxx"
+                  value={inviteForm.phone}
+                  onChange={(e) =>
+                    setInviteForm((f) => ({ ...f, phone: e.target.value }))
+                  }
+                  disabled={inviteBusy}
+                />
+              </div>
+
+              <div className="space-y-1.5">
+                <Label htmlFor="invite-branch">Chi nhánh</Label>
+                <Select
+                  value={inviteForm.branchId}
+                  onValueChange={(v) =>
+                    setInviteForm((f) => ({ ...f, branchId: v ?? "" }))
+                  }
+                  disabled={inviteBusy}
+                >
+                  <SelectTrigger id="invite-branch">
+                    <SelectValue placeholder="Chọn chi nhánh" />
+                  </SelectTrigger>
+                  <SelectContent>
+                    {branches.map((b) => (
+                      <SelectItem key={b.id} value={b.id}>
+                        {b.name}
+                      </SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+              </div>
+
+              <div className="space-y-1.5">
+                <Label htmlFor="invite-role">Vai trò</Label>
+                <Select
+                  value={inviteForm.roleId}
+                  onValueChange={(v) =>
+                    setInviteForm((f) => ({ ...f, roleId: v ?? "" }))
+                  }
+                  disabled={inviteBusy}
+                >
+                  <SelectTrigger id="invite-role">
+                    <SelectValue placeholder="Chọn vai trò" />
+                  </SelectTrigger>
+                  <SelectContent>
+                    {roles.map((role) => (
+                      <SelectItem key={role.id} value={role.id}>
+                        <span className="flex items-center gap-2">
+                          <span
+                            className={cn("h-2 w-2 rounded-full", role.color)}
+                          />
+                          {role.name}
+                        </span>
+                      </SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+              </div>
+            </div>
+          </div>
+          <DialogFooter>
+            <Button
+              variant="outline"
+              onClick={() => setInviteOpen(false)}
+              disabled={inviteBusy}
+            >
+              Hủy
+            </Button>
+            <Button
+              onClick={handleInvite}
+              disabled={
+                inviteBusy ||
+                !inviteForm.email.trim() ||
+                !inviteForm.fullName.trim()
+              }
+            >
+              {inviteBusy ? (
+                <>
+                  <Icon
+                    name="progress_activity"
+                    size={16}
+                    className="mr-1.5 animate-spin"
+                  />
+                  Đang gửi...
+                </>
+              ) : (
+                <>
+                  <Icon name="send" size={16} className="mr-1.5" />
+                  Gửi lời mời
+                </>
+              )}
             </Button>
           </DialogFooter>
         </DialogContent>
