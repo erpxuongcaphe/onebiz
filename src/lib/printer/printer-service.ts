@@ -397,6 +397,69 @@ export class PrinterService {
   }
 
   /**
+   * In raw — dành cho call site đã tự build HTML + ESC/POS bytes.
+   * Bypass toàn bộ logic format hoá đơn của service. Dùng cho:
+   *   - Báo cáo ca X/Z (print-shift-report.ts)
+   *   - Kitchen ticket (print-fnb.ts)
+   *   - Pre-bill
+   *
+   * Fallback: nếu USB lỗi → mở browser print với rawHtml.
+   */
+  async printRaw(args: {
+    rawHtml: string;
+    escposBytes?: Uint8Array;
+    backend?: PrinterBackend;
+    openCashDrawer?: boolean;
+  }): Promise<PrintResult> {
+    const backend = args.backend ?? this.configuredBackend;
+
+    if (backend === "browser" || !args.escposBytes) {
+      try {
+        openBrowserPrint(args.rawHtml);
+        return { success: true, backend: "browser" };
+      } catch (err) {
+        const msg = err instanceof Error ? err.message : String(err);
+        return { success: false, backend: "browser", warning: msg };
+      }
+    }
+
+    if (!isWebUsbSupported()) {
+      return this.fallbackRawToBrowser(args.rawHtml, "Trình duyệt không hỗ trợ WebUSB — đã chuyển sang in qua trình duyệt");
+    }
+    const printer = loadPrinter();
+    if (!printer) {
+      return this.fallbackRawToBrowser(args.rawHtml, "Chưa kết nối máy in USB — đã in qua trình duyệt");
+    }
+
+    try {
+      await sendToUsbPrinter(printer.vendorId, printer.productId, args.escposBytes);
+
+      if (args.openCashDrawer) {
+        const drawerBytes = new EscPosBuilder().openDrawer().buildRaw();
+        try {
+          await sendToUsbPrinter(printer.vendorId, printer.productId, drawerBytes);
+        } catch {
+          /* ignore */
+        }
+      }
+      return { success: true, backend: "escpos-usb" };
+    } catch (err) {
+      const msg = err instanceof Error ? err.message : String(err);
+      return this.fallbackRawToBrowser(args.rawHtml, `Máy in USB lỗi (${msg}) — đã in qua trình duyệt`);
+    }
+  }
+
+  private fallbackRawToBrowser(html: string, warning: string): PrintResult {
+    try {
+      openBrowserPrint(html);
+      return { success: true, backend: "browser", fallback: true, warning };
+    } catch (err) {
+      const msg = err instanceof Error ? err.message : String(err);
+      return { success: false, backend: "browser", fallback: true, warning: `${warning} — ${msg}` };
+    }
+  }
+
+  /**
    * Test print — 1 dòng "TEST PRINT OK" để verify connection.
    * Dùng trong Cài đặt → In ấn → "In thử".
    */

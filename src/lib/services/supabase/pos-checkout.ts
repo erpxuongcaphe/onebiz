@@ -54,6 +54,11 @@ export interface PosCheckoutInput {
   note?: string;
   /** Nguồn: 'pos' (mặc định), 'fnb', 'online' */
   source?: "pos" | "fnb" | "online";
+  /**
+   * ID ca đang mở tại quầy. Nếu có → invoice + cash_transaction sẽ gắn
+   * `shift_id` để báo cáo X/Z của ca tính đúng (không trộn với ca khác).
+   */
+  shiftId?: string | null;
 }
 
 export interface PosCheckoutResult {
@@ -183,10 +188,18 @@ export async function createAutoCashReceipt(
   invoiceCode: string,
   amount: number,
   paymentMethod: "cash" | "transfer" | "card" | "mixed",
-  ctx: { tenantId: string; branchId: string; createdBy: string; customerName: string },
+  ctx: {
+    tenantId: string;
+    branchId: string;
+    createdBy: string;
+    customerName: string;
+    shiftId?: string | null;
+  },
   paymentBreakdown?: PaymentBreakdownItem[]
 ): Promise<void> {
   if (amount <= 0) return; // Nợ 100% — chưa thu tiền
+
+  const shiftId = ctx.shiftId ?? null;
 
   // Mixed + có breakdown → tạo N phiếu thu riêng
   if (paymentMethod === "mixed" && paymentBreakdown && paymentBreakdown.length > 0) {
@@ -220,6 +233,7 @@ export async function createAutoCashReceipt(
         reference_id: invoiceId,
         note: `Thu tiền hoá đơn ${invoiceCode} (${METHOD_LABELS[item.method] ?? item.method})`,
         created_by: ctx.createdBy,
+        shift_id: shiftId,
       };
 
       const { error: cashErr } = await supabase
@@ -254,6 +268,7 @@ export async function createAutoCashReceipt(
     reference_id: invoiceId,
     note: `Thu tiền hoá đơn ${invoiceCode}`,
     created_by: ctx.createdBy,
+    shift_id: shiftId,
   };
 
   const { error: cashErr } = await supabase
@@ -302,6 +317,7 @@ export async function posCheckout(input: PosCheckoutInput): Promise<PosCheckoutR
     source: input.source ?? "pos",
     note: input.note ?? null,
     created_by: input.createdBy,
+    shift_id: input.shiftId ?? null,
   } satisfies InvoiceInsert;
 
   const { data: invoice, error: invoiceError } = await supabase

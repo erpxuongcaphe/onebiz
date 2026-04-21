@@ -64,6 +64,8 @@ export interface FnbPaymentInput {
   paid: number;
   discountAmount?: number;
   note?: string;
+  /** ID ca đang mở — nếu có, gắn vào invoice + cash_transaction để báo cáo ca đúng. */
+  shiftId?: string | null;
 }
 
 export interface FnbPaymentResult {
@@ -141,6 +143,7 @@ export async function fnbPayment(input: FnbPaymentInput): Promise<FnbPaymentResu
     p_discount_amount: input.discountAmount ?? 0,
     p_note: input.note ?? null,
     p_created_by: input.createdBy,
+    p_shift_id: input.shiftId ?? null,
   });
 
   if (error) handleError(error, "fnbPayment:atomic_rpc");
@@ -191,13 +194,15 @@ export async function voidFnbInvoice(input: {
   voidedBy: string;
   tenantId: string;
   branchId: string;
+  /** Nếu hoá đơn void trong 1 ca đang mở → gắn phiếu chi hoàn tiền vào ca đó */
+  shiftId?: string | null;
 }): Promise<void> {
   const supabase = getClient();
 
   // 1. Load invoice to verify it's completed
   const { data: invoice, error: invErr } = await supabase
     .from("invoices")
-    .select("id, code, status, total, paid, source")
+    .select("id, code, status, total, paid, source, shift_id")
     .eq("id", input.invoiceId)
     .single();
 
@@ -269,6 +274,9 @@ export async function voidFnbInvoice(input: {
       p_entity_type: "cash_payment",
     });
 
+    // Ưu tiên ca đang mở (input.shiftId), fallback về ca ban đầu của hoá đơn.
+    const reverseShiftId = input.shiftId ?? invoice.shift_id ?? null;
+
     const { error: cashErr } = await supabase
       .from("cash_transactions")
       .insert({
@@ -284,6 +292,7 @@ export async function voidFnbInvoice(input: {
         reference_id: input.invoiceId,
         note: `Hoàn tiền HĐ ${invoice.code}: ${input.voidReason}`,
         created_by: input.voidedBy,
+        shift_id: reverseShiftId,
       });
     if (cashErr) handleError(cashErr, "voidFnbInvoice:reverseCash");
   }

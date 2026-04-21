@@ -35,8 +35,14 @@ import { useToast } from "@/lib/contexts";
 import { formatCurrency } from "@/lib/format";
 import { cn } from "@/lib/utils";
 import { printReceiptDirect, type ReceiptData } from "@/components/shared/print-receipt";
+import { printShiftReport } from "@/lib/print-shift-report";
 import { PosBranchSelector } from "@/components/shared/pos-branch-selector";
 import { useNetworkStatus, offlinePosCheckout } from "@/lib/offline";
+import { useAuth } from "@/lib/contexts";
+import { useSettings } from "@/lib/contexts/settings-context";
+import { getOpenShift, openShift, closeShift } from "@/lib/services/supabase/shifts";
+import type { Shift } from "@/lib/types/shift";
+import { OpenShiftDialog, CloseShiftDialog } from "./fnb/components/shift-dialog";
 
 import { usePosState, type OrderLine, type DiscountInput, type SellingMode, type DeliveryInfo, type PosSnapshot } from "./hooks/use-pos-state";
 import { ProductGrid } from "./components/product-grid";
@@ -251,6 +257,101 @@ export default function PosPage() {
     if (saved !== null) setAutoPrint(saved === "true");
   }, []);
 
+  // ── Shift state ──
+  // POS Retail cũng cần ca để báo cáo X/Z đúng. Logic giống FnB:
+  // - Mount → check có ca đang mở của cashier này tại chi nhánh này không
+  // - Không có → bắt mở ca trước khi cho thanh toán
+  // - Có → cho phép bán, mọi invoice + cash_transaction gắn shift_id
+  const { user, tenant, currentBranch } = useAuth();
+  const { settings } = useSettings();
+  const [currentShift, setCurrentShift] = useState<Shift | null>(null);
+  const [openShiftDialogOpen, setOpenShiftDialogOpen] = useState(false);
+  const [closeShiftDialogOpen, setCloseShiftDialogOpen] = useState(false);
+
+  // Load ca đang mở khi branch/user sẵn sàng
+  useEffect(() => {
+    if (!currentBranch?.id || !user?.id) return;
+    getOpenShift(currentBranch.id, user.id)
+      .then((shift) => setCurrentShift(shift))
+      .catch(() => {});
+  }, [currentBranch?.id, user?.id]);
+
+  const handleShiftClick = useCallback(() => {
+    if (currentShift) setCloseShiftDialogOpen(true);
+    else setOpenShiftDialogOpen(true);
+  }, [currentShift]);
+
+  const handleOpenShift = useCallback(
+    async (startingCash: number) => {
+      if (!tenant?.id || !currentBranch?.id || !user?.id) return;
+      try {
+        const shift = await openShift({
+          tenantId: tenant.id,
+          branchId: currentBranch.id,
+          cashierId: user.id,
+          startingCash,
+        });
+        setCurrentShift(shift);
+        setOpenShiftDialogOpen(false);
+        toast({ title: "Đã mở ca", description: `Số dư đầu ca: ${startingCash.toLocaleString()} đ`, variant: "success" });
+      } catch (err: any) {
+        toast({ title: "Không mở được ca", description: err?.message ?? "Vui lòng thử lại.", variant: "error" });
+      }
+    },
+    [tenant?.id, currentBranch?.id, user?.id, toast]
+  );
+
+  const handleCloseShift = useCallback(
+    async (actualCash: number, note?: string) => {
+      if (!currentShift) return;
+      try {
+        const report = await closeShift({ shiftId: currentShift.id, actualCash, note });
+
+        // Auto-print Z report
+        try {
+          printShiftReport({
+            type: "Z",
+            storeName: settings.print.showStoreName ? settings.store.name : undefined,
+            storeAddress: settings.print.showStoreAddress ? settings.store.address : undefined,
+            storePhone: settings.print.showStorePhone ? settings.store.phone : undefined,
+            branchName: currentBranch?.name,
+            cashierName: report.cashierName ?? user?.fullName,
+            openedAt: report.openedAt,
+            closedAt: report.closedAt,
+            startingCash: report.startingCash,
+            cashIn: report.cashIn,
+            cashOut: report.cashOut,
+            expectedCash: report.expectedCash ?? 0,
+            actualCash: report.actualCash ?? actualCash,
+            cashDifference: report.cashDifference ?? 0,
+            totalSales: report.totalSales,
+            totalOrders: report.totalOrders,
+            salesByMethod: report.salesByMethod,
+            note: report.note,
+            paperSize: settings.print.paperSize === "58mm" ? "58mm" : "80mm",
+          });
+        } catch (err) {
+          console.error("printShiftReport(Z) error:", err);
+        }
+
+        setCurrentShift(null);
+        setCloseShiftDialogOpen(false);
+
+        const diff = report.cashDifference ?? 0;
+        toast({
+          title: "Đã đóng ca",
+          description: `Chênh lệch: ${
+            diff === 0 ? "KHỚP" : diff > 0 ? `THỪA ${diff.toLocaleString()}` : `THIẾU ${Math.abs(diff).toLocaleString()}`
+          }`,
+          variant: diff === 0 ? "success" : "warning",
+        });
+      } catch (err: any) {
+        toast({ title: "Không đóng được ca", description: err?.message ?? "Vui lòng thử lại.", variant: "error" });
+      }
+    },
+    [currentShift, settings, currentBranch, user, toast]
+  );
+
   // Handle product click — if variants exist, open picker; else add directly
   const handleAddProduct = useCallback(
     async (product: Product) => {
@@ -373,6 +474,16 @@ export default function PosPage() {
 
   const handleComplete = useCallback(async () => {
     if (submitLockRef.current) return;
+    // Bắt mở ca trước khi thanh toán — không có ca = không biết ghi nhận vào đâu.
+    if (!currentShift) {
+      toast({
+        title: "Chưa mở ca",
+        description: "Anh/chị cần mở ca trước khi bán hàng để báo cáo X/Z đúng.",
+        variant: "warning",
+      });
+      setOpenShiftDialogOpen(true);
+      return;
+    }
     submitLockRef.current = true;
     setSubmitting("complete");
     try {
@@ -432,6 +543,7 @@ export default function PosPage() {
           total: state.total,
           paid,
           note: state.note || "",
+          shiftId: currentShift?.id ?? null,
         };
         const result = await offlinePosCheckout(input, networkStatus.isOnline);
         invoiceCode = result.invoiceCode;
@@ -483,12 +595,21 @@ export default function PosPage() {
       setSubmitting(null);
       submitLockRef.current = false;
     }
-  }, [state, toast, autoPrint, networkStatus.isOnline]);
+  }, [state, toast, autoPrint, networkStatus.isOnline, currentShift]);
 
   const handleDebtCheckout = useCallback(async () => {
     if (submitLockRef.current) return;
     if (!state.customer) {
       toast({ title: "Vui lòng chọn khách hàng để ghi nợ", variant: "error" });
+      return;
+    }
+    if (!currentShift) {
+      toast({
+        title: "Chưa mở ca",
+        description: "Anh/chị cần mở ca trước khi ghi nợ.",
+        variant: "warning",
+      });
+      setOpenShiftDialogOpen(true);
       return;
     }
     submitLockRef.current = true;
@@ -526,6 +647,7 @@ export default function PosPage() {
         total: state.total,
         paid: 0, // Ghi nợ 100%
         note: state.note ? `[Ghi nợ] ${state.note}` : "[Ghi nợ]",
+        shiftId: currentShift?.id ?? null,
       };
       const result = await offlinePosCheckout(input, networkStatus.isOnline);
 
@@ -547,7 +669,7 @@ export default function PosPage() {
       setSubmitting(null);
       submitLockRef.current = false;
     }
-  }, [state, toast, networkStatus.isOnline]);
+  }, [state, toast, networkStatus.isOnline, currentShift]);
 
   // ============================================================
   // Hotkeys
@@ -716,6 +838,22 @@ export default function PosPage() {
             </kbd>
           </div>
         </div>
+
+        {/* Shift button — status ca làm việc */}
+        <button
+          type="button"
+          onClick={handleShiftClick}
+          className={cn(
+            "inline-flex items-center gap-1 px-2 py-1 rounded transition-colors shrink-0 text-[11px]",
+            currentShift
+              ? "bg-status-success/90 text-white hover:bg-status-success"
+              : "bg-white/10 text-white/80 hover:bg-white/20"
+          )}
+          title={currentShift ? "Ca đang mở — click để đóng ca" : "Click để mở ca"}
+        >
+          <Icon name={currentShift ? "schedule" : "play_circle"} size={12} />
+          <span className="hidden sm:inline">{currentShift ? "Đang mở ca" : "Mở ca"}</span>
+        </button>
 
         {/* Draft button — always visible */}
         <button
@@ -1483,6 +1621,23 @@ export default function PosPage() {
             status={networkStatus}
           />
         </Suspense>
+      )}
+
+      {/* Shift dialogs — mở/đóng ca */}
+      {openShiftDialogOpen && (
+        <OpenShiftDialog
+          open={openShiftDialogOpen}
+          onOpenChange={setOpenShiftDialogOpen}
+          onConfirm={handleOpenShift}
+        />
+      )}
+      {closeShiftDialogOpen && (
+        <CloseShiftDialog
+          open={closeShiftDialogOpen}
+          onOpenChange={setCloseShiftDialogOpen}
+          currentShift={currentShift}
+          onConfirm={handleCloseShift}
+        />
       )}
     </>
   );

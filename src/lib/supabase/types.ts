@@ -806,6 +806,7 @@ export interface Database {
           note: string | null;
           created_by: string;
           created_at: string;
+          shift_id: string | null;
         };
         Insert: {
           id?: string;
@@ -821,9 +822,11 @@ export interface Database {
           reference_id?: string | null;
           note?: string | null;
           created_by: string;
+          shift_id?: string | null;
         };
         Update: {
           note?: string | null;
+          shift_id?: string | null;
         };
         Relationships: [];
       };

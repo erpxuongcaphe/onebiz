@@ -88,74 +88,61 @@ export async function openShift(input: OpenShiftInput): Promise<Shift> {
   return mapShift(data as unknown as Record<string, unknown>);
 }
 
-/** Close a shift with cash reconciliation */
-export async function closeShift(input: CloseShiftInput): Promise<Shift> {
+/**
+ * Báo cáo chi tiết 1 ca vừa đóng — dùng để in báo cáo X/Z trên máy in nhiệt.
+ * Trả về thêm `cashIn`/`cashOut` so với `Shift` interface.
+ */
+export interface ShiftReport extends Shift {
+  cashIn: number;
+  cashOut: number;
+}
+
+/**
+ * Đóng ca với cash reconciliation — ATOMIC qua RPC `close_shift_atomic`.
+ *
+ * Khác biệt so với implementation cũ:
+ *   - Filter `cash_transactions` + `invoices` theo `shift_id` (KHÔNG theo
+ *     branch_id + thời gian) → chính xác tuyệt đối, không trộn với ca khác
+ *     cùng chi nhánh.
+ *   - All-or-nothing: update shift + tính toán trong cùng 1 transaction.
+ *   - Return chi tiết cash_in / cash_out / sales_by_method để in báo cáo X/Z.
+ *
+ * YÊU CẦU: migration 00030_shift_integrity.sql đã chạy.
+ */
+export async function closeShift(input: CloseShiftInput): Promise<ShiftReport> {
   const supabase = getClient();
 
-  // 1. Get the shift
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  const { data, error } = await (supabase.rpc as any)("close_shift_atomic", {
+    p_shift_id: input.shiftId,
+    p_actual_cash: input.actualCash,
+    p_note: input.note ?? null,
+  });
+
+  if (error) handleError(error, "closeShift");
+  if (!data) throw new Error("Không đóng được ca");
+
+  // Load full shift record (with cashier name) để map về UI
   const { data: shift, error: fetchError } = await supabase
     .from("shifts")
-    .select("*")
-    .eq("id", input.shiftId)
-    .eq("status", "open")
-    .single();
-  if (fetchError || !shift) throw new Error("Không tìm thấy ca đang mở");
-
-  // 2. Calculate expected cash: starting_cash + cash payments during shift
-  const { data: cashPayments } = await supabase
-    .from("cash_transactions")
-    .select("amount, type")
-    .eq("branch_id", shift.branch_id)
-    .gte("created_at", shift.opened_at)
-    .lte("created_at", new Date().toISOString());
-
-  let cashIn = 0;
-  let cashOut = 0;
-  for (const tx of cashPayments ?? []) {
-    if (tx.type === "receipt") cashIn += Number(tx.amount);
-    else cashOut += Number(tx.amount);
-  }
-  const expectedCash = Number(shift.starting_cash) + cashIn - cashOut;
-
-  // 3. Count invoices during shift
-  const { data: invoices } = await supabase
-    .from("invoices")
-    .select("id, total, payment_method")
-    .eq("branch_id", shift.branch_id)
-    .gte("created_at", shift.opened_at)
-    .lte("created_at", new Date().toISOString())
-    .neq("status", "cancelled");
-
-  const totalSales = (invoices ?? []).reduce((sum, inv) => sum + Number(inv.total), 0);
-  const totalOrders = (invoices ?? []).length;
-
-  // Payment method breakdown
-  const salesByMethod: Record<string, number> = {};
-  for (const inv of invoices ?? []) {
-    const method = inv.payment_method ?? "cash";
-    salesByMethod[method] = (salesByMethod[method] ?? 0) + Number(inv.total);
-  }
-
-  // 4. Update shift
-  const { data: closed, error: closeError } = await supabase
-    .from("shifts")
-    .update({
-      status: "closed",
-      closed_at: new Date().toISOString(),
-      expected_cash: expectedCash,
-      actual_cash: input.actualCash,
-      cash_difference: input.actualCash - expectedCash,
-      total_sales: totalSales,
-      total_orders: totalOrders,
-      sales_by_method: salesByMethod,
-      note: input.note ?? null,
-    })
-    .eq("id", input.shiftId)
     .select("*, profiles(full_name)")
+    .eq("id", input.shiftId)
     .single();
+  if (fetchError || !shift) throw new Error("Không đọc được ca sau khi đóng");
 
-  if (closeError) handleError(closeError, "closeShift");
-  return mapShift(closed as unknown as Record<string, unknown>);
+  const base = mapShift(shift as unknown as Record<string, unknown>);
+
+  // Ép kiểu JSON từ RPC
+  const rpcResult = data as {
+    cash_in?: number | string;
+    cash_out?: number | string;
+  };
+
+  return {
+    ...base,
+    cashIn: Number(rpcResult.cash_in ?? 0),
+    cashOut: Number(rpcResult.cash_out ?? 0),
+  };
 }
 
 /** Get shift history for a branch */
