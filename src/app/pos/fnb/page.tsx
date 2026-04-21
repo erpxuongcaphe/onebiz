@@ -4,7 +4,7 @@ import { useState, useEffect, useCallback, useMemo, lazy, Suspense } from "react
 import { useAuth, useToast } from "@/lib/contexts";
 import { useSettings } from "@/lib/contexts/settings-context";
 import { getProductCategoriesAsync } from "@/lib/services/supabase/products";
-import { getVariantsByProduct } from "@/lib/services/supabase/variants";
+import { getVariantsByProduct, getVariantsByProductIds } from "@/lib/services/supabase/variants";
 import { fnbPayment } from "@/lib/services/supabase/fnb-checkout";
 import { getTablesByBranch, markTableAvailable } from "@/lib/services/supabase/fnb-tables";
 import {
@@ -26,6 +26,7 @@ import { getKitchenOrderById } from "@/lib/services/supabase/kitchen-orders";
 import { getOpenShift, openShift, closeShift } from "@/lib/services/supabase/shifts";
 import { getClient } from "@/lib/services/supabase/base";
 import { printKitchenTicketV2, printPreBill, printFnbReceipt } from "@/lib/print-fnb";
+import { printShiftReport } from "@/lib/print-shift-report";
 import type { RestaurantTable } from "@/lib/types/fnb";
 import type { Shift } from "@/lib/types/shift";
 import type { Customer } from "@/lib/types";
@@ -134,7 +135,7 @@ export default function FnbPosPage() {
                   .eq("product_type", "sku")
                   .eq("channel", "fnb")
                   .order("name")
-                  .limit(300),
+                  .limit(200), // giảm từ 300 → 200: hầu như menu FnB <200 SP, tiết kiệm ~100KB JSON
                 supabase
                   .from("products")
                   .select("id, name, sell_price")
@@ -229,22 +230,59 @@ export default function FnbPosPage() {
     []
   );
 
+  // ── Variant PREFETCH: batch load variants cho toàn bộ SP trong menu NGAY SAU khi products load.
+  //    Mục đích: khi user click SP đầu tiên → dialog mở instant (không có 200-400ms delay fetch).
+  //    Dùng .in() → 1 network roundtrip cho N products (thay vì N round-trips lazy).
+  //    Gate bằng cache.size để tránh re-prefetch khi cached products được set từ IndexedDB. ──
+  useEffect(() => {
+    if (!networkStatus.isOnline) return;
+    if (products.length === 0) return;
+    // Cache đã khớp phần lớn → skip (vd mới vừa prefetch xong, refresh menu)
+    if (variantCacheRef.size >= products.length * 0.8) return;
+
+    let cancelled = false;
+    getVariantsByProductIds(products.map((p) => p.id))
+      .then((variantMap) => {
+        if (cancelled) return;
+        variantMap.forEach((variants, pid) => {
+          variantCacheRef.set(
+            pid,
+            variants.map((v) => ({
+              id: v.id,
+              label: v.name,
+              sell_price: v.sellPrice,
+            }))
+          );
+        });
+      })
+      .catch(() => {
+        // Silent — lazy fetch on click sẽ backfill cache
+      });
+    return () => {
+      cancelled = true;
+    };
+  }, [products, networkStatus.isOnline, variantCacheRef]);
+
   // ── Product select → open item dialog (instant open, variants load in background) ──
   const handleSelectProduct = useCallback(
     async (product: FnbProduct) => {
       hapticTap();
       setSelectedProduct(product);
 
-      // Open dialog immediately với variants từ cache (nếu có), sau đó refresh network.
+      // Open dialog immediately với variants từ cache (nếu có). Cache đã được
+      // warm bởi batch prefetch ngay khi menu load → hầu hết lần click đã có
+      // cache, không cần round-trip network.
       const cached = variantCacheRef.get(product.id);
       if (cached) {
         setItemVariants(cached);
-      } else {
-        setItemVariants([]);
+        setItemDialogOpen(true);
+        return; // Skip network — biến thể cache trong session, rất hiếm khi đổi giá giữa ca
       }
-      setItemDialogOpen(true);
 
-      // Fetch / refresh variants in background
+      // Cache miss (vd prefetch còn chạy hoặc SP mới thêm sau khi vào trang)
+      // → fetch trực tiếp SP này rồi populate cache
+      setItemVariants([]);
+      setItemDialogOpen(true);
       try {
         const variants = await getVariantsByProduct(product.id);
         const mapped = variants.map((v) => ({
@@ -256,14 +294,12 @@ export default function FnbPosPage() {
         setItemVariants(mapped);
       } catch (err) {
         console.error("getVariantsByProduct error:", err);
-        if (!cached) {
-          setItemVariants([]);
-          toast({
-            title: "Không tải được size/biến thể",
-            description: "Món sẽ được thêm với giá chuẩn.",
-            variant: "warning",
-          });
-        }
+        setItemVariants([]);
+        toast({
+          title: "Không tải được size/biến thể",
+          description: "Món sẽ được thêm với giá chuẩn.",
+          variant: "warning",
+        });
       }
     },
     [toast, variantCacheRef]
@@ -471,6 +507,7 @@ export default function FnbPosPage() {
             : undefined,
           paid: payload.paid,
           discountAmount: pos.orderDiscountAmount > 0 ? pos.orderDiscountAmount : undefined,
+          shiftId: currentShift?.id ?? null,
         }, networkStatus.isOnline);
 
         // Auto-print receipt if enabled.
@@ -553,7 +590,7 @@ export default function FnbPosPage() {
         toast({ title: "Thanh toán thất bại", description: (err as Error).message, variant: "error" });
       }
     },
-    [pos, tenantId, branchId, userId, handleSendToKitchen, toast, settings, user, networkStatus.isOnline]
+    [pos, tenantId, branchId, userId, handleSendToKitchen, toast, settings, user, networkStatus.isOnline, currentShift?.id]
   );
 
   // ── Table select (from floor plan) ──
@@ -605,11 +642,56 @@ export default function FnbPosPage() {
   const handleCloseShift = useCallback(
     async (actualCash: number, note?: string) => {
       if (!currentShift) return;
-      await closeShift({ shiftId: currentShift.id, actualCash, note });
+      const report = await closeShift({ shiftId: currentShift.id, actualCash, note });
+
+      // In báo cáo Z tự động sau khi đóng ca thành công
+      try {
+        printShiftReport({
+          type: "Z",
+          storeName: settings.print.showStoreName ? settings.store.name : undefined,
+          storeAddress: settings.print.showStoreAddress ? settings.store.address : undefined,
+          storePhone: settings.print.showStorePhone ? settings.store.phone : undefined,
+          branchName: currentBranch?.name,
+          cashierName: report.cashierName ?? user?.fullName,
+          openedAt: report.openedAt,
+          closedAt: report.closedAt,
+          startingCash: report.startingCash,
+          cashIn: report.cashIn,
+          cashOut: report.cashOut,
+          expectedCash: report.expectedCash ?? 0,
+          actualCash: report.actualCash ?? actualCash,
+          cashDifference: report.cashDifference ?? 0,
+          totalSales: report.totalSales,
+          totalOrders: report.totalOrders,
+          salesByMethod: report.salesByMethod,
+          note: report.note,
+          paperSize: settings.print.paperSize === "58mm" ? "58mm" : "80mm",
+        });
+      } catch (err) {
+        console.error("printShiftReport(Z) error:", err);
+        toast({
+          title: "Đóng ca OK nhưng in báo cáo Z lỗi",
+          description: "Anh/chị có thể in lại từ Lịch sử ca.",
+          variant: "warning",
+        });
+      }
+
       setCurrentShift(null);
       setCloseShiftDialogOpen(false);
+
+      toast({
+        title: "Đã đóng ca",
+        description: `Chênh lệch: ${
+          (report.cashDifference ?? 0) === 0
+            ? "KHỚP"
+            : (report.cashDifference ?? 0) > 0
+              ? `THỪA ${(report.cashDifference ?? 0).toLocaleString()}`
+              : `THIẾU ${Math.abs(report.cashDifference ?? 0).toLocaleString()}`
+        }`,
+        variant: (report.cashDifference ?? 0) === 0 ? "success" : "warning",
+      });
     },
-    [currentShift]
+    [currentShift, settings, currentBranch, user, toast]
   );
 
   // ── Customer selection ──

@@ -52,19 +52,24 @@ export function PosBranchSelector({
         className={cn(
           "flex items-center gap-1.5 px-2.5 py-1.5 text-sm rounded-md transition-colors cursor-pointer outline-none shrink-0",
           isDark
-            ? "text-slate-300 hover:text-white hover:bg-slate-800"
+            ? "bg-white/10 text-white ring-1 ring-white/15 hover:bg-white/20"
             : "text-foreground hover:text-on-surface hover:bg-surface-container border border-border",
         )}
+        title={
+          currentBranch
+            ? `Chi nhánh đang ghi nhận đơn: ${currentBranch.name}`
+            : "Chưa chọn chi nhánh"
+        }
       >
-        <Icon name="apartment" size={14} className="shrink-0" />
-        <span className="truncate max-w-[180px] font-medium">
+        <Icon name="apartment" size={16} className="shrink-0" />
+        <span className="truncate max-w-[240px] font-semibold tracking-tight">
           {currentBranch
             ? showCode && currentBranch.code
               ? `${currentBranch.code} · ${currentBranch.name}`
               : currentBranch.name
             : "Chọn chi nhánh"}
         </span>
-        <Icon name="expand_more" size={12} className="shrink-0" />
+        <Icon name="expand_more" size={14} className="shrink-0 opacity-80" />
       </DropdownMenuTrigger>
       <DropdownMenuContent align="start" sideOffset={6} className="min-w-[220px]">
         <DropdownMenuGroup>

@@ -19,6 +19,41 @@ export async function getVariantsByProduct(
   return (data ?? []).map(mapVariant);
 }
 
+/**
+ * Batch fetch variants cho nhiều SP trong 1 request.
+ * Dùng ở POS FnB init để warm cache — user click SP lần đầu thấy
+ * dialog mở instant (không phải chờ 200-400ms round-trip).
+ *
+ * Return: Map<productId, variants[]> để caller populate cache Map<string, ...>.
+ */
+export async function getVariantsByProductIds(
+  productIds: string[]
+): Promise<Map<string, ProductVariant[]>> {
+  const result = new Map<string, ProductVariant[]>();
+  if (productIds.length === 0) return result;
+
+  // Dedup + limit để tránh query quá lớn (Postgres IN giới hạn ~thousands, nhưng
+  // POS menu thường <500 SP nên ok. Vẫn cắt 500 cho an toàn).
+  const unique = Array.from(new Set(productIds)).slice(0, 500);
+
+  const { data, error } = await supabase
+    .from("product_variants")
+    .select("*")
+    .in("product_id", unique)
+    .eq("is_active", true)
+    .order("sort_order");
+
+  if (error) throw error;
+
+  for (const row of data ?? []) {
+    const pid = row.product_id as string;
+    const list = result.get(pid) ?? [];
+    list.push(mapVariant(row));
+    result.set(pid, list);
+  }
+  return result;
+}
+
 export async function createVariant(variant: {
   productId: string;
   name: string;
