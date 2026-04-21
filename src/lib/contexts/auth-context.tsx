@@ -62,7 +62,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   const loadUserData = useCallback(
     async (authUser: User) => {
       try {
-        // 1. Load profile
+        // 1. Profile TRƯỚC — các query khác cần profile.tenant_id + profile.id.
         const { data: profile } = await supabase
           .from("profiles")
           .select("*")
@@ -89,25 +89,32 @@ export function AuthProvider({ children }: { children: ReactNode }) {
         };
         setUser(userProfile);
 
-        // Load permissions (owner auto-gets all via "*" wildcard)
-        if (profile.role === "owner") {
-          setPermissions(new Set(["*"]));
-        } else {
-          try {
-            const perms = await getUserPermissions(profile.id);
-            setPermissions(perms);
-          } catch {
-            setPermissions(new Set());
-          }
-        }
+        // 2-4. Song song hoá tenant + branches + permissions — trước đây 3 call
+        // tuần tự làm cold start 1.5-2s, blocking toàn bộ AuthProvider render.
+        // Owner skip getUserPermissions (có wildcard "*").
+        const permsPromise =
+          profile.role === "owner"
+            ? Promise.resolve<Set<string>>(new Set(["*"]))
+            : getUserPermissions(profile.id).catch(() => new Set<string>());
 
-        // 2. Load tenant
-        const { data: tenantData } = await supabase
-          .from("tenants")
-          .select("*")
-          .eq("id", profile.tenant_id)
-          .single();
+        const [tenantRes, branchRes, perms] = await Promise.all([
+          supabase
+            .from("tenants")
+            .select("*")
+            .eq("id", profile.tenant_id)
+            .single(),
+          supabase
+            .from("branches")
+            .select("*")
+            .eq("tenant_id", profile.tenant_id)
+            .eq("is_active", true)
+            .order("is_default", { ascending: false }),
+          permsPromise,
+        ]);
 
+        setPermissions(perms);
+
+        const tenantData = tenantRes.data;
         if (tenantData) {
           setTenant({
             id: tenantData.id,
@@ -118,14 +125,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
           });
         }
 
-        // 3. Load branches
-        const { data: branchData } = await supabase
-          .from("branches")
-          .select("*")
-          .eq("tenant_id", profile.tenant_id)
-          .eq("is_active", true)
-          .order("is_default", { ascending: false });
-
+        const branchData = branchRes.data;
         if (branchData && branchData.length > 0) {
           const mappedBranches: Branch[] = branchData.map((b) => ({
             id: b.id,

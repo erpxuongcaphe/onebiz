@@ -103,7 +103,11 @@ function calcDiff(current: number, previous: number): { text: string; positive: 
 export default function TongQuanPage() {
   const { activeBranchId } = useBranchFilter();
   const [chartView, setChartView] = useState<ChartView>("day");
-  const [loading, setLoading] = useState(true);
+  // Progressive loading: KPI skeleton trước, charts + secondary widgets sau.
+  // Trước đây single `loading` flag block toàn bộ dashboard 2-4s → user thấy spinner
+  // quay vòng. Giờ KPI xuất hiện <500ms, phần còn lại fill dần.
+  const [kpiLoading, setKpiLoading] = useState(true);
+  const [chartsLoading, setChartsLoading] = useState(true);
 
   // Data state
   const [kpis, setKpis] = useState<DashboardKpis | null>(null);
@@ -117,22 +121,38 @@ export default function TongQuanPage() {
   const [financialAlerts, setFinancialAlerts] = useState<FinancialAlert[]>([]);
   const [turnover, setTurnover] = useState<InventoryTurnoverResult | null>(null);
 
-  const fetchData = useCallback(async () => {
-    setLoading(true);
+  // Phase 1 — KPI + turnover (critical path, hiển thị đầu tiên ~300-500ms)
+  const fetchPhase1 = useCallback(async () => {
+    setKpiLoading(true);
     try {
-      const [kpiRes, dayRes, hourRes, weekdayRes, ordersRes, topRes, lowRes, actRes, alertRes, turnoverRes] = await Promise.all([
+      const [kpiRes, turnoverRes] = await Promise.all([
         getDashboardKpis(activeBranchId),
-        getRevenueByDay(7, activeBranchId),
-        getRevenueByHour(activeBranchId),
-        getRevenueByWeekday(activeBranchId),
-        getOrdersByWeekday(activeBranchId),
-        getTopProducts(10, activeBranchId),
-        getLowStockProducts(5),
-        getRecentActivities(8),
-        getFinancialAlerts().catch(() => [] as FinancialAlert[]),
         getInventoryTurnover().catch(() => null as InventoryTurnoverResult | null),
       ]);
       setKpis(kpiRes);
+      setTurnover(turnoverRes);
+    } catch {
+      // Silently fail — show empty state
+    } finally {
+      setKpiLoading(false);
+    }
+  }, [activeBranchId]);
+
+  // Phase 2 — charts + secondary widgets (không block KPI hiển thị)
+  const fetchPhase2 = useCallback(async () => {
+    setChartsLoading(true);
+    try {
+      const [dayRes, hourRes, weekdayRes, ordersRes, topRes, lowRes, actRes, alertRes] =
+        await Promise.all([
+          getRevenueByDay(7, activeBranchId),
+          getRevenueByHour(activeBranchId),
+          getRevenueByWeekday(activeBranchId),
+          getOrdersByWeekday(activeBranchId),
+          getTopProducts(10, activeBranchId),
+          getLowStockProducts(5),
+          getRecentActivities(8),
+          getFinancialAlerts().catch(() => [] as FinancialAlert[]),
+        ]);
       setRevenueDay(dayRes);
       setRevenueHour(hourRes);
       setRevenueWeekday(weekdayRes);
@@ -141,15 +161,17 @@ export default function TongQuanPage() {
       setLowStock(lowRes);
       setActivities(actRes);
       setFinancialAlerts(alertRes);
-      setTurnover(turnoverRes);
     } catch {
       // Silently fail — show empty state
     } finally {
-      setLoading(false);
+      setChartsLoading(false);
     }
   }, [activeBranchId]);
 
-  useEffect(() => { fetchData(); }, [fetchData]);
+  useEffect(() => {
+    fetchPhase1();
+    fetchPhase2();
+  }, [fetchPhase1, fetchPhase2]);
 
   const today = new Date();
   const formattedDate = new Intl.DateTimeFormat("vi-VN", {
@@ -206,14 +228,6 @@ export default function TongQuanPage() {
       ]
     : [];
 
-  if (loading) {
-    return (
-      <div className="flex items-center justify-center h-64">
-        <Icon name="progress_activity" className="size-8 animate-spin text-muted-foreground" />
-      </div>
-    );
-  }
-
   return (
     <div className="p-4 md:p-6 space-y-4">
       {/* ── Hero: Date + Quick Actions ── */}
@@ -266,6 +280,23 @@ export default function TongQuanPage() {
           icon bg-primary-fixed text-primary, uppercase label widest tracking,
           headline font + bold number. */}
       <div className="grid grid-cols-2 lg:grid-cols-5 gap-4">
+        {/* Skeleton khi kpis chưa load để UI không nhảy — 4 card + 1 turnover bên dưới. */}
+        {kpiLoading && !kpis &&
+          Array.from({ length: 4 }).map((_, i) => (
+            <Card
+              key={`skel-${i}`}
+              className="rounded-xl border-0 ambient-shadow bg-surface-container-lowest"
+            >
+              <CardContent className="p-5">
+                <div className="flex items-start justify-between mb-3">
+                  <span className="h-3 w-20 rounded bg-muted/60 animate-pulse" />
+                  <div className="size-9 rounded-lg bg-muted/60 animate-pulse" />
+                </div>
+                <div className="h-8 w-28 rounded bg-muted/60 animate-pulse" />
+                <div className="mt-2 h-3 w-24 rounded bg-muted/50 animate-pulse" />
+              </CardContent>
+            </Card>
+          ))}
         {kpiCards.map((kpi) => (
           <Card
             key={kpi.label}
