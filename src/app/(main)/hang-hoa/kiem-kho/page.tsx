@@ -5,6 +5,7 @@ import { ColumnDef } from "@tanstack/react-table";
 import { PageHeader } from "@/components/shared/page-header";
 import { ListPageLayout } from "@/components/shared/list-page-layout";
 import { DataTable, StarCell } from "@/components/shared/data-table";
+import { SummaryCard } from "@/components/shared/summary-card";
 import {
   FilterSidebar,
   FilterGroup,
@@ -562,6 +563,19 @@ export default function KiemKhoPage() {
     }
   };
 
+  /* ---- KPI row (derived từ current page data) ---- */
+  // Chỉ tính trên `data` đã fetch (đã được filter theo branch + status + search).
+  // Không query thêm để tránh roundtrip — KPI là view-over-current-result.
+  const kpi = {
+    total,
+    processing: data.filter((d) => d.status === "processing").length,
+    balanced: data.filter((d) => d.status === "balanced").length,
+    netVariance: data.reduce(
+      (sum, d) => sum + (d.increaseAmount - d.decreaseAmount),
+      0,
+    ),
+  };
+
   /* ---- Inline detail renderer ---- */
   const renderDetail = (item: InventoryCheck, onClose: () => void) => (
     <InventoryCheckDetail
@@ -642,6 +656,40 @@ export default function KiemKhoPage() {
           },
         ]}
       />
+
+      {!loading && data.length > 0 && (
+        <div className="grid grid-cols-2 md:grid-cols-4 gap-3 px-4 pt-4">
+          <SummaryCard
+            icon={<Icon name="inventory_2" size={16} />}
+            label="Tổng phiếu kiểm"
+            value={kpi.total.toString()}
+          />
+          <SummaryCard
+            icon={<Icon name="pending_actions" size={16} />}
+            label="Phiếu tạm"
+            value={kpi.processing.toString()}
+            highlight={kpi.processing > 0}
+          />
+          <SummaryCard
+            icon={<Icon name="check_circle" size={16} />}
+            label="Đã cân bằng"
+            value={kpi.balanced.toString()}
+          />
+          <SummaryCard
+            icon={
+              <Icon
+                name={kpi.netVariance >= 0 ? "trending_up" : "trending_down"}
+                size={16}
+              />
+            }
+            label="Chênh lệch ròng"
+            value={formatCurrency(kpi.netVariance)}
+            valueClassName={
+              kpi.netVariance >= 0 ? "text-status-success" : "text-status-error"
+            }
+          />
+        </div>
+      )}
 
       <DataTable
         columns={columns}

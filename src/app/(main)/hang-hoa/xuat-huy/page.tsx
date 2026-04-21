@@ -9,6 +9,7 @@ import { Badge } from "@/components/ui/badge";
 import { PageHeader } from "@/components/shared/page-header";
 import { ListPageLayout } from "@/components/shared/list-page-layout";
 import { DataTable, StarCell } from "@/components/shared/data-table";
+import { SummaryCard } from "@/components/shared/summary-card";
 import {
   FilterSidebar,
   FilterGroup,
@@ -283,6 +284,12 @@ export default function XuatHuyPage() {
     <DisposalExportDetail item={item} onClose={onClose} />
   );
 
+  /* ---- KPI row ---- */
+  // Tổng GT xuất huỷ = thiệt hại — CEO cần visibility trực tiếp trên danh sách.
+  const kpiTotalLoss = data.reduce((sum, d) => sum + (d.totalAmount ?? 0), 0);
+  const kpiDraft = data.filter((d) => d.status === "draft").length;
+  const kpiCompleted = data.filter((d) => d.status === "completed").length;
+
   /* ---- Render ---- */
   return (
     <ListPageLayout
@@ -351,6 +358,33 @@ export default function XuatHuyPage() {
           },
         ]}
       />
+
+      {!loading && data.length > 0 && (
+        <div className="grid grid-cols-2 md:grid-cols-4 gap-3 px-4 pt-4">
+          <SummaryCard
+            icon={<Icon name="delete_sweep" size={16} />}
+            label="Tổng phiếu huỷ"
+            value={total.toString()}
+          />
+          <SummaryCard
+            icon={<Icon name="drafts" size={16} />}
+            label="Phiếu tạm"
+            value={kpiDraft.toString()}
+            highlight={kpiDraft > 0}
+          />
+          <SummaryCard
+            icon={<Icon name="check_circle" size={16} />}
+            label="Đã hoàn tất"
+            value={kpiCompleted.toString()}
+          />
+          <SummaryCard
+            icon={<Icon name="trending_down" size={16} />}
+            label="Giá trị huỷ (kỳ)"
+            value={formatCurrency(kpiTotalLoss)}
+            danger={kpiTotalLoss > 0}
+          />
+        </div>
+      )}
 
       <DataTable
         columns={columns}

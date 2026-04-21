@@ -17,6 +17,8 @@ interface SummaryCardProps {
   /** Viền + nền destructive — dùng cho cảnh báo low stock, quá hạn... */
   danger?: boolean;
   className?: string;
+  /** Override màu cho value — dùng khi cần color phụ (vd: lệch tăng = success, lệch giảm = error). */
+  valueClassName?: string;
 }
 
 /**
@@ -35,6 +37,7 @@ export function SummaryCard({
   highlight,
   danger,
   className,
+  valueClassName,
 }: SummaryCardProps) {
   return (
     <div
@@ -54,6 +57,7 @@ export function SummaryCard({
           "text-lg font-semibold",
           highlight && "text-primary",
           danger && "text-destructive",
+          valueClassName,
         )}
       >
         {value}

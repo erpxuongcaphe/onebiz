@@ -6,6 +6,7 @@ import { ColumnDef } from "@tanstack/react-table";
 import { PageHeader } from "@/components/shared/page-header";
 import { ListPageLayout } from "@/components/shared/list-page-layout";
 import { DataTable, StarCell } from "@/components/shared/data-table";
+import { SummaryCard } from "@/components/shared/summary-card";
 import { KanbanBoard, type KanbanColumn } from "@/components/shared/kanban-board";
 import { PipelineStatusBadge } from "@/components/shared/pipeline";
 import {
@@ -626,6 +627,14 @@ export default function NhapHangPage() {
     }
   };
 
+  /* ---- KPI row (derived từ current fetched data) ---- */
+  // View-over-current-result: không query thêm để tránh roundtrip.
+  // `total` là tổng server-side, `data` là rows trang hiện tại.
+  const kpiTotalAmount = data.reduce((sum, d) => sum + (d.total ?? 0), 0);
+  const kpiTotalOwed = data.reduce((sum, d) => sum + (d.amountOwed ?? 0), 0);
+  const kpiPartial = data.filter((d) => d.status === "partial").length;
+  const kpiCompleted = data.filter((d) => d.status === "completed").length;
+
   /* ---- Render ---- */
   return (
     <>
@@ -730,6 +739,34 @@ export default function NhapHangPage() {
           },
         ]}
       />
+
+      {!loading && data.length > 0 && (
+        <div className="grid grid-cols-2 md:grid-cols-4 gap-3 px-4 pt-4">
+          <SummaryCard
+            icon={<Icon name="receipt_long" size={16} />}
+            label="Tổng phiếu nhập"
+            value={total.toString()}
+          />
+          <SummaryCard
+            icon={<Icon name="hourglass_bottom" size={16} />}
+            label="Đang nhận (partial)"
+            value={kpiPartial.toString()}
+            highlight={kpiPartial > 0}
+          />
+          <SummaryCard
+            icon={<Icon name="check_circle" size={16} />}
+            label="Đã hoàn tất"
+            value={kpiCompleted.toString()}
+          />
+          <SummaryCard
+            icon={<Icon name="payments" size={16} />}
+            label="Công nợ NCC"
+            value={formatCurrency(kpiTotalOwed)}
+            hint={`Tổng GTGT: ${formatCurrency(kpiTotalAmount)}`}
+            danger={kpiTotalOwed > 0}
+          />
+        </div>
+      )}
 
       {viewMode === "kanban" ? (
         <div className="p-4">

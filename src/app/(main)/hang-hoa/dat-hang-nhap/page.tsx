@@ -7,6 +7,7 @@ import { Badge } from "@/components/ui/badge";
 import { PageHeader } from "@/components/shared/page-header";
 import { ListPageLayout } from "@/components/shared/list-page-layout";
 import { DataTable } from "@/components/shared/data-table";
+import { SummaryCard } from "@/components/shared/summary-card";
 import {
   FilterSidebar,
   FilterGroup,
@@ -211,6 +212,16 @@ export default function DatHangNhapPage() {
     setExpandedRow(null);
   }, [search, statusFilter]);
 
+  /* ---- KPI row (outstanding orders = CEO attention) ---- */
+  const kpiOutstanding = data.filter(
+    (d) => d.status === "pending" || d.status === "partial",
+  ).length;
+  const kpiOutstandingValue = data
+    .filter((d) => d.status === "pending" || d.status === "partial")
+    .reduce((sum, d) => sum + (d.totalAmount ?? 0), 0);
+  const kpiCompleted = data.filter((d) => d.status === "completed").length;
+  const kpiCancelled = data.filter((d) => d.status === "cancelled").length;
+
   return (
     <ListPageLayout
       sidebar={
@@ -287,6 +298,34 @@ export default function DatHangNhapPage() {
         onOpenChange={setCreateOpen}
         onSuccess={fetchData}
       />
+
+      {!loading && data.length > 0 && (
+        <div className="grid grid-cols-2 md:grid-cols-4 gap-3 px-4 pt-4">
+          <SummaryCard
+            icon={<Icon name="shopping_cart" size={16} />}
+            label="Tổng đơn đặt"
+            value={total.toString()}
+          />
+          <SummaryCard
+            icon={<Icon name="hourglass_top" size={16} />}
+            label="Chờ / Đang nhập"
+            value={kpiOutstanding.toString()}
+            hint={formatCurrency(kpiOutstandingValue)}
+            highlight={kpiOutstanding > 0}
+          />
+          <SummaryCard
+            icon={<Icon name="check_circle" size={16} />}
+            label="Đã hoàn tất"
+            value={kpiCompleted.toString()}
+          />
+          <SummaryCard
+            icon={<Icon name="cancel" size={16} />}
+            label="Đã huỷ"
+            value={kpiCancelled.toString()}
+            danger={kpiCancelled > 0}
+          />
+        </div>
+      )}
 
       <DataTable
         columns={columns}
