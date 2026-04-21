@@ -2,6 +2,7 @@
 
 import { useRef, useCallback } from "react";
 import { formatCurrency } from "@/lib/format";
+import { printerService, type PrintReceiptPayload } from "@/lib/printer";
 
 export interface ReceiptData {
   invoiceCode: string;
@@ -206,9 +207,17 @@ export function PrintReceipt({ data, width = "80mm" }: PrintReceiptProps) {
 }
 
 /**
- * Utility: print receipt from data without rendering a component
+ * Utility: print receipt from data without rendering a component.
+ *
+ * Dispatch qua PrinterService:
+ *   - backend=browser: dùng HTML xịn (hiện tại) qua window.print()
+ *   - backend=escpos-usb: build ESC/POS bytes + gửi qua WebUSB
+ *                         (tự fallback browser nếu USB lỗi)
+ *
+ * Đọc backend từ localStorage `onebiz_settings.print.backend`.
  */
 export function printReceiptDirect(data: ReceiptData, width: "58mm" | "80mm" = "80mm") {
+  // Build HTML "xịn" (hiện tại) cho browser backend
   const widthPx = width === "58mm" ? "220px" : "302px";
   const paymentLabel =
     data.paymentMethod === "cash"
@@ -230,7 +239,7 @@ export function printReceiptDirect(data: ReceiptData, width: "58mm" | "80mm" = "
     )
     .join("");
 
-  const html = `<!DOCTYPE html>
+  const rawHtml = `<!DOCTYPE html>
 <html><head><meta charset="utf-8"/><title>${data.invoiceCode}</title>
 <style>
 *{margin:0;padding:0;box-sizing:border-box}
@@ -270,9 +279,45 @@ ${data.note ? `<div class="line"></div><div style="font-size:10px">Ghi chu: ${da
 <script>window.onload=function(){window.print();window.close()}<\/script>
 </body></html>`;
 
-  const printWindow = window.open("", "_blank", "width=400,height=600");
-  if (printWindow) {
-    printWindow.document.write(html);
-    printWindow.document.close();
+  // Build payload cho ESC/POS backend
+  const payload: PrintReceiptPayload = {
+    invoiceCode: data.invoiceCode,
+    storeName: data.storeName,
+    storeAddress: data.storeAddress,
+    storePhone: data.storePhone,
+    customerName: data.customerName,
+    cashierName: data.cashierName,
+    createdAt: data.date,
+    items: data.items.map((it) => ({
+      name: it.name,
+      quantity: it.quantity,
+      unitPrice: it.unitPrice,
+      total: it.total,
+    })),
+    subtotal: data.subtotal,
+    discountAmount: data.discountAmount,
+    total: data.total,
+    paid: data.paid,
+    change: data.change,
+    paymentMethod: data.paymentMethod,
+    paperSize: width,
+    orderType: "retail",
+  };
+
+  // Đọc backend + openCashDrawer từ settings
+  let backend: "browser" | "escpos-usb" = "browser";
+  let openCashDrawer = false;
+  try {
+    const raw = typeof window !== "undefined" ? localStorage.getItem("onebiz_settings") : null;
+    if (raw) {
+      const parsed = JSON.parse(raw);
+      backend = parsed?.print?.backend === "escpos-usb" ? "escpos-usb" : "browser";
+      openCashDrawer = parsed?.print?.openCashDrawer === true;
+    }
+  } catch {
+    /* keep defaults */
   }
+
+  printerService.setBackend(backend);
+  void printerService.printReceipt(payload, { rawHtml, openCashDrawer });
 }

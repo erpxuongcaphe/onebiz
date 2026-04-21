@@ -62,7 +62,18 @@ export interface AppSettings {
     showBarcode: boolean;
     showQr: boolean;
     copies: number;
-    // Printer connection
+    /**
+     * Backend in:
+     *   - "browser"    = dùng hộp thoại in của trình duyệt (mặc định, tương
+     *                    thích mọi máy in OS đã cài driver — USB/LAN/WiFi/AirPrint)
+     *   - "escpos-usb" = gửi ESC/POS trực tiếp qua WebUSB tới máy in nhiệt
+     *                    (silent, tức thì, hỗ trợ cắt giấy + mở ngăn kéo).
+     *                    Tự fallback "browser" nếu WebUSB lỗi.
+     */
+    backend: "browser" | "escpos-usb";
+    /** Mở ngăn kéo tiền mặt khi thanh toán cash (chỉ ESC/POS) */
+    openCashDrawer: boolean;
+    // Printer connection (legacy — giữ backward compat)
     connectionType: "usb" | "wifi" | "lan";
     printerName: string;
     printerIp: string;
@@ -161,6 +172,8 @@ const defaultSettings: AppSettings = {
     showBarcode: true,
     showQr: false,
     copies: 1,
+    backend: "browser",
+    openCashDrawer: false,
     connectionType: "usb",
     printerName: "",
     printerIp: "",

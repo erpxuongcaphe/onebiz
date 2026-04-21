@@ -6,6 +6,7 @@
  */
 
 import { formatCurrency } from "@/lib/format";
+import { printerService, type PrintReceiptPayload } from "@/lib/printer";
 
 // ============================================================
 // Types
@@ -300,7 +301,52 @@ ${data.footer ? `<div class="footer-text">${data.footer}</div>` : ""}
 
 </body></html>`;
 
-  openAndPrint(html);
+  // Dispatch qua PrinterService:
+  //   - backend=browser: in qua window.print() với HTML đẹp ở trên
+  //   - backend=escpos-usb: build ESC/POS bytes + gửi USB (tự fallback nếu lỗi)
+  const payload: PrintReceiptPayload = {
+    invoiceCode: data.invoiceCode,
+    storeName: data.storeName,
+    storeAddress: data.storeAddress,
+    storePhone: data.storePhone,
+    customerName: data.customerName,
+    cashierName: data.cashierName,
+    createdAt: data.createdAt,
+    tableName: data.tableName,
+    orderType: data.orderType,
+    items: data.items.map((it) => ({
+      name: it.name,
+      variant: it.variant,
+      quantity: it.quantity,
+      unitPrice: it.unitPrice,
+      total: it.quantity * it.unitPrice,
+    })),
+    subtotal: data.subtotal,
+    discountAmount: data.discountAmount,
+    deliveryFee: data.deliveryFee,
+    total: data.total,
+    paid: data.paid,
+    change: data.change,
+    paymentMethod: data.paymentMethod,
+    footer: data.footer,
+    paperSize: data.paperSize ?? "80mm",
+  };
+
+  let backend: "browser" | "escpos-usb" = "browser";
+  let openCashDrawer = false;
+  try {
+    const raw = typeof window !== "undefined" ? localStorage.getItem("onebiz_settings") : null;
+    if (raw) {
+      const parsed = JSON.parse(raw);
+      backend = parsed?.print?.backend === "escpos-usb" ? "escpos-usb" : "browser";
+      openCashDrawer = parsed?.print?.openCashDrawer === true;
+    }
+  } catch {
+    /* keep defaults */
+  }
+
+  printerService.setBackend(backend);
+  void printerService.printReceipt(payload, { rawHtml: html, openCashDrawer });
 }
 
 // ============================================================
