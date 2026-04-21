@@ -19,30 +19,43 @@ import {
   DetailHeader,
   DetailInfoGrid,
 } from "@/components/shared/inline-detail-panel";
+import {
+  DropdownMenu,
+  DropdownMenuTrigger,
+  DropdownMenuContent,
+  DropdownMenuItem,
+} from "@/components/ui/dropdown-menu";
 import { formatCurrency, formatDate } from "@/lib/format";
 import { exportToExcel, exportToCsv } from "@/lib/utils/export";
-import { getShippingOrders, getShippingStatuses, getPartnerOptions } from "@/lib/services";
+import {
+  getShippingOrders,
+  getShippingStatuses,
+  getPartnerOptionsAsync,
+  updateShippingOrderStatus,
+  getNextShippingStatuses,
+  SHIPPING_STATUS_LABEL,
+} from "@/lib/services";
+import { getAuditLogsByEntity, type AuditLogEntry } from "@/lib/services/supabase/audit";
 import { CreateShippingOrderDialog } from "@/components/shared/dialogs";
-import type { ShippingOrder } from "@/lib/types";
-import { useBranchFilter } from "@/lib/contexts";
+import type { ShippingOrder, ShippingStatus } from "@/lib/types";
+import { useBranchFilter, useToast } from "@/lib/contexts";
 import { Icon } from "@/components/ui/icon";
 
 // --- Status config ---
 
 const statusMap: Record<
-  ShippingOrder["status"],
+  ShippingStatus,
   { label: string; variant: "default" | "secondary" | "outline" | "destructive" }
 > = {
   pending: { label: "Chờ lấy hàng", variant: "secondary" },
-  picking: { label: "Đang lấy hàng", variant: "outline" },
-  shipping: { label: "Đang giao", variant: "outline" },
+  picked_up: { label: "Đã lấy hàng", variant: "outline" },
+  in_transit: { label: "Đang giao", variant: "outline" },
   delivered: { label: "Đã giao", variant: "default" },
-  failed: { label: "Giao thất bại", variant: "destructive" },
   returned: { label: "Đã hoàn", variant: "destructive" },
+  cancelled: { label: "Đã hủy", variant: "destructive" },
 };
 
 const statusOptions = getShippingStatuses();
-const partnerOptions = getPartnerOptions();
 
 const deliveryRegionOptions = [
   { label: "Miền Bắc", value: "north" },
@@ -71,14 +84,99 @@ function useStarredSet() {
 function ShippingOrderDetail({
   order,
   onClose,
+  onStatusChanged,
 }: {
   order: ShippingOrder;
   onClose: () => void;
+  onStatusChanged: () => void;
 }) {
   const status = statusMap[order.status];
+  const nextStatuses = getNextShippingStatuses(order.status);
+  const [busy, setBusy] = useState(false);
+  const [logs, setLogs] = useState<AuditLogEntry[] | null>(null);
+  const [logsLoading, setLogsLoading] = useState(true);
+  const { toast } = useToast();
+
+  const loadLogs = useCallback(async () => {
+    setLogsLoading(true);
+    try {
+      const entries = await getAuditLogsByEntity("shipping_order", order.id, 50);
+      setLogs(entries);
+    } finally {
+      setLogsLoading(false);
+    }
+  }, [order.id]);
+
+  useEffect(() => {
+    loadLogs();
+  }, [loadLogs]);
+
+  const handleTransition = async (next: ShippingStatus) => {
+    if (busy) return;
+    setBusy(true);
+    try {
+      await updateShippingOrderStatus(order.id, next);
+      toast({
+        title: "Đã cập nhật trạng thái",
+        description: `${order.code}: ${SHIPPING_STATUS_LABEL[order.status]} → ${SHIPPING_STATUS_LABEL[next]}`,
+        variant: "success",
+      });
+      await loadLogs();
+      onStatusChanged();
+    } catch (err) {
+      toast({
+        title: "Không thể cập nhật",
+        description: err instanceof Error ? err.message : String(err),
+        variant: "error",
+      });
+    } finally {
+      setBusy(false);
+    }
+  };
 
   return (
     <InlineDetailPanel open onClose={onClose}>
+      <div className="flex items-start justify-between gap-3 pb-2">
+        <DetailHeader
+          title={`Vận đơn ${order.code}`}
+          code={order.invoiceCode}
+          status={{ label: status.label, variant: status.variant }}
+          subtitle={order.deliveryPartner}
+        />
+        {nextStatuses.length > 0 && (
+          <DropdownMenu>
+            <DropdownMenuTrigger
+              disabled={busy}
+              className="inline-flex items-center gap-1 h-8 px-3 rounded-md bg-primary text-primary-foreground text-sm font-medium hover:bg-primary/90 disabled:opacity-60 disabled:cursor-not-allowed shrink-0 outline-none"
+            >
+              <Icon name="sync_alt" size={14} />
+              Đổi trạng thái
+            </DropdownMenuTrigger>
+            <DropdownMenuContent align="end">
+              {nextStatuses.map((s) => (
+                <DropdownMenuItem
+                  key={s}
+                  onSelect={() => handleTransition(s)}
+                  className="cursor-pointer"
+                >
+                  <Icon
+                    name={
+                      s === "delivered"
+                        ? "check_circle"
+                        : s === "cancelled" || s === "returned"
+                          ? "cancel"
+                          : "local_shipping"
+                    }
+                    size={14}
+                    className="mr-2"
+                  />
+                  {SHIPPING_STATUS_LABEL[s]}
+                </DropdownMenuItem>
+              ))}
+            </DropdownMenuContent>
+          </DropdownMenu>
+        )}
+      </div>
       <DetailTabs
         tabs={[
           {
@@ -104,35 +202,68 @@ function ShippingOrderDetail({
                 columns={2}
                 fields={[
                   { label: "Mã HD", value: order.invoiceCode },
-                  { label: "Chi nhánh", value: "Chi nhánh trung tâm" },
+                  { label: "Đối tác giao hàng", value: order.deliveryPartner },
                   { label: "Khách hàng", value: order.customerName },
-                  {
-                    label: "Số lượng hàng",
-                    value: "1",
-                  },
-                  {
-                    label: "Giá trị",
-                    value: formatCurrency(order.cod),
-                  },
+                  { label: "Phí giao", value: formatCurrency(order.fee) },
+                  { label: "COD", value: formatCurrency(order.cod) },
                 ]}
               />
-            ),
-          },
-          {
-            id: "payment_history",
-            label: "Lịch sử thanh toán với ĐTGH",
-            content: (
-              <div className="text-sm text-muted-foreground py-4 text-center">
-                Chưa có lịch sử thanh toán
-              </div>
             ),
           },
           {
             id: "delivery_history",
             label: "Lịch sử giao hàng",
             content: (
-              <div className="text-sm text-muted-foreground py-4 text-center">
-                Chưa có lịch sử giao hàng
+              <div className="py-2">
+                {logsLoading ? (
+                  <div className="text-sm text-muted-foreground py-4 text-center">
+                    Đang tải lịch sử…
+                  </div>
+                ) : !logs || logs.length === 0 ? (
+                  <div className="text-sm text-muted-foreground py-4 text-center">
+                    Chưa có lịch sử thay đổi trạng thái
+                  </div>
+                ) : (
+                  <ol className="space-y-3">
+                    {logs.map((entry) => {
+                      const old = entry.oldData as { status?: string } | null;
+                      const nw = entry.newData as {
+                        status?: string;
+                        note?: string | null;
+                      } | null;
+                      const fromLabel = old?.status
+                        ? SHIPPING_STATUS_LABEL[old.status as ShippingStatus] ??
+                          old.status
+                        : null;
+                      const toLabel = nw?.status
+                        ? SHIPPING_STATUS_LABEL[nw.status as ShippingStatus] ??
+                          nw.status
+                        : null;
+                      return (
+                        <li
+                          key={entry.id}
+                          className="flex gap-3 items-start border-l-2 border-primary/40 pl-3 py-1"
+                        >
+                          <div className="flex-1 text-sm">
+                            <div className="font-medium text-foreground">
+                              {fromLabel && toLabel
+                                ? `${fromLabel} → ${toLabel}`
+                                : entry.actionLabel}
+                            </div>
+                            <div className="text-xs text-muted-foreground">
+                              {entry.userName} · {formatDate(entry.createdAt)}
+                            </div>
+                            {nw?.note && (
+                              <div className="text-xs italic text-muted-foreground mt-0.5">
+                                Ghi chú: {nw.note}
+                              </div>
+                            )}
+                          </div>
+                        </li>
+                      );
+                    })}
+                  </ol>
+                )}
               </div>
             ),
           },
@@ -156,6 +287,9 @@ export default function VanDonPage() {
   const [pageSize, setPageSize] = useState(15);
   const [expandedRow, setExpandedRow] = useState<number | null>(null);
   const [createOpen, setCreateOpen] = useState(false);
+  const [partnerOptions, setPartnerOptions] = useState<
+    Array<{ value: string; label: string }>
+  >([{ value: "all", label: "Tất cả" }]);
 
   // Stars
   const { starred, toggle: toggleStar } = useStarredSet();
@@ -188,6 +322,15 @@ export default function VanDonPage() {
   useEffect(() => {
     fetchData();
   }, [fetchData]);
+
+  // Load partner options (async) — đồng bộ với ĐTGH đang active trong DB
+  useEffect(() => {
+    getPartnerOptionsAsync()
+      .then(setPartnerOptions)
+      .catch(() => {
+        /* keep fallback */
+      });
+  }, []);
 
   useEffect(() => {
     setPage(0);
@@ -276,7 +419,9 @@ export default function VanDonPage() {
       header: "Thời gian giao",
       size: 150,
       cell: ({ row }) =>
-        row.original.status === "delivered" ? formatDate(row.original.createdAt) : "—",
+        row.original.status === "delivered"
+          ? formatDate(row.original.updatedAt ?? row.original.createdAt)
+          : "—",
     },
   ];
 
@@ -370,7 +515,11 @@ export default function VanDonPage() {
         expandedRow={expandedRow}
         onExpandedRowChange={setExpandedRow}
         renderDetail={(order, onClose) => (
-          <ShippingOrderDetail order={order} onClose={onClose} />
+          <ShippingOrderDetail
+            order={order}
+            onClose={onClose}
+            onStatusChanged={fetchData}
+          />
         )}
         getRowId={(row) => row.id}
       />

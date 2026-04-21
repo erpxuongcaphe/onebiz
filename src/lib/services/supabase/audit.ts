@@ -54,6 +54,8 @@ const ACTION_LABELS: Record<string, string> = {
   receive: "Nhập hàng",
   return: "Trả hàng",
   transfer: "Chuyển kho",
+  update_status: "Đổi trạng thái",
+  opening_debt_import: "Nhập công nợ đầu kỳ",
 };
 
 const ENTITY_TYPE_LABELS: Record<string, string> = {
@@ -74,6 +76,7 @@ const ENTITY_TYPE_LABELS: Record<string, string> = {
   internal_sale: "Bán hàng nội bộ",
   inventory_check: "Kiểm kho",
   purchase_return: "Phiếu trả hàng nhập",
+  shipping_order: "Vận đơn",
 };
 
 export function getActionOptions() {

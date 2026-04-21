@@ -16,7 +16,17 @@ export interface Invoice {
   debt: number;
   status: "processing" | "completed" | "cancelled" | "delivery_failed";
   deliveryType: "no_delivery" | "delivery";
-  deliveryStatus?: "pending" | "shipping" | "delivered" | "failed";
+  /**
+   * Trạng thái giao hàng khớp với `ShippingStatus` (shipping_orders.status).
+   * Được derive từ shipping_order liên kết, null nếu chưa tạo vận đơn.
+   */
+  deliveryStatus?:
+    | "pending"
+    | "picked_up"
+    | "in_transit"
+    | "delivered"
+    | "returned"
+    | "cancelled";
   createdBy: string;
 }
 

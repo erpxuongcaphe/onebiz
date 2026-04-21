@@ -92,6 +92,7 @@ export type {
   DeliveryPartner,
   ShippingOrder,
   ShippingOrderDetail,
+  ShippingStatus,
 } from "./shipping";
 
 // Finance domain

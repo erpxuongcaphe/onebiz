@@ -425,10 +425,12 @@ export default function HoaDonPage() {
             <FilterGroup label="Trạng thái giao hàng">
               <CheckboxFilter
                 options={[
-                  { label: "Chờ giao", value: "pending" },
-                  { label: "Đang giao", value: "shipping" },
+                  { label: "Chờ lấy hàng", value: "pending" },
+                  { label: "Đã lấy hàng", value: "picked_up" },
+                  { label: "Đang giao", value: "in_transit" },
                   { label: "Đã giao", value: "delivered" },
-                  { label: "Giao thất bại", value: "failed" },
+                  { label: "Đã hoàn", value: "returned" },
+                  { label: "Đã hủy", value: "cancelled" },
                 ]}
                 selected={[]}
                 onChange={() => {}}

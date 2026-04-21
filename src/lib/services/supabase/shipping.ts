@@ -1,9 +1,20 @@
 /**
  * Supabase service: Shipping Orders & Delivery Partners
+ *
+ * ShippingStatus khớp với enum DB (shipping_orders.status):
+ *   pending → picked_up → in_transit → delivered
+ *   ↘ returned (nếu giao thất bại / khách từ chối)
+ *   ↘ cancelled (nếu huỷ trước khi lấy)
  */
 
-import type { ShippingOrder, DeliveryPartner, QueryParams, QueryResult } from "@/lib/types";
-import { getClient, getPaginationRange, handleError } from "./base";
+import type {
+  ShippingOrder,
+  DeliveryPartner,
+  QueryParams,
+  QueryResult,
+  ShippingStatus,
+} from "@/lib/types";
+import { getClient, getCurrentContext, getPaginationRange, handleError } from "./base";
 
 // --- Shipping Orders ---
 
@@ -54,11 +65,16 @@ export async function getShippingOrders(params: QueryParams): Promise<QueryResul
   return { data: orders, total: count ?? 0 };
 }
 
+/**
+ * Danh sách status filter trong sidebar. Phản ánh đúng lifecycle lẻ của
+ * shipping_orders để user có thể filter "Đang giao" tách biệt với
+ * "Đang lấy hàng".
+ */
 export function getShippingStatuses() {
   return [
     { value: "all", label: "Tất cả" },
     { value: "pending", label: "Chờ lấy hàng" },
-    { value: "picked_up", label: "Đang lấy hàng" },
+    { value: "picked_up", label: "Đã lấy hàng" },
     { value: "in_transit", label: "Đang giao" },
     { value: "delivered", label: "Đã giao" },
     { value: "returned", label: "Đã hoàn" },
@@ -124,6 +140,125 @@ export async function getPartnerOptionsAsync() {
   ];
 }
 
+// --- Status Transitions ---
+
+/**
+ * State machine vận đơn. Chỉ cho phép các transition thực tế nghiệp vụ:
+ *
+ *   pending     → picked_up | cancelled
+ *   picked_up   → in_transit | returned
+ *   in_transit  → delivered | returned
+ *   delivered   → (terminal)
+ *   returned    → (terminal — nếu cần tái giao, tạo vận đơn mới)
+ *   cancelled   → (terminal)
+ *
+ * Lý do tách tường minh: tránh accidentally nhảy thẳng từ pending → delivered
+ * (không thể — shipper phải đi qua picked_up), hoặc đổi lại state sau khi
+ * đã delivered (làm lệch KPI).
+ */
+const ALLOWED_TRANSITIONS: Record<ShippingStatus, ShippingStatus[]> = {
+  pending: ["picked_up", "cancelled"],
+  picked_up: ["in_transit", "returned"],
+  in_transit: ["delivered", "returned"],
+  delivered: [],
+  returned: [],
+  cancelled: [],
+};
+
+export function canTransitionShippingStatus(
+  from: ShippingStatus,
+  to: ShippingStatus,
+): boolean {
+  return ALLOWED_TRANSITIONS[from]?.includes(to) ?? false;
+}
+
+export function getNextShippingStatuses(current: ShippingStatus): ShippingStatus[] {
+  return ALLOWED_TRANSITIONS[current] ?? [];
+}
+
+export const SHIPPING_STATUS_LABEL: Record<ShippingStatus, string> = {
+  pending: "Chờ lấy hàng",
+  picked_up: "Đã lấy hàng",
+  in_transit: "Đang giao",
+  delivered: "Đã giao",
+  returned: "Đã hoàn",
+  cancelled: "Đã hủy",
+};
+
+/**
+ * Chuyển trạng thái vận đơn (pending → picked_up → in_transit → delivered …).
+ *
+ * - Validate transition hợp lệ theo state machine ở trên
+ * - UPDATE guard `WHERE id = ? AND status = v_from` → tránh race khi 2 người
+ *   cùng bấm "đã giao" thì chỉ 1 người thắng
+ * - Insert audit_log entry `entity_type = "shipping_order"` với `old_data` +
+ *   `new_data` để wired vào tab "Lịch sử giao hàng" ở detail panel
+ */
+export async function updateShippingOrderStatus(
+  orderId: string,
+  nextStatus: ShippingStatus,
+  note?: string,
+): Promise<ShippingOrder> {
+  const supabase = getClient();
+  const ctx = await getCurrentContext();
+
+  // 1. Load current status + validate transition
+  const { data: current, error: loadErr } = await supabase
+    .from("shipping_orders")
+    .select("id, status, code")
+    .eq("id", orderId)
+    .single();
+  if (loadErr) handleError(loadErr, "updateShippingOrderStatus.load");
+  if (!current) throw new Error("Không tìm thấy vận đơn");
+
+  const fromStatus = current.status as ShippingStatus;
+  if (!canTransitionShippingStatus(fromStatus, nextStatus)) {
+    throw new Error(
+      `Không thể chuyển vận đơn từ "${SHIPPING_STATUS_LABEL[fromStatus]}" sang "${SHIPPING_STATUS_LABEL[nextStatus]}"`,
+    );
+  }
+
+  // 2. Atomic status swap (race-safe): chỉ update nếu status còn khớp
+  const { data: updated, error: updErr } = await supabase
+    .from("shipping_orders")
+    .update({
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      status: nextStatus as any,
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      updated_at: new Date().toISOString() as any,
+    })
+    .eq("id", orderId)
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    .eq("status", fromStatus as any)
+    .select(
+      `*, invoices!shipping_orders_invoice_id_fkey(code), delivery_partners!shipping_orders_partner_id_fkey(name)`,
+    )
+    .single();
+  if (updErr) handleError(updErr, "updateShippingOrderStatus.update");
+  if (!updated) {
+    throw new Error(
+      "Vận đơn đã bị thay đổi trạng thái bởi request khác — vui lòng tải lại",
+    );
+  }
+
+  // 3. Audit log — best-effort (không block nếu audit ghi fail)
+  try {
+    await supabase.from("audit_log").insert({
+      tenant_id: ctx.tenantId,
+      user_id: ctx.userId,
+      action: "update_status",
+      entity_type: "shipping_order",
+      entity_id: orderId,
+      old_data: { status: fromStatus },
+      new_data: { status: nextStatus, note: note ?? null },
+    });
+  } catch (err) {
+    console.warn("updateShippingOrderStatus: audit_log insert failed", err);
+  }
+
+  return mapShippingOrder(updated);
+}
+
 // --- Write Operations ---
 
 /**
@@ -166,27 +301,9 @@ export async function deactivateDeliveryPartner(id: string): Promise<void> {
 
 // --- Mappers ---
 
-const shippingStatusNameMap: Record<string, string> = {
-  pending: "Chờ lấy hàng",
-  picked_up: "Đang lấy hàng",
-  in_transit: "Đang giao",
-  delivered: "Đã giao",
-  returned: "Đã hoàn",
-  cancelled: "Đã hủy",
-};
-
-// Map DB status to frontend status
-const shippingStatusMap: Record<string, ShippingOrder["status"]> = {
-  pending: "pending",
-  picked_up: "picking",
-  in_transit: "shipping",
-  delivered: "delivered",
-  returned: "returned",
-  cancelled: "failed",
-};
-
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
 function mapShippingOrder(row: any): ShippingOrder {
+  const status = (row.status ?? "pending") as ShippingStatus;
   return {
     id: row.id,
     code: row.code,
@@ -195,11 +312,12 @@ function mapShippingOrder(row: any): ShippingOrder {
     customerName: row.receiver_name,
     customerPhone: row.receiver_phone,
     address: row.receiver_address,
-    status: shippingStatusMap[row.status] ?? "pending",
-    statusName: shippingStatusNameMap[row.status] ?? row.status,
+    status,
+    statusName: SHIPPING_STATUS_LABEL[status] ?? row.status,
     fee: row.shipping_fee,
     cod: row.cod_amount,
     createdAt: row.created_at,
+    updatedAt: row.updated_at ?? undefined,
   };
 }
 

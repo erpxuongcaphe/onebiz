@@ -37,7 +37,19 @@ export {
 export type { DraftOrderSummary, DraftOrderDetail } from "./orders";
 export { getReturns, getReturnStatuses } from "./returns";
 export { completeReturn } from "./returns-completion";
-export { getShippingOrders, getShippingStatuses, getDeliveryPartners, getPartnerOptions, updateDeliveryPartner, deactivateDeliveryPartner } from "./shipping";
+export {
+  getShippingOrders,
+  getShippingStatuses,
+  getDeliveryPartners,
+  getPartnerOptions,
+  getPartnerOptionsAsync,
+  updateDeliveryPartner,
+  deactivateDeliveryPartner,
+  updateShippingOrderStatus,
+  canTransitionShippingStatus,
+  getNextShippingStatuses,
+  SHIPPING_STATUS_LABEL,
+} from "./shipping";
 export { getCashBookEntries, getCashBookTypes, getCashBookSummary, createCashTransaction, deleteCashTransaction } from "./cash-book";
 export {
   getInventoryChecks, getInventoryCheckStatuses, applyInventoryCheck, cancelInventoryCheck,
