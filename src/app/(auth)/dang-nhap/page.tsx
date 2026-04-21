@@ -105,10 +105,7 @@ function LoginForm() {
             {loading ? "Đang đăng nhập..." : "Đăng nhập"}
           </Button>
           <p className="text-center text-sm text-muted-foreground">
-            Chưa có tài khoản chủ cửa hàng?{" "}
-            <Link href="/dang-ky" className="text-primary hover:underline">
-              Đăng ký
-            </Link>
+            Liên hệ chủ cửa hàng để được cấp tài khoản
           </p>
         </form>
       </CardContent>

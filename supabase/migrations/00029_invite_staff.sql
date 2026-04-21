@@ -1,19 +1,28 @@
 -- ============================================================
 -- Migration 00029 — Invite Staff Flow
 -- ============================================================
--- Cho phép admin mời nhân viên join vào tenant hiện có (thay vì mỗi
--- signup tạo tenant mới). Logic:
---   - Nếu raw_user_meta_data có `invited_tenant_id` → link vào tenant đó
---     + dùng `invited_branch_id`, `invited_role_id`, `phone`, `full_name`.
---   - Nếu không → giữ nguyên flow owner-signup cũ (tạo tenant mới).
+-- Chính sách: TẤT CẢ tài khoản đều do admin cấp, không có public signup.
 --
--- Flow nghiệp vụ:
---   1. Admin vào trang he-thong/users → click "Mời nhân viên"
---   2. Form: email + họ tên + số ĐT + chi nhánh + vai trò
---   3. App gọi supabase.auth.signInWithOtp({ email, options: { data: {...} } })
---      → Supabase gửi magic link về email của nhân viên
---   4. Nhân viên click link → auth.users.insert → trigger này fire
---      → đọc metadata → tạo profile link đúng tenant/branch/role
+-- Bootstrap admin ĐẦU TIÊN (chỉ làm 1 lần):
+--   1. Vào Supabase Dashboard → Authentication → Users → Add user
+--   2. Nhập email + password → Create user
+--   3. Trigger handle_new_user sẽ tự tạo tenant + branch + profile (role='owner')
+--   4. Admin đăng nhập vào app → vào he-thong/users để mời người khác
+--   5. KHUYẾN CÁO: sau đó vào Auth > Providers tắt Email Sign up để không
+--      ai tự đăng ký được nữa.
+--
+-- Admin mời thành viên mới (nhân viên HOẶC đồng chủ cửa hàng):
+--   - Nếu raw_user_meta_data có `invited_tenant_id` → link vào tenant đó
+--     + dùng invited_branch_id, invited_role_id, invited_role (legacy
+--     field: 'owner' | 'staff'), phone, full_name.
+--   - Nếu không → giữ nguyên flow owner-signup cũ (tạo tenant mới) —
+--     chỉ xảy ra khi bootstrap qua Supabase Dashboard.
+--
+-- Flow nghiệp vụ mời:
+--   1. Admin vào he-thong/users → "Mời nhân viên"
+--   2. Form: email, họ tên, SĐT, chi nhánh, vai trò, (checkbox) cấp quyền chủ
+--   3. signInWithOtp({ email, options.data: {...} }) → Supabase gửi email
+--   4. Người được mời click link → trigger đọc metadata → tạo profile
 -- ============================================================
 
 create or replace function public.handle_new_user()
@@ -30,6 +39,7 @@ declare
   invited_branch uuid;
   invited_role uuid;
   invited_phone text;
+  invited_legacy_role text;
 begin
   -- ── Invited staff path ──
   -- Admin pre-populated metadata khi gọi signInWithOtp / inviteUserByEmail.
@@ -41,10 +51,16 @@ begin
       raise exception 'Invited tenant_id % không tồn tại', invited_tenant;
     end if;
 
-    invited_branch := nullif(new.raw_user_meta_data ->> 'invited_branch_id', '')::uuid;
-    invited_role   := nullif(new.raw_user_meta_data ->> 'invited_role_id', '')::uuid;
-    invited_phone  := new.raw_user_meta_data ->> 'phone';
-    user_name      := coalesce(
+    invited_branch       := nullif(new.raw_user_meta_data ->> 'invited_branch_id', '')::uuid;
+    invited_role         := nullif(new.raw_user_meta_data ->> 'invited_role_id', '')::uuid;
+    invited_phone        := new.raw_user_meta_data ->> 'phone';
+    -- Legacy role field: 'owner' cho đồng chủ (bypass permission check),
+    -- 'staff' cho nhân viên (chịu kiểm soát theo role_id).
+    invited_legacy_role  := coalesce(new.raw_user_meta_data ->> 'invited_role', 'staff');
+    if invited_legacy_role not in ('owner', 'staff') then
+      invited_legacy_role := 'staff';
+    end if;
+    user_name            := coalesce(
       new.raw_user_meta_data ->> 'full_name',
       split_part(new.email, '@', 1)
     );
@@ -82,7 +98,7 @@ begin
       user_name,
       new.email,
       invited_phone,
-      'staff'  -- legacy role field; actual permissions từ role_id
+      invited_legacy_role  -- 'owner' = full bypass, 'staff' = theo role_id
     );
 
     return new;

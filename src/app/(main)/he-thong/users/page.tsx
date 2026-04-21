@@ -80,6 +80,7 @@ export default function UsersPage() {
     phone: "",
     branchId: "",
     roleId: "",
+    asOwner: false,
   });
 
   const load = useCallback(async () => {
@@ -114,7 +115,7 @@ export default function UsersPage() {
   };
 
   const resetInviteForm = () =>
-    setInviteForm({ email: "", fullName: "", phone: "", branchId: "", roleId: "" });
+    setInviteForm({ email: "", fullName: "", phone: "", branchId: "", roleId: "", asOwner: false });
 
   const handleInvite = async () => {
     if (!tenantId) return;
@@ -127,6 +128,7 @@ export default function UsersPage() {
         phone: inviteForm.phone || undefined,
         branchId: inviteForm.branchId || undefined,
         roleId: inviteForm.roleId || undefined,
+        asOwner: inviteForm.asOwner,
       });
       toast({
         title: "Đã gửi lời mời",
@@ -437,10 +439,14 @@ export default function UsersPage() {
                   onValueChange={(v) =>
                     setInviteForm((f) => ({ ...f, roleId: v ?? "" }))
                   }
-                  disabled={inviteBusy}
+                  disabled={inviteBusy || inviteForm.asOwner}
                 >
                   <SelectTrigger id="invite-role">
-                    <SelectValue placeholder="Chọn vai trò" />
+                    <SelectValue
+                      placeholder={
+                        inviteForm.asOwner ? "(Chủ cửa hàng — full quyền)" : "Chọn vai trò"
+                      }
+                    />
                   </SelectTrigger>
                   <SelectContent>
                     {roles.map((role) => (
@@ -455,6 +461,37 @@ export default function UsersPage() {
                     ))}
                   </SelectContent>
                 </Select>
+              </div>
+
+              <div className="sm:col-span-2 flex items-start gap-2 p-3 rounded-md bg-amber-50 dark:bg-amber-950/30 border border-amber-200 dark:border-amber-900">
+                <input
+                  id="invite-as-owner"
+                  type="checkbox"
+                  checked={inviteForm.asOwner}
+                  onChange={(e) =>
+                    setInviteForm((f) => ({
+                      ...f,
+                      asOwner: e.target.checked,
+                      // Nếu cấp quyền chủ → clear roleId (không cần)
+                      roleId: e.target.checked ? "" : f.roleId,
+                    }))
+                  }
+                  disabled={inviteBusy}
+                  className="mt-0.5 h-4 w-4 rounded border-amber-400 accent-amber-600"
+                />
+                <div className="flex-1">
+                  <Label
+                    htmlFor="invite-as-owner"
+                    className="text-sm font-medium cursor-pointer"
+                  >
+                    Cấp quyền Chủ cửa hàng (đồng chủ)
+                  </Label>
+                  <p className="text-xs text-amber-700 dark:text-amber-400 mt-0.5">
+                    Người này sẽ có toàn quyền như bạn: xem mọi chi nhánh,
+                    mời/xoá nhân viên, xem báo cáo tài chính. Chỉ tick khi
+                    hoàn toàn tin tưởng.
+                  </p>
+                </div>
               </div>
             </div>
           </div>

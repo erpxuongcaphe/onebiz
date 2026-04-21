@@ -292,6 +292,11 @@ export interface InviteStaffInput {
   phone?: string;
   branchId?: string;
   roleId?: string;
+  /**
+   * Nếu true, invitee sẽ có legacy `role='owner'` → bypass mọi permission
+   * check (đồng chủ cửa hàng). Mặc định false = 'staff' kiểm soát theo role_id.
+   */
+  asOwner?: boolean;
 }
 
 /**
@@ -346,6 +351,7 @@ export async function inviteStaff(input: InviteStaffInput): Promise<void> {
         invited_tenant_id: input.tenantId,
         invited_branch_id: input.branchId || null,
         invited_role_id: input.roleId || null,
+        invited_role: input.asOwner ? "owner" : "staff",
       },
     },
   });
