@@ -155,6 +155,14 @@ describe("createStockTransfer", () => {
     tableMocks = {
       stock_transfers: { data: { id: "t1", code: "CK00001" }, error: null },
       stock_transfer_items: { data: null, error: null },
+      // Stock guard lookup — default to plenty of stock so happy-path tests pass
+      branch_stock: {
+        data: [
+          { product_id: "p1", quantity: 100, reserved: 0 },
+          { product_id: "p2", quantity: 50, reserved: 0 },
+        ],
+        error: null,
+      },
     };
   });
 
@@ -208,6 +216,63 @@ describe("createStockTransfer", () => {
         items: [],
       })
     ).rejects.toThrow("ít nhất 1");
+  });
+
+  it("throws when any line has quantity ≤ 0", async () => {
+    await expect(
+      createStockTransfer({
+        fromBranchId: "branch-a",
+        toBranchId: "branch-b",
+        items: [
+          { productId: "p1", productName: "SP A", productCode: "SPA01", quantity: 0 },
+        ],
+      }),
+    ).rejects.toThrow(/lớn hơn 0/);
+  });
+
+  it("throws when requested qty exceeds available stock — no DB writes", async () => {
+    tableMocks.branch_stock = {
+      data: [
+        // Chi nhánh xuất còn 5 SP A (reserved 2 = available 3)
+        { product_id: "p1", quantity: 5, reserved: 2 },
+      ],
+      error: null,
+    };
+
+    await expect(
+      createStockTransfer({
+        fromBranchId: "branch-a",
+        toBranchId: "branch-b",
+        items: [
+          { productId: "p1", productName: "SP A", productCode: "SPA01", unit: "cái", quantity: 10 },
+        ],
+      }),
+    ).rejects.toThrow(/Không đủ tồn kho.*SP A.*cần 10.*còn 3/s);
+
+    // CRITICAL: phải fail trước khi ghi DB — tránh tạo phiếu lỗi
+    expect(insertCalls.filter((c) => c.table === "stock_transfers")).toHaveLength(0);
+    expect(insertCalls.filter((c) => c.table === "stock_transfer_items")).toHaveLength(0);
+  });
+
+  it("lists every over-stock product in the error message", async () => {
+    tableMocks.branch_stock = {
+      data: [
+        { product_id: "p1", quantity: 3, reserved: 0 },
+        { product_id: "p2", quantity: 2, reserved: 0 },
+      ],
+      error: null,
+    };
+
+    await expect(
+      createStockTransfer({
+        fromBranchId: "branch-a",
+        toBranchId: "branch-b",
+        items: [
+          { productId: "p1", productName: "SP A", productCode: "SPA01", quantity: 10 },
+          { productId: "p2", productName: "SP B", productCode: "SPB01", quantity: 10 },
+        ],
+      }),
+    ).rejects.toThrow(/SP A.*SP B/s);
   });
 });
 

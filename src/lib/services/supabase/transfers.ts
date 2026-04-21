@@ -231,6 +231,50 @@ export async function createStockTransfer(
     throw new Error("Phiếu chuyển kho phải có ít nhất 1 sản phẩm");
   }
 
+  // Validate quantities
+  for (const it of input.items) {
+    if (!Number.isFinite(it.quantity) || it.quantity <= 0) {
+      throw new Error(
+        `Số lượng của "${it.productName}" phải lớn hơn 0`,
+      );
+    }
+  }
+
+  // ─── Server-side stock guard ─────────────────────────────────────
+  // Trước khi tạo phiếu, verify từng SP còn đủ tồn ở chi nhánh xuất.
+  // Client UI cũng cap lại qty, nhưng race giữa nhiều người chuyển cùng
+  // lúc có thể xảy ra → check ở đây để fail sớm + descriptive error.
+  const productIds = Array.from(new Set(input.items.map((i) => i.productId)));
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  const { data: stockRows, error: stockErr } = await (supabase as any)
+    .from("branch_stock")
+    .select("product_id, quantity, reserved")
+    .eq("branch_id", input.fromBranchId)
+    .in("product_id", productIds);
+  if (stockErr) handleError(stockErr, "createStockTransfer.checkStock");
+
+  const availableMap = new Map<string, number>();
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  for (const row of stockRows ?? []) {
+    const avail = Number(row.quantity ?? 0) - Number(row.reserved ?? 0);
+    availableMap.set(row.product_id as string, avail);
+  }
+
+  const violations: string[] = [];
+  for (const it of input.items) {
+    const avail = availableMap.get(it.productId) ?? 0;
+    if (it.quantity > avail) {
+      violations.push(
+        `${it.productName} (cần ${it.quantity}${it.unit ? " " + it.unit : ""}, còn ${avail}${it.unit ? " " + it.unit : ""})`,
+      );
+    }
+  }
+  if (violations.length > 0) {
+    throw new Error(
+      `Không đủ tồn kho tại chi nhánh xuất: ${violations.join("; ")}`,
+    );
+  }
+
   // Generate code
   const { data: code, error: codeErr } = await supabase.rpc("next_code", {
     p_tenant_id: ctx.tenantId,

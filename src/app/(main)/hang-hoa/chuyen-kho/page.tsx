@@ -672,9 +672,15 @@ function CreateTransferDialog({
 
   const updateQuantity = (id: string, qty: number) => {
     setItems((prev) =>
-      prev.map((item) =>
-        item.id === id ? { ...item, quantity: Math.max(1, qty) } : item
-      )
+      prev.map((item) => {
+        if (item.id !== id) return item;
+        // Cap [1 .. stock] — không cho user type số lớn hơn tồn tại chi nhánh xuất.
+        // Nếu stock = 0 (edge case: vừa bị chuyển hết trước đó), giữ ở mức 1 để
+        // user thấy rõ warning "vượt tồn" thay vì silent lock ở 0.
+        const maxQty = Math.max(1, Math.floor(item.stock));
+        const bounded = Math.min(Math.max(1, Math.floor(qty) || 1), maxQty);
+        return { ...item, quantity: bounded };
+      }),
     );
   };
 
@@ -682,9 +688,14 @@ function CreateTransferDialog({
     setItems((prev) => prev.filter((item) => item.id !== id));
   };
 
+  // Các item có qty > stock — thường xảy ra khi stock bị thay đổi ngoài
+  // (user khác chuyển kho song song) hoặc khi item mới add với stock = 0.
+  const overStockItems = items.filter((i) => i.quantity > i.stock);
+
   const handleSubmit = () => {
     if (!fromBranch || !toBranch) return;
     if (items.length === 0) return;
+    if (overStockItems.length > 0) return;
     onSubmit({
       fromBranchId: fromBranch,
       toBranchId: toBranch,
@@ -712,7 +723,12 @@ function CreateTransferDialog({
     if (!open) reset();
   }, [open]);
 
-  const isValid = fromBranch && toBranch && fromBranch !== toBranch && items.length > 0;
+  const isValid =
+    Boolean(fromBranch) &&
+    Boolean(toBranch) &&
+    fromBranch !== toBranch &&
+    items.length > 0 &&
+    overStockItems.length === 0;
 
   return (
     <Dialog open={open} onOpenChange={onClose}>
@@ -843,49 +859,68 @@ function CreateTransferDialog({
                   </tr>
                 </thead>
                 <tbody>
-                  {items.map((item) => (
-                    <tr key={item.id} className="border-t">
-                      <td className="px-3 py-2">
-                        <div className="flex items-center gap-2">
-                          <Icon name="inventory_2" size={14} className="text-muted-foreground" />
-                          <div>
-                            <p className="font-medium text-xs">
-                              {item.productName}
-                            </p>
-                            <p className="text-[10px] text-muted-foreground font-mono">
-                              {item.productCode}
-                            </p>
+                  {items.map((item) => {
+                    const overStock = item.quantity > item.stock;
+                    return (
+                      <tr
+                        key={item.id}
+                        className={`border-t ${overStock ? "bg-status-error/5" : ""}`}
+                      >
+                        <td className="px-3 py-2">
+                          <div className="flex items-center gap-2">
+                            <Icon name="inventory_2" size={14} className="text-muted-foreground" />
+                            <div>
+                              <p className="font-medium text-xs">
+                                {item.productName}
+                              </p>
+                              <p className="text-[10px] text-muted-foreground font-mono">
+                                {item.productCode}
+                              </p>
+                            </div>
                           </div>
-                        </div>
-                      </td>
-                      <td className="text-center text-xs text-muted-foreground">
-                        {item.stock} {item.unit ?? ""}
-                      </td>
-                      <td className="text-center px-2">
-                        <Input
-                          type="number"
-                          min={1}
-                          value={item.quantity}
-                          onChange={(e: React.ChangeEvent<HTMLInputElement>) =>
-                            updateQuantity(item.id, parseInt(e.target.value) || 1)
-                          }
-                          className="h-7 text-center text-xs w-20 mx-auto"
-                        />
-                      </td>
-                      <td className="px-2">
-                        <Button
-                          variant="ghost"
-                          size="sm"
-                          className="h-6 w-6 p-0 text-status-error hover:text-status-error"
-                          onClick={() => removeItem(item.id)}
+                        </td>
+                        <td
+                          className={`text-center text-xs ${overStock ? "text-status-error font-medium" : "text-muted-foreground"}`}
                         >
-                          <Icon name="delete" size={12} />
-                        </Button>
-                      </td>
-                    </tr>
-                  ))}
+                          {item.stock} {item.unit ?? ""}
+                        </td>
+                        <td className="text-center px-2">
+                          <Input
+                            type="number"
+                            min={1}
+                            max={Math.max(1, item.stock)}
+                            value={item.quantity}
+                            onChange={(e: React.ChangeEvent<HTMLInputElement>) =>
+                              updateQuantity(item.id, parseInt(e.target.value) || 1)
+                            }
+                            className={`h-7 text-center text-xs w-20 mx-auto ${overStock ? "border-status-error focus-visible:ring-status-error" : ""}`}
+                            aria-invalid={overStock || undefined}
+                          />
+                        </td>
+                        <td className="px-2">
+                          <Button
+                            variant="ghost"
+                            size="sm"
+                            className="h-6 w-6 p-0 text-status-error hover:text-status-error"
+                            onClick={() => removeItem(item.id)}
+                          >
+                            <Icon name="delete" size={12} />
+                          </Button>
+                        </td>
+                      </tr>
+                    );
+                  })}
                 </tbody>
               </table>
+              {overStockItems.length > 0 && (
+                <div className="px-3 py-2 bg-status-error/10 border-t border-status-error/30 text-xs text-status-error flex items-start gap-1.5">
+                  <Icon name="warning" size={14} className="shrink-0 mt-0.5" />
+                  <span>
+                    Có {overStockItems.length} mặt hàng vượt tồn kho tại chi nhánh
+                    xuất. Vui lòng giảm số lượng trước khi tạo phiếu.
+                  </span>
+                </div>
+              )}
             </div>
           )}
 
