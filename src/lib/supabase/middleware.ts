@@ -136,8 +136,13 @@ function copySetCookies(from: NextResponse, to: NextResponse): void {
  * Gọi từ src/middleware.ts.
  */
 export async function updateSession(request: NextRequest) {
-  // DEMO BYPASS: bỏ qua auth để demo — XOÁ SAU KHI TEST XONG
-  const DEMO_MODE = true;
+  // DEV-only auth bypass. Gate kép để production TUYỆT ĐỐI không bypass:
+  //   1. NODE_ENV phải khác "production" (Vercel + Next build prod sẽ là "production")
+  //   2. NEXT_PUBLIC_BYPASS_AUTH phải === "true" (set trong .env.local)
+  // Nếu quên xoá env var khi deploy → NODE_ENV guard vẫn chặn bypass.
+  const DEMO_MODE =
+    process.env.NODE_ENV !== "production" &&
+    process.env.NEXT_PUBLIC_BYPASS_AUTH === "true";
   if (DEMO_MODE) {
     // Vẫn xử lý FnB subdomain routing
     if (isFnbSubdomain(request)) {

@@ -6,6 +6,7 @@ import {
   useState,
   useCallback,
   useEffect,
+  useRef,
   type ReactNode,
 } from "react";
 import { useRouter } from "next/navigation";
@@ -163,12 +164,20 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     [supabase]
   );
 
+  // Track previous auth state to detect forced sign-outs (token expired)
+  // vs initial unauthenticated state.
+  const wasAuthenticatedRef = useRef(false);
+  // Flag set by explicit logout() to suppress "session expired" toast —
+  // user-initiated logout shouldn't show a warning.
+  const userLogoutRef = useRef(false);
+
   // Listen to Supabase auth state changes
   useEffect(() => {
     // Get initial session
     supabase.auth.getUser().then(({ data: { user: initialUser } }) => {
       if (initialUser) {
         setAuthUser(initialUser);
+        wasAuthenticatedRef.current = true;
         loadUserData(initialUser).finally(() => setIsLoading(false));
       } else {
         setIsLoading(false);
@@ -178,11 +187,12 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     // Subscribe to auth changes
     const {
       data: { subscription },
-    } = supabase.auth.onAuthStateChange((_event, session) => {
+    } = supabase.auth.onAuthStateChange((event, session) => {
       const sessionUser = session?.user ?? null;
       setAuthUser(sessionUser);
 
       if (sessionUser) {
+        wasAuthenticatedRef.current = true;
         loadUserData(sessionUser);
       } else {
         setUser(null);
@@ -190,11 +200,28 @@ export function AuthProvider({ children }: { children: ReactNode }) {
         setBranches([]);
         setCurrentBranch(null);
         setPermissions(new Set());
+
+        // Nếu trước đó đã đăng nhập và bây giờ session mất (token hết hạn,
+        // refresh fail, logout từ device khác) → notify + redirect. Bỏ qua
+        // case logout chủ động (đã redirect từ logout() rồi).
+        const wasAuthenticated = wasAuthenticatedRef.current;
+        const userInitiated = userLogoutRef.current;
+        wasAuthenticatedRef.current = false;
+        userLogoutRef.current = false;
+
+        if (wasAuthenticated && !userInitiated && event === "SIGNED_OUT") {
+          // Dispatch event — ToastProvider sibling sẽ show toast.
+          if (typeof window !== "undefined") {
+            window.dispatchEvent(new CustomEvent("auth:session-expired"));
+          }
+          // Redirect to login so user re-auths thay vì stuck silent 401.
+          router.replace("/dang-nhap");
+        }
       }
     });
 
     return () => subscription.unsubscribe();
-  }, [supabase, loadUserData]);
+  }, [supabase, loadUserData, router]);
 
   const switchBranch = useCallback(
     (branchId: string | null) => {
@@ -227,6 +254,9 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   );
 
   const logout = useCallback(async () => {
+    // Flag để SIGNED_OUT handler biết đây là user-initiated, không show
+    // toast "session expired".
+    userLogoutRef.current = true;
     await supabase.auth.signOut();
     router.push("/dang-nhap");
   }, [supabase, router]);
