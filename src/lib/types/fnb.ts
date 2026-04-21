@@ -93,6 +93,8 @@ export interface KitchenOrder {
   items?: KitchenOrderItem[];
   /** Table name (joined) */
   tableName?: string;
+  /** Profile name of creator (joined) */
+  createdByName?: string;
 }
 
 // ── F&B Cart types (frontend state) ──

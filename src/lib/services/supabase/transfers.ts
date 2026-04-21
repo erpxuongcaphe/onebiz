@@ -40,6 +40,7 @@ export interface StockTransfer {
   totalItems: number;
   note: string;
   createdBy: string;
+  createdByName?: string;
   createdAt: string;
   completedAt: string | null;
 }
@@ -107,7 +108,8 @@ export async function getStockTransfers(
     .select(
       `*,
        from_branch:from_branch_id(name),
-       to_branch:to_branch_id(name)`,
+       to_branch:to_branch_id(name),
+       profiles!stock_transfers_created_by_fkey(full_name)`,
       { count: "exact" }
     );
 
@@ -137,6 +139,7 @@ export async function getStockTransfers(
     totalItems: row.total_items ?? 0,
     note: row.note ?? "",
     createdBy: row.created_by ?? "",
+    createdByName: (row.profiles as { full_name: string } | null)?.full_name ?? "",
     createdAt: row.created_at,
     completedAt: row.completed_at ?? null,
   }));

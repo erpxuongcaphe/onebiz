@@ -120,7 +120,7 @@ function TransactionDetail({
                   meta={
                     <div className="flex items-center gap-4 flex-wrap text-xs">
                       <span>
-                        Người tạo: <strong>{formatUser(undefined, entry.createdBy)}</strong>
+                        Người tạo: <strong>{formatUser(entry.createdByName, entry.createdBy)}</strong>
                       </span>
                       <span>
                         Ngày tạo: <strong>{formatDate(entry.date)}</strong>

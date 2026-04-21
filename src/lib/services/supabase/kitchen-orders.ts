@@ -21,6 +21,7 @@ type KOItemInsert = Database["public"]["Tables"]["kitchen_order_items"]["Insert"
 
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
 function mapKitchenOrder(row: any): KitchenOrder {
+  const profile = row.profiles as { full_name: string } | null;
   return {
     id: row.id,
     tenantId: row.tenant_id,
@@ -32,6 +33,7 @@ function mapKitchenOrder(row: any): KitchenOrder {
     status: row.status,
     note: row.note,
     createdBy: row.created_by,
+    createdByName: profile?.full_name ?? undefined,
     createdAt: row.created_at,
     updatedAt: row.updated_at,
     discountAmount: Number(row.discount_amount ?? 0),
@@ -79,7 +81,7 @@ export async function getKitchenOrders(
 
   let query = supabase
     .from("kitchen_orders")
-    .select("*, restaurant_tables(name)")
+    .select("*, restaurant_tables(name), profiles!kitchen_orders_created_by_fkey(full_name)")
     .eq("branch_id", branchId)
     .order("created_at", { ascending: true });
 
@@ -101,7 +103,7 @@ export async function getKitchenOrderById(orderId: string): Promise<KitchenOrder
 
   const { data: order, error: orderErr } = await supabase
     .from("kitchen_orders")
-    .select("*, restaurant_tables(name)")
+    .select("*, restaurant_tables(name), profiles!kitchen_orders_created_by_fkey(full_name)")
     .eq("id", orderId)
     .single();
 

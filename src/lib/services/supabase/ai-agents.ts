@@ -32,6 +32,7 @@ function toJson(v: unknown): Json {
 // Row → Domain mappers
 // ────────────────────────────────────────────
 function mapAgent(row: Record<string, any>): Agent {
+  const profile = row.profiles as { full_name: string } | null;
   return {
     id: row.id,
     tenantId: row.tenant_id,
@@ -46,6 +47,7 @@ function mapAgent(row: Record<string, any>): Agent {
     isActive: row.is_active ?? true,
     lastRunAt: row.last_run_at ?? null,
     createdBy: row.created_by ?? null,
+    createdByName: profile?.full_name ?? null,
     createdAt: row.created_at,
     updatedAt: row.updated_at,
   };
@@ -124,7 +126,7 @@ export async function getAgents(): Promise<Agent[]> {
   const supabase = getClient();
   const { data, error } = await supabase
     .from("agents")
-    .select("*")
+    .select("*, profiles!agents_created_by_fkey(full_name)")
     .order("role", { ascending: true })
     .order("name", { ascending: true });
   if (error) handleError(error, "getAgents");
@@ -135,7 +137,7 @@ export async function getAgentById(id: string): Promise<Agent | null> {
   const supabase = getClient();
   const { data, error } = await supabase
     .from("agents")
-    .select("*")
+    .select("*, profiles!agents_created_by_fkey(full_name)")
     .eq("id", id)
     .maybeSingle();
   if (error) handleError(error, "getAgentById");

@@ -76,6 +76,7 @@ export interface PurchaseOrder {
   paid: number;
   status: PurchaseOrderStatus;
   createdBy: string;
+  createdByName?: string;
   importedBy?: string;
 }
 
@@ -130,6 +131,7 @@ export interface SalesOrder {
   status: "new" | "confirmed" | "delivering" | "completed" | "cancelled";
   statusName: string;
   createdBy: string;
+  createdByName?: string;
 }
 
 // Dòng sản phẩm trong đơn bán hàng

@@ -14,7 +14,7 @@ export async function getCashBookEntries(params: QueryParams): Promise<QueryResu
 
   let query = supabase
     .from("cash_transactions")
-    .select("*", { count: "exact" });
+    .select("*, profiles!cash_transactions_created_by_fkey(full_name)", { count: "exact" });
 
   // Search
   if (params.search) {
@@ -134,6 +134,7 @@ export async function deleteCashTransaction(id: string): Promise<void> {
 
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
 function mapCashEntry(row: any): CashBookEntry {
+  const profile = row.profiles as { full_name: string } | null;
   return {
     id: row.id,
     code: row.code,
@@ -145,5 +146,6 @@ function mapCashEntry(row: any): CashBookEntry {
     amount: row.amount,
     note: row.note ?? undefined,
     createdBy: row.created_by,
+    createdByName: profile?.full_name ?? "",
   };
 }

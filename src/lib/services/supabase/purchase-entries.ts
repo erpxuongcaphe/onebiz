@@ -30,7 +30,7 @@ export async function getPurchaseOrderEntries(
 
   let query = supabase
     .from("purchase_orders")
-    .select("*", { count: "exact" });
+    .select("*, profiles!purchase_orders_created_by_fkey(full_name)", { count: "exact" });
 
   // Search theo mã hoặc tên NCC
   if (params.search) {
@@ -242,7 +242,7 @@ export async function getInputInvoices(
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
   let query = (supabase as any)
     .from("input_invoices")
-    .select("*", { count: "exact" });
+    .select("*, profiles!input_invoices_created_by_fkey(full_name)", { count: "exact" });
 
   // Search theo mã hoặc tên NCC
   if (params.search) {
@@ -459,6 +459,7 @@ const purchaseOrderStatusNameMap: Record<string, string> = {
 
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
 function mapPurchaseOrderEntry(row: any): PurchaseOrderEntry {
+  const profile = row.profiles as { full_name: string } | null;
   return {
     id: row.id,
     code: row.code,
@@ -469,6 +470,7 @@ function mapPurchaseOrderEntry(row: any): PurchaseOrderEntry {
     statusName: purchaseOrderStatusNameMap[row.status] ?? row.status,
     expectedDate: row.expected_date ?? "",
     createdBy: row.created_by ?? "---",
+    createdByName: profile?.full_name ?? undefined,
   };
 }
 
@@ -499,6 +501,7 @@ const inputInvoiceStatusNameMap: Record<string, string> = {
 
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
 function mapInputInvoice(row: any): InputInvoice {
+  const profile = row.profiles as { full_name: string } | null;
   return {
     id: row.id,
     code: row.code,
@@ -509,5 +512,6 @@ function mapInputInvoice(row: any): InputInvoice {
     status: (row.status === "recorded" ? "recorded" : "unrecorded") as InputInvoice["status"],
     statusName: inputInvoiceStatusNameMap[row.status] ?? row.status,
     createdBy: row.created_by ?? "---",
+    createdByName: profile?.full_name ?? undefined,
   };
 }

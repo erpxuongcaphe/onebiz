@@ -23,7 +23,7 @@ export async function getProductionOrders(params?: {
   let query = supabase
     .from("production_orders")
     .select(
-      "*, products!production_orders_product_id_fkey(name, code), branches!production_orders_branch_id_fkey(name)",
+      "*, products!production_orders_product_id_fkey(name, code), branches!production_orders_branch_id_fkey(name), profiles!production_orders_created_by_fkey(full_name)",
       { count: "exact" }
     )
     .order("created_at", { ascending: false });
@@ -46,7 +46,7 @@ export async function getProductionOrderById(id: string) {
   const { data, error } = await supabase
     .from("production_orders")
     .select(
-      "*, products!production_orders_product_id_fkey(name, code), branches!production_orders_branch_id_fkey(name)"
+      "*, products!production_orders_product_id_fkey(name, code), branches!production_orders_branch_id_fkey(name), profiles!production_orders_created_by_fkey(full_name)"
     )
     .eq("id", id)
     .single();
@@ -466,6 +466,7 @@ export async function createPurchaseLot(lot: {
 function mapProductionOrder(row: Record<string, unknown>): ProductionOrder {
   const product = row.products as Record<string, unknown> | undefined;
   const branch = row.branches as Record<string, unknown> | undefined;
+  const profile = row.profiles as { full_name: string } | null;
   return {
     id: row.id as string,
     tenantId: row.tenant_id as string,
@@ -488,6 +489,7 @@ function mapProductionOrder(row: Record<string, unknown>): ProductionOrder {
     notes: (row.notes as string) ?? undefined,
     cogsAmount: (row.cogs_amount as number) ?? undefined,
     createdBy: (row.created_by as string) ?? undefined,
+    createdByName: profile?.full_name ?? undefined,
     createdAt: row.created_at as string,
     updatedAt: row.updated_at as string,
   };

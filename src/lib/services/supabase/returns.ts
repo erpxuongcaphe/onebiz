@@ -11,7 +11,10 @@ export async function getReturns(params: QueryParams): Promise<QueryResult<Retur
 
   let query = supabase
     .from("sales_returns")
-    .select("*, invoices!sales_returns_invoice_id_fkey(code)", { count: "exact" });
+    .select(
+      "*, invoices!sales_returns_invoice_id_fkey(code), profiles!sales_returns_created_by_fkey(full_name)",
+      { count: "exact" },
+    );
 
   // Search
   if (params.search) {
@@ -60,6 +63,7 @@ function mapReturn(row: any): ReturnOrder {
     cancelled: "Đã hủy",
   };
 
+  const profile = row.profiles as { full_name: string } | null;
   return {
     id: row.id,
     code: row.code,
@@ -69,6 +73,6 @@ function mapReturn(row: any): ReturnOrder {
     totalAmount: row.total,
     status: row.status === "completed" ? "completed" : "draft",
     statusName: statusNameMap[row.status] ?? row.status,
-    createdBy: row.created_by,
+    createdBy: profile?.full_name ?? row.created_by,
   };
 }

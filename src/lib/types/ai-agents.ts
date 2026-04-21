@@ -60,6 +60,7 @@ export interface Agent {
   isActive: boolean;
   lastRunAt?: string | null;
   createdBy?: string | null;
+  createdByName?: string | null;
   createdAt: string;
   updatedAt: string;
 }

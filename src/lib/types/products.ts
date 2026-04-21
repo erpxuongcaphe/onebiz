@@ -80,6 +80,7 @@ export interface StockMovement {
   date: string;
   note?: string;
   createdBy: string;
+  createdByName?: string;
   supplierName?: string;
 }
 
@@ -125,6 +126,7 @@ export interface InventoryCheck {
   decreaseAmount: number;
   note?: string;
   createdBy: string;
+  createdByName?: string;
 }
 
 // Lệnh sản xuất
@@ -139,6 +141,7 @@ export interface ManufacturingOrder {
   statusName: string;
   costAmount: number;
   createdBy: string;
+  createdByName?: string;
 }
 
 // Xuất huỷ
@@ -152,6 +155,7 @@ export interface DisposalExport {
   status: "completed" | "draft";
   statusName: string;
   createdBy: string;
+  createdByName?: string;
 }
 
 // Xuất nội bộ
@@ -165,4 +169,5 @@ export interface InternalExport {
   statusName: string;
   note?: string;
   createdBy: string;
+  createdByName?: string;
 }

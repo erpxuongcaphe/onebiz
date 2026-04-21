@@ -81,7 +81,7 @@ export async function getPurchaseOrders(
 
   let query = supabase
     .from("purchase_orders")
-    .select("*", { count: "exact" });
+    .select("*, profiles!purchase_orders_created_by_fkey(full_name)", { count: "exact" });
 
   if (params.search) {
     query = query.or(
@@ -136,7 +136,7 @@ export async function getPurchaseOrdersForSupplier(
   const supabase = getClient();
   const { data, error } = await supabase
     .from("purchase_orders")
-    .select("*")
+    .select("*, profiles!purchase_orders_created_by_fkey(full_name)")
     .eq("supplier_id", supplierId)
     .order("created_at", { ascending: false })
     .limit(limit);
@@ -352,6 +352,7 @@ export async function receivePurchaseOrder(orderId: string): Promise<void> {
 
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
 function mapPurchaseOrder(row: any): PurchaseOrder {
+  const profile = row.profiles as { full_name: string } | null;
   return {
     id: row.id,
     code: row.code,
@@ -365,5 +366,6 @@ function mapPurchaseOrder(row: any): PurchaseOrder {
     paid: Number(row.paid ?? 0),
     status: (row.status ?? "draft") as PurchaseOrderStatus,
     createdBy: row.created_by ?? "",
+    createdByName: profile?.full_name ?? "",
   };
 }

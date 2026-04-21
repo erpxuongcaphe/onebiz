@@ -10,6 +10,7 @@ export interface CashBookEntry {
   amount: number;
   note?: string;
   createdBy: string;
+  createdByName?: string;
 }
 
 // Giao dịch thu chi

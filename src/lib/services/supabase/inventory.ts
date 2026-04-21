@@ -32,6 +32,7 @@ const disposalStatusNameMap: Record<string, string> = {
 
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
 function mapDisposalExport(row: any): DisposalExport {
+  const profile = row.profiles as { full_name: string } | null;
   return {
     id: row.id,
     code: row.code,
@@ -42,6 +43,7 @@ function mapDisposalExport(row: any): DisposalExport {
     status: row.status === "completed" ? "completed" : "draft",
     statusName: disposalStatusNameMap[row.status] ?? row.status,
     createdBy: row.created_by ?? "",
+    createdByName: profile?.full_name ?? "",
   };
 }
 
@@ -52,7 +54,7 @@ export async function getDisposalExports(params: QueryParams): Promise<QueryResu
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
   let query = (supabase as any)
     .from("disposal_exports")
-    .select("*", { count: "exact" });
+    .select("*, profiles!disposal_exports_created_by_fkey(full_name)", { count: "exact" });
 
   // Search theo mã phiếu
   if (params.search) {
@@ -99,6 +101,7 @@ const internalExportStatusNameMap: Record<string, string> = {
 
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
 function mapInternalExport(row: any): InternalExport {
+  const profile = row.profiles as { full_name: string } | null;
   return {
     id: row.id,
     code: row.code,
@@ -109,6 +112,7 @@ function mapInternalExport(row: any): InternalExport {
     statusName: internalExportStatusNameMap[row.status] ?? row.status,
     note: row.note ?? undefined,
     createdBy: row.created_by ?? "",
+    createdByName: profile?.full_name ?? "",
   };
 }
 
@@ -119,7 +123,7 @@ export async function getInternalExports(params: QueryParams): Promise<QueryResu
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
   let query = (supabase as any)
     .from("internal_exports")
-    .select("*", { count: "exact" });
+    .select("*, profiles!internal_exports_created_by_fkey(full_name)", { count: "exact" });
 
   // Search theo mã phiếu
   if (params.search) {
@@ -334,7 +338,7 @@ export async function getInventoryChecks(params: QueryParams): Promise<QueryResu
 
   let query = supabase
     .from("inventory_checks")
-    .select("*", { count: "exact" });
+    .select("*, profiles!inventory_checks_created_by_fkey(full_name)", { count: "exact" });
 
   // Search
   if (params.search) {
@@ -594,6 +598,7 @@ const checkStatusMap: Record<string, InventoryCheck["status"]> = {
 
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
 function mapInventoryCheck(row: any): InventoryCheck {
+  const profile = row.profiles as { full_name: string } | null;
   return {
     id: row.id,
     code: row.code,
@@ -607,5 +612,6 @@ function mapInventoryCheck(row: any): InventoryCheck {
     decreaseAmount: 0,
     note: row.note ?? undefined,
     createdBy: row.created_by,
+    createdByName: profile?.full_name ?? "",
   };
 }

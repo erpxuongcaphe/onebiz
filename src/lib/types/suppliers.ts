@@ -67,6 +67,7 @@ export interface PurchaseOrderEntry {
   statusName: string;
   expectedDate: string;
   createdBy: string;
+  createdByName?: string;
 }
 
 // Trả hàng nhập
@@ -80,6 +81,7 @@ export interface PurchaseReturn {
   status: "completed" | "draft";
   statusName: string;
   createdBy: string;
+  createdByName?: string;
 }
 
 // Hoá đơn đầu vào
@@ -93,4 +95,5 @@ export interface InputInvoice {
   status: "recorded" | "unrecorded";
   statusName: string;
   createdBy: string;
+  createdByName?: string;
 }

@@ -7,15 +7,16 @@ import type { InventoryCheck, DisposalExport, InternalExport, ManufacturingOrder
 import type { PurchaseOrder, Invoice, SalesOrder } from "@/lib/types/orders";
 import type { PurchaseReturn, PurchaseOrderEntry, InputInvoice } from "@/lib/types/suppliers";
 import type { CashBookEntry } from "@/lib/types/finance";
-import { formatCurrency, formatDate } from "@/lib/format";
+import { formatCurrency, formatDate, formatUser } from "@/lib/format";
 
 export function buildInventoryCheckPrintData(row: InventoryCheck): DocumentPrintData {
+  const user = formatUser(row.createdByName, row.createdBy);
   return {
     documentType: "PHIẾU KIỂM KHO",
     documentCode: row.code,
     date: row.date,
     headerFields: [
-      { label: "Người tạo", value: row.createdBy },
+      { label: "Người tạo", value: user },
       { label: "Trạng thái", value: row.statusName || row.status },
       { label: "Tổng sản phẩm", value: String(row.totalProducts) },
     ],
@@ -27,17 +28,18 @@ export function buildInventoryCheckPrintData(row: InventoryCheck): DocumentPrint
       { label: "Tổng chênh lệch", value: formatCurrency(row.increaseAmount - row.decreaseAmount), bold: true },
     ],
     note: row.note,
-    createdBy: row.createdBy,
+    createdBy: user,
   };
 }
 
 export function buildDisposalPrintData(row: DisposalExport): DocumentPrintData {
+  const user = formatUser(row.createdByName, row.createdBy);
   return {
     documentType: "PHIẾU XUẤT HỦY",
     documentCode: row.code,
     date: row.date,
     headerFields: [
-      { label: "Người tạo", value: row.createdBy },
+      { label: "Người tạo", value: user },
       { label: "Trạng thái", value: row.statusName || row.status },
       { label: "Tổng sản phẩm", value: String(row.totalProducts) },
       { label: "Lý do", value: row.reason || "" },
@@ -46,17 +48,18 @@ export function buildDisposalPrintData(row: DisposalExport): DocumentPrintData {
       { label: "Tổng giá trị", value: formatCurrency(row.totalAmount), bold: true },
     ],
     note: row.reason,
-    createdBy: row.createdBy,
+    createdBy: user,
   };
 }
 
 export function buildInternalExportPrintData(row: InternalExport): DocumentPrintData {
+  const user = formatUser(row.createdByName, row.createdBy);
   return {
     documentType: "PHIẾU XUẤT NỘI BỘ",
     documentCode: row.code,
     date: row.date,
     headerFields: [
-      { label: "Người tạo", value: row.createdBy },
+      { label: "Người tạo", value: user },
       { label: "Trạng thái", value: row.statusName || row.status },
       { label: "Tổng sản phẩm", value: String(row.totalProducts) },
     ],
@@ -64,11 +67,12 @@ export function buildInternalExportPrintData(row: InternalExport): DocumentPrint
       { label: "Tổng giá trị", value: formatCurrency(row.totalAmount), bold: true },
     ],
     note: row.note,
-    createdBy: row.createdBy,
+    createdBy: user,
   };
 }
 
 export function buildGoodsReceiptPrintData(row: PurchaseOrder): DocumentPrintData {
+  const user = formatUser(row.createdByName, row.createdBy);
   return {
     documentType: "PHIẾU NHẬP HÀNG",
     documentCode: row.code,
@@ -77,17 +81,18 @@ export function buildGoodsReceiptPrintData(row: PurchaseOrder): DocumentPrintDat
       { label: "Nhà cung cấp", value: row.supplierName },
       { label: "Mã NCC", value: row.supplierCode || "" },
       { label: "Mã đặt hàng nhập", value: row.orderCode || "—" },
-      { label: "Người tạo", value: row.createdBy },
+      { label: "Người tạo", value: user },
     ],
     summaryRows: [
       { label: "Tổng tiền hàng", value: formatCurrency(row.amountOwed) },
       { label: "Cần trả NCC", value: formatCurrency(row.amountOwed), bold: true },
     ],
-    createdBy: row.createdBy,
+    createdBy: user,
   };
 }
 
 export function buildProductionOrderPrintData(row: ManufacturingOrder): DocumentPrintData {
+  const user = formatUser(row.createdByName, row.createdBy);
   return {
     documentType: "LỆNH SẢN XUẤT",
     documentCode: row.code,
@@ -96,16 +101,17 @@ export function buildProductionOrderPrintData(row: ManufacturingOrder): Document
       { label: "Sản phẩm", value: `${row.productCode} — ${row.productName}` },
       { label: "Số lượng", value: String(row.quantity) },
       { label: "Trạng thái", value: row.statusName || row.status },
-      { label: "Người tạo", value: row.createdBy },
+      { label: "Người tạo", value: user },
     ],
     summaryRows: [
       { label: "Chi phí sản xuất", value: formatCurrency(row.costAmount), bold: true },
     ],
-    createdBy: row.createdBy,
+    createdBy: user,
   };
 }
 
 export function buildPurchaseReturnPrintData(row: PurchaseReturn): DocumentPrintData {
+  const user = formatUser(row.createdByName, row.createdBy);
   return {
     documentType: "PHIẾU TRẢ HÀNG NHẬP",
     documentCode: row.code,
@@ -114,16 +120,18 @@ export function buildPurchaseReturnPrintData(row: PurchaseReturn): DocumentPrint
       { label: "Nhà cung cấp", value: row.supplierName },
       { label: "Mã phiếu nhập", value: row.importCode },
       { label: "Trạng thái", value: row.statusName || row.status },
-      { label: "Người tạo", value: row.createdBy },
+      { label: "Người tạo", value: user },
     ],
     summaryRows: [
       { label: "Tổng tiền trả", value: formatCurrency(row.totalAmount), bold: true },
     ],
-    createdBy: row.createdBy,
+    createdBy: user,
   };
 }
 
 export function buildInvoicePrintData(row: Invoice): DocumentPrintData {
+  // Invoice.createdBy already written as full_name by invoices.ts mapper
+  const user = formatUser(undefined, row.createdBy);
   return {
     documentType: "HOÁ ĐƠN BÁN HÀNG",
     documentCode: row.code,
@@ -131,18 +139,19 @@ export function buildInvoicePrintData(row: Invoice): DocumentPrintData {
     headerFields: [
       { label: "Khách hàng", value: row.customerName },
       { label: "Mã KH", value: row.customerCode },
-      { label: "Người tạo", value: row.createdBy },
+      { label: "Người tạo", value: user },
     ],
     summaryRows: [
       { label: "Tổng tiền hàng", value: formatCurrency(row.totalAmount) },
       { label: "Chiết khấu", value: formatCurrency(row.discount) },
       { label: "Thanh toán", value: formatCurrency(row.totalAmount - row.discount), bold: true },
     ],
-    createdBy: row.createdBy,
+    createdBy: user,
   };
 }
 
 export function buildSalesOrderPrintData(row: SalesOrder): DocumentPrintData {
+  const user = formatUser(row.createdByName, row.createdBy);
   return {
     documentType: "ĐƠN ĐẶT HÀNG",
     documentCode: row.code,
@@ -151,16 +160,17 @@ export function buildSalesOrderPrintData(row: SalesOrder): DocumentPrintData {
       { label: "Khách hàng", value: row.customerName },
       { label: "Điện thoại", value: row.customerPhone || "" },
       { label: "Trạng thái", value: row.statusName || row.status },
-      { label: "Người tạo", value: row.createdBy },
+      { label: "Người tạo", value: user },
     ],
     summaryRows: [
       { label: "Tổng tiền", value: formatCurrency(row.totalAmount), bold: true },
     ],
-    createdBy: row.createdBy,
+    createdBy: user,
   };
 }
 
 export function buildCashTransactionPrintData(row: CashBookEntry): DocumentPrintData {
+  const user = formatUser(row.createdByName, row.createdBy);
   return {
     documentType: row.type === "receipt" ? "PHIẾU THU" : "PHIẾU CHI",
     documentCode: row.code,
@@ -169,17 +179,18 @@ export function buildCashTransactionPrintData(row: CashBookEntry): DocumentPrint
       { label: "Loại", value: row.typeName || (row.type === "receipt" ? "Thu" : "Chi") },
       { label: "Danh mục", value: row.category || "" },
       { label: "Đối tượng", value: row.counterparty || "" },
-      { label: "Người tạo", value: row.createdBy },
+      { label: "Người tạo", value: user },
     ],
     summaryRows: [
       { label: "Số tiền", value: formatCurrency(row.amount), bold: true },
     ],
     note: row.note,
-    createdBy: row.createdBy,
+    createdBy: user,
   };
 }
 
 export function buildPurchaseEntryPrintData(row: PurchaseOrderEntry): DocumentPrintData {
+  const user = formatUser(row.createdByName, row.createdBy);
   return {
     documentType: "ĐƠN ĐẶT HÀNG NHẬP",
     documentCode: row.code,
@@ -188,16 +199,17 @@ export function buildPurchaseEntryPrintData(row: PurchaseOrderEntry): DocumentPr
       { label: "Nhà cung cấp", value: row.supplierName },
       { label: "Ngày dự kiến nhận", value: formatDate(row.expectedDate) },
       { label: "Trạng thái", value: row.statusName || row.status },
-      { label: "Người tạo", value: row.createdBy },
+      { label: "Người tạo", value: user },
     ],
     summaryRows: [
       { label: "Tổng tiền", value: formatCurrency(row.totalAmount), bold: true },
     ],
-    createdBy: row.createdBy,
+    createdBy: user,
   };
 }
 
 export function buildInputInvoicePrintData(row: InputInvoice): DocumentPrintData {
+  const user = formatUser(row.createdByName, row.createdBy);
   return {
     documentType: "HOÁ ĐƠN ĐẦU VÀO",
     documentCode: row.code,
@@ -205,18 +217,20 @@ export function buildInputInvoicePrintData(row: InputInvoice): DocumentPrintData
     headerFields: [
       { label: "Nhà cung cấp", value: row.supplierName },
       { label: "Trạng thái", value: row.statusName || row.status },
-      { label: "Người tạo", value: row.createdBy },
+      { label: "Người tạo", value: user },
     ],
     summaryRows: [
       { label: "Tiền hàng", value: formatCurrency(row.totalAmount) },
       { label: "Thuế", value: formatCurrency(row.taxAmount) },
       { label: "Tổng", value: formatCurrency(row.totalAmount + row.taxAmount), bold: true },
     ],
-    createdBy: row.createdBy,
+    createdBy: user,
   };
 }
 
 export function buildReturnPrintData(row: { code: string; date: string; customerName?: string; sellerName?: string; totalRefund: number; createdBy: string }): DocumentPrintData {
+  // row.createdBy already resolved to full_name by returns.ts mapper
+  const user = formatUser(undefined, row.createdBy);
   return {
     documentType: "PHIẾU TRẢ HÀNG",
     documentCode: row.code,
@@ -224,11 +238,11 @@ export function buildReturnPrintData(row: { code: string; date: string; customer
     headerFields: [
       { label: "Khách hàng", value: row.customerName || "" },
       { label: "Người bán", value: row.sellerName || "" },
-      { label: "Người tạo", value: row.createdBy },
+      { label: "Người tạo", value: user },
     ],
     summaryRows: [
       { label: "Tổng tiền trả", value: formatCurrency(row.totalRefund), bold: true },
     ],
-    createdBy: row.createdBy,
+    createdBy: user,
   };
 }

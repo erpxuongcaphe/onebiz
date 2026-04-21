@@ -151,7 +151,7 @@ export async function getAllStockMovements(
 
   let query = supabase
     .from("stock_movements")
-    .select("*, products!inner(name, code)", { count: "exact" });
+    .select("*, products!inner(name, code), profiles!stock_movements_created_by_fkey(full_name)", { count: "exact" });
 
   // Search by product name/code or note
   if (params.search) {
@@ -199,6 +199,7 @@ export async function getAllStockMovements(
     date: row.created_at,
     note: row.note ?? undefined,
     createdBy: row.created_by,
+    createdByName: (row.profiles as { full_name: string } | null)?.full_name ?? "",
     productName: row.products?.name ?? "—",
     productCode: row.products?.code ?? "—",
     referenceType: row.reference_type ?? undefined,
@@ -220,7 +221,7 @@ export async function getStockMovements(
 
   const { data, count, error } = await supabase
     .from("stock_movements")
-    .select("*", { count: "exact" })
+    .select("*, profiles!stock_movements_created_by_fkey(full_name)", { count: "exact" })
     .eq("product_id", productId)
     .order("created_at", { ascending: false })
     .range(from, to);
@@ -234,7 +235,8 @@ export async function getStockMovements(
     transfer: "Chuyển kho",
   };
 
-  const movements: StockMovement[] = (data ?? []).map((row) => ({
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  const movements: StockMovement[] = (data ?? []).map((row: any) => ({
     id: row.id,
     code: row.reference_type ? `${row.reference_type.toUpperCase().slice(0, 2)}${row.id.slice(0, 6)}` : row.id.slice(0, 10),
     type: mapMovementType(row.type),
@@ -245,6 +247,7 @@ export async function getStockMovements(
     date: row.created_at,
     note: row.note ?? undefined,
     createdBy: row.created_by,
+    createdByName: (row.profiles as { full_name: string } | null)?.full_name ?? "",
   }));
 
   return { data: movements, total: count ?? 0 };
@@ -263,7 +266,7 @@ export async function getSalesHistory(
     .from("invoice_items")
     .select(`
       id, quantity, unit_price, discount, total,
-      invoices!inner(id, code, created_at, customer_name, status, created_by)
+      invoices!inner(id, code, created_at, customer_name, status, created_by, profiles!invoices_created_by_fkey(full_name))
     `, { count: "exact" })
     .eq("product_id", productId)
     .order("id", { ascending: false })
@@ -279,13 +282,14 @@ export async function getSalesHistory(
   };
 
   const history: SalesHistory[] = (data ?? []).map((row) => {
-    const inv = row.invoices as {
+    const inv = row.invoices as unknown as {
       id: string;
       code: string;
       created_at: string;
       customer_name: string;
       status: string;
       created_by: string;
+      profiles?: { full_name: string } | null;
     };
     return {
       id: row.id,
@@ -298,7 +302,7 @@ export async function getSalesHistory(
       totalAmount: row.total,
       status: inv.status as SalesHistory["status"],
       statusName: statusNameMap[inv.status] ?? inv.status,
-      createdBy: inv.created_by,
+      createdBy: inv.profiles?.full_name ?? "—",
     };
   });
 

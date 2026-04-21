@@ -54,7 +54,7 @@ export async function getOrders(
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
   let query = (supabase as any)
     .from("sales_orders")
-    .select("*", { count: "exact" });
+    .select("*, profiles!sales_orders_created_by_fkey(full_name)", { count: "exact" });
 
   // Search by code or customer_name
   if (params.search) {
@@ -83,17 +83,21 @@ export async function getOrders(
   if (error) handleError(error, "getOrders");
 
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
-  const orders: SalesOrder[] = (data ?? []).map((row: any) => ({
-    id: row.id,
-    code: row.code,
-    date: row.created_at,
-    customerName: row.customer_name ?? "",
-    customerPhone: row.customer_phone ?? "",
-    totalAmount: row.total ?? 0,
-    status: row.status,
-    statusName: STATUS_LABEL[row.status] ?? row.status,
-    createdBy: row.created_by ?? "---",
-  }));
+  const orders: SalesOrder[] = (data ?? []).map((row: any) => {
+    const profile = row.profiles as { full_name: string } | null;
+    return {
+      id: row.id,
+      code: row.code,
+      date: row.created_at,
+      customerName: row.customer_name ?? "",
+      customerPhone: row.customer_phone ?? "",
+      totalAmount: row.total ?? 0,
+      status: row.status,
+      statusName: STATUS_LABEL[row.status] ?? row.status,
+      createdBy: row.created_by ?? "",
+      createdByName: profile?.full_name ?? "",
+    };
+  });
 
   return { data: orders, total: count ?? 0 };
 }
