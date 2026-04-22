@@ -24,6 +24,7 @@ import {
   DetailHeader,
   DetailInfoGrid,
   DetailItemsTable,
+  AuditHistoryTab,
 } from "@/components/shared/inline-detail-panel";
 import type { DetailTab } from "@/components/shared/inline-detail-panel";
 import { useToast, useBranchFilter } from "@/lib/contexts";
@@ -362,6 +363,11 @@ function PurchaseOrderDetail({
       id: "payment_history",
       label: "Lịch sử thanh toán",
       content: <PaymentHistoryTab orderId={order.id} />,
+    },
+    {
+      id: "audit_history",
+      label: "Lịch sử thay đổi",
+      content: <AuditHistoryTab entityType="purchase_order" entityId={order.id} />,
     },
   ];
 
