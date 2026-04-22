@@ -2,6 +2,8 @@
 
 import { useState, useEffect, useCallback, useMemo, lazy, Suspense } from "react";
 import { useAuth, useToast } from "@/lib/contexts";
+import { PermissionPage } from "@/components/shared/permission-page";
+import { PERMISSIONS } from "@/lib/permissions";
 import { useSettings } from "@/lib/contexts/settings-context";
 import { getProductCategoriesAsync } from "@/lib/services/supabase/products";
 import { getVariantsByProduct, getVariantsByProductIds } from "@/lib/services/supabase/variants";
@@ -58,7 +60,7 @@ const FnbSearchModal = lazy(() => import("./components/fnb-search-modal").then(m
 const FnbCustomerPicker = lazy(() => import("./components/fnb-customer-picker").then(m => ({ default: m.FnbCustomerPicker })));
 const SyncQueueDrawer = lazy(() => import("./components/sync-queue-drawer").then(m => ({ default: m.SyncQueueDrawer })));
 
-export default function FnbPosPage() {
+function FnbPosPageInner() {
   const { user, tenant, currentBranch } = useAuth();
   const { toast } = useToast();
   const { settings } = useSettings();
@@ -1203,5 +1205,15 @@ export default function FnbPosPage() {
         </DialogContent>
       </Dialog>
     </div>
+  );
+}
+
+export default function FnbPosPage() {
+  // Gate toàn page bằng permission pos_fnb.send_kitchen — nhân viên chỉ
+  // truy cập được nếu role template của họ có quyền này.
+  return (
+    <PermissionPage requires={PERMISSIONS.POS_FNB_SEND_KITCHEN}>
+      <FnbPosPageInner />
+    </PermissionPage>
   );
 }

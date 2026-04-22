@@ -19,6 +19,8 @@ import Link from "next/link";
 import { cn } from "@/lib/utils";
 import { useAuth, useToast } from "@/lib/contexts";
 import { PosBranchSelector } from "@/components/shared/pos-branch-selector";
+import { PermissionPage } from "@/components/shared/permission-page";
+import { PERMISSIONS } from "@/lib/permissions";
 import {
   getKitchenOrders,
   getKitchenOrderById,
@@ -97,7 +99,7 @@ interface KdsOrder extends KitchenOrder {
 
 // ── Page ──
 
-export default function KdsPage() {
+function KdsPageInner() {
   const { currentBranch } = useAuth();
   const { toast } = useToast();
   const branchId = currentBranch?.id;
@@ -737,5 +739,16 @@ function KdsItemRow({
         )}
       </div>
     </button>
+  );
+}
+
+export default function KdsPage() {
+  // KDS yêu cầu quyền xem đơn bếp (pos_fnb.view_orders). Bếp/bar có quyền
+  // này; cashier thường chỉ có send_kitchen, không có view_orders trừ khi
+  // admin cấp thêm.
+  return (
+    <PermissionPage requires={PERMISSIONS.POS_FNB_VIEW_ORDERS}>
+      <KdsPageInner />
+    </PermissionPage>
   );
 }

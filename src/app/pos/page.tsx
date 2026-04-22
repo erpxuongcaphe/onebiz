@@ -18,6 +18,8 @@
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { lazy, Suspense, useCallback, useEffect, useRef, useState } from "react";
+import { PermissionPage } from "@/components/shared/permission-page";
+import { PERMISSIONS } from "@/lib/permissions";
 import {
   saveDraftOrder,
   listDraftOrders,
@@ -90,7 +92,7 @@ function nextTabId() {
 // ============================================================
 // Page
 // ============================================================
-export default function PosPage() {
+function PosPageInner() {
   const router = useRouter();
   const { toast } = useToast();
   const state = usePosState();
@@ -2157,5 +2159,15 @@ function DraftListModal({
         </div>
       </div>
     </div>
+  );
+}
+
+export default function PosPage() {
+  // POS Retail cần quyền checkout (pos_retail.checkout) — nhân viên bán lẻ,
+  // ca trưởng, owner đều được cấp mặc định trong role template.
+  return (
+    <PermissionPage requires={PERMISSIONS.POS_RETAIL_CHECKOUT}>
+      <PosPageInner />
+    </PermissionPage>
   );
 }
