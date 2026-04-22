@@ -82,6 +82,8 @@ export interface PurchaseReturn {
   statusName: string;
   createdBy: string;
   createdByName?: string;
+  branchId?: string;
+  branchName?: string;
 }
 
 // Hoá đơn đầu vào

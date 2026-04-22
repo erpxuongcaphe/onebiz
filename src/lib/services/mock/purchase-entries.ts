@@ -74,6 +74,10 @@ export async function getPurchaseReturns(params: QueryParams): Promise<QueryResu
     filtered = filtered.filter((item) => item.status === params.filters!.status);
   }
 
+  if (params.filters?.branchId && params.filters.branchId !== "all") {
+    filtered = filtered.filter((item) => item.branchId === params.filters!.branchId);
+  }
+
   return paginateData(filtered, params.page, params.pageSize);
 }
 

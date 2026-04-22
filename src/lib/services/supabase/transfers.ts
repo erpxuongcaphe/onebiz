@@ -122,6 +122,13 @@ export async function getStockTransfers(
     query = query.eq("status", statusFilter);
   }
 
+  // Filter: chi nhánh — hiện transfer có CN này là source hoặc destination.
+  // Tránh leak giữa các CN không liên quan.
+  const branchFilter = params.filters?.branchId;
+  if (typeof branchFilter === "string" && branchFilter && branchFilter !== "all") {
+    query = query.or(`from_branch_id.eq.${branchFilter},to_branch_id.eq.${branchFilter}`);
+  }
+
   query = query.order("created_at", { ascending: false }).range(from, to);
 
   const { data, count, error } = await query;

@@ -43,7 +43,7 @@ import {
   SelectValue,
 } from "@/components/ui/select";
 import { ConfirmDialog } from "@/components/shared/dialogs/confirm-dialog";
-import { useToast } from "@/lib/contexts";
+import { useToast, useBranchFilter } from "@/lib/contexts";
 import { formatDate } from "@/lib/format";
 import { getBranches, getBranchStockRows } from "@/lib/services";
 import {
@@ -69,6 +69,7 @@ const PAGE_SIZE = 25;
 
 export default function ChuyenKhoPage() {
   const { toast } = useToast();
+  const { activeBranchId } = useBranchFilter();
   const [data, setData] = useState<StockTransfer[]>([]);
   const [total, setTotal] = useState(0);
   const [loading, setLoading] = useState(true);
@@ -100,7 +101,10 @@ export default function ChuyenKhoPage() {
         page,
         pageSize: PAGE_SIZE,
         search,
-        filters: { status: statusFilter },
+        filters: {
+          status: statusFilter,
+          ...(activeBranchId && { branchId: activeBranchId }),
+        },
       });
       setData(result.data);
       setTotal(result.total);
@@ -109,7 +113,7 @@ export default function ChuyenKhoPage() {
     } finally {
       setLoading(false);
     }
-  }, [search, page, statusFilter, toast]);
+  }, [search, page, statusFilter, activeBranchId, toast]);
 
   useEffect(() => {
     fetchData();

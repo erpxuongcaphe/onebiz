@@ -196,7 +196,9 @@ export async function getPurchaseReturns(
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
   let query = (supabase as any)
     .from("supplier_returns")
-    .select("*", { count: "exact" });
+    .select("*, branches!supplier_returns_branch_id_fkey(id,name)", {
+      count: "exact",
+    });
 
   // Search theo mã phiếu trả hoặc tên NCC
   if (params.search) {
@@ -209,6 +211,12 @@ export async function getPurchaseReturns(
   if (params.filters?.status && params.filters.status !== "all") {
     // eslint-disable-next-line @typescript-eslint/no-explicit-any
     query = query.eq("status", params.filters.status as any);
+  }
+
+  // Filter: branch — tránh leak giữa các chi nhánh
+  if (params.filters?.branchId && params.filters.branchId !== "all") {
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    query = query.eq("branch_id", params.filters.branchId as any);
   }
 
   // Sort & paginate
@@ -491,6 +499,7 @@ const purchaseReturnStatusNameMap: Record<string, string> = {
 
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
 function mapPurchaseReturn(row: any): PurchaseReturn {
+  const branch = row.branches as { id: string; name: string } | null;
   return {
     id: row.id,
     code: row.code,
@@ -501,6 +510,8 @@ function mapPurchaseReturn(row: any): PurchaseReturn {
     status: (row.status === "completed" ? "completed" : "draft") as PurchaseReturn["status"],
     statusName: purchaseReturnStatusNameMap[row.status] ?? row.status,
     createdBy: row.created_by ?? "---",
+    branchId: row.branch_id ?? branch?.id ?? undefined,
+    branchName: branch?.name ?? undefined,
   };
 }
 

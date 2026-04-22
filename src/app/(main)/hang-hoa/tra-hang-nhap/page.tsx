@@ -25,7 +25,7 @@ import { formatCurrency, formatDate, formatUser } from "@/lib/format";
 import { getPurchaseReturns, getPurchaseReturnStatuses } from "@/lib/services";
 import type { PurchaseReturn } from "@/lib/types";
 import { CreatePurchaseReturnDialog } from "@/components/shared/dialogs";
-import { useToast } from "@/lib/contexts";
+import { useToast, useBranchFilter } from "@/lib/contexts";
 import { printDocument } from "@/lib/print-document";
 import { buildPurchaseReturnPrintData } from "@/lib/print-templates";
 import { Icon } from "@/components/ui/icon";
@@ -60,7 +60,7 @@ function PurchaseReturnDetail({
             title={`Trả hàng nhập ${item.code}`}
             code={item.code}
             status={{ label: st.label, variant: st.variant }}
-            subtitle="Chi nhánh trung tâm"
+            subtitle={item.branchName ? `Chi nhánh: ${item.branchName}` : undefined}
             meta={
               <div className="flex items-center gap-4 flex-wrap text-xs">
                 <span>
@@ -76,6 +76,7 @@ function PurchaseReturnDetail({
             fields={[
               { label: "Mã trả hàng", value: item.code },
               { label: "Ngày trả", value: formatDate(item.date) },
+              { label: "Chi nhánh", value: item.branchName ?? "---" },
               { label: "Mã nhập hàng", value: item.importCode },
               { label: "Nhà cung cấp", value: item.supplierName },
               { label: "Tổng tiền trả", value: formatCurrency(item.totalAmount) },
@@ -131,6 +132,12 @@ const columns: ColumnDef<PurchaseReturn, unknown>[] = [
     size: 220,
   },
   {
+    accessorKey: "branchName",
+    header: "Chi nhánh",
+    size: 160,
+    cell: ({ row }) => row.original.branchName ?? "---",
+  },
+  {
     accessorKey: "totalAmount",
     header: "Tổng tiền trả",
     cell: ({ row }) => formatCurrency(row.original.totalAmount),
@@ -153,6 +160,7 @@ const columns: ColumnDef<PurchaseReturn, unknown>[] = [
 
 export default function TraHangNhapPage() {
   const { toast } = useToast();
+  const { activeBranchId } = useBranchFilter();
   const [data, setData] = useState<PurchaseReturn[]>([]);
   const [total, setTotal] = useState(0);
   const [loading, setLoading] = useState(true);
@@ -174,12 +182,13 @@ export default function TraHangNhapPage() {
       search,
       filters: {
         ...(statusFilter !== "all" && { status: statusFilter }),
+        ...(activeBranchId && { branchId: activeBranchId }),
       },
     });
     setData(result.data);
     setTotal(result.total);
     setLoading(false);
-  }, [page, pageSize, search, statusFilter]);
+  }, [page, pageSize, search, statusFilter, activeBranchId]);
 
   useEffect(() => {
     fetchData();
@@ -188,7 +197,7 @@ export default function TraHangNhapPage() {
   useEffect(() => {
     setPage(0);
     setExpandedRow(null);
-  }, [search, statusFilter]);
+  }, [search, statusFilter, activeBranchId]);
 
   return (
     <ListPageLayout

@@ -14,7 +14,7 @@ import {
   SelectFilter,
 } from "@/components/shared/filter-sidebar";
 import { Badge } from "@/components/ui/badge";
-import { useToast } from "@/lib/contexts";
+import { useToast, useBranchFilter } from "@/lib/contexts";
 import { formatCurrency, formatDate } from "@/lib/format";
 import { exportToCsv } from "@/lib/utils/export";
 import { getBranchStockPage, getBranchStockAggregates, getBranchStockRows, getBranches } from "@/lib/services";
@@ -30,6 +30,7 @@ type ProductTypeFilter = "all" | "nvl" | "sku";
 
 export default function TonKhoPage() {
   const { toast } = useToast();
+  const { activeBranchId } = useBranchFilter();
   const [rows, setRows] = useState<BranchStockRow[]>([]);
   const [totalRows, setTotalRows] = useState(0);
   const [totalQty, setTotalQty] = useState(0);
@@ -41,7 +42,14 @@ export default function TonKhoPage() {
   const [page, setPage] = useState(0);
   const [pageSize, setPageSize] = useState(20);
 
-  const [branchFilter, setBranchFilter] = useState<string>("all");
+  // Default branch filter theo branch đang active của user.
+  // User có thể override sang "all" qua dropdown nếu là owner/admin.
+  const [branchFilter, setBranchFilter] = useState<string>(activeBranchId ?? "all");
+
+  // Sync khi user switch branch ở global selector (header).
+  useEffect(() => {
+    if (activeBranchId) setBranchFilter(activeBranchId);
+  }, [activeBranchId]);
   const [typeFilter, setTypeFilter] = useState<ProductTypeFilter>("all");
   const [lowStockOnly, setLowStockOnly] = useState<string>("all"); // all | low
 
