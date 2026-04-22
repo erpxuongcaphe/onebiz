@@ -6,6 +6,7 @@ import { Badge } from "@/components/ui/badge";
 import { PageHeader } from "@/components/shared/page-header";
 import { ListPageLayout } from "@/components/shared/list-page-layout";
 import { DataTable, StarCell } from "@/components/shared/data-table";
+import { SummaryCard } from "@/components/shared/summary-card";
 import {
   FilterSidebar,
   FilterGroup,
@@ -222,6 +223,9 @@ export default function DoiTacGiaoHangPage() {
 
   /* ---- Summaries ---- */
   const totalOrders = data.reduce((sum, p) => sum + p.activeOrders + p.completedOrders, 0);
+  const totalActiveOrders = data.reduce((sum, p) => sum + p.activeOrders, 0);
+  const totalCompletedOrders = data.reduce((sum, p) => sum + p.completedOrders, 0);
+  const activePartnerCount = data.filter((p) => p.status === "active").length;
 
   /* ---- Export ---- */
   const handleExport = (type: "excel" | "csv") => {
@@ -366,6 +370,31 @@ export default function DoiTacGiaoHangPage() {
         </FilterSidebar>
       }
     >
+      <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-4">
+        <SummaryCard
+          icon="local_shipping"
+          label="Tổng đối tác"
+          value={total.toLocaleString("vi-VN")}
+          hint={`${activePartnerCount} đang hoạt động`}
+        />
+        <SummaryCard
+          icon="inventory_2"
+          label="Đang giao"
+          value={totalActiveOrders.toLocaleString("vi-VN")}
+          highlight={totalActiveOrders > 0}
+        />
+        <SummaryCard
+          icon="done_all"
+          label="Đã hoàn thành"
+          value={totalCompletedOrders.toLocaleString("vi-VN")}
+        />
+        <SummaryCard
+          icon="assessment"
+          label="Tổng đơn"
+          value={totalOrders.toLocaleString("vi-VN")}
+        />
+      </div>
+
       <PageHeader
         title="Đối tác giao hàng"
         searchPlaceholder="Theo mã, tên đối tác"

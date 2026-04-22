@@ -5,6 +5,7 @@ import { ColumnDef } from "@tanstack/react-table";
 import { PageHeader } from "@/components/shared/page-header";
 import { ListPageLayout } from "@/components/shared/list-page-layout";
 import { DataTable } from "@/components/shared/data-table";
+import { SummaryCard } from "@/components/shared/summary-card";
 import {
   FilterSidebar,
   FilterGroup,
@@ -445,6 +446,7 @@ export default function NhaCungCapPage() {
   /* ---- Summary ---- */
   const totalDebt = data.reduce((sum, s) => sum + s.currentDebt, 0);
   const totalPurchases = data.reduce((sum, s) => sum + s.totalPurchases, 0);
+  const debtSupplierCount = data.filter((s) => s.currentDebt > 0).length;
 
   /* ---- Export ---- */
   const handleExport = (type: "excel" | "csv") => {
@@ -556,6 +558,32 @@ export default function NhaCungCapPage() {
           </FilterSidebar>
         }
       >
+        <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-4">
+          <SummaryCard
+            icon="local_shipping"
+            label="Tổng NCC"
+            value={total.toLocaleString("vi-VN")}
+          />
+          <SummaryCard
+            icon="trending_up"
+            label="Tổng mua hàng"
+            value={formatCurrency(totalPurchases)}
+          />
+          <SummaryCard
+            icon="account_balance_wallet"
+            label="Tổng công nợ"
+            value={formatCurrency(totalDebt)}
+            danger={totalDebt > 0}
+            hint={debtSupplierCount > 0 ? `${debtSupplierCount} NCC còn nợ` : undefined}
+          />
+          <SummaryCard
+            icon="verified"
+            label="Hiển thị"
+            value={data.length.toLocaleString("vi-VN")}
+            hint={`Trang ${page + 1}`}
+          />
+        </div>
+
         <PageHeader
           title="Nhà cung cấp"
           searchPlaceholder="Theo mã, tên, SĐT NCC"

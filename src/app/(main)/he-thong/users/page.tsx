@@ -6,6 +6,7 @@
 
 import { useState, useEffect, useCallback } from "react";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
+import { SummaryCard } from "@/components/shared/summary-card";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import {
@@ -197,31 +198,30 @@ export default function UsersPage() {
       </div>
 
       {/* Stats */}
-      <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
-        <Card>
-          <CardContent className="pt-4 pb-3">
-            <div className="text-2xl font-bold">{users.length}</div>
-            <p className="text-xs text-muted-foreground">Tổng người dùng</p>
-          </CardContent>
-        </Card>
-        <Card>
-          <CardContent className="pt-4 pb-3">
-            <div className="text-2xl font-bold">{users.filter((u) => u.isActive).length}</div>
-            <p className="text-xs text-muted-foreground">Đang hoạt động</p>
-          </CardContent>
-        </Card>
-        <Card>
-          <CardContent className="pt-4 pb-3">
-            <div className="text-2xl font-bold">{roles.length}</div>
-            <p className="text-xs text-muted-foreground">Vai trò</p>
-          </CardContent>
-        </Card>
-        <Card>
-          <CardContent className="pt-4 pb-3">
-            <div className="text-2xl font-bold">{users.filter((u) => !u.roleId).length}</div>
-            <p className="text-xs text-muted-foreground">Chưa gán vai trò</p>
-          </CardContent>
-        </Card>
+      <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-4">
+        <SummaryCard
+          icon="group"
+          label="Tổng người dùng"
+          value={users.length.toLocaleString("vi-VN")}
+        />
+        <SummaryCard
+          icon="verified_user"
+          label="Đang hoạt động"
+          value={users.filter((u) => u.isActive).length.toLocaleString("vi-VN")}
+          highlight
+        />
+        <SummaryCard
+          icon="admin_panel_settings"
+          label="Vai trò"
+          value={roles.length.toLocaleString("vi-VN")}
+        />
+        <SummaryCard
+          icon="person_off"
+          label="Chưa gán vai trò"
+          value={users.filter((u) => !u.roleId).length.toLocaleString("vi-VN")}
+          danger={users.some((u) => !u.roleId)}
+          hint={users.some((u) => !u.roleId) ? "Cần gán vai trò" : undefined}
+        />
       </div>
 
       {/* User table */}
