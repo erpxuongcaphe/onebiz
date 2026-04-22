@@ -6,6 +6,7 @@ import { Badge } from "@/components/ui/badge";
 import { PageHeader } from "@/components/shared/page-header";
 import { ListPageLayout } from "@/components/shared/list-page-layout";
 import { DataTable, StarCell } from "@/components/shared/data-table";
+import { SummaryCard } from "@/components/shared/summary-card";
 import {
   FilterSidebar,
   FilterGroup,
@@ -440,6 +441,35 @@ export default function DatHangPage() {
           },
         ]}
       />
+
+      {/* KPI row */}
+      <div className="grid grid-cols-2 md:grid-cols-4 gap-3 px-4 pt-4">
+        <SummaryCard
+          icon={<Icon name="receipt_long" size={16} />}
+          label="Tổng đơn"
+          value={total.toString()}
+        />
+        <SummaryCard
+          icon={<Icon name="edit_note" size={16} />}
+          label="Phiếu tạm"
+          value={data.filter((r) => r.status === "new").length.toString()}
+          highlight={data.filter((r) => r.status === "new").length > 0}
+        />
+        <SummaryCard
+          icon={<Icon name="local_shipping" size={16} />}
+          label="Đang giao"
+          value={data.filter((r) => r.status === "delivering").length.toString()}
+        />
+        <SummaryCard
+          icon={<Icon name="payments" size={16} />}
+          label="Tổng doanh thu"
+          value={formatCurrency(
+            data
+              .filter((r) => r.status !== "cancelled")
+              .reduce((sum, r) => sum + (r.totalAmount ?? 0), 0),
+          )}
+        />
+      </div>
 
       <DataTable
         columns={columns}

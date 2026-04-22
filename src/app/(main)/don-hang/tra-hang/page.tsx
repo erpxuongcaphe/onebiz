@@ -6,6 +6,7 @@ import { Badge } from "@/components/ui/badge";
 import { PageHeader } from "@/components/shared/page-header";
 import { ListPageLayout } from "@/components/shared/list-page-layout";
 import { DataTable, StarCell } from "@/components/shared/data-table";
+import { SummaryCard } from "@/components/shared/summary-card";
 import {
   FilterSidebar,
   FilterGroup,
@@ -410,6 +411,25 @@ export default function TraHangPage() {
           },
         ]}
       />
+
+      {/* KPI row */}
+      <div className="grid grid-cols-2 md:grid-cols-3 gap-3 px-4 pt-4">
+        <SummaryCard
+          icon={<Icon name="undo" size={16} />}
+          label="Tổng phiếu trả"
+          value={total.toString()}
+        />
+        <SummaryCard
+          icon={<Icon name="check_circle" size={16} />}
+          label="Đã trả"
+          value={data.filter((r) => r.status === "completed").length.toString()}
+        />
+        <SummaryCard
+          icon={<Icon name="payments" size={16} />}
+          label="Tổng tiền trả khách"
+          value={formatCurrency(totalReturnAmount)}
+        />
+      </div>
 
       <DataTable
         columns={columns}

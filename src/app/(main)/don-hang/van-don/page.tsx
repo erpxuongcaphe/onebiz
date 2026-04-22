@@ -6,6 +6,7 @@ import { Badge } from "@/components/ui/badge";
 import { PageHeader } from "@/components/shared/page-header";
 import { ListPageLayout } from "@/components/shared/list-page-layout";
 import { DataTable, StarCell } from "@/components/shared/data-table";
+import { SummaryCard } from "@/components/shared/summary-card";
 import {
   FilterSidebar,
   FilterGroup,
@@ -561,6 +562,32 @@ export default function VanDonPage() {
         onOpenChange={setCreateOpen}
         onSuccess={fetchData}
       />
+
+      {/* KPI row — tình trạng nhanh vận đơn */}
+      <div className="grid grid-cols-2 md:grid-cols-4 gap-3 px-4 pt-4">
+        <SummaryCard
+          icon={<Icon name="local_shipping" size={16} />}
+          label="Tổng vận đơn"
+          value={total.toString()}
+        />
+        <SummaryCard
+          icon={<Icon name="pending" size={16} />}
+          label="Đang giao"
+          value={data.filter((r) => r.status === "in_transit" || r.status === "picked_up").length.toString()}
+          highlight={data.filter((r) => r.status === "in_transit" || r.status === "picked_up").length > 0}
+        />
+        <SummaryCard
+          icon={<Icon name="check_circle" size={16} />}
+          label="Đã giao"
+          value={data.filter((r) => r.status === "delivered").length.toString()}
+        />
+        <SummaryCard
+          icon={<Icon name="warning" size={16} className="text-destructive" />}
+          label="Hoàn / Hủy"
+          value={data.filter((r) => r.status === "returned" || r.status === "cancelled").length.toString()}
+          danger={data.filter((r) => r.status === "returned" || r.status === "cancelled").length > 0}
+        />
+      </div>
 
       <DataTable
         columns={columns}
