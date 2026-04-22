@@ -6,6 +6,7 @@ import { Badge } from "@/components/ui/badge";
 import { PageHeader } from "@/components/shared/page-header";
 import { ListPageLayout } from "@/components/shared/list-page-layout";
 import { DataTable } from "@/components/shared/data-table";
+import { SummaryCard } from "@/components/shared/summary-card";
 import {
   FilterSidebar,
   FilterGroup,
@@ -220,6 +221,33 @@ export default function TraHangNhapPage() {
           { label: "Tạo phiếu trả", icon: <Icon name="add" size={16} />, variant: "default", onClick: () => setCreateOpen(true) },
         ]}
       />
+
+      {/* KPI row — tính trên trang hiện tại, không call extra query */}
+      <div className="grid grid-cols-2 md:grid-cols-4 gap-3 px-4 pt-4">
+        <SummaryCard
+          icon={<Icon name="undo" size={16} />}
+          label="Tổng phiếu"
+          value={total.toString()}
+        />
+        <SummaryCard
+          icon={<Icon name="check_circle" size={16} />}
+          label="Hoàn thành"
+          value={data.filter((r) => r.status === "completed").length.toString()}
+        />
+        <SummaryCard
+          icon={<Icon name="edit_note" size={16} />}
+          label="Phiếu tạm"
+          value={data.filter((r) => r.status === "draft").length.toString()}
+          highlight={data.filter((r) => r.status === "draft").length > 0}
+        />
+        <SummaryCard
+          icon={<Icon name="payments" size={16} />}
+          label="Tổng giá trị"
+          value={formatCurrency(
+            data.reduce((sum, r) => sum + (r.totalAmount ?? 0), 0),
+          )}
+        />
+      </div>
 
       <DataTable
         columns={columns}

@@ -6,6 +6,7 @@ import { Badge } from "@/components/ui/badge";
 import { PageHeader } from "@/components/shared/page-header";
 import { ListPageLayout } from "@/components/shared/list-page-layout";
 import { DataTable, StarCell } from "@/components/shared/data-table";
+import { SummaryCard } from "@/components/shared/summary-card";
 import {
   FilterSidebar,
   FilterGroup,
@@ -344,6 +345,26 @@ export default function XuatDungNoiBoPage() {
           },
         ]}
       />
+
+      {/* KPI row — tính trên trang hiện tại */}
+      <div className="grid grid-cols-2 md:grid-cols-3 gap-3 px-4 pt-4">
+        <SummaryCard
+          icon={<Icon name="inventory_2" size={16} />}
+          label="Tổng phiếu"
+          value={total.toString()}
+        />
+        <SummaryCard
+          icon={<Icon name="check_circle" size={16} />}
+          label="Hoàn thành"
+          value={data.filter((r) => r.status === "completed").length.toString()}
+        />
+        <SummaryCard
+          icon={<Icon name="edit_note" size={16} />}
+          label="Phiếu tạm"
+          value={data.filter((r) => r.status === "draft").length.toString()}
+          highlight={data.filter((r) => r.status === "draft").length > 0}
+        />
+      </div>
 
       <DataTable
         columns={columns}

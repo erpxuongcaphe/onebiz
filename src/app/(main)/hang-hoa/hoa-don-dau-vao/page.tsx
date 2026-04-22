@@ -6,6 +6,7 @@ import { Badge } from "@/components/ui/badge";
 import { PageHeader } from "@/components/shared/page-header";
 import { ListPageLayout } from "@/components/shared/list-page-layout";
 import { DataTable } from "@/components/shared/data-table";
+import { SummaryCard } from "@/components/shared/summary-card";
 import {
   FilterSidebar,
   FilterGroup,
@@ -262,6 +263,34 @@ export default function HoaDonDauVaoPage() {
         onOpenChange={setCreateOpen}
         onSuccess={fetchData}
       />
+
+      {/* KPI row */}
+      <div className="grid grid-cols-2 md:grid-cols-4 gap-3 px-4 pt-4">
+        <SummaryCard
+          icon={<Icon name="receipt_long" size={16} />}
+          label="Tổng hóa đơn"
+          value={total.toString()}
+        />
+        <SummaryCard
+          icon={<Icon name="check_circle" size={16} />}
+          label="Đã ghi sổ"
+          value={data.filter((r) => r.status === "recorded").length.toString()}
+        />
+        <SummaryCard
+          icon={<Icon name="warning" size={16} className="text-destructive" />}
+          label="Chưa ghi sổ"
+          value={data.filter((r) => r.status === "unrecorded").length.toString()}
+          danger={data.filter((r) => r.status === "unrecorded").length > 0}
+          hint={data.filter((r) => r.status === "unrecorded").length > 0 ? "Cần đối chiếu" : undefined}
+        />
+        <SummaryCard
+          icon={<Icon name="payments" size={16} />}
+          label="Tổng tiền hàng"
+          value={formatCurrency(
+            data.reduce((sum, r) => sum + (r.totalAmount ?? 0), 0),
+          )}
+        />
+      </div>
 
       <DataTable
         columns={columns}
