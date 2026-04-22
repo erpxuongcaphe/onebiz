@@ -12,61 +12,121 @@
 -- profiles(id) để giữ nguyên pattern đang dùng ở internal_sales.
 --
 -- Safe to re-run: DROP CONSTRAINT IF EXISTS + ADD CONSTRAINT.
+-- Mọi ALTER đều guard bằng information_schema.tables → nếu bảng
+-- chưa tạo trên môi trường hiện tại thì skip, không fail.
+--
 -- Nếu data có created_by không match profiles.id thì ADD FK sẽ fail —
 -- chạy validation query (bottom) trước nếu nghi ngờ.
 -- ============================================================
 
--- 1. disposal_exports (xuất hủy)
-ALTER TABLE public.disposal_exports
-  DROP CONSTRAINT IF EXISTS disposal_exports_created_by_fkey;
-ALTER TABLE public.disposal_exports
-  ADD CONSTRAINT disposal_exports_created_by_fkey
-  FOREIGN KEY (created_by) REFERENCES public.profiles(id);
+-- Helper DO block pattern: chỉ ALTER nếu bảng tồn tại.
 
--- 2. internal_exports (xuất dùng nội bộ)
-ALTER TABLE public.internal_exports
-  DROP CONSTRAINT IF EXISTS internal_exports_created_by_fkey;
-ALTER TABLE public.internal_exports
-  ADD CONSTRAINT internal_exports_created_by_fkey
-  FOREIGN KEY (created_by) REFERENCES public.profiles(id);
+-- 1. disposal_exports (xuất hủy — 00012)
+DO $$
+BEGIN
+  IF EXISTS (
+    SELECT 1 FROM information_schema.tables
+    WHERE table_schema = 'public' AND table_name = 'disposal_exports'
+  ) THEN
+    EXECUTE 'ALTER TABLE public.disposal_exports
+      DROP CONSTRAINT IF EXISTS disposal_exports_created_by_fkey';
+    EXECUTE 'ALTER TABLE public.disposal_exports
+      ADD CONSTRAINT disposal_exports_created_by_fkey
+      FOREIGN KEY (created_by) REFERENCES public.profiles(id)';
+  END IF;
+END $$;
 
--- 3. sales_orders (đơn hàng bán — chưa có FK)
-ALTER TABLE public.sales_orders
-  DROP CONSTRAINT IF EXISTS sales_orders_created_by_fkey;
-ALTER TABLE public.sales_orders
-  ADD CONSTRAINT sales_orders_created_by_fkey
-  FOREIGN KEY (created_by) REFERENCES public.profiles(id);
+-- 2. internal_exports (xuất dùng nội bộ — 00012)
+DO $$
+BEGIN
+  IF EXISTS (
+    SELECT 1 FROM information_schema.tables
+    WHERE table_schema = 'public' AND table_name = 'internal_exports'
+  ) THEN
+    EXECUTE 'ALTER TABLE public.internal_exports
+      DROP CONSTRAINT IF EXISTS internal_exports_created_by_fkey';
+    EXECUTE 'ALTER TABLE public.internal_exports
+      ADD CONSTRAINT internal_exports_created_by_fkey
+      FOREIGN KEY (created_by) REFERENCES public.profiles(id)';
+  END IF;
+END $$;
 
--- 4. kitchen_orders (đơn bếp)
-ALTER TABLE public.kitchen_orders
-  DROP CONSTRAINT IF EXISTS kitchen_orders_created_by_fkey;
-ALTER TABLE public.kitchen_orders
-  ADD CONSTRAINT kitchen_orders_created_by_fkey
-  FOREIGN KEY (created_by) REFERENCES public.profiles(id);
+-- 3. sales_orders (đơn hàng bán)
+DO $$
+BEGIN
+  IF EXISTS (
+    SELECT 1 FROM information_schema.tables
+    WHERE table_schema = 'public' AND table_name = 'sales_orders'
+  ) THEN
+    EXECUTE 'ALTER TABLE public.sales_orders
+      DROP CONSTRAINT IF EXISTS sales_orders_created_by_fkey';
+    EXECUTE 'ALTER TABLE public.sales_orders
+      ADD CONSTRAINT sales_orders_created_by_fkey
+      FOREIGN KEY (created_by) REFERENCES public.profiles(id)';
+  END IF;
+END $$;
 
--- 5. agents (AI Agent config — reference auth.users → switch to profiles)
-ALTER TABLE public.agents
-  DROP CONSTRAINT IF EXISTS agents_created_by_fkey;
-ALTER TABLE public.agents
-  ADD CONSTRAINT agents_created_by_fkey
-  FOREIGN KEY (created_by) REFERENCES public.profiles(id);
+-- 4. kitchen_orders (đơn bếp — 00016)
+DO $$
+BEGIN
+  IF EXISTS (
+    SELECT 1 FROM information_schema.tables
+    WHERE table_schema = 'public' AND table_name = 'kitchen_orders'
+  ) THEN
+    EXECUTE 'ALTER TABLE public.kitchen_orders
+      DROP CONSTRAINT IF EXISTS kitchen_orders_created_by_fkey';
+    EXECUTE 'ALTER TABLE public.kitchen_orders
+      ADD CONSTRAINT kitchen_orders_created_by_fkey
+      FOREIGN KEY (created_by) REFERENCES public.profiles(id)';
+  END IF;
+END $$;
+
+-- 5. agents (AI Agent config — 00025, có thể chưa apply trên production)
+DO $$
+BEGIN
+  IF EXISTS (
+    SELECT 1 FROM information_schema.tables
+    WHERE table_schema = 'public' AND table_name = 'agents'
+  ) THEN
+    EXECUTE 'ALTER TABLE public.agents
+      DROP CONSTRAINT IF EXISTS agents_created_by_fkey';
+    EXECUTE 'ALTER TABLE public.agents
+      ADD CONSTRAINT agents_created_by_fkey
+      FOREIGN KEY (created_by) REFERENCES public.profiles(id)';
+  END IF;
+END $$;
 
 -- 6. input_invoices (hoá đơn đầu vào — 00012)
-ALTER TABLE public.input_invoices
-  DROP CONSTRAINT IF EXISTS input_invoices_created_by_fkey;
-ALTER TABLE public.input_invoices
-  ADD CONSTRAINT input_invoices_created_by_fkey
-  FOREIGN KEY (created_by) REFERENCES public.profiles(id);
+DO $$
+BEGIN
+  IF EXISTS (
+    SELECT 1 FROM information_schema.tables
+    WHERE table_schema = 'public' AND table_name = 'input_invoices'
+  ) THEN
+    EXECUTE 'ALTER TABLE public.input_invoices
+      DROP CONSTRAINT IF EXISTS input_invoices_created_by_fkey';
+    EXECUTE 'ALTER TABLE public.input_invoices
+      ADD CONSTRAINT input_invoices_created_by_fkey
+      FOREIGN KEY (created_by) REFERENCES public.profiles(id)';
+  END IF;
+END $$;
 
 -- 7. supplier_returns (trả hàng nhập — 00012)
-ALTER TABLE public.supplier_returns
-  DROP CONSTRAINT IF EXISTS supplier_returns_created_by_fkey;
-ALTER TABLE public.supplier_returns
-  ADD CONSTRAINT supplier_returns_created_by_fkey
-  FOREIGN KEY (created_by) REFERENCES public.profiles(id);
+DO $$
+BEGIN
+  IF EXISTS (
+    SELECT 1 FROM information_schema.tables
+    WHERE table_schema = 'public' AND table_name = 'supplier_returns'
+  ) THEN
+    EXECUTE 'ALTER TABLE public.supplier_returns
+      DROP CONSTRAINT IF EXISTS supplier_returns_created_by_fkey';
+    EXECUTE 'ALTER TABLE public.supplier_returns
+      ADD CONSTRAINT supplier_returns_created_by_fkey
+      FOREIGN KEY (created_by) REFERENCES public.profiles(id)';
+  END IF;
+END $$;
 
 -- 8. purchase_order_entries (nếu có — dựng draft receipts trước khi complete)
--- Migration guard: only ALTER nếu bảng tồn tại
 DO $$
 BEGIN
   IF EXISTS (
