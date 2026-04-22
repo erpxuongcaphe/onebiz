@@ -379,6 +379,23 @@ export default function ChuyenKhoPage() {
         ]}
       />
 
+      {kpi.stuckTransit > 0 && (
+        <div className="mx-4 mt-4 rounded-lg border border-destructive/30 bg-destructive/5 p-3">
+          <div className="flex items-start gap-2">
+            <Icon name="warning" size={20} className="text-destructive mt-0.5 shrink-0" />
+            <div className="flex-1 text-sm">
+              <div className="font-semibold text-destructive">
+                Có {kpi.stuckTransit} phiếu chuyển kho đang vận chuyển quá 7 ngày
+              </div>
+              <div className="text-muted-foreground mt-0.5">
+                Cần kiểm tra với đối tác vận chuyển hoặc chi nhánh nhận để xác nhận tình trạng
+                — hàng có thể đã nhận nhưng chưa ghi nhận vào hệ thống.
+              </div>
+            </div>
+          </div>
+        </div>
+      )}
+
       <div className="grid grid-cols-2 md:grid-cols-4 gap-3 px-4 pt-4">
         <SummaryCard
           icon={<Icon name="swap_horiz" size={16} />}
