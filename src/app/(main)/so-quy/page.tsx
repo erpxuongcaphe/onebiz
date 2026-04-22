@@ -6,6 +6,7 @@ import { Badge } from "@/components/ui/badge";
 import { PageHeader } from "@/components/shared/page-header";
 import { ListPageLayout } from "@/components/shared/list-page-layout";
 import { DataTable, StarCell } from "@/components/shared/data-table";
+import { SummaryCard } from "@/components/shared/summary-card";
 import {
   FilterSidebar,
   FilterGroup,
@@ -420,32 +421,30 @@ export default function SoQuyPage() {
           ]}
         />
 
-        {/* Summary row */}
-        <div className="flex items-center gap-6 px-4 py-2 border-b bg-muted/30 text-sm">
-          <div>
-            Quỹ đầu kỳ:{" "}
-            <span className="font-semibold">
-              {formatCurrency(openingBalance)}
-            </span>
-          </div>
-          <div>
-            Tổng thu:{" "}
-            <span className="font-semibold text-primary">
-              {formatCurrency(totalReceipt)}
-            </span>
-          </div>
-          <div>
-            Tổng chi:{" "}
-            <span className="font-semibold text-status-error">
-              {formatCurrency(totalPayment)}
-            </span>
-          </div>
-          <div>
-            Tồn quỹ:{" "}
-            <span className="font-semibold">
-              {formatCurrency(closingBalance)}
-            </span>
-          </div>
+        {/* KPI row — đồng nhất design với các module khác */}
+        <div className="grid grid-cols-2 md:grid-cols-4 gap-3 px-4 pt-4">
+          <SummaryCard
+            icon={<Icon name="savings" size={16} />}
+            label="Quỹ đầu kỳ"
+            value={formatCurrency(openingBalance)}
+          />
+          <SummaryCard
+            icon={<Icon name="south_west" size={16} />}
+            label="Tổng thu"
+            value={formatCurrency(totalReceipt)}
+          />
+          <SummaryCard
+            icon={<Icon name="north_east" size={16} />}
+            label="Tổng chi"
+            value={formatCurrency(totalPayment)}
+            danger={totalPayment > totalReceipt}
+          />
+          <SummaryCard
+            icon={<Icon name="account_balance_wallet" size={16} />}
+            label="Tồn quỹ"
+            value={formatCurrency(closingBalance)}
+            highlight
+          />
         </div>
 
         <DataTable

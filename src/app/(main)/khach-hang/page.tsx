@@ -5,6 +5,7 @@ import { ColumnDef } from "@tanstack/react-table";
 import { PageHeader } from "@/components/shared/page-header";
 import { ListPageLayout } from "@/components/shared/list-page-layout";
 import { DataTable, StarCell } from "@/components/shared/data-table";
+import { SummaryCard } from "@/components/shared/summary-card";
 import {
   FilterSidebar,
   FilterGroup,
@@ -349,6 +350,33 @@ export default function KhachHangPage() {
             },
           ]}
         />
+
+        {/* KPI row */}
+        <div className="grid grid-cols-2 md:grid-cols-4 gap-3 px-4 pt-4">
+          <SummaryCard
+            icon={<Icon name="group" size={16} />}
+            label="Tổng khách"
+            value={total.toString()}
+          />
+          <SummaryCard
+            icon={<Icon name="point_of_sale" size={16} />}
+            label="Doanh số"
+            value={formatCurrency(totalSales)}
+          />
+          <SummaryCard
+            icon={<Icon name="sell" size={16} />}
+            label="Doanh số ròng"
+            value={formatCurrency(totalSalesMinusReturns)}
+            hint="Đã trừ trả hàng"
+          />
+          <SummaryCard
+            icon={<Icon name="account_balance" size={16} />}
+            label="Công nợ hiện tại"
+            value={formatCurrency(totalDebt)}
+            danger={totalDebt > 0}
+            hint={totalDebt > 0 ? "Cần thu hồi" : undefined}
+          />
+        </div>
 
         <DataTable
           columns={columns}
