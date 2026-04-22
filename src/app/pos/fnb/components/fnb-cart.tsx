@@ -26,6 +26,12 @@ interface FnbCartProps {
   onCustomerClick?: () => void;
   onDiscountChange?: (discount: FnbDiscountInput | undefined) => void;
   onPrintPreBill?: () => void;
+  /** Huỷ đơn bếp — chỉ hiển thị khi activeTab.kitchenOrderId tồn tại (đã gửi bếp). */
+  onVoidKitchenOrder?: () => void;
+  /** Chuyển bàn — chỉ hiển thị khi dine_in + kitchenOrderId tồn tại. */
+  onTransferTable?: () => void;
+  /** Lịch sử đơn — mở modal danh sách hoá đơn hôm nay + reprint. */
+  onOrderHistory?: () => void;
   /** When true, show full-width (no hidden lg:flex) */
   mobile?: boolean;
 }
@@ -50,6 +56,9 @@ export function FnbCart({
   onCustomerClick,
   onDiscountChange,
   onPrintPreBill,
+  onVoidKitchenOrder,
+  onTransferTable,
+  onOrderHistory,
   mobile,
 }: FnbCartProps) {
   const lines = activeTab?.lines ?? [];
@@ -95,6 +104,44 @@ export function FnbCart({
               </span>
             )}
           </div>
+          {/* Kebab actions — chỉ hiện khi đơn đã gửi bếp */}
+          {activeTab?.kitchenOrderId && (
+            <div className="flex items-center gap-1 shrink-0">
+              {activeTab?.orderType === "dine_in" && onTransferTable && (
+                <button
+                  type="button"
+                  onClick={onTransferTable}
+                  className="h-8 w-8 rounded-full flex items-center justify-center text-on-surface-variant hover:bg-surface-container-high active:bg-surface-container transition-colors press-scale-sm"
+                  title="Chuyển bàn"
+                  aria-label="Chuyển bàn"
+                >
+                  <Icon name="swap_horiz" size={16} />
+                </button>
+              )}
+              {onVoidKitchenOrder && (
+                <button
+                  type="button"
+                  onClick={onVoidKitchenOrder}
+                  className="h-8 w-8 rounded-full flex items-center justify-center text-on-surface-variant hover:bg-status-error/10 hover:text-status-error active:bg-status-error/20 transition-colors press-scale-sm"
+                  title="Huỷ đơn bếp"
+                  aria-label="Huỷ đơn bếp"
+                >
+                  <Icon name="cancel" size={16} />
+                </button>
+              )}
+            </div>
+          )}
+          {!activeTab?.kitchenOrderId && onOrderHistory && (
+            <button
+              type="button"
+              onClick={onOrderHistory}
+              className="h-8 w-8 rounded-full flex items-center justify-center text-on-surface-variant hover:bg-surface-container-high active:bg-surface-container transition-colors press-scale-sm shrink-0"
+              title="Lịch sử đơn — in lại hoá đơn"
+              aria-label="Lịch sử đơn"
+            >
+              <Icon name="receipt_long" size={16} />
+            </button>
+          )}
         </div>
 
         {/* Customer bar — Stitch style */}

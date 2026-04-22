@@ -51,7 +51,9 @@ import { usePosState, type OrderLine, type DiscountInput, type SellingMode, type
 import { ProductGrid } from "./components/product-grid";
 import { CustomerPicker } from "./components/customer-picker";
 import { VariantPickerDialog } from "./components/variant-picker-dialog";
-import { ConfirmDialog } from "@/components/shared/dialogs";
+import { ConfirmDialog, CreateCustomerDialog, SupervisorPinDialog } from "@/components/shared/dialogs";
+import { getCustomers } from "@/lib/services/supabase/customers";
+import { validateCoupon } from "@/lib/services/supabase/coupons";
 import { Icon } from "@/components/ui/icon";
 import { getVariantsByProduct } from "@/lib/services/supabase/variants";
 import type { Product, ProductVariant } from "@/lib/types";
@@ -166,6 +168,16 @@ function PosPageInner() {
   // Modals
   const [customerModalOpen, setCustomerModalOpen] = useState(false);
   const [draftModalOpen, setDraftModalOpen] = useState(false);
+  // Quick customer create — mở khi user click "+ Thêm KH mới" trong CustomerPicker
+  const [createCustomerOpen, setCreateCustomerOpen] = useState(false);
+  const [createCustomerInitial, setCreateCustomerInitial] = useState<string>("");
+  // Coupon apply state
+  const [couponCode, setCouponCode] = useState("");
+  const [couponApplying, setCouponApplying] = useState(false);
+  const [couponApplied, setCouponApplied] = useState<string | null>(null);
+  // Supervisor PIN gate — mở khi giảm giá vượt ngưỡng + PIN đã cấu hình
+  const [supervisorPinOpen, setSupervisorPinOpen] = useState(false);
+  const pendingApprovalRef = useRef<(() => void) | null>(null);
   // Confirm dialog — dùng chung cho xóa giỏ hàng và huỷ sửa nháp.
   // Dạng "one-shot": mở dialog, lưu hành động vào pendingAction, user xác nhận → chạy.
   const [confirmOpen, setConfirmOpen] = useState(false);
@@ -300,6 +312,100 @@ function PosPageInner() {
     if (currentShift) setCloseShiftDialogOpen(true);
     else setOpenShiftDialogOpen(true);
   }, [currentShift]);
+
+  // ── Guard giảm giá vượt ngưỡng bằng PIN quản lý ──
+  // Nếu PIN chưa cấu hình (rỗng) → không chặn, cashier toàn quyền
+  // Nếu vượt maxDiscount (%) HOẶC vượt threshold VND tuyệt đối → bật PIN dialog
+  const handleOrderDiscountChange = useCallback(
+    (d: import("./hooks/use-pos-state").DiscountInput) => {
+      const pin = settings.sales.supervisorPin?.trim() ?? "";
+      const maxPct = settings.sales.maxDiscount ?? 50;
+      const maxAmt = settings.sales.supervisorDiscountAmountThreshold ?? 500_000;
+
+      // Estimate final discount amount để so với threshold
+      const est =
+        d.mode === "percent"
+          ? Math.round((state.subtotal * d.value) / 100)
+          : d.value;
+      const pctVsBase =
+        state.subtotal > 0 ? (est * 100) / state.subtotal : 0;
+
+      const overPct = d.mode === "percent" && d.value > maxPct;
+      const overAmt = est > maxAmt || pctVsBase > maxPct;
+
+      if (!pin) {
+        // Không có PIN → hard cap: chặn vượt maxPct
+        if (overPct) {
+          toast({
+            title: "Vượt mức giảm tối đa",
+            description: `Mức giảm tối đa là ${maxPct}%. Đề nghị quản lý cấu hình PIN trong Cài đặt để cho phép duyệt vượt ngưỡng.`,
+            variant: "warning",
+          });
+          return;
+        }
+        state.setOrderDiscount(d);
+        return;
+      }
+
+      // PIN configured
+      if (overPct || overAmt) {
+        pendingApprovalRef.current = () => state.setOrderDiscount(d);
+        setSupervisorPinOpen(true);
+        return;
+      }
+
+      state.setOrderDiscount(d);
+    },
+    [settings.sales, state, toast]
+  );
+
+  // ── Áp mã giảm giá (coupon/voucher) ──
+  const handleApplyCoupon = useCallback(async () => {
+    const code = couponCode.trim().toUpperCase();
+    if (!code) return;
+    if (state.subtotal <= 0) {
+      toast({ title: "Giỏ hàng trống", description: "Thêm sản phẩm trước khi áp mã.", variant: "warning" });
+      return;
+    }
+    setCouponApplying(true);
+    try {
+      const result = await validateCoupon(code, state.subtotal, state.customer?.id);
+      if (!result.valid) {
+        toast({
+          title: "Mã không hợp lệ",
+          description: result.error ?? "Mã giảm giá không dùng được cho đơn này.",
+          variant: "error",
+        });
+        return;
+      }
+      const amount = Number(result.discount_amount ?? 0);
+      if (amount <= 0) {
+        toast({ title: "Mã hợp lệ nhưng không giảm", description: "Kiểm tra điều kiện tối thiểu.", variant: "warning" });
+        return;
+      }
+      state.setOrderDiscount({ mode: "amount", value: amount });
+      setCouponApplied(code);
+      toast({
+        title: `Đã áp mã ${code}`,
+        description: `Giảm ${amount.toLocaleString("vi-VN")}đ`,
+        variant: "success",
+      });
+    } catch (err) {
+      toast({
+        title: "Không áp được mã",
+        description: err instanceof Error ? err.message : "Lỗi không xác định",
+        variant: "error",
+      });
+    } finally {
+      setCouponApplying(false);
+    }
+  }, [couponCode, state, toast]);
+
+  const handleRemoveCoupon = useCallback(() => {
+    setCouponApplied(null);
+    setCouponCode("");
+    state.setOrderDiscount({ mode: "amount", value: 0 });
+  }, [state]);
 
   const handleOpenShift = useCallback(
     async (startingCash: number) => {
@@ -1212,11 +1318,68 @@ function PosPageInner() {
             {/* Order discount — hidden in fast mode */}
             {state.sellingMode !== "fast" && (
               <div className="flex items-center justify-between">
-                <span className="text-xs text-muted-foreground">Chiết khấu đơn</span>
+                <span className="text-xs text-muted-foreground">
+                  Chiết khấu đơn
+                  {settings.sales.supervisorPin && (
+                    <Icon
+                      name="lock"
+                      size={10}
+                      className="inline ml-1 text-status-warning align-text-top"
+                      title="Giảm giá vượt ngưỡng cần PIN quản lý"
+                    />
+                  )}
+                </span>
                 <OrderDiscountInput
                   value={state.orderDiscount}
-                  onChange={state.setOrderDiscount}
+                  onChange={handleOrderDiscountChange}
                 />
+              </div>
+            )}
+
+            {/* Coupon / voucher — hidden in fast mode */}
+            {state.sellingMode !== "fast" && (
+              <div className="flex items-center justify-between gap-2">
+                <span className="text-xs text-muted-foreground shrink-0">Mã KM</span>
+                {couponApplied ? (
+                  <div className="inline-flex items-center gap-1 px-2 py-0.5 rounded bg-status-success/10 text-status-success text-[11px] font-bold">
+                    <Icon name="check_circle" size={12} />
+                    {couponApplied}
+                    <button
+                      type="button"
+                      onClick={handleRemoveCoupon}
+                      className="ml-1 hover:text-status-error"
+                      title="Huỷ mã"
+                    >
+                      <Icon name="close" size={12} />
+                    </button>
+                  </div>
+                ) : (
+                  <div className="inline-flex items-stretch h-6 rounded border border-border overflow-hidden bg-white">
+                    <input
+                      type="text"
+                      value={couponCode}
+                      onChange={(e) => setCouponCode(e.target.value.toUpperCase())}
+                      onKeyDown={(e) => {
+                        if (e.key === "Enter") {
+                          e.preventDefault();
+                          handleApplyCoupon();
+                        }
+                      }}
+                      data-allow-hotkeys="true"
+                      placeholder="Nhập mã"
+                      className="w-20 px-1.5 text-[10px] outline-none uppercase"
+                      maxLength={20}
+                    />
+                    <button
+                      type="button"
+                      onClick={handleApplyCoupon}
+                      disabled={couponApplying || !couponCode.trim()}
+                      className="px-2 text-[10px] font-bold border-l border-border bg-primary text-on-primary hover:bg-primary/90 disabled:opacity-50 disabled:cursor-not-allowed"
+                    >
+                      {couponApplying ? "..." : "Áp"}
+                    </button>
+                  </div>
+                )}
               </div>
             )}
 
@@ -1573,6 +1736,40 @@ function PosPageInner() {
         open={customerModalOpen}
         onClose={() => setCustomerModalOpen(false)}
         onSelect={(customer) => state.setCustomer(customer)}
+        onRequestCreate={(initialName) => {
+          setCreateCustomerInitial(initialName);
+          setCreateCustomerOpen(true);
+        }}
+      />
+      {/* Quick-create customer — khi user click "+ Thêm KH mới" trong CustomerPicker.
+          Sau khi tạo xong, tự động tìm lại khách vừa tạo rồi gán vào hoá đơn. */}
+      <CreateCustomerDialog
+        open={createCustomerOpen}
+        onOpenChange={setCreateCustomerOpen}
+        onSuccess={() => {
+          // Refetch customer vừa tạo bằng search theo tên để auto-select
+          // (createCustomer không return customer object, nên phải query lại).
+          if (!createCustomerInitial) return;
+          getCustomers({
+            page: 0,
+            pageSize: 1,
+            search: createCustomerInitial,
+            filters: {},
+            sortBy: "name",
+            sortOrder: "asc",
+          })
+            .then((res) => {
+              if (res.data.length > 0) {
+                state.setCustomer(res.data[0]);
+                toast({
+                  title: "Đã chọn khách hàng",
+                  description: res.data[0].name,
+                  variant: "success",
+                });
+              }
+            })
+            .catch(() => {});
+        }}
       />
       <DraftListModal
         open={draftModalOpen}
@@ -1642,6 +1839,24 @@ function PosPageInner() {
           />
         </Suspense>
       )}
+
+      {/* Supervisor PIN — gate giảm giá vượt ngưỡng */}
+      <SupervisorPinDialog
+        open={supervisorPinOpen}
+        onOpenChange={setSupervisorPinOpen}
+        correctPin={settings.sales.supervisorPin ?? ""}
+        title="Duyệt giảm giá vượt ngưỡng"
+        description={`Mức giảm vượt ${settings.sales.maxDiscount ?? 50}% hoặc ${(settings.sales.supervisorDiscountAmountThreshold ?? 500_000).toLocaleString("vi-VN")}đ — cần quản lý duyệt.`}
+        onApproved={() => {
+          pendingApprovalRef.current?.();
+          pendingApprovalRef.current = null;
+          toast({
+            title: "Đã duyệt",
+            description: "Giảm giá đã được áp dụng.",
+            variant: "success",
+          });
+        }}
+      />
 
       {/* Shift dialogs — mở/đóng ca */}
       {openShiftDialogOpen && (

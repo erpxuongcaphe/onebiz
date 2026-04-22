@@ -66,6 +66,8 @@ export interface FnbPaymentInput {
   note?: string;
   /** ID ca đang mở — nếu có, gắn vào invoice + cash_transaction để báo cáo ca đúng. */
   shiftId?: string | null;
+  /** Tiền tip khách cho nhân viên. Cộng vào total + lưu invoices.tip_amount. */
+  tipAmount?: number;
 }
 
 export interface FnbPaymentResult {
@@ -144,6 +146,7 @@ export async function fnbPayment(input: FnbPaymentInput): Promise<FnbPaymentResu
     p_note: input.note ?? null,
     p_created_by: input.createdBy,
     p_shift_id: input.shiftId ?? null,
+    p_tip_amount: input.tipAmount ?? 0,
   });
 
   if (error) handleError(error, "fnbPayment:atomic_rpc");

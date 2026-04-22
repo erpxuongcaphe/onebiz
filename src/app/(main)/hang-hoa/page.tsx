@@ -18,6 +18,7 @@ import {
   DetailTabs,
   DetailHeader,
   DetailInfoGrid,
+  AuditHistoryTab,
 } from "@/components/shared/inline-detail-panel";
 import { CreateProductDialog } from "@/components/shared/dialogs";
 import { ImportExcelDialog } from "@/components/shared/dialogs/import-excel-dialog";
@@ -158,6 +159,11 @@ function ProductDetail({
                 Chưa liên kết kênh bán nào
               </div>
             ),
+          },
+          {
+            id: "history",
+            label: "Lịch sử",
+            content: <AuditHistoryTab entityType="product" entityId={product.id} />,
           },
         ]}
       />

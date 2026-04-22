@@ -24,7 +24,7 @@ import {
   hapticError,
 } from "@/lib/offline";
 import { splitByItems, splitEqually } from "@/lib/services/supabase/split-bill";
-import { getKitchenOrderById } from "@/lib/services/supabase/kitchen-orders";
+import { getKitchenOrderById, cancelKitchenOrder, transferTable as transferTableService } from "@/lib/services/supabase/kitchen-orders";
 import { getOpenShift, openShift, closeShift } from "@/lib/services/supabase/shifts";
 import { getClient } from "@/lib/services/supabase/base";
 import { printKitchenTicketV2, printPreBill, printFnbReceipt } from "@/lib/print-fnb";
@@ -59,6 +59,7 @@ const CloseShiftDialog = lazy(() => import("./components/shift-dialog").then(m =
 const FnbSearchModal = lazy(() => import("./components/fnb-search-modal").then(m => ({ default: m.FnbSearchModal })));
 const FnbCustomerPicker = lazy(() => import("./components/fnb-customer-picker").then(m => ({ default: m.FnbCustomerPicker })));
 const SyncQueueDrawer = lazy(() => import("./components/sync-queue-drawer").then(m => ({ default: m.SyncQueueDrawer })));
+const FnbOrderHistoryDialog = lazy(() => import("./components/fnb-order-history-dialog").then(m => ({ default: m.FnbOrderHistoryDialog })));
 
 function FnbPosPageInner() {
   const { user, tenant, currentBranch } = useAuth();
@@ -91,6 +92,9 @@ function FnbPosPageInner() {
   const [mobileCartOpen, setMobileCartOpen] = useState(false);
   const [keyboardHelpOpen, setKeyboardHelpOpen] = useState(false);
   const [syncDrawerOpen, setSyncDrawerOpen] = useState(false);
+  const [orderHistoryOpen, setOrderHistoryOpen] = useState(false);
+  const [voidConfirmOpen, setVoidConfirmOpen] = useState(false);
+  const [transferTableOpen, setTransferTableOpen] = useState(false);
 
   const branchId = currentBranch?.id;
   const tenantId = tenant?.id ?? "";
@@ -546,6 +550,7 @@ function FnbPosPageInner() {
           paid: payload.paid,
           discountAmount: pos.orderDiscountAmount > 0 ? pos.orderDiscountAmount : undefined,
           shiftId: currentShift?.id ?? null,
+          tipAmount: payload.tipAmount,
         }, networkStatus.isOnline);
 
         // Auto-print receipt if enabled.
@@ -553,6 +558,7 @@ function FnbPosPageInner() {
         // flow thanh toán (payment đã success → không được hiển thị "Thanh toán thất bại").
         if (settings.print.autoPrintReceipt && tab) {
           try {
+            const tipAmount = payload.tipAmount ?? 0;
             printFnbReceipt({
               invoiceCode: payResult.invoiceCode,
               orderNumber: tab.label,
@@ -569,12 +575,12 @@ function FnbPosPageInner() {
               subtotal: pos.subtotal,
               discountAmount: pos.orderDiscountAmount,
               deliveryFee: 0,
-              total: pos.total,
+              total: pos.total + tipAmount,
               createdAt: new Date().toISOString(),
               cashierName: user?.fullName,
               paymentMethod: payload.paymentMethod,
               paid: payload.paid,
-              change: Math.max(0, payload.paid - pos.total),
+              change: Math.max(0, payload.paid - (pos.total + tipAmount)),
               customerName: payload.customerName,
               storeName: settings.print.showStoreName ? settings.store.name : undefined,
               storeAddress: settings.print.showStoreAddress ? settings.store.address : undefined,
@@ -730,6 +736,93 @@ function FnbPosPageInner() {
       });
     },
     [currentShift, settings, currentBranch, user, toast]
+  );
+
+  // ── Void kitchen order (trước khi thanh toán) ──
+  //   Backend `cancelKitchenOrder` huỷ order + release table atomically.
+  //   Sau khi huỷ → close tab, refresh tables.
+  const handleVoidKitchenOrder = useCallback(async () => {
+    const tab = pos.activeTab;
+    if (!tab?.kitchenOrderId) return;
+    if (!networkStatus.isOnline) {
+      hapticError();
+      toast({
+        title: "Cần kết nối mạng",
+        description: "Huỷ đơn bếp không khả dụng khi ngoại tuyến.",
+        variant: "warning",
+      });
+      return;
+    }
+    try {
+      await cancelKitchenOrder(tab.kitchenOrderId);
+      hapticSuccess();
+      toast({
+        title: "Đã huỷ đơn bếp",
+        description: `Đơn ${tab.label} đã được huỷ.`,
+        variant: "success",
+      });
+      // Optimistic: release table trên UI ngay
+      if (tab.tableId) {
+        setTables((prev) =>
+          prev.map((t) =>
+            t.id === tab.tableId
+              ? { ...t, status: "available" as const, currentOrderId: null }
+              : t
+          )
+        );
+      }
+      pos.closeTab(pos.activeTabId);
+      setVoidConfirmOpen(false);
+      if (branchId) getTablesByBranch(branchId).then(setTables).catch(() => {});
+    } catch (err) {
+      hapticError();
+      toast({
+        title: "Huỷ đơn bếp thất bại",
+        description: err instanceof Error ? err.message : "Lỗi không xác định",
+        variant: "error",
+      });
+    }
+  }, [pos, branchId, networkStatus.isOnline, toast]);
+
+  // ── Transfer table (chuyển bàn) ──
+  const handleTransferTable = useCallback(
+    async (toTableId: string) => {
+      const tab = pos.activeTab;
+      if (!tab?.kitchenOrderId || !tab.tableId) return;
+      if (tab.tableId === toTableId) {
+        toast({ title: "Bàn đích trùng bàn hiện tại", variant: "warning" });
+        return;
+      }
+      if (!networkStatus.isOnline) {
+        hapticError();
+        toast({
+          title: "Cần kết nối mạng",
+          description: "Chuyển bàn không khả dụng khi ngoại tuyến.",
+          variant: "warning",
+        });
+        return;
+      }
+      try {
+        await transferTableService(tab.kitchenOrderId, tab.tableId, toTableId);
+        const newTable = tables.find((t) => t.id === toTableId);
+        hapticSuccess();
+        toast({
+          title: "Đã chuyển bàn",
+          description: newTable ? `Đơn đã chuyển sang Bàn ${newTable.tableNumber}` : "Đơn đã được chuyển",
+          variant: "success",
+        });
+        setTransferTableOpen(false);
+        if (branchId) getTablesByBranch(branchId).then(setTables).catch(() => {});
+      } catch (err) {
+        hapticError();
+        toast({
+          title: "Chuyển bàn thất bại",
+          description: err instanceof Error ? err.message : "Lỗi không xác định",
+          variant: "error",
+        });
+      }
+    },
+    [pos, tables, branchId, networkStatus.isOnline, toast]
   );
 
   // ── Customer selection ──
@@ -1023,6 +1116,9 @@ function FnbPosPageInner() {
           onCustomerClick={() => setCustomerPickerOpen(true)}
           onDiscountChange={(d) => pos.setOrderDiscount(pos.activeTabId, d)}
           onPrintPreBill={handlePrintPreBill}
+          onVoidKitchenOrder={() => setVoidConfirmOpen(true)}
+          onTransferTable={() => setTransferTableOpen(true)}
+          onOrderHistory={() => setOrderHistoryOpen(true)}
         />
       </div>
 
@@ -1144,6 +1240,9 @@ function FnbPosPageInner() {
               onCustomerClick={() => setCustomerPickerOpen(true)}
               onDiscountChange={(d) => pos.setOrderDiscount(pos.activeTabId, d)}
               onPrintPreBill={handlePrintPreBill}
+              onVoidKitchenOrder={() => setVoidConfirmOpen(true)}
+              onTransferTable={() => setTransferTableOpen(true)}
+              onOrderHistory={() => setOrderHistoryOpen(true)}
               mobile
             />
           </div>
@@ -1174,6 +1273,96 @@ function FnbPosPageInner() {
           />
         </Suspense>
       )}
+
+      {/* Order history (reprint) */}
+      {orderHistoryOpen && branchId && (
+        <Suspense fallback={null}>
+          <FnbOrderHistoryDialog
+            open={orderHistoryOpen}
+            onOpenChange={setOrderHistoryOpen}
+            branchId={branchId}
+            cashierName={user?.fullName}
+            paperSize={settings.print.paperSize === "58mm" ? "58mm" : "80mm"}
+            storeName={settings.print.showStoreName ? settings.store.name : undefined}
+            storeAddress={settings.print.showStoreAddress ? settings.store.address : undefined}
+            storePhone={settings.print.showStorePhone ? settings.store.phone : undefined}
+            receiptFooter={settings.print.receiptFooter}
+            receiptStyle={settings.print.receiptStyle}
+          />
+        </Suspense>
+      )}
+
+      {/* Void confirm dialog */}
+      <Dialog open={voidConfirmOpen} onOpenChange={setVoidConfirmOpen}>
+        <DialogContent className="sm:max-w-sm">
+          <DialogHeader>
+            <DialogTitle className="flex items-center gap-2 text-status-error">
+              <Icon name="cancel" size={18} /> Huỷ đơn bếp?
+            </DialogTitle>
+          </DialogHeader>
+          <div className="py-2 space-y-2">
+            <p className="text-sm text-foreground">
+              Đơn <b>{pos.activeTab?.label}</b> sẽ bị huỷ và bàn sẽ được giải phóng.
+            </p>
+            <p className="text-xs text-muted-foreground">
+              Tip: Chỉ huỷ được đơn chưa thanh toán. Nếu đã in ticket, hãy thông báo
+              cho bếp trước.
+            </p>
+          </div>
+          <div className="flex justify-end gap-2 pt-2">
+            <button
+              type="button"
+              onClick={() => setVoidConfirmOpen(false)}
+              className="px-4 py-2 rounded-md text-sm border border-border hover:bg-muted"
+            >
+              Đóng
+            </button>
+            <button
+              type="button"
+              onClick={handleVoidKitchenOrder}
+              className="px-4 py-2 rounded-md text-sm bg-status-error text-white hover:bg-status-error/90"
+            >
+              Huỷ đơn
+            </button>
+          </div>
+        </DialogContent>
+      </Dialog>
+
+      {/* Transfer table dialog */}
+      <Dialog open={transferTableOpen} onOpenChange={setTransferTableOpen}>
+        <DialogContent className="sm:max-w-md">
+          <DialogHeader>
+            <DialogTitle className="flex items-center gap-2">
+              <Icon name="swap_horiz" size={18} /> Chuyển bàn
+            </DialogTitle>
+          </DialogHeader>
+          <div className="py-2">
+            <p className="text-xs text-muted-foreground mb-3">
+              Chọn bàn trống để chuyển đơn <b>{pos.activeTab?.label}</b> sang.
+            </p>
+            <div className="grid grid-cols-4 gap-2 max-h-[320px] overflow-y-auto">
+              {tables
+                .filter((t) => t.status === "available" && t.id !== pos.activeTab?.tableId)
+                .map((t) => (
+                  <button
+                    key={t.id}
+                    type="button"
+                    onClick={() => handleTransferTable(t.id)}
+                    className="h-14 rounded-lg border border-status-success/40 bg-status-success/5 text-status-success font-semibold hover:bg-status-success/10 press-scale-sm transition-colors flex flex-col items-center justify-center"
+                  >
+                    <div className="text-xs opacity-70">Bàn</div>
+                    <div className="text-lg">{t.tableNumber}</div>
+                  </button>
+                ))}
+            </div>
+            {tables.filter((t) => t.status === "available").length === 0 && (
+              <p className="text-center text-sm text-muted-foreground py-6">
+                Không có bàn trống
+              </p>
+            )}
+          </div>
+        </DialogContent>
+      </Dialog>
 
       {/* Keyboard help overlay (F1 / ?) */}
       <Dialog open={keyboardHelpOpen} onOpenChange={setKeyboardHelpOpen}>

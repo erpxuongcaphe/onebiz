@@ -19,6 +19,8 @@ export interface FnbPaymentConfirmPayload {
   paid: number;
   paymentBreakdown?: { cash: number; transfer: number; card: number };
   customerName: string;
+  /** Tiền tip khách cho. Cộng vào total, ghi vào invoice.tip_amount. */
+  tipAmount?: number;
 }
 
 interface FnbPaymentDialogProps {
@@ -26,6 +28,7 @@ interface FnbPaymentDialogProps {
   onOpenChange: (open: boolean) => void;
   subtotal: number;
   discountAmount?: number;
+  /** Total KHÔNG bao gồm tip. Tip sẽ cộng thêm trong dialog. */
   total: number;
   lineCount: number;
   orderNumber?: string;
@@ -54,7 +57,7 @@ function formatDenom(v: number): string {
 // ── Component ──
 
 export function FnbPaymentDialog({
-  open, onOpenChange, subtotal, discountAmount = 0, total, lineCount, orderNumber, onConfirm,
+  open, onOpenChange, subtotal, discountAmount = 0, total: baseTotal, lineCount, orderNumber, onConfirm,
 }: FnbPaymentDialogProps) {
   const [method, setMethod] = useState<PaymentMethod>("cash");
   const [cashInput, setCashInput] = useState("");
@@ -62,6 +65,7 @@ export function FnbPaymentDialog({
   const [cardInput, setCardInput] = useState("");
   const [customerName, setCustomerName] = useState("Khách lẻ");
   const [allowDebt, setAllowDebt] = useState(false);
+  const [tipInput, setTipInput] = useState("");
 
   useEffect(() => {
     if (open) {
@@ -69,6 +73,7 @@ export function FnbPaymentDialog({
       setCashInput(""); setTransferInput(""); setCardInput("");
       setCustomerName("Khách lẻ");
       setAllowDebt(false);
+      setTipInput("");
     }
   }, [open]);
 
@@ -80,6 +85,10 @@ export function FnbPaymentDialog({
   const cashAmount = parseAmount(cashInput);
   const transferAmount = parseAmount(transferInput);
   const cardAmount = parseAmount(cardInput);
+  const tipAmount = parseAmount(tipInput);
+
+  // Total hiện tại = base (đã bao gồm subtotal - discount + delivery + tax) + tip
+  const total = baseTotal + tipAmount;
 
   const totalPaid = useMemo(() => {
     if (method === "cash") return cashAmount;
@@ -103,12 +112,22 @@ export function FnbPaymentDialog({
       paymentMethod: method, paid: totalPaid,
       customerName: customerName.trim() || "Khách lẻ",
     };
+    if (tipAmount > 0) {
+      payload.tipAmount = tipAmount;
+    }
     if (method === "mixed") {
       payload.paymentBreakdown = { cash: cashAmount, transfer: transferAmount, card: cardAmount };
     }
     onConfirm(payload);
     onOpenChange(false);
   };
+
+  const tipQuickButtons = [
+    { label: "Không", value: 0 },
+    { label: "5%", value: Math.round((baseTotal * 0.05) / 1000) * 1000 },
+    { label: "10%", value: Math.round((baseTotal * 0.1) / 1000) * 1000 },
+    { label: "15%", value: Math.round((baseTotal * 0.15) / 1000) * 1000 },
+  ];
 
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
@@ -131,10 +150,53 @@ export function FnbPaymentDialog({
                 <span className="tabular-nums">-{formatCurrency(discountAmount)}</span>
               </div>
             )}
+            {tipAmount > 0 && (
+              <div className="flex justify-between text-status-success">
+                <span>Tiền tip</span>
+                <span className="tabular-nums">+{formatCurrency(tipAmount)}</span>
+              </div>
+            )}
             <div className="flex justify-between font-bold border-t pt-1">
               <span>Tổng cộng</span>
               <span className="text-primary tabular-nums">{formatCurrency(total)}</span>
             </div>
+          </div>
+
+          {/* Tip — quick buttons + custom input */}
+          <div className="space-y-1.5">
+            <Label className="text-sm flex items-center gap-1.5">
+              <Icon name="volunteer_activism" size={14} /> Tiền tip (tuỳ chọn)
+            </Label>
+            <div className="flex gap-1.5 flex-wrap">
+              {tipQuickButtons.map((btn) => (
+                <button
+                  key={btn.label}
+                  type="button"
+                  onClick={() => setTipInput(btn.value > 0 ? String(btn.value) : "")}
+                  className={cn(
+                    "px-3 py-1.5 rounded-md text-xs font-medium border transition-colors tabular-nums",
+                    (btn.value === 0 && tipAmount === 0) || (btn.value > 0 && tipAmount === btn.value)
+                      ? "bg-primary text-primary-foreground border-primary"
+                      : "bg-surface-container-low border-border text-foreground hover:bg-surface-container",
+                  )}
+                >
+                  {btn.label}
+                  {btn.value > 0 && (
+                    <span className="ml-1 text-[10px] opacity-80">
+                      ({formatDenom(btn.value)})
+                    </span>
+                  )}
+                </button>
+              ))}
+            </div>
+            <Input
+              type="text"
+              inputMode="numeric"
+              placeholder="Hoặc nhập số tiền tuỳ ý"
+              value={tipInput}
+              onChange={(e) => setTipInput(e.target.value)}
+              className="tabular-nums"
+            />
           </div>
 
           {/* Payment method tabs */}

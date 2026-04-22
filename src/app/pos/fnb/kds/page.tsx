@@ -18,6 +18,7 @@ import { useState, useEffect, useCallback, useRef } from "react";
 import Link from "next/link";
 import { cn } from "@/lib/utils";
 import { useAuth, useToast } from "@/lib/contexts";
+import { useSettings } from "@/lib/contexts/settings-context";
 import { PosBranchSelector } from "@/components/shared/pos-branch-selector";
 import { PermissionPage } from "@/components/shared/permission-page";
 import { PERMISSIONS } from "@/lib/permissions";
@@ -29,6 +30,7 @@ import {
 } from "@/lib/services/supabase/kitchen-orders";
 import { getClient } from "@/lib/services/supabase/base";
 import { hapticTap, hapticSuccess } from "@/lib/offline";
+import { printKitchenTicketV2 } from "@/lib/print-fnb";
 import type {
   KitchenOrder,
   KitchenOrderItem,
@@ -75,20 +77,26 @@ function formatElapsed(createdAt: string): string {
 
 // ── Sound helper ──
 
-function playBeep() {
+function playBeep(freq = 880, duration = 0.15, gain = 0.3) {
   try {
     const ctx = new AudioContext();
     const osc = ctx.createOscillator();
-    const gain = ctx.createGain();
-    osc.connect(gain);
-    gain.connect(ctx.destination);
-    osc.frequency.value = 880;
-    gain.gain.value = 0.3;
+    const g = ctx.createGain();
+    osc.connect(g);
+    g.connect(ctx.destination);
+    osc.frequency.value = freq;
+    g.gain.value = gain;
     osc.start();
-    osc.stop(ctx.currentTime + 0.15);
+    osc.stop(ctx.currentTime + duration);
   } catch {
     // Web Audio not available
   }
+}
+
+/** Double-beep cảnh báo đơn quá hạn (>10 phút). Freq cao hơn để phân biệt với beep đơn mới. */
+function playOverdueBeep() {
+  playBeep(1320, 0.22, 0.35);
+  setTimeout(() => playBeep(1320, 0.22, 0.35), 260);
 }
 
 // ── Types ──
@@ -100,8 +108,9 @@ interface KdsOrder extends KitchenOrder {
 // ── Page ──
 
 function KdsPageInner() {
-  const { currentBranch } = useAuth();
+  const { currentBranch, user } = useAuth();
   const { toast } = useToast();
+  const { settings } = useSettings();
   const branchId = currentBranch?.id;
 
   const [orders, setOrders] = useState<KdsOrder[]>([]);
@@ -111,6 +120,7 @@ function KdsPageInner() {
   const [now, setNow] = useState(Date.now());
   const [realtimeConnected, setRealtimeConnected] = useState(false);
   const prevOrderIdsRef = useRef<Set<string>>(new Set());
+  const overdueAlertedRef = useRef<Set<string>>(new Set());
   const fetchErrorShownRef = useRef(false);
 
   // Clock
@@ -222,6 +232,28 @@ function KdsPageInner() {
     return () => clearInterval(t);
   }, []);
 
+  // ── Overdue alert: double-beep lần đầu khi đơn crossing >10m ──
+  // Theo dõi orderId đã alert để không spam mỗi giây. Chỉ alert đơn đang active
+  // (chưa served/cancelled) và chưa sẵn sàng hết (bếp chưa xong).
+  useEffect(() => {
+    if (!soundOn) return;
+    for (const order of orders) {
+      if (order.status === "served" || order.status === "cancelled") continue;
+      if (order.items.length === 0) continue;
+      const allReady = order.items.every((i) => i.status === "ready");
+      if (allReady) continue;
+      if (getUrgency(order.createdAt) !== "overdue") continue;
+      if (overdueAlertedRef.current.has(order.id)) continue;
+      overdueAlertedRef.current.add(order.id);
+      playOverdueBeep();
+    }
+    // Garbage-collect: đơn không còn trong active list → bỏ khỏi set
+    const activeIds = new Set(orders.map((o) => o.id));
+    for (const id of overdueAlertedRef.current) {
+      if (!activeIds.has(id)) overdueAlertedRef.current.delete(id);
+    }
+  }, [orders, soundOn, now]);
+
   // ── Item status toggle ──
   const handleItemToggle = useCallback(
     async (item: KitchenOrderItem) => {
@@ -305,6 +337,69 @@ function KdsPageInner() {
       }
     },
     [orders, fetchOrders, toast]
+  );
+
+  // ── Recall item: ready → preparing (lỡ tay đánh dấu xong) ──
+  const handleItemRecall = useCallback(async (item: KitchenOrderItem) => {
+    if (item.status !== "ready") return;
+    hapticTap();
+    try {
+      await updateKitchenItemStatus(item.id, "preparing");
+      setOrders((prev) =>
+        prev.map((o) =>
+          o.id === item.kitchenOrderId
+            ? {
+                ...o,
+                items: o.items.map((i) =>
+                  i.id === item.id ? { ...i, status: "preparing" as KitchenItemStatus } : i
+                ),
+              }
+            : o
+        )
+      );
+    } catch (err) {
+      toast({
+        title: "Không hoàn tác được",
+        description: err instanceof Error ? err.message : "Lỗi không xác định",
+        variant: "error",
+      });
+    }
+  }, [toast]);
+
+  // ── Print kitchen ticket again (reprint) ──
+  const handlePrintTicket = useCallback(
+    (order: KdsOrder) => {
+      try {
+        printKitchenTicketV2({
+          orderNumber: order.orderNumber,
+          tableName: order.tableName ?? undefined,
+          orderType: order.orderType,
+          items: order.items.map((it) => ({
+            name: it.productName,
+            variant: it.variantLabel ?? undefined,
+            quantity: it.quantity,
+            unitPrice: it.unitPrice,
+            toppings: (it.toppings ?? []).map((t) => ({
+              name: t.name,
+              quantity: t.quantity,
+              price: t.price,
+            })),
+            note: it.note ?? undefined,
+          })),
+          createdAt: order.createdAt,
+          cashierName: user?.fullName,
+          style: settings.print.kitchenTicketStyle,
+          paperSize: settings.print.paperSize === "58mm" ? "58mm" : "80mm",
+        });
+      } catch (err) {
+        toast({
+          title: "Không in được phiếu bếp",
+          description: err instanceof Error ? err.message : "Lỗi không xác định",
+          variant: "error",
+        });
+      }
+    },
+    [user?.fullName, settings.print, toast]
   );
 
   // ── Filtered orders ──
@@ -471,6 +566,8 @@ function KdsPageInner() {
                 order={order}
                 now={now}
                 onItemToggle={handleItemToggle}
+                onItemRecall={handleItemRecall}
+                onPrintTicket={() => handlePrintTicket(order)}
                 onServed={() => handleServed(order.id)}
                 onMarkAllReady={() => handleMarkAllReady(order.id)}
               />
@@ -490,12 +587,16 @@ function KdsOrderCard({
   order,
   now: _now,
   onItemToggle,
+  onItemRecall,
+  onPrintTicket,
   onServed,
   onMarkAllReady,
 }: {
   order: KdsOrder;
   now: number;
   onItemToggle: (item: KitchenOrderItem) => void;
+  onItemRecall: (item: KitchenOrderItem) => void;
+  onPrintTicket: () => void;
   onServed: () => void;
   onMarkAllReady: () => void;
 }) {
@@ -572,10 +673,26 @@ function KdsOrderCard({
             #{order.orderNumber}
           </span>
         </div>
-        <div className="text-right shrink-0">
+        <div className="text-right shrink-0 flex flex-col items-end gap-1">
+          <button
+            type="button"
+            onClick={(e) => {
+              e.stopPropagation();
+              onPrintTicket();
+            }}
+            className={cn(
+              "size-7 rounded-md flex items-center justify-center transition-colors",
+              "bg-black/10 hover:bg-black/20",
+              headerTextClass
+            )}
+            title="In lại phiếu bếp"
+            aria-label="In lại phiếu bếp"
+          >
+            <Icon name="print" size={14} />
+          </button>
           <span
             className={cn(
-              "text-[10px] uppercase tracking-wider block mb-1 opacity-80",
+              "text-[10px] uppercase tracking-wider block opacity-80",
               headerTextClass
             )}
           >
@@ -599,6 +716,7 @@ function KdsOrderCard({
             key={item.id}
             item={item}
             onToggle={() => onItemToggle(item)}
+            onRecall={() => onItemRecall(item)}
           />
         ))}
       </div>
@@ -659,39 +777,100 @@ function KdsOrderCard({
 function KdsItemRow({
   item,
   onToggle,
+  onRecall,
 }: {
   item: KitchenOrderItem;
   onToggle: () => void;
+  onRecall: () => void;
 }) {
   const isReady = item.status === "ready";
   const isPreparing = item.status === "preparing";
+
+  // Khi item ready → dùng <div> + recall button riêng (không dùng <button> lớn
+  // để tránh nested button + cho phép người dùng hoàn tác khi lỡ tick).
+  if (isReady) {
+    return (
+      <div
+        className={cn(
+          "flex items-start gap-3 w-full text-left rounded-lg p-3",
+          "bg-pos-chrome-bg-elevated/40"
+        )}
+      >
+        <div
+          className={cn(
+            "size-6 rounded-md border-2 flex items-center justify-center shrink-0 mt-0.5 transition-all",
+            "bg-status-success border-status-success"
+          )}
+        >
+          <Icon name="check" size={14} className="text-white font-bold" />
+        </div>
+
+        <div className="flex-1 min-w-0">
+          <div className="flex items-start gap-1.5">
+            <span
+              className={cn(
+                "font-heading font-bold text-sm md:text-base leading-tight",
+                "line-through text-pos-chrome-fg0"
+              )}
+            >
+              {item.productName}
+            </span>
+          </div>
+          {item.variantLabel && (
+            <span className="text-xs text-pos-chrome-fg-dim block mt-0.5 line-through">
+              {item.variantLabel}
+            </span>
+          )}
+          {item.toppings.length > 0 && (
+            <div className="text-xs text-pos-chrome-fg-dim mt-0.5 line-through">
+              {item.toppings.map((t, i) => (
+                <span key={i}>
+                  {i > 0 && ", "}+{t.name}
+                </span>
+              ))}
+            </div>
+          )}
+          {item.quantity > 1 && (
+            <span className="inline-flex items-center gap-0.5 mt-1.5 px-2 py-0.5 rounded-full bg-status-success/20 text-status-success text-[10px] font-bold">
+              x{item.quantity}
+            </span>
+          )}
+        </div>
+
+        <button
+          type="button"
+          onClick={onRecall}
+          className={cn(
+            "shrink-0 size-7 rounded-md flex items-center justify-center transition-colors press-scale-sm",
+            "bg-pos-chrome-bg text-pos-chrome-fg-dim hover:text-status-warning hover:bg-status-warning/10"
+          )}
+          title="Hoàn tác — đánh dấu lại đang pha"
+          aria-label="Hoàn tác món"
+        >
+          <Icon name="undo" size={14} />
+        </button>
+      </div>
+    );
+  }
 
   return (
     <button
       type="button"
       onClick={onToggle}
-      disabled={isReady}
       className={cn(
         "flex items-start gap-3 w-full text-left rounded-lg p-3 transition-colors press-scale-sm",
-        isReady
-          ? "bg-pos-chrome-bg-elevated/40 cursor-default"
-          : "bg-pos-chrome-bg-elevated hover:bg-pos-chrome-bg-hover cursor-pointer"
+        "bg-pos-chrome-bg-elevated hover:bg-pos-chrome-bg-hover cursor-pointer"
       )}
     >
       {/* Checkbox — Stitch style */}
       <div
         className={cn(
           "size-6 rounded-md border-2 flex items-center justify-center shrink-0 mt-0.5 transition-all",
-          isReady
-            ? "bg-status-success border-status-success"
-            : isPreparing
-              ? "bg-status-warning/20 border-status-warning"
-              : "border-pos-chrome-fg-dim"
+          isPreparing
+            ? "bg-status-warning/20 border-status-warning"
+            : "border-pos-chrome-fg-dim"
         )}
       >
-        {isReady && (
-          <Icon name="check" size={14} className="text-white font-bold" />
-        )}
         {isPreparing && (
           <div className="size-2 rounded-full bg-status-warning animate-pulse" />
         )}
@@ -703,7 +882,7 @@ function KdsItemRow({
           <span
             className={cn(
               "font-heading font-bold text-sm md:text-base leading-tight",
-              isReady ? "line-through text-pos-chrome-fg0" : "text-pos-chrome-fg"
+              "text-pos-chrome-fg"
             )}
           >
             {item.productName}

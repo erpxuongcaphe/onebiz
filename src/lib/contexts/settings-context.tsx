@@ -38,6 +38,14 @@ export interface AppSettings {
     showCostOnPos: boolean;
     discountType: "percent" | "fixed";
     maxDiscount: number;
+    /**
+     * Mã PIN duyệt giảm giá vượt ngưỡng. Trống = tắt tính năng (không yêu
+     * cầu PIN). Có giá trị = khi thu ngân áp giảm giá > maxDiscount (percent
+     * hoặc vượt ngưỡng VND), hộp thoại PIN bật ra yêu cầu quản lý gõ mã này.
+     */
+    supervisorPin: string;
+    /** Ngưỡng VND tuyệt đối — giảm vượt mức này cũng phải có PIN (nếu PIN đang bật). */
+    supervisorDiscountAmountThreshold: number;
     paymentMethods: {
       cash: boolean;
       transfer: boolean;
@@ -150,6 +158,8 @@ const defaultSettings: AppSettings = {
     showCostOnPos: false,
     discountType: "percent",
     maxDiscount: 50,
+    supervisorPin: "",
+    supervisorDiscountAmountThreshold: 500_000,
     paymentMethods: {
       cash: true,
       transfer: true,

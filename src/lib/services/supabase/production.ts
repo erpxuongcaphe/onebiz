@@ -117,8 +117,25 @@ export async function createProductionOrder(order: {
 
   if (error) throw error;
 
-  // Insert materials
+  // Insert materials — kèm unit_cost từ products.cost_price để tính COGS chính xác.
+  // Nếu không fetch được cost_price (lỗi mạng / sản phẩm không tồn tại) → vẫn
+  // insert với unit_cost = 0 để không chặn luồng tạo lệnh sản xuất.
   if (order.materials.length > 0) {
+    const materialProductIds = order.materials.map((m) => m.productId);
+    const costMap = new Map<string, number>();
+    try {
+      const { data: products } = await supabase
+        .from("products")
+        .select("id, cost_price")
+        .in("id", materialProductIds);
+      (products ?? []).forEach((p) => {
+        const row = p as { id: string; cost_price: number | null };
+        costMap.set(row.id, Number(row.cost_price ?? 0));
+      });
+    } catch {
+      // Ignore — fallback về unit_cost = 0
+    }
+
     const { error: matError } = await supabase
       .from("production_order_materials")
       .insert(
@@ -127,6 +144,7 @@ export async function createProductionOrder(order: {
           product_id: m.productId,
           planned_qty: m.plannedQty,
           unit: m.unit,
+          unit_cost: costMap.get(m.productId) ?? 0,
         }))
       );
 

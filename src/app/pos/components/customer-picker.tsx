@@ -18,11 +18,19 @@ interface CustomerPickerProps {
   open: boolean;
   onSelect: (customer: Customer | null) => void; // null = Khách lẻ
   onClose: () => void;
+  /** Nếu cung cấp, hiển thị row "+ Thêm khách hàng mới" — click sẽ bubble
+   *  search query về parent để mở CreateCustomerDialog. */
+  onRequestCreate?: (initialName: string) => void;
 }
 
 const GUEST_OPTION_ID = "__guest__";
 
-export function CustomerPicker({ open, onSelect, onClose }: CustomerPickerProps) {
+export function CustomerPicker({
+  open,
+  onSelect,
+  onClose,
+  onRequestCreate,
+}: CustomerPickerProps) {
   const [query, setQuery] = useState("");
   const [results, setResults] = useState<Customer[]>([]);
   const [loading, setLoading] = useState(false);
@@ -196,6 +204,30 @@ export function CustomerPicker({ open, onSelect, onClose }: CustomerPickerProps)
                 </li>
               );
             })}
+
+            {/* Quick-create row — chỉ show khi parent cung cấp handler */}
+            {onRequestCreate && (
+              <li
+                onClick={() => {
+                  onRequestCreate(query.trim());
+                  onClose();
+                }}
+                className="px-4 py-2.5 cursor-pointer border-t border-dashed border-border flex items-center gap-3 bg-surface-container-low/50 hover:bg-primary-fixed transition-colors"
+              >
+                <div className="h-8 w-8 rounded-full bg-primary/10 flex items-center justify-center shrink-0">
+                  <Icon name="person_add" size={16} className="text-primary" />
+                </div>
+                <div className="flex-1">
+                  <div className="text-sm font-semibold text-primary">
+                    + Thêm khách hàng mới
+                    {query.trim() && <span className="text-muted-foreground font-normal"> — &ldquo;{query.trim()}&rdquo;</span>}
+                  </div>
+                  <div className="text-[11px] text-muted-foreground">
+                    Mở form đăng ký nhanh
+                  </div>
+                </div>
+              </li>
+            )}
           </ul>
 
           <div className="flex items-center justify-between px-4 h-9 bg-muted/50 border-t border-border text-[11px] text-muted-foreground">

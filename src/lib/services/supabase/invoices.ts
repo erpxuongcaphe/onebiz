@@ -114,6 +114,169 @@ export async function getReturnsForCustomer(
  * Hủy hóa đơn — chỉ cho phép hủy hóa đơn ở trạng thái draft hoặc confirmed.
  * Hóa đơn đã hoàn thành (completed) hoặc đã hủy (cancelled) sẽ bị từ chối.
  */
+// ============================================================
+// F&B Order History — fetch today's completed FnB invoices
+// for reprint / lookup ở POS FnB.
+// ============================================================
+
+export interface FnbRecentInvoice {
+  id: string;
+  code: string;
+  customerName: string;
+  total: number;
+  paid: number;
+  tipAmount: number;
+  paymentMethod: string;
+  createdAt: string;
+  kitchenOrderNumber: string | null;
+  tableName: string | null;
+  orderType: string;
+}
+
+export async function getFnbRecentInvoices(params: {
+  branchId: string;
+  limit?: number;
+  search?: string;
+}): Promise<FnbRecentInvoice[]> {
+  const supabase = getClient();
+  const sinceIso = new Date(Date.now() - 24 * 60 * 60 * 1000).toISOString();
+
+  let query = supabase
+    .from("invoices")
+    .select("id, code, customer_name, total, paid, tip_amount, payment_method, created_at")
+    .eq("branch_id", params.branchId)
+    .eq("source", "fnb")
+    .eq("status", "completed")
+    .gte("created_at", sinceIso)
+    .order("created_at", { ascending: false })
+    .limit(params.limit ?? 50);
+
+  if (params.search) {
+    query = query.or(`code.ilike.%${params.search}%,customer_name.ilike.%${params.search}%`);
+  }
+
+  const { data, error } = await query;
+  if (error) handleError(error, "getFnbRecentInvoices");
+
+  // Supabase generated types chưa biết về cột `tip_amount` (migration 00035 mới).
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  const rows = ((data ?? []) as unknown) as any[];
+
+  const invoiceIds = rows.map((r) => r.id);
+  if (invoiceIds.length === 0) return [];
+
+  // Lookup kitchen orders separately (kitchen_orders.invoice_id → invoices.id)
+  const { data: kos } = await supabase
+    .from("kitchen_orders")
+    .select("invoice_id, order_number, order_type, table_id, restaurant_tables(table_number)")
+    .in("invoice_id", invoiceIds);
+
+  const koMap = new Map<string, { orderNumber: string; orderType: string; tableName: string | null }>();
+  (kos ?? []).forEach((ko) => {
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    const k = ko as any;
+    if (!k.invoice_id) return;
+    const tbl = k.restaurant_tables;
+    const tableNumber = Array.isArray(tbl) ? tbl[0]?.table_number : tbl?.table_number;
+    koMap.set(k.invoice_id, {
+      orderNumber: k.order_number,
+      orderType: k.order_type,
+      tableName: tableNumber ? `Bàn ${tableNumber}` : null,
+    });
+  });
+
+  return rows.map((row) => {
+    const ko = koMap.get(row.id);
+    return {
+      id: row.id,
+      code: row.code,
+      customerName: row.customer_name ?? "Khách lẻ",
+      total: Number(row.total ?? 0),
+      paid: Number(row.paid ?? 0),
+      tipAmount: Number(row.tip_amount ?? 0),
+      paymentMethod: row.payment_method ?? "cash",
+      createdAt: row.created_at,
+      kitchenOrderNumber: ko?.orderNumber ?? null,
+      tableName: ko?.tableName ?? null,
+      orderType: ko?.orderType ?? "takeaway",
+    };
+  });
+}
+
+/** Load full invoice with items for reprint. */
+export async function getFnbInvoiceForReprint(invoiceId: string): Promise<{
+  invoiceCode: string;
+  customerName: string;
+  total: number;
+  paid: number;
+  tipAmount: number;
+  discountAmount: number;
+  paymentMethod: string;
+  createdAt: string;
+  orderNumber: string;
+  tableName: string | null;
+  orderType: string;
+  items: Array<{
+    name: string;
+    quantity: number;
+    unitPrice: number;
+    total: number;
+  }>;
+}> {
+  const supabase = getClient();
+
+  const { data: invRaw, error: invErr } = await supabase
+    .from("invoices")
+    .select("id, code, customer_name, total, paid, tip_amount, discount_amount, payment_method, created_at")
+    .eq("id", invoiceId)
+    .single();
+
+  if (invErr) handleError(invErr, "getFnbInvoiceForReprint.invoice");
+  if (!invRaw) throw new Error("Không tìm thấy hoá đơn");
+
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  const inv = invRaw as any;
+
+  const { data: ko } = await supabase
+    .from("kitchen_orders")
+    .select("order_number, order_type, table_id, restaurant_tables(table_number)")
+    .eq("invoice_id", invoiceId)
+    .maybeSingle();
+
+  const { data: items, error: itemsErr } = await supabase
+    .from("invoice_items")
+    .select("product_name, quantity, unit_price, total")
+    .eq("invoice_id", invoiceId)
+    .order("created_at", { ascending: true });
+
+  if (itemsErr) handleError(itemsErr, "getFnbInvoiceForReprint.items");
+
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  const k = ko as any;
+  const tbl = k?.restaurant_tables;
+  const tableNumber = Array.isArray(tbl) ? tbl[0]?.table_number : tbl?.table_number;
+
+  return {
+    invoiceCode: inv.code,
+    customerName: inv.customer_name ?? "Khách lẻ",
+    total: Number(inv.total ?? 0),
+    paid: Number(inv.paid ?? 0),
+    tipAmount: Number(inv.tip_amount ?? 0),
+    discountAmount: Number(inv.discount_amount ?? 0),
+    paymentMethod: inv.payment_method ?? "cash",
+    createdAt: inv.created_at,
+    orderNumber: k?.order_number ?? inv.code,
+    tableName: tableNumber ? `Bàn ${tableNumber}` : null,
+    orderType: k?.order_type ?? "takeaway",
+    items: (items ?? []).map((it) => ({
+      name: it.product_name,
+      quantity: Number(it.quantity),
+      unitPrice: Number(it.unit_price),
+      total: Number(it.total),
+    })),
+  };
+}
+
 export async function cancelInvoice(id: string): Promise<void> {
   const supabase = getClient();
 
