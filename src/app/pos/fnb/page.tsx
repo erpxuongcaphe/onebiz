@@ -216,7 +216,11 @@ export default function FnbPosPage() {
         setLoading(false);
       }
     })();
-  }, [tenantId, branchId, networkStatus.isOnline, toast]);
+    // Bỏ `toast` khỏi deps — nếu ToastContext re-render, tham chiếu đổi →
+    // init flow re-run → 2000+ rows products + variants refetch → POS treo.
+    // toast chỉ dùng trong catch path, ref vẫn đúng tại thời điểm fire.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [tenantId, branchId, networkStatus.isOnline]);
 
   // ── Filtered products ──
   const filteredProducts = useMemo(() => {
@@ -230,10 +234,11 @@ export default function FnbPosPage() {
     []
   );
 
-  // ── Variant PREFETCH: batch load variants cho toàn bộ SP trong menu NGAY SAU khi products load.
+  // ── Variant PREFETCH: batch load variants cho top 50 SP NGAY SAU khi products load.
   //    Mục đích: khi user click SP đầu tiên → dialog mở instant (không có 200-400ms delay fetch).
-  //    Dùng .in() → 1 network roundtrip cho N products (thay vì N round-trips lazy).
-  //    Gate bằng cache.size để tránh re-prefetch khi cached products được set từ IndexedDB. ──
+  //    Gate bằng requestIdleCallback để KHÔNG đua với first paint + limit 50
+  //    thay vì 500 (tiết kiệm 600-1200ms cold start — lazy fetch on-click
+  //    backfill phần còn lại). ──
   useEffect(() => {
     if (!networkStatus.isOnline) return;
     if (products.length === 0) return;
@@ -241,25 +246,56 @@ export default function FnbPosPage() {
     if (variantCacheRef.size >= products.length * 0.8) return;
 
     let cancelled = false;
-    getVariantsByProductIds(products.map((p) => p.id))
-      .then((variantMap) => {
-        if (cancelled) return;
-        variantMap.forEach((variants, pid) => {
-          variantCacheRef.set(
-            pid,
-            variants.map((v) => ({
-              id: v.id,
-              label: v.name,
-              sell_price: v.sellPrice,
-            }))
-          );
+    // Top 50 SP đầu tiên theo order trả về (đã order by name từ query) —
+    // phần còn lại user hiếm khi click trong session đầu, fetch lazy.
+    const topIds = products.slice(0, 50).map((p) => p.id);
+
+    const runPrefetch = () => {
+      if (cancelled) return;
+      getVariantsByProductIds(topIds)
+        .then((variantMap) => {
+          if (cancelled) return;
+          variantMap.forEach((variants, pid) => {
+            variantCacheRef.set(
+              pid,
+              variants.map((v) => ({
+                id: v.id,
+                label: v.name,
+                sell_price: v.sellPrice,
+              }))
+            );
+          });
+        })
+        .catch(() => {
+          // Silent — lazy fetch on click sẽ backfill cache
         });
-      })
-      .catch(() => {
-        // Silent — lazy fetch on click sẽ backfill cache
-      });
+    };
+
+    // requestIdleCallback: browser fire khi main thread idle → không block
+    // first paint + interactive. Fallback setTimeout 1s trên Safari (<16.4).
+    if (typeof window === "undefined") return;
+
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    const ric = (window as any).requestIdleCallback as
+      | ((cb: () => void, opts?: { timeout: number }) => number)
+      | undefined;
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    const cic = (window as any).cancelIdleCallback as
+      | ((id: number) => void)
+      | undefined;
+
+    let idleHandle: number | undefined;
+    let timeoutHandle: number | undefined;
+    if (ric) {
+      idleHandle = ric(runPrefetch, { timeout: 2000 });
+    } else {
+      timeoutHandle = window.setTimeout(runPrefetch, 1000);
+    }
+
     return () => {
       cancelled = true;
+      if (idleHandle !== undefined && cic) cic(idleHandle);
+      if (timeoutHandle !== undefined) window.clearTimeout(timeoutHandle);
     };
   }, [products, networkStatus.isOnline, variantCacheRef]);
 

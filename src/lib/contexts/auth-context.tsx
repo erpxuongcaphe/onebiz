@@ -187,16 +187,42 @@ export function AuthProvider({ children }: { children: ReactNode }) {
 
   // Listen to Supabase auth state changes
   useEffect(() => {
+    // Safety net: nếu getUser() hang 10s (network dropped, DNS fail, CORS),
+    // force release spinner để user không thấy màn hình trắng vô hạn. Trước
+    // đây getUser() thiếu .catch() → isLoading stuck forever → cả app render
+    // null qua PermissionPage → CEO báo "web quay vòng".
+    const initTimeoutId = setTimeout(() => {
+      setIsLoading((current) => {
+        if (current) {
+          console.warn("[AuthProvider] Init timeout 10s — force release spinner");
+        }
+        return false;
+      });
+    }, 10_000);
+
     // Get initial session
-    supabase.auth.getUser().then(({ data: { user: initialUser } }) => {
-      if (initialUser) {
-        setAuthUser(initialUser);
-        wasAuthenticatedRef.current = true;
-        loadUserData(initialUser).finally(() => setIsLoading(false));
-      } else {
+    supabase.auth
+      .getUser()
+      .then(({ data: { user: initialUser } }) => {
+        if (initialUser) {
+          setAuthUser(initialUser);
+          wasAuthenticatedRef.current = true;
+          loadUserData(initialUser).finally(() => {
+            clearTimeout(initTimeoutId);
+            setIsLoading(false);
+          });
+        } else {
+          clearTimeout(initTimeoutId);
+          setIsLoading(false);
+        }
+      })
+      .catch((err) => {
+        // Network fail, token invalid, CORS, DNS — treat như unauthenticated
+        // thay vì để isLoading stuck true.
+        console.error("[AuthProvider] getUser failed:", err);
+        clearTimeout(initTimeoutId);
         setIsLoading(false);
-      }
-    });
+      });
 
     // Subscribe to auth changes
     const {
@@ -207,6 +233,9 @@ export function AuthProvider({ children }: { children: ReactNode }) {
 
       if (sessionUser) {
         wasAuthenticatedRef.current = true;
+        // loadUserData có try/catch trong body — không throw lên đây.
+        // Nếu initial getUser() chưa resolve mà onAuthStateChange fire trước
+        // (race khi tab restore), vẫn safe vì loadUserData self-contained.
         loadUserData(sessionUser);
       } else {
         setUser(null);
@@ -234,7 +263,10 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       }
     });
 
-    return () => subscription.unsubscribe();
+    return () => {
+      clearTimeout(initTimeoutId);
+      subscription.unsubscribe();
+    };
   }, [supabase, loadUserData, router]);
 
   const switchBranch = useCallback(

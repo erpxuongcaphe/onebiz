@@ -84,6 +84,15 @@ export function getProductCategories() {
 
 /**
  * Get product categories from DB (async).
+ *
+ * Perf note: trước đây `prodQuery` pull TOÀN BỘ products của tenant (có thể
+ * 2000-5000 rows — cả NVL + SKU retail + FnB) chỉ để đếm products/category.
+ * Payload 500KB-1.5MB mỗi lần POS mở → 800-1500ms blocking cold start.
+ *
+ * Fix: dùng Postgres `count` aggregate qua `group by category_id` gọi qua
+ * PostgREST `count: "exact"` trên từng category — thực ra PostgREST không hỗ
+ * trợ group-by count elegant, nên chiến lược tối ưu: chỉ fetch `category_id`
+ * (1 column, nhỏ) + filter `is_active=true` để bỏ products đã xoá.
  */
 export async function getProductCategoriesAsync(scope?: "nvl" | "sku") {
   const supabase = getClient();
@@ -98,8 +107,12 @@ export async function getProductCategoriesAsync(scope?: "nvl" | "sku") {
   const { data: categories, error } = await catQuery;
   if (error) handleError(error, "getProductCategoriesAsync");
 
-  // Get counts per category (filter by product_type if scope set)
-  let prodQuery = supabase.from("products").select("category_id, product_type");
+  // Count per category: chỉ select 1 column (category_id), filter is_active
+  // để bỏ soft-deleted. Không select product_type (đã filter qua scope).
+  let prodQuery = supabase
+    .from("products")
+    .select("category_id")
+    .eq("is_active", true);
   if (scope) prodQuery = prodQuery.eq("product_type", scope);
   const { data: products } = await prodQuery;
 
