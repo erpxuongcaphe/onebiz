@@ -135,10 +135,10 @@ export function ProductAutocomplete({
 
       {/* Modal */}
       <div className="fixed inset-x-0 top-16 mx-auto z-50 max-w-2xl px-4">
-        <div className="rounded-lg bg-white border border-slate-200 shadow-2xl overflow-hidden">
+        <div className="rounded-lg bg-background border border-border shadow-2xl overflow-hidden">
           {/* Search input */}
-          <div className="flex items-center gap-2 px-4 h-12 border-b border-slate-200">
-            <Icon name="search" size={16} className="text-slate-400 shrink-0" />
+          <div className="flex items-center gap-2 px-4 h-12 border-b border-border">
+            <Icon name="search" size={16} className="text-muted-foreground shrink-0" />
             <input
               ref={inputRef}
               type="text"
@@ -147,10 +147,10 @@ export function ProductAutocomplete({
               onChange={(e) => setQuery(e.target.value)}
               onKeyDown={handleKeyDown}
               placeholder="Quét mã hoặc nhập tên sản phẩm..."
-              className="flex-1 bg-transparent text-base outline-none placeholder:text-slate-400"
+              className="flex-1 bg-transparent text-base outline-none placeholder:text-muted-foreground"
             />
-            {loading && <Icon name="progress_activity" size={16} className="animate-spin text-slate-400" />}
-            <kbd className="font-mono text-[10px] bg-slate-100 border border-slate-200 rounded px-1.5 py-0.5 text-slate-500">
+            {loading && <Icon name="progress_activity" size={16} className="animate-spin text-muted-foreground" />}
+            <kbd className="font-mono text-[10px] bg-muted border border-border rounded px-1.5 py-0.5 text-muted-foreground">
               Esc
             </kbd>
           </div>
@@ -158,13 +158,13 @@ export function ProductAutocomplete({
           {/* Results */}
           <ul ref={listRef} className="max-h-96 overflow-y-auto">
             {results.length === 0 && debouncedQuery && !loading && (
-              <li className="px-4 py-8 text-center text-sm text-slate-500 flex flex-col items-center gap-2">
-                <Icon name="pageview" size={24} className="text-slate-300" />
+              <li className="px-4 py-8 text-center text-sm text-muted-foreground flex flex-col items-center gap-2">
+                <Icon name="pageview" size={24} className="text-muted-foreground/70" />
                 Không tìm thấy sản phẩm nào
               </li>
             )}
             {results.length === 0 && !debouncedQuery && (
-              <li className="px-4 py-6 text-center text-xs text-slate-400">
+              <li className="px-4 py-6 text-center text-xs text-muted-foreground">
                 Nhập tên / mã sản phẩm để tìm kiếm
               </li>
             )}
@@ -175,20 +175,20 @@ export function ProductAutocomplete({
                 onMouseEnter={() => setHighlighted(i)}
                 onClick={() => commitSelection(i)}
                 className={cn(
-                  "px-4 py-2.5 cursor-pointer border-b border-slate-100 last:border-0 flex items-center justify-between gap-4",
+                  "px-4 py-2.5 cursor-pointer border-b border-border last:border-0 flex items-center justify-between gap-4",
                   i === highlighted && "bg-primary-fixed"
                 )}
               >
                 <div className="min-w-0 flex-1">
-                  <div className="font-mono text-[11px] text-slate-500">
+                  <div className="font-mono text-[11px] text-muted-foreground">
                     {p.code}
                   </div>
-                  <div className="text-sm font-medium text-slate-900 truncate">
+                  <div className="text-sm font-medium text-foreground truncate">
                     {p.name}
                   </div>
                 </div>
                 <div className="text-right shrink-0">
-                  <div className="text-sm font-semibold text-slate-900">
+                  <div className="text-sm font-semibold text-foreground">
                     {formatCurrency(p.sellPrice)} ₫
                   </div>
                   <div
@@ -198,7 +198,7 @@ export function ProductAutocomplete({
                         ? "text-status-error font-medium"
                         : p.stock <= 5
                           ? "text-status-warning"
-                          : "text-slate-500"
+                          : "text-muted-foreground"
                     )}
                   >
                     Tồn: {p.stock} {p.sellUnit ?? p.unit ?? ""}
@@ -209,22 +209,22 @@ export function ProductAutocomplete({
           </ul>
 
           {/* Footer hint */}
-          <div className="flex items-center justify-between px-4 h-9 bg-slate-50 border-t border-slate-200 text-[11px] text-slate-500">
+          <div className="flex items-center justify-between px-4 h-9 bg-muted/50 border-t border-border text-[11px] text-muted-foreground">
             <div className="flex items-center gap-2.5">
               <span>
-                <kbd className="font-mono bg-white border border-slate-200 rounded px-1 text-[10px]">
+                <kbd className="font-mono bg-background border border-border rounded px-1 text-[10px]">
                   ↑ ↓
                 </kbd>{" "}
                 chọn
               </span>
               <span>
-                <kbd className="font-mono bg-white border border-slate-200 rounded px-1 text-[10px]">
+                <kbd className="font-mono bg-background border border-border rounded px-1 text-[10px]">
                   Enter
                 </kbd>{" "}
                 thêm
               </span>
               <span>
-                <kbd className="font-mono bg-white border border-slate-200 rounded px-1 text-[10px]">
+                <kbd className="font-mono bg-background border border-border rounded px-1 text-[10px]">
                   Esc
                 </kbd>{" "}
                 đóng
