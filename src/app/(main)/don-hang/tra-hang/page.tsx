@@ -20,6 +20,7 @@ import {
   DetailHeader,
   DetailInfoGrid,
   DetailItemsTable,
+  AuditHistoryTab,
 } from "@/components/shared/inline-detail-panel";
 import { useToast, useBranchFilter } from "@/lib/contexts";
 import { usePrintWithPicker } from "@/lib/hooks/use-print-with-picker";
@@ -175,12 +176,8 @@ function ReturnDetail({
           },
           {
             id: "payment_history",
-            label: "Lịch sử thanh toán",
-            content: (
-              <div className="text-sm text-muted-foreground py-4 text-center">
-                Chưa có lịch sử thanh toán
-              </div>
-            ),
+            label: "Lịch sử",
+            content: <AuditHistoryTab entityType="sales_return" entityId={returnOrder.id} />,
           },
         ]}
       />

@@ -20,6 +20,7 @@ import {
   DetailHeader,
   DetailInfoGrid,
   DetailItemsTable,
+  AuditHistoryTab,
 } from "@/components/shared/inline-detail-panel";
 import { CreateInvoiceDialog, EditInvoiceDialog, ConfirmDialog } from "@/components/shared/dialogs";
 import { RecordPaymentDialog } from "@/components/shared/dialogs/record-payment-dialog";
@@ -191,12 +192,8 @@ function InvoiceDetail({
           },
           {
             id: "payment_history",
-            label: "Lịch sử thanh toán",
-            content: (
-              <div className="text-sm text-muted-foreground py-4 text-center">
-                Chưa có lịch sử thanh toán
-              </div>
-            ),
+            label: "Lịch sử",
+            content: <AuditHistoryTab entityType="invoice" entityId={invoice.id} />,
           },
         ]}
       />

@@ -21,6 +21,7 @@ import {
   DetailHeader,
   DetailInfoGrid,
   DetailItemsTable,
+  AuditHistoryTab,
 } from "@/components/shared/inline-detail-panel";
 import { CreateCashTransactionDialog, ConfirmDialog } from "@/components/shared/dialogs";
 import { ImportExcelDialog } from "@/components/shared/dialogs/import-excel-dialog";
@@ -160,11 +161,7 @@ function TransactionDetail({
           {
             id: "history",
             label: "Lịch sử",
-            content: (
-              <div className="text-sm text-muted-foreground py-4 text-center">
-                Chưa có lịch sử thay đổi
-              </div>
-            ),
+            content: <AuditHistoryTab entityType="cash_transaction" entityId={entry.id} />,
           },
         ]}
       />
