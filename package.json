@@ -8,7 +8,8 @@
     "start": "next start",
     "lint": "eslint",
     "test": "vitest",
-    "test:run": "vitest run"
+    "test:run": "vitest run",
+    "create-admin": "node scripts/create-admin.mjs"
   },
   "dependencies": {
     "@base-ui/react": "^1.3.0",
