@@ -96,4 +96,6 @@ export interface InputInvoice {
   statusName: string;
   createdBy: string;
   createdByName?: string;
+  branchId?: string;
+  branchName?: string;
 }

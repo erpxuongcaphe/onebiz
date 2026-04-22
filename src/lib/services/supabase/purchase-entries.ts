@@ -242,7 +242,10 @@ export async function getInputInvoices(
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
   let query = (supabase as any)
     .from("input_invoices")
-    .select("*, profiles!input_invoices_created_by_fkey(full_name)", { count: "exact" });
+    .select(
+      "*, profiles!input_invoices_created_by_fkey(full_name), branches!input_invoices_branch_id_fkey(id,name)",
+      { count: "exact" }
+    );
 
   // Search theo mã hoặc tên NCC
   if (params.search) {
@@ -255,6 +258,13 @@ export async function getInputInvoices(
   if (params.filters?.status && params.filters.status !== "all") {
     // eslint-disable-next-line @typescript-eslint/no-explicit-any
     query = query.eq("status", params.filters.status as any);
+  }
+
+  // Filter: branch — quan trọng cho tenant có nhiều chi nhánh
+  // để tránh leak hoá đơn giữa các chi nhánh.
+  if (params.filters?.branchId && params.filters.branchId !== "all") {
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    query = query.eq("branch_id", params.filters.branchId as any);
   }
 
   // Sort & paginate
@@ -502,16 +512,19 @@ const inputInvoiceStatusNameMap: Record<string, string> = {
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
 function mapInputInvoice(row: any): InputInvoice {
   const profile = row.profiles as { full_name: string } | null;
+  const branch = row.branches as { id: string; name: string } | null;
   return {
     id: row.id,
     code: row.code,
     date: row.created_at,
     supplierName: row.supplier_name ?? "---",
-    totalAmount: row.total ?? 0,
+    totalAmount: row.total_amount ?? row.total ?? 0,
     taxAmount: row.tax_amount ?? 0,
     status: (row.status === "recorded" ? "recorded" : "unrecorded") as InputInvoice["status"],
     statusName: inputInvoiceStatusNameMap[row.status] ?? row.status,
     createdBy: row.created_by ?? "---",
     createdByName: profile?.full_name ?? undefined,
+    branchId: row.branch_id ?? branch?.id ?? undefined,
+    branchName: branch?.name ?? undefined,
   };
 }

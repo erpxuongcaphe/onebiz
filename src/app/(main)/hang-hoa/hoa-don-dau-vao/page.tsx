@@ -27,7 +27,7 @@ import { printDocument } from "@/lib/print-document";
 import { buildInputInvoicePrintData } from "@/lib/print-templates";
 import { getInputInvoices, getInputInvoiceStatuses, deleteInputInvoice, recordInputInvoice } from "@/lib/services";
 import { CreateInputInvoiceDialog, ConfirmDialog } from "@/components/shared/dialogs";
-import { useToast } from "@/lib/contexts";
+import { useToast, useBranchFilter } from "@/lib/contexts";
 import type { InputInvoice } from "@/lib/types";
 import { Icon } from "@/components/ui/icon";
 
@@ -63,7 +63,7 @@ function InputInvoiceDetail({
             title={`Hóa đơn đầu vào ${item.code}`}
             code={item.code}
             status={{ label: st.label, variant: st.variant }}
-            subtitle="Chi nhánh trung tâm"
+            subtitle={item.branchName ? `Chi nhánh: ${item.branchName}` : undefined}
             meta={
               <div className="flex items-center gap-4 flex-wrap text-xs">
                 <span>
@@ -79,6 +79,7 @@ function InputInvoiceDetail({
             fields={[
               { label: "Mã hóa đơn", value: item.code },
               { label: "Ngày hóa đơn", value: formatDate(item.date) },
+              { label: "Chi nhánh", value: item.branchName ?? "---" },
               { label: "Nhà cung cấp", value: item.supplierName },
               { label: "Tổng tiền hàng", value: formatCurrency(item.totalAmount) },
               { label: "Thuế", value: formatCurrency(item.taxAmount) },
@@ -130,6 +131,12 @@ const columns: ColumnDef<InputInvoice, unknown>[] = [
     size: 220,
   },
   {
+    accessorKey: "branchName",
+    header: "Chi nhánh",
+    size: 160,
+    cell: ({ row }) => row.original.branchName ?? "---",
+  },
+  {
     accessorKey: "totalAmount",
     header: "Tổng tiền hàng",
     cell: ({ row }) => formatCurrency(row.original.totalAmount),
@@ -157,6 +164,7 @@ const columns: ColumnDef<InputInvoice, unknown>[] = [
 
 export default function HoaDonDauVaoPage() {
   const { toast } = useToast();
+  const { activeBranchId } = useBranchFilter();
   const [data, setData] = useState<InputInvoice[]>([]);
   const [total, setTotal] = useState(0);
   const [loading, setLoading] = useState(true);
@@ -186,12 +194,13 @@ export default function HoaDonDauVaoPage() {
       search,
       filters: {
         ...(statusFilter !== "all" && { status: statusFilter }),
+        ...(activeBranchId && { branchId: activeBranchId }),
       },
     });
     setData(result.data);
     setTotal(result.total);
     setLoading(false);
-  }, [page, pageSize, search, statusFilter]);
+  }, [page, pageSize, search, statusFilter, activeBranchId]);
 
   useEffect(() => {
     fetchData();
@@ -200,7 +209,7 @@ export default function HoaDonDauVaoPage() {
   useEffect(() => {
     setPage(0);
     setExpandedRow(null);
-  }, [search, statusFilter]);
+  }, [search, statusFilter, activeBranchId]);
 
   return (
     <ListPageLayout
