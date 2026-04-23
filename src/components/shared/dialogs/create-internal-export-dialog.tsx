@@ -14,10 +14,7 @@ import { Button } from "@/components/ui/button";
 import { formatCurrency } from "@/lib/format";
 import { useToast } from "@/lib/contexts";
 import { getClient } from "@/lib/services/supabase/base";
-import {
-  applyManualStockMovement,
-  nextEntityCode,
-} from "@/lib/services/supabase/stock-adjustments";
+import { createInternalExport } from "@/lib/services/supabase/inventory";
 import { Icon } from "@/components/ui/icon";
 
 interface CreateInternalExportDialogProps {
@@ -147,24 +144,28 @@ export function CreateInternalExportDialog({
     saveLockRef.current = true;
     setSaving(true);
     try {
-      // Generate the real code via RPC at save-time (atomic, monotonic)
-      const realCode = await nextEntityCode("internal_export");
-      setCode(realCode);
-
-      await applyManualStockMovement(
-        items.map((item) => ({
+      // Dùng service createInternalExport — insert header + items + stock-out
+      // atomically(ish) để list view /xuat-dung-noi-bo hiển thị phiếu vừa tạo.
+      // Trước đây chỉ gọi applyManualStockMovement → stock ghi nhưng header
+      // internal_exports rỗng → phiếu "ghost" (ledger có, không có record quản lý).
+      const notePayload = notes.trim() ? notes.trim() : undefined;
+      const result = await createInternalExport({
+        department: destination,
+        note: notePayload,
+        items: items.map((item) => ({
           productId: item.product_id,
+          productName: item.product_name,
+          unit: item.unit,
           quantity: item.quantity,
-          type: "out",
-          referenceType: "internal_export",
-          note: `${realCode} - Xuất nội bộ - ${destination}${notes ? ` - ${notes}` : ""}`,
-        }))
-      );
+          unitPrice: item.cost_price,
+        })),
+      });
+      setCode(result.code);
 
       onOpenChange(false);
       toast({
         title: "Tạo phiếu xuất nội bộ thành công",
-        description: `Đã tạo phiếu xuất nội bộ ${realCode}`,
+        description: `Đã tạo phiếu xuất nội bộ ${result.code}`,
         variant: "success",
       });
       onSuccess?.();

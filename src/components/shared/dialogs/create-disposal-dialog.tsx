@@ -14,10 +14,7 @@ import { Button } from "@/components/ui/button";
 import { formatCurrency } from "@/lib/format";
 import { useToast } from "@/lib/contexts";
 import { getClient } from "@/lib/services/supabase/base";
-import {
-  applyManualStockMovement,
-  nextEntityCode,
-} from "@/lib/services/supabase/stock-adjustments";
+import { createDisposalExport } from "@/lib/services/supabase/inventory";
 import { Icon } from "@/components/ui/icon";
 
 interface CreateDisposalDialogProps {
@@ -146,23 +143,27 @@ export function CreateDisposalDialog({
     saveLockRef.current = true;
     setSaving(true);
     try {
-      const realCode = await nextEntityCode("disposal");
-      setCode(realCode);
-
-      await applyManualStockMovement(
-        items.map((item) => ({
+      // Dùng service createDisposalExport — insert header + items + stock-out
+      // atomically(ish) để list view /xuat-huy hiển thị phiếu vừa tạo. Trước
+      // đây chỉ apply stock → header disposal_exports rỗng → phiếu "ghost".
+      const notePayload = notes.trim() ? notes.trim() : undefined;
+      const result = await createDisposalExport({
+        reason,
+        note: notePayload,
+        items: items.map((item) => ({
           productId: item.product_id,
+          productName: item.product_name,
+          unit: item.unit,
           quantity: item.quantity,
-          type: "out",
-          referenceType: "disposal",
-          note: `${realCode} - Xuất hủy${reason ? ` - ${reason}` : ""}${notes ? ` - ${notes}` : ""}`,
-        }))
-      );
+          unitPrice: item.cost_price,
+        })),
+      });
+      setCode(result.code);
 
       onOpenChange(false);
       toast({
         title: "Tạo phiếu xuất hủy thành công",
-        description: `Đã tạo phiếu xuất hủy ${realCode}`,
+        description: `Đã tạo phiếu xuất hủy ${result.code}`,
         variant: "success",
       });
       onSuccess?.();

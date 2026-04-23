@@ -20,7 +20,7 @@
 
 import type { InventoryCheck, DisposalExport, InternalExport, QueryParams, QueryResult } from "@/lib/types";
 import { getClient, getCurrentContext, getPaginationRange, handleError } from "./base";
-import { applyManualStockMovement } from "./stock-adjustments";
+import { applyManualStockMovement, nextEntityCode } from "./stock-adjustments";
 
 // --- Disposal Exports / Xuất hủy (Supabase) ---
 
@@ -328,6 +328,205 @@ export async function cancelInternalExport(exportId: string): Promise<void> {
     if (!existing) throw new Error("Không tìm thấy phiếu xuất nội bộ");
     throw new Error(`Không thể hủy phiếu ở trạng thái "${existing.status}".`);
   }
+}
+
+// --- Create Internal Export / Xuất nội bộ ---
+
+export interface CreateExportItemInput {
+  productId: string;
+  productName: string;
+  unit: string;
+  quantity: number;
+  /** Giá vốn per unit — dùng để tính total_amount cho P&L. */
+  unitPrice: number;
+}
+
+export interface CreateInternalExportInput {
+  /** Phòng ban / nơi nhận / mục đích sử dụng. */
+  department: string;
+  note?: string;
+  items: CreateExportItemInput[];
+}
+
+/**
+ * Tạo phiếu xuất dùng nội bộ + insert items + apply stock-out trong một luồng.
+ *
+ * Trước đây dialog chỉ gọi applyManualStockMovement → stock_movements có ghi
+ * nhưng header internal_exports không ghi → list view không hiển thị phiếu vừa
+ * tạo (ghost record). Fix: insert header (status='completed') → items → stock.
+ *
+ * NOT atomic cross-table — nếu stock movement fail ở giữa, header/items đã ghi
+ * thì auto-flip status='cancelled' để list không show phiếu hỏng. RPC
+ * transactional sẽ replace trong sprint KHO-2.
+ */
+export async function createInternalExport(
+  input: CreateInternalExportInput
+): Promise<{ id: string; code: string }> {
+  const supabase = getClient();
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  const sb = supabase as any;
+
+  if (input.items.length === 0) {
+    throw new Error("Phiếu xuất nội bộ phải có ít nhất 1 sản phẩm");
+  }
+
+  const ctx = await getCurrentContext();
+  const code = await nextEntityCode("internal_export", { tenantId: ctx.tenantId });
+  const totalAmount = input.items.reduce(
+    (sum, it) => sum + it.quantity * it.unitPrice,
+    0
+  );
+
+  // 1. Header — create as 'completed' (dialog finalize flow, không qua state draft)
+  const { data: header, error: headerErr } = await sb
+    .from("internal_exports")
+    .insert({
+      tenant_id: ctx.tenantId,
+      branch_id: ctx.branchId,
+      code,
+      status: "completed",
+      total_amount: totalAmount,
+      department: input.department,
+      note: input.note ?? null,
+      created_by: ctx.userId,
+    })
+    .select("id, code")
+    .single();
+  if (headerErr) handleError(headerErr, "createInternalExport:header");
+  if (!header) throw new Error("Không tạo được phiếu xuất nội bộ");
+
+  // 2. Items
+  const { error: itemsErr } = await sb.from("internal_export_items").insert(
+    input.items.map((it) => ({
+      export_id: header.id,
+      product_id: it.productId,
+      product_name: it.productName,
+      unit: it.unit,
+      quantity: it.quantity,
+      unit_price: it.unitPrice,
+      total: it.quantity * it.unitPrice,
+    }))
+  );
+  if (itemsErr) {
+    // Rollback: xoá header để list không show phiếu rỗng
+    await sb.from("internal_exports").delete().eq("id", header.id);
+    handleError(itemsErr, "createInternalExport:items");
+  }
+
+  // 3. Stock-out với referenceId = header vừa tạo (để FK + audit trail)
+  try {
+    await applyManualStockMovement(
+      input.items.map((it) => ({
+        productId: it.productId,
+        quantity: it.quantity,
+        type: "out" as const,
+        referenceType: "internal_export",
+        referenceId: header.id,
+        note: `${header.code} - Xuất nội bộ - ${it.productName} (-${it.quantity})`,
+      })),
+      { tenantId: ctx.tenantId, branchId: ctx.branchId, createdBy: ctx.userId }
+    );
+  } catch (err) {
+    // Stock fail → mark cancelled để list không show phiếu "ghost completed"
+    // mà stock chưa cập nhật (tránh CEO thấy phiếu completed nhưng tồn kho lệch).
+    await sb
+      .from("internal_exports")
+      .update({ status: "cancelled" })
+      .eq("id", header.id);
+    throw err;
+  }
+
+  return { id: header.id, code: header.code };
+}
+
+// --- Create Disposal Export / Xuất hủy ---
+
+export interface CreateDisposalExportInput {
+  /** Lý do xuất hủy (hỏng, hết hạn, vỡ...). */
+  reason: string;
+  note?: string;
+  items: CreateExportItemInput[];
+}
+
+/**
+ * Tạo phiếu xuất hủy + insert items + apply stock-out.
+ * Same rationale as createInternalExport above.
+ */
+export async function createDisposalExport(
+  input: CreateDisposalExportInput
+): Promise<{ id: string; code: string }> {
+  const supabase = getClient();
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  const sb = supabase as any;
+
+  if (input.items.length === 0) {
+    throw new Error("Phiếu xuất hủy phải có ít nhất 1 sản phẩm");
+  }
+
+  const ctx = await getCurrentContext();
+  const code = await nextEntityCode("disposal", { tenantId: ctx.tenantId });
+  const totalAmount = input.items.reduce(
+    (sum, it) => sum + it.quantity * it.unitPrice,
+    0
+  );
+
+  // 1. Header
+  const { data: header, error: headerErr } = await sb
+    .from("disposal_exports")
+    .insert({
+      tenant_id: ctx.tenantId,
+      branch_id: ctx.branchId,
+      code,
+      status: "completed",
+      total_amount: totalAmount,
+      reason: input.reason,
+      note: input.note ?? null,
+      created_by: ctx.userId,
+    })
+    .select("id, code")
+    .single();
+  if (headerErr) handleError(headerErr, "createDisposalExport:header");
+  if (!header) throw new Error("Không tạo được phiếu xuất hủy");
+
+  // 2. Items
+  const { error: itemsErr } = await sb.from("disposal_export_items").insert(
+    input.items.map((it) => ({
+      disposal_id: header.id,
+      product_id: it.productId,
+      product_name: it.productName,
+      unit: it.unit,
+      quantity: it.quantity,
+      unit_price: it.unitPrice,
+      total: it.quantity * it.unitPrice,
+    }))
+  );
+  if (itemsErr) {
+    await sb.from("disposal_exports").delete().eq("id", header.id);
+    handleError(itemsErr, "createDisposalExport:items");
+  }
+
+  // 3. Stock-out
+  try {
+    await applyManualStockMovement(
+      input.items.map((it) => ({
+        productId: it.productId,
+        quantity: it.quantity,
+        type: "out" as const,
+        referenceType: "disposal_export",
+        referenceId: header.id,
+        note: `${header.code} - Xuất hủy - ${it.productName} (-${it.quantity})`,
+      })),
+      { tenantId: ctx.tenantId, branchId: ctx.branchId, createdBy: ctx.userId }
+    );
+  } catch (err) {
+    await sb
+      .from("disposal_exports")
+      .update({ status: "cancelled" })
+      .eq("id", header.id);
+    throw err;
+  }
+
+  return { id: header.id, code: header.code };
 }
 
 // --- Inventory Checks (Supabase) ---
