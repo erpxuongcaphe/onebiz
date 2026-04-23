@@ -1,4 +1,4 @@
-export { getProducts, getProductCategories, getProductCategoriesAsync, getProductById, getAllStockMovements, getStockMovements as getProductStockMovements, getSalesHistory, createProduct, updateProduct, deleteProduct, bulkUpdateCategory, bulkUpdatePrice, bulkDeleteProducts } from "./products";
+export { getProducts, getProductStats, getProductCategories, getProductCategoriesAsync, getProductById, getAllStockMovements, getStockMovements as getProductStockMovements, getSalesHistory, createProduct, updateProduct, deleteProduct, bulkUpdateCategory, bulkUpdatePrice, bulkDeleteProducts } from "./products";
 export type { AllStockMovementRow } from "./products";
 export { getCustomers, getCustomerGroups, getCustomerById, createCustomer, updateCustomer, deleteCustomer } from "./customers";
 export { getSuppliers, getSupplierById, createSupplier, updateSupplier, deleteSupplier } from "./suppliers";
@@ -119,7 +119,7 @@ export { getCategoriesByScope, getAllCategories, getCategoriesWithCounts, create
 export { getVariantsByProduct, createVariant, updateVariant, deleteVariant } from "./variants";
 
 // BOM (Production Formulas)
-export { getAllBOMs, getBOMsByProduct, getBOMById, createBOM, updateBOM, deleteBOM, calculateBOMCost } from "./bom";
+export { getAllBOMs, getBOMsByProduct, getBOMById, createBOM, updateBOM, deleteBOM, calculateBOMCost, getBOMProductionHistory } from "./bom";
 
 // Production Orders + Lot Tracking
 export {
@@ -150,7 +150,7 @@ export type { ConsolidatedPnL, BranchPnLRow } from "./reports";
 export { getUOMConversions, createUOMConversion, updateUOMConversion, deleteUOMConversion, convertQuantity } from "./uom";
 
 // Branch Stock
-export { getBranchStock, getBranchStockRows, getBranchStockPage, getBranchStockAggregates, getProductStockByBranch } from "./branch-stock";
+export { getBranchStock, getBranchStockRows, getBranchStockPage, getBranchStockAggregates, getProductStockByBranch, getProductStockBreakdown } from "./branch-stock";
 export type { BranchStockRow } from "./branch-stock";
 
 // Branches (enhanced)

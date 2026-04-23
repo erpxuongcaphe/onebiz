@@ -13,12 +13,26 @@ import {
   FilterGroup,
   SelectFilter,
 } from "@/components/shared/filter-sidebar";
+import {
+  InlineDetailPanel,
+  DetailTabs,
+  DetailHeader,
+  DetailInfoGrid,
+} from "@/components/shared/inline-detail-panel";
 import { Badge } from "@/components/ui/badge";
 import { useToast, useBranchFilter } from "@/lib/contexts";
 import { formatCurrency, formatDate } from "@/lib/format";
 import { exportToCsv } from "@/lib/utils/export";
-import { getBranchStockPage, getBranchStockAggregates, getBranchStockRows, getBranches } from "@/lib/services";
+import {
+  getBranchStockPage,
+  getBranchStockAggregates,
+  getBranchStockRows,
+  getBranches,
+  getProductStockBreakdown,
+  getProductStockMovements,
+} from "@/lib/services";
 import type { BranchStockRow, BranchDetail } from "@/lib/services/supabase";
+import type { StockMovement } from "@/lib/types";
 import { Icon } from "@/components/ui/icon";
 import { ImportExcelDialog } from "@/components/shared/dialogs/import-excel-dialog";
 import { downloadTemplate } from "@/lib/excel";
@@ -27,6 +41,261 @@ import { exportToExcelFromSchema } from "@/lib/excel";
 import { bulkImportInitialStock } from "@/lib/services/supabase/excel-import";
 
 type ProductTypeFilter = "all" | "nvl" | "sku";
+
+// ---------------------------------------------------------------------------
+// Inline detail panel — hiển thị khi click 1 row tồn kho
+//   • Tab "Tồn các chi nhánh" — breakdown cross-branch cho SP này
+//   • Tab "Lịch sử xuất nhập" — 50 movement gần nhất cho SP này
+// ---------------------------------------------------------------------------
+function StockRowDetail({
+  row,
+  onClose,
+}: {
+  row: BranchStockRow;
+  onClose: () => void;
+}) {
+  const [branches, setBranches] = useState<
+    Array<{
+      branchId: string;
+      branchName: string;
+      branchCode?: string;
+      quantity: number;
+      reserved: number;
+      available: number;
+      updatedAt: string;
+    }>
+  >([]);
+  const [movements, setMovements] = useState<StockMovement[]>([]);
+  const [loadingBranches, setLoadingBranches] = useState(true);
+  const [loadingMovements, setLoadingMovements] = useState(true);
+
+  useEffect(() => {
+    let cancelled = false;
+    (async () => {
+      setLoadingBranches(true);
+      try {
+        const bk = await getProductStockBreakdown(row.productId);
+        if (!cancelled) setBranches(bk);
+      } catch {
+        if (!cancelled) setBranches([]);
+      } finally {
+        if (!cancelled) setLoadingBranches(false);
+      }
+    })();
+    (async () => {
+      setLoadingMovements(true);
+      try {
+        const res = await getProductStockMovements(row.productId, {
+          page: 0,
+          pageSize: 50,
+        });
+        if (!cancelled) setMovements(res.data);
+      } catch {
+        if (!cancelled) setMovements([]);
+      } finally {
+        if (!cancelled) setLoadingMovements(false);
+      }
+    })();
+    return () => {
+      cancelled = true;
+    };
+  }, [row.productId]);
+
+  const totalQty = branches.reduce((s, b) => s + b.quantity, 0);
+  const totalReserved = branches.reduce((s, b) => s + b.reserved, 0);
+
+  return (
+    <InlineDetailPanel open onClose={onClose}>
+      <DetailTabs
+        tabs={[
+          {
+            id: "info",
+            label: "Thông tin",
+            content: (
+              <div className="space-y-4">
+                <DetailHeader
+                  title={row.productName}
+                  code={row.productCode}
+                  subtitle={row.variantName ?? row.branchName}
+                />
+                <DetailInfoGrid
+                  fields={[
+                    { label: "Loại", value: (row.productType ?? "—").toUpperCase() },
+                    { label: "Đơn vị", value: row.unit ?? "—" },
+                    {
+                      label: "Tồn tại chi nhánh này",
+                      value: (
+                        <span className="font-semibold">
+                          {row.quantity} {row.unit ?? ""}
+                        </span>
+                      ),
+                    },
+                    {
+                      label: "Đặt trước",
+                      value: `${row.reserved} ${row.unit ?? ""}`,
+                    },
+                    {
+                      label: "Khả dụng",
+                      value: (
+                        <span className="font-semibold">
+                          {row.available} {row.unit ?? ""}
+                        </span>
+                      ),
+                    },
+                    {
+                      label: "Định mức",
+                      value: row.minStock !== undefined ? `${row.minStock} ${row.unit ?? ""}` : "—",
+                    },
+                    {
+                      label: "Giá vốn",
+                      value: row.costPrice ? formatCurrency(row.costPrice) : "—",
+                    },
+                    {
+                      label: "Giá trị tồn",
+                      value: formatCurrency(row.stockValue),
+                    },
+                    { label: "Cập nhật", value: formatDate(row.updatedAt) },
+                  ]}
+                />
+              </div>
+            ),
+          },
+          {
+            id: "branches",
+            label: `Tồn các chi nhánh (${branches.length})`,
+            content: (
+              <div className="space-y-3">
+                {loadingBranches ? (
+                  <div className="text-sm text-muted-foreground py-4 text-center">
+                    Đang tải...
+                  </div>
+                ) : branches.length === 0 ? (
+                  <div className="text-sm text-muted-foreground py-4 text-center">
+                    Chưa ghi nhận tồn ở chi nhánh nào.
+                  </div>
+                ) : (
+                  <div className="border rounded-lg overflow-hidden">
+                    <table className="w-full text-sm">
+                      <thead className="bg-muted/30">
+                        <tr>
+                          <th className="text-left p-2 font-medium">Chi nhánh</th>
+                          <th className="text-right p-2 font-medium">Tồn</th>
+                          <th className="text-right p-2 font-medium">Đặt trước</th>
+                          <th className="text-right p-2 font-medium">Khả dụng</th>
+                          <th className="text-right p-2 font-medium">Cập nhật</th>
+                        </tr>
+                      </thead>
+                      <tbody>
+                        {branches.map((b) => (
+                          <tr key={b.branchId} className="border-t">
+                            <td className="p-2">
+                              <div className="font-medium">{b.branchName}</div>
+                              {b.branchCode && (
+                                <div className="text-xs text-muted-foreground">
+                                  {b.branchCode}
+                                </div>
+                              )}
+                            </td>
+                            <td className="p-2 text-right tabular-nums font-semibold">
+                              {b.quantity}
+                            </td>
+                            <td className="p-2 text-right tabular-nums text-muted-foreground">
+                              {b.reserved}
+                            </td>
+                            <td className="p-2 text-right tabular-nums">
+                              {b.available}
+                            </td>
+                            <td className="p-2 text-right text-xs text-muted-foreground">
+                              {formatDate(b.updatedAt)}
+                            </td>
+                          </tr>
+                        ))}
+                        <tr className="border-t bg-muted/20 font-semibold">
+                          <td className="p-2">Tổng toàn hệ thống</td>
+                          <td className="p-2 text-right tabular-nums">{totalQty}</td>
+                          <td className="p-2 text-right tabular-nums">
+                            {totalReserved}
+                          </td>
+                          <td className="p-2 text-right tabular-nums">
+                            {totalQty - totalReserved}
+                          </td>
+                          <td />
+                        </tr>
+                      </tbody>
+                    </table>
+                  </div>
+                )}
+              </div>
+            ),
+          },
+          {
+            id: "movements",
+            label: `Lịch sử xuất nhập (${movements.length})`,
+            content: (
+              <div className="space-y-2">
+                {loadingMovements ? (
+                  <div className="text-sm text-muted-foreground py-4 text-center">
+                    Đang tải...
+                  </div>
+                ) : movements.length === 0 ? (
+                  <div className="text-sm text-muted-foreground py-4 text-center">
+                    Chưa có lịch sử xuất nhập cho sản phẩm này.
+                  </div>
+                ) : (
+                  <div className="border rounded-lg overflow-hidden">
+                    <table className="w-full text-sm">
+                      <thead className="bg-muted/30">
+                        <tr>
+                          <th className="text-left p-2 font-medium">Thời gian</th>
+                          <th className="text-left p-2 font-medium">Loại</th>
+                          <th className="text-right p-2 font-medium">Số lượng</th>
+                          <th className="text-left p-2 font-medium">Người tạo</th>
+                          <th className="text-left p-2 font-medium">Ghi chú</th>
+                        </tr>
+                      </thead>
+                      <tbody>
+                        {movements.map((m) => (
+                          <tr key={m.id} className="border-t">
+                            <td className="p-2 text-xs text-muted-foreground whitespace-nowrap">
+                              {formatDate(m.date)}
+                            </td>
+                            <td className="p-2">
+                              <Badge variant="outline" className="text-xs">
+                                {m.typeName}
+                              </Badge>
+                            </td>
+                            <td
+                              className={`p-2 text-right tabular-nums font-medium ${
+                                m.type === "import"
+                                  ? "text-success"
+                                  : m.type === "export"
+                                    ? "text-destructive"
+                                    : ""
+                              }`}
+                            >
+                              {m.type === "export" ? "-" : m.type === "import" ? "+" : ""}
+                              {m.quantity}
+                            </td>
+                            <td className="p-2 text-xs">
+                              {m.createdByName || "—"}
+                            </td>
+                            <td className="p-2 text-xs text-muted-foreground max-w-[240px] truncate">
+                              {m.note ?? "—"}
+                            </td>
+                          </tr>
+                        ))}
+                      </tbody>
+                    </table>
+                  </div>
+                )}
+              </div>
+            ),
+          },
+        ]}
+      />
+    </InlineDetailPanel>
+  );
+}
 
 export default function TonKhoPage() {
   const { toast } = useToast();
@@ -54,6 +323,7 @@ export default function TonKhoPage() {
   const [lowStockOnly, setLowStockOnly] = useState<string>("all"); // all | low
 
   const [importOpen, setImportOpen] = useState(false);
+  const [expandedRow, setExpandedRow] = useState<number | null>(null);
 
   const fetchData = useCallback(async () => {
     setLoading(true);
@@ -101,6 +371,7 @@ export default function TonKhoPage() {
 
   useEffect(() => {
     setPage(0);
+    setExpandedRow(null);
   }, [search, branchFilter, typeFilter, lowStockOnly]);
 
   const columns: ColumnDef<BranchStockRow, unknown>[] = [
@@ -359,6 +630,11 @@ export default function TonKhoPage() {
           stockValue: formatCurrency(totalValue),
         }}
         getRowId={(r) => r.id}
+        expandedRow={expandedRow}
+        onExpandedRowChange={setExpandedRow}
+        renderDetail={(stockRow, onClose) => (
+          <StockRowDetail row={stockRow} onClose={onClose} />
+        )}
       />
 
       <ImportExcelDialog

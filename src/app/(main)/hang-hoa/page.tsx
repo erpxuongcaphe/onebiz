@@ -43,12 +43,14 @@ import { exportToExcelFromSchema } from "@/lib/excel";
 import type { ProductImportRow } from "@/lib/excel/schemas";
 import {
   getProducts,
+  getProductStats,
   getProductCategoriesAsync,
   bulkUpdateCategory,
   bulkUpdatePrice,
   bulkDeleteProducts,
   deleteProduct,
 } from "@/lib/services";
+import { SummaryCard } from "@/components/shared/summary-card";
 import { useToast } from "@/lib/contexts";
 import type { Product } from "@/lib/types";
 import { Icon } from "@/components/ui/icon";
@@ -179,6 +181,12 @@ export default function HangHoaPage() {
   const [data, setData] = useState<Product[]>([]);
   const [total, setTotal] = useState(0);
   const [loading, setLoading] = useState(true);
+  const [stats, setStats] = useState<{
+    totalCount: number;
+    stockValue: number;
+    outOfStock: number;
+    lowStock: number;
+  } | null>(null);
   const [search, setSearch] = useState("");
   const [page, setPage] = useState(0);
   const [pageSize, setPageSize] = useState(15);
@@ -265,6 +273,20 @@ export default function HangHoaPage() {
   useEffect(() => {
     fetchData();
   }, [fetchData]);
+
+  // Fetch stats KPI (totalCount, stockValue, outOfStock, lowStock) theo scope
+  const fetchStats = useCallback(async () => {
+    try {
+      const s = await getProductStats(scope);
+      setStats(s);
+    } catch {
+      // silent fail — KPI không critical cho page
+    }
+  }, [scope]);
+
+  useEffect(() => {
+    fetchStats();
+  }, [fetchStats, data]);
 
   // ============================================================
   // Bulk action handlers — gọi mutation, toast, refetch, clear
@@ -729,6 +751,32 @@ export default function HangHoaPage() {
             },
           ]}
         />
+
+        <div className="grid grid-cols-2 md:grid-cols-4 gap-3 px-4 pt-3 pb-1">
+          <SummaryCard
+            icon={<Icon name="inventory_2" size={16} />}
+            label={scope === "nvl" ? "Tổng NVL" : "Tổng hàng bán"}
+            value={stats ? stats.totalCount.toLocaleString("vi-VN") : "—"}
+          />
+          <SummaryCard
+            icon={<Icon name="savings" size={16} />}
+            label="Giá trị tồn kho"
+            value={stats ? formatCurrency(stats.stockValue) : "—"}
+            highlight
+          />
+          <SummaryCard
+            icon={<Icon name="remove_shopping_cart" size={16} />}
+            label="Hết hàng"
+            value={stats ? stats.outOfStock.toLocaleString("vi-VN") : "—"}
+            danger={(stats?.outOfStock ?? 0) > 0}
+          />
+          <SummaryCard
+            icon={<Icon name="warning" size={16} />}
+            label="Sắp hết (≤ 5)"
+            value={stats ? stats.lowStock.toLocaleString("vi-VN") : "—"}
+            danger={(stats?.lowStock ?? 0) > 0}
+          />
+        </div>
 
         <DataTable
           columns={columns}

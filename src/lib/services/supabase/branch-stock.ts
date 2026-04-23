@@ -251,3 +251,51 @@ export async function getProductStockByBranch(productId: string) {
   if (error) throw error;
   return data ?? [];
 }
+
+/**
+ * Lấy breakdown tồn kho của 1 sản phẩm ở TẤT CẢ chi nhánh (bao gồm 0 tồn) —
+ * kèm branchName + branchCode + reserved + available. Dùng cho detail panel.
+ */
+export async function getProductStockBreakdown(
+  productId: string,
+): Promise<Array<{
+  branchId: string;
+  branchName: string;
+  branchCode?: string;
+  quantity: number;
+  reserved: number;
+  available: number;
+  updatedAt: string;
+}>> {
+  const { data, error } = await supabase
+    .from("branch_stock")
+    .select(
+      `
+      branch_id,
+      quantity,
+      reserved,
+      updated_at,
+      branches:branch_id ( id, name, code )
+      `,
+    )
+    .eq("product_id", productId)
+    .order("quantity", { ascending: false });
+
+  if (error) throw error;
+
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  return (data ?? []).map((row: any) => {
+    const qty = Number(row.quantity ?? 0);
+    const reserved = Number(row.reserved ?? 0);
+    const branch = row.branches ?? {};
+    return {
+      branchId: row.branch_id,
+      branchName: branch.name ?? "—",
+      branchCode: branch.code ?? undefined,
+      quantity: qty,
+      reserved,
+      available: qty - reserved,
+      updatedAt: row.updated_at,
+    };
+  });
+}

@@ -74,6 +74,58 @@ export async function getProducts(params: QueryParams): Promise<QueryResult<Prod
 }
 
 /**
+ * Aggregate stats cho list page Hàng hoá — hiển thị 4 SummaryCard đầu trang.
+ *
+ * Trả về:
+ *   - totalCount  : tổng số SP theo scope
+ *   - stockValue  : tổng giá trị tồn kho (sum stock × cost_price)
+ *   - outOfStock  : số SP hết hàng (stock = 0)
+ *   - lowStock    : số SP sắp hết (0 < stock ≤ 5)
+ *
+ * Dùng 1 query lightweight (`select stock, cost_price`) và reduce client-side.
+ * Với 5000 SP payload ~50KB — acceptable cho go-live. Nếu scale lớn hơn thì
+ * chuyển sang Postgres RPC function (xem comment trong body).
+ */
+export async function getProductStats(scope: "nvl" | "sku" | "all" = "all"): Promise<{
+  totalCount: number;
+  stockValue: number;
+  outOfStock: number;
+  lowStock: number;
+}> {
+  const supabase = getClient();
+  let query = supabase
+    .from("products")
+    .select("stock, cost_price", { count: "exact" })
+    .eq("is_active", true);
+
+  if (scope !== "all") {
+    query = query.eq("product_type", scope);
+  }
+
+  const { data, count, error } = await query;
+  if (error) handleError(error, "getProductStats");
+
+  let stockValue = 0;
+  let outOfStock = 0;
+  let lowStock = 0;
+
+  for (const row of data ?? []) {
+    const stock = Number((row as { stock: number | null }).stock ?? 0);
+    const cost = Number((row as { cost_price: number | null }).cost_price ?? 0);
+    stockValue += stock * cost;
+    if (stock === 0) outOfStock++;
+    else if (stock <= 5) lowStock++;
+  }
+
+  return {
+    totalCount: count ?? 0,
+    stockValue,
+    outOfStock,
+    lowStock,
+  };
+}
+
+/**
  * Get product categories synchronously (empty fallback).
  * Used at module level where async isn't possible.
  * For real data, use getProductCategoriesAsync().

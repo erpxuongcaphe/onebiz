@@ -6,15 +6,70 @@ import type { BOM, BOMItem, BOMCostBreakdown } from "@/lib/types";
 
 const supabase = createClient();
 
-export async function getAllBOMs(): Promise<BOM[]> {
-  const { data, error } = await supabase
+export async function getAllBOMs(params?: {
+  /** Filter: chỉ lấy BOM đã được sử dụng tại chi nhánh này (join production_orders). */
+  usedAtBranchId?: string;
+}): Promise<BOM[]> {
+  let query = supabase
     .from("bom")
     .select("*, products!bom_product_id_fkey(name, code)")
     .eq("is_active", true)
     .order("created_at", { ascending: false });
 
+  // Nếu có filter branch → chỉ trả BOM có ít nhất 1 production_order tại branch đó.
+  if (params?.usedAtBranchId) {
+    const { data: bomIds, error: poErr } = await supabase
+      .from("production_orders")
+      .select("bom_id")
+      .eq("branch_id", params.usedAtBranchId);
+    if (poErr) throw poErr;
+    const uniqueIds = Array.from(new Set((bomIds ?? []).map((r) => r.bom_id as string).filter(Boolean)));
+    if (uniqueIds.length === 0) return [];
+    query = query.in("id", uniqueIds);
+  }
+
+  const { data, error } = await query;
   if (error) throw error;
   return (data ?? []).map((row) => mapBOM(row as Record<string, unknown>));
+}
+
+/**
+ * Lấy lịch sử production orders đã sử dụng 1 BOM.
+ * Dùng cho tab "Lịch sử sản xuất" trên slide-over detail của BOM.
+ */
+export async function getBOMProductionHistory(
+  bomId: string,
+  limit = 30,
+): Promise<Array<{
+  id: string;
+  code: string;
+  branchId: string;
+  branchName?: string;
+  plannedQty: number;
+  completedQty: number;
+  status: string;
+  createdAt: string;
+}>> {
+  const { data, error } = await supabase
+    .from("production_orders")
+    .select("id, code, branch_id, planned_qty, completed_qty, status, created_at, branches:branch_id(name)")
+    .eq("bom_id", bomId)
+    .order("created_at", { ascending: false })
+    .limit(limit);
+
+  if (error) throw error;
+
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  return (data ?? []).map((row: any) => ({
+    id: row.id,
+    code: row.code,
+    branchId: row.branch_id,
+    branchName: (row.branches as { name?: string } | null)?.name,
+    plannedQty: Number(row.planned_qty ?? 0),
+    completedQty: Number(row.completed_qty ?? 0),
+    status: row.status,
+    createdAt: row.created_at,
+  }));
 }
 
 export async function getBOMsByProduct(productId: string): Promise<BOM[]> {
