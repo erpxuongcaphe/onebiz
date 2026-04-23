@@ -73,15 +73,40 @@ function DropdownMenuLabel({
   )
 }
 
+/**
+ * DropdownMenuItem — wrapper over base-ui Menu.Item.
+ *
+ * @base-ui/react's Menu.Item CHỈ có `onClick`, không có `onSelect` (khác Radix).
+ * Để tương thích với code cũ (và pattern Radix quen thuộc), wrapper này nhận
+ * thêm prop `onSelect` và map nó sang `onClick`. Nếu cả hai cùng có, cả hai
+ * được gọi (onClick trước, sau đó onSelect).
+ *
+ * BUG lịch sử: nhiều file dùng `onSelect={() => router.push(...)}` trên base-ui
+ * → callback bị silent drop, menu đóng mà không navigate ("web đứng yên").
+ */
 function DropdownMenuItem({
   className,
   inset,
   variant = "default",
+  onSelect,
+  onClick,
   ...props
 }: MenuPrimitive.Item.Props & {
   inset?: boolean
   variant?: "default" | "destructive"
+  /** Alias cho onClick — Radix-style callback. */
+  onSelect?: () => void
 }) {
+  const handleClick = React.useCallback<
+    NonNullable<MenuPrimitive.Item.Props["onClick"]>
+  >(
+    (event) => {
+      if (onClick) onClick(event);
+      if (onSelect) onSelect();
+    },
+    [onClick, onSelect]
+  );
+
   return (
     <MenuPrimitive.Item
       data-slot="dropdown-menu-item"
@@ -92,6 +117,7 @@ function DropdownMenuItem({
         className
       )}
       {...props}
+      onClick={handleClick}
     />
   )
 }
