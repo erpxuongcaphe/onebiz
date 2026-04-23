@@ -82,6 +82,7 @@ export function FnbOrderHistoryDialog({
         subtotal: detail.total - detail.tipAmount + detail.discountAmount,
         discountAmount: detail.discountAmount,
         deliveryFee: 0,
+        tipAmount: detail.tipAmount,
         total: detail.total,
         createdAt: detail.createdAt,
         cashierName,

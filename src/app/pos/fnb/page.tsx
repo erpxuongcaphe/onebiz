@@ -24,6 +24,7 @@ import {
   hapticError,
 } from "@/lib/offline";
 import { splitByItems, splitEqually } from "@/lib/services/supabase/split-bill";
+import { validateCoupon } from "@/lib/services/supabase/coupons";
 import { getKitchenOrderById, cancelKitchenOrder, transferTable as transferTableService } from "@/lib/services/supabase/kitchen-orders";
 import { getOpenShift, openShift, closeShift } from "@/lib/services/supabase/shifts";
 import { getClient } from "@/lib/services/supabase/base";
@@ -95,6 +96,11 @@ function FnbPosPageInner() {
   const [orderHistoryOpen, setOrderHistoryOpen] = useState(false);
   const [voidConfirmOpen, setVoidConfirmOpen] = useState(false);
   const [transferTableOpen, setTransferTableOpen] = useState(false);
+
+  // Voucher / coupon state — áp mã khuyến mãi cho đơn hiện tại.
+  // couponApplied null = chưa áp. Khi áp, set orderDiscount = { mode: amount, value: discount }.
+  const [couponApplied, setCouponApplied] = useState<{ code: string; discount: number } | null>(null);
+  const [couponApplying, setCouponApplying] = useState(false);
 
   const branchId = currentBranch?.id;
   const tenantId = tenant?.id ?? "";
@@ -490,6 +496,59 @@ function FnbPosPageInner() {
     }
   }, [pos, tenantId, branchId, userId, toast, settings, user, networkStatus.isOnline]);
 
+  // ── Voucher / Coupon apply ──
+  // Khi áp mã thành công, set orderDiscount = { mode: amount, value: discount }.
+  // Nếu user xoá mã hoặc đổi tab, coupon reset.
+  const handleApplyCoupon = useCallback(async (code: string) => {
+    if (!pos.activeTabId || !pos.activeTab) return;
+    const subtotal = pos.subtotal;
+    if (subtotal <= 0) {
+      toast({ title: "Đơn trống", description: "Thêm món trước khi áp mã.", variant: "warning" });
+      return;
+    }
+    setCouponApplying(true);
+    try {
+      const result = await validateCoupon(code, subtotal, pos.activeTab.customerId);
+      if (!result.valid || !result.discount_amount || result.discount_amount <= 0) {
+        toast({
+          title: "Mã không hợp lệ",
+          description: result.error ?? "Kiểm tra lại mã hoặc điều kiện áp dụng.",
+          variant: "error",
+        });
+        return;
+      }
+      pos.setOrderDiscount(pos.activeTabId, {
+        mode: "amount",
+        value: result.discount_amount,
+      });
+      setCouponApplied({ code, discount: result.discount_amount });
+      toast({
+        title: "Áp mã thành công",
+        description: `Giảm ${new Intl.NumberFormat("vi-VN").format(result.discount_amount)} ₫ cho đơn.`,
+        variant: "success",
+      });
+    } catch (err) {
+      toast({
+        title: "Áp mã thất bại",
+        description: (err as Error).message,
+        variant: "error",
+      });
+    } finally {
+      setCouponApplying(false);
+    }
+  }, [pos, toast]);
+
+  const handleRemoveCoupon = useCallback(() => {
+    if (!pos.activeTabId) return;
+    pos.setOrderDiscount(pos.activeTabId, undefined);
+    setCouponApplied(null);
+  }, [pos]);
+
+  // Reset coupon khi đổi tab (mỗi tab có discount riêng).
+  useEffect(() => {
+    setCouponApplied(null);
+  }, [pos.activeTabId]);
+
   // ── Print pre-bill ──
   const handlePrintPreBill = useCallback(() => {
     const tab = pos.activeTab;
@@ -575,6 +634,7 @@ function FnbPosPageInner() {
               subtotal: pos.subtotal,
               discountAmount: pos.orderDiscountAmount,
               deliveryFee: 0,
+              tipAmount,
               total: pos.total + tipAmount,
               createdAt: new Date().toISOString(),
               cashierName: user?.fullName,
@@ -1119,6 +1179,10 @@ function FnbPosPageInner() {
           onVoidKitchenOrder={() => setVoidConfirmOpen(true)}
           onTransferTable={() => setTransferTableOpen(true)}
           onOrderHistory={() => setOrderHistoryOpen(true)}
+          onApplyCoupon={handleApplyCoupon}
+          onRemoveCoupon={handleRemoveCoupon}
+          appliedCouponCode={couponApplied?.code}
+          couponApplying={couponApplying}
         />
       </div>
 
@@ -1243,6 +1307,10 @@ function FnbPosPageInner() {
               onVoidKitchenOrder={() => setVoidConfirmOpen(true)}
               onTransferTable={() => setTransferTableOpen(true)}
               onOrderHistory={() => setOrderHistoryOpen(true)}
+              onApplyCoupon={handleApplyCoupon}
+              onRemoveCoupon={handleRemoveCoupon}
+              appliedCouponCode={couponApplied?.code}
+              couponApplying={couponApplying}
               mobile
             />
           </div>

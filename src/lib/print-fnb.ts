@@ -46,6 +46,8 @@ export interface FnbReceiptData extends PreBillData {
   paid: number;
   change: number;
   customerName?: string;
+  /** Tiền tip khách cho — hiển thị tách riêng trên hoá đơn (đã cộng vào total). */
+  tipAmount?: number;
   /** Receipt style from settings */
   receiptStyle?: "minimal" | "standard" | "full";
   showBarcode?: boolean;
@@ -281,6 +283,7 @@ ${itemsHtml ? `<table>${itemsHtml}</table><div class="line"></div>` : ""}
   ${style !== "minimal" ? `<tr><td>Tạm tính</td><td class="right">${formatCurrency(data.subtotal)}</td></tr>` : ""}
   ${data.discountAmount > 0 ? `<tr><td>Giảm giá</td><td class="right">-${formatCurrency(data.discountAmount)}</td></tr>` : ""}
   ${data.deliveryFee > 0 ? `<tr><td>Phí giao hàng</td><td class="right">${formatCurrency(data.deliveryFee)}</td></tr>` : ""}
+  ${(data.tipAmount ?? 0) > 0 ? `<tr><td>Tiền tip</td><td class="right">+${formatCurrency(data.tipAmount ?? 0)}</td></tr>` : ""}
   <tr class="bold"><td style="font-size:16px;padding-top:4px">TỔNG CỘNG</td><td class="right" style="font-size:16px;padding-top:4px">${formatCurrency(data.total)}</td></tr>
 </table>
 
@@ -324,6 +327,7 @@ ${data.footer ? `<div class="footer-text">${data.footer}</div>` : ""}
     subtotal: data.subtotal,
     discountAmount: data.discountAmount,
     deliveryFee: data.deliveryFee,
+    tipAmount: data.tipAmount,
     total: data.total,
     paid: data.paid,
     change: data.change,

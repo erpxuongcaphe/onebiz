@@ -32,6 +32,12 @@ interface FnbCartProps {
   onTransferTable?: () => void;
   /** Lịch sử đơn — mở modal danh sách hoá đơn hôm nay + reprint. */
   onOrderHistory?: () => void;
+  /** Voucher apply — nếu có, hiển thị input áp mã khuyến mãi.
+   *  Callback nên gọi validateCoupon RPC + setOrderDiscount khi thành công. */
+  onApplyCoupon?: (code: string) => Promise<void> | void;
+  onRemoveCoupon?: () => void;
+  appliedCouponCode?: string;
+  couponApplying?: boolean;
   /** When true, show full-width (no hidden lg:flex) */
   mobile?: boolean;
 }
@@ -59,6 +65,10 @@ export function FnbCart({
   onVoidKitchenOrder,
   onTransferTable,
   onOrderHistory,
+  onApplyCoupon,
+  onRemoveCoupon,
+  appliedCouponCode,
+  couponApplying,
   mobile,
 }: FnbCartProps) {
   const lines = activeTab?.lines ?? [];
@@ -231,6 +241,16 @@ export function FnbCart({
           </div>
         )}
 
+        {/* Voucher / Coupon row */}
+        {!isEmpty && onApplyCoupon && (
+          <CouponRow
+            appliedCode={appliedCouponCode}
+            applying={couponApplying}
+            onApply={onApplyCoupon}
+            onRemove={onRemoveCoupon}
+          />
+        )}
+
         {/* Total — Stitch style: bold xl primary */}
         <div className="flex items-center justify-between border-t border-outline-variant/20 pt-3">
           <span className="text-sm font-semibold text-foreground">Khách cần trả</span>
@@ -296,6 +316,91 @@ export function FnbCart({
           </button>
         </div>
       </div>
+    </div>
+  );
+}
+
+function CouponRow({
+  appliedCode,
+  applying,
+  onApply,
+  onRemove,
+}: {
+  appliedCode?: string;
+  applying?: boolean;
+  onApply: (code: string) => Promise<void> | void;
+  onRemove?: () => void;
+}) {
+  const [code, setCode] = useState("");
+
+  if (appliedCode) {
+    return (
+      <div className="flex items-center gap-1.5">
+        <span className="text-xs text-muted-foreground shrink-0">Mã</span>
+        <div className="flex-1 min-w-0 flex items-center gap-1.5 px-2.5 h-9 md:h-7 rounded bg-status-success/10 border border-status-success/30">
+          <Icon name="local_offer" size={14} className="text-status-success shrink-0" />
+          <span className="text-xs font-semibold text-status-success truncate tabular-nums">
+            {appliedCode}
+          </span>
+        </div>
+        {onRemove && (
+          <button
+            type="button"
+            onClick={onRemove}
+            className="h-9 w-9 md:h-7 md:w-7 rounded border border-border bg-surface-container-low text-muted-foreground hover:text-status-error hover:border-status-error flex items-center justify-center shrink-0 transition-colors"
+            title="Bỏ mã khuyến mãi"
+            aria-label="Bỏ mã"
+          >
+            <Icon name="close" size={14} />
+          </button>
+        )}
+      </div>
+    );
+  }
+
+  const handleApply = async () => {
+    const trimmed = code.trim();
+    if (!trimmed || applying) return;
+    await onApply(trimmed);
+    setCode("");
+  };
+
+  return (
+    <div className="flex items-center gap-1.5">
+      <span className="text-xs text-muted-foreground shrink-0">Mã</span>
+      <Input
+        type="text"
+        value={code}
+        onChange={(e) => setCode(e.target.value.toUpperCase().slice(0, 20))}
+        onKeyDown={(e) => {
+          if (e.key === "Enter") {
+            e.preventDefault();
+            void handleApply();
+          }
+        }}
+        placeholder="Nhập mã khuyến mãi"
+        disabled={applying}
+        className="h-9 md:h-7 text-sm md:text-xs flex-1 min-w-0 font-mono uppercase tracking-wider"
+      />
+      <button
+        type="button"
+        onClick={handleApply}
+        disabled={!code.trim() || applying}
+        className={cn(
+          "h-9 md:h-7 px-2.5 rounded border text-xs font-semibold shrink-0 transition-colors",
+          code.trim() && !applying
+            ? "bg-primary text-on-primary border-primary hover:bg-primary-hover"
+            : "bg-surface-container-low text-muted-foreground border-border opacity-60"
+        )}
+        title="Áp dụng mã"
+        aria-label="Áp mã"
+      >
+        {applying ? (
+          <Icon name="progress_activity" size={14} className="animate-spin" />
+        ) : (
+          "Áp"
+        )}
+      </button>
     </div>
   );
 }

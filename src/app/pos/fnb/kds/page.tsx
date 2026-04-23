@@ -119,6 +119,10 @@ function KdsPageInner() {
   const [soundOn, setSoundOn] = useState(true);
   const [now, setNow] = useState(Date.now());
   const [realtimeConnected, setRealtimeConnected] = useState(false);
+  // Offline indicator: track last successful fetch + current error state.
+  // Banner shows khi hoặc fetch vừa lỗi HOẶC chưa thấy update > 60s (stale).
+  const [fetchError, setFetchError] = useState<string | null>(null);
+  const [lastFetchAt, setLastFetchAt] = useState<number | null>(null);
   const prevOrderIdsRef = useRef<Set<string>>(new Set());
   const overdueAlertedRef = useRef<Set<string>>(new Set());
   const fetchErrorShownRef = useRef(false);
@@ -158,8 +162,12 @@ function KdsPageInner() {
 
       setOrders(enriched);
       fetchErrorShownRef.current = false;
+      setFetchError(null);
+      setLastFetchAt(Date.now());
     } catch (err) {
       console.error("KDS fetchOrders error:", err);
+      const msg = (err as Error).message ?? "Lỗi không xác định";
+      setFetchError(msg);
       if (!fetchErrorShownRef.current) {
         fetchErrorShownRef.current = true;
         toast({
@@ -477,10 +485,14 @@ function KdsPageInner() {
               <span
                 className={cn(
                   "size-2 rounded-full",
-                  realtimeConnected ? "bg-status-success animate-pulse" : "bg-pos-chrome-fg-dim"
+                  fetchError
+                    ? "bg-status-error animate-pulse"
+                    : realtimeConnected
+                      ? "bg-status-success animate-pulse"
+                      : "bg-status-warning"
                 )}
               />
-              {realtimeConnected ? "Live" : "Polling"} · {filtered.length} đơn
+              {fetchError ? "Offline" : realtimeConnected ? "Live" : "Polling"} · {filtered.length} đơn
             </span>
           </div>
           <div className="hidden lg:block">
@@ -525,6 +537,35 @@ function KdsPageInner() {
           </button>
         </div>
       </header>
+
+      {/* Offline / connection alert banner — hiện khi fetch lỗi hoặc stale data > 90s
+          Để bếp biết ngay không cần check header nhỏ. Khi online lại thì biến mất. */}
+      {(fetchError || (!realtimeConnected && lastFetchAt !== null && now - lastFetchAt > 90_000)) && (
+        <div className="bg-status-warning/15 border-b-2 border-status-warning px-4 md:px-8 py-2.5 flex items-center gap-3 shrink-0">
+          <div className="size-8 rounded-full bg-status-warning/30 flex items-center justify-center shrink-0 animate-pulse">
+            <Icon name="wifi_off" size={18} className="text-status-warning" />
+          </div>
+          <div className="flex-1 min-w-0">
+            <div className="font-semibold text-sm text-status-warning">
+              {fetchError ? "Lỗi tải đơn bếp" : "Mất kết nối realtime"}
+            </div>
+            <div className="text-xs text-pos-chrome-fg-dim">
+              {fetchError
+                ? `${fetchError}. Đang thử lại mỗi 30s — kiểm tra mạng hoặc Supabase.`
+                : `Chưa update ${Math.floor((now - (lastFetchAt ?? now)) / 1000)}s. Poll 30s vẫn chạy — món mới có thể chậm.`}
+            </div>
+          </div>
+          <button
+            type="button"
+            onClick={() => fetchOrders()}
+            className="shrink-0 px-3 py-1.5 rounded-lg bg-status-warning/25 hover:bg-status-warning/35 text-status-warning font-semibold text-xs flex items-center gap-1.5 transition-colors press-scale-sm"
+            title="Tải lại ngay"
+          >
+            <Icon name="refresh" size={14} />
+            Tải lại
+          </button>
+        </div>
+      )}
 
       {/* Filter pills — mobile row (outside header) */}
       <div className="flex sm:hidden items-center gap-1 bg-pos-chrome-bg/60 mx-3 mt-3 p-1 rounded-xl overflow-x-auto no-scrollbar border border-pos-chrome-border/40 shrink-0">

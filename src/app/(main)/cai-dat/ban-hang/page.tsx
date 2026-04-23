@@ -81,6 +81,14 @@ export default function SalesSettingsPage() {
     String(settings.sales.maxDiscount)
   );
 
+  const [supervisorPin, setSupervisorPin] = useState(
+    settings.sales.supervisorPin
+  );
+  const [supervisorDiscountAmountThreshold, setSupervisorDiscountAmountThreshold] = useState(
+    String(settings.sales.supervisorDiscountAmountThreshold)
+  );
+  const [showPin, setShowPin] = useState(false);
+
   const [paymentCash, setPaymentCash] = useState(
     settings.sales.paymentMethods.cash
   );
@@ -95,6 +103,26 @@ export default function SalesSettingsPage() {
   );
 
   function handleSave() {
+    // Validate PIN: 4-8 chữ số hoặc rỗng (tắt)
+    const pinTrimmed = supervisorPin.trim();
+    if (pinTrimmed && !/^\d{4,8}$/.test(pinTrimmed)) {
+      toast({
+        title: "Mã PIN không hợp lệ",
+        description: "PIN phải là 4-8 chữ số, hoặc để trống để tắt xác thực.",
+        variant: "error",
+      });
+      return;
+    }
+    const thresholdNum = Number(supervisorDiscountAmountThreshold);
+    if (pinTrimmed && (!Number.isFinite(thresholdNum) || thresholdNum < 0)) {
+      toast({
+        title: "Ngưỡng chiết khấu không hợp lệ",
+        description: "Nhập số tiền VND lớn hơn hoặc bằng 0.",
+        variant: "error",
+      });
+      return;
+    }
+
     updateSettings("sales", {
       allowSellOutOfStock,
       requireCustomer,
@@ -102,6 +130,8 @@ export default function SalesSettingsPage() {
       showCostOnPos,
       discountType,
       maxDiscount: Number(maxDiscount),
+      supervisorPin: pinTrimmed,
+      supervisorDiscountAmountThreshold: thresholdNum || 0,
       paymentMethods: {
         cash: paymentCash,
         transfer: paymentTransfer,
@@ -188,6 +218,75 @@ export default function SalesSettingsPage() {
                 min={0}
                 max={100}
               />
+            </div>
+          </div>
+        </CardContent>
+      </Card>
+
+      <Card>
+        <CardHeader>
+          <CardTitle>Xác thực người quản lý (Supervisor PIN)</CardTitle>
+        </CardHeader>
+        <CardContent>
+          <div className="space-y-4">
+            <div className="text-xs text-muted-foreground leading-relaxed">
+              Khi bật, các chiết khấu vượt ngưỡng trên POS Retail sẽ yêu cầu nhập
+              mã PIN của người quản lý để duyệt. Sau 5 lần nhập sai, dialog sẽ
+              khoá — nhân viên phải gọi quản lý. Để trống mã PIN để <strong>tắt</strong> tính năng.
+            </div>
+
+            <div className="grid gap-4 sm:grid-cols-2">
+              <div className="space-y-2">
+                <label className="text-sm font-medium flex items-center gap-1">
+                  <Icon name="lock" size={14} className="text-muted-foreground" />
+                  Mã PIN (4-8 chữ số)
+                </label>
+                <div className="relative">
+                  <Input
+                    type={showPin ? "text" : "password"}
+                    value={supervisorPin}
+                    onChange={(e) => setSupervisorPin(e.target.value.replace(/\D/g, "").slice(0, 8))}
+                    placeholder="Để trống = tắt"
+                    maxLength={8}
+                    inputMode="numeric"
+                    autoComplete="off"
+                    className="pr-10 font-mono tracking-widest"
+                  />
+                  <button
+                    type="button"
+                    onClick={() => setShowPin((v) => !v)}
+                    className="absolute right-2 top-1/2 -translate-y-1/2 text-muted-foreground hover:text-foreground p-1"
+                    aria-label={showPin ? "Ẩn PIN" : "Hiện PIN"}
+                  >
+                    <Icon name={showPin ? "visibility_off" : "visibility"} size={16} />
+                  </button>
+                </div>
+                <div className="text-[11px] text-muted-foreground">
+                  {supervisorPin ? "✓ PIN đang bật" : "PIN tắt — không yêu cầu xác thực"}
+                </div>
+              </div>
+
+              <div className="space-y-2">
+                <label className="text-sm font-medium">
+                  Ngưỡng chiết khấu cần PIN (VND)
+                </label>
+                <Input
+                  type="number"
+                  value={supervisorDiscountAmountThreshold}
+                  onChange={(e) => setSupervisorDiscountAmountThreshold(e.target.value)}
+                  min={0}
+                  step={10000}
+                  placeholder="500000"
+                  disabled={!supervisorPin}
+                />
+                <div className="text-[11px] text-muted-foreground">
+                  Chiết khấu {">"}{" "}
+                  <span className="font-semibold tabular-nums">
+                    {Number(supervisorDiscountAmountThreshold || 0).toLocaleString("vi-VN")} ₫
+                  </span>{" "}
+                  mới cần PIN. Mặc định 500.000 ₫.
+                </div>
+              </div>
             </div>
           </div>
         </CardContent>

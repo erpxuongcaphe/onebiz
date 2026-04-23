@@ -60,6 +60,8 @@ export interface PrintReceiptPayload {
   discountAmount?: number;
   deliveryFee?: number;
   taxAmount?: number;
+  /** Tiền tip FnB — hiển thị tách riêng trên phiếu (đã cộng vào total). */
+  tipAmount?: number;
   total: number;
   paid: number;
   change?: number;
@@ -181,6 +183,9 @@ function buildReceiptBytes(payload: PrintReceiptPayload): Uint8Array {
   if (payload.taxAmount && payload.taxAmount > 0) {
     builder.textTwoColumns("VAT:", formatVnd(payload.taxAmount));
   }
+  if (payload.tipAmount && payload.tipAmount > 0) {
+    builder.textTwoColumns("Tien tip:", `+${formatVnd(payload.tipAmount)}`);
+  }
 
   builder.bold(true).size("double");
   builder.textTwoColumns("TONG:", formatVnd(payload.total));
@@ -271,6 +276,7 @@ ${payload.tableName ? `<div>Bàn: ${escapeHtml(payload.tableName)}</div>` : ""}
   ${payload.discountAmount ? `<tr><td>Giảm giá:</td><td class="right">-${formatVnd(payload.discountAmount)}</td></tr>` : ""}
   ${payload.deliveryFee ? `<tr><td>Phí giao:</td><td class="right">${formatVnd(payload.deliveryFee)}</td></tr>` : ""}
   ${payload.taxAmount ? `<tr><td>VAT:</td><td class="right">${formatVnd(payload.taxAmount)}</td></tr>` : ""}
+  ${payload.tipAmount && payload.tipAmount > 0 ? `<tr><td>Tiền tip:</td><td class="right">+${formatVnd(payload.tipAmount)}</td></tr>` : ""}
   <tr class="bold big"><td>TỔNG:</td><td class="right">${formatVnd(payload.total)}</td></tr>
 </table>
 <div style="margin-top:6px">
