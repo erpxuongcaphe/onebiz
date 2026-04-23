@@ -17,7 +17,10 @@ export async function getProducts(params: QueryParams): Promise<QueryResult<Prod
 
   let query = supabase
     .from("products")
-    .select("*, categories!products_category_id_fkey(name)", { count: "exact" });
+    .select(
+      "*, categories!products_category_id_fkey(name, code), suppliers!products_supplier_id_fkey(name)",
+      { count: "exact" },
+    );
 
   // Search
   if (params.search) {
@@ -55,6 +58,18 @@ export async function getProducts(params: QueryParams): Promise<QueryResult<Prod
   if (params.filters?.status && params.filters.status !== "all") {
     const isActive = params.filters.status === "active";
     query = query.eq("is_active", isActive);
+  }
+
+  // Filter: brand (thương hiệu) — case-sensitive match. "Tất cả" = không
+  // filter. Nếu FE truyền "__no_brand__" thì filter brand IS NULL (sản phẩm
+  // chưa gán thương hiệu).
+  if (params.filters?.brand && params.filters.brand !== "all") {
+    const brandFilter = params.filters.brand as string;
+    if (brandFilter === "__no_brand__") {
+      query = query.is("brand", null);
+    } else {
+      query = query.eq("brand", brandFilter);
+    }
   }
 
   // Sort
@@ -202,12 +217,47 @@ export async function getProductCategoriesAsync(scope?: "nvl" | "sku") {
   });
 }
 
+/**
+ * Danh sách thương hiệu (brand) distinct có trong tenant.
+ *
+ * Dùng cho filter sidebar ở trang Hàng hoá. Chỉ trả brand của sản phẩm
+ * is_active=true để khỏi kẹt brand "ma" từ sản phẩm đã xoá mềm. Có thể
+ * filter theo scope (nvl/sku) để chỉ hiện brand phù hợp với tab đang xem.
+ */
+export async function getProductBrands(scope?: "nvl" | "sku"): Promise<string[]> {
+  const supabase = getClient();
+
+  let query = supabase
+    .from("products")
+    .select("brand")
+    .not("brand", "is", null)
+    .eq("is_active", true);
+
+  if (scope) query = query.eq("product_type", scope);
+
+  const { data, error } = await query;
+  if (error) {
+    // Filter brand không critical — fail silent để không chặn list page.
+    console.warn("[getProductBrands] failed:", error.message);
+    return [];
+  }
+
+  const unique = new Set<string>();
+  for (const row of data ?? []) {
+    const b = (row as { brand: string | null }).brand;
+    if (b && b.trim()) unique.add(b.trim());
+  }
+  return Array.from(unique).sort((a, b) => a.localeCompare(b, "vi"));
+}
+
 export async function getProductById(id: string): Promise<ProductDetail | null> {
   const supabase = getClient();
 
   const { data, error } = await supabase
     .from("products")
-    .select("*, categories!products_category_id_fkey(name)")
+    .select(
+      "*, categories!products_category_id_fkey(name, code), suppliers!products_supplier_id_fkey(name)",
+    )
     .eq("id", id)
     .single();
 
@@ -432,6 +482,17 @@ function mapProduct(row: any): Product {
     groupCode: row.group_code ?? undefined,
     vatRate: row.vat_rate ?? 0,
     supplierId: row.supplier_id ?? undefined,
+    supplierName: row.suppliers?.name ?? undefined,
+    // Mở rộng: trước đây list view chỉ map các field cơ bản → detail panel
+    // phải hardcode null vì không có dữ liệu. Nay đưa các field DB nhẹ vào
+    // list fetch (barcode/weight/description/brand/min-max) để panel render
+    // thẳng không cần fetch thêm.
+    barcode: row.barcode ?? undefined,
+    weight: row.weight ?? undefined,
+    description: row.description ?? undefined,
+    brand: row.brand ?? undefined,
+    minStock: row.min_stock ?? undefined,
+    maxStock: row.max_stock ?? undefined,
     createdAt: row.created_at,
   };
 }
@@ -440,12 +501,6 @@ function mapProduct(row: any): Product {
 function mapProductDetail(row: any, priceBooks: { name: string; price: number }[]): ProductDetail {
   return {
     ...mapProduct(row),
-    barcode: row.barcode ?? undefined,
-    weight: row.weight ?? undefined,
-    description: row.description ?? undefined,
-    minStock: row.min_stock,
-    maxStock: row.max_stock,
-    position: undefined, // Not in DB schema
     allowSale: row.allow_sale,
     properties: [],
     priceBooks,
@@ -502,8 +557,13 @@ export async function createProduct(product: Partial<Product & ProductDetail>): 
       stock_unit: product.stockUnit,
       sell_unit: product.sellUnit,
       shelf_life_days: product.shelfLifeDays,
+      shelf_life_unit: product.shelfLifeUnit,
+      supplier_id: product.supplierId,
+      brand: product.brand,
     } satisfies ProductInsert)
-    .select("*, categories!products_category_id_fkey(name)")
+    .select(
+      "*, categories!products_category_id_fkey(name, code), suppliers!products_supplier_id_fkey(name)",
+    )
     .single();
 
   if (error) handleError(error, "createProduct");
@@ -537,12 +597,26 @@ export async function updateProduct(id: string, updates: Partial<Product & Produ
   if (updates.channel !== undefined) {
     payload.channel = updates.channel ?? null;
   }
+  // Thương hiệu + thêm các field còn lại — đưa vào payload khi có thay đổi.
+  // Dùng `null` thay vì `undefined` để cho phép xoá brand/nhà cung cấp/trọng
+  // lượng đã gán trước đó (user clear field trong form edit).
+  if (updates.brand !== undefined) payload.brand = updates.brand || null;
+  if (updates.supplierId !== undefined) payload.supplier_id = updates.supplierId || null;
+  if (updates.weight !== undefined) payload.weight = updates.weight ?? null;
+  if (updates.purchaseUnit !== undefined) payload.purchase_unit = updates.purchaseUnit || null;
+  if (updates.stockUnit !== undefined) payload.stock_unit = updates.stockUnit || null;
+  if (updates.sellUnit !== undefined) payload.sell_unit = updates.sellUnit || null;
+  if (updates.shelfLifeDays !== undefined) payload.shelf_life_days = updates.shelfLifeDays ?? null;
+  if (updates.shelfLifeUnit !== undefined) payload.shelf_life_unit = updates.shelfLifeUnit || "day";
+  if (updates.hasBom !== undefined) payload.has_bom = updates.hasBom;
 
   const { data, error } = await supabase
     .from("products")
     .update(payload)
     .eq("id", id)
-    .select("*, categories!products_category_id_fkey(name)")
+    .select(
+      "*, categories!products_category_id_fkey(name, code), suppliers!products_supplier_id_fkey(name)",
+    )
     .single();
 
   if (error) handleError(error, "updateProduct");

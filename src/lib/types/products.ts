@@ -39,17 +39,25 @@ export interface Product {
   vatRate: number;
   oldCode?: string;
   groupCode?: string;
-  createdAt: string;
-}
-
-// Chi tiết sản phẩm mở rộng từ danh sách sản phẩm
-export interface ProductDetail extends Product {
+  // Fields đã có trong DB (products table) nhưng trước đây chỉ expose qua
+  // ProductDetail. Detail panel trang Hàng hoá dùng `Product` trực tiếp
+  // (không fetch thêm getProductById), nên cần đưa lên đây để UI đọc được.
   barcode?: string;
   weight?: number;
   description?: string;
+  /** Thương hiệu / nhãn hàng (VD: Monin, Trung Nguyên, Highlands). */
+  brand?: string;
   minStock?: number;
   maxStock?: number;
-  position?: string; // Vị trí kho
+  createdAt: string;
+}
+
+// Chi tiết sản phẩm mở rộng từ danh sách sản phẩm.
+// Các field DB cơ bản (barcode, weight, description, brand, minStock, maxStock)
+// đã được đưa lên `Product` base vì list page + detail panel cùng dùng. Ở
+// đây chỉ thêm các field "nặng" chỉ cần cho trang chi tiết đầy đủ (gallery
+// ảnh, properties, priceBooks).
+export interface ProductDetail extends Product {
   allowSale: boolean;
   properties?: { name: string; value: string }[];
   priceBooks?: { name: string; price: number }[];

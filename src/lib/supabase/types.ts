@@ -260,6 +260,7 @@ export interface Database {
           shelf_life_unit: string;
           supplier_id: string | null;
           vat_rate: number;
+          brand: string | null;
           created_at: string;
           updated_at: string;
         };
@@ -293,6 +294,7 @@ export interface Database {
           shelf_life_unit?: string;
           supplier_id?: string | null;
           vat_rate?: number;
+          brand?: string | null;
         };
         Update: {
           code?: string;
@@ -322,6 +324,7 @@ export interface Database {
           shelf_life_unit?: string;
           supplier_id?: string | null;
           vat_rate?: number;
+          brand?: string | null;
         };
         Relationships: [
           {

@@ -27,6 +27,7 @@ import { productExcelSchema } from "@/lib/excel/schemas";
 import { bulkImportProducts } from "@/lib/services/supabase/excel-import";
 import { ProductLotsTab } from "@/components/shared/product-lots-tab";
 import { ProductUomConversionsTab } from "@/components/shared/product-uom-conversions-tab";
+import { ProductStockMovementsTab } from "@/components/shared/product-stock-movements-tab";
 import { Tabs, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import {
   Dialog,
@@ -45,6 +46,7 @@ import {
   getProducts,
   getProductStats,
   getProductCategoriesAsync,
+  getProductBrands,
   bulkUpdateCategory,
   bulkUpdatePrice,
   bulkDeleteProducts,
@@ -60,6 +62,33 @@ type ProductScope = "nvl" | "sku";
 // ---------------------------------------------------------------------------
 // Inline detail panel for a product row
 // ---------------------------------------------------------------------------
+// Build dynamic tags từ data thật thay vì hardcoded
+// ["Combo - đóng gói", "Bán trực tiếp", "Tích điểm"] (trước đây gán cứng
+// cho mọi sản phẩm, gây misleading khi NVL cũng hiện "Bán trực tiếp").
+function buildProductTags(product: Product): string[] {
+  const tags: string[] = [];
+  if (product.productType === "nvl") {
+    tags.push("Nguyên vật liệu");
+  } else {
+    if (product.channel === "fnb") tags.push("POS FnB");
+    else if (product.channel === "retail") tags.push("Bán lẻ / Sỉ");
+    else tags.push("Hàng bán");
+  }
+  if (product.hasBom) tags.push("Có BOM");
+  if (product.status === "inactive") tags.push("Ngừng bán");
+  return tags;
+}
+
+function formatShelfLife(
+  days?: number,
+  unit?: "day" | "month" | "year",
+): string | null {
+  if (!days) return null;
+  const unitLabel =
+    unit === "month" ? "tháng" : unit === "year" ? "năm" : "ngày";
+  return `${days} ${unitLabel}`;
+}
+
 function ProductDetail({
   product,
   onClose,
@@ -71,7 +100,7 @@ function ProductDetail({
   onEdit?: () => void;
   onDelete?: () => void;
 }) {
-  const { toast } = useToast();
+  const isNvl = product.productType === "nvl";
   return (
     <InlineDetailPanel open onClose={onClose} onEdit={onEdit} onDelete={onDelete}>
       <DetailTabs
@@ -97,7 +126,7 @@ function ProductDetail({
                       <Icon name="inventory_2" size={32} className="text-muted-foreground/40" />
                     )
                   }
-                  tags={["Combo - đóng gói", "Bán trực tiếp", "Tích điểm"]}
+                  tags={buildProductTags(product)}
                   actionLink={{
                     label: "Xem phân tích",
                     onClick: () => { window.location.href = "/phan-tich/hang-hoa"; },
@@ -108,18 +137,53 @@ function ProductDetail({
                   columns={4}
                   fields={[
                     { label: "Mã hàng", value: product.code },
-                    { label: "Mã vạch", value: null },
-                    {
-                      label: "Giá vốn",
-                      value: formatCurrency(product.costPrice),
-                    },
+                    { label: "Mã vạch", value: product.barcode ?? null },
+                    { label: "Thương hiệu", value: product.brand ?? null },
+                    { label: "Nhà cung cấp", value: product.supplierName ?? null },
+                    { label: "Giá vốn", value: formatCurrency(product.costPrice) },
                     {
                       label: "Giá bán",
-                      value: formatCurrency(product.sellPrice),
+                      value: isNvl ? "—" : formatCurrency(product.sellPrice),
                     },
-                    { label: "Thương hiệu", value: null },
-                    { label: "Vị trí", value: null },
-                    { label: "Trọng lượng", value: null },
+                    {
+                      label: "Thuế VAT",
+                      value: `${product.vatRate ?? 0}%`,
+                    },
+                    {
+                      label: "Kênh bán",
+                      value: isNvl
+                        ? "Nội bộ"
+                        : product.channel === "fnb"
+                          ? "POS FnB"
+                          : product.channel === "retail"
+                            ? "POS Retail"
+                            : null,
+                    },
+                    {
+                      label: "Trọng lượng",
+                      value: product.weight ? `${product.weight} kg` : null,
+                    },
+                    {
+                      label: "Tồn tối thiểu",
+                      value:
+                        product.minStock !== undefined && product.minStock > 0
+                          ? String(product.minStock)
+                          : null,
+                    },
+                    {
+                      label: "Tồn tối đa",
+                      value:
+                        product.maxStock !== undefined && product.maxStock > 0
+                          ? String(product.maxStock)
+                          : null,
+                    },
+                    {
+                      label: "HSD mặc định",
+                      value: formatShelfLife(
+                        product.shelfLifeDays,
+                        product.shelfLifeUnit,
+                      ),
+                    },
                   ]}
                 />
               </div>
@@ -128,7 +192,11 @@ function ProductDetail({
           {
             id: "description",
             label: "Mô tả ghi chú",
-            content: (
+            content: product.description ? (
+              <p className="text-sm whitespace-pre-wrap py-2 leading-relaxed">
+                {product.description}
+              </p>
+            ) : (
               <div className="text-sm text-muted-foreground py-4 text-center">
                 Chưa có mô tả
               </div>
@@ -137,11 +205,7 @@ function ProductDetail({
           {
             id: "stock_card",
             label: "Thẻ kho",
-            content: (
-              <div className="text-sm text-muted-foreground py-4 text-center">
-                Chưa có dữ liệu thẻ kho
-              </div>
-            ),
+            content: <ProductStockMovementsTab productId={product.id} />,
           },
           {
             id: "lots",
@@ -153,15 +217,9 @@ function ProductDetail({
             label: "ĐVT quy đổi",
             content: <ProductUomConversionsTab product={product} />,
           },
-          {
-            id: "channels",
-            label: "Liên kết kênh bán",
-            content: (
-              <div className="text-sm text-muted-foreground py-4 text-center">
-                Chưa liên kết kênh bán nào
-              </div>
-            ),
-          },
+          // Bỏ tab "Liên kết kênh bán" — trước đây hardcoded "Chưa liên kết
+          // kênh bán nào" cho mọi sản phẩm. Thông tin kênh bán đã có ở tab
+          // Thông tin (field "Kênh bán") — không cần tab riêng.
           {
             id: "history",
             label: "Lịch sử",
@@ -231,6 +289,7 @@ export default function HangHoaPage() {
   const [categoryFilter, setCategoryFilter] = useState("all");
   const [stockFilter, setStockFilter] = useState("all");
   const [statusFilter, setStatusFilter] = useState("all");
+  const [brandFilter, setBrandFilter] = useState("all");
   const [expectedOutDate, setExpectedOutDate] =
     useState<DatePresetValue>("all");
   const [createdDatePreset, setCreatedDatePreset] =
@@ -240,13 +299,24 @@ export default function HangHoaPage() {
   const [categories, setCategories] = useState<
     { label: string; value: string; count: number }[]
   >([]);
+  // Brand list lấy từ DB. "__no_brand__" là value đặc biệt → service sẽ filter
+  // những SP brand IS NULL. User hay hỏi "những NVL chưa gán thương hiệu" nên
+  // cần option này ngay từ đầu thay vì bắt gõ manual.
+  const [brands, setBrands] = useState<string[]>([]);
 
-  // Reload categories when scope changes
+  // Reload categories + brands khi scope đổi (NVL vs SKU có brand pool khác nhau)
   useEffect(() => {
     let cancelled = false;
     getProductCategoriesAsync(scope).then((cats) => {
       if (!cancelled) setCategories(cats);
     });
+    getProductBrands(scope)
+      .then((list) => {
+        if (!cancelled) setBrands(list);
+      })
+      .catch(() => {
+        /* brand list optional — fail silent */
+      });
     return () => {
       cancelled = true;
     };
@@ -263,12 +333,13 @@ export default function HangHoaPage() {
         ...(categoryFilter !== "all" && { category: [categoryFilter] }),
         ...(stockFilter !== "all" && { stock: stockFilter }),
         ...(statusFilter !== "all" && { status: statusFilter }),
+        ...(brandFilter !== "all" && { brand: brandFilter }),
       },
     });
     setData(result.data);
     setTotal(result.total);
     setLoading(false);
-  }, [page, pageSize, search, scope, categoryFilter, stockFilter, statusFilter]);
+  }, [page, pageSize, search, scope, categoryFilter, stockFilter, statusFilter, brandFilter]);
 
   useEffect(() => {
     fetchData();
@@ -418,11 +489,12 @@ export default function HangHoaPage() {
   useEffect(() => {
     setPage(0);
     setExpandedRow(null);
-  }, [search, scope, categoryFilter, stockFilter, statusFilter, expectedOutDate, createdDatePreset, supplierFilter]);
+  }, [search, scope, categoryFilter, stockFilter, statusFilter, brandFilter, expectedOutDate, createdDatePreset, supplierFilter]);
 
-  // Reset category filter when scope changes
+  // Reset category + brand filter when scope changes (pool khác nhau giữa NVL/SKU)
   useEffect(() => {
     setCategoryFilter("all");
+    setBrandFilter("all");
   }, [scope]);
 
   const toggleStar = (id: string) => {
@@ -651,6 +723,18 @@ export default function HangHoaPage() {
                 options={categories}
                 value={categoryFilter}
                 onChange={setCategoryFilter}
+                placeholder="Tất cả"
+              />
+            </FilterGroup>
+
+            <FilterGroup label="Thương hiệu">
+              <SelectFilter
+                options={[
+                  { label: "Chưa có thương hiệu", value: "__no_brand__" },
+                  ...brands.map((b) => ({ label: b, value: b })),
+                ]}
+                value={brandFilter}
+                onChange={setBrandFilter}
                 placeholder="Tất cả"
               />
             </FilterGroup>

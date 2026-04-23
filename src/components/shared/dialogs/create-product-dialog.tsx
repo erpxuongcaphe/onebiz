@@ -21,10 +21,22 @@ import {
 import { Checkbox } from "@/components/ui/checkbox";
 import { Tabs, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { useToast } from "@/lib/contexts";
-import { createProduct, updateProduct, getProductCategoriesAsync } from "@/lib/services";
+import {
+  createProduct,
+  updateProduct,
+  getProductCategoriesAsync,
+  getSuppliers,
+} from "@/lib/services";
 import { nextGroupCode } from "@/lib/services/supabase/base";
 import { Icon } from "@/components/ui/icon";
 import type { Product } from "@/lib/types";
+
+type ShelfLifeUnit = "day" | "month" | "year";
+type SupplierOption = { id: string; name: string; code?: string };
+
+// VAT phổ biến ở VN: 0% (không chịu), 5% (giảm thuế hoặc nông sản), 8%
+// (giảm theo NĐ), 10% (chuẩn). User vẫn có thể nhập tuỳ ý qua ô "Khác".
+const VAT_OPTIONS = ["0", "5", "8", "10"];
 
 interface CreateProductDialogProps {
   open: boolean;
@@ -62,14 +74,24 @@ export function CreateProductDialog({
   const [stockUnit, setStockUnit] = useState("");
   const [sellUnit, setSellUnit] = useState("");
   const [shelfLifeDays, setShelfLifeDays] = useState("");
+  const [shelfLifeUnit, setShelfLifeUnit] = useState<ShelfLifeUnit>("day");
   const [hasBom, setHasBom] = useState(false);
   // Kênh bán — chỉ áp dụng cho SKU. NVL luôn null.
   const [channel, setChannel] = useState<ProductChannel>("fnb");
   const [barcode, setBarcode] = useState("");
+  const [brand, setBrand] = useState("");
+  const [supplierId, setSupplierId] = useState<string>("");
+  const [weight, setWeight] = useState("");
+  const [vatRate, setVatRate] = useState<string>("0");
+  const [minStock, setMinStock] = useState("");
+  const [maxStock, setMaxStock] = useState("");
   const [description, setDescription] = useState("");
   const [allowSale, setAllowSale] = useState(true);
   const [errors, setErrors] = useState<Record<string, string>>({});
   const [saving, setSaving] = useState(false);
+
+  // NCC list cho picker. Load lúc open dialog để có sẵn cho edit mode prefill.
+  const [suppliers, setSuppliers] = useState<SupplierOption[]>([]);
 
   // Reset form khi dialog mở. Nếu có initialData → prefill từ sản phẩm đang sửa.
   useEffect(() => {
@@ -85,10 +107,18 @@ export function CreateProductDialog({
       setStockUnit(initialData.stockUnit || initialData.unit || "");
       setSellUnit(initialData.sellUnit || "");
       setShelfLifeDays(initialData.shelfLifeDays ? String(initialData.shelfLifeDays) : "");
+      setShelfLifeUnit((initialData.shelfLifeUnit as ShelfLifeUnit) || "day");
       setHasBom(!!initialData.hasBom);
       setChannel((initialData.channel as ProductChannel) || "fnb");
-      setBarcode("");
-      setDescription("");
+      // Prefill các field mới để edit "sửa được toàn bộ" như CEO yêu cầu.
+      setBarcode(initialData.barcode || "");
+      setBrand(initialData.brand || "");
+      setSupplierId(initialData.supplierId || "");
+      setWeight(initialData.weight ? String(initialData.weight) : "");
+      setVatRate(String(initialData.vatRate ?? 0));
+      setMinStock(initialData.minStock ? String(initialData.minStock) : "");
+      setMaxStock(initialData.maxStock ? String(initialData.maxStock) : "");
+      setDescription(initialData.description || "");
       setAllowSale(true);
       setErrors({});
     } else {
@@ -102,14 +132,41 @@ export function CreateProductDialog({
       setStockUnit("");
       setSellUnit("");
       setShelfLifeDays("");
+      setShelfLifeUnit("day");
       setHasBom(false);
       setChannel("fnb");
       setBarcode("");
+      setBrand("");
+      setSupplierId("");
+      setWeight("");
+      setVatRate("0");
+      setMinStock("");
+      setMaxStock("");
       setDescription("");
       setAllowSale(true);
       setErrors({});
     }
   }, [open, initialData]);
+
+  // Load NCC list 1 lần mỗi lần dialog mở. 500 NCC ~ 50KB payload — ok.
+  // Nếu tenant scale >2k NCC sau này thì đổi sang async search combobox.
+  useEffect(() => {
+    if (!open) return;
+    let cancelled = false;
+    getSuppliers({ page: 0, pageSize: 500, sortBy: "name", sortOrder: "asc" })
+      .then((res) => {
+        if (cancelled) return;
+        setSuppliers(
+          res.data.map((s) => ({ id: s.id, name: s.name, code: s.code })),
+        );
+      })
+      .catch(() => {
+        /* suppliers optional — fail silent */
+      });
+    return () => {
+      cancelled = true;
+    };
+  }, [open]);
 
   // Load categories mỗi khi scope đổi. Edit mode: KHÔNG reset categoryId (đã prefill).
   useEffect(() => {
@@ -140,23 +197,35 @@ export function CreateProductDialog({
     if (!validate()) return;
     setSaving(true);
     try {
+      // Common payload — dùng cho cả create và update. Gom hết field mà user
+      // có thể sửa. CEO dặn "toàn bộ thông tin đều có thể thay đổi trừ mã",
+      // nên edit mode gửi đủ tất cả field vào updateProduct.
+      const commonPayload = {
+        name,
+        channel: scope === "sku" ? channel : undefined,
+        categoryId,
+        unit: stockUnit || purchaseUnit || initialData?.unit || "Cái",
+        purchaseUnit: purchaseUnit || undefined,
+        stockUnit: stockUnit || undefined,
+        sellUnit: sellUnit || undefined,
+        shelfLifeDays: shelfLifeDays ? Number(shelfLifeDays) : undefined,
+        shelfLifeUnit,
+        barcode: barcode || undefined,
+        brand: brand.trim() || undefined,
+        supplierId: supplierId || undefined,
+        weight: weight ? Number(weight) : undefined,
+        vatRate: vatRate ? Number(vatRate) : 0,
+        minStock: minStock ? Number(minStock) : undefined,
+        maxStock: maxStock ? Number(maxStock) : undefined,
+        sellPrice: scope === "sku" ? Number(sellPrice) : 0,
+        costPrice: Number(costPrice) || 0,
+        description: description || undefined,
+        allowSale: scope === "sku" ? allowSale : false,
+      };
+
       if (isEdit && initialData) {
-        // EDIT — giữ nguyên code/productType, không đổi groupCode. Chỉ update các field được phép sửa.
-        await updateProduct(initialData.id, {
-          name,
-          channel: scope === "sku" ? channel : undefined,
-          categoryId,
-          unit: stockUnit || purchaseUnit || initialData.unit || "Cái",
-          purchaseUnit: purchaseUnit || undefined,
-          stockUnit: stockUnit || undefined,
-          sellUnit: sellUnit || undefined,
-          shelfLifeDays: shelfLifeDays ? Number(shelfLifeDays) : undefined,
-          barcode: barcode || undefined,
-          sellPrice: scope === "sku" ? Number(sellPrice) : 0,
-          costPrice: Number(costPrice) || 0,
-          description: description || undefined,
-          allowSale: scope === "sku" ? allowSale : false,
-        });
+        // EDIT — giữ nguyên code/productType, không đổi groupCode.
+        await updateProduct(initialData.id, commonPayload);
         onOpenChange(false);
         toast({
           title: "Cập nhật hàng hóa thành công",
@@ -172,25 +241,13 @@ export function CreateProductDialog({
       const code = await nextGroupCode(prefix, selectedCategory!.code!);
 
       await createProduct({
+        ...commonPayload,
         code,
-        name,
         productType: scope,
         // NVL không có kênh bán (nội bộ). SKU bắt buộc fnb hoặc retail.
-        channel: scope === "sku" ? channel : undefined,
         hasBom: scope === "sku" ? hasBom : false,
         groupCode: selectedCategory!.code,
-        categoryId,
-        unit: stockUnit || purchaseUnit || "Cái",
-        purchaseUnit: purchaseUnit || undefined,
-        stockUnit: stockUnit || undefined,
-        sellUnit: sellUnit || undefined,
-        shelfLifeDays: shelfLifeDays ? Number(shelfLifeDays) : undefined,
-        barcode: barcode || undefined,
-        sellPrice: scope === "sku" ? Number(sellPrice) : 0,
-        costPrice: Number(costPrice) || 0,
         stock: Number(initialStock) || 0,
-        description: description || undefined,
-        allowSale: scope === "sku" ? allowSale : false,
       });
 
       onOpenChange(false);
@@ -325,6 +382,49 @@ export function CreateProductDialog({
             </div>
           </div>
 
+          {/* Thương hiệu + NCC — optional cho NVL, dùng nhiều cho filter + báo cáo */}
+          <div className="grid grid-cols-2 gap-4">
+            <div className="space-y-1.5">
+              <label className="text-sm font-medium">Thương hiệu</label>
+              <Input
+                value={brand}
+                onChange={(e) => setBrand(e.target.value)}
+                placeholder="VD: Monin, Trung Nguyên, Highlands…"
+              />
+            </div>
+            <div className="space-y-1.5">
+              <label className="text-sm font-medium">Nhà cung cấp</label>
+              <Select
+                value={supplierId || null}
+                onValueChange={(v) => setSupplierId(v ?? "")}
+                items={suppliers.map((s) => ({
+                  value: s.id,
+                  label: s.code ? `${s.code} — ${s.name}` : s.name,
+                }))}
+              >
+                <SelectTrigger className="w-full">
+                  <SelectValue placeholder="Chọn nhà cung cấp">
+                    {(v) => {
+                      const match = suppliers.find((s) => s.id === v);
+                      if (match) {
+                        return match.code ? `${match.code} — ${match.name}` : match.name;
+                      }
+                      return "Chọn nhà cung cấp";
+                    }}
+                  </SelectValue>
+                </SelectTrigger>
+                <SelectContent>
+                  {suppliers.map((s) => (
+                    <SelectItem key={s.id} value={s.id}>
+                      {s.code ? `${s.code} — ` : ""}
+                      {s.name}
+                    </SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+            </div>
+          </div>
+
           {/* Kênh bán — chỉ hiển thị cho SKU. Tách FnB vs bán lẻ/sỉ để POS hiển thị đúng danh sách. */}
           {scope === "sku" && (
             <div className="space-y-1.5">
@@ -386,7 +486,7 @@ export function CreateProductDialog({
             </div>
           </div>
 
-          {/* Pricing */}
+          {/* Pricing — giá vốn / giá bán / VAT. VAT theo danh sách chuẩn VN. */}
           <div className="grid grid-cols-3 gap-4">
             <div className="space-y-1.5">
               <label className="text-sm font-medium">Giá vốn</label>
@@ -415,6 +515,29 @@ export function CreateProductDialog({
               )}
             </div>
             <div className="space-y-1.5">
+              <label className="text-sm font-medium">Thuế VAT (%)</label>
+              <Select
+                value={vatRate}
+                onValueChange={(v) => setVatRate(v ?? "0")}
+                items={VAT_OPTIONS.map((v) => ({ value: v, label: `${v}%` }))}
+              >
+                <SelectTrigger className="w-full">
+                  <SelectValue />
+                </SelectTrigger>
+                <SelectContent>
+                  {VAT_OPTIONS.map((v) => (
+                    <SelectItem key={v} value={v}>
+                      {v}%
+                    </SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+            </div>
+          </div>
+
+          {/* Tồn: hiện tại / tối thiểu / tối đa. Min-max dùng cho alert hết hàng. */}
+          <div className="grid grid-cols-3 gap-4">
+            <div className="space-y-1.5">
               <label className="text-sm font-medium">
                 {isEdit ? "Tồn kho hiện tại" : "Tồn kho ban đầu"}
               </label>
@@ -431,12 +554,39 @@ export function CreateProductDialog({
                 </p>
               )}
             </div>
+            <div className="space-y-1.5">
+              <label className="text-sm font-medium">Tồn tối thiểu</label>
+              <Input
+                type="number"
+                value={minStock}
+                onChange={(e) => setMinStock(e.target.value)}
+                placeholder="0"
+              />
+            </div>
+            <div className="space-y-1.5">
+              <label className="text-sm font-medium">Tồn tối đa</label>
+              <Input
+                type="number"
+                value={maxStock}
+                onChange={(e) => setMaxStock(e.target.value)}
+                placeholder="0"
+              />
+            </div>
           </div>
 
-          {/* Shelf life */}
-          <div className="grid grid-cols-2 gap-4">
+          {/* Trọng lượng + HSD. Unit HSD cho phép chọn ngày/tháng/năm. */}
+          <div className="grid grid-cols-3 gap-4">
             <div className="space-y-1.5">
-              <label className="text-sm font-medium">HSD mặc định (ngày)</label>
+              <label className="text-sm font-medium">Trọng lượng (g)</label>
+              <Input
+                type="number"
+                value={weight}
+                onChange={(e) => setWeight(e.target.value)}
+                placeholder="0"
+              />
+            </div>
+            <div className="space-y-1.5">
+              <label className="text-sm font-medium">HSD mặc định</label>
               <Input
                 type="number"
                 value={shelfLifeDays}
@@ -444,21 +594,43 @@ export function CreateProductDialog({
                 placeholder="VD: 365"
               />
             </div>
-            {scope === "sku" && (
-              <div className="space-y-1.5 flex flex-col justify-end">
-                <label className="flex items-center gap-2 text-sm font-medium cursor-pointer pb-2">
-                  <Checkbox
-                    checked={hasBom}
-                    onCheckedChange={(c) => setHasBom(!!c)}
-                  />
-                  Có công thức sản xuất (BOM)
-                </label>
-                <p className="text-xs text-muted-foreground -mt-1">
-                  Bật nếu SKU này tự sản xuất từ NVL
-                </p>
-              </div>
-            )}
+            <div className="space-y-1.5">
+              <label className="text-sm font-medium">Đơn vị HSD</label>
+              <Select
+                value={shelfLifeUnit}
+                onValueChange={(v) => setShelfLifeUnit((v as ShelfLifeUnit) ?? "day")}
+                items={[
+                  { value: "day", label: "Ngày" },
+                  { value: "month", label: "Tháng" },
+                  { value: "year", label: "Năm" },
+                ]}
+              >
+                <SelectTrigger className="w-full">
+                  <SelectValue />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="day">Ngày</SelectItem>
+                  <SelectItem value="month">Tháng</SelectItem>
+                  <SelectItem value="year">Năm</SelectItem>
+                </SelectContent>
+              </Select>
+            </div>
           </div>
+
+          {scope === "sku" && (
+            <div className="flex flex-col gap-1">
+              <label className="flex items-center gap-2 text-sm font-medium cursor-pointer">
+                <Checkbox
+                  checked={hasBom}
+                  onCheckedChange={(c) => setHasBom(!!c)}
+                />
+                Có công thức sản xuất (BOM)
+              </label>
+              <p className="text-xs text-muted-foreground ml-6">
+                Bật nếu SKU này tự sản xuất từ NVL
+              </p>
+            </div>
+          )}
 
           <div className="space-y-1.5">
             <label className="text-sm font-medium">Mô tả</label>
