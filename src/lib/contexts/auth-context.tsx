@@ -39,6 +39,8 @@ interface AuthContextValue extends AuthState {
   activeBranchId: string | undefined;
   /** Check if current user has a specific permission */
   hasPermission: (code: string) => boolean;
+  /** Re-fetch profile + tenant + branches. Dùng sau khi user update /ho-so. */
+  refreshProfile: () => Promise<void>;
   logout: () => Promise<void>;
 }
 
@@ -311,6 +313,14 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     router.push("/dang-nhap");
   }, [supabase, router]);
 
+  // Re-fetch profile/tenant/branches. Dùng khi user update /ho-so hoặc khi
+  // admin thay đổi role/branch từ trang khác — để UI (header, sidebar, permission)
+  // sync ngay không cần reload.
+  const refreshProfile = useCallback(async () => {
+    if (!authUser) return;
+    await loadUserData(authUser);
+  }, [authUser, loadUserData]);
+
   return (
     <AuthContext.Provider
       value={{
@@ -325,6 +335,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
         switchBranch,
         activeBranchId,
         hasPermission,
+        refreshProfile,
         logout,
       }}
     >
