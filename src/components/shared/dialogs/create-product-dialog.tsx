@@ -29,6 +29,7 @@ import {
 } from "@/lib/services";
 import { nextGroupCode } from "@/lib/services/supabase/base";
 import { Icon } from "@/components/ui/icon";
+import { ProductImageUpload } from "@/components/shared/product-image-upload";
 import type { Product } from "@/lib/types";
 
 type ShelfLifeUnit = "day" | "month" | "year";
@@ -86,6 +87,7 @@ export function CreateProductDialog({
   const [minStock, setMinStock] = useState("");
   const [maxStock, setMaxStock] = useState("");
   const [description, setDescription] = useState("");
+  const [image, setImage] = useState<string | null>(null);
   const [allowSale, setAllowSale] = useState(true);
   const [errors, setErrors] = useState<Record<string, string>>({});
   const [saving, setSaving] = useState(false);
@@ -119,6 +121,7 @@ export function CreateProductDialog({
       setMinStock(initialData.minStock ? String(initialData.minStock) : "");
       setMaxStock(initialData.maxStock ? String(initialData.maxStock) : "");
       setDescription(initialData.description || "");
+      setImage(initialData.image || null);
       setAllowSale(true);
       setErrors({});
     } else {
@@ -143,6 +146,7 @@ export function CreateProductDialog({
       setMinStock("");
       setMaxStock("");
       setDescription("");
+      setImage(null);
       setAllowSale(true);
       setErrors({});
     }
@@ -220,6 +224,7 @@ export function CreateProductDialog({
         sellPrice: scope === "sku" ? Number(sellPrice) : 0,
         costPrice: Number(costPrice) || 0,
         description: description || undefined,
+        image: image ?? undefined,
         allowSale: scope === "sku" ? allowSale : false,
       };
 
@@ -300,12 +305,7 @@ export function CreateProductDialog({
 
         <div className="grid gap-4 py-2">
           <div className="flex justify-center">
-            <div className="flex h-24 w-24 cursor-pointer items-center justify-center rounded-lg border-2 border-dashed border-muted-foreground/30 text-muted-foreground hover:border-primary/50 hover:text-primary transition-colors">
-              <div className="flex flex-col items-center gap-1">
-                <Icon name="add_photo_alternate" size={24} />
-                <span className="text-xs">Ảnh</span>
-              </div>
-            </div>
+            <ProductImageUpload value={image} onChange={setImage} />
           </div>
 
           <div className="space-y-1.5">

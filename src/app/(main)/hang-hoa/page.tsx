@@ -28,6 +28,7 @@ import { bulkImportProducts } from "@/lib/services/supabase/excel-import";
 import { ProductLotsTab } from "@/components/shared/product-lots-tab";
 import { ProductUomConversionsTab } from "@/components/shared/product-uom-conversions-tab";
 import { ProductStockMovementsTab } from "@/components/shared/product-stock-movements-tab";
+import { ProductBranchStockTab } from "@/components/shared/product-branch-stock-tab";
 import { Tabs, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import {
   Dialog,
@@ -200,6 +201,16 @@ function ProductDetail({
               <div className="text-sm text-muted-foreground py-4 text-center">
                 Chưa có mô tả
               </div>
+            ),
+          },
+          {
+            id: "branch_stock",
+            label: "Tồn chi nhánh",
+            content: (
+              <ProductBranchStockTab
+                productId={product.id}
+                unit={product.stockUnit ?? product.unit}
+              />
             ),
           },
           {
