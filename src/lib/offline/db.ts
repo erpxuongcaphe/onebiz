@@ -26,6 +26,15 @@ export interface TableCacheRecord {
   data: unknown; // RestaurantTable
 }
 
+/** Variants cache — 1 record per product_id, data = mảng variants.
+ *  Persisted qua reload để khỏi refetch variants mỗi session.
+ *  Warmed by batch prefetch trong page init, auto-invalidate sau STALE_MS. */
+export interface VariantCacheRecord {
+  productId: string;
+  variants: Array<{ id: string; label: string; sell_price: number }>;
+  updatedAt: number;
+}
+
 export interface PendingOrder {
   localId: string;
   tenantId: string;
@@ -94,6 +103,10 @@ interface OneBizFnbDB extends DBSchema {
       by_branch: string;
     };
   };
+  variant_cache: {
+    key: string;
+    value: VariantCacheRecord;
+  };
   pending_orders: {
     key: string;
     value: PendingOrder;
@@ -120,7 +133,8 @@ interface OneBizFnbDB extends DBSchema {
 // ── Singleton ──
 
 const DB_NAME = "onebiz-fnb-offline";
-const DB_VERSION = 1;
+// v2: thêm `variant_cache` store — persist variants per-product qua reload
+const DB_VERSION = 2;
 
 let dbPromise: Promise<IDBPDatabase<OneBizFnbDB>> | null = null;
 
@@ -147,6 +161,13 @@ export function getDb(): Promise<IDBPDatabase<OneBizFnbDB>> {
             keyPath: "id",
           });
           tableStore.createIndex("by_branch", "branchId");
+        }
+
+        // variant_cache (v2) — 1 record per product_id
+        if (!db.objectStoreNames.contains("variant_cache")) {
+          db.createObjectStore("variant_cache", {
+            keyPath: "productId",
+          });
         }
 
         // pending_orders

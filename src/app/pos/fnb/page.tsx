@@ -19,6 +19,9 @@ import {
   getMenuFromCache,
   getTablesFromCache,
   shouldRefreshMenu,
+  saveVariantsToCache,
+  getVariantsFromCache,
+  shouldRefreshVariants,
   hapticTap,
   hapticSuccess,
   hapticError,
@@ -240,47 +243,108 @@ function FnbPosPageInner() {
     return products.filter((p) => p.category_id === activeCategoryId);
   }, [products, activeCategoryId]);
 
-  // ── Variant cache (in-memory, per session) — tránh refetch khi user mở lại dialog cùng SP ──
+  // ── Variant cache (in-memory, per session) — tránh refetch khi user mở lại dialog cùng SP.
+  //    Warm từ IndexedDB on mount (effect bên dưới) → dialog mở instant NGAY CẢ
+  //    khi offline hoặc trong lúc prefetch network chưa xong. ──
   const variantCacheRef = useMemo(
     () => new Map<string, { id: string; label: string; sell_price: number }[]>(),
     []
   );
 
-  // ── Variant PREFETCH: batch load variants cho top 50 SP NGAY SAU khi products load.
-  //    Mục đích: khi user click SP đầu tiên → dialog mở instant (không có 200-400ms delay fetch).
-  //    Gate bằng requestIdleCallback để KHÔNG đua với first paint + limit 50
-  //    thay vì 500 (tiết kiệm 600-1200ms cold start — lazy fetch on-click
-  //    backfill phần còn lại). ──
+  // ── Warm variant cache từ IndexedDB ngay khi mount (cache-first).
+  //    Chạy 1 lần, không chờ network. Nếu có data → dialog mở instant trên cold
+  //    start + offline reload. Sau đó effect prefetch bên dưới sẽ refresh nếu
+  //    cache stale (>30 phút) và online. ──
+  useEffect(() => {
+    let cancelled = false;
+    (async () => {
+      try {
+        const cached = await getVariantsFromCache();
+        if (cancelled) return;
+        cached.forEach((variants, pid) => {
+          // Chỉ set nếu chưa có trong ref (tránh overwrite fresh network data)
+          if (!variantCacheRef.has(pid)) {
+            variantCacheRef.set(pid, variants);
+          }
+        });
+      } catch {
+        // Silent — IndexedDB có thể unavailable (SSR/private mode)
+      }
+    })();
+    return () => {
+      cancelled = true;
+    };
+  }, [variantCacheRef]);
+
+  // ── Variant PREFETCH: batch load variants cho TẤT CẢ SP NGAY SAU khi products load.
+  //    Mục đích: click SP bất kỳ → dialog mở instant (0 round-trip network).
+  //    Gate bằng requestIdleCallback → không block first paint.
+  //    Skip nếu cache IndexedDB còn fresh (<30 phút) → tiết kiệm 500 queries.
+  //    Sau khi fetch xong → persist vào IndexedDB để reload sau không phải refetch. ──
   useEffect(() => {
     if (!networkStatus.isOnline) return;
     if (products.length === 0) return;
-    // Cache đã khớp phần lớn → skip (vd mới vừa prefetch xong, refresh menu)
-    if (variantCacheRef.size >= products.length * 0.8) return;
 
     let cancelled = false;
-    // Top 50 SP đầu tiên theo order trả về (đã order by name từ query) —
-    // phần còn lại user hiếm khi click trong session đầu, fetch lazy.
-    const topIds = products.slice(0, 50).map((p) => p.id);
 
-    const runPrefetch = () => {
+    const runPrefetch = async () => {
       if (cancelled) return;
-      getVariantsByProductIds(topIds)
-        .then((variantMap) => {
-          if (cancelled) return;
-          variantMap.forEach((variants, pid) => {
-            variantCacheRef.set(
-              pid,
-              variants.map((v) => ({
-                id: v.id,
-                label: v.name,
-                sell_price: v.sellPrice,
-              }))
-            );
-          });
-        })
-        .catch(() => {
-          // Silent — lazy fetch on click sẽ backfill cache
+
+      // Nếu cache IndexedDB còn tươi + đã khớp phần lớn products trong ref
+      // → skip fetch network (đã warm từ effect trên).
+      try {
+        const fresh = !(await shouldRefreshVariants());
+        if (fresh && variantCacheRef.size >= products.length * 0.8) {
+          return;
+        }
+      } catch {
+        // Fall through → vẫn fetch để fail-safe
+      }
+
+      if (cancelled) return;
+
+      // Fetch TẤT CẢ products — getVariantsByProductIds dùng `in()` filter
+      // nên 500 ids = 1 query duy nhất, rất nhanh.
+      const allIds = products.map((p) => p.id);
+
+      try {
+        const variantMap = await getVariantsByProductIds(allIds);
+        if (cancelled) return;
+
+        // Ghi vào in-memory ref cho session hiện tại
+        variantMap.forEach((variants, pid) => {
+          variantCacheRef.set(
+            pid,
+            variants.map((v) => ({
+              id: v.id,
+              label: v.name,
+              sell_price: v.sellPrice,
+            }))
+          );
         });
+
+        // Persist vào IndexedDB → lần vào trang sau (cold start, reload, offline)
+        // chỉ cần đọc cache là có full variants, không cần hit network.
+        const toPersist = new Map<
+          string,
+          { id: string; label: string; sell_price: number }[]
+        >();
+        variantMap.forEach((variants, pid) => {
+          toPersist.set(
+            pid,
+            variants.map((v) => ({
+              id: v.id,
+              label: v.name,
+              sell_price: v.sellPrice,
+            }))
+          );
+        });
+        saveVariantsToCache(toPersist).catch(() => {
+          // Silent — quota full hoặc DB lỗi → session memory cache vẫn dùng được
+        });
+      } catch {
+        // Silent — lazy fetch on click sẽ backfill cache
+      }
     };
 
     // requestIdleCallback: browser fire khi main thread idle → không block
@@ -1151,7 +1215,10 @@ function FnbPosPageInner() {
                 activeCategoryId={activeCategoryId}
                 onSelect={setActiveCategoryId}
               />
-              <div className="flex-1 overflow-y-auto p-3">
+              {/* flex-1 min-h-0 cần thiết để cho FnbProductGrid (virtualized,
+                   có scroll riêng) tự quản scroll thay vì wrapper — tránh
+                   double scroll container. */}
+              <div className="flex-1 min-h-0">
                 <FnbProductGrid
                   products={filteredProducts}
                   onSelectProduct={handleSelectProduct}
@@ -1278,7 +1345,7 @@ function FnbPosPageInner() {
 
       {/* Mobile cart overlay */}
       {mobileCartOpen && (
-        <div className="fixed inset-0 z-40 lg:hidden flex flex-col bg-white">
+        <div className="fixed inset-0 z-40 lg:hidden flex flex-col bg-background">
           <div className="flex items-center justify-between px-3 py-2 border-b bg-surface-container-low">
             <span className="text-sm font-semibold">Giỏ hàng</span>
             <button

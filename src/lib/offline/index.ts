@@ -7,6 +7,7 @@ export { getDb, getMeta, setMeta } from "./db";
 export type {
   MenuCacheRecord,
   TableCacheRecord,
+  VariantCacheRecord,
   PendingOrder,
   SyncQueueEntry,
   SyncAction,
@@ -21,8 +22,12 @@ export {
   getTablesFromCache,
   shouldRefreshMenu,
   invalidateMenuCache,
+  saveVariantsToCache,
+  getVariantsFromCache,
+  shouldRefreshVariants,
+  invalidateVariantCache,
 } from "./cache-manager";
-export type { MenuData, ToppingProduct } from "./cache-manager";
+export type { MenuData, ToppingProduct, VariantLite } from "./cache-manager";
 
 // Sync manager
 export {

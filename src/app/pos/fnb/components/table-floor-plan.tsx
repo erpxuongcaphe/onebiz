@@ -54,7 +54,7 @@ const STATUS_CONFIG: Record<
     border: "border-border",
     text: "text-muted-foreground",
     label: "Dọn dẹp",
-    dot: "bg-gray-400",
+    dot: "bg-status-neutral",
   },
 };
 
@@ -102,7 +102,7 @@ export function TableFloorPlan({
   return (
     <div className="flex flex-col h-full">
       {/* ── Legend ── */}
-      <div className="flex items-center gap-4 px-4 py-2 border-b bg-white shrink-0 flex-wrap">
+      <div className="flex items-center gap-4 px-4 py-2 border-b bg-card shrink-0 flex-wrap">
         {(["available", "occupied", "reserved", "cleaning"] as TableStatus[]).map(
           (s) => (
             <div key={s} className="flex items-center gap-1.5 text-xs text-foreground">

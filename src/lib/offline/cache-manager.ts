@@ -188,6 +188,63 @@ export async function getTablesFromCache(
   return records.map((r) => r.data);
 }
 
+// ── Variant cache (v2) ──
+// Persist variants per-product qua reload — mỗi SP có 1 record
+// { productId, variants: [{id, label, sell_price}], updatedAt }.
+
+export interface VariantLite {
+  id: string;
+  label: string;
+  sell_price: number;
+}
+
+/** Ghi 1 batch variants vào IndexedDB. Mỗi entry map = 1 record. */
+export async function saveVariantsToCache(
+  entries: Map<string, VariantLite[]>,
+): Promise<void> {
+  if (entries.size === 0) return;
+  await withQuotaRecovery(async () => {
+    const db = await getDb();
+    const tx = db.transaction("variant_cache", "readwrite");
+    const store = tx.objectStore("variant_cache");
+    const now = Date.now();
+    for (const [productId, variants] of entries) {
+      await store.put({ productId, variants, updatedAt: now });
+    }
+    await tx.done;
+  });
+  await setMeta("variants_last_sync", Date.now());
+}
+
+/** Đọc toàn bộ cached variants → Map để page.tsx warm variantCacheRef. */
+export async function getVariantsFromCache(): Promise<Map<string, VariantLite[]>> {
+  const map = new Map<string, VariantLite[]>();
+  try {
+    const db = await getDb();
+    const all = await db.getAll("variant_cache");
+    for (const rec of all) {
+      map.set(rec.productId, rec.variants);
+    }
+  } catch {
+    // DB chưa available (SSR) hoặc store chưa migrate — trả map rỗng
+  }
+  return map;
+}
+
+/** Cache variants stale sau 30 phút giống menu. */
+export async function shouldRefreshVariants(): Promise<boolean> {
+  const lastSync = await getMeta<number>("variants_last_sync");
+  if (!lastSync) return true;
+  return Date.now() - lastSync > STALE_MS;
+}
+
+/** Xoá variant_cache (dùng khi menu invalidate — variants có thể đổi giá). */
+export async function invalidateVariantCache(): Promise<void> {
+  const db = await getDb();
+  await db.clear("variant_cache");
+  await setMeta("variants_last_sync", 0);
+}
+
 // ── Cache validity ──
 
 export async function shouldRefreshMenu(): Promise<boolean> {
@@ -201,6 +258,13 @@ export async function invalidateMenuCache(): Promise<void> {
   await db.clear("menu_cache");
   await setMeta("menu_last_sync", 0);
   await setMeta("menu_version", "");
+  // Variants liên kết giá với menu — invalidate luôn để tránh dialog hiện giá cũ.
+  try {
+    await db.clear("variant_cache");
+    await setMeta("variants_last_sync", 0);
+  } catch {
+    // variant_cache chưa migrate (DB v1) — skip
+  }
 }
 
 // ── Helpers ──

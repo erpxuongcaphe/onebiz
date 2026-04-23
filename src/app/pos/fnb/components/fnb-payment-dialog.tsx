@@ -240,7 +240,7 @@ export function FnbPaymentDialog({
                 {DENOMINATIONS.map((d) => (
                   <button key={d} type="button"
                     onClick={() => setCashInput(String(d))}
-                    className="px-3 py-2 sm:px-2.5 sm:py-1.5 rounded-md border border-border bg-white text-sm sm:text-xs font-medium text-foreground hover:bg-muted active:bg-muted transition-colors tabular-nums">
+                    className="px-3 py-2 sm:px-2.5 sm:py-1.5 rounded-md border border-border bg-card text-sm sm:text-xs font-medium text-foreground hover:bg-muted active:bg-muted transition-colors tabular-nums">
                     {formatDenom(d)}
                   </button>
                 ))}

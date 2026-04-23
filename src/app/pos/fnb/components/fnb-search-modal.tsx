@@ -105,7 +105,7 @@ export function FnbSearchModal({
       />
 
       <div className="fixed inset-x-0 top-14 mx-auto z-50 max-w-2xl px-4">
-        <div className="rounded-lg bg-white border border-border shadow-2xl overflow-hidden">
+        <div className="rounded-lg bg-card border border-border shadow-2xl overflow-hidden">
           {/* Search input */}
           <div className="flex items-center gap-2 px-4 h-12 border-b border-border">
             <Icon name="search" size={16} className="text-muted-foreground shrink-0" />
@@ -160,19 +160,19 @@ export function FnbSearchModal({
           <div className="flex items-center justify-between px-4 h-9 bg-muted/50 border-t border-border text-[11px] text-muted-foreground">
             <div className="flex items-center gap-2.5">
               <span>
-                <kbd className="font-mono bg-white border border-border rounded px-1 text-[10px]">
+                <kbd className="font-mono bg-card border border-border rounded px-1 text-[10px]">
                   ↑ ↓
                 </kbd>{" "}
                 chọn
               </span>
               <span>
-                <kbd className="font-mono bg-white border border-border rounded px-1 text-[10px]">
+                <kbd className="font-mono bg-card border border-border rounded px-1 text-[10px]">
                   Enter
                 </kbd>{" "}
                 thêm
               </span>
               <span>
-                <kbd className="font-mono bg-white border border-border rounded px-1 text-[10px]">
+                <kbd className="font-mono bg-card border border-border rounded px-1 text-[10px]">
                   Esc
                 </kbd>{" "}
                 đóng
