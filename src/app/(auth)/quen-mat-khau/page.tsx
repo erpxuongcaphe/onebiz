@@ -13,8 +13,16 @@ import {
   CardDescription,
 } from "@/components/ui/card";
 
+/** Nhận diện input là SĐT (VN) hay email. */
+function isPhoneNumber(input: string): boolean {
+  const cleaned = input.replace(/[\s-]/g, "");
+  if (/^0\d{9,10}$/.test(cleaned)) return true;
+  if (/^(\+?84)\d{9,10}$/.test(cleaned)) return true;
+  return false;
+}
+
 export default function ForgotPasswordPage() {
-  const [email, setEmail] = useState("");
+  const [identifier, setIdentifier] = useState("");
   const [error, setError] = useState("");
   const [success, setSuccess] = useState(false);
   const [loading, setLoading] = useState(false);
@@ -25,6 +33,28 @@ export default function ForgotPasswordPage() {
     setLoading(true);
 
     const supabase = createClient();
+    const trimmed = identifier.trim();
+
+    // Supabase reset chỉ nhận email → tra email từ SĐT nếu user nhập SĐT.
+    let email = trimmed;
+    if (isPhoneNumber(trimmed)) {
+      const { data: foundEmail, error: rpcError } = await supabase.rpc(
+        "get_email_by_phone",
+        { p_phone: trimmed },
+      );
+      if (rpcError) {
+        setError("Không tra được SĐT. Thử lại sau hoặc nhập email.");
+        setLoading(false);
+        return;
+      }
+      if (!foundEmail) {
+        setError("Không tìm thấy tài khoản với SĐT này.");
+        setLoading(false);
+        return;
+      }
+      email = foundEmail as string;
+    }
+
     const { error: authError } = await supabase.auth.resetPasswordForEmail(
       email,
       { redirectTo: window.location.origin + "/dat-lai-mat-khau" }
@@ -48,7 +78,7 @@ export default function ForgotPasswordPage() {
         </div>
         <CardTitle className="text-2xl">Quên mật khẩu</CardTitle>
         <CardDescription>
-          Nhập email để nhận link đặt lại mật khẩu
+          Nhập email hoặc SĐT để nhận link đặt lại mật khẩu
         </CardDescription>
       </CardHeader>
       <CardContent>
@@ -64,15 +94,15 @@ export default function ForgotPasswordPage() {
             </div>
           )}
           <div className="space-y-2">
-            <label className="text-sm font-medium" htmlFor="email">
-              Email
+            <label className="text-sm font-medium" htmlFor="identifier">
+              Email hoặc SĐT
             </label>
             <Input
-              id="email"
-              type="email"
-              placeholder="email@congty.vn"
-              value={email}
-              onChange={(e) => setEmail(e.target.value)}
+              id="identifier"
+              type="text"
+              placeholder="email@congty.vn hoặc 0912345678"
+              value={identifier}
+              onChange={(e) => setIdentifier(e.target.value)}
               required
               disabled={success}
             />

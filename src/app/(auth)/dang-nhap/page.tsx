@@ -22,10 +22,23 @@ export default function LoginPage() {
   );
 }
 
+/**
+ * Nhận diện input là SĐT (VN) hay email.
+ * SĐT VN: bắt đầu 0, 10-11 số (0912345678) hoặc +84/84 prefix.
+ */
+function isPhoneNumber(input: string): boolean {
+  const cleaned = input.replace(/[\s-]/g, "");
+  // 0xxxxxxxxx (10 số) hoặc 0xxxxxxxxxx (11 số)
+  if (/^0\d{9,10}$/.test(cleaned)) return true;
+  // +84xxxxxxxxx hoặc 84xxxxxxxxx
+  if (/^(\+?84)\d{9,10}$/.test(cleaned)) return true;
+  return false;
+}
+
 function LoginForm() {
   const router = useRouter();
   const searchParams = useSearchParams();
-  const [email, setEmail] = useState("");
+  const [identifier, setIdentifier] = useState(""); // email HOẶC SĐT
   const [password, setPassword] = useState("");
   const [error, setError] = useState("");
   const [loading, setLoading] = useState(false);
@@ -36,6 +49,29 @@ function LoginForm() {
     setLoading(true);
 
     const supabase = createClient();
+    const trimmed = identifier.trim();
+
+    // Nếu nhập SĐT → tra email tương ứng trong DB. Supabase auth chỉ nhận
+    // email + password, nên phải lookup trước khi signIn.
+    let email = trimmed;
+    if (isPhoneNumber(trimmed)) {
+      const { data: foundEmail, error: rpcError } = await supabase.rpc(
+        "get_email_by_phone",
+        { p_phone: trimmed },
+      );
+      if (rpcError) {
+        setError("Không tra được SĐT. Thử lại sau hoặc đăng nhập bằng email.");
+        setLoading(false);
+        return;
+      }
+      if (!foundEmail) {
+        setError("Không tìm thấy tài khoản với SĐT này. Liên hệ quản lý để kiểm tra.");
+        setLoading(false);
+        return;
+      }
+      email = foundEmail as string;
+    }
+
     const { error: authError } = await supabase.auth.signInWithPassword({
       email,
       password,
@@ -68,15 +104,17 @@ function LoginForm() {
             </div>
           )}
           <div className="space-y-2">
-            <label className="text-sm font-medium" htmlFor="email">
-              Email
+            <label className="text-sm font-medium" htmlFor="identifier">
+              Email hoặc SĐT
             </label>
             <Input
-              id="email"
-              type="email"
-              placeholder="email@congty.vn"
-              value={email}
-              onChange={(e) => setEmail(e.target.value)}
+              id="identifier"
+              type="text"
+              inputMode="text"
+              autoComplete="username"
+              placeholder="email@congty.vn hoặc 0912345678"
+              value={identifier}
+              onChange={(e) => setIdentifier(e.target.value)}
               required
             />
           </div>

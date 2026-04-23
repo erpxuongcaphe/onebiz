@@ -120,13 +120,29 @@ export default function UsersPage() {
 
   const handleInvite = async () => {
     if (!tenantId) return;
+
+    // Validate SĐT VN — bắt buộc vì user dùng SĐT để login.
+    const phoneRaw = inviteForm.phone.trim();
+    const phoneCleaned = phoneRaw.replace(/[\s-]/g, "");
+    const isValidPhone =
+      /^0\d{9,10}$/.test(phoneCleaned) ||
+      /^(\+?84)\d{9,10}$/.test(phoneCleaned);
+    if (!isValidPhone) {
+      toast({
+        title: "SĐT không hợp lệ",
+        description: "Nhập đúng định dạng VN (0912345678 hoặc +84912345678).",
+        variant: "error",
+      });
+      return;
+    }
+
     setInviteBusy(true);
     try {
       await inviteStaff({
         tenantId,
         email: inviteForm.email.trim(),
         fullName: inviteForm.fullName,
-        phone: inviteForm.phone || undefined,
+        phone: phoneCleaned,
         branchId: inviteForm.branchId || undefined,
         roleId: inviteForm.roleId || undefined,
         asOwner: inviteForm.asOwner,
@@ -397,17 +413,21 @@ export default function UsersPage() {
               </div>
 
               <div className="space-y-1.5">
-                <Label htmlFor="invite-phone">Số điện thoại</Label>
+                <Label htmlFor="invite-phone">Số điện thoại *</Label>
                 <Input
                   id="invite-phone"
                   type="tel"
-                  placeholder="0912xxxxxx"
+                  inputMode="numeric"
+                  placeholder="0912345678"
                   value={inviteForm.phone}
                   onChange={(e) =>
                     setInviteForm((f) => ({ ...f, phone: e.target.value }))
                   }
                   disabled={inviteBusy}
                 />
+                <p className="text-[11px] text-muted-foreground">
+                  Nhân viên có thể login bằng SĐT này thay cho email.
+                </p>
               </div>
 
               <div className="space-y-1.5">
@@ -508,7 +528,8 @@ export default function UsersPage() {
               disabled={
                 inviteBusy ||
                 !inviteForm.email.trim() ||
-                !inviteForm.fullName.trim()
+                !inviteForm.fullName.trim() ||
+                !inviteForm.phone.trim()
               }
             >
               {inviteBusy ? (

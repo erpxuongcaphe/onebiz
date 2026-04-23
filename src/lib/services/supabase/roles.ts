@@ -289,7 +289,8 @@ export interface InviteStaffInput {
   tenantId: string;
   email: string;
   fullName: string;
-  phone?: string;
+  /** SĐT bắt buộc — dùng làm identifier thứ 2 cho login. */
+  phone: string;
   branchId?: string;
   roleId?: string;
   /**
@@ -326,6 +327,16 @@ export async function inviteStaff(input: InviteStaffInput): Promise<void> {
     throw new Error("Họ tên không được để trống");
   }
 
+  // Validate SĐT — bắt buộc để user login bằng SĐT. Chấp nhận SĐT VN
+  // format 0xxxxxxxxx (10-11 số) hoặc +84/84xxxxxxxxx.
+  const phoneCleaned = input.phone?.replace(/[\s-]/g, "") ?? "";
+  const isValidPhone =
+    /^0\d{9,10}$/.test(phoneCleaned) ||
+    /^(\+?84)\d{9,10}$/.test(phoneCleaned);
+  if (!isValidPhone) {
+    throw new Error("Số điện thoại không hợp lệ (VD: 0912345678)");
+  }
+
   // Check trùng — nếu đã có profile với email này trong tenant → báo lỗi
   const { data: existing } = await supabase
     .from("profiles")
@@ -341,13 +352,29 @@ export async function inviteStaff(input: InviteStaffInput): Promise<void> {
     throw new Error("Email này đã được sử dụng ở tài khoản khác");
   }
 
+  // Pre-check trùng SĐT trong tenant — DB có unique constraint nhưng báo
+  // lỗi sớm với message thân thiện thay vì exception xấu từ trigger.
+  const { data: phoneMatch } = await supabase
+    .from("profiles")
+    .select("id, full_name, is_active")
+    .eq("tenant_id", input.tenantId)
+    .eq("phone", phoneCleaned)
+    .eq("is_active", true)
+    .maybeSingle();
+
+  if (phoneMatch) {
+    throw new Error(
+      `SĐT này đã được dùng bởi nhân viên "${phoneMatch.full_name}" trong cửa hàng. Mỗi nhân viên cần SĐT riêng để login.`,
+    );
+  }
+
   const { error } = await supabase.auth.signInWithOtp({
     email: input.email,
     options: {
       shouldCreateUser: true,
       data: {
         full_name: input.fullName.trim(),
-        phone: input.phone?.trim() || null,
+        phone: phoneCleaned,
         invited_tenant_id: input.tenantId,
         invited_branch_id: input.branchId || null,
         invited_role_id: input.roleId || null,

@@ -2891,6 +2891,18 @@ export interface Database {
         };
         Returns: Json;
       };
+      normalize_phone: {
+        Args: {
+          p_phone: string;
+        };
+        Returns: string | null;
+      };
+      get_email_by_phone: {
+        Args: {
+          p_phone: string;
+        };
+        Returns: string | null;
+      };
     };
     Enums: Record<string, never>;
     CompositeTypes: Record<string, never>;
