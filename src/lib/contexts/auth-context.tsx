@@ -361,7 +361,10 @@ function buildFallbackProfile(authUser: User): UserProfile {
     tenantId: "",
     fullName: meta.full_name ?? authUser.email?.split("@")[0] ?? "User",
     email: authUser.email ?? "",
-    phone: meta.phone ?? null,
+    // phone tuy typed optional nhưng trước đây gán `null` → assign vào field
+    // `string | undefined` strict TS → ok runtime nhưng `.replace()` / `.trim()`
+    // trên null crash. Dùng undefined để consistent.
+    phone: meta.phone ?? undefined,
     role: "owner",
     isActive: true,
     createdAt: authUser.created_at,

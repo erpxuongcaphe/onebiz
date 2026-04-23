@@ -128,14 +128,20 @@ function UserDropdown() {
   const router = useRouter();
   const { user, logout } = useAuth();
 
-  const initials = user
-    ? user.fullName
-        .split(" ")
-        .map((w) => w[0])
-        .slice(-2)
-        .join("")
-        .toUpperCase()
-    : null;
+  // Defensive — user.fullName TS-type string nhưng DB cho phép null nếu profile
+  // chưa set tên. Nếu bỏ qua, .split() trên null → crash toàn bộ TopNav → cả app
+  // render /error.tsx. Fallback về null để UI hiện icon person.
+  const initials =
+    user && typeof user.fullName === "string" && user.fullName.trim()
+      ? user.fullName
+          .trim()
+          .split(/\s+/)
+          .map((w) => w[0])
+          .filter(Boolean)
+          .slice(-2)
+          .join("")
+          .toUpperCase()
+      : null;
 
   return (
     <DropdownMenu>

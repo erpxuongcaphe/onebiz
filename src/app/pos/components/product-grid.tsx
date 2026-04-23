@@ -120,7 +120,10 @@ export function ProductGrid({ searchQuery, onAddProduct }: ProductGridProps) {
             </p>
           </div>
         ) : (
-          <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-5 xl:grid-cols-6 2xl:grid-cols-7 gap-1.5">
+          // Giãn grid — trước đây 2xl:grid-cols-7 dày đặc, tên SP truncate, giá
+          // chữ nhỏ. CEO phản ánh "quá nhiều món thông tin bán thì ít và nép bên phải".
+          // Giảm 1 cột ở mỗi breakpoint lg+ + tăng gap → mỗi tile rộng hơn, dễ đọc.
+          <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-4 xl:grid-cols-5 2xl:grid-cols-6 gap-2">
             {displayProducts.map((product) => (
               <ProductTile
                 key={product.id}
@@ -228,17 +231,17 @@ function ProductTile({
         )}
       </div>
 
-      {/* Info — compact with code */}
-      <div className="px-1.5 py-1 flex-1 flex flex-col min-h-[40px]">
-        <p className="text-[11px] font-medium text-foreground line-clamp-2 leading-tight flex-1">
+      {/* Info — tăng font-size để dễ đọc trên tablet POS */}
+      <div className="px-2 py-1.5 flex-1 flex flex-col min-h-[44px]">
+        <p className="text-xs font-medium text-foreground line-clamp-2 leading-tight flex-1">
           {product.name}
         </p>
-        <div className="flex items-center justify-between mt-0.5 gap-1">
-          <p className="text-[11px] font-bold text-primary">
+        <div className="flex items-center justify-between mt-1 gap-1">
+          <p className="text-xs font-bold text-primary">
             {formatCurrency(product.sellPrice ?? 0)}
           </p>
           {product.code && (
-            <p className="text-[8px] text-muted-foreground font-mono truncate max-w-[60px]">
+            <p className="text-[9px] text-muted-foreground font-mono truncate max-w-[60px]">
               {product.code}
             </p>
           )}

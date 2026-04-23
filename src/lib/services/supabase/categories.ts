@@ -16,7 +16,17 @@ export async function getCategoriesByScope(
     .order("sort_order");
 
   if (error) throw error;
-  return (data ?? []).map(mapCategory);
+
+  // Dedupe by normalized name — trước đây CEO báo "Cà phê chai × 4, Rang xay
+  // đóng gói × 4" vì seed dev lỡ insert duplicate rows hoặc RLS để lọt category
+  // của tenant khác. Dedup ở FE là an toàn nhất (không phá data, không cần migration).
+  const seen = new Map<string, Record<string, unknown>>();
+  for (const row of data ?? []) {
+    const key = String(row.name ?? "").trim().toLowerCase();
+    if (!key) continue;
+    if (!seen.has(key)) seen.set(key, row);
+  }
+  return Array.from(seen.values()).map(mapCategory);
 }
 
 export async function getAllCategories(): Promise<ProductCategory[]> {

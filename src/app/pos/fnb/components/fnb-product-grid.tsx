@@ -20,6 +20,12 @@ export interface FnbProduct {
 interface FnbProductGridProps {
   products: FnbProduct[];
   onSelectProduct: (product: FnbProduct) => void;
+  /**
+   * Có hiển thị overlay "Hết hàng" khi stock<=0 hay không.
+   * FnB: SP làm theo đơn, stock không phản ánh khả năng bán → default FALSE.
+   * Nếu tenant thực sự track stock NVL qua BOM thì bật lên.
+   */
+  enforceStock?: boolean;
 }
 
 // Grid config — responsive column count + fixed row height cho virtualizer.
@@ -46,6 +52,7 @@ function getColsForWidth(width: number): number {
 export function FnbProductGrid({
   products,
   onSelectProduct,
+  enforceStock = false,
 }: FnbProductGridProps) {
   const parentRef = useRef<HTMLDivElement | null>(null);
   const [containerWidth, setContainerWidth] = useState<number>(0);
@@ -127,6 +134,7 @@ export function FnbProductGrid({
                   key={product.id}
                   product={product}
                   onClick={() => onSelectProduct(product)}
+                  enforceStock={enforceStock}
                 />
               ))}
               {/* Fill empty slots để giữ grid alignment khi row cuối thiếu */}
@@ -145,11 +153,17 @@ export function FnbProductGrid({
 function ProductCard({
   product,
   onClick,
+  enforceStock,
 }: {
   product: FnbProduct;
   onClick: () => void;
+  enforceStock: boolean;
 }) {
-  const outOfStock = product.stock <= 0;
+  // Chỉ coi "Hết hàng" khi enforceStock=true. POS FnB default FALSE vì SP
+  // được làm theo đơn (nguyên liệu track ở NVL, không ở SP bán).
+  // Trước đây mặc định hiển thị overlay → CEO báo "hết hàng mờ căm không thấy gì"
+  // do stock=0 toàn bộ SP FnB.
+  const outOfStock = enforceStock && product.stock <= 0;
   const [imageLoaded, setImageLoaded] = useState(false);
   const [imageError, setImageError] = useState(false);
 
@@ -212,9 +226,11 @@ function ProductCard({
         <h3 className="font-heading font-semibold text-sm text-foreground line-clamp-2 leading-tight mb-0.5">
           {product.name}
         </h3>
-        <p className="text-[11px] text-muted-foreground">
-          {outOfStock ? "Hết hàng" : "Sẵn sàng"}
-        </p>
+        {enforceStock && (
+          <p className="text-[11px] text-muted-foreground">
+            {outOfStock ? "Hết hàng" : "Sẵn sàng"}
+          </p>
+        )}
       </div>
     </button>
   );

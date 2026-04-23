@@ -168,12 +168,38 @@ export async function getProductCategoriesAsync(scope?: "nvl" | "sku") {
   if (scope) prodQuery = prodQuery.eq("product_type", scope);
   const { data: products } = await prodQuery;
 
-  return (categories ?? []).map((cat) => ({
-    label: cat.name,
-    value: cat.id,
-    code: cat.code ?? undefined,
-    count: (products ?? []).filter((p) => p.category_id === cat.id).length,
-  }));
+  // Dedupe categories by normalized name. Trước đây CEO báo "Cà phê chai × 4"
+  // ở POS Retail header do seed data duplicate — dedupe ở FE giữ id đầu tiên +
+  // cộng dồn count cho cùng name.
+  const byName = new Map<
+    string,
+    { id: string; name: string; code: string | null }
+  >();
+  for (const cat of categories ?? []) {
+    const key = String(cat.name ?? "").trim().toLowerCase();
+    if (!key) continue;
+    if (!byName.has(key)) byName.set(key, cat);
+  }
+
+  return Array.from(byName.values()).map((cat) => {
+    // Count products ở TẤT CẢ id có cùng name (đề phòng dupe id nhưng sản phẩm
+    // đã gắn rải rác nhiều id).
+    const sameIds = (categories ?? [])
+      .filter(
+        (c) =>
+          String(c.name ?? "").trim().toLowerCase() ===
+          String(cat.name ?? "").trim().toLowerCase(),
+      )
+      .map((c) => c.id);
+    return {
+      label: cat.name,
+      value: cat.id,
+      code: cat.code ?? undefined,
+      count: (products ?? []).filter((p) =>
+        sameIds.includes(p.category_id as string),
+      ).length,
+    };
+  });
 }
 
 export async function getProductById(id: string): Promise<ProductDetail | null> {

@@ -11,7 +11,7 @@
  * SĐT bắt buộc format VN để login bằng SĐT work (migration 00036).
  */
 
-import { useEffect, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import {
   Card,
   CardHeader,
@@ -34,9 +34,16 @@ function isValidVnPhone(cleaned: string): boolean {
   return false;
 }
 
-/** Initial 2 ký tự từ họ tên để hiện avatar. */
-function getInitials(name: string): string {
-  const parts = name.trim().split(/\s+/).filter(Boolean);
+/**
+ * Initial 2 ký tự từ họ tên để hiện avatar.
+ * Phải defensive với name null/undefined/empty vì DB cho phép null — nếu không
+ * `.trim()` trên null → throw TypeError → (main)/error.tsx catch → trang "Đã xảy ra lỗi".
+ */
+function getInitials(name: string | null | undefined): string {
+  if (!name) return "?";
+  const trimmed = String(name).trim();
+  if (!trimmed) return "?";
+  const parts = trimmed.split(/\s+/).filter(Boolean);
   if (parts.length === 0) return "?";
   if (parts.length === 1) return parts[0].slice(0, 2).toUpperCase();
   return (parts[0][0] + parts[parts.length - 1][0]).toUpperCase();
@@ -63,7 +70,8 @@ function getRoleLabel(role: string): string {
 export default function HoSoPage() {
   const { user, tenant, currentBranch, refreshProfile, isLoading } = useAuth();
   const { toast } = useToast();
-  const supabase = createClient();
+  // createClient() singleton — useMemo để client ổn định giữa các render.
+  const supabase = useMemo(() => createClient(), []);
 
   // Profile form
   const [fullName, setFullName] = useState("");
@@ -95,6 +103,14 @@ export default function HoSoPage() {
       </div>
     );
   }
+
+  // Defensive fallbacks — các field tuy typed là required nhưng DB có thể null
+  // (email cho user SĐT-only, fullName chưa set). Nếu không phòng ngừa, crash
+  // ở getInitials / Input.value / .trim() → error boundary bật lên.
+  const safeFullName = user.fullName ?? "";
+  const safeEmail = user.email ?? "";
+  const safePhone = user.phone ?? "";
+  const safeRole = user.role ?? "staff";
 
   const handleSaveProfile = async () => {
     const nameTrimmed = fullName.trim();
@@ -129,7 +145,8 @@ export default function HoSoPage() {
     try {
       // Check trùng SĐT trong cùng tenant (trừ chính mình). DB có unique
       // partial index (normalize_phone) nhưng pre-check để message thân thiện.
-      if (phoneCleaned !== (user.phone ?? "")) {
+      // Skip nếu tenantId rỗng (fallback profile khi DB chưa ready).
+      if (user.tenantId && phoneCleaned !== safePhone) {
         const { data: dup } = await supabase
           .from("profiles")
           .select("id, full_name")
@@ -229,9 +246,19 @@ export default function HoSoPage() {
     setSavingPassword(true);
     try {
       // Verify mật khẩu cũ bằng signInWithPassword. Supabase cho phép gọi
-      // lại với credentials hiện tại — không làm mất session.
+      // lại với credentials hiện tại — không làm mất session. Yêu cầu user
+      // có email (user SĐT-only sẽ bỏ flow này qua nhánh reset riêng).
+      if (!safeEmail) {
+        toast({
+          title: "Tài khoản không có email",
+          description: "Dùng 'Quên mật khẩu' để đặt lại thay vì đổi tại đây.",
+          variant: "error",
+        });
+        setSavingPassword(false);
+        return;
+      }
       const { error: verifyError } = await supabase.auth.signInWithPassword({
-        email: user.email,
+        email: safeEmail,
         password: currentPassword,
       });
       if (verifyError) {
@@ -276,11 +303,11 @@ export default function HoSoPage() {
     }
   };
 
-  const initials = getInitials(user.fullName);
-  const roleLabel = getRoleLabel(user.role);
+  const initials = getInitials(safeFullName);
+  const roleLabel = getRoleLabel(safeRole);
   const hasProfileChanges =
-    fullName.trim() !== user.fullName ||
-    phone.replace(/[\s-]/g, "") !== (user.phone ?? "");
+    fullName.trim() !== safeFullName ||
+    phone.replace(/[\s-]/g, "") !== safePhone;
 
   return (
     <div className="flex flex-col h-full">
@@ -303,15 +330,15 @@ export default function HoSoPage() {
                 {initials}
               </div>
               <div className="space-y-1">
-                <p className="font-medium">{user.fullName}</p>
+                <p className="font-medium">{safeFullName || "(Chưa đặt tên)"}</p>
                 <div className="flex items-center gap-2 flex-wrap">
                   <Badge variant="secondary">{roleLabel}</Badge>
-                  {tenant && (
+                  {tenant?.name && (
                     <span className="text-xs text-muted-foreground">
                       · {tenant.name}
                     </span>
                   )}
-                  {currentBranch && (
+                  {currentBranch?.name && (
                     <span className="text-xs text-muted-foreground">
                       · {currentBranch.name}
                     </span>
@@ -339,7 +366,8 @@ export default function HoSoPage() {
                 <Input
                   id="email"
                   type="email"
-                  value={user.email}
+                  value={safeEmail}
+                  placeholder="(Không có email)"
                   disabled
                 />
                 <p className="text-xs text-muted-foreground">
