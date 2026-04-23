@@ -154,7 +154,7 @@ export { getBranchStock, getBranchStockRows, getBranchStockPage, getBranchStockA
 export type { BranchStockRow } from "./branch-stock";
 
 // Branches (enhanced)
-export { getBranches, createBranch, updateBranch, syncInternalEntities } from "./branches";
+export { getBranches, createBranch, updateBranch, setBranchDefault, syncInternalEntities } from "./branches";
 export type { BranchDetail } from "./branches";
 export { BRANCH_TYPE_LABELS, BRANCH_CODE_PREFIX } from "./branches";
 

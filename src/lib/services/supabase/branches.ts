@@ -31,27 +31,66 @@ export async function getBranches(): Promise<BranchDetail[]> {
 }
 
 export async function createBranch(branch: {
+  /** Tenant của user hiện tại — bắt buộc pass đúng, không để Supabase tự infer. */
+  tenantId: string;
   name: string;
   code?: string;
   branchType?: "store" | "warehouse" | "factory" | "office";
   address?: string;
   phone?: string;
+  isDefault?: boolean;
 }): Promise<BranchDetail> {
+  if (!branch.tenantId) {
+    throw new Error("Thiếu tenantId khi tạo chi nhánh");
+  }
+  // Nếu đánh dấu default thì clear default cũ trước để không vi phạm
+  // nguyên tắc "mỗi tenant 1 default".
+  if (branch.isDefault) {
+    await supabase
+      .from("branches")
+      .update({ is_default: false })
+      .eq("tenant_id", branch.tenantId)
+      .eq("is_default", true);
+  }
   const { data, error } = await supabase
     .from("branches")
     .insert({
-      tenant_id: "",
+      tenant_id: branch.tenantId,
       name: branch.name,
       code: branch.code ?? null,
       branch_type: branch.branchType ?? "store",
       address: branch.address ?? null,
       phone: branch.phone ?? null,
+      is_default: branch.isDefault ?? false,
     })
     .select()
     .single();
 
   if (error) throw error;
   return mapBranch(data);
+}
+
+/**
+ * Set chi nhánh làm mặc định. Đồng bộ clear default cũ (chỉ 1 default/tenant).
+ */
+export async function setBranchDefault(
+  branchId: string,
+  tenantId: string,
+): Promise<void> {
+  // 1. Clear default cũ
+  const { error: clearErr } = await supabase
+    .from("branches")
+    .update({ is_default: false })
+    .eq("tenant_id", tenantId)
+    .eq("is_default", true);
+  if (clearErr) throw clearErr;
+
+  // 2. Set default mới
+  const { error: setErr } = await supabase
+    .from("branches")
+    .update({ is_default: true })
+    .eq("id", branchId);
+  if (setErr) throw setErr;
 }
 
 export async function updateBranch(
