@@ -19,7 +19,7 @@ import {
   SelectItem,
 } from "@/components/ui/select";
 import { Checkbox } from "@/components/ui/checkbox";
-import { Tabs, TabsList, TabsTrigger } from "@/components/ui/tabs";
+import { Tabs, TabsList, TabsTrigger, TabsContent } from "@/components/ui/tabs";
 import { useToast } from "@/lib/contexts";
 import {
   createProduct,
@@ -34,10 +34,23 @@ import type { Product } from "@/lib/types";
 
 type ShelfLifeUnit = "day" | "month" | "year";
 type SupplierOption = { id: string; name: string; code?: string };
+type InnerTab = "info" | "pricing";
 
 // VAT phổ biến ở VN: 0% (không chịu), 5% (giảm thuế hoặc nông sản), 8%
 // (giảm theo NĐ), 10% (chuẩn). User vẫn có thể nhập tuỳ ý qua ô "Khác".
 const VAT_OPTIONS = ["0", "5", "8", "10"];
+
+// Currency input: lưu raw digits trong state, format khi render. CEO complain
+// "195000" khó đọc — VN convention dùng "195.000" với separator ".".
+function formatVnd(value: string): string {
+  if (!value) return "";
+  const digits = value.replace(/\D/g, "");
+  if (!digits) return "";
+  return Number(digits).toLocaleString("vi-VN");
+}
+function parseVnd(value: string): string {
+  return value.replace(/\D/g, "");
+}
 
 interface CreateProductDialogProps {
   open: boolean;
@@ -92,6 +105,11 @@ export function CreateProductDialog({
   const [errors, setErrors] = useState<Record<string, string>>({});
   const [saving, setSaving] = useState(false);
 
+  // Inner tab — chia dialog thành 2 section để gọn (CEO feedback layout dài).
+  // Tab 1 "info": identity (tên, nhóm, NCC, ĐVT, ảnh, mô tả).
+  // Tab 2 "pricing": giá / VAT / tồn / HSD / trọng lượng.
+  const [innerTab, setInnerTab] = useState<InnerTab>("info");
+
   // NCC list cho picker. Load lúc open dialog để có sẵn cho edit mode prefill.
   const [suppliers, setSuppliers] = useState<SupplierOption[]>([]);
 
@@ -124,6 +142,7 @@ export function CreateProductDialog({
       setImage(initialData.image || null);
       setAllowSale(true);
       setErrors({});
+      setInnerTab("info");
     } else {
       setScope("nvl");
       setCategoryId("");
@@ -149,6 +168,7 @@ export function CreateProductDialog({
       setImage(null);
       setAllowSale(true);
       setErrors({});
+      setInnerTab("info");
     }
   }, [open, initialData]);
 
@@ -194,6 +214,13 @@ export function CreateProductDialog({
         e.sellPrice = "Giá bán không hợp lệ";
     }
     setErrors(e);
+    // Auto-switch tab về tab có lỗi đầu tiên — UX: user không phải đoán
+    // tab nào đang lỗi khi bấm Lưu.
+    if (e.name || e.category) {
+      setInnerTab("info");
+    } else if (e.sellPrice) {
+      setInnerTab("pricing");
+    }
     return Object.keys(e).length === 0;
   }
 
@@ -303,29 +330,60 @@ export function CreateProductDialog({
           </TabsList>
         </Tabs>
 
-        <div className="grid gap-4 py-2">
-          <div className="flex justify-center">
-            <ProductImageUpload value={image} onChange={setImage} />
-          </div>
+        <div className="py-2">
+        <Tabs value={innerTab} onValueChange={(v) => setInnerTab(v as InnerTab)}>
+          <TabsList className="w-full mb-4">
+            <TabsTrigger value="info" className="flex-1">
+              <Icon name="info" size={14} className="mr-1.5" />
+              Thông tin
+              {(errors.name || errors.category) && (
+                <span className="ml-1.5 inline-block h-1.5 w-1.5 rounded-full bg-destructive" />
+              )}
+            </TabsTrigger>
+            <TabsTrigger value="pricing" className="flex-1">
+              <Icon name="payments" size={14} className="mr-1.5" />
+              Giá & Tồn kho
+              {errors.sellPrice && (
+                <span className="ml-1.5 inline-block h-1.5 w-1.5 rounded-full bg-destructive" />
+              )}
+            </TabsTrigger>
+          </TabsList>
 
-          <div className="space-y-1.5">
-            <label className="text-sm font-medium">
-              Tên hàng <span className="text-destructive">*</span>
-            </label>
-            <Input
-              value={name}
-              onChange={(e) => setName(e.target.value)}
-              placeholder={
-                scope === "nvl"
-                  ? "VD: Cà phê hạt Robusta S18 60kg/bao"
-                  : "VD: Robusta Rang Xay 1kg"
-              }
-              aria-invalid={!!errors.name}
-            />
-            {errors.name && <p className="text-xs text-destructive">{errors.name}</p>}
-          </div>
+          {/* ─────────── Tab 1: Thông tin ─────────── */}
+          <TabsContent value="info" className="space-y-4 mt-0">
+            {/* Header row: Ảnh + Tên + Mã code (read-only nếu edit) */}
+            <div className="flex gap-4 items-start">
+              <ProductImageUpload value={image} onChange={setImage} />
+              <div className="flex-1 space-y-1.5 min-w-0">
+                <label className="text-sm font-medium">
+                  Tên hàng <span className="text-destructive">*</span>
+                </label>
+                <Input
+                  value={name}
+                  onChange={(e) => setName(e.target.value)}
+                  placeholder={
+                    scope === "nvl"
+                      ? "VD: Cà phê hạt Robusta S18 60kg/bao"
+                      : "VD: Robusta Rang Xay 1kg"
+                  }
+                  aria-invalid={!!errors.name}
+                />
+                {errors.name && (
+                  <p className="text-xs text-destructive">{errors.name}</p>
+                )}
+                {isEdit && initialData?.code && (
+                  <p className="text-xs text-muted-foreground">
+                    Mã:{" "}
+                    <span className="font-mono font-medium text-foreground">
+                      {initialData.code}
+                    </span>{" "}
+                    — không thể đổi
+                  </p>
+                )}
+              </div>
+            </div>
 
-          <div className="grid grid-cols-2 gap-4">
+            <div className="grid grid-cols-2 gap-4">
             <div className="space-y-1.5">
               <label className="text-sm font-medium">
                 Nhóm hàng <span className="text-destructive">*</span>
@@ -455,205 +513,220 @@ export function CreateProductDialog({
             </div>
           )}
 
-          {/* UOM 3 đơn vị */}
-          <div className="grid grid-cols-3 gap-4">
-            <div className="space-y-1.5">
-              <label className="text-sm font-medium">ĐVT mua</label>
-              <Input
-                value={purchaseUnit}
-                onChange={(e) => setPurchaseUnit(e.target.value)}
-                placeholder="thùng, bao..."
-              />
-            </div>
-            <div className="space-y-1.5">
-              <label className="text-sm font-medium">
-                ĐVT kho <span className="text-muted-foreground">(chuẩn)</span>
-              </label>
-              <Input
-                value={stockUnit}
-                onChange={(e) => setStockUnit(e.target.value)}
-                placeholder="lon, gói, kg..."
-              />
-            </div>
-            <div className="space-y-1.5">
-              <label className="text-sm font-medium">ĐVT bán</label>
-              <Input
-                value={sellUnit}
-                onChange={(e) => setSellUnit(e.target.value)}
-                placeholder="thùng, lốc..."
-                disabled={scope === "nvl"}
-              />
-            </div>
-          </div>
-
-          {/* Pricing — giá vốn / giá bán / VAT. VAT theo danh sách chuẩn VN. */}
-          <div className="grid grid-cols-3 gap-4">
-            <div className="space-y-1.5">
-              <label className="text-sm font-medium">Giá vốn</label>
-              <Input
-                type="number"
-                value={costPrice}
-                onChange={(e) => setCostPrice(e.target.value)}
-                placeholder="0"
-              />
-            </div>
-            <div className="space-y-1.5">
-              <label className="text-sm font-medium">
-                Giá bán
-                {scope === "sku" && <span className="text-destructive"> *</span>}
-              </label>
-              <Input
-                type="number"
-                value={sellPrice}
-                onChange={(e) => setSellPrice(e.target.value)}
-                placeholder="0"
-                disabled={scope === "nvl"}
-                aria-invalid={!!errors.sellPrice}
-              />
-              {errors.sellPrice && (
-                <p className="text-xs text-destructive">{errors.sellPrice}</p>
-              )}
-            </div>
-            <div className="space-y-1.5">
-              <label className="text-sm font-medium">Thuế VAT (%)</label>
-              <Select
-                value={vatRate}
-                onValueChange={(v) => setVatRate(v ?? "0")}
-                items={VAT_OPTIONS.map((v) => ({ value: v, label: `${v}%` }))}
-              >
-                <SelectTrigger className="w-full">
-                  <SelectValue />
-                </SelectTrigger>
-                <SelectContent>
-                  {VAT_OPTIONS.map((v) => (
-                    <SelectItem key={v} value={v}>
-                      {v}%
-                    </SelectItem>
-                  ))}
-                </SelectContent>
-              </Select>
-            </div>
-          </div>
-
-          {/* Tồn: hiện tại / tối thiểu / tối đa. Min-max dùng cho alert hết hàng. */}
-          <div className="grid grid-cols-3 gap-4">
-            <div className="space-y-1.5">
-              <label className="text-sm font-medium">
-                {isEdit ? "Tồn kho hiện tại" : "Tồn kho ban đầu"}
-              </label>
-              <Input
-                type="number"
-                value={initialStock}
-                onChange={(e) => setInitialStock(e.target.value)}
-                placeholder="0"
-                disabled={isEdit}
-              />
-              {isEdit && (
-                <p className="text-xs text-muted-foreground">
-                  Điều chỉnh tồn qua Kiểm kho / Nhập xuất kho.
-                </p>
-              )}
-            </div>
-            <div className="space-y-1.5">
-              <label className="text-sm font-medium">Tồn tối thiểu</label>
-              <Input
-                type="number"
-                value={minStock}
-                onChange={(e) => setMinStock(e.target.value)}
-                placeholder="0"
-              />
-            </div>
-            <div className="space-y-1.5">
-              <label className="text-sm font-medium">Tồn tối đa</label>
-              <Input
-                type="number"
-                value={maxStock}
-                onChange={(e) => setMaxStock(e.target.value)}
-                placeholder="0"
-              />
-            </div>
-          </div>
-
-          {/* Trọng lượng + HSD. Unit HSD cho phép chọn ngày/tháng/năm. */}
-          <div className="grid grid-cols-3 gap-4">
-            <div className="space-y-1.5">
-              <label className="text-sm font-medium">Trọng lượng (g)</label>
-              <Input
-                type="number"
-                value={weight}
-                onChange={(e) => setWeight(e.target.value)}
-                placeholder="0"
-              />
-            </div>
-            <div className="space-y-1.5">
-              <label className="text-sm font-medium">HSD mặc định</label>
-              <Input
-                type="number"
-                value={shelfLifeDays}
-                onChange={(e) => setShelfLifeDays(e.target.value)}
-                placeholder="VD: 365"
-              />
-            </div>
-            <div className="space-y-1.5">
-              <label className="text-sm font-medium">Đơn vị HSD</label>
-              <Select
-                value={shelfLifeUnit}
-                onValueChange={(v) => setShelfLifeUnit((v as ShelfLifeUnit) ?? "day")}
-                items={[
-                  { value: "day", label: "Ngày" },
-                  { value: "month", label: "Tháng" },
-                  { value: "year", label: "Năm" },
-                ]}
-              >
-                <SelectTrigger className="w-full">
-                  <SelectValue />
-                </SelectTrigger>
-                <SelectContent>
-                  <SelectItem value="day">Ngày</SelectItem>
-                  <SelectItem value="month">Tháng</SelectItem>
-                  <SelectItem value="year">Năm</SelectItem>
-                </SelectContent>
-              </Select>
-            </div>
-          </div>
-
-          {scope === "sku" && (
-            <div className="flex flex-col gap-1">
-              <label className="flex items-center gap-2 text-sm font-medium cursor-pointer">
-                <Checkbox
-                  checked={hasBom}
-                  onCheckedChange={(c) => setHasBom(!!c)}
+            {/* UOM 3 đơn vị — gom chung 1 row, NVL chỉ disable ĐVT bán */}
+            <div className="grid grid-cols-3 gap-4">
+              <div className="space-y-1.5">
+                <label className="text-sm font-medium">ĐVT mua</label>
+                <Input
+                  value={purchaseUnit}
+                  onChange={(e) => setPurchaseUnit(e.target.value)}
+                  placeholder="thùng, bao..."
                 />
-                Có công thức sản xuất (BOM)
-              </label>
-              <p className="text-xs text-muted-foreground ml-6">
-                Bật nếu SKU này tự sản xuất từ NVL
-              </p>
+              </div>
+              <div className="space-y-1.5">
+                <label className="text-sm font-medium">
+                  ĐVT kho{" "}
+                  <span className="text-muted-foreground">(chuẩn)</span>
+                </label>
+                <Input
+                  value={stockUnit}
+                  onChange={(e) => setStockUnit(e.target.value)}
+                  placeholder="lon, gói, kg..."
+                />
+              </div>
+              <div className="space-y-1.5">
+                <label className="text-sm font-medium">ĐVT bán</label>
+                <Input
+                  value={sellUnit}
+                  onChange={(e) => setSellUnit(e.target.value)}
+                  placeholder="thùng, lốc..."
+                  disabled={scope === "nvl"}
+                />
+              </div>
             </div>
-          )}
 
-          <div className="space-y-1.5">
-            <label className="text-sm font-medium">Mô tả</label>
-            <textarea
-              className="flex min-h-[60px] w-full rounded-lg border border-input bg-transparent px-2.5 py-2 text-sm transition-colors outline-none placeholder:text-muted-foreground focus-visible:border-ring focus-visible:ring-3 focus-visible:ring-ring/50 disabled:cursor-not-allowed disabled:opacity-50"
-              value={description}
-              onChange={(e) => setDescription(e.target.value)}
-              placeholder="Mô tả sản phẩm"
-              rows={2}
-            />
-          </div>
-
-          {scope === "sku" && (
-            <div className="flex items-center gap-2">
-              <Checkbox
-                checked={allowSale}
-                onCheckedChange={(checked) => setAllowSale(!!checked)}
+            <div className="space-y-1.5">
+              <label className="text-sm font-medium">Mô tả</label>
+              <textarea
+                className="flex min-h-[72px] w-full rounded-lg border border-input bg-transparent px-2.5 py-2 text-sm transition-colors outline-none placeholder:text-muted-foreground focus-visible:border-ring focus-visible:ring-3 focus-visible:ring-ring/50 disabled:cursor-not-allowed disabled:opacity-50"
+                value={description}
+                onChange={(e) => setDescription(e.target.value)}
+                placeholder="Mô tả sản phẩm (xuất xứ, đặc điểm, ghi chú nội bộ…)"
+                rows={3}
               />
-              <label className="text-sm font-medium cursor-pointer">
-                Cho phép bán
-              </label>
             </div>
-          )}
+          </TabsContent>
+
+          {/* ─────────── Tab 2: Giá & Tồn kho ─────────── */}
+          <TabsContent value="pricing" className="space-y-4 mt-0">
+            {/* NVL banner — giải thích vì sao Giá bán + ĐVT bán bị disabled, tránh
+                CEO tưởng là bug. NVL = nguyên vật liệu nội bộ, không bán cho khách. */}
+            {scope === "nvl" && (
+              <div className="flex items-start gap-2 rounded-lg bg-muted/40 px-3 py-2.5 text-xs text-muted-foreground">
+                <Icon name="info" size={14} className="mt-0.5 shrink-0" />
+                <span>
+                  NVL là nguyên vật liệu nội bộ — không có giá bán. Chuyển sang
+                  loại <strong>Hàng bán (SKU)</strong> nếu cần thiết lập giá bán.
+                </span>
+              </div>
+            )}
+
+            {/* Pricing — giá vốn / giá bán / VAT. Format số có dấu chấm ngăn cách. */}
+            <div className="grid grid-cols-3 gap-4">
+              <div className="space-y-1.5">
+                <label className="text-sm font-medium">Giá vốn (₫)</label>
+                <Input
+                  inputMode="numeric"
+                  value={formatVnd(costPrice)}
+                  onChange={(e) => setCostPrice(parseVnd(e.target.value))}
+                  placeholder="0"
+                />
+              </div>
+              <div className="space-y-1.5">
+                <label className="text-sm font-medium">
+                  Giá bán (₫)
+                  {scope === "sku" && (
+                    <span className="text-destructive"> *</span>
+                  )}
+                </label>
+                <Input
+                  inputMode="numeric"
+                  value={formatVnd(sellPrice)}
+                  onChange={(e) => setSellPrice(parseVnd(e.target.value))}
+                  placeholder={scope === "nvl" ? "Không áp dụng" : "0"}
+                  disabled={scope === "nvl"}
+                  aria-invalid={!!errors.sellPrice}
+                />
+                {errors.sellPrice && (
+                  <p className="text-xs text-destructive">{errors.sellPrice}</p>
+                )}
+              </div>
+              <div className="space-y-1.5">
+                <label className="text-sm font-medium">Thuế VAT (%)</label>
+                <Select
+                  value={vatRate}
+                  onValueChange={(v) => setVatRate(v ?? "0")}
+                  items={VAT_OPTIONS.map((v) => ({ value: v, label: `${v}%` }))}
+                >
+                  <SelectTrigger className="w-full">
+                    <SelectValue />
+                  </SelectTrigger>
+                  <SelectContent>
+                    {VAT_OPTIONS.map((v) => (
+                      <SelectItem key={v} value={v}>
+                        {v}%
+                      </SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+              </div>
+            </div>
+
+            {/* Tồn: hiện tại / tối thiểu / tối đa. Min-max dùng cho alert hết hàng. */}
+            <div className="grid grid-cols-3 gap-4">
+              <div className="space-y-1.5">
+                <label className="text-sm font-medium">
+                  {isEdit ? "Tồn hiện tại" : "Tồn ban đầu"}
+                </label>
+                <Input
+                  type="number"
+                  value={initialStock}
+                  onChange={(e) => setInitialStock(e.target.value)}
+                  placeholder="0"
+                  disabled={isEdit}
+                />
+                {isEdit && (
+                  <p className="text-xs text-muted-foreground">
+                    Sửa qua Kiểm kho / Nhập xuất kho.
+                  </p>
+                )}
+              </div>
+              <div className="space-y-1.5">
+                <label className="text-sm font-medium">Tồn tối thiểu</label>
+                <Input
+                  type="number"
+                  value={minStock}
+                  onChange={(e) => setMinStock(e.target.value)}
+                  placeholder="0"
+                />
+              </div>
+              <div className="space-y-1.5">
+                <label className="text-sm font-medium">Tồn tối đa</label>
+                <Input
+                  type="number"
+                  value={maxStock}
+                  onChange={(e) => setMaxStock(e.target.value)}
+                  placeholder="0"
+                />
+              </div>
+            </div>
+
+            {/* Trọng lượng + HSD số + đơn vị — gom thành 1 row */}
+            <div className="grid grid-cols-3 gap-4">
+              <div className="space-y-1.5">
+                <label className="text-sm font-medium">Trọng lượng (g)</label>
+                <Input
+                  type="number"
+                  value={weight}
+                  onChange={(e) => setWeight(e.target.value)}
+                  placeholder="0"
+                />
+              </div>
+              <div className="space-y-1.5">
+                <label className="text-sm font-medium">HSD mặc định</label>
+                <Input
+                  type="number"
+                  value={shelfLifeDays}
+                  onChange={(e) => setShelfLifeDays(e.target.value)}
+                  placeholder="VD: 365"
+                />
+              </div>
+              <div className="space-y-1.5">
+                <label className="text-sm font-medium">Đơn vị HSD</label>
+                <Select
+                  value={shelfLifeUnit}
+                  onValueChange={(v) =>
+                    setShelfLifeUnit((v as ShelfLifeUnit) ?? "day")
+                  }
+                  items={[
+                    { value: "day", label: "Ngày" },
+                    { value: "month", label: "Tháng" },
+                    { value: "year", label: "Năm" },
+                  ]}
+                >
+                  <SelectTrigger className="w-full">
+                    <SelectValue />
+                  </SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="day">Ngày</SelectItem>
+                    <SelectItem value="month">Tháng</SelectItem>
+                    <SelectItem value="year">Năm</SelectItem>
+                  </SelectContent>
+                </Select>
+              </div>
+            </div>
+
+            {/* Toggles cuối — chỉ SKU. Đặt cùng row để gọn. */}
+            {scope === "sku" && (
+              <div className="flex flex-wrap gap-x-6 gap-y-2 pt-2 border-t">
+                <label className="flex items-center gap-2 text-sm font-medium cursor-pointer">
+                  <Checkbox
+                    checked={allowSale}
+                    onCheckedChange={(c) => setAllowSale(!!c)}
+                  />
+                  Cho phép bán
+                </label>
+                <label className="flex items-center gap-2 text-sm font-medium cursor-pointer">
+                  <Checkbox
+                    checked={hasBom}
+                    onCheckedChange={(c) => setHasBom(!!c)}
+                  />
+                  Có công thức sản xuất (BOM)
+                </label>
+              </div>
+            )}
+          </TabsContent>
+        </Tabs>
         </div>
 
         <DialogFooter>
