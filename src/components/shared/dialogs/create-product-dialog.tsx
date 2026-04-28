@@ -27,7 +27,7 @@ import {
   getProductCategoriesAsync,
   getSuppliers,
 } from "@/lib/services";
-import { nextGroupCode } from "@/lib/services/supabase/base";
+import { nextGroupCode, peekNextGroupCode } from "@/lib/services/supabase/base";
 import { Icon } from "@/components/ui/icon";
 import { ProductImageUpload } from "@/components/shared/product-image-upload";
 import type { Product } from "@/lib/types";
@@ -37,8 +37,10 @@ type SupplierOption = { id: string; name: string; code?: string };
 type InnerTab = "info" | "pricing";
 
 // VAT phổ biến ở VN: 0% (không chịu), 5% (giảm thuế hoặc nông sản), 8%
-// (giảm theo NĐ), 10% (chuẩn). User vẫn có thể nhập tuỳ ý qua ô "Khác".
-const VAT_OPTIONS = ["0", "5", "8", "10"];
+// (giảm theo NĐ), 10% (chuẩn). User chọn "Khác..." để input tuỳ ý cho
+// các trường hợp đặc biệt (8.5%, 12%, sản phẩm xuất khẩu, v.v.).
+const VAT_PRESETS = ["0", "5", "8", "10"];
+const VAT_CUSTOM = "__custom__";
 
 // Currency input: lưu raw digits trong state, format khi render. CEO complain
 // "195000" khó đọc — VN convention dùng "195.000" với separator ".".
@@ -96,7 +98,10 @@ export function CreateProductDialog({
   const [brand, setBrand] = useState("");
   const [supplierId, setSupplierId] = useState<string>("");
   const [weight, setWeight] = useState("");
-  const [vatRate, setVatRate] = useState<string>("0");
+  const [vatRate, setVatRate] = useState<string>("10");
+  // Khi user chọn "Khác..." → bật input để nhập VAT tuỳ ý (8.5, 12, ...).
+  // Tự động true nếu prefill 1 giá trị không nằm trong VAT_PRESETS.
+  const [vatCustom, setVatCustom] = useState(false);
   const [minStock, setMinStock] = useState("");
   const [maxStock, setMaxStock] = useState("");
   const [description, setDescription] = useState("");
@@ -112,6 +117,11 @@ export function CreateProductDialog({
 
   // NCC list cho picker. Load lúc open dialog để có sẵn cho edit mode prefill.
   const [suppliers, setSuppliers] = useState<SupplierOption[]>([]);
+
+  // Preview mã SP — query peek_next_group_code khi chọn nhóm (create mode).
+  // Edit mode hiện code thật của SP nên không cần preview.
+  const [previewCode, setPreviewCode] = useState<string>("");
+  const [loadingPreview, setLoadingPreview] = useState(false);
 
   // Reset form khi dialog mở. Nếu có initialData → prefill từ sản phẩm đang sửa.
   useEffect(() => {
@@ -135,7 +145,8 @@ export function CreateProductDialog({
       setBrand(initialData.brand || "");
       setSupplierId(initialData.supplierId || "");
       setWeight(initialData.weight ? String(initialData.weight) : "");
-      setVatRate(String(initialData.vatRate ?? 0));
+      setVatRate(String(initialData.vatRate ?? 10));
+      setVatCustom(!VAT_PRESETS.includes(String(initialData.vatRate ?? 10)));
       setMinStock(initialData.minStock ? String(initialData.minStock) : "");
       setMaxStock(initialData.maxStock ? String(initialData.maxStock) : "");
       setDescription(initialData.description || "");
@@ -161,7 +172,8 @@ export function CreateProductDialog({
       setBrand("");
       setSupplierId("");
       setWeight("");
-      setVatRate("0");
+      setVatRate("10");
+      setVatCustom(false);
       setMinStock("");
       setMaxStock("");
       setDescription("");
@@ -203,6 +215,33 @@ export function CreateProductDialog({
   }, [open, scope, isEdit]);
 
   const selectedCategory = categories.find((c) => c.value === categoryId);
+  const selectedCategoryCode = selectedCategory?.code;
+
+  // Preview mã SP tiếp theo khi user chọn nhóm (create mode).
+  // peek_next_group_code RPC trả về mã thật như NVL-CPH-014 — không phải XXX.
+  // Edit mode: skip vì SP đã có code cố định, không sinh mới.
+  useEffect(() => {
+    if (!open || isEdit || !selectedCategoryCode) {
+      setPreviewCode("");
+      return;
+    }
+    let cancelled = false;
+    setLoadingPreview(true);
+    const prefix = scope === "nvl" ? "NVL" : "SKU";
+    peekNextGroupCode(prefix, selectedCategoryCode)
+      .then((code) => {
+        if (!cancelled) setPreviewCode(code);
+      })
+      .catch(() => {
+        // Fallback đã handle trong peekNextGroupCode → string XXX
+      })
+      .finally(() => {
+        if (!cancelled) setLoadingPreview(false);
+      });
+    return () => {
+      cancelled = true;
+    };
+  }, [open, isEdit, scope, selectedCategoryCode]);
 
   function validate(): boolean {
     const e: Record<string, string> = {};
@@ -423,9 +462,14 @@ export function CreateProductDialog({
               {errors.category && (
                 <p className="text-xs text-destructive">{errors.category}</p>
               )}
-              {selectedCategory?.code && (
+              {!isEdit && selectedCategory?.code && (
                 <p className="text-xs text-muted-foreground">
-                  Mã sẽ là: {scope === "nvl" ? "NVL" : "SKU"}-{selectedCategory.code}-XXX
+                  Mã sẽ là:{" "}
+                  <span className="font-mono font-medium text-foreground">
+                    {loadingPreview
+                      ? `${scope === "nvl" ? "NVL" : "SKU"}-${selectedCategory.code}-...`
+                      : previewCode || `${scope === "nvl" ? "NVL" : "SKU"}-${selectedCategory.code}-001`}
+                  </span>
                 </p>
               )}
             </div>
@@ -603,22 +647,60 @@ export function CreateProductDialog({
               </div>
               <div className="space-y-1.5">
                 <label className="text-sm font-medium">Thuế VAT (%)</label>
-                <Select
-                  value={vatRate}
-                  onValueChange={(v) => setVatRate(v ?? "0")}
-                  items={VAT_OPTIONS.map((v) => ({ value: v, label: `${v}%` }))}
-                >
-                  <SelectTrigger className="w-full">
-                    <SelectValue />
-                  </SelectTrigger>
-                  <SelectContent>
-                    {VAT_OPTIONS.map((v) => (
-                      <SelectItem key={v} value={v}>
-                        {v}%
-                      </SelectItem>
-                    ))}
-                  </SelectContent>
-                </Select>
+                {vatCustom ? (
+                  <div className="flex gap-1">
+                    <Input
+                      type="number"
+                      step="0.1"
+                      min="0"
+                      max="100"
+                      value={vatRate}
+                      onChange={(e) => setVatRate(e.target.value)}
+                      placeholder="VD: 8.5"
+                      autoFocus
+                    />
+                    <Button
+                      type="button"
+                      variant="ghost"
+                      size="icon"
+                      className="h-9 w-9 shrink-0"
+                      title="Quay lại danh sách chuẩn"
+                      onClick={() => {
+                        setVatCustom(false);
+                        setVatRate("10");
+                      }}
+                    >
+                      <Icon name="close" size={14} />
+                    </Button>
+                  </div>
+                ) : (
+                  <Select
+                    value={vatRate}
+                    onValueChange={(v) => {
+                      if (v === VAT_CUSTOM) {
+                        setVatCustom(true);
+                      } else {
+                        setVatRate(v ?? "10");
+                      }
+                    }}
+                    items={[
+                      ...VAT_PRESETS.map((v) => ({ value: v, label: `${v}%` })),
+                      { value: VAT_CUSTOM, label: "Khác..." },
+                    ]}
+                  >
+                    <SelectTrigger className="w-full">
+                      <SelectValue />
+                    </SelectTrigger>
+                    <SelectContent>
+                      {VAT_PRESETS.map((v) => (
+                        <SelectItem key={v} value={v}>
+                          {v}%
+                        </SelectItem>
+                      ))}
+                      <SelectItem value={VAT_CUSTOM}>Khác...</SelectItem>
+                    </SelectContent>
+                  </Select>
+                )}
               </div>
             </div>
 

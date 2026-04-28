@@ -197,3 +197,29 @@ export async function nextGroupCode(prefix: string, groupCode: string): Promise<
   if (error) handleError(error, "nextGroupCode");
   return data as string;
 }
+
+/**
+ * Preview mã group code TIẾP THEO mà KHÔNG tăng counter.
+ *
+ * Dùng cho UI tạo SP hiển thị mã thật (`NVL-CPH-014`) ngay khi user chọn
+ * nhóm — không phải placeholder `XXX`. next_group_code() chỉ gọi khi save.
+ *
+ * Nếu peek thất bại (RPC chưa migrate / network) → fallback `{prefix}-{group}-XXX`
+ * để UI vẫn render được, không block luồng.
+ */
+export async function peekNextGroupCode(
+  prefix: string,
+  groupCode: string,
+): Promise<string> {
+  const supabase = getClient();
+  const tenantId = await getCurrentTenantId();
+  const { data, error } = await supabase.rpc("peek_next_group_code", {
+    p_tenant_id: tenantId,
+    p_prefix: prefix,
+    p_group_code: groupCode,
+  });
+  if (error || !data) {
+    return `${prefix}-${groupCode}-XXX`;
+  }
+  return data as string;
+}

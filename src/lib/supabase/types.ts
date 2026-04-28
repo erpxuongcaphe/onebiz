@@ -2818,6 +2818,14 @@ export interface Database {
         };
         Returns: string;
       };
+      peek_next_group_code: {
+        Args: {
+          p_tenant_id: string;
+          p_prefix: string;
+          p_group_code: string;
+        };
+        Returns: string;
+      };
       calculate_bom_cost: {
         Args: {
           p_bom_id: string;
