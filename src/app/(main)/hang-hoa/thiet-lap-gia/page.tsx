@@ -17,8 +17,10 @@ import {
 import {
   PriceTierDialog,
   AddPriceTierItemDialog,
+  EditPriceTierItemDialog,
 } from "@/components/shared/dialogs";
 import { ConfirmDialog } from "@/components/shared/dialogs/confirm-dialog";
+import { SummaryCard } from "@/components/shared/summary-card";
 import { formatCurrency, formatDate } from "@/lib/format";
 import { useToast } from "@/lib/contexts";
 import {
@@ -26,7 +28,17 @@ import {
   getPriceTierItems,
   deletePriceTier,
   deletePriceTierItem,
+  duplicatePriceTier,
 } from "@/lib/services";
+import { Input } from "@/components/ui/input";
+import {
+  Dialog,
+  DialogContent,
+  DialogHeader,
+  DialogTitle,
+  DialogDescription,
+  DialogFooter,
+} from "@/components/ui/dialog";
 import type { PriceTier, PriceTierItem } from "@/lib/types";
 import { Icon } from "@/components/ui/icon";
 
@@ -47,6 +59,7 @@ function PriceTierDetail({
   const [items, setItems] = useState<PriceTierItem[]>([]);
   const [loading, setLoading] = useState(true);
   const [addOpen, setAddOpen] = useState(false);
+  const [editingItem, setEditingItem] = useState<PriceTierItem | null>(null);
   const [deletingItem, setDeletingItem] = useState<PriceTierItem | null>(null);
   const [deleteBusy, setDeleteBusy] = useState(false);
 
@@ -150,13 +163,22 @@ function PriceTierDetail({
                       {item.minQty}
                     </td>
                     <td className="p-2 text-right">
-                      <button
-                        onClick={() => setDeletingItem(item)}
-                        className="text-muted-foreground hover:text-destructive transition-colors"
-                        title="Xoá"
-                      >
-                        <Icon name="delete" size={14} />
-                      </button>
+                      <div className="flex items-center justify-end gap-1">
+                        <button
+                          onClick={() => setEditingItem(item)}
+                          className="text-muted-foreground hover:text-foreground transition-colors p-1"
+                          title="Sửa giá"
+                        >
+                          <Icon name="edit" size={14} />
+                        </button>
+                        <button
+                          onClick={() => setDeletingItem(item)}
+                          className="text-muted-foreground hover:text-destructive transition-colors p-1"
+                          title="Xoá"
+                        >
+                          <Icon name="delete" size={14} />
+                        </button>
+                      </div>
                     </td>
                   </tr>
                 ))}
@@ -171,6 +193,18 @@ function PriceTierDetail({
         onOpenChange={setAddOpen}
         tierId={tier.id}
         tierName={tier.name}
+        onSuccess={() => {
+          load();
+          onChange();
+        }}
+      />
+
+      <EditPriceTierItemDialog
+        open={editingItem !== null}
+        onOpenChange={(o) => {
+          if (!o) setEditingItem(null);
+        }}
+        item={editingItem}
         onSuccess={() => {
           load();
           onChange();
@@ -215,6 +249,13 @@ export default function ThietLapGiaPage() {
   const [editingTier, setEditingTier] = useState<PriceTier | null>(null);
   const [deletingTier, setDeletingTier] = useState<PriceTier | null>(null);
   const [deleteTierBusy, setDeleteTierBusy] = useState(false);
+
+  // Clone dialog state — Q3
+  const [cloningTier, setCloningTier] = useState<PriceTier | null>(null);
+  const [cloneName, setCloneName] = useState("");
+  const [cloneCode, setCloneCode] = useState("");
+  const [cloneBusy, setCloneBusy] = useState(false);
+  const [cloneError, setCloneError] = useState("");
 
   const fetchData = useCallback(async () => {
     setLoading(true);
@@ -271,6 +312,61 @@ export default function ThietLapGiaPage() {
       setDeleteTierBusy(false);
     }
   }
+
+  // Clone tier — open dialog với prefill (gợi ý name/code mới)
+  function openClone(tier: PriceTier) {
+    setCloningTier(tier);
+    setCloneName(`${tier.name} (sao chép)`);
+    setCloneCode(`${tier.code}_2`);
+    setCloneError("");
+  }
+
+  async function handleClone() {
+    if (!cloningTier) return;
+    const name = cloneName.trim();
+    const code = cloneCode.trim();
+    if (!name || !code) {
+      setCloneError("Tên và mã không được rỗng");
+      return;
+    }
+    setCloneBusy(true);
+    try {
+      const newTier = await duplicatePriceTier({
+        sourceTierId: cloningTier.id,
+        newName: name,
+        newCode: code,
+      });
+      toast({
+        title: "Nhân bản thành công",
+        description: `Đã tạo "${newTier.name}" (${newTier.code}) với toàn bộ sản phẩm từ "${cloningTier.name}".`,
+        variant: "success",
+      });
+      setCloningTier(null);
+      fetchData();
+    } catch (err) {
+      const msg = err instanceof Error ? err.message : "Vui lòng thử lại";
+      // Detect unique violation (duplicate code)
+      const isDup = /unique|duplicate|23505/i.test(msg);
+      if (isDup) {
+        setCloneError(`Mã "${code}" đã tồn tại — chọn mã khác`);
+      } else {
+        toast({
+          title: "Nhân bản thất bại",
+          description: msg,
+          variant: "error",
+        });
+      }
+    } finally {
+      setCloneBusy(false);
+    }
+  }
+
+  // KPI calculations
+  const totalItems = data.reduce((sum, t) => sum + (t.itemCount ?? 0), 0);
+  const topPriorityTier =
+    data.length > 0
+      ? [...data].sort((a, b) => b.priority - a.priority)[0]
+      : null;
 
   const columns: ColumnDef<PriceTier, unknown>[] = [
     {
@@ -344,6 +440,31 @@ export default function ThietLapGiaPage() {
         ]}
       />
 
+      {/* KPI cards — Q2: 3 metric đầu trang */}
+      {!loading && data.length > 0 && (
+        <div className="grid grid-cols-2 md:grid-cols-3 gap-3 px-4 pt-3">
+          <SummaryCard
+            icon={<Icon name="sell" size={16} />}
+            label="Tổng bảng giá"
+            value={data.length.toString()}
+          />
+          <SummaryCard
+            icon={<Icon name="inventory_2" size={16} />}
+            label="Tổng SP áp dụng"
+            value={totalItems.toString()}
+          />
+          <SummaryCard
+            icon={<Icon name="star" size={16} />}
+            label="Ưu tiên cao nhất"
+            value={
+              topPriorityTier
+                ? `${topPriorityTier.name} (${topPriorityTier.priority})`
+                : "—"
+            }
+          />
+        </div>
+      )}
+
       {!loading && filtered.length === 0 ? (
         <div className="flex-1 flex flex-col items-center justify-center text-muted-foreground">
           <Icon name="sell" size={48} className="mb-3 opacity-30" />
@@ -394,6 +515,11 @@ export default function ThietLapGiaPage() {
               },
             },
             {
+              label: "Nhân bản",
+              icon: <Icon name="content_copy" size={16} />,
+              onClick: () => openClone(row),
+            },
+            {
               label: "Xoá",
               icon: <Icon name="delete" size={16} />,
               onClick: () => setDeletingTier(row),
@@ -428,6 +554,82 @@ export default function ThietLapGiaPage() {
         loading={deleteTierBusy}
         onConfirm={handleDelete}
       />
+
+      {/* Clone dialog — Q3 */}
+      <Dialog
+        open={cloningTier !== null}
+        onOpenChange={(o) => {
+          if (cloneBusy) return;
+          if (!o) setCloningTier(null);
+        }}
+      >
+        <DialogContent className="sm:max-w-md">
+          <DialogHeader>
+            <DialogTitle>Nhân bản bảng giá</DialogTitle>
+            <DialogDescription>
+              Tạo bảng giá mới với toàn bộ sản phẩm từ{" "}
+              <strong className="text-foreground">{cloningTier?.name}</strong>{" "}
+              ({cloningTier?.itemCount ?? 0} sản phẩm). Anh có thể chỉnh giá
+              từng sản phẩm sau khi tạo.
+            </DialogDescription>
+          </DialogHeader>
+
+          <div className="grid gap-3 py-2">
+            <div className="space-y-1.5">
+              <label className="text-sm font-medium">
+                Tên bảng giá mới <span className="text-destructive">*</span>
+              </label>
+              <Input
+                value={cloneName}
+                onChange={(e) => {
+                  setCloneName(e.target.value);
+                  setCloneError("");
+                }}
+                placeholder="VD: Giá quán Q4..."
+                autoFocus
+              />
+            </div>
+            <div className="space-y-1.5">
+              <label className="text-sm font-medium">
+                Mã bảng giá <span className="text-destructive">*</span>
+              </label>
+              <Input
+                value={cloneCode}
+                onChange={(e) => {
+                  setCloneCode(e.target.value.toUpperCase());
+                  setCloneError("");
+                }}
+                placeholder="VD: QUAN_Q4"
+                className="font-mono"
+                aria-invalid={!!cloneError}
+              />
+              {cloneError && (
+                <p className="text-xs text-destructive">{cloneError}</p>
+              )}
+            </div>
+          </div>
+
+          <DialogFooter>
+            <Button
+              variant="outline"
+              disabled={cloneBusy}
+              onClick={() => setCloningTier(null)}
+            >
+              Huỷ
+            </Button>
+            <Button onClick={handleClone} disabled={cloneBusy}>
+              {cloneBusy && (
+                <Icon
+                  name="progress_activity"
+                  size={16}
+                  className="mr-2 animate-spin"
+                />
+              )}
+              Nhân bản
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
     </div>
   );
 }

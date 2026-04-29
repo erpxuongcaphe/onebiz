@@ -1,4 +1,10 @@
 // Pricing service — Price tiers for B2B wholesale
+//
+// Multi-tenant safety:
+//   - price_tiers có cột tenant_id → filter trực tiếp .eq("tenant_id", ...)
+//   - price_tier_items KHÔNG có tenant_id → scope qua FK price_tier_id.
+//     Mọi query items phải validate tier ownership (qua getPriceTiers
+//     đã tenant-filtered) hoặc filter qua join inner price_tiers.
 
 import { createClient } from "@/lib/supabase/client";
 import { getCurrentTenantId } from "./base";
@@ -7,9 +13,11 @@ import type { PriceTier, PriceTierItem } from "@/lib/types";
 const supabase = createClient();
 
 export async function getPriceTiers(): Promise<PriceTier[]> {
+  const tenantId = await getCurrentTenantId();
   const { data, error } = await supabase
     .from("price_tiers")
     .select("*")
+    .eq("tenant_id", tenantId)
     .eq("is_active", true)
     .order("priority");
 
@@ -28,7 +36,8 @@ export async function getPriceTiers(): Promise<PriceTier[]> {
     itemCount: 0,
   }));
 
-  // Count items per tier in a single query
+  // Count items per tier in a single query — IDs đã filter tenant rồi nên
+  // count safe (price_tier_items không có tenant_id, scope via FK).
   if (tiers.length > 0) {
     const ids = tiers.map((t) => t.id);
     const { data: countRows } = await supabase
@@ -50,9 +59,30 @@ export async function getPriceTiers(): Promise<PriceTier[]> {
   return tiers;
 }
 
+/**
+ * Validate 1 tier_id thuộc tenant hiện tại — dùng trước khi mutate items.
+ * Throw nếu tier không tồn tại hoặc thuộc tenant khác.
+ */
+async function assertTierOwnership(tierId: string): Promise<void> {
+  const tenantId = await getCurrentTenantId();
+  const { data, error } = await supabase
+    .from("price_tiers")
+    .select("id")
+    .eq("tenant_id", tenantId)
+    .eq("id", tierId)
+    .maybeSingle();
+  if (error) throw error;
+  if (!data) {
+    throw new Error("Bảng giá không tồn tại hoặc không thuộc tenant của bạn");
+  }
+}
+
 export async function getPriceTierItems(
   tierId: string
 ): Promise<PriceTierItem[]> {
+  // Defense: verify tier thuộc tenant trước khi load items
+  await assertTierOwnership(tierId);
+
   const { data, error } = await supabase
     .from("price_tier_items")
     .select("*, products(name, code)")
@@ -118,6 +148,7 @@ export async function updatePriceTier(
     priority?: number;
   }
 ) {
+  const tenantId = await getCurrentTenantId();
   const updateObj: Record<string, unknown> = {};
   if (updates.name !== undefined) updateObj.name = updates.name;
   if (updates.code !== undefined) updateObj.code = updates.code;
@@ -127,19 +158,110 @@ export async function updatePriceTier(
   const { error } = await supabase
     .from("price_tiers")
     .update(updateObj)
+    .eq("tenant_id", tenantId)
     .eq("id", id);
 
   if (error) throw error;
 }
 
 export async function deletePriceTier(id: string) {
+  const tenantId = await getCurrentTenantId();
   // Soft delete
   const { error } = await supabase
     .from("price_tiers")
     .update({ is_active: false })
+    .eq("tenant_id", tenantId)
     .eq("id", id);
 
   if (error) throw error;
+}
+
+/**
+ * Nhân bản bảng giá: tạo tier mới + copy tất cả items từ tier nguồn.
+ *
+ * CEO chốt Q3: hữu ích khi muốn tạo "Giá quán Q4" giống "Giá quán Q3" rồi
+ * điều chỉnh vài SP. Tránh nhân viên gõ lại 100+ items.
+ *
+ * Logic:
+ *   1. assertTierOwnership(sourceId) — verify tier thuộc tenant
+ *   2. Insert tier mới với name/code do user nhập, copy description + priority
+ *   3. Bulk insert items copy từ source (price + min_qty + product_id +
+ *      variant_id), gắn vào tier mới
+ *
+ * Trả về tier mới đã tạo (có id để FE redirect/expand).
+ */
+export async function duplicatePriceTier(params: {
+  sourceTierId: string;
+  newName: string;
+  newCode: string;
+}): Promise<PriceTier> {
+  const tenantId = await getCurrentTenantId();
+  await assertTierOwnership(params.sourceTierId);
+
+  // 1. Lấy source tier để copy description + priority
+  const { data: source, error: srcErr } = await supabase
+    .from("price_tiers")
+    .select("description, priority")
+    .eq("tenant_id", tenantId)
+    .eq("id", params.sourceTierId)
+    .single();
+  if (srcErr || !source) {
+    throw new Error("Không đọc được bảng giá nguồn");
+  }
+
+  // 2. Tạo tier mới
+  const { data: newTier, error: createErr } = await supabase
+    .from("price_tiers")
+    .insert({
+      tenant_id: tenantId,
+      name: params.newName,
+      code: params.newCode,
+      description: source.description ?? null,
+      priority: source.priority,
+    })
+    .select()
+    .single();
+  if (createErr) throw createErr;
+  if (!newTier) throw new Error("Tạo bảng giá mới thất bại");
+
+  // 3. Copy items từ source → new
+  const { data: srcItems, error: itemsErr } = await supabase
+    .from("price_tier_items")
+    .select("product_id, variant_id, price, min_qty")
+    .eq("price_tier_id", params.sourceTierId);
+  if (itemsErr) throw itemsErr;
+
+  if (srcItems && srcItems.length > 0) {
+    const newItems = srcItems.map((it) => ({
+      price_tier_id: newTier.id,
+      product_id: it.product_id,
+      variant_id: it.variant_id,
+      price: it.price,
+      min_qty: it.min_qty,
+    }));
+    const { error: insertErr } = await supabase
+      .from("price_tier_items")
+      .insert(newItems);
+    if (insertErr) {
+      // Rollback: xoá tier mới (cascade sẽ xoá items đã insert)
+      await supabase.from("price_tiers").delete().eq("id", newTier.id);
+      throw new Error(
+        `Lỗi copy sản phẩm: ${insertErr.message}. Đã rollback bảng giá mới.`,
+      );
+    }
+  }
+
+  return {
+    id: newTier.id,
+    tenantId: newTier.tenant_id,
+    name: newTier.name,
+    code: newTier.code,
+    description: newTier.description ?? undefined,
+    priority: newTier.priority,
+    isActive: newTier.is_active,
+    createdAt: newTier.created_at,
+    updatedAt: newTier.updated_at,
+  };
 }
 
 export async function addPriceTierItem(item: {
@@ -149,6 +271,7 @@ export async function addPriceTierItem(item: {
   price: number;
   minQty?: number;
 }) {
+  await assertTierOwnership(item.priceTierId);
   const { error } = await supabase.from("price_tier_items").insert({
     price_tier_id: item.priceTierId,
     product_id: item.productId,
@@ -164,6 +287,24 @@ export async function updatePriceTierItem(
   id: string,
   updates: { price?: number; minQty?: number }
 ) {
+  // Verify item thuộc tenant qua join price_tiers.
+  // Pattern: query item + tier in 1 read, validate, then update by id.
+  const tenantId = await getCurrentTenantId();
+  const { data: item, error: fetchErr } = await supabase
+    .from("price_tier_items")
+    .select("id, price_tiers!inner(tenant_id)")
+    .eq("id", id)
+    .single();
+  if (fetchErr || !item) {
+    throw new Error("Item bảng giá không tồn tại");
+  }
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  const tier = (item as any).price_tiers;
+  const tierTenantId = Array.isArray(tier) ? tier[0]?.tenant_id : tier?.tenant_id;
+  if (tierTenantId !== tenantId) {
+    throw new Error("Item bảng giá không thuộc tenant của bạn");
+  }
+
   const updateObj: Record<string, unknown> = {};
   if (updates.price !== undefined) updateObj.price = updates.price;
   if (updates.minQty !== undefined) updateObj.min_qty = updates.minQty;
@@ -177,6 +318,23 @@ export async function updatePriceTierItem(
 }
 
 export async function deletePriceTierItem(id: string) {
+  // Validate ownership trước khi xoá (defense-in-depth)
+  const tenantId = await getCurrentTenantId();
+  const { data: item, error: fetchErr } = await supabase
+    .from("price_tier_items")
+    .select("id, price_tiers!inner(tenant_id)")
+    .eq("id", id)
+    .single();
+  if (fetchErr || !item) {
+    throw new Error("Item bảng giá không tồn tại");
+  }
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  const tier = (item as any).price_tiers;
+  const tierTenantId = Array.isArray(tier) ? tier[0]?.tenant_id : tier?.tenant_id;
+  if (tierTenantId !== tenantId) {
+    throw new Error("Item bảng giá không thuộc tenant của bạn");
+  }
+
   const { error } = await supabase
     .from("price_tier_items")
     .delete()
@@ -186,21 +344,22 @@ export async function deletePriceTierItem(id: string) {
 }
 
 // Get best price for a product/variant (optionally scoped to a price tier).
-// If tierId provided → look up that tier's price for this product (or variant).
-// Else → fallback to lowest tier price across all active tiers (legacy behaviour).
+// Tenant scope via inner join price_tiers — đảm bảo không leak tier
+// của tenant khác qua productId share giữa tenants.
 export async function getProductPriceForCustomer(
   productId: string,
   variantId?: string,
   tierId?: string
 ): Promise<number | null> {
+  const tenantId = await getCurrentTenantId();
   let query = supabase
     .from("price_tier_items")
-    .select("price, min_qty, variant_id, price_tier_id")
+    .select("price, min_qty, variant_id, price_tier_id, price_tiers!inner(tenant_id)")
+    .eq("price_tiers.tenant_id", tenantId)
     .eq("product_id", productId);
 
   if (tierId) query = query.eq("price_tier_id", tierId);
   if (variantId) {
-    // Prefer variant-specific price, fallback to base product
     query = query.or(`variant_id.eq.${variantId},variant_id.is.null`);
   }
 
@@ -208,7 +367,6 @@ export async function getProductPriceForCustomer(
 
   if (error || !data?.length) return null;
 
-  // If variant-specific rows exist, prefer those
   const variantMatch = variantId
     ? data.find((r) => r.variant_id === variantId)
     : null;
@@ -217,18 +375,18 @@ export async function getProductPriceForCustomer(
   return data[0].price;
 }
 
-// Batch look-up: fetch all tier prices for a list of products+variants in a
-// single query. Used by the POS cart to re-price lines when the cashier picks
-// a tier or a customer with a tier association.
+// Batch tier prices — tenant-scoped via inner join.
 export async function getTierPricesBatch(
   tierId: string,
   productIds: string[]
 ): Promise<Map<string, { base: number | null; byVariant: Map<string, number> }>> {
   if (productIds.length === 0) return new Map();
+  const tenantId = await getCurrentTenantId();
 
   const { data, error } = await supabase
     .from("price_tier_items")
-    .select("product_id, variant_id, price")
+    .select("product_id, variant_id, price, price_tiers!inner(tenant_id)")
+    .eq("price_tiers.tenant_id", tenantId)
     .eq("price_tier_id", tierId)
     .in("product_id", productIds);
 
