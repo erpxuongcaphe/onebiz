@@ -26,6 +26,7 @@ import {
   updateProduct,
   getProductCategoriesAsync,
   getSuppliers,
+  getAllUnits,
 } from "@/lib/services";
 import { nextGroupCode, peekNextGroupCode } from "@/lib/services/supabase/base";
 import { Icon } from "@/components/ui/icon";
@@ -41,6 +42,20 @@ type InnerTab = "info" | "pricing";
 // các trường hợp đặc biệt (8.5%, 12%, sản phẩm xuất khẩu, v.v.).
 const VAT_PRESETS = ["0", "5", "8", "10"];
 const VAT_CUSTOM = "__custom__";
+
+// Tìm đơn vị tương tự (chỉ khác hoa/thường) trong list existing —
+// VD input "kg", existing có "Kg" → return "Kg" để suggest dùng tên cũ.
+// CEO chốt: "không cho đặt giống nhau" → cảnh báo từ đầu thay vì để
+// nhân viên tạo trùng rồi phải merge sau.
+function findCaseInsensitiveDup(input: string, existing: string[]): string | null {
+  const trimmed = input.trim();
+  if (!trimmed) return null;
+  const lower = trimmed.toLowerCase();
+  const match = existing.find(
+    (u) => u.toLowerCase() === lower && u !== trimmed,
+  );
+  return match ?? null;
+}
 
 // Currency input: lưu raw digits trong state, format khi render. CEO complain
 // "195000" khó đọc — VN convention dùng "195.000" với separator ".".
@@ -118,6 +133,10 @@ export function CreateProductDialog({
   // NCC list cho picker. Load lúc open dialog để có sẵn cho edit mode prefill.
   const [suppliers, setSuppliers] = useState<SupplierOption[]>([]);
 
+  // Existing units list — dùng để cảnh báo case-insensitive duplicate khi
+  // user gõ "kg" mà tenant đã có "Kg" (CEO chốt: "không cho đặt giống nhau").
+  const [existingUnits, setExistingUnits] = useState<string[]>([]);
+
   // Preview mã SP — query peek_next_group_code khi chọn nhóm (create mode).
   // Edit mode hiện code thật của SP nên không cần preview.
   const [previewCode, setPreviewCode] = useState<string>("");
@@ -184,6 +203,24 @@ export function CreateProductDialog({
     }
   }, [open, initialData]);
 
+  // Load existing units khi dialog mở — dùng cho case-insensitive duplicate
+  // warning (3 ô ĐVT). Gọi 1 lần, light query (chỉ 4 cột text).
+  useEffect(() => {
+    if (!open) return;
+    let cancelled = false;
+    getAllUnits()
+      .then((list) => {
+        if (cancelled) return;
+        setExistingUnits(list.map((u) => u.unit));
+      })
+      .catch(() => {
+        // fail silent — warning chỉ là nice-to-have, không block
+      });
+    return () => {
+      cancelled = true;
+    };
+  }, [open]);
+
   // Load NCC list 1 lần mỗi lần dialog mở. 500 NCC ~ 50KB payload — ok.
   // Nếu tenant scale >2k NCC sau này thì đổi sang async search combobox.
   useEffect(() => {
@@ -216,6 +253,11 @@ export function CreateProductDialog({
 
   const selectedCategory = categories.find((c) => c.value === categoryId);
   const selectedCategoryCode = selectedCategory?.code;
+
+  // Case-insensitive dup check cho 3 ô ĐVT
+  const purchaseUnitDup = findCaseInsensitiveDup(purchaseUnit, existingUnits);
+  const stockUnitDup = findCaseInsensitiveDup(stockUnit, existingUnits);
+  const sellUnitDup = findCaseInsensitiveDup(sellUnit, existingUnits);
 
   // Preview mã SP tiếp theo khi user chọn nhóm (create mode).
   // peek_next_group_code RPC trả về mã thật như NVL-CPH-014 — không phải XXX.
@@ -557,7 +599,10 @@ export function CreateProductDialog({
             </div>
           )}
 
-            {/* UOM 3 đơn vị — gom chung 1 row, NVL chỉ disable ĐVT bán */}
+            {/* UOM 3 đơn vị — gom chung 1 row, NVL chỉ disable ĐVT bán.
+                Mỗi ô có cảnh báo case-insensitive dup: nếu user gõ "kg" mà
+                tenant đã có "Kg" → suggest click để dùng tên hiện có,
+                tránh tạo 2 đơn vị tương tự khác hoa/thường. */}
             <div className="grid grid-cols-3 gap-4">
               <div className="space-y-1.5">
                 <label className="text-sm font-medium">ĐVT mua</label>
@@ -566,6 +611,20 @@ export function CreateProductDialog({
                   onChange={(e) => setPurchaseUnit(e.target.value)}
                   placeholder="thùng, bao..."
                 />
+                {purchaseUnitDup && (
+                  <p className="text-xs text-status-warning flex items-center gap-1">
+                    <Icon name="warning" size={12} />
+                    Đã có{" "}
+                    <button
+                      type="button"
+                      onClick={() => setPurchaseUnit(purchaseUnitDup)}
+                      className="font-mono font-medium underline hover:text-foreground"
+                    >
+                      {purchaseUnitDup}
+                    </button>
+                    <span className="text-muted-foreground">— dùng tên đó?</span>
+                  </p>
+                )}
               </div>
               <div className="space-y-1.5">
                 <label className="text-sm font-medium">
@@ -577,6 +636,20 @@ export function CreateProductDialog({
                   onChange={(e) => setStockUnit(e.target.value)}
                   placeholder="lon, gói, kg..."
                 />
+                {stockUnitDup && (
+                  <p className="text-xs text-status-warning flex items-center gap-1">
+                    <Icon name="warning" size={12} />
+                    Đã có{" "}
+                    <button
+                      type="button"
+                      onClick={() => setStockUnit(stockUnitDup)}
+                      className="font-mono font-medium underline hover:text-foreground"
+                    >
+                      {stockUnitDup}
+                    </button>
+                    <span className="text-muted-foreground">— dùng tên đó?</span>
+                  </p>
+                )}
               </div>
               <div className="space-y-1.5">
                 <label className="text-sm font-medium">ĐVT bán</label>
@@ -586,6 +659,20 @@ export function CreateProductDialog({
                   placeholder="thùng, lốc..."
                   disabled={scope === "nvl"}
                 />
+                {sellUnitDup && scope === "sku" && (
+                  <p className="text-xs text-status-warning flex items-center gap-1">
+                    <Icon name="warning" size={12} />
+                    Đã có{" "}
+                    <button
+                      type="button"
+                      onClick={() => setSellUnit(sellUnitDup)}
+                      className="font-mono font-medium underline hover:text-foreground"
+                    >
+                      {sellUnitDup}
+                    </button>
+                    <span className="text-muted-foreground">— dùng tên đó?</span>
+                  </p>
+                )}
               </div>
             </div>
 

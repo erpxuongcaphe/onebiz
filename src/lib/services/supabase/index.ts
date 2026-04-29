@@ -146,8 +146,8 @@ export {
 } from "./reports";
 export type { ConsolidatedPnL, BranchPnLRow } from "./reports";
 
-// UOM Conversions
-export { getUOMConversions, createUOMConversion, updateUOMConversion, deleteUOMConversion, convertQuantity } from "./uom";
+// UOM Conversions + Unit Name Management
+export { getUOMConversions, createUOMConversion, updateUOMConversion, deleteUOMConversion, convertQuantity, getAllUnits, renameUnit, mergeUnits, findSimilarUnit } from "./uom";
 
 // Branch Stock
 export { getBranchStock, getBranchStockRows, getBranchStockPage, getBranchStockAggregates, getProductStockByBranch, getProductStockBreakdown } from "./branch-stock";
