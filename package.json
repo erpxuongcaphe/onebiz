@@ -9,6 +9,10 @@
     "lint": "eslint",
     "test": "vitest",
     "test:run": "vitest run",
+    "test:smoke": "vitest run src/__tests__/smoke/",
+    "check:tenant": "node scripts/check-tenant-isolation.mjs",
+    "smoke:health": "node scripts/smoke-health.mjs",
+    "smoke": "node scripts/smoke-all.mjs",
     "create-admin": "node scripts/create-admin.mjs"
   },
   "dependencies": {
