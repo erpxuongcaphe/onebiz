@@ -164,6 +164,8 @@ export function getProductCategories() {
 export async function getProductCategoriesAsync(scope?: "nvl" | "sku") {
   const supabase = getClient();
 
+  // Dedupe FE band-aid đã được thay bằng UNIQUE constraint DB
+  // (migration 00039) — list trả về luôn unique theo (tenant_id, code, scope).
   let catQuery = supabase
     .from("categories")
     .select("id, name, code, scope")
@@ -183,38 +185,21 @@ export async function getProductCategoriesAsync(scope?: "nvl" | "sku") {
   if (scope) prodQuery = prodQuery.eq("product_type", scope);
   const { data: products } = await prodQuery;
 
-  // Dedupe categories by normalized name. Trước đây CEO báo "Cà phê chai × 4"
-  // ở POS Retail header do seed data duplicate — dedupe ở FE giữ id đầu tiên +
-  // cộng dồn count cho cùng name.
-  const byName = new Map<
-    string,
-    { id: string; name: string; code: string | null }
-  >();
-  for (const cat of categories ?? []) {
-    const key = String(cat.name ?? "").trim().toLowerCase();
-    if (!key) continue;
-    if (!byName.has(key)) byName.set(key, cat);
+  // Map count theo category_id — sau migration 00039 không còn duplicate id
+  // theo cùng (tenant, code, scope) nên đếm trực tiếp.
+  const countByCategoryId = new Map<string, number>();
+  for (const p of products ?? []) {
+    const cid = p.category_id as string | null;
+    if (!cid) continue;
+    countByCategoryId.set(cid, (countByCategoryId.get(cid) ?? 0) + 1);
   }
 
-  return Array.from(byName.values()).map((cat) => {
-    // Count products ở TẤT CẢ id có cùng name (đề phòng dupe id nhưng sản phẩm
-    // đã gắn rải rác nhiều id).
-    const sameIds = (categories ?? [])
-      .filter(
-        (c) =>
-          String(c.name ?? "").trim().toLowerCase() ===
-          String(cat.name ?? "").trim().toLowerCase(),
-      )
-      .map((c) => c.id);
-    return {
-      label: cat.name,
-      value: cat.id,
-      code: cat.code ?? undefined,
-      count: (products ?? []).filter((p) =>
-        sameIds.includes(p.category_id as string),
-      ).length,
-    };
-  });
+  return (categories ?? []).map((cat) => ({
+    label: cat.name,
+    value: cat.id,
+    code: cat.code ?? undefined,
+    count: countByCategoryId.get(cat.id) ?? 0,
+  }));
 }
 
 /**

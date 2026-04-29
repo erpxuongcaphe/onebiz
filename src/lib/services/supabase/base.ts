@@ -204,22 +204,48 @@ export async function nextGroupCode(prefix: string, groupCode: string): Promise<
  * Dùng cho UI tạo SP hiển thị mã thật (`NVL-CPH-014`) ngay khi user chọn
  * nhóm — không phải placeholder `XXX`. next_group_code() chỉ gọi khi save.
  *
- * Nếu peek thất bại (RPC chưa migrate / network) → fallback `{prefix}-{group}-XXX`
- * để UI vẫn render được, không block luồng.
+ * Có timeout 5s để không treo browser nếu RPC chưa migrate. Quan sát thực
+ * tế: khi RPC không tồn tại, supabase-js timeout mặc định 60s gây UI freeze.
+ * Race với Promise.race + AbortController không được supabase-js support
+ * gọn — dùng Promise.race với timeout reject thay thế.
+ *
+ * Nếu peek thất bại (RPC chưa migrate / network / timeout) → fallback
+ * `{prefix}-{group}-XXX` để UI vẫn render được, không block luồng.
  */
 export async function peekNextGroupCode(
   prefix: string,
   groupCode: string,
 ): Promise<string> {
   const supabase = getClient();
-  const tenantId = await getCurrentTenantId();
-  const { data, error } = await supabase.rpc("peek_next_group_code", {
-    p_tenant_id: tenantId,
-    p_prefix: prefix,
-    p_group_code: groupCode,
-  });
-  if (error || !data) {
+  try {
+    const tenantId = await getCurrentTenantId();
+    const fallback = `${prefix}-${groupCode}-XXX`;
+
+    const rpcPromise = supabase
+      .rpc("peek_next_group_code", {
+        p_tenant_id: tenantId,
+        p_prefix: prefix,
+        p_group_code: groupCode,
+      })
+      .then((res) => {
+        if (res.error || !res.data) return fallback;
+        return res.data as string;
+      });
+
+    // 5s timeout — đủ generous cho mạng chậm + cold start RPC, nhưng nhanh
+    // gấp 12 lần default 60s nên user không thấy block trên dropdown.
+    const timeoutPromise = new Promise<string>((resolve) =>
+      setTimeout(() => {
+        console.warn(
+          `[peekNextGroupCode] timeout after 5s for ${prefix}-${groupCode} — fallback XXX`,
+        );
+        resolve(fallback);
+      }, 5000),
+    );
+
+    return Promise.race([rpcPromise, timeoutPromise]);
+  } catch (err) {
+    console.warn("[peekNextGroupCode] failed:", err);
     return `${prefix}-${groupCode}-XXX`;
   }
-  return data as string;
 }
