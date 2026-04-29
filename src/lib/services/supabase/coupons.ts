@@ -4,7 +4,7 @@
 
 import type { Coupon, CouponUsage, CouponValidation, QueryParams, QueryResult } from "@/lib/types";
 import type { Database } from "@/lib/supabase/types";
-import { getClient, getPaginationRange, handleError, getFilterValue } from "./base";
+import { getClient, getPaginationRange, handleError, getFilterValue, getCurrentTenantId } from "./base";
 
 type CouponInsert = Database["public"]["Tables"]["coupons"]["Insert"];
 type CouponUpdate = Database["public"]["Tables"]["coupons"]["Update"];
@@ -99,11 +99,12 @@ export async function getCouponById(id: string): Promise<Coupon | null> {
  */
 export async function createCoupon(coupon: Partial<Coupon>): Promise<Coupon> {
   const supabase = getClient();
+  const tenantId = await getCurrentTenantId();
 
   const { data, error } = await supabase
     .from("coupons")
     .insert({
-      tenant_id: "", // RLS sẽ tự fill qua policy
+      tenant_id: tenantId,
       code: coupon.code!,
       name: coupon.name!,
       description: coupon.description,

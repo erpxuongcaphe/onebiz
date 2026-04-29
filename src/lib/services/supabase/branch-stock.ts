@@ -1,6 +1,10 @@
 // Branch Stock service — Per-branch inventory tracking
+//
+// Multi-tenant safety: mọi query filter tenant_id ngay đầu chain.
+// branch_stock có cột tenant_id; products + branches join cũng cần check.
 
 import { createClient } from "@/lib/supabase/client";
+import { getCurrentTenantId } from "./base";
 import type { BranchStock } from "@/lib/types";
 
 const supabase = createClient();
@@ -31,9 +35,11 @@ export async function getBranchStock(params?: {
   branchId?: string;
   productId?: string;
 }): Promise<BranchStock[]> {
+  const tenantId = await getCurrentTenantId();
   let query = supabase
     .from("branch_stock")
     .select("*")
+    .eq("tenant_id", tenantId)
     .order("updated_at", { ascending: false });
 
   if (params?.branchId) query = query.eq("branch_id", params.branchId);
@@ -86,6 +92,7 @@ export async function getBranchStockPage(params: {
   limit?: number;
   offset?: number;
 }): Promise<{ rows: BranchStockRow[]; total: number }> {
+  const tenantId = await getCurrentTenantId();
   // Khi cần filter productType hoặc search: dùng inner join "products!inner"
   const needInnerJoin = Boolean(params.productType || params.search);
   const productsRel = needInnerJoin
@@ -109,6 +116,7 @@ export async function getBranchStockPage(params: {
       `,
       { count: "exact" }
     )
+    .eq("tenant_id", tenantId)
     .order("updated_at", { ascending: false });
 
   if (params.branchId) query = query.eq("branch_id", params.branchId);
@@ -194,6 +202,7 @@ export async function getBranchStockAggregates(params: {
     ? "products!inner:product_id ( product_type, code, name, cost_price, min_stock )"
     : "products:product_id ( product_type, code, name, cost_price, min_stock )";
 
+  const tenantId = await getCurrentTenantId();
   let query = supabase
     .from("branch_stock")
     .select(
@@ -202,7 +211,8 @@ export async function getBranchStockAggregates(params: {
       ${productsRel}
       `,
       { count: "exact" }
-    );
+    )
+    .eq("tenant_id", tenantId);
 
   if (params.branchId) query = query.eq("branch_id", params.branchId);
   if (params.productType) query = query.eq("products.product_type", params.productType);
@@ -242,9 +252,11 @@ export async function getBranchStockAggregates(params: {
 }
 
 export async function getProductStockByBranch(productId: string) {
+  const tenantId = await getCurrentTenantId();
   const { data, error } = await supabase
     .from("branch_stock")
     .select("*")
+    .eq("tenant_id", tenantId)
     .eq("product_id", productId)
     .gt("quantity", 0);
 
@@ -267,6 +279,7 @@ export async function getProductStockBreakdown(
   available: number;
   updatedAt: string;
 }>> {
+  const tenantId = await getCurrentTenantId();
   const { data, error } = await supabase
     .from("branch_stock")
     .select(
@@ -278,6 +291,7 @@ export async function getProductStockBreakdown(
       branches:branch_id ( id, name, code )
       `,
     )
+    .eq("tenant_id", tenantId)
     .eq("product_id", productId)
     .order("quantity", { ascending: false });
 

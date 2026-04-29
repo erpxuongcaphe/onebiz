@@ -1,6 +1,7 @@
 // Pipeline Engine service — Core pipeline operations
 
 import { createClient } from "@/lib/supabase/client";
+import { getCurrentTenantId } from "./base";
 import type {
   Pipeline,
   PipelineStage,
@@ -69,10 +70,11 @@ export async function createPipelineItem(
 
   if (!stages) throw new Error("No initial stage found for pipeline");
 
+  const tenantId = await getCurrentTenantId();
   const { data, error } = await supabase
     .from("pipeline_items")
     .insert({
-      tenant_id: "",
+      tenant_id: tenantId,
       pipeline_id: pipelineId,
       entity_id: entityId,
       current_stage_id: stages.id,

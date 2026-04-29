@@ -1,6 +1,10 @@
 // Packaging variants service — CRUD for product_variants
+//
+// Multi-tenant safety: filter tenant_id mọi query đọc + insert dùng
+// getCurrentTenantId() thay vì hardcode "".
 
 import { createClient } from "@/lib/supabase/client";
+import { getCurrentTenantId } from "./base";
 import type { ProductVariant } from "@/lib/types";
 
 const supabase = createClient();
@@ -8,9 +12,11 @@ const supabase = createClient();
 export async function getVariantsByProduct(
   productId: string
 ): Promise<ProductVariant[]> {
+  const tenantId = await getCurrentTenantId();
   const { data, error } = await supabase
     .from("product_variants")
     .select("*")
+    .eq("tenant_id", tenantId)
     .eq("product_id", productId)
     .eq("is_active", true)
     .order("sort_order");
@@ -32,6 +38,7 @@ export async function getVariantsByProductIds(
   const result = new Map<string, ProductVariant[]>();
   if (productIds.length === 0) return result;
 
+  const tenantId = await getCurrentTenantId();
   // Dedup + limit để tránh query quá lớn (Postgres IN giới hạn ~thousands, nhưng
   // POS menu thường <500 SP nên ok. Vẫn cắt 500 cho an toàn).
   const unique = Array.from(new Set(productIds)).slice(0, 500);
@@ -39,6 +46,7 @@ export async function getVariantsByProductIds(
   const { data, error } = await supabase
     .from("product_variants")
     .select("*")
+    .eq("tenant_id", tenantId)
     .in("product_id", unique)
     .eq("is_active", true)
     .order("sort_order");
@@ -68,10 +76,11 @@ export async function createVariant(variant: {
   isDefault?: boolean;
   sortOrder?: number;
 }): Promise<ProductVariant> {
+  const tenantId = await getCurrentTenantId();
   const { data, error } = await supabase
     .from("product_variants")
     .insert({
-      tenant_id: "",
+      tenant_id: tenantId,
       product_id: variant.productId,
       name: variant.name,
       sku: variant.sku ?? null,

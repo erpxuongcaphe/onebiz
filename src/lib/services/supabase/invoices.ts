@@ -3,19 +3,22 @@
  */
 
 import type { Invoice, QueryParams, QueryResult } from "@/lib/types";
-import { getClient, getPaginationRange, handleError } from "./base";
+import { getClient, getPaginationRange, handleError, getCurrentTenantId } from "./base";
 
 export async function getInvoices(params: QueryParams): Promise<QueryResult<Invoice>> {
   const supabase = getClient();
+  const tenantId = await getCurrentTenantId();
   const { from, to } = getPaginationRange(params);
 
   let query = supabase
     .from("invoices")
-    .select("*, profiles!invoices_created_by_fkey(full_name)", { count: "exact" });
+    .select("*, profiles!invoices_created_by_fkey(full_name)", { count: "exact" })
+    .eq("tenant_id", tenantId);
 
-  // Search
+  // Search — escape % wildcard
   if (params.search) {
-    query = query.or(`code.ilike.%${params.search}%,customer_name.ilike.%${params.search}%`);
+    const esc = params.search.replace(/[%_]/g, "\\$&");
+    query = query.or(`code.ilike.%${esc}%,customer_name.ilike.%${esc}%`);
   }
 
   // Filter: status
@@ -60,9 +63,11 @@ export async function getInvoicesForCustomer(
   limit: number = 50
 ): Promise<Invoice[]> {
   const supabase = getClient();
+  const tenantId = await getCurrentTenantId();
   const { data, error } = await supabase
     .from("invoices")
     .select("*, profiles!invoices_created_by_fkey(full_name)")
+    .eq("tenant_id", tenantId)
     .eq("customer_id", customerId)
     .order("created_at", { ascending: false })
     .limit(limit);
@@ -88,9 +93,11 @@ export async function getReturnsForCustomer(
   limit: number = 50
 ): Promise<CustomerReturn[]> {
   const supabase = getClient();
+  const tenantId = await getCurrentTenantId();
   const { data, error } = await supabase
     .from("sales_returns")
     .select("id, code, total, status, created_at, invoices!sales_returns_invoice_id_fkey(code)")
+    .eq("tenant_id", tenantId)
     .eq("customer_id", customerId)
     .order("created_at", { ascending: false })
     .limit(limit);
@@ -139,11 +146,13 @@ export async function getFnbRecentInvoices(params: {
   search?: string;
 }): Promise<FnbRecentInvoice[]> {
   const supabase = getClient();
+  const tenantId = await getCurrentTenantId();
   const sinceIso = new Date(Date.now() - 24 * 60 * 60 * 1000).toISOString();
 
   let query = supabase
     .from("invoices")
     .select("id, code, customer_name, total, paid, tip_amount, payment_method, created_at")
+    .eq("tenant_id", tenantId)
     .eq("branch_id", params.branchId)
     .eq("source", "fnb")
     .eq("status", "completed")
@@ -152,7 +161,8 @@ export async function getFnbRecentInvoices(params: {
     .limit(params.limit ?? 50);
 
   if (params.search) {
-    query = query.or(`code.ilike.%${params.search}%,customer_name.ilike.%${params.search}%`);
+    const esc = params.search.replace(/[%_]/g, "\\$&");
+    query = query.or(`code.ilike.%${esc}%,customer_name.ilike.%${esc}%`);
   }
 
   const { data, error } = await query;
@@ -224,10 +234,12 @@ export async function getFnbInvoiceForReprint(invoiceId: string): Promise<{
   }>;
 }> {
   const supabase = getClient();
+  const tenantId = await getCurrentTenantId();
 
   const { data: invRaw, error: invErr } = await supabase
     .from("invoices")
     .select("id, code, customer_name, total, paid, tip_amount, discount_amount, payment_method, created_at")
+    .eq("tenant_id", tenantId)
     .eq("id", invoiceId)
     .single();
 
@@ -279,11 +291,13 @@ export async function getFnbInvoiceForReprint(invoiceId: string): Promise<{
 
 export async function cancelInvoice(id: string): Promise<void> {
   const supabase = getClient();
+  const tenantId = await getCurrentTenantId();
 
   // Check current status first
   const { data: existing, error: fetchErr } = await supabase
     .from("invoices")
     .select("status")
+    .eq("tenant_id", tenantId)
     .eq("id", id)
     .single();
 
@@ -302,6 +316,7 @@ export async function cancelInvoice(id: string): Promise<void> {
     .from("invoices")
     // eslint-disable-next-line @typescript-eslint/no-explicit-any
     .update({ status: "cancelled" as any })
+    .eq("tenant_id", tenantId)
     .eq("id", id);
 
   if (error) handleError(error, "cancelInvoice.update");
@@ -328,11 +343,13 @@ export async function updateInvoice(
   patch: UpdateInvoicePatch
 ): Promise<void> {
   const supabase = getClient();
+  const tenantId = await getCurrentTenantId();
 
   // Check current status first
   const { data: existing, error: fetchErr } = await supabase
     .from("invoices")
     .select("status")
+    .eq("tenant_id", tenantId)
     .eq("id", id)
     .single();
 
@@ -360,6 +377,7 @@ export async function updateInvoice(
   const { error } = await supabase
     .from("invoices")
     .update(dbPatch as any)
+    .eq("tenant_id", tenantId)
     .eq("id", id);
 
   if (error) handleError(error, "updateInvoice.update");

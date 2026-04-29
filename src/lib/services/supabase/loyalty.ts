@@ -4,7 +4,7 @@
 
 import type { LoyaltySettings, LoyaltyTier, LoyaltyTransaction, QueryParams, QueryResult } from "@/lib/types";
 import type { Database } from "@/lib/supabase/types";
-import { getClient, getPaginationRange, handleError } from "./base";
+import { getClient, getPaginationRange, handleError, getCurrentTenantId } from "./base";
 
 type TierInsert = Database["public"]["Tables"]["loyalty_tiers"]["Insert"];
 type TierUpdate = Database["public"]["Tables"]["loyalty_tiers"]["Update"];
@@ -110,11 +110,12 @@ export async function getLoyaltyTiers(): Promise<LoyaltyTier[]> {
  */
 export async function createLoyaltyTier(tier: Partial<LoyaltyTier>): Promise<LoyaltyTier> {
   const supabase = getClient();
+  const tenantId = await getCurrentTenantId();
 
   const { data, error } = await supabase
     .from("loyalty_tiers")
     .insert({
-      tenant_id: "",
+      tenant_id: tenantId,
       name: tier.name!,
       min_points: tier.minPoints ?? 0,
       discount_percent: tier.discountPercent ?? 0,

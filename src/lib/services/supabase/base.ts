@@ -198,6 +198,76 @@ export async function nextGroupCode(prefix: string, groupCode: string): Promise<
   return data as string;
 }
 
+// ============================================================
+// TENANT SCOPING HELPERS (Layer 2 of multi-tenant safety)
+// ============================================================
+//
+// Quy tắc bất di bất dịch của project: MỌI query đọc dữ liệu (SELECT) trên
+// table có cột `tenant_id` BẮT BUỘC phải filter theo tenant hiện tại.
+//
+// Tại sao: trong giai đoạn dev BYPASS_AUTH=true, RLS bị tắt (migration
+// 00010_dev_disable_rls). Nếu service không tự filter thì query trả về
+// data của TẤT CẢ tenants → user thấy data của tenant khác. CEO test demo
+// nhiều lần → DB có 4-5 tenant → search "Đắk" hiện 4 row trùng từ 4 tenant.
+//
+// Khi production bật RLS lại (migration sẽ chuẩn bị sẵn), policy sẽ là
+// defense-in-depth — nhưng KHÔNG được tin RLS một mình; vẫn filter ở FE
+// để tránh lỗi nếu RLS policy có sót.
+//
+// Dùng helper `tenantScopedFrom(table)` thay vì `supabase.from(table)` —
+// helper trả về query builder ĐÃ có `.eq("tenant_id", ...)` áp sẵn,
+// không thể quên.
+//
+// Tables KHÔNG có tenant_id (VD: `tenants`, `pipelines` global) → vẫn dùng
+// `getClient().from(...)` trực tiếp.
+// ============================================================
+
+/**
+ * Helper inline áp tenant filter vào bất kỳ query Supabase đang chain.
+ *
+ * Pattern chuẩn cho service mới — KHÔNG được dùng `supabase.from()` trực
+ * tiếp cho table có cột `tenant_id`:
+ *
+ *   // Cách CŨ (KHÔNG dùng nữa)
+ *   const { data } = await supabase.from("products").select("*")
+ *
+ *   // Cách MỚI — luôn áp filter qua applyTenantFilter:
+ *   const { data } = await applyTenantFilter(
+ *     supabase.from("products").select("*", { count: "exact" })
+ *   );
+ *
+ * Hoặc cho query phức tạp với chain dài:
+ *   let q = supabase.from("products").select("*").eq("is_active", true);
+ *   q = await applyTenantFilter(q);
+ *   q = q.order("created_at", { ascending: false }).range(0, 19);
+ *   const { data, error } = await q;
+ *
+ * Helper return về cùng type Q để chain tiếp `.order()`, `.range()`, v.v.
+ *
+ * BẮT BUỘC dùng cho mọi query SELECT trên các table có tenant_id:
+ *   products, categories, suppliers, customers, branches, invoices,
+ *   purchase_orders, stock_movements, branch_stock, transfers, ...
+ *
+ * KHÔNG cần (table không có tenant_id):
+ *   tenants, pipelines (global), pipeline_stages, ...
+ */
+export async function applyTenantFilter<
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  Q extends { eq: (col: string, val: string) => any },
+>(query: Q): Promise<Q> {
+  const tenantId = await getCurrentTenantId();
+  return query.eq("tenant_id", tenantId);
+}
+
+/**
+ * Reset cache tenant_id — gọi khi user đăng xuất / đổi tenant.
+ * Tránh cache stale của user khác trong dev mode.
+ */
+export function clearTenantCache() {
+  cachedTenantId = null;
+  cachedContext = null;
+}
+
 /**
  * Preview mã group code TIẾP THEO mà KHÔNG tăng counter.
  *

@@ -21,7 +21,14 @@ function createUpdateChain() {
   const chain: Record<string, unknown> = {};
   const self = () => chain;
   chain.update = vi.fn(self);
-  chain.eq = mockUpdateEq;
+  // Service giờ chain 2 .eq() (tenant_id rồi id) — first eq trả chain để
+  // chain tiếp, second eq trả mockUpdateEq (cho phép test override result).
+  let eqCallCount = 0;
+  chain.eq = vi.fn((..._args: unknown[]) => {
+    eqCallCount += 1;
+    if (eqCallCount === 1) return chain;
+    return mockUpdateEq(..._args);
+  });
   return chain;
 }
 
@@ -36,6 +43,7 @@ vi.mock("@/lib/services/supabase/base", () => ({
   handleError: (error: { message: string }, ctx: string) => {
     throw new Error(`[${ctx}] ${error.message}`);
   },
+  getCurrentTenantId: vi.fn().mockResolvedValue("tenant-test-1"),
 }));
 
 import { cancelInvoice } from "@/lib/services/supabase/invoices";

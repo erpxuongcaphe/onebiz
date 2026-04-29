@@ -4,7 +4,7 @@
 
 import type { Promotion, QueryParams, QueryResult } from "@/lib/types";
 import type { Database } from "@/lib/supabase/types";
-import { getClient, getPaginationRange, handleError, getFilterValue } from "./base";
+import { getClient, getPaginationRange, handleError, getFilterValue, getCurrentTenantId } from "./base";
 
 type PromotionInsert = Database["public"]["Tables"]["promotions"]["Insert"];
 type PromotionUpdate = Database["public"]["Tables"]["promotions"]["Update"];
@@ -90,11 +90,12 @@ export async function getActivePromotions(): Promise<Promotion[]> {
  */
 export async function createPromotion(promo: Partial<Promotion>): Promise<Promotion> {
   const supabase = getClient();
+  const tenantId = await getCurrentTenantId();
 
   const { data, error } = await supabase
     .from("promotions")
     .insert({
-      tenant_id: "",
+      tenant_id: tenantId,
       name: promo.name!,
       description: promo.description,
       type: promo.type!,

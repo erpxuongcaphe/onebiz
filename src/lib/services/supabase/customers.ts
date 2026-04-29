@@ -4,29 +4,32 @@
 
 import type { Customer, QueryParams, QueryResult } from "@/lib/types";
 import type { Database } from "@/lib/supabase/types";
-import { getClient, getPaginationRange, handleError } from "./base";
+import { getClient, getPaginationRange, handleError, getCurrentTenantId } from "./base";
 
 type CustomerInsert = Database["public"]["Tables"]["customers"]["Insert"];
 type CustomerUpdate = Database["public"]["Tables"]["customers"]["Update"];
 
 export async function getCustomers(params: QueryParams): Promise<QueryResult<Customer>> {
   const supabase = getClient();
+  const tenantId = await getCurrentTenantId();
   const { from, to } = getPaginationRange(params);
 
   let query = supabase
     .from("customers")
-    .select("*, customer_groups!customers_group_id_fkey(name, discount_percent)", { count: "exact" });
+    .select("*, customer_groups!customers_group_id_fkey(name, discount_percent)", { count: "exact" })
+    .eq("tenant_id", tenantId);
 
   // Ẩn khách hàng nội bộ (is_internal=true) khỏi list thường.
-  // Internal customers chỉ dùng cho internal_sales service, không hiển thị ở trang khách hàng chung.
-  // Opt-in hiển thị qua filters.includeInternal = true.
   if (!params.filters?.includeInternal) {
     query = query.or("is_internal.is.null,is_internal.eq.false");
   }
 
-  // Search
+  // Search — escape % wildcard
   if (params.search) {
-    query = query.or(`name.ilike.%${params.search}%,code.ilike.%${params.search}%,phone.ilike.%${params.search}%`);
+    const esc = params.search.replace(/[%_]/g, "\\$&");
+    query = query.or(
+      `name.ilike.%${esc}%,code.ilike.%${esc}%,phone.ilike.%${esc}%`,
+    );
   }
 
   // Filter: type
@@ -76,10 +79,12 @@ export function getCustomerGroups() {
  */
 export async function getCustomerGroupsAsync() {
   const supabase = getClient();
+  const tenantId = await getCurrentTenantId();
 
   const { data, error } = await supabase
     .from("customer_groups")
     .select("id, name")
+    .eq("tenant_id", tenantId)
     .order("name");
 
   if (error) handleError(error, "getCustomerGroupsAsync");
@@ -93,10 +98,12 @@ export async function getCustomerGroupsAsync() {
 
 export async function getCustomerById(id: string): Promise<Customer | null> {
   const supabase = getClient();
+  const tenantId = await getCurrentTenantId();
 
   const { data, error } = await supabase
     .from("customers")
     .select("*, customer_groups!customers_group_id_fkey(name, discount_percent)")
+    .eq("tenant_id", tenantId)
     .eq("id", id)
     .single();
 
@@ -115,11 +122,12 @@ export async function getCustomerById(id: string): Promise<Customer | null> {
  */
 export async function createCustomer(customer: Partial<Customer>): Promise<Customer> {
   const supabase = getClient();
+  const tenantId = await getCurrentTenantId();
 
   const { data, error } = await supabase
     .from("customers")
     .insert({
-      tenant_id: "", // RLS sẽ tự fill qua policy
+      tenant_id: tenantId,
       code: customer.code!,
       name: customer.name!,
       phone: customer.phone || null,
@@ -142,6 +150,7 @@ export async function createCustomer(customer: Partial<Customer>): Promise<Custo
  */
 export async function updateCustomer(id: string, updates: Partial<Customer>): Promise<Customer> {
   const supabase = getClient();
+  const tenantId = await getCurrentTenantId();
 
   const payload: CustomerUpdate = {};
   if (updates.code !== undefined) payload.code = updates.code;
@@ -156,6 +165,7 @@ export async function updateCustomer(id: string, updates: Partial<Customer>): Pr
   const { data, error } = await supabase
     .from("customers")
     .update(payload)
+    .eq("tenant_id", tenantId)
     .eq("id", id)
     .select("*, customer_groups!customers_group_id_fkey(name, discount_percent)")
     .single();
@@ -165,14 +175,16 @@ export async function updateCustomer(id: string, updates: Partial<Customer>): Pr
 }
 
 /**
- * Xóa khách hàng.
+ * Xóa khách hàng. Filter tenant_id (defense-in-depth).
  */
 export async function deleteCustomer(id: string): Promise<void> {
   const supabase = getClient();
+  const tenantId = await getCurrentTenantId();
 
   const { error } = await supabase
     .from("customers")
     .delete()
+    .eq("tenant_id", tenantId)
     .eq("id", id);
 
   if (error) handleError(error, "deleteCustomer");

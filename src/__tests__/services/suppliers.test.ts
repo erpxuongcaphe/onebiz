@@ -29,6 +29,7 @@ vi.mock("@/lib/services/supabase/base", () => ({
   handleError: (error: { message: string }, ctx: string) => {
     throw new Error(`[${ctx}] ${error.message}`);
   },
+  getCurrentTenantId: vi.fn().mockResolvedValue("tenant-test-1"),
 }));
 
 import {
@@ -85,12 +86,17 @@ describe("deleteSupplier", () => {
   beforeEach(() => vi.clearAllMocks());
 
   it("deletes a supplier by id", async () => {
-    (mockChain.eq as ReturnType<typeof vi.fn>).mockReturnValueOnce({ error: null });
+    // Service giờ chain 2 .eq() — tenant_id rồi id. Queue 2 returns:
+    // first eq trả chain (cho phép chain tiếp), second eq trả error null.
+    (mockChain.eq as ReturnType<typeof vi.fn>)
+      .mockReturnValueOnce(mockChain)
+      .mockReturnValueOnce({ error: null });
 
     await deleteSupplier("s-1");
 
     expect(mockFrom).toHaveBeenCalledWith("suppliers");
     expect(mockChain.delete).toHaveBeenCalled();
+    expect(mockChain.eq).toHaveBeenCalledWith("tenant_id", "tenant-test-1");
     expect(mockChain.eq).toHaveBeenCalledWith("id", "s-1");
   });
 });
