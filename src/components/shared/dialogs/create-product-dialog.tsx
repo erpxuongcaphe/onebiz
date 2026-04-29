@@ -678,6 +678,10 @@ export function CreateProductDialog({
                     value={vatRate}
                     onValueChange={(v) => {
                       if (v === VAT_CUSTOM) {
+                        // Reset value khi switch sang custom mode — nếu giữ
+                        // giá trị cũ thì user gõ thêm sẽ thành "108.5" thay vì
+                        // "8.5". Reset rỗng + autoFocus + user gõ ngay được.
+                        setVatRate("");
                         setVatCustom(true);
                       } else {
                         setVatRate(v ?? "10");
