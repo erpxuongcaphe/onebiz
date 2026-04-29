@@ -18,9 +18,11 @@ const supabase = getClient();
 // ============================================================
 
 export async function getPipelines() {
+  const tenantId = await getCurrentTenantId();
   const { data, error } = await supabase
     .from("pipelines")
     .select("*")
+    .eq("tenant_id", tenantId)
     .eq("is_active", true)
     .order("entity_type");
 
@@ -29,9 +31,11 @@ export async function getPipelines() {
 }
 
 export async function getPipelineByEntityType(entityType: string) {
+  const tenantId = await getCurrentTenantId();
   const { data, error } = await supabase
     .from("pipelines")
     .select("*")
+    .eq("tenant_id", tenantId)
     .eq("entity_type", entityType)
     .eq("is_active", true)
     .single();
@@ -92,10 +96,12 @@ export async function getPipelineItemByEntity(
   entityId: string
 ) {
   const pipeline = await getPipelineByEntityType(entityType);
+  const tenantId = await getCurrentTenantId();
 
   const { data, error } = await supabase
     .from("pipeline_items")
     .select("*")
+    .eq("tenant_id", tenantId)
     .eq("pipeline_id", pipeline.id)
     .eq("entity_id", entityId)
     .single();

@@ -40,10 +40,11 @@ export async function recordInvoicePayment(
   const supabase = getClient();
   const ctx = await getCurrentContext();
 
-  // 1. Fetch invoice current state
+  // 1. Fetch invoice current state (filter tenant defense)
   const { data: inv, error: fetchErr } = await supabase
     .from("invoices")
     .select("id, code, customer_id, customer_name, total, paid, debt, status")
+    .eq("tenant_id", ctx.tenantId)
     .eq("id", input.referenceId)
     .single();
 
@@ -97,6 +98,7 @@ export async function recordInvoicePayment(
   const { error: invUpd } = await supabase
     .from("invoices")
     .update({ paid: newPaid, debt: newDebt } as Record<string, unknown>)
+    .eq("tenant_id", ctx.tenantId)
     .eq("id", inv.id);
   if (invUpd) handleError(invUpd, "recordInvoicePayment.invoice_update");
 
@@ -105,6 +107,7 @@ export async function recordInvoicePayment(
     const { data: cust, error: custFetch } = await supabase
       .from("customers")
       .select("debt")
+      .eq("tenant_id", ctx.tenantId)
       .eq("id", inv.customer_id)
       .single();
 
@@ -113,6 +116,7 @@ export async function recordInvoicePayment(
       const { error: custUpd } = await supabase
         .from("customers")
         .update({ debt: custNewDebt } as Record<string, unknown>)
+        .eq("tenant_id", ctx.tenantId)
         .eq("id", inv.customer_id);
       if (custUpd) handleError(custUpd, "recordInvoicePayment.customer_update");
     }
@@ -140,10 +144,11 @@ export async function recordPurchasePayment(
   const supabase = getClient();
   const ctx = await getCurrentContext();
 
-  // 1. Fetch PO current state
+  // 1. Fetch PO current state (filter tenant defense)
   const { data: po, error: fetchErr } = await supabase
     .from("purchase_orders")
     .select("id, code, supplier_id, supplier_name, total, paid, debt, status")
+    .eq("tenant_id", ctx.tenantId)
     .eq("id", input.referenceId)
     .single();
 
@@ -197,6 +202,7 @@ export async function recordPurchasePayment(
   const { error: poUpd } = await supabase
     .from("purchase_orders")
     .update({ paid: newPaid, debt: newDebt } as Record<string, unknown>)
+    .eq("tenant_id", ctx.tenantId)
     .eq("id", po.id);
   if (poUpd) handleError(poUpd, "recordPurchasePayment.po_update");
 
@@ -205,6 +211,7 @@ export async function recordPurchasePayment(
     const { data: sup, error: supFetch } = await supabase
       .from("suppliers")
       .select("debt")
+      .eq("tenant_id", ctx.tenantId)
       .eq("id", po.supplier_id)
       .single();
 
@@ -213,6 +220,7 @@ export async function recordPurchasePayment(
       const { error: supUpd } = await supabase
         .from("suppliers")
         .update({ debt: supNewDebt } as Record<string, unknown>)
+        .eq("tenant_id", ctx.tenantId)
         .eq("id", po.supplier_id);
       if (supUpd) handleError(supUpd, "recordPurchasePayment.supplier_update");
     }
@@ -234,10 +242,12 @@ export async function getPaymentHistory(
   referenceId: string
 ) {
   const supabase = getClient();
+  const ctx = await getCurrentContext();
 
   const { data, error } = await supabase
     .from("cash_transactions")
     .select("id, code, type, amount, payment_method, note, created_at")
+    .eq("tenant_id", ctx.tenantId)
     .eq("reference_type", referenceType)
     .eq("reference_id", referenceId)
     .order("created_at", { ascending: false });

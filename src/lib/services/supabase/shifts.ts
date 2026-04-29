@@ -4,7 +4,7 @@
  * Open/close shifts, calculate expected cash, reconciliation.
  */
 
-import { getClient, handleError } from "./base";
+import { getClient, handleError, getCurrentTenantId } from "./base";
 import type { Shift, OpenShiftInput, CloseShiftInput } from "@/lib/types/shift";
 
 // ── Mappers ──
@@ -35,9 +35,11 @@ function mapShift(row: Record<string, unknown>): Shift {
 /** Get current open shift for a cashier at a branch */
 export async function getOpenShift(branchId: string, cashierId: string): Promise<Shift | null> {
   const supabase = getClient();
+  const tenantId = await getCurrentTenantId();
   const { data, error } = await supabase
     .from("shifts")
     .select("*, profiles(full_name)")
+    .eq("tenant_id", tenantId)
     .eq("branch_id", branchId)
     .eq("cashier_id", cashierId)
     .eq("status", "open")
@@ -51,9 +53,11 @@ export async function getOpenShift(branchId: string, cashierId: string): Promise
 /** Get any open shift at a branch (for checking if someone else is on shift) */
 export async function getAnyOpenShift(branchId: string): Promise<Shift | null> {
   const supabase = getClient();
+  const tenantId = await getCurrentTenantId();
   const { data, error } = await supabase
     .from("shifts")
     .select("*, profiles(full_name)")
+    .eq("tenant_id", tenantId)
     .eq("branch_id", branchId)
     .eq("status", "open")
     .limit(1)
@@ -123,9 +127,11 @@ export async function closeShift(input: CloseShiftInput): Promise<ShiftReport> {
   if (!data) throw new Error("Không đóng được ca");
 
   // Load full shift record (with cashier name) để map về UI
+  const tenantId = await getCurrentTenantId();
   const { data: shift, error: fetchError } = await supabase
     .from("shifts")
     .select("*, profiles(full_name)")
+    .eq("tenant_id", tenantId)
     .eq("id", input.shiftId)
     .single();
   if (fetchError || !shift) throw new Error("Không đọc được ca sau khi đóng");
@@ -151,9 +157,11 @@ export async function getShiftHistory(
   limit = 20
 ): Promise<Shift[]> {
   const supabase = getClient();
+  const tenantId = await getCurrentTenantId();
   const { data, error } = await supabase
     .from("shifts")
     .select("*, profiles(full_name)")
+    .eq("tenant_id", tenantId)
     .eq("branch_id", branchId)
     .order("opened_at", { ascending: false })
     .limit(limit);

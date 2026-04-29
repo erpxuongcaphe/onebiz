@@ -47,6 +47,7 @@ vi.mock("@/lib/services/supabase/base", () => ({
       return { data: null, error: null };
     }),
   }),
+  getCurrentTenantId: () => Promise.resolve("t1"),
   handleError: (error: { message: string }, ctx: string) => {
     throw new Error(`[${ctx}] ${error.message}`);
   },

@@ -16,10 +16,12 @@ type TierUpdate = Database["public"]["Tables"]["loyalty_tiers"]["Update"];
  */
 export async function getLoyaltySettings(): Promise<LoyaltySettings | null> {
   const supabase = getClient();
+  const tenantId = await getCurrentTenantId();
 
   const { data, error } = await supabase
     .from("loyalty_settings")
     .select("*")
+    .eq("tenant_id", tenantId)
     .single();
 
   if (error) {
@@ -86,10 +88,12 @@ export async function upsertLoyaltySettings(settings: Partial<LoyaltySettings>):
  */
 export async function getLoyaltyTiers(): Promise<LoyaltyTier[]> {
   const supabase = getClient();
+  const tenantId = await getCurrentTenantId();
 
   const { data, error } = await supabase
     .from("loyalty_tiers")
     .select("*")
+    .eq("tenant_id", tenantId)
     .order("sort_order", { ascending: true });
 
   if (error) handleError(error, "getLoyaltyTiers");
@@ -143,6 +147,7 @@ export async function createLoyaltyTier(tier: Partial<LoyaltyTier>): Promise<Loy
  */
 export async function updateLoyaltyTier(id: string, updates: Partial<LoyaltyTier>): Promise<LoyaltyTier> {
   const supabase = getClient();
+  const tenantId = await getCurrentTenantId();
 
   const payload: TierUpdate = {};
   if (updates.name !== undefined) payload.name = updates.name;
@@ -154,6 +159,7 @@ export async function updateLoyaltyTier(id: string, updates: Partial<LoyaltyTier
   const { data, error } = await supabase
     .from("loyalty_tiers")
     .update(payload)
+    .eq("tenant_id", tenantId)
     .eq("id", id)
     .select()
     .single();
@@ -176,10 +182,12 @@ export async function updateLoyaltyTier(id: string, updates: Partial<LoyaltyTier
  */
 export async function deleteLoyaltyTier(id: string): Promise<void> {
   const supabase = getClient();
+  const tenantId = await getCurrentTenantId();
 
   const { error } = await supabase
     .from("loyalty_tiers")
     .delete()
+    .eq("tenant_id", tenantId)
     .eq("id", id);
 
   if (error) handleError(error, "deleteLoyaltyTier");
@@ -192,11 +200,13 @@ export async function deleteLoyaltyTier(id: string): Promise<void> {
  */
 export async function getLoyaltyTransactions(params: QueryParams & { customerId?: string }): Promise<QueryResult<LoyaltyTransaction>> {
   const supabase = getClient();
+  const tenantId = await getCurrentTenantId();
   const { from, to } = getPaginationRange(params);
 
   let query = supabase
     .from("loyalty_transactions")
-    .select("*, customers!loyalty_transactions_customer_id_fkey(name)", { count: "exact" });
+    .select("*, customers!loyalty_transactions_customer_id_fkey(name)", { count: "exact" })
+    .eq("tenant_id", tenantId);
 
   if (params.customerId) {
     query = query.eq("customer_id", params.customerId);

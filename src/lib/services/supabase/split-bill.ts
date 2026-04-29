@@ -5,7 +5,7 @@
  * splitEqually: creates child orders by distributing items N ways
  */
 
-import { getClient, handleError } from "./base";
+import { getClient, handleError, getCurrentTenantId } from "./base";
 
 export interface SplitResult {
   /** The newly created child order ID */
@@ -23,18 +23,20 @@ export async function splitByItems(
   itemIds: string[]
 ): Promise<SplitResult> {
   const supabase = getClient();
+  const tenantId = await getCurrentTenantId();
 
   if (itemIds.length === 0) throw new Error("Chọn ít nhất 1 món để tách");
 
-  // 1. Get parent order
+  // 1. Get parent order (filter tenant defense)
   const { data: parent, error: parentErr } = await supabase
     .from("kitchen_orders")
     .select("*")
+    .eq("tenant_id", tenantId)
     .eq("id", orderId)
     .single();
   if (parentErr || !parent) throw new Error("Không tìm thấy đơn bếp");
 
-  // 2. Get items to split
+  // 2. Get items to split — scope qua kitchen_order_id (đã verify ownership ở step 1)
   const { data: allItems } = await supabase
     .from("kitchen_order_items")
     .select("*")
@@ -85,16 +87,18 @@ export async function splitEqually(
   if (numberOfWays < 2) throw new Error("Cần ít nhất 2 phần");
 
   const supabase = getClient();
+  const tenantId = await getCurrentTenantId();
 
-  // 1. Get parent
+  // 1. Get parent (filter tenant defense)
   const { data: parent, error: parentErr } = await supabase
     .from("kitchen_orders")
     .select("*")
+    .eq("tenant_id", tenantId)
     .eq("id", orderId)
     .single();
   if (parentErr || !parent) throw new Error("Không tìm thấy đơn bếp");
 
-  // 2. Get all items
+  // 2. Get all items — scope qua kitchen_order_id (đã verify ownership ở step 1)
   const { data: allItems } = await supabase
     .from("kitchen_order_items")
     .select("*")
@@ -155,9 +159,11 @@ export async function splitEqually(
  */
 export async function areAllTableOrdersCompleted(tableId: string): Promise<boolean> {
   const supabase = getClient();
+  const tenantId = await getCurrentTenantId();
   const { count } = await supabase
     .from("kitchen_orders")
     .select("id", { count: "exact", head: true })
+    .eq("tenant_id", tenantId)
     .eq("table_id", tableId)
     .not("status", "in", '("completed","cancelled")');
 

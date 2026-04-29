@@ -88,6 +88,7 @@ vi.mock("@/lib/services/supabase/base", () => ({
   getCurrentContext: vi.fn(() =>
     Promise.resolve({ tenantId: "t1", branchId: "b1", userId: "u1" })
   ),
+  getCurrentTenantId: () => Promise.resolve("t1"),
   getPaginationRange: vi.fn(() => ({ from: 0, to: 49 })),
   handleError: (error: { message: string }, ctx: string) => {
     throw new Error(`[${ctx}] ${error.message}`);

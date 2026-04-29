@@ -29,6 +29,7 @@ vi.mock("@/lib/services/supabase/base", () => ({
     branchId: "branch-1",
     userId: "user-1",
   }),
+  getCurrentTenantId: () => Promise.resolve("t1"),
   getPaginationRange: (p: { page: number; pageSize: number }) => ({
     from: p.page * p.pageSize,
     to: p.page * p.pageSize + p.pageSize - 1,
@@ -70,6 +71,8 @@ describe("deactivateDeliveryPartner", () => {
   beforeEach(() => vi.clearAllMocks());
 
   it("sets is_active to false", async () => {
+    // Now chain has 2 .eq() — first for tenant_id, second for id (returns terminal)
+    (mockChain.eq as ReturnType<typeof vi.fn>).mockReturnValueOnce(mockChain);
     (mockChain.eq as ReturnType<typeof vi.fn>).mockReturnValueOnce({ error: null });
 
     await deactivateDeliveryPartner("dp-1");

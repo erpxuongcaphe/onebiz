@@ -3,7 +3,7 @@
  * Universal: works for factory (sản xuất), warehouse (SX đơn giản), store (chế biến).
  */
 
-import { getClient, handleError } from "./base";
+import { getClient, handleError, getCurrentTenantId } from "./base";
 
 // ────────────────────────────────────────────
 // Types
@@ -86,15 +86,18 @@ export interface ActiveProductionOrder {
 
 export async function getProductionKpis(branchId?: string): Promise<ProductionKpis> {
   const supabase = getClient();
+  const tenantId = await getCurrentTenantId();
   const now = new Date();
   const monthStart = new Date(now.getFullYear(), now.getMonth(), 1).toISOString();
   const monthEnd = new Date(now.getFullYear(), now.getMonth() + 1, 1).toISOString();
   const thirtyDaysLater = new Date(now.getTime() + 30 * 86400 * 1000).toISOString();
 
-  // All queries in parallel
+  // All queries in parallel — tất cả tables (production_orders, product_lots,
+  // branch_stock) đều có tenant_id, filter ngay đầu chain.
   let ordersQuery = supabase
     .from("production_orders")
     .select("id, status, planned_qty, completed_qty", { count: "exact" })
+    .eq("tenant_id", tenantId)
     .gte("created_at", monthStart)
     .lt("created_at", monthEnd);
   if (branchId) ordersQuery = ordersQuery.eq("branch_id", branchId);
@@ -102,12 +105,14 @@ export async function getProductionKpis(branchId?: string): Promise<ProductionKp
   let activeQuery = supabase
     .from("production_orders")
     .select("id", { count: "exact" })
+    .eq("tenant_id", tenantId)
     .in("status", ["in_production", "quality_check"]);
   if (branchId) activeQuery = activeQuery.eq("branch_id", branchId);
 
   let lotsQuery = (supabase as any)
     .from("product_lots")
     .select("id, expiry_date, current_qty")
+    .eq("tenant_id", tenantId)
     .gt("current_qty", 0)
     .not("expiry_date", "is", null)
     .lte("expiry_date", thirtyDaysLater);
@@ -116,6 +121,7 @@ export async function getProductionKpis(branchId?: string): Promise<ProductionKp
   let nvlQuery = supabase
     .from("branch_stock")
     .select("quantity, products:product_id(cost_price, min_stock, product_type)")
+    .eq("tenant_id", tenantId)
     .gt("quantity", 0);
   if (branchId) nvlQuery = nvlQuery.eq("branch_id", branchId);
 
@@ -184,6 +190,7 @@ export async function getNvlStock(params?: {
   search?: string;
 }): Promise<NvlStockRow[]> {
   const supabase = getClient();
+  const tenantId = await getCurrentTenantId();
 
   let query = supabase
     .from("branch_stock")
@@ -192,6 +199,7 @@ export async function getNvlStock(params?: {
        branches:branch_id (name),
        products:product_id (code, name, unit, product_type, cost_price, min_stock, max_stock)`,
     )
+    .eq("tenant_id", tenantId)
     .order("quantity", { ascending: true });
 
   if (params?.branchId) query = query.eq("branch_id", params.branchId);
@@ -251,6 +259,7 @@ export async function getProductionTrend(
   branchId?: string,
 ): Promise<ProductionTrend[]> {
   const supabase = getClient();
+  const tenantId = await getCurrentTenantId();
   const now = new Date();
   const start = new Date(now.getFullYear(), now.getMonth() - months + 1, 1);
   const end = new Date(now.getFullYear(), now.getMonth() + 1, 1);
@@ -258,6 +267,7 @@ export async function getProductionTrend(
   let query = supabase
     .from("production_orders")
     .select("status, planned_qty, completed_qty, created_at")
+    .eq("tenant_id", tenantId)
     .gte("created_at", start.toISOString())
     .lt("created_at", end.toISOString());
   if (branchId) query = query.eq("branch_id", branchId);
@@ -301,12 +311,14 @@ export async function getTopOutputProducts(
   branchId?: string,
 ): Promise<TopOutputProduct[]> {
   const supabase = getClient();
+  const tenantId = await getCurrentTenantId();
   const now = new Date();
   const monthStart = new Date(now.getFullYear(), now.getMonth(), 1).toISOString();
 
   let query = supabase
     .from("production_orders")
     .select("product_id, completed_qty, products:product_id(name, code)")
+    .eq("tenant_id", tenantId)
     .eq("status", "completed")
     .gte("created_at", monthStart);
   if (branchId) query = query.eq("branch_id", branchId);
@@ -343,6 +355,7 @@ export async function getActiveProductionOrders(
   limit: number = 8,
 ): Promise<ActiveProductionOrder[]> {
   const supabase = getClient();
+  const tenantId = await getCurrentTenantId();
 
   let query = supabase
     .from("production_orders")
@@ -352,6 +365,7 @@ export async function getActiveProductionOrders(
        branches:branch_id (name),
        products:product_id (code, name, unit)`,
     )
+    .eq("tenant_id", tenantId)
     .in("status", ["planned", "material_check", "in_production", "quality_check"])
     .order("created_at", { ascending: false })
     .limit(limit);

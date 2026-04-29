@@ -4,7 +4,7 @@
  * CRUD for roles, permission assignment, and user permission queries.
  */
 
-import { getClient, handleError } from "./base";
+import { getClient, handleError, getCurrentTenantId } from "./base";
 import type { PermissionCode } from "@/lib/permissions/constants";
 
 // ── Types ──
@@ -83,14 +83,17 @@ export async function getRoles(tenantId: string): Promise<DbRole[]> {
 /** Get role by ID with its permission codes */
 export async function getRoleById(roleId: string): Promise<DbRoleDetail> {
   const supabase = getClient();
+  const tenantId = await getCurrentTenantId();
 
   const { data: role, error } = await supabase
     .from("roles")
     .select("*")
+    .eq("tenant_id", tenantId)
     .eq("id", roleId)
     .single();
   if (error || !role) handleError(error ?? { message: "Role not found" }, "getRoleById");
 
+  // role_permissions scope qua role_id (đã verify ownership)
   const { data: perms } = await supabase
     .from("role_permissions")
     .select("permission_code")
@@ -100,6 +103,7 @@ export async function getRoleById(roleId: string): Promise<DbRoleDetail> {
   const { count } = await supabase
     .from("profiles")
     .select("id", { count: "exact", head: true })
+    .eq("tenant_id", tenantId)
     .eq("role_id", roleId);
 
   return {
@@ -157,30 +161,34 @@ export async function createRole(input: CreateRoleInput): Promise<DbRole> {
 /** Update role name/description/color (not permissions) */
 export async function updateRole(roleId: string, input: UpdateRoleInput): Promise<void> {
   const supabase = getClient();
+  const tenantId = await getCurrentTenantId();
   const updates: Record<string, unknown> = { updated_at: new Date().toISOString() };
   if (input.name !== undefined) updates.name = input.name;
   if (input.description !== undefined) updates.description = input.description;
   if (input.color !== undefined) updates.color = input.color;
 
-  const { error } = await supabase.from("roles").update(updates).eq("id", roleId);
+  const { error } = await supabase.from("roles").update(updates).eq("tenant_id", tenantId).eq("id", roleId);
   if (error) handleError(error, "updateRole");
 }
 
 /** Delete a custom role (system roles cannot be deleted) */
 export async function deleteRole(roleId: string): Promise<void> {
   const supabase = getClient();
-  // Verify it's not a system role
-  const { data: role } = await supabase.from("roles").select("is_system").eq("id", roleId).single();
+  const tenantId = await getCurrentTenantId();
+  // Verify it's not a system role + ownership
+  const { data: role } = await supabase.from("roles").select("is_system").eq("tenant_id", tenantId).eq("id", roleId).single();
+  if (!role) throw new Error("Không tìm thấy vai trò");
   if (role?.is_system) throw new Error("Không thể xóa vai trò hệ thống");
 
   // Unassign users with this role
   const { error: unassignError } = await supabase
     .from("profiles")
     .update({ role_id: null })
+    .eq("tenant_id", tenantId)
     .eq("role_id", roleId);
   if (unassignError) handleError(unassignError, "deleteRole.unassign");
 
-  const { error } = await supabase.from("roles").delete().eq("id", roleId);
+  const { error } = await supabase.from("roles").delete().eq("tenant_id", tenantId).eq("id", roleId);
   if (error) handleError(error, "deleteRole");
 }
 
@@ -240,9 +248,11 @@ export async function getUserPermissions(userId: string): Promise<Set<string>> {
 /** Assign a role to a user */
 export async function assignRoleToUser(userId: string, roleId: string | null): Promise<void> {
   const supabase = getClient();
+  const tenantId = await getCurrentTenantId();
   const { error } = await supabase
     .from("profiles")
     .update({ role_id: roleId, updated_at: new Date().toISOString() })
+    .eq("tenant_id", tenantId)
     .eq("id", userId);
   if (error) handleError(error, "assignRoleToUser");
 }

@@ -3,17 +3,19 @@
  */
 
 import type { Favorite } from "@/lib/types";
-import { getClient, handleError } from "./base";
+import { getClient, handleError, getCurrentTenantId } from "./base";
 
 /**
  * Lấy danh sách yêu thích của user hiện tại theo entity_type.
  */
 export async function getFavorites(entityType?: string): Promise<Favorite[]> {
   const supabase = getClient();
+  const tenantId = await getCurrentTenantId();
 
   let query = supabase
     .from("favorites")
     .select("*")
+    .eq("tenant_id", tenantId)
     .order("created_at", { ascending: false });
 
   if (entityType) {
@@ -37,10 +39,12 @@ export async function getFavorites(entityType?: string): Promise<Favorite[]> {
  */
 export async function isFavorite(entityType: string, entityId: string): Promise<boolean> {
   const supabase = getClient();
+  const tenantId = await getCurrentTenantId();
 
   const { count, error } = await supabase
     .from("favorites")
     .select("id", { count: "exact", head: true })
+    .eq("tenant_id", tenantId)
     .eq("entity_type", entityType)
     .eq("entity_id", entityId);
 
@@ -69,10 +73,12 @@ export async function toggleFavorite(entityType: string, entityId: string): Prom
  */
 export async function getFavoriteIds(entityType: string): Promise<Set<string>> {
   const supabase = getClient();
+  const tenantId = await getCurrentTenantId();
 
   const { data, error } = await supabase
     .from("favorites")
     .select("entity_id")
+    .eq("tenant_id", tenantId)
     .eq("entity_type", entityType);
 
   if (error) handleError(error, "getFavoriteIds");

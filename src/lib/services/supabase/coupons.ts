@@ -38,11 +38,13 @@ function mapCoupon(row: Record<string, unknown>): Coupon {
  */
 export async function getCoupons(params: QueryParams): Promise<QueryResult<Coupon>> {
   const supabase = getClient();
+  const tenantId = await getCurrentTenantId();
   const { from, to } = getPaginationRange(params);
 
   let query = supabase
     .from("coupons")
-    .select("*", { count: "exact" });
+    .select("*", { count: "exact" })
+    .eq("tenant_id", tenantId);
 
   // Search
   if (params.search) {
@@ -79,10 +81,12 @@ export async function getCoupons(params: QueryParams): Promise<QueryResult<Coupo
  */
 export async function getCouponById(id: string): Promise<Coupon | null> {
   const supabase = getClient();
+  const tenantId = await getCurrentTenantId();
 
   const { data, error } = await supabase
     .from("coupons")
     .select("*")
+    .eq("tenant_id", tenantId)
     .eq("id", id)
     .single();
 
@@ -132,6 +136,7 @@ export async function createCoupon(coupon: Partial<Coupon>): Promise<Coupon> {
  */
 export async function updateCoupon(id: string, updates: Partial<Coupon>): Promise<Coupon> {
   const supabase = getClient();
+  const tenantId = await getCurrentTenantId();
 
   const payload: CouponUpdate = {};
   if (updates.code !== undefined) payload.code = updates.code;
@@ -152,6 +157,7 @@ export async function updateCoupon(id: string, updates: Partial<Coupon>): Promis
   const { data, error } = await supabase
     .from("coupons")
     .update(payload)
+    .eq("tenant_id", tenantId)
     .eq("id", id)
     .select()
     .single();
@@ -165,10 +171,12 @@ export async function updateCoupon(id: string, updates: Partial<Coupon>): Promis
  */
 export async function deleteCoupon(id: string): Promise<void> {
   const supabase = getClient();
+  const tenantId = await getCurrentTenantId();
 
   const { error } = await supabase
     .from("coupons")
     .delete()
+    .eq("tenant_id", tenantId)
     .eq("id", id);
 
   if (error) handleError(error, "deleteCoupon");

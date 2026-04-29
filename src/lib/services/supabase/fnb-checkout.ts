@@ -9,7 +9,7 @@
  * Bổ sung: addItemsToExistingOrder() — gửi bếp bổ sung
  */
 
-import { getClient, handleError } from "./base";
+import { getClient, handleError, getCurrentTenantId } from "./base";
 import {
   createKitchenOrder,
   getKitchenOrderById,
@@ -202,10 +202,11 @@ export async function voidFnbInvoice(input: {
 }): Promise<void> {
   const supabase = getClient();
 
-  // 1. Load invoice to verify it's completed
+  // 1. Load invoice to verify it's completed (filter tenant defense)
   const { data: invoice, error: invErr } = await supabase
     .from("invoices")
     .select("id, code, status, total, paid, source, shift_id")
+    .eq("tenant_id", input.tenantId)
     .eq("id", input.invoiceId)
     .single();
 
@@ -222,11 +223,14 @@ export async function voidFnbInvoice(input: {
       voided_at: new Date().toISOString(),
       voided_by: input.voidedBy,
     })
+    .eq("tenant_id", input.tenantId)
     .eq("id", input.invoiceId);
 
   if (cancelErr) handleError(cancelErr, "voidFnbInvoice:cancel");
 
   // 3. Load invoice_items for stock reversal
+  // invoice_items không có tenant_id riêng — scope qua invoice_id (đã verify
+  // ownership ở step 1).
   const { data: items, error: itemsErr } = await supabase
     .from("invoice_items")
     .select("product_id, product_name, quantity")
@@ -300,10 +304,11 @@ export async function voidFnbInvoice(input: {
     if (cashErr) handleError(cashErr, "voidFnbInvoice:reverseCash");
   }
 
-  // 6. Mark kitchen order as cancelled
+  // 6. Mark kitchen order as cancelled (filter tenant defense)
   const { error: koErr } = await supabase
     .from("kitchen_orders")
     .update({ status: "cancelled" as const })
+    .eq("tenant_id", input.tenantId)
     .eq("id", input.kitchenOrderId);
   if (koErr) handleError(koErr, "voidFnbInvoice:cancelOrder");
 }

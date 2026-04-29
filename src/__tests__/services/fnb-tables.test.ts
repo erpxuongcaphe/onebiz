@@ -39,6 +39,7 @@ vi.mock("@/lib/services/supabase/base", () => ({
   getClient: () => ({
     from: vi.fn((table: string) => mockFromHandler(table)),
   }),
+  getCurrentTenantId: () => Promise.resolve("t1"),
   handleError: (error: { message: string }, ctx: string) => {
     throw new Error(`[${ctx}] ${error.message}`);
   },

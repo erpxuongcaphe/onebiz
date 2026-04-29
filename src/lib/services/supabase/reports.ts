@@ -3,7 +3,7 @@
  * Báo cáo CEO: P&L, COGS, Inventory Turnover, DSO, Financial Alerts
  */
 
-import { getClient, handleError } from "./base";
+import { getClient, handleError, getCurrentTenantId } from "./base";
 
 // === Types ===
 
@@ -96,6 +96,7 @@ export async function getProfitAndLoss(branchId?: string): Promise<{
   previous: ProfitAndLoss;
 }> {
   const supabase = getClient();
+  const tenantId = await getCurrentTenantId();
   const thisMonth = thisMonthRange();
   const prevMonth = prevMonthRange();
   const now = new Date();
@@ -110,24 +111,28 @@ export async function getProfitAndLoss(branchId?: string): Promise<{
     branchFilter(supabase
       .from("invoices")
       .select("id, total")
+      .eq("tenant_id", tenantId)
       .eq("status", "completed")
       .gte("created_at", thisMonth.start)
       .lt("created_at", thisMonth.end)),
     branchFilter(supabase
       .from("invoices")
       .select("id, total")
+      .eq("tenant_id", tenantId)
       .eq("status", "completed")
       .gte("created_at", prevMonth.start)
       .lt("created_at", prevMonth.end)),
     branchFilter(supabase
       .from("cash_transactions")
       .select("category, amount")
+      .eq("tenant_id", tenantId)
       .eq("type", "payment")
       .gte("created_at", thisMonth.start)
       .lt("created_at", thisMonth.end)),
     branchFilter(supabase
       .from("cash_transactions")
       .select("category, amount")
+      .eq("tenant_id", tenantId)
       .eq("type", "payment")
       .gte("created_at", prevMonth.start)
       .lt("created_at", prevMonth.end)),
@@ -240,12 +245,14 @@ export async function getCOGSBreakdown(
   branchId?: string,
 ): Promise<COGSItem[]> {
   const supabase = getClient();
+  const tenantId = await getCurrentTenantId();
   const range = thisMonthRange();
 
   // Get completed invoice IDs this month
   let invQuery = supabase
     .from("invoices")
     .select("id")
+    .eq("tenant_id", tenantId)
     .eq("status", "completed")
     .gte("created_at", range.start)
     .lt("created_at", range.end);
@@ -310,6 +317,7 @@ export async function getGrossMarginTrend(
   branchId?: string,
 ): Promise<GrossMarginTrend[]> {
   const supabase = getClient();
+  const tenantId = await getCurrentTenantId();
   const range = lastNMonthsRange(months);
   const now = new Date();
 
@@ -317,6 +325,7 @@ export async function getGrossMarginTrend(
   let invQuery = supabase
     .from("invoices")
     .select("id, created_at, total")
+    .eq("tenant_id", tenantId)
     .eq("status", "completed")
     .gte("created_at", range.start)
     .lt("created_at", range.end);
@@ -384,12 +393,14 @@ export async function getGrossMarginTrend(
 
 export async function getInventoryTurnover(branchId?: string): Promise<InventoryTurnoverResult> {
   const supabase = getClient();
+  const tenantId = await getCurrentTenantId();
   const range = thisMonthRange();
 
   // Phase 1: Fetch invoices + stock in parallel
   let invQuery = supabase
     .from("invoices")
     .select("id")
+    .eq("tenant_id", tenantId)
     .eq("status", "completed")
     .gte("created_at", range.start)
     .lt("created_at", range.end);
@@ -398,8 +409,8 @@ export async function getInventoryTurnover(branchId?: string): Promise<Inventory
   const [invData, stockData] = await Promise.all([
     invQuery,
     branchId
-      ? (supabase as any).from("branch_stock").select("quantity, products(cost_price)").eq("branch_id", branchId)
-      : supabase.from("products").select("stock, cost_price"),
+      ? (supabase as any).from("branch_stock").select("quantity, products(cost_price)").eq("tenant_id", tenantId).eq("branch_id", branchId)
+      : supabase.from("products").select("stock, cost_price").eq("tenant_id", tenantId),
   ]);
 
   const invIdArr = (invData.data ?? []).map((i) => i.id as string);
@@ -451,11 +462,13 @@ export async function getInventoryTurnover(branchId?: string): Promise<Inventory
 
 export async function getDSO(branchId?: string): Promise<DSOResult> {
   const supabase = getClient();
+  const tenantId = await getCurrentTenantId();
   const range = lastNMonthsRange(3);
 
   let invQuery = supabase
     .from("invoices")
     .select("total")
+    .eq("tenant_id", tenantId)
     .eq("status", "completed")
     .gte("created_at", range.start)
     .lt("created_at", range.end);
@@ -465,8 +478,8 @@ export async function getDSO(branchId?: string): Promise<DSOResult> {
   const [invData, debtData] = await Promise.all([
     invQuery,
     branchId
-      ? supabase.from("invoices").select("debt").eq("branch_id", branchId).gt("debt", 0)
-      : supabase.from("customers").select("debt").gt("debt", 0),
+      ? supabase.from("invoices").select("debt").eq("tenant_id", tenantId).eq("branch_id", branchId).gt("debt", 0)
+      : supabase.from("customers").select("debt").eq("tenant_id", tenantId).gt("debt", 0),
   ]);
 
   const totalRevenue = (invData.data ?? []).reduce(
@@ -494,6 +507,7 @@ export async function getDSO(branchId?: string): Promise<DSOResult> {
 
 export async function getFinancialAlerts(branchId?: string): Promise<FinancialAlert[]> {
   const supabase = getClient();
+  const tenantId = await getCurrentTenantId();
   const alerts: FinancialAlert[] = [];
 
   // Build branch-filtered queries
@@ -502,6 +516,7 @@ export async function getFinancialAlerts(branchId?: string): Promise<FinancialAl
     ? supabase
         .from("invoices")
         .select("id, customer_name, debt")
+        .eq("tenant_id", tenantId)
         .eq("branch_id", branchId)
         .gt("debt", 0)
         .order("debt", { ascending: false })
@@ -509,6 +524,7 @@ export async function getFinancialAlerts(branchId?: string): Promise<FinancialAl
     : supabase
         .from("customers")
         .select("id, name, debt")
+        .eq("tenant_id", tenantId)
         .gt("debt", 0)
         .order("debt", { ascending: false })
         .limit(20);
@@ -518,15 +534,18 @@ export async function getFinancialAlerts(branchId?: string): Promise<FinancialAl
     ? (supabase as any)
         .from("branch_stock")
         .select("product_id, quantity, products(id, name, code, min_stock, max_stock, unit, is_active)")
+        .eq("tenant_id", tenantId)
         .eq("branch_id", branchId)
     : supabase
         .from("products")
         .select("id, name, stock, min_stock, max_stock, unit")
+        .eq("tenant_id", tenantId)
         .filter("is_active", "eq", true);
 
   let lotQuery = (supabase as any)
     .from("product_lots")
     .select("id, lot_code, product_id, expiry_date, current_qty, products(name)")
+    .eq("tenant_id", tenantId)
     .gt("current_qty", 0)
     .not("expiry_date", "is", null)
     .order("expiry_date", { ascending: true })
@@ -535,6 +554,7 @@ export async function getFinancialAlerts(branchId?: string): Promise<FinancialAl
   let cashQuery = supabase
     .from("cash_transactions")
     .select("type, amount")
+    .eq("tenant_id", tenantId)
     .gte("created_at", thisMonthRange().start)
     .lt("created_at", thisMonthRange().end);
 
@@ -771,6 +791,7 @@ export async function getConsolidatedPnL(): Promise<{
   previous: ConsolidatedPnL;
 }> {
   const supabase = getClient();
+  const tenantId = await getCurrentTenantId();
   const thisMonth = thisMonthRange();
   const prevMonth = prevMonthRange();
   const now = new Date();
@@ -778,17 +799,17 @@ export async function getConsolidatedPnL(): Promise<{
   // Phase 1: Fetch invoices (all + internal) + cash in parallel
   const [thisInv, prevInv, thisInternal, prevInternal, thisCash, prevCash] =
     await Promise.all([
-      supabase.from("invoices").select("id, total, source").eq("status", "completed")
+      supabase.from("invoices").select("id, total, source").eq("tenant_id", tenantId).eq("status", "completed")
         .gte("created_at", thisMonth.start).lt("created_at", thisMonth.end),
-      supabase.from("invoices").select("id, total, source").eq("status", "completed")
+      supabase.from("invoices").select("id, total, source").eq("tenant_id", tenantId).eq("status", "completed")
         .gte("created_at", prevMonth.start).lt("created_at", prevMonth.end),
-      supabase.from("invoices").select("id, total").eq("status", "completed").eq("source", "internal")
+      supabase.from("invoices").select("id, total").eq("tenant_id", tenantId).eq("status", "completed").eq("source", "internal")
         .gte("created_at", thisMonth.start).lt("created_at", thisMonth.end),
-      supabase.from("invoices").select("id, total").eq("status", "completed").eq("source", "internal")
+      supabase.from("invoices").select("id, total").eq("tenant_id", tenantId).eq("status", "completed").eq("source", "internal")
         .gte("created_at", prevMonth.start).lt("created_at", prevMonth.end),
-      supabase.from("cash_transactions").select("category, amount").eq("type", "payment")
+      supabase.from("cash_transactions").select("category, amount").eq("tenant_id", tenantId).eq("type", "payment")
         .gte("created_at", thisMonth.start).lt("created_at", thisMonth.end),
-      supabase.from("cash_transactions").select("category, amount").eq("type", "payment")
+      supabase.from("cash_transactions").select("category, amount").eq("tenant_id", tenantId).eq("type", "payment")
         .gte("created_at", prevMonth.start).lt("created_at", prevMonth.end),
     ]);
 
@@ -875,12 +896,14 @@ export interface BranchPnLRow {
  */
 export async function getBranchPnLComparison(): Promise<BranchPnLRow[]> {
   const supabase = getClient();
+  const tenantId = await getCurrentTenantId();
   const range = thisMonthRange();
 
   // Get branches
   const { data: branches } = await supabase
     .from("branches")
     .select("id, name, branch_type")
+    .eq("tenant_id", tenantId)
     .eq("is_active", true)
     .order("name");
 
@@ -889,9 +912,11 @@ export async function getBranchPnLComparison(): Promise<BranchPnLRow[]> {
   // Phase 1: Fetch invoices + cash this month
   const [invData, cashData] = await Promise.all([
     supabase.from("invoices").select("id, branch_id, total")
+      .eq("tenant_id", tenantId)
       .eq("status", "completed")
       .gte("created_at", range.start).lt("created_at", range.end),
     supabase.from("cash_transactions").select("branch_id, category, amount")
+      .eq("tenant_id", tenantId)
       .eq("type", "payment")
       .gte("created_at", range.start).lt("created_at", range.end),
   ]);
@@ -977,10 +1002,12 @@ export interface StockAlert {
  */
 export async function getStockAlerts(): Promise<StockAlert[]> {
   const supabase = getClient();
+  const tenantId = await getCurrentTenantId();
 
   const { data, error } = await supabase
     .from("products")
     .select("id, code, name, stock, min_stock, max_stock, unit")
+    .eq("tenant_id", tenantId)
     .eq("is_active", true)
     .order("name");
 

@@ -14,7 +14,7 @@
  *   - Supplier debt: purchase_orders where debt > 0
  */
 
-import { getClient, handleError } from "./base";
+import { getClient, handleError, getCurrentTenantId } from "./base";
 
 /* ------------------------------------------------------------------ */
 /*  Types                                                              */
@@ -57,6 +57,7 @@ export interface DebtorDetail {
 
 export async function getDebtAging(): Promise<DebtAgingReport> {
   const supabase = getClient();
+  const tenantId = await getCurrentTenantId();
   const now = new Date();
 
   // Parallel fetch: customers with debt + suppliers with debt + unpaid invoices + unpaid POs
@@ -64,19 +65,23 @@ export async function getDebtAging(): Promise<DebtAgingReport> {
     supabase
       .from("customers")
       .select("id, code, name, debt")
+      .eq("tenant_id", tenantId)
       .gt("debt", 0),
     supabase
       .from("suppliers")
       .select("id, code, name, debt")
+      .eq("tenant_id", tenantId)
       .gt("debt", 0),
     supabase
       .from("invoices")
       .select("id, customer_id, debt, created_at")
+      .eq("tenant_id", tenantId)
       .gt("debt", 0)
       .eq("status", "completed"),
     supabase
       .from("purchase_orders")
       .select("id, supplier_id, debt, created_at")
+      .eq("tenant_id", tenantId)
       .gt("debt", 0)
       .in("status", ["ordered", "partial", "completed"]),
   ]);
@@ -177,29 +182,34 @@ export async function getDebtAging(): Promise<DebtAgingReport> {
 
 export async function getTopDebtors(limit: number = 20): Promise<DebtorDetail[]> {
   const supabase = getClient();
+  const tenantId = await getCurrentTenantId();
   const now = new Date();
 
   const [customersRes, suppliersRes, invoicesRes, posRes] = await Promise.all([
     supabase
       .from("customers")
       .select("id, code, name, phone, debt")
+      .eq("tenant_id", tenantId)
       .gt("debt", 0)
       .order("debt", { ascending: false })
       .limit(limit),
     supabase
       .from("suppliers")
       .select("id, code, name, phone, debt")
+      .eq("tenant_id", tenantId)
       .gt("debt", 0)
       .order("debt", { ascending: false })
       .limit(limit),
     supabase
       .from("invoices")
       .select("customer_id, created_at")
+      .eq("tenant_id", tenantId)
       .gt("debt", 0)
       .eq("status", "completed"),
     supabase
       .from("purchase_orders")
       .select("supplier_id, created_at")
+      .eq("tenant_id", tenantId)
       .gt("debt", 0),
   ]);
 

@@ -15,7 +15,7 @@ import type {
 } from "@/lib/types";
 import type { Database } from "@/lib/supabase/types";
 import type { PurchaseOrderImportRow } from "@/lib/excel/schemas";
-import { getClient, getCurrentContext, getPaginationRange, handleError } from "./base";
+import { getClient, getCurrentContext, getCurrentTenantId, getPaginationRange, handleError } from "./base";
 import { applyManualStockMovement, nextEntityCode } from "./stock-adjustments";
 
 type CashTransactionInsert = Database["public"]["Tables"]["cash_transactions"]["Insert"];
@@ -26,11 +26,13 @@ export async function getPurchaseOrderEntries(
   params: QueryParams
 ): Promise<QueryResult<PurchaseOrderEntry>> {
   const supabase = getClient();
+  const tenantId = await getCurrentTenantId();
   const { from, to } = getPaginationRange(params);
 
   let query = supabase
     .from("purchase_orders")
-    .select("*, profiles!purchase_orders_created_by_fkey(full_name)", { count: "exact" });
+    .select("*, profiles!purchase_orders_created_by_fkey(full_name)", { count: "exact" })
+    .eq("tenant_id", tenantId);
 
   // Search theo mã hoặc tên NCC
   if (params.search) {
@@ -86,6 +88,7 @@ export function getPurchaseEntryStatuses() {
  */
 export async function cancelPurchaseOrderEntry(id: string, reason?: string): Promise<void> {
   const supabase = getClient();
+  const tenantId = await getCurrentTenantId();
   const { data: row, error } = await supabase
     .from("purchase_orders")
     .update({
@@ -93,6 +96,7 @@ export async function cancelPurchaseOrderEntry(id: string, reason?: string): Pro
       status: "cancelled" as any,
       note: reason ?? "Huỷ đơn đặt hàng nhập",
     })
+    .eq("tenant_id", tenantId)
     .eq("id", id)
     // eslint-disable-next-line @typescript-eslint/no-explicit-any
     .in("status", ["draft", "ordered", "partial"] as any)
@@ -118,6 +122,7 @@ export async function getPurchaseOrdersForExport(params: {
   status?: string;
 }): Promise<PurchaseOrderImportRow[]> {
   const supabase = getClient();
+  const tenantId = await getCurrentTenantId();
 
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
   let headerQuery: any = supabase
@@ -125,6 +130,7 @@ export async function getPurchaseOrdersForExport(params: {
     .select(
       "id, code, note, status, supplier:suppliers(code), branch:branches(code)"
     )
+    .eq("tenant_id", tenantId)
     .order("created_at", { ascending: false });
 
   if (params.search) {
@@ -191,6 +197,7 @@ export async function getPurchaseReturns(
   params: QueryParams
 ): Promise<QueryResult<PurchaseReturn>> {
   const supabase = getClient();
+  const tenantId = await getCurrentTenantId();
   const { from, to } = getPaginationRange(params);
 
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
@@ -198,7 +205,8 @@ export async function getPurchaseReturns(
     .from("supplier_returns")
     .select("*, branches!supplier_returns_branch_id_fkey(id,name)", {
       count: "exact",
-    });
+    })
+    .eq("tenant_id", tenantId);
 
   // Search theo mã phiếu trả hoặc tên NCC
   if (params.search) {
@@ -245,6 +253,7 @@ export async function getInputInvoices(
   params: QueryParams
 ): Promise<QueryResult<InputInvoice>> {
   const supabase = getClient();
+  const tenantId = await getCurrentTenantId();
   const { from, to } = getPaginationRange(params);
 
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
@@ -253,7 +262,8 @@ export async function getInputInvoices(
     .select(
       "*, profiles!input_invoices_created_by_fkey(full_name), branches!input_invoices_branch_id_fkey(id,name)",
       { count: "exact" }
-    );
+    )
+    .eq("tenant_id", tenantId);
 
   // Search theo mã hoặc tên NCC
   if (params.search) {
@@ -300,11 +310,13 @@ export function getInputInvoiceStatuses() {
  */
 export async function deleteInputInvoice(id: string): Promise<void> {
   const supabase = getClient();
+  const tenantId = await getCurrentTenantId();
 
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
   const { error } = await (supabase as any)
     .from("input_invoices")
     .delete()
+    .eq("tenant_id", tenantId)
     .eq("id", id);
 
   if (error) handleError(error, "deleteInputInvoice");
@@ -316,6 +328,7 @@ export async function deleteInputInvoice(id: string): Promise<void> {
  */
 export async function recordInputInvoice(id: string): Promise<void> {
   const supabase = getClient();
+  const tenantId = await getCurrentTenantId();
 
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
   const sb = supabase as any;
@@ -324,6 +337,7 @@ export async function recordInputInvoice(id: string): Promise<void> {
   const { data: existing, error: fetchErr } = await sb
     .from("input_invoices")
     .select("status")
+    .eq("tenant_id", tenantId)
     .eq("id", id)
     .single();
 
@@ -339,6 +353,7 @@ export async function recordInputInvoice(id: string): Promise<void> {
   const { error } = await sb
     .from("input_invoices")
     .update({ status: "recorded" })
+    .eq("tenant_id", tenantId)
     .eq("id", id);
 
   if (error) handleError(error, "recordInputInvoice.update");

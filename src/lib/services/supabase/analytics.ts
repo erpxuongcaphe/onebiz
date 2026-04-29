@@ -3,7 +3,7 @@
  * Truy vấn tổng hợp cho 9 trang Phân tích (/phan-tich/*)
  */
 
-import { getClient, handleError } from "./base";
+import { getClient, handleError, getCurrentTenantId } from "./base";
 
 // === Shared Types ===
 
@@ -189,6 +189,7 @@ export async function getOverviewKpis(branchId?: string): Promise<{
   profit: number; prevProfit: number;
 }> {
   const supabase = getClient();
+  const tenantId = await getCurrentTenantId();
   const thisMonth = thisMonthRange();
   const now = new Date();
   const prevStart = new Date(now.getFullYear(), now.getMonth() - 1, 1);
@@ -198,10 +199,10 @@ export async function getOverviewKpis(branchId?: string): Promise<{
   function bq<T>(query: T): T { return branchId ? (query as any).eq("branch_id", branchId) : query; }
 
   const [thisInvoices, prevInvoices, thisCustomers, prevCustomers] = await Promise.all([
-    bq(supabase.from("invoices").select("total, status").gte("created_at", thisMonth.start).lt("created_at", thisMonth.end)),
-    bq(supabase.from("invoices").select("total, status").gte("created_at", prevStart.toISOString()).lt("created_at", prevEnd.toISOString())),
-    supabase.from("customers").select("id", { count: "exact", head: true }).gte("created_at", thisMonth.start).lt("created_at", thisMonth.end),
-    supabase.from("customers").select("id", { count: "exact", head: true }).gte("created_at", prevStart.toISOString()).lt("created_at", prevEnd.toISOString()),
+    bq(supabase.from("invoices").select("total, status").eq("tenant_id", tenantId).gte("created_at", thisMonth.start).lt("created_at", thisMonth.end)),
+    bq(supabase.from("invoices").select("total, status").eq("tenant_id", tenantId).gte("created_at", prevStart.toISOString()).lt("created_at", prevEnd.toISOString())),
+    supabase.from("customers").select("id", { count: "exact", head: true }).eq("tenant_id", tenantId).gte("created_at", thisMonth.start).lt("created_at", thisMonth.end),
+    supabase.from("customers").select("id", { count: "exact", head: true }).eq("tenant_id", tenantId).gte("created_at", prevStart.toISOString()).lt("created_at", prevEnd.toISOString()),
   ]);
 
   const calcRev = (data: { total: number; status: string }[] | null) =>
@@ -222,11 +223,13 @@ export async function getOverviewKpis(branchId?: string): Promise<{
 
 export async function getDailyRevenue(days: number = 30, branchId?: string): Promise<MonthlyRevenuePoint[]> {
   const supabase = getClient();
+  const tenantId = await getCurrentTenantId();
   const range = lastNDaysRange(days);
 
   let query = supabase
     .from("invoices")
     .select("created_at, total")
+    .eq("tenant_id", tenantId)
     .eq("status", "completed")
     .gte("created_at", range.start)
     .lt("created_at", range.end);
@@ -255,11 +258,13 @@ export async function getDailyRevenue(days: number = 30, branchId?: string): Pro
 
 export async function getRevenueByCategory(branchId?: string): Promise<CategoryRevenue[]> {
   const supabase = getClient();
+  const tenantId = await getCurrentTenantId();
   const range = thisMonthRange();
 
   let query = supabase
     .from("invoice_items")
-    .select("total, products!inner(category_id, categories(name)), invoices!inner(created_at, status, branch_id)")
+    .select("total, products!inner(category_id, categories(name)), invoices!inner(created_at, status, branch_id, tenant_id)")
+    .eq("invoices.tenant_id", tenantId)
     .gte("invoices.created_at", range.start)
     .eq("invoices.status", "completed");
   if (branchId) query = query.eq("invoices.branch_id", branchId);
@@ -294,6 +299,7 @@ export async function getSalesKpis(branchId?: string): Promise<{
   returnRate: number; prevReturnRate: number;
 }> {
   const supabase = getClient();
+  const tenantId = await getCurrentTenantId();
   const thisMonth = thisMonthRange();
   const now = new Date();
   const prevStart = new Date(now.getFullYear(), now.getMonth() - 1, 1);
@@ -305,12 +311,12 @@ export async function getSalesKpis(branchId?: string): Promise<{
   function bqJoin<T>(query: T): T { return branchId ? (query as any).eq("invoices.branch_id", branchId) : query; }
 
   const [thisInv, prevInv, thisItems, prevItems, thisReturns, prevReturns] = await Promise.all([
-    bq(supabase.from("invoices").select("total, status").gte("created_at", thisMonth.start).lt("created_at", thisMonth.end)),
-    bq(supabase.from("invoices").select("total, status").gte("created_at", prevStart.toISOString()).lt("created_at", prevEnd.toISOString())),
-    bqJoin(supabase.from("invoice_items").select("quantity, invoices!inner(created_at, status, branch_id)").gte("invoices.created_at", thisMonth.start).eq("invoices.status", "completed")),
-    bqJoin(supabase.from("invoice_items").select("quantity, invoices!inner(created_at, status, branch_id)").gte("invoices.created_at", prevStart.toISOString()).lt("invoices.created_at", prevEnd.toISOString()).eq("invoices.status", "completed")),
-    bq(supabase.from("sales_returns").select("id", { count: "exact", head: true }).gte("created_at", thisMonth.start).lt("created_at", thisMonth.end)),
-    bq(supabase.from("sales_returns").select("id", { count: "exact", head: true }).gte("created_at", prevStart.toISOString()).lt("created_at", prevEnd.toISOString())),
+    bq(supabase.from("invoices").select("total, status").eq("tenant_id", tenantId).gte("created_at", thisMonth.start).lt("created_at", thisMonth.end)),
+    bq(supabase.from("invoices").select("total, status").eq("tenant_id", tenantId).gte("created_at", prevStart.toISOString()).lt("created_at", prevEnd.toISOString())),
+    bqJoin(supabase.from("invoice_items").select("quantity, invoices!inner(created_at, status, branch_id, tenant_id)").eq("invoices.tenant_id", tenantId).gte("invoices.created_at", thisMonth.start).eq("invoices.status", "completed")),
+    bqJoin(supabase.from("invoice_items").select("quantity, invoices!inner(created_at, status, branch_id, tenant_id)").eq("invoices.tenant_id", tenantId).gte("invoices.created_at", prevStart.toISOString()).lt("invoices.created_at", prevEnd.toISOString()).eq("invoices.status", "completed")),
+    bq(supabase.from("sales_returns").select("id", { count: "exact", head: true }).eq("tenant_id", tenantId).gte("created_at", thisMonth.start).lt("created_at", thisMonth.end)),
+    bq(supabase.from("sales_returns").select("id", { count: "exact", head: true }).eq("tenant_id", tenantId).gte("created_at", prevStart.toISOString()).lt("created_at", prevEnd.toISOString())),
   ]);
 
   const calcRev = (d: { total: number; status: string }[] | null) => (d ?? []).filter(i => i.status === "completed").reduce((s, i) => s + (i.total ?? 0), 0);
@@ -334,10 +340,11 @@ export async function getSalesKpis(branchId?: string): Promise<{
 
 export async function getRevenueByWeekday(branchId?: string): Promise<ChartPoint[]> {
   const supabase = getClient();
+  const tenantId = await getCurrentTenantId();
   const range = lastNDaysRange(30);
 
   let query = supabase
-    .from("invoices").select("created_at, total").eq("status", "completed")
+    .from("invoices").select("created_at, total").eq("tenant_id", tenantId).eq("status", "completed")
     .gte("created_at", range.start).lt("created_at", range.end);
   if (branchId) query = query.eq("branch_id", branchId);
   const { data, error } = await query;
@@ -358,10 +365,11 @@ export async function getRevenueByWeekday(branchId?: string): Promise<ChartPoint
 
 export async function getRevenueByHour(branchId?: string): Promise<ChartPoint[]> {
   const supabase = getClient();
+  const tenantId = await getCurrentTenantId();
   const today = todayRange();
 
   let query = supabase
-    .from("invoices").select("created_at, total").eq("status", "completed")
+    .from("invoices").select("created_at, total").eq("tenant_id", tenantId).eq("status", "completed")
     .gte("created_at", today.start).lt("created_at", today.end);
   if (branchId) query = query.eq("branch_id", branchId);
   const { data, error } = await query;
@@ -378,11 +386,13 @@ export async function getRevenueByHour(branchId?: string): Promise<ChartPoint[]>
 
 export async function getTopInvoices(limit: number = 10, branchId?: string): Promise<TopInvoice[]> {
   const supabase = getClient();
+  const tenantId = await getCurrentTenantId();
   const range = thisMonthRange();
 
   let query = supabase
     .from("invoices")
     .select("code, total, created_at, customers(name)")
+    .eq("tenant_id", tenantId)
     .eq("status", "completed")
     .gte("created_at", range.start)
     .lt("created_at", range.end)
@@ -411,6 +421,7 @@ export async function getTopInvoices(limit: number = 10, branchId?: string): Pro
 
 export async function getEndOfDayStats(branchId?: string): Promise<EndOfDayStats> {
   const supabase = getClient();
+  const tenantId = await getCurrentTenantId();
   const today = todayRange();
   const yesterday = yesterdayRange();
 
@@ -418,9 +429,9 @@ export async function getEndOfDayStats(branchId?: string): Promise<EndOfDayStats
   function bq<T>(query: T): T { return branchId ? (query as any).eq("branch_id", branchId) : query; }
 
   const [todayInv, yesterdayInv, todayReturns] = await Promise.all([
-    bq(supabase.from("invoices").select("total, status, payment_method").gte("created_at", today.start).lt("created_at", today.end)),
-    bq(supabase.from("invoices").select("total, status, payment_method").gte("created_at", yesterday.start).lt("created_at", yesterday.end)),
-    bq(supabase.from("sales_returns").select("refunded").gte("created_at", today.start).lt("created_at", today.end)),
+    bq(supabase.from("invoices").select("total, status, payment_method").eq("tenant_id", tenantId).gte("created_at", today.start).lt("created_at", today.end)),
+    bq(supabase.from("invoices").select("total, status, payment_method").eq("tenant_id", tenantId).gte("created_at", yesterday.start).lt("created_at", yesterday.end)),
+    bq(supabase.from("sales_returns").select("refunded").eq("tenant_id", tenantId).gte("created_at", today.start).lt("created_at", today.end)),
   ]);
 
   const completed = (todayInv.data ?? []).filter(i => i.status === "completed");
@@ -446,11 +457,13 @@ export async function getEndOfDayStats(branchId?: string): Promise<EndOfDayStats
 
 export async function getTodayTopProducts(limit: number = 5, branchId?: string): Promise<{ name: string; qty: number }[]> {
   const supabase = getClient();
+  const tenantId = await getCurrentTenantId();
   const today = todayRange();
 
   let query = supabase
     .from("invoice_items")
-    .select("product_name, quantity, invoices!inner(created_at, status, branch_id)")
+    .select("product_name, quantity, invoices!inner(created_at, status, branch_id, tenant_id)")
+    .eq("invoices.tenant_id", tenantId)
     .gte("invoices.created_at", today.start)
     .lt("invoices.created_at", today.end)
     .eq("invoices.status", "completed");
@@ -482,11 +495,13 @@ export async function getOrdersKpis(branchId?: string): Promise<{
   cancelled: number; cancelledPct: number;
 }> {
   const supabase = getClient();
+  const tenantId = await getCurrentTenantId();
   const range = thisMonthRange();
 
   let query = supabase
     .from("invoices")
     .select("status")
+    .eq("tenant_id", tenantId)
     .gte("created_at", range.start)
     .lt("created_at", range.end);
   if (branchId) query = query.eq("branch_id", branchId);
@@ -501,6 +516,7 @@ export async function getOrdersKpis(branchId?: string): Promise<{
   let prevQuery = supabase
     .from("invoices")
     .select("id", { count: "exact", head: true })
+    .eq("tenant_id", tenantId)
     .gte("created_at", prevStart.toISOString())
     .lt("created_at", prevEnd.toISOString());
   if (branchId) prevQuery = prevQuery.eq("branch_id", branchId);
@@ -522,11 +538,13 @@ export async function getOrdersKpis(branchId?: string): Promise<{
 
 export async function getDailyOrderVolume(days: number = 30, branchId?: string): Promise<ChartPoint[]> {
   const supabase = getClient();
+  const tenantId = await getCurrentTenantId();
   const range = lastNDaysRange(days);
 
   let query = supabase
     .from("invoices")
     .select("created_at")
+    .eq("tenant_id", tenantId)
     .gte("created_at", range.start)
     .lt("created_at", range.end);
   if (branchId) query = query.eq("branch_id", branchId);
@@ -554,11 +572,13 @@ export async function getDailyOrderVolume(days: number = 30, branchId?: string):
 
 export async function getOrderStatusDistribution(branchId?: string): Promise<OrderStatusItem[]> {
   const supabase = getClient();
+  const tenantId = await getCurrentTenantId();
   const range = thisMonthRange();
 
   let query = supabase
     .from("invoices")
     .select("status")
+    .eq("tenant_id", tenantId)
     .gte("created_at", range.start)
     .lt("created_at", range.end);
   if (branchId) query = query.eq("branch_id", branchId);
@@ -584,10 +604,12 @@ export async function getOrderStatusDistribution(branchId?: string): Promise<Ord
 
 export async function getRecentOrders(limit: number = 10, branchId?: string): Promise<RecentOrder[]> {
   const supabase = getClient();
+  const tenantId = await getCurrentTenantId();
 
   let query = supabase
     .from("invoices")
     .select("id, code, total, status, created_at, customers(name)")
+    .eq("tenant_id", tenantId)
     .order("created_at", { ascending: false })
     .limit(limit);
   if (branchId) query = query.eq("branch_id", branchId);
@@ -626,11 +648,12 @@ export async function getInventoryKpis(): Promise<{
   stockValue: number;
 }> {
   const supabase = getClient();
+  const tenantId = await getCurrentTenantId();
 
   const [products, lowStock, topProduct] = await Promise.all([
-    supabase.from("products").select("id, sell_price, stock", { count: "exact" }).eq("is_active", true),
-    supabase.from("products").select("id", { count: "exact", head: true }).eq("is_active", true).gt("min_stock", 0).filter("stock", "lte", "min_stock" as unknown as string),
-    supabase.from("invoice_items").select("product_name, quantity, invoices!inner(status)").eq("invoices.status", "completed").order("quantity", { ascending: false }).limit(100),
+    supabase.from("products").select("id, sell_price, stock", { count: "exact" }).eq("tenant_id", tenantId).eq("is_active", true),
+    supabase.from("products").select("id", { count: "exact", head: true }).eq("tenant_id", tenantId).eq("is_active", true).gt("min_stock", 0).filter("stock", "lte", "min_stock" as unknown as string),
+    supabase.from("invoice_items").select("product_name, quantity, invoices!inner(status, tenant_id)").eq("invoices.tenant_id", tenantId).eq("invoices.status", "completed").order("quantity", { ascending: false }).limit(100),
   ]);
 
   // Aggregate top product
@@ -655,11 +678,13 @@ export async function getInventoryKpis(): Promise<{
 
 export async function getTopProductsByRevenue(limit: number = 10, branchId?: string): Promise<TopProductRevenue[]> {
   const supabase = getClient();
+  const tenantId = await getCurrentTenantId();
   const range = thisMonthRange();
 
   let query = supabase
     .from("invoice_items")
-    .select("product_name, quantity, total, invoices!inner(created_at, status, branch_id)")
+    .select("product_name, quantity, total, invoices!inner(created_at, status, branch_id, tenant_id)")
+    .eq("invoices.tenant_id", tenantId)
     .gte("invoices.created_at", range.start)
     .eq("invoices.status", "completed");
   if (branchId) query = query.eq("invoices.branch_id", branchId);
@@ -684,10 +709,12 @@ export async function getTopProductsByRevenue(limit: number = 10, branchId?: str
 
 export async function getCategoryDistribution(): Promise<{ name: string; value: number }[]> {
   const supabase = getClient();
+  const tenantId = await getCurrentTenantId();
 
   const { data, error } = await supabase
     .from("products")
     .select("category_id, categories(name)")
+    .eq("tenant_id", tenantId)
     .eq("is_active", true);
 
   if (error) return [];
@@ -704,11 +731,13 @@ export async function getCategoryDistribution(): Promise<{ name: string; value: 
 
 export async function getStockMovements(days: number = 30, branchId?: string): Promise<StockMovementPoint[]> {
   const supabase = getClient();
+  const tenantId = await getCurrentTenantId();
   const range = lastNDaysRange(days);
 
   let query = supabase
     .from("stock_movements")
     .select("created_at, type, quantity")
+    .eq("tenant_id", tenantId)
     .gte("created_at", range.start)
     .lt("created_at", range.end);
   if (branchId) query = query.eq("branch_id", branchId);
@@ -746,10 +775,12 @@ export async function getStockMovements(days: number = 30, branchId?: string): P
 
 export async function getLowStockProducts(limit: number = 10): Promise<LowStockItem[]> {
   const supabase = getClient();
+  const tenantId = await getCurrentTenantId();
 
   const { data, error } = await supabase
     .from("products")
     .select("name, stock, min_stock, unit")
+    .eq("tenant_id", tenantId)
     .eq("is_active", true)
     .gt("min_stock", 0)
     .order("stock", { ascending: true })
@@ -774,12 +805,14 @@ export async function getLowStockProducts(limit: number = 10): Promise<LowStockI
 
 export async function getChannelRevenue(branchId?: string): Promise<ChartPoint[]> {
   const supabase = getClient();
+  const tenantId = await getCurrentTenantId();
   const range = thisMonthRange();
 
   // Main invoices = "Tại quầy" (POS)
   let posQuery = supabase
     .from("invoices")
     .select("total")
+    .eq("tenant_id", tenantId)
     .eq("status", "completed")
     .gte("created_at", range.start)
     .lt("created_at", range.end);
@@ -792,6 +825,7 @@ export async function getChannelRevenue(branchId?: string): Promise<ChartPoint[]
   let onlineQuery = supabase
     .from("online_orders")
     .select("channel_name, total_amount")
+    .eq("tenant_id", tenantId)
     .gte("created_at", range.start)
     .lt("created_at", range.end);
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
@@ -811,11 +845,13 @@ export async function getChannelRevenue(branchId?: string): Promise<ChartPoint[]
 
 export async function getChannelPerformance(branchId?: string): Promise<{ channel: string; revenue: number; orders: number; avgValue: number }[]> {
   const supabase = getClient();
+  const tenantId = await getCurrentTenantId();
   const range = thisMonthRange();
 
   let posQuery = supabase
     .from("invoices")
     .select("total")
+    .eq("tenant_id", tenantId)
     .eq("status", "completed")
     .gte("created_at", range.start)
     .lt("created_at", range.end);
@@ -828,6 +864,7 @@ export async function getChannelPerformance(branchId?: string): Promise<{ channe
   let onlineQuery = supabase
     .from("online_orders")
     .select("channel_name, total_amount")
+    .eq("tenant_id", tenantId)
     .gte("created_at", range.start)
     .lt("created_at", range.end);
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
@@ -861,22 +898,23 @@ export async function getCustomerKpis(branchId?: string): Promise<{
   totalDebt: number; prevTotalDebt: number;
 }> {
   const supabase = getClient();
+  const tenantId = await getCurrentTenantId();
   const thisMonth = thisMonthRange();
   const now = new Date();
   const prevStart = new Date(now.getFullYear(), now.getMonth() - 1, 1);
   const prevEnd = new Date(now.getFullYear(), now.getMonth(), 1);
 
   const [total, thisNew, prevNew, debt] = await Promise.all([
-    supabase.from("customers").select("id", { count: "exact", head: true }),
-    supabase.from("customers").select("id", { count: "exact", head: true }).gte("created_at", thisMonth.start).lt("created_at", thisMonth.end),
-    supabase.from("customers").select("id", { count: "exact", head: true }).gte("created_at", prevStart.toISOString()).lt("created_at", prevEnd.toISOString()),
-    supabase.from("customers").select("debt"),
+    supabase.from("customers").select("id", { count: "exact", head: true }).eq("tenant_id", tenantId),
+    supabase.from("customers").select("id", { count: "exact", head: true }).eq("tenant_id", tenantId).gte("created_at", thisMonth.start).lt("created_at", thisMonth.end),
+    supabase.from("customers").select("id", { count: "exact", head: true }).eq("tenant_id", tenantId).gte("created_at", prevStart.toISOString()).lt("created_at", prevEnd.toISOString()),
+    supabase.from("customers").select("debt").eq("tenant_id", tenantId),
   ]);
 
   const totalDebt = (debt.data ?? []).reduce((s, c) => s + ((c.debt as number) ?? 0), 0);
 
   // Returning customers: have >1 invoice
-  let repeatQuery = supabase.from("invoices").select("customer_id").eq("status", "completed").not("customer_id", "is", null);
+  let repeatQuery = supabase.from("invoices").select("customer_id").eq("tenant_id", tenantId).eq("status", "completed").not("customer_id", "is", null);
   if (branchId) repeatQuery = repeatQuery.eq("branch_id", branchId);
   const { data: repeatData } = await repeatQuery;
   const custInvCount = new Map<string, number>();
@@ -898,11 +936,13 @@ export async function getCustomerKpis(branchId?: string): Promise<{
 
 export async function getNewCustomersMonthly(months: number = 6, branchId?: string): Promise<ChartPoint[]> {
   const supabase = getClient();
+  const tenantId = await getCurrentTenantId();
   const range = lastNMonthsRange(months);
 
   const { data, error } = await supabase
     .from("customers")
     .select("created_at")
+    .eq("tenant_id", tenantId)
     .gte("created_at", range.start)
     .lt("created_at", range.end);
 
@@ -927,8 +967,9 @@ export async function getNewCustomersMonthly(months: number = 6, branchId?: stri
 
 export async function getCustomerSegments(): Promise<CustomerSegment[]> {
   const supabase = getClient();
+  const tenantId = await getCurrentTenantId();
 
-  const { data } = await supabase.from("customers").select("group_id");
+  const { data } = await supabase.from("customers").select("group_id").eq("tenant_id", tenantId);
 
   const groupMap: Record<string, string> = {
     vip: "VIP",
@@ -948,10 +989,12 @@ export async function getCustomerSegments(): Promise<CustomerSegment[]> {
 
 export async function getTopCustomersByRevenue(limit: number = 10, branchId?: string): Promise<TopCustomer[]> {
   const supabase = getClient();
+  const tenantId = await getCurrentTenantId();
 
   let query = supabase
     .from("invoices")
     .select("customer_id, total, customers(name)")
+    .eq("tenant_id", tenantId)
     .eq("status", "completed")
     .not("customer_id", "is", null);
   if (branchId) query = query.eq("branch_id", branchId);
@@ -977,10 +1020,12 @@ export async function getTopCustomersByRevenue(limit: number = 10, branchId?: st
 
 export async function getTopDebtors(limit: number = 5): Promise<TopDebtor[]> {
   const supabase = getClient();
+  const tenantId = await getCurrentTenantId();
 
   const { data, error } = await supabase
     .from("customers")
     .select("name, debt")
+    .eq("tenant_id", tenantId)
     .gt("debt", 0)
     .order("debt", { ascending: false })
     .limit(limit);
@@ -1001,6 +1046,7 @@ export async function getSupplierKpis(branchId?: string): Promise<{
   returnCount: number;
 }> {
   const supabase = getClient();
+  const tenantId = await getCurrentTenantId();
   const thisMonth = thisMonthRange();
   const now = new Date();
   const prevStart = new Date(now.getFullYear(), now.getMonth() - 1, 1);
@@ -1010,10 +1056,10 @@ export async function getSupplierKpis(branchId?: string): Promise<{
   function bq<T>(query: T): T { return branchId ? (query as any).eq("branch_id", branchId) : query; }
 
   const [total, thisPO, prevPO, debt] = await Promise.all([
-    supabase.from("suppliers").select("id", { count: "exact", head: true }),
-    bq(supabase.from("purchase_orders").select("total").gte("created_at", thisMonth.start).lt("created_at", thisMonth.end).eq("status", "completed")),
-    bq(supabase.from("purchase_orders").select("total").gte("created_at", prevStart.toISOString()).lt("created_at", prevEnd.toISOString()).eq("status", "completed")),
-    supabase.from("suppliers").select("debt"),
+    supabase.from("suppliers").select("id", { count: "exact", head: true }).eq("tenant_id", tenantId),
+    bq(supabase.from("purchase_orders").select("total").eq("tenant_id", tenantId).gte("created_at", thisMonth.start).lt("created_at", thisMonth.end).eq("status", "completed")),
+    bq(supabase.from("purchase_orders").select("total").eq("tenant_id", tenantId).gte("created_at", prevStart.toISOString()).lt("created_at", prevEnd.toISOString()).eq("status", "completed")),
+    supabase.from("suppliers").select("debt").eq("tenant_id", tenantId),
   ]);
 
   const thisPurchase = (thisPO.data ?? []).reduce((s, p) => s + ((p.total as number) ?? 0), 0);
@@ -1032,11 +1078,13 @@ export async function getSupplierKpis(branchId?: string): Promise<{
 
 export async function getPurchaseByMonth(months: number = 6, branchId?: string): Promise<ChartPoint[]> {
   const supabase = getClient();
+  const tenantId = await getCurrentTenantId();
   const range = lastNMonthsRange(months);
 
   let query = supabase
     .from("purchase_orders")
     .select("created_at, total")
+    .eq("tenant_id", tenantId)
     .eq("status", "completed")
     .gte("created_at", range.start)
     .lt("created_at", range.end);
@@ -1064,10 +1112,12 @@ export async function getPurchaseByMonth(months: number = 6, branchId?: string):
 
 export async function getTopSuppliersByPurchase(limit: number = 5, branchId?: string): Promise<{ name: string; amount: number }[]> {
   const supabase = getClient();
+  const tenantId = await getCurrentTenantId();
 
   let query = supabase
     .from("purchase_orders")
     .select("total, suppliers(name)")
+    .eq("tenant_id", tenantId)
     .eq("status", "completed");
   if (branchId) query = query.eq("branch_id", branchId);
   const { data, error } = await query;
@@ -1089,8 +1139,9 @@ export async function getTopSuppliersByPurchase(limit: number = 5, branchId?: st
 
 export async function getSupplierPaymentStatus(): Promise<{ name: string; value: number }[]> {
   const supabase = getClient();
+  const tenantId = await getCurrentTenantId();
 
-  const { data } = await supabase.from("suppliers").select("debt");
+  const { data } = await supabase.from("suppliers").select("debt").eq("tenant_id", tenantId);
 
   let paid = 0, owed = 0;
   (data ?? []).forEach(s => {
@@ -1107,9 +1158,10 @@ export async function getSupplierPaymentStatus(): Promise<{ name: string; value:
 
 export async function getSupplierSummary(limit: number = 8, branchId?: string): Promise<SupplierSummaryRow[]> {
   const supabase = getClient();
+  const tenantId = await getCurrentTenantId();
 
-  const { data: suppliers } = await supabase.from("suppliers").select("id, name, debt");
-  let poQuery = supabase.from("purchase_orders").select("supplier_id, total").eq("status", "completed");
+  const { data: suppliers } = await supabase.from("suppliers").select("id, name, debt").eq("tenant_id", tenantId);
+  let poQuery = supabase.from("purchase_orders").select("supplier_id, total").eq("tenant_id", tenantId).eq("status", "completed");
   if (branchId) poQuery = poQuery.eq("branch_id", branchId);
   const { data: poData } = await poQuery;
 
@@ -1143,6 +1195,7 @@ export async function getFinanceKpis(branchId?: string): Promise<{
   profitMargin: number; prevProfitMargin: number;
 }> {
   const supabase = getClient();
+  const tenantId = await getCurrentTenantId();
   const thisMonth = thisMonthRange();
   const now = new Date();
   const prevStart = new Date(now.getFullYear(), now.getMonth() - 1, 1);
@@ -1152,10 +1205,10 @@ export async function getFinanceKpis(branchId?: string): Promise<{
   function bq<T>(query: T): T { return branchId ? (query as any).eq("branch_id", branchId) : query; }
 
   const [thisInv, prevInv, thisCash, prevCash] = await Promise.all([
-    bq(supabase.from("invoices").select("total").eq("status", "completed").gte("created_at", thisMonth.start).lt("created_at", thisMonth.end)),
-    bq(supabase.from("invoices").select("total").eq("status", "completed").gte("created_at", prevStart.toISOString()).lt("created_at", prevEnd.toISOString())),
-    bq(supabase.from("cash_transactions").select("type, amount").gte("created_at", thisMonth.start).lt("created_at", thisMonth.end)),
-    bq(supabase.from("cash_transactions").select("type, amount").gte("created_at", prevStart.toISOString()).lt("created_at", prevEnd.toISOString())),
+    bq(supabase.from("invoices").select("total").eq("tenant_id", tenantId).eq("status", "completed").gte("created_at", thisMonth.start).lt("created_at", thisMonth.end)),
+    bq(supabase.from("invoices").select("total").eq("tenant_id", tenantId).eq("status", "completed").gte("created_at", prevStart.toISOString()).lt("created_at", prevEnd.toISOString())),
+    bq(supabase.from("cash_transactions").select("type, amount").eq("tenant_id", tenantId).gte("created_at", thisMonth.start).lt("created_at", thisMonth.end)),
+    bq(supabase.from("cash_transactions").select("type, amount").eq("tenant_id", tenantId).gte("created_at", prevStart.toISOString()).lt("created_at", prevEnd.toISOString())),
   ]);
 
   const revenue = (thisInv.data ?? []).reduce((s, i) => s + (i.total ?? 0), 0);
@@ -1176,14 +1229,15 @@ export async function getFinanceKpis(branchId?: string): Promise<{
 
 export async function getRevenueVsExpense(months: number = 12, branchId?: string): Promise<MultiSeriesPoint[]> {
   const supabase = getClient();
+  const tenantId = await getCurrentTenantId();
   const range = lastNMonthsRange(months);
 
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
   function bq<T>(query: T): T { return branchId ? (query as any).eq("branch_id", branchId) : query; }
 
   const [invData, cashData] = await Promise.all([
-    bq(supabase.from("invoices").select("created_at, total").eq("status", "completed").gte("created_at", range.start).lt("created_at", range.end)),
-    bq(supabase.from("cash_transactions").select("created_at, type, amount").gte("created_at", range.start).lt("created_at", range.end)),
+    bq(supabase.from("invoices").select("created_at, total").eq("tenant_id", tenantId).eq("status", "completed").gte("created_at", range.start).lt("created_at", range.end)),
+    bq(supabase.from("cash_transactions").select("created_at, type, amount").eq("tenant_id", tenantId).gte("created_at", range.start).lt("created_at", range.end)),
   ]);
 
   const now = new Date();
@@ -1219,11 +1273,13 @@ export async function getRevenueVsExpense(months: number = 12, branchId?: string
 
 export async function getExpenseBreakdown(branchId?: string): Promise<{ name: string; value: number }[]> {
   const supabase = getClient();
+  const tenantId = await getCurrentTenantId();
   const range = thisMonthRange();
 
   let query = supabase
     .from("cash_transactions")
     .select("category, amount")
+    .eq("tenant_id", tenantId)
     .eq("type", "payment")
     .gte("created_at", range.start)
     .lt("created_at", range.end);
@@ -1253,11 +1309,13 @@ export async function getMonthlyProfit(months: number = 12, branchId?: string): 
 
 export async function getCashFlow(months: number = 6, branchId?: string): Promise<CashFlowRow[]> {
   const supabase = getClient();
+  const tenantId = await getCurrentTenantId();
   const range = lastNMonthsRange(months);
 
   let query = supabase
     .from("cash_transactions")
     .select("created_at, type, amount")
+    .eq("tenant_id", tenantId)
     .gte("created_at", range.start)
     .lt("created_at", range.end);
   if (branchId) query = query.eq("branch_id", branchId);
@@ -1313,11 +1371,13 @@ export interface CashFlowDetailedRow {
 
 export async function getCashFlowDetailed(months: number = 6, branchId?: string): Promise<CashFlowDetailedRow[]> {
   const supabase = getClient();
+  const tenantId = await getCurrentTenantId();
   const range = lastNMonthsRange(months);
 
   let query = supabase
     .from("cash_transactions")
     .select("created_at, type, amount, category")
+    .eq("tenant_id", tenantId)
     .gte("created_at", range.start)
     .lt("created_at", range.end);
   if (branchId) query = query.eq("branch_id", branchId);

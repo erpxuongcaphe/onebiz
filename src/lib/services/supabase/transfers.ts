@@ -20,6 +20,7 @@ import type { QueryParams, QueryResult } from "@/lib/types";
 import {
   getClient,
   getCurrentContext,
+  getCurrentTenantId,
   getPaginationRange,
   handleError,
 } from "./base";
@@ -100,6 +101,7 @@ export async function getStockTransfers(
   params: QueryParams
 ): Promise<QueryResult<StockTransfer>> {
   const supabase = getClient();
+  const tenantId = await getCurrentTenantId();
   const { from, to } = getPaginationRange(params);
 
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
@@ -111,7 +113,8 @@ export async function getStockTransfers(
        to_branch:to_branch_id(name),
        profiles!stock_transfers_created_by_fkey(full_name)`,
       { count: "exact" }
-    );
+    )
+    .eq("tenant_id", tenantId);
 
   if (params.search) {
     query = query.or(`code.ilike.%${params.search}%,note.ilike.%${params.search}%`);
@@ -171,6 +174,7 @@ export async function getStockTransferById(id: string): Promise<{
   items: StockTransferItem[];
 } | null> {
   const supabase = getClient();
+  const tenantId = await getCurrentTenantId();
 
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
   const { data: headerRow, error: headerErr } = await (supabase as any)
@@ -180,6 +184,7 @@ export async function getStockTransferById(id: string): Promise<{
        from_branch:from_branch_id(name),
        to_branch:to_branch_id(name)`
     )
+    .eq("tenant_id", tenantId)
     .eq("id", id)
     .single();
 
@@ -259,6 +264,7 @@ export async function createStockTransfer(
   const { data: stockRows, error: stockErr } = await (supabase as any)
     .from("branch_stock")
     .select("product_id, quantity, reserved")
+    .eq("tenant_id", ctx.tenantId)
     .eq("branch_id", input.fromBranchId)
     .in("product_id", productIds);
   if (stockErr) handleError(stockErr, "createStockTransfer.checkStock");
@@ -355,6 +361,7 @@ export async function completeStockTransfer(transferId: string): Promise<void> {
   const { data: claimed, error: claimErr } = await (supabase as any)
     .from("stock_transfers")
     .update({ status: "completed", completed_at: new Date().toISOString() })
+    .eq("tenant_id", ctx.tenantId)
     .eq("id", transferId)
     .in("status", ["draft", "in_transit"])
     .select("id, code, from_branch_id, to_branch_id")
@@ -421,11 +428,13 @@ export async function completeStockTransfer(transferId: string): Promise<void> {
 
 export async function cancelStockTransfer(transferId: string): Promise<void> {
   const supabase = getClient();
+  const tenantId = await getCurrentTenantId();
 
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
   const { data: claimed, error: claimErr } = await (supabase as any)
     .from("stock_transfers")
     .update({ status: "cancelled" })
+    .eq("tenant_id", tenantId)
     .eq("id", transferId)
     .in("status", ["draft", "in_transit"])
     .select("id")
@@ -454,11 +463,13 @@ export async function updateTransferStatus(
   }
 
   const supabase = getClient();
+  const tenantId = await getCurrentTenantId();
 
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
   const { data: current, error: readErr } = await (supabase as any)
     .from("stock_transfers")
     .select("status")
+    .eq("tenant_id", tenantId)
     .eq("id", transferId)
     .single();
   if (readErr) handleError(readErr, "updateTransferStatus.read");
@@ -472,6 +483,7 @@ export async function updateTransferStatus(
   const { error: updateErr } = await (supabase as any)
     .from("stock_transfers")
     .update({ status: newStatus })
+    .eq("tenant_id", tenantId)
     .eq("id", transferId);
   if (updateErr) handleError(updateErr, "updateTransferStatus.update");
 }

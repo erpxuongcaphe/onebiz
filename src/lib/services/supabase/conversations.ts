@@ -4,7 +4,7 @@
 
 import type { Conversation, ConversationMessage, QueryParams, QueryResult } from "@/lib/types";
 import type { Database } from "@/lib/supabase/types";
-import { getClient, getPaginationRange, handleError, getFilterValue } from "./base";
+import { getClient, getPaginationRange, handleError, getFilterValue, getCurrentTenantId } from "./base";
 
 type MessageInsert = Database["public"]["Tables"]["conversation_messages"]["Insert"];
 
@@ -31,11 +31,13 @@ function mapConversation(row: Record<string, unknown>): Conversation {
  */
 export async function getConversations(params: QueryParams): Promise<QueryResult<Conversation>> {
   const supabase = getClient();
+  const tenantId = await getCurrentTenantId();
   const { from, to } = getPaginationRange(params);
 
   let query = supabase
     .from("conversations")
-    .select("*", { count: "exact" });
+    .select("*", { count: "exact" })
+    .eq("tenant_id", tenantId);
 
   if (params.search) {
     query = query.ilike("customer_name", `%${params.search}%`);
@@ -124,13 +126,15 @@ export async function sendMessage(
 
   if (error) handleError(error, "sendMessage");
 
-  // Cập nhật last_message trên conversation
+  // Cập nhật last_message trên conversation (filter tenant defense)
+  const tenantId = await getCurrentTenantId();
   await supabase
     .from("conversations")
     .update({
       last_message: content,
       last_message_at: new Date().toISOString(),
     })
+    .eq("tenant_id", tenantId)
     .eq("id", conversationId);
 
   return {
@@ -150,10 +154,12 @@ export async function sendMessage(
  */
 export async function markConversationRead(conversationId: string): Promise<void> {
   const supabase = getClient();
+  const tenantId = await getCurrentTenantId();
 
   const { error } = await supabase
     .from("conversations")
     .update({ unread_count: 0 })
+    .eq("tenant_id", tenantId)
     .eq("id", conversationId);
 
   if (error) handleError(error, "markConversationRead");

@@ -14,12 +14,13 @@ import type {
   QueryResult,
   ShippingStatus,
 } from "@/lib/types";
-import { getClient, getCurrentContext, getPaginationRange, handleError } from "./base";
+import { getClient, getCurrentContext, getCurrentTenantId, getPaginationRange, handleError } from "./base";
 
 // --- Shipping Orders ---
 
 export async function getShippingOrders(params: QueryParams): Promise<QueryResult<ShippingOrder>> {
   const supabase = getClient();
+  const tenantId = await getCurrentTenantId();
   const { from, to } = getPaginationRange(params);
 
   let query = supabase
@@ -28,7 +29,8 @@ export async function getShippingOrders(params: QueryParams): Promise<QueryResul
       *,
       invoices!shipping_orders_invoice_id_fkey(code),
       delivery_partners!shipping_orders_partner_id_fkey(name)
-    `, { count: "exact" });
+    `, { count: "exact" })
+    .eq("tenant_id", tenantId);
 
   // Search
   if (params.search) {
@@ -86,11 +88,13 @@ export function getShippingStatuses() {
 
 export async function getDeliveryPartners(params: QueryParams): Promise<QueryResult<DeliveryPartner>> {
   const supabase = getClient();
+  const tenantId = await getCurrentTenantId();
   const { from, to } = getPaginationRange(params);
 
   let query = supabase
     .from("delivery_partners")
-    .select("*", { count: "exact" });
+    .select("*", { count: "exact" })
+    .eq("tenant_id", tenantId);
 
   // Search
   if (params.search) {
@@ -125,10 +129,12 @@ export function getPartnerOptions() {
  */
 export async function getPartnerOptionsAsync() {
   const supabase = getClient();
+  const tenantId = await getCurrentTenantId();
 
   const { data, error } = await supabase
     .from("delivery_partners")
     .select("id, name")
+    .eq("tenant_id", tenantId)
     .eq("is_active", true)
     .order("name");
 
@@ -206,6 +212,7 @@ export async function updateShippingOrderStatus(
   const { data: current, error: loadErr } = await supabase
     .from("shipping_orders")
     .select("id, status, code")
+    .eq("tenant_id", ctx.tenantId)
     .eq("id", orderId)
     .single();
   if (loadErr) handleError(loadErr, "updateShippingOrderStatus.load");
@@ -227,6 +234,7 @@ export async function updateShippingOrderStatus(
       // eslint-disable-next-line @typescript-eslint/no-explicit-any
       updated_at: new Date().toISOString() as any,
     })
+    .eq("tenant_id", ctx.tenantId)
     .eq("id", orderId)
     // eslint-disable-next-line @typescript-eslint/no-explicit-any
     .eq("status", fromStatus as any)
@@ -269,6 +277,7 @@ export async function updateDeliveryPartner(
   updates: Partial<DeliveryPartner>,
 ): Promise<DeliveryPartner> {
   const supabase = getClient();
+  const tenantId = await getCurrentTenantId();
 
   const payload: Record<string, unknown> = {};
   if (updates.name !== undefined) payload.name = updates.name;
@@ -277,6 +286,7 @@ export async function updateDeliveryPartner(
   const { data, error } = await supabase
     .from("delivery_partners")
     .update(payload)
+    .eq("tenant_id", tenantId)
     .eq("id", id)
     .select()
     .single();
@@ -290,10 +300,12 @@ export async function updateDeliveryPartner(
  */
 export async function deactivateDeliveryPartner(id: string): Promise<void> {
   const supabase = getClient();
+  const tenantId = await getCurrentTenantId();
 
   const { error } = await supabase
     .from("delivery_partners")
     .update({ is_active: false })
+    .eq("tenant_id", tenantId)
     .eq("id", id);
 
   if (error) handleError(error, "deactivateDeliveryPartner");

@@ -5,7 +5,7 @@
 
 import type { Database } from "@/lib/supabase/types";
 import type { RestaurantTable, TableStatus } from "@/lib/types/fnb";
-import { getClient, handleError } from "./base";
+import { getClient, handleError, getCurrentTenantId } from "./base";
 
 type TableInsert = Database["public"]["Tables"]["restaurant_tables"]["Insert"];
 type TableUpdate = Database["public"]["Tables"]["restaurant_tables"]["Update"];
@@ -36,10 +36,12 @@ function mapTable(row: any): RestaurantTable {
 
 export async function getTablesByBranch(branchId: string): Promise<RestaurantTable[]> {
   const supabase = getClient();
+  const tenantId = await getCurrentTenantId();
 
   const { data, error } = await supabase
     .from("restaurant_tables")
     .select("*")
+    .eq("tenant_id", tenantId)
     .eq("branch_id", branchId)
     .eq("is_active", true)
     .order("sort_order", { ascending: true });
@@ -89,6 +91,7 @@ export async function updateTableStatus(
   currentOrderId?: string | null
 ): Promise<RestaurantTable | null> {
   const supabase = getClient();
+  const tenantId = await getCurrentTenantId();
 
   const update: TableUpdate = { status: newStatus };
   if (currentOrderId !== undefined) {
@@ -98,6 +101,7 @@ export async function updateTableStatus(
   const { data, error } = await supabase
     .from("restaurant_tables")
     .update(update)
+    .eq("tenant_id", tenantId)
     .eq("id", tableId)
     .select()
     .single();
@@ -115,6 +119,7 @@ export async function claimTable(
   orderId: string
 ): Promise<RestaurantTable | null> {
   const supabase = getClient();
+  const tenantId = await getCurrentTenantId();
 
   const { data, error } = await supabase
     .from("restaurant_tables")
@@ -122,6 +127,7 @@ export async function claimTable(
       status: "occupied" as const,
       current_order_id: orderId,
     } satisfies TableUpdate)
+    .eq("tenant_id", tenantId)
     .eq("id", tableId)
     .eq("status", "available")
     .select()
@@ -136,6 +142,7 @@ export async function claimTable(
  */
 export async function releaseTable(tableId: string): Promise<void> {
   const supabase = getClient();
+  const tenantId = await getCurrentTenantId();
 
   const { error } = await supabase
     .from("restaurant_tables")
@@ -143,6 +150,7 @@ export async function releaseTable(tableId: string): Promise<void> {
       status: "cleaning" as const,
       current_order_id: null,
     } satisfies TableUpdate)
+    .eq("tenant_id", tenantId)
     .eq("id", tableId);
 
   if (error) handleError(error, "releaseTable");
@@ -153,6 +161,7 @@ export async function releaseTable(tableId: string): Promise<void> {
  */
 export async function markTableAvailable(tableId: string): Promise<void> {
   const supabase = getClient();
+  const tenantId = await getCurrentTenantId();
 
   const { error } = await supabase
     .from("restaurant_tables")
@@ -160,6 +169,7 @@ export async function markTableAvailable(tableId: string): Promise<void> {
       status: "available" as const,
       current_order_id: null,
     } satisfies TableUpdate)
+    .eq("tenant_id", tenantId)
     .eq("id", tableId)
     .eq("status", "cleaning");
 
@@ -181,6 +191,7 @@ export async function updateTable(
   }
 ): Promise<RestaurantTable> {
   const supabase = getClient();
+  const tenantId = await getCurrentTenantId();
 
   const update: TableUpdate = {};
   if (input.name !== undefined) update.name = input.name;
@@ -193,6 +204,7 @@ export async function updateTable(
   const { data, error } = await supabase
     .from("restaurant_tables")
     .update(update)
+    .eq("tenant_id", tenantId)
     .eq("id", tableId)
     .select()
     .single();
@@ -207,10 +219,12 @@ export async function updateTable(
  */
 export async function deleteTable(tableId: string): Promise<void> {
   const supabase = getClient();
+  const tenantId = await getCurrentTenantId();
 
   const { error } = await supabase
     .from("restaurant_tables")
     .update({ is_active: false } satisfies TableUpdate)
+    .eq("tenant_id", tenantId)
     .eq("id", tableId)
     .eq("status", "available");
 
@@ -222,10 +236,12 @@ export async function deleteTable(tableId: string): Promise<void> {
  */
 export async function getZonesByBranch(branchId: string): Promise<string[]> {
   const supabase = getClient();
+  const tenantId = await getCurrentTenantId();
 
   const { data, error } = await supabase
     .from("restaurant_tables")
     .select("zone")
+    .eq("tenant_id", tenantId)
     .eq("branch_id", branchId)
     .eq("is_active", true);
 
@@ -283,10 +299,12 @@ export async function renameZone(
   newZone: string
 ): Promise<void> {
   const supabase = getClient();
+  const tenantId = await getCurrentTenantId();
 
   const { error } = await supabase
     .from("restaurant_tables")
     .update({ zone: newZone } satisfies TableUpdate)
+    .eq("tenant_id", tenantId)
     .eq("branch_id", branchId)
     .eq("zone", oldZone)
     .eq("is_active", true);
@@ -303,10 +321,12 @@ export async function deleteZone(
   zone: string
 ): Promise<void> {
   const supabase = getClient();
+  const tenantId = await getCurrentTenantId();
 
   const { error } = await supabase
     .from("restaurant_tables")
     .update({ is_active: false } satisfies TableUpdate)
+    .eq("tenant_id", tenantId)
     .eq("branch_id", branchId)
     .eq("zone", zone)
     .eq("status", "available");

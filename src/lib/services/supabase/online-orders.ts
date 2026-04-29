@@ -3,7 +3,7 @@
  */
 
 import type { OnlineOrder, QueryParams, QueryResult } from "@/lib/types";
-import { getClient, getPaginationRange, handleError, getFilterValue } from "./base";
+import { getClient, getPaginationRange, handleError, getFilterValue, getCurrentTenantId } from "./base";
 
 function mapOnlineOrder(row: Record<string, unknown>): OnlineOrder {
   const status = row.status as string;
@@ -38,14 +38,17 @@ function mapOnlineOrder(row: Record<string, unknown>): OnlineOrder {
  */
 export async function getOnlineOrders(params: QueryParams): Promise<QueryResult<OnlineOrder>> {
   const supabase = getClient();
+  const tenantId = await getCurrentTenantId();
   const { from, to } = getPaginationRange(params);
 
   let query = supabase
     .from("online_orders")
-    .select("*", { count: "exact" });
+    .select("*", { count: "exact" })
+    .eq("tenant_id", tenantId);
 
   if (params.search) {
-    query = query.or(`code.ilike.%${params.search}%,customer_name.ilike.%${params.search}%`);
+    const esc = params.search.replace(/[%_]/g, "\\$&");
+    query = query.or(`code.ilike.%${esc}%,customer_name.ilike.%${esc}%`);
   }
 
   // Filter: channel
@@ -78,10 +81,12 @@ export async function getOnlineOrders(params: QueryParams): Promise<QueryResult<
  */
 export async function getOnlineOrderById(id: string) {
   const supabase = getClient();
+  const tenantId = await getCurrentTenantId();
 
   const { data, error } = await supabase
     .from("online_orders")
     .select("*")
+    .eq("tenant_id", tenantId)
     .eq("id", id)
     .single();
 
@@ -101,10 +106,12 @@ export async function updateOnlineOrderStatus(
   status: "pending" | "confirmed" | "shipping" | "completed" | "cancelled"
 ): Promise<void> {
   const supabase = getClient();
+  const tenantId = await getCurrentTenantId();
 
   const { error } = await supabase
     .from("online_orders")
     .update({ status })
+    .eq("tenant_id", tenantId)
     .eq("id", id);
 
   if (error) handleError(error, "updateOnlineOrderStatus");
@@ -118,10 +125,12 @@ export async function updateOnlineOrderPaymentStatus(
   paymentStatus: "unpaid" | "paid" | "refunded"
 ): Promise<void> {
   const supabase = getClient();
+  const tenantId = await getCurrentTenantId();
 
   const { error } = await supabase
     .from("online_orders")
     .update({ payment_status: paymentStatus })
+    .eq("tenant_id", tenantId)
     .eq("id", id);
 
   if (error) handleError(error, "updateOnlineOrderPaymentStatus");
@@ -132,14 +141,17 @@ export async function updateOnlineOrderPaymentStatus(
  */
 export async function getOnlineOrderStats() {
   const supabase = getClient();
+  const tenantId = await getCurrentTenantId();
 
   const { count: totalOrders } = await supabase
     .from("online_orders")
-    .select("id", { count: "exact", head: true });
+    .select("id", { count: "exact", head: true })
+    .eq("tenant_id", tenantId);
 
   const { count: pendingOrders } = await supabase
     .from("online_orders")
     .select("id", { count: "exact", head: true })
+    .eq("tenant_id", tenantId)
     .eq("status", "pending");
 
   return {

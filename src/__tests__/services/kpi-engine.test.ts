@@ -8,6 +8,7 @@ vi.mock("@/lib/services/supabase/base", () => ({
     })),
   }),
   getCurrentContext: vi.fn(async () => ({ tenantId: "t1", userId: "u1" })),
+  getCurrentTenantId: () => Promise.resolve("t1"),
   handleError: (err: { message: string }, ctx: string) => {
     throw new Error(`[${ctx}] ${err.message}`);
   },

@@ -3,7 +3,7 @@
  * Filters on invoices.source = 'fnb' and joins kitchen_orders + kitchen_order_items.
  */
 
-import { getClient } from "./base";
+import { getClient, getCurrentTenantId } from "./base";
 
 // === Types ===
 
@@ -49,10 +49,12 @@ export async function getFnbKpis(
   branchId?: string,
 ): Promise<FnbKpis> {
   const supabase = getClient();
+  const tenantId = await getCurrentTenantId();
 
   let query = supabase
     .from("invoices")
     .select("id, total, created_at")
+    .eq("tenant_id", tenantId)
     .eq("source", "fnb")
     .not("status", "eq", "cancelled");
 
@@ -69,6 +71,7 @@ export async function getFnbKpis(
   let koQuery = supabase
     .from("kitchen_orders")
     .select("created_at, updated_at")
+    .eq("tenant_id", tenantId)
     .eq("status", "completed")
     .not("table_id", "is", null);
   if (branchId) koQuery = koQuery.eq("branch_id", branchId);
@@ -94,11 +97,13 @@ export async function getRevenueByMenuItem(
   limit = 15,
 ): Promise<MenuItemRevenue[]> {
   const supabase = getClient();
+  const tenantId = await getCurrentTenantId();
 
   // Get completed kitchen order IDs
   let koQuery = supabase
     .from("kitchen_orders")
     .select("id")
+    .eq("tenant_id", tenantId)
     .eq("status", "completed");
   if (branchId) koQuery = koQuery.eq("branch_id", branchId);
 
@@ -106,7 +111,7 @@ export async function getRevenueByMenuItem(
   const koIds = (koRows ?? []).map((r) => r.id);
   if (koIds.length === 0) return [];
 
-  // Get items for those orders
+  // Get items for those orders — scope qua kitchen_order_id (đã filter tenant ở koQuery)
   const { data: items } = await supabase
     .from("kitchen_order_items")
     .select("product_name, quantity, unit_price")
@@ -135,10 +140,12 @@ export async function getRevenueByTable(
   branchId?: string,
 ): Promise<TableRevenue[]> {
   const supabase = getClient();
+  const tenantId = await getCurrentTenantId();
 
   let query = supabase
     .from("kitchen_orders")
     .select("table_id, restaurant_tables(name), invoice_id, invoices(total)")
+    .eq("tenant_id", tenantId)
     .eq("status", "completed")
     .not("table_id", "is", null);
   if (branchId) query = query.eq("branch_id", branchId);
@@ -167,10 +174,12 @@ export async function getRevenueByHourFnb(
   branchId?: string,
 ): Promise<HourlyRevenue[]> {
   const supabase = getClient();
+  const tenantId = await getCurrentTenantId();
 
   let query = supabase
     .from("invoices")
     .select("total, created_at")
+    .eq("tenant_id", tenantId)
     .eq("source", "fnb")
     .not("status", "eq", "cancelled");
   if (branchId) query = query.eq("branch_id", branchId);
@@ -205,10 +214,12 @@ export async function getCashierPerformance(
   branchId?: string,
 ): Promise<CashierPerformance[]> {
   const supabase = getClient();
+  const tenantId = await getCurrentTenantId();
 
   let query = supabase
     .from("invoices")
     .select("total, created_by, profiles(full_name)")
+    .eq("tenant_id", tenantId)
     .eq("source", "fnb")
     .not("status", "eq", "cancelled");
   if (branchId) query = query.eq("branch_id", branchId);
@@ -274,10 +285,12 @@ export async function getRevenueByOrderType(
   branchId?: string,
 ): Promise<OrderTypeRevenue[]> {
   const supabase = getClient();
+  const tenantId = await getCurrentTenantId();
 
   let query = supabase
     .from("kitchen_orders")
     .select("order_type, invoice_id, invoices(total)")
+    .eq("tenant_id", tenantId)
     .eq("status", "completed");
   if (branchId) query = query.eq("branch_id", branchId);
 
@@ -309,10 +322,12 @@ export async function getRevenueByPlatform(
   branchId?: string,
 ): Promise<PlatformRevenue[]> {
   const supabase = getClient();
+  const tenantId = await getCurrentTenantId();
 
   let query = supabase
     .from("kitchen_orders")
     .select("delivery_platform, invoice_id, invoices(total)")
+    .eq("tenant_id", tenantId)
     .eq("status", "completed")
     .eq("order_type", "delivery")
     .not("delivery_platform", "is", null);
@@ -342,11 +357,13 @@ export async function getRevenueByCategory(
   branchId?: string,
 ): Promise<CategoryRevenue[]> {
   const supabase = getClient();
+  const tenantId = await getCurrentTenantId();
 
   // Get completed kitchen order IDs
   let koQuery = supabase
     .from("kitchen_orders")
     .select("id")
+    .eq("tenant_id", tenantId)
     .eq("status", "completed");
   if (branchId) koQuery = koQuery.eq("branch_id", branchId);
 
@@ -354,7 +371,7 @@ export async function getRevenueByCategory(
   const koIds = (koRows ?? []).map((r) => r.id);
   if (koIds.length === 0) return [];
 
-  // Get items with product category
+  // Get items with product category — scope qua kitchen_order_id
   const { data: items } = await supabase
     .from("kitchen_order_items")
     .select("product_id, product_name, quantity, unit_price, products(category_id, product_categories(name))")
@@ -386,12 +403,14 @@ export async function getDailyRevenueFnb(
   days = 30,
 ): Promise<DailyRevenue[]> {
   const supabase = getClient();
+  const tenantId = await getCurrentTenantId();
   const since = new Date();
   since.setDate(since.getDate() - days);
 
   let query = supabase
     .from("invoices")
     .select("total, created_at")
+    .eq("tenant_id", tenantId)
     .eq("source", "fnb")
     .not("status", "eq", "cancelled")
     .gte("created_at", since.toISOString());
@@ -424,10 +443,12 @@ export async function getTableTurnover(
   branchId?: string,
 ): Promise<{ tableName: string; avgMinutes: number; orders: number }[]> {
   const supabase = getClient();
+  const tenantId = await getCurrentTenantId();
 
   let query = supabase
     .from("kitchen_orders")
     .select("table_id, restaurant_tables(name), created_at, updated_at")
+    .eq("tenant_id", tenantId)
     .eq("status", "completed")
     .not("table_id", "is", null);
   if (branchId) query = query.eq("branch_id", branchId);

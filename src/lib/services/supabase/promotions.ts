@@ -36,11 +36,13 @@ function mapPromotion(row: Record<string, unknown>): Promotion {
  */
 export async function getPromotions(params: QueryParams): Promise<QueryResult<Promotion>> {
   const supabase = getClient();
+  const tenantId = await getCurrentTenantId();
   const { from, to } = getPaginationRange(params);
 
   let query = supabase
     .from("promotions")
-    .select("*", { count: "exact" });
+    .select("*", { count: "exact" })
+    .eq("tenant_id", tenantId);
 
   if (params.search) {
     query = query.ilike("name", `%${params.search}%`);
@@ -71,11 +73,13 @@ export async function getPromotions(params: QueryParams): Promise<QueryResult<Pr
  */
 export async function getActivePromotions(): Promise<Promotion[]> {
   const supabase = getClient();
+  const tenantId = await getCurrentTenantId();
   const now = new Date().toISOString();
 
   const { data, error } = await supabase
     .from("promotions")
     .select("*")
+    .eq("tenant_id", tenantId)
     .eq("is_active", true)
     .lte("start_date", now)
     .gte("end_date", now)
@@ -123,6 +127,7 @@ export async function createPromotion(promo: Partial<Promotion>): Promise<Promot
  */
 export async function updatePromotion(id: string, updates: Partial<Promotion>): Promise<Promotion> {
   const supabase = getClient();
+  const tenantId = await getCurrentTenantId();
 
   const payload: PromotionUpdate = {};
   if (updates.name !== undefined) payload.name = updates.name;
@@ -143,6 +148,7 @@ export async function updatePromotion(id: string, updates: Partial<Promotion>): 
   const { data, error } = await supabase
     .from("promotions")
     .update(payload)
+    .eq("tenant_id", tenantId)
     .eq("id", id)
     .select()
     .single();
@@ -156,10 +162,12 @@ export async function updatePromotion(id: string, updates: Partial<Promotion>): 
  */
 export async function deletePromotion(id: string): Promise<void> {
   const supabase = getClient();
+  const tenantId = await getCurrentTenantId();
 
   const { error } = await supabase
     .from("promotions")
     .delete()
+    .eq("tenant_id", tenantId)
     .eq("id", id);
 
   if (error) handleError(error, "deletePromotion");

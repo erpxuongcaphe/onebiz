@@ -12,7 +12,7 @@ import type {
   ToppingAttachment,
   DeliveryPlatform,
 } from "@/lib/types/fnb";
-import { getClient, handleError } from "./base";
+import { getClient, handleError, getCurrentTenantId } from "./base";
 
 type KOInsert = Database["public"]["Tables"]["kitchen_orders"]["Insert"];
 type KOItemInsert = Database["public"]["Tables"]["kitchen_order_items"]["Insert"];
@@ -78,10 +78,12 @@ export async function getKitchenOrders(
   statuses?: KitchenOrderStatus[]
 ): Promise<KitchenOrder[]> {
   const supabase = getClient();
+  const tenantId = await getCurrentTenantId();
 
   let query = supabase
     .from("kitchen_orders")
     .select("*, restaurant_tables(name), profiles!kitchen_orders_created_by_fkey(full_name)")
+    .eq("tenant_id", tenantId)
     .eq("branch_id", branchId)
     .order("created_at", { ascending: true });
 
@@ -100,16 +102,19 @@ export async function getKitchenOrders(
  */
 export async function getKitchenOrderById(orderId: string): Promise<KitchenOrder & { items: KitchenOrderItem[] }> {
   const supabase = getClient();
+  const tenantId = await getCurrentTenantId();
 
   const { data: order, error: orderErr } = await supabase
     .from("kitchen_orders")
     .select("*, restaurant_tables(name), profiles!kitchen_orders_created_by_fkey(full_name)")
+    .eq("tenant_id", tenantId)
     .eq("id", orderId)
     .single();
 
   if (orderErr) handleError(orderErr, "getKitchenOrderById");
   if (!order) throw new Error("Không tìm thấy đơn bếp");
 
+  // items scope qua kitchen_order_id (đã verify ownership ở step trên)
   const { data: items, error: itemsErr } = await supabase
     .from("kitchen_order_items")
     .select("*")
@@ -241,10 +246,12 @@ export async function updateKitchenOrderStatus(
   newStatus: KitchenOrderStatus
 ): Promise<void> {
   const supabase = getClient();
+  const tenantId = await getCurrentTenantId();
 
   const { error } = await supabase
     .from("kitchen_orders")
     .update({ status: newStatus })
+    .eq("tenant_id", tenantId)
     .eq("id", orderId);
 
   if (error) handleError(error, "updateKitchenOrderStatus");
@@ -280,10 +287,12 @@ export async function linkInvoiceToOrder(
   invoiceId: string
 ): Promise<void> {
   const supabase = getClient();
+  const tenantId = await getCurrentTenantId();
 
   const { error } = await supabase
     .from("kitchen_orders")
     .update({ invoice_id: invoiceId, status: "completed" as const })
+    .eq("tenant_id", tenantId)
     .eq("id", orderId);
 
   if (error) handleError(error, "linkInvoiceToOrder");
@@ -340,11 +349,13 @@ export async function removeOrderItem(itemId: string): Promise<void> {
  */
 export async function cancelKitchenOrder(orderId: string): Promise<void> {
   const supabase = getClient();
+  const tenantId = await getCurrentTenantId();
 
   // Load order to check status + get table_id
   const { data: order, error: fetchErr } = await supabase
     .from("kitchen_orders")
     .select("id, status, table_id")
+    .eq("tenant_id", tenantId)
     .eq("id", orderId)
     .single();
 
@@ -362,6 +373,7 @@ export async function cancelKitchenOrder(orderId: string): Promise<void> {
   const { error: updateErr } = await supabase
     .from("kitchen_orders")
     .update({ status: "cancelled" as const })
+    .eq("tenant_id", tenantId)
     .eq("id", orderId);
 
   if (updateErr) handleError(updateErr, "cancelKitchenOrder:update");
@@ -371,6 +383,7 @@ export async function cancelKitchenOrder(orderId: string): Promise<void> {
     const { error: tableErr } = await supabase
       .from("restaurant_tables")
       .update({ status: "available" as const, current_order_id: null })
+      .eq("tenant_id", tenantId)
       .eq("id", order.table_id)
       .eq("current_order_id", orderId);
 
@@ -392,11 +405,13 @@ export async function transferTable(
   toTableId: string
 ): Promise<void> {
   const supabase = getClient();
+  const tenantId = await getCurrentTenantId();
 
   // 1. Claim new table (atomic: only if available)
   const { data: claimed, error: claimErr } = await supabase
     .from("restaurant_tables")
     .update({ status: "occupied" as const, current_order_id: orderId })
+    .eq("tenant_id", tenantId)
     .eq("id", toTableId)
     .eq("status", "available")
     .select()
@@ -409,6 +424,7 @@ export async function transferTable(
   const { error: releaseErr } = await supabase
     .from("restaurant_tables")
     .update({ status: "available" as const, current_order_id: null })
+    .eq("tenant_id", tenantId)
     .eq("id", fromTableId)
     .eq("current_order_id", orderId);
 
@@ -418,6 +434,7 @@ export async function transferTable(
   const { error: orderErr } = await supabase
     .from("kitchen_orders")
     .update({ table_id: toTableId, original_table_id: fromTableId })
+    .eq("tenant_id", tenantId)
     .eq("id", orderId);
 
   if (orderErr) handleError(orderErr, "transferTable:order");
@@ -437,9 +454,10 @@ export async function mergeKitchenOrders(
   sourceOrderIds: string[]
 ): Promise<void> {
   const supabase = getClient();
+  const tenantId = await getCurrentTenantId();
 
   for (const sourceId of sourceOrderIds) {
-    // 1. Move items: update kitchen_order_id to target
+    // 1. Move items: update kitchen_order_id to target — scope qua kitchen_order_id (parent đã verify tenant ở step 2)
     const { error: moveErr } = await supabase
       .from("kitchen_order_items")
       .update({ kitchen_order_id: targetOrderId })
@@ -454,6 +472,7 @@ export async function mergeKitchenOrders(
         status: "cancelled" as const,
         merged_into_id: targetOrderId,
       })
+      .eq("tenant_id", tenantId)
       .eq("id", sourceId);
 
     if (cancelErr) handleError(cancelErr, `mergeKitchenOrders:cancel:${sourceId}`);
@@ -462,6 +481,7 @@ export async function mergeKitchenOrders(
     const { data: srcOrder } = await supabase
       .from("kitchen_orders")
       .select("table_id")
+      .eq("tenant_id", tenantId)
       .eq("id", sourceId)
       .single();
 
@@ -469,6 +489,7 @@ export async function mergeKitchenOrders(
       await supabase
         .from("restaurant_tables")
         .update({ status: "available" as const, current_order_id: null })
+        .eq("tenant_id", tenantId)
         .eq("id", srcOrder.table_id)
         .eq("current_order_id", sourceId);
     }
@@ -507,12 +528,14 @@ export async function applyOrderDiscount(
     discountAmount = Math.round(subtotal * discountValue / 100);
   }
 
+  const tenantId = await getCurrentTenantId();
   const { error } = await supabase
     .from("kitchen_orders")
     .update({
       discount_amount: discountAmount,
       discount_reason: reason ?? null,
     })
+    .eq("tenant_id", tenantId)
     .eq("id", orderId);
 
   if (error) handleError(error, "applyOrderDiscount");
@@ -533,6 +556,7 @@ export async function setDeliveryPlatform(
   platformCommission: number
 ): Promise<void> {
   const supabase = getClient();
+  const tenantId = await getCurrentTenantId();
 
   const { error } = await supabase
     .from("kitchen_orders")
@@ -541,6 +565,7 @@ export async function setDeliveryPlatform(
       delivery_fee: deliveryFee,
       platform_commission: platformCommission,
     })
+    .eq("tenant_id", tenantId)
     .eq("id", orderId);
 
   if (error) handleError(error, "setDeliveryPlatform");

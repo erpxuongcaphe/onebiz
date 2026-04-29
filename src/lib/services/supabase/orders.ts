@@ -19,7 +19,7 @@
  */
 
 import type { SalesOrder, QueryParams, QueryResult } from "@/lib/types";
-import { getClient, getPaginationRange, handleError } from "./base";
+import { getClient, getPaginationRange, handleError, getCurrentTenantId } from "./base";
 import {
   posCheckout,
   applyStockDecrement,
@@ -49,12 +49,14 @@ export async function getOrders(
   params: QueryParams
 ): Promise<QueryResult<SalesOrder>> {
   const supabase = getClient();
+  const tenantId = await getCurrentTenantId();
   const { from, to } = getPaginationRange(params);
 
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
   let query = (supabase as any)
     .from("sales_orders")
-    .select("*, profiles!sales_orders_created_by_fkey(full_name)", { count: "exact" });
+    .select("*, profiles!sales_orders_created_by_fkey(full_name)", { count: "exact" })
+    .eq("tenant_id", tenantId);
 
   // Search by code or customer_name
   if (params.search) {
@@ -131,6 +133,7 @@ export async function completeSalesOrder(
   orderId: string
 ): Promise<{ invoiceId: string; invoiceCode: string }> {
   const supabase = getClient();
+  const tenantId = await getCurrentTenantId();
 
   // 1. ATOMIC claim — flip sales_order status
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
@@ -138,6 +141,7 @@ export async function completeSalesOrder(
   const { data: claimed, error: claimErr } = await sb
     .from("sales_orders")
     .update({ status: "completed" })
+    .eq("tenant_id", tenantId)
     .eq("id", orderId)
     .in("status", ["confirmed", "delivering"])
     .select("id, code, customer_id, customer_name, total, tenant_id, branch_id, created_by")
@@ -147,6 +151,7 @@ export async function completeSalesOrder(
     const { data: existing } = await sb
       .from("sales_orders")
       .select("status")
+      .eq("tenant_id", tenantId)
       .eq("id", orderId)
       .single();
     if (!existing) throw new Error("Không tìm thấy đơn hàng bán");
@@ -156,7 +161,7 @@ export async function completeSalesOrder(
   }
   const order = claimed;
 
-  // 2. Load sales_order_items
+  // 2. Load sales_order_items — scope qua order_id (đã verify ownership ở step 1)
   const { data: soItems, error: soItemsErr } = await sb
     .from("sales_order_items")
     .select("id, product_id, product_name, unit, quantity, unit_price, discount, total")
@@ -259,12 +264,14 @@ export async function completeSalesOrder(
 
 export async function cancelSalesOrder(orderId: string): Promise<void> {
   const supabase = getClient();
+  const tenantId = await getCurrentTenantId();
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
   const sb = supabase as any;
 
   const { data: claimed, error: claimErr } = await sb
     .from("sales_orders")
     .update({ status: "cancelled" })
+    .eq("tenant_id", tenantId)
     .eq("id", orderId)
     .in("status", ["new", "confirmed"])
     .select("id")
@@ -274,6 +281,7 @@ export async function cancelSalesOrder(orderId: string): Promise<void> {
     const { data: existing } = await sb
       .from("sales_orders")
       .select("status")
+      .eq("tenant_id", tenantId)
       .eq("id", orderId)
       .single();
     if (!existing) throw new Error("Không tìm thấy đơn hàng bán");
@@ -408,12 +416,14 @@ export async function listDraftOrders(
   limit: number = 50
 ): Promise<DraftOrderSummary[]> {
   const supabase = getClient();
+  const tenantId = await getCurrentTenantId();
 
   let query = supabase
     .from("invoices")
     .select(
       "id, code, customer_id, customer_name, total, subtotal, discount_amount, note, created_at, invoice_items(count)"
     )
+    .eq("tenant_id", tenantId)
     .eq("status", "draft")
     .order("created_at", { ascending: false })
     .limit(limit);
@@ -449,12 +459,14 @@ export async function getDraftOrderById(
   invoiceId: string
 ): Promise<DraftOrderDetail | null> {
   const supabase = getClient();
+  const tenantId = await getCurrentTenantId();
 
   const { data, error } = await supabase
     .from("invoices")
     .select(
       "id, code, branch_id, customer_id, customer_name, subtotal, discount_amount, total, note, created_at, status, invoice_items(*)"
     )
+    .eq("tenant_id", tenantId)
     .eq("id", invoiceId)
     .single();
   if (error) handleError(error, "getDraftOrderById");
@@ -526,6 +538,7 @@ export async function completeDraftOrder(
       debt: 0, // placeholder — will recompute below
       payment_method: payment.method,
     })
+    .eq("tenant_id", payment.tenantId)
     .eq("id", invoiceId)
     .eq("status", "draft")
     .select("id, code, status, total, customer_name, branch_id, tenant_id")
@@ -536,6 +549,7 @@ export async function completeDraftOrder(
     const { data: existing } = await supabase
       .from("invoices")
       .select("status")
+      .eq("tenant_id", payment.tenantId)
       .eq("id", invoiceId)
       .single();
     if (!existing) throw new Error("Không tìm thấy đơn nháp");
@@ -550,10 +564,11 @@ export async function completeDraftOrder(
     await supabase
       .from("invoices")
       .update({ debt })
+      .eq("tenant_id", payment.tenantId)
       .eq("id", invoiceId);
   }
 
-  // Load invoice_items for stock decrement
+  // Load invoice_items for stock decrement — scope qua invoice_id (đã verify ownership)
   const { data: itemsRaw, error: itemsErr } = await supabase
     .from("invoice_items")
     .select("*")
@@ -607,6 +622,7 @@ export async function completeDraftOrder(
 
 export async function deleteDraftOrder(invoiceId: string): Promise<void> {
   const supabase = getClient();
+  const tenantId = await getCurrentTenantId();
 
   // ATOMIC: Delete invoice WHERE status='draft' FIRST to claim it.
   // If a concurrent completeDraftOrder already flipped status to 'completed',
@@ -615,6 +631,7 @@ export async function deleteDraftOrder(invoiceId: string): Promise<void> {
   const { data: deleted, error: invErr } = await supabase
     .from("invoices")
     .delete()
+    .eq("tenant_id", tenantId)
     .eq("id", invoiceId)
     .eq("status", "draft")
     .select("id")

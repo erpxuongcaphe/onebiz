@@ -19,7 +19,7 @@
  */
 
 import type { InventoryCheck, DisposalExport, InternalExport, QueryParams, QueryResult } from "@/lib/types";
-import { getClient, getCurrentContext, getPaginationRange, handleError } from "./base";
+import { getClient, getCurrentContext, getCurrentTenantId, getPaginationRange, handleError } from "./base";
 import { applyManualStockMovement, nextEntityCode } from "./stock-adjustments";
 
 // --- Disposal Exports / Xuất hủy (Supabase) ---
@@ -49,12 +49,14 @@ function mapDisposalExport(row: any): DisposalExport {
 
 export async function getDisposalExports(params: QueryParams): Promise<QueryResult<DisposalExport>> {
   const supabase = getClient();
+  const tenantId = await getCurrentTenantId();
   const { from, to } = getPaginationRange(params);
 
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
   let query = (supabase as any)
     .from("disposal_exports")
-    .select("*, profiles!disposal_exports_created_by_fkey(full_name)", { count: "exact" });
+    .select("*, profiles!disposal_exports_created_by_fkey(full_name)", { count: "exact" })
+    .eq("tenant_id", tenantId);
 
   // Search theo mã phiếu
   if (params.search) {
@@ -118,12 +120,14 @@ function mapInternalExport(row: any): InternalExport {
 
 export async function getInternalExports(params: QueryParams): Promise<QueryResult<InternalExport>> {
   const supabase = getClient();
+  const tenantId = await getCurrentTenantId();
   const { from, to } = getPaginationRange(params);
 
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
   let query = (supabase as any)
     .from("internal_exports")
-    .select("*, profiles!internal_exports_created_by_fkey(full_name)", { count: "exact" });
+    .select("*, profiles!internal_exports_created_by_fkey(full_name)", { count: "exact" })
+    .eq("tenant_id", tenantId);
 
   // Search theo mã phiếu
   if (params.search) {
@@ -170,6 +174,7 @@ export function getInternalExportStatuses() {
  */
 export async function completeDisposalExport(disposalId: string): Promise<void> {
   const supabase = getClient();
+  const tenantId = await getCurrentTenantId();
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
   const sb = supabase as any;
 
@@ -177,6 +182,7 @@ export async function completeDisposalExport(disposalId: string): Promise<void> 
   const { data: claimed, error: claimErr } = await sb
     .from("disposal_exports")
     .update({ status: "completed" })
+    .eq("tenant_id", tenantId)
     .eq("id", disposalId)
     .eq("status", "draft")
     .select("id, code")
@@ -186,6 +192,7 @@ export async function completeDisposalExport(disposalId: string): Promise<void> 
     const { data: existing } = await sb
       .from("disposal_exports")
       .select("status")
+      .eq("tenant_id", tenantId)
       .eq("id", disposalId)
       .single();
     if (!existing) throw new Error("Không tìm thấy phiếu xuất hủy");
@@ -194,7 +201,7 @@ export async function completeDisposalExport(disposalId: string): Promise<void> 
     );
   }
 
-  // 2. Load items
+  // 2. Load items — scope qua disposal_id (đã verify ownership)
   const { data: items, error: itemsErr } = await sb
     .from("disposal_export_items")
     .select("id, product_id, product_name, quantity")
@@ -223,12 +230,14 @@ export async function completeDisposalExport(disposalId: string): Promise<void> 
  */
 export async function cancelDisposalExport(disposalId: string): Promise<void> {
   const supabase = getClient();
+  const tenantId = await getCurrentTenantId();
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
   const sb = supabase as any;
 
   const { data: claimed, error } = await sb
     .from("disposal_exports")
     .update({ status: "cancelled" })
+    .eq("tenant_id", tenantId)
     .eq("id", disposalId)
     .eq("status", "draft")
     .select("id")
@@ -238,6 +247,7 @@ export async function cancelDisposalExport(disposalId: string): Promise<void> {
     const { data: existing } = await sb
       .from("disposal_exports")
       .select("status")
+      .eq("tenant_id", tenantId)
       .eq("id", disposalId)
       .single();
     if (!existing) throw new Error("Không tìm thấy phiếu xuất hủy");
@@ -255,6 +265,7 @@ export async function cancelDisposalExport(disposalId: string): Promise<void> {
  */
 export async function completeInternalExport(exportId: string): Promise<void> {
   const supabase = getClient();
+  const tenantId = await getCurrentTenantId();
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
   const sb = supabase as any;
 
@@ -262,6 +273,7 @@ export async function completeInternalExport(exportId: string): Promise<void> {
   const { data: claimed, error: claimErr } = await sb
     .from("internal_exports")
     .update({ status: "completed" })
+    .eq("tenant_id", tenantId)
     .eq("id", exportId)
     .eq("status", "draft")
     .select("id, code")
@@ -271,6 +283,7 @@ export async function completeInternalExport(exportId: string): Promise<void> {
     const { data: existing } = await sb
       .from("internal_exports")
       .select("status")
+      .eq("tenant_id", tenantId)
       .eq("id", exportId)
       .single();
     if (!existing) throw new Error("Không tìm thấy phiếu xuất nội bộ");
@@ -279,7 +292,7 @@ export async function completeInternalExport(exportId: string): Promise<void> {
     );
   }
 
-  // 2. Load items
+  // 2. Load items — scope qua export_id (đã verify ownership)
   const { data: items, error: itemsErr } = await sb
     .from("internal_export_items")
     .select("id, product_id, product_name, quantity")
@@ -308,12 +321,14 @@ export async function completeInternalExport(exportId: string): Promise<void> {
  */
 export async function cancelInternalExport(exportId: string): Promise<void> {
   const supabase = getClient();
+  const tenantId = await getCurrentTenantId();
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
   const sb = supabase as any;
 
   const { data: claimed, error } = await sb
     .from("internal_exports")
     .update({ status: "cancelled" })
+    .eq("tenant_id", tenantId)
     .eq("id", exportId)
     .eq("status", "draft")
     .select("id")
@@ -323,6 +338,7 @@ export async function cancelInternalExport(exportId: string): Promise<void> {
     const { data: existing } = await sb
       .from("internal_exports")
       .select("status")
+      .eq("tenant_id", tenantId)
       .eq("id", exportId)
       .single();
     if (!existing) throw new Error("Không tìm thấy phiếu xuất nội bộ");
@@ -533,11 +549,13 @@ export async function createDisposalExport(
 
 export async function getInventoryChecks(params: QueryParams): Promise<QueryResult<InventoryCheck>> {
   const supabase = getClient();
+  const tenantId = await getCurrentTenantId();
   const { from, to } = getPaginationRange(params);
 
   let query = supabase
     .from("inventory_checks")
-    .select("*, profiles!inventory_checks_created_by_fkey(full_name)", { count: "exact" });
+    .select("*, profiles!inventory_checks_created_by_fkey(full_name)", { count: "exact" })
+    .eq("tenant_id", tenantId);
 
   // Search
   if (params.search) {
@@ -599,6 +617,7 @@ export function getInventoryCheckStatuses() {
  */
 export async function applyInventoryCheck(checkId: string): Promise<void> {
   const supabase = getClient();
+  const tenantId = await getCurrentTenantId();
 
   // 1. ATOMIC status flip — claim this check by flipping status to 'balanced'
   //    FIRST. If two concurrent calls race, only one will match the WHERE
@@ -608,6 +627,7 @@ export async function applyInventoryCheck(checkId: string): Promise<void> {
     .from("inventory_checks")
     // eslint-disable-next-line @typescript-eslint/no-explicit-any
     .update({ status: "balanced" as any })
+    .eq("tenant_id", tenantId)
     .eq("id", checkId)
     .in("status", ["draft", "in_progress"])
     .select("id, code, status")
@@ -617,6 +637,7 @@ export async function applyInventoryCheck(checkId: string): Promise<void> {
     const { data: existing } = await supabase
       .from("inventory_checks")
       .select("status")
+      .eq("tenant_id", tenantId)
       .eq("id", checkId)
       .single();
     if (!existing) throw new Error("Không tìm thấy phiếu kiểm kho");
@@ -754,11 +775,13 @@ export async function getInventoryCheckItems(
  */
 export async function cancelInventoryCheck(checkId: string): Promise<void> {
   const supabase = getClient();
+  const tenantId = await getCurrentTenantId();
 
   const { data: claimed, error: claimErr } = await supabase
     .from("inventory_checks")
     // eslint-disable-next-line @typescript-eslint/no-explicit-any
     .update({ status: "cancelled" as any })
+    .eq("tenant_id", tenantId)
     .eq("id", checkId)
     .in("status", ["draft", "in_progress"])
     .select("id")
@@ -769,6 +792,7 @@ export async function cancelInventoryCheck(checkId: string): Promise<void> {
     const { data: existing } = await supabase
       .from("inventory_checks")
       .select("status")
+      .eq("tenant_id", tenantId)
       .eq("id", checkId)
       .single();
     if (!existing) throw new Error("Không tìm thấy phiếu kiểm kho");

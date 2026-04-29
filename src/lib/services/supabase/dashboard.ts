@@ -3,7 +3,7 @@
  * Truy vấn tổng hợp cho trang Tổng quan (/)
  */
 
-import { getClient, handleError } from "./base";
+import { getClient, handleError, getCurrentTenantId } from "./base";
 
 // === Types ===
 
@@ -79,6 +79,7 @@ function last7DaysRange(): { start: string; end: string } {
 
 export async function getDashboardKpis(branchId?: string): Promise<DashboardKpis> {
   const supabase = getClient();
+  const tenantId = await getCurrentTenantId();
   const today = todayRange();
   const yesterday = yesterdayRange();
 
@@ -92,31 +93,37 @@ export async function getDashboardKpis(branchId?: string): Promise<DashboardKpis
     bq(supabase
       .from("invoices")
       .select("total, discount_amount, status")
+      .eq("tenant_id", tenantId)
       .gte("created_at", today.start)
       .lt("created_at", today.end)),
     bq(supabase
       .from("invoices")
       .select("total, discount_amount, status")
+      .eq("tenant_id", tenantId)
       .gte("created_at", yesterday.start)
       .lt("created_at", yesterday.end)),
     supabase
       .from("customers")
       .select("id", { count: "exact", head: true })
+      .eq("tenant_id", tenantId)
       .gte("created_at", today.start)
       .lt("created_at", today.end),
     supabase
       .from("customers")
       .select("id", { count: "exact", head: true })
+      .eq("tenant_id", tenantId)
       .gte("created_at", yesterday.start)
       .lt("created_at", yesterday.end),
     bq(supabase
       .from("cash_transactions")
       .select("type, amount")
+      .eq("tenant_id", tenantId)
       .gte("created_at", today.start)
       .lt("created_at", today.end)),
     bq(supabase
       .from("cash_transactions")
       .select("type, amount")
+      .eq("tenant_id", tenantId)
       .gte("created_at", yesterday.start)
       .lt("created_at", yesterday.end)),
   ]);
@@ -156,11 +163,13 @@ export async function getDashboardKpis(branchId?: string): Promise<DashboardKpis
 
 export async function getRevenueByDay(days: number = 7, branchId?: string): Promise<ChartPoint[]> {
   const supabase = getClient();
+  const tenantId = await getCurrentTenantId();
   const range = last7DaysRange();
 
   let query = supabase
     .from("invoices")
     .select("created_at, total, status")
+    .eq("tenant_id", tenantId)
     .eq("status", "completed")
     .gte("created_at", range.start)
     .lt("created_at", range.end)
@@ -192,11 +201,13 @@ export async function getRevenueByDay(days: number = 7, branchId?: string): Prom
 
 export async function getRevenueByHour(branchId?: string): Promise<ChartPoint[]> {
   const supabase = getClient();
+  const tenantId = await getCurrentTenantId();
   const today = todayRange();
 
   let query = supabase
     .from("invoices")
     .select("created_at, total")
+    .eq("tenant_id", tenantId)
     .eq("status", "completed")
     .gte("created_at", today.start)
     .lt("created_at", today.end);
@@ -219,11 +230,13 @@ export async function getRevenueByHour(branchId?: string): Promise<ChartPoint[]>
 
 export async function getRevenueByWeekday(branchId?: string): Promise<ChartPoint[]> {
   const supabase = getClient();
+  const tenantId = await getCurrentTenantId();
   const range = last7DaysRange();
 
   let query = supabase
     .from("invoices")
     .select("created_at, total")
+    .eq("tenant_id", tenantId)
     .eq("status", "completed")
     .gte("created_at", range.start)
     .lt("created_at", range.end);
@@ -253,11 +266,13 @@ export async function getRevenueByWeekday(branchId?: string): Promise<ChartPoint
 
 export async function getOrdersByWeekday(branchId?: string): Promise<OrderChartPoint[]> {
   const supabase = getClient();
+  const tenantId = await getCurrentTenantId();
   const range = last7DaysRange();
 
   let query = supabase
     .from("invoices")
     .select("created_at, status")
+    .eq("tenant_id", tenantId)
     .gte("created_at", range.start)
     .lt("created_at", range.end);
   if (branchId) query = query.eq("branch_id", branchId);
@@ -288,11 +303,14 @@ export async function getOrdersByWeekday(branchId?: string): Promise<OrderChartP
 
 export async function getTopProducts(limit: number = 10, branchId?: string): Promise<TopProduct[]> {
   const supabase = getClient();
+  const tenantId = await getCurrentTenantId();
   const range = last7DaysRange();
 
+  // invoice_items không có tenant_id riêng — scope qua invoices.tenant_id
   let query = supabase
     .from("invoice_items")
-    .select("product_name, quantity, total, invoices!inner(created_at, status, branch_id)")
+    .select("product_name, quantity, total, invoices!inner(created_at, status, branch_id, tenant_id)")
+    .eq("invoices.tenant_id", tenantId)
     .gte("invoices.created_at", range.start)
     .eq("invoices.status", "completed");
   if (branchId) query = query.eq("invoices.branch_id", branchId);
@@ -321,10 +339,12 @@ export async function getTopProducts(limit: number = 10, branchId?: string): Pro
 
 export async function getLowStockProducts(limit: number = 5): Promise<LowStockProduct[]> {
   const supabase = getClient();
+  const tenantId = await getCurrentTenantId();
 
   const { data, error } = await supabase
     .from("products")
     .select("name, stock, min_stock")
+    .eq("tenant_id", tenantId)
     .eq("is_active", true)
     .gt("min_stock", 0)
     .order("stock", { ascending: true })
@@ -346,10 +366,12 @@ export async function getLowStockProducts(limit: number = 5): Promise<LowStockPr
 
 export async function getRecentActivities(limit: number = 8): Promise<RecentActivity[]> {
   const supabase = getClient();
+  const tenantId = await getCurrentTenantId();
 
   const { data, error } = await supabase
     .from("audit_log")
     .select("id, action, entity_type, entity_id, created_at, profiles!audit_log_user_id_fkey(full_name)")
+    .eq("tenant_id", tenantId)
     .order("created_at", { ascending: false })
     .limit(limit);
 

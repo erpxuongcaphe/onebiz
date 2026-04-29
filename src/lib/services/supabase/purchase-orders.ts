@@ -22,6 +22,7 @@ import type {
 import {
   getClient,
   getCurrentContext,
+  getCurrentTenantId,
   getPaginationRange,
   handleError,
 } from "./base";
@@ -77,11 +78,13 @@ export async function getPurchaseOrders(
   params: QueryParams
 ): Promise<QueryResult<PurchaseOrder>> {
   const supabase = getClient();
+  const tenantId = await getCurrentTenantId();
   const { from, to } = getPaginationRange(params);
 
   let query = supabase
     .from("purchase_orders")
-    .select("*, profiles!purchase_orders_created_by_fkey(full_name)", { count: "exact" });
+    .select("*, profiles!purchase_orders_created_by_fkey(full_name)", { count: "exact" })
+    .eq("tenant_id", tenantId);
 
   if (params.search) {
     query = query.or(
@@ -134,9 +137,11 @@ export async function getPurchaseOrdersForSupplier(
   limit: number = 50
 ): Promise<PurchaseOrder[]> {
   const supabase = getClient();
+  const tenantId = await getCurrentTenantId();
   const { data, error } = await supabase
     .from("purchase_orders")
     .select("*, profiles!purchase_orders_created_by_fkey(full_name)")
+    .eq("tenant_id", tenantId)
     .eq("supplier_id", supplierId)
     .order("created_at", { ascending: false })
     .limit(limit);
@@ -281,10 +286,12 @@ export async function updatePurchaseOrderStatus(
   }
 
   const supabase = getClient();
+  const tenantId = await getCurrentTenantId();
 
   const { data: current, error: readErr } = await supabase
     .from("purchase_orders")
     .select("status")
+    .eq("tenant_id", tenantId)
     .eq("id", orderId)
     .single();
 
@@ -302,6 +309,7 @@ export async function updatePurchaseOrderStatus(
     .from("purchase_orders")
     // eslint-disable-next-line @typescript-eslint/no-explicit-any
     .update({ status: newStatus as any })
+    .eq("tenant_id", tenantId)
     .eq("id", orderId);
 
   if (updateErr) handleError(updateErr, "updatePurchaseOrderStatus.update");

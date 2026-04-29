@@ -19,6 +19,8 @@ const mockFrom = vi.fn(() => mockChain);
 
 vi.mock("@/lib/services/supabase/base", () => ({
   getClient: () => ({ from: mockFrom }),
+  getCurrentTenantId: () => Promise.resolve("t1"),
+  getCurrentContext: () => Promise.resolve({ tenantId: "t1", branchId: "b1", userId: "u1" }),
   getPaginationRange: (p: { page: number; pageSize: number }) => ({
     from: p.page * p.pageSize,
     to: p.page * p.pageSize + p.pageSize - 1,

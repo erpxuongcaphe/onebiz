@@ -9,7 +9,7 @@
  * từ nguồn dữ liệu thực (invoices, orders, customers, cash).
  */
 
-import { getClient, getCurrentContext, handleError } from "./base";
+import { getClient, getCurrentContext, getCurrentTenantId, handleError } from "./base";
 import { getBranches } from "./branches";
 import type {
   KpiBreakdown,
@@ -217,9 +217,11 @@ export function splitPeriod(
 // ────────────────────────────────────────────
 async function fetchKpiById(id: string): Promise<KpiBreakdown | null> {
   const supabase = getClient();
+  const tenantId = await getCurrentTenantId();
   const { data, error } = await supabase
     .from("kpi_breakdowns")
     .select("*")
+    .eq("tenant_id", tenantId)
     .eq("id", id)
     .maybeSingle();
   if (error) handleError(error, "fetchKpiById");
@@ -261,12 +263,14 @@ async function getBranchRevenueWeights(
   windowDays: number = 90,
 ): Promise<Map<string, number>> {
   const supabase = getClient();
+  const tenantId = await getCurrentTenantId();
   const end = new Date();
   const start = addDays(end, -windowDays);
 
   const { data, error } = await supabase
     .from("invoices")
     .select("branch_id, total")
+    .eq("tenant_id", tenantId)
     .eq("status", "completed")
     .in("branch_id", branchIds)
     .gte("created_at", start.toISOString())
@@ -495,7 +499,8 @@ export async function syncKpiActualsFromDb(
   kpiId?: string,
 ): Promise<SyncKpiActualsResult> {
   const supabase = getClient();
-  let query = supabase.from("kpi_breakdowns").select("*");
+  const tenantId = await getCurrentTenantId();
+  let query = supabase.from("kpi_breakdowns").select("*").eq("tenant_id", tenantId);
   if (kpiId) query = query.eq("id", kpiId);
   const { data, error } = await query;
   if (error) handleError(error, "syncKpiActualsFromDb.fetch");
@@ -540,6 +545,7 @@ export async function syncKpiActualsFromDb(
       const { error: updateError } = await supabase
         .from("kpi_breakdowns")
         .update({ actual_value: newActual })
+        .eq("tenant_id", tenantId)
         .eq("id", kpi.id);
       if (updateError) throw new Error(updateError.message);
 
@@ -569,6 +575,7 @@ async function computeActualForKpi(
   kpiId: string,
 ): Promise<number | null> {
   const supabase = getClient();
+  const tenantId = await getCurrentTenantId();
   const startIso = new Date(`${periodStart}T00:00:00.000Z`).toISOString();
   // end-exclusive: next day at 00:00
   const endDate = new Date(`${periodEnd}T00:00:00.000Z`);
@@ -579,6 +586,7 @@ async function computeActualForKpi(
     let q = supabase
       .from("invoices")
       .select("total, customer_id")
+      .eq("tenant_id", tenantId)
       .eq("status", "completed")
       .gte("created_at", startIso)
       .lt("created_at", endIso);
@@ -603,6 +611,7 @@ async function computeActualForKpi(
     let invQ = supabase
       .from("invoices")
       .select("id, total")
+      .eq("tenant_id", tenantId)
       .eq("status", "completed")
       .gte("created_at", startIso)
       .lt("created_at", endIso);
@@ -639,6 +648,7 @@ async function computeActualForKpi(
     const { data, error, count } = await supabase
       .from("agent_tasks")
       .select("id", { count: "exact", head: true })
+      .eq("tenant_id", tenantId)
       .eq("kpi_breakdown_id", kpiId)
       .eq("status", "done");
     if (error) throw new Error(error.message);
@@ -653,6 +663,7 @@ async function computeActualForKpi(
       const { data, error } = await (supabase as any)
         .from("branch_stock")
         .select("quantity, products(cost_price)")
+        .eq("tenant_id", tenantId)
         .eq("branch_id", branchId);
       if (error) throw new Error(error.message);
       return ((data ?? []) as Array<{
@@ -666,7 +677,8 @@ async function computeActualForKpi(
     }
     const { data, error } = await supabase
       .from("products")
-      .select("stock, cost_price");
+      .select("stock, cost_price")
+      .eq("tenant_id", tenantId);
     if (error) throw new Error(error.message);
     return ((data ?? []) as Array<{ stock: number; cost_price: number }>).reduce(
       (s, r) => s + Number(r.stock ?? 0) * Number(r.cost_price ?? 0),

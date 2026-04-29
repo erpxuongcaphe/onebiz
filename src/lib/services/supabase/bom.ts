@@ -10,9 +10,11 @@ export async function getAllBOMs(params?: {
   /** Filter: chỉ lấy BOM đã được sử dụng tại chi nhánh này (join production_orders). */
   usedAtBranchId?: string;
 }): Promise<BOM[]> {
+  const tenantId = await getCurrentTenantId();
   let query = supabase
     .from("bom")
     .select("*, products!bom_product_id_fkey(name, code)")
+    .eq("tenant_id", tenantId)
     .eq("is_active", true)
     .order("created_at", { ascending: false });
 
@@ -21,6 +23,7 @@ export async function getAllBOMs(params?: {
     const { data: bomIds, error: poErr } = await supabase
       .from("production_orders")
       .select("bom_id")
+      .eq("tenant_id", tenantId)
       .eq("branch_id", params.usedAtBranchId);
     if (poErr) throw poErr;
     const uniqueIds = Array.from(new Set((bomIds ?? []).map((r) => r.bom_id as string).filter(Boolean)));
@@ -50,9 +53,11 @@ export async function getBOMProductionHistory(
   status: string;
   createdAt: string;
 }>> {
+  const tenantId = await getCurrentTenantId();
   const { data, error } = await supabase
     .from("production_orders")
     .select("id, code, branch_id, planned_qty, completed_qty, status, created_at, branches:branch_id(name)")
+    .eq("tenant_id", tenantId)
     .eq("bom_id", bomId)
     .order("created_at", { ascending: false })
     .limit(limit);
@@ -73,9 +78,11 @@ export async function getBOMProductionHistory(
 }
 
 export async function getBOMsByProduct(productId: string): Promise<BOM[]> {
+  const tenantId = await getCurrentTenantId();
   const { data, error } = await supabase
     .from("bom")
     .select("*")
+    .eq("tenant_id", tenantId)
     .eq("product_id", productId)
     .eq("is_active", true)
     .order("version", { ascending: false });
@@ -85,16 +92,18 @@ export async function getBOMsByProduct(productId: string): Promise<BOM[]> {
 }
 
 export async function getBOMById(id: string): Promise<BOM> {
+  const tenantId = await getCurrentTenantId();
   const { data, error } = await supabase
     .from("bom")
     .select("*")
+    .eq("tenant_id", tenantId)
     .eq("id", id)
     .single();
 
   if (error) throw error;
   const bom = mapBOM(data as Record<string, unknown>);
 
-  // Get items separately
+  // Get items separately — scope qua bom_id (đã verify ownership)
   const { data: items } = await supabase
     .from("bom_items")
     .select("*")
@@ -182,12 +191,14 @@ export async function updateBOM(
   if (updates.note !== undefined) updateObj.note = updates.note;
   if (updates.isActive !== undefined) updateObj.is_active = updates.isActive;
 
-  const { error } = await supabase.from("bom").update(updateObj).eq("id", id);
+  const tenantId = await getCurrentTenantId();
+  const { error } = await supabase.from("bom").update(updateObj).eq("tenant_id", tenantId).eq("id", id);
   if (error) throw error;
 }
 
 export async function deleteBOM(id: string) {
-  const { error } = await supabase.from("bom").update({ is_active: false }).eq("id", id);
+  const tenantId = await getCurrentTenantId();
+  const { error } = await supabase.from("bom").update({ is_active: false }).eq("tenant_id", tenantId).eq("id", id);
   if (error) throw error;
 }
 

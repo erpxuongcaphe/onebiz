@@ -3,10 +3,11 @@
  */
 
 import type { ReturnOrder, QueryParams, QueryResult } from "@/lib/types";
-import { getClient, getPaginationRange, handleError } from "./base";
+import { getClient, getPaginationRange, handleError, getCurrentTenantId } from "./base";
 
 export async function getReturns(params: QueryParams): Promise<QueryResult<ReturnOrder>> {
   const supabase = getClient();
+  const tenantId = await getCurrentTenantId();
   const { from, to } = getPaginationRange(params);
 
   let query = supabase
@@ -14,11 +15,13 @@ export async function getReturns(params: QueryParams): Promise<QueryResult<Retur
     .select(
       "*, invoices!sales_returns_invoice_id_fkey(code), profiles!sales_returns_created_by_fkey(full_name)",
       { count: "exact" },
-    );
+    )
+    .eq("tenant_id", tenantId);
 
   // Search
   if (params.search) {
-    query = query.or(`code.ilike.%${params.search}%`);
+    const esc = params.search.replace(/[%_]/g, "\\$&");
+    query = query.or(`code.ilike.%${esc}%`);
   }
 
   // Filter: status
