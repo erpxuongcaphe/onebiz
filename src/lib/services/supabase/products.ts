@@ -4,7 +4,7 @@
 
 import type { Product, ProductDetail, StockMovement, SalesHistory, QueryParams, QueryResult } from "@/lib/types";
 import type { Database } from "@/lib/supabase/types";
-import { getClient, getPaginationRange, handleError } from "./base";
+import { getClient, getPaginationRange, handleError, getCurrentTenantId } from "./base";
 
 type ProductInsert = Database["public"]["Tables"]["products"]["Insert"];
 type ProductUpdate = Database["public"]["Tables"]["products"]["Update"];
@@ -164,11 +164,14 @@ export function getProductCategories() {
 export async function getProductCategoriesAsync(scope?: "nvl" | "sku") {
   const supabase = getClient();
 
-  // Dedupe FE band-aid đã được thay bằng UNIQUE constraint DB
-  // (migration 00039) — list trả về luôn unique theo (tenant_id, code, scope).
+  // Filter tenant_id — RLS dev disable nên không tự auto-scope. Trước
+  // đây CEO báo "Bao bì × 4" thực ra là 4 tenant khác nhau leak qua.
+  const tenantId = await getCurrentTenantId();
+
   let catQuery = supabase
     .from("categories")
     .select("id, name, code, scope")
+    .eq("tenant_id", tenantId)
     .order("sort_order", { ascending: true });
 
   if (scope) catQuery = catQuery.eq("scope", scope);
@@ -181,6 +184,7 @@ export async function getProductCategoriesAsync(scope?: "nvl" | "sku") {
   let prodQuery = supabase
     .from("products")
     .select("category_id")
+    .eq("tenant_id", tenantId)
     .eq("is_active", true);
   if (scope) prodQuery = prodQuery.eq("product_type", scope);
   const { data: products } = await prodQuery;

@@ -9,11 +9,15 @@ const supabase = createClient();
 export async function getCategoriesByScope(
   scope: "nvl" | "sku" | "customer" | "supplier"
 ): Promise<ProductCategory[]> {
-  // Dedupe FE band-aid đã được thay bằng UNIQUE constraint DB
-  // (migration 00039) → list trả về luôn unique theo (tenant_id, code, scope).
+  // Filter theo tenant_id — production có RLS auto-scope nhưng dev mode
+  // (BYPASS_AUTH) RLS disabled → query không filter sẽ thấy categories
+  // của TẤT CẢ tenants → CEO trước đó báo "Bao bì × 4" thực ra là 4 tenant
+  // khác nhau, mỗi tenant 1 row Bao bì (đúng UNIQUE constraint).
+  const tenantId = await getCurrentTenantId();
   const { data, error } = await supabase
     .from("categories")
     .select("*")
+    .eq("tenant_id", tenantId)
     .eq("scope", scope)
     .order("sort_order");
 
@@ -22,9 +26,11 @@ export async function getCategoriesByScope(
 }
 
 export async function getAllCategories(): Promise<ProductCategory[]> {
+  const tenantId = await getCurrentTenantId();
   const { data, error } = await supabase
     .from("categories")
     .select("*")
+    .eq("tenant_id", tenantId)
     .not("scope", "is", null)
     .order("scope")
     .order("sort_order");
@@ -159,9 +165,13 @@ export async function getProductsByCategoryId(
     unit?: string;
   }>
 > {
+  // Filter tenant_id — RLS dev disable nên cần tự filter để không leak
+  // products của tenant khác.
+  const tenantId = await getCurrentTenantId();
   const { data, error } = await supabase
     .from("products")
     .select("id, code, name, stock, unit")
+    .eq("tenant_id", tenantId)
     .eq("category_id", categoryId)
     .eq("is_active", true)
     .order("code")
@@ -220,9 +230,13 @@ export async function deleteCategory(id: string) {
 export async function getCategoriesWithCounts(
   scope: "nvl" | "sku"
 ): Promise<ProductCategory[]> {
+  // Filter tenant_id — same reason as getCategoriesByScope (RLS dev disable
+  // làm leak categories của tenant khác).
+  const tenantId = await getCurrentTenantId();
   const { data, error } = await supabase
     .from("categories")
     .select("*, products(count)")
+    .eq("tenant_id", tenantId)
     .eq("scope", scope)
     .order("sort_order");
 
