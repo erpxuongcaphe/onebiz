@@ -206,7 +206,12 @@ export function PageHeader({
 
           {tabs && <div className="shrink-0">{tabs}</div>}
 
-          {/* Search bar — centered */}
+          {/* Search bar — centered.
+              Trước đây có nút "tune" (≂) ở phải nhưng là dead button (không
+              có onClick handler) → CEO chốt bỏ. Search hiện match mã + tên,
+              đủ cho ~95% case. Cần thêm trường (mã vạch, ...) thì mở rộng
+              service `.or(...)` thay vì thêm popover chọn trường (giảm
+              cognitive load cho nhân viên chưa training). */}
           {onSearchChange !== undefined && (
             <div className="relative flex-1 max-w-md">
               <Icon name="search" size={16} className="absolute left-3 top-1/2 -translate-y-1/2 text-muted-foreground" />
@@ -216,13 +221,6 @@ export function PageHeader({
                 placeholder={searchPlaceholder}
                 className="pl-9 h-9"
               />
-              <Button
-                variant="ghost"
-                size="icon"
-                className="absolute right-1 top-1/2 -translate-y-1/2 h-7 w-7 text-muted-foreground"
-              >
-                <Icon name="tune" size={14} />
-              </Button>
             </div>
           )}
 
