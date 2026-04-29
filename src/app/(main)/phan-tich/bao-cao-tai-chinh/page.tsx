@@ -330,9 +330,22 @@ export default function BaoCaoTaiChinhPage() {
         <div className="px-4 md:px-6 pt-3 flex items-center gap-3 flex-wrap">
           <div className="flex items-center gap-2">
             <Icon name="apartment" size={16} className="text-muted-foreground" />
-            <Select value={branchId} onValueChange={(v) => setBranchId(v ?? "all")}>
+            <Select
+              value={branchId}
+              onValueChange={(v) => setBranchId(v ?? "all")}
+              items={[
+                { value: "all", label: "Tất cả chi nhánh" },
+                ...branches.map((b) => ({ value: b.id, label: b.name })),
+              ]}
+            >
               <SelectTrigger className="w-52 h-8 text-xs">
-                <SelectValue placeholder="Tất cả chi nhánh" />
+                <SelectValue placeholder="Tất cả chi nhánh">
+                  {(v) => {
+                    if (v === "all" || !v) return "Tất cả chi nhánh";
+                    const match = branches.find((b) => b.id === v);
+                    return match?.name ?? "Tất cả chi nhánh";
+                  }}
+                </SelectValue>
               </SelectTrigger>
               <SelectContent>
                 <SelectItem value="all">Tất cả chi nhánh</SelectItem>

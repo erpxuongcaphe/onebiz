@@ -335,9 +335,15 @@ export default function UsersPage() {
             <Select
               value={selectedRoleId}
               onValueChange={(v) => setSelectedRoleId(v ?? "")}
+              items={roles.map((r) => ({ value: r.id, label: r.name }))}
             >
               <SelectTrigger>
-                <SelectValue placeholder="Chọn vai trò" />
+                <SelectValue placeholder="Chọn vai trò">
+                  {(v) => {
+                    const match = roles.find((r) => r.id === v);
+                    return match?.name ?? "Chọn vai trò";
+                  }}
+                </SelectValue>
               </SelectTrigger>
               <SelectContent>
                 {roles.map((role) => (
@@ -438,9 +444,15 @@ export default function UsersPage() {
                     setInviteForm((f) => ({ ...f, branchId: v ?? "" }))
                   }
                   disabled={inviteBusy}
+                  items={branches.map((b) => ({ value: b.id, label: b.name }))}
                 >
                   <SelectTrigger id="invite-branch">
-                    <SelectValue placeholder="Chọn chi nhánh" />
+                    <SelectValue placeholder="Chọn chi nhánh">
+                      {(v) => {
+                        const match = branches.find((b) => b.id === v);
+                        return match?.name ?? "Chọn chi nhánh";
+                      }}
+                    </SelectValue>
                   </SelectTrigger>
                   <SelectContent>
                     {branches.map((b) => (
@@ -460,13 +472,22 @@ export default function UsersPage() {
                     setInviteForm((f) => ({ ...f, roleId: v ?? "" }))
                   }
                   disabled={inviteBusy || inviteForm.asOwner}
+                  items={roles.map((r) => ({ value: r.id, label: r.name }))}
                 >
                   <SelectTrigger id="invite-role">
                     <SelectValue
                       placeholder={
                         inviteForm.asOwner ? "(Chủ cửa hàng — full quyền)" : "Chọn vai trò"
                       }
-                    />
+                    >
+                      {(v) => {
+                        if (inviteForm.asOwner) {
+                          return "(Chủ cửa hàng — full quyền)";
+                        }
+                        const match = roles.find((r) => r.id === v);
+                        return match?.name ?? "Chọn vai trò";
+                      }}
+                    </SelectValue>
                   </SelectTrigger>
                   <SelectContent>
                     {roles.map((role) => (

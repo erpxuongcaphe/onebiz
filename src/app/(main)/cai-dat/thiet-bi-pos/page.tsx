@@ -191,9 +191,23 @@ export default function DeviceBindingSettingsPage() {
               <Select
                 value={selectedBranchId}
                 onValueChange={(v) => setSelectedBranchId(v ?? "")}
+                items={branches.map((b) => ({
+                  value: b.id,
+                  label: b.code ? `${b.code} · ${b.name}` : b.name,
+                }))}
               >
                 <SelectTrigger>
-                  <SelectValue placeholder="Chọn chi nhánh" />
+                  <SelectValue placeholder="Chọn chi nhánh">
+                    {(v) => {
+                      const match = branches.find((b) => b.id === v);
+                      if (match) {
+                        return match.code
+                          ? `${match.code} · ${match.name}`
+                          : match.name;
+                      }
+                      return "Chọn chi nhánh";
+                    }}
+                  </SelectValue>
                 </SelectTrigger>
                 <SelectContent>
                   {branches.map((b) => (
