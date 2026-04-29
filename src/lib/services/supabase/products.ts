@@ -15,16 +15,26 @@ export async function getProducts(params: QueryParams): Promise<QueryResult<Prod
   const supabase = getClient();
   const { from, to } = getPaginationRange(params);
 
+  // Filter tenant_id — RLS dev disable nên cần tự filter để tránh leak
+  // products của tenant khác. CEO test "Đắk" thấy 4 row NVL-CPH-002 từ
+  // 4 tenant khác nhau (1 row hiện nhóm "Bao bì" lạ vì cross-tenant).
+  const tenantId = await getCurrentTenantId();
+
   let query = supabase
     .from("products")
     .select(
       "*, categories!products_category_id_fkey(name, code), suppliers!products_supplier_id_fkey(name)",
       { count: "exact" },
-    );
+    )
+    .eq("tenant_id", tenantId);
 
-  // Search
+  // Search — dùng `or` với escape `%` để search ký tự đặc biệt OK.
+  // Postgres `ilike` là case-insensitive nhưng diacritic-sensitive: search
+  // "phe" KHÔNG match "phê" (cần dấu). Tương lai có thể chuyển sang
+  // unaccent extension nếu CEO muốn search không dấu.
   if (params.search) {
-    query = query.or(`name.ilike.%${params.search}%,code.ilike.%${params.search}%`);
+    const esc = params.search.replace(/[%_]/g, "\\$&");
+    query = query.or(`name.ilike.%${esc}%,code.ilike.%${esc}%`);
   }
 
   // Filter: product_type (nvl | sku)
@@ -108,9 +118,11 @@ export async function getProductStats(scope: "nvl" | "sku" | "all" = "all"): Pro
   lowStock: number;
 }> {
   const supabase = getClient();
+  const tenantId = await getCurrentTenantId();
   let query = supabase
     .from("products")
     .select("stock, cost_price", { count: "exact" })
+    .eq("tenant_id", tenantId)
     .eq("is_active", true);
 
   if (scope !== "all") {
@@ -215,10 +227,12 @@ export async function getProductCategoriesAsync(scope?: "nvl" | "sku") {
  */
 export async function getProductBrands(scope?: "nvl" | "sku"): Promise<string[]> {
   const supabase = getClient();
+  const tenantId = await getCurrentTenantId();
 
   let query = supabase
     .from("products")
     .select("brand")
+    .eq("tenant_id", tenantId)
     .not("brand", "is", null)
     .eq("is_active", true);
 
@@ -241,12 +255,16 @@ export async function getProductBrands(scope?: "nvl" | "sku"): Promise<string[]>
 
 export async function getProductById(id: string): Promise<ProductDetail | null> {
   const supabase = getClient();
+  const tenantId = await getCurrentTenantId();
 
+  // Defense-in-depth: id là UUID global unique nhưng vẫn filter tenant để
+  // tránh leak nếu URL bị share / scan.
   const { data, error } = await supabase
     .from("products")
     .select(
       "*, categories!products_category_id_fkey(name, code), suppliers!products_supplier_id_fkey(name)",
     )
+    .eq("tenant_id", tenantId)
     .eq("id", id)
     .single();
 
