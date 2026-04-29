@@ -62,36 +62,57 @@ export function getFilterValue(filters: Record<string, string | string[]> | unde
  * (BYPASS_AUTH unset) still require a real auth user.
  */
 let cachedTenantId: string | null = null;
+// In-flight promise dedup. Khi N services cùng gọi getCurrentTenantId() lần
+// đầu (cache trống), TẤT CẢ chia sẻ 1 promise duy nhất thay vì mỗi cái call
+// supabase.auth.getUser() riêng. Tránh lock contention "@supabase/gotrue-js
+// Lock auth-token was not released within 5000ms" khi page mount nhiều
+// component cùng query (CEO báo: tạo tier treo, console 1400+ lock warnings).
+let inflightTenantPromise: Promise<string> | null = null;
+
 export async function getCurrentTenantId(): Promise<string> {
   if (cachedTenantId) return cachedTenantId;
-  const supabase = getClient();
-  const { data: userData } = await supabase.auth.getUser();
+  if (inflightTenantPromise) return inflightTenantPromise;
 
-  if (userData.user) {
-    const { data, error } = await supabase
-      .from("profiles")
-      .select("tenant_id")
-      .eq("id", userData.user.id)
-      .single();
-    if (error || !data?.tenant_id) throw new Error("Không tìm thấy tenant");
-    cachedTenantId = data.tenant_id;
-    return cachedTenantId;
-  }
+  inflightTenantPromise = (async () => {
+    try {
+      const supabase = getClient();
+      const { data: userData } = await supabase.auth.getUser();
 
-  // DEV bypass
-  if (process.env.NEXT_PUBLIC_BYPASS_AUTH === "true") {
-    const { data: firstTenant } = await supabase
-      .from("tenants")
-      .select("id")
-      .limit(1)
-      .single();
-    if (firstTenant?.id) {
-      cachedTenantId = firstTenant.id;
-      return cachedTenantId;
+      if (userData.user) {
+        const { data, error } = await supabase
+          .from("profiles")
+          .select("tenant_id")
+          .eq("id", userData.user.id)
+          .single();
+        if (error || !data?.tenant_id) {
+          throw new Error("Không tìm thấy tenant");
+        }
+        cachedTenantId = data.tenant_id;
+        return cachedTenantId;
+      }
+
+      // DEV bypass
+      if (process.env.NEXT_PUBLIC_BYPASS_AUTH === "true") {
+        const { data: firstTenant } = await supabase
+          .from("tenants")
+          .select("id")
+          .limit(1)
+          .single();
+        if (firstTenant?.id) {
+          cachedTenantId = firstTenant.id;
+          return cachedTenantId;
+        }
+      }
+
+      throw new Error("Chưa đăng nhập");
+    } finally {
+      // Clear promise khi resolve/reject để lần lỗi tiếp theo có thể retry.
+      // Không clear cachedTenantId — đó là cache long-lived sau khi success.
+      inflightTenantPromise = null;
     }
-  }
+  })();
 
-  throw new Error("Chưa đăng nhập");
+  return inflightTenantPromise;
 }
 
 /**
@@ -108,8 +129,23 @@ export interface CurrentContext {
 }
 
 let cachedContext: CurrentContext | null = null;
+let inflightContextPromise: Promise<CurrentContext> | null = null;
+
 export async function getCurrentContext(): Promise<CurrentContext> {
   if (cachedContext) return cachedContext;
+  if (inflightContextPromise) return inflightContextPromise;
+
+  inflightContextPromise = (async () => {
+    try {
+      return await loadContext();
+    } finally {
+      inflightContextPromise = null;
+    }
+  })();
+  return inflightContextPromise;
+}
+
+async function loadContext(): Promise<CurrentContext> {
   const supabase = getClient();
   const { data: userData } = await supabase.auth.getUser();
 
