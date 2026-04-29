@@ -55,6 +55,7 @@ export interface Database {
           is_active: boolean;
           code: string | null;
           branch_type: string;
+          price_tier_id: string | null;
           created_at: string;
           updated_at: string;
         };
@@ -68,6 +69,7 @@ export interface Database {
           is_active?: boolean;
           code?: string | null;
           branch_type?: string;
+          price_tier_id?: string | null;
         };
         Update: {
           name?: string;
@@ -77,6 +79,7 @@ export interface Database {
           is_active?: boolean;
           code?: string | null;
           branch_type?: string;
+          price_tier_id?: string | null;
         };
         Relationships: [
           {
@@ -442,6 +445,7 @@ export interface Database {
           total_orders: number;
           loyalty_points: number;
           loyalty_tier_id: string | null;
+          price_tier_id: string | null;
           note: string | null;
           is_active: boolean;
           is_internal: boolean;
@@ -465,6 +469,7 @@ export interface Database {
           total_orders?: number;
           loyalty_points?: number;
           loyalty_tier_id?: string | null;
+          price_tier_id?: string | null;
           note?: string | null;
           is_active?: boolean;
           is_internal?: boolean;
@@ -482,6 +487,7 @@ export interface Database {
           debt?: number;
           loyalty_points?: number;
           loyalty_tier_id?: string | null;
+          price_tier_id?: string | null;
           total_spent?: number;
           total_orders?: number;
           note?: string | null;
@@ -1985,6 +1991,7 @@ export interface Database {
           code: string;
           description: string | null;
           priority: number;
+          scope: string;
           is_active: boolean;
           created_at: string;
           updated_at: string;
@@ -1996,6 +2003,7 @@ export interface Database {
           code: string;
           description?: string | null;
           priority?: number;
+          scope?: string;
           is_active?: boolean;
         };
         Update: {
@@ -2003,6 +2011,7 @@ export interface Database {
           code?: string;
           description?: string | null;
           priority?: number;
+          scope?: string;
           is_active?: boolean;
         };
         Relationships: [];

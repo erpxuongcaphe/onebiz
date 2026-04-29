@@ -1,5 +1,13 @@
 // Pricing types — Price tiers, UOM conversions, packaging variants
 
+/**
+ * Channel áp dụng tier:
+ * - retail: tier gắn vào KH (B2B đại lý / quán / lẻ) — POS Retail
+ * - fnb:    tier gắn vào CHI NHÁNH (quán) — POS FnB
+ * - both:   dùng cho cả 2 channel
+ */
+export type PriceTierScope = "retail" | "fnb" | "both";
+
 export interface PriceTier {
   id: string;
   tenantId: string;
@@ -7,6 +15,7 @@ export interface PriceTier {
   code: string;
   description?: string;
   priority: number;
+  scope: PriceTierScope;
   isActive: boolean;
   createdAt: string;
   updatedAt: string;

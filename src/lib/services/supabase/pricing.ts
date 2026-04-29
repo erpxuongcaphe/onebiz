@@ -8,19 +8,32 @@
 
 import { createClient } from "@/lib/supabase/client";
 import { getCurrentTenantId } from "./base";
-import type { PriceTier, PriceTierItem } from "@/lib/types";
+import type { PriceTier, PriceTierItem, PriceTierScope } from "@/lib/types";
 
 const supabase = createClient();
 
-export async function getPriceTiers(): Promise<PriceTier[]> {
+/**
+ * Get all tiers — optional filter theo scope (retail/fnb/both).
+ * Khi UI hiện tab "Retail" thì chỉ load tier có scope='retail' OR 'both'.
+ */
+export async function getPriceTiers(filter?: {
+  scope?: "retail" | "fnb"; // omit hoặc undefined = lấy tất cả
+}): Promise<PriceTier[]> {
   const tenantId = await getCurrentTenantId();
-  const { data, error } = await supabase
+  let query = supabase
     .from("price_tiers")
     .select("*")
     .eq("tenant_id", tenantId)
-    .eq("is_active", true)
-    .order("priority");
+    .eq("is_active", true);
 
+  // Filter scope: nếu UI hiện tab "Retail" → match retail HOẶC both.
+  if (filter?.scope === "retail") {
+    query = query.in("scope", ["retail", "both"]);
+  } else if (filter?.scope === "fnb") {
+    query = query.in("scope", ["fnb", "both"]);
+  }
+
+  const { data, error } = await query.order("priority");
   if (error) throw error;
 
   const tiers = (data ?? []).map((row) => ({
@@ -30,6 +43,7 @@ export async function getPriceTiers(): Promise<PriceTier[]> {
     code: row.code as string,
     description: (row.description as string | null) ?? undefined,
     priority: row.priority as number,
+    scope: ((row as { scope?: string }).scope ?? "both") as PriceTierScope,
     isActive: row.is_active as boolean,
     createdAt: row.created_at as string,
     updatedAt: row.updated_at as string,
@@ -111,6 +125,7 @@ export async function createPriceTier(tier: {
   code: string;
   description?: string;
   priority?: number;
+  scope?: PriceTierScope;
 }): Promise<PriceTier> {
   const tenantId = await getCurrentTenantId();
   const { data, error } = await supabase
@@ -121,6 +136,7 @@ export async function createPriceTier(tier: {
       code: tier.code,
       description: tier.description ?? null,
       priority: tier.priority ?? 0,
+      scope: tier.scope ?? "both",
     })
     .select()
     .single();
@@ -133,6 +149,7 @@ export async function createPriceTier(tier: {
     code: data.code,
     description: data.description ?? undefined,
     priority: data.priority,
+    scope: ((data as { scope?: string }).scope ?? "both") as PriceTierScope,
     isActive: data.is_active,
     createdAt: data.created_at,
     updatedAt: data.updated_at,
@@ -146,6 +163,7 @@ export async function updatePriceTier(
     code?: string;
     description?: string;
     priority?: number;
+    scope?: PriceTierScope;
   }
 ) {
   const tenantId = await getCurrentTenantId();
@@ -154,6 +172,7 @@ export async function updatePriceTier(
   if (updates.code !== undefined) updateObj.code = updates.code;
   if (updates.description !== undefined) updateObj.description = updates.description;
   if (updates.priority !== undefined) updateObj.priority = updates.priority;
+  if (updates.scope !== undefined) updateObj.scope = updates.scope;
 
   const { error } = await supabase
     .from("price_tiers")
@@ -198,10 +217,10 @@ export async function duplicatePriceTier(params: {
   const tenantId = await getCurrentTenantId();
   await assertTierOwnership(params.sourceTierId);
 
-  // 1. Lấy source tier để copy description + priority
+  // 1. Lấy source tier để copy description + priority + scope
   const { data: source, error: srcErr } = await supabase
     .from("price_tiers")
-    .select("description, priority")
+    .select("description, priority, scope")
     .eq("tenant_id", tenantId)
     .eq("id", params.sourceTierId)
     .single();
@@ -209,7 +228,7 @@ export async function duplicatePriceTier(params: {
     throw new Error("Không đọc được bảng giá nguồn");
   }
 
-  // 2. Tạo tier mới
+  // 2. Tạo tier mới — copy scope từ source
   const { data: newTier, error: createErr } = await supabase
     .from("price_tiers")
     .insert({
@@ -218,6 +237,7 @@ export async function duplicatePriceTier(params: {
       code: params.newCode,
       description: source.description ?? null,
       priority: source.priority,
+      scope: (source as { scope?: string }).scope ?? "both",
     })
     .select()
     .single();
@@ -258,10 +278,59 @@ export async function duplicatePriceTier(params: {
     code: newTier.code,
     description: newTier.description ?? undefined,
     priority: newTier.priority,
+    scope: ((newTier as { scope?: string }).scope ?? "both") as PriceTierScope,
     isActive: newTier.is_active,
     createdAt: newTier.created_at,
     updatedAt: newTier.updated_at,
   };
+}
+
+/**
+ * Resolve tier áp dụng tại lúc check out cho 1 context cụ thể.
+ *
+ * Logic ưu tiên:
+ *   - POS Retail (channel='retail'): customers.price_tier_id ?? null
+ *   - POS FnB    (channel='fnb'):    branches.price_tier_id ?? null
+ *
+ * Trả về tierId để caller dùng tiếp với getTierPricesBatch / pricing
+ * lookup cho từng SP. Trả null nếu không có tier mặc định → fallback
+ * giá niêm yết SP.
+ *
+ * Q2 CEO chốt: KHÔNG cho cashier override → service không nhận tham số
+ * override. Nếu sau này cần Q2 Hybrid (PIN supervisor), expose param ở đây.
+ */
+export async function getApplicableTier(context: {
+  channel: "retail" | "fnb";
+  customerId?: string;
+  branchId?: string;
+}): Promise<string | null> {
+  const tenantId = await getCurrentTenantId();
+
+  if (context.channel === "retail" && context.customerId) {
+    const { data, error } = await supabase
+      .from("customers")
+      .select("price_tier_id")
+      .eq("tenant_id", tenantId)
+      .eq("id", context.customerId)
+      .maybeSingle();
+    if (error || !data) return null;
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    return ((data as any).price_tier_id as string | null) ?? null;
+  }
+
+  if (context.channel === "fnb" && context.branchId) {
+    const { data, error } = await supabase
+      .from("branches")
+      .select("price_tier_id")
+      .eq("tenant_id", tenantId)
+      .eq("id", context.branchId)
+      .maybeSingle();
+    if (error || !data) return null;
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    return ((data as any).price_tier_id as string | null) ?? null;
+  }
+
+  return null;
 }
 
 export async function addPriceTierItem(item: {

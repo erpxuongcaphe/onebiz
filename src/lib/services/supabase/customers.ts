@@ -136,6 +136,7 @@ export async function createCustomer(customer: Partial<Customer>): Promise<Custo
       group_id: customer.groupId || null,
       gender: customer.gender || null,
       customer_type: customer.type ?? "individual",
+      price_tier_id: customer.priceTierId || null,
       is_active: true,
     } satisfies CustomerInsert)
     .select("*, customer_groups!customers_group_id_fkey(name, discount_percent)")
@@ -161,6 +162,8 @@ export async function updateCustomer(id: string, updates: Partial<Customer>): Pr
   if (updates.groupId !== undefined) payload.group_id = updates.groupId || null;
   if (updates.gender !== undefined) payload.gender = updates.gender || null;
   if (updates.type !== undefined) payload.customer_type = updates.type;
+  if (updates.priceTierId !== undefined)
+    payload.price_tier_id = updates.priceTierId || null;
 
   const { data, error } = await supabase
     .from("customers")
@@ -212,6 +215,7 @@ function mapCustomer(row: any): Customer {
         : undefined,
     type: row.customer_type,
     gender: row.gender ?? undefined,
+    priceTierId: row.price_tier_id ?? undefined,
     createdAt: row.created_at,
   };
 }

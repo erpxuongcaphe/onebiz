@@ -58,8 +58,10 @@ import {
   updateBranch,
   setBranchDefault,
   BRANCH_TYPE_LABELS,
+  getPriceTiers,
   type BranchDetail,
 } from "@/lib/services";
+import type { PriceTier } from "@/lib/types";
 
 type BranchType = BranchDetail["branchType"];
 
@@ -71,6 +73,8 @@ interface BranchFormState {
   address: string;
   phone: string;
   isDefault: boolean;
+  /** Bảng giá mặc định cho POS FnB của chi nhánh — empty = giá niêm yết */
+  priceTierId: string;
 }
 
 const EMPTY_FORM: BranchFormState = {
@@ -80,6 +84,7 @@ const EMPTY_FORM: BranchFormState = {
   address: "",
   phone: "",
   isDefault: false,
+  priceTierId: "",
 };
 
 /** Validate VN phone nếu nhập (optional). */
@@ -123,6 +128,24 @@ function BranchSettingsPageInner() {
   const [confirmDeactivate, setConfirmDeactivate] = useState<BranchDetail | null>(null);
   const [confirmSetDefault, setConfirmSetDefault] = useState<BranchDetail | null>(null);
 
+  // Tier list cho dropdown "Bảng giá mặc định" — chỉ load khi mở dialog
+  const [tiers, setTiers] = useState<PriceTier[]>([]);
+  useEffect(() => {
+    if (!dialogOpen) return;
+    let cancelled = false;
+    // Chi nhánh là FnB scope → chỉ lấy tier scope=fnb HOẶC both
+    getPriceTiers({ scope: "fnb" })
+      .then((list) => {
+        if (!cancelled) setTiers(list);
+      })
+      .catch(() => {
+        // fail silent — tier optional
+      });
+    return () => {
+      cancelled = true;
+    };
+  }, [dialogOpen]);
+
   const load = useCallback(async () => {
     setLoading(true);
     try {
@@ -158,6 +181,7 @@ function BranchSettingsPageInner() {
       address: branch.address ?? "",
       phone: branch.phone ?? "",
       isDefault: branch.isDefault,
+      priceTierId: branch.priceTierId ?? "",
     });
     setDialogOpen(true);
   };
@@ -200,6 +224,8 @@ function BranchSettingsPageInner() {
           branchType: form.branchType,
           address: form.address.trim(),
           phone: phoneCleaned,
+          // null nếu user xoá → clear tier (về giá niêm yết)
+          priceTierId: form.priceTierId || null,
         });
         // Nếu bật isDefault (và chi nhánh chưa phải default) → set lại
         const current = branches.find((b) => b.id === editingId);
@@ -553,6 +579,47 @@ function BranchSettingsPageInner() {
                   <span className="text-sm">Đặt làm mặc định</span>
                 </label>
               </div>
+
+              {/* Bảng giá mặc định cho POS FnB của chi nhánh — chỉ hiện cho
+                  store + warehouse (factory/office không POS bán hàng). */}
+              {(form.branchType === "store" || form.branchType === "warehouse") && (
+                <div className="space-y-1.5 sm:col-span-2">
+                  <Label htmlFor="branch-tier">
+                    Bảng giá mặc định{" "}
+                    <span className="text-xs font-normal text-muted-foreground">
+                      (POS FnB của chi nhánh)
+                    </span>
+                  </Label>
+                  <Select
+                    value={form.priceTierId || "__none__"}
+                    onValueChange={(val) =>
+                      setForm((f) => ({
+                        ...f,
+                        priceTierId: !val || val === "__none__" ? "" : val,
+                      }))
+                    }
+                  >
+                    <SelectTrigger id="branch-tier">
+                      <SelectValue placeholder="— Giá niêm yết —" />
+                    </SelectTrigger>
+                    <SelectContent>
+                      <SelectItem value="__none__">
+                        — Giá niêm yết (không áp tier) —
+                      </SelectItem>
+                      {tiers.map((t) => (
+                        <SelectItem key={t.id} value={t.id}>
+                          {t.name}
+                          {t.code ? ` (${t.code})` : ""}
+                        </SelectItem>
+                      ))}
+                    </SelectContent>
+                  </Select>
+                  <p className="text-xs text-muted-foreground">
+                    Chi nhánh dùng bảng giá này khi check out POS FnB. SP không
+                    có trong bảng giá → tự động dùng giá niêm yết.
+                  </p>
+                </div>
+              )}
             </div>
           </div>
           <DialogFooter>

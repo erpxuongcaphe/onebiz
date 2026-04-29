@@ -19,8 +19,8 @@ import {
   SelectItem,
 } from "@/components/ui/select";
 import { useToast } from "@/lib/contexts";
-import { createCustomer, updateCustomer } from "@/lib/services";
-import type { Customer } from "@/lib/types";
+import { createCustomer, updateCustomer, getPriceTiers } from "@/lib/services";
+import type { Customer, PriceTier } from "@/lib/types";
 import { Icon } from "@/components/ui/icon";
 
 interface CreateCustomerDialogProps {
@@ -58,8 +58,27 @@ export function CreateCustomerDialog({
   const [group, setGroup] = useState("");
   const [type, setType] = useState<"individual" | "company">("individual");
   const [gender, setGender] = useState("");
+  // Bảng giá B2B mặc định cho KH này — empty = giá niêm yết
+  const [priceTierId, setPriceTierId] = useState("");
+  const [tiers, setTiers] = useState<PriceTier[]>([]);
   const [errors, setErrors] = useState<Record<string, string>>({});
   const [saving, setSaving] = useState(false);
+
+  // Load tier list (scope retail+both) khi dialog mở
+  useEffect(() => {
+    if (!open) return;
+    let cancelled = false;
+    getPriceTiers({ scope: "retail" })
+      .then((list) => {
+        if (!cancelled) setTiers(list);
+      })
+      .catch(() => {
+        /* tier optional — fail silent */
+      });
+    return () => {
+      cancelled = true;
+    };
+  }, [open]);
 
   useEffect(() => {
     if (open) {
@@ -72,6 +91,7 @@ export function CreateCustomerDialog({
         setGroup(initialData.groupId || "");
         setType(initialData.type || "individual");
         setGender(initialData.gender || "");
+        setPriceTierId(initialData.priceTierId || "");
       } else {
         setCode(generateCustomerCode());
         setName("");
@@ -81,6 +101,7 @@ export function CreateCustomerDialog({
         setGroup("");
         setType("individual");
         setGender("");
+        setPriceTierId("");
       }
       setErrors({});
     }
@@ -107,6 +128,7 @@ export function CreateCustomerDialog({
           groupId: group || undefined,
           type,
           gender: (gender as "male" | "female") || undefined,
+          priceTierId: priceTierId || undefined,
         });
         onOpenChange(false);
         toast({
@@ -124,6 +146,7 @@ export function CreateCustomerDialog({
           groupId: group || undefined,
           type,
           gender: (gender as "male" | "female") || undefined,
+          priceTierId: priceTierId || undefined,
         });
         onOpenChange(false);
         toast({
@@ -224,6 +247,42 @@ export function CreateCustomerDialog({
                 ))}
               </SelectContent>
             </Select>
+          </div>
+
+          {/* Bảng giá B2B mặc định — KH này check out POS Retail sẽ áp giá tier
+              này. Để trống = giá niêm yết (B2C bình thường). */}
+          <div className="space-y-1.5">
+            <label className="text-sm font-medium">
+              Bảng giá B2B mặc định{" "}
+              <span className="text-xs font-normal text-muted-foreground">
+                (POS Retail)
+              </span>
+            </label>
+            <Select
+              value={priceTierId || "__none__"}
+              onValueChange={(v) =>
+                setPriceTierId(v === "__none__" ? "" : (v ?? ""))
+              }
+            >
+              <SelectTrigger className="w-full">
+                <SelectValue placeholder="— Giá niêm yết —" />
+              </SelectTrigger>
+              <SelectContent>
+                <SelectItem value="__none__">
+                  — Giá niêm yết (không áp tier) —
+                </SelectItem>
+                {tiers.map((t) => (
+                  <SelectItem key={t.id} value={t.id}>
+                    {t.name}
+                    {t.code ? ` (${t.code})` : ""}
+                  </SelectItem>
+                ))}
+              </SelectContent>
+            </Select>
+            <p className="text-xs text-muted-foreground">
+              KH này dùng bảng giá khi check out POS bán lẻ/sỉ. SP không có
+              trong bảng giá → tự động dùng giá niêm yết.
+            </p>
           </div>
 
           <div className="space-y-1.5">

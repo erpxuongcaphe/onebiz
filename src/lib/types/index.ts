@@ -48,6 +48,7 @@ export type {
 export type {
   PriceTier,
   PriceTierItem,
+  PriceTierScope,
   ProductVariant,
   UOMConversion,
   BranchStock,

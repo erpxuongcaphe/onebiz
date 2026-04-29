@@ -21,6 +21,7 @@ import {
 } from "@/components/shared/dialogs";
 import { ConfirmDialog } from "@/components/shared/dialogs/confirm-dialog";
 import { SummaryCard } from "@/components/shared/summary-card";
+import { Tabs, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { formatCurrency, formatDate } from "@/lib/format";
 import { useToast } from "@/lib/contexts";
 import {
@@ -39,8 +40,16 @@ import {
   DialogDescription,
   DialogFooter,
 } from "@/components/ui/dialog";
-import type { PriceTier, PriceTierItem } from "@/lib/types";
+import type { PriceTier, PriceTierItem, PriceTierScope } from "@/lib/types";
 import { Icon } from "@/components/ui/icon";
+
+type ScopeFilter = "all" | "retail" | "fnb";
+
+const SCOPE_LABEL: Record<PriceTierScope, string> = {
+  retail: "Bán lẻ / Sỉ",
+  fnb: "Quán FnB",
+  both: "Cả hai",
+};
 
 // ---------------------------------------------------------------------------
 // Inline detail — danh sách items của một tier
@@ -250,6 +259,9 @@ export default function ThietLapGiaPage() {
   const [deletingTier, setDeletingTier] = useState<PriceTier | null>(null);
   const [deleteTierBusy, setDeleteTierBusy] = useState(false);
 
+  // Tab filter theo channel — Q1 multi-channel
+  const [scopeFilter, setScopeFilter] = useState<ScopeFilter>("all");
+
   // Clone dialog state — Q3
   const [cloningTier, setCloningTier] = useState<PriceTier | null>(null);
   const [cloneName, setCloneName] = useState("");
@@ -280,9 +292,15 @@ export default function ThietLapGiaPage() {
   useEffect(() => {
     setPage(0);
     setExpandedRow(null);
-  }, [search]);
+  }, [search, scopeFilter]);
 
   const filtered = data.filter((t) => {
+    // Scope filter — tab "Bán lẻ" hiện tier scope retail+both, "FnB" hiện fnb+both
+    if (scopeFilter === "retail" && !["retail", "both"].includes(t.scope))
+      return false;
+    if (scopeFilter === "fnb" && !["fnb", "both"].includes(t.scope))
+      return false;
+
     if (!search) return true;
     const q = search.toLowerCase();
     return (
@@ -395,6 +413,32 @@ export default function ThietLapGiaPage() {
       ),
     },
     {
+      accessorKey: "scope",
+      header: "Áp dụng",
+      size: 130,
+      cell: ({ row }) => {
+        const s = row.original.scope;
+        return (
+          <Badge
+            variant={s === "fnb" ? "default" : "secondary"}
+            className="text-[11px] gap-1"
+          >
+            <Icon
+              name={
+                s === "retail"
+                  ? "storefront"
+                  : s === "fnb"
+                    ? "local_cafe"
+                    : "all_inclusive"
+              }
+              size={12}
+            />
+            {SCOPE_LABEL[s]}
+          </Badge>
+        );
+      },
+    },
+    {
       id: "itemCount",
       header: "SP áp dụng",
       size: 110,
@@ -423,7 +467,19 @@ export default function ThietLapGiaPage() {
   return (
     <div className="h-[calc(100vh-64px)] flex flex-col">
       <PageHeader
-        title="Bảng giá (Price Tiers)"
+        title="Bảng giá"
+        tabs={
+          <Tabs
+            value={scopeFilter}
+            onValueChange={(v) => setScopeFilter(v as ScopeFilter)}
+          >
+            <TabsList>
+              <TabsTrigger value="all">Tất cả</TabsTrigger>
+              <TabsTrigger value="retail">Bán lẻ / Sỉ</TabsTrigger>
+              <TabsTrigger value="fnb">Quán FnB</TabsTrigger>
+            </TabsList>
+          </Tabs>
+        }
         searchPlaceholder="Theo tên hoặc mã bảng giá..."
         searchValue={search}
         onSearchChange={setSearch}

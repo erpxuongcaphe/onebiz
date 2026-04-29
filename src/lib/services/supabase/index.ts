@@ -136,6 +136,7 @@ export {
   createPriceTier, updatePriceTier, deletePriceTier, duplicatePriceTier,
   addPriceTierItem, updatePriceTierItem, deletePriceTierItem,
   getProductPriceForCustomer, getTierPricesBatch,
+  getApplicableTier,
 } from "./pricing";
 
 // Reports & Financial Intelligence

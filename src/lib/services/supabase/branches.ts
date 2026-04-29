@@ -1,6 +1,9 @@
 // Branches service — CRUD with code convention (CNH/BOF/XRA)
+//
+// Multi-tenant safety: filter tenant_id mọi query đọc.
 
 import { createClient } from "@/lib/supabase/client";
+import { getCurrentTenantId } from "./base";
 
 const supabase = createClient();
 
@@ -14,14 +17,18 @@ export interface BranchDetail {
   phone?: string;
   isDefault: boolean;
   isActive: boolean;
+  /** Bảng giá mặc định cho POS FnB của chi nhánh này. NULL = giá niêm yết. */
+  priceTierId?: string;
   createdAt: string;
   updatedAt: string;
 }
 
 export async function getBranches(): Promise<BranchDetail[]> {
+  const tenantId = await getCurrentTenantId();
   const { data, error } = await supabase
     .from("branches")
     .select("*")
+    .eq("tenant_id", tenantId)
     .eq("is_active", true)
     .order("is_default", { ascending: false })
     .order("name");
@@ -102,8 +109,11 @@ export async function updateBranch(
     address: string;
     phone: string;
     isActive: boolean;
+    /** null để clear tier (về giá niêm yết) */
+    priceTierId: string | null;
   }>
 ) {
+  const tenantId = await getCurrentTenantId();
   const updateObj: Record<string, unknown> = {};
   if (updates.name !== undefined) updateObj.name = updates.name;
   if (updates.code !== undefined) updateObj.code = updates.code;
@@ -111,10 +121,12 @@ export async function updateBranch(
   if (updates.address !== undefined) updateObj.address = updates.address;
   if (updates.phone !== undefined) updateObj.phone = updates.phone;
   if (updates.isActive !== undefined) updateObj.is_active = updates.isActive;
+  if (updates.priceTierId !== undefined) updateObj.price_tier_id = updates.priceTierId;
 
   const { error } = await supabase
     .from("branches")
     .update(updateObj)
+    .eq("tenant_id", tenantId)
     .eq("id", id);
 
   if (error) throw error;
@@ -131,6 +143,7 @@ function mapBranch(row: Record<string, unknown>): BranchDetail {
     phone: (row.phone as string) ?? undefined,
     isDefault: (row.is_default as boolean) ?? false,
     isActive: (row.is_active as boolean) ?? true,
+    priceTierId: (row.price_tier_id as string) ?? undefined,
     createdAt: row.created_at as string,
     updatedAt: row.updated_at as string,
   };

@@ -15,7 +15,7 @@ import { Input } from "@/components/ui/input";
 import { Button } from "@/components/ui/button";
 import { useToast } from "@/lib/contexts";
 import { createPriceTier, updatePriceTier } from "@/lib/services";
-import type { PriceTier } from "@/lib/types";
+import type { PriceTier, PriceTierScope } from "@/lib/types";
 import { Icon } from "@/components/ui/icon";
 
 interface PriceTierDialogProps {
@@ -38,6 +38,7 @@ export function PriceTierDialog({
   const [code, setCode] = useState("");
   const [description, setDescription] = useState("");
   const [priority, setPriority] = useState("0");
+  const [scope, setScope] = useState<PriceTierScope>("both");
   const [errors, setErrors] = useState<Record<string, string>>({});
   const [saving, setSaving] = useState(false);
 
@@ -47,6 +48,7 @@ export function PriceTierDialog({
     setCode(tier?.code ?? "");
     setDescription(tier?.description ?? "");
     setPriority(String(tier?.priority ?? 0));
+    setScope(tier?.scope ?? "both");
     setErrors({});
     setSaving(false);
   }, [open, tier]);
@@ -70,6 +72,7 @@ export function PriceTierDialog({
         code: code.trim().toUpperCase(),
         description: description.trim() || undefined,
         priority: Number(priority) || 0,
+        scope,
       };
       if (isEdit && tier) {
         await updatePriceTier(tier.id, payload);
@@ -147,6 +150,75 @@ export function PriceTierDialog({
                 Số nhỏ hơn = ưu tiên cao hơn
               </p>
             </div>
+          </div>
+
+          {/* Áp dụng cho channel — radio card style cho UX rõ ràng */}
+          <div className="space-y-1.5">
+            <label className="text-sm font-medium">
+              Áp dụng cho <span className="text-destructive">*</span>
+            </label>
+            <div className="grid grid-cols-3 gap-2">
+              {[
+                {
+                  value: "retail" as const,
+                  icon: "storefront",
+                  title: "Bán lẻ / Sỉ",
+                  desc: "Gắn vào KH",
+                },
+                {
+                  value: "fnb" as const,
+                  icon: "local_cafe",
+                  title: "Quán FnB",
+                  desc: "Gắn vào CN",
+                },
+                {
+                  value: "both" as const,
+                  icon: "all_inclusive",
+                  title: "Cả hai",
+                  desc: "Linh hoạt",
+                },
+              ].map((opt) => {
+                const active = scope === opt.value;
+                return (
+                  <button
+                    type="button"
+                    key={opt.value}
+                    onClick={() => setScope(opt.value)}
+                    className={`flex flex-col items-start gap-1 rounded-lg border p-2.5 text-left transition-colors ${
+                      active
+                        ? "border-primary bg-primary-fixed/40 ring-1 ring-primary"
+                        : "border-input hover:border-muted-foreground/40 hover:bg-muted/40"
+                    }`}
+                  >
+                    <div className="flex items-center gap-1.5">
+                      <Icon
+                        name={opt.icon}
+                        size={14}
+                        className={active ? "text-primary" : "text-muted-foreground"}
+                      />
+                      <span
+                        className={`text-xs font-medium ${
+                          active ? "text-primary" : "text-foreground"
+                        }`}
+                      >
+                        {opt.title}
+                      </span>
+                    </div>
+                    <span className="text-[11px] text-muted-foreground">
+                      {opt.desc}
+                    </span>
+                  </button>
+                );
+              })}
+            </div>
+            <p className="text-[11px] text-muted-foreground">
+              {scope === "retail" &&
+                "Bảng giá này sẽ chọn được khi gán KH B2B (đại lý / quán)."}
+              {scope === "fnb" &&
+                "Bảng giá này sẽ chọn được khi cấu hình bảng giá mặc định cho từng chi nhánh quán."}
+              {scope === "both" &&
+                "Linh hoạt — dùng được cho cả KH B2B và chi nhánh quán."}
+            </p>
           </div>
 
           <div className="space-y-1.5">

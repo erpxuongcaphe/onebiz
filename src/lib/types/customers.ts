@@ -18,6 +18,8 @@ export interface Customer {
   gender?: "male" | "female";
   isInternal?: boolean;
   branchId?: string;
+  /** Bảng giá B2B mặc định áp dụng khi KH này check out POS Retail. */
+  priceTierId?: string;
   createdAt: string;
 }
 
