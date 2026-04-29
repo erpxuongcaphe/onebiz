@@ -7,6 +7,7 @@ import { PERMISSIONS } from "@/lib/permissions";
 import { useSettings } from "@/lib/contexts/settings-context";
 import { getProductCategoriesAsync } from "@/lib/services/supabase/products";
 import { getVariantsByProduct, getVariantsByProductIds } from "@/lib/services/supabase/variants";
+import { resolveAppliedTier } from "@/lib/services/supabase/pricing";
 import { fnbPayment } from "@/lib/services/supabase/fnb-checkout";
 import { getTablesByBranch, markTableAvailable } from "@/lib/services/supabase/fnb-tables";
 import {
@@ -107,6 +108,15 @@ function FnbPosPageInner() {
 
   const branchId = currentBranch?.id;
   const tenantId = tenant?.id ?? "";
+
+  // Sprint 2: Tier áp dụng cho POS FnB của chi nhánh này.
+  // Resolve khi branchId hoặc products đổi → priceMap + override sell_price.
+  const [appliedTier, setAppliedTier] = useState<{
+    tierId: string;
+    tierName: string;
+    tierCode: string;
+    priceMap: Map<string, number>;
+  } | null>(null);
   const userId = user?.id ?? "";
 
   // ── Load data (cache-first, then network refresh) ──
@@ -237,11 +247,23 @@ function FnbPosPageInner() {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [tenantId, branchId, networkStatus.isOnline]);
 
+  // productsWithTier: products với sell_price override theo tier áp dụng cho
+  // chi nhánh hiện tại. Mọi UI render menu (grid + search modal + item dialog
+  // nếu base product) dùng list này thay vì products thô.
+  // Variant prices KHÔNG override (variant có giá riêng từ DB).
+  const productsWithTier = useMemo(() => {
+    if (!appliedTier) return products;
+    return products.map((p) => {
+      const tierPrice = appliedTier.priceMap.get(p.id);
+      return tierPrice !== undefined ? { ...p, sell_price: tierPrice } : p;
+    });
+  }, [products, appliedTier]);
+
   // ── Filtered products ──
   const filteredProducts = useMemo(() => {
-    if (!activeCategoryId) return products;
-    return products.filter((p) => p.category_id === activeCategoryId);
-  }, [products, activeCategoryId]);
+    if (!activeCategoryId) return productsWithTier;
+    return productsWithTier.filter((p) => p.category_id === activeCategoryId);
+  }, [productsWithTier, activeCategoryId]);
 
   // ── Variant cache (in-memory, per session) — tránh refetch khi user mở lại dialog cùng SP.
   //    Warm từ IndexedDB on mount (effect bên dưới) → dialog mở instant NGAY CẢ
@@ -374,6 +396,34 @@ function FnbPosPageInner() {
       if (timeoutHandle !== undefined) window.clearTimeout(timeoutHandle);
     };
   }, [products, networkStatus.isOnline, variantCacheRef]);
+
+  // ── Sprint 2: Resolve tier áp dụng cho POS FnB của chi nhánh ──
+  // Khi branchId + products đã load → fetch tier mặc định của chi nhánh +
+  // priceMap. Dùng để override sell_price khi render menu (qua displayProducts
+  // useMemo dưới). Tier change → cart lines hiện tại KHÔNG re-price (đơn
+  // đã thêm giữ giá cũ — pattern POS chuẩn để cashier không bị bất ngờ).
+  useEffect(() => {
+    if (!branchId || products.length === 0) {
+      setAppliedTier(null);
+      return;
+    }
+    let cancelled = false;
+    const productIds = products.map((p) => p.id);
+    resolveAppliedTier({
+      channel: "fnb",
+      branchId,
+      productIds,
+    })
+      .then((tier) => {
+        if (!cancelled) setAppliedTier(tier);
+      })
+      .catch(() => {
+        if (!cancelled) setAppliedTier(null);
+      });
+    return () => {
+      cancelled = true;
+    };
+  }, [branchId, products]);
 
   // ── Product select → open item dialog (instant open, variants load in background) ──
   const handleSelectProduct = useCallback(
@@ -1198,6 +1248,27 @@ function FnbPosPageInner() {
         viewMode={showFloorPlan ? "floorplan" : "menu"}
       />
 
+      {/* Sprint 2: Banner tier áp dụng cho chi nhánh — hiện ngay dưới header
+          để cashier thấy "đang dùng bảng giá X". Chỉ hiển thị khi tier resolve
+          được, fallback im lặng nếu chi nhánh dùng giá niêm yết. */}
+      {appliedTier && (
+        <div className="bg-status-success/10 border-b border-status-success/30 px-3 py-1.5 flex items-center gap-2 text-xs">
+          <Icon name="sell" size={14} className="text-status-success" />
+          <span className="text-on-surface">
+            Đang áp bảng giá:{" "}
+            <strong className="font-medium">{appliedTier.tierName}</strong>
+            {appliedTier.tierCode && (
+              <span className="text-muted-foreground ml-1">
+                ({appliedTier.tierCode})
+              </span>
+            )}
+          </span>
+          <span className="text-muted-foreground ml-auto">
+            {appliedTier.priceMap.size}/{products.length} SP có giá riêng
+          </span>
+        </div>
+      )}
+
       <div className="flex flex-1 min-h-0">
         {/* Left panel: menu grid OR floor plan */}
         <div className="flex-1 flex flex-col min-w-0">
@@ -1322,7 +1393,7 @@ function FnbPosPageInner() {
         <Suspense fallback={null}>
           <FnbSearchModal
             open={searchModalOpen}
-            products={products}
+            products={productsWithTier}
             onSelect={(product) => {
               handleSelectProduct(product);
               setSearchModalOpen(false);

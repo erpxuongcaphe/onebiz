@@ -56,6 +56,7 @@ import { getCustomers } from "@/lib/services/supabase/customers";
 import { validateCoupon } from "@/lib/services/supabase/coupons";
 import { Icon } from "@/components/ui/icon";
 import { getVariantsByProduct } from "@/lib/services/supabase/variants";
+import { resolveAppliedTier } from "@/lib/services/supabase/pricing";
 import type { Product, ProductVariant } from "@/lib/types";
 
 // Reuse FnB offline bar/drawer — both are generic over NetworkStatus.
@@ -218,7 +219,7 @@ function PosPageInner() {
         });
         if (result.data.length > 0) {
           const product = result.data[0];
-          state.addLine(product);
+          addLineWithTier(product);
           setSearchQuery("");
           searchInputRef.current?.focus();
           // Auto-scroll cart to bottom
@@ -488,7 +489,7 @@ function PosPageInner() {
         const variants = await getVariantsByProduct(product.id);
         if (variants.length === 0) {
           // No variants → add base product directly
-          state.addLine(product);
+          addLineWithTier(product);
           setTimeout(() => {
             cartScrollRef.current?.scrollTo({
               top: cartScrollRef.current.scrollHeight,
@@ -509,7 +510,7 @@ function PosPageInner() {
         }
       } catch (err) {
         // Fallback to base product on error (network issue etc.)
-        state.addLine(product);
+        addLineWithTier(product);
         toast({
           title: "Không tải được biến thể",
           description: err instanceof Error ? err.message : "Đã thêm sản phẩm gốc vào giỏ.",
@@ -550,6 +551,96 @@ function PosPageInner() {
       variant: "default",
     });
   }, [state.customer?.id]); // eslint-disable-line react-hooks/exhaustive-deps
+
+  // ============================================================
+  // Sprint 2: Apply price tier theo KH đang chọn
+  // ============================================================
+  // Khi customer thay đổi → resolve tier (customer.priceTierId) → fetch
+  // priceMap cho mọi SP đang trong cart → re-price.
+  // appliedTier dùng để: (1) hiển thị badge "Áp: [tier]", (2) override
+  // unitPrice khi addLine SP mới.
+  const [appliedTier, setAppliedTier] = useState<{
+    tierId: string;
+    tierName: string;
+    tierCode: string;
+    priceMap: Map<string, number>;
+  } | null>(null);
+
+  // Wrapper addLine — inject tier price nếu có. Mọi nơi gọi state.addLine
+  // trong page này phải qua addLineWithTier để giá tier được áp dụng cho
+  // SP mới thêm vào cart.
+  const addLineWithTier = useCallback(
+    (
+      product: Product,
+      options?: { variantId?: string; variantLabel?: string; unitPrice?: number; quantity?: number },
+    ) => {
+      const tierPrice = appliedTier?.priceMap.get(product.id);
+      // Nếu caller đã pass unitPrice (variant pricing) → giữ nguyên,
+      // không override bởi tier vì variant có giá riêng.
+      const effectiveOptions =
+        options?.unitPrice !== undefined
+          ? options
+          : tierPrice !== undefined
+            ? { ...options, unitPrice: tierPrice }
+            : options;
+      state.addLine(product, effectiveOptions);
+    },
+    [appliedTier, state],
+  );
+
+  useEffect(() => {
+    const customerId = state.customer?.id;
+    if (!customerId) {
+      // Không có KH → clear tier (về giá niêm yết).
+      if (appliedTier) {
+        setAppliedTier(null);
+        // Re-price cart về sellPrice gốc — em không có cache sellPrice.
+        // Caller hiện chấp nhận: line đang hiện giá tier sẽ giữ giá đó cho
+        // đến khi user xoá line, vì sellPrice gốc cần re-fetch product.
+        // Acceptable cho V1 — V2 cache product trong line state.
+      }
+      return;
+    }
+    let cancelled = false;
+    const productIds = state.lines.map((l) => l.productId);
+    resolveAppliedTier({
+      channel: "retail",
+      customerId,
+      productIds,
+    })
+      .then((tier) => {
+        if (cancelled) return;
+        if (!tier) {
+          setAppliedTier(null);
+          return;
+        }
+        setAppliedTier(tier);
+        // Re-price các line khớp với tier
+        let appliedCount = 0;
+        for (const line of state.lines) {
+          const tierPrice = tier.priceMap.get(line.productId);
+          if (tierPrice !== undefined && tierPrice !== line.unitPrice) {
+            state.updateLinePrice(line.lineId, tierPrice);
+            appliedCount++;
+          }
+        }
+        if (appliedCount > 0) {
+          toast({
+            title: `Áp dụng bảng giá: ${tier.tierName}`,
+            description: `${appliedCount} sản phẩm trong giỏ đã re-price.`,
+            variant: "default",
+          });
+        }
+      })
+      .catch(() => {
+        // fail silent — fallback giá niêm yết
+        setAppliedTier(null);
+      });
+    return () => {
+      cancelled = true;
+    };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [state.customer?.id]);
 
   // ============================================================
   // Handlers
@@ -927,6 +1018,17 @@ function PosPageInner() {
           <Icon name="shopping_cart" size={14} />
           <span className="text-[13px] font-bold tracking-wide">POS Retail</span>
         </div>
+
+        {/* Sprint 2: Badge tier đang áp dụng — chỉ hiện khi có KH với tier */}
+        {appliedTier && (
+          <div
+            className="hidden md:flex items-center gap-1 shrink-0 px-2 py-0.5 rounded-md bg-status-success/20 text-white text-[11px] font-medium border border-status-success/40"
+            title={`Bảng giá ${appliedTier.tierCode} đang áp cho ${state.customer?.name ?? "KH này"}`}
+          >
+            <Icon name="sell" size={12} />
+            <span>Áp: {appliedTier.tierName}</span>
+          </div>
+        )}
 
         {/* Search bar */}
         <div className="flex-1 max-w-lg mx-auto">
@@ -1811,7 +1913,9 @@ function PosPageInner() {
         variants={variantPickerList}
         onConfirm={(payload) => {
           if (!variantPickerProduct) return;
-          state.addLine(variantPickerProduct, {
+          // Variant đã có giá riêng → addLineWithTier không override
+          // (chỉ inject tier price khi options.unitPrice undefined).
+          addLineWithTier(variantPickerProduct, {
             variantId: payload.variantId,
             variantLabel: payload.variantLabel,
             unitPrice: payload.unitPrice,

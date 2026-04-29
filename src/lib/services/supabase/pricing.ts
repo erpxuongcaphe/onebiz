@@ -286,6 +286,63 @@ export async function duplicatePriceTier(params: {
 }
 
 /**
+ * Wrapper resolve tier ÁP DỤNG + LẤY PRICE MAP cho 1 lần fetch:
+ *   1. getApplicableTier → tierId từ customer/branch
+ *   2. Get tier info (name, code)
+ *   3. getTierPricesBatch → Map<productId, price>
+ *
+ * Dùng trong POS để re-price cart khi customer/branch thay đổi.
+ * Trả null nếu không có tier mặc định → caller fallback giá niêm yết.
+ */
+export async function resolveAppliedTier(context: {
+  channel: "retail" | "fnb";
+  customerId?: string;
+  branchId?: string;
+  productIds: string[];
+}): Promise<{
+  tierId: string;
+  tierName: string;
+  tierCode: string;
+  priceMap: Map<string, number>;
+} | null> {
+  const tierId = await getApplicableTier({
+    channel: context.channel,
+    customerId: context.customerId,
+    branchId: context.branchId,
+  });
+  if (!tierId) return null;
+
+  const tenantId = await getCurrentTenantId();
+
+  // Get tier info
+  const { data: tier } = await supabase
+    .from("price_tiers")
+    .select("id, name, code")
+    .eq("tenant_id", tenantId)
+    .eq("id", tierId)
+    .single();
+  if (!tier) return null;
+
+  // Batch lookup prices
+  const tierPrices = await getTierPricesBatch(tierId, context.productIds);
+  const priceMap = new Map<string, number>();
+  for (const [productId, entry] of tierPrices.entries()) {
+    if (entry.base !== null) {
+      priceMap.set(productId, entry.base);
+    }
+    // variant prices (nếu cần) — POS hiện match by productId, variant
+    // override sẽ làm sau khi cần.
+  }
+
+  return {
+    tierId: tier.id,
+    tierName: tier.name,
+    tierCode: tier.code,
+    priceMap,
+  };
+}
+
+/**
  * Resolve tier áp dụng tại lúc check out cho 1 context cụ thể.
  *
  * Logic ưu tiên:
