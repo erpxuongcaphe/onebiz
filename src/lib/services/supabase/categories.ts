@@ -1,10 +1,10 @@
 // Categories service — CRUD with scope (nvl, sku, customer, supplier)
 
-import { createClient } from "@/lib/supabase/client";
+import { getClient } from "./base";
 import { getCurrentTenantId } from "./base";
 import type { ProductCategory } from "@/lib/types";
 
-const supabase = createClient();
+const supabase = getClient();
 
 export async function getCategoriesByScope(
   scope: "nvl" | "sku" | "customer" | "supplier"

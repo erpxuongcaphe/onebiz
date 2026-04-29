@@ -4,11 +4,11 @@
 // getCurrentTenantId(). Plus: helpers rename/merge unit names (case-
 // insensitive cleanup) cho trang /hang-hoa/don-vi-tinh.
 
-import { createClient } from "@/lib/supabase/client";
+import { getClient } from "./base";
 import { getCurrentTenantId } from "./base";
 import type { UOMConversion } from "@/lib/types";
 
-const supabase = createClient();
+const supabase = getClient();
 
 export async function getUOMConversions(
   productId: string

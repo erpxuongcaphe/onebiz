@@ -1,6 +1,6 @@
 // Production service — Production orders, lot tracking, FIFO allocation
 
-import { createClient } from "@/lib/supabase/client";
+import { getClient } from "./base";
 import { getCurrentTenantId } from "./base";
 import type {
   ProductionOrder,
@@ -8,7 +8,7 @@ import type {
   ExpiringLot,
 } from "@/lib/types";
 
-const supabase = createClient();
+const supabase = getClient();
 
 // ============================================================
 // Production Orders

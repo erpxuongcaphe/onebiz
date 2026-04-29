@@ -3,11 +3,11 @@
 // Multi-tenant safety: mọi query filter tenant_id ngay đầu chain.
 // branch_stock có cột tenant_id; products + branches join cũng cần check.
 
-import { createClient } from "@/lib/supabase/client";
+import { getClient } from "./base";
 import { getCurrentTenantId } from "./base";
 import type { BranchStock } from "@/lib/types";
 
-const supabase = createClient();
+const supabase = getClient();
 
 export interface BranchStockRow {
   id: string;

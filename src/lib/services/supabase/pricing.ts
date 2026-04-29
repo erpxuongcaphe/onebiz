@@ -6,11 +6,11 @@
 //     Mọi query items phải validate tier ownership (qua getPriceTiers
 //     đã tenant-filtered) hoặc filter qua join inner price_tiers.
 
-import { createClient } from "@/lib/supabase/client";
+import { getClient } from "./base";
 import { getCurrentTenantId } from "./base";
 import type { PriceTier, PriceTierItem, PriceTierScope } from "@/lib/types";
 
-const supabase = createClient();
+const supabase = getClient();
 
 /**
  * Get all tiers — optional filter theo scope (retail/fnb/both).

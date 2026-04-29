@@ -1,6 +1,6 @@
 // Pipeline Engine service — Core pipeline operations
 
-import { createClient } from "@/lib/supabase/client";
+import { getClient } from "./base";
 import { getCurrentTenantId } from "./base";
 import type {
   Pipeline,
@@ -11,7 +11,7 @@ import type {
   TimelineEntry,
 } from "@/lib/types";
 
-const supabase = createClient();
+const supabase = getClient();
 
 // ============================================================
 // Pipeline CRUD

@@ -3,11 +3,11 @@
 // Multi-tenant safety: filter tenant_id mọi query đọc + insert dùng
 // getCurrentTenantId() thay vì hardcode "".
 
-import { createClient } from "@/lib/supabase/client";
+import { getClient } from "./base";
 import { getCurrentTenantId } from "./base";
 import type { ProductVariant } from "@/lib/types";
 
-const supabase = createClient();
+const supabase = getClient();
 
 export async function getVariantsByProduct(
   productId: string

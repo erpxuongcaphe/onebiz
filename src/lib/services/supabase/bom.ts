@@ -1,10 +1,10 @@
 // BOM service — CRUD for production formulas
 
-import { createClient } from "@/lib/supabase/client";
+import { getClient } from "./base";
 import { getCurrentTenantId } from "./base";
 import type { BOM, BOMItem, BOMCostBreakdown } from "@/lib/types";
 
-const supabase = createClient();
+const supabase = getClient();
 
 export async function getAllBOMs(params?: {
   /** Filter: chỉ lấy BOM đã được sử dụng tại chi nhánh này (join production_orders). */

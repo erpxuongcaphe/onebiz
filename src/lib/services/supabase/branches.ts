@@ -2,10 +2,10 @@
 //
 // Multi-tenant safety: filter tenant_id mọi query đọc.
 
-import { createClient } from "@/lib/supabase/client";
+import { getClient } from "./base";
 import { getCurrentTenantId } from "./base";
 
-const supabase = createClient();
+const supabase = getClient();
 
 export interface BranchDetail {
   id: string;
