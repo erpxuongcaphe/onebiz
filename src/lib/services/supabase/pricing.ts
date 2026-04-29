@@ -352,6 +352,60 @@ export async function addPriceTierItem(item: {
   if (error) throw error;
 }
 
+/**
+ * Bulk add nhiều items vào tier 1 lần. Dùng cho Sprint 3 UX:
+ *  - "Thêm hàng loạt theo nhóm" — CEO chọn category → 50 SP → 1 giá
+ *  - "Điều chỉnh % giá niêm yết" — bulk gen items với price = sellPrice ± X%
+ *
+ * Logic UPSERT: nếu SP đã có trong tier → UPDATE price + min_qty (không
+ * duplicate). Pattern: delete trước insert HOẶC dùng .upsert. Em dùng
+ * delete-then-insert vì price_tier_items không có composite unique key
+ * trên (price_tier_id, product_id, variant_id) — defensive: clear hết
+ * các SP đang được bulk update rồi insert lại.
+ *
+ * Trả về: số items đã thêm/update.
+ */
+export async function bulkAddPriceTierItems(params: {
+  priceTierId: string;
+  items: Array<{
+    productId: string;
+    variantId?: string;
+    price: number;
+    minQty?: number;
+  }>;
+}): Promise<{ insertedCount: number }> {
+  if (params.items.length === 0) return { insertedCount: 0 };
+  await assertTierOwnership(params.priceTierId);
+
+  // Step 1: Xoá các items cũ (cùng tier + cùng productId) để tránh
+  // duplicate. Pattern này an toàn với upsert vì không phụ thuộc unique
+  // constraint (price_tier_items không có).
+  const productIds = params.items.map((i) => i.productId);
+  const { error: deleteErr } = await supabase
+    .from("price_tier_items")
+    .delete()
+    .eq("price_tier_id", params.priceTierId)
+    .in("product_id", productIds);
+  if (deleteErr) throw deleteErr;
+
+  // Step 2: Bulk insert items mới
+  const rows = params.items.map((it) => ({
+    price_tier_id: params.priceTierId,
+    product_id: it.productId,
+    variant_id: it.variantId ?? null,
+    price: it.price,
+    min_qty: it.minQty ?? 1,
+  }));
+
+  const { error: insertErr, data } = await supabase
+    .from("price_tier_items")
+    .insert(rows)
+    .select("id");
+  if (insertErr) throw insertErr;
+
+  return { insertedCount: data?.length ?? 0 };
+}
+
 export async function updatePriceTierItem(
   id: string,
   updates: { price?: number; minQty?: number }

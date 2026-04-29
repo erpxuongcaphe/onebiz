@@ -134,7 +134,7 @@ export type { MaterialCheckInput, MaterialCheckResult } from "./production";
 export {
   getPriceTiers, getPriceTierItems,
   createPriceTier, updatePriceTier, deletePriceTier, duplicatePriceTier,
-  addPriceTierItem, updatePriceTierItem, deletePriceTierItem,
+  addPriceTierItem, bulkAddPriceTierItems, updatePriceTierItem, deletePriceTierItem,
   getProductPriceForCustomer, getTierPricesBatch,
   getApplicableTier,
 } from "./pricing";

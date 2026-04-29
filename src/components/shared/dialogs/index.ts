@@ -25,6 +25,8 @@ export { CreatePriceBookDialog } from "./create-price-book-dialog";
 export { PriceTierDialog } from "./price-tier-dialog";
 export { AddPriceTierItemDialog } from "./add-price-tier-item-dialog";
 export { EditPriceTierItemDialog } from "./edit-price-tier-item-dialog";
+export { BulkAddPriceTierItemsDialog } from "./bulk-add-price-tier-items-dialog";
+export { AdjustPriceTierPercentDialog } from "./adjust-price-tier-percent-dialog";
 export { CreateInternalSaleDialog } from "./create-internal-sale-dialog";
 export { CreatePromotionDialog } from "./create-promotion-dialog";
 export { SupervisorPinDialog } from "./supervisor-pin-dialog";

@@ -18,6 +18,8 @@ import {
   PriceTierDialog,
   AddPriceTierItemDialog,
   EditPriceTierItemDialog,
+  BulkAddPriceTierItemsDialog,
+  AdjustPriceTierPercentDialog,
 } from "@/components/shared/dialogs";
 import { ConfirmDialog } from "@/components/shared/dialogs/confirm-dialog";
 import { SummaryCard } from "@/components/shared/summary-card";
@@ -68,6 +70,8 @@ function PriceTierDetail({
   const [items, setItems] = useState<PriceTierItem[]>([]);
   const [loading, setLoading] = useState(true);
   const [addOpen, setAddOpen] = useState(false);
+  const [bulkAddOpen, setBulkAddOpen] = useState(false);
+  const [adjustOpen, setAdjustOpen] = useState(false);
   const [editingItem, setEditingItem] = useState<PriceTierItem | null>(null);
   const [deletingItem, setDeletingItem] = useState<PriceTierItem | null>(null);
   const [deleteBusy, setDeleteBusy] = useState(false);
@@ -121,14 +125,34 @@ function PriceTierDetail({
           subtitle={tier.description ?? "Không có mô tả"}
         />
 
-        <div className="flex items-center justify-between border-b pb-2">
+        <div className="flex items-center justify-between border-b pb-2 gap-2 flex-wrap">
           <h3 className="text-sm font-semibold">
             Sản phẩm áp dụng ({items.length})
           </h3>
-          <Button size="sm" onClick={() => setAddOpen(true)}>
-            <Icon name="add" size={16} className="mr-1" />
-            Thêm sản phẩm
-          </Button>
+          <div className="flex items-center gap-1.5 flex-wrap">
+            <Button
+              size="sm"
+              variant="outline"
+              onClick={() => setAdjustOpen(true)}
+              title="Áp dụng % giảm/tăng so với giá niêm yết"
+            >
+              <Icon name="percent" size={14} className="mr-1" />
+              Theo %
+            </Button>
+            <Button
+              size="sm"
+              variant="outline"
+              onClick={() => setBulkAddOpen(true)}
+              title="Chọn nhóm hàng → nhập giá đồng loạt"
+            >
+              <Icon name="library_add" size={14} className="mr-1" />
+              Hàng loạt
+            </Button>
+            <Button size="sm" onClick={() => setAddOpen(true)}>
+              <Icon name="add" size={14} className="mr-1" />
+              Thêm SP
+            </Button>
+          </div>
         </div>
 
         {loading ? (
@@ -214,6 +238,32 @@ function PriceTierDetail({
           if (!o) setEditingItem(null);
         }}
         item={editingItem}
+        onSuccess={() => {
+          load();
+          onChange();
+        }}
+      />
+
+      {/* Sprint 3: Bulk add theo nhóm */}
+      <BulkAddPriceTierItemsDialog
+        open={bulkAddOpen}
+        onOpenChange={setBulkAddOpen}
+        tierId={tier.id}
+        tierName={tier.name}
+        tierScope={tier.scope}
+        onSuccess={() => {
+          load();
+          onChange();
+        }}
+      />
+
+      {/* Sprint 3: Adjust % so với giá niêm yết */}
+      <AdjustPriceTierPercentDialog
+        open={adjustOpen}
+        onOpenChange={setAdjustOpen}
+        tierId={tier.id}
+        tierName={tier.name}
+        tierScope={tier.scope}
         onSuccess={() => {
           load();
           onChange();
