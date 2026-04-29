@@ -4,6 +4,24 @@
 
 @custom-variant dark (&:is(.dark *));
 
+/* ============================================================
+ * FOUC fix cho Material Symbols icon font.
+ *
+ * Khi font CDN chưa load xong, các <Icon name="shopping_cart" />
+ * sẽ render text "shopping_cart" thô (vì font Material chưa apply
+ * ligature). Pattern này gây flicker 0.5s khi F5 trang.
+ *
+ * Layer protection trong layout.tsx:
+ *   1. font URL display=block (browser tự ẩn 3s timeout)
+ *   2. inline script add class .fonts-not-ready trước React mount,
+ *      remove khi document.fonts ready (fallback 3s timeout)
+ *   3. CSS rule dưới: hide .material-symbols-outlined khi class
+ *      .fonts-not-ready vẫn còn → guarantee zero raw text.
+ * ============================================================ */
+.fonts-not-ready .material-symbols-outlined {
+  visibility: hidden;
+}
+
 @theme inline {
   --color-background: var(--background);
   --color-foreground: var(--foreground);

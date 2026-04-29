@@ -50,7 +50,13 @@ export default function RootLayout({
         <PwaHead />
         {/* Material Symbols Outlined — icon system cho Stitch UI.
             Axes wght 100-700, FILL 0-1, opsz 20-48 cho phép tweak nét/fill
-            qua inline font-variation-settings ở component <Icon />. */}
+            qua inline font-variation-settings ở component <Icon />.
+
+            FOUC fix: dùng display=block (3s invisible timeout) thay vì swap
+            (hiển thị fallback font ngay → leak raw text "shopping_cart").
+            Plus add class 'fonts-not-ready' trên <html> trước khi React mount,
+            CSS hide .material-symbols-outlined cho đến khi document.fonts.ready
+            remove class. Tạo 3 layer defense: zero raw text leak. */}
         <link rel="preconnect" href="https://fonts.googleapis.com" />
         <link
           rel="preconnect"
@@ -59,7 +65,28 @@ export default function RootLayout({
         />
         <link
           rel="stylesheet"
-          href="https://fonts.googleapis.com/css2?family=Material+Symbols+Outlined:opsz,wght,FILL,GRAD@20..48,100..700,0..1,-50..200&display=swap"
+          href="https://fonts.googleapis.com/css2?family=Material+Symbols+Outlined:opsz,wght,FILL,GRAD@20..48,100..700,0..1,-50..200&display=block"
+        />
+        {/* Inline script trước React render — set class fonts-not-ready ngay
+            trên <html>, remove khi document.fonts ready. Đảm bảo CSS hide rule
+            apply ngay từ first paint, không chờ React. */}
+        <script
+          dangerouslySetInnerHTML={{
+            __html: `
+(function(){
+  var d=document.documentElement;
+  d.classList.add('fonts-not-ready');
+  if('fonts' in document){
+    Promise.race([
+      document.fonts.ready,
+      new Promise(function(r){setTimeout(r,3000);})
+    ]).then(function(){d.classList.remove('fonts-not-ready');});
+  } else {
+    setTimeout(function(){d.classList.remove('fonts-not-ready');},500);
+  }
+})();
+            `.trim(),
+          }}
         />
       </head>
       <body className="min-h-full flex flex-col font-sans">
