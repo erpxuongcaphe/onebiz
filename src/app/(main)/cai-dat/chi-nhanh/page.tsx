@@ -598,9 +598,34 @@ function BranchSettingsPageInner() {
                         priceTierId: !val || val === "__none__" ? "" : val,
                       }))
                     }
+                    // items prop để Base UI resolve UUID -> label, tránh hiện UUID
+                    // thô khi tier chưa load xong hoặc khi prefill edit mode.
+                    items={[
+                      {
+                        value: "__none__",
+                        label: "— Giá niêm yết (không áp tier) —",
+                      },
+                      ...tiers.map((t) => ({
+                        value: t.id,
+                        label: t.code ? `${t.name} (${t.code})` : t.name,
+                      })),
+                    ]}
                   >
                     <SelectTrigger id="branch-tier">
-                      <SelectValue placeholder="— Giá niêm yết —" />
+                      <SelectValue placeholder="— Giá niêm yết —">
+                        {(v) => {
+                          if (!v || v === "__none__") {
+                            return "— Giá niêm yết (không áp tier) —";
+                          }
+                          const match = tiers.find((t) => t.id === v);
+                          if (match) {
+                            return match.code
+                              ? `${match.name} (${match.code})`
+                              : match.name;
+                          }
+                          return "— Giá niêm yết —";
+                        }}
+                      </SelectValue>
                     </SelectTrigger>
                     <SelectContent>
                       <SelectItem value="__none__">
