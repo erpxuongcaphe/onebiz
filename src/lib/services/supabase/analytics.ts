@@ -307,7 +307,8 @@ export async function getRevenueByCategory(branchId?: string): Promise<CategoryR
   const { data, error } = await query;
 
   if (error) {
-    // Fallback: category join might not exist
+    // Log để dev debug — không silent swallow như trước
+    console.warn("[getRevenueByCategory]", error.message);
     return [];
   }
 
@@ -754,9 +755,44 @@ export async function getTopProductsByRevenue(limit: number = 10, branchId?: str
     .slice(0, limit);
 }
 
-export async function getCategoryDistribution(): Promise<{ name: string; value: number }[]> {
+/**
+ * Phân bổ SP theo category (cho chart Pie/Donut).
+ *
+ * @param branchId — nếu truyền: chỉ đếm SP có stock>0 ở branch đó
+ *   (qua `branch_inventory`). Nếu không: đếm toàn tenant (overview).
+ *
+ * Trước đây không nhận branchId → owner mở /phan-tich/kho ở quán FnB
+ * vẫn thấy SP của xưởng rang + kho tổng → confused.
+ */
+export async function getCategoryDistribution(
+  branchId?: string,
+): Promise<{ name: string; value: number }[]> {
   const supabase = getClient();
   const tenantId = await getCurrentTenantId();
+
+  // Nếu có branchId: chỉ lấy SP có stock>0 ở branch đó qua branch_inventory.
+  // Nếu không có: count toàn bộ active products của tenant.
+  if (branchId) {
+    const { data, error } = await supabase
+      .from("branch_inventory")
+      .select("stock, products!inner(category_id, categories(name))")
+      .eq("branch_id", branchId)
+      .eq("tenant_id", tenantId)
+      .gt("stock", 0);
+
+    if (error) {
+      console.warn("[getCategoryDistribution branch]", error.message);
+      return [];
+    }
+    const map = new Map<string, number>();
+    (data ?? []).forEach((row: Record<string, unknown>) => {
+      const products = row.products as Record<string, unknown> | null;
+      const cat = products?.categories as { name: string } | null;
+      const name = cat?.name ?? "Chưa phân loại";
+      map.set(name, (map.get(name) ?? 0) + 1);
+    });
+    return Array.from(map.entries()).map(([name, value]) => ({ name, value }));
+  }
 
   const { data, error } = await supabase
     .from("products")
@@ -764,7 +800,10 @@ export async function getCategoryDistribution(): Promise<{ name: string; value: 
     .eq("tenant_id", tenantId)
     .eq("is_active", true);
 
-  if (error) return [];
+  if (error) {
+    console.warn("[getCategoryDistribution]", error.message);
+    return [];
+  }
 
   const map = new Map<string, number>();
   (data ?? []).forEach((p: Record<string, unknown>) => {
