@@ -2,22 +2,32 @@ export function formatCurrency(amount: number): string {
   return new Intl.NumberFormat("vi-VN").format(amount);
 }
 
-export function formatDate(date: string | Date): string {
+export function formatDate(date: string | Date | null | undefined): string {
+  // Guard: empty string, null, undefined → "—" (em-dash placeholder).
+  // Trước đây new Date("") → Invalid Date → Intl.DateTimeFormat.format throws
+  // RangeError → crash toàn bộ page (vd /hang-hoa/dat-hang-nhap khi PO chưa
+  // có expected_date thì mapping "" → formatDate("") crash).
+  if (date == null || date === "") return "—";
+  const d = date instanceof Date ? date : new Date(date);
+  if (isNaN(d.getTime())) return "—";
   return new Intl.DateTimeFormat("vi-VN", {
     day: "2-digit",
     month: "2-digit",
     year: "numeric",
     hour: "2-digit",
     minute: "2-digit",
-  }).format(new Date(date));
+  }).format(d);
 }
 
-export function formatShortDate(date: string | Date): string {
+export function formatShortDate(date: string | Date | null | undefined): string {
+  if (date == null || date === "") return "—";
+  const d = date instanceof Date ? date : new Date(date);
+  if (isNaN(d.getTime())) return "—";
   return new Intl.DateTimeFormat("vi-VN", {
     day: "2-digit",
     month: "2-digit",
     year: "numeric",
-  }).format(new Date(date));
+  }).format(d);
 }
 
 /**
