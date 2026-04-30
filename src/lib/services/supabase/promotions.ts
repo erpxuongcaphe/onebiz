@@ -266,6 +266,42 @@ export async function getPromotionSettings(): Promise<PromotionSettings> {
 }
 
 /**
+ * KM-4: Sau khi POS checkout xong → tag promotion vào invoice.
+ *
+ * POS Retail tích hợp 3 field này vào posCheckout payload trực tiếp
+ * (atomic). FnB dùng RPC fnb_complete_payment_atomic không nhận field
+ * mới → cần helper update sau. Không atomic, nhưng acceptable vì:
+ *   - usage_count đã tăng đúng ở KM-2 (atomic)
+ *   - discount đã apply vào invoice.discount_amount rồi
+ *   - Chỉ là metadata cho báo cáo (KM-4 page) — fail = không count vào
+ *     báo cáo, nhưng invoice + thanh toán không bị ảnh hưởng.
+ */
+export async function tagInvoicePromotion(input: {
+  invoiceId: string;
+  promotionId: string;
+  promotionDiscount: number;
+  promotionFreeValue: number;
+}): Promise<void> {
+  const supabase = getClient();
+  const tenantId = await getCurrentTenantId();
+
+  const { error } = await supabase
+    .from("invoices")
+    .update({
+      promotion_id: input.promotionId,
+      promotion_discount: input.promotionDiscount,
+      promotion_free_value: input.promotionFreeValue,
+    })
+    .eq("tenant_id", tenantId)
+    .eq("id", input.invoiceId);
+
+  if (error) {
+    // Không throw — báo cáo fail nhưng checkout vẫn ok
+    console.warn("tagInvoicePromotion failed:", error);
+  }
+}
+
+/**
  * Upsert cài đặt khuyến mãi (insert nếu chưa có row, update nếu có).
  * Dùng `onConflict: tenant_id` để idempotent — gọi nhiều lần không sao.
  */

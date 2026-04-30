@@ -852,6 +852,14 @@ function PosPageInner() {
           paid,
           note: state.note || "",
           shiftId: currentShift?.id ?? null,
+          // KM-4: track promotion áp dụng
+          promotionId: appliedPromotion?.promotion.id ?? null,
+          promotionDiscount: appliedPromotion?.discountAmount ?? 0,
+          promotionFreeValue:
+            appliedPromotion?.freeItems?.reduce(
+              (s, f) => s + f.quantity * f.unitPrice,
+              0,
+            ) ?? 0,
         };
         const result = await offlinePosCheckout(input, networkStatus.isOnline);
         invoiceCode = result.invoiceCode;

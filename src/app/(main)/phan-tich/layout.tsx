@@ -24,6 +24,7 @@ const analyticsNav: ModuleNavGroup[] = [
       { label: "F&B", href: "/phan-tich/fnb", icon: "local_cafe" },
       { label: "Đặt hàng", href: "/phan-tich/dat-hang", icon: "assignment" },
       { label: "Kênh bán", href: "/phan-tich/kenh-ban", icon: "public" },
+      { label: "Khuyến mãi", href: "/phan-tich/khuyen-mai", icon: "redeem" },
     ],
   },
   {

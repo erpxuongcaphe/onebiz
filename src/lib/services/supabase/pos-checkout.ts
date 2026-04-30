@@ -59,6 +59,12 @@ export interface PosCheckoutInput {
    * `shift_id` để báo cáo X/Z của ca tính đúng (không trộn với ca khác).
    */
   shiftId?: string | null;
+  /** KM-4: promotion áp dụng cho hoá đơn — null = không có KM. */
+  promotionId?: string | null;
+  /** KM-4: số tiền giảm bởi KM (đã loại line + manual order discount). */
+  promotionDiscount?: number;
+  /** KM-4: trị giá hàng tặng kèm (sum freeItems × unitPrice). */
+  promotionFreeValue?: number;
 }
 
 export interface PosCheckoutResult {
@@ -318,6 +324,10 @@ export async function posCheckout(input: PosCheckoutInput): Promise<PosCheckoutR
     note: input.note ?? null,
     created_by: input.createdBy,
     shift_id: input.shiftId ?? null,
+    // KM-4: track promotion áp dụng — báo cáo hiệu quả KM
+    promotion_id: input.promotionId ?? null,
+    promotion_discount: input.promotionDiscount ?? 0,
+    promotion_free_value: input.promotionFreeValue ?? 0,
   } satisfies InvoiceInsert;
 
   const { data: invoice, error: invoiceError } = await supabase

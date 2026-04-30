@@ -539,6 +539,10 @@ export interface Database {
           voided_at: string | null;
           voided_by: string | null;
           shift_id: string | null;
+          // KM-4 (00044) — track promotion áp vào invoice
+          promotion_id: string | null;
+          promotion_discount: number;
+          promotion_free_value: number;
         };
         Insert: {
           id?: string;
@@ -563,6 +567,9 @@ export interface Database {
           platform_commission?: number;
           discount_type?: "fixed" | "percent";
           discount_percent?: number;
+          promotion_id?: string | null;
+          promotion_discount?: number;
+          promotion_free_value?: number;
         };
         Update: {
           status?: "draft" | "confirmed" | "completed" | "cancelled";
@@ -581,6 +588,9 @@ export interface Database {
           void_reason?: string | null;
           voided_at?: string | null;
           voided_by?: string | null;
+          promotion_id?: string | null;
+          promotion_discount?: number;
+          promotion_free_value?: number;
         };
         Relationships: [
           {

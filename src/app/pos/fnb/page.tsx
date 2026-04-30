@@ -13,6 +13,7 @@ import {
   incrementPromotionUsage,
   type AppliedPromotion,
 } from "@/lib/services/supabase/promotion-engine";
+import { tagInvoicePromotion } from "@/lib/services/supabase/promotions";
 import { fnbPayment } from "@/lib/services/supabase/fnb-checkout";
 import { getTablesByBranch, markTableAvailable } from "@/lib/services/supabase/fnb-tables";
 import {
@@ -903,11 +904,25 @@ function FnbPosPageInner() {
         }
 
         // KM-2: Tăng usage_count atomic — chỉ khi online
+        // KM-4: Tag invoice với promotion_id để báo cáo hiệu quả KM
         if (networkStatus.isOnline && appliedPromotion?.promotion.id) {
           try {
             await incrementPromotionUsage(appliedPromotion.promotion.id);
           } catch (err) {
             console.warn("incrementPromotionUsage failed:", err);
+          }
+          if (payResult.invoiceId) {
+            const freeValue =
+              appliedPromotion.freeItems?.reduce(
+                (s, f) => s + f.quantity * f.unitPrice,
+                0,
+              ) ?? 0;
+            tagInvoicePromotion({
+              invoiceId: payResult.invoiceId,
+              promotionId: appliedPromotion.promotion.id,
+              promotionDiscount: appliedPromotion.discountAmount,
+              promotionFreeValue: freeValue,
+            }).catch(() => {});
           }
         }
 
