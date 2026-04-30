@@ -3,6 +3,12 @@
  *
  * recordInvoicePayment()  → KH trả nợ hóa đơn (phiếu thu + update invoice.paid/debt + customer.debt)
  * recordPurchasePayment() → Trả nợ NCC (phiếu chi + update PO.paid/debt + supplier.debt)
+ *
+ * Sprint SỔ-QUỸ-2: chuyển sang gọi Postgres RPC atomic (migration 00046).
+ * Trước đây client chạy 4 step không atomic → fail giữa chừng → cash đã
+ * ghi mà debt chưa giảm → công nợ ảo.
+ *
+ * Fallback: nếu RPC chưa migrate (404), tự động chạy code 4-step cũ.
  */
 
 import { getClient, getCurrentContext, handleError } from "./base";
@@ -15,7 +21,7 @@ export interface RecordPaymentInput {
   /** invoice or purchase_order ID */
   referenceId: string;
   amount: number;
-  paymentMethod: "cash" | "transfer" | "card";
+  paymentMethod: "cash" | "transfer" | "card" | "ewallet";
   note?: string;
 }
 
@@ -39,6 +45,41 @@ export async function recordInvoicePayment(
 ): Promise<RecordPaymentResult> {
   const supabase = getClient();
   const ctx = await getCurrentContext();
+
+  // Try atomic RPC (migration 00046) trước. Nếu chưa migrate → fall back
+  // 4-step legacy (không atomic).
+  // RPC names cast as never vì supabase generated types chưa biết RPC mới.
+  try {
+    const { data, error } = await supabase.rpc(
+      "record_invoice_payment" as never,
+      {
+        p_invoice_id: input.referenceId,
+        p_amount: input.amount,
+        p_payment_method: input.paymentMethod,
+        p_note: input.note ?? null,
+        p_branch_id: ctx.branchId,
+        p_user_id: ctx.userId,
+      } as never,
+    );
+    if (!error && data) {
+      const r = data as unknown as Record<string, unknown>;
+      return {
+        cashTransactionId: r.cash_transaction_id as string,
+        cashCode: r.cash_code as string,
+        newPaid: Number(r.new_paid ?? 0),
+        newDebt: Number(r.new_debt ?? 0),
+      };
+    }
+    // RPC chưa tồn tại (PGRST202 hoặc 404) — fall back legacy
+    if (error && !/(does not exist|404|PGRST202)/i.test(error.message)) {
+      handleError(error, "recordInvoicePayment.rpc");
+    }
+  } catch (err) {
+    console.warn(
+      "[recordInvoicePayment] RPC unavailable, falling back to 4-step:",
+      err,
+    );
+  }
 
   // 1. Fetch invoice current state (filter tenant defense)
   const { data: inv, error: fetchErr } = await supabase
@@ -80,7 +121,10 @@ export async function recordInvoicePayment(
     category: "Thu nợ khách hàng",
     amount: input.amount,
     counterparty: inv.customer_name,
-    payment_method: input.paymentMethod,
+    // Cast vì DB types chưa biết "ewallet" (migration 00046 mở rộng enum).
+    // RPC path đã bypass type check; legacy path vẫn cần cast.
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    payment_method: input.paymentMethod as any,
     reference_type: "invoice",
     reference_id: inv.id,
     note: input.note || `Thu nợ hóa đơn ${inv.code}`,
@@ -144,6 +188,38 @@ export async function recordPurchasePayment(
   const supabase = getClient();
   const ctx = await getCurrentContext();
 
+  // Try atomic RPC (migration 00046)
+  try {
+    const { data, error } = await supabase.rpc(
+      "record_purchase_payment" as never,
+      {
+        p_purchase_order_id: input.referenceId,
+        p_amount: input.amount,
+        p_payment_method: input.paymentMethod,
+        p_note: input.note ?? null,
+        p_branch_id: ctx.branchId,
+        p_user_id: ctx.userId,
+      } as never,
+    );
+    if (!error && data) {
+      const r = data as unknown as Record<string, unknown>;
+      return {
+        cashTransactionId: r.cash_transaction_id as string,
+        cashCode: r.cash_code as string,
+        newPaid: Number(r.new_paid ?? 0),
+        newDebt: Number(r.new_debt ?? 0),
+      };
+    }
+    if (error && !/(does not exist|404|PGRST202)/i.test(error.message)) {
+      handleError(error, "recordPurchasePayment.rpc");
+    }
+  } catch (err) {
+    console.warn(
+      "[recordPurchasePayment] RPC unavailable, falling back to 4-step:",
+      err,
+    );
+  }
+
   // 1. Fetch PO current state (filter tenant defense)
   const { data: po, error: fetchErr } = await supabase
     .from("purchase_orders")
@@ -184,7 +260,10 @@ export async function recordPurchasePayment(
     category: "Trả nợ nhà cung cấp",
     amount: input.amount,
     counterparty: po.supplier_name,
-    payment_method: input.paymentMethod,
+    // Cast vì DB types chưa biết "ewallet" (migration 00046 mở rộng enum).
+    // RPC path đã bypass type check; legacy path vẫn cần cast.
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    payment_method: input.paymentMethod as any,
     reference_type: "purchase_order",
     reference_id: po.id,
     note: input.note || `Trả nợ đơn nhập hàng ${po.code}`,

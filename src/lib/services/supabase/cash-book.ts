@@ -212,18 +212,23 @@ export async function createCashTransaction(tx: Partial<CashTransaction>): Promi
 }
 
 /**
- * Xóa phiếu thu/chi.
+ * Hủy phiếu thu/chi.
  *
- * ⚠️ CẢNH BÁO: nếu phiếu có `reference_id` (link tới invoice/PO), việc
- * xóa CHỈ remove cash entry — KHÔNG đảo lại debt KH/NCC. Để fix đúng
- * cần atomic RPC reverse debt — sẽ làm ở Sprint SỔ-QUỸ-2 (cần migration).
+ * Sprint SỔ-QUỸ-2: nếu phiếu có reference_id (gắn invoice/PO), gọi RPC
+ * `cancel_cash_transaction` (migration 00046) để ATOMIC đảo lại
+ * invoice/PO.paid/debt + customer/supplier.debt. Phiếu chỉ chuyển sang
+ * status='cancelled' (giữ audit trail), KHÔNG hard delete.
+ *
+ * Nếu phiếu không có reference (phiếu thu/chi tự do) hoặc RPC chưa
+ * migrate → fall back hard delete (legacy behavior, có warn).
  */
 export async function deleteCashTransaction(id: string): Promise<void> {
   const supabase = getClient();
   const tenantId = await getCurrentTenantId();
 
-  // Snapshot best-effort cho audit log
+  // Snapshot best-effort cho audit log + check reference
   let oldRow: Record<string, unknown> | null = null;
+  let referenceType: string | null = null;
   try {
     const res = await supabase
       .from("cash_transactions")
@@ -232,10 +237,44 @@ export async function deleteCashTransaction(id: string): Promise<void> {
       .eq("id", id)
       .maybeSingle();
     oldRow = (res?.data as Record<string, unknown> | null) ?? null;
+    referenceType = (oldRow?.reference_type as string | null) ?? null;
   } catch {
     /* snapshot optional */
   }
 
+  // Nếu phiếu gắn reference → ưu tiên cancel RPC (atomic reverse debt)
+  if (referenceType === "invoice" || referenceType === "purchase_order") {
+    try {
+      const { error: rpcErr } = await supabase.rpc(
+        "cancel_cash_transaction" as never,
+        {
+          p_cash_id: id,
+          p_reason: "Hủy từ UI sổ quỹ",
+        } as never,
+      );
+      if (!rpcErr) {
+        await recordAuditLog({
+          entityType: "cash_transaction",
+          entityId: id,
+          action: "cancel",
+          oldData: oldRow ?? null,
+          newData: { status: "cancelled" },
+        });
+        return;
+      }
+      // RPC chưa migrate → fall through hard delete với warning
+      if (!/(does not exist|404|PGRST202)/i.test(rpcErr.message)) {
+        handleError(rpcErr, "deleteCashTransaction.cancel_rpc");
+      }
+      console.warn(
+        "[deleteCashTransaction] cancel RPC unavailable; hard-deleting phiếu có reference — debt KHÔNG được đảo!",
+      );
+    } catch (err) {
+      console.warn("[deleteCashTransaction] cancel RPC error:", err);
+    }
+  }
+
+  // Hard delete (phiếu tự do hoặc fallback)
   const { error } = await supabase
     .from("cash_transactions")
     .delete()
