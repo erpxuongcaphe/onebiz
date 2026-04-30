@@ -20,6 +20,8 @@ export interface Customer {
   branchId?: string;
   /** Bảng giá B2B mặc định áp dụng khi KH này check out POS Retail. */
   priceTierId?: string;
+  /** L-3: Số điểm tích lũy hiện tại — POS dùng để hiển thị + redeem. */
+  loyaltyPoints?: number;
   createdAt: string;
 }
 

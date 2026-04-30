@@ -2883,6 +2883,14 @@ export interface Database {
         };
         Returns: number;
       };
+      redeem_loyalty_points: {
+        Args: {
+          p_customer_id: string;
+          p_points: number;
+          p_invoice_id: string;
+        };
+        Returns: number;
+      };
       next_group_code: {
         Args: {
           p_tenant_id: string;

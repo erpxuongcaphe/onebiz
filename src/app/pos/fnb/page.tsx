@@ -14,7 +14,12 @@ import {
   type AppliedPromotion,
 } from "@/lib/services/supabase/promotion-engine";
 import { tagInvoicePromotion } from "@/lib/services/supabase/promotions";
-import { earnLoyaltyPoints, getLoyaltySettings } from "@/lib/services/supabase/loyalty";
+import {
+  earnLoyaltyPoints,
+  getLoyaltySettings,
+  redeemLoyaltyPoints,
+  calculateRedeemDiscount,
+} from "@/lib/services/supabase/loyalty";
 import { fnbPayment } from "@/lib/services/supabase/fnb-checkout";
 import { getTablesByBranch, markTableAvailable } from "@/lib/services/supabase/fnb-tables";
 import {

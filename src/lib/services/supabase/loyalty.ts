@@ -261,3 +261,65 @@ export async function earnLoyaltyPoints(
   if (error) handleError(error, "earnLoyaltyPoints");
   return data as number;
 }
+
+/**
+ * L-3: Đổi điểm lấy giảm giá (gọi RPC redeem_loyalty_points).
+ *
+ * Atomic decrement points + log loyalty_transactions. Discount amount
+ * client tính trước qua calculateRedeemDiscount() — server chỉ trừ điểm.
+ *
+ * Trả về số điểm còn lại sau khi đổi. Throw nếu KH không đủ điểm.
+ */
+export async function redeemLoyaltyPoints(
+  customerId: string,
+  points: number,
+  invoiceId: string,
+): Promise<number> {
+  const supabase = getClient();
+
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  const { data, error } = await (supabase.rpc as any)("redeem_loyalty_points", {
+    p_customer_id: customerId,
+    p_points: points,
+    p_invoice_id: invoiceId,
+  });
+
+  if (error) handleError(error, "redeemLoyaltyPoints");
+  return data as number;
+}
+
+/**
+ * L-3: Pure helper — tính discount amount từ số điểm muốn đổi + settings.
+ *
+ *   discount = floor(points / redemptionPoints) × redemptionValue
+ *   capped by orderTotal × maxRedemptionPercent / 100
+ *
+ * Returns:
+ *   - discountAmount: VND giảm cuối cùng (đã cap)
+ *   - effectivePoints: số điểm sẽ thực sự bị trừ (= multiple của
+ *     redemptionPoints để tránh thừa, vd KH nhập 150 nhưng redeem step
+ *     là 100 → effective = 100 → discount = 1 × 10000 = 10000đ).
+ */
+export function calculateRedeemDiscount(
+  points: number,
+  settings: Pick<LoyaltySettings, "redemptionPoints" | "redemptionValue" | "maxRedemptionPercent">,
+  orderTotal: number,
+): { discountAmount: number; effectivePoints: number } {
+  if (points <= 0 || settings.redemptionPoints <= 0) {
+    return { discountAmount: 0, effectivePoints: 0 };
+  }
+  const units = Math.floor(points / settings.redemptionPoints);
+  if (units === 0) return { discountAmount: 0, effectivePoints: 0 };
+
+  const rawDiscount = units * settings.redemptionValue;
+  const cap = Math.floor((orderTotal * settings.maxRedemptionPercent) / 100);
+  const discountAmount = Math.min(rawDiscount, cap);
+  // Tính lại effectivePoints theo discount (sau cap) để KH không bị trừ thừa
+  const effectiveUnits =
+    settings.redemptionValue > 0
+      ? Math.ceil(discountAmount / settings.redemptionValue)
+      : 0;
+  const effectivePoints = effectiveUnits * settings.redemptionPoints;
+
+  return { discountAmount, effectivePoints };
+}

@@ -46,6 +46,14 @@ import { useSettings } from "@/lib/contexts/settings-context";
 import { getOpenShift, openShift, closeShift } from "@/lib/services/supabase/shifts";
 import type { Shift } from "@/lib/types/shift";
 import { OpenShiftDialog, CloseShiftDialog } from "./fnb/components/shift-dialog";
+import {
+  Dialog,
+  DialogContent,
+  DialogHeader,
+  DialogTitle,
+  DialogFooter,
+} from "@/components/ui/dialog";
+import { Button } from "@/components/ui/button";
 
 import { usePosState, type OrderLine, type DiscountInput, type SellingMode, type DeliveryInfo, type PosSnapshot } from "./hooks/use-pos-state";
 import { ProductGrid } from "./components/product-grid";
@@ -62,7 +70,13 @@ import {
   incrementPromotionUsage,
   type AppliedPromotion,
 } from "@/lib/services/supabase/promotion-engine";
-import { earnLoyaltyPoints, getLoyaltySettings } from "@/lib/services/supabase/loyalty";
+import {
+  earnLoyaltyPoints,
+  getLoyaltySettings,
+  redeemLoyaltyPoints,
+  calculateRedeemDiscount,
+} from "@/lib/services/supabase/loyalty";
+import type { LoyaltySettings } from "@/lib/types";
 import type { Product, ProductVariant } from "@/lib/types";
 
 // Reuse FnB offline bar/drawer — both are generic over NetworkStatus.
@@ -731,8 +745,109 @@ function PosPageInner() {
   function clearAppliedPromotion() {
     setAppliedPromotion(null);
     setPromotionCleared(true);
-    state.setOrderDiscount({ mode: "amount", value: 0 });
+    // Khi clear promotion, giữ redeem nếu có. setOrderDiscount = redeem only.
+    state.setOrderDiscount({ mode: "amount", value: appliedRedeem?.discountAmount ?? 0 });
   }
+
+  // ============================================================
+  // L-3: Redeem loyalty points
+  // ============================================================
+  const [loyaltySettings, setLoyaltySettings] = useState<LoyaltySettings | null>(null);
+  const [appliedRedeem, setAppliedRedeem] = useState<{
+    points: number;
+    discountAmount: number;
+  } | null>(null);
+  const [redeemDialogOpen, setRedeemDialogOpen] = useState(false);
+  const [redeemInput, setRedeemInput] = useState("");
+
+  // Lazy load loyalty settings 1 lần (cached)
+  useEffect(() => {
+    let cancelled = false;
+    getLoyaltySettings()
+      .then((s) => {
+        if (!cancelled) setLoyaltySettings(s);
+      })
+      .catch(() => {});
+    return () => {
+      cancelled = true;
+    };
+  }, []);
+
+  // Khi customer thay đổi hoặc cart rỗng → reset redeem
+  useEffect(() => {
+    if (!state.customer?.id || state.lines.length === 0) {
+      if (appliedRedeem) {
+        setAppliedRedeem(null);
+        // Restore promotion-only discount nếu có
+        state.setOrderDiscount({
+          mode: "amount",
+          value: appliedPromotion?.discountAmount ?? 0,
+        });
+      }
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [state.customer?.id, state.lines.length]);
+
+  function clearAppliedRedeem() {
+    setAppliedRedeem(null);
+    state.setOrderDiscount({
+      mode: "amount",
+      value: appliedPromotion?.discountAmount ?? 0,
+    });
+  }
+
+  function handleApplyRedeem() {
+    if (!loyaltySettings || !state.customer?.id) return;
+    const requestedPoints = Number(redeemInput) || 0;
+    const customerPoints = state.customer.loyaltyPoints ?? 0;
+    if (requestedPoints <= 0) {
+      toast({ title: "Số điểm phải lớn hơn 0", variant: "error" });
+      return;
+    }
+    if (requestedPoints > customerPoints) {
+      toast({
+        title: "Khách không đủ điểm",
+        description: `KH chỉ có ${customerPoints} điểm`,
+        variant: "error",
+      });
+      return;
+    }
+    const { discountAmount, effectivePoints } = calculateRedeemDiscount(
+      requestedPoints,
+      loyaltySettings,
+      state.subtotal,
+    );
+    if (discountAmount === 0) {
+      toast({
+        title: "Không đủ điểm để đổi",
+        description: `Cần tối thiểu ${loyaltySettings.redemptionPoints} điểm để đổi`,
+        variant: "warning",
+      });
+      return;
+    }
+    setAppliedRedeem({ points: effectivePoints, discountAmount });
+    // Stack với promotion: tổng discount = promo + redeem
+    state.setOrderDiscount({
+      mode: "amount",
+      value: (appliedPromotion?.discountAmount ?? 0) + discountAmount,
+    });
+    setRedeemDialogOpen(false);
+    setRedeemInput("");
+    toast({
+      title: `Đã đổi ${effectivePoints} điểm`,
+      description: `Giảm ${discountAmount.toLocaleString("vi-VN")}đ`,
+      variant: "success",
+    });
+  }
+
+  // Khi promotion thay đổi → recalc combined discount
+  useEffect(() => {
+    if (!appliedRedeem) return;
+    const totalDiscount =
+      (appliedPromotion?.discountAmount ?? 0) + appliedRedeem.discountAmount;
+    state.setOrderDiscount({ mode: "amount", value: totalDiscount });
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [appliedPromotion?.discountAmount, appliedRedeem?.discountAmount]);
 
   // ============================================================
   // Handlers
@@ -907,6 +1022,24 @@ function PosPageInner() {
         }
       }
 
+      // L-3: Redeem points TRƯỚC khi earn — vì earn dựa trên total
+      // sau discount, redeem decrement điểm cũ. Order: redeem (trừ điểm
+      // dùng) → earn (cộng điểm mới của hoá đơn này).
+      if (!isOfflineCheckout && appliedRedeem && state.customer?.id && invoiceId) {
+        const customerId = state.customer.id;
+        const points = appliedRedeem.points;
+        try {
+          const newBalance = await redeemLoyaltyPoints(customerId, points, invoiceId);
+          toast({
+            title: `Đã trừ ${points} điểm`,
+            description: `Số dư: ${newBalance} điểm`,
+            variant: "info",
+          });
+        } catch (err) {
+          console.warn("redeemLoyaltyPoints failed:", err);
+        }
+      }
+
       // L-2: Tích điểm cho KH có account — chỉ khi online + có customer.id +
       // loyalty enabled. Background fire (không block checkout).
       if (!isOfflineCheckout && state.customer?.id && invoiceId) {
@@ -945,6 +1078,7 @@ function PosPageInner() {
       state.clearCart();
       setAppliedPromotion(null);
       setPromotionCleared(false);
+      setAppliedRedeem(null);
       setSearchQuery("");
       setMobileCartOpen(false);
     } catch (err: any) {
@@ -953,7 +1087,7 @@ function PosPageInner() {
       setSubmitting(null);
       submitLockRef.current = false;
     }
-  }, [state, toast, autoPrint, networkStatus.isOnline, currentShift, appliedPromotion]);
+  }, [state, toast, autoPrint, networkStatus.isOnline, currentShift, appliedPromotion, appliedRedeem]);
 
   const handleDebtCheckout = useCallback(async () => {
     if (submitLockRef.current) return;
@@ -1189,6 +1323,47 @@ function PosPageInner() {
             </button>
           </div>
         )}
+
+        {/* L-3: Badge đổi điểm + button mở dialog */}
+        {state.customer?.id &&
+          loyaltySettings?.isEnabled &&
+          (state.customer.loyaltyPoints ?? 0) > 0 && (
+            <>
+              {appliedRedeem ? (
+                <div
+                  className="hidden md:flex items-center gap-1 shrink-0 px-2 py-0.5 rounded-md bg-status-info/20 text-white text-[11px] font-medium border border-status-info/40"
+                  title={`Đã đổi ${appliedRedeem.points} điểm → -${appliedRedeem.discountAmount.toLocaleString("vi-VN")}đ`}
+                >
+                  <Icon name="star" size={12} />
+                  <span>
+                    -{appliedRedeem.points}đ điểm = -
+                    {appliedRedeem.discountAmount.toLocaleString("vi-VN")}đ
+                  </span>
+                  <button
+                    type="button"
+                    onClick={clearAppliedRedeem}
+                    className="ml-0.5 hover:bg-white/20 rounded-full p-0.5 transition-colors"
+                    title="Bỏ đổi điểm"
+                  >
+                    <Icon name="close" size={11} />
+                  </button>
+                </div>
+              ) : (
+                <button
+                  type="button"
+                  onClick={() => {
+                    setRedeemInput(String(state.customer?.loyaltyPoints ?? 0));
+                    setRedeemDialogOpen(true);
+                  }}
+                  className="hidden md:flex items-center gap-1 shrink-0 px-2 py-0.5 rounded-md bg-white/10 hover:bg-white/20 text-white text-[11px] font-medium border border-white/20 transition-colors"
+                  title={`KH có ${state.customer.loyaltyPoints} điểm`}
+                >
+                  <Icon name="star" size={12} />
+                  <span>Dùng điểm ({state.customer.loyaltyPoints})</span>
+                </button>
+              )}
+            </>
+          )}
 
         {/* Search bar */}
         <div className="flex-1 max-w-lg mx-auto">
@@ -2175,6 +2350,90 @@ function PosPageInner() {
           onConfirm={handleCloseShift}
         />
       )}
+
+      {/* L-3: Dialog đổi điểm tích lũy */}
+      <Dialog open={redeemDialogOpen} onOpenChange={setRedeemDialogOpen}>
+        <DialogContent className="sm:max-w-md">
+          <DialogHeader>
+            <DialogTitle>Đổi điểm tích lũy</DialogTitle>
+          </DialogHeader>
+          <div className="grid gap-4 py-2">
+            {state.customer && loyaltySettings && (
+              <div className="rounded-lg bg-status-info/10 p-3 space-y-1 text-sm">
+                <div>
+                  <span className="text-muted-foreground">Khách: </span>
+                  <strong>{state.customer.name}</strong>
+                </div>
+                <div>
+                  <span className="text-muted-foreground">Số điểm hiện có: </span>
+                  <strong className="text-status-info">
+                    {(state.customer.loyaltyPoints ?? 0).toLocaleString("vi-VN")} điểm
+                  </strong>
+                </div>
+                <div className="text-xs text-muted-foreground">
+                  Quy đổi: {loyaltySettings.redemptionPoints} điểm ={" "}
+                  {loyaltySettings.redemptionValue.toLocaleString("vi-VN")}đ — tối đa{" "}
+                  {loyaltySettings.maxRedemptionPercent}% giá trị đơn
+                </div>
+              </div>
+            )}
+
+            <div className="space-y-1.5">
+              <label className="text-sm font-medium">Số điểm muốn đổi</label>
+              <input
+                type="number"
+                value={redeemInput}
+                onChange={(e) => setRedeemInput(e.target.value)}
+                className="flex h-10 w-full rounded-lg border border-input bg-transparent px-3 text-sm transition-colors outline-none focus-visible:border-ring focus-visible:ring-3 focus-visible:ring-ring/50"
+                placeholder="Nhập số điểm"
+                min={0}
+                max={state.customer?.loyaltyPoints ?? 0}
+              />
+            </div>
+
+            {/* Preview discount */}
+            {(() => {
+              if (!loyaltySettings || !redeemInput) return null;
+              const inputPoints = Number(redeemInput) || 0;
+              const preview = calculateRedeemDiscount(
+                inputPoints,
+                loyaltySettings,
+                state.subtotal,
+              );
+              if (preview.discountAmount === 0) {
+                return (
+                  <div className="text-xs text-status-warning">
+                    Không đủ điểm để đổi (cần tối thiểu {loyaltySettings.redemptionPoints} điểm)
+                  </div>
+                );
+              }
+              return (
+                <div className="rounded-lg bg-status-success/10 p-3 space-y-0.5 text-sm">
+                  <div>
+                    <span className="text-muted-foreground">Sẽ trừ: </span>
+                    <strong>{preview.effectivePoints.toLocaleString("vi-VN")} điểm</strong>
+                  </div>
+                  <div>
+                    <span className="text-muted-foreground">Giảm: </span>
+                    <strong className="text-status-success">
+                      {preview.discountAmount.toLocaleString("vi-VN")}đ
+                    </strong>
+                  </div>
+                </div>
+              );
+            })()}
+          </div>
+          <DialogFooter>
+            <Button variant="outline" onClick={() => setRedeemDialogOpen(false)}>
+              Hủy
+            </Button>
+            <Button onClick={handleApplyRedeem}>
+              <Icon name="check" size={16} className="mr-1.5" />
+              Áp dụng
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
     </>
   );
 }

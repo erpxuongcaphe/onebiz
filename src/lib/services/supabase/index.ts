@@ -74,7 +74,18 @@ export {
   upsertPromotionSettings,
   tagInvoicePromotion,
 } from "./promotions";
-export { getLoyaltySettings, upsertLoyaltySettings, getLoyaltyTiers, createLoyaltyTier, updateLoyaltyTier, deleteLoyaltyTier, getLoyaltyTransactions, earnLoyaltyPoints } from "./loyalty";
+export {
+  getLoyaltySettings,
+  upsertLoyaltySettings,
+  getLoyaltyTiers,
+  createLoyaltyTier,
+  updateLoyaltyTier,
+  deleteLoyaltyTier,
+  getLoyaltyTransactions,
+  earnLoyaltyPoints,
+  redeemLoyaltyPoints,
+  calculateRedeemDiscount,
+} from "./loyalty";
 export { getOnlineOrders, getOnlineOrderById, updateOnlineOrderStatus, updateOnlineOrderPaymentStatus, getOnlineOrderStats } from "./online-orders";
 export { getConversations, getConversationMessages, sendMessage, markConversationRead } from "./conversations";
 export { getDashboardKpis, getRevenueByDay, getRevenueByHour, getRevenueByWeekday, getOrdersByWeekday, getTopProducts, getLowStockProducts, getRecentActivities } from "./dashboard";

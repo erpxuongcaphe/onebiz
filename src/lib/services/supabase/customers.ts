@@ -216,6 +216,7 @@ function mapCustomer(row: any): Customer {
     type: row.customer_type,
     gender: row.gender ?? undefined,
     priceTierId: row.price_tier_id ?? undefined,
+    loyaltyPoints: typeof row.loyalty_points === "number" ? row.loyalty_points : 0,
     createdAt: row.created_at,
   };
 }
