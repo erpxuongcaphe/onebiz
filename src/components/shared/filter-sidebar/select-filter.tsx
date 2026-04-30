@@ -16,18 +16,21 @@ interface SelectFilterProps {
 }
 
 /**
- * SelectFilter — wrap Radix Select cho FilterSidebar.
+ * SelectFilter — wrap Base UI Select cho FilterSidebar.
  *
- * Bug từng có (commit ec97f17 miss): khi value = UUID nhưng options chưa
- * load (race condition: branches fetch async sau mount, branchFilter
- * init từ activeBranchId UUID) → SelectValue render UUID raw.
+ * Bug từng có: khi value = UUID nhưng options chưa load (race condition:
+ * branches fetch async sau mount, branchFilter init từ activeBranchId UUID)
+ * → SelectValue render UUID raw thay vì tên chi nhánh.
  *
- * Root cause: Radix SelectValue render `value` text raw nếu không match
- * item nào. Pass `value={undefined}` cũng KHÔNG reset — Radix vẫn giữ
- * state cũ.
+ * Root cause Base UI Select: nếu KHÔNG pass `items` prop, Select.Value
+ * render raw value text (không thể format).
  *
- * Fix triệt để: render text custom thay vì SelectValue khi value không
- * khớp item nào — bypass Radix render logic.
+ * Fix:
+ *   - Pass `items` prop cho Select.Root → Base UI tự lookup label theo
+ *     value khi render Select.Value.
+ *   - Auto inject "all" item nếu options chưa có (giữ backward compat).
+ *   - SelectValue children function format placeholder khi value không
+ *     match (race condition guard).
  */
 export function SelectFilter({
   options,
@@ -41,23 +44,21 @@ export function SelectFilter({
     ? options
     : [{ label: placeholder, value: "all" }, ...options];
 
-  const matchedOption = safeOptions.find((o) => o.value === value);
-
   return (
     <Select
       value={value}
       onValueChange={(v: string | null) => onChange(v ?? "all")}
+      items={safeOptions}
     >
       <SelectTrigger className="h-8 text-sm">
-        {matchedOption ? (
-          <SelectValue placeholder={placeholder}>
-            {matchedOption.label}
-          </SelectValue>
-        ) : (
-          // value KHÔNG match option (race condition: branches chưa load) →
-          // render placeholder thay vì để Radix render UUID raw
-          <span className="text-muted-foreground">{placeholder}</span>
-        )}
+        <SelectValue placeholder={placeholder}>
+          {(currentValue: unknown) => {
+            const matched = safeOptions.find(
+              (o) => o.value === currentValue,
+            );
+            return matched ? matched.label : placeholder;
+          }}
+        </SelectValue>
       </SelectTrigger>
       <SelectContent>
         {safeOptions.map((opt) => (
