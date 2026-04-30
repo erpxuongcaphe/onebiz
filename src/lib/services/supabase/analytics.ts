@@ -198,12 +198,47 @@ export async function getOverviewKpis(branchId?: string): Promise<{
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
   function bq<T>(query: T): T { return branchId ? (query as any).eq("branch_id", branchId) : query; }
 
-  const [thisInvoices, prevInvoices, thisCustomers, prevCustomers] = await Promise.all([
-    bq(supabase.from("invoices").select("total, status").eq("tenant_id", tenantId).gte("created_at", thisMonth.start).lt("created_at", thisMonth.end)),
-    bq(supabase.from("invoices").select("total, status").eq("tenant_id", tenantId).gte("created_at", prevStart.toISOString()).lt("created_at", prevEnd.toISOString())),
-    supabase.from("customers").select("id", { count: "exact", head: true }).eq("tenant_id", tenantId).gte("created_at", thisMonth.start).lt("created_at", thisMonth.end),
-    supabase.from("customers").select("id", { count: "exact", head: true }).eq("tenant_id", tenantId).gte("created_at", prevStart.toISOString()).lt("created_at", prevEnd.toISOString()),
-  ]);
+  // Lazy import getProfitAndLoss để tránh circular import (reports.ts cũng
+  // import từ analytics.ts qua barrel). Profit thật = Revenue - COGS - OpEx,
+  // KHÔNG phải `revenue * 0.25` bịa như trước. Trước đây CEO mở /phan-tich
+  // thấy "Lợi nhuận tháng" là số 25% doanh thu — số fake hoàn toàn.
+  const { getProfitAndLoss } = await import("./reports");
+
+  const [thisInvoices, prevInvoices, thisCustomers, prevCustomers, pnl] =
+    await Promise.all([
+      bq(
+        supabase
+          .from("invoices")
+          .select("total, status")
+          .eq("tenant_id", tenantId)
+          .gte("created_at", thisMonth.start)
+          .lt("created_at", thisMonth.end),
+      ),
+      bq(
+        supabase
+          .from("invoices")
+          .select("total, status")
+          .eq("tenant_id", tenantId)
+          .gte("created_at", prevStart.toISOString())
+          .lt("created_at", prevEnd.toISOString()),
+      ),
+      supabase
+        .from("customers")
+        .select("id", { count: "exact", head: true })
+        .eq("tenant_id", tenantId)
+        .gte("created_at", thisMonth.start)
+        .lt("created_at", thisMonth.end),
+      supabase
+        .from("customers")
+        .select("id", { count: "exact", head: true })
+        .eq("tenant_id", tenantId)
+        .gte("created_at", prevStart.toISOString())
+        .lt("created_at", prevEnd.toISOString()),
+      getProfitAndLoss(branchId).catch(() => ({
+        current: { netProfit: 0 },
+        previous: { netProfit: 0 },
+      })),
+    ]);
 
   const calcRev = (data: { total: number; status: string }[] | null) =>
     (data ?? []).filter(i => i.status === "completed").reduce((s, i) => s + (i.total ?? 0), 0);
@@ -217,7 +252,8 @@ export async function getOverviewKpis(branchId?: string): Promise<{
     revenue: rev, prevRevenue: prevRev,
     orders: calcOrders(thisInvoices.data), prevOrders: calcOrders(prevInvoices.data),
     newCustomers: thisCustomers.count ?? 0, prevNewCustomers: prevCustomers.count ?? 0,
-    profit: Math.round(rev * 0.25), prevProfit: Math.round(prevRev * 0.25),
+    profit: Math.round(pnl.current.netProfit ?? 0),
+    prevProfit: Math.round(pnl.previous.netProfit ?? 0),
   };
 }
 
@@ -650,11 +686,22 @@ export async function getInventoryKpis(): Promise<{
   const supabase = getClient();
   const tenantId = await getCurrentTenantId();
 
-  const [products, lowStock, topProduct] = await Promise.all([
+  // Low-stock filter: trước đây dùng `.filter("stock", "lte", "min_stock"
+  // as unknown as string)` — Supabase compare `stock <= 'min_stock'` LITERAL
+  // string thay vì column reference → KPI luôn sai. Fix: fetch stock+min_stock
+  // rồi filter client-side. Với <500 SP active việc fetch full nhỏ.
+  const [products, productsForLowStock, topProduct] = await Promise.all([
     supabase.from("products").select("id, sell_price, stock", { count: "exact" }).eq("tenant_id", tenantId).eq("is_active", true),
-    supabase.from("products").select("id", { count: "exact", head: true }).eq("tenant_id", tenantId).eq("is_active", true).gt("min_stock", 0).filter("stock", "lte", "min_stock" as unknown as string),
+    supabase.from("products").select("stock, min_stock").eq("tenant_id", tenantId).eq("is_active", true).gt("min_stock", 0),
     supabase.from("invoice_items").select("product_name, quantity, invoices!inner(status, tenant_id)").eq("invoices.tenant_id", tenantId).eq("invoices.status", "completed").order("quantity", { ascending: false }).limit(100),
   ]);
+
+  const lowStockCount = (productsForLowStock.data ?? []).filter(
+    (p) =>
+      typeof p.stock === "number" &&
+      typeof p.min_stock === "number" &&
+      p.stock <= p.min_stock,
+  ).length;
 
   // Aggregate top product
   const qtyMap = new Map<string, number>();
@@ -671,7 +718,7 @@ export async function getInventoryKpis(): Promise<{
   return {
     totalProducts: products.count ?? 0,
     bestSeller: { name: bestName || "N/A", qty: bestQty },
-    lowStockCount: lowStock.count ?? 0,
+    lowStockCount,
     stockValue,
   };
 }
@@ -924,13 +971,51 @@ export async function getCustomerKpis(branchId?: string): Promise<{
   const returning = Array.from(custInvCount.values()).filter(c => c > 1).length;
   const totalWithInv = custInvCount.size;
 
+  // prev_debt approximation: totalDebt at end of last month
+  //   = current totalDebt
+  //     - (debt added bởi invoices created this month — those increased debt)
+  //     + (debt paid down by cash receipts this month linked to invoice).
+  // Cần `customer_debt_history` snapshot table để có chính xác — chưa có.
+  // Tạm thời: query 2 nguồn này. Nếu fail → fallback bằng totalDebt
+  // (như trước) nhưng KHÔNG dùng cho comparison %.
+  let prevDebtApprox = totalDebt;
+  try {
+    const [debtAdded, debtPaid] = await Promise.all([
+      supabase
+        .from("invoices")
+        .select("debt")
+        .eq("tenant_id", tenantId)
+        .gte("created_at", thisMonth.start)
+        .lt("created_at", thisMonth.end),
+      supabase
+        .from("cash_transactions")
+        .select("amount")
+        .eq("tenant_id", tenantId)
+        .eq("type", "receipt")
+        .eq("reference_type", "invoice")
+        .gte("created_at", thisMonth.start)
+        .lt("created_at", thisMonth.end),
+    ]);
+    const added = (debtAdded.data ?? []).reduce(
+      (s, r) => s + ((r.debt as number) ?? 0),
+      0,
+    );
+    const paid = (debtPaid.data ?? []).reduce(
+      (s, r) => s + ((r.amount as number) ?? 0),
+      0,
+    );
+    prevDebtApprox = Math.max(0, totalDebt - added + paid);
+  } catch {
+    // Fallback: keep prevDebtApprox = totalDebt (comparison sẽ ra 0%)
+  }
+
   return {
     totalCustomers: total.count ?? 0,
     newThisMonth: thisNew.count ?? 0,
     prevNewMonth: prevNew.count ?? 0,
     returningPct: totalWithInv > 0 ? Math.round((returning / totalWithInv) * 100) : 0,
     totalDebt,
-    prevTotalDebt: totalDebt, // approximation
+    prevTotalDebt: prevDebtApprox,
   };
 }
 
@@ -1066,12 +1151,46 @@ export async function getSupplierKpis(branchId?: string): Promise<{
   const prevPurchase = (prevPO.data ?? []).reduce((s, p) => s + ((p.total as number) ?? 0), 0);
   const totalDebt = (debt.data ?? []).reduce((s, s2) => s + ((s2.debt as number) ?? 0), 0);
 
+  // Approximation prevDebt = totalDebt - (debt added by PO this month)
+  // + (paid down by cash payments this month linked to PO).
+  // Trước đây hardcode `prevDebt: totalDebt` → comparison luôn 0%.
+  let prevDebtApprox = totalDebt;
+  try {
+    const [debtAdded, debtPaid] = await Promise.all([
+      supabase
+        .from("purchase_orders")
+        .select("debt")
+        .eq("tenant_id", tenantId)
+        .gte("created_at", thisMonth.start)
+        .lt("created_at", thisMonth.end),
+      supabase
+        .from("cash_transactions")
+        .select("amount")
+        .eq("tenant_id", tenantId)
+        .eq("type", "payment")
+        .eq("reference_type", "purchase_order")
+        .gte("created_at", thisMonth.start)
+        .lt("created_at", thisMonth.end),
+    ]);
+    const added = (debtAdded.data ?? []).reduce(
+      (s, r) => s + ((r.debt as number) ?? 0),
+      0,
+    );
+    const paid = (debtPaid.data ?? []).reduce(
+      (s, r) => s + ((r.amount as number) ?? 0),
+      0,
+    );
+    prevDebtApprox = Math.max(0, totalDebt - added + paid);
+  } catch {
+    /* fallback giữ prevDebtApprox = totalDebt */
+  }
+
   return {
     totalSuppliers: total.count ?? 0,
     purchaseThisMonth: thisPurchase,
     prevPurchase,
     totalDebt,
-    prevDebt: totalDebt,
+    prevDebt: prevDebtApprox,
     returnCount: 0,
   };
 }
