@@ -20,7 +20,8 @@ import {
 } from "@/components/ui/select";
 import { useToast, useAuth } from "@/lib/contexts";
 import { createPromotion, updatePromotion } from "@/lib/services";
-import type { Promotion, PromotionChannel } from "@/lib/types";
+import { getProducts } from "@/lib/services/supabase/products";
+import type { Promotion, PromotionChannel, Product } from "@/lib/types";
 import { Icon } from "@/components/ui/icon";
 import { cn } from "@/lib/utils";
 
@@ -86,6 +87,10 @@ export function CreatePromotionDialog({
   const [timeStart, setTimeStart] = useState("");
   const [timeEnd, setTimeEnd] = useState("");
   const [daysOfWeek, setDaysOfWeek] = useState<number[]>([]);
+  // KM-3: gift product IDs (chỉ dùng khi type='gift')
+  const [giftProductIds, setGiftProductIds] = useState<string[]>([]);
+  const [productsCache, setProductsCache] = useState<Product[]>([]);
+  const [productSearch, setProductSearch] = useState("");
   const [errors, setErrors] = useState<Record<string, string>>({});
   const [saving, setSaving] = useState(false);
 
@@ -110,6 +115,7 @@ export function CreatePromotionDialog({
       setTimeStart(toTimeInput(initialData.timeStart));
       setTimeEnd(toTimeInput(initialData.timeEnd));
       setDaysOfWeek(initialData.daysOfWeek ?? []);
+      setGiftProductIds(initialData.giftProductIds ?? []);
     } else {
       setName("");
       setDescription("");
@@ -130,10 +136,21 @@ export function CreatePromotionDialog({
       setTimeStart("");
       setTimeEnd("");
       setDaysOfWeek([]);
+      setGiftProductIds([]);
     }
     setErrors({});
     setSaving(false);
+    setProductSearch("");
   }, [open, initialData]);
+
+  // Load products khi dialog mở + type='gift' (lazy fetch — chỉ khi cần).
+  useEffect(() => {
+    if (!open || type !== "gift") return;
+    if (productsCache.length > 0) return; // đã cache
+    getProducts({ page: 0, pageSize: 200, search: "" })
+      .then((r) => setProductsCache(r.data))
+      .catch(() => {});
+  }, [open, type, productsCache.length]);
 
   function validate(): boolean {
     const newErrors: Record<string, string> = {};
@@ -166,6 +183,10 @@ export function CreatePromotionDialog({
       newErrors.usageLimit = "Giới hạn lượt dùng phải là số ≥ 0";
     }
 
+    if (type === "gift" && giftProductIds.length === 0) {
+      newErrors.giftProductIds = "Chọn ít nhất 1 SP để tặng";
+    }
+
     setErrors(newErrors);
     return Object.keys(newErrors).length === 0;
   }
@@ -195,6 +216,7 @@ export function CreatePromotionDialog({
         timeStart: fromTimeInput(timeStart),
         timeEnd: fromTimeInput(timeEnd),
         daysOfWeek,
+        giftProductIds,
       };
 
       if (isEditing) {
@@ -228,6 +250,14 @@ export function CreatePromotionDialog({
   function toggleBranch(branchId: string) {
     setBranchIds((prev) =>
       prev.includes(branchId) ? prev.filter((b) => b !== branchId) : [...prev, branchId],
+    );
+  }
+
+  function toggleGiftProduct(productId: string) {
+    setGiftProductIds((prev) =>
+      prev.includes(productId)
+        ? prev.filter((p) => p !== productId)
+        : [...prev, productId],
     );
   }
 
@@ -373,6 +403,98 @@ export function CreatePromotionDialog({
                   <p className="text-xs text-destructive">{errors.getQuantity}</p>
                 )}
               </div>
+            </div>
+          )}
+
+          {/* KM-3: Gift product picker — chỉ hiện khi type='gift' */}
+          {type === "gift" && (
+            <div className="space-y-1.5">
+              <label className="text-sm font-medium">
+                Sản phẩm tặng kèm <span className="text-destructive">*</span>
+                <span className="ml-2 text-xs font-normal text-muted-foreground">
+                  Mỗi SP = 1 quà / đơn match điều kiện
+                </span>
+              </label>
+              <Input
+                value={productSearch}
+                onChange={(e) => setProductSearch(e.target.value)}
+                placeholder="Tìm sản phẩm..."
+                className="h-9 text-sm"
+              />
+              <div
+                className={cn(
+                  "rounded-lg border p-2 max-h-[180px] overflow-y-auto space-y-0.5",
+                  errors.giftProductIds && "border-destructive",
+                )}
+              >
+                {productsCache.length === 0 ? (
+                  <div className="py-3 text-center text-xs text-muted-foreground">
+                    <Icon
+                      name="progress_activity"
+                      size={14}
+                      className="mx-auto mb-1 animate-spin"
+                    />
+                    Đang tải sản phẩm...
+                  </div>
+                ) : (
+                  productsCache
+                    .filter((p) => {
+                      if (!productSearch.trim()) return true;
+                      const q = productSearch.trim().toLowerCase();
+                      return (
+                        p.name.toLowerCase().includes(q) ||
+                        (p.code ?? "").toLowerCase().includes(q)
+                      );
+                    })
+                    .slice(0, 50)
+                    .map((p) => {
+                      const checked = giftProductIds.includes(p.id);
+                      return (
+                        <button
+                          key={p.id}
+                          type="button"
+                          onClick={() => toggleGiftProduct(p.id)}
+                          className={cn(
+                            "w-full flex items-center gap-2 px-2 py-1.5 rounded text-xs text-left transition-colors",
+                            checked
+                              ? "bg-status-warning/10 text-status-warning"
+                              : "hover:bg-muted text-foreground",
+                          )}
+                        >
+                          <span
+                            className={cn(
+                              "flex h-4 w-4 shrink-0 items-center justify-center rounded border",
+                              checked
+                                ? "bg-status-warning border-status-warning text-white"
+                                : "border-border",
+                            )}
+                          >
+                            {checked && <Icon name="check" size={12} />}
+                          </span>
+                          <span className="flex-1 truncate">
+                            {p.code && (
+                              <span className="font-mono text-muted-foreground mr-1">
+                                {p.code}
+                              </span>
+                            )}
+                            {p.name}
+                          </span>
+                          <span className="text-muted-foreground tabular-nums shrink-0">
+                            {(p.sellPrice ?? 0).toLocaleString("vi-VN")}đ
+                          </span>
+                        </button>
+                      );
+                    })
+                )}
+              </div>
+              {errors.giftProductIds && (
+                <p className="text-xs text-destructive">{errors.giftProductIds}</p>
+              )}
+              {giftProductIds.length > 0 && (
+                <p className="text-xs text-muted-foreground">
+                  Đã chọn {giftProductIds.length} sản phẩm để tặng
+                </p>
+              )}
             </div>
           )}
 

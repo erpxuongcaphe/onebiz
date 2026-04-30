@@ -1467,6 +1467,7 @@ function FnbPosPageInner() {
           onRemoveCoupon={handleRemoveCoupon}
           appliedCouponCode={couponApplied?.code}
           couponApplying={couponApplying}
+          freeItems={appliedPromotion?.freeItems}
         />
       </div>
 

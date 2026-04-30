@@ -38,6 +38,8 @@ interface FnbCartProps {
   onRemoveCoupon?: () => void;
   appliedCouponCode?: string;
   couponApplying?: boolean;
+  /** KM-3: free items từ promotion engine (BOGO + gift). Render section "Tặng kèm". */
+  freeItems?: { productId: string; productName?: string; quantity: number; unitPrice: number }[];
   /** When true, show full-width (no hidden lg:flex) */
   mobile?: boolean;
 }
@@ -69,6 +71,7 @@ export function FnbCart({
   onRemoveCoupon,
   appliedCouponCode,
   couponApplying,
+  freeItems,
   mobile,
 }: FnbCartProps) {
   const lines = activeTab?.lines ?? [];
@@ -215,6 +218,40 @@ export function FnbCart({
 
       {/* ── Footer: totals + discount + actions ── */}
       <div className="border-t border-outline-variant/20 bg-surface-container-lowest p-4 shrink-0 space-y-2.5">
+        {/* KM-3: Free items section — quà tặng kèm (BOGO + gift) */}
+        {freeItems && freeItems.length > 0 && (
+          <div className="bg-status-warning/10 border border-status-warning/30 rounded-lg p-2 space-y-1">
+            <div className="flex items-center gap-1.5">
+              <Icon name="redeem" size={14} className="text-status-warning" />
+              <span className="text-xs font-semibold text-status-warning">
+                Tặng kèm ({freeItems.length} món)
+              </span>
+            </div>
+            <div className="space-y-0.5 pl-5">
+              {freeItems.map((free) => {
+                const lineMatch = lines.find((l) => l.productId === free.productId);
+                const name = lineMatch?.productName ?? free.productName ?? "Sản phẩm";
+                return (
+                  <div
+                    key={free.productId}
+                    className="flex items-center justify-between text-[11px]"
+                  >
+                    <span className="truncate text-foreground">
+                      {name}{" "}
+                      <span className="text-muted-foreground">× {free.quantity}</span>
+                    </span>
+                    {free.unitPrice > 0 && (
+                      <span className="text-muted-foreground tabular-nums shrink-0 ml-2">
+                        {formatCurrency(free.quantity * free.unitPrice)}
+                      </span>
+                    )}
+                  </div>
+                );
+              })}
+            </div>
+          </div>
+        )}
+
         {/* Subtotal */}
         <div className="flex items-center justify-between">
           <span className="text-sm text-muted-foreground">Tạm tính</span>

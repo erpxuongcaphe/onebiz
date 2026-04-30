@@ -1521,6 +1521,41 @@ function PosPageInner() {
             )}
           </div>
 
+          {/* KM-3: Free items section — hiển thị quà tặng kèm (BOGO + gift) */}
+          {appliedPromotion?.freeItems && appliedPromotion.freeItems.length > 0 && (
+            <div className="border-t border-status-warning/30 px-3 py-2 bg-status-warning/5">
+              <div className="flex items-center gap-1.5 mb-1.5">
+                <Icon name="redeem" size={14} className="text-status-warning" />
+                <span className="text-xs font-semibold text-status-warning">
+                  Tặng kèm ({appliedPromotion.freeItems.length} món)
+                </span>
+              </div>
+              <div className="space-y-0.5 pl-5">
+                {appliedPromotion.freeItems.map((free) => {
+                  // Lookup product name từ cart line trước; nếu không có
+                  // (gift product không có trong cart) → fallback empty.
+                  const lineMatch = state.lines.find((l) => l.productId === free.productId);
+                  const name = lineMatch?.productName ?? free.productName ?? "Sản phẩm";
+                  return (
+                    <div
+                      key={free.productId}
+                      className="flex items-center justify-between text-[11px]"
+                    >
+                      <span className="truncate text-foreground">
+                        {name} <span className="text-muted-foreground">× {free.quantity}</span>
+                      </span>
+                      {free.unitPrice > 0 && (
+                        <span className="text-muted-foreground tabular-nums shrink-0 ml-2">
+                          {formatCurrency(free.quantity * free.unitPrice)}
+                        </span>
+                      )}
+                    </div>
+                  );
+                })}
+              </div>
+            </div>
+          )}
+
           {/* ── Totals section ── */}
           <div className="border-t border-border px-3 py-2 space-y-1 bg-surface-container-low/50">
             <div className="flex justify-between text-xs text-muted-foreground">

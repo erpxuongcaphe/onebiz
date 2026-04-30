@@ -53,6 +53,7 @@ function makePromo(overrides: Partial<Promotion> = {}): Promotion {
     timeStart: null,
     timeEnd: null,
     daysOfWeek: [],
+    giftProductIds: [],
     createdAt: "2025-01-01T00:00:00.000Z",
     updatedAt: "2025-01-01T00:00:00.000Z",
     ...overrides,
@@ -330,13 +331,73 @@ describe("calculateDiscount", () => {
         makeItem({ productId: "p2", categoryId: "cat-1", quantity: 2, unitPrice: 30000 }),
       ],
     });
-    // total qty = 5, sets = floor(5/2) = 2, cheapest = 30000 → 2 * 1 * 30000 = 60000
+    // total qty = 5, sets = floor(5/2) = 2, getQty = 1 → 2 free units
+    // pick rẻ nhất: 2 unit × 30000 = 60000
     expect(calculateDiscount(promo, ctx).discountAmount).toBe(60000);
   });
 
-  it("gift type → discount = 0 (KM-3 sẽ output free items)", () => {
-    const promo = makePromo({ type: "gift" });
-    expect(calculateDiscount(promo, makeCtx()).discountAmount).toBe(0);
+  it("KM-3: BOGO output free items list (group by productId)", () => {
+    const promo = makePromo({
+      type: "buy_x_get_y",
+      buyQuantity: 2,
+      getQuantity: 1,
+    });
+    const ctx = makeCtx({
+      items: [
+        makeItem({ productId: "p1", quantity: 3, unitPrice: 50000 }),
+        makeItem({ productId: "p2", categoryId: "cat-1", quantity: 2, unitPrice: 30000 }),
+      ],
+    });
+    // Total qty = 5, sets = 2, free units = 2 — pick 2 unit p2 (30000)
+    const result = calculateDiscount(promo, ctx);
+    expect(result.freeItems).toEqual([
+      { productId: "p2", quantity: 2, unitPrice: 30000 },
+    ]);
+    expect(result.discountAmount).toBe(60000);
+  });
+
+  it("KM-3: BOGO free items spans multiple products khi cần", () => {
+    const promo = makePromo({
+      type: "buy_x_get_y",
+      buyQuantity: 1,
+      getQuantity: 1,
+    });
+    // 4 SP qty=1 mỗi: p1=50k, p2=30k, p3=40k, p4=80k
+    // sets=4, free=4 units — pick TẤT CẢ vì cần 4
+    // Nhưng có 4 unit, pick all → group: each productId × 1
+    const ctx = makeCtx({
+      items: [
+        makeItem({ productId: "p1", quantity: 1, unitPrice: 50000 }),
+        makeItem({ productId: "p2", quantity: 1, unitPrice: 30000 }),
+        makeItem({ productId: "p3", quantity: 1, unitPrice: 40000 }),
+        makeItem({ productId: "p4", quantity: 1, unitPrice: 80000 }),
+      ],
+    });
+    const result = calculateDiscount(promo, ctx);
+    expect(result.freeItems).toHaveLength(4);
+    // Discount = sum tất cả vì pick all
+    expect(result.discountAmount).toBe(50000 + 30000 + 40000 + 80000);
+  });
+
+  it("gift type → discount = 0 + freeItems từ giftProductIds", () => {
+    const promo = makePromo({
+      type: "gift",
+      giftProductIds: ["gift-1", "gift-2"],
+    });
+    const result = calculateDiscount(promo, makeCtx());
+    expect(result.discountAmount).toBe(0);
+    expect(result.freeItems).toEqual([
+      { productId: "gift-1", quantity: 1, unitPrice: 0 },
+      { productId: "gift-2", quantity: 1, unitPrice: 0 },
+    ]);
+    expect(result.reasonLabel).toBe("Tặng 2 món");
+  });
+
+  it("gift với giftProductIds rỗng → freeItems undefined", () => {
+    const promo = makePromo({ type: "gift", giftProductIds: [] });
+    const result = calculateDiscount(promo, makeCtx());
+    expect(result.freeItems).toBeUndefined();
+    expect(result.reasonLabel).toBe("Tặng quà kèm");
   });
 
   it("eligible items respect appliesTo filter", () => {
@@ -392,13 +453,35 @@ describe("selectBestPromotion", () => {
     expect(best?.promotion.id).toBe("p2");
   });
 
-  it("filter promo có discount = 0 (vd gift)", () => {
-    const giftPromo = makePromo({ id: "gift", type: "gift" });
+  it("filter promo có discount = 0 (vd gift không có giftProductIds)", () => {
+    const giftPromo = makePromo({ id: "gift", type: "gift", giftProductIds: [] });
     const percentPromo = makePromo({ id: "pct", type: "discount_percent", value: 5 });
     const ctx = makeCtx({
       items: [makeItem({ quantity: 1, unitPrice: 100000 })],
     });
     const best = selectBestPromotion([giftPromo, percentPromo], ctx);
     expect(best?.promotion.id).toBe("pct");
+  });
+
+  it("KM-3: gift với giftProductIds + priority cao hơn → vẫn được pick dù discount = 0", () => {
+    const giftPromo = makePromo({
+      id: "gift",
+      type: "gift",
+      priority: 100,
+      giftProductIds: ["gift-1"],
+    });
+    const percentPromo = makePromo({
+      id: "pct",
+      type: "discount_percent",
+      value: 5,
+      priority: 0,
+    });
+    const ctx = makeCtx({
+      items: [makeItem({ quantity: 1, unitPrice: 100000 })],
+    });
+    // Gift có priority 100 > pct 0 → pick gift dù discount=0
+    const best = selectBestPromotion([giftPromo, percentPromo], ctx);
+    expect(best?.promotion.id).toBe("gift");
+    expect(best?.freeItems).toHaveLength(1);
   });
 });

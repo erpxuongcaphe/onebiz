@@ -1247,6 +1247,7 @@ export interface Database {
           time_start: string | null;
           time_end: string | null;
           days_of_week: number[];
+          gift_product_ids: string[];
         };
         Insert: {
           id?: string;
@@ -1273,6 +1274,7 @@ export interface Database {
           time_start?: string | null;
           time_end?: string | null;
           days_of_week?: number[];
+          gift_product_ids?: string[];
         };
         Update: {
           name?: string;
@@ -1296,6 +1298,7 @@ export interface Database {
           time_start?: string | null;
           time_end?: string | null;
           days_of_week?: number[];
+          gift_product_ids?: string[];
         };
         Relationships: [
           {

@@ -34,6 +34,12 @@ export interface Promotion {
   timeEnd: string | null;
   /** Mảng [0..6] (0=CN, 1=T2, ..., 6=T7). Rỗng = áp mọi ngày. */
   daysOfWeek: number[];
+  /**
+   * KM-3 (00043): danh sách product_id sẽ tặng khi promotion type='gift'
+   * và đơn match điều kiện. Mỗi ID = 1 quà (qty 1). Rỗng = chưa cấu hình.
+   * Chỉ dùng cho type='gift'; BOGO tự pick từ eligible items rẻ nhất.
+   */
+  giftProductIds: string[];
   createdAt: string;
   updatedAt: string;
 }

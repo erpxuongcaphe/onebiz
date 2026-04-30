@@ -47,14 +47,37 @@ export interface PromotionContext {
   now?: Date;
 }
 
+/**
+ * 1 món được tặng kèm theo promotion (BOGO hoặc gift).
+ * POS sẽ render line "Tặng" trong cart + invoice + receipt.
+ */
+export interface PromotionFreeItem {
+  productId: string;
+  /** Hiển thị trong cart/receipt. Nếu engine không biết name → empty, POS sẽ
+   *  lookup từ products list theo productId. */
+  productName?: string;
+  /** SL tặng. BOGO: 1 unit / set × buy_quantity (gộp lại nếu cùng productId). */
+  quantity: number;
+  /** Đơn giá gốc — dùng để hiển thị "trị giá Xđ, tặng" trên receipt. */
+  unitPrice: number;
+}
+
 export interface AppliedPromotion {
   promotion: Promotion;
-  /** Số tiền discount tính ra (luôn >= 0) */
+  /** Số tiền discount tính ra (luôn >= 0). Với BOGO/gift = sum(freeItems.qty * unitPrice). */
   discountAmount: number;
   /** Subtotal của các line eligible (sau khi filter applies_to) */
   eligibleSubtotal: number;
   /** Lý do hiển thị cho UI: "Giảm 10%", "Đơn -50.000đ", "Mua 2 tặng 1" */
   reasonLabel: string;
+  /**
+   * KM-3: danh sách quà tặng cụ thể (chỉ cho BOGO + gift).
+   * - BOGO: pick các unit rẻ nhất từ eligible items theo công thức
+   *         sets × getQuantity (rounded down).
+   * - gift: 1 unit cho mỗi productId trong gift_product_ids.
+   * - discount_percent / discount_fixed: undefined (không có quà).
+   */
+  freeItems?: PromotionFreeItem[];
 }
 
 // ============================================================
@@ -208,6 +231,7 @@ export function calculateDiscount(
 
   let discountAmount = 0;
   let reasonLabel = promo.name;
+  let freeItems: PromotionFreeItem[] | undefined;
 
   switch (promo.type) {
     case "discount_percent": {
@@ -221,36 +245,98 @@ export function calculateDiscount(
       break;
     }
     case "buy_x_get_y": {
-      // KM-2 ước lượng: cứ mỗi X qty mua → tặng Y, lấy đơn giá rẻ nhất
-      // làm giá free. KM-3 sẽ output free items list cụ thể.
+      // KM-3: pick các unit RẺ NHẤT làm free items, group theo productId.
+      //   sets = floor(totalEligibleQty / buyQty)
+      //   freeUnits cần = sets × getQty
+      //   Distribute: expand eligible items thành flat unit list, sort
+      //   ascending by unitPrice, pick freeUnits đầu tiên, group lại theo
+      //   productId. discountAmount = sum(freeItems.qty × unitPrice).
       const buyQty = promo.buyQuantity ?? 0;
       const getQty = promo.getQuantity ?? 0;
       if (buyQty > 0 && getQty > 0 && eligible.length > 0) {
         const totalEligibleQty = eligible.reduce((s, it) => s + it.quantity, 0);
         const sets = Math.floor(totalEligibleQty / buyQty);
-        if (sets > 0) {
-          const cheapestUnit = Math.min(...eligible.map((it) => it.unitPrice));
-          discountAmount = sets * getQty * cheapestUnit;
+        const freeUnitsNeeded = sets * getQty;
+        if (freeUnitsNeeded > 0) {
+          // Expand thành flat unit list rồi sort theo unitPrice asc — pick rẻ nhất
+          // làm quà. Đây là logic chuẩn KiotViet/Sapo.
+          const flatUnits: { productId: string; unitPrice: number }[] = [];
+          for (const item of eligible) {
+            for (let i = 0; i < item.quantity; i++) {
+              flatUnits.push({ productId: item.productId, unitPrice: item.unitPrice });
+            }
+          }
+          flatUnits.sort((a, b) => a.unitPrice - b.unitPrice);
+          const picked = flatUnits.slice(0, freeUnitsNeeded);
+
+          // Group by productId
+          const groupMap = new Map<string, PromotionFreeItem>();
+          for (const u of picked) {
+            const existing = groupMap.get(u.productId);
+            if (existing) {
+              existing.quantity += 1;
+            } else {
+              groupMap.set(u.productId, {
+                productId: u.productId,
+                quantity: 1,
+                unitPrice: u.unitPrice,
+              });
+            }
+          }
+          freeItems = Array.from(groupMap.values());
+          discountAmount = freeItems.reduce((s, f) => s + f.quantity * f.unitPrice, 0);
         }
       }
       reasonLabel = `Mua ${buyQty} tặng ${getQty}`;
       break;
     }
     case "gift": {
-      // Gift = quà tặng, không discount tiền — KM-3 sẽ output free items.
-      // KM-2: discount = 0 nhưng vẫn applicable.
+      // KM-3: output free items từ promotion.giftProductIds.
+      // Mỗi productId = 1 unit tặng. Engine không biết unitPrice của gift
+      // products (không có trong cart) → set unitPrice = 0, POS sẽ lookup
+      // từ products list để hiển thị "trị giá Xđ" trên receipt.
+      // discountAmount = 0 (gift không phải money discount, là physical item).
+      if (promo.giftProductIds && promo.giftProductIds.length > 0) {
+        freeItems = promo.giftProductIds.map((productId) => ({
+          productId,
+          quantity: 1,
+          unitPrice: 0,
+        }));
+      }
       discountAmount = 0;
-      reasonLabel = "Tặng quà kèm";
+      reasonLabel =
+        freeItems && freeItems.length > 0
+          ? `Tặng ${freeItems.length} món`
+          : "Tặng quà kèm";
       break;
     }
   }
 
-  return { promotion: promo, discountAmount, eligibleSubtotal, reasonLabel };
+  return { promotion: promo, discountAmount, eligibleSubtotal, reasonLabel, freeItems };
 }
 
 // ============================================================
 // Select best
 // ============================================================
+
+/**
+ * Estimated value của 1 AppliedPromotion để compare khi select best:
+ *   - discount_percent / discount_fixed / BOGO: discountAmount
+ *   - gift: tổng (quantity × unitPrice) của freeItems — nhưng engine không
+ *     có unitPrice (set 0 ở calculateDiscount). Để gift vẫn có thể được
+ *     pick, giá trị estimate = 1 (tượng trưng "có giá trị nào đó").
+ *     Khi 2 KM ngang nhau → priority quyết định.
+ *   POS có thể override priority để force gift được áp dụng.
+ */
+function estimatePromotionValue(applied: AppliedPromotion): number {
+  if (applied.discountAmount > 0) return applied.discountAmount;
+  if (applied.freeItems && applied.freeItems.length > 0) {
+    // Gift: estimate = sum unitPrice nếu engine có (KM-2 BOGO), hoặc 1 nếu không
+    const sum = applied.freeItems.reduce((s, f) => s + f.quantity * f.unitPrice, 0);
+    return sum > 0 ? sum : 1;
+  }
+  return 0;
+}
 
 /**
  * Chọn KM tốt nhất từ list applicable.
@@ -259,8 +345,8 @@ export function calculateDiscount(
  *   - Nếu settings.autoApplyBest = false → trả null (cashier tự chọn — UI sẽ
  *     hiển thị danh sách applicable cho user click).
  *   - Tính discount cho từng applicable
- *   - Filter discount > 0 (loại gift KM-2 chưa monetary)
- *   - Sort theo: priority desc → discountAmount desc
+ *   - Filter ra KM có giá trị > 0 (discount tiền HOẶC có freeItems)
+ *   - Sort theo: priority desc → estimatedValue desc
  *   - Pick first
  *
  * Trường hợp tie: KM có priority cao hơn thắng (admin chỉ định ưu tiên).
@@ -275,7 +361,7 @@ export function selectBestPromotion(
 
   const calculated = applicable
     .map((p) => calculateDiscount(p, ctx))
-    .filter((c) => c.discountAmount > 0);
+    .filter((c) => estimatePromotionValue(c) > 0);
 
   if (calculated.length === 0) return null;
 
@@ -283,7 +369,7 @@ export function selectBestPromotion(
     if (a.promotion.priority !== b.promotion.priority) {
       return b.promotion.priority - a.promotion.priority;
     }
-    return b.discountAmount - a.discountAmount;
+    return estimatePromotionValue(b) - estimatePromotionValue(a);
   });
 
   return calculated[0];

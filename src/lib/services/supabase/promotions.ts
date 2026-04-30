@@ -43,6 +43,7 @@ function mapPromotion(row: Record<string, unknown>): Promotion {
     timeStart: (row.time_start as string) ?? null,
     timeEnd: (row.time_end as string) ?? null,
     daysOfWeek: (row.days_of_week as number[]) ?? [],
+    giftProductIds: (row.gift_product_ids as string[]) ?? [],
     createdAt: row.created_at as string,
     updatedAt: row.updated_at as string,
   };
@@ -156,6 +157,7 @@ export async function createPromotion(promo: Partial<Promotion>): Promise<Promot
     time_start: promo.timeStart ?? null,
     time_end: promo.timeEnd ?? null,
     days_of_week: promo.daysOfWeek ?? [],
+    gift_product_ids: promo.giftProductIds ?? [],
   };
 
   const { data, error } = await supabase
@@ -198,6 +200,7 @@ export async function updatePromotion(id: string, updates: Partial<Promotion>): 
   if (updates.timeStart !== undefined) payload.time_start = updates.timeStart;
   if (updates.timeEnd !== undefined) payload.time_end = updates.timeEnd;
   if (updates.daysOfWeek !== undefined) payload.days_of_week = updates.daysOfWeek;
+  if (updates.giftProductIds !== undefined) payload.gift_product_ids = updates.giftProductIds;
 
   const { data, error } = await supabase
     .from("promotions")
