@@ -54,8 +54,8 @@ export function CreateSupplierDialog({
         setPhone(initialData.phone || "");
         setEmail(initialData.email || "");
         setAddress(initialData.address || "");
-        setTaxCode("");
-        setNote("");
+        setTaxCode(initialData.taxCode || "");
+        setNote(initialData.note || "");
       } else {
         setCode(generateSupplierCode());
         setName("");
@@ -86,6 +86,8 @@ export function CreateSupplierDialog({
           phone: phone || undefined,
           email: email || undefined,
           address: address || undefined,
+          taxCode: taxCode || undefined,
+          note: note || undefined,
         });
         onOpenChange(false);
         toast({
@@ -100,6 +102,8 @@ export function CreateSupplierDialog({
           phone: phone || undefined,
           email: email || undefined,
           address: address || undefined,
+          taxCode: taxCode || undefined,
+          note: note || undefined,
         });
         onOpenChange(false);
         toast({

@@ -36,7 +36,7 @@ import { exportToExcelFromSchema } from "@/lib/excel";
 import type { CustomerImportRow } from "@/lib/excel/schemas";
 import {
   getCustomers,
-  getCustomerGroups,
+  getCustomerGroupsAsync,
   deleteCustomer,
   getInvoicesForCustomer,
   getReturnsForCustomer,
@@ -98,7 +98,24 @@ export default function KhachHangPage() {
   // Stars
   const { starred, toggle: toggleStar } = useStarredSet();
 
-  const customerGroups = getCustomerGroups();
+  // Customer groups load từ DB (async). Trước đây dùng `getCustomerGroups()`
+  // sync stub trả `[]` → filter sidebar luôn rỗng dù DB có nhóm.
+  const [customerGroups, setCustomerGroups] = useState<
+    { label: string; value: string; count: number }[]
+  >([]);
+  useEffect(() => {
+    let cancelled = false;
+    getCustomerGroupsAsync()
+      .then((groups) => {
+        if (!cancelled) setCustomerGroups(groups);
+      })
+      .catch(() => {
+        if (!cancelled) setCustomerGroups([]);
+      });
+    return () => {
+      cancelled = true;
+    };
+  }, []);
 
   /* ---- Columns (defined inside component so we can access starred) ---- */
   const columns: ColumnDef<Customer, unknown>[] = [

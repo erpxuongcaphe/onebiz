@@ -19,7 +19,12 @@ import {
   SelectItem,
 } from "@/components/ui/select";
 import { useToast } from "@/lib/contexts";
-import { createCustomer, updateCustomer, getPriceTiers } from "@/lib/services";
+import {
+  createCustomer,
+  updateCustomer,
+  getPriceTiers,
+  getCustomerGroupsAsync,
+} from "@/lib/services";
 import type { Customer, PriceTier } from "@/lib/types";
 import { Icon } from "@/components/ui/icon";
 
@@ -30,12 +35,9 @@ interface CreateCustomerDialogProps {
   initialData?: Customer;
 }
 
-const customerGroups = [
-  { label: "Khách lẻ", value: "retail" },
-  { label: "Khách sỉ", value: "wholesale" },
-  { label: "VIP", value: "vip" },
-  { label: "Đại lý", value: "agent" },
-];
+// Customer groups load từ DB (có UUID thật) — KHÔNG hardcode chuỗi
+// "retail/wholesale/vip/agent" như trước (sẽ làm `group_id` nhận chuỗi rác,
+// FK fail hoặc lưu sai).
 
 function generateCustomerCode() {
   const num = Math.floor(Math.random() * 99999) + 1;
@@ -61,10 +63,11 @@ export function CreateCustomerDialog({
   // Bảng giá B2B mặc định cho KH này — empty = giá niêm yết
   const [priceTierId, setPriceTierId] = useState("");
   const [tiers, setTiers] = useState<PriceTier[]>([]);
+  const [groups, setGroups] = useState<{ label: string; value: string }[]>([]);
   const [errors, setErrors] = useState<Record<string, string>>({});
   const [saving, setSaving] = useState(false);
 
-  // Load tier list (scope retail+both) khi dialog mở
+  // Load tier list + customer groups khi dialog mở
   useEffect(() => {
     if (!open) return;
     let cancelled = false;
@@ -74,6 +77,13 @@ export function CreateCustomerDialog({
       })
       .catch(() => {
         /* tier optional — fail silent */
+      });
+    getCustomerGroupsAsync()
+      .then((list) => {
+        if (!cancelled) setGroups(list.map((g) => ({ label: g.label, value: g.value })));
+      })
+      .catch(() => {
+        if (!cancelled) setGroups([]);
       });
     return () => {
       cancelled = true;
@@ -235,18 +245,40 @@ export function CreateCustomerDialog({
 
           <div className="space-y-1.5">
             <label className="text-sm font-medium">Nhóm khách hàng</label>
-            <Select value={group} onValueChange={(v) => setGroup(v ?? "")}>
+            <Select
+              value={group || "__none__"}
+              onValueChange={(v) => setGroup(v === "__none__" ? "" : (v ?? ""))}
+              // items prop để Base UI Select resolve UUID → label, tránh hiện
+              // UUID thô khi load chậm hoặc khi prefill edit mode.
+              items={[
+                { value: "__none__", label: "— Chưa phân nhóm —" },
+                ...groups,
+              ]}
+            >
               <SelectTrigger className="w-full">
-                <SelectValue placeholder="Chọn nhóm khách hàng" />
+                <SelectValue placeholder="Chọn nhóm khách hàng">
+                  {(v) => {
+                    if (!v || v === "__none__") return "— Chưa phân nhóm —";
+                    const match = groups.find((g) => g.value === v);
+                    return match ? match.label : "Chọn nhóm khách hàng";
+                  }}
+                </SelectValue>
               </SelectTrigger>
               <SelectContent>
-                {customerGroups.map((g) => (
+                <SelectItem value="__none__">— Chưa phân nhóm —</SelectItem>
+                {groups.map((g) => (
                   <SelectItem key={g.value} value={g.value}>
                     {g.label}
                   </SelectItem>
                 ))}
               </SelectContent>
             </Select>
+            {groups.length === 0 && (
+              <p className="text-xs text-muted-foreground">
+                Chưa có nhóm khách hàng nào. Tạo nhóm tại{" "}
+                <span className="font-medium">Cài đặt → Nhóm khách hàng</span>.
+              </p>
+            )}
           </div>
 
           {/* Bảng giá B2B mặc định — KH này check out POS Retail sẽ áp giá tier

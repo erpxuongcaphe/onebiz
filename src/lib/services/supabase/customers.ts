@@ -61,8 +61,60 @@ export async function getCustomers(params: QueryParams): Promise<QueryResult<Cus
   const { data, count, error } = await query;
   if (error) handleError(error, "getCustomers");
 
-  const customers: Customer[] = (data ?? []).map(mapCustomer);
+  const rows = data ?? [];
+
+  // Aggregate sales_returns total per customer cho batch hiện tại để tính
+  // chính xác `totalSalesMinusReturns` (KPI "Doanh số ròng" + cột tương ứng).
+  // Trước đây map cứng `total_spent` → KPI sai khi có trả hàng.
+  // Chỉ tính returns đã `completed` (draft/cancelled không trừ).
+  const customerIds = rows.map((r) => r.id).filter((id): id is string => !!id);
+  const returnsByCustomer = await fetchReturnsTotalForCustomers(
+    supabase,
+    tenantId,
+    customerIds,
+  );
+
+  const customers: Customer[] = rows.map((row) =>
+    mapCustomer(row, returnsByCustomer.get(row.id) ?? 0),
+  );
   return { data: customers, total: count ?? 0 };
+}
+
+/**
+ * Tổng tiền trả hàng (`sales_returns.total`) per khách hàng — chỉ phiếu
+ * `completed`. Dùng để tính `totalSalesMinusReturns` chính xác.
+ *
+ * Query 1 lần cho cả batch (tránh N+1).
+ */
+async function fetchReturnsTotalForCustomers(
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  supabase: any,
+  tenantId: string,
+  customerIds: string[],
+): Promise<Map<string, number>> {
+  const result = new Map<string, number>();
+  if (customerIds.length === 0) return result;
+
+  const { data, error } = await supabase
+    .from("sales_returns")
+    .select("customer_id, total")
+    .eq("tenant_id", tenantId)
+    .eq("status", "completed")
+    .in("customer_id", customerIds);
+
+  if (error) {
+    // Fail-soft: nếu query lỗi (ví dụ RLS), chỉ log và trả map rỗng
+    // để KPI fallback về `total_spent` thay vì làm crash trang.
+    console.warn("[fetchReturnsTotalForCustomers]", error.message);
+    return result;
+  }
+
+  for (const row of data ?? []) {
+    if (!row.customer_id) continue;
+    const prev = result.get(row.customer_id) ?? 0;
+    result.set(row.customer_id, prev + Number(row.total ?? 0));
+  }
+  return result;
 }
 
 /**
@@ -195,8 +247,19 @@ export async function deleteCustomer(id: string): Promise<void> {
 
 // --- Mapper ---
 
+/**
+ * Map row khách hàng từ DB sang type Customer.
+ *
+ * @param row Raw row từ Supabase (có embed `customer_groups`).
+ * @param returnsTotal Tổng `sales_returns.total` của khách này (mặc định 0).
+ *   Truyền vào để tính `totalSalesMinusReturns = total_spent - returnsTotal`.
+ *   Khi không truyền (vd: getCustomerById trang chi tiết) → fallback bằng
+ *   `total_spent` để không bể UI.
+ */
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
-function mapCustomer(row: any): Customer {
+function mapCustomer(row: any, returnsTotal = 0): Customer {
+  const totalSpent = Number(row.total_spent ?? 0);
+  const netSales = Math.max(0, totalSpent - returnsTotal);
   return {
     id: row.id,
     code: row.code,
@@ -205,8 +268,8 @@ function mapCustomer(row: any): Customer {
     email: row.email ?? undefined,
     address: row.address ?? undefined,
     currentDebt: row.debt,
-    totalSales: row.total_spent,
-    totalSalesMinusReturns: row.total_spent, // Simplified - would need returns aggregation
+    totalSales: totalSpent,
+    totalSalesMinusReturns: netSales,
     groupId: row.group_id ?? undefined,
     groupName: row.customer_groups?.name ?? undefined,
     groupDiscountPercent:

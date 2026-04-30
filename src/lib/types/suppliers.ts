@@ -7,6 +7,8 @@ export interface Supplier {
   phone: string;
   email?: string;
   address?: string;
+  taxCode?: string;
+  note?: string;
   currentDebt: number;
   totalPurchases: number;
   isInternal?: boolean;
@@ -16,7 +18,6 @@ export interface Supplier {
 
 // Chi tiết nhà cung cấp mở rộng từ danh sách
 export interface SupplierDetail extends Supplier {
-  taxCode?: string;
   totalPaid: number;
 }
 
