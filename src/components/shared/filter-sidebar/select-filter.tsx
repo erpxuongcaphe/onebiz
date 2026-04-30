@@ -18,20 +18,16 @@ interface SelectFilterProps {
 /**
  * SelectFilter — wrap Radix Select cho FilterSidebar.
  *
- * Bug từng có (commit ec97f17 miss case ton-kho/lich-su-kho): khi value =
- * UUID nhưng options chưa load (race condition: branches fetch async sau
- * mount, branchFilter init từ activeBranchId UUID) → Radix SelectValue
- * render value RAW → user thấy "41014501-2ac6-..." thay vì tên chi nhánh.
+ * Bug từng có (commit ec97f17 miss): khi value = UUID nhưng options chưa
+ * load (race condition: branches fetch async sau mount, branchFilter
+ * init từ activeBranchId UUID) → SelectValue render UUID raw.
  *
- * Root cause Radix behavior:
- *   - Khi `value` không match item.value nào trong options
- *     → SelectValue hiển thị value text raw (không phải placeholder)
+ * Root cause: Radix SelectValue render `value` text raw nếu không match
+ * item nào. Pass `value={undefined}` cũng KHÔNG reset — Radix vẫn giữ
+ * state cũ.
  *
- * Fix:
- *   1. Auto inject "all" item nếu options chưa có (giữ backward compat
- *      cho callers không tự thêm — vd lich-su-kho, status filters).
- *   2. Nếu value không match item nào → pass `undefined` xuống Select →
- *      Radix render placeholder thay vì raw UUID.
+ * Fix triệt để: render text custom thay vì SelectValue khi value không
+ * khớp item nào — bypass Radix render logic.
  */
 export function SelectFilter({
   options,
@@ -39,25 +35,29 @@ export function SelectFilter({
   onChange,
   placeholder = "Tất cả",
 }: SelectFilterProps) {
-  // Auto inject "all" item nếu chưa có — caller không cần lo
+  // Auto inject "all" item nếu options chưa có (giữ backward compat)
   const hasAll = options.some((o) => o.value === "all");
   const safeOptions = hasAll
     ? options
     : [{ label: placeholder, value: "all" }, ...options];
 
-  // Race-condition guard: value = UUID nhưng options chưa load (branches
-  // fetch async). Pass undefined để Radix render placeholder thay vì
-  // value raw.
-  const isValid = safeOptions.some((o) => o.value === value);
-  const safeValue = isValid ? value : undefined;
+  const matchedOption = safeOptions.find((o) => o.value === value);
 
   return (
     <Select
-      value={safeValue}
+      value={value}
       onValueChange={(v: string | null) => onChange(v ?? "all")}
     >
       <SelectTrigger className="h-8 text-sm">
-        <SelectValue placeholder={placeholder} />
+        {matchedOption ? (
+          <SelectValue placeholder={placeholder}>
+            {matchedOption.label}
+          </SelectValue>
+        ) : (
+          // value KHÔNG match option (race condition: branches chưa load) →
+          // render placeholder thay vì để Radix render UUID raw
+          <span className="text-muted-foreground">{placeholder}</span>
+        )}
       </SelectTrigger>
       <SelectContent>
         {safeOptions.map((opt) => (
