@@ -5,6 +5,7 @@
 import type { Customer, QueryParams, QueryResult } from "@/lib/types";
 import type { Database } from "@/lib/supabase/types";
 import { getClient, getPaginationRange, handleError, getCurrentTenantId } from "./base";
+import { recordAuditLog } from "./audit";
 
 type CustomerInsert = Database["public"]["Tables"]["customers"]["Insert"];
 type CustomerUpdate = Database["public"]["Tables"]["customers"]["Update"];
@@ -52,6 +53,27 @@ export async function getCustomers(params: QueryParams): Promise<QueryResult<Cus
     if (debtFilter === "has_debt") query = query.gt("debt", 0);
     else if (debtFilter === "no_debt") query = query.eq("debt", 0);
   }
+
+  // Filter: gender (page truyền `gender` từ ChipToggle, trước đây service
+  // bỏ qua → UI giả-filter)
+  if (params.filters?.gender && params.filters.gender !== "all") {
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    query = query.eq("gender", params.filters.gender as any);
+  }
+
+  // Filter: ngày tạo (from/to)
+  if (params.filters?.dateFrom) {
+    query = query.gte("created_at", params.filters.dateFrom as string);
+  }
+  if (params.filters?.dateTo) {
+    const end = new Date(params.filters.dateTo as string);
+    end.setDate(end.getDate() + 1);
+    query = query.lt("created_at", end.toISOString());
+  }
+
+  // Note: filter `createdBy` không support được vì schema `customers` không
+  // có cột `created_by`. UI vẫn hiển thị PersonFilter cho consistency với
+  // các module khác — sẽ chỉ tham gia query khi schema được mở rộng.
 
   // Sort & paginate
   query = query
@@ -195,6 +217,22 @@ export async function createCustomer(customer: Partial<Customer>): Promise<Custo
     .single();
 
   if (error) handleError(error, "createCustomer");
+
+  // Audit log — best-effort
+  await recordAuditLog({
+    entityType: "customer",
+    entityId: data.id,
+    action: "create",
+    newData: {
+      code: data.code,
+      name: data.name,
+      phone: data.phone,
+      email: data.email,
+      group_id: data.group_id,
+      customer_type: data.customer_type,
+    },
+  });
+
   return mapCustomer(data);
 }
 
@@ -204,6 +242,22 @@ export async function createCustomer(customer: Partial<Customer>): Promise<Custo
 export async function updateCustomer(id: string, updates: Partial<Customer>): Promise<Customer> {
   const supabase = getClient();
   const tenantId = await getCurrentTenantId();
+
+  // Snapshot trước khi update để ghi audit log diff. Try/catch best-effort
+  // để không bể luồng chính nếu fetch fail (vd: KH bị xóa giữa chừng,
+  // hoặc test mock không expose maybeSingle).
+  let oldRow: Record<string, unknown> | null = null;
+  try {
+    const res = await supabase
+      .from("customers")
+      .select("code, name, phone, email, group_id, customer_type, address")
+      .eq("tenant_id", tenantId)
+      .eq("id", id)
+      .maybeSingle();
+    oldRow = (res?.data as Record<string, unknown> | null) ?? null;
+  } catch {
+    /* snapshot optional */
+  }
 
   const payload: CustomerUpdate = {};
   if (updates.code !== undefined) payload.code = updates.code;
@@ -226,6 +280,15 @@ export async function updateCustomer(id: string, updates: Partial<Customer>): Pr
     .single();
 
   if (error) handleError(error, "updateCustomer");
+
+  await recordAuditLog({
+    entityType: "customer",
+    entityId: id,
+    action: "update",
+    oldData: oldRow ?? null,
+    newData: payload as Record<string, unknown>,
+  });
+
   return mapCustomer(data);
 }
 
@@ -236,6 +299,20 @@ export async function deleteCustomer(id: string): Promise<void> {
   const supabase = getClient();
   const tenantId = await getCurrentTenantId();
 
+  // Snapshot best-effort để ghi audit log delete (lưu lại tên/code đã xóa).
+  let oldRow: Record<string, unknown> | null = null;
+  try {
+    const res = await supabase
+      .from("customers")
+      .select("code, name, phone, email, group_id, customer_type")
+      .eq("tenant_id", tenantId)
+      .eq("id", id)
+      .maybeSingle();
+    oldRow = (res?.data as Record<string, unknown> | null) ?? null;
+  } catch {
+    /* snapshot optional */
+  }
+
   const { error } = await supabase
     .from("customers")
     .delete()
@@ -243,6 +320,13 @@ export async function deleteCustomer(id: string): Promise<void> {
     .eq("id", id);
 
   if (error) handleError(error, "deleteCustomer");
+
+  await recordAuditLog({
+    entityType: "customer",
+    entityId: id,
+    action: "delete",
+    oldData: oldRow ?? null,
+  });
 }
 
 // --- Mapper ---

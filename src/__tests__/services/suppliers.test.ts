@@ -30,6 +30,11 @@ vi.mock("@/lib/services/supabase/base", () => ({
     throw new Error(`[${ctx}] ${error.message}`);
   },
   getCurrentTenantId: vi.fn().mockResolvedValue("tenant-test-1"),
+  getCurrentContext: vi.fn().mockResolvedValue({
+    tenantId: "tenant-test-1",
+    branchId: "branch-test-1",
+    userId: "user-test-1",
+  }),
 }));
 
 import {
@@ -69,6 +74,9 @@ describe("updateSupplier", () => {
   beforeEach(() => vi.clearAllMocks());
 
   it("updates and returns mapped supplier", async () => {
+    // Snapshot fetch (best-effort cho audit log) — trả null
+    mockResult.mockResolvedValueOnce({ data: null, error: null });
+    // Update result thật
     mockResult.mockResolvedValueOnce({
       data: { id: "s-1", code: "NCC001", name: "Updated" },
       error: null,

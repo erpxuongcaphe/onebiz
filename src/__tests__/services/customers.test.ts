@@ -29,6 +29,13 @@ vi.mock("@/lib/services/supabase/base", () => ({
   },
   // Multi-tenant safety helper — services giờ resolve tenant_id qua đây
   getCurrentTenantId: vi.fn().mockResolvedValue("tenant-test-1"),
+  // Audit log dùng getCurrentContext để có user_id; trả mock context
+  // (audit insert là best-effort, chỉ console.warn nếu fail).
+  getCurrentContext: vi.fn().mockResolvedValue({
+    tenantId: "tenant-test-1",
+    branchId: "branch-test-1",
+    userId: "user-test-1",
+  }),
 }));
 
 import {
@@ -69,6 +76,9 @@ describe("updateCustomer", () => {
   beforeEach(() => vi.clearAllMocks());
 
   it("updates and returns mapped customer", async () => {
+    // Snapshot fetch best-effort cho audit log — trả null
+    mockResult.mockResolvedValueOnce({ data: null, error: null });
+    // Update result thật
     mockResult.mockResolvedValueOnce({
       data: { id: "c-1", code: "KH001", name: "Updated KH", customer_groups: null },
       error: null,

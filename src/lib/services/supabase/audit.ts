@@ -12,6 +12,8 @@ import {
   getClient,
   getPaginationRange,
   handleError,
+  getCurrentContext,
+  getCurrentTenantId,
 } from "./base";
 
 /* ------------------------------------------------------------------ */
@@ -171,6 +173,52 @@ export async function getAuditLogs(
 }
 
 /* ------------------------------------------------------------------ */
+/*  Write helper — manual audit log insert (no triggers)               */
+/* ------------------------------------------------------------------ */
+
+/**
+ * Ghi 1 entry vào `audit_log` cho thao tác create/update/delete.
+ *
+ * Dùng cho service tự ghi audit khi schema không có DB trigger
+ * (KH, NCC, ...). Best-effort: nếu insert fail (RLS, FK profile),
+ * chỉ console.warn — KHÔNG throw để tránh làm hỏng luồng chính.
+ *
+ * @param entityType — string từ ENTITY_TYPE_LABELS (vd: "customer", "supplier")
+ * @param entityId — UUID record vừa thao tác
+ * @param action — "create" | "update" | "delete" | ... (xem ACTION_LABELS)
+ * @param oldData — null cho create, snapshot trước cho update/delete
+ * @param newData — null cho delete, snapshot sau cho create/update
+ */
+export async function recordAuditLog(params: {
+  entityType: string;
+  entityId: string;
+  action: "create" | "update" | "delete" | string;
+  oldData?: Record<string, unknown> | null;
+  newData?: Record<string, unknown> | null;
+}): Promise<void> {
+  const supabase = getClient();
+  try {
+    const ctx = await getCurrentContext();
+    await supabase.from("audit_log").insert({
+      tenant_id: ctx.tenantId,
+      user_id: ctx.userId,
+      action: params.action,
+      entity_type: params.entityType,
+      entity_id: params.entityId,
+      // Cast object → Json (Supabase typing accepts JSON shape but TS doesn't
+      // unify Record<string,unknown> with Json union automatically).
+      old_data: (params.oldData ?? null) as never,
+      new_data: (params.newData ?? null) as never,
+    });
+  } catch (err) {
+    console.warn(
+      `[recordAuditLog] ${params.entityType}/${params.action} failed:`,
+      err,
+    );
+  }
+}
+
+/* ------------------------------------------------------------------ */
 /*  Lookup by entity — dùng cho InlineDetailPanel "Lịch sử" tab        */
 /* ------------------------------------------------------------------ */
 
@@ -220,6 +268,43 @@ export async function getAuditLogsByEntity(
       createdAt: row.created_at,
     };
   });
+}
+
+/* ------------------------------------------------------------------ */
+/*  Profile suggestions cho PersonFilter (dùng chung cho mọi page)     */
+/* ------------------------------------------------------------------ */
+
+/**
+ * Lấy danh sách profiles (user trong tenant hiện tại) làm suggestions
+ * cho `PersonFilter`. Trả về `{ label, value }` dạng map sẵn.
+ *
+ * Trước đây các page như khach-hang hardcode ["admin", "trang"] → giả-suggestion.
+ * Service này load thực tế từ DB; fail-soft trả [] nếu lỗi.
+ */
+export async function getProfilesForPersonFilter(): Promise<
+  { label: string; value: string }[]
+> {
+  const supabase = getClient();
+  try {
+    const tenantId = await getCurrentTenantId();
+    const { data, error } = await supabase
+      .from("profiles")
+      .select("id, full_name, email")
+      .eq("tenant_id", tenantId)
+      .order("full_name", { ascending: true });
+    if (error) {
+      console.warn("[getProfilesForPersonFilter]", error.message);
+      return [];
+    }
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    return (data ?? []).map((p: any) => ({
+      label: p.full_name || p.email || "(không tên)",
+      value: p.id,
+    }));
+  } catch (err) {
+    console.warn("[getProfilesForPersonFilter]", err);
+    return [];
+  }
 }
 
 /* ------------------------------------------------------------------ */

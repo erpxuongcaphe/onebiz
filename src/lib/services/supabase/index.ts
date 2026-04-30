@@ -192,7 +192,7 @@ export {
 export type { StockTransfer, StockTransferStatus, StockTransferItem, CreateStockTransferInput } from "./transfers";
 
 // Audit Log (Lịch sử thao tác)
-export { getAuditLogs, getAuditLogsByEntity, getAuditStats, getActionOptions, getEntityTypeOptions } from "./audit";
+export { getAuditLogs, getAuditLogsByEntity, recordAuditLog, getAuditStats, getActionOptions, getEntityTypeOptions, getProfilesForPersonFilter } from "./audit";
 export type { AuditLogEntry, AuditFilters } from "./audit";
 
 // Debt Aging (Phân tích tuổi nợ)

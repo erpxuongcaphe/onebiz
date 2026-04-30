@@ -21,6 +21,7 @@ import {
   DetailHeader,
   DetailInfoGrid,
   DetailItemsTable,
+  AuditHistoryTab,
 } from "@/components/shared/inline-detail-panel";
 import type { DetailTab } from "@/components/shared/inline-detail-panel";
 import { Badge } from "@/components/ui/badge";
@@ -309,6 +310,11 @@ function SupplierDetail({
         </div>
       ),
     },
+    {
+      id: "audit",
+      label: "Lịch sử thay đổi",
+      content: <AuditHistoryTab entityType="supplier" entityId={supplier.id} />,
+    },
   ];
 
   return (
@@ -427,12 +433,26 @@ export default function NhaCungCapPage() {
       filters: {
         ...(supplierGroupFilter !== "all" && { group: supplierGroupFilter }),
         ...(selectedStatuses.length > 0 && { status: selectedStatuses }),
+        ...(debtFrom && { debtFrom }),
+        ...(debtTo && { debtTo }),
+        ...(dateFrom && { dateFrom }),
+        ...(dateTo && { dateTo }),
       },
     });
     setData(result.data);
     setTotal(result.total);
     setLoading(false);
-  }, [page, pageSize, search, supplierGroupFilter, selectedStatuses]);
+  }, [
+    page,
+    pageSize,
+    search,
+    supplierGroupFilter,
+    selectedStatuses,
+    debtFrom,
+    debtTo,
+    dateFrom,
+    dateTo,
+  ]);
 
   useEffect(() => {
     fetchData();

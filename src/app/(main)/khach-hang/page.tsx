@@ -21,6 +21,7 @@ import {
   DetailHeader,
   DetailInfoGrid,
   DetailItemsTable,
+  AuditHistoryTab,
 } from "@/components/shared/inline-detail-panel";
 import type { DetailTab } from "@/components/shared/inline-detail-panel";
 import { Badge } from "@/components/ui/badge";
@@ -41,6 +42,7 @@ import {
   getInvoicesForCustomer,
   getReturnsForCustomer,
   getLoyaltyTransactions,
+  getProfilesForPersonFilter,
   type CustomerReturn,
 } from "@/lib/services";
 import type { Customer, Invoice, LoyaltyTransaction } from "@/lib/types";
@@ -103,15 +105,21 @@ export default function KhachHangPage() {
   const [customerGroups, setCustomerGroups] = useState<
     { label: string; value: string; count: number }[]
   >([]);
+  // Profile suggestions cho PersonFilter (Người tạo). Trước đây hardcode
+  // ["admin", "trang"] → suggestion giả không match user thực tế.
+  const [profileSuggestions, setProfileSuggestions] = useState<
+    { label: string; value: string }[]
+  >([]);
   useEffect(() => {
     let cancelled = false;
-    getCustomerGroupsAsync()
-      .then((groups) => {
-        if (!cancelled) setCustomerGroups(groups);
-      })
-      .catch(() => {
-        if (!cancelled) setCustomerGroups([]);
-      });
+    Promise.all([
+      getCustomerGroupsAsync().catch(() => []),
+      getProfilesForPersonFilter().catch(() => []),
+    ]).then(([groups, profiles]) => {
+      if (cancelled) return;
+      setCustomerGroups(groups);
+      setProfileSuggestions(profiles);
+    });
     return () => {
       cancelled = true;
     };
@@ -176,6 +184,25 @@ export default function KhachHangPage() {
       header: "Tổng bán trừ trả hàng",
       cell: ({ row }) => formatCurrency(row.original.totalSalesMinusReturns),
     },
+    {
+      accessorKey: "loyaltyPoints",
+      header: "Điểm tích lũy",
+      size: 110,
+      cell: ({ row }) => {
+        const pts = row.original.loyaltyPoints ?? 0;
+        return (
+          <span
+            className={
+              pts > 0
+                ? "font-medium text-status-success tabular-nums"
+                : "text-muted-foreground tabular-nums"
+            }
+          >
+            {pts.toLocaleString("vi-VN")}
+          </span>
+        );
+      },
+    },
   ];
 
   /* ---- Fetch data ---- */
@@ -191,6 +218,8 @@ export default function KhachHangPage() {
         ...(genderFilter !== "all" && { gender: genderFilter }),
         ...(debtFilter !== "all" && { debt: debtFilter }),
         ...(creatorFilter && { createdBy: creatorFilter }),
+        ...(dateFrom && { dateFrom }),
+        ...(dateTo && { dateTo }),
       },
     });
     setData(result.data);
@@ -205,6 +234,8 @@ export default function KhachHangPage() {
     genderFilter,
     debtFilter,
     creatorFilter,
+    dateFrom,
+    dateTo,
   ]);
 
   useEffect(() => {
@@ -213,7 +244,21 @@ export default function KhachHangPage() {
 
   useEffect(() => {
     setPage(0);
-  }, [search, selectedGroups, typeFilter, genderFilter, debtFilter, creatorFilter]);
+    // Reset expanded row khi filter/search đổi: vì `expandedRow` là INDEX
+    // (DataTable không support id-based), nếu giữ → row bị mở chuyển sang
+    // KH khác (index cũ trỏ đến record mới sau filter). Pattern này đồng
+    // bộ với nha-cung-cap/page.tsx.
+    setExpandedRow(null);
+  }, [
+    search,
+    selectedGroups,
+    typeFilter,
+    genderFilter,
+    debtFilter,
+    creatorFilter,
+    dateFrom,
+    dateTo,
+  ]);
 
   /* ---- Summaries ---- */
   const totalDebt = data.reduce((sum, c) => sum + c.currentDebt, 0);
@@ -329,10 +374,7 @@ export default function KhachHangPage() {
                 value={creatorFilter}
                 onChange={setCreatorFilter}
                 placeholder="Chọn người tạo"
-                suggestions={[
-                  { label: "Admin", value: "admin" },
-                  { label: "Cao Thị Huyền Trang", value: "trang" },
-                ]}
+                suggestions={profileSuggestions}
               />
             </FilterGroup>
           </FilterSidebar>
@@ -581,6 +623,20 @@ function CustomerDetailPanel({
                   : customer.gender === "female"
                     ? "Nữ"
                     : "",
+            },
+            {
+              label: "Điểm tích lũy",
+              value: (
+                <span
+                  className={
+                    (customer.loyaltyPoints ?? 0) > 0
+                      ? "font-semibold text-status-success"
+                      : "text-muted-foreground"
+                  }
+                >
+                  {(customer.loyaltyPoints ?? 0).toLocaleString("vi-VN")} điểm
+                </span>
+              ),
             },
             { label: "Ngày tạo", value: formatDate(customer.createdAt) },
           ]}
@@ -885,6 +941,11 @@ function CustomerDetailPanel({
           ]}
         />
       ),
+    },
+    {
+      id: "audit",
+      label: "Lịch sử thay đổi",
+      content: <AuditHistoryTab entityType="customer" entityId={customer.id} />,
     },
   ];
 

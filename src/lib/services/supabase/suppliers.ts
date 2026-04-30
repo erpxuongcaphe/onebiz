@@ -14,6 +14,7 @@ import {
   handleError,
   getCurrentTenantId,
 } from "./base";
+import { recordAuditLog } from "./audit";
 
 type SupplierInsert = Database["public"]["Tables"]["suppliers"]["Insert"];
 type SupplierUpdate = Database["public"]["Tables"]["suppliers"]["Update"];
@@ -43,11 +44,44 @@ export async function getSuppliers(params: QueryParams): Promise<QueryResult<Sup
     );
   }
 
-  // Filter: debt
+  // Filter: debt has/no
   if (params.filters?.debt) {
     const debtFilter = params.filters.debt as string;
     if (debtFilter === "has_debt") query = query.gt("debt", 0);
     else if (debtFilter === "no_debt") query = query.eq("debt", 0);
+  }
+
+  // Filter: trạng thái (active/inactive). Page truyền selectedStatuses
+  // dạng string[]. Khi user check cả 2 → không filter (giữ tất cả).
+  // Khi chỉ active → is_active=true, chỉ inactive → is_active=false.
+  if (params.filters?.status) {
+    const statuses = Array.isArray(params.filters.status)
+      ? params.filters.status
+      : [params.filters.status];
+    if (statuses.length === 1) {
+      query = query.eq("is_active", statuses[0] === "active");
+    }
+  }
+
+  // Filter: khoảng nợ tuỳ chỉnh (debt from/to)
+  if (params.filters?.debtFrom) {
+    const v = Number(params.filters.debtFrom);
+    if (!isNaN(v)) query = query.gte("debt", v);
+  }
+  if (params.filters?.debtTo) {
+    const v = Number(params.filters.debtTo);
+    if (!isNaN(v)) query = query.lte("debt", v);
+  }
+
+  // Filter: ngày tạo (from/to)
+  if (params.filters?.dateFrom) {
+    query = query.gte("created_at", params.filters.dateFrom as string);
+  }
+  if (params.filters?.dateTo) {
+    // Cộng 1 ngày để bao gồm hết ngày được chọn (lt ngày kế)
+    const end = new Date(params.filters.dateTo as string);
+    end.setDate(end.getDate() + 1);
+    query = query.lt("created_at", end.toISOString());
   }
 
   // Sort & paginate
@@ -159,6 +193,20 @@ export async function createSupplier(supplier: Partial<Supplier>): Promise<Suppl
     .single();
 
   if (error) handleError(error, "createSupplier");
+
+  await recordAuditLog({
+    entityType: "supplier",
+    entityId: data.id,
+    action: "create",
+    newData: {
+      code: data.code,
+      name: data.name,
+      phone: data.phone,
+      email: data.email,
+      tax_code: data.tax_code,
+    },
+  });
+
   return mapSupplier(data);
 }
 
@@ -169,6 +217,21 @@ export async function createSupplier(supplier: Partial<Supplier>): Promise<Suppl
 export async function updateSupplier(id: string, updates: Partial<Supplier>): Promise<Supplier> {
   const supabase = getClient();
   const tenantId = await getCurrentTenantId();
+
+  // Snapshot best-effort cho audit log diff. Try/catch để không bể flow
+  // chính nếu fetch lỗi (vd: test mock không expose maybeSingle).
+  let oldRow: Record<string, unknown> | null = null;
+  try {
+    const res = await supabase
+      .from("suppliers")
+      .select("code, name, phone, email, address, tax_code, note")
+      .eq("tenant_id", tenantId)
+      .eq("id", id)
+      .maybeSingle();
+    oldRow = (res?.data as Record<string, unknown> | null) ?? null;
+  } catch {
+    /* snapshot optional */
+  }
 
   const payload: SupplierUpdate = {};
   if (updates.code !== undefined) payload.code = updates.code;
@@ -188,6 +251,15 @@ export async function updateSupplier(id: string, updates: Partial<Supplier>): Pr
     .single();
 
   if (error) handleError(error, "updateSupplier");
+
+  await recordAuditLog({
+    entityType: "supplier",
+    entityId: id,
+    action: "update",
+    oldData: oldRow ?? null,
+    newData: payload as Record<string, unknown>,
+  });
+
   return mapSupplier(data);
 }
 
@@ -198,6 +270,20 @@ export async function deleteSupplier(id: string): Promise<void> {
   const supabase = getClient();
   const tenantId = await getCurrentTenantId();
 
+  // Snapshot best-effort cho audit log delete (lưu lại tên/code đã xóa).
+  let oldRow: Record<string, unknown> | null = null;
+  try {
+    const res = await supabase
+      .from("suppliers")
+      .select("code, name, phone, email, tax_code")
+      .eq("tenant_id", tenantId)
+      .eq("id", id)
+      .maybeSingle();
+    oldRow = (res?.data as Record<string, unknown> | null) ?? null;
+  } catch {
+    /* snapshot optional */
+  }
+
   const { error } = await supabase
     .from("suppliers")
     .delete()
@@ -205,6 +291,13 @@ export async function deleteSupplier(id: string): Promise<void> {
     .eq("id", id);
 
   if (error) handleError(error, "deleteSupplier");
+
+  await recordAuditLog({
+    entityType: "supplier",
+    entityId: id,
+    action: "delete",
+    oldData: oldRow ?? null,
+  });
 }
 
 // --- Mapper ---
