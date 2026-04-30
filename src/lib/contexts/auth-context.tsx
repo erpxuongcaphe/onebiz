@@ -186,6 +186,13 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   // Flag set by explicit logout() to suppress "session expired" toast —
   // user-initiated logout shouldn't show a warning.
   const userLogoutRef = useRef(false);
+  // Track which user.id đã loadUserData rồi để dedup. onAuthStateChange fire
+  // mỗi 50 phút (TOKEN_REFRESHED) + INITIAL_SESSION + USER_UPDATED — nếu
+  // mỗi event đều fire loadUserData() → 5-17 lần fetch profile/tenant/branches
+  // → cross-tab lock contention → "Lock broken by another request with the
+  // 'steal' option" → toàn bộ services downstream throw.
+  // Fix: chỉ load lại khi user.id THỰC SỰ đổi (signin/switch account).
+  const loadedUserIdRef = useRef<string | null>(null);
 
   // Listen to Supabase auth state changes
   useEffect(() => {
@@ -209,6 +216,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
         if (initialUser) {
           setAuthUser(initialUser);
           wasAuthenticatedRef.current = true;
+          loadedUserIdRef.current = initialUser.id;
           loadUserData(initialUser).finally(() => {
             clearTimeout(initTimeoutId);
             setIsLoading(false);
@@ -235,16 +243,23 @@ export function AuthProvider({ children }: { children: ReactNode }) {
 
       if (sessionUser) {
         wasAuthenticatedRef.current = true;
-        // loadUserData có try/catch trong body — không throw lên đây.
-        // Nếu initial getUser() chưa resolve mà onAuthStateChange fire trước
-        // (race khi tab restore), vẫn safe vì loadUserData self-contained.
-        loadUserData(sessionUser);
+        // DEDUP: chỉ loadUserData khi user.id THỰC SỰ đổi (signin/switch
+        // account) hoặc lần đầu (loadedUserIdRef chưa set). TOKEN_REFRESHED
+        // / USER_UPDATED không cần re-fetch profile/tenant/branches vì data
+        // không đổi — chỉ token đổi.
+        if (loadedUserIdRef.current !== sessionUser.id) {
+          loadedUserIdRef.current = sessionUser.id;
+          // loadUserData có try/catch trong body — không throw lên đây.
+          loadUserData(sessionUser);
+        }
       } else {
         setUser(null);
         setTenant(null);
         setBranches([]);
         setCurrentBranch(null);
         setPermissions(new Set());
+        // Reset dedup ref để lần sign-in tiếp theo sẽ load lại
+        loadedUserIdRef.current = null;
 
         // Nếu trước đó đã đăng nhập và bây giờ session mất (token hết hạn,
         // refresh fail, logout từ device khác) → notify + redirect. Bỏ qua
