@@ -145,22 +145,6 @@ export default function HSDPage() {
             </p>
           </FilterGroup>
 
-          <FilterGroup label="Tổng quan">
-            <div className="space-y-2 text-sm">
-              <div className="flex items-center justify-between">
-                <span className="text-muted-foreground">Tổng lô cần chú ý:</span>
-                <span className="font-medium">{total}</span>
-              </div>
-              <div className="flex items-center justify-between">
-                <span className="text-destructive">Đã hết hạn:</span>
-                <span className="font-medium text-destructive">{expiredCount}</span>
-              </div>
-              <div className="flex items-center justify-between">
-                <span className="text-status-warning">Sắp hết:</span>
-                <span className="font-medium text-status-warning">{expiringCount}</span>
-              </div>
-            </div>
-          </FilterGroup>
         </FilterSidebar>
       }
     >
@@ -170,6 +154,79 @@ export default function HSDPage() {
         searchValue={search}
         onSearchChange={setSearch}
       />
+
+      {/* KPI summary cards — đồng đều design với lo-san-xuat / lich-su-kho */}
+      <div className="grid grid-cols-1 md:grid-cols-3 gap-3 px-4 pt-4">
+        <div className="bg-surface-container-lowest rounded-xl border border-border p-3 ambient-shadow">
+          <div className="flex items-center gap-2">
+            <span className="inline-flex size-8 items-center justify-center rounded-lg bg-primary-fixed/15 text-primary">
+              <Icon name="event" size={16} />
+            </span>
+            <div>
+              <div className="text-2xl font-bold text-primary leading-tight">{total}</div>
+              <div className="text-xs text-muted-foreground">Tổng lô cần chú ý</div>
+            </div>
+          </div>
+        </div>
+        <div
+          className={`rounded-xl border p-3 ambient-shadow ${
+            expiredCount > 0
+              ? "bg-status-error/10 border-status-error/25"
+              : "bg-surface-container-lowest border-border"
+          }`}
+        >
+          <div className="flex items-center gap-2">
+            <span
+              className={`inline-flex size-8 items-center justify-center rounded-lg ${
+                expiredCount > 0
+                  ? "bg-status-error/15 text-status-error"
+                  : "bg-status-success/10 text-status-success"
+              }`}
+            >
+              <Icon name={expiredCount > 0 ? "warning" : "verified"} size={16} />
+            </span>
+            <div>
+              <div
+                className={`text-2xl font-bold leading-tight ${
+                  expiredCount > 0 ? "text-status-error" : "text-status-success"
+                }`}
+              >
+                {expiredCount}
+              </div>
+              <div className="text-xs text-muted-foreground">Đã hết hạn</div>
+            </div>
+          </div>
+        </div>
+        <div
+          className={`rounded-xl border p-3 ambient-shadow ${
+            expiringCount > 0
+              ? "bg-status-warning/10 border-status-warning/25"
+              : "bg-surface-container-lowest border-border"
+          }`}
+        >
+          <div className="flex items-center gap-2">
+            <span
+              className={`inline-flex size-8 items-center justify-center rounded-lg ${
+                expiringCount > 0
+                  ? "bg-status-warning/15 text-status-warning"
+                  : "bg-surface-container-high text-foreground"
+              }`}
+            >
+              <Icon name="schedule" size={16} />
+            </span>
+            <div>
+              <div
+                className={`text-2xl font-bold leading-tight ${
+                  expiringCount > 0 ? "text-status-warning" : "text-foreground"
+                }`}
+              >
+                {expiringCount}
+              </div>
+              <div className="text-xs text-muted-foreground">Sắp hết ({thresholdDays}d)</div>
+            </div>
+          </div>
+        </div>
+      </div>
 
       {!loading && filtered.length === 0 ? (
         <div className="flex flex-col items-center justify-center py-20 text-muted-foreground">
