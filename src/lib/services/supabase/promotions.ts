@@ -1,8 +1,17 @@
 /**
  * Supabase service: Promotions (Khuyến mãi)
+ *
+ * Sprint KM-1 (00042): bổ sung 7 field engine + table promotion_settings.
+ * Sprint KM-2 sẽ wire vào POS qua promotion-engine.ts.
  */
 
-import type { Promotion, QueryParams, QueryResult } from "@/lib/types";
+import type {
+  Promotion,
+  PromotionSettings,
+  PromotionChannel,
+  QueryParams,
+  QueryResult,
+} from "@/lib/types";
 import type { Database } from "@/lib/supabase/types";
 import { getClient, getPaginationRange, handleError, getFilterValue, getCurrentTenantId } from "./base";
 
@@ -26,6 +35,25 @@ function mapPromotion(row: Record<string, unknown>): Promotion {
     isActive: row.is_active as boolean,
     autoApply: row.auto_apply as boolean,
     priority: row.priority as number,
+    // KM-1 v2 fields — fallback an toàn cho row cũ chưa có column
+    channel: ((row.channel as PromotionChannel) ?? "both"),
+    branchIds: (row.branch_ids as string[]) ?? [],
+    usageLimit: (row.usage_limit as number) ?? null,
+    usageCount: (row.usage_count as number) ?? 0,
+    timeStart: (row.time_start as string) ?? null,
+    timeEnd: (row.time_end as string) ?? null,
+    daysOfWeek: (row.days_of_week as number[]) ?? [],
+    createdAt: row.created_at as string,
+    updatedAt: row.updated_at as string,
+  };
+}
+
+function mapPromotionSettings(row: Record<string, unknown>): PromotionSettings {
+  return {
+    tenantId: row.tenant_id as string,
+    autoApplyBest: (row.auto_apply_best as boolean) ?? true,
+    allowMultiple: (row.allow_multiple as boolean) ?? false,
+    showOnInvoice: (row.show_on_invoice as boolean) ?? true,
     createdAt: row.created_at as string,
     updatedAt: row.updated_at as string,
   };
@@ -55,6 +83,13 @@ export async function getPromotions(params: QueryParams): Promise<QueryResult<Pr
   const typeFilter = getFilterValue(params.filters, "type");
   if (typeFilter && typeFilter !== "all") query = query.eq("type", typeFilter as Promotion["type"]);
 
+  // Filter theo channel — dùng cho UI list lọc Retail/FnB
+  const channelFilter = getFilterValue(params.filters, "channel");
+  if (channelFilter && channelFilter !== "all") {
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    query = (query as any).eq("channel", channelFilter);
+  }
+
   const sortBy = params.sortBy ?? "priority";
   query = query.order(sortBy, { ascending: params.sortOrder === "asc" });
   query = query.range(from, to);
@@ -69,7 +104,8 @@ export async function getPromotions(params: QueryParams): Promise<QueryResult<Pr
 }
 
 /**
- * Lấy các khuyến mãi đang hoạt động (auto_apply).
+ * Lấy các khuyến mãi đang active trong cửa sổ start/end (chưa filter
+ * channel/branch/time-of-day — engine sẽ filter ở KM-2 cho từng cart).
  */
 export async function getActivePromotions(): Promise<Promotion[]> {
   const supabase = getClient();
@@ -96,25 +132,35 @@ export async function createPromotion(promo: Partial<Promotion>): Promise<Promot
   const supabase = getClient();
   const tenantId = await getCurrentTenantId();
 
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  const insertPayload: any = {
+    tenant_id: tenantId,
+    name: promo.name!,
+    description: promo.description,
+    type: promo.type!,
+    value: promo.value!,
+    min_order_amount: promo.minOrderAmount ?? 0,
+    buy_quantity: promo.buyQuantity,
+    get_quantity: promo.getQuantity,
+    applies_to: promo.appliesTo ?? "all",
+    applies_to_ids: promo.appliesToIds ?? [],
+    start_date: promo.startDate!,
+    end_date: promo.endDate!,
+    is_active: promo.isActive ?? true,
+    auto_apply: promo.autoApply ?? false,
+    priority: promo.priority ?? 0,
+    // KM-1 v2 fields
+    channel: promo.channel ?? "both",
+    branch_ids: promo.branchIds ?? [],
+    usage_limit: promo.usageLimit ?? null,
+    time_start: promo.timeStart ?? null,
+    time_end: promo.timeEnd ?? null,
+    days_of_week: promo.daysOfWeek ?? [],
+  };
+
   const { data, error } = await supabase
     .from("promotions")
-    .insert({
-      tenant_id: tenantId,
-      name: promo.name!,
-      description: promo.description,
-      type: promo.type!,
-      value: promo.value!,
-      min_order_amount: promo.minOrderAmount ?? 0,
-      buy_quantity: promo.buyQuantity,
-      get_quantity: promo.getQuantity,
-      applies_to: promo.appliesTo ?? "all",
-      applies_to_ids: promo.appliesToIds ?? [],
-      start_date: promo.startDate!,
-      end_date: promo.endDate!,
-      is_active: promo.isActive ?? true,
-      auto_apply: promo.autoApply ?? false,
-      priority: promo.priority ?? 0,
-    } satisfies PromotionInsert)
+    .insert(insertPayload satisfies PromotionInsert)
     .select()
     .single();
 
@@ -129,7 +175,8 @@ export async function updatePromotion(id: string, updates: Partial<Promotion>): 
   const supabase = getClient();
   const tenantId = await getCurrentTenantId();
 
-  const payload: PromotionUpdate = {};
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  const payload: any = {};
   if (updates.name !== undefined) payload.name = updates.name;
   if (updates.description !== undefined) payload.description = updates.description;
   if (updates.type !== undefined) payload.type = updates.type;
@@ -144,10 +191,17 @@ export async function updatePromotion(id: string, updates: Partial<Promotion>): 
   if (updates.isActive !== undefined) payload.is_active = updates.isActive;
   if (updates.autoApply !== undefined) payload.auto_apply = updates.autoApply;
   if (updates.priority !== undefined) payload.priority = updates.priority;
+  // KM-1 v2 fields
+  if (updates.channel !== undefined) payload.channel = updates.channel;
+  if (updates.branchIds !== undefined) payload.branch_ids = updates.branchIds;
+  if (updates.usageLimit !== undefined) payload.usage_limit = updates.usageLimit;
+  if (updates.timeStart !== undefined) payload.time_start = updates.timeStart;
+  if (updates.timeEnd !== undefined) payload.time_end = updates.timeEnd;
+  if (updates.daysOfWeek !== undefined) payload.days_of_week = updates.daysOfWeek;
 
   const { data, error } = await supabase
     .from("promotions")
-    .update(payload)
+    .update(payload satisfies PromotionUpdate)
     .eq("tenant_id", tenantId)
     .eq("id", id)
     .select()
@@ -171,4 +225,70 @@ export async function deletePromotion(id: string): Promise<void> {
     .eq("id", id);
 
   if (error) handleError(error, "deletePromotion");
+}
+
+/* ------------------------------------------------------------------ */
+/*  Promotion Settings (1 row / tenant)                                */
+/* ------------------------------------------------------------------ */
+
+/**
+ * Lấy cài đặt khuyến mãi của tenant. Nếu chưa có row → trả default.
+ */
+export async function getPromotionSettings(): Promise<PromotionSettings> {
+  const supabase = getClient();
+  const tenantId = await getCurrentTenantId();
+
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  const { data, error } = await (supabase as any)
+    .from("promotion_settings")
+    .select("*")
+    .eq("tenant_id", tenantId)
+    .maybeSingle();
+
+  if (error && error.code !== "PGRST116") handleError(error, "getPromotionSettings");
+
+  if (!data) {
+    // Default cho tenant chưa có row — UI hiện ra như đã enable
+    return {
+      tenantId,
+      autoApplyBest: true,
+      allowMultiple: false,
+      showOnInvoice: true,
+      createdAt: new Date().toISOString(),
+      updatedAt: new Date().toISOString(),
+    };
+  }
+
+  return mapPromotionSettings(data as Record<string, unknown>);
+}
+
+/**
+ * Upsert cài đặt khuyến mãi (insert nếu chưa có row, update nếu có).
+ * Dùng `onConflict: tenant_id` để idempotent — gọi nhiều lần không sao.
+ */
+export async function upsertPromotionSettings(
+  input: Partial<Pick<PromotionSettings, "autoApplyBest" | "allowMultiple" | "showOnInvoice">>,
+): Promise<PromotionSettings> {
+  const supabase = getClient();
+  const tenantId = await getCurrentTenantId();
+
+  // Lấy current để merge với partial input (giữ field không truyền)
+  const current = await getPromotionSettings();
+
+  const merged = {
+    tenant_id: tenantId,
+    auto_apply_best: input.autoApplyBest ?? current.autoApplyBest,
+    allow_multiple: input.allowMultiple ?? current.allowMultiple,
+    show_on_invoice: input.showOnInvoice ?? current.showOnInvoice,
+  };
+
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  const { data, error } = await (supabase as any)
+    .from("promotion_settings")
+    .upsert(merged, { onConflict: "tenant_id" })
+    .select()
+    .single();
+
+  if (error) handleError(error, "upsertPromotionSettings");
+  return mapPromotionSettings(data as Record<string, unknown>);
 }

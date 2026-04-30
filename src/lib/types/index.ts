@@ -106,7 +106,7 @@ export type { SalesChannel, OnlineOrder } from "./online";
 export type { Coupon, CouponUsage, CouponValidation } from "./coupons";
 
 // Promotions domain
-export type { Promotion } from "./promotions";
+export type { Promotion, PromotionChannel, PromotionSettings } from "./promotions";
 
 // Loyalty domain
 export type { LoyaltySettings, LoyaltyTier, LoyaltyTransaction } from "./loyalty";

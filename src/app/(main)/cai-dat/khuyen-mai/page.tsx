@@ -12,8 +12,10 @@ import {
   getPromotions,
   deletePromotion,
   updatePromotion,
+  getPromotionSettings,
+  upsertPromotionSettings,
 } from "@/lib/services";
-import type { Promotion } from "@/lib/types";
+import type { Promotion, PromotionSettings } from "@/lib/types";
 import { useToast } from "@/lib/contexts";
 import { CreatePromotionDialog, ConfirmDialog } from "@/components/shared/dialogs";
 
@@ -131,9 +133,10 @@ export default function PromotionSettingsPage() {
   const [deleteLoading, setDeleteLoading] = useState(false);
 
   const [enablePromotions, setEnablePromotions] = useState(true);
-  const [autoApplyBest, setAutoApplyBest] = useState(true);
-  const [allowMultipleCodes, setAllowMultipleCodes] = useState(false);
-  const [showOnInvoice, setShowOnInvoice] = useState(true);
+  // Settings persisted in DB (table promotion_settings) — KM-1 fix
+  const [settings, setSettings] = useState<PromotionSettings | null>(null);
+  const [savingSettings, setSavingSettings] = useState(false);
+  const [settingsDirty, setSettingsDirty] = useState(false);
 
   const fetchPromotions = useCallback(async () => {
     setLoading(true);
@@ -152,9 +155,59 @@ export default function PromotionSettingsPage() {
     }
   }, [toast]);
 
+  const fetchSettings = useCallback(async () => {
+    try {
+      const result = await getPromotionSettings();
+      setSettings(result);
+    } catch (err) {
+      toast({
+        title: "Không tải được cài đặt",
+        description: err instanceof Error ? err.message : "Vui lòng thử lại",
+        variant: "error",
+      });
+    }
+  }, [toast]);
+
   useEffect(() => {
     fetchPromotions();
-  }, [fetchPromotions]);
+    fetchSettings();
+  }, [fetchPromotions, fetchSettings]);
+
+  function updateSettingsField<K extends keyof PromotionSettings>(
+    key: K,
+    value: PromotionSettings[K],
+  ) {
+    if (!settings) return;
+    setSettings({ ...settings, [key]: value });
+    setSettingsDirty(true);
+  }
+
+  async function handleSaveSettings() {
+    if (!settings) return;
+    setSavingSettings(true);
+    try {
+      const updated = await upsertPromotionSettings({
+        autoApplyBest: settings.autoApplyBest,
+        allowMultiple: settings.allowMultiple,
+        showOnInvoice: settings.showOnInvoice,
+      });
+      setSettings(updated);
+      setSettingsDirty(false);
+      toast({
+        title: "Đã lưu cài đặt khuyến mãi",
+        description: "Các tuỳ chọn áp dụng đã được cập nhật.",
+        variant: "success",
+      });
+    } catch (err) {
+      toast({
+        title: "Lỗi lưu cài đặt",
+        description: err instanceof Error ? err.message : "Vui lòng thử lại",
+        variant: "error",
+      });
+    } finally {
+      setSavingSettings(false);
+    }
+  }
 
   async function handleToggleActive(promo: Promotion) {
     try {
@@ -367,26 +420,37 @@ export default function PromotionSettingsPage() {
             <CardTitle>Cài đặt chung</CardTitle>
           </CardHeader>
           <CardContent>
-            <div className="divide-y">
-              <Toggle
-                checked={autoApplyBest}
-                onCheckedChange={setAutoApplyBest}
-                label="Tự động áp dụng KM tốt nhất"
-                description="Hệ thống tự chọn khuyến mãi có lợi nhất cho khách hàng"
-              />
-              <Toggle
-                checked={allowMultipleCodes}
-                onCheckedChange={setAllowMultipleCodes}
-                label="Cho phép dùng nhiều mã cùng lúc"
-                description="Khách hàng có thể nhập nhiều mã khuyến mãi trong một đơn hàng"
-              />
-              <Toggle
-                checked={showOnInvoice}
-                onCheckedChange={setShowOnInvoice}
-                label="Hiển thị KM trên hóa đơn"
-                description="In thông tin khuyến mãi đã áp dụng trên hóa đơn"
-              />
-            </div>
+            {!settings ? (
+              <div className="py-4 text-center text-sm text-muted-foreground">
+                <Icon
+                  name="progress_activity"
+                  size={16}
+                  className="mx-auto mb-2 animate-spin"
+                />
+                Đang tải cài đặt...
+              </div>
+            ) : (
+              <div className="divide-y">
+                <Toggle
+                  checked={settings.autoApplyBest}
+                  onCheckedChange={(v) => updateSettingsField("autoApplyBest", v)}
+                  label="Tự động áp dụng KM tốt nhất"
+                  description="Hệ thống tự chọn khuyến mãi có lợi nhất cho khách hàng"
+                />
+                <Toggle
+                  checked={settings.allowMultiple}
+                  onCheckedChange={(v) => updateSettingsField("allowMultiple", v)}
+                  label="Cho phép dùng nhiều mã cùng lúc"
+                  description="Khách hàng có thể nhập nhiều mã khuyến mãi trong một đơn hàng"
+                />
+                <Toggle
+                  checked={settings.showOnInvoice}
+                  onCheckedChange={(v) => updateSettingsField("showOnInvoice", v)}
+                  label="Hiển thị KM trên hóa đơn"
+                  description="In thông tin khuyến mãi đã áp dụng trên hóa đơn"
+                />
+              </div>
+            )}
           </CardContent>
         </Card>
 
@@ -394,16 +458,19 @@ export default function PromotionSettingsPage() {
 
         <div className="flex justify-end">
           <Button
-            onClick={() =>
-              toast({
-                title: "Đã lưu cài đặt chung",
-                description: "Các tuỳ chọn áp dụng khuyến mãi đã được cập nhật.",
-                variant: "success",
-              })
-            }
+            onClick={handleSaveSettings}
+            disabled={!settings || savingSettings || !settingsDirty}
           >
-            <Icon name="save" size={16} className="mr-1.5" />
-            Lưu cài đặt
+            {savingSettings ? (
+              <Icon
+                name="progress_activity"
+                size={16}
+                className="mr-1.5 animate-spin"
+              />
+            ) : (
+              <Icon name="save" size={16} className="mr-1.5" />
+            )}
+            {settingsDirty ? "Lưu cài đặt" : "Đã lưu"}
           </Button>
         </div>
       </div>

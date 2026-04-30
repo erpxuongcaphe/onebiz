@@ -64,7 +64,15 @@ export { recordInvoicePayment, recordPurchasePayment, getPaymentHistory } from "
 export type { RecordPaymentInput, RecordPaymentResult } from "./payments";
 export { getFavorites, isFavorite, toggleFavorite, getFavoriteIds } from "./favorites";
 export { getCoupons, getCouponById, createCoupon, updateCoupon, deleteCoupon, validateCoupon, getCouponUsages } from "./coupons";
-export { getPromotions, getActivePromotions, createPromotion, updatePromotion, deletePromotion } from "./promotions";
+export {
+  getPromotions,
+  getActivePromotions,
+  createPromotion,
+  updatePromotion,
+  deletePromotion,
+  getPromotionSettings,
+  upsertPromotionSettings,
+} from "./promotions";
 export { getLoyaltySettings, upsertLoyaltySettings, getLoyaltyTiers, createLoyaltyTier, updateLoyaltyTier, deleteLoyaltyTier, getLoyaltyTransactions, earnLoyaltyPoints } from "./loyalty";
 export { getOnlineOrders, getOnlineOrderById, updateOnlineOrderStatus, updateOnlineOrderPaymentStatus, getOnlineOrderStats } from "./online-orders";
 export { getConversations, getConversationMessages, sendMessage, markConversationRead } from "./conversations";

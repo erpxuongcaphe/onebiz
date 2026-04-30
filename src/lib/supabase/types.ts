@@ -1239,6 +1239,14 @@ export interface Database {
           created_by: string | null;
           created_at: string;
           updated_at: string;
+          // Sprint KM-1 (00042) fields
+          channel: "retail" | "fnb" | "both";
+          branch_ids: string[];
+          usage_limit: number | null;
+          usage_count: number;
+          time_start: string | null;
+          time_end: string | null;
+          days_of_week: number[];
         };
         Insert: {
           id?: string;
@@ -1258,6 +1266,13 @@ export interface Database {
           auto_apply?: boolean;
           priority?: number;
           created_by?: string | null;
+          channel?: "retail" | "fnb" | "both";
+          branch_ids?: string[];
+          usage_limit?: number | null;
+          usage_count?: number;
+          time_start?: string | null;
+          time_end?: string | null;
+          days_of_week?: number[];
         };
         Update: {
           name?: string;
@@ -1274,10 +1289,46 @@ export interface Database {
           is_active?: boolean;
           auto_apply?: boolean;
           priority?: number;
+          channel?: "retail" | "fnb" | "both";
+          branch_ids?: string[];
+          usage_limit?: number | null;
+          usage_count?: number;
+          time_start?: string | null;
+          time_end?: string | null;
+          days_of_week?: number[];
         };
         Relationships: [
           {
             foreignKeyName: "promotions_tenant_id_fkey";
+            columns: ["tenant_id"];
+            referencedRelation: "tenants";
+            referencedColumns: ["id"];
+          },
+        ];
+      };
+      promotion_settings: {
+        Row: {
+          tenant_id: string;
+          auto_apply_best: boolean;
+          allow_multiple: boolean;
+          show_on_invoice: boolean;
+          created_at: string;
+          updated_at: string;
+        };
+        Insert: {
+          tenant_id: string;
+          auto_apply_best?: boolean;
+          allow_multiple?: boolean;
+          show_on_invoice?: boolean;
+        };
+        Update: {
+          auto_apply_best?: boolean;
+          allow_multiple?: boolean;
+          show_on_invoice?: boolean;
+        };
+        Relationships: [
+          {
+            foreignKeyName: "promotion_settings_tenant_id_fkey";
             columns: ["tenant_id"];
             referencedRelation: "tenants";
             referencedColumns: ["id"];

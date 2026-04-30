@@ -18,9 +18,9 @@ import {
   SelectContent,
   SelectItem,
 } from "@/components/ui/select";
-import { useToast } from "@/lib/contexts";
+import { useToast, useAuth } from "@/lib/contexts";
 import { createPromotion, updatePromotion } from "@/lib/services";
-import type { Promotion } from "@/lib/types";
+import type { Promotion, PromotionChannel } from "@/lib/types";
 import { Icon } from "@/components/ui/icon";
 import { cn } from "@/lib/utils";
 
@@ -43,6 +43,20 @@ function toIsoDate(yyyyMmDd: string): string {
   return `${yyyyMmDd}T00:00:00.000Z`;
 }
 
+function toTimeInput(time: string | null): string {
+  if (!time) return "";
+  // DB stores TIME as HH:mm:ss → trim to HH:mm for HTML time input
+  return time.slice(0, 5);
+}
+
+function fromTimeInput(hhmm: string): string | null {
+  if (!hhmm) return null;
+  // HH:mm → HH:mm:00 for Postgres TIME
+  return hhmm.length === 5 ? `${hhmm}:00` : hhmm;
+}
+
+const DAY_LABELS = ["CN", "T2", "T3", "T4", "T5", "T6", "T7"];
+
 export function CreatePromotionDialog({
   open,
   onOpenChange,
@@ -51,6 +65,7 @@ export function CreatePromotionDialog({
 }: CreatePromotionDialogProps) {
   const isEditing = !!initialData;
   const { toast } = useToast();
+  const { branches } = useAuth();
 
   const [name, setName] = useState("");
   const [description, setDescription] = useState("");
@@ -64,6 +79,13 @@ export function CreatePromotionDialog({
   const [isActive, setIsActive] = useState(true);
   const [autoApply, setAutoApply] = useState(false);
   const [priority, setPriority] = useState("0");
+  // KM-1 v2 fields
+  const [channel, setChannel] = useState<PromotionChannel>("both");
+  const [branchIds, setBranchIds] = useState<string[]>([]);
+  const [usageLimit, setUsageLimit] = useState("");
+  const [timeStart, setTimeStart] = useState("");
+  const [timeEnd, setTimeEnd] = useState("");
+  const [daysOfWeek, setDaysOfWeek] = useState<number[]>([]);
   const [errors, setErrors] = useState<Record<string, string>>({});
   const [saving, setSaving] = useState(false);
 
@@ -82,6 +104,12 @@ export function CreatePromotionDialog({
       setIsActive(initialData.isActive);
       setAutoApply(initialData.autoApply);
       setPriority(String(initialData.priority ?? 0));
+      setChannel(initialData.channel ?? "both");
+      setBranchIds(initialData.branchIds ?? []);
+      setUsageLimit(initialData.usageLimit != null ? String(initialData.usageLimit) : "");
+      setTimeStart(toTimeInput(initialData.timeStart));
+      setTimeEnd(toTimeInput(initialData.timeEnd));
+      setDaysOfWeek(initialData.daysOfWeek ?? []);
     } else {
       setName("");
       setDescription("");
@@ -96,6 +124,12 @@ export function CreatePromotionDialog({
       setIsActive(true);
       setAutoApply(false);
       setPriority("0");
+      setChannel("both");
+      setBranchIds([]);
+      setUsageLimit("");
+      setTimeStart("");
+      setTimeEnd("");
+      setDaysOfWeek([]);
     }
     setErrors({});
     setSaving(false);
@@ -120,6 +154,18 @@ export function CreatePromotionDialog({
     if (!endDate) newErrors.endDate = "Vui lòng chọn ngày kết thúc";
     if (startDate && endDate && startDate > endDate)
       newErrors.endDate = "Ngày kết thúc phải sau ngày bắt đầu";
+
+    // Time-of-day: cả 2 phải null hoặc cả 2 phải có giá trị
+    if ((timeStart && !timeEnd) || (!timeStart && timeEnd)) {
+      newErrors.timeRange = "Cần nhập cả giờ bắt đầu và kết thúc";
+    } else if (timeStart && timeEnd && timeStart >= timeEnd) {
+      newErrors.timeRange = "Giờ kết thúc phải sau giờ bắt đầu";
+    }
+
+    if (usageLimit.trim() && (isNaN(Number(usageLimit)) || Number(usageLimit) < 0)) {
+      newErrors.usageLimit = "Giới hạn lượt dùng phải là số ≥ 0";
+    }
+
     setErrors(newErrors);
     return Object.keys(newErrors).length === 0;
   }
@@ -143,6 +189,12 @@ export function CreatePromotionDialog({
         isActive,
         autoApply,
         priority: Number(priority) || 0,
+        channel,
+        branchIds,
+        usageLimit: usageLimit.trim() ? Number(usageLimit) : null,
+        timeStart: fromTimeInput(timeStart),
+        timeEnd: fromTimeInput(timeEnd),
+        daysOfWeek,
       };
 
       if (isEditing) {
@@ -173,12 +225,32 @@ export function CreatePromotionDialog({
     }
   }
 
+  function toggleBranch(branchId: string) {
+    setBranchIds((prev) =>
+      prev.includes(branchId) ? prev.filter((b) => b !== branchId) : [...prev, branchId],
+    );
+  }
+
+  function toggleDay(day: number) {
+    setDaysOfWeek((prev) =>
+      prev.includes(day) ? prev.filter((d) => d !== day) : [...prev, day].sort(),
+    );
+  }
+
   const needsValue = type === "discount_percent" || type === "discount_fixed";
   const needsBuyGet = type === "buy_x_get_y";
+  // Branch filter chỉ hiển thị khi channel có FnB (fnb/both) — Retail không scope theo branch
+  const showBranchFilter = channel === "fnb" || channel === "both";
+  // Lọc branches theo channel — fnb chỉ store; retail có thể warehouse + store; both = tất cả
+  const filteredBranches = branches.filter((b) => {
+    if (channel === "fnb") return b.branchType === "store";
+    if (channel === "retail") return b.branchType === "warehouse" || b.branchType === "store";
+    return true;
+  });
 
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
-      <DialogContent className="sm:max-w-xl max-h-[90vh] overflow-y-auto">
+      <DialogContent className="sm:max-w-2xl max-h-[90vh] overflow-y-auto">
         <DialogHeader>
           <DialogTitle>
             {isEditing ? "Sửa chương trình khuyến mãi" : "Tạo chương trình khuyến mãi"}
@@ -200,9 +272,7 @@ export function CreatePromotionDialog({
               placeholder="VD: Giảm 10% cho đơn trên 500K"
               aria-invalid={!!errors.name}
             />
-            {errors.name && (
-              <p className="text-xs text-destructive">{errors.name}</p>
-            )}
+            {errors.name && <p className="text-xs text-destructive">{errors.name}</p>}
           </div>
 
           {/* Description */}
@@ -217,22 +287,39 @@ export function CreatePromotionDialog({
             />
           </div>
 
-          {/* Type */}
-          <div className="space-y-1.5">
-            <label className="text-sm font-medium">
-              Loại khuyến mãi <span className="text-destructive">*</span>
-            </label>
-            <Select value={type} onValueChange={(v) => setType(v as Promotion["type"])}>
-              <SelectTrigger className="w-full">
-                <SelectValue />
-              </SelectTrigger>
-              <SelectContent>
-                <SelectItem value="discount_percent">Giảm theo %</SelectItem>
-                <SelectItem value="discount_fixed">Giảm số tiền cố định</SelectItem>
-                <SelectItem value="buy_x_get_y">Mua X tặng Y</SelectItem>
-                <SelectItem value="gift">Tặng quà kèm</SelectItem>
-              </SelectContent>
-            </Select>
+          {/* Type + Channel — same row */}
+          <div className="grid grid-cols-2 gap-3">
+            <div className="space-y-1.5">
+              <label className="text-sm font-medium">
+                Loại khuyến mãi <span className="text-destructive">*</span>
+              </label>
+              <Select value={type} onValueChange={(v) => setType(v as Promotion["type"])}>
+                <SelectTrigger className="w-full">
+                  <SelectValue />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="discount_percent">Giảm theo %</SelectItem>
+                  <SelectItem value="discount_fixed">Giảm số tiền cố định</SelectItem>
+                  <SelectItem value="buy_x_get_y">Mua X tặng Y</SelectItem>
+                  <SelectItem value="gift">Tặng quà kèm</SelectItem>
+                </SelectContent>
+              </Select>
+            </div>
+            <div className="space-y-1.5">
+              <label className="text-sm font-medium">
+                Kênh áp dụng <span className="text-destructive">*</span>
+              </label>
+              <Select value={channel} onValueChange={(v) => setChannel(v as PromotionChannel)}>
+                <SelectTrigger className="w-full">
+                  <SelectValue />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="both">Cả hai (Retail + FnB)</SelectItem>
+                  <SelectItem value="retail">Chỉ POS Retail</SelectItem>
+                  <SelectItem value="fnb">Chỉ POS FnB (quán)</SelectItem>
+                </SelectContent>
+              </Select>
+            </div>
           </div>
 
           {/* Value (for percent / fixed) */}
@@ -249,9 +336,7 @@ export function CreatePromotionDialog({
                 placeholder={type === "discount_percent" ? "VD: 10" : "VD: 20000"}
                 aria-invalid={!!errors.value}
               />
-              {errors.value && (
-                <p className="text-xs text-destructive">{errors.value}</p>
-              )}
+              {errors.value && <p className="text-xs text-destructive">{errors.value}</p>}
             </div>
           )}
 
@@ -291,15 +376,36 @@ export function CreatePromotionDialog({
             </div>
           )}
 
-          {/* Min order */}
-          <div className="space-y-1.5">
-            <label className="text-sm font-medium">Đơn tối thiểu (VNĐ)</label>
-            <Input
-              type="number"
-              value={minOrderAmount}
-              onChange={(e) => setMinOrderAmount(e.target.value)}
-              placeholder="VD: 500000"
-            />
+          {/* Min order + Usage limit — same row */}
+          <div className="grid grid-cols-2 gap-3">
+            <div className="space-y-1.5">
+              <label className="text-sm font-medium">Đơn tối thiểu (VNĐ)</label>
+              <Input
+                type="number"
+                value={minOrderAmount}
+                onChange={(e) => setMinOrderAmount(e.target.value)}
+                placeholder="VD: 500000"
+              />
+            </div>
+            <div className="space-y-1.5">
+              <label className="text-sm font-medium">Giới hạn lượt dùng</label>
+              <Input
+                type="number"
+                value={usageLimit}
+                onChange={(e) => setUsageLimit(e.target.value)}
+                placeholder="Bỏ trống = không giới hạn"
+                aria-invalid={!!errors.usageLimit}
+              />
+              {errors.usageLimit && (
+                <p className="text-xs text-destructive">{errors.usageLimit}</p>
+              )}
+              {isEditing && initialData && initialData.usageCount > 0 && (
+                <p className="text-xs text-muted-foreground">
+                  Đã dùng: {initialData.usageCount}
+                  {initialData.usageLimit != null && ` / ${initialData.usageLimit}`} lượt
+                </p>
+              )}
+            </div>
           </div>
 
           {/* Date range */}
@@ -333,6 +439,112 @@ export function CreatePromotionDialog({
               )}
             </div>
           </div>
+
+          {/* Time-of-day window — KM-3 sẽ filter ở engine */}
+          <div className="space-y-1.5">
+            <label className="text-sm font-medium">
+              Giờ áp dụng (tuỳ chọn)
+              <span className="ml-2 text-xs font-normal text-muted-foreground">
+                Bỏ trống = áp cả ngày
+              </span>
+            </label>
+            <div className="grid grid-cols-2 gap-3">
+              <Input
+                type="time"
+                value={timeStart}
+                onChange={(e) => setTimeStart(e.target.value)}
+                placeholder="VD: 14:00"
+              />
+              <Input
+                type="time"
+                value={timeEnd}
+                onChange={(e) => setTimeEnd(e.target.value)}
+                placeholder="VD: 17:00"
+              />
+            </div>
+            {errors.timeRange && (
+              <p className="text-xs text-destructive">{errors.timeRange}</p>
+            )}
+          </div>
+
+          {/* Days of week */}
+          <div className="space-y-1.5">
+            <label className="text-sm font-medium">
+              Áp dụng các ngày
+              <span className="ml-2 text-xs font-normal text-muted-foreground">
+                Không chọn = áp mọi ngày
+              </span>
+            </label>
+            <div className="flex gap-1.5">
+              {DAY_LABELS.map((label, idx) => {
+                const active = daysOfWeek.includes(idx);
+                return (
+                  <button
+                    key={idx}
+                    type="button"
+                    onClick={() => toggleDay(idx)}
+                    className={cn(
+                      "flex-1 min-w-0 px-2 py-1.5 rounded-md text-xs font-medium border transition-colors",
+                      active
+                        ? "bg-primary text-on-primary border-primary"
+                        : "bg-transparent text-muted-foreground border-border hover:bg-muted"
+                    )}
+                  >
+                    {label}
+                  </button>
+                );
+              })}
+            </div>
+          </div>
+
+          {/* Branch filter — chỉ hiện khi channel có FnB */}
+          {showBranchFilter && filteredBranches.length > 0 && (
+            <div className="space-y-1.5">
+              <label className="text-sm font-medium">
+                Chi nhánh áp dụng
+                <span className="ml-2 text-xs font-normal text-muted-foreground">
+                  Không chọn = áp toàn chuỗi ({filteredBranches.length} chi nhánh)
+                </span>
+              </label>
+              <div className="grid grid-cols-2 gap-1.5 rounded-lg border p-2 max-h-[140px] overflow-y-auto">
+                {filteredBranches.map((b) => {
+                  const checked = branchIds.includes(b.id);
+                  return (
+                    <button
+                      key={b.id}
+                      type="button"
+                      onClick={() => toggleBranch(b.id)}
+                      className={cn(
+                        "flex items-center gap-2 px-2 py-1.5 rounded text-xs text-left transition-colors",
+                        checked
+                          ? "bg-primary/10 text-primary"
+                          : "hover:bg-muted text-foreground"
+                      )}
+                    >
+                      <span
+                        className={cn(
+                          "flex h-4 w-4 shrink-0 items-center justify-center rounded border",
+                          checked
+                            ? "bg-primary border-primary text-on-primary"
+                            : "border-border"
+                        )}
+                      >
+                        {checked && <Icon name="check" size={12} />}
+                      </span>
+                      <span className="truncate">
+                        {b.code && (
+                          <span className="font-mono text-muted-foreground mr-1">
+                            {b.code}
+                          </span>
+                        )}
+                        {b.name}
+                      </span>
+                    </button>
+                  );
+                })}
+              </div>
+            </div>
+          )}
 
           {/* Priority */}
           <div className="space-y-1.5">
