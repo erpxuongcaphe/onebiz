@@ -8,6 +8,11 @@ import { useSettings } from "@/lib/contexts/settings-context";
 import { getProductCategoriesAsync } from "@/lib/services/supabase/products";
 import { getVariantsByProduct, getVariantsByProductIds } from "@/lib/services/supabase/variants";
 import { resolveAppliedTier } from "@/lib/services/supabase/pricing";
+import {
+  resolveAppliedPromotion,
+  incrementPromotionUsage,
+  type AppliedPromotion,
+} from "@/lib/services/supabase/promotion-engine";
 import { fnbPayment } from "@/lib/services/supabase/fnb-checkout";
 import { getTablesByBranch, markTableAvailable } from "@/lib/services/supabase/fnb-tables";
 import {
@@ -258,6 +263,111 @@ function FnbPosPageInner() {
       return tierPrice !== undefined ? { ...p, sell_price: tierPrice } : p;
     });
   }, [products, appliedTier]);
+
+  // ============================================================
+  // Sprint KM-2: Promotion engine cho POS FnB
+  // ============================================================
+  // Theo dõi activeTab.lines + branchId + customerId → resolve KM tốt nhất.
+  // Mỗi tab có thể có KM riêng (vì cart khác nhau). Khi switch tab, useEffect
+  // re-fire và resolve lại cho tab mới.
+  const [appliedPromotion, setAppliedPromotion] = useState<AppliedPromotion | null>(null);
+  const [promotionCleared, setPromotionCleared] = useState(false);
+
+  const activeTabLines = pos.activeTab?.lines ?? [];
+  const activeTabSubtotal = pos.subtotal;
+  const activeTabCustomerId = pos.activeTab?.customerId;
+
+  useEffect(() => {
+    if (!branchId || !pos.activeTabId) return;
+    if (promotionCleared) return;
+
+    if (activeTabLines.length === 0) {
+      if (appliedPromotion) {
+        setAppliedPromotion(null);
+        pos.setOrderDiscount(pos.activeTabId, undefined);
+      }
+      return;
+    }
+
+    let cancelled = false;
+    // Build cart items với categoryId từ products lookup (cho KM theo nhóm)
+    const productCategoryMap = new Map(products.map((p) => [p.id, p.category_id ?? null]));
+    const items = activeTabLines.map((l) => ({
+      productId: l.productId,
+      categoryId: productCategoryMap.get(l.productId) ?? null,
+      quantity: l.quantity,
+      unitPrice: l.unitPrice,
+    }));
+
+    resolveAppliedPromotion({
+      channel: "fnb",
+      branchId,
+      customerId: activeTabCustomerId ?? null,
+      items,
+    })
+      .then(({ best }) => {
+        if (cancelled) return;
+        if (!best || best.discountAmount <= 0) {
+          if (appliedPromotion) {
+            setAppliedPromotion(null);
+            if (pos.activeTabId) pos.setOrderDiscount(pos.activeTabId, undefined);
+          }
+          return;
+        }
+        if (appliedPromotion?.promotion.id !== best.promotion.id) {
+          setAppliedPromotion(best);
+          if (pos.activeTabId) {
+            pos.setOrderDiscount(pos.activeTabId, {
+              mode: "amount",
+              value: best.discountAmount,
+            });
+          }
+          toast({
+            title: `Áp dụng khuyến mãi: ${best.promotion.name}`,
+            description: `${best.reasonLabel} — Giảm ${best.discountAmount.toLocaleString("vi-VN")}đ`,
+            variant: "success",
+          });
+        } else if (appliedPromotion.discountAmount !== best.discountAmount) {
+          setAppliedPromotion(best);
+          if (pos.activeTabId) {
+            pos.setOrderDiscount(pos.activeTabId, {
+              mode: "amount",
+              value: best.discountAmount,
+            });
+          }
+        }
+      })
+      .catch(() => {
+        if (appliedPromotion) {
+          setAppliedPromotion(null);
+          if (pos.activeTabId) pos.setOrderDiscount(pos.activeTabId, undefined);
+        }
+      });
+
+    return () => {
+      cancelled = true;
+    };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [
+    pos.activeTabId,
+    activeTabLines.length,
+    activeTabSubtotal,
+    activeTabCustomerId,
+    branchId,
+    promotionCleared,
+  ]);
+
+  // Khi switch tab → reset cleared flag (mỗi tab có "session" riêng)
+  useEffect(() => {
+    setPromotionCleared(false);
+  }, [pos.activeTabId]);
+
+  function clearAppliedPromotion() {
+    if (!pos.activeTabId) return;
+    setAppliedPromotion(null);
+    setPromotionCleared(true);
+    pos.setOrderDiscount(pos.activeTabId, undefined);
+  }
 
   // ── Filtered products ──
   const filteredProducts = useMemo(() => {
@@ -792,8 +902,19 @@ function FnbPosPageInner() {
           );
         }
 
+        // KM-2: Tăng usage_count atomic — chỉ khi online
+        if (networkStatus.isOnline && appliedPromotion?.promotion.id) {
+          try {
+            await incrementPromotionUsage(appliedPromotion.promotion.id);
+          } catch (err) {
+            console.warn("incrementPromotionUsage failed:", err);
+          }
+        }
+
         setPaymentOpen(false);
         pos.closeTab(pos.activeTabId);
+        setAppliedPromotion(null);
+        setPromotionCleared(false);
         hapticSuccess();
 
         if (!networkStatus.isOnline) {
@@ -808,7 +929,7 @@ function FnbPosPageInner() {
         toast({ title: "Thanh toán thất bại", description: (err as Error).message, variant: "error" });
       }
     },
-    [pos, tenantId, branchId, userId, handleSendToKitchen, toast, settings, user, networkStatus.isOnline, currentShift?.id]
+    [pos, tenantId, branchId, userId, handleSendToKitchen, toast, settings, user, networkStatus.isOnline, currentShift?.id, appliedPromotion]
   );
 
   // ── Table select (from floor plan) ──
@@ -1266,6 +1387,31 @@ function FnbPosPageInner() {
           <span className="text-muted-foreground ml-auto">
             {appliedTier.priceMap.size}/{products.length} SP có giá riêng
           </span>
+        </div>
+      )}
+
+      {/* Sprint KM-2: Banner khuyến mãi áp dụng cho tab hiện tại. Click X để xóa. */}
+      {appliedPromotion && appliedPromotion.discountAmount > 0 && (
+        <div className="bg-status-warning/10 border-b border-status-warning/30 px-3 py-1.5 flex items-center gap-2 text-xs">
+          <Icon name="percent" size={14} className="text-status-warning" />
+          <span className="text-on-surface">
+            Khuyến mãi:{" "}
+            <strong className="font-medium">{appliedPromotion.promotion.name}</strong>
+            <span className="text-muted-foreground ml-1.5">
+              ({appliedPromotion.reasonLabel})
+            </span>
+          </span>
+          <span className="text-status-warning font-medium ml-auto">
+            -{appliedPromotion.discountAmount.toLocaleString("vi-VN")}đ
+          </span>
+          <button
+            type="button"
+            onClick={clearAppliedPromotion}
+            className="ml-2 hover:bg-status-warning/20 rounded p-1 transition-colors"
+            title="Bỏ áp dụng khuyến mãi"
+          >
+            <Icon name="close" size={12} />
+          </button>
         </div>
       )}
 

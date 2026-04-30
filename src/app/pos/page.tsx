@@ -57,6 +57,11 @@ import { validateCoupon } from "@/lib/services/supabase/coupons";
 import { Icon } from "@/components/ui/icon";
 import { getVariantsByProduct } from "@/lib/services/supabase/variants";
 import { resolveAppliedTier } from "@/lib/services/supabase/pricing";
+import {
+  resolveAppliedPromotion,
+  incrementPromotionUsage,
+  type AppliedPromotion,
+} from "@/lib/services/supabase/promotion-engine";
 import type { Product, ProductVariant } from "@/lib/types";
 
 // Reuse FnB offline bar/drawer — both are generic over NetworkStatus.
@@ -643,6 +648,92 @@ function PosPageInner() {
   }, [state.customer?.id]);
 
   // ============================================================
+  // Sprint KM-2: Apply promotion engine
+  // ============================================================
+  // Khi cart hoặc customer/branch đổi → resolve KM tốt nhất → set
+  // orderDiscount theo discountAmount. User có thể click X trên banner
+  // để clear thủ công (overrideClearedPromo = true → skip auto-resolve).
+  const [appliedPromotion, setAppliedPromotion] = useState<AppliedPromotion | null>(null);
+  const [promotionCleared, setPromotionCleared] = useState(false);
+
+  // Check tenant-wide setting "Tự động áp dụng KM tốt nhất" → cache trong state.
+  // Resolver tự đọc settings nên ở đây không cần lưu — engine respect setting.
+
+  useEffect(() => {
+    if (!currentBranch?.id) return;
+
+    // User clicked X to clear → respect, don't auto re-apply until cart changes
+    // significantly (a new "session"). Heuristic: clearCart resets promotionCleared.
+    if (promotionCleared) return;
+
+    // Cart rỗng → không apply KM
+    if (state.lines.length === 0) {
+      if (appliedPromotion) {
+        setAppliedPromotion(null);
+        // Clear orderDiscount nếu trước đó là do KM set
+        state.setOrderDiscount({ mode: "amount", value: 0 });
+      }
+      return;
+    }
+
+    let cancelled = false;
+    resolveAppliedPromotion({
+      channel: "retail",
+      branchId: currentBranch.id,
+      customerId: state.customer?.id ?? null,
+      items: state.lines.map((l) => ({
+        productId: l.productId,
+        // OrderLine không có categoryId hiện tại → null (KM theo category sẽ
+        // không apply ở Retail V1; FnB có thể qua product.category_id nếu cần)
+        categoryId: null,
+        quantity: l.quantity,
+        unitPrice: l.unitPrice,
+      })),
+    })
+      .then(({ best }) => {
+        if (cancelled) return;
+        if (!best || best.discountAmount <= 0) {
+          if (appliedPromotion) {
+            setAppliedPromotion(null);
+            state.setOrderDiscount({ mode: "amount", value: 0 });
+          }
+          return;
+        }
+        // Áp KM mới (hoặc đổi KM tốt hơn)
+        if (appliedPromotion?.promotion.id !== best.promotion.id) {
+          setAppliedPromotion(best);
+          state.setOrderDiscount({ mode: "amount", value: best.discountAmount });
+          toast({
+            title: `Áp dụng khuyến mãi: ${best.promotion.name}`,
+            description: `${best.reasonLabel} — Giảm ${best.discountAmount.toLocaleString("vi-VN")}đ`,
+            variant: "success",
+          });
+        } else if (appliedPromotion.discountAmount !== best.discountAmount) {
+          // Cùng promo, đổi discount (vd cart thay đổi qty)
+          setAppliedPromotion(best);
+          state.setOrderDiscount({ mode: "amount", value: best.discountAmount });
+        }
+      })
+      .catch(() => {
+        // fail silent — không block POS
+        if (appliedPromotion) {
+          setAppliedPromotion(null);
+          state.setOrderDiscount({ mode: "amount", value: 0 });
+        }
+      });
+    return () => {
+      cancelled = true;
+    };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [state.lines.length, state.subtotal, state.customer?.id, currentBranch?.id, promotionCleared]);
+
+  function clearAppliedPromotion() {
+    setAppliedPromotion(null);
+    setPromotionCleared(true);
+    state.setOrderDiscount({ mode: "amount", value: 0 });
+  }
+
+  // ============================================================
   // Handlers
   // ============================================================
 
@@ -794,6 +885,16 @@ function PosPageInner() {
         } catch {}
       }
 
+      // KM-2: Tăng usage_count atomic — chỉ khi online (offline để sync sau)
+      if (!isOfflineCheckout && appliedPromotion?.promotion.id) {
+        try {
+          await incrementPromotionUsage(appliedPromotion.promotion.id);
+        } catch (err) {
+          // Không block checkout — log warn để CEO biết
+          console.warn("incrementPromotionUsage failed:", err);
+        }
+      }
+
       toast({
         title: isOfflineCheckout
           ? `Hoá đơn ${invoiceCode} — đã lưu offline`
@@ -804,6 +905,8 @@ function PosPageInner() {
         variant: isOfflineCheckout ? "info" : "success",
       });
       state.clearCart();
+      setAppliedPromotion(null);
+      setPromotionCleared(false);
       setSearchQuery("");
       setMobileCartOpen(false);
     } catch (err: any) {
@@ -812,7 +915,7 @@ function PosPageInner() {
       setSubmitting(null);
       submitLockRef.current = false;
     }
-  }, [state, toast, autoPrint, networkStatus.isOnline, currentShift]);
+  }, [state, toast, autoPrint, networkStatus.isOnline, currentShift, appliedPromotion]);
 
   const handleDebtCheckout = useCallback(async () => {
     if (submitLockRef.current) return;
@@ -1027,6 +1130,25 @@ function PosPageInner() {
           >
             <Icon name="sell" size={12} />
             <span>Áp: {appliedTier.tierName}</span>
+          </div>
+        )}
+
+        {/* Sprint KM-2: Badge khuyến mãi đang áp dụng — click X để xóa */}
+        {appliedPromotion && appliedPromotion.discountAmount > 0 && (
+          <div
+            className="hidden md:flex items-center gap-1 shrink-0 px-2 py-0.5 rounded-md bg-status-warning/20 text-white text-[11px] font-medium border border-status-warning/40"
+            title={`${appliedPromotion.promotion.name} — Giảm ${appliedPromotion.discountAmount.toLocaleString("vi-VN")}đ`}
+          >
+            <Icon name="percent" size={12} />
+            <span>KM: {appliedPromotion.reasonLabel}</span>
+            <button
+              type="button"
+              onClick={clearAppliedPromotion}
+              className="ml-0.5 hover:bg-white/20 rounded-full p-0.5 transition-colors"
+              title="Bỏ áp dụng khuyến mãi"
+            >
+              <Icon name="close" size={11} />
+            </button>
           </div>
         )}
 
