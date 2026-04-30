@@ -50,18 +50,25 @@ export async function getLoyaltySettings(): Promise<LoyaltySettings | null> {
  */
 export async function upsertLoyaltySettings(settings: Partial<LoyaltySettings>): Promise<LoyaltySettings> {
   const supabase = getClient();
+  // tenant_id LẤY TỪ session (KHÔNG nhận từ caller — tránh inject vào tenant khác)
+  const tenantId = await getCurrentTenantId();
+
+  // Merge với current — caller chỉ truyền field cần update
+  const current = await getLoyaltySettings();
+  const merged = {
+    tenant_id: tenantId,
+    is_enabled: settings.isEnabled ?? current?.isEnabled ?? false,
+    points_per_amount: settings.pointsPerAmount ?? current?.pointsPerAmount ?? 1,
+    amount_per_point: settings.amountPerPoint ?? current?.amountPerPoint ?? 10000,
+    redemption_points: settings.redemptionPoints ?? current?.redemptionPoints ?? 100,
+    redemption_value: settings.redemptionValue ?? current?.redemptionValue ?? 10000,
+    max_redemption_percent:
+      settings.maxRedemptionPercent ?? current?.maxRedemptionPercent ?? 50,
+  };
 
   const { data, error } = await supabase
     .from("loyalty_settings")
-    .upsert({
-      tenant_id: settings.tenantId ?? "",
-      is_enabled: settings.isEnabled ?? false,
-      points_per_amount: settings.pointsPerAmount ?? 1,
-      amount_per_point: settings.amountPerPoint ?? 10000,
-      redemption_points: settings.redemptionPoints ?? 100,
-      redemption_value: settings.redemptionValue ?? 10000,
-      max_redemption_percent: settings.maxRedemptionPercent ?? 50,
-    }, { onConflict: "tenant_id" })
+    .upsert(merged, { onConflict: "tenant_id" })
     .select()
     .single();
 

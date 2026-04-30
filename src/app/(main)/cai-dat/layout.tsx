@@ -25,6 +25,7 @@ const settingsNav: ModuleNavGroup[] = [
       { label: "Thiết bị POS", href: "/cai-dat/thiet-bi-pos", icon: "lock" },
       { label: "Bảng giá", href: "/cai-dat/bang-gia", icon: "attach_money" },
       { label: "Khuyến mãi", href: "/cai-dat/khuyen-mai", icon: "sell" },
+      { label: "Mã giảm giá", href: "/cai-dat/ma-giam-gia", icon: "confirmation_number" },
       { label: "Tích điểm", href: "/cai-dat/tich-diem", icon: "star" },
     ],
   },

@@ -14,6 +14,7 @@ import {
   type AppliedPromotion,
 } from "@/lib/services/supabase/promotion-engine";
 import { tagInvoicePromotion } from "@/lib/services/supabase/promotions";
+import { earnLoyaltyPoints, getLoyaltySettings } from "@/lib/services/supabase/loyalty";
 import { fnbPayment } from "@/lib/services/supabase/fnb-checkout";
 import { getTablesByBranch, markTableAvailable } from "@/lib/services/supabase/fnb-tables";
 import {
@@ -924,6 +925,38 @@ function FnbPosPageInner() {
               promotionFreeValue: freeValue,
             }).catch(() => {});
           }
+        }
+
+        // L-2: Earn loyalty points cho KH có account — bg fire
+        if (
+          networkStatus.isOnline &&
+          tab?.customerId &&
+          payResult.invoiceId
+        ) {
+          const customerId = tab.customerId;
+          const customerName = tab.customerName ?? "khách";
+          const invId = payResult.invoiceId;
+          const totalAmount = pos.total;
+          getLoyaltySettings()
+            .then((settings) => {
+              if (!settings?.isEnabled) return;
+              return earnLoyaltyPoints(customerId, invId, totalAmount).then(
+                (newPoints) => {
+                  const earned = Math.floor(
+                    (totalAmount / (settings.amountPerPoint || 1)) *
+                      (settings.pointsPerAmount || 0),
+                  );
+                  if (earned > 0) {
+                    toast({
+                      title: `Đã tích ${earned} điểm cho ${customerName}`,
+                      description: `Tổng điểm: ${newPoints}`,
+                      variant: "info",
+                    });
+                  }
+                },
+              );
+            })
+            .catch((err) => console.warn("earnLoyaltyPoints failed:", err));
         }
 
         setPaymentOpen(false);

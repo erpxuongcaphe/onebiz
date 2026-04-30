@@ -62,6 +62,7 @@ import {
   incrementPromotionUsage,
   type AppliedPromotion,
 } from "@/lib/services/supabase/promotion-engine";
+import { earnLoyaltyPoints, getLoyaltySettings } from "@/lib/services/supabase/loyalty";
 import type { Product, ProductVariant } from "@/lib/types";
 
 // Reuse FnB offline bar/drawer — both are generic over NetworkStatus.
@@ -800,6 +801,7 @@ function PosPageInner() {
 
       const paid = state.paid || state.total;
       let invoiceCode: string;
+      let invoiceId: string | null = null; // L-2: track để earn loyalty
       let isOfflineCheckout = false;
 
       // Build breakdown for mixed payments
@@ -825,6 +827,7 @@ function PosPageInner() {
           paymentBreakdown: breakdown,
         });
         invoiceCode = result.invoiceCode;
+        invoiceId = state.loadedDraftId;
       } else {
         // ── Fresh checkout → create new completed invoice ──
         const input: PosCheckoutInput = {
@@ -863,6 +866,7 @@ function PosPageInner() {
         };
         const result = await offlinePosCheckout(input, networkStatus.isOnline);
         invoiceCode = result.invoiceCode;
+        invoiceId = result.invoiceId;
         isOfflineCheckout = !!result.isOffline;
       }
 
@@ -901,6 +905,32 @@ function PosPageInner() {
           // Không block checkout — log warn để CEO biết
           console.warn("incrementPromotionUsage failed:", err);
         }
+      }
+
+      // L-2: Tích điểm cho KH có account — chỉ khi online + có customer.id +
+      // loyalty enabled. Background fire (không block checkout).
+      if (!isOfflineCheckout && state.customer?.id && invoiceId) {
+        const customerId = state.customer.id;
+        const total = state.total;
+        getLoyaltySettings()
+          .then((settings) => {
+            if (!settings?.isEnabled) return;
+            return earnLoyaltyPoints(customerId, invoiceId!, total).then((newPoints) => {
+              const earned = Math.floor(
+                (total / (settings.amountPerPoint || 1)) * (settings.pointsPerAmount || 0),
+              );
+              if (earned > 0) {
+                toast({
+                  title: `Đã tích ${earned} điểm cho ${state.customer?.name}`,
+                  description: `Tổng điểm: ${newPoints}`,
+                  variant: "info",
+                });
+              }
+            });
+          })
+          .catch((err) => {
+            console.warn("earnLoyaltyPoints failed:", err);
+          });
       }
 
       toast({
