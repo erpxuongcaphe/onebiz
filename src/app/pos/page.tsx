@@ -1336,7 +1336,7 @@ function PosPageInner() {
                 >
                   <Icon name="star" size={12} />
                   <span>
-                    -{appliedRedeem.points}đ điểm = -
+                    -{appliedRedeem.points} điểm = -
                     {appliedRedeem.discountAmount.toLocaleString("vi-VN")}đ
                   </span>
                   <button
