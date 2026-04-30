@@ -11,11 +11,15 @@ export interface CashBookEntry {
   note?: string;
   createdBy: string;
   createdByName?: string;
+  /** Phương thức thanh toán (cash/transfer/card/ewallet). */
+  paymentMethod?: string;
+  /** Chi nhánh ghi nhận phiếu (UUID + tên đã resolve để render). */
+  branchId?: string;
+  branchName?: string;
+  /** Liên kết tới chứng từ gốc (invoice/PO/return) — xác định reverse debt. */
+  referenceType?: string;
+  referenceId?: string;
 }
 
-// Giao dịch thu chi
-export interface CashTransaction extends CashBookEntry {
-  paymentMethod?: string;
-  referenceId?: string;
-  referenceType?: string;
-}
+// Giao dịch thu chi (alias vì CashBookEntry đã chứa toàn bộ field)
+export type CashTransaction = CashBookEntry;

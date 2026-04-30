@@ -10,6 +10,7 @@ function createChain() {
   chain.delete = vi.fn(self);
   chain.eq = vi.fn(self);
   chain.single = mockResult;
+  chain.maybeSingle = mockResult;
   return chain;
 }
 
@@ -25,6 +26,13 @@ vi.mock("@/lib/services/supabase/base", () => ({
   handleError: (error: { message: string }, ctx: string) => {
     throw new Error(`[${ctx}] ${error.message}`);
   },
+  // Multi-tenant safety + audit log helpers (cash-book service giờ dùng)
+  getCurrentTenantId: vi.fn().mockResolvedValue("tenant-test-1"),
+  getCurrentContext: vi.fn().mockResolvedValue({
+    tenantId: "tenant-test-1",
+    branchId: "branch-test-1",
+    userId: "user-test-1",
+  }),
 }));
 
 import {

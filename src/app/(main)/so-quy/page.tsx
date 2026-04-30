@@ -35,8 +35,7 @@ import { exportToExcelFromSchema } from "@/lib/excel";
 import type { CashTransactionImportRow } from "@/lib/excel/schemas";
 import {
   getCashBookEntries,
-  getCashBookTypes,
-  getCashBookSummary,
+  getCashBookSummaryAsync,
   deleteCashTransaction,
 } from "@/lib/services";
 import { useToast, useBranchFilter } from "@/lib/contexts";
@@ -81,11 +80,71 @@ const thuChiCategoryOptions = [
 ];
 
 // === Status filter options ===
+// Note: DB schema chưa có cột `status` (sẽ thêm ở migration SỔ-QUỸ-2).
+// Filter này hiện chỉ là UI placeholder — không tham gia query backend.
 const statusFilterOptions = [
   { label: "Hoàn thành", value: "completed" },
   { label: "Phiếu tạm", value: "pending" },
   { label: "Đã hủy", value: "cancelled" },
 ];
+
+// Map slug → label tiếng Việt cho category. Trước đây render raw slug
+// (`customer_payment`, `chi_tra_ncc`...) → user không hiểu.
+const CATEGORY_LABELS: Record<string, string> = {
+  customer_payment: "Thu tiền khách hàng",
+  thu_tien_khach: "Thu tiền khách hàng",
+  thu_tien_mat: "Thu tiền mặt",
+  thu_khac: "Thu khác",
+  supplier_payment: "Chi trả NCC",
+  chi_tra_ncc: "Chi trả NCC",
+  chi_phi_van_chuyen: "Chi phí vận chuyển",
+  chi_phi_khac: "Chi phí khác",
+  salary: "Lương nhân viên",
+  rent: "Tiền thuê",
+  utility: "Điện nước",
+};
+
+function categoryLabel(c: string | undefined | null): string {
+  if (!c) return "—";
+  return CATEGORY_LABELS[c] ?? c;
+}
+
+// Convert DatePresetValue → ISO date range để pass vào service.
+// Trả undefined cho "all" hoặc "custom" without dateFrom/dateTo.
+function presetToRange(preset: string): {
+  from: string | undefined;
+  to: string | undefined;
+} {
+  const now = new Date();
+  const today = new Date(now.getFullYear(), now.getMonth(), now.getDate());
+  const toISO = (d: Date) => d.toISOString();
+  switch (preset) {
+    case "today":
+      return { from: toISO(today), to: toISO(today) };
+    case "yesterday": {
+      const y = new Date(today);
+      y.setDate(y.getDate() - 1);
+      return { from: toISO(y), to: toISO(y) };
+    }
+    case "this_week": {
+      const dow = today.getDay() || 7; // CN=7
+      const start = new Date(today);
+      start.setDate(start.getDate() - dow + 1);
+      return { from: toISO(start), to: toISO(today) };
+    }
+    case "this_month": {
+      const start = new Date(today.getFullYear(), today.getMonth(), 1);
+      return { from: toISO(start), to: toISO(today) };
+    }
+    case "last_month": {
+      const start = new Date(today.getFullYear(), today.getMonth() - 1, 1);
+      const end = new Date(today.getFullYear(), today.getMonth(), 0);
+      return { from: toISO(start), to: toISO(end) };
+    }
+    default:
+      return { from: undefined, to: undefined };
+  }
+}
 
 // === Inline Detail ===
 function TransactionDetail({
@@ -109,7 +168,7 @@ function TransactionDetail({
             content: (
               <div className="space-y-4">
                 <DetailHeader
-                  title={entry.counterparty}
+                  title={entry.counterparty || categoryLabel(entry.category)}
                   code={entry.code}
                   status={{
                     label: isReceipt ? "Phiếu thu" : "Phiếu chi",
@@ -118,7 +177,10 @@ function TransactionDetail({
                       ? "bg-status-success/10 text-status-success border-status-success/25"
                       : undefined,
                   }}
-                  subtitle="Chi nhánh trung tâm"
+                  // Resolve branch name từ row.branches (đã join). Trước đây
+                  // hardcode "Chi nhánh trung tâm" → leak label sai khi xem
+                  // phiếu của quán FnB / xưởng rang.
+                  subtitle={entry.branchName || "—"}
                   meta={
                     <div className="flex items-center gap-4 flex-wrap text-xs">
                       <span>
@@ -128,7 +190,7 @@ function TransactionDetail({
                         Ngày tạo: <strong>{formatDate(entry.date)}</strong>
                       </span>
                       <span>
-                        Loại thu chi: <strong>{entry.category}</strong>
+                        Loại thu chi: <strong>{categoryLabel(entry.category)}</strong>
                       </span>
                     </div>
                   }
@@ -138,24 +200,29 @@ function TransactionDetail({
                   fields={[
                     { label: "Mã phiếu", value: entry.code },
                     { label: "Loại phiếu", value: entry.typeName },
+                    { label: "Chi nhánh", value: entry.branchName || "—" },
                     { label: "Người nộp/nhận", value: entry.counterparty },
-                    { label: "Loại thu chi", value: entry.category },
+                    { label: "Loại thu chi", value: categoryLabel(entry.category) },
+                    {
+                      label: "Phương thức",
+                      value:
+                        entry.paymentMethod === "cash"
+                          ? "Tiền mặt"
+                          : entry.paymentMethod === "transfer"
+                            ? "Chuyển khoản"
+                            : entry.paymentMethod === "card"
+                              ? "Thẻ"
+                              : entry.paymentMethod === "ewallet"
+                                ? "Ví điện tử"
+                                : "—",
+                    },
                     {
                       label: "Giá trị",
                       value: formatCurrency(entry.amount),
                     },
-                    { label: "Ghi chú", value: entry.note || "---" },
+                    { label: "Ghi chú", value: entry.note || "—", fullWidth: true },
                   ]}
                 />
-
-                {/* Notes area */}
-                <div className="border rounded-md p-3">
-                  <textarea
-                    placeholder="Ghi chú..."
-                    defaultValue={entry.note ?? ""}
-                    className="w-full text-sm resize-none bg-transparent outline-none min-h-[60px]"
-                  />
-                </div>
               </div>
             ),
           },
@@ -206,21 +273,53 @@ export default function SoQuyPage() {
     "pending",
   ]);
 
+  // Summary state — load async theo branch + period; trước đây dùng
+  // `getCashBookSummary()` sync stub trả {0,0} + openingBalance hardcode
+  // 5tr → KPI sai hoàn toàn trên production.
+  const [summary, setSummary] = useState({
+    totalReceipt: 0,
+    totalPayment: 0,
+    openingBalance: 0,
+  });
+
   const fetchData = useCallback(async () => {
     setLoading(true);
-    const result = await getCashBookEntries({
-      page,
-      pageSize,
-      search,
-      branchId: activeBranchId,
-      filters: {
-        ...(selectedDocTypes.length === 1 && { type: selectedDocTypes[0] }),
-      },
-    });
-    setData(result.data);
-    setTotal(result.total);
+    const range = presetToRange(datePreset);
+    const filters: Record<string, string | string[]> = {};
+    if (selectedDocTypes.length === 1) filters.type = selectedDocTypes[0];
+    if (fundType !== "all") filters.paymentMethod = fundType;
+    if (thuChiCategory !== "all") filters.category = thuChiCategory;
+    if (range.from) filters.dateFrom = range.from;
+    if (range.to) filters.dateTo = range.to;
+
+    const [listResult, summaryResult] = await Promise.all([
+      getCashBookEntries({
+        page,
+        pageSize,
+        search,
+        branchId: activeBranchId,
+        filters,
+      }),
+      getCashBookSummaryAsync({
+        branchId: activeBranchId,
+        dateFrom: range.from,
+        dateTo: range.to,
+      }).catch(() => ({ totalReceipt: 0, totalPayment: 0, openingBalance: 0 })),
+    ]);
+    setData(listResult.data);
+    setTotal(listResult.total);
+    setSummary(summaryResult);
     setLoading(false);
-  }, [search, selectedDocTypes, page, pageSize, activeBranchId]);
+  }, [
+    search,
+    selectedDocTypes,
+    page,
+    pageSize,
+    activeBranchId,
+    fundType,
+    thuChiCategory,
+    datePreset,
+  ]);
 
   useEffect(() => {
     fetchData();
@@ -240,9 +339,8 @@ export default function SoQuyPage() {
     });
   };
 
-  // Summary calculations
-  const { totalReceipt, totalPayment } = getCashBookSummary();
-  const openingBalance = 5000000; // Quỹ đầu kỳ placeholder
+  // Summary calculations từ DB (đã filter theo period + branch)
+  const { totalReceipt, totalPayment, openingBalance } = summary;
   const closingBalance = openingBalance + totalReceipt - totalPayment;
 
   const handleExport = (type: "excel" | "csv") => {
@@ -303,6 +401,19 @@ export default function SoQuyPage() {
       accessorKey: "category",
       header: "Loại thu chi",
       size: 180,
+      cell: ({ row }) => (
+        <span className="text-sm">{categoryLabel(row.original.category)}</span>
+      ),
+    },
+    {
+      accessorKey: "branchName",
+      header: "Chi nhánh",
+      size: 140,
+      cell: ({ row }) => (
+        <span className="text-xs text-muted-foreground">
+          {row.original.branchName || "—"}
+        </span>
+      ),
     },
     {
       accessorKey: "counterparty",

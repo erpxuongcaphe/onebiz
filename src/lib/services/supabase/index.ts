@@ -50,7 +50,7 @@ export {
   getNextShippingStatuses,
   SHIPPING_STATUS_LABEL,
 } from "./shipping";
-export { getCashBookEntries, getCashBookTypes, getCashBookSummary, createCashTransaction, deleteCashTransaction } from "./cash-book";
+export { getCashBookEntries, getCashBookTypes, getCashBookSummary, getCashBookSummaryAsync, createCashTransaction, deleteCashTransaction } from "./cash-book";
 export {
   getInventoryChecks, getInventoryCheckStatuses, applyInventoryCheck, cancelInventoryCheck,
   getInventoryCheckItems,
