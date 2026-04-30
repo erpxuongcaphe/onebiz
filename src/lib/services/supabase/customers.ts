@@ -17,7 +17,7 @@ export async function getCustomers(params: QueryParams): Promise<QueryResult<Cus
 
   let query = supabase
     .from("customers")
-    .select("*, customer_groups!customers_group_id_fkey(name, discount_percent)", { count: "exact" })
+    .select("*, customer_groups!customers_group_id_fkey(name, discount_percent), loyalty_tiers(name, discount_percent)", { count: "exact" })
     .eq("tenant_id", tenantId);
 
   // Ẩn khách hàng nội bộ (is_internal=true) khỏi list thường.
@@ -176,7 +176,7 @@ export async function getCustomerById(id: string): Promise<Customer | null> {
 
   const { data, error } = await supabase
     .from("customers")
-    .select("*, customer_groups!customers_group_id_fkey(name, discount_percent)")
+    .select("*, customer_groups!customers_group_id_fkey(name, discount_percent), loyalty_tiers(name, discount_percent)")
     .eq("tenant_id", tenantId)
     .eq("id", id)
     .single();
@@ -213,7 +213,7 @@ export async function createCustomer(customer: Partial<Customer>): Promise<Custo
       price_tier_id: customer.priceTierId || null,
       is_active: true,
     } satisfies CustomerInsert)
-    .select("*, customer_groups!customers_group_id_fkey(name, discount_percent)")
+    .select("*, customer_groups!customers_group_id_fkey(name, discount_percent), loyalty_tiers(name, discount_percent)")
     .single();
 
   if (error) handleError(error, "createCustomer");
@@ -276,7 +276,7 @@ export async function updateCustomer(id: string, updates: Partial<Customer>): Pr
     .update(payload)
     .eq("tenant_id", tenantId)
     .eq("id", id)
-    .select("*, customer_groups!customers_group_id_fkey(name, discount_percent)")
+    .select("*, customer_groups!customers_group_id_fkey(name, discount_percent), loyalty_tiers(name, discount_percent)")
     .single();
 
   if (error) handleError(error, "updateCustomer");
@@ -364,6 +364,12 @@ function mapCustomer(row: any, returnsTotal = 0): Customer {
     gender: row.gender ?? undefined,
     priceTierId: row.price_tier_id ?? undefined,
     loyaltyPoints: typeof row.loyalty_points === "number" ? row.loyalty_points : 0,
+    loyaltyTierId: row.loyalty_tier_id ?? undefined,
+    loyaltyTierName: row.loyalty_tiers?.name ?? undefined,
+    loyaltyTierDiscount:
+      typeof row.loyalty_tiers?.discount_percent === "number"
+        ? row.loyalty_tiers.discount_percent
+        : undefined,
     createdAt: row.created_at,
   };
 }

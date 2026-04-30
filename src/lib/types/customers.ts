@@ -22,6 +22,12 @@ export interface Customer {
   priceTierId?: string;
   /** L-3: Số điểm tích lũy hiện tại — POS dùng để hiển thị + redeem. */
   loyaltyPoints?: number;
+  /** Hạng thành viên (Bronze/Silver/Gold/...) — FK loyalty_tiers. */
+  loyaltyTierId?: string;
+  /** Tên hạng thành viên (joined từ loyalty_tiers) cho hiển thị nhanh. */
+  loyaltyTierName?: string;
+  /** % ưu đãi của hạng (cached từ loyalty_tiers.discount_percent). */
+  loyaltyTierDiscount?: number;
   createdAt: string;
 }
 

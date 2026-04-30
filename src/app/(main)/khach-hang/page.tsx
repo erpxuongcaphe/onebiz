@@ -186,20 +186,31 @@ export default function KhachHangPage() {
     },
     {
       accessorKey: "loyaltyPoints",
-      header: "Điểm tích lũy",
-      size: 110,
+      header: "Điểm / Hạng",
+      size: 160,
       cell: ({ row }) => {
         const pts = row.original.loyaltyPoints ?? 0;
+        const tierName = row.original.loyaltyTierName;
         return (
-          <span
-            className={
-              pts > 0
-                ? "font-medium text-status-success tabular-nums"
-                : "text-muted-foreground tabular-nums"
-            }
-          >
-            {pts.toLocaleString("vi-VN")}
-          </span>
+          <div className="flex items-center gap-2">
+            <span
+              className={
+                pts > 0
+                  ? "font-medium text-status-success tabular-nums"
+                  : "text-muted-foreground tabular-nums"
+              }
+            >
+              {pts.toLocaleString("vi-VN")}
+            </span>
+            {tierName && (
+              <Badge
+                variant="outline"
+                className="bg-primary-fixed/15 text-primary border-primary/25 text-[10px] uppercase font-semibold"
+              >
+                {tierName}
+              </Badge>
+            )}
+          </div>
         );
       },
     },
@@ -637,6 +648,35 @@ function CustomerDetailPanel({
                   {(customer.loyaltyPoints ?? 0).toLocaleString("vi-VN")} điểm
                 </span>
               ),
+            },
+            {
+              label: "Hạng thành viên",
+              value: customer.loyaltyTierName ? (
+                <span className="inline-flex items-center gap-2">
+                  <Badge
+                    variant="outline"
+                    className="bg-primary-fixed/15 text-primary border-primary/25 text-[10px] uppercase font-semibold"
+                  >
+                    {customer.loyaltyTierName}
+                  </Badge>
+                  {typeof customer.loyaltyTierDiscount === "number" &&
+                    customer.loyaltyTierDiscount > 0 && (
+                      <span className="text-xs text-muted-foreground">
+                        (giảm {customer.loyaltyTierDiscount}%)
+                      </span>
+                    )}
+                </span>
+              ) : (
+                <span className="text-muted-foreground text-xs">— Chưa có hạng —</span>
+              ),
+            },
+            {
+              label: "Mua gần nhất",
+              // Tính từ invoices đã fetch (ở tab Lịch sử) — invoices[0]
+              // đã sort DESC theo created_at trong getInvoicesForCustomer.
+              value: invoices[0]?.date
+                ? formatDate(invoices[0].date)
+                : "— Chưa có giao dịch —",
             },
             { label: "Ngày tạo", value: formatDate(customer.createdAt) },
           ]}
