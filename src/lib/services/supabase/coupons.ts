@@ -5,6 +5,7 @@
 import type { Coupon, CouponUsage, CouponValidation, QueryParams, QueryResult } from "@/lib/types";
 import type { Database } from "@/lib/supabase/types";
 import { getClient, getPaginationRange, handleError, getFilterValue, getCurrentTenantId } from "./base";
+import { recordAuditLog } from "./audit";
 
 type CouponInsert = Database["public"]["Tables"]["coupons"]["Insert"];
 type CouponUpdate = Database["public"]["Tables"]["coupons"]["Update"];
@@ -128,6 +129,21 @@ export async function createCoupon(coupon: Partial<Coupon>): Promise<Coupon> {
     .single();
 
   if (error) handleError(error, "createCoupon");
+
+  await recordAuditLog({
+    entityType: "coupon",
+    entityId: data.id,
+    action: "create",
+    newData: {
+      code: data.code,
+      name: data.name,
+      type: data.type,
+      value: data.value,
+      max_uses: data.max_uses,
+      end_date: data.end_date,
+    },
+  });
+
   return mapCoupon(data as Record<string, unknown>);
 }
 
@@ -137,6 +153,20 @@ export async function createCoupon(coupon: Partial<Coupon>): Promise<Coupon> {
 export async function updateCoupon(id: string, updates: Partial<Coupon>): Promise<Coupon> {
   const supabase = getClient();
   const tenantId = await getCurrentTenantId();
+
+  // Snapshot trước update để diff trong audit log
+  let oldRow: Record<string, unknown> | null = null;
+  try {
+    const res = await supabase
+      .from("coupons")
+      .select("code, name, type, value, is_active, end_date, max_uses")
+      .eq("tenant_id", tenantId)
+      .eq("id", id)
+      .maybeSingle();
+    oldRow = (res?.data as Record<string, unknown> | null) ?? null;
+  } catch {
+    /* snapshot optional */
+  }
 
   const payload: CouponUpdate = {};
   if (updates.code !== undefined) payload.code = updates.code;
@@ -163,6 +193,20 @@ export async function updateCoupon(id: string, updates: Partial<Coupon>): Promis
     .single();
 
   if (error) handleError(error, "updateCoupon");
+
+  await recordAuditLog({
+    entityType: "coupon",
+    entityId: id,
+    action:
+      updates.isActive === false
+        ? "deactivate"
+        : updates.isActive === true
+          ? "activate"
+          : "update",
+    oldData: oldRow ?? null,
+    newData: payload as Record<string, unknown>,
+  });
+
   return mapCoupon(data as Record<string, unknown>);
 }
 
@@ -173,6 +217,20 @@ export async function deleteCoupon(id: string): Promise<void> {
   const supabase = getClient();
   const tenantId = await getCurrentTenantId();
 
+  // Snapshot best-effort cho audit log
+  let oldRow: Record<string, unknown> | null = null;
+  try {
+    const res = await supabase
+      .from("coupons")
+      .select("code, name, type, value")
+      .eq("tenant_id", tenantId)
+      .eq("id", id)
+      .maybeSingle();
+    oldRow = (res?.data as Record<string, unknown> | null) ?? null;
+  } catch {
+    /* snapshot optional */
+  }
+
   const { error } = await supabase
     .from("coupons")
     .delete()
@@ -180,6 +238,13 @@ export async function deleteCoupon(id: string): Promise<void> {
     .eq("id", id);
 
   if (error) handleError(error, "deleteCoupon");
+
+  await recordAuditLog({
+    entityType: "coupon",
+    entityId: id,
+    action: "delete",
+    oldData: oldRow ?? null,
+  });
 }
 
 /**

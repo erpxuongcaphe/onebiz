@@ -5,6 +5,7 @@
 import type { LoyaltySettings, LoyaltyTier, LoyaltyTransaction, QueryParams, QueryResult } from "@/lib/types";
 import type { Database } from "@/lib/supabase/types";
 import { getClient, getPaginationRange, handleError, getCurrentTenantId } from "./base";
+import { recordAuditLog } from "./audit";
 
 type TierInsert = Database["public"]["Tables"]["loyalty_tiers"]["Insert"];
 type TierUpdate = Database["public"]["Tables"]["loyalty_tiers"]["Update"];
@@ -138,6 +139,17 @@ export async function createLoyaltyTier(tier: Partial<LoyaltyTier>): Promise<Loy
 
   if (error) handleError(error, "createLoyaltyTier");
 
+  await recordAuditLog({
+    entityType: "loyalty_tier",
+    entityId: data!.id,
+    action: "create",
+    newData: {
+      name: data!.name,
+      min_points: data!.min_points,
+      discount_percent: data!.discount_percent,
+    },
+  });
+
   return {
     id: data!.id,
     name: data!.name,
@@ -156,6 +168,19 @@ export async function updateLoyaltyTier(id: string, updates: Partial<LoyaltyTier
   const supabase = getClient();
   const tenantId = await getCurrentTenantId();
 
+  let oldRow: Record<string, unknown> | null = null;
+  try {
+    const res = await supabase
+      .from("loyalty_tiers")
+      .select("name, min_points, discount_percent, is_active")
+      .eq("tenant_id", tenantId)
+      .eq("id", id)
+      .maybeSingle();
+    oldRow = (res?.data as Record<string, unknown> | null) ?? null;
+  } catch {
+    /* snapshot optional */
+  }
+
   const payload: TierUpdate = {};
   if (updates.name !== undefined) payload.name = updates.name;
   if (updates.minPoints !== undefined) payload.min_points = updates.minPoints;
@@ -172,6 +197,14 @@ export async function updateLoyaltyTier(id: string, updates: Partial<LoyaltyTier
     .single();
 
   if (error) handleError(error, "updateLoyaltyTier");
+
+  await recordAuditLog({
+    entityType: "loyalty_tier",
+    entityId: id,
+    action: "update",
+    oldData: oldRow ?? null,
+    newData: payload as Record<string, unknown>,
+  });
 
   return {
     id: data!.id,
@@ -191,6 +224,19 @@ export async function deleteLoyaltyTier(id: string): Promise<void> {
   const supabase = getClient();
   const tenantId = await getCurrentTenantId();
 
+  let oldRow: Record<string, unknown> | null = null;
+  try {
+    const res = await supabase
+      .from("loyalty_tiers")
+      .select("name, min_points, discount_percent")
+      .eq("tenant_id", tenantId)
+      .eq("id", id)
+      .maybeSingle();
+    oldRow = (res?.data as Record<string, unknown> | null) ?? null;
+  } catch {
+    /* snapshot optional */
+  }
+
   const { error } = await supabase
     .from("loyalty_tiers")
     .delete()
@@ -198,6 +244,13 @@ export async function deleteLoyaltyTier(id: string): Promise<void> {
     .eq("id", id);
 
   if (error) handleError(error, "deleteLoyaltyTier");
+
+  await recordAuditLog({
+    entityType: "loyalty_tier",
+    entityId: id,
+    action: "delete",
+    oldData: oldRow ?? null,
+  });
 }
 
 // --- Loyalty Transactions ---

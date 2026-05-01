@@ -14,6 +14,7 @@ import type {
 } from "@/lib/types";
 import type { Database } from "@/lib/supabase/types";
 import { getClient, getPaginationRange, handleError, getFilterValue, getCurrentTenantId } from "./base";
+import { recordAuditLog } from "./audit";
 
 type PromotionInsert = Database["public"]["Tables"]["promotions"]["Insert"];
 type PromotionUpdate = Database["public"]["Tables"]["promotions"]["Update"];
@@ -167,6 +168,21 @@ export async function createPromotion(promo: Partial<Promotion>): Promise<Promot
     .single();
 
   if (error) handleError(error, "createPromotion");
+
+  await recordAuditLog({
+    entityType: "promotion",
+    entityId: data.id,
+    action: "create",
+    newData: {
+      name: data.name,
+      type: data.type,
+      value: data.value,
+      channel: data.channel,
+      start_date: data.start_date,
+      end_date: data.end_date,
+    },
+  });
+
   return mapPromotion(data as Record<string, unknown>);
 }
 
@@ -176,6 +192,20 @@ export async function createPromotion(promo: Partial<Promotion>): Promise<Promot
 export async function updatePromotion(id: string, updates: Partial<Promotion>): Promise<Promotion> {
   const supabase = getClient();
   const tenantId = await getCurrentTenantId();
+
+  // Snapshot prev cho audit
+  let oldRow: Record<string, unknown> | null = null;
+  try {
+    const res = await supabase
+      .from("promotions")
+      .select("name, type, value, is_active, channel, start_date, end_date")
+      .eq("tenant_id", tenantId)
+      .eq("id", id)
+      .maybeSingle();
+    oldRow = (res?.data as Record<string, unknown> | null) ?? null;
+  } catch {
+    /* snapshot optional */
+  }
 
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
   const payload: any = {};
@@ -211,6 +241,20 @@ export async function updatePromotion(id: string, updates: Partial<Promotion>): 
     .single();
 
   if (error) handleError(error, "updatePromotion");
+
+  await recordAuditLog({
+    entityType: "promotion",
+    entityId: id,
+    action:
+      updates.isActive === false
+        ? "deactivate"
+        : updates.isActive === true
+          ? "activate"
+          : "update",
+    oldData: oldRow ?? null,
+    newData: payload as Record<string, unknown>,
+  });
+
   return mapPromotion(data as Record<string, unknown>);
 }
 
@@ -221,6 +265,19 @@ export async function deletePromotion(id: string): Promise<void> {
   const supabase = getClient();
   const tenantId = await getCurrentTenantId();
 
+  let oldRow: Record<string, unknown> | null = null;
+  try {
+    const res = await supabase
+      .from("promotions")
+      .select("name, type, value")
+      .eq("tenant_id", tenantId)
+      .eq("id", id)
+      .maybeSingle();
+    oldRow = (res?.data as Record<string, unknown> | null) ?? null;
+  } catch {
+    /* snapshot optional */
+  }
+
   const { error } = await supabase
     .from("promotions")
     .delete()
@@ -228,6 +285,13 @@ export async function deletePromotion(id: string): Promise<void> {
     .eq("id", id);
 
   if (error) handleError(error, "deletePromotion");
+
+  await recordAuditLog({
+    entityType: "promotion",
+    entityId: id,
+    action: "delete",
+    oldData: oldRow ?? null,
+  });
 }
 
 /* ------------------------------------------------------------------ */
