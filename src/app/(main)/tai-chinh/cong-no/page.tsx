@@ -25,7 +25,7 @@ import { exportToCsv } from "@/lib/utils/export";
 import { exportToExcelFromSchema } from "@/lib/excel";
 import type { DebtOpeningImportRow } from "@/lib/excel/schemas";
 import { getCustomers, getSuppliers } from "@/lib/services";
-import { getDebtAging, getTopDebtors } from "@/lib/services/supabase/debt";
+import { getDebtAging, getTopDebtors, getDebtTotals } from "@/lib/services/supabase/debt";
 import type { Customer, Supplier } from "@/lib/types";
 import type { DebtAgingReport, DebtorDetail } from "@/lib/services/supabase/debt";
 import { Icon } from "@/components/ui/icon";
@@ -59,6 +59,16 @@ export default function CongNoPage() {
   const [suppliers, setSuppliers] = useState<Supplier[]>([]);
   const [loading, setLoading] = useState(true);
 
+  // KPI summary — fetch tổng cả 2 (KH + NCC) bất kể đang ở tab nào.
+  // Trước đây tổng tính từ customers/suppliers state — nhưng state chỉ
+  // có data của tab hiện tại → KPI tab không phải hiển thị 0 (sai).
+  const [debtTotals, setDebtTotals] = useState({
+    customerDebtTotal: 0,
+    customerCount: 0,
+    supplierDebtTotal: 0,
+    supplierCount: 0,
+  });
+
   // Aging data
   const [aging, setAging] = useState<DebtAgingReport | null>(null);
   const [topDebtors, setTopDebtors] = useState<DebtorDetail[]>([]);
@@ -70,30 +80,48 @@ export default function CongNoPage() {
   const fetchData = useCallback(async () => {
     setLoading(true);
     try {
+      // Luôn fetch tổng KPI (cả KH + NCC) song song với data tab.
+      const totalsPromise = getDebtTotals().catch(() => ({
+        customerDebtTotal: 0,
+        customerCount: 0,
+        supplierDebtTotal: 0,
+        supplierCount: 0,
+      }));
+
       if (mode === "customer") {
-        const result = await getCustomers({
-          page: 0,
-          pageSize: 200,
-          search,
-          filters: { debt: "has_debt" },
-        });
+        const [result, totals] = await Promise.all([
+          getCustomers({
+            page: 0,
+            pageSize: 200,
+            search,
+            filters: { debt: "has_debt" },
+          }),
+          totalsPromise,
+        ]);
         setCustomers(result.data);
+        setDebtTotals(totals);
       } else if (mode === "supplier") {
-        const result = await getSuppliers({
-          page: 0,
-          pageSize: 200,
-          search,
-          filters: { debt: "has_debt" },
-        });
+        const [result, totals] = await Promise.all([
+          getSuppliers({
+            page: 0,
+            pageSize: 200,
+            search,
+            filters: { debt: "has_debt" },
+          }),
+          totalsPromise,
+        ]);
         setSuppliers(result.data);
+        setDebtTotals(totals);
       } else if (mode === "aging") {
         setAgingLoading(true);
-        const [agingRes, debtorsRes] = await Promise.all([
+        const [agingRes, debtorsRes, totals] = await Promise.all([
           getDebtAging(),
           getTopDebtors(20),
+          totalsPromise,
         ]);
         setAging(agingRes);
         setTopDebtors(debtorsRes);
+        setDebtTotals(totals);
         setAgingLoading(false);
       }
     } catch (err) {
@@ -111,14 +139,11 @@ export default function CongNoPage() {
     fetchData();
   }, [fetchData]);
 
-  const totalCustomerDebt = customers.reduce(
-    (s, c) => s + (c.currentDebt ?? 0),
-    0
-  );
-  const totalSupplierDebt = suppliers.reduce(
-    (s, p) => s + (p.currentDebt ?? 0),
-    0
-  );
+  // KPI dùng totals từ DB (chính xác mọi mode) thay vì reduce client state.
+  const totalCustomerDebt = debtTotals.customerDebtTotal;
+  const totalSupplierDebt = debtTotals.supplierDebtTotal;
+  const customerDebtCount = debtTotals.customerCount;
+  const supplierDebtCount = debtTotals.supplierCount;
 
   const customerColumns: ColumnDef<Customer, unknown>[] = [
     {
@@ -362,19 +387,19 @@ export default function CongNoPage() {
         } : undefined}
       />
 
-      {/* Summary */}
+      {/* Summary — luôn show tổng cả KH + NCC bất kể tab nào */}
       <div className="grid grid-cols-1 md:grid-cols-2 gap-3 px-4 pt-4">
         <SummaryCard
           icon={<Icon name="trending_up" size={16} className="text-status-success" />}
           label="Khách hàng đang nợ"
-          count={customers.length}
+          count={customerDebtCount}
           value={formatCurrency(totalCustomerDebt)}
           tone="success"
         />
         <SummaryCard
           icon={<Icon name="trending_down" size={16} className="text-status-warning" />}
           label="Phải trả NCC"
-          count={suppliers.length}
+          count={supplierDebtCount}
           value={formatCurrency(totalSupplierDebt)}
           tone="warning"
         />
@@ -388,11 +413,11 @@ export default function CongNoPage() {
         <TabsList>
           <TabsTrigger value="customer" className="gap-2">
             <Icon name="group" size={16} />
-            KH còn nợ ({customers.length})
+            KH còn nợ ({customerDebtCount})
           </TabsTrigger>
           <TabsTrigger value="supplier" className="gap-2">
             <Icon name="local_shipping" size={16} />
-            NCC ({suppliers.length})
+            NCC ({supplierDebtCount})
           </TabsTrigger>
           <TabsTrigger value="aging" className="gap-2">
             <Icon name="bar_chart" size={16} />

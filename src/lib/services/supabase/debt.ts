@@ -52,6 +52,64 @@ export interface DebtorDetail {
 }
 
 /* ------------------------------------------------------------------ */
+/*  Quick totals — KPI summary cho cong-no page                        */
+/* ------------------------------------------------------------------ */
+
+/**
+ * Tổng công nợ KH (phải thu) + tổng công nợ NCC (phải trả) của tenant.
+ *
+ * Trước đây page `cong-no` reduce ở client từ list `customers`/`suppliers`
+ * đã fetch — nhưng list chỉ fetch cho mode hiện tại (KH | NCC), nên khi
+ * đang ở tab KH thì `totalSupplierDebt = 0` luôn (sai). Hàm này query
+ * cả 2 song song để KPI luôn đúng bất kể tab nào.
+ *
+ * Note: customer.debt và supplier.debt là field aggregate đã được trigger
+ * DB maintain. Query SUM ở DB level để tránh fetch hết rows.
+ */
+export async function getDebtTotals(): Promise<{
+  customerDebtTotal: number;
+  customerCount: number;
+  supplierDebtTotal: number;
+  supplierCount: number;
+}> {
+  const supabase = getClient();
+  const tenantId = await getCurrentTenantId();
+
+  // Supabase client không có .sum() trực tiếp — query select(debt) với
+  // gt(debt, 0) rồi reduce ở client. Customers + suppliers thường <2000
+  // record cho cà phê chain → payload nhỏ. Khi DB hỗ trợ aggregate sẽ
+  // chuyển sang RPC.
+  const [custRes, suppRes] = await Promise.all([
+    supabase
+      .from("customers")
+      .select("debt")
+      .eq("tenant_id", tenantId)
+      .gt("debt", 0),
+    supabase
+      .from("suppliers")
+      .select("debt")
+      .eq("tenant_id", tenantId)
+      .gt("debt", 0),
+  ]);
+
+  const customerDebtTotal = (custRes.data ?? []).reduce(
+    (s, r) => s + Number(r.debt ?? 0),
+    0,
+  );
+  const supplierDebtTotal = (suppRes.data ?? []).reduce(
+    (s, r) => s + Number(r.debt ?? 0),
+    0,
+  );
+
+  return {
+    customerDebtTotal,
+    customerCount: (custRes.data ?? []).length,
+    supplierDebtTotal,
+    supplierCount: (suppRes.data ?? []).length,
+  };
+}
+
+/* ------------------------------------------------------------------ */
 /*  Aging report                                                       */
 /* ------------------------------------------------------------------ */
 

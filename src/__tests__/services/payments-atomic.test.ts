@@ -93,8 +93,10 @@ describe("recordInvoicePayment — atomic RPC path", () => {
       newDebt: 0,
     });
 
-    // Không fall back vào legacy path → mockFrom KHÔNG được gọi
-    expect(mockFrom).not.toHaveBeenCalled();
+    // Không fall back vào legacy path → mockFrom KHÔNG gọi `invoices` /
+    // `cash_transactions`. Audit log gọi `audit_log` (best-effort) là OK.
+    expect(mockFrom).not.toHaveBeenCalledWith("invoices");
+    expect(mockFrom).not.toHaveBeenCalledWith("cash_transactions");
   });
 
   it("fall back legacy 4-step khi RPC chưa migrate (PGRST202)", async () => {

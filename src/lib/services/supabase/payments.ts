@@ -13,6 +13,7 @@
 
 import { getClient, getCurrentContext, handleError } from "./base";
 import { nextEntityCode } from "./stock-adjustments";
+import { recordAuditLog } from "./audit";
 import type { Database } from "@/lib/supabase/types";
 
 type CashTransactionInsert = Database["public"]["Tables"]["cash_transactions"]["Insert"];
@@ -63,6 +64,21 @@ export async function recordInvoicePayment(
     );
     if (!error && data) {
       const r = data as unknown as Record<string, unknown>;
+      // Audit log: thanh toán hóa đơn là thao tác tài chính nhạy cảm.
+      // CEO cần trace ai thu nợ KH nào, bao nhiêu, khi nào.
+      await recordAuditLog({
+        entityType: "invoice",
+        entityId: input.referenceId,
+        action: "payment",
+        newData: {
+          cash_transaction_id: r.cash_transaction_id,
+          cash_code: r.cash_code,
+          amount: input.amount,
+          payment_method: input.paymentMethod,
+          new_paid: r.new_paid,
+          new_debt: r.new_debt,
+        },
+      });
       return {
         cashTransactionId: r.cash_transaction_id as string,
         cashCode: r.cash_code as string,
@@ -166,6 +182,21 @@ export async function recordInvoicePayment(
     }
   }
 
+  // Audit log cho legacy path (RPC path đã audit ở trên).
+  await recordAuditLog({
+    entityType: "invoice",
+    entityId: inv.id,
+    action: "payment",
+    newData: {
+      cash_transaction_id: cashRow.id,
+      cash_code: cashCode,
+      amount: input.amount,
+      payment_method: input.paymentMethod,
+      new_paid: newPaid,
+      new_debt: newDebt,
+    },
+  });
+
   return {
     cashTransactionId: cashRow.id,
     cashCode,
@@ -203,6 +234,19 @@ export async function recordPurchasePayment(
     );
     if (!error && data) {
       const r = data as unknown as Record<string, unknown>;
+      await recordAuditLog({
+        entityType: "purchase_order",
+        entityId: input.referenceId,
+        action: "payment",
+        newData: {
+          cash_transaction_id: r.cash_transaction_id,
+          cash_code: r.cash_code,
+          amount: input.amount,
+          payment_method: input.paymentMethod,
+          new_paid: r.new_paid,
+          new_debt: r.new_debt,
+        },
+      });
       return {
         cashTransactionId: r.cash_transaction_id as string,
         cashCode: r.cash_code as string,
@@ -304,6 +348,21 @@ export async function recordPurchasePayment(
       if (supUpd) handleError(supUpd, "recordPurchasePayment.supplier_update");
     }
   }
+
+  // Audit log cho legacy path
+  await recordAuditLog({
+    entityType: "purchase_order",
+    entityId: po.id,
+    action: "payment",
+    newData: {
+      cash_transaction_id: cashRow.id,
+      cash_code: cashCode,
+      amount: input.amount,
+      payment_method: input.paymentMethod,
+      new_paid: newPaid,
+      new_debt: newDebt,
+    },
+  });
 
   return {
     cashTransactionId: cashRow.id,
