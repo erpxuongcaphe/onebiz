@@ -44,29 +44,80 @@ import { cn } from "@/lib/utils";
 import { Icon } from "@/components/ui/icon";
 
 // ---------------------------------------------------------------------------
-// Branch selector
+// Branch selector — visual polish (UX sprint 2)
 // ---------------------------------------------------------------------------
+//
+// Cải thiện:
+//   - Icon theo branchType (xưởng/kho/quán/văn phòng) thay vì cùng 1 icon
+//     "apartment" → owner phân biệt nhanh loại đơn vị.
+//   - Trigger có background subtle khi current branch ≠ null (chứng tỏ
+//     đang scope) → visual cue "đang lọc theo branch X".
+//   - Dropdown items: icon trái (loại) + tên + mã code badge (nếu có).
+
+function branchTypeIcon(type?: string): string {
+  switch (type) {
+    case "factory":
+      return "factory";
+    case "warehouse":
+      return "warehouse";
+    case "office":
+      return "domain";
+    case "store":
+    default:
+      return "storefront";
+  }
+}
 
 function BranchSelector() {
   const { tenant: _tenant, branches, currentBranch, switchBranch, user } = useAuth();
   const canViewAll = user?.role === "owner" || user?.role === "admin";
 
+  const triggerIcon = currentBranch
+    ? branchTypeIcon(currentBranch.branchType)
+    : "apartment";
+
   return (
     <DropdownMenu>
-      <DropdownMenuTrigger className="hidden md:flex press-scale-sm items-center gap-1.5 px-3 h-9 text-sm text-foreground/90 hover:text-primary hover:bg-surface-container-low rounded-lg cursor-pointer outline-none">
-        <Icon name="apartment" size={16} className="shrink-0 text-muted-foreground" />
+      <DropdownMenuTrigger
+        className={cn(
+          "hidden md:flex press-scale-sm items-center gap-2 px-3 h-9 text-sm rounded-lg cursor-pointer outline-none transition-colors",
+          currentBranch
+            ? "text-primary bg-primary-fixed/40 hover:bg-primary-fixed"
+            : "text-foreground/90 hover:bg-surface-container-low",
+        )}
+      >
+        <Icon
+          name={triggerIcon}
+          size={16}
+          className={cn(
+            "shrink-0",
+            currentBranch ? "text-primary" : "text-muted-foreground",
+          )}
+        />
         <span className="truncate max-w-[180px] font-semibold">
           {currentBranch?.name ?? "Tất cả chi nhánh"}
         </span>
-        <Icon name="expand_more" size={14} className="shrink-0 text-muted-foreground" />
+        <Icon
+          name="expand_more"
+          size={14}
+          className={cn(
+            "shrink-0",
+            currentBranch ? "text-primary/70" : "text-muted-foreground",
+          )}
+        />
       </DropdownMenuTrigger>
-      <DropdownMenuContent align="start" sideOffset={8} className="min-w-[220px]">
+      <DropdownMenuContent align="start" sideOffset={8} className="min-w-[260px]">
         <DropdownMenuLabel>Chọn chi nhánh</DropdownMenuLabel>
         {canViewAll && (
           <DropdownMenuItem
             className="cursor-pointer"
             onSelect={() => switchBranch(null)}
           >
+            <Icon
+              name="apartment"
+              size={16}
+              className="shrink-0 text-muted-foreground"
+            />
             <span className="flex-1">Tất cả chi nhánh</span>
             {currentBranch === null && (
               <Icon name="check" size={16} className="text-primary" />
@@ -79,9 +130,24 @@ function BranchSelector() {
             className="cursor-pointer"
             onSelect={() => switchBranch(branch.id)}
           >
-            <span className="flex-1">{branch.name}</span>
+            <Icon
+              name={branchTypeIcon(branch.branchType)}
+              size={16}
+              className={cn(
+                "shrink-0",
+                currentBranch?.id === branch.id
+                  ? "text-primary"
+                  : "text-muted-foreground",
+              )}
+            />
+            <span className="flex-1 truncate">{branch.name}</span>
+            {branch.code && (
+              <span className="text-[10px] font-mono text-muted-foreground bg-surface-container px-1.5 py-0.5 rounded">
+                {branch.code}
+              </span>
+            )}
             {currentBranch?.id === branch.id && (
-              <Icon name="check" size={16} className="text-primary" />
+              <Icon name="check" size={16} className="text-primary ml-1" />
             )}
           </DropdownMenuItem>
         ))}

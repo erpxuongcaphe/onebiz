@@ -266,10 +266,10 @@ function GroupExpanded({
         type="button"
         onClick={onToggle}
         className={cn(
-          "w-full press-scale-sm flex items-center gap-3 h-10 px-3 rounded-lg text-sm font-medium",
+          "w-full press-scale-sm flex items-center gap-3 h-10 px-3 rounded-lg text-sm font-medium transition-colors",
           active
-            ? "text-primary font-semibold"
-            : "text-foreground/90 hover:bg-surface-container-low hover:text-foreground"
+            ? "text-primary font-semibold bg-primary-fixed/30"
+            : "text-foreground/90 hover:bg-surface-container-low hover:text-foreground",
         )}
       >
         <Icon
@@ -285,7 +285,8 @@ function GroupExpanded({
           size={16}
           className={cn(
             "shrink-0 transition-transform duration-150",
-            open ? "rotate-0" : "-rotate-90"
+            active && "text-primary",
+            open ? "rotate-0" : "-rotate-90",
           )}
         />
       </button>
@@ -419,6 +420,31 @@ export function AppSidebar() {
   const pathname = usePathname();
   const { hasPermission } = useAuth();
   const [collapsed, setCollapsed] = usePersistedCollapsed(false);
+
+  // Keyboard shortcut Ctrl+B / Cmd+B → toggle sidebar collapse.
+  // Pattern chuẩn từ VS Code, Linear, Notion. Discoverable qua tooltip
+  // ở toggle button.
+  useEffect(() => {
+    const handler = (e: KeyboardEvent) => {
+      if ((e.ctrlKey || e.metaKey) && e.key.toLowerCase() === "b") {
+        // Bỏ qua nếu user đang gõ trong input/textarea (tránh override
+        // browser bookmark).
+        const target = e.target as HTMLElement | null;
+        if (
+          target &&
+          (target.tagName === "INPUT" ||
+            target.tagName === "TEXTAREA" ||
+            target.isContentEditable)
+        ) {
+          return;
+        }
+        e.preventDefault();
+        setCollapsed((prev) => !prev);
+      }
+    };
+    window.addEventListener("keydown", handler);
+    return () => window.removeEventListener("keydown", handler);
+  }, [setCollapsed]);
 
   // Track which top-level groups are open in expanded mode.
   // Defaults: any group whose child route is active.

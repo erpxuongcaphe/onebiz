@@ -12,6 +12,8 @@ import {
   FilterSidebar,
   FilterGroup,
   SelectFilter,
+  ActiveFiltersBar,
+  type ActiveFilter,
 } from "@/components/shared/filter-sidebar";
 import {
   InlineDetailPanel,
@@ -486,11 +488,56 @@ export default function TonKhoPage() {
     },
   ];
 
+  // Active filter chips data — UX cải thiện cho user thấy đang lọc gì.
+  const activeFilters: ActiveFilter[] = [];
+  if (branchFilter !== "all") {
+    const branchName = branches.find((b) => b.id === branchFilter)?.name ?? branchFilter;
+    activeFilters.push({
+      key: "branch",
+      label: "Chi nhánh",
+      value: branchName,
+      onClear: () => setBranchFilter("all"),
+    });
+  }
+  if (typeFilter !== "all") {
+    activeFilters.push({
+      key: "type",
+      label: "Loại",
+      value: typeFilter === "nvl" ? "NVL" : "SKU",
+      onClear: () => setTypeFilter("all"),
+    });
+  }
+  if (lowStockOnly !== "all") {
+    activeFilters.push({
+      key: "low",
+      label: "Định mức",
+      value: "Dưới định mức",
+      onClear: () => setLowStockOnly("all"),
+    });
+  }
+  const handleClearAllFilters = () => {
+    setBranchFilter("all");
+    setTypeFilter("all");
+    setLowStockOnly("all");
+  };
+
   return (
     <ListPageLayout
       sidebar={
         <FilterSidebar>
-          <FilterGroup label="Chi nhánh">
+          <ActiveFiltersBar
+            filters={activeFilters}
+            onClearAll={handleClearAllFilters}
+          />
+
+          <FilterGroup
+            label="Chi nhánh"
+            activeHint={
+              branchFilter !== "all"
+                ? branches.find((b) => b.id === branchFilter)?.name?.slice(0, 12)
+                : undefined
+            }
+          >
             <SelectFilter
               options={[
                 { label: "Tất cả chi nhánh", value: "all" },
@@ -505,7 +552,10 @@ export default function TonKhoPage() {
             />
           </FilterGroup>
 
-          <FilterGroup label="Loại hàng">
+          <FilterGroup
+            label="Loại hàng"
+            activeHint={typeFilter !== "all" ? typeFilter.toUpperCase() : undefined}
+          >
             <SelectFilter
               options={[
                 { label: "Tất cả", value: "all" },
@@ -518,7 +568,10 @@ export default function TonKhoPage() {
             />
           </FilterGroup>
 
-          <FilterGroup label="Định mức">
+          <FilterGroup
+            label="Định mức"
+            activeHint={lowStockOnly === "low" ? "Dưới ĐM" : undefined}
+          >
             <SelectFilter
               options={[
                 { label: "Tất cả", value: "all" },

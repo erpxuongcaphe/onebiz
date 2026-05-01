@@ -199,3 +199,85 @@ export function FilterGroup({
     </div>
   );
 }
+
+/**
+ * ActiveFiltersBar — chip row hiển thị các filter đang áp dụng.
+ *
+ * Đặt ở đầu FilterSidebar (hoặc trên top của list page tùy preference).
+ * Mỗi filter active = 1 chip với label + value + nút × để xóa.
+ * "Xóa tất cả" reset tất cả filter về default.
+ *
+ * Usage:
+ *   <FilterSidebar>
+ *     <ActiveFiltersBar
+ *       filters={[
+ *         branchFilter !== "all" && {
+ *           key: "branch",
+ *           label: "Chi nhánh",
+ *           value: branchName,
+ *           onClear: () => setBranchFilter("all"),
+ *         },
+ *         typeFilter !== "all" && { ... },
+ *       ].filter(Boolean) as ActiveFilter[]}
+ *       onClearAll={() => { setBranchFilter("all"); setTypeFilter("all"); }}
+ *     />
+ *     <FilterGroup label="Chi nhánh">...</FilterGroup>
+ *     ...
+ *   </FilterSidebar>
+ */
+export interface ActiveFilter {
+  key: string;
+  /** Tên field, vd "Chi nhánh" */
+  label: string;
+  /** Giá trị hiển thị, vd "Quán Cà Phê Thủ Đức" */
+  value: string;
+  /** Callback khi user click × xóa filter này */
+  onClear: () => void;
+}
+
+interface ActiveFiltersBarProps {
+  filters: ActiveFilter[];
+  onClearAll?: () => void;
+}
+
+export function ActiveFiltersBar({ filters, onClearAll }: ActiveFiltersBarProps) {
+  if (filters.length === 0) return null;
+
+  return (
+    <div className="pb-2 border-b border-border/40 mb-1">
+      <div className="flex items-center justify-between mb-1.5">
+        <span className="text-[10px] font-bold text-primary uppercase tracking-wider">
+          Đang lọc ({filters.length})
+        </span>
+        {onClearAll && filters.length > 1 && (
+          <button
+            type="button"
+            onClick={onClearAll}
+            className="press-scale-sm text-[10px] font-semibold text-muted-foreground hover:text-destructive transition-colors"
+          >
+            Xóa tất cả
+          </button>
+        )}
+      </div>
+      <div className="flex flex-wrap gap-1">
+        {filters.map((f) => (
+          <button
+            key={f.key}
+            type="button"
+            onClick={f.onClear}
+            className="press-scale-sm group inline-flex items-center gap-1 px-2 py-0.5 rounded-full bg-primary-fixed text-primary text-[11px] font-medium hover:bg-primary/15 transition-colors max-w-full"
+            title={`Xóa filter: ${f.label} = ${f.value}`}
+          >
+            <span className="text-primary/70">{f.label}:</span>
+            <span className="truncate max-w-[100px]">{f.value}</span>
+            <Icon
+              name="close"
+              size={12}
+              className="shrink-0 text-primary/60 group-hover:text-destructive"
+            />
+          </button>
+        ))}
+      </div>
+    </div>
+  );
+}
