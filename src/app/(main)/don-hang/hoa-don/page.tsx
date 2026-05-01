@@ -32,7 +32,9 @@ import {
   getInvoiceStatuses,
   cancelInvoice,
   getInvoiceItems,
+  getTenantBusinessInfo,
   type InvoiceItemRow,
+  type TenantBusinessInfo,
 } from "@/lib/services";
 import { useToast, useBranchFilter } from "@/lib/contexts";
 import { buildInvoicePrintData } from "@/lib/print-templates";
@@ -262,6 +264,15 @@ export default function HoaDonPage() {
   const [cancellingItem, setCancellingItem] = useState<Invoice | null>(null);
   const [cancelLoading, setCancelLoading] = useState(false);
   const [payingItem, setPayingItem] = useState<Invoice | null>(null);
+
+  // Tenant business info — load 1 lần khi page mount để in hóa đơn có
+  // MST + địa chỉ pháp lý (HT-2 wire).
+  const [businessInfo, setBusinessInfo] = useState<TenantBusinessInfo | null>(null);
+  useEffect(() => {
+    getTenantBusinessInfo()
+      .then(setBusinessInfo)
+      .catch(() => setBusinessInfo(null));
+  }, []);
 
   // Filters
   const [selectedStatuses, setSelectedStatuses] = useState<string[]>([
@@ -610,7 +621,11 @@ export default function HoaDonPage() {
             {
               label: "In hóa đơn",
               icon: <Icon name="print" size={16} />,
-              onClick: () => printWithPicker(buildInvoicePrintData(row), "In hóa đơn"),
+              onClick: () =>
+                printWithPicker(
+                  buildInvoicePrintData(row, businessInfo ?? undefined),
+                  "In hóa đơn",
+                ),
             },
             ...(row.status === "processing"
               ? [

@@ -129,13 +129,24 @@ export function buildPurchaseReturnPrintData(row: PurchaseReturn): DocumentPrint
   };
 }
 
-export function buildInvoicePrintData(row: Invoice): DocumentPrintData {
+export function buildInvoicePrintData(
+  row: Invoice,
+  business?: TenantBusinessInfoForPrint,
+): DocumentPrintData {
   // Invoice.createdBy already written as full_name by invoices.ts mapper
   const user = formatUser(undefined, row.createdBy);
   return {
     documentType: "HOÁ ĐƠN BÁN HÀNG",
     documentCode: row.code,
     date: row.date,
+    branchName: row.branchName,
+    // Tenant business info (HT-2): MST, địa chỉ, logo, footer cho VAT.
+    businessName: business?.businessName,
+    businessTaxCode: business?.taxCode,
+    businessAddress: business?.address,
+    businessPhone: business?.phone,
+    businessLogoUrl: business?.logoUrl,
+    businessFooter: business?.invoiceFooter,
     headerFields: [
       { label: "Khách hàng", value: row.customerName },
       { label: "Mã KH", value: row.customerCode },
@@ -148,6 +159,19 @@ export function buildInvoicePrintData(row: Invoice): DocumentPrintData {
     ],
     createdBy: user,
   };
+}
+
+/**
+ * Subset của TenantBusinessInfo dùng cho print template — tránh import
+ * service vào print-templates (giữ pure).
+ */
+export interface TenantBusinessInfoForPrint {
+  businessName?: string;
+  taxCode?: string;
+  address?: string;
+  phone?: string;
+  logoUrl?: string;
+  invoiceFooter?: string;
 }
 
 export function buildSalesOrderPrintData(row: SalesOrder): DocumentPrintData {

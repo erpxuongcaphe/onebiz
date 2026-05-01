@@ -22,6 +22,16 @@ export interface DocumentPrintData {
   storeName?: string;
   branchName?: string;
 
+  // Tenant business info (in trên đầu hóa đơn — bắt buộc cho VAT).
+  // Sprint HT-2: load từ tenants.settings.business_info qua hook
+  // useTenantBusinessInfo() trong page rồi truyền vào builder.
+  businessName?: string;
+  businessTaxCode?: string;
+  businessAddress?: string;
+  businessPhone?: string;
+  businessLogoUrl?: string;
+  businessFooter?: string;
+
   // Header fields (key-value pairs shown below title)
   headerFields?: { label: string; value: string }[];
 
@@ -190,8 +200,20 @@ function generateDocumentHtml(d: DocumentPrintData, paperSize: PaperSize): strin
 </style></head><body>
 
 <div class="header">
-  ${d.storeName ? `<div class="store">${d.storeName}</div>` : ""}
-  ${d.branchName ? `<div class="branch">${d.branchName}</div>` : ""}
+  ${
+    d.businessLogoUrl
+      ? `<img src="${d.businessLogoUrl}" alt="logo" style="max-height:${isThermal ? "30px" : "60px"};margin-bottom:6px;" />`
+      : ""
+  }
+  ${d.businessName ? `<div class="store">${d.businessName}</div>` : d.storeName ? `<div class="store">${d.storeName}</div>` : ""}
+  ${
+    d.businessTaxCode
+      ? `<div class="branch">MST: ${d.businessTaxCode}</div>`
+      : ""
+  }
+  ${d.businessAddress ? `<div class="branch">${d.businessAddress}</div>` : ""}
+  ${d.businessPhone ? `<div class="branch">ĐT: ${d.businessPhone}</div>` : ""}
+  ${d.branchName ? `<div class="branch" style="margin-top:4px;font-style:italic;">Chi nhánh: ${d.branchName}</div>` : ""}
   <div class="doc-type">${d.documentType}</div>
   <div class="doc-code">${d.documentCode} — ${formatDate(d.date)}</div>
 </div>
@@ -232,6 +254,12 @@ ${d.note ? `<div class="note"><strong>Ghi chú:</strong> ${d.note}</div>` : ""}
     <div></div>
   </div>
 </div>
+
+${
+  d.businessFooter
+    ? `<div style="margin-top:${isThermal ? "12px" : "24px"};text-align:center;font-size:${isThermal ? "9px" : "11px"};color:#777;font-style:italic;border-top:1px dashed #ddd;padding-top:8px;">${d.businessFooter}</div>`
+    : ""
+}
 
 </body></html>`;
 }
