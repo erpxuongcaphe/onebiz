@@ -53,6 +53,19 @@ function DropdownMenuGroup({ ...props }: MenuPrimitive.Group.Props) {
   return <MenuPrimitive.Group data-slot="dropdown-menu-group" {...props} />
 }
 
+/**
+ * DropdownMenuLabel — render section label trong dropdown.
+ *
+ * Base UI yêu cầu `MenuPrimitive.GroupLabel` PHẢI nằm trong `<Menu.Group>`,
+ * nếu không sẽ throw "Base UI error #31; MenuGroupRootContext is missing"
+ * → root crash entire app.
+ *
+ * Trước đây user dùng `<DropdownMenuLabel>` ngay trong `<DropdownMenuContent>`
+ * (vd: BranchSelector top-nav) → mỗi lần click open dropdown → crash.
+ *
+ * Fix: tự động wrap `MenuPrimitive.Group` bao quanh GroupLabel để Base UI
+ * luôn có context. Component caller không cần biết chi tiết Base UI API.
+ */
 function DropdownMenuLabel({
   className,
   inset,
@@ -61,15 +74,17 @@ function DropdownMenuLabel({
   inset?: boolean
 }) {
   return (
-    <MenuPrimitive.GroupLabel
-      data-slot="dropdown-menu-label"
-      data-inset={inset}
-      className={cn(
-        "px-1.5 py-1 text-xs font-medium text-muted-foreground data-inset:pl-7",
-        className
-      )}
-      {...props}
-    />
+    <MenuPrimitive.Group>
+      <MenuPrimitive.GroupLabel
+        data-slot="dropdown-menu-label"
+        data-inset={inset}
+        className={cn(
+          "px-1.5 py-1 text-xs font-medium text-muted-foreground data-inset:pl-7",
+          className
+        )}
+        {...props}
+      />
+    </MenuPrimitive.Group>
   )
 }
 
