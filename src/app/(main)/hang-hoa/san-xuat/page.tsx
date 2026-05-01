@@ -34,6 +34,7 @@ import {
   getProductionOrders,
   getProductionOrderById,
   updateProductionStatus,
+  cancelProductionOrder,
   canTransitionProductionStatus,
 } from "@/lib/services";
 import type { ProductionOrder, ProductionOrderStatus } from "@/lib/types";
@@ -598,10 +599,20 @@ export default function SanXuatPage() {
           if (!cancellingItem) return;
           setCancelLoading(true);
           try {
-            await updateProductionStatus(cancellingItem.id, "cancelled");
+            // SX-1: dùng cancelProductionOrder gọi RPC `revert_production_materials`
+            // để atomic đảo NVL nếu đã consume. Nếu RPC chưa migrate (00047),
+            // service tự fall back updateStatus với cảnh báo console.
+            const result = await cancelProductionOrder(
+              cancellingItem.id,
+              "Hủy từ UI quản lý sản xuất",
+            );
+            const revertNote =
+              result.revertedMaterialsQty > 0
+                ? ` Đã hoàn ${result.revertedMaterialsQty} đơn vị NVL về kho.`
+                : "";
             toast({
               title: "Đã hủy lệnh sản xuất",
-              description: `Lệnh ${cancellingItem.code} đã được hủy thành công`,
+              description: `Lệnh ${cancellingItem.code} đã được hủy.${revertNote}`,
               variant: "success",
             });
             await fetchData();

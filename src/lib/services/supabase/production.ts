@@ -194,6 +194,63 @@ export async function updateProductionStatus(
   if (error) throw error;
 }
 
+/**
+ * Hủy lệnh sản xuất với rollback NVL (Sprint SX-1).
+ *
+ * Trước đây cancel chỉ flip status → nếu đã consume (status >= material_check)
+ * thì NVL đã trừ kho mất luôn. Giờ gọi RPC `revert_production_materials`
+ * để atomic đảo stock_movements + restore branch_stock + reset
+ * actual_qty + flip status.
+ *
+ * Status hợp lệ: planned/material_check/in_production/quality_check.
+ * Completed KHÔNG cho cancel (lot đã tạo, cần luồng riêng xuất hủy).
+ *
+ * Fallback: nếu RPC chưa migrate (00047 chưa chạy) → flip status thông
+ * thường + cảnh báo console.warn.
+ */
+export async function cancelProductionOrder(
+  orderId: string,
+  reason?: string,
+): Promise<{ revertedMaterialsQty: number; revertedCogs: number }> {
+  // Try RPC atomic first
+  try {
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    const { data, error } = await (supabase as any).rpc(
+      "revert_production_materials",
+      {
+        p_production_order_id: orderId,
+        p_reason: reason ?? null,
+      },
+    );
+    if (!error && data) {
+      const r = data as Record<string, unknown>;
+      return {
+        revertedMaterialsQty: Number(r.reverted_materials_qty ?? 0),
+        revertedCogs: Number(r.reverted_cogs ?? 0),
+      };
+    }
+    if (error && !/(does not exist|404|PGRST202)/i.test(error.message)) {
+      throw error;
+    }
+  } catch (err) {
+    console.warn(
+      "[cancelProductionOrder] RPC revert chưa migrate, fall back flip status:",
+      err,
+    );
+  }
+
+  // Fallback: chỉ flip status (không rollback NVL — log warning)
+  const { error } = await supabase
+    .from("production_orders")
+    .update({ status: "cancelled" })
+    .eq("id", orderId);
+  if (error) throw error;
+  console.warn(
+    `[cancelProductionOrder] Đã flip status nhưng KHÔNG rollback NVL — chạy migration 00047 để bật RPC.`,
+  );
+  return { revertedMaterialsQty: 0, revertedCogs: 0 };
+}
+
 export async function completeProductionOrder(
   productionOrderId: string,
   completedQty: number,

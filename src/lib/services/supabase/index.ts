@@ -147,6 +147,7 @@ export { getAllBOMs, getBOMsByProduct, getBOMById, createBOM, updateBOM, deleteB
 // Production Orders + Lot Tracking
 export {
   getProductionOrders, getProductionOrderById, createProductionOrder, completeProductionOrder, consumeProductionMaterials,
+  cancelProductionOrder,
   updateProductionStatus, canTransitionProductionStatus,
   checkMaterialsAvailability,
   getProductLots, getAllProductLots, allocateLotsFIFO, getExpiringLots, createPurchaseLot,
