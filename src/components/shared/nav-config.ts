@@ -155,8 +155,23 @@ export const sidebarNavGroups: SidebarGroup[] = [
     icon: "auto_awesome",
     items: [
       { label: "Trang chủ AI", href: "/", icon: "home" },
-      { label: "Phân tích kinh doanh", href: "/ai/phan-tich", icon: "bar_chart" },
-      { label: "Import dữ liệu", href: "/ai/import", icon: "upload" },
+      // /ai/phan-tich + /ai/import chưa có page (404 trên production →
+      // RSC failed to load → trigger error boundary). Mark comingSoon
+      // để render disabled item, không navigate.
+      {
+        label: "Phân tích kinh doanh",
+        href: "/ai/phan-tich",
+        icon: "bar_chart",
+        disabled: true,
+        comingSoon: true,
+      },
+      {
+        label: "Import dữ liệu",
+        href: "/ai/import",
+        icon: "upload",
+        disabled: true,
+        comingSoon: true,
+      },
       { label: "AI Agents", href: "/ai-agents", icon: "smart_toy", badge: "New" },
       { label: "KPI Breakdown", href: "/ai-agents/kpi", icon: "trending_up" },
       { label: "Task hàng ngày", href: "/ai-agents/tasks", icon: "checklist" },
