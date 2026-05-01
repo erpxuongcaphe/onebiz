@@ -288,23 +288,42 @@ export function AuthProvider({ children }: { children: ReactNode }) {
 
   const switchBranch = useCallback(
     (branchId: string | null) => {
-      // Device binding hard-stop — tablet đã khoá vào chi nhánh cụ thể,
-      // không cho đổi. Staff bấm dropdown cũng silent no-op (UI đã lock).
-      if (readDeviceBinding()) return;
+      // Defensive try/catch — switchBranch fire trong sync click handler.
+      // Nếu throw đồng bộ (vd: localStorage.setItem fail vì quota), error
+      // bubble lên error.tsx → root crash. Log + swallow để UI tiếp tục.
+      try {
+        // Device binding hard-stop — tablet đã khoá vào chi nhánh cụ thể,
+        // không cho đổi. Staff bấm dropdown cũng silent no-op (UI đã lock).
+        if (readDeviceBinding()) return;
 
-      if (branchId === null) {
-        // "Tất cả chi nhánh" — CEO view
-        setCurrentBranch(null);
-        try { localStorage.setItem("active_branch_id", "__all__"); } catch {}
-      } else {
-        const branch = branches.find((b) => b.id === branchId);
-        if (branch) {
-          setCurrentBranch(branch);
-          try { localStorage.setItem("active_branch_id", branchId); } catch {}
+        if (branchId === null) {
+          // "Tất cả chi nhánh" — CEO view
+          setCurrentBranch(null);
+          try {
+            localStorage.setItem("active_branch_id", "__all__");
+          } catch {
+            /* localStorage có thể bị block (private mode) */
+          }
+        } else {
+          const branch = branches.find((b) => b.id === branchId);
+          if (branch) {
+            setCurrentBranch(branch);
+            try {
+              localStorage.setItem("active_branch_id", branchId);
+            } catch {
+              /* idem */
+            }
+          } else {
+            console.warn(
+              `[switchBranch] Không tìm thấy branch id="${branchId}" trong list ${branches.length} branches.`,
+            );
+          }
         }
+      } catch (err) {
+        console.error("[switchBranch] error:", err);
       }
     },
-    [branches]
+    [branches],
   );
 
   // Derived: branchId for data queries (undefined = no filter = all branches)

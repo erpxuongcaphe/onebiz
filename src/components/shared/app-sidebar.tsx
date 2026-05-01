@@ -380,7 +380,11 @@ export function AppSidebar() {
       data-collapsed={collapsed ? "true" : "false"}
       className={cn(
         "hidden lg:flex flex-col bg-surface-container-lowest border-r border-border shrink-0 transition-[width] duration-200",
-        collapsed ? "w-16" : "w-64"
+        // w-56 (224px) thay vì w-64 (256px) — tiết kiệm 32px cho main content.
+        // Trên 1366×768, AppSidebar 224 + FilterSidebar 240 + Main = main rộng
+        // 902px (vs 870px trước). FilterSidebar collapsible thêm 192px khi cần.
+        // Collapsed giữ w-16 (64px) để icon comfortable touch target.
+        collapsed ? "w-16" : "w-56"
       )}
     >
       {/* Stitch header — chỉ toggle button, logo đã có ở top-nav (tránh lặp brand) */}

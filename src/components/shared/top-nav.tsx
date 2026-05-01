@@ -360,27 +360,33 @@ export function TopNav() {
   // Bell badge — load số notification chưa đọc của user hiện tại.
   // Trước đây hardcode "3" → CEO mở thấy 3 dù không có notification thật.
   // Refresh khi tab focus + 60s interval (đủ live cho UX, chưa cần Realtime).
+  // Defensive: chỉ fetch khi user đã ready (`tenant` có giá trị) để tránh
+  // race condition fetch khi auth context chưa load → throw "Chưa đăng nhập"
+  // → có thể bubble lên root error nếu không catch kỹ.
+  const { tenant } = useAuth();
   const [unreadCount, setUnreadCount] = useState(0);
   useEffect(() => {
+    if (!tenant) return; // chờ tenant ready
     let cancelled = false;
-    const fetch = async () => {
+    const fetchCount = async () => {
       try {
         const n = await getUnreadNotificationCount();
         if (!cancelled) setUnreadCount(n);
-      } catch {
-        // fail-soft
+      } catch (err) {
+        // fail-soft — log để debug nhưng không bể UI
+        console.warn("[TopNav.unreadCount]", err);
       }
     };
-    fetch();
-    const interval = setInterval(fetch, 60_000);
-    const onFocus = () => fetch();
+    fetchCount();
+    const interval = setInterval(fetchCount, 60_000);
+    const onFocus = () => fetchCount();
     window.addEventListener("focus", onFocus);
     return () => {
       cancelled = true;
       clearInterval(interval);
       window.removeEventListener("focus", onFocus);
     };
-  }, []);
+  }, [tenant]);
 
   return (
     <>
