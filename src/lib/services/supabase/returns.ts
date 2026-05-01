@@ -13,7 +13,7 @@ export async function getReturns(params: QueryParams): Promise<QueryResult<Retur
   let query = supabase
     .from("sales_returns")
     .select(
-      "*, invoices!sales_returns_invoice_id_fkey(code), profiles!sales_returns_created_by_fkey(full_name)",
+      "*, invoices!sales_returns_invoice_id_fkey(code), profiles!sales_returns_created_by_fkey(full_name), branches!sales_returns_branch_id_fkey(name)",
       { count: "exact" },
     )
     .eq("tenant_id", tenantId);
@@ -67,15 +67,70 @@ function mapReturn(row: any): ReturnOrder {
   };
 
   const profile = row.profiles as { full_name: string } | null;
+  const branch = row.branches as { name: string } | null;
   return {
     id: row.id,
     code: row.code,
     invoiceCode: (row.invoices as { code: string } | null)?.code ?? "---",
+    invoiceId: row.invoice_id ?? undefined,
     date: row.created_at,
     customerName: row.customer_name,
     totalAmount: row.total,
     status: row.status === "completed" ? "completed" : "draft",
     statusName: statusNameMap[row.status] ?? row.status,
     createdBy: profile?.full_name ?? row.created_by,
+    branchId: row.branch_id ?? undefined,
+    branchName: branch?.name ?? undefined,
   };
+}
+
+/**
+ * Lấy line items của phiếu trả hàng cho detail panel.
+ * Trước đây panel render hardcoded "SP001 — Sản phẩm mẫu".
+ */
+export interface ReturnItemRow {
+  id: string;
+  productCode: string;
+  productName: string;
+  unit: string;
+  quantity: number;
+  unitPrice: number;
+  total: number;
+}
+
+export async function getReturnItems(returnId: string): Promise<ReturnItemRow[]> {
+  const supabase = getClient();
+  const tenantId = await getCurrentTenantId();
+
+  // Defense-in-depth: verify return thuộc tenant
+  const { data: ret } = await supabase
+    .from("sales_returns")
+    .select("id")
+    .eq("tenant_id", tenantId)
+    .eq("id", returnId)
+    .maybeSingle();
+  if (!ret) return [];
+
+  const { data, error } = await supabase
+    .from("return_items")
+    .select(
+      "id, product_id, product_name, unit, quantity, unit_price, total, products!return_items_product_id_fkey(code)",
+    )
+    .eq("return_id", returnId);
+
+  if (error) {
+    console.warn("[getReturnItems]", error.message);
+    return [];
+  }
+
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  return (data ?? []).map((row: any) => ({
+    id: row.id,
+    productCode: row.products?.code ?? "",
+    productName: row.product_name ?? "",
+    unit: row.unit ?? "",
+    quantity: Number(row.quantity ?? 0),
+    unitPrice: Number(row.unit_price ?? 0),
+    total: Number(row.total ?? 0),
+  }));
 }

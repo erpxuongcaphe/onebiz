@@ -5,12 +5,13 @@ export { getSuppliers, getSupplierById, createSupplier, updateSupplier, deleteSu
 export {
   getInvoices,
   getInvoiceStatuses,
+  getInvoiceItems,
   cancelInvoice,
   updateInvoice,
   getInvoicesForCustomer,
   getReturnsForCustomer,
 } from "./invoices";
-export type { CustomerReturn, UpdateInvoicePatch } from "./invoices";
+export type { CustomerReturn, UpdateInvoicePatch, InvoiceItemRow } from "./invoices";
 export {
   getPurchaseOrders,
   getPurchaseOrderStatuses,
@@ -33,9 +34,11 @@ export {
   deleteDraftOrder,
   completeSalesOrder,
   cancelSalesOrder,
+  getSalesOrderItems,
 } from "./orders";
-export type { DraftOrderSummary, DraftOrderDetail } from "./orders";
-export { getReturns, getReturnStatuses } from "./returns";
+export type { DraftOrderSummary, DraftOrderDetail, SalesOrderItemRow } from "./orders";
+export { getReturns, getReturnStatuses, getReturnItems } from "./returns";
+export type { ReturnItemRow } from "./returns";
 export { completeReturn } from "./returns-completion";
 export {
   getShippingOrders,

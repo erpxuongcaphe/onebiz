@@ -28,7 +28,12 @@ import { usePrintWithPicker } from "@/lib/hooks/use-print-with-picker";
 import { buildSalesOrderPrintData } from "@/lib/print-templates";
 import { formatCurrency, formatDate, formatUser } from "@/lib/format";
 import { exportToExcel, exportToCsv } from "@/lib/utils/export";
-import { getOrders } from "@/lib/services";
+import {
+  getOrders,
+  cancelSalesOrder,
+  getSalesOrderItems,
+  type SalesOrderItemRow,
+} from "@/lib/services";
 import type { SalesOrder } from "@/lib/types";
 import { CreateOrderDialog, ConfirmDialog } from "@/components/shared/dialogs";
 import { Icon } from "@/components/ui/icon";
@@ -83,6 +88,22 @@ function OrderDetail({
     variant: "secondary" as const,
   };
 
+  // Lazy fetch line items thật (P0 audit fix — trước hardcode "SP001").
+  const [items, setItems] = useState<SalesOrderItemRow[]>([]);
+  const [itemsLoading, setItemsLoading] = useState(true);
+  useEffect(() => {
+    let cancelled = false;
+    setItemsLoading(true);
+    getSalesOrderItems(order.id)
+      .then((rows) => { if (!cancelled) setItems(rows); })
+      .catch(() => { if (!cancelled) setItems([]); })
+      .finally(() => { if (!cancelled) setItemsLoading(false); });
+    return () => { cancelled = true; };
+  }, [order.id]);
+
+  const subtotal = items.reduce((s, it) => s + it.unitPrice * it.quantity, 0);
+  const itemDiscountSum = items.reduce((s, it) => s + it.discount, 0);
+
   return (
     <InlineDetailPanel open onClose={onClose} onEdit={onEdit} onDelete={onDelete}>
       <DetailTabs
@@ -103,7 +124,7 @@ function OrderDetail({
                         ? "bg-status-success/10 text-status-success border-status-success/25"
                         : undefined,
                   }}
-                  subtitle="Chi nhánh trung tâm"
+                  subtitle={order.branchName || "—"}
                   meta={
                     <div className="flex items-center gap-4 flex-wrap text-xs">
                       <span>
@@ -136,58 +157,63 @@ function OrderDetail({
                   ]}
                 />
 
-                <DetailItemsTable
-                  columns={[
-                    { header: "Mã hàng", accessor: "code" as never },
-                    { header: "Tên hàng", accessor: "name" as never },
-                    {
-                      header: "Số lượng",
-                      accessor: "quantity" as never,
-                      align: "right",
-                    },
-                    {
-                      header: "Đơn giá",
-                      accessor: (item: Record<string, unknown>) =>
-                        formatCurrency(item.unitPrice as number),
-                      align: "right",
-                    },
-                    {
-                      header: "Thành tiền",
-                      accessor: (item: Record<string, unknown>) => (
-                        <span className="text-primary font-semibold">
-                          {formatCurrency(item.total as number)}
-                        </span>
-                      ),
-                      align: "right",
-                    },
-                  ]}
-                  items={
-                    [
+                {itemsLoading ? (
+                  <div className="text-sm text-muted-foreground py-4 text-center">
+                    Đang tải sản phẩm...
+                  </div>
+                ) : items.length === 0 ? (
+                  <div className="text-sm text-muted-foreground py-4 text-center">
+                    Đơn hàng này không có sản phẩm.
+                  </div>
+                ) : (
+                  <DetailItemsTable
+                    columns={[
+                      { header: "Mã hàng", accessor: "productCode" as never },
+                      { header: "Tên hàng", accessor: "productName" as never },
+                      { header: "Đơn vị", accessor: "unit" as never },
                       {
-                        code: "SP001",
-                        name: "Sản phẩm mẫu",
-                        quantity: 1,
-                        unitPrice: order.totalAmount,
-                        total: order.totalAmount,
+                        header: "SL",
+                        accessor: "quantity" as never,
+                        align: "right",
                       },
-                    ] as Record<string, unknown>[]
-                  }
-                  summary={[
-                    {
-                      label: "Tổng tiền hàng (1)",
-                      value: formatCurrency(order.totalAmount),
-                    },
-                    {
-                      label: "Khách cần trả",
-                      value: formatCurrency(order.totalAmount),
-                      className: "font-bold text-base",
-                    },
-                    {
-                      label: "Khách đã trả",
-                      value: formatCurrency(0),
-                    },
-                  ]}
-                />
+                      {
+                        header: "Đơn giá",
+                        accessor: (item: Record<string, unknown>) =>
+                          formatCurrency(item.unitPrice as number),
+                        align: "right",
+                      },
+                      {
+                        header: "Thành tiền",
+                        accessor: (item: Record<string, unknown>) => (
+                          <span className="text-primary font-semibold">
+                            {formatCurrency(item.total as number)}
+                          </span>
+                        ),
+                        align: "right",
+                      },
+                    ]}
+                    items={items as unknown as Record<string, unknown>[]}
+                    summary={[
+                      {
+                        label: `Tổng tiền hàng (${items.length})`,
+                        value: formatCurrency(subtotal),
+                      },
+                      ...(itemDiscountSum > 0
+                        ? [
+                            {
+                              label: "Giảm giá dòng",
+                              value: formatCurrency(itemDiscountSum),
+                            },
+                          ]
+                        : []),
+                      {
+                        label: "Tổng đơn",
+                        value: formatCurrency(order.totalAmount),
+                        className: "font-bold text-base",
+                      },
+                    ]}
+                  />
+                )}
 
                 <div className="border rounded-md p-3">
                   <textarea
@@ -541,13 +567,21 @@ export default function DatHangPage() {
         if (!cancellingItem) return;
         setCancelLoading(true);
         try {
-          // Mock data — toast success + refetch
+          // Wire DB cancel thật. Trước đây chỉ toast success → user bấm
+          // hủy nhưng đơn vẫn live (mock).
+          await cancelSalesOrder(cancellingItem.id);
           toast({
             title: "Đã hủy đơn đặt hàng",
-            description: `Đơn ${cancellingItem.code} đã được hủy thành công`,
+            description: `Đơn ${cancellingItem.code} đã được hủy.`,
             variant: "success",
           });
           await fetchData();
+        } catch (err) {
+          toast({
+            title: "Lỗi hủy đơn",
+            description: err instanceof Error ? err.message : "Vui lòng thử lại",
+            variant: "error",
+          });
         } finally {
           setCancelLoading(false);
           setCancellingItem(null);

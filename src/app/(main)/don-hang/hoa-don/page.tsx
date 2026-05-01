@@ -27,7 +27,13 @@ import { CreateInvoiceDialog, EditInvoiceDialog, ConfirmDialog } from "@/compone
 import { RecordPaymentDialog } from "@/components/shared/dialogs/record-payment-dialog";
 import { formatCurrency, formatDate, formatUser } from "@/lib/format";
 import { exportToExcel, exportToCsv } from "@/lib/utils/export";
-import { getInvoices, getInvoiceStatuses, cancelInvoice } from "@/lib/services";
+import {
+  getInvoices,
+  getInvoiceStatuses,
+  cancelInvoice,
+  getInvoiceItems,
+  type InvoiceItemRow,
+} from "@/lib/services";
 import { useToast, useBranchFilter } from "@/lib/contexts";
 import { buildInvoicePrintData } from "@/lib/print-templates";
 import { usePrintWithPicker } from "@/lib/hooks/use-print-with-picker";
@@ -62,6 +68,30 @@ function InvoiceDetail({
 }) {
   const status = statusMap[invoice.status];
 
+  // Lazy fetch line items thay vì hardcode "Sản phẩm mẫu" (P0 audit fix).
+  const [items, setItems] = useState<InvoiceItemRow[]>([]);
+  const [itemsLoading, setItemsLoading] = useState(true);
+  useEffect(() => {
+    let cancelled = false;
+    setItemsLoading(true);
+    getInvoiceItems(invoice.id)
+      .then((rows) => {
+        if (!cancelled) setItems(rows);
+      })
+      .catch(() => {
+        if (!cancelled) setItems([]);
+      })
+      .finally(() => {
+        if (!cancelled) setItemsLoading(false);
+      });
+    return () => {
+      cancelled = true;
+    };
+  }, [invoice.id]);
+
+  const subtotal = items.reduce((s, it) => s + it.unitPrice * it.quantity, 0);
+  const itemDiscountSum = items.reduce((s, it) => s + it.discount, 0);
+
   return (
     <InlineDetailPanel
       open
@@ -88,7 +118,7 @@ function InvoiceDetail({
                         ? "bg-status-success/10 text-status-success border-status-success/25"
                         : undefined,
                   }}
-                  subtitle="Chi nhánh trung tâm"
+                  subtitle={invoice.branchName || "—"}
                   meta={
                     <div className="flex items-center gap-4 flex-wrap text-xs">
                       <span>
@@ -96,90 +126,101 @@ function InvoiceDetail({
                         <strong>{formatUser(undefined, invoice.createdBy)}</strong>
                       </span>
                       <span>
-                        Người bán:{" "}
-                        <strong>{formatUser(undefined, invoice.createdBy)}</strong>
-                      </span>
-                      <span>
                         Ngày bán:{" "}
                         <strong>{formatDate(invoice.date)}</strong>
                       </span>
-                      <span>
-                        Kênh bán: <strong>Bán trực tiếp</strong>
-                      </span>
-                      <span>
-                        Bảng giá: <strong>Bảng giá chung</strong>
-                      </span>
+                      {invoice.customerCode && (
+                        <span>
+                          Mã KH: <strong>{invoice.customerCode}</strong>
+                        </span>
+                      )}
                     </div>
                   }
                 />
 
-                <DetailItemsTable
-                  columns={[
-                    { header: "Mã hàng", accessor: "code" as never },
-                    { header: "Tên hàng", accessor: "name" as never },
-                    {
-                      header: "Số lượng",
-                      accessor: "quantity" as never,
-                      align: "right",
-                    },
-                    {
-                      header: "Đơn giá",
-                      accessor: (item: Record<string, unknown>) =>
-                        formatCurrency(item.unitPrice as number),
-                      align: "right",
-                    },
-                    {
-                      header: "Giảm giá",
-                      accessor: (item: Record<string, unknown>) =>
-                        formatCurrency(item.discount as number),
-                      align: "right",
-                    },
-                    {
-                      header: "Thành tiền",
-                      accessor: (item: Record<string, unknown>) => (
-                        <span className="text-primary font-semibold">
-                          {formatCurrency(item.total as number)}
-                        </span>
-                      ),
-                      align: "right",
-                    },
-                  ]}
-                  items={
-                    [
+                {itemsLoading ? (
+                  <div className="text-sm text-muted-foreground py-4 text-center">
+                    Đang tải sản phẩm...
+                  </div>
+                ) : items.length === 0 ? (
+                  <div className="text-sm text-muted-foreground py-4 text-center">
+                    Hóa đơn này không có sản phẩm hoặc dữ liệu lô bị mất.
+                  </div>
+                ) : (
+                  <DetailItemsTable
+                    columns={[
+                      { header: "Mã hàng", accessor: "productCode" as never },
+                      { header: "Tên hàng", accessor: "productName" as never },
                       {
-                        code: "SP001",
-                        name: "Sản phẩm mẫu",
-                        quantity: 1,
-                        unitPrice: invoice.totalAmount,
-                        discount: invoice.discount,
-                        total: invoice.totalAmount - invoice.discount,
+                        header: "Đơn vị",
+                        accessor: (item: Record<string, unknown>) =>
+                          (item.unit as string) ?? "—",
                       },
-                    ] as Record<string, unknown>[]
-                  }
-                  summary={[
-                    {
-                      label: `Tổng tiền hàng (1)`,
-                      value: formatCurrency(invoice.totalAmount),
-                    },
-                    {
-                      label: "Giảm giá hóa đơn",
-                      value: formatCurrency(invoice.discount),
-                    },
-                    {
-                      label: "Khách cần trả",
-                      value: formatCurrency(
-                        invoice.totalAmount - invoice.discount
-                      ),
-                      className: "font-bold text-base",
-                    },
-                    {
-                      label: "Khách đã trả",
-                      value: formatCurrency(
-                        invoice.totalAmount - invoice.discount
-                      ),
-                    },
-                  ]}
-                />
+                      {
+                        header: "SL",
+                        accessor: "quantity" as never,
+                        align: "right",
+                      },
+                      {
+                        header: "Đơn giá",
+                        accessor: (item: Record<string, unknown>) =>
+                          formatCurrency(item.unitPrice as number),
+                        align: "right",
+                      },
+                      {
+                        header: "Giảm",
+                        accessor: (item: Record<string, unknown>) =>
+                          formatCurrency(item.discount as number),
+                        align: "right",
+                      },
+                      {
+                        header: "Thành tiền",
+                        accessor: (item: Record<string, unknown>) => (
+                          <span className="text-primary font-semibold">
+                            {formatCurrency(item.total as number)}
+                          </span>
+                        ),
+                        align: "right",
+                      },
+                    ]}
+                    items={items as unknown as Record<string, unknown>[]}
+                    summary={[
+                      {
+                        label: `Tổng tiền hàng (${items.length})`,
+                        value: formatCurrency(subtotal),
+                      },
+                      {
+                        label: "Giảm giá dòng",
+                        value: formatCurrency(itemDiscountSum),
+                      },
+                      {
+                        label: "Giảm giá hóa đơn",
+                        value: formatCurrency(invoice.discount),
+                      },
+                      {
+                        label: "Khách cần trả",
+                        value: formatCurrency(invoice.totalAmount),
+                        className: "font-bold text-base",
+                      },
+                      {
+                        label: "Khách đã trả",
+                        value: formatCurrency(invoice.paid),
+                      },
+                      ...((invoice.debt ?? 0) > 0
+                        ? [
+                            {
+                              label: "Còn nợ",
+                              value: (
+                                <span className="text-destructive font-semibold">
+                                  {formatCurrency(invoice.debt)}
+                                </span>
+                              ),
+                            },
+                          ]
+                        : []),
+                    ]}
+                  />
+                )}
 
                 {/* Notes area */}
                 <div className="border rounded-md p-3">

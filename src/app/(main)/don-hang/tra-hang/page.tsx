@@ -28,7 +28,12 @@ import { usePrintWithPicker } from "@/lib/hooks/use-print-with-picker";
 import { buildReturnPrintData } from "@/lib/print-templates";
 import { formatCurrency, formatDate } from "@/lib/format";
 import { exportToExcel, exportToCsv } from "@/lib/utils/export";
-import { getReturns, getReturnStatuses } from "@/lib/services";
+import {
+  getReturns,
+  getReturnStatuses,
+  getReturnItems,
+  type ReturnItemRow,
+} from "@/lib/services";
 import type { ReturnOrder } from "@/lib/types";
 import { CreateReturnDialog } from "@/components/shared/dialogs";
 import { Icon } from "@/components/ui/icon";
@@ -68,6 +73,21 @@ function ReturnDetail({
     variant: "secondary" as const,
   };
 
+  // Lazy fetch line items thật (P0 audit fix).
+  const [items, setItems] = useState<ReturnItemRow[]>([]);
+  const [itemsLoading, setItemsLoading] = useState(true);
+  useEffect(() => {
+    let cancelled = false;
+    setItemsLoading(true);
+    getReturnItems(returnOrder.id)
+      .then((rows) => { if (!cancelled) setItems(rows); })
+      .catch(() => { if (!cancelled) setItems([]); })
+      .finally(() => { if (!cancelled) setItemsLoading(false); });
+    return () => { cancelled = true; };
+  }, [returnOrder.id]);
+
+  const subtotal = items.reduce((s, it) => s + it.unitPrice * it.quantity, 0);
+
   return (
     <InlineDetailPanel open onClose={onClose}>
       <DetailTabs
@@ -90,7 +110,7 @@ function ReturnDetail({
                           ? "bg-status-error/10 text-status-error border-status-error/25"
                           : undefined,
                   }}
-                  subtitle="Chi nhánh trung tâm"
+                  subtitle={returnOrder.branchName || "—"}
                   meta={
                     <div className="flex items-center gap-4 flex-wrap text-xs">
                       <span>
@@ -113,58 +133,55 @@ function ReturnDetail({
                   }
                 />
 
-                <DetailItemsTable
-                  columns={[
-                    { header: "Mã hàng", accessor: "code" as never },
-                    { header: "Tên hàng", accessor: "name" as never },
-                    {
-                      header: "Số lượng",
-                      accessor: "quantity" as never,
-                      align: "right",
-                    },
-                    {
-                      header: "Đơn giá",
-                      accessor: (item: Record<string, unknown>) =>
-                        formatCurrency(item.unitPrice as number),
-                      align: "right",
-                    },
-                    {
-                      header: "Thành tiền",
-                      accessor: (item: Record<string, unknown>) => (
-                        <span className="text-primary font-semibold">
-                          {formatCurrency(item.total as number)}
-                        </span>
-                      ),
-                      align: "right",
-                    },
-                  ]}
-                  items={
-                    [
+                {itemsLoading ? (
+                  <div className="text-sm text-muted-foreground py-4 text-center">
+                    Đang tải sản phẩm...
+                  </div>
+                ) : items.length === 0 ? (
+                  <div className="text-sm text-muted-foreground py-4 text-center">
+                    Phiếu trả này không có sản phẩm.
+                  </div>
+                ) : (
+                  <DetailItemsTable
+                    columns={[
+                      { header: "Mã hàng", accessor: "productCode" as never },
+                      { header: "Tên hàng", accessor: "productName" as never },
+                      { header: "Đơn vị", accessor: "unit" as never },
                       {
-                        code: "SP001",
-                        name: "Sản phẩm mẫu",
-                        quantity: 1,
-                        unitPrice: returnOrder.totalAmount,
-                        total: returnOrder.totalAmount,
+                        header: "SL trả",
+                        accessor: "quantity" as never,
+                        align: "right",
                       },
-                    ] as Record<string, unknown>[]
-                  }
-                  summary={[
-                    {
-                      label: "Tổng tiền hàng (1)",
-                      value: formatCurrency(returnOrder.totalAmount),
-                    },
-                    {
-                      label: "Cần trả khách",
-                      value: formatCurrency(returnOrder.totalAmount),
-                      className: "font-bold text-base",
-                    },
-                    {
-                      label: "Đã trả khách",
-                      value: formatCurrency(returnOrder.totalAmount),
-                    },
-                  ]}
-                />
+                      {
+                        header: "Đơn giá",
+                        accessor: (item: Record<string, unknown>) =>
+                          formatCurrency(item.unitPrice as number),
+                        align: "right",
+                      },
+                      {
+                        header: "Thành tiền",
+                        accessor: (item: Record<string, unknown>) => (
+                          <span className="text-primary font-semibold">
+                            {formatCurrency(item.total as number)}
+                          </span>
+                        ),
+                        align: "right",
+                      },
+                    ]}
+                    items={items as unknown as Record<string, unknown>[]}
+                    summary={[
+                      {
+                        label: `Tổng tiền hàng (${items.length})`,
+                        value: formatCurrency(subtotal),
+                      },
+                      {
+                        label: "Cần trả khách",
+                        value: formatCurrency(returnOrder.totalAmount),
+                        className: "font-bold text-base",
+                      },
+                    ]}
+                  />
+                )}
 
                 <div className="border rounded-md p-3">
                   <textarea

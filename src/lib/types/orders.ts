@@ -15,6 +15,10 @@ export interface Invoice {
   paid: number;
   debt: number;
   status: "processing" | "completed" | "cancelled" | "delivery_failed";
+  /** Tên chi nhánh ghi nhận hóa đơn (resolved từ branches.name). */
+  branchName?: string;
+  /** Branch UUID để filter / drill-down. */
+  branchId?: string;
   deliveryType: "no_delivery" | "delivery";
   /**
    * Trạng thái giao hàng khớp với `ShippingStatus` (shipping_orders.status).
@@ -132,6 +136,9 @@ export interface SalesOrder {
   statusName: string;
   createdBy: string;
   createdByName?: string;
+  /** Chi nhánh ghi nhận đơn (resolved từ branches.name). */
+  branchId?: string;
+  branchName?: string;
 }
 
 // Dòng sản phẩm trong đơn bán hàng
@@ -169,12 +176,16 @@ export interface ReturnOrder {
   id: string;
   code: string;
   invoiceCode: string;
+  invoiceId?: string;
   date: string;
   customerName: string;
   totalAmount: number;
   status: "completed" | "draft";
   statusName: string;
   createdBy: string;
+  /** Chi nhánh ghi nhận phiếu trả (resolved từ branches.name). */
+  branchId?: string;
+  branchName?: string;
 }
 
 // Dòng sản phẩm trả hàng

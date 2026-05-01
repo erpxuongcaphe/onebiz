@@ -55,13 +55,17 @@ export async function getOrders(
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
   let query = (supabase as any)
     .from("sales_orders")
-    .select("*, profiles!sales_orders_created_by_fkey(full_name)", { count: "exact" })
+    .select(
+      "*, profiles!sales_orders_created_by_fkey(full_name), branches!sales_orders_branch_id_fkey(name)",
+      { count: "exact" },
+    )
     .eq("tenant_id", tenantId);
 
-  // Search by code or customer_name
+  // Search by code or customer_name. Escape % để tránh wildcard injection.
   if (params.search) {
+    const esc = params.search.replace(/[%_]/g, "\\$&");
     query = query.or(
-      `code.ilike.%${params.search}%,customer_name.ilike.%${params.search}%`
+      `code.ilike.%${esc}%,customer_name.ilike.%${esc}%,customer_phone.ilike.%${esc}%`,
     );
   }
 
@@ -87,6 +91,7 @@ export async function getOrders(
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
   const orders: SalesOrder[] = (data ?? []).map((row: any) => {
     const profile = row.profiles as { full_name: string } | null;
+    const branch = row.branches as { name: string } | null;
     return {
       id: row.id,
       code: row.code,
@@ -98,6 +103,8 @@ export async function getOrders(
       statusName: STATUS_LABEL[row.status] ?? row.status,
       createdBy: row.created_by ?? "",
       createdByName: profile?.full_name ?? "",
+      branchId: row.branch_id ?? undefined,
+      branchName: branch?.name ?? undefined,
     };
   });
 
@@ -296,6 +303,63 @@ export async function cancelSalesOrder(orderId: string): Promise<void> {
 // ============================================================
 export { posCheckout };
 export type { PosCheckoutInput, PosCheckoutResult, PosCheckoutItem };
+
+/**
+ * Lấy line items của một sales order cho detail panel.
+ *
+ * Trước đây panel detail render hardcoded "SP001 — Sản phẩm mẫu" cho
+ * MỌI đơn → user nhìn không biết đơn này gồm SP gì.
+ */
+export interface SalesOrderItemRow {
+  id: string;
+  productCode: string;
+  productName: string;
+  unit: string;
+  quantity: number;
+  unitPrice: number;
+  discount: number;
+  total: number;
+}
+
+export async function getSalesOrderItems(
+  orderId: string,
+): Promise<SalesOrderItemRow[]> {
+  const supabase = getClient();
+  const tenantId = await getCurrentTenantId();
+
+  // Verify order thuộc tenant trước (defense-in-depth)
+  const { data: order } = await supabase
+    .from("sales_orders")
+    .select("id")
+    .eq("tenant_id", tenantId)
+    .eq("id", orderId)
+    .maybeSingle();
+  if (!order) return [];
+
+  const { data, error } = await supabase
+    .from("sales_order_items")
+    .select(
+      "id, product_id, product_name, unit, quantity, unit_price, discount, total, products!sales_order_items_product_id_fkey(code)",
+    )
+    .eq("order_id", orderId);
+
+  if (error) {
+    console.warn("[getSalesOrderItems]", error.message);
+    return [];
+  }
+
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  return (data ?? []).map((row: any) => ({
+    id: row.id,
+    productCode: row.products?.code ?? "",
+    productName: row.product_name ?? "",
+    unit: row.unit ?? "",
+    quantity: Number(row.quantity ?? 0),
+    unitPrice: Number(row.unit_price ?? 0),
+    discount: Number(row.discount ?? 0),
+    total: Number(row.total ?? 0),
+  }));
+}
 
 // ============================================================
 // Types

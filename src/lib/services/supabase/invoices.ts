@@ -12,13 +12,21 @@ export async function getInvoices(params: QueryParams): Promise<QueryResult<Invo
 
   let query = supabase
     .from("invoices")
-    .select("*, profiles!invoices_created_by_fkey(full_name)", { count: "exact" })
+    .select(
+      "*, profiles!invoices_created_by_fkey(full_name), branches!invoices_branch_id_fkey(name), customers!invoices_customer_id_fkey(code, phone)",
+      { count: "exact" },
+    )
     .eq("tenant_id", tenantId);
 
-  // Search — escape % wildcard
+  // Search — escape % wildcard.
+  // Note: search by SĐT KH cần subquery customers.phone — chưa wire vì
+  // invoices.customer_phone không tồn tại; search hiện chỉ trên code +
+  // customer_name (text snapshot lúc tạo HD).
   if (params.search) {
     const esc = params.search.replace(/[%_]/g, "\\$&");
-    query = query.or(`code.ilike.%${esc}%,customer_name.ilike.%${esc}%`);
+    query = query.or(
+      `code.ilike.%${esc}%,customer_name.ilike.%${esc}%`,
+    );
   }
 
   // Filter: status
@@ -383,6 +391,68 @@ export async function updateInvoice(
   if (error) handleError(error, "updateInvoice.update");
 }
 
+/**
+ * Lấy line items của một hóa đơn cho detail panel.
+ *
+ * Trước đây panel detail render hardcoded "Sản phẩm mẫu" — vì service
+ * chưa có hàm fetch items theo invoice_id. Production sẽ thấy 1 dòng
+ * fake cho MỌI HD → sai số liệu.
+ */
+export interface InvoiceItemRow {
+  id: string;
+  productCode: string;
+  productName: string;
+  quantity: number;
+  unitPrice: number;
+  discount: number;
+  total: number;
+  unit?: string;
+}
+
+export async function getInvoiceItems(
+  invoiceId: string,
+): Promise<InvoiceItemRow[]> {
+  const supabase = getClient();
+  const tenantId = await getCurrentTenantId();
+
+  // Verify invoice thuộc tenant trước (defense-in-depth — invoice_items
+  // không có tenant_id direct, dùng FK qua invoice).
+  const { data: inv } = await supabase
+    .from("invoices")
+    .select("id")
+    .eq("tenant_id", tenantId)
+    .eq("id", invoiceId)
+    .maybeSingle();
+  if (!inv) return [];
+
+  // Schema invoice_items không có cột product_code — phải join `products(code)`.
+  // Schema cũng dùng `discount` (không phải `discount_amount`) cho line item.
+  // Field `unit` có sẵn trên invoice_items (snapshot lúc tạo HD).
+  const { data, error } = await supabase
+    .from("invoice_items")
+    .select(
+      "id, product_id, product_name, unit, quantity, unit_price, discount, total, products!invoice_items_product_id_fkey(code)",
+    )
+    .eq("invoice_id", invoiceId);
+
+  if (error) {
+    console.warn("[getInvoiceItems]", error.message);
+    return [];
+  }
+
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  return (data ?? []).map((row: any) => ({
+    id: row.id,
+    productCode: row.products?.code ?? "",
+    productName: row.product_name ?? "",
+    quantity: Number(row.quantity ?? 0),
+    unitPrice: Number(row.unit_price ?? 0),
+    discount: Number(row.discount ?? 0),
+    total: Number(row.total ?? 0),
+    unit: row.unit ?? undefined,
+  }));
+}
+
 // --- Mapper ---
 
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
@@ -394,12 +464,17 @@ function mapInvoice(row: any): Invoice {
     cancelled: "cancelled",
   };
 
+  const branch = row.branches as { name: string } | null;
+  const customer = row.customers as { code: string; phone: string } | null;
+
   return {
     id: row.id,
     code: row.code,
     date: row.created_at,
     customerId: row.customer_id ?? "",
-    customerCode: "", // Would need join to customers table
+    // Lấy mã KH từ join customers (trước hardcode "" → cột "Mã KH" UI
+    // luôn hiện "—" dù KH có code thật).
+    customerCode: customer?.code ?? "",
     customerName: row.customer_name,
     totalAmount: row.total,
     discount: row.discount_amount,
@@ -407,6 +482,8 @@ function mapInvoice(row: any): Invoice {
     paid: Number(row.paid ?? 0),
     debt: Number(row.debt ?? 0),
     status: (statusMap[row.status] ?? row.status) as Invoice["status"],
+    branchId: row.branch_id ?? undefined,
+    branchName: branch?.name ?? undefined,
     deliveryType: "no_delivery", // Would need join to shipping_orders
     createdBy: (row.profiles as { full_name: string } | null)?.full_name ?? "---",
   };
