@@ -1,11 +1,16 @@
 "use client";
 
-import { useState } from "react";
 import { Card, CardContent } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { cn } from "@/lib/utils";
 import { Icon } from "@/components/ui/icon";
+
+// HT-2 fix: trang trước đây hardcode `connected: true/false` cho 6 dịch vụ
+// + button "Kết nối" chỉ setState local — KHÔNG OAuth, KHÔNG gọi API thật.
+// User lừa nghĩ đã connect → CEO không hiểu sao đơn online không ship được.
+// Fix: gắn nhãn trung thực "Sắp ra mắt" cho tất cả, button disabled với
+// hint "Liên hệ admin nếu cần ưu tiên integration này".
 
 interface Integration {
   id: string;
@@ -13,7 +18,6 @@ interface Integration {
   description: string;
   icon: React.ReactNode;
   iconBg: string;
-  connected: boolean;
 }
 
 const integrations: Integration[] = [
@@ -23,7 +27,6 @@ const integrations: Integration[] = [
     description: "Kết nối fanpage để bán hàng",
     icon: <Icon name="public" className="text-primary" />,
     iconBg: "bg-primary-fixed",
-    connected: true,
   },
   {
     id: "zalo",
@@ -31,7 +34,6 @@ const integrations: Integration[] = [
     description: "Kết nối Zalo Official Account",
     icon: <Icon name="chat_bubble" className="text-primary" />,
     iconBg: "bg-primary-fixed",
-    connected: true,
   },
   {
     id: "ghn",
@@ -39,7 +41,6 @@ const integrations: Integration[] = [
     description: "Giao Hàng Nhanh",
     icon: <Icon name="local_shipping" className="text-status-warning" />,
     iconBg: "bg-status-warning/10",
-    connected: true,
   },
   {
     id: "ghtk",
@@ -47,7 +48,6 @@ const integrations: Integration[] = [
     description: "Giao Hàng Tiết Kiệm",
     icon: <Icon name="local_shipping" className="text-status-success" />,
     iconBg: "bg-status-success/10",
-    connected: false,
   },
   {
     id: "vnpay",
@@ -55,7 +55,6 @@ const integrations: Integration[] = [
     description: "Cổng thanh toán VNPay",
     icon: <Icon name="credit_card" className="text-status-error" />,
     iconBg: "bg-status-error/10",
-    connected: false,
   },
   {
     id: "google-sheets",
@@ -63,17 +62,10 @@ const integrations: Integration[] = [
     description: "Đồng bộ dữ liệu",
     icon: <Icon name="table_view" className="text-status-success" />,
     iconBg: "bg-status-success/10",
-    connected: false,
   },
 ];
 
 export default function IntegrationSettingsPage() {
-  const [connectionStates, setConnectionStates] = useState<
-    Record<string, boolean>
-  >(
-    Object.fromEntries(integrations.map((i) => [i.id, i.connected]))
-  );
-
   return (
     <div className="space-y-6">
       <div>
@@ -83,9 +75,19 @@ export default function IntegrationSettingsPage() {
         </p>
       </div>
 
+      <div className="rounded-lg border border-status-warning/30 bg-status-warning/5 p-4 flex items-start gap-3">
+        <Icon name="info" size={18} className="text-status-warning mt-0.5 shrink-0" />
+        <div className="text-sm">
+          <p className="font-medium text-foreground">Tích hợp đang được phát triển</p>
+          <p className="text-xs text-muted-foreground mt-1">
+            Các integration dưới đây hiện chưa hoạt động thật (chưa wire OAuth/API).
+            Liên hệ team để ưu tiên integration anh cần triển khai trước.
+          </p>
+        </div>
+      </div>
+
       <div className="grid gap-4 sm:grid-cols-2">
         {integrations.map((integration) => {
-          const isConnected = connectionStates[integration.id];
           return (
             <Card key={integration.id}>
               <CardContent className="p-5">
@@ -105,15 +107,10 @@ export default function IntegrationSettingsPage() {
                           {integration.name}
                         </span>
                         <Badge
-                          variant={isConnected ? "default" : "secondary"}
-                          className={cn(
-                            "text-xs",
-                            isConnected
-                              ? "bg-status-success/10 text-status-success hover:bg-status-success/10"
-                              : "bg-muted text-muted-foreground hover:bg-muted"
-                          )}
+                          variant="secondary"
+                          className="text-xs bg-status-warning/10 text-status-warning border-status-warning/25 hover:bg-status-warning/10"
                         >
-                          {isConnected ? "Đã kết nối" : "Chưa kết nối"}
+                          Sắp ra mắt
                         </Badge>
                       </div>
                       <p className="text-xs text-muted-foreground">
@@ -123,23 +120,9 @@ export default function IntegrationSettingsPage() {
                   </div>
                 </div>
                 <div className="mt-4 flex justify-end">
-                  {isConnected ? (
-                    <Button variant="outline" size="sm">
-                      Quản lý
-                    </Button>
-                  ) : (
-                    <Button
-                      size="sm"
-                      onClick={() =>
-                        setConnectionStates((prev) => ({
-                          ...prev,
-                          [integration.id]: true,
-                        }))
-                      }
-                    >
-                      Kết nối
-                    </Button>
-                  )}
+                  <Button size="sm" variant="outline" disabled>
+                    Đang phát triển
+                  </Button>
                 </div>
               </CardContent>
             </Card>

@@ -196,6 +196,8 @@ export type { StockTransfer, StockTransferStatus, StockTransferItem, CreateStock
 
 // Audit Log (Lịch sử thao tác)
 export { getAuditLogs, getAuditLogsByEntity, recordAuditLog, getAuditStats, getActionOptions, getEntityTypeOptions, getProfilesForPersonFilter } from "./audit";
+export { getTenantBusinessInfo, updateTenantBusinessInfo } from "./tenant-settings";
+export type { TenantBusinessInfo } from "./tenant-settings";
 export type { AuditLogEntry, AuditFilters } from "./audit";
 
 // Debt Aging (Phân tích tuổi nợ)
