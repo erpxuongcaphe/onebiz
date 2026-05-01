@@ -165,7 +165,12 @@ const columns: ColumnDef<PurchaseOrderEntry, unknown>[] = [
   {
     accessorKey: "createdBy",
     header: "Người tạo",
-    size: 140,
+    size: 160,
+    cell: ({ row }) => (
+      <span className="text-sm">
+        {formatUser(row.original.createdByName, row.original.createdBy)}
+      </span>
+    ),
   },
 ];
 
