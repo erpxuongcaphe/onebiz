@@ -310,13 +310,48 @@ export const sidebarNavGroups: SidebarGroup[] = [
 ];
 
 /**
- * Helper: returns true if the current pathname matches the given href
- * (exact match, or pathname starts with `href + "/"`).
- * Special case: href "/" only matches exact "/".
+ * Collect tất cả href trong sidebar nav để dùng cho "longest match wins"
+ * trong isHrefActive. Tính 1 lần khi module load (immutable nav).
+ */
+const ALL_NAV_HREFS: string[] = (() => {
+  const hrefs: string[] = [];
+  for (const g of sidebarNavGroups) {
+    g.items?.forEach((l) => hrefs.push(l.href));
+    g.subGroups?.forEach((sg) => sg.items.forEach((l) => hrefs.push(l.href)));
+  }
+  return hrefs;
+})();
+
+/**
+ * Returns true if the current pathname matches the given href.
+ *
+ * Logic "longest match wins":
+ *   - Exact match → always active.
+ *   - Prefix match (`pathname.startsWith(href + "/")`) → active CHỈ nếu
+ *     không có nav item nào khác có href dài hơn cũng match.
+ *
+ * Bug từng có: pathname=/hang-hoa/nhom, href=/hang-hoa → prefix match
+ * → "Danh sách hàng" cũng active dù user đang ở "Nhóm hàng" (/hang-hoa/nhom).
+ * Cả 2 cùng bôi blue → user confused. Fix: chỉ active longest matching href.
+ *
+ * Special case: href "/" only matches exact "/" để không match mọi pathname.
  */
 export function isHrefActive(pathname: string, href: string): boolean {
   if (href === "/") return pathname === "/";
-  return pathname === href || pathname.startsWith(href + "/");
+
+  // Exact match always wins
+  if (pathname === href) return true;
+
+  // Prefix match — nhưng phải là longest matching href
+  if (!pathname.startsWith(href + "/")) return false;
+
+  // Có nav item nào khác (longer) cũng match? Nếu có → ta KHÔNG active.
+  return !ALL_NAV_HREFS.some(
+    (h) =>
+      h !== href &&
+      h.length > href.length &&
+      (pathname === h || pathname.startsWith(h + "/")),
+  );
 }
 
 /**
