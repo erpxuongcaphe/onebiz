@@ -1,138 +1,183 @@
 "use client";
 
-import { useState } from "react";
-import {
-  Package,
-  ShoppingCart,
-  AlertTriangle,
-  Users,
-  DollarSign
-} from "lucide-react";
+/**
+ * Trang Thông báo — wire DB thật (Sprint NB-1).
+ *
+ * Trước đây hardcode 20 mock notifications + setState mark-read không
+ * persist. Page này load `getNotifications()` thật từ Supabase, scope
+ * theo user + tenant. Mark read / delete gọi service thật.
+ *
+ * Notification rules engine (cron sinh notification từ low-stock,
+ * expiring lot, overdue debt) sẽ làm ở sprint NB-2 (cần Edge Function/
+ * trigger). Hiện DB rỗng → page hiển thị empty state đúng đắn.
+ */
+
+import { useEffect, useState, useCallback } from "react";
 import { PageHeader } from "@/components/shared/page-header";
 import { Card } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
-import { Button } from "@/components/ui/button";
 import { Separator } from "@/components/ui/separator";
 import { Tabs, TabsList, TabsTrigger, TabsContent } from "@/components/ui/tabs";
-import type { NotificationType, Notification } from "@/lib/types";
+import { useToast } from "@/lib/contexts";
+import {
+  getNotifications,
+  markNotificationAsRead,
+  markAllNotificationsAsRead,
+  deleteNotification,
+  type NotificationKind,
+  type NotificationRow,
+} from "@/lib/services";
 import { Icon } from "@/components/ui/icon";
 
 const typeConfig: Record<
-  NotificationType,
-  { icon: typeof Package; color: string; bgColor: string }
+  string,
+  { iconName: string; color: string; bgColor: string; label: string }
 > = {
   order_new: {
-    icon: ShoppingCart,
+    iconName: "shopping_cart",
     color: "text-status-success",
     bgColor: "bg-status-success/10",
+    label: "Đơn hàng mới",
   },
   order_completed: {
-    icon: Package,
+    iconName: "package_2",
     color: "text-primary",
     bgColor: "bg-primary-fixed",
+    label: "Đơn hoàn thành",
   },
   stock_low: {
-    icon: AlertTriangle,
+    iconName: "warning",
     color: "text-status-warning",
     bgColor: "bg-status-warning/10",
+    label: "Tồn kho thấp",
   },
   customer_new: {
-    icon: Users,
+    iconName: "person_add",
     color: "text-status-info",
     bgColor: "bg-status-info/10",
+    label: "Khách hàng mới",
   },
   payment_received: {
-    icon: DollarSign,
+    iconName: "payments",
+    color: "text-status-success",
+    bgColor: "bg-status-success/10",
+    label: "Nhận thanh toán",
+  },
+  expiring_lot: {
+    iconName: "schedule",
+    color: "text-status-warning",
+    bgColor: "bg-status-warning/10",
+    label: "Lô sắp hết hạn",
+  },
+  po_overdue: {
+    iconName: "schedule_send",
     color: "text-status-error",
     bgColor: "bg-status-error/10",
+    label: "PO quá hạn",
+  },
+  cash_drawer_diff: {
+    iconName: "account_balance_wallet",
+    color: "text-status-error",
+    bgColor: "bg-status-error/10",
+    label: "Lệch quỹ ca",
   },
 };
 
-const tabFilterMap: Record<string, NotificationType[] | null> = {
+const tabFilterMap: Record<string, NotificationKind[] | null> = {
   all: null,
-  unread: null,
+  unread: null, // dùng onlyUnread param thay vì types filter
   orders: ["order_new", "order_completed"],
-  stock: ["stock_low"],
-  finance: ["payment_received"],
+  stock: ["stock_low", "expiring_lot"],
+  finance: ["payment_received", "po_overdue", "cash_drawer_diff"],
 };
 
-const initialNotifications = [
-  { id: 1, type: "order_new", title: "Don hang moi #DH-1042", description: "Nguyen Van An dat don hang tri gia 2.450.000d", timeAgo: "2 phut truoc", read: false },
-  { id: 2, type: "payment_received", title: "Thanh toan thanh cong", description: "Nhan thanh toan 5.200.000d tu khach hang Tran Thi Bich", timeAgo: "5 phut truoc", read: false },
-  { id: 3, type: "stock_low", title: "Ton kho thap: SP-0023", description: "San pham 'Ao thun nam co tron' chi con 3 san pham", timeAgo: "15 phut truoc", read: false },
-  { id: 4, type: "customer_new", title: "Khach hang moi dang ky", description: "Le Van Cuong vua tao tai khoan moi", timeAgo: "30 phut truoc", read: false },
-  { id: 5, type: "order_completed", title: "Don hang #DH-1038 hoan thanh", description: "Don hang da duoc giao thanh cong", timeAgo: "1 gio truoc", read: false },
-  { id: 6, type: "order_new", title: "Don hang moi #DH-1041", description: "Pham Thi Dung dat don hang tri gia 890.000d", timeAgo: "1 gio truoc", read: true },
-  { id: 7, type: "stock_low", title: "Ton kho thap: SP-0089", description: "San pham 'Quan jean nu slim' chi con 2 san pham", timeAgo: "2 gio truoc", read: true },
-  { id: 8, type: "payment_received", title: "Thanh toan thanh cong", description: "Nhan thanh toan 1.800.000d tu khach hang Hoang Van Em", timeAgo: "2 gio truoc", read: false },
-  { id: 9, type: "customer_new", title: "Khach hang moi dang ky", description: "Vo Thi Phuong vua tao tai khoan moi", timeAgo: "3 gio truoc", read: true },
-  { id: 10, type: "order_completed", title: "Don hang #DH-1035 hoan thanh", description: "Don hang da duoc giao thanh cong", timeAgo: "3 gio truoc", read: true },
-  { id: 11, type: "order_new", title: "Don hang moi #DH-1040", description: "Bui Van Giang dat don hang tri gia 3.100.000d", timeAgo: "4 gio truoc", read: true },
-  { id: 12, type: "stock_low", title: "Ton kho thap: SP-0112", description: "San pham 'Giay the thao nam' chi con 1 san pham", timeAgo: "5 gio truoc", read: false },
-  { id: 13, type: "payment_received", title: "Thanh toan thanh cong", description: "Nhan thanh toan 4.500.000d tu khach hang Dang Thi Huong", timeAgo: "6 gio truoc", read: true },
-  { id: 14, type: "customer_new", title: "Khach hang moi dang ky", description: "Nguyen Van Ich vua tao tai khoan moi", timeAgo: "8 gio truoc", read: true },
-  { id: 15, type: "order_completed", title: "Don hang #DH-1032 hoan thanh", description: "Don hang da duoc giao thanh cong", timeAgo: "1 ngay truoc", read: true },
-  { id: 16, type: "order_new", title: "Don hang moi #DH-1039", description: "Tran Van Khanh dat don hang tri gia 1.250.000d", timeAgo: "1 ngay truoc", read: true },
-  { id: 17, type: "stock_low", title: "Ton kho thap: SP-0045", description: "San pham 'Tui xach nu da' chi con 2 san pham", timeAgo: "1 ngay truoc", read: true },
-  { id: 18, type: "payment_received", title: "Thanh toan thanh cong", description: "Nhan thanh toan 7.800.000d tu khach hang Le Thi Lan", timeAgo: "2 ngay truoc", read: true },
-  { id: 19, type: "customer_new", title: "Khach hang moi dang ky", description: "Pham Van Minh vua tao tai khoan moi", timeAgo: "2 ngay truoc", read: true },
-  { id: 20, type: "order_completed", title: "Don hang #DH-1028 hoan thanh", description: "Don hang da duoc giao thanh cong", timeAgo: "3 ngay truoc", read: true },
-].map((n) => ({
-  ...n,
-  title: n.title
-    .replace(/Don hang/g, "Đơn hàng")
-    .replace(/Don/g, "Đơn")
-    .replace(/moi/g, "mới")
-    .replace(/hoan thanh/g, "hoàn thành"),
-  description: n.description
-    .replace(/dat don hang tri gia/g, "đặt đơn hàng trị giá")
-    .replace(/Don hang da duoc giao thanh cong/g, "Đơn hàng đã được giao thành công")
-    .replace(/Nhan thanh toan/g, "Nhận thanh toán")
-    .replace(/tu khach hang/g, "từ khách hàng")
-    .replace(/Thanh toan thanh cong/g, "Thanh toán thành công")
-    .replace(/vua tao tai khoan moi/g, "vừa tạo tài khoản mới")
-    .replace(/chi con/g, "chỉ còn")
-    .replace(/san pham/g, "sản phẩm")
-    .replace(/San pham/g, "Sản phẩm"),
-  timeAgo: n.timeAgo
-    .replace(/phut truoc/g, "phút trước")
-    .replace(/gio truoc/g, "giờ trước")
-    .replace(/ngay truoc/g, "ngày trước"),
-}));
-
-// Fix titles that use Vietnamese
-const fixedNotifications = initialNotifications.map((n) => ({
-  ...n,
-  type: n.type as NotificationType,
-  title: n.title
-    .replace("Tồn kho thấp", "Tồn kho thấp")
-    .replace("Ton kho thap", "Tồn kho thấp")
-    .replace("Khach hang moi dang ky", "Khách hàng mới đăng ký")
-    .replace("Thanh toan thanh cong", "Thanh toán thành công"),
-}));
+/** Format relative time (vi) — đơn giản, không cần dayjs. */
+function timeAgo(iso: string): string {
+  const now = Date.now();
+  const ts = new Date(iso).getTime();
+  if (isNaN(ts)) return "—";
+  const diff = Math.max(0, Math.floor((now - ts) / 1000));
+  if (diff < 60) return "vừa xong";
+  if (diff < 3600) return `${Math.floor(diff / 60)} phút trước`;
+  if (diff < 86400) return `${Math.floor(diff / 3600)} giờ trước`;
+  if (diff < 86400 * 7) return `${Math.floor(diff / 86400)} ngày trước`;
+  return new Date(iso).toLocaleDateString("vi-VN");
+}
 
 export default function ThongBaoPage() {
-  const [notifications, setNotifications] = useState<Notification[]>(fixedNotifications);
+  const { toast } = useToast();
+  const [notifications, setNotifications] = useState<NotificationRow[]>([]);
+  const [loading, setLoading] = useState(true);
   const [activeTab, setActiveTab] = useState("all");
 
-  const handleMarkAllRead = () => {
-    setNotifications((prev) => prev.map((n) => ({ ...n, read: true })));
+  const load = useCallback(async () => {
+    setLoading(true);
+    try {
+      const types = tabFilterMap[activeTab] ?? undefined;
+      const rows = await getNotifications({
+        onlyUnread: activeTab === "unread",
+        types: types ?? undefined,
+      });
+      setNotifications(rows);
+    } catch (err) {
+      toast({
+        title: "Lỗi tải thông báo",
+        description: err instanceof Error ? err.message : "Vui lòng thử lại",
+        variant: "error",
+      });
+    } finally {
+      setLoading(false);
+    }
+  }, [activeTab, toast]);
+
+  useEffect(() => {
+    load();
+  }, [load]);
+
+  const handleMarkAllRead = async () => {
+    try {
+      await markAllNotificationsAsRead();
+      toast({ title: "Đã đánh dấu tất cả là đã đọc", variant: "success" });
+      load();
+    } catch (err) {
+      toast({
+        title: "Lỗi",
+        description: err instanceof Error ? err.message : "",
+        variant: "error",
+      });
+    }
   };
 
-  const handleToggleRead = (id: number) => {
-    setNotifications((prev) =>
-      prev.map((n) => (n.id === id ? { ...n, read: true } : n))
-    );
+  const handleClickNotification = async (n: NotificationRow) => {
+    if (!n.isRead) {
+      // Optimistic update + persist
+      setNotifications((prev) =>
+        prev.map((x) => (x.id === n.id ? { ...x, isRead: true } : x)),
+      );
+      try {
+        await markNotificationAsRead(n.id);
+      } catch {
+        // revert on error
+        load();
+      }
+    }
+    // TODO: deep-link tới reference_type/id (vd order_new → /don-hang/dat-hang?id=X)
   };
 
-  const filteredNotifications = notifications.filter((n) => {
-    if (activeTab === "unread") return !n.read;
-    const allowedTypes = tabFilterMap[activeTab];
-    if (allowedTypes) return allowedTypes.includes(n.type);
-    return true;
-  });
+  const handleDelete = async (id: string) => {
+    try {
+      await deleteNotification(id);
+      setNotifications((prev) => prev.filter((n) => n.id !== id));
+    } catch (err) {
+      toast({
+        title: "Lỗi xóa",
+        description: err instanceof Error ? err.message : "",
+        variant: "error",
+      });
+    }
+  };
 
-  const unreadCount = notifications.filter((n) => !n.read).length;
+  const unreadCount = notifications.filter((n) => !n.isRead).length;
 
   return (
     <div className="flex flex-col h-full">
@@ -151,85 +196,125 @@ export default function ThongBaoPage() {
       <div className="flex-1 overflow-auto p-4">
         <Tabs value={activeTab} onValueChange={setActiveTab}>
           <TabsList className="mb-4">
-            <TabsTrigger value="all">
-              Tất cả
-            </TabsTrigger>
+            <TabsTrigger value="all">Tất cả</TabsTrigger>
             <TabsTrigger value="unread">
               Chưa đọc
               {unreadCount > 0 && (
-                <Badge variant="destructive" className="ml-1.5 h-4 min-w-4 px-1 text-[10px]">
+                <Badge
+                  variant="destructive"
+                  className="ml-1.5 h-4 min-w-4 px-1 text-[10px]"
+                >
                   {unreadCount}
                 </Badge>
               )}
             </TabsTrigger>
-            <TabsTrigger value="orders">
-              Đơn hàng
-            </TabsTrigger>
-            <TabsTrigger value="stock">
-              Kho hàng
-            </TabsTrigger>
-            <TabsTrigger value="finance">
-              Tài chính
-            </TabsTrigger>
+            <TabsTrigger value="orders">Đơn hàng</TabsTrigger>
+            <TabsTrigger value="stock">Kho hàng</TabsTrigger>
+            <TabsTrigger value="finance">Tài chính</TabsTrigger>
           </TabsList>
 
-          {["all", "unread", "orders", "stock", "finance"].map((tab) => (
-            <TabsContent key={tab} value={tab}>
-              <Card>
-                {filteredNotifications.length === 0 ? (
-                  <div className="p-8 text-center text-muted-foreground">
-                    Không có thông báo nào
-                  </div>
-                ) : (
-                  filteredNotifications.map((notification, index) => {
-                    const config = typeConfig[notification.type];
-                    const Icon = config.icon;
-                    return (
-                      <div key={notification.id}>
+          <TabsContent value={activeTab}>
+            <Card>
+              {loading ? (
+                <div className="p-8 text-center text-muted-foreground text-sm">
+                  <Icon
+                    name="progress_activity"
+                    size={20}
+                    className="animate-spin mr-2 inline-block align-middle"
+                  />
+                  Đang tải...
+                </div>
+              ) : notifications.length === 0 ? (
+                <div className="p-12 text-center text-muted-foreground">
+                  <Icon
+                    name="notifications_off"
+                    size={48}
+                    className="mx-auto mb-3 opacity-30"
+                  />
+                  <p className="text-sm font-medium">Không có thông báo</p>
+                  <p className="text-xs mt-1">
+                    Thông báo về đơn hàng, tồn kho thấp, công nợ quá hạn sẽ
+                    hiện ở đây.
+                  </p>
+                </div>
+              ) : (
+                notifications.map((notification, index) => {
+                  const config = typeConfig[notification.type] ?? {
+                    iconName: "notifications",
+                    color: "text-muted-foreground",
+                    bgColor: "bg-muted",
+                    label: notification.type,
+                  };
+                  return (
+                    <div key={notification.id}>
+                      <div
+                        className={`group w-full flex items-start gap-3 p-4 transition-colors hover:bg-surface-container-low ${
+                          !notification.isRead ? "bg-primary-fixed/40" : ""
+                        }`}
+                      >
                         <button
-                          onClick={() => handleToggleRead(notification.id)}
-                          className={`w-full flex items-start gap-3 p-4 text-left transition-colors hover:bg-surface-container-low ${
-                            !notification.read ? "bg-primary-fixed/40" : ""
-                          }`}
+                          onClick={() => handleClickNotification(notification)}
+                          className="shrink-0 h-10 w-10 rounded-full flex items-center justify-center cursor-pointer"
+                          style={{}}
+                          aria-label="Đánh dấu đã đọc"
                         >
-                          <div
-                            className={`shrink-0 h-10 w-10 rounded-full flex items-center justify-center ${config.bgColor}`}
+                          <span
+                            className={`h-10 w-10 rounded-full flex items-center justify-center ${config.bgColor}`}
                           >
-                            <Icon className={`h-5 w-5 ${config.color}`} />
+                            <Icon
+                              name={config.iconName}
+                              size={20}
+                              className={config.color}
+                            />
+                          </span>
+                        </button>
+                        <button
+                          onClick={() => handleClickNotification(notification)}
+                          className="flex-1 min-w-0 text-left cursor-pointer"
+                        >
+                          <div className="flex items-start justify-between gap-2">
+                            <p
+                              className={`text-sm leading-tight ${
+                                !notification.isRead
+                                  ? "font-semibold text-foreground"
+                                  : "text-foreground"
+                              }`}
+                            >
+                              {notification.title}
+                            </p>
+                            {!notification.isRead && (
+                              <span className="shrink-0 mt-1 h-2 w-2 rounded-full bg-primary" />
+                            )}
                           </div>
-                          <div className="flex-1 min-w-0">
-                            <div className="flex items-start justify-between gap-2">
-                              <p
-                                className={`text-sm leading-tight ${
-                                  !notification.read
-                                    ? "font-semibold text-foreground"
-                                    : "text-foreground"
-                                }`}
-                              >
-                                {notification.title}
-                              </p>
-                              {!notification.read && (
-                                <span className="shrink-0 mt-1 h-2 w-2 rounded-full bg-primary" />
-                              )}
-                            </div>
+                          {notification.description && (
                             <p className="text-sm text-muted-foreground mt-0.5 truncate">
                               {notification.description}
                             </p>
-                            <p className="text-xs text-muted-foreground mt-1">
-                              {notification.timeAgo}
-                            </p>
-                          </div>
+                          )}
+                          <p className="text-xs text-muted-foreground mt-1">
+                            {timeAgo(notification.createdAt)}
+                          </p>
                         </button>
-                        {index < filteredNotifications.length - 1 && (
-                          <Separator />
-                        )}
+                        <button
+                          onClick={() => handleDelete(notification.id)}
+                          className="shrink-0 h-8 w-8 rounded-md opacity-0 group-hover:opacity-100 transition-opacity hover:bg-destructive/10 flex items-center justify-center"
+                          aria-label="Xóa"
+                          title="Xóa thông báo"
+                        >
+                          <Icon
+                            name="close"
+                            size={16}
+                            className="text-muted-foreground"
+                          />
+                        </button>
                       </div>
-                    );
-                  })
-                )}
-              </Card>
-            </TabsContent>
-          ))}
+                      {index < notifications.length - 1 && <Separator />}
+                    </div>
+                  );
+                })
+              )}
+            </Card>
+          </TabsContent>
         </Tabs>
       </div>
     </div>

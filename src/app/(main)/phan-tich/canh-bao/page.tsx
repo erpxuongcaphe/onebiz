@@ -6,6 +6,7 @@ import { Badge } from "@/components/ui/badge";
 import { cn } from "@/lib/utils";
 import { formatCurrency } from "@/lib/format";
 import Link from "next/link";
+import { useBranchFilter } from "@/lib/contexts";
 import { getFinancialAlerts } from "@/lib/services";
 import type { FinancialAlert } from "@/lib/services/supabase/reports";
 import { Icon } from "@/components/ui/icon";
@@ -51,6 +52,10 @@ const TYPE_LABELS: Record<FinancialAlert["type"], string> = {
 };
 
 export default function CanhBaoPage() {
+  // Branch awareness — chuỗi 5 đơn vị, owner cần xem cảnh báo riêng
+  // từng quán/kho. Trước đây gọi `getFinancialAlerts()` không param →
+  // luôn aggregate toàn tenant, không filter được.
+  const { activeBranchId } = useBranchFilter();
   const [loading, setLoading] = useState(true);
   const [alerts, setAlerts] = useState<FinancialAlert[]>([]);
   const [filterType, setFilterType] = useState<string>("all");
@@ -58,14 +63,14 @@ export default function CanhBaoPage() {
   const fetchData = useCallback(async () => {
     try {
       setLoading(true);
-      const data = await getFinancialAlerts();
+      const data = await getFinancialAlerts(activeBranchId);
       setAlerts(data);
     } catch (err) {
       console.error("Failed to fetch alerts:", err);
     } finally {
       setLoading(false);
     }
-  }, []);
+  }, [activeBranchId]);
 
   useEffect(() => {
     fetchData();

@@ -198,6 +198,15 @@ export type { StockTransfer, StockTransferStatus, StockTransferItem, CreateStock
 export { getAuditLogs, getAuditLogsByEntity, recordAuditLog, getAuditStats, getActionOptions, getEntityTypeOptions, getProfilesForPersonFilter } from "./audit";
 export { getTenantBusinessInfo, updateTenantBusinessInfo } from "./tenant-settings";
 export type { TenantBusinessInfo } from "./tenant-settings";
+export {
+  getNotifications,
+  getUnreadNotificationCount,
+  markNotificationAsRead,
+  markAllNotificationsAsRead,
+  deleteNotification,
+  createNotification,
+} from "./notifications";
+export type { NotificationKind, NotificationRow } from "./notifications";
 export type { AuditLogEntry, AuditFilters } from "./audit";
 
 // Debt Aging (Phân tích tuổi nợ)

@@ -9,8 +9,9 @@
 
 import Link from "next/link";
 import { usePathname, useRouter } from "next/navigation";
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import { useAuth } from "@/lib/contexts";
+import { getUnreadNotificationCount } from "@/lib/services";
 import { Button } from "@/components/ui/button";
 import {
   Sheet,
@@ -356,6 +357,31 @@ function MobileNav() {
 export function TopNav() {
   const [importOpen, setImportOpen] = useState(false);
 
+  // Bell badge — load số notification chưa đọc của user hiện tại.
+  // Trước đây hardcode "3" → CEO mở thấy 3 dù không có notification thật.
+  // Refresh khi tab focus + 60s interval (đủ live cho UX, chưa cần Realtime).
+  const [unreadCount, setUnreadCount] = useState(0);
+  useEffect(() => {
+    let cancelled = false;
+    const fetch = async () => {
+      try {
+        const n = await getUnreadNotificationCount();
+        if (!cancelled) setUnreadCount(n);
+      } catch {
+        // fail-soft
+      }
+    };
+    fetch();
+    const interval = setInterval(fetch, 60_000);
+    const onFocus = () => fetch();
+    window.addEventListener("focus", onFocus);
+    return () => {
+      cancelled = true;
+      clearInterval(interval);
+      window.removeEventListener("focus", onFocus);
+    };
+  }, []);
+
   return (
     <>
       {/* Stitch style: bg-surface-container-lowest (white) + subtle bottom border.
@@ -409,19 +435,21 @@ export function TopNav() {
               <Icon name="cloud_upload" size={18} />
             </Button>
 
-            {/* Notification bell */}
+            {/* Notification bell — badge hiển thị unread count thật từ DB */}
             <Link href="/thong-bao" className="relative hidden sm:flex">
               <Button
                 variant="ghost"
                 size="icon"
                 className="text-foreground/70 hover:text-foreground hover:bg-surface-container-low"
-                title="Thông báo"
+                title={`Thông báo${unreadCount > 0 ? ` (${unreadCount} chưa đọc)` : ""}`}
               >
                 <Icon name="notifications" size={18} />
               </Button>
-              <span className="absolute top-1 right-1 h-4 w-4 rounded-full bg-destructive text-[10px] font-bold text-on-primary flex items-center justify-center pointer-events-none ring-2 ring-surface-container-lowest">
-                3
-              </span>
+              {unreadCount > 0 && (
+                <span className="absolute top-1 right-1 h-4 min-w-4 px-1 rounded-full bg-destructive text-[10px] font-bold text-on-primary flex items-center justify-center pointer-events-none ring-2 ring-surface-container-lowest">
+                  {unreadCount > 99 ? "99+" : unreadCount}
+                </span>
+              )}
             </Link>
 
             {/* Divider */}
