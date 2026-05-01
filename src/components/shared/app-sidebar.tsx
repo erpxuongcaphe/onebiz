@@ -137,31 +137,106 @@ function LeafLink({
 }
 
 // ============================================================
-// Sub-group section (level 2 — heading + items)
+// Sub-group section (level 2 — collapsible accordion)
 // ============================================================
+//
+// Stitch design improvement (Sprint UX):
+//   - Trước: label "SẢN PHẨM" 10px xám flat, không click được, mỗi
+//     subgroup luôn render hết items → sidebar rất cao.
+//   - Sau: button collapsible, chevron xoay khi toggle. Default mở
+//     nếu chứa active leaf, đóng nếu không. Label 12px font-semibold
+//     dễ đọc. Khi đóng → hiện count "(5)" để user biết bao nhiêu items.
+//   - Tiết kiệm 60% chiều cao khi user chỉ cần 1 subgroup tại 1 thời điểm.
 
 function SubGroupSection({
   subGroup,
   pathname,
   filterPerm,
+  /**
+   * Force expanded (không collapsible) — dùng cho flyout khi sidebar
+   * collapsed. Trong flyout, user hover thấy ngay full menu, không
+   * cần click thêm.
+   */
+  alwaysOpen = false,
 }: {
   subGroup: SidebarSubGroup;
   pathname: string;
   filterPerm?: (code: string) => boolean;
+  alwaysOpen?: boolean;
 }) {
-  const visibleItems = subGroup.items.filter((l) => !l.permission || !filterPerm || filterPerm(l.permission));
+  const visibleItems = subGroup.items.filter(
+    (l) => !l.permission || !filterPerm || filterPerm(l.permission),
+  );
+
+  // Auto-open khi subgroup chứa active leaf — UX expectation chuẩn.
+  const hasActive = visibleItems.some((l) => isHrefActive(pathname, l.href));
+  const [open, setOpen] = useState<boolean>(alwaysOpen || hasActive);
+
+  useEffect(() => {
+    if (hasActive) setOpen(true);
+  }, [hasActive]);
+
   if (visibleItems.length === 0) return null;
+
+  // Flyout mode: render đơn giản, không click toggle.
+  if (alwaysOpen) {
+    return (
+      <div className="mt-1">
+        <div className="flex items-center gap-1.5 px-3 pt-1.5 pb-1 text-[10px] font-semibold text-muted-foreground uppercase tracking-wider">
+          {subGroup.icon && <Icon name={subGroup.icon} size={12} />}
+          {subGroup.label}
+        </div>
+        <div className="space-y-0.5">
+          {visibleItems.map((leaf) => (
+            <LeafLink key={leaf.href} leaf={leaf} pathname={pathname} indent={1} />
+          ))}
+        </div>
+      </div>
+    );
+  }
+
   return (
-    <div className="mt-1">
-      <div className="flex items-center gap-1.5 px-3 pt-2 pb-1 text-[10px] font-semibold text-muted-foreground uppercase tracking-wider">
-        {subGroup.icon && <Icon name={subGroup.icon} size={12} />}
-        {subGroup.label}
-      </div>
-      <div className="space-y-0.5">
-        {visibleItems.map((leaf) => (
-          <LeafLink key={leaf.href} leaf={leaf} pathname={pathname} indent={1} />
-        ))}
-      </div>
+    <div className="mt-0.5">
+      <button
+        type="button"
+        onClick={() => setOpen((v) => !v)}
+        aria-expanded={open}
+        className={cn(
+          "w-full press-scale-sm flex items-center gap-2 px-3 h-8 rounded-md text-xs font-semibold transition-colors",
+          hasActive
+            ? "text-primary"
+            : "text-foreground/75 hover:bg-surface-container-low hover:text-foreground",
+        )}
+      >
+        {subGroup.icon && (
+          <Icon
+            name={subGroup.icon}
+            size={14}
+            className={cn("shrink-0", hasActive && "text-primary")}
+          />
+        )}
+        <span className="flex-1 text-left tracking-wide">{subGroup.label}</span>
+        {!open && (
+          <span className="text-[10px] font-medium text-muted-foreground tabular-nums">
+            {visibleItems.length}
+          </span>
+        )}
+        <Icon
+          name="expand_more"
+          size={14}
+          className={cn(
+            "shrink-0 transition-transform duration-150 text-muted-foreground",
+            open ? "rotate-0" : "-rotate-90",
+          )}
+        />
+      </button>
+      {open && (
+        <div className="mt-0.5 space-y-0.5 stitch-fade-in">
+          {visibleItems.map((leaf) => (
+            <LeafLink key={leaf.href} leaf={leaf} pathname={pathname} indent={1} />
+          ))}
+        </div>
+      )}
     </div>
   );
 }
@@ -321,7 +396,12 @@ function GroupCollapsed({
                 />
               ))}
               {group.subGroups?.map((sg) => (
-                <SubGroupSection key={sg.label} subGroup={sg} pathname={pathname} />
+                <SubGroupSection
+                  key={sg.label}
+                  subGroup={sg}
+                  pathname={pathname}
+                  alwaysOpen
+                />
               ))}
             </div>
           </div>

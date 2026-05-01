@@ -28,7 +28,14 @@ import {
   DropdownMenuLabel,
   DropdownMenuGroup,
 } from "@/components/ui/dropdown-menu";
-import { sidebarNavGroups, isHrefActive, type SidebarLeaf } from "./nav-config";
+import {
+  sidebarNavGroups,
+  isHrefActive,
+  isGroupActive,
+  type SidebarLeaf,
+  type SidebarGroup,
+  type SidebarSubGroup,
+} from "./nav-config";
 import { useCommandPalette } from "./command-palette";
 import { AppSwitcher } from "./app-switcher";
 import { ImportDataDialog } from "./import-data-dialog";
@@ -241,6 +248,140 @@ function MobileLeafLink({
   );
 }
 
+// ---------------------------------------------------------------------------
+// Mobile sheet accordion — đồng bộ UX với desktop AppSidebar SubGroupSection.
+// Group level 1 (Hàng hóa, Bán hàng, ...) auto-open nếu chứa active leaf.
+// SubGroup level 2 (Sản phẩm, Kho, ...) collapsible với chevron + count.
+// ---------------------------------------------------------------------------
+
+function MobileSubGroupAccordion({
+  subGroup,
+  pathname,
+  onClose,
+}: {
+  subGroup: SidebarSubGroup;
+  pathname: string;
+  onClose: () => void;
+}) {
+  const hasActive = subGroup.items.some((l) => isHrefActive(pathname, l.href));
+  const [open, setOpen] = useState<boolean>(hasActive);
+  useEffect(() => {
+    if (hasActive) setOpen(true);
+  }, [hasActive]);
+
+  return (
+    <div className="mt-0.5">
+      <button
+        type="button"
+        onClick={() => setOpen((v) => !v)}
+        aria-expanded={open}
+        className={cn(
+          "w-full press-scale-sm flex items-center gap-2 px-3 h-9 rounded-md text-xs font-semibold transition-colors",
+          hasActive
+            ? "text-primary"
+            : "text-foreground/75 hover:bg-surface-container-low",
+        )}
+      >
+        {subGroup.icon && <Icon name={subGroup.icon} size={14} className="shrink-0" />}
+        <span className="flex-1 text-left tracking-wide">{subGroup.label}</span>
+        {!open && (
+          <span className="text-[10px] font-medium text-muted-foreground tabular-nums">
+            {subGroup.items.length}
+          </span>
+        )}
+        <Icon
+          name="expand_more"
+          size={14}
+          className={cn(
+            "shrink-0 transition-transform duration-150 text-muted-foreground",
+            open ? "rotate-0" : "-rotate-90",
+          )}
+        />
+      </button>
+      {open && (
+        <div className="mt-0.5 space-y-0.5 pl-2 stitch-fade-in">
+          {subGroup.items.map((leaf) => (
+            <MobileLeafLink
+              key={leaf.href}
+              leaf={leaf}
+              pathname={pathname}
+              onClose={onClose}
+            />
+          ))}
+        </div>
+      )}
+    </div>
+  );
+}
+
+function MobileGroupAccordion({
+  group,
+  pathname,
+  onClose,
+}: {
+  group: SidebarGroup;
+  pathname: string;
+  onClose: () => void;
+}) {
+  const active = isGroupActive(pathname, group);
+  const [open, setOpen] = useState<boolean>(active);
+  useEffect(() => {
+    if (active) setOpen(true);
+  }, [active]);
+
+  return (
+    <div>
+      <button
+        type="button"
+        onClick={() => setOpen((v) => !v)}
+        aria-expanded={open}
+        className={cn(
+          "w-full press-scale-sm flex items-center gap-3 px-3 py-2.5 rounded-lg text-sm font-semibold transition-colors",
+          active
+            ? "text-primary bg-primary-fixed/40"
+            : "text-foreground hover:bg-surface-container-low",
+        )}
+      >
+        <Icon
+          name={group.icon}
+          size={18}
+          fill={active}
+          className={cn("shrink-0", active && "text-primary")}
+        />
+        <span className="flex-1 text-left">{group.label}</span>
+        <Icon
+          name="expand_more"
+          size={16}
+          className={cn(
+            "shrink-0 transition-transform duration-150 text-muted-foreground",
+            open ? "rotate-0" : "-rotate-90",
+          )}
+        />
+      </button>
+      {open && (
+        <div className="ml-1 mt-1 space-y-0.5 stitch-fade-in">
+          {group.items?.map((leaf) => (
+            <MobileLeafLink
+              key={leaf.href}
+              leaf={leaf}
+              pathname={pathname}
+              onClose={onClose}
+            />
+          ))}
+          {group.subGroups?.map((sg) => (
+            <MobileSubGroupAccordion
+              key={sg.label}
+              subGroup={sg}
+              pathname={pathname}
+              onClose={onClose}
+            />
+          ))}
+        </div>
+      )}
+    </div>
+  );
+}
+
 function MobileNav() {
   const pathname = usePathname();
   const { branches, currentBranch, switchBranch, user } = useAuth();
@@ -297,39 +438,14 @@ function MobileNav() {
             ))}
           </div>
 
-          {/* Sidebar groups */}
+          {/* Sidebar groups — same accordion UX với desktop AppSidebar */}
           {sidebarNavGroups.map((group) => (
-            <div key={group.label}>
-              <div className="flex items-center gap-3 px-3 py-2 text-sm font-semibold text-foreground">
-                <Icon name={group.icon} size={18} />
-                {group.label}
-              </div>
-              <div className="ml-1 space-y-0.5">
-                {group.items?.map((leaf) => (
-                  <MobileLeafLink
-                    key={leaf.href}
-                    leaf={leaf}
-                    pathname={pathname}
-                    onClose={() => setOpen(false)}
-                  />
-                ))}
-                {group.subGroups?.map((sg) => (
-                  <div key={sg.label} className="mt-1">
-                    <div className="px-3 py-1 text-[10px] font-semibold uppercase tracking-wider text-muted-foreground">
-                      {sg.label}
-                    </div>
-                    {sg.items.map((leaf) => (
-                      <MobileLeafLink
-                        key={leaf.href}
-                        leaf={leaf}
-                        pathname={pathname}
-                        onClose={() => setOpen(false)}
-                      />
-                    ))}
-                  </div>
-                ))}
-              </div>
-            </div>
+            <MobileGroupAccordion
+              key={group.label}
+              group={group}
+              pathname={pathname}
+              onClose={() => setOpen(false)}
+            />
           ))}
 
           {/* B2B Order Terminal shortcut */}
