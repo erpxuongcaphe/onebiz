@@ -1,190 +1,150 @@
 "use client";
 
-import { useState } from "react";
+/**
+ * Cài đặt hóa đơn — Settings overview.
+ *
+ * Sprint CD-1: trước đây toàn local state — prefix/startNumber/separator
+ * + 7 toggle "Hiển thị" KHÔNG persist DB, button "Lưu" không có handler.
+ * CEO sửa toggle, reload mất hết.
+ *
+ * Fix tạm: page này giờ trỏ về 2 nguồn config thật:
+ *   - Header hóa đơn (tên DN, MST, logo, footer) → /he-thong/thiet-lap
+ *   - Khổ giấy + máy in nhiệt 80mm/A4 → /cai-dat/in-an
+ *
+ * Mã hóa đơn (prefix, sequence) hiện được auto-generate bởi RPC
+ * `next_code` ở Postgres (không config UI). Đó là pattern chuẩn:
+ * tenant không cần đụng đến.
+ */
+
+import Link from "next/link";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
-import { Input } from "@/components/ui/input";
-import { Button } from "@/components/ui/button";
-import { Separator } from "@/components/ui/separator";
-import {
-  Select,
-  SelectContent,
-  SelectItem,
-  SelectTrigger,
-  SelectValue,
-} from "@/components/ui/select";
-import { cn } from "@/lib/utils";
 import { Icon } from "@/components/ui/icon";
 
-function Toggle({
-  checked,
-  onCheckedChange,
-  label,
-}: {
-  checked: boolean;
-  onCheckedChange: (val: boolean) => void;
-  label: string;
-}) {
-  return (
-    <div className="flex items-center justify-between py-2">
-      <span className="text-sm font-medium">{label}</span>
-      <button
-        type="button"
-        role="switch"
-        aria-checked={checked}
-        onClick={() => onCheckedChange(!checked)}
-        className={cn(
-          "relative inline-flex h-5 w-9 shrink-0 cursor-pointer rounded-full border-2 border-transparent transition-colors",
-          checked ? "bg-primary" : "bg-muted"
-        )}
-      >
-        <span
-          className={cn(
-            "pointer-events-none inline-block h-4 w-4 rounded-full bg-white shadow-sm transition-transform",
-            checked ? "translate-x-4" : "translate-x-0"
-          )}
-        />
-      </button>
-    </div>
-  );
-}
-
 export default function InvoiceSettingsPage() {
-  const [prefix, setPrefix] = useState("HD");
-  const [startNumber, setStartNumber] = useState("000001");
-  const [separator, setSeparator] = useState("-");
-
-  const [showCustomerName, setShowCustomerName] = useState(true);
-  const [showCustomerPhone, setShowCustomerPhone] = useState(true);
-  const [showProductCode, setShowProductCode] = useState(false);
-  const [showDiscount, setShowDiscount] = useState(true);
-  const [showTax, setShowTax] = useState(true);
-  const [showNote, setShowNote] = useState(true);
-  const [showPaymentMethod, setShowPaymentMethod] = useState(true);
-
-  const previewCode = `${prefix}${separator}${startNumber}`;
-
   return (
     <div className="space-y-6">
       <div>
         <h1 className="text-2xl font-bold">Cài đặt hóa đơn</h1>
         <p className="text-muted-foreground text-sm mt-1">
-          Tùy chỉnh định dạng và nội dung hóa đơn
+          Định dạng và nội dung hiển thị trên hóa đơn
         </p>
       </div>
 
-      <Card>
-        <CardHeader>
-          <CardTitle>Định dạng mã hóa đơn</CardTitle>
-        </CardHeader>
-        <CardContent>
-          <div className="grid gap-4 sm:grid-cols-3">
-            <div className="space-y-2">
-              <label className="text-sm font-medium">Tiền tố</label>
-              <Input
-                value={prefix}
-                onChange={(e) => setPrefix(e.target.value)}
-                placeholder="HD"
-              />
-            </div>
-            <div className="space-y-2">
-              <label className="text-sm font-medium">Ký tự phân cách</label>
-              <Select value={separator} onValueChange={(v) => v !== null && setSeparator(v)}>
-                <SelectTrigger className="w-full">
-                  <SelectValue />
-                </SelectTrigger>
-                <SelectContent>
-                  <SelectItem value="-">Dấu gạch ngang (-)</SelectItem>
-                  <SelectItem value="/">Dấu gạch chéo (/)</SelectItem>
-                  <SelectItem value=".">Dấu chấm (.)</SelectItem>
-                  <SelectItem value="">Không có</SelectItem>
-                </SelectContent>
-              </Select>
-            </div>
-            <div className="space-y-2">
-              <label className="text-sm font-medium">Số bắt đầu</label>
-              <Input
-                value={startNumber}
-                onChange={(e) => setStartNumber(e.target.value)}
-              />
-            </div>
-          </div>
-          <div className="mt-4 rounded-lg bg-muted/50 p-3">
-            <p className="text-xs text-muted-foreground mb-1">Xem trước:</p>
-            <p className="text-sm font-mono font-semibold">{previewCode}</p>
-          </div>
-        </CardContent>
-      </Card>
-
-      <Card>
-        <CardHeader>
-          <CardTitle>Mẫu hóa đơn</CardTitle>
-        </CardHeader>
-        <CardContent>
-          <div className="rounded-lg border bg-muted/30 p-6 text-center">
-            <Icon name="description" size={48} className="mx-auto text-muted-foreground mb-2" />
+      <div className="grid gap-4 sm:grid-cols-2">
+        <Card>
+          <CardHeader>
+            <CardTitle className="flex items-center gap-2">
+              <Icon name="business" size={18} className="text-primary" />
+              Thông tin doanh nghiệp
+            </CardTitle>
+          </CardHeader>
+          <CardContent className="space-y-3">
             <p className="text-sm text-muted-foreground">
-              Xem trước mẫu hóa đơn
+              Tên DN, MST, địa chỉ, logo và footer hóa đơn được cấu hình tại
+              trang Thiết lập chung.
             </p>
-            <Button variant="outline" size="sm" className="mt-3">
-              Tùy chỉnh mẫu
-            </Button>
+            <Link
+              href="/he-thong/thiet-lap"
+              className="inline-flex w-full items-center justify-center gap-1.5 rounded-md bg-primary px-3 py-2 text-sm font-medium text-primary-foreground hover:bg-primary/90 transition-colors"
+            >
+              <Icon name="settings" size={16} />
+              Mở Thiết lập chung
+            </Link>
+          </CardContent>
+        </Card>
+
+        <Card>
+          <CardHeader>
+            <CardTitle className="flex items-center gap-2">
+              <Icon name="print" size={18} className="text-status-success" />
+              Khổ giấy &amp; máy in
+            </CardTitle>
+          </CardHeader>
+          <CardContent className="space-y-3">
+            <p className="text-sm text-muted-foreground">
+              Cấu hình máy in nhiệt 58mm / 80mm / A4, ESC/POS, mở ngăn kéo
+              tiền và in test tại trang In ấn.
+            </p>
+            <Link
+              href="/cai-dat/in-an"
+              className="inline-flex w-full items-center justify-center gap-1.5 rounded-md bg-primary px-3 py-2 text-sm font-medium text-primary-foreground hover:bg-primary/90 transition-colors"
+            >
+              <Icon name="print" size={16} />
+              Mở Cài đặt in ấn
+            </Link>
+          </CardContent>
+        </Card>
+      </div>
+
+      <Card>
+        <CardHeader>
+          <CardTitle className="flex items-center gap-2">
+            <Icon name="tag" size={18} className="text-status-warning" />
+            Mã hóa đơn (prefix &amp; sequence)
+          </CardTitle>
+        </CardHeader>
+        <CardContent>
+          <div className="text-sm space-y-2">
+            <p className="text-muted-foreground">
+              Mã hóa đơn được tự động tạo theo pattern của hệ thống:
+            </p>
+            <ul className="list-disc pl-5 space-y-1 text-muted-foreground">
+              <li>
+                <code className="text-foreground font-mono text-xs bg-muted px-1.5 py-0.5 rounded">
+                  HD000001
+                </code>{" "}
+                — Hóa đơn POS Retail
+              </li>
+              <li>
+                <code className="text-foreground font-mono text-xs bg-muted px-1.5 py-0.5 rounded">
+                  PT000001
+                </code>{" "}
+                — Phiếu thu (sổ quỹ)
+              </li>
+              <li>
+                <code className="text-foreground font-mono text-xs bg-muted px-1.5 py-0.5 rounded">
+                  PC000001
+                </code>{" "}
+                — Phiếu chi (sổ quỹ)
+              </li>
+              <li>
+                <code className="text-foreground font-mono text-xs bg-muted px-1.5 py-0.5 rounded">
+                  HDN-CPH-001
+                </code>{" "}
+                — Đơn nhập café (theo nhóm SP)
+              </li>
+            </ul>
+            <p className="text-muted-foreground mt-3">
+              Sequence được giữ atomic ở Postgres RPC{" "}
+              <code className="font-mono text-xs">next_code</code> — không
+              trùng kể cả khi 2 cashier checkout cùng lúc. Custom prefix
+              theo tenant đang phát triển.
+            </p>
           </div>
         </CardContent>
       </Card>
 
       <Card>
         <CardHeader>
-          <CardTitle>Thông tin hiển thị</CardTitle>
+          <CardTitle className="flex items-center gap-2">
+            <Icon name="visibility" size={18} className="text-muted-foreground" />
+            Tùy chỉnh hiển thị (đang phát triển)
+          </CardTitle>
         </CardHeader>
         <CardContent>
-          <div className="divide-y">
-            <Toggle
-              checked={showCustomerName}
-              onCheckedChange={setShowCustomerName}
-              label="Tên khách hàng"
-            />
-            <Toggle
-              checked={showCustomerPhone}
-              onCheckedChange={setShowCustomerPhone}
-              label="SĐT khách hàng"
-            />
-            <Toggle
-              checked={showProductCode}
-              onCheckedChange={setShowProductCode}
-              label="Mã sản phẩm"
-            />
-            <Toggle
-              checked={showDiscount}
-              onCheckedChange={setShowDiscount}
-              label="Giảm giá"
-            />
-            <Toggle
-              checked={showTax}
-              onCheckedChange={setShowTax}
-              label="Thuế"
-            />
-            <Toggle
-              checked={showNote}
-              onCheckedChange={setShowNote}
-              label="Ghi chú"
-            />
-            <Toggle
-              checked={showPaymentMethod}
-              onCheckedChange={setShowPaymentMethod}
-              label="Phương thức thanh toán"
-            />
+          <div className="flex items-start gap-3 p-3 rounded-md bg-status-warning/5 border border-status-warning/20">
+            <Icon name="info" size={16} className="text-status-warning mt-0.5 shrink-0" />
+            <div className="text-xs">
+              <p className="font-medium text-foreground">Đang phát triển</p>
+              <p className="text-muted-foreground mt-1">
+                Tùy chỉnh ẩn/hiện các trường (mã SP, thuế, ghi chú, phương
+                thức TT) trên hóa đơn đang được phát triển. Hiện hệ thống
+                in tất cả các trường mặc định theo template chuẩn.
+              </p>
+            </div>
           </div>
         </CardContent>
       </Card>
-
-      <Separator />
-
-      <div className="flex justify-end">
-        <Button>
-          <Icon name="save" size={16} className="mr-1.5" />
-          Lưu thay đổi
-        </Button>
-      </div>
     </div>
   );
 }

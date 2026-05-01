@@ -1,145 +1,157 @@
 "use client";
 
-import { useState } from "react";
+/**
+ * Cài đặt giao hàng — Settings overview.
+ *
+ * Sprint CD-1: trước đây toàn page MOCK — `deliveryZones` (Nội/Ngoại/
+ * Liên tỉnh phí 15k/30k/50k) hardcoded, `partners` GHN/GHTK status
+ * "connected" giả, button "Lưu" không gọi gì.
+ *
+ * Fix: load `getDeliveryPartners()` thật từ DB. Delivery zones (phí
+ * giao theo khu vực) chưa có schema — gắn nhãn "Đang phát triển".
+ *
+ * Đối tác giao hàng có CRUD đầy đủ ở `/don-hang/doi-tac-giao-hang`.
+ */
+
+import { useEffect, useState } from "react";
+import Link from "next/link";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
-import { Input } from "@/components/ui/input";
-import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
-import {
-  Table,
-  TableBody,
-  TableCell,
-  TableHead,
-  TableHeader,
-  TableRow,
-} from "@/components/ui/table";
-import { Separator } from "@/components/ui/separator";
 import { Icon } from "@/components/ui/icon";
-
-const deliveryZones = [
-  { id: 1, name: "Nội thành", fee: "15,000", distance: "0 - 10km" },
-  { id: 2, name: "Ngoại thành", fee: "30,000", distance: "10 - 30km" },
-  { id: 3, name: "Liên tỉnh", fee: "50,000", distance: "> 30km" },
-];
-
-const partners = [
-  {
-    id: 1,
-    name: "Giao Hàng Nhanh (GHN)",
-    status: "connected" as const,
-    logo: "GHN",
-  },
-  {
-    id: 2,
-    name: "Giao Hàng Tiết Kiệm (GHTK)",
-    status: "connected" as const,
-    logo: "GHTK",
-  },
-  {
-    id: 3,
-    name: "J&T Express",
-    status: "disconnected" as const,
-    logo: "J&T",
-  },
-  {
-    id: 4,
-    name: "Viettel Post",
-    status: "disconnected" as const,
-    logo: "VTP",
-  },
-];
+import { getDeliveryPartners } from "@/lib/services";
+import type { DeliveryPartner } from "@/lib/types";
 
 export default function DeliverySettingsPage() {
-  const [defaultFee, setDefaultFee] = useState("20,000");
+  const [partners, setPartners] = useState<DeliveryPartner[]>([]);
+  const [loading, setLoading] = useState(true);
+
+  useEffect(() => {
+    let cancelled = false;
+    getDeliveryPartners({ page: 0, pageSize: 50 })
+      .then((res) => {
+        if (!cancelled) setPartners(res.data);
+      })
+      .catch(() => {
+        if (!cancelled) setPartners([]);
+      })
+      .finally(() => {
+        if (!cancelled) setLoading(false);
+      });
+    return () => {
+      cancelled = true;
+    };
+  }, []);
 
   return (
     <div className="space-y-6">
-      <div>
-        <h1 className="text-2xl font-bold">Cài đặt giao hàng</h1>
-        <p className="text-muted-foreground text-sm mt-1">
-          Quản lý phí giao hàng và đối tác vận chuyển
-        </p>
+      <div className="flex items-start justify-between gap-4">
+        <div>
+          <h1 className="text-2xl font-bold">Cài đặt giao hàng</h1>
+          <p className="text-muted-foreground text-sm mt-1">
+            Quản lý đối tác vận chuyển và phí giao hàng
+          </p>
+        </div>
+        <Link
+          href="/don-hang/doi-tac-giao-hang"
+          className="inline-flex items-center gap-1.5 rounded-md bg-primary px-3 py-2 text-sm font-medium text-primary-foreground hover:bg-primary/90 transition-colors"
+        >
+          <Icon name="add" size={16} />
+          Quản lý đối tác
+        </Link>
       </div>
 
       <Card>
         <CardHeader>
-          <CardTitle>Phí giao hàng mặc định</CardTitle>
+          <CardTitle className="flex items-center gap-2">
+            <Icon name="local_shipping" size={18} className="text-primary" />
+            Đối tác giao hàng ({partners.length})
+          </CardTitle>
         </CardHeader>
         <CardContent>
-          <div className="max-w-sm space-y-2">
-            <label className="text-sm font-medium">Phí mặc định (VND)</label>
-            <Input
-              value={defaultFee}
-              onChange={(e) => setDefaultFee(e.target.value)}
-            />
-          </div>
-        </CardContent>
-      </Card>
-
-      <Card>
-        <CardHeader>
-          <CardTitle>Khu vực giao hàng</CardTitle>
-        </CardHeader>
-        <CardContent>
-          <Table>
-            <TableHeader>
-              <TableRow>
-                <TableHead>Khu vực</TableHead>
-                <TableHead>Khoảng cách</TableHead>
-                <TableHead className="text-right">Phí (VND)</TableHead>
-              </TableRow>
-            </TableHeader>
-            <TableBody>
-              {deliveryZones.map((zone) => (
-                <TableRow key={zone.id}>
-                  <TableCell className="font-medium">{zone.name}</TableCell>
-                  <TableCell>{zone.distance}</TableCell>
-                  <TableCell className="text-right">{zone.fee}</TableCell>
-                </TableRow>
-              ))}
-            </TableBody>
-          </Table>
-        </CardContent>
-      </Card>
-
-      <Card>
-        <CardHeader>
-          <CardTitle>Đối tác giao hàng</CardTitle>
-        </CardHeader>
-        <CardContent>
-          <div className="space-y-3">
-            {partners.map((partner) => (
-              <div
-                key={partner.id}
-                className="flex items-center justify-between rounded-lg border p-3"
+          {loading ? (
+            <div className="flex items-center justify-center py-6 text-muted-foreground text-sm">
+              <Icon
+                name="progress_activity"
+                size={16}
+                className="animate-spin mr-2"
+              />
+              Đang tải...
+            </div>
+          ) : partners.length === 0 ? (
+            <div className="text-center py-6 text-sm text-muted-foreground">
+              <Icon
+                name="local_shipping"
+                size={32}
+                className="mx-auto mb-2 opacity-30"
+              />
+              <p>Chưa có đối tác giao hàng nào.</p>
+              <Link
+                href="/don-hang/doi-tac-giao-hang"
+                className="inline-flex items-center mt-4 px-3 py-1.5 text-xs font-medium border border-border rounded-md hover:bg-muted transition-colors"
               >
-                <div className="flex items-center gap-3">
-                  <div className="h-10 w-10 rounded-lg bg-muted flex items-center justify-center text-xs font-bold">
-                    {partner.logo}
+                Thêm đối tác đầu tiên
+              </Link>
+            </div>
+          ) : (
+            <div className="space-y-2">
+              {partners.map((p) => (
+                <div
+                  key={p.id}
+                  className="flex items-center justify-between rounded-lg border p-3"
+                >
+                  <div className="flex items-center gap-3">
+                    <span className="inline-flex size-9 items-center justify-center rounded-lg bg-primary-fixed text-primary text-xs font-bold">
+                      {p.name?.slice(0, 3).toUpperCase() || "DV"}
+                    </span>
+                    <div>
+                      <div className="text-sm font-medium">{p.name}</div>
+                      {p.phone && (
+                        <div className="text-xs text-muted-foreground">{p.phone}</div>
+                      )}
+                    </div>
                   </div>
-                  <span className="text-sm font-medium">{partner.name}</span>
+                  <Badge
+                    variant="outline"
+                    className={
+                      p.status === "active"
+                        ? "bg-status-success/10 text-status-success border-status-success/25"
+                        : "bg-muted text-muted-foreground"
+                    }
+                  >
+                    {p.statusName || (p.status === "active" ? "Đang dùng" : "Tạm ngưng")}
+                  </Badge>
                 </div>
-                {partner.status === "connected" ? (
-                  <Badge variant="default">Đã kết nối</Badge>
-                ) : (
-                  <Button variant="outline" size="sm">
-                    Kết nối
-                  </Button>
-                )}
-              </div>
-            ))}
-          </div>
+              ))}
+            </div>
+          )}
         </CardContent>
       </Card>
 
-      <Separator />
-
-      <div className="flex justify-end">
-        <Button>
-          <Icon name="save" size={16} className="mr-1.5" />
-          Lưu thay đổi
-        </Button>
-      </div>
+      <Card>
+        <CardHeader>
+          <CardTitle className="flex items-center gap-2">
+            <Icon name="map" size={18} className="text-status-warning" />
+            Phí giao hàng theo khu vực
+          </CardTitle>
+        </CardHeader>
+        <CardContent>
+          <div className="flex items-start gap-3 p-3 rounded-md bg-status-warning/5 border border-status-warning/20">
+            <Icon
+              name="info"
+              size={16}
+              className="text-status-warning mt-0.5 shrink-0"
+            />
+            <div className="text-xs">
+              <p className="font-medium text-foreground">Đang phát triển</p>
+              <p className="text-muted-foreground mt-1">
+                Tính năng cấu hình phí giao theo khu vực (nội thành / ngoại
+                thành / liên tỉnh) đang được phát triển. Hiện phí giao được
+                nhập thủ công khi tạo vận đơn ở /don-hang/van-don.
+              </p>
+            </div>
+          </div>
+        </CardContent>
+      </Card>
     </div>
   );
 }

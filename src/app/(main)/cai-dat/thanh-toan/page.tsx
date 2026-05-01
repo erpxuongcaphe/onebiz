@@ -1,225 +1,135 @@
 "use client";
 
-import { useState } from "react";
+/**
+ * Cài đặt thanh toán — Settings overview.
+ *
+ * Sprint CD-1: trước đây toàn page MOCK — bankAccounts hardcoded
+ * (Vietcombank/Techcombank/MB Bank số TK giả của "NGUYEN VAN A"),
+ * `enabledMethods` chỉ local state không persist DB, button "Lưu" vô
+ * tác dụng. CEO đăng nhập thấy 3 tài khoản ngân hàng tưởng đã setup
+ * → in QR sai → khách chuyển khoản nhầm.
+ *
+ * Fix tạm: page này giờ chỉ là **overview** trỏ về 2 nguồn config thật:
+ *   - Tài khoản ngân hàng → /he-thong/thiet-lap (tenant business info,
+ *     section "Tài khoản ngân hàng")
+ *   - Phương thức thanh toán → đã hardcoded ở schema cash_transactions
+ *     check constraint (cash/transfer/card/ewallet sau migration 00046).
+ *     Toggle UI là feature defer (chưa có DB column).
+ */
+
+import Link from "next/link";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
-import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
-import {
-  Table,
-  TableBody,
-  TableCell,
-  TableHead,
-  TableHeader,
-  TableRow,
-} from "@/components/ui/table";
-import { Separator } from "@/components/ui/separator";
-import { cn } from "@/lib/utils";
 import { Icon } from "@/components/ui/icon";
 
-function Toggle({
-  checked,
-  onCheckedChange,
-  label,
-  disabled,
-}: {
-  checked: boolean;
-  onCheckedChange: (val: boolean) => void;
-  label: string;
-  disabled?: boolean;
-}) {
-  return (
-    <button
-      type="button"
-      role="switch"
-      aria-checked={checked}
-      disabled={disabled}
-      onClick={() => onCheckedChange(!checked)}
-      className={cn(
-        "relative inline-flex h-5 w-9 shrink-0 cursor-pointer rounded-full border-2 border-transparent transition-colors",
-        checked ? "bg-primary" : "bg-muted",
-        disabled && "opacity-50 cursor-not-allowed"
-      )}
-    >
-      <span
-        className={cn(
-          "pointer-events-none inline-block h-4 w-4 rounded-full bg-white shadow-sm transition-transform",
-          checked ? "translate-x-4" : "translate-x-0"
-        )}
-      />
-    </button>
-  );
-}
-
-const paymentMethods = [
-  { id: "cash", name: "Tiền mặt", icon: "VND", alwaysOn: true },
-  { id: "transfer", name: "Chuyển khoản", icon: "CK", alwaysOn: false },
-  { id: "card", name: "Thẻ tín dụng/ghi nợ", icon: "CARD", alwaysOn: false },
-  { id: "momo", name: "Ví MoMo", icon: "MoMo", alwaysOn: false },
-  { id: "zalopay", name: "Ví ZaloPay", icon: "Zalo", alwaysOn: false },
-  { id: "vnpay", name: "VNPay", icon: "VNP", alwaysOn: false },
-];
-
-const bankAccounts = [
-  {
-    id: 1,
-    bank: "Vietcombank",
-    accountNumber: "1234567890",
-    accountName: "NGUYEN VAN A",
-    branch: "Chi nhánh HCM",
-  },
-  {
-    id: 2,
-    bank: "Techcombank",
-    accountNumber: "9876543210",
-    accountName: "NGUYEN VAN A",
-    branch: "Chi nhánh Hà Nội",
-  },
-  {
-    id: 3,
-    bank: "MB Bank",
-    accountNumber: "5678901234",
-    accountName: "NGUYEN VAN A",
-    branch: "Chi nhánh Đà Nẵng",
-  },
-];
-
 export default function PaymentSettingsPage() {
-  const [enabledMethods, setEnabledMethods] = useState<Record<string, boolean>>(
-    {
-      cash: true,
-      transfer: true,
-      card: true,
-      momo: false,
-      zalopay: false,
-      vnpay: true,
-    }
-  );
-
-  const [showQr, setShowQr] = useState(true);
-
-  const toggleMethod = (id: string) => {
-    setEnabledMethods((prev) => ({ ...prev, [id]: !prev[id] }));
-  };
-
   return (
     <div className="space-y-6">
       <div>
         <h1 className="text-2xl font-bold">Cài đặt thanh toán</h1>
         <p className="text-muted-foreground text-sm mt-1">
-          Quản lý phương thức thanh toán và tài khoản ngân hàng
+          Phương thức thanh toán và tài khoản ngân hàng
         </p>
       </div>
 
+      {/* Bank account → tenant business info */}
       <Card>
         <CardHeader>
-          <CardTitle>Phương thức thanh toán</CardTitle>
+          <CardTitle className="flex items-center gap-2">
+            <Icon name="account_balance" size={18} className="text-status-success" />
+            Tài khoản ngân hàng
+          </CardTitle>
+        </CardHeader>
+        <CardContent className="space-y-3">
+          <p className="text-sm text-muted-foreground">
+            Tài khoản ngân hàng dùng để in QR + thông tin chuyển khoản trên
+            hóa đơn được cấu hình tại trang Thiết lập chung — section "Tài
+            khoản ngân hàng".
+          </p>
+          <Link
+            href="/he-thong/thiet-lap"
+            className="inline-flex items-center gap-1.5 rounded-md bg-primary px-3 py-2 text-sm font-medium text-primary-foreground hover:bg-primary/90 transition-colors"
+          >
+            <Icon name="settings" size={16} />
+            Mở Thiết lập chung
+          </Link>
+        </CardContent>
+      </Card>
+
+      {/* Payment methods — hiển thị các phương thức được hệ thống hỗ trợ */}
+      <Card>
+        <CardHeader>
+          <CardTitle className="flex items-center gap-2">
+            <Icon name="payments" size={18} className="text-primary" />
+            Phương thức thanh toán hỗ trợ
+          </CardTitle>
         </CardHeader>
         <CardContent>
-          <div className="space-y-3">
-            {paymentMethods.map((method) => (
+          <div className="grid gap-3 sm:grid-cols-2">
+            {[
+              { code: "cash", label: "Tiền mặt", icon: "payments", enabled: true },
+              { code: "transfer", label: "Chuyển khoản", icon: "account_balance", enabled: true },
+              { code: "card", label: "Thẻ tín dụng/ghi nợ", icon: "credit_card", enabled: true },
+              { code: "ewallet", label: "Ví điện tử (Momo/Zalo/VNPay)", icon: "account_balance_wallet", enabled: true },
+            ].map((m) => (
               <div
-                key={method.id}
-                className="flex items-center justify-between rounded-lg border p-3"
+                key={m.code}
+                className="flex items-center gap-3 p-3 rounded-lg border bg-surface-container-lowest"
               >
-                <div className="flex items-center gap-3">
-                  <div className="h-10 w-10 rounded-lg bg-muted flex items-center justify-center text-xs font-bold">
-                    {method.icon}
-                  </div>
-                  <div>
-                    <span className="text-sm font-medium">{method.name}</span>
-                    {method.alwaysOn && (
-                      <p className="text-xs text-muted-foreground">
-                        Luôn bật
-                      </p>
-                    )}
-                  </div>
+                <span className="inline-flex size-9 items-center justify-center rounded-lg bg-primary-fixed text-primary">
+                  <Icon name={m.icon} size={16} />
+                </span>
+                <div className="flex-1 min-w-0">
+                  <div className="text-sm font-medium">{m.label}</div>
+                  <div className="text-xs text-muted-foreground font-mono">{m.code}</div>
                 </div>
-                <Toggle
-                  checked={enabledMethods[method.id] ?? false}
-                  onCheckedChange={() => toggleMethod(method.id)}
-                  label={method.name}
-                  disabled={method.alwaysOn}
-                />
+                <Badge
+                  variant="outline"
+                  className="bg-status-success/10 text-status-success border-status-success/25 text-xs"
+                >
+                  Đã bật
+                </Badge>
               </div>
             ))}
           </div>
+          <p className="text-xs text-muted-foreground mt-4">
+            Tất cả phương thức trên đều được POS Retail / FnB hỗ trợ ngay.
+            Tích hợp cổng thanh toán thật (VNPay/Momo) đang phát triển — xem
+            tại{" "}
+            <Link href="/cai-dat/ket-noi" className="text-primary hover:underline">
+              Tích hợp
+            </Link>
+            .
+          </p>
         </CardContent>
       </Card>
 
+      {/* QR settings */}
       <Card>
         <CardHeader>
-          <CardTitle>Tài khoản ngân hàng</CardTitle>
+          <CardTitle className="flex items-center gap-2">
+            <Icon name="qr_code" size={18} className="text-status-warning" />
+            Mã QR thanh toán
+          </CardTitle>
         </CardHeader>
         <CardContent>
-          <div className="rounded-lg border overflow-hidden">
-            <Table>
-              <TableHeader>
-                <TableRow>
-                  <TableHead>Tên ngân hàng</TableHead>
-                  <TableHead>Số TK</TableHead>
-                  <TableHead className="hidden sm:table-cell">
-                    Chủ TK
-                  </TableHead>
-                  <TableHead className="hidden md:table-cell">
-                    Chi nhánh
-                  </TableHead>
-                </TableRow>
-              </TableHeader>
-              <TableBody>
-                {bankAccounts.map((acc) => (
-                  <TableRow key={acc.id}>
-                    <TableCell className="font-medium">{acc.bank}</TableCell>
-                    <TableCell className="font-mono text-sm">
-                      {acc.accountNumber}
-                    </TableCell>
-                    <TableCell className="hidden sm:table-cell">
-                      {acc.accountName}
-                    </TableCell>
-                    <TableCell className="hidden md:table-cell">
-                      {acc.branch}
-                    </TableCell>
-                  </TableRow>
-                ))}
-              </TableBody>
-            </Table>
-          </div>
-        </CardContent>
-      </Card>
-
-      <Card>
-        <CardHeader>
-          <CardTitle>Cài đặt QR</CardTitle>
-        </CardHeader>
-        <CardContent>
-          <div className="flex items-center justify-between">
-            <div className="flex items-center gap-3">
-              <div className="h-10 w-10 rounded-lg bg-muted flex items-center justify-center">
-                <Icon name="qr_code" className="text-muted-foreground" />
-              </div>
-              <div>
-                <div className="text-sm font-medium">Hiển thị mã QR</div>
-                <div className="text-xs text-muted-foreground">
-                  Hiển thị mã QR thanh toán trên hóa đơn
-                </div>
-              </div>
-            </div>
-            <Toggle
-              checked={showQr}
-              onCheckedChange={setShowQr}
-              label="QR"
+          <div className="flex items-start gap-3 p-3 rounded-md bg-status-warning/5 border border-status-warning/20">
+            <Icon
+              name="info"
+              size={16}
+              className="text-status-warning mt-0.5 shrink-0"
             />
+            <div className="text-xs">
+              <p className="font-medium text-foreground">Đang phát triển</p>
+              <p className="text-muted-foreground mt-1">
+                Tính năng tự động tạo QR VietQR/Vietinpay từ thông tin tài
+                khoản ngân hàng đang được phát triển. Hiện CEO có thể đính
+                kèm QR static qua Logo URL ở Thiết lập chung.
+              </p>
+            </div>
           </div>
         </CardContent>
       </Card>
-
-      <Separator />
-
-      <div className="flex justify-end">
-        <Button>
-          <Icon name="save" size={16} className="mr-1.5" />
-          Lưu thay đổi
-        </Button>
-      </div>
     </div>
   );
 }

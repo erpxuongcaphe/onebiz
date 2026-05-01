@@ -1,138 +1,169 @@
 "use client";
 
-import { useState } from "react";
+/**
+ * Quản lý bảng giá — Settings overview.
+ *
+ * Sprint CD-1 fix: trước đây toàn bộ là MOCK (`mockPriceBooks` 3 dòng
+ * hardcoded "Giá bán lẻ/sỉ/đại lý" với productCount: 156 bịa, button
+ * "Lưu cài đặt" không gọi gì). CEO mở thấy 3 bảng giá ảo → tin có rồi
+ * → thực tế DB có thể trống hoàn toàn.
+ *
+ * Fix: load `getPriceTiers()` thật từ DB. CRUD đầy đủ ở
+ * `/hang-hoa/thiet-lap-gia` — page này chỉ là overview + entry point.
+ *
+ * Quy tắc áp dụng (priceRule): hiện engine `pricing.ts` chọn tier theo
+ * thứ tự: customer.priceTierId → branch.priceTierId → niêm yết. Đây là
+ * hard-coded behavior, không phải tenant config — bỏ section radio
+ * (trước đây local state vô nghĩa).
+ */
+
+import { useEffect, useState } from "react";
+import Link from "next/link";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
-import { Button } from "@/components/ui/button";
-import { Separator } from "@/components/ui/separator";
 import { cn } from "@/lib/utils";
 import { Icon } from "@/components/ui/icon";
+import { getPriceTiers } from "@/lib/services";
+import type { PriceTier } from "@/lib/types";
 
-interface PriceBook {
-  id: string;
-  name: string;
-  isDefault: boolean;
-  productCount: number;
-  status: "active" | "paused";
-}
-
-const mockPriceBooks: PriceBook[] = [
-  {
-    id: "1",
-    name: "Giá bán lẻ",
-    isDefault: true,
-    productCount: 156,
-    status: "active",
-  },
-  {
-    id: "2",
-    name: "Giá sỉ",
-    isDefault: false,
-    productCount: 89,
-    status: "active",
-  },
-  {
-    id: "3",
-    name: "Giá đại lý",
-    isDefault: false,
-    productCount: 45,
-    status: "paused",
-  },
-];
+const SCOPE_LABELS: Record<string, string> = {
+  retail: "POS Retail",
+  fnb: "POS FnB",
+  both: "Cả 2 kênh",
+};
 
 export default function PriceBookSettingsPage() {
-  const [priceRule, setPriceRule] = useState<
-    "customer" | "branch" | "lowest"
-  >("customer");
+  const [tiers, setTiers] = useState<PriceTier[]>([]);
+  const [loading, setLoading] = useState(true);
 
-  const rules = [
-    {
-      value: "customer" as const,
-      label: "Ưu tiên bảng giá khách hàng",
-      description:
-        "Áp dụng bảng giá được gán cho nhóm khách hàng trước tiên",
-    },
-    {
-      value: "branch" as const,
-      label: "Ưu tiên bảng giá chi nhánh",
-      description:
-        "Áp dụng bảng giá được gán cho chi nhánh bán hàng trước tiên",
-    },
-    {
-      value: "lowest" as const,
-      label: "Áp dụng giá thấp nhất",
-      description:
-        "Tự động chọn mức giá thấp nhất giữa các bảng giá áp dụng",
-    },
-  ];
+  useEffect(() => {
+    let cancelled = false;
+    getPriceTiers({})
+      .then((list) => {
+        if (!cancelled) setTiers(list);
+      })
+      .catch(() => {
+        if (!cancelled) setTiers([]);
+      })
+      .finally(() => {
+        if (!cancelled) setLoading(false);
+      });
+    return () => {
+      cancelled = true;
+    };
+  }, []);
 
   return (
     <div className="space-y-6">
-      <div>
-        <h1 className="text-2xl font-bold">Quản lý bảng giá</h1>
-        <p className="text-muted-foreground text-sm mt-1">
-          Tạo bảng giá riêng cho từng nhóm khách hàng hoặc chi nhánh
-        </p>
+      <div className="flex items-start justify-between gap-4">
+        <div>
+          <h1 className="text-2xl font-bold">Quản lý bảng giá</h1>
+          <p className="text-muted-foreground text-sm mt-1">
+            Tổng quan các bảng giá B2B đang áp dụng. Tạo / sửa chi tiết bảng
+            giá tại{" "}
+            <Link
+              href="/hang-hoa/thiet-lap-gia"
+              className="text-primary font-medium hover:underline"
+            >
+              Hàng hóa → Thiết lập giá
+            </Link>
+            .
+          </p>
+        </div>
+        <Link
+          href="/hang-hoa/thiet-lap-gia"
+          className="inline-flex items-center gap-1.5 rounded-md bg-primary px-3 py-2 text-sm font-medium text-primary-foreground hover:bg-primary/90 transition-colors"
+        >
+          <Icon name="add" size={16} />
+          Thêm bảng giá
+        </Link>
       </div>
 
       <Card>
         <CardHeader>
-          <CardTitle>Bảng giá hiện có</CardTitle>
+          <CardTitle>Bảng giá hiện có ({tiers.length})</CardTitle>
         </CardHeader>
         <CardContent>
-          <div className="space-y-4">
-            {mockPriceBooks.map((book) => (
-              <div
-                key={book.id}
-                className="flex items-center justify-between rounded-lg border p-4"
+          {loading ? (
+            <div className="flex items-center justify-center py-8 text-muted-foreground text-sm">
+              <Icon
+                name="progress_activity"
+                size={16}
+                className="animate-spin mr-2"
+              />
+              Đang tải bảng giá...
+            </div>
+          ) : tiers.length === 0 ? (
+            <div className="text-center py-8 text-sm text-muted-foreground">
+              <Icon
+                name="price_change"
+                size={32}
+                className="mx-auto mb-2 opacity-30"
+              />
+              <p>Chưa có bảng giá nào.</p>
+              <p className="text-xs mt-1">
+                Mọi sản phẩm đang dùng giá niêm yết. Tạo bảng giá để áp dụng
+                ưu đãi B2B cho khách sỉ / đại lý.
+              </p>
+              <Link
+                href="/hang-hoa/thiet-lap-gia"
+                className="inline-flex items-center mt-4 px-3 py-1.5 text-xs font-medium border border-border rounded-md hover:bg-muted transition-colors"
               >
-                <div className="space-y-1.5">
-                  <div className="flex items-center gap-2">
-                    <span className="text-sm font-semibold">{book.name}</span>
-                    {book.isDefault && (
-                      <Badge
-                        variant="default"
-                        className="bg-primary-fixed text-primary hover:bg-primary-fixed text-xs"
-                      >
-                        Mặc định
-                      </Badge>
-                    )}
-                    <Badge
-                      variant={
-                        book.status === "active" ? "default" : "secondary"
-                      }
-                      className={cn(
-                        "text-xs",
-                        book.status === "active"
-                          ? "bg-status-success/10 text-status-success hover:bg-status-success/10"
-                          : "bg-muted text-muted-foreground hover:bg-muted"
+                Tạo bảng giá đầu tiên
+              </Link>
+            </div>
+          ) : (
+            <div className="space-y-3">
+              {tiers.map((tier) => (
+                <div
+                  key={tier.id}
+                  className="flex items-center justify-between rounded-lg border p-4"
+                >
+                  <div className="space-y-1.5">
+                    <div className="flex items-center gap-2 flex-wrap">
+                      <span className="text-sm font-semibold">{tier.name}</span>
+                      {tier.code && (
+                        <span className="text-xs font-mono text-muted-foreground">
+                          ({tier.code})
+                        </span>
                       )}
-                    >
-                      {book.status === "active" ? "Đang áp dụng" : "Tạm ngưng"}
-                    </Badge>
+                      <Badge
+                        variant="outline"
+                        className={cn(
+                          "text-xs",
+                          tier.isActive
+                            ? "bg-status-success/10 text-status-success border-status-success/25"
+                            : "bg-muted text-muted-foreground",
+                        )}
+                      >
+                        {tier.isActive ? "Đang áp dụng" : "Tạm ngưng"}
+                      </Badge>
+                      {tier.scope && (
+                        <Badge
+                          variant="outline"
+                          className="text-xs bg-primary-fixed text-primary border-primary/25"
+                        >
+                          {SCOPE_LABELS[tier.scope] ?? tier.scope}
+                        </Badge>
+                      )}
+                    </div>
+                    {tier.description && (
+                      <div className="text-xs text-muted-foreground">
+                        {tier.description}
+                      </div>
+                    )}
                   </div>
-                  <div className="text-xs text-muted-foreground">
-                    {book.productCount} sản phẩm
-                  </div>
-                </div>
-                <div className="flex items-center gap-2">
-                  <Button variant="outline" size="sm">
-                    <Icon name="edit" size={14} className="mr-1" />
+                  <Link
+                    href={`/hang-hoa/thiet-lap-gia?tier=${tier.id}`}
+                    className="inline-flex items-center gap-1 px-3 py-1.5 text-xs font-medium border border-border rounded-md hover:bg-muted transition-colors"
+                  >
+                    <Icon name="edit" size={14} />
                     Chỉnh sửa
-                  </Button>
-                  <Button variant="ghost" size="sm">
-                    <Icon name="visibility" size={14} className="mr-1" />
-                    Xem giá
-                  </Button>
+                  </Link>
                 </div>
-              </div>
-            ))}
-
-            <Button variant="outline" className="w-full">
-              <Icon name="add" size={16} className="mr-1.5" />
-              Thêm bảng giá
-            </Button>
-          </div>
+              ))}
+            </div>
+          )}
         </CardContent>
       </Card>
 
@@ -141,45 +172,53 @@ export default function PriceBookSettingsPage() {
           <CardTitle>Quy tắc áp dụng</CardTitle>
         </CardHeader>
         <CardContent>
-          <div className="space-y-3">
-            {rules.map((rule) => (
-              <label
-                key={rule.value}
-                className={cn(
-                  "flex items-start gap-3 rounded-lg border p-4 cursor-pointer transition-colors",
-                  priceRule === rule.value
-                    ? "border-primary bg-primary/5"
-                    : "hover:bg-muted/50"
-                )}
-              >
-                <input
-                  type="radio"
-                  name="priceRule"
-                  value={rule.value}
-                  checked={priceRule === rule.value}
-                  onChange={() => setPriceRule(rule.value)}
-                  className="mt-0.5 h-4 w-4 accent-primary"
-                />
-                <div className="space-y-0.5">
-                  <div className="text-sm font-medium">{rule.label}</div>
-                  <div className="text-xs text-muted-foreground">
-                    {rule.description}
-                  </div>
-                </div>
-              </label>
-            ))}
+          <div className="space-y-3 text-sm">
+            <div className="flex items-start gap-2">
+              <span className="inline-flex size-6 items-center justify-center rounded-full bg-primary-fixed text-primary text-xs font-bold shrink-0 mt-0.5">
+                1
+              </span>
+              <div>
+                <p className="font-medium">Bảng giá riêng của khách hàng</p>
+                <p className="text-xs text-muted-foreground">
+                  Mỗi khách hàng có thể được gắn bảng giá B2B mặc định khi tạo.
+                  POS sẽ ưu tiên bảng giá này cho khách đó.
+                </p>
+              </div>
+            </div>
+            <div className="flex items-start gap-2">
+              <span className="inline-flex size-6 items-center justify-center rounded-full bg-primary-fixed text-primary text-xs font-bold shrink-0 mt-0.5">
+                2
+              </span>
+              <div>
+                <p className="font-medium">Bảng giá mặc định của chi nhánh</p>
+                <p className="text-xs text-muted-foreground">
+                  Nếu khách không có bảng giá riêng, hệ thống dùng bảng giá đã
+                  gán cho chi nhánh hiện tại (cấu hình ở{" "}
+                  <Link
+                    href="/cai-dat/chi-nhanh"
+                    className="text-primary hover:underline"
+                  >
+                    Chi nhánh
+                  </Link>
+                  ).
+                </p>
+              </div>
+            </div>
+            <div className="flex items-start gap-2">
+              <span className="inline-flex size-6 items-center justify-center rounded-full bg-primary-fixed text-primary text-xs font-bold shrink-0 mt-0.5">
+                3
+              </span>
+              <div>
+                <p className="font-medium">Giá niêm yết</p>
+                <p className="text-xs text-muted-foreground">
+                  Sản phẩm không có trong bảng giá nào → tự động dùng giá niêm
+                  yết (cột Giá bán ở Hàng hóa).
+                </p>
+              </div>
+            </div>
           </div>
         </CardContent>
       </Card>
-
-      <Separator />
-
-      <div className="flex justify-end">
-        <Button>
-          <Icon name="save" size={16} className="mr-1.5" />
-          Lưu cài đặt
-        </Button>
-      </div>
     </div>
   );
 }
