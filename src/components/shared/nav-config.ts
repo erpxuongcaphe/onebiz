@@ -149,58 +149,43 @@ export interface SidebarGroup {
 }
 
 export const sidebarNavGroups: SidebarGroup[] = [
-  // 1. Tổng quan AI
+  // ============================================================
+  // 1. TỔNG QUAN — Dashboard + Phân tích + Cảnh báo
+  // ============================================================
+  // Owner cà phê chain mở app buổi sáng → cần biết NGAY: doanh số,
+  // cảnh báo (tồn thấp / nợ quá hạn / lô hết hạn). Đặt đầu tiên.
   {
-    label: "Tổng quan AI",
-    icon: "auto_awesome",
+    label: "Tổng quan",
+    icon: "dashboard",
     items: [
-      { label: "Trang chủ AI", href: "/", icon: "home" },
-      // /ai/phan-tich + /ai/import chưa có page (404 trên production →
-      // RSC failed to load → trigger error boundary). Mark comingSoon
-      // để render disabled item, không navigate.
-      {
-        label: "Phân tích kinh doanh",
-        href: "/ai/phan-tich",
-        icon: "bar_chart",
-        disabled: true,
-        comingSoon: true,
-      },
-      {
-        label: "Import dữ liệu",
-        href: "/ai/import",
-        icon: "upload",
-        disabled: true,
-        comingSoon: true,
-      },
-      { label: "AI Agents", href: "/ai-agents", icon: "smart_toy", badge: "New" },
-      { label: "KPI Breakdown", href: "/ai-agents/kpi", icon: "trending_up" },
-      { label: "Task hàng ngày", href: "/ai-agents/tasks", icon: "checklist" },
-      {
-        label: "Trò chuyện AI",
-        href: "/ai/chat",
-        icon: "chat",
-        disabled: true,
-        comingSoon: true,
-      },
+      { label: "Trang chủ", href: "/", icon: "home" },
+      { label: "Phân tích", href: "/phan-tich", icon: "insights" },
+      { label: "Cảnh báo", href: "/phan-tich/canh-bao", icon: "warning" },
+      { label: "Báo cáo tài chính", href: "/phan-tich/bao-cao-tai-chinh", icon: "summarize" },
     ],
   },
 
-  // 2. Bán hàng — REV 2: bỏ POS lẻ, focus B2B + Online
+  // ============================================================
+  // 2. BÁN HÀNG — POS + sales documents
+  // ============================================================
   {
     label: "Bán hàng",
     icon: "shopping_cart",
     items: [
-      { label: "POS", href: "/pos", icon: "point_of_sale", mode: "pos", permission: "pos_retail.checkout" },
+      { label: "POS Bán lẻ", href: "/pos", icon: "point_of_sale", mode: "pos", permission: "pos_retail.checkout" },
       { label: "POS F&B", href: "/pos/fnb", icon: "coffee", mode: "pos", permission: "pos_fnb.send_kitchen" },
       { label: "Màn hình bếp (KDS)", href: "/pos/fnb/kds", icon: "restaurant", mode: "pos", permission: "pos_fnb.view_orders" },
       { label: "Bán online", href: "/ban-online", icon: "public" },
       { label: "Đơn đặt hàng", href: "/don-hang/dat-hang", icon: "description" },
       { label: "Hóa đơn", href: "/don-hang/hoa-don", icon: "receipt_long" },
       { label: "Trả hàng", href: "/don-hang/tra-hang", icon: "undo" },
+      { label: "Vận đơn", href: "/don-hang/van-don", icon: "local_shipping" },
     ],
   },
 
-  // 3. Hàng hóa
+  // ============================================================
+  // 3. HÀNG HÓA — products + warehouse + production
+  // ============================================================
   {
     label: "Hàng hóa",
     icon: "inventory_2",
@@ -222,9 +207,11 @@ export const sidebarNavGroups: SidebarGroup[] = [
           { label: "Tồn kho", href: "/hang-hoa/ton-kho", icon: "warehouse" },
           { label: "Lịch sử kho", href: "/hang-hoa/lich-su-kho", icon: "history" },
           { label: "Kiểm kho", href: "/hang-hoa/kiem-kho", icon: "fact_check" },
+          { label: "Chuyển kho", href: "/hang-hoa/chuyen-kho", icon: "swap_horiz" },
           { label: "Hạn sử dụng (HSD)", href: "/hang-hoa/hsd", icon: "event_note" },
-          { label: "Xuất hủy", href: "/hang-hoa/xuat-huy", icon: "delete" },
           { label: "Xuất dùng nội bộ", href: "/hang-hoa/xuat-dung-noi-bo", icon: "inventory" },
+          { label: "Xuất hủy", href: "/hang-hoa/xuat-huy", icon: "delete" },
+          { label: "Bán nội bộ", href: "/hang-hoa/ban-noi-bo", icon: "store" },
         ],
       },
       {
@@ -237,22 +224,6 @@ export const sidebarNavGroups: SidebarGroup[] = [
           { label: "Lô sản xuất", href: "/hang-hoa/lo-san-xuat", icon: "inventory_2" },
         ],
       },
-    ],
-  },
-
-  // 4. Giao dịch
-  {
-    label: "Giao dịch",
-    icon: "swap_horiz",
-    subGroups: [
-      {
-        label: "Nội bộ",
-        icon: "swap_horiz",
-        items: [
-          { label: "Bán nội bộ", href: "/hang-hoa/ban-noi-bo", icon: "swap_horiz" },
-          { label: "Chuyển kho", href: "/hang-hoa/chuyen-kho", icon: "local_shipping" },
-        ],
-      },
       {
         label: "Mua hàng",
         icon: "add_box",
@@ -260,39 +231,69 @@ export const sidebarNavGroups: SidebarGroup[] = [
           { label: "Đặt hàng nhập", href: "/hang-hoa/dat-hang-nhap", icon: "description" },
           { label: "Nhập hàng", href: "/hang-hoa/nhap-hang", icon: "add_box" },
           { label: "Trả hàng nhập", href: "/hang-hoa/tra-hang-nhap", icon: "undo" },
-        ],
-      },
-      {
-        label: "Vận chuyển",
-        icon: "local_shipping",
-        items: [
-          { label: "Vận đơn", href: "/don-hang/van-don", icon: "local_shipping" },
-        ],
-      },
-      {
-        label: "Tài chính",
-        icon: "payments",
-        items: [
-          { label: "Sổ quỹ", href: "/so-quy", icon: "payments" },
-          { label: "Công nợ", href: "/tai-chinh/cong-no", icon: "credit_card" },
+          { label: "Hóa đơn đầu vào", href: "/hang-hoa/hoa-don-dau-vao", icon: "receipt" },
         ],
       },
     ],
   },
 
-  // 5. Đối tác
+  // ============================================================
+  // 4. TÀI CHÍNH — sổ quỹ + công nợ (TÁCH KHỎI "Giao dịch")
+  // ============================================================
+  {
+    label: "Tài chính",
+    icon: "payments",
+    items: [
+      { label: "Sổ quỹ", href: "/so-quy", icon: "payments" },
+      { label: "Công nợ", href: "/tai-chinh/cong-no", icon: "credit_card" },
+    ],
+  },
+
+  // ============================================================
+  // 5. ĐỐI TÁC — KH + NCC + giao hàng
+  // ============================================================
   {
     label: "Đối tác",
     icon: "group",
-    items: [
-      { label: "Khách hàng", href: "/khach-hang", icon: "group" },
-      { label: "Nhóm khách hàng", href: "/khach-hang/nhom", icon: "sell" },
-      { label: "Nhà cung cấp", href: "/doi-tac/ncc", icon: "apartment" },
-      { label: "Đối tác giao hàng", href: "/doi-tac/giao-hang", icon: "local_shipping" },
+    subGroups: [
+      {
+        label: "Khách hàng",
+        icon: "person",
+        items: [
+          { label: "Danh sách KH", href: "/khach-hang", icon: "group" },
+          { label: "Nhóm khách hàng", href: "/khach-hang/nhom", icon: "groups" },
+        ],
+      },
+      {
+        label: "Nhà cung cấp",
+        icon: "apartment",
+        items: [
+          { label: "Danh sách NCC", href: "/doi-tac/ncc", icon: "apartment" },
+          { label: "Đối tác giao hàng", href: "/doi-tac/giao-hang", icon: "local_shipping" },
+        ],
+      },
     ],
   },
 
-  // 6. Hệ thống — pinned bottom
+  // ============================================================
+  // 6. AI & TỰ ĐỘNG HÓA — gọn lại, bỏ comingSoon clutter
+  // ============================================================
+  {
+    label: "AI & Tự động",
+    icon: "auto_awesome",
+    items: [
+      { label: "AI Agents", href: "/ai-agents", icon: "smart_toy", badge: "New" },
+      { label: "KPI Breakdown", href: "/ai-agents/kpi", icon: "trending_up" },
+      { label: "Task hàng ngày", href: "/ai-agents/tasks", icon: "checklist" },
+      // Các route AI chưa có page (/ai/phan-tich, /ai/import, /ai/chat) →
+      // mark comingSoon nhưng KHÔNG render trong sidebar nữa để giảm
+      // clutter. Khi page sẵn sàng thì uncomment.
+    ],
+  },
+
+  // ============================================================
+  // 7. HỆ THỐNG — pinned bottom
+  // ============================================================
   {
     label: "Hệ thống",
     icon: "settings",
