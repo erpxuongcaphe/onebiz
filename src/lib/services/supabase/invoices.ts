@@ -4,6 +4,7 @@
 
 import type { Invoice, QueryParams, QueryResult } from "@/lib/types";
 import { getClient, getPaginationRange, handleError, getCurrentTenantId } from "./base";
+import { recordAuditLog } from "./audit";
 
 export async function getInvoices(params: QueryParams): Promise<QueryResult<Invoice>> {
   const supabase = getClient();
@@ -29,10 +30,30 @@ export async function getInvoices(params: QueryParams): Promise<QueryResult<Invo
     );
   }
 
-  // Filter: status
+  // Filter: status (single value hoặc array)
   if (params.filters?.status && params.filters.status !== "all") {
-    // eslint-disable-next-line @typescript-eslint/no-explicit-any
-    query = query.eq("status", params.filters.status as any);
+    if (Array.isArray(params.filters.status)) {
+      // Multi-select từ CheckboxFilter — UI gửi processing/completed/cancelled.
+      // Map "processing" → DB statuses ['draft','confirmed'] để match.
+      const dbStatuses = (params.filters.status as string[]).flatMap((s) =>
+        s === "processing" ? ["draft", "confirmed"] : [s],
+      );
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      query = query.in("status", dbStatuses as any);
+    } else {
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      query = query.eq("status", params.filters.status as any);
+    }
+  }
+
+  // Filter: ngày tạo (from/to)
+  if (params.filters?.dateFrom) {
+    query = query.gte("created_at", params.filters.dateFrom as string);
+  }
+  if (params.filters?.dateTo) {
+    const end = new Date(params.filters.dateTo as string);
+    end.setDate(end.getDate() + 1);
+    query = query.lt("created_at", end.toISOString());
   }
 
   // Filter: branch
@@ -301,10 +322,10 @@ export async function cancelInvoice(id: string): Promise<void> {
   const supabase = getClient();
   const tenantId = await getCurrentTenantId();
 
-  // Check current status first
+  // Check current status first (snapshot toàn bộ field cần cho audit + reverse)
   const { data: existing, error: fetchErr } = await supabase
     .from("invoices")
-    .select("status")
+    .select("status, code, customer_id, customer_name, total, paid, debt")
     .eq("tenant_id", tenantId)
     .eq("id", id)
     .single();
@@ -319,6 +340,14 @@ export async function cancelInvoice(id: string): Promise<void> {
     );
   }
 
+  // Note: với "draft" → KHÔNG có stock/cash/debt change để rollback (chỉ là
+  // cart đã save). Với "confirmed" → cũng không qua flow stock/cash/debt
+  // vì pos-checkout tạo invoice ở status="completed" trực tiếp; "confirmed"
+  // là transient state rất hiếm gặp. Cancel hiện tại chỉ flip status —
+  // an toàn cho cả 2 case này. Atomic rollback sẽ làm khi cho phép cancel
+  // status="completed" (sprint riêng + RPC + reverse stock_movements +
+  // reverse cash_transactions + reverse customer.debt + reverse loyalty).
+
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
   const { error } = await supabase
     .from("invoices")
@@ -328,6 +357,14 @@ export async function cancelInvoice(id: string): Promise<void> {
     .eq("id", id);
 
   if (error) handleError(error, "cancelInvoice.update");
+
+  await recordAuditLog({
+    entityType: "invoice",
+    entityId: id,
+    action: "cancel",
+    oldData: existing as Record<string, unknown>,
+    newData: { status: "cancelled" },
+  });
 }
 
 /**
@@ -353,10 +390,10 @@ export async function updateInvoice(
   const supabase = getClient();
   const tenantId = await getCurrentTenantId();
 
-  // Check current status first
+  // Check current status first + snapshot full row for audit diff
   const { data: existing, error: fetchErr } = await supabase
     .from("invoices")
-    .select("status")
+    .select("status, customer_id, customer_name, discount_amount, payment_method, note")
     .eq("tenant_id", tenantId)
     .eq("id", id)
     .single();
@@ -389,6 +426,14 @@ export async function updateInvoice(
     .eq("id", id);
 
   if (error) handleError(error, "updateInvoice.update");
+
+  await recordAuditLog({
+    entityType: "invoice",
+    entityId: id,
+    action: "update",
+    oldData: existing as Record<string, unknown>,
+    newData: dbPatch,
+  });
 }
 
 /**

@@ -276,21 +276,58 @@ export default function HoaDonPage() {
 
   const statuses = getInvoiceStatuses();
 
+  // Convert datePreset → ISO range để pass vào filters. Trước đây datePreset
+  // tồn tại trong UI nhưng không gửi xuống service → filter giả.
+  const dateRange = useCallback(() => {
+    const now = new Date();
+    const today = new Date(now.getFullYear(), now.getMonth(), now.getDate());
+    const toISO = (d: Date) => d.toISOString();
+    switch (datePreset) {
+      case "today":
+        return { from: toISO(today), to: toISO(today) };
+      case "yesterday": {
+        const y = new Date(today);
+        y.setDate(y.getDate() - 1);
+        return { from: toISO(y), to: toISO(y) };
+      }
+      case "this_week": {
+        const dow = today.getDay() || 7;
+        const start = new Date(today);
+        start.setDate(start.getDate() - dow + 1);
+        return { from: toISO(start), to: toISO(today) };
+      }
+      case "this_month": {
+        const start = new Date(today.getFullYear(), today.getMonth(), 1);
+        return { from: toISO(start), to: toISO(today) };
+      }
+      case "last_month": {
+        const start = new Date(today.getFullYear(), today.getMonth() - 1, 1);
+        const end = new Date(today.getFullYear(), today.getMonth(), 0);
+        return { from: toISO(start), to: toISO(end) };
+      }
+      default:
+        return { from: undefined, to: undefined };
+    }
+  }, [datePreset]);
+
   const fetchData = useCallback(async () => {
     setLoading(true);
+    const range = dateRange();
+    const filters: Record<string, string | string[]> = {};
+    if (selectedStatuses.length > 0) filters.status = selectedStatuses;
+    if (range.from) filters.dateFrom = range.from;
+    if (range.to) filters.dateTo = range.to;
     const result = await getInvoices({
       page,
       pageSize,
       search,
       branchId: activeBranchId,
-      filters: {
-        ...(selectedStatuses.length > 0 && { status: selectedStatuses }),
-      },
+      filters,
     });
     setData(result.data);
     setTotal(result.total);
     setLoading(false);
-  }, [page, pageSize, search, selectedStatuses, activeBranchId]);
+  }, [page, pageSize, search, selectedStatuses, activeBranchId, dateRange]);
 
   useEffect(() => {
     fetchData();

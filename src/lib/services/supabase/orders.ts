@@ -28,6 +28,7 @@ import {
   type PosCheckoutResult,
   type PosCheckoutItem,
 } from "./pos-checkout";
+import { recordAuditLog } from "./audit";
 import type { Database } from "@/lib/supabase/types";
 
 type InvoiceInsert = Database["public"]["Tables"]["invoices"]["Insert"];
@@ -275,6 +276,14 @@ export async function cancelSalesOrder(orderId: string): Promise<void> {
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
   const sb = supabase as any;
 
+  // Snapshot trước khi flip để có data cho audit log
+  const { data: prev } = await sb
+    .from("sales_orders")
+    .select("code, customer_name, total, status")
+    .eq("tenant_id", tenantId)
+    .eq("id", orderId)
+    .maybeSingle();
+
   const { data: claimed, error: claimErr } = await sb
     .from("sales_orders")
     .update({ status: "cancelled" })
@@ -296,6 +305,14 @@ export async function cancelSalesOrder(orderId: string): Promise<void> {
       `Không thể hủy đơn ở trạng thái "${existing.status}".`
     );
   }
+
+  await recordAuditLog({
+    entityType: "sales_order",
+    entityId: orderId,
+    action: "cancel",
+    oldData: (prev as Record<string, unknown>) ?? null,
+    newData: { status: "cancelled" },
+  });
 }
 
 // ============================================================
