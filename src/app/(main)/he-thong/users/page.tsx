@@ -59,9 +59,15 @@ interface UserRow {
 }
 
 export default function UsersPage() {
-  const { tenant, branches } = useAuth();
+  const { tenant, branches, user } = useAuth();
   const { toast } = useToast();
   const tenantId = tenant?.id ?? "";
+
+  // Security gate: chỉ owner mới được hiển thị checkbox "Cấp quyền owner".
+  // Trước đây ai mở dialog Mời cũng có thể tick → bypass toàn bộ RBAC.
+  // (Trang `/he-thong/users` cần wrap PermissionPage ở layout level — tạm
+  // thời chặn ở UI layer cho đến khi route gating sẵn sàng).
+  const isCurrentUserOwner = user?.role === "owner";
 
   const [users, setUsers] = useState<UserRow[]>([]);
   const [roles, setRoles] = useState<DbRole[]>([]);
@@ -170,11 +176,17 @@ export default function UsersPage() {
 
   const handleToggleActive = async (user: UserRow) => {
     try {
+      // Defense-in-depth: filter tenant_id để admin tenant A KHÔNG thể
+      // disable user tenant B nếu biết UUID. Trước đây chỉ filter id →
+      // RLS off (dev mode) sẽ leak cross-tenant.
       const supabase = getClient();
-      await supabase
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      const { error } = await (supabase as any)
         .from("profiles")
         .update({ is_active: !user.isActive })
+        .eq("tenant_id", tenantId)
         .eq("id", user.id);
+      if (error) throw error;
       toast({
         title: user.isActive ? "Đã vô hiệu hóa" : "Đã kích hoạt",
         description: user.fullName,
@@ -504,36 +516,41 @@ export default function UsersPage() {
                 </Select>
               </div>
 
-              <div className="sm:col-span-2 flex items-start gap-2 p-3 rounded-md bg-amber-50 dark:bg-amber-950/30 border border-amber-200 dark:border-amber-900">
-                <input
-                  id="invite-as-owner"
-                  type="checkbox"
-                  checked={inviteForm.asOwner}
-                  onChange={(e) =>
-                    setInviteForm((f) => ({
-                      ...f,
-                      asOwner: e.target.checked,
-                      // Nếu cấp quyền chủ → clear roleId (không cần)
-                      roleId: e.target.checked ? "" : f.roleId,
-                    }))
-                  }
-                  disabled={inviteBusy}
-                  className="mt-0.5 h-4 w-4 rounded border-amber-400 accent-amber-600"
-                />
-                <div className="flex-1">
-                  <Label
-                    htmlFor="invite-as-owner"
-                    className="text-sm font-medium cursor-pointer"
-                  >
-                    Cấp quyền Chủ cửa hàng (đồng chủ)
-                  </Label>
-                  <p className="text-xs text-amber-700 dark:text-amber-400 mt-0.5">
-                    Người này sẽ có toàn quyền như bạn: xem mọi chi nhánh,
-                    mời/xoá nhân viên, xem báo cáo tài chính. Chỉ tick khi
-                    hoàn toàn tin tưởng.
-                  </p>
+              {/* Security gate: chỉ user role="owner" mới thấy được checkbox
+                  này. Manager/Cashier/Kế toán mở dialog mời cũng chỉ tạo
+                  được role thường, KHÔNG cấp owner được. */}
+              {isCurrentUserOwner && (
+                <div className="sm:col-span-2 flex items-start gap-2 p-3 rounded-md bg-amber-50 dark:bg-amber-950/30 border border-amber-200 dark:border-amber-900">
+                  <input
+                    id="invite-as-owner"
+                    type="checkbox"
+                    checked={inviteForm.asOwner}
+                    onChange={(e) =>
+                      setInviteForm((f) => ({
+                        ...f,
+                        asOwner: e.target.checked,
+                        // Nếu cấp quyền chủ → clear roleId (không cần)
+                        roleId: e.target.checked ? "" : f.roleId,
+                      }))
+                    }
+                    disabled={inviteBusy}
+                    className="mt-0.5 h-4 w-4 rounded border-amber-400 accent-amber-600"
+                  />
+                  <div className="flex-1">
+                    <Label
+                      htmlFor="invite-as-owner"
+                      className="text-sm font-medium cursor-pointer"
+                    >
+                      Cấp quyền Chủ cửa hàng (đồng chủ)
+                    </Label>
+                    <p className="text-xs text-amber-700 dark:text-amber-400 mt-0.5">
+                      Người này sẽ có toàn quyền như bạn: xem mọi chi nhánh,
+                      mời/xoá nhân viên, xem báo cáo tài chính. Chỉ tick khi
+                      hoàn toàn tin tưởng.
+                    </p>
+                  </div>
                 </div>
-              </div>
+              )}
             </div>
           </div>
           <DialogFooter>

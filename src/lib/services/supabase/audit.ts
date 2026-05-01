@@ -103,14 +103,20 @@ export async function getAuditLogs(
   params: QueryParams & { filters?: AuditFilters }
 ): Promise<QueryResult<AuditLogEntry>> {
   const supabase = getClient();
+  const tenantId = await getCurrentTenantId();
   const { from, to } = getPaginationRange(params);
 
+  // Defense-in-depth: explicit tenant filter ngay cả khi RLS bật. Trước đây
+  // service rely 100% vào RLS audit_select policy → khi RLS disable trong
+  // dev hoặc thứ tự migration sai → leak audit log cross-tenant (nhạy cảm:
+  // ai đã làm gì).
   let query = supabase
     .from("audit_log")
     .select(
       "id, user_id, action, entity_type, entity_id, old_data, new_data, ip_address, created_at, profiles!audit_log_user_id_fkey(full_name)",
       { count: "exact" }
-    );
+    )
+    .eq("tenant_id", tenantId);
 
   // Filters
   const filters = params.filters as AuditFilters | undefined;
@@ -233,11 +239,13 @@ export async function getAuditLogsByEntity(
   limit: number = 50
 ): Promise<AuditLogEntry[]> {
   const supabase = getClient();
+  const tenantId = await getCurrentTenantId();
   const { data, error } = await supabase
     .from("audit_log")
     .select(
       "id, user_id, action, entity_type, entity_id, old_data, new_data, ip_address, created_at, profiles!audit_log_user_id_fkey(full_name)"
     )
+    .eq("tenant_id", tenantId)
     .eq("entity_type", entityType)
     .eq("entity_id", entityId)
     .order("created_at", { ascending: false })
@@ -318,18 +326,22 @@ export async function getAuditStats(): Promise<{
   topEntity: string;
 }> {
   const supabase = getClient();
+  const tenantId = await getCurrentTenantId();
   const now = new Date();
   const todayStart = new Date(now.getFullYear(), now.getMonth(), now.getDate()).toISOString();
   const weekStart = new Date(now.getFullYear(), now.getMonth(), now.getDate() - 7).toISOString();
 
+  // Defense-in-depth tenant filter cho cả 2 query stats.
   const [todayRes, weekRes] = await Promise.all([
     supabase
       .from("audit_log")
       .select("id", { count: "exact", head: true })
+      .eq("tenant_id", tenantId)
       .gte("created_at", todayStart),
     supabase
       .from("audit_log")
       .select("action, entity_type")
+      .eq("tenant_id", tenantId)
       .gte("created_at", weekStart),
   ]);
 

@@ -4,6 +4,7 @@
 
 import { getClient } from "./base";
 import { getCurrentTenantId } from "./base";
+import { recordAuditLog } from "./audit";
 
 const supabase = getClient();
 
@@ -74,6 +75,19 @@ export async function createBranch(branch: {
     .single();
 
   if (error) throw error;
+
+  await recordAuditLog({
+    entityType: "branch",
+    entityId: data.id,
+    action: "create",
+    newData: {
+      name: data.name,
+      code: data.code,
+      branch_type: data.branch_type,
+      is_default: data.is_default,
+    },
+  });
+
   return mapBranch(data);
 }
 
@@ -114,6 +128,15 @@ export async function updateBranch(
   }>
 ) {
   const tenantId = await getCurrentTenantId();
+
+  // Snapshot trước update cho audit log
+  const { data: prev } = await supabase
+    .from("branches")
+    .select("name, code, branch_type, address, phone, is_active, price_tier_id")
+    .eq("tenant_id", tenantId)
+    .eq("id", id)
+    .maybeSingle();
+
   const updateObj: Record<string, unknown> = {};
   if (updates.name !== undefined) updateObj.name = updates.name;
   if (updates.code !== undefined) updateObj.code = updates.code;
@@ -130,6 +153,20 @@ export async function updateBranch(
     .eq("id", id);
 
   if (error) throw error;
+
+  await recordAuditLog({
+    entityType: "branch",
+    entityId: id,
+    // Detect deactivate vs general update để label đúng trong audit timeline
+    action:
+      updates.isActive === false
+        ? "deactivate"
+        : updates.isActive === true
+          ? "activate"
+          : "update",
+    oldData: (prev as Record<string, unknown>) ?? null,
+    newData: updateObj,
+  });
 }
 
 function mapBranch(row: Record<string, unknown>): BranchDetail {

@@ -5,6 +5,7 @@
  */
 
 import { getClient, handleError, getCurrentTenantId } from "./base";
+import { recordAuditLog } from "./audit";
 import type { PermissionCode } from "@/lib/permissions/constants";
 
 // ── Types ──
@@ -146,6 +147,19 @@ export async function createRole(input: CreateRoleInput): Promise<DbRole> {
     if (permError) handleError(permError, "createRole.permissions");
   }
 
+  // Audit log: tạo role là thao tác RBAC nhạy cảm — CEO cần trace ai
+  // tạo role gì kèm permission gì.
+  await recordAuditLog({
+    entityType: "role",
+    entityId: role.id,
+    action: "create",
+    newData: {
+      name: role.name,
+      description: role.description,
+      permissions: input.permissions ?? [],
+    },
+  });
+
   return {
     id: role.id,
     tenantId: role.tenant_id,
@@ -175,8 +189,13 @@ export async function updateRole(roleId: string, input: UpdateRoleInput): Promis
 export async function deleteRole(roleId: string): Promise<void> {
   const supabase = getClient();
   const tenantId = await getCurrentTenantId();
-  // Verify it's not a system role + ownership
-  const { data: role } = await supabase.from("roles").select("is_system").eq("tenant_id", tenantId).eq("id", roleId).single();
+  // Verify it's not a system role + ownership + snapshot for audit
+  const { data: role } = await supabase
+    .from("roles")
+    .select("is_system, name, description")
+    .eq("tenant_id", tenantId)
+    .eq("id", roleId)
+    .single();
   if (!role) throw new Error("Không tìm thấy vai trò");
   if (role?.is_system) throw new Error("Không thể xóa vai trò hệ thống");
 
@@ -190,6 +209,13 @@ export async function deleteRole(roleId: string): Promise<void> {
 
   const { error } = await supabase.from("roles").delete().eq("tenant_id", tenantId).eq("id", roleId);
   if (error) handleError(error, "deleteRole");
+
+  await recordAuditLog({
+    entityType: "role",
+    entityId: roleId,
+    action: "delete",
+    oldData: role as Record<string, unknown>,
+  });
 }
 
 /** Bulk-replace all permissions for a role */
@@ -249,12 +275,31 @@ export async function getUserPermissions(userId: string): Promise<Set<string>> {
 export async function assignRoleToUser(userId: string, roleId: string | null): Promise<void> {
   const supabase = getClient();
   const tenantId = await getCurrentTenantId();
+
+  // Snapshot prev role để audit log diff
+  const { data: prev } = await supabase
+    .from("profiles")
+    .select("role_id, full_name")
+    .eq("tenant_id", tenantId)
+    .eq("id", userId)
+    .maybeSingle();
+
   const { error } = await supabase
     .from("profiles")
     .update({ role_id: roleId, updated_at: new Date().toISOString() })
     .eq("tenant_id", tenantId)
     .eq("id", userId);
   if (error) handleError(error, "assignRoleToUser");
+
+  // Audit log: cấp/đổi/gỡ role là thao tác RBAC quan trọng — CEO cần
+  // trace ai cấp quyền cho ai, khi nào.
+  await recordAuditLog({
+    entityType: "user",
+    entityId: userId,
+    action: "role_grant",
+    oldData: { role_id: prev?.role_id ?? null, name: prev?.full_name ?? null },
+    newData: { role_id: roleId },
+  });
 }
 
 /** Get all users for a tenant (for user management) */
@@ -335,6 +380,34 @@ export async function inviteStaff(input: InviteStaffInput): Promise<void> {
   }
   if (!input.fullName.trim()) {
     throw new Error("Họ tên không được để trống");
+  }
+
+  // Security gate: chỉ owner mới được mời với asOwner=true.
+  // Defense-in-depth — UI checkbox đã ẩn khỏi non-owner, nhưng nếu kẻ
+  // tấn công bypass UI và gọi service trực tiếp với asOwner=true, server
+  // verify lại quyền của caller bằng cách query profile từ auth context.
+  if (input.asOwner) {
+    const { data: authUser } = await supabase.auth.getUser();
+    if (authUser.user) {
+      const { data: callerProfile } = await supabase
+        .from("profiles")
+        .select("role, tenant_id")
+        .eq("id", authUser.user.id)
+        .maybeSingle();
+      if (
+        !callerProfile ||
+        callerProfile.role !== "owner" ||
+        callerProfile.tenant_id !== input.tenantId
+      ) {
+        throw new Error(
+          "Chỉ Chủ cửa hàng mới được cấp quyền Chủ cửa hàng cho người khác.",
+        );
+      }
+    } else if (process.env.NEXT_PUBLIC_BYPASS_AUTH !== "true") {
+      // Production: phải đăng nhập + là owner mới qua check
+      throw new Error("Chưa đăng nhập — không thể cấp quyền owner.");
+    }
+    // DEV bypass: cho qua (dev seed có thể cần tạo owner đầu tiên).
   }
 
   // Validate SĐT — bắt buộc để user login bằng SĐT. Chấp nhận SĐT VN
