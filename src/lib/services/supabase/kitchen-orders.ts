@@ -13,6 +13,7 @@ import type {
   DeliveryPlatform,
 } from "@/lib/types/fnb";
 import { getClient, handleError, getCurrentTenantId } from "./base";
+import { recordAuditLog } from "./audit";
 
 type KOInsert = Database["public"]["Tables"]["kitchen_orders"]["Insert"];
 type KOItemInsert = Database["public"]["Tables"]["kitchen_order_items"]["Insert"];
@@ -346,15 +347,22 @@ export async function removeOrderItem(itemId: string): Promise<void> {
 /**
  * Cancel a kitchen order. Releases table if dine_in.
  * Cannot cancel completed/already-cancelled orders.
+ *
+ * @param orderId — kitchen_orders.id
+ * @param reason — lý do bắt buộc cho audit (vd "khách đổi ý", "hết NL").
+ *   Lưu vào `note` (append "[Hủy: <reason>]") + audit log để loss prevention.
  */
-export async function cancelKitchenOrder(orderId: string): Promise<void> {
+export async function cancelKitchenOrder(
+  orderId: string,
+  reason?: string,
+): Promise<void> {
   const supabase = getClient();
   const tenantId = await getCurrentTenantId();
 
-  // Load order to check status + get table_id
+  // Load order to check status + get table_id + existing note
   const { data: order, error: fetchErr } = await supabase
     .from("kitchen_orders")
-    .select("id, status, table_id")
+    .select("id, status, table_id, note")
     .eq("tenant_id", tenantId)
     .eq("id", orderId)
     .single();
@@ -369,14 +377,26 @@ export async function cancelKitchenOrder(orderId: string): Promise<void> {
     throw new Error("Đơn đã huỷ trước đó.");
   }
 
+  // Append cancel reason vào note để hiện ở report sau này.
+  const reasonTag = reason?.trim() ? ` [Hủy: ${reason.trim()}]` : "";
+  const newNote = (order.note ?? "") + reasonTag;
+
   // Cancel the order
   const { error: updateErr } = await supabase
     .from("kitchen_orders")
-    .update({ status: "cancelled" as const })
+    .update({ status: "cancelled" as const, note: newNote })
     .eq("tenant_id", tenantId)
     .eq("id", orderId);
 
   if (updateErr) handleError(updateErr, "cancelKitchenOrder:update");
+
+  // Audit log để báo cáo loss prevention.
+  void recordAuditLog({
+    entityType: "kitchen_order",
+    entityId: orderId,
+    action: "cancel",
+    newData: { reason: reason ?? null, releasedTable: !!order.table_id },
+  });
 
   // Release table if occupied
   if (order.table_id) {

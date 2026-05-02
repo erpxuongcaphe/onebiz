@@ -160,6 +160,27 @@ function KdsPageInner() {
       }
       prevOrderIdsRef.current = newIds;
 
+      // R8: Sort theo urgency desc — đơn chờ lâu nhất nổi đầu để bếp pha trước.
+      // Tiebreak: status priority (pending > preparing > ready) để new orders không
+      // bị "chôn" sau "preparing" cũ. Cancelled không lọt vào ACTIVE_STATUSES.
+      const STATUS_PRIORITY: Record<string, number> = {
+        pending: 0,
+        preparing: 1,
+        ready: 2,
+        served: 3,
+      };
+      enriched.sort((a, b) => {
+        // Primary: createdAt asc (cũ nhất lên đầu = chờ lâu nhất)
+        const tA = new Date(a.createdAt).getTime();
+        const tB = new Date(b.createdAt).getTime();
+        if (tA !== tB) return tA - tB;
+        // Secondary: status priority
+        return (
+          (STATUS_PRIORITY[a.status] ?? 99) -
+          (STATUS_PRIORITY[b.status] ?? 99)
+        );
+      });
+
       setOrders(enriched);
       fetchErrorShownRef.current = false;
       setFetchError(null);

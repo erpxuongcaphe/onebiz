@@ -23,6 +23,16 @@ import { formatCurrency } from "@/lib/format";
 import type { Shift } from "@/lib/types/shift";
 import { Icon } from "@/components/ui/icon";
 
+// R4: Quick-pick denominations cho mở/đóng ca — VND tiền mặt phổ biến.
+// Cashier tap pill thay vì gõ số → ít sai sót khi mở ca vội buổi sáng.
+const QUICK_DENOMINATIONS = [
+  { label: "100k", value: 100_000 },
+  { label: "200k", value: 200_000 },
+  { label: "500k", value: 500_000 },
+  { label: "1M", value: 1_000_000 },
+  { label: "2M", value: 2_000_000 },
+];
+
 // ── Open Shift Dialog ──
 
 interface OpenShiftDialogProps {
@@ -69,7 +79,25 @@ export function OpenShiftDialog({ open, onOpenChange, onConfirm }: OpenShiftDial
                 autoFocus
               />
             </div>
-            <p className="text-xs text-muted-foreground mt-1">
+            {/* R4: Quick-pick denominations — tap thay vì gõ số. */}
+            <div className="flex flex-wrap gap-1.5 mt-2">
+              {QUICK_DENOMINATIONS.map((d) => (
+                <button
+                  key={d.value}
+                  type="button"
+                  onClick={() => setAmount(String(d.value))}
+                  className={cn(
+                    "px-3 py-1.5 rounded-md text-xs font-medium border transition-colors",
+                    amount === String(d.value)
+                      ? "bg-primary text-primary-foreground border-primary"
+                      : "bg-surface-container-low border-border hover:bg-surface-container hover:border-primary/40",
+                  )}
+                >
+                  {d.label}
+                </button>
+              ))}
+            </div>
+            <p className="text-xs text-muted-foreground mt-2">
               Nhập số tiền mặt hiện có khi bắt đầu ca. Để trống nếu bắt đầu từ 0.
             </p>
           </div>

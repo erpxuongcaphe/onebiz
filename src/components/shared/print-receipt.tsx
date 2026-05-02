@@ -28,6 +28,8 @@ export interface ReceiptData {
   note?: string;
   /** True when hoá đơn được tạo trong chế độ offline và chờ đồng bộ lên server. */
   isOffline?: boolean;
+  /** R9: Pre-bill / tạm tính — KHÔNG phải hoá đơn chính thức. Header in chữ to "TẠM TÍNH". */
+  isPreBill?: boolean;
 }
 
 interface PrintReceiptProps {
@@ -106,6 +108,13 @@ export function PrintReceipt({ data, width = "80mm" }: PrintReceiptProps) {
         </div>
 
         <div className="line" />
+
+        {data.isPreBill && (
+          <div className="center" style={{ padding: "4px 0", border: "2px dashed #000", margin: "4px 0" }}>
+            <div style={{ fontSize: "18px", fontWeight: "bold" }}>=== TẠM TÍNH ===</div>
+            <div style={{ fontSize: "10px" }}>(Không phải hoá đơn chính thức)</div>
+          </div>
+        )}
 
         <div className="center">
           <div className="invoice-code bold">{data.invoiceCode}</div>
@@ -259,6 +268,7 @@ ${data.storeAddress ? `<div style="font-size:10px;margin-top:2px">${data.storeAd
 ${data.storePhone ? `<div style="font-size:10px">SDT: ${data.storePhone}</div>` : ""}
 </div>
 <div class="line"></div>
+${data.isPreBill ? `<div class="center" style="padding:4px;border:2px dashed #000;margin:4px 0"><div style="font-size:18px;font-weight:bold">=== TAM TINH ===</div><div style="font-size:10px">(Khong phai hoa don chinh thuc)</div></div>` : ""}
 <div class="center"><div class="bold" style="font-size:13px">${data.invoiceCode}</div><div style="font-size:10px">${data.date}</div>${data.isOffline ? `<div class="bold" style="font-size:11px;color:#b45309;margin-top:2px;border:1px dashed #b45309;padding:2px 6px;display:inline-block">⚠ CHO DONG BO</div>` : ""}</div>
 <div class="line"></div>
 <div class="row"><span>Khach hang:</span><span>${data.customerName}</span></div>

@@ -83,7 +83,7 @@ function FnbPosPageInner() {
   const { toast } = useToast();
   const { settings } = useSettings();
   const networkStatus = useNetworkStatus();
-  const pos = useFnbPosState();
+  const pos = useFnbPosState(currentBranch?.id);
 
   // ── Data state ──
   const [categories, setCategories] = useState<FnbCategory[]>([]);
@@ -117,6 +117,8 @@ function FnbPosPageInner() {
   const [syncDrawerOpen, setSyncDrawerOpen] = useState(false);
   const [orderHistoryOpen, setOrderHistoryOpen] = useState(false);
   const [voidConfirmOpen, setVoidConfirmOpen] = useState(false);
+  // R5: Lý do huỷ — bắt buộc để audit & loss prevention.
+  const [voidReason, setVoidReason] = useState("");
   const [transferTableOpen, setTransferTableOpen] = useState(false);
 
   // Voucher / coupon state — áp mã khuyến mãi cho đơn hiện tại.
@@ -1189,14 +1191,23 @@ function FnbPosPageInner() {
       });
       return;
     }
+    if (!voidReason.trim()) {
+      toast({
+        title: "Vui lòng nhập lý do huỷ",
+        description: "Lý do bắt buộc để theo dõi loss prevention.",
+        variant: "warning",
+      });
+      return;
+    }
     try {
-      await cancelKitchenOrder(tab.kitchenOrderId);
+      await cancelKitchenOrder(tab.kitchenOrderId, voidReason.trim());
       hapticSuccess();
       toast({
         title: "Đã huỷ đơn bếp",
-        description: `Đơn ${tab.label} đã được huỷ.`,
+        description: `Đơn ${tab.label} đã được huỷ. Lý do: ${voidReason.trim()}`,
         variant: "success",
       });
+      setVoidReason("");
       // Optimistic: release table trên UI ngay
       if (tab.tableId) {
         setTables((prev) =>
@@ -1808,19 +1819,40 @@ function FnbPosPageInner() {
               <Icon name="cancel" size={18} /> Huỷ đơn bếp?
             </DialogTitle>
           </DialogHeader>
-          <div className="py-2 space-y-2">
+          <div className="py-2 space-y-3">
             <p className="text-sm text-foreground">
               Đơn <b>{pos.activeTab?.label}</b> sẽ bị huỷ và bàn sẽ được giải phóng.
             </p>
+            <div className="space-y-1.5">
+              <label className="text-xs font-medium text-foreground">
+                Lý do huỷ <span className="text-status-error">*</span>
+              </label>
+              <select
+                value={voidReason}
+                onChange={(e) => setVoidReason(e.target.value)}
+                className="w-full px-3 py-2 text-sm rounded-md border border-border bg-background"
+              >
+                <option value="">— Chọn lý do —</option>
+                <option value="Khách đổi ý">Khách đổi ý</option>
+                <option value="Hết nguyên liệu">Hết nguyên liệu</option>
+                <option value="Pha sai món">Pha sai món</option>
+                <option value="Khách bỏ đi">Khách bỏ đi (no-show)</option>
+                <option value="Lỗi đặt món">Lỗi đặt món (nhân viên)</option>
+                <option value="Khác">Khác</option>
+              </select>
+            </div>
             <p className="text-xs text-muted-foreground">
               Tip: Chỉ huỷ được đơn chưa thanh toán. Nếu đã in ticket, hãy thông báo
-              cho bếp trước.
+              cho bếp trước. Lý do sẽ ghi vào audit log.
             </p>
           </div>
           <div className="flex justify-end gap-2 pt-2">
             <button
               type="button"
-              onClick={() => setVoidConfirmOpen(false)}
+              onClick={() => {
+                setVoidConfirmOpen(false);
+                setVoidReason("");
+              }}
               className="px-4 py-2 rounded-md text-sm border border-border hover:bg-muted"
             >
               Đóng
@@ -1828,7 +1860,8 @@ function FnbPosPageInner() {
             <button
               type="button"
               onClick={handleVoidKitchenOrder}
-              className="px-4 py-2 rounded-md text-sm bg-status-error text-white hover:bg-status-error/90"
+              disabled={!voidReason.trim()}
+              className="px-4 py-2 rounded-md text-sm bg-status-error text-white hover:bg-status-error/90 disabled:opacity-50 disabled:cursor-not-allowed"
             >
               Huỷ đơn
             </button>

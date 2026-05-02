@@ -81,6 +81,9 @@ import type { Product, ProductVariant } from "@/lib/types";
 
 // Reuse FnB offline bar/drawer — both are generic over NetworkStatus.
 import { ConnectionStatusBar } from "./fnb/components/connection-status-bar";
+const ShiftInvoiceDrawer = lazy(() =>
+  import("./components/shift-invoice-drawer").then((m) => ({ default: m.ShiftInvoiceDrawer }))
+);
 const SyncQueueDrawer = lazy(() =>
   import("./fnb/components/sync-queue-drawer").then((m) => ({ default: m.SyncQueueDrawer }))
 );
@@ -301,6 +304,8 @@ function PosPageInner() {
   // Offline/online status — for opportunistic checkout while network is down
   const networkStatus = useNetworkStatus();
   const [syncDrawerOpen, setSyncDrawerOpen] = useState(false);
+  // R10: Drawer "Đơn ca này" — list 50 đơn gần nhất + reprint inline.
+  const [shiftDrawerOpen, setShiftDrawerOpen] = useState(false);
 
   // Auto-print toggle
   const [autoPrint, setAutoPrint] = useState<boolean>(true);
@@ -325,13 +330,31 @@ function PosPageInner() {
   useEffect(() => {
     if (!currentBranch?.id || !user?.id) return;
     getOpenShift(currentBranch.id, user.id)
-      .then((shift) => setCurrentShift(shift))
+      .then((shift) => {
+        setCurrentShift(shift);
+        // R3: Cảnh báo ca treo qua đêm — nếu ca mở > 14h trước, gần như
+        // chắc chắn cashier quên đóng. Nhắc đóng để Z report đúng ngày.
+        if (shift) {
+          const openedHoursAgo =
+            (Date.now() - new Date(shift.openedAt).getTime()) / 3_600_000;
+          if (openedHoursAgo > 14) {
+            toast({
+              title: `⚠️ Ca đang mở từ ${Math.round(openedHoursAgo)}h trước`,
+              description:
+                "Có vẻ ca chưa được đóng cuối hôm qua. Vui lòng đóng ca để Z report khớp ngày.",
+              variant: "warning",
+              duration: 8000,
+            });
+          }
+        }
+      })
       .catch((err) => {
         // Không toast — getOpenShift fail không cản người bán dùng POS
         // (UI sẽ hiện "Chưa mở ca" cho phép user mở ca thủ công).
         // Log để debug khi user báo "ca biến mất".
         console.error("[POS] getOpenShift failed:", err);
       });
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [currentBranch?.id, user?.id]);
 
   const handleShiftClick = useCallback(() => {
@@ -861,6 +884,61 @@ function PosPageInner() {
   // Handlers
   // ============================================================
 
+  // R9: Pre-bill — in tạm tính trước khi khách quyết định trả tiền.
+  // Build receipt từ state cart hiện tại với invoiceCode "TT-<timestamp>"
+  // để rõ KHÔNG phải hoá đơn chính thức. KHÔNG commit gì.
+  const handlePrintPreBill = useCallback(() => {
+    if (state.lines.length === 0) {
+      toast({
+        title: "Giỏ hàng trống",
+        description: "Thêm sản phẩm trước khi in tạm tính.",
+        variant: "warning",
+      });
+      return;
+    }
+    try {
+      const tempCode = `TT-${new Date()
+        .toLocaleTimeString("vi-VN", { hour12: false })
+        .replace(/:/g, "")}`;
+      const receipt: ReceiptData = {
+        invoiceCode: tempCode,
+        date: new Date().toISOString(),
+        customerName: state.customer?.name ?? "Khách lẻ",
+        items: state.lines.map((l) => ({
+          name: l.productName,
+          quantity: l.quantity,
+          unitPrice: l.unitPrice,
+          discount:
+            l.discount.mode === "percent"
+              ? Math.round((l.quantity * l.unitPrice * l.discount.value) / 100)
+              : l.discount.value,
+          total: state.computeLineTotal(l),
+        })),
+        subtotal: state.subtotal,
+        discountAmount: state.orderDiscountAmount + state.lineDiscountTotal,
+        total: state.total,
+        paid: 0,
+        change: 0,
+        paymentMethod: "cash",
+        isOffline: false,
+        isPreBill: true, // flag để print template hiện "TẠM TÍNH" header
+      };
+      printReceiptDirect(receipt);
+      toast({
+        title: "Đã in tạm tính",
+        description: "Đây không phải hoá đơn chính thức.",
+        variant: "default",
+      });
+    } catch (err) {
+      console.error("[POS] Print pre-bill failed:", err);
+      toast({
+        title: "Không in được tạm tính",
+        description: (err as Error).message,
+        variant: "error",
+      });
+    }
+  }, [state.lines, state.customer, state.subtotal, state.orderDiscountAmount, state.lineDiscountTotal, state.total, state.computeLineTotal, toast]);
+
   const handleSaveDraft = useCallback(async () => {
     if (submitLockRef.current) return;
     submitLockRef.current = true;
@@ -916,6 +994,20 @@ function PosPageInner() {
       setOpenShiftDialogOpen(true);
       return;
     }
+    // R1: Block đơn total ≤ 0 (sample/free) — trước đây F10 chỉ check
+    // `state.lines.length > 0` nên cashier set discount 100% có thể xuất
+    // hoá đơn 0đ → âm kho mà không thu tiền. Trừ trường hợp đặt cọc 0đ
+    // (chưa có flow), chặn cứng.
+    if (state.total <= 0) {
+      toast({
+        title: "Đơn không hợp lệ",
+        description: `Tổng đơn = ${formatCurrency(state.total)} ₫. Kiểm tra giảm giá hoặc khuyến mãi đang áp.`,
+        variant: "error",
+        duration: 5000,
+      });
+      return;
+    }
+
     // Mixed payment validation — chặn checkout khi tổng các phương thức <
     // tổng đơn (tránh "ghi nợ ngầm" do cashier quên nhập đủ amount cho 1
     // phương thức). Nếu khách chủ ý ghi nợ → phải dùng nút "Ghi nợ" riêng,
@@ -1364,6 +1456,19 @@ function PosPageInner() {
           <Icon name="shopping_cart" size={14} />
           <span className="text-[13px] font-bold tracking-wide">POS Retail</span>
         </div>
+
+        {/* R10: Trigger "Đơn ca này" — drawer list 50 đơn + reprint */}
+        {currentShift && (
+          <button
+            type="button"
+            onClick={() => setShiftDrawerOpen(true)}
+            className="hidden md:inline-flex items-center gap-1 px-2 py-1 rounded text-xs bg-white/10 hover:bg-white/20 transition-colors shrink-0"
+            title="Lịch sử đơn trong ca + in lại"
+          >
+            <Icon name="receipt_long" size={14} />
+            <span className="hidden lg:inline">Đơn ca này</span>
+          </button>
+        )}
 
         {/* Sprint 2: Badge tier đang áp dụng — chỉ hiện khi có KH với tier */}
         {appliedTier && (
@@ -2152,6 +2257,23 @@ function PosPageInner() {
             </div>
           )}
 
+          {/* R9: Pre-bill row — secondary action above checkout. Tách riêng để
+              không lẫn với "ghi nợ"/checkout, cashier dễ tìm khi khách hỏi
+              "tổng bao nhiêu" trước khi quyết. */}
+          {state.lines.length > 0 && (
+            <div className="px-3 pt-2 shrink-0">
+              <button
+                type="button"
+                onClick={handlePrintPreBill}
+                className="w-full h-9 rounded-lg border border-dashed border-primary/40 bg-primary/5 text-primary text-xs font-medium hover:bg-primary/10 inline-flex items-center justify-center gap-1.5 press-scale-sm"
+                title="In tạm tính cho khách kiểm tra trước khi trả tiền"
+              >
+                <Icon name="receipt_long" size={14} />
+                In tạm tính
+              </button>
+            </div>
+          )}
+
           {/* ── Action buttons — Stitch primary style ── */}
           <div className={cn(
             "px-3 py-2.5 border-t border-outline-variant/20 shrink-0 bg-surface-container-lowest",
@@ -2280,7 +2402,19 @@ function PosPageInner() {
       <CustomerPicker
         open={customerModalOpen}
         onClose={() => setCustomerModalOpen(false)}
-        onSelect={(customer) => state.setCustomer(customer)}
+        onSelect={(customer) => {
+          state.setCustomer(customer);
+          // R2: Cảnh báo nợ cũ — KH có currentDebt > 0 → toast warning
+          // ngay khi chọn để cashier biết trước khi cộng thêm đơn mới.
+          if (customer && customer.currentDebt > 0) {
+            toast({
+              title: `⚠️ ${customer.name} đang nợ ${formatCurrency(customer.currentDebt)} ₫`,
+              description: "Vui lòng đối chiếu công nợ cũ trước khi cho ghi nợ tiếp.",
+              variant: "warning",
+              duration: 6000,
+            });
+          }
+        }}
         onRequestCreate={(initialName) => {
           setCreateCustomerInitial(initialName);
           setCreateCustomerOpen(true);
@@ -2386,6 +2520,12 @@ function PosPageInner() {
       {/* Sync queue drawer — opens when ConnectionStatusBar is clicked */}
       {syncDrawerOpen && (
         <Suspense fallback={null}>
+          <ShiftInvoiceDrawer
+            open={shiftDrawerOpen}
+            onOpenChange={setShiftDrawerOpen}
+            branchId={currentBranch?.id}
+            shiftOpenedAt={currentShift?.openedAt ?? null}
+          />
           <SyncQueueDrawer
             open={syncDrawerOpen}
             onOpenChange={setSyncDrawerOpen}

@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useCallback } from "react";
+import { useState, useCallback, useEffect, useRef } from "react";
 import type {
   FnbOrderLine,
   FnbTabSnapshot,
@@ -8,6 +8,11 @@ import type {
   FnbDiscountInput,
   OrderType,
 } from "@/lib/types/fnb";
+import {
+  loadPersistedTabs,
+  savePersistedTabs,
+  clearPersistedTabs,
+} from "./persist-tabs";
 
 let lineIdCounter = 0;
 function nextLineId(): string {
@@ -72,7 +77,7 @@ export interface UseFnbPosStateReturn {
   lineCount: number;
 }
 
-export function useFnbPosState(): UseFnbPosStateReturn {
+export function useFnbPosState(branchId?: string): UseFnbPosStateReturn {
   const [tabs, setTabs] = useState<FnbTabSnapshot[]>(() => {
     const initialTab: FnbTabSnapshot = {
       id: nextTabId(),
@@ -84,6 +89,39 @@ export function useFnbPosState(): UseFnbPosStateReturn {
     return [initialTab];
   });
   const [activeTabId, setActiveTabId] = useState<string>(tabs[0].id);
+
+  // R12: Restore persisted tabs khi branch change. Tabs cũ hơn 24h tự bỏ
+  // qua. Nếu không có persist → giữ tab default đã init.
+  const restoredBranchRef = useRef<string | undefined>(undefined);
+  useEffect(() => {
+    if (!branchId) return;
+    if (restoredBranchRef.current === branchId) return; // đã restore branch này
+    restoredBranchRef.current = branchId;
+    loadPersistedTabs(branchId).then((restored) => {
+      if (!restored) return;
+      setTabs(restored.tabs);
+      setActiveTabId(restored.activeTabId);
+    });
+  }, [branchId]);
+
+  // R12: Auto-save tabs sau mỗi thay đổi (debounced 400ms để không spam).
+  const saveTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  useEffect(() => {
+    if (!branchId) return;
+    if (saveTimerRef.current) clearTimeout(saveTimerRef.current);
+    saveTimerRef.current = setTimeout(() => {
+      // Skip lưu nếu chỉ có 1 tab rỗng (đỡ ghi I/O thừa)
+      const onlyEmpty = tabs.length === 1 && tabs[0].lines.length === 0;
+      if (onlyEmpty) {
+        clearPersistedTabs(branchId);
+      } else {
+        savePersistedTabs(branchId, tabs, activeTabId);
+      }
+    }, 400);
+    return () => {
+      if (saveTimerRef.current) clearTimeout(saveTimerRef.current);
+    };
+  }, [branchId, tabs, activeTabId]);
 
   const activeTab = tabs.find((t) => t.id === activeTabId);
 
