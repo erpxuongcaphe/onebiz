@@ -148,12 +148,20 @@ export function usePosState() {
     (product: Product, options?: AddLineOptions): void => {
       const qtyDelta = options?.quantity ?? 1;
       setLines((prev) => {
-        // Match both productId AND variantId so different variants are separate lines
-        const existingIdx = prev.findIndex(
-          (l) =>
-            l.productId === product.id &&
-            (l.variantId ?? null) === (options?.variantId ?? null)
-        );
+        // Match both productId AND variantId so different variants are separate lines.
+        // POS-FIX-A5: chỉ merge khi line cũ KHÔNG có discount riêng + cùng
+        // unit price. Nếu line cũ đang giảm giá thủ công, tách line mới
+        // ở giá gốc — tránh "cho thêm 1 cái free" do discount kế thừa âm thầm.
+        const existingIdx = prev.findIndex((l) => {
+          if (l.productId !== product.id) return false;
+          if ((l.variantId ?? null) !== (options?.variantId ?? null)) return false;
+          // Có discount riêng → không merge (tách line mới)
+          if (l.discount.value !== 0) return false;
+          // Khác giá (cashier có thể đã sửa unit price) → không merge
+          const targetPrice = options?.unitPrice ?? product.sellPrice ?? 0;
+          if (l.unitPrice !== targetPrice) return false;
+          return true;
+        });
         if (existingIdx >= 0) {
           const next = [...prev];
           next[existingIdx] = {

@@ -33,6 +33,8 @@ interface FnbItemDialogProps {
   onOpenChange: (open: boolean) => void;
   product: Product | null;
   variants?: Variant[];
+  /** True khi đang fetch variants (cache miss). Hiện skeleton thay vì empty. */
+  variantsLoading?: boolean;
   toppings?: Topping[];
   onConfirm: (payload: FnbItemConfirmPayload) => void;
 }
@@ -40,7 +42,7 @@ interface FnbItemDialogProps {
 // ── Component ──
 
 export function FnbItemDialog({
-  open, onOpenChange, product, variants, toppings, onConfirm,
+  open, onOpenChange, product, variants, variantsLoading, toppings, onConfirm,
 }: FnbItemDialogProps) {
   const [selectedVariant, setSelectedVariant] = useState<Variant | null>(null);
   const [quantity, setQuantity] = useState(1);
@@ -96,8 +98,22 @@ export function FnbItemDialog({
         </DialogHeader>
 
         <div className="space-y-4 py-2">
-          {/* Size / Variant selector */}
-          {variants && variants.length > 0 && (
+          {/* Size / Variant selector. POS-FIX-C3: skeleton khi đang fetch
+              variants (cache miss) — tránh user thấy "không có size" rồi
+              tưởng món không có biến thể, click thêm với giá gốc. */}
+          {variantsLoading && (!variants || variants.length === 0) ? (
+            <div className="space-y-2">
+              <Label className="text-sm font-medium">Kích cỡ</Label>
+              <div className="flex flex-wrap gap-2">
+                {[1, 2, 3].map((i) => (
+                  <div
+                    key={i}
+                    className="h-10 sm:h-8 w-20 rounded-lg bg-muted animate-pulse"
+                  />
+                ))}
+              </div>
+            </div>
+          ) : variants && variants.length > 0 ? (
             <div className="space-y-2">
               <Label className="text-sm font-medium">Kích cỡ</Label>
               <div className="flex flex-wrap gap-2">
@@ -114,7 +130,7 @@ export function FnbItemDialog({
                 ))}
               </div>
             </div>
-          )}
+          ) : null}
 
           {/* Quantity */}
           <div className="space-y-2">

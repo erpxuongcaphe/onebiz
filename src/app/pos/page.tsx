@@ -916,6 +916,45 @@ function PosPageInner() {
       setOpenShiftDialogOpen(true);
       return;
     }
+    // Mixed payment validation — chặn checkout khi tổng các phương thức <
+    // tổng đơn (tránh "ghi nợ ngầm" do cashier quên nhập đủ amount cho 1
+    // phương thức). Nếu khách chủ ý ghi nợ → phải dùng nút "Ghi nợ" riêng,
+    // không qua mixed payment.
+    if (state.paymentMethod === "mixed") {
+      const sumBreakdown = state.paymentBreakdown
+        .filter((b) => b.amount > 0)
+        .reduce((s, b) => s + b.amount, 0);
+      if (sumBreakdown < state.total) {
+        toast({
+          title: "Thiếu tiền thanh toán",
+          description: `Tổng các phương thức (${formatCurrency(sumBreakdown)} ₫) nhỏ hơn đơn (${formatCurrency(state.total)} ₫). Bổ sung số tiền hoặc dùng "Ghi nợ" nếu khách thiếu.`,
+          variant: "error",
+          duration: 6000,
+        });
+        return;
+      }
+    }
+
+    // Oversell preflight — báo trước khi xuất hoá đơn nếu line nào vượt tồn.
+    // Trước đây chỉ có badge UI vàng — cashier vẫn bấm F10 → âm kho.
+    // Skip line từ draft loaded (availableStock=0 unknown) — sẽ check sau ở RPC.
+    const oversoldLines = state.lines.filter(
+      (l) => l.availableStock > 0 && l.quantity > l.availableStock,
+    );
+    if (oversoldLines.length > 0) {
+      const first = oversoldLines[0];
+      toast({
+        title: `${first.productName}: cần ${first.quantity}, còn ${first.availableStock}`,
+        description:
+          oversoldLines.length > 1
+            ? `Và ${oversoldLines.length - 1} sản phẩm khác vượt tồn. Vui lòng giảm SL hoặc kiểm kho.`
+            : "Vui lòng giảm SL hoặc kiểm kho.",
+        variant: "error",
+        duration: 6000,
+      });
+      return;
+    }
+
     submitLockRef.current = true;
     setSubmitting("complete");
     try {
@@ -1188,7 +1227,10 @@ function PosPageInner() {
     const handler = (e: KeyboardEvent) => {
       const tag = (e.target as HTMLElement)?.tagName;
       const inInput = tag === "INPUT" || tag === "TEXTAREA";
-      const allowHotkeys = (e.target as HTMLElement)?.dataset?.allowHotkeys === "true";
+      // SAFE GUARD (POS-FIX-A3): F9/F10 strict không-input.
+      // Trước đây input "Khách đưa" set data-allow-hotkeys=true → cashier
+      // gõ tiền + lỡ tay F10 → checkout sai. Giờ phải Tab/click ra khỏi
+      // input trước khi muốn save-draft/checkout bằng phím tắt.
 
       // Tab management hotkeys
       if (e.key === "Tab" && e.ctrlKey) {
@@ -1231,12 +1273,12 @@ function PosPageInner() {
         setCustomerModalOpen(true);
         return;
       }
-      if (e.key === "F9" && (!inInput || allowHotkeys)) {
+      if (e.key === "F9" && !inInput) {
         e.preventDefault();
         if (state.lines.length > 0) handleSaveDraft();
         return;
       }
-      if (e.key === "F10" && (!inInput || allowHotkeys)) {
+      if (e.key === "F10" && !inInput) {
         e.preventDefault();
         if (state.lines.length > 0) handleComplete();
         return;
@@ -1251,6 +1293,17 @@ function PosPageInner() {
           setDraftModalOpen(false);
         } else if (mobileCartOpen) {
           setMobileCartOpen(false);
+        } else if (state.lines.length > 0) {
+          // SAFE GUARD: Esc khi cart không trống → KHÔNG navigate.
+          // Trước đây Esc bỏ qua hết → router.push("/") khiến cashier
+          // gõ ghi chú lỡ tay Esc → mất sạch cart đang xử lý.
+          // Toast nhắc nhở thay vì hành động phá huỷ.
+          toast({
+            title: "Đang có hàng trong giỏ",
+            description: "Bấm 'Lưu nháp' hoặc 'Hoàn thành' trước khi rời trang.",
+            variant: "warning",
+            duration: 3000,
+          });
         } else {
           router.push("/");
         }

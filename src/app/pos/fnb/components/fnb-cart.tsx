@@ -561,38 +561,40 @@ function CartLineItem({
         </p>
       )}
 
-      {/* Qty controls + remove — Stitch pill group */}
+      {/* Qty controls + remove — Stitch pill group.
+          POS-FIX-C1: tăng touch target lên 36px md+, 44px touch device.
+          Trước đây size-7 (28px) — barista đeo găng tap nhầm sang nút xoá. */}
       <div className="flex items-center justify-between mt-2.5">
         <div className="inline-flex items-center gap-0.5 bg-surface-container-lowest rounded-full p-0.5 border border-outline-variant/15">
           <button
             type="button"
             onClick={() => onUpdateQty(line.quantity - 1)}
-            className="size-7 rounded-full flex items-center justify-center text-muted-foreground hover:bg-surface-container-high hover:text-foreground active:bg-surface-container transition-colors press-scale-sm"
+            className="size-9 md:size-8 rounded-full flex items-center justify-center text-muted-foreground hover:bg-surface-container-high hover:text-foreground active:bg-surface-container transition-colors press-scale-sm"
             aria-label="Giảm số lượng"
           >
-            <Icon name="remove" size={14} />
+            <Icon name="remove" size={16} />
           </button>
-          <span className="text-sm font-semibold w-6 text-center tabular-nums text-foreground">
+          <span className="text-sm font-semibold w-7 text-center tabular-nums text-foreground">
             {line.quantity}
           </span>
           <button
             type="button"
             onClick={() => onUpdateQty(line.quantity + 1)}
-            className="size-7 rounded-full flex items-center justify-center text-primary hover:bg-primary-fixed active:bg-primary-fixed/70 transition-colors press-scale-sm"
+            className="size-9 md:size-8 rounded-full flex items-center justify-center text-primary hover:bg-primary-fixed active:bg-primary-fixed/70 transition-colors press-scale-sm"
             aria-label="Tăng số lượng"
           >
-            <Icon name="add" size={14} />
+            <Icon name="add" size={16} />
           </button>
         </div>
 
         <button
           type="button"
           onClick={onRemove}
-          className="size-7 rounded-full flex items-center justify-center text-muted-foreground hover:text-status-error hover:bg-status-error/10 transition-colors opacity-60 md:opacity-0 md:group-hover:opacity-100 press-scale-sm"
+          className="size-9 md:size-8 rounded-full flex items-center justify-center text-muted-foreground hover:text-status-error hover:bg-status-error/10 transition-colors opacity-60 md:opacity-0 md:group-hover:opacity-100 press-scale-sm"
           title="Xoá"
           aria-label="Xoá món"
         >
-          <Icon name="delete" size={15} />
+          <Icon name="delete" size={16} />
         </button>
       </div>
     </div>

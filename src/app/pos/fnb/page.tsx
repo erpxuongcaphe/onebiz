@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useEffect, useCallback, useMemo, lazy, Suspense } from "react";
+import { useState, useEffect, useRef, useCallback, useMemo, lazy, Suspense } from "react";
 import { useAuth, useToast } from "@/lib/contexts";
 import { PermissionPage } from "@/components/shared/permission-page";
 import { PERMISSIONS } from "@/lib/permissions";
@@ -41,7 +41,7 @@ import {
 } from "@/lib/offline";
 import { splitByItems, splitEqually } from "@/lib/services/supabase/split-bill";
 import { validateCoupon } from "@/lib/services/supabase/coupons";
-import { getKitchenOrderById, cancelKitchenOrder, transferTable as transferTableService } from "@/lib/services/supabase/kitchen-orders";
+import { getKitchenOrderById, getKitchenOrders, cancelKitchenOrder, transferTable as transferTableService } from "@/lib/services/supabase/kitchen-orders";
 import { getOpenShift, openShift, closeShift } from "@/lib/services/supabase/shifts";
 import { getClient } from "@/lib/services/supabase/base";
 import { printKitchenTicketV2, printPreBill, printFnbReceipt } from "@/lib/print-fnb";
@@ -89,6 +89,9 @@ function FnbPosPageInner() {
   const [categories, setCategories] = useState<FnbCategory[]>([]);
   const [products, setProducts] = useState<FnbProduct[]>([]);
   const [tables, setTables] = useState<RestaurantTable[]>([]);
+  // POS-FIX-C2: Map orderId → createdAt cho TableFloorPlan timer.
+  // Fetch khi showFloorPlan mở (lazy) để không block initial load.
+  const [orderTimestamps, setOrderTimestamps] = useState<Record<string, string>>({});
   const [activeCategoryId, setActiveCategoryId] = useState<string | null>(null);
   const [loading, setLoading] = useState(true);
 
@@ -96,6 +99,9 @@ function FnbPosPageInner() {
   const [selectedProduct, setSelectedProduct] = useState<FnbProduct | null>(null);
   const [itemDialogOpen, setItemDialogOpen] = useState(false);
   const [itemVariants, setItemVariants] = useState<{ id: string; label: string; sell_price: number }[]>([]);
+  // POS-FIX-C3: track loading state cho variant dialog — khi cache miss
+  // mà network đang fetch, hiện skeleton thay vì empty (UX "tưởng đơ").
+  const [itemVariantsLoading, setItemVariantsLoading] = useState(false);
   const [toppingProducts, setToppingProducts] = useState<{ id: string; name: string; price: number }[]>([]);
   const [paymentOpen, setPaymentOpen] = useState(false);
   const [showFloorPlan, setShowFloorPlan] = useState(false);
@@ -262,6 +268,56 @@ function FnbPosPageInner() {
     // toast chỉ dùng trong catch path, ref vẫn đúng tại thời điểm fire.
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [tenantId, branchId, networkStatus.isOnline]);
+
+  // POS-FIX-C2: Fetch order timestamps cho floor plan timer khi mở floor plan.
+  // Refresh mỗi 60s để timer cập nhật mượt khi user xem lâu.
+  useEffect(() => {
+    if (!showFloorPlan || !branchId) return;
+    let cancelled = false;
+    const fetchTimestamps = async () => {
+      try {
+        const orders = await getKitchenOrders(branchId, [
+          "pending",
+          "preparing",
+          "ready",
+          "served",
+        ]);
+        if (cancelled) return;
+        const map: Record<string, string> = {};
+        for (const o of orders) {
+          map[o.id] = o.createdAt;
+        }
+        setOrderTimestamps(map);
+      } catch (err) {
+        console.error("[FnB] fetch orderTimestamps failed:", err);
+      }
+    };
+    fetchTimestamps();
+    const interval = setInterval(fetchTimestamps, 60_000);
+    return () => {
+      cancelled = true;
+      clearInterval(interval);
+    };
+  }, [showFloorPlan, branchId]);
+
+  // POS-FIX-B2: Reset cart khi đổi branch (bỏ qua mount đầu tiên).
+  // Tránh gửi cart từ quán A sang quán B — productId có thể không tồn tại
+  // ở B hoặc bếp B pha sai món của A.
+  const prevBranchIdRef = useRef<string | undefined>(branchId);
+  useEffect(() => {
+    if (prevBranchIdRef.current && prevBranchIdRef.current !== branchId) {
+      // Branch thực sự đổi (không phải mount đầu)
+      pos.resetAllTabs();
+      toast({
+        title: "Đã chuyển chi nhánh",
+        description: "Cart đã được làm sạch để tránh gửi nhầm đơn.",
+        variant: "default",
+        duration: 3000,
+      });
+    }
+    prevBranchIdRef.current = branchId;
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [branchId]);
 
   // productsWithTier: products với sell_price override theo tier áp dụng cho
   // chi nhánh hiện tại. Mọi UI render menu (grid + search modal + item dialog
@@ -565,6 +621,7 @@ function FnbPosPageInner() {
       // Cache miss (vd prefetch còn chạy hoặc SP mới thêm sau khi vào trang)
       // → fetch trực tiếp SP này rồi populate cache
       setItemVariants([]);
+      setItemVariantsLoading(true);
       setItemDialogOpen(true);
       try {
         const variants = await getVariantsByProduct(product.id);
@@ -583,6 +640,8 @@ function FnbPosPageInner() {
           description: "Món sẽ được thêm với giá chuẩn.",
           variant: "warning",
         });
+      } finally {
+        setItemVariantsLoading(false);
       }
     },
     [toast, variantCacheRef]
@@ -1005,6 +1064,27 @@ function FnbPosPageInner() {
         if (existingTab) {
           pos.switchTab(existingTab.id);
           setShowFloorPlan(false);
+        } else {
+          // POS-FIX-B3: bàn occupied nhưng không có tab local (vd reload, đổi
+          // ca). Thay vì silent fail (click không gì xảy ra), tạo tab mới link
+          // tới table + thông báo barista xem đơn cũ ở KDS.
+          const newTabId = pos.createTab(
+            `Bàn ${table.tableNumber}`,
+            "dine_in",
+            table.id,
+          );
+          // Gắn currentOrderId để cart có context — barista có thể thêm món
+          // mới vào đơn cũ qua addItemsToExistingOrder.
+          pos.updateTabMeta(newTabId, {
+            kitchenOrderId: table.currentOrderId,
+          });
+          setShowFloorPlan(false);
+          toast({
+            title: `Bàn ${table.tableNumber} đang có đơn cũ`,
+            description: "Tab mới được link tới đơn hiện tại. Xem món đã gọi ở Màn bếp (KDS).",
+            variant: "default",
+            duration: 5000,
+          });
         }
       } else if (table.status === "cleaning") {
         markTableAvailable(table.id).then(() => {
@@ -1012,7 +1092,7 @@ function FnbPosPageInner() {
         });
       }
     },
-    [pos]
+    [pos, branchId, toast],
   );
 
   // ── Shift handlers ──
@@ -1345,12 +1425,16 @@ function FnbPosPageInner() {
         setCustomerPickerOpen(true);
         return;
       }
-      if (e.key === "F9" && (!inInput || (e.target as HTMLElement)?.dataset?.allowHotkeys === "true")) {
+      // POS-FIX-B5: F9/F10 luôn fire kể cả khi cursor ở input (note/coupon/
+      // search). Trước đây check `data-allow-hotkeys` nhưng KHÔNG component
+      // nào set → barista gõ note "ít đá" rồi F10 bị chặn, phải blur trước.
+      // FnB không có input nhập tiền-dưa risky như Retail nên cho phép luôn.
+      if (e.key === "F9") {
         e.preventDefault();
         if (pos.lineCount > 0) setPaymentOpen(true);
         return;
       }
-      if (e.key === "F10" && (!inInput || (e.target as HTMLElement)?.dataset?.allowHotkeys === "true")) {
+      if (e.key === "F10") {
         e.preventDefault();
         if (pos.lineCount > 0) handleSendToKitchen();
         return;
@@ -1484,6 +1568,7 @@ function FnbPosPageInner() {
               <TableFloorPlan
                 tables={tables}
                 onSelectTable={handleTableSelect}
+                orderTimestamps={orderTimestamps}
               />
             </Suspense>
           ) : (
@@ -1540,6 +1625,7 @@ function FnbPosPageInner() {
             onOpenChange={setItemDialogOpen}
             product={selectedProduct}
             variants={itemVariants.length > 0 ? itemVariants : undefined}
+            variantsLoading={itemVariantsLoading}
             toppings={toppingProducts.length > 0 ? toppingProducts : undefined}
             onConfirm={handleItemConfirm}
           />
@@ -1664,16 +1750,23 @@ function FnbPosPageInner() {
         </div>
       )}
 
-      {/* Mobile cart FAB */}
+      {/* Mobile cart FAB — POS-FIX-C4: hiện label tab đang active để
+          barista 3 bàn không nhầm bàn nào trước khi mở overlay. */}
       {!mobileCartOpen && pos.lineCount > 0 && (
         <button
           type="button"
           onClick={() => setMobileCartOpen(true)}
-          className="fixed bottom-4 right-4 z-30 md:hidden h-14 w-14 rounded-full bg-primary text-white shadow-lg flex items-center justify-center hover:bg-primary/90 transition-colors"
+          className="fixed bottom-4 right-4 z-30 md:hidden flex items-center gap-2 px-4 h-14 rounded-full bg-primary text-white shadow-lg hover:bg-primary/90 transition-colors"
+          aria-label={`Mở giỏ hàng tab ${pos.activeTab?.label}`}
         >
-          <Icon name="shopping_cart" size={24} />
-          <span className="absolute -top-1 -right-1 h-5 min-w-5 px-1 rounded-full bg-status-error text-[10px] font-bold flex items-center justify-center">
-            {pos.lineCount}
+          <span className="relative">
+            <Icon name="shopping_cart" size={22} />
+            <span className="absolute -top-1.5 -right-2 h-5 min-w-5 px-1 rounded-full bg-status-error text-[10px] font-bold flex items-center justify-center">
+              {pos.lineCount}
+            </span>
+          </span>
+          <span className="text-sm font-medium max-w-[120px] truncate">
+            {pos.activeTab?.label ?? "Giỏ hàng"}
           </span>
         </button>
       )}

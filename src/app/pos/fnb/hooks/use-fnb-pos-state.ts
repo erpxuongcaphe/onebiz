@@ -28,6 +28,22 @@ function calcLineTotal(line: Omit<FnbOrderLine, "lineTotal" | "id">): number {
   return base + toppingTotal;
 }
 
+/**
+ * Build stable topping signature for dedup. Sort theo productId rồi join
+ * "id:qty" để cùng set topping (bất kể order nhập) có cùng signature.
+ *
+ * Trước đây dùng `JSON.stringify(toppings)` → key order không guarantee
+ * → cùng món cùng topping nhưng tick checkbox khác thứ tự = 2 line riêng,
+ * bếp nhận 2 ticket cho cùng nhu cầu khách.
+ */
+function toppingSignature(toppings: FnbCartTopping[]): string {
+  if (!toppings || toppings.length === 0) return "";
+  return [...toppings]
+    .sort((a, b) => a.productId.localeCompare(b.productId))
+    .map((t) => `${t.productId}:${t.quantity}`)
+    .join("|");
+}
+
 export interface UseFnbPosStateReturn {
   // Tabs
   tabs: FnbTabSnapshot[];
@@ -36,6 +52,8 @@ export interface UseFnbPosStateReturn {
   createTab: (label: string, orderType: OrderType, tableId?: string) => string;
   switchTab: (tabId: string) => void;
   closeTab: (tabId: string) => void;
+  /** Reset toàn bộ tabs về 1 tab "Mang về #1" rỗng. Dùng khi đổi chi nhánh. */
+  resetAllTabs: () => void;
   updateTabMeta: (tabId: string, meta: Partial<Pick<FnbTabSnapshot, "customerId" | "customerName" | "kitchenOrderId">>) => void;
 
   // Cart lines
@@ -117,6 +135,21 @@ export function useFnbPosState(): UseFnbPosStateReturn {
     [activeTabId]
   );
 
+  // POS-FIX-B2: Reset all tabs khi đổi branch — tránh gửi đơn từ cart cũ
+  // sang quán mới (productId có thể không tồn tại ở branch mới hoặc tệ hơn:
+  // bếp pha món sai chi nhánh).
+  const resetAllTabs = useCallback(() => {
+    const fresh: FnbTabSnapshot = {
+      id: nextTabId(),
+      label: "Mang về #1",
+      orderType: "takeaway",
+      customerName: "Khách lẻ",
+      lines: [],
+    };
+    setTabs([fresh]);
+    setActiveTabId(fresh.id);
+  }, []);
+
   const updateTabMeta = useCallback(
     (
       tabId: string,
@@ -144,14 +177,18 @@ export function useFnbPosState(): UseFnbPosStateReturn {
 
   const addLine = useCallback(
     (input: Omit<FnbOrderLine, "id" | "lineTotal">) => {
-      // Check if same product+variant+note already exists → merge qty
+      // Check if same product+variant+note+toppings already exists → merge qty.
+      // POS-FIX-B4: dùng stable signature thay vì JSON.stringify (object key
+      // order không guarantee → cùng món cùng topping bị thêm 2 line riêng,
+      // bếp nhận 2 ticket, khách bill double).
+      const inputToppingSig = toppingSignature(input.toppings);
       updateActiveTab((lines) => {
         const existing = lines.find(
           (l) =>
             l.productId === input.productId &&
             l.variantId === input.variantId &&
-            l.note === input.note &&
-            JSON.stringify(l.toppings) === JSON.stringify(input.toppings)
+            (l.note ?? "") === (input.note ?? "") &&
+            toppingSignature(l.toppings) === inputToppingSig
         );
         if (existing) {
           return lines.map((l) =>
@@ -242,6 +279,7 @@ export function useFnbPosState(): UseFnbPosStateReturn {
     createTab,
     switchTab,
     closeTab,
+    resetAllTabs,
     updateTabMeta,
     addLine,
     updateLineQty,
