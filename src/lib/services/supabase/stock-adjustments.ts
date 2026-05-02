@@ -21,6 +21,7 @@
  */
 
 import { getClient, getCurrentContext, handleError } from "./base";
+import { recordAuditLog } from "./audit";
 import type { Database } from "@/lib/supabase/types";
 
 type StockMovementInsert = Database["public"]["Tables"]["stock_movements"]["Insert"];
@@ -110,6 +111,36 @@ export async function applyManualStockMovement(
       p_delta: delta,
     });
     if (bsErr) handleError(bsErr, "applyManualStockMovement:branch_stock");
+  }
+
+  // Audit log — gom theo referenceType/referenceId (1 event/đơn) để
+  // detail panel "Lịch sử" nhặt được. Nếu không có referenceId (ad-hoc),
+  // log từng item riêng.
+  const groups = new Map<string, ManualStockMovementInput[]>();
+  for (const i of inputs) {
+    const key = i.referenceId ? `${i.referenceType}:${i.referenceId}` : `__adhoc:${i.productId}:${Math.random()}`;
+    const arr = groups.get(key) ?? [];
+    arr.push(i);
+    groups.set(key, arr);
+  }
+  for (const [key, items] of groups) {
+    const [refType, refId] = key.startsWith("__adhoc")
+      ? [items[0].referenceType, ""]
+      : key.split(":");
+    void recordAuditLog({
+      entityType: refType,
+      entityId: refId || items[0].productId,
+      action: items[0].type === "in" ? "create" : "delete",
+      newData: {
+        items: items.map((i) => ({
+          productId: i.productId,
+          quantity: i.quantity,
+          type: i.type,
+          note: i.note,
+        })),
+        branchId: resolved.branchId,
+      },
+    });
   }
 }
 

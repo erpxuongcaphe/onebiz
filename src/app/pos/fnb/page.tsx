@@ -227,13 +227,17 @@ function FnbPosPageInner() {
               }))
             );
 
-            // Update cache in background
-            prefetchMenuData().catch(() => {});
+            // Update cache in background — fail OK, retry next session.
+            prefetchMenuData().catch((err) =>
+              console.warn("[FnB] prefetchMenuData failed:", err),
+            );
           }
 
           if (branchId) {
             setTables(tbls);
-            prefetchTableData(branchId).catch(() => {});
+            prefetchTableData(branchId).catch((err) =>
+              console.warn("[FnB] prefetchTableData failed:", err),
+            );
             if (userId) setCurrentShift(shift);
           }
         }
@@ -928,7 +932,11 @@ function FnbPosPageInner() {
               promotionId: appliedPromotion.promotion.id,
               promotionDiscount: appliedPromotion.discountAmount,
               promotionFreeValue: freeValue,
-            }).catch(() => {});
+            }).catch((err) => {
+              // Tag fail → KM count báo cáo có thể thiếu 1 đơn, nhưng đơn
+              // đã thanh toán xong. Không block UX. Log để admin biết.
+              console.error("[FnB] tagInvoicePromotion failed:", err);
+            });
           }
         }
 
@@ -975,7 +983,7 @@ function FnbPosPageInner() {
         } else {
           toast({ title: "Thanh toán thành công", variant: "success" });
           // Refresh tables từ server để đồng bộ status chính xác
-          if (branchId) getTablesByBranch(branchId).then(setTables).catch(() => {});
+          if (branchId) getTablesByBranch(branchId).then(setTables).catch((err) => console.error("[FnB] refresh tables failed:", err));
         }
       } catch (err) {
         hapticError();
@@ -1121,7 +1129,7 @@ function FnbPosPageInner() {
       }
       pos.closeTab(pos.activeTabId);
       setVoidConfirmOpen(false);
-      if (branchId) getTablesByBranch(branchId).then(setTables).catch(() => {});
+      if (branchId) getTablesByBranch(branchId).then(setTables).catch((err) => console.error("[FnB] refresh tables failed:", err));
     } catch (err) {
       hapticError();
       toast({
@@ -1160,7 +1168,7 @@ function FnbPosPageInner() {
           variant: "success",
         });
         setTransferTableOpen(false);
-        if (branchId) getTablesByBranch(branchId).then(setTables).catch(() => {});
+        if (branchId) getTablesByBranch(branchId).then(setTables).catch((err) => console.error("[FnB] refresh tables failed:", err));
       } catch (err) {
         hapticError();
         toast({

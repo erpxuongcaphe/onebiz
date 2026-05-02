@@ -12,6 +12,7 @@ import {
 import { cn } from "@/lib/utils";
 import { ScrollArea } from "@/components/ui/scroll-area";
 import { Icon } from "@/components/ui/icon";
+import { DemoNotice } from "@/components/shared/demo-notice";
 
 const ONLINE_NAV = [
   { href: "/ban-online", label: "Tổng quan", icon: LayoutDashboard, exact: true },
@@ -92,6 +93,14 @@ export default function BanOnlineLayout({
 
       {/* Content */}
       <main className="flex-1 min-w-0 overflow-auto pb-16 md:pb-0">
+        {/* Banner toàn module: KPI/conversation/order ở /ban-online/* hiện
+            là dữ liệu mẫu. Sẽ thay khi tích hợp Facebook/Zalo/Web. */}
+        <div className="px-4 pt-3 md:px-6 md:pt-4">
+          <DemoNotice
+            title="Module Bán online — đang phát triển"
+            description="Số liệu, hội thoại và đơn hàng trên các trang con (Facebook, Zalo, Website, Đơn hàng online) đang là dữ liệu mẫu để xem trước giao diện. Khi tích hợp xong API các kênh, dữ liệu sẽ tự động cập nhật từ DB."
+          />
+        </div>
         {children}
       </main>
     </div>

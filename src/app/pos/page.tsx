@@ -326,7 +326,12 @@ function PosPageInner() {
     if (!currentBranch?.id || !user?.id) return;
     getOpenShift(currentBranch.id, user.id)
       .then((shift) => setCurrentShift(shift))
-      .catch(() => {});
+      .catch((err) => {
+        // Không toast — getOpenShift fail không cản người bán dùng POS
+        // (UI sẽ hiện "Chưa mở ca" cho phép user mở ca thủ công).
+        // Log để debug khi user báo "ca biến mất".
+        console.error("[POS] getOpenShift failed:", err);
+      });
   }, [currentBranch?.id, user?.id]);
 
   const handleShiftClick = useCallback(() => {
@@ -767,7 +772,10 @@ function PosPageInner() {
       .then((s) => {
         if (!cancelled) setLoyaltySettings(s);
       })
-      .catch(() => {});
+      .catch((err) => {
+        // Loyalty fail → fallback default settings, không cản POS dùng được.
+        console.error("[POS] getLoyaltySettings failed:", err);
+      });
     return () => {
       cancelled = true;
     };
@@ -1009,7 +1017,17 @@ function PosPageInner() {
             isOffline: isOfflineCheckout,
           };
           printReceiptDirect(receipt);
-        } catch {}
+        } catch (err) {
+          // Print failure không nên block checkout — đơn đã thanh toán xong.
+          // Vẫn cần log để admin biết máy in lỗi (vd: hết giấy, mất kết nối).
+          console.error("[POS] Auto-print receipt failed:", err);
+          toast({
+            title: "Không in được hoá đơn",
+            description: `Đơn ${invoiceCode} đã lưu thành công. Vui lòng in lại từ Lịch sử đơn.`,
+            variant: "warning",
+            duration: 6000,
+          });
+        }
       }
 
       // KM-2: Tăng usage_count atomic — chỉ khi online (offline để sync sau)
@@ -2242,7 +2260,14 @@ function PosPageInner() {
                 });
               }
             })
-            .catch(() => {});
+            .catch((err) => {
+              console.error("[POS] customer search failed:", err);
+              toast({
+                title: "Không tìm được khách hàng",
+                description: "Vui lòng thử lại hoặc chọn từ danh sách.",
+                variant: "error",
+              });
+            });
         }}
       />
       <DraftListModal

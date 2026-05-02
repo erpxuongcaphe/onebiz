@@ -303,7 +303,7 @@ export const sidebarNavGroups: SidebarGroup[] = [
       { label: "Chi nhánh", href: "/he-thong/chi-nhanh", icon: "apartment", permission: "system.manage_branches" },
       { label: "Bàn & Khu vực F&B", href: "/he-thong/quan-ly-ban", icon: "chair" },
       { label: "Thiết lập chung", href: "/he-thong/thiet-lap", icon: "settings" },
-      { label: "Tích hợp", href: "/he-thong/tich-hop", icon: "power" },
+      { label: "Tích hợp", href: "/he-thong/tich-hop", icon: "power", comingSoon: true },
       { label: "Lịch sử thao tác", href: "/he-thong/audit", icon: "pending_actions", permission: "system.view_audit" },
     ],
   },

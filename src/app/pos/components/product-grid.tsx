@@ -33,7 +33,9 @@ export function ProductGrid({ searchQuery, onAddProduct }: ProductGridProps) {
   useEffect(() => {
     getCategoriesByScope("sku")
       .then((cats) => setCategories(cats))
-      .catch(() => {});
+      .catch((err) =>
+        console.error("[POS] product-grid getCategoriesByScope failed:", err),
+      );
   }, []);
 
   // ---- Fetch products (debounced when search changes) ----

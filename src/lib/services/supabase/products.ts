@@ -5,6 +5,7 @@
 import type { Product, ProductDetail, StockMovement, SalesHistory, QueryParams, QueryResult } from "@/lib/types";
 import type { Database } from "@/lib/supabase/types";
 import { getClient, getPaginationRange, handleError, getCurrentTenantId } from "./base";
+import { recordAuditLog } from "./audit";
 
 type ProductInsert = Database["public"]["Tables"]["products"]["Insert"];
 type ProductUpdate = Database["public"]["Tables"]["products"]["Update"];
@@ -636,12 +637,36 @@ export async function updateProduct(id: string, updates: Partial<Product & Produ
 export async function deleteProduct(id: string): Promise<void> {
   const supabase = getClient();
 
+  // Snapshot trước khi xoá để audit log có thể restore-by-paste nếu CEO
+  // hỏi "ai xoá SP này, có gì trong đó". Fail-soft: nếu select lỗi vẫn
+  // tiếp tục delete (vd: SP đã xoá race condition).
+  let snapshot: Record<string, unknown> | null = null;
+  try {
+    const { data } = await supabase
+      .from("products")
+      .select("*")
+      .eq("id", id)
+      .maybeSingle();
+    snapshot = (data as Record<string, unknown>) ?? null;
+  } catch {
+    // ignore — vẫn delete
+  }
+
   const { error } = await supabase
     .from("products")
     .delete()
     .eq("id", id);
 
   if (error) handleError(error, "deleteProduct");
+
+  // Audit log fire-and-forget (recordAuditLog tự catch nội bộ).
+  void recordAuditLog({
+    entityType: "product",
+    entityId: id,
+    action: "delete",
+    oldData: snapshot,
+    newData: null,
+  });
 }
 
 // --- Bulk Mutations ---
