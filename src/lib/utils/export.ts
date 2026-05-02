@@ -1,25 +1,46 @@
-import * as XLSX from "xlsx";
-import { saveAs } from "file-saver";
+/**
+ * Excel/CSV export — lazy-loaded để giữ initial bundle gọn.
+ *
+ * Sprint POLISH-3.1: trước đây `import * as XLSX from "xlsx"` ở top-level
+ * khiến gói xlsx (~400KB raw) bị bundle vào 19 list page (mỗi page có nút
+ * Export). Sau khi đổi sang `await import("xlsx")` trong function body, xlsx
+ * chỉ load khi user thực sự nhấn Export — initial JS giảm đáng kể.
+ *
+ * Async API: caller phải `await exportToExcel(...)`. Dialog/button thường
+ * đã có loading state nên không block UX.
+ */
 
 interface ExportColumn {
   header: string;
   key: string;
   width?: number;
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
   format?: (value: any) => string | number;
 }
 
-export function exportToExcel<T extends Record<string, any>>(
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
+export async function exportToExcel<T extends Record<string, any>>(
   data: T[],
   columns: ExportColumn[],
-  fileName: string
-) {
+  fileName: string,
+): Promise<void> {
+  // Lazy import — xlsx chỉ tải khi function thực sự được gọi.
+  const [{ default: XLSX }, { saveAs }] = await Promise.all([
+    import("xlsx"),
+    import("file-saver"),
+  ]);
+
   // Map data to rows using column definitions
   const rows = data.map((item) =>
-    columns.reduce((acc, col) => {
-      const value = item[col.key];
-      acc[col.header] = col.format ? col.format(value) : value;
-      return acc;
-    }, {} as Record<string, any>)
+    columns.reduce(
+      (acc, col) => {
+        const value = item[col.key];
+        acc[col.header] = col.format ? col.format(value) : value;
+        return acc;
+      },
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      {} as Record<string, any>,
+    ),
   );
 
   const ws = XLSX.utils.json_to_sheet(rows);
@@ -37,21 +58,31 @@ export function exportToExcel<T extends Record<string, any>>(
   saveAs(blob, `${fileName}.xlsx`);
 }
 
-export function exportToCsv<T extends Record<string, any>>(
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
+export async function exportToCsv<T extends Record<string, any>>(
   data: T[],
   columns: ExportColumn[],
-  fileName: string
-) {
+  fileName: string,
+): Promise<void> {
+  const [{ default: XLSX }, { saveAs }] = await Promise.all([
+    import("xlsx"),
+    import("file-saver"),
+  ]);
+
   const rows = data.map((item) =>
-    columns.reduce((acc, col) => {
-      const value = item[col.key];
-      acc[col.header] = col.format ? col.format(value) : value;
-      return acc;
-    }, {} as Record<string, any>)
+    columns.reduce(
+      (acc, col) => {
+        const value = item[col.key];
+        acc[col.header] = col.format ? col.format(value) : value;
+        return acc;
+      },
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      {} as Record<string, any>,
+    ),
   );
 
   const ws = XLSX.utils.json_to_sheet(rows);
   const csv = XLSX.utils.sheet_to_csv(ws);
-  const blob = new Blob(["\uFEFF" + csv], { type: "text/csv;charset=utf-8" }); // BOM for Vietnamese
+  const blob = new Blob(["﻿" + csv], { type: "text/csv;charset=utf-8" }); // BOM for Vietnamese
   saveAs(blob, `${fileName}.csv`);
 }

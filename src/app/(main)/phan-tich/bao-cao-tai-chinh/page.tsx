@@ -1,8 +1,8 @@
 "use client";
 
 import { useState, useEffect, useCallback } from "react";
-import * as XLSX from "xlsx";
-import { saveAs } from "file-saver";
+// Sprint POLISH-3.1: xlsx + file-saver lazy-loaded trong handler để
+// initial bundle của trang report KHÔNG kéo ~400KB xlsx eager.
 import {
   Select,
   SelectTrigger,
@@ -203,6 +203,12 @@ export default function BaoCaoTaiChinhPage() {
     }
     setExporting(true);
     try {
+      // Lazy-import xlsx + file-saver — chỉ load khi user thực sự bấm Export.
+      const [{ default: XLSX }, { saveAs }] = await Promise.all([
+        import("xlsx"),
+        import("file-saver"),
+      ]);
+
       const wb = XLSX.utils.book_new();
 
       // Sheet 1: P&L summary
