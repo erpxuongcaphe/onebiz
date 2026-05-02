@@ -81,6 +81,27 @@ interface DataTableProps<TData, TValue> {
    * Dùng sau khi parent thực thi xong một bulk action thành công.
    */
   clearSelectionTrigger?: number;
+  /**
+   * Cho cột đầu (data column đầu tiên — sau cột select nếu có) sticky-left
+   * khi scroll ngang. Tránh user mất context dòng (mã/tên SP) khi bảng nhiều
+   * cột ở tablet. Default `true` — opt-out nếu cell quá rộng / có dialog.
+   */
+  stickyFirstColumn?: boolean;
+}
+
+/**
+ * Module augmentation cho TanStack table — cho phép column khai meta
+ * `pinLeft` để override sticky behavior. Default sticky theo prop
+ * `stickyFirstColumn` của DataTable; cell muốn unpin → set
+ * `meta: { pinLeft: false }` trong column def.
+ */
+declare module "@tanstack/react-table" {
+  // eslint-disable-next-line @typescript-eslint/no-unused-vars
+  interface ColumnMeta<TData extends unknown, TValue> {
+    pinLeft?: boolean;
+    /** Width fixed (px) cho cell sticky — cần để thân row không nhảy. */
+    pinWidth?: number;
+  }
 }
 
 export function DataTable<TData, TValue>({
@@ -104,6 +125,7 @@ export function DataTable<TData, TValue>({
   onExpandedRowChange,
   getRowId,
   clearSelectionTrigger,
+  stickyFirstColumn = true,
 }: DataTableProps<TData, TValue>) {
   const [sorting, setSorting] = useState<SortingState>([]);
   const [rowSelection, setRowSelection] = useState<RowSelectionState>({});
@@ -218,6 +240,33 @@ export function DataTable<TData, TValue>({
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [clearSelectionTrigger]);
 
+  // Tính cột nào sẽ pin-left khi scroll ngang.
+  // Default: cột data đầu tiên (sau "select" nếu có) khi `stickyFirstColumn`.
+  // Override qua column meta `pinLeft: false` (vd nếu cột đầu là image quá rộng).
+  const firstDataColumnId = useMemo(() => {
+    const dataCol = allColumns.find(
+      (c) => c.id !== "select" && c.id !== "actions",
+    );
+    return dataCol?.id;
+  }, [allColumns]);
+
+  const isPinnedColumn = (columnId: string): boolean => {
+    if (columnId === "select" || columnId === "actions") return false;
+    const col = allColumns.find((c) => c.id === columnId);
+    const meta = (col as { meta?: { pinLeft?: boolean } } | undefined)?.meta;
+    if (typeof meta?.pinLeft === "boolean") return meta.pinLeft;
+    return stickyFirstColumn && columnId === firstDataColumnId;
+  };
+
+  // Class chung cho cell pinned — bg phải opaque để cell sau scroll qua
+  // không nhìn thấy text. Border phải để phân tách thị giác.
+  const pinHeaderClass =
+    "sticky left-0 z-20 bg-surface-container-low after:absolute after:inset-y-0 after:right-0 after:w-px after:bg-border";
+  const pinCellClass =
+    "sticky left-0 z-[5] bg-card after:absolute after:inset-y-0 after:right-0 after:w-px after:bg-border/60";
+  const pinCellSelectedClass =
+    "sticky left-0 z-[5] bg-primary-fixed after:absolute after:inset-y-0 after:right-0 after:w-px after:bg-border/60";
+
   // Derive selected rows for bulk actions
   const selectedRows = useMemo(() => {
     return table
@@ -285,13 +334,16 @@ export function DataTable<TData, TValue>({
           <TableHeader className="sticky top-0 bg-surface-container-low z-10">
             {table.getHeaderGroups().map((headerGroup) => (
               <TableRow key={headerGroup.id}>
-                {headerGroup.headers.map((header) => (
+                {headerGroup.headers.map((header) => {
+                  const pinned = isPinnedColumn(header.column.id);
+                  return (
                   <TableHead
                     key={header.id}
                     className={cn(
                       "text-[11px] font-semibold text-muted-foreground whitespace-nowrap uppercase tracking-wider",
                       header.column.getCanSort() &&
-                        "cursor-pointer select-none"
+                        "cursor-pointer select-none",
+                      pinned && pinHeaderClass,
                     )}
                     style={{
                       width:
@@ -321,7 +373,8 @@ export function DataTable<TData, TValue>({
                       )}
                     </div>
                   </TableHead>
-                ))}
+                  );
+                })}
               </TableRow>
             ))}
           </TableHeader>
@@ -385,14 +438,24 @@ export function DataTable<TData, TValue>({
                     )}
                     onClick={() => handleRowClick(row.original, rowIndex)}
                   >
-                    {row.getVisibleCells().map((cell) => (
-                      <TableCell key={cell.id} className="text-sm py-2.5">
+                    {row.getVisibleCells().map((cell) => {
+                      const pinned = isPinnedColumn(cell.column.id);
+                      const isExpanded = expandedRowIdx === rowIndex;
+                      return (
+                      <TableCell
+                        key={cell.id}
+                        className={cn(
+                          "text-sm py-2.5",
+                          pinned && (isExpanded ? pinCellSelectedClass : pinCellClass),
+                        )}
+                      >
                         {flexRender(
                           cell.column.columnDef.cell,
                           cell.getContext()
                         )}
                       </TableCell>
-                    ))}
+                      );
+                    })}
                   </TableRow>
 
                   {/* Inline detail panel */}

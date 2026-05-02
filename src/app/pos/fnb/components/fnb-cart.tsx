@@ -90,7 +90,10 @@ export function FnbCart({
       "flex flex-col bg-surface-container-lowest h-full overflow-hidden",
       mobile
         ? "w-full"
-        : "w-[300px] md:w-[340px] lg:w-[360px] hidden lg:flex rounded-xl ambient-shadow border border-outline-variant/20 my-3 mr-3"
+        // Hiện từ md (768) thay vì lg (1024) — iPad portrait giữ cart context
+        // bên cạnh menu thay vì phải mở overlay full-screen mỗi lần thêm món.
+        // Width ở md compact (280) để menu grid còn ~488px (3-4 cols 160px).
+        : "w-[280px] lg:w-[340px] xl:w-[360px] hidden md:flex rounded-xl ambient-shadow border border-outline-variant/20 my-3 mr-3"
     )}>
       {/* ── Header ── */}
       <div className="p-4 border-b border-outline-variant/20 bg-surface-container-lowest shrink-0">

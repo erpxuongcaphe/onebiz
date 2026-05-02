@@ -239,7 +239,7 @@ export function BOMEditorDialog({
 
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
-      <DialogContent className="sm:max-w-3xl max-h-[90vh] overflow-y-auto">
+      <DialogContent className="md:max-w-2xl lg:max-w-3xl max-h-[90vh] overflow-y-auto">
         <DialogHeader>
           <DialogTitle>{bomId ? "Sửa công thức (BOM)" : "Tạo công thức (BOM)"}</DialogTitle>
           <DialogDescription>

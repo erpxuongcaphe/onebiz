@@ -1614,9 +1614,10 @@ function FnbPosPageInner() {
         </Suspense>
       )}
 
-      {/* Mobile cart overlay */}
+      {/* Mobile cart overlay — chỉ hiện <md (768) khi cart inline ẩn.
+          Từ md trở lên cart đã hiện inline bên phải, không cần overlay. */}
       {mobileCartOpen && (
-        <div className="fixed inset-0 z-40 lg:hidden flex flex-col bg-background">
+        <div className="fixed inset-0 z-40 md:hidden flex flex-col bg-background">
           <div className="flex items-center justify-between px-3 py-2 border-b bg-surface-container-low">
             <span className="text-sm font-semibold">Giỏ hàng</span>
             <button
@@ -1660,7 +1661,7 @@ function FnbPosPageInner() {
         <button
           type="button"
           onClick={() => setMobileCartOpen(true)}
-          className="fixed bottom-4 right-4 z-30 lg:hidden h-14 w-14 rounded-full bg-primary text-white shadow-lg flex items-center justify-center hover:bg-primary/90 transition-colors"
+          className="fixed bottom-4 right-4 z-30 md:hidden h-14 w-14 rounded-full bg-primary text-white shadow-lg flex items-center justify-center hover:bg-primary/90 transition-colors"
         >
           <Icon name="shopping_cart" size={24} />
           <span className="absolute -top-1 -right-1 h-5 min-w-5 px-1 rounded-full bg-status-error text-[10px] font-bold flex items-center justify-center">

@@ -456,7 +456,7 @@ function MobileNav() {
 
   return (
     <Sheet open={open} onOpenChange={setOpen}>
-      <SheetTrigger className="lg:hidden press-scale-sm inline-flex items-center justify-center h-10 w-10 rounded-lg text-foreground hover:bg-surface-container-low">
+      <SheetTrigger className="md:hidden press-scale-sm inline-flex items-center justify-center h-10 w-10 rounded-lg text-foreground hover:bg-surface-container-low">
         <Icon name="menu" size={22} />
       </SheetTrigger>
       <SheetContent side="left" className="w-[320px] p-0">

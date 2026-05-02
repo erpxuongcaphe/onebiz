@@ -167,7 +167,7 @@ export function ImportExcelDialog<TRow>({
 
   return (
     <Dialog open={open} onOpenChange={handleClose}>
-      <DialogContent className="sm:max-w-4xl">
+      <DialogContent className="md:max-w-2xl lg:max-w-3xl xl:max-w-4xl">
         <DialogHeader>
           <DialogTitle>
             <span className="inline-flex items-center gap-2">

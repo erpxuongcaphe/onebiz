@@ -109,7 +109,7 @@ export function ImportDataDialog({ open, onOpenChange }: ImportDataDialogProps) 
 
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
-      <DialogContent className="sm:max-w-3xl">
+      <DialogContent className="md:max-w-2xl lg:max-w-3xl">
         <div className="flex items-start gap-3">
           <div className="h-10 w-10 rounded-lg bg-primary/10 text-primary flex items-center justify-center shrink-0">
             <Icon name="cloud_upload" />

@@ -5,6 +5,7 @@ import { usePathname } from "next/navigation";
 import { useEffect, useMemo, useRef, useState } from "react";
 import { cn } from "@/lib/utils";
 import { useAuth } from "@/lib/contexts";
+import { useBreakpoint } from "@/lib/hooks/use-breakpoint";
 import {
   sidebarNavGroups,
   isHrefActive,
@@ -419,7 +420,15 @@ function GroupCollapsed({
 export function AppSidebar() {
   const pathname = usePathname();
   const { hasPermission } = useAuth();
-  const [collapsed, setCollapsed] = usePersistedCollapsed(false);
+  const [userCollapsed, setUserCollapsed] = usePersistedCollapsed(false);
+
+  // Tablet portrait/landscape (768-1023): FORCE collapsed rail mode.
+  // Lý do: ở md (768-1023) main content đã chật, sidebar full 224px chiếm
+  // 22% viewport. Rail 64px chỉ chiếm 6%, vẫn cho user navigate qua flyout.
+  // Ở lg+ (≥1024) tôn trọng user choice từ localStorage.
+  const isLargeScreen = useBreakpoint("lg");
+  const collapsed = isLargeScreen ? userCollapsed : true;
+  const setCollapsed = isLargeScreen ? setUserCollapsed : (() => {});
 
   // Keyboard shortcut Ctrl+B / Cmd+B → toggle sidebar collapse.
   // Pattern chuẩn từ VS Code, Linear, Notion. Discoverable qua tooltip
@@ -485,32 +494,36 @@ export function AppSidebar() {
     <aside
       data-collapsed={collapsed ? "true" : "false"}
       className={cn(
-        "hidden lg:flex flex-col bg-surface-container-lowest border-r border-border shrink-0 transition-[width] duration-200",
+        // Hiện từ md (768) thay vì lg (1024) — tablet iPad portrait có nav.
+        // Tại md (768-1023) auto force collapsed rail (xem isLargeScreen logic
+        // ở trên), tại lg+ tôn trọng user choice.
+        "hidden md:flex flex-col bg-surface-container-lowest border-r border-border shrink-0 transition-[width] duration-200",
         // w-56 (224px) thay vì w-64 (256px) — tiết kiệm 32px cho main content.
-        // Trên 1366×768, AppSidebar 224 + FilterSidebar 240 + Main = main rộng
-        // 902px (vs 870px trước). FilterSidebar collapsible thêm 192px khi cần.
-        // Collapsed giữ w-16 (64px) để icon comfortable touch target.
+        // Collapsed w-16 (64px) — icon comfortable touch target + flyout đầy đủ.
         collapsed ? "w-16" : "w-56"
       )}
     >
-      {/* Stitch header — chỉ toggle button, logo đã có ở top-nav (tránh lặp brand) */}
+      {/* Stitch header — chỉ toggle button, logo đã có ở top-nav (tránh lặp brand)
+          Toggle ẩn ở md (768-1023) vì state forced rail; chỉ hiện ở lg+. */}
       <div className={cn("flex items-center justify-end h-14 border-b border-border", collapsed ? "px-2" : "px-3")}>
-        <button
-          type="button"
-          onClick={() => setCollapsed(!collapsed)}
-          className={cn(
-            "h-9 w-9 press-scale-sm inline-flex items-center justify-center rounded-lg text-muted-foreground hover:bg-surface-container-low hover:text-foreground",
-            collapsed && "mx-auto"
-          )}
-          aria-label={collapsed ? "Mở rộng sidebar" : "Thu gọn sidebar"}
-          title={collapsed ? "Mở rộng (Ctrl+B)" : "Thu gọn (Ctrl+B)"}
-        >
-          {collapsed ? (
-            <Icon name="left_panel_open" size={20} />
-          ) : (
-            <Icon name="left_panel_close" size={20} />
-          )}
-        </button>
+        {isLargeScreen && (
+          <button
+            type="button"
+            onClick={() => setCollapsed(!collapsed)}
+            className={cn(
+              "h-9 w-9 press-scale-sm inline-flex items-center justify-center rounded-lg text-muted-foreground hover:bg-surface-container-low hover:text-foreground",
+              collapsed && "mx-auto"
+            )}
+            aria-label={collapsed ? "Mở rộng sidebar" : "Thu gọn sidebar"}
+            title={collapsed ? "Mở rộng (Ctrl+B)" : "Thu gọn (Ctrl+B)"}
+          >
+            {collapsed ? (
+              <Icon name="left_panel_open" size={20} />
+            ) : (
+              <Icon name="left_panel_close" size={20} />
+            )}
+          </button>
+        )}
       </div>
 
       {/* Top groups */}
