@@ -86,9 +86,10 @@ export function ProductGrid({ searchQuery, onAddProduct }: ProductGridProps) {
   );
 
   return (
-    <div className="flex flex-col h-full bg-surface-container-low">
-      {/* ── Category pills ── */}
-      <div className="flex items-center gap-1.5 px-3 py-1.5 overflow-x-auto border-b bg-white shrink-0 scrollbar-none">
+    <div className="flex flex-col md:flex-row h-full bg-surface-container-low">
+      {/* ── Mobile: horizontal pills (giữ pattern cũ cho <md, cashier mobile
+              quen tap pill ngang). Desktop: ẩn để dùng vertical sidebar. ── */}
+      <div className="md:hidden flex items-center gap-1.5 px-3 py-1.5 overflow-x-auto border-b bg-white shrink-0 scrollbar-none">
         <CategoryPill
           label="Tất cả"
           count={totalProducts}
@@ -106,8 +107,32 @@ export function ProductGrid({ searchQuery, onAddProduct }: ProductGridProps) {
         ))}
       </div>
 
+      {/* ── Desktop+: vertical sidebar trái — list full-width tap target lớn,
+              count align right, active state primary nền + border-l-4. Pattern
+              Square POS / KiotViet quen thuộc với cashier. ── */}
+      <aside className="hidden md:flex flex-col w-40 lg:w-44 xl:w-48 border-r bg-white shrink-0 overflow-y-auto">
+        <div className="px-3 py-2 text-[10px] font-semibold text-muted-foreground uppercase tracking-wider border-b sticky top-0 bg-white z-10">
+          Danh mục
+        </div>
+        <CategoryRow
+          label="Tất cả"
+          count={totalProducts}
+          active={selectedCategory === "all"}
+          onClick={() => setSelectedCategory("all")}
+        />
+        {categories.map((cat) => (
+          <CategoryRow
+            key={cat.id}
+            label={cat.name}
+            count={cat.productCount}
+            active={selectedCategory === cat.id}
+            onClick={() => setSelectedCategory(cat.id)}
+          />
+        ))}
+      </aside>
+
       {/* ── Product tiles grid ── */}
-      <div className="flex-1 overflow-y-auto p-2">
+      <div className="flex-1 overflow-y-auto p-2 min-w-0">
         {loading ? (
           <div className="flex items-center justify-center h-32">
             <Icon name="progress_activity" className="animate-spin text-primary" />
@@ -125,7 +150,8 @@ export function ProductGrid({ searchQuery, onAddProduct }: ProductGridProps) {
           // Giãn grid — trước đây 2xl:grid-cols-7 dày đặc, tên SP truncate, giá
           // chữ nhỏ. CEO phản ánh "quá nhiều món thông tin bán thì ít và nép bên phải".
           // Giảm 1 cột ở mỗi breakpoint lg+ + tăng gap → mỗi tile rộng hơn, dễ đọc.
-          <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-4 xl:grid-cols-5 2xl:grid-cols-6 gap-2">
+          // Sidebar trái 160-192px ăn vào → giảm cols ở md/lg để tile không bị nén.
+          <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-3 lg:grid-cols-4 xl:grid-cols-5 2xl:grid-cols-6 gap-2">
             {displayProducts.map((product) => (
               <ProductTile
                 key={product.id}
@@ -137,6 +163,48 @@ export function ProductGrid({ searchQuery, onAddProduct }: ProductGridProps) {
         )}
       </div>
     </div>
+  );
+}
+
+// ── Vertical sidebar row (desktop+) ──
+// Full-width clickable, label trái + count phải, active: nền primary + border-l-4.
+// Height 36px → tap thoải mái với chuột desktop, đủ lớn cho tablet.
+function CategoryRow({
+  label,
+  count,
+  active,
+  onClick,
+}: {
+  label: string;
+  count?: number;
+  active: boolean;
+  onClick: () => void;
+}) {
+  return (
+    <button
+      type="button"
+      onClick={onClick}
+      className={cn(
+        "group flex items-center justify-between gap-2 px-3 py-2 text-sm text-left transition-colors border-l-4 shrink-0",
+        active
+          ? "bg-primary-fixed text-primary font-semibold border-l-primary"
+          : "border-l-transparent text-foreground/80 hover:bg-surface-container-low hover:text-foreground",
+      )}
+    >
+      <span className="truncate flex-1">{label}</span>
+      {typeof count === "number" && (
+        <span
+          className={cn(
+            "shrink-0 text-[11px] tabular-nums px-1.5 py-0.5 rounded",
+            active
+              ? "bg-primary/15 text-primary"
+              : "text-muted-foreground group-hover:text-foreground/70",
+          )}
+        >
+          {count}
+        </span>
+      )}
+    </button>
   );
 }
 
