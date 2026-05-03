@@ -1681,10 +1681,10 @@ function PosPageInner() {
         {/* ─── RIGHT: Cart + Payment Panel ─── */}
         <aside className={cn(
           "pos-panel bg-white flex flex-col",
-          // Desktop: inline fixed-width panel. Trước đây 380px quá hẹp cho cart
-          // (tên SP dài bị truncate, nút thanh toán đè nhau) — tăng dần theo
-          // breakpoint để ở màn 2k/4k không bị "nép bên phải".
-          "lg:w-[420px] xl:w-[460px] 2xl:w-[520px] lg:shrink-0 lg:border-l lg:border-border lg:static lg:translate-x-0 lg:z-auto lg:shadow-none",
+          // Desktop: inline fixed-width panel. Trước đây 2xl:520px chiếm 27%
+          // viewport 1920 → product grid bị ép. Giảm progressive cap 440px ở
+          // 2xl đủ chỗ cho cart info + giải phóng ~80px cho grid.
+          "lg:w-[400px] xl:w-[420px] 2xl:w-[440px] lg:shrink-0 lg:border-l lg:border-border lg:static lg:translate-x-0 lg:z-auto lg:shadow-none",
           // Mobile/Tablet: slide-over from right
           "fixed inset-y-0 right-0 z-40 w-full sm:w-[420px] shadow-2xl",
           "transition-transform duration-300 ease-in-out",

@@ -147,11 +147,16 @@ export function ProductGrid({ searchQuery, onAddProduct }: ProductGridProps) {
             </p>
           </div>
         ) : (
-          // Giãn grid — trước đây 2xl:grid-cols-7 dày đặc, tên SP truncate, giá
-          // chữ nhỏ. CEO phản ánh "quá nhiều món thông tin bán thì ít và nép bên phải".
-          // Giảm 1 cột ở mỗi breakpoint lg+ + tăng gap → mỗi tile rộng hơn, dễ đọc.
-          // Sidebar trái 160-192px ăn vào → giảm cols ở md/lg để tile không bị nén.
-          <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-3 lg:grid-cols-4 xl:grid-cols-5 2xl:grid-cols-6 gap-2">
+          // Auto-fit grid (CSS Tricks pattern): khi ít SP, cards stretch để fill
+          // row → không trống bên phải. Khi nhiều SP, cards thu lại 180px → nhiều
+          // cols. Một dòng CSS thay 6 breakpoint fixed cols.
+          // Mobile <md: giữ grid-cols-2/3 cho touch UX quen thuộc.
+          <div
+            className={cn(
+              "grid grid-cols-2 sm:grid-cols-3 gap-2.5",
+              "md:grid-cols-[repeat(auto-fit,minmax(180px,1fr))]",
+            )}
+          >
             {displayProducts.map((product) => (
               <ProductTile
                 key={product.id}
@@ -256,62 +261,77 @@ function ProductTile({
 }) {
   const outOfStock = (product.stock ?? 0) <= 0;
   const stock = product.stock ?? 0;
+  // Stock subtle — chỉ hiện khi LOW (≤5) hoặc OUT. Ngừng đếm số xanh ở mọi
+  // card vì che bớt image + nhiễu visual (KiotViet làm vậy gây rối). Cashier
+  // chỉ cần warning khi sắp hết.
+  const showStockChip = outOfStock || stock <= 5;
+
+  // Placeholder gradient + chữ đầu — pattern Square POS. Khi không có image,
+  // dùng gradient theo hash tên SP để mỗi SP có 1 màu nhất định, dễ scan.
+  const initial = (product.name?.[0] ?? "?").toUpperCase();
+  const hue = hashHue(product.name ?? "");
 
   return (
     <button
       type="button"
       onClick={onClick}
       className={cn(
-        "flex flex-col bg-white rounded border border-border overflow-hidden transition-all text-left group",
-        "hover:border-primary hover:shadow active:scale-[0.97]",
-        outOfStock && "opacity-60"
+        "flex flex-col bg-white rounded-lg border border-border overflow-hidden transition-all text-left group press-scale-sm",
+        "hover:border-primary hover:shadow-md hover:-translate-y-0.5",
+        outOfStock && "opacity-60",
       )}
     >
-      {/* Image — compact 3:2 ratio */}
-      <div className="relative aspect-[3/2] bg-surface-container-low flex items-center justify-center overflow-hidden">
+      {/* Image — aspect 4:3 cân đối hơn 3:2 (cao hơn 16% → có chỗ thở cho image) */}
+      <div className="relative aspect-[4/3] flex items-center justify-center overflow-hidden">
         {product.image ? (
           <img
             src={product.image}
             alt={product.name}
-            className="h-full w-full object-cover group-hover:scale-105 transition-transform"
+            className="h-full w-full object-cover group-hover:scale-105 transition-transform duration-200"
             loading="lazy"
           />
         ) : (
-          <Icon name="inventory_2" className="text-gray-300" />
+          // Gradient placeholder + chữ cái đầu lớn — trông sang trọng hơn icon đen.
+          // Hue ổn định theo tên SP (cùng SP luôn cùng màu, dễ nhận diện).
+          <div
+            className="h-full w-full flex items-center justify-center font-heading font-bold text-white/90 select-none"
+            style={{
+              background: `linear-gradient(135deg, hsl(${hue} 65% 55%) 0%, hsl(${(hue + 30) % 360} 60% 45%) 100%)`,
+              fontSize: "min(48px, 30%)",
+            }}
+            aria-hidden
+          >
+            {initial}
+          </div>
         )}
         {outOfStock && (
-          <div className="absolute inset-0 bg-white/60 flex items-center justify-center">
-            <span className="text-[9px] font-bold text-status-error bg-status-error/10 px-1.5 py-0.5 rounded-full border border-status-error/25">
+          <div className="absolute inset-0 bg-white/70 backdrop-blur-[1px] flex items-center justify-center">
+            <span className="text-[10px] font-bold text-status-error bg-white px-2 py-0.5 rounded-full border border-status-error/30 shadow-sm">
               Hết hàng
             </span>
           </div>
         )}
-        {/* Stock badge — always show when in stock (KiotViet style) */}
-        {!outOfStock && (
-          <div className="absolute top-0.5 right-0.5">
-            <span className={cn(
-              "text-[8px] font-medium px-1 py-0.5 rounded-full border",
-              stock <= 5
-                ? "text-status-warning bg-status-warning/10 border-status-warning/25"
-                : "text-muted-foreground bg-white/80 border-border"
-            )}>
-              {stock}
+        {/* Stock chip — góc trên phải, chỉ khi LOW. */}
+        {showStockChip && !outOfStock && (
+          <div className="absolute top-1.5 right-1.5">
+            <span className="text-[10px] font-semibold px-1.5 py-0.5 rounded-full bg-status-warning/90 text-white shadow-sm">
+              Còn {stock}
             </span>
           </div>
         )}
       </div>
 
-      {/* Info — tăng font-size để dễ đọc trên tablet POS */}
-      <div className="px-2 py-1.5 flex-1 flex flex-col min-h-[44px]">
-        <p className="text-xs font-medium text-foreground line-clamp-2 leading-tight flex-1">
+      {/* Info — typography hierarchy rõ: name → price (nổi bật) → code (mờ) */}
+      <div className="px-2.5 py-2 flex-1 flex flex-col gap-1">
+        <p className="text-[13px] font-medium text-foreground line-clamp-2 leading-snug flex-1">
           {product.name}
         </p>
-        <div className="flex items-center justify-between mt-1 gap-1">
-          <p className="text-xs font-bold text-primary">
+        <div className="flex items-baseline justify-between gap-1.5">
+          <p className="text-[15px] font-bold text-primary tabular-nums">
             {formatCurrency(product.sellPrice ?? 0)}
           </p>
           {product.code && (
-            <p className="text-[9px] text-muted-foreground font-mono truncate max-w-[60px]">
+            <p className="text-[10px] text-muted-foreground/80 font-mono truncate max-w-[80px]">
               {product.code}
             </p>
           )}
@@ -319,4 +339,16 @@ function ProductTile({
       </div>
     </button>
   );
+}
+
+/**
+ * Hash tên SP → hue 0-360 ổn định. Cùng tên luôn cùng màu → cashier nhớ
+ * vị trí theo màu (visual memory). Algorithm: simple djb2 → mod 360.
+ */
+function hashHue(s: string): number {
+  let h = 5381;
+  for (let i = 0; i < s.length; i++) {
+    h = ((h << 5) + h + s.charCodeAt(i)) | 0;
+  }
+  return Math.abs(h) % 360;
 }
