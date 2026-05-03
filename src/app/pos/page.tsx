@@ -1681,7 +1681,7 @@ function PosPageInner() {
         {/* ─── RIGHT: Cart + Payment Panel ─── */}
         <aside
           className={cn(
-            "pos-panel bg-white flex flex-col",
+            "pos-cart-grid pos-panel bg-white flex flex-col",
             // Desktop adaptive (laptop chuẩn 1366 → desktop 1920+): width co
             // giãn qua clamp(540, 38vw, 800). 1366: ~520, 1920: ~730, 2560: 800.
             "lg:w-[clamp(540px,38vw,800px)] lg:shrink-0 lg:border-l lg:border-border lg:static lg:translate-x-0 lg:z-auto lg:shadow-none",
@@ -1691,6 +1691,10 @@ function PosPageInner() {
             mobileCartOpen ? "translate-x-0" : "translate-x-full lg:translate-x-0",
           )}
         >
+          {/* === COL 3: CART ITEMS ZONE (Invoice tabs + items list) ===
+              Ở lg+ chia thành 2 cột qua CSS grid trong globals.css
+              .pos-cart-grid. Mobile/tablet vẫn flex-col tuần tự. */}
+          <div className="cart-items-zone flex flex-col flex-1 min-h-0 lg:border-r lg:border-border">
           {/* ── Invoice tabs bar — KiotViet multi-tab ── */}
           <div className="flex items-center bg-surface-container-low border-b border-border shrink-0 min-h-[32px]">
             {/* Mobile back button */}
@@ -1779,76 +1783,7 @@ function PosPageInner() {
             </div>
           )}
 
-          {/* ── Customer picker row — Stitch pill ── */}
-          <div className="px-3 py-2 border-b border-outline-variant/20">
-            <div className="flex items-center gap-1.5">
-              <button
-                type="button"
-                onClick={() => setCustomerModalOpen(true)}
-                className={cn(
-                  "flex-1 flex items-center gap-2 px-2.5 h-9 rounded-lg text-xs transition-colors press-scale-sm",
-                  state.customer
-                    ? "bg-primary-fixed text-primary font-semibold"
-                    : "bg-surface-container-low text-on-surface-variant hover:bg-surface-container hover:text-foreground"
-                )}
-              >
-                {state.customer ? (
-                  <Icon name="person_check" size={14} className="text-primary shrink-0" />
-                ) : (
-                  <Icon name="person" size={14} className="shrink-0" />
-                )}
-                <span className="flex-1 text-left truncate font-medium">
-                  {state.customer?.name ?? "Khách lẻ"}
-                </span>
-                <kbd className="font-mono text-[9px] bg-surface-container-lowest border border-outline-variant/30 rounded px-1 py-0.5 text-muted-foreground shrink-0">
-                  F4
-                </kbd>
-              </button>
-              {state.customer && (
-                <button
-                  type="button"
-                  onClick={() => state.setCustomer(null)}
-                  className="p-1.5 rounded-lg text-muted-foreground hover:text-status-error hover:bg-status-error/10 transition-colors"
-                  title="Gỡ khách"
-                >
-                  <Icon name="close" size={14} />
-                </button>
-              )}
-            </div>
-            {/* Customer info strip — show phone + debt when selected */}
-            {state.customer && (
-              <div className="flex items-center gap-3 mt-1 px-1 text-[10px] text-muted-foreground">
-                {state.customer.phone && (
-                  <span className="flex items-center gap-0.5">
-                    <Icon name="call" size={10} />
-                    {state.customer.phone}
-                  </span>
-                )}
-                {(state.customer.currentDebt ?? 0) > 0 && (
-                  <span className="flex items-center gap-0.5 text-status-error font-semibold">
-                    Nợ cũ: {formatCurrency(state.customer.currentDebt ?? 0)}
-                  </span>
-                )}
-                {state.customer.code && (
-                  <span className="text-muted-foreground font-mono">{state.customer.code}</span>
-                )}
-                {(state.customer.groupDiscountPercent ?? 0) > 0 && (
-                  <span className="flex items-center gap-0.5 px-1.5 py-0.5 rounded-full bg-status-success/10 text-status-success font-semibold">
-                    <Icon name="loyalty" size={10} />
-                    {state.customer.groupName ?? "Nhóm"} −{state.customer.groupDiscountPercent}%
-                  </span>
-                )}
-              </div>
-            )}
-          </div>
-
-          {/* ── Delivery form (Bán giao hàng mode) ── */}
-          {state.sellingMode === "delivery" && (
-            <DeliveryForm
-              value={state.deliveryInfo}
-              onChange={state.setDeliveryInfo}
-            />
-          )}
+          {/* Customer + Delivery moved to right column (Phase 2 4-col split) */}
 
           {/* ── Cart table header ── */}
           {state.lines.length > 0 && (
@@ -1910,6 +1845,80 @@ function PosPageInner() {
               </div>
             )}
           </div>
+          </div>{/* /cart-items-zone */}
+
+          {/* === COL 4: RIGHT INFO ZONE (Customer + Delivery + Totals + Payment + Actions) === */}
+          <div className="cart-info-zone flex flex-col">
+
+          {/* ── Customer picker row — Stitch pill (moved from items zone) ── */}
+          <div className="px-3 py-2 border-b border-outline-variant/20">
+            <div className="flex items-center gap-1.5">
+              <button
+                type="button"
+                onClick={() => setCustomerModalOpen(true)}
+                className={cn(
+                  "flex-1 flex items-center gap-2 px-2.5 h-9 rounded-lg text-xs transition-colors press-scale-sm",
+                  state.customer
+                    ? "bg-primary-fixed text-primary font-semibold"
+                    : "bg-surface-container-low text-on-surface-variant hover:bg-surface-container hover:text-foreground",
+                )}
+              >
+                {state.customer ? (
+                  <Icon name="person_check" size={14} className="text-primary shrink-0" />
+                ) : (
+                  <Icon name="person" size={14} className="shrink-0" />
+                )}
+                <span className="flex-1 text-left truncate font-medium">
+                  {state.customer?.name ?? "Khách lẻ"}
+                </span>
+                <kbd className="font-mono text-[9px] bg-surface-container-lowest border border-outline-variant/30 rounded px-1 py-0.5 text-muted-foreground shrink-0">
+                  F4
+                </kbd>
+              </button>
+              {state.customer && (
+                <button
+                  type="button"
+                  onClick={() => state.setCustomer(null)}
+                  className="p-1.5 rounded-lg text-muted-foreground hover:text-status-error hover:bg-status-error/10 transition-colors"
+                  title="Gỡ khách"
+                >
+                  <Icon name="close" size={14} />
+                </button>
+              )}
+            </div>
+            {state.customer && (
+              <div className="flex items-center gap-3 mt-1 px-1 text-[10px] text-muted-foreground flex-wrap">
+                {state.customer.phone && (
+                  <span className="flex items-center gap-0.5">
+                    <Icon name="call" size={10} />
+                    {state.customer.phone}
+                  </span>
+                )}
+                {(state.customer.currentDebt ?? 0) > 0 && (
+                  <span className="flex items-center gap-0.5 text-status-error font-semibold">
+                    Nợ cũ: {formatCurrency(state.customer.currentDebt ?? 0)}
+                  </span>
+                )}
+                {state.customer.code && (
+                  <span className="text-muted-foreground font-mono">{state.customer.code}</span>
+                )}
+                {(state.customer.groupDiscountPercent ?? 0) > 0 && (
+                  <span className="flex items-center gap-0.5 px-1.5 py-0.5 rounded-full bg-status-success/10 text-status-success font-semibold">
+                    <Icon name="loyalty" size={10} />
+                    {state.customer.groupName ?? "Nhóm"} −{state.customer.groupDiscountPercent}%
+                  </span>
+                )}
+              </div>
+            )}
+          </div>
+
+          {/* ── Delivery form (Bán giao hàng mode, moved from items zone) ── */}
+          {state.sellingMode === "delivery" && (
+            <DeliveryForm
+              value={state.deliveryInfo}
+              onChange={state.setDeliveryInfo}
+            />
+          )}
 
           {/* KM-3: Free items section — hiển thị quà tặng kèm (BOGO + gift) */}
           {appliedPromotion?.freeItems && appliedPromotion.freeItems.length > 0 && (
@@ -2342,6 +2351,7 @@ function PosPageInner() {
               </kbd>
             </button>
           </div>
+          </div>{/* /cart-info-zone */}
         </aside>
       </div>
 
