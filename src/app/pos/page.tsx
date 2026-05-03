@@ -1679,17 +1679,18 @@ function PosPageInner() {
         </div>
 
         {/* ─── RIGHT: Cart + Payment Panel ─── */}
-        <aside className={cn(
-          "pos-panel bg-white flex flex-col",
-          // Desktop: inline fixed-width panel. Trước đây 2xl:520px chiếm 27%
-          // viewport 1920 → product grid bị ép. Giảm progressive cap 440px ở
-          // 2xl đủ chỗ cho cart info + giải phóng ~80px cho grid.
-          "lg:w-[400px] xl:w-[420px] 2xl:w-[440px] lg:shrink-0 lg:border-l lg:border-border lg:static lg:translate-x-0 lg:z-auto lg:shadow-none",
-          // Mobile/Tablet: slide-over from right
-          "fixed inset-y-0 right-0 z-40 w-full sm:w-[420px] shadow-2xl",
-          "transition-transform duration-300 ease-in-out",
-          mobileCartOpen ? "translate-x-0" : "translate-x-full lg:translate-x-0"
-        )}>
+        <aside
+          className={cn(
+            "pos-panel bg-white flex flex-col",
+            // Desktop adaptive (laptop chuẩn 1366 → desktop 1920+): width co
+            // giãn qua clamp(540, 38vw, 800). 1366: ~520, 1920: ~730, 2560: 800.
+            "lg:w-[clamp(540px,38vw,800px)] lg:shrink-0 lg:border-l lg:border-border lg:static lg:translate-x-0 lg:z-auto lg:shadow-none",
+            // Mobile/Tablet: slide-over from right
+            "fixed inset-y-0 right-0 z-40 w-full sm:w-[420px] shadow-2xl",
+            "transition-transform duration-300 ease-in-out",
+            mobileCartOpen ? "translate-x-0" : "translate-x-full lg:translate-x-0",
+          )}
+        >
           {/* ── Invoice tabs bar — KiotViet multi-tab ── */}
           <div className="flex items-center bg-surface-container-low border-b border-border shrink-0 min-h-[32px]">
             {/* Mobile back button */}

@@ -109,9 +109,13 @@ export function ProductGrid({ searchQuery, onAddProduct }: ProductGridProps) {
 
       {/* ── Desktop+: vertical sidebar trái — list full-width tap target lớn,
               count align right, active state primary nền + border-l-4. Pattern
-              Square POS / KiotViet quen thuộc với cashier. ── */}
-      <aside className="hidden md:flex flex-col w-40 lg:w-44 xl:w-48 border-r bg-white shrink-0 overflow-y-auto">
-        <div className="px-3 py-2 text-[10px] font-semibold text-muted-foreground uppercase tracking-wider border-b sticky top-0 bg-white z-10">
+              Square POS / KiotViet quen thuộc với cashier.
+              Adaptive width: hẹp ở laptop (120-140px), to ở desktop (160px+). ── */}
+      <aside
+        className="hidden md:flex flex-col border-r bg-white shrink-0 overflow-y-auto"
+        style={{ width: "clamp(120px, 9vw, 160px)" }}
+      >
+        <div className="px-2.5 py-2 text-[10px] font-semibold text-muted-foreground uppercase tracking-wider border-b sticky top-0 bg-white z-10">
           Danh mục
         </div>
         <CategoryRow
@@ -147,14 +151,12 @@ export function ProductGrid({ searchQuery, onAddProduct }: ProductGridProps) {
             </p>
           </div>
         ) : (
-          // Auto-fit grid (CSS Tricks pattern): khi ít SP, cards stretch để fill
-          // row → không trống bên phải. Khi nhiều SP, cards thu lại 180px → nhiều
-          // cols. Một dòng CSS thay 6 breakpoint fixed cols.
-          // Mobile <md: giữ grid-cols-2/3 cho touch UX quen thuộc.
+          // Auto-fit grid: card C compact (thumb 40×40 + info bên phải), min
+          // 160px → 4-6 cols tuỳ width. Mobile giữ 2/3 cols vertical card.
           <div
             className={cn(
-              "grid grid-cols-2 sm:grid-cols-3 gap-2.5",
-              "md:grid-cols-[repeat(auto-fit,minmax(180px,1fr))]",
+              "grid grid-cols-2 sm:grid-cols-3 gap-2",
+              "md:grid-cols-[repeat(auto-fill,minmax(160px,1fr))]",
             )}
           >
             {displayProducts.map((product) => (
@@ -251,7 +253,9 @@ function CategoryPill({
   );
 }
 
-// ── Product tile card — KiotViet-style with stock + code ──
+// ── Product tile card C — compact horizontal (thumb 40 + info) ──
+// CEO không thích gradient màu trên placeholder → dùng background xám
+// neutral với icon nhỏ. Card compact ~76px height thay vì 270px.
 function ProductTile({
   product,
   onClick,
@@ -261,80 +265,54 @@ function ProductTile({
 }) {
   const outOfStock = (product.stock ?? 0) <= 0;
   const stock = product.stock ?? 0;
-  // Stock subtle — chỉ hiện khi LOW (≤5) hoặc OUT. Ngừng đếm số xanh ở mọi
-  // card vì che bớt image + nhiễu visual (KiotViet làm vậy gây rối). Cashier
-  // chỉ cần warning khi sắp hết.
   const showStockChip = outOfStock || stock <= 5;
-
-  // Placeholder gradient + chữ đầu — pattern Square POS. Khi không có image,
-  // dùng gradient theo hash tên SP để mỗi SP có 1 màu nhất định, dễ scan.
-  const initial = (product.name?.[0] ?? "?").toUpperCase();
-  const hue = hashHue(product.name ?? "");
 
   return (
     <button
       type="button"
       onClick={onClick}
       className={cn(
-        "flex flex-col bg-white rounded-lg border border-border overflow-hidden transition-all text-left group press-scale-sm",
-        "hover:border-primary hover:shadow-md hover:-translate-y-0.5",
+        "flex items-center gap-2 bg-white rounded-lg border border-border p-2 text-left transition-all press-scale-sm min-h-[60px]",
+        "hover:border-primary hover:shadow-sm",
         outOfStock && "opacity-60",
       )}
     >
-      {/* Image — aspect 4:3 cân đối hơn 3:2 (cao hơn 16% → có chỗ thở cho image) */}
-      <div className="relative aspect-[4/3] flex items-center justify-center overflow-hidden">
+      {/* Thumb 40×40 vuông — image hoặc placeholder neutral (xám nhạt + icon). */}
+      <div className="relative h-10 w-10 shrink-0 rounded-md bg-surface-container-low flex items-center justify-center overflow-hidden">
         {product.image ? (
           <img
             src={product.image}
             alt={product.name}
-            className="h-full w-full object-cover group-hover:scale-105 transition-transform duration-200"
+            className="h-full w-full object-cover"
             loading="lazy"
           />
         ) : (
-          // Gradient placeholder + chữ cái đầu lớn — trông sang trọng hơn icon đen.
-          // Hue ổn định theo tên SP (cùng SP luôn cùng màu, dễ nhận diện).
-          <div
-            className="h-full w-full flex items-center justify-center font-heading font-bold text-white/90 select-none"
-            style={{
-              background: `linear-gradient(135deg, hsl(${hue} 65% 55%) 0%, hsl(${(hue + 30) % 360} 60% 45%) 100%)`,
-              fontSize: "min(48px, 30%)",
-            }}
-            aria-hidden
-          >
-            {initial}
-          </div>
-        )}
-        {outOfStock && (
-          <div className="absolute inset-0 bg-white/70 backdrop-blur-[1px] flex items-center justify-center">
-            <span className="text-[10px] font-bold text-status-error bg-white px-2 py-0.5 rounded-full border border-status-error/30 shadow-sm">
-              Hết hàng
-            </span>
-          </div>
-        )}
-        {/* Stock chip — góc trên phải, chỉ khi LOW. */}
-        {showStockChip && !outOfStock && (
-          <div className="absolute top-1.5 right-1.5">
-            <span className="text-[10px] font-semibold px-1.5 py-0.5 rounded-full bg-status-warning/90 text-white shadow-sm">
-              Còn {stock}
-            </span>
-          </div>
+          <Icon name="inventory_2" size={18} className="text-muted-foreground/40" />
         )}
       </div>
 
-      {/* Info — typography hierarchy rõ: name → price (nổi bật) → code (mờ) */}
-      <div className="px-2.5 py-2 flex-1 flex flex-col gap-1">
-        <p className="text-[13px] font-medium text-foreground line-clamp-2 leading-snug flex-1">
+      {/* Info: tên (line-clamp-2) → price + (code|stock chip) */}
+      <div className="flex-1 min-w-0">
+        <p className="text-[12.5px] font-medium text-foreground line-clamp-2 leading-tight mb-0.5">
           {product.name}
         </p>
-        <div className="flex items-baseline justify-between gap-1.5">
-          <p className="text-[15px] font-bold text-primary tabular-nums">
+        <div className="flex items-center justify-between gap-1">
+          <p className="text-[13px] font-bold text-primary tabular-nums">
             {formatCurrency(product.sellPrice ?? 0)}
           </p>
-          {product.code && (
-            <p className="text-[10px] text-muted-foreground/80 font-mono truncate max-w-[80px]">
+          {outOfStock ? (
+            <span className="text-[9px] font-semibold px-1.5 py-0.5 rounded-full bg-status-error/10 text-status-error border border-status-error/20 shrink-0">
+              Hết
+            </span>
+          ) : showStockChip ? (
+            <span className="text-[9px] font-semibold px-1.5 py-0.5 rounded-full bg-status-warning/15 text-status-warning shrink-0">
+              Còn {stock}
+            </span>
+          ) : product.code ? (
+            <p className="text-[9px] text-muted-foreground/70 font-mono truncate max-w-[64px]">
               {product.code}
             </p>
-          )}
+          ) : null}
         </div>
       </div>
     </button>
@@ -342,9 +320,11 @@ function ProductTile({
 }
 
 /**
- * Hash tên SP → hue 0-360 ổn định. Cùng tên luôn cùng màu → cashier nhớ
- * vị trí theo màu (visual memory). Algorithm: simple djb2 → mod 360.
+ * Hash tên SP → hue 0-360 ổn định. Reserved cho future use nếu cần
+ * color hint per category — không dùng ở Card C compact (CEO không
+ * thích gradient màu).
  */
+// eslint-disable-next-line @typescript-eslint/no-unused-vars
 function hashHue(s: string): number {
   let h = 5381;
   for (let i = 0; i < s.length; i++) {
