@@ -22,9 +22,17 @@ export function PermissionPage({ requires, children }: PermissionPageProps) {
   const { hasPermission, isLoading } = usePermissions();
   const [slowLoading, setSlowLoading] = useState(false);
 
-  // Nếu sau 6s vẫn loading thì show fallback với nút reload — tránh user
-  // stuck trên skeleton vô hạn (auth-context đã có timeout 10s, nhưng UX
-  // fallback sớm hơn giúp user ý thức có vấn đề).
+  // PERF F1: KHÔNG block render khi đang load auth.
+  // Trước đây isLoading=true → spinner full page → user click chức năng
+  // thấy "không load" vì auth chưa xong (cold start ~1s qua 3 round-trip).
+  // Giờ:
+  // - render children NGAY → page mount, fetch data của nó song song
+  // - chỉ chặn khi auth XONG nhưng KHÔNG có quyền (deny chính xác)
+  // - permission check trong children dựa vào hasPermission() đã thread-safe
+  //   (trả về false khi loading, true/false khi xong)
+  // Kết quả: cảm giác app phản hồi tức thì, blank time -> 0.
+
+  // Track slow loading for diagnostic toast (không block UI).
   useEffect(() => {
     if (!isLoading) {
       setSlowLoading(false);
@@ -34,40 +42,9 @@ export function PermissionPage({ requires, children }: PermissionPageProps) {
     return () => clearTimeout(t);
   }, [isLoading]);
 
-  if (isLoading) {
-    if (slowLoading) {
-      return (
-        <div className="flex flex-col items-center justify-center h-64 gap-3">
-          <Icon name="hourglass_empty" size={40} className="text-muted-foreground animate-pulse" />
-          <p className="text-lg font-medium text-muted-foreground">
-            Đang xác thực lâu hơn thường lệ…
-          </p>
-          <p className="text-sm text-muted-foreground">
-            Kiểm tra kết nối mạng. Nếu vẫn chậm, bấm nút bên dưới.
-          </p>
-          <button
-            type="button"
-            onClick={() => window.location.reload()}
-            className="mt-2 px-4 py-2 text-sm rounded-md bg-primary text-primary-foreground hover:opacity-90"
-          >
-            Tải lại trang
-          </button>
-        </div>
-      );
-    }
-    // Skeleton nhẹ thay vì return null — user biết app đang load chứ không
-    // phải màn hình trắng.
-    return (
-      <div className="flex items-center justify-center h-64">
-        <div
-          className="w-8 h-8 border-4 border-muted border-t-primary rounded-full animate-spin"
-          aria-label="Đang tải"
-        />
-      </div>
-    );
-  }
-
-  if (!hasPermission(requires)) {
+  // Chỉ deny khi auth đã hoàn tất + không có quyền.
+  // isLoading → cứ render children, để user thấy app phản hồi.
+  if (!isLoading && !hasPermission(requires)) {
     return (
       <div className="flex flex-col items-center justify-center h-64 gap-3">
         <Icon name="gpp_bad" size={40} className="text-muted-foreground" />
@@ -81,5 +58,23 @@ export function PermissionPage({ requires, children }: PermissionPageProps) {
     );
   }
 
-  return <>{children}</>;
+  // Slow loading diagnostic — không block render, chỉ banner nhỏ trên cùng.
+  return (
+    <>
+      {slowLoading && isLoading && (
+        <div className="bg-status-warning/10 border-b border-status-warning/30 px-4 py-2 text-xs text-status-warning flex items-center gap-2">
+          <Icon name="hourglass_empty" size={14} className="animate-pulse" />
+          <span>Đang xác thực lâu hơn thường lệ — kiểm tra kết nối mạng.</span>
+          <button
+            type="button"
+            onClick={() => window.location.reload()}
+            className="ml-auto underline hover:no-underline"
+          >
+            Tải lại
+          </button>
+        </div>
+      )}
+      {children}
+    </>
+  );
 }

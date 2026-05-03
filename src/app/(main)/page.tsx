@@ -1,26 +1,30 @@
 "use client";
 
 import { useState, useEffect, useCallback } from "react";
+import dynamic from "next/dynamic";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import {
   formatCurrency,
   formatChartCurrency,
-  formatChartTooltipCurrency,
 } from "@/lib/format";
-import {
-  AreaChart,
-  Area,
-  BarChart,
-  Bar,
-  XAxis,
-  YAxis,
-  CartesianGrid,
-  Tooltip,
-  Legend,
-  ResponsiveContainer,
-} from "recharts";
 import { cn } from "@/lib/utils";
+
+// PERF F4: Lazy load Recharts (~150KB gz + d3 deps) — chỉ load khi user
+// thực sự reach dashboard charts, không bundle vào initial JS.
+const DashboardCharts = dynamic(() => import("./_dashboard-charts"), {
+  loading: () => (
+    <div className="grid grid-cols-1 lg:grid-cols-2 gap-3">
+      {[0, 1].map((i) => (
+        <div
+          key={i}
+          className="h-72 rounded-xl border bg-card animate-pulse"
+        />
+      ))}
+    </div>
+  ),
+  ssr: false,
+});
 import Link from "next/link";
 import {
   getDashboardKpis,
@@ -60,33 +64,6 @@ const ENTITY_ICONS: Record<string, string> = {
 };
 
 // Custom tooltips — Stitch style: rounded-xl + ambient-shadow, surface-container-lowest bg.
-function RevenueTooltip({ active, payload, label }: { active?: boolean; payload?: Array<{ value: number }>; label?: string }) {
-  if (!active || !payload?.length) return null;
-  return (
-    <div className="rounded-xl border bg-surface-container-lowest p-3 ambient-shadow">
-      <p className="text-xs text-muted-foreground mb-1">{label}</p>
-      <p className="text-sm font-bold text-primary">
-        {formatChartTooltipCurrency(payload[0].value)}
-      </p>
-    </div>
-  );
-}
-
-function OrdersTooltip({ active, payload, label }: { active?: boolean; payload?: Array<{ value: number; dataKey: string; color: string }>; label?: string }) {
-  if (!active || !payload?.length) return null;
-  return (
-    <div className="rounded-xl border bg-surface-container-lowest p-3 ambient-shadow">
-      <p className="text-xs text-muted-foreground mb-1">{label}</p>
-      {payload.map((entry) => (
-        <p key={entry.dataKey} className="text-sm" style={{ color: entry.color }}>
-          {entry.dataKey === "completed" ? "Hoàn thành" : "Đã hủy"}:{" "}
-          <span className="font-bold">{entry.value}</span>
-        </p>
-      ))}
-    </div>
-  );
-}
-
 function calcChange(current: number, previous: number): { text: string; positive: boolean } {
   if (previous === 0) return { text: current > 0 ? "+100%" : "0%", positive: current >= 0 };
   const pct = ((current - previous) / previous) * 100;
@@ -347,82 +324,13 @@ export default function TongQuanPage() {
         </Card>
       </div>
 
-      {/* Charts row */}
-      <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
-        {/* Revenue chart with view toggle */}
-        <Card>
-          <CardHeader className="pb-2">
-            <div className="flex items-center justify-between">
-              <CardTitle className="text-sm">Biểu đồ doanh thu</CardTitle>
-              {/* Stitch segmented control — rounded-full, active dùng primary token. */}
-              <div className="flex items-center bg-surface-container-low rounded-full overflow-hidden p-0.5">
-                {(
-                  [
-                    { key: "day", label: "Ngày" },
-                    { key: "hour", label: "Giờ" },
-                    { key: "weekday", label: "Thứ" },
-                  ] as const
-                ).map((v) => (
-                  <button
-                    key={v.key}
-                    onClick={() => setChartView(v.key)}
-                    className={cn(
-                      "px-3 py-1 text-xs font-medium rounded-full transition-colors press-scale-sm",
-                      chartView === v.key
-                        ? "bg-primary text-primary-foreground ambient-shadow"
-                        : "text-muted-foreground hover:text-foreground"
-                    )}
-                  >
-                    {v.label}
-                  </button>
-                ))}
-              </div>
-            </div>
-          </CardHeader>
-          <CardContent>
-            <div className="h-60">
-              <ResponsiveContainer width="100%" height="100%">
-                <AreaChart data={chartData[chartView]} margin={{ top: 5, right: 10, left: 0, bottom: 0 }}>
-                  <defs>
-                    {/* Stitch primary gradient #004AC6 fade → transparent cho Area. */}
-                    <linearGradient id="revenueGradient" x1="0" y1="0" x2="0" y2="1">
-                      <stop offset="5%" stopColor="#004AC6" stopOpacity={0.3} />
-                      <stop offset="95%" stopColor="#004AC6" stopOpacity={0} />
-                    </linearGradient>
-                  </defs>
-                  <CartesianGrid strokeDasharray="3 3" vertical={false} />
-                  <XAxis dataKey="label" tick={{ fontSize: 11 }} tickLine={false} axisLine={false} />
-                  <YAxis tickFormatter={(v: number) => formatChartCurrency(v)} tick={{ fontSize: 11 }} tickLine={false} axisLine={false} width={50} />
-                  <Tooltip content={<RevenueTooltip />} />
-                  <Area type="monotone" dataKey="value" stroke="#004AC6" strokeWidth={2} fill="url(#revenueGradient)" name="Doanh thu" />
-                </AreaChart>
-              </ResponsiveContainer>
-            </div>
-          </CardContent>
-        </Card>
-
-        {/* Orders BarChart */}
-        <Card>
-          <CardHeader className="pb-2">
-            <CardTitle className="text-sm">Đơn hàng theo trạng thái</CardTitle>
-          </CardHeader>
-          <CardContent>
-            <div className="h-60">
-              <ResponsiveContainer width="100%" height="100%">
-                <BarChart data={orders} margin={{ top: 5, right: 10, left: 0, bottom: 0 }}>
-                  <CartesianGrid strokeDasharray="3 3" vertical={false} />
-                  <XAxis dataKey="day" tick={{ fontSize: 11 }} tickLine={false} axisLine={false} />
-                  <YAxis tick={{ fontSize: 11 }} tickLine={false} axisLine={false} width={30} />
-                  <Tooltip content={<OrdersTooltip />} />
-                  <Legend formatter={(value: string) => (value === "completed" ? "Hoàn thành" : "Đã hủy")} />
-                  <Bar dataKey="completed" fill="#22c55e" radius={[6, 6, 0, 0]} name="completed" />
-                  <Bar dataKey="cancelled" fill="#ef4444" radius={[6, 6, 0, 0]} name="cancelled" />
-                </BarChart>
-              </ResponsiveContainer>
-            </div>
-          </CardContent>
-        </Card>
-      </div>
+      {/* Charts row — lazy loaded để giảm initial bundle (~150KB recharts). */}
+      <DashboardCharts
+        chartData={chartData}
+        chartView={chartView}
+        setChartView={setChartView}
+        orders={orders}
+      />
 
       {/* Financial Alerts Widget */}
       {financialAlerts.length > 0 && (

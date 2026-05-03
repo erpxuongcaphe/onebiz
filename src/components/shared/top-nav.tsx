@@ -559,12 +559,25 @@ export function TopNav() {
         console.warn("[TopNav.unreadCount]", err);
       }
     };
-    fetchCount();
-    const interval = setInterval(fetchCount, 60_000);
-    const onFocus = () => fetchCount();
+    // PERF F5: Defer initial fetch để không block first paint sau hydration.
+    // Notifications là secondary signal — số đỏ trên chuông không cần thiết
+    // ngay lúc page load. Đặt 1.5s sau hydrate.
+    const initialTimer = setTimeout(fetchCount, 1500);
+    // Polling mỗi 5 phút thay vì 1 phút — notifications không phải real-time critical.
+    const interval = setInterval(fetchCount, 5 * 60_000);
+    // Focus refetch: throttle 30s tránh tab-switch spam (user Cmd+Tab giữa
+    // chrome tabs liên tục → mỗi focus fire query → DB hammered).
+    let lastFocusFetch = 0;
+    const onFocus = () => {
+      const now = Date.now();
+      if (now - lastFocusFetch < 30_000) return;
+      lastFocusFetch = now;
+      fetchCount();
+    };
     window.addEventListener("focus", onFocus);
     return () => {
       cancelled = true;
+      clearTimeout(initialTimer);
       clearInterval(interval);
       window.removeEventListener("focus", onFocus);
     };

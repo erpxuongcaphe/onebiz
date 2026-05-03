@@ -10,6 +10,22 @@ const nextConfig: NextConfig = {
     ];
   },
 
+  // PERF F7: Tree-shake các barrel re-export nặng để initial bundle gọn.
+  // Next.js sẽ rewrite `import { X } from "pkg"` thành deep-import
+  // `import X from "pkg/X"` ở build time → chỉ bundle module thật sự dùng,
+  // không kéo cả gói. Áp dụng cho recharts (chia 10+ chunk), lucide-react,
+  // @base-ui/react. Tự handle ở @next/eslint-plugin-next.
+  experimental: {
+    optimizePackageImports: [
+      "recharts",
+      "lucide-react",
+      "@base-ui/react",
+      "@tanstack/react-table",
+      "@tanstack/react-virtual",
+      "date-fns",
+    ],
+  },
+
   // Phase 3 (2026-04-15): Multi-domain setup
   // - app.onebiz.com.vn     → ERP full (main app)
   // - fnb.onebiz.com.vn     → FnB POS only (via middleware rewrite → /pos/fnb)

@@ -209,10 +209,19 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       });
     }, 10_000);
 
-    // Get initial session
+    // PERF F2: Dùng getSession() thay vì getUser() trên mount.
+    // - getSession() đọc session từ cookie/localStorage → INSTANT (0 RTT).
+    // - getUser() luôn revalidate qua HTTP với Supabase server (200-400ms VN
+    //   mobile). Cold start mỗi page nav phải chờ 1 RTT chỉ để biết "đã login".
+    // - onAuthStateChange phía dưới sẽ fire SIGNED_IN nếu session refresh →
+    //   loadUserData re-run (nhưng chỉ khi user.id thực sự đổi qua dedup).
+    // - Edge case: session expired/tampered → loadUserData query với invalid
+    //   token sẽ fail, RLS block → user bị redirect login. Chấp nhận risk
+    //   này vì lợi ích 200-400ms perf cho 99% case happy path.
     supabase.auth
-      .getUser()
-      .then(({ data: { user: initialUser } }) => {
+      .getSession()
+      .then(({ data: { session } }) => {
+        const initialUser = session?.user ?? null;
         if (initialUser) {
           setAuthUser(initialUser);
           wasAuthenticatedRef.current = true;
@@ -229,7 +238,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       .catch((err) => {
         // Network fail, token invalid, CORS, DNS — treat như unauthenticated
         // thay vì để isLoading stuck true.
-        console.error("[AuthProvider] getUser failed:", err);
+        console.error("[AuthProvider] getSession failed:", err);
         clearTimeout(initTimeoutId);
         setIsLoading(false);
       });

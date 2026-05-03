@@ -8,12 +8,15 @@ export async function middleware(request: NextRequest) {
 export const config = {
   matcher: [
     /*
-     * Match all routes except:
-     * - _next/static (static files)
-     * - _next/image (image optimization)
-     * - favicon.ico, sitemap.xml, robots.txt
-     * - Public assets (svg, png, jpg, jpeg, gif, webp, ico)
+     * PERF F3: Match all routes except:
+     * - _next/static, _next/image, favicon, sitemap, robots
+     * - Public assets (svg, png, jpg, jpeg, gif, webp, ico, woff/woff2)
+     * - api routes (auth check tự handle trong route handler nếu cần)
+     * - manifest, sw.js, workbox-*, PWA assets
+     *
+     * Trước đây matcher gọi updateSession (auth.getUser HTTP roundtrip ~50-150ms)
+     * cho cả manifest/sw.js/woff fonts → mỗi nav tăng TTFB không cần thiết.
      */
-    "/((?!_next/static|_next/image|favicon.ico|sitemap.xml|robots.txt|.*\\.(?:svg|png|jpg|jpeg|gif|webp|ico)$).*)",
+    "/((?!_next/static|_next/image|api/|favicon\\.ico|sitemap\\.xml|robots\\.txt|manifest\\.(?:json|webmanifest)|sw\\.js|workbox-.*|.*\\.(?:svg|png|jpg|jpeg|gif|webp|ico|woff|woff2|css|js)$).*)",
   ],
 };
