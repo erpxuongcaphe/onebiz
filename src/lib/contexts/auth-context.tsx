@@ -236,6 +236,17 @@ export function AuthProvider({ children }: { children: ReactNode }) {
         if (initialUser) {
           setAuthUser(initialUser);
           wasAuthenticatedRef.current = true;
+          // PERF F13: Race condition fix — onAuthStateChange INITIAL_SESSION
+          // có thể fire TRƯỚC getSession.then resolve (Supabase bắn event
+          // ngay khi listener register nếu cookie hợp lệ). Trường hợp đó
+          // listener đã loadUserData rồi → ở đây skip để tránh fetch profile
+          // lần 2.
+          if (loadedUserIdRef.current === initialUser.id) {
+            // Đã load qua listener — chỉ release spinner.
+            clearTimeout(initTimeoutId);
+            setIsLoading(false);
+            return;
+          }
           loadedUserIdRef.current = initialUser.id;
           loadUserData(initialUser).finally(() => {
             clearTimeout(initTimeoutId);
