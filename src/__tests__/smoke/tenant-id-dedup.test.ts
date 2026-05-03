@@ -42,6 +42,10 @@ describe("getCurrentTenantId in-flight dedup", () => {
     vi.resetModules();
     getSessionMock.mockReset();
     profilesSingleMock.mockReset();
+    // PERF F14: clear localStorage để module hydration không pick up state cũ
+    if (typeof localStorage !== "undefined") {
+      localStorage.clear();
+    }
 
     // Default mock: user authenticated với tenant (qua session cookie)
     getSessionMock.mockResolvedValue({

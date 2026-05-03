@@ -73,7 +73,46 @@ interface CachedProfile {
   branchId: string | null;
   userId: string;
 }
-let cachedProfile: CachedProfile | null = null;
+
+// PERF F14: localStorage hydration để tránh race khi AuthContext + service
+// đồng thời fetch profile trên cold start hard nav. Hard nav = page reload =
+// module state mất (cachedProfile = null) NHƯNG localStorage còn → lần thứ 2
+// trở đi không fetch.
+const PROFILE_LS_KEY = "onebiz_profile_cache_v1";
+
+function readProfileFromLS(): CachedProfile | null {
+  if (typeof window === "undefined") return null;
+  try {
+    const raw = window.localStorage.getItem(PROFILE_LS_KEY);
+    if (!raw) return null;
+    const parsed = JSON.parse(raw) as CachedProfile;
+    if (parsed.tenantId && parsed.userId) return parsed;
+    return null;
+  } catch {
+    return null;
+  }
+}
+
+function writeProfileToLS(profile: CachedProfile): void {
+  if (typeof window === "undefined") return;
+  try {
+    window.localStorage.setItem(PROFILE_LS_KEY, JSON.stringify(profile));
+  } catch {
+    /* quota / private mode — fail-soft */
+  }
+}
+
+function clearProfileLS(): void {
+  if (typeof window === "undefined") return;
+  try {
+    window.localStorage.removeItem(PROFILE_LS_KEY);
+  } catch {
+    /* ignore */
+  }
+}
+
+// Hydrate từ localStorage — tránh fetch lần thứ 2 sau hard nav.
+let cachedProfile: CachedProfile | null = readProfileFromLS();
 // In-flight promise dedup. Khi N services cùng gọi loadProfile() lần đầu
 // (cache trống), TẤT CẢ chia sẻ 1 promise duy nhất thay vì mỗi cái call
 // supabase.auth.getUser() + profile query riêng. Tránh lock contention
@@ -108,6 +147,7 @@ async function loadProfile(): Promise<CachedProfile> {
           userId: user.id,
         };
         cachedProfile = profile;
+        writeProfileToLS(profile);
         return profile;
       }
 
@@ -151,11 +191,13 @@ export function _clearProfileCache(): void {
   cachedContext = null;
   inflightProfilePromise = null;
   inflightContextPromise = null;
+  clearProfileLS();
 }
 
 /**
- * PERF F11: Cho AuthContext seed cache profile sau khi nó tự fetch.
- * Tránh service layer refetch profile lần 2 ngay sau page mount.
+ * PERF F11+F14: Cho AuthContext seed cache profile (memory + localStorage)
+ * sau khi nó tự fetch. Tránh service layer refetch profile lần 2 ngay sau
+ * page mount. Hard nav lần sau đọc thẳng từ LS, skip fetch.
  * Internal — chỉ AuthContext nên import.
  */
 export function _seedProfileCache(profile: {
@@ -164,6 +206,7 @@ export function _seedProfileCache(profile: {
   userId: string;
 }): void {
   cachedProfile = profile;
+  writeProfileToLS(profile);
 }
 
 /**
