@@ -2844,13 +2844,17 @@ function PaymentBtn({
       type="button"
       onClick={onClick}
       className={cn(
-        "h-8 rounded-lg text-[10px] font-semibold transition-all press-scale-sm inline-flex items-center justify-center gap-1",
+        "h-8 rounded-lg text-[11px] font-semibold transition-all press-scale-sm inline-flex items-center justify-center gap-1 whitespace-nowrap px-1",
         active
           ? "bg-primary text-on-primary ambient-shadow"
-          : "bg-surface-container-low text-on-surface-variant hover:bg-surface-container hover:text-foreground"
+          : "bg-surface-container-low text-on-surface-variant hover:bg-surface-container hover:text-foreground",
       )}
     >
-      {icon}
+      {/* Icon ẩn ở cart hẹp <440 (sidebar 192 + cart 440 = ~440 cart hiện
+          chiều cao chia 4 buttons → mỗi button ~95px, đủ icon + label.
+          Nhưng safe defensive: hide icon ở @sm queries không có nên dùng
+          ml-0 + label always nowrap. */}
+      <span className="shrink-0 hidden xl:inline-flex">{icon}</span>
       {label}
     </button>
   );
