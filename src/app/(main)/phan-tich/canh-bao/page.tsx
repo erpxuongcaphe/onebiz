@@ -55,7 +55,7 @@ export default function CanhBaoPage() {
   // Branch awareness — chuỗi 5 đơn vị, owner cần xem cảnh báo riêng
   // từng quán/kho. Trước đây gọi `getFinancialAlerts()` không param →
   // luôn aggregate toàn tenant, không filter được.
-  const { activeBranchId } = useBranchFilter();
+  const { activeBranchId, isReady } = useBranchFilter();
   const [loading, setLoading] = useState(true);
   const [alerts, setAlerts] = useState<FinancialAlert[]>([]);
   const [filterType, setFilterType] = useState<string>("all");
@@ -73,8 +73,9 @@ export default function CanhBaoPage() {
   }, [activeBranchId]);
 
   useEffect(() => {
+    if (!isReady) return;
     fetchData();
-  }, [fetchData]);
+  }, [fetchData, isReady]);
 
   const filteredAlerts =
     filterType === "all"

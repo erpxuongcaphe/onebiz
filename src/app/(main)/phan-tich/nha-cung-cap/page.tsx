@@ -128,7 +128,7 @@ function renderPieLabel(props: any) {
 }
 
 export default function NhaCungCapPage() {
-  const { activeBranchId } = useBranchFilter();
+  const { activeBranchId, isReady } = useBranchFilter();
   const [loading, setLoading] = useState(true);
   const [kpis, setKpis] = useState<{
     totalSuppliers: number;
@@ -166,8 +166,9 @@ export default function NhaCungCapPage() {
   }, [activeBranchId]);
 
   useEffect(() => {
+    if (!isReady) return;
     fetchData();
-  }, [fetchData]);
+  }, [fetchData, isReady]);
 
   if (loading) {
     return (

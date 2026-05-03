@@ -37,7 +37,7 @@ import {
   getRecentActivities,
   getFinancialAlerts,
 } from "@/lib/services";
-import { useBranchFilter, useAuth } from "@/lib/contexts";
+import { useBranchFilter } from "@/lib/contexts";
 import type {
   DashboardKpis,
   ChartPoint,
@@ -78,10 +78,10 @@ function calcDiff(current: number, previous: number): { text: string; positive: 
 }
 
 export default function TongQuanPage() {
-  const { activeBranchId } = useBranchFilter();
-  // PERF F9: tenant ready = AuthContext load xong → safe để fire data fetch
-  // mà không lo activeBranchId đổi từ undefined → branch_id sau đó.
-  const { tenant } = useAuth();
+  // PERF F9+F12: isReady = AuthContext load xong → safe để fire data fetch
+  // mà không lo activeBranchId đổi từ undefined → branch_id sau đó (gây
+  // double-fire mỗi service).
+  const { activeBranchId, isReady } = useBranchFilter();
   const [chartView, setChartView] = useState<ChartView>("day");
   // Progressive loading: KPI skeleton trước, charts + secondary widgets sau.
   // Trước đây single `loading` flag block toàn bộ dashboard 2-4s → user thấy spinner
@@ -148,17 +148,12 @@ export default function TongQuanPage() {
     }
   }, [activeBranchId]);
 
-  // PERF F9: Chờ AuthContext xong (tenant ready) rồi mới fetch.
-  // Trước đây mount (activeBranchId=undefined, tenant=null) → fire phase1+
-  // phase2 NGAY, rồi AuthContext load xong → activeBranchId đổi → re-fire.
-  // Mỗi service chạy 2 lần → 14 invoices thay vì 7. Network log đã confirm.
-  // Giờ guard bằng `tenant`: chỉ fire khi tenant set (post-load), branch
-  // có thể vẫn undefined (CEO chọn "all branches").
+  // PERF F9+F12: chờ isReady (AuthContext xong) rồi mới fetch.
   useEffect(() => {
-    if (!tenant) return; // chờ AuthContext xong
+    if (!isReady) return;
     fetchPhase1();
     fetchPhase2();
-  }, [fetchPhase1, fetchPhase2, tenant]);
+  }, [fetchPhase1, fetchPhase2, isReady]);
 
   const today = new Date();
   const formattedDate = new Intl.DateTimeFormat("vi-VN", {

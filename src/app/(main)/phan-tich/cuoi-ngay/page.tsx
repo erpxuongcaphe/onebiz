@@ -81,7 +81,7 @@ function ProductTooltip({ active, payload, label }: any) {
 /* ---------- main page ---------- */
 
 export default function CuoiNgayPage() {
-  const { activeBranchId } = useBranchFilter();
+  const { activeBranchId, isReady } = useBranchFilter();
   const [stats, setStats] = useState<EndOfDayStats | null>(null);
   const [revenueByHour, setRevenueByHour] = useState<ChartPoint[]>([]);
   const [topProducts, setTopProducts] = useState<{ name: string; qty: number }[]>([]);
@@ -106,8 +106,9 @@ export default function CuoiNgayPage() {
   }, [activeBranchId]);
 
   useEffect(() => {
+    if (!isReady) return;
     fetchData();
-  }, [fetchData]);
+  }, [fetchData, isReady]);
 
   /* --- loading state --- */
   if (loading) {

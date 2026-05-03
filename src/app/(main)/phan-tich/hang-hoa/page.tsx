@@ -150,7 +150,7 @@ interface InventoryKpis {
 }
 
 export default function HangHoaPage() {
-  const { activeBranchId } = useBranchFilter();
+  const { activeBranchId, isReady } = useBranchFilter();
   const [loading, setLoading] = useState(true);
   const [kpis, setKpis] = useState<InventoryKpis | null>(null);
   const [topProducts, setTopProducts] = useState<TopProductRevenue[]>([]);
@@ -181,8 +181,9 @@ export default function HangHoaPage() {
   }, [activeBranchId]);
 
   useEffect(() => {
+    if (!isReady) return;
     fetchData();
-  }, [fetchData]);
+  }, [fetchData, isReady]);
 
   if (loading) {
     return (

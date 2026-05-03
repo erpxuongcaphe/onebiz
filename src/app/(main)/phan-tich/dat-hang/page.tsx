@@ -146,7 +146,7 @@ function renderPieLabel(props: any) {
 // === Page ===
 
 export default function DatHangPage() {
-  const { activeBranchId } = useBranchFilter();
+  const { activeBranchId, isReady } = useBranchFilter();
   const [loading, setLoading] = useState(true);
   const [kpis, setKpis] = useState<OrdersKpis | null>(null);
   const [orderVolume, setOrderVolume] = useState<ChartPoint[]>([]);
@@ -174,8 +174,9 @@ export default function DatHangPage() {
   }, [activeBranchId]);
 
   useEffect(() => {
+    if (!isReady) return;
     fetchData();
-  }, [fetchData]);
+  }, [fetchData, isReady]);
 
   if (loading) {
     return (

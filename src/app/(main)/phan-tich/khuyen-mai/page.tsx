@@ -91,7 +91,7 @@ function DailyTrendTooltip({
 }
 
 export default function KhuyenMaiAnalyticsPage() {
-  const { activeBranchId } = useBranchFilter();
+  const { activeBranchId, isReady } = useBranchFilter();
   const [loading, setLoading] = useState(true);
   const [kpis, setKpis] = useState<PromotionKpis | null>(null);
   const [detailRows, setDetailRows] = useState<PromotionDetailRow[]>([]);
@@ -116,8 +116,9 @@ export default function KhuyenMaiAnalyticsPage() {
   }, [activeBranchId]);
 
   useEffect(() => {
+    if (!isReady) return;
     fetchData();
-  }, [fetchData]);
+  }, [fetchData, isReady]);
 
   return (
     <div className="space-y-4 lg:space-y-6">

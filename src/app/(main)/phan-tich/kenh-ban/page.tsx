@@ -101,7 +101,7 @@ function renderPieLabel(props: any) {
 }
 
 export default function KenhBanPage() {
-  const { activeBranchId } = useBranchFilter();
+  const { activeBranchId, isReady } = useBranchFilter();
   const [loading, setLoading] = useState(true);
   const [channelRevenue, setChannelRevenue] = useState<ChartPoint[]>([]);
   const [channelPerformance, setChannelPerformance] = useState<ChannelPerformanceRow[]>([]);
@@ -123,8 +123,9 @@ export default function KenhBanPage() {
   }, [activeBranchId]);
 
   useEffect(() => {
+    if (!isReady) return;
     fetchData();
-  }, [fetchData]);
+  }, [fetchData, isReady]);
 
   if (loading) {
     return (

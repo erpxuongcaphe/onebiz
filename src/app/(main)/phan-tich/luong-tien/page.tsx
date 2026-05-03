@@ -38,7 +38,7 @@ function CashFlowTooltip({ active, payload, label }: any) {
 }
 
 export default function LuongTienPage() {
-  const { activeBranchId } = useBranchFilter();
+  const { activeBranchId, isReady } = useBranchFilter();
   const [data, setData] = useState<CashFlowDetailedRow[]>([]);
   const [loading, setLoading] = useState(true);
 
@@ -55,8 +55,9 @@ export default function LuongTienPage() {
   }, [activeBranchId]);
 
   useEffect(() => {
+    if (!isReady) return;
     fetchData();
-  }, [fetchData]);
+  }, [fetchData, isReady]);
 
   // Aggregate current month KPIs
   const current = data[data.length - 1];

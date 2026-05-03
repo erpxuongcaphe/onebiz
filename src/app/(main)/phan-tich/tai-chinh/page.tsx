@@ -144,7 +144,7 @@ interface FinanceKpis {
 }
 
 export default function TaiChinhPage() {
-  const { activeBranchId } = useBranchFilter();
+  const { activeBranchId, isReady } = useBranchFilter();
   const [loading, setLoading] = useState(true);
   const [kpis, setKpis] = useState<FinanceKpis | null>(null);
   const [revenueVsExpenseData, setRevenueVsExpenseData] = useState<MultiSeriesPoint[]>([]);
@@ -176,8 +176,9 @@ export default function TaiChinhPage() {
   }, [activeBranchId]);
 
   useEffect(() => {
+    if (!isReady) return; // PERF F12: chờ AuthContext xong, tránh double-fire
     fetchData();
-  }, [fetchData]);
+  }, [fetchData, isReady]);
 
   if (loading) {
     return (

@@ -118,7 +118,7 @@ function renderPieLabel(props: any) {
 }
 
 export default function KhachHangPage() {
-  const { activeBranchId } = useBranchFilter();
+  const { activeBranchId, isReady } = useBranchFilter();
   const [loading, setLoading] = useState(true);
   const [kpis, setKpis] = useState<{
     totalCustomers: number;
@@ -156,8 +156,9 @@ export default function KhachHangPage() {
   }, [activeBranchId]);
 
   useEffect(() => {
+    if (!isReady) return;
     fetchData();
-  }, [fetchData]);
+  }, [fetchData, isReady]);
 
   if (loading) {
     return (

@@ -63,7 +63,7 @@ const COLORS = [
 ];
 
 export default function FnbAnalyticsPage() {
-  const { activeBranchId } = useBranchFilter();
+  const { activeBranchId, isReady } = useBranchFilter();
   const [loading, setLoading] = useState(true);
   const [kpis, setKpis] = useState<FnbKpis | null>(null);
   const [menuItems, setMenuItems] = useState<MenuItemRevenue[]>([]);

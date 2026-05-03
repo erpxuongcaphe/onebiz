@@ -137,7 +137,7 @@ interface SalesKpisData {
 }
 
 export default function BanHangPage() {
-  const { activeBranchId } = useBranchFilter();
+  const { activeBranchId, isReady } = useBranchFilter();
   const [loading, setLoading] = useState(true);
   const [kpis, setKpis] = useState<SalesKpisData | null>(null);
   const [dailyRevenue, setDailyRevenue] = useState<MonthlyRevenuePoint[]>([]);
@@ -168,8 +168,9 @@ export default function BanHangPage() {
   }, [activeBranchId]);
 
   useEffect(() => {
+    if (!isReady) return;
     fetchData();
-  }, [fetchData]);
+  }, [fetchData, isReady]);
 
   if (loading) {
     return (
