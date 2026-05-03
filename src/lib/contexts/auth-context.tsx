@@ -14,6 +14,7 @@ import { createClient } from "@/lib/supabase/client";
 import type { UserProfile, Tenant, Branch } from "@/lib/types";
 import type { User } from "@supabase/supabase-js";
 import { getUserPermissions } from "@/lib/services/supabase/roles";
+import { _seedProfileCache as seedProfileCache, _clearProfileCache as clearProfileCache } from "@/lib/services/supabase/base";
 import { readDeviceBinding } from "@/lib/hooks/use-device-binding";
 
 // --- Types ---
@@ -90,6 +91,16 @@ export function AuthProvider({ children }: { children: ReactNode }) {
           createdAt: profile.created_at,
         };
         setUser(userProfile);
+
+        // PERF F11: Seed profile cache trong base.ts để service layer KHÔNG
+        // refetch profile lần nữa. Trước đây AuthContext fetch profile (1) rồi
+        // service đầu tiên gọi getCurrentTenantId() → fetch profile (2).
+        // Giờ chia sẻ ngay → giảm 1 RTT/page nav.
+        seedProfileCache({
+          tenantId: profile.tenant_id,
+          branchId: profile.branch_id ?? null,
+          userId: profile.id,
+        });
 
         // 2-4. Song song hoá tenant + branches + permissions — trước đây 3 call
         // tuần tự làm cold start 1.5-2s, blocking toàn bộ AuthProvider render.
@@ -269,6 +280,9 @@ export function AuthProvider({ children }: { children: ReactNode }) {
         setPermissions(new Set());
         // Reset dedup ref để lần sign-in tiếp theo sẽ load lại
         loadedUserIdRef.current = null;
+        // PERF F11: Clear profile cache trong base.ts để service không trả
+        // tenant cũ cho user mới (nếu admin switch account).
+        clearProfileCache();
 
         // Nếu trước đó đã đăng nhập và bây giờ session mất (token hết hạn,
         // refresh fail, logout từ device khác) → notify + redirect. Bỏ qua

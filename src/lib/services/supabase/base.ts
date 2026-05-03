@@ -143,14 +143,27 @@ export async function getCurrentTenantId(): Promise<string> {
 }
 
 /**
- * Reset cache khi user signOut hoặc switch account — trong AuthContext
- * onAuthStateChange (event=SIGNED_OUT). Không export ra ngoài service.
+ * Reset cache khi user signOut hoặc switch account — gọi trong AuthContext
+ * onAuthStateChange (event=SIGNED_OUT). Không sử dụng public từ service.
  */
 export function _clearProfileCache(): void {
   cachedProfile = null;
   cachedContext = null;
   inflightProfilePromise = null;
   inflightContextPromise = null;
+}
+
+/**
+ * PERF F11: Cho AuthContext seed cache profile sau khi nó tự fetch.
+ * Tránh service layer refetch profile lần 2 ngay sau page mount.
+ * Internal — chỉ AuthContext nên import.
+ */
+export function _seedProfileCache(profile: {
+  tenantId: string;
+  branchId: string | null;
+  userId: string;
+}): void {
+  cachedProfile = profile;
 }
 
 /**
