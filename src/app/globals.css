@@ -19,7 +19,17 @@
  *      .fonts-not-ready vẫn còn → guarantee zero raw text.
  * ============================================================ */
 .fonts-not-ready .material-symbols-outlined {
+  /* Hide qua visibility (giữ space, không layout shift). */
   visibility: hidden;
+}
+
+/* PERF F16: Bật ligature explicit (Material Symbols dùng ligature để
+   biến text "shopping_cart" → glyph). Một số UA cần explicit hint.
+   Khi font load OK → ligature kicks in → glyph render đẹp.
+   Khi font fail → text vẫn ngắt thành tên icon nhưng đã ẩn qua
+   .fonts-not-ready CSS rule (script chỉ remove class khi font ready). */
+.material-symbols-outlined {
+  font-feature-settings: "liga";
 }
 
 @theme inline {
