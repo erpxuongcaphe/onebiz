@@ -366,9 +366,12 @@ export default function HangHoaPage() {
     }
   }, [scope]);
 
+  // PERF F10: Bỏ dep `data` — trước đây mỗi lần fetchData xong (đổi page/
+  // search/filter) → data đổi → fetchStats re-run lại. Stats CHỈ phụ thuộc
+  // scope (NVL/SKU) — không cần refetch khi user filter trong cùng scope.
   useEffect(() => {
     fetchStats();
-  }, [fetchStats, data]);
+  }, [fetchStats]);
 
   // ============================================================
   // Bulk action handlers — gọi mutation, toast, refetch, clear

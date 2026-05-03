@@ -61,34 +61,54 @@ export function getFilterValue(filters: Record<string, string | string[]> | unde
  * session, we transparently return the first tenant row. Production builds
  * (BYPASS_AUTH unset) still require a real auth user.
  */
-let cachedTenantId: string | null = null;
-// In-flight promise dedup. Khi N services cùng gọi getCurrentTenantId() lần
-// đầu (cache trống), TẤT CẢ chia sẻ 1 promise duy nhất thay vì mỗi cái call
-// supabase.auth.getUser() riêng. Tránh lock contention "@supabase/gotrue-js
-// Lock auth-token was not released within 5000ms" khi page mount nhiều
-// component cùng query (CEO báo: tạo tier treo, console 1400+ lock warnings).
-let inflightTenantPromise: Promise<string> | null = null;
+// PERF F8: Profile cache shared cho cả `getCurrentTenantId` và
+// `getCurrentContext`. Trước đây mỗi function tự cache riêng → cùng page
+// mount fire 2-3 fetch profile (1 cho tenant, 1 cho context, 1 cho
+// AuthContext). Giờ cả 2 đều derive từ cùng `cachedProfile`.
+//
+// Quy ước: cachedProfile = null → chưa load. Sau load thành công, các
+// public function trả về synchronous từ cache (cho đến signOut clear).
+interface CachedProfile {
+  tenantId: string;
+  branchId: string | null;
+  userId: string;
+}
+let cachedProfile: CachedProfile | null = null;
+// In-flight promise dedup. Khi N services cùng gọi loadProfile() lần đầu
+// (cache trống), TẤT CẢ chia sẻ 1 promise duy nhất thay vì mỗi cái call
+// supabase.auth.getUser() + profile query riêng. Tránh lock contention
+// "@supabase/gotrue-js Lock auth-token was not released within 5000ms".
+let inflightProfilePromise: Promise<CachedProfile> | null = null;
 
-export async function getCurrentTenantId(): Promise<string> {
-  if (cachedTenantId) return cachedTenantId;
-  if (inflightTenantPromise) return inflightTenantPromise;
+async function loadProfile(): Promise<CachedProfile> {
+  if (cachedProfile) return cachedProfile;
+  if (inflightProfilePromise) return inflightProfilePromise;
 
-  inflightTenantPromise = (async () => {
+  inflightProfilePromise = (async () => {
     try {
       const supabase = getClient();
-      const { data: userData } = await supabase.auth.getUser();
+      // getSession() đọc cookie/localStorage instant (0 RTT) thay vì
+      // getUser() HTTP roundtrip. Trade-off: session expired → query sau
+      // sẽ fail → user redirect login (acceptable).
+      const { data: sessionData } = await supabase.auth.getSession();
+      const user = sessionData.session?.user;
 
-      if (userData.user) {
+      if (user) {
         const { data, error } = await supabase
           .from("profiles")
-          .select("tenant_id")
-          .eq("id", userData.user.id)
+          .select("tenant_id, branch_id")
+          .eq("id", user.id)
           .single();
         if (error || !data?.tenant_id) {
           throw new Error("Không tìm thấy tenant");
         }
-        cachedTenantId = data.tenant_id;
-        return cachedTenantId;
+        const profile: CachedProfile = {
+          tenantId: data.tenant_id,
+          branchId: data.branch_id ?? null,
+          userId: user.id,
+        };
+        cachedProfile = profile;
+        return profile;
       }
 
       // DEV bypass
@@ -99,20 +119,38 @@ export async function getCurrentTenantId(): Promise<string> {
           .limit(1)
           .single();
         if (firstTenant?.id) {
-          cachedTenantId = firstTenant.id;
-          return cachedTenantId;
+          const profile: CachedProfile = {
+            tenantId: firstTenant.id,
+            branchId: null,
+            userId: "dev-bypass",
+          };
+          cachedProfile = profile;
+          return profile;
         }
       }
 
       throw new Error("Chưa đăng nhập");
     } finally {
-      // Clear promise khi resolve/reject để lần lỗi tiếp theo có thể retry.
-      // Không clear cachedTenantId — đó là cache long-lived sau khi success.
-      inflightTenantPromise = null;
+      inflightProfilePromise = null;
     }
   })();
 
-  return inflightTenantPromise;
+  return inflightProfilePromise;
+}
+
+export async function getCurrentTenantId(): Promise<string> {
+  return (await loadProfile()).tenantId;
+}
+
+/**
+ * Reset cache khi user signOut hoặc switch account — trong AuthContext
+ * onAuthStateChange (event=SIGNED_OUT). Không export ra ngoài service.
+ */
+export function _clearProfileCache(): void {
+  cachedProfile = null;
+  cachedContext = null;
+  inflightProfilePromise = null;
+  inflightContextPromise = null;
 }
 
 /**
@@ -146,24 +184,19 @@ export async function getCurrentContext(): Promise<CurrentContext> {
 }
 
 async function loadContext(): Promise<CurrentContext> {
+  // PERF F8: Reuse cachedProfile thay vì fetch riêng lần nữa.
+  // Trước: getCurrentContext fetch profile mới → duplicate với getCurrentTenantId.
+  const profile = await loadProfile();
   const supabase = getClient();
-  const { data: userData } = await supabase.auth.getUser();
 
   // --- Real authenticated path ---
-  if (userData.user) {
-    const { data: profile } = await supabase
-      .from("profiles")
-      .select("tenant_id, branch_id")
-      .eq("id", userData.user.id)
-      .single();
-    if (!profile?.tenant_id) throw new Error("Không tìm thấy tenant");
-
-    let branchId = profile.branch_id;
+  if (profile.userId !== "dev-bypass") {
+    let branchId: string | null = profile.branchId;
     if (!branchId) {
       const { data: branch } = await supabase
         .from("branches")
         .select("id")
-        .eq("tenant_id", profile.tenant_id)
+        .eq("tenant_id", profile.tenantId)
         .eq("is_default", true)
         .limit(1)
         .single();
@@ -172,9 +205,9 @@ async function loadContext(): Promise<CurrentContext> {
     if (!branchId) throw new Error("Không tìm thấy chi nhánh");
 
     cachedContext = {
-      tenantId: profile.tenant_id,
+      tenantId: profile.tenantId,
       branchId,
-      userId: userData.user.id,
+      userId: profile.userId,
     };
     return cachedContext;
   }
@@ -300,8 +333,7 @@ export async function applyTenantFilter<
  * Tránh cache stale của user khác trong dev mode.
  */
 export function clearTenantCache() {
-  cachedTenantId = null;
-  cachedContext = null;
+  _clearProfileCache();
 }
 
 /**
