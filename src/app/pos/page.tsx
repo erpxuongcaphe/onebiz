@@ -1608,8 +1608,40 @@ function PosPageInner() {
           >
             <Icon name="menu" size={16} />
           </DropdownMenuTrigger>
-          <DropdownMenuContent align="end" sideOffset={6} className="min-w-[240px]">
-            <DropdownMenuLabel>POS Retail</DropdownMenuLabel>
+          <DropdownMenuContent align="end" sideOffset={6} className="min-w-[260px]">
+            {/* User info — CEO 04/05: cashier cần biết đang đăng nhập tài
+                khoản nào để khoá ca/đối soát. Hiển thị fullName + email +
+                role · chi nhánh (nếu có). */}
+            <div className="px-3 py-2.5 border-b border-border">
+              <p className="text-sm font-semibold text-foreground truncate" title={user?.fullName}>
+                {user?.fullName ?? "—"}
+              </p>
+              {user?.email && (
+                <p className="text-[11px] text-muted-foreground truncate" title={user.email}>
+                  {user.email}
+                </p>
+              )}
+              <p className="text-[10.5px] text-muted-foreground mt-0.5 flex items-center gap-1 flex-wrap">
+                <span className="px-1.5 py-0.5 rounded bg-primary-fixed text-primary font-medium">
+                  {user?.role === "owner"
+                    ? "Chủ DN"
+                    : user?.role === "admin"
+                      ? "Quản trị"
+                      : user?.role === "manager"
+                        ? "Quản lý"
+                        : user?.role === "cashier"
+                          ? "Thu ngân"
+                          : user?.role === "staff"
+                            ? "Nhân viên"
+                            : "Người dùng"}
+                </span>
+                {currentBranch && (
+                  <span className="text-muted-foreground/80 truncate">
+                    · {currentBranch.name}
+                  </span>
+                )}
+              </p>
+            </div>
             <DropdownMenuItem onSelect={() => router.push("/")}>
               <Icon name="home" size={16} className="mr-2" />
               Quay về trang chủ
@@ -2847,30 +2879,29 @@ function CartItem({
             </button>
           </div>
         ) : line.discount.value > 0 ? (
-          // Có GG → solid warning soft + icon discount + amount.
-          // Mắt scan thấy ngay row nào đang giảm. Click → popover edit.
+          // Có GG → text bold warning + bg soft. Không icon (tránh FOIT
+          // leak "DISCOUNT" + giữ chip gọn ~40-50px).
           <button
             type="button"
             onClick={() => setEditingDiscount(true)}
-            className="inline-flex items-center gap-0.5 text-[10.5px] font-semibold tabular-nums text-status-warning bg-status-warning/15 hover:bg-status-warning/25 border border-status-warning/30 px-1.5 py-0.5 rounded transition-colors"
+            className="text-[10px] font-bold tabular-nums text-status-warning bg-status-warning/15 hover:bg-status-warning/25 px-1.5 py-0.5 rounded transition-colors"
             title="Bấm để sửa giảm giá dòng"
           >
-            <Icon name="discount" size={11} />−
+            −
             {line.discount.mode === "percent"
               ? `${formatNumber(line.discount.value)}%`
               : `${formatNumber(line.discount.value)}đ`}
           </button>
         ) : (
-          // Chưa có GG → chip dashed primary/40 + icon + "Giảm".
-          // Visible nhưng không nhồi nhét — cashier thấy có thể thêm.
+          // Chưa có GG → chip text "+ Giảm" mờ, dashed border thin.
+          // Width ~38-42px — chỉ rộng hơn "+GG" cũ ~10px, không "ghê".
           <button
             type="button"
             onClick={() => setEditingDiscount(true)}
-            className="inline-flex items-center gap-0.5 text-[10.5px] font-medium text-primary/70 hover:text-primary border border-dashed border-primary/40 hover:border-primary hover:bg-primary-fixed/40 px-1.5 py-0.5 rounded transition-all"
+            className="text-[10px] font-medium text-primary/60 hover:text-primary border border-dashed border-primary/30 hover:border-primary hover:bg-primary-fixed/40 px-1 py-0.5 rounded transition-all"
             title="Thêm giảm giá cho dòng này"
           >
-            <Icon name="discount" size={11} />
-            Giảm
+            + Giảm
           </button>
         )}
 
