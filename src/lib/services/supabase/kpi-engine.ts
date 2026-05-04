@@ -11,6 +11,7 @@
 
 import { getClient, getCurrentContext, getCurrentTenantId, handleError } from "./base";
 import { getBranches } from "./branches";
+import { formatShortDate } from "@/lib/format";
 import type {
   KpiBreakdown,
   KpiPeriod,
@@ -127,7 +128,7 @@ export function splitPeriod(
       result.push({
         start: iso,
         end: iso,
-        label: cur.toLocaleDateString("vi-VN"),
+        label: formatShortDate(cur),
       });
       cur = addDays(cur, 1);
     }

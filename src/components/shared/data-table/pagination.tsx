@@ -9,6 +9,7 @@ import {
   SelectValue,
 } from "@/components/ui/select";
 import { Icon } from "@/components/ui/icon";
+import { formatNumber } from "@/lib/format";
 
 interface DataTablePaginationProps {
   pageIndex: number;
@@ -49,7 +50,7 @@ export function DataTablePagination({
         </Select>
         <span className="hidden sm:inline">dòng</span>
         <span className="text-xs text-muted-foreground/60 ml-2">
-          ({total.toLocaleString("vi-VN")} bản ghi)
+          ({formatNumber(total)} bản ghi)
         </span>
       </div>
 

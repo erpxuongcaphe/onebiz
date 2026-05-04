@@ -22,6 +22,7 @@ import {
 import { Button } from "@/components/ui/button";
 import { Icon } from "@/components/ui/icon";
 import { useToast } from "@/lib/contexts";
+import { formatTime as formatTimeHelper } from "@/lib/format";
 import {
   deleteQueueEntry,
   getQueueEntries,
@@ -55,10 +56,7 @@ const STATUS_META: Record<SyncQueueEntry["status"], { label: string; tone: strin
 
 function formatTime(iso: string | null): string {
   if (!iso) return "—";
-  return new Date(iso).toLocaleTimeString("vi-VN", {
-    hour: "2-digit",
-    minute: "2-digit",
-  });
+  return formatTimeHelper(iso);
 }
 
 export function SyncQueueDrawer({ open, onOpenChange, status }: SyncQueueDrawerProps) {

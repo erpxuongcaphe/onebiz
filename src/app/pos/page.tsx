@@ -34,7 +34,7 @@ import {
   getProducts,
 } from "@/lib/services/supabase";
 import { useToast } from "@/lib/contexts";
-import { formatCurrency } from "@/lib/format";
+import { formatCurrency, formatNumber, formatDecimal, parseNumberInput } from "@/lib/format";
 import { cn } from "@/lib/utils";
 import { printReceiptDirect, type ReceiptData } from "@/components/shared/print-receipt";
 import { printShiftReport } from "@/lib/print-shift-report";
@@ -445,7 +445,7 @@ function PosPageInner() {
       setCouponApplied(code);
       toast({
         title: `Đã áp mã ${code}`,
-        description: `Giảm ${amount.toLocaleString("vi-VN")}đ`,
+        description: `Giảm ${formatCurrency(amount)}đ`,
         variant: "success",
       });
     } catch (err) {
@@ -757,7 +757,7 @@ function PosPageInner() {
           state.setOrderDiscount({ mode: "amount", value: best.discountAmount });
           toast({
             title: `Áp dụng khuyến mãi: ${best.promotion.name}`,
-            description: `${best.reasonLabel} — Giảm ${best.discountAmount.toLocaleString("vi-VN")}đ`,
+            description: `${best.reasonLabel} — Giảm ${formatCurrency(best.discountAmount)}đ`,
             variant: "success",
           });
         } else if (appliedPromotion.discountAmount !== best.discountAmount) {
@@ -875,7 +875,7 @@ function PosPageInner() {
     setRedeemInput("");
     toast({
       title: `Đã đổi ${effectivePoints} điểm`,
-      description: `Giảm ${discountAmount.toLocaleString("vi-VN")}đ`,
+      description: `Giảm ${formatCurrency(discountAmount)}đ`,
       variant: "success",
     });
   }
@@ -907,7 +907,7 @@ function PosPageInner() {
     }
     try {
       const tempCode = `TT-${new Date()
-        .toLocaleTimeString("vi-VN", { hour12: false })
+        .toLocaleTimeString("vi-VN", { hour12: false, timeZone: "Asia/Ho_Chi_Minh" })
         .replace(/:/g, "")}`;
       const receipt: ReceiptData = {
         invoiceCode: tempCode,
@@ -1991,6 +1991,7 @@ function PosPageInner() {
                 <OrderDiscountInput
                   value={state.orderDiscount}
                   onChange={handleOrderDiscountChange}
+                  subtotal={state.subtotal}
                 />
               </div>
             )}
@@ -2550,7 +2551,7 @@ function PosPageInner() {
         onOpenChange={setSupervisorPinOpen}
         correctPin={settings.sales.supervisorPin ?? ""}
         title="Duyệt giảm giá vượt ngưỡng"
-        description={`Mức giảm vượt ${settings.sales.maxDiscount ?? 50}% hoặc ${(settings.sales.supervisorDiscountAmountThreshold ?? 500_000).toLocaleString("vi-VN")}đ — cần quản lý duyệt.`}
+        description={`Mức giảm vượt ${settings.sales.maxDiscount ?? 50}% hoặc ${formatCurrency(settings.sales.supervisorDiscountAmountThreshold ?? 500_000)}đ — cần quản lý duyệt.`}
         onApproved={() => {
           pendingApprovalRef.current?.();
           pendingApprovalRef.current = null;
@@ -2595,12 +2596,12 @@ function PosPageInner() {
                 <div>
                   <span className="text-muted-foreground">Số điểm hiện có: </span>
                   <strong className="text-status-info">
-                    {(state.customer.loyaltyPoints ?? 0).toLocaleString("vi-VN")} điểm
+                    {formatNumber(state.customer.loyaltyPoints ?? 0)} điểm
                   </strong>
                 </div>
                 <div className="text-xs text-muted-foreground">
                   Quy đổi: {loyaltySettings.redemptionPoints} điểm ={" "}
-                  {loyaltySettings.redemptionValue.toLocaleString("vi-VN")}đ — tối đa{" "}
+                  {formatCurrency(loyaltySettings.redemptionValue)}đ — tối đa{" "}
                   {loyaltySettings.maxRedemptionPercent}% giá trị đơn
                 </div>
               </div>
@@ -2639,12 +2640,12 @@ function PosPageInner() {
                 <div className="rounded-lg bg-status-success/10 p-3 space-y-0.5 text-sm">
                   <div>
                     <span className="text-muted-foreground">Sẽ trừ: </span>
-                    <strong>{preview.effectivePoints.toLocaleString("vi-VN")} điểm</strong>
+                    <strong>{formatNumber(preview.effectivePoints)} điểm</strong>
                   </div>
                   <div>
                     <span className="text-muted-foreground">Giảm: </span>
                     <strong className="text-status-success">
-                      {preview.discountAmount.toLocaleString("vi-VN")}đ
+                      {formatCurrency(preview.discountAmount)}đ
                     </strong>
                   </div>
                 </div>
@@ -2796,43 +2797,127 @@ function CartItem({
 }
 
 /** Order-level discount input — compact */
+/**
+ * OrderDiscountInput — chiết khấu đơn, toggle %/₫ + live format mask.
+ *
+ * Sprint 04/05/2026 redesign (CEO feedback):
+ * - Rộng hơn: input 112px (w-28) thay 48px (w-12) → đủ chỗ "1,000,000"
+ *   không bị nhốt trong ô.
+ * - Live format en-US (1,234,567 với phẩy ngàn) qua formatNumber +
+ *   parseNumberInput (handle paste/typing đa format).
+ * - Toggle %/₫ giữ NGUYÊN giá trị thực (auto convert: 10% × 100k = 10000₫
+ *   khi switch). Trước đây toggle giữ raw number → "10%" → "10₫" sai.
+ * - Conversion line hiển thị bên dưới: vd "10%" → "≈ 12,500₫" để cashier
+ *   nhìn rõ tiền thực giảm.
+ * - Auto clamp: max 100 nếu mode %; max subtotal nếu mode ₫.
+ */
 function OrderDiscountInput({
   value,
   onChange,
+  subtotal,
 }: {
   value: DiscountInput;
   onChange: (d: DiscountInput) => void;
+  subtotal: number;
 }) {
+  const [text, setText] = useState<string>(() =>
+    value.value > 0 ? formatNumber(value.value) : "",
+  );
+  const focusedRef = useRef(false);
+
+  // Sync external value → text khi không focus (vd promo set chiết khấu auto).
+  useEffect(() => {
+    if (focusedRef.current) return;
+    setText(value.value > 0 ? formatNumber(value.value) : "");
+  }, [value.value]);
+
+  const handleChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const raw = e.target.value;
+    setText(raw); // Cho phép gõ tự do; format trên blur
+
+    let n = parseNumberInput(raw) ?? 0;
+    if (n < 0) n = 0;
+    // Clamp theo mode
+    if (value.mode === "percent") {
+      if (n > 100) n = 100;
+    } else if (subtotal > 0 && n > subtotal) {
+      n = subtotal;
+    }
+    // Round 2 decimals (convention toàn web)
+    n = Math.round(n * 100) / 100;
+    onChange({ ...value, value: n });
+  };
+
+  const handleFocus = (e: React.FocusEvent<HTMLInputElement>) => {
+    focusedRef.current = true;
+    // Convert formatted "1,234,567" → raw "1234567" để dễ edit
+    if (value.value > 0) setText(String(value.value));
+    // Select all để cashier dễ replace
+    e.target.select();
+  };
+
+  const handleBlur = () => {
+    focusedRef.current = false;
+    setText(value.value > 0 ? formatNumber(value.value) : "");
+  };
+
+  const handleToggleMode = () => {
+    const newMode = value.mode === "amount" ? "percent" : "amount";
+    let newValue = value.value;
+    // Auto convert sang đơn vị mới để giữ "amount giảm thực sự"
+    if (subtotal > 0 && value.value > 0) {
+      if (newMode === "amount") {
+        // % → ₫
+        newValue = Math.round(((value.value / 100) * subtotal) * 100) / 100;
+      } else {
+        // ₫ → %
+        newValue = Math.round((value.value / subtotal) * 100 * 100) / 100;
+        if (newValue > 100) newValue = 100;
+      }
+    }
+    onChange({ mode: newMode, value: newValue });
+  };
+
+  // Conversion display: % → ≈ N₫, ₫ → ≈ N%
+  let conversionText: string | null = null;
+  if (value.value > 0 && subtotal > 0) {
+    if (value.mode === "percent") {
+      const amount = (subtotal * value.value) / 100;
+      conversionText = `≈ ${formatCurrency(amount)}đ`;
+    } else {
+      const pct = (value.value / subtotal) * 100;
+      conversionText = `≈ ${formatDecimal(pct, 1)}%`;
+    }
+  }
+
   return (
-    <div className="inline-flex items-stretch h-6 rounded border border-border overflow-hidden bg-white">
-      <input
-        type="number"
-        min={0}
-        value={value.value || ""}
-        onChange={(e) =>
-          onChange({ ...value, value: Math.max(0, parseInt(e.target.value) || 0) })
-        }
-        data-allow-hotkeys="true"
-        placeholder="0"
-        className="w-12 px-1.5 text-right text-[10px] outline-none tabular-nums"
-      />
-      <button
-        type="button"
-        onClick={() =>
-          onChange({
-            ...value,
-            mode: value.mode === "amount" ? "percent" : "amount",
-          })
-        }
-        className={cn(
-          "w-6 flex items-center justify-center text-[10px] border-l border-border font-bold transition-colors",
-          value.mode === "percent"
-            ? "bg-primary-fixed text-primary"
-            : "bg-surface-container-low text-muted-foreground hover:bg-muted"
-        )}
-      >
-        {value.mode === "percent" ? "%" : "₫"}
-      </button>
+    <div className="flex flex-col items-end gap-0.5">
+      <div className="inline-flex items-stretch h-7 rounded-md border border-border overflow-hidden bg-white focus-within:border-primary focus-within:ring-1 focus-within:ring-primary/30 transition-colors">
+        <input
+          type="text"
+          inputMode="decimal"
+          value={text}
+          onChange={handleChange}
+          onFocus={handleFocus}
+          onBlur={handleBlur}
+          data-allow-hotkeys="true"
+          placeholder="0"
+          className="w-28 px-2 text-right text-xs outline-none tabular-nums font-medium"
+        />
+        <button
+          type="button"
+          onClick={handleToggleMode}
+          className="px-2.5 flex items-center justify-center text-xs border-l border-border font-bold transition-colors bg-primary-fixed text-primary hover:bg-primary/15"
+          title="Đổi chế độ % hoặc ₫"
+        >
+          {value.mode === "percent" ? "%" : "đ"}
+        </button>
+      </div>
+      {conversionText && (
+        <span className="text-[10px] text-muted-foreground tabular-nums leading-none">
+          {conversionText}
+        </span>
+      )}
     </div>
   );
 }
@@ -3112,6 +3197,7 @@ function DraftListModal({
                       <span className="text-[10px] text-muted-foreground">
                         {new Date(draft.createdAt).toLocaleString("vi-VN", {
                           day: "2-digit", month: "2-digit", hour: "2-digit", minute: "2-digit",
+                          timeZone: "Asia/Ho_Chi_Minh",
                         })}
                       </span>
                     </div>

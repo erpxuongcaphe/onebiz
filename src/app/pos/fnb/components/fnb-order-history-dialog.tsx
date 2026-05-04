@@ -10,7 +10,7 @@ import { Input } from "@/components/ui/input";
 import { Button } from "@/components/ui/button";
 import { Icon } from "@/components/ui/icon";
 import { ScrollArea } from "@/components/ui/scroll-area";
-import { formatCurrency } from "@/lib/format";
+import { formatCurrency, formatTime } from "@/lib/format";
 import {
   getFnbRecentInvoices,
   getFnbInvoiceForReprint,
@@ -182,10 +182,7 @@ export function FnbOrderHistoryDialog({
                         <span>{inv.customerName}</span>
                         <span>•</span>
                         <span>
-                          {new Date(inv.createdAt).toLocaleTimeString("vi-VN", {
-                            hour: "2-digit",
-                            minute: "2-digit",
-                          })}
+                          {formatTime(inv.createdAt)}
                         </span>
                         <span>•</span>
                         <span>{METHOD_LABEL[inv.paymentMethod] ?? inv.paymentMethod}</span>

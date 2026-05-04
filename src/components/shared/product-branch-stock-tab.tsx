@@ -9,7 +9,7 @@
 
 import { useEffect, useState } from "react";
 import { getProductStockBreakdown } from "@/lib/services";
-import { formatDate } from "@/lib/format";
+import { formatDate, formatNumber } from "@/lib/format";
 import { Icon } from "@/components/ui/icon";
 
 interface ProductBranchStockTabProps {
@@ -100,19 +100,19 @@ export function ProductBranchStockTab({ productId, unit }: ProductBranchStockTab
         <div className="rounded-lg border px-3 py-2">
           <p className="text-xs text-muted-foreground">Tổng tồn</p>
           <p className="text-base font-semibold">
-            {total.toLocaleString("vi-VN")} {unitLabel}
+            {formatNumber(total)} {unitLabel}
           </p>
         </div>
         <div className="rounded-lg border px-3 py-2">
           <p className="text-xs text-muted-foreground">Đang giữ chỗ</p>
           <p className="text-base font-semibold text-status-warning">
-            {totalReserved.toLocaleString("vi-VN")} {unitLabel}
+            {formatNumber(totalReserved)} {unitLabel}
           </p>
         </div>
         <div className="rounded-lg border px-3 py-2">
           <p className="text-xs text-muted-foreground">Có thể bán</p>
           <p className="text-base font-semibold text-status-success">
-            {totalAvailable.toLocaleString("vi-VN")} {unitLabel}
+            {formatNumber(totalAvailable)} {unitLabel}
           </p>
         </div>
       </div>
@@ -148,10 +148,10 @@ export function ProductBranchStockTab({ productId, unit }: ProductBranchStockTab
                   r.quantity === 0 ? "text-muted-foreground" : ""
                 }`}
               >
-                {r.quantity.toLocaleString("vi-VN")}
+                {formatNumber(r.quantity)}
               </span>
               <span className="text-right font-mono text-xs text-status-warning">
-                {r.reserved > 0 ? r.reserved.toLocaleString("vi-VN") : "—"}
+                {r.reserved > 0 ? formatNumber(r.reserved) : "—"}
               </span>
               <span
                 className={`text-right font-mono ${
@@ -160,7 +160,7 @@ export function ProductBranchStockTab({ productId, unit }: ProductBranchStockTab
                     : "text-status-success"
                 }`}
               >
-                {r.available.toLocaleString("vi-VN")}
+                {formatNumber(r.available)}
               </span>
               <span className="text-xs text-muted-foreground truncate">
                 {formatDate(r.updatedAt)}

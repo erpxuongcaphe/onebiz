@@ -10,7 +10,7 @@ import { ConfirmDialog } from "@/components/shared/dialogs/confirm-dialog";
 import { CreateKpiBreakdownDialog } from "@/components/shared/dialogs/create-kpi-breakdown-dialog";
 import { CreateAgentTaskDialog } from "@/components/shared/dialogs/create-agent-task-dialog";
 import { AutoBreakdownDialog } from "@/components/shared/dialogs/auto-breakdown-dialog";
-import { formatCurrency, formatNumber } from "@/lib/format";
+import { formatCurrency, formatNumber, formatShortDate } from "@/lib/format";
 import {
   deleteKpiBreakdown,
   getKpiBreakdownTree,
@@ -112,8 +112,8 @@ function KpiNode({
               </span>
             </div>
             <div className="text-xs text-muted-foreground mt-1">
-              {new Date(node.periodStart).toLocaleDateString("vi-VN")} →{" "}
-              {new Date(node.periodEnd).toLocaleDateString("vi-VN")}
+              {formatShortDate(node.periodStart)} →{" "}
+              {formatShortDate(node.periodEnd)}
               {node.ownerRole && ` · ${node.ownerRole}`}
             </div>
           </div>

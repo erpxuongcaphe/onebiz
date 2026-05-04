@@ -30,7 +30,7 @@ import { ImportExcelDialog } from "@/components/shared/dialogs/import-excel-dial
 import { downloadTemplate } from "@/lib/excel";
 import { supplierExcelSchema } from "@/lib/excel/schemas";
 import { bulkImportSuppliers } from "@/lib/services/supabase/excel-import";
-import { formatCurrency, formatDate } from "@/lib/format";
+import { formatCurrency, formatDate, formatNumber } from "@/lib/format";
 import { exportToCsv } from "@/lib/utils/export";
 import { exportToExcelFromSchema } from "@/lib/excel";
 import type { SupplierImportRow } from "@/lib/excel/schemas";
@@ -582,7 +582,7 @@ export default function NhaCungCapPage() {
           <SummaryCard
             icon="local_shipping"
             label="Tổng NCC"
-            value={total.toLocaleString("vi-VN")}
+            value={formatNumber(total)}
           />
           <SummaryCard
             icon="trending_up"
@@ -599,7 +599,7 @@ export default function NhaCungCapPage() {
           <SummaryCard
             icon="verified"
             label="Hiển thị"
-            value={data.length.toLocaleString("vi-VN")}
+            value={formatNumber(data.length)}
             hint={`Trang ${page + 1}`}
           />
         </div>

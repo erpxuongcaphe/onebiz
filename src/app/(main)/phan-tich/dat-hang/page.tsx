@@ -16,7 +16,7 @@ import {
 } from "recharts";
 import { DateRangeBar, KpiCard, ChartCard } from "../_components";
 import { useBranchFilter } from "@/lib/contexts";
-import { formatCurrency } from "@/lib/format";
+import { formatCurrency, formatNumber } from "@/lib/format";
 import {
   getOrdersKpis,
   getDailyOrderVolume,
@@ -199,7 +199,7 @@ export default function DatHangPage() {
   const kpiCards = [
     {
       label: "Tổng đơn hàng",
-      value: kpis ? kpis.total.toLocaleString("vi-VN") : "0",
+      value: kpis ? formatNumber(kpis.total) : "0",
       change: totalChange.text,
       positive: totalChange.positive,
       icon: "assignment",
@@ -209,7 +209,7 @@ export default function DatHangPage() {
     },
     {
       label: "Đơn hoàn thành",
-      value: kpis ? kpis.completed.toLocaleString("vi-VN") : "0",
+      value: kpis ? formatNumber(kpis.completed) : "0",
       change: kpis ? `${kpis.completedPct}% tổng đơn` : "",
       positive: true,
       icon: "check_circle",
@@ -219,7 +219,7 @@ export default function DatHangPage() {
     },
     {
       label: "Đơn đang xử lý",
-      value: kpis ? kpis.inTransit.toLocaleString("vi-VN") : "0",
+      value: kpis ? formatNumber(kpis.inTransit) : "0",
       change: kpis ? `${kpis.inTransitPct}% tổng đơn` : "",
       positive: true,
       icon: "local_shipping",
@@ -229,7 +229,7 @@ export default function DatHangPage() {
     },
     {
       label: "Đơn hủy",
-      value: kpis ? kpis.cancelled.toLocaleString("vi-VN") : "0",
+      value: kpis ? formatNumber(kpis.cancelled) : "0",
       change: kpis ? `${kpis.cancelledPct}% tổng đơn` : "",
       positive: false,
       icon: "cancel",

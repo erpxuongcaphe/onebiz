@@ -8,6 +8,8 @@
  * - Table/order info
  */
 
+import { formatTime, formatShortDate } from "@/lib/format";
+
 export interface KitchenTicketData {
   orderNumber: string;
   tableName?: string;
@@ -30,11 +32,8 @@ const ORDER_TYPE_LABELS: Record<string, string> = {
 };
 
 export function printKitchenTicket(data: KitchenTicketData) {
-  const time = new Date(data.createdAt).toLocaleTimeString("vi-VN", {
-    hour: "2-digit",
-    minute: "2-digit",
-  });
-  const date = new Date(data.createdAt).toLocaleDateString("vi-VN");
+  const time = formatTime(data.createdAt);
+  const date = formatShortDate(data.createdAt);
 
   const typeLabel = ORDER_TYPE_LABELS[data.orderType] ?? data.orderType;
   const tableLabel = data.tableName ? `${data.tableName}` : typeLabel;

@@ -5,7 +5,7 @@
  * Dùng window.open() + window.print() (browser-native).
  */
 
-import { formatCurrency } from "@/lib/format";
+import { formatCurrency, formatTime as formatTimeHelper, formatShortDate } from "@/lib/format";
 import { printerService, type PrintReceiptPayload } from "@/lib/printer";
 
 // ============================================================
@@ -99,11 +99,11 @@ function getPageSize(paperSize?: string): string {
 }
 
 function formatTime(iso: string): string {
-  return new Date(iso).toLocaleTimeString("vi-VN", { hour: "2-digit", minute: "2-digit" });
+  return formatTimeHelper(iso);
 }
 
 function formatDate(iso: string): string {
-  return new Date(iso).toLocaleDateString("vi-VN");
+  return formatShortDate(iso);
 }
 
 function openAndPrint(html: string) {

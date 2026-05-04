@@ -16,6 +16,7 @@ import {
 import { cn } from "@/lib/utils";
 import { useSettings, useToast } from "@/lib/contexts";
 import { Icon } from "@/components/ui/icon";
+import { formatNumber } from "@/lib/format";
 
 function Toggle({
   checked,
@@ -282,7 +283,7 @@ export default function SalesSettingsPage() {
                 <div className="text-[11px] text-muted-foreground">
                   Chiết khấu {">"}{" "}
                   <span className="font-semibold tabular-nums">
-                    {Number(supervisorDiscountAmountThreshold || 0).toLocaleString("vi-VN")} ₫
+                    {formatNumber(Number(supervisorDiscountAmountThreshold || 0))} ₫
                   </span>{" "}
                   mới cần PIN. Mặc định 500.000 ₫.
                 </div>

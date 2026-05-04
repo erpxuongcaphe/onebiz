@@ -19,6 +19,7 @@ import { Badge } from "@/components/ui/badge";
 import { Separator } from "@/components/ui/separator";
 import { Tabs, TabsList, TabsTrigger, TabsContent } from "@/components/ui/tabs";
 import { useToast } from "@/lib/contexts";
+import { formatShortDate } from "@/lib/format";
 import {
   getNotifications,
   markNotificationAsRead,
@@ -101,7 +102,7 @@ function timeAgo(iso: string): string {
   if (diff < 3600) return `${Math.floor(diff / 60)} phút trước`;
   if (diff < 86400) return `${Math.floor(diff / 3600)} giờ trước`;
   if (diff < 86400 * 7) return `${Math.floor(diff / 86400)} ngày trước`;
-  return new Date(iso).toLocaleDateString("vi-VN");
+  return formatShortDate(iso);
 }
 
 export default function ThongBaoPage() {

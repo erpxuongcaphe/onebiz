@@ -15,6 +15,7 @@ import {
 } from "recharts";
 import {
   formatCurrency,
+  formatNumber,
   formatChartCurrency,
   formatChartTooltipCurrency,
 } from "@/lib/format";
@@ -122,7 +123,7 @@ export default function TongQuanPage() {
           />
           <KpiCard
             label="Đơn hàng"
-            value={(kpis?.orders ?? 0).toLocaleString("vi-VN")}
+            value={formatNumber(kpis?.orders ?? 0)}
             change={calcChange(kpis?.orders ?? 0, kpis?.prevOrders ?? 0)}
             positive={(kpis?.orders ?? 0) >= (kpis?.prevOrders ?? 0)}
             icon="shopping_cart"
@@ -132,7 +133,7 @@ export default function TongQuanPage() {
           />
           <KpiCard
             label="Khách mới"
-            value={(kpis?.newCustomers ?? 0).toLocaleString("vi-VN")}
+            value={formatNumber(kpis?.newCustomers ?? 0)}
             change={calcChange(kpis?.newCustomers ?? 0, kpis?.prevNewCustomers ?? 0)}
             positive={(kpis?.newCustomers ?? 0) >= (kpis?.prevNewCustomers ?? 0)}
             icon="group"

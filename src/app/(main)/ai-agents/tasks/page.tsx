@@ -23,6 +23,7 @@ import {
   type AgentTaskStatus,
 } from "@/lib/types/ai-agents";
 import { useToast } from "@/lib/contexts";
+import { formatShortDate } from "@/lib/format";
 
 const TONE_CLASS: Record<string, string> = {
   neutral: "bg-surface-container-high text-muted-foreground",
@@ -60,7 +61,7 @@ const STATUS_FILTERS: Array<{ key: TaskListFilter; label: string }> = [
 ];
 
 function formatDate(iso: string): string {
-  return new Date(iso).toLocaleDateString("vi-VN");
+  return formatShortDate(iso);
 }
 
 function TaskRow({

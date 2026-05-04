@@ -3,9 +3,9 @@ import { renderHook, act } from "@testing-library/react";
 import { render, screen, fireEvent } from "@testing-library/react";
 import { useFnbPosState } from "@/app/pos/fnb/hooks/use-fnb-pos-state";
 
-// ── Mock formatCurrency ──
+// ── Mock formatCurrency (en-US convention to match real helper) ──
 vi.mock("@/lib/format", () => ({
-  formatCurrency: (v: number) => v.toLocaleString("vi-VN"),
+  formatCurrency: (v: number) => v.toLocaleString("en-US"),
 }));
 
 // ── Helper: build a line input ──

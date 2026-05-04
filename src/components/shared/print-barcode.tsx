@@ -2,6 +2,7 @@
 
 import { useRef, useCallback } from "react";
 import Barcode from "react-barcode";
+import { formatCurrency } from "@/lib/format";
 
 export interface BarcodeLabelData {
   code: string;
@@ -105,7 +106,7 @@ export function PrintBarcode({
             />
             {item.price !== undefined && (
               <div className="label-price">
-                {new Intl.NumberFormat("vi-VN").format(item.price)}đ
+                {formatCurrency(item.price)}đ
               </div>
             )}
           </div>

@@ -23,6 +23,7 @@ import { createPromotion, updatePromotion } from "@/lib/services";
 import { getProducts } from "@/lib/services/supabase/products";
 import type { Promotion, PromotionChannel, Product } from "@/lib/types";
 import { Icon } from "@/components/ui/icon";
+import { formatCurrency } from "@/lib/format";
 import { cn } from "@/lib/utils";
 
 interface CreatePromotionDialogProps {
@@ -480,7 +481,7 @@ export function CreatePromotionDialog({
                             {p.name}
                           </span>
                           <span className="text-muted-foreground tabular-nums shrink-0">
-                            {(p.sellPrice ?? 0).toLocaleString("vi-VN")}đ
+                            {formatCurrency(p.sellPrice ?? 0)}đ
                           </span>
                         </button>
                       );

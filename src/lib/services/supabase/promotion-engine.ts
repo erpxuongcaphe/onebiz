@@ -25,6 +25,7 @@
 import type { Promotion, PromotionSettings } from "@/lib/types";
 import { getClient, handleError, getCurrentTenantId } from "./base";
 import { getActivePromotions, getPromotionSettings } from "./promotions";
+import { formatCurrency } from "@/lib/format";
 
 // ============================================================
 // Types
@@ -241,7 +242,7 @@ export function calculateDiscount(
     }
     case "discount_fixed": {
       discountAmount = Math.min(promo.value, eligibleSubtotal);
-      reasonLabel = `Giảm ${promo.value.toLocaleString("vi-VN")}đ`;
+      reasonLabel = `Giảm ${formatCurrency(promo.value)}đ`;
       break;
     }
     case "buy_x_get_y": {

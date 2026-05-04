@@ -32,6 +32,7 @@ import { nextGroupCode, peekNextGroupCode } from "@/lib/services/supabase/base";
 import { Icon } from "@/components/ui/icon";
 import { ProductImageUpload } from "@/components/shared/product-image-upload";
 import type { Product } from "@/lib/types";
+import { formatNumber } from "@/lib/format";
 
 type ShelfLifeUnit = "day" | "month" | "year";
 type SupplierOption = { id: string; name: string; code?: string };
@@ -58,12 +59,12 @@ function findCaseInsensitiveDup(input: string, existing: string[]): string | nul
 }
 
 // Currency input: lưu raw digits trong state, format khi render. CEO complain
-// "195000" khó đọc — VN convention dùng "195.000" với separator ".".
+// "195000" khó đọc — convention en-US: "195,000" với separator ",".
 function formatVnd(value: string): string {
   if (!value) return "";
   const digits = value.replace(/\D/g, "");
   if (!digits) return "";
-  return Number(digits).toLocaleString("vi-VN");
+  return formatNumber(Number(digits));
 }
 function parseVnd(value: string): string {
   return value.replace(/\D/g, "");

@@ -31,7 +31,7 @@ import { downloadTemplate } from "@/lib/excel";
 import { customerExcelSchema } from "@/lib/excel/schemas";
 import { bulkImportCustomers } from "@/lib/services/supabase/excel-import";
 import { useToast } from "@/lib/contexts";
-import { formatCurrency, formatDate } from "@/lib/format";
+import { formatCurrency, formatDate, formatNumber } from "@/lib/format";
 import { exportToCsv } from "@/lib/utils/export";
 import { exportToExcelFromSchema } from "@/lib/excel";
 import type { CustomerImportRow } from "@/lib/excel/schemas";
@@ -200,7 +200,7 @@ export default function KhachHangPage() {
                   : "text-muted-foreground tabular-nums"
               }
             >
-              {pts.toLocaleString("vi-VN")}
+              {formatNumber(pts)}
             </span>
             {tierName && (
               <Badge
@@ -645,7 +645,7 @@ function CustomerDetailPanel({
                       : "text-muted-foreground"
                   }
                 >
-                  {(customer.loyaltyPoints ?? 0).toLocaleString("vi-VN")} điểm
+                  {formatNumber(customer.loyaltyPoints ?? 0)} điểm
                 </span>
               ),
             },

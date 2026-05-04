@@ -12,6 +12,7 @@ import {
 import { Button } from "@/components/ui/button";
 import { Icon } from "@/components/ui/icon";
 import { useToast } from "@/lib/contexts";
+import { formatNumber, formatShortDate } from "@/lib/format";
 import {
   autoBreakdownKpi,
   getBranches,
@@ -223,11 +224,11 @@ export function AutoBreakdownDialog({
             <div className="text-xs text-muted-foreground">
               Mục tiêu:{" "}
               <span className="font-semibold text-foreground tabular-nums">
-                {parentKpi.targetValue.toLocaleString("vi-VN")}
+                {formatNumber(parentKpi.targetValue)}
               </span>
               {parentKpi.unit && ` ${parentKpi.unit}`} ·{" "}
-              {new Date(parentKpi.periodStart).toLocaleDateString("vi-VN")} →{" "}
-              {new Date(parentKpi.periodEnd).toLocaleDateString("vi-VN")}
+              {formatShortDate(parentKpi.periodStart)} →{" "}
+              {formatShortDate(parentKpi.periodEnd)}
             </div>
           </div>
 
@@ -423,9 +424,9 @@ export function AutoBreakdownDialog({
               </p>
               <p className="text-muted-foreground">
                 {strategy === "time"
-                  ? `Mỗi KPI con = ${parentKpi.targetValue.toLocaleString("vi-VN")} ÷ ${previewCount || 1} = ${Math.round(parentKpi.targetValue / (previewCount || 1)).toLocaleString("vi-VN")}${parentKpi.unit ? ` ${parentKpi.unit}` : ""}`
+                  ? `Mỗi KPI con = ${formatNumber(parentKpi.targetValue)} ÷ ${previewCount || 1} = ${formatNumber(Math.round(parentKpi.targetValue / (previewCount || 1)))}${parentKpi.unit ? ` ${parentKpi.unit}` : ""}`
                   : branchDistribution === "even"
-                    ? `Mỗi chi nhánh: ${Math.round(parentKpi.targetValue / (previewCount || 1)).toLocaleString("vi-VN")}${parentKpi.unit ? ` ${parentKpi.unit}` : ""}`
+                    ? `Mỗi chi nhánh: ${formatNumber(Math.round(parentKpi.targetValue / (previewCount || 1)))}${parentKpi.unit ? ` ${parentKpi.unit}` : ""}`
                     : "Target được phân bổ theo tỉ trọng doanh thu 90 ngày gần nhất"}
               </p>
             </div>

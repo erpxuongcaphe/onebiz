@@ -6,6 +6,7 @@ import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import {
   formatCurrency,
+  formatNumber,
   formatChartCurrency,
 } from "@/lib/format";
 import { cn } from "@/lib/utils";
@@ -161,6 +162,7 @@ export default function TongQuanPage() {
     day: "2-digit",
     month: "2-digit",
     year: "numeric",
+    timeZone: "Asia/Ho_Chi_Minh",
   }).format(today);
 
   const chartData: Record<ChartView, ChartPoint[]> = {
@@ -294,7 +296,7 @@ export default function TongQuanPage() {
                 </div>
               </div>
               <p className="font-heading text-2xl lg:text-3xl font-extrabold tracking-tight text-foreground leading-tight">
-                {kpi.isCurrency ? formatCurrency(kpi.value) : kpi.value.toLocaleString("vi-VN")}
+                {kpi.isCurrency ? formatCurrency(kpi.value) : formatNumber(kpi.value)}
               </p>
               <p className="mt-2 text-xs text-muted-foreground">
                 <span className={cn("font-semibold", kpi.positive ? "text-status-success" : "text-status-error")}>

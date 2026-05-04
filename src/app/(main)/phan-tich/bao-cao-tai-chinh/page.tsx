@@ -27,6 +27,7 @@ import {
 import { DateRangeBar, KpiCard, ChartCard } from "../_components";
 import {
   formatCurrency,
+  formatNumber,
   formatChartCurrency,
   formatChartTooltipCurrency,
 } from "@/lib/format";
@@ -1004,7 +1005,7 @@ export default function BaoCaoTaiChinhPage() {
                         {item.productName}
                       </td>
                       <td className="py-2.5 pr-4 text-right">
-                        {item.qtySold.toLocaleString("vi-VN")}
+                        {formatNumber(item.qtySold)}
                       </td>
                       <td className="py-2.5 pr-4 text-right">
                         {formatCurrency(item.costPrice)}

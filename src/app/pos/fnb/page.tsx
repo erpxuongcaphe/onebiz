@@ -49,6 +49,7 @@ import { printShiftReport } from "@/lib/print-shift-report";
 import type { RestaurantTable } from "@/lib/types/fnb";
 import type { Shift } from "@/lib/types/shift";
 import type { Customer } from "@/lib/types";
+import { formatCurrency } from "@/lib/format";
 import { useFnbPosState } from "./hooks/use-fnb-pos-state";
 import { FnbHeader } from "./components/fnb-header";
 import { FnbCategoryTabs, type FnbCategory } from "./components/fnb-category-tabs";
@@ -393,7 +394,7 @@ function FnbPosPageInner() {
           }
           toast({
             title: `Áp dụng khuyến mãi: ${best.promotion.name}`,
-            description: `${best.reasonLabel} — Giảm ${best.discountAmount.toLocaleString("vi-VN")}đ`,
+            description: `${best.reasonLabel} — Giảm ${formatCurrency(best.discountAmount)}đ`,
             variant: "success",
           });
         } else if (appliedPromotion.discountAmount !== best.discountAmount) {
@@ -820,7 +821,7 @@ function FnbPosPageInner() {
       setCouponApplied({ code, discount: result.discount_amount });
       toast({
         title: "Áp mã thành công",
-        description: `Giảm ${new Intl.NumberFormat("vi-VN").format(result.discount_amount)} ₫ cho đơn.`,
+        description: `Giảm ${formatCurrency(result.discount_amount)} ₫ cho đơn.`,
         variant: "success",
       });
     } catch (err) {
@@ -1558,7 +1559,7 @@ function FnbPosPageInner() {
             </span>
           </span>
           <span className="text-status-warning font-medium ml-auto">
-            -{appliedPromotion.discountAmount.toLocaleString("vi-VN")}đ
+            -{formatCurrency(appliedPromotion.discountAmount)}đ
           </span>
           <button
             type="button"

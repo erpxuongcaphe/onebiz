@@ -39,7 +39,7 @@ import {
   DialogFooter,
 } from "@/components/ui/dialog";
 import { Button } from "@/components/ui/button";
-import { formatCurrency, formatDate } from "@/lib/format";
+import { formatCurrency, formatDate, formatNumber } from "@/lib/format";
 import { exportToCsv } from "@/lib/utils/export";
 import { exportToExcelFromSchema } from "@/lib/excel";
 import type { ProductImportRow } from "@/lib/excel/schemas";
@@ -854,7 +854,7 @@ export default function HangHoaPage() {
           <SummaryCard
             icon={<Icon name="inventory_2" size={16} />}
             label={scope === "nvl" ? "Tổng NVL" : "Tổng hàng bán"}
-            value={stats ? stats.totalCount.toLocaleString("vi-VN") : "—"}
+            value={stats ? formatNumber(stats.totalCount) : "—"}
           />
           <SummaryCard
             icon={<Icon name="savings" size={16} />}
@@ -865,13 +865,13 @@ export default function HangHoaPage() {
           <SummaryCard
             icon={<Icon name="remove_shopping_cart" size={16} />}
             label="Hết hàng"
-            value={stats ? stats.outOfStock.toLocaleString("vi-VN") : "—"}
+            value={stats ? formatNumber(stats.outOfStock) : "—"}
             danger={(stats?.outOfStock ?? 0) > 0}
           />
           <SummaryCard
             icon={<Icon name="warning" size={16} />}
             label="Sắp hết (≤ 5)"
-            value={stats ? stats.lowStock.toLocaleString("vi-VN") : "—"}
+            value={stats ? formatNumber(stats.lowStock) : "—"}
             danger={(stats?.lowStock ?? 0) > 0}
           />
         </div>

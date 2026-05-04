@@ -21,7 +21,7 @@ import { Button } from "@/components/ui/button";
 import { Icon } from "@/components/ui/icon";
 import { LoadingState } from "@/components/shared/loading-state";
 import { EmptyState } from "@/components/shared/empty-state";
-import { formatCurrency } from "@/lib/format";
+import { formatCurrency, formatTime } from "@/lib/format";
 import { getInvoices, getInvoiceItems } from "@/lib/services/supabase/invoices";
 import { printReceiptDirect, type ReceiptData } from "@/components/shared/print-receipt";
 import { useToast } from "@/lib/contexts";
@@ -178,10 +178,7 @@ export function ShiftInvoiceDrawer({
                       {inv.code}
                     </span>
                     <span className="text-[10px] text-muted-foreground">
-                      {new Date(inv.date).toLocaleTimeString("vi-VN", {
-                        hour: "2-digit",
-                        minute: "2-digit",
-                      })}
+                      {formatTime(inv.date)}
                     </span>
                   </div>
                   <div className="text-xs text-muted-foreground truncate mt-0.5">

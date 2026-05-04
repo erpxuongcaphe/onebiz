@@ -2,6 +2,7 @@
 
 import * as React from "react";
 import { Input } from "./input";
+import { formatNumber, formatDecimal, parseNumberInput, roundDecimals } from "@/lib/format";
 
 interface NumericInputProps
   extends Omit<
@@ -20,24 +21,32 @@ interface NumericInputProps
   decimals?: number;
   /** Cho phép giá trị âm — opt-in cho cases hiếm (vd điều chỉnh tồn kho thủ công). */
   allowNegative?: boolean;
+  /**
+   * Force hiển thị `decimals` chữ số (vd "1,234.50" thay vì "1,234.5"). Default `false` →
+   * trim trailing zeros giống `formatNumber`. Bật khi cần consistency cho cân/kg/%.
+   */
+  forceDecimals?: boolean;
 }
 
 /**
- * NumericInput — input số có guard min/max + decimal precision.
+ * NumericInput — input số có guard min/max + decimal precision + LIVE FORMAT MASK.
  *
- * Sprint POLISH-5.2: trước đây nhiều form ERP dùng `<Input type="number">`
- * không có `min={0}` → user có thể nhập số âm cho SL nhập kho, giá tiền,
- * dẫn đến state inconsistent. Audit chỉ ra 17 page có validation form,
- * nhưng đa số dialog tạo phiếu thiếu check này.
+ * Sprint POLISH-5.2 + format unification 04/05/2026:
+ * - Trước đây dùng `<input type="number">` → browser-native không có separator,
+ *   không hiển thị "1,000,000" gọn. CEO chốt: số liệu toàn web có dấu phẩy ngàn
+ *   en-US (formatNumber), max 2 decimals.
+ * - Giờ dùng `<input type="text" inputMode="decimal">` để có thể format custom.
+ * - Live mask: format khi blur (giữ cursor stable khi gõ), select all khi focus.
  *
  * Behavior:
- * - Empty input → onChange(null), không phải 0 (phân biệt "chưa nhập" vs "đã nhập 0").
+ * - Empty input → `onChange(null)`, không phải 0 (phân biệt "chưa nhập" vs "đã nhập 0").
  * - Khi user blur, value được clamp trong [min, max] và normalize về `decimals` digits.
  * - Mặc định KHÔNG cho âm (`min=0`). Opt-in `allowNegative` cho điều chỉnh tồn.
  * - Decimal mặc định 2 — phù hợp tiền VND. Nếu là SL nguyên thì set `decimals={0}`.
+ * - Display khi không focus: en-US format với phẩy ngàn, max `decimals` chữ số.
  *
- * Accessibility: native `<input type="number">` → keyboard up/down arrows,
- * mobile shows numeric keypad qua `inputMode="decimal"`.
+ * Accessibility: `inputMode="decimal"` → mobile shows numeric keypad. Type text
+ * cho phép paste "1,234,567" hoặc "1.234.567" (vi-VN fallback) đều parse được.
  *
  * ```tsx
  * <NumericInput
@@ -56,69 +65,100 @@ export function NumericInput({
   max,
   decimals = 2,
   allowNegative = false,
+  forceDecimals = false,
   ...rest
 }: NumericInputProps) {
-  // Internal text state để cho phép user gõ "0." hoặc xóa hết — không
-  // ép convert mỗi keystroke (làm UX cứng nhắc, mất con trỏ).
-  const [text, setText] = React.useState<string>(
-    value === null || value === undefined ? "" : String(value),
+  // Internal text state — cho phép user gõ "0." hoặc xóa hết mà không bị
+  // ép convert mỗi keystroke (giữ cursor stable, UX mượt).
+  const formatForDisplay = React.useCallback(
+    (n: number | null | undefined): string => {
+      if (n === null || n === undefined || !Number.isFinite(n)) return "";
+      if (forceDecimals) return formatDecimal(n, decimals);
+      // Trim trailing zeros (formatNumber) nhưng cap max `decimals`.
+      // formatNumber max 2 decimals — nếu caller muốn khác, dùng formatDecimal.
+      if (decimals !== 2) {
+        // Manual format cho decimals khác 2 — formatNumber default cap 2.
+        return new Intl.NumberFormat("en-US", {
+          maximumFractionDigits: decimals,
+        }).format(n);
+      }
+      return formatNumber(n);
+    },
+    [decimals, forceDecimals],
   );
 
-  // Sync external value → text khi parent thay đổi (vd reset form).
+  const [text, setText] = React.useState<string>(() => formatForDisplay(value));
+  const focusedRef = React.useRef(false);
+
+  // Sync external value → text khi parent thay đổi (vd reset form). Chỉ
+  // update khi không focus (tránh ghi đè input của user đang gõ).
   React.useEffect(() => {
-    const next =
-      value === null || value === undefined ? "" : String(value);
-    if (next !== text && document.activeElement?.getAttribute("data-numeric-input") !== "active") {
-      setText(next);
-    }
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [value]);
+    if (focusedRef.current) return;
+    setText(formatForDisplay(value));
+  }, [value, formatForDisplay]);
 
   const effectiveMin = allowNegative ? min : Math.max(0, min);
 
+  const clampAndRound = (n: number): number => {
+    let r = n;
+    if (r < effectiveMin) r = effectiveMin;
+    if (typeof max === "number" && r > max) r = max;
+    return roundDecimals(r, decimals);
+  };
+
   const handleChange = (e: React.ChangeEvent<HTMLInputElement>) => {
     const raw = e.target.value;
-    setText(raw);
+    setText(raw); // Cho phép gõ tự do; clamp + format trên blur
+
+    // Empty → null
     if (raw === "" || raw === "-") {
       onChange(null);
       return;
     }
-    const num = Number(raw);
-    if (Number.isNaN(num)) return;
-    onChange(num);
+    const parsed = parseNumberInput(raw);
+    if (parsed === null) return; // Giữ raw text nhưng không update parent (invalid)
+    onChange(clampAndRound(parsed));
+  };
+
+  const handleFocus = (e: React.FocusEvent<HTMLInputElement>) => {
+    focusedRef.current = true;
+    // Convert formatted "1,234,567.89" → raw "1234567.89" để dễ edit
+    if (value !== null && value !== undefined && Number.isFinite(value)) {
+      setText(String(value));
+    }
+    // Select all → cashier dễ replace
+    e.target.select();
+    rest.onFocus?.(e);
   };
 
   const handleBlur = (e: React.FocusEvent<HTMLInputElement>) => {
+    focusedRef.current = false;
     if (text === "" || text === "-") {
       onChange(null);
       setText("");
+      rest.onBlur?.(e);
       return;
     }
-    let num = Number(text);
-    if (Number.isNaN(num)) {
+    const parsed = parseNumberInput(text);
+    if (parsed === null) {
       onChange(null);
       setText("");
+      rest.onBlur?.(e);
       return;
     }
-    // Clamp + round to decimals
-    if (num < effectiveMin) num = effectiveMin;
-    if (typeof max === "number" && num > max) num = max;
-    const factor = Math.pow(10, Math.max(0, decimals));
-    num = Math.round(num * factor) / factor;
-    onChange(num);
-    setText(String(num));
+    const final = clampAndRound(parsed);
+    onChange(final);
+    setText(formatForDisplay(final));
     rest.onBlur?.(e);
   };
 
   return (
     <Input
-      type="number"
+      type="text"
       inputMode={decimals > 0 ? "decimal" : "numeric"}
-      step={decimals > 0 ? `0.${"0".repeat(decimals - 1)}1` : "1"}
-      min={effectiveMin}
-      max={max}
       value={text}
       onChange={handleChange}
+      onFocus={handleFocus}
       onBlur={handleBlur}
       data-numeric-input="active"
       {...rest}

@@ -12,6 +12,7 @@ import { PageHeader } from "@/components/shared/page-header";
 import { Icon } from "@/components/ui/icon";
 import { ConfirmDialog } from "@/components/shared/dialogs/confirm-dialog";
 import { EditPlaybookRuleDialog } from "@/components/shared/dialogs/edit-playbook-rule-dialog";
+import { formatShortDate, formatDate } from "@/lib/format";
 import {
   deleteAgent,
   getAgentById,
@@ -67,12 +68,12 @@ function formatRelative(iso?: string | null): string {
   if (hours < 24) return `${hours} giờ trước`;
   const days = Math.floor(hours / 24);
   if (days < 30) return `${days} ngày trước`;
-  return new Date(iso).toLocaleDateString("vi-VN");
+  return formatShortDate(iso);
 }
 
 function formatDateTime(iso?: string | null): string {
   if (!iso) return "—";
-  return new Date(iso).toLocaleString("vi-VN");
+  return formatDate(iso);
 }
 
 const ROLE_OPTIONS: AgentRole[] = [
@@ -1000,9 +1001,7 @@ export default function AgentDetailPage() {
                                     size={12}
                                     className="inline-block mr-0.5"
                                   />
-                                  {new Date(
-                                    task.taskDate,
-                                  ).toLocaleDateString("vi-VN")}
+                                  {formatShortDate(task.taskDate)}
                                 </span>
                                 {task.dueTime && (
                                   <span>

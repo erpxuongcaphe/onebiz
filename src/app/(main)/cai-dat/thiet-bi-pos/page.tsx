@@ -19,6 +19,7 @@ import {
   writeDeviceBinding,
   clearDeviceBinding,
 } from "@/lib/hooks/use-device-binding";
+import { formatDate } from "@/lib/format";
 
 /**
  * Cài đặt khoá thiết bị POS (device binding).
@@ -153,7 +154,7 @@ export default function DeviceBindingSettingsPage() {
                     </strong>
                   </div>
                   <div className="text-xs text-muted-foreground">
-                    Đã khoá từ: {new Date(binding.boundAt).toLocaleString("vi-VN")}
+                    Đã khoá từ: {formatDate(binding.boundAt)}
                   </div>
                 </div>
               </div>

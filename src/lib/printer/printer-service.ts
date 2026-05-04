@@ -26,6 +26,7 @@ import {
   sendToUsbPrinter,
   type StoredPrinter,
 } from "./webusb-printer";
+import { formatNumber, formatDate } from "@/lib/format";
 
 // ─── Types ───
 
@@ -87,18 +88,12 @@ export interface PrintResult {
 // ─── Format helpers ───
 
 function formatVnd(n: number): string {
-  return Math.round(n).toLocaleString("vi-VN");
+  return formatNumber(Math.round(n));
 }
 
 function formatTime(iso: string): string {
   try {
-    return new Date(iso).toLocaleString("vi-VN", {
-      day: "2-digit",
-      month: "2-digit",
-      year: "numeric",
-      hour: "2-digit",
-      minute: "2-digit",
-    });
+    return formatDate(iso);
   } catch {
     return iso;
   }

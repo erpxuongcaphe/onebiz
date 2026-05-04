@@ -3,6 +3,7 @@
 import { ReactNode } from "react";
 import { cn } from "@/lib/utils";
 import { Icon } from "@/components/ui/icon";
+import { formatNumber } from "@/lib/format";
 
 interface SummaryCardProps {
   /**
@@ -80,7 +81,7 @@ export function SummaryCard({
         <span className="truncate">{label}</span>
         {typeof count === "number" && (
           <span className="ml-auto text-[10px] font-medium text-muted-foreground tabular-nums">
-            {count.toLocaleString("vi-VN")}
+            {formatNumber(count)}
           </span>
         )}
       </div>

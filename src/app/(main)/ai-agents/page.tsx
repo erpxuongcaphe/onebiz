@@ -6,6 +6,7 @@ import { Button } from "@/components/ui/button";
 import { PageHeader } from "@/components/shared/page-header";
 import { Icon } from "@/components/ui/icon";
 import { KpiCard } from "@/app/(main)/phan-tich/_components";
+import { formatShortDate } from "@/lib/format";
 import {
   getAgents,
   getAgentExecutions,
@@ -50,7 +51,7 @@ function formatRelative(iso?: string | null): string {
   if (hours < 24) return `${hours} giờ trước`;
   const days = Math.floor(hours / 24);
   if (days < 30) return `${days} ngày trước`;
-  return new Date(iso).toLocaleDateString("vi-VN");
+  return formatShortDate(iso);
 }
 
 // ────────────────────────────────────────────

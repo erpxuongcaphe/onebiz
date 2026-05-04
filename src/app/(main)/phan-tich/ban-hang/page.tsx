@@ -19,6 +19,7 @@ import { DateRangeBar, KpiCard, ChartCard } from "../_components";
 import { useBranchFilter } from "@/lib/contexts";
 import {
   formatCurrency,
+  formatNumber,
   formatChartCurrency,
   formatChartTooltipCurrency,
 } from "@/lib/format";
@@ -241,7 +242,7 @@ export default function BanHangPage() {
           />
           <KpiCard
             label="Số lượng bán"
-            value={(kpis?.soldQty ?? 0).toLocaleString("vi-VN")}
+            value={formatNumber(kpis?.soldQty ?? 0)}
             change={`${qtyChange.text} so với tháng trước`}
             positive={qtyChange.positive}
             icon="inventory_2"

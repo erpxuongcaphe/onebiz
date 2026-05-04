@@ -31,7 +31,7 @@ import {
   getBranches,
 } from "@/lib/services";
 import type { BranchDetail } from "@/lib/services/supabase";
-import { formatDate, formatCurrency } from "@/lib/format";
+import { formatDate, formatCurrency, formatNumber } from "@/lib/format";
 import type { BOM, BOMCostBreakdown } from "@/lib/types";
 import { Icon } from "@/components/ui/icon";
 
@@ -461,12 +461,12 @@ export default function CongThucPage() {
           <SummaryCard
             icon={<Icon name="science" size={16} />}
             label="Tổng công thức"
-            value={data.length.toLocaleString("vi-VN")}
+            value={formatNumber(data.length)}
           />
           <SummaryCard
             icon={<Icon name="factory" size={16} />}
             label="Đang sử dụng"
-            value={filtered.length.toLocaleString("vi-VN")}
+            value={formatNumber(filtered.length)}
             highlight
           />
           <SummaryCard

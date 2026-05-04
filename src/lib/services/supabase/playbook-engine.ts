@@ -14,6 +14,7 @@
  */
 
 import { getClient, getCurrentContext, handleError } from "./base";
+import { formatNumber } from "@/lib/format";
 import {
   getAgents,
   getKpiBreakdowns,
@@ -82,8 +83,8 @@ function renderTemplate(
   const ctx: Record<string, string> = {
     kpiName: kpi.kpiName,
     progressPct: progress.toFixed(1),
-    target: kpi.targetValue.toLocaleString("vi-VN"),
-    actual: kpi.actualValue.toLocaleString("vi-VN"),
+    target: formatNumber(kpi.targetValue),
+    actual: formatNumber(kpi.actualValue),
     unit: kpi.unit ?? "",
     period: kpi.period,
     ...Object.fromEntries(

@@ -16,7 +16,7 @@ import {
   SelectFilter,
 } from "@/components/shared/filter-sidebar";
 import { useToast, useBranchFilter } from "@/lib/contexts";
-import { formatDate } from "@/lib/format";
+import { formatDate, formatNumber } from "@/lib/format";
 import { getAllProductLots } from "@/lib/services";
 import type { ProductLot } from "@/lib/types";
 import { Icon } from "@/components/ui/icon";
@@ -275,7 +275,7 @@ export default function LoSanXuatPage() {
             </span>
             <div>
               <div className="text-2xl font-bold text-foreground leading-tight">
-                {totalQty.toLocaleString("vi-VN")}
+                {formatNumber(totalQty)}
               </div>
               <div className="text-xs text-muted-foreground">Tổng SL hiện tại</div>
             </div>

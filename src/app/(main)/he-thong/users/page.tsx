@@ -33,6 +33,7 @@ import {
 } from "@/components/ui/select";
 import { cn } from "@/lib/utils";
 import { useAuth, useToast } from "@/lib/contexts";
+import { formatNumber } from "@/lib/format";
 import {
   getRoles,
   getTenantUsers,
@@ -230,23 +231,23 @@ export default function UsersPage() {
         <SummaryCard
           icon="group"
           label="Tổng người dùng"
-          value={users.length.toLocaleString("vi-VN")}
+          value={formatNumber(users.length)}
         />
         <SummaryCard
           icon="verified_user"
           label="Đang hoạt động"
-          value={users.filter((u) => u.isActive).length.toLocaleString("vi-VN")}
+          value={formatNumber(users.filter((u) => u.isActive).length)}
           highlight
         />
         <SummaryCard
           icon="admin_panel_settings"
           label="Vai trò"
-          value={roles.length.toLocaleString("vi-VN")}
+          value={formatNumber(roles.length)}
         />
         <SummaryCard
           icon="person_off"
           label="Chưa gán vai trò"
-          value={users.filter((u) => !u.roleId).length.toLocaleString("vi-VN")}
+          value={formatNumber(users.filter((u) => !u.roleId).length)}
           danger={users.some((u) => !u.roleId)}
           hint={users.some((u) => !u.roleId) ? "Cần gán vai trò" : undefined}
         />

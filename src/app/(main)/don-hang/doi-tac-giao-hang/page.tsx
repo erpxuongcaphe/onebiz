@@ -22,7 +22,7 @@ import {
   DetailHeader,
   DetailInfoGrid,
 } from "@/components/shared/inline-detail-panel";
-import { formatCurrency, formatDate } from "@/lib/format";
+import { formatCurrency, formatDate, formatNumber } from "@/lib/format";
 import { exportToExcel, exportToCsv } from "@/lib/utils/export";
 import { getDeliveryPartners, deactivateDeliveryPartner } from "@/lib/services";
 import { CreateDeliveryPartnerDialog, ConfirmDialog } from "@/components/shared/dialogs";
@@ -374,24 +374,24 @@ export default function DoiTacGiaoHangPage() {
         <SummaryCard
           icon="local_shipping"
           label="Tổng đối tác"
-          value={total.toLocaleString("vi-VN")}
+          value={formatNumber(total)}
           hint={`${activePartnerCount} đang hoạt động`}
         />
         <SummaryCard
           icon="inventory_2"
           label="Đang giao"
-          value={totalActiveOrders.toLocaleString("vi-VN")}
+          value={formatNumber(totalActiveOrders)}
           highlight={totalActiveOrders > 0}
         />
         <SummaryCard
           icon="done_all"
           label="Đã hoàn thành"
-          value={totalCompletedOrders.toLocaleString("vi-VN")}
+          value={formatNumber(totalCompletedOrders)}
         />
         <SummaryCard
           icon="assessment"
           label="Tổng đơn"
-          value={totalOrders.toLocaleString("vi-VN")}
+          value={formatNumber(totalOrders)}
         />
       </div>
 

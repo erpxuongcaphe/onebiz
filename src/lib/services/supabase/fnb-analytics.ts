@@ -4,6 +4,7 @@
  */
 
 import { getClient, getCurrentTenantId } from "./base";
+import { formatShortDate } from "@/lib/format";
 
 // === Types ===
 
@@ -420,7 +421,7 @@ export async function getDailyRevenueFnb(
 
   const map = new Map<string, { revenue: number; orders: number }>();
   for (const row of rows ?? []) {
-    const date = new Date(row.created_at).toLocaleDateString("vi-VN");
+    const date = formatShortDate(row.created_at);
     const prev = map.get(date) ?? { revenue: 0, orders: 0 };
     prev.revenue += Number(row.total ?? 0);
     prev.orders += 1;

@@ -19,6 +19,7 @@ import { Separator } from "@/components/ui/separator";
 import { cn } from "@/lib/utils";
 import { Icon } from "@/components/ui/icon";
 import { useToast } from "@/lib/contexts";
+import { formatNumber } from "@/lib/format";
 import {
   getLoyaltySettings,
   upsertLoyaltySettings,
@@ -492,7 +493,7 @@ export default function LoyaltyPointsSettingsPage() {
                           </div>
                         </td>
                         <td className="py-3 tabular-nums">
-                          {tier.minPoints.toLocaleString("vi-VN")} điểm
+                          {formatNumber(tier.minPoints)} điểm
                         </td>
                         <td className="py-3">
                           {tier.discountPercent > 0

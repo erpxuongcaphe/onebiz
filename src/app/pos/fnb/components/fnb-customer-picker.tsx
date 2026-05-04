@@ -13,6 +13,7 @@ import { getCustomers } from "@/lib/services/supabase";
 import type { Customer } from "@/lib/types";
 import { useDebounce } from "@/lib/utils/use-debounce";
 import { cn } from "@/lib/utils";
+import { formatCurrency } from "@/lib/format";
 import { Icon } from "@/components/ui/icon";
 
 interface FnbCustomerPickerProps {
@@ -198,7 +199,7 @@ export function FnbCustomerPicker({
                   </div>
                   {c.currentDebt > 0 && (
                     <div className="text-[11px] text-status-error font-medium shrink-0">
-                      Nợ {new Intl.NumberFormat("vi-VN").format(c.currentDebt)} ₫
+                      Nợ {formatCurrency(c.currentDebt)} ₫
                     </div>
                   )}
                 </li>
