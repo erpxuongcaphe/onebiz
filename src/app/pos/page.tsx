@@ -2341,12 +2341,15 @@ function PosPageInner() {
             </div>
           )}
 
-          {/* ── Action buttons — Stitch primary style ── */}
+          {/* ── Action buttons — Stitch primary style ──
+              CEO 04/05: từ ngày bỏ nút "Ghi nợ", grid cũ [1fr_1fr_2fr]
+              chừa slot trống → Thanh toán bị nén xuống 2 hàng. Đổi sang
+              [1fr_2fr]: Nháp ~33% + Thanh toán ~66% — đủ 1 hàng. */}
           <div className={cn(
             "px-3 py-2.5 border-t border-outline-variant/20 shrink-0 bg-surface-container-lowest",
             state.sellingMode === "fast"
               ? "flex flex-col gap-1.5"
-              : "grid grid-cols-[1fr_1fr_2fr] gap-1.5"
+              : "grid grid-cols-[1fr_2fr] gap-1.5"
           )}>
             {/* Draft button */}
             <button
@@ -2372,13 +2375,14 @@ function PosPageInner() {
                 khách đưa < total → auto link walk-in (nếu chưa chọn KH) +
                 ghi nợ phần thiếu. Khách đưa > total → mở ChangeDialog hỏi
                 "Trả khách" hay "Ghi credit". */}
-            {/* Checkout button — primary Stitch */}
+            {/* Checkout button — primary Stitch. whitespace-nowrap để chữ
+                "Thanh toán" không xuống dòng dù column hẹp. */}
             <button
               type="button"
               onClick={() => handleComplete()}
               disabled={state.lines.length === 0 || submitting !== null}
               className={cn(
-                "rounded-xl bg-primary text-on-primary font-bold hover:bg-primary-hover disabled:opacity-40 disabled:cursor-not-allowed inline-flex items-center justify-center gap-1.5 transition-all ambient-shadow press-scale-sm",
+                "rounded-xl bg-primary text-on-primary font-bold hover:bg-primary-hover disabled:opacity-40 disabled:cursor-not-allowed inline-flex items-center justify-center gap-1.5 transition-all ambient-shadow press-scale-sm whitespace-nowrap",
                 state.sellingMode === "fast"
                   ? "h-12 text-base"
                   : "h-11 text-[13px]"
