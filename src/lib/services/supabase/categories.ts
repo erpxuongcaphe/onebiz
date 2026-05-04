@@ -7,13 +7,44 @@ import type { ProductCategory } from "@/lib/types";
 const supabase = getClient();
 
 export async function getCategoriesByScope(
-  scope: "nvl" | "sku" | "customer" | "supplier"
+  scope: "nvl" | "sku" | "customer" | "supplier",
+  /**
+   * Optional channel filter — chỉ trả categories có ≥1 SP với channel này.
+   * Dùng cho POS Retail (channel="retail") và POS FnB (channel="fnb") để
+   * không lẫn category của kênh khác. Không pass → trả về tất cả categories
+   * thuộc scope (giữ behavior cũ cho admin nhóm hàng).
+   *
+   * CEO 04/05/2026: trước đây POS Retail thấy cả "Cà phê pha máy" / "Trà
+   * sữa" (FnB-only) vì categories scope=sku dùng chung. Auto-compute từ
+   * products.channel để tự sync — không cần migration column.
+   */
+  channel?: "retail" | "fnb",
 ): Promise<ProductCategory[]> {
   // Filter theo tenant_id — production có RLS auto-scope nhưng dev mode
   // (BYPASS_AUTH) RLS disabled → query không filter sẽ thấy categories
   // của TẤT CẢ tenants → CEO trước đó báo "Bao bì × 4" thực ra là 4 tenant
   // khác nhau, mỗi tenant 1 row Bao bì (đúng UNIQUE constraint).
   const tenantId = await getCurrentTenantId();
+
+  // Nếu có channel: build map category_id → count từ products của channel.
+  // Set IDs valid + count để populate productCount luôn (bonus cho POS sidebar).
+  let countByCategoryId: Map<string, number> | null = null;
+  if (channel) {
+    const { data: prodRows } = await supabase
+      .from("products")
+      .select("category_id")
+      .eq("tenant_id", tenantId)
+      .eq("channel", channel)
+      .eq("is_active", true);
+
+    countByCategoryId = new Map();
+    for (const p of prodRows ?? []) {
+      const cid = (p as { category_id: string | null }).category_id;
+      if (!cid) continue;
+      countByCategoryId.set(cid, (countByCategoryId.get(cid) ?? 0) + 1);
+    }
+  }
+
   const { data, error } = await supabase
     .from("categories")
     .select("*")
@@ -22,7 +53,20 @@ export async function getCategoriesByScope(
     .order("sort_order");
 
   if (error) throw error;
-  return (data ?? []).map(mapCategory);
+
+  let result = (data ?? []).map(mapCategory);
+
+  if (countByCategoryId) {
+    // Filter: chỉ giữ category có ≥1 SP của channel + populate count.
+    result = result
+      .filter((cat) => countByCategoryId!.has(cat.id))
+      .map((cat) => ({
+        ...cat,
+        productCount: countByCategoryId!.get(cat.id) ?? 0,
+      }));
+  }
+
+  return result;
 }
 
 export async function getAllCategories(): Promise<ProductCategory[]> {

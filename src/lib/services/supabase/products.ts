@@ -174,7 +174,18 @@ export function getProductCategories() {
  * trợ group-by count elegant, nên chiến lược tối ưu: chỉ fetch `category_id`
  * (1 column, nhỏ) + filter `is_active=true` để bỏ products đã xoá.
  */
-export async function getProductCategoriesAsync(scope?: "nvl" | "sku") {
+export async function getProductCategoriesAsync(
+  scope?: "nvl" | "sku",
+  /**
+   * Channel filter (CEO 04/05/2026):
+   *   - "retail" → chỉ trả categories có SP retail (cho POS Retail)
+   *   - "fnb"    → chỉ trả categories có SP FnB (cho POS FnB)
+   *   - undefined → trả tất cả (admin nhóm hàng / list)
+   *
+   * Auto-compute từ products.channel — không cần column channel ở categories.
+   */
+  channel?: "retail" | "fnb",
+) {
   const supabase = getClient();
 
   // Filter tenant_id — RLS dev disable nên không tự auto-scope. Trước
@@ -200,6 +211,9 @@ export async function getProductCategoriesAsync(scope?: "nvl" | "sku") {
     .eq("tenant_id", tenantId)
     .eq("is_active", true);
   if (scope) prodQuery = prodQuery.eq("product_type", scope);
+  // CEO 04/05: filter channel để POS Retail không thấy category FnB và
+  // ngược lại. Auto-compute từ products → category trống bị ẩn (chấp nhận).
+  if (channel) prodQuery = prodQuery.eq("channel", channel);
   const { data: products } = await prodQuery;
 
   // Map count theo category_id — sau migration 00039 không còn duplicate id
@@ -211,12 +225,16 @@ export async function getProductCategoriesAsync(scope?: "nvl" | "sku") {
     countByCategoryId.set(cid, (countByCategoryId.get(cid) ?? 0) + 1);
   }
 
-  return (categories ?? []).map((cat) => ({
-    label: cat.name,
-    value: cat.id,
-    code: cat.code ?? undefined,
-    count: countByCategoryId.get(cat.id) ?? 0,
-  }));
+  return (categories ?? [])
+    // Khi có channel: chỉ giữ category có ít nhất 1 SP. Không có channel
+    // → giữ all (admin xem full list).
+    .filter((cat) => !channel || countByCategoryId.has(cat.id))
+    .map((cat) => ({
+      label: cat.name,
+      value: cat.id,
+      code: cat.code ?? undefined,
+      count: countByCategoryId.get(cat.id) ?? 0,
+    }));
 }
 
 /**

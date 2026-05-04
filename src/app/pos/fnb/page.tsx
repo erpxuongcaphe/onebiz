@@ -173,7 +173,9 @@ function FnbPosPageInner() {
           // Parallel fetch: catalog (cats + products + toppings) + branch-scoped (tables + shift)
           const catalogPromise = needsRefresh
             ? Promise.all([
-                getProductCategoriesAsync("sku"),
+                // CEO 04/05: chỉ load categories có SP FnB → POS FnB không
+                // còn thấy category retail (Cốc giấy, Bột cacao đóng gói...).
+                getProductCategoriesAsync("sku", "fnb"),
                 supabase
                   .from("products")
                   .select("id, name, code, sell_price, image_url, stock, category_id")

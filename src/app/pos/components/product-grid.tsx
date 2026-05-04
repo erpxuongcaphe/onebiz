@@ -30,8 +30,10 @@ export function ProductGrid({ searchQuery, onAddProduct }: ProductGridProps) {
   const debounceRef = useRef<ReturnType<typeof setTimeout> | null>(null);
 
   // ---- Fetch categories on mount ----
+  // POS Retail chỉ hiện categories có ≥1 SP retail (CEO 04/05). Auto-compute
+  // từ products.channel="retail" — không cần column channel ở categories.
   useEffect(() => {
-    getCategoriesByScope("sku")
+    getCategoriesByScope("sku", "retail")
       .then((cats) => setCategories(cats))
       .catch((err) =>
         console.error("[POS] product-grid getCategoriesByScope failed:", err),
