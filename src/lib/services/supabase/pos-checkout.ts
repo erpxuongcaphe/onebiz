@@ -65,6 +65,13 @@ export interface PosCheckoutInput {
   promotionDiscount?: number;
   /** KM-4: trị giá hàng tặng kèm (sum freeItems × unitPrice). */
   promotionFreeValue?: number;
+  /**
+   * CEO 04/05/2026 — Idempotency key chống duplicate invoice.
+   * Generate UUID per form session (khi cashier "Tạo đơn mới" hoặc "Tiếp tục
+   * đơn"). Nếu user ấn Thanh toán 2 lần (network slow + retry) → server
+   * detect trùng session_id → return existing invoice thay vì tạo mới.
+   */
+  clientSessionId?: string | null;
 }
 
 export interface PosCheckoutResult {
@@ -290,6 +297,38 @@ export async function createAutoCashReceipt(
 export async function posCheckout(input: PosCheckoutInput): Promise<PosCheckoutResult> {
   const supabase = getClient();
 
+  // ── CEO 04/05/2026 — Idempotency check ──
+  // Nếu có clientSessionId → tìm invoice đã tạo với session_id này.
+  // Đã tồn tại (do retry / recovery) → return existing, KHÔNG tạo mới.
+  // Đây là chống duplicate KiotViet bug: ấn Thanh toán 2 lần → 2 hoá đơn.
+  if (input.clientSessionId) {
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    const { data: existing } = await (supabase as any).rpc(
+      "find_invoice_by_session_id",
+      {
+        p_tenant_id: input.tenantId,
+        p_client_session_id: input.clientSessionId,
+      },
+    );
+    if (existing && Array.isArray(existing) && existing.length > 0) {
+      const row = existing[0] as { id: string; code: string; status: string };
+      // Nếu đã completed → idempotent return. Nếu vẫn draft (race với
+      // saveDraftOrder) → server tạm thời từ chối, client retry sẽ
+      // dùng completeDraftOrder thay vì posCheckout.
+      if (row.status === "completed") {
+        console.warn(
+          `[posCheckout] Idempotent: session_id ${input.clientSessionId} → existing invoice ${row.code} (already completed)`,
+        );
+        return { invoiceId: row.id, invoiceCode: row.code };
+      }
+      if (row.status === "draft") {
+        throw new Error(
+          `Đơn này đang ở trạng thái nháp. Dùng "Tiếp tục đơn" thay vì tạo mới (mã: ${row.code}).`,
+        );
+      }
+    }
+  }
+
   // 1. Generate invoice code via RPC
   const { data: code, error: codeError } = await supabase.rpc("next_code", {
     p_tenant_id: input.tenantId,
@@ -306,7 +345,8 @@ export async function posCheckout(input: PosCheckoutInput): Promise<PosCheckoutR
   }, 0);
 
   // 3. Insert invoice (status = completed) — total đã bao gồm thuế
-  const invoiceData = {
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  const invoiceData: any = {
     tenant_id: input.tenantId,
     branch_id: input.branchId,
     code: invoiceCode,
@@ -328,14 +368,44 @@ export async function posCheckout(input: PosCheckoutInput): Promise<PosCheckoutR
     promotion_id: input.promotionId ?? null,
     promotion_discount: input.promotionDiscount ?? 0,
     promotion_free_value: input.promotionFreeValue ?? 0,
-  } satisfies InvoiceInsert;
+    // 00048 idempotency
+    client_session_id: input.clientSessionId ?? null,
+    auto_saved: false,
+  };
 
-  const { data: invoice, error: invoiceError } = await supabase
+  let invoice: { id: string; code: string } | null = null;
+  const insertResult = await supabase
     .from("invoices")
-    .insert(invoiceData)
+    .insert(invoiceData as InvoiceInsert)
     .select("id, code")
     .single();
-  if (invoiceError) handleError(invoiceError, "posCheckout:invoice");
+  if (insertResult.error) {
+    // Race condition: 2 calls cùng session_id race INSERT → lần 2 fail
+    // 23505 (unique_violation). Retry SELECT để return winner.
+    if (
+      input.clientSessionId &&
+      (insertResult.error.code === "23505" ||
+        insertResult.error.message?.includes("client_session_id_unique"))
+    ) {
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      const { data: raced } = await (supabase as any).rpc(
+        "find_invoice_by_session_id",
+        {
+          p_tenant_id: input.tenantId,
+          p_client_session_id: input.clientSessionId,
+        },
+      );
+      if (raced && Array.isArray(raced) && raced.length > 0) {
+        const row = raced[0] as { id: string; code: string };
+        console.warn(
+          `[posCheckout] Race detected, returning winner ${row.code}`,
+        );
+        return { invoiceId: row.id, invoiceCode: row.code };
+      }
+    }
+    handleError(insertResult.error, "posCheckout:invoice");
+  }
+  invoice = insertResult.data;
   if (!invoice) throw new Error("Không tạo được hóa đơn");
 
   // 4. Insert invoice_items (với VAT)

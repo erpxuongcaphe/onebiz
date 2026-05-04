@@ -35,6 +35,9 @@ import {
   getOrCreateWalkInCustomer,
   adjustCustomerDebt,
 } from "@/lib/services/supabase";
+import { useAutoSaveDraft } from "./hooks/use-auto-save-draft";
+import { RecoveryDialog } from "./components/recovery-dialog";
+import { getClient } from "@/lib/services/supabase/base";
 import { useToast } from "@/lib/contexts";
 import { formatCurrency, formatNumber, formatDecimal, parseNumberInput } from "@/lib/format";
 import { cn } from "@/lib/utils";
@@ -321,6 +324,21 @@ function PosPageInner() {
     excess: number;
   }>({ open: false, excess: 0 });
 
+  // ── Auto-save & recovery (Sprint POS-RECOVERY-1, CEO 04/05/2026) ──
+  // clientSessionId: UUID idempotency key, regen mỗi khi clear cart.
+  // - Auto-save background dùng key này để upsert draft trên server
+  // - posCheckout dùng key này để chống duplicate khi cashier ấn 2 lần
+  const [clientSessionId, setClientSessionId] = useState<string>(() =>
+    typeof crypto !== "undefined" && crypto.randomUUID
+      ? crypto.randomUUID()
+      : `sess-${Date.now()}-${Math.random().toString(36).slice(2)}`,
+  );
+
+  // Recovery dialog: list draft đang dở, hiện khi mount POS Retail.
+  const [recoveryOpen, setRecoveryOpen] = useState(false);
+  const [recoveryDrafts, setRecoveryDrafts] = useState<DraftOrderSummary[]>([]);
+  const recoveryShownRef = useRef(false);
+
   // Offline/online status — for opportunistic checkout while network is down
   const networkStatus = useNetworkStatus();
   const [syncDrawerOpen, setSyncDrawerOpen] = useState(false);
@@ -381,6 +399,146 @@ function PosPageInner() {
     if (currentShift) setCloseShiftDialogOpen(true);
     else setOpenShiftDialogOpen(true);
   }, [currentShift]);
+
+  // ─── Recovery: load draft list khi POS mount + cleanup expired ───
+  // CEO 04/05/2026: nếu có nháp (manual F9 hoặc auto-save), mở dialog cho
+  // cashier chọn tiếp tục hoặc bỏ qua. Chỉ chạy 1 lần per session (không
+  // re-show khi user đã đóng dialog).
+  useEffect(() => {
+    if (!tenant?.id || !currentBranch?.id) return;
+    if (recoveryShownRef.current) return;
+    recoveryShownRef.current = true;
+
+    // Load drafts để recovery dialog
+    listDraftOrders(currentBranch.id, 50)
+      .then((drafts) => {
+        if (drafts.length > 0) {
+          setRecoveryDrafts(drafts);
+          setRecoveryOpen(true);
+        }
+      })
+      .catch((err) => {
+        console.warn("[POS] listDraftOrders failed:", err);
+      });
+
+    // Background cleanup auto-saved drafts > 30 ngày (1 lần per mount)
+    const supabase = getClient();
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    (supabase as any)
+      .rpc("cleanup_expired_auto_drafts", {
+        p_tenant_id: tenant.id,
+        p_days: 30,
+      })
+      .then((res: { data?: number }) => {
+        if (res.data && res.data > 0) {
+          console.info(`[POS] Cleaned up ${res.data} expired auto-saved drafts`);
+        }
+      })
+      .catch((err: unknown) => {
+        // RPC mới — có thể chưa apply migration → log nhưng không block
+        console.warn("[POS] cleanup_expired_auto_drafts failed:", err);
+      });
+  }, [tenant?.id, currentBranch?.id]);
+
+  // ─── Auto-save liên tục ───
+  // Hook tự debounce 1500ms + skip nếu state không đổi. Disabled khi:
+  // - Chưa có ctx (chưa load auth)
+  // - Đang submit (tránh save state nửa chừng giữa lúc đang gửi RPC)
+  // - Đang load draft từ recovery (avoid overwrite)
+  useAutoSaveDraft({
+    sessionId: clientSessionId,
+    snapshot: {
+      lines: state.lines,
+      customer: state.customer,
+      orderDiscount: state.orderDiscount,
+      paymentMethod: state.paymentMethod,
+      subtotal: state.subtotal,
+      total: state.total,
+      orderDiscountAmount: state.orderDiscountAmount,
+      lineDiscountTotal: state.lineDiscountTotal,
+      note: state.note,
+      computeLineTotal: state.computeLineTotal,
+    },
+    ctx:
+      tenant?.id && currentBranch?.id && user?.id
+        ? {
+            tenantId: tenant.id,
+            branchId: currentBranch.id,
+            userId: user.id,
+          }
+        : null,
+    enabled: submitting === null && !recoveryOpen,
+  });
+
+  // ─── Recovery handlers ───
+  const handleRecoverySelect = useCallback(
+    async (draft: DraftOrderSummary) => {
+      try {
+        const detail = await getDraftOrderById(draft.id);
+        if (!detail) {
+          toast({
+            title: "Không tìm được đơn nháp",
+            description: "Có thể đã bị xoá hoặc đã hoàn tất từ máy khác.",
+            variant: "warning",
+          });
+          setRecoveryDrafts((prev) => prev.filter((d) => d.id !== draft.id));
+          return;
+        }
+        // Load state từ detail (loadDraft sẵn có nhận DraftOrderDetail)
+        state.loadDraft(detail);
+        // Adopt session_id của draft để tiếp tục auto-save vào row đó.
+        // Quan trọng: nếu đổi sessionId, useAutoSaveDraft sẽ upsert đúng
+        // row server thay vì tạo row mới.
+        if (detail.clientSessionId) {
+          setClientSessionId(detail.clientSessionId);
+        } else {
+          // Draft cũ pre-migration không có session_id → gán mới
+          const newId =
+            typeof crypto !== "undefined" && crypto.randomUUID
+              ? crypto.randomUUID()
+              : `sess-${Date.now()}`;
+          setClientSessionId(newId);
+        }
+        setRecoveryOpen(false);
+        toast({
+          title: `Đã khôi phục đơn ${detail.code}`,
+          description: `${detail.itemCount} sản phẩm · Tổng: ${formatNumber(detail.total)}đ`,
+          variant: "success",
+        });
+      } catch (err) {
+        console.error("[POS] handleRecoverySelect failed:", err);
+        toast({
+          title: "Khôi phục thất bại",
+          description: (err as Error).message,
+          variant: "error",
+        });
+      }
+    },
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+    [state.loadDraft, toast],
+  );
+
+  const handleRecoveryDelete = useCallback(
+    async (draftId: string) => {
+      try {
+        await deleteDraftOrder(draftId);
+        setRecoveryDrafts((prev) => prev.filter((d) => d.id !== draftId));
+        toast({ title: "Đã xoá đơn nháp", variant: "success" });
+      } catch (err) {
+        console.error("[POS] handleRecoveryDelete failed:", err);
+        toast({
+          title: "Xoá thất bại",
+          description: (err as Error).message,
+          variant: "error",
+        });
+      }
+    },
+    [toast],
+  );
+
+  const handleRecoveryClose = useCallback(() => {
+    setRecoveryOpen(false);
+  }, []);
 
   // ── Guard giảm giá vượt ngưỡng bằng PIN quản lý ──
   // Nếu PIN chưa cấu hình (rỗng) → không chặn, cashier toàn quyền
@@ -967,40 +1125,54 @@ function PosPageInner() {
       const ctx = await getCurrentContext();
       if (!ctx) throw new Error("Không xác định được chi nhánh");
 
-      await saveDraftOrder({
-        tenantId: ctx.tenantId,
-        branchId: ctx.branchId,
-        createdBy: ctx.userId,
-        customerId: state.customer?.id ?? null,
-        customerName: state.customer?.name ?? "Khách lẻ",
-        items: state.lines.map((l) => ({
-          productId: l.productId,
-          productName: l.productName,
-          unit: l.unit,
-          quantity: l.quantity,
-          unitPrice: l.unitPrice,
-          discount: l.discount.mode === "percent"
-            ? Math.round((l.quantity * l.unitPrice * l.discount.value) / 100)
-            : l.discount.value,
-        })),
-        paymentMethod: state.paymentMethod,
-        subtotal: state.subtotal,
-        discountAmount: state.orderDiscountAmount + state.lineDiscountTotal,
-        total: state.total,
-        paid: 0,
-        note: state.note || "",
-      });
+      await saveDraftOrder(
+        {
+          tenantId: ctx.tenantId,
+          branchId: ctx.branchId,
+          createdBy: ctx.userId,
+          customerId: state.customer?.id ?? null,
+          customerName: state.customer?.name ?? "Khách lẻ",
+          items: state.lines.map((l) => ({
+            productId: l.productId,
+            productName: l.productName,
+            unit: l.unit,
+            quantity: l.quantity,
+            unitPrice: l.unitPrice,
+            discount: l.discount.mode === "percent"
+              ? Math.round((l.quantity * l.unitPrice * l.discount.value) / 100)
+              : l.discount.value,
+          })),
+          paymentMethod: state.paymentMethod,
+          subtotal: state.subtotal,
+          discountAmount: state.orderDiscountAmount + state.lineDiscountTotal,
+          total: state.total,
+          paid: 0,
+          note: state.note || "",
+        },
+        {
+          // F9 manual: dùng sessionId hiện tại để upsert (không tạo nháp dup
+          // nếu auto-save đã tạo row trước đó). autoSaved=false → sticky.
+          sessionId: clientSessionId,
+          autoSaved: false,
+        },
+      );
 
       toast({ title: "Đã lưu nháp", variant: "success" });
       state.clearCart();
       setMobileCartOpen(false);
+      // Regen sessionId — đơn nháp đã lưu, cashier mở cart mới = session mới
+      setClientSessionId(
+        typeof crypto !== "undefined" && crypto.randomUUID
+          ? crypto.randomUUID()
+          : `sess-${Date.now()}-${Math.random().toString(36).slice(2)}`,
+      );
     } catch (err: any) {
       toast({ title: "Lưu nháp thất bại", description: err.message, variant: "error" });
     } finally {
       setSubmitting(null);
       submitLockRef.current = false;
     }
-  }, [state, toast]);
+  }, [state, toast, clientSessionId]);
 
   /**
    * handleComplete — F10 thanh toán.
@@ -1192,6 +1364,8 @@ function PosPageInner() {
               (s, f) => s + f.quantity * f.unitPrice,
               0,
             ) ?? 0,
+          // 00048 idempotency — chống duplicate khi cashier ấn Thanh toán 2 lần
+          clientSessionId,
         };
         const result = await offlinePosCheckout(input, networkStatus.isOnline);
         invoiceCode = result.invoiceCode;
@@ -1338,13 +1512,20 @@ function PosPageInner() {
       setSearchQuery("");
       setMobileCartOpen(false);
       setChangeDialog({ open: false, excess: 0 });
+      // Regen sessionId cho đơn tiếp theo — đơn vừa xong đã có invoice
+      // với key này, đơn mới phải có key mới để không bị idempotent reject.
+      setClientSessionId(
+        typeof crypto !== "undefined" && crypto.randomUUID
+          ? crypto.randomUUID()
+          : `sess-${Date.now()}-${Math.random().toString(36).slice(2)}`,
+      );
     } catch (err: any) {
       toast({ title: "Thanh toán thất bại", description: err.message, variant: "error" });
     } finally {
       setSubmitting(null);
       submitLockRef.current = false;
     }
-  }, [state, toast, autoPrint, networkStatus.isOnline, currentShift, appliedPromotion, appliedRedeem]);
+  }, [state, toast, autoPrint, networkStatus.isOnline, currentShift, appliedPromotion, appliedRedeem, clientSessionId]);
 
   // CEO 04/05/2026: Bỏ handleDebtCheckout — nút "Ghi nợ" cũ thay bằng
   // logic auto trong handleComplete (paid < total → auto-link walk-in
@@ -2712,6 +2893,15 @@ function PosPageInner() {
           </DialogFooter>
         </DialogContent>
       </Dialog>
+
+      {/* CEO 04/05/2026 — Recovery dialog: list draft chưa hoàn tất */}
+      <RecoveryDialog
+        open={recoveryOpen}
+        drafts={recoveryDrafts}
+        onSelect={handleRecoverySelect}
+        onDelete={handleRecoveryDelete}
+        onCreateNew={handleRecoveryClose}
+      />
 
       {/* L-3: Dialog đổi điểm tích lũy */}
       <Dialog open={redeemDialogOpen} onOpenChange={setRedeemDialogOpen}>

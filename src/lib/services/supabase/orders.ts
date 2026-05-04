@@ -393,6 +393,16 @@ export interface DraftOrderSummary {
   itemCount: number;
   note: string | null;
   createdAt: string;
+  /** CEO 04/05/2026: thông tin cho recovery dialog. */
+  updatedAt?: string;
+  /** Tên cashier đã tạo nháp này (dùng trong recovery list). */
+  createdByName?: string;
+  /** Danh sách 3 tên SP đầu tiên — preview ngắn cho recovery card. */
+  itemsSummary?: string[];
+  /** TRUE = auto-save background, FALSE = F9 manual sticky. */
+  autoSaved?: boolean;
+  /** UUID idempotency key — client store để tiếp tục auto-save sau khi load. */
+  clientSessionId?: string | null;
 }
 
 export interface DraftOrderDetail extends DraftOrderSummary {
@@ -420,12 +430,50 @@ export interface DraftOrderDetail extends DraftOrderSummary {
  * - Does NOT touch products.stock, stock_movements, or cash_transactions.
  *
  * Stock/cash side-effects are deferred to `completeDraftOrder`.
+ *
+ * CEO 04/05/2026 — Auto-save & recovery upgrade (Sprint POS-RECOVERY-1):
+ * - Param `options.sessionId` (UUID) làm anchor: nếu đã có draft với
+ *   session_id này → UPDATE in-place. Nếu chưa → INSERT mới.
+ * - `options.autoSaved=true` cho auto-save background (TTL 30 ngày qua
+ *   cleanup_expired_auto_drafts). False = F9 manual (giữ vĩnh viễn).
+ * - sessionId KHÔNG truyền → behavior cũ (INSERT mỗi lần — F9 cổ điển).
  */
 export async function saveDraftOrder(
-  input: PosCheckoutInput
+  input: PosCheckoutInput,
+  options?: {
+    /** UUID anchor — upsert by (tenant_id, client_session_id). */
+    sessionId?: string;
+    /** TRUE = auto-save background (TTL 30d). FALSE = F9 manual sticky. */
+    autoSaved?: boolean;
+  },
 ): Promise<{ invoiceId: string; invoiceCode: string }> {
   const supabase = getClient();
+  const autoSaved = options?.autoSaved ?? false;
 
+  // ── Upsert path: nếu có sessionId, tìm row existing trước ──
+  if (options?.sessionId) {
+    // Cast as any vì supabase types chưa gen sau migration 00048
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    const { data: existing } = await (supabase as any)
+      .from("invoices")
+      .select("id, code, status")
+      .eq("tenant_id", input.tenantId)
+      .eq("client_session_id", options.sessionId)
+      .maybeSingle();
+
+    if (existing) {
+      // Đã có row với sessionId này
+      if (existing.status !== "draft") {
+        // Đã được hoàn tất hoặc huỷ → KHÔNG update (idempotency safety net).
+        // Client coi như success, return existing → tránh tạo dup.
+        return { invoiceId: existing.id, invoiceCode: existing.code };
+      }
+      // Status='draft' → UPDATE fields + replace items
+      return await updateDraftOrderInternal(existing.id, input, autoSaved);
+    }
+  }
+
+  // ── Insert path (mới) ──
   // 1. Generate invoice code
   const { data: code, error: codeErr } = await supabase.rpc("next_code", {
     p_tenant_id: input.tenantId,
@@ -435,7 +483,8 @@ export async function saveDraftOrder(
   const invoiceCode = code ?? `HD${Date.now()}`;
 
   // 2. Insert draft invoice
-  const invoiceData = {
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  const invoiceData: any = {
     tenant_id: input.tenantId,
     branch_id: input.branchId,
     code: invoiceCode,
@@ -450,19 +499,53 @@ export async function saveDraftOrder(
     payment_method: input.paymentMethod,
     note: input.note ?? null,
     created_by: input.createdBy,
-  } satisfies InvoiceInsert;
+    // 00048: idempotency + auto-save tracking
+    client_session_id: options?.sessionId ?? null,
+    auto_saved: autoSaved,
+  };
 
-  const { data: invoice, error: invoiceErr } = await supabase
-    .from("invoices")
-    .insert(invoiceData)
-    .select("id, code")
-    .single();
-  if (invoiceErr) handleError(invoiceErr, "saveDraftOrder:invoice");
+  let invoice: { id: string; code: string } | null = null;
+  try {
+    const result = await supabase
+      .from("invoices")
+      .insert(invoiceData as InvoiceInsert)
+      .select("id, code")
+      .single();
+    if (result.error) {
+      // Race condition: 2 calls cùng sessionId race INSERT → lần 2 fail
+      // 23505 (unique_violation). Retry SELECT để return existing.
+      if (
+        (result.error.code === "23505" || result.error.message?.includes("client_session_id_unique")) &&
+        options?.sessionId
+      ) {
+        // eslint-disable-next-line @typescript-eslint/no-explicit-any
+        const { data: raced } = await (supabase as any)
+          .from("invoices")
+          .select("id, code, status")
+          .eq("tenant_id", input.tenantId)
+          .eq("client_session_id", options.sessionId)
+          .single();
+        if (raced && raced.status === "draft") {
+          // Race lost — UPDATE row của winner thay vì INSERT
+          return await updateDraftOrderInternal(raced.id, input, autoSaved);
+        }
+        if (raced) {
+          // Đã completed → return existing
+          return { invoiceId: raced.id, invoiceCode: raced.code };
+        }
+      }
+      handleError(result.error, "saveDraftOrder:invoice");
+    }
+    invoice = result.data;
+  } catch (err) {
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    handleError(err as any, "saveDraftOrder:invoice");
+  }
   if (!invoice) throw new Error("Không lưu được đơn nháp");
 
   // 3. Insert invoice_items
   const itemsData: InvoiceItemInsert[] = input.items.map((item) => ({
-    invoice_id: invoice.id,
+    invoice_id: invoice!.id,
     product_id: item.productId,
     product_name: item.productName,
     unit: item.unit ?? "Cái",
@@ -482,6 +565,78 @@ export async function saveDraftOrder(
   return { invoiceId: invoice.id, invoiceCode: invoice.code };
 }
 
+/**
+ * Internal: UPDATE existing draft (auto-save flow).
+ * - Update invoice fields + auto_saved flag
+ * - DELETE old items + INSERT new (simpler than diff)
+ * - Trigger handle_updated_at refresh updated_at → TTL 30d tính đúng
+ */
+async function updateDraftOrderInternal(
+  invoiceId: string,
+  input: PosCheckoutInput,
+  autoSaved: boolean,
+): Promise<{ invoiceId: string; invoiceCode: string }> {
+  const supabase = getClient();
+
+  // 1. UPDATE invoice (chỉ update field thay đổi). WHERE status='draft'
+  // safety: nếu race condition đã flip sang completed → KHÔNG update.
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  const updatePayload: any = {
+    customer_id: input.customerId ?? null,
+    customer_name: input.customerName || "Khách lẻ",
+    subtotal: input.subtotal,
+    discount_amount: input.discountAmount,
+    total: input.total,
+    debt: input.total,
+    payment_method: input.paymentMethod,
+    note: input.note ?? null,
+    auto_saved: autoSaved,
+  };
+
+  const { data: updated, error: updErr } = await supabase
+    .from("invoices")
+    .update(updatePayload)
+    .eq("tenant_id", input.tenantId)
+    .eq("id", invoiceId)
+    .eq("status", "draft")
+    .select("id, code")
+    .maybeSingle();
+  if (updErr) handleError(updErr, "updateDraftOrderInternal:update");
+  if (!updated) {
+    // Đã không còn ở trạng thái draft → idempotent return existing
+    const { data: snap } = await supabase
+      .from("invoices")
+      .select("id, code")
+      .eq("id", invoiceId)
+      .single();
+    if (snap) return { invoiceId: snap.id, invoiceCode: snap.code };
+    throw new Error("Không tìm thấy đơn nháp để cập nhật");
+  }
+
+  // 2. DELETE old items + INSERT new
+  await supabase.from("invoice_items").delete().eq("invoice_id", invoiceId);
+
+  if (input.items.length > 0) {
+    const itemsData: InvoiceItemInsert[] = input.items.map((item) => ({
+      invoice_id: invoiceId,
+      product_id: item.productId,
+      product_name: item.productName,
+      unit: item.unit ?? "Cái",
+      quantity: item.quantity,
+      unit_price: item.unitPrice,
+      discount: item.discount,
+      total: item.quantity * item.unitPrice - item.discount,
+    }));
+
+    const { error: itemsErr } = await supabase
+      .from("invoice_items")
+      .insert(itemsData);
+    if (itemsErr) handleError(itemsErr, "updateDraftOrderInternal:items");
+  }
+
+  return { invoiceId: updated.id, invoiceCode: updated.code };
+}
+
 // ============================================================
 // List drafts — for resume picker
 // ============================================================
@@ -494,19 +649,21 @@ export async function saveDraftOrder(
  */
 export async function listDraftOrders(
   branchId?: string,
-  limit: number = 50
+  limit: number = 50,
 ): Promise<DraftOrderSummary[]> {
   const supabase = getClient();
   const tenantId = await getCurrentTenantId();
 
+  // Sort by updated_at DESC để recovery dialog hiện nháp mới nhất lên đầu
+  // (auto-save liên tục refresh updated_at qua trigger handle_updated_at).
   let query = supabase
     .from("invoices")
     .select(
-      "id, code, customer_id, customer_name, total, subtotal, discount_amount, note, created_at, invoice_items(count)"
+      "id, code, customer_id, customer_name, total, subtotal, discount_amount, note, created_at, updated_at, auto_saved, client_session_id, created_by, profiles!invoices_created_by_fkey(full_name), invoice_items(product_name)",
     )
     .eq("tenant_id", tenantId)
     .eq("status", "draft")
-    .order("created_at", { ascending: false })
+    .order("updated_at", { ascending: false })
     .limit(limit);
 
   if (branchId) query = query.eq("branch_id", branchId);
@@ -515,21 +672,31 @@ export async function listDraftOrders(
   if (error) handleError(error, "listDraftOrders");
 
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
-  return (data ?? []).map((row: any) => ({
-    id: row.id,
-    code: row.code,
-    customerId: row.customer_id,
-    customerName: row.customer_name ?? "Khách lẻ",
-    total: row.total ?? 0,
-    subtotal: row.subtotal ?? 0,
-    discountAmount: row.discount_amount ?? 0,
-    // invoice_items(count) returns [{ count: N }]
-    itemCount: Array.isArray(row.invoice_items) && row.invoice_items[0]?.count
-      ? row.invoice_items[0].count
-      : 0,
-    note: row.note,
-    createdAt: row.created_at,
-  }));
+  return (data ?? []).map((row: any) => {
+    const items = Array.isArray(row.invoice_items) ? row.invoice_items : [];
+    const profile = row.profiles as { full_name?: string } | null;
+    return {
+      id: row.id,
+      code: row.code,
+      customerId: row.customer_id,
+      customerName: row.customer_name ?? "Khách lẻ",
+      total: row.total ?? 0,
+      subtotal: row.subtotal ?? 0,
+      discountAmount: row.discount_amount ?? 0,
+      itemCount: items.length,
+      note: row.note,
+      createdAt: row.created_at,
+      updatedAt: row.updated_at,
+      createdByName: profile?.full_name ?? undefined,
+      // 3 tên SP đầu cho preview card (recovery dialog)
+      itemsSummary: items
+        .slice(0, 3)
+        .map((it: { product_name?: string }) => it.product_name ?? "")
+        .filter(Boolean),
+      autoSaved: row.auto_saved ?? false,
+      clientSessionId: row.client_session_id ?? null,
+    };
+  });
 }
 
 /**
@@ -545,7 +712,7 @@ export async function getDraftOrderById(
   const { data, error } = await supabase
     .from("invoices")
     .select(
-      "id, code, branch_id, customer_id, customer_name, subtotal, discount_amount, total, note, created_at, status, invoice_items(*)"
+      "id, code, branch_id, customer_id, customer_name, subtotal, discount_amount, total, note, created_at, updated_at, status, auto_saved, client_session_id, invoice_items(*)",
     )
     .eq("tenant_id", tenantId)
     .eq("id", invoiceId)
@@ -567,6 +734,9 @@ export async function getDraftOrderById(
     itemCount: Array.isArray(raw.invoice_items) ? raw.invoice_items.length : 0,
     note: raw.note,
     createdAt: raw.created_at,
+    updatedAt: raw.updated_at,
+    autoSaved: raw.auto_saved ?? false,
+    clientSessionId: raw.client_session_id ?? null,
     // eslint-disable-next-line @typescript-eslint/no-explicit-any
     items: (raw.invoice_items ?? []).map((it: any) => ({
       id: it.id,
