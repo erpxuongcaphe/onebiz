@@ -237,6 +237,103 @@ export async function createCustomer(customer: Partial<Customer>): Promise<Custo
 }
 
 /**
+ * Lấy hoặc tạo system customer "Khách lẻ vãng lai" cho tenant hiện tại.
+ *
+ * Use case: POS Retail (CEO 04/05/2026) bỏ nút "Ghi nợ" riêng — khi cashier
+ * điền "Khách đưa" nhỏ hơn tổng đơn (hoặc rỗng), hệ thống tự ghi công nợ
+ * vào customer. Nếu cashier không chọn khách thật → fallback walk-in
+ * customer chung của chuỗi để track gross debt từ khách vãng lai.
+ *
+ * Code chuẩn: "KL-VL" (Khách Lẻ Vãng Lai). Lazy create — chỉ tạo lần đầu
+ * có invoice ghi nợ với khách lẻ; các lần sau dùng lại.
+ *
+ * NOTE: Một tenant chỉ có 1 walk-in customer. Khoá theo (tenant_id, code)
+ * — UNIQUE constraint của customers table đảm bảo không tạo trùng.
+ */
+export async function getOrCreateWalkInCustomer(): Promise<Customer> {
+  const supabase = getClient();
+  const tenantId = await getCurrentTenantId();
+
+  // Tìm trước
+  const { data: existing } = await supabase
+    .from("customers")
+    .select("*, customer_groups!customers_group_id_fkey(name, discount_percent), loyalty_tiers(name, discount_percent)")
+    .eq("tenant_id", tenantId)
+    .eq("code", "KL-VL")
+    .maybeSingle();
+
+  if (existing) return mapCustomer(existing);
+
+  // Chưa có → tạo
+  const { data: created, error } = await supabase
+    .from("customers")
+    .insert({
+      tenant_id: tenantId,
+      code: "KL-VL",
+      name: "Khách lẻ vãng lai",
+      phone: null,
+      email: null,
+      address: null,
+      group_id: null,
+      gender: null,
+      customer_type: "individual",
+      price_tier_id: null,
+      is_active: true,
+    } satisfies CustomerInsert)
+    .select("*, customer_groups!customers_group_id_fkey(name, discount_percent), loyalty_tiers(name, discount_percent)")
+    .single();
+
+  if (error) handleError(error, "getOrCreateWalkInCustomer");
+
+  return mapCustomer(created);
+}
+
+/**
+ * Điều chỉnh công nợ khách (cộng hoặc trừ). Dùng cho case POS Retail
+ * "Ghi công nợ tiền thừa" — khách trả thừa, shop ghi credit (debt -= excess).
+ *
+ * `delta` dương = tăng nợ phải thu, âm = giảm nợ / tăng credit.
+ *
+ * Audit log để track nguồn (vd "POS-INV-XXX excess change → credit").
+ */
+export async function adjustCustomerDebt(
+  customerId: string,
+  delta: number,
+  reason: string,
+): Promise<void> {
+  const supabase = getClient();
+  const tenantId = await getCurrentTenantId();
+
+  // Read current
+  const { data: cur, error: e1 } = await supabase
+    .from("customers")
+    .select("debt")
+    .eq("tenant_id", tenantId)
+    .eq("id", customerId)
+    .single();
+  if (e1) handleError(e1, "adjustCustomerDebt:read");
+
+  const oldDebt = Number(cur?.debt ?? 0);
+  const newDebt = oldDebt + delta;
+
+  const { error: e2 } = await supabase
+    .from("customers")
+    .update({ debt: newDebt } as CustomerUpdate)
+    .eq("tenant_id", tenantId)
+    .eq("id", customerId);
+  if (e2) handleError(e2, "adjustCustomerDebt:update");
+
+  // Audit log
+  await recordAuditLog({
+    entityType: "customer",
+    entityId: customerId,
+    action: "update",
+    oldData: { debt: oldDebt },
+    newData: { debt: newDebt, reason },
+  });
+}
+
+/**
  * Cập nhật khách hàng.
  */
 export async function updateCustomer(id: string, updates: Partial<Customer>): Promise<Customer> {

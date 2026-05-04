@@ -32,6 +32,8 @@ import {
   type DraftOrderSummary,
   type DraftOrderDetail,
   getProducts,
+  getOrCreateWalkInCustomer,
+  adjustCustomerDebt,
 } from "@/lib/services/supabase";
 import { useToast } from "@/lib/contexts";
 import { formatCurrency, formatNumber, formatDecimal, parseNumberInput } from "@/lib/format";
@@ -309,6 +311,15 @@ function PosPageInner() {
   // Submit state — React state for UI + synchronous ref for double-call guard
   const [submitting, setSubmitting] = useState<"draft" | "complete" | null>(null);
   const submitLockRef = useRef(false);
+
+  // ── Change dialog state (CEO 04/05/2026) ──
+  // Khi cashier điền "Khách đưa" > tổng đơn → mở dialog hỏi cashier
+  // chọn "Trả tiền thừa" hay "Ghi công nợ" (credit cho khách).
+  // - "Ghi công nợ" chỉ enable khi có customer thật (không phải walk-in).
+  const [changeDialog, setChangeDialog] = useState<{
+    open: boolean;
+    excess: number;
+  }>({ open: false, excess: 0 });
 
   // Offline/online status — for opportunistic checkout while network is down
   const networkStatus = useNetworkStatus();
@@ -991,7 +1002,25 @@ function PosPageInner() {
     }
   }, [state, toast]);
 
-  const handleComplete = useCallback(async () => {
+  /**
+   * handleComplete — F10 thanh toán.
+   *
+   * Flow CEO 04/05/2026 (POS Retail):
+   *   - Khách đưa = total → bình thường, paid=total, không nợ
+   *   - Khách đưa < total → ghi nợ phần thiếu vào customer.
+   *     Nếu cashier chưa chọn customer → auto-link "Khách lẻ vãng lai" (KL-VL).
+   *   - Khách đưa > total → mở ChangeDialog hỏi cashier:
+   *       * "Trả tiền thừa": invoice paid=total, không adjust debt
+   *       * "Ghi công nợ":   invoice paid=total, sau đó adjustCustomerDebt(-excess)
+   *         → khách có credit, lần sau cấn trừ. Chỉ enable khi có customer thật.
+   *   - Khách đưa = 0 (rỗng) → ghi nợ 100%, link customer (auto walk-in).
+   *
+   * intent param resolve khi user click button trong ChangeDialog:
+   *   undefined → first call, decide path
+   *   'refund'  → cashier chọn trả tiền thừa
+   *   'credit'  → cashier chọn ghi công nợ
+   */
+  const handleComplete = useCallback(async (intent?: "refund" | "credit") => {
     if (submitLockRef.current) return;
     // Bắt mở ca trước khi thanh toán — không có ca = không biết ghi nhận vào đâu.
     if (!currentShift) {
@@ -1056,13 +1085,49 @@ function PosPageInner() {
       return;
     }
 
+    // ─── Compute paid logic (CEO 04/05) ───
+    // paidEntered = số khách đưa thực (từ ô input). 0 nếu rỗng → ghi nợ 100%.
+    // paidForInvoice = paid trong DB (capped tại total — invoice luôn balanced).
+    // creditExcess = phần thừa (chỉ khi intent='credit') để adjust customer.debt
+    // sau invoice complete.
+    const paidEntered = state.paid; // không default về total nữa
+    const total = state.total;
+
+    // Open ChangeDialog nếu paid > total và chưa có intent
+    if (paidEntered > total && !intent) {
+      setChangeDialog({ open: true, excess: paidEntered - total });
+      return;
+    }
+
+    const paidForInvoice = Math.min(paidEntered, total);
+    const creditExcess =
+      intent === "credit" && paidEntered > total ? paidEntered - total : 0;
+    const needsCustomerForDebt = paidForInvoice < total || creditExcess > 0;
+
     submitLockRef.current = true;
     setSubmitting("complete");
     try {
       const ctx = await getCurrentContext();
       if (!ctx) throw new Error("Không xác định được chi nhánh");
 
-      const paid = state.paid || state.total;
+      // Auto-link walk-in customer khi cần track debt/credit mà cashier
+      // chưa chọn customer thật. Lazy create — chỉ tạo lần đầu mỗi tenant.
+      let resolvedCustomerId: string | null = state.customer?.id ?? null;
+      let resolvedCustomerName: string = state.customer?.name ?? "Khách lẻ";
+      if (needsCustomerForDebt && !resolvedCustomerId) {
+        try {
+          const walkIn = await getOrCreateWalkInCustomer();
+          resolvedCustomerId = walkIn.id;
+          resolvedCustomerName = walkIn.name;
+        } catch (err) {
+          console.error("[POS] getOrCreateWalkInCustomer failed:", err);
+          throw new Error(
+            "Không tạo được khách lẻ vãng lai để ghi công nợ. Vui lòng thử lại.",
+          );
+        }
+      }
+
+      const paid = paidForInvoice; // alias để tận dụng code dưới (receipt, RPC, ...)
       let invoiceCode: string;
       let invoiceId: string | null = null; // L-2: track để earn loyalty
       let isOfflineCheckout = false;
@@ -1097,8 +1162,9 @@ function PosPageInner() {
           tenantId: ctx.tenantId,
           branchId: ctx.branchId,
           createdBy: ctx.userId,
-          customerId: state.customer?.id ?? null,
-          customerName: state.customer?.name ?? "Khách lẻ",
+          // CEO 04/05: dùng resolvedCustomerId — auto fallback walk-in nếu nợ
+          customerId: resolvedCustomerId,
+          customerName: resolvedCustomerName,
           items: state.lines.map((l) => ({
             productId: l.productId,
             productName: l.variantLabel ? `${l.productName} · ${l.variantLabel}` : l.productName,
@@ -1133,12 +1199,35 @@ function PosPageInner() {
         isOfflineCheckout = !!result.isOffline;
       }
 
+      // ─── Credit excess (CEO 04/05) ───
+      // Nếu cashier chọn "Ghi công nợ" với tiền thừa → adjust customer.debt
+      // -= excess. Sau invoice complete để có invoiceCode log audit.
+      // Skip nếu offline (sync lại sau, dùng audit_log để track).
+      if (creditExcess > 0 && resolvedCustomerId && !isOfflineCheckout) {
+        try {
+          await adjustCustomerDebt(
+            resolvedCustomerId,
+            -creditExcess,
+            `Tiền thừa từ HĐ ${invoiceCode}`,
+          );
+        } catch (err) {
+          // Không block — invoice đã success. Toast warn để cashier biết.
+          console.error("[POS] adjustCustomerDebt for credit failed:", err);
+          toast({
+            title: "Đã lưu hoá đơn nhưng chưa ghi credit",
+            description: `Đơn ${invoiceCode} OK. Vui lòng ghi credit tay cho khách (${formatCurrency(creditExcess)}đ).`,
+            variant: "warning",
+            duration: 8000,
+          });
+        }
+      }
+
       if (autoPrint && invoiceCode) {
         try {
           const receipt: ReceiptData = {
             invoiceCode,
             date: new Date().toISOString(),
-            customerName: state.customer?.name ?? "Khách lẻ",
+            customerName: resolvedCustomerName,
             items: state.lines.map((l) => ({
               name: l.productName,
               quantity: l.quantity,
@@ -1151,8 +1240,10 @@ function PosPageInner() {
             subtotal: state.subtotal,
             discountAmount: state.orderDiscountAmount + state.lineDiscountTotal,
             total: state.total,
-            paid,
-            change: Math.max(0, paid - state.total),
+            // Receipt hiển thị số khách đưa THỰC (paidEntered) — không phải
+            // paid clean trong invoice. Cashier check khớp tiền cầm tay.
+            paid: paidEntered,
+            change: Math.max(0, paidEntered - state.total),
             paymentMethod: state.paymentMethod,
             isOffline: isOfflineCheckout,
           };
@@ -1224,13 +1315,20 @@ function PosPageInner() {
           });
       }
 
+      // Toast variant theo case ghi nợ / credit / bình thường
+      const debtAmount = total - paidForInvoice;
+      const toastDescription = isOfflineCheckout
+        ? "Đơn sẽ tự đồng bộ lên server khi có mạng"
+        : debtAmount > 0
+          ? `Đã ghi nợ ${formatCurrency(debtAmount)}đ vào ${resolvedCustomerName}`
+          : creditExcess > 0
+            ? `Đã ghi credit ${formatCurrency(creditExcess)}đ cho ${resolvedCustomerName}`
+            : undefined;
       toast({
         title: isOfflineCheckout
           ? `Hoá đơn ${invoiceCode} — đã lưu offline`
           : `Hoá đơn ${invoiceCode} thành công!`,
-        description: isOfflineCheckout
-          ? "Đơn sẽ tự đồng bộ lên server khi có mạng"
-          : undefined,
+        description: toastDescription,
         variant: isOfflineCheckout ? "info" : "success",
       });
       state.clearCart();
@@ -1239,6 +1337,7 @@ function PosPageInner() {
       setAppliedRedeem(null);
       setSearchQuery("");
       setMobileCartOpen(false);
+      setChangeDialog({ open: false, excess: 0 });
     } catch (err: any) {
       toast({ title: "Thanh toán thất bại", description: err.message, variant: "error" });
     } finally {
@@ -1247,79 +1346,9 @@ function PosPageInner() {
     }
   }, [state, toast, autoPrint, networkStatus.isOnline, currentShift, appliedPromotion, appliedRedeem]);
 
-  const handleDebtCheckout = useCallback(async () => {
-    if (submitLockRef.current) return;
-    if (!state.customer) {
-      toast({ title: "Vui lòng chọn khách hàng để ghi nợ", variant: "error" });
-      return;
-    }
-    if (!currentShift) {
-      toast({
-        title: "Chưa mở ca",
-        description: "Anh/chị cần mở ca trước khi ghi nợ.",
-        variant: "warning",
-      });
-      setOpenShiftDialogOpen(true);
-      return;
-    }
-    submitLockRef.current = true;
-    setSubmitting("complete");
-    try {
-      const ctx = await getCurrentContext();
-      if (!ctx) throw new Error("Không xác định được chi nhánh");
-
-      const breakdown =
-        state.paymentMethod === "mixed"
-          ? state.paymentBreakdown.filter((b) => b.amount > 0)
-          : undefined;
-
-      const input: PosCheckoutInput = {
-        tenantId: ctx.tenantId,
-        branchId: ctx.branchId,
-        createdBy: ctx.userId,
-        customerId: state.customer.id,
-        customerName: state.customer.name,
-        items: state.lines.map((l) => ({
-          productId: l.productId,
-          productName: l.productName,
-          unit: l.unit,
-          quantity: l.quantity,
-          unitPrice: l.unitPrice,
-          discount: l.discount.mode === "percent"
-            ? Math.round((l.quantity * l.unitPrice * l.discount.value) / 100)
-            : l.discount.value,
-          vatRate: l.vatRate ?? 0,
-        })),
-        paymentMethod: state.paymentMethod,
-        paymentBreakdown: breakdown,
-        subtotal: state.subtotal,
-        discountAmount: state.orderDiscountAmount + state.lineDiscountTotal,
-        total: state.total,
-        paid: 0, // Ghi nợ 100%
-        note: state.note ? `[Ghi nợ] ${state.note}` : "[Ghi nợ]",
-        shiftId: currentShift?.id ?? null,
-      };
-      const result = await offlinePosCheckout(input, networkStatus.isOnline);
-
-      toast({
-        title: result.isOffline
-          ? `Ghi nợ ${result.invoiceCode} — đã lưu offline`
-          : `Ghi nợ ${result.invoiceCode} thành công!`,
-        description: result.isOffline
-          ? "Đơn sẽ tự đồng bộ lên server khi có mạng"
-          : undefined,
-        variant: result.isOffline ? "info" : "success",
-      });
-      state.clearCart();
-      setSearchQuery("");
-      setMobileCartOpen(false);
-    } catch (err: any) {
-      toast({ title: "Ghi nợ thất bại", description: err.message, variant: "error" });
-    } finally {
-      setSubmitting(null);
-      submitLockRef.current = false;
-    }
-  }, [state, toast, networkStatus.isOnline, currentShift]);
+  // CEO 04/05/2026: Bỏ handleDebtCheckout — nút "Ghi nợ" cũ thay bằng
+  // logic auto trong handleComplete (paid < total → auto-link walk-in
+  // customer + ghi nợ phần thiếu).
 
   // ============================================================
   // Hotkeys
@@ -2339,24 +2368,14 @@ function PosPageInner() {
                 F9
               </kbd>
             </button>
-            {/* Debt button — ghi nợ 100% */}
-            <button
-              type="button"
-              onClick={handleDebtCheckout}
-              disabled={state.lines.length === 0 || submitting !== null || !state.customer}
-              title={!state.customer ? "Chọn khách hàng để ghi nợ" : "Ghi nợ toàn bộ"}
-              className={cn(
-                "rounded-lg bg-status-warning/10 text-xs font-semibold text-status-warning hover:bg-status-warning/15 disabled:opacity-40 disabled:cursor-not-allowed inline-flex items-center justify-center gap-1 transition-all press-scale-sm",
-                state.sellingMode === "fast" ? "h-9" : "h-11"
-              )}
-            >
-              <Icon name="credit_card" size={14} />
-              Ghi nợ
-            </button>
+            {/* CEO 04/05: Bỏ nút "Ghi nợ" riêng. Logic ghi nợ tự động:
+                khách đưa < total → auto link walk-in (nếu chưa chọn KH) +
+                ghi nợ phần thiếu. Khách đưa > total → mở ChangeDialog hỏi
+                "Trả khách" hay "Ghi credit". */}
             {/* Checkout button — primary Stitch */}
             <button
               type="button"
-              onClick={handleComplete}
+              onClick={() => handleComplete()}
               disabled={state.lines.length === 0 || submitting !== null}
               className={cn(
                 "rounded-xl bg-primary text-on-primary font-bold hover:bg-primary-hover disabled:opacity-40 disabled:cursor-not-allowed inline-flex items-center justify-center gap-1.5 transition-all ambient-shadow press-scale-sm",
@@ -2607,6 +2626,88 @@ function PosPageInner() {
           onConfirm={handleCloseShift}
         />
       )}
+
+      {/* ── ChangeDialog (CEO 04/05): hỏi cashier khi tiền thừa > 0 ── */}
+      <Dialog
+        open={changeDialog.open}
+        onOpenChange={(open) =>
+          setChangeDialog((prev) => ({ ...prev, open }))
+        }
+      >
+        <DialogContent className="sm:max-w-md">
+          <DialogHeader>
+            <DialogTitle className="flex items-center gap-2">
+              <Icon name="payments" size={20} className="text-primary" />
+              Tiền thừa {formatCurrency(changeDialog.excess)}đ
+            </DialogTitle>
+          </DialogHeader>
+          <div className="space-y-3 text-sm">
+            <div className="bg-surface-container-low rounded-lg p-3 space-y-1.5 tabular-nums">
+              <div className="flex justify-between text-xs text-muted-foreground">
+                <span>Khách hàng:</span>
+                <span className="font-medium text-foreground">
+                  {state.customer?.name ?? "Khách lẻ vãng lai (sẽ tự link)"}
+                </span>
+              </div>
+              <div className="flex justify-between text-xs text-muted-foreground">
+                <span>Tổng đơn:</span>
+                <span className="font-medium text-foreground">
+                  {formatCurrency(state.total)}đ
+                </span>
+              </div>
+              <div className="flex justify-between text-xs text-muted-foreground">
+                <span>Khách đưa:</span>
+                <span className="font-medium text-foreground">
+                  {formatCurrency(state.paid)}đ
+                </span>
+              </div>
+              <div className="flex justify-between text-sm font-bold text-status-success border-t border-border pt-1.5 mt-1">
+                <span>Tiền thừa:</span>
+                <span>+{formatCurrency(changeDialog.excess)}đ</span>
+              </div>
+            </div>
+            <p className="text-xs text-muted-foreground">
+              Cashier xử lý tiền thừa thế nào?
+            </p>
+          </div>
+          <DialogFooter className="flex-col sm:flex-col gap-2">
+            <Button
+              type="button"
+              variant="outline"
+              className="w-full"
+              onClick={() => {
+                setChangeDialog({ open: false, excess: 0 });
+                handleComplete("refund");
+              }}
+            >
+              <Icon name="payments" size={16} className="mr-1" />
+              Trả tiền thừa cho khách
+            </Button>
+            <Button
+              type="button"
+              className="w-full"
+              disabled={
+                !state.customer ||
+                state.customer.code === "KL-VL"
+              }
+              title={
+                !state.customer
+                  ? "Cần chọn khách hàng thật để ghi credit (không phải vãng lai)"
+                  : state.customer.code === "KL-VL"
+                    ? "Không ghi credit cho khách vãng lai"
+                    : "Ghi credit vào tài khoản khách, lần sau cấn trừ"
+              }
+              onClick={() => {
+                setChangeDialog({ open: false, excess: 0 });
+                handleComplete("credit");
+              }}
+            >
+              <Icon name="account_balance_wallet" size={16} className="mr-1" />
+              Ghi công nợ {formatCurrency(changeDialog.excess)}đ
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
 
       {/* L-3: Dialog đổi điểm tích lũy */}
       <Dialog open={redeemDialogOpen} onOpenChange={setRedeemDialogOpen}>
