@@ -45,14 +45,18 @@
     flex-direction: row !important;
     align-items: stretch;
   }
+  /* Cart items zone: fixed-ish width, scroll riêng. Tỉ lệ co giãn nhẹ. */
   aside.pos-cart-grid > .cart-items-zone {
-    width: clamp(280px, 22vw, 380px);
+    width: clamp(300px, 21vw, 360px);
     flex-shrink: 0;
     overflow: hidden;
   }
+  /* Info zone: flex-1, đủ chỗ cho payment tabs (4 nút × ~80px) +
+     denomination 6 nút + summary breakdown. Min 360 cho payment fit, max
+     480 cap để không quá rộng ở 4K. */
   aside.pos-cart-grid > .cart-info-zone {
     flex: 1;
-    min-width: 0;
+    min-width: 360px;
     overflow-y: auto;
   }
 }

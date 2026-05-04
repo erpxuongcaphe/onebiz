@@ -43,6 +43,15 @@ import { useNetworkStatus, offlinePosCheckout } from "@/lib/offline";
 import { useBarcodeScanner } from "@/lib/hooks/use-barcode-scanner";
 import { useAuth } from "@/lib/contexts";
 import { useSettings } from "@/lib/contexts/settings-context";
+import {
+  DropdownMenu,
+  DropdownMenuTrigger,
+  DropdownMenuContent,
+  DropdownMenuItem,
+  DropdownMenuLabel,
+  DropdownMenuSeparator,
+  DropdownMenuCheckboxItem,
+} from "@/components/ui/dropdown-menu";
 import { getOpenShift, openShift, closeShift } from "@/lib/services/supabase/shifts";
 import type { Shift } from "@/lib/types/shift";
 import { OpenShiftDialog, CloseShiftDialog } from "./fnb/components/shift-dialog";
@@ -320,8 +329,8 @@ function PosPageInner() {
   // - Mount → check có ca đang mở của cashier này tại chi nhánh này không
   // - Không có → bắt mở ca trước khi cho thanh toán
   // - Có → cho phép bán, mọi invoice + cash_transaction gắn shift_id
-  const { user, tenant, currentBranch } = useAuth();
-  const { settings } = useSettings();
+  const { user, tenant, currentBranch, logout } = useAuth();
+  const { settings, updateSettings } = useSettings();
   const [currentShift, setCurrentShift] = useState<Shift | null>(null);
   const [openShiftDialogOpen, setOpenShiftDialogOpen] = useState(false);
   const [closeShiftDialogOpen, setCloseShiftDialogOpen] = useState(false);
@@ -1457,88 +1466,28 @@ function PosPageInner() {
           <span className="text-[13px] font-bold tracking-wide">POS Retail</span>
         </div>
 
-        {/* R10: Trigger "Đơn ca này" — drawer list 50 đơn + reprint */}
-        {currentShift && (
-          <button
-            type="button"
-            onClick={() => setShiftDrawerOpen(true)}
-            className="hidden md:inline-flex items-center gap-1 px-2 py-1 rounded text-xs bg-white/10 hover:bg-white/20 transition-colors shrink-0"
-            title="Lịch sử đơn trong ca + in lại"
-          >
-            <Icon name="receipt_long" size={14} />
-            <span className="hidden lg:inline">Đơn ca này</span>
-          </button>
-        )}
+        {/* CLEAN HEADER: KM/Tier/Cart-count badges đã bị bỏ — info đã hiện ở
+            cart panel phải (summary breakdown + Khách cần trả). Tránh trùng
+            lặp gây rối thị giác. Đơn ca này chuyển vào hamburger menu. */}
 
-        {/* Sprint 2: Badge tier đang áp dụng — chỉ hiện khi có KH với tier */}
-        {appliedTier && (
-          <div
-            className="hidden md:flex items-center gap-1 shrink-0 px-2 py-0.5 rounded-md bg-status-success/20 text-white text-[11px] font-medium border border-status-success/40"
-            title={`Bảng giá ${appliedTier.tierCode} đang áp cho ${state.customer?.name ?? "KH này"}`}
-          >
-            <Icon name="sell" size={12} />
-            <span>Áp: {appliedTier.tierName}</span>
-          </div>
-        )}
-
-        {/* Sprint KM-2: Badge khuyến mãi đang áp dụng — click X để xóa */}
-        {appliedPromotion && appliedPromotion.discountAmount > 0 && (
-          <div
-            className="hidden md:flex items-center gap-1 shrink-0 px-2 py-0.5 rounded-md bg-status-warning/20 text-white text-[11px] font-medium border border-status-warning/40"
-            title={`${appliedPromotion.promotion.name} — Giảm ${appliedPromotion.discountAmount.toLocaleString("vi-VN")}đ`}
-          >
-            <Icon name="percent" size={12} />
-            <span>KM: {appliedPromotion.reasonLabel}</span>
-            <button
-              type="button"
-              onClick={clearAppliedPromotion}
-              className="ml-0.5 hover:bg-white/20 rounded-full p-0.5 transition-colors"
-              title="Bỏ áp dụng khuyến mãi"
-            >
-              <Icon name="close" size={11} />
-            </button>
-          </div>
-        )}
-
-        {/* L-3: Badge đổi điểm + button mở dialog */}
+        {/* L-3: Button "Dùng điểm" — chỉ hiện khi KH có điểm CHƯA đổi.
+            Badge "đã đổi N điểm" passive → bỏ vì đã hiện ở cart summary phải. */}
         {state.customer?.id &&
           loyaltySettings?.isEnabled &&
-          (state.customer.loyaltyPoints ?? 0) > 0 && (
-            <>
-              {appliedRedeem ? (
-                <div
-                  className="hidden md:flex items-center gap-1 shrink-0 px-2 py-0.5 rounded-md bg-status-info/20 text-white text-[11px] font-medium border border-status-info/40"
-                  title={`Đã đổi ${appliedRedeem.points} điểm → -${appliedRedeem.discountAmount.toLocaleString("vi-VN")}đ`}
-                >
-                  <Icon name="star" size={12} />
-                  <span>
-                    -{appliedRedeem.points} điểm = -
-                    {appliedRedeem.discountAmount.toLocaleString("vi-VN")}đ
-                  </span>
-                  <button
-                    type="button"
-                    onClick={clearAppliedRedeem}
-                    className="ml-0.5 hover:bg-white/20 rounded-full p-0.5 transition-colors"
-                    title="Bỏ đổi điểm"
-                  >
-                    <Icon name="close" size={11} />
-                  </button>
-                </div>
-              ) : (
-                <button
-                  type="button"
-                  onClick={() => {
-                    setRedeemInput(String(state.customer?.loyaltyPoints ?? 0));
-                    setRedeemDialogOpen(true);
-                  }}
-                  className="hidden md:flex items-center gap-1 shrink-0 px-2 py-0.5 rounded-md bg-white/10 hover:bg-white/20 text-white text-[11px] font-medium border border-white/20 transition-colors"
-                  title={`KH có ${state.customer.loyaltyPoints} điểm`}
-                >
-                  <Icon name="star" size={12} />
-                  <span>Dùng điểm ({state.customer.loyaltyPoints})</span>
-                </button>
-              )}
-            </>
+          (state.customer.loyaltyPoints ?? 0) > 0 &&
+          !appliedRedeem && (
+            <button
+              type="button"
+              onClick={() => {
+                setRedeemInput(String(state.customer?.loyaltyPoints ?? 0));
+                setRedeemDialogOpen(true);
+              }}
+              className="hidden md:flex items-center gap-1 shrink-0 px-2 py-0.5 rounded-md bg-white/10 hover:bg-white/20 text-white text-[11px] font-medium border border-white/20 transition-colors"
+              title={`KH có ${state.customer.loyaltyPoints} điểm`}
+            >
+              <Icon name="star" size={12} />
+              <span>Dùng điểm ({state.customer.loyaltyPoints})</span>
+            </button>
           )}
 
         {/* Search bar */}
@@ -1605,59 +1554,108 @@ function PosPageInner() {
           <kbd className="hidden sm:inline font-mono text-[8px] bg-white/10 border border-white/20 rounded px-0.5 text-white/50">F3</kbd>
         </button>
 
-        {/* Stats + Shortcuts — desktop only */}
-        <div className="hidden md:flex items-center gap-2 shrink-0 text-[11px]">
-          <div className="h-3 w-px bg-white/20" />
-          <div className="flex items-center gap-1 text-white/70">
-            <Icon name="shopping_cart" size={12} />
-            <span>{state.itemCount} SP</span>
-          </div>
-          <div className="h-3 w-px bg-white/20" />
-          <span className="font-semibold">{formatCurrency(state.total)} ₫</span>
-          <div className="h-3 w-px bg-white/20" />
-          <div className="relative">
-            <button
-              type="button"
-              onClick={() => setShowShortcuts(!showShortcuts)}
-              className="p-1 rounded text-white/50 hover:bg-white/10 hover:text-white transition-colors"
-              title="Phím tắt"
-            >
-              <Icon name="keyboard" size={14} />
-            </button>
-            {showShortcuts && (
-              <>
-                <div className="fixed inset-0 z-40" onClick={() => setShowShortcuts(false)} />
-                <div className="absolute right-0 top-full mt-1 z-50 bg-gray-900 text-white rounded-lg shadow-2xl p-3 w-56 text-[11px]">
-                  <div className="font-bold text-xs mb-2 text-white/90 flex items-center gap-1.5">
-                    <Icon name="keyboard" size={14} />
-                    Phím tắt POS
-                  </div>
-                  <div className="space-y-1.5">
-                    {[
-                      ["F2", "Tìm sản phẩm"],
-                      ["Enter", "Thêm SP (trong ô tìm)"],
-                      ["F3", "Mở đơn nháp"],
-                      ["F4", "Chọn khách hàng"],
-                      ["F9", "Lưu nháp"],
-                      ["F10", "Thanh toán"],
-                      ["Ctrl+T", "Tạo hoá đơn mới"],
-                      ["Ctrl+Tab", "Chuyển hoá đơn"],
-                      ["Ctrl+W", "Đóng hoá đơn"],
-                      ["Esc", "Đóng popup / Thoát"],
-                    ].map(([key, desc]) => (
-                      <div key={key} className="flex items-center justify-between">
-                        <span className="text-white/60">{desc}</span>
-                        <kbd className="font-mono text-[9px] bg-white/10 border border-white/20 rounded px-1.5 py-0.5">
-                          {key}
-                        </kbd>
-                      </div>
-                    ))}
-                  </div>
+        {/* Keyboard shortcuts — popover icon-only (desktop) */}
+        <div className="hidden md:block relative shrink-0">
+          <button
+            type="button"
+            onClick={() => setShowShortcuts(!showShortcuts)}
+            className="p-1 rounded text-white/60 hover:bg-white/10 hover:text-white transition-colors"
+            title="Phím tắt"
+          >
+            <Icon name="keyboard" size={14} />
+          </button>
+          {showShortcuts && (
+            <>
+              <div className="fixed inset-0 z-40" onClick={() => setShowShortcuts(false)} />
+              <div className="absolute right-0 top-full mt-1 z-50 bg-gray-900 text-white rounded-lg shadow-2xl p-3 w-56 text-[11px]">
+                <div className="font-bold text-xs mb-2 text-white/90 flex items-center gap-1.5">
+                  <Icon name="keyboard" size={14} />
+                  Phím tắt POS
                 </div>
-              </>
-            )}
-          </div>
+                <div className="space-y-1.5">
+                  {[
+                    ["F2", "Tìm sản phẩm"],
+                    ["Enter", "Thêm SP (trong ô tìm)"],
+                    ["F3", "Mở đơn nháp"],
+                    ["F4", "Chọn khách hàng"],
+                    ["F9", "Lưu nháp"],
+                    ["F10", "Thanh toán"],
+                    ["Ctrl+T", "Tạo hoá đơn mới"],
+                    ["Ctrl+Tab", "Chuyển hoá đơn"],
+                    ["Ctrl+W", "Đóng hoá đơn"],
+                    ["Esc", "Đóng popup / Thoát"],
+                  ].map(([key, desc]) => (
+                    <div key={key} className="flex items-center justify-between">
+                      <span className="text-white/60">{desc}</span>
+                      <kbd className="font-mono text-[9px] bg-white/10 border border-white/20 rounded px-1.5 py-0.5">
+                        {key}
+                      </kbd>
+                    </div>
+                  ))}
+                </div>
+              </div>
+            </>
+          )}
         </div>
+
+        {/* HAMBURGER MENU — Quay về trang chủ + Đơn ca này + Auto toggles + Đăng xuất.
+            CEO yêu cầu: bỏ badge KM/cart-count thừa ở header (đã có ở col 4),
+            gom các chức năng phụ vào dropdown 3 gạch tinh tế. */}
+        <DropdownMenu>
+          <DropdownMenuTrigger
+            className="p-1.5 rounded text-white/70 hover:bg-white/10 hover:text-white transition-colors shrink-0 outline-none"
+            title="Menu"
+          >
+            <Icon name="menu" size={16} />
+          </DropdownMenuTrigger>
+          <DropdownMenuContent align="end" sideOffset={6} className="min-w-[240px]">
+            <DropdownMenuLabel>POS Retail</DropdownMenuLabel>
+            <DropdownMenuItem onSelect={() => router.push("/")}>
+              <Icon name="home" size={16} className="mr-2" />
+              Quay về trang chủ
+            </DropdownMenuItem>
+            <DropdownMenuItem
+              onSelect={() => setShiftDrawerOpen(true)}
+              disabled={!currentShift}
+            >
+              <Icon name="receipt_long" size={16} className="mr-2" />
+              Đơn ca này
+              {!currentShift && (
+                <span className="ml-auto text-[10px] text-muted-foreground">
+                  (Mở ca trước)
+                </span>
+              )}
+            </DropdownMenuItem>
+            <DropdownMenuSeparator />
+            <DropdownMenuLabel>Tự động hoá</DropdownMenuLabel>
+            <DropdownMenuCheckboxItem
+              checked={settings.sales.autoPrintInvoice}
+              onCheckedChange={(checked) =>
+                updateSettings("sales", { autoPrintInvoice: !!checked })
+              }
+            >
+              Tự động in hoá đơn khi thanh toán
+            </DropdownMenuCheckboxItem>
+            <DropdownMenuCheckboxItem
+              checked={settings.notification.soundEnabled}
+              onCheckedChange={(checked) =>
+                updateSettings("notification", { soundEnabled: !!checked })
+              }
+            >
+              Âm thanh phản hồi (beep, haptic)
+            </DropdownMenuCheckboxItem>
+            <DropdownMenuSeparator />
+            <DropdownMenuItem
+              onSelect={() => {
+                logout();
+              }}
+              variant="destructive"
+            >
+              <Icon name="logout" size={16} className="mr-2" />
+              Đăng xuất
+            </DropdownMenuItem>
+          </DropdownMenuContent>
+        </DropdownMenu>
       </header>
 
       {/* ═══════════ BODY ═══════════ */}
@@ -1682,9 +1680,10 @@ function PosPageInner() {
         <aside
           className={cn(
             "pos-cart-grid pos-panel bg-white flex flex-col",
-            // Desktop adaptive (laptop chuẩn 1366 → desktop 1920+): width co
-            // giãn qua clamp(540, 38vw, 800). 1366: ~520, 1920: ~730, 2560: 800.
-            "lg:w-[clamp(540px,38vw,800px)] lg:shrink-0 lg:border-l lg:border-border lg:static lg:translate-x-0 lg:z-auto lg:shadow-none",
+            // Desktop adaptive: total cart aside width = items-zone + info-zone.
+            // 1366: 660px (items 300 + info 360), 1920: 840 (items 360 + info 480),
+            // 2560: cap 880. CSS @media trong globals.css chia tỉ lệ adaptive.
+            "lg:w-[clamp(660px,46vw,880px)] lg:shrink-0 lg:border-l lg:border-border lg:static lg:translate-x-0 lg:z-auto lg:shadow-none",
             // Mobile/Tablet: slide-over from right
             "fixed inset-y-0 right-0 z-40 w-full sm:w-[420px] shadow-2xl",
             "transition-transform duration-300 ease-in-out",
