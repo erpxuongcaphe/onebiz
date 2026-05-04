@@ -1784,19 +1784,13 @@ function PosPageInner() {
 
           {/* Customer + Delivery moved to right column (Phase 2 4-col split) */}
 
-          {/* ── Cart table header ── */}
+          {/* ── Cart status strip — Plan A không cần table header (item self-describing).
+                  Strip nhỏ hiện count + clear all để cashier thấy quy mô đơn. ── */}
           {state.lines.length > 0 && (
-            <div className="flex items-center border-b border-border bg-surface-container-low shrink-0">
-              <div className="flex-1 grid grid-cols-[20px_1fr_66px_44px_60px_66px_18px] gap-0 px-2 py-1 text-[9px] font-semibold text-muted-foreground uppercase tracking-wider items-center">
-                <span className="text-center">#</span>
-                <span>Tên hàng</span>
-                <span className="text-right">Đơn giá</span>
-                <span className="text-center">SL</span>
-                <span className="text-right">Giảm giá</span>
-                <span className="text-right">T.Tiền</span>
-                <span />
-              </div>
-              {/* Clear all button */}
+            <div className="flex items-center justify-between px-2.5 py-1 border-b border-border bg-surface-container-low shrink-0">
+              <span className="text-[10px] font-semibold text-muted-foreground uppercase tracking-wider">
+                {state.lines.length} sản phẩm · {state.itemCount} món
+              </span>
               <button
                 type="button"
                 onClick={() =>
@@ -1809,10 +1803,11 @@ function PosPageInner() {
                     }
                   )
                 }
-                className="shrink-0 px-1.5 py-0.5 mr-1 rounded text-[9px] text-muted-foreground hover:text-status-error hover:bg-status-error/10 transition-colors"
+                className="shrink-0 inline-flex items-center gap-1 px-1.5 py-0.5 rounded text-[10px] text-muted-foreground hover:text-status-error hover:bg-status-error/10 transition-colors"
                 title="Xoá tất cả (cần xác nhận)"
               >
                 <Icon name="delete" size={12} />
+                Xoá hết
               </button>
             </div>
           )}
@@ -1855,8 +1850,9 @@ function PosPageInner() {
               <button
                 type="button"
                 onClick={() => setCustomerModalOpen(true)}
+                title={state.customer?.name ?? "Khách lẻ"}
                 className={cn(
-                  "flex-1 flex items-center gap-2 px-2.5 h-9 rounded-lg text-xs transition-colors press-scale-sm",
+                  "flex-1 flex items-center gap-2 px-2.5 h-9 rounded-lg text-xs transition-colors press-scale-sm min-w-0",
                   state.customer
                     ? "bg-primary-fixed text-primary font-semibold"
                     : "bg-surface-container-low text-on-surface-variant hover:bg-surface-container hover:text-foreground",
@@ -2672,6 +2668,22 @@ function PosPageInner() {
 // ============================================================
 
 /** Cart item row — KiotViet table style with line #, unit, editable price + discount */
+/**
+ * CartItem — Stack 2-line layout (Phương án A, CEO chốt 04/05/2026).
+ *
+ * Trước đây dùng table 6 cột [#|Tên|ĐG|SL|GG|TT|X] → cart-items-zone
+ * width 340px chỉ chừa ~10px cho tên SP → truncate "Cà p..." mất context.
+ *
+ * Layout mới:
+ *   ┌──────────────────────────────────────┐
+ *   │ 1  Cà phê Phin Truyền Thống Pha Máy× │  ← Line 1: # + tên (full width) + xoá
+ *   │    SKU-CF001 (kg)                    │  ← code + unit (line 2 sub)
+ *   │    [-2+] × 145,000  -1,000đ  280,000 │  ← Line 2: stepper × giá · GG · tổng
+ *   └──────────────────────────────────────┘
+ *
+ * Lợi: tên SP đầy đủ (line-clamp-1, hover tooltip nếu quá dài), số liệu
+ * format en-US đầy đủ, qty +/- nhanh, GG chỉ hiện khi > 0.
+ */
 function CartItem({
   index,
   line,
@@ -2690,108 +2702,178 @@ function CartItem({
   onRemove: () => void;
 }) {
   const oversold = line.availableStock > 0 && line.quantity > line.availableStock;
+  const [editingPrice, setEditingPrice] = useState(false);
+  const [editingDiscount, setEditingDiscount] = useState(false);
 
   return (
     <div
       className={cn(
-        "grid grid-cols-[20px_1fr_66px_44px_60px_66px_18px] gap-0 px-2 py-1.5 hover:bg-primary-fixed/30 transition-colors group items-center",
-        oversold && "bg-status-warning/10"
+        "border-b border-gray-100 hover:bg-primary-fixed/20 transition-colors group",
+        oversold && "bg-status-warning/10",
       )}
     >
-      {/* Line number */}
-      <span className="text-[10px] text-muted-foreground text-center tabular-nums">{index}</span>
-
-      {/* Name + code + unit */}
-      <div className="min-w-0 pr-1">
-        <p className="text-[11px] font-medium text-foreground truncate leading-tight">
-          {line.productName}
-          {line.variantLabel && (
-            <span className="ml-1 px-1 py-0.5 rounded bg-primary-fixed/50 text-primary text-[9px] font-semibold">
-              {line.variantLabel}
-            </span>
+      {/* ── Line 1: # + tên SP (full width) + xoá ── */}
+      <div className="flex items-start gap-2 px-2.5 pt-1.5">
+        <span className="text-[10px] text-muted-foreground tabular-nums shrink-0 w-3 mt-0.5 text-right">
+          {index}
+        </span>
+        <div className="flex-1 min-w-0">
+          <p
+            className="text-[12px] font-medium text-foreground line-clamp-1 leading-snug"
+            title={line.productName}
+          >
+            {line.productName}
+            {line.variantLabel && (
+              <span className="ml-1 px-1 py-0.5 rounded bg-primary-fixed/60 text-primary text-[9px] font-semibold">
+                {line.variantLabel}
+              </span>
+            )}
+          </p>
+          {(line.productCode || line.unit || oversold) && (
+            <p className="text-[9.5px] text-muted-foreground/80 font-mono leading-tight truncate">
+              {line.productCode && <span>{line.productCode}</span>}
+              {line.unit && <span className="ml-1">({line.unit})</span>}
+              {oversold && (
+                <span className="text-status-warning ml-1 font-sans">
+                  · Tồn: {line.availableStock}
+                </span>
+              )}
+            </p>
           )}
-        </p>
-        <p className="text-[9px] text-muted-foreground font-mono truncate leading-tight">
-          {line.productCode && <span>{line.productCode}</span>}
-          {line.unit && (
-            <span className="text-muted-foreground ml-1">({line.unit})</span>
-          )}
-          {oversold && (
-            <span className="text-status-warning ml-1">Tồn: {line.availableStock}</span>
-          )}
-        </p>
-      </div>
-
-      {/* Editable unit price */}
-      <input
-        type="number"
-        min={0}
-        value={line.unitPrice || ""}
-        onChange={(e) => onPriceChange(parseInt(e.target.value) || 0)}
-        data-allow-hotkeys="true"
-        className="h-6 w-full px-1 text-right text-[10px] font-medium tabular-nums outline-none bg-transparent border border-transparent hover:border-border focus:border-primary focus:bg-white rounded transition-colors"
-      />
-
-      {/* Qty */}
-      <div className="flex items-center justify-center">
-        <input
-          type="number"
-          min={1}
-          value={line.quantity}
-          onChange={(e) => onQtyChange(parseInt(e.target.value) || 1)}
-          data-allow-hotkeys="true"
-          className="h-6 w-10 text-center text-[11px] font-semibold tabular-nums outline-none bg-transparent border border-transparent hover:border-border focus:border-primary focus:bg-white rounded transition-colors"
-        />
-      </div>
-
-      {/* Inline discount — editable with mode toggle */}
-      <div className="flex items-center justify-end gap-0">
-        <input
-          type="number"
-          min={0}
-          value={line.discount.value || ""}
-          onChange={(e) =>
-            onDiscountChange({ ...line.discount, value: Math.max(0, parseInt(e.target.value) || 0) })
-          }
-          data-allow-hotkeys="true"
-          placeholder="0"
-          className="h-6 w-10 px-0.5 text-right text-[10px] tabular-nums outline-none bg-transparent border border-transparent hover:border-border focus:border-primary focus:bg-white rounded-l transition-colors"
-        />
+        </div>
         <button
           type="button"
-          onClick={() =>
-            onDiscountChange({
-              ...line.discount,
-              mode: line.discount.mode === "amount" ? "percent" : "amount",
-            })
-          }
-          className={cn(
-            "h-6 w-5 flex items-center justify-center text-[9px] font-bold border rounded-r transition-colors shrink-0",
-            line.discount.mode === "percent"
-              ? "bg-primary-fixed text-primary border-primary-fixed"
-              : "bg-surface-container-low text-muted-foreground border-border hover:bg-muted"
-          )}
+          onClick={onRemove}
+          className="shrink-0 -mt-0.5 p-0.5 rounded text-muted-foreground hover:text-status-error hover:bg-status-error/10 opacity-0 group-hover:opacity-100 transition-all"
+          title="Xoá"
         >
-          {line.discount.mode === "percent" ? "%" : "₫"}
+          <Icon name="close" size={13} />
         </button>
       </div>
 
-      {/* Line total */}
-      <div className="text-right">
-        <span className="text-[11px] font-bold text-foreground tabular-nums">
-          {formatCurrency(lineTotal)}
+      {/* ── Line 2: qty stepper · × · price · −GG · = total ── */}
+      <div className="flex items-center gap-1.5 px-2.5 pb-1.5 pl-[26px] mt-1">
+        {/* Qty stepper +/− */}
+        <div className="inline-flex items-center bg-surface-container-low rounded h-6 border border-border/40 overflow-hidden">
+          <button
+            type="button"
+            onClick={() => onQtyChange(Math.max(1, line.quantity - 1))}
+            className="w-5 h-6 flex items-center justify-center text-muted-foreground hover:text-foreground hover:bg-muted active:bg-muted/80 transition-colors"
+          >
+            <Icon name="remove" size={11} />
+          </button>
+          <input
+            type="number"
+            min={1}
+            value={line.quantity}
+            onChange={(e) => onQtyChange(parseInt(e.target.value) || 1)}
+            data-allow-hotkeys="true"
+            className="w-7 h-6 text-center text-[11px] font-semibold tabular-nums outline-none bg-transparent"
+          />
+          <button
+            type="button"
+            onClick={() => onQtyChange(line.quantity + 1)}
+            className="w-5 h-6 flex items-center justify-center text-muted-foreground hover:text-foreground hover:bg-muted active:bg-muted/80 transition-colors"
+          >
+            <Icon name="add" size={11} />
+          </button>
+        </div>
+
+        <span className="text-[10px] text-muted-foreground/60 shrink-0">×</span>
+
+        {/* Price (click to edit) */}
+        {editingPrice ? (
+          <input
+            type="text"
+            inputMode="decimal"
+            autoFocus
+            defaultValue={String(line.unitPrice)}
+            onBlur={(e) => {
+              const n = parseNumberInput(e.target.value) ?? 0;
+              onPriceChange(Math.max(0, n));
+              setEditingPrice(false);
+            }}
+            onKeyDown={(e) => {
+              if (e.key === "Enter") (e.target as HTMLInputElement).blur();
+              if (e.key === "Escape") setEditingPrice(false);
+            }}
+            data-allow-hotkeys="true"
+            className="w-20 h-6 px-1 text-right text-[11px] font-medium tabular-nums outline-none border border-primary rounded bg-white"
+          />
+        ) : (
+          <button
+            type="button"
+            onClick={() => setEditingPrice(true)}
+            className="text-[11px] tabular-nums font-medium hover:text-primary hover:underline decoration-dotted underline-offset-2 transition-colors"
+            title="Bấm để sửa đơn giá"
+          >
+            {formatNumber(line.unitPrice)}
+          </button>
+        )}
+
+        {/* Discount badge — hiện inline khi > 0, click để sửa */}
+        {editingDiscount ? (
+          <div className="inline-flex items-stretch h-6 rounded border border-primary overflow-hidden bg-white">
+            <input
+              type="text"
+              inputMode="decimal"
+              autoFocus
+              defaultValue={line.discount.value > 0 ? String(line.discount.value) : ""}
+              onBlur={(e) => {
+                const n = parseNumberInput(e.target.value) ?? 0;
+                onDiscountChange({ ...line.discount, value: Math.max(0, n) });
+                setEditingDiscount(false);
+              }}
+              onKeyDown={(e) => {
+                if (e.key === "Enter") (e.target as HTMLInputElement).blur();
+                if (e.key === "Escape") setEditingDiscount(false);
+              }}
+              data-allow-hotkeys="true"
+              placeholder="0"
+              className="w-14 px-1 text-right text-[10px] tabular-nums outline-none"
+            />
+            <button
+              type="button"
+              onMouseDown={(e) => e.preventDefault()} // tránh blur input
+              onClick={() =>
+                onDiscountChange({
+                  ...line.discount,
+                  mode: line.discount.mode === "amount" ? "percent" : "amount",
+                })
+              }
+              className="px-1.5 flex items-center justify-center text-[10px] border-l border-primary/50 font-bold bg-primary-fixed text-primary"
+            >
+              {line.discount.mode === "percent" ? "%" : "đ"}
+            </button>
+          </div>
+        ) : line.discount.value > 0 ? (
+          <button
+            type="button"
+            onClick={() => setEditingDiscount(true)}
+            className="text-[10px] font-semibold tabular-nums text-status-warning bg-status-warning/10 hover:bg-status-warning/20 px-1.5 py-0.5 rounded transition-colors"
+            title="Bấm để sửa giảm giá"
+          >
+            −
+            {line.discount.mode === "percent"
+              ? `${formatNumber(line.discount.value)}%`
+              : `${formatNumber(line.discount.value)}đ`}
+          </button>
+        ) : (
+          <button
+            type="button"
+            onClick={() => setEditingDiscount(true)}
+            className="text-[10px] text-muted-foreground/60 hover:text-primary px-1 transition-colors"
+            title="Thêm giảm giá dòng"
+          >
+            +GG
+          </button>
+        )}
+
+        {/* Total — pushed right */}
+        <span className="ml-auto text-[12.5px] font-bold tabular-nums text-primary">
+          {formatNumber(lineTotal)}
         </span>
       </div>
-
-      {/* Delete */}
-      <button
-        type="button"
-        onClick={onRemove}
-        className="p-0.5 rounded text-gray-300 hover:text-status-error hover:bg-status-error/10 opacity-0 group-hover:opacity-100 transition-all justify-self-center"
-        title="Xóa"
-      >
-        <Icon name="close" size={12} />
-      </button>
     </div>
   );
 }

@@ -110,10 +110,11 @@ export function ProductGrid({ searchQuery, onAddProduct }: ProductGridProps) {
       {/* ── Desktop+: vertical sidebar trái — list full-width tap target lớn,
               count align right, active state primary nền + border-l-4. Pattern
               Square POS / KiotViet quen thuộc với cashier.
-              Adaptive width: hẹp ở laptop (120-140px), to ở desktop (160px+). ── */}
+              Adaptive width: hơi rộng hơn để tên "Rang xay đóng gói" hiện đủ
+              hoặc wrap 2 dòng (CEO 04/05 báo "Rang xay đó..." truncate). ── */}
       <aside
         className="hidden md:flex flex-col border-r bg-white shrink-0 overflow-y-auto"
-        style={{ width: "clamp(120px, 9vw, 160px)" }}
+        style={{ width: "clamp(132px, 10vw, 180px)" }}
       >
         <div className="px-2.5 py-2 text-[10px] font-semibold text-muted-foreground uppercase tracking-wider border-b sticky top-0 bg-white z-10">
           Danh mục
@@ -174,8 +175,9 @@ export function ProductGrid({ searchQuery, onAddProduct }: ProductGridProps) {
 }
 
 // ── Vertical sidebar row (desktop+) ──
-// Full-width clickable, label trái + count phải, active: nền primary + border-l-4.
-// Height 36px → tap thoải mái với chuột desktop, đủ lớn cho tablet.
+// CEO 04/05: tên "Rang xay đóng gói" trước truncate "Rang xay đó..." → cho
+// phép wrap 2 dòng với line-clamp-2, text-xs (12px) thay text-sm để vừa hơn.
+// Tap target vẫn ≥40px (tablet OK) qua min-h-[40px] + leading-tight.
 function CategoryRow({
   label,
   count,
@@ -192,17 +194,18 @@ function CategoryRow({
       type="button"
       onClick={onClick}
       className={cn(
-        "group flex items-center justify-between gap-2 px-3 py-2 text-sm text-left transition-colors border-l-4 shrink-0",
+        "group flex items-center justify-between gap-1.5 px-2.5 py-1.5 min-h-[40px] text-xs text-left transition-colors border-l-4 shrink-0",
         active
           ? "bg-primary-fixed text-primary font-semibold border-l-primary"
           : "border-l-transparent text-foreground/80 hover:bg-surface-container-low hover:text-foreground",
       )}
+      title={label}
     >
-      <span className="truncate flex-1">{label}</span>
+      <span className="line-clamp-2 flex-1 leading-tight">{label}</span>
       {typeof count === "number" && (
         <span
           className={cn(
-            "shrink-0 text-[11px] tabular-nums px-1.5 py-0.5 rounded",
+            "shrink-0 text-[10.5px] tabular-nums px-1 py-0.5 rounded",
             active
               ? "bg-primary/15 text-primary"
               : "text-muted-foreground group-hover:text-foreground/70",
@@ -271,6 +274,7 @@ function ProductTile({
     <button
       type="button"
       onClick={onClick}
+      title={product.name}
       className={cn(
         "flex items-center gap-2 bg-white rounded-lg border border-border p-2 text-left transition-all press-scale-sm min-h-[60px]",
         "hover:border-primary hover:shadow-sm",
