@@ -2847,25 +2847,30 @@ function CartItem({
             </button>
           </div>
         ) : line.discount.value > 0 ? (
+          // Có GG → solid warning soft + icon discount + amount.
+          // Mắt scan thấy ngay row nào đang giảm. Click → popover edit.
           <button
             type="button"
             onClick={() => setEditingDiscount(true)}
-            className="text-[10px] font-semibold tabular-nums text-status-warning bg-status-warning/10 hover:bg-status-warning/20 px-1.5 py-0.5 rounded transition-colors"
-            title="Bấm để sửa giảm giá"
+            className="inline-flex items-center gap-0.5 text-[10.5px] font-semibold tabular-nums text-status-warning bg-status-warning/15 hover:bg-status-warning/25 border border-status-warning/30 px-1.5 py-0.5 rounded transition-colors"
+            title="Bấm để sửa giảm giá dòng"
           >
-            −
+            <Icon name="discount" size={11} />−
             {line.discount.mode === "percent"
               ? `${formatNumber(line.discount.value)}%`
               : `${formatNumber(line.discount.value)}đ`}
           </button>
         ) : (
+          // Chưa có GG → chip dashed primary/40 + icon + "Giảm".
+          // Visible nhưng không nhồi nhét — cashier thấy có thể thêm.
           <button
             type="button"
             onClick={() => setEditingDiscount(true)}
-            className="text-[10px] text-muted-foreground/60 hover:text-primary px-1 transition-colors"
-            title="Thêm giảm giá dòng"
+            className="inline-flex items-center gap-0.5 text-[10.5px] font-medium text-primary/70 hover:text-primary border border-dashed border-primary/40 hover:border-primary hover:bg-primary-fixed/40 px-1.5 py-0.5 rounded transition-all"
+            title="Thêm giảm giá cho dòng này"
           >
-            +GG
+            <Icon name="discount" size={11} />
+            Giảm
           </button>
         )}
 
