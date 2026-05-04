@@ -2646,7 +2646,7 @@ function PosPageInner() {
               <div className="flex justify-between text-xs text-muted-foreground">
                 <span>Khách hàng:</span>
                 <span className="font-medium text-foreground">
-                  {state.customer?.name ?? "Khách lẻ vãng lai (sẽ tự link)"}
+                  {state.customer?.name ?? "Khách lẻ (sẽ tự link)"}
                 </span>
               </div>
               <div className="flex justify-between text-xs text-muted-foreground">
@@ -2692,9 +2692,9 @@ function PosPageInner() {
               }
               title={
                 !state.customer
-                  ? "Cần chọn khách hàng thật để ghi credit (không phải vãng lai)"
+                  ? "Cần chọn khách hàng cụ thể để ghi credit"
                   : state.customer.code === "KL-VL"
-                    ? "Không ghi credit cho khách vãng lai"
+                    ? "Không ghi credit cho khách lẻ"
                     : "Ghi credit vào tài khoản khách, lần sau cấn trừ"
               }
               onClick={() => {

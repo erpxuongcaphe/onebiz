@@ -237,18 +237,22 @@ export async function createCustomer(customer: Partial<Customer>): Promise<Custo
 }
 
 /**
- * Lấy hoặc tạo system customer "Khách lẻ vãng lai" cho tenant hiện tại.
+ * Lấy hoặc tạo system customer "Khách lẻ" (walk-in) cho tenant hiện tại.
  *
  * Use case: POS Retail (CEO 04/05/2026) bỏ nút "Ghi nợ" riêng — khi cashier
  * điền "Khách đưa" nhỏ hơn tổng đơn (hoặc rỗng), hệ thống tự ghi công nợ
- * vào customer. Nếu cashier không chọn khách thật → fallback walk-in
- * customer chung của chuỗi để track gross debt từ khách vãng lai.
+ * vào customer. Nếu cashier không chọn khách cụ thể → fallback system
+ * customer "Khách lẻ" để track gross debt.
  *
- * Code chuẩn: "KL-VL" (Khách Lẻ Vãng Lai). Lazy create — chỉ tạo lần đầu
- * có invoice ghi nợ với khách lẻ; các lần sau dùng lại.
+ * Code chuẩn (internal): "KL-VL" — chỉ dùng làm DB key tránh trùng với
+ * khách thật. Tên hiển thị: "Khách lẻ" (CEO chốt 04/05 bỏ chữ "vãng lai").
+ * Lazy create — chỉ tạo lần đầu có invoice walk-in; các lần sau dùng lại.
  *
  * NOTE: Một tenant chỉ có 1 walk-in customer. Khoá theo (tenant_id, code)
  * — UNIQUE constraint của customers table đảm bảo không tạo trùng.
+ *
+ * Backward compat: nếu DB đã có customer code KL-VL với name cũ
+ * "Khách lẻ vãng lai" → upsert tên mới khi gọi lần kế.
  */
 export async function getOrCreateWalkInCustomer(): Promise<Customer> {
   const supabase = getClient();
@@ -262,7 +266,18 @@ export async function getOrCreateWalkInCustomer(): Promise<Customer> {
     .eq("code", "KL-VL")
     .maybeSingle();
 
-  if (existing) return mapCustomer(existing);
+  if (existing) {
+    // Migration mềm: nếu name cũ "Khách lẻ vãng lai" → đổi thành "Khách lẻ"
+    if (existing.name === "Khách lẻ vãng lai") {
+      await supabase
+        .from("customers")
+        .update({ name: "Khách lẻ" } as CustomerUpdate)
+        .eq("tenant_id", tenantId)
+        .eq("id", existing.id);
+      existing.name = "Khách lẻ";
+    }
+    return mapCustomer(existing);
+  }
 
   // Chưa có → tạo
   const { data: created, error } = await supabase
@@ -270,7 +285,7 @@ export async function getOrCreateWalkInCustomer(): Promise<Customer> {
     .insert({
       tenant_id: tenantId,
       code: "KL-VL",
-      name: "Khách lẻ vãng lai",
+      name: "Khách lẻ",
       phone: null,
       email: null,
       address: null,
