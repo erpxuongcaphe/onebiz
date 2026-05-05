@@ -66,13 +66,20 @@ export function SummaryCard({
   const isDanger = danger || tone === "error";
   const isWarning = tone === "warning";
 
+  // Sprint VISUAL-2 P1 (CEO 04/05/2026): KPI cards có visual weight + accent
+  // - Default tone: border-l-2 primary cho subtle accent (CEO mở dashboard
+  //   có visual cue thay vì 4 cards trắng phẳng)
+  // - Value text: text-lg → text-xl font-bold (20px / 700) — số là protagonist
+  // - Background: bg-white (cleaner) thay bg-background neutral
   return (
     <div
       className={cn(
-        "border rounded-lg p-3 bg-background",
-        isHighlight && "border-primary/30 bg-primary/5",
-        isDanger && "border-destructive/30 bg-destructive/5",
-        isWarning && "border-status-warning/30 bg-status-warning/5",
+        "border rounded-lg p-3 bg-white border-l-2 transition-colors",
+        // Default tone: subtle primary accent border-l
+        !isHighlight && !isDanger && !isWarning && "border-border border-l-primary/40",
+        isHighlight && "border-primary/30 border-l-primary bg-primary/5",
+        isDanger && "border-destructive/30 border-l-destructive bg-destructive/5",
+        isWarning && "border-status-warning/30 border-l-status-warning bg-status-warning/5",
         className,
       )}
     >
@@ -80,17 +87,18 @@ export function SummaryCard({
         {iconNode}
         <span className="truncate">{label}</span>
         {typeof count === "number" && (
-          <span className="ml-auto text-[10px] font-medium text-muted-foreground tabular-nums">
+          <span className="ml-auto text-xs font-medium text-muted-foreground tabular-nums">
             {formatNumber(count)}
           </span>
         )}
       </div>
       <div
         className={cn(
-          "text-lg font-semibold",
+          "text-xl font-bold tabular-nums",
           isHighlight && "text-primary",
           isDanger && "text-destructive",
           isWarning && "text-status-warning",
+          !isHighlight && !isDanger && !isWarning && "text-foreground",
           valueClassName,
         )}
       >

@@ -31,8 +31,17 @@ interface ExportHandlers {
   pdf?: () => void;
 }
 
+interface BreadcrumbItem {
+  label: string;
+  href?: string;
+}
+
 interface PageHeaderProps {
   title: string;
+  /** Subtitle displayed below title (vd: "Quản lý hoá đơn · 245 đơn") */
+  subtitle?: string;
+  /** Breadcrumb items (vd: [{label: "Hàng hoá"}, {label: "Sản phẩm"}]) */
+  breadcrumbs?: BreadcrumbItem[];
   /** Optional tabs rendered next to the title (e.g. NVL/SKU) */
   tabs?: ReactNode;
   searchPlaceholder?: string;
@@ -176,6 +185,8 @@ function IconButton({
 
 export function PageHeader({
   title,
+  subtitle,
+  breadcrumbs,
   tabs,
   searchPlaceholder = "Tìm kiếm...",
   searchValue,
@@ -200,9 +211,34 @@ export function PageHeader({
     // title font-medium nhẹ nhàng hơn font-semibold.
     <div className={cn("bg-surface-container-lowest border-b", className)}>
       <div className="p-4 space-y-3">
+        {/* Breadcrumbs (Sprint VISUAL-2: trợ giúp navigation cho user multi-level) */}
+        {breadcrumbs && breadcrumbs.length > 0 && (
+          <nav aria-label="Breadcrumb" className="flex items-center gap-1 text-xs text-muted-foreground">
+            {breadcrumbs.map((item, i) => (
+              <span key={i} className="flex items-center gap-1">
+                {i > 0 && <Icon name="chevron_right" size={14} className="text-muted-foreground/60" />}
+                {item.href ? (
+                  <a href={item.href} className="hover:text-primary transition-colors">
+                    {item.label}
+                  </a>
+                ) : (
+                  <span>{item.label}</span>
+                )}
+              </span>
+            ))}
+          </nav>
+        )}
+
         {/* Title row: Title (left) + Search (center) + Actions (right) */}
         <div className="flex items-center gap-3">
-          <h1 className="text-lg font-medium shrink-0 text-on-surface">{title}</h1>
+          {/* Sprint VISUAL-2 P1: title text-2xl font-bold (24px/700) thay text-lg font-medium (18px/500).
+              Page title cần weight rõ → user/CEO scan biết section đang ở đâu. */}
+          <div className="shrink-0">
+            <h1 className="text-2xl font-bold text-on-surface leading-tight">{title}</h1>
+            {subtitle && (
+              <p className="text-xs text-muted-foreground mt-0.5">{subtitle}</p>
+            )}
+          </div>
 
           {tabs && <div className="shrink-0">{tabs}</div>}
 
