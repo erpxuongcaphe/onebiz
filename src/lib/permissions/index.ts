@@ -3,3 +3,6 @@ export type { PermissionCode, PermissionItem, PermissionGroup, RoleTemplate } fr
 export { usePermissions } from "./use-permission";
 export type { PermissionsAPI } from "./use-permission";
 export { Can } from "./permission-gate";
+// Sprint UX-1 Stage 6: row action permissions hook
+export { useTxRowPermissions } from "./use-tx-row-permissions";
+export type { TxRowPermissions } from "./use-tx-row-permissions";
