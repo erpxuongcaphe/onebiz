@@ -30,6 +30,8 @@ import type { Customer, Supplier } from "@/lib/types";
 import type { DebtAgingReport, DebtorDetail } from "@/lib/services/supabase/debt";
 import { Icon } from "@/components/ui/icon";
 import { ImportExcelDialog } from "@/components/shared/dialogs/import-excel-dialog";
+import { AuditLogDialog } from "@/components/shared/audit-log-dialog";
+import { buildTransactionRowActions } from "@/components/shared/transaction-row-actions";
 import { downloadTemplate } from "@/lib/excel";
 import { debtOpeningExcelSchema } from "@/lib/excel/schemas";
 import { bulkImportDebtOpening } from "@/lib/services/supabase/excel-import";
@@ -76,6 +78,13 @@ export default function CongNoPage() {
 
   // Import opening debt
   const [importOpen, setImportOpen] = useState(false);
+
+  // Sprint UX-1 Stage 4: Audit log shortcut (master KH/NCC)
+  const [auditDialogTarget, setAuditDialogTarget] = useState<{
+    type: "customer" | "supplier";
+    id: string;
+    code: string;
+  } | null>(null);
 
   const fetchData = useCallback(async () => {
     setLoading(true);
@@ -437,6 +446,19 @@ export default function CongNoPage() {
             onPageChange={() => {}}
             onPageSizeChange={() => {}}
             getRowId={(r) => r.id}
+            rowActions={(row) =>
+              buildTransactionRowActions({
+                row,
+                // Master KH — gắn kind invoice (gần nhất, vì debt từ invoice).
+                kind: "invoice",
+                onAuditLog: () =>
+                  setAuditDialogTarget({
+                    type: "customer",
+                    id: row.id,
+                    code: row.code,
+                  }),
+              })
+            }
           />
         </TabsContent>
 
@@ -452,6 +474,18 @@ export default function CongNoPage() {
             onPageChange={() => {}}
             onPageSizeChange={() => {}}
             getRowId={(r) => r.id}
+            rowActions={(row) =>
+              buildTransactionRowActions({
+                row,
+                kind: "purchase_order",
+                onAuditLog: () =>
+                  setAuditDialogTarget({
+                    type: "supplier",
+                    id: row.id,
+                    code: row.code,
+                  }),
+              })
+            }
           />
         </TabsContent>
 
@@ -588,6 +622,15 @@ export default function CongNoPage() {
           });
         }}
       />
+
+      {auditDialogTarget && (
+        <AuditLogDialog
+          entityType={auditDialogTarget.type}
+          entityId={auditDialogTarget.id}
+          entityCode={auditDialogTarget.code}
+          onClose={() => setAuditDialogTarget(null)}
+        />
+      )}
     </div>
   );
 }

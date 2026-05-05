@@ -39,6 +39,8 @@ import {
 } from "@/lib/services";
 import { getAuditLogsByEntity, type AuditLogEntry } from "@/lib/services/supabase/audit";
 import { CreateShippingOrderDialog } from "@/components/shared/dialogs";
+import { AuditLogDialog } from "@/components/shared/audit-log-dialog";
+import { buildTransactionRowActions } from "@/components/shared/transaction-row-actions";
 import type { ShippingOrder, ShippingStatus } from "@/lib/types";
 import { useBranchFilter, useToast } from "@/lib/contexts";
 import { Icon } from "@/components/ui/icon";
@@ -343,6 +345,7 @@ function ShippingOrderDetail({
 /*  Page                                                               */
 /* ------------------------------------------------------------------ */
 export default function VanDonPage() {
+  const { toast } = useToast();
   const { activeBranchId } = useBranchFilter();
   const [data, setData] = useState<ShippingOrder[]>([]);
   const [total, setTotal] = useState(0);
@@ -355,6 +358,10 @@ export default function VanDonPage() {
   const [partnerOptions, setPartnerOptions] = useState<
     Array<{ value: string; label: string }>
   >([{ value: "all", label: "Tất cả" }]);
+  // Sprint UX-1 Stage 4: Audit log shortcut + cancel target
+  const [auditDialogTarget, setAuditDialogTarget] = useState<ShippingOrder | null>(null);
+  const [cancellingItem, setCancellingItem] = useState<ShippingOrder | null>(null);
+  const [cancelLoading, setCancelLoading] = useState(false);
 
   // Stars
   const { starred, toggle: toggleStar } = useStarredSet();
@@ -613,6 +620,70 @@ export default function VanDonPage() {
           />
         )}
         getRowId={(row) => row.id}
+        rowActions={(row) =>
+          buildTransactionRowActions({
+            row,
+            kind: "shipping",
+            // Xem chi tiết — toggle inline detail
+            onView: () => {
+              const idx = data.findIndex((d) => d.id === row.id);
+              setExpandedRow(expandedRow === idx ? null : idx);
+            },
+            // Audit log shortcut
+            onAuditLog: () => setAuditDialogTarget(row),
+            // Hủy — chỉ trạng thái non-terminal
+            onCancel:
+              row.status !== "delivered" &&
+              row.status !== "returned" &&
+              row.status !== "cancelled"
+                ? () => setCancellingItem(row)
+                : undefined,
+          })
+        }
+      />
+
+      {auditDialogTarget && (
+        <AuditLogDialog
+          entityType="shipping_order"
+          entityId={auditDialogTarget.id}
+          entityCode={auditDialogTarget.code}
+          onClose={() => setAuditDialogTarget(null)}
+        />
+      )}
+
+      <ConfirmDialog
+        open={!!cancellingItem}
+        onOpenChange={(open) => {
+          if (!open) setCancellingItem(null);
+        }}
+        title="Hủy vận đơn"
+        description={`Bạn có chắc muốn hủy vận đơn ${cancellingItem?.code ?? ""}? Thao tác này không thể hoàn tác.`}
+        confirmLabel="Hủy vận đơn"
+        cancelLabel="Đóng"
+        variant="destructive"
+        loading={cancelLoading}
+        onConfirm={async () => {
+          if (!cancellingItem) return;
+          setCancelLoading(true);
+          try {
+            await updateShippingOrderStatus(cancellingItem.id, "cancelled");
+            toast({
+              title: "Đã hủy vận đơn",
+              description: `Vận đơn ${cancellingItem.code} đã được hủy thành công`,
+              variant: "success",
+            });
+            await fetchData();
+          } catch (err) {
+            toast({
+              title: "Không thể hủy vận đơn",
+              description: err instanceof Error ? err.message : "Vui lòng thử lại",
+              variant: "error",
+            });
+          } finally {
+            setCancelLoading(false);
+            setCancellingItem(null);
+          }
+        }}
       />
     </ListPageLayout>
   );

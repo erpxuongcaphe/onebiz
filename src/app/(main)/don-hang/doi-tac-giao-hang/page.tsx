@@ -26,6 +26,8 @@ import { formatCurrency, formatDate, formatNumber } from "@/lib/format";
 import { exportToExcel, exportToCsv } from "@/lib/utils/export";
 import { getDeliveryPartners, deactivateDeliveryPartner } from "@/lib/services";
 import { CreateDeliveryPartnerDialog, ConfirmDialog } from "@/components/shared/dialogs";
+import { AuditLogDialog } from "@/components/shared/audit-log-dialog";
+import { buildTransactionRowActions } from "@/components/shared/transaction-row-actions";
 import { useToast } from "@/lib/contexts";
 import type { DeliveryPartner } from "@/lib/types";
 import { Icon } from "@/components/ui/icon";
@@ -183,6 +185,8 @@ export default function DoiTacGiaoHangPage() {
   const [editingPartner, setEditingPartner] = useState<DeliveryPartner | null>(null);
   const [deactivatingPartner, setDeactivatingPartner] = useState<DeliveryPartner | null>(null);
   const [deactivateLoading, setDeactivateLoading] = useState(false);
+  // Sprint UX-1 Stage 4: Audit log shortcut
+  const [auditDialogTarget, setAuditDialogTarget] = useState<DeliveryPartner | null>(null);
 
   // Stars
   const { starred, toggle: toggleStar } = useStarredSet();
@@ -457,24 +461,42 @@ export default function DoiTacGiaoHangPage() {
           />
         )}
         getRowId={(row) => row.id}
-        rowActions={(row) => [
-          {
-            label: "Sửa",
-            icon: <Icon name="edit" size={16} />,
-            onClick: () => {
+        rowActions={(row) =>
+          buildTransactionRowActions({
+            row,
+            // Master data đối tác giao hàng — vẫn dùng kind shipping (gần nhất);
+            // các action chỉ Sửa + Audit log + Ngừng hợp tác (extraActions vì
+            // không phải "Hủy" giao dịch).
+            kind: "shipping",
+            onEdit: () => {
               setEditingPartner(row);
               setCreateOpen(true);
             },
-          },
-          {
-            label: "Ngừng hoạt động",
-            icon: <Icon name="block" size={16} />,
-            onClick: () => setDeactivatingPartner(row),
-            variant: "destructive",
-            separator: true,
-          },
-        ]}
+            onAuditLog: () => setAuditDialogTarget(row),
+            extraActions:
+              row.status === "active"
+                ? [
+                    {
+                      label: "Ngừng hoạt động",
+                      icon: <Icon name="block" size={16} />,
+                      onClick: () => setDeactivatingPartner(row),
+                      variant: "destructive",
+                      separator: true,
+                    },
+                  ]
+                : [],
+          })
+        }
       />
+
+      {auditDialogTarget && (
+        <AuditLogDialog
+          entityType="delivery_partner"
+          entityId={auditDialogTarget.id}
+          entityCode={auditDialogTarget.name}
+          onClose={() => setAuditDialogTarget(null)}
+        />
+      )}
 
       <ConfirmDialog
         open={!!deactivatingPartner}

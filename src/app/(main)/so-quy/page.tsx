@@ -25,6 +25,8 @@ import {
   AuditHistoryTab,
 } from "@/components/shared/inline-detail-panel";
 import { CreateCashTransactionDialog, ConfirmDialog } from "@/components/shared/dialogs";
+import { AuditLogDialog } from "@/components/shared/audit-log-dialog";
+import { buildTransactionRowActions } from "@/components/shared/transaction-row-actions";
 import { ImportExcelDialog } from "@/components/shared/dialogs/import-excel-dialog";
 import { downloadTemplate } from "@/lib/excel";
 import { cashTransactionExcelSchema } from "@/lib/excel/schemas";
@@ -256,9 +258,14 @@ export default function SoQuyPage() {
   );
   const [importOpen, setImportOpen] = useState(false);
 
-  // Delete
+  // Cancel (was "Delete" — Stage 5 anomaly fix: phiếu thu/chi đã chốt mà xoá
+  // cứng nguy hiểm cho kế toán/đối soát. UX align với cancel flow.
+  // TODO Stage 5b: refactor service deleteCashTransaction → cancelCashTransaction
+  // (set status='cancelled' + audit log thay vì xoá hard).
   const [deletingEntry, setDeletingEntry] = useState<CashBookEntry | null>(null);
   const [deleteLoading, setDeleteLoading] = useState(false);
+  // Sprint UX-1 Stage 4: Audit log shortcut
+  const [auditDialogTarget, setAuditDialogTarget] = useState<CashBookEntry | null>(null);
 
   // Filters
   const [fundType, setFundType] = useState("all");
@@ -580,28 +587,21 @@ export default function SoQuyPage() {
               onDelete={() => setDeletingEntry(entry)}
             />
           )}
-          rowActions={(row) => [
-            {
-              label: "Xem chi tiết",
-              icon: <Icon name="visibility" size={16} />,
-              onClick: () => {
+          rowActions={(row) =>
+            buildTransactionRowActions({
+              row,
+              kind: "cash_transaction",
+              onView: () => {
                 const idx = data.findIndex((d) => d.id === row.id);
                 setExpandedRow(expandedRow === idx ? null : idx);
               },
-            },
-            {
-              label: "In phiếu",
-              icon: <Icon name="print" size={16} />,
-              onClick: () => printDocument(buildCashTransactionPrintData(row)),
-            },
-            {
-              label: "Xóa",
-              icon: <Icon name="delete" size={16} />,
-              onClick: () => setDeletingEntry(row),
-              variant: "destructive",
-              separator: true,
-            },
-          ]}
+              onPrint: () => printDocument(buildCashTransactionPrintData(row)),
+              onAuditLog: () => setAuditDialogTarget(row),
+              // Stage 5b anomaly fix: đổi "Xóa" → "Hủy" (phiếu thu/chi đã chốt
+              // không xóa cứng). TODO refactor service deleteCashTransaction.
+              onCancel: () => setDeletingEntry(row),
+            })
+          }
         />
       </ListPageLayout>
 
@@ -615,26 +615,38 @@ export default function SoQuyPage() {
       <ConfirmDialog
         open={!!deletingEntry}
         onOpenChange={(open) => { if (!open) setDeletingEntry(null); }}
-        title="Xóa phiếu thu/chi"
-        description={`Xóa phiếu ${deletingEntry?.code}?`}
-        confirmLabel="Xóa"
+        title="Hủy phiếu thu/chi"
+        description={`Bạn có chắc muốn hủy phiếu ${deletingEntry?.code}? Thao tác này không thể hoàn tác.`}
+        confirmLabel="Hủy phiếu"
+        cancelLabel="Đóng"
         variant="destructive"
         loading={deleteLoading}
         onConfirm={async () => {
           if (!deletingEntry) return;
           setDeleteLoading(true);
           try {
+            // TODO Stage 5b: thay deleteCashTransaction bằng cancelCashTransaction
+            // (set status='cancelled' + audit log thay vì xoá hard).
             await deleteCashTransaction(deletingEntry.id);
-            toast({ title: "Đã xóa phiếu", description: deletingEntry.code, variant: "success" });
+            toast({ title: "Đã hủy phiếu", description: deletingEntry.code, variant: "success" });
             setDeletingEntry(null);
             fetchData();
           } catch (err) {
-            toast({ title: "Lỗi xóa phiếu", description: err instanceof Error ? err.message : "Vui lòng thử lại", variant: "error" });
+            toast({ title: "Lỗi hủy phiếu", description: err instanceof Error ? err.message : "Vui lòng thử lại", variant: "error" });
           } finally {
             setDeleteLoading(false);
           }
         }}
       />
+
+      {auditDialogTarget && (
+        <AuditLogDialog
+          entityType="cash_transaction"
+          entityId={auditDialogTarget.id}
+          entityCode={auditDialogTarget.code}
+          onClose={() => setAuditDialogTarget(null)}
+        />
+      )}
 
       <ImportExcelDialog
         open={importOpen}

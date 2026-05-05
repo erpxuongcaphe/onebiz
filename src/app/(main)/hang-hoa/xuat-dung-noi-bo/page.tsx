@@ -28,6 +28,8 @@ import { exportToExcel, exportToCsv } from "@/lib/utils/export";
 import { getInternalExports, getInternalExportStatuses, cancelInternalExport } from "@/lib/services";
 import type { InternalExport } from "@/lib/types";
 import { CreateInternalExportDialog, ConfirmDialog } from "@/components/shared/dialogs";
+import { AuditLogDialog } from "@/components/shared/audit-log-dialog";
+import { buildTransactionRowActions } from "@/components/shared/transaction-row-actions";
 import { useToast, useBranchFilter } from "@/lib/contexts";
 import { printDocument } from "@/lib/print-document";
 import { buildInternalExportPrintData } from "@/lib/print-templates";
@@ -158,6 +160,8 @@ export default function XuatDungNoiBoPage() {
   const [createOpen, setCreateOpen] = useState(false);
   const [cancellingItem, setCancellingItem] = useState<InternalExport | null>(null);
   const [cancelLoading, setCancelLoading] = useState(false);
+  // Sprint UX-1 Stage 4: Audit log shortcut
+  const [auditDialogTarget, setAuditDialogTarget] = useState<InternalExport | null>(null);
 
   // Inline detail
   const [expandedRow, setExpandedRow] = useState<number | null>(null);
@@ -384,25 +388,28 @@ export default function XuatDungNoiBoPage() {
         onExpandedRowChange={setExpandedRow}
         renderDetail={renderDetail}
         getRowId={(row) => row.id}
-        rowActions={(row) => [
-          {
-            label: "In phiếu",
-            icon: <Icon name="print" size={16} />,
-            onClick: () => printDocument(buildInternalExportPrintData(row)),
-          },
-          ...(row.status === "draft"
-            ? [
-                {
-                  label: "Hủy",
-                  icon: <Icon name="cancel" size={16} />,
-                  onClick: () => setCancellingItem(row),
-                  variant: "destructive" as const,
-                  separator: true,
-                },
-              ]
-            : []),
-        ]}
+        rowActions={(row) =>
+          buildTransactionRowActions({
+            row,
+            kind: "internal_export",
+            onPrint: () => printDocument(buildInternalExportPrintData(row)),
+            onAuditLog: () => setAuditDialogTarget(row),
+            onCancel:
+              row.status === "draft"
+                ? () => setCancellingItem(row)
+                : undefined,
+          })
+        }
       />
+
+      {auditDialogTarget && (
+        <AuditLogDialog
+          entityType="internal_export"
+          entityId={auditDialogTarget.id}
+          entityCode={auditDialogTarget.code}
+          onClose={() => setAuditDialogTarget(null)}
+        />
+      )}
 
       <CreateInternalExportDialog
         open={createOpen}

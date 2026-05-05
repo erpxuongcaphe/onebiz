@@ -20,6 +20,8 @@ import { formatDate, formatNumber } from "@/lib/format";
 import { getAllProductLots } from "@/lib/services";
 import type { ProductLot } from "@/lib/types";
 import { Icon } from "@/components/ui/icon";
+import { AuditLogDialog } from "@/components/shared/audit-log-dialog";
+import { buildTransactionRowActions } from "@/components/shared/transaction-row-actions";
 
 type LotRow = ProductLot & { productName: string; productCode: string };
 
@@ -65,6 +67,8 @@ export default function LoSanXuatPage() {
   const [search, setSearch] = useState("");
   const [statusFilter, setStatusFilter] = useState("all");
   const [sourceFilter, setSourceFilter] = useState("all");
+  // Sprint UX-1 Stage 4: Audit log shortcut (master data lot)
+  const [auditDialogTarget, setAuditDialogTarget] = useState<LotRow | null>(null);
 
   const fetchData = useCallback(async () => {
     setLoading(true);
@@ -320,7 +324,28 @@ export default function LoSanXuatPage() {
         )}
       </div>
 
-      <DataTable columns={columns} data={data} loading={loading} />
+      <DataTable
+        columns={columns}
+        data={data}
+        loading={loading}
+        rowActions={(row) =>
+          buildTransactionRowActions({
+            row,
+            // master data lot — gắn kind production (lots phát sinh từ SX/Mua)
+            kind: "production",
+            onAuditLog: () => setAuditDialogTarget(row),
+          })
+        }
+      />
+
+      {auditDialogTarget && (
+        <AuditLogDialog
+          entityType="product_lot"
+          entityId={auditDialogTarget.id}
+          entityCode={auditDialogTarget.lotNumber}
+          onClose={() => setAuditDialogTarget(null)}
+        />
+      )}
     </ListPageLayout>
   );
 }

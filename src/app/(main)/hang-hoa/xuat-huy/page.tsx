@@ -31,6 +31,8 @@ import { exportToExcel, exportToCsv } from "@/lib/utils/export";
 import { getDisposalExports, getDisposalStatuses, cancelDisposalExport } from "@/lib/services";
 import type { DisposalExport } from "@/lib/types";
 import { CreateDisposalDialog, ConfirmDialog } from "@/components/shared/dialogs";
+import { AuditLogDialog } from "@/components/shared/audit-log-dialog";
+import { buildTransactionRowActions } from "@/components/shared/transaction-row-actions";
 import { Icon } from "@/components/ui/icon";
 
 /* ------------------------------------------------------------------ */
@@ -164,6 +166,8 @@ export default function XuatHuyPage() {
   const [createOpen, setCreateOpen] = useState(false);
   const [cancellingItem, setCancellingItem] = useState<DisposalExport | null>(null);
   const [cancelLoading, setCancelLoading] = useState(false);
+  // Sprint UX-1 Stage 4: Audit log shortcut
+  const [auditDialogTarget, setAuditDialogTarget] = useState<DisposalExport | null>(null);
 
   // Inline detail
   const [expandedRow, setExpandedRow] = useState<number | null>(null);
@@ -404,25 +408,28 @@ export default function XuatHuyPage() {
         onExpandedRowChange={setExpandedRow}
         renderDetail={renderDetail}
         getRowId={(row) => row.id}
-        rowActions={(row) => [
-          {
-            label: "In phiếu",
-            icon: <Icon name="print" size={16} />,
-            onClick: () => printDocument(buildDisposalPrintData(row)),
-          },
-          ...(row.status === "draft"
-            ? [
-                {
-                  label: "Hủy",
-                  icon: <Icon name="cancel" size={16} />,
-                  onClick: () => setCancellingItem(row),
-                  variant: "destructive" as const,
-                  separator: true,
-                },
-              ]
-            : []),
-        ]}
+        rowActions={(row) =>
+          buildTransactionRowActions({
+            row,
+            kind: "disposal",
+            onPrint: () => printDocument(buildDisposalPrintData(row)),
+            onAuditLog: () => setAuditDialogTarget(row),
+            onCancel:
+              row.status === "draft"
+                ? () => setCancellingItem(row)
+                : undefined,
+          })
+        }
       />
+
+      {auditDialogTarget && (
+        <AuditLogDialog
+          entityType="disposal_export"
+          entityId={auditDialogTarget.id}
+          entityCode={auditDialogTarget.code}
+          onClose={() => setAuditDialogTarget(null)}
+        />
+      )}
 
       <CreateDisposalDialog
         open={createOpen}

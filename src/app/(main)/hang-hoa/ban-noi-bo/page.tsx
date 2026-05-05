@@ -30,10 +30,14 @@ import {
   cancelInternalSale,
 } from "@/lib/services";
 import { CreateInternalSaleDialog, ConfirmDialog } from "@/components/shared/dialogs";
+import { AuditLogDialog } from "@/components/shared/audit-log-dialog";
+import { buildTransactionRowActions } from "@/components/shared/transaction-row-actions";
 import { ImportExcelDialog } from "@/components/shared/dialogs/import-excel-dialog";
 import { internalSaleExcelSchema } from "@/lib/excel/schemas";
 import { bulkImportInternalSales } from "@/lib/services/supabase/excel-import";
 import { exportToExcelFromSchema } from "@/lib/excel";
+import { printDocument } from "@/lib/print-document";
+import { buildInternalSalePrintData } from "@/lib/print-templates";
 import { useToast, useBranchFilter } from "@/lib/contexts";
 import { Icon } from "@/components/ui/icon";
 
@@ -278,6 +282,8 @@ export default function InternalSalePage() {
   const [importOpen, setImportOpen] = useState(false);
   const [cancellingItem, setCancellingItem] = useState<InternalSaleRow | null>(null);
   const [cancelLoading, setCancelLoading] = useState(false);
+  // Sprint UX-1 Stage 4: Audit log shortcut + In phiếu (anomaly fix)
+  const [auditDialogTarget, setAuditDialogTarget] = useState<InternalSaleRow | null>(null);
 
   const fetchData = useCallback(async () => {
     setLoading(true);
@@ -527,28 +533,24 @@ export default function InternalSalePage() {
               }
             />
           )}
-          rowActions={(row) => [
-            {
-              label: "Xem chi tiết",
-              icon: <Icon name="visibility" size={16} />,
-              onClick: () => {
+          rowActions={(row) =>
+            buildTransactionRowActions({
+              row,
+              kind: "internal_sale",
+              onView: () => {
                 const idx = data.findIndex((d) => d.id === row.id);
                 setExpandedRow(expandedRow === idx ? null : idx);
                 setSelected(row);
               },
-            },
-            ...(row.status !== "completed" && row.status !== "cancelled"
-              ? [
-                  {
-                    label: "Huỷ đơn",
-                    icon: <Icon name="cancel" size={16} />,
-                    onClick: () => setCancellingItem(row),
-                    variant: "destructive" as const,
-                    separator: true,
-                  },
-                ]
-              : []),
-          ]}
+              // Anomaly fix Stage 5c: thêm In phiếu (trước đây thiếu)
+              onPrint: () => printDocument(buildInternalSalePrintData(row)),
+              onAuditLog: () => setAuditDialogTarget(row),
+              onCancel:
+                row.status !== "completed" && row.status !== "cancelled"
+                  ? () => setCancellingItem(row)
+                  : undefined,
+            })
+          }
         />
       </ListPageLayout>
 
@@ -587,6 +589,15 @@ export default function InternalSalePage() {
           });
         }}
       />
+
+      {auditDialogTarget && (
+        <AuditLogDialog
+          entityType="internal_sale"
+          entityId={auditDialogTarget.id}
+          entityCode={auditDialogTarget.code}
+          onClose={() => setAuditDialogTarget(null)}
+        />
+      )}
     </>
   );
 }

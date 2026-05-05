@@ -52,6 +52,42 @@ export function buildDisposalPrintData(row: DisposalExport): DocumentPrintData {
   };
 }
 
+/**
+ * Print template cho phiếu Bán nội bộ — Sprint UX-1 Stage 4 (CEO 04/05/2026).
+ * Anomaly fix: trước đây ban-noi-bo thiếu "In phiếu" trong row actions.
+ */
+export function buildInternalSalePrintData(row: {
+  code: string;
+  createdAt: string;
+  fromBranchName?: string;
+  toBranchName?: string;
+  subtotal: number;
+  taxAmount: number;
+  total: number;
+  note?: string;
+  createdBy?: string;
+  createdByName?: string;
+}): DocumentPrintData {
+  const user = formatUser(row.createdByName, row.createdBy);
+  return {
+    documentType: "PHIẾU BÁN NỘI BỘ",
+    documentCode: row.code,
+    date: row.createdAt,
+    headerFields: [
+      { label: "Bên bán", value: row.fromBranchName || "—" },
+      { label: "Bên mua", value: row.toBranchName || "—" },
+      { label: "Người tạo", value: user },
+    ],
+    summaryRows: [
+      { label: "Tạm tính", value: formatCurrency(row.subtotal) },
+      { label: "Thuế VAT", value: formatCurrency(row.taxAmount) },
+      { label: "Tổng cộng", value: formatCurrency(row.total), bold: true },
+    ],
+    note: row.note,
+    createdBy: user,
+  };
+}
+
 export function buildInternalExportPrintData(row: InternalExport): DocumentPrintData {
   const user = formatUser(row.createdByName, row.createdBy);
   return {

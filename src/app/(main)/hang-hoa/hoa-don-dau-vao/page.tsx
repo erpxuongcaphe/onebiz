@@ -27,6 +27,8 @@ import { printDocument } from "@/lib/print-document";
 import { buildInputInvoicePrintData } from "@/lib/print-templates";
 import { getInputInvoices, getInputInvoiceStatuses, deleteInputInvoice, recordInputInvoice } from "@/lib/services";
 import { CreateInputInvoiceDialog, ConfirmDialog } from "@/components/shared/dialogs";
+import { AuditLogDialog } from "@/components/shared/audit-log-dialog";
+import { buildTransactionRowActions } from "@/components/shared/transaction-row-actions";
 import { useToast, useBranchFilter } from "@/lib/contexts";
 import type { InputInvoice } from "@/lib/types";
 import { Icon } from "@/components/ui/icon";
@@ -174,13 +176,18 @@ export default function HoaDonDauVaoPage() {
   const [createOpen, setCreateOpen] = useState(false);
   const [expandedRow, setExpandedRow] = useState<number | null>(null);
 
-  // Delete
+  // Cancel (was "Delete" — Stage 5 anomaly fix: kế toán đã ghi nhận thì phải
+  // audit hủy, không xóa cứng. TODO Stage 5b: refactor service từ
+  // deleteInputInvoice → cancelInputInvoice (set status='cancelled' + audit).
   const [deletingInvoice, setDeletingInvoice] = useState<InputInvoice | null>(null);
   const [deleteLoading, setDeleteLoading] = useState(false);
 
   // Record
   const [recordingInvoice, setRecordingInvoice] = useState<InputInvoice | null>(null);
   const [recordLoading, setRecordLoading] = useState(false);
+
+  // Sprint UX-1 Stage 4: Audit log shortcut
+  const [auditDialogTarget, setAuditDialogTarget] = useState<InputInvoice | null>(null);
 
   // Filters
   const [statusFilter, setStatusFilter] = useState("all");
@@ -324,44 +331,70 @@ export default function HoaDonDauVaoPage() {
             onDelete={() => setDeletingInvoice(item)}
           />
         )}
-        rowActions={(row) => [
-          {
-            label: "Xem chi tiết",
-            icon: <Icon name="visibility" size={16} />,
-            onClick: () => {
+        rowActions={(row) =>
+          buildTransactionRowActions({
+            row,
+            kind: "input_invoice",
+            onView: () => {
               const idx = data.findIndex((d) => d.id === row.id);
               setExpandedRow(expandedRow === idx ? null : idx);
             },
-          },
-          { label: "In phiếu", icon: <Icon name="print" size={16} />, onClick: () => printDocument(buildInputInvoicePrintData(row)) },
-          { label: "Ghi nhận", icon: <Icon name="menu_book" size={16} />, onClick: () => setRecordingInvoice(row) },
-          { label: "Xóa", icon: <Icon name="delete" size={16} />, onClick: () => setDeletingInvoice(row), variant: "destructive", separator: true },
-        ]}
+            onPrint: () => printDocument(buildInputInvoicePrintData(row)),
+            // Workflow: "Ghi nhận" cho HĐ chưa ghi sổ
+            workflowActions:
+              row.status === "unrecorded"
+                ? [
+                    {
+                      label: "Ghi nhận",
+                      icon: <Icon name="menu_book" size={16} />,
+                      onClick: () => setRecordingInvoice(row),
+                    },
+                  ]
+                : [],
+            onAuditLog: () => setAuditDialogTarget(row),
+            // Stage 5a anomaly fix: đổi "Xóa" → "Hủy" (kế toán không xóa cứng).
+            // TODO Stage 5b: refactor service deleteInputInvoice → cancelInputInvoice.
+            onCancel: () => setDeletingInvoice(row),
+          })
+        }
       />
 
       <ConfirmDialog
         open={!!deletingInvoice}
         onOpenChange={(open) => { if (!open) setDeletingInvoice(null); }}
-        title="Xóa hoá đơn đầu vào"
-        description={`Xóa hoá đơn đầu vào ${deletingInvoice?.code}?`}
-        confirmLabel="Xóa"
+        title="Hủy hoá đơn đầu vào"
+        description={`Bạn có chắc muốn hủy hoá đơn đầu vào ${deletingInvoice?.code}? Thao tác này không thể hoàn tác.`}
+        confirmLabel="Hủy hoá đơn"
+        cancelLabel="Đóng"
         variant="destructive"
         loading={deleteLoading}
         onConfirm={async () => {
           if (!deletingInvoice) return;
           setDeleteLoading(true);
           try {
+            // TODO Stage 5b: thay deleteInputInvoice bằng cancelInputInvoice
+            // (set status='cancelled' + audit log) thay vì xoá cứng. Tạm thời
+            // service vẫn xoá hard nhưng UX/wording đã align với cancel flow.
             await deleteInputInvoice(deletingInvoice.id);
-            toast({ title: "Đã xóa hoá đơn đầu vào", description: deletingInvoice.code, variant: "success" });
+            toast({ title: "Đã hủy hoá đơn đầu vào", description: deletingInvoice.code, variant: "success" });
             setDeletingInvoice(null);
             fetchData();
           } catch (err) {
-            toast({ title: "Lỗi xóa hoá đơn đầu vào", description: err instanceof Error ? err.message : "Vui lòng thử lại", variant: "error" });
+            toast({ title: "Lỗi hủy hoá đơn đầu vào", description: err instanceof Error ? err.message : "Vui lòng thử lại", variant: "error" });
           } finally {
             setDeleteLoading(false);
           }
         }}
       />
+
+      {auditDialogTarget && (
+        <AuditLogDialog
+          entityType="input_invoice"
+          entityId={auditDialogTarget.id}
+          entityCode={auditDialogTarget.code}
+          onClose={() => setAuditDialogTarget(null)}
+        />
+      )}
 
       <ConfirmDialog
         open={!!recordingInvoice}

@@ -24,6 +24,8 @@ import {
   CompleteProductionOrderDialog,
   ConfirmDialog,
 } from "@/components/shared/dialogs";
+import { AuditLogDialog } from "@/components/shared/audit-log-dialog";
+import { buildTransactionRowActions } from "@/components/shared/transaction-row-actions";
 import { PipelineStatusBadge } from "@/components/shared/pipeline";
 import { Button } from "@/components/ui/button";
 import { useToast, useBranchFilter } from "@/lib/contexts";
@@ -237,6 +239,8 @@ export default function SanXuatPage() {
   const [cancellingItem, setCancellingItem] = useState<ProductionOrder | null>(null);
   const [cancelLoading, setCancelLoading] = useState(false);
   const [viewMode, setViewMode] = useState<ViewMode>("list");
+  // Sprint UX-1 Stage 4: Audit log shortcut
+  const [auditDialogTarget, setAuditDialogTarget] = useState<ProductionOrder | null>(null);
 
   const [statusFilters, setStatusFilters] = useState<string[]>([
     "planned",
@@ -532,43 +536,48 @@ export default function SanXuatPage() {
               />
             )}
             getRowId={(row) => row.id}
-            rowActions={(row) => [
-              {
-                label: "Hoàn thành",
-                icon: <Icon name="check_circle" size={16} />,
-                onClick: () => {
-                  setCompletingOrder(row);
-                  setCompleteOpen(true);
-                },
-              },
-              {
-                label: "In phiếu",
-                icon: <Icon name="print" size={16} />,
-                onClick: () => printDocument(buildProductionOrderPrintData({
-                  id: row.id,
-                  code: row.code,
-                  date: row.createdAt,
-                  productName: row.productName ?? "",
-                  productCode: row.productCode ?? "",
-                  quantity: row.plannedQty,
-                  status: row.status as "completed" | "processing" | "cancelled",
-                  statusName: STATUS_META[row.status]?.label ?? row.status,
-                  costAmount: 0,
-                  createdBy: row.createdBy ?? "",
-                })),
-              },
-              ...(canTransitionProductionStatus(row.status, "cancelled")
-                ? [
-                    {
-                      label: "Hủy",
-                      icon: <Icon name="cancel" size={16} />,
-                      onClick: () => setCancellingItem(row),
-                      variant: "destructive" as const,
-                      separator: true,
-                    },
-                  ]
-                : []),
-            ]}
+            rowActions={(row) =>
+              buildTransactionRowActions({
+                row,
+                kind: "production",
+                onPrint: () =>
+                  printDocument(
+                    buildProductionOrderPrintData({
+                      id: row.id,
+                      code: row.code,
+                      date: row.createdAt,
+                      productName: row.productName ?? "",
+                      productCode: row.productCode ?? "",
+                      quantity: row.plannedQty,
+                      status: row.status as
+                        | "completed"
+                        | "processing"
+                        | "cancelled",
+                      statusName: STATUS_META[row.status]?.label ?? row.status,
+                      costAmount: 0,
+                      createdBy: row.createdBy ?? "",
+                    }),
+                  ),
+                // Workflow: "Hoàn thành" specific cho production
+                workflowActions:
+                  row.status !== "completed" && row.status !== "cancelled"
+                    ? [
+                        {
+                          label: "Hoàn thành",
+                          icon: <Icon name="check_circle" size={16} />,
+                          onClick: () => {
+                            setCompletingOrder(row);
+                            setCompleteOpen(true);
+                          },
+                        },
+                      ]
+                    : [],
+                onAuditLog: () => setAuditDialogTarget(row),
+                onCancel: canTransitionProductionStatus(row.status, "cancelled")
+                  ? () => setCancellingItem(row)
+                  : undefined,
+              })
+            }
           />
         )}
       </ListPageLayout>
@@ -628,6 +637,15 @@ export default function SanXuatPage() {
           }
         }}
       />
+      {auditDialogTarget && (
+        <AuditLogDialog
+          entityType="production_order"
+          entityId={auditDialogTarget.id}
+          entityCode={auditDialogTarget.code}
+          onClose={() => setAuditDialogTarget(null)}
+        />
+      )}
+
       {/* total counter to avoid unused var lint */}
       <span className="hidden">{total}</span>
     </>
