@@ -30,6 +30,7 @@ import type { InternalExport } from "@/lib/types";
 import { CreateInternalExportDialog, ConfirmDialog } from "@/components/shared/dialogs";
 import { AuditLogDialog } from "@/components/shared/audit-log-dialog";
 import { buildTransactionRowActions } from "@/components/shared/transaction-row-actions";
+import { useTxRowPermissions } from "@/lib/permissions";
 import { useToast, useBranchFilter } from "@/lib/contexts";
 import { printDocument } from "@/lib/print-document";
 import { buildInternalExportPrintData } from "@/lib/print-templates";
@@ -151,6 +152,7 @@ function InternalExportDetail({
 export default function XuatDungNoiBoPage() {
   const { toast } = useToast();
   const { activeBranchId } = useBranchFilter();
+  const txPerms = useTxRowPermissions("internal_export");
   const [data, setData] = useState<InternalExport[]>([]);
   const [total, setTotal] = useState(0);
   const [loading, setLoading] = useState(true);
@@ -392,6 +394,7 @@ export default function XuatDungNoiBoPage() {
           buildTransactionRowActions({
             row,
             kind: "internal_export",
+            permissions: txPerms,
             onPrint: () => printDocument(buildInternalExportPrintData(row)),
             onAuditLog: () => setAuditDialogTarget(row),
             onCancel:

@@ -22,6 +22,7 @@ import type { ProductLot } from "@/lib/types";
 import { Icon } from "@/components/ui/icon";
 import { AuditLogDialog } from "@/components/shared/audit-log-dialog";
 import { buildTransactionRowActions } from "@/components/shared/transaction-row-actions";
+import { useTxRowPermissions } from "@/lib/permissions";
 
 type LotRow = ProductLot & { productName: string; productCode: string };
 
@@ -62,6 +63,7 @@ const STATUS_DOT_CLASS: Record<"success" | "neutral" | "error", string> = {
 export default function LoSanXuatPage() {
   const { toast } = useToast();
   const { activeBranchId } = useBranchFilter();
+  const txPerms = useTxRowPermissions("production");
   const [data, setData] = useState<LotRow[]>([]);
   const [loading, setLoading] = useState(true);
   const [search, setSearch] = useState("");
@@ -333,6 +335,7 @@ export default function LoSanXuatPage() {
             row,
             // master data lot — gắn kind production (lots phát sinh từ SX/Mua)
             kind: "production",
+            permissions: txPerms,
             onAuditLog: () => setAuditDialogTarget(row),
           })
         }

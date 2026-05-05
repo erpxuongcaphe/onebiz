@@ -27,6 +27,7 @@ import type { PurchaseReturn } from "@/lib/types";
 import { CreatePurchaseReturnDialog } from "@/components/shared/dialogs";
 import { AuditLogDialog } from "@/components/shared/audit-log-dialog";
 import { buildTransactionRowActions } from "@/components/shared/transaction-row-actions";
+import { useTxRowPermissions } from "@/lib/permissions";
 import { useToast, useBranchFilter } from "@/lib/contexts";
 import { printDocument } from "@/lib/print-document";
 import { buildPurchaseReturnPrintData } from "@/lib/print-templates";
@@ -163,6 +164,7 @@ const columns: ColumnDef<PurchaseReturn, unknown>[] = [
 export default function TraHangNhapPage() {
   const { toast } = useToast();
   const { activeBranchId } = useBranchFilter();
+  const txPerms = useTxRowPermissions("purchase_return");
   const [data, setData] = useState<PurchaseReturn[]>([]);
   const [total, setTotal] = useState(0);
   const [loading, setLoading] = useState(true);
@@ -285,6 +287,7 @@ export default function TraHangNhapPage() {
           buildTransactionRowActions({
             row,
             kind: "purchase_return",
+            permissions: txPerms,
             onView: () => {
               const idx = data.findIndex((d) => d.id === row.id);
               setExpandedRow(expandedRow === idx ? null : idx);

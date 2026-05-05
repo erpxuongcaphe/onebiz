@@ -26,6 +26,7 @@ import {
 } from "@/components/shared/dialogs";
 import { AuditLogDialog } from "@/components/shared/audit-log-dialog";
 import { buildTransactionRowActions } from "@/components/shared/transaction-row-actions";
+import { useTxRowPermissions } from "@/lib/permissions";
 import { PipelineStatusBadge } from "@/components/shared/pipeline";
 import { Button } from "@/components/ui/button";
 import { useToast, useBranchFilter } from "@/lib/contexts";
@@ -225,6 +226,7 @@ function ProductionOrderDetail({
 export default function SanXuatPage() {
   const { toast } = useToast();
   const { activeBranchId } = useBranchFilter();
+  const txPerms = useTxRowPermissions("production");
   const [data, setData] = useState<ProductionOrder[]>([]);
   const [total, setTotal] = useState(0);
   const [loading, setLoading] = useState(true);
@@ -540,6 +542,7 @@ export default function SanXuatPage() {
               buildTransactionRowActions({
                 row,
                 kind: "production",
+                permissions: txPerms,
                 onPrint: () =>
                   printDocument(
                     buildProductionOrderPrintData({

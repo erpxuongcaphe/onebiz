@@ -29,6 +29,7 @@ import { getInputInvoices, getInputInvoiceStatuses, deleteInputInvoice, recordIn
 import { CreateInputInvoiceDialog, ConfirmDialog } from "@/components/shared/dialogs";
 import { AuditLogDialog } from "@/components/shared/audit-log-dialog";
 import { buildTransactionRowActions } from "@/components/shared/transaction-row-actions";
+import { useTxRowPermissions } from "@/lib/permissions";
 import { useToast, useBranchFilter } from "@/lib/contexts";
 import type { InputInvoice } from "@/lib/types";
 import { Icon } from "@/components/ui/icon";
@@ -167,6 +168,7 @@ const columns: ColumnDef<InputInvoice, unknown>[] = [
 export default function HoaDonDauVaoPage() {
   const { toast } = useToast();
   const { activeBranchId } = useBranchFilter();
+  const txPerms = useTxRowPermissions("input_invoice");
   const [data, setData] = useState<InputInvoice[]>([]);
   const [total, setTotal] = useState(0);
   const [loading, setLoading] = useState(true);
@@ -335,6 +337,7 @@ export default function HoaDonDauVaoPage() {
           buildTransactionRowActions({
             row,
             kind: "input_invoice",
+            permissions: txPerms,
             onView: () => {
               const idx = data.findIndex((d) => d.id === row.id);
               setExpandedRow(expandedRow === idx ? null : idx);

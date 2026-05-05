@@ -32,6 +32,7 @@ import {
 import { CreateInternalSaleDialog, ConfirmDialog } from "@/components/shared/dialogs";
 import { AuditLogDialog } from "@/components/shared/audit-log-dialog";
 import { buildTransactionRowActions } from "@/components/shared/transaction-row-actions";
+import { useTxRowPermissions } from "@/lib/permissions";
 import { ImportExcelDialog } from "@/components/shared/dialogs/import-excel-dialog";
 import { internalSaleExcelSchema } from "@/lib/excel/schemas";
 import { bulkImportInternalSales } from "@/lib/services/supabase/excel-import";
@@ -270,6 +271,7 @@ function InternalSaleDetail({
 export default function InternalSalePage() {
   const { toast } = useToast();
   const { activeBranchId } = useBranchFilter();
+  const txPerms = useTxRowPermissions("internal_sale");
   const [data, setData] = useState<InternalSaleRow[]>([]);
   const [total, setTotal] = useState(0);
   const [loading, setLoading] = useState(true);
@@ -537,6 +539,7 @@ export default function InternalSalePage() {
             buildTransactionRowActions({
               row,
               kind: "internal_sale",
+              permissions: txPerms,
               onView: () => {
                 const idx = data.findIndex((d) => d.id === row.id);
                 setExpandedRow(expandedRow === idx ? null : idx);

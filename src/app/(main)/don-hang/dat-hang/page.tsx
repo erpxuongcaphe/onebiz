@@ -38,6 +38,7 @@ import type { SalesOrder } from "@/lib/types";
 import { CreateOrderDialog, ConfirmDialog } from "@/components/shared/dialogs";
 import { AuditLogDialog } from "@/components/shared/audit-log-dialog";
 import { buildTransactionRowActions } from "@/components/shared/transaction-row-actions";
+import { useTxRowPermissions } from "@/lib/permissions";
 import { Icon } from "@/components/ui/icon";
 
 // --- Status config ---
@@ -243,6 +244,7 @@ export default function DatHangPage() {
   const { toast } = useToast();
   const { activeBranchId } = useBranchFilter();
   const { printWithPicker, printerDialog } = usePrintWithPicker();
+  const txPerms = useTxRowPermissions("sales_order");
   const [data, setData] = useState<SalesOrder[]>([]);
   const [total, setTotal] = useState(0);
   const [loading, setLoading] = useState(true);
@@ -535,6 +537,7 @@ export default function DatHangPage() {
           buildTransactionRowActions({
             row,
             kind: "sales_order",
+            permissions: txPerms,
             onPrint: () =>
               printWithPicker(buildSalesOrderPrintData(row), "In đơn đặt hàng"),
             // Audit log shortcut

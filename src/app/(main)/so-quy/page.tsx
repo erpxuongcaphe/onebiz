@@ -27,6 +27,7 @@ import {
 import { CreateCashTransactionDialog, ConfirmDialog } from "@/components/shared/dialogs";
 import { AuditLogDialog } from "@/components/shared/audit-log-dialog";
 import { buildTransactionRowActions } from "@/components/shared/transaction-row-actions";
+import { useTxRowPermissions } from "@/lib/permissions";
 import { ImportExcelDialog } from "@/components/shared/dialogs/import-excel-dialog";
 import { downloadTemplate } from "@/lib/excel";
 import { cashTransactionExcelSchema } from "@/lib/excel/schemas";
@@ -243,6 +244,7 @@ function TransactionDetail({
 export default function SoQuyPage() {
   const { toast } = useToast();
   const { activeBranchId } = useBranchFilter();
+  const txPerms = useTxRowPermissions("cash_transaction");
   const [data, setData] = useState<CashBookEntry[]>([]);
   const [total, setTotal] = useState(0);
   const [loading, setLoading] = useState(true);
@@ -591,6 +593,7 @@ export default function SoQuyPage() {
             buildTransactionRowActions({
               row,
               kind: "cash_transaction",
+              permissions: txPerms,
               onView: () => {
                 const idx = data.findIndex((d) => d.id === row.id);
                 setExpandedRow(expandedRow === idx ? null : idx);

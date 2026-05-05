@@ -38,6 +38,7 @@ import type { ReturnOrder } from "@/lib/types";
 import { CreateReturnDialog } from "@/components/shared/dialogs";
 import { AuditLogDialog } from "@/components/shared/audit-log-dialog";
 import { buildTransactionRowActions } from "@/components/shared/transaction-row-actions";
+import { useTxRowPermissions } from "@/lib/permissions";
 import { Icon } from "@/components/ui/icon";
 
 // --- Status config ---
@@ -211,6 +212,7 @@ export default function TraHangPage() {
   const { toast } = useToast();
   const { activeBranchId } = useBranchFilter();
   const { printWithPicker, printerDialog } = usePrintWithPicker();
+  const txPerms = useTxRowPermissions("sales_return");
   const [data, setData] = useState<ReturnOrder[]>([]);
   const [total, setTotal] = useState(0);
   const [loading, setLoading] = useState(true);
@@ -479,6 +481,7 @@ export default function TraHangPage() {
           buildTransactionRowActions({
             row,
             kind: "sales_return",
+            permissions: txPerms,
             onView: () => {
               const idx = data.findIndex((d) => d.id === row.id);
               setExpandedRow(expandedRow === idx ? null : idx);

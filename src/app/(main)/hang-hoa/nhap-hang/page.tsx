@@ -48,6 +48,7 @@ import { RecordPaymentDialog } from "@/components/shared/dialogs/record-payment-
 import { PartialReceiveDialog } from "@/components/shared/dialogs/partial-receive-dialog";
 import { AuditLogDialog } from "@/components/shared/audit-log-dialog";
 import { buildTransactionRowActions } from "@/components/shared/transaction-row-actions";
+import { useTxRowPermissions } from "@/lib/permissions";
 import { Button } from "@/components/ui/button";
 import { Icon } from "@/components/ui/icon";
 
@@ -396,6 +397,7 @@ export default function NhapHangPage() {
   const { activeBranchId } = useBranchFilter();
   const router = useRouter();
   const { printWithPicker, printerDialog } = usePrintWithPicker();
+  const txPerms = useTxRowPermissions("goods_receipt");
   const [data, setData] = useState<PurchaseOrder[]>([]);
   const [total, setTotal] = useState(0);
   const [loading, setLoading] = useState(true);
@@ -869,6 +871,7 @@ export default function NhapHangPage() {
           return buildTransactionRowActions({
             row,
             kind: "goods_receipt",
+            permissions: txPerms,
             // Sửa — chỉ status='draft'
             onEdit:
               row.status === "draft"

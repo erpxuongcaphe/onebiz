@@ -28,6 +28,7 @@ import { getDeliveryPartners, deactivateDeliveryPartner } from "@/lib/services";
 import { CreateDeliveryPartnerDialog, ConfirmDialog } from "@/components/shared/dialogs";
 import { AuditLogDialog } from "@/components/shared/audit-log-dialog";
 import { buildTransactionRowActions } from "@/components/shared/transaction-row-actions";
+import { useTxRowPermissions } from "@/lib/permissions";
 import { useToast } from "@/lib/contexts";
 import type { DeliveryPartner } from "@/lib/types";
 import { Icon } from "@/components/ui/icon";
@@ -174,6 +175,7 @@ function PartnerDetail({
 /* ------------------------------------------------------------------ */
 export default function DoiTacGiaoHangPage() {
   const { toast } = useToast();
+  const txPerms = useTxRowPermissions("shipping");
   const [data, setData] = useState<DeliveryPartner[]>([]);
   const [total, setTotal] = useState(0);
   const [loading, setLoading] = useState(true);
@@ -468,6 +470,7 @@ export default function DoiTacGiaoHangPage() {
             // các action chỉ Sửa + Audit log + Ngừng hợp tác (extraActions vì
             // không phải "Hủy" giao dịch).
             kind: "shipping",
+            permissions: txPerms,
             onEdit: () => {
               setEditingPartner(row);
               setCreateOpen(true);

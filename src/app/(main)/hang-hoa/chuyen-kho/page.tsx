@@ -45,6 +45,7 @@ import {
 import { ConfirmDialog } from "@/components/shared/dialogs/confirm-dialog";
 import { AuditLogDialog } from "@/components/shared/audit-log-dialog";
 import { buildTransactionRowActions } from "@/components/shared/transaction-row-actions";
+import { useTxRowPermissions } from "@/lib/permissions";
 import { useToast, useBranchFilter } from "@/lib/contexts";
 import { formatDate } from "@/lib/format";
 import { getBranches, getBranchStockRows } from "@/lib/services";
@@ -72,6 +73,7 @@ const PAGE_SIZE = 25;
 export default function ChuyenKhoPage() {
   const { toast } = useToast();
   const { activeBranchId } = useBranchFilter();
+  const txPerms = useTxRowPermissions("stock_transfer");
   const [data, setData] = useState<StockTransfer[]>([]);
   const [total, setTotal] = useState(0);
   const [loading, setLoading] = useState(true);
@@ -425,6 +427,7 @@ export default function ChuyenKhoPage() {
             return buildTransactionRowActions({
               row,
               kind: "stock_transfer",
+              permissions: txPerms,
               onView: () => {
                 const idx = data.findIndex((d) => d.id === row.id);
                 setExpandedRow(expandedRow === idx ? null : idx);

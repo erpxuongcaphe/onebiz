@@ -37,6 +37,7 @@ import { CreatePurchaseEntryDialog, ConfirmDialog } from "@/components/shared/di
 import { ImportExcelDialog } from "@/components/shared/dialogs/import-excel-dialog";
 import { AuditLogDialog } from "@/components/shared/audit-log-dialog";
 import { buildTransactionRowActions } from "@/components/shared/transaction-row-actions";
+import { useTxRowPermissions } from "@/lib/permissions";
 import { purchaseOrderExcelSchema } from "@/lib/excel/schemas";
 import { bulkImportPurchaseOrders } from "@/lib/services/supabase/excel-import";
 import { useToast } from "@/lib/contexts";
@@ -177,6 +178,7 @@ const columns: ColumnDef<PurchaseOrderEntry, unknown>[] = [
 ];
 
 export default function DatHangNhapPage() {
+  const txPerms = useTxRowPermissions("purchase_order");
   const [data, setData] = useState<PurchaseOrderEntry[]>([]);
   const [total, setTotal] = useState(0);
   const [loading, setLoading] = useState(true);
@@ -367,6 +369,7 @@ export default function DatHangNhapPage() {
           buildTransactionRowActions({
             row,
             kind: "purchase_order",
+            permissions: txPerms,
             onView: () => {
               const idx = data.findIndex((d) => d.id === row.id);
               setExpandedRow(expandedRow === idx ? null : idx);

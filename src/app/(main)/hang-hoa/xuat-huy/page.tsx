@@ -33,6 +33,7 @@ import type { DisposalExport } from "@/lib/types";
 import { CreateDisposalDialog, ConfirmDialog } from "@/components/shared/dialogs";
 import { AuditLogDialog } from "@/components/shared/audit-log-dialog";
 import { buildTransactionRowActions } from "@/components/shared/transaction-row-actions";
+import { useTxRowPermissions } from "@/lib/permissions";
 import { Icon } from "@/components/ui/icon";
 
 /* ------------------------------------------------------------------ */
@@ -157,6 +158,7 @@ function DisposalExportDetail({
 export default function XuatHuyPage() {
   const { toast } = useToast();
   const { activeBranchId } = useBranchFilter();
+  const txPerms = useTxRowPermissions("disposal");
   const [data, setData] = useState<DisposalExport[]>([]);
   const [total, setTotal] = useState(0);
   const [loading, setLoading] = useState(true);
@@ -412,6 +414,7 @@ export default function XuatHuyPage() {
           buildTransactionRowActions({
             row,
             kind: "disposal",
+            permissions: txPerms,
             onPrint: () => printDocument(buildDisposalPrintData(row)),
             onAuditLog: () => setAuditDialogTarget(row),
             onCancel:

@@ -30,6 +30,7 @@ import type { InventoryCheck } from "@/lib/types";
 import { CreateInventoryCheckDialog, ConfirmDialog } from "@/components/shared/dialogs";
 import { AuditLogDialog } from "@/components/shared/audit-log-dialog";
 import { buildTransactionRowActions } from "@/components/shared/transaction-row-actions";
+import { useTxRowPermissions } from "@/lib/permissions";
 import { useToast, useBranchFilter } from "@/lib/contexts";
 import { usePrintWithPicker } from "@/lib/hooks/use-print-with-picker";
 import { buildInventoryCheckPrintData } from "@/lib/print-templates";
@@ -386,6 +387,7 @@ export default function KiemKhoPage() {
   const { toast } = useToast();
   const { activeBranchId } = useBranchFilter();
   const { printWithPicker, printerDialog } = usePrintWithPicker();
+  const txPerms = useTxRowPermissions("inventory_check");
   const [data, setData] = useState<InventoryCheck[]>([]);
   const [total, setTotal] = useState(0);
   const [loading, setLoading] = useState(true);
@@ -727,6 +729,7 @@ export default function KiemKhoPage() {
           return buildTransactionRowActions({
             row,
             kind: "inventory_check",
+            permissions: txPerms,
             onPrint: () =>
               printWithPicker(buildInventoryCheckPrintData(row), "In phiếu kiểm kho"),
             workflowActions,

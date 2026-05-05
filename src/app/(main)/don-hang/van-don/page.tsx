@@ -41,6 +41,7 @@ import { getAuditLogsByEntity, type AuditLogEntry } from "@/lib/services/supabas
 import { CreateShippingOrderDialog } from "@/components/shared/dialogs";
 import { AuditLogDialog } from "@/components/shared/audit-log-dialog";
 import { buildTransactionRowActions } from "@/components/shared/transaction-row-actions";
+import { useTxRowPermissions } from "@/lib/permissions";
 import type { ShippingOrder, ShippingStatus } from "@/lib/types";
 import { useBranchFilter, useToast } from "@/lib/contexts";
 import { Icon } from "@/components/ui/icon";
@@ -347,6 +348,7 @@ function ShippingOrderDetail({
 export default function VanDonPage() {
   const { toast } = useToast();
   const { activeBranchId } = useBranchFilter();
+  const txPerms = useTxRowPermissions("shipping");
   const [data, setData] = useState<ShippingOrder[]>([]);
   const [total, setTotal] = useState(0);
   const [loading, setLoading] = useState(true);
@@ -624,6 +626,7 @@ export default function VanDonPage() {
           buildTransactionRowActions({
             row,
             kind: "shipping",
+            permissions: txPerms,
             // Xem chi tiết — toggle inline detail
             onView: () => {
               const idx = data.findIndex((d) => d.id === row.id);

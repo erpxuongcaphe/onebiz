@@ -27,6 +27,7 @@ import { CreateInvoiceDialog, EditInvoiceDialog, ConfirmDialog } from "@/compone
 import { RecordPaymentDialog } from "@/components/shared/dialogs/record-payment-dialog";
 import { AuditLogDialog } from "@/components/shared/audit-log-dialog";
 import { buildTransactionRowActions } from "@/components/shared/transaction-row-actions";
+import { useTxRowPermissions } from "@/lib/permissions";
 import { formatCurrency, formatDate, formatUser } from "@/lib/format";
 import { exportToExcel, exportToCsv } from "@/lib/utils/export";
 import {
@@ -253,6 +254,7 @@ export default function HoaDonPage() {
   const { activeBranchId } = useBranchFilter();
   const router = useRouter();
   const { printWithPicker, printerDialog } = usePrintWithPicker();
+  const txPerms = useTxRowPermissions("invoice");
   const [data, setData] = useState<Invoice[]>([]);
   const [total, setTotal] = useState(0);
   const [loading, setLoading] = useState(true);
@@ -627,6 +629,7 @@ export default function HoaDonPage() {
             buildTransactionRowActions({
               row,
               kind: "invoice",
+              permissions: txPerms,
               // Sửa — chỉ status processing
               onEdit:
                 row.status === "processing"
