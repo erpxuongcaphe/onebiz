@@ -603,6 +603,103 @@ export default function HoaDonPage() {
             setPage(0);
           }}
           selectable
+          bulkActions={[
+            {
+              label: "Xuất Excel",
+              icon: <Icon name="download" size={16} />,
+              onClick: (selectedRows) => {
+                const cols = [
+                  { header: "Mã HD", key: "code", width: 15 },
+                  {
+                    header: "Thời gian",
+                    key: "date",
+                    width: 18,
+                    format: (v: string) => formatDate(v),
+                  },
+                  { header: "Khách hàng", key: "customerName", width: 25 },
+                  {
+                    header: "Tổng tiền",
+                    key: "totalAmount",
+                    width: 15,
+                    format: (v: number) => v,
+                  },
+                  {
+                    header: "Giảm giá",
+                    key: "discount",
+                    width: 15,
+                    format: (v: number) => v,
+                  },
+                  {
+                    header: "Trạng thái",
+                    key: "status",
+                    width: 15,
+                    format: (v: Invoice["status"]) =>
+                      statusMap[v]?.label ?? v,
+                  },
+                ];
+                exportToExcel(selectedRows, cols, "hoa-don-da-chon");
+                toast({
+                  title: "Đã xuất Excel",
+                  description: `${selectedRows.length} hoá đơn`,
+                  variant: "success",
+                });
+              },
+            },
+            {
+              label: "In hàng loạt",
+              icon: <Icon name="print" size={16} />,
+              onClick: (selectedRows) => {
+                selectedRows.forEach((row) =>
+                  printWithPicker(
+                    buildInvoicePrintData(row, businessInfo ?? undefined),
+                    "In hóa đơn",
+                  ),
+                );
+              },
+            },
+            {
+              label: "Hủy hàng loạt",
+              icon: <Icon name="cancel" size={16} />,
+              variant: "destructive",
+              onClick: async (selectedRows) => {
+                const cancellable = selectedRows.filter(
+                  (r) => r.status !== "completed" && r.status !== "cancelled",
+                );
+                if (cancellable.length === 0) {
+                  toast({
+                    title: "Không có hoá đơn nào có thể hủy",
+                    description:
+                      "Chỉ hủy được hoá đơn chưa hoàn thành / chưa hủy",
+                    variant: "info",
+                  });
+                  return;
+                }
+                if (
+                  !window.confirm(
+                    `Hủy ${cancellable.length} hoá đơn? Thao tác này không thể hoàn tác.`,
+                  )
+                )
+                  return;
+                try {
+                  await Promise.all(
+                    cancellable.map((r) => cancelInvoice(r.id)),
+                  );
+                  toast({
+                    title: `Đã hủy ${cancellable.length} hoá đơn`,
+                    variant: "success",
+                  });
+                  await fetchData();
+                } catch (err) {
+                  toast({
+                    title: "Lỗi hủy hàng loạt",
+                    description:
+                      err instanceof Error ? err.message : "Vui lòng thử lại",
+                    variant: "error",
+                  });
+                }
+              },
+            },
+          ]}
           summaryRow={{
             totalAmount: formatCurrency(totalAmount),
             discount: formatCurrency(totalDiscount),

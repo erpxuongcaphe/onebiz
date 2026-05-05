@@ -406,6 +406,94 @@ export default function XuatHuyPage() {
           setPage(0);
         }}
         selectable
+        bulkActions={[
+          {
+            label: "Xuất Excel",
+            icon: <Icon name="download" size={16} />,
+            onClick: (selectedRows) => {
+              const cols = [
+                { header: "Mã phiếu", key: "code", width: 15 },
+                {
+                  header: "Thời gian",
+                  key: "date",
+                  width: 18,
+                  format: (v: string) => formatDate(v),
+                },
+                { header: "Người tạo", key: "createdBy", width: 15 },
+                {
+                  header: "Tổng giá trị",
+                  key: "totalAmount",
+                  width: 15,
+                  format: (v: number) => v,
+                },
+                { header: "Lý do", key: "reason", width: 25 },
+                {
+                  header: "Trạng thái",
+                  key: "status",
+                  width: 15,
+                  format: (v: DisposalExport["status"]) =>
+                    statusMap[v]?.label ?? v,
+                },
+              ];
+              exportToExcel(selectedRows, cols, "xuat-huy-da-chon");
+              toast({
+                title: "Đã xuất Excel",
+                description: `${selectedRows.length} phiếu xuất hủy`,
+                variant: "success",
+              });
+            },
+          },
+          {
+            label: "In hàng loạt",
+            icon: <Icon name="print" size={16} />,
+            onClick: (selectedRows) => {
+              selectedRows.forEach((row) =>
+                printDocument(buildDisposalPrintData(row)),
+              );
+            },
+          },
+          {
+            label: "Hủy hàng loạt",
+            icon: <Icon name="cancel" size={16} />,
+            variant: "destructive",
+            onClick: async (selectedRows) => {
+              const cancellable = selectedRows.filter(
+                (r) => r.status === "draft",
+              );
+              if (cancellable.length === 0) {
+                toast({
+                  title: "Không có phiếu nào có thể hủy",
+                  description: "Chỉ hủy được phiếu ở trạng thái Phiếu tạm",
+                  variant: "info",
+                });
+                return;
+              }
+              if (
+                !window.confirm(
+                  `Hủy ${cancellable.length} phiếu xuất hủy? Thao tác này không thể hoàn tác.`,
+                )
+              )
+                return;
+              try {
+                await Promise.all(
+                  cancellable.map((r) => cancelDisposalExport(r.id)),
+                );
+                toast({
+                  title: `Đã hủy ${cancellable.length} phiếu`,
+                  variant: "success",
+                });
+                await fetchData();
+              } catch (err) {
+                toast({
+                  title: "Lỗi hủy hàng loạt",
+                  description:
+                    err instanceof Error ? err.message : "Vui lòng thử lại",
+                  variant: "error",
+                });
+              }
+            },
+          },
+        ]}
         expandedRow={expandedRow}
         onExpandedRowChange={setExpandedRow}
         renderDetail={renderDetail}

@@ -711,6 +711,104 @@ export default function KiemKhoPage() {
           setPage(0);
         }}
         selectable
+        bulkActions={[
+          {
+            label: "Xuất Excel",
+            icon: <Icon name="download" size={16} />,
+            onClick: (selectedRows) => {
+              const cols = [
+                { header: "Mã kiểm kho", key: "code", width: 15 },
+                {
+                  header: "Thời gian",
+                  key: "date",
+                  width: 18,
+                  format: (v: string) => formatDate(v),
+                },
+                {
+                  header: "Trạng thái",
+                  key: "status",
+                  width: 15,
+                  format: (v: InventoryCheck["status"]) =>
+                    statusMap[v]?.label ?? v,
+                },
+                { header: "Tổng SP", key: "totalProducts", width: 10 },
+                { header: "SL lệch tăng", key: "increaseQty", width: 12 },
+                { header: "SL lệch giảm", key: "decreaseQty", width: 12 },
+                {
+                  header: "GT tăng",
+                  key: "increaseAmount",
+                  width: 15,
+                  format: (v: number) => v,
+                },
+                {
+                  header: "GT giảm",
+                  key: "decreaseAmount",
+                  width: 15,
+                  format: (v: number) => v,
+                },
+              ];
+              exportToExcel(selectedRows, cols, "phieu-kiem-kho-da-chon");
+              toast({
+                title: "Đã xuất Excel",
+                description: `${selectedRows.length} phiếu kiểm kho`,
+                variant: "success",
+              });
+            },
+          },
+          {
+            label: "In hàng loạt",
+            icon: <Icon name="print" size={16} />,
+            onClick: (selectedRows) => {
+              selectedRows.forEach((row) =>
+                printWithPicker(
+                  buildInventoryCheckPrintData(row),
+                  "In phiếu kiểm kho",
+                ),
+              );
+            },
+          },
+          {
+            label: "Hủy hàng loạt",
+            icon: <Icon name="cancel" size={16} />,
+            variant: "destructive",
+            onClick: async (selectedRows) => {
+              const cancellable = selectedRows.filter(
+                (r) => r.status === "processing",
+              );
+              if (cancellable.length === 0) {
+                toast({
+                  title: "Không có phiếu nào có thể hủy",
+                  description: "Chỉ hủy được phiếu ở trạng thái Phiếu tạm",
+                  variant: "info",
+                });
+                return;
+              }
+              if (
+                !window.confirm(
+                  `Hủy ${cancellable.length} phiếu kiểm kho? Thao tác này không thể hoàn tác.`,
+                )
+              )
+                return;
+              try {
+                await Promise.all(
+                  cancellable.map((r) => cancelInventoryCheck(r.id)),
+                );
+                toast({
+                  title: `Đã hủy ${cancellable.length} phiếu`,
+                  variant: "success",
+                });
+                await fetchData();
+              } catch (err) {
+                toast({
+                  title: "Lỗi hủy hàng loạt",
+                  description:
+                    err instanceof Error ? err.message : "Vui lòng thử lại",
+                  variant: "error",
+                });
+              }
+            },
+          },
+        ]}
         expandedRow={expandedRow}
         onExpandedRowChange={setExpandedRow}
         renderDetail={renderDetail}

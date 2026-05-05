@@ -352,6 +352,88 @@ export default function DatHangNhapPage() {
           setPage(0);
         }}
         selectable
+        bulkActions={[
+          {
+            label: "Xuất Excel",
+            icon: <Icon name="download" size={16} />,
+            onClick: (selectedRows) => {
+              const cols = [
+                { header: "Mã", key: "code", width: 15 },
+                {
+                  header: "Ngày",
+                  key: "date",
+                  width: 18,
+                  format: (v: string) => formatDate(v),
+                },
+                { header: "NCC", key: "supplierName", width: 25 },
+                {
+                  header: "Tổng tiền",
+                  key: "totalAmount",
+                  width: 18,
+                  format: (v: number) => v,
+                },
+                { header: "Trạng thái", key: "statusName", width: 15 },
+              ];
+              exportToCsv(selectedRows, cols, "dat-hang-nhap-da-chon");
+              toast({
+                title: "Đã xuất file",
+                description: `${selectedRows.length} đơn đặt hàng nhập`,
+                variant: "success",
+              });
+            },
+          },
+          {
+            label: "In hàng loạt",
+            icon: <Icon name="print" size={16} />,
+            onClick: (selectedRows) => {
+              selectedRows.forEach((row) =>
+                printDocument(buildPurchaseEntryPrintData(row)),
+              );
+            },
+          },
+          {
+            label: "Hủy hàng loạt",
+            icon: <Icon name="cancel" size={16} />,
+            variant: "destructive",
+            onClick: async (selectedRows) => {
+              const cancellable = selectedRows.filter(
+                (r) => r.status !== "completed" && r.status !== "cancelled",
+              );
+              if (cancellable.length === 0) {
+                toast({
+                  title: "Không có đơn nào có thể hủy",
+                  description:
+                    "Chỉ hủy được đơn chưa hoàn thành / chưa hủy",
+                  variant: "info",
+                });
+                return;
+              }
+              if (
+                !window.confirm(
+                  `Hủy ${cancellable.length} đơn đặt hàng nhập? Thao tác này không thể hoàn tác.`,
+                )
+              )
+                return;
+              try {
+                await Promise.all(
+                  cancellable.map((r) => cancelPurchaseOrderEntry(r.id)),
+                );
+                toast({
+                  title: `Đã hủy ${cancellable.length} đơn`,
+                  variant: "success",
+                });
+                await fetchData();
+              } catch (err) {
+                toast({
+                  title: "Lỗi hủy hàng loạt",
+                  description:
+                    err instanceof Error ? err.message : "Vui lòng thử lại",
+                  variant: "error",
+                });
+              }
+            },
+          },
+        ]}
         expandedRow={expandedRow}
         onExpandedRowChange={setExpandedRow}
         renderDetail={(item, onClose) => (

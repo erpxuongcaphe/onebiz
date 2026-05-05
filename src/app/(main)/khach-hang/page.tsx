@@ -462,6 +462,61 @@ export default function KhachHangPage() {
             setPage(0);
           }}
           selectable
+          bulkActions={[
+            {
+              label: "Xuất Excel",
+              icon: <Icon name="download" size={16} />,
+              onClick: (selectedRows) => {
+                const rows: CustomerImportRow[] = selectedRows.map((c) => ({
+                  code: c.code,
+                  name: c.name,
+                  phone: c.phone,
+                  email: c.email,
+                  address: c.address,
+                  customerType: c.type,
+                  gender: c.gender,
+                  groupCode: c.groupName,
+                  isActive: true,
+                }));
+                exportToExcelFromSchema(rows, customerExcelSchema);
+                toast({
+                  title: "Đã xuất Excel",
+                  description: `${selectedRows.length} khách hàng`,
+                  variant: "success",
+                });
+              },
+            },
+            {
+              label: "Xóa hàng loạt",
+              icon: <Icon name="delete" size={16} />,
+              variant: "destructive",
+              onClick: async (selectedRows) => {
+                if (
+                  !window.confirm(
+                    `Xóa ${selectedRows.length} khách hàng? Thao tác này không thể hoàn tác.`,
+                  )
+                )
+                  return;
+                try {
+                  await Promise.all(
+                    selectedRows.map((r) => deleteCustomer(r.id)),
+                  );
+                  toast({
+                    title: `Đã xóa ${selectedRows.length} khách hàng`,
+                    variant: "success",
+                  });
+                  await fetchData();
+                } catch (err) {
+                  toast({
+                    title: "Lỗi xóa hàng loạt",
+                    description:
+                      err instanceof Error ? err.message : "Vui lòng thử lại",
+                    variant: "error",
+                  });
+                }
+              },
+            },
+          ]}
           summaryRow={{
             currentDebt: formatCurrency(totalDebt),
             totalSales: formatCurrency(totalSales),

@@ -580,6 +580,72 @@ export default function SoQuyPage() {
             setPageSize(size);
             setPage(0);
           }}
+          selectable
+          bulkActions={[
+            {
+              label: "Xuất Excel",
+              icon: <Icon name="download" size={16} />,
+              onClick: (selectedRows) => {
+                const rows: CashTransactionImportRow[] = selectedRows.map(
+                  (e) => ({
+                    code: e.code,
+                    date: new Date(e.date),
+                    type: e.type,
+                    category: e.category,
+                    amount: e.amount,
+                    counterparty: e.counterparty,
+                    paymentMethod: "cash",
+                    note: e.note,
+                  }),
+                );
+                exportToExcelFromSchema(rows, cashTransactionExcelSchema);
+                toast({
+                  title: "Đã xuất Excel",
+                  description: `${selectedRows.length} phiếu thu/chi`,
+                  variant: "success",
+                });
+              },
+            },
+            {
+              label: "In hàng loạt",
+              icon: <Icon name="print" size={16} />,
+              onClick: (selectedRows) => {
+                selectedRows.forEach((row) =>
+                  printDocument(buildCashTransactionPrintData(row)),
+                );
+              },
+            },
+            {
+              label: "Hủy hàng loạt",
+              icon: <Icon name="cancel" size={16} />,
+              variant: "destructive",
+              onClick: async (selectedRows) => {
+                if (
+                  !window.confirm(
+                    `Hủy ${selectedRows.length} phiếu thu/chi? Thao tác này không thể hoàn tác.`,
+                  )
+                )
+                  return;
+                try {
+                  await Promise.all(
+                    selectedRows.map((r) => deleteCashTransaction(r.id)),
+                  );
+                  toast({
+                    title: `Đã hủy ${selectedRows.length} phiếu`,
+                    variant: "success",
+                  });
+                  await fetchData();
+                } catch (err) {
+                  toast({
+                    title: "Lỗi hủy hàng loạt",
+                    description:
+                      err instanceof Error ? err.message : "Vui lòng thử lại",
+                    variant: "error",
+                  });
+                }
+              },
+            },
+          ]}
           expandedRow={expandedRow}
           onExpandedRowChange={setExpandedRow}
           renderDetail={(entry, onClose) => (
