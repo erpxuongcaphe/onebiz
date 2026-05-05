@@ -1,20 +1,22 @@
 // ────────────────────────────────────────────────────────────────────────
-// Sentry — Client-side error tracking (Sprint LT-2, CEO 04/05/2026)
+// Sentry — Client-side error tracking (Next.js 15 + @sentry/nextjs v10)
 // ────────────────────────────────────────────────────────────────────────
+//
+// Sprint LT-2 (CEO 04/05/2026).
+//
+// Convention v10: file PHẢI tên `instrumentation-client.ts` ở src/ hoặc
+// root để Next.js + Sentry auto-pickup. File `sentry.client.config.ts`
+// (legacy) không còn được auto-load trong v10.
 //
 // Sentry chỉ enable ở PRODUCTION. Dev mode bật → ô nhiễm dashboard với
 // HMR errors / hot-reload edge cases.
 //
 // Sample rates (free tier 5k events/tháng):
-// - tracesSampleRate: 0.1 → 10% transactions tracked. Đủ để spot perf
-//   issues mà không over quota. Có thể tăng nếu cần debug specific page.
-// - replaysSessionSampleRate: 0.1 → 10% sessions ghi replay (xem lại user
-//   action như video). Hữu ích khi cashier báo bug.
-// - replaysOnErrorSampleRate: 1.0 → 100% sessions có error được ghi
-//   replay → khi có lỗi, anh xem được user click gì trước khi crash.
+// - tracesSampleRate: 0.1 → 10% transactions tracked
+// - replaysSessionSampleRate: 0.1 → 10% sessions ghi replay
+// - replaysOnErrorSampleRate: 1.0 → 100% sessions có error → xem replay
 //
-// DSN: dùng env var NEXT_PUBLIC_SENTRY_DSN (anh add trong Vercel Dashboard).
-// Nếu env var thiếu → Sentry no-op (an toàn, không crash app).
+// DSN: env var NEXT_PUBLIC_SENTRY_DSN. Nếu thiếu → Sentry no-op (an toàn).
 
 import * as Sentry from "@sentry/nextjs";
 
@@ -70,3 +72,6 @@ if (SENTRY_DSN && process.env.NODE_ENV === "production") {
     },
   });
 }
+
+// Required by Sentry v10 — captures router transitions for performance
+export const onRouterTransitionStart = Sentry.captureRouterTransitionStart;
