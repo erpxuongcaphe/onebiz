@@ -25,6 +25,8 @@ import {
 } from "@/components/shared/inline-detail-panel";
 import { CreateInvoiceDialog, EditInvoiceDialog, ConfirmDialog } from "@/components/shared/dialogs";
 import { RecordPaymentDialog } from "@/components/shared/dialogs/record-payment-dialog";
+import { AuditLogDialog } from "@/components/shared/audit-log-dialog";
+import { buildTransactionRowActions } from "@/components/shared/transaction-row-actions";
 import { formatCurrency, formatDate, formatUser } from "@/lib/format";
 import { exportToExcel, exportToCsv } from "@/lib/utils/export";
 import {
@@ -33,6 +35,7 @@ import {
   cancelInvoice,
   getInvoiceItems,
   getTenantBusinessInfo,
+  duplicateInvoice,
   type InvoiceItemRow,
   type TenantBusinessInfo,
 } from "@/lib/services";
@@ -264,6 +267,9 @@ export default function HoaDonPage() {
   const [cancellingItem, setCancellingItem] = useState<Invoice | null>(null);
   const [cancelLoading, setCancelLoading] = useState(false);
   const [payingItem, setPayingItem] = useState<Invoice | null>(null);
+  // Sprint UX-1 Stage 4: Audit log dialog + duplicating state
+  const [auditDialogTarget, setAuditDialogTarget] = useState<Invoice | null>(null);
+  const [duplicating, setDuplicating] = useState(false);
 
   // Tenant business info — load 1 lần khi page mount để in hóa đơn có
   // MST + địa chỉ pháp lý (HT-2 wire).
@@ -617,51 +623,59 @@ export default function HoaDonPage() {
               }
             />
           )}
-          rowActions={(row) => [
-            {
-              label: "In hóa đơn",
-              icon: <Icon name="print" size={16} />,
-              onClick: () =>
+          rowActions={(row) =>
+            buildTransactionRowActions({
+              row,
+              kind: "invoice",
+              // Sửa — chỉ status processing
+              onEdit:
+                row.status === "processing"
+                  ? () => setEditingItem(row)
+                  : undefined,
+              // Sao chép (CEO 04/05): tạo draft mới với cùng items
+              onDuplicate: async () => {
+                if (duplicating) return;
+                setDuplicating(true);
+                try {
+                  const result = await duplicateInvoice(row.id);
+                  toast({
+                    variant: "success",
+                    title: "Đã sao chép hoá đơn",
+                    description: `Bản nháp mới: ${result.invoiceCode}`,
+                  });
+                  fetchData();
+                } catch (err) {
+                  toast({
+                    variant: "error",
+                    title: "Không sao chép được",
+                    description: err instanceof Error ? err.message : "Lỗi không xác định",
+                  });
+                } finally {
+                  setDuplicating(false);
+                }
+              },
+              // In phiếu
+              onPrint: () =>
                 printWithPicker(
                   buildInvoicePrintData(row, businessInfo ?? undefined),
                   "In hóa đơn",
                 ),
-            },
-            ...(row.status === "processing"
-              ? [
-                  {
-                    label: "Sửa",
-                    icon: <Icon name="edit" size={16} />,
-                    onClick: () => setEditingItem(row),
-                  },
-                ]
-              : []),
-            ...(row.debt > 0
-              ? [
-                  {
-                    label: "Thu nợ",
-                    icon: <Icon name="payments" size={16} />,
-                    onClick: () => setPayingItem(row),
-                  },
-                ]
-              : []),
-            {
-              label: "Trả hàng",
-              icon: <Icon name="undo" size={16} />,
-              onClick: () => { toast({ variant: "info", title: "Chuyển đến trang trả hàng" }); router.push("/don-hang/tra-hang"); },
-            },
-            ...(row.status !== "completed" && row.status !== "cancelled"
-              ? [
-                  {
-                    label: "Hủy",
-                    icon: <Icon name="cancel" size={16} />,
-                    onClick: () => setCancellingItem(row),
-                    variant: "destructive" as const,
-                    separator: true,
-                  },
-                ]
-              : []),
-          ]}
+              // Trả hàng (redirect)
+              onReturn: () => {
+                toast({ variant: "info", title: "Chuyển đến trang trả hàng" });
+                router.push("/don-hang/tra-hang");
+              },
+              // Thu nợ — chỉ debt > 0
+              onPayment: row.debt > 0 ? () => setPayingItem(row) : undefined,
+              // Audit log shortcut
+              onAuditLog: () => setAuditDialogTarget(row),
+              // Hủy — chỉ chưa completed/cancelled
+              onCancel:
+                row.status !== "completed" && row.status !== "cancelled"
+                  ? () => setCancellingItem(row)
+                  : undefined,
+            })
+          }
         />
       </ListPageLayout>
 
@@ -690,6 +704,16 @@ export default function HoaDonPage() {
           referenceCode={payingItem.code}
           counterpartyName={payingItem.customerName}
           currentDebt={payingItem.debt}
+        />
+      )}
+
+      {/* Sprint UX-1 Stage 4: Audit log shortcut từ row action */}
+      {auditDialogTarget && (
+        <AuditLogDialog
+          entityType="invoice"
+          entityId={auditDialogTarget.id}
+          entityCode={auditDialogTarget.code}
+          onClose={() => setAuditDialogTarget(null)}
         />
       )}
 
