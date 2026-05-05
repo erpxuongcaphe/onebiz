@@ -407,6 +407,9 @@ export function usePosState() {
     setNote,
     setSellingMode,
     setDeliveryInfo,
+    // CEO 04/05 — auto-save callback set khi draft lên server thành công.
+    // handleComplete dùng để biết → đi nhánh completeDraftOrder.
+    setLoadedDraftId,
 
     // Mixed payment helpers
     updateBreakdownAmount,

@@ -57,10 +57,13 @@ interface UseAutoSaveDraftArgs {
   /** Bật auto-save (false trong loading state hoặc đang submit). */
   enabled: boolean;
   /**
-   * Khi đã có invoiceId (từ recovery hoặc save trước), pass vào để debug.
-   * Không dùng cho logic — service tự upsert by sessionId.
+   * Callback khi save thành công — invoiceId của draft trên server.
+   * Quan trọng: parent (POS page) dùng để set `state.loadedDraftId` →
+   * khi cashier bấm Thanh toán, handleComplete sẽ gọi completeDraftOrder
+   * (atomic flip status) thay vì posCheckout (idempotency conflict với
+   * draft đã tồn tại). Bug fix CEO 04/05/2026.
    */
-  loadedDraftId?: string | null;
+  onSaved?: (invoiceId: string) => void;
 }
 
 /**
@@ -74,6 +77,7 @@ export function useAutoSaveDraft({
   snapshot,
   ctx,
   enabled,
+  onSaved,
 }: UseAutoSaveDraftArgs): void {
   const debouncedRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const lastSavedHashRef = useRef<string>("");
@@ -117,6 +121,9 @@ export function useAutoSaveDraft({
         });
         savedInvoiceIdRef.current = result.invoiceId;
         lastSavedHashRef.current = stateHash;
+        // Notify parent → set state.loadedDraftId để handleComplete đi
+        // nhánh completeDraftOrder thay vì posCheckout (tránh dup conflict).
+        onSaved?.(result.invoiceId);
       } catch (err) {
         console.warn("[useAutoSaveDraft] save failed:", err);
       } finally {

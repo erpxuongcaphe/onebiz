@@ -468,6 +468,14 @@ function PosPageInner() {
           }
         : null,
     enabled: submitting === null && !recoveryOpen,
+    // CEO 04/05/2026 fix: khi auto-save tạo draft trên server → set
+    // loadedDraftId. Khi cashier bấm Thanh toán, handleComplete sẽ thấy
+    // có draftId → gọi completeDraftOrder (atomic flip status='completed')
+    // thay vì posCheckout (sẽ fail idempotency check vì đã có draft cùng
+    // session_id). Trước fix: cashier bị toast đỏ "Dùng Tiếp tục đơn".
+    onSaved: (invoiceId) => {
+      state.setLoadedDraftId(invoiceId);
+    },
   });
 
   // ─── Recovery handlers ───
