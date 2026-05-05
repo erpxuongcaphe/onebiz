@@ -46,6 +46,12 @@ export default function RootLayout({
     <html
       lang="vi"
       className={`${inter.variable} ${beVietnamPro.variable} h-full antialiased`}
+      // Inline script ở <head> add class `fonts-not-ready` lên <html> TRƯỚC
+      // khi React hydrate → SSR vs client mismatch (intentional). Dùng
+      // suppressHydrationWarning để React skip warning cho element này
+      // (không skip children — chỉ skip attribute của <html>).
+      // CEO 04/05/2026: Sentry catch hydration warning trên prod → fix.
+      suppressHydrationWarning
     >
       <head>
         <PwaHead />
