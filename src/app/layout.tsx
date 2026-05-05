@@ -1,5 +1,6 @@
 import type { Metadata } from "next";
 import { Be_Vietnam_Pro, Inter } from "next/font/google";
+import { Analytics } from "@vercel/analytics/next";
 import { Providers } from "./providers";
 import { PwaHead } from "@/components/shared/pwa-head";
 import "./globals.css";
@@ -117,6 +118,10 @@ export default function RootLayout({
       </head>
       <body className="min-h-full flex flex-col font-sans">
         <Providers>{children}</Providers>
+        {/* Vercel Analytics — Web Vitals + page views.
+            Sprint LT-2 (CEO 04/05/2026). Free tier 2.5k events/tháng.
+            Anh đã enable trong Vercel Dashboard → Project → Analytics. */}
+        <Analytics />
       </body>
     </html>
   );

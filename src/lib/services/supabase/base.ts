@@ -44,6 +44,76 @@ export function handleError(error: { message: string; code?: string }, context: 
 }
 
 /**
+ * Wrap an async query với timing instrumentation (Sprint LT-2, CEO 04/05).
+ *
+ * - Đo thời gian query (ms)
+ * - Nếu > 1000ms → console.warn + Sentry breadcrumb (slow query alert)
+ * - Nếu > 3000ms → console.error + Sentry capture (cực chậm, cần điều tra)
+ * - Vẫn return kết quả gốc (không throw thêm)
+ *
+ * Service muốn opt-in chỉ cần wrap:
+ *   const result = await traceQuery("getInvoices", () => supabase.from(...));
+ *
+ * Threshold (ms):
+ *   < 1000  : OK, không log
+ *   1000-3000: warn (chậm bất thường)
+ *   > 3000  : error (rất chậm, có thể lock UI)
+ *
+ * Sentry breadcrumb cho phép xem trước đó query nào chậm khi có crash.
+ */
+const SLOW_QUERY_WARN_MS = 1000;
+const SLOW_QUERY_ERROR_MS = 3000;
+
+export async function traceQuery<T>(
+  name: string,
+  fn: () => Promise<T>,
+): Promise<T> {
+  const start = performance.now();
+  try {
+    const result = await fn();
+    const duration = Math.round(performance.now() - start);
+
+    if (duration >= SLOW_QUERY_ERROR_MS) {
+      console.error(
+        `[slow-query] ${name} took ${duration}ms (>3s — investigate)`,
+      );
+      // Sentry breadcrumb (no-op nếu Sentry chưa init)
+      if (typeof window !== "undefined") {
+        // eslint-disable-next-line @typescript-eslint/no-explicit-any
+        const sentry = (window as any).Sentry;
+        if (sentry?.captureMessage) {
+          sentry.captureMessage(`Slow query: ${name} (${duration}ms)`, {
+            level: "warning",
+            tags: { type: "slow_query", query_name: name },
+            extra: { duration_ms: duration },
+          });
+        }
+      }
+    } else if (duration >= SLOW_QUERY_WARN_MS) {
+      console.warn(`[slow-query] ${name} took ${duration}ms (>1s)`);
+      if (typeof window !== "undefined") {
+        // eslint-disable-next-line @typescript-eslint/no-explicit-any
+        const sentry = (window as any).Sentry;
+        if (sentry?.addBreadcrumb) {
+          sentry.addBreadcrumb({
+            category: "query",
+            message: `Slow query: ${name}`,
+            level: "warning",
+            data: { duration_ms: duration },
+          });
+        }
+      }
+    }
+
+    return result;
+  } catch (err) {
+    const duration = Math.round(performance.now() - start);
+    console.error(`[query-error] ${name} failed after ${duration}ms:`, err);
+    throw err;
+  }
+}
+
+/**
  * Extract a single filter value from QueryParams.filters.
  * Handles the string | string[] union by taking first element if array.
  */
