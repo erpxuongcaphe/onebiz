@@ -1,6 +1,9 @@
 export { getProducts, getProductStats, getProductCategories, getProductCategoriesAsync, getProductBrands, getProductById, getAllStockMovements, getStockMovements as getProductStockMovements, getSalesHistory, createProduct, updateProduct, deleteProduct, bulkUpdateCategory, bulkUpdatePrice, bulkDeleteProducts } from "./products";
 export type { AllStockMovementRow } from "./products";
 export { getCustomers, getCustomerGroups, getCustomerGroupsAsync, getCustomerById, createCustomer, updateCustomer, deleteCustomer, getOrCreateWalkInCustomer, adjustCustomerDebt } from "./customers";
+// Sprint UX-1 Stage 3: duplicate services for "Sao chép" row action
+export { duplicateInvoice } from "./orders";
+export { duplicatePurchaseOrder } from "./purchase-orders";
 export { getSuppliers, getSupplierById, createSupplier, updateSupplier, deleteSupplier } from "./suppliers";
 export {
   getInvoices,

@@ -354,6 +354,98 @@ export async function receivePurchaseOrder(orderId: string): Promise<void> {
   }
 }
 
+// ============================================================
+// Duplicate purchase order — clone existing PO → create new draft
+// Sprint UX-1 Stage 3 (CEO 04/05/2026).
+// ============================================================
+
+/**
+ * Sao chép purchase order → tạo PO mới với status='draft'.
+ * Cùng supplier, items, expected_delivery → kế toán/thủ kho re-order
+ * NCC nhanh.
+ *
+ * KHÔNG copy: paid, debt, received_quantity, status (mới = draft từ đầu).
+ * Code mới qua next_code RPC.
+ */
+export async function duplicatePurchaseOrder(
+  sourceOrderId: string,
+): Promise<{ orderId: string; orderCode: string }> {
+  const supabase = getClient();
+  const tenantId = await getCurrentTenantId();
+  const profile = await getCurrentContext();
+  if (!profile) throw new Error("Không xác định được người dùng hiện tại");
+
+  // 1. Load source PO + items
+  const { data: source, error: srcErr } = await supabase
+    .from("purchase_orders")
+    .select("*, purchase_order_items(*)")
+    .eq("tenant_id", tenantId)
+    .eq("id", sourceOrderId)
+    .single();
+  if (srcErr) handleError(srcErr, "duplicatePurchaseOrder:source");
+  if (!source) throw new Error("Không tìm thấy đơn để sao chép");
+
+  // 2. Generate new code
+  const { data: code, error: codeErr } = await supabase.rpc("next_code", {
+    p_tenant_id: tenantId,
+    p_entity_type: "purchase_order",
+  });
+  if (codeErr) handleError(codeErr, "duplicatePurchaseOrder:next_code");
+  const newCode = code ?? `PN${Date.now()}`;
+
+  // 3. Insert new PO draft
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  const newPO: any = {
+    tenant_id: tenantId,
+    branch_id: profile.branchId,
+    code: newCode,
+    supplier_id: source.supplier_id,
+    supplier_name: source.supplier_name,
+    status: "draft",
+    subtotal: source.subtotal,
+    discount_amount: source.discount_amount,
+    tax_amount: source.tax_amount,
+    total: source.total,
+    paid: 0,
+    debt: source.total,
+    note: source.note ? `[Sao chép từ ${source.code}] ${source.note}` : `[Sao chép từ ${source.code}]`,
+    created_by: profile.userId,
+  };
+
+  const { data: po, error: poErr } = await supabase
+    .from("purchase_orders")
+    .insert(newPO)
+    .select("id, code")
+    .single();
+  if (poErr) handleError(poErr, "duplicatePurchaseOrder:insert");
+  if (!po) throw new Error("Không tạo được bản sao đơn nhập");
+
+  // 4. Clone items (reset received_quantity = 0)
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  const sourceItems = (source.purchase_order_items ?? []) as any[];
+  if (sourceItems.length > 0) {
+    const itemsData = sourceItems.map((it) => ({
+      purchase_order_id: po.id,
+      product_id: it.product_id,
+      product_name: it.product_name,
+      unit: it.unit ?? "Cái",
+      quantity: it.quantity,
+      received_quantity: 0,
+      unit_price: it.unit_price,
+      discount: it.discount ?? 0,
+      vat_rate: it.vat_rate ?? 0,
+      vat_amount: it.vat_amount ?? 0,
+      total: it.total,
+    }));
+    const { error: itemsErr } = await supabase
+      .from("purchase_order_items")
+      .insert(itemsData);
+    if (itemsErr) handleError(itemsErr, "duplicatePurchaseOrder:items");
+  }
+
+  return { orderId: po.id, orderCode: po.code };
+}
+
 /* ------------------------------------------------------------------ */
 /*  Mapper                                                             */
 /* ------------------------------------------------------------------ */

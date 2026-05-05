@@ -893,3 +893,99 @@ export async function deleteDraftOrder(invoiceId: string): Promise<void> {
     return;
   }
 }
+
+// ============================================================
+// Duplicate invoice — clone existing invoice → create new draft
+// Sprint UX-1 Stage 3 (CEO 04/05/2026): Sao chép action top user request.
+// Lý do: kế toán thường tạo phiếu giống tháng trước, chỉ đổi vài thông số.
+// ============================================================
+
+/**
+ * Sao chép invoice (bất kỳ status nào) → tạo invoice DRAFT mới với cùng
+ * customer, items, payment method, note. Status mới = 'draft' để cashier
+ * sửa trước khi finalize.
+ *
+ * KHÔNG sao chép: paid, debt, audit_log (mới = chưa thanh toán + chưa
+ * có lịch sử). Code mới qua next_code RPC.
+ *
+ * Trả về { invoiceId, invoiceCode } của bản copy mới — caller có thể
+ * router.push("/don-hang/hoa-don?id=" + id) để mở edit ngay.
+ */
+export async function duplicateInvoice(
+  sourceInvoiceId: string,
+): Promise<{ invoiceId: string; invoiceCode: string }> {
+  const supabase = getClient();
+  const tenantId = await getCurrentTenantId();
+
+  // 1. Load source invoice + items
+  const { data: source, error: srcErr } = await supabase
+    .from("invoices")
+    .select("*, invoice_items(*)")
+    .eq("tenant_id", tenantId)
+    .eq("id", sourceInvoiceId)
+    .single();
+  if (srcErr) handleError(srcErr, "duplicateInvoice:source");
+  if (!source) throw new Error("Không tìm thấy hoá đơn để sao chép");
+
+  // 2. Generate new code
+  const { data: code, error: codeErr } = await supabase.rpc("next_code", {
+    p_tenant_id: tenantId,
+    p_entity_type: "invoice",
+  });
+  if (codeErr) handleError(codeErr, "duplicateInvoice:next_code");
+  const newCode = code ?? `HD${Date.now()}`;
+
+  // 3. Insert new draft với cùng customer/payment, RESET paid+debt
+  const profile = await import("./base").then((m) => m.getCurrentContext());
+  if (!profile) throw new Error("Không xác định được người dùng hiện tại");
+
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  const newInvoice: any = {
+    tenant_id: tenantId,
+    branch_id: profile.branchId,
+    code: newCode,
+    customer_id: source.customer_id,
+    customer_name: source.customer_name,
+    status: "draft",
+    subtotal: source.subtotal,
+    discount_amount: source.discount_amount,
+    total: source.total,
+    paid: 0,
+    debt: source.total,
+    payment_method: source.payment_method,
+    note: source.note ? `[Sao chép từ ${source.code}] ${source.note}` : `[Sao chép từ ${source.code}]`,
+    created_by: profile.userId,
+  };
+
+  const { data: invoice, error: invErr } = await supabase
+    .from("invoices")
+    .insert(newInvoice as InvoiceInsert)
+    .select("id, code")
+    .single();
+  if (invErr) handleError(invErr, "duplicateInvoice:insert");
+  if (!invoice) throw new Error("Không tạo được bản sao hoá đơn");
+
+  // 4. Clone items (reset id, link new invoice_id)
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  const sourceItems = (source.invoice_items ?? []) as any[];
+  if (sourceItems.length > 0) {
+    const itemsData: InvoiceItemInsert[] = sourceItems.map((it) => ({
+      invoice_id: invoice.id,
+      product_id: it.product_id,
+      product_name: it.product_name,
+      unit: it.unit ?? "Cái",
+      quantity: it.quantity,
+      unit_price: it.unit_price,
+      discount: it.discount ?? 0,
+      vat_rate: it.vat_rate ?? 0,
+      vat_amount: it.vat_amount ?? 0,
+      total: it.total,
+    }));
+    const { error: itemsErr } = await supabase
+      .from("invoice_items")
+      .insert(itemsData);
+    if (itemsErr) handleError(itemsErr, "duplicateInvoice:items");
+  }
+
+  return { invoiceId: invoice.id, invoiceCode: invoice.code };
+}
