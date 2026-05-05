@@ -116,7 +116,7 @@ export default function ThietLapPage() {
                 onChange={(e) => update("businessName", e.target.value)}
                 placeholder="VD: CÔNG TY TNHH CÀ PHÊ ABC"
               />
-              <p className="text-[11px] text-muted-foreground">
+              <p className="text-xs text-muted-foreground">
                 Tên xuất hiện trên hóa đơn — thường viết IN HOA theo điều lệ.
               </p>
             </div>
@@ -233,7 +233,7 @@ export default function ThietLapPage() {
                 onChange={(e) => update("logoUrl", e.target.value)}
                 placeholder="https://example.com/logo.png"
               />
-              <p className="text-[11px] text-muted-foreground">
+              <p className="text-xs text-muted-foreground">
                 Upload logo lên Supabase Storage rồi paste URL public vào đây.
               </p>
               {form.logoUrl && (

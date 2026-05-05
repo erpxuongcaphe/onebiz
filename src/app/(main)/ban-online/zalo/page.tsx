@@ -254,7 +254,7 @@ export default function ZaloPage() {
                       >
                         {conv.name}
                       </span>
-                      <span className="text-[11px] text-muted-foreground shrink-0 ml-1">
+                      <span className="text-xs text-muted-foreground shrink-0 ml-1">
                         {conv.time}
                       </span>
                     </div>
@@ -300,7 +300,7 @@ export default function ZaloPage() {
                 <p className="text-sm font-semibold">
                   {activeConversation.name}
                 </p>
-                <p className="text-[11px] text-status-success">Đang hoạt động</p>
+                <p className="text-xs text-status-success">Đang hoạt động</p>
               </div>
             </div>
             <Button
@@ -380,7 +380,7 @@ export default function ZaloPage() {
                   <Button
                     variant="outline"
                     size="sm"
-                    className="text-[11px] h-7 px-2 shrink-0 ml-1"
+                    className="text-xs h-7 px-2 shrink-0 ml-1"
                   >
                     Gửi cho khách
                   </Button>

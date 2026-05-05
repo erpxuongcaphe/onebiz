@@ -133,7 +133,7 @@ export default function AuditPage() {
         const colorCls =
           ACTION_COLORS[row.original.action] ?? "bg-muted text-foreground";
         return (
-          <Badge variant="secondary" className={`text-[11px] ${colorCls}`}>
+          <Badge variant="secondary" className={`text-xs ${colorCls}`}>
             {row.original.actionLabel}
           </Badge>
         );
@@ -356,7 +356,7 @@ export default function AuditPage() {
                       <p className="text-xs font-medium text-muted-foreground mb-1">
                         Dữ liệu cũ
                       </p>
-                      <pre className="text-[11px] bg-status-error/10 border border-status-error/25 rounded p-2 overflow-auto max-h-40">
+                      <pre className="text-xs bg-status-error/10 border border-status-error/25 rounded p-2 overflow-auto max-h-40">
                         {JSON.stringify(selectedEntry.oldData, null, 2)}
                       </pre>
                     </div>
@@ -366,7 +366,7 @@ export default function AuditPage() {
                       <p className="text-xs font-medium text-muted-foreground mb-1">
                         Dữ liệu mới
                       </p>
-                      <pre className="text-[11px] bg-status-success/10 border border-status-success/25 rounded p-2 overflow-auto max-h-40">
+                      <pre className="text-xs bg-status-success/10 border border-status-success/25 rounded p-2 overflow-auto max-h-40">
                         {JSON.stringify(selectedEntry.newData, null, 2)}
                       </pre>
                     </div>

@@ -432,7 +432,7 @@ export default function CongThucPage() {
                 onChange={setBranchFilter}
                 placeholder="Tất cả"
               />
-              <div className="text-[11px] text-muted-foreground mt-1">
+              <div className="text-xs text-muted-foreground mt-1">
                 Chỉ hiện BOM đã dùng trong lệnh sản xuất tại chi nhánh này.
               </div>
             </FilterGroup>

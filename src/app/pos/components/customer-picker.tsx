@@ -169,7 +169,7 @@ export function CustomerPicker({
               </div>
               <div className="flex-1">
                 <div className="text-sm font-medium text-foreground">Khách lẻ</div>
-                <div className="text-[11px] text-muted-foreground">Không gán khách hàng</div>
+                <div className="text-xs text-muted-foreground">Không gán khách hàng</div>
               </div>
             </li>
 
@@ -193,12 +193,12 @@ export function CustomerPicker({
                     <div className="text-sm font-medium text-foreground truncate">
                       {c.name}
                     </div>
-                    <div className="text-[11px] text-muted-foreground">
+                    <div className="text-xs text-muted-foreground">
                       {c.phone || c.code || "—"}
                     </div>
                   </div>
                   {c.currentDebt > 0 && (
-                    <div className="text-[11px] text-status-error font-medium shrink-0">
+                    <div className="text-xs text-status-error font-medium shrink-0">
                       Nợ {formatCurrency(c.currentDebt)} ₫
                     </div>
                   )}
@@ -223,7 +223,7 @@ export function CustomerPicker({
                     + Thêm khách hàng mới
                     {query.trim() && <span className="text-muted-foreground font-normal"> — &ldquo;{query.trim()}&rdquo;</span>}
                   </div>
-                  <div className="text-[11px] text-muted-foreground">
+                  <div className="text-xs text-muted-foreground">
                     Mở form đăng ký nhanh
                   </div>
                 </div>
@@ -231,7 +231,7 @@ export function CustomerPicker({
             )}
           </ul>
 
-          <div className="flex items-center justify-between px-4 h-9 bg-muted/50 border-t border-border text-[11px] text-muted-foreground">
+          <div className="flex items-center justify-between px-4 h-9 bg-muted/50 border-t border-border text-xs text-muted-foreground">
             <div className="flex items-center gap-2.5">
               <span>
                 <kbd className="font-mono bg-background border border-border rounded px-1 text-[10px]">

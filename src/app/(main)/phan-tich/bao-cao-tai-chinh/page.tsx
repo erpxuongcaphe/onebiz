@@ -538,7 +538,7 @@ export default function BaoCaoTaiChinhPage() {
                   })()}
                 </tbody>
               </table>
-              <p className="text-[11px] text-muted-foreground mt-2 italic">
+              <p className="text-xs text-muted-foreground mt-2 italic">
                 Lưu ý: Tổng này <strong>chưa</strong> loại trừ doanh thu nội bộ
                 — nếu muốn xem số thật của toàn chuỗi, bật công tắc{" "}
                 <strong>&quot;Chỉ số CEO&quot;</strong> ở trên để so sánh.

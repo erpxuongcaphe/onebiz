@@ -123,7 +123,7 @@ export default function DashboardCharts({
                   type="button"
                   onClick={() => setChartView(v.value)}
                   className={cn(
-                    "px-2 py-0.5 rounded text-[11px] font-medium transition-colors",
+                    "px-2 py-0.5 rounded text-xs font-medium transition-colors",
                     chartView === v.value
                       ? "bg-primary text-primary-foreground"
                       : "bg-surface-container-low hover:bg-surface-container",

@@ -262,7 +262,7 @@ export default function SalesSettingsPage() {
                     <Icon name={showPin ? "visibility_off" : "visibility"} size={16} />
                   </button>
                 </div>
-                <div className="text-[11px] text-muted-foreground">
+                <div className="text-xs text-muted-foreground">
                   {supervisorPin ? "✓ PIN đang bật" : "PIN tắt — không yêu cầu xác thực"}
                 </div>
               </div>
@@ -280,7 +280,7 @@ export default function SalesSettingsPage() {
                   placeholder="500000"
                   disabled={!supervisorPin}
                 />
-                <div className="text-[11px] text-muted-foreground">
+                <div className="text-xs text-muted-foreground">
                   Chiết khấu {">"}{" "}
                   <span className="font-semibold tabular-nums">
                     {formatNumber(Number(supervisorDiscountAmountThreshold || 0))} ₫

@@ -520,7 +520,7 @@ export default function QuanLyBanPage() {
                     <Badge
                       variant="outline"
                       className={cn(
-                        "text-[9px] mt-0.5",
+                        "text-[10px] mt-0.5",
                         table.status === "available" && "text-status-success border-status-success/25",
                         table.status === "occupied" && "text-status-error border-status-error/25",
                         table.status === "reserved" && "text-status-warning border-status-warning/25",

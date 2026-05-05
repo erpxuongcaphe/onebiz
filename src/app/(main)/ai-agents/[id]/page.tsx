@@ -160,7 +160,7 @@ function ExecutionCard({ execution }: { execution: AgentExecution }) {
               <div className="text-[10px] uppercase tracking-wider font-semibold text-muted-foreground mb-1">
                 Input
               </div>
-              <pre className="font-mono text-[11px] whitespace-pre-wrap break-words max-h-48 overflow-auto">
+              <pre className="font-mono text-xs whitespace-pre-wrap break-words max-h-48 overflow-auto">
                 {JSON.stringify(execution.inputData, null, 2)}
               </pre>
             </div>
@@ -170,7 +170,7 @@ function ExecutionCard({ execution }: { execution: AgentExecution }) {
               <div className="text-[10px] uppercase tracking-wider font-semibold text-muted-foreground mb-1">
                 Output
               </div>
-              <pre className="font-mono text-[11px] whitespace-pre-wrap break-words max-h-48 overflow-auto">
+              <pre className="font-mono text-xs whitespace-pre-wrap break-words max-h-48 overflow-auto">
                 {JSON.stringify(execution.outputData, null, 2)}
               </pre>
             </div>
@@ -1252,7 +1252,7 @@ export default function AgentDetailPage() {
                               size={12}
                               className="mt-0.5 shrink-0"
                             />
-                            <span className="line-clamp-2 font-mono text-[11px]">
+                            <span className="line-clamp-2 font-mono text-xs">
                               {rule.action.titleTemplate ||
                                 "(chưa có tiêu đề task)"}
                             </span>

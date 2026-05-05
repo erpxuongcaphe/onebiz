@@ -147,7 +147,7 @@ function ActiveOrderRow({ order }: { order: ActiveProductionOrder }) {
             style={{ width: `${Math.max(order.progressPct, 2)}%` }}
           />
         </div>
-        <div className="flex items-center justify-between text-[11px] text-muted-foreground tabular-nums">
+        <div className="flex items-center justify-between text-xs text-muted-foreground tabular-nums">
           <span>
             {formatNumber(order.completedQty)} / {formatNumber(order.plannedQty)} {order.unit}
           </span>

@@ -52,7 +52,7 @@ export function KpiCard({
           {change && (
             <span
               className={cn(
-                "inline-flex items-center gap-1 text-[11px] mt-2 px-2 py-0.5 rounded-full font-medium",
+                "inline-flex items-center gap-1 text-xs mt-2 px-2 py-0.5 rounded-full font-medium",
                 positive
                   ? "bg-status-success/10 text-status-success"
                   : "bg-status-error/10 text-status-error",

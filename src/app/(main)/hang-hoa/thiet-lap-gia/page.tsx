@@ -471,7 +471,7 @@ export default function ThietLapGiaPage() {
         return (
           <Badge
             variant={s === "fnb" ? "default" : "secondary"}
-            className="text-[11px] gap-1"
+            className="text-xs gap-1"
           >
             <Icon
               name={

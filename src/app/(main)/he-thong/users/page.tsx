@@ -444,7 +444,7 @@ export default function UsersPage() {
                   }
                   disabled={inviteBusy}
                 />
-                <p className="text-[11px] text-muted-foreground">
+                <p className="text-xs text-muted-foreground">
                   Nhân viên có thể login bằng SĐT này thay cho email.
                 </p>
               </div>

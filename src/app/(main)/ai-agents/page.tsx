@@ -172,7 +172,7 @@ function AgentCard({
         </div>
       </div>
 
-      <div className="flex items-center justify-between text-[11px] text-muted-foreground">
+      <div className="flex items-center justify-between text-xs text-muted-foreground">
         <span>
           <Icon name="history" size={11} className="inline-block mr-0.5" />
           {formatRelative(agent.lastRunAt)}

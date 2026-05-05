@@ -213,7 +213,7 @@ export default function FacebookPage() {
                   <p className="text-sm font-bold leading-tight">
                     {stat.value}
                   </p>
-                  <p className="text-[11px] text-muted-foreground leading-tight">
+                  <p className="text-xs text-muted-foreground leading-tight">
                     {stat.label}
                   </p>
                 </div>
@@ -270,7 +270,7 @@ export default function FacebookPage() {
                       >
                         {conv.name}
                       </p>
-                      <span className="text-[11px] text-muted-foreground shrink-0 ml-2">
+                      <span className="text-xs text-muted-foreground shrink-0 ml-2">
                         {conv.time}
                       </span>
                     </div>
@@ -310,7 +310,7 @@ export default function FacebookPage() {
                 <p className="text-sm font-semibold text-foreground">
                   Nguyễn Thanh Tùng
                 </p>
-                <p className="text-[11px] text-status-success">Đang hoạt động</p>
+                <p className="text-xs text-status-success">Đang hoạt động</p>
               </div>
             </div>
             <Button size="sm" className="gap-1.5">

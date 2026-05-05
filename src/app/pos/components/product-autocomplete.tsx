@@ -180,7 +180,7 @@ export function ProductAutocomplete({
                 )}
               >
                 <div className="min-w-0 flex-1">
-                  <div className="font-mono text-[11px] text-muted-foreground">
+                  <div className="font-mono text-xs text-muted-foreground">
                     {p.code}
                   </div>
                   <div className="text-sm font-medium text-foreground truncate">
@@ -193,7 +193,7 @@ export function ProductAutocomplete({
                   </div>
                   <div
                     className={cn(
-                      "text-[11px]",
+                      "text-xs",
                       p.stock <= 0
                         ? "text-status-error font-medium"
                         : p.stock <= 5
@@ -209,7 +209,7 @@ export function ProductAutocomplete({
           </ul>
 
           {/* Footer hint */}
-          <div className="flex items-center justify-between px-4 h-9 bg-muted/50 border-t border-border text-[11px] text-muted-foreground">
+          <div className="flex items-center justify-between px-4 h-9 bg-muted/50 border-t border-border text-xs text-muted-foreground">
             <div className="flex items-center gap-2.5">
               <span>
                 <kbd className="font-mono bg-background border border-border rounded px-1 text-[10px]">

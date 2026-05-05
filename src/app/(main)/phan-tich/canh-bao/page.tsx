@@ -182,7 +182,7 @@ export default function CanhBaoPage() {
                     <Icon name={card.iconName} size={16} className={cn(card.color)} />
                   </div>
                   <div>
-                    <p className="text-[11px] text-muted-foreground">
+                    <p className="text-xs text-muted-foreground">
                       {card.label}
                     </p>
                     <p className={cn("text-xl font-bold", card.color)}>

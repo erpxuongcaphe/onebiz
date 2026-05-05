@@ -470,7 +470,7 @@ export default function CongNoPage() {
                     <p className="text-xl font-bold text-primary">
                       {formatCurrency(aging.totalDebt)}
                     </p>
-                    <p className="text-[11px] text-muted-foreground mt-1">
+                    <p className="text-xs text-muted-foreground mt-1">
                       {aging.customersWithDebt} KH + {aging.suppliersWithDebt} NCC
                     </p>
                   </CardContent>
@@ -481,7 +481,7 @@ export default function CongNoPage() {
                     <p className="text-xl font-bold text-status-success">
                       {formatCurrency(aging.totalCustomerDebt)}
                     </p>
-                    <p className="text-[11px] text-muted-foreground mt-1">
+                    <p className="text-xs text-muted-foreground mt-1">
                       {aging.customersWithDebt} khách hàng
                     </p>
                   </CardContent>
@@ -492,7 +492,7 @@ export default function CongNoPage() {
                     <p className="text-xl font-bold text-status-warning">
                       {formatCurrency(aging.totalSupplierDebt)}
                     </p>
-                    <p className="text-[11px] text-muted-foreground mt-1">
+                    <p className="text-xs text-muted-foreground mt-1">
                       {aging.suppliersWithDebt} nhà cung cấp
                     </p>
                   </CardContent>
@@ -534,10 +534,10 @@ export default function CongNoPage() {
                         >
                           {formatCurrency(bucket.totalAmount)}
                         </p>
-                        <div className="flex items-center gap-3 mt-2 text-[11px] text-muted-foreground">
+                        <div className="flex items-center gap-3 mt-2 text-xs text-muted-foreground">
                           <span>KH: {bucket.customerCount} ({formatCurrency(bucket.customerAmount)})</span>
                         </div>
-                        <div className="text-[11px] text-muted-foreground">
+                        <div className="text-xs text-muted-foreground">
                           <span>NCC: {bucket.supplierCount} ({formatCurrency(bucket.supplierAmount)})</span>
                         </div>
                       </div>

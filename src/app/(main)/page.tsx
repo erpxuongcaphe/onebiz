@@ -288,7 +288,7 @@ export default function TongQuanPage() {
           >
             <CardContent className="p-5">
               <div className="flex items-start justify-between mb-3">
-                <span className="text-[11px] font-semibold uppercase tracking-[0.08em] text-muted-foreground">
+                <span className="text-xs font-semibold uppercase tracking-[0.08em] text-muted-foreground">
                   {kpi.label}
                 </span>
                 <div className="flex size-9 shrink-0 items-center justify-center rounded-lg bg-primary-fixed">
@@ -312,7 +312,7 @@ export default function TongQuanPage() {
         <Card className="col-span-2 lg:col-span-1 rounded-xl border-0 ambient-shadow bg-surface-container-lowest">
           <CardContent className="p-5">
             <div className="flex items-start justify-between mb-3">
-              <span className="text-[11px] font-semibold uppercase tracking-[0.08em] text-muted-foreground">
+              <span className="text-xs font-semibold uppercase tracking-[0.08em] text-muted-foreground">
                 Vòng quay kho
               </span>
               <div className="flex size-9 shrink-0 items-center justify-center rounded-lg bg-primary-fixed">
@@ -453,7 +453,7 @@ export default function TongQuanPage() {
                   <div key={product.name} className="flex items-center justify-between py-1">
                     <div className="flex-1 min-w-0">
                       <p className="text-sm truncate">{product.name}</p>
-                      <p className="text-[11px] text-muted-foreground">
+                      <p className="text-xs text-muted-foreground">
                         Cảnh báo: dưới {product.minStock}
                       </p>
                     </div>
