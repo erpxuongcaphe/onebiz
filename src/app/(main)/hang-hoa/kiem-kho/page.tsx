@@ -28,6 +28,8 @@ import { getInventoryChecks, getInventoryCheckStatuses, applyInventoryCheck, can
 import type { InventoryCheckItemRow } from "@/lib/services";
 import type { InventoryCheck } from "@/lib/types";
 import { CreateInventoryCheckDialog, ConfirmDialog } from "@/components/shared/dialogs";
+import { AuditLogDialog } from "@/components/shared/audit-log-dialog";
+import { buildTransactionRowActions } from "@/components/shared/transaction-row-actions";
 import { useToast, useBranchFilter } from "@/lib/contexts";
 import { usePrintWithPicker } from "@/lib/hooks/use-print-with-picker";
 import { buildInventoryCheckPrintData } from "@/lib/print-templates";
@@ -394,6 +396,8 @@ export default function KiemKhoPage() {
   const [applyingId, setApplyingId] = useState<string | null>(null);
   const [cancellingItem, setCancellingItem] = useState<InventoryCheck | null>(null);
   const [cancelLoading, setCancelLoading] = useState(false);
+  // Sprint UX-1 Stage 4: Audit log dialog
+  const [auditDialogTarget, setAuditDialogTarget] = useState<InventoryCheck | null>(null);
 
   // Inline detail
   const [expandedRow, setExpandedRow] = useState<number | null>(null);
@@ -709,33 +713,32 @@ export default function KiemKhoPage() {
         onExpandedRowChange={setExpandedRow}
         renderDetail={renderDetail}
         getRowId={(row) => row.id}
-        rowActions={(row) => [
-          ...(row.status === "processing"
-            ? [
-                {
-                  label: applyingId === row.id ? "Đang áp dụng..." : "Áp dụng kiểm kê",
-                  icon: <Icon name="check_circle" size={16} />,
-                  onClick: () => handleApply(row),
-                },
-              ]
-            : []),
-          {
-            label: "In phiếu",
-            icon: <Icon name="print" size={16} />,
-            onClick: () => printWithPicker(buildInventoryCheckPrintData(row), "In phiếu kiểm kho"),
-          },
-          ...(row.status === "processing"
-            ? [
-                {
-                  label: "Hủy",
-                  icon: <Icon name="cancel" size={16} />,
-                  onClick: () => setCancellingItem(row),
-                  variant: "destructive" as const,
-                  separator: true,
-                },
-              ]
-            : []),
-        ]}
+        rowActions={(row) => {
+          // Sprint UX-1 Stage 4: standardized transaction row actions
+          const workflowActions: Array<{ label: string; icon?: React.ReactNode; onClick: () => void }> = [];
+          if (row.status === "processing") {
+            workflowActions.push({
+              label: applyingId === row.id ? "Đang áp dụng..." : "Áp dụng kiểm kê",
+              icon: <Icon name="check_circle" size={16} />,
+              onClick: () => handleApply(row),
+            });
+          }
+
+          return buildTransactionRowActions({
+            row,
+            kind: "inventory_check",
+            onPrint: () =>
+              printWithPicker(buildInventoryCheckPrintData(row), "In phiếu kiểm kho"),
+            workflowActions,
+            // Audit log shortcut
+            onAuditLog: () => setAuditDialogTarget(row),
+            // Hủy — chỉ status='processing'
+            onCancel:
+              row.status === "processing"
+                ? () => setCancellingItem(row)
+                : undefined,
+          });
+        }}
       />
     </ListPageLayout>
 
@@ -779,6 +782,16 @@ export default function KiemKhoPage() {
     />
 
     {printerDialog}
+
+    {/* Sprint UX-1 Stage 4: Audit log shortcut từ row action */}
+    {auditDialogTarget && (
+      <AuditLogDialog
+        entityType="inventory_check"
+        entityId={auditDialogTarget.id}
+        entityCode={auditDialogTarget.code}
+        onClose={() => setAuditDialogTarget(null)}
+      />
+    )}
     </>
   );
 }

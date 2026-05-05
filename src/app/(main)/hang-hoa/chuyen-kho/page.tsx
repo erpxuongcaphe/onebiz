@@ -43,6 +43,8 @@ import {
   SelectValue,
 } from "@/components/ui/select";
 import { ConfirmDialog } from "@/components/shared/dialogs/confirm-dialog";
+import { AuditLogDialog } from "@/components/shared/audit-log-dialog";
+import { buildTransactionRowActions } from "@/components/shared/transaction-row-actions";
 import { useToast, useBranchFilter } from "@/lib/contexts";
 import { formatDate } from "@/lib/format";
 import { getBranches, getBranchStockRows } from "@/lib/services";
@@ -93,6 +95,8 @@ export default function ChuyenKhoPage() {
     transfer: StockTransfer;
   } | null>(null);
   const [actionBusy, setActionBusy] = useState(false);
+  // Sprint UX-1 Stage 4: Audit log dialog
+  const [auditDialogTarget, setAuditDialogTarget] = useState<StockTransfer | null>(null);
 
   const fetchData = useCallback(async () => {
     setLoading(true);
@@ -272,50 +276,8 @@ export default function ChuyenKhoPage() {
         </span>
       ),
     },
-    {
-      id: "actions",
-      header: "",
-      size: 140,
-      cell: ({ row }) => {
-        const st = row.original.status;
-        if (st === "completed" || st === "cancelled") return null;
-        return (
-          <div className="flex items-center gap-1">
-            {st === "draft" && (
-              <Button
-                variant="ghost"
-                size="sm"
-                className="h-7 px-2 text-primary hover:text-primary"
-                onClick={() => requestStartTransit(row.original)}
-                title="Bắt đầu vận chuyển — hàng rời kho xuất"
-              >
-                <Icon name="local_shipping" size={14} />
-              </Button>
-            )}
-            {st === "in_transit" && (
-              <Button
-                variant="ghost"
-                size="sm"
-                className="h-7 px-2 text-status-success hover:text-status-success"
-                onClick={() => requestComplete(row.original)}
-                title="Xác nhận đã nhận hàng — hoàn thành nhập kho"
-              >
-                <Icon name="check_circle" size={14} />
-              </Button>
-            )}
-            <Button
-              variant="ghost"
-              size="sm"
-              className="h-7 px-2 text-status-error hover:text-status-error"
-              onClick={() => requestCancel(row.original)}
-              title={st === "in_transit" ? "Huỷ — hàng đã rời kho, cần xử lý thủ công" : "Huỷ phiếu"}
-            >
-              <Icon name="cancel" size={14} />
-            </Button>
-          </div>
-        );
-      },
-    },
+    // Sprint UX-1 Stage 4: removed inline action column — moved to standardized
+    // rowActions menu (DataTable rowActions prop below).
   ];
 
   const pageCount = Math.ceil(total / PAGE_SIZE);
@@ -443,6 +405,40 @@ export default function ChuyenKhoPage() {
           renderDetail={(item, onClose) => (
             <TransferDetail item={item} onClose={onClose} />
           )}
+          rowActions={(row) => {
+            // Sprint UX-1 Stage 4: standardized transaction row actions
+            const workflowActions: Array<{ label: string; icon?: React.ReactNode; onClick: () => void }> = [];
+            if (row.status === "draft") {
+              workflowActions.push({
+                label: "Bắt đầu vận chuyển",
+                icon: <Icon name="local_shipping" size={16} />,
+                onClick: () => requestStartTransit(row),
+              });
+            } else if (row.status === "in_transit") {
+              workflowActions.push({
+                label: "Hoàn thành nhập kho",
+                icon: <Icon name="check_circle" size={16} />,
+                onClick: () => requestComplete(row),
+              });
+            }
+
+            return buildTransactionRowActions({
+              row,
+              kind: "stock_transfer",
+              onView: () => {
+                const idx = data.findIndex((d) => d.id === row.id);
+                setExpandedRow(expandedRow === idx ? null : idx);
+              },
+              workflowActions,
+              // Audit log shortcut
+              onAuditLog: () => setAuditDialogTarget(row),
+              // Hủy — chỉ chưa completed/cancelled
+              onCancel:
+                row.status !== "completed" && row.status !== "cancelled"
+                  ? () => requestCancel(row)
+                  : undefined,
+            });
+          }}
         />
       </div>
 
@@ -490,6 +486,16 @@ export default function ChuyenKhoPage() {
           variant={pendingDialogConfig.variant}
           loading={actionBusy}
           onConfirm={executePendingAction}
+        />
+      )}
+
+      {/* Sprint UX-1 Stage 4: Audit log shortcut từ row action */}
+      {auditDialogTarget && (
+        <AuditLogDialog
+          entityType="stock_transfer"
+          entityId={auditDialogTarget.id}
+          entityCode={auditDialogTarget.code}
+          onClose={() => setAuditDialogTarget(null)}
         />
       )}
     </ListPageLayout>

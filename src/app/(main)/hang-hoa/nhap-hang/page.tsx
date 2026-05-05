@@ -46,6 +46,8 @@ import type { PurchaseOrder, PurchaseOrderStatus } from "@/lib/types";
 import { CreatePurchaseOrderDialog } from "@/components/shared/dialogs";
 import { RecordPaymentDialog } from "@/components/shared/dialogs/record-payment-dialog";
 import { PartialReceiveDialog } from "@/components/shared/dialogs/partial-receive-dialog";
+import { AuditLogDialog } from "@/components/shared/audit-log-dialog";
+import { buildTransactionRowActions } from "@/components/shared/transaction-row-actions";
 import { Button } from "@/components/ui/button";
 import { Icon } from "@/components/ui/icon";
 
@@ -405,6 +407,8 @@ export default function NhapHangPage() {
   const [viewMode, setViewMode] = useState<ViewMode>("list");
   const [payingItem, setPayingItem] = useState<PurchaseOrder | null>(null);
   const [partialReceiveOrder, setPartialReceiveOrder] = useState<PurchaseOrder | null>(null);
+  // Sprint UX-1 Stage 4: Audit log dialog
+  const [auditDialogTarget, setAuditDialogTarget] = useState<PurchaseOrder | null>(null);
 
   // Inline detail
   const [expandedRow, setExpandedRow] = useState<number | null>(null);
@@ -835,75 +839,72 @@ export default function NhapHangPage() {
         renderDetail={renderDetail}
         getRowId={(row) => row.id}
         rowActions={(row) => {
-          const actions = [];
-          // Advance to next valid status
+          // Sprint UX-1 Stage 4: standardized transaction row actions
+          const workflowActions: Array<{ label: string; icon?: React.ReactNode; onClick: () => void }> = [];
           if (row.status === "draft") {
-            actions.push({
-              label: "Sửa",
-              icon: <Icon name="edit" size={16} />,
-              onClick: () => {
-                setEditingPO({
-                  id: row.id,
-                  code: row.code,
-                  supplierId: row.supplierId,
-                  supplierName: row.supplierName,
-                });
-                setCreateOpen(true);
-              },
-            });
-            actions.push({
+            workflowActions.push({
               label: "Xác nhận đặt hàng",
               icon: <Icon name="arrow_forward" size={16} />,
               onClick: () => handleAdvanceStatus(row, "ordered"),
             });
           } else if (row.status === "ordered") {
-            actions.push({
+            workflowActions.push({
               label: "Nhập một phần",
               icon: <Icon name="arrow_forward" size={16} />,
               onClick: () => handleAdvanceStatus(row, "partial"),
             });
-            actions.push({
+            workflowActions.push({
               label: "Hoàn thành nhập",
               icon: <Icon name="arrow_forward" size={16} />,
               onClick: () => handleAdvanceStatus(row, "completed"),
             });
           } else if (row.status === "partial") {
-            actions.push({
+            workflowActions.push({
               label: "Hoàn thành nhập",
               icon: <Icon name="arrow_forward" size={16} />,
               onClick: () => handleAdvanceStatus(row, "completed"),
             });
           }
-          actions.push({
-            label: "In phiếu",
-            icon: <Icon name="print" size={16} />,
-            onClick: () => printWithPicker(buildGoodsReceiptPrintData(row), "In phiếu nhập"),
-          });
-          actions.push({
-            label: "Trả hàng nhập",
-            icon: <Icon name="undo" size={16} />,
-            onClick: () => {
-              toast({ variant: "info", title: "Chuyển đến trang trả hàng nhập", description: "Tạo phiếu trả cho phiếu nhập " + row.code });
+
+          return buildTransactionRowActions({
+            row,
+            kind: "goods_receipt",
+            // Sửa — chỉ status='draft'
+            onEdit:
+              row.status === "draft"
+                ? () => {
+                    setEditingPO({
+                      id: row.id,
+                      code: row.code,
+                      supplierId: row.supplierId,
+                      supplierName: row.supplierName,
+                    });
+                    setCreateOpen(true);
+                  }
+                : undefined,
+            onPrint: () =>
+              printWithPicker(buildGoodsReceiptPrintData(row), "In phiếu nhập"),
+            workflowActions,
+            // Trả hàng nhập (redirect)
+            onReturn: () => {
+              toast({
+                variant: "info",
+                title: "Chuyển đến trang trả hàng nhập",
+                description: "Tạo phiếu trả cho phiếu nhập " + row.code,
+              });
               router.push("/hang-hoa/tra-hang-nhap");
             },
+            // Trả nợ NCC — chỉ amountOwed > 0
+            onPayment:
+              row.amountOwed > 0 ? () => setPayingItem(row) : undefined,
+            // Audit log shortcut
+            onAuditLog: () => setAuditDialogTarget(row),
+            // Hủy — chỉ chưa completed/cancelled
+            onCancel:
+              row.status !== "completed" && row.status !== "cancelled"
+                ? () => handleAdvanceStatus(row, "cancelled")
+                : undefined,
           });
-          if (row.amountOwed > 0) {
-            actions.push({
-              label: "Trả nợ NCC",
-              icon: <Icon name="payments" size={16} />,
-              onClick: () => setPayingItem(row),
-            });
-          }
-          if (row.status !== "completed" && row.status !== "cancelled") {
-            actions.push({
-              label: "Hủy",
-              icon: <Icon name="cancel" size={16} />,
-              onClick: () => handleAdvanceStatus(row, "cancelled"),
-              variant: "destructive" as const,
-              separator: true,
-            });
-          }
-          return actions;
         }}
       />
       )}
@@ -946,6 +947,16 @@ export default function NhapHangPage() {
     />
 
     {printerDialog}
+
+    {/* Sprint UX-1 Stage 4: Audit log shortcut từ row action */}
+    {auditDialogTarget && (
+      <AuditLogDialog
+        entityType="purchase_order"
+        entityId={auditDialogTarget.id}
+        entityCode={auditDialogTarget.code}
+        onClose={() => setAuditDialogTarget(null)}
+      />
+    )}
     </>
   );
 }

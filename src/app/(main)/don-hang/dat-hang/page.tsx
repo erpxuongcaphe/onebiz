@@ -36,6 +36,8 @@ import {
 } from "@/lib/services";
 import type { SalesOrder } from "@/lib/types";
 import { CreateOrderDialog, ConfirmDialog } from "@/components/shared/dialogs";
+import { AuditLogDialog } from "@/components/shared/audit-log-dialog";
+import { buildTransactionRowActions } from "@/components/shared/transaction-row-actions";
 import { Icon } from "@/components/ui/icon";
 
 // --- Status config ---
@@ -252,6 +254,8 @@ export default function DatHangPage() {
   const [createOpen, setCreateOpen] = useState(false);
   const [cancellingItem, setCancellingItem] = useState<SalesOrder | null>(null);
   const [cancelLoading, setCancelLoading] = useState(false);
+  // Sprint UX-1 Stage 4: Audit log dialog
+  const [auditDialogTarget, setAuditDialogTarget] = useState<SalesOrder | null>(null);
 
   // Filters
   const [selectedStatuses, setSelectedStatuses] = useState<string[]>([
@@ -527,24 +531,21 @@ export default function DatHangPage() {
             }
           />
         )}
-        rowActions={(row) => [
-          {
-            label: "In phiếu",
-            icon: <Icon name="print" size={16} />,
-            onClick: () => printWithPicker(buildSalesOrderPrintData(row), "In đơn đặt hàng"),
-          },
-          ...(row.status !== "completed" && row.status !== "cancelled"
-            ? [
-                {
-                  label: "Hủy",
-                  icon: <Icon name="cancel" size={16} />,
-                  onClick: () => setCancellingItem(row),
-                  variant: "destructive" as const,
-                  separator: true,
-                },
-              ]
-            : []),
-        ]}
+        rowActions={(row) =>
+          buildTransactionRowActions({
+            row,
+            kind: "sales_order",
+            onPrint: () =>
+              printWithPicker(buildSalesOrderPrintData(row), "In đơn đặt hàng"),
+            // Audit log shortcut
+            onAuditLog: () => setAuditDialogTarget(row),
+            // Hủy — chỉ chưa completed/cancelled
+            onCancel:
+              row.status !== "completed" && row.status !== "cancelled"
+                ? () => setCancellingItem(row)
+                : undefined,
+          })
+        }
       />
     </ListPageLayout>
 
@@ -590,6 +591,16 @@ export default function DatHangPage() {
     />
 
     {printerDialog}
+
+    {/* Sprint UX-1 Stage 4: Audit log shortcut từ row action */}
+    {auditDialogTarget && (
+      <AuditLogDialog
+        entityType="sales_order"
+        entityId={auditDialogTarget.id}
+        entityCode={auditDialogTarget.code}
+        onClose={() => setAuditDialogTarget(null)}
+      />
+    )}
     </>
   );
 }

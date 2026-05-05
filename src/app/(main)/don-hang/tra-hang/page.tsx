@@ -36,6 +36,8 @@ import {
 } from "@/lib/services";
 import type { ReturnOrder } from "@/lib/types";
 import { CreateReturnDialog } from "@/components/shared/dialogs";
+import { AuditLogDialog } from "@/components/shared/audit-log-dialog";
+import { buildTransactionRowActions } from "@/components/shared/transaction-row-actions";
 import { Icon } from "@/components/ui/icon";
 
 // --- Status config ---
@@ -218,6 +220,8 @@ export default function TraHangPage() {
   const [expandedRow, setExpandedRow] = useState<number | null>(null);
   const [starred, setStarred] = useState<Set<string>>(new Set());
   const [createOpen, setCreateOpen] = useState(false);
+  // Sprint UX-1 Stage 4: Audit log dialog
+  const [auditDialogTarget, setAuditDialogTarget] = useState<ReturnOrder | null>(null);
 
   // Filters
   const [selectedTypes, setSelectedTypes] = useState<string[]>([
@@ -471,19 +475,29 @@ export default function TraHangPage() {
         renderDetail={(returnOrder, onClose) => (
           <ReturnDetail returnOrder={returnOrder} onClose={onClose} />
         )}
-        rowActions={(row) => [
-          {
-            label: "In phiếu trả",
-            icon: <Icon name="print" size={16} />,
-            onClick: () => printWithPicker(buildReturnPrintData({
-              code: row.code,
-              date: row.date,
-              customerName: row.customerName,
-              totalRefund: row.totalAmount,
-              createdBy: row.createdBy,
-            }), "In phiếu trả hàng"),
-          },
-        ]}
+        rowActions={(row) =>
+          buildTransactionRowActions({
+            row,
+            kind: "sales_return",
+            onView: () => {
+              const idx = data.findIndex((d) => d.id === row.id);
+              setExpandedRow(expandedRow === idx ? null : idx);
+            },
+            onPrint: () =>
+              printWithPicker(
+                buildReturnPrintData({
+                  code: row.code,
+                  date: row.date,
+                  customerName: row.customerName,
+                  totalRefund: row.totalAmount,
+                  createdBy: row.createdBy,
+                }),
+                "In phiếu trả hàng",
+              ),
+            // Audit log shortcut
+            onAuditLog: () => setAuditDialogTarget(row),
+          })
+        }
       />
     </ListPageLayout>
 
@@ -494,6 +508,16 @@ export default function TraHangPage() {
     />
 
     {printerDialog}
+
+    {/* Sprint UX-1 Stage 4: Audit log shortcut từ row action */}
+    {auditDialogTarget && (
+      <AuditLogDialog
+        entityType="sales_return"
+        entityId={auditDialogTarget.id}
+        entityCode={auditDialogTarget.code}
+        onClose={() => setAuditDialogTarget(null)}
+      />
+    )}
     </>
   );
 }

@@ -25,6 +25,8 @@ import { formatCurrency, formatDate, formatUser } from "@/lib/format";
 import { getPurchaseReturns, getPurchaseReturnStatuses } from "@/lib/services";
 import type { PurchaseReturn } from "@/lib/types";
 import { CreatePurchaseReturnDialog } from "@/components/shared/dialogs";
+import { AuditLogDialog } from "@/components/shared/audit-log-dialog";
+import { buildTransactionRowActions } from "@/components/shared/transaction-row-actions";
 import { useToast, useBranchFilter } from "@/lib/contexts";
 import { printDocument } from "@/lib/print-document";
 import { buildPurchaseReturnPrintData } from "@/lib/print-templates";
@@ -169,6 +171,8 @@ export default function TraHangNhapPage() {
   const [pageSize, setPageSize] = useState(20);
   const [createOpen, setCreateOpen] = useState(false);
   const [expandedRow, setExpandedRow] = useState<number | null>(null);
+  // Sprint UX-1 Stage 4: Audit log dialog
+  const [auditDialogTarget, setAuditDialogTarget] = useState<PurchaseReturn | null>(null);
 
   // Filters
   const [statusFilter, setStatusFilter] = useState("all");
@@ -277,17 +281,19 @@ export default function TraHangNhapPage() {
         renderDetail={(item, onClose) => (
           <PurchaseReturnDetail item={item} onClose={onClose} />
         )}
-        rowActions={(row) => [
-          {
-            label: "Xem chi tiết",
-            icon: <Icon name="visibility" size={16} />,
-            onClick: () => {
+        rowActions={(row) =>
+          buildTransactionRowActions({
+            row,
+            kind: "purchase_return",
+            onView: () => {
               const idx = data.findIndex((d) => d.id === row.id);
               setExpandedRow(expandedRow === idx ? null : idx);
             },
-          },
-          { label: "In phiếu", icon: <Icon name="print" size={16} />, onClick: () => printDocument(buildPurchaseReturnPrintData(row)) },
-        ]}
+            onPrint: () => printDocument(buildPurchaseReturnPrintData(row)),
+            // Audit log shortcut
+            onAuditLog: () => setAuditDialogTarget(row),
+          })
+        }
       />
 
       <CreatePurchaseReturnDialog
@@ -295,6 +301,16 @@ export default function TraHangNhapPage() {
         onOpenChange={setCreateOpen}
         onSuccess={fetchData}
       />
+
+      {/* Sprint UX-1 Stage 4: Audit log shortcut từ row action */}
+      {auditDialogTarget && (
+        <AuditLogDialog
+          entityType="purchase_return"
+          entityId={auditDialogTarget.id}
+          entityCode={auditDialogTarget.code}
+          onClose={() => setAuditDialogTarget(null)}
+        />
+      )}
     </ListPageLayout>
   );
 }

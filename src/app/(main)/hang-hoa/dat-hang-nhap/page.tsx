@@ -35,6 +35,8 @@ import {
 } from "@/lib/services";
 import { CreatePurchaseEntryDialog, ConfirmDialog } from "@/components/shared/dialogs";
 import { ImportExcelDialog } from "@/components/shared/dialogs/import-excel-dialog";
+import { AuditLogDialog } from "@/components/shared/audit-log-dialog";
+import { buildTransactionRowActions } from "@/components/shared/transaction-row-actions";
 import { purchaseOrderExcelSchema } from "@/lib/excel/schemas";
 import { bulkImportPurchaseOrders } from "@/lib/services/supabase/excel-import";
 import { useToast } from "@/lib/contexts";
@@ -186,6 +188,8 @@ export default function DatHangNhapPage() {
   const [expandedRow, setExpandedRow] = useState<number | null>(null);
   const [cancellingItem, setCancellingItem] = useState<PurchaseOrderEntry | null>(null);
   const [cancelLoading, setCancelLoading] = useState(false);
+  // Sprint UX-1 Stage 4: Audit log dialog
+  const [auditDialogTarget, setAuditDialogTarget] = useState<PurchaseOrderEntry | null>(null);
   const { toast } = useToast();
   const router = useRouter();
 
@@ -359,23 +363,35 @@ export default function DatHangNhapPage() {
             }
           />
         )}
-        rowActions={(row) => [
-          {
-            label: "Xem chi tiết",
-            icon: <Icon name="visibility" size={16} />,
-            onClick: () => {
+        rowActions={(row) =>
+          buildTransactionRowActions({
+            row,
+            kind: "purchase_order",
+            onView: () => {
               const idx = data.findIndex((d) => d.id === row.id);
               setExpandedRow(expandedRow === idx ? null : idx);
             },
-          },
-          { label: "In phiếu", icon: <Icon name="print" size={16} />, onClick: () => printDocument(buildPurchaseEntryPrintData(row)) },
-          { label: "Nhập hàng", icon: <Icon name="add_box" size={16} />, onClick: () => { toast({ variant: "info", title: "Chuyển đến trang nhập hàng" }); router.push("/hang-hoa/nhap-hang"); } },
-          ...(row.status !== "completed" && row.status !== "cancelled"
-            ? [
-                { label: "Hủy", icon: <Icon name="cancel" size={16} />, onClick: () => setCancellingItem(row), variant: "destructive" as const, separator: true },
-              ]
-            : []),
-        ]}
+            onPrint: () => printDocument(buildPurchaseEntryPrintData(row)),
+            // Workflow: chuyển sang nhập hàng
+            workflowActions: [
+              {
+                label: "Nhập hàng",
+                icon: <Icon name="add_box" size={16} />,
+                onClick: () => {
+                  toast({ variant: "info", title: "Chuyển đến trang nhập hàng" });
+                  router.push("/hang-hoa/nhap-hang");
+                },
+              },
+            ],
+            // Audit log shortcut
+            onAuditLog: () => setAuditDialogTarget(row),
+            // Hủy — chỉ chưa completed/cancelled
+            onCancel:
+              row.status !== "completed" && row.status !== "cancelled"
+                ? () => setCancellingItem(row)
+                : undefined,
+          })
+        }
       />
 
       <ConfirmDialog
@@ -426,6 +442,16 @@ export default function DatHangNhapPage() {
           });
         }}
       />
+
+      {/* Sprint UX-1 Stage 4: Audit log shortcut từ row action */}
+      {auditDialogTarget && (
+        <AuditLogDialog
+          entityType="purchase_order"
+          entityId={auditDialogTarget.id}
+          entityCode={auditDialogTarget.code}
+          onClose={() => setAuditDialogTarget(null)}
+        />
+      )}
     </ListPageLayout>
   );
 }
