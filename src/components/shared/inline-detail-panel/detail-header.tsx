@@ -74,7 +74,7 @@ export function DetailHeader({
 
             {/* Tags */}
             {tags && tags.length > 0 && (
-              <div className="flex items-center gap-1.5 flex-wrap">
+              <div className="flex items-center gap-2 flex-wrap">
                 {tags.map((tag) => (
                   <Badge key={tag} variant="outline" className="text-xs font-normal">
                     {tag}

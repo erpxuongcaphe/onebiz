@@ -43,7 +43,7 @@ export function KpiCard({
           </p>
           <p
             className={cn(
-              "text-xl lg:text-2xl font-bold mt-1.5 truncate tabular-nums",
+              "text-xl lg:text-2xl font-bold mt-2 truncate tabular-nums",
               valueColor,
             )}
           >

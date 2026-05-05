@@ -46,7 +46,7 @@ function calcChange(current: number, previous: number): string {
 function RevenueTooltip({ active, payload, label }: any) {
   if (!active || !payload?.length) return null;
   return (
-    <div className="bg-surface-container-lowest border border-border rounded-lg ambient-shadow p-2.5 text-xs">
+    <div className="bg-surface-container-lowest border border-border rounded-lg ambient-shadow p-3 text-xs">
       <p className="font-semibold text-foreground mb-1">{label}</p>
       {payload.map((entry: any, i: number) => (
         <p key={i} style={{ color: entry.color }}>

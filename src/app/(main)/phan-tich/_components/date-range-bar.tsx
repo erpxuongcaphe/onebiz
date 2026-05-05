@@ -64,7 +64,7 @@ export function DateRangeBar({
             <Button
               variant="outline"
               size="sm"
-              className="h-8 text-xs gap-1.5 rounded-full"
+              className="h-8 text-xs gap-2 rounded-full"
               onClick={onExport}
               disabled={exportDisabled}
             >
@@ -75,7 +75,7 @@ export function DateRangeBar({
         </div>
       </div>
       {/* Stitch date preset pills — rounded-full + press-scale-sm, active dùng primary/primary-foreground */}
-      <div className="flex items-center gap-1.5 overflow-x-auto [&::-webkit-scrollbar]:hidden [-ms-overflow-style:none] [scrollbar-width:none]">
+      <div className="flex items-center gap-2 overflow-x-auto [&::-webkit-scrollbar]:hidden [-ms-overflow-style:none] [scrollbar-width:none]">
         <button className="p-1 rounded-full press-scale-sm hover:bg-surface-container text-muted-foreground shrink-0">
           <Icon name="chevron_left" className="size-4" />
         </button>

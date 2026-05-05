@@ -317,7 +317,7 @@ export function CreatePurchaseOrderDialog({
 
         <div className="grid gap-4 py-2">
           {/* Supplier search */}
-          <div className="space-y-1.5">
+          <div className="space-y-2">
             <label className="text-sm font-medium">
               Nhà cung cấp <span className="text-destructive">*</span>
             </label>
@@ -368,7 +368,7 @@ export function CreatePurchaseOrderDialog({
           </div>
 
           {/* Product search + add */}
-          <div className="space-y-1.5">
+          <div className="space-y-2">
             <label className="text-sm font-medium">Thêm sản phẩm</label>
             <div className="relative">
               <Icon name="search" size={16} className="absolute left-2.5 top-1/2 -translate-y-1/2 text-muted-foreground" />
@@ -496,10 +496,10 @@ export function CreatePurchaseOrderDialog({
           </div>
 
           {/* Notes */}
-          <div className="space-y-1.5">
+          <div className="space-y-2">
             <label className="text-sm font-medium">Ghi chú</label>
             <textarea
-              className="flex min-h-[50px] w-full rounded-lg border border-input bg-transparent px-2.5 py-2 text-sm transition-colors outline-none placeholder:text-muted-foreground focus-visible:border-ring focus-visible:ring-3 focus-visible:ring-ring/50"
+              className="flex min-h-[50px] w-full rounded-lg border border-input bg-transparent px-3 py-2 text-sm transition-colors outline-none placeholder:text-muted-foreground focus-visible:border-ring focus-visible:ring-3 focus-visible:ring-ring/50"
               value={notes}
               onChange={(e) => setNotes(e.target.value)}
               placeholder="Ghi chú phiếu nhập"

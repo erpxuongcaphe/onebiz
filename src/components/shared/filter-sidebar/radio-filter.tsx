@@ -20,7 +20,7 @@ export function RadioFilter({
   name = "radio-filter",
 }: RadioFilterProps) {
   return (
-    <div className="space-y-1.5">
+    <div className="space-y-2">
       {options.map((option) => (
         <label
           key={option.value}

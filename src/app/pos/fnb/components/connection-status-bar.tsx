@@ -58,7 +58,7 @@ export function ConnectionStatusBar({ status, onClick }: ConnectionStatusBarProp
       onClick={clickable ? onClick : undefined}
       disabled={!clickable}
       className={cn(
-        "flex items-center justify-center gap-2 px-3 py-1.5 text-xs font-medium transition-all shrink-0 w-full",
+        "flex items-center justify-center gap-2 px-3 py-2 text-xs font-medium transition-all shrink-0 w-full",
         clickable && "cursor-pointer hover:brightness-110",
         !clickable && "cursor-default",
         isSyncing

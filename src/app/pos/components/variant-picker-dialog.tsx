@@ -107,7 +107,7 @@ export function VariantPickerDialog({
 
         <div className="space-y-3 py-1">
           {/* Variant list */}
-          <div className="space-y-1.5 max-h-[320px] overflow-y-auto">
+          <div className="space-y-2 max-h-[320px] overflow-y-auto">
             {variants.map((v) => {
               const isSelected = v.id === selectedId;
               const meta = formatVariantMeta(v);
@@ -117,7 +117,7 @@ export function VariantPickerDialog({
                   type="button"
                   onClick={() => setSelectedId(v.id)}
                   className={cn(
-                    "w-full flex items-center gap-3 rounded-xl border px-3 py-2.5 text-left transition-colors",
+                    "w-full flex items-center gap-3 rounded-xl border px-3 py-3 text-left transition-colors",
                     isSelected
                       ? "border-primary bg-primary-fixed/40 ring-2 ring-primary/30"
                       : "border-border bg-surface-container-lowest hover:bg-surface-container-low"
@@ -139,7 +139,7 @@ export function VariantPickerDialog({
                         {v.name}
                       </span>
                       {v.isDefault && (
-                        <span className="px-1.5 py-0.5 rounded-full bg-status-info/10 text-status-info text-[10px] font-semibold">
+                        <span className="px-2 py-0.5 rounded-full bg-status-info/10 text-status-info text-[10px] font-semibold">
                           Mặc định
                         </span>
                       )}
@@ -166,9 +166,9 @@ export function VariantPickerDialog({
           </div>
 
           {/* Quantity picker */}
-          <div className="flex items-center justify-between rounded-xl bg-surface-container-low px-3 py-2.5">
+          <div className="flex items-center justify-between rounded-xl bg-surface-container-low px-3 py-3">
             <span className="text-sm font-medium text-foreground">Số lượng</span>
-            <div className="flex items-center gap-1.5">
+            <div className="flex items-center gap-2">
               <Button
                 size="icon"
                 variant="outline"
@@ -201,7 +201,7 @@ export function VariantPickerDialog({
 
           {/* Total */}
           {selected && (
-            <div className="flex items-center justify-between rounded-xl bg-primary-fixed/30 px-3 py-2.5 border border-primary/20">
+            <div className="flex items-center justify-between rounded-xl bg-primary-fixed/30 px-3 py-3 border border-primary/20">
               <span className="text-sm font-medium text-foreground">Thành tiền</span>
               <span className="font-heading text-lg font-extrabold text-primary tabular-nums">
                 {formatCurrency(lineTotal)}
@@ -219,7 +219,7 @@ export function VariantPickerDialog({
             disabled={!selected || quantity <= 0}
             className="bg-primary text-white"
           >
-            <Icon name="add_shopping_cart" size={14} className="mr-1.5" />
+            <Icon name="add_shopping_cart" size={14} className="mr-1" />
             Thêm vào giỏ
           </Button>
         </DialogFooter>

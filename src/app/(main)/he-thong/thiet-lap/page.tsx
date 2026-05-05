@@ -106,7 +106,7 @@ export default function ThietLapPage() {
           </div>
 
           <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-            <div className="space-y-1.5 sm:col-span-2">
+            <div className="space-y-2 sm:col-span-2">
               <Label htmlFor="businessName">
                 Tên doanh nghiệp <span className="text-destructive">*</span>
               </Label>
@@ -121,7 +121,7 @@ export default function ThietLapPage() {
               </p>
             </div>
 
-            <div className="space-y-1.5">
+            <div className="space-y-2">
               <Label htmlFor="taxCode">Mã số thuế</Label>
               <Input
                 id="taxCode"
@@ -131,7 +131,7 @@ export default function ThietLapPage() {
               />
             </div>
 
-            <div className="space-y-1.5">
+            <div className="space-y-2">
               <Label htmlFor="phone">Số điện thoại</Label>
               <Input
                 id="phone"
@@ -141,7 +141,7 @@ export default function ThietLapPage() {
               />
             </div>
 
-            <div className="space-y-1.5 sm:col-span-2">
+            <div className="space-y-2 sm:col-span-2">
               <Label htmlFor="address">Địa chỉ</Label>
               <Input
                 id="address"
@@ -151,7 +151,7 @@ export default function ThietLapPage() {
               />
             </div>
 
-            <div className="space-y-1.5">
+            <div className="space-y-2">
               <Label htmlFor="email">Email</Label>
               <Input
                 id="email"
@@ -162,7 +162,7 @@ export default function ThietLapPage() {
               />
             </div>
 
-            <div className="space-y-1.5">
+            <div className="space-y-2">
               <Label htmlFor="website">Website</Label>
               <Input
                 id="website"
@@ -189,7 +189,7 @@ export default function ThietLapPage() {
           </div>
 
           <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-            <div className="space-y-1.5">
+            <div className="space-y-2">
               <Label htmlFor="bankName">Tên ngân hàng</Label>
               <Input
                 id="bankName"
@@ -198,7 +198,7 @@ export default function ThietLapPage() {
                 placeholder="Vietcombank"
               />
             </div>
-            <div className="space-y-1.5">
+            <div className="space-y-2">
               <Label htmlFor="bankAccount">Số tài khoản</Label>
               <Input
                 id="bankAccount"
@@ -225,7 +225,7 @@ export default function ThietLapPage() {
           </div>
 
           <div className="space-y-4">
-            <div className="space-y-1.5">
+            <div className="space-y-2">
               <Label htmlFor="logoUrl">Logo URL</Label>
               <Input
                 id="logoUrl"
@@ -246,7 +246,7 @@ export default function ThietLapPage() {
               )}
             </div>
 
-            <div className="space-y-1.5">
+            <div className="space-y-2">
               <Label htmlFor="invoiceFooter">Ghi chú cuối hóa đơn</Label>
               <textarea
                 id="invoiceFooter"

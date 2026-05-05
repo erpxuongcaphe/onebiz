@@ -58,7 +58,7 @@ export function InlineDetailPanel({
       )}
     >
       <div className="relative">
-        <div className="absolute right-3 top-3 z-10 flex items-center gap-1.5">
+        <div className="absolute right-3 top-3 z-10 flex items-center gap-2">
           {onEdit && (
             <button
               type="button"
@@ -66,7 +66,7 @@ export function InlineDetailPanel({
                 e.stopPropagation();
                 onEdit();
               }}
-              className="inline-flex items-center gap-1.5 rounded-md border border-outline-variant bg-surface px-2.5 py-1 text-[12px] font-medium text-on-surface hover:bg-surface-container-high transition-colors"
+              className="inline-flex items-center gap-2 rounded-md border border-outline-variant bg-surface px-3 py-1 text-[12px] font-medium text-on-surface hover:bg-surface-container-high transition-colors"
               aria-label={editLabel}
             >
               <Icon name="edit" size={14} />
@@ -80,7 +80,7 @@ export function InlineDetailPanel({
                 e.stopPropagation();
                 onDelete();
               }}
-              className="inline-flex items-center gap-1.5 rounded-md border border-error/30 bg-error-container/40 px-2.5 py-1 text-[12px] font-medium text-error hover:bg-error-container/70 transition-colors"
+              className="inline-flex items-center gap-2 rounded-md border border-error/30 bg-error-container/40 px-3 py-1 text-[12px] font-medium text-error hover:bg-error-container/70 transition-colors"
               aria-label={deleteLabel}
             >
               <Icon name="delete" size={14} />

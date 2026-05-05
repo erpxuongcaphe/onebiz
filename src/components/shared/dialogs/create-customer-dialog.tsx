@@ -188,12 +188,12 @@ export function CreateCustomerDialog({
         </DialogHeader>
 
         <div className="grid gap-4 py-2">
-          <div className="space-y-1.5">
+          <div className="space-y-2">
             <label className="text-sm font-medium">Mã khách hàng</label>
             <Input value={code} onChange={(e) => setCode(e.target.value)} readOnly={isEditing} className={isEditing ? "bg-muted/50" : ""} />
           </div>
 
-          <div className="space-y-1.5">
+          <div className="space-y-2">
             <label className="text-sm font-medium">
               Tên khách hàng <span className="text-destructive">*</span>
             </label>
@@ -209,7 +209,7 @@ export function CreateCustomerDialog({
           </div>
 
           <div className="grid grid-cols-2 gap-4">
-            <div className="space-y-1.5">
+            <div className="space-y-2">
               <label className="text-sm font-medium">
                 Số điện thoại <span className="text-destructive">*</span>
               </label>
@@ -223,7 +223,7 @@ export function CreateCustomerDialog({
                 <p className="text-xs text-destructive">{errors.phone}</p>
               )}
             </div>
-            <div className="space-y-1.5">
+            <div className="space-y-2">
               <label className="text-sm font-medium">Email</label>
               <Input
                 type="email"
@@ -234,7 +234,7 @@ export function CreateCustomerDialog({
             </div>
           </div>
 
-          <div className="space-y-1.5">
+          <div className="space-y-2">
             <label className="text-sm font-medium">Địa chỉ</label>
             <Input
               value={address}
@@ -243,7 +243,7 @@ export function CreateCustomerDialog({
             />
           </div>
 
-          <div className="space-y-1.5">
+          <div className="space-y-2">
             <label className="text-sm font-medium">Nhóm khách hàng</label>
             <Select
               value={group || "__none__"}
@@ -283,7 +283,7 @@ export function CreateCustomerDialog({
 
           {/* Bảng giá B2B mặc định — KH này check out POS Retail sẽ áp giá tier
               này. Để trống = giá niêm yết (B2C bình thường). */}
-          <div className="space-y-1.5">
+          <div className="space-y-2">
             <label className="text-sm font-medium">
               Bảng giá B2B mặc định{" "}
               <span className="text-xs font-normal text-muted-foreground">
@@ -339,7 +339,7 @@ export function CreateCustomerDialog({
             </p>
           </div>
 
-          <div className="space-y-1.5">
+          <div className="space-y-2">
             <label className="text-sm font-medium">Loại khách hàng</label>
             <div className="flex items-center gap-4">
               <label className="flex items-center gap-2 cursor-pointer">
@@ -367,7 +367,7 @@ export function CreateCustomerDialog({
             </div>
           </div>
 
-          <div className="space-y-1.5">
+          <div className="space-y-2">
             <label className="text-sm font-medium">Giới tính</label>
             <Select value={gender} onValueChange={(v) => setGender(v ?? "")}>
               <SelectTrigger className="w-full">

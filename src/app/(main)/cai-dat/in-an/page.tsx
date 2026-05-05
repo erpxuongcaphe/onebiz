@@ -288,7 +288,7 @@ export default function PrintSettingsPage() {
                     onClick={handleConnectUsbPrinter}
                     disabled={connecting || !webusbSupported}
                   >
-                    <Icon name="usb" size={16} className="mr-1.5" />
+                    <Icon name="usb" size={16} className="mr-1" />
                     {connecting ? "Đang kết nối..." : storedPrinter ? "Đổi máy in" : "Kết nối máy in"}
                   </Button>
                   {storedPrinter && (
@@ -327,7 +327,7 @@ export default function PrintSettingsPage() {
               onClick={handleTestPrint}
               disabled={testStatus === "testing"}
             >
-              <Icon name="print" size={16} className="mr-1.5" />
+              <Icon name="print" size={16} className="mr-1" />
               {testStatus === "testing" ? "Đang in..." : "In thử"}
             </Button>
             {testStatus === "success" && (

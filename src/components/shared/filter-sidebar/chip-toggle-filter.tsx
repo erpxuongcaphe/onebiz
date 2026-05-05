@@ -19,7 +19,7 @@ export function ChipToggleFilter({
   onChange,
 }: ChipToggleFilterProps) {
   return (
-    <div className="flex flex-wrap gap-1.5">
+    <div className="flex flex-wrap gap-2">
       {options.map((option) => (
         <button
           key={option.value}

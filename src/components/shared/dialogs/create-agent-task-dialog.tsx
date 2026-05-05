@@ -167,7 +167,7 @@ export function CreateAgentTaskDialog({
 
         <div className="grid gap-4 py-2">
           {/* Tiêu đề */}
-          <div className="space-y-1.5">
+          <div className="space-y-2">
             <label className="text-sm font-medium">
               Tiêu đề <span className="text-destructive">*</span>
             </label>
@@ -178,7 +178,7 @@ export function CreateAgentTaskDialog({
             />
           </div>
 
-          <div className="space-y-1.5">
+          <div className="space-y-2">
             <label className="text-sm font-medium">Mô tả</label>
             <Textarea
               value={description}
@@ -190,7 +190,7 @@ export function CreateAgentTaskDialog({
 
           {/* Ngày + giờ deadline + priority */}
           <div className="grid grid-cols-3 gap-4">
-            <div className="space-y-1.5">
+            <div className="space-y-2">
               <label className="text-sm font-medium">
                 Ngày <span className="text-destructive">*</span>
               </label>
@@ -200,7 +200,7 @@ export function CreateAgentTaskDialog({
                 onChange={(e) => setTaskDate(e.target.value)}
               />
             </div>
-            <div className="space-y-1.5">
+            <div className="space-y-2">
               <label className="text-sm font-medium">Deadline (giờ)</label>
               <Input
                 type="time"
@@ -208,14 +208,14 @@ export function CreateAgentTaskDialog({
                 onChange={(e) => setDueTime(e.target.value)}
               />
             </div>
-            <div className="space-y-1.5">
+            <div className="space-y-2">
               <label className="text-sm font-medium">Độ ưu tiên</label>
               <select
                 value={priority}
                 onChange={(e) =>
                   setPriority(e.target.value as AgentTaskPriority)
                 }
-                className="h-10 w-full rounded-xl border border-input bg-surface-container-lowest px-3.5 py-2 text-sm outline-none focus-visible:border-primary focus-visible:ring-2 focus-visible:ring-primary/20"
+                className="h-10 w-full rounded-xl border border-input bg-surface-container-lowest px-4 py-2 text-sm outline-none focus-visible:border-primary focus-visible:ring-2 focus-visible:ring-primary/20"
               >
                 {PRIORITY_OPTIONS.map((p) => (
                   <option key={p} value={p}>
@@ -228,7 +228,7 @@ export function CreateAgentTaskDialog({
 
           {/* Assigned role + branch */}
           <div className="grid grid-cols-2 gap-4">
-            <div className="space-y-1.5">
+            <div className="space-y-2">
               <label className="text-sm font-medium">Giao cho role</label>
               <Input
                 value={assignedToRole}
@@ -236,12 +236,12 @@ export function CreateAgentTaskDialog({
                 placeholder="cashier-branch-A / manager / barista"
               />
             </div>
-            <div className="space-y-1.5">
+            <div className="space-y-2">
               <label className="text-sm font-medium">Chi nhánh</label>
               <select
                 value={branchId}
                 onChange={(e) => setBranchId(e.target.value)}
-                className="h-10 w-full rounded-xl border border-input bg-surface-container-lowest px-3.5 py-2 text-sm outline-none focus-visible:border-primary focus-visible:ring-2 focus-visible:ring-primary/20"
+                className="h-10 w-full rounded-xl border border-input bg-surface-container-lowest px-4 py-2 text-sm outline-none focus-visible:border-primary focus-visible:ring-2 focus-visible:ring-primary/20"
               >
                 <option value="">— Toàn doanh nghiệp —</option>
                 {branches.map((b) => (
@@ -254,7 +254,7 @@ export function CreateAgentTaskDialog({
           </div>
 
           {/* Target metric */}
-          <div className="space-y-1.5">
+          <div className="space-y-2">
             <label className="text-sm font-medium">
               Chỉ số mục tiêu
               <span className="text-muted-foreground font-normal ml-1">
@@ -271,12 +271,12 @@ export function CreateAgentTaskDialog({
 
           {/* Agent + KPI link */}
           <div className="grid grid-cols-2 gap-4">
-            <div className="space-y-1.5">
+            <div className="space-y-2">
               <label className="text-sm font-medium">Agent tạo ra</label>
               <select
                 value={agentId}
                 onChange={(e) => setAgentId(e.target.value)}
-                className="h-10 w-full rounded-xl border border-input bg-surface-container-lowest px-3.5 py-2 text-sm outline-none focus-visible:border-primary focus-visible:ring-2 focus-visible:ring-primary/20"
+                className="h-10 w-full rounded-xl border border-input bg-surface-container-lowest px-4 py-2 text-sm outline-none focus-visible:border-primary focus-visible:ring-2 focus-visible:ring-primary/20"
               >
                 <option value="">— Không gắn agent —</option>
                 {agents.map((a) => (
@@ -286,13 +286,13 @@ export function CreateAgentTaskDialog({
                 ))}
               </select>
             </div>
-            <div className="space-y-1.5">
+            <div className="space-y-2">
               <label className="text-sm font-medium">KPI liên kết</label>
               <select
                 value={kpiId}
                 onChange={(e) => setKpiId(e.target.value)}
                 disabled={Boolean(kpiBreakdown)}
-                className="h-10 w-full rounded-xl border border-input bg-surface-container-lowest px-3.5 py-2 text-sm outline-none focus-visible:border-primary focus-visible:ring-2 focus-visible:ring-primary/20 disabled:opacity-60"
+                className="h-10 w-full rounded-xl border border-input bg-surface-container-lowest px-4 py-2 text-sm outline-none focus-visible:border-primary focus-visible:ring-2 focus-visible:ring-primary/20 disabled:opacity-60"
               >
                 <option value="">— Không gắn KPI —</option>
                 {kpis.map((k) => (
@@ -319,7 +319,7 @@ export function CreateAgentTaskDialog({
               <Icon
                 name="progress_activity"
                 size={16}
-                className="mr-1.5 animate-spin"
+                className="mr-1 animate-spin"
               />
             )}
             Tạo task

@@ -416,17 +416,17 @@ export function CreateProductDialog({
         <Tabs value={innerTab} onValueChange={(v) => setInnerTab(v as InnerTab)}>
           <TabsList className="w-full mb-4">
             <TabsTrigger value="info" className="flex-1">
-              <Icon name="info" size={14} className="mr-1.5" />
+              <Icon name="info" size={14} className="mr-1" />
               Thông tin
               {(errors.name || errors.category) && (
-                <span className="ml-1.5 inline-block h-1.5 w-1.5 rounded-full bg-destructive" />
+                <span className="ml-1 inline-block h-1.5 w-1.5 rounded-full bg-destructive" />
               )}
             </TabsTrigger>
             <TabsTrigger value="pricing" className="flex-1">
-              <Icon name="payments" size={14} className="mr-1.5" />
+              <Icon name="payments" size={14} className="mr-1" />
               Giá & Tồn kho
               {errors.sellPrice && (
-                <span className="ml-1.5 inline-block h-1.5 w-1.5 rounded-full bg-destructive" />
+                <span className="ml-1 inline-block h-1.5 w-1.5 rounded-full bg-destructive" />
               )}
             </TabsTrigger>
           </TabsList>
@@ -436,7 +436,7 @@ export function CreateProductDialog({
             {/* Header row: Ảnh + Tên + Mã code (read-only nếu edit) */}
             <div className="flex gap-4 items-start">
               <ProductImageUpload value={image} onChange={setImage} />
-              <div className="flex-1 space-y-1.5 min-w-0">
+              <div className="flex-1 space-y-2 min-w-0">
                 <label className="text-sm font-medium">
                   Tên hàng <span className="text-destructive">*</span>
                 </label>
@@ -466,7 +466,7 @@ export function CreateProductDialog({
             </div>
 
             <div className="grid grid-cols-2 gap-4">
-            <div className="space-y-1.5">
+            <div className="space-y-2">
               <label className="text-sm font-medium">
                 Nhóm hàng <span className="text-destructive">*</span>
               </label>
@@ -517,7 +517,7 @@ export function CreateProductDialog({
               )}
             </div>
 
-            <div className="space-y-1.5">
+            <div className="space-y-2">
               <label className="text-sm font-medium">Mã vạch</label>
               <Input
                 value={barcode}
@@ -529,7 +529,7 @@ export function CreateProductDialog({
 
           {/* Thương hiệu + NCC — optional cho NVL, dùng nhiều cho filter + báo cáo */}
           <div className="grid grid-cols-2 gap-4">
-            <div className="space-y-1.5">
+            <div className="space-y-2">
               <label className="text-sm font-medium">Thương hiệu</label>
               <Input
                 value={brand}
@@ -537,7 +537,7 @@ export function CreateProductDialog({
                 placeholder="VD: Monin, Trung Nguyên, Highlands…"
               />
             </div>
-            <div className="space-y-1.5">
+            <div className="space-y-2">
               <label className="text-sm font-medium">Nhà cung cấp</label>
               <Select
                 value={supplierId || null}
@@ -572,7 +572,7 @@ export function CreateProductDialog({
 
           {/* Kênh bán — chỉ hiển thị cho SKU. Tách FnB vs bán lẻ/sỉ để POS hiển thị đúng danh sách. */}
           {scope === "sku" && (
-            <div className="space-y-1.5">
+            <div className="space-y-2">
               <label className="text-sm font-medium">
                 Kênh bán <span className="text-destructive">*</span>
               </label>
@@ -605,7 +605,7 @@ export function CreateProductDialog({
                 tenant đã có "Kg" → suggest click để dùng tên hiện có,
                 tránh tạo 2 đơn vị tương tự khác hoa/thường. */}
             <div className="grid grid-cols-3 gap-4">
-              <div className="space-y-1.5">
+              <div className="space-y-2">
                 <label className="text-sm font-medium">ĐVT mua</label>
                 <Input
                   value={purchaseUnit}
@@ -627,7 +627,7 @@ export function CreateProductDialog({
                   </p>
                 )}
               </div>
-              <div className="space-y-1.5">
+              <div className="space-y-2">
                 <label className="text-sm font-medium">
                   ĐVT kho{" "}
                   <span className="text-muted-foreground">(chuẩn)</span>
@@ -652,7 +652,7 @@ export function CreateProductDialog({
                   </p>
                 )}
               </div>
-              <div className="space-y-1.5">
+              <div className="space-y-2">
                 <label className="text-sm font-medium">ĐVT bán</label>
                 <Input
                   value={sellUnit}
@@ -677,10 +677,10 @@ export function CreateProductDialog({
               </div>
             </div>
 
-            <div className="space-y-1.5">
+            <div className="space-y-2">
               <label className="text-sm font-medium">Mô tả</label>
               <textarea
-                className="flex min-h-[72px] w-full rounded-lg border border-input bg-transparent px-2.5 py-2 text-sm transition-colors outline-none placeholder:text-muted-foreground focus-visible:border-ring focus-visible:ring-3 focus-visible:ring-ring/50 disabled:cursor-not-allowed disabled:opacity-50"
+                className="flex min-h-[72px] w-full rounded-lg border border-input bg-transparent px-3 py-2 text-sm transition-colors outline-none placeholder:text-muted-foreground focus-visible:border-ring focus-visible:ring-3 focus-visible:ring-ring/50 disabled:cursor-not-allowed disabled:opacity-50"
                 value={description}
                 onChange={(e) => setDescription(e.target.value)}
                 placeholder="Mô tả sản phẩm (xuất xứ, đặc điểm, ghi chú nội bộ…)"
@@ -694,7 +694,7 @@ export function CreateProductDialog({
             {/* NVL banner — giải thích vì sao Giá bán + ĐVT bán bị disabled, tránh
                 CEO tưởng là bug. NVL = nguyên vật liệu nội bộ, không bán cho khách. */}
             {scope === "nvl" && (
-              <div className="flex items-start gap-2 rounded-lg bg-muted/40 px-3 py-2.5 text-xs text-muted-foreground">
+              <div className="flex items-start gap-2 rounded-lg bg-muted/40 px-3 py-3 text-xs text-muted-foreground">
                 <Icon name="info" size={14} className="mt-0.5 shrink-0" />
                 <span>
                   NVL là nguyên vật liệu nội bộ — không có giá bán. Chuyển sang
@@ -705,7 +705,7 @@ export function CreateProductDialog({
 
             {/* Pricing — giá vốn / giá bán / VAT. Format số có dấu chấm ngăn cách. */}
             <div className="grid grid-cols-3 gap-4">
-              <div className="space-y-1.5">
+              <div className="space-y-2">
                 <label className="text-sm font-medium">Giá vốn (₫)</label>
                 <Input
                   inputMode="numeric"
@@ -714,7 +714,7 @@ export function CreateProductDialog({
                   placeholder="0"
                 />
               </div>
-              <div className="space-y-1.5">
+              <div className="space-y-2">
                 <label className="text-sm font-medium">
                   Giá bán (₫)
                   {scope === "sku" && (
@@ -733,7 +733,7 @@ export function CreateProductDialog({
                   <p className="text-xs text-destructive">{errors.sellPrice}</p>
                 )}
               </div>
-              <div className="space-y-1.5">
+              <div className="space-y-2">
                 <label className="text-sm font-medium">Thuế VAT (%)</label>
                 {vatCustom ? (
                   <div className="flex gap-1">
@@ -798,7 +798,7 @@ export function CreateProductDialog({
 
             {/* Tồn: hiện tại / tối thiểu / tối đa. Min-max dùng cho alert hết hàng. */}
             <div className="grid grid-cols-3 gap-4">
-              <div className="space-y-1.5">
+              <div className="space-y-2">
                 <label className="text-sm font-medium">
                   {isEdit ? "Tồn hiện tại" : "Tồn ban đầu"}
                 </label>
@@ -815,7 +815,7 @@ export function CreateProductDialog({
                   </p>
                 )}
               </div>
-              <div className="space-y-1.5">
+              <div className="space-y-2">
                 <label className="text-sm font-medium">Tồn tối thiểu</label>
                 <Input
                   type="number"
@@ -824,7 +824,7 @@ export function CreateProductDialog({
                   placeholder="0"
                 />
               </div>
-              <div className="space-y-1.5">
+              <div className="space-y-2">
                 <label className="text-sm font-medium">Tồn tối đa</label>
                 <Input
                   type="number"
@@ -837,7 +837,7 @@ export function CreateProductDialog({
 
             {/* Trọng lượng + HSD số + đơn vị — gom thành 1 row */}
             <div className="grid grid-cols-3 gap-4">
-              <div className="space-y-1.5">
+              <div className="space-y-2">
                 <label className="text-sm font-medium">Trọng lượng (g)</label>
                 <Input
                   type="number"
@@ -846,7 +846,7 @@ export function CreateProductDialog({
                   placeholder="0"
                 />
               </div>
-              <div className="space-y-1.5">
+              <div className="space-y-2">
                 <label className="text-sm font-medium">HSD mặc định</label>
                 <Input
                   type="number"
@@ -855,7 +855,7 @@ export function CreateProductDialog({
                   placeholder="VD: 365"
                 />
               </div>
-              <div className="space-y-1.5">
+              <div className="space-y-2">
                 <label className="text-sm font-medium">Đơn vị HSD</label>
                 <Select
                   value={shelfLifeUnit}

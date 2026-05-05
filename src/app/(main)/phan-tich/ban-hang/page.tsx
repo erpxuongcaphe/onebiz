@@ -447,16 +447,16 @@ export default function BanHangPage() {
                 <tbody>
                   {topInvoicesList.map((inv) => (
                     <tr key={inv.code} className="border-b last:border-0">
-                      <td className="py-2.5 pr-4 font-mono text-xs text-primary">
+                      <td className="py-3 pr-4 font-mono text-xs text-primary">
                         {inv.code}
                       </td>
-                      <td className="py-2.5 pr-4 font-medium">
+                      <td className="py-3 pr-4 font-medium">
                         {inv.customer}
                       </td>
-                      <td className="py-2.5 pr-4 text-right font-medium text-primary">
+                      <td className="py-3 pr-4 text-right font-medium text-primary">
                         {formatCurrency(inv.value)}đ
                       </td>
-                      <td className="py-2.5 text-right text-muted-foreground">
+                      <td className="py-3 text-right text-muted-foreground">
                         {inv.date}
                       </td>
                     </tr>

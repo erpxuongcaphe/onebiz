@@ -288,7 +288,7 @@ export default function ZaloPage() {
         {/* RIGHT: Chat detail */}
         <div className="flex-1 flex flex-col bg-surface-container-low min-w-0">
           {/* Chat header */}
-          <div className="bg-white border-b px-4 py-2.5 flex items-center justify-between">
+          <div className="bg-white border-b px-4 py-3 flex items-center justify-between">
             <div className="flex items-center gap-2">
               <div
                 className="size-8 rounded-full flex items-center justify-center text-white text-xs font-bold"
@@ -308,7 +308,7 @@ export default function ZaloPage() {
               style={{ backgroundColor: ZALO_BLUE }}
               className="text-white hover:opacity-90"
             >
-              <Icon name="shopping_cart" className="size-4 mr-1.5" />
+              <Icon name="shopping_cart" className="size-4 mr-1" />
               Tạo đơn hàng
             </Button>
           </div>
@@ -326,7 +326,7 @@ export default function ZaloPage() {
                 >
                   <div
                     className={cn(
-                      "max-w-[75%] rounded-2xl px-3.5 py-2",
+                      "max-w-[75%] rounded-2xl px-4 py-2",
                       msg.sender === "shop"
                         ? "text-white"
                         : "bg-white border text-foreground"
@@ -355,7 +355,7 @@ export default function ZaloPage() {
           </ScrollArea>
 
           {/* Product suggestions */}
-          <div className="border-t bg-white px-4 py-2.5">
+          <div className="border-t bg-white px-4 py-3">
             <p className="text-xs font-medium text-muted-foreground mb-2 flex items-center gap-1">
               <Icon name="inventory_2" className="size-3" />
               Gợi ý sản phẩm
@@ -402,7 +402,7 @@ export default function ZaloPage() {
                 style={{ backgroundColor: ZALO_BLUE }}
                 className="text-white hover:opacity-90"
               >
-                <Icon name="send" className="size-4 mr-1.5" />
+                <Icon name="send" className="size-4 mr-1" />
                 Gửi
               </Button>
             </div>

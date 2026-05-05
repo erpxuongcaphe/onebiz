@@ -213,7 +213,7 @@ function ProductCard({
         )}
 
         {/* Price badge — Stitch glass style top-right */}
-        <div className="absolute top-3 right-3 bg-primary/90 backdrop-blur-[20px] text-on-primary text-[11px] font-bold px-2.5 py-1 rounded-full ambient-shadow">
+        <div className="absolute top-3 right-3 bg-primary/90 backdrop-blur-[20px] text-on-primary text-[11px] font-bold px-3 py-1 rounded-full ambient-shadow">
           {formatCurrency(product.sell_price)}
         </div>
 

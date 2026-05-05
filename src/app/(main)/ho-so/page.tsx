@@ -348,7 +348,7 @@ export default function HoSoPage() {
             </div>
             <Separator />
             <div className="grid gap-4 sm:grid-cols-2">
-              <div className="space-y-1.5">
+              <div className="space-y-2">
                 <label className="text-sm font-medium" htmlFor="full-name">
                   Họ tên <span className="text-destructive">*</span>
                 </label>
@@ -359,7 +359,7 @@ export default function HoSoPage() {
                   placeholder="Nguyễn Văn A"
                 />
               </div>
-              <div className="space-y-1.5">
+              <div className="space-y-2">
                 <label className="text-sm font-medium" htmlFor="email">
                   Email
                 </label>
@@ -374,7 +374,7 @@ export default function HoSoPage() {
                   Email liên kết với tài khoản đăng nhập, không đổi được.
                 </p>
               </div>
-              <div className="space-y-1.5">
+              <div className="space-y-2">
                 <label className="text-sm font-medium" htmlFor="phone">
                   Số điện thoại <span className="text-destructive">*</span>
                 </label>
@@ -390,7 +390,7 @@ export default function HoSoPage() {
                   Dùng SĐT này để đăng nhập thay email.
                 </p>
               </div>
-              <div className="space-y-1.5">
+              <div className="space-y-2">
                 <label className="text-sm font-medium" htmlFor="role">
                   Vai trò
                 </label>
@@ -403,7 +403,7 @@ export default function HoSoPage() {
             <div className="flex justify-end">
               <Button
                 size="sm"
-                className="gap-1.5"
+                className="gap-2"
                 onClick={handleSaveProfile}
                 disabled={savingProfile || !hasProfileChanges}
               >
@@ -424,7 +424,7 @@ export default function HoSoPage() {
           </CardHeader>
           <CardContent className="pt-4 space-y-4">
             <div className="grid gap-4 sm:grid-cols-1 max-w-sm">
-              <div className="space-y-1.5">
+              <div className="space-y-2">
                 <label className="text-sm font-medium" htmlFor="current-password">
                   Mật khẩu hiện tại
                 </label>
@@ -437,7 +437,7 @@ export default function HoSoPage() {
                   placeholder="••••••••"
                 />
               </div>
-              <div className="space-y-1.5">
+              <div className="space-y-2">
                 <label className="text-sm font-medium" htmlFor="new-password">
                   Mật khẩu mới
                 </label>
@@ -450,7 +450,7 @@ export default function HoSoPage() {
                   placeholder="Ít nhất 6 ký tự"
                 />
               </div>
-              <div className="space-y-1.5">
+              <div className="space-y-2">
                 <label className="text-sm font-medium" htmlFor="confirm-password">
                   Xác nhận mật khẩu mới
                 </label>
@@ -467,7 +467,7 @@ export default function HoSoPage() {
             <div className="flex justify-end">
               <Button
                 size="sm"
-                className="gap-1.5"
+                className="gap-2"
                 onClick={handleChangePassword}
                 disabled={
                   savingPassword ||

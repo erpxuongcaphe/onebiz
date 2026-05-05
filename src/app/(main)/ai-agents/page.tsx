@@ -549,7 +549,7 @@ export default function AiAgentsPage() {
                   ({totalOverdueCount} quá hạn · {totalDueTodayCount} hôm nay)
                 </span>
               </div>
-              <ul className="space-y-1.5">
+              <ul className="space-y-2">
                 {criticalTasks.map((t) => {
                   const u = taskUrgency(t);
                   const agent = agents.find((a) => a.id === t.agentId);
@@ -673,7 +673,7 @@ export default function AiAgentsPage() {
                   return (
                     <div
                       key={ex.id}
-                      className="flex items-center gap-3 py-2.5 text-sm"
+                      className="flex items-center gap-3 py-3 text-sm"
                     >
                       <span
                         className={`text-[10px] font-semibold uppercase rounded-full px-2 py-0.5 ${statusClass[statusTone]}`}

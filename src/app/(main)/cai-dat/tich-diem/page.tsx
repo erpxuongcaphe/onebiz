@@ -152,7 +152,7 @@ function TierDialog({ open, onOpenChange, initial, onSaved }: TierDialogProps) {
           </DialogTitle>
         </DialogHeader>
         <div className="grid gap-4 py-2">
-          <div className="space-y-1.5">
+          <div className="space-y-2">
             <label className="text-sm font-medium">Tên hạng *</label>
             <Input
               value={name}
@@ -161,7 +161,7 @@ function TierDialog({ open, onOpenChange, initial, onSaved }: TierDialogProps) {
             />
           </div>
           <div className="grid grid-cols-2 gap-3">
-            <div className="space-y-1.5">
+            <div className="space-y-2">
               <label className="text-sm font-medium">Điểm tối thiểu</label>
               <Input
                 type="number"
@@ -170,7 +170,7 @@ function TierDialog({ open, onOpenChange, initial, onSaved }: TierDialogProps) {
                 min={0}
               />
             </div>
-            <div className="space-y-1.5">
+            <div className="space-y-2">
               <label className="text-sm font-medium">Giảm giá (%)</label>
               <Input
                 type="number"
@@ -181,7 +181,7 @@ function TierDialog({ open, onOpenChange, initial, onSaved }: TierDialogProps) {
               />
             </div>
           </div>
-          <div className="space-y-1.5">
+          <div className="space-y-2">
             <label className="text-sm font-medium">Thứ tự sắp xếp</label>
             <Input
               type="number"
@@ -199,7 +199,7 @@ function TierDialog({ open, onOpenChange, initial, onSaved }: TierDialogProps) {
           </Button>
           <Button onClick={handleSave} disabled={saving}>
             {saving && (
-              <Icon name="progress_activity" size={16} className="mr-1.5 animate-spin" />
+              <Icon name="progress_activity" size={16} className="mr-1 animate-spin" />
             )}
             {isEdit ? "Cập nhật" : "Tạo hạng"}
           </Button>
@@ -441,7 +441,7 @@ export default function LoyaltyPointsSettingsPage() {
                   setTierDialogOpen(true);
                 }}
               >
-                <Icon name="add" size={14} className="mr-1.5" />
+                <Icon name="add" size={14} className="mr-1" />
                 Thêm hạng
               </Button>
             </div>
@@ -552,9 +552,9 @@ export default function LoyaltyPointsSettingsPage() {
             disabled={!settings || savingSettings || !settingsDirty}
           >
             {savingSettings ? (
-              <Icon name="progress_activity" size={16} className="mr-1.5 animate-spin" />
+              <Icon name="progress_activity" size={16} className="mr-1 animate-spin" />
             ) : (
-              <Icon name="save" size={16} className="mr-1.5" />
+              <Icon name="save" size={16} className="mr-1" />
             )}
             {settingsDirty ? "Lưu cài đặt" : "Đã lưu"}
           </Button>

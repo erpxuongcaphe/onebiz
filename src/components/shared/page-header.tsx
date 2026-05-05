@@ -69,7 +69,7 @@ function ActionButton({ action }: { action: PageAction }) {
       size="sm"
       onClick={handleClick}
       disabled={action.disabled}
-      className="gap-1.5 shrink-0"
+      className="gap-2 shrink-0"
     >
       {action.icon}
       {action.label}
@@ -82,7 +82,7 @@ function ExportButton({ onExport }: { onExport: ExportHandlers }) {
     <DropdownMenu>
       <DropdownMenuTrigger
         className={cn(
-          "inline-flex items-center justify-center gap-1.5 shrink-0",
+          "inline-flex items-center justify-center gap-2 shrink-0",
           "rounded-md text-sm font-medium",
           "border border-input bg-background hover:bg-accent hover:text-accent-foreground",
           "h-8 px-3 cursor-pointer"
@@ -143,7 +143,7 @@ function ImportButton({ onImport }: { onImport: (file: File) => void }) {
         variant="outline"
         size="sm"
         onClick={handleClick}
-        className="gap-1.5 shrink-0"
+        className="gap-2 shrink-0"
       >
         <Icon name="upload" size={16} />
         Import file
@@ -225,7 +225,7 @@ export function PageHeader({
           )}
 
           {/* Desktop actions */}
-          <div className="hidden md:flex items-center gap-1.5 ml-auto">
+          <div className="hidden md:flex items-center gap-2 ml-auto">
             {mainActions.map((action, i) => (
               <ActionButton key={i} action={action} />
             ))}
@@ -248,7 +248,7 @@ export function PageHeader({
                   {overflowActions.map((action, i) => (
                     <DropdownMenuItem key={i} onClick={action.onClick}>
                       {action.icon && (
-                        <span className="mr-1.5">{action.icon}</span>
+                        <span className="mr-1">{action.icon}</span>
                       )}
                       {action.label}
                     </DropdownMenuItem>

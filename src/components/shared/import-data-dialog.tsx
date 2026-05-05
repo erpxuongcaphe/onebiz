@@ -129,7 +129,7 @@ export function ImportDataDialog({ open, onOpenChange }: ImportDataDialogProps) 
               key={m.id}
               className="border rounded-lg p-3 bg-background hover:border-primary/40 transition-colors"
             >
-              <div className="flex items-start gap-2.5 mb-2">
+              <div className="flex items-start gap-3 mb-2">
                 <div className="h-9 w-9 rounded-md bg-primary-fixed text-primary flex items-center justify-center shrink-0">
                   <Icon name={m.icon} size={18} />
                 </div>
@@ -142,12 +142,12 @@ export function ImportDataDialog({ open, onOpenChange }: ImportDataDialogProps) 
                   </p>
                 </div>
               </div>
-              <div className="flex items-center gap-1.5 mt-2">
+              <div className="flex items-center gap-2 mt-2">
                 <Button
                   type="button"
                   variant="ghost"
                   size="sm"
-                  className="flex-1 gap-1.5"
+                  className="flex-1 gap-2"
                   onClick={() => downloadTemplate(m.schema)}
                 >
                   <Icon name="description" size={14} />
@@ -157,7 +157,7 @@ export function ImportDataDialog({ open, onOpenChange }: ImportDataDialogProps) 
                   type="button"
                   variant="outline"
                   size="sm"
-                  className="flex-1 gap-1.5"
+                  className="flex-1 gap-2"
                   onClick={() => goToModule(m.href)}
                 >
                   <Icon name="arrow_forward" size={14} />
@@ -168,7 +168,7 @@ export function ImportDataDialog({ open, onOpenChange }: ImportDataDialogProps) 
           ))}
         </div>
 
-        <div className="rounded-md bg-primary-fixed/40 border border-primary-fixed-dim p-2.5 text-[11px] text-foreground/80 leading-snug">
+        <div className="rounded-md bg-primary-fixed/40 border border-primary-fixed-dim p-3 text-[11px] text-foreground/80 leading-snug">
           <strong className="text-primary">Quy trình:</strong> Tải mẫu →
           điền dữ liệu → vào trang tương ứng → bấm &quot;Nhập Excel&quot; →
           preview &amp; validate → xác nhận ghi DB.

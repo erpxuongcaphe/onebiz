@@ -203,7 +203,7 @@ export default function ThongBaoPage() {
               {unreadCount > 0 && (
                 <Badge
                   variant="destructive"
-                  className="ml-1.5 h-4 min-w-4 px-1 text-[10px]"
+                  className="ml-1 h-4 min-w-4 px-1 text-[10px]"
                 >
                   {unreadCount}
                 </Badge>

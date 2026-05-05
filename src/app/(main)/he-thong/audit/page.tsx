@@ -119,7 +119,7 @@ export default function AuditPage() {
       header: "Người thực hiện",
       size: 160,
       cell: ({ row }) => (
-        <div className="flex items-center gap-1.5">
+        <div className="flex items-center gap-2">
           <Icon name="person" size={14} className="text-muted-foreground" />
           <span className="text-sm font-medium">{row.original.userName}</span>
         </div>
@@ -394,7 +394,7 @@ function StatCard({
 }) {
   return (
     <div className={`border rounded-lg p-3 ${bg}`}>
-      <div className="flex items-center gap-1.5 text-xs text-muted-foreground mb-1">
+      <div className="flex items-center gap-2 text-xs text-muted-foreground mb-1">
         {icon}
         <span>{label}</span>
       </div>
@@ -419,7 +419,7 @@ function FilterSelect({
       <select
         value={value}
         onChange={(e) => onChange(e.target.value)}
-        className="appearance-none text-xs border rounded-md px-3 py-1.5 pr-7 bg-background cursor-pointer hover:bg-muted/50 transition-colors"
+        className="appearance-none text-xs border rounded-md px-3 py-2 pr-7 bg-background cursor-pointer hover:bg-muted/50 transition-colors"
       >
         {options.map((opt) => (
           <option key={opt.value} value={opt.value}>

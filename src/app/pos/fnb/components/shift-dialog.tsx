@@ -80,14 +80,14 @@ export function OpenShiftDialog({ open, onOpenChange, onConfirm }: OpenShiftDial
               />
             </div>
             {/* R4: Quick-pick denominations — tap thay vì gõ số. */}
-            <div className="flex flex-wrap gap-1.5 mt-2">
+            <div className="flex flex-wrap gap-2 mt-2">
               {QUICK_DENOMINATIONS.map((d) => (
                 <button
                   key={d.value}
                   type="button"
                   onClick={() => setAmount(String(d.value))}
                   className={cn(
-                    "px-3 py-1.5 rounded-md text-xs font-medium border transition-colors",
+                    "px-3 py-2 rounded-md text-xs font-medium border transition-colors",
                     amount === String(d.value)
                       ? "bg-primary text-primary-foreground border-primary"
                       : "bg-surface-container-low border-border hover:bg-surface-container hover:border-primary/40",

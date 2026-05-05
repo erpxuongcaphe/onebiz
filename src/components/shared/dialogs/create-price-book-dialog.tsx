@@ -157,7 +157,7 @@ export function CreatePriceBookDialog({
 
         <div className="grid gap-4 py-2">
           {/* Product search */}
-          <div className="space-y-1.5">
+          <div className="space-y-2">
             <label className="text-sm font-medium">
               Sản phẩm <span className="text-destructive">*</span>
             </label>
@@ -224,7 +224,7 @@ export function CreatePriceBookDialog({
           )}
 
           {/* New sell price */}
-          <div className="space-y-1.5">
+          <div className="space-y-2">
             <label className="text-sm font-medium">
               Giá bán mới <span className="text-destructive">*</span>
             </label>
@@ -242,7 +242,7 @@ export function CreatePriceBookDialog({
           </div>
 
           {/* New cost price */}
-          <div className="space-y-1.5">
+          <div className="space-y-2">
             <label className="text-sm font-medium">Giá vốn mới</label>
             <Input
               type="number"
@@ -258,7 +258,7 @@ export function CreatePriceBookDialog({
           </div>
 
           {/* Effective date */}
-          <div className="space-y-1.5">
+          <div className="space-y-2">
             <label className="text-sm font-medium">Ngày áp dụng</label>
             <Input
               type="date"

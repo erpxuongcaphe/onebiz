@@ -158,7 +158,7 @@ export function FnbOrderHistoryDialog({
                 <p className="text-sm">Không có hoá đơn trong 24h qua</p>
               </div>
             ) : (
-              <div className="space-y-1.5 pr-2">
+              <div className="space-y-2 pr-2">
                 {invoices.map((inv) => (
                   <div
                     key={inv.id}
@@ -173,7 +173,7 @@ export function FnbOrderHistoryDialog({
                           </span>
                         )}
                         {inv.tableName && (
-                          <span className="text-[10px] px-1.5 py-0.5 rounded bg-primary-fixed text-primary font-semibold">
+                          <span className="text-[10px] px-2 py-0.5 rounded bg-primary-fixed text-primary font-semibold">
                             {inv.tableName}
                           </span>
                         )}

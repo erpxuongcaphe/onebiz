@@ -120,7 +120,7 @@ export function PrintSizePickerDialog({
             Hủy
           </Button>
           <Button type="button" onClick={handlePrint}>
-            <Icon name="print" size={16} className="mr-1.5" />
+            <Icon name="print" size={16} className="mr-1" />
             In ngay ({selected})
           </Button>
         </DialogFooter>

@@ -216,7 +216,7 @@ export function ImportExcelDialog<TRow>({
                   size="sm"
                   onClick={() => fileInputRef.current?.click()}
                 >
-                  <Icon name="folder_open" size={16} className="mr-1.5" />
+                  <Icon name="folder_open" size={16} className="mr-1" />
                   Chọn file
                 </Button>
                 <Button
@@ -224,7 +224,7 @@ export function ImportExcelDialog<TRow>({
                   size="sm"
                   onClick={() => downloadTemplate(schema)}
                 >
-                  <Icon name="download" size={16} className="mr-1.5" />
+                  <Icon name="download" size={16} className="mr-1" />
                   Tải file mẫu
                 </Button>
               </div>
@@ -306,7 +306,7 @@ export function ImportExcelDialog<TRow>({
                 disabled={!canConfirm}
                 onClick={handleConfirmImport}
               >
-                <Icon name="check" size={16} className="mr-1.5" />
+                <Icon name="check" size={16} className="mr-1" />
                 {errorCount > 0 && skipErrors
                   ? `Nhập ${validCount} dòng hợp lệ (bỏ qua ${errorCount} dòng lỗi)`
                   : `Xác nhận nhập ${validCount} dòng`}
@@ -400,7 +400,7 @@ function PreviewSection<TRow>({
               <Icon name="error" size={14} className="inline mr-1" />
               Danh sách dòng lỗi ({errorCount})
             </p>
-            <label className="flex items-center gap-1.5 text-xs cursor-pointer text-muted-foreground">
+            <label className="flex items-center gap-2 text-xs cursor-pointer text-muted-foreground">
               <input
                 type="checkbox"
                 checked={skipErrors}

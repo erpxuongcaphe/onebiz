@@ -216,7 +216,7 @@ export default function ChuyenKhoPage() {
       header: "Từ → Đến",
       size: 280,
       cell: ({ row }) => (
-        <div className="flex items-center gap-1.5 text-sm">
+        <div className="flex items-center gap-2 text-sm">
           <span className="font-medium truncate max-w-[120px]">
             {row.original.fromBranchName}
           </span>
@@ -350,7 +350,7 @@ export default function ChuyenKhoPage() {
             <div className="space-y-1">
               <button
                 onClick={() => { setStatusFilter("all"); setPage(0); }}
-                className={`w-full text-left text-xs px-2 py-1.5 rounded ${statusFilter === "all" ? "bg-primary text-white" : "hover:bg-muted"}`}
+                className={`w-full text-left text-xs px-2 py-2 rounded ${statusFilter === "all" ? "bg-primary text-white" : "hover:bg-muted"}`}
               >
                 Tất cả
               </button>
@@ -358,7 +358,7 @@ export default function ChuyenKhoPage() {
                 <button
                   key={opt.value}
                   onClick={() => { setStatusFilter(opt.value); setPage(0); }}
-                  className={`w-full text-left text-xs px-2 py-1.5 rounded ${statusFilter === opt.value ? "bg-primary text-white" : "hover:bg-muted"}`}
+                  className={`w-full text-left text-xs px-2 py-2 rounded ${statusFilter === opt.value ? "bg-primary text-white" : "hover:bg-muted"}`}
                 >
                   {opt.label}
                 </button>
@@ -993,7 +993,7 @@ function CreateTransferDialog({
                 </tbody>
               </table>
               {overStockItems.length > 0 && (
-                <div className="px-3 py-2 bg-status-error/10 border-t border-status-error/30 text-xs text-status-error flex items-start gap-1.5">
+                <div className="px-3 py-2 bg-status-error/10 border-t border-status-error/30 text-xs text-status-error flex items-start gap-2">
                   <Icon name="warning" size={14} className="shrink-0 mt-0.5" />
                   <span>
                     Có {overStockItems.length} mặt hàng vượt tồn kho tại chi nhánh
@@ -1027,7 +1027,7 @@ function CreateTransferDialog({
             Hủy
           </Button>
           <Button onClick={handleSubmit} disabled={!isValid || creating}>
-            {creating && <Icon name="progress_activity" size={16} className="animate-spin mr-1.5" />}
+            {creating && <Icon name="progress_activity" size={16} className="animate-spin mr-1" />}
             Tạo phiếu
           </Button>
         </DialogFooter>

@@ -129,15 +129,15 @@ export function CreateDeliveryPartnerDialog({
 
         <div className="grid gap-4 py-2">
           {/* Code */}
-          <div className="space-y-1.5">
+          <div className="space-y-2">
             <label className="text-sm font-medium">Mã đối tác</label>
-            <div className="flex h-9 w-full rounded-lg border border-input bg-muted/50 px-2.5 py-2 text-sm">
+            <div className="flex h-9 w-full rounded-lg border border-input bg-muted/50 px-3 py-2 text-sm">
               {code}
             </div>
           </div>
 
           {/* Name */}
-          <div className="space-y-1.5">
+          <div className="space-y-2">
             <label className="text-sm font-medium">
               Tên đối tác <span className="text-destructive">*</span>
             </label>
@@ -153,7 +153,7 @@ export function CreateDeliveryPartnerDialog({
           </div>
 
           {/* Phone */}
-          <div className="space-y-1.5">
+          <div className="space-y-2">
             <label className="text-sm font-medium">Điện thoại</label>
             <Input
               value={phone}

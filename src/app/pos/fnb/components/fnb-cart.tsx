@@ -170,7 +170,7 @@ export function FnbCart({
           <span className="truncate flex-1 text-left">
             {activeTab?.customerName ?? "Khách lẻ"}
           </span>
-          <kbd className="text-[10px] text-muted-foreground font-mono bg-surface-container-lowest border border-outline-variant/30 rounded px-1.5 py-0.5">
+          <kbd className="text-[10px] text-muted-foreground font-mono bg-surface-container-lowest border border-outline-variant/30 rounded px-2 py-0.5">
             F4
           </kbd>
         </button>
@@ -178,7 +178,7 @@ export function FnbCart({
 
       {/* Order type badge row (display current) */}
       <div className="px-4 pt-3 pb-2 shrink-0">
-        <div className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-full bg-primary-fixed text-primary text-xs font-semibold">
+        <div className="inline-flex items-center gap-2 px-3 py-2 rounded-full bg-primary-fixed text-primary text-xs font-semibold">
           <Icon
             name={
               activeTab?.orderType === "dine_in"
@@ -220,11 +220,11 @@ export function FnbCart({
       )}
 
       {/* ── Footer: totals + discount + actions ── */}
-      <div className="border-t border-outline-variant/20 bg-surface-container-lowest p-4 shrink-0 space-y-2.5">
+      <div className="border-t border-outline-variant/20 bg-surface-container-lowest p-4 shrink-0 space-y-3">
         {/* KM-3: Free items section — quà tặng kèm (BOGO + gift) */}
         {freeItems && freeItems.length > 0 && (
           <div className="bg-status-warning/10 border border-status-warning/30 rounded-lg p-2 space-y-1">
-            <div className="flex items-center gap-1.5">
+            <div className="flex items-center gap-2">
               <Icon name="redeem" size={14} className="text-status-warning" />
               <span className="text-xs font-semibold text-status-warning">
                 Tặng kèm ({freeItems.length} món)
@@ -375,9 +375,9 @@ function CouponRow({
 
   if (appliedCode) {
     return (
-      <div className="flex items-center gap-1.5">
+      <div className="flex items-center gap-2">
         <span className="text-xs text-muted-foreground shrink-0">Mã</span>
-        <div className="flex-1 min-w-0 flex items-center gap-1.5 px-2.5 h-9 md:h-7 rounded bg-status-success/10 border border-status-success/30">
+        <div className="flex-1 min-w-0 flex items-center gap-2 px-3 h-9 md:h-7 rounded bg-status-success/10 border border-status-success/30">
           <Icon name="local_offer" size={14} className="text-status-success shrink-0" />
           <span className="text-xs font-semibold text-status-success truncate tabular-nums">
             {appliedCode}
@@ -406,7 +406,7 @@ function CouponRow({
   };
 
   return (
-    <div className="flex items-center gap-1.5">
+    <div className="flex items-center gap-2">
       <span className="text-xs text-muted-foreground shrink-0">Mã</span>
       <Input
         type="text"
@@ -427,7 +427,7 @@ function CouponRow({
         onClick={handleApply}
         disabled={!code.trim() || applying}
         className={cn(
-          "h-9 md:h-7 px-2.5 rounded border text-xs font-semibold shrink-0 transition-colors",
+          "h-9 md:h-7 px-3 rounded border text-xs font-semibold shrink-0 transition-colors",
           code.trim() && !applying
             ? "bg-primary text-on-primary border-primary hover:bg-primary-hover"
             : "bg-surface-container-low text-muted-foreground border-border opacity-60"
@@ -476,7 +476,7 @@ function DiscountRow({
   };
 
   return (
-    <div className="flex items-center gap-1.5">
+    <div className="flex items-center gap-2">
       <span className="text-xs text-muted-foreground shrink-0">Giảm giá</span>
       <Input
         type="text"
@@ -544,7 +544,7 @@ function CartLineItem({
 
       {/* Toppings */}
       {line.toppings.length > 0 && (
-        <div className="mt-1.5 space-y-0.5">
+        <div className="mt-2 space-y-0.5">
           {line.toppings.map((t, i) => (
             <p key={i} className="text-[11px] text-muted-foreground">
               + {t.name} x{t.quantity}{" "}
@@ -564,7 +564,7 @@ function CartLineItem({
       {/* Qty controls + remove — Stitch pill group.
           POS-FIX-C1: tăng touch target lên 36px md+, 44px touch device.
           Trước đây size-7 (28px) — barista đeo găng tap nhầm sang nút xoá. */}
-      <div className="flex items-center justify-between mt-2.5">
+      <div className="flex items-center justify-between mt-3">
         <div className="inline-flex items-center gap-0.5 bg-surface-container-lowest rounded-full p-0.5 border border-outline-variant/15">
           <button
             type="button"

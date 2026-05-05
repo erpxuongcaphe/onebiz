@@ -41,7 +41,7 @@ function calcChangePct(current: number, previous: number): number {
 function HourTooltip({ active, payload, label }: any) {
   if (!active || !payload?.length) return null;
   return (
-    <div className="bg-white border rounded-lg shadow-lg p-2.5 text-xs">
+    <div className="bg-white border rounded-lg shadow-lg p-3 text-xs">
       <p className="font-semibold text-foreground mb-1">{label}</p>
       {payload.map((entry: any, i: number) => (
         <p key={i} style={{ color: entry.color }}>
@@ -57,7 +57,7 @@ function PieTooltip({ active, payload }: any) {
   const d = payload[0];
   const total = d.payload.total as number;
   return (
-    <div className="bg-white border rounded-lg shadow-lg p-2.5 text-xs">
+    <div className="bg-white border rounded-lg shadow-lg p-3 text-xs">
       <p className="font-semibold text-foreground mb-1">{d.name}</p>
       <p style={{ color: d.payload.color }}>
         {formatChartTooltipCurrency(d.value)} ({total > 0 ? ((d.value / total) * 100).toFixed(1) : 0}%)
@@ -69,7 +69,7 @@ function PieTooltip({ active, payload }: any) {
 function ProductTooltip({ active, payload, label }: any) {
   if (!active || !payload?.length) return null;
   return (
-    <div className="bg-white border rounded-lg shadow-lg p-2.5 text-xs">
+    <div className="bg-white border rounded-lg shadow-lg p-3 text-xs">
       <p className="font-semibold text-foreground mb-1">{label}</p>
       <p style={{ color: payload[0].color }}>
         Số lượng: {payload[0].value}
@@ -315,7 +315,7 @@ export default function CuoiNgayPage() {
                 <tbody>
                   {paymentMethods.map((m, i) => (
                     <tr key={i} className="border-b last:border-0">
-                      <td className="py-2.5 pr-4">
+                      <td className="py-3 pr-4">
                         <div className="flex items-center gap-2">
                           <span
                             className="size-2.5 rounded-full shrink-0"
@@ -324,36 +324,36 @@ export default function CuoiNgayPage() {
                           <span className="font-medium text-foreground">{m.name}</span>
                         </div>
                       </td>
-                      <td className="py-2.5 pr-4 text-right font-semibold text-foreground">
+                      <td className="py-3 pr-4 text-right font-semibold text-foreground">
                         {formatCurrency(m.value)}đ
                       </td>
-                      <td className="py-2.5 text-right text-muted-foreground">
+                      <td className="py-3 text-right text-muted-foreground">
                         {totalRevenue > 0 ? ((m.value / totalRevenue) * 100).toFixed(1) : "0.0"}%
                       </td>
                     </tr>
                   ))}
                   <tr className="border-t-2 font-bold">
-                    <td className="py-2.5 pr-4 text-foreground">Tổng cộng</td>
-                    <td className="py-2.5 pr-4 text-right text-primary">
+                    <td className="py-3 pr-4 text-foreground">Tổng cộng</td>
+                    <td className="py-3 pr-4 text-right text-primary">
                       {formatCurrency(totalRevenue)}đ
                     </td>
-                    <td className="py-2.5 text-right text-foreground">100%</td>
+                    <td className="py-3 text-right text-foreground">100%</td>
                   </tr>
                   <tr className="text-status-error">
-                    <td className="py-2.5 pr-4">Trả hàng</td>
-                    <td className="py-2.5 pr-4 text-right font-semibold">
+                    <td className="py-3 pr-4">Trả hàng</td>
+                    <td className="py-3 pr-4 text-right font-semibold">
                       -{formatCurrency(returnAmount)}đ
                     </td>
-                    <td className="py-2.5 text-right">
+                    <td className="py-3 text-right">
                       {totalRevenue > 0 ? ((returnAmount / totalRevenue) * 100).toFixed(1) : "0.0"}%
                     </td>
                   </tr>
                   <tr className="border-t-2 font-bold text-status-success">
-                    <td className="py-2.5 pr-4">Doanh thu thực</td>
-                    <td className="py-2.5 pr-4 text-right">
+                    <td className="py-3 pr-4">Doanh thu thực</td>
+                    <td className="py-3 pr-4 text-right">
                       {formatCurrency(totalRevenue - returnAmount)}đ
                     </td>
-                    <td className="py-2.5 text-right">
+                    <td className="py-3 text-right">
                       {totalRevenue > 0
                         ? (((totalRevenue - returnAmount) / totalRevenue) * 100).toFixed(1)
                         : "0.0"}%

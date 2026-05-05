@@ -78,12 +78,12 @@ function LeafLink({
       )}
       <span className="truncate flex-1">{leaf.label}</span>
       {leaf.comingSoon && (
-        <span className="text-[9px] font-semibold uppercase tracking-wider rounded px-1.5 py-0.5 bg-status-warning/10 text-status-warning border border-status-warning/25">
+        <span className="text-[9px] font-semibold uppercase tracking-wider rounded px-2 py-0.5 bg-status-warning/10 text-status-warning border border-status-warning/25">
           Soon
         </span>
       )}
       {leaf.badge && !leaf.comingSoon && (
-        <span className="text-[9px] font-semibold uppercase tracking-wider rounded px-1.5 py-0.5 bg-primary/10 text-primary">
+        <span className="text-[9px] font-semibold uppercase tracking-wider rounded px-2 py-0.5 bg-primary/10 text-primary">
           {leaf.badge}
         </span>
       )}
@@ -183,7 +183,7 @@ function SubGroupSection({
   if (alwaysOpen) {
     return (
       <div className="mt-1">
-        <div className="flex items-center gap-1.5 px-3 pt-1.5 pb-1 text-[10px] font-semibold text-muted-foreground uppercase tracking-wider">
+        <div className="flex items-center gap-2 px-3 pt-2 pb-1 text-[10px] font-semibold text-muted-foreground uppercase tracking-wider">
           {subGroup.icon && <Icon name={subGroup.icon} size={12} />}
           {subGroup.label}
         </div>
@@ -385,7 +385,7 @@ function GroupCollapsed({
           onMouseLeave={scheduleClose}
         >
           <div className="bg-surface-container-lowest rounded-xl ambient-shadow-lg min-w-[240px] max-w-[280px] py-2">
-            <div className="px-3 py-1.5 text-xs font-semibold text-muted-foreground uppercase tracking-wider border-b mb-1">
+            <div className="px-3 py-2 text-xs font-semibold text-muted-foreground uppercase tracking-wider border-b mb-1">
               {group.label}
             </div>
             <div className="px-1 space-y-0.5 max-h-[70vh] overflow-y-auto">
@@ -530,7 +530,7 @@ export function AppSidebar() {
       <nav
         className={cn(
           "flex-1 overflow-y-auto overflow-x-visible py-3",
-          collapsed ? "px-1.5" : "px-3"
+          collapsed ? "px-2" : "px-3"
         )}
       >
         <div className="space-y-0.5">
@@ -552,7 +552,7 @@ export function AppSidebar() {
       </nav>
 
       {/* Bottom-pinned groups (Hệ thống) */}
-      <div className={cn("border-t border-border py-3", collapsed ? "px-1.5" : "px-3")}>
+      <div className={cn("border-t border-border py-3", collapsed ? "px-2" : "px-3")}>
         <div className="space-y-0.5">
           {bottomGroups.map((g) =>
             collapsed ? (

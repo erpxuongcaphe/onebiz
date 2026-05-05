@@ -40,7 +40,7 @@ export function PersonFilter({
   return (
     <div className="relative">
       {value && selectedLabel ? (
-        <div className="flex items-center gap-1.5 px-2 py-1.5 text-sm bg-primary-fixed text-primary rounded-md border border-primary-fixed">
+        <div className="flex items-center gap-2 px-2 py-2 text-sm bg-primary-fixed text-primary rounded-md border border-primary-fixed">
           <span className="flex-1 truncate">{selectedLabel}</span>
           <button
             type="button"
@@ -75,7 +75,7 @@ export function PersonFilter({
               key={item.value}
               type="button"
               className={cn(
-                "w-full text-left px-3 py-1.5 text-sm hover:bg-muted transition-colors",
+                "w-full text-left px-3 py-2 text-sm hover:bg-muted transition-colors",
                 "focus:bg-muted outline-none"
               )}
               onMouseDown={(e) => {

@@ -150,7 +150,7 @@ export function ProductAutocomplete({
               className="flex-1 bg-transparent text-base outline-none placeholder:text-muted-foreground"
             />
             {loading && <Icon name="progress_activity" size={16} className="animate-spin text-muted-foreground" />}
-            <kbd className="font-mono text-[10px] bg-muted border border-border rounded px-1.5 py-0.5 text-muted-foreground">
+            <kbd className="font-mono text-[10px] bg-muted border border-border rounded px-2 py-0.5 text-muted-foreground">
               Esc
             </kbd>
           </div>
@@ -175,7 +175,7 @@ export function ProductAutocomplete({
                 onMouseEnter={() => setHighlighted(i)}
                 onClick={() => commitSelection(i)}
                 className={cn(
-                  "px-4 py-2.5 cursor-pointer border-b border-border last:border-0 flex items-center justify-between gap-4",
+                  "px-4 py-3 cursor-pointer border-b border-border last:border-0 flex items-center justify-between gap-4",
                   i === highlighted && "bg-primary-fixed"
                 )}
               >
@@ -210,7 +210,7 @@ export function ProductAutocomplete({
 
           {/* Footer hint */}
           <div className="flex items-center justify-between px-4 h-9 bg-muted/50 border-t border-border text-xs text-muted-foreground">
-            <div className="flex items-center gap-2.5">
+            <div className="flex items-center gap-3">
               <span>
                 <kbd className="font-mono bg-background border border-border rounded px-1 text-[10px]">
                   ↑ ↓

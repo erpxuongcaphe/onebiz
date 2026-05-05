@@ -24,7 +24,7 @@ import { Icon } from "@/components/ui/icon";
 function CashFlowTooltip({ active, payload, label }: any) {
   if (!active || !payload?.length) return null;
   return (
-    <div className="rounded-lg border bg-background p-2.5 shadow-md text-xs space-y-1">
+    <div className="rounded-lg border bg-background p-3 shadow-md text-xs space-y-1">
       <p className="font-medium">{label}</p>
       {payload.map((p: any) => (
         <div key={p.dataKey} className="flex items-center gap-2">

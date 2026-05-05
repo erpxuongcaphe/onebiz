@@ -257,7 +257,7 @@ export function PartialReceiveDialog({
                 </table>
               </div>
 
-              <div className="text-xs text-muted-foreground bg-surface-container-low rounded-lg p-2.5 flex items-start gap-2">
+              <div className="text-xs text-muted-foreground bg-surface-container-low rounded-lg p-3 flex items-start gap-2">
                 <Icon name="info" size={14} className="mt-0.5 shrink-0 text-primary" />
                 <span>
                   Kho sẽ được cộng ngay. Nếu tất cả dòng đã nhận đủ, đơn sẽ chuyển thành

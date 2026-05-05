@@ -124,20 +124,20 @@ function DraftCard({
       onClick={onSelect}
     >
       {/* Header: code + auto/manual badge + delete X */}
-      <div className="flex items-center gap-2 mb-1.5">
+      <div className="flex items-center gap-2 mb-2">
         <span className="text-xs font-mono font-semibold text-foreground">
           {draft.code}
         </span>
         {draft.autoSaved ? (
           <span
-            className="text-[9px] font-semibold uppercase tracking-wider px-1.5 py-0.5 rounded bg-status-warning/15 text-status-warning"
+            className="text-[9px] font-semibold uppercase tracking-wider px-2 py-0.5 rounded bg-status-warning/15 text-status-warning"
             title="Tự động lưu (recovery — TTL 30 ngày)"
           >
             Tự động
           </span>
         ) : (
           <span
-            className="text-[9px] font-semibold uppercase tracking-wider px-1.5 py-0.5 rounded bg-status-success/15 text-status-success"
+            className="text-[9px] font-semibold uppercase tracking-wider px-2 py-0.5 rounded bg-status-success/15 text-status-success"
             title="Đã lưu nháp F9 (sticky)"
           >
             Đã lưu
@@ -175,7 +175,7 @@ function DraftCard({
 
       {/* Items summary (3 tên đầu) */}
       {draft.itemsSummary && draft.itemsSummary.length > 0 && (
-        <p className="text-[11px] text-muted-foreground mb-1.5 line-clamp-1">
+        <p className="text-[11px] text-muted-foreground mb-2 line-clamp-1">
           {draft.itemsSummary.join(", ")}
           {draft.itemCount > 3 && ` · +${draft.itemCount - 3}`}
         </p>

@@ -1118,7 +1118,7 @@ export default function HangHoaPage() {
             </DialogDescription>
           </DialogHeader>
           <div className="py-3 space-y-3">
-            <div className="space-y-1.5">
+            <div className="space-y-2">
               <label className="text-xs font-medium text-muted-foreground">
                 Giá bán mới (đ)
               </label>
@@ -1132,7 +1132,7 @@ export default function HangHoaPage() {
                 className="w-full h-10 rounded-md border border-input bg-background px-3 text-sm disabled:opacity-50"
               />
             </div>
-            <div className="space-y-1.5">
+            <div className="space-y-2">
               <label className="text-xs font-medium text-muted-foreground">
                 Giá vốn mới (đ)
               </label>

@@ -42,7 +42,7 @@ export function DatePresetFilter({
   presets = defaultPresets,
 }: DatePresetFilterProps) {
   return (
-    <div className="space-y-1.5">
+    <div className="space-y-2">
       {presets.map((preset) => (
         <label
           key={preset.value}

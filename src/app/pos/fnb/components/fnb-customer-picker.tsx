@@ -144,7 +144,7 @@ export function FnbCustomerPicker({
             {loading && (
               <Icon name="progress_activity" size={16} className="animate-spin text-muted-foreground" />
             )}
-            <kbd className="font-mono text-[10px] bg-muted border border-border rounded px-1.5 py-0.5 text-muted-foreground">
+            <kbd className="font-mono text-[10px] bg-muted border border-border rounded px-2 py-0.5 text-muted-foreground">
               Esc
             </kbd>
           </div>
@@ -156,7 +156,7 @@ export function FnbCustomerPicker({
               onMouseEnter={() => setHighlighted(0)}
               onClick={() => commitSelection(0)}
               className={cn(
-                "px-4 py-2.5 cursor-pointer border-b border-border/40 flex items-center gap-3",
+                "px-4 py-3 cursor-pointer border-b border-border/40 flex items-center gap-3",
                 highlighted === 0 && "bg-primary-fixed"
               )}
             >
@@ -182,7 +182,7 @@ export function FnbCustomerPicker({
                   onMouseEnter={() => setHighlighted(idx)}
                   onClick={() => commitSelection(idx)}
                   className={cn(
-                    "px-4 py-2.5 cursor-pointer border-b border-border/40 last:border-0 flex items-center gap-3",
+                    "px-4 py-3 cursor-pointer border-b border-border/40 last:border-0 flex items-center gap-3",
                     highlighted === idx && "bg-primary-fixed"
                   )}
                 >
@@ -208,7 +208,7 @@ export function FnbCustomerPicker({
           </ul>
 
           <div className="flex items-center justify-between px-4 h-9 bg-muted/50 border-t border-border text-[11px] text-muted-foreground">
-            <div className="flex items-center gap-2.5">
+            <div className="flex items-center gap-3">
               <span>
                 <kbd className="font-mono bg-card border border-border rounded px-1 text-[10px]">
                   ↑ ↓

@@ -345,7 +345,7 @@ function BranchSettingsPageInner() {
           </p>
         </div>
         <Button onClick={openCreateDialog}>
-          <Icon name="add" size={16} className="mr-1.5" />
+          <Icon name="add" size={16} className="mr-1" />
           Thêm chi nhánh
         </Button>
       </div>
@@ -501,7 +501,7 @@ function BranchSettingsPageInner() {
           </DialogHeader>
           <div className="space-y-4 py-2">
             <div className="grid gap-4 sm:grid-cols-2">
-              <div className="space-y-1.5 sm:col-span-2">
+              <div className="space-y-2 sm:col-span-2">
                 <Label htmlFor="branch-name">
                   Tên chi nhánh <span className="text-destructive">*</span>
                 </Label>
@@ -512,7 +512,7 @@ function BranchSettingsPageInner() {
                   placeholder="VD: Quán Cà Phê Quận 1"
                 />
               </div>
-              <div className="space-y-1.5">
+              <div className="space-y-2">
                 <Label htmlFor="branch-code">Mã chi nhánh</Label>
                 <Input
                   id="branch-code"
@@ -527,7 +527,7 @@ function BranchSettingsPageInner() {
                   Hiển thị trên header POS + in hoá đơn.
                 </p>
               </div>
-              <div className="space-y-1.5">
+              <div className="space-y-2">
                 <Label htmlFor="branch-type">Loại</Label>
                 <Select
                   value={form.branchType}
@@ -546,7 +546,7 @@ function BranchSettingsPageInner() {
                   </SelectContent>
                 </Select>
               </div>
-              <div className="space-y-1.5 sm:col-span-2">
+              <div className="space-y-2 sm:col-span-2">
                 <Label htmlFor="branch-address">Địa chỉ</Label>
                 <Input
                   id="branch-address"
@@ -555,7 +555,7 @@ function BranchSettingsPageInner() {
                   placeholder="Số nhà, đường, phường, quận, thành phố"
                 />
               </div>
-              <div className="space-y-1.5">
+              <div className="space-y-2">
                 <Label htmlFor="branch-phone">Số điện thoại</Label>
                 <Input
                   id="branch-phone"
@@ -566,7 +566,7 @@ function BranchSettingsPageInner() {
                   placeholder="0912345678"
                 />
               </div>
-              <div className="space-y-1.5 flex items-end">
+              <div className="space-y-2 flex items-end">
                 <label className="inline-flex items-center gap-2 cursor-pointer select-none pb-2">
                   <input
                     type="checkbox"
@@ -583,7 +583,7 @@ function BranchSettingsPageInner() {
               {/* Bảng giá mặc định cho POS FnB của chi nhánh — chỉ hiện cho
                   store + warehouse (factory/office không POS bán hàng). */}
               {(form.branchType === "store" || form.branchType === "warehouse") && (
-                <div className="space-y-1.5 sm:col-span-2">
+                <div className="space-y-2 sm:col-span-2">
                   <Label htmlFor="branch-tier">
                     Bảng giá mặc định{" "}
                     <span className="text-xs font-normal text-muted-foreground">

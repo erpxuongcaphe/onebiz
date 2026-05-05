@@ -295,7 +295,7 @@ export default function PromotionSettingsPage() {
                   Chưa có chương trình khuyến mãi nào
                 </div>
                 <Button onClick={() => setCreateOpen(true)}>
-                  <Icon name="add" size={16} className="mr-1.5" />
+                  <Icon name="add" size={16} className="mr-1" />
                   Tạo chương trình đầu tiên
                 </Button>
               </div>
@@ -308,7 +308,7 @@ export default function PromotionSettingsPage() {
                       key={promo.id}
                       className="flex items-start justify-between rounded-lg border p-4 hover:bg-muted/30 transition-colors"
                     >
-                      <div className="space-y-1.5 flex-1 min-w-0">
+                      <div className="space-y-2 flex-1 min-w-0">
                         <div className="flex items-center gap-2 flex-wrap">
                           <span className="text-sm font-semibold">
                             {promo.name}
@@ -407,7 +407,7 @@ export default function PromotionSettingsPage() {
                     setCreateOpen(true);
                   }}
                 >
-                  <Icon name="add" size={16} className="mr-1.5" />
+                  <Icon name="add" size={16} className="mr-1" />
                   Thêm chương trình
                 </Button>
               </div>
@@ -465,10 +465,10 @@ export default function PromotionSettingsPage() {
               <Icon
                 name="progress_activity"
                 size={16}
-                className="mr-1.5 animate-spin"
+                className="mr-1 animate-spin"
               />
             ) : (
-              <Icon name="save" size={16} className="mr-1.5" />
+              <Icon name="save" size={16} className="mr-1" />
             )}
             {settingsDirty ? "Lưu cài đặt" : "Đã lưu"}
           </Button>

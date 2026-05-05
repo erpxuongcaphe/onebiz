@@ -181,7 +181,7 @@ function CouponDialog({ open, onOpenChange, initial, onSaved }: CouponDialogProp
         </DialogHeader>
         <div className="grid gap-4 py-2">
           <div className="grid grid-cols-2 gap-3">
-            <div className="space-y-1.5">
+            <div className="space-y-2">
               <label className="text-sm font-medium">Mã coupon *</label>
               <Input
                 value={code}
@@ -196,7 +196,7 @@ function CouponDialog({ open, onOpenChange, initial, onSaved }: CouponDialogProp
                 </p>
               )}
             </div>
-            <div className="space-y-1.5">
+            <div className="space-y-2">
               <label className="text-sm font-medium">Tên coupon *</label>
               <Input
                 value={name}
@@ -206,7 +206,7 @@ function CouponDialog({ open, onOpenChange, initial, onSaved }: CouponDialogProp
             </div>
           </div>
 
-          <div className="space-y-1.5">
+          <div className="space-y-2">
             <label className="text-sm font-medium">Mô tả</label>
             <Input
               value={description}
@@ -216,7 +216,7 @@ function CouponDialog({ open, onOpenChange, initial, onSaved }: CouponDialogProp
           </div>
 
           <div className="grid grid-cols-2 gap-3">
-            <div className="space-y-1.5">
+            <div className="space-y-2">
               <label className="text-sm font-medium">Loại giảm *</label>
               <Select value={type} onValueChange={(v) => setType(v as "fixed" | "percent")}>
                 <SelectTrigger className="w-full">
@@ -228,7 +228,7 @@ function CouponDialog({ open, onOpenChange, initial, onSaved }: CouponDialogProp
                 </SelectContent>
               </Select>
             </div>
-            <div className="space-y-1.5">
+            <div className="space-y-2">
               <label className="text-sm font-medium">
                 {type === "percent" ? "% giảm *" : "Số tiền giảm (VNĐ) *"}
               </label>
@@ -241,7 +241,7 @@ function CouponDialog({ open, onOpenChange, initial, onSaved }: CouponDialogProp
           </div>
 
           <div className="grid grid-cols-2 gap-3">
-            <div className="space-y-1.5">
+            <div className="space-y-2">
               <label className="text-sm font-medium">Đơn tối thiểu (VNĐ)</label>
               <Input
                 type="number"
@@ -251,7 +251,7 @@ function CouponDialog({ open, onOpenChange, initial, onSaved }: CouponDialogProp
               />
             </div>
             {type === "percent" && (
-              <div className="space-y-1.5">
+              <div className="space-y-2">
                 <label className="text-sm font-medium">Giảm tối đa (VNĐ)</label>
                 <Input
                   type="number"
@@ -264,7 +264,7 @@ function CouponDialog({ open, onOpenChange, initial, onSaved }: CouponDialogProp
           </div>
 
           <div className="grid grid-cols-2 gap-3">
-            <div className="space-y-1.5">
+            <div className="space-y-2">
               <label className="text-sm font-medium">Tổng số lượt dùng</label>
               <Input
                 type="number"
@@ -273,7 +273,7 @@ function CouponDialog({ open, onOpenChange, initial, onSaved }: CouponDialogProp
                 placeholder="Không giới hạn"
               />
             </div>
-            <div className="space-y-1.5">
+            <div className="space-y-2">
               <label className="text-sm font-medium">Số lượt / KH</label>
               <Input
                 type="number"
@@ -285,7 +285,7 @@ function CouponDialog({ open, onOpenChange, initial, onSaved }: CouponDialogProp
           </div>
 
           <div className="grid grid-cols-2 gap-3">
-            <div className="space-y-1.5">
+            <div className="space-y-2">
               <label className="text-sm font-medium">Ngày bắt đầu</label>
               <Input
                 type="date"
@@ -293,7 +293,7 @@ function CouponDialog({ open, onOpenChange, initial, onSaved }: CouponDialogProp
                 onChange={(e) => setStartDate(e.target.value)}
               />
             </div>
-            <div className="space-y-1.5">
+            <div className="space-y-2">
               <label className="text-sm font-medium">Ngày kết thúc</label>
               <Input
                 type="date"
@@ -337,7 +337,7 @@ function CouponDialog({ open, onOpenChange, initial, onSaved }: CouponDialogProp
           </Button>
           <Button onClick={handleSave} disabled={saving}>
             {saving && (
-              <Icon name="progress_activity" size={16} className="mr-1.5 animate-spin" />
+              <Icon name="progress_activity" size={16} className="mr-1 animate-spin" />
             )}
             {isEdit ? "Cập nhật" : "Tạo coupon"}
           </Button>
@@ -454,7 +454,7 @@ export default function CouponSettingsPage() {
               setDialogOpen(true);
             }}
           >
-            <Icon name="add" size={16} className="mr-1.5" />
+            <Icon name="add" size={16} className="mr-1" />
             Tạo coupon
           </Button>
         </div>

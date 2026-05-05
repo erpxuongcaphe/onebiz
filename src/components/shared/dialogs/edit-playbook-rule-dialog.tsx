@@ -151,7 +151,7 @@ export function EditPlaybookRuleDialog({
         <div className="grid gap-4 py-2">
           {/* Tên + enabled */}
           <div className="grid sm:grid-cols-3 gap-4">
-            <div className="sm:col-span-2 space-y-1.5">
+            <div className="sm:col-span-2 space-y-2">
               <Label>
                 Tên rule <span className="text-destructive">*</span>
               </Label>
@@ -163,7 +163,7 @@ export function EditPlaybookRuleDialog({
                 placeholder="VD: Doanh thu tháng chậm — nhắc đẩy promo"
               />
             </div>
-            <div className="space-y-1.5 flex flex-col justify-end">
+            <div className="space-y-2 flex flex-col justify-end">
               <Label className="invisible">Enabled</Label>
               <label className="flex items-center gap-2 h-10 px-3 rounded-xl border border-border bg-surface-container-lowest cursor-pointer">
                 <Checkbox
@@ -184,20 +184,20 @@ export function EditPlaybookRuleDialog({
               Lọc KPI
             </div>
 
-            <div className="space-y-1.5">
+            <div className="space-y-2">
               <Label className="text-xs">
                 Áp dụng cho loại KPI{" "}
                 <span className="text-muted-foreground font-normal">
                   (không chọn = tất cả)
                 </span>
               </Label>
-              <div className="flex flex-wrap gap-1.5">
+              <div className="flex flex-wrap gap-2">
                 {ALL_KPI_TYPES.map((t) => (
                   <button
                     key={t}
                     type="button"
                     onClick={() => toggleKpiType(t)}
-                    className={`px-2.5 py-1 rounded-full text-xs font-medium border transition-colors press-scale-sm ${
+                    className={`px-3 py-1 rounded-full text-xs font-medium border transition-colors press-scale-sm ${
                       rule.kpiTypes.includes(t)
                         ? "bg-primary text-primary-foreground border-primary"
                         : "bg-surface-container-lowest border-border text-muted-foreground hover:bg-surface-container"
@@ -209,20 +209,20 @@ export function EditPlaybookRuleDialog({
               </div>
             </div>
 
-            <div className="space-y-1.5">
+            <div className="space-y-2">
               <Label className="text-xs">
                 Áp dụng cho kỳ{" "}
                 <span className="text-muted-foreground font-normal">
                   (không chọn = tất cả)
                 </span>
               </Label>
-              <div className="flex flex-wrap gap-1.5">
+              <div className="flex flex-wrap gap-2">
                 {ALL_PERIODS.map((p) => (
                   <button
                     key={p}
                     type="button"
                     onClick={() => togglePeriod(p)}
-                    className={`px-2.5 py-1 rounded-full text-xs font-medium border transition-colors press-scale-sm ${
+                    className={`px-3 py-1 rounded-full text-xs font-medium border transition-colors press-scale-sm ${
                       rule.periods.includes(p)
                         ? "bg-primary text-primary-foreground border-primary"
                         : "bg-surface-container-lowest border-border text-muted-foreground hover:bg-surface-container"
@@ -241,7 +241,7 @@ export function EditPlaybookRuleDialog({
               <Icon name="bolt" size={16} className="text-primary" />
               Điều kiện kích hoạt (trigger)
             </div>
-            <div className="space-y-1.5">
+            <div className="space-y-2">
               <Label className="text-xs">Loại trigger</Label>
               <select
                 value={rule.trigger}
@@ -251,7 +251,7 @@ export function EditPlaybookRuleDialog({
                     trigger: e.target.value as PlaybookTriggerType,
                   }))
                 }
-                className="h-10 w-full rounded-xl border border-input bg-surface-container-lowest px-3.5 py-2 text-sm outline-none focus-visible:border-primary focus-visible:ring-2 focus-visible:ring-primary/20"
+                className="h-10 w-full rounded-xl border border-input bg-surface-container-lowest px-4 py-2 text-sm outline-none focus-visible:border-primary focus-visible:ring-2 focus-visible:ring-primary/20"
               >
                 {ALL_TRIGGERS.map((t) => (
                   <option key={t} value={t}>
@@ -264,7 +264,7 @@ export function EditPlaybookRuleDialog({
             {(rule.trigger === "progress_low" ||
               rule.trigger === "progress_high") && (
               <div className="grid grid-cols-2 gap-3">
-                <div className="space-y-1.5">
+                <div className="space-y-2">
                   <Label className="text-xs">Ngưỡng tiến độ (%)</Label>
                   <Input
                     type="number"
@@ -286,7 +286,7 @@ export function EditPlaybookRuleDialog({
                   />
                 </div>
                 {rule.trigger === "progress_low" && (
-                  <div className="space-y-1.5">
+                  <div className="space-y-2">
                     <Label className="text-xs">
                       Kỳ trôi tối thiểu (%)
                       <span className="text-muted-foreground font-normal ml-1">
@@ -315,7 +315,7 @@ export function EditPlaybookRuleDialog({
             )}
 
             {rule.trigger === "no_activity" && (
-              <div className="space-y-1.5">
+              <div className="space-y-2">
                 <Label className="text-xs">
                   Số ngày đầu kỳ để cảnh báo khi actual = 0
                 </Label>
@@ -338,7 +338,7 @@ export function EditPlaybookRuleDialog({
             )}
 
             {rule.trigger === "periodic_review" && (
-              <div className="space-y-1.5">
+              <div className="space-y-2">
                 <Label className="text-xs">
                   Mỗi bao nhiêu ngày tạo task review
                 </Label>
@@ -368,7 +368,7 @@ export function EditPlaybookRuleDialog({
               Task tạo ra khi trigger khớp
             </div>
 
-            <div className="space-y-1.5">
+            <div className="space-y-2">
               <Label className="text-xs">
                 Tiêu đề task <span className="text-destructive">*</span>
                 <span className="text-muted-foreground font-normal ml-1">
@@ -388,7 +388,7 @@ export function EditPlaybookRuleDialog({
               />
             </div>
 
-            <div className="space-y-1.5">
+            <div className="space-y-2">
               <Label className="text-xs">Mô tả (tuỳ chọn)</Label>
               <Textarea
                 value={rule.action.descriptionTemplate ?? ""}
@@ -407,7 +407,7 @@ export function EditPlaybookRuleDialog({
             </div>
 
             <div className="grid grid-cols-3 gap-3">
-              <div className="space-y-1.5">
+              <div className="space-y-2">
                 <Label className="text-xs">Độ ưu tiên</Label>
                 <select
                   value={rule.action.priority}
@@ -420,7 +420,7 @@ export function EditPlaybookRuleDialog({
                       },
                     }))
                   }
-                  className="h-10 w-full rounded-xl border border-input bg-surface-container-lowest px-3.5 py-2 text-sm outline-none focus-visible:border-primary focus-visible:ring-2 focus-visible:ring-primary/20"
+                  className="h-10 w-full rounded-xl border border-input bg-surface-container-lowest px-4 py-2 text-sm outline-none focus-visible:border-primary focus-visible:ring-2 focus-visible:ring-primary/20"
                 >
                   {ALL_PRIORITIES.map((p) => (
                     <option key={p} value={p}>
@@ -429,7 +429,7 @@ export function EditPlaybookRuleDialog({
                   ))}
                 </select>
               </div>
-              <div className="space-y-1.5">
+              <div className="space-y-2">
                 <Label className="text-xs">
                   Giao cho role
                   <span className="text-muted-foreground font-normal ml-1">
@@ -450,7 +450,7 @@ export function EditPlaybookRuleDialog({
                   placeholder="manager / cashier / …"
                 />
               </div>
-              <div className="space-y-1.5">
+              <div className="space-y-2">
                 <Label className="text-xs">Hạn chót (+ngày từ hôm nay)</Label>
                 <Input
                   type="number"
@@ -477,7 +477,7 @@ export function EditPlaybookRuleDialog({
             Huỷ
           </Button>
           <Button onClick={handleSave}>
-            <Icon name="save" size={16} className="mr-1.5" />
+            <Icon name="save" size={16} className="mr-1" />
             {initialRule ? "Cập nhật" : "Thêm rule"}
           </Button>
         </DialogFooter>

@@ -63,7 +63,7 @@ export function PipelineTimeline({ pipelineItemId }: PipelineTimelineProps) {
             {formatDate(entry.changedAt)}
             {entry.changedBy && <span> · {entry.changedBy}</span>}
           </div>
-          <div className="mt-0.5 flex items-center gap-1.5 text-sm">
+          <div className="mt-0.5 flex items-center gap-2 text-sm">
             {entry.fromStage && (
               <>
                 <span className="text-muted-foreground">{entry.fromStage}</span>

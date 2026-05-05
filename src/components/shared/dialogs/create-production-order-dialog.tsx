@@ -220,7 +220,7 @@ export function CreateProductionOrderDialog({
 
         <div className="grid gap-4 py-2">
           <div className="grid grid-cols-2 gap-4">
-            <div className="space-y-1.5">
+            <div className="space-y-2">
               <label className="text-sm font-medium">
                 Công thức (BOM) <span className="text-destructive">*</span>
               </label>
@@ -251,7 +251,7 @@ export function CreateProductionOrderDialog({
               {errors.bomId && <p className="text-xs text-destructive">{errors.bomId}</p>}
             </div>
 
-            <div className="space-y-1.5">
+            <div className="space-y-2">
               <label className="text-sm font-medium">
                 Chi nhánh sản xuất <span className="text-destructive">*</span>
               </label>
@@ -278,7 +278,7 @@ export function CreateProductionOrderDialog({
           </div>
 
           <div className="grid grid-cols-3 gap-4">
-            <div className="space-y-1.5">
+            <div className="space-y-2">
               <label className="text-sm font-medium">
                 Số lượng <span className="text-destructive">*</span>
               </label>
@@ -298,7 +298,7 @@ export function CreateProductionOrderDialog({
                 <p className="text-xs text-destructive">{errors.plannedQty}</p>
               )}
             </div>
-            <div className="space-y-1.5">
+            <div className="space-y-2">
               <label className="text-sm font-medium">Bắt đầu dự kiến</label>
               <Input
                 type="date"
@@ -306,7 +306,7 @@ export function CreateProductionOrderDialog({
                 onChange={(e) => setPlannedStart(e.target.value)}
               />
             </div>
-            <div className="space-y-1.5">
+            <div className="space-y-2">
               <label className="text-sm font-medium">Kết thúc dự kiến</label>
               <Input
                 type="date"
@@ -379,7 +379,7 @@ export function CreateProductionOrderDialog({
               )}
 
               {hasShortage && (
-                <div className="text-xs text-destructive flex items-center gap-1.5 bg-destructive/5 rounded p-2">
+                <div className="text-xs text-destructive flex items-center gap-2 bg-destructive/5 rounded p-2">
                   <Icon name="warning" size={14} />
                   Có NVL không đủ tồn kho — bạn vẫn có thể tạo lệnh nhưng cần nhập kho trước khi sản xuất
                 </div>
@@ -387,10 +387,10 @@ export function CreateProductionOrderDialog({
             </div>
           )}
 
-          <div className="space-y-1.5">
+          <div className="space-y-2">
             <label className="text-sm font-medium">Ghi chú</label>
             <textarea
-              className="flex min-h-[60px] w-full rounded-lg border border-input bg-transparent px-2.5 py-2 text-sm outline-none focus-visible:border-ring"
+              className="flex min-h-[60px] w-full rounded-lg border border-input bg-transparent px-3 py-2 text-sm outline-none focus-visible:border-ring"
               value={notes}
               onChange={(e) => setNotes(e.target.value)}
               rows={2}

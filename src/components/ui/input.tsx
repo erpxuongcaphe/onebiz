@@ -15,7 +15,7 @@ interface InputProps extends React.ComponentProps<"input"> {
 
 const variantClass: Record<InputVariant, string> = {
   default:
-    "h-10 rounded-xl border border-input bg-surface-container-lowest px-3.5 py-2 shadow-none " +
+    "h-10 rounded-xl border border-input bg-surface-container-lowest px-4 py-2 shadow-none " +
     "focus-visible:border-primary focus-visible:ring-2 focus-visible:ring-primary/20",
   underline:
     "h-11 border-0 border-b-2 border-input bg-surface-container-low px-3 py-2 rounded-t-md " +

@@ -39,12 +39,12 @@ export default function RootError({
           </div>
           <div className="flex flex-col sm:flex-row gap-3 justify-center">
             <Button onClick={reset} variant="default">
-              <Icon name="undo" size={16} className="mr-1.5" />
+              <Icon name="undo" size={16} className="mr-1" />
               Thử lại
             </Button>
             <Link href="/">
               <Button variant="outline">
-                <Icon name="home" size={16} className="mr-1.5" />
+                <Icon name="home" size={16} className="mr-1" />
                 Về trang chủ
               </Button>
             </Link>

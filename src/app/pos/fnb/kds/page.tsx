@@ -446,7 +446,7 @@ function KdsPageInner() {
         <header className="h-16 bg-pos-chrome-bg/70 backdrop-blur flex items-center px-6 gap-3 shrink-0 border-b border-pos-chrome-border/50">
           <Link
             href="/pos/fnb"
-            className="text-pos-chrome-fg-dim hover:text-pos-chrome-fg text-sm flex items-center gap-1.5 rounded-lg px-2 py-1 hover:bg-pos-chrome-bg-elevated transition-colors"
+            className="text-pos-chrome-fg-dim hover:text-pos-chrome-fg text-sm flex items-center gap-2 rounded-lg px-2 py-1 hover:bg-pos-chrome-bg-elevated transition-colors"
           >
             <Icon name="arrow_back" size={16} />
             POS
@@ -502,7 +502,7 @@ function KdsPageInner() {
             <h1 className="font-heading text-lg md:text-xl font-bold tracking-tight text-pos-chrome-fg truncate leading-tight">
               KDS Bếp Chính
             </h1>
-            <span className="flex items-center gap-1.5 text-xs text-pos-chrome-fg-dim">
+            <span className="flex items-center gap-2 text-xs text-pos-chrome-fg-dim">
               <span
                 className={cn(
                   "size-2 rounded-full",
@@ -528,7 +528,7 @@ function KdsPageInner() {
               key={tab.key}
               onClick={() => setFilter(tab.key)}
               className={cn(
-                "px-4 md:px-5 py-1.5 md:py-2 rounded-lg font-semibold text-xs md:text-sm transition-all press-scale-sm",
+                "px-4 md:px-5 py-2 md:py-2 rounded-lg font-semibold text-xs md:text-sm transition-all press-scale-sm",
                 filter === tab.key
                   ? "bg-status-info text-white shadow-md shadow-pos-chrome-bg/30"
                   : "text-pos-chrome-fg-dim hover:bg-pos-chrome-bg-elevated hover:text-pos-chrome-fg"
@@ -562,7 +562,7 @@ function KdsPageInner() {
       {/* Offline / connection alert banner — hiện khi fetch lỗi hoặc stale data > 90s
           Để bếp biết ngay không cần check header nhỏ. Khi online lại thì biến mất. */}
       {(fetchError || (!realtimeConnected && lastFetchAt !== null && now - lastFetchAt > 90_000)) && (
-        <div className="bg-status-warning/15 border-b-2 border-status-warning px-4 md:px-8 py-2.5 flex items-center gap-3 shrink-0">
+        <div className="bg-status-warning/15 border-b-2 border-status-warning px-4 md:px-8 py-3 flex items-center gap-3 shrink-0">
           <div className="size-8 rounded-full bg-status-warning/30 flex items-center justify-center shrink-0 animate-pulse">
             <Icon name="wifi_off" size={18} className="text-status-warning" />
           </div>
@@ -579,7 +579,7 @@ function KdsPageInner() {
           <button
             type="button"
             onClick={() => fetchOrders()}
-            className="shrink-0 px-3 py-1.5 rounded-lg bg-status-warning/25 hover:bg-status-warning/35 text-status-warning font-semibold text-xs flex items-center gap-1.5 transition-colors press-scale-sm"
+            className="shrink-0 px-3 py-2 rounded-lg bg-status-warning/25 hover:bg-status-warning/35 text-status-warning font-semibold text-xs flex items-center gap-2 transition-colors press-scale-sm"
             title="Tải lại ngay"
           >
             <Icon name="refresh" size={14} />
@@ -772,7 +772,7 @@ function KdsOrderCard({
       </div>
 
       {/* ── Items list ── */}
-      <div className="p-2 flex flex-col gap-1.5 bg-pos-chrome-bg flex-1 min-h-0 overflow-y-auto">
+      <div className="p-2 flex flex-col gap-2 bg-pos-chrome-bg flex-1 min-h-0 overflow-y-auto">
         {order.items.map((item) => (
           <KdsItemRow
             key={item.id}
@@ -791,7 +791,7 @@ function KdsOrderCard({
             type="button"
             onClick={onMarkAllReady}
             className={cn(
-              "w-full py-2.5 rounded-lg font-semibold text-xs transition-all press-scale-sm flex items-center justify-center gap-1.5",
+              "w-full py-3 rounded-lg font-semibold text-xs transition-all press-scale-sm flex items-center justify-center gap-2",
               "bg-pos-chrome-bg-elevated text-status-info hover:bg-pos-chrome-bg-hover border border-status-info/40"
             )}
             title={`Đánh dấu sẵn sàng ${pendingCount} món còn lại`}
@@ -802,7 +802,7 @@ function KdsOrderCard({
         )}
 
         {order.status === "served" ? (
-          <div className="w-full py-3 rounded-lg bg-pos-chrome-bg-elevated text-pos-chrome-fg0 font-semibold text-sm text-center flex items-center justify-center gap-1.5">
+          <div className="w-full py-3 rounded-lg bg-pos-chrome-bg-elevated text-pos-chrome-fg0 font-semibold text-sm text-center flex items-center justify-center gap-2">
             <Icon name="check_circle" size={16} />
             Đã phục vụ
           </div>
@@ -868,7 +868,7 @@ function KdsItemRow({
         </div>
 
         <div className="flex-1 min-w-0">
-          <div className="flex items-start gap-1.5">
+          <div className="flex items-start gap-2">
             <span
               className={cn(
                 "font-heading font-bold text-sm md:text-base leading-tight",
@@ -893,7 +893,7 @@ function KdsItemRow({
             </div>
           )}
           {item.quantity > 1 && (
-            <span className="inline-flex items-center gap-0.5 mt-1.5 px-2 py-0.5 rounded-full bg-status-success/20 text-status-success text-[10px] font-bold">
+            <span className="inline-flex items-center gap-0.5 mt-2 px-2 py-0.5 rounded-full bg-status-success/20 text-status-success text-[10px] font-bold">
               x{item.quantity}
             </span>
           )}
@@ -940,7 +940,7 @@ function KdsItemRow({
 
       {/* Item body */}
       <div className="flex-1 min-w-0">
-        <div className="flex items-start gap-1.5">
+        <div className="flex items-start gap-2">
           <span
             className={cn(
               "font-heading font-bold text-sm md:text-base leading-tight",
@@ -974,7 +974,7 @@ function KdsItemRow({
         )}
         {/* Quantity badge */}
         {item.quantity > 1 && (
-          <span className="inline-flex items-center gap-0.5 mt-1.5 px-2 py-0.5 rounded-full bg-status-info/20 text-status-info text-[10px] font-bold">
+          <span className="inline-flex items-center gap-0.5 mt-2 px-2 py-0.5 rounded-full bg-status-info/20 text-status-info text-[10px] font-bold">
             x{item.quantity}
           </span>
         )}

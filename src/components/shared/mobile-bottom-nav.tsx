@@ -153,7 +153,7 @@ export function MobileBottomNav() {
                     <div className="px-1 pb-2 text-[11px] font-semibold text-muted-foreground uppercase tracking-wider">
                       {section.section}
                     </div>
-                    <div className="grid grid-cols-3 gap-2.5">
+                    <div className="grid grid-cols-3 gap-3">
                       {section.items.map((item) => {
                         const active = pathname.startsWith(item.href);
                         return (

@@ -258,7 +258,7 @@ function CustomerGroupDialog({
         </DialogHeader>
 
         <div className="space-y-4 py-2">
-          <div className="space-y-1.5">
+          <div className="space-y-2">
             <label className="text-sm font-medium">Mã nhóm (3 chữ cái) *</label>
             <Input
               value={code}
@@ -274,7 +274,7 @@ function CustomerGroupDialog({
             )}
           </div>
 
-          <div className="space-y-1.5">
+          <div className="space-y-2">
             <label className="text-sm font-medium">Tên nhóm *</label>
             <Input
               value={name}
@@ -283,7 +283,7 @@ function CustomerGroupDialog({
             />
           </div>
 
-          <div className="space-y-1.5">
+          <div className="space-y-2">
             <label className="text-sm font-medium">Thứ tự hiển thị</label>
             <Input
               type="number"

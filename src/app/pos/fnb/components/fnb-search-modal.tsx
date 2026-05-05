@@ -119,7 +119,7 @@ export function FnbSearchModal({
               placeholder="Tìm món theo tên hoặc mã..."
               className="flex-1 bg-transparent text-base outline-none placeholder:text-muted-foreground"
             />
-            <kbd className="font-mono text-[10px] bg-muted border border-border rounded px-1.5 py-0.5 text-muted-foreground">
+            <kbd className="font-mono text-[10px] bg-muted border border-border rounded px-2 py-0.5 text-muted-foreground">
               Esc
             </kbd>
           </div>
@@ -158,7 +158,7 @@ export function FnbSearchModal({
 
           {/* Footer hints */}
           <div className="flex items-center justify-between px-4 h-9 bg-muted/50 border-t border-border text-[11px] text-muted-foreground">
-            <div className="flex items-center gap-2.5">
+            <div className="flex items-center gap-3">
               <span>
                 <kbd className="font-mono bg-card border border-border rounded px-1 text-[10px]">
                   ↑ ↓

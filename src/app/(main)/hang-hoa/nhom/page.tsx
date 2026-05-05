@@ -125,7 +125,7 @@ function CategoryProductsPanel({ categoryId }: { categoryId: string }) {
           {items.map((p) => (
             <li
               key={p.id}
-              className="grid grid-cols-[140px_1fr_90px_70px] gap-2 px-3 py-1.5 text-sm items-center"
+              className="grid grid-cols-[140px_1fr_90px_70px] gap-2 px-3 py-2 text-sm items-center"
             >
               <span className="font-mono text-xs text-primary">{p.code}</span>
               <span className="truncate">{p.name}</span>
@@ -525,7 +525,7 @@ export default function NhomHangPage() {
               .
             </p>
             <Button onClick={openCreate}>
-              <Icon name="add" size={16} className="mr-1.5" />
+              <Icon name="add" size={16} className="mr-1" />
               Tạo nhóm đầu tiên
             </Button>
           </div>
@@ -566,7 +566,7 @@ export default function NhomHangPage() {
           </DialogHeader>
 
           <div className="grid gap-4 py-2">
-            <div className="space-y-1.5">
+            <div className="space-y-2">
               <label className="text-sm font-medium">
                 Tên nhóm <span className="text-destructive">*</span>
               </label>
@@ -585,7 +585,7 @@ export default function NhomHangPage() {
               )}
             </div>
 
-            <div className="space-y-1.5">
+            <div className="space-y-2">
               <label className="text-sm font-medium">
                 Mã nhóm <span className="text-destructive">*</span>
                 <span className="ml-2 text-xs font-normal text-muted-foreground">

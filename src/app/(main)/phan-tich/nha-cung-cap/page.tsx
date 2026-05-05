@@ -387,19 +387,19 @@ export default function NhaCungCapPage() {
                 <tbody>
                   {supplierTable.map((item) => (
                     <tr key={item.rank} className="border-b last:border-0">
-                      <td className="py-2.5 pr-4 text-muted-foreground">{item.rank}</td>
-                      <td className="py-2.5 pr-4 font-medium">{item.name}</td>
-                      <td className="py-2.5 pr-4 text-right font-medium text-primary">
+                      <td className="py-3 pr-4 text-muted-foreground">{item.rank}</td>
+                      <td className="py-3 pr-4 font-medium">{item.name}</td>
+                      <td className="py-3 pr-4 text-right font-medium text-primary">
                         {formatCurrency(item.total)}
                       </td>
-                      <td className="py-2.5 pr-4 text-right">
+                      <td className="py-3 pr-4 text-right">
                         {item.debt > 0 ? (
                           <span className="text-status-error font-medium">{formatCurrency(item.debt)}</span>
                         ) : (
                           <span className="text-status-success">0</span>
                         )}
                       </td>
-                      <td className="py-2.5 text-right">{item.orders}</td>
+                      <td className="py-3 text-right">{item.orders}</td>
                     </tr>
                   ))}
                 </tbody>

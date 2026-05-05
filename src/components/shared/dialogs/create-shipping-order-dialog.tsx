@@ -178,7 +178,7 @@ export function CreateShippingOrderDialog({
 
         <div className="grid gap-4 py-2">
           {/* Invoice search */}
-          <div className="space-y-1.5">
+          <div className="space-y-2">
             <label className="text-sm font-medium">
               Hóa đơn <span className="text-destructive">*</span>
             </label>
@@ -230,12 +230,12 @@ export function CreateShippingOrderDialog({
           </div>
 
           {/* Partner select */}
-          <div className="space-y-1.5">
+          <div className="space-y-2">
             <label className="text-sm font-medium">Đối tác giao hàng</label>
             <select
               value={selectedPartnerId}
               onChange={(e) => setSelectedPartnerId(e.target.value)}
-              className="flex h-9 w-full rounded-lg border border-input bg-transparent px-2.5 py-1.5 text-sm transition-colors outline-none focus-visible:border-ring focus-visible:ring-3 focus-visible:ring-ring/50"
+              className="flex h-9 w-full rounded-lg border border-input bg-transparent px-3 py-2 text-sm transition-colors outline-none focus-visible:border-ring focus-visible:ring-3 focus-visible:ring-ring/50"
             >
               <option value="">-- Chọn đối tác --</option>
               {partners.map((p) => (
@@ -248,7 +248,7 @@ export function CreateShippingOrderDialog({
 
           {/* Receiver info */}
           <div className="grid grid-cols-2 gap-3">
-            <div className="space-y-1.5">
+            <div className="space-y-2">
               <label className="text-sm font-medium">
                 Người nhận <span className="text-destructive">*</span>
               </label>
@@ -262,7 +262,7 @@ export function CreateShippingOrderDialog({
                 <p className="text-xs text-destructive">{errors.receiverName}</p>
               )}
             </div>
-            <div className="space-y-1.5">
+            <div className="space-y-2">
               <label className="text-sm font-medium">
                 Điện thoại <span className="text-destructive">*</span>
               </label>
@@ -279,7 +279,7 @@ export function CreateShippingOrderDialog({
           </div>
 
           {/* Address */}
-          <div className="space-y-1.5">
+          <div className="space-y-2">
             <label className="text-sm font-medium">
               Địa chỉ <span className="text-destructive">*</span>
             </label>
@@ -296,7 +296,7 @@ export function CreateShippingOrderDialog({
 
           {/* Fees */}
           <div className="grid grid-cols-2 gap-3">
-            <div className="space-y-1.5">
+            <div className="space-y-2">
               <label className="text-sm font-medium">Phí vận chuyển</label>
               <Input
                 type="number"
@@ -305,7 +305,7 @@ export function CreateShippingOrderDialog({
                 placeholder="0"
               />
             </div>
-            <div className="space-y-1.5">
+            <div className="space-y-2">
               <label className="text-sm font-medium">Thu hộ (COD)</label>
               <Input
                 type="number"
@@ -317,10 +317,10 @@ export function CreateShippingOrderDialog({
           </div>
 
           {/* Notes */}
-          <div className="space-y-1.5">
+          <div className="space-y-2">
             <label className="text-sm font-medium">Ghi chú</label>
             <textarea
-              className="flex min-h-[50px] w-full rounded-lg border border-input bg-transparent px-2.5 py-2 text-sm transition-colors outline-none placeholder:text-muted-foreground focus-visible:border-ring focus-visible:ring-3 focus-visible:ring-ring/50"
+              className="flex min-h-[50px] w-full rounded-lg border border-input bg-transparent px-3 py-2 text-sm transition-colors outline-none placeholder:text-muted-foreground focus-visible:border-ring focus-visible:ring-3 focus-visible:ring-ring/50"
               value={notes}
               onChange={(e) => setNotes(e.target.value)}
               placeholder="Ghi chú vận đơn"

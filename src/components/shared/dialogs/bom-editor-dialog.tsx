@@ -250,7 +250,7 @@ export function BOMEditorDialog({
         <div className="grid gap-4 py-2">
           {/* Output SKU + Name */}
           <div className="grid grid-cols-2 gap-4">
-            <div className="space-y-1.5">
+            <div className="space-y-2">
               <label className="text-sm font-medium">
                 SKU đầu ra <span className="text-destructive">*</span>
               </label>
@@ -284,7 +284,7 @@ export function BOMEditorDialog({
               )}
             </div>
 
-            <div className="space-y-1.5">
+            <div className="space-y-2">
               <label className="text-sm font-medium">
                 Tên công thức <span className="text-destructive">*</span>
               </label>
@@ -299,7 +299,7 @@ export function BOMEditorDialog({
 
           {/* Batch / Yield */}
           <div className="grid grid-cols-3 gap-4">
-            <div className="space-y-1.5">
+            <div className="space-y-2">
               <label className="text-sm font-medium">Batch size</label>
               <Input
                 type="number"
@@ -307,7 +307,7 @@ export function BOMEditorDialog({
                 onChange={(e) => setBatchSize(e.target.value)}
               />
             </div>
-            <div className="space-y-1.5">
+            <div className="space-y-2">
               <label className="text-sm font-medium">Sản lượng/batch</label>
               <Input
                 type="number"
@@ -315,7 +315,7 @@ export function BOMEditorDialog({
                 onChange={(e) => setYieldQty(e.target.value)}
               />
             </div>
-            <div className="space-y-1.5">
+            <div className="space-y-2">
               <label className="text-sm font-medium">ĐVT sản lượng</label>
               <Input
                 value={yieldUnit}
@@ -444,10 +444,10 @@ export function BOMEditorDialog({
           </div>
 
           {/* Note */}
-          <div className="space-y-1.5">
+          <div className="space-y-2">
             <label className="text-sm font-medium">Ghi chú</label>
             <textarea
-              className="flex min-h-[60px] w-full rounded-lg border border-input bg-transparent px-2.5 py-2 text-sm outline-none focus-visible:border-ring"
+              className="flex min-h-[60px] w-full rounded-lg border border-input bg-transparent px-3 py-2 text-sm outline-none focus-visible:border-ring"
               value={note}
               onChange={(e) => setNote(e.target.value)}
               placeholder="Quy trình sản xuất, lưu ý..."

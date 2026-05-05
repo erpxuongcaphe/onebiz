@@ -286,7 +286,7 @@ export default function FacebookPage() {
                         {conv.lastMessage}
                       </p>
                       {conv.unread > 0 && (
-                        <Badge className="h-5 min-w-5 px-1.5 text-[10px] rounded-full bg-primary ml-2 shrink-0">
+                        <Badge className="h-5 min-w-5 px-2 text-[10px] rounded-full bg-primary ml-2 shrink-0">
                           {conv.unread}
                         </Badge>
                       )}
@@ -313,7 +313,7 @@ export default function FacebookPage() {
                 <p className="text-xs text-status-success">Đang hoạt động</p>
               </div>
             </div>
-            <Button size="sm" className="gap-1.5">
+            <Button size="sm" className="gap-2">
               <Icon name="add" size={16} />
               Tạo đơn hàng
             </Button>
@@ -332,7 +332,7 @@ export default function FacebookPage() {
                 >
                   <div
                     className={cn(
-                      "max-w-[75%] rounded-2xl px-4 py-2.5",
+                      "max-w-[75%] rounded-2xl px-4 py-3",
                       msg.sender === "shop"
                         ? "bg-primary text-white"
                         : "bg-white text-foreground border"
@@ -389,7 +389,7 @@ export default function FacebookPage() {
                     <div className="h-20 bg-gradient-to-br from-amber-100 to-amber-50 flex items-center justify-center">
                       <span className="text-2xl">☕</span>
                     </div>
-                    <div className="p-2.5">
+                    <div className="p-3">
                       <p className="text-xs font-medium text-foreground line-clamp-1">
                         {product.name}
                       </p>

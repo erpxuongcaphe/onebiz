@@ -83,7 +83,7 @@ export function PipelineTransitionActions({
 
   if (loading) {
     return (
-      <Button size={size} variant={variant} disabled className="gap-1.5">
+      <Button size={size} variant={variant} disabled className="gap-2">
         <Icon name="progress_activity" size={14} className="animate-spin" />
         Đang tải...
       </Button>
@@ -92,7 +92,7 @@ export function PipelineTransitionActions({
 
   if (transitions.length === 0) {
     return (
-      <Button size={size} variant={variant} disabled className="gap-1.5">
+      <Button size={size} variant={variant} disabled className="gap-2">
         Không có hành động
       </Button>
     );
@@ -102,7 +102,7 @@ export function PipelineTransitionActions({
     <DropdownMenu>
       <DropdownMenuTrigger
         className={cn(
-          "inline-flex items-center gap-1.5 rounded-md border px-3 text-sm font-medium cursor-pointer",
+          "inline-flex items-center gap-2 rounded-md border px-3 text-sm font-medium cursor-pointer",
           size === "sm" ? "h-8" : "h-9",
           variant === "default"
             ? "bg-primary text-primary-foreground border-primary hover:bg-primary/90"

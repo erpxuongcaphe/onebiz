@@ -179,7 +179,7 @@ export function DataTable<TData, TValue>({
           return (
             <DropdownMenu>
               <DropdownMenuTrigger
-                className="inline-flex items-center justify-center rounded-md p-1.5 hover:bg-muted focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
+                className="inline-flex items-center justify-center rounded-md p-2 hover:bg-muted focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
                 onClick={(e) => e.stopPropagation()}
               >
                 <Icon name="more_horiz" size={16} className="text-muted-foreground" />
@@ -197,7 +197,7 @@ export function DataTable<TData, TValue>({
                       }}
                     >
                       {action.icon && (
-                        <span className="mr-1.5">{action.icon}</span>
+                        <span className="mr-1">{action.icon}</span>
                       )}
                       {action.label}
                     </DropdownMenuItem>
@@ -300,7 +300,7 @@ export function DataTable<TData, TValue>({
       {columnToggle && toggleableColumns.length > 0 && (
         <div className="flex justify-end px-4 py-2">
           <DropdownMenu>
-            <DropdownMenuTrigger className="inline-flex items-center gap-1.5 rounded-md border border-input bg-background px-3 py-1.5 text-sm font-medium hover:bg-accent hover:text-accent-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring">
+            <DropdownMenuTrigger className="inline-flex items-center gap-2 rounded-md border border-input bg-background px-3 py-2 text-sm font-medium hover:bg-accent hover:text-accent-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring">
               <Icon name="tune" size={16} />
               <span className="hidden sm:inline">Hiển thị cột</span>
             </DropdownMenuTrigger>
@@ -445,7 +445,7 @@ export function DataTable<TData, TValue>({
                       <TableCell
                         key={cell.id}
                         className={cn(
-                          "text-sm py-2.5",
+                          "text-sm py-3",
                           pinned && (isExpanded ? pinCellSelectedClass : pinCellClass),
                         )}
                       >
@@ -527,7 +527,7 @@ export function DataTable<TData, TValue>({
                     {rowActions && (
                       <DropdownMenu>
                         <DropdownMenuTrigger
-                          className="inline-flex items-center justify-center rounded-md p-1.5 hover:bg-muted focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
+                          className="inline-flex items-center justify-center rounded-md p-2 hover:bg-muted focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
                           onClick={(e) => e.stopPropagation()}
                         >
                           <Icon name="more_horiz" size={16} className="text-muted-foreground" />
@@ -550,7 +550,7 @@ export function DataTable<TData, TValue>({
                                 }}
                               >
                                 {action.icon && (
-                                  <span className="mr-1.5">
+                                  <span className="mr-1">
                                     {action.icon}
                                   </span>
                                 )}
@@ -641,13 +641,13 @@ export function DataTable<TData, TValue>({
 
               <div className="h-4 w-px bg-background/20 mx-1 hidden sm:block" />
 
-              <div className="flex items-center gap-1.5 flex-wrap">
+              <div className="flex items-center gap-2 flex-wrap">
                 {bulkActions.map((action, idx) => (
                   <button
                     key={idx}
                     type="button"
                     className={cn(
-                      "inline-flex items-center gap-1.5 rounded-md px-3 py-1.5 text-sm font-medium transition-colors",
+                      "inline-flex items-center gap-2 rounded-md px-3 py-2 text-sm font-medium transition-colors",
                       action.variant === "destructive"
                         ? "bg-destructive text-destructive-foreground hover:bg-destructive/90"
                         : "bg-background/15 hover:bg-background/25 text-background"
@@ -666,7 +666,7 @@ export function DataTable<TData, TValue>({
 
               <button
                 type="button"
-                className="ml-auto inline-flex items-center gap-1 rounded-md px-2 py-1.5 text-sm hover:bg-background/15 transition-colors text-background/70 hover:text-background"
+                className="ml-auto inline-flex items-center gap-1 rounded-md px-2 py-2 text-sm hover:bg-background/15 transition-colors text-background/70 hover:text-background"
                 onClick={() => table.toggleAllRowsSelected(false)}
               >
                 <Icon name="close" size={16} />

@@ -200,7 +200,7 @@ export function AdjustPriceTierPercentDialog({
 
         <div className="grid gap-4 py-2">
           {/* Phạm vi áp dụng */}
-          <div className="space-y-1.5">
+          <div className="space-y-2">
             <label className="text-sm font-medium">Phạm vi áp dụng</label>
             <div className="grid grid-cols-2 gap-2">
               {[
@@ -229,7 +229,7 @@ export function AdjustPriceTierPercentDialog({
                         : "border-input hover:border-muted-foreground/40 hover:bg-muted/40"
                     }`}
                   >
-                    <div className="flex items-center gap-1.5">
+                    <div className="flex items-center gap-2">
                       <Icon
                         name={opt.icon}
                         size={16}
@@ -256,7 +256,7 @@ export function AdjustPriceTierPercentDialog({
 
           {/* Chọn nhóm nếu scope=category */}
           {scope === "category" && (
-            <div className="space-y-1.5">
+            <div className="space-y-2">
               <label className="text-sm font-medium">
                 Nhóm hàng <span className="text-destructive">*</span>
               </label>
@@ -290,7 +290,7 @@ export function AdjustPriceTierPercentDialog({
           )}
 
           {/* % adjustment */}
-          <div className="space-y-1.5">
+          <div className="space-y-2">
             <label className="text-sm font-medium">
               % so với giá niêm yết{" "}
               <span className="text-destructive">*</span>
@@ -333,13 +333,13 @@ export function AdjustPriceTierPercentDialog({
               <table className="w-full text-sm">
                 <thead className="text-xs text-muted-foreground">
                   <tr>
-                    <th className="text-left px-3 py-1.5 font-medium">
+                    <th className="text-left px-3 py-2 font-medium">
                       Sản phẩm
                     </th>
-                    <th className="text-right px-3 py-1.5 font-medium">
+                    <th className="text-right px-3 py-2 font-medium">
                       Giá NY
                     </th>
-                    <th className="text-right px-3 py-1.5 font-medium">
+                    <th className="text-right px-3 py-2 font-medium">
                       Giá tier
                     </th>
                   </tr>
@@ -347,14 +347,14 @@ export function AdjustPriceTierPercentDialog({
                 <tbody className="divide-y">
                   {items.slice(0, previewLimit).map((it) => (
                     <tr key={it.product.id}>
-                      <td className="px-3 py-1.5 truncate max-w-[280px]">
+                      <td className="px-3 py-2 truncate max-w-[280px]">
                         {it.product.name}
                       </td>
-                      <td className="px-3 py-1.5 text-right text-muted-foreground">
+                      <td className="px-3 py-2 text-right text-muted-foreground">
                         {formatCurrency(it.product.sellPrice)}
                       </td>
                       <td
-                        className={`px-3 py-1.5 text-right font-medium ${
+                        className={`px-3 py-2 text-right font-medium ${
                           it.newPrice < it.product.sellPrice
                             ? "text-status-success"
                             : it.newPrice > it.product.sellPrice
@@ -369,7 +369,7 @@ export function AdjustPriceTierPercentDialog({
                 </tbody>
               </table>
               {items.length > previewLimit && (
-                <div className="px-3 py-1.5 text-xs text-muted-foreground border-t">
+                <div className="px-3 py-2 text-xs text-muted-foreground border-t">
                   ...và {items.length - previewLimit} SP khác cũng được áp dụng.
                 </div>
               )}

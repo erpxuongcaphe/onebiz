@@ -241,7 +241,7 @@ export function CreateKpiBreakdownDialog({
 
         <div className="grid gap-4 py-2">
           {/* Tên + mô tả */}
-          <div className="space-y-1.5">
+          <div className="space-y-2">
             <label className="text-sm font-medium">
               Tên KPI <span className="text-destructive">*</span>
             </label>
@@ -252,7 +252,7 @@ export function CreateKpiBreakdownDialog({
             />
           </div>
 
-          <div className="space-y-1.5">
+          <div className="space-y-2">
             <label className="text-sm font-medium">Mô tả (tuỳ chọn)</label>
             <Textarea
               value={description}
@@ -264,14 +264,14 @@ export function CreateKpiBreakdownDialog({
 
           {/* Loại + kỳ */}
           <div className="grid grid-cols-2 gap-4">
-            <div className="space-y-1.5">
+            <div className="space-y-2">
               <label className="text-sm font-medium">
                 Loại KPI <span className="text-destructive">*</span>
               </label>
               <select
                 value={kpiType}
                 onChange={(e) => setKpiType(e.target.value as KpiType)}
-                className="h-10 w-full rounded-xl border border-input bg-surface-container-lowest px-3.5 py-2 text-sm outline-none focus-visible:border-primary focus-visible:ring-2 focus-visible:ring-primary/20"
+                className="h-10 w-full rounded-xl border border-input bg-surface-container-lowest px-4 py-2 text-sm outline-none focus-visible:border-primary focus-visible:ring-2 focus-visible:ring-primary/20"
               >
                 {TYPE_OPTIONS.map((t) => (
                   <option key={t} value={t}>
@@ -280,14 +280,14 @@ export function CreateKpiBreakdownDialog({
                 ))}
               </select>
             </div>
-            <div className="space-y-1.5">
+            <div className="space-y-2">
               <label className="text-sm font-medium">
                 Chu kỳ <span className="text-destructive">*</span>
               </label>
               <select
                 value={period}
                 onChange={(e) => handlePeriodChange(e.target.value as KpiPeriod)}
-                className="h-10 w-full rounded-xl border border-input bg-surface-container-lowest px-3.5 py-2 text-sm outline-none focus-visible:border-primary focus-visible:ring-2 focus-visible:ring-primary/20"
+                className="h-10 w-full rounded-xl border border-input bg-surface-container-lowest px-4 py-2 text-sm outline-none focus-visible:border-primary focus-visible:ring-2 focus-visible:ring-primary/20"
               >
                 {PERIOD_OPTIONS.map((p) => (
                   <option key={p} value={p}>
@@ -300,7 +300,7 @@ export function CreateKpiBreakdownDialog({
 
           {/* Khoảng thời gian */}
           <div className="grid grid-cols-2 gap-4">
-            <div className="space-y-1.5">
+            <div className="space-y-2">
               <label className="text-sm font-medium">
                 Từ ngày <span className="text-destructive">*</span>
               </label>
@@ -310,7 +310,7 @@ export function CreateKpiBreakdownDialog({
                 onChange={(e) => setPeriodStart(e.target.value)}
               />
             </div>
-            <div className="space-y-1.5">
+            <div className="space-y-2">
               <label className="text-sm font-medium">
                 Đến ngày <span className="text-destructive">*</span>
               </label>
@@ -324,7 +324,7 @@ export function CreateKpiBreakdownDialog({
 
           {/* Mục tiêu + thực tế + đơn vị */}
           <div className="grid grid-cols-3 gap-4">
-            <div className="space-y-1.5">
+            <div className="space-y-2">
               <label className="text-sm font-medium">
                 Mục tiêu <span className="text-destructive">*</span>
               </label>
@@ -336,7 +336,7 @@ export function CreateKpiBreakdownDialog({
                 placeholder="500000000"
               />
             </div>
-            <div className="space-y-1.5">
+            <div className="space-y-2">
               <label className="text-sm font-medium">Thực tế</label>
               <Input
                 type="number"
@@ -346,7 +346,7 @@ export function CreateKpiBreakdownDialog({
                 placeholder="0"
               />
             </div>
-            <div className="space-y-1.5">
+            <div className="space-y-2">
               <label className="text-sm font-medium">Đơn vị</label>
               <Input
                 value={unit}
@@ -358,7 +358,7 @@ export function CreateKpiBreakdownDialog({
 
           {/* Owner + chi nhánh */}
           <div className="grid grid-cols-2 gap-4">
-            <div className="space-y-1.5">
+            <div className="space-y-2">
               <label className="text-sm font-medium">Role phụ trách</label>
               <Input
                 value={ownerRole}
@@ -366,12 +366,12 @@ export function CreateKpiBreakdownDialog({
                 placeholder="ceo / manager-branch-A / cashier"
               />
             </div>
-            <div className="space-y-1.5">
+            <div className="space-y-2">
               <label className="text-sm font-medium">Chi nhánh</label>
               <select
                 value={branchId}
                 onChange={(e) => setBranchId(e.target.value)}
-                className="h-10 w-full rounded-xl border border-input bg-surface-container-lowest px-3.5 py-2 text-sm outline-none focus-visible:border-primary focus-visible:ring-2 focus-visible:ring-primary/20"
+                className="h-10 w-full rounded-xl border border-input bg-surface-container-lowest px-4 py-2 text-sm outline-none focus-visible:border-primary focus-visible:ring-2 focus-visible:ring-primary/20"
               >
                 <option value="">— Toàn doanh nghiệp —</option>
                 {branches.map((b) => (
@@ -384,7 +384,7 @@ export function CreateKpiBreakdownDialog({
           </div>
 
           {/* KPI cha */}
-          <div className="space-y-1.5">
+          <div className="space-y-2">
             <label className="text-sm font-medium">
               KPI cha (tạo tree breakdown)
             </label>
@@ -392,7 +392,7 @@ export function CreateKpiBreakdownDialog({
               value={parentId}
               onChange={(e) => setParentId(e.target.value)}
               disabled={Boolean(parentKpi)}
-              className="h-10 w-full rounded-xl border border-input bg-surface-container-lowest px-3.5 py-2 text-sm outline-none focus-visible:border-primary focus-visible:ring-2 focus-visible:ring-primary/20 disabled:opacity-60"
+              className="h-10 w-full rounded-xl border border-input bg-surface-container-lowest px-4 py-2 text-sm outline-none focus-visible:border-primary focus-visible:ring-2 focus-visible:ring-primary/20 disabled:opacity-60"
             >
               <option value="">— KPI gốc (không có cha) —</option>
               {allKpis
@@ -420,7 +420,7 @@ export function CreateKpiBreakdownDialog({
               <Icon
                 name="progress_activity"
                 size={16}
-                className="mr-1.5 animate-spin"
+                className="mr-1 animate-spin"
               />
             )}
             Tạo KPI

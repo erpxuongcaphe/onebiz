@@ -45,7 +45,7 @@ export default function InvoiceSettingsPage() {
             </p>
             <Link
               href="/he-thong/thiet-lap"
-              className="inline-flex w-full items-center justify-center gap-1.5 rounded-md bg-primary px-3 py-2 text-sm font-medium text-primary-foreground hover:bg-primary/90 transition-colors"
+              className="inline-flex w-full items-center justify-center gap-2 rounded-md bg-primary px-3 py-2 text-sm font-medium text-primary-foreground hover:bg-primary/90 transition-colors"
             >
               <Icon name="settings" size={16} />
               Mở Thiết lập chung
@@ -67,7 +67,7 @@ export default function InvoiceSettingsPage() {
             </p>
             <Link
               href="/cai-dat/in-an"
-              className="inline-flex w-full items-center justify-center gap-1.5 rounded-md bg-primary px-3 py-2 text-sm font-medium text-primary-foreground hover:bg-primary/90 transition-colors"
+              className="inline-flex w-full items-center justify-center gap-2 rounded-md bg-primary px-3 py-2 text-sm font-medium text-primary-foreground hover:bg-primary/90 transition-colors"
             >
               <Icon name="print" size={16} />
               Mở Cài đặt in ấn
@@ -90,25 +90,25 @@ export default function InvoiceSettingsPage() {
             </p>
             <ul className="list-disc pl-5 space-y-1 text-muted-foreground">
               <li>
-                <code className="text-foreground font-mono text-xs bg-muted px-1.5 py-0.5 rounded">
+                <code className="text-foreground font-mono text-xs bg-muted px-2 py-0.5 rounded">
                   HD000001
                 </code>{" "}
                 — Hóa đơn POS Retail
               </li>
               <li>
-                <code className="text-foreground font-mono text-xs bg-muted px-1.5 py-0.5 rounded">
+                <code className="text-foreground font-mono text-xs bg-muted px-2 py-0.5 rounded">
                   PT000001
                 </code>{" "}
                 — Phiếu thu (sổ quỹ)
               </li>
               <li>
-                <code className="text-foreground font-mono text-xs bg-muted px-1.5 py-0.5 rounded">
+                <code className="text-foreground font-mono text-xs bg-muted px-2 py-0.5 rounded">
                   PC000001
                 </code>{" "}
                 — Phiếu chi (sổ quỹ)
               </li>
               <li>
-                <code className="text-foreground font-mono text-xs bg-muted px-1.5 py-0.5 rounded">
+                <code className="text-foreground font-mono text-xs bg-muted px-2 py-0.5 rounded">
                   HDN-CPH-001
                 </code>{" "}
                 — Đơn nhập café (theo nhóm SP)

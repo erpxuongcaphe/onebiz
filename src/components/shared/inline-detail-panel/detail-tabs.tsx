@@ -31,14 +31,14 @@ export function DetailTabs({ tabs, defaultTab, className }: DetailTabsProps) {
             type="button"
             onClick={() => setActiveTab(tab.id)}
             className={cn(
-              "px-4 py-2.5 text-sm font-medium transition-colors whitespace-nowrap",
+              "px-4 py-3 text-sm font-medium transition-colors whitespace-nowrap",
               "border-b-2 -mb-px",
               activeTab === tab.id
                 ? "border-primary text-primary"
                 : "border-transparent text-muted-foreground hover:text-foreground hover:border-muted-foreground/30"
             )}
           >
-            {tab.icon && <span className="mr-1.5 inline-flex">{tab.icon}</span>}
+            {tab.icon && <span className="mr-1 inline-flex">{tab.icon}</span>}
             {tab.label}
           </button>
         ))}

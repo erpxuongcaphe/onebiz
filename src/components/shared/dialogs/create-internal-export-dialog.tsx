@@ -193,15 +193,15 @@ export function CreateInternalExportDialog({
 
         <div className="grid gap-4 py-2">
           {/* Code */}
-          <div className="space-y-1.5">
+          <div className="space-y-2">
             <label className="text-sm font-medium">Mã phiếu</label>
-            <div className="flex h-9 w-full rounded-lg border border-input bg-muted/50 px-2.5 py-2 text-sm">
+            <div className="flex h-9 w-full rounded-lg border border-input bg-muted/50 px-3 py-2 text-sm">
               {code}
             </div>
           </div>
 
           {/* Destination / purpose */}
-          <div className="space-y-1.5">
+          <div className="space-y-2">
             <label className="text-sm font-medium">
               Nơi nhận / Mục đích <span className="text-destructive">*</span>
             </label>
@@ -217,7 +217,7 @@ export function CreateInternalExportDialog({
           </div>
 
           {/* Product search */}
-          <div className="space-y-1.5">
+          <div className="space-y-2">
             <label className="text-sm font-medium">
               Thêm sản phẩm <span className="text-destructive">*</span>
             </label>
@@ -264,7 +264,7 @@ export function CreateInternalExportDialog({
 
           {/* Selected items */}
           {items.length > 0 && (
-            <div className="space-y-1.5">
+            <div className="space-y-2">
               <label className="text-sm font-medium">Sản phẩm xuất</label>
               <div className="rounded-lg border overflow-hidden">
                 <div className="grid grid-cols-[1fr_70px_100px_100px_36px] gap-2 px-3 py-2 bg-muted/50 text-xs font-medium text-muted-foreground">
@@ -315,10 +315,10 @@ export function CreateInternalExportDialog({
           )}
 
           {/* Notes */}
-          <div className="space-y-1.5">
+          <div className="space-y-2">
             <label className="text-sm font-medium">Ghi chú</label>
             <textarea
-              className="flex min-h-[50px] w-full rounded-lg border border-input bg-transparent px-2.5 py-2 text-sm transition-colors outline-none placeholder:text-muted-foreground focus-visible:border-ring focus-visible:ring-3 focus-visible:ring-ring/50"
+              className="flex min-h-[50px] w-full rounded-lg border border-input bg-transparent px-3 py-2 text-sm transition-colors outline-none placeholder:text-muted-foreground focus-visible:border-ring focus-visible:ring-3 focus-visible:ring-ring/50"
               value={notes}
               onChange={(e) => setNotes(e.target.value)}
               placeholder="Ghi chú phiếu xuất nội bộ"

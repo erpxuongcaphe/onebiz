@@ -115,7 +115,7 @@ export function PrintBarcode({
 
       <button
         onClick={handlePrint}
-        className="inline-flex items-center gap-1.5 px-3 py-1.5 text-sm font-medium rounded-md border border-border bg-surface-container-lowest hover:bg-surface-container-low transition-colors"
+        className="inline-flex items-center gap-2 px-3 py-2 text-sm font-medium rounded-md border border-border bg-surface-container-lowest hover:bg-surface-container-low transition-colors"
       >
         In mã vạch ({items.length} sp)
       </button>

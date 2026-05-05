@@ -129,7 +129,7 @@ export default function AppearanceSettingsPage() {
                     )}
                   >
                     <div
-                      className={cn("h-2 w-12 rounded-full mb-1.5", t.previewInner)}
+                      className={cn("h-2 w-12 rounded-full mb-2", t.previewInner)}
                     />
                     <div
                       className={cn("h-2 w-8 rounded-full", t.previewInner)}
@@ -157,7 +157,7 @@ export default function AppearanceSettingsPage() {
                 key={c.id}
                 type="button"
                 onClick={() => setAccentColor(c.id)}
-                className="flex flex-col items-center gap-1.5"
+                className="flex flex-col items-center gap-2"
                 title={c.label}
               >
                 <div
@@ -312,7 +312,7 @@ export default function AppearanceSettingsPage() {
                   accentColors.find((c) => c.id === accentColor)?.color
                 )}
               />
-              <div className="space-y-1.5">
+              <div className="space-y-2">
                 <div className="h-2 w-full rounded-full bg-muted" />
                 <div className="h-2 w-3/4 rounded-full bg-muted" />
                 <div className="h-2 w-1/2 rounded-full bg-muted" />
@@ -345,7 +345,7 @@ export default function AppearanceSettingsPage() {
 
       <div className="flex justify-end">
         <Button onClick={handleSave}>
-          <Icon name="save" size={16} className="mr-1.5" />
+          <Icon name="save" size={16} className="mr-1" />
           Lưu thay đổi
         </Button>
       </div>

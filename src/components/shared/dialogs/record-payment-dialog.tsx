@@ -132,7 +132,7 @@ export function RecordPaymentDialog({
           </div>
 
           {/* Amount */}
-          <div className="space-y-1.5">
+          <div className="space-y-2">
             <label className="text-sm font-medium">
               Số tiền thanh toán <span className="text-destructive">*</span>
             </label>
@@ -159,7 +159,7 @@ export function RecordPaymentDialog({
           </div>
 
           {/* Payment method */}
-          <div className="space-y-1.5">
+          <div className="space-y-2">
             <label className="text-sm font-medium">Phương thức thanh toán</label>
             <Select value={paymentMethod} onValueChange={(v) => setPaymentMethod(v as "cash" | "transfer" | "card")}>
               <SelectTrigger className="w-full">
@@ -174,10 +174,10 @@ export function RecordPaymentDialog({
           </div>
 
           {/* Note */}
-          <div className="space-y-1.5">
+          <div className="space-y-2">
             <label className="text-sm font-medium">Ghi chú</label>
             <textarea
-              className="flex min-h-[50px] w-full rounded-lg border border-input bg-transparent px-2.5 py-2 text-sm transition-colors outline-none placeholder:text-muted-foreground focus-visible:border-ring focus-visible:ring-3 focus-visible:ring-ring/50"
+              className="flex min-h-[50px] w-full rounded-lg border border-input bg-transparent px-3 py-2 text-sm transition-colors outline-none placeholder:text-muted-foreground focus-visible:border-ring focus-visible:ring-3 focus-visible:ring-ring/50"
               value={note}
               onChange={(e) => setNote(e.target.value)}
               placeholder="Ghi chú thanh toán"

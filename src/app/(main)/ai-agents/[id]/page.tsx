@@ -146,7 +146,7 @@ function ExecutionCard({ execution }: { execution: AgentExecution }) {
       {open && hasPayload && (
         <div className="mt-3 space-y-2 text-xs">
           {execution.errorMessage && (
-            <div className="rounded-lg bg-status-error/5 border border-status-error/20 p-2.5">
+            <div className="rounded-lg bg-status-error/5 border border-status-error/20 p-3">
               <div className="text-[10px] uppercase tracking-wider font-semibold text-status-error mb-1">
                 Lỗi
               </div>
@@ -156,7 +156,7 @@ function ExecutionCard({ execution }: { execution: AgentExecution }) {
             </div>
           )}
           {Object.keys(execution.inputData).length > 0 && (
-            <div className="rounded-lg bg-surface-container p-2.5">
+            <div className="rounded-lg bg-surface-container p-3">
               <div className="text-[10px] uppercase tracking-wider font-semibold text-muted-foreground mb-1">
                 Input
               </div>
@@ -166,7 +166,7 @@ function ExecutionCard({ execution }: { execution: AgentExecution }) {
             </div>
           )}
           {Object.keys(execution.outputData).length > 0 && (
-            <div className="rounded-lg bg-surface-container p-2.5">
+            <div className="rounded-lg bg-surface-container p-3">
               <div className="text-[10px] uppercase tracking-wider font-semibold text-muted-foreground mb-1">
                 Output
               </div>
@@ -176,7 +176,7 @@ function ExecutionCard({ execution }: { execution: AgentExecution }) {
             </div>
           )}
           {execution.tokenUsage && (
-            <div className="rounded-lg bg-primary-fixed/40 p-2.5 text-primary">
+            <div className="rounded-lg bg-primary-fixed/40 p-3 text-primary">
               <div className="text-[10px] uppercase tracking-wider font-semibold mb-1">
                 Token usage
               </div>
@@ -691,7 +691,7 @@ export default function AgentDetailPage() {
             </h3>
 
             <div className="grid sm:grid-cols-2 gap-4">
-              <div className="space-y-1.5">
+              <div className="space-y-2">
                 <Label htmlFor="agent-name">Tên agent</Label>
                 <Input
                   id="agent-name"
@@ -700,13 +700,13 @@ export default function AgentDetailPage() {
                   placeholder="VD: CEO Agent"
                 />
               </div>
-              <div className="space-y-1.5">
+              <div className="space-y-2">
                 <Label htmlFor="agent-role">Vai trò</Label>
                 <select
                   id="agent-role"
                   value={role}
                   onChange={(e) => setRole(e.target.value as AgentRole)}
-                  className="h-10 w-full rounded-xl border border-input bg-surface-container-lowest px-3.5 py-2 text-sm outline-none focus-visible:border-primary focus-visible:ring-2 focus-visible:ring-primary/20"
+                  className="h-10 w-full rounded-xl border border-input bg-surface-container-lowest px-4 py-2 text-sm outline-none focus-visible:border-primary focus-visible:ring-2 focus-visible:ring-primary/20"
                 >
                   {ROLE_OPTIONS.map((r) => (
                     <option key={r} value={r}>
@@ -717,7 +717,7 @@ export default function AgentDetailPage() {
               </div>
             </div>
 
-            <div className="space-y-1.5">
+            <div className="space-y-2">
               <Label htmlFor="agent-desc">Mô tả</Label>
               <Textarea
                 id="agent-desc"
@@ -755,7 +755,7 @@ export default function AgentDetailPage() {
               </Button>
             </div>
 
-            <div className="space-y-1.5">
+            <div className="space-y-2">
               <Label htmlFor="webhook-url">
                 Webhook URL
                 <span className="text-muted-foreground font-normal ml-1">
@@ -770,7 +770,7 @@ export default function AgentDetailPage() {
               />
             </div>
 
-            <div className="space-y-1.5">
+            <div className="space-y-2">
               <Label htmlFor="workflow-id">
                 Workflow ID
                 <span className="text-muted-foreground font-normal ml-1">
@@ -878,13 +878,13 @@ export default function AgentDetailPage() {
                   </div>
                   <div className="flex items-center gap-2 flex-wrap">
                     {workload.overdue > 0 && (
-                      <span className="text-xs font-semibold rounded-full px-2.5 py-1 bg-status-error/10 text-status-error flex items-center gap-1">
+                      <span className="text-xs font-semibold rounded-full px-3 py-1 bg-status-error/10 text-status-error flex items-center gap-1">
                         <Icon name="error" size={12} />
                         {workload.overdue} quá hạn
                       </span>
                     )}
                     {workload.dueToday > 0 && (
-                      <span className="text-xs font-semibold rounded-full px-2.5 py-1 bg-status-warning/10 text-status-warning flex items-center gap-1">
+                      <span className="text-xs font-semibold rounded-full px-3 py-1 bg-status-warning/10 text-status-warning flex items-center gap-1">
                         <Icon name="schedule" size={12} />
                         {workload.dueToday} hôm nay
                       </span>
@@ -903,7 +903,7 @@ export default function AgentDetailPage() {
                     <button
                       key={f.key}
                       onClick={() => setTaskFilter(f.key)}
-                      className={`shrink-0 text-xs font-semibold rounded-full px-3 py-1.5 transition-colors ${
+                      className={`shrink-0 text-xs font-semibold rounded-full px-3 py-2 transition-colors ${
                         taskFilter === f.key
                           ? "bg-primary text-on-primary"
                           : "bg-surface-container text-foreground/70 hover:bg-surface-container-high"
@@ -1043,7 +1043,7 @@ export default function AgentDetailPage() {
                             </div>
                           </div>
 
-                          <div className="flex items-center gap-1.5 flex-wrap">
+                          <div className="flex items-center gap-2 flex-wrap">
                             {nextStatus && (
                               <Button
                                 size="sm"

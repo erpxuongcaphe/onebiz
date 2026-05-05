@@ -354,7 +354,7 @@ export default function QuanLyBanPage() {
         </div>
         <div className="flex items-center gap-2">
           <Button variant="outline" onClick={() => setAddZoneOpen(true)}>
-            <Icon name="add" className="size-4 mr-1.5" /> Thêm khu vực
+            <Icon name="add" className="size-4 mr-1" /> Thêm khu vực
           </Button>
           <Button onClick={() => {
             setBulkForm({
@@ -365,7 +365,7 @@ export default function QuanLyBanPage() {
             });
             setBulkAddOpen(true);
           }}>
-            <Icon name="grid_view" className="size-4 mr-1.5" /> Tạo hàng loạt
+            <Icon name="grid_view" className="size-4 mr-1" /> Tạo hàng loạt
           </Button>
         </div>
       </div>

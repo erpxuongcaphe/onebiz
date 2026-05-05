@@ -363,7 +363,7 @@ function CommandPaletteDialog({
           {searching && (
             <span className="text-xs text-muted-foreground">Đang tìm...</span>
           )}
-          <kbd className="hidden sm:inline-flex items-center gap-0.5 text-[10px] font-mono text-muted-foreground bg-muted px-1.5 py-0.5 rounded border">
+          <kbd className="hidden sm:inline-flex items-center gap-0.5 text-[10px] font-mono text-muted-foreground bg-muted px-2 py-0.5 rounded border">
             Esc
           </kbd>
         </div>

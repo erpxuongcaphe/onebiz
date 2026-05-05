@@ -142,7 +142,7 @@ export function EditInvoiceDialog({
           </div>
 
           {/* Editable fields */}
-          <div className="grid gap-1.5">
+          <div className="grid gap-2">
             <label htmlFor="edit-invoice-customer" className="text-sm font-medium">
               Tên khách hàng
             </label>
@@ -155,7 +155,7 @@ export function EditInvoiceDialog({
             />
           </div>
 
-          <div className="grid gap-1.5">
+          <div className="grid gap-2">
             <label htmlFor="edit-invoice-discount" className="text-sm font-medium">
               Giảm giá (VND)
             </label>
@@ -169,7 +169,7 @@ export function EditInvoiceDialog({
             />
           </div>
 
-          <div className="grid gap-1.5">
+          <div className="grid gap-2">
             <label htmlFor="edit-invoice-payment" className="text-sm font-medium">
               Phương thức thanh toán
             </label>
@@ -192,7 +192,7 @@ export function EditInvoiceDialog({
             </Select>
           </div>
 
-          <div className="grid gap-1.5">
+          <div className="grid gap-2">
             <label htmlFor="edit-invoice-note" className="text-sm font-medium">
               Ghi chú
             </label>

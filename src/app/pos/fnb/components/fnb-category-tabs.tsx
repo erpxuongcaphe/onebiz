@@ -33,7 +33,7 @@ export function FnbCategoryTabs({
   return (
     <div
       ref={scrollRef}
-      className="flex gap-2 px-3 sm:px-4 py-2.5 overflow-x-auto no-scrollbar border-b border-outline-variant/20 bg-surface-container-lowest shrink-0"
+      className="flex gap-2 px-3 sm:px-4 py-3 overflow-x-auto no-scrollbar border-b border-outline-variant/20 bg-surface-container-lowest shrink-0"
     >
       {/* "Tất cả" — always first */}
       <CategoryPill
@@ -68,7 +68,7 @@ function CategoryPill({
       type="button"
       onClick={onClick}
       className={cn(
-        "shrink-0 px-5 py-2.5 rounded-lg text-sm font-semibold transition-all whitespace-nowrap press-scale-sm",
+        "shrink-0 px-5 py-3 rounded-lg text-sm font-semibold transition-all whitespace-nowrap press-scale-sm",
         active
           ? "bg-primary text-on-primary ambient-shadow"
           : "bg-surface-container-low text-on-surface-variant hover:bg-surface-container hover:text-foreground"

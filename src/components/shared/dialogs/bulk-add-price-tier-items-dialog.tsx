@@ -237,7 +237,7 @@ export function BulkAddPriceTierItemsDialog({
 
         <div className="grid gap-4 py-2">
           {/* Bước 1: Chọn nhóm */}
-          <div className="space-y-1.5">
+          <div className="space-y-2">
             <label className="text-sm font-medium">
               Nhóm hàng <span className="text-destructive">*</span>
             </label>
@@ -274,7 +274,7 @@ export function BulkAddPriceTierItemsDialog({
           {/* Bước 2: Giá đồng loạt + check all */}
           {categoryId && (
             <div className="grid grid-cols-[1fr_auto] gap-3 items-end">
-              <div className="space-y-1.5">
+              <div className="space-y-2">
                 <label className="text-sm font-medium">
                   Giá đồng loạt cho {selectedCount}/{products.length} SP đã chọn
                 </label>
@@ -290,7 +290,7 @@ export function BulkAddPriceTierItemsDialog({
                   này.
                 </p>
               </div>
-              <div className="flex items-center gap-2 pb-2.5">
+              <div className="flex items-center gap-2 pb-3">
                 <Checkbox
                   checked={
                     products.length > 0 && selectedCount === products.length

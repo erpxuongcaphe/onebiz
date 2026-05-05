@@ -72,7 +72,7 @@ export default function PriceBookSettingsPage() {
         </div>
         <Link
           href="/hang-hoa/thiet-lap-gia"
-          className="inline-flex items-center gap-1.5 rounded-md bg-primary px-3 py-2 text-sm font-medium text-primary-foreground hover:bg-primary/90 transition-colors"
+          className="inline-flex items-center gap-2 rounded-md bg-primary px-3 py-2 text-sm font-medium text-primary-foreground hover:bg-primary/90 transition-colors"
         >
           <Icon name="add" size={16} />
           Thêm bảng giá
@@ -107,7 +107,7 @@ export default function PriceBookSettingsPage() {
               </p>
               <Link
                 href="/hang-hoa/thiet-lap-gia"
-                className="inline-flex items-center mt-4 px-3 py-1.5 text-xs font-medium border border-border rounded-md hover:bg-muted transition-colors"
+                className="inline-flex items-center mt-4 px-3 py-2 text-xs font-medium border border-border rounded-md hover:bg-muted transition-colors"
               >
                 Tạo bảng giá đầu tiên
               </Link>
@@ -119,7 +119,7 @@ export default function PriceBookSettingsPage() {
                   key={tier.id}
                   className="flex items-center justify-between rounded-lg border p-4"
                 >
-                  <div className="space-y-1.5">
+                  <div className="space-y-2">
                     <div className="flex items-center gap-2 flex-wrap">
                       <span className="text-sm font-semibold">{tier.name}</span>
                       {tier.code && (
@@ -155,7 +155,7 @@ export default function PriceBookSettingsPage() {
                   </div>
                   <Link
                     href={`/hang-hoa/thiet-lap-gia?tier=${tier.id}`}
-                    className="inline-flex items-center gap-1 px-3 py-1.5 text-xs font-medium border border-border rounded-md hover:bg-muted transition-colors"
+                    className="inline-flex items-center gap-1 px-3 py-2 text-xs font-medium border border-border rounded-md hover:bg-muted transition-colors"
                   >
                     <Icon name="edit" size={14} />
                     Chỉnh sửa

@@ -91,7 +91,7 @@ export function ProductGrid({ searchQuery, onAddProduct }: ProductGridProps) {
     <div className="flex flex-col md:flex-row h-full bg-surface-container-low">
       {/* ── Mobile: horizontal pills (giữ pattern cũ cho <md, cashier mobile
               quen tap pill ngang). Desktop: ẩn để dùng vertical sidebar. ── */}
-      <div className="md:hidden flex items-center gap-1.5 px-3 py-1.5 overflow-x-auto border-b bg-white shrink-0 scrollbar-none">
+      <div className="md:hidden flex items-center gap-2 px-3 py-2 overflow-x-auto border-b bg-white shrink-0 scrollbar-none">
         <CategoryPill
           label="Tất cả"
           count={totalProducts}
@@ -118,7 +118,7 @@ export function ProductGrid({ searchQuery, onAddProduct }: ProductGridProps) {
         className="hidden md:flex flex-col border-r bg-white shrink-0 overflow-y-auto"
         style={{ width: "clamp(132px, 10vw, 180px)" }}
       >
-        <div className="px-2.5 py-2 text-[10px] font-semibold text-muted-foreground uppercase tracking-wider border-b sticky top-0 bg-white z-10">
+        <div className="px-3 py-2 text-[10px] font-semibold text-muted-foreground uppercase tracking-wider border-b sticky top-0 bg-white z-10">
           Danh mục
         </div>
         <CategoryRow
@@ -196,7 +196,7 @@ function CategoryRow({
       type="button"
       onClick={onClick}
       className={cn(
-        "group flex items-center justify-between gap-1.5 px-2.5 py-1.5 min-h-[40px] text-xs text-left transition-colors border-l-4 shrink-0",
+        "group flex items-center justify-between gap-2 px-3 py-2 min-h-[40px] text-xs text-left transition-colors border-l-4 shrink-0",
         active
           ? "bg-primary-fixed text-primary font-semibold border-l-primary"
           : "border-l-transparent text-foreground/80 hover:bg-surface-container-low hover:text-foreground",
@@ -237,7 +237,7 @@ function CategoryPill({
       type="button"
       onClick={onClick}
       className={cn(
-        "shrink-0 px-2.5 py-1 rounded-full text-[11px] font-medium transition-all whitespace-nowrap",
+        "shrink-0 px-3 py-1 rounded-full text-[11px] font-medium transition-all whitespace-nowrap",
         active
           ? "bg-primary text-white shadow-sm"
           : "bg-muted text-foreground hover:bg-muted"
@@ -307,11 +307,11 @@ function ProductTile({
             {formatCurrency(product.sellPrice ?? 0)}
           </p>
           {outOfStock ? (
-            <span className="text-[9px] font-semibold px-1.5 py-0.5 rounded-full bg-status-error/10 text-status-error border border-status-error/20 shrink-0">
+            <span className="text-[9px] font-semibold px-2 py-0.5 rounded-full bg-status-error/10 text-status-error border border-status-error/20 shrink-0">
               Hết
             </span>
           ) : showStockChip ? (
-            <span className="text-[9px] font-semibold px-1.5 py-0.5 rounded-full bg-status-warning/15 text-status-warning shrink-0">
+            <span className="text-[9px] font-semibold px-2 py-0.5 rounded-full bg-status-warning/15 text-status-warning shrink-0">
               Còn {stock}
             </span>
           ) : product.code ? (

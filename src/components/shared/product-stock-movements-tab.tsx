@@ -115,7 +115,7 @@ export function ProductStockMovementsTab({ productId }: ProductStockMovementsTab
                 <span className="text-xs text-muted-foreground">
                   {formatDate(m.date)}
                 </span>
-                <span className={`flex items-center gap-1.5 ${style.color}`}>
+                <span className={`flex items-center gap-2 ${style.color}`}>
                   <Icon name={style.icon} size={14} />
                   <span className="truncate">{m.typeName || style.label}</span>
                 </span>

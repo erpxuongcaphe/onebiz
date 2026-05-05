@@ -163,18 +163,18 @@ export function FnbPaymentDialog({
           </div>
 
           {/* Tip — quick buttons + custom input */}
-          <div className="space-y-1.5">
-            <Label className="text-sm flex items-center gap-1.5">
+          <div className="space-y-2">
+            <Label className="text-sm flex items-center gap-2">
               <Icon name="volunteer_activism" size={14} /> Tiền tip (tuỳ chọn)
             </Label>
-            <div className="flex gap-1.5 flex-wrap">
+            <div className="flex gap-2 flex-wrap">
               {tipQuickButtons.map((btn) => (
                 <button
                   key={btn.label}
                   type="button"
                   onClick={() => setTipInput(btn.value > 0 ? String(btn.value) : "")}
                   className={cn(
-                    "px-3 py-1.5 rounded-md text-xs font-medium border transition-colors tabular-nums",
+                    "px-3 py-2 rounded-md text-xs font-medium border transition-colors tabular-nums",
                     (btn.value === 0 && tipAmount === 0) || (btn.value > 0 && tipAmount === btn.value)
                       ? "bg-primary text-primary-foreground border-primary"
                       : "bg-surface-container-low border-border text-foreground hover:bg-surface-container",
@@ -200,7 +200,7 @@ export function FnbPaymentDialog({
           </div>
 
           {/* Payment method tabs */}
-          <div className="grid grid-cols-2 sm:grid-cols-4 gap-2 sm:gap-1.5">
+          <div className="grid grid-cols-2 sm:grid-cols-4 gap-2 sm:gap-2">
             {METHODS.map(({ key, label, icon: Icon }) => (
               <button key={key} type="button" onClick={() => setMethod(key)}
                 className={cn(
@@ -217,7 +217,7 @@ export function FnbPaymentDialog({
 
           {/* Cash input (for cash & mixed) */}
           {(method === "cash" || method === "mixed") && (
-            <div className="space-y-1.5">
+            <div className="space-y-2">
               <Label className="text-sm">{method === "mixed" ? "Tiền mặt" : "Tiền khách đưa"}</Label>
               <Input type="text" inputMode="numeric" placeholder="0"
                 value={cashInput} onChange={(e) => setCashInput(e.target.value)}
@@ -231,16 +231,16 @@ export function FnbPaymentDialog({
                 )}
               />
               {/* Denomination quick buttons */}
-              <div className="flex flex-wrap gap-2 sm:gap-1.5">
+              <div className="flex flex-wrap gap-2 sm:gap-2">
                 <button type="button"
                   onClick={() => setCashInput(String(total))}
-                  className="px-3 py-2 sm:px-2.5 sm:py-1.5 rounded-md border border-status-success/25 bg-status-success/10 text-sm sm:text-xs font-medium text-status-success hover:bg-status-success/20 active:bg-status-success/30 transition-colors">
+                  className="px-3 py-2 sm:px-3 sm:py-2 rounded-md border border-status-success/25 bg-status-success/10 text-sm sm:text-xs font-medium text-status-success hover:bg-status-success/20 active:bg-status-success/30 transition-colors">
                   Đủ
                 </button>
                 {DENOMINATIONS.map((d) => (
                   <button key={d} type="button"
                     onClick={() => setCashInput(String(d))}
-                    className="px-3 py-2 sm:px-2.5 sm:py-1.5 rounded-md border border-border bg-card text-sm sm:text-xs font-medium text-foreground hover:bg-muted active:bg-muted transition-colors tabular-nums">
+                    className="px-3 py-2 sm:px-3 sm:py-2 rounded-md border border-border bg-card text-sm sm:text-xs font-medium text-foreground hover:bg-muted active:bg-muted transition-colors tabular-nums">
                     {formatDenom(d)}
                   </button>
                 ))}
@@ -251,13 +251,13 @@ export function FnbPaymentDialog({
           {/* Transfer & card inputs (mixed only) */}
           {method === "mixed" && (
             <>
-              <div className="space-y-1.5">
+              <div className="space-y-2">
                 <Label className="text-sm">Chuyển khoản</Label>
                 <Input type="text" inputMode="numeric" placeholder="0"
                   value={transferInput} onChange={(e) => setTransferInput(e.target.value)}
                   className="tabular-nums" />
               </div>
-              <div className="space-y-1.5">
+              <div className="space-y-2">
                 <Label className="text-sm">Thẻ</Label>
                 <Input type="text" inputMode="numeric" placeholder="0"
                   value={cardInput} onChange={(e) => setCardInput(e.target.value)}
@@ -335,8 +335,8 @@ export function FnbPaymentDialog({
           )}
 
           {/* Customer name */}
-          <div className="space-y-1.5">
-            <Label className="text-sm flex items-center gap-1.5">
+          <div className="space-y-2">
+            <Label className="text-sm flex items-center gap-2">
               <Icon name="person" size={14} /> Tên khách hàng
             </Label>
             <Input value={customerName} onChange={(e) => setCustomerName(e.target.value)}

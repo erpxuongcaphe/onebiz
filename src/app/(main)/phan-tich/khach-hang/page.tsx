@@ -335,10 +335,10 @@ export default function KhachHangPage() {
                 <tbody>
                   {topCustomers.map((item) => (
                     <tr key={item.rank} className="border-b last:border-0">
-                      <td className="py-2.5 pr-4 text-muted-foreground">{item.rank}</td>
-                      <td className="py-2.5 pr-4 font-medium">{item.name}</td>
-                      <td className="py-2.5 pr-4 text-right">{item.orders}</td>
-                      <td className="py-2.5 text-right font-medium text-primary">
+                      <td className="py-3 pr-4 text-muted-foreground">{item.rank}</td>
+                      <td className="py-3 pr-4 font-medium">{item.name}</td>
+                      <td className="py-3 pr-4 text-right">{item.orders}</td>
+                      <td className="py-3 text-right font-medium text-primary">
                         {formatCurrency(item.revenue)}
                       </td>
                     </tr>

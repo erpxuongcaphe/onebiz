@@ -147,7 +147,7 @@ export function ProductImageUpload({
               type="button"
               onClick={handleFilePick}
               disabled={uploading}
-              className="rounded-full bg-white/90 p-1.5 hover:bg-white text-foreground"
+              className="rounded-full bg-white/90 p-2 hover:bg-white text-foreground"
               title="Đổi ảnh"
             >
               <Icon name="edit" size={14} />
@@ -156,7 +156,7 @@ export function ProductImageUpload({
               type="button"
               onClick={handleRemove}
               disabled={uploading}
-              className="rounded-full bg-white/90 p-1.5 hover:bg-destructive hover:text-white text-foreground"
+              className="rounded-full bg-white/90 p-2 hover:bg-destructive hover:text-white text-foreground"
               title="Xoá ảnh"
             >
               <Icon name="close" size={14} />

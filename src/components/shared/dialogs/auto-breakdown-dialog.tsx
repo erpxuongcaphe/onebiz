@@ -233,7 +233,7 @@ export function AutoBreakdownDialog({
           </div>
 
           {/* Strategy selector */}
-          <div className="space-y-1.5">
+          <div className="space-y-2">
             <label className="text-sm font-medium">
               Chiến lược chia <span className="text-destructive">*</span>
             </label>
@@ -295,7 +295,7 @@ export function AutoBreakdownDialog({
 
           {/* Strategy: time options */}
           {strategy === "time" && (
-            <div className="space-y-1.5">
+            <div className="space-y-2">
               <label className="text-sm font-medium">
                 Chia thành kỳ <span className="text-destructive">*</span>
               </label>
@@ -311,7 +311,7 @@ export function AutoBreakdownDialog({
                   onChange={(e) =>
                     setTargetSubPeriod(e.target.value as KpiPeriod)
                   }
-                  className="h-10 w-full rounded-xl border border-input bg-surface-container-lowest px-3.5 py-2 text-sm outline-none focus-visible:border-primary focus-visible:ring-2 focus-visible:ring-primary/20"
+                  className="h-10 w-full rounded-xl border border-input bg-surface-container-lowest px-4 py-2 text-sm outline-none focus-visible:border-primary focus-visible:ring-2 focus-visible:ring-primary/20"
                 >
                   {validTargetSubPeriods.map((p) => (
                     <option key={p} value={p}>
@@ -326,7 +326,7 @@ export function AutoBreakdownDialog({
           {/* Strategy: branch options */}
           {strategy === "branch" && (
             <>
-              <div className="space-y-1.5">
+              <div className="space-y-2">
                 <label className="text-sm font-medium">
                   Phân bổ target <span className="text-destructive">*</span>
                 </label>
@@ -335,7 +335,7 @@ export function AutoBreakdownDialog({
                     type="button"
                     onClick={() => setBranchDistribution("even")}
                     className={cn(
-                      "rounded-xl border p-2.5 text-left transition-colors press-scale-sm",
+                      "rounded-xl border p-3 text-left transition-colors press-scale-sm",
                       branchDistribution === "even"
                         ? "border-primary bg-primary-fixed"
                         : "border-border bg-surface-container-lowest hover:bg-surface-container",
@@ -350,7 +350,7 @@ export function AutoBreakdownDialog({
                     type="button"
                     onClick={() => setBranchDistribution("historical")}
                     className={cn(
-                      "rounded-xl border p-2.5 text-left transition-colors press-scale-sm",
+                      "rounded-xl border p-3 text-left transition-colors press-scale-sm",
                       branchDistribution === "historical"
                         ? "border-primary bg-primary-fixed"
                         : "border-border bg-surface-container-lowest hover:bg-surface-container",
@@ -366,7 +366,7 @@ export function AutoBreakdownDialog({
                 </div>
               </div>
 
-              <div className="space-y-1.5">
+              <div className="space-y-2">
                 <div className="flex items-center justify-between">
                   <label className="text-sm font-medium">
                     Chi nhánh áp dụng
@@ -391,7 +391,7 @@ export function AutoBreakdownDialog({
                     branches.map((b) => (
                       <label
                         key={b.id}
-                        className="flex items-center gap-2 p-2.5 hover:bg-surface-container cursor-pointer border-b border-border/40 last:border-b-0"
+                        className="flex items-center gap-2 p-3 hover:bg-surface-container cursor-pointer border-b border-border/40 last:border-b-0"
                       >
                         <input
                           type="checkbox"
@@ -445,7 +445,7 @@ export function AutoBreakdownDialog({
               <Icon
                 name="progress_activity"
                 size={16}
-                className="mr-1.5 animate-spin"
+                className="mr-1 animate-spin"
               />
             )}
             Tạo {previewCount} KPI con

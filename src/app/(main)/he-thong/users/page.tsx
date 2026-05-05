@@ -221,7 +221,7 @@ export default function UsersPage() {
           </p>
         </div>
         <Button onClick={() => setInviteOpen(true)}>
-          <Icon name="person_add" size={16} className="mr-1.5" />
+          <Icon name="person_add" size={16} className="mr-1" />
           Mời nhân viên
         </Button>
       </div>
@@ -277,10 +277,10 @@ export default function UsersPage() {
               <tbody>
                 {users.map((user) => (
                   <tr key={user.id} className="border-b last:border-0">
-                    <td className="py-2.5 font-medium">{user.fullName}</td>
-                    <td className="py-2.5 text-muted-foreground">{user.email}</td>
-                    <td className="py-2.5 hidden md:table-cell">{getBranchName(user.branchId)}</td>
-                    <td className="py-2.5">
+                    <td className="py-3 font-medium">{user.fullName}</td>
+                    <td className="py-3 text-muted-foreground">{user.email}</td>
+                    <td className="py-3 hidden md:table-cell">{getBranchName(user.branchId)}</td>
+                    <td className="py-3">
                       {user.roleName ? (
                         <Badge variant="secondary" className="text-xs">
                           <Icon name="shield" size={12} className="mr-1" />
@@ -292,7 +292,7 @@ export default function UsersPage() {
                         </span>
                       )}
                     </td>
-                    <td className="py-2.5">
+                    <td className="py-3">
                       <Badge
                         variant={user.isActive ? "default" : "secondary"}
                         className={cn(
@@ -303,7 +303,7 @@ export default function UsersPage() {
                         {user.isActive ? "Hoạt động" : "Vô hiệu"}
                       </Badge>
                     </td>
-                    <td className="py-2.5">
+                    <td className="py-3">
                       <DropdownMenu>
                         <DropdownMenuTrigger className="inline-flex items-center justify-center h-7 w-7 rounded-md hover:bg-muted transition-colors">
                           <Icon name="more_horiz" size={16} />
@@ -378,7 +378,7 @@ export default function UsersPage() {
               Hủy
             </Button>
             <Button onClick={handleAssignRole}>
-              <Icon name="check" size={16} className="mr-1.5" />
+              <Icon name="check" size={16} className="mr-1" />
               Xác nhận
             </Button>
           </DialogFooter>
@@ -404,7 +404,7 @@ export default function UsersPage() {
             </p>
 
             <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
-              <div className="space-y-1.5 sm:col-span-2">
+              <div className="space-y-2 sm:col-span-2">
                 <Label htmlFor="invite-email">Email *</Label>
                 <Input
                   id="invite-email"
@@ -418,7 +418,7 @@ export default function UsersPage() {
                 />
               </div>
 
-              <div className="space-y-1.5">
+              <div className="space-y-2">
                 <Label htmlFor="invite-name">Họ và tên *</Label>
                 <Input
                   id="invite-name"
@@ -431,7 +431,7 @@ export default function UsersPage() {
                 />
               </div>
 
-              <div className="space-y-1.5">
+              <div className="space-y-2">
                 <Label htmlFor="invite-phone">Số điện thoại *</Label>
                 <Input
                   id="invite-phone"
@@ -449,7 +449,7 @@ export default function UsersPage() {
                 </p>
               </div>
 
-              <div className="space-y-1.5">
+              <div className="space-y-2">
                 <Label htmlFor="invite-branch">Chi nhánh</Label>
                 <Select
                   value={inviteForm.branchId}
@@ -477,7 +477,7 @@ export default function UsersPage() {
                 </Select>
               </div>
 
-              <div className="space-y-1.5">
+              <div className="space-y-2">
                 <Label htmlFor="invite-role">Vai trò</Label>
                 <Select
                   value={inviteForm.roleId}
@@ -576,13 +576,13 @@ export default function UsersPage() {
                   <Icon
                     name="progress_activity"
                     size={16}
-                    className="mr-1.5 animate-spin"
+                    className="mr-1 animate-spin"
                   />
                   Đang gửi...
                 </>
               ) : (
                 <>
-                  <Icon name="send" size={16} className="mr-1.5" />
+                  <Icon name="send" size={16} className="mr-1" />
                   Gửi lời mời
                 </>
               )}

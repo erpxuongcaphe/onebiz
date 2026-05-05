@@ -176,7 +176,7 @@ export function KanbanBoard<T>({
                       onDragEnd={handleDragEnd}
                       onClick={() => onCardClick?.(item)}
                       className={cn(
-                        "rounded-md border bg-background p-2.5 text-sm shadow-sm cursor-grab active:cursor-grabbing hover:shadow-md hover:border-primary/40 transition-all",
+                        "rounded-md border bg-background p-3 text-sm shadow-sm cursor-grab active:cursor-grabbing hover:shadow-md hover:border-primary/40 transition-all",
                         isDragging && "opacity-40",
                         onCardClick && "cursor-pointer"
                       )}

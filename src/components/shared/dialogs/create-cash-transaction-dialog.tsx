@@ -139,12 +139,12 @@ export function CreateCashTransactionDialog({
 
         <div className="grid gap-4 py-2">
           {/* Type toggle */}
-          <div className="space-y-1.5">
+          <div className="space-y-2">
             <label className="text-sm font-medium">Loại phiếu</label>
             <div className="flex rounded-lg border p-0.5">
               <button
                 type="button"
-                className={`flex-1 rounded-md px-3 py-1.5 text-sm font-medium transition-colors cursor-pointer ${
+                className={`flex-1 rounded-md px-3 py-2 text-sm font-medium transition-colors cursor-pointer ${
                   type === "receipt"
                     ? "bg-primary text-primary-foreground"
                     : "text-muted-foreground hover:text-foreground"
@@ -155,7 +155,7 @@ export function CreateCashTransactionDialog({
               </button>
               <button
                 type="button"
-                className={`flex-1 rounded-md px-3 py-1.5 text-sm font-medium transition-colors cursor-pointer ${
+                className={`flex-1 rounded-md px-3 py-2 text-sm font-medium transition-colors cursor-pointer ${
                   type === "payment"
                     ? "bg-primary text-primary-foreground"
                     : "text-muted-foreground hover:text-foreground"
@@ -167,12 +167,12 @@ export function CreateCashTransactionDialog({
             </div>
           </div>
 
-          <div className="space-y-1.5">
+          <div className="space-y-2">
             <label className="text-sm font-medium">Mã phiếu</label>
             <Input value={code} onChange={(e) => setCode(e.target.value)} />
           </div>
 
-          <div className="space-y-1.5">
+          <div className="space-y-2">
             <label className="text-sm font-medium">
               Số tiền <span className="text-destructive">*</span>
             </label>
@@ -188,7 +188,7 @@ export function CreateCashTransactionDialog({
             )}
           </div>
 
-          <div className="space-y-1.5">
+          <div className="space-y-2">
             <label className="text-sm font-medium">
               {type === "receipt" ? "Người nộp" : "Người nhận"}
             </label>
@@ -203,7 +203,7 @@ export function CreateCashTransactionDialog({
             />
           </div>
 
-          <div className="space-y-1.5">
+          <div className="space-y-2">
             <label className="text-sm font-medium">Phương thức</label>
             <Select value={method} onValueChange={(v) => setMethod(v ?? "cash")}>
               <SelectTrigger className="w-full">
@@ -217,7 +217,7 @@ export function CreateCashTransactionDialog({
             </Select>
           </div>
 
-          <div className="space-y-1.5">
+          <div className="space-y-2">
             <label className="text-sm font-medium">Danh mục</label>
             <Select value={category} onValueChange={(v) => setCategory(v ?? "")}>
               <SelectTrigger className="w-full">
@@ -233,10 +233,10 @@ export function CreateCashTransactionDialog({
             </Select>
           </div>
 
-          <div className="space-y-1.5">
+          <div className="space-y-2">
             <label className="text-sm font-medium">Ghi chú</label>
             <textarea
-              className="flex min-h-[60px] w-full rounded-lg border border-input bg-transparent px-2.5 py-2 text-sm transition-colors outline-none placeholder:text-muted-foreground focus-visible:border-ring focus-visible:ring-3 focus-visible:ring-ring/50 disabled:cursor-not-allowed disabled:opacity-50"
+              className="flex min-h-[60px] w-full rounded-lg border border-input bg-transparent px-3 py-2 text-sm transition-colors outline-none placeholder:text-muted-foreground focus-visible:border-ring focus-visible:ring-3 focus-visible:ring-ring/50 disabled:cursor-not-allowed disabled:opacity-50"
               value={note}
               onChange={(e) => setNote(e.target.value)}
               placeholder="Ghi chú thêm"

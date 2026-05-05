@@ -1532,7 +1532,7 @@ function FnbPosPageInner() {
           để cashier thấy "đang dùng bảng giá X". Chỉ hiển thị khi tier resolve
           được, fallback im lặng nếu chi nhánh dùng giá niêm yết. */}
       {appliedTier && (
-        <div className="bg-status-success/10 border-b border-status-success/30 px-3 py-1.5 flex items-center gap-2 text-xs">
+        <div className="bg-status-success/10 border-b border-status-success/30 px-3 py-2 flex items-center gap-2 text-xs">
           <Icon name="sell" size={14} className="text-status-success" />
           <span className="text-on-surface">
             Đang áp bảng giá:{" "}
@@ -1551,12 +1551,12 @@ function FnbPosPageInner() {
 
       {/* Sprint KM-2: Banner khuyến mãi áp dụng cho tab hiện tại. Click X để xóa. */}
       {appliedPromotion && appliedPromotion.discountAmount > 0 && (
-        <div className="bg-status-warning/10 border-b border-status-warning/30 px-3 py-1.5 flex items-center gap-2 text-xs">
+        <div className="bg-status-warning/10 border-b border-status-warning/30 px-3 py-2 flex items-center gap-2 text-xs">
           <Icon name="percent" size={14} className="text-status-warning" />
           <span className="text-on-surface">
             Khuyến mãi:{" "}
             <strong className="font-medium">{appliedPromotion.promotion.name}</strong>
-            <span className="text-muted-foreground ml-1.5">
+            <span className="text-muted-foreground ml-1">
               ({appliedPromotion.reasonLabel})
             </span>
           </span>
@@ -1826,7 +1826,7 @@ function FnbPosPageInner() {
             <p className="text-sm text-foreground">
               Đơn <b>{pos.activeTab?.label}</b> sẽ bị huỷ và bàn sẽ được giải phóng.
             </p>
-            <div className="space-y-1.5">
+            <div className="space-y-2">
               <label className="text-xs font-medium text-foreground">
                 Lý do huỷ <span className="text-status-error">*</span>
               </label>
@@ -1912,11 +1912,11 @@ function FnbPosPageInner() {
       <Dialog open={keyboardHelpOpen} onOpenChange={setKeyboardHelpOpen}>
         <DialogContent className="sm:max-w-sm">
           <DialogHeader>
-            <DialogTitle className="text-sm font-semibold flex items-center gap-1.5">
+            <DialogTitle className="text-sm font-semibold flex items-center gap-2">
               <Icon name="keyboard" size={16} /> Phím tắt
             </DialogTitle>
           </DialogHeader>
-          <div className="space-y-1.5 text-xs">
+          <div className="space-y-2 text-xs">
             {[
               ["F1 / ?", "Bảng phím tắt"],
               ["F3", "Tìm món"],
@@ -1930,7 +1930,7 @@ function FnbPosPageInner() {
               ["Esc", "Đóng popup"],
             ].map(([key, desc]) => (
               <div key={key} className="flex items-center justify-between py-0.5">
-                <kbd className="px-1.5 py-0.5 bg-muted border rounded text-[11px] font-mono">{key}</kbd>
+                <kbd className="px-2 py-0.5 bg-muted border rounded text-[11px] font-mono">{key}</kbd>
                 <span className="text-foreground">{desc}</span>
               </div>
             ))}

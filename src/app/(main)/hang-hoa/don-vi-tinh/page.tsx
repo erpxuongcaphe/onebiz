@@ -207,7 +207,7 @@ export default function DonViTinhPage() {
             {hasDup && (
               <Badge
                 variant="destructive"
-                className="text-[10px] px-1.5 py-0 h-4"
+                className="text-[10px] px-2 py-0 h-4"
                 title="Có đơn vị khác cùng tên (khác chữ hoa/thường)"
               >
                 Trùng
@@ -233,7 +233,7 @@ export default function DonViTinhPage() {
       size: 200,
       enableSorting: false,
       cell: ({ row }) => (
-        <div className="flex items-center gap-1.5">
+        <div className="flex items-center gap-2">
           <Button
             variant="outline"
             size="sm"
@@ -356,7 +356,7 @@ export default function DonViTinhPage() {
             </DialogDescription>
           </DialogHeader>
 
-          <div className="space-y-1.5 py-2">
+          <div className="space-y-2 py-2">
             <label className="text-sm font-medium">
               Tên mới <span className="text-destructive">*</span>
             </label>
@@ -419,7 +419,7 @@ export default function DonViTinhPage() {
             </DialogDescription>
           </DialogHeader>
 
-          <div className="space-y-1.5 py-2">
+          <div className="space-y-2 py-2">
             <label className="text-sm font-medium">
               Gộp vào đơn vị <span className="text-destructive">*</span>
             </label>

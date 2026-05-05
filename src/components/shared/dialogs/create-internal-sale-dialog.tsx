@@ -213,7 +213,7 @@ export function CreateInternalSaleDialog({
 
         {/* Branch selectors */}
         <div className="grid grid-cols-[1fr_auto_1fr] gap-3 items-end">
-          <div className="space-y-1.5">
+          <div className="space-y-2">
             <label className="text-sm font-medium">Chi nhánh bán</label>
             <Select
               value={fromBranchId || null}
@@ -235,7 +235,7 @@ export function CreateInternalSaleDialog({
             </Select>
           </div>
           <Icon name="arrow_forward" className="text-muted-foreground mb-2" />
-          <div className="space-y-1.5">
+          <div className="space-y-2">
             <label className="text-sm font-medium">Chi nhánh mua</label>
             <Select
               value={toBranchId || null}
@@ -263,7 +263,7 @@ export function CreateInternalSaleDialog({
         </div>
 
         {/* Payment method */}
-        <div className="space-y-1.5">
+        <div className="space-y-2">
           <label className="text-sm font-medium">Hình thức thanh toán</label>
           <Select value={paymentMethod} onValueChange={(v) => v && setPaymentMethod(v as "transfer" | "cash" | "debt")}>
             <SelectTrigger className="w-48">
@@ -278,7 +278,7 @@ export function CreateInternalSaleDialog({
         </div>
 
         {/* Product search */}
-        <div className="space-y-1.5">
+        <div className="space-y-2">
           <label className="text-sm font-medium">Thêm sản phẩm</label>
           <div className="relative">
             <Icon name="search" size={16} className="absolute left-3 top-1/2 -translate-y-1/2 text-muted-foreground" />
@@ -390,7 +390,7 @@ export function CreateInternalSaleDialog({
         )}
 
         {/* Note */}
-        <div className="space-y-1.5">
+        <div className="space-y-2">
           <label className="text-sm font-medium">Ghi chú</label>
           <Input
             placeholder="Ghi chú..."

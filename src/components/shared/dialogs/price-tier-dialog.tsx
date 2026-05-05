@@ -107,7 +107,7 @@ export function PriceTierDialog({
         </DialogHeader>
 
         <div className="grid gap-4 py-2">
-          <div className="space-y-1.5">
+          <div className="space-y-2">
             <label className="text-sm font-medium">
               Tên bảng giá <span className="text-destructive">*</span>
             </label>
@@ -123,7 +123,7 @@ export function PriceTierDialog({
           </div>
 
           <div className="grid grid-cols-2 gap-3">
-            <div className="space-y-1.5">
+            <div className="space-y-2">
               <label className="text-sm font-medium">
                 Mã <span className="text-destructive">*</span>
               </label>
@@ -138,7 +138,7 @@ export function PriceTierDialog({
               )}
             </div>
 
-            <div className="space-y-1.5">
+            <div className="space-y-2">
               <label className="text-sm font-medium">Ưu tiên</label>
               <Input
                 type="number"
@@ -153,7 +153,7 @@ export function PriceTierDialog({
           </div>
 
           {/* Áp dụng cho channel — radio card style cho UX rõ ràng */}
-          <div className="space-y-1.5">
+          <div className="space-y-2">
             <label className="text-sm font-medium">
               Áp dụng cho <span className="text-destructive">*</span>
             </label>
@@ -184,13 +184,13 @@ export function PriceTierDialog({
                     type="button"
                     key={opt.value}
                     onClick={() => setScope(opt.value)}
-                    className={`flex flex-col items-start gap-1 rounded-lg border p-2.5 text-left transition-colors ${
+                    className={`flex flex-col items-start gap-1 rounded-lg border p-3 text-left transition-colors ${
                       active
                         ? "border-primary bg-primary-fixed/40 ring-1 ring-primary"
                         : "border-input hover:border-muted-foreground/40 hover:bg-muted/40"
                     }`}
                   >
-                    <div className="flex items-center gap-1.5">
+                    <div className="flex items-center gap-2">
                       <Icon
                         name={opt.icon}
                         size={14}
@@ -221,7 +221,7 @@ export function PriceTierDialog({
             </p>
           </div>
 
-          <div className="space-y-1.5">
+          <div className="space-y-2">
             <label className="text-sm font-medium">Mô tả</label>
             <Input
               value={description}

@@ -220,7 +220,7 @@ export default function NotificationSettingsPage() {
 
       <div className="flex justify-end">
         <Button onClick={handleSave}>
-          <Icon name="save" size={16} className="mr-1.5" />
+          <Icon name="save" size={16} className="mr-1" />
           Lưu thay đổi
         </Button>
       </div>

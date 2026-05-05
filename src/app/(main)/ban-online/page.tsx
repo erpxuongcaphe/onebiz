@@ -307,22 +307,22 @@ export default function BanOnlinePage() {
               <table className="w-full text-sm">
                 <thead>
                   <tr className="border-b bg-muted/40">
-                    <th className="text-left px-4 py-2.5 font-medium text-muted-foreground">
+                    <th className="text-left px-4 py-3 font-medium text-muted-foreground">
                       Mã đơn
                     </th>
-                    <th className="text-left px-4 py-2.5 font-medium text-muted-foreground">
+                    <th className="text-left px-4 py-3 font-medium text-muted-foreground">
                       Kênh
                     </th>
-                    <th className="text-left px-4 py-2.5 font-medium text-muted-foreground">
+                    <th className="text-left px-4 py-3 font-medium text-muted-foreground">
                       Khách hàng
                     </th>
-                    <th className="text-right px-4 py-2.5 font-medium text-muted-foreground">
+                    <th className="text-right px-4 py-3 font-medium text-muted-foreground">
                       Tổng tiền
                     </th>
-                    <th className="text-left px-4 py-2.5 font-medium text-muted-foreground">
+                    <th className="text-left px-4 py-3 font-medium text-muted-foreground">
                       Trạng thái
                     </th>
-                    <th className="text-left px-4 py-2.5 font-medium text-muted-foreground">
+                    <th className="text-left px-4 py-3 font-medium text-muted-foreground">
                       Thời gian
                     </th>
                   </tr>
@@ -333,12 +333,12 @@ export default function BanOnlinePage() {
                       key={order.code}
                       className="border-b last:border-b-0 hover:bg-muted/20 transition-colors"
                     >
-                      <td className="px-4 py-2.5">
+                      <td className="px-4 py-3">
                         <span className="font-medium text-primary">
                           {order.code}
                         </span>
                       </td>
-                      <td className="px-4 py-2.5">
+                      <td className="px-4 py-3">
                         <div className="flex items-center gap-2">
                           <div
                             className={cn(
@@ -349,11 +349,11 @@ export default function BanOnlinePage() {
                           <span>{order.channel}</span>
                         </div>
                       </td>
-                      <td className="px-4 py-2.5">{order.customer}</td>
-                      <td className="px-4 py-2.5 text-right font-medium">
+                      <td className="px-4 py-3">{order.customer}</td>
+                      <td className="px-4 py-3 text-right font-medium">
                         {formatCurrency(order.total)}
                       </td>
-                      <td className="px-4 py-2.5">
+                      <td className="px-4 py-3">
                         <span
                           className={cn(
                             "inline-flex items-center px-2 py-0.5 rounded-full text-xs font-medium",
@@ -363,7 +363,7 @@ export default function BanOnlinePage() {
                           {order.status}
                         </span>
                       </td>
-                      <td className="px-4 py-2.5 text-muted-foreground">
+                      <td className="px-4 py-3 text-muted-foreground">
                         {order.time}
                       </td>
                     </tr>

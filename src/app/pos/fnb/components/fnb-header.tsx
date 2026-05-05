@@ -46,7 +46,7 @@ export function FnbHeader({
   const { isFnb, fnbPath } = useFnbSubdomain();
 
   return (
-    <header className="h-12 bg-pos-chrome-bg text-pos-chrome-fg flex items-center px-2 gap-1.5 shrink-0">
+    <header className="h-12 bg-pos-chrome-bg text-pos-chrome-fg flex items-center px-2 gap-2 shrink-0">
       {/* ── Left: back + branch selector + view mode tabs ── */}
       {!isFnb && (
         <Link
@@ -70,7 +70,7 @@ export function FnbHeader({
           type="button"
           onClick={() => viewMode !== "floorplan" && onToggleFloorPlan()}
           className={cn(
-            "flex items-center gap-1 px-2.5 py-1.5 text-xs font-medium rounded-l-md transition-colors",
+            "flex items-center gap-1 px-3 py-2 text-xs font-medium rounded-l-md transition-colors",
             viewMode === "floorplan"
               ? "bg-primary text-on-primary"
               : "bg-pos-chrome-bg-elevated text-pos-chrome-fg-dim hover:bg-pos-chrome-bg-hover hover:text-pos-chrome-fg-muted"
@@ -83,7 +83,7 @@ export function FnbHeader({
           type="button"
           onClick={() => viewMode !== "menu" && onToggleFloorPlan()}
           className={cn(
-            "flex items-center gap-1 px-2.5 py-1.5 text-xs font-medium rounded-r-md transition-colors",
+            "flex items-center gap-1 px-3 py-2 text-xs font-medium rounded-r-md transition-colors",
             viewMode === "menu"
               ? "bg-primary text-on-primary"
               : "bg-pos-chrome-bg-elevated text-pos-chrome-fg-dim hover:bg-pos-chrome-bg-hover hover:text-pos-chrome-fg-muted"
@@ -98,7 +98,7 @@ export function FnbHeader({
       <button
         type="button"
         onClick={onSearch}
-        className="flex items-center gap-2 px-3 py-2 sm:py-1.5 bg-pos-chrome-bg-elevated hover:bg-pos-chrome-bg-hover active:bg-pos-chrome-bg-hover rounded-md text-sm sm:text-xs text-pos-chrome-fg-dim transition-colors shrink-0 min-w-0 sm:min-w-[140px] lg:min-w-[200px]"
+        className="flex items-center gap-2 px-3 py-2 sm:py-2 bg-pos-chrome-bg-elevated hover:bg-pos-chrome-bg-hover active:bg-pos-chrome-bg-hover rounded-md text-sm sm:text-xs text-pos-chrome-fg-dim transition-colors shrink-0 min-w-0 sm:min-w-[140px] lg:min-w-[200px]"
       >
         <Icon name="search" size={14} />
         <span>Tìm món (F3)</span>
@@ -116,7 +116,7 @@ export function FnbHeader({
               type="button"
               onClick={() => switchTab(tab.id)}
               className={cn(
-                "flex items-center gap-1 px-2.5 py-1 rounded text-xs font-medium whitespace-nowrap transition-colors shrink-0",
+                "flex items-center gap-1 px-3 py-1 rounded text-xs font-medium whitespace-nowrap transition-colors shrink-0",
                 isActive
                   ? "bg-primary text-on-primary"
                   : "bg-pos-chrome-bg-elevated text-pos-chrome-fg-dim hover:bg-pos-chrome-bg-hover hover:text-pos-chrome-fg-muted"

@@ -380,21 +380,21 @@ export default function DatHangPage() {
                 <tbody>
                   {recentOrdersList.map((order) => (
                     <tr key={order.id} className="border-b last:border-0">
-                      <td className="py-2.5 pr-4 font-mono text-xs font-medium text-primary">
+                      <td className="py-3 pr-4 font-mono text-xs font-medium text-primary">
                         {order.code}
                       </td>
-                      <td className="py-2.5 pr-4 font-medium">{order.customer}</td>
-                      <td className="py-2.5 pr-4">
+                      <td className="py-3 pr-4 font-medium">{order.customer}</td>
+                      <td className="py-3 pr-4">
                         <span
                           className={`inline-block px-2 py-0.5 rounded-full text-xs font-medium ${STATUS_BADGE[order.status] ?? ""}`}
                         >
                           {order.status}
                         </span>
                       </td>
-                      <td className="py-2.5 pr-4 text-right font-medium">
+                      <td className="py-3 pr-4 text-right font-medium">
                         {formatCurrency(order.value)}
                       </td>
-                      <td className="py-2.5 text-right text-muted-foreground text-xs">
+                      <td className="py-3 text-right text-muted-foreground text-xs">
                         {order.date}
                       </td>
                     </tr>

@@ -288,7 +288,7 @@ export function ProductUomConversionsTab({ product }: Props) {
 
 function UnitChip({ label, value }: { label: string; value: string }) {
   return (
-    <span className="inline-flex flex-col items-center px-2.5 py-1 rounded border bg-background">
+    <span className="inline-flex flex-col items-center px-3 py-1 rounded border bg-background">
       <span className="text-[10px] text-muted-foreground uppercase">
         {label}
       </span>

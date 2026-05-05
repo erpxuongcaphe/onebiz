@@ -425,14 +425,14 @@ export default function TaiChinhPage() {
                 <tbody>
                   {cashFlowData.map((item) => (
                     <tr key={item.month} className="border-b last:border-0">
-                      <td className="py-2.5 pr-4 font-medium">{item.month}</td>
-                      <td className="py-2.5 pr-4 text-right text-status-success font-medium">
+                      <td className="py-3 pr-4 font-medium">{item.month}</td>
+                      <td className="py-3 pr-4 text-right text-status-success font-medium">
                         +{formatCurrency(item.thu)}
                       </td>
-                      <td className="py-2.5 pr-4 text-right text-status-error font-medium">
+                      <td className="py-3 pr-4 text-right text-status-error font-medium">
                         -{formatCurrency(item.chi)}
                       </td>
-                      <td className="py-2.5 text-right font-bold text-primary">
+                      <td className="py-3 text-right font-bold text-primary">
                         {formatCurrency(item.ton)}
                       </td>
                     </tr>

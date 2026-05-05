@@ -62,7 +62,7 @@ export function FilterSidebar({ children, className }: FilterSidebarProps) {
       <Button
         variant="outline"
         size="sm"
-        className="md:hidden flex items-center gap-1.5"
+        className="md:hidden flex items-center gap-2"
         onClick={() => setMobileOpen(true)}
       >
         <Icon name="filter_alt" size={16} />
@@ -171,14 +171,14 @@ export function FilterGroup({
         type="button"
         onClick={() => setOpen((v) => !v)}
         className={cn(
-          "w-full press-scale-sm flex items-center justify-between gap-2 py-1.5 text-xs font-semibold transition-colors",
+          "w-full press-scale-sm flex items-center justify-between gap-2 py-2 text-xs font-semibold transition-colors",
           hasActive ? "text-primary" : "text-foreground hover:text-primary",
         )}
       >
-        <span className="flex items-center gap-1.5 truncate">
+        <span className="flex items-center gap-2 truncate">
           <span className="truncate">{label}</span>
           {hasActive && !open && (
-            <span className="text-[10px] font-medium text-primary bg-primary-fixed px-1.5 py-0.5 rounded-full">
+            <span className="text-[10px] font-medium text-primary bg-primary-fixed px-2 py-0.5 rounded-full">
               {activeHint}
             </span>
           )}
@@ -195,7 +195,7 @@ export function FilterGroup({
           />
         </span>
       </button>
-      {open && <div className="mt-1.5 space-y-1 stitch-fade-in">{children}</div>}
+      {open && <div className="mt-2 space-y-1 stitch-fade-in">{children}</div>}
     </div>
   );
 }
@@ -245,7 +245,7 @@ export function ActiveFiltersBar({ filters, onClearAll }: ActiveFiltersBarProps)
 
   return (
     <div className="pb-2 border-b border-border/40 mb-1">
-      <div className="flex items-center justify-between mb-1.5">
+      <div className="flex items-center justify-between mb-2">
         <span className="text-[10px] font-bold text-primary uppercase tracking-wider">
           Đang lọc ({filters.length})
         </span>

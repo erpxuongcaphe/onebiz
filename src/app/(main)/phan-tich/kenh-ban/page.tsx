@@ -268,25 +268,25 @@ export default function KenhBanPage() {
                 <tbody>
                   {channelPerformance.map((row) => (
                     <tr key={row.channel} className="border-b last:border-0">
-                      <td className="py-2.5 pr-4 font-medium">{row.channel}</td>
-                      <td className="py-2.5 pr-4 text-right font-medium text-primary">
+                      <td className="py-3 pr-4 font-medium">{row.channel}</td>
+                      <td className="py-3 pr-4 text-right font-medium text-primary">
                         {formatCurrency(row.revenue)}
                       </td>
-                      <td className="py-2.5 pr-4 text-right">{row.orders}</td>
-                      <td className="py-2.5 text-right text-muted-foreground">
+                      <td className="py-3 pr-4 text-right">{row.orders}</td>
+                      <td className="py-3 text-right text-muted-foreground">
                         {formatCurrency(row.avgValue)}
                       </td>
                     </tr>
                   ))}
                   <tr className="border-t-2 font-semibold">
-                    <td className="py-2.5 pr-4">Tổng cộng</td>
-                    <td className="py-2.5 pr-4 text-right text-primary">
+                    <td className="py-3 pr-4">Tổng cộng</td>
+                    <td className="py-3 pr-4 text-right text-primary">
                       {formatCurrency(totalRev)}
                     </td>
-                    <td className="py-2.5 pr-4 text-right">
+                    <td className="py-3 pr-4 text-right">
                       {totalOrders}
                     </td>
-                    <td className="py-2.5 text-right text-muted-foreground">
+                    <td className="py-3 text-right text-muted-foreground">
                       {formatCurrency(totalAvg)}
                     </td>
                   </tr>

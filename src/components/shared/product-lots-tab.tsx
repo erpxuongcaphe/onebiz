@@ -173,7 +173,7 @@ function SummaryCard({
         ? "text-status-warning"
         : "text-foreground";
   return (
-    <div className="border rounded-lg p-2.5">
+    <div className="border rounded-lg p-3">
       <div className="text-xs text-muted-foreground">{label}</div>
       <div className={`text-base font-semibold mt-0.5 ${toneClass}`}>{value}</div>
     </div>

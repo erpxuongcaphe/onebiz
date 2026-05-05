@@ -141,7 +141,7 @@ export function AddPriceTierItemDialog({
 
         <div className="grid gap-4 py-2">
           {/* Product picker */}
-          <div className="space-y-1.5">
+          <div className="space-y-2">
             <label className="text-sm font-medium">
               Sản phẩm <span className="text-destructive">*</span>
             </label>
@@ -200,7 +200,7 @@ export function AddPriceTierItemDialog({
           )}
 
           <div className="grid grid-cols-2 gap-3">
-            <div className="space-y-1.5">
+            <div className="space-y-2">
               <label className="text-sm font-medium">
                 Giá riêng <span className="text-destructive">*</span>
               </label>
@@ -216,7 +216,7 @@ export function AddPriceTierItemDialog({
                 <p className="text-xs text-destructive">{errors.price}</p>
               )}
             </div>
-            <div className="space-y-1.5">
+            <div className="space-y-2">
               <label className="text-sm font-medium">
                 SL tối thiểu <span className="text-destructive">*</span>
               </label>

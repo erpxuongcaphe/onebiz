@@ -105,7 +105,7 @@ export function TableFloorPlan({
       <div className="flex items-center gap-4 px-4 py-2 border-b bg-card shrink-0 flex-wrap">
         {(["available", "occupied", "reserved", "cleaning"] as TableStatus[]).map(
           (s) => (
-            <div key={s} className="flex items-center gap-1.5 text-xs text-foreground">
+            <div key={s} className="flex items-center gap-2 text-xs text-foreground">
               <span
                 className={cn("h-2.5 w-2.5 rounded-full", STATUS_CONFIG[s].dot)}
               />
@@ -124,7 +124,7 @@ export function TableFloorPlan({
             <h3 className="text-xs font-semibold text-muted-foreground uppercase tracking-wide mb-2">
               {zoneName}
             </h3>
-            <div className="grid grid-cols-3 sm:grid-cols-4 md:grid-cols-5 lg:grid-cols-4 xl:grid-cols-5 gap-2.5 md:gap-2">
+            <div className="grid grid-cols-3 sm:grid-cols-4 md:grid-cols-5 lg:grid-cols-4 xl:grid-cols-5 gap-3 md:gap-2">
               {zoneTables.map((table) => (
                 <TableCard
                   key={table.id}

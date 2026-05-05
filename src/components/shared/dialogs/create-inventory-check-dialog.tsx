@@ -111,18 +111,18 @@ export function CreateInventoryCheckDialog({
 
         <div className="grid gap-4 py-2">
           {/* Code */}
-          <div className="space-y-1.5">
+          <div className="space-y-2">
             <label className="text-sm font-medium">Mã phiếu kiểm kho</label>
-            <div className="flex h-9 w-full rounded-lg border border-input bg-muted/50 px-2.5 py-2 text-sm">
+            <div className="flex h-9 w-full rounded-lg border border-input bg-muted/50 px-3 py-2 text-sm">
               {code}
             </div>
           </div>
 
           {/* Notes */}
-          <div className="space-y-1.5">
+          <div className="space-y-2">
             <label className="text-sm font-medium">Ghi chú</label>
             <textarea
-              className="flex min-h-[80px] w-full rounded-lg border border-input bg-transparent px-2.5 py-2 text-sm transition-colors outline-none placeholder:text-muted-foreground focus-visible:border-ring focus-visible:ring-3 focus-visible:ring-ring/50"
+              className="flex min-h-[80px] w-full rounded-lg border border-input bg-transparent px-3 py-2 text-sm transition-colors outline-none placeholder:text-muted-foreground focus-visible:border-ring focus-visible:ring-3 focus-visible:ring-ring/50"
               value={notes}
               onChange={(e) => setNotes(e.target.value)}
               placeholder="Ghi chú phiếu kiểm kho (lý do kiểm kho, khu vực kiểm...)"

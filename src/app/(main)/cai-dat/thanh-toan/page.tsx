@@ -48,7 +48,7 @@ export default function PaymentSettingsPage() {
           </p>
           <Link
             href="/he-thong/thiet-lap"
-            className="inline-flex items-center gap-1.5 rounded-md bg-primary px-3 py-2 text-sm font-medium text-primary-foreground hover:bg-primary/90 transition-colors"
+            className="inline-flex items-center gap-2 rounded-md bg-primary px-3 py-2 text-sm font-medium text-primary-foreground hover:bg-primary/90 transition-colors"
           >
             <Icon name="settings" size={16} />
             Mở Thiết lập chung

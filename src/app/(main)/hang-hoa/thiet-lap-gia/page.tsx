@@ -129,7 +129,7 @@ function PriceTierDetail({
           <h3 className="text-sm font-semibold">
             Sản phẩm áp dụng ({items.length})
           </h3>
-          <div className="flex items-center gap-1.5 flex-wrap">
+          <div className="flex items-center gap-2 flex-wrap">
             <Button
               size="sm"
               variant="outline"
@@ -681,7 +681,7 @@ export default function ThietLapGiaPage() {
           </DialogHeader>
 
           <div className="grid gap-3 py-2">
-            <div className="space-y-1.5">
+            <div className="space-y-2">
               <label className="text-sm font-medium">
                 Tên bảng giá mới <span className="text-destructive">*</span>
               </label>
@@ -695,7 +695,7 @@ export default function ThietLapGiaPage() {
                 autoFocus
               />
             </div>
-            <div className="space-y-1.5">
+            <div className="space-y-2">
               <label className="text-sm font-medium">
                 Mã bảng giá <span className="text-destructive">*</span>
               </label>

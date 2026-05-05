@@ -219,7 +219,7 @@ export default function PermissionSettingsPage() {
             </Button>
           )}
           <Button onClick={() => setCreateOpen(true)}>
-            <Icon name="add" size={16} className="mr-1.5" />
+            <Icon name="add" size={16} className="mr-1" />
             Thêm vai trò
           </Button>
         </div>
@@ -397,7 +397,7 @@ export default function PermissionSettingsPage() {
               Hủy
             </Button>
             <Button onClick={handleCreate} disabled={!newRoleName.trim()}>
-              <Icon name="add" size={16} className="mr-1.5" />
+              <Icon name="add" size={16} className="mr-1" />
               Tạo vai trò
             </Button>
           </DialogFooter>

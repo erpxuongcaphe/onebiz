@@ -53,7 +53,7 @@ export default function DeliverySettingsPage() {
         </div>
         <Link
           href="/don-hang/doi-tac-giao-hang"
-          className="inline-flex items-center gap-1.5 rounded-md bg-primary px-3 py-2 text-sm font-medium text-primary-foreground hover:bg-primary/90 transition-colors"
+          className="inline-flex items-center gap-2 rounded-md bg-primary px-3 py-2 text-sm font-medium text-primary-foreground hover:bg-primary/90 transition-colors"
         >
           <Icon name="add" size={16} />
           Quản lý đối tác
@@ -87,7 +87,7 @@ export default function DeliverySettingsPage() {
               <p>Chưa có đối tác giao hàng nào.</p>
               <Link
                 href="/don-hang/doi-tac-giao-hang"
-                className="inline-flex items-center mt-4 px-3 py-1.5 text-xs font-medium border border-border rounded-md hover:bg-muted transition-colors"
+                className="inline-flex items-center mt-4 px-3 py-2 text-xs font-medium border border-border rounded-md hover:bg-muted transition-colors"
               >
                 Thêm đối tác đầu tiên
               </Link>

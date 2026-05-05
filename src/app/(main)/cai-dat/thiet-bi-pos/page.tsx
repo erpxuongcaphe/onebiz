@@ -159,7 +159,7 @@ export default function DeviceBindingSettingsPage() {
                 </div>
               </div>
               <Button variant="outline" onClick={handleUnbind} className="self-start">
-                <Icon name="lock_open" size={16} className="mr-1.5" />
+                <Icon name="lock_open" size={16} className="mr-1" />
                 Mở khoá thiết bị
               </Button>
             </div>
@@ -235,7 +235,7 @@ export default function DeviceBindingSettingsPage() {
 
           <div className="flex items-center gap-2">
             <Button onClick={handleBind}>
-              <Icon name="lock" size={16} className="mr-1.5" />
+              <Icon name="lock" size={16} className="mr-1" />
               {binding ? "Cập nhật khoá" : "Khoá thiết bị"}
             </Button>
             {binding && (

@@ -514,7 +514,7 @@ export default function CongNoPage() {
                         key={bucket.range}
                         className={`border rounded-lg p-3 ${BUCKET_COLORS[idx]}`}
                       >
-                        <div className="flex items-center gap-1.5 mb-2">
+                        <div className="flex items-center gap-2 mb-2">
                           {idx >= 2 && (
                             <Icon name="warning"
                               className={`h-3.5 w-3.5 ${BUCKET_TEXT_COLORS[idx]}`}

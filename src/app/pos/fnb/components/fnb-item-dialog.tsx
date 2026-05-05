@@ -155,7 +155,7 @@ export function FnbItemDialog({
                 {variants.map((v) => (
                   <button key={v.id} type="button" onClick={() => setSelectedVariant(v)}
                     className={cn(
-                      "rounded-lg border px-4 py-2.5 sm:px-3 sm:py-1.5 text-sm transition-colors active:scale-95",
+                      "rounded-lg border px-4 py-3 sm:px-3 sm:py-2 text-sm transition-colors active:scale-95",
                       selectedVariant?.id === v.id
                         ? "border-primary bg-primary text-primary-foreground"
                         : "border-border hover:border-primary/50",
@@ -187,7 +187,7 @@ export function FnbItemDialog({
           {toppings && toppings.length > 0 && (
             <div className="space-y-2">
               <Label className="text-sm font-medium">Topping</Label>
-              <div className="grid gap-2 sm:gap-1.5">
+              <div className="grid gap-2 sm:gap-2">
                 {toppings.map((t) => {
                   const qty = toppingQtys.get(t.id) ?? 0;
                   const active = qty > 0;
@@ -195,7 +195,7 @@ export function FnbItemDialog({
                     <div
                       key={t.id}
                       className={cn(
-                        "flex items-center justify-between rounded-lg border px-3 py-2.5 sm:py-2 text-sm transition-colors",
+                        "flex items-center justify-between rounded-lg border px-3 py-3 sm:py-2 text-sm transition-colors",
                         active ? "border-primary bg-primary/5" : "border-border",
                       )}
                     >
@@ -238,14 +238,14 @@ export function FnbItemDialog({
           {/* R7: Modifier preset — Đường + Đá. Tap pill thay vì gõ note tay. */}
           <div className="space-y-2">
             <Label className="text-sm font-medium">Mức đường</Label>
-            <div className="flex flex-wrap gap-1.5">
+            <div className="flex flex-wrap gap-2">
               {SWEETNESS_OPTIONS.map((s) => (
                 <button
                   key={s}
                   type="button"
                   onClick={() => setSweetness(sweetness === s ? "" : s)}
                   className={cn(
-                    "px-3 py-1.5 rounded-full border text-xs font-medium transition-colors",
+                    "px-3 py-2 rounded-full border text-xs font-medium transition-colors",
                     sweetness === s
                       ? "bg-primary text-primary-foreground border-primary"
                       : "border-border hover:border-primary/40",
@@ -259,14 +259,14 @@ export function FnbItemDialog({
 
           <div className="space-y-2">
             <Label className="text-sm font-medium">Mức đá</Label>
-            <div className="flex flex-wrap gap-1.5">
+            <div className="flex flex-wrap gap-2">
               {ICE_OPTIONS.map((i) => (
                 <button
                   key={i}
                   type="button"
                   onClick={() => setIceLevel(iceLevel === i ? "" : i)}
                   className={cn(
-                    "px-3 py-1.5 rounded-full border text-xs font-medium transition-colors",
+                    "px-3 py-2 rounded-full border text-xs font-medium transition-colors",
                     iceLevel === i
                       ? "bg-primary text-primary-foreground border-primary"
                       : "border-border hover:border-primary/40",
@@ -280,7 +280,7 @@ export function FnbItemDialog({
 
           {/* Note tự do — chỉ dùng khi modifier preset không cover */}
           <div className="space-y-2">
-            <Label className="text-sm font-medium flex items-center gap-1.5">
+            <Label className="text-sm font-medium flex items-center gap-2">
               <Icon name="sticky_note_2" size={14} /> Ghi chú thêm
             </Label>
             <Textarea value={note} onChange={(e) => setNote(e.target.value)}

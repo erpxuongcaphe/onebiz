@@ -52,7 +52,7 @@ export function PipelineDimensionBadges({
   if (entries.length === 0) return null;
 
   return (
-    <div className={cn("flex flex-wrap gap-1.5", className)}>
+    <div className={cn("flex flex-wrap gap-2", className)}>
       {entries.map(([key, value]) => {
         const label = labels[key] ?? key;
         const customValue = valueLabels?.[key]?.[value];
@@ -63,7 +63,7 @@ export function PipelineDimensionBadges({
         return (
           <span
             key={key}
-            className="inline-flex items-center gap-1 rounded text-[11px] px-1.5 py-0.5 border"
+            className="inline-flex items-center gap-1 rounded text-[11px] px-2 py-0.5 border"
             style={{
               backgroundColor: `${color}1a`,
               color,

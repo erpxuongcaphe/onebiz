@@ -220,7 +220,7 @@ export function CompleteProductionOrderDialog({
         </DialogHeader>
 
         <div className="grid gap-4 py-2">
-          <div className="space-y-1.5">
+          <div className="space-y-2">
             <label className="text-sm font-medium">Số lượng thực tế</label>
             <Input
               type="number"
@@ -229,7 +229,7 @@ export function CompleteProductionOrderDialog({
             />
           </div>
 
-          <div className="space-y-1.5">
+          <div className="space-y-2">
             <label className="text-sm font-medium">Số lô</label>
             <Input
               value={lotNumber}
@@ -239,7 +239,7 @@ export function CompleteProductionOrderDialog({
           </div>
 
           <div className="grid grid-cols-2 gap-4">
-            <div className="space-y-1.5">
+            <div className="space-y-2">
               <label className="text-sm font-medium">NSX</label>
               <Input
                 type="date"
@@ -247,7 +247,7 @@ export function CompleteProductionOrderDialog({
                 onChange={(e) => setManufacturedDate(e.target.value)}
               />
             </div>
-            <div className="space-y-1.5">
+            <div className="space-y-2">
               <label className="text-sm font-medium">HSD</label>
               <Input
                 type="date"
@@ -261,7 +261,7 @@ export function CompleteProductionOrderDialog({
           {materialChecks.length > 0 && (
             <div className="rounded-xl border border-border overflow-hidden bg-surface-container-lowest">
               <div className="px-3 py-2 bg-surface-container-low text-xs font-semibold flex items-center justify-between">
-                <span className="flex items-center gap-1.5">
+                <span className="flex items-center gap-2">
                   <Icon name="inventory_2" size={14} className="text-muted-foreground" />
                   Kiểm tra nguyên vật liệu
                 </span>
@@ -283,14 +283,14 @@ export function CompleteProductionOrderDialog({
                 <tbody>
                   {materialChecks.map((m) => (
                     <tr key={m.productId} className="border-t border-border">
-                      <td className="px-3 py-1.5 font-medium">{m.productName}</td>
-                      <td className="px-3 py-1.5 text-right text-muted-foreground tabular-nums">
+                      <td className="px-3 py-2 font-medium">{m.productName}</td>
+                      <td className="px-3 py-2 text-right text-muted-foreground tabular-nums">
                         Cần: {formatNumber(m.needed)} {m.unit}
                       </td>
-                      <td className="px-3 py-1.5 text-right tabular-nums">
+                      <td className="px-3 py-2 text-right tabular-nums">
                         Kho: {formatNumber(m.available)} {m.unit}
                       </td>
-                      <td className="px-3 py-1.5 text-center w-8">
+                      <td className="px-3 py-2 text-center w-8">
                         {m.sufficient ? (
                           <Icon name="check_circle" size={14} className="text-status-success" />
                         ) : (
@@ -317,10 +317,10 @@ export function CompleteProductionOrderDialog({
               </label>
             </div>
             {autoSell && (
-              <div className="pl-6 space-y-1.5">
+              <div className="pl-6 space-y-2">
                 <label className="text-xs text-muted-foreground">Chi nhánh nhận</label>
                 <select
-                  className="w-full rounded-lg border border-border px-3 py-1.5 text-sm bg-surface-container-lowest focus:ring-2 focus:ring-primary/30 outline-none"
+                  className="w-full rounded-lg border border-border px-3 py-2 text-sm bg-surface-container-lowest focus:ring-2 focus:ring-primary/30 outline-none"
                   value={targetBranchId}
                   onChange={(e) => setTargetBranchId(e.target.value)}
                 >
@@ -341,7 +341,7 @@ export function CompleteProductionOrderDialog({
             )}
           </div>
 
-          <div className="text-xs text-muted-foreground bg-surface-container-low rounded-lg p-2.5 flex items-start gap-2">
+          <div className="text-xs text-muted-foreground bg-surface-container-low rounded-lg p-3 flex items-start gap-2">
             <Icon name="info" size={14} className="mt-0.5 shrink-0 text-primary" />
             <span>
               Khi xác nhận: NVL sẽ bị trừ kho, SKU sẽ được cộng vào kho và lô mới sẽ được tạo.

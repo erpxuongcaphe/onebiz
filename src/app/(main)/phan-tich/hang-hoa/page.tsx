@@ -434,8 +434,8 @@ export default function HangHoaPage() {
                     const isCritical = ratio <= 0.3;
                     return (
                       <tr key={item.name} className="border-b last:border-0">
-                        <td className="py-2.5 pr-4 font-medium">{item.name}</td>
-                        <td className="py-2.5 pr-4 text-right">
+                        <td className="py-3 pr-4 font-medium">{item.name}</td>
+                        <td className="py-3 pr-4 text-right">
                           <span
                             className={
                               isCritical
@@ -449,10 +449,10 @@ export default function HangHoaPage() {
                             {item.unit}
                           </span>
                         </td>
-                        <td className="py-2.5 pr-4 text-right text-muted-foreground">
+                        <td className="py-3 pr-4 text-right text-muted-foreground">
                           {item.warning} {item.unit}
                         </td>
-                        <td className="py-2.5 text-right">
+                        <td className="py-3 text-right">
                           <span
                             className={`inline-flex items-center px-2 py-0.5 rounded-full text-xs font-medium ${
                               isCritical

@@ -156,7 +156,7 @@ export function ShiftInvoiceDrawer({
           </div>
         </SheetHeader>
 
-        <div className="flex-1 overflow-y-auto p-3 space-y-1.5">
+        <div className="flex-1 overflow-y-auto p-3 space-y-2">
           {loading ? (
             <LoadingState variant="skeleton-list" rows={5} />
           ) : invoices.length === 0 ? (
@@ -170,7 +170,7 @@ export function ShiftInvoiceDrawer({
             invoices.map((inv) => (
               <div
                 key={inv.id}
-                className="flex items-start gap-2 rounded-lg border bg-card p-2.5 hover:bg-surface-container-low transition-colors"
+                className="flex items-start gap-2 rounded-lg border bg-card p-3 hover:bg-surface-container-low transition-colors"
               >
                 <div className="flex-1 min-w-0">
                   <div className="flex items-center gap-2">

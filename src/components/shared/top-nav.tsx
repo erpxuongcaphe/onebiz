@@ -142,7 +142,7 @@ function BranchSelector() {
             />
             <span className="flex-1 truncate">{branch.name}</span>
             {branch.code && (
-              <span className="text-[10px] font-mono text-muted-foreground bg-surface-container px-1.5 py-0.5 rounded">
+              <span className="text-[10px] font-mono text-muted-foreground bg-surface-container px-2 py-0.5 rounded">
                 {branch.code}
               </span>
             )}
@@ -179,7 +179,7 @@ function GlobalSearchBar() {
       <span className="flex-1 truncate">
         Tìm sản phẩm, khách hàng, đơn hàng...
       </span>
-      <kbd className="hidden lg:inline-flex font-sans items-center gap-0.5 bg-surface-container-high border border-border rounded-md px-1.5 py-0.5 text-[10px] font-semibold text-muted-foreground">
+      <kbd className="hidden lg:inline-flex font-sans items-center gap-0.5 bg-surface-container-high border border-border rounded-md px-2 py-0.5 text-[10px] font-semibold text-muted-foreground">
         Ctrl K
       </kbd>
     </button>
@@ -289,7 +289,7 @@ function MobileLeafLink({
         {leaf.icon && <Icon name={leaf.icon} size={18} />}
         <span className="flex-1">{leaf.label}</span>
         {leaf.comingSoon && (
-          <span className="text-[9px] font-semibold uppercase rounded px-1.5 py-0.5 bg-status-warning/10 text-status-warning border border-status-warning/25">
+          <span className="text-[9px] font-semibold uppercase rounded px-2 py-0.5 bg-status-warning/10 text-status-warning border border-status-warning/25">
             Soon
           </span>
         )}
@@ -402,7 +402,7 @@ function MobileGroupAccordion({
         onClick={() => setOpen((v) => !v)}
         aria-expanded={open}
         className={cn(
-          "w-full press-scale-sm flex items-center gap-3 px-3 py-2.5 rounded-lg text-sm font-semibold transition-colors",
+          "w-full press-scale-sm flex items-center gap-3 px-3 py-3 rounded-lg text-sm font-semibold transition-colors",
           active
             ? "text-primary bg-primary-fixed/40"
             : "text-foreground hover:bg-surface-container-low",
@@ -610,13 +610,13 @@ export function TopNav() {
           </div>
 
           {/* Right: Quick Import + Bell + Help + User + Bán hàng */}
-          <div className="flex items-center gap-1.5 shrink-0">
+          <div className="flex items-center gap-2 shrink-0">
             {/* Quick Import — Trung tâm nhập Excel theo schema */}
             <button
               type="button"
               onClick={() => setImportOpen(true)}
               className={cn(
-                "hidden md:inline-flex press-scale-sm items-center gap-2 h-9 px-3.5 rounded-lg text-xs font-semibold",
+                "hidden md:inline-flex press-scale-sm items-center gap-2 h-9 px-4 rounded-lg text-xs font-semibold",
                 "bg-primary-fixed text-primary hover:bg-primary-fixed-dim transition-colors"
               )}
               title="Trung tâm nhập Excel — tải mẫu & đi tới trang nhập"
@@ -665,7 +665,7 @@ export function TopNav() {
                 size="default"
                 className="rounded-xl font-semibold ambient-shadow"
               >
-                <Icon name="point_of_sale" size={18} className="mr-1.5" />
+                <Icon name="point_of_sale" size={18} className="mr-1" />
                 Bán hàng
               </Button>
             </Link>

@@ -222,38 +222,38 @@ export default function TongQuanPage() {
         </div>
         <div className="flex flex-wrap items-center gap-2">
           <Link href="/pos">
-            <Button size="sm" className="gap-1.5 h-9 shadow-sm">
+            <Button size="sm" className="gap-2 h-9 shadow-sm">
               <Icon name="shopping_cart" className="size-3.5" /> POS Retail
             </Button>
           </Link>
           <Link href="/pos/fnb">
-            <Button size="sm" className="gap-1.5 h-9 shadow-sm bg-status-warning hover:bg-status-warning text-white">
+            <Button size="sm" className="gap-2 h-9 shadow-sm bg-status-warning hover:bg-status-warning text-white">
               <Icon name="local_cafe" className="size-3.5" /> POS F&B
             </Button>
           </Link>
           <div className="hidden sm:block h-5 w-px bg-border" />
           <Link href="/don-hang/dat-hang">
-            <Button size="sm" variant="outline" className="gap-1.5 h-9">
+            <Button size="sm" variant="outline" className="gap-2 h-9">
               <Icon name="add" className="size-3.5" /> Đơn hàng
             </Button>
           </Link>
           <Link href="/hang-hoa/nhap-hang">
-            <Button size="sm" variant="outline" className="gap-1.5 h-9">
+            <Button size="sm" variant="outline" className="gap-2 h-9">
               <Icon name="inventory" className="size-3.5" /> Nhập hàng
             </Button>
           </Link>
           <Link href="/hang-hoa/chuyen-kho">
-            <Button size="sm" variant="outline" className="gap-1.5 h-9">
+            <Button size="sm" variant="outline" className="gap-2 h-9">
               <Icon name="swap_horiz" className="size-3.5" /> Chuyển kho
             </Button>
           </Link>
           <Link href="/tai-chinh/so-quy">
-            <Button size="sm" variant="outline" className="gap-1.5 h-9">
+            <Button size="sm" variant="outline" className="gap-2 h-9">
               <Icon name="receipt" className="size-3.5" /> Sổ quỹ
             </Button>
           </Link>
           <Link href="/phan-tich/bao-cao-tai-chinh">
-            <Button size="sm" variant="outline" className="gap-1.5 h-9">
+            <Button size="sm" variant="outline" className="gap-2 h-9">
               <Icon name="bar_chart" className="size-3.5" /> P&L
             </Button>
           </Link>
@@ -344,10 +344,10 @@ export default function TongQuanPage() {
         <Card>
           <CardHeader className="pb-2">
             <div className="flex items-center justify-between">
-              <CardTitle className="text-sm flex items-center gap-1.5">
+              <CardTitle className="text-sm flex items-center gap-2">
                 <Icon name="warning" className="size-4 text-status-warning" />
                 Cảnh báo tài chính
-                <Badge variant="destructive" className="text-[10px] px-1.5 py-0 ml-1">
+                <Badge variant="destructive" className="text-[10px] px-2 py-0 ml-1">
                   {financialAlerts.length}
                 </Badge>
               </CardTitle>
@@ -365,7 +365,7 @@ export default function TongQuanPage() {
                 <div
                   key={alert.id}
                   className={cn(
-                    "flex items-center gap-3 p-2.5 rounded-lg border",
+                    "flex items-center gap-3 p-3 rounded-lg border",
                     alert.severity === "critical"
                       ? "bg-status-error/10 border-status-error/25"
                       : "bg-status-warning/10 border-status-warning/25"
@@ -415,7 +415,7 @@ export default function TongQuanPage() {
             ) : (
               <div className="space-y-2">
                 {topProds.slice(0, 7).map((product, index) => (
-                  <div key={product.name} className="flex items-center gap-2.5 py-1">
+                  <div key={product.name} className="flex items-center gap-3 py-1">
                     <span className={cn(
                       "size-5 rounded-full flex items-center justify-center text-[10px] font-bold shrink-0",
                       index < 3 ? "bg-primary text-primary-foreground" : "bg-muted text-muted-foreground"
@@ -435,11 +435,11 @@ export default function TongQuanPage() {
         <Card className="lg:col-span-1">
           <CardHeader className="pb-2">
             <div className="flex items-center justify-between">
-              <CardTitle className="text-sm flex items-center gap-1.5">
+              <CardTitle className="text-sm flex items-center gap-2">
                 <Icon name="warning" className="size-4 text-status-warning" />
                 Hàng sắp hết
               </CardTitle>
-              <Badge variant="destructive" className="text-[10px] px-1.5 py-0">
+              <Badge variant="destructive" className="text-[10px] px-2 py-0">
                 {lowStock.length}
               </Badge>
             </div>
@@ -448,7 +448,7 @@ export default function TongQuanPage() {
             {lowStock.length === 0 ? (
               <p className="text-sm text-muted-foreground text-center py-4">Không có hàng sắp hết</p>
             ) : (
-              <div className="space-y-2.5">
+              <div className="space-y-3">
                 {lowStock.map((product) => (
                   <div key={product.name} className="flex items-center justify-between py-1">
                     <div className="flex-1 min-w-0">
@@ -488,7 +488,7 @@ export default function TongQuanPage() {
                 {activities.slice(0, 6).map((activity) => {
                   const iconName = ENTITY_ICONS[activity.entityType] ?? "description";
                   return (
-                    <div key={activity.id} className="flex items-start gap-2.5">
+                    <div key={activity.id} className="flex items-start gap-3">
                       <div className="flex size-7 shrink-0 items-center justify-center rounded-full bg-surface-container">
                         <Icon name={iconName} size={14} className="text-muted-foreground" />
                       </div>

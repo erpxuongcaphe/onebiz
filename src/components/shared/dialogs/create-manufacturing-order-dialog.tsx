@@ -150,15 +150,15 @@ export function CreateManufacturingOrderDialog({
 
         <div className="grid gap-4 py-2">
           {/* Code */}
-          <div className="space-y-1.5">
+          <div className="space-y-2">
             <label className="text-sm font-medium">Mã phiếu</label>
-            <div className="flex h-9 w-full rounded-lg border border-input bg-muted/50 px-2.5 py-2 text-sm">
+            <div className="flex h-9 w-full rounded-lg border border-input bg-muted/50 px-3 py-2 text-sm">
               {code}
             </div>
           </div>
 
           {/* Product search */}
-          <div className="space-y-1.5">
+          <div className="space-y-2">
             <label className="text-sm font-medium">
               Sản phẩm sản xuất <span className="text-destructive">*</span>
             </label>
@@ -219,7 +219,7 @@ export function CreateManufacturingOrderDialog({
           )}
 
           {/* Quantity */}
-          <div className="space-y-1.5">
+          <div className="space-y-2">
             <label className="text-sm font-medium">
               Số lượng sản xuất <span className="text-destructive">*</span>
             </label>
@@ -237,10 +237,10 @@ export function CreateManufacturingOrderDialog({
           </div>
 
           {/* Notes */}
-          <div className="space-y-1.5">
+          <div className="space-y-2">
             <label className="text-sm font-medium">Ghi chú</label>
             <textarea
-              className="flex min-h-[50px] w-full rounded-lg border border-input bg-transparent px-2.5 py-2 text-sm transition-colors outline-none placeholder:text-muted-foreground focus-visible:border-ring focus-visible:ring-3 focus-visible:ring-ring/50"
+              className="flex min-h-[50px] w-full rounded-lg border border-input bg-transparent px-3 py-2 text-sm transition-colors outline-none placeholder:text-muted-foreground focus-visible:border-ring focus-visible:ring-3 focus-visible:ring-ring/50"
               value={notes}
               onChange={(e) => setNotes(e.target.value)}
               placeholder="Ghi chú phiếu sản xuất"

@@ -132,7 +132,7 @@ export function ProductBranchStockTab({ productId, unit }: ProductBranchStockTab
               key={r.branchId}
               className="grid grid-cols-[1fr_90px_90px_90px_120px] gap-2 items-center px-3 py-2 text-sm"
             >
-              <span className="flex items-center gap-1.5 min-w-0">
+              <span className="flex items-center gap-2 min-w-0">
                 <Icon
                   name="store"
                   size={14}

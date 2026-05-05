@@ -197,11 +197,11 @@ export default function CanhBaoPage() {
 
         {/* Filter tabs */}
         {alertTypes.length > 1 && (
-          <div className="flex items-center gap-1.5 overflow-x-auto">
+          <div className="flex items-center gap-2 overflow-x-auto">
             <button
               onClick={() => setFilterType("all")}
               className={cn(
-                "px-3 py-1.5 rounded-full text-xs font-medium transition-colors whitespace-nowrap",
+                "px-3 py-2 rounded-full text-xs font-medium transition-colors whitespace-nowrap",
                 filterType === "all"
                   ? "bg-primary text-white"
                   : "bg-muted text-muted-foreground hover:text-foreground"
@@ -216,7 +216,7 @@ export default function CanhBaoPage() {
                   key={type}
                   onClick={() => setFilterType(type)}
                   className={cn(
-                    "px-3 py-1.5 rounded-full text-xs font-medium transition-colors whitespace-nowrap",
+                    "px-3 py-2 rounded-full text-xs font-medium transition-colors whitespace-nowrap",
                     filterType === type
                       ? "bg-primary text-white"
                       : "bg-muted text-muted-foreground hover:text-foreground"
@@ -272,7 +272,7 @@ export default function CanhBaoPage() {
                             {alert.title}
                             <Badge
                               className={cn(
-                                "text-[10px] px-1.5 py-0 font-medium",
+                                "text-[10px] px-2 py-0 font-medium",
                                 severityCfg.badgeBg
                               )}
                             >

@@ -444,7 +444,7 @@ export default function BaoCaoTaiChinhPage() {
                         key={b.branchId}
                         className="border-b last:border-0 hover:bg-surface-container-low"
                       >
-                        <td className="py-2.5 pr-3">
+                        <td className="py-3 pr-3">
                           <div className="flex items-center gap-2">
                             <Icon name={typeIconName} size={14} className="text-muted-foreground shrink-0" />
                             <div className="min-w-0">
@@ -455,18 +455,18 @@ export default function BaoCaoTaiChinhPage() {
                             </div>
                           </div>
                         </td>
-                        <td className="py-2.5 pr-3 text-right font-medium text-primary">
+                        <td className="py-3 pr-3 text-right font-medium text-primary">
                           {formatCurrency(b.revenue)}
                         </td>
-                        <td className="py-2.5 pr-3 text-right text-status-warning">
+                        <td className="py-3 pr-3 text-right text-status-warning">
                           {formatCurrency(b.cogs)}
                         </td>
-                        <td className="py-2.5 pr-3 text-right font-medium text-status-success">
+                        <td className="py-3 pr-3 text-right font-medium text-status-success">
                           {formatCurrency(b.grossProfit)}
                         </td>
-                        <td className="py-2.5 pr-3 text-right text-xs">
+                        <td className="py-3 pr-3 text-right text-xs">
                           <span
-                            className={`inline-block px-1.5 py-0.5 rounded ${
+                            className={`inline-block px-2 py-0.5 rounded ${
                               b.grossMargin >= 30
                                 ? "bg-status-success/10 text-status-success"
                                 : b.grossMargin >= 15
@@ -477,11 +477,11 @@ export default function BaoCaoTaiChinhPage() {
                             {b.grossMargin}%
                           </span>
                         </td>
-                        <td className="py-2.5 pr-3 text-right text-muted-foreground">
+                        <td className="py-3 pr-3 text-right text-muted-foreground">
                           {formatCurrency(b.opEx)}
                         </td>
                         <td
-                          className={`py-2.5 text-right font-semibold ${
+                          className={`py-3 text-right font-semibold ${
                             b.netProfit >= 0 ? "text-status-success" : "text-status-error"
                           }`}
                         >
@@ -508,26 +508,26 @@ export default function BaoCaoTaiChinhPage() {
                         : 0;
                     return (
                       <tr className="bg-muted/40 font-semibold">
-                        <td className="py-2.5 pr-3">
+                        <td className="py-3 pr-3">
                           Tổng toàn chuỗi ({branchPnL.length})
                         </td>
-                        <td className="py-2.5 pr-3 text-right text-primary">
+                        <td className="py-3 pr-3 text-right text-primary">
                           {formatCurrency(sum.revenue)}
                         </td>
-                        <td className="py-2.5 pr-3 text-right text-status-warning">
+                        <td className="py-3 pr-3 text-right text-status-warning">
                           {formatCurrency(sum.cogs)}
                         </td>
-                        <td className="py-2.5 pr-3 text-right text-status-success">
+                        <td className="py-3 pr-3 text-right text-status-success">
                           {formatCurrency(sum.grossProfit)}
                         </td>
-                        <td className="py-2.5 pr-3 text-right text-xs">
+                        <td className="py-3 pr-3 text-right text-xs">
                           {totalMargin}%
                         </td>
-                        <td className="py-2.5 pr-3 text-right text-muted-foreground">
+                        <td className="py-3 pr-3 text-right text-muted-foreground">
                           {formatCurrency(sum.opEx)}
                         </td>
                         <td
-                          className={`py-2.5 text-right ${
+                          className={`py-3 text-right ${
                             sum.netProfit >= 0 ? "text-status-success" : "text-status-error"
                           }`}
                         >
@@ -690,22 +690,22 @@ export default function BaoCaoTaiChinhPage() {
                       className={`border-b last:border-0 ${row.highlight ? "bg-status-success/5" : ""}`}
                     >
                       <td
-                        className={`py-2.5 pr-4 ${row.bold ? "font-semibold" : ""} ${row.color ?? ""}`}
+                        className={`py-3 pr-4 ${row.bold ? "font-semibold" : ""} ${row.color ?? ""}`}
                       >
                         {row.label}
                       </td>
-                      <td className="py-2.5 pr-4 text-right font-medium">
+                      <td className="py-3 pr-4 text-right font-medium">
                         {row.isPercent
                           ? `${row.cur}%`
                           : formatCurrency(row.cur)}
                       </td>
-                      <td className="py-2.5 pr-4 text-right text-muted-foreground">
+                      <td className="py-3 pr-4 text-right text-muted-foreground">
                         {row.isPercent
                           ? `${row.prev}%`
                           : formatCurrency(row.prev)}
                       </td>
                       <td
-                        className={`py-2.5 text-right text-xs font-medium ${isPositiveChange ? "text-status-success" : "text-status-error"}`}
+                        className={`py-3 text-right text-xs font-medium ${isPositiveChange ? "text-status-success" : "text-status-error"}`}
                       >
                         {change}
                       </td>
@@ -871,7 +871,7 @@ export default function BaoCaoTaiChinhPage() {
           >
             <div className="grid grid-cols-2 gap-4 py-4">
               <div className="text-center space-y-1">
-                <div className="flex items-center justify-center gap-1.5 text-muted-foreground">
+                <div className="flex items-center justify-center gap-2 text-muted-foreground">
                   <Icon name="undo" className="size-4" />
                   <span className="text-xs">Vòng quay</span>
                 </div>
@@ -881,7 +881,7 @@ export default function BaoCaoTaiChinhPage() {
                 <p className="text-xs text-muted-foreground">lần/tháng</p>
               </div>
               <div className="text-center space-y-1">
-                <div className="flex items-center justify-center gap-1.5 text-muted-foreground">
+                <div className="flex items-center justify-center gap-2 text-muted-foreground">
                   <Icon name="schedule" className="size-4" />
                   <span className="text-xs">TB ngày bán hết</span>
                 </div>
@@ -917,7 +917,7 @@ export default function BaoCaoTaiChinhPage() {
           >
             <div className="grid grid-cols-2 gap-4 py-4">
               <div className="text-center space-y-1">
-                <div className="flex items-center justify-center gap-1.5 text-muted-foreground">
+                <div className="flex items-center justify-center gap-2 text-muted-foreground">
                   <Icon name="bar_chart" className="size-4" />
                   <span className="text-xs">DSO</span>
                 </div>
@@ -929,7 +929,7 @@ export default function BaoCaoTaiChinhPage() {
                 <p className="text-xs text-muted-foreground">ngày</p>
               </div>
               <div className="text-center space-y-1">
-                <div className="flex items-center justify-center gap-1.5 text-muted-foreground">
+                <div className="flex items-center justify-center gap-2 text-muted-foreground">
                   <Icon name="attach_money" className="size-4" />
                   <span className="text-xs">Phải thu</span>
                 </div>
@@ -998,23 +998,23 @@ export default function BaoCaoTaiChinhPage() {
                       key={item.productName}
                       className="border-b last:border-0"
                     >
-                      <td className="py-2.5 pr-4 text-muted-foreground">
+                      <td className="py-3 pr-4 text-muted-foreground">
                         {i + 1}
                       </td>
-                      <td className="py-2.5 pr-4 font-medium">
+                      <td className="py-3 pr-4 font-medium">
                         {item.productName}
                       </td>
-                      <td className="py-2.5 pr-4 text-right">
+                      <td className="py-3 pr-4 text-right">
                         {formatNumber(item.qtySold)}
                       </td>
-                      <td className="py-2.5 pr-4 text-right">
+                      <td className="py-3 pr-4 text-right">
                         {formatCurrency(item.costPrice)}
                       </td>
-                      <td className="py-2.5 pr-4 text-right font-medium text-status-warning">
+                      <td className="py-3 pr-4 text-right font-medium text-status-warning">
                         {formatCurrency(item.totalCost)}
                       </td>
-                      <td className="py-2.5 text-right">
-                        <span className="inline-block bg-status-warning/10 text-status-warning px-1.5 py-0.5 rounded text-xs font-medium">
+                      <td className="py-3 text-right">
+                        <span className="inline-block bg-status-warning/10 text-status-warning px-2 py-0.5 rounded text-xs font-medium">
                           {item.pctOfCogs}%
                         </span>
                       </td>

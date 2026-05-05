@@ -293,7 +293,7 @@ export function CreatePromotionDialog({
 
         <div className="grid gap-4 py-2">
           {/* Name */}
-          <div className="space-y-1.5">
+          <div className="space-y-2">
             <label className="text-sm font-medium">
               Tên chương trình <span className="text-destructive">*</span>
             </label>
@@ -307,10 +307,10 @@ export function CreatePromotionDialog({
           </div>
 
           {/* Description */}
-          <div className="space-y-1.5">
+          <div className="space-y-2">
             <label className="text-sm font-medium">Mô tả</label>
             <textarea
-              className="flex min-h-[60px] w-full rounded-lg border border-input bg-transparent px-2.5 py-2 text-sm transition-colors outline-none placeholder:text-muted-foreground focus-visible:border-ring focus-visible:ring-3 focus-visible:ring-ring/50"
+              className="flex min-h-[60px] w-full rounded-lg border border-input bg-transparent px-3 py-2 text-sm transition-colors outline-none placeholder:text-muted-foreground focus-visible:border-ring focus-visible:ring-3 focus-visible:ring-ring/50"
               value={description}
               onChange={(e) => setDescription(e.target.value)}
               placeholder="Mô tả thêm về chương trình"
@@ -320,7 +320,7 @@ export function CreatePromotionDialog({
 
           {/* Type + Channel — same row */}
           <div className="grid grid-cols-2 gap-3">
-            <div className="space-y-1.5">
+            <div className="space-y-2">
               <label className="text-sm font-medium">
                 Loại khuyến mãi <span className="text-destructive">*</span>
               </label>
@@ -336,7 +336,7 @@ export function CreatePromotionDialog({
                 </SelectContent>
               </Select>
             </div>
-            <div className="space-y-1.5">
+            <div className="space-y-2">
               <label className="text-sm font-medium">
                 Kênh áp dụng <span className="text-destructive">*</span>
               </label>
@@ -355,7 +355,7 @@ export function CreatePromotionDialog({
 
           {/* Value (for percent / fixed) */}
           {needsValue && (
-            <div className="space-y-1.5">
+            <div className="space-y-2">
               <label className="text-sm font-medium">
                 {type === "discount_percent" ? "Phần trăm giảm (%)" : "Số tiền giảm (VNĐ)"}
                 <span className="text-destructive"> *</span>
@@ -374,7 +374,7 @@ export function CreatePromotionDialog({
           {/* Buy X Get Y */}
           {needsBuyGet && (
             <div className="grid grid-cols-2 gap-3">
-              <div className="space-y-1.5">
+              <div className="space-y-2">
                 <label className="text-sm font-medium">
                   Mua (SL) <span className="text-destructive">*</span>
                 </label>
@@ -389,7 +389,7 @@ export function CreatePromotionDialog({
                   <p className="text-xs text-destructive">{errors.buyQuantity}</p>
                 )}
               </div>
-              <div className="space-y-1.5">
+              <div className="space-y-2">
                 <label className="text-sm font-medium">
                   Tặng (SL) <span className="text-destructive">*</span>
                 </label>
@@ -409,7 +409,7 @@ export function CreatePromotionDialog({
 
           {/* KM-3: Gift product picker — chỉ hiện khi type='gift' */}
           {type === "gift" && (
-            <div className="space-y-1.5">
+            <div className="space-y-2">
               <label className="text-sm font-medium">
                 Sản phẩm tặng kèm <span className="text-destructive">*</span>
                 <span className="ml-2 text-xs font-normal text-muted-foreground">
@@ -456,7 +456,7 @@ export function CreatePromotionDialog({
                           type="button"
                           onClick={() => toggleGiftProduct(p.id)}
                           className={cn(
-                            "w-full flex items-center gap-2 px-2 py-1.5 rounded text-xs text-left transition-colors",
+                            "w-full flex items-center gap-2 px-2 py-2 rounded text-xs text-left transition-colors",
                             checked
                               ? "bg-status-warning/10 text-status-warning"
                               : "hover:bg-muted text-foreground",
@@ -501,7 +501,7 @@ export function CreatePromotionDialog({
 
           {/* Min order + Usage limit — same row */}
           <div className="grid grid-cols-2 gap-3">
-            <div className="space-y-1.5">
+            <div className="space-y-2">
               <label className="text-sm font-medium">Đơn tối thiểu (VNĐ)</label>
               <Input
                 type="number"
@@ -510,7 +510,7 @@ export function CreatePromotionDialog({
                 placeholder="VD: 500000"
               />
             </div>
-            <div className="space-y-1.5">
+            <div className="space-y-2">
               <label className="text-sm font-medium">Giới hạn lượt dùng</label>
               <Input
                 type="number"
@@ -533,7 +533,7 @@ export function CreatePromotionDialog({
 
           {/* Date range */}
           <div className="grid grid-cols-2 gap-3">
-            <div className="space-y-1.5">
+            <div className="space-y-2">
               <label className="text-sm font-medium">
                 Ngày bắt đầu <span className="text-destructive">*</span>
               </label>
@@ -547,7 +547,7 @@ export function CreatePromotionDialog({
                 <p className="text-xs text-destructive">{errors.startDate}</p>
               )}
             </div>
-            <div className="space-y-1.5">
+            <div className="space-y-2">
               <label className="text-sm font-medium">
                 Ngày kết thúc <span className="text-destructive">*</span>
               </label>
@@ -564,7 +564,7 @@ export function CreatePromotionDialog({
           </div>
 
           {/* Time-of-day window — KM-3 sẽ filter ở engine */}
-          <div className="space-y-1.5">
+          <div className="space-y-2">
             <label className="text-sm font-medium">
               Giờ áp dụng (tuỳ chọn)
               <span className="ml-2 text-xs font-normal text-muted-foreground">
@@ -591,14 +591,14 @@ export function CreatePromotionDialog({
           </div>
 
           {/* Days of week */}
-          <div className="space-y-1.5">
+          <div className="space-y-2">
             <label className="text-sm font-medium">
               Áp dụng các ngày
               <span className="ml-2 text-xs font-normal text-muted-foreground">
                 Không chọn = áp mọi ngày
               </span>
             </label>
-            <div className="flex gap-1.5">
+            <div className="flex gap-2">
               {DAY_LABELS.map((label, idx) => {
                 const active = daysOfWeek.includes(idx);
                 return (
@@ -607,7 +607,7 @@ export function CreatePromotionDialog({
                     type="button"
                     onClick={() => toggleDay(idx)}
                     className={cn(
-                      "flex-1 min-w-0 px-2 py-1.5 rounded-md text-xs font-medium border transition-colors",
+                      "flex-1 min-w-0 px-2 py-2 rounded-md text-xs font-medium border transition-colors",
                       active
                         ? "bg-primary text-on-primary border-primary"
                         : "bg-transparent text-muted-foreground border-border hover:bg-muted"
@@ -622,14 +622,14 @@ export function CreatePromotionDialog({
 
           {/* Branch filter — chỉ hiện khi channel có FnB */}
           {showBranchFilter && filteredBranches.length > 0 && (
-            <div className="space-y-1.5">
+            <div className="space-y-2">
               <label className="text-sm font-medium">
                 Chi nhánh áp dụng
                 <span className="ml-2 text-xs font-normal text-muted-foreground">
                   Không chọn = áp toàn chuỗi ({filteredBranches.length} chi nhánh)
                 </span>
               </label>
-              <div className="grid grid-cols-2 gap-1.5 rounded-lg border p-2 max-h-[140px] overflow-y-auto">
+              <div className="grid grid-cols-2 gap-2 rounded-lg border p-2 max-h-[140px] overflow-y-auto">
                 {filteredBranches.map((b) => {
                   const checked = branchIds.includes(b.id);
                   return (
@@ -638,7 +638,7 @@ export function CreatePromotionDialog({
                       type="button"
                       onClick={() => toggleBranch(b.id)}
                       className={cn(
-                        "flex items-center gap-2 px-2 py-1.5 rounded text-xs text-left transition-colors",
+                        "flex items-center gap-2 px-2 py-2 rounded text-xs text-left transition-colors",
                         checked
                           ? "bg-primary/10 text-primary"
                           : "hover:bg-muted text-foreground"
@@ -670,7 +670,7 @@ export function CreatePromotionDialog({
           )}
 
           {/* Priority */}
-          <div className="space-y-1.5">
+          <div className="space-y-2">
             <label className="text-sm font-medium">Độ ưu tiên</label>
             <Input
               type="number"
@@ -685,7 +685,7 @@ export function CreatePromotionDialog({
             <button
               type="button"
               onClick={() => setIsActive(!isActive)}
-              className="flex w-full items-center justify-between py-1.5"
+              className="flex w-full items-center justify-between py-2"
             >
               <div className="text-left">
                 <div className="text-sm font-medium">Kích hoạt</div>
@@ -710,7 +710,7 @@ export function CreatePromotionDialog({
             <button
               type="button"
               onClick={() => setAutoApply(!autoApply)}
-              className="flex w-full items-center justify-between py-1.5"
+              className="flex w-full items-center justify-between py-2"
             >
               <div className="text-left">
                 <div className="text-sm font-medium">Tự động áp dụng</div>

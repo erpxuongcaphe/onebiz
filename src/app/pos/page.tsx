@@ -1679,7 +1679,7 @@ function PosPageInner() {
         {/* Branch selector + Title — hiện rõ tên chi nhánh + code để user biết đang ghi nhận đơn ở đâu */}
         <PosBranchSelector variant="dark" filter={["warehouse", "store"]} showCode />
         <div className="h-4 w-px bg-white/20 shrink-0" />
-        <div className="flex items-center gap-1.5 shrink-0">
+        <div className="flex items-center gap-2 shrink-0">
           <Icon name="shopping_cart" size={14} />
           <span className="text-[13px] font-bold tracking-wide">POS Retail</span>
         </div>
@@ -1786,11 +1786,11 @@ function PosPageInner() {
             <>
               <div className="fixed inset-0 z-40" onClick={() => setShowShortcuts(false)} />
               <div className="absolute right-0 top-full mt-1 z-50 bg-gray-900 text-white rounded-lg shadow-2xl p-3 w-56 text-[11px]">
-                <div className="font-bold text-xs mb-2 text-white/90 flex items-center gap-1.5">
+                <div className="font-bold text-xs mb-2 text-white/90 flex items-center gap-2">
                   <Icon name="keyboard" size={14} />
                   Phím tắt POS
                 </div>
-                <div className="space-y-1.5">
+                <div className="space-y-2">
                   {[
                     ["F2", "Tìm sản phẩm"],
                     ["Enter", "Thêm SP (trong ô tìm)"],
@@ -1805,7 +1805,7 @@ function PosPageInner() {
                   ].map(([key, desc]) => (
                     <div key={key} className="flex items-center justify-between">
                       <span className="text-white/60">{desc}</span>
-                      <kbd className="font-mono text-[9px] bg-white/10 border border-white/20 rounded px-1.5 py-0.5">
+                      <kbd className="font-mono text-[9px] bg-white/10 border border-white/20 rounded px-2 py-0.5">
                         {key}
                       </kbd>
                     </div>
@@ -1821,7 +1821,7 @@ function PosPageInner() {
             gom các chức năng phụ vào dropdown 3 gạch tinh tế. */}
         <DropdownMenu>
           <DropdownMenuTrigger
-            className="p-1.5 rounded text-white/70 hover:bg-white/10 hover:text-white transition-colors shrink-0 outline-none"
+            className="p-2 rounded text-white/70 hover:bg-white/10 hover:text-white transition-colors shrink-0 outline-none"
             title="Menu"
           >
             <Icon name="menu" size={16} />
@@ -1830,7 +1830,7 @@ function PosPageInner() {
             {/* User info — CEO 04/05: cashier cần biết đang đăng nhập tài
                 khoản nào để khoá ca/đối soát. Hiển thị fullName + email +
                 role · chi nhánh (nếu có). */}
-            <div className="px-3 py-2.5 border-b border-border">
+            <div className="px-3 py-3 border-b border-border">
               <p className="text-sm font-semibold text-foreground truncate" title={user?.fullName}>
                 {user?.fullName ?? "—"}
               </p>
@@ -1840,7 +1840,7 @@ function PosPageInner() {
                 </p>
               )}
               <p className="text-[10.5px] text-muted-foreground mt-0.5 flex items-center gap-1 flex-wrap">
-                <span className="px-1.5 py-0.5 rounded bg-primary-fixed text-primary font-medium">
+                <span className="px-2 py-0.5 rounded bg-primary-fixed text-primary font-medium">
                   {user?.role === "owner"
                     ? "Chủ DN"
                     : user?.role === "admin"
@@ -2037,7 +2037,7 @@ function PosPageInner() {
           {/* ── Cart status strip — Plan A không cần table header (item self-describing).
                   Strip nhỏ hiện count + clear all để cashier thấy quy mô đơn. ── */}
           {state.lines.length > 0 && (
-            <div className="flex items-center justify-between px-2.5 py-1 border-b border-border bg-surface-container-low shrink-0">
+            <div className="flex items-center justify-between px-3 py-1 border-b border-border bg-surface-container-low shrink-0">
               <span className="text-[10px] font-semibold text-muted-foreground uppercase tracking-wider">
                 {state.lines.length} sản phẩm · {state.itemCount} món
               </span>
@@ -2053,7 +2053,7 @@ function PosPageInner() {
                     }
                   )
                 }
-                className="shrink-0 inline-flex items-center gap-1 px-1.5 py-0.5 rounded text-[10px] text-muted-foreground hover:text-status-error hover:bg-status-error/10 transition-colors"
+                className="shrink-0 inline-flex items-center gap-1 px-2 py-0.5 rounded text-[10px] text-muted-foreground hover:text-status-error hover:bg-status-error/10 transition-colors"
                 title="Xoá tất cả (cần xác nhận)"
               >
                 <Icon name="delete" size={12} />
@@ -2096,13 +2096,13 @@ function PosPageInner() {
 
           {/* ── Customer picker row — Stitch pill (moved from items zone) ── */}
           <div className="px-3 py-2 border-b border-outline-variant/20">
-            <div className="flex items-center gap-1.5">
+            <div className="flex items-center gap-2">
               <button
                 type="button"
                 onClick={() => setCustomerModalOpen(true)}
                 title={state.customer?.name ?? "Khách lẻ"}
                 className={cn(
-                  "flex-1 flex items-center gap-2 px-2.5 h-9 rounded-lg text-xs transition-colors press-scale-sm min-w-0",
+                  "flex-1 flex items-center gap-2 px-3 h-9 rounded-lg text-xs transition-colors press-scale-sm min-w-0",
                   state.customer
                     ? "bg-primary-fixed text-primary font-semibold"
                     : "bg-surface-container-low text-on-surface-variant hover:bg-surface-container hover:text-foreground",
@@ -2124,7 +2124,7 @@ function PosPageInner() {
                 <button
                   type="button"
                   onClick={() => state.setCustomer(null)}
-                  className="p-1.5 rounded-lg text-muted-foreground hover:text-status-error hover:bg-status-error/10 transition-colors"
+                  className="p-2 rounded-lg text-muted-foreground hover:text-status-error hover:bg-status-error/10 transition-colors"
                   title="Gỡ khách"
                 >
                   <Icon name="close" size={14} />
@@ -2148,7 +2148,7 @@ function PosPageInner() {
                   <span className="text-muted-foreground font-mono">{state.customer.code}</span>
                 )}
                 {(state.customer.groupDiscountPercent ?? 0) > 0 && (
-                  <span className="flex items-center gap-0.5 px-1.5 py-0.5 rounded-full bg-status-success/10 text-status-success font-semibold">
+                  <span className="flex items-center gap-0.5 px-2 py-0.5 rounded-full bg-status-success/10 text-status-success font-semibold">
                     <Icon name="loyalty" size={10} />
                     {state.customer.groupName ?? "Nhóm"} −{state.customer.groupDiscountPercent}%
                   </span>
@@ -2168,7 +2168,7 @@ function PosPageInner() {
           {/* KM-3: Free items section — hiển thị quà tặng kèm (BOGO + gift) */}
           {appliedPromotion?.freeItems && appliedPromotion.freeItems.length > 0 && (
             <div className="border-t border-status-warning/30 px-3 py-2 bg-status-warning/5">
-              <div className="flex items-center gap-1.5 mb-1.5">
+              <div className="flex items-center gap-2 mb-2">
                 <Icon name="redeem" size={14} className="text-status-warning" />
                 <span className="text-xs font-semibold text-status-warning">
                   Tặng kèm ({appliedPromotion.freeItems.length} món)
@@ -2273,7 +2273,7 @@ function PosPageInner() {
                       }}
                       data-allow-hotkeys="true"
                       placeholder="Nhập mã"
-                      className="w-20 px-1.5 text-[10px] outline-none uppercase"
+                      className="w-20 px-2 text-[10px] outline-none uppercase"
                       maxLength={20}
                     />
                     <button
@@ -2310,7 +2310,7 @@ function PosPageInner() {
             )}
 
             {/* Total — Stitch font-heading extrabold primary */}
-            <div className="flex justify-between items-baseline pt-1.5 border-t border-outline-variant/20">
+            <div className="flex justify-between items-baseline pt-2 border-t border-outline-variant/20">
               <span className="text-sm font-semibold text-foreground">Khách cần trả</span>
               <span className="font-heading text-lg font-extrabold text-primary tabular-nums tracking-tight">
                 {formatCurrency(state.total)} ₫
@@ -2322,7 +2322,7 @@ function PosPageInner() {
           {state.sellingMode !== "fast" && (
             <div className="border-t border-border px-3 py-2 space-y-2">
               {/* Payment method */}
-              <div className="grid grid-cols-4 gap-1.5">
+              <div className="grid grid-cols-4 gap-2">
                 <PaymentBtn
                   icon={<Icon name="payments" size={14} />}
                   label="Tiền mặt"
@@ -2351,7 +2351,7 @@ function PosPageInner() {
 
               {/* Mixed payment breakdown */}
               {state.paymentMethod === "mixed" ? (
-                <div className="space-y-1.5">
+                <div className="space-y-2">
                   <label className="text-[10px] font-medium text-muted-foreground uppercase tracking-wider">
                     Chi tiết thanh toán
                   </label>
@@ -2418,12 +2418,12 @@ function PosPageInner() {
                         Khách đưa
                       </label>
                       {state.paid > 0 && state.change > 0 && (
-                        <span className="text-[11px] font-bold text-status-success bg-status-success/10 px-1.5 py-0.5 rounded">
+                        <span className="text-[11px] font-bold text-status-success bg-status-success/10 px-2 py-0.5 rounded">
                           Thừa: {formatCurrency(state.change)} ₫
                         </span>
                       )}
                       {state.paid > 0 && state.debt > 0 && (
-                        <span className="text-[11px] font-bold text-status-warning bg-status-warning/10 px-1.5 py-0.5 rounded">
+                        <span className="text-[11px] font-bold text-status-warning bg-status-warning/10 px-2 py-0.5 rounded">
                           Nợ: {formatCurrency(state.debt)} ₫
                         </span>
                       )}
@@ -2486,7 +2486,7 @@ function PosPageInner() {
                   />
                   Ghi chú
                 </button>
-                <label className="flex items-center gap-1.5 text-[10px] text-muted-foreground cursor-pointer select-none">
+                <label className="flex items-center gap-2 text-[10px] text-muted-foreground cursor-pointer select-none">
                   <input
                     type="checkbox"
                     checked={autoPrint}
@@ -2506,7 +2506,7 @@ function PosPageInner() {
                   onChange={(e) => state.setNote(e.target.value)}
                   rows={2}
                   data-allow-hotkeys="true"
-                  className="w-full px-2.5 py-1.5 rounded border border-border text-xs resize-none outline-none focus:ring-2 focus:ring-primary/30 focus:border-primary"
+                  className="w-full px-3 py-2 rounded border border-border text-xs resize-none outline-none focus:ring-2 focus:ring-primary/30 focus:border-primary"
                   placeholder="Ghi chú cho đơn hàng..."
                 />
               )}
@@ -2521,7 +2521,7 @@ function PosPageInner() {
               <button
                 type="button"
                 onClick={handlePrintPreBill}
-                className="w-full h-9 rounded-lg border border-dashed border-primary/40 bg-primary/5 text-primary text-xs font-medium hover:bg-primary/10 inline-flex items-center justify-center gap-1.5 press-scale-sm"
+                className="w-full h-9 rounded-lg border border-dashed border-primary/40 bg-primary/5 text-primary text-xs font-medium hover:bg-primary/10 inline-flex items-center justify-center gap-2 press-scale-sm"
                 title="In tạm tính cho khách kiểm tra trước khi trả tiền"
               >
                 <Icon name="receipt_long" size={14} />
@@ -2535,10 +2535,10 @@ function PosPageInner() {
               chừa slot trống → Thanh toán bị nén xuống 2 hàng. Đổi sang
               [1fr_2fr]: Nháp ~33% + Thanh toán ~66% — đủ 1 hàng. */}
           <div className={cn(
-            "px-3 py-2.5 border-t border-outline-variant/20 shrink-0 bg-surface-container-lowest",
+            "px-3 py-3 border-t border-outline-variant/20 shrink-0 bg-surface-container-lowest",
             state.sellingMode === "fast"
-              ? "flex flex-col gap-1.5"
-              : "grid grid-cols-[1fr_2fr] gap-1.5"
+              ? "flex flex-col gap-2"
+              : "grid grid-cols-[1fr_2fr] gap-2"
           )}>
             {/* Draft button */}
             <button
@@ -2571,7 +2571,7 @@ function PosPageInner() {
               onClick={() => handleComplete()}
               disabled={state.lines.length === 0 || submitting !== null}
               className={cn(
-                "rounded-xl bg-primary text-on-primary font-bold hover:bg-primary-hover disabled:opacity-40 disabled:cursor-not-allowed inline-flex items-center justify-center gap-1.5 transition-all ambient-shadow press-scale-sm whitespace-nowrap",
+                "rounded-xl bg-primary text-on-primary font-bold hover:bg-primary-hover disabled:opacity-40 disabled:cursor-not-allowed inline-flex items-center justify-center gap-2 transition-all ambient-shadow press-scale-sm whitespace-nowrap",
                 state.sellingMode === "fast"
                   ? "h-12 text-base"
                   : "h-11 text-[13px]"
@@ -2835,7 +2835,7 @@ function PosPageInner() {
             </DialogTitle>
           </DialogHeader>
           <div className="space-y-3 text-sm">
-            <div className="bg-surface-container-low rounded-lg p-3 space-y-1.5 tabular-nums">
+            <div className="bg-surface-container-low rounded-lg p-3 space-y-2 tabular-nums">
               <div className="flex justify-between text-xs text-muted-foreground">
                 <span>Khách hàng:</span>
                 <span className="font-medium text-foreground">
@@ -2854,7 +2854,7 @@ function PosPageInner() {
                   {formatCurrency(state.paid)}đ
                 </span>
               </div>
-              <div className="flex justify-between text-sm font-bold text-status-success border-t border-border pt-1.5 mt-1">
+              <div className="flex justify-between text-sm font-bold text-status-success border-t border-border pt-2 mt-1">
                 <span>Tiền thừa:</span>
                 <span>+{formatCurrency(changeDialog.excess)}đ</span>
               </div>
@@ -2938,7 +2938,7 @@ function PosPageInner() {
               </div>
             )}
 
-            <div className="space-y-1.5">
+            <div className="space-y-2">
               <label className="text-sm font-medium">Số điểm muốn đổi</label>
               <input
                 type="number"
@@ -2988,7 +2988,7 @@ function PosPageInner() {
               Hủy
             </Button>
             <Button onClick={handleApplyRedeem}>
-              <Icon name="check" size={16} className="mr-1.5" />
+              <Icon name="check" size={16} className="mr-1" />
               Áp dụng
             </Button>
           </DialogFooter>
@@ -3048,7 +3048,7 @@ function CartItem({
       )}
     >
       {/* ── Line 1: # + tên SP (full width) + xoá ── */}
-      <div className="flex items-start gap-2 px-2.5 pt-1.5">
+      <div className="flex items-start gap-2 px-3 pt-2">
         <span className="text-[10px] text-muted-foreground tabular-nums shrink-0 w-3 mt-0.5 text-right">
           {index}
         </span>
@@ -3087,7 +3087,7 @@ function CartItem({
       </div>
 
       {/* ── Line 2: qty stepper · × · price · −GG · = total ── */}
-      <div className="flex items-center gap-1.5 px-2.5 pb-1.5 pl-[26px] mt-1">
+      <div className="flex items-center gap-2 px-3 pb-2 pl-[26px] mt-1">
         {/* Qty stepper +/− */}
         <div className="inline-flex items-center bg-surface-container-low rounded h-6 border border-border/40 overflow-hidden">
           <button
@@ -3176,7 +3176,7 @@ function CartItem({
                   mode: line.discount.mode === "amount" ? "percent" : "amount",
                 })
               }
-              className="px-1.5 flex items-center justify-center text-[10px] border-l border-primary/50 font-bold bg-primary-fixed text-primary"
+              className="px-2 flex items-center justify-center text-[10px] border-l border-primary/50 font-bold bg-primary-fixed text-primary"
             >
               {line.discount.mode === "percent" ? "%" : "đ"}
             </button>
@@ -3187,7 +3187,7 @@ function CartItem({
           <button
             type="button"
             onClick={() => setEditingDiscount(true)}
-            className="text-[10px] font-bold tabular-nums text-status-warning bg-status-warning/15 hover:bg-status-warning/25 px-1.5 py-0.5 rounded transition-colors"
+            className="text-[10px] font-bold tabular-nums text-status-warning bg-status-warning/15 hover:bg-status-warning/25 px-2 py-0.5 rounded transition-colors"
             title="Bấm để sửa giảm giá dòng"
           >
             −
@@ -3328,7 +3328,7 @@ function OrderDiscountInput({
         <button
           type="button"
           onClick={handleToggleMode}
-          className="px-2.5 flex items-center justify-center text-xs border-l border-border font-bold transition-colors bg-primary-fixed text-primary hover:bg-primary/15"
+          className="px-3 flex items-center justify-center text-xs border-l border-border font-bold transition-colors bg-primary-fixed text-primary hover:bg-primary/15"
           title="Đổi chế độ % hoặc ₫"
         >
           {value.mode === "percent" ? "%" : "đ"}
@@ -3393,7 +3393,7 @@ function SellingModeTab({
       type="button"
       onClick={onClick}
       className={cn(
-        "relative inline-flex items-center gap-1.5 px-4 text-[11px] transition-colors",
+        "relative inline-flex items-center gap-2 px-4 text-[11px] transition-colors",
         active
           ? "text-primary font-bold"
           : "text-on-surface-variant font-semibold hover:text-foreground"
@@ -3421,12 +3421,12 @@ function DeliveryForm({
     onChange({ ...value, [field]: val });
 
   return (
-    <div className="border-b border-border bg-status-warning/10 px-3 py-2 space-y-1.5">
-      <div className="flex items-center gap-1.5 text-[11px] font-semibold text-status-warning">
+    <div className="border-b border-border bg-status-warning/10 px-3 py-2 space-y-2">
+      <div className="flex items-center gap-2 text-[11px] font-semibold text-status-warning">
         <Icon name="local_shipping" size={12} />
         Thông tin giao hàng
       </div>
-      <div className="grid grid-cols-2 gap-1.5">
+      <div className="grid grid-cols-2 gap-2">
         <div className="relative">
           <input
             type="text"
@@ -3461,7 +3461,7 @@ function DeliveryForm({
         />
         <Icon name="location_on" size={12} className="absolute left-2 top-1/2 -translate-y-1/2 text-muted-foreground" />
       </div>
-      <div className="grid grid-cols-2 gap-1.5">
+      <div className="grid grid-cols-2 gap-2">
         <input
           type="text"
           value={value.district}
@@ -3609,7 +3609,7 @@ function DraftListModal({
               {drafts.map((draft) => (
                 <div
                   key={draft.id}
-                  className="flex items-center gap-3 px-4 py-2.5 hover:bg-primary-fixed/50 transition-colors group"
+                  className="flex items-center gap-3 px-4 py-3 hover:bg-primary-fixed/50 transition-colors group"
                 >
                   {/* Draft info */}
                   <div className="flex-1 min-w-0 cursor-pointer" onClick={() => handleLoad(draft.id)}>
