@@ -39,7 +39,7 @@ export function AppSwitcher() {
         className="hidden md:inline-flex items-center justify-center h-10 w-10 rounded-full text-muted-foreground hover:text-primary hover:bg-surface-container-low transition-colors cursor-pointer outline-none focus-visible:ring-2 focus-visible:ring-primary/30 press-scale-sm"
         title="Ứng dụng"
       >
-        <Icon name="apps" size={22} />
+        <Icon name="apps" size={20} />
       </DropdownMenuTrigger>
       <DropdownMenuContent
         align="start"
@@ -56,7 +56,7 @@ export function AppSwitcher() {
               <span className="h-11 w-11 rounded-2xl bg-primary-fixed flex items-center justify-center group-hover:bg-primary-fixed-dim group-hover:scale-[1.04] transition-all">
                 <Icon
                   name={app.iconName}
-                  size={22}
+                  size={20}
                   className="text-primary"
                   fill={false}
                 />

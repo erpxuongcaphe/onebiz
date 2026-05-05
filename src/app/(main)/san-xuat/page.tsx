@@ -127,7 +127,7 @@ function ActiveOrderRow({ order }: { order: ActiveProductionOrder }) {
         </div>
         {order.isOverdue && (
           <span className="inline-flex items-center gap-0.5 text-[10px] font-semibold px-2 py-0.5 rounded-full bg-status-error/10 text-status-error shrink-0">
-            <Icon name="schedule" size={10} />
+            <Icon name="schedule" size={14} />
             Quá hạn
           </span>
         )}

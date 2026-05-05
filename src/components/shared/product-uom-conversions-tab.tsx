@@ -207,7 +207,7 @@ export function ProductUomConversionsTab({ product }: Props) {
                 disabled={saving}
                 className="flex-1"
               >
-                {saving ? <Icon name="progress_activity" size={12} className="animate-spin" /> : "Lưu"}
+                {saving ? <Icon name="progress_activity" size={14} className="animate-spin" /> : "Lưu"}
               </Button>
               <Button size="sm" variant="ghost" onClick={resetForm}>
                 Hủy

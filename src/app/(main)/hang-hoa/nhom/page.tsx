@@ -111,7 +111,7 @@ function CategoryProductsPanel({ categoryId }: { categoryId: string }) {
           className="text-primary hover:underline inline-flex items-center gap-1"
         >
           Xem trong Hàng hoá
-          <Icon name="arrow_outward" size={12} />
+          <Icon name="arrow_outward" size={14} />
         </a>
       </div>
       <div className="rounded-lg border bg-background overflow-hidden">

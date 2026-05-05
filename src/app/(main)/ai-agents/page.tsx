@@ -132,7 +132,7 @@ function AgentCard({
           }`}
         >
           <div className="text-muted-foreground flex items-center gap-1">
-            <Icon name="task_alt" size={12} />
+            <Icon name="task_alt" size={14} />
             Task đang làm
           </div>
           <div className="font-semibold mt-0.5 flex items-baseline gap-1">
@@ -161,7 +161,7 @@ function AgentCard({
           }`}
         >
           <div className="text-muted-foreground flex items-center gap-1">
-            <Icon name="trending_up" size={12} />
+            <Icon name="trending_up" size={14} />
             KPI tiến độ
           </div>
           <div className="font-semibold mt-0.5">
@@ -174,7 +174,7 @@ function AgentCard({
 
       <div className="flex items-center justify-between text-xs text-muted-foreground">
         <span>
-          <Icon name="history" size={11} className="inline-block mr-0.5" />
+          <Icon name="history" size={14} className="inline-block mr-0.5" />
           {formatRelative(agent.lastRunAt)}
         </span>
         <span
@@ -184,7 +184,7 @@ function AgentCard({
         >
           <Icon
             name={webhookConfigured ? "check_circle" : "warning"}
-            size={11}
+            size={14}
             className="inline-block mr-0.5"
           />
           {webhookConfigured ? "Webhook OK" : "Chưa có webhook"}
@@ -539,7 +539,7 @@ export default function AiAgentsPage() {
               <div className="flex items-center gap-2 mb-3">
                 <Icon
                   name="crisis_alert"
-                  size={18}
+                  size={16}
                   className="text-status-error"
                 />
                 <h3 className="font-semibold text-status-error">
@@ -563,7 +563,7 @@ export default function AiAgentsPage() {
                       >
                         <Icon
                           name={TASK_URGENCY_ICON[u]}
-                          size={10}
+                          size={14}
                           className="inline-block mr-0.5"
                         />
                         {TASK_URGENCY_LABELS[u]}

@@ -133,9 +133,9 @@ export default function LoSanXuatPage() {
       cell: ({ row }) => (
         <div className="flex items-center gap-1">
           {row.original.sourceType === "production" ? (
-            <Icon name="factory" size={12} className="text-primary" />
+            <Icon name="factory" size={14} className="text-primary" />
           ) : (
-            <Icon name="shopping_cart" size={12} className="text-status-success" />
+            <Icon name="shopping_cart" size={14} className="text-status-success" />
           )}
           <span className="text-xs">
             {row.original.sourceType === "production" ? "Sản xuất" : "Mua hàng"}
@@ -187,7 +187,7 @@ export default function LoSanXuatPage() {
             {(isExpired || isNearExpiry) && (
               <Icon
                 name="warning"
-                size={12}
+                size={14}
                 className={isExpired ? "text-status-error" : "text-status-warning"}
               />
             )}

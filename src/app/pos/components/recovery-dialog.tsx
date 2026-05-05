@@ -163,12 +163,12 @@ function DraftCard({
       <div className="flex items-center gap-3 text-[11px] text-muted-foreground mb-1">
         {draft.createdByName && (
           <span className="flex items-center gap-1">
-            <Icon name="badge" size={11} />
+            <Icon name="badge" size={14} />
             {draft.createdByName}
           </span>
         )}
         <span className="flex items-center gap-1">
-          <Icon name="person" size={11} />
+          <Icon name="person" size={14} />
           {draft.customerName}
         </span>
       </div>
@@ -194,7 +194,7 @@ function DraftCard({
         </span>
         <span className="text-[11px] font-semibold text-primary inline-flex items-center gap-0.5">
           Tiếp tục
-          <Icon name="arrow_forward" size={12} />
+          <Icon name="arrow_forward" size={14} />
         </span>
       </div>
     </div>

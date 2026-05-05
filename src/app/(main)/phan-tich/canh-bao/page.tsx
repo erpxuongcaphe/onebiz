@@ -276,7 +276,7 @@ export default function CanhBaoPage() {
                                 severityCfg.badgeBg
                               )}
                             >
-                              <Icon name={severityCfg.icon} size={10} className="mr-0.5" />
+                              <Icon name={severityCfg.icon} size={14} className="mr-0.5" />
                               {severityCfg.label}
                             </Badge>
                           </CardTitle>

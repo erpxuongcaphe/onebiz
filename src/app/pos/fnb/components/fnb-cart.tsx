@@ -115,7 +115,7 @@ export function FnbCart({
                 className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full bg-status-info/10 text-status-info text-[10px] font-semibold shrink-0"
                 title="Đơn đã được gửi xuống bếp. Thêm món sẽ gửi bổ sung."
               >
-                <Icon name="ramen_dining" size={11} />
+                <Icon name="ramen_dining" size={14} />
                 Đã gửi bếp
               </span>
             )}
@@ -337,7 +337,7 @@ export function FnbCart({
                 : "bg-surface-container-high text-on-surface hover:bg-surface-container disabled:opacity-40 disabled:pointer-events-none"
             )}
           >
-            <Icon name={activeTab?.kitchenOrderId ? "add_circle" : "notifications_active"} size={18} />
+            <Icon name={activeTab?.kitchenOrderId ? "add_circle" : "notifications_active"} size={16} />
             <span className="text-xs leading-none">
               {activeTab?.kitchenOrderId ? "Gửi thêm (F10)" : "Bếp (F10)"}
             </span>
@@ -351,7 +351,7 @@ export function FnbCart({
               "bg-primary text-on-primary hover:bg-primary-hover disabled:opacity-40 disabled:pointer-events-none"
             )}
           >
-            <Icon name="payments" size={18} />
+            <Icon name="payments" size={16} />
             <span className="text-xs leading-none">Thanh toán (F9)</span>
           </button>
         </div>

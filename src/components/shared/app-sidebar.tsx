@@ -70,7 +70,7 @@ function LeafLink({
       {leaf.icon && (
         <Icon
           name={leaf.icon}
-          size={18}
+          size={16}
           fill={active}
           weight={active ? 500 : 400}
           className={cn("shrink-0", active ? "text-primary" : "text-foreground/70")}
@@ -184,7 +184,7 @@ function SubGroupSection({
     return (
       <div className="mt-1">
         <div className="flex items-center gap-2 px-3 pt-2 pb-1 text-[10px] font-semibold text-muted-foreground uppercase tracking-wider">
-          {subGroup.icon && <Icon name={subGroup.icon} size={12} />}
+          {subGroup.icon && <Icon name={subGroup.icon} size={14} />}
           {subGroup.label}
         </div>
         <div className="space-y-0.5">
@@ -374,7 +374,7 @@ function GroupCollapsed({
             : "text-foreground/80 hover:bg-surface-container-low hover:text-foreground"
         )}
       >
-        <Icon name={group.icon} size={22} fill={active} weight={active ? 500 : 400} />
+        <Icon name={group.icon} size={20} fill={active} weight={active ? 500 : 400} />
       </button>
 
       {open && pos && (

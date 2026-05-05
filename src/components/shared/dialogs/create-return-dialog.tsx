@@ -415,7 +415,7 @@ export function CreateReturnDialog({
                           : "border-transparent bg-surface-container hover:bg-surface-container-high"
                       }`}
                     >
-                      <Icon name={opt.icon} size={18} />
+                      <Icon name={opt.icon} size={16} />
                       <span className="leading-tight text-center">{opt.label}</span>
                     </button>
                   ))}

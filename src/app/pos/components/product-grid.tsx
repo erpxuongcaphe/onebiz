@@ -293,7 +293,7 @@ function ProductTile({
             loading="lazy"
           />
         ) : (
-          <Icon name="inventory_2" size={18} className="text-muted-foreground/40" />
+          <Icon name="inventory_2" size={16} className="text-muted-foreground/40" />
         )}
       </div>
 

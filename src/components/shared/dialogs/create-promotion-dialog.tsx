@@ -470,7 +470,7 @@ export function CreatePromotionDialog({
                                 : "border-border",
                             )}
                           >
-                            {checked && <Icon name="check" size={12} />}
+                            {checked && <Icon name="check" size={14} />}
                           </span>
                           <span className="flex-1 truncate">
                             {p.code && (
@@ -652,7 +652,7 @@ export function CreatePromotionDialog({
                             : "border-border"
                         )}
                       >
-                        {checked && <Icon name="check" size={12} />}
+                        {checked && <Icon name="check" size={14} />}
                       </span>
                       <span className="truncate">
                         {b.code && (

@@ -272,7 +272,7 @@ export function ActiveFiltersBar({ filters, onClearAll }: ActiveFiltersBarProps)
             <span className="truncate max-w-[100px]">{f.value}</span>
             <Icon
               name="close"
-              size={12}
+              size={14}
               className="shrink-0 text-primary/60 group-hover:text-destructive"
             />
           </button>

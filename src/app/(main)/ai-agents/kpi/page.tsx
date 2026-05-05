@@ -154,7 +154,7 @@ function KpiNode({
             disabled={busy}
             onClick={() => onAutoBreakdown(node)}
           >
-            <Icon name="auto_awesome" size={12} />
+            <Icon name="auto_awesome" size={14} />
             <span className="ml-1">Tự động chia nhỏ</span>
           </Button>
           <Button
@@ -163,7 +163,7 @@ function KpiNode({
             disabled={busy}
             onClick={() => onBreakdown(node)}
           >
-            <Icon name="account_tree" size={12} />
+            <Icon name="account_tree" size={14} />
             <span className="ml-1">Tạo KPI con</span>
           </Button>
           <Button
@@ -172,7 +172,7 @@ function KpiNode({
             disabled={busy}
             onClick={() => onUpdateActual(node)}
           >
-            <Icon name="edit" size={12} />
+            <Icon name="edit" size={14} />
             <span className="ml-1">Cập nhật thực tế</span>
           </Button>
           <Button
@@ -181,7 +181,7 @@ function KpiNode({
             disabled={busy}
             onClick={() => onCreateTask(node)}
           >
-            <Icon name="add_task" size={12} />
+            <Icon name="add_task" size={14} />
             <span className="ml-1">Tạo task</span>
           </Button>
           <Button
@@ -191,7 +191,7 @@ function KpiNode({
             onClick={() => onDelete(node)}
             className="ml-auto text-status-error hover:text-status-error"
           >
-            <Icon name="delete" size={12} />
+            <Icon name="delete" size={14} />
             <span className="ml-1">Xoá</span>
           </Button>
         </div>

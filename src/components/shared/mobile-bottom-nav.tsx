@@ -113,7 +113,7 @@ export function MobileBottomNav() {
                     href={tab.href}
                     className="absolute -top-5 press-scale flex flex-col items-center justify-center h-14 w-14 rounded-full bg-primary text-primary-foreground ambient-shadow-lg"
                   >
-                    <Icon name={tab.icon} size={22} fill />
+                    <Icon name={tab.icon} size={24} fill />
                     <span className="text-[9px] font-semibold leading-tight mt-0.5">
                       Bán
                     </span>
@@ -133,7 +133,7 @@ export function MobileBottomNav() {
                     : "text-muted-foreground hover:text-foreground"
                 )}
               >
-                <Icon name={tab.icon} size={22} fill={active} weight={active ? 500 : 400} />
+                <Icon name={tab.icon} size={20} fill={active} weight={active ? 500 : 400} />
                 <span className="text-[11px] font-medium">{tab.label}</span>
               </Link>
             );
@@ -142,7 +142,7 @@ export function MobileBottomNav() {
           {/* More */}
           <Sheet open={moreOpen} onOpenChange={setMoreOpen}>
             <SheetTrigger className="flex flex-col press-scale-sm items-center justify-center flex-1 gap-0.5 text-muted-foreground hover:text-foreground">
-              <Icon name="more_horiz" size={22} />
+              <Icon name="more_horiz" size={20} />
               <span className="text-[11px] font-medium">Thêm</span>
             </SheetTrigger>
             <SheetContent side="bottom" className="h-[70vh] p-0 rounded-t-2xl">
@@ -168,7 +168,7 @@ export function MobileBottomNav() {
                                 : "bg-surface-container-lowest hover:bg-surface-container-low border-border/50"
                             )}
                           >
-                            <Icon name={item.icon} size={22} fill={active} />
+                            <Icon name={item.icon} size={20} fill={active} />
                             <span className="text-[11px] font-medium text-center leading-tight">
                               {item.label}
                             </span>

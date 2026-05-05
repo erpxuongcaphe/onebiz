@@ -131,7 +131,7 @@ export function ImportDataDialog({ open, onOpenChange }: ImportDataDialogProps) 
             >
               <div className="flex items-start gap-3 mb-2">
                 <div className="h-9 w-9 rounded-md bg-primary-fixed text-primary flex items-center justify-center shrink-0">
-                  <Icon name={m.icon} size={18} />
+                  <Icon name={m.icon} size={16} />
                 </div>
                 <div className="flex-1 min-w-0">
                   <p className="font-semibold text-sm leading-tight">

@@ -292,7 +292,7 @@ export default function TongQuanPage() {
                   {kpi.label}
                 </span>
                 <div className="flex size-9 shrink-0 items-center justify-center rounded-lg bg-primary-fixed">
-                  <Icon name={kpi.icon} size={18} className="text-primary" />
+                  <Icon name={kpi.icon} size={16} className="text-primary" />
                 </div>
               </div>
               <p className="font-heading text-2xl lg:text-3xl font-extrabold tracking-tight text-foreground leading-tight">
@@ -316,7 +316,7 @@ export default function TongQuanPage() {
                 Vòng quay kho
               </span>
               <div className="flex size-9 shrink-0 items-center justify-center rounded-lg bg-primary-fixed">
-                <Icon name="autorenew" size={18} className="text-primary" />
+                <Icon name="autorenew" size={16} className="text-primary" />
               </div>
             </div>
             <p className="font-heading text-2xl lg:text-3xl font-extrabold tracking-tight text-foreground leading-tight">
@@ -476,7 +476,7 @@ export default function TongQuanPage() {
             <div className="flex items-center justify-between">
               <CardTitle className="text-sm">Hoạt động gần đây</CardTitle>
               <Link href="/phan-tich" className="text-xs text-primary hover:underline flex items-center gap-0.5">
-                <Icon name="analytics" size={12} /> Phân tích
+                <Icon name="analytics" size={14} /> Phân tích
               </Link>
             </div>
           </CardHeader>

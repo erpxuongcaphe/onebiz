@@ -363,11 +363,11 @@ export function DataTable<TData, TValue>({
                       {header.column.getCanSort() && (
                         <span className="text-muted-foreground/50">
                           {header.column.getIsSorted() === "asc" ? (
-                            <Icon name="arrow_upward" size={12} />
+                            <Icon name="arrow_upward" size={14} />
                           ) : header.column.getIsSorted() === "desc" ? (
-                            <Icon name="arrow_downward" size={12} />
+                            <Icon name="arrow_downward" size={14} />
                           ) : (
-                            <Icon name="unfold_more" size={12} />
+                            <Icon name="unfold_more" size={14} />
                           )}
                         </span>
                       )}

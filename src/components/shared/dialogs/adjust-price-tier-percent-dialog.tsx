@@ -325,7 +325,7 @@ export function AdjustPriceTierPercentDialog({
                 {loadingProducts && (
                   <Icon
                     name="progress_activity"
-                    size={12}
+                    size={14}
                     className="animate-spin text-muted-foreground"
                   />
                 )}

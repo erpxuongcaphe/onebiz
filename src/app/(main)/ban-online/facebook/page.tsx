@@ -401,7 +401,7 @@ export default function FacebookPage() {
                         size="sm"
                         className="w-full mt-2 h-7 text-xs gap-1"
                       >
-                        <Icon name="add" size={12} />
+                        <Icon name="add" size={14} />
                         Thêm vào đơn
                       </Button>
                     </div>

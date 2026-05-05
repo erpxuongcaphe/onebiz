@@ -110,7 +110,7 @@ export function ModuleSidebarLayout({
                               : "text-muted-foreground hover:bg-surface-container hover:text-foreground"
                           )}
                         >
-                          <Icon name={item.icon} size={18} fill={active} weight={active ? 500 : 400} className="shrink-0" />
+                          <Icon name={item.icon} size={16} fill={active} weight={active ? 500 : 400} className="shrink-0" />
                           <span className="truncate">{item.label}</span>
                         </Link>
                       );

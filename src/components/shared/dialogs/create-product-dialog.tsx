@@ -614,7 +614,7 @@ export function CreateProductDialog({
                 />
                 {purchaseUnitDup && (
                   <p className="text-xs text-status-warning flex items-center gap-1">
-                    <Icon name="warning" size={12} />
+                    <Icon name="warning" size={14} />
                     Đã có{" "}
                     <button
                       type="button"
@@ -639,7 +639,7 @@ export function CreateProductDialog({
                 />
                 {stockUnitDup && (
                   <p className="text-xs text-status-warning flex items-center gap-1">
-                    <Icon name="warning" size={12} />
+                    <Icon name="warning" size={14} />
                     Đã có{" "}
                     <button
                       type="button"
@@ -662,7 +662,7 @@ export function CreateProductDialog({
                 />
                 {sellUnitDup && scope === "sku" && (
                   <p className="text-xs text-status-warning flex items-center gap-1">
-                    <Icon name="warning" size={12} />
+                    <Icon name="warning" size={14} />
                     Đã có{" "}
                     <button
                       type="button"

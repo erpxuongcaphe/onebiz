@@ -110,7 +110,7 @@ export function FnbOrderHistoryDialog({
       <DialogContent className="max-w-2xl">
         <DialogHeader>
           <DialogTitle className="flex items-center gap-2">
-            <Icon name="receipt_long" size={18} />
+            <Icon name="receipt_long" size={16} />
             Lịch sử đơn F&B (24h gần nhất)
           </DialogTitle>
           <DialogDescription>

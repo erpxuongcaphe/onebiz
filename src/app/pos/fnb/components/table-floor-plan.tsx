@@ -199,7 +199,7 @@ function TableCard({
       {/* Timer for occupied tables */}
       {elapsed && (
         <span className="flex items-center gap-0.5 text-[10px] text-status-error font-medium mt-1">
-          <Icon name="schedule" size={10} />
+          <Icon name="schedule" size={14} />
           {elapsed}
         </span>
       )}
@@ -207,14 +207,14 @@ function TableCard({
       {/* Cleaning indicator */}
       {table.status === "cleaning" && (
         <span className="flex items-center gap-0.5 text-[10px] text-muted-foreground mt-1">
-          <Icon name="auto_awesome" size={10} />
+          <Icon name="auto_awesome" size={14} />
           Dọn
         </span>
       )}
 
       {/* Capacity */}
       <span className="flex items-center gap-0.5 text-[9px] text-muted-foreground mt-0.5">
-        <Icon name="group" size={10} />
+        <Icon name="group" size={14} />
         {table.capacity}
       </span>
     </button>

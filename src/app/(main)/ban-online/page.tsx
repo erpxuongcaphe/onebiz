@@ -204,7 +204,7 @@ export default function BanOnlinePage() {
                     </div>
                     {kpi.change && (
                       <span className="flex items-center gap-0.5 text-xs font-medium text-status-success">
-                        <Icon name="north_east" size={12} />
+                        <Icon name="north_east" size={14} />
                         {kpi.change}
                       </span>
                     )}

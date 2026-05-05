@@ -78,7 +78,7 @@ export function AuditHistoryTab({
           <span
             className={`absolute -left-[28px] top-0.5 flex items-center justify-center w-5 h-5 rounded-full text-[11px] ${actionColor(e.action)}`}
           >
-            <Icon name={actionIcon(e.action)} size={12} />
+            <Icon name={actionIcon(e.action)} size={14} />
           </span>
           <div className="flex flex-wrap items-baseline gap-x-2 gap-y-0.5">
             <span className="text-sm font-medium text-foreground">

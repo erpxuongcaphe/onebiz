@@ -132,7 +132,7 @@ export function ShiftInvoiceDrawer({
       <SheetContent side="right" className="w-full sm:max-w-md p-0 flex flex-col">
         <SheetHeader className="px-4 py-3 border-b">
           <SheetTitle className="flex items-center gap-2 text-base">
-            <Icon name="receipt_long" size={18} className="text-primary" />
+            <Icon name="receipt_long" size={16} className="text-primary" />
             Đơn ca này
           </SheetTitle>
           {/* KPI ca: tổng đơn + doanh số */}
@@ -211,7 +211,7 @@ export function ShiftInvoiceDrawer({
         <div className="px-4 py-2 border-t bg-surface-container-lowest text-[11px] text-muted-foreground">
           {invoices.length === 50 && (
             <div className={cn("inline-flex items-center gap-1")}>
-              <Icon name="info" size={12} />
+              <Icon name="info" size={14} />
               Hiện 50 đơn gần nhất ca này.
             </div>
           )}

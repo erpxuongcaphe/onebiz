@@ -1703,7 +1703,7 @@ function PosPageInner() {
               className="hidden md:flex items-center gap-1 shrink-0 px-2 py-0.5 rounded-md bg-white/10 hover:bg-white/20 text-white text-[11px] font-medium border border-white/20 transition-colors"
               title={`KH có ${state.customer.loyaltyPoints} điểm`}
             >
-              <Icon name="star" size={12} />
+              <Icon name="star" size={14} />
               <span>Dùng điểm ({state.customer.loyaltyPoints})</span>
             </button>
           )}
@@ -1736,7 +1736,7 @@ function PosPageInner() {
                 }}
                 className="absolute right-8 top-1/2 -translate-y-1/2 p-0.5 rounded hover:bg-white/20"
               >
-                <Icon name="close" size={12} className="text-white/60" />
+                <Icon name="close" size={14} className="text-white/60" />
               </button>
             )}
             <kbd className="absolute right-2 top-1/2 -translate-y-1/2 font-mono text-[9px] bg-white/10 border border-white/20 rounded px-1 py-0.5 text-white/60">
@@ -1757,7 +1757,7 @@ function PosPageInner() {
           )}
           title={currentShift ? "Ca đang mở — click để đóng ca" : "Click để mở ca"}
         >
-          <Icon name={currentShift ? "schedule" : "play_circle"} size={12} />
+          <Icon name={currentShift ? "schedule" : "play_circle"} size={14} />
           <span className="hidden sm:inline">{currentShift ? "Đang mở ca" : "Mở ca"}</span>
         </button>
 
@@ -1767,7 +1767,7 @@ function PosPageInner() {
           onClick={() => setDraftModalOpen(true)}
           className="inline-flex items-center gap-1 px-2 py-1 rounded text-white/70 hover:bg-white/10 hover:text-white transition-colors shrink-0 text-[11px]"
         >
-          <Icon name="save" size={12} />
+          <Icon name="save" size={14} />
           <span className="hidden sm:inline">Nháp</span>
           <kbd className="hidden sm:inline font-mono text-[8px] bg-white/10 border border-white/20 rounded px-0.5 text-white/50">F3</kbd>
         </button>
@@ -1990,7 +1990,7 @@ function PosPageInner() {
                         }}
                         className="ml-0.5 p-0.5 rounded opacity-0 group-hover:opacity-100 hover:bg-status-error/10 hover:text-status-error text-muted-foreground transition-all"
                       >
-                        <Icon name="close" size={10} />
+                        <Icon name="close" size={14} />
                       </span>
                     )}
                   </button>
@@ -2011,7 +2011,7 @@ function PosPageInner() {
           {/* ── Draft indicator (when loaded from F3) ── */}
           {state.loadedDraftId && (
             <div className="flex items-center gap-2 px-3 py-1 bg-status-warning/10 border-b border-status-warning/25 text-[11px]">
-              <Icon name="save" size={12} className="text-status-warning" />
+              <Icon name="save" size={14} className="text-status-warning" />
               <span className="text-status-warning font-medium">Đang sửa nháp</span>
               <button
                 type="button"
@@ -2056,7 +2056,7 @@ function PosPageInner() {
                 className="shrink-0 inline-flex items-center gap-1 px-2 py-0.5 rounded text-[10px] text-muted-foreground hover:text-status-error hover:bg-status-error/10 transition-colors"
                 title="Xoá tất cả (cần xác nhận)"
               >
-                <Icon name="delete" size={12} />
+                <Icon name="delete" size={14} />
                 Xoá hết
               </button>
             </div>
@@ -2135,7 +2135,7 @@ function PosPageInner() {
               <div className="flex items-center gap-3 mt-1 px-1 text-[10px] text-muted-foreground flex-wrap">
                 {state.customer.phone && (
                   <span className="flex items-center gap-0.5">
-                    <Icon name="call" size={10} />
+                    <Icon name="call" size={14} />
                     {state.customer.phone}
                   </span>
                 )}
@@ -2149,7 +2149,7 @@ function PosPageInner() {
                 )}
                 {(state.customer.groupDiscountPercent ?? 0) > 0 && (
                   <span className="flex items-center gap-0.5 px-2 py-0.5 rounded-full bg-status-success/10 text-status-success font-semibold">
-                    <Icon name="loyalty" size={10} />
+                    <Icon name="loyalty" size={14} />
                     {state.customer.groupName ?? "Nhóm"} −{state.customer.groupDiscountPercent}%
                   </span>
                 )}
@@ -2228,7 +2228,7 @@ function PosPageInner() {
                   {settings.sales.supervisorPin && (
                     <Icon
                       name="lock"
-                      size={10}
+                      size={14}
                       className="inline ml-1 text-status-warning align-text-top"
                       title="Giảm giá vượt ngưỡng cần PIN quản lý"
                     />
@@ -2248,7 +2248,7 @@ function PosPageInner() {
                 <span className="text-xs text-muted-foreground shrink-0">Mã KM</span>
                 {couponApplied ? (
                   <div className="inline-flex items-center gap-1 px-2 py-0.5 rounded bg-status-success/10 text-status-success text-[11px] font-bold">
-                    <Icon name="check_circle" size={12} />
+                    <Icon name="check_circle" size={14} />
                     {couponApplied}
                     <button
                       type="button"
@@ -2256,7 +2256,7 @@ function PosPageInner() {
                       className="ml-1 hover:text-status-error"
                       title="Huỷ mã"
                     >
-                      <Icon name="close" size={12} />
+                      <Icon name="close" size={14} />
                     </button>
                   </div>
                 ) : (
@@ -2356,9 +2356,9 @@ function PosPageInner() {
                     Chi tiết thanh toán
                   </label>
                   {([
-                    { method: "cash" as const, label: "Tiền mặt", icon: <Icon name="payments" size={12} className="text-status-success" /> },
-                    { method: "transfer" as const, label: "Chuyển khoản", icon: <Icon name="apartment" size={12} className="text-primary" /> },
-                    { method: "card" as const, label: "Thẻ", icon: <Icon name="credit_card" size={12} className="text-status-info" /> },
+                    { method: "cash" as const, label: "Tiền mặt", icon: <Icon name="payments" size={14} className="text-status-success" /> },
+                    { method: "transfer" as const, label: "Chuyển khoản", icon: <Icon name="apartment" size={14} className="text-primary" /> },
+                    { method: "card" as const, label: "Thẻ", icon: <Icon name="credit_card" size={14} className="text-status-info" /> },
                   ]).map((pm) => {
                     const item = state.paymentBreakdown.find((b) => b.method === pm.method);
                     return (
@@ -2630,19 +2630,19 @@ function PosPageInner() {
       {/* ═══════════ SELLING MODE TABS (bottom bar) ═══════════ */}
       <div className="h-8 bg-white border-t border-border flex items-stretch px-3 gap-0 shrink-0">
         <SellingModeTab
-          icon={<Icon name="bolt" size={12} />}
+          icon={<Icon name="bolt" size={14} />}
           label="Bán nhanh"
           active={state.sellingMode === "fast"}
           onClick={() => state.setSellingMode("fast")}
         />
         <SellingModeTab
-          icon={<Icon name="schedule" size={12} />}
+          icon={<Icon name="schedule" size={14} />}
           label="Bán thường"
           active={state.sellingMode === "normal"}
           onClick={() => state.setSellingMode("normal")}
         />
         <SellingModeTab
-          icon={<Icon name="local_shipping" size={12} />}
+          icon={<Icon name="local_shipping" size={14} />}
           label="Bán giao hàng"
           active={state.sellingMode === "delivery"}
           onClick={() => state.setSellingMode("delivery")}
@@ -3082,7 +3082,7 @@ function CartItem({
           className="shrink-0 -mt-0.5 p-0.5 rounded text-muted-foreground hover:text-status-error hover:bg-status-error/10 opacity-0 group-hover:opacity-100 transition-all"
           title="Xoá"
         >
-          <Icon name="close" size={13} />
+          <Icon name="close" size={14} />
         </button>
       </div>
 
@@ -3095,7 +3095,7 @@ function CartItem({
             onClick={() => onQtyChange(Math.max(1, line.quantity - 1))}
             className="w-5 h-6 flex items-center justify-center text-muted-foreground hover:text-foreground hover:bg-muted active:bg-muted/80 transition-colors"
           >
-            <Icon name="remove" size={11} />
+            <Icon name="remove" size={14} />
           </button>
           <input
             type="number"
@@ -3110,7 +3110,7 @@ function CartItem({
             onClick={() => onQtyChange(line.quantity + 1)}
             className="w-5 h-6 flex items-center justify-center text-muted-foreground hover:text-foreground hover:bg-muted active:bg-muted/80 transition-colors"
           >
-            <Icon name="add" size={11} />
+            <Icon name="add" size={14} />
           </button>
         </div>
 
@@ -3423,7 +3423,7 @@ function DeliveryForm({
   return (
     <div className="border-b border-border bg-status-warning/10 px-3 py-2 space-y-2">
       <div className="flex items-center gap-2 text-[11px] font-semibold text-status-warning">
-        <Icon name="local_shipping" size={12} />
+        <Icon name="local_shipping" size={14} />
         Thông tin giao hàng
       </div>
       <div className="grid grid-cols-2 gap-2">
@@ -3436,7 +3436,7 @@ function DeliveryForm({
             data-allow-hotkeys="true"
             className="w-full h-7 px-2 pl-7 rounded border border-border text-[11px] outline-none focus:border-primary bg-white"
           />
-          <Icon name="person" size={12} className="absolute left-2 top-1/2 -translate-y-1/2 text-muted-foreground" />
+          <Icon name="person" size={14} className="absolute left-2 top-1/2 -translate-y-1/2 text-muted-foreground" />
         </div>
         <div className="relative">
           <input
@@ -3447,7 +3447,7 @@ function DeliveryForm({
             data-allow-hotkeys="true"
             className="w-full h-7 px-2 pl-7 rounded border border-border text-[11px] outline-none focus:border-primary bg-white"
           />
-          <Icon name="call" size={12} className="absolute left-2 top-1/2 -translate-y-1/2 text-muted-foreground" />
+          <Icon name="call" size={14} className="absolute left-2 top-1/2 -translate-y-1/2 text-muted-foreground" />
         </div>
       </div>
       <div className="relative">
@@ -3459,7 +3459,7 @@ function DeliveryForm({
           data-allow-hotkeys="true"
           className="w-full h-7 px-2 pl-7 rounded border border-border text-[11px] outline-none focus:border-primary bg-white"
         />
-        <Icon name="location_on" size={12} className="absolute left-2 top-1/2 -translate-y-1/2 text-muted-foreground" />
+        <Icon name="location_on" size={14} className="absolute left-2 top-1/2 -translate-y-1/2 text-muted-foreground" />
       </div>
       <div className="grid grid-cols-2 gap-2">
         <input
@@ -3660,9 +3660,9 @@ function DraftListModal({
                       title="Xóa nháp"
                     >
                       {deleting === draft.id ? (
-                        <Icon name="progress_activity" size={12} className="animate-spin" />
+                        <Icon name="progress_activity" size={14} className="animate-spin" />
                       ) : (
-                        <Icon name="delete" size={12} />
+                        <Icon name="delete" size={14} />
                       )}
                     </button>
                   </div>

@@ -96,7 +96,7 @@ function TaskRow({
               >
                 <Icon
                   name={TASK_URGENCY_ICON[urg]}
-                  size={10}
+                  size={14}
                   className="inline-block mr-0.5"
                 />
                 {TASK_URGENCY_LABELS[urg]}
@@ -107,7 +107,7 @@ function TaskRow({
             >
               <Icon
                 name={STATUS_ICONS[task.status]}
-                size={10}
+                size={14}
                 className="inline-block mr-0.5"
               />
               {AGENT_TASK_STATUS_LABELS[task.status]}
@@ -123,14 +123,14 @@ function TaskRow({
           )}
           <div className="text-xs text-muted-foreground mt-1 flex flex-wrap gap-x-3 gap-y-1">
             <span>
-              <Icon name="event" size={12} className="inline-block mr-0.5" />
+              <Icon name="event" size={14} className="inline-block mr-0.5" />
               {formatDate(task.taskDate)}
             </span>
             {task.dueTime && (
               <span>
                 <Icon
                   name="schedule"
-                  size={12}
+                  size={14}
                   className="inline-block mr-0.5"
                 />
                 {task.dueTime}
@@ -140,7 +140,7 @@ function TaskRow({
               <span>
                 <Icon
                   name="person"
-                  size={12}
+                  size={14}
                   className="inline-block mr-0.5"
                 />
                 {task.assignedToRole}
@@ -148,7 +148,7 @@ function TaskRow({
             )}
             {task.targetMetric && (
               <span>
-                <Icon name="flag" size={12} className="inline-block mr-0.5" />
+                <Icon name="flag" size={14} className="inline-block mr-0.5" />
                 {task.targetMetric}
               </span>
             )}

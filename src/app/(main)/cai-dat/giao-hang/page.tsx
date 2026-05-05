@@ -63,7 +63,7 @@ export default function DeliverySettingsPage() {
       <Card>
         <CardHeader>
           <CardTitle className="flex items-center gap-2">
-            <Icon name="local_shipping" size={18} className="text-primary" />
+            <Icon name="local_shipping" size={16} className="text-primary" />
             Đối tác giao hàng ({partners.length})
           </CardTitle>
         </CardHeader>
@@ -130,7 +130,7 @@ export default function DeliverySettingsPage() {
       <Card>
         <CardHeader>
           <CardTitle className="flex items-center gap-2">
-            <Icon name="map" size={18} className="text-status-warning" />
+            <Icon name="map" size={16} className="text-status-warning" />
             Phí giao hàng theo khu vực
           </CardTitle>
         </CardHeader>

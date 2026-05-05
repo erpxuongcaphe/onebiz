@@ -175,7 +175,7 @@ function GlobalSearchBar() {
         "focus:outline-none focus:ring-2 focus:ring-primary/30"
       )}
     >
-      <Icon name="search" size={18} className="shrink-0 text-muted-foreground" />
+      <Icon name="search" size={16} className="shrink-0 text-muted-foreground" />
       <span className="flex-1 truncate">
         Tìm sản phẩm, khách hàng, đơn hàng...
       </span>
@@ -221,7 +221,7 @@ function UserDropdown() {
     <DropdownMenu>
       <DropdownMenuTrigger className="flex press-scale-sm items-center gap-2 pl-1 pr-2 py-1 rounded-full text-foreground hover:bg-surface-container-low cursor-pointer outline-none">
         <span className="h-8 w-8 rounded-full bg-primary-fixed text-primary flex items-center justify-center text-xs font-bold shrink-0">
-          {initials ?? <Icon name="person" size={18} />}
+          {initials ?? <Icon name="person" size={16} />}
         </span>
         <span className="hidden xl:block text-sm font-medium truncate max-w-[100px]">
           {user?.fullName ?? "Tài khoản"}
@@ -286,7 +286,7 @@ function MobileLeafLink({
   if (leaf.disabled) {
     return (
       <div className="flex items-center gap-3 px-3 py-2 rounded-lg text-sm text-muted-foreground opacity-50">
-        {leaf.icon && <Icon name={leaf.icon} size={18} />}
+        {leaf.icon && <Icon name={leaf.icon} size={16} />}
         <span className="flex-1">{leaf.label}</span>
         {leaf.comingSoon && (
           <span className="text-[9px] font-semibold uppercase rounded px-2 py-0.5 bg-status-warning/10 text-status-warning border border-status-warning/25">
@@ -308,7 +308,7 @@ function MobileLeafLink({
           : "text-foreground/80 hover:bg-surface-container-low hover:text-primary"
       )}
     >
-      {leaf.icon && <Icon name={leaf.icon} size={18} fill={active} />}
+      {leaf.icon && <Icon name={leaf.icon} size={16} fill={active} />}
       <span className="flex-1">{leaf.label}</span>
     </Link>
   );
@@ -410,7 +410,7 @@ function MobileGroupAccordion({
       >
         <Icon
           name={group.icon}
-          size={18}
+          size={16}
           fill={active}
           className={cn("shrink-0", active && "text-primary")}
         />
@@ -457,7 +457,7 @@ function MobileNav() {
   return (
     <Sheet open={open} onOpenChange={setOpen}>
       <SheetTrigger className="md:hidden press-scale-sm inline-flex items-center justify-center h-10 w-10 rounded-lg text-foreground hover:bg-surface-container-low">
-        <Icon name="menu" size={22} />
+        <Icon name="menu" size={20} />
       </SheetTrigger>
       <SheetContent side="left" className="w-[320px] p-0">
         <SheetTitle className="px-5 py-4 border-b font-semibold text-base">Menu</SheetTitle>
@@ -477,7 +477,7 @@ function MobileNav() {
                     : "text-foreground/80 hover:bg-surface-container-low"
                 )}
               >
-                <Icon name="apartment" size={18} />
+                <Icon name="apartment" size={16} />
                 Tất cả chi nhánh
                 {currentBranch === null && (
                   <Icon name="check" size={16} className="ml-auto" />
@@ -495,7 +495,7 @@ function MobileNav() {
                     : "text-foreground/80 hover:bg-surface-container-low"
                 )}
               >
-                <Icon name="apartment" size={18} />
+                <Icon name="apartment" size={16} />
                 {branch.name}
                 {currentBranch?.id === branch.id && (
                   <Icon name="check" size={16} className="ml-auto" />
@@ -521,9 +521,9 @@ function MobileNav() {
               className="flex press-scale items-center gap-2 px-4 py-3 rounded-xl text-sm font-semibold bg-primary text-primary-foreground hover:bg-primary-hover ambient-shadow"
               onClick={() => setOpen(false)}
             >
-              <Icon name="point_of_sale" size={18} />
+              <Icon name="point_of_sale" size={16} />
               Mở POS
-              <Icon name="chevron_right" size={18} className="ml-auto" />
+              <Icon name="chevron_right" size={16} className="ml-auto" />
             </Link>
           </div>
         </nav>
@@ -633,7 +633,7 @@ export function TopNav() {
               className="text-foreground/70 hover:text-foreground hover:bg-surface-container-low md:hidden"
               title="Trung tâm nhập Excel"
             >
-              <Icon name="cloud_upload" size={18} />
+              <Icon name="cloud_upload" size={16} />
             </Button>
 
             {/* Notification bell — badge hiển thị unread count thật từ DB */}
@@ -644,7 +644,7 @@ export function TopNav() {
                 className="text-foreground/70 hover:text-foreground hover:bg-surface-container-low"
                 title={`Thông báo${unreadCount > 0 ? ` (${unreadCount} chưa đọc)` : ""}`}
               >
-                <Icon name="notifications" size={18} />
+                <Icon name="notifications" size={16} />
               </Button>
               {unreadCount > 0 && (
                 <span className="absolute top-1 right-1 h-4 min-w-4 px-1 rounded-full bg-destructive text-[10px] font-bold text-on-primary flex items-center justify-center pointer-events-none ring-2 ring-surface-container-lowest">
@@ -665,7 +665,7 @@ export function TopNav() {
                 size="default"
                 className="rounded-xl font-semibold ambient-shadow"
               >
-                <Icon name="point_of_sale" size={18} className="mr-1" />
+                <Icon name="point_of_sale" size={16} className="mr-1" />
                 Bán hàng
               </Button>
             </Link>

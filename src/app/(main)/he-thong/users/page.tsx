@@ -283,7 +283,7 @@ export default function UsersPage() {
                     <td className="py-3">
                       {user.roleName ? (
                         <Badge variant="secondary" className="text-xs">
-                          <Icon name="shield" size={12} className="mr-1" />
+                          <Icon name="shield" size={14} className="mr-1" />
                           {user.roleName}
                         </Badge>
                       ) : (

@@ -36,7 +36,7 @@ export default function PaymentSettingsPage() {
       <Card>
         <CardHeader>
           <CardTitle className="flex items-center gap-2">
-            <Icon name="account_balance" size={18} className="text-status-success" />
+            <Icon name="account_balance" size={16} className="text-status-success" />
             Tài khoản ngân hàng
           </CardTitle>
         </CardHeader>
@@ -60,7 +60,7 @@ export default function PaymentSettingsPage() {
       <Card>
         <CardHeader>
           <CardTitle className="flex items-center gap-2">
-            <Icon name="payments" size={18} className="text-primary" />
+            <Icon name="payments" size={16} className="text-primary" />
             Phương thức thanh toán hỗ trợ
           </CardTitle>
         </CardHeader>
@@ -108,7 +108,7 @@ export default function PaymentSettingsPage() {
       <Card>
         <CardHeader>
           <CardTitle className="flex items-center gap-2">
-            <Icon name="qr_code" size={18} className="text-status-warning" />
+            <Icon name="qr_code" size={16} className="text-status-warning" />
             Mã QR thanh toán
           </CardTitle>
         </CardHeader>

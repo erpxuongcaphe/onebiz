@@ -243,7 +243,7 @@ export default function DonViTinhPage() {
               openRename(row.original.unit);
             }}
           >
-            <Icon name="edit" size={12} className="mr-1" />
+            <Icon name="edit" size={14} className="mr-1" />
             Đổi tên
           </Button>
           <Button
@@ -256,7 +256,7 @@ export default function DonViTinhPage() {
             }}
             disabled={units.length < 2}
           >
-            <Icon name="call_merge" size={12} className="mr-1" />
+            <Icon name="call_merge" size={14} className="mr-1" />
             Gộp với...
           </Button>
         </div>

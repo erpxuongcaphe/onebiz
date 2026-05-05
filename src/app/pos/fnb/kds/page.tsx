@@ -496,7 +496,7 @@ function KdsPageInner() {
             className="shrink-0 text-pos-chrome-fg-dim hover:text-pos-chrome-fg rounded-lg p-2 hover:bg-pos-chrome-bg-elevated transition-colors"
             title="Quay về POS"
           >
-            <Icon name="arrow_back" size={18} />
+            <Icon name="arrow_back" size={16} />
           </Link>
           <div className="flex flex-col min-w-0">
             <h1 className="font-heading text-lg md:text-xl font-bold tracking-tight text-pos-chrome-fg truncate leading-tight">
@@ -554,7 +554,7 @@ function KdsPageInner() {
             )}
             title={soundOn ? "Tắt âm" : "Bật âm"}
           >
-            <Icon name={soundOn ? "volume_up" : "volume_off"} size={18} />
+            <Icon name={soundOn ? "volume_up" : "volume_off"} size={16} />
           </button>
         </div>
       </header>
@@ -564,7 +564,7 @@ function KdsPageInner() {
       {(fetchError || (!realtimeConnected && lastFetchAt !== null && now - lastFetchAt > 90_000)) && (
         <div className="bg-status-warning/15 border-b-2 border-status-warning px-4 md:px-8 py-3 flex items-center gap-3 shrink-0">
           <div className="size-8 rounded-full bg-status-warning/30 flex items-center justify-center shrink-0 animate-pulse">
-            <Icon name="wifi_off" size={18} className="text-status-warning" />
+            <Icon name="wifi_off" size={16} className="text-status-warning" />
           </div>
           <div className="flex-1 min-w-0">
             <div className="font-semibold text-sm text-status-warning">
@@ -968,7 +968,7 @@ function KdsItemRow({
         {/* Note */}
         {item.note && (
           <p className="text-xs text-status-warning italic mt-1 flex items-start gap-1">
-            <Icon name="sticky_note_2" size={12} className="mt-0.5 shrink-0" />
+            <Icon name="sticky_note_2" size={14} className="mt-0.5 shrink-0" />
             {item.note}
           </p>
         )}

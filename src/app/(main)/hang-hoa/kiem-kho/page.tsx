@@ -91,7 +91,7 @@ function VarianceTab({ checkId }: { checkId: string }) {
   if (loading) {
     return (
       <div className="flex items-center justify-center py-12 text-sm text-muted-foreground gap-2">
-        <Icon name="progress_activity" size={18} className="animate-spin" />
+        <Icon name="progress_activity" size={16} className="animate-spin" />
         Đang tải chi tiết kiểm kê...
       </div>
     );
@@ -100,7 +100,7 @@ function VarianceTab({ checkId }: { checkId: string }) {
   if (error) {
     return (
       <div className="flex items-center justify-center py-12 text-sm text-status-error gap-2">
-        <Icon name="error" size={18} />
+        <Icon name="error" size={16} />
         {error}
       </div>
     );

@@ -260,7 +260,7 @@ export default function PermissionSettingsPage() {
                         </Badge>
                       )}
                       <Badge variant="secondary">
-                        <Icon name="group" size={12} className="mr-1" />
+                        <Icon name="group" size={14} className="mr-1" />
                         {role.memberCount}
                       </Badge>
                       {isExpanded ? (

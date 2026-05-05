@@ -133,7 +133,7 @@ export default function DeviceBindingSettingsPage() {
       <Card>
         <CardHeader>
           <CardTitle className="flex items-center gap-2 text-base">
-            <Icon name="devices" size={18} />
+            <Icon name="devices" size={16} />
             Trạng thái thiết bị
           </CardTitle>
         </CardHeader>

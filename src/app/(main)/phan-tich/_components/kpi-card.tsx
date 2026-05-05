@@ -60,7 +60,7 @@ export function KpiCard({
             >
               <MSIcon
                 name={positive ? "trending_up" : "trending_down"}
-                size={12}
+                size={14}
               />
               {change}
             </span>
@@ -72,7 +72,7 @@ export function KpiCard({
             bg,
           )}
         >
-          <MSIcon name={icon} size={22} className={cn(iconColor)} />
+          <MSIcon name={icon} size={24} className={cn(iconColor)} />
         </div>
       </div>
     </div>

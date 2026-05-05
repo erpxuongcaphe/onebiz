@@ -34,7 +34,7 @@ export default function InvoiceSettingsPage() {
         <Card>
           <CardHeader>
             <CardTitle className="flex items-center gap-2">
-              <Icon name="business" size={18} className="text-primary" />
+              <Icon name="business" size={16} className="text-primary" />
               Thông tin doanh nghiệp
             </CardTitle>
           </CardHeader>
@@ -56,7 +56,7 @@ export default function InvoiceSettingsPage() {
         <Card>
           <CardHeader>
             <CardTitle className="flex items-center gap-2">
-              <Icon name="print" size={18} className="text-status-success" />
+              <Icon name="print" size={16} className="text-status-success" />
               Khổ giấy &amp; máy in
             </CardTitle>
           </CardHeader>
@@ -79,7 +79,7 @@ export default function InvoiceSettingsPage() {
       <Card>
         <CardHeader>
           <CardTitle className="flex items-center gap-2">
-            <Icon name="tag" size={18} className="text-status-warning" />
+            <Icon name="tag" size={16} className="text-status-warning" />
             Mã hóa đơn (prefix &amp; sequence)
           </CardTitle>
         </CardHeader>
@@ -127,7 +127,7 @@ export default function InvoiceSettingsPage() {
       <Card>
         <CardHeader>
           <CardTitle className="flex items-center gap-2">
-            <Icon name="visibility" size={18} className="text-muted-foreground" />
+            <Icon name="visibility" size={16} className="text-muted-foreground" />
             Tùy chỉnh hiển thị (đang phát triển)
           </CardTitle>
         </CardHeader>

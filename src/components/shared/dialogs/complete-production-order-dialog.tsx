@@ -266,7 +266,7 @@ export function CompleteProductionOrderDialog({
                   Kiểm tra nguyên vật liệu
                 </span>
                 {checking ? (
-                  <Icon name="progress_activity" size={12} className="animate-spin" />
+                  <Icon name="progress_activity" size={14} className="animate-spin" />
                 ) : hasShortage ? (
                   <span className="inline-flex items-center gap-1 text-[10px] font-semibold px-2 py-0.5 rounded-full bg-status-warning/10 text-status-warning">
                     <span className="size-1.5 rounded-full bg-status-warning" />
@@ -333,7 +333,7 @@ export function CompleteProductionOrderDialog({
                 </select>
                 {targetBranchId && (
                   <div className="text-xs text-muted-foreground flex items-center gap-1">
-                    <Icon name="arrow_forward" size={12} />
+                    <Icon name="arrow_forward" size={14} />
                     Sẽ tạo đơn bán nội bộ (ghi nợ) sau khi hoàn thành
                   </div>
                 )}

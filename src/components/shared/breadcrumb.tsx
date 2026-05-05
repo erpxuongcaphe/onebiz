@@ -64,13 +64,13 @@ export function Breadcrumb({ items, className }: BreadcrumbProps) {
         className="inline-flex items-center hover:text-foreground transition-colors"
         aria-label="Trang chủ"
       >
-        <Icon name="home" size={12} />
+        <Icon name="home" size={14} />
       </Link>
       {derived.map((item, idx) => (
         <Fragment key={`${item.label}-${idx}`}>
           <Icon
             name="chevron_right"
-            size={12}
+            size={14}
             className="text-muted-foreground/50 shrink-0"
           />
           {item.href && idx < derived.length - 1 ? (

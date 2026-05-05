@@ -984,7 +984,7 @@ function CreateTransferDialog({
                             className="h-6 w-6 p-0 text-status-error hover:text-status-error"
                             onClick={() => removeItem(item.id)}
                           >
-                            <Icon name="delete" size={12} />
+                            <Icon name="delete" size={14} />
                           </Button>
                         </td>
                       </tr>

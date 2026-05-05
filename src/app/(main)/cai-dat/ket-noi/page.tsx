@@ -76,7 +76,7 @@ export default function IntegrationSettingsPage() {
       </div>
 
       <div className="rounded-lg border border-status-warning/30 bg-status-warning/5 p-4 flex items-start gap-3">
-        <Icon name="info" size={18} className="text-status-warning mt-0.5 shrink-0" />
+        <Icon name="info" size={16} className="text-status-warning mt-0.5 shrink-0" />
         <div className="text-sm">
           <p className="font-medium text-foreground">Tích hợp đang được phát triển</p>
           <p className="text-xs text-muted-foreground mt-1">

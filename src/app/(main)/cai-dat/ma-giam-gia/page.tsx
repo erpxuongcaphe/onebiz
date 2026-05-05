@@ -536,7 +536,7 @@ export default function CouponSettingsPage() {
                           <span className="inline-flex items-center gap-1">
                             <Icon
                               name={c.type === "percent" ? "percent" : "sell"}
-                              size={12}
+                              size={14}
                             />
                             {c.type === "percent"
                               ? `Giảm ${c.value}%`

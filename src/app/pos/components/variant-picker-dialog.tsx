@@ -97,7 +97,7 @@ export function VariantPickerDialog({
       <DialogContent className="sm:max-w-lg">
         <DialogHeader>
           <DialogTitle className="flex items-center gap-2">
-            <Icon name="inventory_2" size={18} className="text-primary" />
+            <Icon name="inventory_2" size={16} className="text-primary" />
             {product.name}
           </DialogTitle>
           <DialogDescription>
@@ -131,7 +131,7 @@ export function VariantPickerDialog({
                         : "border-border bg-white"
                     )}
                   >
-                    {isSelected && <Icon name="check" size={12} />}
+                    {isSelected && <Icon name="check" size={14} />}
                   </div>
                   <div className="flex-1 min-w-0">
                     <div className="flex items-center gap-2">

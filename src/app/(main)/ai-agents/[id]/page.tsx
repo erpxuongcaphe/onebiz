@@ -138,7 +138,7 @@ function ExecutionCard({ execution }: { execution: AgentExecution }) {
         {hasPayload && (
           <Icon
             name={open ? "expand_less" : "expand_more"}
-            size={18}
+            size={16}
             className="text-muted-foreground shrink-0"
           />
         )}
@@ -686,7 +686,7 @@ export default function AgentDetailPage() {
           {/* Basic info */}
           <section className="bg-surface-container-lowest rounded-xl ambient-shadow border border-border p-5 space-y-4">
             <h3 className="font-semibold flex items-center gap-2">
-              <Icon name="info" size={18} className="text-primary" />
+              <Icon name="info" size={16} className="text-primary" />
               Thông tin cơ bản
             </h3>
 
@@ -741,7 +741,7 @@ export default function AgentDetailPage() {
           <section className="bg-surface-container-lowest rounded-xl ambient-shadow border border-border p-5 space-y-4">
             <div className="flex items-center justify-between gap-2">
               <h3 className="font-semibold flex items-center gap-2">
-                <Icon name="hub" size={18} className="text-primary" />
+                <Icon name="hub" size={16} className="text-primary" />
                 Tích hợp n8n
               </h3>
               <Button
@@ -807,7 +807,7 @@ export default function AgentDetailPage() {
           {/* Prompt template */}
           <section className="bg-surface-container-lowest rounded-xl ambient-shadow border border-border p-5 space-y-3">
             <h3 className="font-semibold flex items-center gap-2">
-              <Icon name="auto_awesome" size={18} className="text-primary" />
+              <Icon name="auto_awesome" size={16} className="text-primary" />
               Prompt template
             </h3>
             <p className="text-xs text-muted-foreground">
@@ -865,7 +865,7 @@ export default function AgentDetailPage() {
                 <div className="flex items-center justify-between gap-2 flex-wrap">
                   <div>
                     <h3 className="font-semibold flex items-center gap-2">
-                      <Icon name="task_alt" size={18} className="text-primary" />
+                      <Icon name="task_alt" size={16} className="text-primary" />
                       Task queue
                       <span className="text-xs text-muted-foreground font-normal">
                         ({workload.activeCount} đang làm · {workload.done} xong)
@@ -879,13 +879,13 @@ export default function AgentDetailPage() {
                   <div className="flex items-center gap-2 flex-wrap">
                     {workload.overdue > 0 && (
                       <span className="text-xs font-semibold rounded-full px-3 py-1 bg-status-error/10 text-status-error flex items-center gap-1">
-                        <Icon name="error" size={12} />
+                        <Icon name="error" size={14} />
                         {workload.overdue} quá hạn
                       </span>
                     )}
                     {workload.dueToday > 0 && (
                       <span className="text-xs font-semibold rounded-full px-3 py-1 bg-status-warning/10 text-status-warning flex items-center gap-1">
-                        <Icon name="schedule" size={12} />
+                        <Icon name="schedule" size={14} />
                         {workload.dueToday} hôm nay
                       </span>
                     )}
@@ -955,7 +955,7 @@ export default function AgentDetailPage() {
                                 >
                                   <Icon
                                     name={TASK_URGENCY_ICON[urg]}
-                                    size={10}
+                                    size={14}
                                     className="inline-block mr-0.5"
                                   />
                                   {TASK_URGENCY_LABELS[urg]}
@@ -998,7 +998,7 @@ export default function AgentDetailPage() {
                                 <span>
                                   <Icon
                                     name="event"
-                                    size={12}
+                                    size={14}
                                     className="inline-block mr-0.5"
                                   />
                                   {formatShortDate(task.taskDate)}
@@ -1007,7 +1007,7 @@ export default function AgentDetailPage() {
                                   <span>
                                     <Icon
                                       name="schedule"
-                                      size={12}
+                                      size={14}
                                       className="inline-block mr-0.5"
                                     />
                                     {task.dueTime}
@@ -1017,7 +1017,7 @@ export default function AgentDetailPage() {
                                   <span>
                                     <Icon
                                       name="person"
-                                      size={12}
+                                      size={14}
                                       className="inline-block mr-0.5"
                                     />
                                     {task.assignedToRole}
@@ -1032,7 +1032,7 @@ export default function AgentDetailPage() {
                                     <span className="italic">
                                       <Icon
                                         name="rule"
-                                        size={12}
+                                        size={14}
                                         className="inline-block mr-0.5"
                                       />
                                       Playbook: {ruleName}
@@ -1132,7 +1132,7 @@ export default function AgentDetailPage() {
                 <h3 className="font-semibold flex items-center gap-2">
                   <Icon
                     name="rule"
-                    size={18}
+                    size={16}
                     className="text-primary"
                   />
                   Playbook rules
@@ -1229,7 +1229,7 @@ export default function AgentDetailPage() {
 
                         <div className="text-xs text-muted-foreground mt-1 space-y-0.5">
                           <div className="flex items-center gap-1 flex-wrap">
-                            <Icon name="filter_alt" size={12} />
+                            <Icon name="filter_alt" size={14} />
                             <span>
                               {rule.kpiTypes.length === 0
                                 ? "Tất cả loại KPI"
@@ -1249,7 +1249,7 @@ export default function AgentDetailPage() {
                           <div className="flex items-start gap-1">
                             <Icon
                               name="add_task"
-                              size={12}
+                              size={14}
                               className="mt-0.5 shrink-0"
                             />
                             <span className="line-clamp-2 font-mono text-xs">
@@ -1259,7 +1259,7 @@ export default function AgentDetailPage() {
                           </div>
                           {rule.action.assignedToRole && (
                             <div className="flex items-center gap-1">
-                              <Icon name="person" size={12} />
+                              <Icon name="person" size={14} />
                               <span>
                                 Giao cho role: {rule.action.assignedToRole}
                               </span>
@@ -1308,7 +1308,7 @@ export default function AgentDetailPage() {
           {/* Config JSON */}
           <section className="bg-surface-container-lowest rounded-xl ambient-shadow border border-border p-5 space-y-3">
             <h3 className="font-semibold flex items-center gap-2">
-              <Icon name="tune" size={18} className="text-primary" />
+              <Icon name="tune" size={16} className="text-primary" />
               Config (JSON)
             </h3>
             <p className="text-xs text-muted-foreground">
@@ -1326,7 +1326,7 @@ export default function AgentDetailPage() {
             />
             {configError && (
               <div className="text-xs text-status-error">
-                <Icon name="error" size={12} className="inline mr-1" />
+                <Icon name="error" size={14} className="inline mr-1" />
                 {configError}
               </div>
             )}
@@ -1360,7 +1360,7 @@ export default function AgentDetailPage() {
           <section className="bg-surface-container-lowest rounded-xl ambient-shadow border border-border p-5">
             <div className="flex items-center justify-between mb-3">
               <h3 className="font-semibold flex items-center gap-2">
-                <Icon name="history" size={18} className="text-primary" />
+                <Icon name="history" size={16} className="text-primary" />
                 Log gần đây
               </h3>
               <span className="text-xs text-muted-foreground">

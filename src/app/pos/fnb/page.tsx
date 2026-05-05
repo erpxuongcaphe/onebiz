@@ -1569,7 +1569,7 @@ function FnbPosPageInner() {
             className="ml-2 hover:bg-status-warning/20 rounded p-1 transition-colors"
             title="Bỏ áp dụng khuyến mãi"
           >
-            <Icon name="close" size={12} />
+            <Icon name="close" size={14} />
           </button>
         </div>
       )}
@@ -1774,7 +1774,7 @@ function FnbPosPageInner() {
           aria-label={`Mở giỏ hàng tab ${pos.activeTab?.label}`}
         >
           <span className="relative">
-            <Icon name="shopping_cart" size={22} />
+            <Icon name="shopping_cart" size={20} />
             <span className="absolute -top-1.5 -right-2 h-5 min-w-5 px-1 rounded-full bg-status-error text-[10px] font-bold flex items-center justify-center">
               {pos.lineCount}
             </span>
@@ -1819,7 +1819,7 @@ function FnbPosPageInner() {
         <DialogContent className="sm:max-w-sm">
           <DialogHeader>
             <DialogTitle className="flex items-center gap-2 text-status-error">
-              <Icon name="cancel" size={18} /> Huỷ đơn bếp?
+              <Icon name="cancel" size={16} /> Huỷ đơn bếp?
             </DialogTitle>
           </DialogHeader>
           <div className="py-2 space-y-3">
@@ -1877,7 +1877,7 @@ function FnbPosPageInner() {
         <DialogContent className="sm:max-w-md">
           <DialogHeader>
             <DialogTitle className="flex items-center gap-2">
-              <Icon name="swap_horiz" size={18} /> Chuyển bàn
+              <Icon name="swap_horiz" size={16} /> Chuyển bàn
             </DialogTitle>
           </DialogHeader>
           <div className="py-2">

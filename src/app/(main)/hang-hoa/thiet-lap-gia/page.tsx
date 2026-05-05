@@ -481,7 +481,7 @@ export default function ThietLapGiaPage() {
                     ? "local_cafe"
                     : "all_inclusive"
               }
-              size={12}
+              size={14}
             />
             {SCOPE_LABEL[s]}
           </Badge>

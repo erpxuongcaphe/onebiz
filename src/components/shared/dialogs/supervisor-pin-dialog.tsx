@@ -82,7 +82,7 @@ export function SupervisorPinDialog({
       <DialogContent className="sm:max-w-sm">
         <DialogHeader>
           <DialogTitle className="flex items-center gap-2">
-            <Icon name="lock" size={18} className="text-status-warning" />
+            <Icon name="lock" size={16} className="text-status-warning" />
             {title}
           </DialogTitle>
           <DialogDescription>{description}</DialogDescription>

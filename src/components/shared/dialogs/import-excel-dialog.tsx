@@ -171,7 +171,7 @@ export function ImportExcelDialog<TRow>({
         <DialogHeader>
           <DialogTitle>
             <span className="inline-flex items-center gap-2">
-              <Icon name="upload" size={18} />
+              <Icon name="upload" size={16} />
               Nhập Excel: {schema.name}
             </span>
           </DialogTitle>
@@ -366,12 +366,12 @@ function PreviewSection<TRow>({
           Tổng {totalRows} dòng
         </Badge>
         <Badge className="bg-status-success/15 text-status-success border-status-success/30">
-          <Icon name="check_circle" size={12} className="mr-1" />
+          <Icon name="check_circle" size={14} className="mr-1" />
           {validCount} hợp lệ
         </Badge>
         {errorCount > 0 && (
           <Badge className="bg-destructive/15 text-destructive border-destructive/30">
-            <Icon name="error" size={12} className="mr-1" />
+            <Icon name="error" size={14} className="mr-1" />
             {errorCount} lỗi
           </Badge>
         )}
