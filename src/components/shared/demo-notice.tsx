@@ -33,7 +33,7 @@ export function DemoNotice({
         className,
       )}
     >
-      <span className="flex-none mt-0.5 inline-flex h-7 w-7 items-center justify-center rounded-md bg-status-warning/15 text-status-warning">
+      <span className="flex-none mt-0.5 inline-flex h-7 w-7 items-center justify-center rounded-lg bg-status-warning/15 text-status-warning">
         <Icon name="engineering" size={16} />
       </span>
       <div className="min-w-0">

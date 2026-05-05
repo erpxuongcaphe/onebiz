@@ -192,7 +192,7 @@ function ShippingOrderDetail({
           <DropdownMenu>
             <DropdownMenuTrigger
               disabled={busy}
-              className="inline-flex items-center gap-1 h-8 px-3 rounded-md bg-primary text-primary-foreground text-sm font-medium hover:bg-primary/90 disabled:opacity-60 disabled:cursor-not-allowed shrink-0 outline-none"
+              className="inline-flex items-center gap-1 h-8 px-3 rounded-lg bg-primary text-primary-foreground text-sm font-medium hover:bg-primary/90 disabled:opacity-60 disabled:cursor-not-allowed shrink-0 outline-none"
             >
               <Icon name="sync_alt" size={14} />
               Đổi trạng thái

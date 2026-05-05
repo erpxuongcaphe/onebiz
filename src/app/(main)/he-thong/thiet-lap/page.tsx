@@ -241,7 +241,7 @@ export default function ThietLapPage() {
                 <img
                   src={form.logoUrl}
                   alt="Logo preview"
-                  className="mt-2 h-16 w-auto border border-border rounded-md p-2 bg-white"
+                  className="mt-2 h-16 w-auto border border-border rounded-lg p-2 bg-white"
                 />
               )}
             </div>

@@ -112,7 +112,7 @@ export function FilterSidebar({ children, className }: FilterSidebarProps) {
           <button
             type="button"
             onClick={toggleCollapsed}
-            className="press-scale-sm h-7 w-7 inline-flex items-center justify-center rounded-md text-muted-foreground hover:bg-surface-container hover:text-foreground"
+            className="press-scale-sm h-7 w-7 inline-flex items-center justify-center rounded-lg text-muted-foreground hover:bg-surface-container hover:text-foreground"
             aria-label={collapsed ? "Mở rộng bộ lọc" : "Thu gọn bộ lọc"}
             title={collapsed ? "Mở bộ lọc" : "Thu gọn bộ lọc"}
           >

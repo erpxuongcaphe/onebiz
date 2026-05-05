@@ -80,7 +80,7 @@ function BranchSelector() {
     <DropdownMenu>
       <DropdownMenuTrigger
         className={cn(
-          "hidden md:flex press-scale-sm items-center gap-2 px-3 h-9 text-sm rounded-lg cursor-pointer outline-none transition-colors",
+          "hidden md:flex press-scale-sm items-center gap-2 px-3 h-8 text-sm rounded-lg cursor-pointer outline-none transition-colors",
           currentBranch
             ? "text-primary bg-primary-fixed/40 hover:bg-primary-fixed"
             : "text-foreground/90 hover:bg-surface-container-low",
@@ -179,7 +179,7 @@ function GlobalSearchBar() {
       <span className="flex-1 truncate">
         Tìm sản phẩm, khách hàng, đơn hàng...
       </span>
-      <kbd className="hidden lg:inline-flex font-sans items-center gap-0.5 bg-surface-container-high border border-border rounded-md px-2 py-0.5 text-[10px] font-semibold text-muted-foreground">
+      <kbd className="hidden lg:inline-flex font-sans items-center gap-0.5 bg-surface-container-high border border-border rounded-lg px-2 py-0.5 text-[10px] font-semibold text-muted-foreground">
         Ctrl K
       </kbd>
     </button>
@@ -342,7 +342,7 @@ function MobileSubGroupAccordion({
         onClick={() => setOpen((v) => !v)}
         aria-expanded={open}
         className={cn(
-          "w-full press-scale-sm flex items-center gap-2 px-3 h-9 rounded-md text-xs font-semibold transition-colors",
+          "w-full press-scale-sm flex items-center gap-2 px-3 h-8 rounded-lg text-xs font-semibold transition-colors",
           hasActive
             ? "text-primary"
             : "text-foreground/75 hover:bg-surface-container-low",
@@ -616,7 +616,7 @@ export function TopNav() {
               type="button"
               onClick={() => setImportOpen(true)}
               className={cn(
-                "hidden md:inline-flex press-scale-sm items-center gap-2 h-9 px-4 rounded-lg text-xs font-semibold",
+                "hidden md:inline-flex press-scale-sm items-center gap-2 h-8 px-4 rounded-lg text-xs font-semibold",
                 "bg-primary-fixed text-primary hover:bg-primary-fixed-dim transition-colors"
               )}
               title="Trung tâm nhập Excel — tải mẫu & đi tới trang nhập"

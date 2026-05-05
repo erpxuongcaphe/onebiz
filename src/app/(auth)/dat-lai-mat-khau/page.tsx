@@ -62,12 +62,12 @@ export default function ResetPasswordPage() {
       <CardContent>
         <form onSubmit={handleSubmit} className="space-y-4">
           {error && (
-            <div className="rounded-md bg-destructive/10 p-3 text-sm text-destructive">
+            <div className="rounded-lg bg-destructive/10 p-3 text-sm text-destructive">
               {error}
             </div>
           )}
           {success && (
-            <div className="rounded-md bg-status-success/10 p-3 text-sm text-status-success">
+            <div className="rounded-lg bg-status-success/10 p-3 text-sm text-status-success">
               Đặt lại mật khẩu thành công. Đang chuyển hướng...
             </div>
           )}

@@ -51,7 +51,7 @@ export default function BanOnlineLayout({
                   key={item.href}
                   href={item.href}
                   className={cn(
-                    "flex items-center gap-3 px-3 py-2 rounded-md text-sm transition-colors",
+                    "flex items-center gap-3 px-3 py-2 rounded-lg text-sm transition-colors",
                     isActive
                       ? "bg-primary/10 text-primary font-medium"
                       : "text-foreground hover:bg-muted hover:text-foreground"

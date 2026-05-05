@@ -743,7 +743,7 @@ function KdsOrderCard({
               onPrintTicket();
             }}
             className={cn(
-              "size-7 rounded-md flex items-center justify-center transition-colors",
+              "size-7 rounded-lg flex items-center justify-center transition-colors",
               "bg-black/10 hover:bg-black/20",
               headerTextClass
             )}
@@ -860,7 +860,7 @@ function KdsItemRow({
       >
         <div
           className={cn(
-            "size-6 rounded-md border-2 flex items-center justify-center shrink-0 mt-0.5 transition-all",
+            "size-6 rounded-lg border-2 flex items-center justify-center shrink-0 mt-0.5 transition-all",
             "bg-status-success border-status-success"
           )}
         >
@@ -903,7 +903,7 @@ function KdsItemRow({
           type="button"
           onClick={onRecall}
           className={cn(
-            "shrink-0 size-7 rounded-md flex items-center justify-center transition-colors press-scale-sm",
+            "shrink-0 size-7 rounded-lg flex items-center justify-center transition-colors press-scale-sm",
             "bg-pos-chrome-bg text-pos-chrome-fg-dim hover:text-status-warning hover:bg-status-warning/10"
           )}
           title="Hoàn tác — đánh dấu lại đang pha"
@@ -927,7 +927,7 @@ function KdsItemRow({
       {/* Checkbox — Stitch style */}
       <div
         className={cn(
-          "size-6 rounded-md border-2 flex items-center justify-center shrink-0 mt-0.5 transition-all",
+          "size-6 rounded-lg border-2 flex items-center justify-center shrink-0 mt-0.5 transition-all",
           isPreparing
             ? "bg-status-warning/20 border-status-warning"
             : "border-pos-chrome-fg-dim"

@@ -70,7 +70,7 @@ export function FnbHeader({
           type="button"
           onClick={() => viewMode !== "floorplan" && onToggleFloorPlan()}
           className={cn(
-            "flex items-center gap-1 px-3 py-2 text-xs font-medium rounded-l-md transition-colors",
+            "flex items-center gap-1 px-3 py-2 text-xs font-medium rounded-l-lg transition-colors",
             viewMode === "floorplan"
               ? "bg-primary text-on-primary"
               : "bg-pos-chrome-bg-elevated text-pos-chrome-fg-dim hover:bg-pos-chrome-bg-hover hover:text-pos-chrome-fg-muted"
@@ -83,7 +83,7 @@ export function FnbHeader({
           type="button"
           onClick={() => viewMode !== "menu" && onToggleFloorPlan()}
           className={cn(
-            "flex items-center gap-1 px-3 py-2 text-xs font-medium rounded-r-md transition-colors",
+            "flex items-center gap-1 px-3 py-2 text-xs font-medium rounded-r-lg transition-colors",
             viewMode === "menu"
               ? "bg-primary text-on-primary"
               : "bg-pos-chrome-bg-elevated text-pos-chrome-fg-dim hover:bg-pos-chrome-bg-hover hover:text-pos-chrome-fg-muted"
@@ -98,7 +98,7 @@ export function FnbHeader({
       <button
         type="button"
         onClick={onSearch}
-        className="flex items-center gap-2 px-3 py-2 sm:py-2 bg-pos-chrome-bg-elevated hover:bg-pos-chrome-bg-hover active:bg-pos-chrome-bg-hover rounded-md text-sm sm:text-xs text-pos-chrome-fg-dim transition-colors shrink-0 min-w-0 sm:min-w-[140px] lg:min-w-[200px]"
+        className="flex items-center gap-2 px-3 py-2 sm:py-2 bg-pos-chrome-bg-elevated hover:bg-pos-chrome-bg-hover active:bg-pos-chrome-bg-hover rounded-lg text-sm sm:text-xs text-pos-chrome-fg-dim transition-colors shrink-0 min-w-0 sm:min-w-[140px] lg:min-w-[200px]"
       >
         <Icon name="search" size={14} />
         <span>Tìm món (F3)</span>

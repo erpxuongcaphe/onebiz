@@ -225,7 +225,7 @@ function InvoiceDetail({
                 )}
 
                 {/* Notes area */}
-                <div className="border rounded-md p-3">
+                <div className="border rounded-lg p-3">
                   <textarea
                     placeholder="Ghi chú..."
                     className="w-full text-sm resize-none bg-transparent outline-none min-h-[60px]"
@@ -525,7 +525,7 @@ export default function HoaDonPage() {
             </FilterGroup>
 
             <FilterGroup label="Đối tác giao hàng">
-              <select className="w-full h-8 text-sm border rounded-md px-2 bg-white">
+              <select className="w-full h-8 text-sm border rounded-lg px-2 bg-white">
                 <option value="">Chọn đối tác giao hàng</option>
               </select>
             </FilterGroup>

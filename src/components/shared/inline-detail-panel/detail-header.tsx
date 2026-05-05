@@ -49,7 +49,7 @@ export function DetailHeader({
       <div className="flex items-start justify-between gap-4">
         <div className="flex items-start gap-3">
           {avatar && (
-            <div className="shrink-0 h-16 w-16 rounded-md overflow-hidden bg-muted flex items-center justify-center">
+            <div className="shrink-0 h-16 w-16 rounded-lg overflow-hidden bg-muted flex items-center justify-center">
               {avatar}
             </div>
           )}

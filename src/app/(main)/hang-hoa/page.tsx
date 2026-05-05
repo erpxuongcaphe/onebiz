@@ -1068,7 +1068,7 @@ export default function HangHoaPage() {
           </DialogHeader>
           <div className="py-3">
             <select
-              className="w-full h-10 rounded-md border border-input bg-background px-3 text-sm disabled:opacity-50"
+              className="w-full h-10 rounded-lg border border-input bg-background px-3 text-sm disabled:opacity-50"
               value={bulkCategoryValue}
               disabled={bulkLoading}
               onChange={(e) => setBulkCategoryValue(e.target.value)}
@@ -1129,7 +1129,7 @@ export default function HangHoaPage() {
                 value={bulkSellPriceValue}
                 disabled={bulkLoading}
                 onChange={(e) => setBulkSellPriceValue(e.target.value)}
-                className="w-full h-10 rounded-md border border-input bg-background px-3 text-sm disabled:opacity-50"
+                className="w-full h-10 rounded-lg border border-input bg-background px-3 text-sm disabled:opacity-50"
               />
             </div>
             <div className="space-y-2">
@@ -1143,7 +1143,7 @@ export default function HangHoaPage() {
                 value={bulkCostPriceValue}
                 disabled={bulkLoading}
                 onChange={(e) => setBulkCostPriceValue(e.target.value)}
-                className="w-full h-10 rounded-md border border-input bg-background px-3 text-sm disabled:opacity-50"
+                className="w-full h-10 rounded-lg border border-input bg-background px-3 text-sm disabled:opacity-50"
               />
             </div>
           </div>

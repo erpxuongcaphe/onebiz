@@ -284,7 +284,7 @@ function ProductTile({
       )}
     >
       {/* Thumb 40×40 vuông — image hoặc placeholder neutral (xám nhạt + icon). */}
-      <div className="relative h-10 w-10 shrink-0 rounded-md bg-surface-container-low flex items-center justify-center overflow-hidden">
+      <div className="relative h-10 w-10 shrink-0 rounded-lg bg-surface-container-low flex items-center justify-center overflow-hidden">
         {product.image ? (
           <img
             src={product.image}

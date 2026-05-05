@@ -420,7 +420,7 @@ export function CreatePromotionDialog({
                 value={productSearch}
                 onChange={(e) => setProductSearch(e.target.value)}
                 placeholder="Tìm sản phẩm..."
-                className="h-9 text-sm"
+                className="h-8 text-sm"
               />
               <div
                 className={cn(
@@ -607,7 +607,7 @@ export function CreatePromotionDialog({
                     type="button"
                     onClick={() => toggleDay(idx)}
                     className={cn(
-                      "flex-1 min-w-0 px-2 py-2 rounded-md text-xs font-medium border transition-colors",
+                      "flex-1 min-w-0 px-2 py-2 rounded-lg text-xs font-medium border transition-colors",
                       active
                         ? "bg-primary text-on-primary border-primary"
                         : "bg-transparent text-muted-foreground border-border hover:bg-muted"

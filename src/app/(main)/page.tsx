@@ -222,38 +222,38 @@ export default function TongQuanPage() {
         </div>
         <div className="flex flex-wrap items-center gap-2">
           <Link href="/pos">
-            <Button size="sm" className="gap-2 h-9 shadow-sm">
+            <Button size="sm" className="gap-2 h-8 shadow-sm">
               <Icon name="shopping_cart" className="size-3.5" /> POS Retail
             </Button>
           </Link>
           <Link href="/pos/fnb">
-            <Button size="sm" className="gap-2 h-9 shadow-sm bg-status-warning hover:bg-status-warning text-white">
+            <Button size="sm" className="gap-2 h-8 shadow-sm bg-status-warning hover:bg-status-warning text-white">
               <Icon name="local_cafe" className="size-3.5" /> POS F&B
             </Button>
           </Link>
           <div className="hidden sm:block h-5 w-px bg-border" />
           <Link href="/don-hang/dat-hang">
-            <Button size="sm" variant="outline" className="gap-2 h-9">
+            <Button size="sm" variant="outline" className="gap-2 h-8">
               <Icon name="add" className="size-3.5" /> Đơn hàng
             </Button>
           </Link>
           <Link href="/hang-hoa/nhap-hang">
-            <Button size="sm" variant="outline" className="gap-2 h-9">
+            <Button size="sm" variant="outline" className="gap-2 h-8">
               <Icon name="inventory" className="size-3.5" /> Nhập hàng
             </Button>
           </Link>
           <Link href="/hang-hoa/chuyen-kho">
-            <Button size="sm" variant="outline" className="gap-2 h-9">
+            <Button size="sm" variant="outline" className="gap-2 h-8">
               <Icon name="swap_horiz" className="size-3.5" /> Chuyển kho
             </Button>
           </Link>
           <Link href="/tai-chinh/so-quy">
-            <Button size="sm" variant="outline" className="gap-2 h-9">
+            <Button size="sm" variant="outline" className="gap-2 h-8">
               <Icon name="receipt" className="size-3.5" /> Sổ quỹ
             </Button>
           </Link>
           <Link href="/phan-tich/bao-cao-tai-chinh">
-            <Button size="sm" variant="outline" className="gap-2 h-9">
+            <Button size="sm" variant="outline" className="gap-2 h-8">
               <Icon name="bar_chart" className="size-3.5" /> P&L
             </Button>
           </Link>

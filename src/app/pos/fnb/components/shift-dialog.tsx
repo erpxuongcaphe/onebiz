@@ -87,7 +87,7 @@ export function OpenShiftDialog({ open, onOpenChange, onConfirm }: OpenShiftDial
                   type="button"
                   onClick={() => setAmount(String(d.value))}
                   className={cn(
-                    "px-3 py-2 rounded-md text-xs font-medium border transition-colors",
+                    "px-3 py-2 rounded-lg text-xs font-medium border transition-colors",
                     amount === String(d.value)
                       ? "bg-primary text-primary-foreground border-primary"
                       : "bg-surface-container-low border-border hover:bg-surface-container hover:border-primary/40",

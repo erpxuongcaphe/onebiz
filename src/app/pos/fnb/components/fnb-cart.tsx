@@ -305,7 +305,7 @@ export function FnbCart({
               <Button
                 variant="outline"
                 onClick={onPrintPreBill}
-                className="flex-1 h-9 text-xs rounded-lg border-outline-variant/40"
+                className="flex-1 h-8 text-xs rounded-lg border-outline-variant/40"
               >
                 <Icon name="description" size={14} className="mr-1" />
                 Tạm tính
@@ -315,7 +315,7 @@ export function FnbCart({
               <Button
                 variant="outline"
                 onClick={onSplitBill}
-                className="flex-1 h-9 text-xs rounded-lg border-outline-variant/40"
+                className="flex-1 h-8 text-xs rounded-lg border-outline-variant/40"
               >
                 <Icon name="content_cut" size={14} className="mr-1" />
                 Tách bill

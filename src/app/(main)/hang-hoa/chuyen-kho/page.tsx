@@ -897,7 +897,7 @@ function CreateTransferDialog({
               </p>
             )}
             {searchResults.length > 0 && (
-              <div className="mt-1 border rounded-md max-h-40 overflow-auto bg-background shadow-sm">
+              <div className="mt-1 border rounded-lg max-h-40 overflow-auto bg-background shadow-sm">
                 {searchResults.map((prod) => (
                   <button
                     key={prod.id}

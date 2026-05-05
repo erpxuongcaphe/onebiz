@@ -308,7 +308,7 @@ export default function PrintSettingsPage() {
                 description="Tự động mở ngăn kéo khi thanh toán tiền mặt (cần máy in có cổng RJ11/RJ12 kết nối drawer)"
               />
 
-              <div className="rounded-md bg-amber-50 p-3 text-xs text-amber-900 dark:bg-amber-900/20 dark:text-amber-200">
+              <div className="rounded-lg bg-amber-50 p-3 text-xs text-amber-900 dark:bg-amber-900/20 dark:text-amber-200">
                 <p className="font-medium">Lưu ý:</p>
                 <ul className="mt-1 list-disc pl-4 space-y-0.5">
                   <li>WebUSB chỉ hoạt động trên Chrome, Edge, Opera (desktop + Android)</li>

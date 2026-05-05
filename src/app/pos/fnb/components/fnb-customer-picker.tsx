@@ -207,7 +207,7 @@ export function FnbCustomerPicker({
             })}
           </ul>
 
-          <div className="flex items-center justify-between px-4 h-9 bg-muted/50 border-t border-border text-[11px] text-muted-foreground">
+          <div className="flex items-center justify-between px-4 h-8 bg-muted/50 border-t border-border text-[11px] text-muted-foreground">
             <div className="flex items-center gap-3">
               <span>
                 <kbd className="font-mono bg-card border border-border rounded px-1 text-[10px]">

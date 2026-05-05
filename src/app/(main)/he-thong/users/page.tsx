@@ -305,7 +305,7 @@ export default function UsersPage() {
                     </td>
                     <td className="py-3">
                       <DropdownMenu>
-                        <DropdownMenuTrigger className="inline-flex items-center justify-center h-7 w-7 rounded-md hover:bg-muted transition-colors">
+                        <DropdownMenuTrigger className="inline-flex items-center justify-center h-7 w-7 rounded-lg hover:bg-muted transition-colors">
                           <Icon name="more_horiz" size={16} />
                         </DropdownMenuTrigger>
                         <DropdownMenuContent align="end">
@@ -521,7 +521,7 @@ export default function UsersPage() {
                   này. Manager/Cashier/Kế toán mở dialog mời cũng chỉ tạo
                   được role thường, KHÔNG cấp owner được. */}
               {isCurrentUserOwner && (
-                <div className="sm:col-span-2 flex items-start gap-2 p-3 rounded-md bg-amber-50 dark:bg-amber-950/30 border border-amber-200 dark:border-amber-900">
+                <div className="sm:col-span-2 flex items-start gap-2 p-3 rounded-lg bg-amber-50 dark:bg-amber-950/30 border border-amber-200 dark:border-amber-900">
                   <input
                     id="invite-as-owner"
                     type="checkbox"

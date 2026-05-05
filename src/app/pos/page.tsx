@@ -1700,7 +1700,7 @@ function PosPageInner() {
                 setRedeemInput(String(state.customer?.loyaltyPoints ?? 0));
                 setRedeemDialogOpen(true);
               }}
-              className="hidden md:flex items-center gap-1 shrink-0 px-2 py-0.5 rounded-md bg-white/10 hover:bg-white/20 text-white text-[11px] font-medium border border-white/20 transition-colors"
+              className="hidden md:flex items-center gap-1 shrink-0 px-2 py-0.5 rounded-lg bg-white/10 hover:bg-white/20 text-white text-[11px] font-medium border border-white/20 transition-colors"
               title={`KH có ${state.customer.loyaltyPoints} điểm`}
             >
               <Icon name="star" size={14} />
@@ -2102,7 +2102,7 @@ function PosPageInner() {
                 onClick={() => setCustomerModalOpen(true)}
                 title={state.customer?.name ?? "Khách lẻ"}
                 className={cn(
-                  "flex-1 flex items-center gap-2 px-3 h-9 rounded-lg text-xs transition-colors press-scale-sm min-w-0",
+                  "flex-1 flex items-center gap-2 px-3 h-8 rounded-lg text-xs transition-colors press-scale-sm min-w-0",
                   state.customer
                     ? "bg-primary-fixed text-primary font-semibold"
                     : "bg-surface-container-low text-on-surface-variant hover:bg-surface-container hover:text-foreground",
@@ -2438,7 +2438,7 @@ function PosPageInner() {
                       placeholder={formatCurrency(state.total)}
                       data-allow-hotkeys="true"
                       className={cn(
-                        "w-full h-9 px-3 rounded border text-right text-sm font-bold outline-none focus:ring-2 focus:ring-primary/30 focus:border-primary tabular-nums transition-colors",
+                        "w-full h-8 px-3 rounded border text-right text-sm font-bold outline-none focus:ring-2 focus:ring-primary/30 focus:border-primary tabular-nums transition-colors",
                         state.paid > 0 && state.paid >= state.total
                           ? "border-status-success/25 bg-status-success/10"
                           : state.paid > 0 && state.paid < state.total
@@ -2521,7 +2521,7 @@ function PosPageInner() {
               <button
                 type="button"
                 onClick={handlePrintPreBill}
-                className="w-full h-9 rounded-lg border border-dashed border-primary/40 bg-primary/5 text-primary text-xs font-medium hover:bg-primary/10 inline-flex items-center justify-center gap-2 press-scale-sm"
+                className="w-full h-8 rounded-lg border border-dashed border-primary/40 bg-primary/5 text-primary text-xs font-medium hover:bg-primary/10 inline-flex items-center justify-center gap-2 press-scale-sm"
                 title="In tạm tính cho khách kiểm tra trước khi trả tiền"
               >
                 <Icon name="receipt_long" size={14} />
@@ -2547,7 +2547,7 @@ function PosPageInner() {
               disabled={state.lines.length === 0 || submitting !== null}
               className={cn(
                 "rounded-lg bg-surface-container-low text-xs font-semibold text-on-surface-variant hover:bg-surface-container disabled:opacity-40 disabled:cursor-not-allowed inline-flex items-center justify-center gap-1 transition-all press-scale-sm",
-                state.sellingMode === "fast" ? "h-9" : "h-11"
+                state.sellingMode === "fast" ? "h-8" : "h-10"
               )}
             >
               {submitting === "draft" ? (
@@ -2574,7 +2574,7 @@ function PosPageInner() {
                 "rounded-xl bg-primary text-on-primary font-bold hover:bg-primary-hover disabled:opacity-40 disabled:cursor-not-allowed inline-flex items-center justify-center gap-2 transition-all ambient-shadow press-scale-sm whitespace-nowrap",
                 state.sellingMode === "fast"
                   ? "h-12 text-base"
-                  : "h-11 text-[13px]"
+                  : "h-10 text-[13px]"
               )}
             >
               {submitting === "complete" ? (
@@ -3313,7 +3313,7 @@ function OrderDiscountInput({
 
   return (
     <div className="flex flex-col items-end gap-0.5">
-      <div className="inline-flex items-stretch h-7 rounded-md border border-border overflow-hidden bg-white focus-within:border-primary focus-within:ring-1 focus-within:ring-primary/30 transition-colors">
+      <div className="inline-flex items-stretch h-7 rounded-lg border border-border overflow-hidden bg-white focus-within:border-primary focus-within:ring-1 focus-within:ring-primary/30 transition-colors">
         <input
           type="text"
           inputMode="decimal"

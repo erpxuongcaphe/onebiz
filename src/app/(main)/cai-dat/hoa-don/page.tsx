@@ -45,7 +45,7 @@ export default function InvoiceSettingsPage() {
             </p>
             <Link
               href="/he-thong/thiet-lap"
-              className="inline-flex w-full items-center justify-center gap-2 rounded-md bg-primary px-3 py-2 text-sm font-medium text-primary-foreground hover:bg-primary/90 transition-colors"
+              className="inline-flex w-full items-center justify-center gap-2 rounded-lg bg-primary px-3 py-2 text-sm font-medium text-primary-foreground hover:bg-primary/90 transition-colors"
             >
               <Icon name="settings" size={16} />
               Mở Thiết lập chung
@@ -67,7 +67,7 @@ export default function InvoiceSettingsPage() {
             </p>
             <Link
               href="/cai-dat/in-an"
-              className="inline-flex w-full items-center justify-center gap-2 rounded-md bg-primary px-3 py-2 text-sm font-medium text-primary-foreground hover:bg-primary/90 transition-colors"
+              className="inline-flex w-full items-center justify-center gap-2 rounded-lg bg-primary px-3 py-2 text-sm font-medium text-primary-foreground hover:bg-primary/90 transition-colors"
             >
               <Icon name="print" size={16} />
               Mở Cài đặt in ấn
@@ -132,7 +132,7 @@ export default function InvoiceSettingsPage() {
           </CardTitle>
         </CardHeader>
         <CardContent>
-          <div className="flex items-start gap-3 p-3 rounded-md bg-status-warning/5 border border-status-warning/20">
+          <div className="flex items-start gap-3 p-3 rounded-lg bg-status-warning/5 border border-status-warning/20">
             <Icon name="info" size={16} className="text-status-warning mt-0.5 shrink-0" />
             <div className="text-xs">
               <p className="font-medium text-foreground">Đang phát triển</p>

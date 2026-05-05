@@ -293,7 +293,7 @@ export function CreateInternalSaleDialog({
               onFocus={() => setShowDropdown(true)}
             />
             {showDropdown && filteredProducts.length > 0 && (
-              <div className="absolute z-50 mt-1 w-full bg-background border rounded-md shadow-lg max-h-48 overflow-y-auto">
+              <div className="absolute z-50 mt-1 w-full bg-background border rounded-lg shadow-lg max-h-48 overflow-y-auto">
                 {filteredProducts.map((p) => (
                   <button
                     key={p.id}
@@ -315,7 +315,7 @@ export function CreateInternalSaleDialog({
 
         {/* Items table */}
         {items.length > 0 && (
-          <div className="border rounded-md overflow-hidden">
+          <div className="border rounded-lg overflow-hidden">
             <table className="w-full text-sm">
               <thead className="bg-muted/50">
                 <tr>
@@ -401,7 +401,7 @@ export function CreateInternalSaleDialog({
 
         {/* Summary */}
         {fromBranch && toBranch && items.length > 0 && (
-          <div className="rounded-md bg-muted/50 p-3 text-sm">
+          <div className="rounded-lg bg-muted/50 p-3 text-sm">
             <strong>{fromBranch.name}</strong> bán cho <strong>{toBranch.name}</strong>
             {" · "}
             {items.length} sản phẩm · {formatCurrency(total)}

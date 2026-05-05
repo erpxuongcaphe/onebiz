@@ -31,7 +31,7 @@ export function DetailItemsTable<T>({
   };
 
   return (
-    <div className={cn("border rounded-md overflow-hidden", className)}>
+    <div className={cn("border rounded-lg overflow-hidden", className)}>
       <table className="w-full text-sm">
         <thead>
           <tr className="bg-muted/50">

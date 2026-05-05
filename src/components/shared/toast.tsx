@@ -72,7 +72,7 @@ export function ToastContainer() {
             </div>
             <button
               onClick={() => dismiss(t.id)}
-              className="shrink-0 rounded-md p-1 hover:bg-black/5 transition-colors"
+              className="shrink-0 rounded-lg p-1 hover:bg-black/5 transition-colors"
               aria-label="Đóng"
             >
               <Icon name="close" size={16} className="text-muted-foreground" />

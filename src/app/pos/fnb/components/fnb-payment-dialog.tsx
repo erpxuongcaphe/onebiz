@@ -174,7 +174,7 @@ export function FnbPaymentDialog({
                   type="button"
                   onClick={() => setTipInput(btn.value > 0 ? String(btn.value) : "")}
                   className={cn(
-                    "px-3 py-2 rounded-md text-xs font-medium border transition-colors tabular-nums",
+                    "px-3 py-2 rounded-lg text-xs font-medium border transition-colors tabular-nums",
                     (btn.value === 0 && tipAmount === 0) || (btn.value > 0 && tipAmount === btn.value)
                       ? "bg-primary text-primary-foreground border-primary"
                       : "bg-surface-container-low border-border text-foreground hover:bg-surface-container",
@@ -234,13 +234,13 @@ export function FnbPaymentDialog({
               <div className="flex flex-wrap gap-2 sm:gap-2">
                 <button type="button"
                   onClick={() => setCashInput(String(total))}
-                  className="px-3 py-2 sm:px-3 sm:py-2 rounded-md border border-status-success/25 bg-status-success/10 text-sm sm:text-xs font-medium text-status-success hover:bg-status-success/20 active:bg-status-success/30 transition-colors">
+                  className="px-3 py-2 sm:px-3 sm:py-2 rounded-lg border border-status-success/25 bg-status-success/10 text-sm sm:text-xs font-medium text-status-success hover:bg-status-success/20 active:bg-status-success/30 transition-colors">
                   Đủ
                 </button>
                 {DENOMINATIONS.map((d) => (
                   <button key={d} type="button"
                     onClick={() => setCashInput(String(d))}
-                    className="px-3 py-2 sm:px-3 sm:py-2 rounded-md border border-border bg-card text-sm sm:text-xs font-medium text-foreground hover:bg-muted active:bg-muted transition-colors tabular-nums">
+                    className="px-3 py-2 sm:px-3 sm:py-2 rounded-lg border border-border bg-card text-sm sm:text-xs font-medium text-foreground hover:bg-muted active:bg-muted transition-colors tabular-nums">
                     {formatDenom(d)}
                   </button>
                 ))}

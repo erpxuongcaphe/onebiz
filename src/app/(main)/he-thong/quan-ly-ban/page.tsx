@@ -739,7 +739,7 @@ export default function QuanLyBanPage() {
                 />
               </div>
             </div>
-            <div className="rounded-md bg-muted p-3 text-sm text-muted-foreground">
+            <div className="rounded-lg bg-muted p-3 text-sm text-muted-foreground">
               Sẽ tạo {bulkForm.count} bàn: Bàn {bulkForm.startNumber} → Bàn{" "}
               {bulkForm.startNumber + bulkForm.count - 1}, mỗi bàn {bulkForm.capacity} chỗ,
               thuộc khu vực &quot;{bulkForm.zone || "..."}&quot;

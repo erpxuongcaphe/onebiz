@@ -130,7 +130,7 @@ export function ImportDataDialog({ open, onOpenChange }: ImportDataDialogProps) 
               className="border rounded-lg p-3 bg-background hover:border-primary/40 transition-colors"
             >
               <div className="flex items-start gap-3 mb-2">
-                <div className="h-9 w-9 rounded-md bg-primary-fixed text-primary flex items-center justify-center shrink-0">
+                <div className="h-9 w-9 rounded-lg bg-primary-fixed text-primary flex items-center justify-center shrink-0">
                   <Icon name={m.icon} size={16} />
                 </div>
                 <div className="flex-1 min-w-0">
@@ -168,7 +168,7 @@ export function ImportDataDialog({ open, onOpenChange }: ImportDataDialogProps) 
           ))}
         </div>
 
-        <div className="rounded-md bg-primary-fixed/40 border border-primary-fixed-dim p-3 text-[11px] text-foreground/80 leading-snug">
+        <div className="rounded-lg bg-primary-fixed/40 border border-primary-fixed-dim p-3 text-[11px] text-foreground/80 leading-snug">
           <strong className="text-primary">Quy trình:</strong> Tải mẫu →
           điền dữ liệu → vào trang tương ứng → bấm &quot;Nhập Excel&quot; →
           preview &amp; validate → xác nhận ghi DB.

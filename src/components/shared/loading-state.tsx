@@ -60,7 +60,7 @@ export function LoadingState({
             key={i}
             className="flex items-center gap-3 rounded-lg border bg-card p-3"
           >
-            <Skeleton className="h-9 w-9 rounded-md shrink-0" />
+            <Skeleton className="h-9 w-9 rounded-lg shrink-0" />
             <div className="flex-1 space-y-2">
               <Skeleton className="h-3.5 w-2/3" />
               <Skeleton className="h-3 w-1/3" />
@@ -83,7 +83,7 @@ export function LoadingState({
       >
         {Array.from({ length: rows * 3 }).map((_, i) => (
           <div key={i} className="rounded-lg border bg-card p-3 space-y-2">
-            <Skeleton className="aspect-square w-full rounded-md" />
+            <Skeleton className="aspect-square w-full rounded-lg" />
             <Skeleton className="h-3.5 w-2/3" />
             <Skeleton className="h-3 w-1/2" />
           </div>

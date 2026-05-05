@@ -106,7 +106,7 @@ function LeafLink({
   // - press-scale từ globals cho tactile feedback khi click
   const baseClass = cn(
     "group press-scale-sm flex items-center gap-3 rounded-lg text-sm",
-    "h-9 pr-3",
+    "h-8 pr-3",
     active
       ? "bg-primary-fixed text-primary font-semibold border-r-4 border-primary"
       : "text-foreground/80 hover:bg-surface-container-low hover:text-primary",
@@ -203,7 +203,7 @@ function SubGroupSection({
         onClick={() => setOpen((v) => !v)}
         aria-expanded={open}
         className={cn(
-          "w-full press-scale-sm flex items-center gap-2 px-3 h-8 rounded-md text-xs font-semibold transition-colors",
+          "w-full press-scale-sm flex items-center gap-2 px-3 h-8 rounded-lg text-xs font-semibold transition-colors",
           hasActive
             ? "text-primary"
             : "text-foreground/75 hover:bg-surface-container-low hover:text-foreground",

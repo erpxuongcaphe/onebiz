@@ -137,7 +137,7 @@ export function SplitBillDialog({
                   <label
                     key={item.id}
                     className={cn(
-                      "flex items-center gap-3 px-3 py-2 rounded-md cursor-pointer transition-colors",
+                      "flex items-center gap-3 px-3 py-2 rounded-lg cursor-pointer transition-colors",
                       selectedIds.has(item.id) ? "bg-primary-fixed border border-primary-fixed" : "bg-muted/30 hover:bg-muted/50"
                     )}
                   >

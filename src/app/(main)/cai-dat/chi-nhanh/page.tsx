@@ -439,7 +439,7 @@ function BranchSettingsPageInner() {
                 </TableCell>
                 <TableCell>
                   <DropdownMenu>
-                    <DropdownMenuTrigger className="inline-flex items-center justify-center h-8 w-8 rounded-md hover:bg-surface-container-low cursor-pointer outline-none">
+                    <DropdownMenuTrigger className="inline-flex items-center justify-center h-8 w-8 rounded-lg hover:bg-surface-container-low cursor-pointer outline-none">
                       <Icon name="more_vert" size={16} />
                     </DropdownMenuTrigger>
                     <DropdownMenuContent align="end" sideOffset={4}>

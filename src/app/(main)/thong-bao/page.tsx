@@ -298,7 +298,7 @@ export default function ThongBaoPage() {
                         </button>
                         <button
                           onClick={() => handleDelete(notification.id)}
-                          className="shrink-0 h-8 w-8 rounded-md opacity-0 group-hover:opacity-100 transition-opacity hover:bg-destructive/10 flex items-center justify-center"
+                          className="shrink-0 h-8 w-8 rounded-lg opacity-0 group-hover:opacity-100 transition-opacity hover:bg-destructive/10 flex items-center justify-center"
                           aria-label="Xóa"
                           title="Xóa thông báo"
                         >

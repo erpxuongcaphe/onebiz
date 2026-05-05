@@ -167,7 +167,7 @@ export default function DonHangOnlinePage() {
             placeholder="Tìm mã đơn, khách hàng, SĐT..."
             value={searchText}
             onChange={(e) => setSearchText(e.target.value)}
-            className="pl-8 h-9 text-sm"
+            className="pl-8 h-8 text-sm"
           />
         </div>
 

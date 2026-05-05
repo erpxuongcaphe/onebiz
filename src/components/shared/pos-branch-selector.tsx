@@ -46,7 +46,7 @@ export function PosBranchSelector({
     return (
       <div
         className={cn(
-          "flex items-center gap-2 px-3 py-2 text-sm rounded-md shrink-0",
+          "flex items-center gap-2 px-3 py-2 text-sm rounded-lg shrink-0",
           isDark
             ? "bg-white/10 text-white ring-1 ring-white/15"
             : "text-foreground bg-surface-container border border-border",
@@ -78,7 +78,7 @@ export function PosBranchSelector({
     <DropdownMenu>
       <DropdownMenuTrigger
         className={cn(
-          "flex items-center gap-2 px-3 py-2 text-sm rounded-md transition-colors cursor-pointer outline-none shrink-0",
+          "flex items-center gap-2 px-3 py-2 text-sm rounded-lg transition-colors cursor-pointer outline-none shrink-0",
           isDark
             ? "bg-white/10 text-white ring-1 ring-white/15 hover:bg-white/20"
             : "text-foreground hover:text-on-surface hover:bg-surface-container border border-border",

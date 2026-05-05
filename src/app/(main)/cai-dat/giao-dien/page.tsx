@@ -54,7 +54,7 @@ const fontSizes = [
 const borderRadii = [
   { id: "none", label: "Không bo", radius: "rounded-none" },
   { id: "sm", label: "Nhẹ", radius: "rounded-sm" },
-  { id: "md", label: "Trung bình", radius: "rounded-md" },
+  { id: "md", label: "Trung bình", radius: "rounded-lg" },
   { id: "lg", label: "Nhiều", radius: "rounded-xl" },
 ];
 
@@ -124,7 +124,7 @@ export default function AppearanceSettingsPage() {
                   {/* Theme preview */}
                   <div
                     className={cn(
-                      "h-20 rounded-md border mb-3 p-2",
+                      "h-20 rounded-lg border mb-3 p-2",
                       t.preview
                     )}
                   >

@@ -306,7 +306,7 @@ export default function PermissionSettingsPage() {
                                 type="button"
                                 onClick={() => togglePerm(perm.code)}
                                 className={cn(
-                                  "flex items-center gap-2 rounded-md px-3 py-2 text-sm cursor-pointer transition-colors text-left",
+                                  "flex items-center gap-2 rounded-lg px-3 py-2 text-sm cursor-pointer transition-colors text-left",
                                   editPerms.has(perm.code)
                                     ? "bg-status-success/10 text-status-success dark:bg-status-success/10 dark:text-status-success"
                                     : "bg-muted text-muted-foreground"

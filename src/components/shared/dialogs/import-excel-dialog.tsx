@@ -238,12 +238,12 @@ export function ImportExcelDialog<TRow>({
             </div>
 
             {parseError && (
-              <div className="rounded-md bg-destructive/10 border border-destructive/25 p-3 text-sm text-destructive">
+              <div className="rounded-lg bg-destructive/10 border border-destructive/25 p-3 text-sm text-destructive">
                 {parseError}
               </div>
             )}
 
-            <div className="rounded-md bg-primary/5 border border-primary/20 p-3 text-xs text-muted-foreground">
+            <div className="rounded-lg bg-primary/5 border border-primary/20 p-3 text-xs text-muted-foreground">
               <p className="font-medium text-foreground mb-1">
                 Lưu ý khi nhập liệu:
               </p>
@@ -379,7 +379,7 @@ function PreviewSection<TRow>({
 
       {/* Table-level errors (thiếu cột...) */}
       {tableErrors.length > 0 && (
-        <div className="rounded-md bg-destructive/10 border border-destructive/25 p-3 text-sm text-destructive space-y-1">
+        <div className="rounded-lg bg-destructive/10 border border-destructive/25 p-3 text-sm text-destructive space-y-1">
           <p className="font-medium">
             <Icon name="error" size={14} className="inline mr-1" />
             Lỗi cấp file — không thể import:
@@ -394,7 +394,7 @@ function PreviewSection<TRow>({
 
       {/* Error rows detail */}
       {errorCount > 0 && (
-        <div className="rounded-md bg-destructive/5 border border-destructive/20 p-3">
+        <div className="rounded-lg bg-destructive/5 border border-destructive/20 p-3">
           <div className="flex items-center justify-between mb-2">
             <p className="text-sm font-medium text-destructive">
               <Icon name="error" size={14} className="inline mr-1" />
@@ -425,7 +425,7 @@ function PreviewSection<TRow>({
 
       {/* Preview valid rows */}
       {validCount > 0 && (
-        <div className="border rounded-md overflow-hidden">
+        <div className="border rounded-lg overflow-hidden">
           <div className="bg-muted/40 px-3 py-2 text-xs text-muted-foreground flex items-center justify-between">
             <span>
               Xem trước {Math.min(maxShow, validCount)} / {validCount} dòng hợp lệ
@@ -472,7 +472,7 @@ function PreviewSection<TRow>({
       )}
 
       {validCount === 0 && errorCount === 0 && tableErrors.length === 0 && (
-        <div className="rounded-md bg-muted/40 p-6 text-center text-sm text-muted-foreground">
+        <div className="rounded-lg bg-muted/40 p-6 text-center text-sm text-muted-foreground">
           File không có dòng dữ liệu nào.
         </div>
       )}
@@ -520,7 +520,7 @@ function DoneSection({
     <div className="space-y-3">
       <div
         className={cn(
-          "rounded-md border p-4 flex items-start gap-3",
+          "rounded-lg border p-4 flex items-start gap-3",
           allOk
             ? "bg-status-success/10 border-status-success/30"
             : "bg-status-warning/10 border-status-warning/30"
@@ -546,7 +546,7 @@ function DoneSection({
       </div>
 
       {result.errors.length > 0 && (
-        <div className="rounded-md bg-destructive/5 border border-destructive/20 p-3 max-h-48 overflow-y-auto">
+        <div className="rounded-lg bg-destructive/5 border border-destructive/20 p-3 max-h-48 overflow-y-auto">
           <p className="text-xs font-medium text-destructive mb-1">Chi tiết lỗi:</p>
           <ul className="text-xs space-y-1">
             {result.errors.map((e, i) => (

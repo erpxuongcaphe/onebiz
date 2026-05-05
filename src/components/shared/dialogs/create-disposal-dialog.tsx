@@ -193,7 +193,7 @@ export function CreateDisposalDialog({
           {/* Code */}
           <div className="space-y-2">
             <label className="text-sm font-medium">Mã phiếu</label>
-            <div className="flex h-9 w-full rounded-lg border border-input bg-muted/50 px-3 py-2 text-sm">
+            <div className="flex h-8 w-full rounded-lg border border-input bg-muted/50 px-3 py-2 text-sm">
               {code}
             </div>
           </div>

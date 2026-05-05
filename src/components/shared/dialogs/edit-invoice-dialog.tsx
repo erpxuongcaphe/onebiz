@@ -118,7 +118,7 @@ export function EditInvoiceDialog({
 
         <div className="grid gap-4 py-2">
           {/* Read-only summary */}
-          <div className="rounded-md border border-outline-variant bg-surface-container-low p-3 text-sm">
+          <div className="rounded-lg border border-outline-variant bg-surface-container-low p-3 text-sm">
             <div className="flex justify-between">
               <span className="text-muted-foreground">Mã hóa đơn</span>
               <span className="font-medium">{invoice.code}</span>

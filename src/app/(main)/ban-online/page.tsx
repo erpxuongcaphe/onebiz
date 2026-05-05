@@ -259,7 +259,7 @@ export default function BanOnlinePage() {
 
                   {channel.connected ? (
                     <div className="grid grid-cols-2 gap-3 mb-3">
-                      <div className="bg-muted/50 rounded-md p-2 text-center">
+                      <div className="bg-muted/50 rounded-lg p-2 text-center">
                         <p className="text-xs text-muted-foreground">
                           Đơn hôm nay
                         </p>
@@ -267,7 +267,7 @@ export default function BanOnlinePage() {
                           {channel.ordersToday}
                         </p>
                       </div>
-                      <div className="bg-muted/50 rounded-md p-2 text-center">
+                      <div className="bg-muted/50 rounded-lg p-2 text-center">
                         <p className="text-xs text-muted-foreground">
                           Doanh thu hôm nay
                         </p>
@@ -277,7 +277,7 @@ export default function BanOnlinePage() {
                       </div>
                     </div>
                   ) : (
-                    <div className="bg-muted/30 rounded-md p-4 mb-3 text-center">
+                    <div className="bg-muted/30 rounded-lg p-4 mb-3 text-center">
                       <p className="text-sm text-muted-foreground">
                         Kết nối để bắt đầu bán hàng
                       </p>

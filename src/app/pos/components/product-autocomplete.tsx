@@ -209,7 +209,7 @@ export function ProductAutocomplete({
           </ul>
 
           {/* Footer hint */}
-          <div className="flex items-center justify-between px-4 h-9 bg-muted/50 border-t border-border text-xs text-muted-foreground">
+          <div className="flex items-center justify-between px-4 h-8 bg-muted/50 border-t border-border text-xs text-muted-foreground">
             <div className="flex items-center gap-3">
               <span>
                 <kbd className="font-mono bg-background border border-border rounded px-1 text-[10px]">

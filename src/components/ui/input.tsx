@@ -18,10 +18,10 @@ const variantClass: Record<InputVariant, string> = {
     "h-10 rounded-xl border border-input bg-surface-container-lowest px-4 py-2 shadow-none " +
     "focus-visible:border-primary focus-visible:ring-2 focus-visible:ring-primary/20",
   underline:
-    "h-11 border-0 border-b-2 border-input bg-surface-container-low px-3 py-2 rounded-t-md " +
+    "h-10 border-0 border-b-2 border-input bg-surface-container-low px-3 py-2 rounded-t-lg " +
     "focus-visible:border-primary focus-visible:bg-surface-container",
   ghost:
-    "h-9 border border-transparent bg-transparent px-2 py-1 rounded-lg " +
+    "h-8 border border-transparent bg-transparent px-2 py-1 rounded-lg " +
     "hover:border-border focus-visible:border-primary focus-visible:bg-surface-container-lowest focus-visible:ring-1 focus-visible:ring-primary/20",
 }
 

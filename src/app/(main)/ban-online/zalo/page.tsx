@@ -222,7 +222,7 @@ export default function ZaloPage() {
                 placeholder="Tìm cuộc hội thoại"
                 value={searchText}
                 onChange={(e) => setSearchText(e.target.value)}
-                className="pl-8 h-9 text-sm"
+                className="pl-8 h-8 text-sm"
               />
             </div>
           </div>

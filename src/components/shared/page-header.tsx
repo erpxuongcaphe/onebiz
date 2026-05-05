@@ -83,7 +83,7 @@ function ExportButton({ onExport }: { onExport: ExportHandlers }) {
       <DropdownMenuTrigger
         className={cn(
           "inline-flex items-center justify-center gap-2 shrink-0",
-          "rounded-md text-sm font-medium",
+          "rounded-lg text-sm font-medium",
           "border border-input bg-background hover:bg-accent hover:text-accent-foreground",
           "h-8 px-3 cursor-pointer"
         )}
@@ -219,7 +219,7 @@ export function PageHeader({
                 value={searchValue}
                 onChange={(e) => onSearchChange(e.target.value)}
                 placeholder={searchPlaceholder}
-                className="pl-9 h-9"
+                className="pl-9 h-8"
               />
             </div>
           )}
@@ -237,7 +237,7 @@ export function PageHeader({
               <DropdownMenu>
                 <DropdownMenuTrigger
                   className={cn(
-                    "inline-flex items-center justify-center rounded-md",
+                    "inline-flex items-center justify-center rounded-lg",
                     "border border-input bg-background hover:bg-accent",
                     "h-8 w-8 shrink-0 cursor-pointer"
                   )}

@@ -144,7 +144,7 @@ export function CreateCashTransactionDialog({
             <div className="flex rounded-lg border p-0.5">
               <button
                 type="button"
-                className={`flex-1 rounded-md px-3 py-2 text-sm font-medium transition-colors cursor-pointer ${
+                className={`flex-1 rounded-lg px-3 py-2 text-sm font-medium transition-colors cursor-pointer ${
                   type === "receipt"
                     ? "bg-primary text-primary-foreground"
                     : "text-muted-foreground hover:text-foreground"
@@ -155,7 +155,7 @@ export function CreateCashTransactionDialog({
               </button>
               <button
                 type="button"
-                className={`flex-1 rounded-md px-3 py-2 text-sm font-medium transition-colors cursor-pointer ${
+                className={`flex-1 rounded-lg px-3 py-2 text-sm font-medium transition-colors cursor-pointer ${
                   type === "payment"
                     ? "bg-primary text-primary-foreground"
                     : "text-muted-foreground hover:text-foreground"

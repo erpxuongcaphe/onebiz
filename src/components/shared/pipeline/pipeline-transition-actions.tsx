@@ -102,8 +102,8 @@ export function PipelineTransitionActions({
     <DropdownMenu>
       <DropdownMenuTrigger
         className={cn(
-          "inline-flex items-center gap-2 rounded-md border px-3 text-sm font-medium cursor-pointer",
-          size === "sm" ? "h-8" : "h-9",
+          "inline-flex items-center gap-2 rounded-lg border px-3 text-sm font-medium cursor-pointer",
+          size === "sm" ? "h-8" : "h-8",
           variant === "default"
             ? "bg-primary text-primary-foreground border-primary hover:bg-primary/90"
             : "bg-background hover:bg-accent border-input"
