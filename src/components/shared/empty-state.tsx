@@ -58,35 +58,42 @@ export function EmptyState({
           ? "bg-destructive/10 text-destructive"
           : "bg-muted text-muted-foreground";
 
+  // Sprint VISUAL-2 P2 (CEO 04/05/2026): empty state có visual weight hơn
+  // - Icon size: 22/28 → 20/24 (theo design system scale chuẩn)
+  // - Title: text-base → text-lg cho non-compact (visual weight)
+  // - Title weight: font-medium → font-semibold
+  // - Description: tăng line-height, max-w-md (rộng hơn)
+  // - Outer container: rounded-2xl + dashed border subtle (không phá flat)
   return (
     <div
       role="status"
       className={cn(
         "flex flex-col items-center justify-center text-center",
-        compact ? "py-6 gap-2" : "py-12 gap-3",
+        compact ? "py-6 gap-2" : "py-16 gap-4",
+        !compact && "rounded-2xl border-2 border-dashed border-border/60 bg-surface-container-low/30",
         className,
       )}
     >
       <div
         className={cn(
           "rounded-full flex items-center justify-center",
-          compact ? "h-12 w-12" : "h-16 w-16",
+          compact ? "h-12 w-12" : "h-20 w-20",
           ringClass,
         )}
       >
-        <Icon name={icon} size={compact ? 22 : 28} />
+        <Icon name={icon} size={compact ? 20 : 24} />
       </div>
-      <div className="space-y-1 max-w-sm px-4">
-        <p className={cn("font-medium text-foreground", compact ? "text-sm" : "text-base")}>
+      <div className="space-y-1.5 max-w-md px-4">
+        <p className={cn("font-semibold text-foreground", compact ? "text-sm" : "text-lg")}>
           {title}
         </p>
         {description && (
-          <p className="text-xs text-muted-foreground leading-relaxed">
+          <p className="text-sm text-muted-foreground leading-relaxed">
             {description}
           </p>
         )}
       </div>
-      {action && <div className="mt-1">{action}</div>}
+      {action && <div className="mt-2">{action}</div>}
     </div>
   );
 }

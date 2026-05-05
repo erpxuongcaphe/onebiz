@@ -38,7 +38,7 @@ import {
   getRecentActivities,
   getFinancialAlerts,
 } from "@/lib/services";
-import { useBranchFilter } from "@/lib/contexts";
+import { useAuth, useBranchFilter } from "@/lib/contexts";
 import type {
   DashboardKpis,
   ChartPoint,
@@ -83,6 +83,7 @@ export default function TongQuanPage() {
   // mà không lo activeBranchId đổi từ undefined → branch_id sau đó (gây
   // double-fire mỗi service).
   const { activeBranchId, isReady } = useBranchFilter();
+  const { user } = useAuth();
   const [chartView, setChartView] = useState<ChartView>("day");
   // Progressive loading: KPI skeleton trước, charts + secondary widgets sau.
   // Trước đây single `loading` flag block toàn bộ dashboard 2-4s → user thấy spinner
@@ -212,13 +213,25 @@ export default function TongQuanPage() {
       ]
     : [];
 
+  // Sprint VISUAL-2 P2 (CEO 04/05/2026): Hero greeting message
+  // Lý do: dashboard rỗng/trống vì empty data → CEO mở thấy không có "weight".
+  // Hero: "Chào anh [Tên], hôm nay [Y/M/D]" + quick actions ngay dưới.
+  const firstName = user?.fullName?.split(" ").pop() ?? "anh";
+  const hour = new Date().getHours();
+  const greeting = hour < 12 ? "Chào buổi sáng" : hour < 18 ? "Chào buổi chiều" : "Chào buổi tối";
+
   return (
     <div className="p-4 md:p-6 space-y-4">
-      {/* ── Hero: Date + Quick Actions ── */}
-      <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3">
-        <div className="flex items-center gap-2">
-          <Icon name="schedule" className="size-5 text-muted-foreground" />
-          <span className="text-sm text-muted-foreground capitalize">{formattedDate}</span>
+      {/* ── Hero: Greeting + Date + Quick Actions ── */}
+      <div className="flex flex-col sm:flex-row sm:items-end sm:justify-between gap-3">
+        <div className="space-y-0.5">
+          <h1 className="text-2xl font-bold text-foreground leading-tight">
+            {greeting}, {firstName}
+          </h1>
+          <div className="flex items-center gap-2 text-sm text-muted-foreground">
+            <Icon name="schedule" size={14} className="text-muted-foreground" />
+            <span className="capitalize">{formattedDate}</span>
+          </div>
         </div>
         <div className="flex flex-wrap items-center gap-2">
           <Link href="/pos">
