@@ -1,6 +1,7 @@
 import type { Metadata } from "next";
 import { Be_Vietnam_Pro, Inter } from "next/font/google";
 import { Analytics } from "@vercel/analytics/next";
+import NextTopLoader from "nextjs-toploader";
 import { Providers } from "./providers";
 import { PwaHead } from "@/components/shared/pwa-head";
 import "./globals.css";
@@ -123,6 +124,16 @@ export default function RootLayout({
         />
       </head>
       <body className="min-h-full flex flex-col font-sans">
+        {/* Sprint UX-1 Stage 1 (CEO 04/05/2026): top progress bar khi nav.
+            Trước đây click menu page đứng yên không indicator → user tưởng
+            web treo. Giờ có thanh xanh trên đầu hiện ngay khi link click.
+            Color match brand primary (navy). */}
+        <NextTopLoader
+          color="#1E3A8A"
+          height={3}
+          showSpinner={false}
+          shadow="0 0 8px #1E3A8A,0 0 4px #1E3A8A"
+        />
         <Providers>{children}</Providers>
         {/* Vercel Analytics — Web Vitals + page views.
             Sprint LT-2 (CEO 04/05/2026). Free tier 2.5k events/tháng.
