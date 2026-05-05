@@ -39,7 +39,7 @@ import {
 import { useCommandPalette } from "./command-palette";
 import { AppSwitcher } from "./app-switcher";
 import { ImportDataDialog } from "./import-data-dialog";
-import { LogoIcon } from "@/components/brand/logo";
+import { LogoIcon, LogoWordmark } from "@/components/brand/logo";
 import { cn } from "@/lib/utils";
 import { Icon } from "@/components/ui/icon";
 
@@ -594,12 +594,16 @@ export function TopNav() {
           <AppSwitcher />
           <Link
             href="/"
-            className="flex items-center ml-1 shrink-0 press-scale-sm"
+            className="flex items-center gap-2 ml-1 shrink-0 press-scale-sm"
             title="Trang chủ ONEBIZ."
             aria-label="ONEBIZ home"
           >
             {/* Brand icon "O." — navy nền + chấm xanh, 36×36 khớp slot top-nav */}
             <LogoIcon size={36} className="rounded-xl ambient-shadow" />
+            {/* Sprint VISUAL-2 P3: thêm wordmark cạnh icon ở desktop để
+                brand identity rõ hơn — header trước chỉ có "O." nhỏ.
+                Hide ở mobile (<lg) để tiết kiệm space. */}
+            <LogoWordmark height={20} className="hidden lg:block" />
           </Link>
           <div className="hidden md:block w-px h-6 bg-border ml-1" />
           <BranchSelector />
