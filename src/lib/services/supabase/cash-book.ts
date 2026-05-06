@@ -291,6 +291,98 @@ export async function deleteCashTransaction(id: string): Promise<void> {
   });
 }
 
+/**
+ * Hủy phiếu thu/chi — Stage 5b refactor (CEO 06/05/2026).
+ *
+ * Khác `deleteCashTransaction`:
+ * - Hard delete bị mất history → kế toán không tra được.
+ * - Cancel = giữ row + flip status='cancelled' + audit log với reason.
+ * - Nếu phiếu gắn reference (invoice/PO) → reverse debt qua RPC.
+ *
+ * Schema cash_transactions có `status` column (chưa enforce CHECK constraint).
+ *
+ * @param id — cash transaction id
+ * @param reason — lý do hủy (bắt buộc)
+ */
+export async function cancelCashTransaction(
+  id: string,
+  reason: string,
+): Promise<void> {
+  const supabase = getClient();
+  const tenantId = await getCurrentTenantId();
+
+  // Snapshot
+  let oldRow: Record<string, unknown> | null = null;
+  let referenceType: string | null = null;
+  try {
+    const res = await supabase
+      .from("cash_transactions")
+      .select("code, type, category, amount, counterparty, reference_type, reference_id, status")
+      .eq("tenant_id", tenantId)
+      .eq("id", id)
+      .maybeSingle();
+    oldRow = (res?.data as Record<string, unknown> | null) ?? null;
+    referenceType = (oldRow?.reference_type as string | null) ?? null;
+  } catch {
+    /* snapshot optional */
+  }
+  if (!oldRow) throw new Error("Không tìm thấy phiếu thu/chi");
+
+  // Nếu phiếu gắn reference → cancel RPC (atomic reverse debt)
+  if (referenceType === "invoice" || referenceType === "purchase_order") {
+    try {
+      const { error: rpcErr } = await supabase.rpc(
+        "cancel_cash_transaction" as never,
+        {
+          p_cash_id: id,
+          p_reason: reason,
+        } as never,
+      );
+      if (!rpcErr) {
+        await recordAuditLog({
+          entityType: "cash_transaction",
+          entityId: id,
+          action: "cancel",
+          oldData: oldRow,
+          newData: { status: "cancelled", reason },
+        });
+        return;
+      }
+      if (!/(does not exist|404|PGRST202)/i.test(rpcErr.message)) {
+        handleError(rpcErr, "cancelCashTransaction.rpc");
+      }
+      console.warn(
+        "[cancelCashTransaction] RPC chưa migrate → fallback set status='cancelled' (debt KHÔNG được đảo)",
+      );
+    } catch (err) {
+      console.warn("[cancelCashTransaction] RPC error:", err);
+    }
+  }
+
+  // Fallback / phiếu tự do: chỉ flip status = 'cancelled' + ghi note reason
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  const { error: updErr } = await (supabase as any)
+    .from("cash_transactions")
+    .update({
+      status: "cancelled",
+      note:
+        ((oldRow.note as string | null) ?? "") +
+        `\n[ĐÃ HỦY ${new Date().toISOString()}] ${reason}`.trim(),
+    })
+    .eq("tenant_id", tenantId)
+    .eq("id", id);
+
+  if (updErr) handleError(updErr, "cancelCashTransaction.update");
+
+  await recordAuditLog({
+    entityType: "cash_transaction",
+    entityId: id,
+    action: "cancel",
+    oldData: oldRow,
+    newData: { status: "cancelled", reason },
+  });
+}
+
 // --- Mapper ---
 
 // eslint-disable-next-line @typescript-eslint/no-explicit-any

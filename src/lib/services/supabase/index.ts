@@ -56,7 +56,7 @@ export {
   getNextShippingStatuses,
   SHIPPING_STATUS_LABEL,
 } from "./shipping";
-export { getCashBookEntries, getCashBookTypes, getCashBookSummary, getCashBookSummaryAsync, createCashTransaction, deleteCashTransaction } from "./cash-book";
+export { getCashBookEntries, getCashBookTypes, getCashBookSummary, getCashBookSummaryAsync, createCashTransaction, deleteCashTransaction, cancelCashTransaction } from "./cash-book";
 export {
   getInventoryChecks, getInventoryCheckStatuses, applyInventoryCheck, cancelInventoryCheck,
   getInventoryCheckItems,
@@ -65,7 +65,7 @@ export {
 } from "./inventory";
 export type { InventoryCheckItemRow } from "./inventory";
 // Manufacturing handled by production.ts (getProductionOrders)
-export { getPurchaseOrderEntries, getPurchaseOrdersForExport, getPurchaseEntryStatuses, getPurchaseReturns, getPurchaseReturnStatuses, getInputInvoices, getInputInvoiceStatuses, deleteInputInvoice, recordInputInvoice, completeSupplierReturn, cancelPurchaseOrderEntry } from "./purchase-entries";
+export { getPurchaseOrderEntries, getPurchaseOrdersForExport, getPurchaseEntryStatuses, getPurchaseReturns, getPurchaseReturnStatuses, getInputInvoices, getInputInvoiceStatuses, deleteInputInvoice, cancelInputInvoice, recordInputInvoice, completeSupplierReturn, cancelPurchaseOrderEntry } from "./purchase-entries";
 export { recordInvoicePayment, recordPurchasePayment, getPaymentHistory } from "./payments";
 export type { RecordPaymentInput, RecordPaymentResult } from "./payments";
 export { getFavorites, isFavorite, toggleFavorite, getFavoriteIds } from "./favorites";

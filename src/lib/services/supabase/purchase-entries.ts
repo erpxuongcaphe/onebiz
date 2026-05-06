@@ -17,6 +17,7 @@ import type { Database } from "@/lib/supabase/types";
 import type { PurchaseOrderImportRow } from "@/lib/excel/schemas";
 import { getClient, getCurrentContext, getCurrentTenantId, getPaginationRange, handleError } from "./base";
 import { applyManualStockMovement, nextEntityCode } from "./stock-adjustments";
+import { recordAuditLog } from "./audit";
 
 type CashTransactionInsert = Database["public"]["Tables"]["cash_transactions"]["Insert"];
 
@@ -306,20 +307,111 @@ export function getInputInvoiceStatuses() {
 }
 
 /**
- * Xoá hóa đơn đầu vào.
+ * Xoá hóa đơn đầu vào (LEGACY — Stage 5b CEO 06/05/2026).
+ *
+ * Quy ước mới: KHÔNG xóa cứng nữa. Caller nên dùng `cancelInputInvoice()`
+ * để giữ history. Hàm này chỉ giữ làm fallback khi caller cần xóa thật
+ * (vd cleanup test data) — đã thêm audit log snapshot trước khi delete
+ * để nếu cần truy lại vẫn có dấu vết.
+ *
+ * @deprecated Dùng `cancelInputInvoice` thay thế.
  */
 export async function deleteInputInvoice(id: string): Promise<void> {
   const supabase = getClient();
   const tenantId = await getCurrentTenantId();
 
+  // Snapshot trước khi xóa cứng — đảm bảo có dấu vết audit log
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
-  const { error } = await (supabase as any)
+  const sb = supabase as any;
+  let oldRow: Record<string, unknown> | null = null;
+  try {
+    const res = await sb
+      .from("input_invoices")
+      .select("code, supplier_id, supplier_name, total_amount, status")
+      .eq("tenant_id", tenantId)
+      .eq("id", id)
+      .maybeSingle();
+    oldRow = (res?.data as Record<string, unknown> | null) ?? null;
+  } catch {
+    /* snapshot optional */
+  }
+
+  const { error } = await sb
     .from("input_invoices")
     .delete()
     .eq("tenant_id", tenantId)
     .eq("id", id);
 
   if (error) handleError(error, "deleteInputInvoice");
+
+  await recordAuditLog({
+    entityType: "input_invoice",
+    entityId: id,
+    action: "delete",
+    oldData: oldRow,
+    newData: null,
+  });
+}
+
+/**
+ * Hủy hóa đơn đầu vào — Stage 5b refactor (CEO 06/05/2026).
+ *
+ * Schema input_invoices.status CHECK chỉ accept ('recorded', 'unrecorded')
+ * → không thể set 'cancelled' nếu không migrate trước. Tạm thời cancel ở đây
+ * = revert status về 'unrecorded' + ghi audit log với action='cancel' +
+ * lý do reason. UI list page filter status='unrecorded' sẽ thấy phiếu này
+ * nhưng badge "Đã hủy" hiển thị từ audit_log.action='cancel' (thay vì status).
+ *
+ * Khi nào cần thật sự thêm status='cancelled' → cần migration update CHECK
+ * constraint (defer KHO-2 vì impact rộng).
+ *
+ * @param id — input invoice id
+ * @param reason — lý do hủy
+ */
+export async function cancelInputInvoice(
+  id: string,
+  reason: string,
+): Promise<void> {
+  const supabase = getClient();
+  const tenantId = await getCurrentTenantId();
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  const sb = supabase as any;
+
+  // Snapshot
+  const { data: existing, error: fetchErr } = await sb
+    .from("input_invoices")
+    .select("code, status, supplier_id, supplier_name, total_amount")
+    .eq("tenant_id", tenantId)
+    .eq("id", id)
+    .single();
+  if (fetchErr) handleError(fetchErr, "cancelInputInvoice.fetch");
+  if (!existing) throw new Error("Không tìm thấy hóa đơn đầu vào");
+
+  // Nếu đang là recorded → revert về unrecorded để mark "đã hủy ghi sổ"
+  if (existing.status === "recorded") {
+    const { error: updErr } = await sb
+      .from("input_invoices")
+      .update({ status: "unrecorded", note: `[ĐÃ HỦY] ${reason}` })
+      .eq("tenant_id", tenantId)
+      .eq("id", id);
+    if (updErr) handleError(updErr, "cancelInputInvoice.update");
+  } else {
+    // Đang unrecorded → chỉ append note marker
+    const { error: updErr } = await sb
+      .from("input_invoices")
+      .update({ note: `[ĐÃ HỦY] ${reason}` })
+      .eq("tenant_id", tenantId)
+      .eq("id", id);
+    if (updErr) handleError(updErr, "cancelInputInvoice.update");
+  }
+
+  await recordAuditLog({
+    entityType: "input_invoice",
+    entityId: id,
+    action: "cancel",
+    oldData: existing,
+    newData: { status: existing.status, note: `[ĐÃ HỦY] ${reason}` },
+  });
 }
 
 /**
