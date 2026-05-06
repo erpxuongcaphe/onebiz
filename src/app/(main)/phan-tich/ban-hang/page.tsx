@@ -308,7 +308,6 @@ export default function BanHangPage() {
   const reportHeader = (
     <ReportPageHeader
       title="Báo cáo bán hàng"
-      subtitle="Thống kê doanh thu và đơn hàng theo thời gian"
       preset={preset}
       range={range}
       onPresetChange={setPreset}

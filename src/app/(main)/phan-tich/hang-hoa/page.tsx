@@ -219,8 +219,6 @@ export default function HangHoaPage() {
           <KpiCard
             label="Tổng mặt hàng"
             value={String(totalProducts)}
-            change={totalProducts > 0 ? `${totalProducts} sản phẩm` : "Chưa có dữ liệu"}
-            positive={totalProducts > 0}
             icon="inventory_2"
             bg="bg-primary-fixed"
             iconColor="text-primary"
@@ -228,9 +226,9 @@ export default function HangHoaPage() {
           />
           <KpiCard
             label="Hàng bán chạy"
-            value={kpis?.bestSeller.name ?? "N/A"}
-            change={kpis?.bestSeller.qty ? `${kpis.bestSeller.qty} sản phẩm/tháng` : "Chưa có dữ liệu"}
-            positive={(kpis?.bestSeller.qty ?? 0) > 0}
+            value={kpis?.bestSeller.name ?? "—"}
+            change={kpis?.bestSeller.qty ? `${kpis.bestSeller.qty} sản phẩm trong tháng` : undefined}
+            positive
             icon="star"
             bg="bg-status-success/10"
             iconColor="text-status-success"
@@ -239,7 +237,7 @@ export default function HangHoaPage() {
           <KpiCard
             label="Hàng tồn kho thấp"
             value={String(kpis?.lowStockCount ?? 0)}
-            change={(kpis?.lowStockCount ?? 0) > 0 ? "Cần nhập thêm" : "Đủ hàng"}
+            change={(kpis?.lowStockCount ?? 0) > 0 ? "Cần nhập thêm" : undefined}
             positive={(kpis?.lowStockCount ?? 0) === 0}
             icon="warning"
             bg="bg-status-error/10"
@@ -249,8 +247,6 @@ export default function HangHoaPage() {
           <KpiCard
             label="Giá trị tồn kho"
             value={formatCurrency(kpis?.stockValue ?? 0) + "đ"}
-            change={(kpis?.stockValue ?? 0) > 0 ? "Giá trị hiện tại" : "Chưa có dữ liệu"}
-            positive={(kpis?.stockValue ?? 0) > 0}
             icon="warehouse"
             bg="bg-status-info/10"
             iconColor="text-status-info"

@@ -249,7 +249,7 @@ export default function AbcAnalysisPage() {
     <div className="flex flex-col h-[calc(100vh-64px)] overflow-hidden">
       <ReportPageHeader
         title="Phân loại sản phẩm theo doanh thu"
-        subtitle="Phân loại sản phẩm theo nguyên tắc Pareto: Nhóm A chiếm 80% doanh thu, Nhóm B chiếm 15%, Nhóm C chiếm 5%, kèm danh sách bán chậm"
+        subtitle="Nhóm A 80% — Nhóm B 15% — Nhóm C 5% — kèm danh sách bán chậm"
         preset={preset}
         range={range}
         onPresetChange={setPreset}

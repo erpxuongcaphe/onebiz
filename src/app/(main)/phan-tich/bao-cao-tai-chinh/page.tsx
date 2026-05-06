@@ -399,7 +399,6 @@ export default function BaoCaoTaiChinhPage() {
     <div className="flex flex-col h-[calc(100vh-64px)] overflow-y-auto">
       <ReportPageHeader
         title="Báo cáo lãi - lỗ"
-        subtitle="Lãi - lỗ, Giá vốn hàng bán, Biên lợi nhuận theo kỳ"
         preset={preset}
         range={range}
         onPresetChange={setPreset}

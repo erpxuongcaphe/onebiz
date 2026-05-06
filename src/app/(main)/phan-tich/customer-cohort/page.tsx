@@ -115,7 +115,6 @@ export default function CustomerCohortPage() {
     <div className="flex flex-col h-[calc(100vh-64px)] overflow-hidden">
       <ReportPageHeader
         title="Khách hàng quay lại theo tháng đầu mua"
-        subtitle="Tỷ lệ khách hàng quay lại trong các tháng kế tiếp sau lần mua đầu tiên"
         preset={preset}
         range={range}
         onPresetChange={setPreset}

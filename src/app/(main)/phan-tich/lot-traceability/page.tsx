@@ -246,8 +246,8 @@ export default function LotTraceabilityPage() {
   return (
     <div className="flex flex-col h-[calc(100vh-64px)] overflow-hidden">
       <ReportPageHeader
-        title="Truy xuất nguồn gốc theo lô + Hàng cận hạn sử dụng"
-        subtitle="Truy xuất nguồn gốc lô hàng và cảnh báo lô sắp hết hạn sử dụng"
+        title="Truy xuất nguồn gốc theo lô"
+        subtitle="Cảnh báo lô sắp hết hạn sử dụng"
         preset={preset}
         range={range}
         onPresetChange={setPreset}

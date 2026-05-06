@@ -472,8 +472,8 @@ export default function XuatNhapTonPage() {
         title="Báo cáo Xuất - Nhập - Tồn"
         subtitle={
           subMode === "detail"
-            ? "Chi tiết NHẬP/XUẤT theo từng loại giao dịch (kế toán)"
-            : "Tổng hợp tồn đầu, nhập, xuất, tồn cuối kỳ"
+            ? "Chi tiết theo từng loại giao dịch nhập, xuất"
+            : undefined
         }
         preset={preset}
         range={range}

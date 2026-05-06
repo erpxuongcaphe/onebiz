@@ -1707,22 +1707,21 @@ function PosPageInner() {
 
       {/* ═══════════ HEADER 40px ═══════════ */}
       <header className="h-10 bg-primary text-primary-foreground flex items-center px-3 shrink-0 gap-3">
-        {/* Back */}
+        {/* Back — chỉ icon, text Quay lại bỏ để header gọn */}
         <Link
           href="/"
-          className="inline-flex items-center gap-1 px-2 py-1 rounded text-xs hover:bg-white/10 transition-colors shrink-0"
+          className="inline-flex items-center justify-center p-1.5 rounded hover:bg-white/10 transition-colors shrink-0"
+          title="Quay lại trang chủ"
         >
-          <Icon name="arrow_back" size={14} />
-          <span className="hidden sm:inline">Quay lại</span>
+          <Icon name="arrow_back" size={16} />
         </Link>
 
-        {/* Branch selector + Title — hiện rõ tên chi nhánh + code để user biết đang ghi nhận đơn ở đâu */}
+        {/* Branch selector + Title — title text đầy đủ, bỏ icon shopping_cart trùng nghĩa */}
         <PosBranchSelector variant="dark" filter={["warehouse", "store"]} showCode />
         <div className="h-4 w-px bg-white/20 shrink-0" />
-        <div className="flex items-center gap-2 shrink-0">
-          <Icon name="shopping_cart" size={14} />
-          <span className="text-[13px] font-bold tracking-wide">POS Retail</span>
-        </div>
+        <span className="text-[13px] font-bold tracking-wide shrink-0">
+          Bán hàng tại quầy
+        </span>
 
         {/* CLEAN HEADER: KM/Tier/Cart-count badges đã bị bỏ — info đã hiện ở
             cart panel phải (summary breakdown + Khách cần trả). Tránh trùng
