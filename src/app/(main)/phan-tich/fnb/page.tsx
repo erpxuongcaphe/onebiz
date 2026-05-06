@@ -76,11 +76,12 @@ export default function FnbAnalyticsPage() {
   const [cashiers, setCashiers] = useState<CashierPerformance[]>([]);
 
   useEffect(() => {
+    if (!isReady) return;
     (async () => {
       setLoading(true);
       try {
         const [k, m, t, h, c] = await Promise.all([
-          getFnbKpis(activeBranchId),
+          getFnbKpis(activeBranchId, range),
           getRevenueByMenuItem(activeBranchId),
           getRevenueByTable(activeBranchId),
           getRevenueByHourFnb(activeBranchId),
@@ -97,7 +98,7 @@ export default function FnbAnalyticsPage() {
         setLoading(false);
       }
     })();
-  }, [activeBranchId]);
+  }, [activeBranchId, range, isReady]);
 
   if (loading) {
     return (

@@ -48,9 +48,12 @@ export interface CashierPerformance {
  */
 export async function getFnbKpis(
   branchId?: string,
+  range?: { from: string; to: string },
 ): Promise<FnbKpis> {
   const supabase = getClient();
   const tenantId = await getCurrentTenantId();
+  const rangeStart = range ? `${range.from}T00:00:00+07:00` : null;
+  const rangeEnd = range ? `${range.to}T23:59:59.999+07:00` : null;
 
   let query = supabase
     .from("invoices")
@@ -60,6 +63,9 @@ export async function getFnbKpis(
     .not("status", "eq", "cancelled");
 
   if (branchId) query = query.eq("branch_id", branchId);
+  if (rangeStart && rangeEnd) {
+    query = query.gte("created_at", rangeStart).lt("created_at", rangeEnd);
+  }
 
   const { data: invoices } = await query;
   const rows = invoices ?? [];
@@ -76,6 +82,9 @@ export async function getFnbKpis(
     .eq("status", "completed")
     .not("table_id", "is", null);
   if (branchId) koQuery = koQuery.eq("branch_id", branchId);
+  if (rangeStart && rangeEnd) {
+    koQuery = koQuery.gte("created_at", rangeStart).lt("created_at", rangeEnd);
+  }
 
   const { data: koRows } = await koQuery;
   let avgTurnoverMinutes = 0;

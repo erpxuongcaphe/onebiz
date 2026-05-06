@@ -161,9 +161,9 @@ export default function TaiChinhPage() {
       setLoading(true);
       const [kpiResult, revExpResult, expBkResult, profitResult, cashResult] =
         await Promise.all([
-          getFinanceKpis(activeBranchId),
+          getFinanceKpis(activeBranchId, range),
           getRevenueVsExpense(12, activeBranchId),
-          getExpenseBreakdown(activeBranchId),
+          getExpenseBreakdown(activeBranchId, range),
           getMonthlyProfit(12, activeBranchId),
           getCashFlow(6, activeBranchId),
         ]);
@@ -177,7 +177,7 @@ export default function TaiChinhPage() {
     } finally {
       setLoading(false);
     }
-  }, [activeBranchId]);
+  }, [activeBranchId, range]);
 
   useEffect(() => {
     if (!isReady) return; // PERF F12: chờ AuthContext xong, tránh double-fire

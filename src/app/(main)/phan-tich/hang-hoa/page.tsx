@@ -167,9 +167,9 @@ export default function HangHoaPage() {
     try {
       const [kpiData, topData, catData, moveData, lowData] = await Promise.all([
         getInventoryKpis(),
-        getTopProductsByRevenue(10, activeBranchId),
+        getTopProductsByRevenue(10, activeBranchId, range),
         getCategoryDistribution(),
-        getStockMovements(30, activeBranchId),
+        getStockMovements(30, activeBranchId, range),
         getAnalyticsLowStock(),
       ]);
       setKpis(kpiData);
@@ -182,7 +182,7 @@ export default function HangHoaPage() {
     } finally {
       setLoading(false);
     }
-  }, [activeBranchId]);
+  }, [activeBranchId, range]);
 
   useEffect(() => {
     if (!isReady) return;

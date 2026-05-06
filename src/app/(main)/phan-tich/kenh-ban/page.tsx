@@ -126,8 +126,8 @@ export default function KenhBanPage() {
     setLoading(true);
     try {
       const [revenueRes, perfRes] = await Promise.all([
-        getChannelRevenue(activeBranchId),
-        getChannelPerformance(activeBranchId),
+        getChannelRevenue(activeBranchId, range),
+        getChannelPerformance(activeBranchId, range),
       ]);
       setChannelRevenue(revenueRes);
       setChannelPerformance(perfRes);
@@ -136,7 +136,7 @@ export default function KenhBanPage() {
     } finally {
       setLoading(false);
     }
-  }, [activeBranchId]);
+  }, [activeBranchId, range]);
 
   useEffect(() => {
     if (!isReady) return;

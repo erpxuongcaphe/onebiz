@@ -178,11 +178,51 @@ function lastNMonthsRange(n: number): { start: string; end: string } {
   return { start: start.toISOString(), end: end.toISOString() };
 }
 
+/**
+ * Sprint REP-2 (CEO 06/05/2026): wire date filter từ ReportPageHeader
+ * vào service layer. Trước đây UI đổi preset nhưng service vẫn fetch
+ * "tháng này" hardcoded.
+ *
+ * @param range - optional date range từ caller (ReportPageHeader preset)
+ * @param fallback - fallback range cũ (giữ backward-compat)
+ */
+function resolveRange(
+  range: { from: string; to: string } | undefined,
+  fallback: { start: string; end: string },
+): { start: string; end: string } {
+  if (range) {
+    return {
+      start: `${range.from}T00:00:00+07:00`,
+      end: `${range.to}T23:59:59.999+07:00`,
+    };
+  }
+  return fallback;
+}
+
+/**
+ * Compute previous-period range (same length backward) cho KPIs comparison.
+ * Dùng khi caller pass custom range — previous month không còn ý nghĩa.
+ */
+function previousRange(current: {
+  start: string;
+  end: string;
+}): { start: string; end: string } {
+  const startDate = new Date(current.start);
+  const endDate = new Date(current.end);
+  const lengthMs = endDate.getTime() - startDate.getTime();
+  const prevEnd = new Date(startDate.getTime() - 1);
+  const prevStart = new Date(prevEnd.getTime() - lengthMs);
+  return { start: prevStart.toISOString(), end: prevEnd.toISOString() };
+}
+
 // ========================================
 // TỔNG QUAN (Overview) - /phan-tich
 // ========================================
 
-export async function getOverviewKpis(branchId?: string): Promise<{
+export async function getOverviewKpis(
+  branchId?: string,
+  range?: { from: string; to: string },
+): Promise<{
   revenue: number; prevRevenue: number;
   orders: number; prevOrders: number;
   newCustomers: number; prevNewCustomers: number;
@@ -190,10 +230,17 @@ export async function getOverviewKpis(branchId?: string): Promise<{
 }> {
   const supabase = getClient();
   const tenantId = await getCurrentTenantId();
-  const thisMonth = thisMonthRange();
-  const now = new Date();
-  const prevStart = new Date(now.getFullYear(), now.getMonth() - 1, 1);
-  const prevEnd = new Date(now.getFullYear(), now.getMonth(), 1);
+  const thisMonth = resolveRange(range, thisMonthRange());
+  const prev = range
+    ? previousRange(thisMonth)
+    : (() => {
+        const now = new Date();
+        const ps = new Date(now.getFullYear(), now.getMonth() - 1, 1);
+        const pe = new Date(now.getFullYear(), now.getMonth(), 1);
+        return { start: ps.toISOString(), end: pe.toISOString() };
+      })();
+  const prevStart = new Date(prev.start);
+  const prevEnd = new Date(prev.end);
 
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
   function bq<T>(query: T): T { return branchId ? (query as any).eq("branch_id", branchId) : query; }
@@ -301,16 +348,20 @@ export async function getDailyRevenue(
   return Array.from(grouped.entries()).map(([date, revenue]) => ({ date, revenue }));
 }
 
-export async function getRevenueByCategory(branchId?: string): Promise<CategoryRevenue[]> {
+export async function getRevenueByCategory(
+  branchId?: string,
+  range?: { from: string; to: string },
+): Promise<CategoryRevenue[]> {
   const supabase = getClient();
   const tenantId = await getCurrentTenantId();
-  const range = thisMonthRange();
+  const r = resolveRange(range, thisMonthRange());
 
   let query = supabase
     .from("invoice_items")
     .select("total, products!inner(category_id, categories(name)), invoices!inner(created_at, status, branch_id, tenant_id)")
     .eq("invoices.tenant_id", tenantId)
-    .gte("invoices.created_at", range.start)
+    .gte("invoices.created_at", r.start)
+    .lt("invoices.created_at", r.end)
     .eq("invoices.status", "completed");
   if (branchId) query = query.eq("invoices.branch_id", branchId);
   const { data, error } = await query;
@@ -576,7 +627,10 @@ export async function getTodayTopProducts(
 // ĐẶT HÀNG (Orders) - /phan-tich/dat-hang
 // ========================================
 
-export async function getOrdersKpis(branchId?: string): Promise<{
+export async function getOrdersKpis(
+  branchId?: string,
+  range?: { from: string; to: string },
+): Promise<{
   total: number; prevTotal: number;
   completed: number; completedPct: number;
   inTransit: number; inTransitPct: number;
@@ -584,29 +638,33 @@ export async function getOrdersKpis(branchId?: string): Promise<{
 }> {
   const supabase = getClient();
   const tenantId = await getCurrentTenantId();
-  const range = thisMonthRange();
+  const r = resolveRange(range, thisMonthRange());
+  const prev = range
+    ? previousRange(r)
+    : (() => {
+        const now = new Date();
+        const ps = new Date(now.getFullYear(), now.getMonth() - 1, 1);
+        const pe = new Date(now.getFullYear(), now.getMonth(), 1);
+        return { start: ps.toISOString(), end: pe.toISOString() };
+      })();
 
   let query = supabase
     .from("invoices")
     .select("status")
     .eq("tenant_id", tenantId)
-    .gte("created_at", range.start)
-    .lt("created_at", range.end);
+    .gte("created_at", r.start)
+    .lt("created_at", r.end);
   if (branchId) query = query.eq("branch_id", branchId);
   const { data, error } = await query;
 
   if (error) handleError(error, "getOrdersKpis");
 
-  const now = new Date();
-  const prevStart = new Date(now.getFullYear(), now.getMonth() - 1, 1);
-  const prevEnd = new Date(now.getFullYear(), now.getMonth(), 1);
-
   let prevQuery = supabase
     .from("invoices")
     .select("id", { count: "exact", head: true })
     .eq("tenant_id", tenantId)
-    .gte("created_at", prevStart.toISOString())
-    .lt("created_at", prevEnd.toISOString());
+    .gte("created_at", prev.start)
+    .lt("created_at", prev.end);
   if (branchId) prevQuery = prevQuery.eq("branch_id", branchId);
   const { count: prevTotal } = await prevQuery;
 
@@ -624,10 +682,14 @@ export async function getOrdersKpis(branchId?: string): Promise<{
   };
 }
 
-export async function getDailyOrderVolume(days: number = 30, branchId?: string): Promise<ChartPoint[]> {
+export async function getDailyOrderVolume(
+  days: number = 30,
+  branchId?: string,
+  customRange?: { from: string; to: string },
+): Promise<ChartPoint[]> {
   const supabase = getClient();
   const tenantId = await getCurrentTenantId();
-  const range = lastNDaysRange(days);
+  const range = resolveRange(customRange, lastNDaysRange(days));
 
   let query = supabase
     .from("invoices")
@@ -658,17 +720,20 @@ export async function getDailyOrderVolume(days: number = 30, branchId?: string):
   return Array.from(grouped.entries()).map(([label, value]) => ({ label, value }));
 }
 
-export async function getOrderStatusDistribution(branchId?: string): Promise<OrderStatusItem[]> {
+export async function getOrderStatusDistribution(
+  branchId?: string,
+  range?: { from: string; to: string },
+): Promise<OrderStatusItem[]> {
   const supabase = getClient();
   const tenantId = await getCurrentTenantId();
-  const range = thisMonthRange();
+  const r = resolveRange(range, thisMonthRange());
 
   let query = supabase
     .from("invoices")
     .select("status")
     .eq("tenant_id", tenantId)
-    .gte("created_at", range.start)
-    .lt("created_at", range.end);
+    .gte("created_at", r.start)
+    .lt("created_at", r.end);
   if (branchId) query = query.eq("branch_id", branchId);
   const { data, error } = await query;
 
@@ -690,7 +755,11 @@ export async function getOrderStatusDistribution(branchId?: string): Promise<Ord
   return Array.from(counts.entries()).map(([name, value]) => ({ name, value }));
 }
 
-export async function getRecentOrders(limit: number = 10, branchId?: string): Promise<RecentOrder[]> {
+export async function getRecentOrders(
+  limit: number = 10,
+  branchId?: string,
+  range?: { from: string; to: string },
+): Promise<RecentOrder[]> {
   const supabase = getClient();
   const tenantId = await getCurrentTenantId();
 
@@ -701,6 +770,10 @@ export async function getRecentOrders(limit: number = 10, branchId?: string): Pr
     .order("created_at", { ascending: false })
     .limit(limit);
   if (branchId) query = query.eq("branch_id", branchId);
+  if (range) {
+    const r = resolveRange(range, thisMonthRange());
+    query = query.gte("created_at", r.start).lt("created_at", r.end);
+  }
   const { data, error } = await query;
 
   if (error) handleError(error, "getRecentOrders");
@@ -775,16 +848,21 @@ export async function getInventoryKpis(): Promise<{
   };
 }
 
-export async function getTopProductsByRevenue(limit: number = 10, branchId?: string): Promise<TopProductRevenue[]> {
+export async function getTopProductsByRevenue(
+  limit: number = 10,
+  branchId?: string,
+  range?: { from: string; to: string },
+): Promise<TopProductRevenue[]> {
   const supabase = getClient();
   const tenantId = await getCurrentTenantId();
-  const range = thisMonthRange();
+  const r = resolveRange(range, thisMonthRange());
 
   let query = supabase
     .from("invoice_items")
     .select("product_name, quantity, total, invoices!inner(created_at, status, branch_id, tenant_id)")
     .eq("invoices.tenant_id", tenantId)
-    .gte("invoices.created_at", range.start)
+    .gte("invoices.created_at", r.start)
+    .lt("invoices.created_at", r.end)
     .eq("invoices.status", "completed");
   if (branchId) query = query.eq("invoices.branch_id", branchId);
   const { data, error } = await query;
@@ -866,10 +944,14 @@ export async function getCategoryDistribution(
   return Array.from(map.entries()).map(([name, value]) => ({ name, value }));
 }
 
-export async function getStockMovements(days: number = 30, branchId?: string): Promise<StockMovementPoint[]> {
+export async function getStockMovements(
+  days: number = 30,
+  branchId?: string,
+  customRange?: { from: string; to: string },
+): Promise<StockMovementPoint[]> {
   const supabase = getClient();
   const tenantId = await getCurrentTenantId();
-  const range = lastNDaysRange(days);
+  const range = resolveRange(customRange, lastNDaysRange(days));
 
   let query = supabase
     .from("stock_movements")
@@ -940,10 +1022,13 @@ export async function getLowStockProducts(limit: number = 10): Promise<LowStockI
 // KÊNH BÁN (Sales Channels) - /phan-tich/kenh-ban
 // ========================================
 
-export async function getChannelRevenue(branchId?: string): Promise<ChartPoint[]> {
+export async function getChannelRevenue(
+  branchId?: string,
+  range?: { from: string; to: string },
+): Promise<ChartPoint[]> {
   const supabase = getClient();
   const tenantId = await getCurrentTenantId();
-  const range = thisMonthRange();
+  const r = resolveRange(range, thisMonthRange());
 
   // Main invoices = "Tại quầy" (POS)
   let posQuery = supabase
@@ -951,8 +1036,8 @@ export async function getChannelRevenue(branchId?: string): Promise<ChartPoint[]
     .select("total")
     .eq("tenant_id", tenantId)
     .eq("status", "completed")
-    .gte("created_at", range.start)
-    .lt("created_at", range.end);
+    .gte("created_at", r.start)
+    .lt("created_at", r.end);
   if (branchId) posQuery = posQuery.eq("branch_id", branchId);
   const { data: posData } = await posQuery;
 
@@ -963,8 +1048,8 @@ export async function getChannelRevenue(branchId?: string): Promise<ChartPoint[]
     .from("online_orders")
     .select("channel_name, total_amount")
     .eq("tenant_id", tenantId)
-    .gte("created_at", range.start)
-    .lt("created_at", range.end);
+    .gte("created_at", r.start)
+    .lt("created_at", r.end);
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
   if (branchId) onlineQuery = (onlineQuery as any).eq("branch_id", branchId);
   const { data: onlineData } = await onlineQuery;
@@ -980,18 +1065,21 @@ export async function getChannelRevenue(branchId?: string): Promise<ChartPoint[]
   return Array.from(channelMap.entries()).map(([label, value]) => ({ label, value }));
 }
 
-export async function getChannelPerformance(branchId?: string): Promise<{ channel: string; revenue: number; orders: number; avgValue: number }[]> {
+export async function getChannelPerformance(
+  branchId?: string,
+  range?: { from: string; to: string },
+): Promise<{ channel: string; revenue: number; orders: number; avgValue: number }[]> {
   const supabase = getClient();
   const tenantId = await getCurrentTenantId();
-  const range = thisMonthRange();
+  const r = resolveRange(range, thisMonthRange());
 
   let posQuery = supabase
     .from("invoices")
     .select("total")
     .eq("tenant_id", tenantId)
     .eq("status", "completed")
-    .gte("created_at", range.start)
-    .lt("created_at", range.end);
+    .gte("created_at", r.start)
+    .lt("created_at", r.end);
   if (branchId) posQuery = posQuery.eq("branch_id", branchId);
   const { data: posData } = await posQuery;
 
@@ -1002,8 +1090,8 @@ export async function getChannelPerformance(branchId?: string): Promise<{ channe
     .from("online_orders")
     .select("channel_name, total_amount")
     .eq("tenant_id", tenantId)
-    .gte("created_at", range.start)
-    .lt("created_at", range.end);
+    .gte("created_at", r.start)
+    .lt("created_at", r.end);
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
   if (branchId) onlineQuery = (onlineQuery as any).eq("branch_id", branchId);
   const { data: onlineData } = await onlineQuery;
@@ -1028,7 +1116,10 @@ export async function getChannelPerformance(branchId?: string): Promise<{ channe
 // KHÁCH HÀNG (Customers) - /phan-tich/khach-hang
 // ========================================
 
-export async function getCustomerKpis(branchId?: string): Promise<{
+export async function getCustomerKpis(
+  branchId?: string,
+  range?: { from: string; to: string },
+): Promise<{
   totalCustomers: number;
   newThisMonth: number; prevNewMonth: number;
   returningPct: number;
@@ -1036,10 +1127,17 @@ export async function getCustomerKpis(branchId?: string): Promise<{
 }> {
   const supabase = getClient();
   const tenantId = await getCurrentTenantId();
-  const thisMonth = thisMonthRange();
-  const now = new Date();
-  const prevStart = new Date(now.getFullYear(), now.getMonth() - 1, 1);
-  const prevEnd = new Date(now.getFullYear(), now.getMonth(), 1);
+  const thisMonth = resolveRange(range, thisMonthRange());
+  const prev = range
+    ? previousRange(thisMonth)
+    : (() => {
+        const now = new Date();
+        const ps = new Date(now.getFullYear(), now.getMonth() - 1, 1);
+        const pe = new Date(now.getFullYear(), now.getMonth(), 1);
+        return { start: ps.toISOString(), end: pe.toISOString() };
+      })();
+  const prevStart = new Date(prev.start);
+  const prevEnd = new Date(prev.end);
 
   const [total, thisNew, prevNew, debt] = await Promise.all([
     supabase.from("customers").select("id", { count: "exact", head: true }).eq("tenant_id", tenantId),
@@ -1214,7 +1312,10 @@ export async function getTopDebtors(limit: number = 5): Promise<TopDebtor[]> {
 // NHÀ CUNG CẤP (Suppliers) - /phan-tich/nha-cung-cap
 // ========================================
 
-export async function getSupplierKpis(branchId?: string): Promise<{
+export async function getSupplierKpis(
+  branchId?: string,
+  range?: { from: string; to: string },
+): Promise<{
   totalSuppliers: number;
   purchaseThisMonth: number; prevPurchase: number;
   totalDebt: number; prevDebt: number;
@@ -1222,10 +1323,17 @@ export async function getSupplierKpis(branchId?: string): Promise<{
 }> {
   const supabase = getClient();
   const tenantId = await getCurrentTenantId();
-  const thisMonth = thisMonthRange();
-  const now = new Date();
-  const prevStart = new Date(now.getFullYear(), now.getMonth() - 1, 1);
-  const prevEnd = new Date(now.getFullYear(), now.getMonth(), 1);
+  const thisMonth = resolveRange(range, thisMonthRange());
+  const prev = range
+    ? previousRange(thisMonth)
+    : (() => {
+        const now = new Date();
+        const ps = new Date(now.getFullYear(), now.getMonth() - 1, 1);
+        const pe = new Date(now.getFullYear(), now.getMonth(), 1);
+        return { start: ps.toISOString(), end: pe.toISOString() };
+      })();
+  const prevStart = new Date(prev.start);
+  const prevEnd = new Date(prev.end);
 
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
   function bq<T>(query: T): T { return branchId ? (query as any).eq("branch_id", branchId) : query; }
@@ -1397,7 +1505,10 @@ export async function getSupplierSummary(limit: number = 8, branchId?: string): 
 // TÀI CHÍNH (Finance) - /phan-tich/tai-chinh
 // ========================================
 
-export async function getFinanceKpis(branchId?: string): Promise<{
+export async function getFinanceKpis(
+  branchId?: string,
+  range?: { from: string; to: string },
+): Promise<{
   revenue: number; prevRevenue: number;
   expense: number; prevExpense: number;
   profit: number; prevProfit: number;
@@ -1405,10 +1516,17 @@ export async function getFinanceKpis(branchId?: string): Promise<{
 }> {
   const supabase = getClient();
   const tenantId = await getCurrentTenantId();
-  const thisMonth = thisMonthRange();
-  const now = new Date();
-  const prevStart = new Date(now.getFullYear(), now.getMonth() - 1, 1);
-  const prevEnd = new Date(now.getFullYear(), now.getMonth(), 1);
+  const thisMonth = resolveRange(range, thisMonthRange());
+  const prev = range
+    ? previousRange(thisMonth)
+    : (() => {
+        const now = new Date();
+        const ps = new Date(now.getFullYear(), now.getMonth() - 1, 1);
+        const pe = new Date(now.getFullYear(), now.getMonth(), 1);
+        return { start: ps.toISOString(), end: pe.toISOString() };
+      })();
+  const prevStart = new Date(prev.start);
+  const prevEnd = new Date(prev.end);
 
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
   function bq<T>(query: T): T { return branchId ? (query as any).eq("branch_id", branchId) : query; }
@@ -1480,18 +1598,21 @@ export async function getRevenueVsExpense(months: number = 12, branchId?: string
   }));
 }
 
-export async function getExpenseBreakdown(branchId?: string): Promise<{ name: string; value: number }[]> {
+export async function getExpenseBreakdown(
+  branchId?: string,
+  range?: { from: string; to: string },
+): Promise<{ name: string; value: number }[]> {
   const supabase = getClient();
   const tenantId = await getCurrentTenantId();
-  const range = thisMonthRange();
+  const r = resolveRange(range, thisMonthRange());
 
   let query = supabase
     .from("cash_transactions")
     .select("category, amount")
     .eq("tenant_id", tenantId)
     .eq("type", "payment")
-    .gte("created_at", range.start)
-    .lt("created_at", range.end);
+    .gte("created_at", r.start)
+    .lt("created_at", r.end);
   if (branchId) query = query.eq("branch_id", branchId);
   const { data, error } = await query;
 

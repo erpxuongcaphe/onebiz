@@ -91,10 +91,10 @@ export default function TongQuanPage() {
       setLoading(true);
       try {
         const [kpiData, daily, category, products] = await Promise.all([
-          getOverviewKpis(activeBranchId),
-          getDailyRevenue(30, activeBranchId),
-          getRevenueByCategory(activeBranchId),
-          getTopProductsByRevenue(10, activeBranchId),
+          getOverviewKpis(activeBranchId, range),
+          getDailyRevenue(30, activeBranchId, range),
+          getRevenueByCategory(activeBranchId, range),
+          getTopProductsByRevenue(10, activeBranchId, range),
         ]);
         setKpis(kpiData);
         setDailyRevenue(daily);
@@ -107,7 +107,7 @@ export default function TongQuanPage() {
       }
     }
     fetchData();
-  }, [activeBranchId]);
+  }, [activeBranchId, range]);
 
   if (loading) {
     return (

@@ -163,7 +163,7 @@ export default function NhaCungCapPage() {
     try {
       setLoading(true);
       const [kpiData, purchase, top, payment, summary] = await Promise.all([
-        getSupplierKpis(activeBranchId),
+        getSupplierKpis(activeBranchId, range),
         getPurchaseByMonth(6, activeBranchId),
         getTopSuppliersByPurchase(5, activeBranchId),
         getSupplierPaymentStatus(),
@@ -179,7 +179,7 @@ export default function NhaCungCapPage() {
     } finally {
       setLoading(false);
     }
-  }, [activeBranchId]);
+  }, [activeBranchId, range]);
 
   useEffect(() => {
     if (!isReady) return;

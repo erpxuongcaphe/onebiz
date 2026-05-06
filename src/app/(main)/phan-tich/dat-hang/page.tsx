@@ -173,10 +173,10 @@ export default function DatHangPage() {
     try {
       setLoading(true);
       const [kpisData, volumeData, statusData, ordersData] = await Promise.all([
-        getOrdersKpis(activeBranchId),
-        getDailyOrderVolume(30, activeBranchId),
-        getOrderStatusDistribution(activeBranchId),
-        getRecentOrders(10, activeBranchId),
+        getOrdersKpis(activeBranchId, range),
+        getDailyOrderVolume(30, activeBranchId, range),
+        getOrderStatusDistribution(activeBranchId, range),
+        getRecentOrders(10, activeBranchId, range),
       ]);
       setKpis(kpisData);
       setOrderVolume(volumeData);
@@ -187,7 +187,7 @@ export default function DatHangPage() {
     } finally {
       setLoading(false);
     }
-  }, [activeBranchId]);
+  }, [activeBranchId, range]);
 
   useEffect(() => {
     if (!isReady) return;

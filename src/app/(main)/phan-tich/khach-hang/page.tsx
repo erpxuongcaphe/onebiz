@@ -151,7 +151,7 @@ export default function KhachHangPage() {
     try {
       setLoading(true);
       const [kpiData, monthly, segments, customers, debtors] = await Promise.all([
-        getCustomerKpis(activeBranchId),
+        getCustomerKpis(activeBranchId, range),
         getNewCustomersMonthly(6, activeBranchId),
         getCustomerSegments(),
         getTopCustomersByRevenue(10, activeBranchId),
@@ -167,7 +167,7 @@ export default function KhachHangPage() {
     } finally {
       setLoading(false);
     }
-  }, [activeBranchId]);
+  }, [activeBranchId, range]);
 
   useEffect(() => {
     if (!isReady) return;
