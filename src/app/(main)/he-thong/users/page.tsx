@@ -79,7 +79,7 @@ export default function UsersPage() {
   const [selectedUser, setSelectedUser] = useState<UserRow | null>(null);
   const [selectedRoleId, setSelectedRoleId] = useState<string>("");
 
-  // Invite staff dialog
+  // Invite staff dialog (legacy - email magic link)
   const [inviteOpen, setInviteOpen] = useState(false);
   const [inviteBusy, setInviteBusy] = useState(false);
   const [inviteForm, setInviteForm] = useState({
@@ -90,6 +90,95 @@ export default function UsersPage() {
     roleId: "",
     asOwner: false,
   });
+
+  // Create account dialog (Sprint USER-MGMT — admin tự đặt password)
+  const [createOpen, setCreateOpen] = useState(false);
+  const [createBusy, setCreateBusy] = useState(false);
+  const [createForm, setCreateForm] = useState({
+    email: "",
+    password: "",
+    fullName: "",
+    phone: "",
+    roleId: "",
+    branchIds: [] as string[],
+    allBranches: false,
+  });
+  const resetCreateForm = () =>
+    setCreateForm({
+      email: "",
+      password: "",
+      fullName: "",
+      phone: "",
+      roleId: "",
+      branchIds: [],
+      allBranches: false,
+    });
+
+  const handleCreateUser = async () => {
+    if (!createForm.email || !createForm.password || !createForm.fullName) {
+      toast({
+        title: "Thiếu thông tin",
+        description: "Vui lòng nhập đầy đủ email, mật khẩu, họ tên",
+        variant: "error",
+      });
+      return;
+    }
+    if (createForm.password.length < 8) {
+      toast({
+        title: "Mật khẩu quá ngắn",
+        description: "Mật khẩu phải có ít nhất 8 ký tự",
+        variant: "error",
+      });
+      return;
+    }
+    if (!createForm.allBranches && createForm.branchIds.length === 0) {
+      toast({
+        title: "Chưa chọn chi nhánh",
+        description: "Chọn ít nhất 1 chi nhánh hoặc tick 'Tất cả chi nhánh'",
+        variant: "error",
+      });
+      return;
+    }
+
+    setCreateBusy(true);
+    try {
+      const res = await fetch("/api/admin/create-user", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          email: createForm.email.trim(),
+          password: createForm.password,
+          fullName: createForm.fullName.trim(),
+          phone: createForm.phone.trim() || undefined,
+          roleId: createForm.roleId || undefined,
+          branchIds: createForm.allBranches ? [] : createForm.branchIds,
+          allBranches: createForm.allBranches,
+        }),
+      });
+      const data = await res.json();
+      if (!res.ok || !data.success) {
+        throw new Error(data.message ?? "Lỗi không xác định");
+      }
+      toast({
+        title: "Đã tạo tài khoản",
+        description: `${createForm.email} có thể đăng nhập bằng mật khẩu vừa đặt`,
+        variant: "success",
+        duration: 8000,
+      });
+      setCreateOpen(false);
+      resetCreateForm();
+      load();
+    } catch (err) {
+      toast({
+        title: "Tạo tài khoản thất bại",
+        description: (err as Error).message,
+        variant: "error",
+        duration: 10000,
+      });
+    } finally {
+      setCreateBusy(false);
+    }
+  };
 
   const load = useCallback(async () => {
     if (!tenantId) return;
@@ -220,10 +309,16 @@ export default function UsersPage() {
             Quản lý tài khoản nhân viên, gán vai trò
           </p>
         </div>
-        <Button onClick={() => setInviteOpen(true)}>
-          <Icon name="person_add" size={16} className="mr-1" />
-          Mời nhân viên
-        </Button>
+        <div className="flex items-center gap-2">
+          <Button onClick={() => setCreateOpen(true)}>
+            <Icon name="person_add" size={16} className="mr-1" />
+            Tạo tài khoản mới
+          </Button>
+          <Button variant="outline" onClick={() => setInviteOpen(true)}>
+            <Icon name="mail" size={16} className="mr-1" />
+            Mời qua email
+          </Button>
+        </div>
       </div>
 
       {/* Stats */}
@@ -584,6 +679,184 @@ export default function UsersPage() {
                 <>
                   <Icon name="send" size={16} className="mr-1" />
                   Gửi lời mời
+                </>
+              )}
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
+      {/* ================================================
+           Dialog: Tạo tài khoản mới (Sprint USER-MGMT)
+           Admin tự đặt password thay vì gửi link email
+         ================================================ */}
+      <Dialog open={createOpen} onOpenChange={setCreateOpen}>
+        <DialogContent className="max-w-lg">
+          <DialogHeader>
+            <DialogTitle>Tạo tài khoản mới</DialogTitle>
+          </DialogHeader>
+          <div className="space-y-4 py-2">
+            <div className="grid grid-cols-2 gap-3">
+              <div className="space-y-1">
+                <Label htmlFor="create-email">Email *</Label>
+                <Input
+                  id="create-email"
+                  type="email"
+                  value={createForm.email}
+                  onChange={(e) =>
+                    setCreateForm({ ...createForm, email: e.target.value })
+                  }
+                  placeholder="ten@xuongcaphe.com"
+                />
+              </div>
+              <div className="space-y-1">
+                <Label htmlFor="create-password">
+                  Mật khẩu * (≥ 8 ký tự)
+                </Label>
+                <Input
+                  id="create-password"
+                  type="text"
+                  value={createForm.password}
+                  onChange={(e) =>
+                    setCreateForm({ ...createForm, password: e.target.value })
+                  }
+                  placeholder="Nhập mật khẩu cho nhân viên"
+                />
+              </div>
+            </div>
+
+            <div className="space-y-1">
+              <Label htmlFor="create-fullname">Họ và tên *</Label>
+              <Input
+                id="create-fullname"
+                value={createForm.fullName}
+                onChange={(e) =>
+                  setCreateForm({ ...createForm, fullName: e.target.value })
+                }
+                placeholder="Nguyễn Văn A"
+              />
+            </div>
+
+            <div className="space-y-1">
+              <Label htmlFor="create-phone">Số điện thoại</Label>
+              <Input
+                id="create-phone"
+                value={createForm.phone}
+                onChange={(e) =>
+                  setCreateForm({ ...createForm, phone: e.target.value })
+                }
+                placeholder="0912345678"
+              />
+            </div>
+
+            <div className="space-y-1">
+              <Label htmlFor="create-role">Vai trò</Label>
+              <Select
+                value={createForm.roleId}
+                onValueChange={(v) =>
+                  setCreateForm({ ...createForm, roleId: v ?? "" })
+                }
+              >
+                <SelectTrigger id="create-role">
+                  <SelectValue placeholder="Chọn vai trò..." />
+                </SelectTrigger>
+                <SelectContent>
+                  {roles.map((r) => (
+                    <SelectItem key={r.id} value={r.id}>
+                      {r.name}
+                    </SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+            </div>
+
+            <div className="space-y-2">
+              <Label>Chi nhánh được phép truy cập *</Label>
+              <label className="flex items-center gap-2 text-sm cursor-pointer">
+                <input
+                  type="checkbox"
+                  checked={createForm.allBranches}
+                  onChange={(e) =>
+                    setCreateForm({
+                      ...createForm,
+                      allBranches: e.target.checked,
+                      branchIds: e.target.checked ? [] : createForm.branchIds,
+                    })
+                  }
+                  className="h-4 w-4"
+                />
+                <span className="font-medium">Tất cả chi nhánh</span>
+                <span className="text-xs text-muted-foreground">
+                  (truy cập mọi chi nhánh hiện có và sau này)
+                </span>
+              </label>
+              {!createForm.allBranches && (
+                <div className="border rounded-lg p-2 max-h-40 overflow-auto space-y-1">
+                  {branches.length === 0 ? (
+                    <p className="text-xs text-muted-foreground text-center py-2">
+                      Chưa có chi nhánh nào
+                    </p>
+                  ) : (
+                    branches.map((b) => (
+                      <label
+                        key={b.id}
+                        className="flex items-center gap-2 text-sm cursor-pointer hover:bg-surface-container-low rounded px-2 py-1"
+                      >
+                        <input
+                          type="checkbox"
+                          checked={createForm.branchIds.includes(b.id)}
+                          onChange={(e) => {
+                            const next = e.target.checked
+                              ? [...createForm.branchIds, b.id]
+                              : createForm.branchIds.filter((x) => x !== b.id);
+                            setCreateForm({ ...createForm, branchIds: next });
+                          }}
+                          className="h-4 w-4"
+                        />
+                        <span>{b.name}</span>
+                        {b.code && (
+                          <span className="text-xs text-muted-foreground">
+                            ({b.code})
+                          </span>
+                        )}
+                      </label>
+                    ))
+                  )}
+                </div>
+              )}
+            </div>
+
+            <div className="rounded-lg bg-status-info/5 border border-status-info/20 p-3 text-xs text-status-info">
+              <Icon name="info" size={14} className="inline mr-1" />
+              Sau khi tạo, anh đưa email + mật khẩu cho nhân viên để họ đăng nhập.
+              Họ có thể tự đổi mật khẩu trong trang Cá nhân.
+            </div>
+          </div>
+          <DialogFooter>
+            <Button
+              variant="outline"
+              onClick={() => {
+                setCreateOpen(false);
+                resetCreateForm();
+              }}
+              disabled={createBusy}
+            >
+              Huỷ
+            </Button>
+            <Button onClick={handleCreateUser} disabled={createBusy}>
+              {createBusy ? (
+                <>
+                  <Icon
+                    name="progress_activity"
+                    size={16}
+                    className="mr-1 animate-spin"
+                  />
+                  Đang tạo...
+                </>
+              ) : (
+                <>
+                  <Icon name="person_add" size={16} className="mr-1" />
+                  Tạo tài khoản
                 </>
               )}
             </Button>
