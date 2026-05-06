@@ -338,9 +338,19 @@ function GroupCollapsed({
     cancelClose();
     if (buttonRef.current) {
       const rect = buttonRef.current.getBoundingClientRect();
-      // Position flyout to the right of the icon, vertically aligned with top of button.
-      // Using viewport-fixed coordinates so the flyout escapes any clipping ancestor.
-      setPos({ top: rect.top, left: rect.right + 6 });
+      // Position flyout to the right of the icon. Mặc định align top button.
+      // CEO 06/05/2026 fix: nếu button gần đáy viewport → popover dài có thể
+      // bị cắt mất phần dưới. Tính top sao cho popover luôn vừa viewport:
+      //   - Estimate popover height ~ 8 items × 36px + header 40px ≈ 360px max
+      //   - Nếu rect.top + 360 > viewport.height → align bottom thay vì top
+      const VIEWPORT_PADDING = 16;
+      const ESTIMATED_HEIGHT = 400;
+      const viewportH = window.innerHeight;
+      let top = rect.top;
+      if (rect.top + ESTIMATED_HEIGHT > viewportH - VIEWPORT_PADDING) {
+        top = Math.max(VIEWPORT_PADDING, viewportH - ESTIMATED_HEIGHT - VIEWPORT_PADDING);
+      }
+      setPos({ top, left: rect.right + 6 });
     }
     setOpen(true);
   };
@@ -384,11 +394,11 @@ function GroupCollapsed({
           onMouseEnter={cancelClose}
           onMouseLeave={scheduleClose}
         >
-          <div className="bg-surface-container-lowest rounded-xl ambient-shadow-lg min-w-[240px] max-w-[280px] py-2">
-            <div className="px-3 py-2 text-xs font-semibold text-muted-foreground uppercase tracking-wider border-b mb-1">
+          <div className="bg-surface-container-lowest rounded-xl ambient-shadow-lg min-w-[240px] max-w-[280px] py-2 max-h-[calc(100vh-32px)] flex flex-col">
+            <div className="px-3 py-2 text-xs font-semibold text-muted-foreground uppercase tracking-wider border-b mb-1 shrink-0">
               {group.label}
             </div>
-            <div className="px-1 space-y-0.5 max-h-[70vh] overflow-y-auto">
+            <div className="px-1 space-y-0.5 overflow-y-auto flex-1">
               {group.items?.map((leaf) => (
                 <LeafLink
                   key={leaf.href}

@@ -817,9 +817,16 @@ export default function UsersPage() {
                 onValueChange={(v) =>
                   setEditForm({ ...editForm, roleId: v ?? "" })
                 }
+                items={roles.map((r) => ({ value: r.id, label: r.name }))}
               >
                 <SelectTrigger id="edit-role">
-                  <SelectValue placeholder="Không gán vai trò" />
+                  <SelectValue placeholder="Không gán vai trò">
+                    {(v) => {
+                      if (!v) return "Không gán vai trò";
+                      const match = roles.find((r) => r.id === v);
+                      return match?.name ?? "Không gán vai trò";
+                    }}
+                  </SelectValue>
                 </SelectTrigger>
                 <SelectContent>
                   {roles.map((r) => (
@@ -1006,9 +1013,16 @@ export default function UsersPage() {
                 onValueChange={(v) =>
                   setCreateForm({ ...createForm, roleId: v ?? "" })
                 }
+                items={roles.map((r) => ({ value: r.id, label: r.name }))}
               >
                 <SelectTrigger id="create-role">
-                  <SelectValue placeholder="Chọn vai trò..." />
+                  <SelectValue placeholder="Chọn vai trò...">
+                    {(v) => {
+                      if (!v) return "Chọn vai trò...";
+                      const match = roles.find((r) => r.id === v);
+                      return match?.name ?? "Chọn vai trò...";
+                    }}
+                  </SelectValue>
                 </SelectTrigger>
                 <SelectContent>
                   {roles.map((r) => (
