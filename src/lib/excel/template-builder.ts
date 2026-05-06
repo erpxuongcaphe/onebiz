@@ -99,6 +99,95 @@ function buildDataSheet<TRow>(
 }
 
 function buildGuideSheet<TRow>(schema: ExcelSchema<TRow>): XLSX.WorkSheet {
+  // ============================================================
+  // Sprint EXCEL-GUIDE (CEO 06/05/2026) — sheet hướng dẫn nhập liệu
+  // đầy đủ cho kế toán không phải dev:
+  //   1. Tiêu đề file + mô tả mục đích
+  //   2. Quy tắc nhập liệu chung (5 quy tắc cơ bản)
+  //   3. Bảng metadata cột (tên / bắt buộc / kiểu / ghi chú / ví dụ)
+  //   4. Lỗi thường gặp + cách xử lý
+  //   5. Hỗ trợ (nơi liên hệ khi gặp khó)
+  // ============================================================
+
+  const rows: (string | number | null)[][] = [];
+
+  // ========================================
+  // Section 1: Tiêu đề + mô tả
+  // ========================================
+  rows.push([
+    `📖 HƯỚNG DẪN NHẬP LIỆU — ${schema.fileName.toUpperCase()}`,
+    "",
+    "",
+    "",
+    "",
+  ]);
+  rows.push(["", "", "", "", ""]);
+  if (schema.description) {
+    rows.push(["Mục đích:", schema.description, "", "", ""]);
+    rows.push(["", "", "", "", ""]);
+  }
+
+  // ========================================
+  // Section 2: Quy tắc nhập liệu chung
+  // ========================================
+  rows.push(["📌 QUY TẮC NHẬP LIỆU CHUNG", "", "", "", ""]);
+  rows.push(["", "", "", "", ""]);
+  rows.push([
+    "1.",
+    "Chỉ nhập dữ liệu vào sheet 'Dữ liệu', KHÔNG sửa sheet này",
+    "",
+    "",
+    "",
+  ]);
+  rows.push([
+    "2.",
+    "Hàng 1 trong sheet 'Dữ liệu' là tiêu đề cột — KHÔNG xoá hoặc đổi thứ tự",
+    "",
+    "",
+    "",
+  ]);
+  rows.push([
+    "3.",
+    "Bắt đầu nhập từ hàng 2. Mỗi hàng = 1 dòng dữ liệu",
+    "",
+    "",
+    "",
+  ]);
+  rows.push([
+    "4.",
+    "Cột đánh dấu 'Có' ở 'Bắt buộc' không được để trống",
+    "",
+    "",
+    "",
+  ]);
+  rows.push([
+    "5.",
+    "Định dạng số tiền: chỉ nhập số nguyên (vd 25000), KHÔNG nhập 'đ', dấu phẩy, dấu chấm",
+    "",
+    "",
+    "",
+  ]);
+  rows.push([
+    "6.",
+    "Định dạng ngày: YYYY-MM-DD (vd 2026-05-06) hoặc DD/MM/YYYY (vd 06/05/2026)",
+    "",
+    "",
+    "",
+  ]);
+  rows.push([
+    "7.",
+    "Cột chọn 1 (enum): copy chính xác giá trị từ cột 'Giá trị hợp lệ' bên dưới",
+    "",
+    "",
+    "",
+  ]);
+  rows.push(["", "", "", "", ""]);
+
+  // ========================================
+  // Section 3: Bảng metadata cột
+  // ========================================
+  rows.push(["📋 CHI TIẾT TỪNG CỘT", "", "", "", ""]);
+  rows.push(["", "", "", "", ""]);
   const header = [
     "Tên cột",
     "Bắt buộc",
@@ -106,14 +195,6 @@ function buildGuideSheet<TRow>(schema: ExcelSchema<TRow>): XLSX.WorkSheet {
     "Giá trị hợp lệ / Ghi chú",
     "Ví dụ",
   ];
-
-  const rows: (string | number | null)[][] = [];
-
-  // Header meta
-  if (schema.description) {
-    rows.push([schema.description, "", "", "", ""]);
-    rows.push(["", "", "", "", ""]);
-  }
   rows.push(header);
 
   for (const col of schema.columns) {
@@ -148,15 +229,99 @@ function buildGuideSheet<TRow>(schema: ExcelSchema<TRow>): XLSX.WorkSheet {
       col.example !== undefined ? String(col.example) : "",
     ]);
   }
+  rows.push(["", "", "", "", ""]);
+
+  // ========================================
+  // Section 4: Lỗi thường gặp
+  // ========================================
+  rows.push(["⚠️ LỖI THƯỜNG GẶP", "", "", "", ""]);
+  rows.push(["", "", "", "", ""]);
+  rows.push(["Lỗi", "Nguyên nhân", "Cách xử lý", "", ""]);
+  rows.push([
+    "Cột bắt buộc bị trống",
+    "Để trống cell ở cột có 'Bắt buộc = Có'",
+    "Điền giá trị cho mọi hàng có dữ liệu — kể cả nếu một số cột khác trống",
+    "",
+    "",
+  ]);
+  rows.push([
+    "Sai định dạng ngày",
+    "Nhập '5/6/2026' hoặc '5-6-26' không chuẩn",
+    "Đổi sang định dạng YYYY-MM-DD (vd 2026-05-06) hoặc DD/MM/YYYY (vd 06/05/2026)",
+    "",
+    "",
+  ]);
+  rows.push([
+    "Số tiền có dấu phẩy / chấm",
+    "Excel tự thêm '1,000,000' khi định dạng cell là currency",
+    "Đổi cell format sang Number không có separator (Format Cells → Number → 0 decimal)",
+    "",
+    "",
+  ]);
+  rows.push([
+    "Mã trùng lặp",
+    "Hai hàng có cùng mã sản phẩm / mã khách / mã NCC",
+    "Kiểm tra cột đánh dấu 'Không được trùng trong file' và sửa giá trị duy nhất",
+    "",
+    "",
+  ]);
+  rows.push([
+    "Giá trị enum không khớp",
+    "Cột chọn 1 nhập sai chính tả (vd 'Cá nhân' thay vì 'CA_NHAN')",
+    "Copy chính xác giá trị từ cột 'Giá trị hợp lệ' ở bảng trên",
+    "",
+    "",
+  ]);
+  rows.push([
+    "Excel báo 'Lỗi đọc file'",
+    "File có macro / link external bị block",
+    "Mở Excel → File → Save As → chọn định dạng .xlsx (Excel Workbook), KHÔNG chọn .xlsm",
+    "",
+    "",
+  ]);
+  rows.push([
+    "Tiếng Việt bị lỗi font",
+    "Lưu sai encoding (CSV ANSI thay vì UTF-8)",
+    "Luôn dùng định dạng .xlsx, KHÔNG dùng .csv",
+    "",
+    "",
+  ]);
+  rows.push(["", "", "", "", ""]);
+
+  // ========================================
+  // Section 5: Hỗ trợ
+  // ========================================
+  rows.push(["💬 HỖ TRỢ", "", "", "", ""]);
+  rows.push(["", "", "", "", ""]);
+  rows.push([
+    "Khi gặp khó:",
+    "Liên hệ admin qua chat trong web hoặc gọi quản lý hệ thống",
+    "",
+    "",
+    "",
+  ]);
+  rows.push([
+    "Tài liệu chi tiết:",
+    "Vào Trang chủ → Hệ thống → Hướng dẫn sử dụng",
+    "",
+    "",
+    "",
+  ]);
 
   const ws = XLSX.utils.aoa_to_sheet(rows);
   ws["!cols"] = [
-    { wch: 24 },
-    { wch: 10 },
-    { wch: 14 },
+    { wch: 26 },
+    { wch: 12 },
+    { wch: 16 },
     { wch: 60 },
-    { wch: 24 },
+    { wch: 26 },
   ];
+
+  // Merge title cell across columns
+  ws["!merges"] = [
+    { s: { r: 0, c: 0 }, e: { r: 0, c: 4 } }, // Title
+  ];
+
   return ws;
 }
 
