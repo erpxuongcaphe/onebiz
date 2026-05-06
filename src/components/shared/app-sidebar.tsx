@@ -338,19 +338,16 @@ function GroupCollapsed({
     cancelClose();
     if (buttonRef.current) {
       const rect = buttonRef.current.getBoundingClientRect();
-      // Position flyout to the right of the icon. Mặc định align top button.
-      // CEO 06/05/2026 fix: nếu button gần đáy viewport → popover dài có thể
-      // bị cắt mất phần dưới. Tính top sao cho popover luôn vừa viewport:
-      //   - Estimate popover height ~ 8 items × 36px + header 40px ≈ 360px max
-      //   - Nếu rect.top + 360 > viewport.height → align bottom thay vì top
+      // CEO 06/05 fix v2: group "Báo cáo" có 5 sub-groups + 14 items =>
+      // chiều cao thực ~700px. Estimate cũ 400 không đủ → popover vẫn bị
+      // cắt khi button cách đáy viewport < 700px.
+      //
+      // Strategy mới (luôn fits): top = 16 cố định (gần top viewport),
+      // popover dùng max-h calc(100vh-32px) tự scroll khi quá cao.
+      // Trade-off: popover không align với button nữa, nhưng bù lại
+      // luôn thấy đầy đủ items.
       const VIEWPORT_PADDING = 16;
-      const ESTIMATED_HEIGHT = 400;
-      const viewportH = window.innerHeight;
-      let top = rect.top;
-      if (rect.top + ESTIMATED_HEIGHT > viewportH - VIEWPORT_PADDING) {
-        top = Math.max(VIEWPORT_PADDING, viewportH - ESTIMATED_HEIGHT - VIEWPORT_PADDING);
-      }
-      setPos({ top, left: rect.right + 6 });
+      setPos({ top: VIEWPORT_PADDING, left: rect.right + 6 });
     }
     setOpen(true);
   };
