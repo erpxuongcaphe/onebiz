@@ -404,12 +404,52 @@ function PosPageInner() {
   // CEO 04/05/2026: nếu có nháp (manual F9 hoặc auto-save), mở dialog cho
   // cashier chọn tiếp tục hoặc bỏ qua. Chỉ chạy 1 lần per session (không
   // re-show khi user đã đóng dialog).
+  //
+  // Plus: nếu URL có ?draftId=xxx (vd "Sao chép" từ list hoá đơn redirect
+  // qua POS), auto-load draft đó luôn — skip recovery dialog.
+  // NOTE: dùng window.location.search trực tiếp (client-only) thay
+  // useSearchParams() để tránh phải wrap Suspense — POS đã là client component.
   useEffect(() => {
     if (!tenant?.id || !currentBranch?.id) return;
     if (recoveryShownRef.current) return;
     recoveryShownRef.current = true;
 
-    // Load drafts để recovery dialog
+    const urlDraftId = typeof window !== "undefined"
+      ? new URLSearchParams(window.location.search).get("draftId")
+      : null;
+
+    // Priority 1: nếu URL có ?draftId → load thẳng draft đó
+    if (urlDraftId) {
+      getDraftOrderById(urlDraftId)
+        .then((detail) => {
+          if (!detail) {
+            toast({
+              title: "Không tìm thấy đơn nháp",
+              description: "Có thể đã bị xoá hoặc đã hoàn tất từ trước.",
+              variant: "warning",
+            });
+            return;
+          }
+          state.loadDraft(detail);
+          if (detail.clientSessionId) {
+            setClientSessionId(detail.clientSessionId);
+          }
+          toast({
+            title: `Đã mở đơn nháp ${detail.code}`,
+            description: `${detail.itemCount} sản phẩm · Tổng: ${detail.total.toLocaleString("en-US")}đ. Sửa lại rồi bấm Thanh toán.`,
+            variant: "success",
+            duration: 5000,
+          });
+          // Clear URL param tránh load lại khi reload
+          router.replace("/pos", { scroll: false });
+        })
+        .catch((err) => {
+          console.warn("[POS] auto-load draft from URL failed:", err);
+        });
+      return; // Skip recovery dialog khi đã có URL param
+    }
+
+    // Priority 2: load all drafts → recovery dialog
     listDraftOrders(currentBranch.id, 50)
       .then((drafts) => {
         if (drafts.length > 0) {

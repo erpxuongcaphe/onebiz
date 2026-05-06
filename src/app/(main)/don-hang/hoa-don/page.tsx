@@ -732,7 +732,10 @@ export default function HoaDonPage() {
                 row.status === "processing"
                   ? () => setEditingItem(row)
                   : undefined,
-              // Sao chép (CEO 04/05): tạo draft mới với cùng items
+              // Sao chép (CEO 04/05): tạo draft mới + redirect ngay vào
+              // POS Retail với data pre-loaded → cashier sửa + thanh toán.
+              // Trước đây chỉ tạo draft trên server → user không biết tìm
+              // ở đâu. Giờ ?draftId=xxx → POS auto-load.
               onDuplicate: async () => {
                 if (duplicating) return;
                 setDuplicating(true);
@@ -740,10 +743,10 @@ export default function HoaDonPage() {
                   const result = await duplicateInvoice(row.id);
                   toast({
                     variant: "success",
-                    title: "Đã sao chép hoá đơn",
-                    description: `Bản nháp mới: ${result.invoiceCode}`,
+                    title: "Đã sao chép — đang mở POS Retail",
+                    description: `Bản mới: ${result.invoiceCode}`,
                   });
-                  fetchData();
+                  router.push(`/pos?draftId=${result.invoiceId}`);
                 } catch (err) {
                   toast({
                     variant: "error",
