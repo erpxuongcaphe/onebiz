@@ -327,6 +327,7 @@ export const sidebarNavGroups: SidebarGroup[] = [
           { label: "Phân tích hàng hoá", href: "/phan-tich/hang-hoa", icon: "analytics" },
           { label: "Phân loại sản phẩm theo doanh thu", href: "/phan-tich/abc-analysis", icon: "leaderboard" },
           { label: "Truy xuất nguồn gốc theo lô", href: "/phan-tich/lot-traceability", icon: "qr_code" },
+          { label: "Báo cáo kiểm kê", href: "/phan-tich/kiem-ke", icon: "fact_check" },
         ],
       },
       {

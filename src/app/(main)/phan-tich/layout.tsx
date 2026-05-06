@@ -34,6 +34,7 @@ const analyticsNav: ModuleNavGroup[] = [
       { label: "Phân tích hàng hóa", href: "/phan-tich/hang-hoa", icon: "analytics" },
       { label: "Phân loại sản phẩm theo doanh thu", href: "/phan-tich/abc-analysis", icon: "leaderboard" },
       { label: "Truy xuất nguồn gốc theo lô", href: "/phan-tich/lot-traceability", icon: "qr_code" },
+      { label: "Báo cáo kiểm kê", href: "/phan-tich/kiem-ke", icon: "fact_check" },
       { label: "Khách hàng", href: "/phan-tich/khach-hang", icon: "group" },
       { label: "Khách hàng quay lại", href: "/phan-tich/customer-cohort", icon: "repeat" },
       { label: "Nhà cung cấp", href: "/phan-tich/nha-cung-cap", icon: "local_shipping" },
