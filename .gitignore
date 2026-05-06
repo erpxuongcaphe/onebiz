@@ -28,3 +28,6 @@ supabase/seed_chunk_*
 supabase/*.b64
 supabase/remaining_part*.txt
 supabase/_migrations_phase1.sql
+
+# Database backups (chứa sample/production data, KHÔNG commit lên git)
+backups/
