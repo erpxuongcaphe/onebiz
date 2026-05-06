@@ -14,7 +14,7 @@ import {
   Legend,
   ResponsiveContainer,
 } from "recharts";
-import { DateRangeBar, KpiCard, ChartCard } from "../_components";
+import { KpiCard, ChartCard } from "../_components";
 import { useBranchFilter } from "@/lib/contexts";
 import {
   formatCurrency,
@@ -35,6 +35,12 @@ import type {
   TopDebtor,
 } from "@/lib/services/supabase/analytics";
 import { Icon } from "@/components/ui/icon";
+import { ReportPageHeader } from "@/components/shared/report";
+import { useReportState } from "@/lib/hooks/use-report-state";
+import {
+  exportReportToExcel,
+  buildReportTitleRows,
+} from "@/lib/utils/excel-export";
 
 const SEGMENT_COLORS = ["#f59e0b", "#004AC6", "#16a34a", "#8b5cf6"];
 
@@ -118,7 +124,15 @@ function renderPieLabel(props: any) {
 }
 
 export default function KhachHangPage() {
-  const { activeBranchId, isReady } = useBranchFilter();
+  const { activeBranchId, isReady, branches } = useBranchFilter();
+  const {
+    preset,
+    range,
+    setPreset,
+    setCustomRange,
+    viewMode,
+    setViewMode,
+  } = useReportState({ defaultPreset: "thisMonth", defaultViewMode: "chart" });
   const [loading, setLoading] = useState(true);
   const [kpis, setKpis] = useState<{
     totalCustomers: number;
@@ -160,13 +174,143 @@ export default function KhachHangPage() {
     fetchData();
   }, [fetchData, isReady]);
 
+  const branchName =
+    branches.find((b) => b.id === activeBranchId)?.name ?? "Tất cả chi nhánh";
+
+  const handleExportView = useCallback(() => {
+    if (!kpis) return;
+    const titleRows = buildReportTitleRows({
+      title: "Báo cáo khách hàng",
+      range,
+      branchName,
+      generatedAt: new Date(),
+    });
+    exportReportToExcel({
+      kind: "khach-hang",
+      mode: "view",
+      range,
+      branchName,
+      sheets: [
+        {
+          name: "Top khách hàng",
+          titleRows,
+          columns: [
+            { label: "Hạng", key: "rank", width: 6, format: "number" },
+            { label: "Khách hàng", key: "name", width: 28 },
+            { label: "Số đơn", key: "orders", width: 10, format: "number" },
+            { label: "Doanh thu", key: "revenue", width: 18, format: "currency" },
+          ],
+          rows: topCustomers.map((c) => ({
+            rank: c.rank,
+            name: c.name,
+            orders: c.orders,
+            revenue: c.revenue,
+          })),
+        },
+      ],
+    });
+  }, [kpis, topCustomers, range, branchName]);
+
+  const handleExportFull = useCallback(() => {
+    if (!kpis) return;
+    const titleRows = buildReportTitleRows({
+      title: "Báo cáo khách hàng — Đầy đủ",
+      range,
+      branchName,
+      generatedAt: new Date(),
+    });
+    exportReportToExcel({
+      kind: "khach-hang",
+      mode: "full",
+      range,
+      branchName,
+      sheets: [
+        {
+          name: "1. KPI",
+          titleRows,
+          columns: [
+            { label: "Chỉ tiêu", key: "label", width: 28 },
+            { label: "Giá trị", key: "value", width: 18, format: "currency" },
+          ],
+          rows: [
+            { label: "Tổng khách hàng", value: kpis.totalCustomers },
+            { label: "Khách mới tháng này", value: kpis.newThisMonth },
+            { label: "Khách mới tháng trước", value: kpis.prevNewMonth },
+            { label: "Tỷ lệ khách quay lại (%)", value: kpis.returningPct },
+            { label: "Tổng nợ phải thu", value: kpis.totalDebt },
+          ],
+        },
+        {
+          name: "2. Top khách hàng",
+          columns: [
+            { label: "Hạng", key: "rank", width: 6, format: "number" },
+            { label: "Khách hàng", key: "name", width: 28 },
+            { label: "Số đơn", key: "orders", width: 10, format: "number" },
+            { label: "Doanh thu", key: "revenue", width: 18, format: "currency" },
+          ],
+          rows: topCustomers.map((c) => ({
+            rank: c.rank,
+            name: c.name,
+            orders: c.orders,
+            revenue: c.revenue,
+          })),
+        },
+        {
+          name: "3. Top công nợ",
+          columns: [
+            { label: "Khách hàng", key: "name", width: 28 },
+            { label: "Công nợ", key: "debt", width: 18, format: "currency" },
+          ],
+          rows: topDebtors.map((d) => ({ name: d.name, debt: d.debt })),
+        },
+        {
+          name: "4. Khách mới theo tháng",
+          columns: [
+            { label: "Tháng", key: "label", width: 12 },
+            { label: "Số khách mới", key: "value", width: 14, format: "number" },
+          ],
+          rows: newCustomersMonthly.map((p) => ({ label: p.label, value: p.value })),
+        },
+        {
+          name: "5. Phân loại khách",
+          columns: [
+            { label: "Nhóm", key: "name", width: 18 },
+            { label: "Số khách", key: "value", width: 12, format: "number" },
+          ],
+          rows: customerSegments.map((s) => ({ name: s.name, value: s.value })),
+        },
+      ],
+    });
+  }, [
+    kpis,
+    topCustomers,
+    topDebtors,
+    newCustomersMonthly,
+    customerSegments,
+    range,
+    branchName,
+  ]);
+
+  const reportHeader = (
+    <ReportPageHeader
+      title="Báo cáo khách hàng"
+      subtitle="Thống kê và phân loại khách hàng"
+      preset={preset}
+      range={range}
+      onPresetChange={setPreset}
+      onCustomRangeChange={setCustomRange}
+      viewMode={viewMode}
+      onViewModeChange={setViewMode}
+      onExportView={handleExportView}
+      onExportFull={handleExportFull}
+      exportDisabled={loading || !kpis}
+    />
+  );
+
   if (loading) {
     return (
       <div className="flex flex-col h-[calc(100vh-64px)]">
-        <DateRangeBar
-          title="Phân tích khách hàng"
-          subtitle="Thống kê và phân loại khách hàng"
-        />
+        {reportHeader}
         <div className="flex-1 flex items-center justify-center">
           <Icon name="progress_activity" size={32} className="animate-spin text-muted-foreground" />
         </div>
@@ -186,10 +330,7 @@ export default function KhachHangPage() {
 
   return (
     <div className="flex flex-col h-[calc(100vh-64px)] overflow-y-auto">
-      <DateRangeBar
-        title="Phân tích khách hàng"
-        subtitle="Thống kê và phân loại khách hàng"
-      />
+      {reportHeader}
 
       <div className="flex-1 p-4 md:p-6 space-y-4">
         {/* KPI Cards */}

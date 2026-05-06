@@ -16,7 +16,9 @@ import {
   Legend,
   ResponsiveContainer,
 } from "recharts";
-import { DateRangeBar, KpiCard, ChartCard } from "../_components";
+import { KpiCard, ChartCard } from "../_components";
+import { ReportPageHeader } from "@/components/shared/report";
+import { useReportState } from "@/lib/hooks/use-report-state";
 import { useBranchFilter } from "@/lib/contexts";
 import {
   formatCurrency,
@@ -151,6 +153,8 @@ interface InventoryKpis {
 
 export default function HangHoaPage() {
   const { activeBranchId, isReady } = useBranchFilter();
+  const { preset, range, setPreset, setCustomRange, viewMode, setViewMode } =
+    useReportState({ defaultPreset: "thisMonth", defaultViewMode: "chart" });
   const [loading, setLoading] = useState(true);
   const [kpis, setKpis] = useState<InventoryKpis | null>(null);
   const [topProducts, setTopProducts] = useState<TopProductRevenue[]>([]);
@@ -198,9 +202,15 @@ export default function HangHoaPage() {
 
   return (
     <div className="flex flex-col h-[calc(100vh-64px)] overflow-y-auto">
-      <DateRangeBar
+      <ReportPageHeader
         title="Phân tích hàng hóa"
         subtitle="Thống kê sản phẩm, tồn kho và xuất nhập"
+        preset={preset}
+        range={range}
+        onPresetChange={setPreset}
+        onCustomRangeChange={setCustomRange}
+        viewMode={viewMode}
+        onViewModeChange={setViewMode}
       />
 
       <div className="flex-1 p-4 lg:p-6 space-y-4">

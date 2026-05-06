@@ -257,10 +257,19 @@ export async function getOverviewKpis(branchId?: string): Promise<{
   };
 }
 
-export async function getDailyRevenue(days: number = 30, branchId?: string): Promise<MonthlyRevenuePoint[]> {
+export async function getDailyRevenue(
+  days: number = 30,
+  branchId?: string,
+  customRange?: { from: string; to: string },
+): Promise<MonthlyRevenuePoint[]> {
   const supabase = getClient();
   const tenantId = await getCurrentTenantId();
-  const range = lastNDaysRange(days);
+  const range = customRange
+    ? {
+        start: `${customRange.from}T00:00:00+07:00`,
+        end: `${customRange.to}T23:59:59.999+07:00`,
+      }
+    : lastNDaysRange(days);
 
   let query = supabase
     .from("invoices")
@@ -400,14 +409,22 @@ export async function getRevenueByWeekday(branchId?: string): Promise<ChartPoint
   return [1, 2, 3, 4, 5, 6, 0].map((d) => ({ label: weekdays[d], value: grouped.get(d) ?? 0 }));
 }
 
-export async function getRevenueByHour(branchId?: string): Promise<ChartPoint[]> {
+export async function getRevenueByHour(
+  branchId?: string,
+  range?: { from: string; to: string },
+): Promise<ChartPoint[]> {
   const supabase = getClient();
   const tenantId = await getCurrentTenantId();
-  const today = todayRange();
+  const r = range
+    ? {
+        start: `${range.from}T00:00:00+07:00`,
+        end: `${range.to}T23:59:59.999+07:00`,
+      }
+    : todayRange();
 
   let query = supabase
     .from("invoices").select("created_at, total").eq("tenant_id", tenantId).eq("status", "completed")
-    .gte("created_at", today.start).lt("created_at", today.end);
+    .gte("created_at", r.start).lt("created_at", r.end);
   if (branchId) query = query.eq("branch_id", branchId);
   const { data, error } = await query;
 
@@ -456,19 +473,44 @@ export async function getTopInvoices(limit: number = 10, branchId?: string): Pro
 // CUỐI NGÀY (End of Day) - /phan-tich/cuoi-ngay
 // ========================================
 
-export async function getEndOfDayStats(branchId?: string): Promise<EndOfDayStats> {
+/**
+ * @param range - optional date range (Sprint REP-1, CEO 06/05/2026).
+ *  Nếu không truyền → fallback "hôm nay vs hôm qua" như behavior cũ.
+ *  Nếu truyền → so sánh kỳ này vs kỳ trước cùng độ dài backward.
+ */
+export async function getEndOfDayStats(
+  branchId?: string,
+  range?: { from: string; to: string },
+): Promise<EndOfDayStats> {
   const supabase = getClient();
   const tenantId = await getCurrentTenantId();
-  const today = todayRange();
-  const yesterday = yesterdayRange();
+
+  // Build current + previous range
+  let current: { start: string; end: string };
+  let previous: { start: string; end: string };
+  if (range) {
+    const fromIso = `${range.from}T00:00:00+07:00`;
+    const toIso = `${range.to}T23:59:59.999+07:00`;
+    current = { start: fromIso, end: toIso };
+    // Previous = same length backward
+    const fromDate = new Date(`${range.from}T00:00:00+07:00`);
+    const toDate = new Date(`${range.to}T23:59:59.999+07:00`);
+    const lengthMs = toDate.getTime() - fromDate.getTime();
+    const prevTo = new Date(fromDate.getTime() - 1);
+    const prevFrom = new Date(prevTo.getTime() - lengthMs);
+    previous = { start: prevFrom.toISOString(), end: prevTo.toISOString() };
+  } else {
+    current = todayRange();
+    previous = yesterdayRange();
+  }
 
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
   function bq<T>(query: T): T { return branchId ? (query as any).eq("branch_id", branchId) : query; }
 
   const [todayInv, yesterdayInv, todayReturns] = await Promise.all([
-    bq(supabase.from("invoices").select("total, status, payment_method").eq("tenant_id", tenantId).gte("created_at", today.start).lt("created_at", today.end)),
-    bq(supabase.from("invoices").select("total, status, payment_method").eq("tenant_id", tenantId).gte("created_at", yesterday.start).lt("created_at", yesterday.end)),
-    bq(supabase.from("sales_returns").select("refunded").eq("tenant_id", tenantId).gte("created_at", today.start).lt("created_at", today.end)),
+    bq(supabase.from("invoices").select("total, status, payment_method").eq("tenant_id", tenantId).gte("created_at", current.start).lt("created_at", current.end)),
+    bq(supabase.from("invoices").select("total, status, payment_method").eq("tenant_id", tenantId).gte("created_at", previous.start).lt("created_at", previous.end)),
+    bq(supabase.from("sales_returns").select("refunded").eq("tenant_id", tenantId).gte("created_at", current.start).lt("created_at", current.end)),
   ]);
 
   const completed = (todayInv.data ?? []).filter(i => i.status === "completed");
@@ -492,17 +534,26 @@ export async function getEndOfDayStats(branchId?: string): Promise<EndOfDayStats
   };
 }
 
-export async function getTodayTopProducts(limit: number = 5, branchId?: string): Promise<{ name: string; qty: number }[]> {
+export async function getTodayTopProducts(
+  limit: number = 5,
+  branchId?: string,
+  range?: { from: string; to: string },
+): Promise<{ name: string; qty: number }[]> {
   const supabase = getClient();
   const tenantId = await getCurrentTenantId();
-  const today = todayRange();
+  const r = range
+    ? {
+        start: `${range.from}T00:00:00+07:00`,
+        end: `${range.to}T23:59:59.999+07:00`,
+      }
+    : todayRange();
 
   let query = supabase
     .from("invoice_items")
     .select("product_name, quantity, invoices!inner(created_at, status, branch_id, tenant_id)")
     .eq("invoices.tenant_id", tenantId)
-    .gte("invoices.created_at", today.start)
-    .lt("invoices.created_at", today.end)
+    .gte("invoices.created_at", r.start)
+    .lt("invoices.created_at", r.end)
     .eq("invoices.status", "completed");
   if (branchId) query = query.eq("invoices.branch_id", branchId);
   const { data, error } = await query;

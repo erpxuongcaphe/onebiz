@@ -19,7 +19,9 @@ import {
   formatChartCurrency,
   formatChartTooltipCurrency,
 } from "@/lib/format";
-import { DateRangeBar, KpiCard, ChartCard } from "./_components";
+import { KpiCard, ChartCard } from "./_components";
+import { ReportPageHeader } from "@/components/shared/report";
+import { useReportState } from "@/lib/hooks/use-report-state";
 import { useBranchFilter } from "@/lib/contexts";
 import {
   getOverviewKpis,
@@ -59,6 +61,20 @@ function RevenueTooltip({ active, payload, label }: any) {
 
 export default function TongQuanPage() {
   const { activeBranchId } = useBranchFilter();
+  const { preset, range, setPreset, setCustomRange, viewMode, setViewMode } =
+    useReportState({ defaultPreset: "thisMonth", defaultViewMode: "chart" });
+  const reportHeader = (
+    <ReportPageHeader
+      title="Tổng quan"
+      subtitle="Phân tích kinh doanh tổng hợp"
+      preset={preset}
+      range={range}
+      onPresetChange={setPreset}
+      onCustomRangeChange={setCustomRange}
+      viewMode={viewMode}
+      onViewModeChange={setViewMode}
+    />
+  );
   const [loading, setLoading] = useState(true);
   const [kpis, setKpis] = useState<{
     revenue: number; prevRevenue: number;
@@ -96,7 +112,7 @@ export default function TongQuanPage() {
   if (loading) {
     return (
       <div className="flex flex-col h-full">
-        <DateRangeBar title="Tổng quan" subtitle="Phân tích kinh doanh tổng hợp" />
+        {reportHeader}
         <div className="flex-1 flex items-center justify-center">
           <Icon name="progress_activity" size={32} className="animate-spin text-muted-foreground" />
         </div>
@@ -106,7 +122,7 @@ export default function TongQuanPage() {
 
   return (
     <div className="flex flex-col h-full">
-      <DateRangeBar title="Tổng quan" subtitle="Phân tích kinh doanh tổng hợp" />
+      {reportHeader}
 
       <div className="flex-1 overflow-auto p-4 lg:p-6 space-y-4">
         {/* KPI Cards */}

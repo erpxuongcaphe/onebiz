@@ -11,7 +11,9 @@ import {
   Tooltip,
   ResponsiveContainer,
 } from "recharts";
-import { DateRangeBar, KpiCard, ChartCard } from "../_components";
+import { KpiCard, ChartCard } from "../_components";
+import { ReportPageHeader } from "@/components/shared/report";
+import { useReportState } from "@/lib/hooks/use-report-state";
 import { useBranchFilter } from "@/lib/contexts";
 import { formatCurrency, formatChartCurrency, formatChartTooltipCurrency } from "@/lib/format";
 import {
@@ -64,6 +66,8 @@ const COLORS = [
 
 export default function FnbAnalyticsPage() {
   const { activeBranchId, isReady } = useBranchFilter();
+  const { preset, range, setPreset, setCustomRange, viewMode, setViewMode } =
+    useReportState({ defaultPreset: "thisMonth", defaultViewMode: "chart" });
   const [loading, setLoading] = useState(true);
   const [kpis, setKpis] = useState<FnbKpis | null>(null);
   const [menuItems, setMenuItems] = useState<MenuItemRevenue[]>([]);
@@ -105,7 +109,16 @@ export default function FnbAnalyticsPage() {
 
   return (
     <div>
-      <DateRangeBar title="Báo cáo F&B" subtitle="Doanh thu theo món, bàn, giờ, nhân viên" />
+      <ReportPageHeader
+        title="Báo cáo F&B"
+        subtitle="Doanh thu theo món, bàn, giờ, nhân viên"
+        preset={preset}
+        range={range}
+        onPresetChange={setPreset}
+        onCustomRangeChange={setCustomRange}
+        viewMode={viewMode}
+        onViewModeChange={setViewMode}
+      />
 
       {/* KPI Cards */}
       <div className="grid grid-cols-2 lg:grid-cols-4 gap-3 p-4">

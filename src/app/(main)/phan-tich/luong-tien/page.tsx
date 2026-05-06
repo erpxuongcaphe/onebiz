@@ -19,6 +19,8 @@ import { formatCurrency, formatChartCurrency, formatChartTooltipCurrency } from 
 import { getCashFlowDetailed } from "@/lib/services/supabase/analytics";
 import type { CashFlowDetailedRow } from "@/lib/services/supabase/analytics";
 import { Icon } from "@/components/ui/icon";
+import { ReportPageHeader } from "@/components/shared/report";
+import { useReportState } from "@/lib/hooks/use-report-state";
 
 // ── Custom Tooltip ──
 function CashFlowTooltip({ active, payload, label }: any) {
@@ -39,6 +41,8 @@ function CashFlowTooltip({ active, payload, label }: any) {
 
 export default function LuongTienPage() {
   const { activeBranchId, isReady } = useBranchFilter();
+  const { preset, range, setPreset, setCustomRange, viewMode, setViewMode } =
+    useReportState({ defaultPreset: "thisYear", defaultViewMode: "chart" });
   const [data, setData] = useState<CashFlowDetailedRow[]>([]);
   const [loading, setLoading] = useState(true);
 
@@ -90,13 +94,18 @@ export default function LuongTienPage() {
   }
 
   return (
-    <div className="space-y-6 p-4 sm:p-6">
-      <div>
-        <h1 className="text-xl font-bold tracking-tight">Luồng tiền</h1>
-        <p className="text-sm text-muted-foreground">
-          Phân tích dòng tiền vào/ra 6 tháng gần nhất
-        </p>
-      </div>
+    <div className="flex flex-col h-[calc(100vh-64px)] overflow-y-auto">
+      <ReportPageHeader
+        title="Lưu chuyển tiền tệ"
+        subtitle="Phân tích dòng tiền vào/ra 6 tháng gần nhất"
+        preset={preset}
+        range={range}
+        onPresetChange={setPreset}
+        onCustomRangeChange={setCustomRange}
+        viewMode={viewMode}
+        onViewModeChange={setViewMode}
+      />
+      <div className="space-y-6 p-4 sm:p-6">
 
       {/* KPI Cards */}
       <div className="grid grid-cols-2 lg:grid-cols-4 gap-3">
@@ -228,6 +237,7 @@ export default function LuongTienPage() {
           </table>
         </div>
       </ChartCard>
+      </div>
     </div>
   );
 }

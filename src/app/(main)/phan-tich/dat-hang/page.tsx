@@ -14,7 +14,9 @@ import {
   Legend,
   ResponsiveContainer,
 } from "recharts";
-import { DateRangeBar, KpiCard, ChartCard } from "../_components";
+import { KpiCard, ChartCard } from "../_components";
+import { ReportPageHeader } from "@/components/shared/report";
+import { useReportState } from "@/lib/hooks/use-report-state";
 import { useBranchFilter } from "@/lib/contexts";
 import { formatCurrency, formatNumber } from "@/lib/format";
 import {
@@ -147,6 +149,20 @@ function renderPieLabel(props: any) {
 
 export default function DatHangPage() {
   const { activeBranchId, isReady } = useBranchFilter();
+  const { preset, range, setPreset, setCustomRange, viewMode, setViewMode } =
+    useReportState({ defaultPreset: "thisMonth", defaultViewMode: "chart" });
+  const reportHeader = (
+    <ReportPageHeader
+      title="Phân tích đặt hàng"
+      subtitle="Theo dõi tình trạng và hiệu suất đơn hàng"
+      preset={preset}
+      range={range}
+      onPresetChange={setPreset}
+      onCustomRangeChange={setCustomRange}
+      viewMode={viewMode}
+      onViewModeChange={setViewMode}
+    />
+  );
   const [loading, setLoading] = useState(true);
   const [kpis, setKpis] = useState<OrdersKpis | null>(null);
   const [orderVolume, setOrderVolume] = useState<ChartPoint[]>([]);
@@ -181,10 +197,7 @@ export default function DatHangPage() {
   if (loading) {
     return (
       <div className="flex flex-col h-[calc(100vh-64px)]">
-        <DateRangeBar
-          title="Phân tích đặt hàng"
-          subtitle="Theo dõi tình trạng và hiệu suất đơn hàng"
-        />
+        {reportHeader}
         <div className="flex-1 flex items-center justify-center">
           <Icon name="progress_activity" className="size-8 animate-spin text-muted-foreground" />
         </div>
@@ -241,10 +254,7 @@ export default function DatHangPage() {
 
   return (
     <div className="flex flex-col h-[calc(100vh-64px)] overflow-y-auto">
-      <DateRangeBar
-        title="Phân tích đặt hàng"
-        subtitle="Theo dõi tình trạng và hiệu suất đơn hàng"
-      />
+      {reportHeader}
 
       <div className="flex-1 p-4 md:p-6 space-y-4">
         {/* KPI Cards */}

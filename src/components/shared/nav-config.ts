@@ -323,7 +323,8 @@ export const sidebarNavGroups: SidebarGroup[] = [
         label: "Hàng hoá & Kho",
         icon: "inventory_2",
         items: [
-          { label: "Xuất - Nhập - Tồn", href: "/phan-tich/hang-hoa", icon: "inventory_2" },
+          { label: "Xuất - Nhập - Tồn", href: "/phan-tich/xuat-nhap-ton", icon: "inventory_2", badge: "Mới" },
+          { label: "Phân tích hàng hoá", href: "/phan-tich/hang-hoa", icon: "analytics" },
         ],
       },
       {

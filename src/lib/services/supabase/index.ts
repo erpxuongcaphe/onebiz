@@ -174,6 +174,11 @@ export {
 } from "./reports";
 export type { ConsolidatedPnL, BranchPnLRow } from "./reports";
 
+// XNT Report — Xuất-Nhập-Tồn (Sprint REP-1, CEO 06/05/2026)
+// Format chuẩn KiotViet với 13 cột detail breakdown NHẬP/XUẤT
+export { getXntReport } from "./xnt-report";
+export type { XntRow, XntBranchBreakdown, XntReportResult } from "./xnt-report";
+
 // UOM Conversions + Unit Name Management
 export { getUOMConversions, createUOMConversion, updateUOMConversion, deleteUOMConversion, convertQuantity, getAllUnits, renameUnit, mergeUnits, findSimilarUnit } from "./uom";
 

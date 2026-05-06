@@ -15,7 +15,7 @@ import {
   Tooltip,
   ResponsiveContainer,
 } from "recharts";
-import { DateRangeBar, KpiCard, ChartCard } from "../_components";
+import { KpiCard, ChartCard } from "../_components";
 import { useBranchFilter } from "@/lib/contexts";
 import {
   formatCurrency,
@@ -36,6 +36,16 @@ import type {
   TopInvoice,
 } from "@/lib/services/supabase/analytics";
 import { Icon } from "@/components/ui/icon";
+import {
+  ReportPageHeader,
+  ReportDataTable,
+  type DataTableColumn,
+} from "@/components/shared/report";
+import { useReportState } from "@/lib/hooks/use-report-state";
+import {
+  exportReportToExcel,
+  buildReportTitleRows,
+} from "@/lib/utils/excel-export";
 
 // === Helpers ===
 
@@ -138,7 +148,15 @@ interface SalesKpisData {
 }
 
 export default function BanHangPage() {
-  const { activeBranchId, isReady } = useBranchFilter();
+  const { activeBranchId, isReady, branches } = useBranchFilter();
+  const {
+    preset,
+    range,
+    setPreset,
+    setCustomRange,
+    viewMode,
+    setViewMode,
+  } = useReportState({ defaultPreset: "thisMonth", defaultViewMode: "chart" });
   const [loading, setLoading] = useState(true);
   const [kpis, setKpis] = useState<SalesKpisData | null>(null);
   const [dailyRevenue, setDailyRevenue] = useState<MonthlyRevenuePoint[]>([]);
@@ -151,9 +169,9 @@ export default function BanHangPage() {
     try {
       const [kpisData, daily, weekday, hourly, invoices] = await Promise.all([
         getSalesKpis(activeBranchId),
-        getDailyRevenue(30, activeBranchId),
+        getDailyRevenue(30, activeBranchId, range),
         getSalesRevenueByWeekday(activeBranchId),
-        getSalesRevenueByHour(activeBranchId),
+        getSalesRevenueByHour(activeBranchId, range),
         getTopInvoices(10, activeBranchId),
       ]);
       setKpis(kpisData);
@@ -166,20 +184,153 @@ export default function BanHangPage() {
     } finally {
       setLoading(false);
     }
-  }, [activeBranchId]);
+  }, [activeBranchId, range]);
 
   useEffect(() => {
     if (!isReady) return;
     fetchData();
   }, [fetchData, isReady]);
 
+  const branchName =
+    branches.find((b) => b.id === activeBranchId)?.name ?? "Tất cả chi nhánh";
+
+  // ===== Excel exports =====
+  const handleExportView = useCallback(() => {
+    if (!kpis) return;
+    const titleRows = buildReportTitleRows({
+      title: "Báo cáo bán hàng",
+      range,
+      branchName,
+      generatedAt: new Date(),
+    });
+    exportReportToExcel({
+      kind: "ban-hang",
+      mode: "view",
+      range,
+      branchName,
+      sheets: [
+        {
+          name: "KPI bán hàng",
+          titleRows,
+          columns: [
+            { label: "Chỉ tiêu", key: "label", width: 28 },
+            { label: "Kỳ này", key: "current", width: 18, format: "currency" },
+            { label: "Kỳ trước", key: "previous", width: 18, format: "currency" },
+          ],
+          rows: [
+            { label: "Doanh thu thuần", current: kpis.netRevenue, previous: kpis.prevNetRevenue },
+            { label: "Số lượng bán", current: kpis.soldQty, previous: kpis.prevSoldQty },
+            { label: "AOV (giá trị TB/đơn)", current: kpis.avgOrderValue, previous: kpis.prevAvgOrderValue },
+            { label: "Tỷ lệ trả hàng (%)", current: kpis.returnRate, previous: kpis.prevReturnRate },
+          ],
+        },
+      ],
+    });
+  }, [kpis, range, branchName]);
+
+  const handleExportFull = useCallback(() => {
+    if (!kpis) return;
+    const titleRows = buildReportTitleRows({
+      title: "Báo cáo bán hàng — Đầy đủ",
+      range,
+      branchName,
+      generatedAt: new Date(),
+    });
+    exportReportToExcel({
+      kind: "ban-hang",
+      mode: "full",
+      range,
+      branchName,
+      sheets: [
+        // Sheet 1 — KPI
+        {
+          name: "1. KPI",
+          titleRows,
+          columns: [
+            { label: "Chỉ tiêu", key: "label", width: 28 },
+            { label: "Kỳ này", key: "current", width: 18, format: "currency" },
+            { label: "Kỳ trước", key: "previous", width: 18, format: "currency" },
+          ],
+          rows: [
+            { label: "Doanh thu thuần", current: kpis.netRevenue, previous: kpis.prevNetRevenue },
+            { label: "Số lượng bán", current: kpis.soldQty, previous: kpis.prevSoldQty },
+            { label: "AOV (giá trị TB/đơn)", current: kpis.avgOrderValue, previous: kpis.prevAvgOrderValue },
+            { label: "Tỷ lệ trả hàng (%)", current: kpis.returnRate, previous: kpis.prevReturnRate },
+          ],
+        },
+        // Sheet 2 — Theo ngày
+        {
+          name: "2. Theo ngày",
+          columns: [
+            { label: "Ngày", key: "date", width: 12 },
+            { label: "Doanh thu", key: "revenue", width: 18, format: "currency" },
+          ],
+          rows: dailyRevenue.map((r) => ({ date: r.date, revenue: r.revenue })),
+        },
+        // Sheet 3 — Theo thứ trong tuần
+        {
+          name: "3. Theo thứ",
+          columns: [
+            { label: "Thứ", key: "label", width: 14 },
+            { label: "Doanh thu", key: "value", width: 18, format: "currency" },
+          ],
+          rows: revenueByWeekday.map((r) => ({ label: r.label, value: r.value })),
+        },
+        // Sheet 4 — Theo giờ
+        {
+          name: "4. Theo giờ",
+          columns: [
+            { label: "Giờ", key: "label", width: 8 },
+            { label: "Doanh thu", key: "value", width: 18, format: "currency" },
+          ],
+          rows: revenueByHour.map((r) => ({ label: r.label, value: r.value })),
+        },
+        // Sheet 5 — Top hóa đơn
+        {
+          name: "5. Top hóa đơn",
+          columns: [
+            { label: "Mã HĐ", key: "code", width: 14 },
+            { label: "Khách hàng", key: "customer", width: 28 },
+            { label: "Giá trị", key: "value", width: 18, format: "currency" },
+            { label: "Ngày", key: "date", width: 14 },
+          ],
+          rows: topInvoicesList.map((inv) => ({
+            code: inv.code,
+            customer: inv.customer,
+            value: inv.value,
+            date: inv.date,
+          })),
+        },
+      ],
+    });
+  }, [kpis, dailyRevenue, revenueByWeekday, revenueByHour, topInvoicesList, range, branchName]);
+
+  const reportHeader = (
+    <ReportPageHeader
+      title="Báo cáo bán hàng"
+      subtitle="Thống kê doanh thu và đơn hàng theo thời gian"
+      preset={preset}
+      range={range}
+      onPresetChange={setPreset}
+      onCustomRangeChange={setCustomRange}
+      viewMode={viewMode}
+      onViewModeChange={setViewMode}
+      onExportView={handleExportView}
+      onExportFull={handleExportFull}
+      exportDisabled={loading}
+    />
+  );
+
   if (loading) {
     return (
-      <div className="flex flex-col h-[calc(100vh-64px)] items-center justify-center">
-        <Icon name="progress_activity" size={32} className="animate-spin text-muted-foreground" />
-        <p className="mt-3 text-sm text-muted-foreground">
-          Đang tải dữ liệu phân tích...
-        </p>
+      <div className="flex flex-col h-[calc(100vh-64px)]">
+        {reportHeader}
+        <div className="flex-1 flex flex-col items-center justify-center">
+          <Icon name="progress_activity" size={32} className="animate-spin text-muted-foreground" />
+          <p className="mt-3 text-sm text-muted-foreground">
+            Đang tải dữ liệu phân tích...
+          </p>
+        </div>
       </div>
     );
   }
@@ -194,10 +345,7 @@ export default function BanHangPage() {
   if (!hasData) {
     return (
       <div className="flex flex-col h-[calc(100vh-64px)]">
-        <DateRangeBar
-          title="Phân tích bán hàng"
-          subtitle="Thống kê doanh thu và đơn hàng theo thời gian"
-        />
+        {reportHeader}
         <div className="flex-1 flex items-center justify-center">
           <p className="text-muted-foreground">
             Chưa có dữ liệu bán hàng trong khoảng thời gian này.
@@ -220,12 +368,20 @@ export default function BanHangPage() {
     ? calcChangePct(kpis.returnRate, kpis.prevReturnRate)
     : { text: "0%", positive: true };
 
+  // Table mode columns
+  const dailyColumns: DataTableColumn<MonthlyRevenuePoint>[] = [
+    { label: "Ngày", key: "date", align: "left" },
+    {
+      label: "Doanh thu",
+      key: "revenue",
+      align: "right",
+      cell: (r) => formatCurrency(r.revenue) + "đ",
+    },
+  ];
+
   return (
     <div className="flex flex-col h-[calc(100vh-64px)] overflow-y-auto">
-      <DateRangeBar
-        title="Phân tích bán hàng"
-        subtitle="Thống kê doanh thu và đơn hàng theo thời gian"
-      />
+      {reportHeader}
 
       <div className="flex-1 p-4 lg:p-6 space-y-4">
         {/* KPI Cards */}
@@ -272,10 +428,25 @@ export default function BanHangPage() {
           />
         </div>
 
-        {/* Daily Revenue Trend */}
-        {dailyRevenue.length > 0 && (
+        {/* Table mode early return — only doanh thu theo ngày */}
+        {viewMode === "table" ? (
+          <div className="bg-surface-container-lowest rounded-xl ambient-shadow">
+            <ReportDataTable<MonthlyRevenuePoint>
+              columns={dailyColumns}
+              rows={dailyRevenue}
+              getRowKey={(r) => r.date}
+              subtotalLabel={`Tổng cộng: ${formatCurrency(
+                dailyRevenue.reduce((s, r) => s + r.revenue, 0),
+              )}đ`}
+              emptyState="Chưa có doanh thu trong kỳ này"
+            />
+          </div>
+        ) : null}
+
+        {/* Daily Revenue Trend (chart mode) */}
+        {viewMode === "chart" && dailyRevenue.length > 0 && (
           <ChartCard
-            title="Xu hướng doanh thu 30 ngày"
+            title="Xu hướng doanh thu trong kỳ"
             subtitle="Dữ liệu thực tế"
           >
             <div className="h-56 md:h-72">
@@ -315,6 +486,7 @@ export default function BanHangPage() {
           </ChartCard>
         )}
 
+        {viewMode === "chart" && (
         <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
           {/* Revenue by Day of Week */}
           {revenueByWeekday.length > 0 && (
@@ -423,8 +595,9 @@ export default function BanHangPage() {
             </ChartCard>
           )}
         </div>
+        )}
 
-        {/* Top 10 Invoices Table */}
+        {/* Top 10 Invoices Table — show in both modes */}
         {topInvoicesList.length > 0 && (
           <ChartCard
             title="Top 10 hóa đơn giá trị cao nhất"

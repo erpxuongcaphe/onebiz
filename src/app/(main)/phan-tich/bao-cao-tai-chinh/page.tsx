@@ -24,7 +24,13 @@ import {
   Legend,
   ResponsiveContainer,
 } from "recharts";
-import { DateRangeBar, KpiCard, ChartCard } from "../_components";
+import { KpiCard, ChartCard } from "../_components";
+import { ReportPageHeader } from "@/components/shared/report";
+import { useReportState } from "@/lib/hooks/use-report-state";
+import {
+  exportReportToExcel,
+  buildReportTitleRows,
+} from "@/lib/utils/excel-export";
 import {
   formatCurrency,
   formatNumber,
@@ -111,6 +117,12 @@ function COGSTooltip({
 
 export default function BaoCaoTaiChinhPage() {
   const { toast } = useToast();
+  const {
+    preset,
+    range,
+    setPreset,
+    setCustomRange,
+  } = useReportState({ defaultPreset: "thisMonth", forceTable: true });
   const [loading, setLoading] = useState(true);
   const [exporting, setExporting] = useState(false);
   const [branchId, setBranchId] = useState<string>("all");
@@ -192,6 +204,66 @@ export default function BaoCaoTaiChinhPage() {
   const useConsolidated = ceoView && branchId === "all" && !!consolidated;
   const cur = useConsolidated ? consolidated.current : pnl?.current;
   const prev = useConsolidated ? consolidated.previous : pnl?.previous;
+
+  // Export view — 1 sheet P&L summary
+  async function handleExportView() {
+    if (!cur || !prev) {
+      toast({
+        title: "Chưa có dữ liệu để xuất",
+        description: "Vui lòng chờ báo cáo tải xong.",
+        variant: "error",
+      });
+      return;
+    }
+    setExporting(true);
+    try {
+      const branchName =
+        branchId === "all"
+          ? "Tất cả chi nhánh"
+          : branches.find((b) => b.id === branchId)?.name ?? "";
+      const titleRows = buildReportTitleRows({
+        title: "Báo cáo lãi lỗ (P&L)",
+        range,
+        branchName,
+        generatedAt: new Date(),
+      });
+      exportReportToExcel({
+        kind: "bao-cao-tai-chinh",
+        mode: "view",
+        range,
+        branchName,
+        sheets: [
+          {
+            name: "P&L",
+            titleRows,
+            columns: [
+              { label: "Khoản mục", key: "label", width: 32 },
+              { label: cur.period, key: "current", width: 18, format: "currency" },
+              { label: prev.period, key: "previous", width: 18, format: "currency" },
+            ],
+            rows: [
+              { label: "Doanh thu", current: cur.revenue, previous: prev.revenue },
+              { label: "(-) Giá vốn hàng bán (COGS)", current: cur.cogs, previous: prev.cogs },
+              { label: "= Lãi gộp", current: cur.grossProfit, previous: prev.grossProfit },
+              { label: "   Biên LN gộp (%)", current: cur.grossMargin, previous: prev.grossMargin },
+              { label: "(-) Chi phí vận hành", current: cur.operatingExpense, previous: prev.operatingExpense },
+              { label: "= Lãi ròng", current: cur.netProfit, previous: prev.netProfit },
+              { label: "   Biên LN ròng (%)", current: cur.netMargin, previous: prev.netMargin },
+            ],
+          },
+        ],
+      });
+      toast({ title: "Đã xuất báo cáo P&L", variant: "success" });
+    } catch (err) {
+      toast({
+        title: "Lỗi xuất báo cáo",
+        description: err instanceof Error ? err.message : "Vui lòng thử lại",
+        variant: "error",
+      });
+    } finally {
+      setExporting(false);
+    }
+  }
 
   async function handleExport() {
     if (!cur || !prev) {
@@ -325,10 +397,15 @@ export default function BaoCaoTaiChinhPage() {
 
   return (
     <div className="flex flex-col h-[calc(100vh-64px)] overflow-y-auto">
-      <DateRangeBar
+      <ReportPageHeader
         title="Báo cáo tài chính (P&L)"
         subtitle="Lãi/Lỗ, Giá vốn, Biên lợi nhuận"
-        onExport={handleExport}
+        preset={preset}
+        range={range}
+        onPresetChange={setPreset}
+        onCustomRangeChange={setCustomRange}
+        onExportView={handleExportView}
+        onExportFull={handleExport}
         exportDisabled={exporting || loading}
       />
 

@@ -16,7 +16,9 @@ import {
   Legend,
   ResponsiveContainer,
 } from "recharts";
-import { DateRangeBar, KpiCard, ChartCard } from "../_components";
+import { KpiCard, ChartCard } from "../_components";
+import { ReportPageHeader } from "@/components/shared/report";
+import { useReportState } from "@/lib/hooks/use-report-state";
 import { useBranchFilter } from "@/lib/contexts";
 import {
   formatCurrency,
@@ -145,6 +147,8 @@ interface FinanceKpis {
 
 export default function TaiChinhPage() {
   const { activeBranchId, isReady } = useBranchFilter();
+  const { preset, range, setPreset, setCustomRange, viewMode, setViewMode } =
+    useReportState({ defaultPreset: "thisYear", defaultViewMode: "chart" });
   const [loading, setLoading] = useState(true);
   const [kpis, setKpis] = useState<FinanceKpis | null>(null);
   const [revenueVsExpenseData, setRevenueVsExpenseData] = useState<MultiSeriesPoint[]>([]);
@@ -191,9 +195,15 @@ export default function TaiChinhPage() {
 
   return (
     <div className="flex flex-col h-[calc(100vh-64px)] overflow-y-auto">
-      <DateRangeBar
+      <ReportPageHeader
         title="Phân tích tài chính"
         subtitle="Tổng quan doanh thu, chi phí và lợi nhuận"
+        preset={preset}
+        range={range}
+        onPresetChange={setPreset}
+        onCustomRangeChange={setCustomRange}
+        viewMode={viewMode}
+        onViewModeChange={setViewMode}
       />
 
       <div className="flex-1 p-4 md:p-6 space-y-4">

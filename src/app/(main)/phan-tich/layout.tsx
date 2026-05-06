@@ -30,7 +30,8 @@ const analyticsNav: ModuleNavGroup[] = [
   {
     label: "Đối tượng",
     items: [
-      { label: "Hàng hóa", href: "/phan-tich/hang-hoa", icon: "inventory_2" },
+      { label: "Xuất - Nhập - Tồn", href: "/phan-tich/xuat-nhap-ton", icon: "inventory_2" },
+      { label: "Phân tích hàng hóa", href: "/phan-tich/hang-hoa", icon: "analytics" },
       { label: "Khách hàng", href: "/phan-tich/khach-hang", icon: "group" },
       { label: "Nhà cung cấp", href: "/phan-tich/nha-cung-cap", icon: "local_shipping" },
     ],

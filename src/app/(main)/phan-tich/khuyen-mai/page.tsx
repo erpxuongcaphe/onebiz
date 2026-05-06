@@ -40,6 +40,8 @@ import {
 import { Icon } from "@/components/ui/icon";
 import { Badge } from "@/components/ui/badge";
 import { cn } from "@/lib/utils";
+import { ReportPageHeader } from "@/components/shared/report";
+import { useReportState } from "@/lib/hooks/use-report-state";
 
 const TYPE_LABEL: Record<string, string> = {
   discount_percent: "Giảm %",
@@ -92,6 +94,8 @@ function DailyTrendTooltip({
 
 export default function KhuyenMaiAnalyticsPage() {
   const { activeBranchId, isReady } = useBranchFilter();
+  const { preset, range, setPreset, setCustomRange, viewMode, setViewMode } =
+    useReportState({ defaultPreset: "thisMonth", defaultViewMode: "chart" });
   const [loading, setLoading] = useState(true);
   const [kpis, setKpis] = useState<PromotionKpis | null>(null);
   const [detailRows, setDetailRows] = useState<PromotionDetailRow[]>([]);
@@ -121,14 +125,18 @@ export default function KhuyenMaiAnalyticsPage() {
   }, [fetchData, isReady]);
 
   return (
-    <div className="space-y-4 lg:space-y-6">
-      <div>
-        <h1 className="text-2xl font-bold">Hiệu quả khuyến mãi</h1>
-        <p className="text-muted-foreground text-sm mt-1">
-          Báo cáo lượt dùng, doanh thu và ROI của các chương trình khuyến mãi
-          (30 ngày qua)
-        </p>
-      </div>
+    <div className="flex flex-col h-[calc(100vh-64px)] overflow-y-auto">
+      <ReportPageHeader
+        title="Hiệu quả khuyến mãi"
+        subtitle="Lượt dùng, doanh thu và ROI của các chương trình khuyến mãi"
+        preset={preset}
+        range={range}
+        onPresetChange={setPreset}
+        onCustomRangeChange={setCustomRange}
+        viewMode={viewMode}
+        onViewModeChange={setViewMode}
+      />
+      <div className="space-y-4 lg:space-y-6 p-4 lg:p-6">
 
       {/* KPI Row */}
       <div className="grid grid-cols-2 lg:grid-cols-4 gap-3 lg:gap-4">
@@ -322,6 +330,7 @@ export default function KhuyenMaiAnalyticsPage() {
           </div>
         )}
       </ChartCard>
+      </div>
     </div>
   );
 }
