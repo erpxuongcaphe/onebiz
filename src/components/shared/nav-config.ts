@@ -325,6 +325,8 @@ export const sidebarNavGroups: SidebarGroup[] = [
         items: [
           { label: "Xuất - Nhập - Tồn", href: "/phan-tich/xuat-nhap-ton", icon: "inventory_2", badge: "Mới" },
           { label: "Phân tích hàng hoá", href: "/phan-tich/hang-hoa", icon: "analytics" },
+          { label: "Phân tích ABC", href: "/phan-tich/abc-analysis", icon: "leaderboard", badge: "Mới" },
+          { label: "Lot Traceability", href: "/phan-tich/lot-traceability", icon: "qr_code", badge: "Mới" },
         ],
       },
       {
@@ -332,6 +334,7 @@ export const sidebarNavGroups: SidebarGroup[] = [
         icon: "group",
         items: [
           { label: "Theo khách hàng", href: "/phan-tich/khach-hang", icon: "person" },
+          { label: "Cohort Retention", href: "/phan-tich/customer-cohort", icon: "repeat", badge: "Mới" },
           { label: "Theo nhà cung cấp", href: "/phan-tich/nha-cung-cap", icon: "apartment" },
         ],
       },

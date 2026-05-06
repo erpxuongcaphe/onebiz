@@ -187,6 +187,14 @@ export type { ConsolidatedPnL, BranchPnLRow } from "./reports";
 export { getXntReport } from "./xnt-report";
 export type { XntRow, XntBranchBreakdown, XntReportResult } from "./xnt-report";
 
+// ABC Analysis + Slow Movers (Sprint REP-3, CEO 06/05/2026)
+export { getAbcReport } from "./abc-analysis";
+export type { AbcRow, AbcClass, AbcReportResult } from "./abc-analysis";
+
+// Customer Cohort Retention (Sprint REP-3, CEO 06/05/2026)
+export { getCustomerCohortReport } from "./customer-cohort";
+export type { CohortRow, CohortReportResult } from "./customer-cohort";
+
 // UOM Conversions + Unit Name Management
 export { getUOMConversions, createUOMConversion, updateUOMConversion, deleteUOMConversion, convertQuantity, getAllUnits, renameUnit, mergeUnits, findSimilarUnit } from "./uom";
 
