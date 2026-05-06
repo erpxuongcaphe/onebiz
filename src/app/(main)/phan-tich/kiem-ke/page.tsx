@@ -8,7 +8,7 @@
  */
 
 import { useEffect, useState, useCallback } from "react";
-import { useBranchFilter } from "@/lib/contexts";
+import { useBranchFilter, useToast } from "@/lib/contexts";
 import { Icon } from "@/components/ui/icon";
 import { formatNumber, formatCurrency, formatShortDate } from "@/lib/format";
 import {
@@ -43,6 +43,7 @@ const STATUS_LABEL: Record<string, string> = {
 
 export default function KiemKeReportPage() {
   const { activeBranchId, isReady, branches } = useBranchFilter();
+  const { toast } = useToast();
   const { preset, range, setPreset, setCustomRange, viewMode, setViewMode } =
     useReportState({ defaultPreset: "thisMonth", defaultViewMode: "table" });
 
@@ -59,10 +60,15 @@ export default function KiemKeReportPage() {
       setData(result);
     } catch (err) {
       console.error("Failed to fetch inventory check report:", err);
+      toast({
+        title: "Lỗi tải báo cáo kiểm kê",
+        description: err instanceof Error ? err.message : "Vui lòng thử lại",
+        variant: "error",
+      });
     } finally {
       setLoading(false);
     }
-  }, [range, activeBranchId]);
+  }, [range, activeBranchId, toast]);
 
   useEffect(() => {
     if (!isReady) return;

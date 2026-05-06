@@ -16,7 +16,7 @@ import {
   ResponsiveContainer,
 } from "recharts";
 import { KpiCard, ChartCard } from "../_components";
-import { useBranchFilter } from "@/lib/contexts";
+import { useBranchFilter, useToast } from "@/lib/contexts";
 import {
   formatCurrency,
   formatNumber,
@@ -149,6 +149,7 @@ interface SalesKpisData {
 
 export default function BanHangPage() {
   const { activeBranchId, isReady, branches } = useBranchFilter();
+  const { toast } = useToast();
   const {
     preset,
     range,
@@ -181,10 +182,15 @@ export default function BanHangPage() {
       setTopInvoicesList(invoices);
     } catch (err) {
       console.error("Failed to fetch sales analytics:", err);
+      toast({
+        title: "Lỗi tải báo cáo bán hàng",
+        description: err instanceof Error ? err.message : "Vui lòng thử lại",
+        variant: "error",
+      });
     } finally {
       setLoading(false);
     }
-  }, [activeBranchId, range]);
+  }, [activeBranchId, range, toast]);
 
   useEffect(() => {
     if (!isReady) return;

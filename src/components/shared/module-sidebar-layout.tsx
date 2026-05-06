@@ -21,6 +21,8 @@ export interface ModuleNavItem {
   icon: string;
   /** Match exact (cho trang gốc của module) */
   exact?: boolean;
+  /** Optional badge text bên phải (vd "Sắp ra mắt" cho tính năng dev dở) */
+  badge?: string;
 }
 
 export interface ModuleNavGroup {
@@ -111,7 +113,12 @@ export function ModuleSidebarLayout({
                           )}
                         >
                           <Icon name={item.icon} size={16} fill={active} weight={active ? 500 : 400} className="shrink-0" />
-                          <span className="truncate">{item.label}</span>
+                          <span className="truncate flex-1">{item.label}</span>
+                          {item.badge && (
+                            <span className="text-[10px] px-1.5 py-0.5 rounded-full bg-status-warning/10 text-status-warning font-semibold shrink-0">
+                              {item.badge}
+                            </span>
+                          )}
                         </Link>
                       );
                     })}

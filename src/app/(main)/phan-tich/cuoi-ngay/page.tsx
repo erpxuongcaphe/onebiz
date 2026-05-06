@@ -28,7 +28,7 @@ import {
   formatChartTooltipCurrency,
 } from "@/lib/format";
 import { KpiCard, ChartCard } from "../_components";
-import { useBranchFilter } from "@/lib/contexts";
+import { useBranchFilter, useToast } from "@/lib/contexts";
 import {
   getEndOfDayStats,
   getSalesRevenueByHour,
@@ -112,6 +112,7 @@ interface PaymentRow {
 
 export default function CuoiNgayPage() {
   const { activeBranchId, isReady, branches } = useBranchFilter();
+  const { toast } = useToast();
   const {
     preset,
     range,
@@ -142,10 +143,15 @@ export default function CuoiNgayPage() {
       setTopProducts(productsData);
     } catch (err) {
       console.error("Failed to fetch end-of-day data", err);
+      toast({
+        title: "Lỗi tải báo cáo cuối ngày",
+        description: err instanceof Error ? err.message : "Vui lòng thử lại",
+        variant: "error",
+      });
     } finally {
       setLoading(false);
     }
-  }, [activeBranchId, range]);
+  }, [activeBranchId, range, toast]);
 
   useEffect(() => {
     if (!isReady) return;

@@ -13,7 +13,7 @@
  */
 
 import { useEffect, useState, useCallback } from "react";
-import { useBranchFilter } from "@/lib/contexts";
+import { useBranchFilter, useToast } from "@/lib/contexts";
 import { Icon } from "@/components/ui/icon";
 import { formatNumber, formatCurrency } from "@/lib/format";
 import {
@@ -39,6 +39,7 @@ const SUB_MODES: { key: SubMode; label: string; icon: string }[] = [
 
 export default function XuatNhapTonPage() {
   const { activeBranchId, isReady, branches } = useBranchFilter();
+  const { toast } = useToast();
 
   const {
     preset,
@@ -68,10 +69,15 @@ export default function XuatNhapTonPage() {
       setData(result);
     } catch (err) {
       console.error("Failed to fetch XNT report:", err);
+      toast({
+        title: "Lỗi tải báo cáo Xuất - Nhập - Tồn",
+        description: err instanceof Error ? err.message : "Vui lòng thử lại",
+        variant: "error",
+      });
     } finally {
       setLoading(false);
     }
-  }, [range, activeBranchId, search]);
+  }, [range, activeBranchId, search, toast]);
 
   useEffect(() => {
     if (!isReady) return;

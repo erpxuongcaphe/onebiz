@@ -91,6 +91,68 @@ export default function UsersPage() {
     asOwner: false,
   });
 
+  // Edit user dialog (CEO 06/05/2026)
+  const [editOpen, setEditOpen] = useState(false);
+  const [editBusy, setEditBusy] = useState(false);
+  const [editTarget, setEditTarget] = useState<UserRow | null>(null);
+  const [editForm, setEditForm] = useState({
+    fullName: "",
+    phone: "",
+    roleId: "",
+    branchIds: [] as string[],
+    allBranches: false,
+    newPassword: "",
+  });
+
+  const handleEditUser = async () => {
+    if (!editTarget) return;
+    if (editForm.newPassword && editForm.newPassword.length < 8) {
+      toast({
+        title: "Mật khẩu mới quá ngắn",
+        description: "Tối thiểu 8 ký tự",
+        variant: "error",
+      });
+      return;
+    }
+    setEditBusy(true);
+    try {
+      const res = await fetch("/api/admin/update-user", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          userId: editTarget.id,
+          fullName: editForm.fullName.trim() || undefined,
+          phone: editForm.phone.trim(),
+          roleId: editForm.roleId || null,
+          branchIds: editForm.allBranches ? [] : editForm.branchIds,
+          allBranches: editForm.allBranches,
+          newPassword: editForm.newPassword || undefined,
+        }),
+      });
+      const data = await res.json();
+      if (!res.ok || !data.success) {
+        throw new Error(data.message ?? "Lỗi không xác định");
+      }
+      toast({
+        title: "Đã cập nhật thông tin",
+        description: editTarget.fullName,
+        variant: "success",
+      });
+      setEditOpen(false);
+      setEditTarget(null);
+      load();
+    } catch (err) {
+      toast({
+        title: "Cập nhật thất bại",
+        description: (err as Error).message,
+        variant: "error",
+        duration: 8000,
+      });
+    } finally {
+      setEditBusy(false);
+    }
+  };
+
   // Create account dialog (Sprint USER-MGMT — admin tự đặt password)
   const [createOpen, setCreateOpen] = useState(false);
   const [createBusy, setCreateBusy] = useState(false);
@@ -407,6 +469,23 @@ export default function UsersPage() {
                           <DropdownMenuLabel>Thao tác</DropdownMenuLabel>
                           <DropdownMenuItem
                             onSelect={() => {
+                              setEditTarget(user);
+                              setEditForm({
+                                fullName: user.fullName,
+                                phone: user.phone ?? "",
+                                roleId: user.roleId ?? "",
+                                branchIds: user.branchId ? [user.branchId] : [],
+                                allBranches: false,
+                                newPassword: "",
+                              });
+                              setEditOpen(true);
+                            }}
+                          >
+                            <Icon name="edit" size={16} className="mr-2" />
+                            Chỉnh sửa thông tin
+                          </DropdownMenuItem>
+                          <DropdownMenuItem
+                            onSelect={() => {
                               setSelectedUser(user);
                               setSelectedRoleId(user.roleId ?? "");
                               setAssignOpen(true);
@@ -420,7 +499,8 @@ export default function UsersPage() {
                             onSelect={() => handleToggleActive(user)}
                             className={user.isActive ? "text-status-error" : "text-status-success"}
                           >
-                            {user.isActive ? "Vô hiệu hóa" : "Kích hoạt lại"}
+                            <Icon name={user.isActive ? "block" : "check_circle"} size={16} className="mr-2" />
+                            {user.isActive ? "Vô hiệu hoá" : "Kích hoạt lại"}
                           </DropdownMenuItem>
                         </DropdownMenuContent>
                       </DropdownMenu>
@@ -690,6 +770,176 @@ export default function UsersPage() {
            Dialog: Tạo tài khoản mới (Sprint USER-MGMT)
            Admin tự đặt password thay vì gửi link email
          ================================================ */}
+      {/* ================================================
+           Dialog: Chỉnh sửa user (CEO 06/05/2026)
+           Sửa tên / SĐT / role / chi nhánh + reset password
+         ================================================ */}
+      <Dialog open={editOpen} onOpenChange={setEditOpen}>
+        <DialogContent className="max-w-lg">
+          <DialogHeader>
+            <DialogTitle>
+              Chỉnh sửa thông tin — {editTarget?.fullName}
+            </DialogTitle>
+          </DialogHeader>
+          <div className="space-y-4 py-2">
+            <div className="space-y-1">
+              <Label>Email (không sửa được)</Label>
+              <Input value={editTarget?.email ?? ""} disabled className="bg-muted" />
+            </div>
+
+            <div className="space-y-1">
+              <Label htmlFor="edit-fullname">Họ và tên</Label>
+              <Input
+                id="edit-fullname"
+                value={editForm.fullName}
+                onChange={(e) =>
+                  setEditForm({ ...editForm, fullName: e.target.value })
+                }
+              />
+            </div>
+
+            <div className="space-y-1">
+              <Label htmlFor="edit-phone">Số điện thoại</Label>
+              <Input
+                id="edit-phone"
+                value={editForm.phone}
+                onChange={(e) =>
+                  setEditForm({ ...editForm, phone: e.target.value })
+                }
+                placeholder="0912345678"
+              />
+            </div>
+
+            <div className="space-y-1">
+              <Label htmlFor="edit-role">Vai trò</Label>
+              <Select
+                value={editForm.roleId}
+                onValueChange={(v) =>
+                  setEditForm({ ...editForm, roleId: v ?? "" })
+                }
+              >
+                <SelectTrigger id="edit-role">
+                  <SelectValue placeholder="Không gán vai trò" />
+                </SelectTrigger>
+                <SelectContent>
+                  {roles.map((r) => (
+                    <SelectItem key={r.id} value={r.id}>
+                      {r.name}
+                    </SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+            </div>
+
+            <div className="space-y-2">
+              <Label>Chi nhánh được phép truy cập</Label>
+              <label className="flex items-center gap-2 text-sm cursor-pointer">
+                <input
+                  type="checkbox"
+                  checked={editForm.allBranches}
+                  onChange={(e) =>
+                    setEditForm({
+                      ...editForm,
+                      allBranches: e.target.checked,
+                      branchIds: e.target.checked ? [] : editForm.branchIds,
+                    })
+                  }
+                  className="h-4 w-4"
+                />
+                <span className="font-medium">Tất cả chi nhánh</span>
+              </label>
+              {!editForm.allBranches && (
+                <div className="border rounded-lg p-2 max-h-40 overflow-auto space-y-1">
+                  {branches.length === 0 ? (
+                    <p className="text-xs text-muted-foreground text-center py-2">
+                      Chưa có chi nhánh nào
+                    </p>
+                  ) : (
+                    branches.map((b) => (
+                      <label
+                        key={b.id}
+                        className="flex items-center gap-2 text-sm cursor-pointer hover:bg-surface-container-low rounded px-2 py-1"
+                      >
+                        <input
+                          type="checkbox"
+                          checked={editForm.branchIds.includes(b.id)}
+                          onChange={(e) => {
+                            const next = e.target.checked
+                              ? [...editForm.branchIds, b.id]
+                              : editForm.branchIds.filter((x) => x !== b.id);
+                            setEditForm({ ...editForm, branchIds: next });
+                          }}
+                          className="h-4 w-4"
+                        />
+                        <span>{b.name}</span>
+                        {b.code && (
+                          <span className="text-xs text-muted-foreground">
+                            ({b.code})
+                          </span>
+                        )}
+                      </label>
+                    ))
+                  )}
+                </div>
+              )}
+            </div>
+
+            <div className="space-y-1 border-t pt-3">
+              <Label htmlFor="edit-password" className="flex items-center gap-2">
+                <Icon name="lock_reset" size={14} />
+                Đặt lại mật khẩu
+                <span className="text-xs text-muted-foreground font-normal">
+                  (để trống nếu không đổi)
+                </span>
+              </Label>
+              <Input
+                id="edit-password"
+                type="text"
+                value={editForm.newPassword}
+                onChange={(e) =>
+                  setEditForm({ ...editForm, newPassword: e.target.value })
+                }
+                placeholder="Mật khẩu mới (≥ 8 ký tự)"
+              />
+              {editForm.newPassword && (
+                <p className="text-xs text-status-warning">
+                  ⚠️ Sau khi lưu, đưa mật khẩu mới cho nhân viên — họ phải đăng nhập lại.
+                </p>
+              )}
+            </div>
+          </div>
+          <DialogFooter>
+            <Button
+              variant="outline"
+              onClick={() => {
+                setEditOpen(false);
+                setEditTarget(null);
+              }}
+              disabled={editBusy}
+            >
+              Huỷ
+            </Button>
+            <Button onClick={handleEditUser} disabled={editBusy}>
+              {editBusy ? (
+                <>
+                  <Icon
+                    name="progress_activity"
+                    size={16}
+                    className="mr-1 animate-spin"
+                  />
+                  Đang lưu...
+                </>
+              ) : (
+                <>
+                  <Icon name="save" size={16} className="mr-1" />
+                  Lưu thay đổi
+                </>
+              )}
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
       <Dialog open={createOpen} onOpenChange={setCreateOpen}>
         <DialogContent className="max-w-lg">
           <DialogHeader>

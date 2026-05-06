@@ -20,7 +20,7 @@ const settingsNav: ModuleNavGroup[] = [
     label: "Bán hàng",
     items: [
       { label: "Bán hàng", href: "/cai-dat/ban-hang", icon: "shopping_cart" },
-      { label: "Hóa đơn", href: "/cai-dat/hoa-don", icon: "description" },
+      { label: "Hóa đơn", href: "/cai-dat/hoa-don", icon: "description", badge: "Sắp ra mắt" },
       { label: "In ấn", href: "/cai-dat/in-an", icon: "print" },
       { label: "Thiết bị POS", href: "/cai-dat/thiet-bi-pos", icon: "lock" },
       { label: "Bảng giá", href: "/cai-dat/bang-gia", icon: "attach_money" },
@@ -32,10 +32,10 @@ const settingsNav: ModuleNavGroup[] = [
   {
     label: "Tích hợp",
     items: [
-      { label: "Thanh toán", href: "/cai-dat/thanh-toan", icon: "credit_card" },
-      { label: "Giao hàng", href: "/cai-dat/giao-hang", icon: "local_shipping" },
+      { label: "Thanh toán", href: "/cai-dat/thanh-toan", icon: "credit_card", badge: "Sắp ra mắt" },
+      { label: "Giao hàng", href: "/cai-dat/giao-hang", icon: "local_shipping", badge: "Sắp ra mắt" },
       { label: "Thông báo", href: "/cai-dat/thong-bao", icon: "notifications" },
-      { label: "Kết nối", href: "/cai-dat/ket-noi", icon: "link" },
+      { label: "Kết nối", href: "/cai-dat/ket-noi", icon: "link", badge: "Sắp ra mắt" },
     ],
   },
 ];

@@ -190,10 +190,15 @@ export default function BaoCaoTaiChinhPage() {
       setBranchPnL(branchPnLRes);
     } catch (err) {
       console.error("Failed to fetch P&L data:", err);
+      toast({
+        title: "Lỗi tải báo cáo lãi - lỗ",
+        description: err instanceof Error ? err.message : "Vui lòng thử lại",
+        variant: "error",
+      });
     } finally {
       setLoading(false);
     }
-  }, [branchId]);
+  }, [branchId, toast]);
 
   useEffect(() => {
     fetchData();
