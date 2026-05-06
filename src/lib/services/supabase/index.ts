@@ -4,6 +4,14 @@ export { getCustomers, getCustomerGroups, getCustomerGroupsAsync, getCustomerByI
 // Sprint UX-1 Stage 3: duplicate services for "Sao chép" row action
 export { duplicateInvoice } from "./orders";
 export { duplicatePurchaseOrder } from "./purchase-orders";
+// Stage 8 (CEO 06/05/2026): duplicate services 5 kind warehouse + production
+export {
+  duplicateInventoryCheck,
+  duplicateStockTransfer,
+  duplicateDisposalExport,
+  duplicateInternalSale,
+  duplicateProductionOrder,
+} from "./duplicate-services";
 export { getSuppliers, getSupplierById, createSupplier, updateSupplier, deleteSupplier } from "./suppliers";
 export {
   getInvoices,
