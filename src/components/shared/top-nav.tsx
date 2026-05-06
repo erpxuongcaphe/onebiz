@@ -663,16 +663,66 @@ export function TopNav() {
             {/* User dropdown */}
             <UserDropdown />
 
-            {/* POS shortcut — Stitch primary CTA */}
-            <Link href="/pos" className="hidden sm:flex ml-2">
-              <Button
-                size="default"
-                className="rounded-xl font-semibold ambient-shadow"
+            {/* POS dropdown — CEO 04/05/2026: tách POS Bán lẻ + POS F&B + KDS
+                khỏi sidebar admin. Dropdown để cashier chọn nhanh chế độ
+                front-of-house cần dùng. */}
+            <DropdownMenu>
+              <DropdownMenuTrigger
+                className={cn(
+                  "hidden sm:inline-flex items-center justify-center ml-2 gap-1",
+                  "h-10 px-4 rounded-xl text-sm font-semibold",
+                  "bg-primary text-primary-foreground hover:bg-primary/90",
+                  "ambient-shadow cursor-pointer outline-none transition-colors",
+                )}
               >
                 <Icon name="point_of_sale" size={16} className="mr-1" />
                 Bán hàng
-              </Button>
-            </Link>
+                <Icon name="expand_more" size={16} />
+              </DropdownMenuTrigger>
+              <DropdownMenuContent align="end" className="min-w-[200px]">
+                <DropdownMenuLabel>Chế độ bán hàng</DropdownMenuLabel>
+                <DropdownMenuSeparator />
+                <DropdownMenuItem
+                  onClick={() => {
+                    window.location.href = "/pos";
+                  }}
+                >
+                  <Icon name="shopping_cart" size={16} className="mr-2 text-primary" />
+                  <div className="flex-1">
+                    <div className="font-medium">POS Bán lẻ</div>
+                    <div className="text-[10px] text-muted-foreground">
+                      Hàng đóng gói, B2B
+                    </div>
+                  </div>
+                </DropdownMenuItem>
+                <DropdownMenuItem
+                  onClick={() => {
+                    window.location.href = "/pos/fnb";
+                  }}
+                >
+                  <Icon name="coffee" size={16} className="mr-2 text-status-warning" />
+                  <div className="flex-1">
+                    <div className="font-medium">POS F&amp;B</div>
+                    <div className="text-[10px] text-muted-foreground">
+                      Pha chế tại quán
+                    </div>
+                  </div>
+                </DropdownMenuItem>
+                <DropdownMenuItem
+                  onClick={() => {
+                    window.location.href = "/pos/fnb/kds";
+                  }}
+                >
+                  <Icon name="restaurant" size={16} className="mr-2 text-status-success" />
+                  <div className="flex-1">
+                    <div className="font-medium">Màn hình bếp (KDS)</div>
+                    <div className="text-[10px] text-muted-foreground">
+                      Đầu bếp xem đơn
+                    </div>
+                  </div>
+                </DropdownMenuItem>
+              </DropdownMenuContent>
+            </DropdownMenu>
           </div>
         </div>
       </header>

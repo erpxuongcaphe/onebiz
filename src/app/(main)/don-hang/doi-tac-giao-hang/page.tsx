@@ -410,7 +410,6 @@ export default function DoiTacGiaoHangPage() {
           excel: () => handleExport("excel"),
           csv: () => handleExport("csv"),
         }}
-        onImport={() => {}}
         actions={[
           {
             label: "Đối tác giao hàng",

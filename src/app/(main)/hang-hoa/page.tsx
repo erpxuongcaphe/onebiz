@@ -52,6 +52,7 @@ import {
   bulkUpdatePrice,
   bulkDeleteProducts,
   deleteProduct,
+  duplicateProduct,
 } from "@/lib/services";
 import { SummaryCard } from "@/components/shared/summary-card";
 import { useToast } from "@/lib/contexts";
@@ -951,15 +952,23 @@ export default function HangHoaPage() {
             {
               label: "Nhân bản",
               icon: <Icon name="content_copy" size={16} />,
-              onClick: () => {
-                toast({ variant: "info", title: "Đang phát triển", description: "Tính năng nhân bản đang được phát triển" });
-              },
-            },
-            {
-              label: "In mã vạch",
-              icon: <Icon name="print" size={16} />,
-              onClick: () => {
-                toast({ variant: "info", title: "Đang phát triển", description: "Đang phát triển tính năng in mã vạch" });
+              onClick: async () => {
+                try {
+                  const copy = await duplicateProduct(row.id);
+                  toast({
+                    variant: "success",
+                    title: "Đã sao chép",
+                    description: `Bản sao mới: ${copy.code} — ${copy.name}`,
+                  });
+                  // Refresh list — fetch lại data
+                  fetchData();
+                } catch (err) {
+                  toast({
+                    variant: "error",
+                    title: "Không sao chép được",
+                    description: err instanceof Error ? err.message : "Lỗi không xác định",
+                  });
+                }
               },
             },
             {

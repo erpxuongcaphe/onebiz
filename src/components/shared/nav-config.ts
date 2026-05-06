@@ -150,117 +150,107 @@ export interface SidebarGroup {
 
 export const sidebarNavGroups: SidebarGroup[] = [
   // ============================================================
-  // 1. TỔNG QUAN — Dashboard + Phân tích + Cảnh báo
+  // 1. TỔNG QUAN — chỉ Dashboard + Cảnh báo (Phân tích + Báo cáo TC tách
+  // sang group BÁO CÁO riêng dưới cùng theo CEO 04/05/2026)
   // ============================================================
-  // Owner cà phê chain mở app buổi sáng → cần biết NGAY: doanh số,
-  // cảnh báo (tồn thấp / nợ quá hạn / lô hết hạn). Đặt đầu tiên.
   {
     label: "Tổng quan",
     icon: "dashboard",
     items: [
       { label: "Trang chủ", href: "/", icon: "home" },
-      { label: "Phân tích", href: "/phan-tich", icon: "insights" },
       { label: "Cảnh báo", href: "/phan-tich/canh-bao", icon: "warning" },
-      { label: "Báo cáo tài chính", href: "/phan-tich/bao-cao-tai-chinh", icon: "summarize" },
     ],
   },
 
   // ============================================================
-  // 2. BÁN HÀNG — POS + sales documents
+  // 2. BÁN HÀNG — sales documents (POS tách lên top-nav header)
+  // CEO 04/05/2026: Hoá đơn lên TOP (kế toán xem nhiều nhất hàng ngày).
+  // POS Bán lẻ + POS F&B + KDS rời sidebar → top-nav dropdown "POS"
+  // (front-of-house cashier không cần admin sidebar).
   // ============================================================
   {
     label: "Bán hàng",
     icon: "shopping_cart",
     items: [
-      { label: "POS Bán lẻ", href: "/pos", icon: "point_of_sale", mode: "pos", permission: "pos_retail.checkout" },
-      { label: "POS F&B", href: "/pos/fnb", icon: "coffee", mode: "pos", permission: "pos_fnb.send_kitchen" },
-      { label: "Màn hình bếp (KDS)", href: "/pos/fnb/kds", icon: "restaurant", mode: "pos", permission: "pos_fnb.view_orders" },
-      { label: "Bán online", href: "/ban-online", icon: "public" },
+      { label: "Hóa đơn", href: "/don-hang/hoa-don", icon: "receipt_long", badge: "Top" },
       { label: "Đơn đặt hàng", href: "/don-hang/dat-hang", icon: "description" },
-      { label: "Hóa đơn", href: "/don-hang/hoa-don", icon: "receipt_long" },
       { label: "Trả hàng", href: "/don-hang/tra-hang", icon: "undo" },
       { label: "Vận đơn", href: "/don-hang/van-don", icon: "local_shipping" },
+      { label: "Bán online", href: "/ban-online", icon: "public" },
     ],
   },
 
   // ============================================================
-  // 3. HÀNG HÓA — products + warehouse + production
+  // 3. KHO — tách top-level từ "Hàng hoá > Kho" cũ (CEO 04/05)
+  // Lý do: thủ kho dùng Tồn kho, Kiểm kho, Chuyển kho hằng ngày —
+  // không phải nest 2 lớp như trước.
   // ============================================================
   {
-    label: "Hàng hóa",
-    icon: "inventory_2",
+    label: "Kho",
+    icon: "warehouse",
+    items: [
+      { label: "Tồn kho", href: "/hang-hoa/ton-kho", icon: "warehouse" },
+      { label: "Lịch sử kho", href: "/hang-hoa/lich-su-kho", icon: "history" },
+      { label: "Kiểm kho", href: "/hang-hoa/kiem-kho", icon: "fact_check" },
+      { label: "Chuyển kho", href: "/hang-hoa/chuyen-kho", icon: "swap_horiz" },
+      { label: "Hạn sử dụng (HSD)", href: "/hang-hoa/hsd", icon: "event_note" },
+      { label: "Xuất dùng nội bộ", href: "/hang-hoa/xuat-dung-noi-bo", icon: "inventory" },
+      { label: "Xuất hủy", href: "/hang-hoa/xuat-huy", icon: "delete" },
+      { label: "Bán nội bộ", href: "/hang-hoa/ban-noi-bo", icon: "store" },
+    ],
+  },
+
+  // ============================================================
+  // 4. MUA HÀNG — tách top-level từ "Hàng hoá > Mua hàng" cũ
+  // ============================================================
+  {
+    label: "Mua hàng",
+    icon: "add_box",
+    items: [
+      { label: "Đặt hàng nhập", href: "/hang-hoa/dat-hang-nhap", icon: "description" },
+      { label: "Nhập hàng", href: "/hang-hoa/nhap-hang", icon: "add_box" },
+      { label: "Trả hàng nhập", href: "/hang-hoa/tra-hang-nhap", icon: "undo" },
+      { label: "Hóa đơn đầu vào", href: "/hang-hoa/hoa-don-dau-vao", icon: "receipt" },
+    ],
+  },
+
+  // ============================================================
+  // 5. SẢN XUẤT — tách top-level từ "Hàng hoá > Sản xuất" cũ
+  // ============================================================
+  {
+    label: "Sản xuất",
+    icon: "factory",
+    items: [
+      { label: "Dashboard Sản xuất", href: "/san-xuat", icon: "bar_chart" },
+      { label: "Lệnh sản xuất", href: "/hang-hoa/san-xuat", icon: "factory" },
+      { label: "Công thức (BOM)", href: "/hang-hoa/cong-thuc", icon: "schema" },
+      { label: "Lô sản xuất", href: "/hang-hoa/lo-san-xuat", icon: "inventory_2" },
+    ],
+  },
+
+  // ============================================================
+  // 6. DANH MỤC — gộp master data (sản phẩm + KH + NCC) một chỗ
+  // CEO 04/05: trước đây scatter 3 group khác nhau → khó tìm.
+  // ============================================================
+  {
+    label: "Danh mục",
+    icon: "category",
     subGroups: [
       {
         label: "Sản phẩm",
-        icon: "category",
+        icon: "inventory_2",
         items: [
-          { label: "Danh sách hàng", href: "/hang-hoa", icon: "inventory_2" },
+          { label: "Danh sách sản phẩm", href: "/hang-hoa", icon: "inventory_2" },
           { label: "Nhóm hàng", href: "/hang-hoa/nhom", icon: "sell" },
           { label: "Đơn vị tính", href: "/hang-hoa/don-vi-tinh", icon: "straighten" },
           { label: "Bảng giá", href: "/hang-hoa/thiet-lap-gia", icon: "attach_money" },
         ],
       },
       {
-        label: "Kho",
-        icon: "warehouse",
-        items: [
-          { label: "Tồn kho", href: "/hang-hoa/ton-kho", icon: "warehouse" },
-          { label: "Lịch sử kho", href: "/hang-hoa/lich-su-kho", icon: "history" },
-          { label: "Kiểm kho", href: "/hang-hoa/kiem-kho", icon: "fact_check" },
-          { label: "Chuyển kho", href: "/hang-hoa/chuyen-kho", icon: "swap_horiz" },
-          { label: "Hạn sử dụng (HSD)", href: "/hang-hoa/hsd", icon: "event_note" },
-          { label: "Xuất dùng nội bộ", href: "/hang-hoa/xuat-dung-noi-bo", icon: "inventory" },
-          { label: "Xuất hủy", href: "/hang-hoa/xuat-huy", icon: "delete" },
-          { label: "Bán nội bộ", href: "/hang-hoa/ban-noi-bo", icon: "store" },
-        ],
-      },
-      {
-        label: "Sản xuất",
-        icon: "factory",
-        items: [
-          { label: "Dashboard Sản xuất", href: "/san-xuat", icon: "bar_chart" },
-          { label: "Lệnh sản xuất", href: "/hang-hoa/san-xuat", icon: "factory" },
-          { label: "Công thức (BOM)", href: "/hang-hoa/cong-thuc", icon: "schema" },
-          { label: "Lô sản xuất", href: "/hang-hoa/lo-san-xuat", icon: "inventory_2" },
-        ],
-      },
-      {
-        label: "Mua hàng",
-        icon: "add_box",
-        items: [
-          { label: "Đặt hàng nhập", href: "/hang-hoa/dat-hang-nhap", icon: "description" },
-          { label: "Nhập hàng", href: "/hang-hoa/nhap-hang", icon: "add_box" },
-          { label: "Trả hàng nhập", href: "/hang-hoa/tra-hang-nhap", icon: "undo" },
-          { label: "Hóa đơn đầu vào", href: "/hang-hoa/hoa-don-dau-vao", icon: "receipt" },
-        ],
-      },
-    ],
-  },
-
-  // ============================================================
-  // 4. TÀI CHÍNH — sổ quỹ + công nợ (TÁCH KHỎI "Giao dịch")
-  // ============================================================
-  {
-    label: "Tài chính",
-    icon: "payments",
-    items: [
-      { label: "Sổ quỹ", href: "/so-quy", icon: "payments" },
-      { label: "Công nợ", href: "/tai-chinh/cong-no", icon: "credit_card" },
-    ],
-  },
-
-  // ============================================================
-  // 5. ĐỐI TÁC — KH + NCC + giao hàng
-  // ============================================================
-  {
-    label: "Đối tác",
-    icon: "group",
-    subGroups: [
-      {
         label: "Khách hàng",
         icon: "person",
         items: [
-          { label: "Danh sách KH", href: "/khach-hang", icon: "group" },
+          { label: "Danh sách khách hàng", href: "/khach-hang", icon: "group" },
           { label: "Nhóm khách hàng", href: "/khach-hang/nhom", icon: "groups" },
         ],
       },
@@ -276,7 +266,19 @@ export const sidebarNavGroups: SidebarGroup[] = [
   },
 
   // ============================================================
-  // 6. AI & TỰ ĐỘNG HÓA — gọn lại, bỏ comingSoon clutter
+  // 7. TÀI CHÍNH — sổ quỹ + công nợ
+  // ============================================================
+  {
+    label: "Tài chính",
+    icon: "payments",
+    items: [
+      { label: "Sổ quỹ", href: "/so-quy", icon: "payments" },
+      { label: "Công nợ", href: "/tai-chinh/cong-no", icon: "credit_card" },
+    ],
+  },
+
+  // ============================================================
+  // 8. AI & TỰ ĐỘNG
   // ============================================================
   {
     label: "AI & Tự động",
@@ -285,14 +287,66 @@ export const sidebarNavGroups: SidebarGroup[] = [
       { label: "AI Agents", href: "/ai-agents", icon: "smart_toy", badge: "New" },
       { label: "KPI Breakdown", href: "/ai-agents/kpi", icon: "trending_up" },
       { label: "Task hàng ngày", href: "/ai-agents/tasks", icon: "checklist" },
-      // Các route AI chưa có page (/ai/phan-tich, /ai/import, /ai/chat) →
-      // mark comingSoon nhưng KHÔNG render trong sidebar nữa để giảm
-      // clutter. Khi page sẵn sàng thì uncomment.
     ],
   },
 
   // ============================================================
-  // 7. HỆ THỐNG — pinned bottom
+  // 9. BÁO CÁO — tách riêng cuối, group dưới cùng (CEO 04/05/2026)
+  // 14 báo cáo phân tích tổng hợp. Trước đây "Phân tích" + "Báo cáo TC"
+  // nằm trong "Tổng quan" → user khó tìm khi muốn deep-dive.
+  // ============================================================
+  {
+    label: "Báo cáo",
+    icon: "analytics",
+    subGroups: [
+      {
+        label: "Tổng quan",
+        icon: "insights",
+        items: [
+          { label: "Phân tích tổng hợp", href: "/phan-tich", icon: "insights" },
+          { label: "Báo cáo tài chính", href: "/phan-tich/bao-cao-tai-chinh", icon: "summarize" },
+          { label: "Báo cáo cuối ngày", href: "/phan-tich/cuoi-ngay", icon: "today" },
+        ],
+      },
+      {
+        label: "Bán hàng",
+        icon: "shopping_cart",
+        items: [
+          { label: "Doanh thu bán hàng", href: "/phan-tich/ban-hang", icon: "trending_up" },
+          { label: "Đặt hàng & xử lý", href: "/phan-tich/dat-hang", icon: "description" },
+          { label: "Theo kênh bán", href: "/phan-tich/kenh-ban", icon: "storefront" },
+          { label: "Báo cáo F&B", href: "/phan-tich/fnb", icon: "coffee" },
+          { label: "Khuyến mãi", href: "/phan-tich/khuyen-mai", icon: "local_offer" },
+        ],
+      },
+      {
+        label: "Hàng hoá & Kho",
+        icon: "inventory_2",
+        items: [
+          { label: "Xuất - Nhập - Tồn", href: "/phan-tich/hang-hoa", icon: "inventory_2" },
+        ],
+      },
+      {
+        label: "Đối tác",
+        icon: "group",
+        items: [
+          { label: "Theo khách hàng", href: "/phan-tich/khach-hang", icon: "person" },
+          { label: "Theo nhà cung cấp", href: "/phan-tich/nha-cung-cap", icon: "apartment" },
+        ],
+      },
+      {
+        label: "Tài chính",
+        icon: "payments",
+        items: [
+          { label: "Phân tích tài chính", href: "/phan-tich/tai-chinh", icon: "account_balance" },
+          { label: "Lưu chuyển tiền tệ", href: "/phan-tich/luong-tien", icon: "payments" },
+        ],
+      },
+    ],
+  },
+
+  // ============================================================
+  // 10. HỆ THỐNG — pinned bottom
   // ============================================================
   {
     label: "Hệ thống",

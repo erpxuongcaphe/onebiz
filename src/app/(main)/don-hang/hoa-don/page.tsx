@@ -549,10 +549,6 @@ export default function HoaDonPage() {
             excel: () => handleExport("excel"),
             csv: () => handleExport("csv"),
           }}
-          onImport={() => {}}
-          showColumnToggle
-          showSettings
-          showHelp
           actions={[
             {
               label: "Tạo mới",

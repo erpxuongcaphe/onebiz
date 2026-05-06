@@ -758,3 +758,75 @@ export async function bulkDeleteProducts(
   if (error) handleError(error, "bulkDeleteProducts");
   return { count: data?.length ?? 0 };
 }
+
+// ============================================================
+// Sao chép sản phẩm — clone existing product với code mới
+// Sprint UX-1 fix mockup (CEO 04/05/2026): trước đây "Nhân bản" chỉ
+// toast "Đang phát triển". Giờ tạo bản copy thật với code tự động
+// generate (gắn suffix "-COPY" hoặc next code).
+// ============================================================
+
+/**
+ * Sao chép sản phẩm: load source → insert copy mới với:
+ * - Code mới: prepend "COPY-" + timestamp ngắn (đảm bảo unique)
+ * - Tên: thêm "(Bản sao)" vào cuối
+ * - RESET stock=0, has_bom=false (bản copy bắt đầu sạch tồn)
+ * - GIỮ category, supplier, prices, unit, vat_rate, channel...
+ *
+ * Trả về Product mới — caller có thể setEditing(newProduct) mở form sửa
+ * cho user tinh chỉnh trước khi finalize.
+ */
+export async function duplicateProduct(sourceId: string): Promise<Product> {
+  const supabase = getClient();
+  const tenantId = await getCurrentTenantId();
+
+  // 1. Load source full detail
+  const source = await getProductById(sourceId);
+  if (!source) throw new Error("Không tìm thấy sản phẩm để sao chép");
+
+  // 2. Generate new code — suffix timestamp 6 chữ số tránh trùng
+  const ts = Date.now().toString().slice(-6);
+  const newCode = `${source.code}-${ts}`;
+  const newName = `${source.name} (Bản sao)`;
+
+  // 3. Insert copy
+  const { data, error } = await supabase
+    .from("products")
+    .insert({
+      tenant_id: tenantId,
+      code: newCode,
+      name: newName,
+      sell_price: source.sellPrice,
+      cost_price: source.costPrice,
+      category_id: source.categoryId || null,
+      unit: source.unit,
+      stock: 0, // bắt đầu tồn 0 — admin nhập kho riêng
+      min_stock: source.minStock ?? 0,
+      max_stock: source.maxStock ?? 1000,
+      vat_rate: source.vatRate ?? 0,
+      barcode: null, // không clone barcode (unique per SP)
+      weight: source.weight,
+      description: source.description,
+      image_url: source.image,
+      allow_sale: source.allowSale ?? true,
+      is_active: true,
+      product_type: source.productType,
+      channel: source.productType === "sku" ? (source.channel ?? null) : null,
+      has_bom: false, // bản copy bắt đầu không có BOM
+      group_code: source.groupCode,
+      purchase_unit: source.purchaseUnit,
+      stock_unit: source.stockUnit,
+      sell_unit: source.sellUnit,
+      shelf_life_days: source.shelfLifeDays,
+      shelf_life_unit: source.shelfLifeUnit,
+      supplier_id: source.supplierId,
+      brand: source.brand,
+    } satisfies ProductInsert)
+    .select(
+      "*, categories!products_category_id_fkey(name, code), suppliers!products_supplier_id_fkey(name)",
+    )
+    .single();
+
+  if (error) handleError(error, "duplicateProduct");
+  return mapProduct(data);
+}

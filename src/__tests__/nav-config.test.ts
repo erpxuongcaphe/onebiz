@@ -47,12 +47,20 @@ describe("isHrefActive — longest match wins", () => {
     expect(isHrefActive("/hang-hoa-xyz", "/hang-hoa")).toBe(false); // not /hang-hoa/...
   });
 
-  it("isGroupActive: nhóm Hàng hóa active khi user ở /hang-hoa/nhom", () => {
-    const hangHoaGroup = sidebarNavGroups.find((g) => g.label === "Hàng hóa");
-    expect(hangHoaGroup).toBeDefined();
-    if (!hangHoaGroup) return;
-    expect(isGroupActive("/hang-hoa/nhom", hangHoaGroup)).toBe(true);
-    expect(isGroupActive("/hang-hoa/ton-kho", hangHoaGroup)).toBe(true);
-    expect(isGroupActive("/khach-hang", hangHoaGroup)).toBe(false);
+  it("isGroupActive: nhóm Danh mục active khi user ở /hang-hoa/nhom (CEO 04/05 reorg)", () => {
+    // Sau reorg sidebar (CEO 04/05/2026):
+    // - /hang-hoa/nhom thuộc group "Danh mục" → sub "Sản phẩm"
+    // - /hang-hoa/ton-kho thuộc group "Kho" (top-level riêng)
+    const danhMucGroup = sidebarNavGroups.find((g) => g.label === "Danh mục");
+    expect(danhMucGroup).toBeDefined();
+    if (!danhMucGroup) return;
+    expect(isGroupActive("/hang-hoa/nhom", danhMucGroup)).toBe(true);
+    expect(isGroupActive("/khach-hang", danhMucGroup)).toBe(true); // "Khách hàng" cũng trong Danh mục
+
+    const khoGroup = sidebarNavGroups.find((g) => g.label === "Kho");
+    expect(khoGroup).toBeDefined();
+    if (!khoGroup) return;
+    expect(isGroupActive("/hang-hoa/ton-kho", khoGroup)).toBe(true);
+    expect(isGroupActive("/khach-hang", khoGroup)).toBe(false);
   });
 });
