@@ -193,7 +193,7 @@ export const sidebarNavGroups: SidebarGroup[] = [
       { label: "Lịch sử kho", href: "/hang-hoa/lich-su-kho", icon: "history" },
       { label: "Kiểm kho", href: "/hang-hoa/kiem-kho", icon: "fact_check" },
       { label: "Chuyển kho", href: "/hang-hoa/chuyen-kho", icon: "swap_horiz" },
-      { label: "Hạn sử dụng (HSD)", href: "/hang-hoa/hsd", icon: "event_note" },
+      { label: "Hạn sử dụng", href: "/hang-hoa/hsd", icon: "event_note" },
       { label: "Xuất dùng nội bộ", href: "/hang-hoa/xuat-dung-noi-bo", icon: "inventory" },
       { label: "Xuất hủy", href: "/hang-hoa/xuat-huy", icon: "delete" },
       { label: "Bán nội bộ", href: "/hang-hoa/ban-noi-bo", icon: "store" },
@@ -223,7 +223,7 @@ export const sidebarNavGroups: SidebarGroup[] = [
     items: [
       { label: "Dashboard Sản xuất", href: "/san-xuat", icon: "bar_chart" },
       { label: "Lệnh sản xuất", href: "/hang-hoa/san-xuat", icon: "factory" },
-      { label: "Công thức (BOM)", href: "/hang-hoa/cong-thuc", icon: "schema" },
+      { label: "Công thức sản xuất", href: "/hang-hoa/cong-thuc", icon: "schema" },
       { label: "Lô sản xuất", href: "/hang-hoa/lo-san-xuat", icon: "inventory_2" },
     ],
   },
@@ -258,7 +258,7 @@ export const sidebarNavGroups: SidebarGroup[] = [
         label: "Nhà cung cấp",
         icon: "apartment",
         items: [
-          { label: "Danh sách NCC", href: "/doi-tac/ncc", icon: "apartment" },
+          { label: "Danh sách nhà cung cấp", href: "/doi-tac/ncc", icon: "apartment" },
           { label: "Đối tác giao hàng", href: "/doi-tac/giao-hang", icon: "local_shipping" },
         ],
       },
@@ -315,7 +315,7 @@ export const sidebarNavGroups: SidebarGroup[] = [
           { label: "Doanh thu bán hàng", href: "/phan-tich/ban-hang", icon: "trending_up" },
           { label: "Đặt hàng & xử lý", href: "/phan-tich/dat-hang", icon: "description" },
           { label: "Theo kênh bán", href: "/phan-tich/kenh-ban", icon: "storefront" },
-          { label: "Báo cáo F&B", href: "/phan-tich/fnb", icon: "coffee" },
+          { label: "Báo cáo quán cà phê", href: "/phan-tich/fnb", icon: "coffee" },
           { label: "Khuyến mãi", href: "/phan-tich/khuyen-mai", icon: "local_offer" },
         ],
       },
@@ -325,8 +325,8 @@ export const sidebarNavGroups: SidebarGroup[] = [
         items: [
           { label: "Xuất - Nhập - Tồn", href: "/phan-tich/xuat-nhap-ton", icon: "inventory_2", badge: "Mới" },
           { label: "Phân tích hàng hoá", href: "/phan-tich/hang-hoa", icon: "analytics" },
-          { label: "Phân tích ABC", href: "/phan-tich/abc-analysis", icon: "leaderboard", badge: "Mới" },
-          { label: "Lot Traceability", href: "/phan-tich/lot-traceability", icon: "qr_code", badge: "Mới" },
+          { label: "Phân loại sản phẩm theo doanh thu", href: "/phan-tich/abc-analysis", icon: "leaderboard", badge: "Mới" },
+          { label: "Truy xuất nguồn gốc theo lô", href: "/phan-tich/lot-traceability", icon: "qr_code", badge: "Mới" },
         ],
       },
       {
@@ -334,7 +334,7 @@ export const sidebarNavGroups: SidebarGroup[] = [
         icon: "group",
         items: [
           { label: "Theo khách hàng", href: "/phan-tich/khach-hang", icon: "person" },
-          { label: "Cohort Retention", href: "/phan-tich/customer-cohort", icon: "repeat", badge: "Mới" },
+          { label: "Khách hàng quay lại", href: "/phan-tich/customer-cohort", icon: "repeat", badge: "Mới" },
           { label: "Theo nhà cung cấp", href: "/phan-tich/nha-cung-cap", icon: "apartment" },
         ],
       },

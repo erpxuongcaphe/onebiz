@@ -220,7 +220,7 @@ export default function BanHangPage() {
           rows: [
             { label: "Doanh thu thuần", current: kpis.netRevenue, previous: kpis.prevNetRevenue },
             { label: "Số lượng bán", current: kpis.soldQty, previous: kpis.prevSoldQty },
-            { label: "AOV (giá trị TB/đơn)", current: kpis.avgOrderValue, previous: kpis.prevAvgOrderValue },
+            { label: "Giá trị trung bình mỗi đơn", current: kpis.avgOrderValue, previous: kpis.prevAvgOrderValue },
             { label: "Tỷ lệ trả hàng (%)", current: kpis.returnRate, previous: kpis.prevReturnRate },
           ],
         },
@@ -254,7 +254,7 @@ export default function BanHangPage() {
           rows: [
             { label: "Doanh thu thuần", current: kpis.netRevenue, previous: kpis.prevNetRevenue },
             { label: "Số lượng bán", current: kpis.soldQty, previous: kpis.prevSoldQty },
-            { label: "AOV (giá trị TB/đơn)", current: kpis.avgOrderValue, previous: kpis.prevAvgOrderValue },
+            { label: "Giá trị trung bình mỗi đơn", current: kpis.avgOrderValue, previous: kpis.prevAvgOrderValue },
             { label: "Tỷ lệ trả hàng (%)", current: kpis.returnRate, previous: kpis.prevReturnRate },
           ],
         },
@@ -407,7 +407,7 @@ export default function BanHangPage() {
             valueColor="text-foreground"
           />
           <KpiCard
-            label="Giá trị trung bình/đơn"
+            label="Giá trị trung bình mỗi đơn"
             value={formatCurrency(kpis?.avgOrderValue ?? 0) + "đ"}
             change={`${avgChange.text} so với tháng trước`}
             positive={avgChange.positive}

@@ -340,7 +340,7 @@ export default function BaoCaoTaiChinhPage() {
       // Sheet 4: Operational KPIs
       const opKpiRows = [
         { "Chỉ số": "Vòng quay tồn kho (lần/tháng)", "Giá trị": turnover?.turnoverRatio ?? 0 },
-        { "Chỉ số": "Số ngày bán hết TB", "Giá trị": turnover?.avgDaysToSell ?? 0 },
+        { "Chỉ số": "Số ngày bán hết trung bình", "Giá trị": turnover?.avgDaysToSell ?? 0 },
         { "Chỉ số": "Giá vốn bán trong kỳ", "Giá trị": turnover?.totalCogsPeriod ?? 0 },
         { "Chỉ số": "Giá trị tồn kho TB", "Giá trị": turnover?.avgInventoryValue ?? 0 },
         { "Chỉ số": "Số ngày thu tiền TB (DSO)", "Giá trị": dso?.dso ?? 0 },
@@ -398,8 +398,8 @@ export default function BaoCaoTaiChinhPage() {
   return (
     <div className="flex flex-col h-[calc(100vh-64px)] overflow-y-auto">
       <ReportPageHeader
-        title="Báo cáo tài chính (P&L)"
-        subtitle="Lãi/Lỗ, Giá vốn, Biên lợi nhuận"
+        title="Báo cáo lãi - lỗ"
+        subtitle="Lãi - lỗ, Giá vốn hàng bán, Biên lợi nhuận theo kỳ"
         preset={preset}
         range={range}
         onPresetChange={setPreset}
@@ -641,7 +641,7 @@ export default function BaoCaoTaiChinhPage() {
             valueColor="text-primary"
           />
           <KpiCard
-            label="Giá vốn (COGS)"
+            label="Giá vốn hàng bán"
             value={cur ? formatCurrency(cur.cogs) : "—"}
             change={
               cur && prev
@@ -669,7 +669,7 @@ export default function BaoCaoTaiChinhPage() {
             valueColor="text-status-success"
           />
           <KpiCard
-            label="Biên LN gộp"
+            label="Biên lợi nhuận gộp"
             value={cur ? `${cur.grossMargin}%` : "—"}
             change={
               cur && prev
@@ -960,7 +960,7 @@ export default function BaoCaoTaiChinhPage() {
               <div className="text-center space-y-1">
                 <div className="flex items-center justify-center gap-2 text-muted-foreground">
                   <Icon name="schedule" className="size-4" />
-                  <span className="text-xs">TB ngày bán hết</span>
+                  <span className="text-xs">Trung bình ngày bán hết</span>
                 </div>
                 <p className="text-3xl font-bold text-status-warning">
                   {turnover?.avgDaysToSell ?? 0}
@@ -989,14 +989,14 @@ export default function BaoCaoTaiChinhPage() {
           </ChartCard>
 
           <ChartCard
-            title="Số ngày thu tiền TB (DSO)"
+            title="Số ngày thu tiền trung bình"
             subtitle="3 tháng gần nhất"
           >
             <div className="grid grid-cols-2 gap-4 py-4">
               <div className="text-center space-y-1">
                 <div className="flex items-center justify-center gap-2 text-muted-foreground">
                   <Icon name="bar_chart" className="size-4" />
-                  <span className="text-xs">DSO</span>
+                  <span className="text-xs">Số ngày thu tiền</span>
                 </div>
                 <p
                   className={`text-3xl font-bold ${(dso?.dso ?? 0) > 30 ? "text-status-error" : "text-status-success"}`}
@@ -1019,7 +1019,7 @@ export default function BaoCaoTaiChinhPage() {
             <div className="border-t pt-3 space-y-2">
               <div className="flex justify-between text-sm">
                 <span className="text-muted-foreground">
-                  Doanh thu TB/ngày
+                  Doanh thu trung bình mỗi ngày
                 </span>
                 <span className="font-medium">
                   {formatCurrency(Math.round(dso?.avgDailyRevenue ?? 0))}

@@ -32,10 +32,10 @@ const analyticsNav: ModuleNavGroup[] = [
     items: [
       { label: "Xuất - Nhập - Tồn", href: "/phan-tich/xuat-nhap-ton", icon: "inventory_2" },
       { label: "Phân tích hàng hóa", href: "/phan-tich/hang-hoa", icon: "analytics" },
-      { label: "Phân tích ABC", href: "/phan-tich/abc-analysis", icon: "leaderboard" },
-      { label: "Lot Traceability", href: "/phan-tich/lot-traceability", icon: "qr_code" },
+      { label: "Phân loại sản phẩm theo doanh thu", href: "/phan-tich/abc-analysis", icon: "leaderboard" },
+      { label: "Truy xuất nguồn gốc theo lô", href: "/phan-tich/lot-traceability", icon: "qr_code" },
       { label: "Khách hàng", href: "/phan-tich/khach-hang", icon: "group" },
-      { label: "Cohort retention", href: "/phan-tich/customer-cohort", icon: "repeat" },
+      { label: "Khách hàng quay lại", href: "/phan-tich/customer-cohort", icon: "repeat" },
       { label: "Nhà cung cấp", href: "/phan-tich/nha-cung-cap", icon: "local_shipping" },
     ],
   },

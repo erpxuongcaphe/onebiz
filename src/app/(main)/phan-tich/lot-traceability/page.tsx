@@ -171,13 +171,13 @@ export default function LotTraceabilityPage() {
     { label: "Mã hàng", key: "productCode", align: "left", width: "100px" },
     { label: "Tên hàng", key: "productName", align: "left" },
     {
-      label: "SL nhập",
+      label: "Số lượng nhập",
       key: "quantity",
       align: "right",
       cell: (r) => formatNumber(r.quantity),
     },
     {
-      label: "Còn lại",
+      label: "Số lượng còn lại",
       key: "remainingQty",
       align: "right",
       cell: (r) => formatNumber(r.remainingQty),
@@ -189,13 +189,13 @@ export default function LotTraceabilityPage() {
       cell: (r) => formatShortDate(r.receivedDate),
     },
     {
-      label: "HSD",
+      label: "Hạn sử dụng",
       key: "expiryDate",
       align: "center",
       cell: (r) => (r.expiryDate ? formatShortDate(r.expiryDate) : "—"),
     },
     {
-      label: "Còn lại",
+      label: "Còn lại đến hạn",
       key: "daysToExpiry",
       align: "right",
       cell: (r) => {
@@ -209,13 +209,15 @@ export default function LotTraceabilityPage() {
               isWarning && "text-status-warning font-medium",
             )}
           >
-            {isExpired ? `Quá ${Math.abs(r.daysToExpiry)} ngày` : `${r.daysToExpiry} ngày`}
+            {isExpired
+              ? `Quá hạn ${Math.abs(r.daysToExpiry)} ngày`
+              : `Còn ${r.daysToExpiry} ngày`}
           </span>
         );
       },
     },
     {
-      label: "Nguồn",
+      label: "Nguồn nhập",
       key: "sourceType",
       align: "center",
       cell: (r) => SOURCE_LABEL[r.sourceType] ?? r.sourceType,
@@ -244,8 +246,8 @@ export default function LotTraceabilityPage() {
   return (
     <div className="flex flex-col h-[calc(100vh-64px)] overflow-hidden">
       <ReportPageHeader
-        title="Lot Traceability + Hàng cận date"
-        subtitle="Truy xuất nguồn gốc lô hàng + cảnh báo hết hạn"
+        title="Truy xuất nguồn gốc theo lô + Hàng cận hạn sử dụng"
+        subtitle="Truy xuất nguồn gốc lô hàng và cảnh báo lô sắp hết hạn sử dụng"
         preset={preset}
         range={range}
         onPresetChange={setPreset}
@@ -259,7 +261,7 @@ export default function LotTraceabilityPage() {
       <div className="flex-1 overflow-auto p-4 lg:p-6 space-y-4">
         <div className="grid grid-cols-2 lg:grid-cols-4 gap-3">
           <KpiCard
-            label="Tổng lô"
+            label="Tổng số lô"
             value={String(totalLots)}
             icon="inventory_2"
             bg="bg-primary-fixed"
@@ -267,7 +269,7 @@ export default function LotTraceabilityPage() {
             valueColor="text-foreground"
           />
           <KpiCard
-            label="Lô đang dùng"
+            label="Lô đang còn hàng"
             value={String(activeLots)}
             icon="check_circle"
             bg="bg-status-success/10"
@@ -275,9 +277,9 @@ export default function LotTraceabilityPage() {
             valueColor="text-foreground"
           />
           <KpiCard
-            label="Sắp hết hạn (30 ngày)"
+            label="Sắp hết hạn (trong 30 ngày)"
             value={String(expiringCount)}
-            change={expiringCount > 0 ? "Cần xả gấp" : "An toàn"}
+            change={expiringCount > 0 ? "Cần xả hàng gấp" : "An toàn"}
             positive={expiringCount === 0}
             icon="schedule"
             bg="bg-status-warning/10"
@@ -285,7 +287,7 @@ export default function LotTraceabilityPage() {
             valueColor="text-foreground"
           />
           <KpiCard
-            label="Tổng SL còn"
+            label="Tổng số lượng còn lại"
             value={formatNumber(totalQty)}
             icon="warehouse"
             bg="bg-status-info/10"

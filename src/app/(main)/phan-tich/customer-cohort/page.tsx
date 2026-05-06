@@ -114,8 +114,8 @@ export default function CustomerCohortPage() {
   return (
     <div className="flex flex-col h-[calc(100vh-64px)] overflow-hidden">
       <ReportPageHeader
-        title="Customer Cohort Retention"
-        subtitle="Tỷ lệ khách hàng quay lại theo cohort tháng đầu mua"
+        title="Khách hàng quay lại theo tháng đầu mua"
+        subtitle="Tỷ lệ khách hàng quay lại trong các tháng kế tiếp sau lần mua đầu tiên"
         preset={preset}
         range={range}
         onPresetChange={setPreset}
@@ -129,7 +129,7 @@ export default function CustomerCohortPage() {
       <div className="flex-1 overflow-auto p-4 lg:p-6 space-y-4">
         <div className="grid grid-cols-2 lg:grid-cols-3 gap-3">
           <KpiCard
-            label="Số cohort"
+            label="Số nhóm khách"
             value={String(totalCohorts)}
             change={`${data?.monthsTracked ?? 6} tháng theo dõi`}
             positive
@@ -139,9 +139,9 @@ export default function CustomerCohortPage() {
             valueColor="text-foreground"
           />
           <KpiCard
-            label="Tổng KH lần đầu"
+            label="Tổng khách hàng lần đầu"
             value={String(totalCustomers)}
-            change="Cohort 6 tháng gần nhất"
+            change="6 tháng gần nhất"
             positive
             icon="person_add"
             bg="bg-status-success/10"
@@ -149,7 +149,7 @@ export default function CustomerCohortPage() {
             valueColor="text-foreground"
           />
           <KpiCard
-            label="M1 Retention TB"
+            label="Tháng kế tiếp quay lại trung bình"
             value={`${m1Retention}%`}
             change={
               m1Retention >= 30
@@ -188,17 +188,17 @@ export default function CustomerCohortPage() {
               <thead>
                 <tr className="bg-primary-fixed/40 border-b border-border">
                   <th className="px-3 py-2 text-xs font-semibold text-left">
-                    Cohort
+                    Nhóm tháng đầu mua
                   </th>
                   <th className="px-3 py-2 text-xs font-semibold text-right">
-                    Size
+                    Số khách
                   </th>
                   {Array.from({ length: data.monthsTracked }).map((_, i) => (
                     <th
                       key={i}
-                      className="px-3 py-2 text-xs font-semibold text-center min-w-[70px]"
+                      className="px-3 py-2 text-xs font-semibold text-center min-w-[80px]"
                     >
-                      M{i}
+                      {i === 0 ? "Tháng đầu" : `Tháng +${i}`}
                     </th>
                   ))}
                 </tr>

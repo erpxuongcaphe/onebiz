@@ -689,9 +689,9 @@ export function TopNav() {
                 >
                   <Icon name="shopping_cart" size={16} className="mr-2 text-primary" />
                   <div className="flex-1">
-                    <div className="font-medium">POS Bán lẻ</div>
+                    <div className="font-medium">Bán hàng tại quầy</div>
                     <div className="text-[10px] text-muted-foreground">
-                      Hàng đóng gói, B2B
+                      Hàng đóng gói, bán cho doanh nghiệp
                     </div>
                   </div>
                 </DropdownMenuItem>
@@ -702,7 +702,7 @@ export function TopNav() {
                 >
                   <Icon name="coffee" size={16} className="mr-2 text-status-warning" />
                   <div className="flex-1">
-                    <div className="font-medium">POS F&amp;B</div>
+                    <div className="font-medium">Bán hàng quán cà phê</div>
                     <div className="text-[10px] text-muted-foreground">
                       Pha chế tại quán
                     </div>
@@ -715,7 +715,7 @@ export function TopNav() {
                 >
                   <Icon name="restaurant" size={16} className="mr-2 text-status-success" />
                   <div className="flex-1">
-                    <div className="font-medium">Màn hình bếp (KDS)</div>
+                    <div className="font-medium">Màn hình bếp</div>
                     <div className="text-[10px] text-muted-foreground">
                       Đầu bếp xem đơn
                     </div>

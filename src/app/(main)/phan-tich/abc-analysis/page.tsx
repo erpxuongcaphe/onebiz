@@ -33,10 +33,10 @@ type FilterMode = "all" | "A" | "B" | "C" | "slow";
 
 const FILTER_OPTIONS: { key: FilterMode; label: string; bg: string; icon: string }[] = [
   { key: "all", label: "Tất cả", bg: "bg-surface-container-low", icon: "category" },
-  { key: "A", label: "Lớp A (80%)", bg: "bg-status-success/10", icon: "star" },
-  { key: "B", label: "Lớp B (15%)", bg: "bg-status-info/10", icon: "trending_up" },
-  { key: "C", label: "Lớp C (5%)", bg: "bg-status-warning/10", icon: "trending_flat" },
-  { key: "slow", label: "Bán chậm", bg: "bg-status-error/10", icon: "trending_down" },
+  { key: "A", label: "Nhóm A (80% doanh thu)", bg: "bg-status-success/10", icon: "star" },
+  { key: "B", label: "Nhóm B (15% doanh thu)", bg: "bg-status-info/10", icon: "trending_up" },
+  { key: "C", label: "Nhóm C (5% doanh thu)", bg: "bg-status-warning/10", icon: "trending_flat" },
+  { key: "slow", label: "Bán chậm (không bán trong kỳ)", bg: "bg-status-error/10", icon: "trending_down" },
 ];
 
 export default function AbcAnalysisPage() {
@@ -190,7 +190,7 @@ export default function AbcAnalysisPage() {
 
   const columns: DataTableColumn<AbcRow>[] = [
     {
-      label: "Lớp",
+      label: "Nhóm",
       key: "abcClass",
       align: "center",
       cell: (r) => (
@@ -203,15 +203,15 @@ export default function AbcAnalysisPage() {
             r.abcClass === "slow" && "bg-status-error/15 text-status-error",
           )}
         >
-          {r.abcClass === "slow" ? "Slow" : r.abcClass}
+          {r.abcClass === "slow" ? "Bán chậm" : r.abcClass}
         </span>
       ),
     },
     { label: "Mã hàng", key: "code", align: "left", width: "110px" },
     { label: "Tên hàng", key: "name", align: "left" },
-    { label: "ĐVT", key: "unit", align: "left", width: "70px" },
+    { label: "Đơn vị tính", key: "unit", align: "left", width: "90px" },
     {
-      label: "SL bán",
+      label: "Số lượng bán",
       key: "qtySold",
       align: "right",
       cell: (r) => formatNumber(r.qtySold),
@@ -223,33 +223,33 @@ export default function AbcAnalysisPage() {
       cell: (r) => formatCurrency(r.revenue),
     },
     {
-      label: "% DT",
+      label: "% Doanh thu",
       key: "pct",
       align: "right",
       cell: (r) => `${r.pct.toFixed(2)}%`,
     },
     {
-      label: "% Lũy kế",
+      label: "% Luỹ kế",
       key: "cumPct",
       align: "right",
       cell: (r) => `${r.cumPct.toFixed(2)}%`,
     },
     {
-      label: "Bán cuối",
+      label: "Lần bán cuối",
       key: "lastSoldDaysAgo",
       align: "right",
       cell: (r) =>
         r.lastSoldDaysAgo == null
           ? <span className="text-status-error font-medium">Chưa bán</span>
-          : `${r.lastSoldDaysAgo} ngày`,
+          : `Cách đây ${r.lastSoldDaysAgo} ngày`,
     },
   ];
 
   return (
     <div className="flex flex-col h-[calc(100vh-64px)] overflow-hidden">
       <ReportPageHeader
-        title="Phân tích ABC + Slow Movers"
-        subtitle="Phân loại SP theo Pareto 80/15/5 + xác định SP bán chậm"
+        title="Phân loại sản phẩm theo doanh thu"
+        subtitle="Phân loại sản phẩm theo nguyên tắc Pareto: Nhóm A chiếm 80% doanh thu, Nhóm B chiếm 15%, Nhóm C chiếm 5%, kèm danh sách bán chậm"
         preset={preset}
         range={range}
         onPresetChange={setPreset}
@@ -266,9 +266,9 @@ export default function AbcAnalysisPage() {
         {data && (
           <div className="grid grid-cols-2 lg:grid-cols-4 gap-3">
             <KpiCard
-              label="Lớp A"
+              label="Nhóm A — Sản phẩm chủ lực"
               value={String(data.classStats.A.count)}
-              change={`${data.classStats.A.revenuePct}% doanh thu`}
+              change={`Chiếm ${data.classStats.A.revenuePct}% doanh thu`}
               positive
               icon="star"
               bg="bg-status-success/10"
@@ -276,9 +276,9 @@ export default function AbcAnalysisPage() {
               valueColor="text-foreground"
             />
             <KpiCard
-              label="Lớp B"
+              label="Nhóm B — Sản phẩm trung bình"
               value={String(data.classStats.B.count)}
-              change={`${data.classStats.B.revenuePct}% doanh thu`}
+              change={`Chiếm ${data.classStats.B.revenuePct}% doanh thu`}
               positive
               icon="trending_up"
               bg="bg-status-info/10"
@@ -286,9 +286,9 @@ export default function AbcAnalysisPage() {
               valueColor="text-foreground"
             />
             <KpiCard
-              label="Lớp C"
+              label="Nhóm C — Sản phẩm ít bán"
               value={String(data.classStats.C.count)}
-              change={`${data.classStats.C.revenuePct}% doanh thu`}
+              change={`Chiếm ${data.classStats.C.revenuePct}% doanh thu`}
               positive={false}
               icon="trending_flat"
               bg="bg-status-warning/10"
@@ -298,7 +298,7 @@ export default function AbcAnalysisPage() {
             <KpiCard
               label="Bán chậm"
               value={String(data.classStats.slow.count)}
-              change="SP không bán trong kỳ"
+              change="Sản phẩm không bán trong kỳ"
               positive={false}
               icon="trending_down"
               bg="bg-status-error/10"
