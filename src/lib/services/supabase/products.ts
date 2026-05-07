@@ -687,6 +687,103 @@ export async function deleteProduct(id: string): Promise<void> {
   });
 }
 
+/**
+ * Sprint D — CEO 06/05: Đổi vị trí sort_order của 1 SP với neighbor.
+ *
+ * Pattern: tương tự moveCategorySortOrder nhưng scope theo (category_id,
+ * product_type, channel) — vì FnB POS hiển thị SP theo category, sort phải
+ * stable trong cùng category. SP không có category_id → swap toàn tenant.
+ *
+ * Trước đây sort_order được set 1 lần khi tạo SP, không có UI đổi → CEO báo
+ * "sắp xếp thực đơn theo ý". Giờ admin bấm ↑↓ để move SP lên xuống trong
+ * danh mục, ảnh hưởng thứ tự hiển thị POS FnB grid + POS Retail.
+ *
+ * @returns true nếu đã swap, false nếu không có neighbor (đầu/cuối list).
+ */
+export async function moveProductSortOrder(
+  productId: string,
+  direction: "up" | "down",
+): Promise<boolean> {
+  const supabase = getClient();
+  const tenantId = await getCurrentTenantId();
+
+  // Lấy current product info — cần category_id + product_type + channel để
+  // scope query đúng (tránh swap cross-category gây hỗn loạn).
+  // Note: Database types chưa generate `sort_order` cho products (column tồn
+  // tại runtime nhưng schema migration chưa bump types). Cast `any` để
+  // bypass — KHI nào regen types qua `supabase gen types` thì xoá cast.
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  const { data: currentRaw, error: e1 } = await (supabase as any)
+    .from("products")
+    .select("id, sort_order, category_id, product_type, channel")
+    .eq("tenant_id", tenantId)
+    .eq("id", productId)
+    .single();
+  if (e1 || !currentRaw) throw e1 ?? new Error("Không tìm thấy sản phẩm");
+  const current = currentRaw as {
+    id: string;
+    sort_order: number;
+    category_id: string | null;
+    product_type: string | null;
+    channel: string | null;
+  };
+
+  // Build neighbor query — scope theo category nếu có, fallback toàn tenant.
+  // RLS đã filter tenant, nhưng vẫn .eq() cho rõ + tận dụng index composite.
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  let neighborQuery = (supabase as any)
+    .from("products")
+    .select("id, sort_order")
+    .eq("tenant_id", tenantId)
+    .eq("is_active", true);
+  if (current.category_id) {
+    neighborQuery = neighborQuery.eq("category_id", current.category_id);
+  } else {
+    neighborQuery = neighborQuery.is("category_id", null);
+  }
+  if (current.product_type) {
+    neighborQuery = neighborQuery.eq("product_type", current.product_type);
+  }
+  if (current.channel) {
+    neighborQuery = neighborQuery.eq("channel", current.channel);
+  }
+
+  if (direction === "up") {
+    neighborQuery = neighborQuery
+      .lt("sort_order", current.sort_order)
+      .order("sort_order", { ascending: false });
+  } else {
+    neighborQuery = neighborQuery
+      .gt("sort_order", current.sort_order)
+      .order("sort_order", { ascending: true });
+  }
+
+  const { data: neighbors } = await neighborQuery.limit(1);
+  if (!neighbors || neighbors.length === 0) return false;
+
+  const neighbor = neighbors[0] as { id: string; sort_order: number };
+
+  // Swap atomic — 2 update tuần tự, nếu update thứ 2 fail thì có thể bị
+  // duplicate sort_order tạm thời nhưng không corrupt data (UNIQUE constraint
+  // không có trên sort_order). Production sẽ migration dùng RPC swap atomic
+  // nếu cần (đã có pattern cho categories).
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  const { error: e2 } = await (supabase as any)
+    .from("products")
+    .update({ sort_order: neighbor.sort_order })
+    .eq("id", productId);
+  if (e2) throw e2;
+
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  const { error: e3 } = await (supabase as any)
+    .from("products")
+    .update({ sort_order: current.sort_order })
+    .eq("id", neighbor.id);
+  if (e3) throw e3;
+
+  return true;
+}
+
 // --- Bulk Mutations ---
 
 /**
