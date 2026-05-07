@@ -607,24 +607,50 @@ function FnbPosPageInner() {
     };
   }, [branchId, products]);
 
-  // ── Product select → open item dialog (instant open, variants load in background) ──
+  // ── Product select → quick-add hoặc open item dialog ──
+  // Sprint POS-FNB-3 (CEO 06/05): SP đơn giản (không variant) → 1-tap add
+  // cart, KHÔNG mở dialog. Pattern KiotViet: cà phê đen / nước suối / bánh
+  // mỳ chỉ cần click 1 lần → vào giỏ ngay, save 4 tap so với dialog.
+  // Nếu khách muốn thêm topping / ghi chú → click edit từ cart line.
   const handleSelectProduct = useCallback(
     async (product: FnbProduct) => {
       hapticTap();
       setSelectedProduct(product);
 
-      // Open dialog immediately với variants từ cache (nếu có). Cache đã được
-      // warm bởi batch prefetch ngay khi menu load → hầu hết lần click đã có
-      // cache, không cần round-trip network.
+      // Helper: quick-add với product price chuẩn (không variant, không topping)
+      const quickAdd = () => {
+        pos.addLine({
+          productId: product.id,
+          productName: product.name,
+          quantity: 1,
+          unitPrice: product.sell_price,
+          toppings: [],
+        });
+        toast({
+          title: `+1 ${product.name}`,
+          description: `${formatCurrency(product.sell_price)}đ — vào giỏ ngay`,
+          variant: "success",
+          duration: 1500,
+        });
+      };
+
+      // 1. Cache hit — quyết định ngay không network
       const cached = variantCacheRef.get(product.id);
       if (cached) {
+        if (cached.length === 0) {
+          // SP không có biến thể → quick-add, skip dialog
+          quickAdd();
+          return;
+        }
+        // SP có ≥1 biến thể → mở dialog cho user chọn size
         setItemVariants(cached);
         setItemDialogOpen(true);
-        return; // Skip network — biến thể cache trong session, rất hiếm khi đổi giá giữa ca
+        return;
       }
 
-      // Cache miss (vd prefetch còn chạy hoặc SP mới thêm sau khi vào trang)
-      // → fetch trực tiếp SP này rồi populate cache
+      // 2. Cache miss → fetch variants. Mở dialog ngay với loading state
+      // để user thấy phản hồi tức thời. Nếu sau fetch ra 0 variants →
+      // close dialog + quick-add.
       setItemVariants([]);
       setItemVariantsLoading(true);
       setItemDialogOpen(true);
@@ -636,6 +662,13 @@ function FnbPosPageInner() {
           sell_price: v.sellPrice,
         }));
         variantCacheRef.set(product.id, mapped);
+
+        if (mapped.length === 0) {
+          // Không có variant → đóng dialog + quick-add
+          setItemDialogOpen(false);
+          quickAdd();
+          return;
+        }
         setItemVariants(mapped);
       } catch (err) {
         console.error("getVariantsByProduct error:", err);
@@ -649,7 +682,7 @@ function FnbPosPageInner() {
         setItemVariantsLoading(false);
       }
     },
-    [toast, variantCacheRef]
+    [toast, variantCacheRef, pos],
   );
 
   // ── Add to cart from item dialog ──
