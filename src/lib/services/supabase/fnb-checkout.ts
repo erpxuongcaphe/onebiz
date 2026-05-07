@@ -35,6 +35,11 @@ export interface SendToKitchenInput {
   deliveryPlatform?: DeliveryPlatform;
   deliveryFee?: number;
   platformCommission?: number;
+  /**
+   * Idempotency key — Sprint FIX-1 (CEO 07/05). Pass localId từ offline queue
+   * để server dedup khi retry → không tạo đơn trùng.
+   */
+  idempotencyKey?: string;
   items: {
     productId: string;
     productName: string;
@@ -102,6 +107,7 @@ export async function sendToKitchen(input: SendToKitchenInput): Promise<SendToKi
     tableId: input.tableId,
     orderType: input.orderType,
     note: input.note,
+    idempotencyKey: input.idempotencyKey,
     items: input.items,
   };
 

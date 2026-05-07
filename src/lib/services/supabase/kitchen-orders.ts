@@ -139,6 +139,13 @@ export interface CreateKitchenOrderInput {
   tableId?: string;
   orderType: "dine_in" | "takeaway" | "delivery";
   note?: string;
+  /**
+   * Idempotency key — Sprint FIX-1 (CEO 07/05). Khi pass, server check
+   * existing trước, nếu đã có thì return existing thay vì insert mới
+   * → chống duplicate khi offline retry.
+   * Client gen UUID hoặc dùng localId từ offline queue.
+   */
+  idempotencyKey?: string;
   items: {
     productId: string;
     productName: string;
@@ -161,7 +168,25 @@ export async function createKitchenOrder(
 ): Promise<KitchenOrder> {
   const supabase = getClient();
 
-  const orderData: KOInsert = {
+  // Sprint FIX-1: Idempotency check — nếu client truyền key + đã có order
+  // với key đó → return existing (chống duplicate khi offline retry).
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  if (input.idempotencyKey) {
+    const { data: existing } = await (supabase as any)
+      .from("kitchen_orders")
+      .select(
+        "*, restaurant_tables(name), profiles!kitchen_orders_created_by_fkey(full_name)",
+      )
+      .eq("tenant_id", input.tenantId)
+      .eq("idempotency_key", input.idempotencyKey)
+      .maybeSingle();
+    if (existing) {
+      // Đã insert lần trước — không tạo mới + KHÔNG insert items (đã có).
+      return mapKitchenOrder(existing);
+    }
+  }
+
+  const orderData: KOInsert & { idempotency_key?: string } = {
     tenant_id: input.tenantId,
     branch_id: input.branchId,
     table_id: input.tableId ?? null,
@@ -169,15 +194,39 @@ export async function createKitchenOrder(
     order_type: input.orderType,
     note: input.note ?? null,
     created_by: input.createdBy,
+    ...(input.idempotencyKey ? { idempotency_key: input.idempotencyKey } : {}),
   };
 
-  const { data: order, error: orderErr } = await supabase
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  const { data: order, error: orderErr } = await (supabase as any)
     .from("kitchen_orders")
     .insert(orderData)
     .select()
     .single();
 
-  if (orderErr) handleError(orderErr, "createKitchenOrder");
+  if (orderErr) {
+    // Race condition: 2 retry concurrent → unique constraint violation.
+    // Re-query existing và return — vẫn idempotent.
+    if (
+      input.idempotencyKey &&
+      typeof orderErr === "object" &&
+      orderErr !== null &&
+      "code" in orderErr &&
+      (orderErr as { code: string }).code === "23505" // unique_violation
+    ) {
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      const { data: race } = await (supabase as any)
+        .from("kitchen_orders")
+        .select(
+          "*, restaurant_tables(name), profiles!kitchen_orders_created_by_fkey(full_name)",
+        )
+        .eq("tenant_id", input.tenantId)
+        .eq("idempotency_key", input.idempotencyKey)
+        .maybeSingle();
+      if (race) return mapKitchenOrder(race);
+    }
+    handleError(orderErr, "createKitchenOrder");
+  }
   if (!order) throw new Error("Không tạo được đơn bếp");
 
   // Insert items

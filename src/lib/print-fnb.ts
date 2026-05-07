@@ -106,14 +106,34 @@ function formatDate(iso: string): string {
   return formatShortDate(iso);
 }
 
-function openAndPrint(html: string) {
+/**
+ * Sprint FIX-1: return boolean để caller biết popup mở thành công hay bị
+ * block (browser blocker / extension chặn). Caller có thể toast lỗi nếu cần.
+ */
+function openAndPrint(html: string): boolean {
   const win = window.open("", "_blank", "width=400,height=700");
-  if (!win) return;
+  if (!win) {
+    // Popup blocked. Dispatch event để UI có thể hiện toast (tránh import
+    // toast vào module print → giảm coupling).
+    if (typeof window !== "undefined") {
+      window.dispatchEvent(
+        new CustomEvent("fnb-print-failed", {
+          detail: {
+            reason: "popup_blocked",
+            message:
+              "Trình duyệt chặn cửa sổ in. Cho phép popup cho trang này rồi thử lại.",
+          },
+        }),
+      );
+    }
+    return false;
+  }
   win.document.write(html);
   win.document.close();
   win.focus();
   win.print();
   setTimeout(() => win.close(), 1500);
+  return true;
 }
 
 function baseStyles(width: number, pageSize: string): string {

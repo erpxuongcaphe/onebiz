@@ -96,6 +96,11 @@ export interface AppSettings {
     receiptStyle: "minimal" | "standard" | "full";
     // Footer message
     receiptFooter: string;
+    // Sprint FIX-1: error notification toggles (CEO 07/05)
+    /** Hiện toast khi máy in lỗi (popup chặn / WebUSB fail / kết nối rớt). Default true. */
+    notifyPrintFailure: boolean;
+    /** Hỏi xác nhận in lại khi fail. Default false → silent retry next click. */
+    confirmRetryOnFail: boolean;
   };
   // Giao hàng (delivery)
   delivery: {
@@ -194,6 +199,8 @@ const defaultSettings: AppSettings = {
     kitchenTicketStyle: "standard",
     receiptStyle: "standard",
     receiptFooter: "Cảm ơn quý khách! Hẹn gặp lại!",
+    notifyPrintFailure: true,
+    confirmRetryOnFail: false,
   },
   delivery: {
     defaultFee: 30000,

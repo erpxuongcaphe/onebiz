@@ -287,6 +287,24 @@ function FnbPosPageInner() {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [tenantId, branchId, networkStatus.isOnline]);
 
+  // Sprint FIX-1 (CEO 07/05): Listen "fnb-print-failed" event từ print-fnb.ts
+  // → toast lỗi để user biết không in được. Toggle qua settings.print.notifyPrintFailure.
+  useEffect(() => {
+    if (!settings.print.notifyPrintFailure) return;
+    const handler = (e: Event) => {
+      const custom = e as CustomEvent<{ reason: string; message: string }>;
+      const detail = custom.detail;
+      toast({
+        title: "Không in được phiếu",
+        description: detail?.message ?? "Kiểm tra lại máy in / popup trình duyệt.",
+        variant: "error",
+        duration: 5000,
+      });
+    };
+    window.addEventListener("fnb-print-failed", handler);
+    return () => window.removeEventListener("fnb-print-failed", handler);
+  }, [settings.print.notifyPrintFailure, toast]);
+
   // POS-FIX-C2: Fetch order timestamps cho floor plan timer khi mở floor plan.
   // Refresh mỗi 60s để timer cập nhật mượt khi user xem lâu.
   useEffect(() => {

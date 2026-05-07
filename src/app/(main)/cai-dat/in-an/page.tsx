@@ -30,6 +30,7 @@ import {
   type StoredPrinter,
 } from "@/lib/printer";
 import { useToast } from "@/lib/contexts/toast-context";
+import { HelpTip } from "@/components/shared/help-tip";
 
 // ── Toggle component ──
 function Toggle({
@@ -37,16 +38,22 @@ function Toggle({
   onCheckedChange,
   label,
   description,
+  helpTip,
 }: {
   checked: boolean;
   onCheckedChange: (val: boolean) => void;
   label: string;
   description?: string;
+  /** Sprint FIX-1: optional HelpTip content (string or JSX) — bấm icon i để xem hướng dẫn. */
+  helpTip?: React.ReactNode;
 }) {
   return (
     <div className="flex items-center justify-between py-2">
       <div>
-        <span className="text-sm font-medium">{label}</span>
+        <span className="text-sm font-medium">
+          {label}
+          {helpTip && <HelpTip>{helpTip}</HelpTip>}
+        </span>
         {description && (
           <p className="text-xs text-muted-foreground">{description}</p>
         )}
@@ -435,6 +442,12 @@ export default function PrintSettingsPage() {
           <CardTitle className="flex items-center gap-2">
             <Icon name="description" />
             Khổ giấy
+            <HelpTip>
+              <strong>58mm</strong>: máy in nhỏ, ít phổ biến.<br />
+              <strong>80mm</strong>: chuẩn FnB Việt Nam (Xprinter, Epson...).<br />
+              <strong>A4/A5</strong>: máy in văn phòng, dùng cho phiếu kho /
+              hoá đơn VAT.
+            </HelpTip>
           </CardTitle>
         </CardHeader>
         <CardContent>
@@ -492,27 +505,38 @@ export default function PrintSettingsPage() {
               checked={print.showStoreName}
               onCheckedChange={(v) => update({ showStoreName: v })}
               label="Tên cửa hàng"
+              helpTip="Hiển thị tên cửa hàng (lấy từ Cài đặt → Cửa hàng → Tên doanh nghiệp) ở đầu phiếu in. Tắt nếu phiếu đã có sẵn header in từ máy."
             />
             <Toggle
               checked={print.showStoreAddress}
               onCheckedChange={(v) => update({ showStoreAddress: v })}
               label="Địa chỉ"
+              helpTip="Hiển thị địa chỉ quán dưới tên cửa hàng. Hữu ích cho khách takeaway/delivery để có thông tin liên hệ."
             />
             <Toggle
               checked={print.showStorePhone}
               onCheckedChange={(v) => update({ showStorePhone: v })}
               label="Số điện thoại"
+              helpTip="Hiển thị SĐT quán trên phiếu. Tắt nếu không muốn để khách gọi thẳng (vd quán chỉ nhận đơn qua app)."
             />
             <Toggle
               checked={print.showBarcode}
               onCheckedChange={(v) => update({ showBarcode: v })}
               label="Mã vạch"
+              helpTip="In barcode mã hoá đơn → quét lại để tra cứu nhanh. Phù hợp quán tích hợp với hệ thống kế toán scan barcode."
             />
             <Toggle
               checked={print.showQr}
               onCheckedChange={(v) => update({ showQr: v })}
               label="Mã QR thanh toán"
               description="Hiện QR chuyển khoản trên phiếu"
+              helpTip={
+                <>
+                  In QR VietQR/MoMo trên phiếu → khách quét chuyển khoản dễ
+                  dàng. Cần cấu hình tài khoản ngân hàng tại{" "}
+                  <strong>Cài đặt → Thanh toán</strong> trước.
+                </>
+              }
             />
           </div>
 
@@ -547,18 +571,30 @@ export default function PrintSettingsPage() {
                 onCheckedChange={(v) => update({ autoPrintKitchen: v })}
                 label="Phiếu bếp/bar"
                 description="Tự động in phiếu khi gửi bếp"
+                helpTip={
+                  <>
+                    <strong>Bật:</strong> Bấm “Gửi bếp” trong POS FnB → phiếu
+                    chế biến tự in ra ngay, nhân viên bar/bếp thấy món + bàn
+                    để pha chế.
+                    <br />
+                    <strong>Tắt:</strong> Bấm “Gửi bếp” nhưng KHÔNG in giấy.
+                    Phù hợp nếu quán dùng KDS (màn hình bếp) thay phiếu giấy.
+                  </>
+                }
               />
               <Toggle
                 checked={print.autoPrintPreBill}
                 onCheckedChange={(v) => update({ autoPrintPreBill: v })}
                 label="Phiếu tạm tính"
                 description="In phiếu tạm khi khách yêu cầu tính tiền"
+                helpTip="Phiếu tạm tính = chưa thanh toán, để khách kiểm tra món + tổng tiền trước khi trả. Bật nếu quán có khách hay yêu cầu xem trước."
               />
               <Toggle
                 checked={print.autoPrintReceipt}
                 onCheckedChange={(v) => update({ autoPrintReceipt: v })}
                 label="Phiếu thanh toán"
                 description="Tự động in hoá đơn sau khi thanh toán"
+                helpTip="Bật để in hoá đơn cho khách ngay sau khi nhân viên xác nhận thanh toán. Tắt nếu khách không cần phiếu giấy (vd thanh toán QR + nhận hoá đơn qua email/SMS sau)."
               />
             </div>
           </div>
@@ -589,6 +625,51 @@ export default function PrintSettingsPage() {
           </div>
 
           <Separator />
+
+          {/* Auto-print toggles with HelpTip */}
+          <Separator />
+          <div>
+            <h4 className="text-sm font-semibold mb-2">
+              Thông báo &amp; Lỗi máy in
+              <HelpTip>
+                Cấu hình OneBiz hiển thị toast khi máy in lỗi (popup trình
+                duyệt bị chặn / mất kết nối WebUSB / hết giấy). Tránh trường
+                hợp nhân viên tưởng đã in nhưng thực tế không in được.
+              </HelpTip>
+            </h4>
+            <div className="divide-y">
+              <Toggle
+                checked={print.notifyPrintFailure}
+                onCheckedChange={(v) => update({ notifyPrintFailure: v })}
+                label="Hiện toast khi máy in lỗi"
+                description="Bật để biết phiếu fail thay vì silent fail"
+                helpTip={
+                  <>
+                    <strong>Bật (khuyến nghị):</strong> Khi máy in lỗi sẽ hiện
+                    toast đỏ ở góc màn hình + ghi chú lý do (vd "popup chặn",
+                    "máy in mất kết nối"). Nhân viên biết để in lại.
+                    <br />
+                    <strong>Tắt:</strong> Silent — phù hợp khi quán không có
+                    máy in, dùng phần mềm để theo dõi đơn qua KDS thôi.
+                  </>
+                }
+              />
+              <Toggle
+                checked={print.confirmRetryOnFail}
+                onCheckedChange={(v) => update({ confirmRetryOnFail: v })}
+                label="Hỏi xác nhận khi in lại"
+                description="Bật để xác nhận trước khi retry — tránh in trùng"
+                helpTip={
+                  <>
+                    Khi máy in lỗi, hệ thống sẽ <em>hỏi</em> trước khi gửi lệnh
+                    in lại. Hữu ích nếu anh muốn kiểm tra giấy/kết nối thủ công
+                    trước. Mặc định <strong>tắt</strong> — retry tự động khi
+                    nhân viên bấm in lần kế.
+                  </>
+                }
+              />
+            </div>
+          </div>
 
           {/* Receipt style */}
           <div>

@@ -29,13 +29,19 @@ export async function offlineSendToKitchen(
   input: SendToKitchenInput,
   isOnline: boolean
 ): Promise<SendToKitchenResult & { isOffline?: boolean }> {
-  // Online → call real service
+  // Sprint FIX-1: gen idempotencyKey TRƯỚC để dùng cho cả online + offline.
+  // Online: pass key vào server → nếu user đôi lúc cao trào click 2 lần submit
+  //   nhanh, server cũng dedup. Tránh duplicate ngay cả khi không offline.
+  // Offline: localId = idempotencyKey → khi replay, server thấy đã tồn tại
+  //   thì return existing thay vì tạo mới.
+  const localId = `local_${Date.now()}_${Math.random().toString(36).slice(2, 8)}`;
+
+  // Online → call real service với idempotencyKey
   if (isOnline) {
-    return sendToKitchen(input);
+    return sendToKitchen({ ...input, idempotencyKey: localId });
   }
 
   // Offline → write to IndexedDB
-  const localId = `local_${Date.now()}_${Math.random().toString(36).slice(2, 8)}`;
   const localOrderNumber = await getNextLocalOrderNumber();
 
   try {
@@ -57,10 +63,10 @@ export async function offlineSendToKitchen(
       });
     });
 
-    // Enqueue for replay
+    // Enqueue for replay — payload kèm idempotencyKey để server dedup khi retry
     await enqueue({
       action: "sendToKitchen",
-      payload: input,
+      payload: { ...input, idempotencyKey: localId },
       localId,
       createdAt: new Date().toISOString(),
     });
