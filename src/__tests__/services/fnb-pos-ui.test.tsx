@@ -465,7 +465,10 @@ describe("FnbCart — component", () => {
       />
     );
     expect(screen.getByText("Nguyễn Văn B")).toBeDefined();
-    expect(screen.getByText("F4")).toBeDefined();
+    // Sprint POS-FNB-4: F4 hiện 2 chỗ — customer bar (header) +
+    // empty state CTA shortcuts. Cả 2 đều ok cho UX, test chỉ cần
+    // verify có ≥1 element F4 visible.
+    expect(screen.getAllByText("F4").length).toBeGreaterThanOrEqual(1);
   });
 
   it("hiện nút 'Bếp (F10)' + 'Thanh toán (F9)'", () => {
