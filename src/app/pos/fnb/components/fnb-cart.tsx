@@ -107,8 +107,8 @@ export function FnbCart({
         //   2xl (1536+) → 440px width
         : "w-[320px] xl:w-[400px] 2xl:w-[440px] hidden lg:flex rounded-xl ambient-shadow border border-outline-variant/20 my-3 mr-3"
     )}>
-      {/* ── Header ── */}
-      <div className="p-4 border-b border-outline-variant/20 bg-surface-container-lowest shrink-0">
+      {/* ── Header (Sprint UI-5: gradient subtle để tróc khỏi nền + ambient depth) ── */}
+      <div className="p-4 border-b border-outline-variant/20 bg-gradient-to-b from-surface-container/50 to-surface-container-lowest shrink-0">
         <div className="flex items-center justify-between mb-3">
           <div className="flex items-center gap-2 min-w-0 flex-wrap">
             <h2 className="font-heading text-base font-bold text-foreground truncate">
