@@ -60,6 +60,7 @@ import {
 import { FnbCategoryGrid } from "./components/fnb-category-grid";
 import { FnbSidenavDrawer } from "./components/fnb-sidenav-drawer";
 import { FnbProductGrid, type FnbProduct } from "./components/fnb-product-grid";
+import { FnbSubcategoryPills } from "./components/fnb-subcategory-pills";
 import { FnbCart } from "./components/fnb-cart";
 import type { FnbItemConfirmPayload } from "./components/fnb-item-dialog";
 import type { FnbPaymentConfirmPayload } from "./components/fnb-payment-dialog";
@@ -100,6 +101,9 @@ function FnbPosPageInner() {
   // Fetch khi showFloorPlan mở (lazy) để không block initial load.
   const [orderTimestamps, setOrderTimestamps] = useState<Record<string, string>>({});
   const [activeCategoryId, setActiveCategoryId] = useState<string | null>(null);
+  // Sprint UI-4: sub-filter brand trong active category. null = "Tất cả".
+  // Reset khi đổi category để không carry filter sai sang nhóm khác.
+  const [activeSubFilter, setActiveSubFilter] = useState<string | null>(null);
   const [loading, setLoading] = useState(true);
 
   // ── Dialog state ──
@@ -186,7 +190,7 @@ function FnbPosPageInner() {
                 getProductCategoriesAsync("sku", "fnb"),
                 supabase
                   .from("products")
-                  .select("id, name, code, sell_price, image_url, stock, category_id")
+                  .select("id, name, code, sell_price, image_url, stock, category_id, brand")
                   .eq("is_active", true)
                   .eq("product_type", "sku")
                   .eq("channel", "fnb")
@@ -234,6 +238,7 @@ function FnbPosPageInner() {
                 image_url: (p as Record<string, unknown>).image_url as string | undefined,
                 stock: p.stock,
                 category_id: p.category_id,
+                brand: ((p as Record<string, unknown>).brand as string | null) ?? null,
               }))
             );
 
@@ -449,11 +454,36 @@ function FnbPosPageInner() {
     pos.setOrderDiscount(pos.activeTabId, undefined);
   }
 
-  // ── Filtered products ──
-  const filteredProducts = useMemo(() => {
+  // ── Filtered products (Sprint UI-4: thêm sub-filter brand) ──
+  const productsInCategory = useMemo(() => {
     if (!activeCategoryId) return productsWithTier;
     return productsWithTier.filter((p) => p.category_id === activeCategoryId);
   }, [productsWithTier, activeCategoryId]);
+
+  const filteredProducts = useMemo(() => {
+    if (!activeSubFilter) return productsInCategory;
+    return productsInCategory.filter((p) => p.brand === activeSubFilter);
+  }, [productsInCategory, activeSubFilter]);
+
+  // Map productId → brand cho sub-pills component (chỉ products trong category)
+  const brandByProductId = useMemo(() => {
+    const map = new Map<string, string | null>();
+    for (const p of productsInCategory) {
+      map.set(p.id, p.brand ?? null);
+    }
+    return map;
+  }, [productsInCategory]);
+
+  // Active category name từ id (cho UI-4 pills label)
+  const activeCategoryName = useMemo(() => {
+    if (!activeCategoryId) return null;
+    return categories.find((c) => c.id === activeCategoryId)?.name ?? null;
+  }, [activeCategoryId, categories]);
+
+  // Reset sub-filter khi đổi category (tránh filter brand cũ trên nhóm mới)
+  useEffect(() => {
+    setActiveSubFilter(null);
+  }, [activeCategoryId]);
 
   // Sprint A: categories kèm count cho sidebar. Đếm trực tiếp từ products
   // hiện tại (không từ DB) — phản ánh đúng số SP user đang thấy.
@@ -1699,6 +1729,16 @@ function FnbPosPageInner() {
                   onSelect={setActiveCategoryId}
                 />
               </div>
+              {/* Sprint UI-4: Sub-category pills row — chỉ hiện khi user
+                   chọn 1 category cha + có ≥1 brand trong category đó.
+                   Tự ẩn ở "Tất cả" hoặc category không gán brand. */}
+              <FnbSubcategoryPills
+                activeCategoryName={activeCategoryName}
+                productsInCategory={productsInCategory}
+                brandByProductId={brandByProductId}
+                activeSubFilter={activeSubFilter}
+                onSelectSubFilter={setActiveSubFilter}
+              />
               {/* flex-1 min-h-0 cần thiết để cho FnbProductGrid (virtualized,
                    có scroll riêng) tự quản scroll thay vì wrapper — tránh
                    double scroll container. */}

@@ -15,6 +15,8 @@ export interface FnbProduct {
   image_url?: string;
   stock: number;
   category_id: string | null;
+  /** Sprint UI-4: dùng cho sub-category pills (group by brand). Null nếu chưa gán. */
+  brand?: string | null;
 }
 
 interface FnbProductGridProps {
