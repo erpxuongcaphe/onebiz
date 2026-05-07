@@ -18,7 +18,7 @@ import {
   Network
 } from "lucide-react";
 import { cn } from "@/lib/utils";
-import { useEffect, useState } from "react";
+import { useEffect, useState, useCallback } from "react";
 import { Icon } from "@/components/ui/icon";
 import {
   requestPrinter,
@@ -31,6 +31,12 @@ import {
 } from "@/lib/printer";
 import { useToast } from "@/lib/contexts/toast-context";
 import { HelpTip } from "@/components/shared/help-tip";
+import { BusinessLogoUpload } from "@/components/shared/business-logo-upload";
+import {
+  getTenantBusinessInfo,
+  updateTenantBusinessInfo,
+} from "@/lib/services";
+import Link from "next/link";
 
 // ── Toggle component ──
 function Toggle({
@@ -133,6 +139,11 @@ export default function PrintSettingsPage() {
   const [storedPrinter, setStoredPrinter] = useState<StoredPrinter | null>(null);
   const [webusbSupported, setWebusbSupported] = useState(false);
   const [connecting, setConnecting] = useState(false);
+  // Sprint TEMPLATE-1: logo doanh nghiệp + footer hoá đơn — load + save qua
+  // tenants.settings.business_info (cùng nguồn với /he-thong/thiet-lap).
+  const [logoUrl, setLogoUrl] = useState<string | null>(null);
+  const [invoiceFooter, setInvoiceFooter] = useState<string>("");
+  const [logoSaving, setLogoSaving] = useState(false);
 
   const update = (values: Partial<typeof print>) => {
     updateSettings("print", values);
@@ -143,6 +154,69 @@ export default function PrintSettingsPage() {
     setWebusbSupported(isWebUsbSupported());
     setStoredPrinter(loadPrinter());
   }, []);
+
+  // Sprint TEMPLATE-1: load logo + footer từ tenant settings
+  useEffect(() => {
+    let cancelled = false;
+    getTenantBusinessInfo()
+      .then((info) => {
+        if (cancelled) return;
+        setLogoUrl(info.logoUrl ?? null);
+        setInvoiceFooter(info.invoiceFooter ?? "");
+      })
+      .catch(() => {
+        // Silent — UI vẫn render với defaults
+      });
+    return () => {
+      cancelled = true;
+    };
+  }, []);
+
+  const handleLogoChange = useCallback(
+    async (url: string | null) => {
+      setLogoUrl(url);
+      setLogoSaving(true);
+      try {
+        await updateTenantBusinessInfo({ logoUrl: url ?? undefined });
+        toast({
+          variant: "success",
+          title: url ? "Đã cập nhật logo" : "Đã xoá logo",
+          description: url
+            ? "Logo sẽ tự xuất hiện trên hoá đơn + phiếu in"
+            : "Hoá đơn sẽ in không có logo",
+        });
+      } catch (err) {
+        toast({
+          variant: "error",
+          title: "Lỗi lưu logo",
+          description: err instanceof Error ? err.message : "Vui lòng thử lại",
+        });
+      } finally {
+        setLogoSaving(false);
+      }
+    },
+    [toast],
+  );
+
+  const handleFooterSave = useCallback(async () => {
+    setLogoSaving(true);
+    try {
+      await updateTenantBusinessInfo({ invoiceFooter });
+      toast({
+        variant: "success",
+        title: "Đã lưu lời cảm ơn",
+        description: "Sẽ in ở cuối hoá đơn từ giờ trở đi",
+      });
+    } catch (err) {
+      toast({
+        variant: "error",
+        title: "Lỗi lưu lời cảm ơn",
+        description: err instanceof Error ? err.message : "Vui lòng thử lại",
+      });
+    } finally {
+      setLogoSaving(false);
+    }
+  }, [invoiceFooter, toast]);
 
   const handleConnectUsbPrinter = async () => {
     setConnecting(true);
@@ -487,6 +561,77 @@ export default function PrintSettingsPage() {
                 ))}
               </SelectContent>
             </Select>
+          </div>
+        </CardContent>
+      </Card>
+
+      {/* ── Sprint TEMPLATE-1: Logo + Lời cảm ơn (CEO 07/05) ── */}
+      <Card>
+        <CardHeader>
+          <CardTitle className="flex items-center gap-2">
+            <Icon name="image" />
+            Logo &amp; Lời cảm ơn
+            <HelpTip>
+              Logo + lời cảm ơn xuất hiện đầu / cuối hoá đơn POS, phiếu tạm
+              tính, phiếu kho. Cài 1 lần là dùng cho mọi loại phiếu in.
+              Lưu vào <code>tenants.settings.business_info</code>, anh có thể
+              chỉnh thêm tại Hệ thống → Thiết lập chung.
+            </HelpTip>
+          </CardTitle>
+        </CardHeader>
+        <CardContent className="space-y-5">
+          <div className="space-y-2">
+            <label className="text-sm font-medium flex items-center gap-1">
+              Logo doanh nghiệp
+              <HelpTip>
+                Khuyến nghị: PNG nền trong suốt (transparent) hoặc SVG. Kích
+                thước hợp lý 200-400px rộng × 80-120px cao. Logo sẽ tự co theo
+                khổ giấy (max-height 30px cho 80mm, 60px cho A4).
+              </HelpTip>
+            </label>
+            <BusinessLogoUpload value={logoUrl} onChange={handleLogoChange} />
+            <p className="text-xs text-muted-foreground">
+              Hoặc cài qua{" "}
+              <Link
+                href="/he-thong/thiet-lap"
+                className="text-primary underline hover:no-underline"
+              >
+                Hệ thống → Thiết lập chung
+              </Link>{" "}
+              cùng các thông tin pháp lý khác (MST, địa chỉ).
+            </p>
+          </div>
+
+          <Separator />
+
+          <div className="space-y-2">
+            <label className="text-sm font-medium flex items-center gap-1">
+              Lời cảm ơn / chân hoá đơn
+              <HelpTip>
+                Text in ở CUỐI hoá đơn — thường ghi cảm ơn khách / link
+                Facebook / mã WiFi / chính sách đổi trả. Tối đa 200 ký tự,
+                hỗ trợ xuống dòng.
+              </HelpTip>
+            </label>
+            <Input
+              value={invoiceFooter}
+              onChange={(e) => setInvoiceFooter(e.target.value)}
+              placeholder="VD: Cảm ơn quý khách! WiFi: caphe123 — Hẹn gặp lại!"
+              maxLength={200}
+            />
+            <div className="flex items-center justify-between">
+              <span className="text-xs text-muted-foreground">
+                {invoiceFooter.length}/200
+              </span>
+              <Button
+                size="sm"
+                onClick={handleFooterSave}
+                disabled={logoSaving}
+              >
+                <Icon name="save" size={14} className="mr-1" />
+                {logoSaving ? "Đang lưu..." : "Lưu lời cảm ơn"}
+              </Button>
+            </div>
           </div>
         </CardContent>
       </Card>

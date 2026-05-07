@@ -22,6 +22,8 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Icon } from "@/components/ui/icon";
+import { BusinessLogoUpload } from "@/components/shared/business-logo-upload";
+import { HelpTip } from "@/components/shared/help-tip";
 
 export default function ThietLapPage() {
   const { toast } = useToast();
@@ -226,24 +228,22 @@ export default function ThietLapPage() {
 
           <div className="space-y-4">
             <div className="space-y-2">
-              <Label htmlFor="logoUrl">Logo URL</Label>
-              <Input
-                id="logoUrl"
-                value={form.logoUrl ?? ""}
-                onChange={(e) => update("logoUrl", e.target.value)}
-                placeholder="https://example.com/logo.png"
+              <Label>
+                Logo doanh nghiệp
+                <HelpTip>
+                  Logo sẽ tự động xuất hiện trên hoá đơn POS, phiếu tạm tính,
+                  phiếu kho. Nên dùng PNG nền trong suốt hoặc SVG. Kích thước
+                  khuyến nghị: rộng 200-400px, cao 80-120px. Tối đa 5 MB.
+                </HelpTip>
+              </Label>
+              <BusinessLogoUpload
+                value={form.logoUrl ?? null}
+                onChange={(url) => update("logoUrl", url ?? "")}
               />
               <p className="text-xs text-muted-foreground">
-                Upload logo lên Supabase Storage rồi paste URL public vào đây.
+                Bấm vùng có dấu cộng để chọn ảnh, hoặc kéo-thả file vào.
+                Logo cũ tự xoá khi upload logo mới.
               </p>
-              {form.logoUrl && (
-                // eslint-disable-next-line @next/next/no-img-element
-                <img
-                  src={form.logoUrl}
-                  alt="Logo preview"
-                  className="mt-2 h-16 w-auto border border-border rounded-lg p-2 bg-white"
-                />
-              )}
             </div>
 
             <div className="space-y-2">
