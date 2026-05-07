@@ -1716,8 +1716,9 @@ function PosPageInner() {
           <Icon name="arrow_back" size={16} />
         </Link>
 
-        {/* Branch selector + Title — title text đầy đủ, bỏ icon shopping_cart trùng nghĩa */}
-        <PosBranchSelector variant="dark" filter={["warehouse", "store"]} showCode />
+        {/* Branch selector + Title — prominent style: badge nổi bật để CEO/staff
+            biết rõ chi nhánh đang ghi nhận đơn (CEO feedback 20/04). */}
+        <PosBranchSelector variant="dark" filter={["warehouse", "store"]} showCode prominent />
         <div className="h-4 w-px bg-white/20 shrink-0" />
         <span className="text-[13px] font-bold tracking-wide shrink-0">
           Bán hàng tại quầy
