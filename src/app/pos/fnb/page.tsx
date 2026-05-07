@@ -1656,6 +1656,7 @@ function FnbPosPageInner() {
           onSendToKitchen={handleSendToKitchen}
           onPayment={() => setPaymentOpen(true)}
           onSplitBill={handleOpenSplitBill}
+          onChangeOrderType={pos.setActiveTabOrderType}
           onCustomerClick={() => setCustomerPickerOpen(true)}
           onDiscountChange={(d) => pos.setOrderDiscount(pos.activeTabId, d)}
           onPrintPreBill={handlePrintPreBill}

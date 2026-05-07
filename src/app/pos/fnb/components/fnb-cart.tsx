@@ -32,6 +32,12 @@ interface FnbCartProps {
   onTransferTable?: () => void;
   /** Lịch sử đơn — mở modal danh sách hoá đơn hôm nay + reprint. */
   onOrderHistory?: () => void;
+  /**
+   * Sprint POS-FNB-4: switch order type instant từ cart (dine_in/takeaway/delivery).
+   * Chỉ hiển thị pill row khi callback được pass + chưa gửi bếp (tránh
+   * đổi loại sau khi đã in bill bếp gây nhầm phục vụ).
+   */
+  onChangeOrderType?: (next: "dine_in" | "takeaway" | "delivery") => void;
   /** Voucher apply — nếu có, hiển thị input áp mã khuyến mãi.
    *  Callback nên gọi validateCoupon RPC + setOrderDiscount khi thành công. */
   onApplyCoupon?: (code: string) => Promise<void> | void;
@@ -67,6 +73,7 @@ export function FnbCart({
   onVoidKitchenOrder,
   onTransferTable,
   onOrderHistory,
+  onChangeOrderType,
   onApplyCoupon,
   onRemoveCoupon,
   appliedCouponCode,
@@ -180,21 +187,60 @@ export function FnbCart({
         </button>
       </div>
 
-      {/* Order type badge row (display current) */}
+      {/* Order type pill row — Sprint POS-FNB-4 (CEO 06/05).
+          Trước: chỉ display badge mode current → muốn đổi phải qua menu.
+          Sau: 3 button pill switch instant — cashier chuyển dine-in
+          ↔ takeaway ↔ delivery với 1 click ngay tại cart.
+          Disable sau khi gửi bếp (kitchenOrderId tồn tại) để tránh
+          đổi loại đơn đã in vé bếp gây phục vụ nhầm. */}
       <div className="px-4 pt-3 pb-2 shrink-0">
-        <div className="inline-flex items-center gap-2 px-3 py-2 rounded-full bg-primary-fixed text-primary text-xs font-semibold">
-          <Icon
-            name={
-              activeTab?.orderType === "dine_in"
-                ? "restaurant"
-                : activeTab?.orderType === "delivery"
-                  ? "local_shipping"
-                  : "takeout_dining"
-            }
-            size={14}
-          />
-          {orderTypeLabel}
-        </div>
+        {onChangeOrderType && !activeTab?.kitchenOrderId ? (
+          <div className="inline-flex items-center rounded-full p-0.5 bg-surface-container-low border border-outline-variant/30">
+            {([
+              { key: "dine_in", label: "Tại quán", icon: "restaurant" },
+              { key: "takeaway", label: "Mang về", icon: "takeout_dining" },
+              { key: "delivery", label: "Giao hàng", icon: "local_shipping" },
+            ] as const).map((opt) => {
+              const isActive = (activeTab?.orderType ?? "takeaway") === opt.key;
+              return (
+                <button
+                  key={opt.key}
+                  type="button"
+                  onClick={() => onChangeOrderType(opt.key)}
+                  className={cn(
+                    "inline-flex items-center gap-1 px-3 h-7 rounded-full text-xs font-medium transition-colors press-scale-sm",
+                    isActive
+                      ? "bg-primary text-on-primary ambient-shadow"
+                      : "text-muted-foreground hover:text-foreground",
+                  )}
+                  aria-pressed={isActive}
+                >
+                  <Icon name={opt.icon} size={13} />
+                  {opt.label}
+                </button>
+              );
+            })}
+          </div>
+        ) : (
+          <div className="inline-flex items-center gap-2 px-3 py-2 rounded-full bg-primary-fixed text-primary text-xs font-semibold">
+            <Icon
+              name={
+                activeTab?.orderType === "dine_in"
+                  ? "restaurant"
+                  : activeTab?.orderType === "delivery"
+                    ? "local_shipping"
+                    : "takeout_dining"
+              }
+              size={14}
+            />
+            {orderTypeLabel}
+            {activeTab?.kitchenOrderId && (
+              <span className="text-[10px] text-muted-foreground ml-1">
+                (đã gửi bếp)
+              </span>
+            )}
+          </div>
+        )}
       </div>
 
       {/* ── Cart lines ── */}
@@ -207,6 +253,19 @@ export function FnbCart({
           <p className="text-xs text-muted-foreground">
             Chọn món từ thực đơn để thêm vào đơn
           </p>
+          {/* Sprint POS-FNB-4: CTA shortcuts cho cashier mới
+              giúp tìm nhanh thay vì lóng ngóng. */}
+          <div className="flex items-center gap-1.5 mt-2 text-[11px] text-muted-foreground">
+            <kbd className="font-mono bg-surface-container-lowest border border-outline-variant/30 rounded px-1.5 py-0.5">
+              F3
+            </kbd>
+            <span>tìm món</span>
+            <span className="opacity-50">·</span>
+            <kbd className="font-mono bg-surface-container-lowest border border-outline-variant/30 rounded px-1.5 py-0.5">
+              F4
+            </kbd>
+            <span>chọn khách</span>
+          </div>
         </div>
       ) : (
         <ScrollArea className="flex-1">
@@ -295,11 +354,14 @@ export function FnbCart({
           />
         )}
 
-        {/* Total — Stitch style: bold xl primary */}
-        <div className="flex items-center justify-between border-t border-outline-variant/20 pt-3">
-          <span className="text-sm font-semibold text-foreground">Khách cần trả</span>
-          <span className="font-heading text-2xl font-extrabold text-primary tabular-nums tracking-tight">
+        {/* Total — Sprint POS-FNB-4: số to hơn (3xl) cho cashier liếc xa
+            đọc được. Stitch spec dùng text-3xl/4xl để ưu tiên visual.
+            font-black thay extrabold để đậm rõ. */}
+        <div className="flex items-end justify-between border-t border-outline-variant/20 pt-3">
+          <span className="text-sm font-semibold text-foreground pb-0.5">Khách cần trả</span>
+          <span className="font-heading text-3xl font-black text-primary tabular-nums tracking-tight leading-none">
             {formatCurrency(total)}
+            <span className="text-base font-bold ml-1">đ</span>
           </span>
         </div>
 

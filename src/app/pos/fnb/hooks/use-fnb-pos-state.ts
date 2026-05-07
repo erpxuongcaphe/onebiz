@@ -60,6 +60,9 @@ export interface UseFnbPosStateReturn {
   /** Reset toàn bộ tabs về 1 tab "Mang về #1" rỗng. Dùng khi đổi chi nhánh. */
   resetAllTabs: () => void;
   updateTabMeta: (tabId: string, meta: Partial<Pick<FnbTabSnapshot, "customerId" | "customerName" | "kitchenOrderId">>) => void;
+  /** Sprint POS-FNB-4: switch order type instant từ cart pill row.
+   *  Guard: bị ignore nếu tab đã gửi bếp (kitchenOrderId tồn tại). */
+  setActiveTabOrderType: (next: OrderType) => void;
 
   // Cart lines
   addLine: (line: Omit<FnbOrderLine, "id" | "lineTotal">) => void;
@@ -200,6 +203,20 @@ export function useFnbPosState(branchId?: string): UseFnbPosStateReturn {
     []
   );
 
+  // Sprint POS-FNB-4 (CEO 06/05): switch order type instant từ cart pill row.
+  // KHÔNG cho đổi sau khi đã gửi bếp (kitchenOrderId tồn tại) — bếp đã pha
+  // theo "Tại quán" thì khách không thể đổi qua "Mang về" giữa chừng (sai
+  // luồng phục vụ). UI guard ở fnb-cart.tsx, hook này guard backup.
+  const setActiveTabOrderType = useCallback((next: OrderType) => {
+    setTabs((prev) =>
+      prev.map((t) =>
+        t.id === activeTabId && !t.kitchenOrderId
+          ? { ...t, orderType: next }
+          : t,
+      ),
+    );
+  }, [activeTabId]);
+
   // ── Cart lines (scoped to active tab) ──
 
   const updateActiveTab = useCallback(
@@ -319,6 +336,7 @@ export function useFnbPosState(branchId?: string): UseFnbPosStateReturn {
     closeTab,
     resetAllTabs,
     updateTabMeta,
+    setActiveTabOrderType,
     addLine,
     updateLineQty,
     removeLine,
