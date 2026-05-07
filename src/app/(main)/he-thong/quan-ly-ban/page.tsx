@@ -7,7 +7,7 @@
  * Each branch has its own layout. Tables are grouped by zone.
  */
 
-import { useState, useEffect, useCallback } from "react";
+import { useState, useEffect, useCallback, useMemo } from "react";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
@@ -40,6 +40,10 @@ import {
   renameZone,
   deleteZone,
 } from "@/lib/services/supabase/fnb-tables";
+import {
+  getBranchSettings,
+  updateBranchSettings,
+} from "@/lib/services/supabase/branches";
 import type { RestaurantTable } from "@/lib/types/fnb";
 import { Icon } from "@/components/ui/icon";
 import { FloorPlanEditor } from "./floor-plan-editor";
@@ -95,6 +99,10 @@ export default function QuanLyBanPage() {
   // Sprint C — CEO 06/05: tab "Bố cục" cho phép drag-drop bàn trên canvas.
   const [viewMode, setViewMode] = useState<"list" | "layout">("list");
   const [layoutZone, setLayoutZone] = useState<string>("");
+  // Sprint E — CEO 06/05: thứ tự zone tabs trong layout view (per-branch).
+  // Đồng bộ từ branches.settings.pos_zone_order. Zone không có trong order
+  // → fallback về cuối list theo thứ tự alpha.
+  const [zoneOrder, setZoneOrder] = useState<string[]>([]);
 
   const tenantId = tenant?.id ?? "";
 
@@ -131,6 +139,65 @@ export default function QuanLyBanPage() {
   }, [activeBranchId, toast]);
 
   useEffect(() => { loadTables(); }, [loadTables]);
+
+  // Sprint E: Load zone order từ branch settings (mỗi branch tự lưu order riêng).
+  useEffect(() => {
+    if (!activeBranchId) return;
+    let cancelled = false;
+    (async () => {
+      try {
+        const settings = await getBranchSettings(activeBranchId);
+        if (!cancelled && settings.posZoneOrder) {
+          setZoneOrder(settings.posZoneOrder);
+        }
+      } catch {
+        // Silent — fallback empty (alpha order)
+      }
+    })();
+    return () => {
+      cancelled = true;
+    };
+  }, [activeBranchId]);
+
+  // Sprint E: Sắp xếp zones theo zoneOrder. Zone không có trong order →
+  // append cuối theo alpha.
+  const orderedZones = useMemo(() => {
+    if (zoneOrder.length === 0) return zones;
+    const indexMap = new Map(zoneOrder.map((name, i) => [name, i]));
+    return [...zones].sort((a, b) => {
+      const ia = indexMap.get(a.name) ?? Infinity;
+      const ib = indexMap.get(b.name) ?? Infinity;
+      if (ia !== ib) return ia - ib;
+      return a.name.localeCompare(b.name, "vi");
+    });
+  }, [zones, zoneOrder]);
+
+  // Sprint E: Move zone trong order (up/down). Save vào branch settings.
+  const moveZone = useCallback(
+    async (zoneName: string, direction: "up" | "down") => {
+      if (!activeBranchId) return;
+      const currentNames = orderedZones.map((z) => z.name);
+      const idx = currentNames.indexOf(zoneName);
+      if (idx === -1) return;
+      const swapIdx = direction === "up" ? idx - 1 : idx + 1;
+      if (swapIdx < 0 || swapIdx >= currentNames.length) return;
+      const next = [...currentNames];
+      [next[idx], next[swapIdx]] = [next[swapIdx], next[idx]];
+      setZoneOrder(next); // optimistic
+      try {
+        await updateBranchSettings(activeBranchId, { posZoneOrder: next });
+      } catch (err) {
+        // Rollback nếu fail
+        setZoneOrder(currentNames);
+        toast({
+          title: "Đổi thứ tự khu vực thất bại",
+          description: err instanceof Error ? err.message : "Vui lòng thử lại",
+          variant: "error",
+        });
+      }
+    },
+    [activeBranchId, orderedZones, toast],
+  );
 
   // ── Stats ──
 
@@ -462,40 +529,76 @@ export default function QuanLyBanPage() {
                   Kéo bàn để sắp xếp theo ý
                 </Badge>
               </div>
-              {/* Zone tabs */}
+              {/* Sprint E: Zone tabs với ↑↓ reorder per-branch */}
               <div className="flex items-center gap-1 flex-wrap">
-                {zones.map((z) => (
-                  <button
-                    key={z.name}
-                    type="button"
-                    onClick={() => setLayoutZone(z.name)}
-                    className={cn(
-                      "px-3 py-1.5 rounded-lg text-xs font-semibold transition-colors flex items-center gap-1.5",
-                      layoutZone === z.name
-                        ? "bg-primary text-on-primary"
-                        : "bg-surface-container text-on-surface-variant hover:bg-surface-container-high hover:text-foreground",
-                    )}
-                  >
-                    {z.name}
-                    <span
+                {orderedZones.map((z, idx) => {
+                  const isFirst = idx === 0;
+                  const isLast = idx === orderedZones.length - 1;
+                  const isActive = layoutZone === z.name;
+                  return (
+                    <div
+                      key={z.name}
                       className={cn(
-                        "px-1.5 py-0 rounded text-[10px] tabular-nums",
-                        layoutZone === z.name
-                          ? "bg-on-primary/20"
-                          : "bg-surface-container-lowest",
+                        "flex items-center rounded-lg overflow-hidden transition-colors",
+                        isActive
+                          ? "bg-primary text-on-primary"
+                          : "bg-surface-container text-on-surface-variant hover:bg-surface-container-high",
                       )}
                     >
-                      {z.tables.length}
-                    </span>
-                  </button>
-                ))}
+                      <button
+                        type="button"
+                        onClick={() => setLayoutZone(z.name)}
+                        className="px-3 py-1.5 text-xs font-semibold flex items-center gap-1.5"
+                      >
+                        {z.name}
+                        <span
+                          className={cn(
+                            "px-1.5 py-0 rounded text-[10px] tabular-nums",
+                            isActive
+                              ? "bg-on-primary/20"
+                              : "bg-surface-container-lowest",
+                          )}
+                        >
+                          {z.tables.length}
+                        </span>
+                      </button>
+                      {/* ↑↓ reorder — chỉ hiển thị khi >1 zone */}
+                      {orderedZones.length > 1 && (
+                        <div className="flex border-l border-current/20">
+                          <button
+                            type="button"
+                            disabled={isFirst}
+                            onClick={() => moveZone(z.name, "up")}
+                            className={cn(
+                              "px-1.5 py-1.5 hover:bg-current/10 disabled:opacity-30 disabled:cursor-not-allowed",
+                            )}
+                            title="Đẩy khu vực lên trước"
+                          >
+                            <Icon name="chevron_left" size={12} />
+                          </button>
+                          <button
+                            type="button"
+                            disabled={isLast}
+                            onClick={() => moveZone(z.name, "down")}
+                            className={cn(
+                              "px-1.5 py-1.5 hover:bg-current/10 disabled:opacity-30 disabled:cursor-not-allowed border-l border-current/20",
+                            )}
+                            title="Đẩy khu vực ra sau"
+                          >
+                            <Icon name="chevron_right" size={12} />
+                          </button>
+                        </div>
+                      )}
+                    </div>
+                  );
+                })}
               </div>
             </div>
           </CardHeader>
           <CardContent className="pt-0">
             <FloorPlanEditor
               tables={
-                zones.find((z) => z.name === layoutZone)?.tables ?? []
+                orderedZones.find((z) => z.name === layoutZone)?.tables ?? []
               }
               onSaved={loadTables}
             />
@@ -516,7 +619,7 @@ export default function QuanLyBanPage() {
         </Card>
       )}
 
-      {viewMode === "list" && zones.map((zone) => (
+      {viewMode === "list" && orderedZones.map((zone) => (
         <Card key={zone.name}>
           <CardHeader className="pb-3">
             <div className="flex items-center justify-between">

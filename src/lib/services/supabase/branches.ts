@@ -169,6 +169,116 @@ export async function updateBranch(
   });
 }
 
+// ============================================================
+// Sprint E — CEO 06/05: Branch settings JSONB (mockup v3)
+// ============================================================
+// Lưu trữ per-branch layout preferences cho POS FnB:
+//   - pos_zone_order: thứ tự sảnh hiển thị trên floor plan
+//   - pos_layout_mode: "auto" (grid) | "manual" (positionX/Y absolute)
+//   - pos_canvas_width / pos_canvas_height: kích thước canvas editor
+//   - pos_cart_position: "right" | "bottom" (Sprint sau)
+//
+// Schema dùng JSONB để mở rộng không cần migration mỗi key mới. Service
+// merge partial — chỉ update key được truyền vào, giữ key cũ.
+
+export interface BranchSettings {
+  /** Thứ tự sảnh hiển thị trên floor plan tab (admin sắp xếp). */
+  posZoneOrder?: string[];
+  /** Floor plan dùng position absolute (manual) hay auto-grid (auto). */
+  posLayoutMode?: "auto" | "manual";
+  /** Canvas width/height khi mode manual. Default 1024×720. */
+  posCanvasWidth?: number;
+  posCanvasHeight?: number;
+  /** Cart position trên POS view (Sprint sau implement). */
+  posCartPosition?: "right" | "bottom";
+}
+
+export async function getBranchSettings(
+  branchId: string,
+): Promise<BranchSettings> {
+  const supabase = getClient();
+  const tenantId = await getCurrentTenantId();
+
+  // Cast `any` vì DB types chưa regen sau migration 00052 — `settings` JSONB
+  // chưa có trong Database types. Sau khi user chạy `supabase gen types`
+  // có thể bỏ cast.
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  const { data, error } = await (supabase as any)
+    .from("branches")
+    .select("settings")
+    .eq("tenant_id", tenantId)
+    .eq("id", branchId)
+    .maybeSingle();
+
+  if (error || !data) return {};
+  const raw = (data.settings ?? {}) as Record<string, unknown>;
+
+  return {
+    posZoneOrder: Array.isArray(raw.pos_zone_order)
+      ? (raw.pos_zone_order as string[])
+      : undefined,
+    posLayoutMode:
+      raw.pos_layout_mode === "auto" || raw.pos_layout_mode === "manual"
+        ? raw.pos_layout_mode
+        : undefined,
+    posCanvasWidth:
+      typeof raw.pos_canvas_width === "number"
+        ? raw.pos_canvas_width
+        : undefined,
+    posCanvasHeight:
+      typeof raw.pos_canvas_height === "number"
+        ? raw.pos_canvas_height
+        : undefined,
+    posCartPosition:
+      raw.pos_cart_position === "right" || raw.pos_cart_position === "bottom"
+        ? raw.pos_cart_position
+        : undefined,
+  };
+}
+
+/**
+ * Merge partial settings vào branches.settings JSONB.
+ * Key truyền vào sẽ update, key không truyền giữ nguyên.
+ */
+export async function updateBranchSettings(
+  branchId: string,
+  patch: BranchSettings,
+): Promise<void> {
+  const supabase = getClient();
+  const tenantId = await getCurrentTenantId();
+
+  // Read current settings để merge — tránh ghi đè key cũ
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  const { data: row } = await (supabase as any)
+    .from("branches")
+    .select("settings")
+    .eq("tenant_id", tenantId)
+    .eq("id", branchId)
+    .maybeSingle();
+
+  const current = ((row?.settings as Record<string, unknown>) ?? {}) as Record<
+    string,
+    unknown
+  >;
+
+  // Map camelCase → snake_case cho DB
+  const next: Record<string, unknown> = { ...current };
+  if (patch.posZoneOrder !== undefined) next.pos_zone_order = patch.posZoneOrder;
+  if (patch.posLayoutMode !== undefined) next.pos_layout_mode = patch.posLayoutMode;
+  if (patch.posCanvasWidth !== undefined) next.pos_canvas_width = patch.posCanvasWidth;
+  if (patch.posCanvasHeight !== undefined) next.pos_canvas_height = patch.posCanvasHeight;
+  if (patch.posCartPosition !== undefined) next.pos_cart_position = patch.posCartPosition;
+
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  const { error } = await (supabase as any)
+    .from("branches")
+    .update({ settings: next })
+    .eq("tenant_id", tenantId)
+    .eq("id", branchId);
+
+  if (error) throw error;
+}
+
 function mapBranch(row: Record<string, unknown>): BranchDetail {
   return {
     id: row.id as string,
