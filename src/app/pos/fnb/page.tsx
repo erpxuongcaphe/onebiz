@@ -53,6 +53,11 @@ import { formatCurrency } from "@/lib/format";
 import { useFnbPosState } from "./hooks/use-fnb-pos-state";
 import { FnbHeader } from "./components/fnb-header";
 import { FnbCategoryTabs, type FnbCategory } from "./components/fnb-category-tabs";
+import {
+  FnbCategorySidebar,
+  type FnbCategoryWithCount,
+} from "./components/fnb-category-sidebar";
+import { FnbSidenavDrawer } from "./components/fnb-sidenav-drawer";
 import { FnbProductGrid, type FnbProduct } from "./components/fnb-product-grid";
 import { FnbCart } from "./components/fnb-cart";
 import type { FnbItemConfirmPayload } from "./components/fnb-item-dialog";
@@ -121,6 +126,8 @@ function FnbPosPageInner() {
   // R5: Lý do huỷ — bắt buộc để audit & loss prevention.
   const [voidReason, setVoidReason] = useState("");
   const [transferTableOpen, setTransferTableOpen] = useState(false);
+  // Sprint A — CEO 06/05: Sidenav drawer trigger từ ☰ button trong header.
+  const [sidenavOpen, setSidenavOpen] = useState(false);
 
   // Voucher / coupon state — áp mã khuyến mãi cho đơn hiện tại.
   // couponApplied null = chưa áp. Khi áp, set orderDiscount = { mode: amount, value: discount }.
@@ -446,6 +453,21 @@ function FnbPosPageInner() {
     if (!activeCategoryId) return productsWithTier;
     return productsWithTier.filter((p) => p.category_id === activeCategoryId);
   }, [productsWithTier, activeCategoryId]);
+
+  // Sprint A: categories kèm count cho sidebar. Đếm trực tiếp từ products
+  // hiện tại (không từ DB) — phản ánh đúng số SP user đang thấy.
+  const categoriesWithCount = useMemo<FnbCategoryWithCount[]>(() => {
+    const counts = new Map<string, number>();
+    for (const p of productsWithTier) {
+      if (p.category_id) {
+        counts.set(p.category_id, (counts.get(p.category_id) ?? 0) + 1);
+      }
+    }
+    return categories.map((c) => ({
+      ...c,
+      count: counts.get(c.id) ?? 0,
+    }));
+  }, [categories, productsWithTier]);
 
   // ── Variant cache (in-memory, per session) — tránh refetch khi user mở lại dialog cùng SP.
   //    Warm từ IndexedDB on mount (effect bên dưới) → dialog mở instant NGAY CẢ
@@ -1559,6 +1581,17 @@ function FnbPosPageInner() {
         shift={currentShift}
         onShiftClick={handleShiftClick}
         viewMode={showFloorPlan ? "floorplan" : "menu"}
+        onMenuClick={() => setSidenavOpen(true)}
+      />
+
+      {/* Sprint A: Sidenav drawer (☰ → slide-in). */}
+      <FnbSidenavDrawer
+        open={sidenavOpen}
+        onClose={() => setSidenavOpen(false)}
+        onCloseShift={
+          currentShift ? () => setCloseShiftDialogOpen(true) : undefined
+        }
+        hasOpenShift={!!currentShift}
       />
 
       {/* Sprint POS-FNB-1 (CEO 06/05): consolidate 2 banner → 1 strip duy nhất.
@@ -1614,6 +1647,31 @@ function FnbPosPageInner() {
       )}
 
       <div className="flex flex-1 min-h-0">
+        {/* Sprint A: Categories sidebar cột trái (chỉ hiện khi không floor plan).
+            Ẩn trên mobile (<768px) để tận hết width — Sprint B sẽ làm grid 4-col
+            cho mobile. md+ (≥768) hiện compact 144px, lg+ (≥1024) hiện 200px. */}
+        {!showFloorPlan && categoriesWithCount.length > 0 && (
+          <>
+            <div className="hidden lg:block">
+              <FnbCategorySidebar
+                categories={categoriesWithCount}
+                totalCount={productsWithTier.length}
+                activeCategoryId={activeCategoryId}
+                onSelect={setActiveCategoryId}
+              />
+            </div>
+            <div className="hidden md:block lg:hidden">
+              <FnbCategorySidebar
+                categories={categoriesWithCount}
+                totalCount={productsWithTier.length}
+                activeCategoryId={activeCategoryId}
+                onSelect={setActiveCategoryId}
+                compact
+              />
+            </div>
+          </>
+        )}
+
         {/* Left panel: menu grid OR floor plan */}
         <div className="flex-1 flex flex-col min-w-0">
           {showFloorPlan ? (
@@ -1626,11 +1684,15 @@ function FnbPosPageInner() {
             </Suspense>
           ) : (
             <>
-              <FnbCategoryTabs
-                categories={categories}
-                activeCategoryId={activeCategoryId}
-                onSelect={setActiveCategoryId}
-              />
+              {/* Mobile (<768px) fallback: horizontal pills hiện tại (Sprint B
+                   sẽ thay bằng grid 4-col). Tablet/Desktop dùng sidebar bên trái. */}
+              <div className="md:hidden">
+                <FnbCategoryTabs
+                  categories={categories}
+                  activeCategoryId={activeCategoryId}
+                  onSelect={setActiveCategoryId}
+                />
+              </div>
               {/* flex-1 min-h-0 cần thiết để cho FnbProductGrid (virtualized,
                    có scroll riêng) tự quản scroll thay vì wrapper — tránh
                    double scroll container. */}

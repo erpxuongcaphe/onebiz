@@ -29,6 +29,8 @@ interface FnbHeaderProps {
   shift?: Shift | null;
   onShiftClick?: () => void;
   viewMode?: "menu" | "floorplan";
+  /** Sprint A: Mở sidenav drawer (☰ trigger). */
+  onMenuClick?: () => void;
 }
 
 export function FnbHeader({
@@ -42,13 +44,27 @@ export function FnbHeader({
   shift,
   onShiftClick,
   viewMode = "menu",
+  onMenuClick,
 }: FnbHeaderProps) {
   const { isFnb, fnbPath } = useFnbSubdomain();
 
   return (
     <header className="h-12 bg-pos-chrome-bg text-pos-chrome-fg flex items-center px-2 gap-2 shrink-0">
-      {/* ── Left: back + branch selector + view mode tabs ── */}
-      {!isFnb && (
+      {/* ── Sprint A: ☰ Sidenav trigger (CEO 06/05) — thay back arrow ──
+          Drawer chứa Trang chủ + nav sang Sản phẩm/Tồn kho/Báo cáo,
+          không cần back button riêng nữa. */}
+      {onMenuClick && (
+        <button
+          type="button"
+          onClick={onMenuClick}
+          className="w-9 h-9 rounded-lg flex items-center justify-center text-pos-chrome-fg-muted hover:text-pos-chrome-fg hover:bg-pos-chrome-bg-elevated transition-colors shrink-0"
+          aria-label="Mở menu điều hướng"
+          title="Menu điều hướng (☰)"
+        >
+          <Icon name="menu" size={18} />
+        </button>
+      )}
+      {!onMenuClick && !isFnb && (
         <Link
           href="/"
           className="flex items-center gap-1 text-sm text-pos-chrome-fg-muted hover:text-pos-chrome-fg transition-colors shrink-0"

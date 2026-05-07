@@ -1,0 +1,511 @@
+<!DOCTYPE html>
+<html lang="vi">
+<head>
+<meta charset="UTF-8" />
+<title>POS F&B — So sánh layout hiện tại vs có sidenav</title>
+<style>
+  body {
+    font-family: 'Segoe UI', system-ui, sans-serif;
+    margin: 0; padding: 24px;
+    background: #f3f4f6;
+    color: #1f2937;
+  }
+  h1 { margin-top: 0; font-size: 22px; }
+  h2 { font-size: 16px; margin: 24px 0 12px; }
+  .container { max-width: 1400px; margin: 0 auto; }
+  .layout {
+    background: #fff;
+    border: 1px solid #e5e7eb;
+    border-radius: 12px;
+    margin-bottom: 32px;
+    overflow: hidden;
+    box-shadow: 0 4px 16px rgba(0,0,0,0.04);
+  }
+  .layout-title {
+    background: #1e293b;
+    color: #fff;
+    padding: 12px 16px;
+    font-weight: 600;
+    font-size: 14px;
+  }
+  .layout-title.good { background: #16a34a; }
+  .layout-title.bad { background: #dc2626; }
+  .frame {
+    display: flex;
+    flex-direction: column;
+    width: 1280px;
+    height: 720px;
+    margin: 0 auto;
+    border: 1px solid #cbd5e1;
+  }
+  .header {
+    height: 48px;
+    background: #0f172a;
+    color: #f1f5f9;
+    display: flex;
+    align-items: center;
+    padding: 0 12px;
+    gap: 12px;
+    font-size: 12px;
+  }
+  .header-glass {
+    background: rgba(255,255,255,0.85);
+    backdrop-filter: blur(20px);
+    color: #0f172a;
+    border-bottom: 1px solid #e5e7eb;
+  }
+  .chip {
+    background: rgba(255,255,255,0.1);
+    padding: 4px 10px;
+    border-radius: 8px;
+    font-size: 11px;
+  }
+  .chip.light { background: rgba(0,0,0,0.05); }
+  .banner {
+    height: 32px;
+    background: #f1f5f9;
+    border-bottom: 1px solid #e2e8f0;
+    display: flex;
+    align-items: center;
+    padding: 0 12px;
+    gap: 12px;
+    font-size: 11px;
+    color: #475569;
+  }
+  .body {
+    flex: 1;
+    display: flex;
+    overflow: hidden;
+  }
+  .sidenav {
+    width: 64px;
+    background: #f8fafc;
+    border-right: 1px solid #e2e8f0;
+    display: flex;
+    flex-direction: column;
+    padding: 8px 0;
+    gap: 4px;
+  }
+  .sidenav-item {
+    height: 48px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    color: #64748b;
+    font-size: 18px;
+  }
+  .sidenav-item.active {
+    background: #dbeafe;
+    color: #1d4ed8;
+  }
+  .menu {
+    flex: 1;
+    padding: 12px;
+    background: #fff;
+    overflow: hidden;
+  }
+  .cat-tabs {
+    display: flex;
+    gap: 8px;
+    margin-bottom: 12px;
+    border-bottom: 1px solid #e5e7eb;
+    padding-bottom: 8px;
+  }
+  .cat {
+    padding: 6px 12px;
+    background: #f1f5f9;
+    border-radius: 999px;
+    font-size: 12px;
+    color: #475569;
+  }
+  .cat.active { background: #2563eb; color: #fff; }
+  .grid {
+    display: grid;
+    gap: 12px;
+  }
+  .card {
+    aspect-ratio: 1;
+    background: #f8fafc;
+    border-radius: 10px;
+    padding: 8px;
+    display: flex;
+    flex-direction: column;
+    justify-content: space-between;
+    border: 1px solid transparent;
+    box-shadow: 0 4px 12px rgba(0,0,0,0.03);
+  }
+  .card .name { font-size: 11px; font-weight: 600; }
+  .card .price {
+    font-size: 10px;
+    background: #2563eb;
+    color: #fff;
+    padding: 2px 6px;
+    border-radius: 999px;
+    align-self: flex-end;
+    font-weight: 700;
+  }
+  .cart {
+    width: 440px;
+    background: #fff;
+    border-left: 1px solid #e5e7eb;
+    display: flex;
+    flex-direction: column;
+    margin: 12px;
+    border-radius: 12px;
+    box-shadow: 0 4px 16px rgba(0,0,0,0.05);
+    overflow: hidden;
+  }
+  .cart.narrow { width: 280px; }
+  .cart.medium { width: 360px; }
+  .cart-h {
+    padding: 12px 16px;
+    border-bottom: 1px solid #e5e7eb;
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+  }
+  .cart-h h3 { margin: 0; font-size: 14px; }
+  .pill-row {
+    padding: 8px 16px;
+    display: flex;
+    gap: 4px;
+    border-bottom: 1px solid #f1f5f9;
+  }
+  .pill {
+    flex: 1;
+    padding: 6px 8px;
+    background: #f1f5f9;
+    border-radius: 999px;
+    text-align: center;
+    font-size: 11px;
+    color: #64748b;
+  }
+  .pill.active { background: #2563eb; color: #fff; font-weight: 600; }
+  .cart-lines {
+    flex: 1;
+    padding: 12px 16px;
+    overflow-y: auto;
+    display: flex;
+    flex-direction: column;
+    gap: 8px;
+  }
+  .line {
+    background: #f8fafc;
+    padding: 10px 12px;
+    border-radius: 8px;
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    font-size: 12px;
+  }
+  .cart-footer {
+    border-top: 1px solid #e5e7eb;
+    padding: 12px 16px;
+  }
+  .row { display: flex; justify-content: space-between; font-size: 12px; margin: 4px 0; }
+  .row .total { color: #2563eb; font-weight: 900; font-size: 28px; line-height: 1; }
+  .row .total-3xl { font-size: 28px; }
+  .row .total-2xl { font-size: 20px; }
+  .actions { display: flex; gap: 8px; margin-top: 12px; }
+  .btn {
+    flex: 0.5;
+    padding: 12px;
+    border-radius: 10px;
+    text-align: center;
+    font-size: 12px;
+    font-weight: 700;
+    color: #fff;
+  }
+  .btn.kitchen { background: #f59e0b; flex: 0.4; }
+  .btn.pay { background: #16a34a; flex: 0.6; }
+  .pros-cons {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: 16px;
+    padding: 16px;
+    background: #f9fafb;
+  }
+  .col {
+    background: #fff;
+    border-radius: 8px;
+    padding: 12px 16px;
+  }
+  .col h4 { margin: 0 0 8px; font-size: 13px; }
+  .col.pros h4 { color: #16a34a; }
+  .col.cons h4 { color: #dc2626; }
+  .col ul { padding-left: 20px; margin: 4px 0; font-size: 12px; line-height: 1.6; }
+  .legend {
+    background: #fef3c7;
+    border-left: 4px solid #f59e0b;
+    padding: 12px 16px;
+    border-radius: 6px;
+    font-size: 13px;
+    margin: 16px 0;
+  }
+</style>
+</head>
+<body>
+
+<div class="container">
+
+<h1>POS F&B — So sánh 2 phương án</h1>
+
+<div class="legend">
+  <strong>Bối cảnh</strong>: POS F&B chạy trên tablet/iPad cố định tại quầy. Cashier
+  chỉ làm 2 việc: nhận order + thanh toán. KHÔNG mở báo cáo / quản lý menu giữa ca
+  (admin làm trên desktop sau ca).
+</div>
+
+<!-- ========== PHƯƠNG ÁN 1: HIỆN TẠI ========== -->
+<div class="layout">
+  <div class="layout-title good">
+    ✅ PHƯƠNG ÁN 1 — HIỆN TẠI (đã ship Sprint 1+3+4) — Em RECOMMEND
+  </div>
+  <div style="padding: 16px; background: #f1f5f9;">
+    <div class="frame">
+      <div class="header">
+        <span class="chip">🏪 KHO TỔNG</span>
+        <span class="chip">⏱ Ca 14:30</span>
+        <span class="chip" style="background:#2563eb">🍽 Phòng bàn</span>
+        <span class="chip">🍴 Thực đơn</span>
+        <span class="chip">🔍 Tìm món F3</span>
+        <span style="opacity:0.3">|</span>
+        <span class="chip" style="background:#2563eb">Đơn 1 ╳</span>
+        <span class="chip">Đơn 2 ╳</span>
+        <span style="margin-left:auto">🍳 KDS · ⚙</span>
+      </div>
+      <div class="banner">
+        🏷 Bảng giá: VIP · 12/200 SP riêng · 🎁 KM: Combo trưa −15.000đ ╳
+      </div>
+      <div class="body">
+        <div class="menu" style="display:flex; flex-direction:column;">
+          <div class="cat-tabs">
+            <span class="cat active">Cà phê</span>
+            <span class="cat">Trà</span>
+            <span class="cat">Sữa</span>
+            <span class="cat">Bánh</span>
+            <span class="cat">Topping</span>
+          </div>
+          <div class="grid" style="grid-template-columns: repeat(5, 1fr); flex:1;">
+            <div class="card"><div class="name">Cà phê đen</div><div class="price">25k</div></div>
+            <div class="card"><div class="name">Cà phê sữa</div><div class="price">30k</div></div>
+            <div class="card"><div class="name">Bạc xỉu</div><div class="price">35k</div></div>
+            <div class="card"><div class="name">Cold brew</div><div class="price">40k</div></div>
+            <div class="card"><div class="name">Espresso</div><div class="price">28k</div></div>
+            <div class="card"><div class="name">Latte</div><div class="price">45k</div></div>
+            <div class="card"><div class="name">Cappuccino</div><div class="price">45k</div></div>
+            <div class="card"><div class="name">Mocha</div><div class="price">50k</div></div>
+            <div class="card"><div class="name">Caramel Macchiato</div><div class="price">50k</div></div>
+            <div class="card"><div class="name">Cà phê dừa</div><div class="price">55k</div></div>
+          </div>
+        </div>
+        <div class="cart">
+          <div class="cart-h">
+            <h3>🍽 Bàn 5 — Đơn 1</h3>
+            <span style="font-size:11px;color:#64748b">F4 Khách lẻ</span>
+          </div>
+          <div class="pill-row">
+            <div class="pill active">🍽 Tại quán</div>
+            <div class="pill">🥡 Mang về</div>
+            <div class="pill">🛵 Giao hàng</div>
+          </div>
+          <div class="cart-lines">
+            <div class="line"><span><b>Cà phê đen</b> × 2<br><small style="color:#94a3b8">Ít đường, không đá</small></span><b>50.000đ</b></div>
+            <div class="line"><span><b>Trà sữa size L</b> × 1<br><small style="color:#94a3b8">+ Trân châu × 2</small></span><b>55.000đ</b></div>
+            <div class="line"><span><b>Bánh mì pate</b> × 1</span><b>40.000đ</b></div>
+          </div>
+          <div class="cart-footer">
+            <div class="row"><span>Tạm tính</span><b>145.000đ</b></div>
+            <div class="row"><span>KM Combo trưa</span><b style="color:#dc2626">−15.000đ</b></div>
+            <div class="row" style="border-top:1px solid #e5e7eb; padding-top:8px; margin-top:8px;">
+              <span style="font-size:14px;font-weight:600">Khách cần trả</span>
+              <span class="total">130.000<small style="font-size:14px"> đ</small></span>
+            </div>
+            <div class="actions">
+              <div class="btn kitchen">🍳 Bếp F10</div>
+              <div class="btn pay">💳 Thanh toán F9</div>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+  <div class="pros-cons">
+    <div class="col pros">
+      <h4>✅ Ưu điểm</h4>
+      <ul>
+        <li><b>5 cột menu</b> trên desktop 1280+ — visual hierarchy mạnh, cashier chọn món nhanh</li>
+        <li><b>Cart 440px</b> (30% width) — tên món dài không truncate, total 3xl đọc xa được</li>
+        <li><b>Header gọn 48px</b> — đủ chứa branch/ca/view toggle/search/tabs/KDS</li>
+        <li><b>Banner 1 strip 32px</b> — gộp tier + KM, không stack chiếm space</li>
+        <li><b>Order type pill</b> switch instant — đổi tại quán/mang về 1 click</li>
+        <li><b>Quick-add</b> SP đơn giản 1 tap</li>
+        <li>iPad portrait 768px vẫn 3 cols tốt</li>
+        <li><b>Risk = 0</b> (đã production, đã test)</li>
+      </ul>
+    </div>
+    <div class="col cons">
+      <h4>❌ Nhược điểm</h4>
+      <ul>
+        <li>Header 48px hơi chật khi có 5+ tab order cùng lúc (rất hiếm)</li>
+        <li>Cashier muốn vào "Báo cáo / Quản lý menu" phải thoát POS → vào main app</li>
+        <li>Không có visual app-switcher giữa POS Bán lẻ ↔ POS F&B (phải qua URL)</li>
+      </ul>
+    </div>
+  </div>
+</div>
+
+<!-- ========== PHƯƠNG ÁN 2: SIDENAV ========== -->
+<div class="layout">
+  <div class="layout-title bad">
+    ⚠️ PHƯƠNG ÁN 2 — Thêm Sidenav (Sprint 2 đề xuất ban đầu) — Em KHÔNG recommend
+  </div>
+  <div style="padding: 16px; background: #f1f5f9;">
+    <div class="frame">
+      <div class="header header-glass" style="height:64px">
+        <span class="chip light">🏪 KHO TỔNG</span>
+        <span class="chip light">⏱ Ca 14:30</span>
+        <span class="chip light">🔍 Tìm món F3</span>
+        <span style="opacity:0.3">|</span>
+        <span class="chip" style="background:#2563eb;color:#fff">Đơn 1 ╳</span>
+        <span class="chip light">Đơn 2 ╳</span>
+        <span style="margin-left:auto">⚙ Cài đặt</span>
+      </div>
+      <div class="banner">
+        🏷 Bảng giá: VIP · 12/200 SP riêng · 🎁 KM: Combo trưa −15.000đ ╳
+      </div>
+      <div class="body">
+        <div class="sidenav">
+          <div class="sidenav-item active" title="POS bán hàng">🛒</div>
+          <div class="sidenav-item" title="Màn hình bếp">🍳</div>
+          <div class="sidenav-item" title="Sơ đồ bàn">🪑</div>
+          <div class="sidenav-item" title="Quản lý menu">📋</div>
+          <div class="sidenav-item" title="Quản lý ca">⏱</div>
+          <div class="sidenav-item" title="Báo cáo F&B">📊</div>
+        </div>
+        <div class="menu" style="display:flex; flex-direction:column;">
+          <div class="cat-tabs">
+            <span class="cat active">Cà phê</span>
+            <span class="cat">Trà</span>
+            <span class="cat">Sữa</span>
+            <span class="cat">Bánh</span>
+          </div>
+          <div class="grid" style="grid-template-columns: repeat(4, 1fr); flex:1;">
+            <div class="card"><div class="name">Cà phê đen</div><div class="price">25k</div></div>
+            <div class="card"><div class="name">Cà phê sữa</div><div class="price">30k</div></div>
+            <div class="card"><div class="name">Bạc xỉu</div><div class="price">35k</div></div>
+            <div class="card"><div class="name">Cold brew</div><div class="price">40k</div></div>
+            <div class="card"><div class="name">Espresso</div><div class="price">28k</div></div>
+            <div class="card"><div class="name">Latte</div><div class="price">45k</div></div>
+            <div class="card"><div class="name">Cappuccino</div><div class="price">45k</div></div>
+            <div class="card"><div class="name">Mocha</div><div class="price">50k</div></div>
+          </div>
+          <div style="padding:8px; background:#f1f5f9; border-radius:8px; margin-top:8px; display:flex; gap:8px; justify-content:center;">
+            <span class="cat active">🪑 Phòng bàn</span>
+            <span class="cat">🍴 Thực đơn</span>
+          </div>
+        </div>
+        <div class="cart medium">
+          <div class="cart-h">
+            <h3>🍽 Bàn 5 — Đơn 1</h3>
+          </div>
+          <div class="pill-row">
+            <div class="pill active">🍽 Tại quán</div>
+            <div class="pill">🥡 Mang về</div>
+            <div class="pill">🛵 Giao</div>
+          </div>
+          <div class="cart-lines">
+            <div class="line"><span><b>Cà phê đen</b> × 2</span><b>50.000đ</b></div>
+            <div class="line"><span><b>Trà sữa</b> × 1</span><b>55.000đ</b></div>
+            <div class="line"><span><b>Bánh mì</b> × 1</span><b>40.000đ</b></div>
+          </div>
+          <div class="cart-footer">
+            <div class="row"><span>Tạm tính</span><b>145.000đ</b></div>
+            <div class="row"><span>KM</span><b style="color:#dc2626">−15.000đ</b></div>
+            <div class="row" style="border-top:1px solid #e5e7eb; padding-top:8px; margin-top:8px;">
+              <span style="font-size:13px">Khách cần trả</span>
+              <span style="color:#2563eb;font-weight:900;font-size:24px">130.000đ</span>
+            </div>
+            <div class="actions">
+              <div class="btn kitchen">🍳 Bếp F10</div>
+              <div class="btn pay">💳 Thanh toán</div>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+  <div class="pros-cons">
+    <div class="col pros">
+      <h4>✅ Ưu điểm</h4>
+      <ul>
+        <li><b>Header 64px thoáng</b> hơn — không "dồn nén"</li>
+        <li>Cashier vào KDS / Sơ đồ bàn / Báo cáo bằng 1 click sidenav (không cần thoát POS)</li>
+        <li>Glass header sáng (Stitch design pattern)</li>
+        <li>Trông giống mockup Stitch hơn về mặt thẩm mỹ</li>
+      </ul>
+    </div>
+    <div class="col cons">
+      <h4>❌ Nhược điểm (LỚN HƠN ƯU)</h4>
+      <ul>
+        <li><b>Mất 1 cột menu</b> (5 → 4) trên desktop — cashier scroll nhiều hơn để tìm món</li>
+        <li><b>iPad portrait 768px</b>: sidenav 64 + cart 320 = menu 384px → chỉ 2 cols (cards bé như icon)</li>
+        <li>Cashier mới phải HỌC THÊM 1 layer navigation (sidenav) — confusion khi onboard</li>
+        <li>"Báo cáo / Quản lý menu" bên sidenav → cashier dễ click NHẦM giữa ca → mở UI lạ → mất focus</li>
+        <li>POS F&B mất cảm giác kiosk-mode (toàn màn hình) → trông giống admin app</li>
+        <li><b>Effort 4 ngày code</b> + risk side-effect (page.tsx 1952 dòng có offline queue, branch reset...)</li>
+        <li>Phải logic conditional ẩn sidenav trên fnb.onebiz.com.vn subdomain</li>
+        <li>Không giải quyết complaint thực — CEO complaint là "dồn nén" → đã fix bằng cart 440px ở Sprint 1</li>
+      </ul>
+    </div>
+  </div>
+</div>
+
+<h2>📊 So sánh số liệu cụ thể</h2>
+<table style="width:100%; border-collapse:collapse; background:#fff; border-radius:8px; overflow:hidden;">
+  <thead style="background:#1e293b; color:#fff;">
+    <tr>
+      <th style="padding:10px; text-align:left">Tiêu chí</th>
+      <th style="padding:10px">Hiện tại (P/A 1)</th>
+      <th style="padding:10px">Có sidenav (P/A 2)</th>
+    </tr>
+  </thead>
+  <tbody style="font-size:13px;">
+    <tr><td style="padding:10px; border-bottom:1px solid #e5e7eb">Số cột menu (1440px)</td><td style="padding:10px; border-bottom:1px solid #e5e7eb; background:#f0fdf4"><b>6 cols</b></td><td style="padding:10px; border-bottom:1px solid #e5e7eb; background:#fef2f2">5 cols (-1)</td></tr>
+    <tr><td style="padding:10px; border-bottom:1px solid #e5e7eb">Số cột menu (1024px laptop)</td><td style="padding:10px; border-bottom:1px solid #e5e7eb; background:#f0fdf4"><b>4 cols</b></td><td style="padding:10px; border-bottom:1px solid #e5e7eb; background:#fef2f2">3 cols (-1)</td></tr>
+    <tr><td style="padding:10px; border-bottom:1px solid #e5e7eb">Số cột menu (iPad 768px)</td><td style="padding:10px; border-bottom:1px solid #e5e7eb; background:#f0fdf4"><b>3 cols</b></td><td style="padding:10px; border-bottom:1px solid #e5e7eb; background:#fef2f2">2 cols (-1)</td></tr>
+    <tr><td style="padding:10px; border-bottom:1px solid #e5e7eb">Vào KDS</td><td style="padding:10px; border-bottom:1px solid #e5e7eb">1 click header "🍳 KDS"</td><td style="padding:10px; border-bottom:1px solid #e5e7eb">1 click sidenav "🍳"</td></tr>
+    <tr><td style="padding:10px; border-bottom:1px solid #e5e7eb">Vào Sơ đồ bàn</td><td style="padding:10px; border-bottom:1px solid #e5e7eb">1 click "Phòng bàn" toggle</td><td style="padding:10px; border-bottom:1px solid #e5e7eb">1 click sidenav "🪑"</td></tr>
+    <tr><td style="padding:10px; border-bottom:1px solid #e5e7eb">Vào Báo cáo F&B</td><td style="padding:10px; border-bottom:1px solid #e5e7eb">Thoát POS → /phan-tich/fnb</td><td style="padding:10px; border-bottom:1px solid #e5e7eb; background:#f0fdf4">1 click sidenav "📊"</td></tr>
+    <tr><td style="padding:10px; border-bottom:1px solid #e5e7eb">Header height</td><td style="padding:10px; border-bottom:1px solid #e5e7eb">48px</td><td style="padding:10px; border-bottom:1px solid #e5e7eb; background:#f0fdf4">64px (thoáng hơn)</td></tr>
+    <tr><td style="padding:10px; border-bottom:1px solid #e5e7eb">Width content</td><td style="padding:10px; border-bottom:1px solid #e5e7eb; background:#f0fdf4">100% viewport</td><td style="padding:10px; border-bottom:1px solid #e5e7eb">−64 đến −256px</td></tr>
+    <tr><td style="padding:10px; border-bottom:1px solid #e5e7eb">Effort dev</td><td style="padding:10px; border-bottom:1px solid #e5e7eb; background:#f0fdf4">0 (đã ship)</td><td style="padding:10px; border-bottom:1px solid #e5e7eb">4 ngày + test</td></tr>
+    <tr><td style="padding:10px;"><b>Risk</b></td><td style="padding:10px; background:#f0fdf4"><b>0</b></td><td style="padding:10px; background:#fef2f2"><b>High</b> (đụng layout shell, page 1952 dòng)</td></tr>
+  </tbody>
+</table>
+
+<h2>💡 Kết luận của em</h2>
+<div style="background:#fff; padding:16px; border-radius:8px; line-height:1.7; font-size:14px;">
+  <p><b>POS F&B là kiosk mode trên tablet</b> — cashier chỉ làm 2 việc, không cần
+  navigation phức tạp như admin app desktop. Sidenav là giải pháp cho ERP backend
+  (đã có ở /he-thong, /phan-tich, /cai-dat) — KHÔNG phù hợp với POS.</p>
+
+  <p>Sprint 1+3+4 đã giải quyết <b>80% complaint của anh</b>:
+  <ul>
+    <li>Cart hẹp → mở rộng 320/400/440px (gấp đôi width xa nhất)</li>
+    <li>Banner stack chiếm chỗ → gộp 1 strip 32px</li>
+    <li>Bàn occupied đỏ như báo lỗi → primary blue đúng semantic</li>
+    <li>Cashier order cà phê 4 tap → 1 tap quick-add</li>
+    <li>Total số nhỏ → 3xl bold</li>
+    <li>Đổi loại order phải qua menu → pill switch instant</li>
+  </ul></p>
+
+  <p><b>Em đề nghị:</b> Anh test thử Sprint 1+3+4 trên Vercel (~3 phút deploy) trên
+  iPad/iPhone/laptop. Nếu vẫn cảm thấy header chật / muốn vào báo cáo nhanh hơn
+  → quay lại nói em — em sẽ làm Sprint 2 với <b>feature flag</b>
+  (default OFF, anh bật bằng setting nếu muốn thử).</p>
+</div>
+
+</div>
+</body>
+</html>

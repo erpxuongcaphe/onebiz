@@ -1,0 +1,1977 @@
+<!DOCTYPE html>
+<html lang="vi">
+<head>
+<meta charset="UTF-8" />
+<title>POS F&B v3 — Sidenav ẩn + Danh mục cột trái + Customization</title>
+<style>
+  * { box-sizing: border-box; }
+  body {
+    font-family: 'Be Vietnam Pro', 'Segoe UI', system-ui, sans-serif;
+    margin: 0; padding: 32px 16px;
+    background: #f9fafb;
+    color: #0f172a;
+  }
+  .container { max-width: 1600px; margin: 0 auto; }
+  h1 { font-size: 24px; margin: 0 0 8px; }
+  .subtitle { color: #64748b; margin-bottom: 24px; font-size: 14px; line-height: 1.6; }
+  h2 { font-size: 19px; margin: 40px 0 12px; color: #1e293b; padding: 8px 12px; background: linear-gradient(90deg, #dbeafe 0%, transparent 100%); border-left: 4px solid #2563eb; border-radius: 4px; }
+  h3 { font-size: 14px; color: #475569; margin: 20px 0 10px; font-weight: 700; }
+
+  .feedback-box {
+    background: #fef3c7;
+    border-left: 4px solid #f59e0b;
+    padding: 14px 18px;
+    border-radius: 8px;
+    font-size: 13px;
+    line-height: 1.7;
+    margin: 12px 0 24px;
+  }
+  .feedback-box strong { color: #92400e; }
+
+  /* Frames */
+  .desktop {
+    width: 1440px; height: 900px;
+    background: #fff;
+    border-radius: 12px;
+    border: 8px solid #1e293b;
+    overflow: hidden;
+    box-shadow: 0 16px 48px rgba(0,0,0,0.12);
+    margin-bottom: 8px;
+  }
+  .tablet {
+    background: #fff;
+    border: 12px solid #1e293b;
+    border-radius: 24px;
+    overflow: hidden;
+    box-shadow: 0 16px 48px rgba(0,0,0,0.15);
+    margin-bottom: 8px;
+  }
+  .tablet.portrait { width: 768px; height: 1024px; }
+  .tablet.landscape { width: 1024px; height: 768px; }
+  .phone {
+    width: 390px; height: 844px;
+    background: #fff;
+    border-radius: 36px;
+    border: 8px solid #1e293b;
+    overflow: hidden;
+    position: relative;
+    box-shadow: 0 24px 48px rgba(0,0,0,0.15);
+    flex-shrink: 0;
+  }
+  .phone-notch {
+    position: absolute;
+    top: 0; left: 50%;
+    transform: translateX(-50%);
+    width: 120px; height: 28px;
+    background: #1e293b;
+    border-radius: 0 0 18px 18px;
+    z-index: 100;
+  }
+
+  .label { color: #475569; font-size: 13px; font-weight: 600; text-align: center; margin-bottom: 24px; }
+
+  .row { display: flex; gap: 24px; flex-wrap: wrap; align-items: flex-start; margin-bottom: 16px; }
+
+  .app { display: flex; flex-direction: column; height: 100%; background: #f8fafc; }
+
+  /* === HEADER === */
+  .header {
+    background: rgba(255,255,255,0.95);
+    backdrop-filter: blur(20px);
+    border-bottom: 1px solid #e5e7eb;
+    padding: 12px 24px;
+    display: flex;
+    align-items: center;
+    gap: 12px;
+    height: 64px;
+    flex-shrink: 0;
+  }
+  .menu-toggle {
+    width: 40px; height: 40px;
+    border-radius: 10px;
+    background: #f1f5f9;
+    display: flex; align-items: center; justify-content: center;
+    font-size: 20px;
+    cursor: pointer;
+  }
+  .menu-toggle:hover { background: #dbeafe; }
+  .logo { font-weight: 900; font-size: 18px; color: #2563eb; }
+  .chip {
+    padding: 8px 14px; background: #f1f5f9;
+    border-radius: 999px; font-size: 13px; color: #475569;
+    display: flex; align-items: center; gap: 6px; cursor: pointer;
+  }
+  .chip.active { background: #dbeafe; color: #1d4ed8; font-weight: 600; }
+
+  /* View toggle: Bán hàng / Sơ đồ bàn (như KiotViet) */
+  .view-toggle {
+    display: flex;
+    background: #f1f5f9;
+    border-radius: 12px;
+    padding: 3px;
+  }
+  .vt-btn {
+    padding: 8px 16px;
+    border-radius: 9px;
+    font-size: 13px;
+    color: #64748b;
+    font-weight: 500;
+    cursor: pointer;
+    display: flex;
+    align-items: center;
+    gap: 6px;
+  }
+  .vt-btn.active { background: #fff; color: #2563eb; font-weight: 700; box-shadow: 0 2px 6px rgba(0,0,0,0.06); }
+
+  .search-bar {
+    flex: 1; max-width: 360px;
+    background: #f1f5f9;
+    padding: 10px 16px;
+    border-radius: 12px;
+    color: #94a3b8; font-size: 14px;
+    display: flex; align-items: center; gap: 10px;
+  }
+
+  /* === Order tabs === */
+  .order-tabs {
+    display: flex; gap: 4px;
+    padding: 0 12px;
+    background: #f8fafc;
+    border-bottom: 1px solid #e5e7eb;
+    overflow-x: auto;
+    flex-shrink: 0;
+  }
+  .order-tab {
+    display: flex; align-items: center; gap: 8px;
+    padding: 10px 16px;
+    background: #fff;
+    border-radius: 12px 12px 0 0;
+    font-size: 12px; color: #475569;
+    border: 1px solid transparent;
+    border-bottom: none;
+    margin-top: 6px;
+    flex-shrink: 0;
+    cursor: pointer;
+  }
+  .order-tab.active { background: #fff; color: #2563eb; font-weight: 700; border-color: #e5e7eb; }
+  .order-tab .dot { width: 8px; height: 8px; border-radius: 50%; }
+  .order-tab .close { color: #94a3b8; margin-left: 4px; }
+  .order-tab.add { color: #2563eb; font-size: 16px; padding: 10px 14px; }
+
+  /* === Body === */
+  .body { flex: 1; display: flex; overflow: hidden; }
+
+  /* Sidenav DRAWER (hidden by default, slide from left) */
+  .sidenav-drawer {
+    position: absolute;
+    left: 0; top: 0; bottom: 0;
+    width: 280px;
+    background: #fff;
+    box-shadow: 4px 0 24px rgba(0,0,0,0.12);
+    border-right: 1px solid #e5e7eb;
+    z-index: 50;
+    display: none;
+    flex-direction: column;
+    padding: 16px 0;
+  }
+  .sidenav-drawer.open { display: flex; }
+  .sd-header {
+    padding: 0 16px 16px;
+    border-bottom: 1px solid #e5e7eb;
+    display: flex; align-items: center; justify-content: space-between;
+  }
+  .sd-header .logo { font-size: 20px; }
+  .sd-close {
+    width: 32px; height: 32px;
+    border-radius: 8px;
+    background: #f1f5f9;
+    display: flex; align-items: center; justify-content: center;
+    cursor: pointer;
+  }
+  .sd-section { padding: 12px 12px 0; }
+  .sd-label {
+    font-size: 10px; color: #94a3b8;
+    text-transform: uppercase; letter-spacing: 0.05em;
+    font-weight: 700; padding: 8px 12px;
+  }
+  .sd-item {
+    display: flex; align-items: center; gap: 12px;
+    padding: 10px 14px;
+    border-radius: 10px;
+    color: #475569;
+    font-size: 14px; font-weight: 500;
+    cursor: pointer; margin-bottom: 2px;
+  }
+  .sd-item:hover { background: #f8fafc; }
+  .sd-item.active { background: #dbeafe; color: #1d4ed8; font-weight: 700; }
+  .sd-item .ico { font-size: 18px; }
+  .sd-item .badge-mini {
+    margin-left: auto;
+    background: #ef4444; color: #fff;
+    font-size: 10px; padding: 2px 6px;
+    border-radius: 999px; font-weight: 700;
+  }
+
+  /* Backdrop khi drawer mở */
+  .backdrop {
+    position: absolute;
+    inset: 0;
+    background: rgba(0,0,0,0.4);
+    z-index: 40;
+    display: none;
+  }
+  .backdrop.open { display: block; }
+
+  /* === Categories CỘT TRÁI (mới) === */
+  .cat-sidebar {
+    width: 200px;
+    background: #fff;
+    border-right: 1px solid #e5e7eb;
+    flex-shrink: 0;
+    display: flex;
+    flex-direction: column;
+    overflow: hidden;
+  }
+  .cat-search {
+    padding: 12px;
+    border-bottom: 1px solid #f1f5f9;
+  }
+  .cat-search input {
+    width: 100%;
+    padding: 8px 12px;
+    border-radius: 8px;
+    background: #f1f5f9;
+    border: none;
+    font-size: 13px;
+    outline: none;
+  }
+  .cat-list { flex: 1; overflow-y: auto; padding: 8px; }
+  .cat-item {
+    display: flex; align-items: center; gap: 10px;
+    padding: 10px 12px;
+    border-radius: 10px;
+    cursor: pointer;
+    font-size: 13px;
+    color: #475569;
+    margin-bottom: 2px;
+    transition: all 0.15s;
+  }
+  .cat-item:hover { background: #f8fafc; }
+  .cat-item.active {
+    background: #dbeafe;
+    color: #1d4ed8;
+    font-weight: 700;
+  }
+  .cat-item .ico { font-size: 18px; flex-shrink: 0; }
+  .cat-item .lbl { flex: 1; }
+  .cat-item .count {
+    font-size: 11px;
+    background: #f1f5f9;
+    color: #64748b;
+    padding: 2px 6px;
+    border-radius: 999px;
+    font-weight: 600;
+  }
+  .cat-item.active .count { background: #2563eb; color: #fff; }
+
+  /* Sub-cat collapsible */
+  .sub-cat-list {
+    padding-left: 28px;
+    margin: 4px 0;
+    display: none;
+  }
+  .cat-item.open + .sub-cat-list { display: block; }
+  .sub-cat {
+    padding: 6px 12px;
+    border-radius: 8px;
+    font-size: 12px;
+    color: #64748b;
+    cursor: pointer;
+    margin-bottom: 1px;
+  }
+  .sub-cat.active { background: #f0f9ff; color: #1d4ed8; font-weight: 600; }
+
+  /* === Menu zone === */
+  .menu-zone { flex: 1; display: flex; flex-direction: column; overflow: hidden; }
+
+  .menu-grid {
+    flex: 1; overflow-y: auto;
+    padding: 16px;
+    display: grid; gap: 12px;
+    align-content: start;
+  }
+
+  .product-card {
+    background: #fff; border-radius: 14px;
+    padding: 10px;
+    border: 1px solid #f1f5f9;
+    display: flex; flex-direction: column;
+    box-shadow: 0 2px 8px rgba(0,0,0,0.04);
+    cursor: pointer;
+    aspect-ratio: 0.92;
+    position: relative;
+  }
+  .product-card:hover {
+    transform: translateY(-2px);
+    box-shadow: 0 8px 24px rgba(0,0,0,0.08);
+    border-color: #c7d2fe;
+  }
+  .product-card .img {
+    background: linear-gradient(135deg, #fef3c7 0%, #fde68a 100%);
+    border-radius: 10px;
+    flex: 1;
+    display: flex; align-items: center; justify-content: center;
+    font-size: 36px;
+    margin-bottom: 8px;
+    position: relative;
+  }
+  .price-badge {
+    position: absolute; top: 8px; right: 8px;
+    background: rgba(37,99,235,0.95);
+    color: #fff; font-size: 11px; font-weight: 700;
+    padding: 3px 8px; border-radius: 999px;
+    backdrop-filter: blur(10px);
+  }
+  .stock-badge {
+    position: absolute; bottom: 8px; left: 8px;
+    background: rgba(0,0,0,0.6);
+    color: #fff; font-size: 9px;
+    padding: 2px 6px; border-radius: 999px;
+  }
+  .product-card .name { font-size: 12px; font-weight: 600; line-height: 1.3; }
+  .product-card .meta { font-size: 10px; color: #94a3b8; margin-top: 2px; }
+
+  /* === Cart panel === */
+  .cart-panel {
+    width: 400px; background: #fff;
+    border-left: 1px solid #e5e7eb;
+    display: flex; flex-direction: column;
+    flex-shrink: 0;
+  }
+  .cart-header {
+    padding: 14px 16px;
+    border-bottom: 1px solid #e5e7eb;
+  }
+  .cart-header h3 { margin: 0; font-size: 16px; font-weight: 700; }
+
+  .order-type-pill {
+    display: flex; background: #f1f5f9;
+    border-radius: 999px; padding: 4px;
+    margin: 14px 16px 0;
+  }
+  .ot-btn {
+    flex: 1; padding: 10px 4px;
+    text-align: center; font-size: 13px;
+    color: #64748b; border-radius: 999px;
+    font-weight: 500; cursor: pointer;
+  }
+  .ot-btn.active { background: #fff; color: #2563eb; font-weight: 700; box-shadow: 0 2px 4px rgba(0,0,0,0.06); }
+
+  .customer-bar {
+    margin: 12px 16px 0;
+    padding: 12px 14px;
+    background: #f0f9ff;
+    border-radius: 12px;
+    display: flex; align-items: center; gap: 10px;
+    cursor: pointer;
+  }
+  .customer-bar .key {
+    font-size: 11px; color: #2563eb; font-weight: 700;
+    padding: 3px 8px; background: #fff; border-radius: 6px;
+  }
+
+  .cart-lines { flex: 1; overflow-y: auto; padding: 14px 16px; display: flex; flex-direction: column; gap: 8px; }
+  .line { background: #f8fafc; border-radius: 12px; padding: 12px; display: flex; gap: 10px; }
+  .line .indicator { width: 4px; background: #2563eb; border-radius: 2px; }
+  .line .info { flex: 1; }
+  .line .name { font-size: 14px; font-weight: 600; }
+  .line .meta { font-size: 12px; color: #64748b; margin-top: 3px; }
+  .line .actions { display: flex; flex-direction: column; align-items: flex-end; gap: 8px; }
+  .qty { display: flex; align-items: center; gap: 8px; background: #fff; border-radius: 999px; padding: 3px; box-shadow: 0 1px 3px rgba(0,0,0,0.05); }
+  .qty .btn { width: 28px; height: 28px; border-radius: 50%; background: #f1f5f9; display: flex; align-items: center; justify-content: center; font-weight: 700; }
+  .qty .num { min-width: 24px; text-align: center; font-weight: 700; font-size: 13px; }
+  .line .price { font-size: 13px; font-weight: 700; }
+
+  .cart-footer { padding: 14px 16px; border-top: 1px solid #e5e7eb; }
+  .summary-row { display: flex; justify-content: space-between; font-size: 13px; padding: 4px 0; }
+  .summary-row.total { font-size: 14px; font-weight: 700; margin-top: 8px; padding-top: 12px; border-top: 1px solid #e2e8f0; align-items: flex-end; }
+  .summary-row.total .amount { font-size: 32px; font-weight: 900; color: #2563eb; line-height: 1; }
+  .actions-row { display: flex; gap: 8px; margin-top: 14px; }
+  .btn-action { padding: 14px; border-radius: 12px; text-align: center; font-size: 14px; font-weight: 700; color: #fff; cursor: pointer; }
+  .btn-action.kitchen { flex: 0.4; background: #f97316; }
+  .btn-action.pay { flex: 0.6; background: #16a34a; box-shadow: 0 4px 12px rgba(22,163,74,0.25); }
+
+  /* === FLOOR PLAN EDITOR === */
+  .fp-editor {
+    flex: 1; display: flex; flex-direction: column;
+    background: #f8fafc;
+  }
+  .fp-toolbar {
+    background: #fff;
+    border-bottom: 1px solid #e5e7eb;
+    padding: 10px 16px;
+    display: flex; align-items: center; gap: 8px;
+  }
+  .tool-btn {
+    padding: 8px 12px;
+    background: #f1f5f9;
+    border-radius: 8px;
+    font-size: 13px;
+    color: #475569;
+    cursor: pointer;
+    display: flex; align-items: center; gap: 6px;
+  }
+  .tool-btn.primary { background: #2563eb; color: #fff; font-weight: 600; }
+  .tool-btn.danger { color: #dc2626; }
+
+  .fp-canvas {
+    flex: 1;
+    background:
+      linear-gradient(#e2e8f0 1px, transparent 1px),
+      linear-gradient(90deg, #e2e8f0 1px, transparent 1px);
+    background-size: 40px 40px;
+    position: relative;
+    overflow: auto;
+  }
+  .fp-zone-label {
+    position: absolute;
+    background: rgba(255,255,255,0.9);
+    padding: 4px 12px;
+    border-radius: 6px;
+    font-size: 11px;
+    color: #64748b;
+    font-weight: 600;
+    text-transform: uppercase;
+    letter-spacing: 0.05em;
+  }
+  .fp-table {
+    position: absolute;
+    background: #fff;
+    border: 2px solid #2563eb;
+    border-radius: 12px;
+    padding: 12px;
+    cursor: move;
+    user-select: none;
+    box-shadow: 0 4px 12px rgba(0,0,0,0.06);
+  }
+  .fp-table.round { border-radius: 50%; padding: 16px; }
+  .fp-table.occupied { background: #2563eb; color: #fff; }
+  .fp-table.selected { box-shadow: 0 0 0 3px #2563eb, 0 4px 16px rgba(37,99,235,0.3); }
+  .fp-table .name { font-size: 13px; font-weight: 700; }
+  .fp-table .meta { font-size: 10px; opacity: 0.8; margin-top: 2px; }
+  .fp-table .resize-handle {
+    position: absolute;
+    bottom: -6px; right: -6px;
+    width: 12px; height: 12px;
+    background: #fff;
+    border: 2px solid #2563eb;
+    border-radius: 3px;
+    cursor: nwse-resize;
+  }
+
+  /* === Properties panel === */
+  .props-panel {
+    width: 280px;
+    background: #fff;
+    border-left: 1px solid #e5e7eb;
+    flex-shrink: 0;
+    padding: 16px;
+  }
+  .props-section { margin-bottom: 20px; }
+  .props-section h4 { font-size: 12px; color: #94a3b8; text-transform: uppercase; letter-spacing: 0.05em; font-weight: 700; margin: 0 0 10px; }
+  .form-row { display: flex; align-items: center; gap: 10px; margin-bottom: 10px; font-size: 13px; }
+  .form-row label { flex: 1; color: #475569; }
+  .form-row input, .form-row select {
+    padding: 6px 10px;
+    border-radius: 6px;
+    border: 1px solid #e2e8f0;
+    font-size: 13px;
+    width: 100px;
+  }
+  .shape-picker { display: flex; gap: 6px; }
+  .shape-opt { width: 36px; height: 36px; border-radius: 8px; border: 2px solid #e2e8f0; display: flex; align-items: center; justify-content: center; cursor: pointer; font-size: 18px; }
+  .shape-opt.active { border-color: #2563eb; background: #dbeafe; }
+
+  /* === MOBILE PHONE === */
+  .phone-app { padding-top: 28px; height: 100%; display: flex; flex-direction: column; background: #f8fafc; }
+  .phone-topbar {
+    background: #fff; padding: 12px 16px;
+    border-bottom: 1px solid #e2e8f0;
+    display: flex; align-items: center; gap: 8px;
+    flex-shrink: 0;
+  }
+  .phone-topbar h2 { margin: 0; font-size: 17px; font-weight: 700; flex: 1; }
+  .icon-btn { width: 36px; height: 36px; border-radius: 50%; background: #f1f5f9; display: flex; align-items: center; justify-content: center; color: #475569; }
+
+  .phone-body { flex: 1; overflow-y: auto; padding: 12px; }
+
+  /* Mobile categories — GRID 2x4 hoặc DROPDOWN */
+  .mobile-cat-grid {
+    display: grid;
+    grid-template-columns: repeat(4, 1fr);
+    gap: 8px;
+    margin-bottom: 12px;
+  }
+  .mc-item {
+    background: #fff;
+    border-radius: 12px;
+    padding: 10px 6px;
+    text-align: center;
+    cursor: pointer;
+    border: 2px solid transparent;
+    box-shadow: 0 1px 3px rgba(0,0,0,0.04);
+  }
+  .mc-item.active {
+    background: #dbeafe;
+    border-color: #2563eb;
+    color: #1d4ed8;
+    font-weight: 700;
+  }
+  .mc-item .ico { font-size: 22px; display: block; margin-bottom: 2px; }
+  .mc-item .lbl { font-size: 10px; line-height: 1.2; }
+  .mc-item .count { font-size: 9px; color: #94a3b8; margin-top: 2px; }
+
+  /* Mobile category dropdown */
+  .mobile-cat-dropdown {
+    background: #fff; border-radius: 14px;
+    padding: 14px; margin-bottom: 12px;
+    display: flex; align-items: center; gap: 12px;
+    box-shadow: 0 2px 8px rgba(0,0,0,0.04);
+  }
+  .mcd-current { flex: 1; }
+  .mcd-current .lbl { font-size: 11px; color: #64748b; text-transform: uppercase; }
+  .mcd-current .name { font-size: 15px; font-weight: 700; color: #2563eb; }
+  .mcd-counter { font-size: 12px; color: #94a3b8; }
+
+  /* Mobile menu list */
+  .menu-item {
+    background: #fff; border-radius: 14px;
+    padding: 12px; margin-bottom: 8px;
+    display: flex; gap: 12px; align-items: center;
+    box-shadow: 0 2px 8px rgba(0,0,0,0.03);
+  }
+  .menu-item .img {
+    width: 64px; height: 64px;
+    border-radius: 12px;
+    background: linear-gradient(135deg, #fef3c7, #fde68a);
+    display: flex; align-items: center; justify-content: center;
+    font-size: 28px;
+    flex-shrink: 0;
+  }
+  .menu-item .info { flex: 1; min-width: 0; }
+  .menu-item .name { font-weight: 600; font-size: 14px; margin-bottom: 2px; }
+  .menu-item .desc { font-size: 11px; color: #64748b; margin-bottom: 4px; }
+  .menu-item .price { font-weight: 700; color: #2563eb; font-size: 14px; }
+  .menu-item .add-btn { width: 32px; height: 32px; border-radius: 50%; background: #2563eb; color: #fff; display: flex; align-items: center; justify-content: center; font-size: 18px; font-weight: 700; }
+
+  /* Phone bottom tab */
+  .bottom-tab { background: #fff; border-top: 1px solid #e2e8f0; display: flex; padding: 8px 0 24px; flex-shrink: 0; }
+  .tab-item { flex: 1; text-align: center; color: #64748b; font-size: 11px; padding: 4px; }
+  .tab-item .ico { font-size: 22px; display: block; margin-bottom: 2px; }
+  .tab-item.active { color: #2563eb; font-weight: 700; }
+
+  .sticky-cta { background: #fff; border-top: 1px solid #e2e8f0; padding: 12px 16px; flex-shrink: 0; }
+  .cta-btn { width: 100%; background: #2563eb; color: #fff; padding: 14px; border-radius: 14px; text-align: center; font-size: 15px; font-weight: 700; box-shadow: 0 4px 12px rgba(37,99,235,0.3); }
+
+  /* === Pros/cons === */
+  .pros-cons {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: 16px;
+    margin: 16px 0 32px;
+  }
+  .col {
+    background: #fff;
+    border-radius: 12px;
+    padding: 14px 18px;
+  }
+  .col h4 { margin: 0 0 8px; font-size: 13px; }
+  .col.pros h4 { color: #16a34a; }
+  .col.cons h4 { color: #dc2626; }
+  .col ul { padding-left: 18px; margin: 0; font-size: 12px; line-height: 1.7; }
+
+  .feature-status {
+    display: grid;
+    grid-template-columns: repeat(3, 1fr);
+    gap: 12px;
+    margin: 16px 0;
+  }
+  .fs-item {
+    background: #fff;
+    border-radius: 10px;
+    padding: 14px;
+    border-left: 4px solid;
+  }
+  .fs-item.have { border-color: #16a34a; }
+  .fs-item.partial { border-color: #f59e0b; }
+  .fs-item.missing { border-color: #dc2626; }
+  .fs-item h5 { margin: 0 0 4px; font-size: 13px; font-weight: 700; }
+  .fs-item p { margin: 0; font-size: 11px; color: #64748b; line-height: 1.5; }
+
+</style>
+</head>
+<body>
+
+<div class="container">
+
+<h1>📋 POS F&B v3 — Phương án theo feedback CEO</h1>
+<div class="subtitle">
+  Em đã tổng hợp lại 5 yêu cầu của anh: (1) Sidenav ẩn ☰ desktop, (2) Sơ đồ bàn vị trí riêng, (3) Danh mục cột trái HOẶC ngang wrap, (4) Mobile/Tablet không kéo ngang, (5) Customization toàn diện.
+</div>
+
+<!-- ═══════════════════════════════════════════════════════════════ -->
+<h2>1️⃣ Desktop — Sidenav ẨN ☰ + Danh mục cột trái</h2>
+
+<div class="feedback-box">
+  <strong>Feedback CEO:</strong> "Menu trái nên được ẩn trong biểu tượng 3 gạch khi nào muốn thì mở lên,
+  trừ sơ đồ bàn thiết kế chỗ để cho phù hợp. Danh mục nên để qua cột trái cho dễ xem hơn."
+</div>
+
+<h3>📌 Cách giải quyết</h3>
+<ul style="font-size: 13px; line-height: 1.8;">
+  <li><strong>Sidenav (Bán hàng / Bếp / Đơn / Báo cáo / ...) → ẩn dưới icon ☰</strong> ở góc trái header. Click mở slide drawer 280px overlay (không push content).</li>
+  <li><strong>Sơ đồ bàn / Bán hàng → tách view-toggle riêng</strong> ngay header (giống KiotViet "Phòng bàn / Thực đơn"). Bấm switch instant, không qua sidenav.</li>
+  <li><strong>Danh mục (Cà phê / Trà / Sữa...) → cột trái 200px</strong>. Mỗi category 1 row có icon + tên + count. Sub-category nested expand/collapse khi click parent.</li>
+  <li><strong>Menu grid 5 cols</strong> (đủ rộng vì sidenav đã ẩn) → cards lớn dễ bấm.</li>
+  <li><strong>Cart 400px</strong> bên phải giữ nguyên.</li>
+</ul>
+
+<div class="desktop">
+  <div class="app">
+    <!-- Header -->
+    <div class="header">
+      <div class="menu-toggle">☰</div>
+      <div class="logo">OneBiz F&B</div>
+      <div class="chip">🏪 Kho Tổng</div>
+      <div class="chip"><span style="width:8px;height:8px;background:#16a34a;border-radius:50%"></span> Ca 14:30</div>
+      <!-- View toggle TÁCH RIÊNG -->
+      <div class="view-toggle">
+        <div class="vt-btn active">🍽 Bán hàng</div>
+        <div class="vt-btn">🪑 Sơ đồ bàn</div>
+      </div>
+      <div class="search-bar">🔍 <span>Tìm món, mã SP... (F3)</span></div>
+      <div class="chip">🔔 3</div>
+      <div class="chip">👤</div>
+    </div>
+
+    <!-- Order tabs -->
+    <div class="order-tabs">
+      <div class="order-tab active">
+        <span class="dot" style="background:#2563eb"></span>
+        <span>NS01 · Sảnh 1 · 2 khách · 84p</span>
+        <span class="close">×</span>
+      </div>
+      <div class="order-tab">
+        <span class="dot" style="background:#f97316"></span>
+        <span>Mang về #2</span>
+        <span class="close">×</span>
+      </div>
+      <div class="order-tab add">+ Đơn mới</div>
+    </div>
+
+    <div class="body" style="position:relative">
+      <!-- Categories CỘT TRÁI (mới) -->
+      <div class="cat-sidebar">
+        <div class="cat-search">
+          <input placeholder="Tìm danh mục..." />
+        </div>
+        <div class="cat-list">
+          <div class="cat-item active">
+            <span class="ico">☕</span>
+            <span class="lbl">Cà phê</span>
+            <span class="count">24</span>
+          </div>
+          <div class="sub-cat-list" style="display:block">
+            <div class="sub-cat active">Tất cả (24)</div>
+            <div class="sub-cat">Đen (6)</div>
+            <div class="sub-cat">Sữa (8)</div>
+            <div class="sub-cat">Cold brew (4)</div>
+            <div class="sub-cat">Espresso (3)</div>
+            <div class="sub-cat">Đặc biệt (3)</div>
+          </div>
+          <div class="cat-item">
+            <span class="ico">🥤</span>
+            <span class="lbl">Trà sữa</span>
+            <span class="count">18</span>
+          </div>
+          <div class="cat-item">
+            <span class="ico">🍵</span>
+            <span class="lbl">Trà</span>
+            <span class="count">12</span>
+          </div>
+          <div class="cat-item">
+            <span class="ico">🥛</span>
+            <span class="lbl">Sữa</span>
+            <span class="count">8</span>
+          </div>
+          <div class="cat-item">
+            <span class="ico">🥪</span>
+            <span class="lbl">Bánh ngọt</span>
+            <span class="count">15</span>
+          </div>
+          <div class="cat-item">
+            <span class="ico">🍪</span>
+            <span class="lbl">Topping</span>
+            <span class="count">22</span>
+          </div>
+          <div class="cat-item">
+            <span class="ico">🥗</span>
+            <span class="lbl">Set ăn trưa</span>
+            <span class="count">6</span>
+          </div>
+          <div class="cat-item">
+            <span class="ico">📦</span>
+            <span class="lbl">Khuyến mãi</span>
+            <span class="count">3</span>
+          </div>
+        </div>
+        <div style="padding:12px;border-top:1px solid #f1f5f9">
+          <div style="font-size:11px;color:#94a3b8;text-align:center;cursor:pointer">
+            ✏️ Tuỳ chỉnh danh mục
+          </div>
+        </div>
+      </div>
+
+      <!-- Menu zone (5 cols vì sidenav đã ẩn) -->
+      <div class="menu-zone">
+        <div class="menu-grid" style="grid-template-columns: repeat(5, 1fr);">
+          <div class="product-card"><div class="img">☕<span class="price-badge">25k</span><span class="stock-badge">Tồn 24</span></div><div class="name">Cà phê đen</div><div class="meta">Size M · Đá / Nóng</div></div>
+          <div class="product-card"><div class="img">☕<span class="price-badge">30k</span><span class="stock-badge">Tồn 18</span></div><div class="name">Cà phê sữa</div><div class="meta">Size M</div></div>
+          <div class="product-card"><div class="img">☕<span class="price-badge">35k</span><span class="stock-badge">Tồn 12</span></div><div class="name">Bạc xỉu</div><div class="meta">Size M</div></div>
+          <div class="product-card"><div class="img" style="background:linear-gradient(135deg,#dbeafe,#bfdbfe)">🧊<span class="price-badge">40k</span><span class="stock-badge">Tồn 8</span></div><div class="name">Cold Brew</div><div class="meta">Pha lạnh</div></div>
+          <div class="product-card"><div class="img">☕<span class="price-badge">28k</span><span class="stock-badge">Tồn 50</span></div><div class="name">Espresso</div><div class="meta">Italy đậm</div></div>
+          <div class="product-card"><div class="img">☕<span class="price-badge">45k</span><span class="stock-badge">Tồn 6</span></div><div class="name">Cappuccino</div><div class="meta">Foam dày</div></div>
+          <div class="product-card"><div class="img">☕<span class="price-badge">50k</span><span class="stock-badge">Tồn 14</span></div><div class="name">Mocha</div><div class="meta">Cacao</div></div>
+          <div class="product-card"><div class="img">☕<span class="price-badge">50k</span><span class="stock-badge">Tồn 11</span></div><div class="name">Caramel Macc</div><div class="meta">Caramel ngọt</div></div>
+          <div class="product-card"><div class="img">☕<span class="price-badge">55k</span><span class="stock-badge">Tồn 9</span></div><div class="name">Cà phê dừa</div><div class="meta">Đặc sản</div></div>
+          <div class="product-card"><div class="img">☕<span class="price-badge">38k</span><span class="stock-badge">Tồn 22</span></div><div class="name">Cà phê trứng</div><div class="meta">HN style</div></div>
+          <div class="product-card"><div class="img">☕<span class="price-badge">42k</span><span class="stock-badge">Tồn 16</span></div><div class="name">Cà phê muối</div><div class="meta">Trend 2024</div></div>
+          <div class="product-card"><div class="img" style="background:linear-gradient(135deg,#fce7f3,#fbcfe8)">🍓<span class="price-badge">48k</span><span class="stock-badge">Tồn 4</span></div><div class="name">Strawberry latte</div><div class="meta">Đặc biệt</div></div>
+          <div class="product-card"><div class="img" style="background:linear-gradient(135deg,#dcfce7,#bbf7d0)">🍵<span class="price-badge">45k</span><span class="stock-badge">Tồn 19</span></div><div class="name">Matcha latte</div><div class="meta">Trà xanh Nhật</div></div>
+          <div class="product-card"><div class="img">☕<span class="price-badge">52k</span><span class="stock-badge">Tồn 7</span></div><div class="name">Coconut coffee</div><div class="meta">Cốt dừa</div></div>
+          <div class="product-card"><div class="img">☕<span class="price-badge">35k</span><span class="stock-badge">Tồn 12</span></div><div class="name">Trà đào</div><div class="meta">Cam sả</div></div>
+        </div>
+      </div>
+
+      <!-- Cart panel -->
+      <div class="cart-panel">
+        <div class="cart-header"><h3>NS01 · Sảnh 1</h3></div>
+        <div class="order-type-pill">
+          <div class="ot-btn active">🍽 Tại quán</div>
+          <div class="ot-btn">🥡 Mang về</div>
+          <div class="ot-btn">🛵 Giao</div>
+        </div>
+        <div class="customer-bar">
+          <span style="font-size:20px">👤</span>
+          <div style="flex:1">
+            <div style="font-weight:600;font-size:13px">Khách lẻ</div>
+            <div style="font-size:11px;color:#64748b">Bấm để chọn</div>
+          </div>
+          <span class="key">F4</span>
+        </div>
+        <div class="cart-lines">
+          <div class="line">
+            <div class="indicator"></div>
+            <div class="info">
+              <div class="name">Hồng Trà</div>
+              <div class="meta">100% · Ly · Đá</div>
+            </div>
+            <div class="actions">
+              <div class="qty"><div class="btn">−</div><span class="num">2</span><div class="btn">+</div></div>
+              <div class="price">50.000 đ</div>
+            </div>
+          </div>
+          <div class="line">
+            <div class="indicator" style="background:#f97316"></div>
+            <div class="info">
+              <div class="name">Cà phê đen</div>
+              <div class="meta">Size M · Ít đường</div>
+            </div>
+            <div class="actions">
+              <div class="qty"><div class="btn">−</div><span class="num">1</span><div class="btn">+</div></div>
+              <div class="price">25.000 đ</div>
+            </div>
+          </div>
+        </div>
+        <div class="cart-footer">
+          <div class="summary-row"><span>Tạm tính</span><span>75.000 đ</span></div>
+          <div class="summary-row"><span>VAT 8%</span><span>5.600 đ</span></div>
+          <div class="summary-row total">
+            <span>Khách trả</span>
+            <span class="amount">80.600<small style="font-size:14px"> đ</small></span>
+          </div>
+          <div class="actions-row">
+            <div class="btn-action kitchen">🍳 Bếp F10</div>
+            <div class="btn-action pay">💳 Thanh toán F9</div>
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+</div>
+
+<div class="label">Desktop 1440×900 — Sidenav ẩn ☰ · Danh mục cột trái 200px · Menu 5 cols · Cart 400px</div>
+
+<!-- ═══════════════════════════════════════════════════════════════ -->
+<h2>2️⃣ Desktop — Khi mở sidenav drawer (click ☰)</h2>
+
+<div class="desktop">
+  <div class="app">
+    <div class="header">
+      <div class="menu-toggle" style="background:#dbeafe">☰</div>
+      <div class="logo">OneBiz F&B</div>
+      <div class="chip">🏪 Kho Tổng</div>
+      <div class="chip"><span style="width:8px;height:8px;background:#16a34a;border-radius:50%"></span> Ca 14:30</div>
+      <div class="view-toggle">
+        <div class="vt-btn active">🍽 Bán hàng</div>
+        <div class="vt-btn">🪑 Sơ đồ bàn</div>
+      </div>
+      <div class="search-bar">🔍 <span>Tìm món... (F3)</span></div>
+      <div class="chip">🔔 3</div>
+      <div class="chip">👤</div>
+    </div>
+    <div class="order-tabs">
+      <div class="order-tab active"><span class="dot" style="background:#2563eb"></span><span>NS01 · 2k · 84p</span><span class="close">×</span></div>
+      <div class="order-tab"><span class="dot" style="background:#f97316"></span><span>Mang về #2</span><span class="close">×</span></div>
+      <div class="order-tab add">+</div>
+    </div>
+    <div class="body" style="position:relative">
+      <div class="backdrop open"></div>
+      <div class="sidenav-drawer open">
+        <div class="sd-header">
+          <div class="logo">OneBiz F&B</div>
+          <div class="sd-close">×</div>
+        </div>
+        <div class="sd-section">
+          <div class="sd-label">Bán hàng</div>
+          <div class="sd-item active">
+            <span class="ico">🛒</span>
+            <span>Bán hàng (POS)</span>
+          </div>
+          <div class="sd-item">
+            <span class="ico">🍳</span>
+            <span>Màn bếp (KDS)</span>
+            <span class="badge-mini">5</span>
+          </div>
+        </div>
+        <div class="sd-section">
+          <div class="sd-label">Vận hành</div>
+          <div class="sd-item">
+            <span class="ico">📋</span>
+            <span>Đơn hôm nay</span>
+          </div>
+          <div class="sd-item">
+            <span class="ico">🛵</span>
+            <span>Giao hàng app</span>
+          </div>
+          <div class="sd-item">
+            <span class="ico">⏱</span>
+            <span>Quản lý ca</span>
+          </div>
+          <div class="sd-item">
+            <span class="ico">🍽</span>
+            <span>Quản lý menu</span>
+          </div>
+        </div>
+        <div class="sd-section">
+          <div class="sd-label">Thiết lập</div>
+          <div class="sd-item">
+            <span class="ico">🪑</span>
+            <span>Sơ đồ bàn (sửa)</span>
+          </div>
+          <div class="sd-item">
+            <span class="ico">🎨</span>
+            <span>Tuỳ chỉnh giao diện</span>
+          </div>
+          <div class="sd-item">
+            <span class="ico">⚙</span>
+            <span>Cài đặt</span>
+          </div>
+        </div>
+        <div class="sd-section">
+          <div class="sd-label">Phân tích</div>
+          <div class="sd-item">
+            <span class="ico">📊</span>
+            <span>Báo cáo F&B</span>
+          </div>
+        </div>
+      </div>
+
+      <!-- Behind drawer: cat sidebar + menu + cart vẫn render mờ -->
+      <div class="cat-sidebar" style="opacity:0.5"><div class="cat-list"><div class="cat-item active"><span class="ico">☕</span><span class="lbl">Cà phê</span></div></div></div>
+      <div class="menu-zone" style="opacity:0.4">
+        <div class="menu-grid" style="grid-template-columns: repeat(5, 1fr);">
+          <div class="product-card"><div class="img">☕</div></div>
+          <div class="product-card"><div class="img">☕</div></div>
+          <div class="product-card"><div class="img">☕</div></div>
+          <div class="product-card"><div class="img">☕</div></div>
+          <div class="product-card"><div class="img">☕</div></div>
+        </div>
+      </div>
+      <div class="cart-panel" style="opacity:0.4"></div>
+    </div>
+  </div>
+</div>
+
+<div class="label">Drawer slide từ trái + backdrop mờ — KHÔNG push content. Click backdrop để đóng.</div>
+
+<!-- ═══════════════════════════════════════════════════════════════ -->
+<h2>3️⃣ Desktop — View "Sơ đồ bàn" + Editor drag-drop</h2>
+
+<div class="feedback-box">
+  <strong>Feedback CEO:</strong> "Có thể làm sơ đồ bàn theo ý để có thể giống như đang ở quán là đẹp nhất."
+  <br>→ Em build editor drag-drop với 4 shape (vuông/tròn/dài), resize, multi-zone, save layout.
+</div>
+
+<div class="desktop">
+  <div class="app">
+    <div class="header">
+      <div class="menu-toggle">☰</div>
+      <div class="logo">OneBiz F&B</div>
+      <div class="chip">🏪 Kho Tổng</div>
+      <div class="view-toggle">
+        <div class="vt-btn">🍽 Bán hàng</div>
+        <div class="vt-btn active">🪑 Sơ đồ bàn</div>
+      </div>
+      <div style="flex:1"></div>
+      <div class="chip" style="background:#fef3c7;color:#a16207">✏️ Đang chỉnh sửa</div>
+      <div class="chip" style="background:#16a34a;color:#fff">💾 Lưu thay đổi</div>
+    </div>
+
+    <!-- Floor plan toolbar -->
+    <div class="fp-toolbar">
+      <div class="tool-btn primary">+ Thêm bàn</div>
+      <div style="width:1px;height:20px;background:#e5e7eb"></div>
+      <div class="tool-btn">⬜ Vuông</div>
+      <div class="tool-btn">⭕ Tròn</div>
+      <div class="tool-btn">▭ Dài</div>
+      <div class="tool-btn">🛋 Sofa</div>
+      <div style="width:1px;height:20px;background:#e5e7eb"></div>
+      <div class="tool-btn">📍 Khu vực</div>
+      <select style="padding:8px 12px;border-radius:8px;border:1px solid #e2e8f0;font-size:13px">
+        <option>Tất cả khu vực</option>
+        <option>Sảnh 1</option>
+        <option>Sảnh 2</option>
+        <option>Sân thượng</option>
+        <option>+ Thêm khu vực</option>
+      </select>
+      <div style="flex:1"></div>
+      <div class="tool-btn">🔄 Hoàn tác</div>
+      <div class="tool-btn">📐 Snap lưới</div>
+      <div class="tool-btn">🖼 Ảnh nền</div>
+    </div>
+
+    <div class="body">
+      <!-- Canvas with grid -->
+      <div class="fp-canvas">
+        <!-- Zone Sảnh 1 -->
+        <div class="fp-zone-label" style="top:16px;left:24px">Sảnh 1 · 8 bàn</div>
+
+        <div class="fp-table occupied" style="top:60px;left:40px;width:100px;height:100px">
+          <div class="name">NS01</div>
+          <div class="meta">2 khách · 84p</div>
+          <div class="meta" style="font-weight:700;margin-top:4px">50.000 đ</div>
+        </div>
+
+        <div class="fp-table occupied selected" style="top:60px;left:160px;width:100px;height:100px">
+          <div class="name">NS02</div>
+          <div class="meta">3 khách · 42p</div>
+          <div class="meta" style="font-weight:700;margin-top:4px">90.000 đ</div>
+          <div class="resize-handle"></div>
+        </div>
+
+        <div class="fp-table" style="top:60px;left:280px;width:100px;height:100px">
+          <div style="color:#94a3b8" class="name">NS03</div>
+          <div style="color:#94a3b8" class="meta">Trống</div>
+        </div>
+
+        <div class="fp-table round occupied" style="top:60px;left:400px;width:100px;height:100px;display:flex;flex-direction:column;justify-content:center;align-items:center">
+          <div class="name">NS04</div>
+          <div class="meta">4 khách</div>
+        </div>
+
+        <div class="fp-table" style="top:200px;left:40px;width:200px;height:80px">
+          <div style="color:#94a3b8" class="name">VIP01 (Bàn dài)</div>
+          <div style="color:#94a3b8" class="meta">Trống · 8-10 chỗ</div>
+        </div>
+
+        <div class="fp-table" style="top:200px;left:280px;width:100px;height:100px">
+          <div style="color:#94a3b8" class="name">NS05</div>
+          <div style="color:#94a3b8" class="meta">Trống</div>
+        </div>
+
+        <div class="fp-table round" style="top:200px;left:400px;width:100px;height:100px;display:flex;flex-direction:column;justify-content:center;align-items:center">
+          <div style="color:#94a3b8" class="name">NS06</div>
+          <div style="color:#94a3b8" class="meta">Trống</div>
+        </div>
+
+        <!-- Zone Sảnh 2 -->
+        <div class="fp-zone-label" style="top:340px;left:24px">Sảnh 2 · 6 bàn</div>
+
+        <div class="fp-table" style="top:380px;left:40px;width:100px;height:100px">
+          <div style="color:#94a3b8" class="name">SS01</div>
+          <div style="color:#94a3b8" class="meta">Trống</div>
+        </div>
+
+        <div class="fp-table" style="top:380px;left:160px;width:100px;height:100px">
+          <div style="color:#94a3b8" class="name">SS02</div>
+          <div style="color:#94a3b8" class="meta">Trống</div>
+        </div>
+
+        <div class="fp-table occupied" style="top:380px;left:280px;width:100px;height:100px">
+          <div class="name">SS03</div>
+          <div class="meta">2 khách · 12p</div>
+          <div class="meta" style="font-weight:700;margin-top:4px">99.000 đ</div>
+        </div>
+
+        <!-- Sample background hint -->
+        <div style="position:absolute;bottom:16px;right:16px;background:rgba(255,255,255,0.9);padding:8px 12px;border-radius:8px;font-size:11px;color:#64748b">
+          ↔️ Kéo thả để sắp xếp · ↘ Resize handle · Click chọn để sửa
+        </div>
+      </div>
+
+      <!-- Properties panel -->
+      <div class="props-panel">
+        <h3 style="margin:0 0 16px;font-size:15px">Thuộc tính bàn NS02</h3>
+
+        <div class="props-section">
+          <h4>Hình dạng</h4>
+          <div class="shape-picker">
+            <div class="shape-opt active">⬜</div>
+            <div class="shape-opt">⭕</div>
+            <div class="shape-opt">▭</div>
+            <div class="shape-opt">🛋</div>
+          </div>
+        </div>
+
+        <div class="props-section">
+          <h4>Thông tin</h4>
+          <div class="form-row">
+            <label>Mã bàn</label>
+            <input value="NS02" />
+          </div>
+          <div class="form-row">
+            <label>Khu vực</label>
+            <select>
+              <option>Sảnh 1</option>
+              <option>Sảnh 2</option>
+              <option>Sân thượng</option>
+            </select>
+          </div>
+          <div class="form-row">
+            <label>Số chỗ</label>
+            <input type="number" value="4" />
+          </div>
+        </div>
+
+        <div class="props-section">
+          <h4>Kích thước (px)</h4>
+          <div class="form-row">
+            <label>Rộng</label>
+            <input type="number" value="100" />
+          </div>
+          <div class="form-row">
+            <label>Cao</label>
+            <input type="number" value="100" />
+          </div>
+        </div>
+
+        <div class="props-section">
+          <h4>Vị trí (px)</h4>
+          <div class="form-row">
+            <label>X</label>
+            <input type="number" value="160" />
+          </div>
+          <div class="form-row">
+            <label>Y</label>
+            <input type="number" value="60" />
+          </div>
+        </div>
+
+        <div class="props-section">
+          <div class="tool-btn danger" style="width:100%;justify-content:center">🗑 Xoá bàn này</div>
+        </div>
+      </div>
+    </div>
+  </div>
+</div>
+
+<div class="label">Floor plan editor — Drag bàn / resize / chọn shape (vuông/tròn/dài/sofa) / multi-zone / snap lưới 40px</div>
+
+<!-- ═══════════════════════════════════════════════════════════════ -->
+<h2>4️⃣ Tablet — Menu scroll DỌC + Categories cột trái</h2>
+
+<div class="feedback-box">
+  <strong>Feedback CEO:</strong> "Tablet gặp vấn đề với danh mục và với cả thực đơn phải kéo thanh ngang
+  mới coi được — thay vậy hãy kéo dọc cho thực đơn."
+</div>
+
+<div class="row">
+  <div>
+    <div class="tablet portrait">
+      <div class="app">
+        <div class="header" style="height:48px;padding:8px 12px">
+          <div class="menu-toggle" style="width:36px;height:36px;font-size:18px">☰</div>
+          <div class="chip" style="font-size:12px">🏪 Kho Tổng</div>
+          <div class="view-toggle">
+            <div class="vt-btn active" style="padding:6px 12px;font-size:12px">🍽 Bán</div>
+            <div class="vt-btn" style="padding:6px 12px;font-size:12px">🪑 Bàn</div>
+          </div>
+          <div style="flex:1"></div>
+          <div class="chip" style="font-size:12px">🔍 F3</div>
+        </div>
+
+        <div class="order-tabs">
+          <div class="order-tab active" style="padding:8px 12px;font-size:11px">
+            <span class="dot" style="background:#2563eb"></span>
+            <span>NS01 · 2k · 84p</span>
+            <span class="close">×</span>
+          </div>
+          <div class="order-tab" style="padding:8px 12px;font-size:11px">
+            <span class="dot" style="background:#f97316"></span>
+            <span>Mang về #2</span>
+            <span class="close">×</span>
+          </div>
+          <div class="order-tab add" style="padding:8px 12px">+</div>
+        </div>
+
+        <div class="body">
+          <!-- Categories CỘT TRÁI 140px (gọn) -->
+          <div class="cat-sidebar" style="width:140px">
+            <div class="cat-list" style="padding:6px">
+              <div class="cat-item active" style="padding:8px;font-size:12px">
+                <span class="ico" style="font-size:16px">☕</span>
+                <span class="lbl">Cà phê</span>
+                <span class="count">24</span>
+              </div>
+              <div class="cat-item" style="padding:8px;font-size:12px">
+                <span class="ico" style="font-size:16px">🥤</span>
+                <span class="lbl">Trà sữa</span>
+                <span class="count">18</span>
+              </div>
+              <div class="cat-item" style="padding:8px;font-size:12px">
+                <span class="ico" style="font-size:16px">🍵</span>
+                <span class="lbl">Trà</span>
+                <span class="count">12</span>
+              </div>
+              <div class="cat-item" style="padding:8px;font-size:12px">
+                <span class="ico" style="font-size:16px">🥛</span>
+                <span class="lbl">Sữa</span>
+                <span class="count">8</span>
+              </div>
+              <div class="cat-item" style="padding:8px;font-size:12px">
+                <span class="ico" style="font-size:16px">🥪</span>
+                <span class="lbl">Bánh</span>
+                <span class="count">15</span>
+              </div>
+              <div class="cat-item" style="padding:8px;font-size:12px">
+                <span class="ico" style="font-size:16px">🍪</span>
+                <span class="lbl">Topping</span>
+                <span class="count">22</span>
+              </div>
+              <div class="cat-item" style="padding:8px;font-size:12px">
+                <span class="ico" style="font-size:16px">🥗</span>
+                <span class="lbl">Set ăn</span>
+                <span class="count">6</span>
+              </div>
+              <div class="cat-item" style="padding:8px;font-size:12px">
+                <span class="ico" style="font-size:16px">📦</span>
+                <span class="lbl">KM</span>
+                <span class="count">3</span>
+              </div>
+            </div>
+          </div>
+
+          <!-- Menu grid 3 cols (thay vì horizontal scroll) -->
+          <div class="menu-zone">
+            <!-- Sub-cat WRAP nhiều dòng (không scroll ngang) -->
+            <div style="background:#f8fafc;padding:8px 12px;border-bottom:1px solid #e5e7eb;display:flex;gap:6px;flex-wrap:wrap">
+              <span style="padding:4px 10px;background:#fff;border-radius:6px;font-size:11px;color:#1d4ed8;font-weight:600;box-shadow:0 1px 3px rgba(0,0,0,0.06)">Tất cả (24)</span>
+              <span style="padding:4px 10px;border-radius:6px;font-size:11px;color:#64748b">Đen (6)</span>
+              <span style="padding:4px 10px;border-radius:6px;font-size:11px;color:#64748b">Sữa (8)</span>
+              <span style="padding:4px 10px;border-radius:6px;font-size:11px;color:#64748b">Cold brew (4)</span>
+              <span style="padding:4px 10px;border-radius:6px;font-size:11px;color:#64748b">Espresso (3)</span>
+              <span style="padding:4px 10px;border-radius:6px;font-size:11px;color:#64748b">Đặc biệt (3)</span>
+            </div>
+            <div class="menu-grid" style="grid-template-columns: repeat(3, 1fr);gap:8px;padding:10px">
+              <div class="product-card"><div class="img">☕<span class="price-badge">25k</span></div><div class="name">Cà phê đen</div><div class="meta">Size M</div></div>
+              <div class="product-card"><div class="img">☕<span class="price-badge">30k</span></div><div class="name">Cà phê sữa</div><div class="meta">Size M</div></div>
+              <div class="product-card"><div class="img">☕<span class="price-badge">35k</span></div><div class="name">Bạc xỉu</div><div class="meta">Size M</div></div>
+              <div class="product-card"><div class="img" style="background:linear-gradient(135deg,#dbeafe,#bfdbfe)">🧊<span class="price-badge">40k</span></div><div class="name">Cold Brew</div><div class="meta">Pha lạnh</div></div>
+              <div class="product-card"><div class="img">☕<span class="price-badge">28k</span></div><div class="name">Espresso</div><div class="meta">Italy</div></div>
+              <div class="product-card"><div class="img">☕<span class="price-badge">45k</span></div><div class="name">Cappuccino</div><div class="meta">Foam</div></div>
+              <div class="product-card"><div class="img">☕<span class="price-badge">50k</span></div><div class="name">Mocha</div><div class="meta">Cacao</div></div>
+              <div class="product-card"><div class="img">☕<span class="price-badge">50k</span></div><div class="name">Caramel</div><div class="meta">Caramel</div></div>
+              <div class="product-card"><div class="img">☕<span class="price-badge">55k</span></div><div class="name">Cà phê dừa</div><div class="meta">Đặc sản</div></div>
+              <div class="product-card"><div class="img">☕<span class="price-badge">38k</span></div><div class="name">Cà phê trứng</div><div class="meta">HN</div></div>
+              <div class="product-card"><div class="img">☕<span class="price-badge">42k</span></div><div class="name">Cà phê muối</div><div class="meta">Trend</div></div>
+              <div class="product-card"><div class="img" style="background:linear-gradient(135deg,#fce7f3,#fbcfe8)">🍓<span class="price-badge">48k</span></div><div class="name">Strawberry</div><div class="meta">Đặc biệt</div></div>
+            </div>
+          </div>
+        </div>
+
+        <!-- Cart drawer collapsed -->
+        <div style="background:#fff;border-top:1px solid #e5e7eb;box-shadow:0 -4px 12px rgba(0,0,0,0.04)">
+          <div style="text-align:center;padding:6px;color:#94a3b8">
+            <div style="width:40px;height:4px;background:#cbd5e1;border-radius:2px;margin:0 auto 4px"></div>
+            <span style="font-size:10px">Kéo lên xem giỏ hàng</span>
+          </div>
+          <div style="padding:10px 16px;display:flex;align-items:center;gap:10px">
+            <div style="font-size:22px">🛒</div>
+            <div style="flex:1">
+              <div style="font-size:11px;color:#64748b">NS01 · 3 món</div>
+              <div style="font-size:13px;font-weight:700">2 khách · 84 phút</div>
+            </div>
+            <div style="text-align:right">
+              <div style="font-size:10px;color:#64748b">Tổng</div>
+              <div style="font-size:20px;font-weight:900;color:#2563eb;line-height:1">75.600 đ</div>
+            </div>
+            <div style="background:#16a34a;color:#fff;padding:10px 14px;border-radius:10px;font-size:12px;font-weight:700">
+              Thanh toán
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+    <div class="label">Tablet portrait 768×1024 — Categories cột trái 140px · Menu 3 cols scroll DỌC · Sub-cat wrap multi-row</div>
+  </div>
+</div>
+
+<!-- ═══════════════════════════════════════════════════════════════ -->
+<h2>4️⃣b Tablet landscape — 3 cột desktop-like (cart luôn hiển thị)</h2>
+
+<div class="feedback-box">
+  <strong>Khi nào dùng landscape?</strong> Quầy thu ngân cố định (giống KiotViet T-POS) — tablet đặt giá đỡ ngang
+  để vừa nhập đơn vừa xem cart real-time, không cần kéo lên. Cart 320px LUÔN hiển thị bên phải, KHÔNG còn drawer.
+  <br>→ Quán có thể chọn portrait (di động) hoặc landscape (cố định) tuỳ phong cách phục vụ.
+</div>
+
+<h3>A) View "Bán hàng" — Categories cột trái + Menu 4 cols + Cart cố định bên phải</h3>
+<div class="row">
+  <div>
+    <div class="tablet landscape">
+      <div class="app">
+        <!-- Header gọn 48px cho landscape (tận dụng width) -->
+        <div class="header" style="height:48px;padding:8px 14px">
+          <div class="menu-toggle" style="width:36px;height:36px;font-size:18px">☰</div>
+          <div class="chip" style="font-size:12px">🏪 Kho Tổng · CN-KT</div>
+          <div class="view-toggle">
+            <div class="vt-btn active" style="padding:6px 14px;font-size:12px">🍽 Bán hàng</div>
+            <div class="vt-btn" style="padding:6px 14px;font-size:12px">🪑 Sơ đồ bàn</div>
+          </div>
+          <!-- Order tabs ngay header (tận dụng chiều ngang) -->
+          <div style="display:flex;gap:4px;flex:1;align-items:center;padding-left:10px">
+            <div class="order-tab active" style="padding:6px 12px;font-size:11px;margin-top:0;border-radius:8px">
+              <span class="dot" style="background:#2563eb"></span>
+              <span>NS01 · 2k · 84p</span>
+              <span class="close">×</span>
+            </div>
+            <div class="order-tab" style="padding:6px 12px;font-size:11px;margin-top:0;border-radius:8px;background:#f1f5f9">
+              <span class="dot" style="background:#f97316"></span>
+              <span>Mang về #2</span>
+              <span class="close">×</span>
+            </div>
+            <div class="order-tab add" style="padding:6px 10px;margin-top:0;border-radius:8px">+</div>
+          </div>
+          <div class="chip" style="font-size:12px">🔍 F3 — Tìm món</div>
+          <div class="chip" style="font-size:12px">🔔 3</div>
+          <div class="chip" style="font-size:12px">⚙️</div>
+        </div>
+
+        <div class="body">
+          <!-- Cat sidebar 140px (gọn hơn desktop 200px nhưng đủ đọc) -->
+          <div class="cat-sidebar" style="width:140px">
+            <div class="cat-list" style="padding:6px">
+              <div class="cat-item active" style="padding:8px;font-size:12px">
+                <span class="ico" style="font-size:16px">☕</span>
+                <span class="lbl">Cà phê</span>
+                <span class="count">24</span>
+              </div>
+              <div class="cat-item" style="padding:8px;font-size:12px">
+                <span class="ico" style="font-size:16px">🥤</span>
+                <span class="lbl">Trà sữa</span>
+                <span class="count">18</span>
+              </div>
+              <div class="cat-item" style="padding:8px;font-size:12px">
+                <span class="ico" style="font-size:16px">🍵</span>
+                <span class="lbl">Trà</span>
+                <span class="count">12</span>
+              </div>
+              <div class="cat-item" style="padding:8px;font-size:12px">
+                <span class="ico" style="font-size:16px">🥛</span>
+                <span class="lbl">Sữa</span>
+                <span class="count">8</span>
+              </div>
+              <div class="cat-item" style="padding:8px;font-size:12px">
+                <span class="ico" style="font-size:16px">🥪</span>
+                <span class="lbl">Bánh</span>
+                <span class="count">15</span>
+              </div>
+              <div class="cat-item" style="padding:8px;font-size:12px">
+                <span class="ico" style="font-size:16px">🍪</span>
+                <span class="lbl">Topping</span>
+                <span class="count">22</span>
+              </div>
+              <div class="cat-item" style="padding:8px;font-size:12px">
+                <span class="ico" style="font-size:16px">🥗</span>
+                <span class="lbl">Set ăn</span>
+                <span class="count">6</span>
+              </div>
+              <div class="cat-item" style="padding:8px;font-size:12px">
+                <span class="ico" style="font-size:16px">📦</span>
+                <span class="lbl">KM</span>
+                <span class="count">3</span>
+              </div>
+            </div>
+          </div>
+
+          <!-- Menu zone 4 cols (rộng hơn portrait 3 cols nhờ landscape) -->
+          <div class="menu-zone">
+            <!-- Sub-cat wrap 1 dòng (đủ chiều ngang) -->
+            <div style="background:#f8fafc;padding:8px 12px;border-bottom:1px solid #e5e7eb;display:flex;gap:6px;flex-wrap:wrap">
+              <span style="padding:4px 10px;background:#fff;border-radius:6px;font-size:11px;color:#1d4ed8;font-weight:600;box-shadow:0 1px 3px rgba(0,0,0,0.06)">Tất cả (24)</span>
+              <span style="padding:4px 10px;border-radius:6px;font-size:11px;color:#64748b">Đen (6)</span>
+              <span style="padding:4px 10px;border-radius:6px;font-size:11px;color:#64748b">Sữa (8)</span>
+              <span style="padding:4px 10px;border-radius:6px;font-size:11px;color:#64748b">Cold brew (4)</span>
+              <span style="padding:4px 10px;border-radius:6px;font-size:11px;color:#64748b">Espresso (3)</span>
+              <span style="padding:4px 10px;border-radius:6px;font-size:11px;color:#64748b">Đặc biệt (3)</span>
+            </div>
+            <div class="menu-grid" style="grid-template-columns: repeat(4, 1fr);gap:8px;padding:10px">
+              <div class="product-card"><div class="img">☕<span class="price-badge">25k</span></div><div class="name">Cà phê đen</div><div class="meta">Size M</div></div>
+              <div class="product-card"><div class="img">☕<span class="price-badge">30k</span></div><div class="name">Cà phê sữa</div><div class="meta">Size M</div></div>
+              <div class="product-card"><div class="img">☕<span class="price-badge">35k</span></div><div class="name">Bạc xỉu</div><div class="meta">Size M</div></div>
+              <div class="product-card"><div class="img" style="background:linear-gradient(135deg,#dbeafe,#bfdbfe)">🧊<span class="price-badge">40k</span></div><div class="name">Cold Brew</div><div class="meta">Pha lạnh</div></div>
+              <div class="product-card"><div class="img">☕<span class="price-badge">28k</span></div><div class="name">Espresso</div><div class="meta">Italy</div></div>
+              <div class="product-card"><div class="img">☕<span class="price-badge">45k</span></div><div class="name">Cappuccino</div><div class="meta">Foam</div></div>
+              <div class="product-card"><div class="img">☕<span class="price-badge">50k</span></div><div class="name">Mocha</div><div class="meta">Cacao</div></div>
+              <div class="product-card"><div class="img">☕<span class="price-badge">50k</span></div><div class="name">Caramel</div><div class="meta">Caramel</div></div>
+              <div class="product-card"><div class="img">☕<span class="price-badge">55k</span></div><div class="name">Cà phê dừa</div><div class="meta">Đặc sản</div></div>
+              <div class="product-card"><div class="img">☕<span class="price-badge">38k</span></div><div class="name">Cà phê trứng</div><div class="meta">HN</div></div>
+              <div class="product-card"><div class="img">☕<span class="price-badge">42k</span></div><div class="name">Cà phê muối</div><div class="meta">Trend</div></div>
+              <div class="product-card"><div class="img" style="background:linear-gradient(135deg,#fce7f3,#fbcfe8)">🍓<span class="price-badge">48k</span></div><div class="name">Strawberry</div><div class="meta">Đặc biệt</div></div>
+            </div>
+          </div>
+
+          <!-- CART 320px CỐ ĐỊNH bên phải (key advantage of landscape) -->
+          <div style="width:320px;background:#fff;border-left:1px solid #e5e7eb;display:flex;flex-direction:column">
+            <!-- Cart header với tab info -->
+            <div style="padding:10px 14px;border-bottom:1px solid #e5e7eb;background:linear-gradient(180deg,#f8fafc,#fff)">
+              <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:4px">
+                <div style="font-weight:700;font-size:14px;color:#0f172a">NS01 · Bàn 1</div>
+                <span style="background:#dcfce7;color:#15803d;padding:2px 8px;border-radius:6px;font-size:10px;font-weight:700">Mở 84p</span>
+              </div>
+              <div style="display:flex;gap:8px;font-size:11px;color:#64748b">
+                <span>👥 2 khách</span>
+                <span>·</span>
+                <span>👤 Nguyễn Văn A</span>
+              </div>
+            </div>
+
+            <!-- Cart lines -->
+            <div style="flex:1;overflow-y:auto;padding:10px 14px">
+              <div style="background:#f8fafc;border-radius:10px;padding:8px 10px;margin-bottom:6px">
+                <div style="display:flex;justify-content:space-between;align-items:start">
+                  <div style="flex:1;min-width:0">
+                    <div style="font-size:12px;font-weight:600;color:#0f172a">Cà phê sữa</div>
+                    <div style="font-size:10px;color:#64748b">Size M · Đá ít · Ngọt vừa</div>
+                  </div>
+                  <div style="text-align:right;margin-left:6px">
+                    <div style="font-size:12px;font-weight:700;color:#0f172a">30.000</div>
+                  </div>
+                </div>
+                <div style="display:flex;align-items:center;justify-content:space-between;margin-top:6px">
+                  <div style="display:flex;align-items:center;gap:6px">
+                    <div style="width:24px;height:24px;border-radius:6px;background:#fff;border:1px solid #e5e7eb;display:flex;align-items:center;justify-content:center;font-size:14px;color:#64748b">−</div>
+                    <span style="font-size:12px;font-weight:700;min-width:18px;text-align:center">2</span>
+                    <div style="width:24px;height:24px;border-radius:6px;background:#fff;border:1px solid #e5e7eb;display:flex;align-items:center;justify-content:center;font-size:14px;color:#64748b">+</div>
+                  </div>
+                  <span style="font-size:11px;color:#94a3b8">🗑</span>
+                </div>
+              </div>
+
+              <div style="background:#f8fafc;border-radius:10px;padding:8px 10px;margin-bottom:6px">
+                <div style="display:flex;justify-content:space-between;align-items:start">
+                  <div style="flex:1;min-width:0">
+                    <div style="font-size:12px;font-weight:600;color:#0f172a">Bánh croissant</div>
+                    <div style="font-size:10px;color:#64748b">Bơ Pháp</div>
+                  </div>
+                  <div style="text-align:right;margin-left:6px">
+                    <div style="font-size:12px;font-weight:700;color:#0f172a">35.000</div>
+                  </div>
+                </div>
+                <div style="display:flex;align-items:center;justify-content:space-between;margin-top:6px">
+                  <div style="display:flex;align-items:center;gap:6px">
+                    <div style="width:24px;height:24px;border-radius:6px;background:#fff;border:1px solid #e5e7eb;display:flex;align-items:center;justify-content:center;font-size:14px;color:#64748b">−</div>
+                    <span style="font-size:12px;font-weight:700;min-width:18px;text-align:center">1</span>
+                    <div style="width:24px;height:24px;border-radius:6px;background:#fff;border:1px solid #e5e7eb;display:flex;align-items:center;justify-content:center;font-size:14px;color:#64748b">+</div>
+                  </div>
+                  <span style="font-size:11px;color:#94a3b8">🗑</span>
+                </div>
+              </div>
+
+              <div style="background:#f8fafc;border-radius:10px;padding:8px 10px">
+                <div style="display:flex;justify-content:space-between;align-items:start">
+                  <div style="flex:1;min-width:0">
+                    <div style="font-size:12px;font-weight:600;color:#0f172a">Cold Brew</div>
+                    <div style="font-size:10px;color:#64748b">Size L</div>
+                  </div>
+                  <div style="text-align:right;margin-left:6px">
+                    <div style="font-size:12px;font-weight:700;color:#0f172a">40.000</div>
+                  </div>
+                </div>
+                <div style="display:flex;align-items:center;justify-content:space-between;margin-top:6px">
+                  <div style="display:flex;align-items:center;gap:6px">
+                    <div style="width:24px;height:24px;border-radius:6px;background:#fff;border:1px solid #e5e7eb;display:flex;align-items:center;justify-content:center;font-size:14px;color:#64748b">−</div>
+                    <span style="font-size:12px;font-weight:700;min-width:18px;text-align:center">1</span>
+                    <div style="width:24px;height:24px;border-radius:6px;background:#fff;border:1px solid #e5e7eb;display:flex;align-items:center;justify-content:center;font-size:14px;color:#64748b">+</div>
+                  </div>
+                  <span style="font-size:11px;color:#94a3b8">🗑</span>
+                </div>
+              </div>
+            </div>
+
+            <!-- Order type pills -->
+            <div style="padding:8px 14px;border-top:1px solid #e5e7eb;display:flex;gap:4px">
+              <div style="flex:1;padding:6px;background:#dbeafe;color:#1d4ed8;border-radius:8px;text-align:center;font-size:11px;font-weight:700">🪑 Tại quán</div>
+              <div style="flex:1;padding:6px;color:#64748b;border-radius:8px;text-align:center;font-size:11px">📦 Mang về</div>
+              <div style="flex:1;padding:6px;color:#64748b;border-radius:8px;text-align:center;font-size:11px">🛵 Giao hàng</div>
+            </div>
+
+            <!-- Total + CTA -->
+            <div style="padding:12px 14px;border-top:1px solid #e5e7eb;background:#fafbfc">
+              <div style="display:flex;justify-content:space-between;font-size:11px;color:#64748b;margin-bottom:4px">
+                <span>Tạm tính (4 món)</span>
+                <span>105.000</span>
+              </div>
+              <div style="display:flex;justify-content:space-between;font-size:11px;color:#16a34a;margin-bottom:6px">
+                <span>KM Happy Hour −10%</span>
+                <span>−10.500</span>
+              </div>
+              <div style="display:flex;justify-content:space-between;align-items:baseline;margin-bottom:10px">
+                <span style="font-size:11px;color:#64748b">Khách cần trả</span>
+                <span style="font-size:22px;font-weight:900;color:#2563eb">94.500 đ</span>
+              </div>
+              <div style="background:#16a34a;color:#fff;padding:10px;border-radius:10px;text-align:center;font-size:13px;font-weight:700">
+                ✅ Thanh toán (F8)
+              </div>
+              <div style="display:flex;gap:6px;margin-top:6px">
+                <div style="flex:1;padding:6px;background:#fff;border:1px solid #e5e7eb;border-radius:8px;text-align:center;font-size:10px;color:#475569">📋 In tạm tính</div>
+                <div style="flex:1;padding:6px;background:#fff;border:1px solid #e5e7eb;border-radius:8px;text-align:center;font-size:10px;color:#475569">🍳 Gửi bếp</div>
+              </div>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+    <div class="label">Tablet landscape 1024×768 — Categories 140px · Menu 4 cols · <strong>Cart 320px CỐ ĐỊNH</strong> (key advantage vs portrait)</div>
+  </div>
+</div>
+
+<h3>B) View "Sơ đồ bàn" landscape — full-width canvas + zone tabs trái</h3>
+<div class="row">
+  <div>
+    <div class="tablet landscape">
+      <div class="app">
+        <div class="header" style="height:48px;padding:8px 14px">
+          <div class="menu-toggle" style="width:36px;height:36px;font-size:18px">☰</div>
+          <div class="chip" style="font-size:12px">🏪 Kho Tổng · CN-KT</div>
+          <div class="view-toggle">
+            <div class="vt-btn" style="padding:6px 14px;font-size:12px">🍽 Bán hàng</div>
+            <div class="vt-btn active" style="padding:6px 14px;font-size:12px">🪑 Sơ đồ bàn</div>
+          </div>
+          <div style="flex:1"></div>
+          <div class="chip" style="font-size:12px;background:#fef3c7;color:#92400e">✏️ Chỉnh sửa</div>
+          <div class="chip" style="font-size:12px">⚙️</div>
+        </div>
+
+        <div class="body">
+          <!-- Zone tabs trái (140px) -->
+          <div style="width:140px;background:#fff;border-right:1px solid #e5e7eb;display:flex;flex-direction:column;padding:10px 8px">
+            <div style="font-size:10px;text-transform:uppercase;letter-spacing:0.05em;color:#94a3b8;font-weight:700;padding:6px 10px;margin-bottom:4px">Khu vực</div>
+            <div style="padding:10px 12px;background:#dbeafe;color:#1d4ed8;border-radius:10px;font-size:13px;font-weight:700;display:flex;justify-content:space-between;margin-bottom:4px">
+              <span>Sảnh 1</span>
+              <span style="background:#fff;color:#1d4ed8;padding:1px 6px;border-radius:4px;font-size:10px">8</span>
+            </div>
+            <div style="padding:10px 12px;color:#475569;border-radius:10px;font-size:13px;display:flex;justify-content:space-between;margin-bottom:4px">
+              <span>Sảnh 2</span>
+              <span style="background:#f1f5f9;color:#64748b;padding:1px 6px;border-radius:4px;font-size:10px">6</span>
+            </div>
+            <div style="padding:10px 12px;color:#475569;border-radius:10px;font-size:13px;display:flex;justify-content:space-between;margin-bottom:4px">
+              <span>Sân vườn</span>
+              <span style="background:#f1f5f9;color:#64748b;padding:1px 6px;border-radius:4px;font-size:10px">4</span>
+            </div>
+            <div style="padding:10px 12px;color:#94a3b8;border-radius:10px;font-size:12px;border:2px dashed #cbd5e1;text-align:center;margin-top:8px">+ Thêm KV</div>
+
+            <!-- Quick stats bottom -->
+            <div style="margin-top:auto;background:#f8fafc;border-radius:10px;padding:10px;border:1px solid #e5e7eb">
+              <div style="font-size:10px;color:#64748b;margin-bottom:6px;text-align:center;font-weight:600">Đang phục vụ</div>
+              <div style="font-size:24px;font-weight:900;color:#16a34a;text-align:center;line-height:1">5/8</div>
+              <div style="font-size:10px;color:#64748b;text-align:center;margin-top:2px">3 bàn trống</div>
+            </div>
+          </div>
+
+          <!-- Floor plan canvas (lớn — tận dụng landscape) -->
+          <div style="flex:1;background:#fafbfc;background-image:linear-gradient(#e5e7eb 1px,transparent 1px),linear-gradient(90deg,#e5e7eb 1px,transparent 1px);background-size:32px 32px;position:relative;padding:24px;overflow:auto">
+            <!-- Toolbar -->
+            <div style="position:absolute;top:16px;left:16px;background:#fff;border:1px solid #e5e7eb;border-radius:10px;padding:8px;display:flex;gap:6px;box-shadow:0 2px 8px rgba(0,0,0,0.04)">
+              <span style="padding:6px 10px;background:#f1f5f9;border-radius:8px;font-size:11px;cursor:pointer">🟢 Trống</span>
+              <span style="padding:6px 10px;background:#fef3c7;color:#92400e;border-radius:8px;font-size:11px;cursor:pointer">🟡 Đang dùng</span>
+              <span style="padding:6px 10px;background:#dbeafe;color:#1d4ed8;border-radius:8px;font-size:11px;cursor:pointer">🔵 Đặt trước</span>
+              <span style="padding:6px 10px;background:#fee2e2;color:#991b1b;border-radius:8px;font-size:11px;cursor:pointer">🔴 Cần dọn</span>
+            </div>
+
+            <!-- Tables — landscape có không gian lớn cho 6-8 bàn trên 1 layout -->
+            <!-- Bàn 1 — round 4 chỗ -->
+            <div style="position:absolute;top:80px;left:80px;width:88px;height:88px;background:#fef3c7;border:2px solid #f59e0b;border-radius:50%;display:flex;flex-direction:column;align-items:center;justify-content:center;box-shadow:0 2px 8px rgba(245,158,11,0.2)">
+              <div style="font-size:16px;font-weight:900;color:#92400e">B1</div>
+              <div style="font-size:9px;color:#92400e">2/4 · 84p</div>
+              <div style="font-size:9px;color:#92400e;font-weight:700">75.6k</div>
+            </div>
+
+            <!-- Bàn 2 — square 2 chỗ -->
+            <div style="position:absolute;top:80px;left:220px;width:80px;height:80px;background:#dcfce7;border:2px solid #16a34a;border-radius:12px;display:flex;flex-direction:column;align-items:center;justify-content:center">
+              <div style="font-size:16px;font-weight:900;color:#15803d">B2</div>
+              <div style="font-size:9px;color:#15803d">Trống</div>
+            </div>
+
+            <!-- Bàn 3 — square 4 chỗ -->
+            <div style="position:absolute;top:80px;left:340px;width:96px;height:96px;background:#fef3c7;border:2px solid #f59e0b;border-radius:12px;display:flex;flex-direction:column;align-items:center;justify-content:center;box-shadow:0 2px 8px rgba(245,158,11,0.2)">
+              <div style="font-size:16px;font-weight:900;color:#92400e">B3</div>
+              <div style="font-size:9px;color:#92400e">4/4 · 22p</div>
+              <div style="font-size:9px;color:#92400e;font-weight:700">142k</div>
+            </div>
+
+            <!-- Bàn 4 — long 6 chỗ -->
+            <div style="position:absolute;top:90px;left:480px;width:160px;height:72px;background:#dcfce7;border:2px solid #16a34a;border-radius:12px;display:flex;flex-direction:column;align-items:center;justify-content:center">
+              <div style="font-size:16px;font-weight:900;color:#15803d">B4 · Bàn dài</div>
+              <div style="font-size:9px;color:#15803d">Trống · 6 chỗ</div>
+            </div>
+
+            <!-- Bàn 5 — sofa 6 chỗ -->
+            <div style="position:absolute;top:200px;left:80px;width:200px;height:96px;background:#dbeafe;border:2px solid #2563eb;border-radius:16px;display:flex;flex-direction:column;align-items:center;justify-content:center;box-shadow:0 2px 8px rgba(37,99,235,0.15)">
+              <div style="font-size:16px;font-weight:900;color:#1e3a8a">B5 · Sofa VIP</div>
+              <div style="font-size:9px;color:#1e3a8a">Đặt trước · 19h00</div>
+              <div style="font-size:9px;color:#1e3a8a">👤 Anh Hùng · 6 khách</div>
+            </div>
+
+            <!-- Bàn 6 — round 4 chỗ -->
+            <div style="position:absolute;top:220px;left:320px;width:88px;height:88px;background:#fee2e2;border:2px solid #dc2626;border-radius:50%;display:flex;flex-direction:column;align-items:center;justify-content:center">
+              <div style="font-size:16px;font-weight:900;color:#991b1b">B6</div>
+              <div style="font-size:9px;color:#991b1b">Cần dọn</div>
+            </div>
+
+            <!-- Bàn 7 — square 2 chỗ -->
+            <div style="position:absolute;top:220px;left:450px;width:80px;height:80px;background:#fef3c7;border:2px solid #f59e0b;border-radius:12px;display:flex;flex-direction:column;align-items:center;justify-content:center">
+              <div style="font-size:16px;font-weight:900;color:#92400e">B7</div>
+              <div style="font-size:9px;color:#92400e">1/2 · 12p</div>
+              <div style="font-size:9px;color:#92400e;font-weight:700">38k</div>
+            </div>
+
+            <!-- Bàn 8 — round 4 chỗ -->
+            <div style="position:absolute;top:220px;left:570px;width:88px;height:88px;background:#dcfce7;border:2px solid #16a34a;border-radius:50%;display:flex;flex-direction:column;align-items:center;justify-content:center">
+              <div style="font-size:16px;font-weight:900;color:#15803d">B8</div>
+              <div style="font-size:9px;color:#15803d">Trống</div>
+            </div>
+
+            <!-- Door label -->
+            <div style="position:absolute;top:340px;left:240px;font-size:10px;color:#94a3b8;letter-spacing:0.1em;font-weight:600">⬆ CỬA RA VÀO</div>
+
+            <!-- Bar/quầy -->
+            <div style="position:absolute;bottom:24px;left:24px;right:24px;height:60px;background:linear-gradient(180deg,#fff,#f8fafc);border:2px solid #94a3b8;border-radius:8px;display:flex;align-items:center;justify-content:center;color:#475569;font-size:11px;font-weight:700;letter-spacing:0.1em">
+              ☕ QUẦY PHA CHẾ ☕
+            </div>
+          </div>
+
+          <!-- Mini cart bên phải 200px (compact, hiện đơn đang phục vụ ở bàn được chọn) -->
+          <div style="width:200px;background:#fff;border-left:1px solid #e5e7eb;display:flex;flex-direction:column">
+            <div style="padding:12px 14px;background:linear-gradient(135deg,#fef3c7,#fde68a);border-bottom:1px solid #fbbf24">
+              <div style="font-size:10px;color:#92400e;font-weight:700;text-transform:uppercase;letter-spacing:0.05em;margin-bottom:2px">Đang chọn</div>
+              <div style="font-size:18px;font-weight:900;color:#78350f">Bàn B1</div>
+              <div style="font-size:11px;color:#92400e;margin-top:2px">2 khách · 84 phút</div>
+            </div>
+            <div style="flex:1;padding:10px 12px;overflow-y:auto">
+              <div style="font-size:11px;font-weight:700;color:#475569;margin-bottom:6px">Đơn hiện tại (3)</div>
+              <div style="font-size:11px;padding:6px 8px;background:#f8fafc;border-radius:6px;margin-bottom:4px">
+                <div style="font-weight:600">2× Cà phê sữa</div>
+                <div style="color:#64748b;font-size:10px">60.000 đ</div>
+              </div>
+              <div style="font-size:11px;padding:6px 8px;background:#f8fafc;border-radius:6px;margin-bottom:4px">
+                <div style="font-weight:600">1× Croissant</div>
+                <div style="color:#64748b;font-size:10px">35.000 đ</div>
+              </div>
+              <div style="font-size:11px;padding:6px 8px;background:#f8fafc;border-radius:6px">
+                <div style="font-weight:600">1× Cold Brew</div>
+                <div style="color:#64748b;font-size:10px">40.000 đ</div>
+              </div>
+            </div>
+            <div style="padding:12px 14px;border-top:1px solid #e5e7eb;background:#fafbfc">
+              <div style="display:flex;justify-content:space-between;align-items:baseline;margin-bottom:8px">
+                <span style="font-size:10px;color:#64748b">Tổng</span>
+                <span style="font-size:18px;font-weight:900;color:#2563eb">94.500 đ</span>
+              </div>
+              <div style="background:#2563eb;color:#fff;padding:8px;border-radius:8px;text-align:center;font-size:11px;font-weight:700;margin-bottom:6px">
+                Mở đơn B1
+              </div>
+              <div style="display:flex;gap:4px">
+                <div style="flex:1;padding:6px;background:#fff;border:1px solid #e5e7eb;border-radius:6px;text-align:center;font-size:10px">↔ Chuyển</div>
+                <div style="flex:1;padding:6px;background:#fff;border:1px solid #e5e7eb;border-radius:6px;text-align:center;font-size:10px">⨯ Đóng</div>
+              </div>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+    <div class="label">View "Sơ đồ bàn" landscape — zone tabs 140px · floor plan canvas LỚN · mini-cart 200px khi chọn bàn (drag-drop edit toggle bằng nút ✏️)</div>
+  </div>
+</div>
+
+<div style="background:#eff6ff;border-left:4px solid #2563eb;padding:14px 18px;border-radius:8px;font-size:13px;line-height:1.7;margin:16px 0 24px">
+  <strong style="color:#1e3a8a">📐 So sánh Tablet portrait vs landscape:</strong>
+  <table style="width:100%;border-collapse:collapse;margin-top:8px;font-size:12px">
+    <thead>
+      <tr style="background:#dbeafe;color:#1e3a8a">
+        <th style="padding:6px 10px;text-align:left;border:1px solid #bfdbfe">Yếu tố</th>
+        <th style="padding:6px 10px;text-align:left;border:1px solid #bfdbfe">Portrait 768×1024</th>
+        <th style="padding:6px 10px;text-align:left;border:1px solid #bfdbfe">Landscape 1024×768</th>
+      </tr>
+    </thead>
+    <tbody>
+      <tr><td style="padding:6px 10px;border:1px solid #bfdbfe;font-weight:600">Use case chính</td><td style="padding:6px 10px;border:1px solid #bfdbfe">Phục vụ di động (cầm tay đi bàn)</td><td style="padding:6px 10px;border:1px solid #bfdbfe;background:#dcfce7">Quầy thu ngân cố định / KDS</td></tr>
+      <tr><td style="padding:6px 10px;border:1px solid #bfdbfe;font-weight:600">Cart visibility</td><td style="padding:6px 10px;border:1px solid #bfdbfe">Drawer dưới (kéo lên)</td><td style="padding:6px 10px;border:1px solid #bfdbfe;background:#dcfce7"><strong>Cố định bên phải</strong> — luôn thấy</td></tr>
+      <tr><td style="padding:6px 10px;border:1px solid #bfdbfe;font-weight:600">Menu cols</td><td style="padding:6px 10px;border:1px solid #bfdbfe">3 cột (~150px/card)</td><td style="padding:6px 10px;border:1px solid #bfdbfe">4 cột (~125px/card)</td></tr>
+      <tr><td style="padding:6px 10px;border:1px solid #bfdbfe;font-weight:600">Floor plan</td><td style="padding:6px 10px;border:1px solid #bfdbfe">Full screen, cart drawer</td><td style="padding:6px 10px;border:1px solid #bfdbfe;background:#dcfce7">Canvas LỚN + zone tabs + mini-cart</td></tr>
+      <tr><td style="padding:6px 10px;border:1px solid #bfdbfe;font-weight:600">Order tabs</td><td style="padding:6px 10px;border:1px solid #bfdbfe">Riêng row dưới header</td><td style="padding:6px 10px;border:1px solid #bfdbfe;background:#dcfce7">Inline trong header (tiết kiệm 36px)</td></tr>
+      <tr><td style="padding:6px 10px;border:1px solid #bfdbfe;font-weight:600">Phù hợp</td><td style="padding:6px 10px;border:1px solid #bfdbfe">Quán cafe nhỏ, phục vụ bưng đồ</td><td style="padding:6px 10px;border:1px solid #bfdbfe">Cafe + bistro, có quầy thu ngân</td></tr>
+    </tbody>
+  </table>
+  <div style="margin-top:10px;padding:8px 10px;background:#fef3c7;border-radius:6px">
+    <strong>💡 User chọn orientation tablet:</strong> Hệ thống tự detect <code>screen.orientation</code> + responsive CSS.
+    Quán có thể bind tablet Y vào branch X + lock orientation (admin setting) để đồng bộ trải nghiệm staff.
+  </div>
+</div>
+
+<!-- ═══════════════════════════════════════════════════════════════ -->
+<h2>5️⃣ Mobile — Categories GRID 2x4 (không kéo ngang)</h2>
+
+<div class="feedback-box">
+  <strong>Feedback CEO:</strong> "Mobile danh mục cũng nên có cách thiết kế khác, mobile kéo kéo sẽ bất tiện.
+  Phục vụ sẽ rất cần việc bấm bill trên điện thoại thật tốt."
+  <br>→ Em đề xuất 2 phương án: Grid 4 cột (8 categories visible) HOẶC Dropdown sheet picker.
+</div>
+
+<div class="row">
+
+<!-- Phone 1: Grid categories -->
+<div>
+  <div class="phone">
+    <div class="phone-notch"></div>
+    <div class="phone-app">
+      <div class="phone-topbar">
+        <div class="icon-btn">←</div>
+        <h2>NS01 · Sảnh 1</h2>
+        <div class="icon-btn">🔍</div>
+      </div>
+      <div class="phone-body">
+        <!-- Categories GRID 2x4 -->
+        <div class="mobile-cat-grid">
+          <div class="mc-item active">
+            <span class="ico">☕</span>
+            <span class="lbl">Cà phê</span>
+            <div class="count">24</div>
+          </div>
+          <div class="mc-item">
+            <span class="ico">🥤</span>
+            <span class="lbl">Trà sữa</span>
+            <div class="count">18</div>
+          </div>
+          <div class="mc-item">
+            <span class="ico">🍵</span>
+            <span class="lbl">Trà</span>
+            <div class="count">12</div>
+          </div>
+          <div class="mc-item">
+            <span class="ico">🥛</span>
+            <span class="lbl">Sữa</span>
+            <div class="count">8</div>
+          </div>
+          <div class="mc-item">
+            <span class="ico">🥪</span>
+            <span class="lbl">Bánh</span>
+            <div class="count">15</div>
+          </div>
+          <div class="mc-item">
+            <span class="ico">🍪</span>
+            <span class="lbl">Topping</span>
+            <div class="count">22</div>
+          </div>
+          <div class="mc-item">
+            <span class="ico">🥗</span>
+            <span class="lbl">Set ăn</span>
+            <div class="count">6</div>
+          </div>
+          <div class="mc-item">
+            <span class="ico">⋯</span>
+            <span class="lbl">Khác</span>
+          </div>
+        </div>
+
+        <!-- Sub-cat wrap -->
+        <div style="display:flex;flex-wrap:wrap;gap:6px;margin-bottom:12px">
+          <span style="padding:6px 12px;background:#2563eb;color:#fff;border-radius:999px;font-size:12px;font-weight:600">Tất cả</span>
+          <span style="padding:6px 12px;background:#fff;border-radius:999px;font-size:12px;color:#475569;border:1px solid #e2e8f0">Đen</span>
+          <span style="padding:6px 12px;background:#fff;border-radius:999px;font-size:12px;color:#475569;border:1px solid #e2e8f0">Sữa</span>
+          <span style="padding:6px 12px;background:#fff;border-radius:999px;font-size:12px;color:#475569;border:1px solid #e2e8f0">Cold brew</span>
+          <span style="padding:6px 12px;background:#fff;border-radius:999px;font-size:12px;color:#475569;border:1px solid #e2e8f0">Espresso</span>
+        </div>
+
+        <!-- Menu items vertical list -->
+        <div class="menu-item">
+          <div class="img">☕</div>
+          <div class="info">
+            <div class="name">Cà phê đen size M</div>
+            <div class="desc">Đậm đà, không đường</div>
+            <div class="price">25.000 đ</div>
+          </div>
+          <div class="add-btn">+</div>
+        </div>
+        <div class="menu-item">
+          <div class="img">☕</div>
+          <div class="info">
+            <div class="name">Cà phê sữa size M</div>
+            <div class="desc">Béo ngậy, cân bằng</div>
+            <div class="price">30.000 đ</div>
+          </div>
+          <div class="add-btn">+</div>
+        </div>
+        <div class="menu-item">
+          <div class="img">☕</div>
+          <div class="info">
+            <div class="name">Bạc xỉu size M</div>
+            <div class="desc">Sữa nhiều, cà phê ít</div>
+            <div class="price">35.000 đ</div>
+          </div>
+          <div class="add-btn">+</div>
+        </div>
+      </div>
+      <div class="sticky-cta">
+        <div class="cta-btn">
+          🛒 2 món · 50.000đ — Xem giỏ
+        </div>
+      </div>
+    </div>
+  </div>
+  <div class="label">Phương án A: Grid 2×4 (8 categories visible)</div>
+</div>
+
+<!-- Phone 2: Dropdown picker -->
+<div>
+  <div class="phone">
+    <div class="phone-notch"></div>
+    <div class="phone-app">
+      <div class="phone-topbar">
+        <div class="icon-btn">←</div>
+        <h2>NS01 · Sảnh 1</h2>
+        <div class="icon-btn">🔍</div>
+      </div>
+      <div class="phone-body">
+        <!-- Category dropdown picker -->
+        <div class="mobile-cat-dropdown">
+          <span style="font-size:24px">☕</span>
+          <div class="mcd-current">
+            <div class="lbl">DANH MỤC</div>
+            <div class="name">Cà phê <span style="color:#94a3b8;font-size:13px;font-weight:500">(24 món)</span></div>
+          </div>
+          <div style="font-size:18px;color:#94a3b8">⌄</div>
+        </div>
+
+        <!-- Sub-cat wrap multi-row -->
+        <div style="display:flex;flex-wrap:wrap;gap:6px;margin-bottom:12px">
+          <span style="padding:6px 14px;background:#2563eb;color:#fff;border-radius:999px;font-size:12px;font-weight:600">Tất cả (24)</span>
+          <span style="padding:6px 14px;background:#fff;border-radius:999px;font-size:12px;color:#475569;border:1px solid #e2e8f0">Đen (6)</span>
+          <span style="padding:6px 14px;background:#fff;border-radius:999px;font-size:12px;color:#475569;border:1px solid #e2e8f0">Sữa (8)</span>
+          <span style="padding:6px 14px;background:#fff;border-radius:999px;font-size:12px;color:#475569;border:1px solid #e2e8f0">Cold brew (4)</span>
+          <span style="padding:6px 14px;background:#fff;border-radius:999px;font-size:12px;color:#475569;border:1px solid #e2e8f0">Espresso (3)</span>
+          <span style="padding:6px 14px;background:#fff;border-radius:999px;font-size:12px;color:#475569;border:1px solid #e2e8f0">Đặc biệt (3)</span>
+        </div>
+
+        <!-- Menu items -->
+        <div class="menu-item">
+          <div class="img">☕</div>
+          <div class="info">
+            <div class="name">Cà phê đen size M</div>
+            <div class="desc">Đậm đà, không đường</div>
+            <div class="price">25.000 đ</div>
+          </div>
+          <div class="add-btn">+</div>
+        </div>
+        <div class="menu-item">
+          <div class="img">☕</div>
+          <div class="info">
+            <div class="name">Cà phê sữa size M</div>
+            <div class="desc">Béo ngậy</div>
+            <div class="price">30.000 đ</div>
+          </div>
+          <div class="add-btn">+</div>
+        </div>
+        <div class="menu-item">
+          <div class="img">☕</div>
+          <div class="info">
+            <div class="name">Bạc xỉu size M</div>
+            <div class="desc">Sữa nhiều</div>
+            <div class="price">35.000 đ</div>
+          </div>
+          <div class="add-btn">+</div>
+        </div>
+        <div class="menu-item">
+          <div class="img" style="background:linear-gradient(135deg,#dbeafe,#bfdbfe)">🧊</div>
+          <div class="info">
+            <div class="name">Cold Brew</div>
+            <div class="desc">Pha lạnh 12h</div>
+            <div class="price">40.000 đ</div>
+          </div>
+          <div class="add-btn">+</div>
+        </div>
+      </div>
+      <div class="sticky-cta">
+        <div class="cta-btn">
+          🛒 3 món · 75.000đ — Xem giỏ
+        </div>
+      </div>
+    </div>
+  </div>
+  <div class="label">Phương án B: Dropdown sheet (1 dòng — gọn)</div>
+</div>
+
+</div>
+
+<!-- ═══════════════════════════════════════════════════════════════ -->
+<h2>6️⃣ Customization toàn diện — Em check + đề xuất</h2>
+
+<div class="feedback-box">
+  <strong>Feedback CEO:</strong> "Có 1 điều em check xem đã có thể tùy biến màn hình pos chưa? Ví dụ: sơ đồ bàn,
+  khu vực, số lượng bàn, sắp xếp thực đơn theo ý, bố cục thực đơn theo ý."
+</div>
+
+<h3>📊 Trạng thái hiện tại — Backend đã sẵn 80%</h3>
+
+<div class="feature-status">
+  <div class="fs-item have">
+    <h5>✅ Vị trí bàn (X, Y)</h5>
+    <p>DB schema có <code>position_x</code>, <code>position_y</code>. Cần build UI drag-drop editor.</p>
+  </div>
+  <div class="fs-item have">
+    <h5>✅ Khu vực (zones)</h5>
+    <p>DB schema có <code>zone</code> + <code>sort_order</code>. UI list zones có nhưng chưa drag-drop layout.</p>
+  </div>
+  <div class="fs-item have">
+    <h5>✅ Sort categories</h5>
+    <p>DB có <code>categories.sort_order</code> + RPC swap. UI có button up/down cơ bản, cần upgrade drag-drop.</p>
+  </div>
+  <div class="fs-item have">
+    <h5>✅ Sort products</h5>
+    <p>DB có <code>products.sort_order</code>. CHƯA có UI drag-drop reorder menu.</p>
+  </div>
+  <div class="fs-item missing">
+    <h5>❌ Layout config (bố cục)</h5>
+    <p>Chưa có. Cần thêm <code>tenant_settings.pos_layout</code> JSON: cart left/right swap, density, theme color.</p>
+  </div>
+  <div class="fs-item missing">
+    <h5>❌ Background image</h5>
+    <p>Sơ đồ bàn chưa support upload ảnh nền (vẽ layout quán) làm guide cho drag-drop.</p>
+  </div>
+</div>
+
+<h3>🎯 Em đề xuất 4 trang Customization mới</h3>
+<ol style="font-size: 13px; line-height: 2;">
+  <li><strong>📍 Sơ đồ bàn editor</strong> (mockup ở mục 3 phía trên) — drag-drop bàn, resize, multi-zone, snap lưới, ảnh nền tham khảo.</li>
+  <li><strong>🍽 Menu reorder editor</strong> — drag-drop categories + products, set "best-seller" sticky top, hide/show theo ca/giờ.</li>
+  <li><strong>🎨 Theme & Layout config</strong> — primary color picker, cart left/right, compact/comfortable density, hide/show panels.</li>
+  <li><strong>🪑 Zone manager</strong> — thêm/xoá khu vực, đổi tên (Sảnh 1 → "Tầng trệt"), bulk-create bàn (vd "Tạo 8 bàn cho Sảnh 2").</li>
+</ol>
+
+<!-- ═══════════════════════════════════════════════════════════════ -->
+<h2>7️⃣ Implementation plan — Em đề xuất 6 sprint</h2>
+
+<table style="width:100%;border-collapse:collapse;background:#fff;border-radius:12px;overflow:hidden;box-shadow:0 2px 8px rgba(0,0,0,0.04)">
+  <thead style="background:#1e293b;color:#fff">
+    <tr>
+      <th style="padding:12px 16px;text-align:left;font-size:13px">Sprint</th>
+      <th style="padding:12px 16px;text-align:left;font-size:13px">Nội dung</th>
+      <th style="padding:12px 16px;text-align:left;font-size:13px">Effort</th>
+      <th style="padding:12px 16px;text-align:left;font-size:13px">Ưu tiên</th>
+    </tr>
+  </thead>
+  <tbody style="font-size:13px">
+    <tr style="border-bottom:1px solid #e5e7eb">
+      <td style="padding:12px 16px;font-weight:700;background:#fef3c7">A — Layout shell rebuild</td>
+      <td style="padding:12px 16px">
+        Sidenav drawer ☰ + view toggle "Bán hàng / Sơ đồ bàn" + Categories cột trái 200px desktop / 140px tablet / grid 4 col phone.
+        <br><span style="color:#64748b">Files: page.tsx layout, fnb-header.tsx, mới fnb-cat-sidebar.tsx, fnb-sidenav-drawer.tsx</span>
+      </td>
+      <td style="padding:12px 16px">5 ngày</td>
+      <td style="padding:12px 16px;color:#dc2626;font-weight:700">🔴 Cao nhất</td>
+    </tr>
+    <tr style="border-bottom:1px solid #e5e7eb">
+      <td style="padding:12px 16px;font-weight:700;background:#fef3c7">B — Mobile + tablet responsive</td>
+      <td style="padding:12px 16px">
+        Mobile: bottom-tab + grid 4 col category + sticky CTA. Tablet portrait: cart drawer kéo lên. Tablet landscape: 3-cột.
+        <br><span style="color:#64748b">Detect orientation tự động, KHÔNG bắt xoay</span>
+      </td>
+      <td style="padding:12px 16px">4 ngày</td>
+      <td style="padding:12px 16px;color:#dc2626;font-weight:700">🔴 Cao nhất</td>
+    </tr>
+    <tr style="border-bottom:1px solid #e5e7eb">
+      <td style="padding:12px 16px;font-weight:700;background:#fef3c7">C — Floor plan editor drag-drop</td>
+      <td style="padding:12px 16px">
+        Build editor full feature: drag bàn / resize / shape (vuông/tròn/dài/sofa) / multi-zone / snap lưới / ảnh nền.
+        Save layout vào <code>tables.position_x/y</code>.
+        <br><span style="color:#64748b">Dùng @dnd-kit/core (đã có pattern trong codebase)</span>
+      </td>
+      <td style="padding:12px 16px">4 ngày</td>
+      <td style="padding:12px 16px;color:#f97316;font-weight:700">🟡 Cao</td>
+    </tr>
+    <tr style="border-bottom:1px solid #e5e7eb">
+      <td style="padding:12px 16px;font-weight:700;background:#dbeafe">D — Menu reorder editor</td>
+      <td style="padding:12px 16px">
+        Drag-drop categories + products. Bulk action "Đẩy lên đầu / Ẩn / Hiển thị". Time-based hide (vd "Cà phê đá ẩn từ 18h").
+      </td>
+      <td style="padding:12px 16px">3 ngày</td>
+      <td style="padding:12px 16px;color:#f97316;font-weight:700">🟡 Cao</td>
+    </tr>
+    <tr style="border-bottom:1px solid #e5e7eb">
+      <td style="padding:12px 16px;font-weight:700;background:#dbeafe">E — Zone manager + Layout config</td>
+      <td style="padding:12px 16px">
+        Migration <code>tenant_settings.pos_layout</code> JSON. UI thêm/đổi/xoá zone, primary color picker, cart left/right, density.
+      </td>
+      <td style="padding:12px 16px">3 ngày</td>
+      <td style="padding:12px 16px;color:#16a34a;font-weight:700">🟢 Trung bình</td>
+    </tr>
+    <tr>
+      <td style="padding:12px 16px;font-weight:700;background:#dcfce7">F — Polish + 5 features thiếu</td>
+      <td style="padding:12px 16px">
+        VietQR động · Bluetooth printer · Sync GrabFood/ShopeeFood · Merge tables · Reservation
+      </td>
+      <td style="padding:12px 16px">7-10 ngày</td>
+      <td style="padding:12px 16px;color:#64748b">⚪ Defer</td>
+    </tr>
+  </tbody>
+</table>
+
+<div class="feedback-box" style="background:#dcfce7;border-color:#16a34a;color:#14532d">
+  <strong>📌 Em đề xuất chốt:</strong>
+  <ul style="margin: 8px 0 0">
+    <li><strong>Tuần 1</strong>: Sprint A (Layout shell rebuild) — CEO thấy desktop khác biệt rõ</li>
+    <li><strong>Tuần 2</strong>: Sprint B (Mobile + tablet responsive) — fix vấn đề "phải xoay ngang"</li>
+    <li><strong>Tuần 3</strong>: Sprint C (Floor plan editor) + Sprint D (Menu reorder) — customization core</li>
+    <li><strong>Tuần 4</strong>: Sprint E (Zone manager + Layout config) — hoàn thiện customization</li>
+    <li>Sprint F (5 features mới): sau khi quán chạy ổn định mới làm</li>
+  </ul>
+  <p style="margin: 8px 0 0">
+    Tổng: <strong>~15 ngày dev</strong> cho 5 sprint A-E (3 tuần). Sprint F defer.
+    Có thể ship sau mỗi sprint để CEO test feedback dần.
+  </p>
+</div>
+
+</div>
+</body>
+</html>

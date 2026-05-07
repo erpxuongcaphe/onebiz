@@ -1,0 +1,730 @@
+<!DOCTYPE html>
+<html lang="vi">
+<head>
+<meta charset="UTF-8" />
+<title>POS F&B v2 — Mobile portrait (KHÔNG xoay ngang)</title>
+<style>
+  body {
+    font-family: 'Be Vietnam Pro', 'Segoe UI', system-ui, sans-serif;
+    margin: 0; padding: 32px 16px;
+    background: #f9fafb;
+    color: #0f172a;
+  }
+  .container { max-width: 1400px; margin: 0 auto; }
+  h1 { font-size: 22px; margin: 0 0 8px; }
+  .subtitle { color: #64748b; margin-bottom: 32px; font-size: 14px; }
+  h2 { font-size: 16px; margin: 32px 0 12px; color: #1e293b; }
+
+  .row { display: flex; gap: 24px; flex-wrap: wrap; align-items: flex-start; }
+
+  /* Phone frame 390×844 (iPhone 14) */
+  .phone {
+    width: 390px;
+    height: 844px;
+    background: #fff;
+    border-radius: 36px;
+    border: 8px solid #1e293b;
+    overflow: hidden;
+    position: relative;
+    box-shadow: 0 24px 48px rgba(0,0,0,0.15);
+    flex-shrink: 0;
+  }
+  .phone-label {
+    width: 390px;
+    text-align: center;
+    margin-top: 12px;
+    color: #475569;
+    font-size: 13px;
+    font-weight: 600;
+    flex-shrink: 0;
+  }
+  .phone-notch {
+    position: absolute;
+    top: 0; left: 50%;
+    transform: translateX(-50%);
+    width: 120px; height: 28px;
+    background: #1e293b;
+    border-radius: 0 0 18px 18px;
+    z-index: 100;
+  }
+
+  /* App content */
+  .app { padding-top: 28px; height: 100%; display: flex; flex-direction: column; background: #f8fafc; }
+
+  /* Top bar */
+  .topbar {
+    background: #fff;
+    padding: 12px 16px;
+    border-bottom: 1px solid #e2e8f0;
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    flex-shrink: 0;
+  }
+  .topbar h2 { margin: 0; font-size: 17px; font-weight: 700; flex: 1; }
+  .icon-btn {
+    width: 36px; height: 36px;
+    border-radius: 50%;
+    background: #f1f5f9;
+    display: flex; align-items: center; justify-content: center;
+    color: #475569;
+  }
+  .badge {
+    position: absolute;
+    top: -4px; right: -4px;
+    background: #ef4444;
+    color: #fff;
+    font-size: 10px;
+    width: 18px; height: 18px;
+    border-radius: 50%;
+    display: flex; align-items: center; justify-content: center;
+    font-weight: 700;
+  }
+
+  .body-scroll { flex: 1; overflow-y: auto; padding: 16px; }
+
+  /* Bottom tab */
+  .bottom-tab {
+    background: #fff;
+    border-top: 1px solid #e2e8f0;
+    display: flex;
+    padding: 8px 0 24px;
+    flex-shrink: 0;
+  }
+  .tab-item {
+    flex: 1;
+    text-align: center;
+    color: #64748b;
+    font-size: 11px;
+    padding: 4px;
+  }
+  .tab-item .ico { font-size: 22px; display: block; margin-bottom: 2px; }
+  .tab-item.active { color: #2563eb; font-weight: 700; }
+
+  /* Bottom sticky CTA */
+  .sticky-cta {
+    background: #fff;
+    border-top: 1px solid #e2e8f0;
+    padding: 12px 16px;
+    flex-shrink: 0;
+  }
+  .cta-btn {
+    width: 100%;
+    background: #2563eb;
+    color: #fff;
+    padding: 14px;
+    border-radius: 14px;
+    text-align: center;
+    font-size: 15px;
+    font-weight: 700;
+    box-shadow: 0 4px 12px rgba(37,99,235,0.3);
+  }
+
+  /* Floor plan card */
+  .zone-tabs {
+    display: flex;
+    gap: 8px;
+    margin-bottom: 16px;
+    overflow-x: auto;
+    padding-bottom: 4px;
+  }
+  .zone-tab {
+    padding: 8px 14px;
+    background: #fff;
+    border-radius: 999px;
+    font-size: 13px;
+    color: #475569;
+    flex-shrink: 0;
+    border: 1px solid #e2e8f0;
+  }
+  .zone-tab.active { background: #2563eb; color: #fff; border-color: #2563eb; font-weight: 600; }
+  .filter-pills {
+    display: flex;
+    gap: 6px;
+    margin-bottom: 16px;
+  }
+  .pill-sm {
+    padding: 6px 12px;
+    background: #fff;
+    border-radius: 999px;
+    font-size: 12px;
+    color: #475569;
+    border: 1px solid #e2e8f0;
+  }
+  .pill-sm.active { background: #dbeafe; color: #1d4ed8; border-color: #93c5fd; font-weight: 600; }
+
+  .table-grid {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: 12px;
+  }
+  .table-card {
+    background: #fff;
+    border-radius: 16px;
+    padding: 14px;
+    border: 2px solid transparent;
+    min-height: 100px;
+    display: flex;
+    flex-direction: column;
+    justify-content: space-between;
+    box-shadow: 0 2px 8px rgba(0,0,0,0.04);
+  }
+  .table-card.occupied {
+    background: linear-gradient(135deg, #2563eb 0%, #3b82f6 100%);
+    color: #fff;
+    border-color: #1d4ed8;
+  }
+  .table-card.empty { color: #94a3b8; }
+  .table-card.warning { border-color: #f97316; background: #fff7ed; }
+  .table-card .name { font-weight: 700; font-size: 15px; }
+  .table-card .price { font-size: 18px; font-weight: 800; }
+  .table-card .meta { font-size: 11px; opacity: 0.85; }
+
+  /* Menu list — 1 column scroll */
+  .cat-scroll {
+    display: flex;
+    gap: 6px;
+    overflow-x: auto;
+    margin-bottom: 12px;
+    padding-bottom: 4px;
+    margin: -16px -16px 12px -16px;
+    padding: 8px 16px 8px;
+    background: #fff;
+    border-bottom: 1px solid #e2e8f0;
+  }
+  .cat-scroll .pill {
+    padding: 8px 14px;
+    background: #f1f5f9;
+    border-radius: 999px;
+    font-size: 13px;
+    color: #475569;
+    flex-shrink: 0;
+    font-weight: 500;
+  }
+  .cat-scroll .pill.active { background: #2563eb; color: #fff; font-weight: 700; }
+
+  /* Menu item card — 1 col with image left */
+  .menu-item {
+    background: #fff;
+    border-radius: 14px;
+    padding: 12px;
+    margin-bottom: 8px;
+    display: flex;
+    gap: 12px;
+    align-items: center;
+    box-shadow: 0 2px 8px rgba(0,0,0,0.03);
+  }
+  .menu-item .img {
+    width: 64px; height: 64px;
+    border-radius: 12px;
+    background: linear-gradient(135deg, #fef3c7 0%, #fde68a 100%);
+    display: flex; align-items: center; justify-content: center;
+    font-size: 28px;
+    flex-shrink: 0;
+  }
+  .menu-item .info { flex: 1; min-width: 0; }
+  .menu-item .name { font-weight: 600; font-size: 14px; margin-bottom: 2px; }
+  .menu-item .desc { font-size: 11px; color: #64748b; margin-bottom: 4px; }
+  .menu-item .price { font-weight: 700; color: #2563eb; font-size: 14px; }
+  .menu-item .add-btn {
+    width: 32px; height: 32px;
+    border-radius: 50%;
+    background: #2563eb;
+    color: #fff;
+    display: flex; align-items: center; justify-content: center;
+    font-size: 18px;
+    font-weight: 700;
+    box-shadow: 0 2px 6px rgba(37,99,235,0.3);
+  }
+
+  /* Search bar */
+  .search-bar {
+    margin: -16px -16px 12px;
+    padding: 12px 16px;
+    background: #fff;
+    border-bottom: 1px solid #e2e8f0;
+    display: flex;
+    gap: 8px;
+    align-items: center;
+  }
+  .search-input {
+    flex: 1;
+    background: #f1f5f9;
+    padding: 10px 16px;
+    border-radius: 12px;
+    color: #94a3b8;
+    font-size: 14px;
+    display: flex;
+    align-items: center;
+    gap: 8px;
+  }
+
+  /* Cart screen */
+  .cart-header {
+    background: #fff;
+    padding: 12px 16px;
+    border-bottom: 1px solid #e2e8f0;
+    display: flex;
+    align-items: center;
+    gap: 8px;
+  }
+  .cart-line {
+    background: #fff;
+    border-radius: 14px;
+    padding: 12px;
+    margin-bottom: 8px;
+    display: flex;
+    gap: 10px;
+    align-items: flex-start;
+  }
+  .cart-line .name { font-weight: 600; font-size: 14px; }
+  .cart-line .meta { font-size: 11px; color: #64748b; }
+  .cart-line .qty-control {
+    display: flex; align-items: center; gap: 8px;
+    background: #f1f5f9;
+    border-radius: 999px;
+    padding: 2px;
+  }
+  .qty-btn {
+    width: 28px; height: 28px;
+    border-radius: 50%;
+    background: #fff;
+    display: flex; align-items: center; justify-content: center;
+    font-weight: 700;
+    box-shadow: 0 1px 3px rgba(0,0,0,0.06);
+  }
+
+  /* Order type pill */
+  .order-type-row {
+    display: flex;
+    background: #f1f5f9;
+    border-radius: 999px;
+    padding: 4px;
+    margin-bottom: 12px;
+  }
+  .ot-btn {
+    flex: 1;
+    padding: 8px 4px;
+    text-align: center;
+    font-size: 12px;
+    color: #64748b;
+    border-radius: 999px;
+    font-weight: 500;
+  }
+  .ot-btn.active { background: #fff; color: #2563eb; font-weight: 700; box-shadow: 0 1px 3px rgba(0,0,0,0.08); }
+
+  /* Summary */
+  .summary {
+    background: #fff;
+    border-radius: 16px;
+    padding: 16px;
+    margin-top: 16px;
+  }
+  .summary-row {
+    display: flex; justify-content: space-between;
+    font-size: 13px;
+    padding: 4px 0;
+  }
+  .summary-row.total {
+    font-size: 14px;
+    font-weight: 700;
+    margin-top: 8px;
+    padding-top: 12px;
+    border-top: 1px solid #e2e8f0;
+  }
+  .summary-row.total .amount {
+    font-size: 28px;
+    font-weight: 900;
+    color: #2563eb;
+  }
+
+  /* Notes */
+  .notes {
+    background: #fef9c3;
+    border-left: 4px solid #facc15;
+    padding: 12px 14px;
+    border-radius: 8px;
+    font-size: 12px;
+    line-height: 1.6;
+    color: #713f12;
+    margin: 24px 0;
+  }
+  .pros-cons {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: 16px;
+    margin: 16px 0 32px;
+  }
+  .col {
+    background: #fff;
+    border-radius: 12px;
+    padding: 14px 18px;
+  }
+  .col h4 { margin: 0 0 8px; font-size: 13px; }
+  .col.pros h4 { color: #16a34a; }
+  .col.cons h4 { color: #dc2626; }
+  .col ul { padding-left: 18px; margin: 0; font-size: 12px; line-height: 1.7; }
+</style>
+</head>
+<body>
+
+<div class="container">
+
+<h1>📱 Mobile Portrait — Phiên bản v2 (KHÔNG xoay ngang)</h1>
+<div class="subtitle">
+  Pattern "Phục vụ-first" giống Sapo + KiotViet phone app. Phone không cố thu nhỏ desktop.
+  Tập trung vào nhân viên phục vụ tại bàn — chọn bàn, gọi món, gửi bếp.
+</div>
+
+<div class="notes">
+  <strong>💡 Insight quan trọng từ research:</strong> Phone &lt;400px KHÔNG đủ chỗ vừa menu + cart như tablet/desktop.
+  Sapo Phục vụ + KiotViet phục vụ + iPOS phục vụ — cả 3 đều TÁCH RIÊNG app phone phục vụ khỏi
+  app thu ngân tablet. Phone tập trung 1 việc: nhân viên phục vụ chạy bàn nhận order → gửi bếp.
+  Thanh toán đầy đủ → đẩy về tablet thu ngân.
+</div>
+
+<h2>4 màn hình chính (bottom-tab navigation)</h2>
+
+<div class="row">
+
+<!-- ========== SCREEN 1: BÀN ========== -->
+<div>
+  <div class="phone">
+    <div class="phone-notch"></div>
+    <div class="app">
+      <div class="topbar">
+        <div class="icon-btn">☰</div>
+        <h2>Bàn</h2>
+        <div class="icon-btn">🔍</div>
+        <div class="icon-btn" style="position:relative">
+          🔔
+          <span class="badge">3</span>
+        </div>
+      </div>
+      <div class="body-scroll">
+        <div class="zone-tabs">
+          <span class="zone-tab active">Tất cả · 36</span>
+          <span class="zone-tab">Sảnh 1</span>
+          <span class="zone-tab">Sảnh 2</span>
+          <span class="zone-tab">Sân thượng</span>
+        </div>
+        <div class="filter-pills">
+          <span class="pill-sm active">Tất cả</span>
+          <span class="pill-sm">Đang dùng (10)</span>
+          <span class="pill-sm">Trống (26)</span>
+        </div>
+        <div class="table-grid">
+          <div class="table-card occupied">
+            <div>
+              <div class="name">NS01</div>
+              <div class="meta">2 khách · 84 phút</div>
+            </div>
+            <div class="price">50.000<small style="font-size:13px"> đ</small></div>
+          </div>
+          <div class="table-card occupied">
+            <div>
+              <div class="name">NS02</div>
+              <div class="meta">3 khách · 42 phút</div>
+            </div>
+            <div class="price">90.000<small style="font-size:13px"> đ</small></div>
+          </div>
+          <div class="table-card occupied">
+            <div>
+              <div class="name">NS03</div>
+              <div class="meta">4 khách · 12 phút</div>
+            </div>
+            <div class="price">99.000<small style="font-size:13px"> đ</small></div>
+          </div>
+          <div class="table-card warning">
+            <div>
+              <div class="name" style="color:#0f172a">NS04</div>
+              <div class="meta" style="color:#f97316">⏰ 2 khách · 95 phút</div>
+            </div>
+            <div class="price" style="color:#f97316">47.000<small style="font-size:13px"> đ</small></div>
+          </div>
+          <div class="table-card empty">
+            <div class="name" style="color:#64748b">NS05</div>
+            <div style="color:#94a3b8;font-size:11px">Trống</div>
+          </div>
+          <div class="table-card empty">
+            <div class="name" style="color:#64748b">NS06</div>
+            <div style="color:#94a3b8;font-size:11px">Trống</div>
+          </div>
+          <div class="table-card empty">
+            <div class="name" style="color:#64748b">NS07</div>
+            <div style="color:#94a3b8;font-size:11px">Trống</div>
+          </div>
+          <div class="table-card empty">
+            <div class="name" style="color:#64748b">NS08</div>
+            <div style="color:#94a3b8;font-size:11px">Trống</div>
+          </div>
+        </div>
+      </div>
+      <div class="bottom-tab">
+        <div class="tab-item active"><span class="ico">🪑</span>Bàn</div>
+        <div class="tab-item"><span class="ico">🍽</span>Menu</div>
+        <div class="tab-item" style="position:relative"><span class="ico">🛒</span>Đơn<span class="badge" style="top:0;right:18px">2</span></div>
+        <div class="tab-item"><span class="ico">👤</span>Tôi</div>
+      </div>
+    </div>
+  </div>
+  <div class="phone-label">Màn 1: Sơ đồ bàn theo zone</div>
+</div>
+
+<!-- ========== SCREEN 2: MENU ========== -->
+<div>
+  <div class="phone">
+    <div class="phone-notch"></div>
+    <div class="app">
+      <div class="topbar">
+        <div class="icon-btn">←</div>
+        <h2>NS01 · Sảnh 1</h2>
+        <div class="icon-btn" style="background:#dbeafe;color:#2563eb">2</div>
+      </div>
+      <div class="body-scroll">
+        <div class="search-bar">
+          <div class="search-input">
+            🔍 <span>Tìm món...</span>
+          </div>
+          <div class="icon-btn">🎤</div>
+        </div>
+        <div class="cat-scroll">
+          <span class="pill active">☕ Cà phê</span>
+          <span class="pill">🥤 Trà sữa</span>
+          <span class="pill">🍵 Trà</span>
+          <span class="pill">🥛 Sữa</span>
+          <span class="pill">🥪 Bánh</span>
+          <span class="pill">🍪 Topping</span>
+        </div>
+        <div class="menu-item">
+          <div class="img">☕</div>
+          <div class="info">
+            <div class="name">Cà phê đen size M</div>
+            <div class="desc">Đậm đà, không đường</div>
+            <div class="price">25.000 đ</div>
+          </div>
+          <div class="add-btn">+</div>
+        </div>
+        <div class="menu-item">
+          <div class="img">☕</div>
+          <div class="info">
+            <div class="name">Cà phê sữa size M</div>
+            <div class="desc">Béo ngậy, cân bằng</div>
+            <div class="price">30.000 đ</div>
+          </div>
+          <div class="add-btn">+</div>
+        </div>
+        <div class="menu-item">
+          <div class="img" style="background:linear-gradient(135deg,#fef3c7,#fde68a)">☕</div>
+          <div class="info">
+            <div class="name">Bạc xỉu size M</div>
+            <div class="desc">Sữa nhiều, cà phê ít</div>
+            <div class="price">35.000 đ</div>
+          </div>
+          <div class="add-btn">+</div>
+        </div>
+        <div class="menu-item">
+          <div class="img" style="background:linear-gradient(135deg,#dbeafe,#bfdbfe)">🧊</div>
+          <div class="info">
+            <div class="name">Cold Brew</div>
+            <div class="desc">Pha lạnh 12h, vị tinh khiết</div>
+            <div class="price">40.000 đ</div>
+          </div>
+          <div class="add-btn">+</div>
+        </div>
+        <div class="menu-item">
+          <div class="img">☕</div>
+          <div class="info">
+            <div class="name">Espresso</div>
+            <div class="desc">Đậm Italy</div>
+            <div class="price">28.000 đ</div>
+          </div>
+          <div class="add-btn">+</div>
+        </div>
+      </div>
+      <div class="sticky-cta">
+        <div class="cta-btn">
+          🛒 2 món · 50.000 đ — Xem giỏ
+        </div>
+      </div>
+    </div>
+  </div>
+  <div class="phone-label">Màn 2: Menu 1 cột scroll dọc + sticky CTA</div>
+</div>
+
+<!-- ========== SCREEN 3: CART ========== -->
+<div>
+  <div class="phone">
+    <div class="phone-notch"></div>
+    <div class="app">
+      <div class="cart-header">
+        <div class="icon-btn">←</div>
+        <div style="flex:1">
+          <div style="font-weight:700;font-size:15px">NS01 · Sảnh 1</div>
+          <div style="font-size:11px;color:#64748b">2 khách · 84 phút · Khách lẻ</div>
+        </div>
+        <div class="icon-btn">⋯</div>
+      </div>
+      <div class="body-scroll" style="padding:16px;">
+        <div class="order-type-row">
+          <div class="ot-btn active">🍽 Tại quán</div>
+          <div class="ot-btn">🥡 Mang về</div>
+          <div class="ot-btn">🛵 Giao</div>
+        </div>
+
+        <div class="cart-line">
+          <div style="width:8px;background:#2563eb;border-radius:4px;align-self:stretch"></div>
+          <div style="flex:1">
+            <div class="name">Hồng Trà · Size M</div>
+            <div class="meta">100% đường · Ly</div>
+            <div style="font-size:12px;color:#2563eb;margin-top:4px">+ Ghi chú / món thêm</div>
+          </div>
+          <div style="display:flex;flex-direction:column;align-items:flex-end;gap:8px">
+            <div class="qty-control">
+              <div class="qty-btn">−</div>
+              <span style="font-weight:700;min-width:20px;text-align:center">2</span>
+              <div class="qty-btn">+</div>
+            </div>
+            <div style="font-weight:700">50.000 đ</div>
+          </div>
+        </div>
+
+        <div class="cart-line">
+          <div style="width:8px;background:#f97316;border-radius:4px;align-self:stretch"></div>
+          <div style="flex:1">
+            <div class="name">Cà phê đen</div>
+            <div class="meta">Size M · Ít đường · Không đá</div>
+          </div>
+          <div style="display:flex;flex-direction:column;align-items:flex-end;gap:8px">
+            <div class="qty-control">
+              <div class="qty-btn">−</div>
+              <span style="font-weight:700;min-width:20px;text-align:center">1</span>
+              <div class="qty-btn">+</div>
+            </div>
+            <div style="font-weight:700">25.000 đ</div>
+          </div>
+        </div>
+
+        <div style="margin-top:16px;padding:12px;background:#dbeafe;border-radius:12px;display:flex;align-items:center;gap:8px">
+          <span style="font-size:18px">👤</span>
+          <div style="flex:1">
+            <div style="font-weight:600;font-size:13px">Khách lẻ</div>
+            <div style="font-size:11px;color:#64748b">Bấm để chọn khách</div>
+          </div>
+          <div style="font-size:11px;color:#2563eb;font-weight:600">F4</div>
+        </div>
+
+        <div class="summary">
+          <div class="summary-row"><span>Tạm tính (3 món)</span><span>75.000 đ</span></div>
+          <div class="summary-row"><span>Khuyến mãi</span><span style="color:#dc2626">−5.000 đ</span></div>
+          <div class="summary-row"><span>VAT 8%</span><span>5.600 đ</span></div>
+          <div class="summary-row total">
+            <span>Khách cần trả</span>
+            <span class="amount">75.600 đ</span>
+          </div>
+        </div>
+      </div>
+      <div class="sticky-cta">
+        <div style="display:flex;gap:8px">
+          <div style="flex:0.4;background:#f97316;color:#fff;padding:14px;border-radius:14px;text-align:center;font-weight:700;font-size:14px">
+            🍳 Bếp F10
+          </div>
+          <div style="flex:0.6;background:#16a34a;color:#fff;padding:14px;border-radius:14px;text-align:center;font-weight:700;font-size:14px;box-shadow:0 4px 12px rgba(22,163,74,0.3)">
+            💳 Thanh toán
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+  <div class="phone-label">Màn 3: Cart đầy đủ + sticky CTA</div>
+</div>
+
+<!-- ========== SCREEN 4: CART EMPTY ========== -->
+<div>
+  <div class="phone">
+    <div class="phone-notch"></div>
+    <div class="app">
+      <div class="cart-header">
+        <div class="icon-btn">←</div>
+        <div style="flex:1">
+          <div style="font-weight:700;font-size:15px">Đơn của bạn</div>
+          <div style="font-size:11px;color:#64748b">2 đơn đang mở</div>
+        </div>
+        <div class="icon-btn">+</div>
+      </div>
+      <div class="body-scroll" style="padding:16px">
+        <div style="background:#fff;border-radius:14px;padding:16px;margin-bottom:8px;display:flex;gap:12px;align-items:center;border-left:4px solid #2563eb">
+          <div style="font-size:32px">🍽</div>
+          <div style="flex:1">
+            <div style="font-weight:700;font-size:14px">NS01 · Sảnh 1</div>
+            <div style="font-size:12px;color:#64748b">2 khách · 3 món · 75.000 đ</div>
+            <div style="font-size:11px;color:#16a34a;margin-top:2px">⏱ 84 phút · Đã gửi bếp</div>
+          </div>
+          <div style="font-size:18px;color:#94a3b8">→</div>
+        </div>
+        <div style="background:#fff;border-radius:14px;padding:16px;margin-bottom:8px;display:flex;gap:12px;align-items:center;border-left:4px solid #f97316">
+          <div style="font-size:32px">🥡</div>
+          <div style="flex:1">
+            <div style="font-weight:700;font-size:14px">Mang về #2</div>
+            <div style="font-size:12px;color:#64748b">SĐT: 09xx · 1 món · 30.000 đ</div>
+            <div style="font-size:11px;color:#f97316;margin-top:2px">⏱ 5 phút · Chưa gửi bếp</div>
+          </div>
+          <div style="font-size:18px;color:#94a3b8">→</div>
+        </div>
+        <div style="text-align:center;padding:32px 16px;color:#94a3b8;font-size:13px">
+          <div style="font-size:48px;margin-bottom:8px;opacity:0.4">📋</div>
+          Bấm + ở góc để tạo đơn mới<br/>
+          hoặc chọn bàn từ tab Bàn
+        </div>
+      </div>
+      <div class="bottom-tab">
+        <div class="tab-item"><span class="ico">🪑</span>Bàn</div>
+        <div class="tab-item"><span class="ico">🍽</span>Menu</div>
+        <div class="tab-item active" style="position:relative"><span class="ico">🛒</span>Đơn<span class="badge" style="top:0;right:18px">2</span></div>
+        <div class="tab-item"><span class="ico">👤</span>Tôi</div>
+      </div>
+    </div>
+  </div>
+  <div class="phone-label">Màn 4: Danh sách đơn đang mở</div>
+</div>
+
+</div>
+
+<h2>✅ Ưu / ❌ Nhược của phương án này</h2>
+<div class="pros-cons">
+  <div class="col pros">
+    <h4>✅ Ưu điểm</h4>
+    <ul>
+      <li><strong>KHÔNG bắt xoay ngang</strong> — portrait native, đáp ứng yêu cầu CEO</li>
+      <li><strong>Bottom-tab 4 mục</strong> — pattern quen thuộc với mọi user (Instagram/Facebook), thumb-zone tối ưu</li>
+      <li><strong>Bottom sticky CTA</strong> luôn pin — không bao giờ phải scroll tìm nút "Gửi bếp/Thanh toán"</li>
+      <li><strong>Menu 1 cột với hình lớn</strong> — touch target 56-64dp, dễ tap chính xác</li>
+      <li><strong>Floor plan 2 cột</strong> — bàn cards giàu info (giá + thời gian + khách + tên)</li>
+      <li><strong>Search có voice input</strong> 🎤 — phù hợp lúc bận tay</li>
+      <li><strong>Multi-order tabs</strong> ở màn "Đơn" với badge — quản lý 2-3 đơn dễ</li>
+      <li><strong>Order type pill</strong> ở cart, switch instant như tablet/desktop</li>
+      <li><strong>Total số 28px bold</strong> ở cart — đọc rõ</li>
+    </ul>
+  </div>
+  <div class="col cons">
+    <h4>❌ Nhược điểm</h4>
+    <ul>
+      <li>Phone không xem được full menu cùng cart 1 màn — phải switch tab (đặc tính phone hẹp)</li>
+      <li>Cashier muốn full POS power → cần dùng tablet thu ngân (đề xuất tách app)</li>
+      <li>Chữ tiếng Việt có thể wrap 2 dòng ở cards — cần tối ưu line-clamp + ellipsis</li>
+      <li>Build native app riêng tốn effort hơn responsive web (4-6 tuần thêm) nếu muốn release App Store / Play Store</li>
+    </ul>
+  </div>
+</div>
+
+<div class="notes">
+  <strong>💡 Đề xuất triển khai:</strong>
+  <ol style="margin:8px 0 0">
+    <li>Giai đoạn 1: Web responsive — phone access qua <code>fnb.onebiz.com.vn</code> mobile browser, không cần app native. Effort 3-4 ngày.</li>
+    <li>Giai đoạn 2 (sau khi quán chạy ổn): nếu cần app store presence + push notification → wrap PWA hoặc build React Native app. Effort 2-3 tuần.</li>
+  </ol>
+</div>
+
+</div>
+</body>
+</html>

@@ -1,0 +1,911 @@
+<!DOCTYPE html>
+<html lang="vi">
+<head>
+<meta charset="UTF-8" />
+<title>POS F&B v2 — Desktop</title>
+<style>
+  body {
+    font-family: 'Be Vietnam Pro', 'Segoe UI', system-ui, sans-serif;
+    margin: 0; padding: 32px 16px;
+    background: #f9fafb;
+    color: #0f172a;
+  }
+  .container { max-width: 1600px; margin: 0 auto; }
+  h1 { font-size: 22px; margin: 0 0 8px; }
+  .subtitle { color: #64748b; margin-bottom: 32px; font-size: 14px; }
+  h2 { font-size: 18px; margin: 32px 0 12px; color: #1e293b; }
+
+  .desktop {
+    width: 1440px;
+    height: 900px;
+    background: #fff;
+    border-radius: 12px;
+    border: 8px solid #1e293b;
+    overflow: hidden;
+    box-shadow: 0 16px 48px rgba(0,0,0,0.12);
+    margin-bottom: 24px;
+  }
+
+  .app { display: flex; flex-direction: column; height: 100%; background: #f8fafc; }
+
+  .header {
+    background: rgba(255,255,255,0.92);
+    backdrop-filter: blur(20px);
+    border-bottom: 1px solid #e5e7eb;
+    padding: 12px 24px;
+    display: flex;
+    align-items: center;
+    gap: 12px;
+    height: 64px;
+    flex-shrink: 0;
+  }
+  .logo {
+    font-weight: 900;
+    font-size: 18px;
+    color: #2563eb;
+    margin-right: 16px;
+  }
+  .chip {
+    padding: 8px 14px;
+    background: #f1f5f9;
+    border-radius: 999px;
+    font-size: 13px;
+    color: #475569;
+    display: flex;
+    align-items: center;
+    gap: 6px;
+    cursor: pointer;
+  }
+  .chip.active { background: #dbeafe; color: #1d4ed8; font-weight: 600; }
+  .search-bar {
+    flex: 1;
+    max-width: 400px;
+    background: #f1f5f9;
+    padding: 10px 16px;
+    border-radius: 12px;
+    color: #94a3b8;
+    font-size: 14px;
+    display: flex;
+    align-items: center;
+    gap: 10px;
+  }
+
+  .order-tabs {
+    display: flex;
+    gap: 4px;
+    padding: 0 12px;
+    background: #f8fafc;
+    border-bottom: 1px solid #e5e7eb;
+    overflow-x: auto;
+    flex-shrink: 0;
+  }
+  .order-tab {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    padding: 12px 18px;
+    background: #fff;
+    border-radius: 12px 12px 0 0;
+    font-size: 13px;
+    color: #475569;
+    border: 1px solid transparent;
+    border-bottom: none;
+    margin-top: 6px;
+    flex-shrink: 0;
+    cursor: pointer;
+  }
+  .order-tab.active { background: #fff; color: #2563eb; font-weight: 700; border-color: #e5e7eb; box-shadow: 0 -2px 6px rgba(37,99,235,0.05); }
+  .order-tab .dot { width: 8px; height: 8px; border-radius: 50%; }
+  .order-tab .close { color: #94a3b8; margin-left: 4px; padding: 2px 4px; }
+  .order-tab.add { color: #2563eb; font-size: 16px; padding: 12px 18px; font-weight: 700; }
+
+  .sub-banner {
+    background: linear-gradient(90deg, #f0f9ff 0%, #fef3c7 100%);
+    padding: 10px 24px;
+    font-size: 13px;
+    display: flex;
+    gap: 24px;
+    align-items: center;
+    flex-shrink: 0;
+  }
+
+  .body { flex: 1; display: flex; overflow: hidden; }
+
+  /* Sidenav with labels (collapsible) */
+  .sidenav {
+    width: 240px;
+    background: #fff;
+    border-right: 1px solid #e5e7eb;
+    display: flex;
+    flex-direction: column;
+    padding: 16px 0;
+    flex-shrink: 0;
+  }
+  .nav-group { padding: 0 12px; }
+  .nav-section-label {
+    font-size: 10px;
+    color: #94a3b8;
+    text-transform: uppercase;
+    letter-spacing: 0.05em;
+    font-weight: 600;
+    padding: 12px 12px 6px;
+  }
+  .nav-item {
+    display: flex;
+    align-items: center;
+    gap: 12px;
+    padding: 10px 12px;
+    border-radius: 10px;
+    color: #475569;
+    font-size: 14px;
+    font-weight: 500;
+    cursor: pointer;
+    margin-bottom: 2px;
+  }
+  .nav-item:hover { background: #f8fafc; }
+  .nav-item.active { background: #dbeafe; color: #1d4ed8; font-weight: 700; }
+  .nav-item .ico { font-size: 18px; }
+  .nav-item .badge-mini { margin-left: auto; background: #ef4444; color: #fff; font-size: 10px; padding: 2px 6px; border-radius: 999px; }
+
+  .sidenav-collapse {
+    margin-top: auto;
+    padding: 12px;
+    border-top: 1px solid #e5e7eb;
+  }
+
+  /* Menu zone */
+  .menu-zone { flex: 1; display: flex; flex-direction: column; overflow: hidden; }
+  .cat-row {
+    background: #fff;
+    border-bottom: 1px solid #e5e7eb;
+    padding: 10px 16px;
+    display: flex;
+    gap: 8px;
+    overflow-x: auto;
+    flex-shrink: 0;
+  }
+  .cat-row .pill {
+    padding: 10px 16px;
+    background: #f1f5f9;
+    border-radius: 999px;
+    font-size: 14px;
+    color: #475569;
+    flex-shrink: 0;
+    font-weight: 500;
+    cursor: pointer;
+    white-space: nowrap;
+  }
+  .cat-row .pill.active { background: #2563eb; color: #fff; font-weight: 700; }
+  .cat-row .pill .count { font-size: 11px; opacity: 0.7; margin-left: 6px; }
+
+  .sub-cat-row {
+    background: #f8fafc;
+    border-bottom: 1px solid #e5e7eb;
+    padding: 8px 16px;
+    display: flex;
+    gap: 6px;
+    overflow-x: auto;
+    flex-shrink: 0;
+  }
+  .sub-cat-row .pill-sub {
+    padding: 6px 12px;
+    background: transparent;
+    border-radius: 6px;
+    font-size: 12px;
+    color: #64748b;
+    flex-shrink: 0;
+    cursor: pointer;
+  }
+  .sub-cat-row .pill-sub.active { background: #fff; color: #1d4ed8; font-weight: 600; box-shadow: 0 1px 3px rgba(0,0,0,0.06); }
+
+  .menu-grid {
+    flex: 1;
+    overflow-y: auto;
+    padding: 16px;
+    display: grid;
+    grid-template-columns: repeat(6, 1fr);
+    gap: 12px;
+    align-content: start;
+  }
+
+  .product-card {
+    background: #fff;
+    border-radius: 14px;
+    padding: 10px;
+    border: 1px solid #f1f5f9;
+    display: flex;
+    flex-direction: column;
+    box-shadow: 0 2px 8px rgba(0,0,0,0.04);
+    cursor: pointer;
+    aspect-ratio: 0.92;
+    position: relative;
+    transition: all 0.2s;
+  }
+  .product-card:hover {
+    transform: translateY(-2px);
+    box-shadow: 0 8px 24px rgba(0,0,0,0.08);
+    border-color: #c7d2fe;
+  }
+  .product-card .img {
+    background: linear-gradient(135deg, #fef3c7 0%, #fde68a 100%);
+    border-radius: 10px;
+    flex: 1;
+    display: flex; align-items: center; justify-content: center;
+    font-size: 36px;
+    margin-bottom: 8px;
+    position: relative;
+  }
+  .product-card .price-badge {
+    position: absolute;
+    top: 8px; right: 8px;
+    background: rgba(37,99,235,0.95);
+    backdrop-filter: blur(10px);
+    color: #fff;
+    font-size: 11px;
+    font-weight: 700;
+    padding: 3px 8px;
+    border-radius: 999px;
+  }
+  .product-card .stock-badge {
+    position: absolute;
+    bottom: 8px; left: 8px;
+    background: rgba(0,0,0,0.6);
+    color: #fff;
+    font-size: 9px;
+    padding: 2px 6px;
+    border-radius: 999px;
+    backdrop-filter: blur(10px);
+  }
+  .product-card .name { font-size: 12px; font-weight: 600; line-height: 1.3; }
+  .product-card .meta { font-size: 10px; color: #94a3b8; margin-top: 2px; }
+  .product-card.outofstock .img { opacity: 0.4; }
+
+  /* Cart panel */
+  .cart-panel {
+    width: 400px;
+    background: #fff;
+    border-left: 1px solid #e5e7eb;
+    display: flex;
+    flex-direction: column;
+    flex-shrink: 0;
+  }
+  .cart-header {
+    padding: 14px 16px;
+    border-bottom: 1px solid #e5e7eb;
+    display: flex; align-items: center; gap: 10px;
+  }
+  .cart-header h3 { margin: 0; font-size: 16px; font-weight: 700; }
+  .cart-header .meta { color: #64748b; font-size: 12px; }
+
+  .order-type-pill {
+    display: flex;
+    background: #f1f5f9;
+    border-radius: 999px;
+    padding: 4px;
+    margin: 14px 16px 0;
+  }
+  .ot-btn {
+    flex: 1;
+    padding: 10px 4px;
+    text-align: center;
+    font-size: 13px;
+    color: #64748b;
+    border-radius: 999px;
+    font-weight: 500;
+    cursor: pointer;
+  }
+  .ot-btn.active { background: #fff; color: #2563eb; font-weight: 700; box-shadow: 0 2px 4px rgba(0,0,0,0.06); }
+
+  .customer-bar {
+    margin: 12px 16px 0;
+    padding: 12px 14px;
+    background: #f0f9ff;
+    border-radius: 12px;
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    cursor: pointer;
+  }
+  .customer-bar .label { flex: 1; font-size: 13px; }
+  .customer-bar .key { font-size: 11px; color: #2563eb; font-weight: 700; padding: 3px 8px; background: #fff; border-radius: 6px; }
+
+  .cart-lines {
+    flex: 1;
+    overflow-y: auto;
+    padding: 14px 16px;
+    display: flex;
+    flex-direction: column;
+    gap: 8px;
+  }
+  .line {
+    background: #f8fafc;
+    border-radius: 12px;
+    padding: 12px;
+    display: flex;
+    gap: 10px;
+  }
+  .line .indicator {
+    width: 4px;
+    background: #2563eb;
+    border-radius: 2px;
+  }
+  .line .info { flex: 1; }
+  .line .name { font-size: 14px; font-weight: 600; }
+  .line .meta { font-size: 12px; color: #64748b; margin-top: 3px; }
+  .line .actions { display: flex; flex-direction: column; align-items: flex-end; gap: 8px; }
+  .qty {
+    display: flex; align-items: center; gap: 8px;
+    background: #fff; border-radius: 999px; padding: 3px;
+    box-shadow: 0 1px 3px rgba(0,0,0,0.05);
+  }
+  .qty .btn {
+    width: 28px; height: 28px; border-radius: 50%;
+    background: #f1f5f9;
+    display: flex; align-items: center; justify-content: center;
+    font-weight: 700; cursor: pointer;
+  }
+  .qty .num { min-width: 24px; text-align: center; font-weight: 700; font-size: 13px; }
+  .line .price { font-size: 13px; font-weight: 700; }
+
+  .cart-toolbar {
+    display: flex;
+    gap: 4px;
+    padding: 10px 16px;
+    border-top: 1px solid #f1f5f9;
+  }
+  .toolbar-btn {
+    flex: 1;
+    padding: 10px;
+    background: #f8fafc;
+    border-radius: 10px;
+    text-align: center;
+    font-size: 11px;
+    color: #475569;
+    cursor: pointer;
+  }
+  .toolbar-btn .ico { font-size: 18px; display: block; margin-bottom: 2px; }
+
+  .cart-footer {
+    padding: 14px 16px;
+    border-top: 1px solid #e5e7eb;
+  }
+  .summary-row {
+    display: flex; justify-content: space-between;
+    font-size: 13px;
+    padding: 4px 0;
+  }
+  .summary-row.total {
+    font-size: 14px;
+    font-weight: 700;
+    margin-top: 8px;
+    padding-top: 12px;
+    border-top: 1px solid #e2e8f0;
+    align-items: flex-end;
+  }
+  .summary-row.total .amount {
+    font-size: 32px;
+    font-weight: 900;
+    color: #2563eb;
+    line-height: 1;
+  }
+  .actions-row {
+    display: flex; gap: 8px; margin-top: 14px;
+  }
+  .btn-action {
+    padding: 14px;
+    border-radius: 12px;
+    text-align: center;
+    font-size: 14px;
+    font-weight: 700;
+    color: #fff;
+    cursor: pointer;
+  }
+  .btn-action.kitchen { flex: 0.4; background: #f97316; box-shadow: 0 4px 12px rgba(249,115,22,0.25); }
+  .btn-action.pay { flex: 0.6; background: #16a34a; box-shadow: 0 4px 12px rgba(22,163,74,0.25); }
+
+  .notes {
+    background: #fef9c3;
+    border-left: 4px solid #facc15;
+    padding: 12px 14px;
+    border-radius: 8px;
+    font-size: 13px;
+    line-height: 1.6;
+    color: #713f12;
+    margin: 16px 0;
+  }
+  .pros-cons {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: 16px;
+    margin: 16px 0 32px;
+  }
+  .col {
+    background: #fff;
+    border-radius: 12px;
+    padding: 14px 18px;
+  }
+  .col h4 { margin: 0 0 8px; font-size: 13px; }
+  .col.pros h4 { color: #16a34a; }
+  .col.cons h4 { color: #dc2626; }
+  .col ul { padding-left: 18px; margin: 0; font-size: 12px; line-height: 1.7; }
+
+  .feature-grid {
+    display: grid;
+    grid-template-columns: repeat(2, 1fr);
+    gap: 12px;
+    margin: 16px 0;
+  }
+  .feature-card {
+    background: #fff;
+    border-radius: 12px;
+    padding: 14px 16px;
+    border: 1px solid #e5e7eb;
+  }
+  .feature-card h4 { margin: 0 0 8px; font-size: 13px; color: #1e293b; }
+  .feature-card .status {
+    display: inline-block;
+    padding: 2px 8px;
+    border-radius: 999px;
+    font-size: 10px;
+    font-weight: 700;
+  }
+  .status.have { background: #dcfce7; color: #15803d; }
+  .status.partial { background: #fef3c7; color: #a16207; }
+  .status.missing { background: #fee2e2; color: #b91c1c; }
+  .feature-card ul { font-size: 11px; color: #64748b; margin: 6px 0 0; padding-left: 16px; line-height: 1.6; }
+</style>
+</head>
+<body>
+
+<div class="container">
+
+<h1>💻 Desktop — Phiên bản v2</h1>
+<div class="subtitle">
+  Pattern A: Sidenav 240px (collapsible 64px) + Header glass 64px + Menu 6 cols + Cart 400px luôn hiển thị.
+  Tham khảo KiotViet + Sapo + Misa CukCuk pattern.
+</div>
+
+<!-- ═══════════════════════════════════════════════════════════════ -->
+<h2>🖥 Desktop 1440×900 (laptop / màn hình quán)</h2>
+<div class="desktop">
+  <div class="app">
+    <!-- Top header -->
+    <div class="header">
+      <div class="logo">OneBiz F&B</div>
+      <span class="chip">🏪 Kho Tổng (CN-KT)</span>
+      <span class="chip"><span style="width:8px;height:8px;background:#16a34a;border-radius:50%"></span> Ca 14:30 · Phan Thanh</span>
+      <div class="search-bar">
+        🔍 <span>Tìm món, mã SP... (F3)</span>
+      </div>
+      <span class="chip">🔔 3</span>
+      <span class="chip">⚙ Cài đặt</span>
+      <span class="chip">👤 Anh</span>
+    </div>
+
+    <!-- Order tabs -->
+    <div class="order-tabs">
+      <div class="order-tab active">
+        <span class="dot" style="background:#2563eb"></span>
+        <span>NS01 · Sảnh 1 · 2 khách · 84p</span>
+        <span class="close">×</span>
+      </div>
+      <div class="order-tab">
+        <span class="dot" style="background:#f97316"></span>
+        <span>Mang về #2 · 09xxx</span>
+        <span class="close">×</span>
+      </div>
+      <div class="order-tab">
+        <span class="dot" style="background:#16a34a"></span>
+        <span>Grab #3 · Đã sẵn</span>
+        <span class="close">×</span>
+      </div>
+      <div class="order-tab add">+ Đơn mới</div>
+    </div>
+
+    <!-- Sub-banner -->
+    <div class="sub-banner">
+      <span>🏷 Bảng giá <strong>VIP</strong> · 12/200 SP có giá riêng</span>
+      <span style="opacity:0.4">|</span>
+      <span>🎁 KM <strong>Combo trưa</strong> giảm 15.000đ (áp dụng 11h-14h)</span>
+      <span style="margin-left:auto;color:#94a3b8;font-size:12px">⌨️ F3 tìm | F9 thanh toán | F10 in bill | ESC hủy</span>
+    </div>
+
+    <div class="body">
+      <!-- Sidenav -->
+      <div class="sidenav">
+        <div class="nav-group">
+          <div class="nav-section-label">Bán hàng</div>
+          <div class="nav-item active">
+            <span class="ico">🛒</span>
+            <span>Bán hàng</span>
+          </div>
+          <div class="nav-item">
+            <span class="ico">🪑</span>
+            <span>Sơ đồ bàn</span>
+            <span class="badge-mini">10</span>
+          </div>
+          <div class="nav-item">
+            <span class="ico">🍳</span>
+            <span>Màn bếp (KDS)</span>
+            <span class="badge-mini">5</span>
+          </div>
+        </div>
+        <div class="nav-group">
+          <div class="nav-section-label">Vận hành</div>
+          <div class="nav-item">
+            <span class="ico">📋</span>
+            <span>Đơn hôm nay</span>
+          </div>
+          <div class="nav-item">
+            <span class="ico">🛵</span>
+            <span>Giao hàng app</span>
+          </div>
+          <div class="nav-item">
+            <span class="ico">⏱</span>
+            <span>Quản lý ca</span>
+          </div>
+          <div class="nav-item">
+            <span class="ico">🍽</span>
+            <span>Quản lý menu</span>
+          </div>
+        </div>
+        <div class="nav-group">
+          <div class="nav-section-label">Phân tích</div>
+          <div class="nav-item">
+            <span class="ico">📊</span>
+            <span>Báo cáo F&B</span>
+          </div>
+          <div class="nav-item">
+            <span class="ico">👥</span>
+            <span>Khách hàng</span>
+          </div>
+        </div>
+        <div class="sidenav-collapse">
+          <div class="nav-item" style="padding:8px 12px;font-size:12px">
+            <span class="ico">⏪</span>
+            <span>Thu gọn</span>
+          </div>
+        </div>
+      </div>
+
+      <!-- Menu zone -->
+      <div class="menu-zone">
+        <div class="cat-row">
+          <span class="pill active">☕ Cà phê <span class="count">24</span></span>
+          <span class="pill">🥤 Trà sữa <span class="count">18</span></span>
+          <span class="pill">🍵 Trà <span class="count">12</span></span>
+          <span class="pill">🥛 Sữa <span class="count">8</span></span>
+          <span class="pill">🥪 Bánh <span class="count">15</span></span>
+          <span class="pill">🍪 Topping <span class="count">22</span></span>
+          <span class="pill">🥗 Set ăn <span class="count">6</span></span>
+          <span class="pill">📦 Khuyến mãi <span class="count">3</span></span>
+        </div>
+        <div class="sub-cat-row">
+          <span class="pill-sub active">Tất cả</span>
+          <span class="pill-sub">Đen</span>
+          <span class="pill-sub">Sữa</span>
+          <span class="pill-sub">Cold brew</span>
+          <span class="pill-sub">Espresso</span>
+          <span class="pill-sub">Rang xay</span>
+          <span class="pill-sub">Đặc biệt</span>
+        </div>
+        <div class="menu-grid">
+          <div class="product-card">
+            <div class="img">☕<span class="price-badge">25k</span><span class="stock-badge">Tồn 24</span></div>
+            <div class="name">Cà phê đen</div>
+            <div class="meta">Size M · Đá / Nóng</div>
+          </div>
+          <div class="product-card">
+            <div class="img">☕<span class="price-badge">30k</span><span class="stock-badge">Tồn 18</span></div>
+            <div class="name">Cà phê sữa</div>
+            <div class="meta">Size M</div>
+          </div>
+          <div class="product-card">
+            <div class="img">☕<span class="price-badge">35k</span><span class="stock-badge">Tồn 12</span></div>
+            <div class="name">Bạc xỉu</div>
+            <div class="meta">Size M</div>
+          </div>
+          <div class="product-card">
+            <div class="img" style="background:linear-gradient(135deg,#dbeafe,#bfdbfe)">🧊<span class="price-badge">40k</span><span class="stock-badge">Tồn 8</span></div>
+            <div class="name">Cold Brew</div>
+            <div class="meta">Pha lạnh 12h</div>
+          </div>
+          <div class="product-card">
+            <div class="img">☕<span class="price-badge">28k</span><span class="stock-badge">Tồn 50</span></div>
+            <div class="name">Espresso</div>
+            <div class="meta">Italy đậm</div>
+          </div>
+          <div class="product-card outofstock">
+            <div class="img">☕<span class="price-badge" style="background:#94a3b8">45k</span><span class="stock-badge" style="background:#dc2626">Hết hàng</span></div>
+            <div class="name">Latte</div>
+            <div class="meta">Hết tạm</div>
+          </div>
+          <div class="product-card">
+            <div class="img">☕<span class="price-badge">45k</span><span class="stock-badge">Tồn 6</span></div>
+            <div class="name">Cappuccino</div>
+            <div class="meta">Foam dày</div>
+          </div>
+          <div class="product-card">
+            <div class="img">☕<span class="price-badge">50k</span><span class="stock-badge">Tồn 14</span></div>
+            <div class="name">Mocha</div>
+            <div class="meta">Cacao + Espresso</div>
+          </div>
+          <div class="product-card">
+            <div class="img">☕<span class="price-badge">50k</span><span class="stock-badge">Tồn 11</span></div>
+            <div class="name">Caramel Macc</div>
+            <div class="meta">Caramel ngọt</div>
+          </div>
+          <div class="product-card">
+            <div class="img">☕<span class="price-badge">55k</span><span class="stock-badge">Tồn 9</span></div>
+            <div class="name">Cà phê dừa</div>
+            <div class="meta">Đặc sản quán</div>
+          </div>
+          <div class="product-card">
+            <div class="img">☕<span class="price-badge">38k</span><span class="stock-badge">Tồn 22</span></div>
+            <div class="name">Cà phê trứng</div>
+            <div class="meta">Hà Nội style</div>
+          </div>
+          <div class="product-card">
+            <div class="img">☕<span class="price-badge">42k</span><span class="stock-badge">Tồn 16</span></div>
+            <div class="name">Cà phê muối</div>
+            <div class="meta">Trend 2024</div>
+          </div>
+          <div class="product-card">
+            <div class="img" style="background:linear-gradient(135deg,#fce7f3,#fbcfe8)">🍓<span class="price-badge">48k</span><span class="stock-badge">Tồn 4</span></div>
+            <div class="name">Strawberry latte</div>
+            <div class="meta">Đặc biệt</div>
+          </div>
+          <div class="product-card">
+            <div class="img" style="background:linear-gradient(135deg,#dcfce7,#bbf7d0)">🍵<span class="price-badge">45k</span><span class="stock-badge">Tồn 19</span></div>
+            <div class="name">Matcha latte</div>
+            <div class="meta">Trà xanh Nhật</div>
+          </div>
+          <div class="product-card">
+            <div class="img" style="background:linear-gradient(135deg,#fef3c7,#fde68a)">🥥<span class="price-badge">52k</span><span class="stock-badge">Tồn 7</span></div>
+            <div class="name">Coconut coffee</div>
+            <div class="meta">Cốt dừa</div>
+          </div>
+          <div class="product-card">
+            <div class="img" style="background:linear-gradient(135deg,#e0e7ff,#c7d2fe)">🥤<span class="price-badge">35k</span><span class="stock-badge">Tồn 12</span></div>
+            <div class="name">Trà đào</div>
+            <div class="meta">Cam sả</div>
+          </div>
+          <div class="product-card">
+            <div class="img" style="background:linear-gradient(135deg,#e0e7ff,#c7d2fe)">🥤<span class="price-badge">38k</span><span class="stock-badge">Tồn 8</span></div>
+            <div class="name">Trà vải</div>
+            <div class="meta">Vải tươi</div>
+          </div>
+          <div class="product-card">
+            <div class="img" style="background:linear-gradient(135deg,#fce7f3,#fbcfe8)">🥤<span class="price-badge">40k</span><span class="stock-badge">Tồn 15</span></div>
+            <div class="name">Trà sữa trân châu</div>
+            <div class="meta">Truyền thống</div>
+          </div>
+        </div>
+      </div>
+
+      <!-- Cart panel -->
+      <div class="cart-panel">
+        <div class="cart-header">
+          <h3>NS01 · Sảnh 1</h3>
+          <span class="meta">2 khách · 84 phút</span>
+        </div>
+
+        <div class="order-type-pill">
+          <div class="ot-btn active">🍽 Tại quán</div>
+          <div class="ot-btn">🥡 Mang về</div>
+          <div class="ot-btn">🛵 Giao hàng</div>
+        </div>
+
+        <div class="customer-bar">
+          <span style="font-size:20px">👤</span>
+          <div style="flex:1">
+            <div style="font-weight:600;font-size:13px">Khách lẻ</div>
+            <div style="font-size:11px;color:#64748b">Bấm để chọn KH</div>
+          </div>
+          <span class="key">F4</span>
+        </div>
+
+        <div class="cart-lines">
+          <div class="line">
+            <div class="indicator" style="background:#2563eb"></div>
+            <div class="info">
+              <div class="name">Hồng Trà</div>
+              <div class="meta">100% đường · Ly · Đá</div>
+              <div style="font-size:11px;color:#2563eb;margin-top:4px;cursor:pointer;font-weight:600">+ Ghi chú/Món thêm</div>
+            </div>
+            <div class="actions">
+              <div class="qty">
+                <div class="btn">−</div>
+                <span class="num">2</span>
+                <div class="btn">+</div>
+              </div>
+              <div class="price">50.000 đ</div>
+            </div>
+          </div>
+          <div class="line">
+            <div class="indicator" style="background:#f97316"></div>
+            <div class="info">
+              <div class="name">Cà phê đen</div>
+              <div class="meta">Size M · Ít đường · Không đá</div>
+            </div>
+            <div class="actions">
+              <div class="qty">
+                <div class="btn">−</div>
+                <span class="num">1</span>
+                <div class="btn">+</div>
+              </div>
+              <div class="price">25.000 đ</div>
+            </div>
+          </div>
+          <div class="line" style="background:#fef3c7">
+            <div class="indicator" style="background:#f59e0b"></div>
+            <div class="info">
+              <div class="name">🎁 Bánh quy (tặng)</div>
+              <div class="meta">KM Combo trưa · Free</div>
+            </div>
+            <div class="actions">
+              <div class="price" style="color:#dc2626">−15.000</div>
+            </div>
+          </div>
+        </div>
+
+        <div class="cart-toolbar">
+          <div class="toolbar-btn"><span class="ico">✏️</span>Sửa</div>
+          <div class="toolbar-btn"><span class="ico">🔀</span>Tách bill</div>
+          <div class="toolbar-btn"><span class="ico">↔️</span>Chuyển bàn</div>
+          <div class="toolbar-btn"><span class="ico">📋</span>Lịch sử</div>
+          <div class="toolbar-btn"><span class="ico">🖨</span>In tạm</div>
+        </div>
+
+        <div class="cart-footer">
+          <div class="summary-row"><span>Tạm tính (3 món)</span><span style="font-weight:600">75.000 đ</span></div>
+          <div class="summary-row"><span>Khuyến mãi Combo</span><span style="color:#dc2626;font-weight:600">−5.000 đ</span></div>
+          <div class="summary-row"><span>VAT 8%</span><span>5.600 đ</span></div>
+          <div class="summary-row total">
+            <span>Khách cần trả</span>
+            <span class="amount">75.600<small style="font-size:16px;font-weight:800"> đ</small></span>
+          </div>
+          <div class="actions-row">
+            <div class="btn-action kitchen">🍳 Bếp F10</div>
+            <div class="btn-action pay">💳 Thanh toán F9</div>
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+</div>
+
+<!-- ════════════════════════════════════════════ -->
+<h2>🎯 30 chức năng POS F&B chuẩn — đối chiếu OneBiz hiện trạng</h2>
+<div class="feature-grid">
+  <div class="feature-card">
+    <h4>1. Menu grid + Tìm kiếm <span class="status have">CÓ</span></h4>
+    <ul><li>Virtualized grid + IndexedDB cache + F3 search modal</li></ul>
+  </div>
+  <div class="feature-card">
+    <h4>2. Variant / Topping / Modifier <span class="status have">CÓ</span></h4>
+    <ul><li>fnb-item-dialog với variant + topping qty + modifier preset (sweetness/ice)</li></ul>
+  </div>
+  <div class="feature-card">
+    <h4>3. Multi-order tabs <span class="status have">CÓ</span></h4>
+    <ul><li>useFnbPosState managed tabs với label + orderType + lines per tab</li></ul>
+  </div>
+  <div class="feature-card">
+    <h4>4. Order types (Tại quán / Mang về / Giao) <span class="status have">CÓ</span></h4>
+    <ul><li>Sprint POS-FNB-4 đã thêm pill switch instant</li></ul>
+  </div>
+  <div class="feature-card">
+    <h4>5. Send to kitchen + KOT <span class="status have">CÓ</span></h4>
+    <ul><li>sendToKitchen RPC + print-templates kitchen ticket</li></ul>
+  </div>
+  <div class="feature-card">
+    <h4>6. KDS (màn hình bếp) <span class="status partial">CÓ NHƯNG CƠ BẢN</span></h4>
+    <ul><li>/pos/fnb/kds chỉ là list, thiếu countdown timer + drag-drop status + sound alert</li></ul>
+  </div>
+  <div class="feature-card">
+    <h4>7. Print bill (receipt + kitchen) <span class="status have">CÓ</span></h4>
+    <ul><li>buildKitchenOrderPrintData + buildInvoicePrintData</li></ul>
+  </div>
+  <div class="feature-card">
+    <h4>8. Discount line + order <span class="status have">CÓ</span></h4>
+    <ul><li>FnbDiscountInput per-line + order-level</li></ul>
+  </div>
+  <div class="feature-card">
+    <h4>9. Khuyến mãi / Voucher / Coupon <span class="status have">CÓ</span></h4>
+    <ul><li>Promotion engine (Sprint KM-2/3/4) + coupon validate RPC</li></ul>
+  </div>
+  <div class="feature-card">
+    <h4>10. Customer loyalty <span class="status have">CÓ</span></h4>
+    <ul><li>Loyalty tier + earn/redeem points (Sprint 00045)</li></ul>
+  </div>
+  <div class="feature-card">
+    <h4>11. Floor plan (sơ đồ bàn + zones) <span class="status partial">CƠ BẢN</span></h4>
+    <ul><li>table-floor-plan có zones nhưng thiếu drag-drop edit, color-coded chỉ 4 status</li></ul>
+  </div>
+  <div class="feature-card">
+    <h4>12. Transfer table <span class="status have">CÓ</span></h4>
+    <ul><li>transferTable RPC + UI dialog</li></ul>
+  </div>
+  <div class="feature-card">
+    <h4>13. Merge tables <span class="status missing">THIẾU</span></h4>
+    <ul><li>Hiện chỉ transfer 1-1, chưa merge 2 bàn → 1 đơn</li></ul>
+  </div>
+  <div class="feature-card">
+    <h4>14. Split bill <span class="status have">CÓ</span></h4>
+    <ul><li>split-bill-dialog: theo món / theo người / theo tỷ lệ</li></ul>
+  </div>
+  <div class="feature-card">
+    <h4>15. Customer count <span class="status have">CÓ</span></h4>
+    <ul><li>kitchen_orders.customer_count</li></ul>
+  </div>
+  <div class="feature-card">
+    <h4>16. Reservation / Booking <span class="status missing">THIẾU</span></h4>
+    <ul><li>Chưa có hệ thống đặt bàn trước</li></ul>
+  </div>
+  <div class="feature-card">
+    <h4>17. Multi-payment (TM + CK + thẻ) <span class="status have">CÓ</span></h4>
+    <ul><li>fnb-payment-dialog support method='mixed' với paymentBreakdown</li></ul>
+  </div>
+  <div class="feature-card">
+    <h4>18. QR code động (VietQR) <span class="status missing">THIẾU</span></h4>
+    <ul><li>Chưa có generate QR per đơn từ TKNH</li></ul>
+  </div>
+  <div class="feature-card">
+    <h4>19. Tip <span class="status have">CÓ</span></h4>
+    <ul><li>Sprint 00035 tip support</li></ul>
+  </div>
+  <div class="feature-card">
+    <h4>20. Refund / Void <span class="status have">CÓ</span></h4>
+    <ul><li>voidFnbInvoice với reverse stock + reverse cash</li></ul>
+  </div>
+  <div class="feature-card">
+    <h4>21. Cash drawer + đếm ca <span class="status partial">CƠ BẢN</span></h4>
+    <ul><li>shifts table có nhưng UI shift-dialog đơn giản, thiếu cash counting wizard</li></ul>
+  </div>
+  <div class="feature-card">
+    <h4>22. Shift management <span class="status have">CÓ</span></h4>
+    <ul><li>openShift / closeShift + shift-indicator</li></ul>
+  </div>
+  <div class="feature-card">
+    <h4>23. Inventory + NVL trừ tự động <span class="status have">CÓ</span></h4>
+    <ul><li>BOM + atomic stock decrement (Sprint 00027)</li></ul>
+  </div>
+  <div class="feature-card">
+    <h4>24. Stock-out alert <span class="status partial">CƠ BẢN</span></h4>
+    <ul><li>Có overlay "Hết hàng" nhưng default OFF cho FnB. Cần auto-detect khi BOM NVL hết</li></ul>
+  </div>
+  <div class="feature-card">
+    <h4>25. Multi-branch <span class="status have">CÓ</span></h4>
+    <ul><li>branch_id scoped + RLS</li></ul>
+  </div>
+  <div class="feature-card">
+    <h4>26. Role-based access <span class="status have">CÓ</span></h4>
+    <ul><li>RBAC permissions (Sprint UX-1)</li></ul>
+  </div>
+  <div class="feature-card">
+    <h4>27. Sync GrabFood / ShopeeFood <span class="status missing">THIẾU</span></h4>
+    <ul><li>Đơn online từ Grab/Shopee Food chưa vào KDS tự động</li></ul>
+  </div>
+  <div class="feature-card">
+    <h4>28. E-invoice (HĐĐT TT78) <span class="status partial">CƠ BẢN</span></h4>
+    <ul><li>VAT support đã có (Sprint 00015) nhưng phát hành HĐĐT chưa wire</li></ul>
+  </div>
+  <div class="feature-card">
+    <h4>29. Bluetooth printer <span class="status missing">THIẾU</span></h4>
+    <ul><li>Chỉ in qua print dialog browser, chưa wire ESC/POS qua Bluetooth/USB</li></ul>
+  </div>
+  <div class="feature-card">
+    <h4>30. Offline-first <span class="status have">CÓ</span></h4>
+    <ul><li>IndexedDB cache + sync queue + connection status bar</li></ul>
+  </div>
+</div>
+
+<div class="notes">
+  <strong>📊 Tổng kết features</strong>: 22/30 CÓ ✅ · 5/30 CƠ BẢN ⚠️ · 5/30 THIẾU ❌
+  <br/>5 thiếu nghiêm trọng: <strong>Merge tables, Reservation, QR động, Sync Grab/Shopee, Bluetooth printer</strong>
+  <br/>5 cần upgrade: <strong>KDS countdown, Floor plan drag-drop, Cash counting wizard, Stock-out auto, E-invoice phát hành</strong>
+</div>
+
+</div>
+</body>
+</html>

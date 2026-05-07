@@ -1,0 +1,827 @@
+<!DOCTYPE html>
+<html lang="vi">
+<head>
+<meta charset="UTF-8" />
+<title>POS F&B v2 — Tablet (iPad portrait + landscape)</title>
+<style>
+  body {
+    font-family: 'Be Vietnam Pro', 'Segoe UI', system-ui, sans-serif;
+    margin: 0; padding: 32px 16px;
+    background: #f9fafb;
+    color: #0f172a;
+  }
+  .container { max-width: 1500px; margin: 0 auto; }
+  h1 { font-size: 22px; margin: 0 0 8px; }
+  .subtitle { color: #64748b; margin-bottom: 32px; font-size: 14px; }
+  h2 { font-size: 18px; margin: 32px 0 12px; color: #1e293b; }
+  h3 { font-size: 14px; color: #475569; margin: 16px 0 8px; font-weight: 600; }
+
+  .ipad {
+    background: #fff;
+    border: 12px solid #1e293b;
+    border-radius: 24px;
+    overflow: hidden;
+    box-shadow: 0 16px 48px rgba(0,0,0,0.15);
+    margin-bottom: 16px;
+  }
+  .ipad.portrait { width: 768px; height: 1024px; }
+  .ipad.landscape { width: 1024px; height: 768px; }
+
+  .label {
+    color: #475569;
+    font-size: 13px;
+    font-weight: 600;
+    text-align: center;
+    margin-bottom: 24px;
+  }
+
+  /* App layout */
+  .app { display: flex; flex-direction: column; height: 100%; background: #f8fafc; }
+
+  /* Top header */
+  .header {
+    background: rgba(255,255,255,0.92);
+    backdrop-filter: blur(20px);
+    border-bottom: 1px solid #e5e7eb;
+    padding: 10px 16px;
+    display: flex;
+    align-items: center;
+    gap: 12px;
+    height: 56px;
+    flex-shrink: 0;
+  }
+  .header h2 { margin: 0; font-size: 14px; font-weight: 700; }
+  .chip {
+    padding: 6px 12px;
+    background: #f1f5f9;
+    border-radius: 999px;
+    font-size: 12px;
+    color: #475569;
+    display: flex;
+    align-items: center;
+    gap: 6px;
+  }
+  .chip.active { background: #dbeafe; color: #1d4ed8; font-weight: 600; }
+  .chip.shift-closed { background: #fee2e2; color: #dc2626; }
+
+  .order-tabs {
+    display: flex;
+    gap: 4px;
+    padding: 0 8px;
+    background: #f8fafc;
+    border-bottom: 1px solid #e5e7eb;
+    overflow-x: auto;
+    flex-shrink: 0;
+  }
+  .order-tab {
+    display: flex;
+    align-items: center;
+    gap: 6px;
+    padding: 10px 14px;
+    background: #fff;
+    border-radius: 12px 12px 0 0;
+    font-size: 12px;
+    color: #475569;
+    border: 1px solid transparent;
+    border-bottom: none;
+    margin-top: 6px;
+    flex-shrink: 0;
+  }
+  .order-tab.active { background: #fff; color: #2563eb; font-weight: 700; border-color: #e5e7eb; }
+  .order-tab .dot {
+    width: 8px; height: 8px;
+    border-radius: 50%;
+  }
+  .order-tab .close { color: #94a3b8; margin-left: 4px; }
+  .order-tab.add { color: #2563eb; font-size: 16px; padding: 10px 16px; }
+
+  /* Sub-banner consolidated */
+  .sub-banner {
+    background: linear-gradient(90deg, #f0f9ff 0%, #fef3c7 100%);
+    padding: 8px 16px;
+    font-size: 12px;
+    display: flex;
+    gap: 16px;
+    align-items: center;
+    flex-shrink: 0;
+  }
+
+  /* Body */
+  .body { flex: 1; display: flex; overflow: hidden; }
+
+  /* Sidenav (landscape only) */
+  .sidenav {
+    width: 72px;
+    background: #fff;
+    border-right: 1px solid #e5e7eb;
+    display: flex;
+    flex-direction: column;
+    padding: 12px 0;
+    gap: 4px;
+    flex-shrink: 0;
+  }
+  .nav-item {
+    height: 56px;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    gap: 2px;
+    color: #64748b;
+    cursor: pointer;
+  }
+  .nav-item .ico { font-size: 22px; }
+  .nav-item .lbl { font-size: 10px; }
+  .nav-item.active { color: #2563eb; background: #f0f9ff; border-left: 3px solid #2563eb; }
+
+  /* Menu zone */
+  .menu-zone { flex: 1; display: flex; flex-direction: column; overflow: hidden; }
+  .cat-row {
+    background: #fff;
+    border-bottom: 1px solid #e5e7eb;
+    padding: 8px 12px;
+    display: flex;
+    gap: 6px;
+    overflow-x: auto;
+    flex-shrink: 0;
+  }
+  .cat-row .pill {
+    padding: 8px 14px;
+    background: #f1f5f9;
+    border-radius: 999px;
+    font-size: 13px;
+    color: #475569;
+    flex-shrink: 0;
+    font-weight: 500;
+    white-space: nowrap;
+  }
+  .cat-row .pill.active { background: #2563eb; color: #fff; font-weight: 700; }
+
+  .sub-cat-row {
+    background: #f8fafc;
+    border-bottom: 1px solid #e5e7eb;
+    padding: 6px 12px;
+    display: flex;
+    gap: 4px;
+    overflow-x: auto;
+    flex-shrink: 0;
+  }
+  .sub-cat-row .pill-sub {
+    padding: 4px 10px;
+    background: transparent;
+    border-radius: 6px;
+    font-size: 11px;
+    color: #64748b;
+    flex-shrink: 0;
+    white-space: nowrap;
+  }
+  .sub-cat-row .pill-sub.active { background: #fff; color: #1d4ed8; font-weight: 600; box-shadow: 0 1px 3px rgba(0,0,0,0.06); }
+
+  .menu-grid {
+    flex: 1;
+    overflow-y: auto;
+    padding: 12px;
+    display: grid;
+    gap: 10px;
+  }
+
+  .product-card {
+    background: #fff;
+    border-radius: 12px;
+    padding: 10px;
+    border: 1px solid #f1f5f9;
+    display: flex;
+    flex-direction: column;
+    box-shadow: 0 2px 6px rgba(0,0,0,0.03);
+    cursor: pointer;
+    aspect-ratio: 1;
+    position: relative;
+  }
+  .product-card .img {
+    background: linear-gradient(135deg, #fef3c7 0%, #fde68a 100%);
+    border-radius: 8px;
+    flex: 1;
+    display: flex; align-items: center; justify-content: center;
+    font-size: 32px;
+    margin-bottom: 6px;
+    position: relative;
+  }
+  .product-card .price-badge {
+    position: absolute;
+    top: 6px; right: 6px;
+    background: #2563eb;
+    color: #fff;
+    font-size: 10px;
+    font-weight: 700;
+    padding: 2px 6px;
+    border-radius: 999px;
+  }
+  .product-card .stock-badge {
+    position: absolute;
+    bottom: 6px; left: 6px;
+    background: rgba(0,0,0,0.5);
+    color: #fff;
+    font-size: 9px;
+    padding: 2px 6px;
+    border-radius: 999px;
+  }
+  .product-card .name { font-size: 11px; font-weight: 600; line-height: 1.3; }
+  .product-card .meta { font-size: 9px; color: #94a3b8; margin-top: 2px; }
+  .product-card.outofstock .img { opacity: 0.4; }
+
+  /* Cart panel */
+  .cart-panel {
+    width: 380px;
+    background: #fff;
+    border-left: 1px solid #e5e7eb;
+    display: flex;
+    flex-direction: column;
+    flex-shrink: 0;
+  }
+  .cart-header {
+    padding: 12px 16px;
+    border-bottom: 1px solid #e5e7eb;
+    display: flex; align-items: center; gap: 8px;
+  }
+  .cart-header h3 { margin: 0; font-size: 14px; font-weight: 700; }
+
+  .order-type-pill {
+    display: flex;
+    background: #f1f5f9;
+    border-radius: 999px;
+    padding: 3px;
+    margin: 12px 16px 0;
+  }
+  .ot-btn {
+    flex: 1;
+    padding: 7px 4px;
+    text-align: center;
+    font-size: 11px;
+    color: #64748b;
+    border-radius: 999px;
+    font-weight: 500;
+  }
+  .ot-btn.active { background: #fff; color: #2563eb; font-weight: 700; box-shadow: 0 1px 3px rgba(0,0,0,0.08); }
+
+  .customer-bar {
+    margin: 12px 16px 0;
+    padding: 10px 12px;
+    background: #f0f9ff;
+    border-radius: 10px;
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    cursor: pointer;
+  }
+  .customer-bar .label { flex: 1; font-size: 12px; }
+  .customer-bar .key { font-size: 10px; color: #2563eb; font-weight: 700; padding: 2px 6px; background: #fff; border-radius: 4px; }
+
+  .cart-lines {
+    flex: 1;
+    overflow-y: auto;
+    padding: 12px 16px;
+    display: flex;
+    flex-direction: column;
+    gap: 6px;
+  }
+  .line {
+    background: #f8fafc;
+    border-radius: 10px;
+    padding: 10px;
+    display: flex;
+    gap: 8px;
+  }
+  .line .indicator {
+    width: 4px;
+    background: #2563eb;
+    border-radius: 2px;
+  }
+  .line .info { flex: 1; }
+  .line .name { font-size: 13px; font-weight: 600; }
+  .line .meta { font-size: 11px; color: #64748b; margin-top: 2px; }
+  .line .actions { display: flex; flex-direction: column; align-items: flex-end; gap: 6px; }
+  .qty {
+    display: flex; align-items: center; gap: 6px;
+    background: #fff; border-radius: 999px; padding: 2px;
+    box-shadow: 0 1px 3px rgba(0,0,0,0.05);
+  }
+  .qty .btn { width: 24px; height: 24px; border-radius: 50%; background: #f1f5f9; display: flex; align-items: center; justify-content: center; font-weight: 700; }
+  .qty .num { min-width: 20px; text-align: center; font-weight: 700; font-size: 12px; }
+  .line .price { font-size: 12px; font-weight: 700; }
+
+  .cart-toolbar {
+    display: flex;
+    gap: 4px;
+    padding: 8px 16px;
+    border-top: 1px solid #f1f5f9;
+  }
+  .toolbar-btn {
+    flex: 1;
+    padding: 8px;
+    background: #f8fafc;
+    border-radius: 8px;
+    text-align: center;
+    font-size: 11px;
+    color: #475569;
+  }
+  .toolbar-btn .ico { font-size: 16px; display: block; margin-bottom: 2px; }
+
+  .cart-footer {
+    padding: 12px 16px;
+    border-top: 1px solid #e5e7eb;
+  }
+  .summary-row {
+    display: flex; justify-content: space-between;
+    font-size: 12px;
+    padding: 3px 0;
+  }
+  .summary-row.total {
+    font-size: 13px;
+    font-weight: 700;
+    margin-top: 6px;
+    padding-top: 10px;
+    border-top: 1px solid #e2e8f0;
+    align-items: flex-end;
+  }
+  .summary-row.total .amount {
+    font-size: 28px;
+    font-weight: 900;
+    color: #2563eb;
+    line-height: 1;
+  }
+  .actions-row {
+    display: flex; gap: 6px; margin-top: 12px;
+  }
+  .btn-action {
+    padding: 12px;
+    border-radius: 12px;
+    text-align: center;
+    font-size: 13px;
+    font-weight: 700;
+    color: #fff;
+  }
+  .btn-action.kitchen { flex: 0.4; background: #f97316; }
+  .btn-action.pay { flex: 0.6; background: #16a34a; box-shadow: 0 4px 12px rgba(22,163,74,0.25); }
+
+  /* Cart drawer (portrait) */
+  .cart-drawer {
+    background: #fff;
+    border-top: 1px solid #e5e7eb;
+    box-shadow: 0 -8px 32px rgba(0,0,0,0.08);
+    flex-shrink: 0;
+    display: flex;
+    flex-direction: column;
+  }
+  .drawer-handle {
+    text-align: center;
+    padding: 8px;
+    color: #94a3b8;
+    border-bottom: 1px solid #f1f5f9;
+  }
+  .drawer-handle .bar {
+    width: 40px; height: 4px;
+    background: #cbd5e1;
+    border-radius: 2px;
+    margin: 0 auto 6px;
+  }
+
+  .pros-cons {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: 16px;
+    margin: 16px 0 32px;
+  }
+  .col {
+    background: #fff;
+    border-radius: 12px;
+    padding: 14px 18px;
+  }
+  .col h4 { margin: 0 0 8px; font-size: 13px; }
+  .col.pros h4 { color: #16a34a; }
+  .col.cons h4 { color: #dc2626; }
+  .col ul { padding-left: 18px; margin: 0; font-size: 12px; line-height: 1.7; }
+
+  .notes {
+    background: #fef9c3;
+    border-left: 4px solid #facc15;
+    padding: 12px 14px;
+    border-radius: 8px;
+    font-size: 12px;
+    line-height: 1.6;
+    color: #713f12;
+    margin: 16px 0;
+  }
+</style>
+</head>
+<body>
+
+<div class="container">
+
+<h1>📲 Tablet — Phiên bản v2 (iPad portrait + landscape)</h1>
+<div class="subtitle">
+  <strong>Portrait (768px)</strong>: Pattern stacked với cart drawer kéo lên (TouchBistro/Lightspeed K).
+  <strong>Landscape (1024px)</strong>: Pattern 3-cột với sidenav icon-only (Toast Flex/Square Register).
+  Tự detect orientation, KHÔNG bắt user xoay.
+</div>
+
+<!-- ═══════════════════════════════════════════════════════════════ -->
+<h2>📱 iPad Portrait 768×1024</h2>
+<div class="label">
+  Cart drawer kéo lên peek 120px → expand half-sheet 50% screen.
+  Menu vẫn full-screen khi cart collapsed → tận dụng tối đa chiều dọc.
+</div>
+
+<div class="ipad portrait">
+  <div class="app">
+    <!-- Top header -->
+    <div class="header">
+      <span class="chip">🏪 Kho Tổng</span>
+      <span class="chip"><span style="width:8px;height:8px;background:#16a34a;border-radius:50%"></span> Ca 14:30</span>
+      <span style="flex:1"></span>
+      <span class="chip">🔍 Tìm món F3</span>
+      <span class="chip">🍳 Bếp</span>
+      <span class="chip">🔔 3</span>
+      <span class="chip">⚙</span>
+    </div>
+
+    <!-- Order tabs -->
+    <div class="order-tabs">
+      <div class="order-tab active">
+        <span class="dot" style="background:#2563eb"></span>
+        <span>NS01 · 2k · 84p</span>
+        <span class="close">×</span>
+      </div>
+      <div class="order-tab">
+        <span class="dot" style="background:#f97316"></span>
+        <span>Mang về #2</span>
+        <span class="close">×</span>
+      </div>
+      <div class="order-tab add">+ Đơn mới</div>
+    </div>
+
+    <!-- Sub-banner -->
+    <div class="sub-banner">
+      <span>🏷 <strong>VIP</strong> · 12/200 SP có giá riêng</span>
+      <span style="opacity:0.4">|</span>
+      <span>🎁 <strong>Combo trưa</strong> −15.000đ</span>
+    </div>
+
+    <!-- Menu zone -->
+    <div class="body">
+      <div class="menu-zone">
+        <div class="cat-row">
+          <span class="pill active">☕ Cà phê</span>
+          <span class="pill">🥤 Trà sữa</span>
+          <span class="pill">🍵 Trà</span>
+          <span class="pill">🥛 Sữa</span>
+          <span class="pill">🥪 Bánh</span>
+          <span class="pill">🍪 Topping</span>
+          <span class="pill">📦 KM</span>
+        </div>
+        <div class="sub-cat-row">
+          <span class="pill-sub active">Tất cả</span>
+          <span class="pill-sub">Đen</span>
+          <span class="pill-sub">Sữa</span>
+          <span class="pill-sub">Cold brew</span>
+          <span class="pill-sub">Espresso</span>
+        </div>
+        <div class="menu-grid" style="grid-template-columns: repeat(3, 1fr);">
+          <div class="product-card">
+            <div class="img">
+              ☕
+              <span class="price-badge">25k</span>
+              <span class="stock-badge">Tồn 24</span>
+            </div>
+            <div class="name">Cà phê đen</div>
+            <div class="meta">Size M · Đá / Nóng</div>
+          </div>
+          <div class="product-card">
+            <div class="img">
+              ☕
+              <span class="price-badge">30k</span>
+              <span class="stock-badge">Tồn 18</span>
+            </div>
+            <div class="name">Cà phê sữa</div>
+            <div class="meta">Size M · Đá / Nóng</div>
+          </div>
+          <div class="product-card">
+            <div class="img">
+              ☕
+              <span class="price-badge">35k</span>
+              <span class="stock-badge">Tồn 12</span>
+            </div>
+            <div class="name">Bạc xỉu</div>
+            <div class="meta">Size M</div>
+          </div>
+          <div class="product-card">
+            <div class="img" style="background:linear-gradient(135deg,#dbeafe,#bfdbfe)">
+              🧊
+              <span class="price-badge">40k</span>
+              <span class="stock-badge">Tồn 8</span>
+            </div>
+            <div class="name">Cold Brew</div>
+            <div class="meta">Pha lạnh 12h</div>
+          </div>
+          <div class="product-card">
+            <div class="img">
+              ☕
+              <span class="price-badge">28k</span>
+              <span class="stock-badge">Tồn 50</span>
+            </div>
+            <div class="name">Espresso</div>
+            <div class="meta">Đậm Italy</div>
+          </div>
+          <div class="product-card outofstock">
+            <div class="img">
+              ☕
+              <span class="price-badge" style="background:#94a3b8">45k</span>
+              <span class="stock-badge" style="background:#dc2626">Hết hàng</span>
+            </div>
+            <div class="name">Latte</div>
+            <div class="meta">Hết tạm</div>
+          </div>
+          <div class="product-card">
+            <div class="img">
+              ☕
+              <span class="price-badge">45k</span>
+              <span class="stock-badge">Tồn 6</span>
+            </div>
+            <div class="name">Cappuccino</div>
+            <div class="meta">Foam dày</div>
+          </div>
+          <div class="product-card">
+            <div class="img">
+              ☕
+              <span class="price-badge">50k</span>
+              <span class="stock-badge">Tồn 14</span>
+            </div>
+            <div class="name">Mocha</div>
+            <div class="meta">Cacao + Espresso</div>
+          </div>
+          <div class="product-card">
+            <div class="img">
+              ☕
+              <span class="price-badge">55k</span>
+              <span class="stock-badge">Tồn 9</span>
+            </div>
+            <div class="name">Cà phê dừa</div>
+            <div class="meta">Đặc sản quán</div>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <!-- Cart drawer (collapsed peek) -->
+    <div class="cart-drawer">
+      <div class="drawer-handle">
+        <div class="bar"></div>
+        <span style="font-size:11px">Kéo lên để mở giỏ</span>
+      </div>
+      <div style="padding:12px 16px;display:flex;align-items:center;gap:12px">
+        <div style="font-size:24px">🛒</div>
+        <div style="flex:1">
+          <div style="font-size:12px;color:#64748b">NS01 · Sảnh 1 · 3 món</div>
+          <div style="font-size:13px;font-weight:700">2 khách · 84 phút</div>
+        </div>
+        <div style="text-align:right">
+          <div style="font-size:11px;color:#64748b">Tổng</div>
+          <div style="font-size:22px;font-weight:900;color:#2563eb;line-height:1">75.600<small style="font-size:13px"> đ</small></div>
+        </div>
+        <div style="background:#16a34a;color:#fff;padding:12px 16px;border-radius:12px;font-size:13px;font-weight:700">
+          Thanh toán →
+        </div>
+      </div>
+    </div>
+  </div>
+</div>
+
+<!-- ═══════════════════════════════════════════════════════════════ -->
+<h2>💻 iPad Landscape 1024×768 (3-cột sidenav + menu + cart)</h2>
+<div class="label">
+  Sidenav icon-only 72px | Menu grid 4-5 cols | Cart 380px luôn hiển thị.
+  Touch target 64pt cho ngón tay nhân viên.
+</div>
+
+<div class="ipad landscape">
+  <div class="app">
+    <!-- Top header -->
+    <div class="header">
+      <span class="chip">🏪 Kho Tổng</span>
+      <span class="chip"><span style="width:8px;height:8px;background:#16a34a;border-radius:50%"></span> Ca 14:30 (Phan Thanh)</span>
+      <span class="chip">🔍 Tìm món (F3)</span>
+      <div class="order-tabs" style="background:transparent;border:none;flex:1;padding:0">
+        <div class="order-tab active" style="margin-top:0">
+          <span class="dot" style="background:#2563eb"></span>
+          <span>NS01 · 2k · 84p</span>
+          <span class="close">×</span>
+        </div>
+        <div class="order-tab" style="margin-top:0">
+          <span class="dot" style="background:#f97316"></span>
+          <span>Mang về #2</span>
+          <span class="close">×</span>
+        </div>
+        <div class="order-tab add" style="margin-top:0">+</div>
+      </div>
+      <span class="chip">🔔 3</span>
+      <span class="chip">⚙</span>
+    </div>
+
+    <div class="sub-banner">
+      <span>🏷 <strong>VIP</strong> · 12/200 SP có giá riêng</span>
+      <span style="opacity:0.4">|</span>
+      <span>🎁 <strong>Combo trưa</strong> −15.000đ</span>
+    </div>
+
+    <div class="body">
+      <!-- Sidenav -->
+      <div class="sidenav">
+        <div class="nav-item active">
+          <span class="ico">🛒</span>
+          <span class="lbl">Bán</span>
+        </div>
+        <div class="nav-item">
+          <span class="ico">🪑</span>
+          <span class="lbl">Bàn</span>
+        </div>
+        <div class="nav-item">
+          <span class="ico">🍳</span>
+          <span class="lbl">Bếp</span>
+        </div>
+        <div class="nav-item">
+          <span class="ico">📋</span>
+          <span class="lbl">Đơn</span>
+        </div>
+        <div class="nav-item">
+          <span class="ico">🛵</span>
+          <span class="lbl">Giao</span>
+        </div>
+        <div class="nav-item">
+          <span class="ico">📊</span>
+          <span class="lbl">B/cáo</span>
+        </div>
+        <div style="flex:1"></div>
+        <div class="nav-item">
+          <span class="ico">⚙</span>
+          <span class="lbl">Cài đặt</span>
+        </div>
+      </div>
+
+      <!-- Menu zone -->
+      <div class="menu-zone">
+        <div class="cat-row">
+          <span class="pill active">☕ Cà phê</span>
+          <span class="pill">🥤 Trà sữa</span>
+          <span class="pill">🍵 Trà</span>
+          <span class="pill">🥛 Sữa</span>
+          <span class="pill">🥪 Bánh</span>
+          <span class="pill">🍪 Topping</span>
+          <span class="pill">📦 KM</span>
+        </div>
+        <div class="sub-cat-row">
+          <span class="pill-sub active">Tất cả</span>
+          <span class="pill-sub">Đen</span>
+          <span class="pill-sub">Sữa</span>
+          <span class="pill-sub">Cold brew</span>
+          <span class="pill-sub">Espresso</span>
+        </div>
+        <div class="menu-grid" style="grid-template-columns: repeat(4, 1fr);">
+          <div class="product-card"><div class="img">☕<span class="price-badge">25k</span><span class="stock-badge">Tồn 24</span></div><div class="name">Cà phê đen</div><div class="meta">Size M</div></div>
+          <div class="product-card"><div class="img">☕<span class="price-badge">30k</span><span class="stock-badge">Tồn 18</span></div><div class="name">Cà phê sữa</div><div class="meta">Size M</div></div>
+          <div class="product-card"><div class="img">☕<span class="price-badge">35k</span><span class="stock-badge">Tồn 12</span></div><div class="name">Bạc xỉu</div><div class="meta">Size M</div></div>
+          <div class="product-card"><div class="img" style="background:linear-gradient(135deg,#dbeafe,#bfdbfe)">🧊<span class="price-badge">40k</span><span class="stock-badge">Tồn 8</span></div><div class="name">Cold Brew</div><div class="meta">Pha lạnh 12h</div></div>
+          <div class="product-card"><div class="img">☕<span class="price-badge">28k</span><span class="stock-badge">Tồn 50</span></div><div class="name">Espresso</div><div class="meta">Italy đậm</div></div>
+          <div class="product-card outofstock"><div class="img">☕<span class="price-badge" style="background:#94a3b8">45k</span><span class="stock-badge" style="background:#dc2626">Hết</span></div><div class="name">Latte</div><div class="meta">Hết tạm</div></div>
+          <div class="product-card"><div class="img">☕<span class="price-badge">45k</span><span class="stock-badge">Tồn 6</span></div><div class="name">Cappuccino</div><div class="meta">Foam dày</div></div>
+          <div class="product-card"><div class="img">☕<span class="price-badge">50k</span><span class="stock-badge">Tồn 14</span></div><div class="name">Mocha</div><div class="meta">Cacao</div></div>
+          <div class="product-card"><div class="img">☕<span class="price-badge">50k</span><span class="stock-badge">Tồn 11</span></div><div class="name">Caramel Macc</div><div class="meta">Caramel ngọt</div></div>
+          <div class="product-card"><div class="img">☕<span class="price-badge">55k</span><span class="stock-badge">Tồn 9</span></div><div class="name">Cà phê dừa</div><div class="meta">Đặc sản</div></div>
+          <div class="product-card"><div class="img">☕<span class="price-badge">38k</span><span class="stock-badge">Tồn 22</span></div><div class="name">Cà phê trứng</div><div class="meta">HN style</div></div>
+          <div class="product-card"><div class="img">☕<span class="price-badge">42k</span><span class="stock-badge">Tồn 16</span></div><div class="name">Cà phê muối</div><div class="meta">Trend 2024</div></div>
+        </div>
+      </div>
+
+      <!-- Cart panel -->
+      <div class="cart-panel">
+        <div class="cart-header">
+          <h3>NS01 · Sảnh 1</h3>
+          <span style="margin-left:auto;font-size:11px;color:#64748b">2 khách · 84p</span>
+        </div>
+
+        <div class="order-type-pill">
+          <div class="ot-btn active">🍽 Tại quán</div>
+          <div class="ot-btn">🥡 Mang về</div>
+          <div class="ot-btn">🛵 Giao</div>
+        </div>
+
+        <div class="customer-bar">
+          <span style="font-size:18px">👤</span>
+          <span class="label">Khách lẻ</span>
+          <span class="key">F4</span>
+        </div>
+
+        <div class="cart-lines">
+          <div class="line">
+            <div class="indicator" style="background:#2563eb"></div>
+            <div class="info">
+              <div class="name">Hồng Trà</div>
+              <div class="meta">100% · Ly · Đá</div>
+              <div style="font-size:11px;color:#2563eb;margin-top:2px;cursor:pointer">+ Ghi chú/Món thêm</div>
+            </div>
+            <div class="actions">
+              <div class="qty">
+                <div class="btn">−</div>
+                <span class="num">2</span>
+                <div class="btn">+</div>
+              </div>
+              <div class="price">50.000 đ</div>
+            </div>
+          </div>
+          <div class="line">
+            <div class="indicator" style="background:#f97316"></div>
+            <div class="info">
+              <div class="name">Cà phê đen</div>
+              <div class="meta">Size M · Ít đường · Không đá</div>
+            </div>
+            <div class="actions">
+              <div class="qty">
+                <div class="btn">−</div>
+                <span class="num">1</span>
+                <div class="btn">+</div>
+              </div>
+              <div class="price">25.000 đ</div>
+            </div>
+          </div>
+          <div class="line" style="background:#fef3c7">
+            <div class="indicator" style="background:#f59e0b"></div>
+            <div class="info">
+              <div class="name">🎁 Bánh quy (tặng)</div>
+              <div class="meta">Combo trưa</div>
+            </div>
+            <div class="actions">
+              <div class="price" style="color:#dc2626">−15.000</div>
+            </div>
+          </div>
+        </div>
+
+        <div class="cart-toolbar">
+          <div class="toolbar-btn"><span class="ico">✏️</span>Sửa</div>
+          <div class="toolbar-btn"><span class="ico">🔀</span>Tách</div>
+          <div class="toolbar-btn"><span class="ico">↔️</span>Chuyển</div>
+          <div class="toolbar-btn"><span class="ico">📋</span>Lịch sử</div>
+          <div class="toolbar-btn"><span class="ico">🖨</span>In</div>
+        </div>
+
+        <div class="cart-footer">
+          <div class="summary-row"><span>Tạm tính (3 món)</span><span>75.000 đ</span></div>
+          <div class="summary-row"><span>Khuyến mãi</span><span style="color:#dc2626">−5.000 đ</span></div>
+          <div class="summary-row"><span>VAT 8%</span><span>5.600 đ</span></div>
+          <div class="summary-row total">
+            <span>Khách trả</span>
+            <span class="amount">75.600<small style="font-size:14px"> đ</small></span>
+          </div>
+          <div class="actions-row">
+            <div class="btn-action kitchen">🍳 Bếp F10</div>
+            <div class="btn-action pay">💳 Thanh toán F9</div>
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+</div>
+
+<h2>✅ Ưu / ❌ Nhược của thiết kế tablet v2</h2>
+<div class="pros-cons">
+  <div class="col pros">
+    <h4>✅ Ưu điểm</h4>
+    <ul>
+      <li><strong>Auto-detect orientation</strong> — portrait dùng cart drawer, landscape dùng 3-cột panel. KHÔNG bắt user xoay.</li>
+      <li><strong>Sidenav icon-only 72px</strong> — chiếm ít chỗ nhưng có 6 icon access nhanh (Bán/Bàn/Bếp/Đơn/Giao/Báo cáo)</li>
+      <li><strong>Order tabs giống browser</strong> — như Chrome tabs, dễ hiểu</li>
+      <li><strong>Cart drawer kéo lên</strong> (portrait) — peek 120px cho phép thấy tổng tiền + CTA "Thanh toán →" mà không che menu</li>
+      <li><strong>Cart panel cố định</strong> (landscape) — luôn thấy items + total + 5 toolbar buttons (Sửa/Tách/Chuyển/Lịch sử/In)</li>
+      <li><strong>Stock badge</strong> trên product card — cashier biết SP còn bao nhiêu, tránh nhận order xong mới biết hết</li>
+      <li><strong>Out-of-stock dim</strong> + badge đỏ — không click được nhầm</li>
+      <li><strong>2-row category</strong> (chính + sub) — như KiotViet, scroll ngang cho menu nhiều</li>
+      <li><strong>Free item display</strong> — quà tặng KM hiển thị highlight vàng + giá âm</li>
+      <li><strong>Order tabs có dot màu</strong> — xanh đã gửi bếp, cam chưa gửi</li>
+    </ul>
+  </div>
+  <div class="col cons">
+    <h4>❌ Nhược điểm</h4>
+    <ul>
+      <li>Sidenav 72px lấy 7% width landscape — phải accept trade-off để có quick nav</li>
+      <li>Cart 380px ở portrait → khi expand lên half-sheet 50% → menu chỉ còn 50% chiều cao (~512px) → có thể chỉ thấy 2-3 row items menu</li>
+      <li>Build orientation-aware layout cần `useMediaQuery` + 2 layout shells riêng → effort hơn 1 layout responsive</li>
+      <li>Touch target 64pt cho card menu → grid 3 cols ở 768 portrait ≈ 232px/col - 12px gap = 220px width, height tỷ lệ aspect-square = 220 → 4-5 row visible</li>
+    </ul>
+  </div>
+</div>
+
+<div class="notes">
+  <strong>💡 Kết luận tablet:</strong> Đây là design platform CHÍNH cho POS F&B (cashier dùng nhiều nhất).
+  Cả 2 orientation portrait + landscape đều phải support tốt vì cashier có thể dùng iPad đặt trên đế xoay tự do.
+</div>
+
+</div>
+</body>
+</html>
