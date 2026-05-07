@@ -263,6 +263,21 @@ export type { CreateKitchenOrderInput } from "./kitchen-orders";
 
 // F&B Checkout (2-step flow)
 export { sendToKitchen, fnbPayment, addItemsToExistingOrder, voidFnbInvoice } from "./fnb-checkout";
+
+// Sprint KITCHEN-1 (CEO 07/05): Kitchen stations multi-routing
+export {
+  getKitchenStationsByBranch,
+  getAllKitchenStations,
+  createKitchenStation,
+  updateKitchenStation,
+  deleteKitchenStation,
+  assignCategoryToStation,
+  getStationsByProductIds,
+  type KitchenStation,
+  type KitchenStationSettings,
+  type CreateKitchenStationInput,
+  type UpdateKitchenStationInput,
+} from "./kitchen-stations";
 export type { SendToKitchenInput, SendToKitchenResult, FnbPaymentInput, FnbPaymentResult } from "./fnb-checkout";
 
 // Shift Management
