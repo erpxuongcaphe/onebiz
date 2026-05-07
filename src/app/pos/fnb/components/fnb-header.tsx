@@ -58,6 +58,7 @@ export function FnbHeader({
   const { isFnb, fnbPath } = useFnbSubdomain();
 
   return (
+    <>
     <header className="h-16 bg-surface/95 backdrop-blur-md text-foreground flex items-center px-3 gap-2 shrink-0 border-b border-outline-variant/30">
       {/* ☰ Sidenav trigger */}
       {onMenuClick && (
@@ -146,73 +147,8 @@ export function FnbHeader({
         <span>Tìm món (F3)</span>
       </button>
 
-      <div className="h-6 w-px bg-outline-variant/30 shrink-0" />
-
-      {/* Tab bar — Sprint UI-2 sẽ tách thành row riêng. Hiện inline với padding mới. */}
-      <div className="flex-1 flex items-center gap-1 overflow-x-auto scrollbar-none min-w-0">
-        {tabs.map((tab) => {
-          const isActive = tab.id === activeTabId;
-          // Colored dot theo orderType (xanh dine_in / cam takeaway / tím delivery).
-          // Delivery dùng status-success (xanh lá) thay vì purple — token chưa
-          // có status-purple. Tone: xanh dương / cam / xanh lá đủ phân biệt.
-          const dotColor =
-            tab.orderType === "dine_in"
-              ? "bg-status-info"
-              : tab.orderType === "takeaway"
-                ? "bg-status-warning"
-                : "bg-status-success";
-          return (
-            <button
-              key={tab.id}
-              type="button"
-              onClick={() => switchTab(tab.id)}
-              className={cn(
-                "flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-semibold whitespace-nowrap transition-colors shrink-0",
-                isActive
-                  ? "bg-primary-fixed text-primary"
-                  : "bg-surface-container text-on-surface-variant hover:bg-surface-container-high hover:text-foreground",
-              )}
-            >
-              <span className={cn("h-2 w-2 rounded-full", dotColor)} />
-              <span className="max-w-[120px] truncate">{tab.label}</span>
-              <span
-                role="button"
-                tabIndex={0}
-                onClick={(e) => {
-                  e.stopPropagation();
-                  closeTab(tab.id);
-                }}
-                onKeyDown={(e) => {
-                  if (e.key === "Enter") {
-                    e.stopPropagation();
-                    closeTab(tab.id);
-                  }
-                }}
-                className={cn(
-                  "ml-0.5 rounded-full p-0.5 transition-colors",
-                  isActive
-                    ? "text-primary hover:bg-primary/20"
-                    : "text-on-surface-variant hover:bg-surface-container-highest",
-                )}
-              >
-                <Icon name="close" size={12} />
-              </span>
-            </button>
-          );
-        })}
-
-        {/* Add tab button */}
-        <button
-          type="button"
-          onClick={createTab}
-          className="flex items-center justify-center h-8 w-8 rounded-lg bg-surface-container text-on-surface-variant hover:bg-primary-fixed hover:text-primary transition-colors shrink-0"
-          title="Thêm đơn mới"
-        >
-          <Icon name="add" size={16} />
-        </button>
-      </div>
-
-      <div className="h-6 w-px bg-outline-variant/30 shrink-0" />
+      {/* Filler giữa search và right actions — đẩy KDS/settings sang phải */}
+      <div className="flex-1" />
 
       {/* Right: KDS + settings */}
       <div className="flex items-center gap-1 shrink-0">
@@ -240,5 +176,78 @@ export function FnbHeader({
         )}
       </div>
     </header>
+
+    {/* Sprint UI-2: Order tabs row riêng dưới header (40px).
+        Mockup v3: tabs có space riêng, không chen với toolbar — staff dễ
+        scan đơn hiện tại. Color dot xanh/cam/xanh lá theo orderType. */}
+    <div className="h-10 bg-surface-container-lowest border-b border-outline-variant/20 flex items-center px-3 gap-1.5 shrink-0 overflow-x-auto scrollbar-none">
+      {tabs.map((tab) => {
+        const isActive = tab.id === activeTabId;
+        // Color dot theo orderType (đồng bộ với cart pill row)
+        const dotColor =
+          tab.orderType === "dine_in"
+            ? "bg-status-info"
+            : tab.orderType === "takeaway"
+              ? "bg-status-warning"
+              : "bg-status-success";
+        return (
+          <button
+            key={tab.id}
+            type="button"
+            onClick={() => switchTab(tab.id)}
+            className={cn(
+              "flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-semibold whitespace-nowrap transition-colors shrink-0",
+              isActive
+                ? "bg-surface text-primary ambient-shadow border border-primary/20"
+                : "bg-transparent text-on-surface-variant hover:bg-surface-container hover:text-foreground",
+            )}
+          >
+            <span className={cn("h-2 w-2 rounded-full shrink-0", dotColor)} />
+            <span className="max-w-[140px] truncate">{tab.label}</span>
+            <span
+              role="button"
+              tabIndex={0}
+              onClick={(e) => {
+                e.stopPropagation();
+                closeTab(tab.id);
+              }}
+              onKeyDown={(e) => {
+                if (e.key === "Enter") {
+                  e.stopPropagation();
+                  closeTab(tab.id);
+                }
+              }}
+              className={cn(
+                "ml-0.5 rounded-full p-0.5 transition-colors",
+                isActive
+                  ? "text-primary hover:bg-primary/15"
+                  : "text-on-surface-variant hover:bg-surface-container-highest",
+              )}
+            >
+              <Icon name="close" size={12} />
+            </span>
+          </button>
+        );
+      })}
+
+      {/* Add tab button — luôn ở cuối list */}
+      <button
+        type="button"
+        onClick={createTab}
+        className="flex items-center justify-center gap-1 h-7 px-2.5 rounded-lg bg-primary-fixed text-primary hover:bg-primary hover:text-on-primary transition-colors shrink-0 text-xs font-bold"
+        title="Thêm đơn mới"
+      >
+        <Icon name="add" size={14} />
+        <span className="hidden sm:inline">Đơn mới</span>
+      </button>
+
+      {/* Empty state khi không có tab */}
+      {tabs.length === 0 && (
+        <span className="text-xs text-on-surface-variant px-2">
+          Chưa có đơn — bấm “Đơn mới” để bắt đầu
+        </span>
+      )}
+    </div>
+    </>
   );
 }
