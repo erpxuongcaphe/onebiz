@@ -52,10 +52,8 @@ export function FnbCategoryGrid({
   activeCategoryId,
   onSelect,
 }: FnbCategoryGridProps) {
-  if (categories.length === 0) {
-    return null;
-  }
-
+  // FIX (CEO 07/05): KHÔNG return null khi rỗng — vẫn render "Tất cả" để
+  // CEO thấy layout shell. Empty tenant chưa add SP/danh mục.
   return (
     <div
       className="grid grid-cols-4 gap-1.5 p-2 bg-surface-container-lowest border-b border-outline-variant/20 max-h-[140px] overflow-y-auto shrink-0"

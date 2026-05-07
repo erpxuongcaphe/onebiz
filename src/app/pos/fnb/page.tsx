@@ -1649,9 +1649,12 @@ function FnbPosPageInner() {
 
       <div className="flex flex-1 min-h-0">
         {/* Sprint A: Categories sidebar cột trái (chỉ hiện khi không floor plan).
-            Ẩn trên mobile (<768px) để tận hết width — Sprint B sẽ làm grid 4-col
-            cho mobile. md+ (≥768) hiện compact 144px, lg+ (≥1024) hiện 200px. */}
-        {!showFloorPlan && categoriesWithCount.length > 0 && (
+            FIX (CEO 07/05): KHÔNG guard length > 0 — luôn render trên md+ kể
+            cả khi tenant chưa có SP để CEO thấy layout shell. Component đã
+            có empty state "Chưa có danh mục".
+            Ẩn trên mobile (<768px) để tận hết width — mobile dùng grid 4-col.
+            md+ (≥768) hiện compact 144px, lg+ (≥1024) hiện 200px. */}
+        {!showFloorPlan && (
           <>
             <div className="hidden lg:block">
               <FnbCategorySidebar
