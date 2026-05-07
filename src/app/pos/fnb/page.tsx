@@ -52,11 +52,12 @@ import type { Customer } from "@/lib/types";
 import { formatCurrency } from "@/lib/format";
 import { useFnbPosState } from "./hooks/use-fnb-pos-state";
 import { FnbHeader } from "./components/fnb-header";
-import { FnbCategoryTabs, type FnbCategory } from "./components/fnb-category-tabs";
+import type { FnbCategory } from "./components/fnb-category-tabs";
 import {
   FnbCategorySidebar,
   type FnbCategoryWithCount,
 } from "./components/fnb-category-sidebar";
+import { FnbCategoryGrid } from "./components/fnb-category-grid";
 import { FnbSidenavDrawer } from "./components/fnb-sidenav-drawer";
 import { FnbProductGrid, type FnbProduct } from "./components/fnb-product-grid";
 import { FnbCart } from "./components/fnb-cart";
@@ -1684,11 +1685,13 @@ function FnbPosPageInner() {
             </Suspense>
           ) : (
             <>
-              {/* Mobile (<768px) fallback: horizontal pills hiện tại (Sprint B
-                   sẽ thay bằng grid 4-col). Tablet/Desktop dùng sidebar bên trái. */}
+              {/* Sprint B (CEO 06/05): Mobile (<768px) dùng GRID 4-col,
+                   không kéo ngang. Phục vụ điện thoại bấm 1 chạm chọn danh mục.
+                   Tablet/Desktop dùng sidebar bên trái (đã setup ở Sprint A). */}
               <div className="md:hidden">
-                <FnbCategoryTabs
-                  categories={categories}
+                <FnbCategoryGrid
+                  categories={categoriesWithCount}
+                  totalCount={productsWithTier.length}
                   activeCategoryId={activeCategoryId}
                   onSelect={setActiveCategoryId}
                 />
@@ -1824,10 +1827,12 @@ function FnbPosPageInner() {
         </Suspense>
       )}
 
-      {/* Mobile cart overlay — chỉ hiện <md (768) khi cart inline ẩn.
-          Từ md trở lên cart đã hiện inline bên phải, không cần overlay. */}
+      {/* Sprint B (CEO 06/05): cart overlay hiện <lg (1024) — bao gồm mobile
+          + tablet portrait. Tablet landscape (≥lg) giữ cart fixed bên phải.
+          Lý do: tablet portrait 768px nếu fix cart 320 → menu zone chỉ còn
+          304px (~2 cols). Drawer cho phép menu tận 624px (4 cols). */}
       {mobileCartOpen && (
-        <div className="fixed inset-0 z-40 md:hidden flex flex-col bg-background">
+        <div className="fixed inset-0 z-40 lg:hidden flex flex-col bg-background">
           <div className="flex items-center justify-between px-3 py-2 border-b bg-surface-container-low">
             <span className="text-sm font-semibold">Giỏ hàng</span>
             <button
@@ -1876,7 +1881,7 @@ function FnbPosPageInner() {
         <button
           type="button"
           onClick={() => setMobileCartOpen(true)}
-          className="fixed bottom-4 right-4 z-30 md:hidden flex items-center gap-2 px-4 h-14 rounded-full bg-primary text-white ambient-shadow-floating hover:bg-primary/90 transition-colors"
+          className="fixed bottom-4 right-4 z-30 lg:hidden flex items-center gap-2 px-4 h-14 rounded-full bg-primary text-white ambient-shadow-floating hover:bg-primary/90 transition-colors"
           aria-label={`Mở giỏ hàng tab ${pos.activeTab?.label}, ${pos.lineCount} món, tổng ${formatCurrency(pos.subtotal ?? 0)}đ`}
         >
           <span className="relative shrink-0">

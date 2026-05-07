@@ -523,14 +523,15 @@ describe("FnbCart — component", () => {
     expect(classes).not.toContain("lg:flex");
   });
 
-  it("mobile=false (default) → hidden md:flex (visible on tablet+)", () => {
+  it("mobile=false (default) → hidden lg:flex (visible on tablet landscape+)", () => {
     const { container } = render(<FnbCart {...baseProps} />);
     const rootDiv = container.firstElementChild as HTMLElement;
     const classes = rootDiv.className.split(/\s+/);
     expect(classes).toContain("hidden");
-    // Sprint POLISH-1.4: cart hiện từ md (768) thay vì lg để iPad portrait
-    // có cart context bên cạnh menu thay vì phải mở overlay full-screen.
-    expect(classes).toContain("md:flex");
+    // Sprint B (CEO 06/05): cart fixed CHỈ trên lg+ (tablet landscape +
+    // desktop). Tablet portrait (md 768-1023) chuyển sang FAB + drawer
+    // để menu zone tận full width 624px (4 cols thay vì bị chèn còn 304px).
+    expect(classes).toContain("lg:flex");
   });
 
   it("click customer bar → gọi onCustomerClick", () => {
