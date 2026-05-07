@@ -179,7 +179,9 @@ function ProductCard({
       onClick={onClick}
       className={cn(
         "group relative flex flex-col bg-surface-container-low rounded-xl overflow-hidden press-scale-sm transition-all duration-200 text-left h-full",
-        "hover:bg-surface-container-lowest hover:ambient-shadow border border-transparent hover:border-outline-variant/15",
+        // Sprint POS-FNB-1: dùng ambient-shadow-elevated cho hover (tier 2)
+        // → depth rõ hơn, card "nổi" lên khi hover, đúng pattern Stitch.
+        "hover:bg-surface-container-lowest hover:ambient-shadow-elevated border border-transparent hover:border-outline-variant/20",
         outOfStock && "opacity-50 pointer-events-none",
       )}
     >

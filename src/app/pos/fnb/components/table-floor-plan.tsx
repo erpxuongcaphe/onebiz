@@ -23,6 +23,12 @@ interface TableFloorPlanProps {
 }
 
 // ── Status config ──
+//
+// Sprint POS-FNB-1 (CEO 06/05/2026): Sửa semantic màu cho đúng Stitch.
+// Trước: occupied = đỏ (như báo lỗi → cashier hiểu nhầm "có vấn đề").
+// Sau: occupied = primary blue (= "đang phục vụ", positive state).
+// Theo nguyên tắc UI: error/warning chỉ dùng cho TÌNH TRẠNG XẤU,
+// không phải trạng thái bình thường của business.
 
 const STATUS_CONFIG: Record<
   TableStatus,
@@ -36,13 +42,15 @@ const STATUS_CONFIG: Record<
     dot: "bg-status-success",
   },
   occupied: {
-    bg: "bg-status-error/10 hover:bg-status-error/20",
-    border: "border-status-error/25",
-    text: "text-status-error",
-    label: "Đang dùng",
-    dot: "bg-status-error",
+    // Đổi error red → primary blue (đang phục vụ, không phải lỗi)
+    bg: "bg-primary/10 hover:bg-primary/20",
+    border: "border-primary/30",
+    text: "text-primary",
+    label: "Đang phục vụ",
+    dot: "bg-primary",
   },
   reserved: {
+    // Giữ warning amber cho đặt trước (cảnh báo "đã giữ chỗ")
     bg: "bg-status-warning/10 hover:bg-status-warning/20",
     border: "border-status-warning/25",
     text: "text-status-warning",
@@ -53,7 +61,7 @@ const STATUS_CONFIG: Record<
     bg: "bg-muted hover:bg-muted",
     border: "border-border",
     text: "text-muted-foreground",
-    label: "Dọn dẹp",
+    label: "Đang dọn",
     dot: "bg-status-neutral",
   },
 };

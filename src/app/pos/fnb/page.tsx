@@ -1528,49 +1528,55 @@ function FnbPosPageInner() {
         viewMode={showFloorPlan ? "floorplan" : "menu"}
       />
 
-      {/* Sprint 2: Banner tier áp dụng cho chi nhánh — hiện ngay dưới header
-          để cashier thấy "đang dùng bảng giá X". Chỉ hiển thị khi tier resolve
-          được, fallback im lặng nếu chi nhánh dùng giá niêm yết. */}
-      {appliedTier && (
-        <div className="bg-status-success/10 border-b border-status-success/30 px-3 py-2 flex items-center gap-2 text-xs">
-          <Icon name="sell" size={14} className="text-status-success" />
-          <span className="text-on-surface">
-            Đang áp bảng giá:{" "}
-            <strong className="font-medium">{appliedTier.tierName}</strong>
-            {appliedTier.tierCode && (
-              <span className="text-muted-foreground ml-1">
-                ({appliedTier.tierCode})
+      {/* Sprint POS-FNB-1 (CEO 06/05): consolidate 2 banner → 1 strip duy nhất.
+          Trước: tier banner (40px) + promotion banner (40px) = 80px khi đồng
+          thời hiển thị → ăn space menu, dồn nén.
+          Sau: 1 strip 32px chia 2 segment, dùng divider giữa 2 thông tin. */}
+      {(appliedTier || (appliedPromotion && appliedPromotion.discountAmount > 0)) && (
+        <div className="bg-surface-container border-b border-outline-variant/20 px-3 py-1.5 flex items-center gap-3 text-xs flex-wrap">
+          {appliedTier && (
+            <span className="flex items-center gap-1.5 text-on-surface">
+              <Icon name="sell" size={13} className="text-status-success" />
+              <span>
+                Bảng giá:{" "}
+                <strong className="font-medium">{appliedTier.tierName}</strong>
+                {appliedTier.tierCode && (
+                  <span className="text-muted-foreground ml-1">
+                    ({appliedTier.tierCode})
+                  </span>
+                )}
               </span>
-            )}
-          </span>
-          <span className="text-muted-foreground ml-auto">
-            {appliedTier.priceMap.size}/{products.length} SP có giá riêng
-          </span>
-        </div>
-      )}
-
-      {/* Sprint KM-2: Banner khuyến mãi áp dụng cho tab hiện tại. Click X để xóa. */}
-      {appliedPromotion && appliedPromotion.discountAmount > 0 && (
-        <div className="bg-status-warning/10 border-b border-status-warning/30 px-3 py-2 flex items-center gap-2 text-xs">
-          <Icon name="percent" size={14} className="text-status-warning" />
-          <span className="text-on-surface">
-            Khuyến mãi:{" "}
-            <strong className="font-medium">{appliedPromotion.promotion.name}</strong>
-            <span className="text-muted-foreground ml-1">
-              ({appliedPromotion.reasonLabel})
+              <span className="text-muted-foreground">
+                · {appliedTier.priceMap.size}/{products.length} sản phẩm có giá riêng
+              </span>
             </span>
-          </span>
-          <span className="text-status-warning font-medium ml-auto">
-            -{formatCurrency(appliedPromotion.discountAmount)}đ
-          </span>
-          <button
-            type="button"
-            onClick={clearAppliedPromotion}
-            className="ml-2 hover:bg-status-warning/20 rounded p-1 transition-colors"
-            title="Bỏ áp dụng khuyến mãi"
-          >
-            <Icon name="close" size={14} />
-          </button>
+          )}
+          {appliedTier && appliedPromotion && appliedPromotion.discountAmount > 0 && (
+            <span className="h-3 w-px bg-outline-variant/40" aria-hidden />
+          )}
+          {appliedPromotion && appliedPromotion.discountAmount > 0 && (
+            <span className="flex items-center gap-1.5 text-on-surface">
+              <Icon name="percent" size={13} className="text-status-warning" />
+              <span>
+                Khuyến mãi:{" "}
+                <strong className="font-medium">{appliedPromotion.promotion.name}</strong>
+                <span className="text-muted-foreground ml-1">
+                  ({appliedPromotion.reasonLabel})
+                </span>
+              </span>
+              <span className="text-status-warning font-medium">
+                −{formatCurrency(appliedPromotion.discountAmount)}đ
+              </span>
+              <button
+                type="button"
+                onClick={clearAppliedPromotion}
+                className="ml-1 hover:bg-status-warning/20 rounded p-0.5 transition-colors"
+                title="Bỏ áp dụng khuyến mãi"
+              >
+                <Icon name="close" size={13} />
+              </button>
+            </span>
+          )}
         </div>
       )}
 
@@ -1764,23 +1770,32 @@ function FnbPosPageInner() {
         </div>
       )}
 
-      {/* Mobile cart FAB — POS-FIX-C4: hiện label tab đang active để
-          barista 3 bàn không nhầm bàn nào trước khi mở overlay. */}
+      {/* Mobile cart FAB — POS-FIX-C4 + Sprint POS-FNB-1 (CEO 06/05):
+          Trước: chỉ hiện label tab + count badge.
+          Sau: hiện thêm TỔNG TIỀN để cashier không cần mở overlay
+          mới biết bill bao nhiêu. Layout 2 dòng compact:
+            [icon+count] [label tab]
+                        [tổng tiền]                              */}
       {!mobileCartOpen && pos.lineCount > 0 && (
         <button
           type="button"
           onClick={() => setMobileCartOpen(true)}
-          className="fixed bottom-4 right-4 z-30 md:hidden flex items-center gap-2 px-4 h-14 rounded-full bg-primary text-white shadow-lg hover:bg-primary/90 transition-colors"
-          aria-label={`Mở giỏ hàng tab ${pos.activeTab?.label}`}
+          className="fixed bottom-4 right-4 z-30 md:hidden flex items-center gap-2 px-4 h-14 rounded-full bg-primary text-white ambient-shadow-floating hover:bg-primary/90 transition-colors"
+          aria-label={`Mở giỏ hàng tab ${pos.activeTab?.label}, ${pos.lineCount} món, tổng ${formatCurrency(pos.subtotal ?? 0)}đ`}
         >
-          <span className="relative">
+          <span className="relative shrink-0">
             <Icon name="shopping_cart" size={20} />
             <span className="absolute -top-1.5 -right-2 h-5 min-w-5 px-1 rounded-full bg-status-error text-[10px] font-bold flex items-center justify-center">
               {pos.lineCount}
             </span>
           </span>
-          <span className="text-sm font-medium max-w-[120px] truncate">
-            {pos.activeTab?.label ?? "Giỏ hàng"}
+          <span className="flex flex-col items-start leading-tight">
+            <span className="text-[11px] font-medium max-w-[140px] truncate opacity-90">
+              {pos.activeTab?.label ?? "Giỏ hàng"}
+            </span>
+            <span className="text-sm font-bold tabular-nums">
+              {formatCurrency(pos.subtotal ?? 0)}đ
+            </span>
           </span>
         </button>
       )}

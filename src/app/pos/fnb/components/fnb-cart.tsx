@@ -90,10 +90,14 @@ export function FnbCart({
       "flex flex-col bg-surface-container-lowest h-full overflow-hidden",
       mobile
         ? "w-full"
-        // Hiện từ md (768) thay vì lg (1024) — iPad portrait giữ cart context
-        // bên cạnh menu thay vì phải mở overlay full-screen mỗi lần thêm món.
-        // Width ở md compact (280) để menu grid còn ~488px (3-4 cols 160px).
-        : "w-[280px] lg:w-[340px] xl:w-[360px] hidden md:flex rounded-xl ambient-shadow border border-outline-variant/20 my-3 mr-3"
+        // Sprint POS-FNB-1 (CEO 06/05): cart width tăng theo chuẩn Stitch.
+        // Trước: 280/340/360 (22-25% viewport — chật, tên món truncate).
+        // Sau:   320/400/440 (≈30% — Stitch spec, breathing space).
+        // Breakpoints:
+        //   md (768)  → 320px → menu còn 448px (3 cols 144px) — ipad portrait
+        //   lg (1024) → 400px → menu còn 624px (4 cols 156px) — laptop nhỏ
+        //   xl (1280) → 440px → menu còn 840px (5 cols 168px) — desktop
+        : "w-[320px] lg:w-[400px] xl:w-[440px] hidden md:flex rounded-xl ambient-shadow border border-outline-variant/20 my-3 mr-3"
     )}>
       {/* ── Header ── */}
       <div className="p-4 border-b border-outline-variant/20 bg-surface-container-lowest shrink-0">
