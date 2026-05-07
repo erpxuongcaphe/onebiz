@@ -42,6 +42,7 @@ import {
 } from "@/lib/services/supabase/fnb-tables";
 import type { RestaurantTable } from "@/lib/types/fnb";
 import { Icon } from "@/components/ui/icon";
+import { FloorPlanEditor } from "./floor-plan-editor";
 
 // ── Types ──
 
@@ -90,6 +91,10 @@ export default function QuanLyBanPage() {
   const [deletingTable, setDeletingTable] = useState<RestaurantTable | null>(null);
   const [deletingZone, setDeletingZone] = useState<string | null>(null);
   const [deleteBusy, setDeleteBusy] = useState(false);
+
+  // Sprint C — CEO 06/05: tab "Bố cục" cho phép drag-drop bàn trên canvas.
+  const [viewMode, setViewMode] = useState<"list" | "layout">("list");
+  const [layoutZone, setLayoutZone] = useState<string>("");
 
   const tenantId = tenant?.id ?? "";
 
@@ -353,6 +358,39 @@ export default function QuanLyBanPage() {
           </p>
         </div>
         <div className="flex items-center gap-2">
+          {/* Sprint C: View mode toggle Danh sách / Bố cục */}
+          <div className="flex items-center bg-surface-container rounded-lg p-1">
+            <button
+              type="button"
+              onClick={() => setViewMode("list")}
+              className={cn(
+                "px-3 py-1.5 text-xs font-semibold rounded-md transition-colors flex items-center gap-1.5",
+                viewMode === "list"
+                  ? "bg-surface-container-lowest text-foreground ambient-shadow"
+                  : "text-on-surface-variant hover:text-foreground",
+              )}
+            >
+              <Icon name="list" size={14} />
+              Danh sách
+            </button>
+            <button
+              type="button"
+              onClick={() => {
+                setViewMode("layout");
+                if (!layoutZone && zones[0]) setLayoutZone(zones[0].name);
+              }}
+              className={cn(
+                "px-3 py-1.5 text-xs font-semibold rounded-md transition-colors flex items-center gap-1.5",
+                viewMode === "layout"
+                  ? "bg-surface-container-lowest text-foreground ambient-shadow"
+                  : "text-on-surface-variant hover:text-foreground",
+              )}
+            >
+              <Icon name="dashboard_customize" size={14} />
+              Bố cục
+            </button>
+          </div>
+
           <Button variant="outline" onClick={() => setAddZoneOpen(true)}>
             <Icon name="add" className="size-4 mr-1" /> Thêm khu vực
           </Button>
@@ -413,8 +451,60 @@ export default function QuanLyBanPage() {
         </Card>
       </div>
 
-      {/* ── Zone sections ── */}
-      {zones.length === 0 && (
+      {/* ── Sprint C: Layout view (drag-drop sơ đồ bàn) ── */}
+      {viewMode === "layout" && zones.length > 0 && (
+        <Card>
+          <CardHeader className="pb-3">
+            <div className="flex flex-wrap items-center justify-between gap-3">
+              <div className="flex items-center gap-2">
+                <CardTitle className="text-base">Sơ đồ bàn</CardTitle>
+                <Badge variant="secondary" className="text-xs">
+                  Kéo bàn để sắp xếp theo ý
+                </Badge>
+              </div>
+              {/* Zone tabs */}
+              <div className="flex items-center gap-1 flex-wrap">
+                {zones.map((z) => (
+                  <button
+                    key={z.name}
+                    type="button"
+                    onClick={() => setLayoutZone(z.name)}
+                    className={cn(
+                      "px-3 py-1.5 rounded-lg text-xs font-semibold transition-colors flex items-center gap-1.5",
+                      layoutZone === z.name
+                        ? "bg-primary text-on-primary"
+                        : "bg-surface-container text-on-surface-variant hover:bg-surface-container-high hover:text-foreground",
+                    )}
+                  >
+                    {z.name}
+                    <span
+                      className={cn(
+                        "px-1.5 py-0 rounded text-[10px] tabular-nums",
+                        layoutZone === z.name
+                          ? "bg-on-primary/20"
+                          : "bg-surface-container-lowest",
+                      )}
+                    >
+                      {z.tables.length}
+                    </span>
+                  </button>
+                ))}
+              </div>
+            </div>
+          </CardHeader>
+          <CardContent className="pt-0">
+            <FloorPlanEditor
+              tables={
+                zones.find((z) => z.name === layoutZone)?.tables ?? []
+              }
+              onSaved={loadTables}
+            />
+          </CardContent>
+        </Card>
+      )}
+
+      {/* ── Zone sections (List view) ── */}
+      {viewMode === "list" && zones.length === 0 && (
         <Card>
           <CardContent className="py-12 text-center">
             <Icon name="chair" className="size-12 text-muted-foreground mx-auto mb-3" />
@@ -426,7 +516,7 @@ export default function QuanLyBanPage() {
         </Card>
       )}
 
-      {zones.map((zone) => (
+      {viewMode === "list" && zones.map((zone) => (
         <Card key={zone.name}>
           <CardHeader className="pb-3">
             <div className="flex items-center justify-between">
