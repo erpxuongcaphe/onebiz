@@ -94,7 +94,7 @@ async function pruneIfOversized(): Promise<void> {
     // thì withQuotaRecovery sẽ catch ở vòng sau.
     if (!isQuotaExceededError(err)) {
       // log chỉ khi không phải quota (quota đã có cleanup riêng)
-      // eslint-disable-next-line no-console
+       
       console.warn("[sync-manager] prune failed:", err);
     }
   }

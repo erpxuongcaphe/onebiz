@@ -91,7 +91,7 @@ export function getPurchaseReturnStatuses() {
 
 // ==================== Input Invoices (Hóa đơn đầu vào) ====================
 
-let mockInputInvoices: InputInvoice[] = [
+const mockInputInvoices: InputInvoice[] = [
   { id: "1", code: "HDDV000001", date: "2026-03-30T10:00:00", supplierName: "Công ty TNHH Phát Đạt", totalAmount: 25000000, taxAmount: 2500000, status: "recorded", statusName: "Đã ghi sổ", createdBy: "Nguyễn Văn A" },
   { id: "2", code: "HDDV000002", date: "2026-03-29T14:30:00", supplierName: "Công ty CP Thành Công", totalAmount: 18500000, taxAmount: 1850000, status: "recorded", statusName: "Đã ghi sổ", createdBy: "Trần Thị B" },
   { id: "3", code: "HDDV000003", date: "2026-03-28T09:00:00", supplierName: "Công ty TNHH Minh Quang", totalAmount: 42000000, taxAmount: 4200000, status: "unrecorded", statusName: "Chưa ghi sổ", createdBy: "Lê Văn C" },

@@ -656,7 +656,7 @@ export async function applyInventoryCheck(checkId: string): Promise<void> {
     .select("id, product_id, product_name, system_stock, actual_stock, difference")
     .eq("check_id", checkId);
   if (itemsErr) handleError(itemsErr, "applyInventoryCheck.items");
-  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+   
   const items = (itemsRaw ?? []) as Array<{
     id: string;
     product_id: string;

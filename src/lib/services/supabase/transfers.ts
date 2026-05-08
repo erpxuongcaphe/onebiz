@@ -270,7 +270,7 @@ export async function createStockTransfer(
   if (stockErr) handleError(stockErr, "createStockTransfer.checkStock");
 
   const availableMap = new Map<string, number>();
-  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+   
   for (const row of stockRows ?? []) {
     const avail = Number(row.quantity ?? 0) - Number(row.reserved ?? 0);
     availableMap.set(row.product_id as string, avail);

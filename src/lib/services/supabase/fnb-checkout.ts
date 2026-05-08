@@ -9,10 +9,10 @@
  * Bổ sung: addItemsToExistingOrder() — gửi bếp bổ sung
  */
 
-import { getClient, handleError, getCurrentTenantId } from "./base";
+import { getClient, handleError } from "./base";
+import { isRpcUnavailable } from "./rpc-utils";
 import {
   createKitchenOrder,
-  getKitchenOrderById,
   addItemsToOrder,
   type CreateKitchenOrderInput,
 } from "./kitchen-orders";
@@ -111,6 +111,42 @@ export async function sendToKitchen(input: SendToKitchenInput): Promise<SendToKi
     items: input.items,
   };
 
+  // Prefer the server-side transaction when migration 00055 is available.
+  // If it has not been applied yet, fall back to the existing client flow.
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  const { data: atomicData, error: atomicError } = await (supabase.rpc as any)(
+    "fnb_send_to_kitchen_atomic",
+    {
+      p_tenant_id: input.tenantId,
+      p_branch_id: input.branchId,
+      p_created_by: input.createdBy,
+      p_table_id: input.tableId ?? null,
+      p_order_type: input.orderType,
+      p_note: input.note ?? null,
+      p_idempotency_key: input.idempotencyKey ?? null,
+      p_order_number: orderNumber,
+      p_items: input.items,
+    },
+  );
+
+  if (!atomicError && atomicData) {
+    const result = atomicData as {
+      kitchen_order_id?: string;
+      order_number?: string;
+    };
+    if (result.kitchen_order_id && result.order_number) {
+      return {
+        kitchenOrderId: result.kitchen_order_id,
+        orderNumber: result.order_number,
+      };
+    }
+    throw new Error("Phản hồi gửi bếp thiếu thông tin đơn.");
+  }
+
+  if (atomicError && !isRpcUnavailable(atomicError)) {
+    handleError(atomicError, "sendToKitchen:atomic_rpc");
+  }
+
   const order = await createKitchenOrder(koInput, orderNumber);
 
   // 3. Claim table if dine_in
@@ -207,6 +243,28 @@ export async function voidFnbInvoice(input: {
   shiftId?: string | null;
 }): Promise<void> {
   const supabase = getClient();
+
+  // Prefer transactional void when migration 00055 is available.
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  const { data: atomicData, error: atomicError } = await (supabase.rpc as any)(
+    "fnb_void_invoice_atomic",
+    {
+      p_invoice_id: input.invoiceId,
+      p_kitchen_order_id: input.kitchenOrderId,
+      p_void_reason: input.voidReason,
+      p_voided_by: input.voidedBy,
+      p_tenant_id: input.tenantId,
+      p_branch_id: input.branchId,
+      p_shift_id: input.shiftId ?? null,
+    },
+  );
+
+  if (!atomicError && (atomicData as { success?: boolean } | null)?.success) {
+    return;
+  }
+  if (atomicError && !isRpcUnavailable(atomicError)) {
+    handleError(atomicError, "voidFnbInvoice:atomic_rpc");
+  }
 
   // 1. Load invoice to verify it's completed (filter tenant defense)
   const { data: invoice, error: invErr } = await supabase

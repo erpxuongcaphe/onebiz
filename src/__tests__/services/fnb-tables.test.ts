@@ -3,7 +3,7 @@ import { describe, it, expect, vi, beforeEach } from "vitest";
 // === Supabase mock ===
 
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
-let mockChainData: any = { data: null, error: null };
+const mockChainData: any = { data: null, error: null };
 let lastUpdateFilter: { id?: string; status?: string } = {};
 let lastInsertData: unknown = null;
 

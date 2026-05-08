@@ -348,7 +348,7 @@ export async function cancelInvoice(id: string): Promise<void> {
   // status="completed" (sprint riêng + RPC + reverse stock_movements +
   // reverse cash_transactions + reverse customer.debt + reverse loyalty).
 
-  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+   
   const { error } = await supabase
     .from("invoices")
     // eslint-disable-next-line @typescript-eslint/no-explicit-any
@@ -418,7 +418,7 @@ export async function updateInvoice(
   if (patch.paymentMethod !== undefined) dbPatch.payment_method = patch.paymentMethod;
   if (patch.note !== undefined) dbPatch.note = patch.note;
 
-  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+   
   const { error } = await supabase
     .from("invoices")
     .update(dbPatch as any)

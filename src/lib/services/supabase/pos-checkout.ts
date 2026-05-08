@@ -11,6 +11,7 @@
 import type { SupabaseClient } from "@supabase/supabase-js";
 import { getClient, handleError } from "./base";
 import type { Database } from "@/lib/supabase/types";
+import { isRpcUnavailable } from "./rpc-utils";
 
 type InvoiceInsert = Database["public"]["Tables"]["invoices"]["Insert"];
 type InvoiceItemInsert = Database["public"]["Tables"]["invoice_items"]["Insert"];
@@ -297,6 +298,50 @@ export async function createAutoCashReceipt(
 export async function posCheckout(input: PosCheckoutInput): Promise<PosCheckoutResult> {
   const supabase = getClient();
 
+  // Prefer the server-side transaction when migration 00055 is available.
+  // If the RPC has not been deployed yet, fall back to the legacy client flow
+  // so this code can be shipped before the database migration is applied.
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  const { data: atomicData, error: atomicError } = await (supabase.rpc as any)(
+    "pos_complete_checkout_atomic",
+    {
+      p_tenant_id: input.tenantId,
+      p_branch_id: input.branchId,
+      p_created_by: input.createdBy,
+      p_customer_id: input.customerId ?? null,
+      p_customer_name: input.customerName || "Khách lẻ",
+      p_items: input.items,
+      p_payment_method: input.paymentMethod,
+      p_payment_breakdown: input.paymentBreakdown ?? null,
+      p_subtotal: input.subtotal,
+      p_discount_amount: input.discountAmount,
+      p_total: input.total,
+      p_paid: input.paid,
+      p_note: input.note ?? null,
+      p_source: input.source ?? "pos",
+      p_shift_id: input.shiftId ?? null,
+      p_promotion_id: input.promotionId ?? null,
+      p_promotion_discount: input.promotionDiscount ?? 0,
+      p_promotion_free_value: input.promotionFreeValue ?? 0,
+      p_client_session_id: input.clientSessionId ?? null,
+    },
+  );
+
+  if (!atomicError && atomicData) {
+    const result = atomicData as { invoice_id?: string; invoice_code?: string };
+    if (result.invoice_id && result.invoice_code) {
+      return {
+        invoiceId: result.invoice_id,
+        invoiceCode: result.invoice_code,
+      };
+    }
+    throw new Error("Phản hồi thanh toán thiếu thông tin hoá đơn.");
+  }
+
+  if (atomicError && !isRpcUnavailable(atomicError)) {
+    handleError(atomicError, "posCheckout:atomic_rpc");
+  }
+
   // ── CEO 04/05/2026 — Idempotency check ──
   // Nếu có clientSessionId → tìm invoice đã tạo với session_id này.
   // Đã tồn tại (do retry / recovery) → return existing, KHÔNG tạo mới.
@@ -452,6 +497,7 @@ export async function posCheckout(input: PosCheckoutInput): Promise<PosCheckoutR
       branchId: input.branchId,
       createdBy: input.createdBy,
       customerName: input.customerName || "Khách lẻ",
+      shiftId: input.shiftId ?? null,
     },
     input.paymentBreakdown
   );

@@ -23,7 +23,7 @@ interface ConnectionStatusBarProps {
 
 export function ConnectionStatusBar({ status, onClick }: ConnectionStatusBarProps) {
   const { isOnline, pendingCount, failedCount, isSyncing } = status;
-  const [visible, setVisible] = useState(!isOnline);
+  const [visible, setVisible] = useState(false);
   const [wasOffline, setWasOffline] = useState(false);
 
   useEffect(() => {

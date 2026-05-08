@@ -29,9 +29,7 @@ export interface NetworkStatus {
 }
 
 export function useNetworkStatus(): NetworkStatus {
-  const [isOnline, setIsOnline] = useState(() =>
-    typeof navigator !== "undefined" ? navigator.onLine : true
-  );
+  const [isOnline, setIsOnline] = useState(true);
   const [pendingCount, setPendingCount] = useState(0);
   const [failedCount, setFailedCount] = useState(0);
   const [isSyncing, setIsSyncing] = useState(false);
@@ -94,9 +92,11 @@ export function useNetworkStatus(): NetworkStatus {
     window.addEventListener("online", handleOnline);
     window.addEventListener("offline", handleOffline);
 
-    // Initial state
     if (!navigator.onLine) {
+      setIsOnline(false);
       wasOfflineRef.current = true;
+    } else {
+      setIsOnline(true);
     }
 
     // Auto-clear completed entries on mount — keeps IndexedDB tidy

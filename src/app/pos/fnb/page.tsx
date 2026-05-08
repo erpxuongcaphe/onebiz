@@ -193,7 +193,7 @@ function FnbPosPageInner() {
       try {
         // Step 1: Load from IndexedDB cache instantly
         try {
-          const cached = await getMenuFromCache();
+          const cached = await getMenuFromCache(tenantId);
           if (cached.products.length > 0) {
             setCategories(cached.categories);
             setProducts(cached.products);
@@ -201,7 +201,7 @@ function FnbPosPageInner() {
             setLoading(false); // Show cached data immediately
           }
           if (branchId) {
-            const cachedTables = await getTablesFromCache(branchId);
+            const cachedTables = await getTablesFromCache(tenantId, branchId);
             if (cachedTables.length > 0) {
               setTables(cachedTables as RestaurantTable[]);
             }
@@ -212,7 +212,7 @@ function FnbPosPageInner() {
 
         // Step 2: Background refresh from Supabase (if online) — PARALLEL
         if (networkStatus.isOnline) {
-          const needsRefresh = await shouldRefreshMenu().catch(() => true);
+          const needsRefresh = await shouldRefreshMenu(tenantId).catch(() => true);
           const supabase = getClient();
 
           // Parallel fetch: catalog (cats + products + toppings) + branch-scoped (tables + shift)
@@ -224,6 +224,7 @@ function FnbPosPageInner() {
                 supabase
                   .from("products")
                   .select("id, name, code, sell_price, image_url, stock, category_id, brand")
+                  .eq("tenant_id", tenantId)
                   .eq("is_active", true)
                   .eq("product_type", "sku")
                   .eq("channel", "fnb")
@@ -232,6 +233,7 @@ function FnbPosPageInner() {
                 supabase
                   .from("products")
                   .select("id, name, sell_price")
+                  .eq("tenant_id", tenantId)
                   .eq("is_active", true)
                   .ilike("code", "NVL-TOP%")
                   .limit(100),
@@ -285,14 +287,14 @@ function FnbPosPageInner() {
             );
 
             // Update cache in background — fail OK, retry next session.
-            prefetchMenuData().catch((err) =>
+            prefetchMenuData(tenantId).catch((err) =>
               console.warn("[FnB] prefetchMenuData failed:", err),
             );
           }
 
           if (branchId) {
             setTables(tbls);
-            prefetchTableData(branchId).catch((err) =>
+            prefetchTableData(tenantId, branchId).catch((err) =>
               console.warn("[FnB] prefetchTableData failed:", err),
             );
             if (userId) setCurrentShift(shift);
@@ -582,10 +584,11 @@ function FnbPosPageInner() {
   //    start + offline reload. Sau đó effect prefetch bên dưới sẽ refresh nếu
   //    cache stale (>30 phút) và online. ──
   useEffect(() => {
+    if (!tenantId) return;
     let cancelled = false;
     (async () => {
       try {
-        const cached = await getVariantsFromCache();
+        const cached = await getVariantsFromCache(tenantId);
         if (cancelled) return;
         cached.forEach((variants, pid) => {
           // Chỉ set nếu chưa có trong ref (tránh overwrite fresh network data)
@@ -600,7 +603,7 @@ function FnbPosPageInner() {
     return () => {
       cancelled = true;
     };
-  }, [variantCacheRef]);
+  }, [tenantId, variantCacheRef]);
 
   // ── Variant PREFETCH: batch load variants cho TẤT CẢ SP NGAY SAU khi products load.
   //    Mục đích: click SP bất kỳ → dialog mở instant (0 round-trip network).
@@ -609,6 +612,7 @@ function FnbPosPageInner() {
   //    Sau khi fetch xong → persist vào IndexedDB để reload sau không phải refetch. ──
   useEffect(() => {
     if (!networkStatus.isOnline) return;
+    if (!tenantId) return;
     if (products.length === 0) return;
 
     let cancelled = false;
@@ -619,7 +623,7 @@ function FnbPosPageInner() {
       // Nếu cache IndexedDB còn tươi + đã khớp phần lớn products trong ref
       // → skip fetch network (đã warm từ effect trên).
       try {
-        const fresh = !(await shouldRefreshVariants());
+        const fresh = !(await shouldRefreshVariants(tenantId));
         if (fresh && variantCacheRef.size >= products.length * 0.8) {
           return;
         }
@@ -665,7 +669,7 @@ function FnbPosPageInner() {
             }))
           );
         });
-        saveVariantsToCache(toPersist).catch(() => {
+        saveVariantsToCache(tenantId, toPersist).catch(() => {
           // Silent — quota full hoặc DB lỗi → session memory cache vẫn dùng được
         });
       } catch {
@@ -699,7 +703,7 @@ function FnbPosPageInner() {
       if (idleHandle !== undefined && cic) cic(idleHandle);
       if (timeoutHandle !== undefined) window.clearTimeout(timeoutHandle);
     };
-  }, [products, networkStatus.isOnline, variantCacheRef]);
+  }, [products, networkStatus.isOnline, tenantId, variantCacheRef]);
 
   // ── Sprint 2: Resolve tier áp dụng cho POS FnB của chi nhánh ──
   // Khi branchId + products đã load → fetch tier mặc định của chi nhánh +

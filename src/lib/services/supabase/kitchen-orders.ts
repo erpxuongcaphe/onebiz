@@ -15,6 +15,7 @@ import type {
 import { getClient, handleError, getCurrentTenantId } from "./base";
 import { recordAuditLog } from "./audit";
 import { getStationsByProductIds } from "./kitchen-stations";
+import { isRpcUnavailable } from "./rpc-utils";
 
 type KOInsert = Database["public"]["Tables"]["kitchen_orders"]["Insert"];
 type KOItemInsert = Database["public"]["Tables"]["kitchen_order_items"]["Insert"];
@@ -173,8 +174,8 @@ export async function createKitchenOrder(
 
   // Sprint FIX-1: Idempotency check — nếu client truyền key + đã có order
   // với key đó → return existing (chống duplicate khi offline retry).
-  // eslint-disable-next-line @typescript-eslint/no-explicit-any
   if (input.idempotencyKey) {
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
     const { data: existing } = await (supabase as any)
       .from("kitchen_orders")
       .select(
@@ -498,6 +499,25 @@ export async function transferTable(
 ): Promise<void> {
   const supabase = getClient();
   const tenantId = await getCurrentTenantId();
+
+  // Prefer atomic transfer when migration 00055 is available.
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  const { data: atomicData, error: atomicError } = await (supabase.rpc as any)(
+    "fnb_transfer_table_atomic",
+    {
+      p_tenant_id: tenantId,
+      p_order_id: orderId,
+      p_from_table_id: fromTableId,
+      p_to_table_id: toTableId,
+    },
+  );
+
+  if (!atomicError && (atomicData as { success?: boolean } | null)?.success) {
+    return;
+  }
+  if (atomicError && !isRpcUnavailable(atomicError)) {
+    handleError(atomicError, "transferTable:atomic_rpc");
+  }
 
   // 1. Claim new table (atomic: only if available)
   const { data: claimed, error: claimErr } = await supabase

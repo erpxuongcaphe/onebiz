@@ -7,12 +7,8 @@
  *   3. If data changed → update cache + notify via callback
  */
 
-import { getDb, getMeta, setMeta, type MenuCacheRecord } from "./db";
-import {
-  isQuotaExceededError,
-  performEmergencyCleanup,
-  withQuotaRecovery,
-} from "./quota-manager";
+import { getDb, getMeta, setMeta } from "./db";
+import { withQuotaRecovery } from "./quota-manager";
 import { getClient } from "@/lib/services/supabase/base";
 import { getTablesByBranch } from "@/lib/services/supabase/fnb-tables";
 import type { FnbCategory } from "@/app/pos/fnb/components/fnb-category-tabs";
@@ -37,13 +33,22 @@ const STALE_MS = 30 * 60 * 1000;
 
 // ── Prefetch: Menu ──
 
-export async function prefetchMenuData(): Promise<void> {
+function menuMetaKey(tenantId: string, key: string): string {
+  return `menu:${tenantId}:${key}`;
+}
+
+function tablesMetaKey(tenantId: string, branchId: string, key: string): string {
+  return `tables:${tenantId}:${branchId}:${key}`;
+}
+
+export async function prefetchMenuData(tenantId: string): Promise<void> {
   const supabase = getClient();
 
   // Fetch categories
   const { data: cats } = await supabase
     .from("categories")
     .select("id, name, code")
+    .eq("tenant_id", tenantId)
     .eq("scope", "sku")
     .order("sort_order");
 
@@ -51,6 +56,7 @@ export async function prefetchMenuData(): Promise<void> {
   const { data: prods } = await supabase
     .from("products")
     .select("id, name, code, sell_price, image_url, stock, category_id")
+    .eq("tenant_id", tenantId)
     .eq("is_active", true)
     .eq("product_type", "sku")
     .eq("channel", "fnb")
@@ -60,6 +66,7 @@ export async function prefetchMenuData(): Promise<void> {
   const { data: toppings } = await supabase
     .from("products")
     .select("id, name, sell_price")
+    .eq("tenant_id", tenantId)
     .eq("is_active", true)
     .ilike("code", "NVL-TOP%");
 
@@ -77,6 +84,7 @@ export async function prefetchMenuData(): Promise<void> {
     for (const c of cats ?? []) {
       await store.put({
         id: `cat_${c.id}`,
+        tenantId,
         _type: "category",
         data: { id: c.id, name: c.name, code: c.code },
       });
@@ -86,6 +94,7 @@ export async function prefetchMenuData(): Promise<void> {
     for (const p of prods ?? []) {
       await store.put({
         id: `prod_${p.id}`,
+        tenantId,
         _type: "product",
         data: {
           id: p.id,
@@ -103,6 +112,7 @@ export async function prefetchMenuData(): Promise<void> {
     for (const t of toppings ?? []) {
       await store.put({
         id: `top_${t.id}`,
+        tenantId,
         _type: "topping",
         data: { id: t.id, name: t.name, price: t.sell_price },
       });
@@ -113,13 +123,14 @@ export async function prefetchMenuData(): Promise<void> {
 
   // Update meta timestamps
   const version = computeVersion(prods ?? [], toppings ?? []);
-  await setMeta("menu_last_sync", Date.now());
-  await setMeta("menu_version", version);
+  await setMeta(menuMetaKey(tenantId, "last_sync"), Date.now());
+  await setMeta(menuMetaKey(tenantId, "version"), version);
 }
 
 // ── Prefetch: Tables ──
 
 export async function prefetchTableData(
+  tenantId: string,
   branchId: string
 ): Promise<void> {
   const tables = await getTablesByBranch(branchId);
@@ -139,6 +150,7 @@ export async function prefetchTableData(
     for (const t of tables) {
       await store.put({
         id: t.id,
+        tenantId,
         branchId,
         data: t,
       });
@@ -146,12 +158,12 @@ export async function prefetchTableData(
 
     await tx.done;
   });
-  await setMeta("tables_last_sync", Date.now());
+  await setMeta(tablesMetaKey(tenantId, branchId, "last_sync"), Date.now());
 }
 
 // ── Read from cache ──
 
-export async function getMenuFromCache(): Promise<MenuData> {
+export async function getMenuFromCache(tenantId: string): Promise<MenuData> {
   const db = await getDb();
   const all = await db.getAll("menu_cache");
 
@@ -160,6 +172,7 @@ export async function getMenuFromCache(): Promise<MenuData> {
   const toppings: ToppingProduct[] = [];
 
   for (const record of all) {
+    if (record.tenantId !== tenantId) continue;
     switch (record._type) {
       case "category":
         categories.push(record.data as FnbCategory);
@@ -177,6 +190,7 @@ export async function getMenuFromCache(): Promise<MenuData> {
 }
 
 export async function getTablesFromCache(
+  tenantId: string,
   branchId: string
 ): Promise<unknown[]> {
   const db = await getDb();
@@ -185,7 +199,7 @@ export async function getTablesFromCache(
     .objectStore("table_cache")
     .index("by_branch")
     .getAll(branchId);
-  return records.map((r) => r.data);
+  return records.filter((r) => r.tenantId === tenantId).map((r) => r.data);
 }
 
 // ── Variant cache (v2) ──
@@ -200,6 +214,7 @@ export interface VariantLite {
 
 /** Ghi 1 batch variants vào IndexedDB. Mỗi entry map = 1 record. */
 export async function saveVariantsToCache(
+  tenantId: string,
   entries: Map<string, VariantLite[]>,
 ): Promise<void> {
   if (entries.size === 0) return;
@@ -209,20 +224,21 @@ export async function saveVariantsToCache(
     const store = tx.objectStore("variant_cache");
     const now = Date.now();
     for (const [productId, variants] of entries) {
-      await store.put({ productId, variants, updatedAt: now });
+      await store.put({ productId, tenantId, variants, updatedAt: now });
     }
     await tx.done;
   });
-  await setMeta("variants_last_sync", Date.now());
+  await setMeta(menuMetaKey(tenantId, "variants_last_sync"), Date.now());
 }
 
 /** Đọc toàn bộ cached variants → Map để page.tsx warm variantCacheRef. */
-export async function getVariantsFromCache(): Promise<Map<string, VariantLite[]>> {
+export async function getVariantsFromCache(tenantId: string): Promise<Map<string, VariantLite[]>> {
   const map = new Map<string, VariantLite[]>();
   try {
     const db = await getDb();
     const all = await db.getAll("variant_cache");
     for (const rec of all) {
+      if (rec.tenantId !== tenantId) continue;
       map.set(rec.productId, rec.variants);
     }
   } catch {
@@ -232,29 +248,65 @@ export async function getVariantsFromCache(): Promise<Map<string, VariantLite[]>
 }
 
 /** Cache variants stale sau 30 phút giống menu. */
-export async function shouldRefreshVariants(): Promise<boolean> {
-  const lastSync = await getMeta<number>("variants_last_sync");
+export async function shouldRefreshVariants(tenantId: string): Promise<boolean> {
+  const lastSync = await getMeta<number>(menuMetaKey(tenantId, "variants_last_sync"));
   if (!lastSync) return true;
   return Date.now() - lastSync > STALE_MS;
 }
 
 /** Xoá variant_cache (dùng khi menu invalidate — variants có thể đổi giá). */
-export async function invalidateVariantCache(): Promise<void> {
+export async function invalidateVariantCache(tenantId?: string): Promise<void> {
   const db = await getDb();
+  if (tenantId) {
+    const all = await db.getAll("variant_cache");
+    const tx = db.transaction(["variant_cache", "meta"], "readwrite");
+    for (const rec of all) {
+      if (rec.tenantId === tenantId) {
+        await tx.objectStore("variant_cache").delete(rec.productId);
+      }
+    }
+    await tx.objectStore("meta").put({
+      key: menuMetaKey(tenantId, "variants_last_sync"),
+      value: 0,
+    });
+    await tx.done;
+    return;
+  }
   await db.clear("variant_cache");
   await setMeta("variants_last_sync", 0);
 }
 
 // ── Cache validity ──
 
-export async function shouldRefreshMenu(): Promise<boolean> {
-  const lastSync = await getMeta<number>("menu_last_sync");
+export async function shouldRefreshMenu(tenantId: string): Promise<boolean> {
+  const lastSync = await getMeta<number>(menuMetaKey(tenantId, "last_sync"));
   if (!lastSync) return true;
   return Date.now() - lastSync > STALE_MS;
 }
 
-export async function invalidateMenuCache(): Promise<void> {
+export async function invalidateMenuCache(tenantId?: string): Promise<void> {
   const db = await getDb();
+  if (tenantId) {
+    const all = await db.getAll("menu_cache");
+    const variants = await db.getAll("variant_cache");
+    const tx = db.transaction(["menu_cache", "variant_cache", "meta"], "readwrite");
+    for (const record of all) {
+      if (record.tenantId === tenantId) {
+        await tx.objectStore("menu_cache").delete(record.id);
+      }
+    }
+    for (const record of variants) {
+      if (record.tenantId === tenantId) {
+        await tx.objectStore("variant_cache").delete(record.productId);
+      }
+    }
+    await tx.objectStore("meta").put({ key: menuMetaKey(tenantId, "last_sync"), value: 0 });
+    await tx.objectStore("meta").put({ key: menuMetaKey(tenantId, "version"), value: "" });
+    await tx.objectStore("meta").put({ key: menuMetaKey(tenantId, "variants_last_sync"), value: 0 });
+    await tx.done;
+    return;
+  }
+
   await db.clear("menu_cache");
   await setMeta("menu_last_sync", 0);
   await setMeta("menu_version", "");
