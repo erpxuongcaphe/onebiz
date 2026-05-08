@@ -264,6 +264,18 @@ export type { CreateKitchenOrderInput } from "./kitchen-orders";
 // F&B Checkout (2-step flow)
 export { sendToKitchen, fnbPayment, addItemsToExistingOrder, voidFnbInvoice } from "./fnb-checkout";
 
+// Sprint POS-FNB-EXT-1 (CEO 08/05): Delivery platforms + Discount presets
+export {
+  getDeliveryPlatformSettings,
+  updateDeliveryPlatformSettings,
+  DEFAULT_DELIVERY_PLATFORM_SETTINGS,
+  getDiscountPresets,
+  saveDiscountPresets,
+  type DeliveryPlatformConfig,
+  type DeliveryPlatformSettings,
+  type DiscountPreset,
+} from "./fnb-platform-settings";
+
 // Sprint KITCHEN-1 (CEO 07/05): Kitchen stations multi-routing
 export {
   getKitchenStationsByBranch,

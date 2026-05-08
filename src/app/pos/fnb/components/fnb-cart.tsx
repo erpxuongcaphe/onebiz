@@ -495,11 +495,12 @@ export function FnbCart({
           </span>
         </div>
 
-        {/* Discount controls */}
+        {/* Discount controls + Preset dropdown (Sprint POS-FNB-EXT-1) */}
         {!isEmpty && onDiscountChange && (
           <DiscountRow
             discount={activeTab?.orderDiscount}
             onChange={onDiscountChange}
+            presets={discountPresets}
           />
         )}
 
@@ -683,14 +684,17 @@ function CouponRow({
 function DiscountRow({
   discount,
   onChange,
+  presets,
 }: {
   discount: FnbDiscountInput | undefined;
   onChange: (d: FnbDiscountInput | undefined) => void;
+  presets?: { id: string; name: string; mode: "amount" | "percent"; value: number }[];
 }) {
   const mode = discount?.mode ?? "amount";
   const [localValue, setLocalValue] = useState(
-    discount?.value ? String(discount.value) : ""
+    discount?.value ? String(discount.value) : "",
   );
+  const [presetMenuOpen, setPresetMenuOpen] = useState(false);
 
   const handleValueChange = (v: string) => {
     setLocalValue(v);
@@ -710,34 +714,84 @@ function DiscountRow({
     }
   };
 
+  // Sprint POS-FNB-EXT-1: Apply preset từ dropdown — set both mode + value
+  const applyPreset = (preset: { mode: "amount" | "percent"; value: number }) => {
+    setLocalValue(String(preset.value));
+    onChange({ mode: preset.mode, value: preset.value });
+    setPresetMenuOpen(false);
+  };
+
   return (
-    <div className="flex items-center gap-2">
-      <span className="text-xs text-muted-foreground shrink-0">Giảm giá</span>
-      <Input
-        type="text"
-        inputMode="numeric"
-        value={localValue}
-        onChange={(e) => handleValueChange(e.target.value)}
-        placeholder="0"
-        className="h-9 md:h-7 text-sm md:text-xs flex-1 min-w-0 tabular-nums"
-      />
-      <button
-        type="button"
-        onClick={toggleMode}
-        className={cn(
-          "h-9 w-9 md:h-7 md:w-7 rounded border flex items-center justify-center shrink-0 transition-colors",
-          mode === "percent"
-            ? "bg-primary-fixed border-primary text-primary"
-            : "bg-surface-container-low border-border text-muted-foreground"
+    <div className="space-y-1.5">
+      <div className="flex items-center gap-2">
+        <span className="text-xs text-muted-foreground shrink-0">Giảm giá</span>
+        <Input
+          type="text"
+          inputMode="numeric"
+          value={localValue}
+          onChange={(e) => handleValueChange(e.target.value)}
+          placeholder="0"
+          className="h-9 md:h-7 text-sm md:text-xs flex-1 min-w-0 tabular-nums"
+        />
+        <button
+          type="button"
+          onClick={toggleMode}
+          className={cn(
+            "h-9 w-9 md:h-7 md:w-7 rounded border flex items-center justify-center shrink-0 transition-colors",
+            mode === "percent"
+              ? "bg-primary-fixed border-primary text-primary"
+              : "bg-surface-container-low border-border text-muted-foreground",
+          )}
+          title={mode === "percent" ? "Phần trăm" : "Số tiền"}
+        >
+          {mode === "percent" ? (
+            <Icon name="percent" size={14} className="md:h-3 md:w-3" />
+          ) : (
+            <span className="text-xs md:text-[10px] font-bold">đ</span>
+          )}
+        </button>
+        {/* Sprint POS-FNB-EXT-1: Preset dropdown trigger */}
+        {presets && presets.length > 0 && (
+          <div className="relative shrink-0">
+            <button
+              type="button"
+              onClick={() => setPresetMenuOpen((v) => !v)}
+              className="h-9 w-9 md:h-7 md:w-7 rounded border border-border bg-surface-container-low text-muted-foreground hover:text-primary hover:border-primary flex items-center justify-center transition-colors"
+              title="Khuyến mãi nhanh"
+            >
+              <Icon name="local_offer" size={14} className="md:h-3 md:w-3" />
+            </button>
+            {presetMenuOpen && (
+              <>
+                <div
+                  className="fixed inset-0 z-40"
+                  onClick={() => setPresetMenuOpen(false)}
+                />
+                <div className="absolute right-0 top-full mt-1 z-50 w-52 rounded-lg border border-outline-variant/30 bg-surface-container-lowest shadow-lg overflow-hidden">
+                  <div className="px-3 py-2 text-[10px] uppercase tracking-wider font-bold text-on-surface-variant border-b border-outline-variant/20">
+                    Khuyến mãi nhanh
+                  </div>
+                  {presets.map((p) => (
+                    <button
+                      key={p.id}
+                      type="button"
+                      onClick={() => applyPreset(p)}
+                      className="w-full px-3 py-2 text-left text-xs hover:bg-surface-container-low transition-colors flex items-center justify-between"
+                    >
+                      <span className="truncate">{p.name}</span>
+                      <span className="font-semibold text-primary tabular-nums shrink-0 ml-2">
+                        {p.mode === "percent"
+                          ? `${p.value}%`
+                          : `${formatCurrency(p.value)}`}
+                      </span>
+                    </button>
+                  ))}
+                </div>
+              </>
+            )}
+          </div>
         )}
-        title={mode === "percent" ? "Phần trăm" : "Số tiền"}
-      >
-        {mode === "percent" ? (
-          <Icon name="percent" size={14} className="md:h-3 md:w-3" />
-        ) : (
-          <span className="text-xs md:text-[10px] font-bold">đ</span>
-        )}
-      </button>
+      </div>
     </div>
   );
 }

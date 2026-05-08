@@ -43,6 +43,12 @@ import { splitByItems, splitEqually } from "@/lib/services/supabase/split-bill";
 import { validateCoupon } from "@/lib/services/supabase/coupons";
 import { getKitchenOrderById, getKitchenOrders, cancelKitchenOrder, transferTable as transferTableService } from "@/lib/services/supabase/kitchen-orders";
 import { getOpenShift, openShift, closeShift } from "@/lib/services/supabase/shifts";
+import {
+  getDeliveryPlatformSettings,
+  getDiscountPresets,
+  type DeliveryPlatformSettings,
+  type DiscountPreset,
+} from "@/lib/services/supabase/fnb-platform-settings";
 import { getClient } from "@/lib/services/supabase/base";
 import { printKitchenTicketV2, printPreBill, printFnbReceipt } from "@/lib/print-fnb";
 import { printKitchenTicketsByStation } from "./print-stations";
@@ -136,6 +142,9 @@ function FnbPosPageInner() {
   const [transferTableOpen, setTransferTableOpen] = useState(false);
   // Sprint A — CEO 06/05: Sidenav drawer trigger từ ☰ button trong header.
   const [sidenavOpen, setSidenavOpen] = useState(false);
+  // Sprint POS-FNB-EXT-1 (CEO 08/05): platform commission settings + discount presets
+  const [platformSettings, setPlatformSettings] = useState<DeliveryPlatformSettings | null>(null);
+  const [discountPresets, setDiscountPresets] = useState<DiscountPreset[]>([]);
 
   // Voucher / coupon state — áp mã khuyến mãi cho đơn hiện tại.
   // couponApplied null = chưa áp. Khi áp, set orderDiscount = { mode: amount, value: discount }.
@@ -289,6 +298,24 @@ function FnbPosPageInner() {
     // toast chỉ dùng trong catch path, ref vẫn đúng tại thời điểm fire.
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [tenantId, branchId, networkStatus.isOnline]);
+
+  // Sprint POS-FNB-EXT-1 (CEO 08/05): Load delivery platform settings +
+  // discount presets on mount. Cached suốt session — F5 reload.
+  useEffect(() => {
+    let cancelled = false;
+    Promise.all([getDeliveryPlatformSettings(), getDiscountPresets()])
+      .then(([p, pr]) => {
+        if (cancelled) return;
+        setPlatformSettings(p);
+        setDiscountPresets(pr);
+      })
+      .catch(() => {
+        // Silent — fallback empty
+      });
+    return () => {
+      cancelled = true;
+    };
+  }, []);
 
   // Sprint FIX-1 (CEO 07/05): Listen "fnb-print-failed" event từ print-fnb.ts
   // → toast lỗi để user biết không in được. Toggle qua settings.print.notifyPrintFailure.
@@ -1846,13 +1873,18 @@ function FnbPosPageInner() {
           couponApplying={couponApplying}
           freeItems={appliedPromotion?.freeItems}
           onOrderNoteChange={(note) => pos.setOrderNote(pos.activeTabId, note)}
-          onDeliveryPlatformChange={(platform, commission) =>
-            pos.setDeliveryPlatform(pos.activeTabId, platform, commission)
-          }
+          onDeliveryPlatformChange={(platform, _commission) => {
+            // Auto-fill commission% từ settings khi user pick platform.
+            // User vẫn override được sau qua input riêng.
+            const defaultCommission =
+              platformSettings?.[platform]?.commissionPercent ?? 0;
+            pos.setDeliveryPlatform(pos.activeTabId, platform, defaultCommission);
+          }}
           onDeliveryFeeChange={(fee) => pos.setDeliveryFee(pos.activeTabId, fee)}
           onPlatformCommissionChange={(pct) =>
             pos.setPlatformCommissionPercent(pos.activeTabId, pct)
           }
+          discountPresets={discountPresets}
         />
       </div>
 
