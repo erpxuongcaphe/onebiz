@@ -328,6 +328,10 @@ function GroupCollapsed({
     triggerHeight: number;
   } | null>(null);
   const buttonRef = useRef<HTMLButtonElement>(null);
+  // Sprint UI-FIX v3 (CEO 08/05): popupRef để filter scroll events — chỉ
+  // close khi scroll diễn ra ngoài popup, không close khi user cuộn nội
+  // dung dài bên trong popup.
+  const popupRef = useRef<HTMLDivElement>(null);
   const active = isGroupActive(pathname, group);
   const closeTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
 
@@ -377,14 +381,25 @@ function GroupCollapsed({
   };
 
   // Close on scroll/resize so the flyout doesn't float in stale position.
+  // Sprint UI-FIX v3 (CEO 08/05): chỉ close khi scroll OUTSIDE popup —
+  // ignore scroll bên trong popup (popup có overflow-y-auto cho list dài
+  // như "Báo cáo" 14 items, user cần cuộn được mà không bị popup tự đóng).
   useEffect(() => {
     if (!open) return;
-    const handler = () => setOpen(false);
-    window.addEventListener("scroll", handler, true);
-    window.addEventListener("resize", handler);
+    const scrollHandler = (e: Event) => {
+      // Nếu scroll target là popup hoặc descendant → ignore (cuộn nội bộ).
+      const target = e.target as Node | null;
+      if (target && popupRef.current?.contains(target)) return;
+      // Scroll OUTSIDE popup (page scroll, sidebar scroll, ...) → close
+      // để popup không float ở vị trí cũ stale.
+      setOpen(false);
+    };
+    const resizeHandler = () => setOpen(false);
+    window.addEventListener("scroll", scrollHandler, true);
+    window.addEventListener("resize", resizeHandler);
     return () => {
-      window.removeEventListener("scroll", handler, true);
-      window.removeEventListener("resize", handler);
+      window.removeEventListener("scroll", scrollHandler, true);
+      window.removeEventListener("resize", resizeHandler);
     };
   }, [open]);
 
@@ -430,6 +445,7 @@ function GroupCollapsed({
             aria-hidden
           />
           <div
+            ref={popupRef}
             className="fixed z-[100] stitch-fade-in"
             style={{ top: pos.top, left: pos.left }}
             onMouseEnter={cancelClose}
