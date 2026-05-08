@@ -2,7 +2,7 @@
 
 import Link from "next/link";
 import { usePathname } from "next/navigation";
-import { useEffect, useMemo, useRef, useState } from "react";
+import { useEffect, useLayoutEffect, useMemo, useRef, useState } from "react";
 import { cn } from "@/lib/utils";
 import { useAuth } from "@/lib/contexts";
 import { useBreakpoint } from "@/lib/hooks/use-breakpoint";
@@ -401,6 +401,38 @@ function GroupCollapsed({
       window.removeEventListener("scroll", scrollHandler, true);
       window.removeEventListener("resize", resizeHandler);
     };
+  }, [open]);
+
+  // Sprint UI-FIX v4 (CEO 08/05): MEASURE popup thật sau mount + reposition
+  // để tránh popup vượt biên đáy. Estimate cũ 600px underestimate cho "Báo
+  // cáo" (~800-850px với 5 sub-groups + 14 items), gây cắt phần dưới popup.
+  //
+  // useLayoutEffect chạy sau DOM mount + trước paint → user không thấy
+  // flicker reposition.
+  useLayoutEffect(() => {
+    if (!open) return;
+    const popupEl = popupRef.current;
+    const buttonEl = buttonRef.current;
+    if (!popupEl || !buttonEl) return;
+    const popupH = popupEl.getBoundingClientRect().height;
+    const triggerRect = buttonEl.getBoundingClientRect();
+    const viewportH = window.innerHeight;
+    const PAD = 16;
+
+    // Default: align với trigger.top
+    let newTop = triggerRect.top;
+    // Nếu popup vượt biên đáy → đẩy lên sao cho bottom = viewportH - PAD.
+    // Math.max(PAD, ...) đảm bảo top không âm khi popup quá cao.
+    if (newTop + popupH > viewportH - PAD) {
+      newTop = Math.max(PAD, viewportH - popupH - PAD);
+    }
+
+    setPos((prev) => {
+      if (!prev) return prev;
+      // Avoid infinite loop — chỉ update nếu khác > 1px
+      if (Math.abs(prev.top - newTop) < 1) return prev;
+      return { ...prev, top: newTop };
+    });
   }, [open]);
 
   return (
