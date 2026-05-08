@@ -23,13 +23,13 @@ import { HelpTip } from "@/components/shared/help-tip";
 const DELIVERY_PLATFORMS: {
   key: DeliveryPlatform;
   label: string;
-  color: string;
+  activeClassName: string;
 }[] = [
-  { key: "shopee_food", label: "Shopee Food", color: "#ee4d2d" },
-  { key: "grab_food", label: "Grab Food", color: "#00b14f" },
-  { key: "gojek", label: "Gojek", color: "#00aa13" },
-  { key: "be", label: "Be", color: "#fdd835" },
-  { key: "direct", label: "Tự giao", color: "#475569" },
+  { key: "shopee_food", label: "Shopee Food", activeClassName: "bg-status-error text-white" },
+  { key: "grab_food", label: "Grab Food", activeClassName: "bg-status-success text-white" },
+  { key: "gojek", label: "Gojek", activeClassName: "bg-status-success text-white" },
+  { key: "be", label: "Be", activeClassName: "bg-status-warning text-foreground" },
+  { key: "direct", label: "Tự giao", activeClassName: "bg-status-neutral text-white" },
 ];
 
 interface FnbCartProps {
@@ -229,28 +229,30 @@ export function FnbCart({
             (CEO 08/05). Ghi chú toàn bill khác line.note (từng món). */}
         {onOrderNoteChange && (
           <div className="mt-2">
-            <button
-              type="button"
-              onClick={() => setNoteExpanded((v) => !v)}
-              className="w-full flex items-center gap-2 px-3 py-1.5 rounded-lg text-xs text-on-surface-variant hover:bg-surface-container transition-colors"
-            >
-              <Icon name="sticky_note_2" size={14} />
-              <span className="flex-1 text-left truncate">
-                {activeTab?.orderNote
-                  ? `📝 ${activeTab.orderNote}`
-                  : "Thêm ghi chú đơn"}
-              </span>
+            <div className="flex items-center gap-1">
+              <button
+                type="button"
+                onClick={() => setNoteExpanded((v) => !v)}
+                className="flex min-w-0 flex-1 items-center gap-2 rounded-lg px-3 py-1.5 text-xs text-on-surface-variant hover:bg-surface-container transition-colors"
+              >
+                <Icon name="sticky_note_2" size={14} />
+                <span className="flex-1 text-left truncate">
+                  {activeTab?.orderNote
+                    ? `📝 ${activeTab.orderNote}`
+                    : "Thêm ghi chú đơn"}
+                </span>
+                <Icon
+                  name={noteExpanded ? "expand_less" : "expand_more"}
+                  size={14}
+                  className="opacity-60"
+                />
+              </button>
               <HelpTip>
-                Ghi chú cho TOÀN BILL — vd "Khách kiêng đường", "Đơn VIP",
-                "Không nhận giấy". In ra phiếu bếp dòng riêng. Khác ghi chú
+                Ghi chú cho TOÀN BILL — vd &quot;Khách kiêng đường&quot;, &quot;Đơn VIP&quot;,
+                &quot;Không nhận giấy&quot;. In ra phiếu bếp dòng riêng. Khác ghi chú
                 từng món (mở dialog món để nhập).
               </HelpTip>
-              <Icon
-                name={noteExpanded ? "expand_less" : "expand_more"}
-                size={14}
-                className="opacity-60"
-              />
-            </button>
+            </div>
             {noteExpanded && (
               <Textarea
                 value={activeTab?.orderNote ?? ""}
@@ -349,10 +351,9 @@ export function FnbCart({
                       className={cn(
                         "px-2.5 py-1 rounded-md text-[11px] font-semibold transition-colors",
                         isActive
-                          ? "text-white shadow-sm"
+                          ? p.activeClassName
                           : "bg-surface-container text-on-surface-variant hover:bg-surface-container-high",
                       )}
-                      style={isActive ? { backgroundColor: p.color } : undefined}
                     >
                       {p.label}
                     </button>
@@ -367,7 +368,7 @@ export function FnbCart({
                       Phí ship (₫)
                       <HelpTip>
                         Phí giao hàng quán trả cho sàn / shipper. Khách thường
-                        thấy "Free ship" nhưng quán vẫn chịu phí qua sàn.
+                        thấy &quot;Free ship&quot; nhưng quán vẫn chịu phí qua sàn.
                       </HelpTip>
                     </label>
                     <Input

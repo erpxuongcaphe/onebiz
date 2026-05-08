@@ -1692,13 +1692,6 @@ function PosPageInner() {
   // ============================================================
   return (
     <>
-      {/* Hide number input spinners for clean POS look */}
-      <style>{`
-        .pos-panel input[type="number"]::-webkit-inner-spin-button,
-        .pos-panel input[type="number"]::-webkit-outer-spin-button { -webkit-appearance: none; margin: 0; }
-        .pos-panel input[type="number"] { -moz-appearance: textfield; }
-      `}</style>
-
       {/* ═══════════ OFFLINE STATUS BAR ═══════════ */}
       <ConnectionStatusBar
         status={networkStatus}

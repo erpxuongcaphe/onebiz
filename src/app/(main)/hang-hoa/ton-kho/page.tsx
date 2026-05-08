@@ -645,7 +645,7 @@ export default function TonKhoPage() {
       />
 
       {/* Summary cards */}
-      <div className="grid grid-cols-1 md:grid-cols-3 gap-3 px-4 pt-4">
+      <div className="grid grid-cols-[repeat(3,minmax(150px,1fr))] md:grid-cols-3 gap-3 px-4 pt-4 pb-1 overflow-x-auto scrollbar-none">
         <SummaryCard
           icon={<Icon name="inventory" size={16} />}
           label="Tổng SP"
@@ -708,4 +708,3 @@ export default function TonKhoPage() {
     </ListPageLayout>
   );
 }
-

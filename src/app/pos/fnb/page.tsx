@@ -153,6 +153,27 @@ function FnbPosPageInner() {
 
   const branchId = currentBranch?.id;
   const tenantId = tenant?.id ?? "";
+  const isBlockingLoad = authLoading || (!!branchId && loading);
+  const [blockingLoadMs, setBlockingLoadMs] = useState(0);
+
+  useEffect(() => {
+    if (!isBlockingLoad) {
+      setBlockingLoadMs(0);
+      return;
+    }
+
+    const startedAt = Date.now();
+    setBlockingLoadMs(0);
+    const interval = window.setInterval(() => {
+      setBlockingLoadMs(Date.now() - startedAt);
+    }, 1_000);
+
+    return () => window.clearInterval(interval);
+  }, [isBlockingLoad, branchId, tenantId]);
+
+  const retryFnbLoad = useCallback(() => {
+    window.location.reload();
+  }, []);
 
   // Sprint 2: Tier áp dụng cho POS FnB của chi nhánh này.
   // Resolve khi branchId hoặc products đổi → priceMap + override sell_price.
@@ -1642,7 +1663,14 @@ function FnbPosPageInner() {
   // 2) auth done + KHÔNG có branch FnB nào → empty state đẹp với CTA
   // 3) data đang load (branchId có, products/tables fetching) → skeleton
   if (authLoading) {
-    return <FnbLoadingSkeleton />;
+    return (
+      <FnbLoadingSkeleton
+        title="Đang kiểm tra phiên đăng nhập"
+        detail="OneBiz đang xác nhận tài khoản, doanh nghiệp và chi nhánh trước khi mở POS F&B."
+        elapsedMs={blockingLoadMs}
+        onRetry={retryFnbLoad}
+      />
+    );
   }
   if (!branchId) {
     // Phân biệt: chưa có branch nào (tenant rỗng) vs có branch nhưng chưa pick
@@ -1678,7 +1706,7 @@ function FnbPosPageInner() {
               Chọn chi nhánh để bắt đầu
             </h2>
             <p className="text-sm text-on-surface-variant">
-              Bấm chip <strong className="text-foreground">"Chọn chi nhánh"</strong> trên header để chọn quán đang làm việc.
+              Bấm chip <strong className="text-foreground">&quot;Chọn chi nhánh&quot;</strong> trên header để chọn quán đang làm việc.
             </p>
           </div>
         </div>
@@ -1688,7 +1716,18 @@ function FnbPosPageInner() {
 
   if (loading) {
     // Data còn fetch (products, tables) — skeleton match layout thật
-    return <FnbLoadingSkeleton />;
+    return (
+      <FnbLoadingSkeleton
+        title={networkStatus.isOnline ? "Đang tải menu, bàn và ca bán" : "Đang mở dữ liệu F&B đã lưu"}
+        detail={
+          networkStatus.isOnline
+            ? "Đang đồng bộ menu, khu vực bàn và ca bán của chi nhánh hiện tại."
+            : "Thiết bị đang offline, OneBiz sẽ ưu tiên dữ liệu đã cache trên máy."
+        }
+        elapsedMs={blockingLoadMs}
+        onRetry={retryFnbLoad}
+      />
+    );
   }
 
   return (

@@ -64,12 +64,30 @@ interface PageHeaderProps {
 }
 
 function ActionButton({ action }: { action: PageAction }) {
+  return (
+    <ActionButtonBase action={action} />
+  );
+}
+
+function runAction(action: PageAction) {
+  if (action.onClick) {
+    action.onClick();
+  } else if (action.href) {
+    window.location.href = action.href;
+  }
+}
+
+function ActionButtonBase({
+  action,
+  className,
+  labelClassName,
+}: {
+  action: PageAction;
+  className?: string;
+  labelClassName?: string;
+}) {
   const handleClick = () => {
-    if (action.onClick) {
-      action.onClick();
-    } else if (action.href) {
-      window.location.href = action.href;
-    }
+    runAction(action);
   };
 
   return (
@@ -78,11 +96,23 @@ function ActionButton({ action }: { action: PageAction }) {
       size="sm"
       onClick={handleClick}
       disabled={action.disabled}
-      className="gap-2 shrink-0"
+      className={cn("gap-2 shrink-0", className)}
+    >
+      {action.icon}
+      <span className={labelClassName}>{action.label}</span>
+    </Button>
+  );
+}
+
+function ActionMenuItem({ action }: { action: PageAction }) {
+  return (
+    <DropdownMenuItem
+      disabled={action.disabled}
+      onClick={() => runAction(action)}
     >
       {action.icon}
       {action.label}
-    </Button>
+    </DropdownMenuItem>
   );
 }
 
@@ -158,6 +188,110 @@ function ImportButton({ onImport }: { onImport: (file: File) => void }) {
         Import file
       </Button>
     </>
+  );
+}
+
+function MobileActions({
+  mainActions,
+  overflowActions,
+  onImport,
+  onExport,
+}: {
+  mainActions: PageAction[];
+  overflowActions: PageAction[];
+  onImport?: (file: File) => void;
+  onExport?: ExportHandlers;
+}) {
+  const fileInputRef = useRef<HTMLInputElement>(null);
+  const primaryAction =
+    mainActions.find((action) => action.variant !== "ghost") ?? mainActions[0];
+  const secondaryActions = mainActions.filter((action) => action !== primaryAction);
+  const hasMenu =
+    secondaryActions.length > 0 ||
+    overflowActions.length > 0 ||
+    !!onImport ||
+    !!onExport?.excel ||
+    !!onExport?.csv ||
+    !!onExport?.pdf;
+
+  const handleFileChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (file && onImport) {
+      onImport(file);
+      e.target.value = "";
+    }
+  };
+
+  return (
+    <div className="flex items-center gap-2 md:hidden">
+      {onImport && (
+        <input
+          ref={fileInputRef}
+          type="file"
+          className="hidden"
+          onChange={handleFileChange}
+          accept=".xlsx,.xls,.csv"
+        />
+      )}
+
+      {primaryAction && (
+        <ActionButtonBase
+          action={primaryAction}
+          className="min-w-0 max-w-[calc(100vw-5rem)]"
+          labelClassName="truncate"
+        />
+      )}
+
+      {hasMenu && (
+        <DropdownMenu>
+          <DropdownMenuTrigger
+            className={cn(
+              "inline-flex h-8 w-8 shrink-0 items-center justify-center rounded-lg",
+              "border border-input bg-background hover:bg-accent cursor-pointer"
+            )}
+            aria-label="Mở thêm thao tác"
+          >
+            <Icon name="more_horiz" size={16} />
+          </DropdownMenuTrigger>
+          <DropdownMenuContent align="end" className="min-w-52">
+            {secondaryActions.map((action, i) => (
+              <ActionMenuItem key={`secondary-${i}`} action={action} />
+            ))}
+            {overflowActions.map((action, i) => (
+              <ActionMenuItem key={`overflow-${i}`} action={action} />
+            ))}
+
+            {(secondaryActions.length > 0 || overflowActions.length > 0) &&
+              (onImport || onExport) && <DropdownMenuSeparator />}
+
+            {onImport && (
+              <DropdownMenuItem onClick={() => fileInputRef.current?.click()}>
+                <Icon name="upload" size={16} />
+                Import file
+              </DropdownMenuItem>
+            )}
+            {onExport?.excel && (
+              <DropdownMenuItem onClick={onExport.excel}>
+                <Icon name="table_view" size={16} />
+                Xuất Excel (.xlsx)
+              </DropdownMenuItem>
+            )}
+            {onExport?.csv && (
+              <DropdownMenuItem onClick={onExport.csv}>
+                <Icon name="description" size={16} />
+                Xuất CSV
+              </DropdownMenuItem>
+            )}
+            {onExport?.pdf && (
+              <DropdownMenuItem onClick={onExport.pdf}>
+                <Icon name="picture_as_pdf" size={16} />
+                Xuất PDF
+              </DropdownMenuItem>
+            )}
+          </DropdownMenuContent>
+        </DropdownMenu>
+      )}
+    </div>
   );
 }
 
@@ -320,13 +454,12 @@ export function PageHeader({
 
         {/* Mobile actions */}
         {(mainActions.length > 0 || onExport || onImport) && (
-          <div className="flex items-center gap-2 md:hidden overflow-x-auto">
-            {mainActions.map((action, i) => (
-              <ActionButton key={i} action={action} />
-            ))}
-            {onImport && <ImportButton onImport={onImport} />}
-            {onExport && <ExportButton onExport={onExport} />}
-          </div>
+          <MobileActions
+            mainActions={mainActions}
+            overflowActions={overflowActions}
+            onImport={onImport}
+            onExport={onExport}
+          />
         )}
 
         {children}

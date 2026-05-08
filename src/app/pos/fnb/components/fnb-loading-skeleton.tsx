@@ -1,5 +1,7 @@
 "use client";
 
+import { Icon } from "@/components/ui/icon";
+
 /**
  * FnbLoadingSkeleton — Khung xám nhấp nháy thay "trang trắng + dòng chữ rỗng".
  * Sprint LOAD-1 (CEO 08/05).
@@ -17,7 +19,25 @@
  * vì với layout phức tạp, skeleton đẹp + thông tin hơn.
  */
 
-export function FnbLoadingSkeleton() {
+interface FnbLoadingSkeletonProps {
+  title?: string;
+  detail?: string;
+  elapsedMs?: number;
+  onRetry?: () => void;
+  onOpenBranchPicker?: () => void;
+}
+
+export function FnbLoadingSkeleton({
+  title = "Đang tải POS F&B",
+  detail = "OneBiz đang chuẩn bị menu, bàn và giỏ hàng cho chi nhánh hiện tại.",
+  elapsedMs = 0,
+  onRetry,
+  onOpenBranchPicker,
+}: FnbLoadingSkeletonProps) {
+  const elapsedSeconds = Math.floor(elapsedMs / 1000);
+  const showProgressHint = elapsedMs >= 2_000;
+  const showRecovery = elapsedMs >= 8_000;
+
   return (
     <div className="flex flex-col h-screen bg-surface-container-low">
       {/* Header skeleton — match đúng h-16 + light theme thật */}
@@ -45,6 +65,60 @@ export function FnbLoadingSkeleton() {
         <div className="h-7 w-32 rounded-lg bg-surface-container animate-pulse" />
         <div className="h-7 w-20 rounded-lg bg-surface-container animate-pulse" />
       </div>
+
+      {showProgressHint && (
+        <div className="border-b border-outline-variant/20 bg-surface-container-lowest px-3 py-2">
+          <div className="mx-auto flex max-w-3xl flex-col gap-2 rounded-xl border border-outline-variant/30 bg-white/80 px-3 py-2 shadow-sm sm:flex-row sm:items-center sm:justify-between">
+            <div className="min-w-0">
+              <div className="flex items-center gap-2 text-sm font-semibold text-on-surface">
+                <Icon
+                  name={showRecovery ? "wifi_tethering_error" : "hourglass_top"}
+                  size={16}
+                  className={showRecovery ? "text-status-warning" : "text-primary"}
+                />
+                <span>{title}</span>
+                {elapsedSeconds > 0 && (
+                  <span className="text-xs font-medium text-muted-foreground">
+                    {elapsedSeconds}s
+                  </span>
+                )}
+              </div>
+              <p className="mt-0.5 text-xs leading-relaxed text-on-surface-variant">
+                {showRecovery
+                  ? onOpenBranchPicker
+                    ? "Đang tải lâu hơn bình thường. Anh có thể thử tải lại hoặc chọn lại chi nhánh mà không ảnh hưởng dữ liệu."
+                    : "Đang tải lâu hơn bình thường. Anh có thể thử tải lại trang mà không ảnh hưởng dữ liệu."
+                  : detail}
+              </p>
+            </div>
+
+            {showRecovery && (onRetry || onOpenBranchPicker) && (
+              <div className="flex shrink-0 items-center gap-2">
+                {onOpenBranchPicker && (
+                  <button
+                    type="button"
+                    onClick={onOpenBranchPicker}
+                    className="inline-flex h-8 items-center gap-1.5 rounded-lg border border-outline-variant/40 bg-white px-3 text-xs font-semibold text-on-surface hover:bg-surface-container transition-colors"
+                  >
+                    <Icon name="storefront" size={14} />
+                    Chọn chi nhánh
+                  </button>
+                )}
+                {onRetry && (
+                  <button
+                    type="button"
+                    onClick={onRetry}
+                    className="inline-flex h-8 items-center gap-1.5 rounded-lg bg-primary px-3 text-xs font-semibold text-on-primary hover:bg-primary/90 transition-colors"
+                  >
+                    <Icon name="refresh" size={14} />
+                    Thử lại
+                  </button>
+                )}
+              </div>
+            )}
+          </div>
+        </div>
+      )}
 
       {/* Body 3 cột — sidebar + menu grid + cart */}
       <div className="flex flex-1 min-h-0">

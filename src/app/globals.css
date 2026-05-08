@@ -61,6 +61,16 @@
   }
 }
 
+.pos-panel input[type="number"]::-webkit-inner-spin-button,
+.pos-panel input[type="number"]::-webkit-outer-spin-button {
+  -webkit-appearance: none;
+  margin: 0;
+}
+
+.pos-panel input[type="number"] {
+  -moz-appearance: textfield;
+}
+
 @theme inline {
   --color-background: var(--background);
   --color-foreground: var(--foreground);

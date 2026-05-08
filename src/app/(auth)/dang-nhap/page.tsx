@@ -1,9 +1,8 @@
 "use client";
 
 import { Suspense, useState } from "react";
-import { useRouter, useSearchParams } from "next/navigation";
+import { useSearchParams } from "next/navigation";
 import Link from "next/link";
-import { createClient } from "@/lib/supabase/client";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import {
@@ -22,69 +21,25 @@ export default function LoginPage() {
   );
 }
 
-/**
- * Nhận diện input là SĐT (VN) hay email.
- * SĐT VN: bắt đầu 0, 10-11 số (0912345678) hoặc +84/84 prefix.
- */
-function isPhoneNumber(input: string): boolean {
-  const cleaned = input.replace(/[\s-]/g, "");
-  // 0xxxxxxxxx (10 số) hoặc 0xxxxxxxxxx (11 số)
-  if (/^0\d{9,10}$/.test(cleaned)) return true;
-  // +84xxxxxxxxx hoặc 84xxxxxxxxx
-  if (/^(\+?84)\d{9,10}$/.test(cleaned)) return true;
-  return false;
+function getSafeRedirect(value: string | null): string {
+  if (!value || !value.startsWith("/") || value.startsWith("//")) {
+    return "/";
+  }
+  return value;
 }
 
 function LoginForm() {
-  const router = useRouter();
   const searchParams = useSearchParams();
   const [identifier, setIdentifier] = useState(""); // email HOẶC SĐT
   const [password, setPassword] = useState("");
   const [error, setError] = useState("");
   const [loading, setLoading] = useState(false);
+  const redirect = getSafeRedirect(searchParams.get("redirect"));
+  const serverError = searchParams.get("error") ?? "";
 
-  async function handleSubmit(e: React.FormEvent) {
-    e.preventDefault();
+  function handleSubmit() {
     setError("");
     setLoading(true);
-
-    const supabase = createClient();
-    const trimmed = identifier.trim();
-
-    // Nếu nhập SĐT → tra email tương ứng trong DB. Supabase auth chỉ nhận
-    // email + password, nên phải lookup trước khi signIn.
-    let email = trimmed;
-    if (isPhoneNumber(trimmed)) {
-      const { data: foundEmail, error: rpcError } = await supabase.rpc(
-        "get_email_by_phone",
-        { p_phone: trimmed },
-      );
-      if (rpcError) {
-        setError("Không tra được SĐT. Thử lại sau hoặc đăng nhập bằng email.");
-        setLoading(false);
-        return;
-      }
-      if (!foundEmail) {
-        setError("Không tìm thấy tài khoản với SĐT này. Liên hệ quản lý để kiểm tra.");
-        setLoading(false);
-        return;
-      }
-      email = foundEmail as string;
-    }
-
-    const { error: authError } = await supabase.auth.signInWithPassword({
-      email,
-      password,
-    });
-
-    if (authError) {
-      setError(authError.message);
-      setLoading(false);
-      return;
-    }
-
-    const redirect = searchParams.get("redirect") || "/";
-    router.push(redirect);
   }
 
   return (
@@ -97,10 +52,15 @@ function LoginForm() {
         <CardDescription>ERP Suite — Đăng nhập vào hệ thống quản lý</CardDescription>
       </CardHeader>
       <CardContent>
-        <form onSubmit={handleSubmit} className="space-y-4">
-          {error && (
+        <form
+          action={`/api/auth/sign-in?redirect=${encodeURIComponent(redirect)}`}
+          method="post"
+          onSubmit={handleSubmit}
+          className="space-y-4"
+        >
+          {(error || serverError) && (
             <div className="rounded-lg bg-destructive/10 p-3 text-sm text-destructive">
-              {error}
+              {error || serverError}
             </div>
           )}
           <div className="space-y-2">
@@ -109,6 +69,7 @@ function LoginForm() {
             </label>
             <Input
               id="identifier"
+              name="identifier"
               type="text"
               inputMode="text"
               autoComplete="username"
@@ -132,6 +93,7 @@ function LoginForm() {
             </div>
             <Input
               id="password"
+              name="password"
               type="password"
               placeholder="••••••••"
               value={password}
