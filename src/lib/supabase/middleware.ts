@@ -3,7 +3,8 @@ import { NextResponse, type NextRequest } from "next/server";
 
 /**
  * Extract root domain for cross-subdomain cookie sharing.
- * app.onebiz.com.vn → .onebiz.com.vn (shared with fnb.onebiz.com.vn)
+ * onebiz.com.vn → .onebiz.com.vn (shared with fnb.onebiz.com.vn)
+ * fnb.onebiz.com.vn → .onebiz.com.vn (cùng cookie domain)
  * localhost → undefined (browser default)
  */
 function getCookieDomain(request: NextRequest): string | undefined {
@@ -17,7 +18,7 @@ function getCookieDomain(request: NextRequest): string | undefined {
   const ccSlds = ["com.vn", "org.vn", "net.vn", "edu.vn", "gov.vn"];
   const tail2 = parts.slice(-2).join(".");
   if (ccSlds.includes(tail2) && parts.length >= 3) {
-    // app.onebiz.com.vn → .onebiz.com.vn
+    // onebiz.com.vn / fnb.onebiz.com.vn → .onebiz.com.vn (cookie share)
     return `.${parts.slice(-3).join(".")}`;
   }
   // Standard TLD: app.example.com → .example.com
@@ -183,7 +184,7 @@ export async function updateSession(request: NextRequest) {
             supabaseResponse.cookies.set(name, value, {
               ...options,
               // Set cookie domain for cross-subdomain sharing
-              // app.onebiz.com.vn ↔ fnb.onebiz.com.vn share session
+              // onebiz.com.vn ↔ fnb.onebiz.com.vn share session (.onebiz.com.vn cookie)
               ...(cookieDomain ? { domain: cookieDomain } : {}),
             })
           );

@@ -28,10 +28,10 @@ const nextConfig: NextConfig = {
   },
 
   // Phase 3 (2026-04-15): Multi-domain setup
-  // - app.onebiz.com.vn     → ERP full (main app)
+  // - onebiz.com.vn         → ERP full (trang chính, mọi settings + manage)
   // - fnb.onebiz.com.vn     → FnB POS only (via middleware rewrite → /pos/fnb)
   // Subdomain routing handled in src/lib/supabase/middleware.ts
-  // Cross-domain auth: Supabase cookie set on .onebiz.com.vn domain
+  // Cross-domain auth: Supabase cookie set on .onebiz.com.vn domain (share session)
   // PWA: manifest-fnb.json + sw-fnb.js for FnB subdomain
 };
 

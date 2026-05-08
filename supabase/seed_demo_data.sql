@@ -1126,7 +1126,7 @@ BEGIN
   RAISE NOTICE 'Promotions: %',
     (SELECT count(*) FROM public.promotions WHERE tenant_id = v_tenant_id);
   RAISE NOTICE '============================================================';
-  RAISE NOTICE 'XONG! Vào app.onebiz.com.vn hoặc fnb.onebiz.com.vn để xem.';
+  RAISE NOTICE 'XONG! Vào onebiz.com.vn hoặc fnb.onebiz.com.vn để xem.';
   RAISE NOTICE '============================================================';
 
 END $seed$;

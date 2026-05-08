@@ -31,7 +31,7 @@ export function useFnbSubdomain() {
    *
    * Behavior theo host:
    *   - On fnb.* → relative path (đã ở subdomain rồi)
-   *   - On app.onebiz.com.vn | onebiz.com.vn | www.onebiz.com.vn →
+   *   - On onebiz.com.vn | www.onebiz.com.vn (trang chính của tenant) →
    *     full URL `https://fnb.onebiz.com.vn{path}` để cross-subdomain nav
    *   - Localhost / vercel preview → giữ `/pos/fnb{path}` (không có subdomain
    *     riêng để switch)
@@ -49,12 +49,8 @@ export function useFnbSubdomain() {
       return subPath === "" ? "/" : subPath;
     }
 
-    // Production app/root domain → full URL sang fnb subdomain
-    if (
-      host === "app.onebiz.com.vn" ||
-      host === "onebiz.com.vn" ||
-      host === "www.onebiz.com.vn"
-    ) {
+    // Production root domain → full URL sang fnb subdomain
+    if (host === "onebiz.com.vn" || host === "www.onebiz.com.vn") {
       const protocol = window.location.protocol;
       return `${protocol}//fnb.onebiz.com.vn${subPath === "" ? "/" : subPath}`;
     }
