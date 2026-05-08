@@ -318,7 +318,15 @@ function GroupCollapsed({
   pathname: string;
 }) {
   const [open, setOpen] = useState(false);
-  const [pos, setPos] = useState<{ top: number; left: number } | null>(null);
+  // Sprint UI-FIX (CEO 08/05): pos kèm `triggerTop` để render bridge zone
+  // bridging trigger → popup, tránh mouse rớt qua gap khi popup top:16 mà
+  // trigger ở dưới đáy viewport (gap dọc 900px+).
+  const [pos, setPos] = useState<{
+    top: number;
+    left: number;
+    triggerTop: number;
+    triggerHeight: number;
+  } | null>(null);
   const buttonRef = useRef<HTMLButtonElement>(null);
   const active = isGroupActive(pathname, group);
   const closeTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
@@ -331,23 +339,39 @@ function GroupCollapsed({
   };
   const scheduleClose = () => {
     cancelClose();
-    closeTimer.current = setTimeout(() => setOpen(false), 120);
+    // Sprint UI-FIX (CEO 08/05): Tăng 120ms → 280ms để user di chuột chậm
+    // từ trigger sang popup (gap dọc lớn) vẫn kịp.
+    closeTimer.current = setTimeout(() => setOpen(false), 280);
   };
 
   const handleOpen = () => {
     cancelClose();
     if (buttonRef.current) {
       const rect = buttonRef.current.getBoundingClientRect();
-      // CEO 06/05 fix v2: group "Báo cáo" có 5 sub-groups + 14 items =>
-      // chiều cao thực ~700px. Estimate cũ 400 không đủ → popover vẫn bị
-      // cắt khi button cách đáy viewport < 700px.
-      //
-      // Strategy mới (luôn fits): top = 16 cố định (gần top viewport),
-      // popover dùng max-h calc(100vh-32px) tự scroll khi quá cao.
-      // Trade-off: popover không align với button nữa, nhưng bù lại
-      // luôn thấy đầy đủ items.
+      // Sprint UI-FIX (CEO 08/05): Smart placement — align với trigger nếu
+      // popup fits viewport, fallback top:16 khi quá cao.
+      // Trước (chỉ top:16) gây gap dọc 900px+ khi trigger ở dưới đáy → mouse
+      // di chuyển chậm qua no-man's-land → 120ms timer fire trước khi vào
+      // popup → close. Giờ align trigger.top → gap chỉ 6px ngang dễ vượt.
       const VIEWPORT_PADDING = 16;
-      setPos({ top: VIEWPORT_PADDING, left: rect.right + 6 });
+      // Estimate popup height ~ 600px (với scroll nội bộ nếu lớn hơn)
+      const ESTIMATED_POPUP_HEIGHT = 600;
+      const viewportH = window.innerHeight;
+      // Try align với trigger top
+      let popupTop = rect.top;
+      // Nếu trigger gần đáy → popup vượt biên → bám đáy
+      if (rect.top + ESTIMATED_POPUP_HEIGHT > viewportH - VIEWPORT_PADDING) {
+        popupTop = Math.max(
+          VIEWPORT_PADDING,
+          viewportH - ESTIMATED_POPUP_HEIGHT - VIEWPORT_PADDING,
+        );
+      }
+      setPos({
+        top: popupTop,
+        left: rect.right + 6,
+        triggerTop: rect.top,
+        triggerHeight: rect.height,
+      });
     }
     setOpen(true);
   };
@@ -385,36 +409,57 @@ function GroupCollapsed({
       </button>
 
       {open && pos && (
-        <div
-          className="fixed z-[100] stitch-fade-in"
-          style={{ top: pos.top, left: pos.left }}
-          onMouseEnter={cancelClose}
-          onMouseLeave={scheduleClose}
-        >
-          <div className="bg-surface-container-lowest rounded-xl ambient-shadow-lg min-w-[240px] max-w-[280px] py-2 max-h-[calc(100vh-32px)] flex flex-col">
-            <div className="px-3 py-2 text-xs font-semibold text-muted-foreground uppercase tracking-wider border-b mb-1 shrink-0">
-              {group.label}
-            </div>
-            <div className="px-1 space-y-0.5 overflow-y-auto flex-1">
-              {group.items?.map((leaf) => (
-                <LeafLink
-                  key={leaf.href}
-                  leaf={leaf}
-                  pathname={pathname}
-                  indent={0}
-                />
-              ))}
-              {group.subGroups?.map((sg) => (
-                <SubGroupSection
-                  key={sg.label}
-                  subGroup={sg}
-                  pathname={pathname}
-                  alwaysOpen
-                />
-              ))}
+        <>
+          {/* Sprint UI-FIX (CEO 08/05): Bridge zone — invisible div phủ vùng
+              trigger → popup. Khi popup ở top:16 mà trigger ở dưới, mouse
+              phải di chuyển dọc qua "no-man's-land" → bridge này catch
+              mouseenter để cancelClose, popup không bị rớt. */}
+          <div
+            className="fixed z-[99]"
+            style={{
+              top: Math.min(pos.top, pos.triggerTop),
+              left: pos.left - 6,
+              width: 12,
+              height:
+                Math.abs(pos.top - pos.triggerTop) + pos.triggerHeight + 12,
+              // pointerEvents auto để bridge nhận mouseenter; visually trong suốt
+              pointerEvents: "auto",
+            }}
+            onMouseEnter={cancelClose}
+            onMouseLeave={scheduleClose}
+            aria-hidden
+          />
+          <div
+            className="fixed z-[100] stitch-fade-in"
+            style={{ top: pos.top, left: pos.left }}
+            onMouseEnter={cancelClose}
+            onMouseLeave={scheduleClose}
+          >
+            <div className="bg-surface-container-lowest rounded-xl ambient-shadow-lg min-w-[240px] max-w-[280px] py-2 max-h-[calc(100vh-32px)] flex flex-col">
+              <div className="px-3 py-2 text-xs font-semibold text-muted-foreground uppercase tracking-wider border-b mb-1 shrink-0">
+                {group.label}
+              </div>
+              <div className="px-1 space-y-0.5 overflow-y-auto flex-1">
+                {group.items?.map((leaf) => (
+                  <LeafLink
+                    key={leaf.href}
+                    leaf={leaf}
+                    pathname={pathname}
+                    indent={0}
+                  />
+                ))}
+                {group.subGroups?.map((sg) => (
+                  <SubGroupSection
+                    key={sg.label}
+                    subGroup={sg}
+                    pathname={pathname}
+                    alwaysOpen
+                  />
+                ))}
+              </div>
             </div>
           </div>
-        </div>
+        </>
       )}
     </div>
   );
