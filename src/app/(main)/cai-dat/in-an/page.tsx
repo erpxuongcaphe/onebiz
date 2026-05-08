@@ -32,6 +32,7 @@ import {
 import { useToast } from "@/lib/contexts/toast-context";
 import { HelpTip } from "@/components/shared/help-tip";
 import { BusinessLogoUpload } from "@/components/shared/business-logo-upload";
+import { KitchenStationsCard } from "@/components/shared/kitchen-stations-card";
 import {
   getTenantBusinessInfo,
   updateTenantBusinessInfo,
@@ -635,6 +636,9 @@ export default function PrintSettingsPage() {
           </div>
         </CardContent>
       </Card>
+
+      {/* ── Sprint KITCHEN-1: Trạm chế biến (CEO 07/05) ── */}
+      <KitchenStationsCard />
 
       {/* ── 3. Receipt Content ── */}
       <Card>

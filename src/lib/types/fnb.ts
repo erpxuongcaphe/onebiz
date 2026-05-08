@@ -64,6 +64,12 @@ export interface KitchenOrderItem {
   status: KitchenItemStatus;
   startedAt: string | null;
   completedAt: string | null;
+  /**
+   * Sprint KITCHEN-1 (CEO 07/05): trạm chế biến cho item này (auto-fill từ
+   * category.kitchen_station_id khi insert). Null = single-queue legacy mode.
+   * Dùng để split phiếu in + filter KDS theo trạm.
+   */
+  kitchenStationId?: string | null;
 }
 
 // ── Kitchen order ──

@@ -45,6 +45,7 @@ import { getKitchenOrderById, getKitchenOrders, cancelKitchenOrder, transferTabl
 import { getOpenShift, openShift, closeShift } from "@/lib/services/supabase/shifts";
 import { getClient } from "@/lib/services/supabase/base";
 import { printKitchenTicketV2, printPreBill, printFnbReceipt } from "@/lib/print-fnb";
+import { printKitchenTicketsByStation } from "./print-stations";
 import { printShiftReport } from "@/lib/print-shift-report";
 import type { RestaurantTable } from "@/lib/types/fnb";
 import type { Shift } from "@/lib/types/shift";
@@ -808,27 +809,36 @@ function FnbPosPageInner() {
           networkStatus.isOnline
         );
 
-        // In ticket bổ sung (đánh dấu "BỔ SUNG")
-        if (settings.print.autoPrintKitchen) {
-          printKitchenTicketV2({
-            orderNumber: tab.label,
-            tableName: tab.label,
-            orderType: tab.orderType,
-            items: tab.lines.map((l) => ({
-              name: l.productName,
-              variant: l.variantLabel,
+        // In ticket bổ sung (đánh dấu "BỔ SUNG") — Sprint KITCHEN-1: split
+        // theo station, mỗi station 1 phiếu với header lớn (BAR / BẾP / ...).
+        if (settings.print.autoPrintKitchen && branchId) {
+          await printKitchenTicketsByStation(
+            tab.lines.map((l) => ({
+              productId: l.productId,
+              productName: l.productName,
+              variantLabel: l.variantLabel,
               quantity: l.quantity,
               unitPrice: l.unitPrice,
-              toppings: l.toppings.map((t) => ({ name: t.name, quantity: t.quantity, price: t.price })),
+              toppings: l.toppings.map((t) => ({
+                name: t.name,
+                quantity: t.quantity,
+                price: t.price,
+              })),
               note: l.note,
             })),
-            createdAt: new Date().toISOString(),
-            cashierName: user?.fullName,
-            style: settings.print.kitchenTicketStyle,
-            paperSize: settings.print.paperSize === "58mm" ? "58mm" : "80mm",
-            isOffline: !networkStatus.isOnline,
-            isSupplement: true,
-          });
+            {
+              orderNumber: tab.label,
+              tableName: tab.label,
+              orderType: tab.orderType,
+              createdAt: new Date().toISOString(),
+              cashierName: user?.fullName,
+              style: settings.print.kitchenTicketStyle,
+              paperSize: settings.print.paperSize === "58mm" ? "58mm" : "80mm",
+              isOffline: !networkStatus.isOnline,
+              isSupplement: true,
+            },
+            branchId,
+          );
         }
 
         pos.clearCart();
@@ -863,26 +873,36 @@ function FnbPosPageInner() {
 
       pos.updateTabMeta(tab.id, { kitchenOrderId: result.kitchenOrderId });
 
-      // Print kitchen ticket (auto-print if enabled in settings)
-      if (settings.print.autoPrintKitchen) {
-        printKitchenTicketV2({
-          orderNumber: result.orderNumber ?? "—",
-          tableName: tab.label,
-          orderType: tab.orderType,
-          items: tab.lines.map((l) => ({
-            name: l.productName,
-            variant: l.variantLabel,
+      // Print kitchen ticket — Sprint KITCHEN-1: split theo station, mỗi
+      // station 1 phiếu (Bar / Bếp / Quầy bánh...). Backward compat: tenant
+      // chỉ có 1 station "Bar pha chế" → in 1 phiếu y hệt cũ.
+      if (settings.print.autoPrintKitchen && branchId) {
+        await printKitchenTicketsByStation(
+          tab.lines.map((l) => ({
+            productId: l.productId,
+            productName: l.productName,
+            variantLabel: l.variantLabel,
             quantity: l.quantity,
             unitPrice: l.unitPrice,
-            toppings: l.toppings.map((t) => ({ name: t.name, quantity: t.quantity, price: t.price })),
+            toppings: l.toppings.map((t) => ({
+              name: t.name,
+              quantity: t.quantity,
+              price: t.price,
+            })),
             note: l.note,
           })),
-          createdAt: new Date().toISOString(),
-          cashierName: user?.fullName,
-          style: settings.print.kitchenTicketStyle,
-          paperSize: settings.print.paperSize === "58mm" ? "58mm" : "80mm",
-          isOffline: !networkStatus.isOnline,
-        });
+          {
+            orderNumber: result.orderNumber ?? "—",
+            tableName: tab.label,
+            orderType: tab.orderType,
+            createdAt: new Date().toISOString(),
+            cashierName: user?.fullName,
+            style: settings.print.kitchenTicketStyle,
+            paperSize: settings.print.paperSize === "58mm" ? "58mm" : "80mm",
+            isOffline: !networkStatus.isOnline,
+          },
+          branchId,
+        );
       }
 
       pos.clearCart();

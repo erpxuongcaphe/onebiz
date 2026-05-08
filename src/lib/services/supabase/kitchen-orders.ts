@@ -14,6 +14,7 @@ import type {
 } from "@/lib/types/fnb";
 import { getClient, handleError, getCurrentTenantId } from "./base";
 import { recordAuditLog } from "./audit";
+import { getStationsByProductIds } from "./kitchen-stations";
 
 type KOInsert = Database["public"]["Tables"]["kitchen_orders"]["Insert"];
 type KOItemInsert = Database["public"]["Tables"]["kitchen_order_items"]["Insert"];
@@ -65,6 +66,8 @@ function mapKitchenItem(row: any): KitchenOrderItem {
     status: row.status,
     startedAt: row.started_at,
     completedAt: row.completed_at,
+    // Sprint KITCHEN-1: station routing — null nếu legacy single-queue mode.
+    kitchenStationId: (row.kitchen_station_id as string | null) ?? null,
   };
 }
 
@@ -229,20 +232,31 @@ export async function createKitchenOrder(
   }
   if (!order) throw new Error("Không tạo được đơn bếp");
 
-  // Insert items
-  const itemsData: KOItemInsert[] = input.items.map((item) => ({
-    kitchen_order_id: order.id,
-    product_id: item.productId,
-    product_name: item.productName,
-    variant_id: item.variantId ?? null,
-    variant_label: item.variantLabel ?? null,
-    quantity: item.quantity,
-    unit_price: item.unitPrice,
-    note: item.note ?? null,
-    toppings: item.toppings ?? null,
-  }));
+  // Sprint KITCHEN-1: Auto-fill station_id cho mỗi item bằng cách lookup
+  // product → category → kitchen_station_id. Bulk query 1 lần cho hiệu quả.
+  // Items không tìm được station → null (legacy single-queue mode).
+  const productIds = Array.from(new Set(input.items.map((i) => i.productId)));
+  const stationMap = await getStationsByProductIds(productIds).catch(
+    () => new Map<string, string | null>(),
+  );
 
-  const { error: itemsErr } = await supabase
+  // Insert items với kitchen_station_id auto-filled
+  const itemsData: (KOItemInsert & { kitchen_station_id?: string | null })[] =
+    input.items.map((item) => ({
+      kitchen_order_id: order.id,
+      product_id: item.productId,
+      product_name: item.productName,
+      variant_id: item.variantId ?? null,
+      variant_label: item.variantLabel ?? null,
+      quantity: item.quantity,
+      unit_price: item.unitPrice,
+      note: item.note ?? null,
+      toppings: item.toppings ?? null,
+      kitchen_station_id: stationMap.get(item.productId) ?? null,
+    }));
+
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  const { error: itemsErr } = await (supabase as any)
     .from("kitchen_order_items")
     .insert(itemsData);
 
@@ -269,19 +283,28 @@ export async function addItemsToOrder(
 ): Promise<void> {
   const supabase = getClient();
 
-  const itemsData: KOItemInsert[] = items.map((item) => ({
-    kitchen_order_id: orderId,
-    product_id: item.productId,
-    product_name: item.productName,
-    variant_id: item.variantId ?? null,
-    variant_label: item.variantLabel ?? null,
-    quantity: item.quantity,
-    unit_price: item.unitPrice,
-    note: item.note ?? null,
-    toppings: item.toppings ?? null,
-  }));
+  // Sprint KITCHEN-1: Auto-fill station_id cho items bổ sung (cùng logic).
+  const productIds = Array.from(new Set(items.map((i) => i.productId)));
+  const stationMap = await getStationsByProductIds(productIds).catch(
+    () => new Map<string, string | null>(),
+  );
 
-  const { error } = await supabase
+  const itemsData: (KOItemInsert & { kitchen_station_id?: string | null })[] =
+    items.map((item) => ({
+      kitchen_order_id: orderId,
+      product_id: item.productId,
+      product_name: item.productName,
+      variant_id: item.variantId ?? null,
+      variant_label: item.variantLabel ?? null,
+      quantity: item.quantity,
+      unit_price: item.unitPrice,
+      note: item.note ?? null,
+      toppings: item.toppings ?? null,
+      kitchen_station_id: stationMap.get(item.productId) ?? null,
+    }));
+
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  const { error } = await (supabase as any)
     .from("kitchen_order_items")
     .insert(itemsData);
 

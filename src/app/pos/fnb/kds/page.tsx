@@ -29,6 +29,7 @@ import {
   updateKitchenItemStatus,
 } from "@/lib/services/supabase/kitchen-orders";
 import { getClient } from "@/lib/services/supabase/base";
+import { getKitchenStationsByBranch } from "@/lib/services/supabase/kitchen-stations";
 import { hapticTap, hapticSuccess } from "@/lib/offline";
 import { printKitchenTicketV2 } from "@/lib/print-fnb";
 import type {
@@ -116,6 +117,12 @@ function KdsPageInner() {
   const [orders, setOrders] = useState<KdsOrder[]>([]);
   const [loading, setLoading] = useState(true);
   const [filter, setFilter] = useState<FilterTab>("all");
+  // Sprint KITCHEN-1 (CEO 07/05): filter theo trạm chế biến.
+  // null = "Tất cả trạm" (hiện hết). string = id của 1 station.
+  const [stationFilter, setStationFilter] = useState<string | null>(null);
+  const [stations, setStations] = useState<
+    { id: string; name: string; color: string; icon: string }[]
+  >([]);
   const [soundOn, setSoundOn] = useState(true);
   const [now, setNow] = useState(Date.now());
   const [realtimeConnected, setRealtimeConnected] = useState(false);
@@ -132,6 +139,27 @@ function KdsPageInner() {
     const d = new Date();
     return `${String(d.getHours()).padStart(2, "0")}:${String(d.getMinutes()).padStart(2, "0")}`;
   });
+
+  // Sprint KITCHEN-1: Load stations cho dropdown filter.
+  useEffect(() => {
+    if (!branchId) return;
+    let cancelled = false;
+    getKitchenStationsByBranch(branchId)
+      .then((list) => {
+        if (cancelled) return;
+        // Chỉ hiện stations có show_on_kds !== false
+        const visible = list
+          .filter((s) => s.settings.show_on_kds !== false)
+          .map((s) => ({ id: s.id, name: s.name, color: s.color, icon: s.icon }));
+        setStations(visible);
+      })
+      .catch(() => {
+        if (!cancelled) setStations([]);
+      });
+    return () => {
+      cancelled = true;
+    };
+  }, [branchId]);
 
   // ── Poll orders ──
   const fetchOrders = useCallback(async () => {
@@ -432,10 +460,21 @@ function KdsPageInner() {
   );
 
   // ── Filtered orders ──
-  const filtered = orders.filter((o) => {
-    if (filter === "all") return o.status !== "served";
-    return o.status === filter;
-  });
+  // Sprint KITCHEN-1: thêm filter theo station — bar staff chỉ thấy món
+  // drink, kitchen staff chỉ thấy món bếp. Khi filter = null = "Tất cả trạm".
+  const filtered = orders
+    .map((o) => {
+      // Filter items theo station nếu có chọn
+      if (!stationFilter) return o;
+      const items = o.items.filter((it) => it.kitchenStationId === stationFilter);
+      return { ...o, items };
+    })
+    .filter((o) => {
+      // Hide order nếu không còn item nào (sau khi filter station)
+      if (stationFilter && o.items.length === 0) return false;
+      if (filter === "all") return o.status !== "served";
+      return o.status === filter;
+    });
 
   // ── Render ──
 
@@ -538,6 +577,48 @@ function KdsPageInner() {
             </button>
           ))}
         </div>
+
+        {/* Sprint KITCHEN-1: Station filter — chỉ hiện nếu quán có >1 trạm.
+            Bar staff chọn "Bar" → chỉ thấy món drink, kitchen staff chọn "Bếp"
+            → chỉ thấy món bếp. Default null = "Tất cả trạm". */}
+        {stations.length > 1 && (
+          <div className="hidden md:flex items-center gap-1 bg-pos-chrome-bg/60 p-1 rounded-xl border border-pos-chrome-border/40">
+            <button
+              onClick={() => setStationFilter(null)}
+              className={cn(
+                "px-3 py-2 rounded-lg font-semibold text-xs transition-all press-scale-sm flex items-center gap-1.5",
+                stationFilter === null
+                  ? "bg-pos-chrome-fg/15 text-pos-chrome-fg"
+                  : "text-pos-chrome-fg-dim hover:bg-pos-chrome-bg-elevated hover:text-pos-chrome-fg",
+              )}
+              title="Hiện tất cả trạm"
+            >
+              <Icon name="apps" size={14} />
+              Tất cả
+            </button>
+            {stations.map((s) => (
+              <button
+                key={s.id}
+                onClick={() => setStationFilter(s.id)}
+                className={cn(
+                  "px-3 py-2 rounded-lg font-semibold text-xs transition-all press-scale-sm flex items-center gap-1.5",
+                  stationFilter === s.id
+                    ? "text-white shadow-md"
+                    : "text-pos-chrome-fg-dim hover:bg-pos-chrome-bg-elevated hover:text-pos-chrome-fg",
+                )}
+                style={
+                  stationFilter === s.id
+                    ? { backgroundColor: s.color }
+                    : undefined
+                }
+                title={`Chỉ hiện món ${s.name}`}
+              >
+                <Icon name={s.icon} size={14} />
+                {s.name}
+              </button>
+            ))}
+          </div>
+        )}
 
         {/* Right: time + sound */}
         <div className="flex items-center gap-3 shrink-0">

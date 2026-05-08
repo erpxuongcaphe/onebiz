@@ -71,6 +71,15 @@ export interface KitchenTicketDataV2 {
   isSupplement?: boolean;
   /** true = order saved offline, will sync when online */
   isOffline?: boolean;
+  /**
+   * Sprint KITCHEN-1 (CEO 07/05): Tên trạm chế biến hiển thị header LỚN
+   * trên phiếu (vd "BAR PHA CHẾ", "BẾP NÓNG"). Để trống = "PHIẾU BAR/BẾP" mặc định.
+   */
+  stationName?: string;
+  /**
+   * Màu badge station (hex) cho border + text accent. Default = "#000".
+   */
+  stationColor?: string;
 }
 
 // ============================================================
@@ -448,7 +457,9 @@ ${offlineBanner}
 ${supplementBanner}
 
 <div class="center">
-  <div style="font-size:12px;letter-spacing:3px">PHIẾU BAR/BẾP</div>
+  <div style="font-size:14px;letter-spacing:3px;font-weight:bold;${data.stationColor ? `color:${data.stationColor};` : ""}padding:6px 0;${data.stationColor ? `border:2px solid ${data.stationColor};` : "border:1px solid #000;"}margin-bottom:4px">
+    ${data.stationName ?? "PHIẾU BAR/BẾP"}
+  </div>
   <div class="order-number">${data.orderNumber}</div>
 </div>
 
