@@ -74,6 +74,20 @@ export interface UseFnbPosStateReturn {
   setOrderDiscount: (tabId: string, discount: FnbDiscountInput | undefined) => void;
   orderDiscountAmount: number;
 
+  // Sprint POS-FNB-EXT-1 (CEO 08/05): order metadata
+  /** Set ghi chú toàn đơn (orderNote). Khác line.note (ghi chú từng món). */
+  setOrderNote: (tabId: string, note: string) => void;
+  /** Set sàn giao hàng + auto-fill commission % nếu user chưa override. */
+  setDeliveryPlatform: (
+    tabId: string,
+    platform: import("@/lib/types/fnb").DeliveryPlatform,
+    commissionPercent?: number,
+  ) => void;
+  /** Set phí giao hàng VND. */
+  setDeliveryFee: (tabId: string, fee: number) => void;
+  /** Override % chiết khấu sàn (nếu khác mặc định). */
+  setPlatformCommissionPercent: (tabId: string, percent: number) => void;
+
   // Totals
   subtotal: number;
   total: number;
@@ -311,6 +325,63 @@ export function useFnbPosState(branchId?: string): UseFnbPosStateReturn {
     []
   );
 
+  // ── Sprint POS-FNB-EXT-1: Order metadata (note + delivery) ──
+
+  const setOrderNote = useCallback((tabId: string, note: string) => {
+    setTabs((prev) =>
+      prev.map((t) => (t.id === tabId ? { ...t, orderNote: note } : t)),
+    );
+  }, []);
+
+  const setDeliveryPlatform = useCallback(
+    (
+      tabId: string,
+      platform: import("@/lib/types/fnb").DeliveryPlatform,
+      commissionPercent?: number,
+    ) => {
+      setTabs((prev) =>
+        prev.map((t) =>
+          t.id === tabId
+            ? {
+                ...t,
+                deliveryPlatform: platform,
+                // Chỉ override commission nếu caller pass (auto-fill từ settings).
+                // Nếu không, giữ value cũ user đã chỉnh tay.
+                ...(commissionPercent !== undefined
+                  ? { platformCommissionPercent: commissionPercent }
+                  : {}),
+              }
+            : t,
+        ),
+      );
+    },
+    [],
+  );
+
+  const setDeliveryFee = useCallback((tabId: string, fee: number) => {
+    setTabs((prev) =>
+      prev.map((t) =>
+        t.id === tabId ? { ...t, deliveryFee: Math.max(0, fee) } : t,
+      ),
+    );
+  }, []);
+
+  const setPlatformCommissionPercent = useCallback(
+    (tabId: string, percent: number) => {
+      setTabs((prev) =>
+        prev.map((t) =>
+          t.id === tabId
+            ? {
+                ...t,
+                platformCommissionPercent: Math.max(0, Math.min(100, percent)),
+              }
+            : t,
+        ),
+      );
+    },
+    [],
+  );
+
   // ── Totals ──
 
   const lines = activeTab?.lines ?? [];
@@ -343,6 +414,10 @@ export function useFnbPosState(branchId?: string): UseFnbPosStateReturn {
     clearCart,
     setOrderDiscount,
     orderDiscountAmount,
+    setOrderNote,
+    setDeliveryPlatform,
+    setDeliveryFee,
+    setPlatformCommissionPercent,
     subtotal,
     total,
     lineCount,

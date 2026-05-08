@@ -7,10 +7,30 @@ import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { ScrollArea } from "@/components/ui/scroll-area";
 import { Input } from "@/components/ui/input";
+import { Textarea } from "@/components/ui/textarea";
 import { cn } from "@/lib/utils";
 import { formatCurrency } from "@/lib/format";
-import type { FnbTabSnapshot, FnbOrderLine, FnbDiscountInput } from "@/lib/types/fnb";
+import type {
+  FnbTabSnapshot,
+  FnbOrderLine,
+  FnbDiscountInput,
+  DeliveryPlatform,
+} from "@/lib/types/fnb";
 import { Icon } from "@/components/ui/icon";
+import { HelpTip } from "@/components/shared/help-tip";
+
+// Sprint POS-FNB-EXT-1 (CEO 08/05): Delivery platform metadata
+const DELIVERY_PLATFORMS: {
+  key: DeliveryPlatform;
+  label: string;
+  color: string;
+}[] = [
+  { key: "shopee_food", label: "Shopee Food", color: "#ee4d2d" },
+  { key: "grab_food", label: "Grab Food", color: "#00b14f" },
+  { key: "gojek", label: "Gojek", color: "#00aa13" },
+  { key: "be", label: "Be", color: "#fdd835" },
+  { key: "direct", label: "Tự giao", color: "#475569" },
+];
 
 interface FnbCartProps {
   activeTab: FnbTabSnapshot | undefined;
@@ -26,6 +46,17 @@ interface FnbCartProps {
   onCustomerClick?: () => void;
   onDiscountChange?: (discount: FnbDiscountInput | undefined) => void;
   onPrintPreBill?: () => void;
+  /** Sprint POS-FNB-EXT-1: ghi chú toàn đơn. */
+  onOrderNoteChange?: (note: string) => void;
+  /** Sprint POS-FNB-EXT-1: delivery platform setters (chỉ dùng khi orderType="delivery"). */
+  onDeliveryPlatformChange?: (
+    platform: import("@/lib/types/fnb").DeliveryPlatform,
+    commissionPercent?: number,
+  ) => void;
+  onDeliveryFeeChange?: (fee: number) => void;
+  onPlatformCommissionChange?: (percent: number) => void;
+  /** Sprint POS-FNB-EXT-1: discount presets từ settings. */
+  discountPresets?: { id: string; name: string; mode: "amount" | "percent"; value: number }[];
   /** Huỷ đơn bếp — chỉ hiển thị khi activeTab.kitchenOrderId tồn tại (đã gửi bếp). */
   onVoidKitchenOrder?: () => void;
   /** Chuyển bàn — chỉ hiển thị khi dine_in + kitchenOrderId tồn tại. */
@@ -80,7 +111,14 @@ export function FnbCart({
   couponApplying,
   freeItems,
   mobile,
+  onOrderNoteChange,
+  onDeliveryPlatformChange,
+  onDeliveryFeeChange,
+  onPlatformCommissionChange,
+  discountPresets,
 }: FnbCartProps) {
+  // Sprint POS-FNB-EXT-1: state cho note textarea expandable
+  const [noteExpanded, setNoteExpanded] = useState(false);
   const lines = activeTab?.lines ?? [];
   const isEmpty = lines.length === 0;
   const orderTypeLabel =
@@ -186,6 +224,44 @@ export function FnbCart({
             F4
           </kbd>
         </button>
+
+        {/* Sprint POS-FNB-EXT-1: Ghi chú đơn — toggle expandable textarea
+            (CEO 08/05). Ghi chú toàn bill khác line.note (từng món). */}
+        {onOrderNoteChange && (
+          <div className="mt-2">
+            <button
+              type="button"
+              onClick={() => setNoteExpanded((v) => !v)}
+              className="w-full flex items-center gap-2 px-3 py-1.5 rounded-lg text-xs text-on-surface-variant hover:bg-surface-container transition-colors"
+            >
+              <Icon name="sticky_note_2" size={14} />
+              <span className="flex-1 text-left truncate">
+                {activeTab?.orderNote
+                  ? `📝 ${activeTab.orderNote}`
+                  : "Thêm ghi chú đơn"}
+              </span>
+              <HelpTip>
+                Ghi chú cho TOÀN BILL — vd "Khách kiêng đường", "Đơn VIP",
+                "Không nhận giấy". In ra phiếu bếp dòng riêng. Khác ghi chú
+                từng món (mở dialog món để nhập).
+              </HelpTip>
+              <Icon
+                name={noteExpanded ? "expand_less" : "expand_more"}
+                size={14}
+                className="opacity-60"
+              />
+            </button>
+            {noteExpanded && (
+              <Textarea
+                value={activeTab?.orderNote ?? ""}
+                onChange={(e) => onOrderNoteChange(e.target.value)}
+                placeholder="VD: Khách kiêng đường hết bill, đơn ưu tiên VIP..."
+                className="mt-1 text-xs min-h-[60px] resize-y"
+                maxLength={300}
+              />
+            )}
+          </div>
+        )}
       </div>
 
       {/* Order type pill row — Sprint POS-FNB-4 (CEO 06/05).
@@ -242,6 +318,98 @@ export function FnbCart({
             )}
           </div>
         )}
+
+        {/* Sprint POS-FNB-EXT-1: Delivery platform section — chỉ hiện khi
+            orderType="delivery". Pick sàn → auto-fill commission % từ settings.
+            User override được commission + delivery fee. */}
+        {activeTab?.orderType === "delivery" &&
+          onDeliveryPlatformChange &&
+          !activeTab?.kitchenOrderId && (
+            <div className="mt-3 p-3 rounded-xl bg-surface-container-low border border-outline-variant/20 space-y-2.5">
+              <div className="flex items-center gap-1">
+                <span className="text-[11px] uppercase tracking-wider font-bold text-on-surface-variant">
+                  Sàn giao hàng
+                </span>
+                <HelpTip>
+                  Chọn sàn để hệ thống tự ghi nhận chiết khấu (% sàn lấy của
+                  quán) + phí ship. Dùng cho báo cáo doanh thu net (sau CK).
+                  Mặc định % CK lấy từ Cài đặt → Sàn giao hàng.
+                </HelpTip>
+              </div>
+              {/* Platform pills */}
+              <div className="flex gap-1 flex-wrap">
+                {DELIVERY_PLATFORMS.map((p) => {
+                  const isActive =
+                    (activeTab.deliveryPlatform ?? "direct") === p.key;
+                  return (
+                    <button
+                      key={p.key}
+                      type="button"
+                      onClick={() => onDeliveryPlatformChange(p.key)}
+                      className={cn(
+                        "px-2.5 py-1 rounded-md text-[11px] font-semibold transition-colors",
+                        isActive
+                          ? "text-white shadow-sm"
+                          : "bg-surface-container text-on-surface-variant hover:bg-surface-container-high",
+                      )}
+                      style={isActive ? { backgroundColor: p.color } : undefined}
+                    >
+                      {p.label}
+                    </button>
+                  );
+                })}
+              </div>
+              {/* Fee + Commission inputs row */}
+              {(activeTab.deliveryPlatform ?? "direct") !== "direct" && (
+                <div className="grid grid-cols-2 gap-2">
+                  <div className="space-y-0.5">
+                    <label className="text-[10px] text-on-surface-variant flex items-center gap-1">
+                      Phí ship (₫)
+                      <HelpTip>
+                        Phí giao hàng quán trả cho sàn / shipper. Khách thường
+                        thấy "Free ship" nhưng quán vẫn chịu phí qua sàn.
+                      </HelpTip>
+                    </label>
+                    <Input
+                      type="number"
+                      min={0}
+                      step={1000}
+                      value={activeTab.deliveryFee ?? 0}
+                      onChange={(e) =>
+                        onDeliveryFeeChange?.(parseInt(e.target.value) || 0)
+                      }
+                      className="h-8 text-xs"
+                      placeholder="0"
+                    />
+                  </div>
+                  <div className="space-y-0.5">
+                    <label className="text-[10px] text-on-surface-variant flex items-center gap-1">
+                      CK sàn (%)
+                      <HelpTip>
+                        % chiết khấu sàn lấy của quán. Shopee Food / Grab Food
+                        thường 25%, Be 20%. Có thể chỉnh tay nếu sàn ưu đãi
+                        riêng cho quán anh.
+                      </HelpTip>
+                    </label>
+                    <Input
+                      type="number"
+                      min={0}
+                      max={100}
+                      step={1}
+                      value={activeTab.platformCommissionPercent ?? 0}
+                      onChange={(e) =>
+                        onPlatformCommissionChange?.(
+                          parseInt(e.target.value) || 0,
+                        )
+                      }
+                      className="h-8 text-xs"
+                      placeholder="0"
+                    />
+                  </div>
+                </div>
+              )}
+            </div>
+          )}
       </div>
 
       {/* ── Cart lines ── */}

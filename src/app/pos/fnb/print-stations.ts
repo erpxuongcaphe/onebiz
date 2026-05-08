@@ -29,6 +29,7 @@ interface RawTicketItem {
   note?: string | null;
 }
 
+// Sprint POS-FNB-EXT-1: orderNote vẫn passable qua baseData
 type BaseTicketData = Omit<KitchenTicketDataV2, "items" | "stationName" | "stationColor">;
 
 /**

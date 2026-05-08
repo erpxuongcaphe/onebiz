@@ -80,6 +80,12 @@ export interface KitchenTicketDataV2 {
    * Màu badge station (hex) cho border + text accent. Default = "#000".
    */
   stationColor?: string;
+  /**
+   * Sprint POS-FNB-EXT-1 (CEO 08/05): Ghi chú toàn đơn — vd "Khách kiêng
+   * đường", "Đơn VIP". In dòng riêng dưới header station, font đậm + bg xám
+   * để bếp/bar dễ nhận biết.
+   */
+  orderNote?: string;
 }
 
 // ============================================================
@@ -469,6 +475,12 @@ ${supplementBanner}
   <div class="table-label">${tableLabel}</div>
   <div class="type-badge">${typeLabel.toUpperCase()}</div>
 </div>
+
+${
+  data.orderNote
+    ? `<div style="margin:8px 0;padding:8px;background:#f3f4f6;border-left:4px solid #000;font-size:14px;font-weight:bold;line-height:1.4">📝 GHI CHÚ ĐƠN:<br/>${data.orderNote}</div>`
+    : ""
+}
 
 <div class="line"></div>
 

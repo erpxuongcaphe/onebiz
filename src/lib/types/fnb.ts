@@ -141,4 +141,23 @@ export interface FnbTabSnapshot {
   customerName: string;
   orderDiscount?: FnbDiscountInput;
   lines: FnbOrderLine[];
+  /**
+   * Sprint POS-FNB-EXT-1 (CEO 08/05): Ghi chú đơn — ghi chú toàn bill
+   * (khác line.note là ghi chú từng món). Vd "Khách kiêng đường",
+   * "Đơn ưu tiên VIP", "Không nhận túi nilon".
+   * Pass vào sendToKitchen + in ra phiếu bếp dòng "📝 Ghi chú: ...".
+   */
+  orderNote?: string;
+  /**
+   * Sàn giao hàng (chỉ áp dụng khi orderType === "delivery").
+   * Default "direct" = quán tự giao.
+   */
+  deliveryPlatform?: DeliveryPlatform;
+  /** Phí giao hàng (VND), thường 15-30k. Khách trả thêm hoặc shop subsidize. */
+  deliveryFee?: number;
+  /**
+   * % chiết khấu cho platform. Auto-fill từ settings khi pick platform,
+   * user override được tại cart. Vd Shopee Food default 25%.
+   */
+  platformCommissionPercent?: number;
 }

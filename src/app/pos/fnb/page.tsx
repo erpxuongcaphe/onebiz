@@ -864,12 +864,17 @@ function FnbPosPageInner() {
       }
 
       // ── Tạo đơn bếp mới ──
+      // Sprint POS-FNB-EXT-1: pass orderNote + delivery platform metadata
       const result = await offlineSendToKitchen({
         tenantId,
         branchId: branchId!,
         createdBy: userId,
         tableId: tab.tableId,
         orderType: tab.orderType,
+        note: tab.orderNote,
+        deliveryPlatform: tab.deliveryPlatform,
+        deliveryFee: tab.deliveryFee,
+        platformCommission: tab.platformCommissionPercent,
         items: mappedItems,
       }, networkStatus.isOnline);
 
@@ -902,6 +907,7 @@ function FnbPosPageInner() {
             style: settings.print.kitchenTicketStyle,
             paperSize: settings.print.paperSize === "58mm" ? "58mm" : "80mm",
             isOffline: !networkStatus.isOnline,
+            orderNote: tab.orderNote, // Sprint POS-FNB-EXT-1: in ghi chú đơn ra phiếu
           },
           branchId,
         );
@@ -1839,6 +1845,14 @@ function FnbPosPageInner() {
           appliedCouponCode={couponApplied?.code}
           couponApplying={couponApplying}
           freeItems={appliedPromotion?.freeItems}
+          onOrderNoteChange={(note) => pos.setOrderNote(pos.activeTabId, note)}
+          onDeliveryPlatformChange={(platform, commission) =>
+            pos.setDeliveryPlatform(pos.activeTabId, platform, commission)
+          }
+          onDeliveryFeeChange={(fee) => pos.setDeliveryFee(pos.activeTabId, fee)}
+          onPlatformCommissionChange={(pct) =>
+            pos.setPlatformCommissionPercent(pos.activeTabId, pct)
+          }
         />
       </div>
 
