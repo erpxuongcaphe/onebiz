@@ -23,5 +23,45 @@ export function useFnbSubdomain() {
     return path;
   };
 
-  return { isFnb, fnbPath };
+  /**
+   * Sprint UI-FIX (CEO 08/05): Build URL FULL đến FnB subdomain.
+   * Dùng cho button "POS F&B" trên trang chủ — khi user click, browser
+   * navigate sang subdomain riêng (fnb.onebiz.com.vn) thay vì rewrite
+   * trong cùng tab dưới URL `onebiz.com.vn/pos/fnb`.
+   *
+   * Behavior theo host:
+   *   - On fnb.* → relative path (đã ở subdomain rồi)
+   *   - On app.onebiz.com.vn | onebiz.com.vn | www.onebiz.com.vn →
+   *     full URL `https://fnb.onebiz.com.vn{path}` để cross-subdomain nav
+   *   - Localhost / vercel preview → giữ `/pos/fnb{path}` (không có subdomain
+   *     riêng để switch)
+   *
+   * @param subPath sub path SAU /pos/fnb. Default = "" → trang chủ FnB.
+   *   VD posFnbUrl() = "https://fnb.onebiz.com.vn/"
+   *      posFnbUrl("/kds") = "https://fnb.onebiz.com.vn/kds"
+   */
+  const posFnbUrl = (subPath: string = ""): string => {
+    if (typeof window === "undefined") return `/pos/fnb${subPath}`;
+    const host = window.location.hostname;
+
+    // Already on fnb subdomain → relative
+    if (host.startsWith("fnb.") || host.startsWith("fnb-")) {
+      return subPath === "" ? "/" : subPath;
+    }
+
+    // Production app/root domain → full URL sang fnb subdomain
+    if (
+      host === "app.onebiz.com.vn" ||
+      host === "onebiz.com.vn" ||
+      host === "www.onebiz.com.vn"
+    ) {
+      const protocol = window.location.protocol;
+      return `${protocol}//fnb.onebiz.com.vn${subPath === "" ? "/" : subPath}`;
+    }
+
+    // Vercel preview / localhost / dev → fallback in-app routing
+    return `/pos/fnb${subPath}`;
+  };
+
+  return { isFnb, fnbPath, posFnbUrl };
 }

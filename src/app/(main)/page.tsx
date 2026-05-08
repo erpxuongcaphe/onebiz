@@ -39,6 +39,7 @@ import {
   getFinancialAlerts,
 } from "@/lib/services";
 import { useAuth, useBranchFilter } from "@/lib/contexts";
+import { useFnbSubdomain } from "@/lib/hooks/use-fnb-subdomain";
 import type {
   DashboardKpis,
   ChartPoint,
@@ -84,6 +85,8 @@ export default function TongQuanPage() {
   // double-fire mỗi service).
   const { activeBranchId, isReady } = useBranchFilter();
   const { user } = useAuth();
+  // Sprint UI-FIX (CEO 08/05): button POS F&B nhảy qua fnb.onebiz.com.vn
+  const { posFnbUrl } = useFnbSubdomain();
   const [chartView, setChartView] = useState<ChartView>("day");
   // Progressive loading: KPI skeleton trước, charts + secondary widgets sau.
   // Trước đây single `loading` flag block toàn bộ dashboard 2-4s → user thấy spinner
@@ -239,11 +242,14 @@ export default function TongQuanPage() {
               <Icon name="shopping_cart" className="size-3.5" /> POS Retail
             </Button>
           </Link>
-          <Link href="/pos/fnb">
+          {/* Sprint UI-FIX (CEO 08/05): POS F&B → cross-subdomain navigation
+              tới fnb.onebiz.com.vn (không phải /pos/fnb route trong app).
+              Dùng <a> regular vì Next.js Link không xử lý cross-domain. */}
+          <a href={posFnbUrl()}>
             <Button size="sm" className="gap-2 h-8 shadow-sm bg-status-warning hover:bg-status-warning text-white">
               <Icon name="local_cafe" className="size-3.5" /> POS F&B
             </Button>
-          </Link>
+          </a>
           <div className="hidden sm:block h-5 w-px bg-border" />
           <Link href="/don-hang/dat-hang">
             <Button size="sm" variant="outline" className="gap-2 h-8">

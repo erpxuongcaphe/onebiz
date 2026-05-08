@@ -30,6 +30,7 @@ import {
 } from "@/lib/services/supabase/kitchen-orders";
 import { getClient } from "@/lib/services/supabase/base";
 import { getKitchenStationsByBranch } from "@/lib/services/supabase/kitchen-stations";
+import { useFnbSubdomain } from "@/lib/hooks/use-fnb-subdomain";
 import { hapticTap, hapticSuccess } from "@/lib/offline";
 import { printKitchenTicketV2 } from "@/lib/print-fnb";
 import type {
@@ -110,6 +111,9 @@ interface KdsOrder extends KitchenOrder {
 
 function KdsPageInner() {
   const { currentBranch, user } = useAuth();
+  // Sprint UI-FIX (CEO 08/05): link "Quay về POS" dùng fnbPath để
+  // trên subdomain fnb.* trỏ về "/" thay vì "/pos/fnb" (URL bar đẹp hơn).
+  const { fnbPath } = useFnbSubdomain();
   const { toast } = useToast();
   const { settings } = useSettings();
   const branchId = currentBranch?.id;
@@ -484,7 +488,7 @@ function KdsPageInner() {
       <div className="flex flex-col h-screen bg-pos-chrome-bg-elevated text-pos-chrome-fg">
         <header className="h-16 bg-pos-chrome-bg/70 backdrop-blur flex items-center px-6 gap-3 shrink-0 border-b border-pos-chrome-border/50">
           <Link
-            href="/pos/fnb"
+            href={fnbPath("/pos/fnb")}
             className="text-pos-chrome-fg-dim hover:text-pos-chrome-fg text-sm flex items-center gap-2 rounded-lg px-2 py-1 hover:bg-pos-chrome-bg-elevated transition-colors"
           >
             <Icon name="arrow_back" size={16} />
@@ -539,7 +543,7 @@ function KdsPageInner() {
         {/* Left: title + status */}
         <div className="flex items-center gap-3 min-w-0">
           <Link
-            href="/pos/fnb"
+            href={fnbPath("/pos/fnb")}
             className="shrink-0 text-pos-chrome-fg-dim hover:text-pos-chrome-fg rounded-lg p-2 hover:bg-pos-chrome-bg-elevated transition-colors"
             title="Quay về POS"
           >
