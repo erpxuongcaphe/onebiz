@@ -384,23 +384,33 @@ export default function QuanLyBanPage() {
     setAddTableOpen(true);
   };
 
-  // ── Branch guard ──
+  // ── Branch guard (Sprint LOAD-1: improved empty state) ──
 
   if (!activeBranchId) {
     return (
       <div className="space-y-6">
         <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3">
           <div>
-            <h1 className="text-2xl font-bold">Quản lý Bàn & Khu vực</h1>
+            <h1 className="text-2xl font-bold">Quản lý Bàn &amp; Khu vực</h1>
             <p className="text-muted-foreground text-sm mt-1">
               Chọn chi nhánh để quản lý bàn
             </p>
           </div>
           <PosBranchSelector variant="light" />
         </div>
-        <div className="flex flex-col items-center justify-center h-48 gap-3">
-          <Icon name="chair" size={40} className="text-muted-foreground" />
-          <p className="text-muted-foreground">Chọn chi nhánh ở góc phải để bắt đầu</p>
+        <div className="flex flex-col items-center justify-center py-16 gap-4">
+          <div className="relative w-24 h-24">
+            <div className="absolute inset-0 rounded-full bg-primary-fixed/30 animate-pulse" />
+            <div className="relative w-full h-full flex items-center justify-center text-primary">
+              <Icon name="chair" size={48} />
+            </div>
+          </div>
+          <div className="text-center space-y-1 max-w-md">
+            <h2 className="text-lg font-bold text-foreground">Chọn chi nhánh để bắt đầu</h2>
+            <p className="text-sm text-muted-foreground">
+              Mỗi quán có sơ đồ bàn riêng. Chọn chi nhánh ở chip bên phải header để xem &amp; sắp xếp bàn.
+            </p>
+          </div>
         </div>
       </div>
     );

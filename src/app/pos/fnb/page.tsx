@@ -53,6 +53,8 @@ import type { Customer } from "@/lib/types";
 import { formatCurrency } from "@/lib/format";
 import { useFnbPosState } from "./hooks/use-fnb-pos-state";
 import { FnbHeader } from "./components/fnb-header";
+import { FnbLoadingSkeleton } from "./components/fnb-loading-skeleton";
+import { FnbEmptyBranch } from "./components/fnb-empty-branch";
 import type { FnbCategory } from "./components/fnb-category-tabs";
 import {
   FnbCategorySidebar,
@@ -88,7 +90,7 @@ const SyncQueueDrawer = lazy(() => import("./components/sync-queue-drawer").then
 const FnbOrderHistoryDialog = lazy(() => import("./components/fnb-order-history-dialog").then(m => ({ default: m.FnbOrderHistoryDialog })));
 
 function FnbPosPageInner() {
-  const { user, tenant, currentBranch } = useAuth();
+  const { user, tenant, currentBranch, branches, isLoading: authLoading } = useAuth();
   const { toast } = useToast();
   const { settings } = useSettings();
   const networkStatus = useNetworkStatus();
@@ -1602,8 +1604,19 @@ function FnbPosPageInner() {
     handleSendToKitchen,
   ]);
 
-  // CEO chưa chọn chi nhánh → hiện layout POS với prompt chọn chi nhánh
+  // Sprint LOAD-1 (CEO 08/05): Phân biệt 3 state để loading UX đẹp hơn.
+  // 1) auth đang load → skeleton (user thấy đang load, không tưởng lỗi)
+  // 2) auth done + KHÔNG có branch FnB nào → empty state đẹp với CTA
+  // 3) data đang load (branchId có, products/tables fetching) → skeleton
+  if (authLoading) {
+    return <FnbLoadingSkeleton />;
+  }
   if (!branchId) {
+    // Phân biệt: chưa có branch nào (tenant rỗng) vs có branch nhưng chưa pick
+    if (branches.length === 0) {
+      return <FnbEmptyBranch onMenuClick={() => setSidenavOpen(true)} onSearch={() => setSearchModalOpen(true)} />;
+    }
+    // Có branch nhưng currentBranch null — render header với chip để user chọn
     return (
       <div className="flex flex-col h-screen bg-surface-container-low">
         <FnbHeader
@@ -1614,23 +1627,35 @@ function FnbPosPageInner() {
           createTab={() => {}}
           onToggleFloorPlan={() => {}}
           onSearch={() => setSearchModalOpen(true)}
+          onMenuClick={() => setSidenavOpen(true)}
         />
-        <div className="flex-1 flex flex-col items-center justify-center gap-3">
-          <Icon name="inventory_2" size={48} className="text-muted-foreground" />
-          <p className="text-lg font-medium text-muted-foreground">
-            Chọn chi nhánh trên thanh header để bắt đầu bán hàng
-          </p>
+        <FnbSidenavDrawer
+          open={sidenavOpen}
+          onClose={() => setSidenavOpen(false)}
+        />
+        <div className="flex-1 flex flex-col items-center justify-center gap-4 p-6">
+          <div className="relative w-24 h-24">
+            <div className="absolute inset-0 rounded-full bg-primary-fixed/30 animate-pulse" />
+            <div className="relative w-full h-full flex items-center justify-center text-primary">
+              <Icon name="storefront" size={48} />
+            </div>
+          </div>
+          <div className="text-center space-y-1">
+            <h2 className="font-heading text-xl font-bold text-foreground">
+              Chọn chi nhánh để bắt đầu
+            </h2>
+            <p className="text-sm text-on-surface-variant">
+              Bấm chip <strong className="text-foreground">"Chọn chi nhánh"</strong> trên header để chọn quán đang làm việc.
+            </p>
+          </div>
         </div>
       </div>
     );
   }
 
   if (loading) {
-    return (
-      <div className="flex items-center justify-center h-screen bg-surface-container-low">
-        <Icon name="progress_activity" size={32} className="animate-spin text-muted-foreground" />
-      </div>
-    );
+    // Data còn fetch (products, tables) — skeleton match layout thật
+    return <FnbLoadingSkeleton />;
   }
 
   return (

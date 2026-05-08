@@ -497,13 +497,21 @@ function KdsPageInner() {
             KDS Bếp
           </span>
         </header>
-        <div className="flex-1 flex flex-col items-center justify-center gap-4">
-          <div className="size-20 rounded-2xl bg-pos-chrome-bg-hover flex items-center justify-center">
-            <Icon name="soup_kitchen" size={40} className="text-pos-chrome-fg-dim" />
+        <div className="flex-1 flex flex-col items-center justify-center gap-5 p-6">
+          <div className="relative w-28 h-28">
+            <div className="absolute inset-0 rounded-full bg-status-info/20 animate-pulse" />
+            <div className="relative w-full h-full flex items-center justify-center text-status-info">
+              <Icon name="soup_kitchen" size={56} />
+            </div>
           </div>
-          <p className="font-heading text-lg font-semibold text-pos-chrome-fg-muted">
-            Chọn chi nhánh trên thanh header để xem đơn bếp
-          </p>
+          <div className="text-center space-y-2 max-w-md">
+            <h2 className="font-heading text-2xl font-bold text-pos-chrome-fg">
+              Chọn chi nhánh để xem đơn bếp
+            </h2>
+            <p className="text-sm text-pos-chrome-fg-dim leading-relaxed">
+              Bấm chip <strong className="text-pos-chrome-fg">"Chọn chi nhánh"</strong> trên header để chọn quán đang trực bếp. Mỗi quán có hàng đợi đơn riêng.
+            </p>
+          </div>
         </div>
       </div>
     );
