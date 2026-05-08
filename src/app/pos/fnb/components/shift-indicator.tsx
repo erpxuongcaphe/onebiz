@@ -32,7 +32,8 @@ export function ShiftIndicator({ shift, onClick }: ShiftIndicatorProps) {
         className="flex items-center gap-1 px-2 py-1 rounded text-xs bg-status-error/80 text-white hover:bg-status-error transition-colors shrink-0"
       >
         <Icon name="schedule" size={14} />
-        <span>Chưa mở ca</span>
+        <span className="sm:hidden">Ca</span>
+        <span className="hidden sm:inline">Chưa mở ca</span>
       </button>
     );
   }

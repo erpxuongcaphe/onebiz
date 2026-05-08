@@ -33,6 +33,7 @@ interface PosBranchSelectorProps {
    * Bật cho POS Retail (h-10 header) để badge tróc khỏi nền primary.
    */
   prominent?: boolean;
+  className?: string;
 }
 
 export function PosBranchSelector({
@@ -40,6 +41,7 @@ export function PosBranchSelector({
   filter,
   showCode = false,
   prominent = false,
+  className,
 }: PosBranchSelectorProps) {
   const { branches, currentBranch, switchBranch } = useAuth();
   const binding = useDeviceBinding();
@@ -53,7 +55,7 @@ export function PosBranchSelector({
     return (
       <div
         className={cn(
-          "flex items-center gap-2 rounded-lg shrink-0",
+          "flex min-w-0 items-center gap-2 rounded-lg",
           prominent ? "px-3 py-1.5 text-base" : "px-3 py-2 text-sm",
           isDark
             ? prominent
@@ -62,6 +64,7 @@ export function PosBranchSelector({
             : prominent
               ? "text-foreground bg-surface-container ring-2 ring-primary/40"
               : "text-foreground bg-surface-container border border-border",
+          className,
         )}
         title={`Thiết bị khoá: ${binding.deviceName} · Chi nhánh ${currentBranch?.name ?? "—"}`}
       >
@@ -69,7 +72,9 @@ export function PosBranchSelector({
         <span
           className={cn(
             "truncate tracking-tight",
-            prominent ? "max-w-[300px] font-bold" : "max-w-[240px] font-semibold",
+            prominent
+              ? "max-w-[160px] font-bold sm:max-w-[300px]"
+              : "max-w-[180px] font-semibold sm:max-w-[220px] lg:max-w-[240px]",
           )}
         >
           {prominent && <span className="opacity-70 font-medium mr-1">CN:</span>}
@@ -96,7 +101,7 @@ export function PosBranchSelector({
     <DropdownMenu>
       <DropdownMenuTrigger
         className={cn(
-          "flex items-center gap-2 rounded-lg transition-colors cursor-pointer outline-none shrink-0",
+          "flex min-w-0 items-center gap-2 rounded-lg transition-colors cursor-pointer outline-none",
           prominent ? "px-3 py-1.5 text-base" : "px-3 py-2 text-sm",
           isDark
             ? prominent
@@ -105,6 +110,7 @@ export function PosBranchSelector({
             : prominent
               ? "text-foreground bg-surface-container ring-2 ring-primary/40 hover:bg-surface-container-high"
               : "text-foreground hover:text-on-surface hover:bg-surface-container border border-border",
+          className,
         )}
         title={
           currentBranch
@@ -116,7 +122,9 @@ export function PosBranchSelector({
         <span
           className={cn(
             "truncate tracking-tight",
-            prominent ? "max-w-[300px] font-bold" : "max-w-[240px] font-semibold",
+            prominent
+              ? "max-w-[160px] font-bold sm:max-w-[300px]"
+              : "max-w-[180px] font-semibold sm:max-w-[220px] lg:max-w-[240px]",
           )}
         >
           {prominent && <span className="opacity-70 font-medium mr-1">CN:</span>}
