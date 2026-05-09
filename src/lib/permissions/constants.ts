@@ -9,7 +9,7 @@
 // ── Permission codes ──
 
 export const PERMISSIONS = {
-  // POS F&B
+  // POS FnB
   POS_FNB_SEND_KITCHEN: "pos_fnb.send_kitchen",
   POS_FNB_VOID: "pos_fnb.void",
   POS_FNB_DISCOUNT: "pos_fnb.discount",
@@ -95,7 +95,7 @@ export interface PermissionGroup {
 
 export const PERMISSION_GROUPS: PermissionGroup[] = [
   {
-    group: "POS F&B",
+    group: "POS FnB",
     permissions: [
       { code: PERMISSIONS.POS_FNB_SEND_KITCHEN, label: "Gửi bếp" },
       { code: PERMISSIONS.POS_FNB_VOID, label: "Hủy hóa đơn" },

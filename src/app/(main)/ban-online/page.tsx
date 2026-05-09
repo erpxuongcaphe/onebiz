@@ -1,11 +1,5 @@
 "use client";
 
-import {
-  ShoppingCart,
-  TrendingUp,
-  CheckCircle,
-  Clock
-} from "lucide-react";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
@@ -20,7 +14,7 @@ const kpiCards = [
     value: "156",
     change: "+12%",
     subtitle: "so với tháng trước",
-    icon: ShoppingCart,
+    icon: "shopping_cart",
     color: "text-primary",
     bg: "bg-primary-fixed",
     borderColor: "border-primary-fixed",
@@ -30,7 +24,7 @@ const kpiCards = [
     value: formatCurrency(245000000) + "đ",
     change: "+8,5%",
     subtitle: "so với tháng trước",
-    icon: TrendingUp,
+    icon: "trending_up",
     color: "text-status-success",
     bg: "bg-status-success/10",
     borderColor: "border-status-success/25",
@@ -40,7 +34,7 @@ const kpiCards = [
     value: "92%",
     change: "+3%",
     subtitle: "so với tháng trước",
-    icon: CheckCircle,
+    icon: "check_circle",
     color: "text-status-info",
     bg: "bg-status-info/10",
     borderColor: "border-status-info/25",
@@ -50,7 +44,7 @@ const kpiCards = [
     value: "8",
     change: "",
     subtitle: "cần xử lý ngay",
-    icon: Clock,
+    icon: "schedule",
     color: "text-status-warning",
     bg: "bg-status-warning/10",
     borderColor: "border-status-warning/25",
@@ -189,7 +183,6 @@ export default function BanOnlinePage() {
         {/* KPI Cards */}
         <div className="grid grid-cols-2 lg:grid-cols-4 gap-4">
           {kpiCards.map((kpi) => {
-            const Icon = kpi.icon;
             return (
               <Card key={kpi.title} className={cn("border", kpi.borderColor)}>
                 <CardContent className="p-4">
@@ -200,7 +193,7 @@ export default function BanOnlinePage() {
                         kpi.bg
                       )}
                     >
-                      <Icon className={cn("h-5 w-5", kpi.color)} />
+                      <Icon name={kpi.icon} size={20} className={kpi.color} />
                     </div>
                     {kpi.change && (
                       <span className="flex items-center gap-0.5 text-xs font-medium text-status-success">

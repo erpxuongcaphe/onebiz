@@ -143,7 +143,7 @@ export function FnbCart({
         //   lg (1024+, landscape/desktop) → 320px width
         //   xl (1280+) → 400px width
         //   2xl (1536+) → 440px width
-        : "w-[320px] xl:w-[400px] 2xl:w-[440px] hidden lg:flex rounded-xl ambient-shadow border border-outline-variant/20 my-3 mr-3"
+        : "w-[320px] xl:w-[400px] 2xl:w-[440px] hidden lg:flex rounded-lg ambient-shadow border border-outline-variant/20 my-3 mr-3"
     )}>
       {/* ── Header (Sprint UI-5: gradient subtle để tróc khỏi nền + ambient depth) ── */}
       <div className="p-4 border-b border-outline-variant/20 bg-gradient-to-b from-surface-container/50 to-surface-container-lowest shrink-0">
@@ -327,9 +327,9 @@ export function FnbCart({
         {activeTab?.orderType === "delivery" &&
           onDeliveryPlatformChange &&
           !activeTab?.kitchenOrderId && (
-            <div className="mt-3 p-3 rounded-xl bg-surface-container-low border border-outline-variant/20 space-y-2.5">
+            <div className="mt-3 p-3 rounded-lg bg-surface-container-low border border-outline-variant/20 space-y-2.5">
               <div className="flex items-center gap-1">
-                <span className="text-[11px] uppercase tracking-wider font-bold text-on-surface-variant">
+                <span className="text-[11px] uppercase font-bold text-on-surface-variant">
                   Sàn giao hàng
                 </span>
                 <HelpTip>
@@ -568,7 +568,7 @@ export function FnbCart({
             onClick={onSendToKitchen}
             disabled={isEmpty}
             className={cn(
-              "flex-[0.4] h-14 rounded-xl font-semibold text-sm flex flex-col items-center justify-center gap-0.5 transition-all press-scale-sm",
+              "flex-[0.4] h-14 rounded-lg font-semibold text-sm flex flex-col items-center justify-center gap-0.5 transition-all press-scale-sm",
               activeTab?.kitchenOrderId
                 ? "bg-status-info/15 text-status-info hover:bg-status-info/25 disabled:opacity-40 disabled:pointer-events-none"
                 : "bg-surface-container-high text-on-surface hover:bg-surface-container disabled:opacity-40 disabled:pointer-events-none"
@@ -584,7 +584,7 @@ export function FnbCart({
             onClick={onPayment}
             disabled={isEmpty}
             className={cn(
-              "flex-[0.6] h-14 rounded-xl font-bold text-sm flex flex-col items-center justify-center gap-0.5 transition-all press-scale-sm ambient-shadow",
+              "flex-[0.6] h-14 rounded-lg font-bold text-sm flex flex-col items-center justify-center gap-0.5 transition-all press-scale-sm ambient-shadow",
               "bg-primary text-on-primary hover:bg-primary-hover disabled:opacity-40 disabled:pointer-events-none"
             )}
           >
@@ -657,7 +657,7 @@ function CouponRow({
         }}
         placeholder="Nhập mã khuyến mãi"
         disabled={applying}
-        className="h-9 md:h-7 text-sm md:text-xs flex-1 min-w-0 font-mono uppercase tracking-wider"
+        className="h-9 md:h-7 text-sm md:text-xs flex-1 min-w-0 font-mono uppercase"
       />
       <button
         type="button"
@@ -769,7 +769,7 @@ function DiscountRow({
                   onClick={() => setPresetMenuOpen(false)}
                 />
                 <div className="absolute right-0 top-full mt-1 z-50 w-52 rounded-lg border border-outline-variant/30 bg-surface-container-lowest shadow-lg overflow-hidden">
-                  <div className="px-3 py-2 text-[10px] uppercase tracking-wider font-bold text-on-surface-variant border-b border-outline-variant/20">
+                  <div className="px-3 py-2 text-[10px] uppercase font-bold text-on-surface-variant border-b border-outline-variant/20">
                     Khuyến mãi nhanh
                   </div>
                   {presets.map((p) => (

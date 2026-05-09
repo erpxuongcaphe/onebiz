@@ -595,7 +595,7 @@ export function CreateProductDialog({
               <p className="text-xs text-muted-foreground">
                 {channel === "fnb"
                   ? "Chỉ hiện trên POS FnB của quán."
-                  : "Chỉ hiện trên POS bán lẻ của kho tổng."}
+                  : "Chỉ hiện trên POS Retail của kho tổng."}
               </p>
             </div>
           )}

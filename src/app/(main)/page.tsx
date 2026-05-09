@@ -19,7 +19,7 @@ const DashboardCharts = dynamic(() => import("./_dashboard-charts"), {
       {[0, 1].map((i) => (
         <div
           key={i}
-          className="h-72 rounded-xl border bg-card animate-pulse"
+          className="h-72 rounded-lg border bg-card animate-pulse"
         />
       ))}
     </div>
@@ -39,7 +39,6 @@ import {
   getFinancialAlerts,
 } from "@/lib/services";
 import { useAuth, useBranchFilter } from "@/lib/contexts";
-import { useFnbSubdomain } from "@/lib/hooks/use-fnb-subdomain";
 import type {
   DashboardKpis,
   ChartPoint,
@@ -51,7 +50,6 @@ import type {
 import type { FinancialAlert } from "@/lib/services/supabase/reports";
 import { getInventoryTurnover } from "@/lib/services/supabase/reports";
 import type { InventoryTurnoverResult } from "@/lib/services/supabase/reports";
-import { Button } from "@/components/ui/button";
 import { Icon } from "@/components/ui/icon";
 
 type ChartView = "day" | "hour" | "weekday";
@@ -85,8 +83,6 @@ export default function TongQuanPage() {
   // double-fire mỗi service).
   const { activeBranchId, isReady } = useBranchFilter();
   const { user } = useAuth();
-  // Sprint UI-FIX (CEO 08/05): button POS F&B nhảy qua fnb.onebiz.com.vn
-  const { posFnbUrl } = useFnbSubdomain();
   const [chartView, setChartView] = useState<ChartView>("day");
   // Progressive loading: KPI skeleton trước, charts + secondary widgets sau.
   // Trước đây single `loading` flag block toàn bộ dashboard 2-4s → user thấy spinner
@@ -218,64 +214,21 @@ export default function TongQuanPage() {
 
   // Sprint VISUAL-2 P2 (CEO 04/05/2026): Hero greeting message
   // Lý do: dashboard rỗng/trống vì empty data → CEO mở thấy không có "weight".
-  // Hero: "Chào anh [Tên], hôm nay [Y/M/D]" + quick actions ngay dưới.
+  // Hero: "Chào anh [Tên], hôm nay [Y/M/D]".
   const firstName = user?.fullName?.split(" ").pop() ?? "anh";
   const hour = new Date().getHours();
   const greeting = hour < 12 ? "Chào buổi sáng" : hour < 18 ? "Chào buổi chiều" : "Chào buổi tối";
 
   return (
     <div className="p-4 md:p-6 space-y-4">
-      {/* ── Hero: Greeting + Date + Quick Actions ── */}
-      <div className="flex flex-col sm:flex-row sm:items-end sm:justify-between gap-3">
-        <div className="space-y-0.5">
-          <h1 className="text-2xl font-bold text-foreground leading-tight">
-            {greeting}, {firstName}
-          </h1>
-          <div className="flex items-center gap-2 text-sm text-muted-foreground">
-            <Icon name="schedule" size={14} className="text-muted-foreground" />
-            <span className="capitalize">{formattedDate}</span>
-          </div>
-        </div>
-        <div className="flex flex-wrap items-center gap-2">
-          <Link href="/pos">
-            <Button size="sm" className="gap-2 h-8 shadow-sm">
-              <Icon name="shopping_cart" className="size-3.5" /> POS Retail
-            </Button>
-          </Link>
-          {/* Sprint UI-FIX (CEO 08/05): POS F&B → cross-subdomain navigation
-              tới fnb.onebiz.com.vn (không phải /pos/fnb route trong app).
-              Dùng <a> regular vì Next.js Link không xử lý cross-domain. */}
-          <a href={posFnbUrl()}>
-            <Button size="sm" className="gap-2 h-8 shadow-sm bg-status-warning hover:bg-status-warning text-white">
-              <Icon name="local_cafe" className="size-3.5" /> POS F&B
-            </Button>
-          </a>
-          <div className="hidden sm:block h-5 w-px bg-border" />
-          <Link href="/don-hang/dat-hang">
-            <Button size="sm" variant="outline" className="gap-2 h-8">
-              <Icon name="add" className="size-3.5" /> Đơn hàng
-            </Button>
-          </Link>
-          <Link href="/hang-hoa/nhap-hang">
-            <Button size="sm" variant="outline" className="gap-2 h-8">
-              <Icon name="inventory" className="size-3.5" /> Nhập hàng
-            </Button>
-          </Link>
-          <Link href="/hang-hoa/chuyen-kho">
-            <Button size="sm" variant="outline" className="gap-2 h-8">
-              <Icon name="swap_horiz" className="size-3.5" /> Chuyển kho
-            </Button>
-          </Link>
-          <Link href="/tai-chinh/so-quy">
-            <Button size="sm" variant="outline" className="gap-2 h-8">
-              <Icon name="receipt" className="size-3.5" /> Sổ quỹ
-            </Button>
-          </Link>
-          <Link href="/phan-tich/bao-cao-tai-chinh">
-            <Button size="sm" variant="outline" className="gap-2 h-8">
-              <Icon name="bar_chart" className="size-3.5" /> P&L
-            </Button>
-          </Link>
+      {/* ── Hero: Greeting + Date ── */}
+      <div className="space-y-0.5">
+        <h1 className="text-2xl font-bold text-foreground leading-tight">
+          {greeting}, {firstName}
+        </h1>
+        <div className="flex items-center gap-2 text-sm text-muted-foreground">
+          <Icon name="schedule" size={14} className="text-muted-foreground" />
+          <span className="capitalize">{formattedDate}</span>
         </div>
       </div>
 
@@ -288,7 +241,7 @@ export default function TongQuanPage() {
           Array.from({ length: 4 }).map((_, i) => (
             <Card
               key={`skel-${i}`}
-              className="rounded-xl border-0 ambient-shadow bg-surface-container-lowest"
+              className="rounded-lg border-0 ambient-shadow bg-surface-container-lowest"
             >
               <CardContent className="p-5">
                 <div className="flex items-start justify-between mb-3">
@@ -303,18 +256,18 @@ export default function TongQuanPage() {
         {kpiCards.map((kpi) => (
           <Card
             key={kpi.label}
-            className="rounded-xl border-0 ambient-shadow bg-surface-container-lowest"
+            className="rounded-lg border-0 ambient-shadow bg-surface-container-lowest"
           >
             <CardContent className="p-5">
               <div className="flex items-start justify-between mb-3">
-                <span className="text-xs font-semibold uppercase tracking-[0.08em] text-muted-foreground">
+                <span className="text-xs font-semibold uppercase text-muted-foreground">
                   {kpi.label}
                 </span>
                 <div className="flex size-9 shrink-0 items-center justify-center rounded-lg bg-primary-fixed">
                   <Icon name={kpi.icon} size={16} className="text-primary" />
                 </div>
               </div>
-              <p className="font-heading text-2xl lg:text-3xl font-extrabold tracking-tight text-foreground leading-tight">
+              <p className="font-heading text-2xl lg:text-3xl font-extrabold text-foreground leading-tight">
                 {kpi.isCurrency ? formatCurrency(kpi.value) : formatNumber(kpi.value)}
               </p>
               <p className="mt-2 text-xs text-muted-foreground">
@@ -328,17 +281,17 @@ export default function TongQuanPage() {
         ))}
 
         {/* Inventory Turnover — inline as 5th card */}
-        <Card className="col-span-2 lg:col-span-1 rounded-xl border-0 ambient-shadow bg-surface-container-lowest">
+        <Card className="col-span-2 lg:col-span-1 rounded-lg border-0 ambient-shadow bg-surface-container-lowest">
           <CardContent className="p-5">
             <div className="flex items-start justify-between mb-3">
-              <span className="text-xs font-semibold uppercase tracking-[0.08em] text-muted-foreground">
+              <span className="text-xs font-semibold uppercase text-muted-foreground">
                 Vòng quay kho
               </span>
               <div className="flex size-9 shrink-0 items-center justify-center rounded-lg bg-primary-fixed">
                 <Icon name="autorenew" size={16} className="text-primary" />
               </div>
             </div>
-            <p className="font-heading text-2xl lg:text-3xl font-extrabold tracking-tight text-foreground leading-tight">
+            <p className="font-heading text-2xl lg:text-3xl font-extrabold text-foreground leading-tight">
               {turnover ? `${turnover.turnoverRatio.toFixed(1)}x` : "—"}
             </p>
             <p className="mt-2 text-xs text-muted-foreground">

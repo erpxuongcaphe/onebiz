@@ -62,7 +62,7 @@ export function FilterSidebar({ children, className }: FilterSidebarProps) {
       <Button
         variant="outline"
         size="sm"
-        className="md:hidden flex items-center gap-2"
+        className="m-3 mb-0 flex items-center gap-2 self-start md:hidden"
         onClick={() => setMobileOpen(true)}
       >
         <Icon name="filter_alt" size={16} />
@@ -105,7 +105,7 @@ export function FilterSidebar({ children, className }: FilterSidebarProps) {
           )}
         >
           {!collapsed && (
-            <span className="text-[10px] font-bold text-muted-foreground uppercase tracking-wider">
+            <span className="text-[10px] font-bold text-muted-foreground uppercase">
               Bộ lọc
             </span>
           )}
@@ -246,7 +246,7 @@ export function ActiveFiltersBar({ filters, onClearAll }: ActiveFiltersBarProps)
   return (
     <div className="pb-2 border-b border-border/40 mb-1">
       <div className="flex items-center justify-between mb-2">
-        <span className="text-[10px] font-bold text-primary uppercase tracking-wider">
+        <span className="text-[10px] font-bold text-primary uppercase">
           Đang lọc ({filters.length})
         </span>
         {onClearAll && filters.length > 1 && (

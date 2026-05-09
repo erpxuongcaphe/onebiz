@@ -1670,7 +1670,7 @@ function FnbPosPageInner() {
     return (
       <FnbLoadingSkeleton
         title="Đang kiểm tra phiên đăng nhập"
-        detail="OneBiz đang xác nhận tài khoản, doanh nghiệp và chi nhánh trước khi mở POS F&B."
+        detail="OneBiz đang xác nhận tài khoản, doanh nghiệp và chi nhánh trước khi mở POS FnB."
         elapsedMs={blockingLoadMs}
         onRetry={retryFnbLoad}
       />

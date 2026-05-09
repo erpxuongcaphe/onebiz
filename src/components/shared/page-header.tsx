@@ -364,17 +364,17 @@ export function PageHeader({
         )}
 
         {/* Title row: Title (left) + Search (center) + Actions (right) */}
-        <div className="flex items-center gap-3">
+        <div className="flex flex-col gap-3 lg:flex-row lg:items-center">
           {/* Sprint VISUAL-2 P1: title text-2xl font-bold (24px/700) thay text-lg font-medium (18px/500).
               Page title cần weight rõ → user/CEO scan biết section đang ở đâu. */}
-          <div className="shrink-0">
+          <div className="min-w-0 shrink-0">
             <h1 className="text-2xl font-bold text-on-surface leading-tight">{title}</h1>
             {subtitle && (
               <p className="text-xs text-muted-foreground mt-0.5">{subtitle}</p>
             )}
           </div>
 
-          {tabs && <div className="shrink-0">{tabs}</div>}
+          {tabs && <div className="min-w-0 shrink-0 overflow-x-auto no-scrollbar">{tabs}</div>}
 
           {/* Search bar — centered.
               Trước đây có nút "tune" (≂) ở phải nhưng là dead button (không
@@ -383,7 +383,7 @@ export function PageHeader({
               service `.or(...)` thay vì thêm popover chọn trường (giảm
               cognitive load cho nhân viên chưa training). */}
           {onSearchChange !== undefined && (
-            <div className="relative flex-1 max-w-md">
+            <div className="relative w-full min-w-0 lg:max-w-md lg:flex-1">
               <Icon name="search" size={16} className="absolute left-3 top-1/2 -translate-y-1/2 text-muted-foreground" />
               <Input
                 value={searchValue}
@@ -395,7 +395,7 @@ export function PageHeader({
           )}
 
           {/* Desktop actions */}
-          <div className="hidden md:flex items-center gap-2 ml-auto">
+          <div className="hidden md:flex min-w-0 flex-wrap items-center justify-end gap-2 lg:ml-auto">
             {mainActions.map((action, i) => (
               <ActionButton key={i} action={action} />
             ))}

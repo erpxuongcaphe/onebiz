@@ -22,11 +22,11 @@ interface AppTile {
 
 const APPS: AppTile[] = [
   { label: "Tổng quan", href: "/", iconName: "dashboard" },
-  { label: "Hàng hóa", href: "/hang-hoa", iconName: "inventory_2" },
-  { label: "Đơn hàng", href: "/don-hang/hoa-don", iconName: "shopping_cart" },
-  { label: "Khách hàng", href: "/khach-hang", iconName: "groups" },
-  { label: "Phân tích", href: "/phan-tich", iconName: "analytics" },
-  { label: "Sổ quỹ", href: "/so-quy", iconName: "account_balance_wallet" },
+  { label: "Kho", href: "/hang-hoa/ton-kho", iconName: "warehouse" },
+  { label: "Bán hàng", href: "/don-hang/hoa-don", iconName: "receipt_long" },
+  { label: "Mua hàng", href: "/hang-hoa/dat-hang-nhap", iconName: "add_box" },
+  { label: "Sản phẩm", href: "/hang-hoa", iconName: "inventory_2" },
+  { label: "Báo cáo", href: "/phan-tich", iconName: "analytics" },
   { label: "Bán online", href: "/ban-online", iconName: "language" },
   { label: "POS", href: "/pos", iconName: "point_of_sale" },
   { label: "Cài đặt", href: "/cai-dat", iconName: "settings" },
@@ -44,16 +44,16 @@ export function AppSwitcher() {
       <DropdownMenuContent
         align="start"
         sideOffset={10}
-        className="!w-[300px] p-4 rounded-2xl"
+        className="!w-[320px] p-4 rounded-lg"
       >
         <div className="grid grid-cols-3 gap-1">
           {APPS.map((app) => (
             <Link
               key={app.label}
               href={app.href}
-              className="flex flex-col items-center gap-2 py-3 px-2 rounded-xl hover:bg-surface-container-low transition-colors group press-scale-sm"
+              className="flex flex-col items-center gap-2 rounded-lg px-2 py-3 transition-colors group press-scale-sm hover:bg-surface-container-low"
             >
-              <span className="h-11 w-11 rounded-2xl bg-primary-fixed flex items-center justify-center group-hover:bg-primary-fixed-dim group-hover:scale-[1.04] transition-all">
+              <span className="flex h-11 w-11 items-center justify-center rounded-lg bg-primary-fixed transition-all group-hover:scale-[1.04] group-hover:bg-primary-fixed-dim">
                 <Icon
                   name={app.iconName}
                   size={20}

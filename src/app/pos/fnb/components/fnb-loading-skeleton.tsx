@@ -28,7 +28,7 @@ interface FnbLoadingSkeletonProps {
 }
 
 export function FnbLoadingSkeleton({
-  title = "Đang tải POS F&B",
+  title = "Đang tải POS FnB",
   detail = "OneBiz đang chuẩn bị menu, bàn và giỏ hàng cho chi nhánh hiện tại.",
   elapsedMs = 0,
   onRetry,

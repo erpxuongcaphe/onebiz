@@ -1,7 +1,6 @@
 "use client";
 
 import { useEffect, useMemo, useState } from "react";
-import { Banknote, CreditCard, ArrowRightLeft, Layers } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import { Input } from "@/components/ui/input";
@@ -35,11 +34,11 @@ interface FnbPaymentDialogProps {
   onConfirm: (payload: FnbPaymentConfirmPayload) => void;
 }
 
-const METHODS: { key: PaymentMethod; label: string; icon: React.ElementType }[] = [
-  { key: "cash", label: "Tiền mặt", icon: Banknote },
-  { key: "transfer", label: "Chuyển khoản", icon: ArrowRightLeft },
-  { key: "card", label: "Thẻ", icon: CreditCard },
-  { key: "mixed", label: "Hỗn hợp", icon: Layers },
+const METHODS: { key: PaymentMethod; label: string; icon: string }[] = [
+  { key: "cash", label: "Tiền mặt", icon: "payments" },
+  { key: "transfer", label: "Chuyển khoản", icon: "account_balance" },
+  { key: "card", label: "Thẻ", icon: "credit_card" },
+  { key: "mixed", label: "Hỗn hợp", icon: "layers" },
 ];
 
 const DENOMINATIONS = [50_000, 100_000, 200_000, 500_000, 1_000_000];
@@ -201,7 +200,7 @@ export function FnbPaymentDialog({
 
           {/* Payment method tabs */}
           <div className="grid grid-cols-2 sm:grid-cols-4 gap-2 sm:gap-2">
-            {METHODS.map(({ key, label, icon: Icon }) => (
+            {METHODS.map(({ key, label, icon }) => (
               <button key={key} type="button" onClick={() => setMethod(key)}
                 className={cn(
                   "flex flex-col items-center gap-1 rounded-lg border p-3 sm:p-2 text-sm sm:text-xs transition-colors",
@@ -209,7 +208,7 @@ export function FnbPaymentDialog({
                     ? "border-primary bg-primary text-primary-foreground"
                     : "border-border hover:border-primary/50 active:bg-muted",
                 )}>
-                <Icon className="h-5 w-5 sm:h-4 sm:w-4" />
+                <Icon name={icon} size={20} fill={method === key} />
                 {label}
               </button>
             ))}

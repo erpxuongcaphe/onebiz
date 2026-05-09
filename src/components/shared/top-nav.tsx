@@ -42,6 +42,7 @@ import { ImportDataDialog } from "./import-data-dialog";
 import { LogoIcon, LogoWordmark } from "@/components/brand/logo";
 import { cn } from "@/lib/utils";
 import { Icon } from "@/components/ui/icon";
+import { useFnbSubdomain } from "@/lib/hooks/use-fnb-subdomain";
 
 // ---------------------------------------------------------------------------
 // Branch selector — visual polish (UX sprint 2)
@@ -349,7 +350,7 @@ function MobileSubGroupAccordion({
         )}
       >
         {subGroup.icon && <Icon name={subGroup.icon} size={14} className="shrink-0" />}
-        <span className="flex-1 text-left tracking-wide">{subGroup.label}</span>
+        <span className="flex-1 text-left">{subGroup.label}</span>
         {!open && (
           <span className="text-[10px] font-medium text-muted-foreground tabular-nums">
             {subGroup.items.length}
@@ -464,7 +465,7 @@ function MobileNav() {
         <nav className="p-4 space-y-3 overflow-y-auto max-h-[calc(100vh-60px)]">
           {/* Branch selector for mobile */}
           <div className="pb-3 border-b">
-            <div className="px-2 py-1 text-[10px] font-semibold text-muted-foreground uppercase tracking-wider">
+            <div className="px-2 py-1 text-[10px] font-semibold text-muted-foreground uppercase">
               Chi nhánh
             </div>
             {canViewAll && (
@@ -538,6 +539,7 @@ function MobileNav() {
 
 export function TopNav() {
   const [importOpen, setImportOpen] = useState(false);
+  const { posFnbUrl } = useFnbSubdomain();
 
   // Bell badge — load số notification chưa đọc của user hiện tại.
   // Trước đây hardcode "3" → CEO mở thấy 3 dù không có notification thật.
@@ -676,7 +678,7 @@ export function TopNav() {
                 )}
               >
                 <Icon name="point_of_sale" size={16} className="mr-1" />
-                Bán hàng
+                POS
                 <Icon name="expand_more" size={16} />
               </DropdownMenuTrigger>
               <DropdownMenuContent align="end" className="min-w-[200px]">
@@ -689,7 +691,7 @@ export function TopNav() {
                 >
                   <Icon name="shopping_cart" size={16} className="mr-2 text-primary" />
                   <div className="flex-1">
-                    <div className="font-medium">Bán hàng tại quầy</div>
+                    <div className="font-medium">POS Retail</div>
                     <div className="text-[10px] text-muted-foreground">
                       Hàng đóng gói, bán cho doanh nghiệp
                     </div>
@@ -697,12 +699,12 @@ export function TopNav() {
                 </DropdownMenuItem>
                 <DropdownMenuItem
                   onClick={() => {
-                    window.location.href = "/pos/fnb";
+                    window.location.href = posFnbUrl();
                   }}
                 >
                   <Icon name="coffee" size={16} className="mr-2 text-status-warning" />
                   <div className="flex-1">
-                    <div className="font-medium">Bán hàng quán cà phê</div>
+                    <div className="font-medium">POS FnB</div>
                     <div className="text-[10px] text-muted-foreground">
                       Pha chế tại quán
                     </div>
@@ -710,7 +712,7 @@ export function TopNav() {
                 </DropdownMenuItem>
                 <DropdownMenuItem
                   onClick={() => {
-                    window.location.href = "/pos/fnb/kds";
+                    window.location.href = posFnbUrl("/kds");
                   }}
                 >
                   <Icon name="restaurant" size={16} className="mr-2 text-status-success" />

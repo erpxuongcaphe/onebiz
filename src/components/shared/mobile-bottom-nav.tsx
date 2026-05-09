@@ -15,6 +15,7 @@ import { useState } from "react";
 import { Sheet, SheetContent, SheetTrigger, SheetTitle } from "@/components/ui/sheet";
 import { cn } from "@/lib/utils";
 import { Icon } from "@/components/ui/icon";
+import { useFnbSubdomain } from "@/lib/hooks/use-fnb-subdomain";
 
 interface TabItem {
   label: string;
@@ -31,14 +32,14 @@ const PRIMARY_TABS: TabItem[] = [
     match: (p) => p === "/",
   },
   {
-    label: "Hàng hóa",
-    href: "/hang-hoa",
-    icon: "inventory_2",
+    label: "Kho",
+    href: "/hang-hoa/ton-kho",
+    icon: "warehouse",
     match: (p) => p.startsWith("/hang-hoa"),
   },
-  // POS nổi ở giữa
+  // POS nổi ở giữa, mở sheet chọn đúng chế độ bán.
   {
-    label: "Bán hàng",
+    label: "POS",
     href: "/pos",
     icon: "point_of_sale",
     match: (p) => p.startsWith("/pos"),
@@ -56,25 +57,28 @@ const MORE_ITEMS: {
   items: { label: string; href: string; icon: string }[];
 }[] = [
   {
-    section: "Quản lý",
+    section: "Vận hành",
     items: [
+      { label: "Sản phẩm", href: "/hang-hoa", icon: "inventory_2" },
       { label: "Khách hàng", href: "/khach-hang", icon: "group" },
-      { label: "Sổ quỹ", href: "/so-quy", icon: "payments" },
-      { label: "Phân tích", href: "/phan-tich", icon: "analytics" },
+      { label: "Mua hàng", href: "/hang-hoa/dat-hang-nhap", icon: "add_box" },
       { label: "Bán online", href: "/ban-online", icon: "public" },
     ],
   },
   {
-    section: "Sản xuất",
+    section: "Kho & sản xuất",
     items: [
+      { label: "Kiểm kho", href: "/hang-hoa/kiem-kho", icon: "fact_check" },
+      { label: "Chuyển kho", href: "/hang-hoa/chuyen-kho", icon: "swap_horiz" },
       { label: "Lệnh sản xuất", href: "/hang-hoa/san-xuat", icon: "factory" },
-      { label: "Công thức (BOM)", href: "/hang-hoa/cong-thuc", icon: "schema" },
       { label: "Hạn sử dụng", href: "/hang-hoa/hsd", icon: "notifications" },
     ],
   },
   {
-    section: "Khác",
+    section: "Phân tích & hệ thống",
     items: [
+      { label: "Báo cáo", href: "/phan-tich", icon: "analytics" },
+      { label: "Sổ quỹ", href: "/so-quy", icon: "payments" },
       { label: "Thông báo", href: "/thong-bao", icon: "notifications" },
       { label: "Cài đặt", href: "/cai-dat", icon: "settings" },
     ],
@@ -84,6 +88,8 @@ const MORE_ITEMS: {
 export function MobileBottomNav() {
   const pathname = usePathname();
   const [moreOpen, setMoreOpen] = useState(false);
+  const [posOpen, setPosOpen] = useState(false);
+  const { posFnbUrl } = useFnbSubdomain();
 
   // Ẩn trên trang POS (toàn màn hình)
   if (pathname.startsWith("/pos")) return null;
@@ -109,15 +115,61 @@ export function MobileBottomNav() {
                   key={tab.href}
                   className="relative flex items-center justify-center w-16"
                 >
-                  <Link
-                    href={tab.href}
-                    className="absolute -top-5 press-scale flex flex-col items-center justify-center h-14 w-14 rounded-full bg-primary text-primary-foreground ambient-shadow-lg"
-                  >
-                    <Icon name={tab.icon} size={24} fill />
-                    <span className="text-[9px] font-semibold leading-tight mt-0.5">
-                      Bán
-                    </span>
-                  </Link>
+                  <Sheet open={posOpen} onOpenChange={setPosOpen}>
+                    <SheetTrigger className="absolute -top-5 press-scale flex h-14 w-14 flex-col items-center justify-center rounded-full bg-primary text-primary-foreground ambient-shadow-lg">
+                      <Icon name={tab.icon} size={24} fill />
+                      <span className="mt-0.5 text-[9px] font-semibold leading-tight">
+                        POS
+                      </span>
+                    </SheetTrigger>
+                    <SheetContent side="bottom" className="p-0 rounded-t-lg" showCloseButton={false}>
+                      <SheetTitle className="px-5 py-4 border-b font-semibold">Chọn chế độ POS</SheetTitle>
+                      <div className="grid gap-3 p-4 pb-[calc(1rem+env(safe-area-inset-bottom))]">
+                        <Link
+                          href="/pos"
+                          onClick={() => setPosOpen(false)}
+                          className="flex items-center gap-3 rounded-lg border border-border bg-surface-container-lowest p-4 hover:bg-surface-container-low"
+                        >
+                          <span className="flex h-10 w-10 items-center justify-center rounded-lg bg-primary-fixed text-primary">
+                            <Icon name="shopping_cart" size={20} />
+                          </span>
+                          <span className="min-w-0 flex-1">
+                            <span className="block text-sm font-semibold">POS Retail</span>
+                            <span className="block text-xs text-muted-foreground">Hàng đóng gói, bán tại quầy</span>
+                          </span>
+                          <Icon name="chevron_right" size={18} className="text-muted-foreground" />
+                        </Link>
+                        <a
+                          href={posFnbUrl()}
+                          onClick={() => setPosOpen(false)}
+                          className="flex items-center gap-3 rounded-lg border border-border bg-surface-container-lowest p-4 hover:bg-surface-container-low"
+                        >
+                          <span className="flex h-10 w-10 items-center justify-center rounded-lg bg-status-warning/10 text-status-warning">
+                            <Icon name="coffee" size={20} />
+                          </span>
+                          <span className="min-w-0 flex-1">
+                            <span className="block text-sm font-semibold">POS FnB</span>
+                            <span className="block text-xs text-muted-foreground">Quầy thu ngân quán cà phê</span>
+                          </span>
+                          <Icon name="chevron_right" size={18} className="text-muted-foreground" />
+                        </a>
+                        <a
+                          href={posFnbUrl("/kds")}
+                          onClick={() => setPosOpen(false)}
+                          className="flex items-center gap-3 rounded-lg border border-border bg-surface-container-lowest p-4 hover:bg-surface-container-low"
+                        >
+                          <span className="flex h-10 w-10 items-center justify-center rounded-lg bg-status-success/10 text-status-success">
+                            <Icon name="restaurant" size={20} />
+                          </span>
+                          <span className="min-w-0 flex-1">
+                            <span className="block text-sm font-semibold">Màn bếp KDS</span>
+                            <span className="block text-xs text-muted-foreground">Theo dõi món đang chờ làm</span>
+                          </span>
+                          <Icon name="chevron_right" size={18} className="text-muted-foreground" />
+                        </a>
+                      </div>
+                    </SheetContent>
+                  </Sheet>
                 </div>
               );
             }
@@ -145,12 +197,12 @@ export function MobileBottomNav() {
               <Icon name="more_horiz" size={20} />
               <span className="text-[11px] font-medium">Thêm</span>
             </SheetTrigger>
-            <SheetContent side="bottom" className="h-[70vh] p-0 rounded-t-2xl">
+            <SheetContent side="bottom" className="h-[70vh] p-0 rounded-t-lg">
               <SheetTitle className="px-5 py-4 border-b font-semibold">Menu</SheetTitle>
               <div className="overflow-y-auto h-[calc(70vh-60px)] p-4 space-y-5">
                 {MORE_ITEMS.map((section) => (
                   <div key={section.section}>
-                    <div className="px-1 pb-2 text-[11px] font-semibold text-muted-foreground uppercase tracking-wider">
+                    <div className="px-1 pb-2 text-[11px] font-semibold text-muted-foreground uppercase">
                       {section.section}
                     </div>
                     <div className="grid grid-cols-3 gap-3">
@@ -162,7 +214,7 @@ export function MobileBottomNav() {
                             href={item.href}
                             onClick={() => setMoreOpen(false)}
                             className={cn(
-                              "flex flex-col press-scale-sm items-center gap-2 p-3 rounded-xl border",
+                              "flex flex-col press-scale-sm items-center gap-2 p-3 rounded-lg border",
                               active
                                 ? "bg-primary-fixed border-primary/30 text-primary"
                                 : "bg-surface-container-lowest hover:bg-surface-container-low border-border/50"

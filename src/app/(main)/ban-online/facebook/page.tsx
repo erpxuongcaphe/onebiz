@@ -1,11 +1,6 @@
 "use client";
 
 import { useState } from "react";
-import {
-  MessageCircle,
-  ShoppingCart,
-  TrendingUp
-} from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
@@ -20,21 +15,21 @@ const stats = [
   {
     label: "Tin nhắn mới",
     value: "12",
-    icon: MessageCircle,
+    icon: "forum",
     color: "text-primary",
     bg: "bg-primary-fixed",
   },
   {
     label: "Đơn từ Facebook",
     value: "23",
-    icon: ShoppingCart,
+    icon: "shopping_cart",
     color: "text-status-success",
     bg: "bg-status-success/10",
   },
   {
     label: "Doanh thu",
     value: "45,2M",
-    icon: TrendingUp,
+    icon: "trending_up",
     color: "text-status-info",
     bg: "bg-status-info/10",
   },
@@ -198,7 +193,6 @@ export default function FacebookPage() {
         {/* Stats bar */}
         <div className="flex gap-4 mt-3">
           {stats.map((stat) => {
-            const Icon = stat.icon;
             return (
               <div key={stat.label} className="flex items-center gap-2">
                 <div
@@ -207,7 +201,7 @@ export default function FacebookPage() {
                     stat.bg
                   )}
                 >
-                  <Icon className={cn("h-4 w-4", stat.color)} />
+                  <Icon name={stat.icon} size={16} className={stat.color} />
                 </div>
                 <div>
                   <p className="text-sm font-bold leading-tight">

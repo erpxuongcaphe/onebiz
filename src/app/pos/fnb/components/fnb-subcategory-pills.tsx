@@ -70,7 +70,7 @@ export function FnbSubcategoryPills({
       role="tablist"
       aria-label={`Phân loại trong ${activeCategoryName}`}
     >
-      <span className="text-[11px] uppercase tracking-wider font-bold text-on-surface-variant mr-1 shrink-0">
+      <span className="text-[11px] uppercase font-bold text-on-surface-variant mr-1 shrink-0">
         {activeCategoryName}
       </span>
       <Pill

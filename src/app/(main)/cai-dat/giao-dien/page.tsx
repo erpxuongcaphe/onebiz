@@ -4,7 +4,6 @@ import { useState, useEffect } from "react";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Separator } from "@/components/ui/separator";
-import { Sun, Moon, Monitor } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { useSettings, useToast } from "@/lib/contexts";
 import { Icon } from "@/components/ui/icon";
@@ -13,21 +12,21 @@ const themes = [
   {
     id: "light",
     label: "Sáng",
-    icon: Sun,
+    icon: "light_mode",
     preview: "bg-white border-border",
     previewInner: "bg-muted",
   },
   {
     id: "dark",
     label: "Tối",
-    icon: Moon,
+    icon: "dark_mode",
     preview: "bg-gray-900 border-gray-700",
     previewInner: "bg-gray-800",
   },
   {
     id: "system",
     label: "Hệ thống",
-    icon: Monitor,
+    icon: "desktop_windows",
     preview:
       "bg-gradient-to-r from-white to-gray-900 border-gray-400",
     previewInner: "bg-gradient-to-r from-gray-100 to-gray-800",
@@ -107,7 +106,6 @@ export default function AppearanceSettingsPage() {
         <CardContent>
           <div className="grid gap-3 sm:grid-cols-3">
             {themes.map((t) => {
-              const Icon = t.icon;
               const isSelected = theme === t.id;
               return (
                 <button
@@ -136,7 +134,7 @@ export default function AppearanceSettingsPage() {
                     />
                   </div>
                   <div className="flex items-center gap-2">
-                    <Icon className="h-4 w-4" />
+                    <Icon name={t.icon} size={16} />
                     <span className="text-sm font-medium">{t.label}</span>
                   </div>
                 </button>
