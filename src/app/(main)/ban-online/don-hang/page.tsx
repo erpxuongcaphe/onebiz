@@ -1,13 +1,6 @@
 "use client";
 
 import { useState } from "react";
-import {
-  ShoppingBag,
-  Clock,
-  Truck,
-  CheckCircle2,
-  XCircle
-} from "lucide-react";
 import { Card, CardContent } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
@@ -44,11 +37,11 @@ const filterTabs: { key: OrderStatus; label: string; count: number }[] = [
 ];
 
 const summaryCards = [
-  { label: "Tổng đơn", value: 156, icon: ShoppingBag, color: "text-foreground", bg: "bg-surface-container-low" },
-  { label: "Chờ xử lý", value: 8, icon: Clock, color: "text-status-warning", bg: "bg-status-warning/10" },
-  { label: "Đang giao", value: 23, icon: Truck, color: "text-status-info", bg: "bg-status-info/10" },
-  { label: "Hoàn thành", value: 118, icon: CheckCircle2, color: "text-status-success", bg: "bg-status-success/10" },
-  { label: "Đã hủy", value: 7, icon: XCircle, color: "text-status-error", bg: "bg-status-error/10" },
+  { label: "Tổng đơn", value: 156, icon: "shopping_bag", color: "text-foreground", bg: "bg-surface-container-low" },
+  { label: "Chờ xử lý", value: 8, icon: "schedule", color: "text-status-warning", bg: "bg-status-warning/10" },
+  { label: "Đang giao", value: 23, icon: "local_shipping", color: "text-status-info", bg: "bg-status-info/10" },
+  { label: "Hoàn thành", value: 118, icon: "check_circle", color: "text-status-success", bg: "bg-status-success/10" },
+  { label: "Đã hủy", value: 7, icon: "cancel", color: "text-status-error", bg: "bg-status-error/10" },
 ];
 
 const statusBadge: Record<
@@ -141,7 +134,6 @@ export default function DonHangOnlinePage() {
         {/* Summary bar */}
         <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-5 gap-3">
           {summaryCards.map((s) => {
-            const Icon = s.icon;
             return (
               <div
                 key={s.label}
@@ -150,7 +142,7 @@ export default function DonHangOnlinePage() {
                   s.bg
                 )}
               >
-                <Icon className={cn("size-5 shrink-0", s.color)} />
+                <Icon name={s.icon} size={20} className={cn("shrink-0", s.color)} />
                 <div>
                   <p className="text-xs text-muted-foreground">{s.label}</p>
                   <p className={cn("text-lg font-bold", s.color)}>{s.value}</p>

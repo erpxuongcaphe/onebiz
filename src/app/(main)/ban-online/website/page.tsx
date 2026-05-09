@@ -1,12 +1,6 @@
 "use client";
 
 import { useState } from "react";
-import {
-  Eye,
-  ShoppingBag,
-  DollarSign,
-  TrendingUp
-} from "lucide-react";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
@@ -24,21 +18,21 @@ const stats = [
   {
     label: "Lượt truy cập hôm nay",
     value: "234",
-    icon: Eye,
+    icon: "visibility",
     color: "text-status-success",
     bg: "bg-status-success/10",
   },
   {
     label: "Đơn từ website",
     value: "8",
-    icon: ShoppingBag,
+    icon: "shopping_bag",
     color: "text-status-success",
     bg: "bg-status-success/10",
   },
   {
     label: "Doanh thu",
     value: "15.800.000",
-    icon: DollarSign,
+    icon: "attach_money",
     color: "text-status-success",
     bg: "bg-status-success/10",
     suffix: "đ",
@@ -46,7 +40,7 @@ const stats = [
   {
     label: "Tỷ lệ chuyển đổi",
     value: "3,4",
-    icon: TrendingUp,
+    icon: "trending_up",
     color: "text-status-success",
     bg: "bg-status-success/10",
     suffix: "%",
@@ -124,13 +118,12 @@ export default function WebsitePage() {
         {/* Stats bar */}
         <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
           {stats.map((s) => {
-            const Icon = s.icon;
             return (
               <div
                 key={s.label}
                 className={cn("flex items-center gap-2 rounded-lg px-3 py-2", s.bg)}
               >
-                <Icon className={cn("size-4 shrink-0", s.color)} />
+                <Icon name={s.icon} size={16} className={cn("shrink-0", s.color)} />
                 <div>
                   <p className="text-xs text-muted-foreground">{s.label}</p>
                   <p className={cn("text-sm font-bold", s.color)}>

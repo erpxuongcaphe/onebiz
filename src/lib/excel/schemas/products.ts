@@ -85,7 +85,7 @@ export const productExcelSchema: ExcelSchema<ProductImportRow> = {
       },
       example: "fnb",
       description:
-        "Chỉ điền khi Loại = sku. Bỏ trống cho NVL. fnb = POS tại quán; retail = POS bán lẻ/sỉ",
+        "Chỉ điền khi Loại = sku. Bỏ trống cho NVL. fnb = POS FnB; retail = POS Retail/sỉ",
       width: 14,
     },
     {

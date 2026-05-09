@@ -69,7 +69,7 @@ export const debtOpeningExcelSchema: ExcelSchema<DebtOpeningImportRow> = {
       header: "Ngày chốt số",
       type: "date",
       required: true,
-      example: "2026-01-01",
+      example: "01/01/2026",
       description: "Ngày bắt đầu ghi nhận công nợ",
       width: 16,
     },

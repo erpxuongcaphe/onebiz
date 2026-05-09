@@ -154,7 +154,7 @@ export async function getRevenueByTable(
 
   let query = supabase
     .from("kitchen_orders")
-    .select("table_id, restaurant_tables(name), invoice_id, invoices(total)")
+    .select("table_id, restaurant_tables!kitchen_orders_table_id_fkey(name), invoice_id, invoices(total)")
     .eq("tenant_id", tenantId)
     .eq("status", "completed")
     .not("table_id", "is", null);
@@ -457,7 +457,7 @@ export async function getTableTurnover(
 
   let query = supabase
     .from("kitchen_orders")
-    .select("table_id, restaurant_tables(name), created_at, updated_at")
+    .select("table_id, restaurant_tables!kitchen_orders_table_id_fkey(name), created_at, updated_at")
     .eq("tenant_id", tenantId)
     .eq("status", "completed")
     .not("table_id", "is", null);

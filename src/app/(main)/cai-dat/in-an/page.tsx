@@ -12,11 +12,6 @@ import {
 } from "@/components/ui/select";
 import { Input } from "@/components/ui/input";
 import { Separator } from "@/components/ui/separator";
-import {
-  Usb,
-  Wifi,
-  Network
-} from "lucide-react";
 import { cn } from "@/lib/utils";
 import { useEffect, useState, useCallback } from "react";
 import { Icon } from "@/components/ui/icon";
@@ -96,9 +91,9 @@ const templates = [
 
 // ── Connection types ──
 const connectionTypes = [
-  { id: "usb" as const, label: "USB / Cáp", icon: Usb, desc: "Kết nối trực tiếp qua cáp USB" },
-  { id: "wifi" as const, label: "WiFi", icon: Wifi, desc: "Kết nối qua mạng WiFi" },
-  { id: "lan" as const, label: "LAN", icon: Network, desc: "Kết nối qua cáp mạng LAN" },
+  { id: "usb" as const, label: "USB / Cáp", icon: "usb" as const, desc: "Kết nối trực tiếp qua cáp USB" },
+  { id: "wifi" as const, label: "WiFi", icon: "wifi" as const, desc: "Kết nối qua mạng WiFi" },
+  { id: "lan" as const, label: "LAN", icon: "lan" as const, desc: "Kết nối qua cáp mạng LAN" },
 ];
 
 // ── Kitchen ticket styles ──
@@ -443,7 +438,6 @@ export default function PrintSettingsPage() {
             </p>
             <div className="grid gap-3 sm:grid-cols-3">
               {connectionTypes.map((ct) => {
-                const Icon = ct.icon;
                 return (
                   <button
                     key={ct.id}
@@ -456,10 +450,15 @@ export default function PrintSettingsPage() {
                         : "border-border hover:border-primary/50"
                     )}
                   >
-                    <Icon className={cn(
-                      "h-6 w-6",
-                      print.connectionType === ct.id ? "text-primary" : "text-muted-foreground"
-                    )} />
+                    <Icon
+                      name={ct.icon}
+                      size={24}
+                      className={cn(
+                        print.connectionType === ct.id
+                          ? "text-primary"
+                          : "text-muted-foreground",
+                      )}
+                    />
                     <span className="text-sm font-medium">{ct.label}</span>
                     <span className="text-xs text-muted-foreground text-center">{ct.desc}</span>
                   </button>

@@ -16,12 +16,14 @@ import { openDB, type DBSchema, type IDBPDatabase } from "idb";
 
 export interface MenuCacheRecord {
   id: string;
+  tenantId?: string;
   _type: "product" | "category" | "topping";
   data: unknown; // FnbProduct | FnbCategory | ToppingProduct
 }
 
 export interface TableCacheRecord {
   id: string;
+  tenantId?: string;
   branchId: string;
   data: unknown; // RestaurantTable
 }
@@ -31,6 +33,7 @@ export interface TableCacheRecord {
  *  Warmed by batch prefetch trong page init, auto-invalidate sau STALE_MS. */
 export interface VariantCacheRecord {
   productId: string;
+  tenantId?: string;
   variants: Array<{ id: string; label: string; sell_price: number }>;
   updatedAt: number;
 }

@@ -59,17 +59,20 @@ export function FnbHeader({
 
   return (
     <>
-    <header className="h-16 bg-surface/95 backdrop-blur-md text-foreground flex items-center px-3 gap-2 shrink-0 border-b border-outline-variant/30">
+    <header className="min-h-14 bg-surface/95 backdrop-blur-md text-foreground flex flex-wrap md:flex-nowrap items-center px-2 sm:px-3 gap-2 py-2 md:h-16 md:py-0 shrink-0 border-b border-outline-variant/30">
       {/* ☰ Sidenav trigger */}
       {onMenuClick && (
         <button
           type="button"
           onClick={onMenuClick}
-          className="w-10 h-10 rounded-xl flex items-center justify-center text-on-surface-variant hover:text-foreground hover:bg-surface-container transition-colors shrink-0"
+          className="w-9 h-9 sm:w-10 sm:h-10 rounded-xl flex items-center justify-center text-on-surface-variant hover:text-foreground hover:bg-surface-container transition-colors shrink-0"
           aria-label="Mở menu điều hướng"
           title="Menu điều hướng (☰)"
         >
-          <Icon name="menu" size={20} />
+          <span className="text-lg font-bold leading-none sm:hidden" aria-hidden>
+            ≡
+          </span>
+          <Icon name="menu" size={20} className="hidden sm:block" />
         </button>
       )}
       {!onMenuClick && !isFnb && (
@@ -84,7 +87,7 @@ export function FnbHeader({
       {/* Logo OneBiz — chỉ icon 28px, không text vì branch chip đã chiếm space */}
       <Link
         href={isFnb ? "/" : "/"}
-        className="flex items-center shrink-0 hover:opacity-80 transition-opacity"
+        className="hidden sm:flex items-center shrink-0 hover:opacity-80 transition-opacity"
         title="Trang chủ OneBiz"
       >
         <Image
@@ -98,19 +101,30 @@ export function FnbHeader({
       </Link>
 
       {/* POS FnB: CHỈ chọn quán (store). Light variant cho header trắng. */}
-      <PosBranchSelector variant="light" filter={["store"]} showCode />
+      <div className="order-1 min-w-0 flex-1 md:order-none md:flex-none">
+        <PosBranchSelector
+          variant="light"
+          filter={["store"]}
+          showCode
+          className="w-full justify-center md:w-auto md:justify-start"
+        />
+      </div>
 
       {onShiftClick && (
-        <ShiftIndicator shift={shift ?? null} onClick={onShiftClick} />
+        <div className="order-2 shrink-0 md:order-none">
+          <ShiftIndicator shift={shift ?? null} onClick={onShiftClick} />
+        </div>
       )}
 
+      <div className="order-10 basis-full md:hidden" aria-hidden />
+
       {/* View mode toggle: Sprint UI-3 — wording chuẩn "Bán hàng / Sơ đồ bàn" */}
-      <div className="flex items-center bg-surface-container rounded-xl p-1 shrink-0">
+      <div className="order-20 flex min-w-[154px] basis-full items-center bg-surface-container rounded-xl p-1 shrink-0 md:order-none md:min-w-0 md:basis-auto md:flex-none">
         <button
           type="button"
           onClick={() => viewMode !== "menu" && onToggleFloorPlan()}
           className={cn(
-            "flex items-center gap-1.5 px-3 py-1.5 text-xs font-semibold rounded-lg transition-colors",
+            "flex flex-1 items-center justify-center gap-1.5 px-2 sm:px-3 py-1.5 text-xs font-semibold rounded-lg transition-colors md:flex-none",
             viewMode === "menu"
               ? "bg-surface text-primary ambient-shadow"
               : "text-on-surface-variant hover:text-foreground",
@@ -118,13 +132,13 @@ export function FnbHeader({
           title="Xem thực đơn để bán hàng"
         >
           <Icon name="restaurant" size={14} />
-          <span className="hidden sm:inline">Bán hàng</span>
+          <span>Bán hàng</span>
         </button>
         <button
           type="button"
           onClick={() => viewMode !== "floorplan" && onToggleFloorPlan()}
           className={cn(
-            "flex items-center gap-1.5 px-3 py-1.5 text-xs font-semibold rounded-lg transition-colors",
+            "flex flex-1 items-center justify-center gap-1.5 px-2 sm:px-3 py-1.5 text-xs font-semibold rounded-lg transition-colors md:flex-none",
             viewMode === "floorplan"
               ? "bg-surface text-primary ambient-shadow"
               : "text-on-surface-variant hover:text-foreground",
@@ -132,7 +146,7 @@ export function FnbHeader({
           title="Xem sơ đồ bàn"
         >
           <Icon name="table_restaurant" size={14} />
-          <span className="hidden sm:inline">Sơ đồ bàn</span>
+          <span>Sơ đồ bàn</span>
         </button>
       </div>
 
@@ -140,7 +154,7 @@ export function FnbHeader({
       <button
         type="button"
         onClick={onSearch}
-        className="flex items-center gap-2 px-3 py-2 bg-surface-container hover:bg-surface-container-high rounded-xl text-xs sm:text-sm text-on-surface-variant transition-colors shrink-0 min-w-0 sm:min-w-[160px] lg:min-w-[220px]"
+        className="order-21 flex min-w-[150px] basis-full items-center justify-center gap-2 px-3 py-2 bg-surface-container hover:bg-surface-container-high rounded-xl text-xs sm:text-sm text-on-surface-variant transition-colors shrink-0 sm:min-w-[180px] md:order-none md:basis-auto md:flex-none lg:min-w-[220px]"
         title="Tìm món (F3)"
       >
         <Icon name="search" size={16} />
@@ -148,10 +162,10 @@ export function FnbHeader({
       </button>
 
       {/* Filler giữa search và right actions — đẩy KDS/settings sang phải */}
-      <div className="flex-1" />
+      <div className="hidden md:block flex-1" />
 
       {/* Right: KDS + settings */}
-      <div className="flex items-center gap-1 shrink-0">
+      <div className="order-22 hidden items-center gap-1 shrink-0 sm:flex md:order-none">
         <Link href={fnbPath("/pos/fnb/kds")}>
           <Button
             variant="ghost"
@@ -180,7 +194,7 @@ export function FnbHeader({
     {/* Sprint UI-2: Order tabs row riêng dưới header (40px).
         Mockup v3: tabs có space riêng, không chen với toolbar — staff dễ
         scan đơn hiện tại. Color dot xanh/cam/xanh lá theo orderType. */}
-    <div className="h-10 bg-surface-container-lowest border-b border-outline-variant/20 flex items-center px-3 gap-1.5 shrink-0 overflow-x-auto scrollbar-none">
+    <div className="h-10 bg-surface-container-lowest border-b border-outline-variant/20 flex items-center px-2 sm:px-3 gap-1.5 shrink-0 overflow-x-auto scrollbar-none">
       {tabs.map((tab) => {
         const isActive = tab.id === activeTabId;
         // Color dot theo orderType (đồng bộ với cart pill row)
@@ -203,7 +217,7 @@ export function FnbHeader({
             )}
           >
             <span className={cn("h-2 w-2 rounded-full shrink-0", dotColor)} />
-            <span className="max-w-[140px] truncate">{tab.label}</span>
+            <span className="max-w-[104px] truncate sm:max-w-[140px]">{tab.label}</span>
             <span
               role="button"
               tabIndex={0}
@@ -238,6 +252,7 @@ export function FnbHeader({
         title="Thêm đơn mới"
       >
         <Icon name="add" size={14} />
+        <span className="sm:hidden">Mới</span>
         <span className="hidden sm:inline">Đơn mới</span>
       </button>
 

@@ -19,7 +19,7 @@ import {
 } from "react";
 import { useRouter } from "next/navigation";
 import { Dialog, DialogContent, DialogTitle } from "@/components/ui/dialog";
-import { mainNavItems } from "./nav-config";
+import { sidebarNavGroups } from "./nav-config";
 import { getProducts, getCustomers, getSuppliers } from "@/lib/services";
 import { cn } from "@/lib/utils";
 import { Icon } from "@/components/ui/icon";
@@ -39,6 +39,36 @@ export interface CommandItem {
   icon: ReactNode;
   onSelect: () => void;
 }
+
+type CommandNavGroup = {
+  label: string;
+  href?: string;
+  items?: {
+    groupLabel?: string;
+    items: { label: string; href: string }[];
+  }[];
+};
+
+const commandNavItems: CommandNavGroup[] = sidebarNavGroups.map((group) => ({
+  label: group.label,
+  items: [
+    ...(group.items
+      ? [
+          {
+            items: group.items
+              .filter((leaf) => !leaf.disabled)
+              .map((leaf) => ({ label: leaf.label, href: leaf.href })),
+          },
+        ]
+      : []),
+    ...(group.subGroups?.map((subGroup) => ({
+      groupLabel: subGroup.label,
+      items: subGroup.items
+        .filter((leaf) => !leaf.disabled)
+        .map((leaf) => ({ label: leaf.label, href: leaf.href })),
+    })) ?? []),
+  ],
+}));
 
 interface CommandPaletteContextValue {
   open: boolean;
@@ -140,7 +170,7 @@ function CommandPaletteDialog({
   // Local static items (navigation + quick actions)
   const staticItems = useMemo<CommandItem[]>(() => {
     const nav: CommandItem[] = [];
-    for (const group of mainNavItems) {
+    for (const group of commandNavItems) {
       if (group.href) {
         nav.push({
           id: `nav:${group.href}`,

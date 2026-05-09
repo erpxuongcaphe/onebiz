@@ -5,22 +5,16 @@
  * - disposal_exports, internal_exports: from Supabase (read + filter)
  * - manufacturing: removed — handled by production.ts
  *
- * Apply flow (G7 fix):
- *   `applyInventoryCheck(checkId)` reads every row from `inventory_check_items`
- *   whose `difference != 0`, splits them into 'in' (actual > system) and 'out'
- *   (actual < system) lists, then routes each list through
- *   `applyManualStockMovement` so the dual-table sync (products.stock +
- *   branch_stock + stock_movements ledger) stays consistent with the rest of
- *   the warehouse dialogs. Finally flips the check status to `balanced`.
- *
- *   stock_movements convention: `quantity` is always positive; direction comes
- *   from the `type` column. Hence we split deltas instead of writing a single
- *   signed 'adjust' row.
+ * Apply flow:
+ *   `applyInventoryCheck(checkId)` delegates to `apply_inventory_check_atomic`.
+ *   The RPC claims the check, writes stock_movements, updates products.stock
+ *   and branch_stock, then flips status to `balanced` in one DB transaction.
  */
 
 import type { InventoryCheck, DisposalExport, InternalExport, QueryParams, QueryResult } from "@/lib/types";
 import { getClient, getCurrentContext, getCurrentTenantId, getPaginationRange, handleError } from "./base";
 import { applyManualStockMovement, nextEntityCode } from "./stock-adjustments";
+import { recordAuditLog } from "./audit";
 
 // --- Disposal Exports / Xuất hủy (Supabase) ---
 
@@ -596,119 +590,32 @@ export function getInventoryCheckStatuses() {
 }
 
 /* ------------------------------------------------------------------ */
-/*  Apply inventory check (G7 fix) — commits real stock deltas        */
+/*  Apply inventory check — commits real stock deltas atomically      */
 /* ------------------------------------------------------------------ */
 
 /**
- * Apply an inventory check:
- *   1. Validate the check is in a mutable state ('draft' | 'in_progress')
- *   2. Read every `inventory_check_items` row
- *   3. For each item with `difference != 0`, derive a manual movement:
- *        - difference > 0 → type='in',  quantity=|difference|  (found more)
- *        - difference < 0 → type='out', quantity=|difference|  (lost some)
- *   4. Route every movement through `applyManualStockMovement` (writes
- *      stock_movements + products.stock + branch_stock in one pass)
- *   5. Flip `inventory_checks.status = 'balanced'`
+ * Apply inventory check via one Postgres transaction.
  *
- * NOT atomic (fetch-then-update loop). Acceptable for single-cashier
- * workflows; a future RPC will wrap this in a single transaction.
- *
- * Throws if the check is already balanced/cancelled, or if it has no items.
+ * The RPC validates status, reads variance rows, writes ledger/snapshots, and
+ * flips `inventory_checks.status = 'balanced'` all-or-nothing.
  */
 export async function applyInventoryCheck(checkId: string): Promise<void> {
   const supabase = getClient();
-  const tenantId = await getCurrentTenantId();
-
-  // 1. ATOMIC status flip — claim this check by flipping status to 'balanced'
-  //    FIRST. If two concurrent calls race, only one will match the WHERE
-  //    clause (status IN draft/in_progress) and succeed. The loser gets 0 rows
-  //    and bails out, preventing double stock adjustment.
-  const { data: claimed, error: claimErr } = await supabase
-    .from("inventory_checks")
-    // eslint-disable-next-line @typescript-eslint/no-explicit-any
-    .update({ status: "balanced" as any })
-    .eq("tenant_id", tenantId)
-    .eq("id", checkId)
-    .in("status", ["draft", "in_progress"])
-    .select("id, code, status")
-    .maybeSingle();
-  if (claimErr) handleError(claimErr, "applyInventoryCheck.claim");
-  if (!claimed) {
-    const { data: existing } = await supabase
-      .from("inventory_checks")
-      .select("status")
-      .eq("tenant_id", tenantId)
-      .eq("id", checkId)
-      .single();
-    if (!existing) throw new Error("Không tìm thấy phiếu kiểm kho");
-    throw new Error(
-      `Phiếu kiểm kho đã được xử lý (trạng thái: ${existing.status}). Không thể áp dụng lại.`
-    );
-  }
-  const check = claimed;
-
-  // 2. Read check items
-  // NOTE: `inventory_check_items` is not in the generated Database types yet
-  // (schema 00001 but not surfaced in types.ts). Cast to any to bypass.
+  const ctx = await getCurrentContext();
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
-  const { data: itemsRaw, error: itemsErr } = await (supabase as any)
-    .from("inventory_check_items")
-    .select("id, product_id, product_name, system_stock, actual_stock, difference")
-    .eq("check_id", checkId);
-  if (itemsErr) handleError(itemsErr, "applyInventoryCheck.items");
-  // eslint-disable-next-line @typescript-eslint/no-explicit-any
-  const items = (itemsRaw ?? []) as Array<{
-    id: string;
-    product_id: string;
-    product_name: string;
-    system_stock: number;
-    actual_stock: number;
-    difference: number;
-  }>;
-  if (items.length === 0) {
-    throw new Error("Phiếu kiểm kho chưa có sản phẩm nào để áp dụng");
-  }
+  const { error } = await (supabase.rpc as any)("apply_inventory_check_atomic", {
+    p_tenant_id: ctx.tenantId,
+    p_check_id: checkId,
+    p_created_by: ctx.userId,
+  });
+  if (error) handleError(error, "applyInventoryCheck.atomic_rpc");
 
-  // 3. Build movements — skip zero-diff rows (nothing to write)
-  //
-  // SECURITY: RECOMPUTE `difference` từ `actual_stock - system_stock` thay vì
-  // trust giá trị `it.difference` do client gửi. Kịch bản tấn công: user sửa
-  // devtools gửi `difference = 1000` dù actual=system → gây nhập kho ảo.
-  // Recompute ở đây đảm bảo delta luôn khớp với actual-system đã ghi ở bước tạo.
-  const movements = items
-    .map((it) => {
-      const actual = Number(it.actual_stock ?? 0);
-      const system = Number(it.system_stock ?? 0);
-      const diff = actual - system; // server-recomputed, KHÔNG dùng it.difference
-      if (diff === 0) return null;
-      return {
-        productId: it.product_id,
-        productName: it.product_name,
-        quantity: Math.abs(diff),
-        type: (diff > 0 ? "in" : "out") as "in" | "out",
-      };
-    })
-    .filter((m): m is { productId: string; productName: string; quantity: number; type: "in" | "out" } => m !== null);
-
-  if (movements.length === 0) {
-    // Nothing to apply — status already flipped to 'balanced' at step 1.
-    return;
-  }
-
-  // 4. Apply all deltas in one batch via the shared helper
-  await applyManualStockMovement(
-    movements.map((m) => ({
-      productId: m.productId,
-      quantity: m.quantity,
-      type: m.type,
-      referenceType: "inventory_check",
-      referenceId: checkId,
-      note: `${check.code} - Kiểm kê - ${m.productName} (${m.type === "in" ? "+" : "-"}${m.quantity})`,
-    }))
-  );
-
-  // 5. Status already flipped to 'balanced' at step 1 (atomic claim).
-  //    No further status update needed.
+  void recordAuditLog({
+    entityType: "inventory_check",
+    entityId: checkId,
+    action: "complete",
+    newData: { status: "balanced", atomic: true },
+  });
 }
 
 /* ------------------------------------------------------------------ */

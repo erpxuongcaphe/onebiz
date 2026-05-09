@@ -1,6 +1,7 @@
 import { createServerClient, type CookieOptions } from "@supabase/ssr";
 import { NextResponse, type NextRequest } from "next/server";
 import type { Database } from "@/lib/supabase/types";
+import { getSharedCookieDomain } from "@/lib/supabase/cookie-domain";
 
 function isPhoneNumber(input: string): boolean {
   const cleaned = input.replace(/[\s-]/g, "");
@@ -10,20 +11,7 @@ function isPhoneNumber(input: string): boolean {
 }
 
 function getCookieDomain(request: NextRequest): string | undefined {
-  const host = request.headers.get("host") ?? "";
-  const hostname = host.split(":")[0];
-  if (hostname === "localhost" || hostname === "127.0.0.1") return undefined;
-
-  const parts = hostname.split(".");
-  const ccSlds = ["com.vn", "org.vn", "net.vn", "edu.vn", "gov.vn"];
-  const tail2 = parts.slice(-2).join(".");
-  if (ccSlds.includes(tail2) && parts.length >= 3) {
-    return `.${parts.slice(-3).join(".")}`;
-  }
-  if (parts.length >= 2) {
-    return `.${parts.slice(-2).join(".")}`;
-  }
-  return undefined;
+  return getSharedCookieDomain(request.headers.get("host"));
 }
 
 function getSafeRedirect(value: string | null): string {

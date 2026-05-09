@@ -3,15 +3,15 @@
 /**
  * KDS (Kitchen Display System) — Full-screen order board for bar/kitchen.
  *
- * Polls kitchen_orders every 5s, displays cards grouped by status.
+ * Polls kitchen_orders in bulk, displays cards grouped by kitchen stage.
  * Bar staff taps items to cycle status (pending→preparing→ready),
  * taps "Xong" to mark order as served.
  *
- * Stitch dark mode styling (per mockup m_n_h_nh_b_p_kds_fnb_dark_mode_chuy_n_d_ng):
- * - Main bg: bg-pos-chrome-bg-elevated (inverse-surface tương đương MD3)
- * - Cards: bg-pos-chrome-bg rounded-xl với colored header theo status
- * - Timer: font-heading black 4xl, color theo threshold
- * - Item checkbox: w-6 h-6 rounded border-2 toggle
+ * OneBiz light board styling:
+ * - Main bg follows ERP surface tokens for consistency with POS FnB.
+ * - Cards use white surfaces with a strong status strip for kitchen readability.
+ * - Timer stays large and color-coded by urgency.
+ * - Item rows stay touch-friendly for tablet/kitchen monitors.
  */
 
 import { useState, useEffect, useCallback, useRef } from "react";
@@ -23,8 +23,7 @@ import { PosBranchSelector } from "@/components/shared/pos-branch-selector";
 import { PermissionPage } from "@/components/shared/permission-page";
 import { PERMISSIONS } from "@/lib/permissions";
 import {
-  getKitchenOrders,
-  getKitchenOrderById,
+  getKitchenOrdersWithItems,
   updateKitchenOrderStatus,
   updateKitchenItemStatus,
 } from "@/lib/services/supabase/kitchen-orders";
@@ -44,7 +43,7 @@ import { Icon } from "@/components/ui/icon";
 // ── Constants ──
 
 const POLL_INTERVAL = 30_000;
-const ACTIVE_STATUSES: KitchenOrderStatus[] = ["pending", "preparing", "ready", "served"];
+const ACTIVE_STATUSES: KitchenOrderStatus[] = ["pending", "preparing", "ready"];
 
 type FilterTab = "all" | "pending" | "preparing" | "ready";
 const FILTER_TABS: { key: FilterTab; label: string }[] = [
@@ -52,6 +51,35 @@ const FILTER_TABS: { key: FilterTab; label: string }[] = [
   { key: "pending", label: "Chờ" },
   { key: "preparing", label: "Đang pha" },
   { key: "ready", label: "Sẵn sàng" },
+];
+const KDS_LANES: {
+  key: Exclude<FilterTab, "all">;
+  title: string;
+  description: string;
+  icon: string;
+  accentClass: string;
+}[] = [
+  {
+    key: "pending",
+    title: "Chờ nhận",
+    description: "Đơn mới cần bắt đầu làm",
+    icon: "pending_actions",
+    accentClass: "text-status-warning bg-status-warning/10 border-status-warning/20",
+  },
+  {
+    key: "preparing",
+    title: "Đang pha",
+    description: "Món đang được xử lý",
+    icon: "local_cafe",
+    accentClass: "text-primary bg-primary-subtle border-primary/20",
+  },
+  {
+    key: "ready",
+    title: "Sẵn sàng",
+    description: "Chờ mang ra hoặc giao khách",
+    icon: "room_service",
+    accentClass: "text-status-success bg-status-success/10 border-status-success/20",
+  },
 ];
 
 // ── Timer helpers ──
@@ -75,6 +103,18 @@ function formatElapsed(createdAt: string): string {
   const m = Math.floor(ms / 60_000);
   const s = Math.floor((ms % 60_000) / 1000);
   return `${String(m).padStart(2, "0")}:${String(s).padStart(2, "0")}`;
+}
+
+function getOrderStage(order: KdsOrder): Exclude<FilterTab, "all"> {
+  if (order.status === "ready") return "ready";
+  if (order.status === "preparing") return "preparing";
+  if (order.items.length > 0 && order.items.every((item) => item.status === "ready")) {
+    return "ready";
+  }
+  if (order.items.some((item) => item.status === "preparing" || item.status === "ready")) {
+    return "preparing";
+  }
+  return "pending";
 }
 
 // ── Sound helper ──
@@ -101,6 +141,17 @@ function playOverdueBeep() {
   setTimeout(() => playBeep(1320, 0.22, 0.35), 260);
 }
 
+function getKitchenLoadMessage(err: unknown): string {
+  const message = err instanceof Error ? err.message : String(err ?? "");
+  if (message.includes("PGRST201")) {
+    return "Không đọc được thông tin bàn do quan hệ dữ liệu bị mơ hồ. Hệ thống sẽ thử lại sau khi dùng query đã chỉ rõ liên kết bàn.";
+  }
+  if (message.toLowerCase().includes("failed to fetch") || message.toLowerCase().includes("network")) {
+    return "Mất kết nối mạng khi tải đơn bếp.";
+  }
+  return "Không tải được đơn bếp lúc này.";
+}
+
 // ── Types ──
 
 interface KdsOrder extends KitchenOrder {
@@ -110,13 +161,15 @@ interface KdsOrder extends KitchenOrder {
 // ── Page ──
 
 function KdsPageInner() {
-  const { currentBranch, user } = useAuth();
+  const { branches, currentBranch, switchBranch, user } = useAuth();
   // Sprint UI-FIX (CEO 08/05): link "Quay về POS" dùng fnbPath để
   // trên subdomain fnb.* trỏ về "/" thay vì "/pos/fnb" (URL bar đẹp hơn).
   const { fnbPath } = useFnbSubdomain();
   const { toast } = useToast();
   const { settings } = useSettings();
   const branchId = currentBranch?.id;
+  const isStoreBranch = currentBranch?.branchType === "store";
+  const storeBranches = branches.filter((branch) => branch.branchType === "store");
 
   const [orders, setOrders] = useState<KdsOrder[]>([]);
   const [loading, setLoading] = useState(true);
@@ -146,7 +199,11 @@ function KdsPageInner() {
 
   // Sprint KITCHEN-1: Load stations cho dropdown filter.
   useEffect(() => {
-    if (!branchId) return;
+    if (!branchId || !isStoreBranch) {
+      setStations([]);
+      setStationFilter(null);
+      return;
+    }
     let cancelled = false;
     getKitchenStationsByBranch(branchId)
       .then((list) => {
@@ -163,23 +220,19 @@ function KdsPageInner() {
     return () => {
       cancelled = true;
     };
-  }, [branchId]);
+  }, [branchId, isStoreBranch]);
 
   // ── Poll orders ──
   const fetchOrders = useCallback(async () => {
-    if (!branchId) return;
+    if (!branchId || !isStoreBranch) {
+      setOrders([]);
+      setFetchError(null);
+      setLastFetchAt(null);
+      setLoading(false);
+      return;
+    }
     try {
-      const list = await getKitchenOrders(branchId, ACTIVE_STATUSES);
-      const enriched = await Promise.all(
-        list.map(async (o) => {
-          try {
-            const detail = await getKitchenOrderById(o.id);
-            return { ...o, items: detail.items } as KdsOrder;
-          } catch {
-            return { ...o, items: [] } as KdsOrder;
-          }
-        })
-      );
+      const enriched = await getKitchenOrdersWithItems(branchId, ACTIVE_STATUSES);
 
       const newIds = new Set(enriched.map((o) => o.id));
       if (prevOrderIdsRef.current.size > 0 && soundOn) {
@@ -219,21 +272,21 @@ function KdsPageInner() {
       setLastFetchAt(Date.now());
     } catch (err) {
       console.error("KDS fetchOrders error:", err);
-      const msg = (err as Error).message ?? "Lỗi không xác định";
+      const msg = getKitchenLoadMessage(err);
       setFetchError(msg);
       if (!fetchErrorShownRef.current) {
         fetchErrorShownRef.current = true;
         toast({
           title: "Không tải được đơn bếp",
           description:
-            "Danh sách có thể không phải bản mới nhất. Kiểm tra kết nối.",
+            "Danh sách có thể chưa phải bản mới nhất. Hệ thống vẫn tự thử lại.",
           variant: "error",
         });
       }
     } finally {
       setLoading(false);
     }
-  }, [branchId, soundOn, toast]);
+  }, [branchId, isStoreBranch, soundOn, toast]);
 
   useEffect(() => {
     fetchOrders();
@@ -243,7 +296,7 @@ function KdsPageInner() {
 
   // ── Supabase Realtime subscription ──
   useEffect(() => {
-    if (!branchId) return;
+    if (!branchId || !isStoreBranch) return;
     const client = getClient();
 
     const channel = client
@@ -279,7 +332,7 @@ function KdsPageInner() {
       client.removeChannel(channel);
       setRealtimeConnected(false);
     };
-  }, [branchId, fetchOrders]);
+  }, [branchId, isStoreBranch, fetchOrders]);
 
   // Timer tick every second + wall clock update
   useEffect(() => {
@@ -477,44 +530,105 @@ function KdsPageInner() {
       // Hide order nếu không còn item nào (sau khi filter station)
       if (stationFilter && o.items.length === 0) return false;
       if (filter === "all") return o.status !== "served";
-      return o.status === filter;
+      return getOrderStage(o) === filter;
     });
+  const laneOrders = (status: Exclude<FilterTab, "all">) =>
+    filtered.filter((order) => getOrderStage(order) === status);
+  const selectedLane =
+    filter === "all" ? null : KDS_LANES.find((lane) => lane.key === filter);
 
   // ── Render ──
 
   // CEO chưa chọn chi nhánh
   if (!branchId) {
     return (
-      <div className="flex flex-col h-screen bg-pos-chrome-bg-elevated text-pos-chrome-fg">
-        <header className="h-16 bg-pos-chrome-bg/70 backdrop-blur flex items-center px-6 gap-3 shrink-0 border-b border-pos-chrome-border/50">
+      <div className="flex h-screen flex-col bg-background text-foreground">
+        <header className="flex h-16 shrink-0 items-center gap-3 border-b border-border bg-card px-6">
           <Link
             href={fnbPath("/pos/fnb")}
-            className="text-pos-chrome-fg-dim hover:text-pos-chrome-fg text-sm flex items-center gap-2 rounded-lg px-2 py-1 hover:bg-pos-chrome-bg-elevated transition-colors"
+            className="flex items-center gap-2 rounded-lg px-2 py-1 text-sm text-muted-foreground transition-colors hover:bg-surface-container hover:text-foreground"
           >
             <Icon name="arrow_back" size={16} />
             POS
           </Link>
-          <PosBranchSelector variant="dark" filter={["store"]} showCode />
+          <PosBranchSelector variant="light" filter={["store"]} showCode />
           <div className="flex-1" />
-          <Icon name="soup_kitchen" size={20} className="text-pos-chrome-fg-dim" />
-          <span className="font-heading text-base font-bold text-pos-chrome-fg">
+          <Icon name="soup_kitchen" size={20} className="text-muted-foreground" />
+          <span className="font-heading text-base font-bold text-foreground">
             KDS Bếp
           </span>
         </header>
-        <div className="flex-1 flex flex-col items-center justify-center gap-5 p-6">
+        <div className="flex flex-1 flex-col items-center justify-center gap-5 p-6">
           <div className="relative w-28 h-28">
-            <div className="absolute inset-0 rounded-full bg-status-info/20 animate-pulse" />
-            <div className="relative w-full h-full flex items-center justify-center text-status-info">
+            <div className="absolute inset-0 rounded-full bg-primary/10 animate-pulse" />
+            <div className="relative flex h-full w-full items-center justify-center text-primary">
               <Icon name="soup_kitchen" size={56} />
             </div>
           </div>
           <div className="text-center space-y-2 max-w-md">
-            <h2 className="font-heading text-2xl font-bold text-pos-chrome-fg">
+            <h2 className="font-heading text-2xl font-bold text-foreground">
               Chọn chi nhánh để xem đơn bếp
             </h2>
-            <p className="text-sm text-pos-chrome-fg-dim leading-relaxed">
-              Bấm chip <strong className="text-pos-chrome-fg">"Chọn chi nhánh"</strong> trên header để chọn quán đang trực bếp. Mỗi quán có hàng đợi đơn riêng.
+            <p className="text-sm text-muted-foreground leading-relaxed">
+              Bấm chip <strong className="text-foreground">"Chọn chi nhánh"</strong> trên header để chọn quán đang trực bếp. Mỗi quán có hàng đợi đơn riêng.
             </p>
+          </div>
+        </div>
+      </div>
+    );
+  }
+
+  if (!isStoreBranch) {
+    return (
+      <div className="flex h-screen flex-col bg-background text-foreground">
+        <header className="flex h-16 shrink-0 items-center gap-3 border-b border-border bg-card px-6">
+          <Link
+            href={fnbPath("/pos/fnb")}
+            className="flex items-center gap-2 rounded-lg px-2 py-1 text-sm text-muted-foreground transition-colors hover:bg-surface-container hover:text-foreground"
+          >
+            <Icon name="arrow_back" size={16} />
+            POS FnB
+          </Link>
+          <div className="flex-1" />
+          <PosBranchSelector variant="light" filter={["store"]} showCode />
+        </header>
+
+        <div className="flex flex-1 items-center justify-center p-6">
+          <div className="w-full max-w-xl rounded-lg border border-border bg-card p-6 text-center shadow-sm">
+            <div className="mx-auto mb-4 flex size-14 items-center justify-center rounded-lg bg-primary-subtle text-primary">
+              <Icon name="storefront" size={28} />
+            </div>
+            <h2 className="font-heading text-2xl font-bold text-foreground">
+              Chọn quán FnB để mở màn bếp
+            </h2>
+            <p className="mt-2 text-sm leading-relaxed text-muted-foreground">
+              Hiện tại đang ở {currentBranch?.name ?? "chi nhánh không phù hợp"}. KDS chỉ hiển thị đơn của chi nhánh loại quán/store để tránh bếp xem nhầm hàng đợi.
+            </p>
+
+            {storeBranches.length > 0 ? (
+              <div className="mt-5 grid gap-2 sm:grid-cols-2">
+                {storeBranches.map((branch) => (
+                  <button
+                    key={branch.id}
+                    type="button"
+                    onClick={() => switchBranch(branch.id)}
+                    className="flex items-center gap-3 rounded-lg border border-border bg-surface-container-lowest px-4 py-3 text-left transition-colors hover:border-primary/40 hover:bg-primary-subtle press-scale-sm"
+                  >
+                    <Icon name="storefront" size={18} className="text-primary" />
+                    <span className="min-w-0">
+                      <span className="block truncate text-sm font-semibold text-foreground">
+                        {branch.code ? `${branch.code} · ${branch.name}` : branch.name}
+                      </span>
+                      <span className="block text-xs text-muted-foreground">Mở hàng đợi bếp</span>
+                    </span>
+                  </button>
+                ))}
+              </div>
+            ) : (
+              <p className="mt-5 rounded-lg bg-status-warning/10 px-4 py-3 text-sm text-status-warning">
+                Chưa có chi nhánh loại quán/store. Anh tạo hoặc đổi loại chi nhánh trong Cài đặt chi nhánh trước.
+              </p>
+            )}
           </div>
         </div>
       </div>
@@ -523,156 +637,157 @@ function KdsPageInner() {
 
   if (loading) {
     return (
-      <div className="flex items-center justify-center h-screen bg-pos-chrome-bg-elevated">
+      <div className="flex h-screen items-center justify-center bg-background">
         <div className="flex flex-col items-center gap-3">
           <Icon
             name="progress_activity"
             size={36}
-            className="animate-spin text-status-info"
+            className="animate-spin text-primary"
           />
-          <p className="text-sm text-pos-chrome-fg-dim">Đang tải đơn bếp…</p>
+          <p className="text-sm text-muted-foreground">Đang tải đơn bếp...</p>
         </div>
       </div>
     );
   }
 
   return (
-    <div className="flex flex-col h-screen bg-pos-chrome-bg-elevated text-pos-chrome-fg overflow-hidden">
-      {/* ── Stitch Top Bar ── */}
-      <header className="h-16 md:h-20 px-4 md:px-8 flex items-center justify-between bg-pos-chrome-bg/60 backdrop-blur-md border-b border-pos-chrome-border/50 shrink-0 gap-3">
-        {/* Left: title + status */}
-        <div className="flex items-center gap-3 min-w-0">
+    <div className="flex h-screen flex-col overflow-hidden bg-background text-foreground">
+      <header className="shrink-0 border-b border-border bg-card/95 px-4 py-3 shadow-sm md:px-6">
+        <div className="flex flex-wrap items-center gap-3">
+          {/* Left: title + status */}
+          <div className="flex min-w-0 items-center gap-3">
           <Link
             href={fnbPath("/pos/fnb")}
-            className="shrink-0 text-pos-chrome-fg-dim hover:text-pos-chrome-fg rounded-lg p-2 hover:bg-pos-chrome-bg-elevated transition-colors"
+            className="shrink-0 rounded-lg border border-border bg-card p-2 text-muted-foreground transition-colors hover:bg-surface-container hover:text-foreground"
             title="Quay về POS"
           >
             <Icon name="arrow_back" size={16} />
           </Link>
-          <div className="flex flex-col min-w-0">
-            <h1 className="font-heading text-lg md:text-xl font-bold tracking-tight text-pos-chrome-fg truncate leading-tight">
-              KDS Bếp Chính
-            </h1>
-            <span className="flex items-center gap-2 text-xs text-pos-chrome-fg-dim">
-              <span
-                className={cn(
-                  "size-2 rounded-full",
-                  fetchError
-                    ? "bg-status-error animate-pulse"
-                    : realtimeConnected
-                      ? "bg-status-success animate-pulse"
-                      : "bg-status-warning"
-                )}
-              />
-              {fetchError ? "Offline" : realtimeConnected ? "Live" : "Polling"} · {filtered.length} đơn
-            </span>
+            <div className="flex size-10 shrink-0 items-center justify-center rounded-lg bg-primary-subtle text-primary">
+              <Icon name="restaurant_menu" size={20} />
+            </div>
+            <div className="flex min-w-0 flex-col">
+              <h1 className="font-heading truncate text-lg font-bold leading-tight tracking-tight text-foreground md:text-xl">
+                Màn bếp KDS
+              </h1>
+              <span className="flex items-center gap-2 text-xs text-muted-foreground">
+                <span
+                  className={cn(
+                    "size-2 rounded-full",
+                    fetchError
+                      ? "bg-status-error animate-pulse"
+                      : realtimeConnected
+                        ? "bg-status-success"
+                        : "bg-status-warning",
+                  )}
+                />
+                {fetchError ? "Lỗi tải" : realtimeConnected ? "Trực tiếp" : "Đang kiểm tra"} · {filtered.length} đơn
+              </span>
+            </div>
           </div>
           <div className="hidden lg:block">
-            <PosBranchSelector variant="dark" filter={["store"]} showCode />
+            <PosBranchSelector variant="light" filter={["store"]} showCode />
           </div>
-        </div>
 
-        {/* Center: filter pills — Stitch style */}
-        <div className="hidden sm:flex items-center gap-1 bg-pos-chrome-bg/60 p-1 rounded-xl border border-pos-chrome-border/40">
-          {FILTER_TABS.map((tab) => (
-            <button
-              key={tab.key}
-              onClick={() => setFilter(tab.key)}
-              className={cn(
-                "px-4 md:px-5 py-2 md:py-2 rounded-lg font-semibold text-xs md:text-sm transition-all press-scale-sm",
-                filter === tab.key
-                  ? "bg-status-info text-white shadow-md shadow-pos-chrome-bg/30"
-                  : "text-pos-chrome-fg-dim hover:bg-pos-chrome-bg-elevated hover:text-pos-chrome-fg"
-              )}
-            >
-              {tab.label}
-            </button>
-          ))}
-        </div>
+          <div className="flex-1" />
 
-        {/* Sprint KITCHEN-1: Station filter — chỉ hiện nếu quán có >1 trạm.
-            Bar staff chọn "Bar" → chỉ thấy món drink, kitchen staff chọn "Bếp"
-            → chỉ thấy món bếp. Default null = "Tất cả trạm". */}
-        {stations.length > 1 && (
-          <div className="hidden md:flex items-center gap-1 bg-pos-chrome-bg/60 p-1 rounded-xl border border-pos-chrome-border/40">
-            <button
-              onClick={() => setStationFilter(null)}
-              className={cn(
-                "px-3 py-2 rounded-lg font-semibold text-xs transition-all press-scale-sm flex items-center gap-1.5",
-                stationFilter === null
-                  ? "bg-pos-chrome-fg/15 text-pos-chrome-fg"
-                  : "text-pos-chrome-fg-dim hover:bg-pos-chrome-bg-elevated hover:text-pos-chrome-fg",
-              )}
-              title="Hiện tất cả trạm"
-            >
-              <Icon name="apps" size={14} />
-              Tất cả
-            </button>
-            {stations.map((s) => (
+          <div className="hidden items-center gap-1 rounded-lg border border-border bg-surface-container p-1 sm:flex">
+            {FILTER_TABS.map((tab) => (
               <button
-                key={s.id}
-                onClick={() => setStationFilter(s.id)}
+                key={tab.key}
+                onClick={() => setFilter(tab.key)}
                 className={cn(
-                  "px-3 py-2 rounded-lg font-semibold text-xs transition-all press-scale-sm flex items-center gap-1.5",
-                  stationFilter === s.id
-                    ? "text-white shadow-md"
-                    : "text-pos-chrome-fg-dim hover:bg-pos-chrome-bg-elevated hover:text-pos-chrome-fg",
+                  "rounded-md px-4 py-2 text-xs font-semibold transition-all press-scale-sm md:text-sm",
+                  filter === tab.key
+                    ? "bg-primary text-primary-foreground shadow-sm"
+                    : "text-muted-foreground hover:bg-card hover:text-foreground",
                 )}
-                style={
-                  stationFilter === s.id
-                    ? { backgroundColor: s.color }
-                    : undefined
-                }
-                title={`Chỉ hiện món ${s.name}`}
               >
-                <Icon name={s.icon} size={14} />
-                {s.name}
+                {tab.label}
               </button>
             ))}
           </div>
-        )}
 
-        {/* Right: time + sound */}
-        <div className="flex items-center gap-3 shrink-0">
-          <div className="font-heading font-bold text-xl md:text-2xl tabular-nums tracking-tight text-pos-chrome-fg">
-            {wallClock}
+          {stations.length > 1 && (
+            <div className="hidden max-w-[420px] items-center gap-1 overflow-x-auto rounded-lg border border-border bg-surface-container p-1 md:flex">
+              <button
+                onClick={() => setStationFilter(null)}
+                className={cn(
+                  "flex items-center gap-1.5 rounded-md px-3 py-2 text-xs font-semibold transition-all press-scale-sm",
+                  stationFilter === null
+                    ? "bg-card text-foreground shadow-sm"
+                    : "text-muted-foreground hover:bg-card hover:text-foreground",
+                )}
+                title="Hiện tất cả trạm"
+              >
+                <Icon name="apps" size={14} />
+                Tất cả
+              </button>
+              {stations.map((s) => (
+                <button
+                  key={s.id}
+                  onClick={() => setStationFilter(s.id)}
+                  className={cn(
+                    "flex items-center gap-1.5 rounded-md px-3 py-2 text-xs font-semibold transition-all press-scale-sm",
+                    stationFilter === s.id
+                      ? "text-white shadow-sm"
+                      : "text-muted-foreground hover:bg-card hover:text-foreground",
+                  )}
+                  style={
+                    stationFilter === s.id
+                      ? { backgroundColor: s.color }
+                      : undefined
+                  }
+                  title={`Chỉ hiện món ${s.name}`}
+                >
+                  <Icon name={s.icon} size={14} />
+                  {s.name}
+                </button>
+              ))}
+            </div>
+          )}
+
+          <div className="flex shrink-0 items-center gap-2">
+            <div className="rounded-lg border border-border bg-card px-3 py-1.5 font-heading text-xl font-bold tabular-nums tracking-tight text-foreground md:text-2xl">
+              {wallClock}
+            </div>
+            <button
+              onClick={() => setSoundOn(!soundOn)}
+              className={cn(
+                "flex size-10 items-center justify-center rounded-lg border transition-colors press-scale-sm",
+                soundOn
+                  ? "border-primary/30 bg-primary-subtle text-primary hover:bg-primary-fixed"
+                  : "border-border bg-card text-muted-foreground hover:bg-surface-container",
+              )}
+              title={soundOn ? "Tắt âm" : "Bật âm"}
+            >
+              <Icon name={soundOn ? "volume_up" : "volume_off"} size={18} />
+            </button>
           </div>
-          <button
-            onClick={() => setSoundOn(!soundOn)}
-            className={cn(
-              "size-9 rounded-lg flex items-center justify-center transition-colors press-scale-sm",
-              soundOn
-                ? "bg-status-info/20 text-status-info hover:bg-status-info/30"
-                : "bg-pos-chrome-bg-elevated text-pos-chrome-fg0 hover:bg-pos-chrome-bg-hover"
-            )}
-            title={soundOn ? "Tắt âm" : "Bật âm"}
-          >
-            <Icon name={soundOn ? "volume_up" : "volume_off"} size={16} />
-          </button>
         </div>
       </header>
 
       {/* Offline / connection alert banner — hiện khi fetch lỗi hoặc stale data > 90s
           Để bếp biết ngay không cần check header nhỏ. Khi online lại thì biến mất. */}
       {(fetchError || (!realtimeConnected && lastFetchAt !== null && now - lastFetchAt > 90_000)) && (
-        <div className="bg-status-warning/15 border-b-2 border-status-warning px-4 md:px-8 py-3 flex items-center gap-3 shrink-0">
-          <div className="size-8 rounded-full bg-status-warning/30 flex items-center justify-center shrink-0 animate-pulse">
+        <div className="flex shrink-0 items-center gap-3 border-b border-status-warning/30 bg-status-warning/10 px-4 py-3 md:px-6">
+          <div className="flex size-8 shrink-0 animate-pulse items-center justify-center rounded-full bg-status-warning/20">
             <Icon name="wifi_off" size={16} className="text-status-warning" />
           </div>
           <div className="flex-1 min-w-0">
             <div className="font-semibold text-sm text-status-warning">
               {fetchError ? "Lỗi tải đơn bếp" : "Mất kết nối realtime"}
             </div>
-            <div className="text-xs text-pos-chrome-fg-dim">
+            <div className="text-xs text-muted-foreground">
               {fetchError
-                ? `${fetchError}. Đang thử lại mỗi 30s — kiểm tra mạng hoặc Supabase.`
-                : `Chưa update ${Math.floor((now - (lastFetchAt ?? now)) / 1000)}s. Poll 30s vẫn chạy — món mới có thể chậm.`}
+                ? `${fetchError}. Đang thử lại mỗi 30s - kiểm tra mạng hoặc Supabase.`
+                : `Chưa update ${Math.floor((now - (lastFetchAt ?? now)) / 1000)}s. Poll 30s vẫn chạy - món mới có thể chậm.`}
             </div>
           </div>
           <button
             type="button"
             onClick={() => fetchOrders()}
-            className="shrink-0 px-3 py-2 rounded-lg bg-status-warning/25 hover:bg-status-warning/35 text-status-warning font-semibold text-xs flex items-center gap-2 transition-colors press-scale-sm"
+            className="flex shrink-0 items-center gap-2 rounded-lg border border-status-warning/30 bg-card px-3 py-2 text-xs font-semibold text-status-warning transition-colors hover:bg-status-warning/10 press-scale-sm"
             title="Tải lại ngay"
           >
             <Icon name="refresh" size={14} />
@@ -682,16 +797,16 @@ function KdsPageInner() {
       )}
 
       {/* Filter pills — mobile row (outside header) */}
-      <div className="flex sm:hidden items-center gap-1 bg-pos-chrome-bg/60 mx-3 mt-3 p-1 rounded-xl overflow-x-auto no-scrollbar border border-pos-chrome-border/40 shrink-0">
+      <div className="mx-3 mt-3 flex shrink-0 items-center gap-1 overflow-x-auto rounded-lg border border-border bg-surface-container p-1 no-scrollbar sm:hidden">
         {FILTER_TABS.map((tab) => (
           <button
             key={tab.key}
             onClick={() => setFilter(tab.key)}
             className={cn(
-              "shrink-0 px-4 py-2 rounded-lg font-semibold text-xs transition-all press-scale-sm",
+              "shrink-0 rounded-md px-4 py-2 text-xs font-semibold transition-all press-scale-sm",
               filter === tab.key
-                ? "bg-status-info text-white shadow"
-                : "text-pos-chrome-fg-dim hover:bg-pos-chrome-bg-elevated hover:text-pos-chrome-fg"
+                ? "bg-primary text-primary-foreground shadow-sm"
+                : "text-muted-foreground hover:bg-card hover:text-foreground"
             )}
           >
             {tab.label}
@@ -699,35 +814,79 @@ function KdsPageInner() {
         ))}
       </div>
 
+      {stations.length > 1 && (
+        <div className="mx-3 mt-2 flex shrink-0 items-center gap-1 overflow-x-auto rounded-lg border border-border bg-surface-container p-1 no-scrollbar md:hidden">
+          <button
+            onClick={() => setStationFilter(null)}
+            className={cn(
+              "flex shrink-0 items-center gap-1.5 rounded-md px-3 py-2 text-xs font-semibold transition-all press-scale-sm",
+              stationFilter === null
+                ? "bg-card text-foreground shadow-sm"
+                : "text-muted-foreground hover:bg-card hover:text-foreground",
+            )}
+          >
+            <Icon name="apps" size={14} />
+            Tất cả trạm
+          </button>
+          {stations.map((s) => (
+            <button
+              key={s.id}
+              onClick={() => setStationFilter(s.id)}
+              className={cn(
+                "flex shrink-0 items-center gap-1.5 rounded-md px-3 py-2 text-xs font-semibold transition-all press-scale-sm",
+                stationFilter === s.id
+                  ? "text-white shadow-sm"
+                  : "text-muted-foreground hover:bg-card hover:text-foreground",
+              )}
+              style={
+                stationFilter === s.id
+                  ? { backgroundColor: s.color }
+                  : undefined
+              }
+            >
+              <Icon name={s.icon} size={14} />
+              {s.name}
+            </button>
+          ))}
+        </div>
+      )}
+
       {/* ── KDS Board ── */}
-      <div className="flex-1 overflow-x-auto overflow-y-hidden p-4 md:p-6">
-        {filtered.length === 0 ? (
-          <div className="flex flex-col items-center justify-center h-full gap-3">
-            <div className="size-20 rounded-2xl bg-pos-chrome-bg-hover flex items-center justify-center">
-              <Icon name="check_circle" size={40} className="text-status-success" />
-            </div>
-            <p className="font-heading text-lg font-bold text-pos-chrome-fg-muted">
-              Bếp đang thong thả
-            </p>
-            <p className="text-sm text-pos-chrome-fg0 max-w-xs text-center">
-              Đơn mới sẽ tự động hiện trong vài giây. Âm thanh {soundOn ? "đang bật" : "đang tắt"}.
-            </p>
-          </div>
-        ) : (
-          <div className="h-full flex gap-4 md:gap-5 items-start overflow-x-auto no-scrollbar pb-3">
-            {filtered.map((order) => (
-              <KdsOrderCard
-                key={order.id}
-                order={order}
+      <div className="flex-1 overflow-auto bg-background p-3 md:p-5">
+        {filter === "all" ? (
+          <div className="grid min-h-full grid-cols-1 gap-3 lg:grid-cols-3">
+            {KDS_LANES.map((lane) => (
+              <KdsLane
+                key={lane.key}
+                title={lane.title}
+                description={lane.description}
+                icon={lane.icon}
+                accentClass={lane.accentClass}
+                orders={laneOrders(lane.key)}
                 now={now}
                 onItemToggle={handleItemToggle}
                 onItemRecall={handleItemRecall}
-                onPrintTicket={() => handlePrintTicket(order)}
-                onServed={() => handleServed(order.id)}
-                onMarkAllReady={() => handleMarkAllReady(order.id)}
+                onPrintTicket={handlePrintTicket}
+                onServed={handleServed}
+                onMarkAllReady={handleMarkAllReady}
               />
             ))}
           </div>
+        ) : (
+          <KdsLane
+            title={selectedLane?.title ?? "Đơn bếp"}
+            description={selectedLane?.description ?? "Hàng đợi đang lọc"}
+            icon={selectedLane?.icon ?? "restaurant_menu"}
+            accentClass={selectedLane?.accentClass ?? "text-primary bg-primary-subtle border-primary/20"}
+            orders={filtered}
+            now={now}
+            wide
+            onItemToggle={handleItemToggle}
+            onItemRecall={handleItemRecall}
+            onPrintTicket={handlePrintTicket}
+            onServed={handleServed}
+            onMarkAllReady={handleMarkAllReady}
+          />
         )}
       </div>
     </div>
@@ -735,7 +894,92 @@ function KdsPageInner() {
 }
 
 // ══════════════════════════════════════════════════════════════════
-// KDS Order Card — Stitch dark mode
+// KDS Lane
+// ══════════════════════════════════════════════════════════════════
+
+function KdsLane({
+  title,
+  description,
+  icon,
+  accentClass,
+  orders,
+  now,
+  wide = false,
+  onItemToggle,
+  onItemRecall,
+  onPrintTicket,
+  onServed,
+  onMarkAllReady,
+}: {
+  title: string;
+  description: string;
+  icon: string;
+  accentClass: string;
+  orders: KdsOrder[];
+  now: number;
+  wide?: boolean;
+  onItemToggle: (item: KitchenOrderItem) => void;
+  onItemRecall: (item: KitchenOrderItem) => void;
+  onPrintTicket: (order: KdsOrder) => void;
+  onServed: (orderId: string) => void;
+  onMarkAllReady: (orderId: string) => void;
+}) {
+  return (
+    <section className="flex min-h-[320px] flex-col overflow-hidden rounded-lg border border-border bg-surface-container-lowest shadow-sm">
+      <header className="flex shrink-0 items-center gap-3 border-b border-border bg-card px-3 py-3">
+        <div className={cn("flex size-10 shrink-0 items-center justify-center rounded-lg border", accentClass)}>
+          <Icon name={icon} size={20} />
+        </div>
+        <div className="min-w-0 flex-1">
+          <div className="flex items-center gap-2">
+            <h2 className="font-heading text-base font-bold text-foreground">
+              {title}
+            </h2>
+            <span className="rounded-full bg-surface-container px-2 py-0.5 text-xs font-bold text-muted-foreground">
+              {orders.length}
+            </span>
+          </div>
+          <p className="truncate text-xs text-muted-foreground">
+            {description}
+          </p>
+        </div>
+      </header>
+
+      <div
+        className={cn(
+          "flex-1 overflow-y-auto p-3",
+          wide
+            ? "grid auto-rows-max grid-cols-1 gap-3 md:grid-cols-2 xl:grid-cols-3"
+            : "space-y-3",
+        )}
+      >
+        {orders.length === 0 ? (
+          <div className="flex min-h-[180px] flex-col items-center justify-center rounded-lg border border-dashed border-border bg-background/70 p-4 text-center">
+            <Icon name="check_circle" size={28} className="text-status-success" />
+            <p className="mt-2 text-sm font-semibold text-foreground">Đang trống</p>
+            <p className="mt-1 text-xs text-muted-foreground">Chưa có đơn trong luồng này.</p>
+          </div>
+        ) : (
+          orders.map((order) => (
+            <KdsOrderCard
+              key={order.id}
+              order={order}
+              now={now}
+              onItemToggle={onItemToggle}
+              onItemRecall={onItemRecall}
+              onPrintTicket={() => onPrintTicket(order)}
+              onServed={() => onServed(order.id)}
+              onMarkAllReady={() => onMarkAllReady(order.id)}
+            />
+          ))
+        )}
+      </div>
+    </section>
+  );
+}
+
+// ══════════════════════════════════════════════════════════════════
+// KDS Order Card — OneBiz light board style
 // ══════════════════════════════════════════════════════════════════
 
 function KdsOrderCard({
@@ -768,22 +1012,22 @@ function KdsOrderCard({
         ? "Mang về"
         : "Giao";
   const typeLabelCaption =
-    order.orderType === "dine_in" ? "BÀN" : order.orderType === "takeaway" ? "TAKEAWAY" : "DELIVERY";
+    order.orderType === "dine_in" ? "Bàn tại quán" : order.orderType === "takeaway" ? "Mang về" : "Giao hàng";
 
   // Header color theme based on urgency
-  const headerClass =
+  const cardAccentClass =
     urgency === "overdue"
-      ? "bg-status-error/80 border-b border-status-error/40"
+      ? "border-t-status-error"
       : urgency === "attention"
-        ? "bg-status-warning/60 border-b border-status-warning/30"
-        : "bg-status-info";
+        ? "border-t-status-warning"
+        : "border-t-primary";
 
-  const headerTextClass =
+  const statusPillClass =
     urgency === "overdue"
-      ? "text-status-error"
+      ? "border-status-error/30 bg-status-error/10 text-status-error"
       : urgency === "attention"
-        ? "text-status-warning"
-        : "text-status-info";
+        ? "border-status-warning/30 bg-status-warning/10 text-status-warning"
+        : "border-primary/20 bg-primary-subtle text-primary";
 
   const timerTextClass =
     urgency === "overdue"
@@ -795,77 +1039,51 @@ function KdsOrderCard({
   return (
     <div
       className={cn(
-        "w-[300px] md:w-[320px] shrink-0 bg-pos-chrome-bg rounded-xl overflow-hidden flex flex-col relative ambient-shadow-lg",
-        "border border-pos-chrome-border/40",
+        "relative flex max-h-full w-full flex-col overflow-hidden rounded-lg border border-border border-t-4 bg-card shadow-sm",
+        cardAccentClass,
         order.status === "served" && "opacity-50"
       )}
     >
-      {/* Overdue pulse bar */}
-      {urgency === "overdue" && (
-        <div className="absolute top-0 left-0 right-0 h-1 bg-status-error animate-pulse" />
-      )}
-
-      {/* ── Card Header — large table # ── */}
-      <div className={cn("p-4 flex justify-between items-start shrink-0", headerClass)}>
-        <div className="min-w-0">
-          <span
-            className={cn(
-              "text-[10px] font-bold uppercase tracking-[0.15em] block mb-1 opacity-90",
-              headerTextClass
-            )}
-          >
+      <div className="flex shrink-0 items-start justify-between gap-3 border-b border-border bg-card p-4">
+        <div className="min-w-0 space-y-2">
+          <span className={cn("inline-flex items-center rounded-full border px-2 py-1 text-[11px] font-bold", statusPillClass)}>
             {typeLabelCaption}
           </span>
-          <span
-            className={cn(
-              "font-heading font-extrabold text-3xl md:text-4xl leading-none truncate block",
-              headerTextClass
-            )}
-          >
-            {typeLabel}
-          </span>
-          <span className={cn("text-[11px] font-semibold mt-1 block opacity-80", headerTextClass)}>
-            #{order.orderNumber}
-          </span>
+          <div className="space-y-1">
+            <span className="block truncate font-heading text-3xl font-extrabold leading-none text-foreground md:text-4xl">
+              {typeLabel}
+            </span>
+            <span className="block text-xs font-semibold text-muted-foreground">
+              #{order.orderNumber}
+            </span>
+          </div>
         </div>
-        <div className="text-right shrink-0 flex flex-col items-end gap-1">
+        <div className="flex shrink-0 flex-col items-end gap-2 text-right">
           <button
             type="button"
             onClick={(e) => {
               e.stopPropagation();
               onPrintTicket();
             }}
-            className={cn(
-              "size-7 rounded-lg flex items-center justify-center transition-colors",
-              "bg-black/10 hover:bg-black/20",
-              headerTextClass
-            )}
+            className="flex size-8 items-center justify-center rounded-lg border border-border bg-card text-muted-foreground transition-colors hover:bg-surface-container hover:text-foreground"
             title="In lại phiếu bếp"
             aria-label="In lại phiếu bếp"
           >
             <Icon name="print" size={14} />
           </button>
-          <span
-            className={cn(
-              "text-[10px] uppercase tracking-wider block opacity-80",
-              headerTextClass
-            )}
-          >
-            Time
-          </span>
-          <span
-            className={cn(
-              "font-heading font-bold text-xl md:text-2xl tabular-nums",
-              timerTextClass
-            )}
-          >
-            {formatElapsed(order.createdAt)}
-          </span>
+          <div className="rounded-lg bg-surface-container px-2.5 py-1.5">
+            <span className="block text-[10px] font-bold uppercase text-muted-foreground">
+              Thời gian
+            </span>
+            <span className={cn("font-heading text-xl font-bold tabular-nums md:text-2xl", timerTextClass)}>
+              {formatElapsed(order.createdAt)}
+            </span>
+          </div>
         </div>
       </div>
 
       {/* ── Items list ── */}
-      <div className="p-2 flex flex-col gap-2 bg-pos-chrome-bg flex-1 min-h-0 overflow-y-auto">
+      <div className="flex min-h-0 flex-1 flex-col gap-2 overflow-y-auto bg-surface-container-lowest p-2">
         {order.items.map((item) => (
           <KdsItemRow
             key={item.id}
@@ -877,15 +1095,14 @@ function KdsOrderCard({
       </div>
 
       {/* ── Action buttons ── */}
-      <div className="p-3 shrink-0 border-t border-pos-chrome-border/40 bg-pos-chrome-bg space-y-2">
+      <div className="shrink-0 space-y-2 border-t border-border bg-card p-3">
         {/* Bulk "Sẵn sàng hết" — only when there are still pending items */}
         {order.status !== "served" && pendingCount > 0 && (
           <button
             type="button"
             onClick={onMarkAllReady}
             className={cn(
-              "w-full py-3 rounded-lg font-semibold text-xs transition-all press-scale-sm flex items-center justify-center gap-2",
-              "bg-pos-chrome-bg-elevated text-status-info hover:bg-pos-chrome-bg-hover border border-status-info/40"
+              "flex w-full items-center justify-center gap-2 rounded-lg border border-primary/25 bg-primary-subtle py-3 text-xs font-semibold text-primary transition-all hover:bg-primary-fixed press-scale-sm"
             )}
             title={`Đánh dấu sẵn sàng ${pendingCount} món còn lại`}
           >
@@ -895,7 +1112,7 @@ function KdsOrderCard({
         )}
 
         {order.status === "served" ? (
-          <div className="w-full py-3 rounded-lg bg-pos-chrome-bg-elevated text-pos-chrome-fg0 font-semibold text-sm text-center flex items-center justify-center gap-2">
+          <div className="flex w-full items-center justify-center gap-2 rounded-lg bg-surface-container py-3 text-center text-sm font-semibold text-muted-foreground">
             <Icon name="check_circle" size={16} />
             Đã phục vụ
           </div>
@@ -905,19 +1122,17 @@ function KdsOrderCard({
             onClick={onServed}
             disabled={!allReady}
             className={cn(
-              "w-full py-3 rounded-lg font-bold text-sm transition-all press-scale-sm flex items-center justify-center gap-2",
+              "flex w-full items-center justify-center gap-2 rounded-lg py-3 text-sm font-bold transition-all press-scale-sm",
               allReady
                 ? "bg-status-success text-white hover:bg-status-success/90 ambient-shadow"
-                : urgency === "overdue"
-                  ? "bg-status-error/80 text-white hover:bg-status-error ambient-shadow"
-                  : "bg-pos-chrome-bg-elevated text-pos-chrome-fg-dim cursor-not-allowed opacity-70"
+                : "cursor-not-allowed bg-surface-container text-muted-foreground opacity-75"
             )}
           >
             <Icon
-              name={allReady ? "check_circle" : urgency === "overdue" ? "bolt" : "pending"}
+              name={allReady ? "check_circle" : "pending_actions"}
               size={16}
             />
-            {allReady ? "Xong" : urgency === "overdue" ? "Đẩy nhanh" : "Chờ hoàn tất"}
+            {allReady ? "Xong" : `Còn ${pendingCount} món`}
           </button>
         )}
       </div>
@@ -926,7 +1141,7 @@ function KdsOrderCard({
 }
 
 // ══════════════════════════════════════════════════════════════════
-// KDS Item Row — Stitch checkbox style
+// KDS Item Row
 // ══════════════════════════════════════════════════════════════════
 
 function KdsItemRow({
@@ -947,13 +1162,12 @@ function KdsItemRow({
     return (
       <div
         className={cn(
-          "flex items-start gap-3 w-full text-left rounded-lg p-3",
-          "bg-pos-chrome-bg-elevated/40"
+          "flex w-full items-start gap-3 rounded-lg border border-status-success/20 bg-status-success/5 p-3 text-left"
         )}
       >
         <div
           className={cn(
-            "size-6 rounded-lg border-2 flex items-center justify-center shrink-0 mt-0.5 transition-all",
+            "mt-0.5 flex size-6 shrink-0 items-center justify-center rounded-lg border-2 transition-all",
             "bg-status-success border-status-success"
           )}
         >
@@ -964,20 +1178,20 @@ function KdsItemRow({
           <div className="flex items-start gap-2">
             <span
               className={cn(
-                "font-heading font-bold text-sm md:text-base leading-tight",
-                "line-through text-pos-chrome-fg0"
+                "font-heading text-sm font-bold leading-tight md:text-base",
+                "line-through text-muted-foreground"
               )}
             >
               {item.productName}
             </span>
           </div>
           {item.variantLabel && (
-            <span className="text-xs text-pos-chrome-fg-dim block mt-0.5 line-through">
+            <span className="mt-0.5 block text-xs text-muted-foreground line-through">
               {item.variantLabel}
             </span>
           )}
           {item.toppings.length > 0 && (
-            <div className="text-xs text-pos-chrome-fg-dim mt-0.5 line-through">
+            <div className="mt-0.5 text-xs text-muted-foreground line-through">
               {item.toppings.map((t, i) => (
                 <span key={i}>
                   {i > 0 && ", "}+{t.name}
@@ -996,10 +1210,9 @@ function KdsItemRow({
           type="button"
           onClick={onRecall}
           className={cn(
-            "shrink-0 size-7 rounded-lg flex items-center justify-center transition-colors press-scale-sm",
-            "bg-pos-chrome-bg text-pos-chrome-fg-dim hover:text-status-warning hover:bg-status-warning/10"
+            "flex size-7 shrink-0 items-center justify-center rounded-lg border border-border bg-card text-muted-foreground transition-colors hover:bg-status-warning/10 hover:text-status-warning press-scale-sm"
           )}
-          title="Hoàn tác — đánh dấu lại đang pha"
+          title="Hoàn tác - đánh dấu lại đang pha"
           aria-label="Hoàn tác món"
         >
           <Icon name="undo" size={14} />
@@ -1013,17 +1226,19 @@ function KdsItemRow({
       type="button"
       onClick={onToggle}
       className={cn(
-        "flex items-start gap-3 w-full text-left rounded-lg p-3 transition-colors press-scale-sm",
-        "bg-pos-chrome-bg-elevated hover:bg-pos-chrome-bg-hover cursor-pointer"
+        "flex w-full cursor-pointer items-start gap-3 rounded-lg border p-3 text-left transition-colors press-scale-sm",
+        isPreparing
+          ? "border-status-warning/30 bg-status-warning/10 hover:bg-status-warning/15"
+          : "border-border bg-card hover:bg-surface-container"
       )}
     >
       {/* Checkbox — Stitch style */}
       <div
         className={cn(
-          "size-6 rounded-lg border-2 flex items-center justify-center shrink-0 mt-0.5 transition-all",
+          "mt-0.5 flex size-6 shrink-0 items-center justify-center rounded-lg border-2 transition-all",
           isPreparing
             ? "bg-status-warning/20 border-status-warning"
-            : "border-pos-chrome-fg-dim"
+            : "border-outline-variant"
         )}
       >
         {isPreparing && (
@@ -1036,21 +1251,21 @@ function KdsItemRow({
         <div className="flex items-start gap-2">
           <span
             className={cn(
-              "font-heading font-bold text-sm md:text-base leading-tight",
-              "text-pos-chrome-fg"
+              "font-heading text-sm font-bold leading-tight md:text-base",
+              "text-foreground"
             )}
           >
             {item.productName}
           </span>
         </div>
         {item.variantLabel && (
-          <span className="text-xs text-pos-chrome-fg-dim block mt-0.5">
+          <span className="mt-0.5 block text-xs text-muted-foreground">
             {item.variantLabel}
           </span>
         )}
         {/* Toppings */}
         {item.toppings.length > 0 && (
-          <div className="text-xs text-pos-chrome-fg-dim mt-0.5">
+          <div className="mt-0.5 text-xs text-muted-foreground">
             {item.toppings.map((t, i) => (
               <span key={i}>
                 {i > 0 && ", "}+{t.name}

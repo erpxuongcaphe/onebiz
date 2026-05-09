@@ -41,7 +41,7 @@ export const cashTransactionExcelSchema: ExcelSchema<CashTransactionImportRow> =
       header: "Ngày phát sinh",
       type: "date",
       required: true,
-      example: "2026-04-19",
+      example: "19/04/2026",
       width: 16,
     },
     {

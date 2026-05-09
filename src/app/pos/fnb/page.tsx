@@ -56,7 +56,7 @@ import { printShiftReport } from "@/lib/print-shift-report";
 import type { RestaurantTable } from "@/lib/types/fnb";
 import type { Shift } from "@/lib/types/shift";
 import type { Customer } from "@/lib/types";
-import { formatCurrency } from "@/lib/format";
+import { formatCurrency, formatNumber } from "@/lib/format";
 import { useFnbPosState } from "./hooks/use-fnb-pos-state";
 import { FnbHeader } from "./components/fnb-header";
 import { FnbLoadingSkeleton } from "./components/fnb-loading-skeleton";
@@ -193,7 +193,7 @@ function FnbPosPageInner() {
       try {
         // Step 1: Load from IndexedDB cache instantly
         try {
-          const cached = await getMenuFromCache();
+          const cached = await getMenuFromCache(tenantId);
           if (cached.products.length > 0) {
             setCategories(cached.categories);
             setProducts(cached.products);
@@ -201,7 +201,7 @@ function FnbPosPageInner() {
             setLoading(false); // Show cached data immediately
           }
           if (branchId) {
-            const cachedTables = await getTablesFromCache(branchId);
+            const cachedTables = await getTablesFromCache(tenantId, branchId);
             if (cachedTables.length > 0) {
               setTables(cachedTables as RestaurantTable[]);
             }
@@ -212,7 +212,7 @@ function FnbPosPageInner() {
 
         // Step 2: Background refresh from Supabase (if online) — PARALLEL
         if (networkStatus.isOnline) {
-          const needsRefresh = await shouldRefreshMenu().catch(() => true);
+          const needsRefresh = await shouldRefreshMenu(tenantId).catch(() => true);
           const supabase = getClient();
 
           // Parallel fetch: catalog (cats + products + toppings) + branch-scoped (tables + shift)
@@ -224,6 +224,7 @@ function FnbPosPageInner() {
                 supabase
                   .from("products")
                   .select("id, name, code, sell_price, image_url, stock, category_id, brand")
+                  .eq("tenant_id", tenantId)
                   .eq("is_active", true)
                   .eq("product_type", "sku")
                   .eq("channel", "fnb")
@@ -232,6 +233,7 @@ function FnbPosPageInner() {
                 supabase
                   .from("products")
                   .select("id, name, sell_price")
+                  .eq("tenant_id", tenantId)
                   .eq("is_active", true)
                   .ilike("code", "NVL-TOP%")
                   .limit(100),
@@ -285,14 +287,14 @@ function FnbPosPageInner() {
             );
 
             // Update cache in background — fail OK, retry next session.
-            prefetchMenuData().catch((err) =>
+            prefetchMenuData(tenantId).catch((err) =>
               console.warn("[FnB] prefetchMenuData failed:", err),
             );
           }
 
           if (branchId) {
             setTables(tbls);
-            prefetchTableData(branchId).catch((err) =>
+            prefetchTableData(tenantId, branchId).catch((err) =>
               console.warn("[FnB] prefetchTableData failed:", err),
             );
             if (userId) setCurrentShift(shift);
@@ -582,10 +584,11 @@ function FnbPosPageInner() {
   //    start + offline reload. Sau đó effect prefetch bên dưới sẽ refresh nếu
   //    cache stale (>30 phút) và online. ──
   useEffect(() => {
+    if (!tenantId) return;
     let cancelled = false;
     (async () => {
       try {
-        const cached = await getVariantsFromCache();
+        const cached = await getVariantsFromCache(tenantId);
         if (cancelled) return;
         cached.forEach((variants, pid) => {
           // Chỉ set nếu chưa có trong ref (tránh overwrite fresh network data)
@@ -600,7 +603,7 @@ function FnbPosPageInner() {
     return () => {
       cancelled = true;
     };
-  }, [variantCacheRef]);
+  }, [tenantId, variantCacheRef]);
 
   // ── Variant PREFETCH: batch load variants cho TẤT CẢ SP NGAY SAU khi products load.
   //    Mục đích: click SP bất kỳ → dialog mở instant (0 round-trip network).
@@ -609,6 +612,7 @@ function FnbPosPageInner() {
   //    Sau khi fetch xong → persist vào IndexedDB để reload sau không phải refetch. ──
   useEffect(() => {
     if (!networkStatus.isOnline) return;
+    if (!tenantId) return;
     if (products.length === 0) return;
 
     let cancelled = false;
@@ -619,7 +623,7 @@ function FnbPosPageInner() {
       // Nếu cache IndexedDB còn tươi + đã khớp phần lớn products trong ref
       // → skip fetch network (đã warm từ effect trên).
       try {
-        const fresh = !(await shouldRefreshVariants());
+        const fresh = !(await shouldRefreshVariants(tenantId));
         if (fresh && variantCacheRef.size >= products.length * 0.8) {
           return;
         }
@@ -665,7 +669,7 @@ function FnbPosPageInner() {
             }))
           );
         });
-        saveVariantsToCache(toPersist).catch(() => {
+        saveVariantsToCache(tenantId, toPersist).catch(() => {
           // Silent — quota full hoặc DB lỗi → session memory cache vẫn dùng được
         });
       } catch {
@@ -699,7 +703,7 @@ function FnbPosPageInner() {
       if (idleHandle !== undefined && cic) cic(idleHandle);
       if (timeoutHandle !== undefined) window.clearTimeout(timeoutHandle);
     };
-  }, [products, networkStatus.isOnline, variantCacheRef]);
+  }, [products, networkStatus.isOnline, tenantId, variantCacheRef]);
 
   // ── Sprint 2: Resolve tier áp dụng cho POS FnB của chi nhánh ──
   // Khi branchId + products đã load → fetch tier mặc định của chi nhánh +
@@ -1350,8 +1354,8 @@ function FnbPosPageInner() {
           (report.cashDifference ?? 0) === 0
             ? "KHỚP"
             : (report.cashDifference ?? 0) > 0
-              ? `THỪA ${(report.cashDifference ?? 0).toLocaleString()}`
-              : `THIẾU ${Math.abs(report.cashDifference ?? 0).toLocaleString()}`
+              ? `THỪA ${formatNumber(report.cashDifference ?? 0)}`
+              : `THIẾU ${formatNumber(Math.abs(report.cashDifference ?? 0))}`
         }`,
         variant: (report.cashDifference ?? 0) === 0 ? "success" : "warning",
       });
@@ -1666,7 +1670,7 @@ function FnbPosPageInner() {
     return (
       <FnbLoadingSkeleton
         title="Đang kiểm tra phiên đăng nhập"
-        detail="OneBiz đang xác nhận tài khoản, doanh nghiệp và chi nhánh trước khi mở POS F&B."
+        detail="OneBiz đang xác nhận tài khoản, doanh nghiệp và chi nhánh trước khi mở POS FnB."
         elapsedMs={blockingLoadMs}
         onRetry={retryFnbLoad}
       />
@@ -1812,7 +1816,7 @@ function FnbPosPageInner() {
         </div>
       )}
 
-      <div className="flex flex-1 min-h-0">
+      <div className="flex flex-1 min-h-0 overflow-hidden">
         {/* Sprint A: Categories sidebar cột trái (chỉ hiện khi không floor plan).
             FIX (CEO 07/05): KHÔNG guard length > 0 — luôn render trên md+ kể
             cả khi tenant chưa có SP để CEO thấy layout shell. Component đã
@@ -1842,7 +1846,7 @@ function FnbPosPageInner() {
         )}
 
         {/* Left panel: menu grid OR floor plan */}
-        <div className="flex-1 flex flex-col min-w-0">
+        <div className="flex-1 flex flex-col min-w-0 pb-24 lg:pb-0">
           {showFloorPlan ? (
             <Suspense fallback={<div className="flex-1 flex items-center justify-center"><Icon name="progress_activity" size={24} className="animate-spin text-muted-foreground" /></div>}>
               <TableFloorPlan
@@ -2023,13 +2027,25 @@ function FnbPosPageInner() {
           Lý do: tablet portrait 768px nếu fix cart 320 → menu zone chỉ còn
           304px (~2 cols). Drawer cho phép menu tận 624px (4 cols). */}
       {mobileCartOpen && (
-        <div className="fixed inset-0 z-40 lg:hidden flex flex-col bg-background">
-          <div className="flex items-center justify-between px-3 py-2 border-b bg-surface-container-low">
-            <span className="text-sm font-semibold">Giỏ hàng</span>
+        <div className="fixed inset-0 z-40 lg:hidden bg-black/35 backdrop-blur-sm flex justify-end">
+          <button
+            type="button"
+            className="absolute inset-0 cursor-default"
+            aria-label="Đóng giỏ hàng"
+            onClick={() => setMobileCartOpen(false)}
+          />
+          <div className="relative z-10 flex h-full w-full flex-col bg-background shadow-2xl md:max-w-[460px]">
+          <div className="flex items-center justify-between px-4 py-3 border-b bg-surface-container-low">
+            <div className="min-w-0">
+              <span className="block text-sm font-semibold">Giỏ hàng</span>
+              <span className="block truncate text-xs text-muted-foreground">
+                {pos.activeTab?.label ?? "Đơn hiện tại"} · {pos.lineCount} món
+              </span>
+            </div>
             <button
               type="button"
               onClick={() => setMobileCartOpen(false)}
-              className="h-8 w-8 rounded flex items-center justify-center hover:bg-muted"
+              className="h-9 w-9 rounded-xl flex items-center justify-center hover:bg-muted"
             >
               <Icon name="close" size={16} />
             </button>
@@ -2046,6 +2062,7 @@ function FnbPosPageInner() {
               onSendToKitchen={() => { handleSendToKitchen(); setMobileCartOpen(false); }}
               onPayment={() => { setPaymentOpen(true); setMobileCartOpen(false); }}
               onSplitBill={handleOpenSplitBill}
+              onChangeOrderType={pos.setActiveTabOrderType}
               onCustomerClick={() => setCustomerPickerOpen(true)}
               onDiscountChange={(d) => pos.setOrderDiscount(pos.activeTabId, d)}
               onPrintPreBill={handlePrintPreBill}
@@ -2056,8 +2073,21 @@ function FnbPosPageInner() {
               onRemoveCoupon={handleRemoveCoupon}
               appliedCouponCode={couponApplied?.code}
               couponApplying={couponApplying}
+              freeItems={appliedPromotion?.freeItems}
+              onOrderNoteChange={(note) => pos.setOrderNote(pos.activeTabId, note)}
+              onDeliveryPlatformChange={(platform, _commission) => {
+                const defaultCommission =
+                  platformSettings?.[platform]?.commissionPercent ?? 0;
+                pos.setDeliveryPlatform(pos.activeTabId, platform, defaultCommission);
+              }}
+              onDeliveryFeeChange={(fee) => pos.setDeliveryFee(pos.activeTabId, fee)}
+              onPlatformCommissionChange={(pct) =>
+                pos.setPlatformCommissionPercent(pos.activeTabId, pct)
+              }
+              discountPresets={discountPresets}
               mobile
             />
+          </div>
           </div>
         </div>
       )}
@@ -2072,21 +2102,31 @@ function FnbPosPageInner() {
         <button
           type="button"
           onClick={() => setMobileCartOpen(true)}
-          className="fixed bottom-4 right-4 z-30 lg:hidden flex items-center gap-2 px-4 h-14 rounded-full bg-primary text-white ambient-shadow-floating hover:bg-primary/90 transition-colors"
+          className="fixed inset-x-3 bottom-3 z-30 lg:hidden flex items-center justify-between gap-3 rounded-2xl border border-primary/20 bg-surface-container-lowest/95 px-3 py-2.5 text-left ambient-shadow-floating backdrop-blur-md transition-colors hover:bg-surface-container-lowest"
           aria-label={`Mở giỏ hàng tab ${pos.activeTab?.label}, ${pos.lineCount} món, tổng ${formatCurrency(pos.subtotal ?? 0)}đ`}
         >
-          <span className="relative shrink-0">
-            <Icon name="shopping_cart" size={20} />
-            <span className="absolute -top-1.5 -right-2 h-5 min-w-5 px-1 rounded-full bg-status-error text-[10px] font-bold flex items-center justify-center">
-              {pos.lineCount}
+          <span className="flex min-w-0 items-center gap-2">
+            <span className="relative flex h-10 w-10 shrink-0 items-center justify-center rounded-xl bg-primary text-on-primary">
+              <Icon name="shopping_cart" size={20} />
+              <span className="absolute -top-1.5 -right-1.5 h-5 min-w-5 px-1 rounded-full bg-status-error text-[10px] font-bold flex items-center justify-center">
+                {pos.lineCount}
+              </span>
+            </span>
+            <span className="flex min-w-0 flex-col leading-tight">
+              <span className="truncate text-xs font-semibold text-foreground">
+                {pos.activeTab?.label ?? "Giỏ hàng"}
+              </span>
+              <span className="text-[11px] text-muted-foreground">
+                Chạm để kiểm tra đơn
+              </span>
             </span>
           </span>
-          <span className="flex flex-col items-start leading-tight">
-            <span className="text-[11px] font-medium max-w-[140px] truncate opacity-90">
-              {pos.activeTab?.label ?? "Giỏ hàng"}
-            </span>
-            <span className="text-sm font-bold tabular-nums">
+          <span className="shrink-0 text-right">
+            <span className="block text-base font-black text-primary tabular-nums leading-none">
               {formatCurrency(pos.subtotal ?? 0)}đ
+            </span>
+            <span className="mt-1 inline-flex items-center gap-1 rounded-full bg-primary-fixed px-2 py-0.5 text-[10px] font-semibold text-primary">
+              Mở giỏ
             </span>
           </span>
         </button>

@@ -97,7 +97,7 @@ interface DataTableProps<TData, TValue> {
  */
 declare module "@tanstack/react-table" {
   // eslint-disable-next-line @typescript-eslint/no-unused-vars
-  interface ColumnMeta<TData extends unknown, TValue> {
+  interface ColumnMeta<TData, TValue> {
     pinLeft?: boolean;
     /** Width fixed (px) cho cell sticky — cần để thân row không nhảy. */
     pinWidth?: number;
@@ -340,7 +340,7 @@ export function DataTable<TData, TValue>({
                   <TableHead
                     key={header.id}
                     className={cn(
-                      "text-[11px] font-semibold text-muted-foreground whitespace-nowrap uppercase tracking-wider",
+                      "text-[11px] font-semibold text-muted-foreground whitespace-nowrap uppercase",
                       header.column.getCanSort() &&
                         "cursor-pointer select-none",
                       pinned && pinHeaderClass,
@@ -502,7 +502,7 @@ export function DataTable<TData, TValue>({
             <Fragment key={row.id}>
               <div
                 className={cn(
-                  "bg-card rounded-xl border p-3 ambient-shadow",
+                  "bg-card rounded-lg border p-3 ambient-shadow",
                   (onRowClick || renderDetail) &&
                     "cursor-pointer active:bg-surface-container-low press-scale-sm",
                   expandedRowIdx === rowIndex &&

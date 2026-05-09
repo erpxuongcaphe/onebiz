@@ -260,6 +260,190 @@ function simulateReceivePurchaseItemsAtomic(params: any): { data: unknown; error
   };
 }
 
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
+function simulatePosCompleteCheckoutAtomic(params: any): { data: unknown; error: unknown } {
+  rpcCodeCounter++;
+  rpcCalls.push({
+    fn: "next_code",
+    params: { p_tenant_id: params.p_tenant_id, p_entity_type: "invoice" },
+  });
+  const invoiceId = `inv-sim-${rpcCodeCounter}`;
+  const invoiceCode = `HD${String(rpcCodeCounter).padStart(5, "0")}`;
+  const total = Number(params.p_total ?? 0);
+  const paid = Number(params.p_paid ?? 0);
+  const items = (params.p_items ?? []) as Array<{
+    productId: string;
+    productName: string;
+    quantity: number;
+    unitPrice: number;
+    discount?: number;
+  }>;
+
+  insertCalls.push({
+    table: "invoices",
+    data: {
+      id: invoiceId,
+      code: invoiceCode,
+      tenant_id: params.p_tenant_id,
+      branch_id: params.p_branch_id,
+      customer_id: params.p_customer_id ?? null,
+      customer_name: params.p_customer_name,
+      payment_method: params.p_payment_method,
+      subtotal: params.p_subtotal,
+      discount_amount: params.p_discount_amount,
+      total,
+      paid,
+      debt: Math.max(0, total - paid),
+      status: "completed",
+      source: params.p_source ?? "pos",
+    },
+  });
+
+  insertCalls.push({
+    table: "invoice_items",
+    data: items.map((item) => ({
+      invoice_id: invoiceId,
+      product_id: item.productId,
+      product_name: item.productName,
+      quantity: item.quantity,
+      unit_price: item.unitPrice,
+      discount: item.discount ?? 0,
+    })),
+  });
+
+  insertCalls.push({
+    table: "stock_movements",
+    data: items.map((item) => ({
+      product_id: item.productId,
+      quantity: item.quantity,
+      type: "out",
+      reference_type: "invoice",
+      reference_id: invoiceId,
+    })),
+  });
+
+  for (const item of items) {
+    rpcCalls.push({
+      fn: "increment_product_stock",
+      params: { p_product_id: item.productId, p_delta: -Number(item.quantity ?? 0) },
+    });
+    rpcCalls.push({
+      fn: "upsert_branch_stock",
+      params: {
+        p_tenant_id: params.p_tenant_id,
+        p_branch_id: params.p_branch_id,
+        p_product_id: item.productId,
+        p_delta: -Number(item.quantity ?? 0),
+      },
+    });
+  }
+
+  if (paid > 0) {
+    const breakdown = Array.isArray(params.p_payment_breakdown)
+      ? params.p_payment_breakdown
+      : [{ method: params.p_payment_method, amount: paid }];
+    for (const part of breakdown) {
+      insertCalls.push({
+        table: "cash_transactions",
+        data: {
+          type: "receipt",
+          category: "Bán hàng",
+          reference_type: "invoice",
+          reference_id: invoiceId,
+          payment_method: part.method,
+          amount: part.amount,
+        },
+      });
+    }
+  }
+
+  return {
+    data: { invoice_id: invoiceId, invoice_code: invoiceCode },
+    error: null,
+  };
+}
+
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
+function simulateCompleteStockTransferAtomic(params: any): { data: unknown; error: unknown } {
+  const transfer = tableMocks.stock_transfers?.data;
+  const items = (tableMocks.stock_transfer_items?.data ?? []) as Array<{
+    product_id: string;
+    product_name: string;
+    quantity: number;
+  }>;
+  if (!transfer) return { data: null, error: { message: "Transfer not found" } };
+
+  const outInputs = items.map((item) => ({
+    productId: item.product_id,
+    productName: item.product_name,
+    quantity: item.quantity,
+    type: "out",
+    referenceType: "stock_transfer",
+    referenceId: params.p_transfer_id,
+  }));
+  const inInputs = items.map((item) => ({
+    productId: item.product_id,
+    productName: item.product_name,
+    quantity: item.quantity,
+    type: "in",
+    referenceType: "stock_transfer",
+    referenceId: params.p_transfer_id,
+  }));
+  stockMovementCalls.push([
+    outInputs,
+    { tenantId: params.p_tenant_id, branchId: transfer.from_branch_id, createdBy: params.p_created_by },
+  ]);
+  stockMovementCalls.push([
+    inInputs,
+    { tenantId: params.p_tenant_id, branchId: transfer.to_branch_id, createdBy: params.p_created_by },
+  ]);
+  updateCalls.push({
+    table: "stock_transfers",
+    data: { status: "completed" },
+    filters: { id: params.p_transfer_id },
+  });
+  return { data: { success: true }, error: null };
+}
+
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
+function simulateApplyInventoryCheckAtomic(params: any): { data: unknown; error: unknown } {
+  const check = tableMocks.inventory_checks?.data;
+  const items = (tableMocks.inventory_check_items?.data ?? []) as Array<{
+    product_id: string;
+    product_name: string;
+    difference: number;
+  }>;
+  if (!check) return { data: null, error: { message: "Inventory check not found" } };
+
+  const movementInputs = items
+    .filter((item) => Number(item.difference ?? 0) !== 0)
+    .map((item) => ({
+      productId: item.product_id,
+      productName: item.product_name,
+      quantity: Math.abs(Number(item.difference ?? 0)),
+      type: Number(item.difference ?? 0) > 0 ? "in" : "out",
+      referenceType: "inventory_check",
+      referenceId: params.p_check_id,
+    }));
+
+  if (movementInputs.length > 0) {
+    stockMovementCalls.push([
+      movementInputs,
+      {
+        tenantId: params.p_tenant_id,
+        branchId: check.branch_id ?? "branch-1",
+        createdBy: params.p_created_by,
+      },
+    ]);
+  }
+  updateCalls.push({
+    table: "inventory_checks",
+    data: { status: "balanced" },
+    filters: { id: params.p_check_id },
+  });
+  return { data: { success: true }, error: null };
+}
+
 vi.mock("@/lib/services/supabase/base", () => ({
   getClient: () => ({
     from: vi.fn((table: string) => {
@@ -272,6 +456,15 @@ vi.mock("@/lib/services/supabase/base", () => ({
       rpcCalls.push({ fn, params });
       if (fn === "receive_purchase_items_atomic") {
         return simulateReceivePurchaseItemsAtomic(params);
+      }
+      if (fn === "pos_complete_checkout_atomic") {
+        return simulatePosCompleteCheckoutAtomic(params);
+      }
+      if (fn === "complete_stock_transfer_atomic") {
+        return simulateCompleteStockTransferAtomic(params);
+      }
+      if (fn === "apply_inventory_check_atomic") {
+        return simulateApplyInventoryCheckAtomic(params);
       }
       if (fn === "next_code") {
         rpcCodeCounter++;

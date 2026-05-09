@@ -82,6 +82,15 @@ vi.mock("@/lib/services/supabase/base", () => ({
       if (fn === "increment_product_stock" || fn === "upsert_branch_stock") {
         return { data: null, error: null };
       }
+      if (fn === "complete_stock_transfer_atomic") {
+        if (!tableMocks.stock_transfers?.data) {
+          return {
+            data: null,
+            error: { message: "Phiếu chuyển kho đã được xử lý hoặc không tồn tại" },
+          };
+        }
+        return { data: { ok: true }, error: null };
+      }
       return { data: null, error: null };
     }),
   }),
@@ -289,54 +298,28 @@ describe("completeStockTransfer", () => {
     to_branch_id: "branch-b",
   };
 
-  const mockItems = [
-    { id: "ti1", product_id: "p1", product_name: "SP A", quantity: 10 },
-    { id: "ti2", product_id: "p2", product_name: "SP B", quantity: 5 },
-  ];
-
   beforeEach(() => {
     tableMocks = {
       stock_transfers: { data: mockTransfer, error: null },
-      stock_transfer_items: { data: mockItems, error: null },
     };
   });
 
-  it("calls stock OUT for source branch", async () => {
+  it("calls complete_stock_transfer_atomic RPC", async () => {
     await completeStockTransfer("t1");
 
-    // Should have 2 calls: OUT from source, IN to target
-    expect(stockMovementCalls.length).toBe(2);
-
-    // First call = OUT from source branch
-    // eslint-disable-next-line @typescript-eslint/no-explicit-any
-    const outCall = stockMovementCalls[0] as any[];
-    const outInputs = outCall[0];
-    expect(outInputs).toHaveLength(2);
-    expect(outInputs[0].type).toBe("out");
-    expect(outInputs[0].quantity).toBe(10);
-    expect(outInputs[0].referenceType).toBe("stock_transfer");
-
-    // Context should have source branch
-    const outCtx = outCall[1];
-    expect(outCtx.branchId).toBe("branch-a");
+    const rpcCall = rpcCalls.find((c) => c.fn === "complete_stock_transfer_atomic");
+    expect(rpcCall).toBeDefined();
+    expect(rpcCall!.params).toMatchObject({
+      p_tenant_id: "t1",
+      p_transfer_id: "t1",
+      p_created_by: "u1",
+    });
   });
 
-  it("calls stock IN for target branch", async () => {
+  it("does not run legacy client stock movement fallback", async () => {
     await completeStockTransfer("t1");
 
-    // Second call = IN to target branch
-    // eslint-disable-next-line @typescript-eslint/no-explicit-any
-    const inCall = stockMovementCalls[1] as any[];
-    const inInputs = inCall[0];
-    expect(inInputs).toHaveLength(2);
-    expect(inInputs[0].type).toBe("in");
-    expect(inInputs[0].quantity).toBe(10);
-    expect(inInputs[1].type).toBe("in");
-    expect(inInputs[1].quantity).toBe(5);
-
-    // Context should have target branch
-    const inCtx = inCall[1];
-    expect(inCtx.branchId).toBe("branch-b");
+    expect(stockMovementCalls).toHaveLength(0);
   });
 
   it("throws when transfer is already completed", async () => {

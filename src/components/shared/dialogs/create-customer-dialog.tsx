@@ -334,7 +334,7 @@ export function CreateCustomerDialog({
               </SelectContent>
             </Select>
             <p className="text-xs text-muted-foreground">
-              KH này dùng bảng giá khi check out POS bán lẻ/sỉ. SP không có
+              KH này dùng bảng giá khi check out POS Retail/sỉ. SP không có
               trong bảng giá → tự động dùng giá niêm yết.
             </p>
           </div>

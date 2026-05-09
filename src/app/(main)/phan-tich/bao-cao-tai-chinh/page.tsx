@@ -75,7 +75,7 @@ function MarginTooltip({
   label,
 }: {
   active?: boolean;
-  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+   
   payload?: Array<{ value: number; name: string; color: string; dataKey: string }>;
   label?: string;
 }) {

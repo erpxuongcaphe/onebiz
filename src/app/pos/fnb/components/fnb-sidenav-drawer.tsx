@@ -40,16 +40,16 @@ interface NavItem {
 }
 
 const POS_ITEMS: NavItem[] = [
-  { href: "/pos/fnb", icon: "restaurant", label: "Bán hàng FnB" },
+  { href: "/pos/fnb", icon: "restaurant", label: "POS FnB" },
   { href: "/pos/fnb/kds", icon: "restaurant_menu", label: "Màn bếp (KDS)" },
-  { href: "/pos", icon: "point_of_sale", label: "Bán hàng tại quầy", fnbExternal: true },
+  { href: "/pos", icon: "point_of_sale", label: "POS Retail", fnbExternal: true },
 ];
 
 const MANAGE_ITEMS: NavItem[] = [
   { href: "/hang-hoa", icon: "inventory_2", label: "Sản phẩm", fnbExternal: true },
   { href: "/hang-hoa/ton-kho", icon: "warehouse", label: "Tồn kho", fnbExternal: true },
   { href: "/khach-hang", icon: "person", label: "Khách hàng", fnbExternal: true },
-  { href: "/bao-cao", icon: "analytics", label: "Báo cáo", fnbExternal: true },
+  { href: "/phan-tich/fnb", icon: "analytics", label: "Báo cáo F&B", fnbExternal: true },
 ];
 
 const SYSTEM_ITEMS: NavItem[] = [
@@ -106,8 +106,8 @@ export function FnbSidenavDrawer({
       >
         {/* Header */}
         <div className="px-4 py-4 border-b border-outline-variant/20 flex items-center gap-3">
-          <div className="w-10 h-10 rounded-xl bg-primary text-on-primary flex items-center justify-center font-black text-lg shrink-0">
-            ☕
+          <div className="w-10 h-10 rounded-lg bg-primary text-on-primary flex items-center justify-center font-black text-lg shrink-0">
+            <Icon name="local_cafe" size={20} />
           </div>
           <div className="flex-1 min-w-0">
             <div className="font-bold text-sm text-foreground truncate">
@@ -185,7 +185,7 @@ function NavSection({
 
   return (
     <div className="px-2 mb-2">
-      <div className="px-3 py-1.5 text-[10px] uppercase tracking-wider font-bold text-on-surface-variant">
+      <div className="px-3 py-1.5 text-[10px] uppercase font-bold text-on-surface-variant">
         {label}
       </div>
       <div className="space-y-0.5">

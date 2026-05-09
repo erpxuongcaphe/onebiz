@@ -345,7 +345,7 @@ export async function getXntReport(
 
   // 5. Build rows
   const rows: XntRow[] = [];
-  let subtotal = {
+  const subtotal = {
     productCount: 0,
     openingQty: 0,
     openingValue: 0,

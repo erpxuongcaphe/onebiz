@@ -512,7 +512,7 @@ export async function getFinancialAlerts(branchId?: string): Promise<FinancialAl
 
   // Build branch-filtered queries
   // When branchId is set, use invoice-level debt instead of customer-level
-  let debtQuery = branchId
+  const debtQuery = branchId
     ? supabase
         .from("invoices")
         .select("id, customer_name, debt")
@@ -530,7 +530,7 @@ export async function getFinancialAlerts(branchId?: string): Promise<FinancialAl
         .limit(20);
 
   // When branchId is set, use branch_stock instead of products.stock
-  let stockQuery = branchId
+  const stockQuery = branchId
     ? (supabase as any)
         .from("branch_stock")
         .select("product_id, quantity, products(id, name, code, min_stock, max_stock, unit, is_active)")

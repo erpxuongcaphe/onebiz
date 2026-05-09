@@ -1,11 +1,6 @@
 "use client";
 
 import { useState } from "react";
-import {
-  MessageCircle,
-  ShoppingCart,
-  DollarSign
-} from "lucide-react";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
@@ -137,21 +132,21 @@ const stats = [
   {
     label: "Tin nhắn mới",
     value: "8",
-    icon: MessageCircle,
+    icon: "forum",
     color: "text-[#0068FF]",
     bg: "bg-primary-fixed",
   },
   {
     label: "Đơn từ Zalo",
     value: "15",
-    icon: ShoppingCart,
+    icon: "shopping_cart",
     color: "text-[#0068FF]",
     bg: "bg-primary-fixed",
   },
   {
     label: "Doanh thu",
     value: "28.500.000",
-    icon: DollarSign,
+    icon: "attach_money",
     color: "text-[#0068FF]",
     bg: "bg-primary-fixed",
     suffix: "đ",
@@ -191,13 +186,12 @@ export default function ZaloPage() {
         {/* Stats bar */}
         <div className="grid grid-cols-3 gap-3">
           {stats.map((s) => {
-            const Icon = s.icon;
             return (
               <div
                 key={s.label}
                 className={cn("flex items-center gap-2 rounded-lg px-3 py-2", s.bg)}
               >
-                <Icon className={cn("size-4 shrink-0", s.color)} />
+                <Icon name={s.icon} size={16} className={cn("shrink-0", s.color)} />
                 <div>
                   <p className="text-xs text-muted-foreground">{s.label}</p>
                   <p className={cn("text-sm font-bold", s.color)}>

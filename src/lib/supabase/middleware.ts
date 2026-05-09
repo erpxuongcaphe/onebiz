@@ -1,5 +1,6 @@
 import { createServerClient } from "@supabase/ssr";
 import { NextResponse, type NextRequest } from "next/server";
+import { getSharedCookieDomain } from "./cookie-domain";
 
 /**
  * Extract root domain for cross-subdomain cookie sharing.
@@ -8,24 +9,7 @@ import { NextResponse, type NextRequest } from "next/server";
  * localhost → undefined (browser default)
  */
 function getCookieDomain(request: NextRequest): string | undefined {
-  const host = request.headers.get("host") ?? "";
-  // Strip port
-  const hostname = host.split(":")[0];
-  // Only set domain for production (not localhost)
-  if (hostname === "localhost" || hostname === "127.0.0.1") return undefined;
-  const parts = hostname.split(".");
-  // Country-code SLD: .com.vn, .org.vn, .net.vn → need last 3 parts
-  const ccSlds = ["com.vn", "org.vn", "net.vn", "edu.vn", "gov.vn"];
-  const tail2 = parts.slice(-2).join(".");
-  if (ccSlds.includes(tail2) && parts.length >= 3) {
-    // onebiz.com.vn / fnb.onebiz.com.vn → .onebiz.com.vn (cookie share)
-    return `.${parts.slice(-3).join(".")}`;
-  }
-  // Standard TLD: app.example.com → .example.com
-  if (parts.length >= 2) {
-    return `.${parts.slice(-2).join(".")}`;
-  }
-  return undefined;
+  return getSharedCookieDomain(request.headers.get("host"));
 }
 
 // ────────────────────────────────────────────
@@ -39,6 +23,25 @@ function getCookieDomain(request: NextRequest): string | undefined {
 function isFnbSubdomain(request: NextRequest): boolean {
   const host = request.headers.get("host") ?? "";
   return host.startsWith("fnb.") || host.startsWith("fnb-");
+}
+
+function getFnbPublicPath(pathname: string): string {
+  if (pathname === "/pos/fnb" || pathname === "/pos/fnb/") return "/";
+  if (pathname.startsWith("/pos/fnb/")) {
+    return pathname.replace("/pos/fnb", "") || "/";
+  }
+  if (pathname === "/" || pathname === "" || pathname.startsWith("/kds")) {
+    return pathname || "/";
+  }
+  return "/";
+}
+
+function getFnbAuthRedirect(request: NextRequest): string {
+  const redirect = request.nextUrl.searchParams.get("redirect");
+  if (!redirect || !redirect.startsWith("/") || redirect.startsWith("//")) {
+    return "/";
+  }
+  return getFnbPublicPath(redirect);
 }
 
 /**
@@ -64,14 +67,15 @@ function handleFnbSubdomain(
   if (!user && !isPublicPath) {
     const url = request.nextUrl.clone();
     url.pathname = "/dang-nhap";
-    url.searchParams.set("redirect", "/");
+    url.searchParams.set("redirect", getFnbPublicPath(pathname));
     return NextResponse.redirect(url);
   }
 
-  // Authenticated on auth page → redirect to FnB home
+  // Authenticated on auth page → redirect to the requested FnB screen.
   if (user && isPublicPath) {
     const url = request.nextUrl.clone();
-    url.pathname = "/";
+    url.pathname = getFnbAuthRedirect(request);
+    url.search = "";
     return NextResponse.redirect(url);
   }
 

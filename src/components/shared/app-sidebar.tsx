@@ -73,24 +73,24 @@ function LeafLink({
           size={16}
           fill={active}
           weight={active ? 500 : 400}
-          className={cn("shrink-0", active ? "text-primary" : "text-foreground/70")}
+          className={cn("shrink-0", active ? "text-sidebar-primary" : "text-sidebar-foreground/65")}
         />
       )}
       <span className="truncate flex-1">{leaf.label}</span>
       {leaf.comingSoon && (
-        <span className="text-[9px] font-semibold uppercase tracking-wider rounded px-2 py-0.5 bg-status-warning/10 text-status-warning border border-status-warning/25">
+        <span className="text-[9px] font-semibold uppercase rounded px-2 py-0.5 bg-status-warning/10 text-status-warning border border-status-warning/25">
           Soon
         </span>
       )}
       {leaf.badge && !leaf.comingSoon && (
-        <span className="text-[9px] font-semibold uppercase tracking-wider rounded px-2 py-0.5 bg-primary/10 text-primary">
+        <span className="text-[9px] font-semibold uppercase rounded px-2 py-0.5 bg-primary/10 text-primary">
           {leaf.badge}
         </span>
       )}
       {leaf.mode === "pos" && !leaf.comingSoon && (
         <span
           aria-hidden
-          className="text-[9px] font-semibold uppercase tracking-wider rounded px-1 py-0.5 bg-status-success/10 text-status-success border border-status-success/25"
+          className="text-[9px] font-semibold uppercase rounded px-1 py-0.5 bg-status-success/10 text-status-success border border-status-success/25"
           title="Mở chế độ toàn màn hình"
         >
           B2B
@@ -108,8 +108,8 @@ function LeafLink({
     "group press-scale-sm flex items-center gap-3 rounded-lg text-sm",
     "h-8 pr-3",
     active
-      ? "bg-primary-fixed text-primary font-semibold border-r-4 border-primary"
-      : "text-foreground/80 hover:bg-surface-container-low hover:text-primary",
+      ? "bg-sidebar-accent text-sidebar-accent-foreground font-semibold border-r-4 border-sidebar-primary"
+      : "text-sidebar-foreground/78 hover:bg-sidebar-accent/75 hover:text-sidebar-accent-foreground",
     disabled && "opacity-50 pointer-events-none"
   );
 
@@ -183,7 +183,7 @@ function SubGroupSection({
   if (alwaysOpen) {
     return (
       <div className="mt-1">
-        <div className="flex items-center gap-2 px-3 pt-2 pb-1 text-[10px] font-semibold text-muted-foreground uppercase tracking-wider">
+        <div className="flex items-center gap-2 px-3 pt-2 pb-1 text-[10px] font-semibold text-sidebar-foreground/50 uppercase">
           {subGroup.icon && <Icon name={subGroup.icon} size={14} />}
           {subGroup.label}
         </div>
@@ -205,20 +205,20 @@ function SubGroupSection({
         className={cn(
           "w-full press-scale-sm flex items-center gap-2 px-3 h-8 rounded-lg text-xs font-semibold transition-colors",
           hasActive
-            ? "text-primary"
-            : "text-foreground/75 hover:bg-surface-container-low hover:text-foreground",
+            ? "text-sidebar-accent-foreground"
+            : "text-sidebar-foreground/68 hover:bg-sidebar-accent/70 hover:text-sidebar-accent-foreground",
         )}
       >
         {subGroup.icon && (
           <Icon
             name={subGroup.icon}
             size={14}
-            className={cn("shrink-0", hasActive && "text-primary")}
+            className={cn("shrink-0", hasActive && "text-sidebar-primary")}
           />
         )}
-        <span className="flex-1 text-left tracking-wide">{subGroup.label}</span>
+        <span className="flex-1 text-left">{subGroup.label}</span>
         {!open && (
-          <span className="text-[10px] font-medium text-muted-foreground tabular-nums">
+            <span className="text-[10px] font-medium text-sidebar-foreground/45 tabular-nums">
             {visibleItems.length}
           </span>
         )}
@@ -226,7 +226,7 @@ function SubGroupSection({
           name="expand_more"
           size={14}
           className={cn(
-            "shrink-0 transition-transform duration-150 text-muted-foreground",
+            "shrink-0 transition-transform duration-150 text-sidebar-foreground/45",
             open ? "rotate-0" : "-rotate-90",
           )}
         />
@@ -269,8 +269,8 @@ function GroupExpanded({
         className={cn(
           "w-full press-scale-sm flex items-center gap-3 h-10 px-3 rounded-lg text-sm font-medium transition-colors",
           active
-            ? "text-primary font-semibold bg-primary-fixed/30"
-            : "text-foreground/90 hover:bg-surface-container-low hover:text-foreground",
+            ? "text-sidebar-accent-foreground font-semibold bg-sidebar-accent"
+            : "text-sidebar-foreground/84 hover:bg-sidebar-accent/70 hover:text-sidebar-accent-foreground",
         )}
       >
         <Icon
@@ -278,7 +278,7 @@ function GroupExpanded({
           size={20}
           fill={active}
           weight={active ? 500 : 400}
-          className={cn("shrink-0", active && "text-primary")}
+          className={cn("shrink-0", active && "text-sidebar-primary")}
         />
         <span className="flex-1 text-left truncate">{group.label}</span>
         <Icon
@@ -286,7 +286,7 @@ function GroupExpanded({
           size={16}
           className={cn(
             "shrink-0 transition-transform duration-150",
-            active && "text-primary",
+            active && "text-sidebar-primary",
             open ? "rotate-0" : "-rotate-90",
           )}
         />
@@ -448,8 +448,8 @@ function GroupCollapsed({
         className={cn(
           "w-10 h-10 mx-auto press-scale-sm flex items-center justify-center rounded-lg",
           active
-            ? "bg-primary-fixed text-primary"
-            : "text-foreground/80 hover:bg-surface-container-low hover:text-foreground"
+            ? "bg-sidebar-accent text-sidebar-accent-foreground"
+            : "text-sidebar-foreground/78 hover:bg-sidebar-accent/70 hover:text-sidebar-accent-foreground"
         )}
       >
         <Icon name={group.icon} size={20} fill={active} weight={active ? 500 : 400} />
@@ -483,8 +483,8 @@ function GroupCollapsed({
             onMouseEnter={cancelClose}
             onMouseLeave={scheduleClose}
           >
-            <div className="bg-surface-container-lowest rounded-xl ambient-shadow-lg min-w-[240px] max-w-[280px] py-2 max-h-[calc(100vh-32px)] flex flex-col">
-              <div className="px-3 py-2 text-xs font-semibold text-muted-foreground uppercase tracking-wider border-b mb-1 shrink-0">
+            <div className="bg-sidebar text-sidebar-foreground rounded-lg ambient-shadow-lg min-w-[240px] max-w-[280px] py-2 max-h-[calc(100vh-32px)] flex flex-col border border-sidebar-border">
+              <div className="px-3 py-2 text-xs font-semibold text-sidebar-foreground/55 uppercase border-b border-sidebar-border mb-1 shrink-0">
                 {group.label}
               </div>
               <div className="px-1 space-y-0.5 overflow-y-auto flex-1">
@@ -597,7 +597,7 @@ export function AppSidebar() {
         // Hiện từ md (768) thay vì lg (1024) — tablet iPad portrait có nav.
         // Tại md (768-1023) auto force collapsed rail (xem isLargeScreen logic
         // ở trên), tại lg+ tôn trọng user choice.
-        "hidden md:flex flex-col bg-surface-container-lowest border-r border-border shrink-0 transition-[width] duration-200",
+        "hidden md:flex flex-col bg-sidebar text-sidebar-foreground border-r border-sidebar-border shrink-0 transition-[width] duration-200",
         // w-56 (224px) thay vì w-64 (256px) — tiết kiệm 32px cho main content.
         // Collapsed w-16 (64px) — icon comfortable touch target + flyout đầy đủ.
         collapsed ? "w-16" : "w-56"
@@ -605,13 +605,13 @@ export function AppSidebar() {
     >
       {/* Stitch header — chỉ toggle button, logo đã có ở top-nav (tránh lặp brand)
           Toggle ẩn ở md (768-1023) vì state forced rail; chỉ hiện ở lg+. */}
-      <div className={cn("flex items-center justify-end h-14 border-b border-border", collapsed ? "px-2" : "px-3")}>
+      <div className={cn("flex items-center justify-end h-14 border-b border-sidebar-border", collapsed ? "px-2" : "px-3")}>
         {isLargeScreen && (
           <button
             type="button"
             onClick={() => setCollapsed(!collapsed)}
             className={cn(
-              "h-9 w-9 press-scale-sm inline-flex items-center justify-center rounded-lg text-muted-foreground hover:bg-surface-container-low hover:text-foreground",
+              "h-9 w-9 press-scale-sm inline-flex items-center justify-center rounded-lg text-sidebar-foreground/65 hover:bg-sidebar-accent hover:text-sidebar-accent-foreground",
               collapsed && "mx-auto"
             )}
             aria-label={collapsed ? "Mở rộng sidebar" : "Thu gọn sidebar"}
@@ -652,7 +652,7 @@ export function AppSidebar() {
       </nav>
 
       {/* Bottom-pinned groups (Hệ thống) */}
-      <div className={cn("border-t border-border py-3", collapsed ? "px-2" : "px-3")}>
+      <div className={cn("border-t border-sidebar-border py-3", collapsed ? "px-2" : "px-3")}>
         <div className="space-y-0.5">
           {bottomGroups.map((g) =>
             collapsed ? (

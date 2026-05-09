@@ -46,7 +46,7 @@ interface NumericInputProps
  * - Display khi không focus: en-US format với phẩy ngàn, max `decimals` chữ số.
  *
  * Accessibility: `inputMode="decimal"` → mobile shows numeric keypad. Type text
- * cho phép paste "1,234,567" hoặc "1.234.567" (vi-VN fallback) đều parse được.
+ * accepts strict en-US numbers only: comma thousands and dot decimals.
  *
  * ```tsx
  * <NumericInput

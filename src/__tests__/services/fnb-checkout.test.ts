@@ -64,6 +64,16 @@ vi.mock("@/lib/services/supabase/base", () => ({
           error: null,
         };
       }
+      if (fn === "fnb_send_to_kitchen_atomic") {
+        const p = params as Record<string, unknown> | undefined;
+        return {
+          data: {
+            kitchen_order_id: "ko-1",
+            order_number: p?.p_order_number ?? "KB00001",
+          },
+          error: null,
+        };
+      }
       return { data: null, error: null };
     }),
   }),
@@ -73,7 +83,7 @@ vi.mock("@/lib/services/supabase/base", () => ({
   },
 }));
 
-// Mock fnb-tables (claimTable still used by sendToKitchen)
+// Mock fnb-tables (legacy client claim must not run in atomic send-to-kitchen)
 const claimTableMock = vi.fn();
 vi.mock("@/lib/services/supabase/fnb-tables", () => ({
   claimTable: (...args: unknown[]) => claimTableMock(...args),
@@ -154,6 +164,25 @@ describe("sendToKitchen", () => {
 
     expect(result.kitchenOrderId).toBe("ko-1");
     expect(result.orderNumber).toBe("KB00001");
+
+    const rpcCall = rpcCalls.find((c) => c.fn === "fnb_send_to_kitchen_atomic");
+    expect(rpcCall).toBeDefined();
+    const params = rpcCall!.params as Record<string, unknown>;
+    expect(params.p_order_type).toBe("takeaway");
+    expect(params.p_items).toEqual([
+      {
+        productId: "p1",
+        productName: "Cà Phê Sữa Đá",
+        quantity: 2,
+        unitPrice: 35000,
+      },
+      {
+        productId: "p2",
+        productName: "Bạc Xỉu",
+        quantity: 1,
+        unitPrice: 32000,
+      },
+    ]);
   });
 
   it("does NOT create invoice or affect stock", async () => {
@@ -172,7 +201,7 @@ describe("sendToKitchen", () => {
     expect(invoiceInserts.length).toBe(0);
   });
 
-  it("claims table when dine_in", async () => {
+  it("passes table id to atomic RPC when dine_in", async () => {
     await sendToKitchen({
       ...CTX,
       orderType: "dine_in",
@@ -182,7 +211,10 @@ describe("sendToKitchen", () => {
       ],
     });
 
-    expect(claimTableMock).toHaveBeenCalledWith("table-5", "ko-1");
+    const rpcCall = rpcCalls.find((c) => c.fn === "fnb_send_to_kitchen_atomic");
+    expect(rpcCall).toBeDefined();
+    expect((rpcCall!.params as Record<string, unknown>).p_table_id).toBe("table-5");
+    expect(claimTableMock).not.toHaveBeenCalled();
   });
 
   it("does NOT claim table for takeaway", async () => {
@@ -217,15 +249,11 @@ describe("sendToKitchen", () => {
       ],
     });
 
-    // Kitchen order items should include toppings JSONB
-    const koItemInserts = insertCalls.filter(
-      (c) => (c.data as Record<string, unknown>)?.kitchen_order_id === "ko-1"
-    );
-    expect(koItemInserts.length).toBeGreaterThanOrEqual(1);
-    if (koItemInserts.length > 0) {
-      const item = koItemInserts[0].data as Record<string, unknown>;
-      expect(item.toppings).toEqual(toppings);
-    }
+    const rpcCall = rpcCalls.find((c) => c.fn === "fnb_send_to_kitchen_atomic");
+    expect(rpcCall).toBeDefined();
+    const params = rpcCall!.params as Record<string, unknown>;
+    const items = params.p_items as Array<Record<string, unknown>>;
+    expect(items[0].toppings).toEqual(toppings);
   });
 });
 

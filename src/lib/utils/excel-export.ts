@@ -18,6 +18,7 @@
 import * as XLSX from "xlsx";
 import { saveAs } from "file-saver";
 import type { DateRange, ReportKind } from "@/lib/types/report";
+import { formatDate } from "@/lib/format";
 
 // ============================================================
 // Sheet schema — mỗi sheet = 1 bảng độc lập
@@ -259,14 +260,7 @@ export function buildReportTitleRows(args: {
   const rows = [args.title, fmtRange];
   if (args.branchName) rows.push(`Chi nhánh: ${args.branchName}`);
   if (args.generatedAt) {
-    const ts = new Intl.DateTimeFormat("vi-VN", {
-      day: "2-digit",
-      month: "2-digit",
-      year: "numeric",
-      hour: "2-digit",
-      minute: "2-digit",
-      timeZone: "Asia/Ho_Chi_Minh",
-    }).format(args.generatedAt);
+    const ts = formatDate(args.generatedAt);
     rows.push(`Ngày lập: ${ts}`);
   }
   return rows;

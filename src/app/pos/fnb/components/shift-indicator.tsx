@@ -1,5 +1,5 @@
 "use client";
-import { cn } from "@/lib/utils";
+import { useEffect, useState } from "react";
 import type { Shift } from "@/lib/types/shift";
 import { Icon } from "@/components/ui/icon";
 
@@ -9,6 +9,21 @@ interface ShiftIndicatorProps {
 }
 
 export function ShiftIndicator({ shift, onClick }: ShiftIndicatorProps) {
+  const [now, setNow] = useState<number | null>(null);
+
+  useEffect(() => {
+    if (!shift) {
+      setNow(null);
+      return;
+    }
+
+    const updateNow = () => setNow(Date.now());
+    updateNow();
+    const intervalId = window.setInterval(updateNow, 60_000);
+
+    return () => window.clearInterval(intervalId);
+  }, [shift]);
+
   if (!shift) {
     return (
       <button
@@ -17,13 +32,16 @@ export function ShiftIndicator({ shift, onClick }: ShiftIndicatorProps) {
         className="flex items-center gap-1 px-2 py-1 rounded text-xs bg-status-error/80 text-white hover:bg-status-error transition-colors shrink-0"
       >
         <Icon name="schedule" size={14} />
-        <span>Chưa mở ca</span>
+        <span className="sm:hidden">Ca</span>
+        <span className="hidden sm:inline">Chưa mở ca</span>
       </button>
     );
   }
 
-  const elapsed = Math.round(
-    (Date.now() - new Date(shift.openedAt).getTime()) / 60_000
+  const openedAt = new Date(shift.openedAt).getTime();
+  const elapsed = Math.max(
+    0,
+    Math.round(((now ?? openedAt) - openedAt) / 60_000)
   );
   const hours = Math.floor(elapsed / 60);
   const mins = elapsed % 60;

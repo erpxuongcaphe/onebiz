@@ -10,6 +10,7 @@
  * vào view (Suspense fallback hiện skeleton).
  */
 
+import { type ReactNode, useEffect, useRef, useState } from "react";
 import {
   AreaChart,
   Area,
@@ -33,6 +34,7 @@ import {
   formatChartCurrency,
   formatChartTooltipCurrency,
 } from "@/lib/format";
+import { CHART_TOKEN_VAR } from "@/lib/chart-colors";
 
 export type ChartView = "day" | "hour" | "weekday";
 
@@ -59,6 +61,40 @@ const VIEW_OPTIONS: { value: ChartView; label: string }[] = [
   { value: "hour", label: "Giờ" },
   { value: "weekday", label: "Tuần" },
 ];
+
+function ChartFrame({ children }: { children: ReactNode }) {
+  const ref = useRef<HTMLDivElement>(null);
+  const [ready, setReady] = useState(false);
+
+  useEffect(() => {
+    const el = ref.current;
+    if (!el) return;
+
+    const update = () => {
+      setReady(el.clientWidth > 0 && el.clientHeight > 0);
+    };
+
+    update();
+    if (typeof ResizeObserver === "undefined") {
+      setReady(true);
+      return;
+    }
+
+    const observer = new ResizeObserver(update);
+    observer.observe(el);
+    return () => observer.disconnect();
+  }, []);
+
+  return (
+    <div ref={ref} className="h-60 min-w-0">
+      {ready ? (
+        children
+      ) : (
+        <div className="h-full rounded-lg bg-surface-container-low animate-pulse" />
+      )}
+    </div>
+  );
+}
 
 function RevenueTooltip({
   active,
@@ -110,9 +146,9 @@ export default function DashboardCharts({
   orders,
 }: DashboardChartsProps) {
   return (
-    <div className="grid grid-cols-1 lg:grid-cols-2 gap-3">
+    <div className="grid min-w-0 grid-cols-1 gap-3 lg:grid-cols-2">
       {/* Revenue AreaChart */}
-      <Card>
+      <Card className="min-w-0">
         <CardHeader className="pb-2">
           <div className="flex items-center justify-between">
             <CardTitle className="text-sm">Doanh thu</CardTitle>
@@ -135,17 +171,17 @@ export default function DashboardCharts({
             </div>
           </div>
         </CardHeader>
-        <CardContent>
-          <div className="h-60">
-            <ResponsiveContainer width="100%" height="100%">
+        <CardContent className="min-w-0">
+          <ChartFrame>
+            <ResponsiveContainer width="100%" height="100%" minWidth={0} minHeight={240}>
               <AreaChart
                 data={chartData[chartView]}
                 margin={{ top: 5, right: 10, left: 0, bottom: 0 }}
               >
                 <defs>
                   <linearGradient id="revenueGradient" x1="0" y1="0" x2="0" y2="1">
-                    <stop offset="5%" stopColor="#004AC6" stopOpacity={0.3} />
-                    <stop offset="95%" stopColor="#004AC6" stopOpacity={0} />
+                    <stop offset="5%" stopColor={CHART_TOKEN_VAR.chart1} stopOpacity={0.3} />
+                    <stop offset="95%" stopColor={CHART_TOKEN_VAR.chart1} stopOpacity={0} />
                   </linearGradient>
                 </defs>
                 <CartesianGrid strokeDasharray="3 3" vertical={false} />
@@ -166,25 +202,25 @@ export default function DashboardCharts({
                 <Area
                   type="monotone"
                   dataKey="value"
-                  stroke="#004AC6"
+                  stroke={CHART_TOKEN_VAR.chart1}
                   strokeWidth={2}
                   fill="url(#revenueGradient)"
                   name="Doanh thu"
                 />
               </AreaChart>
             </ResponsiveContainer>
-          </div>
+          </ChartFrame>
         </CardContent>
       </Card>
 
       {/* Orders BarChart */}
-      <Card>
+      <Card className="min-w-0">
         <CardHeader className="pb-2">
           <CardTitle className="text-sm">Đơn hàng theo trạng thái</CardTitle>
         </CardHeader>
-        <CardContent>
-          <div className="h-60">
-            <ResponsiveContainer width="100%" height="100%">
+        <CardContent className="min-w-0">
+          <ChartFrame>
+            <ResponsiveContainer width="100%" height="100%" minWidth={0} minHeight={240}>
               <BarChart
                 data={orders}
                 margin={{ top: 5, right: 10, left: 0, bottom: 0 }}
@@ -210,19 +246,19 @@ export default function DashboardCharts({
                 />
                 <Bar
                   dataKey="completed"
-                  fill="#22c55e"
+                  fill={CHART_TOKEN_VAR.success}
                   radius={[6, 6, 0, 0]}
                   name="completed"
                 />
                 <Bar
                   dataKey="cancelled"
-                  fill="#ef4444"
+                  fill={CHART_TOKEN_VAR.error}
                   radius={[6, 6, 0, 0]}
                   name="cancelled"
                 />
               </BarChart>
             </ResponsiveContainer>
-          </div>
+          </ChartFrame>
         </CardContent>
       </Card>
     </div>

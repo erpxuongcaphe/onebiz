@@ -1,6 +1,8 @@
 import { describe, it, expect, vi, beforeEach } from "vitest";
 
 const mockResult = vi.fn();
+const rpcCalls: { fn: string; params: unknown }[] = [];
+let rpcResponse: { data: unknown; error: unknown } = { data: { ok: true }, error: null };
 
 function createChain() {
   const chain: Record<string, unknown> = {};
@@ -18,7 +20,13 @@ const mockChain = createChain();
 const mockFrom = vi.fn(() => mockChain);
 
 vi.mock("@/lib/services/supabase/base", () => ({
-  getClient: () => ({ from: mockFrom }),
+  getClient: () => ({
+    from: mockFrom,
+    rpc: vi.fn((fn: string, params?: unknown) => {
+      rpcCalls.push({ fn, params });
+      return rpcResponse;
+    }),
+  }),
   getCurrentTenantId: () => Promise.resolve("t1"),
   getCurrentContext: () => Promise.resolve({ tenantId: "t1", branchId: "b1", userId: "u1" }),
   getPaginationRange: (p: { page: number; pageSize: number }) => ({
@@ -43,10 +51,14 @@ vi.mock("@/lib/services/mock/inventory", () => ({
   getInternalExportStatuses: vi.fn(),
 }));
 
-import { cancelInventoryCheck } from "@/lib/services/supabase/inventory";
+import { applyInventoryCheck, cancelInventoryCheck } from "@/lib/services/supabase/inventory";
 
 describe("cancelInventoryCheck", () => {
-  beforeEach(() => vi.clearAllMocks());
+  beforeEach(() => {
+    vi.clearAllMocks();
+    rpcCalls.length = 0;
+    rpcResponse = { data: { ok: true }, error: null };
+  });
 
   it("cancels a draft inventory check (atomic claim succeeds)", async () => {
     // .update().eq().in().select().maybeSingle() → claimed row
@@ -84,5 +96,35 @@ describe("cancelInventoryCheck", () => {
     mockResult.mockResolvedValueOnce({ data: null, error: null });
 
     await expect(cancelInventoryCheck("chk-x")).rejects.toThrow("Không tìm thấy");
+  });
+});
+
+describe("applyInventoryCheck", () => {
+  beforeEach(() => {
+    vi.clearAllMocks();
+    rpcCalls.length = 0;
+    rpcResponse = { data: { ok: true }, error: null };
+  });
+
+  it("calls apply_inventory_check_atomic RPC", async () => {
+    await applyInventoryCheck("chk-1");
+
+    expect(rpcCalls).toHaveLength(1);
+    expect(rpcCalls[0]).toMatchObject({
+      fn: "apply_inventory_check_atomic",
+      params: {
+        p_tenant_id: "t1",
+        p_check_id: "chk-1",
+        p_created_by: "u1",
+      },
+    });
+  });
+
+  it("surfaces RPC errors", async () => {
+    rpcResponse = { data: null, error: { message: "invalid inventory check" } };
+
+    await expect(applyInventoryCheck("chk-1")).rejects.toThrow(
+      "[applyInventoryCheck.atomic_rpc] invalid inventory check"
+    );
   });
 });

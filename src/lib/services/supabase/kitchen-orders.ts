@@ -15,9 +15,13 @@ import type {
 import { getClient, handleError, getCurrentTenantId } from "./base";
 import { recordAuditLog } from "./audit";
 import { getStationsByProductIds } from "./kitchen-stations";
+import { isRpcUnavailable } from "./rpc-utils";
 
 type KOInsert = Database["public"]["Tables"]["kitchen_orders"]["Insert"];
 type KOItemInsert = Database["public"]["Tables"]["kitchen_order_items"]["Insert"];
+
+const KITCHEN_ORDER_SELECT =
+  "*, restaurant_tables!kitchen_orders_table_id_fkey(name), profiles!kitchen_orders_created_by_fkey(full_name)";
 
 // ── Mappers ──
 
@@ -86,7 +90,7 @@ export async function getKitchenOrders(
 
   let query = supabase
     .from("kitchen_orders")
-    .select("*, restaurant_tables(name), profiles!kitchen_orders_created_by_fkey(full_name)")
+    .select(KITCHEN_ORDER_SELECT)
     .eq("tenant_id", tenantId)
     .eq("branch_id", branchId)
     .order("created_at", { ascending: true });
@@ -110,7 +114,7 @@ export async function getKitchenOrderById(orderId: string): Promise<KitchenOrder
 
   const { data: order, error: orderErr } = await supabase
     .from("kitchen_orders")
-    .select("*, restaurant_tables(name), profiles!kitchen_orders_created_by_fkey(full_name)")
+    .select(KITCHEN_ORDER_SELECT)
     .eq("tenant_id", tenantId)
     .eq("id", orderId)
     .single();
@@ -131,6 +135,43 @@ export async function getKitchenOrderById(orderId: string): Promise<KitchenOrder
     ...mapKitchenOrder(order),
     items: (items ?? []).map(mapKitchenItem),
   };
+}
+
+/**
+ * Get kitchen orders and all child items in two queries.
+ *
+ * KDS calls this on polling + realtime refresh. Keeping it bulked avoids the
+ * old N+1 pattern where every active order triggered another network request.
+ */
+export async function getKitchenOrdersWithItems(
+  branchId: string,
+  statuses?: KitchenOrderStatus[],
+): Promise<(KitchenOrder & { items: KitchenOrderItem[] })[]> {
+  const supabase = getClient();
+  const orders = await getKitchenOrders(branchId, statuses);
+  if (orders.length === 0) return [];
+
+  const orderIds = orders.map((order) => order.id);
+  const { data: items, error } = await supabase
+    .from("kitchen_order_items")
+    .select("*")
+    .in("kitchen_order_id", orderIds)
+    .order("id", { ascending: true });
+
+  if (error) handleError(error, "getKitchenOrdersWithItems:items");
+
+  const itemsByOrder = new Map<string, KitchenOrderItem[]>();
+  for (const row of items ?? []) {
+    const item = mapKitchenItem(row);
+    const bucket = itemsByOrder.get(item.kitchenOrderId) ?? [];
+    bucket.push(item);
+    itemsByOrder.set(item.kitchenOrderId, bucket);
+  }
+
+  return orders.map((order) => ({
+    ...order,
+    items: itemsByOrder.get(order.id) ?? [],
+  }));
 }
 
 // ── Mutations ──
@@ -173,13 +214,11 @@ export async function createKitchenOrder(
 
   // Sprint FIX-1: Idempotency check — nếu client truyền key + đã có order
   // với key đó → return existing (chống duplicate khi offline retry).
-  // eslint-disable-next-line @typescript-eslint/no-explicit-any
   if (input.idempotencyKey) {
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
     const { data: existing } = await (supabase as any)
       .from("kitchen_orders")
-      .select(
-        "*, restaurant_tables(name), profiles!kitchen_orders_created_by_fkey(full_name)",
-      )
+      .select(KITCHEN_ORDER_SELECT)
       .eq("tenant_id", input.tenantId)
       .eq("idempotency_key", input.idempotencyKey)
       .maybeSingle();
@@ -220,9 +259,7 @@ export async function createKitchenOrder(
       // eslint-disable-next-line @typescript-eslint/no-explicit-any
       const { data: race } = await (supabase as any)
         .from("kitchen_orders")
-        .select(
-          "*, restaurant_tables(name), profiles!kitchen_orders_created_by_fkey(full_name)",
-        )
+        .select(KITCHEN_ORDER_SELECT)
         .eq("tenant_id", input.tenantId)
         .eq("idempotency_key", input.idempotencyKey)
         .maybeSingle();
@@ -499,37 +536,30 @@ export async function transferTable(
   const supabase = getClient();
   const tenantId = await getCurrentTenantId();
 
-  // 1. Claim new table (atomic: only if available)
-  const { data: claimed, error: claimErr } = await supabase
-    .from("restaurant_tables")
-    .update({ status: "occupied" as const, current_order_id: orderId })
-    .eq("tenant_id", tenantId)
-    .eq("id", toTableId)
-    .eq("status", "available")
-    .select()
-    .maybeSingle();
+  // Server-side transaction only. Table transfer must fail closed if the RPC is
+  // missing; the legacy multi-step flow can leave table/order state split.
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  const { data: atomicData, error: atomicError } = await (supabase.rpc as any)(
+    "fnb_transfer_table_atomic",
+    {
+      p_tenant_id: tenantId,
+      p_order_id: orderId,
+      p_from_table_id: fromTableId,
+      p_to_table_id: toTableId,
+    },
+  );
 
-  if (claimErr) handleError(claimErr, "transferTable:claim");
-  if (!claimed) throw new Error("Bàn đích không trống hoặc không tồn tại.");
+  if (!atomicError && (atomicData as { success?: boolean } | null)?.success) {
+    return;
+  }
+  if (atomicError) {
+    if (isRpcUnavailable(atomicError)) {
+      throw new Error("Chưa có RPC fnb_transfer_table_atomic. Vui lòng chạy migration POS/FnB atomic trước khi chuyển bàn.");
+    }
+    handleError(atomicError, "transferTable:atomic_rpc");
+  }
 
-  // 2. Release old table
-  const { error: releaseErr } = await supabase
-    .from("restaurant_tables")
-    .update({ status: "available" as const, current_order_id: null })
-    .eq("tenant_id", tenantId)
-    .eq("id", fromTableId)
-    .eq("current_order_id", orderId);
-
-  if (releaseErr) handleError(releaseErr, "transferTable:release");
-
-  // 3. Update kitchen_order table_id + store original for audit
-  const { error: orderErr } = await supabase
-    .from("kitchen_orders")
-    .update({ table_id: toTableId, original_table_id: fromTableId })
-    .eq("tenant_id", tenantId)
-    .eq("id", orderId);
-
-  if (orderErr) handleError(orderErr, "transferTable:order");
+  throw new Error("Server không trả kết quả chuyển bàn hợp lệ.");
 }
 
 // ============================================================

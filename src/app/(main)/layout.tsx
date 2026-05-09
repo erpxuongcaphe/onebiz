@@ -18,7 +18,7 @@ export default function MainLayout({
       */}
       <div className="flex h-[calc(100vh-4rem)] min-h-0">
         <AppSidebar />
-        <main className="flex-1 min-w-0 overflow-y-auto overflow-x-auto">
+        <main className="flex-1 min-w-0 overflow-y-auto overflow-x-auto max-md:pb-20">
           {children}
         </main>
       </div>

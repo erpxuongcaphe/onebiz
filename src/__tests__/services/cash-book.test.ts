@@ -8,6 +8,7 @@ function createChain() {
   chain.select = vi.fn(self);
   chain.insert = vi.fn(self);
   chain.delete = vi.fn(self);
+  chain.update = vi.fn(self);
   chain.eq = vi.fn(self);
   chain.single = mockResult;
   chain.maybeSingle = mockResult;
@@ -16,9 +17,10 @@ function createChain() {
 
 const mockChain = createChain();
 const mockFrom = vi.fn(() => mockChain);
+const mockRpc = vi.fn();
 
 vi.mock("@/lib/services/supabase/base", () => ({
-  getClient: () => ({ from: mockFrom }),
+  getClient: () => ({ from: mockFrom, rpc: mockRpc }),
   getPaginationRange: (p: { page: number; pageSize: number }) => ({
     from: p.page * p.pageSize,
     to: p.page * p.pageSize + p.pageSize - 1,
@@ -33,6 +35,10 @@ vi.mock("@/lib/services/supabase/base", () => ({
     branchId: "branch-test-1",
     userId: "user-test-1",
   }),
+}));
+
+vi.mock("@/lib/services/supabase/audit", () => ({
+  recordAuditLog: vi.fn(),
 }));
 
 import {
@@ -60,15 +66,29 @@ describe("getCashBookSummary", () => {
 describe("deleteCashTransaction", () => {
   beforeEach(() => vi.clearAllMocks());
 
-  it("deletes a transaction by id", async () => {
-    // .from().delete().eq() chain — eq returns chain which has no error
-    // The actual code destructures { error } from the chain end
-    (mockChain.eq as ReturnType<typeof vi.fn>).mockReturnValueOnce({ error: null });
+  it("cancels a free-form transaction by id without hard delete", async () => {
+    mockResult.mockResolvedValueOnce({
+      data: {
+        code: "PT00001",
+        type: "receipt",
+        category: "Khác",
+        amount: 100000,
+        counterparty: null,
+        reference_type: null,
+        reference_id: null,
+        status: "active",
+        note: null,
+      },
+      error: null,
+    });
 
     await deleteCashTransaction("tx-1");
 
     expect(mockFrom).toHaveBeenCalledWith("cash_transactions");
-    expect(mockChain.delete).toHaveBeenCalled();
+    expect(mockChain.delete).not.toHaveBeenCalled();
+    expect(mockChain.update).toHaveBeenCalledWith(
+      expect.objectContaining({ status: "cancelled" })
+    );
     expect(mockChain.eq).toHaveBeenCalledWith("id", "tx-1");
   });
 });

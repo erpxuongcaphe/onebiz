@@ -132,7 +132,7 @@ export interface AppSettings {
   language: {
     locale: "vi" | "en";
     currency: "VND" | "USD";
-    dateFormat: "DD/MM/YYYY" | "MM/DD/YYYY" | "YYYY-MM-DD";
+    dateFormat: "DD/MM/YYYY";
     timezone: string;
   };
 }
@@ -244,7 +244,7 @@ function loadSettings(): AppSettings {
     if (!raw) return defaultSettings;
     const parsed = JSON.parse(raw);
     // Deep merge with defaults to handle new keys added later
-    return deepMerge(defaultSettings, parsed) as AppSettings;
+    return normalizeSettings(deepMerge(defaultSettings, parsed) as AppSettings);
   } catch {
     return defaultSettings;
   }
@@ -253,10 +253,21 @@ function loadSettings(): AppSettings {
 function saveSettings(settings: AppSettings) {
   if (typeof window === "undefined") return;
   try {
-    localStorage.setItem(STORAGE_KEY, JSON.stringify(settings));
+    localStorage.setItem(STORAGE_KEY, JSON.stringify(normalizeSettings(settings)));
   } catch {
     // localStorage quota exceeded or disabled - silently ignore
   }
+}
+
+function normalizeSettings(settings: AppSettings): AppSettings {
+  return {
+    ...settings,
+    language: {
+      ...settings.language,
+      dateFormat: "DD/MM/YYYY",
+      timezone: settings.language.timezone || "Asia/Ho_Chi_Minh",
+    },
+  };
 }
 
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
@@ -318,7 +329,12 @@ export function SettingsProvider({ children }: { children: ReactNode }) {
     ) => {
       setSettings((prev) => ({
         ...prev,
-        [section]: { ...prev[section], ...values },
+        [section]: section === "language"
+          ? normalizeSettings({
+              ...prev,
+              language: { ...prev.language, ...(values as Partial<AppSettings["language"]>) },
+            }).language
+          : { ...prev[section], ...values },
       }));
     },
     []

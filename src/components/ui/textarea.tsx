@@ -3,8 +3,8 @@ import { cn } from "@/lib/utils";
 
 // Stitch style: rounded-xl, bg-surface-container-lowest, focus ring primary/20.
 // Match Input default variant để form trông nhất quán.
-export interface TextareaProps
-  extends React.TextareaHTMLAttributes<HTMLTextAreaElement> {}
+export type TextareaProps =
+  React.TextareaHTMLAttributes<HTMLTextAreaElement>;
 
 const Textarea = React.forwardRef<HTMLTextAreaElement, TextareaProps>(
   ({ className, ...props }, ref) => {

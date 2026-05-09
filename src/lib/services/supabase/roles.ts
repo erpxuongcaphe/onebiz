@@ -55,7 +55,7 @@ export async function getRoles(tenantId: string): Promise<DbRole[]> {
 
   // Count members per role
   const roleIds = (data ?? []).map((r) => r.id);
-  let memberCounts: Record<string, number> = {};
+  const memberCounts: Record<string, number> = {};
   if (roleIds.length > 0) {
     const { data: profiles } = await supabase
       .from("profiles")

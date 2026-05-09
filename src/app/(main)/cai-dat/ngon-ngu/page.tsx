@@ -21,18 +21,8 @@ const languages = [
   { id: "ja", label: "\u65E5\u672C\u8A9E", flag: "\u{1F1EF}\u{1F1F5}" },
 ];
 
-// Mapping between UI date format values and settings date format values
-const dateFormatToSettings: Record<string, "DD/MM/YYYY" | "MM/DD/YYYY" | "YYYY-MM-DD"> = {
-  "dd/MM/yyyy": "DD/MM/YYYY",
-  "MM/dd/yyyy": "MM/DD/YYYY",
-  "yyyy-MM-dd": "YYYY-MM-DD",
-};
-
-const dateFormatFromSettings: Record<string, string> = {
-  "DD/MM/YYYY": "dd/MM/yyyy",
-  "MM/DD/YYYY": "MM/dd/yyyy",
-  "YYYY-MM-DD": "yyyy-MM-dd",
-};
+const FIXED_NUMBER_FORMAT = "en";
+const FIXED_DATE_FORMAT = "dd/MM/yyyy";
 
 // Mapping between UI timezone values and settings timezone values
 const timezoneToSettings: Record<string, string> = {
@@ -53,10 +43,6 @@ export default function LanguageSettingsPage() {
 
   // Initialize local form state from settings
   const [language, setLanguage] = useState(settings.language.locale);
-  const [numberFormat, setNumberFormat] = useState("vi");
-  const [dateFormat, setDateFormat] = useState(
-    dateFormatFromSettings[settings.language.dateFormat] ?? "dd/MM/yyyy"
-  );
   const [timezone, setTimezone] = useState(
     timezoneFromSettings[settings.language.timezone] ?? "asia-hcm"
   );
@@ -66,9 +52,6 @@ export default function LanguageSettingsPage() {
   useEffect(() => {
     setLanguage(settings.language.locale);
     setCurrency(settings.language.currency);
-    setDateFormat(
-      dateFormatFromSettings[settings.language.dateFormat] ?? "dd/MM/yyyy"
-    );
     setTimezone(
       timezoneFromSettings[settings.language.timezone] ?? "asia-hcm"
     );
@@ -78,7 +61,7 @@ export default function LanguageSettingsPage() {
     updateSettings("language", {
       locale: language as "vi" | "en",
       currency: currency as "VND" | "USD",
-      dateFormat: dateFormatToSettings[dateFormat] ?? "DD/MM/YYYY",
+      dateFormat: "DD/MM/YYYY",
       timezone: timezoneToSettings[timezone] ?? "Asia/Ho_Chi_Minh",
     });
     toast({
@@ -131,26 +114,23 @@ export default function LanguageSettingsPage() {
           <div className="grid gap-4 sm:grid-cols-2">
             <div className="space-y-2">
               <label className="text-sm font-medium">Định dạng số</label>
-              <Select value={numberFormat} onValueChange={(v) => v && setNumberFormat(v)}>
+              <Select value={FIXED_NUMBER_FORMAT} disabled>
                 <SelectTrigger className="w-full">
                   <SelectValue />
                 </SelectTrigger>
                 <SelectContent>
-                  <SelectItem value="vi">1.000.000 (Việt Nam)</SelectItem>
                   <SelectItem value="en">1,000,000 (English)</SelectItem>
                 </SelectContent>
               </Select>
             </div>
             <div className="space-y-2">
               <label className="text-sm font-medium">Định dạng ngày</label>
-              <Select value={dateFormat} onValueChange={(v) => v && setDateFormat(v)}>
+              <Select value={FIXED_DATE_FORMAT} disabled>
                 <SelectTrigger className="w-full">
                   <SelectValue />
                 </SelectTrigger>
                 <SelectContent>
                   <SelectItem value="dd/MM/yyyy">dd/MM/yyyy</SelectItem>
-                  <SelectItem value="MM/dd/yyyy">MM/dd/yyyy</SelectItem>
-                  <SelectItem value="yyyy-MM-dd">yyyy-MM-dd</SelectItem>
                 </SelectContent>
               </Select>
             </div>

@@ -94,7 +94,7 @@ export function ModuleSidebarLayout({
               {nav.map((group, gi) => (
                 <div key={gi}>
                   {group.label && (
-                    <div className="px-3 pb-2 text-[10px] font-semibold text-muted-foreground uppercase tracking-wider">
+                    <div className="px-3 pb-2 text-[10px] font-semibold text-muted-foreground uppercase">
                       {group.label}
                     </div>
                   )}

@@ -66,7 +66,7 @@ export async function getCustomerCohortReport(
   if (error) handleError(error, "getCustomerCohortReport");
 
   // Build customer → first_purchase_month + active_months
-  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+   
   type Inv = { customer_id: string; created_at: string };
   const customerMap = new Map<
     string,

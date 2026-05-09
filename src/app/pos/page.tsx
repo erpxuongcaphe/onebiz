@@ -39,7 +39,7 @@ import { useAutoSaveDraft } from "./hooks/use-auto-save-draft";
 import { RecoveryDialog } from "./components/recovery-dialog";
 import { getClient } from "@/lib/services/supabase/base";
 import { useToast } from "@/lib/contexts";
-import { formatCurrency, formatNumber, formatDecimal, parseNumberInput } from "@/lib/format";
+import { formatCurrency, formatNumber, formatDecimal, parseNumberInput, formatDate } from "@/lib/format";
 import { cn } from "@/lib/utils";
 import { printReceiptDirect, type ReceiptData } from "@/components/shared/print-receipt";
 import { printShiftReport } from "@/lib/print-shift-report";
@@ -436,7 +436,7 @@ function PosPageInner() {
           }
           toast({
             title: `Đã mở đơn nháp ${detail.code}`,
-            description: `${detail.itemCount} sản phẩm · Tổng: ${detail.total.toLocaleString("en-US")}đ. Sửa lại rồi bấm Thanh toán.`,
+            description: `${detail.itemCount} sản phẩm · Tổng: ${formatNumber(detail.total)}đ. Sửa lại rồi bấm Thanh toán.`,
             variant: "success",
             duration: 5000,
           });
@@ -694,7 +694,7 @@ function PosPageInner() {
         });
         setCurrentShift(shift);
         setOpenShiftDialogOpen(false);
-        toast({ title: "Đã mở ca", description: `Số dư đầu ca: ${startingCash.toLocaleString()} đ`, variant: "success" });
+        toast({ title: "Đã mở ca", description: `Số dư đầu ca: ${formatNumber(startingCash)} đ`, variant: "success" });
       } catch (err: any) {
         toast({ title: "Không mở được ca", description: err?.message ?? "Vui lòng thử lại.", variant: "error" });
       }
@@ -742,7 +742,7 @@ function PosPageInner() {
         toast({
           title: "Đã đóng ca",
           description: `Chênh lệch: ${
-            diff === 0 ? "KHỚP" : diff > 0 ? `THỪA ${diff.toLocaleString()}` : `THIẾU ${Math.abs(diff).toLocaleString()}`
+            diff === 0 ? "KHỚP" : diff > 0 ? `THỪA ${formatNumber(diff)}` : `THIẾU ${formatNumber(Math.abs(diff))}`
           }`,
           variant: diff === 0 ? "success" : "warning",
         });
@@ -1123,9 +1123,8 @@ function PosPageInner() {
       return;
     }
     try {
-      const tempCode = `TT-${new Date()
-        .toLocaleTimeString("vi-VN", { hour12: false, timeZone: "Asia/Ho_Chi_Minh" })
-        .replace(/:/g, "")}`;
+      const now = new Date();
+      const tempCode = `TT-${String(now.getHours()).padStart(2, "0")}${String(now.getMinutes()).padStart(2, "0")}${String(now.getSeconds()).padStart(2, "0")}`;
       const receipt: ReceiptData = {
         invoiceCode: tempCode,
         date: new Date().toISOString(),
@@ -1713,8 +1712,8 @@ function PosPageInner() {
             biết rõ chi nhánh đang ghi nhận đơn (CEO feedback 20/04). */}
         <PosBranchSelector variant="dark" filter={["warehouse", "store"]} showCode prominent />
         <div className="h-4 w-px bg-white/20 shrink-0" />
-        <span className="text-[13px] font-bold tracking-wide shrink-0">
-          Bán hàng tại quầy
+        <span className="text-[13px] font-bold shrink-0">
+          POS Retail
         </span>
 
         {/* CLEAN HEADER: KM/Tier/Cart-count badges đã bị bỏ — info đã hiện ở
@@ -1818,7 +1817,7 @@ function PosPageInner() {
           {showShortcuts && (
             <>
               <div className="fixed inset-0 z-40" onClick={() => setShowShortcuts(false)} />
-              <div className="absolute right-0 top-full mt-1 z-50 bg-gray-900 text-white rounded-lg shadow-2xl p-3 w-56 text-[11px]">
+              <div className="absolute right-0 top-full mt-1 z-50 rounded-lg bg-pos-chrome-bg text-pos-chrome-fg shadow-2xl p-3 w-56 text-[11px]">
                 <div className="font-bold text-xs mb-2 text-white/90 flex items-center gap-2">
                   <Icon name="keyboard" size={14} />
                   Phím tắt POS
@@ -2071,7 +2070,7 @@ function PosPageInner() {
                   Strip nhỏ hiện count + clear all để cashier thấy quy mô đơn. ── */}
           {state.lines.length > 0 && (
             <div className="flex items-center justify-between px-3 py-1 border-b border-border bg-surface-container-low shrink-0">
-              <span className="text-[10px] font-semibold text-muted-foreground uppercase tracking-wider">
+              <span className="text-[10px] font-semibold text-muted-foreground uppercase">
                 {state.lines.length} sản phẩm · {state.itemCount} món
               </span>
               <button
@@ -2099,14 +2098,14 @@ function PosPageInner() {
           <div ref={cartScrollRef} className="flex-1 overflow-y-auto min-h-0">
             {state.lines.length === 0 ? (
               <div className="flex flex-col items-center justify-center h-full text-muted-foreground px-6">
-                <Icon name="shopping_cart" size={32} className="mb-2 text-gray-200" />
+                <Icon name="shopping_cart" size={32} className="mb-2 text-muted-foreground/35" />
                 <p className="text-xs font-medium text-muted-foreground">Giỏ hàng trống</p>
-                <p className="text-[10px] text-gray-300 mt-0.5 text-center">
+                <p className="text-[10px] text-muted-foreground/70 mt-0.5 text-center">
                   Chọn sản phẩm bên trái hoặc nhấn F2 để tìm
                 </p>
               </div>
             ) : (
-              <div className="divide-y divide-gray-100">
+              <div className="divide-y divide-border">
                 {state.lines.map((line, idx) => (
                   <CartItem
                     key={line.lineId}
@@ -2345,7 +2344,7 @@ function PosPageInner() {
             {/* Total — Stitch font-heading extrabold primary */}
             <div className="flex justify-between items-baseline pt-2 border-t border-outline-variant/20">
               <span className="text-sm font-semibold text-foreground">Khách cần trả</span>
-              <span className="font-heading text-lg font-extrabold text-primary tabular-nums tracking-tight">
+              <span className="font-heading text-lg font-extrabold text-primary tabular-nums">
                 {formatCurrency(state.total)} ₫
               </span>
             </div>
@@ -2385,7 +2384,7 @@ function PosPageInner() {
               {/* Mixed payment breakdown */}
               {state.paymentMethod === "mixed" ? (
                 <div className="space-y-2">
-                  <label className="text-[10px] font-medium text-muted-foreground uppercase tracking-wider">
+                  <label className="text-[10px] font-medium text-muted-foreground uppercase">
                     Chi tiết thanh toán
                   </label>
                   {([
@@ -2447,7 +2446,7 @@ function PosPageInner() {
                   {/* Single-method: Paid amount */}
                   <div>
                     <div className="flex items-center justify-between mb-1">
-                      <label className="text-[10px] font-medium text-muted-foreground uppercase tracking-wider">
+                      <label className="text-[10px] font-medium text-muted-foreground uppercase">
                         Khách đưa
                       </label>
                       {state.paid > 0 && state.change > 0 && (
@@ -3076,7 +3075,7 @@ function CartItem({
   return (
     <div
       className={cn(
-        "border-b border-gray-100 hover:bg-primary-fixed/20 transition-colors group",
+        "border-b border-border hover:bg-primary-fixed/20 transition-colors group",
         oversold && "bg-status-warning/10",
       )}
     >
@@ -3634,11 +3633,11 @@ function DraftListModal({
             </div>
           ) : drafts.length === 0 ? (
             <div className="flex flex-col items-center justify-center py-12 text-muted-foreground">
-              <Icon name="save" size={32} className="mb-2 text-gray-200" />
+              <Icon name="save" size={32} className="mb-2 text-muted-foreground/35" />
               <p className="text-xs">Chưa có đơn nháp nào</p>
             </div>
           ) : (
-            <div className="divide-y divide-gray-100">
+            <div className="divide-y divide-border">
               {drafts.map((draft) => (
                 <div
                   key={draft.id}
@@ -3649,10 +3648,7 @@ function DraftListModal({
                     <div className="flex items-center gap-2">
                       <span className="text-xs font-bold text-primary">{draft.code}</span>
                       <span className="text-[10px] text-muted-foreground">
-                        {new Date(draft.createdAt).toLocaleString("vi-VN", {
-                          day: "2-digit", month: "2-digit", hour: "2-digit", minute: "2-digit",
-                          timeZone: "Asia/Ho_Chi_Minh",
-                        })}
+                        {formatDate(draft.createdAt)}
                       </span>
                     </div>
                     <div className="flex items-center gap-2 mt-0.5">
@@ -3689,7 +3685,7 @@ function DraftListModal({
                       type="button"
                       onClick={() => handleDelete(draft.id)}
                       disabled={deleting === draft.id}
-                      className="p-1 rounded text-gray-300 hover:text-status-error hover:bg-status-error/10 transition-colors disabled:opacity-50"
+                      className="p-1 rounded text-muted-foreground/60 hover:text-status-error hover:bg-status-error/10 transition-colors disabled:opacity-50"
                       title="Xóa nháp"
                     >
                       {deleting === draft.id ? (

@@ -667,8 +667,9 @@ function InlineDetail({ invoice, onClose }: { invoice: Invoice; onClose: () => v
           </thead>
           <tbody>
             {Array.from({ length: invoice.itemCount }).map((_, i) => {
-              const qty = 1 + Math.floor(Math.random() * 5);
-              const price = 50000 + Math.floor(Math.random() * 200000);
+              const qty = 1 + ((i + invoice.itemCount) % 5);
+              const price =
+                50000 + ((i * 47000 + invoice.itemCount * 23000) % 200000);
               return (
                 <tr key={i} className="border-b border-border last:border-0">
                   <td className="px-3 py-1.5">

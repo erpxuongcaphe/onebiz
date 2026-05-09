@@ -4,6 +4,7 @@ import { describe, it, expect, vi, beforeEach } from "vitest";
 
 // Track all insert calls to verify N separate receipts
 const insertCalls: { table: string; data: Record<string, unknown> }[] = [];
+const rpcCalls: { fn: string; params: unknown }[] = [];
 let nextCodeCounter = 0;
 
 function createChain(resolvedValue: unknown = { data: null, error: null }) {
@@ -36,10 +37,17 @@ let mockFromHandler: (table: string) => any;
 vi.mock("@/lib/services/supabase/base", () => ({
   getClient: () => ({
     from: vi.fn((table: string) => mockFromHandler(table)),
-    rpc: vi.fn((fn: string) => {
+    rpc: vi.fn((fn: string, params?: unknown) => {
+      rpcCalls.push({ fn, params });
       if (fn === "next_code") {
         nextCodeCounter++;
         return { data: `PT${String(nextCodeCounter).padStart(5, "0")}`, error: null };
+      }
+      if (fn === "pos_complete_checkout_atomic") {
+        return {
+          data: { invoice_id: "inv-new-1", invoice_code: "HD00001" },
+          error: null,
+        };
       }
       if (fn === "increment_product_stock" || fn === "upsert_branch_stock") {
         return { data: null, error: null };
@@ -62,6 +70,7 @@ import type { Database } from "@/lib/supabase/types";
 
 beforeEach(() => {
   insertCalls.length = 0;
+  rpcCalls.length = 0;
   nextCodeCounter = 0;
   mockFromHandler = () => createChain({ data: null, error: null });
 });
@@ -240,38 +249,7 @@ describe("createAutoCashReceipt", () => {
 // ========================================
 
 describe("posCheckout", () => {
-  it("passes breakdown to createAutoCashReceipt when mixed", async () => {
-    const invoiceId = "inv-new-1";
-    const invoiceCode = "HD00001";
-
-    // Setup mock to handle invoice creation + items + stock + cash
-    mockFromHandler = (table: string) => {
-      if (table === "invoices") {
-        return {
-          insert: vi.fn(() => ({
-            select: vi.fn(() => ({
-              single: vi.fn(() => ({
-                data: { id: invoiceId, code: invoiceCode },
-                error: null,
-              })),
-            })),
-          })),
-        };
-      }
-      if (table === "invoice_items" || table === "stock_movements") {
-        return { insert: vi.fn(() => ({ error: null })) };
-      }
-      if (table === "cash_transactions") {
-        return {
-          insert: vi.fn((data: Record<string, unknown>) => {
-            insertCalls.push({ table: "cash_transactions", data });
-            return { error: null };
-          }),
-        };
-      }
-      return createChain();
-    };
-
+  it("passes mixed payment breakdown to atomic checkout RPC", async () => {
     const result = await posCheckout({
       tenantId: "t1",
       branchId: "b1",
@@ -291,46 +269,21 @@ describe("posCheckout", () => {
       paid: 500_000,
     });
 
-    expect(result.invoiceCode).toBe(invoiceCode);
+    expect(result.invoiceCode).toBe("HD00001");
 
-    // Verify 2 separate cash_transactions were inserted
-    const cashInserts = insertCalls.filter((c) => c.table === "cash_transactions");
-    expect(cashInserts).toHaveLength(2);
-    expect(cashInserts[0].data).toMatchObject({ payment_method: "cash", amount: 200_000 });
-    expect(cashInserts[1].data).toMatchObject({ payment_method: "transfer", amount: 300_000 });
+    const rpcCall = rpcCalls.find((c) => c.fn === "pos_complete_checkout_atomic");
+    expect(rpcCall).toBeDefined();
+    const params = rpcCall!.params as Record<string, unknown>;
+    expect(params.p_payment_method).toBe("mixed");
+    expect(params.p_payment_breakdown).toEqual([
+      { method: "cash", amount: 200_000 },
+      { method: "transfer", amount: 300_000 },
+    ]);
+    expect(params.p_paid).toBe(500_000);
+    expect(insertCalls.filter((c) => c.table === "cash_transactions")).toHaveLength(0);
   });
 
-  it("creates single receipt when paymentMethod is not mixed", async () => {
-    const invoiceId = "inv-new-2";
-    const invoiceCode = "HD00002";
-
-    mockFromHandler = (table: string) => {
-      if (table === "invoices") {
-        return {
-          insert: vi.fn(() => ({
-            select: vi.fn(() => ({
-              single: vi.fn(() => ({
-                data: { id: invoiceId, code: invoiceCode },
-                error: null,
-              })),
-            })),
-          })),
-        };
-      }
-      if (table === "invoice_items" || table === "stock_movements") {
-        return { insert: vi.fn(() => ({ error: null })) };
-      }
-      if (table === "cash_transactions") {
-        return {
-          insert: vi.fn((data: Record<string, unknown>) => {
-            insertCalls.push({ table: "cash_transactions", data });
-            return { error: null };
-          }),
-        };
-      }
-      return createChain();
-    };
-
+  it("passes single payment method to atomic checkout RPC", async () => {
     await posCheckout({
       tenantId: "t1",
       branchId: "b1",
@@ -346,8 +299,11 @@ describe("posCheckout", () => {
       paid: 500_000,
     });
 
-    const cashInserts = insertCalls.filter((c) => c.table === "cash_transactions");
-    expect(cashInserts).toHaveLength(1);
-    expect(cashInserts[0].data).toMatchObject({ payment_method: "transfer", amount: 500_000 });
+    const rpcCall = rpcCalls.find((c) => c.fn === "pos_complete_checkout_atomic");
+    expect(rpcCall).toBeDefined();
+    const params = rpcCall!.params as Record<string, unknown>;
+    expect(params.p_payment_method).toBe("transfer");
+    expect(params.p_payment_breakdown).toBeNull();
+    expect(params.p_total).toBe(500_000);
   });
 });

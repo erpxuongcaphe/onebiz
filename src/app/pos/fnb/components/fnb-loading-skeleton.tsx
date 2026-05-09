@@ -28,7 +28,7 @@ interface FnbLoadingSkeletonProps {
 }
 
 export function FnbLoadingSkeleton({
-  title = "Đang tải POS F&B",
+  title = "Đang tải POS FnB",
   detail = "OneBiz đang chuẩn bị menu, bàn và giỏ hàng cho chi nhánh hiện tại.",
   elapsedMs = 0,
   onRetry,
@@ -41,23 +41,23 @@ export function FnbLoadingSkeleton({
   return (
     <div className="flex flex-col h-screen bg-surface-container-low">
       {/* Header skeleton — match đúng h-16 + light theme thật */}
-      <header className="h-16 bg-surface/95 backdrop-blur-md border-b border-outline-variant/30 flex items-center px-3 gap-2 shrink-0">
+      <header className="min-h-14 bg-surface/95 backdrop-blur-md border-b border-outline-variant/30 flex flex-wrap md:flex-nowrap items-center px-2 sm:px-3 gap-2 py-2 md:h-16 md:py-0 shrink-0">
         {/* ☰ button */}
-        <div className="w-10 h-10 rounded-xl bg-surface-container animate-pulse" />
+        <div className="w-9 h-9 sm:w-10 sm:h-10 rounded-xl bg-surface-container animate-pulse" />
         {/* Logo placeholder */}
-        <div className="w-7 h-7 rounded bg-surface-container animate-pulse" />
+        <div className="hidden sm:block w-7 h-7 rounded bg-surface-container animate-pulse" />
         {/* Branch chip placeholder */}
-        <div className="h-9 w-44 rounded-lg bg-surface-container animate-pulse" />
+        <div className="h-9 w-32 sm:w-44 rounded-lg bg-surface-container animate-pulse" />
         {/* Shift indicator placeholder */}
         <div className="h-7 w-24 rounded-full bg-surface-container animate-pulse" />
         {/* View toggle placeholder */}
-        <div className="h-9 w-44 rounded-xl bg-surface-container animate-pulse" />
+        <div className="order-20 h-9 min-w-[154px] flex-1 rounded-xl bg-surface-container animate-pulse md:order-none md:w-44 md:flex-none" />
         {/* Search bar placeholder */}
-        <div className="h-9 w-56 rounded-xl bg-surface-container animate-pulse" />
+        <div className="order-21 h-9 min-w-[150px] flex-1 rounded-xl bg-surface-container animate-pulse md:order-none md:w-56 md:flex-none" />
         {/* Filler */}
-        <div className="flex-1" />
+        <div className="hidden md:block flex-1" />
         {/* KDS button placeholder */}
-        <div className="h-9 w-24 rounded-lg bg-surface-container animate-pulse" />
+        <div className="order-22 h-9 w-20 rounded-lg bg-surface-container animate-pulse md:order-none md:w-24" />
       </header>
 
       {/* Tab row skeleton 40px */}

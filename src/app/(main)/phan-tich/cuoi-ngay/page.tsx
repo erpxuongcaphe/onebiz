@@ -26,6 +26,7 @@ import {
   formatCurrency,
   formatChartCurrency,
   formatChartTooltipCurrency,
+  formatDate,
 } from "@/lib/format";
 import { KpiCard, ChartCard } from "../_components";
 import { useBranchFilter, useToast } from "@/lib/contexts";
@@ -282,9 +283,7 @@ export default function CuoiNgayPage() {
             { key: "Chi nhánh", value: branchName },
             {
               key: "Thời gian xuất",
-              value: new Date().toLocaleString("vi-VN", {
-                timeZone: "Asia/Ho_Chi_Minh",
-              }),
+              value: formatDate(new Date()),
             },
           ],
         },

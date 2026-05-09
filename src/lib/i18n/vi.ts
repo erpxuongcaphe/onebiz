@@ -1,3 +1,5 @@
+import { formatNumber } from "@/lib/format";
+
 /**
  * Từ điển Việt hoá — Sprint VN-1 (CEO 06/05/2026).
  *
@@ -13,15 +15,15 @@
  *
  * Sử dụng:
  *   import { TERMS } from "@/lib/i18n/vi";
- *   <h1>{TERMS.posRetail}</h1>  // "Bán hàng tại quầy"
+ *   <h1>{TERMS.posRetail}</h1>  // "POS Retail"
  */
 
 export const TERMS = {
   // ============================================================
   // POS / Bán hàng
   // ============================================================
-  posRetail: "Bán hàng tại quầy",
-  posFnb: "Bán hàng quán cà phê",
+  posRetail: "POS Retail",
+  posFnb: "POS FnB",
   pos: "Bán hàng",
   kds: "Màn hình bếp",
 
@@ -196,8 +198,9 @@ export const TERMS = {
  * @example formatQty(5, "kg") → "5 kg"
  */
 export function formatQty(qty: number, unit?: string): string {
-  if (!unit) return qty.toLocaleString("vi-VN");
-  return `${qty.toLocaleString("vi-VN")} ${unit}`;
+  const formatted = formatNumber(qty);
+  if (!unit) return formatted;
+  return `${formatted} ${unit}`;
 }
 
 /**

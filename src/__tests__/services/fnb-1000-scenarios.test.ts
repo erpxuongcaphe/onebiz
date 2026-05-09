@@ -47,8 +47,7 @@ let nextCodeCounter = 0;
 // Scenario snapshot captured by setupMocks — used by fnb_complete_payment_atomic mock
 // to simulate the server-side side effects (increment_product_stock per item/topping,
 // releaseTableMock if dine_in) that real RPC would perform.
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
-let currentScenario: any = null;
+let currentScenario: Scenario | null = null;
 
 function createChain(resolvedValue: unknown = { data: null, error: null }) {
   const filters: Record<string, unknown> = {};
@@ -104,6 +103,56 @@ vi.mock("@/lib/services/supabase/base", () => ({
       }
       if (fn === "increment_product_stock" || fn === "upsert_branch_stock" || fn === "allocate_lots_fifo") {
         return { data: null, error: null };
+      }
+      if (fn === "fnb_send_to_kitchen_atomic") {
+        const orderId = `ko-${currentScenario?.id ?? "1"}`;
+        if (args?.p_table_id) {
+          claimTableMock(args.p_table_id, orderId);
+        }
+        return {
+          data: {
+            kitchen_order_id: orderId,
+            order_number: args?.p_order_number ?? `KB${String(currentScenario?.id ?? 1).padStart(5, "0")}`,
+          },
+          error: null,
+        };
+      }
+      if (fn === "fnb_transfer_table_atomic") {
+        updateCalls.push(
+          { table: "_rpc", data: { status: "available" }, filters: { id: args?.p_from_table_id } },
+          { table: "_rpc", data: { status: "occupied" }, filters: { id: args?.p_to_table_id } },
+          { table: "_rpc", data: { table_id: args?.p_to_table_id }, filters: { id: args?.p_order_id } },
+        );
+        return { data: { success: true }, error: null };
+      }
+      if (fn === "fnb_void_invoice_atomic") {
+        const mockedItems = mockFromHandler("invoice_items").maybeSingle?.()?.data;
+        const rows: Array<{ product_id: string; product_name: string; quantity: number }> = Array.isArray(mockedItems)
+          ? mockedItems as Array<{ product_id: string; product_name: string; quantity: number }>
+          : currentScenario
+          ? currentScenario.items.flatMap((it: ScenarioItem) => {
+              const lines = [
+                { product_id: it.productId, product_name: it.productName, quantity: it.quantity },
+              ];
+              for (const tp of it.toppings ?? []) {
+                if (tp.quantity > 0) {
+                  lines.push({ product_id: tp.productId, product_name: tp.name, quantity: tp.quantity * it.quantity });
+                }
+              }
+              return lines;
+            })
+          : [];
+        updateCalls.push({
+          table: "_rpc",
+          data: { status: "cancelled", void_reason: args?.p_void_reason },
+          filters: { id: args?.p_invoice_id },
+        });
+        for (const row of rows) {
+          insertCalls.push({ table: "_rpc", data: { ...row, type: "in" } });
+          rpcCalls.push({ fn: "increment_product_stock", args: { p_product_id: row.product_id, p_delta: row.quantity } });
+        }
+        insertCalls.push({ table: "_rpc", data: { type: "payment", invoice_id: args?.p_invoice_id } });
+        return { data: { success: true }, error: null };
       }
       if (fn === "fnb_complete_payment_atomic") {
         // Simulate server-side atomic RPC behavior:

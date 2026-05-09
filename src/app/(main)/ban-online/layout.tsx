@@ -2,24 +2,17 @@
 
 import Link from "next/link";
 import { usePathname } from "next/navigation";
-import {
-  Globe,
-  MessageCircle,
-  Monitor,
-  LayoutDashboard,
-  ShoppingBag,
-} from "lucide-react";
 import { cn } from "@/lib/utils";
 import { ScrollArea } from "@/components/ui/scroll-area";
 import { Icon } from "@/components/ui/icon";
 import { DemoNotice } from "@/components/shared/demo-notice";
 
 const ONLINE_NAV = [
-  { href: "/ban-online", label: "Tổng quan", icon: LayoutDashboard, exact: true },
-  { href: "/ban-online/facebook", label: "Facebook", icon: Globe },
-  { href: "/ban-online/zalo", label: "Zalo", icon: MessageCircle },
-  { href: "/ban-online/website", label: "Website", icon: Monitor },
-  { href: "/ban-online/don-hang", label: "Đơn hàng", icon: ShoppingBag },
+  { href: "/ban-online", label: "Tổng quan", icon: "dashboard", exact: true },
+  { href: "/ban-online/facebook", label: "Facebook", icon: "public" },
+  { href: "/ban-online/zalo", label: "Zalo", icon: "forum" },
+  { href: "/ban-online/website", label: "Website", icon: "desktop_windows" },
+  { href: "/ban-online/don-hang", label: "Đơn hàng", icon: "shopping_bag" },
 ];
 
 export default function BanOnlineLayout({
@@ -30,9 +23,9 @@ export default function BanOnlineLayout({
   const pathname = usePathname();
 
   return (
-    <div className="flex h-full">
+    <div className="flex h-full flex-col md:flex-row">
       {/* Sidebar */}
-      <aside className="hidden md:flex w-48 lg:w-52 border-r bg-white shrink-0 flex-col">
+      <aside className="hidden md:flex w-48 lg:w-52 border-r bg-surface-container-lowest shrink-0 flex-col">
         <div className="px-4 py-3 border-b">
           <h2 className="text-sm font-bold text-foreground flex items-center gap-2">
             <Icon name="public" className="size-4 text-primary" />
@@ -42,7 +35,6 @@ export default function BanOnlineLayout({
         <ScrollArea className="flex-1">
           <nav className="p-2 space-y-0.5">
             {ONLINE_NAV.map((item) => {
-              const Icon = item.icon;
               const isActive = item.exact
                 ? pathname === item.href
                 : pathname.startsWith(item.href);
@@ -57,7 +49,7 @@ export default function BanOnlineLayout({
                       : "text-foreground hover:bg-muted hover:text-foreground"
                   )}
                 >
-                  <Icon className="size-4 shrink-0" />
+                  <Icon name={item.icon} size={16} fill={isActive} className="shrink-0" />
                   <span>{item.label}</span>
                 </Link>
               );
@@ -67,10 +59,9 @@ export default function BanOnlineLayout({
       </aside>
 
       {/* Mobile nav */}
-      <div className="md:hidden fixed bottom-0 left-0 right-0 z-40 bg-white border-t">
-        <div className="flex justify-around px-1 py-1">
+      <div className="sticky top-0 z-30 border-b bg-surface-container-lowest/95 backdrop-blur md:hidden">
+        <div className="flex gap-1 overflow-x-auto px-3 py-2">
           {ONLINE_NAV.map((item) => {
-            const Icon = item.icon;
             const isActive = item.exact
               ? pathname === item.href
               : pathname.startsWith(item.href);
@@ -79,11 +70,13 @@ export default function BanOnlineLayout({
                 key={item.href}
                 href={item.href}
                 className={cn(
-                  "flex flex-col items-center gap-0.5 px-2 py-2 rounded text-[10px] transition-colors",
-                  isActive ? "text-primary font-medium" : "text-muted-foreground"
+                  "flex min-w-[72px] flex-col items-center gap-0.5 rounded-lg px-2 py-2 text-[10px] transition-colors",
+                  isActive
+                    ? "bg-primary-fixed text-primary font-semibold"
+                    : "text-muted-foreground"
                 )}
               >
-                <Icon className="size-4" />
+                <Icon name={item.icon} size={16} fill={isActive} />
                 <span>{item.label}</span>
               </Link>
             );
@@ -92,7 +85,7 @@ export default function BanOnlineLayout({
       </div>
 
       {/* Content */}
-      <main className="flex-1 min-w-0 overflow-auto pb-16 md:pb-0">
+      <main className="flex-1 min-w-0 overflow-auto pb-3 md:pb-0">
         {/* Banner toàn module: KPI/conversation/order ở /ban-online/* hiện
             là dữ liệu mẫu. Sẽ thay khi tích hợp Facebook/Zalo/Web. */}
         <div className="px-4 pt-3 md:px-6 md:pt-4">
