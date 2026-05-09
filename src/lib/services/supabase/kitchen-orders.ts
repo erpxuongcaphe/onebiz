@@ -20,6 +20,9 @@ import { isRpcUnavailable } from "./rpc-utils";
 type KOInsert = Database["public"]["Tables"]["kitchen_orders"]["Insert"];
 type KOItemInsert = Database["public"]["Tables"]["kitchen_order_items"]["Insert"];
 
+const KITCHEN_ORDER_SELECT =
+  "*, restaurant_tables!kitchen_orders_table_id_fkey(name), profiles!kitchen_orders_created_by_fkey(full_name)";
+
 // ── Mappers ──
 
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
@@ -87,7 +90,7 @@ export async function getKitchenOrders(
 
   let query = supabase
     .from("kitchen_orders")
-    .select("*, restaurant_tables(name), profiles!kitchen_orders_created_by_fkey(full_name)")
+    .select(KITCHEN_ORDER_SELECT)
     .eq("tenant_id", tenantId)
     .eq("branch_id", branchId)
     .order("created_at", { ascending: true });
@@ -111,7 +114,7 @@ export async function getKitchenOrderById(orderId: string): Promise<KitchenOrder
 
   const { data: order, error: orderErr } = await supabase
     .from("kitchen_orders")
-    .select("*, restaurant_tables(name), profiles!kitchen_orders_created_by_fkey(full_name)")
+    .select(KITCHEN_ORDER_SELECT)
     .eq("tenant_id", tenantId)
     .eq("id", orderId)
     .single();
@@ -132,6 +135,43 @@ export async function getKitchenOrderById(orderId: string): Promise<KitchenOrder
     ...mapKitchenOrder(order),
     items: (items ?? []).map(mapKitchenItem),
   };
+}
+
+/**
+ * Get kitchen orders and all child items in two queries.
+ *
+ * KDS calls this on polling + realtime refresh. Keeping it bulked avoids the
+ * old N+1 pattern where every active order triggered another network request.
+ */
+export async function getKitchenOrdersWithItems(
+  branchId: string,
+  statuses?: KitchenOrderStatus[],
+): Promise<(KitchenOrder & { items: KitchenOrderItem[] })[]> {
+  const supabase = getClient();
+  const orders = await getKitchenOrders(branchId, statuses);
+  if (orders.length === 0) return [];
+
+  const orderIds = orders.map((order) => order.id);
+  const { data: items, error } = await supabase
+    .from("kitchen_order_items")
+    .select("*")
+    .in("kitchen_order_id", orderIds)
+    .order("id", { ascending: true });
+
+  if (error) handleError(error, "getKitchenOrdersWithItems:items");
+
+  const itemsByOrder = new Map<string, KitchenOrderItem[]>();
+  for (const row of items ?? []) {
+    const item = mapKitchenItem(row);
+    const bucket = itemsByOrder.get(item.kitchenOrderId) ?? [];
+    bucket.push(item);
+    itemsByOrder.set(item.kitchenOrderId, bucket);
+  }
+
+  return orders.map((order) => ({
+    ...order,
+    items: itemsByOrder.get(order.id) ?? [],
+  }));
 }
 
 // ── Mutations ──
@@ -178,9 +218,7 @@ export async function createKitchenOrder(
     // eslint-disable-next-line @typescript-eslint/no-explicit-any
     const { data: existing } = await (supabase as any)
       .from("kitchen_orders")
-      .select(
-        "*, restaurant_tables(name), profiles!kitchen_orders_created_by_fkey(full_name)",
-      )
+      .select(KITCHEN_ORDER_SELECT)
       .eq("tenant_id", input.tenantId)
       .eq("idempotency_key", input.idempotencyKey)
       .maybeSingle();
@@ -221,9 +259,7 @@ export async function createKitchenOrder(
       // eslint-disable-next-line @typescript-eslint/no-explicit-any
       const { data: race } = await (supabase as any)
         .from("kitchen_orders")
-        .select(
-          "*, restaurant_tables(name), profiles!kitchen_orders_created_by_fkey(full_name)",
-        )
+        .select(KITCHEN_ORDER_SELECT)
         .eq("tenant_id", input.tenantId)
         .eq("idempotency_key", input.idempotencyKey)
         .maybeSingle();

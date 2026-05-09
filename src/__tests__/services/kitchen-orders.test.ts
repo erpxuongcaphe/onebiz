@@ -52,6 +52,7 @@ vi.mock("@/lib/services/supabase/base", () => ({
 
 import {
   getKitchenOrders,
+  getKitchenOrdersWithItems,
   getKitchenOrderById,
   createKitchenOrder,
   addItemsToOrder,
@@ -153,6 +154,33 @@ describe("getKitchenOrders", () => {
     mockFromHandler = () => createChain({ data: [], error: null });
     const orders = await getKitchenOrders("b-empty");
     expect(orders).toEqual([]);
+  });
+});
+
+describe("getKitchenOrdersWithItems", () => {
+  it("loads active orders and items in bulk", async () => {
+    mockFromHandler = (table: string) => {
+      if (table === "kitchen_orders") {
+        return createChain({
+          data: [ORDER_ROW],
+          error: null,
+        });
+      }
+      if (table === "kitchen_order_items") {
+        return createChain({
+          data: ITEM_ROWS,
+          error: null,
+        });
+      }
+      return createChain();
+    };
+
+    const orders = await getKitchenOrdersWithItems("b1", ["pending"]);
+
+    expect(orders).toHaveLength(1);
+    expect(orders[0].id).toBe("ko-1");
+    expect(orders[0].items).toHaveLength(2);
+    expect(orders[0].items[0].kitchenOrderId).toBe("ko-1");
   });
 });
 

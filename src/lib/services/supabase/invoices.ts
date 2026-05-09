@@ -207,7 +207,7 @@ export async function getFnbRecentInvoices(params: {
   // Lookup kitchen orders separately (kitchen_orders.invoice_id → invoices.id)
   const { data: kos } = await supabase
     .from("kitchen_orders")
-    .select("invoice_id, order_number, order_type, table_id, restaurant_tables(table_number)")
+    .select("invoice_id, order_number, order_type, table_id, restaurant_tables!kitchen_orders_table_id_fkey(table_number)")
     .in("invoice_id", invoiceIds);
 
   const koMap = new Map<string, { orderNumber: string; orderType: string; tableName: string | null }>();
@@ -280,7 +280,7 @@ export async function getFnbInvoiceForReprint(invoiceId: string): Promise<{
 
   const { data: ko } = await supabase
     .from("kitchen_orders")
-    .select("order_number, order_type, table_id, restaurant_tables(table_number)")
+    .select("order_number, order_type, table_id, restaurant_tables!kitchen_orders_table_id_fkey(table_number)")
     .eq("invoice_id", invoiceId)
     .maybeSingle();
 

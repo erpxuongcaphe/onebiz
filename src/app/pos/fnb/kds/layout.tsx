@@ -1,21 +1,18 @@
 import type { Metadata } from "next";
 
 export const metadata: Metadata = {
-  title: "KDS — Màn hình bếp",
+  title: "Màn bếp KDS",
   description: "Kitchen Display System",
 };
 
 /**
- * KDS luôn chạy dark mode (Stitch KDS mockup) — quán bar thường ánh sáng
- * yếu, ca đêm dùng KDS cần tone tối để không chói mắt bartender.
- *
- * Wrapper div.dark bật tất cả `.dark` CSS vars từ globals.css, giúp mọi
- * component con (buttons, inputs, dropdown) tự động chuyển sang dark palette.
+ * KDS dùng cùng light surface với OneBiz để đồng bộ ERP/FnB, còn card đơn vẫn
+ * giữ kích thước lớn và màu trạng thái rõ cho môi trường bếp.
  */
 export default function KdsLayout({
   children,
 }: {
   children: React.ReactNode;
 }) {
-  return <div className="dark min-h-screen bg-background text-foreground">{children}</div>;
+  return <div className="min-h-screen bg-background text-foreground">{children}</div>;
 }
