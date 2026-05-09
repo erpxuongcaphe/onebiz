@@ -1,115 +1,137 @@
 #!/usr/bin/env node
 /**
- * smoke-health.mjs — kiểm tra production URL alive + critical pages return 200.
+ * Production smoke health check.
+ *
+ * Defaults:
+ *   - Main ERP: https://onebiz.com.vn
+ *   - FnB POS:  https://fnb.onebiz.com.vn
  *
  * Usage:
- *   node scripts/smoke-health.mjs                   # default https://onebiz.com.vn
- *   node scripts/smoke-health.mjs --url=preview.vercel.app
- *
- * Output:
- *   ✅ /                   200  (124ms)
- *   ✅ /dang-nhap          200  (87ms)
- *   ⚠️ /hang-hoa           302  redirected to /dang-nhap (auth required, OK)
- *   ❌ /api/_health        500  Internal Server Error
+ *   node scripts/smoke-health.mjs
+ *   node scripts/smoke-health.mjs --url=https://preview.vercel.app
+ *   node scripts/smoke-health.mjs --fnb-url=https://fnb.onebiz.com.vn
+ *   node scripts/smoke-health.mjs --skip-fnb
  *
  * Exit code:
- *   0 — all pages OK (200 hoặc 30x auth redirect)
- *   1 — có page return 4xx/5xx
- *
- * Plus: tự log timestamp để CEO thấy trong CI/CD pipeline.
+ *   0 - all critical pages return 200 or an expected auth redirect
+ *   1 - any page returns 4xx/5xx or an unexpected redirect
  */
 
 const args = process.argv.slice(2);
-const urlArg = args.find((a) => a.startsWith("--url="));
-const baseUrl = urlArg
-  ? `https://${urlArg.slice(6).replace(/^https?:\/\//, "")}`
-  : "https://onebiz.com.vn";
 
-// Critical public pages — không cần auth, phải luôn 200.
-// Pages auth-required → redirect 302 (counted as OK vì server alive).
-const PAGES = [
-  { path: "/", expectAuth: false },
-  { path: "/dang-nhap", expectAuth: false },
-  { path: "/hang-hoa", expectAuth: true }, // auth → redirect /dang-nhap
-  { path: "/hang-hoa/thiet-lap-gia", expectAuth: true },
-  { path: "/cai-dat/chi-nhanh", expectAuth: true },
+function readArg(name, fallback) {
+  const hit = args.find((arg) => arg.startsWith(`--${name}=`));
+  if (!hit) return fallback;
+  return normalizeUrl(hit.slice(name.length + 3));
+}
+
+function normalizeUrl(value) {
+  const trimmed = String(value ?? "").trim().replace(/\/+$/, "");
+  if (!trimmed) return "";
+  return /^https?:\/\//i.test(trimmed) ? trimmed : `https://${trimmed}`;
+}
+
+const mainBaseUrl = readArg("url", "https://onebiz.com.vn");
+const fnbBaseUrl = readArg("fnb-url", "https://fnb.onebiz.com.vn");
+const skipFnb = args.includes("--skip-fnb");
+
+const CHECK_GROUPS = [
+  {
+    label: "Main ERP",
+    baseUrl: mainBaseUrl,
+    pages: [
+      { path: "/", auth: true },
+      { path: "/dang-nhap", auth: false },
+      { path: "/hang-hoa", auth: true },
+      { path: "/hang-hoa/ton-kho", auth: true },
+      { path: "/pos", auth: true },
+    ],
+  },
+  ...(
+    skipFnb
+      ? []
+      : [
+          {
+            label: "FnB subdomain",
+            baseUrl: fnbBaseUrl,
+            pages: [
+              { path: "/", auth: true },
+              { path: "/dang-nhap", auth: false },
+              { path: "/kds", auth: true },
+              { path: "/pos/fnb", auth: true },
+            ],
+          },
+        ]
+  ),
 ];
 
 const TIMEOUT_MS = 10000;
 
-async function check(path, expectAuth) {
+function isAuthRedirect(location) {
+  return /dang-nhap|login|auth/i.test(location ?? "");
+}
+
+async function checkPage(group, page) {
   const start = Date.now();
+  const url = `${group.baseUrl}${page.path}`;
+
   try {
     const ctrl = new AbortController();
     const timer = setTimeout(() => ctrl.abort(), TIMEOUT_MS);
-    const res = await fetch(`${baseUrl}${path}`, {
-      redirect: "manual",
-      signal: ctrl.signal,
-    });
+    const res = await fetch(url, { redirect: "manual", signal: ctrl.signal });
     clearTimeout(timer);
-    const ms = Date.now() - start;
+
+    const elapsed = Date.now() - start;
+    const location = res.headers.get("location") ?? "";
     const status = res.status;
-    let label;
-    let ok;
-
-    if (status === 200) {
-      label = "✅";
-      ok = true;
-    } else if ([301, 302, 307, 308].includes(status)) {
-      const loc = res.headers.get("location") ?? "";
-      const isAuthRedirect = /dang-nhap|login|auth/i.test(loc);
-      if (expectAuth && isAuthRedirect) {
-        label = "✅";
-        ok = true;
-      } else {
-        label = "⚠️";
-        ok = true;
-      }
-    } else {
-      label = "❌";
-      ok = false;
-    }
+    const redirectOk =
+      [301, 302, 303, 307, 308].includes(status) &&
+      (page.auth ? isAuthRedirect(location) : true);
+    const ok = status === 200 || redirectOk;
+    const icon = ok ? "OK" : "FAIL";
+    const extra = location ? ` -> ${location}` : "";
 
     console.log(
-      `  ${label} ${path.padEnd(35)} ${status}  (${ms}ms)`,
+      `  ${icon.padEnd(4)} ${page.path.padEnd(18)} ${String(status).padEnd(3)} ${String(elapsed).padStart(5)}ms${extra}`,
     );
-    return { path, status, ms, ok };
-  } catch (err) {
-    const ms = Date.now() - start;
+
+    return { ok, status, path: page.path, group: group.label };
+  } catch (error) {
+    const elapsed = Date.now() - start;
     console.log(
-      `  ❌ ${path.padEnd(35)} ERROR (${ms}ms)  ${err.message ?? err}`,
+      `  FAIL ${page.path.padEnd(18)} ERR ${String(elapsed).padStart(5)}ms ${error?.message ?? error}`,
     );
-    return { path, status: 0, ms, ok: false };
+    return { ok: false, status: 0, path: page.path, group: group.label };
   }
 }
 
 async function main() {
-  console.log(`\n🩺 Smoke health check — ${new Date().toISOString()}`);
-  console.log(`   URL: ${baseUrl}\n`);
+  console.log(`\nSmoke health check - ${new Date().toISOString()}`);
 
   const results = [];
-  for (const p of PAGES) {
-    results.push(await check(p.path, p.expectAuth));
+  for (const group of CHECK_GROUPS) {
+    console.log(`\n${group.label}: ${group.baseUrl}`);
+    for (const page of group.pages) {
+      results.push(await checkPage(group, page));
+    }
   }
 
-  const failed = results.filter((r) => !r.ok);
-  const totalMs = results.reduce((s, r) => s + r.ms, 0);
-  console.log(
-    `\n   ${results.length - failed.length}/${results.length} pages OK · ${totalMs}ms total`,
-  );
+  const failed = results.filter((result) => !result.ok);
+  const passed = results.length - failed.length;
+  console.log(`\n${passed}/${results.length} checks passed`);
 
   if (failed.length > 0) {
-    console.log(`\n❌ ${failed.length} pages failed:`);
-    failed.forEach((f) =>
-      console.log(`     - ${f.path} (status ${f.status})`),
-    );
+    console.log("\nFailed checks:");
+    failed.forEach((result) => {
+      console.log(`  - ${result.group} ${result.path} (status ${result.status})`);
+    });
     process.exit(1);
   }
-  console.log(`\n✅ All pages alive\n`);
-  process.exit(0);
+
+  console.log("All production smoke checks passed\n");
 }
 
-main().catch((err) => {
-  console.error("Smoke check fatal:", err);
+main().catch((error) => {
+  console.error("Smoke check fatal:", error);
   process.exit(1);
 });
