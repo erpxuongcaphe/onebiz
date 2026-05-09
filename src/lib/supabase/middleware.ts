@@ -25,6 +25,25 @@ function isFnbSubdomain(request: NextRequest): boolean {
   return host.startsWith("fnb.") || host.startsWith("fnb-");
 }
 
+function getFnbPublicPath(pathname: string): string {
+  if (pathname === "/pos/fnb" || pathname === "/pos/fnb/") return "/";
+  if (pathname.startsWith("/pos/fnb/")) {
+    return pathname.replace("/pos/fnb", "") || "/";
+  }
+  if (pathname === "/" || pathname === "" || pathname.startsWith("/kds")) {
+    return pathname || "/";
+  }
+  return "/";
+}
+
+function getFnbAuthRedirect(request: NextRequest): string {
+  const redirect = request.nextUrl.searchParams.get("redirect");
+  if (!redirect || !redirect.startsWith("/") || redirect.startsWith("//")) {
+    return "/";
+  }
+  return getFnbPublicPath(redirect);
+}
+
 /**
  * FnB subdomain routing:
  * - fnb.onebiz.com.vn/            → rewrite /pos/fnb
@@ -48,14 +67,15 @@ function handleFnbSubdomain(
   if (!user && !isPublicPath) {
     const url = request.nextUrl.clone();
     url.pathname = "/dang-nhap";
-    url.searchParams.set("redirect", "/");
+    url.searchParams.set("redirect", getFnbPublicPath(pathname));
     return NextResponse.redirect(url);
   }
 
-  // Authenticated on auth page → redirect to FnB home
+  // Authenticated on auth page → redirect to the requested FnB screen.
   if (user && isPublicPath) {
     const url = request.nextUrl.clone();
-    url.pathname = "/";
+    url.pathname = getFnbAuthRedirect(request);
+    url.search = "";
     return NextResponse.redirect(url);
   }
 
