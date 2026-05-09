@@ -8,9 +8,9 @@
  * - Decimals: hiển thị TỐI ĐA 2 chữ số thập phân, trim trailing zeros khi
  *   là số nguyên (vd `5` thay vì `5.00`). Khi caller cần force 2 decimals
  *   cho consistency (vd cân/kg) → dùng `formatDecimal(n, 2, true)`.
- * - Date locale: vẫn `vi-VN` (DD/MM/YYYY) NHƯNG timezone CỐ ĐỊNH
- *   `Asia/Ho_Chi_Minh` để server (UTC) hiển thị đúng giờ Việt Nam dù user
- *   ở timezone khác.
+ * - Date display: deterministic `DD/MM/YYYY` and `DD/MM/YYYY HH:mm`.
+ *   Timezone stays fixed to `Asia/Ho_Chi_Minh` so server/client rendering
+ *   cannot drift by environment timezone.
  */
 
 const TIMEZONE = "Asia/Ho_Chi_Minh";
@@ -63,34 +63,47 @@ export function formatCurrency(amount: number | null | undefined): string {
 }
 
 // ============================================================
-// Date — vi-VN locale + Asia/Ho_Chi_Minh timezone
+// Date — deterministic DD/MM/YYYY + Asia/Ho_Chi_Minh timezone
 // ============================================================
+
+function getDateParts(date: Date, withTime = false): Record<string, string> {
+  const parts = new Intl.DateTimeFormat("en-GB", {
+    day: "2-digit",
+    month: "2-digit",
+    year: "numeric",
+    ...(withTime
+      ? {
+          hour: "2-digit",
+          minute: "2-digit",
+          hour12: false,
+          hourCycle: "h23",
+        }
+      : {}),
+    timeZone: TIMEZONE,
+  }).formatToParts(date);
+
+  return Object.fromEntries(
+    parts
+      .filter((part) => part.type !== "literal")
+      .map((part) => [part.type, part.value])
+  );
+}
 
 export function formatDate(date: string | Date | null | undefined): string {
   // Guard: empty/null/undefined → "—" (tránh Invalid Date crash page).
   if (date == null || date === "") return "—";
   const d = date instanceof Date ? date : new Date(date);
   if (isNaN(d.getTime())) return "—";
-  return new Intl.DateTimeFormat("vi-VN", {
-    day: "2-digit",
-    month: "2-digit",
-    year: "numeric",
-    hour: "2-digit",
-    minute: "2-digit",
-    timeZone: TIMEZONE,
-  }).format(d);
+  const p = getDateParts(d, true);
+  return `${p.day}/${p.month}/${p.year} ${p.hour}:${p.minute}`;
 }
 
 export function formatShortDate(date: string | Date | null | undefined): string {
   if (date == null || date === "") return "—";
   const d = date instanceof Date ? date : new Date(date);
   if (isNaN(d.getTime())) return "—";
-  return new Intl.DateTimeFormat("vi-VN", {
-    day: "2-digit",
-    month: "2-digit",
-    year: "numeric",
-    timeZone: TIMEZONE,
-  }).format(d);
+  const p = getDateParts(d);
+  return `${p.day}/${p.month}/${p.year}`;
 }
 
 /**
@@ -101,11 +114,8 @@ export function formatTime(date: string | Date | null | undefined): string {
   if (date == null || date === "") return "—";
   const d = date instanceof Date ? date : new Date(date);
   if (isNaN(d.getTime())) return "—";
-  return new Intl.DateTimeFormat("vi-VN", {
-    hour: "2-digit",
-    minute: "2-digit",
-    timeZone: TIMEZONE,
-  }).format(d);
+  const p = getDateParts(d, true);
+  return `${p.hour}:${p.minute}`;
 }
 
 // ============================================================
@@ -185,49 +195,65 @@ export function formatUser(
 // Number parsing — input → number (en-US compatible)
 // ============================================================
 
-/**
- * Parse user input string → number. Hỗ trợ cả 2 format en-US và vi-VN
- * để fallback nếu user lỡ gõ kiểu cũ.
- *
- * - "1,234,567.89" (en-US) → 1234567.89
- * - "1.234.567,89" (vi-VN) → 1234567.89  (fallback)
- * - "1234567.89" (raw) → 1234567.89
- * - "" / null / không hợp lệ → null
- */
 export function parseNumberInput(input: string | null | undefined): number | null {
   if (input == null) return null;
   let s = String(input).trim();
   if (!s) return null;
 
-  // Detect format: nếu có cả phẩy và chấm, ký tự đứng SAU là decimal separator.
-  const lastComma = s.lastIndexOf(",");
-  const lastDot = s.lastIndexOf(".");
-
-  if (lastComma >= 0 && lastDot >= 0) {
-    if (lastDot > lastComma) {
-      // en-US: "1,234.56" — dấu phẩy ngàn, dấu chấm thập phân
-      s = s.replace(/,/g, "");
-    } else {
-      // vi-VN: "1.234,56" — dấu chấm ngàn, dấu phẩy thập phân
-      s = s.replace(/\./g, "").replace(",", ".");
-    }
-  } else if (lastComma >= 0) {
-    // Chỉ có phẩy: kiểm tra có thể là thousands hoặc decimal
-    // Quy ước en-US: phẩy = thousands → loại bỏ
-    // Trừ trường hợp "1,5" (3 chars, 1 phẩy) — có thể là vi-VN decimal
-    const afterComma = s.slice(lastComma + 1);
-    if (afterComma.length === 1 || afterComma.length === 2) {
-      // Có thể là decimal vi-VN (vd "12,5") — convert
-      s = s.replace(/\./g, "").replace(",", ".");
-    } else {
-      // "1,234" or "1,234,567" — thousands separator
-      s = s.replace(/,/g, "");
-    }
-  }
-  // Nếu chỉ có chấm hoặc không có ký tự nào → parseFloat trực tiếp.
+  // Strict en-US parser:
+  // - comma is thousands only: 1,234,567
+  // - dot is decimal only: 1,234.56
+  // - vi-VN decimal such as "1,5" is intentionally rejected.
+  s = s.replace(/\s/g, "");
+  const strictUsPattern = /^[-+]?(?:\d+|\d{1,3}(?:,\d{3})+)(?:\.\d+)?$/;
+  if (!strictUsPattern.test(s)) return null;
+  s = s.replace(/,/g, "");
 
   const n = parseFloat(s);
   return Number.isFinite(n) ? n : null;
+}
+
+export function parseDateInput(input: string | Date | null | undefined): Date | null {
+  if (input == null || input === "") return null;
+  if (input instanceof Date) {
+    return Number.isNaN(input.getTime()) ? null : input;
+  }
+
+  const value = String(input).trim();
+  const match = value.match(/^(\d{1,2})\/(\d{1,2})\/(\d{4})(?:[ T](\d{1,2}):(\d{2}))?$/);
+  if (!match) return null;
+
+  const [, dayRaw, monthRaw, yearRaw, hourRaw = "0", minuteRaw = "0"] = match;
+  const day = Number(dayRaw);
+  const month = Number(monthRaw);
+  const year = Number(yearRaw);
+  const hour = Number(hourRaw);
+  const minute = Number(minuteRaw);
+
+  if (
+    day < 1 ||
+    day > 31 ||
+    month < 1 ||
+    month > 12 ||
+    hour < 0 ||
+    hour > 23 ||
+    minute < 0 ||
+    minute > 59
+  ) {
+    return null;
+  }
+
+  const parsed = new Date(year, month - 1, day, hour, minute, 0, 0);
+  if (
+    parsed.getFullYear() !== year ||
+    parsed.getMonth() !== month - 1 ||
+    parsed.getDate() !== day ||
+    parsed.getHours() !== hour ||
+    parsed.getMinutes() !== minute
+  ) {
+    return null;
+  }
+  return parsed;
 }
 
 /**

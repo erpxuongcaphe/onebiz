@@ -39,7 +39,7 @@ import { useAutoSaveDraft } from "./hooks/use-auto-save-draft";
 import { RecoveryDialog } from "./components/recovery-dialog";
 import { getClient } from "@/lib/services/supabase/base";
 import { useToast } from "@/lib/contexts";
-import { formatCurrency, formatNumber, formatDecimal, parseNumberInput } from "@/lib/format";
+import { formatCurrency, formatNumber, formatDecimal, parseNumberInput, formatDate } from "@/lib/format";
 import { cn } from "@/lib/utils";
 import { printReceiptDirect, type ReceiptData } from "@/components/shared/print-receipt";
 import { printShiftReport } from "@/lib/print-shift-report";
@@ -436,7 +436,7 @@ function PosPageInner() {
           }
           toast({
             title: `Đã mở đơn nháp ${detail.code}`,
-            description: `${detail.itemCount} sản phẩm · Tổng: ${detail.total.toLocaleString("en-US")}đ. Sửa lại rồi bấm Thanh toán.`,
+            description: `${detail.itemCount} sản phẩm · Tổng: ${formatNumber(detail.total)}đ. Sửa lại rồi bấm Thanh toán.`,
             variant: "success",
             duration: 5000,
           });
@@ -694,7 +694,7 @@ function PosPageInner() {
         });
         setCurrentShift(shift);
         setOpenShiftDialogOpen(false);
-        toast({ title: "Đã mở ca", description: `Số dư đầu ca: ${startingCash.toLocaleString()} đ`, variant: "success" });
+        toast({ title: "Đã mở ca", description: `Số dư đầu ca: ${formatNumber(startingCash)} đ`, variant: "success" });
       } catch (err: any) {
         toast({ title: "Không mở được ca", description: err?.message ?? "Vui lòng thử lại.", variant: "error" });
       }
@@ -742,7 +742,7 @@ function PosPageInner() {
         toast({
           title: "Đã đóng ca",
           description: `Chênh lệch: ${
-            diff === 0 ? "KHỚP" : diff > 0 ? `THỪA ${diff.toLocaleString()}` : `THIẾU ${Math.abs(diff).toLocaleString()}`
+            diff === 0 ? "KHỚP" : diff > 0 ? `THỪA ${formatNumber(diff)}` : `THIẾU ${formatNumber(Math.abs(diff))}`
           }`,
           variant: diff === 0 ? "success" : "warning",
         });
@@ -1123,9 +1123,8 @@ function PosPageInner() {
       return;
     }
     try {
-      const tempCode = `TT-${new Date()
-        .toLocaleTimeString("vi-VN", { hour12: false, timeZone: "Asia/Ho_Chi_Minh" })
-        .replace(/:/g, "")}`;
+      const now = new Date();
+      const tempCode = `TT-${String(now.getHours()).padStart(2, "0")}${String(now.getMinutes()).padStart(2, "0")}${String(now.getSeconds()).padStart(2, "0")}`;
       const receipt: ReceiptData = {
         invoiceCode: tempCode,
         date: new Date().toISOString(),
@@ -3649,10 +3648,7 @@ function DraftListModal({
                     <div className="flex items-center gap-2">
                       <span className="text-xs font-bold text-primary">{draft.code}</span>
                       <span className="text-[10px] text-muted-foreground">
-                        {new Date(draft.createdAt).toLocaleString("vi-VN", {
-                          day: "2-digit", month: "2-digit", hour: "2-digit", minute: "2-digit",
-                          timeZone: "Asia/Ho_Chi_Minh",
-                        })}
+                        {formatDate(draft.createdAt)}
                       </span>
                     </div>
                     <div className="flex items-center gap-2 mt-0.5">

@@ -1,3 +1,5 @@
+import { formatNumber } from "@/lib/format";
+
 /**
  * Từ điển Việt hoá — Sprint VN-1 (CEO 06/05/2026).
  *
@@ -196,8 +198,9 @@ export const TERMS = {
  * @example formatQty(5, "kg") → "5 kg"
  */
 export function formatQty(qty: number, unit?: string): string {
-  if (!unit) return qty.toLocaleString("vi-VN");
-  return `${qty.toLocaleString("vi-VN")} ${unit}`;
+  const formatted = formatNumber(qty);
+  if (!unit) return formatted;
+  return `${formatted} ${unit}`;
 }
 
 /**

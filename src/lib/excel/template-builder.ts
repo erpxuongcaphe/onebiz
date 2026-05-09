@@ -39,7 +39,7 @@ function formatValueForCell<TRow>(
     return column.enumLabels[str] ?? str;
   }
 
-  // date: format YYYY-MM-DD HH:mm (Excel-friendly, vẫn parse ngược được)
+  // date: format DD/MM/YYYY HH:mm to match the app-wide date convention.
   if (column.type === "date") {
     if (value instanceof Date) {
       return formatDate(value);
@@ -62,12 +62,12 @@ function formatValueForCell<TRow>(
 
 function formatDate(d: Date): string {
   const pad = (n: number) => String(n).padStart(2, "0");
-  const y = d.getFullYear();
-  const m = pad(d.getMonth() + 1);
   const dd = pad(d.getDate());
+  const m = pad(d.getMonth() + 1);
+  const y = d.getFullYear();
   const h = pad(d.getHours());
   const mi = pad(d.getMinutes());
-  return `${y}-${m}-${dd} ${h}:${mi}`;
+  return `${dd}/${m}/${y} ${h}:${mi}`;
 }
 
 function buildDataSheet<TRow>(
@@ -169,7 +169,7 @@ function buildGuideSheet<TRow>(schema: ExcelSchema<TRow>): XLSX.WorkSheet {
   ]);
   rows.push([
     "6.",
-    "Định dạng ngày: YYYY-MM-DD (vd 2026-05-06) hoặc DD/MM/YYYY (vd 06/05/2026)",
+    "Định dạng ngày: DD/MM/YYYY (vd 06/05/2026)",
     "",
     "",
     "",
@@ -247,7 +247,7 @@ function buildGuideSheet<TRow>(schema: ExcelSchema<TRow>): XLSX.WorkSheet {
   rows.push([
     "Sai định dạng ngày",
     "Nhập '5/6/2026' hoặc '5-6-26' không chuẩn",
-    "Đổi sang định dạng YYYY-MM-DD (vd 2026-05-06) hoặc DD/MM/YYYY (vd 06/05/2026)",
+    "Đổi sang định dạng DD/MM/YYYY (vd 06/05/2026)",
     "",
     "",
   ]);
@@ -336,7 +336,7 @@ function typeLabel(type: string): string {
     case "boolean":
       return "Có / Không";
     case "date":
-      return "Ngày (YYYY-MM-DD)";
+      return "Ngày (DD/MM/YYYY)";
     case "enum":
       return "Chọn 1";
     default:

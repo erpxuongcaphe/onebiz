@@ -536,7 +536,8 @@ export async function transferTable(
   const supabase = getClient();
   const tenantId = await getCurrentTenantId();
 
-  // Prefer atomic transfer when migration 00055 is available.
+  // Server-side transaction only. Table transfer must fail closed if the RPC is
+  // missing; the legacy multi-step flow can leave table/order state split.
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
   const { data: atomicData, error: atomicError } = await (supabase.rpc as any)(
     "fnb_transfer_table_atomic",
@@ -551,41 +552,14 @@ export async function transferTable(
   if (!atomicError && (atomicData as { success?: boolean } | null)?.success) {
     return;
   }
-  if (atomicError && !isRpcUnavailable(atomicError)) {
+  if (atomicError) {
+    if (isRpcUnavailable(atomicError)) {
+      throw new Error("Chưa có RPC fnb_transfer_table_atomic. Vui lòng chạy migration POS/FnB atomic trước khi chuyển bàn.");
+    }
     handleError(atomicError, "transferTable:atomic_rpc");
   }
 
-  // 1. Claim new table (atomic: only if available)
-  const { data: claimed, error: claimErr } = await supabase
-    .from("restaurant_tables")
-    .update({ status: "occupied" as const, current_order_id: orderId })
-    .eq("tenant_id", tenantId)
-    .eq("id", toTableId)
-    .eq("status", "available")
-    .select()
-    .maybeSingle();
-
-  if (claimErr) handleError(claimErr, "transferTable:claim");
-  if (!claimed) throw new Error("Bàn đích không trống hoặc không tồn tại.");
-
-  // 2. Release old table
-  const { error: releaseErr } = await supabase
-    .from("restaurant_tables")
-    .update({ status: "available" as const, current_order_id: null })
-    .eq("tenant_id", tenantId)
-    .eq("id", fromTableId)
-    .eq("current_order_id", orderId);
-
-  if (releaseErr) handleError(releaseErr, "transferTable:release");
-
-  // 3. Update kitchen_order table_id + store original for audit
-  const { error: orderErr } = await supabase
-    .from("kitchen_orders")
-    .update({ table_id: toTableId, original_table_id: fromTableId })
-    .eq("tenant_id", tenantId)
-    .eq("id", orderId);
-
-  if (orderErr) handleError(orderErr, "transferTable:order");
+  throw new Error("Server không trả kết quả chuyển bàn hợp lệ.");
 }
 
 // ============================================================

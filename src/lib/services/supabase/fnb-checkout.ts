@@ -12,11 +12,8 @@
 import { getClient, handleError } from "./base";
 import { isRpcUnavailable } from "./rpc-utils";
 import {
-  createKitchenOrder,
   addItemsToOrder,
-  type CreateKitchenOrderInput,
 } from "./kitchen-orders";
-import { claimTable } from "./fnb-tables";
 import type { PaymentBreakdownItem } from "./pos-checkout";
 import type { ToppingAttachment, DeliveryPlatform } from "@/lib/types/fnb";
 
@@ -99,20 +96,8 @@ export async function sendToKitchen(input: SendToKitchenInput): Promise<SendToKi
   if (codeErr) handleError(codeErr, "sendToKitchen:next_code");
   const orderNumber = code ?? `KB${Date.now()}`;
 
-  // 2. Create kitchen order + items
-  const koInput: CreateKitchenOrderInput = {
-    tenantId: input.tenantId,
-    branchId: input.branchId,
-    createdBy: input.createdBy,
-    tableId: input.tableId,
-    orderType: input.orderType,
-    note: input.note,
-    idempotencyKey: input.idempotencyKey,
-    items: input.items,
-  };
-
-  // Prefer the server-side transaction when migration 00055 is available.
-  // If it has not been applied yet, fall back to the existing client flow.
+  // Server-side transaction only. Sending to kitchen must fail closed if this
+  // RPC is missing; the old client flow can leave table/order state divergent.
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
   const { data: atomicData, error: atomicError } = await (supabase.rpc as any)(
     "fnb_send_to_kitchen_atomic",
@@ -143,21 +128,14 @@ export async function sendToKitchen(input: SendToKitchenInput): Promise<SendToKi
     throw new Error("Phản hồi gửi bếp thiếu thông tin đơn.");
   }
 
-  if (atomicError && !isRpcUnavailable(atomicError)) {
+  if (atomicError) {
+    if (isRpcUnavailable(atomicError)) {
+      throw new Error("Chưa có RPC fnb_send_to_kitchen_atomic. Vui lòng chạy migration POS/FnB atomic trước khi gửi bếp.");
+    }
     handleError(atomicError, "sendToKitchen:atomic_rpc");
   }
 
-  const order = await createKitchenOrder(koInput, orderNumber);
-
-  // 3. Claim table if dine_in
-  if (input.orderType === "dine_in" && input.tableId) {
-    await claimTable(input.tableId, order.id);
-  }
-
-  return {
-    kitchenOrderId: order.id,
-    orderNumber: order.orderNumber,
-  };
+  throw new Error("Server không trả kết quả gửi bếp hợp lệ.");
 }
 
 // ============================================================
@@ -262,117 +240,12 @@ export async function voidFnbInvoice(input: {
   if (!atomicError && (atomicData as { success?: boolean } | null)?.success) {
     return;
   }
-  if (atomicError && !isRpcUnavailable(atomicError)) {
+  if (atomicError) {
+    if (isRpcUnavailable(atomicError)) {
+      throw new Error("Chưa có RPC fnb_void_invoice_atomic. Vui lòng chạy migration POS/FnB atomic trước khi huỷ hoá đơn.");
+    }
     handleError(atomicError, "voidFnbInvoice:atomic_rpc");
   }
 
-  // 1. Load invoice to verify it's completed (filter tenant defense)
-  const { data: invoice, error: invErr } = await supabase
-    .from("invoices")
-    .select("id, code, status, total, paid, source, shift_id")
-    .eq("tenant_id", input.tenantId)
-    .eq("id", input.invoiceId)
-    .single();
-
-  if (invErr) handleError(invErr, "voidFnbInvoice:fetch");
-  if (!invoice) throw new Error("Không tìm thấy hoá đơn");
-  if (invoice.status === "cancelled") throw new Error("Hoá đơn đã huỷ trước đó.");
-
-  // 2. Cancel the invoice
-  const { error: cancelErr } = await supabase
-    .from("invoices")
-    .update({
-      status: "cancelled" as const,
-      void_reason: input.voidReason,
-      voided_at: new Date().toISOString(),
-      voided_by: input.voidedBy,
-    })
-    .eq("tenant_id", input.tenantId)
-    .eq("id", input.invoiceId);
-
-  if (cancelErr) handleError(cancelErr, "voidFnbInvoice:cancel");
-
-  // 3. Load invoice_items for stock reversal
-  // invoice_items không có tenant_id riêng — scope qua invoice_id (đã verify
-  // ownership ở step 1).
-  const { data: items, error: itemsErr } = await supabase
-    .from("invoice_items")
-    .select("product_id, product_name, quantity")
-    .eq("invoice_id", input.invoiceId);
-
-  if (itemsErr) handleError(itemsErr, "voidFnbInvoice:items");
-
-  // 4. Reverse stock: create 'in' movements + increment stock
-  if (items && items.length > 0) {
-    const reverseMovements = items.map((item) => ({
-      tenant_id: input.tenantId,
-      branch_id: input.branchId,
-      product_id: item.product_id,
-      type: "in" as const,
-      quantity: item.quantity,
-      reference_type: "invoice_void" as const,
-      reference_id: input.invoiceId,
-      note: `Hoàn trả - huỷ HĐ ${invoice.code}: ${input.voidReason}`,
-      created_by: input.voidedBy,
-    }));
-
-    const { error: mvErr } = await supabase
-      .from("stock_movements")
-      .insert(reverseMovements);
-    if (mvErr) handleError(mvErr, "voidFnbInvoice:reverseStock");
-
-    // Increment product stock + branch stock
-    for (const item of items) {
-      // eslint-disable-next-line @typescript-eslint/no-explicit-any
-      await (supabase.rpc as any)("increment_product_stock", {
-        p_product_id: item.product_id,
-        p_delta: item.quantity, // positive = add back
-      });
-      // eslint-disable-next-line @typescript-eslint/no-explicit-any
-      await (supabase.rpc as any)("upsert_branch_stock", {
-        p_tenant_id: input.tenantId,
-        p_branch_id: input.branchId,
-        p_product_id: item.product_id,
-        p_delta: item.quantity,
-      });
-    }
-  }
-
-  // 5. Create reverse cash transaction (phiếu chi hoàn tiền)
-  if (invoice.paid > 0) {
-    const { data: code } = await supabase.rpc("next_code", {
-      p_tenant_id: input.tenantId,
-      p_entity_type: "cash_payment",
-    });
-
-    // Ưu tiên ca đang mở (input.shiftId), fallback về ca ban đầu của hoá đơn.
-    const reverseShiftId = input.shiftId ?? invoice.shift_id ?? null;
-
-    const { error: cashErr } = await supabase
-      .from("cash_transactions")
-      .insert({
-        tenant_id: input.tenantId,
-        branch_id: input.branchId,
-        code: code ?? `PC${Date.now()}`,
-        type: "payment" as const,
-        category: "Hoàn trả",
-        amount: invoice.paid,
-        counterparty: "Khách hàng",
-        payment_method: "cash" as const,
-        reference_type: "invoice",
-        reference_id: input.invoiceId,
-        note: `Hoàn tiền HĐ ${invoice.code}: ${input.voidReason}`,
-        created_by: input.voidedBy,
-        shift_id: reverseShiftId,
-      });
-    if (cashErr) handleError(cashErr, "voidFnbInvoice:reverseCash");
-  }
-
-  // 6. Mark kitchen order as cancelled (filter tenant defense)
-  const { error: koErr } = await supabase
-    .from("kitchen_orders")
-    .update({ status: "cancelled" as const })
-    .eq("tenant_id", input.tenantId)
-    .eq("id", input.kitchenOrderId);
-  if (koErr) handleError(koErr, "voidFnbInvoice:cancelOrder");
+  throw new Error("Server không trả kết quả huỷ hoá đơn hợp lệ.");
 }

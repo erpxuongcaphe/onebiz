@@ -8,6 +8,7 @@ import {
   formatCurrency,
   formatNumber,
   formatChartCurrency,
+  formatShortDate,
 } from "@/lib/format";
 import { cn } from "@/lib/utils";
 
@@ -156,14 +157,7 @@ export default function TongQuanPage() {
     fetchPhase2();
   }, [fetchPhase1, fetchPhase2, isReady]);
 
-  const today = new Date();
-  const formattedDate = new Intl.DateTimeFormat("vi-VN", {
-    weekday: "long",
-    day: "2-digit",
-    month: "2-digit",
-    year: "numeric",
-    timeZone: "Asia/Ho_Chi_Minh",
-  }).format(today);
+  const formattedDate = formatShortDate(new Date());
 
   const chartData: Record<ChartView, ChartPoint[]> = {
     day: revenueDay,

@@ -7,7 +7,7 @@
  * Tái sử dụng dispatch printerService (USB/browser) giống hoá đơn bán hàng.
  */
 
-import { formatCurrency } from "@/lib/format";
+import { formatCurrency, formatDate } from "@/lib/format";
 import { printerService } from "@/lib/printer";
 import { EscPosBuilder } from "@/lib/printer/escpos";
 
@@ -43,14 +43,7 @@ const METHOD_LABELS: Record<string, string> = {
 };
 
 function formatDateVi(iso?: string | null): string {
-  if (!iso) return "—";
-  try {
-    const d = new Date(iso);
-    const pad = (n: number) => String(n).padStart(2, "0");
-    return `${pad(d.getDate())}/${pad(d.getMonth() + 1)}/${d.getFullYear()} ${pad(d.getHours())}:${pad(d.getMinutes())}`;
-  } catch {
-    return iso;
-  }
+  return formatDate(iso);
 }
 
 /**

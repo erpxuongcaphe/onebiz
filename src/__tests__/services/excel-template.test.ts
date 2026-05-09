@@ -89,7 +89,7 @@ describe("parseWorkbook — happy path", () => {
   it("parse 1 row hợp lệ", () => {
     const wb = makeWb([
       ["Mã SP", "Tên sản phẩm", "Giá bán", "Tồn kho", "Đang bán", "Nhóm hàng", "Ngày bán"],
-      ["SP001", "Cà phê đen", 25000, 100, "Có", "coffee", "2026-04-19"],
+      ["SP001", "Cà phê đen", 25000, 100, "Có", "coffee", "19/04/2026"],
     ]);
     const result = parseWorkbook(wb, productSchema);
 
@@ -111,8 +111,8 @@ describe("parseWorkbook — happy path", () => {
   it("parse nhiều rows, match enum bằng label tiếng Việt", () => {
     const wb = makeWb([
       ["Mã SP", "Tên sản phẩm", "Giá bán", "Tồn kho", "Đang bán", "Nhóm hàng", "Ngày bán"],
-      ["SP001", "Cà phê đen", 25000, 100, "Có", "Cà phê", "2026-04-19"],
-      ["SP002", "Bánh mì", 30000, 50, "Không", "Thức ăn", "2026-04-20"],
+      ["SP001", "Cà phê đen", 25000, 100, "Có", "Cà phê", "19/04/2026"],
+      ["SP002", "Bánh mì", 30000, 50, "Không", "Thức ăn", "20/04/2026"],
     ]);
     const result = parseWorkbook(wb, productSchema);
 
@@ -180,6 +180,26 @@ describe("parseWorkbook — validation errors", () => {
     expect(result.errorRows[0].errors.some((e) => e.includes("số"))).toBe(true);
   });
 
+  it("rejects vi-VN decimal number format", () => {
+    const wb = makeWb([
+      ["Mã SP", "Tên sản phẩm", "Giá bán"],
+      ["SP001", "Cà phê", "1,5"],
+    ]);
+    const result = parseWorkbook(wb, productSchema);
+    expect(result.errorRows).toHaveLength(1);
+    expect(result.errorRows[0].errors.some((e) => e.includes("Giá bán"))).toBe(true);
+  });
+
+  it("accepts en-US thousands and decimal number format", () => {
+    const wb = makeWb([
+      ["Mã SP", "Tên sản phẩm", "Giá bán"],
+      ["SP001", "Cà phê", "1,234.56"],
+    ]);
+    const result = parseWorkbook(wb, productSchema);
+    expect(result.errorRows).toEqual([]);
+    expect(result.validRows[0].price).toBe(1234.56);
+  });
+
   it("integer nhưng truyền float → row error", () => {
     const wb = makeWb([
       ["Mã SP", "Tên sản phẩm", "Giá bán", "Tồn kho"],
@@ -225,6 +245,16 @@ describe("parseWorkbook — validation errors", () => {
     const wb = makeWb([
       ["Mã SP", "Tên sản phẩm", "Giá bán", "Ngày bán"],
       ["SP001", "Cà phê", 25000, "not-a-date"],
+    ]);
+    const result = parseWorkbook(wb, productSchema);
+    expect(result.errorRows).toHaveLength(1);
+    expect(result.errorRows[0].errors.some((e) => e.includes("Ngày bán"))).toBe(true);
+  });
+
+  it("rejects ISO date strings so imports stay DD/MM/YYYY", () => {
+    const wb = makeWb([
+      ["Mã SP", "Tên sản phẩm", "Giá bán", "Ngày bán"],
+      ["SP001", "Cà phê", 25000, "2026-04-19"],
     ]);
     const result = parseWorkbook(wb, productSchema);
     expect(result.errorRows).toHaveLength(1);

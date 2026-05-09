@@ -33,6 +33,7 @@ import {
 import { Button } from "@/components/ui/button";
 import { Icon } from "@/components/ui/icon";
 import { cn } from "@/lib/utils";
+import { formatShortDate } from "@/lib/format";
 import { formatNumber } from "@/lib/format";
 import type { DraftOrderSummary } from "@/lib/services/supabase";
 
@@ -216,5 +217,5 @@ function formatRelativeTime(iso: string): string {
   if (hours < 24) return `${hours} giờ trước`;
   const days = Math.floor(hours / 24);
   if (days < 30) return `${days} ngày trước`;
-  return new Date(iso).toLocaleDateString("vi-VN");
+  return formatShortDate(iso);
 }

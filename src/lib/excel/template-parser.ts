@@ -20,6 +20,7 @@ import type {
   ParsedRow,
   ParseResult,
 } from "./types";
+import { parseDateInput, parseNumberInput } from "@/lib/format";
 
 /** Entry point: parse file upload → ParseResult */
 export async function parseExcelFile<TRow>(
@@ -221,14 +222,14 @@ function parseByType<TRow>(raw: unknown, col: ExcelColumn<TRow>): unknown {
       return str;
 
     case "number": {
-      const n = typeof raw === "number" ? raw : parseFloat(str.replace(",", "."));
-      if (Number.isNaN(n)) throw new Error("phải là số");
+      const n = typeof raw === "number" ? raw : parseNumberInput(str);
+      if (n == null || Number.isNaN(n)) throw new Error("phải là số");
       return n;
     }
 
     case "integer": {
-      const n = typeof raw === "number" ? raw : parseInt(str, 10);
-      if (Number.isNaN(n) || !Number.isInteger(n)) {
+      const n = typeof raw === "number" ? raw : parseNumberInput(str);
+      if (n == null || Number.isNaN(n) || !Number.isInteger(n)) {
         throw new Error("phải là số nguyên");
       }
       return n;
@@ -252,9 +253,9 @@ function parseByType<TRow>(raw: unknown, col: ExcelColumn<TRow>): unknown {
         if (!d) throw new Error("ngày không hợp lệ");
         return d;
       }
-      const d = new Date(str);
-      if (Number.isNaN(d.getTime())) {
-        throw new Error("ngày không hợp lệ (dạng YYYY-MM-DD)");
+      const d = parseDateInput(str);
+      if (!d) {
+        throw new Error("ngày không hợp lệ (dạng DD/MM/YYYY)");
       }
       return d;
     }

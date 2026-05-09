@@ -312,7 +312,7 @@ export function SyncQueueDrawer({ open, onOpenChange, status }: SyncQueueDrawerP
                             <Icon name="refresh" size={14} />
                           </Button>
                         )}
-                        {(entry.status === "failed" || entry.status === "pending") && (
+                        {entry.status === "completed" && (
                           <Button
                             size="sm"
                             variant="ghost"

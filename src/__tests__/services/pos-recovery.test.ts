@@ -152,6 +152,16 @@ vi.mock("@/lib/services/supabase/base", () => ({
       }
       const hit = mockRpcResponse.get(fn);
       if (hit) return hit;
+      if (fn === "pos_complete_checkout_atomic") {
+        const data = mockInsertResponse.data as Record<string, unknown> | undefined;
+        return {
+          data: {
+            invoice_id: data?.id ?? "inv-new",
+            invoice_code: data?.code ?? "HD-00001",
+          },
+          error: null,
+        };
+      }
       return { data: null, error: null };
     }),
   }),
@@ -310,19 +320,12 @@ describe("saveDraftOrder — upsert by client_session_id", () => {
 
 describe("posCheckout — idempotency by client_session_id", () => {
   it("Return existing khi sessionId đã có invoice 'completed'", async () => {
-    // Mô phỏng: cashier ấn Thanh toán 2 lần. Lần 1 thành công, tạo invoice
-    // 'completed'. Lần 2 vào posCheckout với cùng sessionId → check qua RPC
-    // find_invoice_by_session_id → trả existing → return ngay, KHÔNG insert.
-    mockRpcResponse.set("find_invoice_by_session_id", {
-      data: [
-        {
-          id: "inv-already",
-          code: "HD-ALREADY",
-          status: "completed",
-          total: 290000,
-          paid: 290000,
-        },
-      ],
+    mockRpcResponse.set("pos_complete_checkout_atomic", {
+      data: {
+        invoice_id: "inv-already",
+        invoice_code: "HD-ALREADY",
+        idempotent: true,
+      },
       error: null,
     });
 
@@ -337,22 +340,13 @@ describe("posCheckout — idempotency by client_session_id", () => {
     // KHÔNG insert invoice mới (idempotent)
     const invoiceInsert = insertCalls.find((c) => c.table === "invoices");
     expect(invoiceInsert).toBeUndefined();
-    // RPC find_invoice_by_session_id đã được gọi
-    expect(rpcCalls.find((c) => c.fn === "find_invoice_by_session_id")).toBeDefined();
+    expect(rpcCalls.find((c) => c.fn === "pos_complete_checkout_atomic")).toBeDefined();
   });
 
   it("Throw khi sessionId đã có invoice 'draft' (chưa hoàn tất)", async () => {
-    mockRpcResponse.set("find_invoice_by_session_id", {
-      data: [
-        {
-          id: "inv-draft",
-          code: "HD-DRAFT",
-          status: "draft",
-          total: 290000,
-          paid: 0,
-        },
-      ],
-      error: null,
+    mockRpcResponse.set("pos_complete_checkout_atomic", {
+      data: null,
+      error: { message: "Invoice HD-DRAFT đang ở trạng thái nháp; Tiếp tục đơn" },
     });
 
     // Phải throw — cashier chuyển hướng dùng completeDraftOrder thay vì
@@ -367,11 +361,6 @@ describe("posCheckout — idempotency by client_session_id", () => {
   });
 
   it("INSERT bình thường khi sessionId chưa có invoice", async () => {
-    // sessionId mới — RPC trả mảng rỗng → POSTcontinue insert
-    mockRpcResponse.set("find_invoice_by_session_id", {
-      data: [],
-      error: null,
-    });
     mockInsertResponse = {
       data: { id: "inv-fresh-checkout", code: "HD-00010" },
       error: null,
@@ -385,17 +374,15 @@ describe("posCheckout — idempotency by client_session_id", () => {
 
     expect(result.invoiceId).toBe("inv-fresh-checkout");
     expect(result.invoiceCode).toBe("HD-00010");
-    // Có insert invoice mới với client_session_id
-    const invoiceInsert = insertCalls.find((c) => c.table === "invoices");
-    expect(invoiceInsert).toBeDefined();
-    expect(invoiceInsert?.data).toMatchObject({
-      client_session_id: "sid-fresh",
-      status: "completed",
+    const checkoutRpc = rpcCalls.find((c) => c.fn === "pos_complete_checkout_atomic");
+    expect(checkoutRpc?.args).toMatchObject({
+      p_client_session_id: "sid-fresh",
+      p_total: 290000,
     });
+    expect(insertCalls.find((c) => c.table === "invoices")).toBeUndefined();
   });
 
   it("INSERT bình thường khi không truyền sessionId (backward compat)", async () => {
-    // Không pass clientSessionId → KHÔNG check RPC, INSERT thẳng
     mockInsertResponse = {
       data: { id: "inv-legacy", code: "HD-00020" },
       error: null,
@@ -409,10 +396,11 @@ describe("posCheckout — idempotency by client_session_id", () => {
     expect(result.invoiceId).toBe("inv-legacy");
     // RPC find không được gọi
     expect(rpcCalls.find((c) => c.fn === "find_invoice_by_session_id")).toBeUndefined();
-    // client_session_id = null trong payload
-    const invoiceInsert = insertCalls.find((c) => c.table === "invoices");
-    expect(invoiceInsert?.data).toMatchObject({
-      client_session_id: null,
+    const checkoutRpc = rpcCalls.find((c) => c.fn === "pos_complete_checkout_atomic");
+    expect(checkoutRpc?.args).toMatchObject({
+      p_client_session_id: null,
+      p_total: 290000,
     });
+    expect(insertCalls.find((c) => c.table === "invoices")).toBeUndefined();
   });
 });

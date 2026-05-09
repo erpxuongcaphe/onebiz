@@ -56,7 +56,7 @@ import { printShiftReport } from "@/lib/print-shift-report";
 import type { RestaurantTable } from "@/lib/types/fnb";
 import type { Shift } from "@/lib/types/shift";
 import type { Customer } from "@/lib/types";
-import { formatCurrency } from "@/lib/format";
+import { formatCurrency, formatNumber } from "@/lib/format";
 import { useFnbPosState } from "./hooks/use-fnb-pos-state";
 import { FnbHeader } from "./components/fnb-header";
 import { FnbLoadingSkeleton } from "./components/fnb-loading-skeleton";
@@ -1354,8 +1354,8 @@ function FnbPosPageInner() {
           (report.cashDifference ?? 0) === 0
             ? "KHỚP"
             : (report.cashDifference ?? 0) > 0
-              ? `THỪA ${(report.cashDifference ?? 0).toLocaleString()}`
-              : `THIẾU ${Math.abs(report.cashDifference ?? 0).toLocaleString()}`
+              ? `THỪA ${formatNumber(report.cashDifference ?? 0)}`
+              : `THIẾU ${formatNumber(Math.abs(report.cashDifference ?? 0))}`
         }`,
         variant: (report.cashDifference ?? 0) === 0 ? "success" : "warning",
       });

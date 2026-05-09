@@ -10,10 +10,9 @@
  *
  * Stock effects:
  *   - completeStockTransfer():
- *     1. Atomic claim status → 'completed'
- *     2. Stock OUT from source branch via applyManualStockMovement
- *     3. Stock IN to target branch via applyManualStockMovement
- *     (dual-branch movement — products.stock stays same, branch_stock rebalances)
+ *     1. Delegates to `complete_stock_transfer_atomic`
+ *     2. Writes OUT/IN stock_movements and source/target branch_stock in one DB transaction
+ *     3. Keeps company-wide products.stock unchanged because this is an inter-branch move
  */
 
 import type { QueryParams, QueryResult } from "@/lib/types";
@@ -24,7 +23,7 @@ import {
   getPaginationRange,
   handleError,
 } from "./base";
-import { applyManualStockMovement } from "./stock-adjustments";
+import { recordAuditLog } from "./audit";
 
 /* ------------------------------------------------------------------ */
 /*  Types                                                              */
@@ -343,82 +342,27 @@ export async function createStockTransfer(
 /* ------------------------------------------------------------------ */
 
 /**
- * Complete a stock transfer:
- *   1. Atomic claim: status → 'completed'
- *   2. Stock OUT from source branch (applyManualStockMovement)
- *   3. Stock IN to target branch (applyManualStockMovement)
+ * Complete a stock transfer via one Postgres transaction.
  *
- * Note: products.stock stays unchanged (out + in cancel out).
- * Only branch_stock rebalances between the two branches.
- * We use two separate calls with explicit branch overrides.
+ * The RPC claims the transfer, writes OUT/IN ledger rows, and rebalances
+ * branch_stock for source/target branches. products.stock stays unchanged.
  */
 export async function completeStockTransfer(transferId: string): Promise<void> {
   const supabase = getClient();
   const ctx = await getCurrentContext();
-
-  // 1. Atomic claim
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
-  const { data: claimed, error: claimErr } = await (supabase as any)
-    .from("stock_transfers")
-    .update({ status: "completed", completed_at: new Date().toISOString() })
-    .eq("tenant_id", ctx.tenantId)
-    .eq("id", transferId)
-    .in("status", ["draft", "in_transit"])
-    .select("id, code, from_branch_id, to_branch_id")
-    .maybeSingle();
-  if (claimErr) handleError(claimErr, "completeStockTransfer.claim");
-  if (!claimed) {
-    throw new Error("Phiếu chuyển kho đã được xử lý hoặc không tồn tại");
-  }
-
-  // 2. Read items
-  // eslint-disable-next-line @typescript-eslint/no-explicit-any
-  const { data: items, error: itemsErr } = await (supabase as any)
-    .from("stock_transfer_items")
-    .select("id, product_id, product_name, quantity")
-    .eq("transfer_id", transferId);
-  if (itemsErr) handleError(itemsErr, "completeStockTransfer.items");
-  if (!items || items.length === 0) {
-    throw new Error("Phiếu chuyển kho không có sản phẩm");
-  }
-
-  // 3. Stock OUT from source branch
-  // eslint-disable-next-line @typescript-eslint/no-explicit-any
-  const outInputs = items.map((it: any) => ({
-    productId: it.product_id,
-    quantity: Number(it.quantity),
-    type: "out" as const,
-    referenceType: "stock_transfer",
-    referenceId: transferId,
-    note: `${claimed.code} - Xuất chuyển kho - ${it.product_name}`,
-  }));
-
-  await applyManualStockMovement(outInputs, {
-    tenantId: ctx.tenantId,
-    branchId: claimed.from_branch_id,
-    createdBy: ctx.userId,
+  const { error } = await (supabase.rpc as any)("complete_stock_transfer_atomic", {
+    p_tenant_id: ctx.tenantId,
+    p_transfer_id: transferId,
+    p_created_by: ctx.userId,
   });
+  if (error) handleError(error, "completeStockTransfer.atomic_rpc");
 
-  // 4. Stock IN to target branch
-  // For the target branch, we need to:
-  //   - NOT double-count products.stock (it was decremented in step 3)
-  //   - Only update branch_stock for the target
-  // We call applyManualStockMovement with type='in' which adds to products.stock,
-  // effectively canceling the 'out' delta on the company-wide total.
-  // eslint-disable-next-line @typescript-eslint/no-explicit-any
-  const inInputs = items.map((it: any) => ({
-    productId: it.product_id,
-    quantity: Number(it.quantity),
-    type: "in" as const,
-    referenceType: "stock_transfer",
-    referenceId: transferId,
-    note: `${claimed.code} - Nhập chuyển kho - ${it.product_name}`,
-  }));
-
-  await applyManualStockMovement(inInputs, {
-    tenantId: ctx.tenantId,
-    branchId: claimed.to_branch_id,
-    createdBy: ctx.userId,
+  void recordAuditLog({
+    entityType: "stock_transfer",
+    entityId: transferId,
+    action: "complete",
+    newData: { status: "completed", atomic: true },
   });
 }
 

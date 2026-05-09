@@ -65,53 +65,25 @@ export async function applyManualStockMovement(
   // Resolve full context (tenantId, branchId, createdBy) — fall back to current user
   const resolved = await resolveContext(ctx);
 
-  // 1. Insert stock_movements ledger rows (always positive quantity)
-  const movements: StockMovementInsert[] = inputs.map((i) => ({
-    tenant_id: resolved.tenantId,
-    branch_id: resolved.branchId,
+  const rpcItems = inputs.map((i) => ({
     product_id: i.productId,
     type: i.type,
     quantity: i.quantity,
     reference_type: i.referenceType,
     reference_id: i.referenceId ?? null,
     note: i.note,
-    created_by: resolved.createdBy,
   }));
 
-  const { error: smErr } = await supabase
-    .from("stock_movements")
-    .insert(movements);
-  if (smErr) handleError(smErr, "applyManualStockMovement:movements");
-
-  // 2 + 3. Update products.stock and branch_stock per item
-  // FIX: Use SQL atomic increment (`stock = stock + delta`) instead of
-  // read-compute-write to prevent race conditions when two concurrent
-  // mutations operate on the same product.
-  for (const item of inputs) {
-    const delta =
-      item.type === "in" ? item.quantity
-      : item.type === "out" ? -item.quantity
-      : 0; // 'adjust' is a no-op for delta math
-    if (delta === 0) continue;
-
-    // 2. products.stock — atomic SQL increment via RPC
-    // eslint-disable-next-line @typescript-eslint/no-explicit-any
-    const { error: updErr } = await (supabase.rpc as any)("increment_product_stock", {
-      p_product_id: item.productId,
-      p_delta: delta,
-    });
-    if (updErr) handleError(updErr, "applyManualStockMovement:product_update");
-
-    // 3. branch_stock — atomic upsert via RPC
-    // eslint-disable-next-line @typescript-eslint/no-explicit-any
-    const { error: bsErr } = await (supabase.rpc as any)("upsert_branch_stock", {
-      p_tenant_id: resolved.tenantId,
-      p_branch_id: resolved.branchId,
-      p_product_id: item.productId,
-      p_delta: delta,
-    });
-    if (bsErr) handleError(bsErr, "applyManualStockMovement:branch_stock");
-  }
+  // All stock side effects are handled in one Postgres transaction:
+  // stock_movements + products.stock + branch_stock.
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  const { error: rpcErr } = await (supabase.rpc as any)("apply_manual_stock_movement_atomic", {
+    p_tenant_id: resolved.tenantId,
+    p_branch_id: resolved.branchId,
+    p_created_by: resolved.createdBy,
+    p_items: rpcItems,
+  });
+  if (rpcErr) handleError(rpcErr, "applyManualStockMovement:atomic_rpc");
 
   // Audit log — gom theo referenceType/referenceId (1 event/đơn) để
   // detail panel "Lịch sử" nhặt được. Nếu không có referenceId (ad-hoc),

@@ -13,8 +13,6 @@ import { getClient, handleError } from "./base";
 import type { Database } from "@/lib/supabase/types";
 import { isRpcUnavailable } from "./rpc-utils";
 
-type InvoiceInsert = Database["public"]["Tables"]["invoices"]["Insert"];
-type InvoiceItemInsert = Database["public"]["Tables"]["invoice_items"]["Insert"];
 type StockMovementInsert = Database["public"]["Tables"]["stock_movements"]["Insert"];
 type CashTransactionInsert = Database["public"]["Tables"]["cash_transactions"]["Insert"];
 
@@ -298,9 +296,8 @@ export async function createAutoCashReceipt(
 export async function posCheckout(input: PosCheckoutInput): Promise<PosCheckoutResult> {
   const supabase = getClient();
 
-  // Prefer the server-side transaction when migration 00055 is available.
-  // If the RPC has not been deployed yet, fall back to the legacy client flow
-  // so this code can be shipped before the database migration is applied.
+  // Server-side transaction only. POS checkout must fail closed if the RPC is
+  // missing; falling back to the legacy multi-step client flow can create drift.
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
   const { data: atomicData, error: atomicError } = await (supabase.rpc as any)(
     "pos_complete_checkout_atomic",
@@ -338,172 +335,12 @@ export async function posCheckout(input: PosCheckoutInput): Promise<PosCheckoutR
     throw new Error("Phản hồi thanh toán thiếu thông tin hoá đơn.");
   }
 
-  if (atomicError && !isRpcUnavailable(atomicError)) {
+  if (atomicError) {
+    if (isRpcUnavailable(atomicError)) {
+      throw new Error("Chưa có RPC pos_complete_checkout_atomic. Vui lòng chạy migration POS/FnB atomic trước khi thanh toán.");
+    }
     handleError(atomicError, "posCheckout:atomic_rpc");
   }
 
-  // ── CEO 04/05/2026 — Idempotency check ──
-  // Nếu có clientSessionId → tìm invoice đã tạo với session_id này.
-  // Đã tồn tại (do retry / recovery) → return existing, KHÔNG tạo mới.
-  // Đây là chống duplicate KiotViet bug: ấn Thanh toán 2 lần → 2 hoá đơn.
-  if (input.clientSessionId) {
-    // eslint-disable-next-line @typescript-eslint/no-explicit-any
-    const { data: existing } = await (supabase as any).rpc(
-      "find_invoice_by_session_id",
-      {
-        p_tenant_id: input.tenantId,
-        p_client_session_id: input.clientSessionId,
-      },
-    );
-    if (existing && Array.isArray(existing) && existing.length > 0) {
-      const row = existing[0] as { id: string; code: string; status: string };
-      // Nếu đã completed → idempotent return. Nếu vẫn draft (race với
-      // saveDraftOrder) → server tạm thời từ chối, client retry sẽ
-      // dùng completeDraftOrder thay vì posCheckout.
-      if (row.status === "completed") {
-        console.warn(
-          `[posCheckout] Idempotent: session_id ${input.clientSessionId} → existing invoice ${row.code} (already completed)`,
-        );
-        return { invoiceId: row.id, invoiceCode: row.code };
-      }
-      if (row.status === "draft") {
-        throw new Error(
-          `Đơn này đang ở trạng thái nháp. Dùng "Tiếp tục đơn" thay vì tạo mới (mã: ${row.code}).`,
-        );
-      }
-    }
-  }
-
-  // 1. Generate invoice code via RPC
-  const { data: code, error: codeError } = await supabase.rpc("next_code", {
-    p_tenant_id: input.tenantId,
-    p_entity_type: "invoice",
-  });
-  if (codeError) handleError(codeError, "posCheckout:next_code");
-  const invoiceCode = code ?? `HD${Date.now()}`;
-
-  // 2. Tính thuế GTGT từ items
-  const taxAmount = input.items.reduce((sum, item) => {
-    const rate = item.vatRate ?? 0;
-    const lineBeforeTax = item.quantity * item.unitPrice - item.discount;
-    return sum + Math.round(lineBeforeTax * rate / 100);
-  }, 0);
-
-  // 3. Insert invoice (status = completed) — total đã bao gồm thuế
-  // eslint-disable-next-line @typescript-eslint/no-explicit-any
-  const invoiceData: any = {
-    tenant_id: input.tenantId,
-    branch_id: input.branchId,
-    code: invoiceCode,
-    customer_id: input.customerId ?? null,
-    customer_name: input.customerName || "Khách lẻ",
-    status: "completed" as const,
-    subtotal: input.subtotal,
-    discount_amount: input.discountAmount,
-    tax_amount: taxAmount,
-    total: input.total,
-    paid: input.paid,
-    debt: Math.max(0, input.total - input.paid),
-    payment_method: input.paymentMethod,
-    source: input.source ?? "pos",
-    note: input.note ?? null,
-    created_by: input.createdBy,
-    shift_id: input.shiftId ?? null,
-    // KM-4: track promotion áp dụng — báo cáo hiệu quả KM
-    promotion_id: input.promotionId ?? null,
-    promotion_discount: input.promotionDiscount ?? 0,
-    promotion_free_value: input.promotionFreeValue ?? 0,
-    // 00048 idempotency
-    client_session_id: input.clientSessionId ?? null,
-    auto_saved: false,
-  };
-
-  let invoice: { id: string; code: string } | null = null;
-  const insertResult = await supabase
-    .from("invoices")
-    .insert(invoiceData as InvoiceInsert)
-    .select("id, code")
-    .single();
-  if (insertResult.error) {
-    // Race condition: 2 calls cùng session_id race INSERT → lần 2 fail
-    // 23505 (unique_violation). Retry SELECT để return winner.
-    if (
-      input.clientSessionId &&
-      (insertResult.error.code === "23505" ||
-        insertResult.error.message?.includes("client_session_id_unique"))
-    ) {
-      // eslint-disable-next-line @typescript-eslint/no-explicit-any
-      const { data: raced } = await (supabase as any).rpc(
-        "find_invoice_by_session_id",
-        {
-          p_tenant_id: input.tenantId,
-          p_client_session_id: input.clientSessionId,
-        },
-      );
-      if (raced && Array.isArray(raced) && raced.length > 0) {
-        const row = raced[0] as { id: string; code: string };
-        console.warn(
-          `[posCheckout] Race detected, returning winner ${row.code}`,
-        );
-        return { invoiceId: row.id, invoiceCode: row.code };
-      }
-    }
-    handleError(insertResult.error, "posCheckout:invoice");
-  }
-  invoice = insertResult.data;
-  if (!invoice) throw new Error("Không tạo được hóa đơn");
-
-  // 4. Insert invoice_items (với VAT)
-  const itemsData: InvoiceItemInsert[] = input.items.map((item) => {
-    const lineBeforeTax = item.quantity * item.unitPrice - item.discount;
-    const vatRate = item.vatRate ?? 0;
-    const vatAmt = Math.round(lineBeforeTax * vatRate / 100);
-    return {
-      invoice_id: invoice.id,
-      product_id: item.productId,
-      product_name: item.productName,
-      unit: item.unit ?? "Cái",
-      quantity: item.quantity,
-      unit_price: item.unitPrice,
-      discount: item.discount,
-      vat_rate: vatRate,
-      vat_amount: vatAmt,
-      total: lineBeforeTax,
-    };
-  });
-
-  const { error: itemsError } = await supabase
-    .from("invoice_items")
-    .insert(itemsData);
-  if (itemsError) handleError(itemsError, "posCheckout:items");
-
-  // 5. Decrement stock (+ stock_movements)
-  await applyStockDecrement(supabase, invoice.id, input.items, {
-    tenantId: input.tenantId,
-    branchId: input.branchId,
-    createdBy: input.createdBy,
-    invoiceCode: invoice.code,
-  });
-
-  // 6. Auto-create cash transaction (phiếu thu) — hỗ trợ tách thanh toán hỗn hợp
-  await createAutoCashReceipt(
-    supabase,
-    invoice.id,
-    invoice.code,
-    input.paid,
-    input.paymentMethod,
-    {
-      tenantId: input.tenantId,
-      branchId: input.branchId,
-      createdBy: input.createdBy,
-      customerName: input.customerName || "Khách lẻ",
-      shiftId: input.shiftId ?? null,
-    },
-    input.paymentBreakdown
-  );
-
-  return {
-    invoiceId: invoice.id,
-    invoiceCode: invoice.code,
-  };
+  throw new Error("Server không trả kết quả thanh toán POS hợp lệ.");
 }

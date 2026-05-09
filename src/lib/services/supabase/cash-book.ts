@@ -219,83 +219,17 @@ export async function createCashTransaction(tx: Partial<CashTransaction>): Promi
  * invoice/PO.paid/debt + customer/supplier.debt. Phiếu chỉ chuyển sang
  * status='cancelled' (giữ audit trail), KHÔNG hard delete.
  *
- * Nếu phiếu không có reference (phiếu thu/chi tự do) hoặc RPC chưa
- * migrate → fall back hard delete (legacy behavior, có warn).
+ * Phiếu tự do chỉ flip status='cancelled'. Phiếu có reference phải đi qua RPC
+ * để đảo công nợ atomic; nếu thiếu RPC thì fail closed, không hard delete.
  */
 export async function deleteCashTransaction(id: string): Promise<void> {
-  const supabase = getClient();
-  const tenantId = await getCurrentTenantId();
-
-  // Snapshot best-effort cho audit log + check reference
-  let oldRow: Record<string, unknown> | null = null;
-  let referenceType: string | null = null;
-  try {
-    const res = await supabase
-      .from("cash_transactions")
-      .select("code, type, category, amount, counterparty, reference_type, reference_id")
-      .eq("tenant_id", tenantId)
-      .eq("id", id)
-      .maybeSingle();
-    oldRow = (res?.data as Record<string, unknown> | null) ?? null;
-    referenceType = (oldRow?.reference_type as string | null) ?? null;
-  } catch {
-    /* snapshot optional */
-  }
-
-  // Nếu phiếu gắn reference → ưu tiên cancel RPC (atomic reverse debt)
-  if (referenceType === "invoice" || referenceType === "purchase_order") {
-    try {
-      const { error: rpcErr } = await supabase.rpc(
-        "cancel_cash_transaction" as never,
-        {
-          p_cash_id: id,
-          p_reason: "Hủy từ UI sổ quỹ",
-        } as never,
-      );
-      if (!rpcErr) {
-        await recordAuditLog({
-          entityType: "cash_transaction",
-          entityId: id,
-          action: "cancel",
-          oldData: oldRow ?? null,
-          newData: { status: "cancelled" },
-        });
-        return;
-      }
-      // RPC chưa migrate → fall through hard delete với warning
-      if (!/(does not exist|404|PGRST202)/i.test(rpcErr.message)) {
-        handleError(rpcErr, "deleteCashTransaction.cancel_rpc");
-      }
-      console.warn(
-        "[deleteCashTransaction] cancel RPC unavailable; hard-deleting phiếu có reference — debt KHÔNG được đảo!",
-      );
-    } catch (err) {
-      console.warn("[deleteCashTransaction] cancel RPC error:", err);
-    }
-  }
-
-  // Hard delete (phiếu tự do hoặc fallback)
-  const { error } = await supabase
-    .from("cash_transactions")
-    .delete()
-    .eq("tenant_id", tenantId)
-    .eq("id", id);
-
-  if (error) handleError(error, "deleteCashTransaction");
-
-  await recordAuditLog({
-    entityType: "cash_transaction",
-    entityId: id,
-    action: "delete",
-    oldData: oldRow ?? null,
-  });
+  await cancelCashTransaction(id, "Hủy từ UI sổ quỹ");
 }
 
 /**
  * Hủy phiếu thu/chi — Stage 5b refactor (CEO 06/05/2026).
  *
- * Khác `deleteCashTransaction`:
- * - Hard delete bị mất history → kế toán không tra được.
+ * `deleteCashTransaction` now delegates here for backward compatibility.
  * - Cancel = giữ row + flip status='cancelled' + audit log với reason.
  * - Nếu phiếu gắn reference (invoice/PO) → reverse debt qua RPC.
  *
@@ -351,15 +285,14 @@ export async function cancelCashTransaction(
       if (!/(does not exist|404|PGRST202)/i.test(rpcErr.message)) {
         handleError(rpcErr, "cancelCashTransaction.rpc");
       }
-      console.warn(
-        "[cancelCashTransaction] RPC chưa migrate → fallback set status='cancelled' (debt KHÔNG được đảo)",
-      );
+      throw new Error("Chưa có RPC cancel_cash_transaction. Không thể hủy phiếu có công nợ vì sẽ làm lệch sổ.");
     } catch (err) {
-      console.warn("[cancelCashTransaction] RPC error:", err);
+      if (err instanceof Error) throw err;
+      throw new Error("Không thể hủy phiếu thu/chi có công nợ.");
     }
   }
 
-  // Fallback / phiếu tự do: chỉ flip status = 'cancelled' + ghi note reason
+  // Phiếu tự do: chỉ flip status = 'cancelled' + ghi note reason.
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
   const { error: updErr } = await (supabase as any)
     .from("cash_transactions")

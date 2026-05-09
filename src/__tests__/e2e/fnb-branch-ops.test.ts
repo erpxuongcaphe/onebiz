@@ -101,6 +101,142 @@ vi.mock("@/lib/services/supabase/base", () => ({
       if (fn === "increment_product_stock" || fn === "upsert_branch_stock" || fn === "allocate_lots_fifo") {
         return { data: null, error: null };
       }
+      if (fn === "fnb_send_to_kitchen_atomic") {
+        const orderNumber = (args?.p_order_number as string) ?? `KB${String(++nextCodeCounter).padStart(5, "0")}`;
+        const orderId = (args?.p_idempotency_key as string | null) ?? `ko-${orderNumber}`;
+        if (args?.p_table_id) {
+          claimTableMock(args.p_table_id, orderId);
+        }
+        insertCalls.push({
+          table: "kitchen_orders",
+          data: {
+            id: orderId,
+            order_number: orderNumber,
+            tenant_id: args?.p_tenant_id,
+            branch_id: args?.p_branch_id,
+            table_id: args?.p_table_id ?? null,
+            order_type: args?.p_order_type,
+          },
+        });
+        for (const item of ((args?.p_items as Array<Record<string, unknown>> | undefined) ?? [])) {
+          insertCalls.push({
+            table: "kitchen_order_items",
+            data: {
+              product_id: item.productId,
+              product_name: item.productName,
+              quantity: item.quantity,
+              unit_price: item.unitPrice,
+            },
+          });
+          for (const topping of ((item.toppings as Array<Record<string, unknown>> | undefined) ?? [])) {
+            insertCalls.push({
+              table: "kitchen_order_items",
+              data: {
+                product_id: topping.productId,
+                product_name: topping.name,
+                quantity: topping.quantity,
+                unit_price: topping.price,
+              },
+            });
+          }
+        }
+        return {
+          data: { kitchen_order_id: orderId, order_number: orderNumber },
+          error: null,
+        };
+      }
+      if (fn === "fnb_transfer_table_atomic") {
+        const toTableId = args?.p_to_table_id as string;
+        if (toTableId === "table-8") {
+          return { data: null, error: { message: "Bàn đích đang có đơn khác" } };
+        }
+        updateCalls.push({
+          table: "_update",
+          data: { status: "available", current_order_id: null },
+          filters: { id: args?.p_from_table_id },
+        });
+        updateCalls.push({
+          table: "_update",
+          data: { status: "occupied", current_order_id: args?.p_order_id },
+          filters: { id: toTableId },
+        });
+        updateCalls.push({
+          table: "_update",
+          data: { table_id: toTableId },
+          filters: { id: args?.p_order_id },
+        });
+        return { data: { success: true }, error: null };
+      }
+      if (fn === "fnb_void_invoice_atomic") {
+        let invoice: Record<string, unknown> | null = null;
+        let items: Array<Record<string, unknown>> = [];
+        let cashRows: Array<Record<string, unknown>> = [];
+        try {
+          // eslint-disable-next-line @typescript-eslint/no-explicit-any
+          const chain = mockFromHandler("invoices") as any;
+          invoice = (chain?.single?.() ?? chain?.maybeSingle?.())?.data ?? null;
+        } catch {
+          // ignore
+        }
+        try {
+          // eslint-disable-next-line @typescript-eslint/no-explicit-any
+          const chain = mockFromHandler("invoice_items") as any;
+          const data = (chain?.single?.() ?? chain?.maybeSingle?.())?.data;
+          items = Array.isArray(data) ? data : [];
+        } catch {
+          // ignore
+        }
+        try {
+          // eslint-disable-next-line @typescript-eslint/no-explicit-any
+          const chain = mockFromHandler("cash_transactions") as any;
+          const data = (chain?.single?.() ?? chain?.maybeSingle?.())?.data;
+          cashRows = Array.isArray(data) ? data : [];
+        } catch {
+          // ignore
+        }
+        if (invoice?.status === "cancelled") {
+          return { data: null, error: { message: "Hoá đơn đã huỷ trước đó" } };
+        }
+        for (const item of items) {
+          insertCalls.push({
+            table: "stock_movements",
+            data: {
+              type: "in",
+              product_id: item.product_id,
+              quantity: item.quantity,
+              reference_type: "invoice_void",
+              reference_id: args?.p_invoice_id,
+            },
+          });
+          rpcCalls.push({
+            fn: "increment_product_stock",
+            args: { p_product_id: item.product_id, p_delta: Number(item.quantity ?? 0) },
+          });
+        }
+        for (const cash of cashRows) {
+          insertCalls.push({
+            table: "cash_transactions",
+            data: {
+              type: "payment",
+              amount: cash.amount,
+              payment_method: cash.payment_method,
+              reference_type: "invoice_void",
+              reference_id: args?.p_invoice_id,
+            },
+          });
+        }
+        updateCalls.push({
+          table: "_update",
+          data: { status: "cancelled", void_reason: args?.p_void_reason },
+          filters: { id: args?.p_invoice_id },
+        });
+        updateCalls.push({
+          table: "_update",
+          data: { status: "cancelled" },
+          filters: { id: args?.p_kitchen_order_id },
+        });
+        return { data: { success: true }, error: null };
+      }
       if (fn === "fnb_complete_payment_atomic") {
         const koId = (args?.p_kitchen_order_id as string) ?? "ko-1";
         const paymentMethod = (args?.p_payment_method as string) ?? "cash";

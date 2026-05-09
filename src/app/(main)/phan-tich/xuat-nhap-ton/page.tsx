@@ -15,7 +15,7 @@
 import { useEffect, useState, useCallback } from "react";
 import { useBranchFilter, useToast } from "@/lib/contexts";
 import { Icon } from "@/components/ui/icon";
-import { formatNumber, formatCurrency } from "@/lib/format";
+import { formatNumber, formatCurrency, formatDate } from "@/lib/format";
 import {
   ReportPageHeader,
   ReportDataTable,
@@ -344,9 +344,7 @@ export default function XuatNhapTonPage() {
             { key: "Người xuất", value: "—" },
             {
               key: "Thời gian xuất",
-              value: new Date().toLocaleString("vi-VN", {
-                timeZone: "Asia/Ho_Chi_Minh",
-              }),
+              value: formatDate(new Date()),
             },
           ],
         },

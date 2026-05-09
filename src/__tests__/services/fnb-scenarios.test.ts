@@ -82,6 +82,49 @@ vi.mock("@/lib/services/supabase/base", () => ({
       if (fn === "increment_product_stock" || fn === "upsert_branch_stock" || fn === "allocate_lots_fifo") {
         return { data: null, error: null };
       }
+      if (fn === "fnb_send_to_kitchen_atomic") {
+        const orderId = "ko-1";
+        if (args?.p_table_id) {
+          claimTableMock(args.p_table_id, orderId);
+        }
+        return {
+          data: {
+            kitchen_order_id: orderId,
+            order_number: args?.p_order_number ?? "KB00001",
+          },
+          error: null,
+        };
+      }
+      if (fn === "fnb_transfer_table_atomic") {
+        const destination = mockFromHandler("restaurant_tables").maybeSingle?.();
+        if (!destination?.data) {
+          return { data: null, error: { message: "Bàn đích không trống" } };
+        }
+        updateCalls.push(
+          { table: "_rpc", data: { status: "available" }, filters: { id: args?.p_from_table_id } },
+          { table: "_rpc", data: { status: "occupied" }, filters: { id: args?.p_to_table_id } },
+          { table: "_rpc", data: { table_id: args?.p_to_table_id }, filters: { id: args?.p_order_id } },
+        );
+        return { data: { success: true }, error: null };
+      }
+      if (fn === "fnb_void_invoice_atomic") {
+        const invoice = mockFromHandler("invoices").maybeSingle?.();
+        if (invoice?.data?.status === "cancelled") {
+          return { data: null, error: { message: "Hoá đơn đã huỷ trước đó" } };
+        }
+        const invoiceItems = mockFromHandler("invoice_items").maybeSingle?.()?.data;
+        const rows = Array.isArray(invoiceItems) ? invoiceItems : [];
+        updateCalls.push({
+          table: "_rpc",
+          data: { status: "cancelled", void_reason: args?.p_void_reason },
+          filters: { id: args?.p_invoice_id },
+        });
+        for (const row of rows) {
+          insertCalls.push({ table: "_rpc", data: { ...row, type: "in" } });
+        }
+        insertCalls.push({ table: "_rpc", data: { type: "payment", invoice_id: args?.p_invoice_id } });
+        return { data: { success: true }, error: null };
+      }
       if (fn === "fnb_complete_payment_atomic") {
         const koId = (args?.p_kitchen_order_id as string) ?? "ko-1";
         atomicPaymentCalls.push({ kitchenOrderId: koId, params: args ?? {} });

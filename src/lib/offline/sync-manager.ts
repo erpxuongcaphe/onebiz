@@ -316,6 +316,11 @@ export async function retryFailedEntries(): Promise<number> {
  */
 export async function deleteQueueEntry(id: number): Promise<void> {
   const db = await getDb();
+  const entry = await db.get("sync_queue", id);
+  if (!entry) return;
+  if (entry.status !== "completed") {
+    throw new Error("Không thể xoá đơn offline chưa đồng bộ xong.");
+  }
   await db.delete("sync_queue", id);
 }
 
