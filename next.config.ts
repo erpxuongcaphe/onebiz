@@ -73,8 +73,10 @@ export default withSentryConfig(nextConfig, {
   },
 
   // Disable Sentry Logger trong production để giảm bundle size
-  disableLogger: true,
-
-  // Auto instrumentation cho server runtime
-  automaticVercelMonitors: false,
+  webpack: {
+    treeshake: {
+      removeDebugLogging: true,
+    },
+    automaticVercelMonitors: false,
+  },
 });

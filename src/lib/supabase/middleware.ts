@@ -138,7 +138,7 @@ function copySetCookies(from: NextResponse, to: NextResponse): void {
 
 /**
  * Refresh session token trên mỗi request.
- * Gọi từ src/middleware.ts.
+ * Gọi từ src/proxy.ts.
  */
 export async function updateSession(request: NextRequest) {
   // DEV-only auth bypass. Gate kép để production TUYỆT ĐỐI không bypass:
