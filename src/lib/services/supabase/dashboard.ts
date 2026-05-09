@@ -364,13 +364,44 @@ export async function getLowStockProducts(limit: number = 5): Promise<LowStockPr
 
 // === Recent activities (from audit_log) ===
 
+const UUID_RE =
+  /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i;
+
+function getRecordLabel(
+  newData: Record<string, unknown> | null,
+  oldData: Record<string, unknown> | null,
+): string {
+  const source = { ...(oldData ?? {}), ...(newData ?? {}) };
+  const keys = [
+    "display_name",
+    "full_name",
+    "customer_name",
+    "supplier_name",
+    "product_name",
+    "invoice_code",
+    "order_code",
+    "code",
+    "name",
+    "email",
+    "phone",
+  ];
+
+  for (const key of keys) {
+    const value = source[key];
+    if (typeof value === "string" && value.trim() && !UUID_RE.test(value.trim())) {
+      return value.trim();
+    }
+  }
+  return "";
+}
+
 export async function getRecentActivities(limit: number = 8): Promise<RecentActivity[]> {
   const supabase = getClient();
   const tenantId = await getCurrentTenantId();
 
   const { data, error } = await supabase
     .from("audit_log")
-    .select("id, action, entity_type, entity_id, created_at, profiles!audit_log_user_id_fkey(full_name)")
+    .select("id, action, entity_type, entity_id, old_data, new_data, created_at, profiles!audit_log_user_id_fkey(full_name)")
     .eq("tenant_id", tenantId)
     .order("created_at", { ascending: false })
     .limit(limit);
@@ -396,23 +427,38 @@ export async function getRecentActivities(limit: number = 8): Promise<RecentActi
       create: "tạo",
       update: "cập nhật",
       delete: "xóa",
+      complete: "hoàn thành",
+      cancel: "hủy",
+      transfer: "chuyển",
+      role_grant: "cấp quyền",
     };
 
     const entityMap: Record<string, string> = {
       invoice: "hóa đơn",
       product: "sản phẩm",
       customer: "khách hàng",
+      user: "người dùng",
+      role: "vai trò",
+      branch: "chi nhánh",
       purchase_order: "đơn nhập hàng",
       cash_transaction: "phiếu thu/chi",
+      stock_transfer: "chuyển kho",
+      stock_movement: "phiếu kho",
+      inventory_check: "kiểm kho",
+      kitchen_order: "đơn bếp",
     };
 
     const actionText = actionMap[row.action as string] ?? (row.action as string);
     const entityText = entityMap[row.entity_type as string] ?? (row.entity_type as string);
+    const label = getRecordLabel(
+      (row.new_data as Record<string, unknown> | null) ?? null,
+      (row.old_data as Record<string, unknown> | null) ?? null,
+    );
 
     return {
       id: row.id as string,
       userName: profile?.full_name ?? "Hệ thống",
-      action: `${actionText} ${entityText} ${(row.entity_id as string) ?? ""}`.trim(),
+      action: `${actionText} ${entityText}${label ? ` ${label}` : ""}`.trim(),
       entityType: row.entity_type as string,
       time: timeStr,
     };

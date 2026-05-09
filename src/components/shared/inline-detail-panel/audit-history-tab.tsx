@@ -179,6 +179,8 @@ function DiffSummary({
       (k) =>
         k !== "updated_at" &&
         k !== "updated_by" &&
+        k !== "tenant_id" &&
+        !k.endsWith("_id") &&
         JSON.stringify(oldData[k]) !== JSON.stringify(newData[k])
     );
     if (changedKeys.length === 0) return null;
@@ -187,7 +189,7 @@ function DiffSummary({
       <ul className="text-xs text-muted-foreground mt-0.5 space-y-0.5">
         {shown.map((k) => (
           <li key={k}>
-            <span className="font-medium">{k}:</span>{" "}
+            <span className="font-medium">{fieldLabel(k)}:</span>{" "}
             <span className="line-through opacity-60">
               {formatValue(oldData[k])}
             </span>{" "}
@@ -209,6 +211,32 @@ function DiffSummary({
 
 function formatValue(v: unknown): string {
   if (v === null || v === undefined) return "—";
-  if (typeof v === "object") return JSON.stringify(v);
-  return String(v);
+  if (typeof v === "string" && isUuid(v)) return "Đã cập nhật";
+  if (typeof v === "object") return scrubUuidText(JSON.stringify(v));
+  return scrubUuidText(String(v));
+}
+
+function fieldLabel(key: string): string {
+  const labels: Record<string, string> = {
+    full_name: "Tên",
+    name: "Tên",
+    code: "Mã",
+    email: "Email",
+    phone: "Điện thoại",
+    status: "Trạng thái",
+    role: "Vai trò",
+    note: "Ghi chú",
+  };
+  return labels[key] ?? key;
+}
+
+function isUuid(value: string): boolean {
+  return /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i.test(value);
+}
+
+function scrubUuidText(value: string): string {
+  return value.replace(
+    /[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}/gi,
+    "mã nội bộ",
+  );
 }

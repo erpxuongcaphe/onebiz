@@ -29,6 +29,7 @@ export interface AuditLogEntry {
   entityType: string;
   entityTypeLabel: string;
   entityId: string;
+  entityName: string;
   oldData: Record<string, unknown> | null;
   newData: Record<string, unknown> | null;
   ipAddress: string | null;
@@ -58,12 +59,17 @@ const ACTION_LABELS: Record<string, string> = {
   transfer: "Chuyển kho",
   update_status: "Đổi trạng thái",
   opening_debt_import: "Nhập công nợ đầu kỳ",
+  role_grant: "Cấp quyền",
+  role_revoke: "Gỡ quyền",
 };
 
 const ENTITY_TYPE_LABELS: Record<string, string> = {
   invoice: "Hóa đơn",
   product: "Sản phẩm",
   customer: "Khách hàng",
+  user: "Người dùng",
+  role: "Vai trò",
+  branch: "Chi nhánh",
   supplier: "Nhà cung cấp",
   purchase_order: "Đơn nhập hàng",
   cash_transaction: "Phiếu thu/chi",
@@ -79,7 +85,46 @@ const ENTITY_TYPE_LABELS: Record<string, string> = {
   inventory_check: "Kiểm kho",
   purchase_return: "Phiếu trả hàng nhập",
   shipping_order: "Vận đơn",
+  kitchen_order: "Đơn bếp",
 };
+
+const UUID_RE =
+  /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i;
+
+function compactInternalId(id: string): string {
+  if (!id) return "—";
+  return id.includes("-") ? `#${id.slice(-6).toUpperCase()}` : id;
+}
+
+function getEntityName(
+  entityId: string,
+  oldData: Record<string, unknown> | null,
+  newData: Record<string, unknown> | null,
+): string {
+  const source = { ...(oldData ?? {}), ...(newData ?? {}) };
+  const keys = [
+    "display_name",
+    "full_name",
+    "customer_name",
+    "supplier_name",
+    "product_name",
+    "invoice_code",
+    "order_code",
+    "code",
+    "name",
+    "email",
+    "phone",
+  ];
+
+  for (const key of keys) {
+    const value = source[key];
+    if (typeof value === "string" && value.trim() && !UUID_RE.test(value.trim())) {
+      return value.trim();
+    }
+  }
+
+  return compactInternalId(entityId);
+}
 
 export function getActionOptions() {
   return Object.entries(ACTION_LABELS).map(([value, label]) => ({
@@ -168,6 +213,7 @@ export async function getAuditLogs(
       entityType,
       entityTypeLabel: ENTITY_TYPE_LABELS[entityType] ?? entityType,
       entityId: row.entity_id ?? "",
+      entityName: getEntityName(row.entity_id ?? "", row.old_data ?? null, row.new_data ?? null),
       oldData: row.old_data ?? null,
       newData: row.new_data ?? null,
       ipAddress: row.ip_address ?? null,
@@ -270,6 +316,7 @@ export async function getAuditLogsByEntity(
       entityType: et,
       entityTypeLabel: ENTITY_TYPE_LABELS[et] ?? et,
       entityId: row.entity_id ?? "",
+      entityName: getEntityName(row.entity_id ?? "", row.old_data ?? null, row.new_data ?? null),
       oldData: row.old_data ?? null,
       newData: row.new_data ?? null,
       ipAddress: row.ip_address ?? null,

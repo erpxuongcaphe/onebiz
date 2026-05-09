@@ -148,25 +148,14 @@ export default function AuditPage() {
       ),
     },
     {
-      accessorKey: "entityId",
-      header: "Mã",
+      accessorKey: "entityName",
+      header: "Tên / mã hiển thị",
       size: 120,
-      cell: ({ row }) => {
-        // entityId là UUID nội bộ — hiện 6 ký tự cuối cho user dễ tham chiếu,
-        // full UUID ở tooltip. Tránh phô UUID đầy đủ trong bảng (khó đọc + bí mật
-        // không cần thiết).
-        const id = row.original.entityId;
-        if (!id) return <span className="text-xs text-muted-foreground">—</span>;
-        const shortCode = id.includes("-") ? id.slice(-6).toUpperCase() : id;
-        return (
-          <span
-            className="text-xs font-mono text-primary"
-            title={id}
-          >
-            #{shortCode}
-          </span>
-        );
-      },
+      cell: ({ row }) => (
+        <span className="text-sm font-medium text-foreground">
+          {row.original.entityName || "—"}
+        </span>
+      ),
     },
     {
       id: "detail",
@@ -330,10 +319,10 @@ export default function AuditPage() {
                 </div>
                 <div className="col-span-2">
                   <span className="text-muted-foreground text-xs">
-                    Mã đối tượng
+                    Tên / mã hiển thị
                   </span>
-                  <p className="font-mono text-xs text-primary">
-                    {selectedEntry.entityId || "—"}
+                  <p className="font-medium text-sm text-foreground">
+                    {selectedEntry.entityName || "—"}
                   </p>
                 </div>
                 {selectedEntry.ipAddress && (

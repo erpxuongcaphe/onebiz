@@ -164,8 +164,8 @@ export function FnbHeader({
       {/* Filler giữa search và right actions — đẩy KDS/settings sang phải */}
       <div className="hidden md:block flex-1" />
 
-      {/* Right: KDS + settings */}
-      <div className="order-22 hidden items-center gap-1 shrink-0 sm:flex md:order-none">
+      {/* Right: KDS + settings. Tablet portrait keeps these in the drawer to avoid header overflow. */}
+      <div className="order-22 hidden items-center gap-1 shrink-0 lg:flex md:order-none">
         <Link href={fnbPath("/pos/fnb/kds")}>
           <Button
             variant="ghost"

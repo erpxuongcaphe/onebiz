@@ -602,7 +602,7 @@ function KdsPageInner() {
               Chọn quán FnB để mở màn bếp
             </h2>
             <p className="mt-2 text-sm leading-relaxed text-muted-foreground">
-              Hiện tại đang ở {currentBranch?.name ?? "chi nhánh không phù hợp"}. KDS chỉ hiển thị đơn của chi nhánh loại quán/store để tránh bếp xem nhầm hàng đợi.
+              Hiện tại đang ở {currentBranch?.name ?? "chi nhánh không phù hợp"}. KDS chỉ hiển thị đơn của chi nhánh loại quán/store. Vui lòng chọn đúng quán để mở hàng đợi bếp.
             </p>
 
             {storeBranches.length > 0 ? (
@@ -626,7 +626,7 @@ function KdsPageInner() {
               </div>
             ) : (
               <p className="mt-5 rounded-lg bg-status-warning/10 px-4 py-3 text-sm text-status-warning">
-                Chưa có chi nhánh loại quán/store. Anh tạo hoặc đổi loại chi nhánh trong Cài đặt chi nhánh trước.
+                Chưa có chi nhánh loại quán/store. Vui lòng tạo hoặc đổi loại chi nhánh trong Cài đặt chi nhánh trước.
               </p>
             )}
           </div>
