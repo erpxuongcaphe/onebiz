@@ -13,7 +13,7 @@
 
 export default function Loading() {
   return (
-    <div className="p-4 md:p-6 space-y-4">
+    <div className="p-3 md:p-4 space-y-3">
       {/* Page header skeleton */}
       <div className="flex items-center justify-between gap-4">
         <div className="space-y-2">
@@ -27,7 +27,7 @@ export default function Loading() {
       </div>
 
       {/* KPI cards skeleton */}
-      <div className="grid grid-cols-2 lg:grid-cols-4 gap-4">
+      <div className="grid grid-cols-2 lg:grid-cols-4 gap-3">
         {[0, 1, 2, 3].map((i) => (
           <div
             key={i}

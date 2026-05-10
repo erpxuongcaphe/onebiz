@@ -74,19 +74,21 @@ function ChartFrame({ children }: { children: ReactNode }) {
       setReady(el.clientWidth > 0 && el.clientHeight > 0);
     };
 
-    update();
+    const frame = window.requestAnimationFrame(update);
     if (typeof ResizeObserver === "undefined") {
-      setReady(true);
-      return;
+      return () => window.cancelAnimationFrame(frame);
     }
 
     const observer = new ResizeObserver(update);
     observer.observe(el);
-    return () => observer.disconnect();
+    return () => {
+      window.cancelAnimationFrame(frame);
+      observer.disconnect();
+    };
   }, []);
 
   return (
-    <div ref={ref} className="h-60 min-w-0">
+    <div ref={ref} className="h-52 min-w-0 xl:h-56">
       {ready ? (
         children
       ) : (
@@ -148,8 +150,8 @@ export default function DashboardCharts({
   return (
     <div className="grid min-w-0 grid-cols-1 gap-3 lg:grid-cols-2">
       {/* Revenue AreaChart */}
-      <Card className="min-w-0">
-        <CardHeader className="pb-2">
+      <Card size="sm" className="min-w-0">
+        <CardHeader className="pb-1">
           <div className="flex items-center justify-between">
             <CardTitle className="text-sm">Doanh thu</CardTitle>
             <div className="flex gap-1">
@@ -173,7 +175,7 @@ export default function DashboardCharts({
         </CardHeader>
         <CardContent className="min-w-0">
           <ChartFrame>
-            <ResponsiveContainer width="100%" height="100%" minWidth={0} minHeight={240}>
+            <ResponsiveContainer width="100%" height="100%" minWidth={0} minHeight={208}>
               <AreaChart
                 data={chartData[chartView]}
                 margin={{ top: 5, right: 10, left: 0, bottom: 0 }}
@@ -214,13 +216,13 @@ export default function DashboardCharts({
       </Card>
 
       {/* Orders BarChart */}
-      <Card className="min-w-0">
-        <CardHeader className="pb-2">
+      <Card size="sm" className="min-w-0">
+        <CardHeader className="pb-1">
           <CardTitle className="text-sm">Đơn hàng theo trạng thái</CardTitle>
         </CardHeader>
         <CardContent className="min-w-0">
           <ChartFrame>
-            <ResponsiveContainer width="100%" height="100%" minWidth={0} minHeight={240}>
+            <ResponsiveContainer width="100%" height="100%" minWidth={0} minHeight={208}>
               <BarChart
                 data={orders}
                 margin={{ top: 5, right: 10, left: 0, bottom: 0 }}

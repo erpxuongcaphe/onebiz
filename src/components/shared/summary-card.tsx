@@ -74,7 +74,7 @@ export function SummaryCard({
   return (
     <div
       className={cn(
-        "border rounded-lg p-3 bg-white border-l-2 transition-colors",
+        "border rounded-lg p-2.5 bg-white border-l-2 transition-colors",
         // Default tone: subtle primary accent border-l
         !isHighlight && !isDanger && !isWarning && "border-border border-l-primary/40",
         isHighlight && "border-primary/30 border-l-primary bg-primary/5",
@@ -83,7 +83,7 @@ export function SummaryCard({
         className,
       )}
     >
-      <div className="flex items-center gap-2 text-xs text-muted-foreground mb-1">
+      <div className="flex items-center gap-2 text-xs text-muted-foreground mb-0.5">
         {iconNode}
         <span className="truncate">{label}</span>
         {typeof count === "number" && (
@@ -94,7 +94,7 @@ export function SummaryCard({
       </div>
       <div
         className={cn(
-          "text-xl font-bold tabular-nums",
+          "text-lg font-bold tabular-nums",
           isHighlight && "text-primary",
           isDanger && "text-destructive",
           isWarning && "text-status-warning",

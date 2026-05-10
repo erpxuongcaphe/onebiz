@@ -20,7 +20,7 @@ const DashboardCharts = dynamic(() => import("./_dashboard-charts"), {
       {[0, 1].map((i) => (
         <div
           key={i}
-          className="h-72 rounded-lg border bg-card animate-pulse"
+          className="h-60 rounded-lg border bg-card animate-pulse"
         />
       ))}
     </div>
@@ -211,10 +211,10 @@ export default function TongQuanPage() {
   const greeting = hour < 12 ? "Chào buổi sáng" : hour < 18 ? "Chào buổi chiều" : "Chào buổi tối";
 
   return (
-    <div className="p-4 md:p-6 space-y-4">
+    <div className="p-3 md:p-4 space-y-3">
       {/* ── Hero: Greeting + Date ── */}
       <div className="space-y-0.5">
-        <h1 className="text-2xl font-bold text-foreground leading-tight">
+        <h1 className="text-xl md:text-2xl font-bold text-foreground leading-tight">
           {greeting}, {firstName}
         </h1>
         <div className="flex items-center gap-2 text-sm text-muted-foreground">
@@ -226,57 +226,59 @@ export default function TongQuanPage() {
       {/* KPI Cards + Inventory Turnover — Stitch spec: rounded-xl, padding rộng,
           icon bg-primary-fixed text-primary, uppercase label widest tracking,
           headline font + bold number. */}
-      <div className="grid grid-cols-2 lg:grid-cols-5 gap-4">
+      <div className="grid grid-cols-2 lg:grid-cols-5 gap-3">
         {/* Skeleton khi kpis chưa load để UI không nhảy — 4 card + 1 turnover bên dưới. */}
         {kpiLoading && !kpis &&
           Array.from({ length: 4 }).map((_, i) => (
             <Card
               key={`skel-${i}`}
+              size="sm"
               className="rounded-lg border-0 ambient-shadow bg-surface-container-lowest"
             >
-              <CardContent className="p-5">
-                <div className="flex items-start justify-between mb-3">
+              <CardContent className="p-4">
+                <div className="flex items-start justify-between mb-2">
                   <span className="h-3 w-20 rounded bg-muted/60 animate-pulse" />
-                  <div className="size-9 rounded-lg bg-muted/60 animate-pulse" />
+                  <div className="size-8 rounded-lg bg-muted/60 animate-pulse" />
                 </div>
-                <div className="h-8 w-28 rounded bg-muted/60 animate-pulse" />
-                <div className="mt-2 h-3 w-24 rounded bg-muted/50 animate-pulse" />
+                <div className="h-7 w-24 rounded bg-muted/60 animate-pulse" />
+                <div className="mt-1.5 h-3 w-20 rounded bg-muted/50 animate-pulse" />
               </CardContent>
             </Card>
           ))}
         {kpiCards.map((kpi) => (
           <Card
             key={kpi.label}
+            size="sm"
             className="rounded-lg border-0 ambient-shadow bg-surface-container-lowest"
           >
-            <CardContent className="p-5">
-              <div className="flex items-start justify-between mb-3">
+            <CardContent className="p-4">
+              <div className="flex items-start justify-between mb-2">
                 <span className="text-xs font-semibold uppercase text-muted-foreground">
                   {kpi.label}
                 </span>
-                <div className="flex size-9 shrink-0 items-center justify-center rounded-lg bg-primary-fixed">
+                <div className="flex size-8 shrink-0 items-center justify-center rounded-lg bg-primary-fixed">
                   <Icon name={kpi.icon} size={16} className="text-primary" />
                 </div>
               </div>
-              <p className="font-heading text-2xl lg:text-3xl font-extrabold text-foreground leading-tight">
+              <p className="font-heading text-2xl font-extrabold text-foreground leading-tight">
                 {kpi.isCurrency ? formatCurrency(kpi.value) : formatNumber(kpi.value)}
               </p>
-              <p className="mt-2 text-xs text-muted-foreground">
+              <p className="mt-1.5 text-xs text-muted-foreground">
                 <span className={cn("font-semibold", kpi.positive ? "text-status-success" : "text-status-error")}>
                   {kpi.text}
                 </span>{" "}
                 {kpi.changeLabel}
               </p>
               {"isCollection" in kpi && kpi.isCollection && kpis && (
-                <div className="mt-3 space-y-2 border-t border-border/60 pt-3">
-                  <div className="grid grid-cols-2 gap-1.5 text-[11px] leading-tight">
-                    <div className="rounded-md bg-surface-container px-2 py-1">
+                <div className="mt-2 space-y-1.5 border-t border-border/60 pt-2">
+                  <div className="grid grid-cols-2 gap-1 text-[10px] leading-tight">
+                    <div className="rounded-md bg-surface-container px-1.5 py-1">
                       <span className="block text-muted-foreground">Tiền mặt</span>
                       <span className="font-semibold text-foreground">
                         {formatChartCurrency(kpis.todayCash)}
                       </span>
                     </div>
-                    <div className="rounded-md bg-surface-container px-2 py-1">
+                    <div className="rounded-md bg-surface-container px-1.5 py-1">
                       <span className="block text-muted-foreground">Chuyển khoản</span>
                       <span className="font-semibold text-foreground">
                         {formatChartCurrency(kpis.todayTransfer)}
@@ -294,20 +296,20 @@ export default function TongQuanPage() {
         ))}
 
         {/* Inventory Turnover — inline as 5th card */}
-        <Card className="col-span-2 lg:col-span-1 rounded-lg border-0 ambient-shadow bg-surface-container-lowest">
-          <CardContent className="p-5">
-            <div className="flex items-start justify-between mb-3">
+        <Card size="sm" className="col-span-2 lg:col-span-1 rounded-lg border-0 ambient-shadow bg-surface-container-lowest">
+          <CardContent className="p-4">
+            <div className="flex items-start justify-between mb-2">
               <span className="text-xs font-semibold uppercase text-muted-foreground">
                 Vòng quay kho
               </span>
-              <div className="flex size-9 shrink-0 items-center justify-center rounded-lg bg-primary-fixed">
+              <div className="flex size-8 shrink-0 items-center justify-center rounded-lg bg-primary-fixed">
                 <Icon name="autorenew" size={16} className="text-primary" />
               </div>
             </div>
-            <p className="font-heading text-2xl lg:text-3xl font-extrabold text-foreground leading-tight">
+            <p className="font-heading text-2xl font-extrabold text-foreground leading-tight">
               {turnover ? `${turnover.turnoverRatio.toFixed(1)}x` : "—"}
             </p>
-            <p className="mt-2 text-xs text-muted-foreground">
+            <p className="mt-1.5 text-xs text-muted-foreground">
               {turnover
                 ? `COGS ${formatChartCurrency(turnover.totalCogsPeriod)}`
                 : "Chưa có dữ liệu"}

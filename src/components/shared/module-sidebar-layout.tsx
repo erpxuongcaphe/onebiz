@@ -61,7 +61,7 @@ export function ModuleSidebarLayout({
       {/* Mobile horizontal tabs */}
       <div className="lg:hidden border-b bg-background sticky top-16 z-40">
         <ScrollArea className="w-full">
-          <div className="flex gap-1 p-2">
+          <div className="flex gap-1 p-1.5">
             {flatItems.map((item) => {
               const active = isActive(item);
               return (
@@ -69,7 +69,7 @@ export function ModuleSidebarLayout({
                   key={item.href}
                   href={item.href}
                   className={cn(
-                    "flex flex-col items-center gap-1 px-3 py-2 rounded-lg text-xs font-medium whitespace-nowrap transition-colors min-w-[64px]",
+                    "flex flex-col items-center gap-1 px-2.5 py-1.5 rounded-lg text-xs font-medium whitespace-nowrap transition-colors min-w-[64px]",
                     active
                       ? "bg-primary-fixed text-primary"
                       : "text-muted-foreground hover:bg-surface-container hover:text-foreground"
@@ -88,13 +88,13 @@ export function ModuleSidebarLayout({
       <div className="flex">
         {/* Desktop sidebar */}
         <aside className="hidden lg:block w-60 shrink-0 border-r bg-background sticky top-16 h-[calc(100vh-64px)] overflow-y-auto">
-          <div className="p-4">
-            <h2 className="text-lg font-semibold mb-4">{title}</h2>
-            <nav className="space-y-4">
+          <div className="p-3">
+            <h2 className="text-base font-semibold mb-3">{title}</h2>
+            <nav className="space-y-3">
               {nav.map((group, gi) => (
                 <div key={gi}>
                   {group.label && (
-                    <div className="px-3 pb-2 text-[10px] font-semibold text-muted-foreground uppercase">
+                    <div className="px-3 pb-1.5 text-[10px] font-semibold text-muted-foreground uppercase">
                       {group.label}
                     </div>
                   )}
@@ -106,7 +106,7 @@ export function ModuleSidebarLayout({
                           key={item.href}
                           href={item.href}
                           className={cn(
-                            "flex items-center gap-3 px-3 py-2 rounded-lg text-sm font-medium transition-colors press-scale-sm",
+                            "flex items-center gap-2.5 px-3 py-1.5 rounded-lg text-sm font-medium transition-colors press-scale-sm",
                             active
                               ? "bg-primary-fixed text-primary"
                               : "text-muted-foreground hover:bg-surface-container hover:text-foreground"
@@ -131,7 +131,7 @@ export function ModuleSidebarLayout({
 
         {/* Content */}
         <div className="flex-1 min-w-0">
-          <div className={cn("p-4 md:p-6 mx-auto", contentClassName)}>
+          <div className={cn("p-3 md:p-5 mx-auto", contentClassName)}>
             {children}
           </div>
         </div>
