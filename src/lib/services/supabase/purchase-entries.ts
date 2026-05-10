@@ -20,6 +20,7 @@ import { applyManualStockMovement, nextEntityCode } from "./stock-adjustments";
 import { recordAuditLog } from "./audit";
 
 type CashTransactionInsert = Database["public"]["Tables"]["cash_transactions"]["Insert"];
+type SupplierReturnPaymentMethod = "cash" | "transfer" | "card";
 
 // ==================== Purchase Order Entries (Đặt hàng nhập) ====================
 
@@ -469,6 +470,7 @@ interface CompleteSupplierReturnInput {
   items: SupplierReturnItem[];
   reason?: string;
   note?: string;
+  paymentMethod?: SupplierReturnPaymentMethod;
 }
 
 /**
@@ -549,7 +551,7 @@ export async function completeSupplierReturn(input: CompleteSupplierReturnInput)
       category: "Trả hàng nhập",
       amount: returnTotal,
       counterparty: input.supplierName,
-      payment_method: "cash",
+      payment_method: input.paymentMethod ?? "cash",
       reference_type: "supplier_return",
       reference_id: returnId,
       note: `Hoàn tiền trả hàng nhập ${returnCode} (ĐN gốc: ${input.purchaseOrderCode})`,

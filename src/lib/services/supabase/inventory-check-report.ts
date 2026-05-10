@@ -79,7 +79,7 @@ export async function getInventoryCheckReport(
   let query = (supabase as any)
     .from("inventory_checks")
     .select(
-      "id, code, created_at, branch_id, status, profiles!inventory_checks_created_by_fkey(full_name), branches(name), inventory_check_items(id, quantity_diff, value_impact)",
+      "id, code, created_at, branch_id, status, profiles!inventory_checks_created_by_fkey(full_name), branches(name), inventory_check_items(id, difference, products(cost_price))",
     )
     .eq("tenant_id", tenantId)
     .gte("created_at", fromIso)
@@ -94,13 +94,13 @@ export async function getInventoryCheckReport(
   const rows: InventoryCheckReportRow[] = (checks ?? []).map(
     (c: Record<string, unknown>) => {
       const items = (c.inventory_check_items as Array<{
-        quantity_diff: number;
-        value_impact: number;
+        difference: number;
+        products?: { cost_price?: number | null } | null;
       }>) ?? [];
       let inc = 0;
       let dec = 0;
       for (const it of items) {
-        const v = Number(it.value_impact ?? 0);
+        const v = Number(it.difference ?? 0) * Number(it.products?.cost_price ?? 0);
         if (v > 0) inc += v;
         else if (v < 0) dec += Math.abs(v);
       }
@@ -128,7 +128,7 @@ export async function getInventoryCheckReport(
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
   let prevQuery = (supabase as any)
     .from("inventory_checks")
-    .select("id, inventory_check_items(value_impact)")
+    .select("id, inventory_check_items(difference, products(cost_price))")
     .eq("tenant_id", tenantId)
     .gte("created_at", prevFrom.toISOString())
     .lt("created_at", prevTo.toISOString());
@@ -138,10 +138,15 @@ export async function getInventoryCheckReport(
   let prevInc = 0;
   let prevDec = 0;
   for (const pc of prevChecks ?? []) {
-    const items = (pc as { inventory_check_items?: Array<{ value_impact: number }> })
+    const items = (pc as {
+      inventory_check_items?: Array<{
+        difference: number;
+        products?: { cost_price?: number | null } | null;
+      }>;
+    })
       .inventory_check_items ?? [];
     for (const it of items) {
-      const v = Number(it.value_impact ?? 0);
+      const v = Number(it.difference ?? 0) * Number(it.products?.cost_price ?? 0);
       if (v > 0) prevInc += v;
       else if (v < 0) prevDec += Math.abs(v);
     }

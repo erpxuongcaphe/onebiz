@@ -241,6 +241,22 @@ export async function getXntReport(
   const { data: movements, error: mErr } = await movementsQuery;
   if (mErr) handleError(mErr, "getXntReport.movements");
 
+  // Branch report must use branch snapshot as closing stock. Using
+  // products.stock here would mix company-wide closing stock with
+  // branch-filtered movements, making opening/closing balances drift.
+  const branchClosingStock = new Map<string, number>();
+  if (branchId) {
+    const { data: branchStock, error: bsErr } = await supabase
+      .from("branch_stock")
+      .select("product_id, quantity")
+      .eq("tenant_id", tenantId)
+      .eq("branch_id", branchId);
+    if (bsErr) handleError(bsErr, "getXntReport.branch_stock");
+    for (const row of branchStock ?? []) {
+      branchClosingStock.set(row.product_id, Number(row.quantity ?? 0));
+    }
+  }
+
   // 4. Aggregate movements per product
   const aggMap = new Map<
     string,
@@ -387,7 +403,9 @@ export async function getXntReport(
       agg.outProduction +
       agg.outInternal;
 
-    const closingQty = Number(p.stock ?? 0);
+    const closingQty = branchId
+      ? branchClosingStock.get(p.id) ?? 0
+      : Number(p.stock ?? 0);
     const openingQty = closingQty - (totalIn - totalOut);
     const cost = Number(p.cost_price ?? 0);
 

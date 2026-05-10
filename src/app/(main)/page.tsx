@@ -89,7 +89,6 @@ export default function TongQuanPage() {
   // Trước đây single `loading` flag block toàn bộ dashboard 2-4s → user thấy spinner
   // quay vòng. Giờ KPI xuất hiện <500ms, phần còn lại fill dần.
   const [kpiLoading, setKpiLoading] = useState(true);
-  const [chartsLoading, setChartsLoading] = useState(true);
 
   // Data state
   const [kpis, setKpis] = useState<DashboardKpis | null>(null);
@@ -122,7 +121,6 @@ export default function TongQuanPage() {
 
   // Phase 2 — charts + secondary widgets (không block KPI hiển thị)
   const fetchPhase2 = useCallback(async () => {
-    setChartsLoading(true);
     try {
       const [dayRes, hourRes, weekdayRes, ordersRes, topRes, lowRes, actRes, alertRes] =
         await Promise.all([
@@ -145,8 +143,6 @@ export default function TongQuanPage() {
       setFinancialAlerts(alertRes);
     } catch {
       // Silently fail — show empty state
-    } finally {
-      setChartsLoading(false);
     }
   }, [activeBranchId]);
 
@@ -172,12 +168,13 @@ export default function TongQuanPage() {
   const kpiCards = kpis
     ? [
         {
-          label: "Doanh thu",
-          value: kpis.todayRevenue,
+          label: "Thực thu",
+          value: kpis.todayCollected,
           icon: "trending_up",
-          ...calcChange(kpis.todayRevenue, kpis.yesterdayRevenue),
+          ...calcChange(kpis.todayCollected, kpis.yesterdayCollected),
           changeLabel: "vs hôm qua",
           isCurrency: true,
+          isCollection: true,
         },
         {
           label: "Đơn hàng",
@@ -270,6 +267,28 @@ export default function TongQuanPage() {
                 </span>{" "}
                 {kpi.changeLabel}
               </p>
+              {"isCollection" in kpi && kpi.isCollection && kpis && (
+                <div className="mt-3 space-y-2 border-t border-border/60 pt-3">
+                  <div className="grid grid-cols-2 gap-1.5 text-[11px] leading-tight">
+                    <div className="rounded-md bg-surface-container px-2 py-1">
+                      <span className="block text-muted-foreground">Tiền mặt</span>
+                      <span className="font-semibold text-foreground">
+                        {formatChartCurrency(kpis.todayCash)}
+                      </span>
+                    </div>
+                    <div className="rounded-md bg-surface-container px-2 py-1">
+                      <span className="block text-muted-foreground">Chuyển khoản</span>
+                      <span className="font-semibold text-foreground">
+                        {formatChartCurrency(kpis.todayTransfer)}
+                      </span>
+                    </div>
+                  </div>
+                  <div className="flex items-center justify-between gap-2 text-[11px] text-muted-foreground">
+                    <span>Thẻ {formatChartCurrency(kpis.todayCard)}</span>
+                    <span>Giảm trừ {formatChartCurrency(kpis.todayDiscounts)}</span>
+                  </div>
+                </div>
+              )}
             </CardContent>
           </Card>
         ))}

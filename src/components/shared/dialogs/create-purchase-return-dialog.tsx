@@ -43,6 +43,18 @@ interface POLineItem {
   returnQty: number;
 }
 
+type SupplierReturnPaymentMethod = "cash" | "transfer" | "card";
+
+const SUPPLIER_RETURN_PAYMENT_METHODS: Array<{
+  value: SupplierReturnPaymentMethod;
+  label: string;
+  icon: string;
+}> = [
+  { value: "cash", label: "Tiền mặt", icon: "payments" },
+  { value: "transfer", label: "Chuyển khoản", icon: "account_balance" },
+  { value: "card", label: "Thẻ", icon: "credit_card" },
+];
+
 // Placeholder shown in the dialog header before save. Real code is generated
 // via `next_code('purchase_return')` at save time.
 const PENDING_CODE_PLACEHOLDER = "THN —";
@@ -63,6 +75,7 @@ export function CreatePurchaseReturnDialog({
   const [notes, setNotes] = useState("");
   const [errors, setErrors] = useState<Record<string, string>>({});
   const [saving, setSaving] = useState(false);
+  const [paymentMethod, setPaymentMethod] = useState<SupplierReturnPaymentMethod>("cash");
   const saveLockRef = useRef(false);
 
   useEffect(() => {
@@ -77,6 +90,7 @@ export function CreatePurchaseReturnDialog({
       setNotes("");
       setErrors({});
       setSaving(false);
+      setPaymentMethod("cash");
     }
   }, [open]);
 
@@ -174,6 +188,7 @@ export function CreatePurchaseReturnDialog({
         })),
         reason: reason || undefined,
         note: notes || undefined,
+        paymentMethod,
       });
       setCode(returnCode);
 
@@ -319,6 +334,28 @@ export function CreatePurchaseReturnDialog({
                 <span className="text-lg font-semibold text-primary">
                   {formatCurrency(returnTotal)}
                 </span>
+              </div>
+              <div className="space-y-2">
+                <label className="text-xs font-medium text-muted-foreground uppercase tracking-wider">
+                  Nhà cung cấp hoàn bằng
+                </label>
+                <div className="grid grid-cols-3 gap-2">
+                  {SUPPLIER_RETURN_PAYMENT_METHODS.map((method) => (
+                    <button
+                      key={method.value}
+                      type="button"
+                      onClick={() => setPaymentMethod(method.value)}
+                      className={`flex items-center justify-center gap-1.5 rounded-lg border px-2 py-2 text-xs font-medium transition press-scale-sm ${
+                        paymentMethod === method.value
+                          ? "border-primary bg-primary-fixed text-primary shadow-sm"
+                          : "border-border bg-background hover:bg-muted"
+                      }`}
+                    >
+                      <Icon name={method.icon} size={15} />
+                      <span className="truncate">{method.label}</span>
+                    </button>
+                  ))}
+                </div>
               </div>
             </div>
           )}

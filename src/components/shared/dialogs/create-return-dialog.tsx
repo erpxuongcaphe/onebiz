@@ -48,6 +48,18 @@ interface InvoiceLineItem {
   returnQty: number;
 }
 
+type RefundPaymentMethod = "cash" | "transfer" | "card";
+
+const REFUND_PAYMENT_METHODS: Array<{
+  value: RefundPaymentMethod;
+  label: string;
+  icon: string;
+}> = [
+  { value: "cash", label: "Tiền mặt", icon: "payments" },
+  { value: "transfer", label: "Chuyển khoản", icon: "account_balance" },
+  { value: "card", label: "Thẻ", icon: "credit_card" },
+];
+
 // Code generation moved to nextEntityCode("sales_return") in handleSave
 
 export function CreateReturnDialog({
@@ -74,6 +86,7 @@ export function CreateReturnDialog({
   //   "debt_only" → refundAmount = 0, all credits customer debt
   const [refundMode, setRefundMode] = useState<"full" | "partial" | "debt_only">("full");
   const [partialRefund, setPartialRefund] = useState(0);
+  const [refundPaymentMethod, setRefundPaymentMethod] = useState<RefundPaymentMethod>("cash");
 
   useEffect(() => {
     if (open) {
@@ -89,6 +102,7 @@ export function CreateReturnDialog({
       setSaving(false);
       setRefundMode("full");
       setPartialRefund(0);
+      setRefundPaymentMethod("cash");
     }
   }, [open]);
 
@@ -167,6 +181,10 @@ export function CreateReturnDialog({
   }, [refundMode, returnTotal, partialRefund]);
 
   const debtCredit = returnTotal - effectiveRefund;
+  const refundPaymentMethodLabel = useMemo(
+    () => REFUND_PAYMENT_METHODS.find((m) => m.value === refundPaymentMethod)?.label ?? "Tiền mặt",
+    [refundPaymentMethod]
+  );
 
   function validate(): boolean {
     const newErrors: Record<string, string> = {};
@@ -236,6 +254,7 @@ export function CreateReturnDialog({
             unitPrice: item.unit_price,
           })),
           refundAmount: effectiveRefund,
+          refundPaymentMethod,
           totalAmount: returnTotal,
         });
       }
@@ -243,7 +262,7 @@ export function CreateReturnDialog({
       onOpenChange(false);
       const descParts: string[] = [];
       if (effectiveRefund > 0)
-        descParts.push(`hoàn ${formatCurrency(effectiveRefund)} tiền mặt`);
+        descParts.push(`hoàn ${formatCurrency(effectiveRefund)} qua ${refundPaymentMethodLabel.toLowerCase()}`);
       if (debtCredit > 0)
         descParts.push(`trừ ${formatCurrency(debtCredit)} công nợ`);
       toast({
@@ -395,7 +414,7 @@ export function CreateReturnDialog({
                 </label>
                 <div className="grid grid-cols-3 gap-2">
                   {[
-                    { value: "full" as const, label: "Hoàn đủ tiền mặt", icon: "payments" },
+                    { value: "full" as const, label: "Hoàn đủ", icon: "payments" },
                     { value: "partial" as const, label: "Hoàn một phần", icon: "pie_chart" },
                     { value: "debt_only" as const, label: "Khấu trừ công nợ", icon: "account_balance_wallet" },
                   ].map((opt) => (
@@ -426,7 +445,7 @@ export function CreateReturnDialog({
               {refundMode === "partial" && (
                 <div className="space-y-2">
                   <label className="text-xs font-medium">
-                    Số tiền hoàn bằng tiền mặt
+                    Số tiền hoàn
                   </label>
                   <Input
                     type="number"
@@ -441,14 +460,45 @@ export function CreateReturnDialog({
                 </div>
               )}
 
+              {effectiveRefund > 0 && (
+                <div className="space-y-2">
+                  <label className="text-xs font-medium text-muted-foreground uppercase tracking-wider">
+                    Phương thức hoàn
+                  </label>
+                  <div className="grid grid-cols-3 gap-2">
+                    {REFUND_PAYMENT_METHODS.map((method) => (
+                      <button
+                        key={method.value}
+                        type="button"
+                        onClick={() => setRefundPaymentMethod(method.value)}
+                        className={`flex items-center justify-center gap-1.5 rounded-lg border px-2 py-2 text-xs font-medium transition press-scale-sm ${
+                          refundPaymentMethod === method.value
+                            ? "border-primary bg-primary-fixed text-primary shadow-sm"
+                            : "border-border bg-background hover:bg-muted"
+                        }`}
+                      >
+                        <Icon name={method.icon} size={15} />
+                        <span className="truncate">{method.label}</span>
+                      </button>
+                    ))}
+                  </div>
+                </div>
+              )}
+
               {/* Breakdown preview */}
               <div className="rounded-lg bg-surface-container-low p-3 text-xs space-y-1">
                 <div className="flex items-center justify-between">
-                  <span className="text-muted-foreground">Hoàn tiền mặt:</span>
+                  <span className="text-muted-foreground">Hoàn tiền:</span>
                   <span className="font-mono font-semibold text-status-success">
                     {formatCurrency(effectiveRefund)}
                   </span>
                 </div>
+                {effectiveRefund > 0 && (
+                  <div className="flex items-center justify-between">
+                    <span className="text-muted-foreground">Phương thức:</span>
+                    <span className="font-medium">{refundPaymentMethodLabel}</span>
+                  </div>
+                )}
                 {debtCredit > 0 && (
                   <div className="flex items-center justify-between">
                     <span className="text-muted-foreground">
@@ -461,7 +511,7 @@ export function CreateReturnDialog({
                 )}
                 {debtCredit > 0 && !selectedInvoice?.customer_id && (
                   <p className="text-[10px] text-status-warning mt-1">
-                    ⚠ Khách vãng lai không có công nợ — chỉ hoàn tiền mặt có ý nghĩa
+                    ⚠ Khách vãng lai không có công nợ — chỉ hoàn tiền trực tiếp có ý nghĩa
                   </p>
                 )}
               </div>

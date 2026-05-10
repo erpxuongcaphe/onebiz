@@ -18,6 +18,7 @@ import type { ManualStockMovementInput } from "./stock-adjustments";
 import type { Database } from "@/lib/supabase/types";
 
 type CashTransactionInsert = Database["public"]["Tables"]["cash_transactions"]["Insert"];
+type RefundPaymentMethod = "cash" | "transfer" | "card";
 
 interface ReturnItem {
   productId: string;
@@ -35,6 +36,7 @@ interface CompleteReturnInput {
   items: ReturnItem[];
   /** Cashback amount paid back to customer. May be less than totalAmount. */
   refundAmount: number;
+  refundPaymentMethod?: RefundPaymentMethod;
   /** Grand total being returned — items × unitPrice sum. Used to derive debt credit. */
   totalAmount?: number;
 }
@@ -72,7 +74,7 @@ export async function completeReturn(input: CompleteReturnInput): Promise<void> 
       category: "Trả hàng",
       amount: input.refundAmount,
       counterparty: input.customerName,
-      payment_method: "cash",
+      payment_method: input.refundPaymentMethod ?? "cash",
       reference_type: "sales_return",
       reference_id: input.returnId,
       note: `Hoàn tiền phiếu trả hàng ${input.returnCode} (HĐ gốc: ${input.invoiceCode})`,

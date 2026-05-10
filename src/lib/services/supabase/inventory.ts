@@ -651,7 +651,7 @@ export async function getInventoryCheckItems(
   const { data, error } = await sb
     .from("inventory_check_items")
     .select(
-      "id, product_id, product_name, system_stock, actual_stock, difference, note, products(code, unit, cost)"
+      "id, product_id, product_name, system_stock, actual_stock, difference, products(code, unit, cost_price)"
     )
     .eq("check_id", checkId)
     .order("difference", { ascending: true });
@@ -661,7 +661,7 @@ export async function getInventoryCheckItems(
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
   return (data ?? []).map((row: any) => {
     const diff = Number(row.difference ?? 0);
-    const cost = Number(row.products?.cost ?? 0);
+    const cost = Number(row.products?.cost_price ?? 0);
     return {
       id: row.id,
       productId: row.product_id,
@@ -672,7 +672,6 @@ export async function getInventoryCheckItems(
       actualStock: Number(row.actual_stock ?? 0),
       difference: diff,
       valueImpact: diff * cost,
-      note: row.note ?? undefined,
     };
   });
 }

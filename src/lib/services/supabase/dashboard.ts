@@ -9,10 +9,17 @@ import { getClient, handleError, getCurrentTenantId } from "./base";
 
 export interface DashboardKpis {
   todayRevenue: number;
+  todayCollected: number;
+  todayCash: number;
+  todayTransfer: number;
+  todayCard: number;
+  todayRefunds: number;
+  todayDiscounts: number;
   todayOrders: number;
   newCustomers: number;
   todayProfit: number;
   yesterdayRevenue: number;
+  yesterdayCollected: number;
   yesterdayOrders: number;
   yesterdayNewCustomers: number;
   yesterdayProfit: number;
@@ -85,6 +92,7 @@ export async function getDashboardKpis(branchId?: string): Promise<DashboardKpis
 
   // Helper: apply optional branch filter
   function bq<T>(query: T): T {
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
     return branchId ? (query as any).eq("branch_id", branchId) : query;
   }
 
@@ -114,15 +122,17 @@ export async function getDashboardKpis(branchId?: string): Promise<DashboardKpis
       .eq("tenant_id", tenantId)
       .gte("created_at", yesterday.start)
       .lt("created_at", yesterday.end),
-    bq(supabase
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    bq((supabase as any)
       .from("cash_transactions")
-      .select("type, amount")
+      .select("type, amount, payment_method, reference_type, status")
       .eq("tenant_id", tenantId)
       .gte("created_at", today.start)
       .lt("created_at", today.end)),
-    bq(supabase
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    bq((supabase as any)
       .from("cash_transactions")
-      .select("type, amount")
+      .select("type, amount, payment_method, reference_type, status")
       .eq("tenant_id", tenantId)
       .gte("created_at", yesterday.start)
       .lt("created_at", yesterday.end)),
@@ -133,6 +143,11 @@ export async function getDashboardKpis(branchId?: string): Promise<DashboardKpis
       .filter((inv) => inv.status === "completed")
       .reduce((sum, inv) => sum + (inv.total ?? 0), 0);
 
+  const calcDiscounts = (data: { discount_amount?: number; status: string }[] | null) =>
+    (data ?? [])
+      .filter((inv) => inv.status === "completed")
+      .reduce((sum, inv) => sum + (inv.discount_amount ?? 0), 0);
+
   const calcOrders = (data: { status: string }[] | null) =>
     (data ?? []).filter((inv) => inv.status === "completed").length;
 
@@ -141,18 +156,71 @@ export async function getDashboardKpis(branchId?: string): Promise<DashboardKpis
       .filter((c) => c.type === "payment")
       .reduce((sum, c) => sum + (c.amount ?? 0), 0);
 
+  type CashRow = {
+    type: string;
+    amount: number;
+    payment_method?: string | null;
+    reference_type?: string | null;
+    status?: string | null;
+  };
+
+  const calcSalesCollection = (data: CashRow[] | null) => {
+    const totals = {
+      cash: 0,
+      transfer: 0,
+      card: 0,
+      refunds: 0,
+      net: 0,
+    };
+
+    for (const row of data ?? []) {
+      if (row.status === "cancelled") continue;
+      const amount = Number(row.amount ?? 0);
+      const method = row.payment_method === "transfer"
+        ? "transfer"
+        : row.payment_method === "card"
+        ? "card"
+        : "cash";
+      const isSalesReceipt =
+        row.type === "receipt" && row.reference_type === "invoice";
+      const isSalesRefund =
+        row.type === "payment" &&
+        (row.reference_type === "invoice" || row.reference_type === "sales_return");
+
+      if (isSalesReceipt) {
+        totals[method] += amount;
+        totals.net += amount;
+      } else if (isSalesRefund) {
+        totals[method] -= amount;
+        totals.refunds += amount;
+        totals.net -= amount;
+      }
+    }
+
+    return totals;
+  };
+
   // Profit = Revenue - Expenses (real calculation from cash_transactions)
   const todayRev = calcRevenue(todayInvoices.data);
   const yesterdayRev = calcRevenue(yesterdayInvoices.data);
   const todayExp = calcExpenses(todayCash.data);
   const yesterdayExp = calcExpenses(yesterdayCash.data);
+  const todayCollection = calcSalesCollection(todayCash.data);
+  const yesterdayCollection = calcSalesCollection(yesterdayCash.data);
 
   return {
     todayRevenue: todayRev,
+    todayCollected: todayCollection.net,
+    todayCash: todayCollection.cash,
+    todayTransfer: todayCollection.transfer,
+    todayCard: todayCollection.card,
+    todayRefunds: todayCollection.refunds,
+    todayDiscounts: calcDiscounts(todayInvoices.data),
     todayOrders: calcOrders(todayInvoices.data),
     newCustomers: todayCustomers.count ?? 0,
     todayProfit: Math.round(todayRev - todayExp),
     yesterdayRevenue: yesterdayRev,
+    yesterdayCollected: yesterdayCollection.net,
     yesterdayOrders: calcOrders(yesterdayInvoices.data),
     yesterdayNewCustomers: yesterdayCustomers.count ?? 0,
     yesterdayProfit: Math.round(yesterdayRev - yesterdayExp),
