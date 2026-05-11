@@ -22,7 +22,6 @@ import {
   InlineDetailPanel,
   DetailTabs,
   DetailHeader,
-  DetailInfoGrid,
   DetailItemsTable,
   AuditHistoryTab,
 } from "@/components/shared/inline-detail-panel";
@@ -30,7 +29,7 @@ import type { DetailTab } from "@/components/shared/inline-detail-panel";
 import { useToast, useBranchFilter } from "@/lib/contexts";
 import { usePrintWithPicker } from "@/lib/hooks/use-print-with-picker";
 import { buildGoodsReceiptPrintData } from "@/lib/print-templates";
-import { formatCurrency, formatDate, formatUser } from "@/lib/format";
+import { formatCurrency, formatDate, formatNumber, formatUser } from "@/lib/format";
 import { exportToExcel, exportToCsv } from "@/lib/utils/export";
 import {
   getPurchaseOrders,
@@ -237,7 +236,12 @@ function PurchaseOrderDetail({
     (s, i) => s + i.receivedQuantity * i.unitPrice,
     0,
   );
+  const totalRemainingValue = Math.max(0, totalOrdered - totalReceivedValue);
+  const totalOrderedQty = items.reduce((s, i) => s + i.quantity, 0);
+  const totalReceivedQty = items.reduce((s, i) => s + i.receivedQuantity, 0);
   const totalRemaining = items.reduce((s, i) => s + i.remaining, 0);
+  const receivePercent =
+    totalOrderedQty > 0 ? Math.min(100, Math.round((totalReceivedQty / totalOrderedQty) * 100)) : 0;
   const canPartialReceive = (order.status === "ordered" || order.status === "partial") && totalRemaining > 0;
 
   const tabs: DetailTab[] = [
@@ -258,7 +262,7 @@ function PurchaseOrderDetail({
             meta={
               <div className="flex items-center gap-4 flex-wrap text-xs">
                 <span>
-                  Người tạo: <strong>{formatUser(undefined, order.createdBy)}</strong>
+                  Người tạo: <strong>{formatUser(order.createdByName, order.createdBy)}</strong>
                 </span>
                 {order.importedBy && (
                   <span>
@@ -287,16 +291,44 @@ function PurchaseOrderDetail({
             </div>
           ) : (
             <>
-              <div className="flex items-center justify-between">
-                <div className="text-xs text-muted-foreground">
-                  {items.length} mặt hàng · Đã nhập {items.filter((i) => i.receivedQuantity > 0).length} / {items.length}
+              <div className="rounded-xl border bg-surface-container-lowest p-3">
+                <div className="flex flex-wrap items-center justify-between gap-2">
+                  <div>
+                    <div className="text-sm font-semibold">Tiến độ nhận hàng</div>
+                    <div className="text-xs text-muted-foreground">
+                      {items.length} mặt hàng · Đã nhập {formatNumber(totalReceivedQty)} / {formatNumber(totalOrderedQty)}
+                    </div>
+                  </div>
+                  {canPartialReceive && (
+                    <Button size="sm" variant="outline" onClick={onRequestPartialReceive}>
+                      <Icon name="call_received" size={14} />
+                      <span className="ml-1">Nhận hàng</span>
+                    </Button>
+                  )}
                 </div>
-                {canPartialReceive && (
-                  <Button size="sm" variant="outline" onClick={onRequestPartialReceive}>
-                    <Icon name="call_received" size={14} />
-                    <span className="ml-1">Nhập một phần</span>
-                  </Button>
-                )}
+                <div className="mt-3 h-2 overflow-hidden rounded-full bg-muted">
+                  <div className="h-full rounded-full bg-primary" style={{ width: `${receivePercent}%` }} />
+                </div>
+                <div className="mt-3 grid gap-2 sm:grid-cols-3">
+                  <div className="rounded-lg bg-muted/40 px-3 py-2">
+                    <div className="text-xs text-muted-foreground">Đã nhận</div>
+                    <div className="font-semibold tabular-nums text-status-success">
+                      {formatCurrency(totalReceivedValue)}
+                    </div>
+                  </div>
+                  <div className="rounded-lg bg-muted/40 px-3 py-2">
+                    <div className="text-xs text-muted-foreground">Còn nhận</div>
+                    <div className="font-semibold tabular-nums text-status-warning">
+                      {formatCurrency(totalRemainingValue)}
+                    </div>
+                  </div>
+                  <div className="rounded-lg bg-muted/40 px-3 py-2">
+                    <div className="text-xs text-muted-foreground">Cần trả NCC</div>
+                    <div className="font-semibold tabular-nums text-primary">
+                      {formatCurrency(order.amountOwed)}
+                    </div>
+                  </div>
+                </div>
               </div>
               <DetailItemsTable
                 columns={[
@@ -311,7 +343,7 @@ function PurchaseOrderDetail({
                       const done = received >= total;
                       return (
                         <span className={done ? "text-status-success font-semibold" : "text-status-warning"}>
-                          {received} / {total} {unit}
+                          {formatNumber(received)} / {formatNumber(total)} {unit}
                         </span>
                       );
                     },
@@ -405,7 +437,15 @@ export default function NhapHangPage() {
   const [page, setPage] = useState(0);
   const [pageSize, setPageSize] = useState(15);
   const [createOpen, setCreateOpen] = useState(false);
-  const [editingPO, setEditingPO] = useState<{ id: string; code: string; supplierId: string; supplierName: string; note?: string } | null>(null);
+  const [editingPO, setEditingPO] = useState<{
+    id: string;
+    code: string;
+    supplierId: string;
+    supplierName: string;
+    total?: number;
+    taxAmount?: number;
+    note?: string;
+  } | null>(null);
   const [viewMode, setViewMode] = useState<ViewMode>("list");
   const [payingItem, setPayingItem] = useState<PurchaseOrder | null>(null);
   const [partialReceiveOrder, setPartialReceiveOrder] = useState<PurchaseOrder | null>(null);
@@ -566,6 +606,8 @@ export default function NhapHangPage() {
                 code: order.code,
                 supplierId: order.supplierId,
                 supplierName: order.supplierName,
+                total: order.total,
+                taxAmount: order.taxAmount,
               });
               setCreateOpen(true);
             }
@@ -761,7 +803,7 @@ export default function NhapHangPage() {
           />
           <SummaryCard
             icon={<Icon name="hourglass_bottom" size={16} />}
-            label="Đang nhận (partial)"
+            label="Đang nhận"
             value={kpiPartial.toString()}
             highlight={kpiPartial > 0}
           />
@@ -976,6 +1018,8 @@ export default function NhapHangPage() {
                       code: row.code,
                       supplierId: row.supplierId,
                       supplierName: row.supplierName,
+                      total: row.total,
+                      taxAmount: row.taxAmount,
                     });
                     setCreateOpen(true);
                   }

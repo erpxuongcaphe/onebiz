@@ -1,16 +1,16 @@
 "use client";
 
-import { useState, useEffect, useRef } from "react";
+import { useState, useEffect, useMemo, useRef } from "react";
 import {
   Dialog,
   DialogContent,
   DialogHeader,
   DialogTitle,
-  DialogDescription,
   DialogFooter,
 } from "@/components/ui/dialog";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
+import { NumericInput } from "@/components/ui/numeric-input";
 import { useToast } from "@/lib/contexts";
 import { getClient, getCurrentContext } from "@/lib/services/supabase/base";
 import { nextEntityCode } from "@/lib/services/supabase/stock-adjustments";
@@ -39,9 +39,7 @@ interface CreateInventoryCheckDialogProps {
   onSuccess?: () => void;
 }
 
-// Placeholder shown in the dialog header before save. Real code is generated
-// via `next_code('inventory')` at save time.
-const PENDING_CODE_PLACEHOLDER = "KK —";
+const PENDING_CODE_PLACEHOLDER = "Tự tạo khi lưu";
 
 export function CreateInventoryCheckDialog({
   open,
@@ -60,16 +58,16 @@ export function CreateInventoryCheckDialog({
   const saveLockRef = useRef(false);
 
   useEffect(() => {
-    if (open) {
-      setCode(PENDING_CODE_PLACEHOLDER);
-      setNotes("");
-      setProductSearch("");
-      setShowProductDropdown(false);
-      setFilteredProducts([]);
-      setCheckItems([]);
-      setErrors({});
-      setSaving(false);
-    }
+    if (!open) return;
+
+    setCode(PENDING_CODE_PLACEHOLDER);
+    setNotes("");
+    setProductSearch("");
+    setShowProductDropdown(false);
+    setFilteredProducts([]);
+    setCheckItems([]);
+    setErrors({});
+    setSaving(false);
   }, [open]);
 
   useEffect(() => {
@@ -145,14 +143,29 @@ export function CreateInventoryCheckDialog({
       items.map((item) =>
         item.productId === productId
           ? { ...item, actualStock: Number.isFinite(actualStock) ? Math.max(0, actualStock) : 0 }
-          : item
-      )
+          : item,
+      ),
     );
   }
 
   function removeProduct(productId: string) {
     setCheckItems((items) => items.filter((item) => item.productId !== productId));
   }
+
+  const totalSystemStock = useMemo(
+    () => checkItems.reduce((sum, item) => sum + item.systemStock, 0),
+    [checkItems],
+  );
+
+  const totalActualStock = useMemo(
+    () => checkItems.reduce((sum, item) => sum + item.actualStock, 0),
+    [checkItems],
+  );
+
+  const totalDiff = totalActualStock - totalSystemStock;
+
+  const increaseLines = checkItems.filter((item) => item.actualStock > item.systemStock).length;
+  const decreaseLines = checkItems.filter((item) => item.actualStock < item.systemStock).length;
 
   function validate(): boolean {
     const newErrors: Record<string, string> = {};
@@ -169,6 +182,7 @@ export function CreateInventoryCheckDialog({
   async function handleSave() {
     if (saveLockRef.current) return;
     if (!validate()) return;
+
     saveLockRef.current = true;
     setSaving(true);
     try {
@@ -241,157 +255,205 @@ export function CreateInventoryCheckDialog({
 
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
-      <DialogContent className="sm:max-w-3xl max-h-[90vh] overflow-y-auto">
-        <DialogHeader>
-          <DialogTitle>Tạo phiếu kiểm kho</DialogTitle>
-          <DialogDescription>
-            Chọn sản phẩm, nhập số thực tế rồi lưu phiếu. Khi cân bằng, hệ thống sẽ tạo nhập/xuất điều chỉnh theo chênh lệch.
-          </DialogDescription>
-        </DialogHeader>
-
-        <div className="grid gap-4 py-2">
-          {/* Code */}
-          <div className="space-y-2">
-            <label className="text-sm font-medium">Mã phiếu kiểm kho</label>
-            <div className="flex h-8 w-full rounded-lg border border-input bg-muted/50 px-3 py-2 text-sm">
-              {code}
+      <DialogContent className="flex h-[calc(100dvh-24px)] w-[calc(100vw-24px)] max-w-[1450px] flex-col gap-0 overflow-hidden p-0 sm:max-w-[1450px] sm:rounded-2xl">
+        <div className="shrink-0 border-b bg-white px-4 py-3 md:px-5">
+          <DialogHeader className="gap-0 pr-10">
+            <div className="flex flex-wrap items-center gap-3">
+              <DialogTitle className="text-xl">Tạo phiếu kiểm kho</DialogTitle>
+              <span className="rounded-full bg-blue-50 px-2.5 py-1 text-xs font-semibold text-blue-700">
+                Cân bằng sau kiểm
+              </span>
+              <span className="ml-auto mr-8 max-w-none whitespace-nowrap rounded-lg border bg-primary/5 px-3 py-1.5 text-sm font-bold text-primary sm:text-base">
+                {code}
+              </span>
             </div>
-          </div>
+          </DialogHeader>
+        </div>
 
-          {/* Notes */}
-          <div className="space-y-2">
-            <label className="text-sm font-medium">Ghi chú</label>
-            <textarea
-              className="flex min-h-[80px] w-full rounded-lg border border-input bg-transparent px-3 py-2 text-sm transition-colors outline-none placeholder:text-muted-foreground focus-visible:border-ring focus-visible:ring-3 focus-visible:ring-ring/50"
-              value={notes}
-              onChange={(e) => setNotes(e.target.value)}
-              placeholder="Ghi chú phiếu kiểm kho (lý do kiểm kho, khu vực kiểm...)"
-              rows={3}
-            />
-          </div>
-
-          <div className="space-y-2">
-            <label className="text-sm font-medium">
-              Sản phẩm kiểm kho <span className="text-destructive">*</span>
-            </label>
-            <div className="relative">
-              <Icon name="search" size={16} className="absolute left-2.5 top-1/2 -translate-y-1/2 text-muted-foreground" />
-              <Input
-                value={productSearch}
-                onChange={(e) => {
-                  setProductSearch(e.target.value);
-                  setShowProductDropdown(true);
-                }}
-                onFocus={() => setShowProductDropdown(true)}
-                onBlur={() => setTimeout(() => setShowProductDropdown(false), 200)}
-                placeholder="Tìm theo mã, tên hoặc barcode..."
-                className="pl-8"
-              />
-              {showProductDropdown && productSearch && (
-                <div className="absolute z-20 mt-1 max-h-56 w-full overflow-y-auto rounded-lg border bg-popover shadow-md">
-                  {filteredProducts.length === 0 ? (
-                    <div className="px-3 py-2 text-sm text-muted-foreground">
-                      Không tìm thấy sản phẩm
+        <div className="min-h-0 flex-1 overflow-y-auto bg-surface-container-low p-3 md:p-4">
+          <div className="mx-auto flex max-w-[1380px] flex-col gap-3">
+            <div className="grid gap-3 lg:grid-cols-[minmax(420px,1fr)_minmax(320px,0.75fr)]">
+              <section className="rounded-xl border bg-white p-3 shadow-sm">
+                <div className="mb-2 flex items-center justify-between gap-2">
+                  <h3 className="text-sm font-semibold">Sản phẩm kiểm kho</h3>
+                  <span className="text-xs text-muted-foreground">{formatNumber(checkItems.length)} dòng</span>
+                </div>
+                <div className="relative">
+                  <Icon name="search" size={16} className="absolute left-2.5 top-1/2 -translate-y-1/2 text-muted-foreground" />
+                  <Input
+                    value={productSearch}
+                    onChange={(e) => {
+                      setProductSearch(e.target.value);
+                      setShowProductDropdown(true);
+                    }}
+                    onFocus={() => setShowProductDropdown(true)}
+                    onBlur={() => setTimeout(() => setShowProductDropdown(false), 200)}
+                    placeholder="Tìm theo mã, tên hoặc barcode"
+                    className="pl-8"
+                  />
+                  {showProductDropdown && productSearch && (
+                    <div className="absolute z-30 mt-1 max-h-56 w-full overflow-y-auto rounded-lg border bg-popover shadow-lg">
+                      {filteredProducts.length === 0 ? (
+                        <div className="px-3 py-2 text-sm text-muted-foreground">
+                          Không tìm thấy sản phẩm
+                        </div>
+                      ) : (
+                        filteredProducts.map((product) => (
+                          <button
+                            key={product.id}
+                            type="button"
+                            className="grid w-full grid-cols-[minmax(0,1fr)_64px] gap-3 px-3 py-2 text-left text-sm hover:bg-accent"
+                            onMouseDown={(e) => e.preventDefault()}
+                            onClick={() => addProduct(product)}
+                          >
+                            <span className="min-w-0">
+                              <span className="block truncate font-medium">{product.name}</span>
+                              <span className="block truncate text-xs text-muted-foreground">
+                                {product.code} · {product.unit}
+                              </span>
+                            </span>
+                            <span className="text-right text-xs font-semibold text-primary">Thêm</span>
+                          </button>
+                        ))
+                      )}
                     </div>
-                  ) : (
-                    filteredProducts.map((product) => (
-                      <button
-                        key={product.id}
-                        type="button"
-                        className="flex w-full items-center justify-between gap-3 px-3 py-2 text-left text-sm hover:bg-accent"
-                        onMouseDown={(e) => e.preventDefault()}
-                        onClick={() => addProduct(product)}
-                      >
-                        <span className="min-w-0">
-                          <span className="block truncate font-medium">{product.name}</span>
-                          <span className="block text-xs text-muted-foreground">
-                            {product.code} · {product.unit}
-                          </span>
-                        </span>
-                        <span className="shrink-0 text-xs font-medium text-primary">Thêm</span>
-                      </button>
-                    ))
                   )}
+                </div>
+                {errors.items && <p className="mt-1 text-xs text-destructive">{errors.items}</p>}
+              </section>
+
+              <section className="rounded-xl border bg-white p-3 shadow-sm">
+                <h3 className="mb-2 text-sm font-semibold">Ghi chú</h3>
+                <textarea
+                  className="flex min-h-[74px] w-full rounded-lg border border-input bg-transparent px-3 py-2 text-sm outline-none placeholder:text-muted-foreground focus-visible:border-ring focus-visible:ring-3 focus-visible:ring-ring/50"
+                  value={notes}
+                  onChange={(e) => setNotes(e.target.value)}
+                  placeholder="Ví dụ: kiểm kho cuối ngày, khu vực quầy, ca kiểm..."
+                  rows={3}
+                />
+              </section>
+            </div>
+
+            <div className="overflow-hidden rounded-xl border bg-white shadow-sm">
+              <div className="hidden grid-cols-[minmax(300px,1fr)_90px_120px_120px_120px_44px] gap-2 border-b bg-muted/50 px-3 py-2 text-xs font-semibold uppercase text-muted-foreground md:grid">
+                <span>Sản phẩm</span>
+                <span className="flex justify-center">ĐVT</span>
+                <span className="flex justify-end">Sổ kho</span>
+                <span className="flex justify-end">Thực tế</span>
+                <span className="flex justify-end">Lệch</span>
+                <span />
+              </div>
+
+              {checkItems.length === 0 ? (
+                <div className="flex min-h-[320px] flex-col items-center justify-center px-4 py-10 text-center">
+                  <div className="flex size-12 items-center justify-center rounded-xl bg-primary/10 text-primary">
+                    <Icon name="fact_check" size={24} />
+                  </div>
+                  <div className="mt-3 font-semibold">Chưa có sản phẩm kiểm kho</div>
+                  <div className="mt-1 max-w-md text-sm text-muted-foreground">
+                    Khi cân bằng phiếu, chênh lệch dương sẽ tạo nhập điều chỉnh, chênh lệch âm sẽ tạo xuất điều chỉnh.
+                  </div>
+                </div>
+              ) : (
+                <div className="divide-y">
+                  {checkItems.map((item) => {
+                    const diff = item.actualStock - item.systemStock;
+                    return (
+                      <div
+                        key={item.productId}
+                        className="grid gap-2 px-3 py-2.5 md:grid-cols-[minmax(300px,1fr)_90px_120px_120px_120px_44px] md:items-center"
+                      >
+                        <div className="min-w-0">
+                          <div className="truncate text-sm font-semibold">{item.productName}</div>
+                          <div className="mt-0.5 truncate text-xs text-muted-foreground">{item.productCode}</div>
+                        </div>
+                        <div className="flex justify-center">
+                          <span className="min-w-[64px] rounded-md bg-muted/50 px-2 py-1 text-center text-xs font-semibold text-muted-foreground">
+                            {item.unit || "Cái"}
+                          </span>
+                        </div>
+                        <div className="text-right text-sm tabular-nums text-muted-foreground">
+                          {formatNumber(item.systemStock)}
+                        </div>
+                        <NumericInput
+                          value={item.actualStock}
+                          onChange={(value) => updateActualStock(item.productId, value ?? 0)}
+                          min={0}
+                          decimals={2}
+                          className="h-8 text-right"
+                          aria-label={`Tồn thực tế ${item.productName}`}
+                        />
+                        <div
+                          className={`text-right text-sm font-bold tabular-nums ${
+                            diff === 0
+                              ? "text-muted-foreground"
+                              : diff > 0
+                                ? "text-status-success"
+                                : "text-destructive"
+                          }`}
+                        >
+                          {diff > 0 ? "+" : ""}
+                          {formatNumber(diff)}
+                        </div>
+                        <Button
+                          type="button"
+                          variant="ghost"
+                          size="icon-sm"
+                          onClick={() => removeProduct(item.productId)}
+                          className="justify-self-end text-muted-foreground hover:text-destructive"
+                          aria-label={`Bỏ ${item.productName}`}
+                        >
+                          <Icon name="delete" size={14} />
+                        </Button>
+                      </div>
+                    );
+                  })}
                 </div>
               )}
             </div>
-            {errors.items && <p className="text-xs text-destructive">{errors.items}</p>}
-          </div>
-
-          <div className="rounded-lg border">
-            <div className="grid grid-cols-[1fr_92px_112px_96px_40px] gap-2 border-b bg-muted/50 px-3 py-2 text-xs font-medium text-muted-foreground">
-              <span>Sản phẩm</span>
-              <span className="text-right">Sổ kho</span>
-              <span className="text-right">Thực tế</span>
-              <span className="text-right">Lệch</span>
-              <span />
-            </div>
-            {checkItems.length === 0 ? (
-              <div className="px-3 py-8 text-center text-sm text-muted-foreground">
-                Chưa có sản phẩm kiểm kho
-              </div>
-            ) : (
-              checkItems.map((item) => {
-                const diff = item.actualStock - item.systemStock;
-                return (
-                  <div
-                    key={item.productId}
-                    className="grid grid-cols-[1fr_92px_112px_96px_40px] items-center gap-2 border-b px-3 py-2 last:border-b-0"
-                  >
-                    <div className="min-w-0">
-                      <div className="truncate text-sm font-medium">{item.productName}</div>
-                      <div className="text-xs text-muted-foreground">
-                        {item.productCode} · {item.unit}
-                      </div>
-                    </div>
-                    <div className="text-right font-mono text-sm">
-                      {formatNumber(item.systemStock)}
-                    </div>
-                    <Input
-                      type="number"
-                      min={0}
-                      value={item.actualStock}
-                      onChange={(e) => updateActualStock(item.productId, Number(e.target.value) || 0)}
-                      className="h-8 text-right font-mono"
-                    />
-                    <div
-                      className={`text-right font-mono text-sm font-semibold ${
-                        diff === 0
-                          ? "text-muted-foreground"
-                          : diff > 0
-                            ? "text-status-success"
-                            : "text-destructive"
-                      }`}
-                    >
-                      {diff > 0 ? "+" : ""}
-                      {formatNumber(diff)}
-                    </div>
-                    <Button
-                      type="button"
-                      variant="ghost"
-                      size="icon-sm"
-                      onClick={() => removeProduct(item.productId)}
-                      aria-label={`Bỏ ${item.productName}`}
-                    >
-                      <Icon name="close" size={16} />
-                    </Button>
-                  </div>
-                );
-              })
-            )}
           </div>
         </div>
 
-        <DialogFooter>
-          <Button variant="outline" onClick={() => onOpenChange(false)}>
-            Hủy
-          </Button>
-          <Button onClick={handleSave} disabled={saving}>
-            {saving && <Icon name="progress_activity" size={16} className="mr-2 animate-spin" />}
-            Tạo phiếu kiểm kho
-          </Button>
+        <DialogFooter className="mx-0 mb-0 shrink-0 rounded-none border-t bg-white px-4 py-3">
+          <div className="mx-auto grid w-full max-w-[1380px] grid-cols-1 items-center gap-3 lg:grid-cols-[1fr_auto]">
+            <div className="grid gap-2 text-sm sm:grid-cols-3 xl:grid-cols-5">
+              <FooterMetric label="Dòng" value={formatNumber(checkItems.length)} />
+              <FooterMetric label="Sổ kho" value={formatNumber(totalSystemStock)} />
+              <FooterMetric label="Thực tế" value={formatNumber(totalActualStock)} />
+              <FooterMetric label="Nhập/Xuất lệch" value={`${formatNumber(increaseLines)} / ${formatNumber(decreaseLines)}`} />
+              <FooterMetric label="Tổng lệch" value={`${totalDiff > 0 ? "+" : ""}${formatNumber(totalDiff)}`} strong />
+            </div>
+            <div className="flex justify-end gap-2">
+              <Button variant="outline" onClick={() => onOpenChange(false)}>
+                Hủy
+              </Button>
+              <Button onClick={handleSave} disabled={saving}>
+                {saving && <Icon name="progress_activity" size={16} className="mr-2 animate-spin" />}
+                Tạo phiếu kiểm kho
+              </Button>
+            </div>
+          </div>
         </DialogFooter>
       </DialogContent>
     </Dialog>
+  );
+}
+
+function FooterMetric({
+  label,
+  value,
+  strong,
+}: {
+  label: string;
+  value: string;
+  strong?: boolean;
+}) {
+  return (
+    <div className="rounded-lg border bg-surface-container-lowest px-3 py-2">
+      <div className="text-[11px] font-semibold uppercase text-muted-foreground">{label}</div>
+      <div className={`mt-0.5 break-words font-bold leading-tight tabular-nums ${strong ? "text-lg text-primary" : ""}`}>
+        {value}
+      </div>
+    </div>
   );
 }

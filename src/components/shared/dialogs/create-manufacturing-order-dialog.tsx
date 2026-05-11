@@ -12,7 +12,7 @@ import {
 import { Input } from "@/components/ui/input";
 import { Button } from "@/components/ui/button";
 import { useToast } from "@/lib/contexts";
-import { getClient } from "@/lib/services/supabase/base";
+import { getClient, getCurrentContext } from "@/lib/services/supabase/base";
 import {
   applyManualStockMovement,
   nextEntityCode,
@@ -76,10 +76,12 @@ export function CreateManufacturingOrderDialog({
     if (!productSearch || productSearch.length < 1) { setFilteredProducts([]); return; }
     const timer = setTimeout(async () => {
       const supabase = getClient();
+      const ctx = await getCurrentContext();
       const { data } = await supabase
         .from("products")
         .select("id, code, name, unit")
         .or(`name.ilike.%${productSearch}%,code.ilike.%${productSearch}%`)
+        .eq("tenant_id", ctx.tenantId)
         .eq("is_active", true)
         .limit(8);
       setFilteredProducts((data ?? []).map(p => ({

@@ -205,9 +205,10 @@ export async function getPurchaseReturns(
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
   let query = (supabase as any)
     .from("supplier_returns")
-    .select("*, branches!supplier_returns_branch_id_fkey(id,name)", {
-      count: "exact",
-    })
+    .select(
+      "*, profiles!supplier_returns_created_by_fkey(full_name), branches!supplier_returns_branch_id_fkey(id,name)",
+      { count: "exact" },
+    )
     .eq("tenant_id", tenantId);
 
   // Search theo mã phiếu trả hoặc tên NCC
@@ -609,6 +610,7 @@ const purchaseReturnStatusNameMap: Record<string, string> = {
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
 function mapPurchaseReturn(row: any): PurchaseReturn {
   const branch = row.branches as { id: string; name: string } | null;
+  const profile = row.profiles as { full_name: string } | null;
   return {
     id: row.id,
     code: row.code,
@@ -619,6 +621,7 @@ function mapPurchaseReturn(row: any): PurchaseReturn {
     status: (row.status === "completed" ? "completed" : "draft") as PurchaseReturn["status"],
     statusName: purchaseReturnStatusNameMap[row.status] ?? row.status,
     createdBy: row.created_by ?? "---",
+    createdByName: profile?.full_name ?? undefined,
     branchId: row.branch_id ?? branch?.id ?? undefined,
     branchName: branch?.name ?? undefined,
   };

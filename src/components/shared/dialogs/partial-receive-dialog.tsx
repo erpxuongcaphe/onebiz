@@ -90,10 +90,12 @@ export function PartialReceiveDialog({
     };
   }, [open, orderId, toast]);
 
-  const selectedCount = lines.filter((l) => l.checked && l.receiveQty > 0).length;
-  const totalValue = lines
-    .filter((l) => l.checked && l.receiveQty > 0)
-    .reduce((s, l) => s + l.receiveQty * l.unitPrice, 0);
+  const selectedLines = lines.filter((l) => l.checked && l.receiveQty > 0);
+  const selectedCount = selectedLines.length;
+  const totalReceiveQty = selectedLines.reduce((s, l) => s + l.receiveQty, 0);
+  const totalRemainingQty = lines.reduce((s, l) => s + l.remaining, 0);
+  const totalAfterReceiveQty = Math.max(0, totalRemainingQty - totalReceiveQty);
+  const totalValue = selectedLines.reduce((s, l) => s + l.receiveQty * l.unitPrice, 0);
 
   const handleToggle = (id: string) => {
     setLines((prev) =>
@@ -112,6 +114,20 @@ export function PartialReceiveDialog({
             }
           : l,
       ),
+    );
+  };
+
+  const handleReceiveRemaining = (id: string) => {
+    setLines((prev) =>
+      prev.map((l) =>
+        l.id === id ? { ...l, checked: true, receiveQty: l.remaining } : l,
+      ),
+    );
+  };
+
+  const handleSkipLine = (id: string) => {
+    setLines((prev) =>
+      prev.map((l) => (l.id === id ? { ...l, checked: false, receiveQty: 0 } : l)),
     );
   };
 
@@ -159,16 +175,16 @@ export function PartialReceiveDialog({
 
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
-      <DialogContent className="md:max-w-2xl lg:max-w-3xl max-h-[90vh] overflow-y-auto">
+      <DialogContent className="md:max-w-3xl lg:max-w-4xl max-h-[90vh] overflow-y-auto">
         <DialogHeader>
-          <DialogTitle>Nhập một phần — {orderCode}</DialogTitle>
+          <DialogTitle>Nhận hàng từ phiếu {orderCode}</DialogTitle>
           <DialogDescription>
-            Chọn từng mặt hàng và nhập số lượng thực tế nhận được. Kho sẽ được cộng ngay
-            sau khi xác nhận.
+            Nhập đúng số lượng thực nhận. Khi xác nhận, hệ thống sẽ cộng kho cho các
+            dòng được chọn.
           </DialogDescription>
         </DialogHeader>
 
-        <div className="space-y-3 py-2">
+        <div className="space-y-3 py-1">
           {loading ? (
             <div className="flex items-center justify-center py-8">
               <Icon name="progress_activity" size={24} className="animate-spin text-muted-foreground" />
@@ -179,52 +195,99 @@ export function PartialReceiveDialog({
             </div>
           ) : (
             <>
-              <div className="flex items-center justify-between">
-                <span className="text-xs text-muted-foreground">
-                  {selectedCount} / {lines.length} dòng được chọn
-                </span>
-                <div className="flex gap-2">
+              <div className="grid gap-2 sm:grid-cols-2 lg:grid-cols-4">
+                <div className="rounded-lg border bg-surface-container-lowest p-3">
+                  <div className="text-xs uppercase text-muted-foreground">Dòng nhập</div>
+                  <div className="mt-1 text-xl font-bold tabular-nums">
+                    {selectedCount}/{lines.length}
+                  </div>
+                </div>
+                <div className="rounded-lg border bg-surface-container-lowest p-3">
+                  <div className="text-xs uppercase text-muted-foreground">SL nhận</div>
+                  <div className="mt-1 text-xl font-bold tabular-nums">
+                    {formatNumber(totalReceiveQty)}
+                  </div>
+                </div>
+                <div className="rounded-lg border bg-surface-container-lowest p-3">
+                  <div className="text-xs uppercase text-muted-foreground">Còn sau nhập</div>
+                  <div className="mt-1 text-xl font-bold tabular-nums">
+                    {formatNumber(totalAfterReceiveQty)}
+                  </div>
+                </div>
+                <div className="rounded-lg border bg-primary/5 p-3">
+                  <div className="text-xs uppercase text-primary/80">Giá trị nhập</div>
+                  <div className="mt-1 text-xl font-bold text-primary tabular-nums">
+                    {formatCurrency(totalValue)}
+                  </div>
+                </div>
+              </div>
+
+              <div className="flex flex-wrap items-center justify-between gap-2">
+                <div className="text-xs text-muted-foreground">
+                  Chỉ các dòng có số lượng lớn hơn 0 mới được cộng kho.
+                </div>
+                <div className="flex flex-wrap gap-2">
                   <Button size="sm" variant="ghost" onClick={handleClear}>
-                    Bỏ chọn tất cả
+                    Bỏ chọn
                   </Button>
                   <Button size="sm" variant="outline" onClick={handleReceiveAll}>
-                    Nhập đủ tất cả
+                    Nhận hết còn lại
                   </Button>
                 </div>
               </div>
 
-              <div className="rounded-xl border border-border overflow-hidden bg-surface-container-lowest">
-                <table className="w-full text-sm">
-                  <thead className="bg-surface-container-low text-xs uppercase tracking-wider text-muted-foreground">
-                    <tr>
-                      <th className="px-3 py-2 text-left w-10"></th>
-                      <th className="px-3 py-2 text-left">Mặt hàng</th>
-                      <th className="px-3 py-2 text-right w-24">Tổng SL</th>
-                      <th className="px-3 py-2 text-right w-24">Đã nhập</th>
-                      <th className="px-3 py-2 text-right w-28">Nhập lần này</th>
-                      <th className="px-3 py-2 text-right w-28">Thành tiền</th>
-                    </tr>
-                  </thead>
-                  <tbody>
-                    {lines.map((l) => (
-                      <tr key={l.id} className="border-t border-border">
-                        <td className="px-3 py-2">
+              <div className="rounded-xl border border-border bg-surface-container-lowest">
+                <div className="hidden grid-cols-[40px_minmax(220px,1fr)_150px_150px_140px] gap-3 border-b bg-surface-container-low px-3 py-2 text-xs font-semibold uppercase text-muted-foreground md:grid">
+                  <span />
+                  <span>Mặt hàng</span>
+                  <span className="text-right">Tiến độ</span>
+                  <span className="text-right">Nhập lần này</span>
+                  <span className="text-right">Thành tiền</span>
+                </div>
+                <div className="divide-y">
+                  {lines.map((l) => {
+                    const lineValue = l.checked && l.receiveQty > 0 ? l.receiveQty * l.unitPrice : 0;
+                    const progress = l.quantity > 0 ? Math.min(100, (l.receivedQuantity / l.quantity) * 100) : 0;
+                    return (
+                      <div
+                        key={l.id}
+                        className="grid gap-3 px-3 py-3 md:grid-cols-[40px_minmax(220px,1fr)_150px_150px_140px] md:items-center"
+                      >
+                        <div className="flex items-center justify-between md:block">
                           <Checkbox
                             checked={l.checked}
                             onCheckedChange={() => handleToggle(l.id)}
+                            aria-label={`Chọn ${l.productName}`}
                           />
-                        </td>
-                        <td className="px-3 py-2">
-                          <div className="font-medium">{l.productName}</div>
-                          <div className="text-xs text-muted-foreground">{l.productCode}</div>
-                        </td>
-                        <td className="px-3 py-2 text-right tabular-nums">
-                          {formatNumber(l.quantity)} {l.unit}
-                        </td>
-                        <td className="px-3 py-2 text-right tabular-nums text-muted-foreground">
-                          {formatNumber(l.receivedQuantity)}
-                        </td>
-                        <td className="px-3 py-2">
+                          <div className="text-xs text-muted-foreground md:hidden">
+                            Còn {formatNumber(l.remaining)} {l.unit}
+                          </div>
+                        </div>
+
+                        <div className="min-w-0">
+                          <div className="truncate font-medium">{l.productName}</div>
+                          <div className="mt-0.5 flex flex-wrap items-center gap-2 text-xs text-muted-foreground">
+                            {l.productCode && <span>{l.productCode}</span>}
+                            <span>{formatCurrency(l.unitPrice)}/{l.unit}</span>
+                          </div>
+                        </div>
+
+                        <div className="space-y-1 text-xs md:text-right">
+                          <div className="font-medium tabular-nums">
+                            {formatNumber(l.receivedQuantity)} / {formatNumber(l.quantity)} {l.unit}
+                          </div>
+                          <div className="h-1.5 overflow-hidden rounded-full bg-muted">
+                            <div
+                              className="h-full rounded-full bg-primary"
+                              style={{ width: `${progress}%` }}
+                            />
+                          </div>
+                          <div className="text-muted-foreground">
+                            Còn {formatNumber(l.remaining)}
+                          </div>
+                        </div>
+
+                        <div className="space-y-1">
                           <Input
                             type="number"
                             value={l.receiveQty}
@@ -233,28 +296,40 @@ export function PartialReceiveDialog({
                             max={l.remaining}
                             step="any"
                             disabled={!l.checked}
-                            className="text-right h-8"
+                            className="h-8 text-right tabular-nums"
                           />
-                        </td>
-                        <td className="px-3 py-2 text-right tabular-nums font-semibold text-primary">
-                          {l.checked && l.receiveQty > 0
-                            ? formatCurrency(l.receiveQty * l.unitPrice)
-                            : "—"}
-                        </td>
-                      </tr>
-                    ))}
-                  </tbody>
-                  <tfoot className="bg-surface-container-low text-sm">
-                    <tr>
-                      <td colSpan={5} className="px-3 py-2 text-right font-semibold">
-                        Tổng giá trị nhập lần này
-                      </td>
-                      <td className="px-3 py-2 text-right tabular-nums font-bold text-primary">
-                        {formatCurrency(totalValue)}
-                      </td>
-                    </tr>
-                  </tfoot>
-                </table>
+                          <div className="flex justify-end gap-1">
+                            <Button
+                              type="button"
+                              size="xs"
+                              variant="ghost"
+                              onClick={() => handleSkipLine(l.id)}
+                            >
+                              0
+                            </Button>
+                            <Button
+                              type="button"
+                              size="xs"
+                              variant="outline"
+                              onClick={() => handleReceiveRemaining(l.id)}
+                            >
+                              Còn lại
+                            </Button>
+                          </div>
+                        </div>
+
+                        <div className="text-right">
+                          <div className="text-sm font-semibold tabular-nums text-primary">
+                            {lineValue > 0 ? formatCurrency(lineValue) : "—"}
+                          </div>
+                          <div className="text-xs text-muted-foreground">
+                            Sau nhập còn {formatNumber(Math.max(0, l.remaining - (l.checked ? l.receiveQty : 0)))}
+                          </div>
+                        </div>
+                      </div>
+                    );
+                  })}
+                </div>
               </div>
 
               <div className="text-xs text-muted-foreground bg-surface-container-low rounded-lg p-3 flex items-start gap-2">

@@ -10,11 +10,12 @@ import {
   DialogFooter,
 } from "@/components/ui/dialog";
 import { Input } from "@/components/ui/input";
+import { NumericInput } from "@/components/ui/numeric-input";
 import { Button } from "@/components/ui/button";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
-import { formatCurrency } from "@/lib/format";
+import { formatCurrency, formatNumber } from "@/lib/format";
 import { useToast, useAuth } from "@/lib/contexts";
-import { getClient } from "@/lib/services/supabase/base";
+import { getClient, getCurrentContext } from "@/lib/services/supabase/base";
 import { createInternalSale, getBranches, syncInternalEntities } from "@/lib/services";
 import type { BranchDetail } from "@/lib/services";
 import { Icon } from "@/components/ui/icon";
@@ -89,10 +90,12 @@ export function CreateInternalSaleDialog({
     }
     const timer = setTimeout(async () => {
       const supabase = getClient();
+      const ctx = await getCurrentContext();
       const { data } = await supabase
         .from("products")
         .select("id, code, name, unit, stock, sell_price, vat_rate")
         .or(`name.ilike.%${productSearch}%,code.ilike.%${productSearch}%`)
+        .eq("tenant_id", ctx.tenantId)
         .eq("is_active", true)
         .limit(8);
       setFilteredProducts(
@@ -143,6 +146,7 @@ export function CreateInternalSaleDialog({
     0,
   );
   const total = subtotal + taxTotal;
+  const totalQuantity = items.reduce((s, i) => s + i.quantity, 0);
 
   async function handleSave() {
     if (saveLockRef.current) return;
@@ -203,7 +207,7 @@ export function CreateInternalSaleDialog({
 
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
-      <DialogContent className="max-w-3xl max-h-[90vh] overflow-y-auto">
+      <DialogContent className="max-w-[min(1100px,calc(100vw-32px))] max-h-[92vh] overflow-y-auto">
         <DialogHeader>
           <DialogTitle>Tạo đơn bán nội bộ</DialogTitle>
           <DialogDescription>
@@ -291,23 +295,30 @@ export function CreateInternalSaleDialog({
                 setShowDropdown(true);
               }}
               onFocus={() => setShowDropdown(true)}
+              onBlur={() => setTimeout(() => setShowDropdown(false), 150)}
             />
-            {showDropdown && filteredProducts.length > 0 && (
+            {showDropdown && productSearch && (
               <div className="absolute z-50 mt-1 w-full bg-background border rounded-lg shadow-lg max-h-48 overflow-y-auto">
-                {filteredProducts.map((p) => (
-                  <button
-                    key={p.id}
-                    className="w-full text-left px-3 py-2 text-sm hover:bg-accent flex justify-between"
-                    onClick={() => addProduct(p)}
-                  >
-                    <span>
-                      <strong>{p.code}</strong> — {p.name}
-                    </span>
-                    <span className="text-muted-foreground">
-                      Kho: {p.stock} {p.unit} | {formatCurrency(p.sell_price)}
-                    </span>
-                  </button>
-                ))}
+                {filteredProducts.length === 0 ? (
+                  <div className="px-3 py-2 text-sm text-muted-foreground">Không tìm thấy sản phẩm</div>
+                ) : (
+                  filteredProducts.map((p) => (
+                    <button
+                      key={p.id}
+                      type="button"
+                      className="w-full text-left px-3 py-2 text-sm hover:bg-accent flex justify-between"
+                      onMouseDown={(e) => e.preventDefault()}
+                      onClick={() => addProduct(p)}
+                    >
+                      <span>
+                        <strong>{p.code}</strong> — {p.name}
+                      </span>
+                      <span className="text-muted-foreground">
+                        Kho: {formatNumber(p.stock)} {p.unit} | {formatCurrency(p.sell_price)}
+                      </span>
+                    </button>
+                  ))
+                )}
               </div>
             )}
           </div>
@@ -320,6 +331,7 @@ export function CreateInternalSaleDialog({
               <thead className="bg-muted/50">
                 <tr>
                   <th className="text-left p-2">Sản phẩm</th>
+                  <th className="text-center p-2 w-24">ĐVT</th>
                   <th className="text-right p-2 w-20">SL</th>
                   <th className="text-right p-2 w-32">Đơn giá</th>
                   <th className="text-right p-2 w-16">VAT%</th>
@@ -333,25 +345,29 @@ export function CreateInternalSaleDialog({
                     <td className="p-2">
                       <div className="font-medium">{item.productName}</div>
                       <div className="text-xs text-muted-foreground">
-                        {item.productCode} · {item.unit} · Kho: {item.stock}
+                        {item.productCode} · Kho: {formatNumber(item.stock)}
                       </div>
                     </td>
+                    <td className="p-2 text-center">
+                      <span className="inline-flex min-w-14 justify-center rounded-md bg-muted px-2 py-1 font-medium">
+                        {item.unit}
+                      </span>
+                    </td>
                     <td className="p-2">
-                      <Input
-                        type="number"
-                        min={1}
-                        className="w-20 text-right h-8"
+                      <NumericInput
                         value={item.quantity}
-                        onChange={(e) => updateItem(item.productId, "quantity", Number(e.target.value) || 1)}
+                        min={0}
+                        className="h-8 w-20 text-right"
+                        onChange={(value) => updateItem(item.productId, "quantity", value ?? 0)}
                       />
                     </td>
                     <td className="p-2">
-                      <Input
-                        type="number"
-                        min={0}
-                        className="w-32 text-right h-8"
+                      <NumericInput
                         value={item.unitPrice}
-                        onChange={(e) => updateItem(item.productId, "unitPrice", Number(e.target.value) || 0)}
+                        min={0}
+                        decimals={0}
+                        className="h-8 w-32 text-right"
+                        onChange={(value) => updateItem(item.productId, "unitPrice", value ?? 0)}
                       />
                     </td>
                     <td className="p-2 text-right">{item.vatRate}%</td>
@@ -404,7 +420,7 @@ export function CreateInternalSaleDialog({
           <div className="rounded-lg bg-muted/50 p-3 text-sm">
             <strong>{fromBranch.name}</strong> bán cho <strong>{toBranch.name}</strong>
             {" · "}
-            {items.length} sản phẩm · {formatCurrency(total)}
+            {formatNumber(items.length)} sản phẩm · SL {formatNumber(totalQuantity)} · {formatCurrency(total)}
             {" · "}
             {paymentMethod === "debt" ? "Ghi nợ" : paymentMethod === "cash" ? "Tiền mặt" : "Chuyển khoản"}
           </div>

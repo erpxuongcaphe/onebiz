@@ -70,7 +70,7 @@ function InputInvoiceDetail({
             meta={
               <div className="flex items-center gap-4 flex-wrap text-xs">
                 <span>
-                  Người tạo: <strong>{formatUser(undefined, item.createdBy)}</strong>
+                  Người tạo: <strong>{formatUser(item.createdByName, item.createdBy)}</strong>
                 </span>
                 <span>
                   Ngày tạo: <strong>{formatDate(item.date)}</strong>
@@ -87,7 +87,7 @@ function InputInvoiceDetail({
               { label: "Tổng tiền hàng", value: formatCurrency(item.totalAmount) },
               { label: "Thuế", value: formatCurrency(item.taxAmount) },
               { label: "Trạng thái", value: st.label },
-              { label: "Người tạo", value: formatUser(undefined, item.createdBy) },
+              { label: "Người tạo", value: formatUser(item.createdByName, item.createdBy) },
             ]}
           />
         </div>
@@ -162,6 +162,7 @@ const columns: ColumnDef<InputInvoice, unknown>[] = [
     accessorKey: "createdBy",
     header: "Người tạo",
     size: 140,
+    cell: ({ row }) => formatUser(row.original.createdByName, row.original.createdBy),
   },
 ];
 

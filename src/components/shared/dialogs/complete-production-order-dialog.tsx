@@ -23,7 +23,7 @@ import {
 } from "@/lib/services";
 import type { ProductionOrder } from "@/lib/types";
 import type { BranchDetail, MaterialCheckResult } from "@/lib/services";
-import { getClient } from "@/lib/services/supabase/base";
+import { getClient, getCurrentContext } from "@/lib/services/supabase/base";
 import { formatNumber } from "@/lib/format";
 import { Icon } from "@/components/ui/icon";
 
@@ -148,9 +148,11 @@ export function CompleteProductionOrderDialog({
 
           // Fetch product price for internal sale
           const supabase = getClient();
+          const ctx = await getCurrentContext();
           const { data: product } = await supabase
             .from("products")
             .select("code, name, unit, sell_price, vat_rate")
+            .eq("tenant_id", ctx.tenantId)
             .eq("id", order.productId)
             .single();
 

@@ -291,7 +291,7 @@ function InventoryCheckDetail({
             meta={
               <div className="flex items-center gap-4 flex-wrap text-xs">
                 <span>
-                  Người tạo: <strong>{formatUser(undefined, item.createdBy)}</strong>
+                  Người tạo: <strong>{formatUser(item.createdByName, item.createdBy)}</strong>
                 </span>
                 <span>
                   Thời gian: <strong>{formatDate(item.date)}</strong>
@@ -305,7 +305,7 @@ function InventoryCheckDetail({
               { label: "Mã kiểm kho", value: item.code },
               { label: "Thời gian", value: formatDate(item.date) },
               { label: "Trạng thái", value: status.label },
-              { label: "Người tạo", value: formatUser(undefined, item.createdBy) },
+              { label: "Người tạo", value: formatUser(item.createdByName, item.createdBy) },
               {
                 label: "Tổng sản phẩm",
                 value: String(item.totalProducts),

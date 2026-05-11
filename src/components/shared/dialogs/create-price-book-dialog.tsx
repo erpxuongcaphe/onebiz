@@ -13,7 +13,7 @@ import { Input } from "@/components/ui/input";
 import { Button } from "@/components/ui/button";
 import { formatCurrency } from "@/lib/format";
 import { useToast } from "@/lib/contexts";
-import { getClient } from "@/lib/services/supabase/base";
+import { getClient, getCurrentContext } from "@/lib/services/supabase/base";
 import { Icon } from "@/components/ui/icon";
 
 interface CreatePriceBookDialogProps {
@@ -66,10 +66,12 @@ export function CreatePriceBookDialog({
     if (!productSearch || productSearch.length < 1) { setFilteredProducts([]); return; }
     const timer = setTimeout(async () => {
       const supabase = getClient();
+      const ctx = await getCurrentContext();
       const { data } = await supabase
         .from("products")
         .select("id, code, name, unit, sell_price, cost_price")
         .or(`name.ilike.%${productSearch}%,code.ilike.%${productSearch}%`)
+        .eq("tenant_id", ctx.tenantId)
         .eq("is_active", true)
         .limit(8);
       setFilteredProducts((data ?? []).map(p => ({
@@ -112,6 +114,7 @@ export function CreatePriceBookDialog({
     setSaving(true);
     try {
       const supabase = getClient();
+      const ctx = await getCurrentContext();
 
       const updateData: Record<string, number> = {
         sell_price: Number(newSellPrice),
@@ -123,6 +126,7 @@ export function CreatePriceBookDialog({
       const { error: updateErr } = await supabase
         .from("products")
         .update(updateData)
+        .eq("tenant_id", ctx.tenantId)
         .eq("id", selectedProduct!.id);
 
       if (updateErr) throw new Error(updateErr.message);

@@ -6,15 +6,15 @@ import {
   DialogContent,
   DialogHeader,
   DialogTitle,
-  DialogDescription,
   DialogFooter,
 } from "@/components/ui/dialog";
 import { Input } from "@/components/ui/input";
+import { NumericInput } from "@/components/ui/numeric-input";
 import { Button } from "@/components/ui/button";
 import { Checkbox } from "@/components/ui/checkbox";
-import { formatCurrency } from "@/lib/format";
+import { formatCurrency, formatNumber } from "@/lib/format";
 import { useToast } from "@/lib/contexts";
-import { getClient } from "@/lib/services/supabase/base";
+import { getClient, getCurrentContext } from "@/lib/services/supabase/base";
 import { completeSupplierReturn } from "@/lib/services/supabase/purchase-entries";
 import { Icon } from "@/components/ui/icon";
 
@@ -55,9 +55,7 @@ const SUPPLIER_RETURN_PAYMENT_METHODS: Array<{
   { value: "card", label: "Thẻ", icon: "credit_card" },
 ];
 
-// Placeholder shown in the dialog header before save. Real code is generated
-// via `next_code('purchase_return')` at save time.
-const PENDING_CODE_PLACEHOLDER = "THN —";
+const PENDING_CODE_PLACEHOLDER = "Tự tạo khi lưu";
 
 export function CreatePurchaseReturnDialog({
   open,
@@ -79,85 +77,99 @@ export function CreatePurchaseReturnDialog({
   const saveLockRef = useRef(false);
 
   useEffect(() => {
-    if (open) {
-      setCode(PENDING_CODE_PLACEHOLDER);
-      setPOSearch("");
-      setShowPODropdown(false);
-      setFilteredPOs([]);
-      setSelectedPO(null);
-      setPOItems([]);
-      setReason("");
-      setNotes("");
-      setErrors({});
-      setSaving(false);
-      setPaymentMethod("cash");
-    }
+    if (!open) return;
+
+    setCode(PENDING_CODE_PLACEHOLDER);
+    setPOSearch("");
+    setShowPODropdown(false);
+    setFilteredPOs([]);
+    setSelectedPO(null);
+    setPOItems([]);
+    setReason("");
+    setNotes("");
+    setErrors({});
+    setSaving(false);
+    setPaymentMethod("cash");
   }, [open]);
 
-  // Live search purchase orders
   useEffect(() => {
-    if (!poSearch || poSearch.length < 1) { setFilteredPOs([]); return; }
+    if (!poSearch || poSearch.length < 1) {
+      setFilteredPOs([]);
+      return;
+    }
+
     const timer = setTimeout(async () => {
       const supabase = getClient();
+      const ctx = await getCurrentContext();
       const { data } = await supabase
         .from("purchase_orders")
         .select("id, code, supplier_id, supplier_name")
         .ilike("code", `%${poSearch}%`)
+        .eq("tenant_id", ctx.tenantId)
         .in("status", ["completed", "partial"])
         .limit(8);
-      setFilteredPOs((data ?? []).map(po => ({
+
+      setFilteredPOs((data ?? []).map((po) => ({
         id: po.id,
         code: po.code,
         supplier_id: po.supplier_id,
         supplier_name: po.supplier_name,
       })));
     }, 300);
+
     return () => clearTimeout(timer);
   }, [poSearch]);
 
-  // Load PO items when PO selected
   async function loadPOItems(poId: string) {
     const supabase = getClient();
     const { data } = await supabase
       .from("purchase_order_items")
       .select("id, product_id, product_name, unit, quantity, unit_price, total")
       .eq("purchase_order_id", poId);
+
     setPOItems(
-      (data ?? []).map(item => ({
+      (data ?? []).map((item) => ({
         id: item.id,
         product_id: item.product_id,
         product_name: item.product_name,
         unit: item.unit,
-        quantity: item.quantity,
-        unit_price: item.unit_price,
-        total: item.total,
+        quantity: Number(item.quantity ?? 0),
+        unit_price: Number(item.unit_price ?? 0),
+        total: Number(item.total ?? 0),
         selected: false,
-        returnQty: item.quantity,
-      }))
+        returnQty: Number(item.quantity ?? 0),
+      })),
     );
   }
 
   function toggleItem(id: string) {
     setPOItems(
       poItems.map((item) =>
-        item.id === id ? { ...item, selected: !item.selected } : item
-      )
+        item.id === id ? { ...item, selected: !item.selected } : item,
+      ),
     );
   }
 
   function updateReturnQty(id: string, qty: number) {
     setPOItems(
       poItems.map((item) =>
-        item.id === id ? { ...item, returnQty: Math.min(Math.max(1, qty), item.quantity) } : item
-      )
+        item.id === id
+          ? { ...item, returnQty: Math.min(Math.max(0.01, qty), item.quantity) }
+          : item,
+      ),
     );
   }
 
-  const selectedItems = useMemo(() => poItems.filter(i => i.selected), [poItems]);
+  const selectedItems = useMemo(() => poItems.filter((item) => item.selected), [poItems]);
 
   const returnTotal = useMemo(
     () => selectedItems.reduce((sum, item) => sum + item.returnQty * item.unit_price, 0),
-    [selectedItems]
+    [selectedItems],
+  );
+
+  const returnQuantity = useMemo(
+    () => selectedItems.reduce((sum, item) => sum + item.returnQty, 0),
+    [selectedItems],
   );
 
   function validate(): boolean {
@@ -171,6 +183,7 @@ export function CreatePurchaseReturnDialog({
   async function handleSave() {
     if (saveLockRef.current) return;
     if (!validate()) return;
+
     saveLockRef.current = true;
     setSaving(true);
     try {
@@ -213,139 +226,87 @@ export function CreatePurchaseReturnDialog({
 
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
-      <DialogContent className="sm:max-w-2xl max-h-[90vh] overflow-y-auto">
-        <DialogHeader>
-          <DialogTitle>Tạo phiếu trả hàng nhập</DialogTitle>
-          <DialogDescription>
-            Mã phiếu trả: {code}
-          </DialogDescription>
-        </DialogHeader>
+      <DialogContent className="flex h-[calc(100dvh-24px)] w-[calc(100vw-24px)] max-w-[1450px] flex-col gap-0 overflow-hidden p-0 sm:max-w-[1450px] sm:rounded-2xl">
+        <div className="shrink-0 border-b bg-white px-4 py-3 md:px-5">
+          <DialogHeader className="gap-0 pr-10">
+            <div className="flex flex-wrap items-center gap-3">
+              <DialogTitle className="text-xl">Tạo phiếu trả hàng nhập</DialogTitle>
+              <span className="rounded-full bg-amber-50 px-2.5 py-1 text-xs font-semibold text-amber-700">
+                Xuất trả NCC
+              </span>
+              <span className="ml-auto mr-8 max-w-none whitespace-nowrap rounded-lg border bg-primary/5 px-3 py-1.5 text-sm font-bold text-primary sm:text-base">
+                {code}
+              </span>
+            </div>
+          </DialogHeader>
+        </div>
 
-        <div className="grid gap-4 py-2">
-          {/* PO search */}
-          <div className="space-y-2">
-            <label className="text-sm font-medium">
-              Đơn nhập hàng <span className="text-destructive">*</span>
-            </label>
-            <div className="relative">
-              <Icon name="search" size={16} className="absolute left-2.5 top-1/2 -translate-y-1/2 text-muted-foreground" />
-              <Input
-                value={poSearch}
-                onChange={(e) => {
-                  setPOSearch(e.target.value);
-                  setShowPODropdown(true);
-                }}
-                onFocus={() => setShowPODropdown(true)}
-                onBlur={() => setTimeout(() => setShowPODropdown(false), 200)}
-                placeholder="Tìm đơn nhập hàng theo mã..."
-                className="pl-8"
-                aria-invalid={!!errors.po}
-              />
-              {showPODropdown && poSearch && (
-                <div className="absolute z-10 mt-1 w-full rounded-lg border bg-popover shadow-md max-h-40 overflow-y-auto">
-                  {filteredPOs.length === 0 ? (
-                    <div className="px-3 py-2 text-sm text-muted-foreground">
-                      Không tìm thấy đơn nhập hàng
-                    </div>
-                  ) : (
-                    filteredPOs.map((po) => (
-                      <button
-                        key={po.id}
-                        type="button"
-                        className="flex w-full items-center justify-between px-3 py-2 text-sm hover:bg-accent cursor-pointer"
-                        onMouseDown={(e) => e.preventDefault()}
-                        onClick={() => {
-                          setSelectedPO(po);
-                          setPOSearch(po.code);
-                          setShowPODropdown(false);
-                          loadPOItems(po.id);
-                        }}
-                      >
-                        <span className="font-medium">{po.code}</span>
-                        <span className="text-muted-foreground">{po.supplier_name}</span>
-                      </button>
-                    ))
+        <div className="min-h-0 flex-1 overflow-y-auto bg-surface-container-low p-3 md:p-4">
+          <div className="mx-auto flex max-w-[1380px] flex-col gap-3">
+            <div className="grid gap-3 lg:grid-cols-[minmax(360px,0.9fr)_minmax(420px,1.1fr)]">
+              <section className="rounded-xl border bg-white p-3 shadow-sm">
+                <div className="mb-2 flex items-center justify-between gap-2">
+                  <h3 className="text-sm font-semibold">Đơn nhập hàng</h3>
+                  {selectedPO && (
+                    <span className="max-w-[180px] truncate rounded-full bg-primary/10 px-2 py-0.5 text-xs font-semibold text-primary">
+                      {selectedPO.supplier_name}
+                    </span>
                   )}
                 </div>
-              )}
-            </div>
-            {errors.po && (
-              <p className="text-xs text-destructive">{errors.po}</p>
-            )}
-          </div>
-
-          {/* Selected PO info */}
-          {selectedPO && (
-            <div className="rounded-lg border p-3 bg-muted/30 text-sm">
-              <span className="text-muted-foreground">Nhà cung cấp: </span>
-              <span className="font-medium">{selectedPO.supplier_name}</span>
-            </div>
-          )}
-
-          {/* PO items to select for return */}
-          {poItems.length > 0 && (
-            <div className="space-y-2">
-              <label className="text-sm font-medium">
-                Chọn sản phẩm trả <span className="text-destructive">*</span>
-              </label>
-              <div className="rounded-lg border overflow-hidden">
-                <div className="grid grid-cols-[32px_1fr_70px_100px_100px] gap-2 px-3 py-2 bg-muted/50 text-xs font-medium text-muted-foreground">
-                  <span />
-                  <span>Sản phẩm</span>
-                  <span className="text-center">SL nhập</span>
-                  <span className="text-center">SL trả</span>
-                  <span className="text-right">Đơn giá</span>
+                <div className="relative">
+                  <Icon name="search" size={16} className="absolute left-2.5 top-1/2 -translate-y-1/2 text-muted-foreground" />
+                  <Input
+                    value={poSearch}
+                    onChange={(e) => {
+                      setPOSearch(e.target.value);
+                      setShowPODropdown(true);
+                    }}
+                    onFocus={() => setShowPODropdown(true)}
+                    onBlur={() => setTimeout(() => setShowPODropdown(false), 200)}
+                    placeholder="Tìm đơn nhập hàng theo mã"
+                    className="pl-8"
+                    aria-invalid={!!errors.po}
+                  />
+                  {showPODropdown && poSearch && (
+                    <div className="absolute z-30 mt-1 max-h-56 w-full overflow-y-auto rounded-lg border bg-popover shadow-lg">
+                      {filteredPOs.length === 0 ? (
+                        <div className="px-3 py-2 text-sm text-muted-foreground">
+                          Không tìm thấy đơn nhập hàng
+                        </div>
+                      ) : (
+                        filteredPOs.map((po) => (
+                          <button
+                            key={po.id}
+                            type="button"
+                            className="flex w-full items-center justify-between gap-3 px-3 py-2 text-left text-sm hover:bg-accent"
+                            onMouseDown={(e) => e.preventDefault()}
+                            onClick={() => {
+                              setSelectedPO(po);
+                              setPOSearch(po.code);
+                              setShowPODropdown(false);
+                              loadPOItems(po.id);
+                            }}
+                          >
+                            <span className="font-semibold">{po.code}</span>
+                            <span className="truncate text-muted-foreground">{po.supplier_name}</span>
+                          </button>
+                        ))
+                      )}
+                    </div>
+                  )}
                 </div>
-                {poItems.map((item) => (
-                  <div
-                    key={item.id}
-                    className="grid grid-cols-[32px_1fr_70px_100px_100px] gap-2 items-center px-3 py-2 border-t"
-                  >
-                    <Checkbox
-                      checked={item.selected}
-                      onCheckedChange={() => toggleItem(item.id)}
-                    />
-                    <span className="text-sm truncate">{item.product_name}</span>
-                    <span className="text-sm text-center text-muted-foreground">{item.quantity}</span>
-                    <Input
-                      type="number"
-                      min={1}
-                      max={item.quantity}
-                      value={item.returnQty}
-                      onChange={(e) => updateReturnQty(item.id, Number(e.target.value) || 1)}
-                      className="h-7 text-center px-1"
-                      disabled={!item.selected}
-                    />
-                    <span className="text-sm text-right">{formatCurrency(item.unit_price)}</span>
-                  </div>
-                ))}
-              </div>
-              {errors.items && (
-                <p className="text-xs text-destructive">{errors.items}</p>
-              )}
-            </div>
-          )}
+                {errors.po && <p className="mt-1 text-xs text-destructive">{errors.po}</p>}
+              </section>
 
-          {/* Return total */}
-          {selectedItems.length > 0 && (
-            <div className="space-y-3 rounded-lg border p-3">
-              <div className="flex items-center justify-between">
-                <span className="font-medium">Tổng tiền trả</span>
-                <span className="text-lg font-semibold text-primary">
-                  {formatCurrency(returnTotal)}
-                </span>
-              </div>
-              <div className="space-y-2">
-                <label className="text-xs font-medium text-muted-foreground uppercase tracking-wider">
-                  Nhà cung cấp hoàn bằng
-                </label>
+              <section className="rounded-xl border bg-white p-3 shadow-sm">
+                <h3 className="mb-2 text-sm font-semibold">Nhà cung cấp hoàn bằng</h3>
                 <div className="grid grid-cols-3 gap-2">
                   {SUPPLIER_RETURN_PAYMENT_METHODS.map((method) => (
                     <button
                       key={method.value}
                       type="button"
                       onClick={() => setPaymentMethod(method.value)}
-                      className={`flex items-center justify-center gap-1.5 rounded-lg border px-2 py-2 text-xs font-medium transition press-scale-sm ${
+                      className={`flex min-h-10 items-center justify-center gap-1.5 rounded-lg border px-2 py-2 text-xs font-semibold transition ${
                         paymentMethod === method.value
                           ? "border-primary bg-primary-fixed text-primary shadow-sm"
                           : "border-border bg-background hover:bg-muted"
@@ -356,43 +317,142 @@ export function CreatePurchaseReturnDialog({
                     </button>
                   ))}
                 </div>
-              </div>
+              </section>
             </div>
-          )}
 
-          {/* Reason */}
-          <div className="space-y-2">
-            <label className="text-sm font-medium">Lý do trả hàng</label>
-            <Input
-              value={reason}
-              onChange={(e) => setReason(e.target.value)}
-              placeholder="Nhập lý do trả hàng nhập"
-            />
-          </div>
+            <div className="overflow-hidden rounded-xl border bg-white shadow-sm">
+              <div className="hidden grid-cols-[40px_minmax(300px,1fr)_90px_110px_120px_140px_150px] gap-2 border-b bg-muted/50 px-3 py-2 text-xs font-semibold uppercase text-muted-foreground md:grid">
+                <span />
+                <span>Sản phẩm</span>
+                <span className="flex justify-center">ĐVT</span>
+                <span className="flex justify-end">SL nhập</span>
+                <span className="flex justify-end">SL trả</span>
+                <span className="flex justify-end">Đơn giá</span>
+                <span className="flex justify-end">Thành tiền</span>
+              </div>
 
-          {/* Notes */}
-          <div className="space-y-2">
-            <label className="text-sm font-medium">Ghi chú</label>
-            <textarea
-              className="flex min-h-[50px] w-full rounded-lg border border-input bg-transparent px-3 py-2 text-sm transition-colors outline-none placeholder:text-muted-foreground focus-visible:border-ring focus-visible:ring-3 focus-visible:ring-ring/50"
-              value={notes}
-              onChange={(e) => setNotes(e.target.value)}
-              placeholder="Ghi chú phiếu trả hàng nhập"
-              rows={2}
-            />
+              {poItems.length === 0 ? (
+                <div className="flex min-h-[300px] flex-col items-center justify-center px-4 py-10 text-center">
+                  <div className="flex size-12 items-center justify-center rounded-xl bg-primary/10 text-primary">
+                    <Icon name="assignment_return" size={24} />
+                  </div>
+                  <div className="mt-3 font-semibold">Chưa chọn đơn nhập</div>
+                  <div className="mt-1 text-sm text-muted-foreground">
+                    Chọn đơn nhập đã hoàn thành để lấy danh sách hàng có thể trả.
+                  </div>
+                </div>
+              ) : (
+                <div className="divide-y">
+                  {poItems.map((item) => (
+                    <div
+                      key={item.id}
+                      className="grid gap-2 px-3 py-2.5 md:grid-cols-[40px_minmax(300px,1fr)_90px_110px_120px_140px_150px] md:items-center"
+                    >
+                      <Checkbox
+                        checked={item.selected}
+                        onCheckedChange={() => toggleItem(item.id)}
+                        aria-label={`Chọn ${item.product_name}`}
+                      />
+                      <div className="min-w-0">
+                        <div className="truncate text-sm font-semibold">{item.product_name}</div>
+                      </div>
+                      <div className="flex justify-center">
+                        <span className="min-w-[64px] rounded-md bg-muted/50 px-2 py-1 text-center text-xs font-semibold text-muted-foreground">
+                          {item.unit || "Cái"}
+                        </span>
+                      </div>
+                      <div className="text-right text-sm tabular-nums text-muted-foreground">
+                        {formatNumber(item.quantity)}
+                      </div>
+                      <NumericInput
+                        value={item.returnQty}
+                        onChange={(value) => updateReturnQty(item.id, value ?? 0.01)}
+                        min={0.01}
+                        max={item.quantity}
+                        decimals={2}
+                        disabled={!item.selected}
+                        className="h-8 text-right"
+                        aria-label={`Số lượng trả ${item.product_name}`}
+                      />
+                      <div className="text-right text-sm tabular-nums">
+                        {formatCurrency(item.unit_price)}
+                      </div>
+                      <div className="text-right text-sm font-bold tabular-nums text-primary">
+                        {formatCurrency(item.returnQty * item.unit_price)}
+                      </div>
+                    </div>
+                  ))}
+                </div>
+              )}
+            </div>
+            {errors.items && <p className="text-xs text-destructive">{errors.items}</p>}
+
+            <div className="grid gap-3 lg:grid-cols-2">
+              <section className="rounded-xl border bg-white p-3 shadow-sm">
+                <label className="text-sm font-medium">Lý do trả hàng</label>
+                <Input
+                  value={reason}
+                  onChange={(e) => setReason(e.target.value)}
+                  placeholder="VD: hàng lỗi, sai quy cách, trả lại nhà cung cấp..."
+                  className="mt-2"
+                />
+              </section>
+              <section className="rounded-xl border bg-white p-3 shadow-sm">
+                <label className="text-sm font-medium">Ghi chú</label>
+                <textarea
+                  className="mt-2 flex min-h-[52px] w-full rounded-lg border border-input bg-transparent px-3 py-2 text-sm outline-none placeholder:text-muted-foreground focus-visible:border-ring focus-visible:ring-3 focus-visible:ring-ring/50"
+                  value={notes}
+                  onChange={(e) => setNotes(e.target.value)}
+                  placeholder="Ví dụ: biên bản trả hàng, người nhận, chứng từ kèm theo..."
+                  rows={2}
+                />
+              </section>
+            </div>
           </div>
         </div>
 
-        <DialogFooter>
-          <Button variant="outline" onClick={() => onOpenChange(false)}>
-            Hủy
-          </Button>
-          <Button onClick={handleSave} disabled={saving}>
-            {saving && <Icon name="progress_activity" size={16} className="mr-2 animate-spin" />}
-            Tạo phiếu trả
-          </Button>
+        <DialogFooter className="mx-0 mb-0 shrink-0 rounded-none border-t bg-white px-4 py-3">
+          <div className="mx-auto grid w-full max-w-[1380px] grid-cols-1 items-center gap-3 lg:grid-cols-[1fr_auto]">
+            <div className="grid gap-2 text-sm sm:grid-cols-3 xl:grid-cols-4">
+              <FooterMetric label="Dòng chọn" value={formatNumber(selectedItems.length)} />
+              <FooterMetric label="Tổng SL trả" value={formatNumber(returnQuantity)} />
+              <FooterMetric label="Tổng tiền trả" value={formatCurrency(returnTotal)} strong />
+              <FooterMetric
+                label="Hoàn NCC"
+                value={SUPPLIER_RETURN_PAYMENT_METHODS.find((m) => m.value === paymentMethod)?.label ?? "Tiền mặt"}
+              />
+            </div>
+            <div className="flex justify-end gap-2">
+              <Button variant="outline" onClick={() => onOpenChange(false)}>
+                Hủy
+              </Button>
+              <Button onClick={handleSave} disabled={saving}>
+                {saving && <Icon name="progress_activity" size={16} className="mr-2 animate-spin" />}
+                Tạo phiếu trả
+              </Button>
+            </div>
+          </div>
         </DialogFooter>
       </DialogContent>
     </Dialog>
+  );
+}
+
+function FooterMetric({
+  label,
+  value,
+  strong,
+}: {
+  label: string;
+  value: string;
+  strong?: boolean;
+}) {
+  return (
+    <div className="rounded-lg border bg-surface-container-lowest px-3 py-2">
+      <div className="text-[11px] font-semibold uppercase text-muted-foreground">{label}</div>
+      <div className={`mt-0.5 break-words font-bold leading-tight tabular-nums ${strong ? "text-lg text-primary" : ""}`}>
+        {value}
+      </div>
+    </div>
   );
 }

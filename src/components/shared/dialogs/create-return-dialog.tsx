@@ -6,13 +6,13 @@ import {
   DialogContent,
   DialogHeader,
   DialogTitle,
-  DialogDescription,
   DialogFooter,
 } from "@/components/ui/dialog";
 import { Input } from "@/components/ui/input";
+import { NumericInput } from "@/components/ui/numeric-input";
 import { Button } from "@/components/ui/button";
 import { Checkbox } from "@/components/ui/checkbox";
-import { formatCurrency } from "@/lib/format";
+import { formatCurrency, formatNumber } from "@/lib/format";
 import { useToast } from "@/lib/contexts";
 import { getClient, getCurrentContext } from "@/lib/services/supabase/base";
 import { nextEntityCode } from "@/lib/services/supabase/stock-adjustments";
@@ -60,8 +60,6 @@ const REFUND_PAYMENT_METHODS: Array<{
   { value: "card", label: "Thẻ", icon: "credit_card" },
 ];
 
-// Code generation moved to nextEntityCode("sales_return") in handleSave
-
 export function CreateReturnDialog({
   open,
   onOpenChange,
@@ -78,102 +76,108 @@ export function CreateReturnDialog({
   const [notes, setNotes] = useState("");
   const [errors, setErrors] = useState<Record<string, string>>({});
   const [saving, setSaving] = useState(false);
-
-  // Partial-refund state: default to full cashback; user can lower it.
-  // refundMode:
-  //   "full" → refundAmount = returnTotal (cashback toàn bộ)
-  //   "partial" → refundAmount user-set, remainder credits customer debt
-  //   "debt_only" → refundAmount = 0, all credits customer debt
   const [refundMode, setRefundMode] = useState<"full" | "partial" | "debt_only">("full");
   const [partialRefund, setPartialRefund] = useState(0);
   const [refundPaymentMethod, setRefundPaymentMethod] = useState<RefundPaymentMethod>("cash");
 
   useEffect(() => {
-    if (open) {
-      setCode("TH...");
-      setInvoiceSearch("");
-      setShowInvoiceDropdown(false);
-      setFilteredInvoices([]);
-      setSelectedInvoice(null);
-      setInvoiceItems([]);
-      setReason("");
-      setNotes("");
-      setErrors({});
-      setSaving(false);
-      setRefundMode("full");
-      setPartialRefund(0);
-      setRefundPaymentMethod("cash");
-    }
+    if (!open) return;
+
+    setCode("TH...");
+    setInvoiceSearch("");
+    setShowInvoiceDropdown(false);
+    setFilteredInvoices([]);
+    setSelectedInvoice(null);
+    setInvoiceItems([]);
+    setReason("");
+    setNotes("");
+    setErrors({});
+    setSaving(false);
+    setRefundMode("full");
+    setPartialRefund(0);
+    setRefundPaymentMethod("cash");
   }, [open]);
 
-  // Live search invoices
   useEffect(() => {
-    if (!invoiceSearch || invoiceSearch.length < 1) { setFilteredInvoices([]); return; }
+    if (!invoiceSearch || invoiceSearch.length < 1) {
+      setFilteredInvoices([]);
+      return;
+    }
+
     const timer = setTimeout(async () => {
       const supabase = getClient();
+      const ctx = await getCurrentContext();
       const { data } = await supabase
         .from("invoices")
         .select("id, code, customer_id, customer_name")
         .ilike("code", `%${invoiceSearch}%`)
+        .eq("tenant_id", ctx.tenantId)
         .eq("status", "completed")
         .limit(8);
-      setFilteredInvoices((data ?? []).map(inv => ({
+
+      setFilteredInvoices((data ?? []).map((inv) => ({
         id: inv.id,
         code: inv.code,
         customer_id: inv.customer_id,
         customer_name: inv.customer_name,
       })));
     }, 300);
+
     return () => clearTimeout(timer);
   }, [invoiceSearch]);
 
-  // Load invoice items when invoice selected
   async function loadInvoiceItems(invoiceId: string) {
     const supabase = getClient();
     const { data } = await supabase
       .from("invoice_items")
       .select("id, product_id, product_name, unit, quantity, unit_price, total")
       .eq("invoice_id", invoiceId);
+
     setInvoiceItems(
-      (data ?? []).map(item => ({
+      (data ?? []).map((item) => ({
         id: item.id,
         product_id: item.product_id,
         product_name: item.product_name,
         unit: item.unit,
-        quantity: item.quantity,
-        unit_price: item.unit_price,
-        total: item.total,
+        quantity: Number(item.quantity ?? 0),
+        unit_price: Number(item.unit_price ?? 0),
+        total: Number(item.total ?? 0),
         selected: false,
-        returnQty: item.quantity,
-      }))
+        returnQty: Number(item.quantity ?? 0),
+      })),
     );
   }
 
   function toggleItem(id: string) {
     setInvoiceItems(
       invoiceItems.map((item) =>
-        item.id === id ? { ...item, selected: !item.selected } : item
-      )
+        item.id === id ? { ...item, selected: !item.selected } : item,
+      ),
     );
   }
 
   function updateReturnQty(id: string, qty: number) {
     setInvoiceItems(
       invoiceItems.map((item) =>
-        item.id === id ? { ...item, returnQty: Math.min(Math.max(1, qty), item.quantity) } : item
-      )
+        item.id === id
+          ? { ...item, returnQty: Math.min(Math.max(0.01, qty), item.quantity) }
+          : item,
+      ),
     );
   }
 
-  const selectedItems = useMemo(() => invoiceItems.filter(i => i.selected), [invoiceItems]);
+  const selectedItems = useMemo(() => invoiceItems.filter((item) => item.selected), [invoiceItems]);
 
   const returnTotal = useMemo(
     () => selectedItems.reduce((sum, item) => sum + item.returnQty * item.unit_price, 0),
-    [selectedItems]
+    [selectedItems],
   );
 
-  // Derive actual cash refund from mode + user input.
-  // Clamp to [0, returnTotal] to prevent cashier overpayment.
+  const returnQuantity = useMemo(
+    () => selectedItems.reduce((sum, item) => sum + item.returnQty, 0),
+    [selectedItems],
+  );
+
   const effectiveRefund = useMemo(() => {
     if (refundMode === "full") return returnTotal;
     if (refundMode === "debt_only") return 0;
@@ -183,7 +187,7 @@ export function CreateReturnDialog({
   const debtCredit = returnTotal - effectiveRefund;
   const refundPaymentMethodLabel = useMemo(
     () => REFUND_PAYMENT_METHODS.find((m) => m.value === refundPaymentMethod)?.label ?? "Tiền mặt",
-    [refundPaymentMethod]
+    [refundPaymentMethod],
   );
 
   function validate(): boolean {
@@ -200,8 +204,6 @@ export function CreateReturnDialog({
     try {
       const supabase = getClient();
       const ctx = await getCurrentContext();
-
-      // Generate monotonic return code via next_code RPC
       const returnCode = await nextEntityCode("sales_return", { tenantId: ctx.tenantId });
       setCode(returnCode);
 
@@ -229,7 +231,7 @@ export function CreateReturnDialog({
       if (salesReturn && selectedItems.length > 0) {
         const { error: itemsErr } = await supabase
           .from("return_items")
-          .insert(selectedItems.map(item => ({
+          .insert(selectedItems.map((item) => ({
             return_id: salesReturn.id,
             product_id: item.product_id,
             product_name: item.product_name,
@@ -240,14 +242,13 @@ export function CreateReturnDialog({
           } satisfies ReturnItemInsert)));
         if (itemsErr) throw new Error(itemsErr.message);
 
-        // Complete return: increment stock + create cash refund payment (if any) + credit debt
         await completeReturn({
           returnId: salesReturn.id,
           returnCode,
           invoiceCode: selectedInvoice!.code,
           customerId: selectedInvoice!.customer_id,
           customerName: selectedInvoice!.customer_name,
-          items: selectedItems.map(item => ({
+          items: selectedItems.map((item) => ({
             productId: item.product_id,
             productName: item.product_name,
             quantity: item.returnQty,
@@ -261,13 +262,15 @@ export function CreateReturnDialog({
 
       onOpenChange(false);
       const descParts: string[] = [];
-      if (effectiveRefund > 0)
+      if (effectiveRefund > 0) {
         descParts.push(`hoàn ${formatCurrency(effectiveRefund)} qua ${refundPaymentMethodLabel.toLowerCase()}`);
-      if (debtCredit > 0)
+      }
+      if (debtCredit > 0) {
         descParts.push(`trừ ${formatCurrency(debtCredit)} công nợ`);
+      }
       toast({
         title: "Tạo phiếu trả hàng thành công",
-        description: `${returnCode} — ${descParts.join(", ") || "đã nhập kho"}`,
+        description: `${returnCode} - ${descParts.join(", ") || "đã nhập kho"}`,
         variant: "success",
       });
       onSuccess?.();
@@ -284,139 +287,85 @@ export function CreateReturnDialog({
 
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
-      <DialogContent className="sm:max-w-2xl max-h-[90vh] overflow-y-auto">
-        <DialogHeader>
-          <DialogTitle>Tạo phiếu trả hàng</DialogTitle>
-          <DialogDescription>
-            Mã phiếu trả: {code}
-          </DialogDescription>
-        </DialogHeader>
+      <DialogContent className="flex h-[calc(100dvh-24px)] w-[calc(100vw-24px)] max-w-[1450px] flex-col gap-0 overflow-hidden p-0 sm:max-w-[1450px] sm:rounded-2xl">
+        <div className="shrink-0 border-b bg-white px-4 py-3 md:px-5">
+          <DialogHeader className="gap-0 pr-10">
+            <div className="flex flex-wrap items-center gap-3">
+              <DialogTitle className="text-xl">Tạo phiếu trả hàng</DialogTitle>
+              <span className="rounded-full bg-emerald-50 px-2.5 py-1 text-xs font-semibold text-emerald-700">
+                Nhập lại kho
+              </span>
+              <span className="ml-auto mr-8 max-w-none whitespace-nowrap rounded-lg border bg-primary/5 px-3 py-1.5 text-sm font-bold text-primary sm:text-base">
+                {code}
+              </span>
+            </div>
+          </DialogHeader>
+        </div>
 
-        <div className="grid gap-4 py-2">
-          {/* Invoice search */}
-          <div className="space-y-2">
-            <label className="text-sm font-medium">
-              Hóa đơn gốc <span className="text-destructive">*</span>
-            </label>
-            <div className="relative">
-              <Icon name="search" size={16} className="absolute left-2.5 top-1/2 -translate-y-1/2 text-muted-foreground" />
-              <Input
-                value={invoiceSearch}
-                onChange={(e) => {
-                  setInvoiceSearch(e.target.value);
-                  setShowInvoiceDropdown(true);
-                }}
-                onFocus={() => setShowInvoiceDropdown(true)}
-                onBlur={() => setTimeout(() => setShowInvoiceDropdown(false), 200)}
-                placeholder="Tìm hóa đơn theo mã..."
-                className="pl-8"
-                aria-invalid={!!errors.invoice}
-              />
-              {showInvoiceDropdown && invoiceSearch && (
-                <div className="absolute z-10 mt-1 w-full rounded-lg border bg-popover shadow-md max-h-40 overflow-y-auto">
-                  {filteredInvoices.length === 0 ? (
-                    <div className="px-3 py-2 text-sm text-muted-foreground">
-                      Không tìm thấy hóa đơn
-                    </div>
-                  ) : (
-                    filteredInvoices.map((inv) => (
-                      <button
-                        key={inv.id}
-                        type="button"
-                        className="flex w-full items-center justify-between px-3 py-2 text-sm hover:bg-accent cursor-pointer"
-                        onMouseDown={(e) => e.preventDefault()}
-                        onClick={() => {
-                          setSelectedInvoice(inv);
-                          setInvoiceSearch(inv.code);
-                          setShowInvoiceDropdown(false);
-                          loadInvoiceItems(inv.id);
-                        }}
-                      >
-                        <span className="font-medium">{inv.code}</span>
-                        <span className="text-muted-foreground">{inv.customer_name}</span>
-                      </button>
-                    ))
+        <div className="min-h-0 flex-1 overflow-y-auto bg-surface-container-low p-3 md:p-4">
+          <div className="mx-auto flex max-w-[1380px] flex-col gap-3">
+            <div className="grid gap-3 lg:grid-cols-[minmax(360px,0.9fr)_minmax(420px,1.1fr)]">
+              <section className="rounded-xl border bg-white p-3 shadow-sm">
+                <div className="mb-2 flex items-center justify-between gap-2">
+                  <h3 className="text-sm font-semibold">Hóa đơn gốc</h3>
+                  {selectedInvoice && (
+                    <span className="max-w-[180px] truncate rounded-full bg-primary/10 px-2 py-0.5 text-xs font-semibold text-primary">
+                      {selectedInvoice.customer_name}
+                    </span>
                   )}
                 </div>
-              )}
-            </div>
-            {errors.invoice && (
-              <p className="text-xs text-destructive">{errors.invoice}</p>
-            )}
-          </div>
-
-          {/* Selected invoice info */}
-          {selectedInvoice && (
-            <div className="rounded-lg border p-3 bg-muted/30 text-sm">
-              <span className="text-muted-foreground">Khách hàng: </span>
-              <span className="font-medium">{selectedInvoice.customer_name}</span>
-            </div>
-          )}
-
-          {/* Invoice items to select for return */}
-          {invoiceItems.length > 0 && (
-            <div className="space-y-2">
-              <label className="text-sm font-medium">
-                Chọn sản phẩm trả <span className="text-destructive">*</span>
-              </label>
-              <div className="rounded-lg border overflow-hidden">
-                <div className="grid grid-cols-[32px_1fr_70px_100px_100px] gap-2 px-3 py-2 bg-muted/50 text-xs font-medium text-muted-foreground">
-                  <span />
-                  <span>Sản phẩm</span>
-                  <span className="text-center">SL mua</span>
-                  <span className="text-center">SL trả</span>
-                  <span className="text-right">Đơn giá</span>
+                <div className="relative">
+                  <Icon name="search" size={16} className="absolute left-2.5 top-1/2 -translate-y-1/2 text-muted-foreground" />
+                  <Input
+                    value={invoiceSearch}
+                    onChange={(e) => {
+                      setInvoiceSearch(e.target.value);
+                      setShowInvoiceDropdown(true);
+                    }}
+                    onFocus={() => setShowInvoiceDropdown(true)}
+                    onBlur={() => setTimeout(() => setShowInvoiceDropdown(false), 200)}
+                    placeholder="Tìm hóa đơn theo mã"
+                    className="pl-8"
+                    aria-invalid={!!errors.invoice}
+                  />
+                  {showInvoiceDropdown && invoiceSearch && (
+                    <div className="absolute z-30 mt-1 max-h-56 w-full overflow-y-auto rounded-lg border bg-popover shadow-lg">
+                      {filteredInvoices.length === 0 ? (
+                        <div className="px-3 py-2 text-sm text-muted-foreground">
+                          Không tìm thấy hóa đơn
+                        </div>
+                      ) : (
+                        filteredInvoices.map((inv) => (
+                          <button
+                            key={inv.id}
+                            type="button"
+                            className="flex w-full items-center justify-between gap-3 px-3 py-2 text-left text-sm hover:bg-accent"
+                            onMouseDown={(e) => e.preventDefault()}
+                            onClick={() => {
+                              setSelectedInvoice(inv);
+                              setInvoiceSearch(inv.code);
+                              setShowInvoiceDropdown(false);
+                              loadInvoiceItems(inv.id);
+                            }}
+                          >
+                            <span className="font-semibold">{inv.code}</span>
+                            <span className="truncate text-muted-foreground">{inv.customer_name}</span>
+                          </button>
+                        ))
+                      )}
+                    </div>
+                  )}
                 </div>
-                {invoiceItems.map((item) => (
-                  <div
-                    key={item.id}
-                    className="grid grid-cols-[32px_1fr_70px_100px_100px] gap-2 items-center px-3 py-2 border-t"
-                  >
-                    <Checkbox
-                      checked={item.selected}
-                      onCheckedChange={() => toggleItem(item.id)}
-                    />
-                    <span className="text-sm truncate">{item.product_name}</span>
-                    <span className="text-sm text-center text-muted-foreground">{item.quantity}</span>
-                    <Input
-                      type="number"
-                      min={1}
-                      max={item.quantity}
-                      value={item.returnQty}
-                      onChange={(e) => updateReturnQty(item.id, Number(e.target.value) || 1)}
-                      className="h-7 text-center px-1"
-                      disabled={!item.selected}
-                    />
-                    <span className="text-sm text-right">{formatCurrency(item.unit_price)}</span>
-                  </div>
-                ))}
-              </div>
-              {errors.items && (
-                <p className="text-xs text-destructive">{errors.items}</p>
-              )}
-            </div>
-          )}
+                {errors.invoice && <p className="mt-1 text-xs text-destructive">{errors.invoice}</p>}
+              </section>
 
-          {/* Return total + refund mode */}
-          {selectedItems.length > 0 && (
-            <div className="space-y-3 rounded-xl border p-3">
-              <div className="flex items-center justify-between">
-                <span className="font-medium">Tổng tiền trả</span>
-                <span className="text-lg font-semibold text-primary">
-                  {formatCurrency(returnTotal)}
-                </span>
-              </div>
-
-              {/* Refund mode selector */}
-              <div className="space-y-2">
-                <label className="text-xs font-medium text-muted-foreground uppercase tracking-wider">
-                  Hình thức hoàn tiền
-                </label>
+              <section className="rounded-xl border bg-white p-3 shadow-sm">
+                <h3 className="mb-2 text-sm font-semibold">Hoàn tiền / công nợ</h3>
                 <div className="grid grid-cols-3 gap-2">
                   {[
                     { value: "full" as const, label: "Hoàn đủ", icon: "payments" },
-                    { value: "partial" as const, label: "Hoàn một phần", icon: "pie_chart" },
-                    { value: "debt_only" as const, label: "Khấu trừ công nợ", icon: "account_balance_wallet" },
+                    { value: "partial" as const, label: "Một phần", icon: "pie_chart" },
+                    { value: "debt_only" as const, label: "Công nợ", icon: "account_balance_wallet" },
                   ].map((opt) => (
                     <button
                       key={opt.value}
@@ -424,54 +373,39 @@ export function CreateReturnDialog({
                       onClick={() => {
                         setRefundMode(opt.value);
                         if (opt.value === "partial" && partialRefund === 0) {
-                          // Default partial to half for convenience
                           setPartialRefund(Math.round(returnTotal / 2));
                         }
                       }}
-                      className={`flex flex-col items-center justify-center gap-1 rounded-lg border-2 p-2 text-xs font-medium transition press-scale-sm ${
+                      className={`flex min-h-10 items-center justify-center gap-1.5 rounded-lg border px-2 py-2 text-xs font-semibold transition ${
                         refundMode === opt.value
-                          ? "border-primary bg-primary-fixed text-primary"
-                          : "border-transparent bg-surface-container hover:bg-surface-container-high"
+                          ? "border-primary bg-primary-fixed text-primary shadow-sm"
+                          : "border-border bg-background hover:bg-muted"
                       }`}
                     >
-                      <Icon name={opt.icon} size={16} />
-                      <span className="leading-tight text-center">{opt.label}</span>
+                      <Icon name={opt.icon} size={15} />
+                      <span className="truncate">{opt.label}</span>
                     </button>
                   ))}
                 </div>
-              </div>
-
-              {/* Partial refund amount input */}
-              {refundMode === "partial" && (
-                <div className="space-y-2">
-                  <label className="text-xs font-medium">
-                    Số tiền hoàn
-                  </label>
-                  <Input
-                    type="number"
+                {refundMode === "partial" && (
+                  <NumericInput
+                    value={partialRefund}
+                    onChange={(value) => setPartialRefund(Math.max(0, value ?? 0))}
                     min={0}
                     max={returnTotal}
-                    value={partialRefund}
-                    onChange={(e) =>
-                      setPartialRefund(Math.max(0, Number(e.target.value) || 0))
-                    }
-                    className="text-right font-mono"
+                    decimals={2}
+                    className="mt-2 h-8 text-right"
+                    aria-label="Số tiền hoàn"
                   />
-                </div>
-              )}
-
-              {effectiveRefund > 0 && (
-                <div className="space-y-2">
-                  <label className="text-xs font-medium text-muted-foreground uppercase tracking-wider">
-                    Phương thức hoàn
-                  </label>
-                  <div className="grid grid-cols-3 gap-2">
+                )}
+                {effectiveRefund > 0 && (
+                  <div className="mt-2 grid grid-cols-3 gap-2">
                     {REFUND_PAYMENT_METHODS.map((method) => (
                       <button
                         key={method.value}
                         type="button"
                         onClick={() => setRefundPaymentMethod(method.value)}
-                        className={`flex items-center justify-center gap-1.5 rounded-lg border px-2 py-2 text-xs font-medium transition press-scale-sm ${
+                        className={`flex min-h-9 items-center justify-center gap-1.5 rounded-lg border px-2 py-2 text-xs font-medium transition ${
                           refundPaymentMethod === method.value
                             ? "border-primary bg-primary-fixed text-primary shadow-sm"
                             : "border-border bg-background hover:bg-muted"
@@ -482,75 +416,141 @@ export function CreateReturnDialog({
                       </button>
                     ))}
                   </div>
+                )}
+              </section>
+            </div>
+
+            <div className="overflow-hidden rounded-xl border bg-white shadow-sm">
+              <div className="hidden grid-cols-[40px_minmax(300px,1fr)_90px_110px_120px_140px_150px] gap-2 border-b bg-muted/50 px-3 py-2 text-xs font-semibold uppercase text-muted-foreground md:grid">
+                <span />
+                <span>Sản phẩm</span>
+                <span className="flex justify-center">ĐVT</span>
+                <span className="flex justify-end">SL mua</span>
+                <span className="flex justify-end">SL trả</span>
+                <span className="flex justify-end">Đơn giá</span>
+                <span className="flex justify-end">Thành tiền</span>
+              </div>
+
+              {invoiceItems.length === 0 ? (
+                <div className="flex min-h-[300px] flex-col items-center justify-center px-4 py-10 text-center">
+                  <div className="flex size-12 items-center justify-center rounded-xl bg-primary/10 text-primary">
+                    <Icon name="assignment_return" size={24} />
+                  </div>
+                  <div className="mt-3 font-semibold">Chưa chọn hóa đơn</div>
+                  <div className="mt-1 text-sm text-muted-foreground">
+                    Chọn hóa đơn đã hoàn thành để lấy danh sách hàng có thể trả.
+                  </div>
+                </div>
+              ) : (
+                <div className="divide-y">
+                  {invoiceItems.map((item) => (
+                    <div
+                      key={item.id}
+                      className="grid gap-2 px-3 py-2.5 md:grid-cols-[40px_minmax(300px,1fr)_90px_110px_120px_140px_150px] md:items-center"
+                    >
+                      <Checkbox
+                        checked={item.selected}
+                        onCheckedChange={() => toggleItem(item.id)}
+                        aria-label={`Chọn ${item.product_name}`}
+                      />
+                      <div className="min-w-0">
+                        <div className="truncate text-sm font-semibold">{item.product_name}</div>
+                      </div>
+                      <div className="flex justify-center">
+                        <span className="min-w-[64px] rounded-md bg-muted/50 px-2 py-1 text-center text-xs font-semibold text-muted-foreground">
+                          {item.unit || "Cái"}
+                        </span>
+                      </div>
+                      <div className="text-right text-sm tabular-nums text-muted-foreground">
+                        {formatNumber(item.quantity)}
+                      </div>
+                      <NumericInput
+                        value={item.returnQty}
+                        onChange={(value) => updateReturnQty(item.id, value ?? 0.01)}
+                        min={0.01}
+                        max={item.quantity}
+                        decimals={2}
+                        disabled={!item.selected}
+                        className="h-8 text-right"
+                        aria-label={`Số lượng trả ${item.product_name}`}
+                      />
+                      <div className="text-right text-sm tabular-nums">
+                        {formatCurrency(item.unit_price)}
+                      </div>
+                      <div className="text-right text-sm font-bold tabular-nums text-primary">
+                        {formatCurrency(item.returnQty * item.unit_price)}
+                      </div>
+                    </div>
+                  ))}
                 </div>
               )}
-
-              {/* Breakdown preview */}
-              <div className="rounded-lg bg-surface-container-low p-3 text-xs space-y-1">
-                <div className="flex items-center justify-between">
-                  <span className="text-muted-foreground">Hoàn tiền:</span>
-                  <span className="font-mono font-semibold text-status-success">
-                    {formatCurrency(effectiveRefund)}
-                  </span>
-                </div>
-                {effectiveRefund > 0 && (
-                  <div className="flex items-center justify-between">
-                    <span className="text-muted-foreground">Phương thức:</span>
-                    <span className="font-medium">{refundPaymentMethodLabel}</span>
-                  </div>
-                )}
-                {debtCredit > 0 && (
-                  <div className="flex items-center justify-between">
-                    <span className="text-muted-foreground">
-                      Khấu trừ công nợ KH:
-                    </span>
-                    <span className="font-mono font-semibold text-status-info">
-                      {formatCurrency(debtCredit)}
-                    </span>
-                  </div>
-                )}
-                {debtCredit > 0 && !selectedInvoice?.customer_id && (
-                  <p className="text-[10px] text-status-warning mt-1">
-                    ⚠ Khách vãng lai không có công nợ — chỉ hoàn tiền trực tiếp có ý nghĩa
-                  </p>
-                )}
-              </div>
             </div>
-          )}
+            {errors.items && <p className="text-xs text-destructive">{errors.items}</p>}
 
-          {/* Reason */}
-          <div className="space-y-2">
-            <label className="text-sm font-medium">Lý do trả hàng</label>
-            <Input
-              value={reason}
-              onChange={(e) => setReason(e.target.value)}
-              placeholder="Nhập lý do trả hàng"
-            />
-          </div>
-
-          {/* Notes */}
-          <div className="space-y-2">
-            <label className="text-sm font-medium">Ghi chú</label>
-            <textarea
-              className="flex min-h-[50px] w-full rounded-lg border border-input bg-transparent px-3 py-2 text-sm transition-colors outline-none placeholder:text-muted-foreground focus-visible:border-ring focus-visible:ring-3 focus-visible:ring-ring/50"
-              value={notes}
-              onChange={(e) => setNotes(e.target.value)}
-              placeholder="Ghi chú phiếu trả"
-              rows={2}
-            />
+            <div className="grid gap-3 lg:grid-cols-2">
+              <section className="rounded-xl border bg-white p-3 shadow-sm">
+                <label className="text-sm font-medium">Lý do trả hàng</label>
+                <Input
+                  value={reason}
+                  onChange={(e) => setReason(e.target.value)}
+                  placeholder="VD: khách trả hàng, sai món, lỗi sản phẩm..."
+                  className="mt-2"
+                />
+              </section>
+              <section className="rounded-xl border bg-white p-3 shadow-sm">
+                <label className="text-sm font-medium">Ghi chú</label>
+                <textarea
+                  className="mt-2 flex min-h-[52px] w-full rounded-lg border border-input bg-transparent px-3 py-2 text-sm outline-none placeholder:text-muted-foreground focus-visible:border-ring focus-visible:ring-3 focus-visible:ring-ring/50"
+                  value={notes}
+                  onChange={(e) => setNotes(e.target.value)}
+                  placeholder="Ví dụ: tình trạng hàng trả, nhân viên xác nhận, chứng từ kèm theo..."
+                  rows={2}
+                />
+              </section>
+            </div>
           </div>
         </div>
 
-        <DialogFooter>
-          <Button variant="outline" onClick={() => onOpenChange(false)}>
-            Hủy
-          </Button>
-          <Button onClick={handleSave} disabled={saving}>
-            {saving && <Icon name="progress_activity" size={16} className="mr-2 animate-spin" />}
-            Tạo phiếu trả
-          </Button>
+        <DialogFooter className="mx-0 mb-0 shrink-0 rounded-none border-t bg-white px-4 py-3">
+          <div className="mx-auto grid w-full max-w-[1380px] grid-cols-1 items-center gap-3 lg:grid-cols-[1fr_auto]">
+            <div className="grid gap-2 text-sm sm:grid-cols-3 xl:grid-cols-5">
+              <FooterMetric label="Dòng chọn" value={formatNumber(selectedItems.length)} />
+              <FooterMetric label="Tổng SL trả" value={formatNumber(returnQuantity)} />
+              <FooterMetric label="Tổng tiền trả" value={formatCurrency(returnTotal)} strong />
+              <FooterMetric label="Hoàn tiền" value={formatCurrency(effectiveRefund)} />
+              <FooterMetric label="Trừ công nợ" value={formatCurrency(debtCredit)} />
+            </div>
+            <div className="flex justify-end gap-2">
+              <Button variant="outline" onClick={() => onOpenChange(false)}>
+                Hủy
+              </Button>
+              <Button onClick={handleSave} disabled={saving}>
+                {saving && <Icon name="progress_activity" size={16} className="mr-2 animate-spin" />}
+                Tạo phiếu trả
+              </Button>
+            </div>
+          </div>
         </DialogFooter>
       </DialogContent>
     </Dialog>
+  );
+}
+
+function FooterMetric({
+  label,
+  value,
+  strong,
+}: {
+  label: string;
+  value: string;
+  strong?: boolean;
+}) {
+  return (
+    <div className="rounded-lg border bg-surface-container-lowest px-3 py-2">
+      <div className="text-[11px] font-semibold uppercase text-muted-foreground">{label}</div>
+      <div className={`mt-0.5 break-words font-bold leading-tight tabular-nums ${strong ? "text-lg text-primary" : ""}`}>
+        {value}
+      </div>
+    </div>
   );
 }

@@ -12,7 +12,7 @@ import {
 import { Input } from "@/components/ui/input";
 import { Button } from "@/components/ui/button";
 import { useToast } from "@/lib/contexts";
-import { getClient } from "@/lib/services/supabase/base";
+import { getClient, getCurrentContext } from "@/lib/services/supabase/base";
 import { updateDeliveryPartner } from "@/lib/services";
 import type { Database } from "@/lib/supabase/types";
 import type { DeliveryPartner } from "@/lib/types";
@@ -86,11 +86,12 @@ export function CreateDeliveryPartnerDialog({
         });
       } else {
         const supabase = getClient();
+        const ctx = await getCurrentContext();
 
         const { error: insertErr } = await supabase
           .from("delivery_partners")
           .insert({
-            tenant_id: "",
+            tenant_id: ctx.tenantId,
             name: name.trim(),
             code,
             phone: phone.trim() || null,

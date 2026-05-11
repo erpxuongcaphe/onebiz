@@ -131,7 +131,7 @@ function OrderDetail({
                   meta={
                     <div className="flex items-center gap-4 flex-wrap text-xs">
                       <span>
-                        Người tạo: <strong>{formatUser(undefined, order.createdBy)}</strong>
+                        Người tạo: <strong>{formatUser(order.createdByName, order.createdBy)}</strong>
                       </span>
                       <span>
                         Ngày đặt: <strong>{formatDate(order.date)}</strong>

@@ -78,9 +78,11 @@ export function CreateShippingOrderDialog({
       // Load delivery partners
       (async () => {
         const supabase = getClient();
+        const ctx = await getCurrentContext();
         const { data } = await supabase
           .from("delivery_partners")
           .select("id, name")
+          .eq("tenant_id", ctx.tenantId)
           .eq("is_active", true)
           .order("name")
           .limit(50);
@@ -97,10 +99,12 @@ export function CreateShippingOrderDialog({
     }
     const timer = setTimeout(async () => {
       const supabase = getClient();
+      const ctx = await getCurrentContext();
       const { data } = await supabase
         .from("invoices")
         .select("id, code, customer_name")
         .ilike("code", `%${invoiceSearch}%`)
+        .eq("tenant_id", ctx.tenantId)
         .limit(8);
       setFilteredInvoices(
         (data ?? []).map((inv) => ({

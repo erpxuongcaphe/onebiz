@@ -82,7 +82,7 @@ function PurchaseOrderEntryDetail({
             meta={
               <div className="flex items-center gap-4 flex-wrap text-xs">
                 <span>
-                  Người tạo: <strong>{formatUser(undefined, item.createdBy)}</strong>
+                  Người tạo: <strong>{formatUser(item.createdByName, item.createdBy)}</strong>
                 </span>
                 <span>
                   Ngày tạo: <strong>{formatDate(item.date)}</strong>
@@ -98,7 +98,7 @@ function PurchaseOrderEntryDetail({
               { label: "Tổng tiền", value: formatCurrency(item.totalAmount) },
               { label: "Ngày dự kiến nhận", value: formatDate(item.expectedDate) },
               { label: "Trạng thái", value: st.label },
-              { label: "Người tạo", value: formatUser(undefined, item.createdBy) },
+              { label: "Người tạo", value: formatUser(item.createdByName, item.createdBy) },
             ]}
           />
         </div>

@@ -95,7 +95,7 @@ function DisposalExportDetail({
             meta={
               <div className="flex items-center gap-4 flex-wrap text-xs">
                 <span>
-                  Người tạo: <strong>{formatUser(undefined, item.createdBy)}</strong>
+                  Người tạo: <strong>{formatUser(item.createdByName, item.createdBy)}</strong>
                 </span>
                 <span>
                   Thời gian: <strong>{formatDate(item.date)}</strong>
@@ -109,7 +109,7 @@ function DisposalExportDetail({
               { label: "Mã phiếu", value: item.code },
               { label: "Thời gian", value: formatDate(item.date) },
               { label: "Trạng thái", value: status.label },
-              { label: "Người tạo", value: formatUser(undefined, item.createdBy) },
+              { label: "Người tạo", value: formatUser(item.createdByName, item.createdBy) },
               {
                 label: "Tổng sản phẩm",
                 value: String(item.totalProducts),
@@ -222,6 +222,7 @@ export default function XuatHuyPage() {
       accessorKey: "createdBy",
       header: "Người tạo",
       size: 150,
+      cell: ({ row }) => formatUser(row.original.createdByName, row.original.createdBy),
     },
     {
       accessorKey: "totalAmount",

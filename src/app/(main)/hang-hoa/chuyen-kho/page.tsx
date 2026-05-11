@@ -564,7 +564,7 @@ function TransferDetail({
                       <div className="flex items-center gap-4 flex-wrap text-xs">
                         <span>
                           Người tạo:{" "}
-                          <strong>{formatUser(undefined, item.createdBy)}</strong>
+                          <strong>{formatUser(item.createdByName, item.createdBy)}</strong>
                         </span>
                         <span>
                           Ngày tạo: <strong>{formatDate(item.createdAt)}</strong>
