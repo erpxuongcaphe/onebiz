@@ -42,6 +42,7 @@ const AUDITED_STRICT = new Set([
   "customers.ts",
   "invoices.ts",
   "branch-stock.ts",
+  "excel-import.ts",
 ]);
 
 interface ServiceAudit {

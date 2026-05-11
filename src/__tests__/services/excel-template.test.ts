@@ -10,6 +10,7 @@ import * as XLSX from "xlsx";
 
 import { parseWorkbook } from "@/lib/excel/template-parser";
 import type { ExcelSchema } from "@/lib/excel/types";
+import { productExcelSchema, supplierExcelSchema } from "@/lib/excel/schemas";
 
 interface Product {
   sku: string;
@@ -409,5 +410,46 @@ describe("parseWorkbook — rowIndex tracking", () => {
     const result = parseWorkbook(wb, productSchema);
     expect(result.errorRows).toHaveLength(1);
     expect(result.errorRows[0].rowIndex).toBe(3);
+  });
+
+  it("valid row giữ Excel row index nội bộ để service báo lỗi đúng dòng", () => {
+    const wb = makeWb([
+      ["Mã SP", "Tên sản phẩm", "Giá bán"],
+      ["SP001", "Cà phê", 25000],
+      ["SP002", "Trà", 10000],
+    ]);
+    const result = parseWorkbook(wb, productSchema);
+    expect((result.validRows[1] as Product & { __excelRowIndex?: number }).__excelRowIndex).toBe(3);
+  });
+});
+
+describe("real OneBiz schemas", () => {
+  it("product import không cho nhập tồn kho trực tiếp để tránh lệch lịch sử kho", () => {
+    const wb = makeWb([
+      [
+        "Mã SP",
+        "Tên sản phẩm",
+        "Loại",
+        "Kênh bán",
+        "Đơn vị tính",
+        "Giá bán",
+        "Giá vốn",
+        "Tồn kho ban đầu",
+      ],
+      ["CF001", "Cà phê đen", "sku", "fnb", "Ly", 35000, 15000, 10],
+    ]);
+    const result = parseWorkbook(wb, productExcelSchema);
+    expect(result.validRows).toHaveLength(0);
+    expect(result.errorRows[0].errors.some((e) => e.includes("Tồn kho đầu kỳ"))).toBe(true);
+  });
+
+  it("supplier schema nhận cột ghi chú để không mất thông tin khi export/import", () => {
+    const wb = makeWb([
+      ["Mã NCC", "Tên NCC", "Ghi chú"],
+      ["NCC001", "Công ty Cà phê Việt", "Liên hệ anh Nam"],
+    ]);
+    const result = parseWorkbook(wb, supplierExcelSchema);
+    expect(result.errorRows).toEqual([]);
+    expect(result.validRows[0].note).toBe("Liên hệ anh Nam");
   });
 });

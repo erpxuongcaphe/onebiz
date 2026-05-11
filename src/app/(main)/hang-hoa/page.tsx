@@ -540,11 +540,15 @@ export default function HangHoaPage() {
         sellPrice: p.sellPrice,
         costPrice: p.costPrice,
         stock: p.stock,
+        minStock: p.minStock,
+        maxStock: p.maxStock,
         vatRate: p.vatRate,
+        barcode: p.barcode,
         groupCode: p.groupCode,
         purchaseUnit: p.purchaseUnit,
         stockUnit: p.stockUnit,
         sellUnit: p.sellUnit,
+        description: p.description,
         isActive: p.status !== "inactive",
       }));
       exportToExcelFromSchema(rows, productExcelSchema);

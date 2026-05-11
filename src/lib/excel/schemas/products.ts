@@ -131,7 +131,8 @@ export const productExcelSchema: ExcelSchema<ProductImportRow> = {
       type: "number",
       min: 0,
       example: 0,
-      description: "Thường để 0 khi tạo mới. Tồn kho thực tế nhập qua phiếu nhập.",
+      description:
+        "Chỉ để 0 trong file hàng hóa. Tồn thực tế phải nhập bằng mẫu Tồn kho đầu kỳ hoặc phiếu nhập để có lịch sử kho.",
       width: 16,
     },
     {
@@ -227,6 +228,9 @@ export const productExcelSchema: ExcelSchema<ProductImportRow> = {
     }
     if (row.productType === "sku" && !row.channel) {
       return "Hàng bán (sku) phải có Kênh bán (fnb hoặc retail)";
+    }
+    if ((row.stock ?? 0) > 0) {
+      return "File hàng hóa chỉ tạo danh mục sản phẩm, không ghi tồn kho. Hãy dùng mẫu Tồn kho đầu kỳ hoặc phiếu nhập để cộng kho đúng lịch sử.";
     }
     if (
       row.minStock !== undefined &&

@@ -28,6 +28,8 @@ import {
   cashTransactionExcelSchema,
   debtOpeningExcelSchema,
   initialStockExcelSchema,
+  purchaseOrderExcelSchema,
+  internalSaleExcelSchema,
 } from "@/lib/excel/schemas";
 import type { ExcelSchema } from "@/lib/excel";
 
@@ -51,7 +53,7 @@ const IMPORT_MODULES: ImportModule[] = [
     id: "products",
     title: "Sản phẩm",
     icon: "inventory_2",
-    description: "Tạo SP mới / cập nhật giá theo lô. Hỗ trợ NVL và SKU.",
+    description: "Tạo danh mục SP mới. Tồn kho nhập riêng qua mẫu tồn đầu kỳ/phiếu nhập.",
     href: "/hang-hoa",
     schema: productExcelSchema,
   },
@@ -67,9 +69,25 @@ const IMPORT_MODULES: ImportModule[] = [
     id: "suppliers",
     title: "Nhà cung cấp",
     icon: "local_shipping",
-    description: "Danh sách NCC (mã, tên, SĐT, mã số thuế, liên hệ).",
+    description: "Danh sách NCC (mã, tên, SĐT, mã số thuế, ghi chú).",
     href: "/hang-hoa/nha-cung-cap",
     schema: supplierExcelSchema,
+  },
+  {
+    id: "purchase-orders",
+    title: "Đơn đặt hàng nhập",
+    icon: "assignment",
+    description: "Import nhiều dòng hàng theo mã đơn, tạo đơn nháp để duyệt rồi nhận hàng.",
+    href: "/hang-hoa/dat-hang-nhap",
+    schema: purchaseOrderExcelSchema,
+  },
+  {
+    id: "internal-sales",
+    title: "Bán nội bộ",
+    icon: "sync_alt",
+    description: "Import giao dịch chi nhánh bán cho chi nhánh khác, kèm nhập/xuất kho.",
+    href: "/hang-hoa/ban-noi-bo",
+    schema: internalSaleExcelSchema,
   },
   {
     id: "initial-stock",

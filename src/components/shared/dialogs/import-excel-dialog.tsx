@@ -39,6 +39,7 @@ import {
 } from "@/components/ui/table";
 import { Badge } from "@/components/ui/badge";
 import { cn } from "@/lib/utils";
+import { formatNumber, formatShortDate } from "@/lib/format";
 import {
   downloadTemplate,
   parseExcelFile,
@@ -77,7 +78,6 @@ export function ImportExcelDialog<TRow>({
     null
   );
   const [parseError, setParseError] = useState<string | null>(null);
-  const [skipErrors, setSkipErrors] = useState(false);
   const fileInputRef = useRef<HTMLInputElement>(null);
 
   function reset() {
@@ -86,7 +86,6 @@ export function ImportExcelDialog<TRow>({
     setParseResult(null);
     setImportResult(null);
     setParseError(null);
-    setSkipErrors(false);
     setDragOver(false);
     if (fileInputRef.current) fileInputRef.current.value = "";
   }
@@ -156,14 +155,13 @@ export function ImportExcelDialog<TRow>({
     }
   }
 
-  const hasErrors = (parseResult?.errorRows.length ?? 0) > 0;
   const hasTableErrors = (parseResult?.tableErrors.length ?? 0) > 0;
   const validCount = parseResult?.validRows.length ?? 0;
   const errorCount = parseResult?.errorRows.length ?? 0;
   const canConfirm =
     validCount > 0 &&
     !hasTableErrors &&
-    (errorCount === 0 || skipErrors);
+    errorCount === 0;
 
   return (
     <Dialog open={open} onOpenChange={handleClose}>
@@ -266,8 +264,6 @@ export function ImportExcelDialog<TRow>({
             schema={schema}
             result={parseResult}
             file={file}
-            skipErrors={skipErrors}
-            onToggleSkipErrors={setSkipErrors}
             onBack={() => {
               reset();
             }}
@@ -307,8 +303,8 @@ export function ImportExcelDialog<TRow>({
                 onClick={handleConfirmImport}
               >
                 <Icon name="check" size={16} className="mr-1" />
-                {errorCount > 0 && skipErrors
-                  ? `Nhập ${validCount} dòng hợp lệ (bỏ qua ${errorCount} dòng lỗi)`
+                {errorCount > 0
+                  ? "Sửa hết lỗi trước khi nhập"
                   : `Xác nhận nhập ${validCount} dòng`}
               </Button>
             </>
@@ -335,8 +331,6 @@ interface PreviewSectionProps<TRow> {
   schema: ExcelSchema<TRow>;
   result: ParseResult<TRow>;
   file: File | null;
-  skipErrors: boolean;
-  onToggleSkipErrors: (v: boolean) => void;
   onBack: () => void;
 }
 
@@ -344,8 +338,6 @@ function PreviewSection<TRow>({
   schema,
   result,
   file,
-  skipErrors,
-  onToggleSkipErrors,
 }: PreviewSectionProps<TRow>) {
   const { validRows, errorRows, tableErrors, totalRows } = result;
   const validCount = validRows.length;
@@ -400,15 +392,9 @@ function PreviewSection<TRow>({
               <Icon name="error" size={14} className="inline mr-1" />
               Danh sách dòng lỗi ({errorCount})
             </p>
-            <label className="flex items-center gap-2 text-xs cursor-pointer text-muted-foreground">
-              <input
-                type="checkbox"
-                checked={skipErrors}
-                onChange={(e) => onToggleSkipErrors(e.target.checked)}
-                className="rounded"
-              />
-              Bỏ qua dòng lỗi, chỉ nhập {validCount} dòng hợp lệ
-            </label>
+            <span className="text-xs text-muted-foreground">
+              Sửa hết lỗi để tránh nhập thiếu hoặc lệch chứng từ.
+            </span>
           </div>
           <div className="max-h-40 overflow-y-auto space-y-1">
             {errorRows.slice(0, 100).map((row) => (
@@ -496,10 +482,10 @@ function ErrorRowItem<TRow>({ row }: { row: ParsedRow<TRow> }) {
 function formatCellForPreview(v: unknown): string {
   if (v === null || v === undefined) return "";
   if (v instanceof Date) {
-    const pad = (n: number) => String(n).padStart(2, "0");
-    return `${v.getFullYear()}-${pad(v.getMonth() + 1)}-${pad(v.getDate())}`;
+    return formatShortDate(v);
   }
   if (typeof v === "boolean") return v ? "Có" : "Không";
+  if (typeof v === "number") return formatNumber(v);
   if (typeof v === "object") return JSON.stringify(v);
   return String(v);
 }

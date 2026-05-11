@@ -207,6 +207,12 @@ function parseSingleRow<TRow>(
     }
   }
 
+  Object.defineProperty(data, "__excelRowIndex", {
+    value: rowIndex,
+    enumerable: false,
+    configurable: false,
+  });
+
   return { rowIndex, data, errors };
 }
 

@@ -11,7 +11,7 @@ export interface SupplierImportRow {
   email?: string;
   address?: string;
   taxCode?: string;
-  contactPerson?: string;
+  note?: string;
   isActive?: boolean;
 }
 
@@ -82,11 +82,12 @@ export const supplierExcelSchema: ExcelSchema<SupplierImportRow> = {
       width: 16,
     },
     {
-      key: "contactPerson",
-      header: "Người liên hệ",
+      key: "note",
+      header: "Ghi chú",
       type: "string",
-      maxLength: 100,
-      width: 20,
+      maxLength: 500,
+      description: "Ghi chú nội bộ, ví dụ người liên hệ, điều khoản thanh toán, tuyến giao hàng.",
+      width: 36,
     },
     {
       key: "isActive",

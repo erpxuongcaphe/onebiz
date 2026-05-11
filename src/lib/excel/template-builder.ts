@@ -162,7 +162,7 @@ function buildGuideSheet<TRow>(schema: ExcelSchema<TRow>): XLSX.WorkSheet {
   ]);
   rows.push([
     "5.",
-    "Định dạng số tiền: chỉ nhập số nguyên (vd 25000), KHÔNG nhập 'đ', dấu phẩy, dấu chấm",
+    "Định dạng số: dùng chuẩn US như trên web (vd 25000 hoặc 25,000 hoặc 1,234.56), không nhập ký hiệu tiền tệ",
     "",
     "",
     "",
@@ -252,9 +252,9 @@ function buildGuideSheet<TRow>(schema: ExcelSchema<TRow>): XLSX.WorkSheet {
     "",
   ]);
   rows.push([
-    "Số tiền có dấu phẩy / chấm",
-    "Excel tự thêm '1,000,000' khi định dạng cell là currency",
-    "Đổi cell format sang Number không có separator (Format Cells → Number → 0 decimal)",
+    "Số tiền sai chuẩn",
+    "Nhập lẫn chuẩn Việt Nam như '1.234,56' hoặc thêm ký hiệu đ/VND",
+    "Dùng chuẩn US: dấu phẩy là phần ngàn, dấu chấm là thập phân. Ví dụ 1,234.56",
     "",
     "",
   ]);

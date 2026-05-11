@@ -27,6 +27,13 @@ import { getClient, getCurrentContext, getCurrentTenantId } from "./base";
 import { applyManualStockMovement } from "./stock-adjustments";
 import { createInternalSale } from "./internal-sales";
 
+type RowWithExcelIndex = { __excelRowIndex?: number };
+
+function excelRowIndex(row: unknown, fallback: number): number {
+  const index = (row as RowWithExcelIndex | null)?.__excelRowIndex;
+  return typeof index === "number" && Number.isFinite(index) ? index : fallback;
+}
+
 /** Chạy executor cho từng row, collect error per-row. */
 async function runBulk<TRow>(
   rows: TRow[],
@@ -40,7 +47,7 @@ async function runBulk<TRow>(
       successCount++;
     } catch (e) {
       errors.push({
-        rowIndex: i + 1,
+        rowIndex: excelRowIndex(rows[i], i + 1),
         message: toVietnameseError(e),
       });
     }
@@ -82,6 +89,7 @@ export async function bulkImportProducts(
   const { data: cats } = await supabase
     .from("categories")
     .select("id, code")
+    .eq("tenant_id", tenantId)
     .not("code", "is", null);
   const catMap = new Map<string, string>();
   for (const c of cats ?? []) {
@@ -89,6 +97,10 @@ export async function bulkImportProducts(
   }
 
   return runBulk(rows, async (row) => {
+    if ((row.stock ?? 0) > 0) {
+      throw new Error("File hàng hóa không ghi tồn kho; dùng mẫu Tồn kho đầu kỳ hoặc phiếu nhập");
+    }
+
     let categoryId: string | null = null;
     if (row.categoryCode) {
       const found = catMap.get(row.categoryCode);
@@ -108,7 +120,7 @@ export async function bulkImportProducts(
       unit: row.unit,
       sell_price: row.sellPrice,
       cost_price: row.costPrice,
-      stock: row.stock ?? 0,
+      stock: 0,
       min_stock: row.minStock ?? 0,
       max_stock: row.maxStock ?? 1000,
       vat_rate: row.vatRate ?? 0,
@@ -138,7 +150,8 @@ export async function bulkImportCustomers(
   // customer_groups không có cột code — map theo name
   const { data: groups } = await supabase
     .from("customer_groups")
-    .select("id, name");
+    .select("id, name")
+    .eq("tenant_id", tenantId);
   const groupMap = new Map<string, string>();
   for (const g of groups ?? []) {
     groupMap.set(g.name, g.id);
@@ -190,6 +203,7 @@ export async function bulkImportSuppliers(
       email: row.email ?? null,
       address: row.address ?? null,
       tax_code: row.taxCode ?? null,
+      note: row.note ?? null,
       is_active: row.isActive ?? true,
     });
     if (error) throw new Error(error.message);
@@ -210,7 +224,10 @@ export async function bulkImportCashTransactions(
   const supabase = getClient();
   const ctx = await getCurrentContext();
 
-  const { data: branches } = await supabase.from("branches").select("id, code");
+  const { data: branches } = await supabase
+    .from("branches")
+    .select("id, code")
+    .eq("tenant_id", ctx.tenantId);
   const branchMap = new Map<string, string>();
   for (const b of branches ?? []) {
     if (b.code) branchMap.set(b.code, b.id);
@@ -267,8 +284,8 @@ export async function bulkImportDebtOpening(
   const ctx = await getCurrentContext();
 
   const [custRes, suppRes] = await Promise.all([
-    supabase.from("customers").select("id, code"),
-    supabase.from("suppliers").select("id, code"),
+    supabase.from("customers").select("id, code").eq("tenant_id", ctx.tenantId),
+    supabase.from("suppliers").select("id, code").eq("tenant_id", ctx.tenantId),
   ]);
   const custMap = new Map<string, string>();
   for (const c of custRes.data ?? []) custMap.set(c.code, c.id);
@@ -282,6 +299,7 @@ export async function bulkImportDebtOpening(
       const { error } = await supabase
         .from("customers")
         .update({ debt: row.openingDebt })
+        .eq("tenant_id", ctx.tenantId)
         .eq("id", id);
       if (error) throw new Error(error.message);
 
@@ -304,6 +322,7 @@ export async function bulkImportDebtOpening(
       const { error } = await supabase
         .from("suppliers")
         .update({ debt: row.openingDebt })
+        .eq("tenant_id", ctx.tenantId)
         .eq("id", id);
       if (error) throw new Error(error.message);
 
@@ -338,8 +357,8 @@ export async function bulkImportInitialStock(
   const ctx = await getCurrentContext();
 
   const [prodRes, branchRes] = await Promise.all([
-    supabase.from("products").select("id, code"),
-    supabase.from("branches").select("id, code"),
+    supabase.from("products").select("id, code").eq("tenant_id", ctx.tenantId),
+    supabase.from("branches").select("id, code").eq("tenant_id", ctx.tenantId),
   ]);
   const prodMap = new Map<string, string>();
   for (const p of prodRes.data ?? []) prodMap.set(p.code, p.id);
@@ -395,9 +414,9 @@ export async function bulkImportPurchaseOrders(
 
   // Preload maps
   const [suppRes, branchRes, prodRes] = await Promise.all([
-    supabase.from("suppliers").select("id, code, name"),
-    supabase.from("branches").select("id, code"),
-    supabase.from("products").select("id, code, name, unit"),
+    supabase.from("suppliers").select("id, code, name").eq("tenant_id", ctx.tenantId),
+    supabase.from("branches").select("id, code").eq("tenant_id", ctx.tenantId),
+    supabase.from("products").select("id, code, name, unit").eq("tenant_id", ctx.tenantId),
   ]);
   const suppMap = new Map<string, { id: string; name: string }>();
   for (const s of suppRes.data ?? []) suppMap.set(s.code, { id: s.id, name: s.name });
@@ -518,7 +537,7 @@ export async function bulkImportPurchaseOrders(
       successCount++;
     } catch (e) {
       errors.push({
-        rowIndex: groupIdx,
+        rowIndex: excelRowIndex(groupRows[0], groupIdx),
         message: `Đơn "${code}": ${toVietnameseError(e)}`,
       });
     }
@@ -542,10 +561,11 @@ export async function bulkImportInternalSales(
   rows: InternalSaleImportRow[]
 ): Promise<ImportBatchResult> {
   const supabase = getClient();
+  const ctx = await getCurrentContext();
 
   const [branchRes, prodRes] = await Promise.all([
-    supabase.from("branches").select("id, code"),
-    supabase.from("products").select("id, code, name, unit"),
+    supabase.from("branches").select("id, code").eq("tenant_id", ctx.tenantId),
+    supabase.from("products").select("id, code, name, unit").eq("tenant_id", ctx.tenantId),
   ]);
   const branchMap = new Map<string, string>();
   for (const b of branchRes.data ?? []) {
@@ -612,7 +632,7 @@ export async function bulkImportInternalSales(
       successCount++;
     } catch (e) {
       errors.push({
-        rowIndex: groupIdx,
+        rowIndex: excelRowIndex(groupRows[0], groupIdx),
         message: `Đơn "${code}": ${toVietnameseError(e)}`,
       });
     }

@@ -477,6 +477,8 @@ export default function NhaCungCapPage() {
         phone: s.phone,
         email: s.email,
         address: s.address,
+        taxCode: s.taxCode,
+        note: s.note,
         isActive: true,
       }));
       exportToExcelFromSchema(rows, supplierExcelSchema);
