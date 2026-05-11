@@ -1,6 +1,7 @@
 "use client";
 
 import { useEffect, useState } from "react";
+import { usePathname } from "next/navigation";
 import { useFnbSubdomain } from "@/lib/hooks/use-fnb-subdomain";
 import { Icon } from "@/components/ui/icon";
 
@@ -19,20 +20,38 @@ interface BeforeInstallPromptEvent extends Event {
   prompt(): Promise<void>;
 }
 
-const DISMISS_KEY = "onebiz-fnb-pwa-dismissed";
+const APP_PROMPT = {
+  fnb: {
+    dismissKey: "onebiz-fnb-pwa-dismissed",
+    title: "Cài ứng dụng FnB POS",
+    description: "Bán hàng nhanh hơn, mở từ màn hình chính như app thật",
+  },
+  manager: {
+    dismissKey: "onebiz-manager-pwa-dismissed",
+    title: "Cài ứng dụng Manager",
+    description: "Theo dõi doanh số, tồn kho và cảnh báo nhanh trên điện thoại",
+  },
+} as const;
 
 export function PwaInstallPrompt() {
   const { isFnb } = useFnbSubdomain();
+  const pathname = usePathname();
+  const isManagerApp = pathname.startsWith("/manager");
   const [deferredPrompt, setDeferredPrompt] =
     useState<BeforeInstallPromptEvent | null>(null);
   const [visible, setVisible] = useState(false);
+  const promptConfig = isFnb
+    ? APP_PROMPT.fnb
+    : isManagerApp
+      ? APP_PROMPT.manager
+      : null;
 
   useEffect(() => {
-    if (!isFnb) return;
+    if (!promptConfig) return;
     if (typeof window === "undefined") return;
 
     // Đã dismiss trong 14 ngày gần nhất → ẩn
-    const dismissed = localStorage.getItem(DISMISS_KEY);
+    const dismissed = localStorage.getItem(promptConfig.dismissKey);
     if (dismissed) {
       const ts = parseInt(dismissed, 10);
       if (!Number.isNaN(ts) && Date.now() - ts < 14 * 24 * 60 * 60 * 1000) {
@@ -52,16 +71,16 @@ export function PwaInstallPrompt() {
     window.addEventListener("beforeinstallprompt", onBeforeInstall);
     return () =>
       window.removeEventListener("beforeinstallprompt", onBeforeInstall);
-  }, [isFnb]);
+  }, [promptConfig]);
 
-  if (!visible || !deferredPrompt) return null;
+  if (!promptConfig || !visible || !deferredPrompt) return null;
 
   const handleInstall = async () => {
     try {
       await deferredPrompt.prompt();
       const choice = await deferredPrompt.userChoice;
       if (choice.outcome === "dismissed") {
-        localStorage.setItem(DISMISS_KEY, String(Date.now()));
+        localStorage.setItem(promptConfig.dismissKey, String(Date.now()));
       }
     } catch {
       // ignore
@@ -72,7 +91,7 @@ export function PwaInstallPrompt() {
   };
 
   const handleDismiss = () => {
-    localStorage.setItem(DISMISS_KEY, String(Date.now()));
+    localStorage.setItem(promptConfig.dismissKey, String(Date.now()));
     setVisible(false);
   };
 
@@ -90,10 +109,10 @@ export function PwaInstallPrompt() {
           id="pwa-install-title"
           className="font-heading text-sm font-bold text-foreground leading-tight"
         >
-          Cài ứng dụng FnB POS
+          {promptConfig.title}
         </p>
         <p className="text-xs text-muted-foreground mt-0.5">
-          Bán hàng nhanh hơn, mở từ màn hình chính như app thật
+          {promptConfig.description}
         </p>
       </div>
       <div className="flex flex-col gap-1 shrink-0">

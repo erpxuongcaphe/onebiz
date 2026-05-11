@@ -1,6 +1,7 @@
 "use client";
 
 import { useEffect } from "react";
+import { usePathname } from "next/navigation";
 import { useFnbSubdomain } from "@/lib/hooks/use-fnb-subdomain";
 
 /**
@@ -10,6 +11,8 @@ import { useFnbSubdomain } from "@/lib/hooks/use-fnb-subdomain";
  */
 export function PwaHead() {
   const { isFnb } = useFnbSubdomain();
+  const pathname = usePathname();
+  const isManagerApp = pathname.startsWith("/manager");
 
   useEffect(() => {
     // Dynamically set manifest link
@@ -18,7 +21,11 @@ export function PwaHead() {
 
     const link = document.createElement("link");
     link.rel = "manifest";
-    link.href = isFnb ? "/manifest-fnb.json" : "/manifest.json";
+    link.href = isFnb
+      ? "/manifest-fnb.json"
+      : isManagerApp
+        ? "/manifest-manager.json"
+        : "/manifest.json";
     document.head.appendChild(link);
 
     // Set theme-color meta — cả ERP + FnB dùng Stitch primary để brand đồng bộ.
@@ -41,7 +48,7 @@ export function PwaHead() {
           // Silent fail — SW registration is optional
         });
     }
-  }, [isFnb]);
+  }, [isFnb, isManagerApp]);
 
   // Set apple-mobile-web-app meta tags
   return (
@@ -54,7 +61,7 @@ export function PwaHead() {
       />
       <meta
         name="apple-mobile-web-app-title"
-        content={isFnb ? "FnB POS" : "ONEBIZ."}
+        content={isFnb ? "FnB POS" : isManagerApp ? "Manager" : "ONEBIZ."}
       />
       {/* Apple touch icon cho install prompt trên iOS.
           ERP dùng brand icon ONEBIZ; FnB giữ icon riêng để user phân biệt trên home screen. */}
