@@ -232,14 +232,14 @@ function FnbPosPageInner() {
                   .eq("product_type", "sku")
                   .eq("channel", "fnb")
                   .order("name")
-                  .limit(200), // giảm từ 300 → 200: hầu như menu FnB <200 SP, tiết kiệm ~100KB JSON
+                  .limit(5000), // CEO 12/05: bỏ giới hạn 200 SP — product grid đã virtualize (@tanstack/react-virtual) nên DOM safe; payload ~1MB cho 5000 SP, mạng 4G ~1-2s, chấp nhận được. Cap 5000 để tránh Supabase PostgREST default cap.
                 supabase
                   .from("products")
                   .select("id, name, sell_price")
                   .eq("tenant_id", tenantId)
                   .eq("is_active", true)
                   .ilike("code", "NVL-TOP%")
-                  .limit(100),
+                  .limit(1000), // tương tự — tăng từ 100 lên 1000 cho toppings
               ])
             : Promise.resolve(null);
 
