@@ -15,7 +15,7 @@ import { useAuth, useBranchFilter } from "@/lib/contexts";
 import {
   getDashboardKpis,
   getFinancialAlerts,
-  getLowStockProducts,
+  getManagerLowStockProducts,
   getOrdersByWeekday,
   getRecentActivities,
   getRevenueByDay,
@@ -26,7 +26,6 @@ import {
 import type {
   ChartPoint,
   DashboardKpis,
-  LowStockProduct,
   OrderChartPoint,
   RecentActivity,
   TopProduct,
@@ -34,7 +33,7 @@ import type {
 import type {
   FinancialAlert,
 } from "@/lib/services/supabase/reports";
-import type { StockForecastRow } from "@/lib/services/supabase/stock-forecast";
+import type { ManagerLowStockProduct, StockForecastRow } from "@/lib/services/supabase/stock-forecast";
 
 type ScreenId = "overview" | "inventory" | "activity" | "analytics";
 
@@ -44,7 +43,7 @@ interface ManagerData {
   revenueByHour: ChartPoint[];
   ordersByWeekday: OrderChartPoint[];
   topProducts: TopProduct[];
-  lowStock: LowStockProduct[];
+  lowStock: ManagerLowStockProduct[];
   stockForecast: StockForecastRow[];
   activities: RecentActivity[];
   alerts: FinancialAlert[];
@@ -117,7 +116,7 @@ export default function ManagerPwaPage() {
         getRevenueByHour(activeBranchId),
         getOrdersByWeekday(activeBranchId),
         getTopProducts(8, activeBranchId),
-        getLowStockProducts(8),
+        getManagerLowStockProducts({ branchId: activeBranchId, limit: 8, productType: "sku" }),
         getStockoutForecast({ branchId: activeBranchId, days: 30, limit: 8, productType: "sku" }).catch(() => [] as StockForecastRow[]),
         getRecentActivities(10),
         getFinancialAlerts().catch(() => [] as FinancialAlert[]),
@@ -345,10 +344,10 @@ function InventoryScreen({ data }: { data: ManagerData }) {
     <div className="grid gap-2.5 xl:grid-cols-[minmax(0,1fr)_360px]">
       <section className="min-w-0 rounded-lg border border-border bg-white p-3 shadow-sm md:p-4">
         <div className="mb-3 flex items-center justify-between gap-3">
-          <div>
+          <div className="min-w-0">
             <h2 className="font-heading text-lg font-bold">Cảnh báo tồn kho</h2>
             <p className="text-sm text-muted-foreground">
-              Ưu tiên hàng sắp hết, âm kho hoặc cần chuyển từ kho tổng.
+              Theo chi nhánh đang chọn, ưu tiên hàng dưới định mức.
             </p>
           </div>
           <Badge variant={data.lowStock.length ? "destructive" : "secondary"}>
@@ -358,17 +357,20 @@ function InventoryScreen({ data }: { data: ManagerData }) {
 
         <div className="space-y-2">
           {data.lowStock.length === 0 ? (
-            <EmptyState icon="task_alt" title="Kho đang ổn" text="Chưa có mặt hàng dưới mức cảnh báo." />
+            <EmptyState icon="task_alt" title="Kho đang ổn" text="Chưa có mặt hàng dưới định mức cảnh báo." />
           ) : (
             data.lowStock.map((item) => (
               <div
-                key={item.name}
+                key={`${item.branchId}:${item.productId}`}
                 className="grid gap-2.5 rounded-lg border border-border bg-surface-container-lowest p-2.5 sm:grid-cols-[1fr_auto]"
               >
                 <div className="min-w-0">
-                  <div className="truncate font-semibold">{item.name}</div>
-                  <div className="mt-1 text-sm text-muted-foreground">
-                    Min {formatNumber(item.minStock)}
+                  <div className="truncate font-semibold">{item.productName}</div>
+                  <div className="mt-1 truncate text-sm text-muted-foreground">
+                    {item.productCode || "Chưa có mã"} · {item.branchName}
+                  </div>
+                  <div className="mt-1 text-xs font-medium text-status-warning">
+                    Thiếu {formatNumber(item.shortage)} {item.unit ?? ""} so với định mức
                   </div>
                 </div>
                 <div className="flex items-center justify-between gap-3 sm:justify-end">
@@ -376,7 +378,9 @@ function InventoryScreen({ data }: { data: ManagerData }) {
                     <div className="font-heading text-xl font-extrabold text-status-warning">
                       {formatNumber(item.stock)}
                     </div>
-                    <div className="text-xs text-muted-foreground">Tồn hiện tại</div>
+                    <div className="text-xs text-muted-foreground">
+                      Min {formatNumber(item.minStock)}
+                    </div>
                   </div>
                   <Link href="/hang-hoa/dat-hang-nhap">
                     <Button size="sm" variant="outline">

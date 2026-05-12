@@ -201,8 +201,8 @@ export { getUOMConversions, createUOMConversion, updateUOMConversion, deleteUOMC
 // Branch Stock
 export { getBranchStock, getBranchStockRows, getBranchStockPage, getBranchStockAggregates, getProductStockByBranch, getProductStockBreakdown } from "./branch-stock";
 export type { BranchStockRow } from "./branch-stock";
-export { getStockoutForecast } from "./stock-forecast";
-export type { StockForecastRow, StockoutUrgency } from "./stock-forecast";
+export { getManagerLowStockProducts, getStockoutForecast } from "./stock-forecast";
+export type { ManagerLowStockProduct, StockForecastRow, StockoutUrgency } from "./stock-forecast";
 
 // Branches (enhanced)
 export { getBranches, createBranch, updateBranch, setBranchDefault, syncInternalEntities, getBranchSettings, updateBranchSettings, type BranchSettings } from "./branches";

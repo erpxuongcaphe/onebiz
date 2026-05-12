@@ -1,5 +1,10 @@
 import { getClient, getCurrentTenantId, handleError } from "./base";
-import { getBranchStockRows, type BranchStockRow } from "./branch-stock";
+import {
+  getBranchStockPage,
+  type BranchStockRow,
+} from "./branch-stock";
+
+type SupabaseClient = ReturnType<typeof getClient>;
 
 type MovementRow = {
   product_id: string | null;
@@ -7,6 +12,21 @@ type MovementRow = {
   quantity: number | string | null;
   reference_type: string | null;
   created_at: string | null;
+};
+
+type ForecastRpcRow = {
+  product_id: string;
+  product_code: string | null;
+  product_name: string | null;
+  unit: string | null;
+  stock: number | string | null;
+  min_stock: number | string | null;
+  avg_daily_out: number | string | null;
+  avg_daily_in: number | string | null;
+  total_out: number | string | null;
+  total_in: number | string | null;
+  days_until_stockout: number | string | null;
+  forecast_date: string | null;
 };
 
 export type StockoutUrgency = "critical" | "warning" | "watch" | "stable";
@@ -26,6 +46,26 @@ export interface StockForecastRow {
   forecastDate: string | null;
   urgency: StockoutUrgency;
   suggestion: string;
+}
+
+export interface ManagerLowStockProduct {
+  productId: string;
+  productCode: string;
+  productName: string;
+  branchId: string;
+  branchName: string;
+  unit?: string;
+  stock: number;
+  minStock: number;
+  shortage: number;
+}
+
+const PAGE_SIZE = 1000;
+const MAX_FALLBACK_MOVEMENT_PAGES = 50;
+
+function toNumber(value: number | string | null | undefined) {
+  const num = Number(value ?? 0);
+  return Number.isFinite(num) ? num : 0;
 }
 
 function startDateIso(days: number) {
@@ -58,6 +98,85 @@ function isPurchaseReference(referenceType: string) {
   );
 }
 
+function urgencyFor(days: number | null, stock: number, minStock: number): StockoutUrgency {
+  if (stock <= 0 || (days !== null && days <= 3)) return "critical";
+  if (days !== null && days <= 7) return "warning";
+  if (stock <= minStock || (days !== null && days <= 14)) return "watch";
+  return "stable";
+}
+
+function suggestionFor(days: number | null, avgDailyOut: number, stock: number) {
+  if (stock <= 0) return "Hết hàng, cần xử lý ngay";
+  if (avgDailyOut <= 0) return "Chưa đủ lịch sử bán/xuất";
+  if (days !== null && days <= 3) return "Nên đặt hoặc điều chuyển ngay";
+  if (days !== null && days <= 7) return "Chuẩn bị đặt hàng trong tuần";
+  if (days !== null && days <= 14) return "Theo dõi sát kế hoạch nhập";
+  return "Ổn định";
+}
+
+function withForecastMeta(row: Omit<StockForecastRow, "urgency" | "suggestion">): StockForecastRow {
+  const urgency = urgencyFor(row.daysUntilStockout, row.stock, row.minStock);
+  return {
+    ...row,
+    urgency,
+    suggestion: suggestionFor(row.daysUntilStockout, row.avgDailyOut, row.stock),
+  };
+}
+
+async function loadAllBranchStockRows(params: {
+  branchId?: string;
+  productType?: "sku" | "nvl";
+}): Promise<BranchStockRow[]> {
+  const rows: BranchStockRow[] = [];
+  let offset = 0;
+  let total = Number.POSITIVE_INFINITY;
+
+  while (rows.length < total) {
+    const page = await getBranchStockPage({
+      ...params,
+      limit: PAGE_SIZE,
+      offset,
+    });
+
+    rows.push(...page.rows);
+    total = page.total ?? rows.length;
+    if (page.rows.length < PAGE_SIZE) break;
+    offset += PAGE_SIZE;
+  }
+
+  return rows;
+}
+
+async function loadMovementRows(
+  supabase: SupabaseClient,
+  tenantId: string,
+  params: { branchId?: string; days: number },
+): Promise<MovementRow[]> {
+  const rows: MovementRow[] = [];
+  let offset = 0;
+
+  for (let pageIndex = 0; pageIndex < MAX_FALLBACK_MOVEMENT_PAGES; pageIndex += 1) {
+    let query = supabase
+      .from("stock_movements")
+      .select("product_id,type,quantity,reference_type,created_at")
+      .eq("tenant_id", tenantId)
+      .gte("created_at", startDateIso(params.days))
+      .order("created_at", { ascending: false })
+      .range(offset, offset + PAGE_SIZE - 1);
+
+    if (params.branchId) query = query.eq("branch_id", params.branchId);
+
+    const { data, error } = await query;
+    if (error) handleError(error, "getStockoutForecast:fallbackMovements");
+
+    rows.push(...((data ?? []) as MovementRow[]));
+    if (!data || data.length < PAGE_SIZE) break;
+    offset += PAGE_SIZE;
+  }
+
+  return rows;
+}
+
 function buildStockMap(rows: BranchStockRow[]) {
   const map = new Map<string, BranchStockRow>();
 
@@ -79,59 +198,83 @@ function buildStockMap(rows: BranchStockRow[]) {
   return map;
 }
 
-function urgencyFor(days: number | null, stock: number, minStock: number): StockoutUrgency {
-  if (stock <= 0 || (days !== null && days <= 3)) return "critical";
-  if (days !== null && days <= 7) return "warning";
-  if (stock <= minStock || (days !== null && days <= 14)) return "watch";
-  return "stable";
+function mapRpcForecastRow(row: ForecastRpcRow): StockForecastRow {
+  const stock = toNumber(row.stock);
+  const minStock = toNumber(row.min_stock);
+  const avgDailyOut = toNumber(row.avg_daily_out);
+  const daysUntilStockout =
+    row.days_until_stockout === null || row.days_until_stockout === undefined
+      ? null
+      : Math.max(0, Math.floor(toNumber(row.days_until_stockout)));
+
+  return withForecastMeta({
+    productId: row.product_id,
+    productCode: row.product_code ?? "",
+    productName: row.product_name ?? "",
+    unit: row.unit ?? undefined,
+    stock,
+    minStock,
+    avgDailyOut,
+    avgDailyIn: toNumber(row.avg_daily_in),
+    totalOut: toNumber(row.total_out),
+    totalIn: toNumber(row.total_in),
+    daysUntilStockout,
+    forecastDate: row.forecast_date,
+  });
 }
 
-function suggestionFor(days: number | null, avgDailyOut: number, stock: number) {
-  if (stock <= 0) return "Hết hàng, cần xử lý ngay";
-  if (avgDailyOut <= 0) return "Chưa đủ lịch sử bán/xuất";
-  if (days !== null && days <= 3) return "Nên đặt hoặc điều chuyển ngay";
-  if (days !== null && days <= 7) return "Chuẩn bị đặt hàng trong tuần";
-  if (days !== null && days <= 14) return "Theo dõi sát kế hoạch nhập";
-  return "Ổn định";
-}
-
-export async function getStockoutForecast(params?: {
+async function getStockoutForecastFromRpc(params: {
+  tenantId: string;
   branchId?: string;
-  days?: number;
-  limit?: number;
-  productType?: "sku" | "nvl";
+  days: number;
+  limit: number;
+  productType: "sku" | "nvl";
+}): Promise<StockForecastRow[] | null> {
+  const supabase = getClient();
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  const { data, error } = await (supabase.rpc as any)("get_stockout_forecast", {
+    p_tenant_id: params.tenantId,
+    p_branch_id: params.branchId ?? null,
+    p_days: params.days,
+    p_limit: params.limit,
+    p_product_type: params.productType,
+  });
+
+  if (error) {
+    console.warn("[getStockoutForecast] RPC unavailable, using JS fallback", error.message);
+    return null;
+  }
+
+  return ((data ?? []) as ForecastRpcRow[]).map(mapRpcForecastRow);
+}
+
+async function getStockoutForecastFallback(params: {
+  tenantId: string;
+  branchId?: string;
+  days: number;
+  limit: number;
+  productType: "sku" | "nvl";
 }): Promise<StockForecastRow[]> {
   const supabase = getClient();
-  const tenantId = await getCurrentTenantId();
-  const days = Math.max(7, params?.days ?? 30);
-  const limit = params?.limit ?? 8;
-
-  const stockRows = await getBranchStockRows({
-    branchId: params?.branchId,
-    productType: params?.productType ?? "sku",
-    limit: 1000,
+  const stockRows = await loadAllBranchStockRows({
+    branchId: params.branchId,
+    productType: params.productType,
   });
   const stockByProduct = buildStockMap(stockRows);
   if (stockByProduct.size === 0) return [];
 
-  let query = supabase
-    .from("stock_movements")
-    .select("product_id,type,quantity,reference_type,created_at")
-    .eq("tenant_id", tenantId)
-    .gte("created_at", startDateIso(days));
-
-  if (params?.branchId) query = query.eq("branch_id", params.branchId);
-
-  const { data, error } = await query;
-  if (error) handleError(error, "getStockoutForecast");
+  const movements = await loadMovementRows(supabase, params.tenantId, {
+    branchId: params.branchId,
+    days: params.days,
+  });
 
   const usageByProduct = new Map<string, { totalOut: number; totalIn: number }>();
-  ((data ?? []) as MovementRow[]).forEach((movement) => {
+  movements.forEach((movement) => {
     if (!movement.product_id || !stockByProduct.has(movement.product_id)) return;
     const refType = normalizeReferenceType(movement.reference_type);
-    const isCompanyWideTransfer = !params?.branchId && isTransferReference(refType);
-    const qty = Math.abs(Number(movement.quantity ?? 0));
-    if (!Number.isFinite(qty) || qty <= 0) return;
+    const isCompanyWideTransfer = !params.branchId && isTransferReference(refType);
+    const qty = Math.abs(toNumber(movement.quantity));
+    if (qty <= 0) return;
 
     const bucket = usageByProduct.get(movement.product_id) ?? {
       totalOut: 0,
@@ -142,7 +285,7 @@ export async function getStockoutForecast(params?: {
       bucket.totalOut += qty;
     }
 
-    if (movement.type === "in" && (params?.branchId || isPurchaseReference(refType))) {
+    if (movement.type === "in" && (params.branchId || isPurchaseReference(refType))) {
       bucket.totalIn += qty;
     }
 
@@ -152,14 +295,13 @@ export async function getStockoutForecast(params?: {
   return Array.from(stockByProduct.values())
     .map((stockRow) => {
       const usage = usageByProduct.get(stockRow.productId) ?? { totalOut: 0, totalIn: 0 };
-      const stock = Number(stockRow.quantity ?? 0);
-      const minStock = Number(stockRow.minStock ?? 0);
-      const avgDailyOut = usage.totalOut / days;
-      const avgDailyIn = usage.totalIn / days;
+      const stock = toNumber(stockRow.quantity);
+      const minStock = toNumber(stockRow.minStock);
+      const avgDailyOut = usage.totalOut / params.days;
+      const avgDailyIn = usage.totalIn / params.days;
       const daysUntilStockout = avgDailyOut > 0 ? Math.floor(stock / avgDailyOut) : null;
-      const urgency = urgencyFor(daysUntilStockout, stock, minStock);
 
-      return {
+      return withForecastMeta({
         productId: stockRow.productId,
         productCode: stockRow.productCode,
         productName: stockRow.productName,
@@ -172,9 +314,7 @@ export async function getStockoutForecast(params?: {
         totalIn: usage.totalIn,
         daysUntilStockout,
         forecastDate: forecastDateIso(daysUntilStockout),
-        urgency,
-        suggestion: suggestionFor(daysUntilStockout, avgDailyOut, stock),
-      };
+      });
     })
     .filter((row) => row.avgDailyOut > 0 || row.stock <= row.minStock)
     .sort((a, b) => {
@@ -192,5 +332,83 @@ export async function getStockoutForecast(params?: {
       if (aDays !== bDays) return aDays - bDays;
       return b.avgDailyOut - a.avgDailyOut;
     })
+    .slice(0, params.limit);
+}
+
+export async function getManagerLowStockProducts(params?: {
+  branchId?: string;
+  limit?: number;
+  productType?: "sku" | "nvl";
+}): Promise<ManagerLowStockProduct[]> {
+  const limit = params?.limit ?? 8;
+  const stockRows = await loadAllBranchStockRows({
+    branchId: params?.branchId,
+    productType: params?.productType ?? "sku",
+  });
+
+  const map = new Map<string, ManagerLowStockProduct>();
+
+  stockRows.forEach((row) => {
+    const key = `${row.branchId}:${row.productId}`;
+    const existing = map.get(key);
+    if (!existing) {
+      map.set(key, {
+        productId: row.productId,
+        productCode: row.productCode,
+        productName: row.productName,
+        branchId: row.branchId,
+        branchName: row.branchName,
+        unit: row.unit,
+        stock: toNumber(row.quantity),
+        minStock: toNumber(row.minStock),
+        shortage: 0,
+      });
+      return;
+    }
+
+    existing.stock += toNumber(row.quantity);
+    existing.minStock = Math.max(existing.minStock, toNumber(row.minStock));
+  });
+
+  return Array.from(map.values())
+    .map((row) => ({
+      ...row,
+      shortage: Math.max(0, row.minStock - row.stock),
+    }))
+    .filter((row) => row.minStock > 0 && row.stock <= row.minStock)
+    .sort((a, b) => {
+      if (a.shortage !== b.shortage) return b.shortage - a.shortage;
+      return a.stock - b.stock;
+    })
     .slice(0, limit);
+}
+
+export async function getStockoutForecast(params?: {
+  branchId?: string;
+  days?: number;
+  limit?: number;
+  productType?: "sku" | "nvl";
+}): Promise<StockForecastRow[]> {
+  const tenantId = await getCurrentTenantId();
+  const days = Math.max(7, params?.days ?? 30);
+  const limit = params?.limit ?? 8;
+  const productType = params?.productType ?? "sku";
+
+  const rpcRows = await getStockoutForecastFromRpc({
+    tenantId,
+    branchId: params?.branchId,
+    days,
+    limit,
+    productType,
+  });
+
+  if (rpcRows) return rpcRows;
+
+  return getStockoutForecastFallback({
+    tenantId,
+    branchId: params?.branchId,
+    days,
+    limit,
+    productType,
+  });
 }
