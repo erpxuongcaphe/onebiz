@@ -1015,31 +1015,61 @@ function OtpTab() {
       </section>
 
       {/* 6 action cards */}
-      <section>
-        <h3 className="text-[12px] font-semibold mb-1.5 px-1">
-          Áp dụng cho 6 action nhạy cảm
-        </h3>
-        <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-6 gap-2">
+      {/* Hero — 1 nút cấp OTP (CEO 12/05: UX mới gom 1 nút thay vì 6 card) */}
+      <section className="bg-surface border border-border rounded-xl p-4 shadow-sm">
+        <div className="flex items-center gap-2.5 mb-3">
+          <div className="h-9 w-9 rounded-lg bg-status-warning/10 flex items-center justify-center">
+            <Icon name="vpn_key" size={18} className="text-status-warning" />
+          </div>
+          <div>
+            <h3 className="text-sm font-bold leading-tight">Cấp OTP duyệt từ xa</h3>
+            <p className="text-[10px] text-muted-foreground">
+              Cashier gọi xin → chọn action → đọc mã 6 số qua điện thoại
+            </p>
+          </div>
+        </div>
+
+        <label className="text-[10px] font-semibold uppercase tracking-wide text-muted-foreground">
+          Loại OTP cần cấp
+        </label>
+        <select className="w-full mt-1 px-2.5 py-2 rounded-md border border-border bg-surface text-[13px] font-medium h-9">
           {OTP_ACTION_CARDS.map((a) => (
-            <div
-              key={a.label}
-              className="p-2 rounded-md border border-border bg-surface"
-            >
-              <div className="flex items-start gap-1.5">
-                <div className={cn("h-7 w-7 rounded-md flex items-center justify-center shrink-0 border", a.color)}>
-                  <Icon name={a.icon} size={14} />
-                </div>
-                <div className="flex-1 min-w-0">
-                  <div className="font-medium text-[11px] leading-tight">{a.label}</div>
-                  <div className="text-[9px] text-muted-foreground mt-0.5 line-clamp-2">
-                    {a.description}
-                  </div>
-                </div>
+            <option key={a.label} value={a.label}>
+              {a.label}
+            </option>
+          ))}
+        </select>
+        <p className="text-[10px] text-muted-foreground mt-1 px-0.5">
+          {OTP_ACTION_CARDS[0].description}
+        </p>
+
+        <Button size="lg" className="w-full mt-3 h-10 text-[13px] font-semibold">
+          <Icon name="add" size={16} className="mr-1.5" />
+          Cấp OTP mới
+        </Button>
+
+        <div className="mt-2 text-[10px] text-muted-foreground text-center">
+          Mã 6 số · TTL 2 phút · dùng 1 lần
+        </div>
+      </section>
+
+      {/* 6 action labels — collapsible reference */}
+      <details className="bg-surface border border-border rounded-lg">
+        <summary className="cursor-pointer px-3 py-2 text-[12px] font-semibold flex items-center gap-1.5 hover:bg-surface-container-low">
+          <Icon name="info" size={12} className="text-muted-foreground" />
+          Xem 6 action nhạy cảm áp dụng OTP
+        </summary>
+        <div className="grid grid-cols-2 sm:grid-cols-3 gap-1.5 p-2 pt-0">
+          {OTP_ACTION_CARDS.map((a) => (
+            <div key={a.label} className="flex items-center gap-1.5 p-1.5 rounded border border-border bg-surface-container-low">
+              <div className={cn("h-6 w-6 rounded flex items-center justify-center shrink-0 border", a.color)}>
+                <Icon name={a.icon} size={12} />
               </div>
+              <span className="text-[10px] font-medium truncate">{a.label}</span>
             </div>
           ))}
         </div>
-      </section>
+      </details>
 
       {/* Stats + policy */}
       <section className="grid grid-cols-2 sm:grid-cols-4 gap-2">

@@ -642,6 +642,19 @@ export function TopNav() {
               <Icon name="cloud_upload" size={16} />
             </Button>
 
+            {/* CEO 12/05: Shortcut "Cấp OTP" trên header — quản lý truy cập
+                nhanh khi cashier gọi xin duyệt, không phải lội qua menu sidebar.
+                Highlight cam để dễ thấy. */}
+            <Link href="/manager/otp" className="hidden sm:flex" title="Cấp OTP duyệt từ xa">
+              <Button
+                variant="ghost"
+                size="icon"
+                className="text-status-warning hover:text-status-warning hover:bg-status-warning/10"
+              >
+                <Icon name="vpn_key" size={16} />
+              </Button>
+            </Link>
+
             {/* Notification bell — badge hiển thị unread count thật từ DB */}
             <Link href="/thong-bao" className="relative hidden sm:flex">
               <Button

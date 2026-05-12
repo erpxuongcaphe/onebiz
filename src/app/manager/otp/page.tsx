@@ -110,8 +110,11 @@ export default function ManagerOtpPage() {
   const { toast } = useToast();
   const { hasPermission } = usePermissions();
 
+  const [selectedActionCode, setSelectedActionCode] = useState<OtpActionCode>(
+    OTP_ACTION_CODES.FNB_CANCEL_UNPAID_BILL,
+  );
   const [issuedOtp, setIssuedOtp] = useState<IssuedOtp | null>(null);
-  const [issuing, setIssuing] = useState<string | null>(null);
+  const [issuing, setIssuing] = useState(false);
   const [recent, setRecent] = useState<RecentManagerOtp[]>([]);
   const [loadingRecent, setLoadingRecent] = useState(true);
 
@@ -131,20 +134,22 @@ export default function ManagerOtpPage() {
     loadRecent();
   }, [loadRecent]);
 
-  const handleIssue = async (action: ActionCard) => {
-    if (!hasPermission(action.requiredPermission)) {
+  const selectedAction = ACTION_CARDS.find((a) => a.code === selectedActionCode)!;
+  const canIssueSelected = hasPermission(selectedAction.requiredPermission);
+
+  const handleIssue = async () => {
+    if (!canIssueSelected) {
       toast({
         variant: "warning",
         title: "Không có quyền cấp OTP",
-        description: `Cần quyền '${action.requiredPermission}'.`,
+        description: `Cần quyền '${selectedAction.requiredPermission}'.`,
       });
       return;
     }
-    setIssuing(action.code);
+    setIssuing(true);
     try {
-      const otp = await issueManagerOtp({ actionCode: action.code });
+      const otp = await issueManagerOtp({ actionCode: selectedActionCode });
       setIssuedOtp(otp);
-      // Refresh history
       loadRecent();
     } catch (err) {
       toast({
@@ -153,7 +158,7 @@ export default function ManagerOtpPage() {
         description: err instanceof Error ? err.message : "Vui lòng thử lại.",
       });
     } finally {
-      setIssuing(null);
+      setIssuing(false);
     }
   };
 
@@ -178,90 +183,85 @@ export default function ManagerOtpPage() {
         </div>
       </header>
 
-      <main className="p-4 sm:p-6 max-w-5xl mx-auto space-y-6">
-        {/* Hướng dẫn ngắn */}
-        <div className="bg-primary/5 border border-primary/20 rounded-xl p-4 flex items-start gap-3">
-          <Icon
-            name="info"
-            size={20}
-            className="text-primary shrink-0 mt-0.5"
-          />
-          <div className="text-sm text-muted-foreground">
-            <p className="font-medium text-foreground">Cách dùng</p>
-            <ol className="list-decimal list-inside space-y-0.5 mt-1 text-xs">
-              <li>Cashier gọi điện / nhắn Zalo cho bạn xin duyệt</li>
-              <li>Bạn bấm <strong>Cấp OTP</strong> ở action tương ứng</li>
-              <li>Đọc mã 6 số qua điện thoại cho cashier</li>
-              <li>Cashier nhập vào POS — mã chỉ dùng được 1 lần</li>
-            </ol>
+      <main className="p-4 sm:p-6 max-w-2xl mx-auto space-y-4">
+        {/* Hero — 1 nút cấp OTP duy nhất */}
+        <section className="bg-surface border border-border rounded-2xl p-5 sm:p-6 shadow-sm">
+          <div className="flex items-center gap-3 mb-4">
+            <div className="h-11 w-11 rounded-xl bg-status-warning/10 flex items-center justify-center shrink-0">
+              <Icon name="vpn_key" size={22} className="text-status-warning" />
+            </div>
+            <div>
+              <h2 className="text-base font-bold leading-tight">Cấp OTP duyệt từ xa</h2>
+              <p className="text-[11px] text-muted-foreground mt-0.5">
+                Cashier gọi xin → chọn action → đọc mã 6 số qua điện thoại
+              </p>
+            </div>
           </div>
-        </div>
 
-        {/* 6 action cards */}
-        <section>
-          <h2 className="text-sm font-semibold text-foreground mb-3 px-1">
-            Cấp OTP cho action
-          </h2>
-          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-3">
-            {ACTION_CARDS.map((a) => {
-              const allowed = hasPermission(a.requiredPermission);
-              const isLoading = issuing === a.code;
-              return (
-                <button
-                  key={a.code}
-                  onClick={() => handleIssue(a)}
-                  disabled={!allowed || isLoading}
-                  className={cn(
-                    "text-left p-4 rounded-xl border-2 transition-all bg-surface",
-                    "hover:shadow-md disabled:opacity-50 disabled:cursor-not-allowed",
-                    allowed
-                      ? "border-border hover:border-primary/40"
-                      : "border-border",
-                  )}
-                >
-                  <div className="flex items-start gap-3">
-                    <div
-                      className={cn(
-                        "h-10 w-10 rounded-lg flex items-center justify-center shrink-0 border",
-                        a.color,
-                      )}
-                    >
-                      <Icon name={a.icon} size={20} />
-                    </div>
-                    <div className="flex-1 min-w-0">
-                      <div className="font-medium text-sm">{a.label}</div>
-                      <div className="text-[11px] text-muted-foreground mt-0.5 line-clamp-2">
-                        {a.description}
-                      </div>
-                      <div className="mt-2 flex items-center gap-1.5">
-                        {allowed ? (
-                          isLoading ? (
-                            <Badge className="bg-primary/10 text-primary border-primary/30 text-[10px]">
-                              <Icon
-                                name="progress_activity"
-                                size={10}
-                                className="animate-spin mr-1"
-                              />
-                              Đang cấp...
-                            </Badge>
-                          ) : (
-                            <Badge className="bg-status-success/10 text-status-success border-status-success/30 text-[10px]">
-                              <Icon name="check_circle" size={10} className="mr-1" />
-                              Có quyền
-                            </Badge>
-                          )
-                        ) : (
-                          <Badge variant="outline" className="text-[10px]">
-                            <Icon name="lock" size={10} className="mr-1" />
-                            Thiếu quyền
-                          </Badge>
-                        )}
-                      </div>
-                    </div>
-                  </div>
-                </button>
-              );
-            })}
+          {/* Action selector */}
+          <label className="text-[11px] font-semibold uppercase tracking-wide text-muted-foreground">
+            Loại OTP cần cấp
+          </label>
+          <div className="mt-1.5 space-y-1.5">
+            <select
+              value={selectedActionCode}
+              onChange={(e) => setSelectedActionCode(e.target.value as OtpActionCode)}
+              disabled={issuing}
+              className="w-full px-3 py-2.5 rounded-lg border border-border bg-surface text-sm font-medium focus:outline-none focus:ring-2 focus:ring-primary/40 disabled:opacity-60"
+            >
+              {ACTION_CARDS.map((a) => {
+                const allowed = hasPermission(a.requiredPermission);
+                return (
+                  <option key={a.code} value={a.code} disabled={!allowed}>
+                    {allowed ? "" : "🔒 "}{a.label}
+                  </option>
+                );
+              })}
+            </select>
+            <div className="flex items-start gap-2 px-1">
+              <div className={cn(
+                "h-7 w-7 rounded-md flex items-center justify-center shrink-0 border",
+                selectedAction.color,
+              )}>
+                <Icon name={selectedAction.icon} size={14} />
+              </div>
+              <div className="flex-1 min-w-0">
+                <p className="text-[11px] text-muted-foreground">
+                  {selectedAction.description}
+                </p>
+                {!canIssueSelected && (
+                  <p className="text-[11px] text-status-warning mt-0.5 flex items-center gap-1">
+                    <Icon name="lock" size={11} />
+                    Bạn không có quyền cấp loại này — cần <code className="text-[10px] bg-muted px-1 rounded">{selectedAction.requiredPermission}</code>
+                  </p>
+                )}
+              </div>
+            </div>
+          </div>
+
+          {/* Big issue button */}
+          <Button
+            size="lg"
+            className="w-full mt-4 h-12 text-base font-semibold"
+            onClick={handleIssue}
+            disabled={!canIssueSelected || issuing}
+          >
+            {issuing ? (
+              <>
+                <Icon name="progress_activity" size={18} className="mr-2 animate-spin" />
+                Đang sinh mã...
+              </>
+            ) : (
+              <>
+                <Icon name="add" size={18} className="mr-1.5" />
+                Cấp OTP mới
+              </>
+            )}
+          </Button>
+
+          {/* Quick hint */}
+          <div className="mt-3 text-[10px] text-muted-foreground text-center">
+            Mã 6 số · TTL 2 phút · dùng 1 lần · {user?.fullName ?? "—"}
           </div>
         </section>
 
