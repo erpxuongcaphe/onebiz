@@ -96,10 +96,8 @@ describe("updateCustomer", () => {
 describe("deleteCustomer", () => {
   beforeEach(() => vi.clearAllMocks());
 
-  it("calls the secure atomic RPC delete_customer_atomic", async () => {
-    // Sprint S2 Phase 1 (CEO 12/05): service đã chuyển sang RPC SECURITY DEFINER
-    // để DB enforce permission `customers.delete`. Test verify gọi đúng RPC name
-    // + param shape.
+  it("calls the secure atomic RPC delete_customer_atomic (no OTP)", async () => {
+    // Sprint S2 Phase 1 + 3a: service gọi RPC SECURITY DEFINER + có optional OTP.
     mockRpc.mockResolvedValueOnce({
       data: { success: true, customer_id: "c-1", customer_code: "KH001" },
       error: null,
@@ -109,6 +107,21 @@ describe("deleteCustomer", () => {
 
     expect(mockRpc).toHaveBeenCalledWith("delete_customer_atomic", {
       p_customer_id: "c-1",
+      p_otp_id: null,
+    });
+  });
+
+  it("passes p_otp_id when caller supplies OTP for delegation flow (Phase 3a)", async () => {
+    mockRpc.mockResolvedValueOnce({
+      data: { success: true, customer_id: "c-2", delegated: true, approved_by: "manager-id" },
+      error: null,
+    });
+
+    await deleteCustomer("c-2", "otp-uuid-456");
+
+    expect(mockRpc).toHaveBeenCalledWith("delete_customer_atomic", {
+      p_customer_id: "c-2",
+      p_otp_id: "otp-uuid-456",
     });
   });
 

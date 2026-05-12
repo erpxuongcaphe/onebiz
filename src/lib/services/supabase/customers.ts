@@ -409,16 +409,21 @@ export async function updateCustomer(id: string, updates: Partial<Customer>): Pr
  * Xóa khách hàng.
  *
  * Sprint S2 Phase 1 (CEO 12/05): chuyển sang RPC SECURITY DEFINER để enforce
- * quyền `customers.delete` ở DB layer + atomic audit log snapshot. Trước đây
- * cashier không có quyền vẫn xoá được KH (CRITICAL bug).
+ * quyền `customers.delete` ở DB layer + atomic audit log snapshot.
+ *
+ * Sprint S2 Phase 3a (CEO 12/05): nhận optional `otpId` để hỗ trợ delegation
+ * — cashier không có quyền vẫn xoá được nếu có OTP đã verify từ manager.
  */
-export async function deleteCustomer(id: string): Promise<void> {
+export async function deleteCustomer(id: string, otpId?: string): Promise<void> {
   const supabase = getClient();
 
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
   const { data, error } = await (supabase.rpc as any)(
     "delete_customer_atomic",
-    { p_customer_id: id },
+    {
+      p_customer_id: id,
+      p_otp_id: otpId ?? null,
+    },
   );
 
   if (error) {

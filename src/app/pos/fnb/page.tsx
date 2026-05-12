@@ -42,6 +42,8 @@ import {
 import { splitByItems, splitEqually } from "@/lib/services/supabase/split-bill";
 import { validateCoupon } from "@/lib/services/supabase/coupons";
 import { getKitchenOrderById, getKitchenOrders, cancelUnpaidKitchenOrder, transferTable as transferTableService } from "@/lib/services/supabase/kitchen-orders";
+import { OtpApprovalDialog } from "@/components/shared/dialogs/otp-approval-dialog";
+import { OTP_ACTION_CODES } from "@/lib/services/supabase/manager-otp";
 import { getOpenShift, openShift, closeShift } from "@/lib/services/supabase/shifts";
 import {
   getDeliveryPlatformSettings,
@@ -139,6 +141,16 @@ function FnbPosPageInner() {
   const [voidConfirmOpen, setVoidConfirmOpen] = useState(false);
   // R5: Lý do huỷ — bắt buộc để audit & loss prevention.
   const [voidReason, setVoidReason] = useState("");
+  // Sprint S2 Phase 3a (CEO 12/05): OTP delegation cho cashier không có quyền
+  // pos_fnb.cancel_unpaid_order. Cashier xin OTP từ quản lý qua điện thoại
+  // → nhập vào dialog → server check OTP issuer có quyền.
+  const [voidOtpDialogOpen, setVoidOtpDialogOpen] = useState(false);
+  const [voidOtpContext, setVoidOtpContext] = useState<{
+    orderId: string;
+    label: string;
+    reasonCode: string;
+    tableId?: string | null;
+  } | null>(null);
   const [transferTableOpen, setTransferTableOpen] = useState(false);
   // Sprint A — CEO 06/05: Sidenav drawer trigger từ ☰ button trong header.
   const [sidenavOpen, setSidenavOpen] = useState(false);
@@ -1369,18 +1381,66 @@ function FnbPosPageInner() {
   // ── Void kitchen order (trước khi thanh toán) ──
   //   RPC kiểm quyền + ghi POS exception event trong cùng transaction.
   //   Sau khi huỷ → close tab, refresh tables.
+  // Helper chung — execute cancel với optional OTP. Tách ra để tái sử dụng
+  // cho cả flow direct (có quyền) và flow OTP-delegated (Phase 3a).
+  const executeKitchenOrderCancel = useCallback(
+    async (args: {
+      orderId: string;
+      reasonCode: string;
+      label: string;
+      tableId?: string | null;
+      otpId?: string;
+    }) => {
+      try {
+        await cancelUnpaidKitchenOrder({
+          orderId: args.orderId,
+          reasonCode: args.reasonCode,
+          shiftId: currentShift?.id ?? null,
+          otpId: args.otpId,
+        });
+        hapticSuccess();
+        toast({
+          title: "Đã huỷ đơn bếp",
+          description: args.otpId
+            ? `Đơn ${args.label} đã được huỷ (duyệt qua OTP). Lý do: ${args.reasonCode}`
+            : `Đơn ${args.label} đã được huỷ. Lý do: ${args.reasonCode}`,
+          variant: "success",
+        });
+        setVoidReason("");
+        // Optimistic: release table trên UI ngay
+        if (args.tableId) {
+          setTables((prev) =>
+            prev.map((t) =>
+              t.id === args.tableId
+                ? { ...t, status: "available" as const, currentOrderId: null }
+                : t,
+            ),
+          );
+        }
+        // Đóng tab hiện tại nếu trùng order vừa huỷ
+        if (pos.activeTab?.kitchenOrderId === args.orderId) {
+          pos.closeTab(pos.activeTabId);
+        }
+        setVoidConfirmOpen(false);
+        if (branchId)
+          getTablesByBranch(branchId)
+            .then(setTables)
+            .catch((err) => console.error("[FnB] refresh tables failed:", err));
+      } catch (err) {
+        hapticError();
+        toast({
+          title: "Huỷ đơn bếp thất bại",
+          description: err instanceof Error ? err.message : "Lỗi không xác định",
+          variant: "error",
+        });
+      }
+    },
+    [pos, branchId, currentShift?.id, toast],
+  );
+
   const handleVoidKitchenOrder = useCallback(async () => {
     const tab = pos.activeTab;
     if (!tab?.kitchenOrderId) return;
-    if (!canCancelUnpaidOrder) {
-      hapticError();
-      toast({
-        title: "Cần quyền quản lý",
-        description: "Hủy đơn đã gửi bếp cần quyền hủy đơn chưa thanh toán.",
-        variant: "warning",
-      });
-      return;
-    }
     if (!networkStatus.isOnline) {
       hapticError();
       toast({
@@ -1398,41 +1458,34 @@ function FnbPosPageInner() {
       });
       return;
     }
-    try {
-      await cancelUnpaidKitchenOrder({
+
+    // Phase 3a: cashier không có quyền → chuyển sang OTP delegation flow.
+    if (!canCancelUnpaidOrder) {
+      setVoidOtpContext({
         orderId: tab.kitchenOrderId,
+        label: tab.label,
         reasonCode: voidReason.trim(),
-        shiftId: currentShift?.id ?? null,
+        tableId: tab.tableId ?? null,
       });
-      hapticSuccess();
-      toast({
-        title: "Đã huỷ đơn bếp",
-        description: `Đơn ${tab.label} đã được huỷ. Lý do: ${voidReason.trim()}`,
-        variant: "success",
-      });
-      setVoidReason("");
-      // Optimistic: release table trên UI ngay
-      if (tab.tableId) {
-        setTables((prev) =>
-          prev.map((t) =>
-            t.id === tab.tableId
-              ? { ...t, status: "available" as const, currentOrderId: null }
-              : t
-          )
-        );
-      }
-      pos.closeTab(pos.activeTabId);
       setVoidConfirmOpen(false);
-      if (branchId) getTablesByBranch(branchId).then(setTables).catch((err) => console.error("[FnB] refresh tables failed:", err));
-    } catch (err) {
-      hapticError();
-      toast({
-        title: "Huỷ đơn bếp thất bại",
-        description: err instanceof Error ? err.message : "Lỗi không xác định",
-        variant: "error",
-      });
+      setVoidOtpDialogOpen(true);
+      return;
     }
-  }, [pos, canCancelUnpaidOrder, branchId, currentShift?.id, networkStatus.isOnline, toast, voidReason]);
+
+    await executeKitchenOrderCancel({
+      orderId: tab.kitchenOrderId,
+      reasonCode: voidReason.trim(),
+      label: tab.label,
+      tableId: tab.tableId,
+    });
+  }, [
+    pos,
+    canCancelUnpaidOrder,
+    networkStatus.isOnline,
+    toast,
+    voidReason,
+    executeKitchenOrderCancel,
+  ]);
 
   // ── Transfer table (chuyển bàn) ──
   const handleTransferTable = useCallback(
@@ -1923,7 +1976,7 @@ function FnbPosPageInner() {
           onCustomerClick={() => setCustomerPickerOpen(true)}
           onDiscountChange={(d) => pos.setOrderDiscount(pos.activeTabId, d)}
           onPrintPreBill={handlePrintPreBill}
-          onVoidKitchenOrder={canCancelUnpaidOrder ? () => setVoidConfirmOpen(true) : undefined}
+          onVoidKitchenOrder={() => setVoidConfirmOpen(true)}
           onTransferTable={() => setTransferTableOpen(true)}
           onOrderHistory={() => setOrderHistoryOpen(true)}
           onApplyCoupon={handleApplyCoupon}
@@ -2082,7 +2135,7 @@ function FnbPosPageInner() {
               onCustomerClick={() => setCustomerPickerOpen(true)}
               onDiscountChange={(d) => pos.setOrderDiscount(pos.activeTabId, d)}
               onPrintPreBill={handlePrintPreBill}
-              onVoidKitchenOrder={canCancelUnpaidOrder ? () => setVoidConfirmOpen(true) : undefined}
+              onVoidKitchenOrder={() => setVoidConfirmOpen(true)}
               onTransferTable={() => setTransferTableOpen(true)}
               onOrderHistory={() => setOrderHistoryOpen(true)}
               onApplyCoupon={handleApplyCoupon}
@@ -2211,6 +2264,12 @@ function FnbPosPageInner() {
               Tip: Chỉ huỷ được đơn chưa thanh toán. Nếu đã in ticket, hãy thông báo
               cho bếp trước. Lý do sẽ ghi vào audit log.
             </p>
+            {!canCancelUnpaidOrder && (
+              <div className="rounded-md bg-status-warning/10 border border-status-warning/30 p-2.5 text-xs text-foreground">
+                <Icon name="pin" size={14} className="inline-block mr-1 text-status-warning" />
+                Bạn không có quyền huỷ. Sau khi xác nhận sẽ mở dialog xin OTP từ quản lý.
+              </div>
+            )}
           </div>
           <div className="flex justify-end gap-2 pt-2">
             <button
@@ -2229,11 +2288,46 @@ function FnbPosPageInner() {
               disabled={!voidReason.trim()}
               className="px-4 py-2 rounded-lg text-sm bg-status-error text-white hover:bg-status-error/90 disabled:opacity-50 disabled:cursor-not-allowed"
             >
-              Huỷ đơn
+              {canCancelUnpaidOrder ? "Huỷ đơn" : "Xin OTP duyệt"}
             </button>
           </div>
         </DialogContent>
       </Dialog>
+
+      {/* Phase 3a (CEO 12/05): OTP delegation dialog cho cashier không có quyền */}
+      <OtpApprovalDialog
+        open={voidOtpDialogOpen}
+        onOpenChange={(o) => {
+          setVoidOtpDialogOpen(o);
+          if (!o) setVoidOtpContext(null);
+        }}
+        actionCode={OTP_ACTION_CODES.FNB_CANCEL_UNPAID_BILL}
+        targetMeta={
+          voidOtpContext
+            ? {
+                kitchen_order_id: voidOtpContext.orderId,
+                reason_code: voidOtpContext.reasonCode,
+                table_id: voidOtpContext.tableId,
+              }
+            : undefined
+        }
+        contextLabel={
+          voidOtpContext
+            ? `Huỷ đơn ${voidOtpContext.label} — lý do: ${voidOtpContext.reasonCode}`
+            : undefined
+        }
+        onApproved={async (verified) => {
+          if (!voidOtpContext) return;
+          await executeKitchenOrderCancel({
+            orderId: voidOtpContext.orderId,
+            reasonCode: voidOtpContext.reasonCode,
+            label: voidOtpContext.label,
+            tableId: voidOtpContext.tableId,
+            otpId: verified.otpId,
+          });
+          setVoidOtpContext(null);
+        }}
+      />
 
       {/* Transfer table dialog */}
       <Dialog open={transferTableOpen} onOpenChange={setTransferTableOpen}>

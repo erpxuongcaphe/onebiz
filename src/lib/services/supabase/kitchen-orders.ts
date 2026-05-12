@@ -525,6 +525,13 @@ export interface CancelUnpaidKitchenOrderInput {
   reasonCode: string;
   reasonNote?: string;
   shiftId?: string | null;
+  /**
+   * Phase 3a (CEO 12/05): nếu cashier không có quyền pos_fnb.cancel_unpaid_order,
+   * verify OTP từ manager trước (`verifyAndUseManagerOtp`) rồi pass otpId xuống
+   * service. Server kiểm OTP used_at < 60s + action_code match + used_by = current
+   * user → cho phép thực thi với permission của OTP issuer.
+   */
+  otpId?: string;
 }
 
 /**
@@ -553,6 +560,7 @@ export async function cancelUnpaidKitchenOrder(
       p_reason_code: reasonCode,
       p_reason_note: reasonNote || null,
       p_shift_id: input.shiftId ?? null,
+      p_otp_id: input.otpId ?? null,
     },
   );
 

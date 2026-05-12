@@ -59,6 +59,8 @@ import { SummaryCard } from "@/components/shared/summary-card";
 import { useToast } from "@/lib/contexts";
 import { usePermissions } from "@/lib/permissions/use-permission";
 import { PERMISSIONS } from "@/lib/permissions/constants";
+import { OtpApprovalDialog } from "@/components/shared/dialogs/otp-approval-dialog";
+import { OTP_ACTION_CODES } from "@/lib/services/supabase/manager-otp";
 import type { Product } from "@/lib/types";
 import { Icon } from "@/components/ui/icon";
 
@@ -280,12 +282,17 @@ export default function HangHoaPage() {
   // Bulk action state — phase 2: wire backend mutations
   const { toast } = useToast();
 
-  // Sprint S2 Phase 1 (CEO 12/05): defense-in-depth permission cho xoá SP.
-  // canDeleteProduct = false → ẩn nút Xoá khỏi UI + chặn handler + service RPC
-  // cũng reject. Owner luôn bypass. Trước đây cashier không có quyền cũng xoá
-  // được (CRITICAL bug bảo mật).
+  // Sprint S2 Phase 1 + 3a (CEO 12/05): defense-in-depth permission cho xoá SP.
+  //   - canDeleteProduct = true  → bấm Xoá → ConfirmDialog → service trực tiếp
+  //   - canDeleteProduct = false → bấm Xoá → ConfirmDialog → mở OTP dialog
+  //     → manager cấp OTP từ /manager/otp → cashier nhập → service với otpId
+  // Server (migration 00060/00062) enforce permission của OTP issuer thay actor.
   const { hasPermission } = usePermissions();
   const canDeleteProduct = hasPermission(PERMISSIONS.PRODUCTS_DELETE);
+
+  // OTP delegation state — khi cashier không có quyền nhưng vẫn muốn xoá
+  const [otpDialogOpen, setOtpDialogOpen] = useState(false);
+  const [otpTargetProduct, setOtpTargetProduct] = useState<Product | null>(null);
   const [bulkChangeCategoryOpen, setBulkChangeCategoryOpen] = useState(false);
   const [bulkChangePriceOpen, setBulkChangePriceOpen] = useState(false);
   const [bulkDeleteConfirmOpen, setBulkDeleteConfirmOpen] = useState(false);
@@ -480,16 +487,17 @@ export default function HangHoaPage() {
 
   const handleConfirmSingleDelete = useCallback(async () => {
     if (!deletingProduct) return;
+
+    // Phase 3a: cashier không có quyền → chuyển sang flow OTP delegation.
+    // Đóng ConfirmDialog, mở OtpApprovalDialog. Cashier xin OTP từ quản lý.
     if (!canDeleteProduct) {
-      toast({
-        variant: "warning",
-        title: "Không có quyền xoá sản phẩm",
-        description: "Liên hệ quản lý để được cấp quyền 'products.delete'.",
-      });
+      setOtpTargetProduct(deletingProduct);
       setDeleteConfirmOpen(false);
       setDeletingProduct(null);
+      setOtpDialogOpen(true);
       return;
     }
+
     setDeleteLoading(true);
     try {
       await deleteProduct(deletingProduct.id);
@@ -505,14 +513,35 @@ export default function HangHoaPage() {
     }
   }, [deletingProduct, canDeleteProduct, toast, fetchData]);
 
+  const handleOtpApproved = useCallback(async (otpId: string) => {
+    if (!otpTargetProduct) return;
+    try {
+      await deleteProduct(otpTargetProduct.id, otpId);
+      toast({
+        variant: "success",
+        title: "Đã xoá sản phẩm",
+        description: `${otpTargetProduct.code} — ${otpTargetProduct.name} (duyệt từ xa qua OTP)`,
+      });
+      await fetchData();
+    } catch (err) {
+      const message = err instanceof Error ? err.message : "Vui lòng thử lại sau.";
+      toast({ variant: "error", title: "Xoá sản phẩm thất bại", description: message });
+    } finally {
+      setOtpTargetProduct(null);
+    }
+  }, [otpTargetProduct, toast, fetchData]);
+
   const handleConfirmBulkDelete = useCallback(async () => {
     const ids = selectedRowsForBulk.map((p) => p.id);
     if (ids.length === 0) return;
+    // Bulk delete giữ permission gate cứng — không support OTP flow vì OTP
+    // chỉ approve 1 thao tác, không phải N thao tác. Cashier cần xoá nhiều
+    // SP phải xin manager tự làm hoặc cấp quyền tạm thời.
     if (!canDeleteProduct) {
       toast({
         variant: "warning",
-        title: "Không có quyền xoá sản phẩm",
-        description: "Liên hệ quản lý để được cấp quyền 'products.delete'.",
+        title: "Không có quyền xoá nhiều sản phẩm",
+        description: "Bulk delete cần quyền 'products.delete'. OTP chỉ duyệt 1 SP/lần — nhờ quản lý tự thực hiện.",
       });
       setBulkDeleteConfirmOpen(false);
       return;
@@ -1036,15 +1065,12 @@ export default function HangHoaPage() {
                 setEditingProduct(product);
                 setCreateOpen(true);
               }}
-              // CEO 12/05: ẩn nút "Xoá" trong detail panel nếu không có quyền.
-              onDelete={
-                canDeleteProduct
-                  ? () => {
-                      setDeletingProduct(product);
-                      setDeleteConfirmOpen(true);
-                    }
-                  : undefined
-              }
+              // Phase 3a: button "Xoá" luôn hiện. Cashier không có quyền sẽ
+              // được chuyển sang OTP flow ở handleConfirmSingleDelete.
+              onDelete={() => {
+                setDeletingProduct(product);
+                setDeleteConfirmOpen(true);
+              }}
             />
           )}
           rowActions={(row) => [
@@ -1078,21 +1104,18 @@ export default function HangHoaPage() {
                 }
               },
             },
-            // CEO 12/05: row action "Xoá" chỉ hiện khi có quyền products.delete.
-            ...(canDeleteProduct
-              ? [
-                  {
-                    label: "Xóa",
-                    icon: <Icon name="delete" size={16} />,
-                    onClick: () => {
-                      setDeletingProduct(row);
-                      setDeleteConfirmOpen(true);
-                    },
-                    variant: "destructive" as const,
-                    separator: true,
-                  },
-                ]
-              : []),
+            // Phase 3a: row action "Xoá" luôn hiện. Cashier không có quyền
+            // sẽ được chuyển sang OTP flow trong handleConfirmSingleDelete.
+            {
+              label: "Xóa",
+              icon: <Icon name="delete" size={16} />,
+              onClick: () => {
+                setDeletingProduct(row);
+                setDeleteConfirmOpen(true);
+              },
+              variant: "destructive" as const,
+              separator: true,
+            },
           ]}
         />
       </ListPageLayout>
@@ -1119,11 +1142,18 @@ export default function HangHoaPage() {
         <DialogContent className="sm:max-w-md">
           <DialogHeader>
             <DialogTitle>Xoá sản phẩm?</DialogTitle>
-            <DialogDescription>
-              Bạn có chắc chắn muốn xoá sản phẩm{" "}
-              <strong>{deletingProduct?.code}</strong> —{" "}
-              <strong>{deletingProduct?.name}</strong>? Hành động này không thể
-              hoàn tác.
+            <DialogDescription className="space-y-2">
+              <span className="block">
+                Bạn có chắc chắn muốn xoá sản phẩm{" "}
+                <strong>{deletingProduct?.code}</strong> —{" "}
+                <strong>{deletingProduct?.name}</strong>? Hành động này không thể hoàn tác.
+              </span>
+              {!canDeleteProduct && (
+                <span className="block rounded-md bg-status-warning/10 border border-status-warning/30 p-2.5 text-xs text-foreground">
+                  <Icon name="pin" size={14} className="inline-block mr-1 text-status-warning" />
+                  Bạn không có quyền xoá. Sau khi xác nhận, hệ thống sẽ yêu cầu OTP từ quản lý.
+                </span>
+              )}
             </DialogDescription>
           </DialogHeader>
           <DialogFooter>
@@ -1142,11 +1172,32 @@ export default function HangHoaPage() {
               disabled={deleteLoading}
               onClick={handleConfirmSingleDelete}
             >
-              {deleteLoading ? "Đang xoá..." : "Xoá"}
+              {deleteLoading ? "Đang xoá..." : canDeleteProduct ? "Xoá" : "Xin OTP duyệt"}
             </Button>
           </DialogFooter>
         </DialogContent>
       </Dialog>
+
+      {/* --- OTP delegation dialog (Phase 3a, CEO 12/05) --- */}
+      <OtpApprovalDialog
+        open={otpDialogOpen}
+        onOpenChange={(o) => {
+          setOtpDialogOpen(o);
+          if (!o) setOtpTargetProduct(null);
+        }}
+        actionCode={OTP_ACTION_CODES.CRM_DELETE_PARTY}
+        targetMeta={
+          otpTargetProduct
+            ? { entity_type: "product", entity_id: otpTargetProduct.id, code: otpTargetProduct.code }
+            : undefined
+        }
+        contextLabel={
+          otpTargetProduct
+            ? `Xoá sản phẩm ${otpTargetProduct.code} — ${otpTargetProduct.name}`
+            : undefined
+        }
+        onApproved={(verified) => handleOtpApproved(verified.otpId)}
+      />
 
       {/* ============================================================ */}
       {/* Excel Import — template-based, deterministic (thay AI cũ)     */}

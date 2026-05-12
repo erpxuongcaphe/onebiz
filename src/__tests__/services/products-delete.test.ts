@@ -26,7 +26,7 @@ import { deleteProduct } from "@/lib/services/supabase/products";
 describe("deleteProduct", () => {
   beforeEach(() => vi.clearAllMocks());
 
-  it("calls the secure atomic RPC delete_product_atomic with product id", async () => {
+  it("calls the secure atomic RPC delete_product_atomic with product id (no OTP)", async () => {
     mockRpc.mockResolvedValueOnce({
       data: { success: true, product_id: "p-1", product_code: "SP001", product_name: "Cà phê đen" },
       error: null,
@@ -36,6 +36,21 @@ describe("deleteProduct", () => {
 
     expect(mockRpc).toHaveBeenCalledWith("delete_product_atomic", {
       p_product_id: "p-1",
+      p_otp_id: null,
+    });
+  });
+
+  it("passes p_otp_id when caller supplies OTP for delegation flow (Phase 3a)", async () => {
+    mockRpc.mockResolvedValueOnce({
+      data: { success: true, product_id: "p-2", delegated: true, approved_by: "manager-id" },
+      error: null,
+    });
+
+    await deleteProduct("p-2", "otp-uuid-123");
+
+    expect(mockRpc).toHaveBeenCalledWith("delete_product_atomic", {
+      p_product_id: "p-2",
+      p_otp_id: "otp-uuid-123",
     });
   });
 

@@ -654,17 +654,28 @@ export async function updateProduct(id: string, updates: Partial<Product & Produ
  * Xóa sản phẩm.
  *
  * Sprint S2 Phase 1 (CEO 12/05): chuyển sang RPC SECURITY DEFINER để enforce
- * quyền `products.delete` ở DB layer. Trước đây là direct delete → cashier
- * không có quyền vẫn xoá được (CRITICAL bug). Audit log snapshot do RPC tự
- * ghi nội bộ — atomic cùng transaction với delete để không bao giờ orphan.
+ * quyền `products.delete` ở DB layer.
+ *
+ * Sprint S2 Phase 3a (CEO 12/05): nhận optional `otpId` để hỗ trợ delegation
+ * — cashier không có quyền vẫn xoá được nếu có OTP đã verify từ manager.
+ * Backend (migration 00062) re-check permission của OTP issuer thay vì actor.
+ *
+ * @param id Product ID cần xoá
+ * @param otpId Optional — UUID của row manager_otp_codes đã verify_and_use.
+ *   Server check OTP used_at < 60s + action_code = 'crm.delete_party'
+ *   + used_by = current user → cho phép bỏ qua permission check của actor,
+ *   dùng permission của OTP issuer.
  */
-export async function deleteProduct(id: string): Promise<void> {
+export async function deleteProduct(id: string, otpId?: string): Promise<void> {
   const supabase = getClient();
 
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
   const { data, error } = await (supabase.rpc as any)(
     "delete_product_atomic",
-    { p_product_id: id },
+    {
+      p_product_id: id,
+      p_otp_id: otpId ?? null,
+    },
   );
 
   if (error) {

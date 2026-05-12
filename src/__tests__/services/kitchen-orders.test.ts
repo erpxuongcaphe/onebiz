@@ -137,7 +137,7 @@ beforeEach(() => {
 });
 
 describe("cancelUnpaidKitchenOrder", () => {
-  it("calls the secure atomic RPC with reason and shift context", async () => {
+  it("calls the secure atomic RPC with reason and shift context (no OTP)", async () => {
     await cancelUnpaidKitchenOrder({
       orderId: "ko-1",
       reasonCode: "Khách đổi ý",
@@ -151,6 +151,27 @@ describe("cancelUnpaidKitchenOrder", () => {
         p_reason_code: "Khách đổi ý",
         p_reason_note: null,
         p_shift_id: "shift-1",
+        p_otp_id: null,
+      },
+    });
+  });
+
+  it("passes p_otp_id when caller supplies OTP for delegation flow (Phase 3a)", async () => {
+    await cancelUnpaidKitchenOrder({
+      orderId: "ko-2",
+      reasonCode: "Khách bỏ đi",
+      shiftId: "shift-1",
+      otpId: "otp-uuid-789",
+    });
+
+    expect(rpcCalls).toContainEqual({
+      fn: "fnb_cancel_unpaid_order_atomic",
+      args: {
+        p_order_id: "ko-2",
+        p_reason_code: "Khách bỏ đi",
+        p_reason_note: null,
+        p_shift_id: "shift-1",
+        p_otp_id: "otp-uuid-789",
       },
     });
   });

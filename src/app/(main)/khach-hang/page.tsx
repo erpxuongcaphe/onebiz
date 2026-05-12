@@ -33,6 +33,8 @@ import { bulkImportCustomers } from "@/lib/services/supabase/excel-import";
 import { useToast } from "@/lib/contexts";
 import { usePermissions } from "@/lib/permissions/use-permission";
 import { PERMISSIONS } from "@/lib/permissions/constants";
+import { OtpApprovalDialog } from "@/components/shared/dialogs/otp-approval-dialog";
+import { OTP_ACTION_CODES } from "@/lib/services/supabase/manager-otp";
 import { formatCurrency, formatDate, formatNumber } from "@/lib/format";
 import { exportToCsv } from "@/lib/utils/export";
 import { exportToExcelFromSchema } from "@/lib/excel";
@@ -71,11 +73,16 @@ function useStarredSet() {
 export default function KhachHangPage() {
   const { toast } = useToast();
 
-  // Sprint S2 Phase 1 (CEO 12/05): defense-in-depth permission cho xoá KH.
-  // canDeleteCustomer = false → ẩn nút Xoá khỏi UI + chặn confirm handler.
-  // Service `deleteCustomer` cũng gọi RPC SECURITY DEFINER nên DB enforce thật.
+  // Sprint S2 Phase 1 + 3a (CEO 12/05): defense-in-depth permission cho xoá KH.
+  //   - canDeleteCustomer = true  → bấm Xoá → ConfirmDialog → service trực tiếp
+  //   - canDeleteCustomer = false → bấm Xoá → ConfirmDialog → mở OTP dialog
+  //     → manager cấp OTP từ /manager/otp → cashier nhập → service với otpId
   const { hasPermission } = usePermissions();
   const canDeleteCustomer = hasPermission(PERMISSIONS.CUSTOMERS_DELETE);
+
+  // OTP delegation state
+  const [otpDialogOpen, setOtpDialogOpen] = useState(false);
+  const [otpTargetCustomer, setOtpTargetCustomer] = useState<Customer | null>(null);
   const [data, setData] = useState<Customer[]>([]);
   const [total, setTotal] = useState(0);
   const [loading, setLoading] = useState(true);
@@ -326,8 +333,9 @@ export default function KhachHangPage() {
         setEditingCustomer(customer);
         setCreateOpen(true);
       }}
-      // CEO 12/05: ẩn nút "Xoá" trong detail panel nếu không có quyền.
-      onDelete={canDeleteCustomer ? () => setDeletingCustomer(customer) : undefined}
+      // Phase 3a: button "Xoá" luôn hiện. Cashier không có quyền sẽ được
+      // chuyển sang OTP flow trong ConfirmDialog onConfirm.
+      onDelete={() => setDeletingCustomer(customer)}
     />
   );
 
@@ -544,18 +552,15 @@ export default function KhachHangPage() {
                 setCreateOpen(true);
               },
             },
-            // CEO 12/05: row action "Xoá" chỉ hiện khi có quyền customers.delete.
-            ...(canDeleteCustomer
-              ? [
-                  {
-                    label: "Xóa",
-                    icon: <Icon name="delete" size={16} />,
-                    onClick: () => setDeletingCustomer(row),
-                    variant: "destructive" as const,
-                    separator: true,
-                  },
-                ]
-              : []),
+            // Phase 3a: luôn hiện row action "Xoá". Permission check chuyển
+            // sang ConfirmDialog onConfirm — không có quyền sẽ mở OTP dialog.
+            {
+              label: "Xóa",
+              icon: <Icon name="delete" size={16} />,
+              onClick: () => setDeletingCustomer(row),
+              variant: "destructive" as const,
+              separator: true,
+            },
           ]}
         />
       </ListPageLayout>
@@ -574,19 +579,21 @@ export default function KhachHangPage() {
         open={!!deletingCustomer}
         onOpenChange={(open) => { if (!open) setDeletingCustomer(null); }}
         title="Xóa khách hàng"
-        description={`Xóa khách hàng ${deletingCustomer?.code} — ${deletingCustomer?.name}?`}
-        confirmLabel="Xóa"
+        description={
+          canDeleteCustomer
+            ? `Xóa khách hàng ${deletingCustomer?.code} — ${deletingCustomer?.name}?`
+            : `Bạn không có quyền xoá. Sau khi xác nhận sẽ yêu cầu OTP từ quản lý duyệt cho khách hàng ${deletingCustomer?.code} — ${deletingCustomer?.name}.`
+        }
+        confirmLabel={canDeleteCustomer ? "Xóa" : "Xin OTP duyệt"}
         variant="destructive"
         loading={deleteLoading}
         onConfirm={async () => {
           if (!deletingCustomer) return;
           if (!canDeleteCustomer) {
-            toast({
-              title: "Không có quyền xoá khách hàng",
-              description: "Liên hệ quản lý để được cấp quyền 'customers.delete'.",
-              variant: "warning",
-            });
+            // Phase 3a: cashier không có quyền → chuyển sang OTP delegation flow.
+            setOtpTargetCustomer(deletingCustomer);
             setDeletingCustomer(null);
+            setOtpDialogOpen(true);
             return;
           }
           setDeleteLoading(true);
@@ -599,6 +606,46 @@ export default function KhachHangPage() {
             toast({ title: "Lỗi xóa khách hàng", description: err instanceof Error ? err.message : "Vui lòng thử lại", variant: "error" });
           } finally {
             setDeleteLoading(false);
+          }
+        }}
+      />
+
+      {/* OTP delegation dialog (Phase 3a, CEO 12/05) */}
+      <OtpApprovalDialog
+        open={otpDialogOpen}
+        onOpenChange={(o) => {
+          setOtpDialogOpen(o);
+          if (!o) setOtpTargetCustomer(null);
+        }}
+        actionCode={OTP_ACTION_CODES.CRM_DELETE_PARTY}
+        targetMeta={
+          otpTargetCustomer
+            ? { entity_type: "customer", entity_id: otpTargetCustomer.id, code: otpTargetCustomer.code }
+            : undefined
+        }
+        contextLabel={
+          otpTargetCustomer
+            ? `Xoá khách hàng ${otpTargetCustomer.code} — ${otpTargetCustomer.name}`
+            : undefined
+        }
+        onApproved={async (verified) => {
+          if (!otpTargetCustomer) return;
+          try {
+            await deleteCustomer(otpTargetCustomer.id, verified.otpId);
+            toast({
+              title: "Đã xoá khách hàng",
+              description: `${otpTargetCustomer.code} — ${otpTargetCustomer.name} (duyệt qua OTP)`,
+              variant: "success",
+            });
+            fetchData();
+          } catch (err) {
+            toast({
+              title: "Lỗi xoá khách hàng",
+              description: err instanceof Error ? err.message : "Vui lòng thử lại",
+              variant: "error",
+            });
+          } finally {
+            setOtpTargetCustomer(null);
           }
         }}
       />
