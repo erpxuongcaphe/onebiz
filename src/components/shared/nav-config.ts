@@ -358,7 +358,7 @@ export const sidebarNavGroups: SidebarGroup[] = [
     icon: "settings",
     pinBottom: true,
     items: [
-      { label: "Cấp OTP duyệt từ xa", href: "/manager/otp", icon: "vpn_key" },
+      { label: "Cấp OTP duyệt từ xa", href: "/cap-otp", icon: "vpn_key" },
       { label: "Người dùng & phân quyền", href: "/he-thong/users", icon: "manage_accounts", permission: "system.manage_users" },
       { label: "Chi nhánh", href: "/he-thong/chi-nhanh", icon: "apartment", permission: "system.manage_branches" },
       { label: "Bàn & Khu vực F&B", href: "/he-thong/quan-ly-ban", icon: "chair" },
