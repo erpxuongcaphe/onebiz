@@ -266,6 +266,23 @@ export type { CreateKitchenOrderInput, CancelUnpaidKitchenOrderInput } from "./k
 // F&B Checkout (2-step flow)
 export { sendToKitchen, fnbPayment, addItemsToExistingOrder, voidFnbInvoice } from "./fnb-checkout";
 
+// Manager OTP — duyệt từ xa các action nhạy cảm POS (CEO 12/05)
+export {
+  issueManagerOtp,
+  verifyAndUseManagerOtp,
+  getRecentManagerOtps,
+  OTP_ACTION_CODES,
+  OTP_ACTION_LABELS,
+} from "./manager-otp";
+export type {
+  IssueManagerOtpInput,
+  IssuedOtp,
+  VerifyManagerOtpInput,
+  VerifiedOtp,
+  RecentManagerOtp,
+  OtpActionCode,
+} from "./manager-otp";
+
 // Sprint POS-FNB-EXT-1 (CEO 08/05): Delivery platforms + Discount presets
 export {
   getDeliveryPlatformSettings,

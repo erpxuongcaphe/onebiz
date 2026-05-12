@@ -244,6 +244,19 @@ function ManagerTopBar({
             <Badge variant="outline" className="hidden h-7 rounded-lg bg-white sm:inline-flex">
               Dữ liệu thật
             </Badge>
+            {/* CEO 12/05: shortcut cấp OTP duyệt từ xa — manager truy cập nhanh
+                khi cashier gọi điện xin duyệt action nhạy cảm. */}
+            <Link href="/manager/otp" aria-label="Cấp OTP duyệt từ xa">
+              <Button
+                type="button"
+                variant="outline"
+                size="sm"
+                className="h-9 border-status-warning/40 bg-status-warning/5 text-status-warning hover:bg-status-warning/10"
+              >
+                <Icon name="pin" size={16} className="mr-1" />
+                <span className="hidden sm:inline">Cấp OTP</span>
+              </Button>
+            </Link>
             <Button
               type="button"
               variant="outline"
