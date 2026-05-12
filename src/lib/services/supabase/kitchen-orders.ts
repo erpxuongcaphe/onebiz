@@ -520,6 +520,54 @@ export async function cancelKitchenOrder(
   }
 }
 
+export interface CancelUnpaidKitchenOrderInput {
+  orderId: string;
+  reasonCode: string;
+  reasonNote?: string;
+  shiftId?: string | null;
+}
+
+/**
+ * Secure cancel for a sent-but-unpaid F&B order.
+ *
+ * This path is intentionally RPC-only: the database verifies the current user
+ * has a manager-level cancel permission and writes a POS exception event in the
+ * same transaction as the order/table update.
+ */
+export async function cancelUnpaidKitchenOrder(
+  input: CancelUnpaidKitchenOrderInput,
+): Promise<void> {
+  const supabase = getClient();
+  const reasonCode = input.reasonCode.trim();
+  const reasonNote = input.reasonNote?.trim();
+
+  if (!reasonCode) {
+    throw new Error("Vui lòng chọn lý do hủy đơn.");
+  }
+
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  const { data, error } = await (supabase.rpc as any)(
+    "fnb_cancel_unpaid_order_atomic",
+    {
+      p_order_id: input.orderId,
+      p_reason_code: reasonCode,
+      p_reason_note: reasonNote || null,
+      p_shift_id: input.shiftId ?? null,
+    },
+  );
+
+  if (error) {
+    if (isRpcUnavailable(error)) {
+      throw new Error("Chưa có RPC fnb_cancel_unpaid_order_atomic. Vui lòng chạy migration kiểm soát hủy bill FnB trước.");
+    }
+    handleError(error, "cancelUnpaidKitchenOrder:atomic_rpc");
+  }
+
+  if (!data || (typeof data === "object" && "success" in data && !data.success)) {
+    throw new Error("Server không trả kết quả hủy đơn hợp lệ.");
+  }
+}
+
 // ============================================================
 // Chuyển bàn (Transfer table)
 // ============================================================

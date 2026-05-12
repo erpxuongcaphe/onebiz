@@ -258,10 +258,10 @@ export {
   updateKitchenOrderStatus, updateKitchenItemStatus,
   linkInvoiceToOrder,
   updateOrderItemQty, removeOrderItem,
-  cancelKitchenOrder, transferTable, mergeKitchenOrders,
+  cancelKitchenOrder, cancelUnpaidKitchenOrder, transferTable, mergeKitchenOrders,
   applyOrderDiscount, setDeliveryPlatform,
 } from "./kitchen-orders";
-export type { CreateKitchenOrderInput } from "./kitchen-orders";
+export type { CreateKitchenOrderInput, CancelUnpaidKitchenOrderInput } from "./kitchen-orders";
 
 // F&B Checkout (2-step flow)
 export { sendToKitchen, fnbPayment, addItemsToExistingOrder, voidFnbInvoice } from "./fnb-checkout";

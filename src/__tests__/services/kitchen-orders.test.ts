@@ -3,6 +3,7 @@ import { describe, it, expect, vi, beforeEach } from "vitest";
 // === Supabase mock ===
 
 const insertCalls: { table: string; data: unknown }[] = [];
+const rpcCalls: { fn: string; args?: unknown }[] = [];
 let nextCodeCounter = 0;
 
 function createChain(resolvedValue: unknown = { data: null, error: null }) {
@@ -36,10 +37,14 @@ let mockFromHandler: (table: string) => any;
 vi.mock("@/lib/services/supabase/base", () => ({
   getClient: () => ({
     from: vi.fn((table: string) => mockFromHandler(table)),
-    rpc: vi.fn((fn: string) => {
+    rpc: vi.fn((fn: string, args?: unknown) => {
+      rpcCalls.push({ fn, args });
       if (fn === "next_code") {
         nextCodeCounter++;
         return { data: `KB${String(nextCodeCounter).padStart(5, "0")}`, error: null };
+      }
+      if (fn === "fnb_cancel_unpaid_order_atomic") {
+        return { data: { success: true }, error: null };
       }
       return { data: null, error: null };
     }),
@@ -59,6 +64,7 @@ import {
   updateKitchenOrderStatus,
   updateKitchenItemStatus,
   linkInvoiceToOrder,
+  cancelUnpaidKitchenOrder,
 } from "@/lib/services/supabase/kitchen-orders";
 
 // === Fixtures ===
@@ -116,6 +122,7 @@ const ITEM_ROWS = [
 
 beforeEach(() => {
   insertCalls.length = 0;
+  rpcCalls.length = 0;
   nextCodeCounter = 0;
 
   mockFromHandler = (table: string) => {
@@ -127,6 +134,34 @@ beforeEach(() => {
     }
     return createChain();
   };
+});
+
+describe("cancelUnpaidKitchenOrder", () => {
+  it("calls the secure atomic RPC with reason and shift context", async () => {
+    await cancelUnpaidKitchenOrder({
+      orderId: "ko-1",
+      reasonCode: "Khách đổi ý",
+      shiftId: "shift-1",
+    });
+
+    expect(rpcCalls).toContainEqual({
+      fn: "fnb_cancel_unpaid_order_atomic",
+      args: {
+        p_order_id: "ko-1",
+        p_reason_code: "Khách đổi ý",
+        p_reason_note: null,
+        p_shift_id: "shift-1",
+      },
+    });
+  });
+
+  it("requires a cancel reason before hitting the RPC", async () => {
+    await expect(
+      cancelUnpaidKitchenOrder({ orderId: "ko-1", reasonCode: "   " }),
+    ).rejects.toThrow("lý do");
+
+    expect(rpcCalls.find((call) => call.fn === "fnb_cancel_unpaid_order_atomic")).toBeUndefined();
+  });
 });
 
 // ============================================================

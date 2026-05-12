@@ -41,7 +41,7 @@ import {
 } from "@/lib/offline";
 import { splitByItems, splitEqually } from "@/lib/services/supabase/split-bill";
 import { validateCoupon } from "@/lib/services/supabase/coupons";
-import { getKitchenOrderById, getKitchenOrders, cancelKitchenOrder, transferTable as transferTableService } from "@/lib/services/supabase/kitchen-orders";
+import { getKitchenOrderById, getKitchenOrders, cancelUnpaidKitchenOrder, transferTable as transferTableService } from "@/lib/services/supabase/kitchen-orders";
 import { getOpenShift, openShift, closeShift } from "@/lib/services/supabase/shifts";
 import {
   getDeliveryPlatformSettings,
@@ -96,7 +96,7 @@ const SyncQueueDrawer = lazy(() => import("./components/sync-queue-drawer").then
 const FnbOrderHistoryDialog = lazy(() => import("./components/fnb-order-history-dialog").then(m => ({ default: m.FnbOrderHistoryDialog })));
 
 function FnbPosPageInner() {
-  const { user, tenant, currentBranch, branches, isLoading: authLoading } = useAuth();
+  const { user, tenant, currentBranch, branches, isLoading: authLoading, hasPermission } = useAuth();
   const { toast } = useToast();
   const { settings } = useSettings();
   const networkStatus = useNetworkStatus();
@@ -184,6 +184,9 @@ function FnbPosPageInner() {
     priceMap: Map<string, number>;
   } | null>(null);
   const userId = user?.id ?? "";
+  const canCancelUnpaidOrder =
+    hasPermission(PERMISSIONS.POS_FNB_CANCEL_UNPAID_ORDER) ||
+    hasPermission(PERMISSIONS.POS_FNB_VOID);
 
   // ── Load data (cache-first, then network refresh) ──
   useEffect(() => {
@@ -1364,11 +1367,20 @@ function FnbPosPageInner() {
   );
 
   // ── Void kitchen order (trước khi thanh toán) ──
-  //   Backend `cancelKitchenOrder` huỷ order + release table atomically.
+  //   RPC kiểm quyền + ghi POS exception event trong cùng transaction.
   //   Sau khi huỷ → close tab, refresh tables.
   const handleVoidKitchenOrder = useCallback(async () => {
     const tab = pos.activeTab;
     if (!tab?.kitchenOrderId) return;
+    if (!canCancelUnpaidOrder) {
+      hapticError();
+      toast({
+        title: "Cần quyền quản lý",
+        description: "Hủy đơn đã gửi bếp cần quyền hủy đơn chưa thanh toán.",
+        variant: "warning",
+      });
+      return;
+    }
     if (!networkStatus.isOnline) {
       hapticError();
       toast({
@@ -1387,7 +1399,11 @@ function FnbPosPageInner() {
       return;
     }
     try {
-      await cancelKitchenOrder(tab.kitchenOrderId, voidReason.trim());
+      await cancelUnpaidKitchenOrder({
+        orderId: tab.kitchenOrderId,
+        reasonCode: voidReason.trim(),
+        shiftId: currentShift?.id ?? null,
+      });
       hapticSuccess();
       toast({
         title: "Đã huỷ đơn bếp",
@@ -1416,7 +1432,7 @@ function FnbPosPageInner() {
         variant: "error",
       });
     }
-  }, [pos, branchId, networkStatus.isOnline, toast]);
+  }, [pos, canCancelUnpaidOrder, branchId, currentShift?.id, networkStatus.isOnline, toast, voidReason]);
 
   // ── Transfer table (chuyển bàn) ──
   const handleTransferTable = useCallback(
@@ -1907,7 +1923,7 @@ function FnbPosPageInner() {
           onCustomerClick={() => setCustomerPickerOpen(true)}
           onDiscountChange={(d) => pos.setOrderDiscount(pos.activeTabId, d)}
           onPrintPreBill={handlePrintPreBill}
-          onVoidKitchenOrder={() => setVoidConfirmOpen(true)}
+          onVoidKitchenOrder={canCancelUnpaidOrder ? () => setVoidConfirmOpen(true) : undefined}
           onTransferTable={() => setTransferTableOpen(true)}
           onOrderHistory={() => setOrderHistoryOpen(true)}
           onApplyCoupon={handleApplyCoupon}
@@ -2066,7 +2082,7 @@ function FnbPosPageInner() {
               onCustomerClick={() => setCustomerPickerOpen(true)}
               onDiscountChange={(d) => pos.setOrderDiscount(pos.activeTabId, d)}
               onPrintPreBill={handlePrintPreBill}
-              onVoidKitchenOrder={() => setVoidConfirmOpen(true)}
+              onVoidKitchenOrder={canCancelUnpaidOrder ? () => setVoidConfirmOpen(true) : undefined}
               onTransferTable={() => setTransferTableOpen(true)}
               onOrderHistory={() => setOrderHistoryOpen(true)}
               onApplyCoupon={handleApplyCoupon}
