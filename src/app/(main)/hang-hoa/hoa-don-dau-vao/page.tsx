@@ -25,8 +25,17 @@ import { formatCurrency, formatDate, formatUser } from "@/lib/format";
 import { exportToExcel, exportToCsv } from "@/lib/utils/export";
 import { printDocument } from "@/lib/print-document";
 import { buildInputInvoicePrintData } from "@/lib/print-templates";
-import { getInputInvoices, getInputInvoiceStatuses, deleteInputInvoice, recordInputInvoice } from "@/lib/services";
+import { getInputInvoices, getInputInvoiceStatuses, cancelInputInvoice, recordInputInvoice } from "@/lib/services";
 import { CreateInputInvoiceDialog, ConfirmDialog } from "@/components/shared/dialogs";
+import {
+  Dialog,
+  DialogContent,
+  DialogHeader,
+  DialogTitle,
+  DialogDescription,
+  DialogFooter,
+} from "@/components/ui/dialog";
+import { Button } from "@/components/ui/button";
 import { AuditLogDialog } from "@/components/shared/audit-log-dialog";
 import { buildTransactionRowActions } from "@/components/shared/transaction-row-actions";
 import { useTxRowPermissions } from "@/lib/permissions";
@@ -179,11 +188,12 @@ export default function HoaDonDauVaoPage() {
   const [createOpen, setCreateOpen] = useState(false);
   const [expandedRow, setExpandedRow] = useState<number | null>(null);
 
-  // Cancel (was "Delete" — Stage 5 anomaly fix: kế toán đã ghi nhận thì phải
-  // audit hủy, không xóa cứng. TODO Stage 5b: refactor service từ
-  // deleteInputInvoice → cancelInputInvoice (set status='cancelled' + audit).
+  // Phase 6.3 (CEO 12/05): hủy hoá đơn dùng `cancelInputInvoice` (soft-delete
+  // + audit log + giữ lịch sử), thay vì `deleteInputInvoice` hard-delete.
+  // Yêu cầu nhập lý do hủy ≥ 5 ký tự để tracking loss-prevention.
   const [deletingInvoice, setDeletingInvoice] = useState<InputInvoice | null>(null);
   const [deleteLoading, setDeleteLoading] = useState(false);
+  const [cancelReason, setCancelReason] = useState("");
 
   // Record
   const [recordingInvoice, setRecordingInvoice] = useState<InputInvoice | null>(null);
@@ -356,40 +366,97 @@ export default function HoaDonDauVaoPage() {
                   ]
                 : [],
             onAuditLog: () => setAuditDialogTarget(row),
-            // Stage 5a anomaly fix: đổi "Xóa" → "Hủy" (kế toán không xóa cứng).
-            // TODO Stage 5b: refactor service deleteInputInvoice → cancelInputInvoice.
-            onCancel: () => setDeletingInvoice(row),
+            // Phase 6.3: cancel = soft-delete + audit log + lý do bắt buộc.
+            onCancel: () => {
+              setDeletingInvoice(row);
+              setCancelReason("");
+            },
           })
         }
       />
 
-      <ConfirmDialog
+      {/* Phase 6.3 (CEO 12/05): Dialog hủy với textarea lý do bắt buộc */}
+      <Dialog
         open={!!deletingInvoice}
-        onOpenChange={(open) => { if (!open) setDeletingInvoice(null); }}
-        title="Hủy hoá đơn đầu vào"
-        description={`Bạn có chắc muốn hủy hoá đơn đầu vào ${deletingInvoice?.code}? Thao tác này không thể hoàn tác.`}
-        confirmLabel="Hủy hoá đơn"
-        cancelLabel="Đóng"
-        variant="destructive"
-        loading={deleteLoading}
-        onConfirm={async () => {
-          if (!deletingInvoice) return;
-          setDeleteLoading(true);
-          try {
-            // TODO Stage 5b: thay deleteInputInvoice bằng cancelInputInvoice
-            // (set status='cancelled' + audit log) thay vì xoá cứng. Tạm thời
-            // service vẫn xoá hard nhưng UX/wording đã align với cancel flow.
-            await deleteInputInvoice(deletingInvoice.id);
-            toast({ title: "Đã hủy hoá đơn đầu vào", description: deletingInvoice.code, variant: "success" });
+        onOpenChange={(open) => {
+          if (!open) {
             setDeletingInvoice(null);
-            fetchData();
-          } catch (err) {
-            toast({ title: "Lỗi hủy hoá đơn đầu vào", description: err instanceof Error ? err.message : "Vui lòng thử lại", variant: "error" });
-          } finally {
-            setDeleteLoading(false);
+            setCancelReason("");
           }
         }}
-      />
+      >
+        <DialogContent className="sm:max-w-md">
+          <DialogHeader>
+            <DialogTitle className="text-status-error">Hủy hoá đơn đầu vào</DialogTitle>
+            <DialogDescription>
+              Hủy hoá đơn{" "}
+              <strong>{deletingInvoice?.code}</strong>
+              {deletingInvoice?.supplierName && (
+                <> · NCC: {deletingInvoice.supplierName}</>
+              )}. Hệ thống ghi lý do vào lịch sử thao tác, không xoá cứng.
+            </DialogDescription>
+          </DialogHeader>
+          <div className="space-y-2 py-2">
+            <label className="text-xs font-medium text-foreground">
+              Lý do hủy <span className="text-status-error">*</span>
+            </label>
+            <textarea
+              value={cancelReason}
+              onChange={(e) => setCancelReason(e.target.value)}
+              placeholder="VD: NCC giao sai mặt hàng, đã nhận lại hàng..."
+              rows={3}
+              disabled={deleteLoading}
+              className="w-full px-3 py-2 text-sm rounded-md border border-border bg-surface resize-none focus:outline-none focus:ring-2 focus:ring-primary/40"
+            />
+            {cancelReason.length > 0 && cancelReason.trim().length < 5 && (
+              <p className="text-[11px] text-status-error">
+                Lý do tối thiểu 5 ký tự.
+              </p>
+            )}
+          </div>
+          <DialogFooter>
+            <Button
+              variant="outline"
+              disabled={deleteLoading}
+              onClick={() => {
+                setDeletingInvoice(null);
+                setCancelReason("");
+              }}
+            >
+              Đóng
+            </Button>
+            <Button
+              variant="destructive"
+              disabled={deleteLoading || cancelReason.trim().length < 5}
+              onClick={async () => {
+                if (!deletingInvoice) return;
+                setDeleteLoading(true);
+                try {
+                  await cancelInputInvoice(deletingInvoice.id, cancelReason.trim());
+                  toast({
+                    title: "Đã hủy hoá đơn đầu vào",
+                    description: `${deletingInvoice.code} — lý do: ${cancelReason.trim()}`,
+                    variant: "success",
+                  });
+                  setDeletingInvoice(null);
+                  setCancelReason("");
+                  fetchData();
+                } catch (err) {
+                  toast({
+                    title: "Lỗi hủy hoá đơn đầu vào",
+                    description: err instanceof Error ? err.message : "Vui lòng thử lại",
+                    variant: "error",
+                  });
+                } finally {
+                  setDeleteLoading(false);
+                }
+              }}
+            >
+              {deleteLoading ? "Đang hủy..." : "Hủy hoá đơn"}
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
 
       {auditDialogTarget && (
         <AuditLogDialog

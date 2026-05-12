@@ -438,6 +438,13 @@ function PosPageInner() {
     if (recoveryShownRef.current) return;
     recoveryShownRef.current = true;
 
+    // Phase 6.2 (CEO 12/05): race protection. Nếu user switch chi nhánh giữa
+    // chừng khi listDraftOrders / getDraftOrderById đang in-flight, response
+    // cũ có thể về sau khi branch đã đổi → setRecoveryDrafts với drafts của
+    // chi nhánh sai → dialog hiển thị nhầm. Cancel token bảo vệ:
+    const branchSnapshot = currentBranch.id;
+    let cancelled = false;
+
     const urlDraftId = typeof window !== "undefined"
       ? new URLSearchParams(window.location.search).get("draftId")
       : null;
@@ -446,6 +453,7 @@ function PosPageInner() {
     if (urlDraftId) {
       getDraftOrderById(urlDraftId)
         .then((detail) => {
+          if (cancelled || branchSnapshot !== currentBranch?.id) return;
           if (!detail) {
             toast({
               title: "Không tìm thấy đơn nháp",
@@ -468,20 +476,25 @@ function PosPageInner() {
           router.replace("/pos", { scroll: false });
         })
         .catch((err) => {
+          if (cancelled) return;
           console.warn("[POS] auto-load draft from URL failed:", err);
         });
-      return; // Skip recovery dialog khi đã có URL param
+      return () => {
+        cancelled = true;
+      };
     }
 
-    // Priority 2: load all drafts → recovery dialog
-    listDraftOrders(currentBranch.id, 50)
+    // Priority 2: load all drafts → recovery dialog (race-safe)
+    listDraftOrders(branchSnapshot, 50)
       .then((drafts) => {
+        if (cancelled || branchSnapshot !== currentBranch?.id) return;
         if (drafts.length > 0) {
           setRecoveryDrafts(drafts);
           setRecoveryOpen(true);
         }
       })
       .catch((err) => {
+        if (cancelled) return;
         console.warn("[POS] listDraftOrders failed:", err);
       });
 
@@ -494,14 +507,20 @@ function PosPageInner() {
         p_days: 30,
       })
       .then((res: { data?: number }) => {
+        if (cancelled) return;
         if (res.data && res.data > 0) {
           console.info(`[POS] Cleaned up ${res.data} expired auto-saved drafts`);
         }
       })
       .catch((err: unknown) => {
+        if (cancelled) return;
         // RPC mới — có thể chưa apply migration → log nhưng không block
         console.warn("[POS] cleanup_expired_auto_drafts failed:", err);
       });
+
+    return () => {
+      cancelled = true;
+    };
   }, [tenant?.id, currentBranch?.id]);
 
   // ─── Auto-save liên tục ───
