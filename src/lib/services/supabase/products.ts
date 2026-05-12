@@ -6,6 +6,7 @@ import type { Product, ProductDetail, StockMovement, SalesHistory, QueryParams, 
 import type { Database } from "@/lib/supabase/types";
 import { getClient, getPaginationRange, handleError, getCurrentTenantId } from "./base";
 import { recordAuditLog } from "./audit";
+import { isRpcUnavailable } from "./rpc-utils";
 
 type ProductInsert = Database["public"]["Tables"]["products"]["Insert"];
 type ProductUpdate = Database["public"]["Tables"]["products"]["Update"];
@@ -651,40 +652,33 @@ export async function updateProduct(id: string, updates: Partial<Product & Produ
 
 /**
  * Xóa sản phẩm.
+ *
+ * Sprint S2 Phase 1 (CEO 12/05): chuyển sang RPC SECURITY DEFINER để enforce
+ * quyền `products.delete` ở DB layer. Trước đây là direct delete → cashier
+ * không có quyền vẫn xoá được (CRITICAL bug). Audit log snapshot do RPC tự
+ * ghi nội bộ — atomic cùng transaction với delete để không bao giờ orphan.
  */
 export async function deleteProduct(id: string): Promise<void> {
   const supabase = getClient();
 
-  // Snapshot trước khi xoá để audit log có thể restore-by-paste nếu CEO
-  // hỏi "ai xoá SP này, có gì trong đó". Fail-soft: nếu select lỗi vẫn
-  // tiếp tục delete (vd: SP đã xoá race condition).
-  let snapshot: Record<string, unknown> | null = null;
-  try {
-    const { data } = await supabase
-      .from("products")
-      .select("*")
-      .eq("id", id)
-      .maybeSingle();
-    snapshot = (data as Record<string, unknown>) ?? null;
-  } catch {
-    // ignore — vẫn delete
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  const { data, error } = await (supabase.rpc as any)(
+    "delete_product_atomic",
+    { p_product_id: id },
+  );
+
+  if (error) {
+    if (isRpcUnavailable(error)) {
+      throw new Error(
+        "Chưa có RPC delete_product_atomic. Vui lòng chạy migration 00060_secure_delete_rpcs trước khi xoá sản phẩm.",
+      );
+    }
+    handleError(error, "deleteProduct:atomic_rpc");
   }
 
-  const { error } = await supabase
-    .from("products")
-    .delete()
-    .eq("id", id);
-
-  if (error) handleError(error, "deleteProduct");
-
-  // Audit log fire-and-forget (recordAuditLog tự catch nội bộ).
-  void recordAuditLog({
-    entityType: "product",
-    entityId: id,
-    action: "delete",
-    oldData: snapshot,
-    newData: null,
-  });
+  if (!data || (typeof data === "object" && "success" in data && !data.success)) {
+    throw new Error("Server không trả kết quả xoá sản phẩm hợp lệ.");
+  }
 }
 
 /**

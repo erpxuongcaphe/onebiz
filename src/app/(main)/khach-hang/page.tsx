@@ -31,6 +31,8 @@ import { downloadTemplate } from "@/lib/excel";
 import { customerExcelSchema } from "@/lib/excel/schemas";
 import { bulkImportCustomers } from "@/lib/services/supabase/excel-import";
 import { useToast } from "@/lib/contexts";
+import { usePermissions } from "@/lib/permissions/use-permission";
+import { PERMISSIONS } from "@/lib/permissions/constants";
 import { formatCurrency, formatDate, formatNumber } from "@/lib/format";
 import { exportToCsv } from "@/lib/utils/export";
 import { exportToExcelFromSchema } from "@/lib/excel";
@@ -68,6 +70,12 @@ function useStarredSet() {
 /* ------------------------------------------------------------------ */
 export default function KhachHangPage() {
   const { toast } = useToast();
+
+  // Sprint S2 Phase 1 (CEO 12/05): defense-in-depth permission cho xoá KH.
+  // canDeleteCustomer = false → ẩn nút Xoá khỏi UI + chặn confirm handler.
+  // Service `deleteCustomer` cũng gọi RPC SECURITY DEFINER nên DB enforce thật.
+  const { hasPermission } = usePermissions();
+  const canDeleteCustomer = hasPermission(PERMISSIONS.CUSTOMERS_DELETE);
   const [data, setData] = useState<Customer[]>([]);
   const [total, setTotal] = useState(0);
   const [loading, setLoading] = useState(true);
@@ -318,7 +326,8 @@ export default function KhachHangPage() {
         setEditingCustomer(customer);
         setCreateOpen(true);
       }}
-      onDelete={() => setDeletingCustomer(customer)}
+      // CEO 12/05: ẩn nút "Xoá" trong detail panel nếu không có quyền.
+      onDelete={canDeleteCustomer ? () => setDeletingCustomer(customer) : undefined}
     />
   );
 
@@ -535,13 +544,18 @@ export default function KhachHangPage() {
                 setCreateOpen(true);
               },
             },
-            {
-              label: "Xóa",
-              icon: <Icon name="delete" size={16} />,
-              onClick: () => setDeletingCustomer(row),
-              variant: "destructive",
-              separator: true,
-            },
+            // CEO 12/05: row action "Xoá" chỉ hiện khi có quyền customers.delete.
+            ...(canDeleteCustomer
+              ? [
+                  {
+                    label: "Xóa",
+                    icon: <Icon name="delete" size={16} />,
+                    onClick: () => setDeletingCustomer(row),
+                    variant: "destructive" as const,
+                    separator: true,
+                  },
+                ]
+              : []),
           ]}
         />
       </ListPageLayout>
@@ -566,6 +580,15 @@ export default function KhachHangPage() {
         loading={deleteLoading}
         onConfirm={async () => {
           if (!deletingCustomer) return;
+          if (!canDeleteCustomer) {
+            toast({
+              title: "Không có quyền xoá khách hàng",
+              description: "Liên hệ quản lý để được cấp quyền 'customers.delete'.",
+              variant: "warning",
+            });
+            setDeletingCustomer(null);
+            return;
+          }
           setDeleteLoading(true);
           try {
             await deleteCustomer(deletingCustomer.id);

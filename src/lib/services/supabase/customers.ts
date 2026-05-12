@@ -6,6 +6,7 @@ import type { Customer, QueryParams, QueryResult } from "@/lib/types";
 import type { Database } from "@/lib/supabase/types";
 import { getClient, getPaginationRange, handleError, getCurrentTenantId } from "./base";
 import { recordAuditLog } from "./audit";
+import { isRpcUnavailable } from "./rpc-utils";
 
 type CustomerInsert = Database["public"]["Tables"]["customers"]["Insert"];
 type CustomerUpdate = Database["public"]["Tables"]["customers"]["Update"];
@@ -405,40 +406,33 @@ export async function updateCustomer(id: string, updates: Partial<Customer>): Pr
 }
 
 /**
- * Xóa khách hàng. Filter tenant_id (defense-in-depth).
+ * Xóa khách hàng.
+ *
+ * Sprint S2 Phase 1 (CEO 12/05): chuyển sang RPC SECURITY DEFINER để enforce
+ * quyền `customers.delete` ở DB layer + atomic audit log snapshot. Trước đây
+ * cashier không có quyền vẫn xoá được KH (CRITICAL bug).
  */
 export async function deleteCustomer(id: string): Promise<void> {
   const supabase = getClient();
-  const tenantId = await getCurrentTenantId();
 
-  // Snapshot best-effort để ghi audit log delete (lưu lại tên/code đã xóa).
-  let oldRow: Record<string, unknown> | null = null;
-  try {
-    const res = await supabase
-      .from("customers")
-      .select("code, name, phone, email, group_id, customer_type")
-      .eq("tenant_id", tenantId)
-      .eq("id", id)
-      .maybeSingle();
-    oldRow = (res?.data as Record<string, unknown> | null) ?? null;
-  } catch {
-    /* snapshot optional */
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  const { data, error } = await (supabase.rpc as any)(
+    "delete_customer_atomic",
+    { p_customer_id: id },
+  );
+
+  if (error) {
+    if (isRpcUnavailable(error)) {
+      throw new Error(
+        "Chưa có RPC delete_customer_atomic. Vui lòng chạy migration 00060_secure_delete_rpcs trước khi xoá khách hàng.",
+      );
+    }
+    handleError(error, "deleteCustomer:atomic_rpc");
   }
 
-  const { error } = await supabase
-    .from("customers")
-    .delete()
-    .eq("tenant_id", tenantId)
-    .eq("id", id);
-
-  if (error) handleError(error, "deleteCustomer");
-
-  await recordAuditLog({
-    entityType: "customer",
-    entityId: id,
-    action: "delete",
-    oldData: oldRow ?? null,
-  });
+  if (!data || (typeof data === "object" && "success" in data && !data.success)) {
+    throw new Error("Server không trả kết quả xoá khách hàng hợp lệ.");
+  }
 }
 
 // --- Mapper ---

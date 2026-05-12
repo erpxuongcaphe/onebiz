@@ -57,6 +57,8 @@ import {
 } from "@/lib/services";
 import { SummaryCard } from "@/components/shared/summary-card";
 import { useToast } from "@/lib/contexts";
+import { usePermissions } from "@/lib/permissions/use-permission";
+import { PERMISSIONS } from "@/lib/permissions/constants";
 import type { Product } from "@/lib/types";
 import { Icon } from "@/components/ui/icon";
 
@@ -277,6 +279,13 @@ export default function HangHoaPage() {
 
   // Bulk action state — phase 2: wire backend mutations
   const { toast } = useToast();
+
+  // Sprint S2 Phase 1 (CEO 12/05): defense-in-depth permission cho xoá SP.
+  // canDeleteProduct = false → ẩn nút Xoá khỏi UI + chặn handler + service RPC
+  // cũng reject. Owner luôn bypass. Trước đây cashier không có quyền cũng xoá
+  // được (CRITICAL bug bảo mật).
+  const { hasPermission } = usePermissions();
+  const canDeleteProduct = hasPermission(PERMISSIONS.PRODUCTS_DELETE);
   const [bulkChangeCategoryOpen, setBulkChangeCategoryOpen] = useState(false);
   const [bulkChangePriceOpen, setBulkChangePriceOpen] = useState(false);
   const [bulkDeleteConfirmOpen, setBulkDeleteConfirmOpen] = useState(false);
@@ -471,6 +480,16 @@ export default function HangHoaPage() {
 
   const handleConfirmSingleDelete = useCallback(async () => {
     if (!deletingProduct) return;
+    if (!canDeleteProduct) {
+      toast({
+        variant: "warning",
+        title: "Không có quyền xoá sản phẩm",
+        description: "Liên hệ quản lý để được cấp quyền 'products.delete'.",
+      });
+      setDeleteConfirmOpen(false);
+      setDeletingProduct(null);
+      return;
+    }
     setDeleteLoading(true);
     try {
       await deleteProduct(deletingProduct.id);
@@ -484,11 +503,20 @@ export default function HangHoaPage() {
     } finally {
       setDeleteLoading(false);
     }
-  }, [deletingProduct, toast, fetchData]);
+  }, [deletingProduct, canDeleteProduct, toast, fetchData]);
 
   const handleConfirmBulkDelete = useCallback(async () => {
     const ids = selectedRowsForBulk.map((p) => p.id);
     if (ids.length === 0) return;
+    if (!canDeleteProduct) {
+      toast({
+        variant: "warning",
+        title: "Không có quyền xoá sản phẩm",
+        description: "Liên hệ quản lý để được cấp quyền 'products.delete'.",
+      });
+      setBulkDeleteConfirmOpen(false);
+      return;
+    }
     setBulkLoading(true);
     try {
       const { count } = await bulkDeleteProducts(ids);
@@ -502,7 +530,7 @@ export default function HangHoaPage() {
     } finally {
       setBulkLoading(false);
     }
-  }, [selectedRowsForBulk, finishBulkSuccess, finishBulkError]);
+  }, [selectedRowsForBulk, canDeleteProduct, toast, finishBulkSuccess, finishBulkError]);
 
   useEffect(() => {
     setPage(0);
@@ -979,15 +1007,20 @@ export default function HangHoaPage() {
                 setBulkChangePriceOpen(true);
               },
             },
-            {
-              label: "Xóa",
-              icon: <Icon name="delete" size={16} />,
-              variant: "destructive",
-              onClick: (rows) => {
-                setSelectedRowsForBulk(rows);
-                setBulkDeleteConfirmOpen(true);
-              },
-            },
+            // CEO 12/05: chỉ render bulk "Xoá" khi user có quyền products.delete.
+            ...(canDeleteProduct
+              ? [
+                  {
+                    label: "Xóa",
+                    icon: <Icon name="delete" size={16} />,
+                    variant: "destructive" as const,
+                    onClick: (rows: Product[]) => {
+                      setSelectedRowsForBulk(rows);
+                      setBulkDeleteConfirmOpen(true);
+                    },
+                  },
+                ]
+              : []),
           ]}
           summaryRow={{
             stock: formatCurrency(totalStock),
@@ -1003,10 +1036,15 @@ export default function HangHoaPage() {
                 setEditingProduct(product);
                 setCreateOpen(true);
               }}
-              onDelete={() => {
-                setDeletingProduct(product);
-                setDeleteConfirmOpen(true);
-              }}
+              // CEO 12/05: ẩn nút "Xoá" trong detail panel nếu không có quyền.
+              onDelete={
+                canDeleteProduct
+                  ? () => {
+                      setDeletingProduct(product);
+                      setDeleteConfirmOpen(true);
+                    }
+                  : undefined
+              }
             />
           )}
           rowActions={(row) => [
@@ -1040,16 +1078,21 @@ export default function HangHoaPage() {
                 }
               },
             },
-            {
-              label: "Xóa",
-              icon: <Icon name="delete" size={16} />,
-              onClick: () => {
-                setDeletingProduct(row);
-                setDeleteConfirmOpen(true);
-              },
-              variant: "destructive",
-              separator: true,
-            },
+            // CEO 12/05: row action "Xoá" chỉ hiện khi có quyền products.delete.
+            ...(canDeleteProduct
+              ? [
+                  {
+                    label: "Xóa",
+                    icon: <Icon name="delete" size={16} />,
+                    onClick: () => {
+                      setDeletingProduct(row);
+                      setDeleteConfirmOpen(true);
+                    },
+                    variant: "destructive" as const,
+                    separator: true,
+                  },
+                ]
+              : []),
           ]}
         />
       </ListPageLayout>

@@ -1,6 +1,7 @@
 import { describe, it, expect, vi, beforeEach } from "vitest";
 
 const mockResult = vi.fn();
+const mockRpc = vi.fn();
 
 function createChain() {
   const chain: Record<string, unknown> = {};
@@ -19,7 +20,7 @@ const mockChain = createChain();
 const mockFrom = vi.fn(() => mockChain);
 
 vi.mock("@/lib/services/supabase/base", () => ({
-  getClient: () => ({ from: mockFrom }),
+  getClient: () => ({ from: mockFrom, rpc: mockRpc }),
   getPaginationRange: (p: { page: number; pageSize: number }) => ({
     from: p.page * p.pageSize,
     to: p.page * p.pageSize + p.pageSize - 1,
@@ -95,18 +96,38 @@ describe("updateCustomer", () => {
 describe("deleteCustomer", () => {
   beforeEach(() => vi.clearAllMocks());
 
-  it("deletes a customer by id", async () => {
-    // Service chain 2 .eq() (tenant_id + id) — queue 2 returns
-    (mockChain.eq as ReturnType<typeof vi.fn>)
-      .mockReturnValueOnce(mockChain)
-      .mockReturnValueOnce({ error: null });
+  it("calls the secure atomic RPC delete_customer_atomic", async () => {
+    // Sprint S2 Phase 1 (CEO 12/05): service đã chuyển sang RPC SECURITY DEFINER
+    // để DB enforce permission `customers.delete`. Test verify gọi đúng RPC name
+    // + param shape.
+    mockRpc.mockResolvedValueOnce({
+      data: { success: true, customer_id: "c-1", customer_code: "KH001" },
+      error: null,
+    });
 
     await deleteCustomer("c-1");
 
-    expect(mockFrom).toHaveBeenCalledWith("customers");
-    expect(mockChain.delete).toHaveBeenCalled();
-    expect(mockChain.eq).toHaveBeenCalledWith("tenant_id", "tenant-test-1");
-    expect(mockChain.eq).toHaveBeenCalledWith("id", "c-1");
+    expect(mockRpc).toHaveBeenCalledWith("delete_customer_atomic", {
+      p_customer_id: "c-1",
+    });
+  });
+
+  it("surfaces a clear error when migration 00060 hasn't been applied", async () => {
+    mockRpc.mockResolvedValueOnce({
+      data: null,
+      error: { code: "42883", message: "function does not exist" },
+    });
+
+    await expect(deleteCustomer("c-1")).rejects.toThrow(/migration 00060/i);
+  });
+
+  it("propagates permission denied error from RPC", async () => {
+    mockRpc.mockResolvedValueOnce({
+      data: null,
+      error: { message: "PERMISSION_DENIED: cần quyền customers.delete để xoá khách hàng" },
+    });
+
+    await expect(deleteCustomer("c-1")).rejects.toThrow(/PERMISSION_DENIED/);
   });
 });
 
