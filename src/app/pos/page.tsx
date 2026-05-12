@@ -364,6 +364,30 @@ function PosPageInner() {
   const [openShiftDialogOpen, setOpenShiftDialogOpen] = useState(false);
   const [closeShiftDialogOpen, setCloseShiftDialogOpen] = useState(false);
 
+  // Phase 6 (CEO 12/05): Clear cart + đóng tab phụ khi đổi chi nhánh để
+  // tránh cashier vô tình thanh toán SP của chi nhánh cũ (stock sẽ trừ sai).
+  // Trước đây `switchBranch()` chỉ đổi context, cart giữ SP cũ → checkout fail
+  // hoặc tính stock sai.
+  const branchIdRef = useRef<string | null>(currentBranch?.id ?? null);
+  useEffect(() => {
+    const nextBranchId = currentBranch?.id ?? null;
+    if (branchIdRef.current && branchIdRef.current !== nextBranchId) {
+      // Branch thực sự đổi (không phải mount lần đầu)
+      const hadItems = state.itemCount > 0;
+      state.clearCart();
+      // Giữ tab hiện tại, drop snapshot các tab khác
+      setTabs((prev) => prev.map((t) => ({ ...t, snapshot: null, itemCount: 0 })));
+      if (hadItems) {
+        toast({
+          title: "Đã làm trống giỏ hàng",
+          description: "Bạn vừa đổi chi nhánh — giỏ hàng đã được làm trống để tránh sai tồn kho.",
+          variant: "warning",
+        });
+      }
+    }
+    branchIdRef.current = nextBranchId;
+  }, [currentBranch?.id, state, toast]);
+
   // Load ca đang mở khi branch/user sẵn sàng
   useEffect(() => {
     if (!currentBranch?.id || !user?.id) return;

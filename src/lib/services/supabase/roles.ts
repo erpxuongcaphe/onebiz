@@ -222,6 +222,22 @@ export async function deleteRole(roleId: string): Promise<void> {
 export async function setRolePermissions(roleId: string, permissionCodes: string[]): Promise<void> {
   const supabase = getClient();
 
+  // Phase 5 (CEO 12/05): snapshot quyền cũ + tên role để audit log diff.
+  // CEO cần trace "ai sửa quyền role X từ A sang B lúc nào" — đây là thao
+  // tác RBAC nhạy cảm nhất (1 click có thể disable cả 1 role).
+  let prevPerms: string[] = [];
+  let roleName: string | null = null;
+  try {
+    const [permsRes, roleRes] = await Promise.all([
+      supabase.from("role_permissions").select("permission_code").eq("role_id", roleId),
+      supabase.from("roles").select("name").eq("id", roleId).maybeSingle(),
+    ]);
+    prevPerms = (permsRes.data ?? []).map((r) => r.permission_code);
+    roleName = (roleRes.data as { name?: string } | null)?.name ?? null;
+  } catch {
+    /* snapshot best-effort */
+  }
+
   // Delete existing
   const { error: delError } = await supabase
     .from("role_permissions")
@@ -237,6 +253,24 @@ export async function setRolePermissions(roleId: string, permissionCodes: string
     }));
     const { error: insError } = await supabase.from("role_permissions").insert(rows);
     if (insError) handleError(insError, "setRolePermissions.insert");
+  }
+
+  // Audit log diff: chỉ ghi nếu thực sự có thay đổi (sort + compare).
+  const sortedPrev = [...prevPerms].sort();
+  const sortedNew = [...permissionCodes].sort();
+  const changed =
+    sortedPrev.length !== sortedNew.length ||
+    sortedPrev.some((p, i) => p !== sortedNew[i]);
+  if (changed) {
+    const added = sortedNew.filter((p) => !sortedPrev.includes(p));
+    const removed = sortedPrev.filter((p) => !sortedNew.includes(p));
+    await recordAuditLog({
+      entityType: "role",
+      entityId: roleId,
+      action: "permissions_update",
+      oldData: { name: roleName, permissions: sortedPrev },
+      newData: { name: roleName, permissions: sortedNew, added, removed },
+    });
   }
 }
 

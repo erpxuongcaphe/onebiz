@@ -12,6 +12,8 @@ import {
 } from "@/lib/format";
 import { cn } from "@/lib/utils";
 import { useAuth, useBranchFilter } from "@/lib/contexts";
+import { usePermissions } from "@/lib/permissions/use-permission";
+import { PERMISSIONS } from "@/lib/permissions/constants";
 import {
   getDashboardKpis,
   getFinancialAlerts,
@@ -96,6 +98,12 @@ export default function ManagerPwaPage() {
   const { activeBranchId, currentBranch, isReady } = useBranchFilter();
   const { user } = useAuth();
 
+  // Phase 6 (CEO 12/05): Manager portal cần permission `reports.dashboard`.
+  // Trước đây mọi user đăng nhập đều vào được — cashier vào sẽ thấy doanh thu
+  // toàn công ty (leak nghiêm trọng). Owner luôn bypass qua usePermissions.
+  const { hasPermission, isLoading: permLoading } = usePermissions();
+  const canViewManager = hasPermission(PERMISSIONS.REPORTS_DASHBOARD);
+
   const loadData = useCallback(async () => {
     setLoading(true);
     setError("");
@@ -149,6 +157,31 @@ export default function ManagerPwaPage() {
   const firstName = user?.fullName?.split(" ").pop() ?? "admin";
   const today = formatShortDate(new Date());
   const branchName = currentBranch?.name ?? "Tất cả chi nhánh";
+
+  // Permission gate (CEO 12/05): chưa có quyền → màn hình "Không có quyền"
+  // thay vì render dashboard. Owner luôn bypass qua usePermissions hook.
+  if (!permLoading && !canViewManager) {
+    return (
+      <main className="min-h-dvh flex items-center justify-center bg-surface-container-low p-6">
+        <div className="max-w-md w-full bg-surface border border-border rounded-2xl p-8 text-center shadow-sm">
+          <div className="h-14 w-14 rounded-full bg-status-warning/10 flex items-center justify-center mx-auto mb-4">
+            <Icon name="lock" size={28} className="text-status-warning" />
+          </div>
+          <h1 className="text-lg font-bold mb-1">Không có quyền truy cập Manager</h1>
+          <p className="text-sm text-muted-foreground mb-5">
+            Manager Portal yêu cầu quyền <code className="text-xs bg-muted px-1 rounded">reports.dashboard</code>.
+            Liên hệ quản trị để được cấp quyền nếu anh cần xem báo cáo.
+          </p>
+          <Link href="/">
+            <Button size="sm" className="w-full">
+              <Icon name="home" size={14} className="mr-1" />
+              Quay về trang chủ
+            </Button>
+          </Link>
+        </div>
+      </main>
+    );
+  }
 
   return (
     <main className="min-h-dvh overflow-x-hidden bg-surface-container-low text-foreground">

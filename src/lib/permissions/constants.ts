@@ -48,35 +48,58 @@ export const PERMISSIONS = {
   PRODUCTS_EDIT: "products.edit",
   PRODUCTS_DELETE: "products.delete",
   PRODUCTS_MANAGE_PRICES: "products.manage_prices",
+  // Phase 5 (CEO 12/05): chi tiết hơn để phân quyền sát thực tế (tham khảo KiotViet/Sapo).
+  PRODUCTS_VIEW_COST: "products.view_cost",          // ẩn giá vốn khỏi cashier
+  PRODUCTS_VIEW_PROFIT: "products.view_profit",      // ẩn lợi nhuận
+  PRODUCTS_IMPORT: "products.import",                // Excel bulk import
+  PRODUCTS_EXPORT: "products.export",                // Excel export
+  PRODUCTS_PRINT_BARCODE: "products.print_barcode",  // in tem
+  PRODUCTS_DUPLICATE: "products.duplicate",          // sao chép sản phẩm
 
   // Customers
   CUSTOMERS_VIEW: "customers.view",
   CUSTOMERS_CREATE: "customers.create",
   CUSTOMERS_EDIT: "customers.edit",
   CUSTOMERS_DELETE: "customers.delete",
+  CUSTOMERS_VIEW_DEBT: "customers.view_debt",        // ẩn công nợ khỏi cashier
+  CUSTOMERS_IMPORT: "customers.import",
+  CUSTOMERS_EXPORT: "customers.export",
 
   // Suppliers
   SUPPLIERS_VIEW: "suppliers.view",
   SUPPLIERS_CREATE: "suppliers.create",
   SUPPLIERS_EDIT: "suppliers.edit",
   SUPPLIERS_DELETE: "suppliers.delete",
+  SUPPLIERS_VIEW_DEBT: "suppliers.view_debt",
+  SUPPLIERS_IMPORT: "suppliers.import",
+  SUPPLIERS_EXPORT: "suppliers.export",
 
   // Orders
   ORDERS_VIEW: "orders.view",
   ORDERS_CREATE: "orders.create",
   ORDERS_CANCEL: "orders.cancel",
+  ORDERS_PRINT: "orders.print",
+  ORDERS_EXPORT: "orders.export",
+  ORDERS_VIEW_OWN_ONLY: "orders.view_own_only",      // constraint: chỉ xem đơn của mình
+
+  // Invoices
+  INVOICES_VIEW: "invoices.view",
+  INVOICES_PRINT: "invoices.print",
+  INVOICES_EXPORT: "invoices.export",
 
   // System
   SYSTEM_MANAGE_USERS: "system.manage_users",
   SYSTEM_MANAGE_BRANCHES: "system.manage_branches",
   SYSTEM_MANAGE_ROLES: "system.manage_roles",
   SYSTEM_VIEW_AUDIT: "system.view_audit",
+  SYSTEM_ISSUE_OTP: "system.issue_otp",              // cấp OTP duyệt từ xa cho thao tác nhạy cảm
 
   // Reports
   REPORTS_DASHBOARD: "reports.dashboard",
   REPORTS_ANALYTICS: "reports.analytics",
   REPORTS_FNB: "reports.fnb",
   REPORTS_EXPORT: "reports.export",
+  REPORTS_VIEW_PROFIT: "reports.view_profit",        // ẩn báo cáo lợi nhuận khỏi cashier
 } as const;
 
 export type PermissionCode = (typeof PERMISSIONS)[keyof typeof PERMISSIONS];
@@ -149,7 +172,13 @@ export const PERMISSION_GROUPS: PermissionGroup[] = [
       { code: PERMISSIONS.PRODUCTS_CREATE, label: "Thêm sản phẩm" },
       { code: PERMISSIONS.PRODUCTS_EDIT, label: "Sửa sản phẩm" },
       { code: PERMISSIONS.PRODUCTS_DELETE, label: "Xóa sản phẩm" },
-      { code: PERMISSIONS.PRODUCTS_MANAGE_PRICES, label: "Quản lý giá" },
+      { code: PERMISSIONS.PRODUCTS_DUPLICATE, label: "Sao chép sản phẩm" },
+      { code: PERMISSIONS.PRODUCTS_MANAGE_PRICES, label: "Quản lý giá bán" },
+      { code: PERMISSIONS.PRODUCTS_VIEW_COST, label: "Xem giá vốn" },
+      { code: PERMISSIONS.PRODUCTS_VIEW_PROFIT, label: "Xem lợi nhuận" },
+      { code: PERMISSIONS.PRODUCTS_IMPORT, label: "Nhập Excel" },
+      { code: PERMISSIONS.PRODUCTS_EXPORT, label: "Xuất Excel" },
+      { code: PERMISSIONS.PRODUCTS_PRINT_BARCODE, label: "In tem mã vạch" },
     ],
   },
   {
@@ -159,6 +188,9 @@ export const PERMISSION_GROUPS: PermissionGroup[] = [
       { code: PERMISSIONS.CUSTOMERS_CREATE, label: "Thêm khách hàng" },
       { code: PERMISSIONS.CUSTOMERS_EDIT, label: "Sửa khách hàng" },
       { code: PERMISSIONS.CUSTOMERS_DELETE, label: "Xóa khách hàng" },
+      { code: PERMISSIONS.CUSTOMERS_VIEW_DEBT, label: "Xem công nợ" },
+      { code: PERMISSIONS.CUSTOMERS_IMPORT, label: "Nhập Excel" },
+      { code: PERMISSIONS.CUSTOMERS_EXPORT, label: "Xuất Excel" },
     ],
   },
   {
@@ -168,14 +200,28 @@ export const PERMISSION_GROUPS: PermissionGroup[] = [
       { code: PERMISSIONS.SUPPLIERS_CREATE, label: "Thêm NCC" },
       { code: PERMISSIONS.SUPPLIERS_EDIT, label: "Sửa NCC" },
       { code: PERMISSIONS.SUPPLIERS_DELETE, label: "Xóa NCC" },
+      { code: PERMISSIONS.SUPPLIERS_VIEW_DEBT, label: "Xem công nợ NCC" },
+      { code: PERMISSIONS.SUPPLIERS_IMPORT, label: "Nhập Excel" },
+      { code: PERMISSIONS.SUPPLIERS_EXPORT, label: "Xuất Excel" },
     ],
   },
   {
     group: "Đơn hàng",
     permissions: [
       { code: PERMISSIONS.ORDERS_VIEW, label: "Xem đơn hàng" },
+      { code: PERMISSIONS.ORDERS_VIEW_OWN_ONLY, label: "Chỉ xem đơn của mình" },
       { code: PERMISSIONS.ORDERS_CREATE, label: "Tạo đơn" },
       { code: PERMISSIONS.ORDERS_CANCEL, label: "Hủy đơn" },
+      { code: PERMISSIONS.ORDERS_PRINT, label: "In đơn" },
+      { code: PERMISSIONS.ORDERS_EXPORT, label: "Xuất Excel" },
+    ],
+  },
+  {
+    group: "Hóa đơn",
+    permissions: [
+      { code: PERMISSIONS.INVOICES_VIEW, label: "Xem hóa đơn" },
+      { code: PERMISSIONS.INVOICES_PRINT, label: "In hóa đơn" },
+      { code: PERMISSIONS.INVOICES_EXPORT, label: "Xuất Excel" },
     ],
   },
   {
@@ -185,6 +231,7 @@ export const PERMISSION_GROUPS: PermissionGroup[] = [
       { code: PERMISSIONS.SYSTEM_MANAGE_BRANCHES, label: "Quản lý chi nhánh" },
       { code: PERMISSIONS.SYSTEM_MANAGE_ROLES, label: "Quản lý vai trò" },
       { code: PERMISSIONS.SYSTEM_VIEW_AUDIT, label: "Xem lịch sử thao tác" },
+      { code: PERMISSIONS.SYSTEM_ISSUE_OTP, label: "Cấp OTP duyệt từ xa" },
     ],
   },
   {
@@ -193,6 +240,7 @@ export const PERMISSION_GROUPS: PermissionGroup[] = [
       { code: PERMISSIONS.REPORTS_DASHBOARD, label: "Dashboard" },
       { code: PERMISSIONS.REPORTS_ANALYTICS, label: "Phân tích" },
       { code: PERMISSIONS.REPORTS_FNB, label: "Báo cáo F&B" },
+      { code: PERMISSIONS.REPORTS_VIEW_PROFIT, label: "Báo cáo lợi nhuận" },
       { code: PERMISSIONS.REPORTS_EXPORT, label: "Xuất báo cáo" },
     ],
   },
@@ -225,7 +273,7 @@ export const DEFAULT_ROLE_TEMPLATES: RoleTemplate[] = [
   },
   {
     name: "Quản lý",
-    description: "Quản lý hoạt động cửa hàng và chi nhánh",
+    description: "Quản lý hoạt động cửa hàng và chi nhánh, cấp OTP duyệt từ xa",
     legacyRole: "manager",
     color: "bg-primary",
     permissions: [
@@ -233,24 +281,29 @@ export const DEFAULT_ROLE_TEMPLATES: RoleTemplate[] = [
       ...ALL_PERMISSION_CODES.filter((c) => c.startsWith("pos_")),
       // Inventory full
       ...ALL_PERMISSION_CODES.filter((c) => c.startsWith("inventory.")),
-      // Finance view
+      // Finance view + create
       PERMISSIONS.FINANCE_VIEW_CASH_BOOK,
       PERMISSIONS.FINANCE_CREATE_TRANSACTION,
       PERMISSIONS.FINANCE_VIEW_REPORTS,
-      // Products full
+      // Products full (cả view_cost + view_profit)
       ...ALL_PERMISSION_CODES.filter((c) => c.startsWith("products.")),
       // Customers full
       ...ALL_PERMISSION_CODES.filter((c) => c.startsWith("customers.")),
-      // Suppliers view
-      PERMISSIONS.SUPPLIERS_VIEW,
+      // Suppliers full
+      ...ALL_PERMISSION_CODES.filter((c) => c.startsWith("suppliers.")),
       // Orders full
       ...ALL_PERMISSION_CODES.filter((c) => c.startsWith("orders.")),
+      // Invoices full
+      ...ALL_PERMISSION_CODES.filter((c) => c.startsWith("invoices.")),
       // Reports
       PERMISSIONS.REPORTS_DASHBOARD,
       PERMISSIONS.REPORTS_ANALYTICS,
       PERMISSIONS.REPORTS_FNB,
-      // System limited
+      PERMISSIONS.REPORTS_VIEW_PROFIT,
+      PERMISSIONS.REPORTS_EXPORT,
+      // System: cấp OTP + xem audit
       PERMISSIONS.SYSTEM_VIEW_AUDIT,
+      PERMISSIONS.SYSTEM_ISSUE_OTP,
     ],
   },
   {
