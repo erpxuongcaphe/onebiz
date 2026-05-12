@@ -8,14 +8,14 @@
  *  - Permission nhạy cảm (xoá/hủy/duyệt giảm giá) HIỂN THỊ RÕ RÀNG
  *  - Constraint editor inline (max %, time window, "chỉ của mình")
  *  - Module master toggle (tắt cả module 1 lần)
- *  - PIN POS per-user (switch user nhanh trên tablet)
+ *  - OTP duyệt từ xa cho 6 action nhạy cảm (CEO 12/05)
  *  - Diff compare 2 vai trò
  *  - Audit log thay đổi quyền
  *
  * Sau khi CEO duyệt design → em apply vào /cai-dat/phan-quyen thật.
  */
 
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Icon } from "@/components/ui/icon";
@@ -24,7 +24,7 @@ import { cn } from "@/lib/utils";
 
 // ── Mock data ──
 
-type TabId = "roles" | "users" | "audit" | "pin";
+type TabId = "roles" | "users" | "audit" | "otp";
 
 interface MockRole {
   id: string;
@@ -175,7 +175,7 @@ const MOCK_USERS: MockUser[] = [
 const MOCK_AUDIT = [
   { time: "12/05 14:22", actor: "Đinh Quốc Toàn", action: "Cấp vai trò", target: "Trưởng ca bar → Trần Thị Bích", icon: "person_add", color: "text-status-success" },
   { time: "12/05 11:08", actor: "Đinh Quốc Toàn", action: "Sửa quyền vai trò", target: "Phục vụ: bật Áp giảm giá (tối đa 5%)", icon: "edit", color: "text-status-warning" },
-  { time: "12/05 10:55", actor: "Nguyễn Văn An", action: "Đặt PIN POS", target: "Lê Văn Cường (PIN 6 số)", icon: "pin", color: "text-primary" },
+  { time: "12/05 10:55", actor: "Nguyễn Văn An", action: "Cấp OTP duyệt", target: "Xoá bill B-2042 — duyệt cho Trần Thị Bích", icon: "pin", color: "text-primary" },
   { time: "11/05 16:30", actor: "Đinh Quốc Toàn", action: "Tạo vai trò", target: "Trưởng ca bar (18 quyền)", icon: "shield_lock", color: "text-status-success" },
   { time: "11/05 09:15", actor: "Đinh Quốc Toàn", action: "Khoá nhân viên", target: "Hoàng Minh Em (lý do: nghỉ việc)", icon: "block", color: "text-status-error" },
   { time: "10/05 14:00", actor: "Đinh Quốc Toàn", action: "Tắt quyền", target: "Thu ngân F&B: bỏ Áp giảm giá", icon: "remove_circle", color: "text-status-error" },
@@ -238,7 +238,7 @@ export default function PhanQuyenMockup() {
           {[
             { id: "roles" as TabId, label: "Vai trò", icon: "shield", count: MOCK_ROLES.length },
             { id: "users" as TabId, label: "Nhân viên", icon: "groups", count: MOCK_USERS.length },
-            { id: "pin" as TabId, label: "PIN POS", icon: "pin", count: MOCK_USERS.filter((u) => u.hasPin).length },
+            { id: "otp" as TabId, label: "OTP duyệt từ xa", icon: "pin", count: 6 },
             { id: "audit" as TabId, label: "Lịch sử thay đổi quyền", icon: "history", count: MOCK_AUDIT.length },
           ].map((t) => (
             <button
@@ -273,7 +273,7 @@ export default function PhanQuyenMockup() {
           />
         )}
         {activeTab === "users" && <UsersTab activeUserId={activeUserId} setActiveUserId={setActiveUserId} />}
-        {activeTab === "pin" && <PinPosTab />}
+        {activeTab === "otp" && <OtpTab />}
         {activeTab === "audit" && <AuditTab />}
       </div>
     </div>
@@ -720,7 +720,7 @@ function UsersTab({ activeUserId, setActiveUserId }: { activeUserId: string | nu
                 <th className="px-4 py-3 font-medium">Nhân viên</th>
                 <th className="px-4 py-3 font-medium">Vai trò</th>
                 <th className="px-4 py-3 font-medium">Chi nhánh</th>
-                <th className="px-4 py-3 font-medium">PIN POS</th>
+                <th className="px-4 py-3 font-medium">Quyền duyệt OTP</th>
                 <th className="px-4 py-3 font-medium">Hoạt động</th>
                 <th className="px-4 py-3 font-medium text-right">Trạng thái</th>
               </tr>
@@ -765,13 +765,14 @@ function UsersTab({ activeUserId, setActiveUserId }: { activeUserId: string | nu
                       </div>
                     </td>
                     <td className="px-4 py-3">
-                      {u.hasPin ? (
+                      {/* Role có thể cấp OTP cho action nào — phụ thuộc permission */}
+                      {["owner", "admin", "manager", "custom-1"].includes(u.roleId) ? (
                         <span className="inline-flex items-center gap-1 text-xs text-status-success">
-                          <Icon name="check_circle" size={14} /> Đã đặt
+                          <Icon name="vpn_key" size={14} /> Có thể duyệt
                         </span>
                       ) : (
                         <span className="inline-flex items-center gap-1 text-xs text-muted-foreground">
-                          <Icon name="remove_circle" size={14} /> Chưa đặt
+                          <Icon name="lock" size={14} /> Cần xin OTP
                         </span>
                       )}
                     </td>
@@ -837,28 +838,21 @@ function UsersTab({ activeUserId, setActiveUserId }: { activeUserId: string | nu
               <div className="flex items-center justify-between mb-2">
                 <div>
                   <h4 className="text-sm font-medium flex items-center gap-1.5">
-                    <Icon name="pin" size={14} className="text-status-warning" />
-                    PIN POS
+                    <Icon name="vpn_key" size={14} className="text-status-warning" />
+                    Quyền cấp OTP duyệt từ xa
                   </h4>
                   <p className="text-[11px] text-muted-foreground mt-0.5">
-                    Để switch user nhanh trên tablet POS
+                    Cashier xin OTP qua điện thoại để duyệt thao tác nhạy cảm
                   </p>
                 </div>
-                {activeUser.hasPin ? (
-                  <Badge className="bg-status-success/10 text-status-success border-status-success/30">Đã đặt</Badge>
+                {["owner", "admin", "manager", "custom-1"].includes(activeUser.roleId) ? (
+                  <Badge className="bg-status-success/10 text-status-success border-status-success/30">Có thể duyệt</Badge>
                 ) : (
-                  <Badge variant="outline">Chưa đặt</Badge>
+                  <Badge variant="outline">Không duyệt</Badge>
                 )}
               </div>
-              <div className="flex gap-2 mt-2">
-                <Button size="sm" variant="outline" className="flex-1">
-                  <Icon name="key" size={14} className="mr-1" />
-                  {activeUser.hasPin ? "Đổi PIN" : "Đặt PIN"}
-                </Button>
-                <Button size="sm" variant="outline" className="flex-1">
-                  <Icon name="casino" size={14} className="mr-1" />
-                  PIN ngẫu nhiên
-                </Button>
+              <div className="text-[11px] text-muted-foreground mt-1">
+                Quản lý vào <span className="font-medium text-foreground">onebiz.com.vn/manager/otp</span> để cấp mã 6 số.
               </div>
             </div>
 
@@ -883,89 +877,370 @@ function UsersTab({ activeUserId, setActiveUserId }: { activeUserId: string | nu
   );
 }
 
-// ── TAB: PIN POS ──
+// ── TAB: OTP DUYỆT TỪ XA ──
 
-function PinPosTab() {
+const FLOW_STEPS = [
+  {
+    actor: "Cashier",
+    text: "Bấm action nhạy cảm (vd Huỷ bill 500K). Hệ thống biết cashier không có quyền.",
+    icon: "touch_app",
+    color: "text-primary",
+  },
+  {
+    actor: "POS",
+    text: 'Hiển thị dialog "Cần OTP duyệt từ xa" — kèm danh sách quản lý phụ trách (tên + SĐT + Gọi/Zalo).',
+    icon: "lock",
+    color: "text-status-warning",
+  },
+  {
+    actor: "Cashier",
+    text: "Gọi điện hoặc nhắn Zalo cho quản lý phụ trách (xếp sẵn theo trạng thái: đang trong ca trước).",
+    icon: "phone_in_talk",
+    color: "text-primary",
+  },
+  {
+    actor: "Manager",
+    text: 'Mở web onebiz.com.vn/manager (hoặc PWA / app) → bấm "Cấp OTP" → đọc mã 6 số qua điện thoại.',
+    icon: "vpn_key",
+    color: "text-status-success",
+  },
+  {
+    actor: "Cashier",
+    text: "Nhập 6 số vào POS → server verify (TTL 2 phút, dùng 1 lần) → action được duyệt.",
+    icon: "check_circle",
+    color: "text-status-success",
+  },
+  {
+    actor: "System",
+    text: "Audit log ghi: cashier ABC bấm, manager XYZ duyệt, action gì, lúc nào, bill nào.",
+    icon: "history_edu",
+    color: "text-muted-foreground",
+  },
+];
+
+const OTP_ACTION_CARDS = [
+  {
+    icon: "receipt_long",
+    label: "Xoá bill chưa thanh toán",
+    description: "Cashier bấm Huỷ bill — chưa thu tiền",
+    color: "bg-status-warning/10 text-status-warning border-status-warning/30",
+  },
+  {
+    icon: "remove_shopping_cart",
+    label: "Xoá món chưa thanh toán",
+    description: "Bỏ món khỏi order đã lưu",
+    color: "bg-status-warning/10 text-status-warning border-status-warning/30",
+  },
+  {
+    icon: "percent",
+    label: "Giảm giá ngoài phạm vi",
+    description: "Cashier muốn giảm > quota cho phép",
+    color: "bg-primary/10 text-primary border-primary/30",
+  },
+  {
+    icon: "edit_note",
+    label: "Sửa món đã gửi bếp",
+    description: "Thêm / bớt món sau khi đã gửi",
+    color: "bg-primary/10 text-primary border-primary/30",
+  },
+  {
+    icon: "money_off",
+    label: "Huỷ bill đã thanh toán",
+    description: "Hoàn tiền — tự cascade cash transaction",
+    color: "bg-status-error/10 text-status-error border-status-error/30",
+  },
+  {
+    icon: "person_remove",
+    label: "Xoá khách hàng / NCC",
+    description: "Xoá vĩnh viễn trong danh bạ",
+    color: "bg-status-error/10 text-status-error border-status-error/30",
+  },
+];
+
+const MOCK_OTP_HISTORY = [
+  {
+    time: "14:32",
+    action: "Xoá bill chưa thanh toán",
+    target: "B-2042 (500.000đ)",
+    status: "used" as const,
+    usedBy: "Trần Thị Bích",
+  },
+  {
+    time: "13:15",
+    action: "Giảm giá ngoài phạm vi",
+    target: "Bill HD-1029 — giảm 30%",
+    status: "used" as const,
+    usedBy: "Trần Thị Bích",
+  },
+  {
+    time: "12:08",
+    action: "Xoá món chưa thanh toán",
+    target: "Bill B-2038 — Cappuccino x2",
+    status: "expired" as const,
+    usedBy: null,
+  },
+  {
+    time: "10:44",
+    action: "Huỷ bill đã thanh toán",
+    target: "B-2031 (1.200.000đ) — khách trả về",
+    status: "used" as const,
+    usedBy: "Lê Văn Cường",
+  },
+];
+
+function OtpTab() {
+  const [showDemo, setShowDemo] = useState(false);
+
   return (
-    <div className="p-6 max-w-4xl">
-      <div className="mb-5">
-        <h2 className="text-xl font-bold">PIN POS — Switch user nhanh</h2>
-        <p className="text-xs text-muted-foreground mt-1">
-          Mỗi nhân viên có mã PIN 6 số riêng. Trên tablet POS, nhấn icon người dùng → nhập PIN → đổi cashier mà không cần đăng xuất.
-        </p>
+    <div className="p-6 max-w-5xl space-y-6">
+      {/* Header */}
+      <div className="flex items-start justify-between">
+        <div>
+          <h2 className="text-xl font-bold">OTP duyệt từ xa</h2>
+          <p className="text-xs text-muted-foreground mt-1 max-w-2xl">
+            Manager không cần có mặt tại quán. Cashier gọi điện xin OTP — quản lý phụ trách (ai có quyền ở chi nhánh đó) cấp mã 6 số qua web/app, đọc qua điện thoại. Mã dùng 1 lần, hiệu lực 2 phút.
+          </p>
+        </div>
+        <Button
+          variant="outline"
+          size="sm"
+          onClick={() => setShowDemo(true)}
+        >
+          <Icon name="play_arrow" size={14} className="mr-1" />
+          Xem demo modal cấp OTP
+        </Button>
       </div>
 
-      {/* PIN demo */}
-      <div className="bg-surface border border-border rounded-xl p-6 mb-6">
-        <h3 className="text-sm font-semibold mb-4 flex items-center gap-2">
-          <Icon name="preview" size={16} />
-          Demo màn hình nhập PIN trên POS
-        </h3>
-        <div className="bg-surface-container-low p-8 rounded-lg flex flex-col items-center">
-          <div className="h-16 w-16 rounded-full bg-primary/10 flex items-center justify-center mb-3">
-            <Icon name="account_circle" size={32} className="text-primary" />
-          </div>
-          <div className="text-sm font-medium mb-1">Nhập PIN của bạn</div>
-          <div className="text-xs text-muted-foreground mb-4">Để bắt đầu ca tại FNB01 Lý Tự Trọng</div>
-          <div className="flex gap-2 mb-4">
-            {[1, 2, 3, 4, 5, 6].map((i) => (
-              <div key={i} className={cn(
-                "h-12 w-12 rounded-lg border-2 flex items-center justify-center text-2xl font-bold",
-                i <= 4 ? "border-primary bg-primary/5 text-primary" : "border-border"
-              )}>
-                {i <= 4 ? "•" : ""}
-              </div>
-            ))}
-          </div>
-          <div className="grid grid-cols-3 gap-2 w-64">
-            {["1", "2", "3", "4", "5", "6", "7", "8", "9", "", "0", "⌫"].map((k) => (
-              <button
-                key={k}
-                className={cn(
-                  "h-12 rounded-lg text-lg font-medium transition-colors",
-                  k === "" ? "invisible" : k === "⌫" ? "bg-surface-container hover:bg-surface-container-high text-muted-foreground" : "bg-surface hover:bg-surface-container border border-border"
+      {/* Flow timeline */}
+      <section>
+        <h3 className="text-sm font-semibold mb-3">Quy trình 6 bước</h3>
+        <div className="bg-surface border border-border rounded-xl divide-y divide-border">
+          {FLOW_STEPS.map((step, i) => (
+            <div key={i} className="flex items-start gap-3 p-4">
+              <div className="flex flex-col items-center">
+                <div className="h-8 w-8 rounded-full bg-surface-container-low border border-border flex items-center justify-center font-semibold text-xs">
+                  {i + 1}
+                </div>
+                {i < FLOW_STEPS.length - 1 && (
+                  <div className="w-px h-6 bg-border mt-1" />
                 )}
+              </div>
+              <div className="flex-1 pt-1">
+                <div className="flex items-center gap-2 mb-1">
+                  <Icon name={step.icon} size={14} className={step.color} />
+                  <span className="text-xs font-semibold uppercase tracking-wide text-muted-foreground">
+                    {step.actor}
+                  </span>
+                </div>
+                <p className="text-sm text-foreground">{step.text}</p>
+              </div>
+            </div>
+          ))}
+        </div>
+      </section>
+
+      {/* 6 action cards */}
+      <section>
+        <h3 className="text-sm font-semibold mb-3">
+          Áp dụng cho 6 action nhạy cảm (CEO chốt 12/05)
+        </h3>
+        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-3">
+          {OTP_ACTION_CARDS.map((a) => (
+            <div
+              key={a.label}
+              className="p-4 rounded-xl border-2 border-border bg-surface"
+            >
+              <div className="flex items-start gap-3">
+                <div
+                  className={cn(
+                    "h-10 w-10 rounded-lg flex items-center justify-center shrink-0 border",
+                    a.color,
+                  )}
+                >
+                  <Icon name={a.icon} size={20} />
+                </div>
+                <div className="flex-1 min-w-0">
+                  <div className="font-medium text-sm">{a.label}</div>
+                  <div className="text-[11px] text-muted-foreground mt-0.5">
+                    {a.description}
+                  </div>
+                </div>
+              </div>
+            </div>
+          ))}
+        </div>
+      </section>
+
+      {/* Stats + policy */}
+      <section className="grid grid-cols-1 sm:grid-cols-4 gap-3">
+        <div className="bg-surface border border-border rounded-xl p-4">
+          <div className="flex items-center gap-2 text-xs text-muted-foreground">
+            <Icon name="schedule" size={14} /> Hiệu lực
+          </div>
+          <div className="text-base font-bold mt-1">2 phút</div>
+          <div className="text-[10px] text-muted-foreground mt-0.5">
+            Sau đó tự đổi mã mới
+          </div>
+        </div>
+        <div className="bg-surface border border-border rounded-xl p-4">
+          <div className="flex items-center gap-2 text-xs text-muted-foreground">
+            <Icon name="key" size={14} /> Số ký tự
+          </div>
+          <div className="text-base font-bold mt-1">6 số</div>
+          <div className="text-[10px] text-muted-foreground mt-0.5">
+            Random 000000-999999
+          </div>
+        </div>
+        <div className="bg-surface border border-border rounded-xl p-4">
+          <div className="flex items-center gap-2 text-xs text-muted-foreground">
+            <Icon name="security" size={14} /> Rate limit
+          </div>
+          <div className="text-base font-bold mt-1">5 / 15 phút</div>
+          <div className="text-[10px] text-muted-foreground mt-0.5">
+            Mỗi manager
+          </div>
+        </div>
+        <div className="bg-surface border border-border rounded-xl p-4">
+          <div className="flex items-center gap-2 text-xs text-muted-foreground">
+            <Icon name="warning" size={14} /> Sai 10 lần
+          </div>
+          <div className="text-base font-bold mt-1">Báo admin</div>
+          <div className="text-[10px] text-muted-foreground mt-0.5">
+            Không khoá (theo yêu cầu CEO)
+          </div>
+        </div>
+      </section>
+
+      {/* History */}
+      <section>
+        <div className="flex items-center justify-between mb-3">
+          <h3 className="text-sm font-semibold">OTP gần nhất (demo)</h3>
+          <Button variant="ghost" size="sm" className="text-xs h-7">
+            <Icon name="refresh" size={14} className="mr-1" /> Làm mới
+          </Button>
+        </div>
+        <div className="bg-surface border border-border rounded-xl divide-y divide-border">
+          {MOCK_OTP_HISTORY.map((r, i) => {
+            const statusStyle =
+              r.status === "used"
+                ? "bg-status-success/10 text-status-success border-status-success/30"
+                : "bg-muted text-muted-foreground border-border";
+            const statusLabel =
+              r.status === "used" ? `Đã dùng · ${r.usedBy}` : "Hết hạn";
+            return (
+              <div
+                key={i}
+                className="flex items-center gap-3 p-3 hover:bg-surface-container-low transition-colors"
               >
-                {k}
-              </button>
-            ))}
-          </div>
+                <div className="flex-1 min-w-0">
+                  <div className="text-sm font-medium">{r.action}</div>
+                  <div className="text-[11px] text-muted-foreground mt-0.5">
+                    {r.target} · Hôm nay {r.time}
+                  </div>
+                </div>
+                <Badge
+                  variant="outline"
+                  className={cn("text-[10px]", statusStyle)}
+                >
+                  {statusLabel}
+                </Badge>
+              </div>
+            );
+          })}
         </div>
-      </div>
+      </section>
 
-      {/* Stats */}
-      <div className="grid grid-cols-3 gap-4 mb-5">
-        <div className="bg-surface border border-border rounded-xl p-4">
-          <div className="flex items-center gap-2 text-xs text-muted-foreground">
-            <Icon name="pin" size={14} /> Đã đặt PIN
-          </div>
-          <div className="text-2xl font-bold mt-1">{MOCK_USERS.filter((u) => u.hasPin).length}/{MOCK_USERS.length}</div>
-        </div>
-        <div className="bg-surface border border-border rounded-xl p-4">
-          <div className="flex items-center gap-2 text-xs text-muted-foreground">
-            <Icon name="security" size={14} /> Chính sách
-          </div>
-          <div className="text-sm font-medium mt-1">6 số · Khoá sau 5 lần sai</div>
-        </div>
-        <div className="bg-surface border border-border rounded-xl p-4">
-          <div className="flex items-center gap-2 text-xs text-muted-foreground">
-            <Icon name="schedule" size={14} /> Hết hạn
-          </div>
-          <div className="text-sm font-medium mt-1">90 ngày tự nhắc đổi</div>
-        </div>
-      </div>
+      {/* Demo modal */}
+      <OtpDemoModal open={showDemo} onClose={() => setShowDemo(false)} />
+    </div>
+  );
+}
 
-      {/* Users without PIN warning */}
-      <div className="bg-status-warning/5 border border-status-warning/30 rounded-xl p-4">
-        <div className="flex items-start gap-3">
-          <Icon name="warning" size={20} className="text-status-warning shrink-0 mt-0.5" />
-          <div className="flex-1">
-            <h4 className="text-sm font-semibold text-status-warning">Còn 2 nhân viên chưa có PIN POS</h4>
-            <p className="text-xs text-muted-foreground mt-1">
-              Lê Văn Cường (Phục vụ), Hoàng Minh Em (Kế toán) — chưa thể switch user trên tablet POS
-            </p>
-            <Button size="sm" variant="outline" className="mt-2">
-              Đặt PIN cho cả 2
+// Demo modal — bản preview cho CEO hiểu UX modal cấp OTP thật ở /manager/otp
+function OtpDemoModal({
+  open,
+  onClose,
+}: {
+  open: boolean;
+  onClose: () => void;
+}) {
+  const [secondsLeft, setSecondsLeft] = useState(120);
+  const demoCode = "847291";
+
+  useEffect(() => {
+    if (!open) return;
+    setSecondsLeft(120);
+    const interval = setInterval(() => {
+      setSecondsLeft((s) => (s <= 1 ? 120 : s - 1));
+    }, 1000);
+    return () => clearInterval(interval);
+  }, [open]);
+
+  if (!open) return null;
+
+  const minutes = Math.floor(secondsLeft / 60);
+  const seconds = secondsLeft % 60;
+  const progress = (secondsLeft / 120) * 100;
+
+  return (
+    <div
+      onClick={onClose}
+      className="fixed inset-0 z-50 bg-black/50 flex items-center justify-center p-4"
+    >
+      <div
+        onClick={(e) => e.stopPropagation()}
+        className="bg-surface rounded-2xl max-w-md w-full shadow-2xl overflow-hidden"
+      >
+        <div className="p-6">
+          <div className="flex items-center gap-2 mb-3">
+            <Icon name="pin" size={18} className="text-status-warning" />
+            <h3 className="font-bold">Mã OTP đã cấp (demo)</h3>
+          </div>
+          <p className="text-xs text-muted-foreground mb-5">
+            Đọc cho cashier qua điện thoại. Mã dùng được 1 lần trong 2 phút.
+          </p>
+
+          <div className="bg-status-warning/5 border border-status-warning/30 rounded-xl p-6 text-center mb-4">
+            <div className="flex justify-center gap-2 mb-3">
+              {demoCode.split("").map((d, i) => (
+                <div
+                  key={i}
+                  className="h-14 w-12 rounded-lg flex items-center justify-center text-3xl font-bold font-mono bg-surface text-status-warning border border-status-warning/30"
+                >
+                  {d}
+                </div>
+              ))}
+            </div>
+            <div className="flex items-center justify-center gap-1.5 text-sm mb-2">
+              <Icon name="timer" size={16} className="text-status-warning" />
+              <span className="font-mono font-medium">
+                {minutes}:{seconds.toString().padStart(2, "0")}
+              </span>
+            </div>
+            <div className="h-1 bg-border rounded-full overflow-hidden">
+              <div
+                className="h-full bg-status-warning transition-all duration-1000"
+                style={{ width: `${progress}%` }}
+              />
+            </div>
+          </div>
+
+          <div className="bg-primary/5 border border-primary/20 rounded-lg p-3 text-xs text-muted-foreground mb-4">
+            <Icon
+              name="phone_in_talk"
+              size={14}
+              className="inline-block mr-1 text-primary"
+            />
+            Đọc 6 số chậm rãi: "8 - 4 - 7 - 2 - 9 - 1". Tuyệt đối không chụp màn hình.
+          </div>
+
+          <div className="flex justify-end gap-2">
+            <Button variant="outline" size="sm">
+              <Icon name="content_copy" size={14} className="mr-1" />
+              Sao chép
+            </Button>
+            <Button size="sm" onClick={onClose}>
+              Đã đọc xong
             </Button>
           </div>
         </div>
