@@ -207,53 +207,52 @@ export default function PhanQuyenMockup() {
   return (
     <div className="min-h-screen bg-surface-container-low">
       {/* Header */}
-      <header className="sticky top-0 z-10 bg-surface border-b border-border px-6 py-4">
-        <div className="flex items-center justify-between">
-          <div>
-            <div className="flex items-center gap-2 text-xs text-muted-foreground mb-1">
+      <header className="sticky top-0 z-10 bg-surface border-b border-border px-5 py-2.5">
+        <div className="flex items-center justify-between gap-3">
+          <div className="min-w-0">
+            <div className="flex items-center gap-1.5 text-[11px] text-muted-foreground">
               <span>Mockup</span>
-              <Icon name="chevron_right" size={14} />
+              <Icon name="chevron_right" size={12} />
               <span>Phân quyền</span>
-              <Badge variant="outline" className="text-[10px]">Đề xuất UX</Badge>
+              <Badge variant="outline" className="text-[9px] px-1 py-0 h-4">Đề xuất UX</Badge>
             </div>
-            <h1 className="text-xl font-bold text-foreground">Phân quyền & Nhân viên</h1>
-            <p className="text-xs text-muted-foreground mt-0.5">
-              Tham khảo KiotViet / Sapo / Misa — anh duyệt design xong em apply vào trang thật
-            </p>
+            <h1 className="text-base font-bold text-foreground leading-tight mt-0.5">
+              Phân quyền & Nhân viên
+            </h1>
           </div>
-          <div className="flex items-center gap-2">
-            <Button variant="outline" size="sm">
+          <div className="flex items-center gap-1.5 shrink-0">
+            <Button variant="outline" size="sm" className="h-8">
               <Icon name="visibility" size={14} className="mr-1" />
-              Xem trang hiện tại
+              <span className="hidden sm:inline">Trang hiện tại</span>
             </Button>
-            <Button size="sm">
+            <Button size="sm" className="h-8">
               <Icon name="check" size={14} className="mr-1" />
-              Duyệt design này
+              Duyệt design
             </Button>
           </div>
         </div>
 
         {/* Tabs */}
-        <div className="flex items-center gap-1 mt-4 -mb-1">
+        <div className="flex items-center gap-0.5 mt-2 -mb-2.5 overflow-x-auto">
           {[
             { id: "roles" as TabId, label: "Vai trò", icon: "shield", count: MOCK_ROLES.length },
             { id: "users" as TabId, label: "Nhân viên", icon: "groups", count: MOCK_USERS.length },
             { id: "otp" as TabId, label: "OTP duyệt từ xa", icon: "pin", count: 6 },
-            { id: "audit" as TabId, label: "Lịch sử thay đổi quyền", icon: "history", count: MOCK_AUDIT.length },
+            { id: "audit" as TabId, label: "Lịch sử thay đổi", icon: "history", count: MOCK_AUDIT.length },
           ].map((t) => (
             <button
               key={t.id}
               onClick={() => setActiveTab(t.id)}
               className={cn(
-                "flex items-center gap-2 px-4 py-2.5 text-sm font-medium border-b-2 transition-colors",
+                "flex items-center gap-1.5 px-3 py-2 text-[13px] font-medium border-b-2 transition-colors whitespace-nowrap",
                 activeTab === t.id
                   ? "border-primary text-primary"
                   : "border-transparent text-muted-foreground hover:text-foreground"
               )}
             >
-              <Icon name={t.icon} size={16} />
+              <Icon name={t.icon} size={15} />
               {t.label}
-              <Badge variant="secondary" className="text-[10px]">
+              <Badge variant="secondary" className="text-[9px] px-1 py-0 h-4">
                 {t.count}
               </Badge>
             </button>
@@ -334,15 +333,15 @@ function RolesTab({ activeRoleId, setActiveRoleId, compareWithId, setCompareWith
   return (
     <div className="flex">
       {/* Sidebar: role list */}
-      <aside className="w-72 border-r border-border bg-surface min-h-[calc(100vh-145px)] p-3">
-        <div className="flex items-center justify-between mb-3">
-          <h3 className="text-xs font-semibold text-muted-foreground uppercase tracking-wider">Vai trò</h3>
-          <Button variant="ghost" size="sm" className="h-7 px-2">
-            <Icon name="add" size={14} className="mr-0.5" />
+      <aside className="w-64 border-r border-border bg-surface min-h-[calc(100vh-110px)] p-2.5">
+        <div className="flex items-center justify-between mb-2 px-1">
+          <h3 className="text-[11px] font-semibold text-muted-foreground uppercase tracking-wider">Vai trò</h3>
+          <Button variant="ghost" size="sm" className="h-6 px-1.5 text-[11px]">
+            <Icon name="add" size={12} className="mr-0.5" />
             Thêm
           </Button>
         </div>
-        <div className="space-y-1">
+        <div className="space-y-0.5">
           {MOCK_ROLES.map((r) => {
             const isActive = r.id === activeRoleId;
             return (
@@ -350,32 +349,30 @@ function RolesTab({ activeRoleId, setActiveRoleId, compareWithId, setCompareWith
                 key={r.id}
                 onClick={() => setActiveRoleId(r.id)}
                 className={cn(
-                  "w-full text-left px-3 py-2.5 rounded-lg transition-colors",
+                  "w-full text-left px-2 py-1.5 rounded-md transition-colors",
                   isActive
                     ? "bg-primary/10 ring-1 ring-primary/30"
                     : "hover:bg-surface-container"
                 )}
               >
-                <div className="flex items-center gap-3">
-                  <div className={cn("h-8 w-8 rounded-lg flex items-center justify-center text-white shrink-0", r.color)}>
-                    <Icon name={r.icon} size={16} />
+                <div className="flex items-center gap-2">
+                  <div className={cn("h-7 w-7 rounded-md flex items-center justify-center text-white shrink-0", r.color)}>
+                    <Icon name={r.icon} size={14} />
                   </div>
                   <div className="flex-1 min-w-0">
-                    <div className="flex items-center gap-1.5">
-                      <span className="text-sm font-medium truncate">{r.name}</span>
+                    <div className="flex items-center gap-1">
+                      <span className="text-[13px] font-medium truncate">{r.name}</span>
                       {r.isSystem && (
-                        <Badge variant="outline" className="text-[9px] px-1 py-0 h-4">HT</Badge>
+                        <Badge variant="outline" className="text-[9px] px-1 py-0 h-3.5">HT</Badge>
                       )}
                     </div>
-                    <div className="flex items-center gap-2 text-[11px] text-muted-foreground mt-0.5">
+                    <div className="flex items-center gap-1.5 text-[10px] text-muted-foreground">
                       <span className="flex items-center gap-0.5">
-                        <Icon name="group" size={11} />
+                        <Icon name="group" size={10} />
                         {r.memberCount}
                       </span>
                       <span>·</span>
-                      <span>
-                        {r.permissionCount}/{r.totalCount} quyền
-                      </span>
+                      <span>{r.permissionCount}/{r.totalCount}</span>
                     </div>
                   </div>
                 </div>
@@ -386,88 +383,83 @@ function RolesTab({ activeRoleId, setActiveRoleId, compareWithId, setCompareWith
       </aside>
 
       {/* Main: editor */}
-      <main className="flex-1 p-6 max-w-5xl">
+      <main className="flex-1 p-4 max-w-5xl">
         {/* Role header */}
-        <div className="flex items-start justify-between mb-6">
-          <div className="flex items-start gap-3">
-            <div className={cn("h-12 w-12 rounded-xl flex items-center justify-center text-white shrink-0", activeRole.color)}>
-              <Icon name={activeRole.icon} size={24} />
+        <div className="flex items-start justify-between gap-3 mb-3">
+          <div className="flex items-center gap-2.5 min-w-0">
+            <div className={cn("h-10 w-10 rounded-lg flex items-center justify-center text-white shrink-0", activeRole.color)}>
+              <Icon name={activeRole.icon} size={20} />
             </div>
-            <div>
-              <div className="flex items-center gap-2">
-                <h2 className="text-xl font-bold">{activeRole.name}</h2>
+            <div className="min-w-0">
+              <div className="flex items-center gap-1.5">
+                <h2 className="text-base font-bold">{activeRole.name}</h2>
                 {activeRole.isSystem && (
-                  <Badge variant="outline" className="text-[10px]">Vai trò hệ thống</Badge>
+                  <Badge variant="outline" className="text-[9px] px-1 py-0 h-4">Hệ thống</Badge>
                 )}
               </div>
-              <p className="text-sm text-muted-foreground mt-0.5">{activeRole.description}</p>
-              <div className="flex items-center gap-3 mt-2 text-xs">
-                <span className="flex items-center gap-1 text-muted-foreground">
-                  <Icon name="group" size={12} />
-                  <span className="font-medium text-foreground">{activeRole.memberCount}</span> nhân viên
+              <div className="flex items-center gap-2.5 text-[11px] text-muted-foreground mt-0.5">
+                <span className="truncate max-w-[280px]">{activeRole.description}</span>
+                <span className="shrink-0">·</span>
+                <span className="flex items-center gap-0.5 shrink-0">
+                  <Icon name="group" size={11} />
+                  <span className="font-medium text-foreground">{activeRole.memberCount}</span>
                 </span>
-                <span className="flex items-center gap-1 text-muted-foreground">
-                  <Icon name="check_circle" size={12} />
-                  <span className="font-medium text-foreground">{activeRole.permissionCount}</span>/{activeRole.totalCount} quyền
+                <span className="flex items-center gap-0.5 shrink-0">
+                  <Icon name="check_circle" size={11} />
+                  <span className="font-medium text-foreground">{activeRole.permissionCount}</span>/{activeRole.totalCount}
                 </span>
               </div>
             </div>
           </div>
-          <div className="flex items-center gap-2">
-            <div className="flex items-center gap-1.5">
-              <span className="text-xs text-muted-foreground">So sánh với:</span>
-              <select
-                className="text-xs border border-border rounded-md px-2 py-1 bg-surface"
-                value={compareWithId ?? ""}
-                onChange={(e) => setCompareWithId(e.target.value || null)}
-              >
-                <option value="">— Không —</option>
-                {MOCK_ROLES.filter((r) => r.id !== activeRoleId).map((r) => (
-                  <option key={r.id} value={r.id}>{r.name}</option>
-                ))}
-              </select>
-            </div>
-            <Button variant="outline" size="sm">
-              <Icon name="content_copy" size={14} className="mr-1" />
+          <div className="flex items-center gap-1.5 shrink-0">
+            <select
+              className="text-[11px] border border-border rounded-md px-2 py-1 bg-surface h-8 max-w-[140px]"
+              value={compareWithId ?? ""}
+              onChange={(e) => setCompareWithId(e.target.value || null)}
+              aria-label="So sánh vai trò"
+            >
+              <option value="">So sánh với…</option>
+              {MOCK_ROLES.filter((r) => r.id !== activeRoleId).map((r) => (
+                <option key={r.id} value={r.id}>{r.name}</option>
+              ))}
+            </select>
+            <Button variant="outline" size="sm" className="h-8">
+              <Icon name="content_copy" size={13} className="mr-1" />
               Sao chép
             </Button>
-            <Button size="sm">
-              <Icon name="save" size={14} className="mr-1" />
-              Lưu thay đổi
+            <Button size="sm" className="h-8">
+              <Icon name="save" size={13} className="mr-1" />
+              Lưu
             </Button>
           </div>
         </div>
 
         {/* Module master toggles */}
-        <div className="bg-surface border border-border rounded-xl p-4 mb-5">
-          <div className="flex items-center justify-between mb-3">
-            <div>
-              <h3 className="text-sm font-semibold">Bật/tắt cả module</h3>
-              <p className="text-xs text-muted-foreground mt-0.5">
-                Tắt module → ẩn toàn bộ menu + chặn truy cập route module đó
-              </p>
-            </div>
+        <div className="bg-surface border border-border rounded-lg p-2.5 mb-3">
+          <div className="flex items-center justify-between mb-2 px-0.5">
+            <h3 className="text-[12px] font-semibold flex items-center gap-1.5">
+              <Icon name="toggle_on" size={13} className="text-muted-foreground" />
+              Module master
+            </h3>
+            <span className="text-[10px] text-muted-foreground">
+              Tắt → ẩn menu + chặn route
+            </span>
           </div>
-          <div className="grid grid-cols-4 gap-2">
+          <div className="grid grid-cols-4 lg:grid-cols-8 gap-1.5">
             {MODULES.map((m) => {
               const moduleOn = activeRoleId !== "server" || m.code !== "system"; // mock
               return (
                 <button
                   key={m.code}
                   className={cn(
-                    "flex items-center gap-2 p-2.5 rounded-lg border-2 transition-colors text-left",
+                    "flex items-center gap-1.5 p-1.5 rounded-md border transition-colors text-left",
                     moduleOn
                       ? "border-status-success/30 bg-status-success/5"
                       : "border-status-error/30 bg-status-error/5 opacity-60"
                   )}
                 >
-                  <Icon name={m.icon} size={16} className={moduleOn ? "text-status-success" : "text-status-error"} />
-                  <div className="flex-1">
-                    <div className="text-xs font-medium">{m.label}</div>
-                    <div className="text-[10px] text-muted-foreground">
-                      {moduleOn ? "Đang bật" : "Đã tắt"}
-                    </div>
-                  </div>
+                  <Icon name={m.icon} size={13} className={moduleOn ? "text-status-success" : "text-status-error"} />
+                  <span className="text-[11px] font-medium truncate">{m.label}</span>
                 </button>
               );
             })}
@@ -475,41 +467,38 @@ function RolesTab({ activeRoleId, setActiveRoleId, compareWithId, setCompareWith
         </div>
 
         {/* Legend */}
-        <div className="flex items-center gap-4 text-xs text-muted-foreground mb-4 px-1">
-          <span className="flex items-center gap-1.5">
-            <div className="h-2 w-2 rounded-full bg-status-error" />
+        <div className="flex items-center flex-wrap gap-3 text-[11px] text-muted-foreground mb-2 px-1">
+          <span className="flex items-center gap-1">
+            <div className="h-1.5 w-1.5 rounded-full bg-status-error" />
             Không hoàn tác
           </span>
-          <span className="flex items-center gap-1.5">
-            <div className="h-2 w-2 rounded-full bg-status-warning" />
-            Nhạy cảm (có thể cần PIN duyệt)
+          <span className="flex items-center gap-1">
+            <div className="h-1.5 w-1.5 rounded-full bg-status-warning" />
+            Nhạy cảm (có thể cần OTP)
           </span>
-          <span className="flex items-center gap-1.5">
-            <div className="h-2 w-2 rounded-full bg-muted-foreground" />
+          <span className="flex items-center gap-1">
+            <div className="h-1.5 w-1.5 rounded-full bg-muted-foreground" />
             Thường
           </span>
           {compareWithId && (
-            <>
-              <span className="mx-2">|</span>
-              <span className="flex items-center gap-1.5">
-                <div className="h-2 w-2 rounded-sm bg-status-success/20 border border-status-success" />
-                Khác với {MOCK_ROLES.find((r) => r.id === compareWithId)?.name}
-              </span>
-            </>
+            <span className="flex items-center gap-1 ml-auto">
+              <div className="h-1.5 w-1.5 rounded-sm bg-status-success/20 border border-status-success" />
+              Khác với {MOCK_ROLES.find((r) => r.id === compareWithId)?.name}
+            </span>
           )}
         </div>
 
         {/* Permission groups */}
-        <div className="space-y-4">
+        <div className="space-y-2">
           {PERMISSION_GROUPS.map((group) => {
             const onCount = group.permissions.filter((p) => enabled.has(p.code)).length;
             return (
-              <div key={group.group} className="bg-surface border border-border rounded-xl overflow-hidden">
-                <div className="flex items-center justify-between px-4 py-3 bg-surface-container-low border-b border-border">
-                  <div className="flex items-center gap-2">
-                    <Icon name={group.icon} size={18} className="text-muted-foreground" />
-                    <h4 className="text-sm font-semibold">{group.group}</h4>
-                    <Badge variant="secondary" className="text-[10px]">
+              <div key={group.group} className="bg-surface border border-border rounded-lg overflow-hidden">
+                <div className="flex items-center justify-between px-3 py-1.5 bg-surface-container-low border-b border-border">
+                  <div className="flex items-center gap-1.5">
+                    <Icon name={group.icon} size={14} className="text-muted-foreground" />
+                    <h4 className="text-[13px] font-semibold">{group.group}</h4>
+                    <Badge variant="secondary" className="text-[9px] px-1 py-0 h-4">
                       {onCount}/{group.permissions.length}
                     </Badge>
                   </div>
@@ -542,15 +531,15 @@ function RolesTab({ activeRoleId, setActiveRoleId, compareWithId, setCompareWith
         </div>
 
         {/* Footer actions */}
-        <div className="mt-6 flex items-center justify-between pt-4 border-t border-border">
+        <div className="mt-4 flex items-center justify-between pt-3 border-t border-border">
           {!activeRole.isSystem ? (
-            <Button variant="ghost" size="sm" className="text-status-error hover:bg-status-error/10">
-              <Icon name="delete" size={16} className="mr-1" />
+            <Button variant="ghost" size="sm" className="h-8 text-status-error hover:bg-status-error/10">
+              <Icon name="delete" size={14} className="mr-1" />
               Xoá vai trò
             </Button>
           ) : <div />}
-          <Button size="sm">
-            <Icon name="save" size={16} className="mr-1" />
+          <Button size="sm" className="h-8">
+            <Icon name="save" size={14} className="mr-1" />
             Lưu thay đổi
           </Button>
         </div>
@@ -573,41 +562,41 @@ function PermissionRow({ permission, isOn, diff, compareOn, levelStyle: lv }: Pe
   return (
     <div
       className={cn(
-        "flex items-center gap-3 px-4 py-3 hover:bg-surface-container-low transition-colors",
+        "flex items-center gap-2 px-3 py-1.5 hover:bg-surface-container-low transition-colors relative",
         diff && "bg-status-success/5"
       )}
     >
       {/* Diff indicator */}
       {diff && (
-        <div className="w-1 h-8 rounded-full bg-status-success absolute left-0" />
+        <div className="w-0.5 h-6 rounded-full bg-status-success absolute left-0 top-1/2 -translate-y-1/2" />
       )}
 
       {/* Toggle */}
       <button
         className={cn(
-          "h-5 w-9 rounded-full transition-colors relative shrink-0",
+          "h-4 w-7 rounded-full transition-colors relative shrink-0",
           isOn ? "bg-primary" : "bg-surface-container"
         )}
       >
         <div
           className={cn(
-            "absolute top-0.5 h-4 w-4 rounded-full bg-white transition-transform",
-            isOn ? "left-[18px]" : "left-0.5"
+            "absolute top-0.5 h-3 w-3 rounded-full bg-white transition-transform shadow-sm",
+            isOn ? "left-[14px]" : "left-0.5"
           )}
         />
       </button>
 
       {/* Level dot */}
-      <div className={cn("h-2 w-2 rounded-full shrink-0", lv.dot)} />
+      <div className={cn("h-1.5 w-1.5 rounded-full shrink-0", lv.dot)} />
 
-      {/* Label + description */}
+      {/* Label + description (compact: chỉ description khi permission là "Thường") */}
       <div className="flex-1 min-w-0">
-        <div className="flex items-center gap-2">
-          <span className="text-sm font-medium">{permission.label}</span>
+        <div className="flex items-center gap-1.5 flex-wrap">
+          <span className="text-[13px] font-medium">{permission.label}</span>
           {permission.level !== "normal" && (
             <Badge
               variant="outline"
-              className={cn("text-[9px] px-1 py-0 h-4", lv.labelClass, "border-current")}
+              className={cn("text-[9px] px-1 py-0 h-3.5", lv.labelClass, "border-current")}
             >
               {lv.label}
             </Badge>
@@ -615,13 +604,15 @@ function PermissionRow({ permission, isOn, diff, compareOn, levelStyle: lv }: Pe
           {diff && compareOn !== null && (
             <Badge
               variant="outline"
-              className="text-[9px] px-1 py-0 h-4 border-status-success text-status-success"
+              className="text-[9px] px-1 py-0 h-3.5 border-status-success text-status-success"
             >
               {isOn ? "Có" : "Không"} ↔ {compareOn ? "Có" : "Không"}
             </Badge>
           )}
+          <span className="text-[11px] text-muted-foreground truncate" title={permission.description}>
+            · {permission.description}
+          </span>
         </div>
-        <p className="text-[11px] text-muted-foreground mt-0.5">{permission.description}</p>
       </div>
 
       {/* Constraint editor inline */}
@@ -636,37 +627,33 @@ function ConstraintEditor({ type }: { type: ConstraintType }) {
   switch (type) {
     case "max_percent":
       return (
-        <div className="flex items-center gap-1.5 shrink-0 bg-status-warning/10 px-2 py-1 rounded-md border border-status-warning/30">
-          <Icon name="percent" size={12} className="text-status-warning" />
-          <span className="text-[11px] text-muted-foreground">tối đa</span>
-          <Input className="h-6 w-12 text-xs px-1 text-center" defaultValue="10" />
-          <span className="text-[11px] text-muted-foreground">%</span>
+        <div className="flex items-center gap-1 shrink-0 bg-status-warning/10 px-1.5 py-0.5 rounded border border-status-warning/30">
+          <Icon name="percent" size={11} className="text-status-warning" />
+          <Input className="h-5 w-10 text-[11px] px-1 text-center" defaultValue="10" />
+          <span className="text-[10px] text-muted-foreground">%</span>
         </div>
       );
     case "max_amount":
       return (
-        <div className="flex items-center gap-1.5 shrink-0 bg-status-warning/10 px-2 py-1 rounded-md border border-status-warning/30">
-          <Icon name="payments" size={12} className="text-status-warning" />
-          <span className="text-[11px] text-muted-foreground">tối đa</span>
-          <Input className="h-6 w-20 text-xs px-1 text-center" defaultValue="5,000,000" />
-          <span className="text-[11px] text-muted-foreground">đ</span>
+        <div className="flex items-center gap-1 shrink-0 bg-status-warning/10 px-1.5 py-0.5 rounded border border-status-warning/30">
+          <Icon name="payments" size={11} className="text-status-warning" />
+          <Input className="h-5 w-16 text-[11px] px-1 text-center" defaultValue="5,000,000" />
+          <span className="text-[10px] text-muted-foreground">đ</span>
         </div>
       );
     case "time_window":
       return (
-        <div className="flex items-center gap-1.5 shrink-0 bg-status-warning/10 px-2 py-1 rounded-md border border-status-warning/30">
-          <Icon name="schedule" size={12} className="text-status-warning" />
-          <span className="text-[11px] text-muted-foreground">trong</span>
-          <Input className="h-6 w-12 text-xs px-1 text-center" defaultValue="2" />
-          <span className="text-[11px] text-muted-foreground">giờ sau khi gửi</span>
+        <div className="flex items-center gap-1 shrink-0 bg-status-warning/10 px-1.5 py-0.5 rounded border border-status-warning/30">
+          <Icon name="schedule" size={11} className="text-status-warning" />
+          <Input className="h-5 w-9 text-[11px] px-1 text-center" defaultValue="2" />
+          <span className="text-[10px] text-muted-foreground">giờ</span>
         </div>
       );
     case "scope":
       return (
-        <div className="flex items-center gap-1.5 shrink-0 bg-surface-container px-2 py-1 rounded-md">
-          <span className="text-[11px] text-muted-foreground">Phạm vi:</span>
-          <select className="text-[11px] border-0 bg-transparent">
-            <option>Chỉ của mình</option>
+        <div className="flex items-center gap-1 shrink-0 bg-surface-container px-1.5 py-0.5 rounded border border-border">
+          <select className="text-[10px] border-0 bg-transparent h-5">
+            <option>Của mình</option>
             <option>Cả ca</option>
             <option>Cả chi nhánh</option>
           </select>
@@ -674,13 +661,11 @@ function ConstraintEditor({ type }: { type: ConstraintType }) {
       );
     case "require_pin":
       return (
-        <div className="flex items-center gap-1.5 shrink-0 bg-status-error/10 px-2 py-1 rounded-md border border-status-error/30">
-          <Icon name="pin" size={12} className="text-status-error" />
-          <label className="flex items-center gap-1 text-[11px] text-status-error cursor-pointer">
-            <input type="checkbox" defaultChecked className="h-3 w-3 accent-status-error" />
-            Yêu cầu PIN quản lý
-          </label>
-        </div>
+        <label className="flex items-center gap-1 shrink-0 bg-status-error/10 px-1.5 py-0.5 rounded border border-status-error/30 cursor-pointer">
+          <input type="checkbox" defaultChecked className="h-3 w-3 accent-status-error" />
+          <Icon name="pin" size={11} className="text-status-error" />
+          <span className="text-[10px] text-status-error font-medium">OTP</span>
+        </label>
       );
     default:
       return null;
@@ -694,35 +679,35 @@ function UsersTab({ activeUserId, setActiveUserId }: { activeUserId: string | nu
 
   return (
     <div className="flex">
-      <main className="flex-1 p-6">
-        <div className="flex items-center justify-between mb-4">
+      <main className="flex-1 p-4">
+        <div className="flex items-center justify-between mb-3 gap-3">
           <div>
-            <h2 className="text-xl font-bold">Nhân viên</h2>
-            <p className="text-xs text-muted-foreground mt-0.5">{MOCK_USERS.length} người · {MOCK_USERS.filter((u) => u.isActive).length} đang hoạt động</p>
+            <h2 className="text-base font-bold">Nhân viên</h2>
+            <p className="text-[11px] text-muted-foreground">{MOCK_USERS.length} người · {MOCK_USERS.filter((u) => u.isActive).length} đang hoạt động</p>
           </div>
-          <div className="flex items-center gap-2">
-            <Input placeholder="Tìm tên, email, SĐT..." className="w-72 h-9" />
-            <Button variant="outline" size="sm">
-              <Icon name="filter_list" size={14} className="mr-1" />
+          <div className="flex items-center gap-1.5">
+            <Input placeholder="Tìm tên, email, SĐT..." className="w-64 h-8 text-[13px]" />
+            <Button variant="outline" size="sm" className="h-8">
+              <Icon name="filter_list" size={13} className="mr-1" />
               Lọc
             </Button>
-            <Button size="sm">
-              <Icon name="person_add" size={14} className="mr-1" />
-              Mời nhân viên
+            <Button size="sm" className="h-8">
+              <Icon name="person_add" size={13} className="mr-1" />
+              Mời
             </Button>
           </div>
         </div>
 
-        <div className="bg-surface border border-border rounded-xl overflow-hidden">
-          <table className="w-full text-sm">
+        <div className="bg-surface border border-border rounded-lg overflow-hidden">
+          <table className="w-full text-[13px]">
             <thead className="bg-surface-container-low border-b border-border">
-              <tr className="text-left text-xs text-muted-foreground uppercase tracking-wider">
-                <th className="px-4 py-3 font-medium">Nhân viên</th>
-                <th className="px-4 py-3 font-medium">Vai trò</th>
-                <th className="px-4 py-3 font-medium">Chi nhánh</th>
-                <th className="px-4 py-3 font-medium">Quyền duyệt OTP</th>
-                <th className="px-4 py-3 font-medium">Hoạt động</th>
-                <th className="px-4 py-3 font-medium text-right">Trạng thái</th>
+              <tr className="text-left text-[10px] text-muted-foreground uppercase tracking-wider">
+                <th className="px-3 py-2 font-medium">Nhân viên</th>
+                <th className="px-3 py-2 font-medium">Vai trò</th>
+                <th className="px-3 py-2 font-medium">Chi nhánh</th>
+                <th className="px-3 py-2 font-medium">Duyệt OTP</th>
+                <th className="px-3 py-2 font-medium">Hoạt động</th>
+                <th className="px-3 py-2 font-medium text-right">Trạng thái</th>
               </tr>
             </thead>
             <tbody className="divide-y divide-border">
@@ -738,52 +723,51 @@ function UsersTab({ activeUserId, setActiveUserId }: { activeUserId: string | nu
                       isActive ? "bg-primary/5" : "hover:bg-surface-container-low"
                     )}
                   >
-                    <td className="px-4 py-3">
-                      <div className="flex items-center gap-3">
-                        <div className="h-9 w-9 rounded-full bg-primary/10 flex items-center justify-center text-primary text-sm font-semibold">
+                    <td className="px-3 py-2">
+                      <div className="flex items-center gap-2">
+                        <div className="h-7 w-7 rounded-full bg-primary/10 flex items-center justify-center text-primary text-[11px] font-semibold shrink-0">
                           {u.fullName.split(" ").map((n) => n[0]).slice(-2).join("")}
                         </div>
-                        <div>
-                          <div className="text-sm font-medium">{u.fullName}</div>
-                          <div className="text-xs text-muted-foreground">{u.email} · {u.phone}</div>
+                        <div className="min-w-0">
+                          <div className="text-[13px] font-medium truncate">{u.fullName}</div>
+                          <div className="text-[10px] text-muted-foreground truncate">{u.email} · {u.phone}</div>
                         </div>
                       </div>
                     </td>
-                    <td className="px-4 py-3">
-                      <div className="flex items-center gap-2">
-                        <div className={cn("h-6 w-6 rounded-md flex items-center justify-center text-white", role?.color)}>
-                          <Icon name={role?.icon ?? "shield"} size={12} />
+                    <td className="px-3 py-2">
+                      <div className="flex items-center gap-1.5">
+                        <div className={cn("h-5 w-5 rounded flex items-center justify-center text-white shrink-0", role?.color)}>
+                          <Icon name={role?.icon ?? "shield"} size={11} />
                         </div>
-                        <span className="text-sm">{role?.name}</span>
+                        <span className="text-[12px]">{role?.name}</span>
                       </div>
                     </td>
-                    <td className="px-4 py-3">
-                      <div className="flex flex-wrap gap-1">
+                    <td className="px-3 py-2">
+                      <div className="flex flex-wrap gap-0.5">
                         {u.branches.map((b) => (
-                          <Badge key={b} variant="outline" className="text-[10px]">{b}</Badge>
+                          <Badge key={b} variant="outline" className="text-[9px] px-1 py-0 h-4">{b}</Badge>
                         ))}
                       </div>
                     </td>
-                    <td className="px-4 py-3">
-                      {/* Role có thể cấp OTP cho action nào — phụ thuộc permission */}
+                    <td className="px-3 py-2">
                       {["owner", "admin", "manager", "custom-1"].includes(u.roleId) ? (
-                        <span className="inline-flex items-center gap-1 text-xs text-status-success">
-                          <Icon name="vpn_key" size={14} /> Có thể duyệt
+                        <span className="inline-flex items-center gap-0.5 text-[11px] text-status-success">
+                          <Icon name="vpn_key" size={12} /> Có thể
                         </span>
                       ) : (
-                        <span className="inline-flex items-center gap-1 text-xs text-muted-foreground">
-                          <Icon name="lock" size={14} /> Cần xin OTP
+                        <span className="inline-flex items-center gap-0.5 text-[11px] text-muted-foreground">
+                          <Icon name="lock" size={12} /> Xin OTP
                         </span>
                       )}
                     </td>
-                    <td className="px-4 py-3 text-xs text-muted-foreground">{u.lastLogin}</td>
-                    <td className="px-4 py-3 text-right">
+                    <td className="px-3 py-2 text-[11px] text-muted-foreground">{u.lastLogin}</td>
+                    <td className="px-3 py-2 text-right">
                       {u.isActive ? (
-                        <Badge className="bg-status-success/10 text-status-success border-status-success/30">
-                          Đang hoạt động
+                        <Badge className="bg-status-success/10 text-status-success border-status-success/30 text-[10px] px-1.5 py-0 h-5">
+                          Hoạt động
                         </Badge>
                       ) : (
-                        <Badge variant="outline" className="text-muted-foreground">Đã khoá</Badge>
+                        <Badge variant="outline" className="text-muted-foreground text-[10px] px-1.5 py-0 h-5">Đã khoá</Badge>
                       )}
                     </td>
                   </tr>
@@ -796,27 +780,27 @@ function UsersTab({ activeUserId, setActiveUserId }: { activeUserId: string | nu
 
       {/* User detail drawer */}
       {activeUser && (
-        <aside className="w-96 border-l border-border bg-surface min-h-[calc(100vh-145px)]">
-          <div className="sticky top-[145px] p-5 space-y-5">
-            <div className="flex items-start justify-between">
-              <div className="flex items-center gap-3">
-                <div className="h-14 w-14 rounded-full bg-primary/10 flex items-center justify-center text-primary text-xl font-bold">
+        <aside className="w-80 border-l border-border bg-surface min-h-[calc(100vh-110px)]">
+          <div className="sticky top-[110px] p-3.5 space-y-3">
+            <div className="flex items-start justify-between gap-2">
+              <div className="flex items-center gap-2.5 min-w-0">
+                <div className="h-11 w-11 rounded-full bg-primary/10 flex items-center justify-center text-primary text-base font-bold shrink-0">
                   {activeUser.fullName.split(" ").map((n) => n[0]).slice(-2).join("")}
                 </div>
-                <div>
-                  <h3 className="font-semibold">{activeUser.fullName}</h3>
-                  <p className="text-xs text-muted-foreground">{activeUser.email}</p>
-                  <p className="text-xs text-muted-foreground">{activeUser.phone}</p>
+                <div className="min-w-0">
+                  <h3 className="text-sm font-semibold truncate">{activeUser.fullName}</h3>
+                  <p className="text-[11px] text-muted-foreground truncate">{activeUser.email}</p>
+                  <p className="text-[11px] text-muted-foreground">{activeUser.phone}</p>
                 </div>
               </div>
-              <Button variant="ghost" size="sm" onClick={() => setActiveUserId(null)}>
-                <Icon name="close" size={16} />
+              <Button variant="ghost" size="sm" className="h-7 w-7 p-0" onClick={() => setActiveUserId(null)}>
+                <Icon name="close" size={14} />
               </Button>
             </div>
 
             <div>
-              <label className="text-[11px] font-medium text-muted-foreground uppercase tracking-wider">Vai trò</label>
-              <select className="w-full mt-1 px-3 py-2 border border-border rounded-md text-sm bg-surface">
+              <label className="text-[10px] font-semibold text-muted-foreground uppercase tracking-wider">Vai trò</label>
+              <select className="w-full mt-1 px-2.5 py-1.5 border border-border rounded-md text-[13px] bg-surface h-8">
                 {MOCK_ROLES.map((r) => (
                   <option key={r.id} value={r.id} selected={r.id === activeUser.roleId}>{r.name} · {r.permissionCount} quyền</option>
                 ))}
@@ -824,49 +808,44 @@ function UsersTab({ activeUserId, setActiveUserId }: { activeUserId: string | nu
             </div>
 
             <div>
-              <label className="text-[11px] font-medium text-muted-foreground uppercase tracking-wider">Chi nhánh được phép</label>
-              <div className="flex flex-wrap gap-1 mt-1.5">
-                <Badge className="bg-primary/10 text-primary border-primary/30">FNB01 Lý Tự Trọng ×</Badge>
-                <Badge className="bg-primary/10 text-primary border-primary/30">FNB02 Pasteur ×</Badge>
-                <Button variant="outline" size="sm" className="h-6 text-[10px]">
-                  <Icon name="add" size={12} className="mr-0.5" /> Thêm
+              <label className="text-[10px] font-semibold text-muted-foreground uppercase tracking-wider">Chi nhánh được phép</label>
+              <div className="flex flex-wrap gap-1 mt-1">
+                <Badge className="bg-primary/10 text-primary border-primary/30 text-[10px] px-1.5 py-0 h-5">FNB01 Lý Tự Trọng ×</Badge>
+                <Badge className="bg-primary/10 text-primary border-primary/30 text-[10px] px-1.5 py-0 h-5">FNB02 Pasteur ×</Badge>
+                <Button variant="outline" size="sm" className="h-5 text-[10px] px-1.5">
+                  <Icon name="add" size={10} className="mr-0.5" /> Thêm
                 </Button>
               </div>
             </div>
 
-            <div className="border border-border rounded-lg p-3 bg-surface-container-low">
-              <div className="flex items-center justify-between mb-2">
-                <div>
-                  <h4 className="text-sm font-medium flex items-center gap-1.5">
-                    <Icon name="vpn_key" size={14} className="text-status-warning" />
-                    Quyền cấp OTP duyệt từ xa
-                  </h4>
-                  <p className="text-[11px] text-muted-foreground mt-0.5">
-                    Cashier xin OTP qua điện thoại để duyệt thao tác nhạy cảm
-                  </p>
-                </div>
+            <div className="border border-border rounded-md p-2.5 bg-surface-container-low">
+              <div className="flex items-center justify-between gap-2 mb-1">
+                <h4 className="text-[12px] font-semibold flex items-center gap-1">
+                  <Icon name="vpn_key" size={12} className="text-status-warning" />
+                  Quyền cấp OTP duyệt
+                </h4>
                 {["owner", "admin", "manager", "custom-1"].includes(activeUser.roleId) ? (
-                  <Badge className="bg-status-success/10 text-status-success border-status-success/30">Có thể duyệt</Badge>
+                  <Badge className="bg-status-success/10 text-status-success border-status-success/30 text-[10px] px-1.5 py-0 h-5">Có thể duyệt</Badge>
                 ) : (
-                  <Badge variant="outline">Không duyệt</Badge>
+                  <Badge variant="outline" className="text-[10px] px-1.5 py-0 h-5">Không duyệt</Badge>
                 )}
               </div>
-              <div className="text-[11px] text-muted-foreground mt-1">
-                Quản lý vào <span className="font-medium text-foreground">onebiz.com.vn/manager/otp</span> để cấp mã 6 số.
-              </div>
+              <p className="text-[10px] text-muted-foreground">
+                Cashier xin OTP qua điện thoại. Quản lý vào <span className="font-medium text-foreground">/manager/otp</span> cấp mã 6 số.
+              </p>
             </div>
 
-            <div className="border-t border-border pt-4 space-y-2">
-              <Button variant="outline" size="sm" className="w-full justify-start">
-                <Icon name="logout" size={14} className="mr-2" />
+            <div className="border-t border-border pt-2.5 space-y-1.5">
+              <Button variant="outline" size="sm" className="w-full justify-start h-7 text-[12px]">
+                <Icon name="logout" size={13} className="mr-1.5" />
                 Đăng xuất tất cả thiết bị
               </Button>
-              <Button variant="outline" size="sm" className="w-full justify-start">
-                <Icon name="lock_reset" size={14} className="mr-2" />
+              <Button variant="outline" size="sm" className="w-full justify-start h-7 text-[12px]">
+                <Icon name="lock_reset" size={13} className="mr-1.5" />
                 Gửi link đặt lại mật khẩu
               </Button>
-              <Button variant="outline" size="sm" className="w-full justify-start text-status-error hover:bg-status-error/10">
-                <Icon name="block" size={14} className="mr-2" />
+              <Button variant="outline" size="sm" className="w-full justify-start h-7 text-[12px] text-status-error hover:bg-status-error/10">
+                <Icon name="block" size={13} className="mr-1.5" />
                 {activeUser.isActive ? "Khoá tài khoản" : "Mở khoá"}
               </Button>
             </div>
@@ -992,47 +971,43 @@ function OtpTab() {
   const [showDemo, setShowDemo] = useState(false);
 
   return (
-    <div className="p-6 max-w-5xl space-y-6">
+    <div className="p-4 max-w-5xl space-y-3">
       {/* Header */}
-      <div className="flex items-start justify-between">
-        <div>
-          <h2 className="text-xl font-bold">OTP duyệt từ xa</h2>
-          <p className="text-xs text-muted-foreground mt-1 max-w-2xl">
-            Manager không cần có mặt tại quán. Cashier gọi điện xin OTP — quản lý phụ trách (ai có quyền ở chi nhánh đó) cấp mã 6 số qua web/app, đọc qua điện thoại. Mã dùng 1 lần, hiệu lực 2 phút.
+      <div className="flex items-start justify-between gap-3">
+        <div className="min-w-0">
+          <h2 className="text-base font-bold">OTP duyệt từ xa</h2>
+          <p className="text-[11px] text-muted-foreground max-w-2xl">
+            Manager không cần có mặt tại quán. Cashier gọi điện xin OTP — quản lý cấp mã 6 số qua web, đọc qua điện thoại. Mã dùng 1 lần, hiệu lực 2 phút.
           </p>
         </div>
-        <Button
-          variant="outline"
-          size="sm"
-          onClick={() => setShowDemo(true)}
-        >
-          <Icon name="play_arrow" size={14} className="mr-1" />
-          Xem demo modal cấp OTP
+        <Button variant="outline" size="sm" className="h-8 shrink-0" onClick={() => setShowDemo(true)}>
+          <Icon name="play_arrow" size={13} className="mr-1" />
+          Demo modal
         </Button>
       </div>
 
       {/* Flow timeline */}
       <section>
-        <h3 className="text-sm font-semibold mb-3">Quy trình 6 bước</h3>
-        <div className="bg-surface border border-border rounded-xl divide-y divide-border">
+        <h3 className="text-[12px] font-semibold mb-1.5 px-1">Quy trình 6 bước</h3>
+        <div className="bg-surface border border-border rounded-lg divide-y divide-border">
           {FLOW_STEPS.map((step, i) => (
-            <div key={i} className="flex items-start gap-3 p-4">
+            <div key={i} className="flex items-start gap-2.5 px-3 py-2">
               <div className="flex flex-col items-center">
-                <div className="h-8 w-8 rounded-full bg-surface-container-low border border-border flex items-center justify-center font-semibold text-xs">
+                <div className="h-6 w-6 rounded-full bg-surface-container-low border border-border flex items-center justify-center font-semibold text-[11px]">
                   {i + 1}
                 </div>
                 {i < FLOW_STEPS.length - 1 && (
-                  <div className="w-px h-6 bg-border mt-1" />
+                  <div className="w-px h-4 bg-border mt-1" />
                 )}
               </div>
-              <div className="flex-1 pt-1">
-                <div className="flex items-center gap-2 mb-1">
-                  <Icon name={step.icon} size={14} className={step.color} />
-                  <span className="text-xs font-semibold uppercase tracking-wide text-muted-foreground">
+              <div className="flex-1 pt-0.5 min-w-0">
+                <div className="flex items-center gap-1.5">
+                  <Icon name={step.icon} size={12} className={step.color} />
+                  <span className="text-[10px] font-semibold uppercase tracking-wide text-muted-foreground">
                     {step.actor}
                   </span>
                 </div>
-                <p className="text-sm text-foreground">{step.text}</p>
+                <p className="text-[12px] text-foreground">{step.text}</p>
               </div>
             </div>
           ))}
@@ -1041,27 +1016,22 @@ function OtpTab() {
 
       {/* 6 action cards */}
       <section>
-        <h3 className="text-sm font-semibold mb-3">
-          Áp dụng cho 6 action nhạy cảm (CEO chốt 12/05)
+        <h3 className="text-[12px] font-semibold mb-1.5 px-1">
+          Áp dụng cho 6 action nhạy cảm
         </h3>
-        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-3">
+        <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-6 gap-2">
           {OTP_ACTION_CARDS.map((a) => (
             <div
               key={a.label}
-              className="p-4 rounded-xl border-2 border-border bg-surface"
+              className="p-2 rounded-md border border-border bg-surface"
             >
-              <div className="flex items-start gap-3">
-                <div
-                  className={cn(
-                    "h-10 w-10 rounded-lg flex items-center justify-center shrink-0 border",
-                    a.color,
-                  )}
-                >
-                  <Icon name={a.icon} size={20} />
+              <div className="flex items-start gap-1.5">
+                <div className={cn("h-7 w-7 rounded-md flex items-center justify-center shrink-0 border", a.color)}>
+                  <Icon name={a.icon} size={14} />
                 </div>
                 <div className="flex-1 min-w-0">
-                  <div className="font-medium text-sm">{a.label}</div>
-                  <div className="text-[11px] text-muted-foreground mt-0.5">
+                  <div className="font-medium text-[11px] leading-tight">{a.label}</div>
+                  <div className="text-[9px] text-muted-foreground mt-0.5 line-clamp-2">
                     {a.description}
                   </div>
                 </div>
@@ -1072,54 +1042,46 @@ function OtpTab() {
       </section>
 
       {/* Stats + policy */}
-      <section className="grid grid-cols-1 sm:grid-cols-4 gap-3">
-        <div className="bg-surface border border-border rounded-xl p-4">
-          <div className="flex items-center gap-2 text-xs text-muted-foreground">
-            <Icon name="schedule" size={14} /> Hiệu lực
+      <section className="grid grid-cols-2 sm:grid-cols-4 gap-2">
+        <div className="bg-surface border border-border rounded-md p-2.5">
+          <div className="flex items-center gap-1 text-[10px] text-muted-foreground">
+            <Icon name="schedule" size={12} /> Hiệu lực
           </div>
-          <div className="text-base font-bold mt-1">2 phút</div>
-          <div className="text-[10px] text-muted-foreground mt-0.5">
-            Sau đó tự đổi mã mới
-          </div>
+          <div className="text-sm font-bold mt-0.5">2 phút</div>
+          <div className="text-[9px] text-muted-foreground">Tự đổi mã mới</div>
         </div>
-        <div className="bg-surface border border-border rounded-xl p-4">
-          <div className="flex items-center gap-2 text-xs text-muted-foreground">
-            <Icon name="key" size={14} /> Số ký tự
+        <div className="bg-surface border border-border rounded-md p-2.5">
+          <div className="flex items-center gap-1 text-[10px] text-muted-foreground">
+            <Icon name="key" size={12} /> Số ký tự
           </div>
-          <div className="text-base font-bold mt-1">6 số</div>
-          <div className="text-[10px] text-muted-foreground mt-0.5">
-            Random 000000-999999
-          </div>
+          <div className="text-sm font-bold mt-0.5">6 số</div>
+          <div className="text-[9px] text-muted-foreground">000000-999999</div>
         </div>
-        <div className="bg-surface border border-border rounded-xl p-4">
-          <div className="flex items-center gap-2 text-xs text-muted-foreground">
-            <Icon name="security" size={14} /> Rate limit
+        <div className="bg-surface border border-border rounded-md p-2.5">
+          <div className="flex items-center gap-1 text-[10px] text-muted-foreground">
+            <Icon name="security" size={12} /> Rate limit
           </div>
-          <div className="text-base font-bold mt-1">5 / 15 phút</div>
-          <div className="text-[10px] text-muted-foreground mt-0.5">
-            Mỗi manager
-          </div>
+          <div className="text-sm font-bold mt-0.5">5 / 15 phút</div>
+          <div className="text-[9px] text-muted-foreground">Mỗi manager</div>
         </div>
-        <div className="bg-surface border border-border rounded-xl p-4">
-          <div className="flex items-center gap-2 text-xs text-muted-foreground">
-            <Icon name="warning" size={14} /> Sai 10 lần
+        <div className="bg-surface border border-border rounded-md p-2.5">
+          <div className="flex items-center gap-1 text-[10px] text-muted-foreground">
+            <Icon name="warning" size={12} /> Sai 10 lần
           </div>
-          <div className="text-base font-bold mt-1">Báo admin</div>
-          <div className="text-[10px] text-muted-foreground mt-0.5">
-            Không khoá (theo yêu cầu CEO)
-          </div>
+          <div className="text-sm font-bold mt-0.5">Báo admin</div>
+          <div className="text-[9px] text-muted-foreground">Không khoá</div>
         </div>
       </section>
 
       {/* History */}
       <section>
-        <div className="flex items-center justify-between mb-3">
-          <h3 className="text-sm font-semibold">OTP gần nhất (demo)</h3>
-          <Button variant="ghost" size="sm" className="text-xs h-7">
-            <Icon name="refresh" size={14} className="mr-1" /> Làm mới
+        <div className="flex items-center justify-between mb-1.5 px-1">
+          <h3 className="text-[12px] font-semibold">OTP gần nhất (demo)</h3>
+          <Button variant="ghost" size="sm" className="text-[11px] h-6 px-2">
+            <Icon name="refresh" size={12} className="mr-1" /> Làm mới
           </Button>
         </div>
-        <div className="bg-surface border border-border rounded-xl divide-y divide-border">
+        <div className="bg-surface border border-border rounded-lg divide-y divide-border">
           {MOCK_OTP_HISTORY.map((r, i) => {
             const statusStyle =
               r.status === "used"
@@ -1130,17 +1092,17 @@ function OtpTab() {
             return (
               <div
                 key={i}
-                className="flex items-center gap-3 p-3 hover:bg-surface-container-low transition-colors"
+                className="flex items-center gap-2 px-3 py-1.5 hover:bg-surface-container-low transition-colors"
               >
                 <div className="flex-1 min-w-0">
-                  <div className="text-sm font-medium">{r.action}</div>
-                  <div className="text-[11px] text-muted-foreground mt-0.5">
+                  <div className="text-[12px] font-medium truncate">{r.action}</div>
+                  <div className="text-[10px] text-muted-foreground truncate">
                     {r.target} · Hôm nay {r.time}
                   </div>
                 </div>
                 <Badge
                   variant="outline"
-                  className={cn("text-[10px]", statusStyle)}
+                  className={cn("text-[9px] px-1.5 py-0 h-5 shrink-0", statusStyle)}
                 >
                   {statusLabel}
                 </Badge>
@@ -1253,38 +1215,38 @@ function OtpDemoModal({
 
 function AuditTab() {
   return (
-    <div className="p-6 max-w-4xl">
-      <div className="flex items-center justify-between mb-5">
+    <div className="p-4 max-w-4xl">
+      <div className="flex items-center justify-between gap-3 mb-3">
         <div>
-          <h2 className="text-xl font-bold">Lịch sử thay đổi quyền</h2>
-          <p className="text-xs text-muted-foreground mt-1">
+          <h2 className="text-base font-bold">Lịch sử thay đổi quyền</h2>
+          <p className="text-[11px] text-muted-foreground">
             Tracking đầy đủ: ai cấp/đổi/gỡ quyền, lúc nào, cho ai
           </p>
         </div>
-        <div className="flex items-center gap-2">
-          <Input placeholder="Tìm theo tên..." className="w-64 h-9" />
-          <Button variant="outline" size="sm">
-            <Icon name="download" size={14} className="mr-1" />
-            Xuất Excel
+        <div className="flex items-center gap-1.5">
+          <Input placeholder="Tìm theo tên..." className="w-56 h-8 text-[13px]" />
+          <Button variant="outline" size="sm" className="h-8">
+            <Icon name="download" size={13} className="mr-1" />
+            Excel
           </Button>
         </div>
       </div>
 
-      <div className="bg-surface border border-border rounded-xl divide-y divide-border">
+      <div className="bg-surface border border-border rounded-lg divide-y divide-border">
         {MOCK_AUDIT.map((a, i) => (
-          <div key={i} className="flex items-start gap-4 p-4 hover:bg-surface-container-low transition-colors">
-            <div className="h-8 w-8 rounded-full bg-surface-container flex items-center justify-center shrink-0">
-              <Icon name={a.icon} size={16} className={a.color} />
+          <div key={i} className="flex items-center gap-2.5 px-3 py-2 hover:bg-surface-container-low transition-colors">
+            <div className="h-7 w-7 rounded-full bg-surface-container flex items-center justify-center shrink-0">
+              <Icon name={a.icon} size={14} className={a.color} />
             </div>
-            <div className="flex-1">
-              <div className="text-sm">
+            <div className="flex-1 min-w-0">
+              <div className="text-[12px] truncate">
                 <span className="font-medium">{a.actor}</span>
                 <span className="text-muted-foreground"> · </span>
                 <span className={a.color}>{a.action}</span>
               </div>
-              <div className="text-xs text-muted-foreground mt-0.5">{a.target}</div>
+              <div className="text-[10px] text-muted-foreground truncate">{a.target}</div>
             </div>
-            <div className="text-xs text-muted-foreground shrink-0">{a.time}</div>
+            <div className="text-[10px] text-muted-foreground shrink-0">{a.time}</div>
           </div>
         ))}
       </div>
