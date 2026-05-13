@@ -536,6 +536,36 @@ export function FnbCart({
           </span>
         </div>
 
+        {/* CEO 13/05: Commission sàn — chỉ hiện khi đơn delivery + platform khác direct.
+            Quán biết "thực thu" sau khi trừ chiết khấu sàn → tính lãi/lỗ chính xác. */}
+        {activeTab?.orderType === "delivery" &&
+          activeTab?.deliveryPlatform &&
+          activeTab.deliveryPlatform !== "direct" &&
+          activeTab.platformCommissionPercent &&
+          activeTab.platformCommissionPercent > 0 && (
+            <div className="rounded-md bg-status-warning/5 border border-status-warning/20 px-2.5 py-2 space-y-1">
+              <div className="flex items-center justify-between text-xs">
+                <span className="text-muted-foreground">
+                  Phí sàn ({activeTab.platformCommissionPercent}%)
+                </span>
+                <span className="font-medium text-status-warning tabular-nums">
+                  -{formatCurrency(Math.round((total * activeTab.platformCommissionPercent) / 100))}
+                </span>
+              </div>
+              <div className="flex items-center justify-between text-[13px] pt-1 border-t border-status-warning/20">
+                <span className="text-foreground font-semibold">
+                  💰 Thực thu sau phí sàn
+                </span>
+                <span className="font-bold text-status-success tabular-nums">
+                  {formatCurrency(
+                    Math.round(total * (1 - activeTab.platformCommissionPercent / 100)),
+                  )}
+                  đ
+                </span>
+              </div>
+            </div>
+          )}
+
         {!isEmpty && (
           <div className="flex gap-2">
             {onPrintPreBill && (

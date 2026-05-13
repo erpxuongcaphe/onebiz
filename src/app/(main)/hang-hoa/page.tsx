@@ -29,6 +29,7 @@ import { ProductLotsTab } from "@/components/shared/product-lots-tab";
 import { ProductUomConversionsTab } from "@/components/shared/product-uom-conversions-tab";
 import { ProductStockMovementsTab } from "@/components/shared/product-stock-movements-tab";
 import { ProductBranchStockTab } from "@/components/shared/product-branch-stock-tab";
+import { ProductPlatformPricesTab } from "@/components/shared/product-platform-prices-tab";
 import { Tabs, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import {
   Dialog,
@@ -240,9 +241,23 @@ function ProductDetail({
             label: "ĐVT quy đổi",
             content: <ProductUomConversionsTab product={product} />,
           },
-          // Bỏ tab "Liên kết kênh bán" — trước đây hardcoded "Chưa liên kết
-          // kênh bán nào" cho mọi sản phẩm. Thông tin kênh bán đã có ở tab
-          // Thông tin (field "Kênh bán") — không cần tab riêng.
+          // CEO 13/05 (Fabi/iPos pattern): SP FnB có thể có giá khác cho
+          // mỗi nền tảng đơn (Shopee Food / Grab / Gojek / Be). Tab này
+          // chỉ relevant cho SP channel='fnb' — SP retail ẩn tab.
+          ...(product.channel === "fnb"
+            ? [
+                {
+                  id: "platform_prices",
+                  label: "Giá theo nền tảng",
+                  content: (
+                    <ProductPlatformPricesTab
+                      productId={product.id}
+                      basePrice={product.sellPrice}
+                    />
+                  ),
+                },
+              ]
+            : []),
           {
             id: "history",
             label: "Lịch sử",

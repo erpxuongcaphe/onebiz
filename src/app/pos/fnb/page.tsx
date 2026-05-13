@@ -160,6 +160,13 @@ function FnbPosPageInner() {
   // CEO 13/05: discount manual OTP dialog (BẤT KỲ giảm giá manual nào)
   const [discountOtpOpen, setDiscountOtpOpen] = useState(false);
   const pendingDiscountRef = useRef<(() => void) | null>(null);
+
+  // CEO 13/05 (Fabi/iPos): platform price override map.
+  // Key: productId, value: { shopee_food?: number, grab_food?: number, ... }
+  // Load 1 lần khi mount + theo tab.deliveryPlatform → resolve giá đúng.
+  const [platformPriceMap, setPlatformPriceMap] = useState<
+    Record<string, Partial<Record<string, number>>>
+  >({});
   // Sprint POS-FNB-EXT-1 (CEO 08/05): platform commission settings + discount presets
   const [platformSettings, setPlatformSettings] = useState<DeliveryPlatformSettings | null>(null);
   const [discountPresets, setDiscountPresets] = useState<DiscountPreset[]>([]);
@@ -236,7 +243,7 @@ function FnbPosPageInner() {
           const needsRefresh = await shouldRefreshMenu(tenantId).catch(() => true);
           const supabase = getClient();
 
-          // Parallel fetch: catalog (cats + products + toppings) + branch-scoped (tables + shift)
+          // Parallel fetch: catalog (cats + products + toppings + platform_prices) + branch-scoped (tables + shift)
           const catalogPromise = needsRefresh
             ? Promise.all([
                 // CEO 04/05: chỉ load categories có SP FnB → POS FnB không
@@ -258,6 +265,12 @@ function FnbPosPageInner() {
                   .eq("is_active", true)
                   .ilike("code", "NVL-TOP%")
                   .limit(1000), // tương tự — tăng từ 100 lên 1000 cho toppings
+                // CEO 13/05: load platform price overrides để resolve giá theo
+                // tab.deliveryPlatform. Map sang Record<productId, Record<platform, price>>.
+                supabase
+                  .from("product_platform_prices")
+                  .select("product_id, platform, override_price")
+                  .eq("tenant_id", tenantId),
               ])
             : Promise.resolve(null);
 
@@ -276,7 +289,16 @@ function FnbPosPageInner() {
           ]);
 
           if (catalogResult) {
-            const [cats, prodsResp, toppingsResp] = catalogResult;
+            const [cats, prodsResp, toppingsResp, ppResp] = catalogResult;
+            // CEO 13/05: build platform price map → resolve nhanh trong POS
+            const ppMap: Record<string, Partial<Record<string, number>>> = {};
+            for (const row of ppResp?.data ?? []) {
+              const r = row as Record<string, unknown>;
+              const pid = String(r.product_id);
+              if (!ppMap[pid]) ppMap[pid] = {};
+              ppMap[pid][String(r.platform)] = Number(r.override_price);
+            }
+            setPlatformPriceMap(ppMap);
             const mappedCats = cats.map((c) => ({
               id: c.value,
               name: c.label,
@@ -765,17 +787,30 @@ function FnbPosPageInner() {
       setSelectedProduct(product);
 
       // Helper: quick-add với product price chuẩn (không variant, không topping)
+      // CEO 13/05: resolve giá theo tab.deliveryPlatform — nếu có override
+      // cho platform của tab hiện tại (vd shopee_food = 26k) thì dùng, else
+      // fallback sell_price (25k).
+      const activeTab = pos.activeTab;
+      const platform = activeTab?.deliveryPlatform;
+      const override = platform && platform !== "direct"
+        ? platformPriceMap[product.id]?.[platform]
+        : undefined;
+      const resolvedPrice = override !== undefined ? override : product.sell_price;
+
       const quickAdd = () => {
         pos.addLine({
           productId: product.id,
           productName: product.name,
           quantity: 1,
-          unitPrice: product.sell_price,
+          unitPrice: resolvedPrice,
           toppings: [],
         });
+        const overrideNote = override !== undefined
+          ? ` (giá ${platform === "shopee_food" ? "Shopee Food" : platform === "grab_food" ? "Grab" : platform})`
+          : "";
         toast({
           title: `+1 ${product.name}`,
-          description: `${formatCurrency(product.sell_price)}đ — vào giỏ ngay`,
+          description: `${formatCurrency(resolvedPrice)}đ${overrideNote} — vào giỏ ngay`,
           variant: "success",
           duration: 1500,
         });
