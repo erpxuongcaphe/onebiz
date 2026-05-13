@@ -292,6 +292,20 @@ export {
 } from "./pos-pin";
 export type { PosPinUser, PosPinSwitchResult } from "./pos-pin";
 
+// CEO 13/05: Giá theo nền tảng (Fabi/iPos pattern)
+export {
+  getPlatformPricesForProduct,
+  getProductsWithPlatformPrices,
+  upsertPlatformPrices,
+  deletePlatformPrices,
+  resolveProductPrice,
+} from "./platform-prices";
+export type {
+  ProductPlatformPrice,
+  ProductPlatformPriceUpsert,
+  ProductWithPlatformPrices,
+} from "./platform-prices";
+
 // Sprint POS-FNB-EXT-1 (CEO 08/05): Delivery platforms + Discount presets
 export {
   getDeliveryPlatformSettings,
