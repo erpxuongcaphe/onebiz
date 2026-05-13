@@ -1,6 +1,7 @@
 "use client";
 
 import { useState } from "react";
+import Link from "next/link";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
 import { Button } from "@/components/ui/button";
@@ -226,69 +227,77 @@ export default function SalesSettingsPage() {
 
       <Card>
         <CardHeader>
-          <CardTitle>Xác thực người quản lý (Supervisor PIN)</CardTitle>
+          <CardTitle className="flex items-center gap-2">
+            <Icon name="vpn_key" size={18} className="text-status-warning" />
+            Duyệt giảm giá vượt ngưỡng — qua OTP per-user
+          </CardTitle>
         </CardHeader>
         <CardContent>
-          <div className="space-y-4">
-            <div className="text-xs text-muted-foreground leading-relaxed">
-              Khi bật, các chiết khấu vượt ngưỡng trên POS Retail sẽ yêu cầu nhập
-              mã PIN của người quản lý để duyệt. Sau 5 lần nhập sai, dialog sẽ
-              khoá — nhân viên phải gọi quản lý. Để trống mã PIN để <strong>tắt</strong> tính năng.
+          <div className="space-y-3">
+            <div className="rounded-md bg-status-success/5 border border-status-success/30 p-3 text-xs">
+              <div className="flex items-start gap-2">
+                <Icon name="check_circle" size={16} className="text-status-success shrink-0 mt-0.5" />
+                <div>
+                  <p className="font-medium text-foreground">Đã nâng cấp sang OTP per-user</p>
+                  <p className="text-muted-foreground mt-1">
+                    Từ Sprint B.6 (CEO 12/05/2026), giảm giá vượt ngưỡng KHÔNG còn dùng PIN chung. Mỗi
+                    quản lý có quyền <code className="bg-muted px-1 rounded text-[10px]">pos_fnb.discount</code>
+                    {" "}vào <Link href="/cap-otp" className="text-primary underline">/cap-otp</Link> để cấp OTP 6 số
+                    (TTL 2 phút). Cashier nhập OTP → server verify manager đã duyệt → audit log lưu cả 2.
+                  </p>
+                </div>
+              </div>
             </div>
 
-            <div className="grid gap-4 sm:grid-cols-2">
-              <div className="space-y-2">
-                <label className="text-sm font-medium flex items-center gap-1">
-                  <Icon name="lock" size={14} className="text-muted-foreground" />
-                  Mã PIN (4-8 chữ số)
-                </label>
-                <div className="relative">
+            <div className="space-y-2">
+              <label className="text-sm font-medium">
+                Ngưỡng tiền cần OTP duyệt (VND)
+              </label>
+              <Input
+                type="number"
+                value={supervisorDiscountAmountThreshold}
+                onChange={(e) => setSupervisorDiscountAmountThreshold(e.target.value)}
+                min={0}
+                step={10000}
+                placeholder="500000"
+              />
+              <div className="text-xs text-muted-foreground">
+                Chiết khấu vượt {formatNumber(Number(supervisorDiscountAmountThreshold || 0))} ₫
+                {" "}hoặc vượt % tối đa ở trên → yêu cầu OTP từ manager. Mặc định 500.000 ₫.
+              </div>
+            </div>
+
+            <details className="text-xs">
+              <summary className="cursor-pointer text-muted-foreground hover:text-foreground">
+                Cấu hình PIN supervisor cũ (deprecated)
+              </summary>
+              <div className="mt-2 p-3 rounded-md border border-status-warning/30 bg-status-warning/5">
+                <p className="text-foreground mb-2">
+                  ⚠️ PIN chung cũ đã bị bỏ. Trường này KHÔNG còn được POS dùng — sẽ xoá sau 2 tuần
+                  để backward compat. Để rỗng nếu không cần.
+                </p>
+                <div className="flex gap-2 items-center">
                   <Input
                     type={showPin ? "text" : "password"}
                     value={supervisorPin}
                     onChange={(e) => setSupervisorPin(e.target.value.replace(/\D/g, "").slice(0, 8))}
-                    placeholder="Để trống = tắt"
+                    placeholder="(deprecated)"
                     maxLength={8}
                     inputMode="numeric"
                     autoComplete="off"
-                    className="pr-10 font-mono tracking-widest"
+                    className="font-mono tracking-widest opacity-60"
                   />
                   <button
                     type="button"
                     onClick={() => setShowPin((v) => !v)}
-                    className="absolute right-2 top-1/2 -translate-y-1/2 text-muted-foreground hover:text-foreground p-1"
+                    className="text-muted-foreground hover:text-foreground p-1"
                     aria-label={showPin ? "Ẩn PIN" : "Hiện PIN"}
                   >
                     <Icon name={showPin ? "visibility_off" : "visibility"} size={16} />
                   </button>
                 </div>
-                <div className="text-xs text-muted-foreground">
-                  {supervisorPin ? "✓ PIN đang bật" : "PIN tắt — không yêu cầu xác thực"}
-                </div>
               </div>
-
-              <div className="space-y-2">
-                <label className="text-sm font-medium">
-                  Ngưỡng chiết khấu cần PIN (VND)
-                </label>
-                <Input
-                  type="number"
-                  value={supervisorDiscountAmountThreshold}
-                  onChange={(e) => setSupervisorDiscountAmountThreshold(e.target.value)}
-                  min={0}
-                  step={10000}
-                  placeholder="500000"
-                  disabled={!supervisorPin}
-                />
-                <div className="text-xs text-muted-foreground">
-                  Chiết khấu {">"}{" "}
-                  <span className="font-semibold tabular-nums">
-                    {formatNumber(Number(supervisorDiscountAmountThreshold || 0))} ₫
-                  </span>{" "}
-                  mới cần PIN. Mặc định 500.000 ₫.
-                </div>
-              </div>
-            </div>
+            </details>
           </div>
         </CardContent>
       </Card>

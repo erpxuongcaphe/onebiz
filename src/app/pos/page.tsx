@@ -73,7 +73,11 @@ import { usePosState, type OrderLine, type DiscountInput, type SellingMode, type
 import { ProductGrid } from "./components/product-grid";
 import { CustomerPicker } from "./components/customer-picker";
 import { VariantPickerDialog } from "./components/variant-picker-dialog";
-import { ConfirmDialog, CreateCustomerDialog, SupervisorPinDialog } from "@/components/shared/dialogs";
+import { ConfirmDialog, CreateCustomerDialog } from "@/components/shared/dialogs";
+// Sprint B.6 (CEO 12/05): bỏ SupervisorPinDialog (1 PIN chung) →
+// dùng OtpApprovalDialog (OTP per-user TTL 2 phút)
+import { OtpApprovalDialog } from "@/components/shared/dialogs/otp-approval-dialog";
+import { OTP_ACTION_CODES } from "@/lib/services/supabase/manager-otp";
 import { getCustomers } from "@/lib/services/supabase/customers";
 import { validateCoupon } from "@/lib/services/supabase/coupons";
 import { Icon } from "@/components/ui/icon";
@@ -214,7 +218,8 @@ function PosPageInner() {
   const [couponApplying, setCouponApplying] = useState(false);
   const [couponApplied, setCouponApplied] = useState<string | null>(null);
   // Supervisor PIN gate — mở khi giảm giá vượt ngưỡng + PIN đã cấu hình
-  const [supervisorPinOpen, setSupervisorPinOpen] = useState(false);
+  // Sprint B.6: thay supervisorPinOpen bằng discountOtpOpen (per-user OTP)
+  const [discountOtpOpen, setDiscountOtpOpen] = useState(false);
   const pendingApprovalRef = useRef<(() => void) | null>(null);
   // Confirm dialog — dùng chung cho xóa giỏ hàng và huỷ sửa nháp.
   // Dạng "one-shot": mở dialog, lưu hành động vào pendingAction, user xác nhận → chạy.
@@ -631,12 +636,17 @@ function PosPageInner() {
     setRecoveryOpen(false);
   }, []);
 
-  // ── Guard giảm giá vượt ngưỡng bằng PIN quản lý ──
-  // Nếu PIN chưa cấu hình (rỗng) → không chặn, cashier toàn quyền
-  // Nếu vượt maxDiscount (%) HOẶC vượt threshold VND tuyệt đối → bật PIN dialog
+  // Sprint B.6 (CEO 12/05): Guard giảm giá vượt ngưỡng → BẮT BUỘC OTP per-user
+  // từ manager qua /cap-otp. KHÔNG còn fallback "PIN chung supervisor" nữa
+  // — supervisorPin đã bị deprecate vì 1 PIN chung không trace được AI duyệt.
+  //
+  // Flow mới:
+  //   - Trong ngưỡng → tự áp dụng
+  //   - Vượt maxDiscount (%) hoặc threshold VND → mở OtpApprovalDialog
+  //     → cashier gọi điện xin manager cấp OTP qua /cap-otp → nhập 6 số →
+  //     server verify OTP issuer có quyền pos_fnb.discount → apply discount
   const handleOrderDiscountChange = useCallback(
     (d: import("./hooks/use-pos-state").DiscountInput) => {
-      const pin = settings.sales.supervisorPin?.trim() ?? "";
       const maxPct = settings.sales.maxDiscount ?? 50;
       const maxAmt = settings.sales.supervisorDiscountAmountThreshold ?? 500_000;
 
@@ -651,30 +661,16 @@ function PosPageInner() {
       const overPct = d.mode === "percent" && d.value > maxPct;
       const overAmt = est > maxAmt || pctVsBase > maxPct;
 
-      if (!pin) {
-        // Không có PIN → hard cap: chặn vượt maxPct
-        if (overPct) {
-          toast({
-            title: "Vượt mức giảm tối đa",
-            description: `Mức giảm tối đa là ${maxPct}%. Đề nghị quản lý cấu hình PIN trong Cài đặt để cho phép duyệt vượt ngưỡng.`,
-            variant: "warning",
-          });
-          return;
-        }
-        state.setOrderDiscount(d);
-        return;
-      }
-
-      // PIN configured
       if (overPct || overAmt) {
+        // Vượt ngưỡng → mở OTP dialog. Cashier xin manager OTP từ xa.
         pendingApprovalRef.current = () => state.setOrderDiscount(d);
-        setSupervisorPinOpen(true);
+        setDiscountOtpOpen(true);
         return;
       }
 
       state.setOrderDiscount(d);
     },
-    [settings.sales, state, toast]
+    [settings.sales, state]
   );
 
   // ── Áp mã giảm giá (coupon/voucher) ──
@@ -2300,14 +2296,13 @@ function PosPageInner() {
               <div className="flex items-center justify-between">
                 <span className="text-xs text-muted-foreground">
                   Chiết khấu đơn
-                  {settings.sales.supervisorPin && (
-                    <Icon
-                      name="lock"
-                      size={14}
-                      className="inline ml-1 text-status-warning align-text-top"
-                      title="Giảm giá vượt ngưỡng cần PIN quản lý"
-                    />
-                  )}
+                  {/* Sprint B.6: indicator OTP guard (thay PIN cũ) */}
+                  <Icon
+                    name="vpn_key"
+                    size={14}
+                    className="inline ml-1 text-status-warning align-text-top"
+                    title="Giảm giá vượt ngưỡng cần OTP duyệt từ quản lý (/cap-otp)"
+                  />
                 </span>
                 <OrderDiscountInput
                   value={state.orderDiscount}
@@ -2861,18 +2856,21 @@ function PosPageInner() {
       )}
 
       {/* Supervisor PIN — gate giảm giá vượt ngưỡng */}
-      <SupervisorPinDialog
-        open={supervisorPinOpen}
-        onOpenChange={setSupervisorPinOpen}
-        correctPin={settings.sales.supervisorPin ?? ""}
-        title="Duyệt giảm giá vượt ngưỡng"
-        description={`Mức giảm vượt ${settings.sales.maxDiscount ?? 50}% hoặc ${formatCurrency(settings.sales.supervisorDiscountAmountThreshold ?? 500_000)}đ — cần quản lý duyệt.`}
+      {/* Sprint B.6 (CEO 12/05): bỏ SupervisorPinDialog (1 PIN chung) →
+          OtpApprovalDialog per-user. Manager cấp OTP từ /cap-otp → cashier
+          nhập 6 số → server verify OTP issuer có quyền pos_fnb.discount →
+          audit log đầy đủ cashier + manager đã duyệt. */}
+      <OtpApprovalDialog
+        open={discountOtpOpen}
+        onOpenChange={setDiscountOtpOpen}
+        actionCode={OTP_ACTION_CODES.FNB_DISCOUNT_OVERRIDE}
+        contextLabel={`Giảm giá vượt ngưỡng ${settings.sales.maxDiscount ?? 50}% hoặc ${formatCurrency(settings.sales.supervisorDiscountAmountThreshold ?? 500_000)}đ`}
         onApproved={() => {
           pendingApprovalRef.current?.();
           pendingApprovalRef.current = null;
           toast({
-            title: "Đã duyệt",
-            description: "Giảm giá đã được áp dụng.",
+            title: "Đã duyệt qua OTP",
+            description: "Giảm giá đã được áp dụng (audit log lưu manager duyệt).",
             variant: "success",
           });
         }}

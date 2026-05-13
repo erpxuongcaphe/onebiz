@@ -70,6 +70,7 @@ import {
 } from "./components/fnb-category-sidebar";
 import { FnbCategoryGrid } from "./components/fnb-category-grid";
 import { FnbSidenavDrawer } from "./components/fnb-sidenav-drawer";
+import { PosPinSwitchDialog } from "@/components/shared/dialogs/pos-pin-switch-dialog";
 import { FnbProductGrid, type FnbProduct } from "./components/fnb-product-grid";
 import { FnbSubcategoryPills } from "./components/fnb-subcategory-pills";
 import { FnbCart } from "./components/fnb-cart";
@@ -154,6 +155,8 @@ function FnbPosPageInner() {
   const [transferTableOpen, setTransferTableOpen] = useState(false);
   // Sprint A — CEO 06/05: Sidenav drawer trigger từ ☰ button trong header.
   const [sidenavOpen, setSidenavOpen] = useState(false);
+  // Sprint B.5 (CEO 12/05): PIN POS switch user dialog
+  const [pinSwitchOpen, setPinSwitchOpen] = useState(false);
   // Sprint POS-FNB-EXT-1 (CEO 08/05): platform commission settings + discount presets
   const [platformSettings, setPlatformSettings] = useState<DeliveryPlatformSettings | null>(null);
   const [discountPresets, setDiscountPresets] = useState<DiscountPreset[]>([]);
@@ -1831,7 +1834,23 @@ function FnbPosPageInner() {
           currentShift ? () => setCloseShiftDialogOpen(true) : undefined
         }
         hasOpenShift={!!currentShift}
+        onSwitchUser={() => setPinSwitchOpen(true)}
       />
+
+      {/* Sprint B.5 (CEO 12/05): PIN POS switch user (Approach Z) */}
+      {branchId && (
+        <PosPinSwitchDialog
+          open={pinSwitchOpen}
+          onOpenChange={setPinSwitchOpen}
+          branchId={branchId}
+          currentUserId={userId ?? undefined}
+          onSwitched={() => {
+            // Reload POS với user mới — session đã swap, AuthContext sẽ
+            // pick up profile mới khi mount.
+            window.location.reload();
+          }}
+        />
+      )}
 
       {/* Sprint POS-FNB-1 (CEO 06/05): consolidate 2 banner → 1 strip duy nhất.
           Trước: tier banner (40px) + promotion banner (40px) = 80px khi đồng

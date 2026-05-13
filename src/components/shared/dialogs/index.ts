@@ -31,3 +31,4 @@ export { CreateInternalSaleDialog } from "./create-internal-sale-dialog";
 export { CreatePromotionDialog } from "./create-promotion-dialog";
 export { SupervisorPinDialog } from "./supervisor-pin-dialog";
 export { SetPinDialog } from "./set-pin-dialog";
+export { PosPinSwitchDialog } from "./pos-pin-switch-dialog";
