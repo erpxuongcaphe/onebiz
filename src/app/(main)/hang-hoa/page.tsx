@@ -101,11 +101,14 @@ function ProductDetail({
   onClose,
   onEdit,
   onDelete,
+  canViewCost,
 }: {
   product: Product;
   onClose: () => void;
   onEdit?: () => void;
   onDelete?: () => void;
+  /** Sprint A.2: ẩn "Giá vốn" / "Lợi nhuận" khi user không có quyền products.view_cost */
+  canViewCost: boolean;
 }) {
   const isNvl = product.productType === "nvl";
   return (
@@ -147,7 +150,10 @@ function ProductDetail({
                     { label: "Mã vạch", value: product.barcode ?? null },
                     { label: "Thương hiệu", value: product.brand ?? null },
                     { label: "Nhà cung cấp", value: product.supplierName ?? null },
-                    { label: "Giá vốn", value: formatCurrency(product.costPrice) },
+                    // Sprint A.2: ẩn "Giá vốn" khỏi user thiếu products.view_cost
+                    ...(canViewCost
+                      ? [{ label: "Giá vốn", value: formatCurrency(product.costPrice) }]
+                      : []),
                     {
                       label: "Giá bán",
                       value: isNvl ? "—" : formatCurrency(product.sellPrice),
@@ -289,6 +295,9 @@ export default function HangHoaPage() {
   // Server (migration 00060/00062) enforce permission của OTP issuer thay actor.
   const { hasPermission } = usePermissions();
   const canDeleteProduct = hasPermission(PERMISSIONS.PRODUCTS_DELETE);
+  // Sprint A.2 (CEO 12/05): cashier KHÔNG được thấy giá vốn / lợi nhuận
+  // → leak business KPI. Gate cả column trong DataTable + detail panel.
+  const canViewCost = hasPermission(PERMISSIONS.PRODUCTS_VIEW_COST);
 
   // OTP delegation state — khi cashier không có quyền nhưng vẫn muốn xoá
   const [otpDialogOpen, setOtpDialogOpen] = useState(false);
@@ -757,13 +766,18 @@ export default function HangHoaPage() {
       size: 90,
       cell: ({ row }) => row.original.stockUnit ?? row.original.unit ?? "—",
     },
-    {
-      accessorKey: "costPrice",
-      header: "Giá vốn",
-      cell: ({ row }) => (
-        <span className="text-right block">{formatCurrency(row.original.costPrice)}</span>
-      ),
-    },
+    // Sprint A.2: column "Giá vốn" chỉ hiện khi user có products.view_cost
+    ...(canViewCost
+      ? [
+          {
+            accessorKey: "costPrice",
+            header: "Giá vốn",
+            cell: ({ row }: { row: { original: Product } }) => (
+              <span className="text-right block">{formatCurrency(row.original.costPrice)}</span>
+            ),
+          } as ColumnDef<Product, unknown>,
+        ]
+      : []),
     {
       accessorKey: "stock",
       header: "Tồn kho",
@@ -806,13 +820,18 @@ export default function HangHoaPage() {
         <span className="text-right block">{formatCurrency(row.original.sellPrice)}</span>
       ),
     },
-    {
-      accessorKey: "costPrice",
-      header: "Giá vốn",
-      cell: ({ row }) => (
-        <span className="text-right block">{formatCurrency(row.original.costPrice)}</span>
-      ),
-    },
+    // Sprint A.2: column "Giá vốn" chỉ hiện khi user có products.view_cost
+    ...(canViewCost
+      ? [
+          {
+            accessorKey: "costPrice",
+            header: "Giá vốn",
+            cell: ({ row }: { row: { original: Product } }) => (
+              <span className="text-right block">{formatCurrency(row.original.costPrice)}</span>
+            ),
+          } as ColumnDef<Product, unknown>,
+        ]
+      : []),
     {
       accessorKey: "stock",
       header: "Tồn kho",
@@ -1071,6 +1090,7 @@ export default function HangHoaPage() {
                 setDeletingProduct(product);
                 setDeleteConfirmOpen(true);
               }}
+              canViewCost={canViewCost}
             />
           )}
           rowActions={(row) => [

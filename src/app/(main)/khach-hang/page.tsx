@@ -79,6 +79,8 @@ export default function KhachHangPage() {
   //     → manager cấp OTP từ /manager/otp → cashier nhập → service với otpId
   const { hasPermission } = usePermissions();
   const canDeleteCustomer = hasPermission(PERMISSIONS.CUSTOMERS_DELETE);
+  // Sprint A.2: cashier KHÔNG được thấy công nợ KH (leak business data).
+  const canViewDebt = hasPermission(PERMISSIONS.CUSTOMERS_VIEW_DEBT);
 
   // OTP delegation state
   const [otpDialogOpen, setOtpDialogOpen] = useState(false);
@@ -173,22 +175,27 @@ export default function KhachHangPage() {
       header: "Điện thoại",
       size: 130,
     },
-    {
-      accessorKey: "currentDebt",
-      header: "Nợ hiện tại",
-      cell: ({ row }) => {
-        const debt = row.original.currentDebt;
-        return (
-          <span
-            className={
-              debt > 0 ? "text-destructive" : "text-muted-foreground"
-            }
-          >
-            {formatCurrency(debt)}
-          </span>
-        );
-      },
-    },
+    // Sprint A.2: column "Nợ hiện tại" chỉ hiện với customers.view_debt
+    ...(canViewDebt
+      ? [
+          {
+            accessorKey: "currentDebt",
+            header: "Nợ hiện tại",
+            cell: ({ row }: { row: { original: Customer } }) => {
+              const debt = row.original.currentDebt;
+              return (
+                <span
+                  className={
+                    debt > 0 ? "text-destructive" : "text-muted-foreground"
+                  }
+                >
+                  {formatCurrency(debt)}
+                </span>
+              );
+            },
+          } as ColumnDef<Customer, unknown>,
+        ]
+      : []),
     {
       accessorKey: "totalSales",
       header: "Tổng bán",
