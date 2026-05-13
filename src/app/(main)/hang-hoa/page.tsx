@@ -1205,7 +1205,7 @@ export default function HangHoaPage() {
           setOtpDialogOpen(o);
           if (!o) setOtpTargetProduct(null);
         }}
-        actionCode={OTP_ACTION_CODES.CRM_DELETE_PARTY}
+        actionCode={OTP_ACTION_CODES.PRODUCTS_DELETE}
         targetMeta={
           otpTargetProduct
             ? { entity_type: "product", entity_id: otpTargetProduct.id, code: otpTargetProduct.code }

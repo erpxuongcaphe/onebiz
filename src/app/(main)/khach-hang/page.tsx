@@ -624,7 +624,7 @@ export default function KhachHangPage() {
           setOtpDialogOpen(o);
           if (!o) setOtpTargetCustomer(null);
         }}
-        actionCode={OTP_ACTION_CODES.CRM_DELETE_PARTY}
+        actionCode={OTP_ACTION_CODES.CRM_DELETE_CUSTOMER}
         targetMeta={
           otpTargetCustomer
             ? { entity_type: "customer", entity_id: otpTargetCustomer.id, code: otpTargetCustomer.code }

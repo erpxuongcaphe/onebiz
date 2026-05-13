@@ -19,12 +19,22 @@ import { isRpcUnavailable } from "./rpc-utils";
 // Action codes — 6 action CEO chốt 12/05
 // ============================================================
 
+/**
+ * Sprint A.7 (CEO 12/05): tách `crm.delete_party` → 3 action chi tiết.
+ * Giữ alias `CRM_DELETE_PARTY` deprecated 2 tuần để client cũ không vỡ;
+ * sau đó remove khi tất cả callsite migrated sang code mới.
+ */
 export const OTP_ACTION_CODES = {
   FNB_CANCEL_UNPAID_BILL: "fnb.cancel_unpaid_bill",
   FNB_CANCEL_UNPAID_ITEM: "fnb.cancel_unpaid_item",
   FNB_DISCOUNT_OVERRIDE: "fnb.discount_override",
   FNB_VOID_PAID_BILL: "fnb.void_paid_bill",
   FNB_EDIT_SENT_ORDER: "fnb.edit_sent_order",
+  // A.7: tách rõ entity type
+  CRM_DELETE_CUSTOMER: "crm.delete_customer",
+  CRM_DELETE_SUPPLIER: "crm.delete_supplier",
+  PRODUCTS_DELETE: "products.delete",
+  /** @deprecated dùng CRM_DELETE_CUSTOMER hoặc PRODUCTS_DELETE */
   CRM_DELETE_PARTY: "crm.delete_party",
 } as const;
 
@@ -38,7 +48,10 @@ export const OTP_ACTION_LABELS: Record<OtpActionCode, string> = {
   [OTP_ACTION_CODES.FNB_DISCOUNT_OVERRIDE]: "Giảm giá ngoài phạm vi",
   [OTP_ACTION_CODES.FNB_VOID_PAID_BILL]: "Huỷ bill đã thanh toán",
   [OTP_ACTION_CODES.FNB_EDIT_SENT_ORDER]: "Sửa món đã gửi bếp",
-  [OTP_ACTION_CODES.CRM_DELETE_PARTY]: "Xoá khách hàng / NCC",
+  [OTP_ACTION_CODES.CRM_DELETE_CUSTOMER]: "Xoá khách hàng",
+  [OTP_ACTION_CODES.CRM_DELETE_SUPPLIER]: "Xoá nhà cung cấp",
+  [OTP_ACTION_CODES.PRODUCTS_DELETE]: "Xoá sản phẩm",
+  [OTP_ACTION_CODES.CRM_DELETE_PARTY]: "Xoá khách hàng / NCC (cũ)",
 };
 
 // ============================================================

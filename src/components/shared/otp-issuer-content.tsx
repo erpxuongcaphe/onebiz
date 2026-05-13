@@ -88,12 +88,29 @@ const ACTION_CARDS: ActionCard[] = [
     requiredPermission: PERMISSIONS.POS_FNB_VOID_PAID_BILL,
     color: "bg-status-error/10 text-status-error border-status-error/30",
   },
+  // Sprint A.7: tách 3 action xóa entity riêng biệt thay vì gộp 'crm.delete_party'
   {
-    code: OTP_ACTION_CODES.CRM_DELETE_PARTY,
+    code: OTP_ACTION_CODES.CRM_DELETE_CUSTOMER,
     icon: "person_remove",
-    label: OTP_ACTION_LABELS[OTP_ACTION_CODES.CRM_DELETE_PARTY],
-    description: "Cấp cho nhân viên xóa khách hàng / NCC",
+    label: OTP_ACTION_LABELS[OTP_ACTION_CODES.CRM_DELETE_CUSTOMER],
+    description: "Cấp cho nhân viên xoá khách hàng",
     requiredPermission: PERMISSIONS.CUSTOMERS_DELETE,
+    color: "bg-status-error/10 text-status-error border-status-error/30",
+  },
+  {
+    code: OTP_ACTION_CODES.CRM_DELETE_SUPPLIER,
+    icon: "no_accounts",
+    label: OTP_ACTION_LABELS[OTP_ACTION_CODES.CRM_DELETE_SUPPLIER],
+    description: "Cấp cho nhân viên xoá nhà cung cấp",
+    requiredPermission: PERMISSIONS.SUPPLIERS_DELETE,
+    color: "bg-status-error/10 text-status-error border-status-error/30",
+  },
+  {
+    code: OTP_ACTION_CODES.PRODUCTS_DELETE,
+    icon: "delete_sweep",
+    label: OTP_ACTION_LABELS[OTP_ACTION_CODES.PRODUCTS_DELETE],
+    description: "Cấp cho nhân viên xoá sản phẩm",
+    requiredPermission: PERMISSIONS.PRODUCTS_DELETE,
     color: "bg-status-error/10 text-status-error border-status-error/30",
   },
 ];
