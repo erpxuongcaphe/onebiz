@@ -636,41 +636,31 @@ function PosPageInner() {
     setRecoveryOpen(false);
   }, []);
 
-  // Sprint B.6 (CEO 12/05): Guard giảm giá vượt ngưỡng → BẮT BUỘC OTP per-user
-  // từ manager qua /cap-otp. KHÔNG còn fallback "PIN chung supervisor" nữa
-  // — supervisorPin đã bị deprecate vì 1 PIN chung không trace được AI duyệt.
+  // CEO 13/05: BẤT KỲ giảm giá MANUAL nào → BẮT BUỘC OTP (không còn check
+  // ngưỡng nữa). Cashier không tự ý giảm giá khách quen / giảm vô tội vạ.
   //
-  // Flow mới:
-  //   - Trong ngưỡng → tự áp dụng
-  //   - Vượt maxDiscount (%) hoặc threshold VND → mở OtpApprovalDialog
-  //     → cashier gọi điện xin manager cấp OTP qua /cap-otp → nhập 6 số →
-  //     server verify OTP issuer có quyền pos_fnb.discount → apply discount
+  // Logic phân biệt MANUAL vs AUTO:
+  //   - Manual: cashier gõ trực tiếp vào ô "Chiết khấu đơn" → cần OTP
+  //   - Auto:
+  //     · Promotion engine match → state.applyPromotion() (không qua handler này)
+  //     · Coupon code valid → state.applyCoupon() (không qua handler này)
+  //     · Platform commission → tính riêng ở footer, không phải discount
+  //
+  // Hàm này CHỈ được gọi khi cashier gõ tay → mặc nhiên là manual → OTP.
+  // Trừ 1 case: d.value === 0 (xoá discount) → không cần OTP.
   const handleOrderDiscountChange = useCallback(
     (d: import("./hooks/use-pos-state").DiscountInput) => {
-      const maxPct = settings.sales.maxDiscount ?? 50;
-      const maxAmt = settings.sales.supervisorDiscountAmountThreshold ?? 500_000;
-
-      // Estimate final discount amount để so với threshold
-      const est =
-        d.mode === "percent"
-          ? Math.round((state.subtotal * d.value) / 100)
-          : d.value;
-      const pctVsBase =
-        state.subtotal > 0 ? (est * 100) / state.subtotal : 0;
-
-      const overPct = d.mode === "percent" && d.value > maxPct;
-      const overAmt = est > maxAmt || pctVsBase > maxPct;
-
-      if (overPct || overAmt) {
-        // Vượt ngưỡng → mở OTP dialog. Cashier xin manager OTP từ xa.
-        pendingApprovalRef.current = () => state.setOrderDiscount(d);
-        setDiscountOtpOpen(true);
+      // Xoá discount (về 0) → không cần OTP
+      if (d.value === 0) {
+        state.setOrderDiscount(d);
         return;
       }
 
-      state.setOrderDiscount(d);
+      // Bất kỳ giảm giá manual > 0 → mở OTP dialog
+      pendingApprovalRef.current = () => state.setOrderDiscount(d);
+      setDiscountOtpOpen(true);
     },
-    [settings.sales, state]
+    [state]
   );
 
   // ── Áp mã giảm giá (coupon/voucher) ──
@@ -2864,7 +2854,7 @@ function PosPageInner() {
         open={discountOtpOpen}
         onOpenChange={setDiscountOtpOpen}
         actionCode={OTP_ACTION_CODES.FNB_DISCOUNT_OVERRIDE}
-        contextLabel={`Giảm giá vượt ngưỡng ${settings.sales.maxDiscount ?? 50}% hoặc ${formatCurrency(settings.sales.supervisorDiscountAmountThreshold ?? 500_000)}đ`}
+        contextLabel="Cashier yêu cầu giảm giá thủ công cho bill này"
         onApproved={() => {
           pendingApprovalRef.current?.();
           pendingApprovalRef.current = null;

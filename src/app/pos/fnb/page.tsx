@@ -157,6 +157,9 @@ function FnbPosPageInner() {
   const [sidenavOpen, setSidenavOpen] = useState(false);
   // Sprint B.5 (CEO 12/05): PIN POS switch user dialog
   const [pinSwitchOpen, setPinSwitchOpen] = useState(false);
+  // CEO 13/05: discount manual OTP dialog (BẤT KỲ giảm giá manual nào)
+  const [discountOtpOpen, setDiscountOtpOpen] = useState(false);
+  const pendingDiscountRef = useRef<(() => void) | null>(null);
   // Sprint POS-FNB-EXT-1 (CEO 08/05): platform commission settings + discount presets
   const [platformSettings, setPlatformSettings] = useState<DeliveryPlatformSettings | null>(null);
   const [discountPresets, setDiscountPresets] = useState<DiscountPreset[]>([]);
@@ -1543,6 +1546,25 @@ function FnbPosPageInner() {
     [pos]
   );
 
+  // CEO 13/05: BẤT KỲ giảm giá MANUAL nào → OTP duyệt từ manager.
+  // Xoá discount (undefined hoặc value=0) → skip OTP, apply trực tiếp.
+  // Promotion/coupon đi route khác (handleApplyCoupon) nên không qua handler này.
+  const handleManualDiscount = useCallback(
+    (d: import("@/lib/types/fnb").FnbDiscountInput | undefined) => {
+      if (!pos.activeTabId) return;
+      const isClear = !d || d.value === 0;
+      if (isClear) {
+        pos.setOrderDiscount(pos.activeTabId, d);
+        return;
+      }
+      // Manual > 0 → queue + mở OTP dialog
+      const activeTabId = pos.activeTabId;
+      pendingDiscountRef.current = () => pos.setOrderDiscount(activeTabId, d);
+      setDiscountOtpOpen(true);
+    },
+    [pos]
+  );
+
   // ── Open split bill dialog ──
   const handleOpenSplitBill = useCallback(async () => {
     const tab = pos.activeTab;
@@ -1993,7 +2015,7 @@ function FnbPosPageInner() {
           onSplitBill={handleOpenSplitBill}
           onChangeOrderType={pos.setActiveTabOrderType}
           onCustomerClick={() => setCustomerPickerOpen(true)}
-          onDiscountChange={(d) => pos.setOrderDiscount(pos.activeTabId, d)}
+          onDiscountChange={handleManualDiscount}
           onPrintPreBill={handlePrintPreBill}
           onVoidKitchenOrder={() => setVoidConfirmOpen(true)}
           onTransferTable={() => setTransferTableOpen(true)}
@@ -2152,7 +2174,7 @@ function FnbPosPageInner() {
               onSplitBill={handleOpenSplitBill}
               onChangeOrderType={pos.setActiveTabOrderType}
               onCustomerClick={() => setCustomerPickerOpen(true)}
-              onDiscountChange={(d) => pos.setOrderDiscount(pos.activeTabId, d)}
+              onDiscountChange={handleManualDiscount}
               onPrintPreBill={handlePrintPreBill}
               onVoidKitchenOrder={() => setVoidConfirmOpen(true)}
               onTransferTable={() => setTransferTableOpen(true)}
@@ -2345,6 +2367,26 @@ function FnbPosPageInner() {
             otpId: verified.otpId,
           });
           setVoidOtpContext(null);
+        }}
+      />
+
+      {/* CEO 13/05: OTP duyệt MỌI giảm giá manual (FnB) — không còn check ngưỡng */}
+      <OtpApprovalDialog
+        open={discountOtpOpen}
+        onOpenChange={(o) => {
+          setDiscountOtpOpen(o);
+          if (!o) pendingDiscountRef.current = null;
+        }}
+        actionCode={OTP_ACTION_CODES.FNB_DISCOUNT_OVERRIDE}
+        contextLabel={`Cashier yêu cầu giảm giá thủ công cho đơn ${pos.activeTab?.label ?? ""}`}
+        onApproved={() => {
+          pendingDiscountRef.current?.();
+          pendingDiscountRef.current = null;
+          toast({
+            title: "Đã duyệt qua OTP",
+            description: "Giảm giá đã được áp dụng (audit log lưu manager duyệt).",
+            variant: "success",
+          });
         }}
       />
 
