@@ -143,11 +143,14 @@ function copySetCookies(from: NextResponse, to: NextResponse): void {
 export async function updateSession(request: NextRequest) {
   // DEV-only auth bypass. Gate kép để production TUYỆT ĐỐI không bypass:
   //   1. NODE_ENV phải khác "production" (Vercel + Next build prod sẽ là "production")
-  //   2. NEXT_PUBLIC_BYPASS_AUTH phải === "true" (set trong .env.local)
-  // Nếu quên xoá env var khi deploy → NODE_ENV guard vẫn chặn bypass.
+  //   2. BYPASS_AUTH phải === "true" (set trong .env.local)
+  //
+  // Sprint A.3 (CEO 12/05): đổi NEXT_PUBLIC_BYPASS_AUTH → BYPASS_AUTH
+  // để biến KHÔNG bị inline vào client bundle. Middleware chạy server-side
+  // nên process.env.BYPASS_AUTH vẫn đọc được bình thường.
   const DEMO_MODE =
     process.env.NODE_ENV !== "production" &&
-    process.env.NEXT_PUBLIC_BYPASS_AUTH === "true";
+    process.env.BYPASS_AUTH === "true";
   if (DEMO_MODE) {
     // Vẫn xử lý FnB subdomain routing
     if (isFnbSubdomain(request)) {

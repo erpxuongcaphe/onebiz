@@ -22,7 +22,7 @@ function makeRequest(url: string): NextRequest {
 describe("FnB subdomain routing", () => {
   beforeEach(() => {
     supabaseState.user = null;
-    process.env.NEXT_PUBLIC_BYPASS_AUTH = "false";
+    process.env.BYPASS_AUTH = "false";
   });
 
   it("uses the shared login page for unauthenticated FnB users", async () => {

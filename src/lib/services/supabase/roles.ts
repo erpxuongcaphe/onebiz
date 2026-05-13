@@ -437,7 +437,7 @@ export async function inviteStaff(input: InviteStaffInput): Promise<void> {
           "Chỉ Chủ cửa hàng mới được cấp quyền Chủ cửa hàng cho người khác.",
         );
       }
-    } else if (process.env.NEXT_PUBLIC_BYPASS_AUTH !== "true") {
+    } else if (process.env.BYPASS_AUTH !== "true") {
       // Production: phải đăng nhập + là owner mới qua check
       throw new Error("Chưa đăng nhập — không thể cấp quyền owner.");
     }

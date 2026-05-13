@@ -422,6 +422,16 @@ export function useAuth() {
 
 // --- Fallback profile (when DB not ready) ---
 
+/**
+ * Sprint A.4 (CEO 12/05): fallback khi DB query fail / chưa có profile row.
+ * Trước đây gán `role: "owner" + isActive: true` → DB fail = user thoáng
+ * có quyền owner → bypass permission gate. Privilege escalation risk.
+ *
+ * Sửa: role thấp nhất ("staff") + isActive=false. UI thấy isActive=false
+ * → block thao tác cho tới khi profile load thật. usePermissions() trả
+ * permissions=empty → mọi hasPermission() return false (trừ chính owner
+ * thật được verified qua DB query).
+ */
 function buildFallbackProfile(authUser: User): UserProfile {
   const meta = authUser.user_metadata ?? {};
   return {
@@ -429,12 +439,9 @@ function buildFallbackProfile(authUser: User): UserProfile {
     tenantId: "",
     fullName: meta.full_name ?? authUser.email?.split("@")[0] ?? "User",
     email: authUser.email ?? "",
-    // phone tuy typed optional nhưng trước đây gán `null` → assign vào field
-    // `string | undefined` strict TS → ok runtime nhưng `.replace()` / `.trim()`
-    // trên null crash. Dùng undefined để consistent.
     phone: meta.phone ?? undefined,
-    role: "owner",
-    isActive: true,
+    role: "staff",
+    isActive: false,
     createdAt: authUser.created_at,
   };
 }

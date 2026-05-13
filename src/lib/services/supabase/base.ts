@@ -127,9 +127,13 @@ export function getFilterValue(filters: Record<string, string | string[]> | unde
 /**
  * Get the current authenticated user's tenant_id (cached per page load).
  *
- * DEV FALLBACK: when `NEXT_PUBLIC_BYPASS_AUTH=true` and there is no auth
- * session, we transparently return the first tenant row. Production builds
- * (BYPASS_AUTH unset) still require a real auth user.
+ * DEV FALLBACK: when `BYPASS_AUTH=true` and there is no auth session, we
+ * transparently return the first tenant row. Production builds (env unset)
+ * still require a real auth user.
+ *
+ * Sprint A.3 (CEO 12/05): đổi NEXT_PUBLIC_BYPASS_AUTH → BYPASS_AUTH để
+ * biến không lộ vào client bundle. Service functions chạy ở edge/server
+ * runtime nên vẫn đọc được biến không-public.
  */
 // PERF F8: Profile cache shared cho cả `getCurrentTenantId` và
 // `getCurrentContext`. Trước đây mỗi function tự cache riêng → cùng page
@@ -221,8 +225,8 @@ async function loadProfile(): Promise<CachedProfile> {
         return profile;
       }
 
-      // DEV bypass
-      if (process.env.NEXT_PUBLIC_BYPASS_AUTH === "true") {
+      // DEV bypass (server-only, không leak vào client bundle)
+      if (process.env.BYPASS_AUTH === "true") {
         const { data: firstTenant } = await supabase
           .from("tenants")
           .select("id")
@@ -338,8 +342,8 @@ async function loadContext(): Promise<CurrentContext> {
     return cachedContext;
   }
 
-  // --- DEV bypass path ---
-  if (process.env.NEXT_PUBLIC_BYPASS_AUTH !== "true") {
+  // --- DEV bypass path (server-only) ---
+  if (process.env.BYPASS_AUTH !== "true") {
     throw new Error("Chưa đăng nhập");
   }
 
