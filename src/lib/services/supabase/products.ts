@@ -5,7 +5,6 @@
 import type { Product, ProductDetail, StockMovement, SalesHistory, QueryParams, QueryResult } from "@/lib/types";
 import type { Database } from "@/lib/supabase/types";
 import { getClient, getPaginationRange, handleError, getCurrentTenantId } from "./base";
-import { recordAuditLog } from "./audit";
 import { isRpcUnavailable } from "./rpc-utils";
 
 type ProductInsert = Database["public"]["Tables"]["products"]["Insert"];
