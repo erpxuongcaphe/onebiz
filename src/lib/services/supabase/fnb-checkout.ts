@@ -13,6 +13,7 @@ import { getClient, handleError } from "./base";
 import { isRpcUnavailable } from "./rpc-utils";
 import {
   addItemsToOrder,
+  setDeliveryPlatform,
 } from "./kitchen-orders";
 import type { PaymentBreakdownItem } from "./pos-checkout";
 import type { ToppingAttachment, DeliveryPlatform } from "@/lib/types/fnb";
@@ -31,7 +32,16 @@ export interface SendToKitchenInput {
   /** Delivery platform (Shopee Food, Grab, etc.) */
   deliveryPlatform?: DeliveryPlatform;
   deliveryFee?: number;
+  /**
+   * @deprecated Migration 00070 — dùng `platformCommissionPercent`.
+   */
   platformCommission?: number;
+  /**
+   * Migration 00070: % phí sàn (vd 25 = 25%). Persist xuống
+   * `kitchen_orders.platform_commission_percent` ngay sau khi tạo
+   * đơn để RPC fnb_complete_payment_atomic đọc khi thanh toán.
+   */
+  platformCommissionPercent?: number;
   /**
    * Idempotency key — Sprint FIX-1 (CEO 07/05). Pass localId từ offline queue
    * để server dedup khi retry → không tạo đơn trùng.
@@ -120,6 +130,27 @@ export async function sendToKitchen(input: SendToKitchenInput): Promise<SendToKi
       order_number?: string;
     };
     if (result.kitchen_order_id && result.order_number) {
+      // Migration 00070 (CEO 13/05): RPC fnb_send_to_kitchen_atomic không
+      // nhận platform/fee/commission → cần update riêng sau khi tạo đơn.
+      // Nếu là đơn delivery với platform != "direct", persist xuống DB
+      // để RPC thanh toán đọc khi tính commission_amount.
+      const platform = input.deliveryPlatform;
+      const percent = input.platformCommissionPercent ?? input.platformCommission ?? 0;
+      const fee = input.deliveryFee ?? 0;
+      if (
+        input.orderType === "delivery" &&
+        platform &&
+        platform !== "direct" &&
+        (percent > 0 || fee > 0)
+      ) {
+        try {
+          await setDeliveryPlatform(result.kitchen_order_id, platform, fee, percent);
+        } catch (err) {
+          // Không rollback đơn — đơn đã gửi bếp thành công. Log để debug.
+          // User có thể chỉnh platform sau qua cart (handler page.tsx).
+          console.error("sendToKitchen:setDeliveryPlatform persist failed", err);
+        }
+      }
       return {
         kitchenOrderId: result.kitchen_order_id,
         orderNumber: result.order_number,

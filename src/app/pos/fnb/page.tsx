@@ -41,7 +41,7 @@ import {
 } from "@/lib/offline";
 import { splitByItems, splitEqually } from "@/lib/services/supabase/split-bill";
 import { validateCoupon } from "@/lib/services/supabase/coupons";
-import { getKitchenOrderById, getKitchenOrders, cancelUnpaidKitchenOrder, transferTable as transferTableService } from "@/lib/services/supabase/kitchen-orders";
+import { getKitchenOrderById, getKitchenOrders, cancelUnpaidKitchenOrder, transferTable as transferTableService, setDeliveryPlatform as setDeliveryPlatformService } from "@/lib/services/supabase/kitchen-orders";
 import { OtpApprovalDialog } from "@/components/shared/dialogs/otp-approval-dialog";
 import { OTP_ACTION_CODES } from "@/lib/services/supabase/manager-otp";
 import { getOpenShift, openShift, closeShift } from "@/lib/services/supabase/shifts";
@@ -972,7 +972,8 @@ function FnbPosPageInner() {
       }
 
       // ── Tạo đơn bếp mới ──
-      // Sprint POS-FNB-EXT-1: pass orderNote + delivery platform metadata
+      // Sprint POS-FNB-EXT-1: pass orderNote + delivery platform metadata.
+      // Migration 00070: param đúng tên là `platformCommissionPercent` (%).
       const result = await offlineSendToKitchen({
         tenantId,
         branchId: branchId!,
@@ -982,7 +983,7 @@ function FnbPosPageInner() {
         note: tab.orderNote,
         deliveryPlatform: tab.deliveryPlatform,
         deliveryFee: tab.deliveryFee,
-        platformCommission: tab.platformCommissionPercent,
+        platformCommissionPercent: tab.platformCommissionPercent,
         items: mappedItems,
       }, networkStatus.isOnline);
 
@@ -1087,6 +1088,34 @@ function FnbPosPageInner() {
   useEffect(() => {
     setCouponApplied(null);
   }, [pos.activeTabId]);
+
+  // Migration 00070: persist platform info xuống DB sau khi đơn đã gửi bếp.
+  // Local state thôi không đủ — RPC thanh toán đọc commission_percent từ
+  // kitchen_orders → cần đồng bộ mỗi lần user đổi platform/fee/% sau gửi bếp.
+  const persistDeliveryPlatform = useCallback(
+    async (
+      kitchenOrderId: string,
+      platform: import("@/lib/types/fnb").DeliveryPlatform,
+      fee: number,
+      percent: number,
+    ) => {
+      if (!kitchenOrderId.startsWith("local_")) {
+        // Bỏ qua đơn offline (chưa có DB row thật) — local state đủ;
+        // khi sync sẽ replay sendToKitchen kèm platform info.
+        try {
+          await setDeliveryPlatformService(kitchenOrderId, platform, fee, percent);
+        } catch (err) {
+          console.error("persistDeliveryPlatform failed", err);
+          toast({
+            title: "Không lưu được thông tin sàn",
+            description: "Hãy thử đổi lại hoặc kiểm tra mạng.",
+            variant: "warning",
+          });
+        }
+      }
+    },
+    [toast],
+  );
 
   // ── Print pre-bill ──
   const handlePrintPreBill = useCallback(() => {
@@ -2098,11 +2127,43 @@ function FnbPosPageInner() {
             const defaultCommission =
               platformSettings?.[platform]?.commissionPercent ?? 0;
             pos.setDeliveryPlatform(pos.activeTabId, platform, defaultCommission);
+            // Migration 00070: persist nếu đơn đã gửi bếp.
+            const koId = pos.activeTab?.kitchenOrderId;
+            if (koId) {
+              void persistDeliveryPlatform(
+                koId,
+                platform,
+                pos.activeTab?.deliveryFee ?? 0,
+                defaultCommission,
+              );
+            }
           }}
-          onDeliveryFeeChange={(fee) => pos.setDeliveryFee(pos.activeTabId, fee)}
-          onPlatformCommissionChange={(pct) =>
-            pos.setPlatformCommissionPercent(pos.activeTabId, pct)
-          }
+          onDeliveryFeeChange={(fee) => {
+            pos.setDeliveryFee(pos.activeTabId, fee);
+            const koId = pos.activeTab?.kitchenOrderId;
+            const platform = pos.activeTab?.deliveryPlatform;
+            if (koId && platform && platform !== "direct") {
+              void persistDeliveryPlatform(
+                koId,
+                platform,
+                fee,
+                pos.activeTab?.platformCommissionPercent ?? 0,
+              );
+            }
+          }}
+          onPlatformCommissionChange={(pct) => {
+            pos.setPlatformCommissionPercent(pos.activeTabId, pct);
+            const koId = pos.activeTab?.kitchenOrderId;
+            const platform = pos.activeTab?.deliveryPlatform;
+            if (koId && platform && platform !== "direct") {
+              void persistDeliveryPlatform(
+                koId,
+                platform,
+                pos.activeTab?.deliveryFee ?? 0,
+                pct,
+              );
+            }
+          }}
           discountPresets={discountPresets}
         />
       </div>
