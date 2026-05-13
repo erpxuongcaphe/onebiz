@@ -38,7 +38,6 @@ import {
   getRoles,
   getTenantUsers,
   assignRoleToUser,
-  inviteStaff,
 } from "@/lib/services/supabase/roles";
 import type { DbRole } from "@/lib/services/supabase/roles";
 import { setUserPosPin, removeUserPosPin } from "@/lib/services/supabase/pos-pin";
@@ -83,18 +82,6 @@ export default function UsersPage() {
 
   // Sprint B.4 (CEO 12/05): Set PIN POS dialog
   const [setPinUser, setSetPinUser] = useState<UserRow | null>(null);
-
-  // Invite staff dialog (legacy - email magic link)
-  const [inviteOpen, setInviteOpen] = useState(false);
-  const [inviteBusy, setInviteBusy] = useState(false);
-  const [inviteForm, setInviteForm] = useState({
-    email: "",
-    fullName: "",
-    phone: "",
-    branchId: "",
-    roleId: "",
-    asOwner: false,
-  });
 
   // Edit user dialog (CEO 06/05/2026)
   const [editOpen, setEditOpen] = useState(false);
@@ -159,6 +146,7 @@ export default function UsersPage() {
   };
 
   // Create account dialog (Sprint USER-MGMT — admin tự đặt password)
+  // CEO 13/05: thêm field PIN POS để set 1 lượt khi tạo (không cần 2 bước).
   const [createOpen, setCreateOpen] = useState(false);
   const [createBusy, setCreateBusy] = useState(false);
   const [createForm, setCreateForm] = useState({
@@ -169,6 +157,7 @@ export default function UsersPage() {
     roleId: "",
     branchIds: [] as string[],
     allBranches: false,
+    pin: "",
   });
   const resetCreateForm = () =>
     setCreateForm({
@@ -179,6 +168,7 @@ export default function UsersPage() {
       roleId: "",
       branchIds: [],
       allBranches: false,
+      pin: "",
     });
 
   const handleCreateUser = async () => {
@@ -206,6 +196,16 @@ export default function UsersPage() {
       });
       return;
     }
+    // PIN POS: optional — nếu nhập thì phải 4-6 chữ số.
+    const pinTrim = createForm.pin.trim();
+    if (pinTrim && !/^\d{4,6}$/.test(pinTrim)) {
+      toast({
+        title: "PIN POS không hợp lệ",
+        description: "PIN phải gồm 4-6 chữ số (vd 1234 hoặc 123456).",
+        variant: "error",
+      });
+      return;
+    }
 
     setCreateBusy(true);
     try {
@@ -226,9 +226,24 @@ export default function UsersPage() {
       if (!res.ok || !data.success) {
         throw new Error(data.message ?? "Lỗi không xác định");
       }
+
+      // CEO 13/05: nếu admin có nhập PIN → set luôn cho user mới tạo
+      // (không cần phải đặt PIN bước thứ 2 qua dropdown).
+      let pinNotice = "";
+      if (pinTrim && data.userId) {
+        try {
+          await setUserPosPin(data.userId, pinTrim);
+          pinNotice = ` + PIN POS ${pinTrim}`;
+        } catch (pinErr) {
+          // Account đã tạo OK, chỉ PIN fail → cảnh báo nhưng không rollback
+          pinNotice = " (PIN POS chưa set — vui lòng đặt lại qua dropdown)";
+          console.error("setUserPosPin failed", pinErr);
+        }
+      }
+
       toast({
         title: "Đã tạo tài khoản",
-        description: `${createForm.email} có thể đăng nhập bằng mật khẩu vừa đặt`,
+        description: `${createForm.email} có thể đăng nhập bằng mật khẩu vừa đặt${pinNotice}`,
         variant: "success",
         duration: 8000,
       });
@@ -275,59 +290,6 @@ export default function UsersPage() {
       load();
     } catch (err) {
       toast({ title: "Lỗi", description: (err as Error).message, variant: "error" });
-    }
-  };
-
-  const resetInviteForm = () =>
-    setInviteForm({ email: "", fullName: "", phone: "", branchId: "", roleId: "", asOwner: false });
-
-  const handleInvite = async () => {
-    if (!tenantId) return;
-
-    // Validate SĐT VN — bắt buộc vì user dùng SĐT để login.
-    const phoneRaw = inviteForm.phone.trim();
-    const phoneCleaned = phoneRaw.replace(/[\s-]/g, "");
-    const isValidPhone =
-      /^0\d{9,10}$/.test(phoneCleaned) ||
-      /^(\+?84)\d{9,10}$/.test(phoneCleaned);
-    if (!isValidPhone) {
-      toast({
-        title: "SĐT không hợp lệ",
-        description: "Nhập đúng định dạng VN (0912345678 hoặc +84912345678).",
-        variant: "error",
-      });
-      return;
-    }
-
-    setInviteBusy(true);
-    try {
-      await inviteStaff({
-        tenantId,
-        email: inviteForm.email.trim(),
-        fullName: inviteForm.fullName,
-        phone: phoneCleaned,
-        branchId: inviteForm.branchId || undefined,
-        roleId: inviteForm.roleId || undefined,
-        asOwner: inviteForm.asOwner,
-      });
-      toast({
-        title: "Đã gửi lời mời",
-        description: `Email mời đã gửi đến ${inviteForm.email}. Nhân viên click link trong email để kích hoạt tài khoản.`,
-        variant: "success",
-        duration: 8000,
-      });
-      setInviteOpen(false);
-      resetInviteForm();
-      load();
-    } catch (err) {
-      toast({
-        title: "Không gửi được lời mời",
-        description: (err as Error).message,
-        variant: "error",
-        duration: 8000,
-      });
-    } finally {
-      setInviteBusy(false);
     }
   };
 
@@ -380,10 +342,6 @@ export default function UsersPage() {
           <Button onClick={() => setCreateOpen(true)}>
             <Icon name="person_add" size={16} className="mr-1" />
             Tạo tài khoản mới
-          </Button>
-          <Button variant="outline" onClick={() => setInviteOpen(true)}>
-            <Icon name="mail" size={16} className="mr-1" />
-            Mời qua email
           </Button>
         </div>
       </div>
@@ -565,212 +523,6 @@ export default function UsersPage() {
             <Button onClick={handleAssignRole}>
               <Icon name="check" size={16} className="mr-1" />
               Xác nhận
-            </Button>
-          </DialogFooter>
-        </DialogContent>
-      </Dialog>
-
-      {/* Invite Staff Dialog */}
-      <Dialog
-        open={inviteOpen}
-        onOpenChange={(o) => {
-          setInviteOpen(o);
-          if (!o) resetInviteForm();
-        }}
-      >
-        <DialogContent className="sm:max-w-lg">
-          <DialogHeader>
-            <DialogTitle>Mời nhân viên mới</DialogTitle>
-          </DialogHeader>
-          <div className="space-y-4 py-2">
-            <p className="text-xs text-muted-foreground">
-              Nhân viên sẽ nhận email chứa link đăng nhập. Sau khi click link,
-              tài khoản tự động được kích hoạt và liên kết với cửa hàng.
-            </p>
-
-            <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
-              <div className="space-y-2 sm:col-span-2">
-                <Label htmlFor="invite-email">Email *</Label>
-                <Input
-                  id="invite-email"
-                  type="email"
-                  placeholder="nhanvien@email.com"
-                  value={inviteForm.email}
-                  onChange={(e) =>
-                    setInviteForm((f) => ({ ...f, email: e.target.value }))
-                  }
-                  disabled={inviteBusy}
-                />
-              </div>
-
-              <div className="space-y-2">
-                <Label htmlFor="invite-name">Họ và tên *</Label>
-                <Input
-                  id="invite-name"
-                  placeholder="Nguyễn Văn A"
-                  value={inviteForm.fullName}
-                  onChange={(e) =>
-                    setInviteForm((f) => ({ ...f, fullName: e.target.value }))
-                  }
-                  disabled={inviteBusy}
-                />
-              </div>
-
-              <div className="space-y-2">
-                <Label htmlFor="invite-phone">Số điện thoại *</Label>
-                <Input
-                  id="invite-phone"
-                  type="tel"
-                  inputMode="numeric"
-                  placeholder="0912345678"
-                  value={inviteForm.phone}
-                  onChange={(e) =>
-                    setInviteForm((f) => ({ ...f, phone: e.target.value }))
-                  }
-                  disabled={inviteBusy}
-                />
-                <p className="text-xs text-muted-foreground">
-                  Nhân viên có thể login bằng SĐT này thay cho email.
-                </p>
-              </div>
-
-              <div className="space-y-2">
-                <Label htmlFor="invite-branch">Chi nhánh</Label>
-                <Select
-                  value={inviteForm.branchId}
-                  onValueChange={(v) =>
-                    setInviteForm((f) => ({ ...f, branchId: v ?? "" }))
-                  }
-                  disabled={inviteBusy}
-                  items={branches.map((b) => ({ value: b.id, label: b.name }))}
-                >
-                  <SelectTrigger id="invite-branch">
-                    <SelectValue placeholder="Chọn chi nhánh">
-                      {(v) => {
-                        const match = branches.find((b) => b.id === v);
-                        return match?.name ?? "Chọn chi nhánh";
-                      }}
-                    </SelectValue>
-                  </SelectTrigger>
-                  <SelectContent>
-                    {branches.map((b) => (
-                      <SelectItem key={b.id} value={b.id}>
-                        {b.name}
-                      </SelectItem>
-                    ))}
-                  </SelectContent>
-                </Select>
-              </div>
-
-              <div className="space-y-2">
-                <Label htmlFor="invite-role">Vai trò</Label>
-                <Select
-                  value={inviteForm.roleId}
-                  onValueChange={(v) =>
-                    setInviteForm((f) => ({ ...f, roleId: v ?? "" }))
-                  }
-                  disabled={inviteBusy || inviteForm.asOwner}
-                  items={roles.map((r) => ({ value: r.id, label: r.name }))}
-                >
-                  <SelectTrigger id="invite-role">
-                    <SelectValue
-                      placeholder={
-                        inviteForm.asOwner ? "(Chủ cửa hàng — full quyền)" : "Chọn vai trò"
-                      }
-                    >
-                      {(v) => {
-                        if (inviteForm.asOwner) {
-                          return "(Chủ cửa hàng — full quyền)";
-                        }
-                        const match = roles.find((r) => r.id === v);
-                        return match?.name ?? "Chọn vai trò";
-                      }}
-                    </SelectValue>
-                  </SelectTrigger>
-                  <SelectContent>
-                    {roles.map((role) => (
-                      <SelectItem key={role.id} value={role.id}>
-                        <span className="flex items-center gap-2">
-                          <span
-                            className={cn("h-2 w-2 rounded-full", role.color)}
-                          />
-                          {role.name}
-                        </span>
-                      </SelectItem>
-                    ))}
-                  </SelectContent>
-                </Select>
-              </div>
-
-              {/* Security gate: chỉ user role="owner" mới thấy được checkbox
-                  này. Manager/Cashier/Kế toán mở dialog mời cũng chỉ tạo
-                  được role thường, KHÔNG cấp owner được. */}
-              {isCurrentUserOwner && (
-                <div className="sm:col-span-2 flex items-start gap-2 p-3 rounded-lg bg-amber-50 dark:bg-amber-950/30 border border-amber-200 dark:border-amber-900">
-                  <input
-                    id="invite-as-owner"
-                    type="checkbox"
-                    checked={inviteForm.asOwner}
-                    onChange={(e) =>
-                      setInviteForm((f) => ({
-                        ...f,
-                        asOwner: e.target.checked,
-                        // Nếu cấp quyền chủ → clear roleId (không cần)
-                        roleId: e.target.checked ? "" : f.roleId,
-                      }))
-                    }
-                    disabled={inviteBusy}
-                    className="mt-0.5 h-4 w-4 rounded border-amber-400 accent-amber-600"
-                  />
-                  <div className="flex-1">
-                    <Label
-                      htmlFor="invite-as-owner"
-                      className="text-sm font-medium cursor-pointer"
-                    >
-                      Cấp quyền Chủ cửa hàng (đồng chủ)
-                    </Label>
-                    <p className="text-xs text-amber-700 dark:text-amber-400 mt-0.5">
-                      Người này sẽ có toàn quyền như bạn: xem mọi chi nhánh,
-                      mời/xoá nhân viên, xem báo cáo tài chính. Chỉ tick khi
-                      hoàn toàn tin tưởng.
-                    </p>
-                  </div>
-                </div>
-              )}
-            </div>
-          </div>
-          <DialogFooter>
-            <Button
-              variant="outline"
-              onClick={() => setInviteOpen(false)}
-              disabled={inviteBusy}
-            >
-              Hủy
-            </Button>
-            <Button
-              onClick={handleInvite}
-              disabled={
-                inviteBusy ||
-                !inviteForm.email.trim() ||
-                !inviteForm.fullName.trim() ||
-                !inviteForm.phone.trim()
-              }
-            >
-              {inviteBusy ? (
-                <>
-                  <Icon
-                    name="progress_activity"
-                    size={16}
-                    className="mr-1 animate-spin"
-                  />
-                  Đang gửi...
-                </>
-              ) : (
-                <>
-                  <Icon name="send" size={16} className="mr-1" />
-                  Gửi lời mời
-                </>
-              )}
             </Button>
           </DialogFooter>
         </DialogContent>
@@ -1098,6 +850,31 @@ export default function UsersPage() {
                   )}
                 </div>
               )}
+            </div>
+
+            <div className="space-y-1">
+              <Label htmlFor="create-pin" className="flex items-center gap-1">
+                <Icon name="pin" size={14} className="text-status-warning" />
+                PIN POS (tuỳ chọn — 4-6 số)
+              </Label>
+              <Input
+                id="create-pin"
+                type="text"
+                inputMode="numeric"
+                maxLength={6}
+                value={createForm.pin}
+                onChange={(e) =>
+                  setCreateForm({
+                    ...createForm,
+                    pin: e.target.value.replace(/\D/g, "").slice(0, 6),
+                  })
+                }
+                placeholder="vd 1234 hoặc 123456"
+              />
+              <p className="text-xs text-muted-foreground">
+                PIN dùng để switch user nhanh trên POS (đầu ca login email,
+                trong ca chỉ gõ PIN). Có thể bỏ qua, đặt sau qua dropdown.
+              </p>
             </div>
 
             <div className="rounded-lg bg-status-info/5 border border-status-info/20 p-3 text-xs text-status-info">
