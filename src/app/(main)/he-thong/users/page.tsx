@@ -145,8 +145,9 @@ export default function UsersPage() {
     }
   };
 
-  // Create account dialog (Sprint USER-MGMT — admin tự đặt password)
-  // CEO 13/05: thêm field PIN POS để set 1 lượt khi tạo (không cần 2 bước).
+  // Create account dialog (Sprint USER-MGMT — admin tự đặt password).
+  // CEO 13/05: admin KHÔNG đặt PIN POS — nhân viên tự set qua trang Hồ sơ
+  // sau khi login lần đầu (PIN cá nhân, owner không nên biết).
   const [createOpen, setCreateOpen] = useState(false);
   const [createBusy, setCreateBusy] = useState(false);
   const [createForm, setCreateForm] = useState({
@@ -157,7 +158,6 @@ export default function UsersPage() {
     roleId: "",
     branchIds: [] as string[],
     allBranches: false,
-    pin: "",
   });
   const resetCreateForm = () =>
     setCreateForm({
@@ -168,7 +168,6 @@ export default function UsersPage() {
       roleId: "",
       branchIds: [],
       allBranches: false,
-      pin: "",
     });
 
   const handleCreateUser = async () => {
@@ -196,17 +195,6 @@ export default function UsersPage() {
       });
       return;
     }
-    // PIN POS: optional — nếu nhập thì phải 4-6 chữ số.
-    const pinTrim = createForm.pin.trim();
-    if (pinTrim && !/^\d{4,6}$/.test(pinTrim)) {
-      toast({
-        title: "PIN POS không hợp lệ",
-        description: "PIN phải gồm 4-6 chữ số (vd 1234 hoặc 123456).",
-        variant: "error",
-      });
-      return;
-    }
-
     setCreateBusy(true);
     try {
       const res = await fetch("/api/admin/create-user", {
@@ -227,23 +215,9 @@ export default function UsersPage() {
         throw new Error(data.message ?? "Lỗi không xác định");
       }
 
-      // CEO 13/05: nếu admin có nhập PIN → set luôn cho user mới tạo
-      // (không cần phải đặt PIN bước thứ 2 qua dropdown).
-      let pinNotice = "";
-      if (pinTrim && data.userId) {
-        try {
-          await setUserPosPin(data.userId, pinTrim);
-          pinNotice = ` + PIN POS ${pinTrim}`;
-        } catch (pinErr) {
-          // Account đã tạo OK, chỉ PIN fail → cảnh báo nhưng không rollback
-          pinNotice = " (PIN POS chưa set — vui lòng đặt lại qua dropdown)";
-          console.error("setUserPosPin failed", pinErr);
-        }
-      }
-
       toast({
         title: "Đã tạo tài khoản",
-        description: `${createForm.email} có thể đăng nhập bằng mật khẩu vừa đặt${pinNotice}`,
+        description: `${createForm.email} có thể đăng nhập bằng mật khẩu vừa đặt. Nhân viên tự đặt PIN POS qua trang Hồ sơ.`,
         variant: "success",
         duration: 8000,
       });
@@ -852,35 +826,12 @@ export default function UsersPage() {
               )}
             </div>
 
-            <div className="space-y-1">
-              <Label htmlFor="create-pin" className="flex items-center gap-1">
-                <Icon name="pin" size={14} className="text-status-warning" />
-                PIN POS (tuỳ chọn — 4-6 số)
-              </Label>
-              <Input
-                id="create-pin"
-                type="text"
-                inputMode="numeric"
-                maxLength={6}
-                value={createForm.pin}
-                onChange={(e) =>
-                  setCreateForm({
-                    ...createForm,
-                    pin: e.target.value.replace(/\D/g, "").slice(0, 6),
-                  })
-                }
-                placeholder="vd 1234 hoặc 123456"
-              />
-              <p className="text-xs text-muted-foreground">
-                PIN dùng để switch user nhanh trên POS (đầu ca login email,
-                trong ca chỉ gõ PIN). Có thể bỏ qua, đặt sau qua dropdown.
-              </p>
-            </div>
-
             <div className="rounded-lg bg-status-info/5 border border-status-info/20 p-3 text-xs text-status-info">
-              <Icon name="info" size={14} className="inline mr-1" />
-              Sau khi tạo, anh đưa email + mật khẩu cho nhân viên để họ đăng nhập.
-              Họ có thể tự đổi mật khẩu trong trang Cá nhân.
+              <Icon name="info" size={14} className="inline mr-1 align-text-bottom" />
+              Sau khi tạo, đưa email + mật khẩu cho nhân viên. Nhân viên tự
+              vào <strong>Hồ sơ → Đổi PIN POS</strong> để đặt PIN 6 số riêng
+              (chủ cửa hàng không biết PIN này). Khi NV quên PIN → reset qua
+              dropdown ⋯ → &quot;Đặt PIN POS&quot;.
             </div>
           </div>
           <DialogFooter>

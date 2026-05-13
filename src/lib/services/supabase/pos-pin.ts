@@ -130,6 +130,54 @@ export async function listPosPinUsers(branchId: string): Promise<PosPinUser[]> {
 }
 
 /**
+ * Nhân viên TỰ đổi PIN POS của chính mình (CEO 13/05).
+ *
+ * - Lần đầu chưa có PIN: pass oldPin = null
+ * - Đã có PIN: oldPin required, server verify bằng bcrypt
+ *
+ * Server check (RPC `change_my_pos_pin`):
+ *   - auth.uid() = user đang đăng nhập
+ *   - Nếu đã có PIN cũ: bắt buộc verify oldPin (chống session-takeover)
+ *   - PIN mới ≠ PIN cũ
+ *   - PIN mới 6 chữ số
+ */
+export async function changeMyPosPin(
+  newPin: string,
+  oldPin: string | null,
+): Promise<{ isFirstTime: boolean }> {
+  const supabase = getClient();
+
+  if (!/^[0-9]{6}$/.test(newPin)) {
+    throw new Error("PIN mới phải gồm đúng 6 chữ số.");
+  }
+  if (oldPin !== null && !/^[0-9]{6}$/.test(oldPin)) {
+    throw new Error("PIN cũ phải gồm đúng 6 chữ số.");
+  }
+
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  const { data, error } = await (supabase.rpc as any)("change_my_pos_pin", {
+    p_old_pin: oldPin,
+    p_new_pin: newPin,
+  });
+
+  if (error) {
+    if (isRpcUnavailable(error)) {
+      throw new Error(
+        "Chưa có RPC change_my_pos_pin. Vui lòng chạy migration 00071 trước.",
+      );
+    }
+    handleError(error, "changeMyPosPin");
+  }
+
+  const result = data as { success?: boolean; is_first_time?: boolean } | null;
+  if (!result?.success) {
+    throw new Error("Server không trả kết quả đổi PIN hợp lệ.");
+  }
+
+  return { isFirstTime: Boolean(result.is_first_time) };
+}
+
+/**
  * Verify PIN + swap session sang user mới.
  *
  * Gọi API route /api/auth/pos-pin-switch:

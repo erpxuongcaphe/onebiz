@@ -26,6 +26,7 @@ import { Separator } from "@/components/ui/separator";
 import { Icon } from "@/components/ui/icon";
 import { useAuth, useToast } from "@/lib/contexts";
 import { createClient } from "@/lib/supabase/client";
+import { changeMyPosPin } from "@/lib/services/supabase/pos-pin";
 
 /** VN phone: 10-11 số, chấp nhận prefix 0, 84, +84. */
 function isValidVnPhone(cleaned: string): boolean {
@@ -84,6 +85,13 @@ export default function HoSoPage() {
   const [confirmPassword, setConfirmPassword] = useState("");
   const [savingPassword, setSavingPassword] = useState(false);
 
+  // PIN POS form (CEO 13/05): NV tự đặt/đổi PIN cá nhân
+  const [hasPin, setHasPin] = useState<boolean | null>(null);
+  const [oldPin, setOldPin] = useState("");
+  const [newPin, setNewPin] = useState("");
+  const [confirmPin, setConfirmPin] = useState("");
+  const [savingPin, setSavingPin] = useState(false);
+
   // Sync form state với user khi auth load xong.
   useEffect(() => {
     if (user) {
@@ -91,6 +99,30 @@ export default function HoSoPage() {
       setPhone(user.phone ?? "");
     }
   }, [user]);
+
+  // Check hiện user có PIN POS chưa (để show form đúng "Đặt mới" vs "Đổi").
+  useEffect(() => {
+    if (!user?.id) return;
+    let cancelled = false;
+    (async () => {
+      try {
+        // eslint-disable-next-line @typescript-eslint/no-explicit-any
+        const { data } = await (supabase as any)
+          .from("profiles")
+          .select("pos_pin_hash")
+          .eq("id", user.id)
+          .maybeSingle();
+        if (!cancelled) {
+          setHasPin(Boolean(data?.pos_pin_hash));
+        }
+      } catch {
+        if (!cancelled) setHasPin(false);
+      }
+    })();
+    return () => {
+      cancelled = true;
+    };
+  }, [user?.id, supabase]);
 
   // Guard — auth chưa load hoặc user null (nên không bao giờ xảy ra trong route protected)
   if (isLoading || !user) {
@@ -303,6 +335,79 @@ export default function HoSoPage() {
     }
   };
 
+  const handleChangePin = async () => {
+    // Validate PIN mới
+    if (!/^[0-9]{6}$/.test(newPin)) {
+      toast({
+        title: "PIN mới không hợp lệ",
+        description: "PIN phải gồm đúng 6 chữ số (vd 123456).",
+        variant: "error",
+      });
+      return;
+    }
+    if (newPin !== confirmPin) {
+      toast({
+        title: "PIN xác nhận không khớp",
+        description: "Nhập lại PIN mới ở ô xác nhận cho khớp.",
+        variant: "error",
+      });
+      return;
+    }
+    // Nếu đã có PIN cũ → bắt buộc nhập + kiểm tra format
+    if (hasPin === true) {
+      if (!/^[0-9]{6}$/.test(oldPin)) {
+        toast({
+          title: "PIN cũ không hợp lệ",
+          description: "Nhập đúng PIN 6 số đang dùng để xác minh.",
+          variant: "error",
+        });
+        return;
+      }
+      if (oldPin === newPin) {
+        toast({
+          title: "PIN trùng",
+          description: "PIN mới phải khác PIN cũ.",
+          variant: "error",
+        });
+        return;
+      }
+    }
+
+    setSavingPin(true);
+    try {
+      const result = await changeMyPosPin(newPin, hasPin === true ? oldPin : null);
+      setOldPin("");
+      setNewPin("");
+      setConfirmPin("");
+      setHasPin(true);
+      toast({
+        title: result.isFirstTime ? "Đã đặt PIN POS" : "Đã đổi PIN POS",
+        description:
+          "Lần sau switch user trên POS dùng PIN mới này. Đừng chia sẻ PIN với người khác.",
+        variant: "success",
+        duration: 7000,
+      });
+    } catch (err) {
+      const msg = (err as Error).message;
+      // Map lỗi server sang message thân thiện
+      const friendlyMsg = msg.includes("INVALID_OLD_PIN")
+        ? "PIN cũ không đúng. Nếu quên PIN cũ, nhờ chủ cửa hàng reset giúp."
+        : msg.includes("PIN_SAME_AS_OLD")
+          ? "PIN mới trùng PIN cũ — đổi sang PIN khác."
+          : msg.includes("OLD_PIN_REQUIRED")
+            ? "Bạn đã có PIN — bắt buộc nhập PIN cũ để xác minh."
+            : msg;
+      toast({
+        title: "Không đổi được PIN",
+        description: friendlyMsg,
+        variant: "error",
+        duration: 8000,
+      });
+    } finally {
+      setSavingPin(false);
+    }
+  };
+
   const initials = getInitials(safeFullName);
   const roleLabel = getRoleLabel(safeRole);
   const hasProfileChanges =
@@ -478,6 +583,98 @@ export default function HoSoPage() {
               >
                 <Icon name="save" size={16} />
                 {savingPassword ? "Đang đổi..." : "Cập nhật mật khẩu"}
+              </Button>
+            </div>
+          </CardContent>
+        </Card>
+
+        {/* PIN POS — CEO 13/05: NV tự đặt / đổi */}
+        <Card>
+          <CardHeader className="border-b">
+            <CardTitle className="flex items-center gap-2">
+              <Icon name="pin" size={18} className="text-status-warning" />
+              {hasPin === true ? "Đổi PIN POS" : "Đặt PIN POS"}
+            </CardTitle>
+            <CardDescription>
+              PIN 6 số riêng dùng để switch user nhanh trên POS (không cần
+              nhập lại email + password trong ca). Chủ cửa hàng KHÔNG biết
+              PIN này — đừng chia sẻ với ai.
+            </CardDescription>
+          </CardHeader>
+          <CardContent className="pt-4 space-y-4">
+            <div className="grid gap-4 sm:grid-cols-1 max-w-sm">
+              {hasPin === true && (
+                <div className="space-y-2">
+                  <label className="text-sm font-medium" htmlFor="old-pin">
+                    PIN hiện tại
+                  </label>
+                  <Input
+                    id="old-pin"
+                    type="password"
+                    inputMode="numeric"
+                    maxLength={6}
+                    autoComplete="off"
+                    value={oldPin}
+                    onChange={(e) =>
+                      setOldPin(e.target.value.replace(/\D/g, "").slice(0, 6))
+                    }
+                    placeholder="••••••"
+                  />
+                </div>
+              )}
+              <div className="space-y-2">
+                <label className="text-sm font-medium" htmlFor="new-pin">
+                  PIN mới (6 chữ số)
+                </label>
+                <Input
+                  id="new-pin"
+                  type="password"
+                  inputMode="numeric"
+                  maxLength={6}
+                  autoComplete="off"
+                  value={newPin}
+                  onChange={(e) =>
+                    setNewPin(e.target.value.replace(/\D/g, "").slice(0, 6))
+                  }
+                  placeholder="••••••"
+                />
+              </div>
+              <div className="space-y-2">
+                <label className="text-sm font-medium" htmlFor="confirm-pin">
+                  Xác nhận PIN mới
+                </label>
+                <Input
+                  id="confirm-pin"
+                  type="password"
+                  inputMode="numeric"
+                  maxLength={6}
+                  autoComplete="off"
+                  value={confirmPin}
+                  onChange={(e) =>
+                    setConfirmPin(e.target.value.replace(/\D/g, "").slice(0, 6))
+                  }
+                  placeholder="••••••"
+                />
+              </div>
+            </div>
+            <div className="flex justify-end">
+              <Button
+                size="sm"
+                className="gap-2"
+                onClick={handleChangePin}
+                disabled={
+                  savingPin ||
+                  newPin.length !== 6 ||
+                  confirmPin.length !== 6 ||
+                  (hasPin === true && oldPin.length !== 6)
+                }
+              >
+                <Icon name="save" size={16} />
+                {savingPin
+                  ? "Đang lưu..."
+                  : hasPin === true
+                    ? "Đổi PIN"
+                    : "Đặt PIN"}
               </Button>
             </div>
           </CardContent>
