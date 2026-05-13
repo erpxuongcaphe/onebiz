@@ -255,6 +255,10 @@ export async function getFnbInvoiceForReprint(invoiceId: string): Promise<{
   orderNumber: string;
   tableName: string | null;
   orderType: string;
+  /** Migration 00070: platform commission for accurate reprint. */
+  deliveryPlatform: string | null;
+  platformCommissionPercent: number;
+  platformCommissionAmount: number;
   items: Array<{
     name: string;
     quantity: number;
@@ -267,7 +271,7 @@ export async function getFnbInvoiceForReprint(invoiceId: string): Promise<{
 
   const { data: invRaw, error: invErr } = await supabase
     .from("invoices")
-    .select("id, code, customer_name, total, paid, tip_amount, discount_amount, payment_method, created_at")
+    .select("id, code, customer_name, total, paid, tip_amount, discount_amount, payment_method, created_at, platform_commission_amount, platform_commission_percent")
     .eq("tenant_id", tenantId)
     .eq("id", invoiceId)
     .single();
@@ -280,7 +284,7 @@ export async function getFnbInvoiceForReprint(invoiceId: string): Promise<{
 
   const { data: ko } = await supabase
     .from("kitchen_orders")
-    .select("order_number, order_type, table_id, restaurant_tables!kitchen_orders_table_id_fkey(table_number)")
+    .select("order_number, order_type, table_id, delivery_platform, restaurant_tables!kitchen_orders_table_id_fkey(table_number)")
     .eq("invoice_id", invoiceId)
     .maybeSingle();
 
@@ -309,6 +313,9 @@ export async function getFnbInvoiceForReprint(invoiceId: string): Promise<{
     orderNumber: k?.order_number ?? inv.code,
     tableName: tableNumber ? `Bàn ${tableNumber}` : null,
     orderType: k?.order_type ?? "takeaway",
+    deliveryPlatform: k?.delivery_platform ?? null,
+    platformCommissionPercent: Number(inv.platform_commission_percent ?? 0),
+    platformCommissionAmount: Number(inv.platform_commission_amount ?? 0),
     items: (items ?? []).map((it) => ({
       name: it.product_name,
       quantity: Number(it.quantity),

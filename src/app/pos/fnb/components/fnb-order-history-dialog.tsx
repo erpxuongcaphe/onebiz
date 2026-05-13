@@ -68,6 +68,16 @@ export function FnbOrderHistoryDialog({
     setReprinting(id);
     try {
       const detail = await getFnbInvoiceForReprint(id);
+      // Migration 00070: detail.total đã = NET (sau commission) cho đơn platform.
+      // subtotal = net + commission − tip + discount  (vì invoices.total đã trừ commission)
+      const isPlatformOrder =
+        detail.orderType === "delivery" &&
+        !!detail.deliveryPlatform &&
+        detail.deliveryPlatform !== "direct" &&
+        detail.platformCommissionAmount > 0;
+      const subtotalForReprint = isPlatformOrder
+        ? detail.total + detail.platformCommissionAmount - detail.tipAmount + detail.discountAmount
+        : detail.total - detail.tipAmount + detail.discountAmount;
       printFnbReceipt({
         invoiceCode: detail.invoiceCode,
         orderNumber: detail.orderNumber,
@@ -79,7 +89,7 @@ export function FnbOrderHistoryDialog({
           unitPrice: it.unitPrice,
           toppings: [],
         })),
-        subtotal: detail.total - detail.tipAmount + detail.discountAmount,
+        subtotal: subtotalForReprint,
         discountAmount: detail.discountAmount,
         deliveryFee: 0,
         tipAmount: detail.tipAmount,
@@ -96,6 +106,16 @@ export function FnbOrderHistoryDialog({
         paperSize: paperSize ?? "80mm",
         footer: receiptFooter ? `*** IN LẠI *** ${receiptFooter}` : "*** IN LẠI ***",
         receiptStyle,
+        deliveryPlatform: (detail.deliveryPlatform ?? undefined) as
+          | "direct"
+          | "shopee_food"
+          | "grab_food"
+          | "gojek"
+          | "be"
+          | "other"
+          | undefined,
+        platformCommissionPercent: isPlatformOrder ? detail.platformCommissionPercent : undefined,
+        platformCommissionAmount: isPlatformOrder ? detail.platformCommissionAmount : undefined,
       });
     } finally {
       setReprinting(null);

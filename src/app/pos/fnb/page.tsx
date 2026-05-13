@@ -1093,6 +1093,19 @@ function FnbPosPageInner() {
     const tab = pos.activeTab;
     if (!tab || tab.lines.length === 0) return;
 
+    // Migration 00070: nếu là đơn sàn → bill in NET (quán thực thu),
+    // commission line tách riêng cho shipper thấy.
+    const commissionPercent = tab.platformCommissionPercent ?? 0;
+    const isPlatformOrder =
+      tab.orderType === "delivery" &&
+      !!tab.deliveryPlatform &&
+      tab.deliveryPlatform !== "direct" &&
+      commissionPercent > 0;
+    const commissionAmount = isPlatformOrder
+      ? Math.round((pos.total * commissionPercent) / 100)
+      : 0;
+    const netTotal = pos.total - commissionAmount;
+
     printPreBill({
       orderNumber: tab.label,
       tableName: tab.label,
@@ -1108,7 +1121,7 @@ function FnbPosPageInner() {
       subtotal: pos.subtotal,
       discountAmount: pos.orderDiscountAmount,
       deliveryFee: 0,
-      total: pos.total,
+      total: netTotal,
       createdAt: new Date().toISOString(),
       cashierName: user?.fullName,
       storeName: settings.print.showStoreName ? settings.store.name : undefined,
@@ -1116,6 +1129,9 @@ function FnbPosPageInner() {
       storePhone: settings.print.showStorePhone ? settings.store.phone : undefined,
       paperSize: settings.print.paperSize === "58mm" ? "58mm" : "80mm",
       footer: settings.print.receiptFooter,
+      deliveryPlatform: tab.deliveryPlatform,
+      platformCommissionPercent: isPlatformOrder ? commissionPercent : undefined,
+      platformCommissionAmount: isPlatformOrder ? commissionAmount : undefined,
     });
   }, [pos, settings, user]);
 
@@ -1157,6 +1173,18 @@ function FnbPosPageInner() {
         if (settings.print.autoPrintReceipt && tab) {
           try {
             const tipAmount = payload.tipAmount ?? 0;
+            // Migration 00070: total trên bill = NET (quán thực thu) cho đơn sàn.
+            const commissionPercent = tab.platformCommissionPercent ?? 0;
+            const isPlatformOrderPrint =
+              tab.orderType === "delivery" &&
+              !!tab.deliveryPlatform &&
+              tab.deliveryPlatform !== "direct" &&
+              commissionPercent > 0;
+            const grossWithTip = pos.total + tipAmount;
+            const commissionAmount = isPlatformOrderPrint
+              ? Math.round((pos.total * commissionPercent) / 100)
+              : 0;
+            const netWithTip = grossWithTip - commissionAmount;
             printFnbReceipt({
               invoiceCode: payResult.invoiceCode,
               orderNumber: tab.label,
@@ -1174,12 +1202,12 @@ function FnbPosPageInner() {
               discountAmount: pos.orderDiscountAmount,
               deliveryFee: 0,
               tipAmount,
-              total: pos.total + tipAmount,
+              total: netWithTip,
               createdAt: new Date().toISOString(),
               cashierName: user?.fullName,
               paymentMethod: payload.paymentMethod,
               paid: payload.paid,
-              change: Math.max(0, payload.paid - (pos.total + tipAmount)),
+              change: isPlatformOrderPrint ? 0 : Math.max(0, payload.paid - grossWithTip),
               customerName: payload.customerName,
               storeName: settings.print.showStoreName ? settings.store.name : undefined,
               storeAddress: settings.print.showStoreAddress ? settings.store.address : undefined,
@@ -1194,6 +1222,9 @@ function FnbPosPageInner() {
                 bankAccount: settings.payment.bankAccount,
                 bankHolder: settings.payment.bankHolder,
               } : undefined,
+              deliveryPlatform: tab.deliveryPlatform,
+              platformCommissionPercent: isPlatformOrderPrint ? commissionPercent : undefined,
+              platformCommissionAmount: isPlatformOrderPrint ? commissionAmount : undefined,
             });
           } catch (printErr) {
             console.error("printFnbReceipt error:", printErr);

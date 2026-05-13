@@ -562,14 +562,17 @@ describe("Scenario: Đơn Shopee Food", () => {
   it("sets delivery platform metadata", async () => {
     mockFromHandler = () => createChain({ data: null, error: null });
 
-    await setDeliveryPlatform("ko-1", "shopee_food", 15000, 22000);
+    // Migration 00070: 4th param đổi từ "amount" → "percent". Shopee 25%.
+    await setDeliveryPlatform("ko-1", "shopee_food", 15000, 25);
 
     const platformUpdates = updateCalls.filter(
       (c) => (c.data as Record<string, unknown>)?.delivery_platform === "shopee_food"
     );
     expect(platformUpdates.length).toBe(1);
     expect((platformUpdates[0].data as Record<string, unknown>).delivery_fee).toBe(15000);
-    expect((platformUpdates[0].data as Record<string, unknown>).platform_commission).toBe(22000);
+    expect((platformUpdates[0].data as Record<string, unknown>).platform_commission_percent).toBe(25);
+    // Cột cũ platform_commission luôn = 0 sau migration 00070
+    expect((platformUpdates[0].data as Record<string, unknown>).platform_commission).toBe(0);
   });
 
   it("delivery fee included in total", async () => {
@@ -594,14 +597,15 @@ describe("Scenario: Đơn GrabFood", () => {
   it("sets Grab platform with commission 25%", async () => {
     mockFromHandler = () => createChain({ data: null, error: null });
 
-    // Grab takes 25% of subtotal (96000) = 24000
-    await setDeliveryPlatform("ko-1", "grab_food", 0, 24000);
+    // Migration 00070: param thứ 4 = % (không phải amount). Grab 25%.
+    await setDeliveryPlatform("ko-1", "grab_food", 0, 25);
 
     const updates = updateCalls.filter(
       (c) => (c.data as Record<string, unknown>)?.delivery_platform === "grab_food"
     );
     expect(updates.length).toBe(1);
-    expect((updates[0].data as Record<string, unknown>).platform_commission).toBe(24000);
+    expect((updates[0].data as Record<string, unknown>).platform_commission_percent).toBe(25);
+    expect((updates[0].data as Record<string, unknown>).platform_commission).toBe(0);
   });
 });
 

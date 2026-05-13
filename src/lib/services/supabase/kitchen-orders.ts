@@ -47,6 +47,9 @@ function mapKitchenOrder(row: any): KitchenOrder {
     deliveryPlatform: row.delivery_platform ?? null,
     deliveryFee: Number(row.delivery_fee ?? 0),
     platformCommission: Number(row.platform_commission ?? 0),
+    // Migration 00070: tách commission_percent / commission_amount
+    platformCommissionPercent: Number(row.platform_commission_percent ?? 0),
+    platformCommissionAmount: Number(row.platform_commission_amount ?? 0),
     mergedIntoId: row.merged_into_id ?? null,
     originalTableId: row.original_table_id ?? null,
     parentOrderId: row.parent_order_id ?? null,
@@ -726,12 +729,20 @@ export async function applyOrderDiscount(
 
 /**
  * Set delivery platform info on a kitchen order.
+ *
+ * Migration 00070 (CEO 13/05): tách commission thành 2 trường:
+ *   - platform_commission_percent (%): cashier set, vd 25 = 25%
+ *   - platform_commission_amount  (VND): tự tính khi thanh toán
+ *     = subtotal × percent / 100
+ *
+ * Giữ tham số `platformCommissionPercent` ở client. Server tự tính
+ * commission_amount khi gọi fnb_complete_payment_atomic.
  */
 export async function setDeliveryPlatform(
   orderId: string,
   platform: DeliveryPlatform,
   deliveryFee: number,
-  platformCommission: number
+  platformCommissionPercent: number
 ): Promise<void> {
   const supabase = getClient();
   const tenantId = await getCurrentTenantId();
@@ -741,7 +752,10 @@ export async function setDeliveryPlatform(
     .update({
       delivery_platform: platform,
       delivery_fee: deliveryFee,
-      platform_commission: platformCommission,
+      // Migration 00070: lưu vào cột _percent mới. Giữ cột cũ
+      // platform_commission = 0 để tránh confuse báo cáo cũ.
+      platform_commission_percent: platformCommissionPercent,
+      platform_commission: 0,
     })
     .eq("tenant_id", tenantId)
     .eq("id", orderId);

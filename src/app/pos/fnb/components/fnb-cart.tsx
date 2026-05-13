@@ -525,46 +525,73 @@ export function FnbCart({
           />
         )}
 
-        {/* Total — Sprint POS-FNB-4: số to hơn (3xl) cho cashier liếc xa
-            đọc được. Stitch spec dùng text-3xl/4xl để ưu tiên visual.
-            font-black thay extrabold để đậm rõ. */}
-        <div className="flex items-end justify-between border-t border-outline-variant/20 pt-3">
-          <span className="text-sm font-semibold text-foreground pb-0.5">Khách cần trả</span>
-          <span className="font-heading text-3xl font-black text-primary tabular-nums tracking-tight leading-none">
-            {formatCurrency(total)}
-            <span className="text-base font-bold ml-1">đ</span>
-          </span>
-        </div>
+        {(() => {
+          // CEO 13/05 (Migration 00070): tách 2 số rõ ràng cho đơn online sàn.
+          // - Khách trả qua app = total gross (chỉ cashier audit, không phải tiền quán nhận)
+          // - Quán thực thu    = total - commission (= ghi sổ quỹ + bill in cho shipper)
+          const commissionPercent = activeTab?.platformCommissionPercent ?? 0;
+          const isPlatformOrder =
+            !!activeTab &&
+            activeTab.orderType === "delivery" &&
+            !!activeTab.deliveryPlatform &&
+            activeTab.deliveryPlatform !== "direct" &&
+            commissionPercent > 0;
+          const commissionAmount = isPlatformOrder
+            ? Math.round((total * commissionPercent) / 100)
+            : 0;
+          const netReceived = total - commissionAmount;
 
-        {/* CEO 13/05: Commission sàn — chỉ hiện khi đơn delivery + platform khác direct.
-            Quán biết "thực thu" sau khi trừ chiết khấu sàn → tính lãi/lỗ chính xác. */}
-        {activeTab?.orderType === "delivery" &&
-          activeTab?.deliveryPlatform &&
-          activeTab.deliveryPlatform !== "direct" &&
-          activeTab.platformCommissionPercent &&
-          activeTab.platformCommissionPercent > 0 && (
-            <div className="rounded-md bg-status-warning/5 border border-status-warning/20 px-2.5 py-2 space-y-1">
-              <div className="flex items-center justify-between text-xs">
-                <span className="text-muted-foreground">
-                  Phí sàn ({activeTab.platformCommissionPercent}%)
+          if (!isPlatformOrder) {
+            // Đơn tại quán / takeaway / direct: hiển thị như cũ
+            return (
+              <div className="flex items-end justify-between border-t border-outline-variant/20 pt-3">
+                <span className="text-sm font-semibold text-foreground pb-0.5">
+                  Khách cần trả
                 </span>
-                <span className="font-medium text-status-warning tabular-nums">
-                  -{formatCurrency(Math.round((total * activeTab.platformCommissionPercent) / 100))}
+                <span className="font-heading text-3xl font-black text-primary tabular-nums tracking-tight leading-none">
+                  {formatCurrency(total)}
+                  <span className="text-base font-bold ml-1">đ</span>
                 </span>
               </div>
-              <div className="flex items-center justify-between text-[13px] pt-1 border-t border-status-warning/20">
-                <span className="text-foreground font-semibold">
-                  💰 Thực thu sau phí sàn
+            );
+          }
+
+          // Đơn online sàn (Shopee/Grab/...) — 3 hàng rõ ràng
+          return (
+            <div className="border-t border-outline-variant/20 pt-3 space-y-2">
+              {/* Khách trả qua app — gross (audit only) */}
+              <div className="flex items-center justify-between">
+                <span className="text-xs text-muted-foreground">
+                  Khách trả qua app
                 </span>
-                <span className="font-bold text-status-success tabular-nums">
-                  {formatCurrency(
-                    Math.round(total * (1 - activeTab.platformCommissionPercent / 100)),
-                  )}
-                  đ
+                <span className="text-sm font-medium text-muted-foreground tabular-nums line-through decoration-muted-foreground/40">
+                  {formatCurrency(total)}đ
+                </span>
+              </div>
+
+              {/* Phí sàn */}
+              <div className="flex items-center justify-between rounded-md bg-status-warning/5 border border-status-warning/20 px-2.5 py-1.5">
+                <span className="text-xs text-status-warning">
+                  Phí sàn ({commissionPercent}%)
+                </span>
+                <span className="text-sm font-medium text-status-warning tabular-nums">
+                  −{formatCurrency(commissionAmount)}đ
+                </span>
+              </div>
+
+              {/* Quán thực thu — net (số chính, to nhất) */}
+              <div className="flex items-end justify-between pt-1">
+                <span className="text-sm font-semibold text-foreground pb-0.5">
+                  💰 Quán thực thu
+                </span>
+                <span className="font-heading text-3xl font-black text-status-success tabular-nums tracking-tight leading-none">
+                  {formatCurrency(netReceived)}
+                  <span className="text-base font-bold ml-1">đ</span>
                 </span>
               </div>
             </div>
-          )}
+          );
+        })()}
 
         {!isEmpty && (
           <div className="flex gap-2">

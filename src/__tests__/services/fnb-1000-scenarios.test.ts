@@ -294,7 +294,8 @@ interface Scenario {
   discount?: { mode: "fixed" | "percent"; value: number };
   deliveryPlatform?: "shopee_food" | "grab_food" | "gojek" | "be";
   deliveryFee?: number;
-  platformCommission?: number;
+  /** Migration 00070: % (vd 25), not amount. */
+  platformCommissionPercent?: number;
   specialOp?: "modify" | "transfer" | "merge" | "split_items" | "split_equal" | "cancel" | "void";
 }
 
@@ -397,7 +398,8 @@ function generateScenarios(): Scenario[] {
     const subtotal = items.reduce((s, it) =>
       s + it.unitPrice * it.quantity + it.toppings.reduce((ts, tp) => ts + tp.price * tp.quantity * it.quantity, 0), 0);
     const deliveryFee = pick([0, 10000, 15000, 20000, 25000]);
-    const commission = Math.round(subtotal * pick([0.15, 0.20, 0.25, 0.30]));
+    // Migration 00070: store percent (vd 25 = 25%), không phải amount.
+    const commissionPercent = pick([15, 20, 25, 30]);
 
     scenarios.push({
       id: ++scenarioId,
@@ -408,7 +410,7 @@ function generateScenarios(): Scenario[] {
       paymentMethod: "transfer",
       deliveryPlatform: platform,
       deliveryFee,
-      platformCommission: commission,
+      platformCommissionPercent: commissionPercent,
     });
   }
 
@@ -564,7 +566,10 @@ function makeOrderRow(s: Scenario, overrides: Record<string, unknown> = {}) {
     discount_reason: s.discount ? "Giảm giá" : null,
     delivery_platform: s.deliveryPlatform ?? null,
     delivery_fee: s.deliveryFee ?? 0,
-    platform_commission: s.platformCommission ?? 0,
+    // Migration 00070: old column nullified, new cols hold split values.
+    platform_commission: 0,
+    platform_commission_percent: s.platformCommissionPercent ?? 0,
+    platform_commission_amount: 0,
     merged_into_id: null,
     original_table_id: null,
     restaurant_tables: s.tableId ? { name: s.label } : null,

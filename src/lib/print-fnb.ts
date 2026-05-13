@@ -38,6 +38,16 @@ export interface PreBillData {
   storePhone?: string;
   paperSize?: "58mm" | "80mm";
   footer?: string;
+  /**
+   * Migration 00070 — Phí sàn (Shopee / Grab / Gojek / Be).
+   * Nếu là đơn platform != "direct" + percent > 0 → bill in:
+   *   • "Khách trả qua app" = subtotal sau discount + deliveryFee (gross)
+   *   • "Phí sàn (XX%)"     = − commissionAmount
+   *   • "QUÁN THỰC THU"     = total (đã trừ phí sàn, đưa cho shipper)
+   */
+  deliveryPlatform?: "direct" | "shopee_food" | "grab_food" | "gojek" | "be" | "other";
+  platformCommissionPercent?: number;
+  platformCommissionAmount?: number;
 }
 
 export interface FnbReceiptData extends PreBillData {
@@ -197,6 +207,34 @@ export function printPreBill(data: PreBillData): void {
     return html;
   }).join("");
 
+  // Migration 00070: platform order → tách "Khách trả app" vs "Quán thực thu"
+  const isPlatformOrder =
+    data.orderType === "delivery" &&
+    !!data.deliveryPlatform &&
+    data.deliveryPlatform !== "direct" &&
+    (data.platformCommissionPercent ?? 0) > 0;
+  const commissionAmount = isPlatformOrder ? (data.platformCommissionAmount ?? 0) : 0;
+  const grossTotal = data.total + commissionAmount; // gross = net + commission
+  const platformLabel = ({
+    shopee_food: "Shopee Food",
+    grab_food: "Grab Food",
+    gojek: "Gojek",
+    be: "Be",
+    other: "Sàn khác",
+  } as Record<string, string>)[data.deliveryPlatform ?? ""] ?? "Sàn";
+
+  const totalsHtml = isPlatformOrder
+    ? `<tr><td>Tạm tính</td><td class="right">${formatCurrency(data.subtotal)}</td></tr>
+       ${data.discountAmount > 0 ? `<tr><td>Giảm giá</td><td class="right">-${formatCurrency(data.discountAmount)}</td></tr>` : ""}
+       ${data.deliveryFee > 0 ? `<tr><td>Phí giao hàng</td><td class="right">${formatCurrency(data.deliveryFee)}</td></tr>` : ""}
+       <tr><td>Khách trả qua ${platformLabel}</td><td class="right" style="text-decoration:line-through;color:#888">${formatCurrency(grossTotal)}</td></tr>
+       <tr><td>Phí sàn (${data.platformCommissionPercent}%)</td><td class="right">-${formatCurrency(commissionAmount)}</td></tr>
+       <tr class="bold"><td style="font-size:16px;padding-top:4px">QUÁN THỰC THU</td><td class="right" style="font-size:16px;padding-top:4px">${formatCurrency(data.total)}</td></tr>`
+    : `<tr><td>Tạm tính</td><td class="right">${formatCurrency(data.subtotal)}</td></tr>
+       ${data.discountAmount > 0 ? `<tr><td>Giảm giá</td><td class="right">-${formatCurrency(data.discountAmount)}</td></tr>` : ""}
+       ${data.deliveryFee > 0 ? `<tr><td>Phí giao hàng</td><td class="right">${formatCurrency(data.deliveryFee)}</td></tr>` : ""}
+       <tr class="bold"><td style="font-size:16px;padding-top:4px">TỔNG CỘNG</td><td class="right" style="font-size:16px;padding-top:4px">${formatCurrency(data.total)}</td></tr>`;
+
   const html = `<!DOCTYPE html>
 <html><head><meta charset="utf-8"><title>Tạm tính ${data.orderNumber}</title>
 <style>${baseStyles(width, pageSize)}
@@ -211,7 +249,7 @@ ${data.storePhone ? `<div class="center" style="font-size:10px;color:#666">ĐT: 
 <div class="center" style="margin-top:6px">
   <div class="title">PHIẾU TẠM TÍNH</div>
   <div class="order-info">${data.orderNumber} — ${tableLabel}</div>
-  <div style="font-size:11px;color:#888">${typeLabel} • ${formatTime(data.createdAt)} ${formatDate(data.createdAt)}</div>
+  <div style="font-size:11px;color:#888">${typeLabel}${isPlatformOrder ? ` • ${platformLabel}` : ""} • ${formatTime(data.createdAt)} ${formatDate(data.createdAt)}</div>
 </div>
 
 <div class="line"></div>
@@ -220,17 +258,12 @@ ${data.storePhone ? `<div class="center" style="font-size:10px;color:#666">ĐT: 
 
 <div class="line"></div>
 
-<table>
-  <tr><td>Tạm tính</td><td class="right">${formatCurrency(data.subtotal)}</td></tr>
-  ${data.discountAmount > 0 ? `<tr><td>Giảm giá</td><td class="right">-${formatCurrency(data.discountAmount)}</td></tr>` : ""}
-  ${data.deliveryFee > 0 ? `<tr><td>Phí giao hàng</td><td class="right">${formatCurrency(data.deliveryFee)}</td></tr>` : ""}
-  <tr class="bold"><td style="font-size:16px;padding-top:4px">TỔNG CỘNG</td><td class="right" style="font-size:16px;padding-top:4px">${formatCurrency(data.total)}</td></tr>
-</table>
+<table>${totalsHtml}</table>
 
 <div class="line"></div>
 
 <div class="center" style="font-size:12px;font-style:italic;margin:6px 0">
-  Đây là phiếu tạm tính, chưa phải hoá đơn thanh toán
+  ${isPlatformOrder ? "Đơn sàn — số trên là số quán thực thu (đã trừ phí sàn)." : "Đây là phiếu tạm tính, chưa phải hoá đơn thanh toán"}
 </div>
 
 ${data.cashierName ? `<div class="center" style="font-size:10px;color:#888">Thu ngân: ${data.cashierName}</div>` : ""}
@@ -252,6 +285,22 @@ export function printFnbReceipt(data: FnbReceiptData): void {
   const tableLabel = data.tableName ?? typeLabel;
   const style = data.receiptStyle ?? "standard";
   const paymentLabel = PAYMENT_METHOD_VN[data.paymentMethod] ?? data.paymentMethod;
+
+  // Migration 00070: platform order → tách "Khách trả app" vs "Quán thực thu"
+  const isPlatformOrder =
+    data.orderType === "delivery" &&
+    !!data.deliveryPlatform &&
+    data.deliveryPlatform !== "direct" &&
+    (data.platformCommissionPercent ?? 0) > 0;
+  const commissionAmount = isPlatformOrder ? (data.platformCommissionAmount ?? 0) : 0;
+  const grossTotal = data.total + commissionAmount;
+  const platformLabel = ({
+    shopee_food: "Shopee Food",
+    grab_food: "Grab Food",
+    gojek: "Gojek",
+    be: "Be",
+    other: "Sàn khác",
+  } as Record<string, string>)[data.deliveryPlatform ?? ""] ?? "Sàn";
 
   // Minimal: no item details, just total
   // Standard: items + prices
@@ -319,15 +368,16 @@ ${itemsHtml ? `<table>${itemsHtml}</table><div class="line"></div>` : ""}
   ${data.discountAmount > 0 ? `<tr><td>Giảm giá</td><td class="right">-${formatCurrency(data.discountAmount)}</td></tr>` : ""}
   ${data.deliveryFee > 0 ? `<tr><td>Phí giao hàng</td><td class="right">${formatCurrency(data.deliveryFee)}</td></tr>` : ""}
   ${(data.tipAmount ?? 0) > 0 ? `<tr><td>Tiền tip</td><td class="right">+${formatCurrency(data.tipAmount ?? 0)}</td></tr>` : ""}
-  <tr class="bold"><td style="font-size:16px;padding-top:4px">TỔNG CỘNG</td><td class="right" style="font-size:16px;padding-top:4px">${formatCurrency(data.total)}</td></tr>
+  ${isPlatformOrder ? `<tr><td>Khách trả qua ${platformLabel}</td><td class="right" style="text-decoration:line-through;color:#888">${formatCurrency(grossTotal)}</td></tr><tr><td>Phí sàn (${data.platformCommissionPercent}%)</td><td class="right">-${formatCurrency(commissionAmount)}</td></tr>` : ""}
+  <tr class="bold"><td style="font-size:16px;padding-top:4px">${isPlatformOrder ? "QUÁN THỰC THU" : "TỔNG CỘNG"}</td><td class="right" style="font-size:16px;padding-top:4px">${formatCurrency(data.total)}</td></tr>
 </table>
 
 <div class="line-thin"></div>
 
 <table>
-  <tr><td>Thanh toán</td><td class="right bold">${paymentLabel}</td></tr>
-  <tr><td>Tiền khách đưa</td><td class="right">${formatCurrency(data.paid)}</td></tr>
-  ${data.change > 0 ? `<tr class="bold"><td>Tiền thừa</td><td class="right">${formatCurrency(data.change)}</td></tr>` : ""}
+  <tr><td>Thanh toán</td><td class="right bold">${isPlatformOrder ? "Chuyển khoản (sàn)" : paymentLabel}</td></tr>
+  ${isPlatformOrder ? `<tr><td colspan="2" style="font-style:italic;color:#666;font-size:11px">Khách đã thanh toán qua app — sàn chuyển khoản về quán sau khi đối soát.</td></tr>` : `<tr><td>Tiền khách đưa</td><td class="right">${formatCurrency(data.paid)}</td></tr>`}
+  ${!isPlatformOrder && data.change > 0 ? `<tr class="bold"><td>Tiền thừa</td><td class="right">${formatCurrency(data.change)}</td></tr>` : ""}
 </table>
 
 ${qrHtml}

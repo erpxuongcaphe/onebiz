@@ -739,11 +739,14 @@ describe("Part 2: Takeaway order (Latte + Kem phô mai)", () => {
 describe("Part 2: Delivery — Shopee Food (Matcha Latte, commission 25%)", () => {
   it("sets delivery platform + fee + commission", async () => {
     mockFromHandler = () => createChain({ data: makeOrderRow({ order_type: "delivery" }), error: null });
-    await setDeliveryPlatform("ko-1", "shopee_food", 15000, 0.25);
+    // Migration 00070: 4th param = % (vd 25 = 25%), không phải 0.25.
+    await setDeliveryPlatform("ko-1", "shopee_food", 15000, 25);
     const upd = updateCalls.find((c) => (c.data as Record<string, unknown>).delivery_platform === "shopee_food");
     expect(upd).toBeDefined();
     expect((upd!.data as Record<string, unknown>).delivery_fee).toBe(15000);
-    expect((upd!.data as Record<string, unknown>).platform_commission).toBe(0.25);
+    expect((upd!.data as Record<string, unknown>).platform_commission_percent).toBe(25);
+    // Cột cũ platform_commission luôn = 0 sau migration 00070
+    expect((upd!.data as Record<string, unknown>).platform_commission).toBe(0);
   });
 });
 

@@ -91,7 +91,15 @@ export interface KitchenOrder {
   discountReason: string | null;
   deliveryPlatform: DeliveryPlatform | null;
   deliveryFee: number;
+  /**
+   * @deprecated Migration 00070: dùng `platformCommissionPercent` + `platformCommissionAmount`.
+   * Vẫn giữ field cũ cho data legacy (đơn cũ trước migration).
+   */
   platformCommission: number;
+  /** % phí sàn lưu trên đơn (Shopee 25%, Grab 25%, Gojek 23%, Be 20%). */
+  platformCommissionPercent: number;
+  /** Số tiền phí sàn thực tế = round(total_gross * percent / 100). */
+  platformCommissionAmount: number;
   mergedIntoId: string | null;
   originalTableId: string | null;
   parentOrderId: string | null;
