@@ -283,6 +283,15 @@ export type {
   OtpActionCode,
 } from "./manager-otp";
 
+// Sprint B (CEO 12/05): PIN POS per-user (Approach Z)
+export {
+  setUserPosPin,
+  removeUserPosPin,
+  listPosPinUsers,
+  verifyPosPinAndSwitch,
+} from "./pos-pin";
+export type { PosPinUser, PosPinSwitchResult } from "./pos-pin";
+
 // Sprint POS-FNB-EXT-1 (CEO 08/05): Delivery platforms + Discount presets
 export {
   getDeliveryPlatformSettings,

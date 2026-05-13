@@ -30,3 +30,4 @@ export { AdjustPriceTierPercentDialog } from "./adjust-price-tier-percent-dialog
 export { CreateInternalSaleDialog } from "./create-internal-sale-dialog";
 export { CreatePromotionDialog } from "./create-promotion-dialog";
 export { SupervisorPinDialog } from "./supervisor-pin-dialog";
+export { SetPinDialog } from "./set-pin-dialog";

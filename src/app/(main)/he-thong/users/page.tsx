@@ -41,6 +41,8 @@ import {
   inviteStaff,
 } from "@/lib/services/supabase/roles";
 import type { DbRole } from "@/lib/services/supabase/roles";
+import { setUserPosPin, removeUserPosPin } from "@/lib/services/supabase/pos-pin";
+import { SetPinDialog } from "@/components/shared/dialogs";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { getClient } from "@/lib/services/supabase/base";
@@ -78,6 +80,9 @@ export default function UsersPage() {
   const [assignOpen, setAssignOpen] = useState(false);
   const [selectedUser, setSelectedUser] = useState<UserRow | null>(null);
   const [selectedRoleId, setSelectedRoleId] = useState<string>("");
+
+  // Sprint B.4 (CEO 12/05): Set PIN POS dialog
+  const [setPinUser, setSetPinUser] = useState<UserRow | null>(null);
 
   // Invite staff dialog (legacy - email magic link)
   const [inviteOpen, setInviteOpen] = useState(false);
@@ -493,6 +498,11 @@ export default function UsersPage() {
                           >
                             <Icon name="shield" size={16} className="mr-2" />
                             Gán vai trò
+                          </DropdownMenuItem>
+                          {/* Sprint B.4 (CEO 12/05): đặt PIN POS cho nhân viên */}
+                          <DropdownMenuItem onSelect={() => setSetPinUser(user)}>
+                            <Icon name="pin" size={16} className="mr-2 text-status-warning" />
+                            Đặt PIN POS
                           </DropdownMenuItem>
                           <DropdownMenuSeparator />
                           <DropdownMenuItem
@@ -1127,6 +1137,35 @@ export default function UsersPage() {
           </DialogFooter>
         </DialogContent>
       </Dialog>
+
+      {/* Sprint B.4 (CEO 12/05): Đặt PIN POS cho nhân viên */}
+      <SetPinDialog
+        open={setPinUser !== null}
+        onOpenChange={(o) => {
+          if (!o) setSetPinUser(null);
+        }}
+        targetUserName={setPinUser?.fullName ?? ""}
+        hasExistingPin={false}
+        onConfirm={async (pin) => {
+          if (!setPinUser) return;
+          try {
+            await setUserPosPin(setPinUser.id, pin);
+            toast({
+              title: "Đã đặt PIN POS",
+              description: `${setPinUser.fullName} — nhân viên có thể switch user trên POS bằng PIN mới`,
+              variant: "success",
+            });
+            setSetPinUser(null);
+          } catch (err) {
+            toast({
+              title: "Đặt PIN thất bại",
+              description: err instanceof Error ? err.message : "Vui lòng thử lại",
+              variant: "error",
+            });
+            throw err; // để SetPinDialog giữ open + hiện error inline
+          }
+        }}
+      />
     </div>
   );
 }
