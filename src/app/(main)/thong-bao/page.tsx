@@ -13,6 +13,7 @@
  */
 
 import { useEffect, useState, useCallback } from "react";
+import { useRouter } from "next/navigation";
 import { PageHeader } from "@/components/shared/page-header";
 import { Card } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
@@ -92,6 +93,61 @@ const tabFilterMap: Record<string, NotificationKind[] | null> = {
   finance: ["payment_received", "po_overdue", "cash_drawer_diff"],
 };
 
+/**
+ * CEO 13/05: Deep-link notification → trang liên quan. Map (kind, referenceType,
+ * referenceId) sang URL phù hợp. Trả null nếu không có route phù hợp (notify
+ * info-only như cash_drawer_diff không cần navigate đâu cả).
+ */
+function getNotificationLink(n: NotificationRow): string | null {
+  const refId = n.referenceId;
+
+  // Priority 1: reference_type (chính xác hơn kind)
+  if (n.referenceType && refId) {
+    switch (n.referenceType) {
+      case "invoice":
+        return `/don-hang/dat-hang?id=${refId}`;
+      case "purchase_order":
+      case "purchase_entry":
+        return `/hang-hoa/dat-hang-nhap?id=${refId}`;
+      case "product":
+        return `/hang-hoa/ton-kho?productId=${refId}`;
+      case "product_lot":
+        return `/hang-hoa/ton-kho?lotId=${refId}`;
+      case "customer":
+        return `/khach-hang?id=${refId}`;
+      case "cash_transaction":
+        return `/so-quy?id=${refId}`;
+      case "shift":
+        return `/so-quy?shiftId=${refId}`;
+      case "kitchen_order":
+        return `/pos/fnb`;
+    }
+  }
+
+  // Priority 2: fallback theo kind (khi reference rỗng — vd low-stock daily summary)
+  switch (n.type) {
+    case "order_new":
+    case "order_completed":
+      return refId ? `/don-hang/dat-hang?id=${refId}` : "/don-hang/dat-hang";
+    case "stock_low":
+      return "/hang-hoa/ton-kho";
+    case "expiring_lot":
+      return "/hang-hoa/ton-kho?filter=expiring";
+    case "po_overdue":
+      return "/hang-hoa/dat-hang-nhap?filter=overdue";
+    case "customer_new":
+      return refId ? `/khach-hang?id=${refId}` : "/khach-hang";
+    case "payment_received":
+      return refId ? `/so-quy?id=${refId}` : "/so-quy";
+    case "cash_drawer_diff":
+      return "/so-quy";
+    case "pos_offline":
+      return "/pos";
+  }
+
+  return null;
+}
+
 /** Format relative time (vi) — đơn giản, không cần dayjs. */
 function timeAgo(iso: string): string {
   const now = Date.now();
@@ -107,6 +163,7 @@ function timeAgo(iso: string): string {
 
 export default function ThongBaoPage() {
   const { toast } = useToast();
+  const router = useRouter();
   const [notifications, setNotifications] = useState<NotificationRow[]>([]);
   const [loading, setLoading] = useState(true);
   const [activeTab, setActiveTab] = useState("all");
@@ -162,7 +219,11 @@ export default function ThongBaoPage() {
         load();
       }
     }
-    // TODO: deep-link tới reference_type/id (vd order_new → /don-hang/dat-hang?id=X)
+    // CEO 13/05: deep-link sang trang chi tiết (order/PO/stock/khách...)
+    const link = getNotificationLink(n);
+    if (link) {
+      router.push(link);
+    }
   };
 
   const handleDelete = async (id: string) => {

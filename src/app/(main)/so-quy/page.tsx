@@ -39,7 +39,7 @@ import type { CashTransactionImportRow } from "@/lib/excel/schemas";
 import {
   getCashBookEntries,
   getCashBookSummaryAsync,
-  deleteCashTransaction,
+  cancelCashTransaction,
 } from "@/lib/services";
 import { useToast, useBranchFilter } from "@/lib/contexts";
 import { printDocument } from "@/lib/print-document";
@@ -262,9 +262,10 @@ export default function SoQuyPage() {
 
   // Cancel (was "Delete" — Stage 5 anomaly fix: phiếu thu/chi đã chốt mà xoá
   // cứng nguy hiểm cho kế toán/đối soát. UX align với cancel flow.
-  // TODO Stage 5b: refactor service deleteCashTransaction → cancelCashTransaction
-  // (set status='cancelled' + audit log thay vì xoá hard).
+  // CEO 13/05: refactor xong — dùng cancelCashTransaction (status='cancelled'
+  // + audit log + reverse debt nếu có invoice/PO ref).
   const [deletingEntry, setDeletingEntry] = useState<CashBookEntry | null>(null);
+  const [deleteReason, setDeleteReason] = useState("");
   const [deleteLoading, setDeleteLoading] = useState(false);
   // Sprint UX-1 Stage 4: Audit log shortcut
   const [auditDialogTarget, setAuditDialogTarget] = useState<CashBookEntry | null>(null);
@@ -628,7 +629,9 @@ export default function SoQuyPage() {
                   return;
                 try {
                   await Promise.all(
-                    selectedRows.map((r) => deleteCashTransaction(r.id)),
+                    selectedRows.map((r) =>
+                      cancelCashTransaction(r.id, "Hủy hàng loạt từ UI sổ quỹ"),
+                    ),
                   );
                   toast({
                     title: `Đã hủy ${selectedRows.length} phiếu`,
@@ -666,8 +669,8 @@ export default function SoQuyPage() {
               },
               onPrint: () => printDocument(buildCashTransactionPrintData(row)),
               onAuditLog: () => setAuditDialogTarget(row),
-              // Stage 5b anomaly fix: đổi "Xóa" → "Hủy" (phiếu thu/chi đã chốt
-              // không xóa cứng). TODO refactor service deleteCashTransaction.
+              // Stage 5b: đổi "Xóa" → "Hủy" (phiếu thu/chi đã chốt không
+              // xoá cứng — dùng cancelCashTransaction với reason + audit log).
               onCancel: () => setDeletingEntry(row),
             })
           }
@@ -683,25 +686,71 @@ export default function SoQuyPage() {
 
       <ConfirmDialog
         open={!!deletingEntry}
-        onOpenChange={(open) => { if (!open) setDeletingEntry(null); }}
+        onOpenChange={(open) => {
+          if (!open) {
+            setDeletingEntry(null);
+            setDeleteReason("");
+          }
+        }}
         title="Hủy phiếu thu/chi"
-        description={`Bạn có chắc muốn hủy phiếu ${deletingEntry?.code}? Thao tác này không thể hoàn tác.`}
+        description={
+          <div className="space-y-3">
+            <p>
+              Bạn có chắc muốn hủy phiếu <strong>{deletingEntry?.code}</strong>?
+              Phiếu sẽ được đánh dấu cancelled (giữ lại để audit).
+            </p>
+            <div className="space-y-1">
+              <label
+                htmlFor="cancel-reason"
+                className="text-xs font-medium block"
+              >
+                Lý do hủy <span className="text-status-error">*</span>
+              </label>
+              <textarea
+                id="cancel-reason"
+                value={deleteReason}
+                onChange={(e) => setDeleteReason(e.target.value)}
+                placeholder="VD: Nhập nhầm số tiền, sai bên / hủy đối ứng đơn..."
+                className="w-full min-h-[60px] rounded-md border border-input bg-background px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-primary"
+                disabled={deleteLoading}
+              />
+            </div>
+          </div>
+        }
         confirmLabel="Hủy phiếu"
         cancelLabel="Đóng"
         variant="destructive"
         loading={deleteLoading}
+        confirmDisabled={deleteReason.trim().length < 3}
         onConfirm={async () => {
           if (!deletingEntry) return;
+          const reasonTrim = deleteReason.trim();
+          if (reasonTrim.length < 3) {
+            toast({
+              title: "Cần ghi lý do",
+              description: "Nhập ít nhất 3 ký tự để audit log truy được.",
+              variant: "error",
+            });
+            return;
+          }
           setDeleteLoading(true);
           try {
-            // TODO Stage 5b: thay deleteCashTransaction bằng cancelCashTransaction
-            // (set status='cancelled' + audit log thay vì xoá hard).
-            await deleteCashTransaction(deletingEntry.id);
-            toast({ title: "Đã hủy phiếu", description: deletingEntry.code, variant: "success" });
+            await cancelCashTransaction(deletingEntry.id, reasonTrim);
+            toast({
+              title: "Đã hủy phiếu",
+              description: `${deletingEntry.code} — ${reasonTrim}`,
+              variant: "success",
+            });
             setDeletingEntry(null);
+            setDeleteReason("");
             fetchData();
           } catch (err) {
-            toast({ title: "Lỗi hủy phiếu", description: err instanceof Error ? err.message : "Vui lòng thử lại", variant: "error" });
+            toast({
+              title: "Lỗi hủy phiếu",
+              description:
+                err instanceof Error ? err.message : "Vui lòng thử lại",
+              variant: "error",
+            });
           } finally {
             setDeleteLoading(false);
           }

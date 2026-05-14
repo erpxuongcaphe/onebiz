@@ -20,6 +20,11 @@ interface ConfirmDialogProps {
   cancelLabel?: string;
   variant?: "default" | "destructive";
   loading?: boolean;
+  /**
+   * Optional — disable confirm button có thể vì validate input chưa đủ
+   * (vd: cần nhập lý do hủy phiếu ≥ 3 ký tự).
+   */
+  confirmDisabled?: boolean;
   onConfirm: () => void;
 }
 
@@ -32,6 +37,7 @@ export function ConfirmDialog({
   cancelLabel = "Huỷ",
   variant = "default",
   loading = false,
+  confirmDisabled = false,
   onConfirm,
 }: ConfirmDialogProps) {
   return (
@@ -59,7 +65,7 @@ export function ConfirmDialog({
           </Button>
           <Button
             variant={variant}
-            disabled={loading}
+            disabled={loading || confirmDisabled}
             onClick={onConfirm}
           >
             {loading ? "Đang xử lý..." : confirmLabel}
