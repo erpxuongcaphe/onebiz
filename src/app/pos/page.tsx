@@ -363,7 +363,30 @@ function PosPageInner() {
   // - Mount → check có ca đang mở của cashier này tại chi nhánh này không
   // - Không có → bắt mở ca trước khi cho thanh toán
   // - Có → cho phép bán, mọi invoice + cash_transaction gắn shift_id
-  const { user, tenant, currentBranch, logout } = useAuth();
+  const { user, tenant, currentBranch, branches, switchBranch, logout } = useAuth();
+
+  // CEO 13/05: POS Retail = bán sỉ qua Kho tổng. Nếu user đang ở Cửa hàng
+  // FnB / Xưởng / Văn phòng → auto-switch sang kho tổng đầu tiên. Tránh
+  // user bị stuck với checkout không trừ stock đúng nơi.
+  useEffect(() => {
+    if (!currentBranch) return;
+    if (currentBranch.branchType === "warehouse") return;
+    const firstWarehouse = branches.find((b) => b.branchType === "warehouse");
+    if (!firstWarehouse) return; // empty state handle ở dưới
+    void switchBranch(firstWarehouse.id);
+    toast({
+      title: "Chuyển sang Kho tổng",
+      description: `${currentBranch.name} là ${
+        currentBranch.branchType === "store"
+          ? "Cửa hàng FnB"
+          : currentBranch.branchType === "factory"
+            ? "Xưởng sản xuất"
+            : "Văn phòng"
+      } — POS Retail chỉ hoạt động ở Kho tổng. Đã chuyển sang "${firstWarehouse.name}".`,
+      variant: "info",
+      duration: 6000,
+    });
+  }, [currentBranch, branches, switchBranch, toast]);
   const { settings, updateSettings } = useSettings();
   const [currentShift, setCurrentShift] = useState<Shift | null>(null);
   const [openShiftDialogOpen, setOpenShiftDialogOpen] = useState(false);
@@ -1738,8 +1761,10 @@ function PosPageInner() {
         </Link>
 
         {/* Branch selector + Title — prominent style: badge nổi bật để CEO/staff
-            biết rõ chi nhánh đang ghi nhận đơn (CEO feedback 20/04). */}
-        <PosBranchSelector variant="dark" filter={["warehouse", "store"]} showCode prominent />
+            biết rõ chi nhánh đang ghi nhận đơn (CEO feedback 20/04).
+            CEO 13/05: POS Retail = bán sỉ qua Kho tổng. Filter chỉ "warehouse"
+            — FnB và Retail là 2 mảng riêng, Cửa hàng FnB không xuất hiện. */}
+        <PosBranchSelector variant="dark" filter={["warehouse"]} showCode prominent />
         <div className="h-4 w-px bg-white/20 shrink-0" />
         <span className="text-[13px] font-bold shrink-0">
           POS Retail

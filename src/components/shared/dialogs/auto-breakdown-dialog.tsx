@@ -403,9 +403,9 @@ export function AutoBreakdownDialog({
                         <span className="text-[10px] uppercase tracking-wider text-muted-foreground">
                           {(
                             {
-                              store: "Cửa hàng",
-                              warehouse: "Kho",
-                              factory: "Xưởng",
+                              store: "Cửa hàng FnB",
+                              warehouse: "Kho tổng",
+                              factory: "Xưởng SX",
                               office: "Văn phòng",
                             } as Record<string, string>
                           )[b.branchType] ?? b.branchType}

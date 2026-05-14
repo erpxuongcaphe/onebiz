@@ -59,10 +59,12 @@ export interface Tenant {
 }
 
 // Loại chi nhánh — quyết định POS/kho/báo cáo hiển thị ra sao.
-//   store     — quán FnB (POS FnB + KDS)
-//   warehouse — kho tổng (POS Retail + quản lý xuất nhập)
-//   factory   — xưởng sản xuất (SX orders + NVL + thành phẩm về kho)
-//   office    — văn phòng/HQ (không bán trực tiếp)
+// CEO 13/05/2026: phân định rõ FnB và Retail là 2 mảng riêng.
+//   store     — Cửa hàng FnB (POS FnB + KDS) — quán bán đồ uống tại bàn / mang về / giao hàng
+//   warehouse — Kho tổng (POS Retail) — bán sỉ hạt rang + máy móc cho khách doanh nghiệp
+//   factory   — Xưởng sản xuất (SX orders) — rang hạt, không POS bán hàng
+//   office    — Văn phòng HQ — ghi nhận chi phí điều hành (lương BOD, văn phòng phẩm,
+//               điện nước HQ...). Không POS bán hàng nhưng có sổ quỹ + công nợ.
 export type BranchType = "store" | "warehouse" | "factory" | "office";
 
 // Chi nhánh

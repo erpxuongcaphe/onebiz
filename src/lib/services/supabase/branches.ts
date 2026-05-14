@@ -297,11 +297,20 @@ function mapBranch(row: Record<string, unknown>): BranchDetail {
 }
 
 // Branch type labels (Vietnamese)
+// CEO 13/05: phân định rõ FnB vs Retail. Cửa hàng = mảng FnB. Kho tổng = mảng Retail.
 export const BRANCH_TYPE_LABELS: Record<BranchDetail["branchType"], string> = {
-  store: "Cửa hàng",
-  warehouse: "Kho",
+  store: "Cửa hàng FnB",
+  warehouse: "Kho tổng",
   factory: "Xưởng sản xuất",
   office: "Văn phòng",
+};
+
+// Mô tả ngắn cho từng loại — hiển thị dưới dropdown để user hiểu rõ.
+export const BRANCH_TYPE_DESCRIPTIONS: Record<BranchDetail["branchType"], string> = {
+  store: "Quán bán đồ uống — POS FnB + KDS bếp/bar",
+  warehouse: "Bán sỉ hạt rang + máy móc — POS Retail",
+  factory: "Rang hạt cà phê — không POS bán hàng",
+  office: "Văn phòng HQ — ghi nhận chi phí điều hành (lương, VPP, điện nước)",
 };
 
 // Branch code prefix based on type

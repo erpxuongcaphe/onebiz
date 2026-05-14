@@ -334,6 +334,7 @@ function BranchSettingsPageInner() {
   const storeCount = branches.filter((b) => b.branchType === "store").length;
   const warehouseCount = branches.filter((b) => b.branchType === "warehouse").length;
   const factoryCount = branches.filter((b) => b.branchType === "factory").length;
+  const officeCount = branches.filter((b) => b.branchType === "office").length;
 
   return (
     <div className="space-y-6 p-4">
@@ -350,27 +351,32 @@ function BranchSettingsPageInner() {
         </Button>
       </div>
 
-      {/* KPI row */}
-      <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
+      {/* KPI row — 5 ô: Tổng hoạt động + 4 loại chi nhánh */}
+      <div className="grid grid-cols-2 md:grid-cols-5 gap-3">
         <SummaryCard
           label="Đang hoạt động"
           value={activeCount.toString()}
           icon={<Icon name="apartment" size={14} />}
         />
         <SummaryCard
-          label="Cửa hàng"
+          label="Cửa hàng FnB"
           value={storeCount.toString()}
           icon={<Icon name="storefront" size={14} />}
         />
         <SummaryCard
-          label="Kho"
+          label="Kho tổng"
           value={warehouseCount.toString()}
           icon={<Icon name="warehouse" size={14} />}
         />
         <SummaryCard
-          label="Xưởng"
+          label="Xưởng SX"
           value={factoryCount.toString()}
           icon={<Icon name="factory" size={14} />}
+        />
+        <SummaryCard
+          label="Văn phòng"
+          value={officeCount.toString()}
+          icon={<Icon name="business_center" size={14} />}
         />
       </div>
 
@@ -537,20 +543,19 @@ function BranchSettingsPageInner() {
                     setForm((f) => ({ ...f, branchType: val as BranchType }))
                   }
                   items={[
-                    { value: "store", label: "Cửa hàng" },
+                    { value: "store", label: "Cửa hàng FnB" },
                     { value: "warehouse", label: "Kho tổng" },
                     { value: "factory", label: "Xưởng SX" },
                     { value: "office", label: "Văn phòng" },
                   ]}
                 >
-                  {/* CEO 13/05: label ngắn (Cửa hàng / Kho tổng / Xưởng SX
-                      / Văn phòng) để fit trong cột 2-col của dialog. Mô tả
-                      chi tiết để dưới dropdown để user vẫn hiểu. */}
+                  {/* CEO 13/05: label ngắn fit cột 2-col. Phân định rõ FnB
+                      và Retail là 2 mảng riêng — Cửa hàng FnB ≠ Kho tổng. */}
                   <SelectTrigger id="branch-type" className="w-full">
                     <SelectValue placeholder="Chọn loại">
                       {(v) => {
                         const labels: Record<string, string> = {
-                          store: "Cửa hàng",
+                          store: "Cửa hàng FnB",
                           warehouse: "Kho tổng",
                           factory: "Xưởng SX",
                           office: "Văn phòng",
@@ -560,17 +565,17 @@ function BranchSettingsPageInner() {
                     </SelectValue>
                   </SelectTrigger>
                   <SelectContent>
-                    <SelectItem value="store">Cửa hàng (POS FnB / Retail)</SelectItem>
-                    <SelectItem value="warehouse">Kho tổng (bán sỉ)</SelectItem>
-                    <SelectItem value="factory">Xưởng sản xuất</SelectItem>
-                    <SelectItem value="office">Văn phòng (không POS)</SelectItem>
+                    <SelectItem value="store">Cửa hàng FnB (POS FnB + KDS)</SelectItem>
+                    <SelectItem value="warehouse">Kho tổng (POS Retail — bán sỉ)</SelectItem>
+                    <SelectItem value="factory">Xưởng sản xuất (rang hạt)</SelectItem>
+                    <SelectItem value="office">Văn phòng (ghi nhận chi phí HQ)</SelectItem>
                   </SelectContent>
                 </Select>
                 <p className="text-xs text-muted-foreground">
-                  {form.branchType === "store" && "Có POS FnB / Retail + KDS"}
-                  {form.branchType === "warehouse" && "Bán sỉ + quản lý xuất nhập"}
-                  {form.branchType === "factory" && "SX orders + NVL về kho"}
-                  {form.branchType === "office" && "Văn phòng — không POS"}
+                  {form.branchType === "store" && "Quán bán đồ uống — POS FnB + KDS bếp/bar"}
+                  {form.branchType === "warehouse" && "Bán sỉ hạt rang + máy móc — POS Retail"}
+                  {form.branchType === "factory" && "Rang hạt cà phê — không POS bán hàng"}
+                  {form.branchType === "office" && "Văn phòng HQ — ghi nhận chi phí điều hành (lương, VPP, điện nước)"}
                 </p>
               </div>
               <div className="space-y-2 sm:col-span-2">
