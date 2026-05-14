@@ -489,9 +489,9 @@ function BranchSettingsPageInner() {
 
       {/* Create/Edit Dialog */}
       <Dialog open={dialogOpen} onOpenChange={setDialogOpen}>
-        {/* CEO 13/05: nâng từ max-w-lg lên max-w-2xl — form có 2 cột
-            (Tên/Mã/Loại/Địa chỉ/SĐT/Bảng giá) sẽ rộng rãi hơn. */}
-        <DialogContent className="max-w-2xl">
+        {/* CEO 13/05: dialog 3xl — label dropdown "Cửa hàng" dài + form
+            2 cột (Mã + Loại) cần đủ chỗ. */}
+        <DialogContent className="max-w-3xl">
           <DialogHeader>
             <DialogTitle>
               {editingId ? "Sửa chi nhánh" : "Thêm chi nhánh"}
@@ -537,22 +537,25 @@ function BranchSettingsPageInner() {
                     setForm((f) => ({ ...f, branchType: val as BranchType }))
                   }
                   items={[
-                    { value: "store", label: "Cửa hàng (POS FnB / Retail)" },
-                    { value: "warehouse", label: "Kho tổng (bán sỉ)" },
-                    { value: "factory", label: "Xưởng sản xuất" },
+                    { value: "store", label: "Cửa hàng" },
+                    { value: "warehouse", label: "Kho tổng" },
+                    { value: "factory", label: "Xưởng SX" },
                     { value: "office", label: "Văn phòng" },
                   ]}
                 >
-                  <SelectTrigger id="branch-type">
-                    <SelectValue placeholder="Chọn loại chi nhánh">
+                  {/* CEO 13/05: label ngắn (Cửa hàng / Kho tổng / Xưởng SX
+                      / Văn phòng) để fit trong cột 2-col của dialog. Mô tả
+                      chi tiết để dưới dropdown để user vẫn hiểu. */}
+                  <SelectTrigger id="branch-type" className="w-full">
+                    <SelectValue placeholder="Chọn loại">
                       {(v) => {
                         const labels: Record<string, string> = {
-                          store: "Cửa hàng (POS FnB / Retail)",
-                          warehouse: "Kho tổng (bán sỉ)",
-                          factory: "Xưởng sản xuất",
+                          store: "Cửa hàng",
+                          warehouse: "Kho tổng",
+                          factory: "Xưởng SX",
                           office: "Văn phòng",
                         };
-                        return labels[v as string] ?? "Chọn loại chi nhánh";
+                        return labels[v as string] ?? "Chọn loại";
                       }}
                     </SelectValue>
                   </SelectTrigger>
@@ -560,9 +563,15 @@ function BranchSettingsPageInner() {
                     <SelectItem value="store">Cửa hàng (POS FnB / Retail)</SelectItem>
                     <SelectItem value="warehouse">Kho tổng (bán sỉ)</SelectItem>
                     <SelectItem value="factory">Xưởng sản xuất</SelectItem>
-                    <SelectItem value="office">Văn phòng</SelectItem>
+                    <SelectItem value="office">Văn phòng (không POS)</SelectItem>
                   </SelectContent>
                 </Select>
+                <p className="text-xs text-muted-foreground">
+                  {form.branchType === "store" && "Có POS FnB / Retail + KDS"}
+                  {form.branchType === "warehouse" && "Bán sỉ + quản lý xuất nhập"}
+                  {form.branchType === "factory" && "SX orders + NVL về kho"}
+                  {form.branchType === "office" && "Văn phòng — không POS"}
+                </p>
               </div>
               <div className="space-y-2 sm:col-span-2">
                 <Label htmlFor="branch-address">Địa chỉ</Label>
