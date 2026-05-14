@@ -180,7 +180,14 @@ td{padding:1px 0;font-size:12px;vertical-align:top}
 // 1. PHIẾU TẠM TÍNH (Pre-bill)
 // ============================================================
 
-export function printPreBill(data: PreBillData): void {
+/**
+ * Build HTML string của phiếu tạm tính — KHÔNG mở popup print.
+ * Dùng cho preview component (iframe srcDoc) hoặc test snapshot.
+ *
+ * CEO 13/05: tách logic build HTML ra khỏi printPreBill để preview
+ * dùng được. Logic 100% giống printPreBill — chỉ skip openAndPrint.
+ */
+export function buildPreBillHtml(data: PreBillData): string {
   const width = getWidth(data.paperSize);
   const pageSize = getPageSize(data.paperSize);
   const typeLabel = ORDER_TYPE_VN[data.orderType] ?? data.orderType;
@@ -271,14 +278,25 @@ ${data.footer ? `<div class="footer-text">${data.footer}</div>` : ""}
 
 </body></html>`;
 
-  openAndPrint(html);
+  return html;
+}
+
+export function printPreBill(data: PreBillData): void {
+  openAndPrint(buildPreBillHtml(data));
 }
 
 // ============================================================
 // 2. PHIẾU THANH TOÁN (FnB Receipt)
 // ============================================================
 
-export function printFnbReceipt(data: FnbReceiptData): void {
+/**
+ * Build HTML string của hoá đơn thanh toán FnB — KHÔNG dispatch printer.
+ * Dùng cho preview (iframe srcDoc).
+ *
+ * CEO 13/05: tách HTML builder để Settings page render preview live khi
+ * user toggle paperSize / receiptStyle / showQr / etc.
+ */
+export function buildFnbReceiptHtml(data: FnbReceiptData): string {
   const width = getWidth(data.paperSize);
   const pageSize = getPageSize(data.paperSize);
   const typeLabel = ORDER_TYPE_VN[data.orderType] ?? data.orderType;
@@ -389,6 +407,12 @@ ${data.footer ? `<div class="footer-text">${data.footer}</div>` : ""}
 
 </body></html>`;
 
+  return html;
+}
+
+export function printFnbReceipt(data: FnbReceiptData): void {
+  const html = buildFnbReceiptHtml(data);
+
   // Dispatch qua PrinterService:
   //   - backend=browser: in qua window.print() với HTML đẹp ở trên
   //   - backend=escpos-usb: build ESC/POS bytes + gửi USB (tự fallback nếu lỗi)
@@ -442,7 +466,10 @@ ${data.footer ? `<div class="footer-text">${data.footer}</div>` : ""}
 // 3. PHIẾU BẾP/BAR (Kitchen Ticket v2 — 3 styles)
 // ============================================================
 
-export function printKitchenTicketV2(data: KitchenTicketDataV2): void {
+/**
+ * Build HTML phiếu bếp/bar — dùng cho preview, không pop window.
+ */
+export function buildKitchenTicketHtml(data: KitchenTicketDataV2): string {
   const width = getWidth(data.paperSize);
   const pageSize = getPageSize(data.paperSize);
   const style = data.style ?? "standard";
@@ -545,5 +572,9 @@ ${itemsHtml}
 
 </body></html>`;
 
-  openAndPrint(html);
+  return html;
+}
+
+export function printKitchenTicketV2(data: KitchenTicketDataV2): void {
+  openAndPrint(buildKitchenTicketHtml(data));
 }

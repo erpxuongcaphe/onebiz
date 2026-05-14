@@ -28,6 +28,7 @@ import { useToast } from "@/lib/contexts/toast-context";
 import { HelpTip } from "@/components/shared/help-tip";
 import { BusinessLogoUpload } from "@/components/shared/business-logo-upload";
 import { KitchenStationsCard } from "@/components/shared/kitchen-stations-card";
+import { ReceiptPreviewPanel } from "@/components/shared/receipt-preview-panel";
 import {
   getTenantBusinessInfo,
   updateTenantBusinessInfo,
@@ -841,6 +842,40 @@ export default function PrintSettingsPage() {
               ))}
             </div>
           </div>
+        </CardContent>
+      </Card>
+
+      {/* ── 5. Preview live (CEO 13/05) ── */}
+      <Card>
+        <CardHeader>
+          <CardTitle className="flex items-center gap-2">
+            <Icon name="preview" />
+            Xem trước mẫu in
+            <HelpTip>
+              Mẫu phiếu thực tế khi in. Đổi khổ giấy (58mm/80mm) / kiểu phiếu
+              ở trên → preview tự cập nhật ngay. Dùng data mẫu (2 món + 1
+              topping + ghi chú) để hiển thị đủ trường hợp. Bản in thật trên
+              POS sẽ dùng đúng data đơn thật.
+            </HelpTip>
+          </CardTitle>
+        </CardHeader>
+        <CardContent>
+          <ReceiptPreviewPanel
+            paperSize={print.paperSize}
+            receiptStyle={print.receiptStyle}
+            kitchenTicketStyle={print.kitchenTicketStyle}
+            storeName={settings.store.name}
+            storeAddress={settings.store.address}
+            storePhone={settings.store.phone}
+            footer={print.receiptFooter || invoiceFooter}
+            showStoreName={print.showStoreName}
+            showStoreAddress={print.showStoreAddress}
+            showStorePhone={print.showStorePhone}
+            showQr={print.showQr}
+            bankName={settings.payment.bankName}
+            bankAccount={settings.payment.bankAccount}
+            bankHolder={settings.payment.bankHolder}
+          />
         </CardContent>
       </Card>
     </div>
