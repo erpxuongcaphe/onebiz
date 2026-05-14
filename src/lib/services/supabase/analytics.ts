@@ -1291,6 +1291,212 @@ export async function getTopCustomersByRevenue(limit: number = 10, branchId?: st
     .map((c, i) => ({ rank: i + 1, ...c }));
 }
 
+// ========================================
+// KHÁCH HÀNG × SẢN PHẨM (Cross-table analytics) — CEO 14/05/2026
+// ========================================
+//
+// 2 báo cáo "Behavior phân tích":
+//   C. KH × Nhóm hàng → matrix pivot, biết khách mua nhóm nào nhiều
+//   D. KH × Mặt hàng  → drill-down, biết món "tủ" của từng khách
+//
+// Cả 2 share 1 query: JOIN invoices + invoice_items + products + categories
+// + customers, group by customer × (category | product). Đỡ N+1 query nếu
+// caller cần cả 2 view trong 1 page (load 1 lần dùng 2 mode).
+
+export interface CustomerCategoryCell {
+  customerId: string;
+  customerName: string;
+  /** null khi SP chưa có category — gộp vào "Chưa phân loại" ở UI */
+  categoryId: string | null;
+  categoryName: string;
+  quantity: number;
+  revenue: number;
+}
+
+export interface CustomerProductCell {
+  customerId: string;
+  customerName: string;
+  productId: string;
+  productName: string;
+  /** Tên category để group nếu UI muốn — nullable nếu SP miss category */
+  categoryName: string | null;
+  quantity: number;
+  revenue: number;
+}
+
+/**
+ * Báo cáo C: doanh thu khách hàng × nhóm hàng (matrix dạng dài).
+ *
+ * UI cross-table convert sang ma trận: rows = customers, cols = categories,
+ * cell = revenue (hoặc quantity).
+ *
+ * @param branchId  optional — filter theo chi nhánh; nếu null = toàn công ty
+ * @param range     date range — default thisMonth
+ * @param topN      số khách hàng top (theo doanh thu) lấy về, default 50
+ *                  (tránh matrix quá lớn — UI có thể scroll thêm sau)
+ */
+export async function getRevenueByCustomerAndCategory(
+  branchId?: string,
+  range?: { from: string; to: string },
+  topN: number = 50,
+): Promise<CustomerCategoryCell[]> {
+  const supabase = getClient();
+  const tenantId = await getCurrentTenantId();
+  const r = resolveRange(range, thisMonthRange());
+
+  let query = supabase
+    .from("invoice_items")
+    .select(
+      "quantity, total, product_id, products!inner(category_id, categories(name)), invoices!inner(customer_id, customer_name, customers(name), created_at, status, branch_id, tenant_id)",
+    )
+    .eq("invoices.tenant_id", tenantId)
+    .gte("invoices.created_at", r.start)
+    .lt("invoices.created_at", r.end)
+    .eq("invoices.status", "completed")
+    .not("invoices.customer_id", "is", null);
+  if (branchId) query = query.eq("invoices.branch_id", branchId);
+  const { data, error } = await query;
+
+  if (error) {
+    console.warn("[getRevenueByCustomerAndCategory]", error.message);
+    return [];
+  }
+
+  // Aggregate (customer_id × category_id) → revenue + qty
+  type AggKey = string; // `${custId}|${catId ?? 'null'}`
+  const map = new Map<
+    AggKey,
+    CustomerCategoryCell & { _custTotalRevenue: number }
+  >();
+  // Track tổng doanh thu mỗi KH để filter top N
+  const custTotals = new Map<string, number>();
+
+  (data ?? []).forEach((item: Record<string, unknown>) => {
+    const inv = item.invoices as Record<string, unknown> | null;
+    const cust = inv?.customers as { name: string } | null;
+    const product = item.products as Record<string, unknown> | null;
+    const cat = product?.categories as { name: string } | null;
+
+    const custId = (inv?.customer_id as string) ?? "";
+    if (!custId) return;
+    const custName =
+      cust?.name ?? (inv?.customer_name as string) ?? "Khách lẻ";
+    const catId = (product?.category_id as string) ?? null;
+    const catName = cat?.name ?? "Chưa phân loại";
+    const qty = (item.quantity as number) ?? 0;
+    const revenue = (item.total as number) ?? 0;
+
+    const key = `${custId}|${catId ?? "null"}`;
+    const existing = map.get(key) ?? {
+      customerId: custId,
+      customerName: custName,
+      categoryId: catId,
+      categoryName: catName,
+      quantity: 0,
+      revenue: 0,
+      _custTotalRevenue: 0,
+    };
+    existing.quantity += qty;
+    existing.revenue += revenue;
+    map.set(key, existing);
+
+    custTotals.set(custId, (custTotals.get(custId) ?? 0) + revenue);
+  });
+
+  // Top N khách theo tổng doanh thu
+  const topCustIds = new Set(
+    Array.from(custTotals.entries())
+      .sort((a, b) => b[1] - a[1])
+      .slice(0, topN)
+      .map(([id]) => id),
+  );
+
+  return Array.from(map.values())
+    .filter((c) => topCustIds.has(c.customerId))
+    .map(({ _custTotalRevenue: _ignore, ...rest }) => rest)
+    .sort((a, b) => b.revenue - a.revenue);
+}
+
+/**
+ * Báo cáo D: doanh thu khách hàng × sản phẩm (drill-down).
+ *
+ * Nếu pass `customerId` → chỉ trả SP của khách đó (master-detail UI).
+ * Không pass → trả tất cả KH × SP (matrix lớn, UI nên paginate).
+ */
+export async function getRevenueByCustomerAndProduct(
+  branchId?: string,
+  range?: { from: string; to: string },
+  customerId?: string,
+  topN: number = 100,
+): Promise<CustomerProductCell[]> {
+  const supabase = getClient();
+  const tenantId = await getCurrentTenantId();
+  const r = resolveRange(range, thisMonthRange());
+
+  let query = supabase
+    .from("invoice_items")
+    .select(
+      "product_id, product_name, quantity, total, products(categories(name)), invoices!inner(customer_id, customer_name, customers(name), created_at, status, branch_id, tenant_id)",
+    )
+    .eq("invoices.tenant_id", tenantId)
+    .gte("invoices.created_at", r.start)
+    .lt("invoices.created_at", r.end)
+    .eq("invoices.status", "completed")
+    .not("invoices.customer_id", "is", null);
+  if (branchId) query = query.eq("invoices.branch_id", branchId);
+  if (customerId) query = query.eq("invoices.customer_id", customerId);
+  const { data, error } = await query;
+
+  if (error) {
+    console.warn("[getRevenueByCustomerAndProduct]", error.message);
+    return [];
+  }
+
+  // Aggregate (customer × product)
+  type AggKey = string;
+  const map = new Map<AggKey, CustomerProductCell>();
+
+  (data ?? []).forEach((item: Record<string, unknown>) => {
+    const inv = item.invoices as Record<string, unknown> | null;
+    const cust = inv?.customers as { name: string } | null;
+    const product = item.products as Record<string, unknown> | null;
+    const cat = product?.categories as { name: string } | null;
+
+    const custId = (inv?.customer_id as string) ?? "";
+    if (!custId) return;
+    const custName =
+      cust?.name ?? (inv?.customer_name as string) ?? "Khách lẻ";
+    const productId = (item.product_id as string) ?? "";
+    if (!productId) return;
+    const productName = (item.product_name as string) ?? "Không rõ";
+    const qty = (item.quantity as number) ?? 0;
+    const revenue = (item.total as number) ?? 0;
+
+    const key = `${custId}|${productId}`;
+    const existing = map.get(key) ?? {
+      customerId: custId,
+      customerName: custName,
+      productId,
+      productName,
+      categoryName: cat?.name ?? null,
+      quantity: 0,
+      revenue: 0,
+    };
+    existing.quantity += qty;
+    existing.revenue += revenue;
+    map.set(key, existing);
+  });
+
+  const rows = Array.from(map.values()).sort(
+    (a, b) => b.revenue - a.revenue,
+  );
+
+  // Nếu customerId pass → trả full SP của khách đó (giữ toàn bộ)
+  // Nếu không → cap topN cell để tránh payload to
+  if (customerId) return rows;
+  return rows.slice(0, topN);
+}
+
 export async function getTopDebtors(limit: number = 5): Promise<TopDebtor[]> {
   const supabase = getClient();
   const tenantId = await getCurrentTenantId();

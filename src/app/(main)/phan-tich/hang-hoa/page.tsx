@@ -19,7 +19,12 @@ import {
 import { KpiCard, ChartCard } from "../_components";
 import { ReportPageHeader } from "@/components/shared/report";
 import { useReportState } from "@/lib/hooks/use-report-state";
-import { useBranchFilter } from "@/lib/contexts";
+import { useBranchFilter, useAuth, useToast } from "@/lib/contexts";
+import {
+  exportReportToExcel,
+  buildReportTitleRows,
+  type ExcelSheet,
+} from "@/lib/utils/excel-export";
 import {
   formatCurrency,
   formatChartCurrency,
@@ -153,6 +158,8 @@ interface InventoryKpis {
 
 export default function HangHoaPage() {
   const { activeBranchId, isReady } = useBranchFilter();
+  const { branches } = useAuth();
+  const { toast } = useToast();
   const { preset, range, setPreset, setCustomRange, viewMode, setViewMode } =
     useReportState({ defaultPreset: "thisMonth", defaultViewMode: "chart" });
   const [loading, setLoading] = useState(true);
@@ -161,6 +168,135 @@ export default function HangHoaPage() {
   const [categories, setCategories] = useState<{ name: string; value: number }[]>([]);
   const [movements, setMovements] = useState<StockMovementPoint[]>([]);
   const [lowStock, setLowStock] = useState<LowStockItem[]>([]);
+
+  const branchLabel = activeBranchId
+    ? branches.find((b) => b.id === activeBranchId)?.name ?? "Chi nhánh đang chọn"
+    : "Tất cả chi nhánh";
+
+  const handleExportView = useCallback(() => {
+    try {
+      const title = buildReportTitleRows({
+        title: "BÁO CÁO HÀNG HÓA",
+        range,
+        branchName: branchLabel,
+        generatedAt: new Date(),
+      });
+      const sheet: ExcelSheet = {
+        name: "Top SP bán chạy",
+        titleRows: title,
+        columns: [
+          { label: "STT", key: "rank", width: 6 },
+          { label: "Sản phẩm", key: "name", width: 32 },
+          { label: "SL bán", key: "qty", width: 12, format: "number" },
+          { label: "Doanh thu (VND)", key: "revenue", width: 18, format: "currency" },
+        ],
+        rows: topProducts.map((p, i) => ({
+          rank: i + 1,
+          name: p.name,
+          qty: p.qty,
+          revenue: p.revenue,
+        })),
+        footer: {
+          rank: "",
+          name: "TỔNG",
+          qty: topProducts.reduce((s, p) => s + p.qty, 0),
+          revenue: topProducts.reduce((s, p) => s + p.revenue, 0),
+        },
+      };
+      exportReportToExcel({
+        kind: "hang-hoa",
+        mode: "view",
+        range,
+        branchName: branchLabel,
+        sheets: [sheet],
+      });
+      toast({ title: "Đã xuất Excel (view)", variant: "success" });
+    } catch (err) {
+      toast({ title: "Lỗi xuất Excel", description: err instanceof Error ? err.message : "", variant: "error" });
+    }
+  }, [topProducts, range, branchLabel, toast]);
+
+  const handleExportFull = useCallback(() => {
+    try {
+      const title = buildReportTitleRows({
+        title: "BÁO CÁO HÀNG HÓA — ĐẦY ĐỦ",
+        range,
+        branchName: branchLabel,
+        generatedAt: new Date(),
+      });
+      const sheets: ExcelSheet[] = [
+        {
+          name: "KPI",
+          titleRows: title,
+          columns: [
+            { label: "Chỉ tiêu", key: "metric", width: 28 },
+            { label: "Giá trị", key: "value", width: 16, format: "number" },
+          ],
+          rows: [
+            { metric: "Tổng SP", value: kpis?.totalProducts ?? 0 },
+            { metric: "Giá trị tồn (VND)", value: kpis?.stockValue ?? 0 },
+            { metric: "SP gần hết", value: kpis?.lowStockCount ?? 0 },
+          ],
+        },
+        {
+          name: "Top SP",
+          titleRows: ["TOP 10 SP BÁN CHẠY", ...title.slice(1)],
+          columns: [
+            { label: "STT", key: "rank", width: 6 },
+            { label: "Sản phẩm", key: "name", width: 32 },
+            { label: "SL bán", key: "qty", width: 12, format: "number" },
+            { label: "Doanh thu (VND)", key: "revenue", width: 18, format: "currency" },
+          ],
+          rows: topProducts.map((p, i) => ({
+            rank: i + 1, name: p.name, qty: p.qty, revenue: p.revenue,
+          })),
+        },
+        {
+          name: "Theo danh mục",
+          titleRows: ["PHÂN BỔ THEO DANH MỤC", ...title.slice(1)],
+          columns: [
+            { label: "Danh mục", key: "name", width: 24 },
+            { label: "Số SP", key: "value", width: 12, format: "number" },
+          ],
+          rows: categories.map((c) => ({ name: c.name, value: c.value })),
+        },
+        {
+          name: "Xuất - Nhập 30 ngày",
+          titleRows: ["XUẤT - NHẬP THEO NGÀY", ...title.slice(1)],
+          columns: [
+            { label: "Ngày", key: "date", width: 14 },
+            { label: "Nhập", key: "imported", width: 12, format: "number" },
+            { label: "Xuất", key: "exported", width: 12, format: "number" },
+          ],
+          rows: movements.map((m) => ({
+            date: m.day, imported: m.nhap, exported: m.xuat,
+          })),
+        },
+        {
+          name: "SP sắp hết",
+          titleRows: ["SẢN PHẨM SẮP HẾT", ...title.slice(1)],
+          columns: [
+            { label: "Sản phẩm", key: "name", width: 32 },
+            { label: "Tồn", key: "stock", width: 12, format: "number" },
+            { label: "Ngưỡng", key: "threshold", width: 12, format: "number" },
+          ],
+          rows: lowStock.map((l) => ({
+            name: l.name, stock: l.stock, threshold: l.warning,
+          })),
+        },
+      ];
+      exportReportToExcel({
+        kind: "hang-hoa",
+        mode: "full",
+        range,
+        branchName: branchLabel,
+        sheets,
+      });
+      toast({ title: "Đã xuất Excel (đầy đủ)", variant: "success" });
+    } catch (err) {
+      toast({ title: "Lỗi xuất Excel", description: err instanceof Error ? err.message : "", variant: "error" });
+    }
+  }, [kpis, topProducts, categories, movements, lowStock, range, branchLabel, toast]);
 
   const fetchData = useCallback(async () => {
     setLoading(true);
@@ -211,6 +347,9 @@ export default function HangHoaPage() {
         onCustomRangeChange={setCustomRange}
         viewMode={viewMode}
         onViewModeChange={setViewMode}
+        onExportView={handleExportView}
+        onExportFull={handleExportFull}
+        exportDisabled={loading}
       />
 
       <div className="flex-1 p-4 lg:p-6 space-y-4">

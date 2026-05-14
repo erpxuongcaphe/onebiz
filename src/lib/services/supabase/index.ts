@@ -118,6 +118,8 @@ export {
   getChannelRevenue, getChannelPerformance,
   // Customers
   getCustomerKpis, getNewCustomersMonthly, getCustomerSegments, getTopCustomersByRevenue, getTopDebtors,
+  // CEO 14/05: Khách hàng × Sản phẩm (cross-table analytics)
+  getRevenueByCustomerAndCategory, getRevenueByCustomerAndProduct,
   // Suppliers
   getSupplierKpis, getPurchaseByMonth, getTopSuppliersByPurchase, getSupplierPaymentStatus, getSupplierSummary,
   // Finance

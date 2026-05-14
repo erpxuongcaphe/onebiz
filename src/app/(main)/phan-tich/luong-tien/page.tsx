@@ -14,13 +14,18 @@ import {
   ResponsiveContainer,
 } from "recharts";
 import { KpiCard, ChartCard } from "../_components";
-import { useBranchFilter } from "@/lib/contexts";
+import { useBranchFilter, useAuth, useToast } from "@/lib/contexts";
 import { formatCurrency, formatChartCurrency, formatChartTooltipCurrency } from "@/lib/format";
 import { getCashFlowDetailed } from "@/lib/services/supabase/analytics";
 import type { CashFlowDetailedRow } from "@/lib/services/supabase/analytics";
 import { Icon } from "@/components/ui/icon";
 import { ReportPageHeader } from "@/components/shared/report";
 import { useReportState } from "@/lib/hooks/use-report-state";
+import {
+  exportReportToExcel,
+  buildReportTitleRows,
+  type ExcelSheet,
+} from "@/lib/utils/excel-export";
 
 // ── Custom Tooltip ──
 function CashFlowTooltip({ active, payload, label }: any) {
@@ -41,10 +46,58 @@ function CashFlowTooltip({ active, payload, label }: any) {
 
 export default function LuongTienPage() {
   const { activeBranchId, isReady } = useBranchFilter();
+  const { branches } = useAuth();
+  const { toast } = useToast();
   const { preset, range, setPreset, setCustomRange, viewMode, setViewMode } =
     useReportState({ defaultPreset: "thisYear", defaultViewMode: "chart" });
   const [data, setData] = useState<CashFlowDetailedRow[]>([]);
   const [loading, setLoading] = useState(true);
+
+  const branchLabel = activeBranchId
+    ? branches.find((b) => b.id === activeBranchId)?.name ?? "Chi nhánh đang chọn"
+    : "Tất cả chi nhánh";
+
+  const handleExportView = useCallback(() => {
+    try {
+      const title = buildReportTitleRows({
+        title: "BÁO CÁO LƯU CHUYỂN TIỀN TỆ",
+        range,
+        branchName: branchLabel,
+        generatedAt: new Date(),
+      });
+      const sheet: ExcelSheet = {
+        name: "Cash flow 6 tháng",
+        titleRows: title,
+        columns: [
+          { label: "Tháng", key: "month", width: 14 },
+          { label: "Thu vào (VND)", key: "receipt", width: 18, format: "currency" },
+          { label: "Chi ra (VND)", key: "payment", width: 18, format: "currency" },
+          { label: "Ròng (VND)", key: "net", width: 18, format: "currency" },
+          { label: "Số dư luỹ kế (VND)", key: "balance", width: 20, format: "currency" },
+        ],
+        rows: data.map((d) => ({
+          month: d.month,
+          receipt: d.totalReceipt,
+          payment: d.totalPayment,
+          net: d.net,
+          balance: d.cumulativeBalance,
+        })),
+        footer: {
+          month: "TỔNG",
+          receipt: data.reduce((s, d) => s + d.totalReceipt, 0),
+          payment: data.reduce((s, d) => s + d.totalPayment, 0),
+          net: data.reduce((s, d) => s + d.net, 0),
+          balance: "",
+        },
+      };
+      exportReportToExcel({ kind: "luong-tien", mode: "view", range, branchName: branchLabel, sheets: [sheet] });
+      toast({ title: "Đã xuất Excel (view)", variant: "success" });
+    } catch (err) {
+      toast({ title: "Lỗi xuất Excel", description: err instanceof Error ? err.message : "", variant: "error" });
+    }
+  }, [data, range, branchLabel, toast]);
+
+  const handleExportFull = handleExportView; // luong-tien chỉ 1 sheet — view = full
 
   const fetchData = useCallback(async () => {
     setLoading(true);
@@ -104,6 +157,9 @@ export default function LuongTienPage() {
         onCustomRangeChange={setCustomRange}
         viewMode={viewMode}
         onViewModeChange={setViewMode}
+        onExportView={handleExportView}
+        onExportFull={handleExportFull}
+        exportDisabled={loading || data.length === 0}
       />
       <div className="space-y-6 p-4 sm:p-6">
 

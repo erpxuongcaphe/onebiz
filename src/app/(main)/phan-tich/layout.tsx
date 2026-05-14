@@ -36,6 +36,7 @@ const analyticsNav: ModuleNavGroup[] = [
       { label: "Truy xuất nguồn gốc theo lô", href: "/phan-tich/lot-traceability", icon: "qr_code" },
       { label: "Báo cáo kiểm kê", href: "/phan-tich/kiem-ke", icon: "fact_check" },
       { label: "Khách hàng", href: "/phan-tich/khach-hang", icon: "group" },
+      { label: "Khách × Sản phẩm", href: "/phan-tich/khach-san-pham", icon: "diversity_3" },
       { label: "Khách hàng quay lại", href: "/phan-tich/customer-cohort", icon: "repeat" },
       { label: "Nhà cung cấp", href: "/phan-tich/nha-cung-cap", icon: "local_shipping" },
     ],

@@ -27,8 +27,13 @@ import {
   CartesianGrid,
 } from "recharts";
 import { KpiCard, ChartCard } from "../_components";
-import { useBranchFilter } from "@/lib/contexts";
+import { useBranchFilter, useAuth, useToast } from "@/lib/contexts";
 import { formatCurrency } from "@/lib/format";
+import {
+  exportReportToExcel,
+  buildReportTitleRows,
+  type ExcelSheet,
+} from "@/lib/utils/excel-export";
 import {
   getPromotionKpis,
   getPromotionDetailRows,
@@ -94,12 +99,146 @@ function DailyTrendTooltip({
 
 export default function KhuyenMaiAnalyticsPage() {
   const { activeBranchId, isReady } = useBranchFilter();
+  const { branches } = useAuth();
+  const { toast } = useToast();
   const { preset, range, setPreset, setCustomRange, viewMode, setViewMode } =
     useReportState({ defaultPreset: "thisMonth", defaultViewMode: "chart" });
   const [loading, setLoading] = useState(true);
   const [kpis, setKpis] = useState<PromotionKpis | null>(null);
   const [detailRows, setDetailRows] = useState<PromotionDetailRow[]>([]);
   const [dailyTrend, setDailyTrend] = useState<PromotionDailyPoint[]>([]);
+
+  const branchLabel = activeBranchId
+    ? branches.find((b) => b.id === activeBranchId)?.name ?? "Chi nhánh đang chọn"
+    : "Tất cả chi nhánh";
+
+  const handleExportView = useCallback(() => {
+    try {
+      const title = buildReportTitleRows({
+        title: "BÁO CÁO KHUYẾN MÃI",
+        range,
+        branchName: branchLabel,
+        generatedAt: new Date(),
+      });
+      const sheet: ExcelSheet = {
+        name: "Chi tiết KM",
+        titleRows: title,
+        columns: [
+          { label: "Tên CT khuyến mãi", key: "name", width: 32 },
+          { label: "Loại", key: "type", width: 16 },
+          { label: "Kênh", key: "channel", width: 12 },
+          { label: "Lượt dùng", key: "uses", width: 12, format: "number" },
+          { label: "Tổng giảm (VND)", key: "discount", width: 18, format: "currency" },
+          { label: "DT phát sinh (VND)", key: "revenue", width: 20, format: "currency" },
+        ],
+        rows: detailRows.map((r) => ({
+          name: r.name,
+          type: TYPE_LABEL[r.type] ?? r.type,
+          channel: CHANNEL_LABEL[r.channel] ?? r.channel,
+          uses: r.invoiceCount,
+          discount: r.totalDiscount,
+          revenue: r.totalRevenue,
+        })),
+        footer: {
+          name: "TỔNG",
+          type: "",
+          channel: "",
+          uses: detailRows.reduce((s, r) => s + r.invoiceCount, 0),
+          discount: detailRows.reduce((s, r) => s + r.totalDiscount, 0),
+          revenue: detailRows.reduce((s, r) => s + r.totalRevenue, 0),
+        },
+      };
+      exportReportToExcel({
+        kind: "khuyen-mai",
+        mode: "view",
+        range,
+        branchName: branchLabel,
+        sheets: [sheet],
+      });
+      toast({ title: "Đã xuất Excel (view)", variant: "success" });
+    } catch (err) {
+      toast({
+        title: "Lỗi xuất Excel",
+        description: err instanceof Error ? err.message : "",
+        variant: "error",
+      });
+    }
+  }, [detailRows, range, branchLabel, toast]);
+
+  const handleExportFull = useCallback(() => {
+    try {
+      const title = buildReportTitleRows({
+        title: "BÁO CÁO KHUYẾN MÃI — ĐẦY ĐỦ",
+        range,
+        branchName: branchLabel,
+        generatedAt: new Date(),
+      });
+      const sheets: ExcelSheet[] = [
+        {
+          name: "KPI",
+          titleRows: title,
+          columns: [
+            { label: "Chỉ tiêu", key: "metric", width: 28 },
+            { label: "Giá trị", key: "value", width: 18, format: "currency" },
+          ],
+          rows: [
+            { metric: "Tổng lượt dùng", value: kpis?.totalUsageCount ?? 0 },
+            { metric: "Tổng giảm giá", value: kpis?.totalDiscount ?? 0 },
+            { metric: "Tổng quà tặng", value: kpis?.totalFreeValue ?? 0 },
+            { metric: "Doanh thu phát sinh", value: kpis?.revenueWithPromo ?? 0 },
+          ],
+        },
+        {
+          name: "Chi tiết CT",
+          titleRows: ["CHI TIẾT TỪNG CT KHUYẾN MÃI", ...title.slice(1)],
+          columns: [
+            { label: "Tên CT", key: "name", width: 32 },
+            { label: "Loại", key: "type", width: 16 },
+            { label: "Kênh", key: "channel", width: 12 },
+            { label: "Lượt dùng", key: "uses", width: 12, format: "number" },
+            { label: "Tổng giảm (VND)", key: "discount", width: 18, format: "currency" },
+            { label: "DT phát sinh (VND)", key: "revenue", width: 20, format: "currency" },
+          ],
+          rows: detailRows.map((r) => ({
+            name: r.name,
+            type: TYPE_LABEL[r.type] ?? r.type,
+            channel: CHANNEL_LABEL[r.channel] ?? r.channel,
+            uses: r.invoiceCount,
+            discount: r.totalDiscount,
+            revenue: r.totalRevenue,
+          })),
+        },
+        {
+          name: "Theo ngày",
+          titleRows: ["XU HƯỚNG THEO NGÀY", ...title.slice(1)],
+          columns: [
+            { label: "Ngày", key: "date", width: 14 },
+            { label: "Lượt dùng", key: "uses", width: 12, format: "number" },
+            { label: "Giảm giá (VND)", key: "discount", width: 18, format: "currency" },
+          ],
+          rows: dailyTrend.map((p) => ({
+            date: p.date,
+            uses: p.usageCount,
+            discount: p.totalDiscount,
+          })),
+        },
+      ];
+      exportReportToExcel({
+        kind: "khuyen-mai",
+        mode: "full",
+        range,
+        branchName: branchLabel,
+        sheets,
+      });
+      toast({ title: "Đã xuất Excel (đầy đủ)", variant: "success" });
+    } catch (err) {
+      toast({
+        title: "Lỗi xuất Excel",
+        description: err instanceof Error ? err.message : "",
+        variant: "error",
+      });
+    }
+  }, [kpis, detailRows, dailyTrend, range, branchLabel, toast]);
 
   const fetchData = useCallback(async () => {
     try {
@@ -135,6 +274,9 @@ export default function KhuyenMaiAnalyticsPage() {
         onCustomRangeChange={setCustomRange}
         viewMode={viewMode}
         onViewModeChange={setViewMode}
+        onExportView={handleExportView}
+        onExportFull={handleExportFull}
+        exportDisabled={loading}
       />
       <div className="space-y-4 lg:space-y-6 p-4 lg:p-6">
 

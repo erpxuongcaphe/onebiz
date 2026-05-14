@@ -19,7 +19,12 @@ import {
 import { KpiCard, ChartCard } from "../_components";
 import { ReportPageHeader } from "@/components/shared/report";
 import { useReportState } from "@/lib/hooks/use-report-state";
-import { useBranchFilter } from "@/lib/contexts";
+import { useBranchFilter, useAuth, useToast } from "@/lib/contexts";
+import {
+  exportReportToExcel,
+  buildReportTitleRows,
+  type ExcelSheet,
+} from "@/lib/utils/excel-export";
 import {
   formatCurrency,
   formatChartCurrency,
@@ -147,6 +152,8 @@ interface FinanceKpis {
 
 export default function TaiChinhPage() {
   const { activeBranchId, isReady } = useBranchFilter();
+  const { branches } = useAuth();
+  const { toast } = useToast();
   const { preset, range, setPreset, setCustomRange, viewMode, setViewMode } =
     useReportState({ defaultPreset: "thisYear", defaultViewMode: "chart" });
   const [loading, setLoading] = useState(true);
@@ -155,6 +162,114 @@ export default function TaiChinhPage() {
   const [expenseBreakdownData, setExpenseBreakdownData] = useState<{ name: string; value: number }[]>([]);
   const [monthlyProfitData, setMonthlyProfitData] = useState<ChartPoint[]>([]);
   const [cashFlowData, setCashFlowData] = useState<CashFlowRow[]>([]);
+
+  const branchLabel = activeBranchId
+    ? branches.find((b) => b.id === activeBranchId)?.name ?? "Chi nhánh đang chọn"
+    : "Tất cả chi nhánh";
+
+  const handleExportView = useCallback(() => {
+    try {
+      const title = buildReportTitleRows({
+        title: "BÁO CÁO TÀI CHÍNH",
+        range,
+        branchName: branchLabel,
+        generatedAt: new Date(),
+      });
+      const sheet: ExcelSheet = {
+        name: "KPI tài chính",
+        titleRows: title,
+        columns: [
+          { label: "Chỉ tiêu", key: "metric", width: 28 },
+          { label: "Kỳ hiện tại", key: "current", width: 18, format: "currency" },
+          { label: "Kỳ trước", key: "prev", width: 18, format: "currency" },
+        ],
+        rows: [
+          { metric: "Doanh thu", current: kpis?.revenue ?? 0, prev: kpis?.prevRevenue ?? 0 },
+          { metric: "Chi phí", current: kpis?.expense ?? 0, prev: kpis?.prevExpense ?? 0 },
+          { metric: "Lợi nhuận", current: kpis?.profit ?? 0, prev: kpis?.prevProfit ?? 0 },
+          { metric: "Biên LN (%)", current: kpis?.profitMargin ?? 0, prev: kpis?.prevProfitMargin ?? 0 },
+        ],
+      };
+      exportReportToExcel({ kind: "tai-chinh", mode: "view", range, branchName: branchLabel, sheets: [sheet] });
+      toast({ title: "Đã xuất Excel (view)", variant: "success" });
+    } catch (err) {
+      toast({ title: "Lỗi xuất Excel", description: err instanceof Error ? err.message : "", variant: "error" });
+    }
+  }, [kpis, range, branchLabel, toast]);
+
+  const handleExportFull = useCallback(() => {
+    try {
+      const title = buildReportTitleRows({
+        title: "BÁO CÁO TÀI CHÍNH — ĐẦY ĐỦ",
+        range,
+        branchName: branchLabel,
+        generatedAt: new Date(),
+      });
+      const sheets: ExcelSheet[] = [
+        {
+          name: "KPI",
+          titleRows: title,
+          columns: [
+            { label: "Chỉ tiêu", key: "metric", width: 28 },
+            { label: "Kỳ hiện tại", key: "current", width: 18, format: "currency" },
+            { label: "Kỳ trước", key: "prev", width: 18, format: "currency" },
+          ],
+          rows: [
+            { metric: "Doanh thu", current: kpis?.revenue ?? 0, prev: kpis?.prevRevenue ?? 0 },
+            { metric: "Chi phí", current: kpis?.expense ?? 0, prev: kpis?.prevExpense ?? 0 },
+            { metric: "Lợi nhuận", current: kpis?.profit ?? 0, prev: kpis?.prevProfit ?? 0 },
+          ],
+        },
+        {
+          name: "DT vs Chi phí",
+          titleRows: ["DOANH THU VS CHI PHÍ 12 THÁNG", ...title.slice(1)],
+          columns: [
+            { label: "Tháng", key: "label", width: 14 },
+            { label: "Doanh thu (VND)", key: "revenue", width: 18, format: "currency" },
+            { label: "Chi phí (VND)", key: "expense", width: 18, format: "currency" },
+          ],
+          rows: revenueVsExpenseData.map((p) => ({
+            label: p.label,
+            revenue: p.revenue ?? 0,
+            expense: p.expense ?? 0,
+          })),
+        },
+        {
+          name: "Cơ cấu chi phí",
+          titleRows: ["CƠ CẤU CHI PHÍ", ...title.slice(1)],
+          columns: [
+            { label: "Loại chi phí", key: "name", width: 24 },
+            { label: "Giá trị (VND)", key: "value", width: 18, format: "currency" },
+          ],
+          rows: expenseBreakdownData,
+        },
+        {
+          name: "LN theo tháng",
+          titleRows: ["LỢI NHUẬN THEO THÁNG", ...title.slice(1)],
+          columns: [
+            { label: "Tháng", key: "label", width: 14 },
+            { label: "Lợi nhuận (VND)", key: "value", width: 18, format: "currency" },
+          ],
+          rows: monthlyProfitData.map((p) => ({ label: p.label, value: p.value })),
+        },
+        {
+          name: "Cash flow",
+          titleRows: ["LƯU CHUYỂN TIỀN", ...title.slice(1)],
+          columns: [
+            { label: "Tháng", key: "month", width: 14 },
+            { label: "Thu (VND)", key: "income", width: 18, format: "currency" },
+            { label: "Chi (VND)", key: "expense", width: 18, format: "currency" },
+            { label: "Số dư (VND)", key: "balance", width: 18, format: "currency" },
+          ],
+          rows: cashFlowData.map((r) => ({ ...r })),
+        },
+      ];
+      exportReportToExcel({ kind: "tai-chinh", mode: "full", range, branchName: branchLabel, sheets });
+      toast({ title: "Đã xuất Excel (đầy đủ)", variant: "success" });
+    } catch (err) {
+      toast({ title: "Lỗi xuất Excel", description: err instanceof Error ? err.message : "", variant: "error" });
+    }
+  }, [kpis, revenueVsExpenseData, expenseBreakdownData, monthlyProfitData, cashFlowData, range, branchLabel, toast]);
 
   const fetchData = useCallback(async () => {
     try {
@@ -204,6 +319,9 @@ export default function TaiChinhPage() {
         onCustomRangeChange={setCustomRange}
         viewMode={viewMode}
         onViewModeChange={setViewMode}
+        onExportView={handleExportView}
+        onExportFull={handleExportFull}
+        exportDisabled={loading}
       />
 
       <div className="flex-1 p-4 md:p-6 space-y-4">

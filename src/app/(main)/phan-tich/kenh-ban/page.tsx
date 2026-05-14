@@ -12,7 +12,7 @@ import {
 import { KpiCard, ChartCard } from "../_components";
 import { ReportPageHeader } from "@/components/shared/report";
 import { useReportState } from "@/lib/hooks/use-report-state";
-import { useBranchFilter } from "@/lib/contexts";
+import { useBranchFilter, useAuth, useToast } from "@/lib/contexts";
 import {
   formatCurrency,
   formatChartTooltipCurrency,
@@ -22,6 +22,11 @@ import {
   getChannelPerformance,
 } from "@/lib/services";
 import type { ChartPoint } from "@/lib/services/supabase/analytics";
+import {
+  exportReportToExcel,
+  buildReportTitleRows,
+  type ExcelSheet,
+} from "@/lib/utils/excel-export";
 import { Icon } from "@/components/ui/icon";
 
 type ChannelPerformanceRow = {
@@ -104,8 +109,123 @@ function renderPieLabel(props: any) {
 
 export default function KenhBanPage() {
   const { activeBranchId, isReady } = useBranchFilter();
+  const { branches } = useAuth();
+  const { toast } = useToast();
   const { preset, range, setPreset, setCustomRange, viewMode, setViewMode } =
     useReportState({ defaultPreset: "thisMonth", defaultViewMode: "chart" });
+  const [loading, setLoading] = useState(true);
+  const [channelRevenue, setChannelRevenue] = useState<ChartPoint[]>([]);
+  const [channelPerformance, setChannelPerformance] = useState<ChannelPerformanceRow[]>([]);
+
+  const branchLabel = activeBranchId
+    ? branches.find((b) => b.id === activeBranchId)?.name ?? "Chi nhánh đang chọn"
+    : "Tất cả chi nhánh";
+
+  const handleExportView = useCallback(() => {
+    try {
+      const title = buildReportTitleRows({
+        title: "BÁO CÁO KÊNH BÁN",
+        range,
+        branchName: branchLabel,
+        generatedAt: new Date(),
+      });
+      const sheet: ExcelSheet = {
+        name: "Kênh bán",
+        titleRows: title,
+        columns: [
+          { label: "Kênh", key: "channel", width: 20 },
+          { label: "Số đơn", key: "orders", width: 12, format: "number" },
+          { label: "Doanh thu (VND)", key: "revenue", width: 18, format: "currency" },
+          { label: "TB/đơn (VND)", key: "avgValue", width: 16, format: "currency" },
+        ],
+        rows: channelPerformance.map((c) => ({
+          channel: c.channel,
+          orders: c.orders,
+          revenue: c.revenue,
+          avgValue: c.avgValue,
+        })),
+        footer: {
+          channel: "TỔNG",
+          orders: channelPerformance.reduce((s, c) => s + c.orders, 0),
+          revenue: channelPerformance.reduce((s, c) => s + c.revenue, 0),
+          avgValue: "",
+        },
+      };
+      exportReportToExcel({
+        kind: "kenh-ban",
+        mode: "view",
+        range,
+        branchName: branchLabel,
+        sheets: [sheet],
+      });
+      toast({ title: "Đã xuất Excel (view)", variant: "success" });
+    } catch (err) {
+      toast({
+        title: "Lỗi xuất Excel",
+        description: err instanceof Error ? err.message : "",
+        variant: "error",
+      });
+    }
+  }, [channelPerformance, range, branchLabel, toast]);
+
+  const handleExportFull = useCallback(() => {
+    try {
+      const title = buildReportTitleRows({
+        title: "BÁO CÁO KÊNH BÁN — ĐẦY ĐỦ",
+        range,
+        branchName: branchLabel,
+        generatedAt: new Date(),
+      });
+      const sheets: ExcelSheet[] = [
+        {
+          name: "Hiệu suất kênh",
+          titleRows: title,
+          columns: [
+            { label: "Kênh", key: "channel", width: 20 },
+            { label: "Số đơn", key: "orders", width: 12, format: "number" },
+            { label: "Doanh thu (VND)", key: "revenue", width: 18, format: "currency" },
+            { label: "TB/đơn (VND)", key: "avgValue", width: 16, format: "currency" },
+          ],
+          rows: channelPerformance.map((c) => ({
+            channel: c.channel,
+            orders: c.orders,
+            revenue: c.revenue,
+            avgValue: c.avgValue,
+          })),
+          footer: {
+            channel: "TỔNG",
+            orders: channelPerformance.reduce((s, c) => s + c.orders, 0),
+            revenue: channelPerformance.reduce((s, c) => s + c.revenue, 0),
+            avgValue: "",
+          },
+        },
+        {
+          name: "DT theo kênh (pie)",
+          titleRows: ["DOANH THU THEO KÊNH", ...title.slice(1)],
+          columns: [
+            { label: "Kênh", key: "label", width: 20 },
+            { label: "Doanh thu (VND)", key: "value", width: 18, format: "currency" },
+          ],
+          rows: channelRevenue.map((c) => ({ label: c.label, value: c.value })),
+        },
+      ];
+      exportReportToExcel({
+        kind: "kenh-ban",
+        mode: "full",
+        range,
+        branchName: branchLabel,
+        sheets,
+      });
+      toast({ title: "Đã xuất Excel (đầy đủ)", variant: "success" });
+    } catch (err) {
+      toast({
+        title: "Lỗi xuất Excel",
+        description: err instanceof Error ? err.message : "",
+        variant: "error",
+      });
+    }
+  }, [channelPerformance, channelRevenue, range, branchLabel, toast]);
+
   const reportHeader = (
     <ReportPageHeader
       title="Phân tích kênh bán"
@@ -116,11 +236,11 @@ export default function KenhBanPage() {
       onCustomRangeChange={setCustomRange}
       viewMode={viewMode}
       onViewModeChange={setViewMode}
+      onExportView={handleExportView}
+      onExportFull={handleExportFull}
+      exportDisabled={loading}
     />
   );
-  const [loading, setLoading] = useState(true);
-  const [channelRevenue, setChannelRevenue] = useState<ChartPoint[]>([]);
-  const [channelPerformance, setChannelPerformance] = useState<ChannelPerformanceRow[]>([]);
 
   const fetchData = useCallback(async () => {
     setLoading(true);

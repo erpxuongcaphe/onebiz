@@ -19,7 +19,12 @@ import {
 import { KpiCard, ChartCard } from "../_components";
 import { ReportPageHeader } from "@/components/shared/report";
 import { useReportState } from "@/lib/hooks/use-report-state";
-import { useBranchFilter } from "@/lib/contexts";
+import { useBranchFilter, useAuth, useToast } from "@/lib/contexts";
+import {
+  exportReportToExcel,
+  buildReportTitleRows,
+  type ExcelSheet,
+} from "@/lib/utils/excel-export";
 import {
   formatCurrency,
   formatChartCurrency,
@@ -131,20 +136,10 @@ function renderPieLabel(props: any) {
 
 export default function NhaCungCapPage() {
   const { activeBranchId, isReady } = useBranchFilter();
+  const { branches } = useAuth();
+  const { toast } = useToast();
   const { preset, range, setPreset, setCustomRange, viewMode, setViewMode } =
     useReportState({ defaultPreset: "thisMonth", defaultViewMode: "chart" });
-  const reportHeader = (
-    <ReportPageHeader
-      title="Phân tích nhà cung cấp"
-      subtitle="Thống kê mua hàng và công nợ nhà cung cấp"
-      preset={preset}
-      range={range}
-      onPresetChange={setPreset}
-      onCustomRangeChange={setCustomRange}
-      viewMode={viewMode}
-      onViewModeChange={setViewMode}
-    />
-  );
   const [loading, setLoading] = useState(true);
   const [kpis, setKpis] = useState<{
     totalSuppliers: number;
@@ -158,6 +153,135 @@ export default function NhaCungCapPage() {
   const [topSuppliers, setTopSuppliers] = useState<{ name: string; amount: number }[]>([]);
   const [paymentStatus, setPaymentStatus] = useState<{ name: string; value: number }[]>([]);
   const [supplierTable, setSupplierTable] = useState<SupplierSummaryRow[]>([]);
+
+  const branchLabel = activeBranchId
+    ? branches.find((b) => b.id === activeBranchId)?.name ?? "Chi nhánh đang chọn"
+    : "Tất cả chi nhánh";
+
+  const handleExportView = useCallback(() => {
+    try {
+      const title = buildReportTitleRows({
+        title: "BÁO CÁO NHÀ CUNG CẤP",
+        range,
+        branchName: branchLabel,
+        generatedAt: new Date(),
+      });
+      const sheet: ExcelSheet = {
+        name: "Tổng quan NCC",
+        titleRows: title,
+        columns: [
+          { label: "Nhà cung cấp", key: "name", width: 32 },
+          { label: "Đã mua (VND)", key: "purchased", width: 18, format: "currency" },
+          { label: "Công nợ (VND)", key: "debt", width: 18, format: "currency" },
+          { label: "Đơn nhập", key: "orderCount", width: 12, format: "number" },
+        ],
+        rows: supplierTable.map((s) => ({
+          name: s.name,
+          purchased: s.total,
+          debt: s.debt,
+          orderCount: s.orders,
+        })),
+        footer: {
+          name: "TỔNG",
+          purchased: supplierTable.reduce((sum, s) => sum + s.total, 0),
+          debt: supplierTable.reduce((sum, s) => sum + s.debt, 0),
+          orderCount: supplierTable.reduce((sum, s) => sum + s.orders, 0),
+        },
+      };
+      exportReportToExcel({ kind: "nha-cung-cap", mode: "view", range, branchName: branchLabel, sheets: [sheet] });
+      toast({ title: "Đã xuất Excel (view)", variant: "success" });
+    } catch (err) {
+      toast({ title: "Lỗi xuất Excel", description: err instanceof Error ? err.message : "", variant: "error" });
+    }
+  }, [supplierTable, range, branchLabel, toast]);
+
+  const handleExportFull = useCallback(() => {
+    try {
+      const title = buildReportTitleRows({
+        title: "BÁO CÁO NHÀ CUNG CẤP — ĐẦY ĐỦ",
+        range,
+        branchName: branchLabel,
+        generatedAt: new Date(),
+      });
+      const sheets: ExcelSheet[] = [
+        {
+          name: "KPI",
+          titleRows: title,
+          columns: [
+            { label: "Chỉ tiêu", key: "metric", width: 28 },
+            { label: "Giá trị", key: "value", width: 18, format: "currency" },
+          ],
+          rows: [
+            { metric: "Tổng NCC", value: kpis?.totalSuppliers ?? 0 },
+            { metric: "Mua tháng này", value: kpis?.purchaseThisMonth ?? 0 },
+            { metric: "Mua tháng trước", value: kpis?.prevPurchase ?? 0 },
+            { metric: "Tổng công nợ", value: kpis?.totalDebt ?? 0 },
+            { metric: "Số đơn trả", value: kpis?.returnCount ?? 0 },
+          ],
+        },
+        {
+          name: "Mua theo tháng",
+          titleRows: ["MUA HÀNG 6 THÁNG GẦN NHẤT", ...title.slice(1)],
+          columns: [
+            { label: "Tháng", key: "label", width: 16 },
+            { label: "Giá trị (VND)", key: "value", width: 18, format: "currency" },
+          ],
+          rows: purchaseByMonth.map((p) => ({ label: p.label, value: p.value })),
+        },
+        {
+          name: "Top NCC",
+          titleRows: ["TOP 5 NCC", ...title.slice(1)],
+          columns: [
+            { label: "Nhà cung cấp", key: "name", width: 32 },
+            { label: "Tổng mua (VND)", key: "amount", width: 18, format: "currency" },
+          ],
+          rows: topSuppliers,
+        },
+        {
+          name: "Chi tiết NCC",
+          titleRows: ["TỔNG HỢP NCC", ...title.slice(1)],
+          columns: [
+            { label: "Nhà cung cấp", key: "name", width: 32 },
+            { label: "Đã mua (VND)", key: "purchased", width: 18, format: "currency" },
+            { label: "Công nợ (VND)", key: "debt", width: 18, format: "currency" },
+            { label: "Đơn nhập", key: "orderCount", width: 12, format: "number" },
+          ],
+          rows: supplierTable.map((s) => ({
+            name: s.name, purchased: s.total, debt: s.debt, orders: s.orders,
+          })),
+        },
+        {
+          name: "Tình trạng TT",
+          titleRows: ["TÌNH TRẠNG THANH TOÁN", ...title.slice(1)],
+          columns: [
+            { label: "Trạng thái", key: "name", width: 20 },
+            { label: "Số NCC", key: "value", width: 12, format: "number" },
+          ],
+          rows: paymentStatus,
+        },
+      ];
+      exportReportToExcel({ kind: "nha-cung-cap", mode: "full", range, branchName: branchLabel, sheets });
+      toast({ title: "Đã xuất Excel (đầy đủ)", variant: "success" });
+    } catch (err) {
+      toast({ title: "Lỗi xuất Excel", description: err instanceof Error ? err.message : "", variant: "error" });
+    }
+  }, [kpis, purchaseByMonth, topSuppliers, paymentStatus, supplierTable, range, branchLabel, toast]);
+
+  const reportHeader = (
+    <ReportPageHeader
+      title="Phân tích nhà cung cấp"
+      subtitle="Thống kê mua hàng và công nợ nhà cung cấp"
+      preset={preset}
+      range={range}
+      onPresetChange={setPreset}
+      onCustomRangeChange={setCustomRange}
+      viewMode={viewMode}
+      onViewModeChange={setViewMode}
+      onExportView={handleExportView}
+      onExportFull={handleExportFull}
+      exportDisabled={loading}
+    />
+  );
 
   const fetchData = useCallback(async () => {
     try {

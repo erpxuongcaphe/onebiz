@@ -17,7 +17,7 @@ import {
 import { KpiCard, ChartCard } from "../_components";
 import { ReportPageHeader } from "@/components/shared/report";
 import { useReportState } from "@/lib/hooks/use-report-state";
-import { useBranchFilter } from "@/lib/contexts";
+import { useBranchFilter, useAuth, useToast } from "@/lib/contexts";
 import { formatCurrency, formatNumber } from "@/lib/format";
 import {
   getOrdersKpis,
@@ -30,6 +30,11 @@ import type {
   OrderStatusItem,
   RecentOrder,
 } from "@/lib/services/supabase/analytics";
+import {
+  exportReportToExcel,
+  buildReportTitleRows,
+  type ExcelSheet,
+} from "@/lib/utils/excel-export";
 import { Icon } from "@/components/ui/icon";
 
 // === Types ===
@@ -149,8 +154,159 @@ function renderPieLabel(props: any) {
 
 export default function DatHangPage() {
   const { activeBranchId, isReady } = useBranchFilter();
+  const { branches } = useAuth();
+  const { toast } = useToast();
   const { preset, range, setPreset, setCustomRange, viewMode, setViewMode } =
     useReportState({ defaultPreset: "thisMonth", defaultViewMode: "chart" });
+  const [loading, setLoading] = useState(true);
+  const [kpis, setKpis] = useState<OrdersKpis | null>(null);
+  const [orderVolume, setOrderVolume] = useState<ChartPoint[]>([]);
+  const [orderStatus, setOrderStatus] = useState<OrderStatusItem[]>([]);
+  const [recentOrdersList, setRecentOrdersList] = useState<RecentOrder[]>([]);
+
+  const branchLabel = activeBranchId
+    ? branches.find((b) => b.id === activeBranchId)?.name ?? "Chi nhánh đang chọn"
+    : "Tất cả chi nhánh";
+
+  // ── Export Excel — view (1 sheet) + full (multi-sheet) ──
+  const handleExportView = useCallback(() => {
+    try {
+      const title = buildReportTitleRows({
+        title: "BÁO CÁO ĐẶT HÀNG",
+        range,
+        branchName: branchLabel,
+        generatedAt: new Date(),
+      });
+      const sheet: ExcelSheet = {
+        name: "KPI đặt hàng",
+        titleRows: title,
+        columns: [
+          { label: "Chỉ tiêu", key: "metric", width: 28 },
+          { label: "Giá trị", key: "value", width: 16, format: "number" },
+          { label: "% tổng", key: "pct", width: 12 },
+        ],
+        rows: [
+          { metric: "Tổng đơn hàng", value: kpis?.total ?? 0, pct: "100%" },
+          {
+            metric: "Đơn hoàn thành",
+            value: kpis?.completed ?? 0,
+            pct: kpis ? `${kpis.completedPct}%` : "0%",
+          },
+          {
+            metric: "Đơn đang xử lý",
+            value: kpis?.inTransit ?? 0,
+            pct: kpis ? `${kpis.inTransitPct}%` : "0%",
+          },
+          {
+            metric: "Đơn huỷ",
+            value: kpis?.cancelled ?? 0,
+            pct: kpis ? `${kpis.cancelledPct}%` : "0%",
+          },
+        ],
+      };
+      exportReportToExcel({
+        kind: "dat-hang",
+        mode: "view",
+        range,
+        branchName: branchLabel,
+        sheets: [sheet],
+      });
+      toast({ title: "Đã xuất Excel (view)", variant: "success" });
+    } catch (err) {
+      toast({
+        title: "Lỗi xuất Excel",
+        description: err instanceof Error ? err.message : "",
+        variant: "error",
+      });
+    }
+  }, [kpis, range, branchLabel, toast]);
+
+  const handleExportFull = useCallback(() => {
+    try {
+      const title = buildReportTitleRows({
+        title: "BÁO CÁO ĐẶT HÀNG — ĐẦY ĐỦ",
+        range,
+        branchName: branchLabel,
+        generatedAt: new Date(),
+      });
+      const sheets: ExcelSheet[] = [
+        {
+          name: "KPI",
+          titleRows: title,
+          columns: [
+            { label: "Chỉ tiêu", key: "metric", width: 28 },
+            { label: "Giá trị", key: "value", width: 16, format: "number" },
+            { label: "% tổng", key: "pct", width: 12 },
+          ],
+          rows: [
+            { metric: "Tổng đơn", value: kpis?.total ?? 0, pct: "100%" },
+            { metric: "Hoàn thành", value: kpis?.completed ?? 0, pct: `${kpis?.completedPct ?? 0}%` },
+            { metric: "Đang xử lý", value: kpis?.inTransit ?? 0, pct: `${kpis?.inTransitPct ?? 0}%` },
+            { metric: "Đã huỷ", value: kpis?.cancelled ?? 0, pct: `${kpis?.cancelledPct ?? 0}%` },
+          ],
+        },
+        {
+          name: "Theo ngày",
+          titleRows: ["SỐ LƯỢNG ĐƠN THEO NGÀY", ...title.slice(1)],
+          columns: [
+            { label: "Ngày", key: "label", width: 14 },
+            { label: "Số đơn", key: "value", width: 12, format: "number" },
+          ],
+          rows: orderVolume.map((p) => ({ label: p.label, value: p.value })),
+          footer: {
+            label: "TỔNG",
+            value: orderVolume.reduce((s, p) => s + p.value, 0),
+          },
+        },
+        {
+          name: "Theo trạng thái",
+          titleRows: ["PHÂN BỔ TRẠNG THÁI", ...title.slice(1)],
+          columns: [
+            { label: "Trạng thái", key: "name", width: 20 },
+            { label: "Số đơn", key: "value", width: 12, format: "number" },
+          ],
+          rows: orderStatus.map((s) => ({ name: s.name, value: s.value })),
+        },
+        {
+          name: "Đơn gần đây",
+          titleRows: ["10 ĐƠN GẦN NHẤT", ...title.slice(1)],
+          columns: [
+            { label: "Mã ĐH", key: "code", width: 16 },
+            { label: "Khách hàng", key: "customer", width: 28 },
+            { label: "Trạng thái", key: "status", width: 16 },
+            { label: "Giá trị (VND)", key: "value", width: 16, format: "currency" },
+            { label: "Ngày", key: "date", width: 14 },
+          ],
+          rows: recentOrdersList.map((o) => ({
+            code: o.code,
+            customer: o.customer,
+            status: o.status,
+            value: o.value,
+            date: o.date,
+          })),
+        },
+      ];
+      exportReportToExcel({
+        kind: "dat-hang",
+        mode: "full",
+        range,
+        branchName: branchLabel,
+        sheets,
+      });
+      toast({
+        title: "Đã xuất Excel (đầy đủ)",
+        description: "4 sheet: KPI + Theo ngày + Theo trạng thái + Đơn gần đây.",
+        variant: "success",
+      });
+    } catch (err) {
+      toast({
+        title: "Lỗi xuất Excel",
+        description: err instanceof Error ? err.message : "",
+        variant: "error",
+      });
+    }
+  }, [kpis, orderVolume, orderStatus, recentOrdersList, range, branchLabel, toast]);
+
   const reportHeader = (
     <ReportPageHeader
       title="Phân tích đặt hàng"
@@ -161,13 +317,11 @@ export default function DatHangPage() {
       onCustomRangeChange={setCustomRange}
       viewMode={viewMode}
       onViewModeChange={setViewMode}
+      onExportView={handleExportView}
+      onExportFull={handleExportFull}
+      exportDisabled={loading || !kpis}
     />
   );
-  const [loading, setLoading] = useState(true);
-  const [kpis, setKpis] = useState<OrdersKpis | null>(null);
-  const [orderVolume, setOrderVolume] = useState<ChartPoint[]>([]);
-  const [orderStatus, setOrderStatus] = useState<OrderStatusItem[]>([]);
-  const [recentOrdersList, setRecentOrdersList] = useState<RecentOrder[]>([]);
 
   const fetchData = useCallback(async () => {
     try {
