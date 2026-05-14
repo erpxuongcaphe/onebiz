@@ -9,6 +9,7 @@
  */
 
 import { getClient, getCurrentContext, handleError } from "./base";
+import { recordAuditLog } from "./audit";
 import type { Json } from "@/lib/supabase/types";
 import type {
   Agent,
@@ -196,8 +197,28 @@ export async function updateAgent(input: UpdateAgentInput): Promise<Agent> {
 
 export async function deleteAgent(id: string): Promise<void> {
   const supabase = getClient();
+
+  // Snapshot trước khi xoá để audit log (CEO 13/05): malicious user có thể
+  // xoá agent đã được cấu hình thủ công → trace lại được ai xoá + nội dung.
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  const { data: snapshot } = await (supabase as any)
+    .from("agents")
+    .select("*")
+    .eq("id", id)
+    .maybeSingle();
+
   const { error } = await supabase.from("agents").delete().eq("id", id);
   if (error) handleError(error, "deleteAgent");
+
+  // Best-effort audit — không throw nếu fail (delete đã thành công)
+  if (snapshot) {
+    void recordAuditLog({
+      action: "delete",
+      entityType: "agent",
+      entityId: id,
+      oldData: snapshot,
+    });
+  }
 }
 
 /**
@@ -411,8 +432,26 @@ export async function updateAgentTaskStatus(
 
 export async function deleteAgentTask(id: string): Promise<void> {
   const supabase = getClient();
+
+  // Snapshot trước khi xoá để audit log
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  const { data: snapshot } = await (supabase as any)
+    .from("agent_tasks")
+    .select("*")
+    .eq("id", id)
+    .maybeSingle();
+
   const { error } = await supabase.from("agent_tasks").delete().eq("id", id);
   if (error) handleError(error, "deleteAgentTask");
+
+  if (snapshot) {
+    void recordAuditLog({
+      action: "delete",
+      entityType: "agent_task",
+      entityId: id,
+      oldData: snapshot,
+    });
+  }
 }
 
 /**

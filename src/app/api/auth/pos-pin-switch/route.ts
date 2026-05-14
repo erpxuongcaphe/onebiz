@@ -34,6 +34,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { createServerSupabaseClient } from "@/lib/supabase/server";
 import { getAdminClient } from "@/lib/supabase/admin";
+import { checkRateLimit, getClientIp } from "@/lib/rate-limit";
 
 export const runtime = "nodejs";
 
@@ -56,6 +57,35 @@ export async function POST(req: NextRequest) {
       return NextResponse.json(
         { success: false, message: "Chưa đăng nhập", code: "AUTH_REQUIRED" },
         { status: 401 },
+      );
+    }
+
+    // ─── 1.5. Rate limit (CEO 13/05): chặn brute-force PIN qua endpoint ───
+    // RPC verify_pos_pin đã track failed_attempts + lock 15 phút sau 10 sai,
+    // nhưng attacker có thể spawn nhiều tab/IP → API-level rate limit cấp
+    // request. Key = IP + callerId để chống đổi IP nhưng dùng cùng session.
+    const ip = getClientIp(req);
+    const rateLimit = checkRateLimit(`pin-switch:${ip}:${caller.id}`, {
+      limit: 5,
+      windowMs: 60_000, // 5 request / phút / (IP + caller)
+    });
+    if (!rateLimit.allowed) {
+      const retryAfterSec = Math.ceil((rateLimit.resetAt - Date.now()) / 1000);
+      return NextResponse.json(
+        {
+          success: false,
+          message: `Quá nhiều lần thử PIN. Vui lòng đợi ${retryAfterSec} giây.`,
+          code: "RATE_LIMITED",
+        },
+        {
+          status: 429,
+          headers: {
+            "Retry-After": String(retryAfterSec),
+            "X-RateLimit-Limit": "5",
+            "X-RateLimit-Remaining": "0",
+            "X-RateLimit-Reset": String(Math.ceil(rateLimit.resetAt / 1000)),
+          },
+        },
       );
     }
 
