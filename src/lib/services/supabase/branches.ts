@@ -47,6 +47,11 @@ export async function createBranch(branch: {
   address?: string;
   phone?: string;
   isDefault?: boolean;
+  /**
+   * CEO 13/05: Bảng giá mặc định cho POS FnB / Retail của chi nhánh này.
+   * null/undefined = dùng giá niêm yết (không áp tier).
+   */
+  priceTierId?: string | null;
 }): Promise<BranchDetail> {
   if (!branch.tenantId) {
     throw new Error("Thiếu tenantId khi tạo chi nhánh");
@@ -70,6 +75,8 @@ export async function createBranch(branch: {
       address: branch.address ?? null,
       phone: branch.phone ?? null,
       is_default: branch.isDefault ?? false,
+      // CEO 13/05: fix bug — trước đây bỏ qua tier user chọn lúc tạo mới
+      price_tier_id: branch.priceTierId ?? null,
     })
     .select()
     .single();

@@ -246,6 +246,8 @@ function BranchSettingsPageInner() {
           address: form.address.trim() || undefined,
           phone: phoneCleaned || undefined,
           isDefault: form.isDefault,
+          // CEO 13/05: fix bug — pass priceTierId xuống service
+          priceTierId: form.priceTierId || null,
         });
         toast({
           title: "Đã thêm chi nhánh",
