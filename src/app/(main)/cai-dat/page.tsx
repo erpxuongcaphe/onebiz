@@ -136,7 +136,18 @@ export default function StoreSettingsPage() {
               <label className="text-sm font-medium">Loại hình kinh doanh</label>
               <Select value={businessType} onValueChange={(v) => v && setBusinessType(v)}>
                 <SelectTrigger className="w-full">
-                  <SelectValue />
+                  <SelectValue placeholder="Chọn loại hình">
+                    {(v) => {
+                      const labels: Record<string, string> = {
+                        retail: "Bán lẻ",
+                        wholesale: "Bán sỉ",
+                        fnb: "F&B - Nhà hàng / Café",
+                        service: "Dịch vụ",
+                        other: "Khác",
+                      };
+                      return labels[v as string] ?? "Chọn loại hình";
+                    }}
+                  </SelectValue>
                 </SelectTrigger>
                 <SelectContent>
                   <SelectItem value="retail">Bán lẻ</SelectItem>

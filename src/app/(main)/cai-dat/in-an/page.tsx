@@ -554,7 +554,9 @@ export default function PrintSettingsPage() {
               onValueChange={(v) => v && update({ copies: parseInt(v) })}
             >
               <SelectTrigger className="w-24">
-                <SelectValue />
+                <SelectValue placeholder="1 bản">
+                  {(v) => `${v ?? 1} bản`}
+                </SelectValue>
               </SelectTrigger>
               <SelectContent>
                 {[1, 2, 3].map((n) => (

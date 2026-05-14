@@ -116,7 +116,9 @@ export default function LanguageSettingsPage() {
               <label className="text-sm font-medium">Định dạng số</label>
               <Select value={FIXED_NUMBER_FORMAT} disabled>
                 <SelectTrigger className="w-full">
-                  <SelectValue />
+                  <SelectValue placeholder="Chọn định dạng">
+                    {(v) => (v === "en" ? "1,000,000 (English)" : "Chọn định dạng")}
+                  </SelectValue>
                 </SelectTrigger>
                 <SelectContent>
                   <SelectItem value="en">1,000,000 (English)</SelectItem>
@@ -127,7 +129,9 @@ export default function LanguageSettingsPage() {
               <label className="text-sm font-medium">Định dạng ngày</label>
               <Select value={FIXED_DATE_FORMAT} disabled>
                 <SelectTrigger className="w-full">
-                  <SelectValue />
+                  <SelectValue placeholder="Chọn định dạng">
+                    {(v) => (v === "dd/MM/yyyy" ? "dd/MM/yyyy" : "Chọn định dạng")}
+                  </SelectValue>
                 </SelectTrigger>
                 <SelectContent>
                   <SelectItem value="dd/MM/yyyy">dd/MM/yyyy</SelectItem>
@@ -138,7 +142,16 @@ export default function LanguageSettingsPage() {
               <label className="text-sm font-medium">Múi giờ</label>
               <Select value={timezone} onValueChange={(v) => v && setTimezone(v)}>
                 <SelectTrigger className="w-full">
-                  <SelectValue />
+                  <SelectValue placeholder="Chọn múi giờ">
+                    {(v) => {
+                      const labels: Record<string, string> = {
+                        "asia-hcm": "Asia/Ho_Chi_Minh (UTC+7)",
+                        "asia-tokyo": "Asia/Tokyo (UTC+9)",
+                        utc: "UTC (UTC+0)",
+                      };
+                      return labels[v as string] ?? "Chọn múi giờ";
+                    }}
+                  </SelectValue>
                 </SelectTrigger>
                 <SelectContent>
                   <SelectItem value="asia-hcm">
@@ -155,7 +168,15 @@ export default function LanguageSettingsPage() {
               <label className="text-sm font-medium">Đơn vị tiền tệ</label>
               <Select value={currency} onValueChange={(v) => v && setCurrency(v)}>
                 <SelectTrigger className="w-full">
-                  <SelectValue />
+                  <SelectValue placeholder="Chọn tiền tệ">
+                    {(v) =>
+                      v === "VND"
+                        ? "VND - Việt Nam Đồng"
+                        : v === "USD"
+                          ? "USD - US Dollar"
+                          : "Chọn tiền tệ"
+                    }
+                  </SelectValue>
                 </SelectTrigger>
                 <SelectContent>
                   <SelectItem value="VND">VND - Việt Nam Đồng</SelectItem>

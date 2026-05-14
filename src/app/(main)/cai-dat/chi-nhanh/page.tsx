@@ -489,7 +489,9 @@ function BranchSettingsPageInner() {
 
       {/* Create/Edit Dialog */}
       <Dialog open={dialogOpen} onOpenChange={setDialogOpen}>
-        <DialogContent className="max-w-lg">
+        {/* CEO 13/05: nâng từ max-w-lg lên max-w-2xl — form có 2 cột
+            (Tên/Mã/Loại/Địa chỉ/SĐT/Bảng giá) sẽ rộng rãi hơn. */}
+        <DialogContent className="max-w-2xl">
           <DialogHeader>
             <DialogTitle>
               {editingId ? "Sửa chi nhánh" : "Thêm chi nhánh"}
@@ -534,9 +536,25 @@ function BranchSettingsPageInner() {
                   onValueChange={(val) =>
                     setForm((f) => ({ ...f, branchType: val as BranchType }))
                   }
+                  items={[
+                    { value: "store", label: "Cửa hàng (POS FnB / Retail)" },
+                    { value: "warehouse", label: "Kho tổng (bán sỉ)" },
+                    { value: "factory", label: "Xưởng sản xuất" },
+                    { value: "office", label: "Văn phòng" },
+                  ]}
                 >
                   <SelectTrigger id="branch-type">
-                    <SelectValue />
+                    <SelectValue placeholder="Chọn loại chi nhánh">
+                      {(v) => {
+                        const labels: Record<string, string> = {
+                          store: "Cửa hàng (POS FnB / Retail)",
+                          warehouse: "Kho tổng (bán sỉ)",
+                          factory: "Xưởng sản xuất",
+                          office: "Văn phòng",
+                        };
+                        return labels[v as string] ?? "Chọn loại chi nhánh";
+                      }}
+                    </SelectValue>
                   </SelectTrigger>
                   <SelectContent>
                     <SelectItem value="store">Cửa hàng (POS FnB / Retail)</SelectItem>

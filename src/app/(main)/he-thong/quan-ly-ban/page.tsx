@@ -874,7 +874,7 @@ export default function QuanLyBanPage() {
                   onValueChange={(v) => setTableForm((f) => ({ ...f, zone: v ?? "" }))}
                 >
                   <SelectTrigger>
-                    <SelectValue />
+                    <SelectValue placeholder="Chọn khu vực" />
                   </SelectTrigger>
                   <SelectContent>
                     {zones.map((z) => (

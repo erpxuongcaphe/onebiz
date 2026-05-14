@@ -201,7 +201,15 @@ export default function SalesSettingsPage() {
               <label className="text-sm font-medium">Loại giảm giá</label>
               <Select value={discountType} onValueChange={(v) => v && setDiscountType(v as "percent" | "fixed")}>
                 <SelectTrigger className="w-full">
-                  <SelectValue />
+                  <SelectValue placeholder="Chọn loại">
+                    {(v) =>
+                      v === "percent"
+                        ? "Phần trăm (%)"
+                        : v === "fixed"
+                          ? "Số tiền cố định (VND)"
+                          : "Chọn loại"
+                    }
+                  </SelectValue>
                 </SelectTrigger>
                 <SelectContent>
                   <SelectItem value="percent">Phần trăm (%)</SelectItem>

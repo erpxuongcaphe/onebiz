@@ -220,7 +220,15 @@ function CouponDialog({ open, onOpenChange, initial, onSaved }: CouponDialogProp
               <label className="text-sm font-medium">Loại giảm *</label>
               <Select value={type} onValueChange={(v) => setType(v as "fixed" | "percent")}>
                 <SelectTrigger className="w-full">
-                  <SelectValue />
+                  <SelectValue placeholder="Chọn loại">
+                    {(v) =>
+                      v === "percent"
+                        ? "Theo %"
+                        : v === "fixed"
+                          ? "Số tiền cố định"
+                          : "Chọn loại"
+                    }
+                  </SelectValue>
                 </SelectTrigger>
                 <SelectContent>
                   <SelectItem value="percent">Theo %</SelectItem>

@@ -171,8 +171,9 @@ export default function FnbPresetsPage() {
     );
   }
 
+  // CEO 13/05: bỏ max-w-4xl, để theo layout cha (max-w-6xl)
   return (
-    <div className="p-4 md:p-6 space-y-6 max-w-4xl">
+    <div className="p-4 md:p-6 space-y-6">
       <div>
         <h1 className="text-2xl font-bold flex items-center gap-2">
           Cài đặt POS FnB nâng cao
