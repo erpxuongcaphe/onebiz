@@ -179,6 +179,35 @@ function FnbPosPageInner() {
   const branchId = currentBranch?.id;
   const tenantId = tenant?.id ?? "";
   const isBlockingLoad = authLoading || (!!branchId && loading);
+
+  // CEO 13/05: Auto-switch nếu user đang ở branch non-store (kho tổng/xưởng/
+  // văn phòng). POS FnB chỉ phục vụ quán. Tìm quán đầu tiên trong list →
+  // switch + toast info. Tránh user bị stuck với cart trống không add món
+  // được vì branch không match menu FnB.
+  const { switchBranch: doSwitchBranch } = useAuth();
+  useEffect(() => {
+    if (authLoading) return;
+    if (!currentBranch) return;
+    if (currentBranch.branchType === "store") return;
+    const firstStore = branches.find((b) => b.branchType === "store");
+    if (!firstStore) {
+      // Không có quán FnB nào → FnbEmptyBranch sẽ render
+      return;
+    }
+    void doSwitchBranch(firstStore.id);
+    toast({
+      title: "Chuyển sang quán FnB",
+      description: `${currentBranch.name} là ${
+        currentBranch.branchType === "warehouse"
+          ? "kho tổng"
+          : currentBranch.branchType === "factory"
+            ? "xưởng sản xuất"
+            : "văn phòng"
+      } — POS FnB tự chuyển sang "${firstStore.name}". Bấm dropdown chi nhánh để đổi quán khác.`,
+      variant: "info",
+      duration: 6000,
+    });
+  }, [authLoading, currentBranch, branches, doSwitchBranch, toast]);
   const [blockingLoadMs, setBlockingLoadMs] = useState(0);
 
   useEffect(() => {
