@@ -13,6 +13,7 @@
  * thật gì. Giờ query `branches` table thật + cho CEO tạo/sửa/ngưng hoạt động.
  */
 
+import Link from "next/link";
 import { useCallback, useEffect, useState } from "react";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
@@ -614,69 +615,114 @@ function BranchSettingsPageInner() {
                 </label>
               </div>
 
-              {/* Bảng giá mặc định cho POS FnB của chi nhánh — chỉ hiện cho
-                  store + warehouse (factory/office không POS bán hàng). */}
+              {/* Bảng giá mặc định cho POS FnB / Retail của chi nhánh.
+                  Chỉ hiện cho store + warehouse (factory/office không POS bán hàng).
+                  CEO 13/05: nếu chưa có tier nào → empty state + CTA tạo bảng giá,
+                  không render dropdown chỉ có "Giá niêm yết" vô nghĩa. */}
               {(form.branchType === "store" || form.branchType === "warehouse") && (
                 <div className="space-y-2 sm:col-span-2">
                   <Label htmlFor="branch-tier">
                     Bảng giá mặc định{" "}
                     <span className="text-xs font-normal text-muted-foreground">
-                      (POS FnB của chi nhánh)
+                      ({form.branchType === "store" ? "POS FnB" : "POS Retail"} của chi nhánh)
                     </span>
                   </Label>
-                  <Select
-                    value={form.priceTierId || "__none__"}
-                    onValueChange={(val) =>
-                      setForm((f) => ({
-                        ...f,
-                        priceTierId: !val || val === "__none__" ? "" : val,
-                      }))
-                    }
-                    // items prop để Base UI resolve UUID -> label, tránh hiện UUID
-                    // thô khi tier chưa load xong hoặc khi prefill edit mode.
-                    items={[
-                      {
-                        value: "__none__",
-                        label: "— Giá niêm yết (không áp tier) —",
-                      },
-                      ...tiers.map((t) => ({
-                        value: t.id,
-                        label: t.code ? `${t.name} (${t.code})` : t.name,
-                      })),
-                    ]}
-                  >
-                    <SelectTrigger id="branch-tier">
-                      <SelectValue placeholder="— Giá niêm yết —">
-                        {(v) => {
-                          if (!v || v === "__none__") {
-                            return "— Giá niêm yết (không áp tier) —";
-                          }
-                          const match = tiers.find((t) => t.id === v);
-                          if (match) {
-                            return match.code
-                              ? `${match.name} (${match.code})`
-                              : match.name;
-                          }
-                          return "— Giá niêm yết —";
-                        }}
-                      </SelectValue>
-                    </SelectTrigger>
-                    <SelectContent>
-                      <SelectItem value="__none__">
-                        — Giá niêm yết (không áp tier) —
-                      </SelectItem>
-                      {tiers.map((t) => (
-                        <SelectItem key={t.id} value={t.id}>
-                          {t.name}
-                          {t.code ? ` (${t.code})` : ""}
-                        </SelectItem>
-                      ))}
-                    </SelectContent>
-                  </Select>
-                  <p className="text-xs text-muted-foreground">
-                    Chi nhánh dùng bảng giá này khi check out POS FnB. SP không
-                    có trong bảng giá → tự động dùng giá niêm yết.
-                  </p>
+
+                  {tiers.length === 0 ? (
+                    // Empty state — chưa có bảng giá nào, hướng dẫn user tạo
+                    <div className="rounded-lg border border-dashed border-status-info/30 bg-status-info/5 p-3 space-y-2">
+                      <div className="flex items-start gap-2">
+                        <Icon name="info" size={16} className="text-status-info shrink-0 mt-0.5" />
+                        <div className="space-y-1.5">
+                          <p className="text-sm font-medium">Chưa có bảng giá nào</p>
+                          <p className="text-xs text-muted-foreground leading-relaxed">
+                            Bảng giá cho phép áp giá khác nhau theo chi nhánh (VD: quán mặt
+                            tiền +20%, quán dân cư giữ giá niêm yết). Hiện chi nhánh sẽ
+                            dùng <strong>giá niêm yết</strong> cho mọi sản phẩm.
+                          </p>
+                          <div className="flex flex-wrap gap-2 pt-1">
+                            <Link
+                              href="/cai-dat/bang-gia"
+                              target="_blank"
+                              className="inline-flex items-center gap-1 text-xs font-medium text-primary hover:underline"
+                            >
+                              <Icon name="add" size={14} />
+                              Tạo bảng giá mới (tab mới)
+                            </Link>
+                            <span className="text-xs text-muted-foreground">
+                              · Sau khi tạo xong, mở lại dialog này để chọn
+                            </span>
+                          </div>
+                        </div>
+                      </div>
+                    </div>
+                  ) : (
+                    <>
+                      <Select
+                        value={form.priceTierId || "__none__"}
+                        onValueChange={(val) =>
+                          setForm((f) => ({
+                            ...f,
+                            priceTierId: !val || val === "__none__" ? "" : val,
+                          }))
+                        }
+                        // items prop để Base UI resolve UUID -> label, tránh hiện UUID
+                        // thô khi tier chưa load xong hoặc khi prefill edit mode.
+                        items={[
+                          {
+                            value: "__none__",
+                            label: "— Giá niêm yết (không áp tier) —",
+                          },
+                          ...tiers.map((t) => ({
+                            value: t.id,
+                            label: t.code ? `${t.name} (${t.code})` : t.name,
+                          })),
+                        ]}
+                      >
+                        <SelectTrigger id="branch-tier" className="w-full">
+                          <SelectValue placeholder="— Giá niêm yết —">
+                            {(v) => {
+                              if (!v || v === "__none__") {
+                                return "— Giá niêm yết (không áp tier) —";
+                              }
+                              const match = tiers.find((t) => t.id === v);
+                              if (match) {
+                                return match.code
+                                  ? `${match.name} (${match.code})`
+                                  : match.name;
+                              }
+                              return "— Giá niêm yết —";
+                            }}
+                          </SelectValue>
+                        </SelectTrigger>
+                        <SelectContent>
+                          <SelectItem value="__none__">
+                            — Giá niêm yết (không áp tier) —
+                          </SelectItem>
+                          {tiers.map((t) => (
+                            <SelectItem key={t.id} value={t.id}>
+                              {t.name}
+                              {t.code ? ` (${t.code})` : ""}
+                            </SelectItem>
+                          ))}
+                        </SelectContent>
+                      </Select>
+                      <div className="flex items-center justify-between gap-2">
+                        <p className="text-xs text-muted-foreground flex-1">
+                          Chi nhánh dùng bảng giá này khi check out. SP không có
+                          trong bảng giá → tự động dùng giá niêm yết.
+                        </p>
+                        <Link
+                          href="/cai-dat/bang-gia"
+                          target="_blank"
+                          className="inline-flex items-center gap-1 text-xs font-medium text-primary hover:underline shrink-0"
+                        >
+                          <Icon name="add" size={12} />
+                          Tạo bảng giá mới
+                        </Link>
+                      </div>
+                    </>
+                  )}
                 </div>
               )}
             </div>
