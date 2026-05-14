@@ -1894,6 +1894,18 @@ function FnbPosPageInner() {
       />
     );
   }
+  // CEO 13/05: Nếu tenant không có store nào (chỉ có kho/xưởng) → empty.
+  // POS FnB chỉ phục vụ Quán FnB. Phải có ít nhất 1 chi nhánh type=store.
+  const hasAnyStoreBranch = branches.some((b) => b.branchType === "store");
+  if (!hasAnyStoreBranch) {
+    return (
+      <FnbEmptyBranch
+        onMenuClick={() => setSidenavOpen(true)}
+        onSearch={() => setSearchModalOpen(true)}
+      />
+    );
+  }
+
   if (!branchId) {
     // Phân biệt: chưa có branch nào (tenant rỗng) vs có branch nhưng chưa pick
     if (branches.length === 0) {

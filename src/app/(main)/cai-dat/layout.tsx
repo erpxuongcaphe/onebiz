@@ -47,8 +47,11 @@ export default function SettingsLayout({
 }: {
   children: React.ReactNode;
 }) {
+  // CEO 13/05: nâng max-w lên 6xl (1152px) để bảng Chi nhánh / Phân quyền
+  // hiển thị đủ cột, không bó hẹp ở giữa khi viewport rộng. Form ngắn
+  // (ngôn ngữ, giao diện...) tự wrap max-w-2xl bên trong nếu cần.
   return (
-    <ModuleSidebarLayout title="Cài đặt" nav={settingsNav} contentClassName="max-w-4xl">
+    <ModuleSidebarLayout title="Cài đặt" nav={settingsNav} contentClassName="max-w-6xl">
       {children}
     </ModuleSidebarLayout>
   );
