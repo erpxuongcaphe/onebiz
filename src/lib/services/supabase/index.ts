@@ -292,6 +292,14 @@ export {
 } from "./pos-pin";
 export type { PosPinUser, PosPinSwitchResult } from "./pos-pin";
 
+// CEO 13/05: Stock integrity reconciliation (migration 00073)
+export { verifyStockInvariants } from "./stock-integrity";
+export type {
+  StockInvariantsResult,
+  StockInvariantViolation1,
+  StockInvariantViolation23,
+} from "./stock-integrity";
+
 // CEO 13/05: Giá theo nền tảng (Fabi/iPos pattern)
 export {
   getPlatformPricesForProduct,
