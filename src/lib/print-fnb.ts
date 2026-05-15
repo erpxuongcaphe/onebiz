@@ -62,7 +62,18 @@ export interface FnbReceiptData extends PreBillData {
   receiptStyle?: "minimal" | "standard" | "full";
   showBarcode?: boolean;
   showQr?: boolean;
-  bankInfo?: { bankName: string; bankAccount: string; bankHolder: string };
+  bankInfo?: {
+    bankName: string;
+    bankAccount: string;
+    bankHolder: string;
+    /**
+     * CEO 14/05: bankBin (NAPAS 6 chữ số) — bắt buộc để render VietQR image.
+     * Khi có bankBin + vietQrEnabled → in QR thật (template "print").
+     * Khi thiếu → fallback hiển thị text "Chuyển khoản: STK xxx" như cũ.
+     */
+    bankBin?: string;
+    vietQrEnabled?: boolean;
+  };
   /** true = payment saved offline, will sync when online */
   isOffline?: boolean;
 }
@@ -348,13 +359,52 @@ export function buildFnbReceiptHtml(data: FnbReceiptData): string {
     }).join("");
   }
 
-  const qrHtml = data.showQr && data.bankInfo && data.paymentMethod !== "cash"
-    ? `<div class="center" style="margin:8px 0">
+  // CEO 14/05: nếu vietQrEnabled + bankBin → render QR image thật
+  // (VietQR.io CDN). Khi POS in qua nhiệt 58/80mm, browser sẽ tự fetch
+  // image embed vào bill. Offline: image broken → fallback text dưới.
+  let qrHtml = "";
+  if (data.showQr && data.bankInfo && data.paymentMethod !== "cash") {
+    const info = data.bankInfo;
+    if (info.vietQrEnabled && info.bankBin && info.bankAccount) {
+      // Build VietQR URL inline (không import vietqr.ts để tránh circular dep)
+      const cleanInfo = (s: string) =>
+        s
+          .normalize("NFD")
+          .replace(/[̀-ͯ]/g, "")
+          .replace(/[^a-zA-Z0-9\s-]/g, "")
+          .trim()
+          .slice(0, 50);
+      const cleanHolder = (s: string) =>
+        s
+          .normalize("NFD")
+          .replace(/[̀-ͯ]/g, "")
+          .toUpperCase()
+          .replace(/[^A-Z0-9\s]/g, "")
+          .trim()
+          .slice(0, 50);
+      const params = new URLSearchParams();
+      params.set("amount", String(Math.round(data.total)));
+      params.set("addInfo", cleanInfo(data.invoiceCode));
+      if (info.bankHolder) {
+        params.set("accountName", cleanHolder(info.bankHolder));
+      }
+      const qrUrl = `https://img.vietqr.io/image/${info.bankBin}-${info.bankAccount}-print.png?${params.toString()}`;
+      qrHtml = `<div class="center" style="margin:8px 0;page-break-inside:avoid">
+        <div style="font-size:11px;font-weight:bold;margin-bottom:4px">QUÉT QR ĐỂ THANH TOÁN</div>
+        <img src="${qrUrl}" alt="VietQR" style="max-width:180px;width:100%;height:auto" />
+        <div style="font-size:10px;margin-top:4px;color:#555">
+          ${info.bankName} · ${info.bankAccount}
+        </div>
+      </div>`;
+    } else {
+      // Fallback: text-only (legacy behavior)
+      qrHtml = `<div class="center" style="margin:8px 0">
         <div style="font-size:11px;font-weight:bold">Chuyển khoản:</div>
-        <div style="font-size:11px">${data.bankInfo.bankName} — ${data.bankInfo.bankAccount}</div>
-        <div style="font-size:11px">${data.bankInfo.bankHolder}</div>
-      </div>`
-    : "";
+        <div style="font-size:11px">${info.bankName} — ${info.bankAccount}</div>
+        <div style="font-size:11px">${info.bankHolder}</div>
+      </div>`;
+    }
+  }
 
   const html = `<!DOCTYPE html>
 <html><head><meta charset="utf-8"><title>Hoá đơn ${data.invoiceCode}</title>

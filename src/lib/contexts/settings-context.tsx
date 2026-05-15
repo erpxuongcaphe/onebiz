@@ -114,6 +114,16 @@ export interface AppSettings {
     bankName: string;
     bankAccount: string;
     bankHolder: string;
+    /**
+     * CEO 14/05: BIN NAPAS 6 chữ số — bắt buộc để render VietQR image
+     * khi `vietQrEnabled = true`. Lưu trong tenant settings (sync sang
+     * local settings khi user lưu ở /cai-dat/thanh-toan).
+     */
+    bankBin?: string;
+    /** Code ngắn (vd "VCB", "TCB") để UI hiển thị logo. */
+    bankCode?: string;
+    /** Bật tự in QR VietQR trên bill thanh toán. */
+    vietQrEnabled?: boolean;
     momoPhone: string;
     vnpayEnabled: boolean;
   };

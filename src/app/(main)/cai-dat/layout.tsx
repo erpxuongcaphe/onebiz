@@ -34,7 +34,7 @@ const settingsNav: ModuleNavGroup[] = [
   {
     label: "Tích hợp",
     items: [
-      { label: "Thanh toán", href: "/cai-dat/thanh-toan", icon: "credit_card", badge: "Sắp ra mắt" },
+      { label: "Thanh toán", href: "/cai-dat/thanh-toan", icon: "credit_card" },
       { label: "Giao hàng", href: "/cai-dat/giao-hang", icon: "local_shipping", badge: "Sắp ra mắt" },
       { label: "Thông báo", href: "/cai-dat/thong-bao", icon: "notifications" },
       { label: "Kết nối", href: "/cai-dat/ket-noi", icon: "link", badge: "Sắp ra mắt" },

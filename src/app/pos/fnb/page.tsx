@@ -1279,6 +1279,8 @@ function FnbPosPageInner() {
                 bankName: settings.payment.bankName,
                 bankAccount: settings.payment.bankAccount,
                 bankHolder: settings.payment.bankHolder,
+                bankBin: settings.payment.bankBin,
+                vietQrEnabled: settings.payment.vietQrEnabled,
               } : undefined,
               deliveryPlatform: tab.deliveryPlatform,
               platformCommissionPercent: isPlatformOrderPrint ? commissionPercent : undefined,

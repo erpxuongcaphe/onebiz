@@ -31,6 +31,15 @@ export interface TenantBusinessInfo {
   /** Số tài khoản ngân hàng + tên ngân hàng (cho hóa đơn convertible). */
   bankAccount?: string;
   bankName?: string;
+  /**
+   * CEO 14/05: thêm BIN code (NAPAS 6 chữ số) + tên chủ TK cho VietQR auto.
+   * BIN bắt buộc để build QR string; bankName là fallback cho UI cũ.
+   */
+  bankBin?: string;
+  bankCode?: string;
+  bankHolder?: string;
+  /** Bật tự động in QR VietQR trên bill thanh toán (POS FnB + Retail). */
+  vietQrEnabled?: boolean;
   /** Footer hóa đơn (chính sách đổi/trả, ghi chú cảm ơn,...). */
   invoiceFooter?: string;
 }
@@ -67,6 +76,10 @@ export async function getTenantBusinessInfo(): Promise<TenantBusinessInfo> {
     logoUrl: business.logo_url as string | undefined,
     bankAccount: business.bank_account as string | undefined,
     bankName: business.bank_name as string | undefined,
+    bankBin: business.bank_bin as string | undefined,
+    bankCode: business.bank_code as string | undefined,
+    bankHolder: business.bank_holder as string | undefined,
+    vietQrEnabled: business.vietqr_enabled as boolean | undefined,
     invoiceFooter: business.invoice_footer as string | undefined,
   };
 }
@@ -107,6 +120,10 @@ export async function updateTenantBusinessInfo(
   if (patch.logoUrl !== undefined) updates.logo_url = patch.logoUrl;
   if (patch.bankAccount !== undefined) updates.bank_account = patch.bankAccount;
   if (patch.bankName !== undefined) updates.bank_name = patch.bankName;
+  if (patch.bankBin !== undefined) updates.bank_bin = patch.bankBin;
+  if (patch.bankCode !== undefined) updates.bank_code = patch.bankCode;
+  if (patch.bankHolder !== undefined) updates.bank_holder = patch.bankHolder;
+  if (patch.vietQrEnabled !== undefined) updates.vietqr_enabled = patch.vietQrEnabled;
   if (patch.invoiceFooter !== undefined) updates.invoice_footer = patch.invoiceFooter;
 
   const newSettings = {
@@ -141,6 +158,10 @@ export async function updateTenantBusinessInfo(
     logoUrl: updates.logo_url as string | undefined,
     bankAccount: updates.bank_account as string | undefined,
     bankName: updates.bank_name as string | undefined,
+    bankBin: updates.bank_bin as string | undefined,
+    bankCode: updates.bank_code as string | undefined,
+    bankHolder: updates.bank_holder as string | undefined,
+    vietQrEnabled: updates.vietqr_enabled as boolean | undefined,
     invoiceFooter: updates.invoice_footer as string | undefined,
   };
 }
