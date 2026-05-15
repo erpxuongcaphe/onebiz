@@ -29,11 +29,17 @@ import {
   getDailyRevenue,
   getRevenueByCategory,
   getTopProductsByRevenue,
+  getTopCustomersByRevenue,
+  getFinanceKpis,
+  getExpenseBreakdown,
+  getCashFlowDetailed,
 } from "@/lib/services";
 import type {
   MonthlyRevenuePoint,
   CategoryRevenue,
   TopProductRevenue,
+  TopCustomer,
+  CashFlowDetailedRow,
 } from "@/lib/services/supabase/analytics";
 import {
   exportReportToExcel,
@@ -81,12 +87,44 @@ export default function TongQuanPage() {
   const [dailyRevenue, setDailyRevenue] = useState<MonthlyRevenuePoint[]>([]);
   const [categoryRevenue, setCategoryRevenue] = useState<CategoryRevenue[]>([]);
   const [topProducts, setTopProducts] = useState<TopProductRevenue[]>([]);
+  // CEO 14/05: thêm data cho báo cáo Excel chi tiết hơn (financial + customers + cash flow)
+  const [financeKpis, setFinanceKpis] = useState<{
+    revenue: number; prevRevenue: number;
+    expense: number; prevExpense: number;
+    profit: number; prevProfit: number;
+    profitMargin: number; prevProfitMargin: number;
+  } | null>(null);
+  const [expenseBreakdown, setExpenseBreakdown] = useState<
+    { name: string; value: number }[]
+  >([]);
+  const [topCustomers, setTopCustomers] = useState<TopCustomer[]>([]);
+  const [cashFlow, setCashFlow] = useState<CashFlowDetailedRow[]>([]);
 
   // CEO 13/05: helper resolve tên branch để in title row Excel
+  const tenantName = useAuth().tenant?.name;
   const branchLabel =
     activeBranchId
       ? branches.find((b) => b.id === activeBranchId)?.name ?? "Chi nhánh đang chọn"
       : "Tất cả chi nhánh";
+
+  // Fetch supplementary data cho Excel
+  useEffect(() => {
+    Promise.all([
+      getFinanceKpis(activeBranchId ?? undefined, range),
+      getExpenseBreakdown(activeBranchId ?? undefined, range),
+      getTopCustomersByRevenue(20, activeBranchId ?? undefined),
+      getCashFlowDetailed(6, activeBranchId ?? undefined),
+    ])
+      .then(([fin, exp, cust, cash]) => {
+        setFinanceKpis(fin);
+        setExpenseBreakdown(exp);
+        setTopCustomers(cust);
+        setCashFlow(cash);
+      })
+      .catch(() => {
+        // Silent — fallback empty
+      });
+  }, [activeBranchId, range]);
 
   // ── Export Excel — 2 mode ──
   const handleExportView = useCallback(() => {
@@ -139,111 +177,361 @@ export default function TongQuanPage() {
 
   const handleExportFull = useCallback(() => {
     try {
-      const title = buildReportTitleRows({
-        title: "BÁO CÁO TỔNG QUAN — ĐẦY ĐỦ",
+      const titleBase = {
+        title: "BÁO CÁO TỔNG QUAN KINH DOANH",
         range,
         branchName: branchLabel,
+        tenantName,
         generatedAt: new Date(),
-      });
+      };
+
+      // Helpers
+      const totalRevenueByCat = categoryRevenue.reduce((s, c) => s + c.revenue, 0);
+      const totalRevenueByDay = dailyRevenue.reduce((s, d) => s + d.revenue, 0);
+      const totalQty = topProducts.reduce((s, p) => s + p.qty, 0);
+      const totalRevenueTop = topProducts.reduce((s, p) => s + p.revenue, 0);
+      const totalExpense = expenseBreakdown.reduce((s, e) => s + e.value, 0);
+      const totalCustomerRev = topCustomers.reduce((s, c) => s + c.revenue, 0);
+      const totalCustomerOrders = topCustomers.reduce((s, c) => s + c.orders, 0);
+
+      // ═════════════════════════════════════════════════════════════
+      // SHEET 1: EXECUTIVE SUMMARY (1 trang CEO scan nhanh)
+      // ═════════════════════════════════════════════════════════════
+      const execSummary: ExcelSheet = {
+        name: "1. Tổng hợp",
+        titleRows: buildReportTitleRows(titleBase),
+        columns: [
+          { label: "Chỉ tiêu", key: "metric", width: 32 },
+          { label: "Kỳ hiện tại", key: "current", width: 20, format: "currency" },
+          { label: "Kỳ trước", key: "prev", width: 20, format: "currency" },
+          { label: "Chênh lệch", key: "diff", width: 18, format: "currency" },
+          { label: "% thay đổi", key: "pct", width: 14, align: "right" },
+        ],
+        rows: [
+          // ─ Doanh thu ─
+          {
+            metric: "Tổng doanh thu",
+            current: kpis?.revenue ?? 0,
+            prev: kpis?.prevRevenue ?? 0,
+            diff: (kpis?.revenue ?? 0) - (kpis?.prevRevenue ?? 0),
+            pct: calcChange(kpis?.revenue ?? 0, kpis?.prevRevenue ?? 0),
+          },
+          {
+            metric: "  Số đơn hàng",
+            current: kpis?.orders ?? 0,
+            prev: kpis?.prevOrders ?? 0,
+            diff: (kpis?.orders ?? 0) - (kpis?.prevOrders ?? 0),
+            pct: calcChange(kpis?.orders ?? 0, kpis?.prevOrders ?? 0),
+          },
+          {
+            metric: "  TB / đơn hàng",
+            current:
+              (kpis?.orders ?? 0) > 0
+                ? Math.round((kpis?.revenue ?? 0) / (kpis?.orders ?? 1))
+                : 0,
+            prev:
+              (kpis?.prevOrders ?? 0) > 0
+                ? Math.round((kpis?.prevRevenue ?? 0) / (kpis?.prevOrders ?? 1))
+                : 0,
+            diff: 0,
+            pct: "",
+          },
+          // ─ Khách hàng ─
+          {
+            metric: "Khách hàng mới",
+            current: kpis?.newCustomers ?? 0,
+            prev: kpis?.prevNewCustomers ?? 0,
+            diff: (kpis?.newCustomers ?? 0) - (kpis?.prevNewCustomers ?? 0),
+            pct: calcChange(kpis?.newCustomers ?? 0, kpis?.prevNewCustomers ?? 0),
+          },
+          // ─ Chi phí + Lợi nhuận ─
+          {
+            metric: "Tổng chi phí",
+            current: financeKpis?.expense ?? 0,
+            prev: financeKpis?.prevExpense ?? 0,
+            diff: (financeKpis?.expense ?? 0) - (financeKpis?.prevExpense ?? 0),
+            pct: calcChange(financeKpis?.expense ?? 0, financeKpis?.prevExpense ?? 0),
+          },
+          {
+            metric: "Lợi nhuận gộp",
+            current: kpis?.profit ?? 0,
+            prev: kpis?.prevProfit ?? 0,
+            diff: (kpis?.profit ?? 0) - (kpis?.prevProfit ?? 0),
+            pct: calcChange(kpis?.profit ?? 0, kpis?.prevProfit ?? 0),
+          },
+          {
+            metric: "Biên lợi nhuận (%)",
+            current: financeKpis?.profitMargin ?? 0,
+            prev: financeKpis?.prevProfitMargin ?? 0,
+            diff:
+              (financeKpis?.profitMargin ?? 0) - (financeKpis?.prevProfitMargin ?? 0),
+            pct: "",
+          },
+        ],
+        sections: {
+          0: "I. CHỈ SỐ DOANH THU",
+          3: "II. CHỈ SỐ KHÁCH HÀNG",
+          4: "III. CHỈ SỐ TÀI CHÍNH",
+        },
+        withSignature: true,
+      };
+
+      // ═════════════════════════════════════════════════════════════
+      // SHEET 2: P&L — BÁO CÁO LÃI LỖ
+      // ═════════════════════════════════════════════════════════════
+      const profitLoss: ExcelSheet = {
+        name: "2. Lãi-Lỗ (P&L)",
+        titleRows: buildReportTitleRows({
+          ...titleBase,
+          title: "BÁO CÁO KẾT QUẢ KINH DOANH",
+        }),
+        columns: [
+          { label: "STT", key: "stt", width: 6, align: "center" },
+          { label: "Chỉ tiêu", key: "metric", width: 40 },
+          { label: "Kỳ này (VND)", key: "current", width: 20, format: "currency" },
+          { label: "Kỳ trước (VND)", key: "prev", width: 20, format: "currency" },
+          { label: "Chênh lệch (VND)", key: "diff", width: 20, format: "currency" },
+        ],
+        rows: [
+          {
+            stt: 1,
+            metric: "Doanh thu bán hàng",
+            current: kpis?.revenue ?? 0,
+            prev: kpis?.prevRevenue ?? 0,
+            diff: (kpis?.revenue ?? 0) - (kpis?.prevRevenue ?? 0),
+          },
+          {
+            stt: 2,
+            metric: "Tổng chi phí",
+            current: financeKpis?.expense ?? 0,
+            prev: financeKpis?.prevExpense ?? 0,
+            diff: (financeKpis?.expense ?? 0) - (financeKpis?.prevExpense ?? 0),
+          },
+          {
+            stt: 3,
+            metric: "Lợi nhuận trước thuế",
+            current: kpis?.profit ?? 0,
+            prev: kpis?.prevProfit ?? 0,
+            diff: (kpis?.profit ?? 0) - (kpis?.prevProfit ?? 0),
+          },
+        ],
+      };
+
+      // ═════════════════════════════════════════════════════════════
+      // SHEET 3: DOANH THU CHI TIẾT (theo ngày + theo danh mục)
+      // ═════════════════════════════════════════════════════════════
+      const revenueDetail: ExcelSheet = {
+        name: "3. Doanh thu chi tiết",
+        titleRows: buildReportTitleRows({
+          ...titleBase,
+          title: "DOANH THU CHI TIẾT THEO NGÀY",
+        }),
+        columns: [
+          { label: "STT", key: "stt", width: 6, align: "center" },
+          { label: "Ngày", key: "date", width: 16 },
+          { label: "Doanh thu (VND)", key: "revenue", width: 22, format: "currency" },
+          {
+            label: "Tỷ trọng (%)",
+            key: "share",
+            width: 14,
+            format: "percent",
+          },
+        ],
+        rows: dailyRevenue.map((d, i) => ({
+          stt: i + 1,
+          date: d.date,
+          revenue: d.revenue,
+          share: totalRevenueByDay > 0 ? (d.revenue / totalRevenueByDay) * 100 : 0,
+        })),
+        footer: {
+          stt: "",
+          date: "TỔNG CỘNG",
+          revenue: totalRevenueByDay,
+          share: 100,
+        },
+      };
+
+      // ═════════════════════════════════════════════════════════════
+      // SHEET 4: THEO DANH MỤC
+      // ═════════════════════════════════════════════════════════════
+      const categorySheet: ExcelSheet = {
+        name: "4. Theo danh mục",
+        titleRows: buildReportTitleRows({
+          ...titleBase,
+          title: "DOANH THU THEO DANH MỤC SẢN PHẨM",
+        }),
+        columns: [
+          { label: "STT", key: "stt", width: 6, align: "center" },
+          { label: "Danh mục", key: "category", width: 28 },
+          { label: "Doanh thu (VND)", key: "revenue", width: 22, format: "currency" },
+          { label: "Tỷ trọng (%)", key: "share", width: 14, format: "percent" },
+        ],
+        rows: categoryRevenue.map((c, i) => ({
+          stt: i + 1,
+          category: c.category,
+          revenue: c.revenue,
+          share: totalRevenueByCat > 0 ? (c.revenue / totalRevenueByCat) * 100 : 0,
+        })),
+        footer: {
+          stt: "",
+          category: "TỔNG CỘNG",
+          revenue: totalRevenueByCat,
+          share: 100,
+        },
+      };
+
+      // ═════════════════════════════════════════════════════════════
+      // SHEET 5: TOP SẢN PHẨM
+      // ═════════════════════════════════════════════════════════════
+      const topProductsSheet: ExcelSheet = {
+        name: "5. Top SP bán chạy",
+        titleRows: buildReportTitleRows({
+          ...titleBase,
+          title: "TOP 10 SẢN PHẨM BÁN CHẠY",
+        }),
+        columns: [
+          { label: "STT", key: "stt", width: 6, align: "center" },
+          { label: "Tên sản phẩm", key: "name", width: 40 },
+          { label: "Số lượng", key: "qty", width: 12, format: "number" },
+          { label: "Doanh thu (VND)", key: "revenue", width: 22, format: "currency" },
+          { label: "Tỷ trọng (%)", key: "share", width: 14, format: "percent" },
+        ],
+        rows: topProducts.map((p, i) => ({
+          stt: i + 1,
+          name: p.name,
+          qty: p.qty,
+          revenue: p.revenue,
+          share: totalRevenueTop > 0 ? (p.revenue / totalRevenueTop) * 100 : 0,
+        })),
+        footer: {
+          stt: "",
+          name: "TỔNG CỘNG",
+          qty: totalQty,
+          revenue: totalRevenueTop,
+          share: 100,
+        },
+      };
+
+      // ═════════════════════════════════════════════════════════════
+      // SHEET 6: TOP KHÁCH HÀNG
+      // ═════════════════════════════════════════════════════════════
+      const topCustomersSheet: ExcelSheet = {
+        name: "6. Top khách hàng",
+        titleRows: buildReportTitleRows({
+          ...titleBase,
+          title: "TOP 20 KHÁCH HÀNG THEO DOANH THU",
+        }),
+        columns: [
+          { label: "Hạng", key: "rank", width: 6, align: "center" },
+          { label: "Tên khách hàng", key: "name", width: 36 },
+          { label: "Số đơn", key: "orders", width: 12, format: "number" },
+          { label: "Doanh thu (VND)", key: "revenue", width: 22, format: "currency" },
+          {
+            label: "TB / đơn (VND)",
+            key: "avgTicket",
+            width: 18,
+            format: "currency",
+          },
+          {
+            label: "% tổng",
+            key: "share",
+            width: 12,
+            format: "percent",
+          },
+        ],
+        rows: topCustomers.map((c) => ({
+          rank: c.rank,
+          name: c.name,
+          orders: c.orders,
+          revenue: c.revenue,
+          avgTicket: c.orders > 0 ? Math.round(c.revenue / c.orders) : 0,
+          share: totalCustomerRev > 0 ? (c.revenue / totalCustomerRev) * 100 : 0,
+        })),
+        footer: {
+          rank: "",
+          name: "TỔNG CỘNG (top 20)",
+          orders: totalCustomerOrders,
+          revenue: totalCustomerRev,
+          avgTicket: "",
+          share: 100,
+        },
+      };
+
+      // ═════════════════════════════════════════════════════════════
+      // SHEET 7: CƠ CẤU CHI PHÍ
+      // ═════════════════════════════════════════════════════════════
+      const expenseSheet: ExcelSheet = {
+        name: "7. Cơ cấu chi phí",
+        titleRows: buildReportTitleRows({
+          ...titleBase,
+          title: "CƠ CẤU CHI PHÍ THEO LOẠI",
+        }),
+        columns: [
+          { label: "STT", key: "stt", width: 6, align: "center" },
+          { label: "Loại chi phí", key: "name", width: 32 },
+          { label: "Số tiền (VND)", key: "value", width: 22, format: "currency" },
+          { label: "Tỷ trọng (%)", key: "share", width: 14, format: "percent" },
+        ],
+        rows: expenseBreakdown.map((e, i) => ({
+          stt: i + 1,
+          name: e.name,
+          value: e.value,
+          share: totalExpense > 0 ? (e.value / totalExpense) * 100 : 0,
+        })),
+        footer: {
+          stt: "",
+          name: "TỔNG CHI PHÍ",
+          value: totalExpense,
+          share: 100,
+        },
+      };
+
+      // ═════════════════════════════════════════════════════════════
+      // SHEET 8: LƯU CHUYỂN TIỀN TỆ
+      // ═════════════════════════════════════════════════════════════
+      const cashFlowSheet: ExcelSheet = {
+        name: "8. Lưu chuyển tiền",
+        titleRows: buildReportTitleRows({
+          ...titleBase,
+          title: "LƯU CHUYỂN TIỀN TỆ 6 THÁNG GẦN NHẤT",
+        }),
+        columns: [
+          { label: "Tháng", key: "month", width: 16 },
+          { label: "Thu (VND)", key: "receipt", width: 20, format: "currency" },
+          { label: "Chi (VND)", key: "payment", width: 20, format: "currency" },
+          { label: "Dòng tiền ròng", key: "net", width: 20, format: "currency" },
+          {
+            label: "Số dư luỹ kế",
+            key: "balance",
+            width: 20,
+            format: "currency",
+          },
+        ],
+        rows: cashFlow.map((c) => ({
+          month: c.month,
+          receipt: c.totalReceipt,
+          payment: c.totalPayment,
+          net: c.net,
+          balance: c.cumulativeBalance,
+        })),
+        footer: {
+          month: "TỔNG CỘNG",
+          receipt: cashFlow.reduce((s, c) => s + c.totalReceipt, 0),
+          payment: cashFlow.reduce((s, c) => s + c.totalPayment, 0),
+          net: cashFlow.reduce((s, c) => s + c.net, 0),
+          balance: "",
+        },
+      };
 
       const sheets: ExcelSheet[] = [
-        // Sheet 1: KPI overview
-        {
-          name: "Tổng quan KPI",
-          titleRows: title,
-          columns: [
-            { label: "Chỉ tiêu", key: "metric", width: 24 },
-            { label: "Kỳ hiện tại", key: "value", width: 18, format: "currency" },
-            { label: "Kỳ trước", key: "prev", width: 18, format: "currency" },
-            { label: "% thay đổi", key: "change", width: 14 },
-          ],
-          rows: [
-            {
-              metric: "Doanh thu",
-              value: kpis?.revenue ?? 0,
-              prev: kpis?.prevRevenue ?? 0,
-              change: calcChange(kpis?.revenue ?? 0, kpis?.prevRevenue ?? 0),
-            },
-            {
-              metric: "Đơn hàng",
-              value: kpis?.orders ?? 0,
-              prev: kpis?.prevOrders ?? 0,
-              change: calcChange(kpis?.orders ?? 0, kpis?.prevOrders ?? 0),
-            },
-            {
-              metric: "Khách mới",
-              value: kpis?.newCustomers ?? 0,
-              prev: kpis?.prevNewCustomers ?? 0,
-              change: calcChange(kpis?.newCustomers ?? 0, kpis?.prevNewCustomers ?? 0),
-            },
-            {
-              metric: "Lợi nhuận",
-              value: kpis?.profit ?? 0,
-              prev: kpis?.prevProfit ?? 0,
-              change: calcChange(kpis?.profit ?? 0, kpis?.prevProfit ?? 0),
-            },
-          ],
-        },
-        // Sheet 2: Doanh thu theo ngày
-        {
-          name: "Doanh thu theo ngày",
-          titleRows: [
-            "DOANH THU 30 NGÀY GẦN NHẤT",
-            ...title.slice(1),
-          ],
-          columns: [
-            { label: "Ngày", key: "date", width: 14 },
-            { label: "Doanh thu (VND)", key: "revenue", width: 18, format: "currency" },
-          ],
-          rows: dailyRevenue.map((d) => ({
-            date: d.date,
-            revenue: d.revenue,
-          })),
-          footer: {
-            date: "TỔNG",
-            revenue: dailyRevenue.reduce((s, d) => s + d.revenue, 0),
-          },
-        },
-        // Sheet 3: Doanh thu theo danh mục
-        {
-          name: "Theo danh mục",
-          titleRows: [
-            "DOANH THU THEO DANH MỤC",
-            ...title.slice(1),
-          ],
-          columns: [
-            { label: "Danh mục", key: "category", width: 24 },
-            { label: "Doanh thu (VND)", key: "revenue", width: 18, format: "currency" },
-          ],
-          rows: categoryRevenue.map((c) => ({
-            category: c.category,
-            revenue: c.revenue,
-          })),
-          footer: {
-            category: "TỔNG",
-            revenue: categoryRevenue.reduce((s, c) => s + c.revenue, 0),
-          },
-        },
-        // Sheet 4: Top 10 sản phẩm
-        {
-          name: "Top SP bán chạy",
-          titleRows: [
-            "TOP 10 SẢN PHẨM BÁN CHẠY",
-            ...title.slice(1),
-          ],
-          columns: [
-            { label: "STT", key: "rank", width: 6 },
-            { label: "Sản phẩm", key: "name", width: 32 },
-            { label: "SL bán", key: "qty", width: 12, format: "number" },
-            { label: "Doanh thu (VND)", key: "revenue", width: 18, format: "currency" },
-          ],
-          rows: topProducts.map((p, i) => ({
-            rank: i + 1,
-            name: p.name,
-            qty: p.qty,
-            revenue: p.revenue,
-          })),
-        },
+        execSummary,
+        profitLoss,
+        revenueDetail,
+        categorySheet,
+        topProductsSheet,
+        topCustomersSheet,
+        expenseSheet,
+        cashFlowSheet,
       ];
 
       exportReportToExcel({
@@ -251,13 +539,14 @@ export default function TongQuanPage() {
         mode: "full",
         range,
         branchName: branchLabel,
+        tenantName,
         sheets,
       });
       toast({
-        title: "Đã xuất Excel (đầy đủ)",
-        description: "File có 4 sheet — KPI + theo ngày + theo danh mục + top SP.",
+        title: "Đã xuất báo cáo Excel",
+        description: `${sheets.length} sheet: Tổng hợp + P&L + Doanh thu + Danh mục + Top SP + Top KH + Chi phí + Cash flow`,
         variant: "success",
-        duration: 5000,
+        duration: 6000,
       });
     } catch (err) {
       toast({
@@ -266,7 +555,20 @@ export default function TongQuanPage() {
         variant: "error",
       });
     }
-  }, [kpis, dailyRevenue, categoryRevenue, topProducts, range, branchLabel, toast]);
+  }, [
+    kpis,
+    financeKpis,
+    dailyRevenue,
+    categoryRevenue,
+    topProducts,
+    topCustomers,
+    expenseBreakdown,
+    cashFlow,
+    range,
+    branchLabel,
+    tenantName,
+    toast,
+  ]);
 
   const reportHeader = (
     <ReportPageHeader
