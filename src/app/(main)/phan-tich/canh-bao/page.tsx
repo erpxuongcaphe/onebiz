@@ -186,6 +186,10 @@ export default function CanhBaoPage() {
                 {warningCount} cảnh báo
               </Badge>
             )}
+            {/* CEO 14/05 (research): Cảnh báo KHÔNG xuất Excel — chuẩn industry
+                (KiotViet/MISA cũng vậy). Alert chỉ live trên web/push, ai cần
+                trích xuất số liệu tồn kho/công nợ → vào module riêng. */}
+            {false && (
             <button
               type="button"
               onClick={handleExportExcel}
@@ -200,6 +204,7 @@ export default function CanhBaoPage() {
               <Icon name="download" size={14} />
               Xuất Excel
             </button>
+            )}
           </div>
         </div>
       </div>

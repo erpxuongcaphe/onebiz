@@ -24,6 +24,7 @@ import { useReportState } from "@/lib/hooks/use-report-state";
 import {
   exportReportToExcel,
   buildReportTitleRows,
+  buildInfoSheet,
   type ExcelSheet,
 } from "@/lib/utils/excel-export";
 
@@ -53,51 +54,151 @@ export default function LuongTienPage() {
   const [data, setData] = useState<CashFlowDetailedRow[]>([]);
   const [loading, setLoading] = useState(true);
 
+  const tenantName = useAuth().tenant?.name;
   const branchLabel = activeBranchId
     ? branches.find((b) => b.id === activeBranchId)?.name ?? "Chi nhánh đang chọn"
     : "Tất cả chi nhánh";
 
+  const buildSheets = useCallback((): ExcelSheet[] => {
+    // Sheet 0: Info + disclaimer
+    const infoSheet = buildInfoSheet({
+      title: "BÁO CÁO LƯU CHUYỂN TIỀN TỆ",
+      description:
+        "Dòng tiền thu/chi 6 tháng gần nhất, dòng tiền ròng và số dư luỹ kế.",
+      range,
+      branchName: branchLabel,
+      tenantName,
+      generatedAt: new Date(),
+      disclaimer:
+        "Báo cáo quản trị nội bộ — không thay thế Báo cáo lưu chuyển tiền tệ (B03-DN) theo Thông tư 200/133.",
+    });
+
+    const titleBase = {
+      title: "BÁO CÁO LƯU CHUYỂN TIỀN TỆ",
+      range,
+      branchName: branchLabel,
+      tenantName,
+      generatedAt: new Date(),
+    };
+
+    // Sheet 1: Cash flow 6 tháng (theo MISA trực tiếp)
+    const cashFlowSheet: ExcelSheet = {
+      name: "Cash flow",
+      titleRows: buildReportTitleRows({
+        ...titleBase,
+        title: "LƯU CHUYỂN TIỀN 6 THÁNG GẦN NHẤT",
+      }),
+      columns: [
+        { label: "Tháng", key: "month", width: 16, align: "center" },
+        { label: "Thu vào (VND)", key: "receipt", width: 20, format: "currency" },
+        { label: "Chi ra (VND)", key: "payment", width: 20, format: "currency" },
+        {
+          label: "Dòng tiền ròng",
+          key: "net",
+          width: 20,
+          format: "currency",
+        },
+        {
+          label: "Số dư luỹ kế",
+          key: "balance",
+          width: 22,
+          format: "currency",
+        },
+      ],
+      rows: data.map((d) => ({
+        month: d.month,
+        receipt: d.totalReceipt,
+        payment: d.totalPayment,
+        net: d.net,
+        balance: d.cumulativeBalance,
+      })),
+      footer: {
+        month: "TỔNG 6 THÁNG",
+        receipt: data.reduce((s, d) => s + d.totalReceipt, 0),
+        payment: data.reduce((s, d) => s + d.totalPayment, 0),
+        net: data.reduce((s, d) => s + d.net, 0),
+        balance: "",
+      },
+      withSignature: true,
+    };
+
+    // Sheet 2: Thu chi tháng cuối kỳ (drill chi tiết)
+    const lastMonth = data[data.length - 1];
+    const monthDetail: ExcelSheet = {
+      name: "Thu chi tháng này",
+      titleRows: buildReportTitleRows({
+        ...titleBase,
+        title: `THU CHI THÁNG ${lastMonth?.month ?? "—"}`,
+      }),
+      columns: [
+        { label: "Chỉ tiêu", key: "metric", width: 32 },
+        { label: "Số tiền (VND)", key: "value", width: 22, format: "currency" },
+      ],
+      rows: [
+        { metric: "Tổng thu", value: lastMonth?.totalReceipt ?? 0 },
+        { metric: "Tổng chi", value: lastMonth?.totalPayment ?? 0 },
+        { metric: "Dòng tiền ròng", value: lastMonth?.net ?? 0 },
+        { metric: "Số dư đầu kỳ", value: 0 },
+        { metric: "Số dư cuối kỳ (luỹ kế)", value: lastMonth?.cumulativeBalance ?? 0 },
+      ],
+    };
+
+    return [infoSheet, cashFlowSheet, monthDetail];
+  }, [data, range, branchLabel, tenantName]);
+
   const handleExportView = useCallback(() => {
     try {
-      const title = buildReportTitleRows({
+      // View mode: chỉ Cash flow 6 tháng (1 sheet chính + info)
+      const infoSheet = buildInfoSheet({
         title: "BÁO CÁO LƯU CHUYỂN TIỀN TỆ",
         range,
         branchName: branchLabel,
+        tenantName,
         generatedAt: new Date(),
       });
-      const sheet: ExcelSheet = {
-        name: "Cash flow 6 tháng",
-        titleRows: title,
-        columns: [
-          { label: "Tháng", key: "month", width: 14 },
-          { label: "Thu vào (VND)", key: "receipt", width: 18, format: "currency" },
-          { label: "Chi ra (VND)", key: "payment", width: 18, format: "currency" },
-          { label: "Ròng (VND)", key: "net", width: 18, format: "currency" },
-          { label: "Số dư luỹ kế (VND)", key: "balance", width: 20, format: "currency" },
-        ],
-        rows: data.map((d) => ({
-          month: d.month,
-          receipt: d.totalReceipt,
-          payment: d.totalPayment,
-          net: d.net,
-          balance: d.cumulativeBalance,
-        })),
-        footer: {
-          month: "TỔNG",
-          receipt: data.reduce((s, d) => s + d.totalReceipt, 0),
-          payment: data.reduce((s, d) => s + d.totalPayment, 0),
-          net: data.reduce((s, d) => s + d.net, 0),
-          balance: "",
-        },
-      };
-      exportReportToExcel({ kind: "luong-tien", mode: "view", range, branchName: branchLabel, sheets: [sheet] });
+      const allSheets = buildSheets();
+      const cfSheet = allSheets.find((s) => s.name === "Cash flow");
+      exportReportToExcel({
+        kind: "luong-tien",
+        mode: "view",
+        range,
+        branchName: branchLabel,
+        tenantName,
+        sheets: cfSheet ? [infoSheet, cfSheet] : [infoSheet],
+      });
       toast({ title: "Đã xuất Excel (view)", variant: "success" });
     } catch (err) {
-      toast({ title: "Lỗi xuất Excel", description: err instanceof Error ? err.message : "", variant: "error" });
+      toast({
+        title: "Lỗi xuất Excel",
+        description: err instanceof Error ? err.message : "",
+        variant: "error",
+      });
     }
-  }, [data, range, branchLabel, toast]);
+  }, [buildSheets, range, branchLabel, tenantName, toast]);
 
-  const handleExportFull = handleExportView; // luong-tien chỉ 1 sheet — view = full
+  const handleExportFull = useCallback(() => {
+    try {
+      exportReportToExcel({
+        kind: "luong-tien",
+        mode: "full",
+        range,
+        branchName: branchLabel,
+        tenantName,
+        sheets: buildSheets(),
+      });
+      toast({
+        title: "Đã xuất báo cáo lưu chuyển tiền",
+        description: "3 sheet: Info + Cash flow 6 tháng + Thu chi tháng này",
+        variant: "success",
+      });
+    } catch (err) {
+      toast({
+        title: "Lỗi xuất Excel",
+        description: err instanceof Error ? err.message : "",
+        variant: "error",
+      });
+    }
+  }, [buildSheets, range, branchLabel, tenantName, toast]);
 
   const fetchData = useCallback(async () => {
     setLoading(true);

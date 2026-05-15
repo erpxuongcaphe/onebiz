@@ -417,11 +417,93 @@ export function exportReportToExcel(options: ExportOptions): void {
 }
 
 function buildFilename(options: ExportOptions): string {
-  const { kind, mode, range } = options;
+  // CEO 14/05: pattern chuẩn `OneBiz_<Module>_<ChiNhanh>_<YYYYMM>_<exportDate>.xlsx`
+  // (research từ KiotViet/MISA — tên file phải tự explain được module + kỳ + chi nhánh)
+  const { kind, range, branchName } = options;
+  const branchSafe = (branchName ?? "TatCa")
+    .normalize("NFD")
+    .replace(/[̀-ͯ]/g, "") // strip Vietnamese diacritics
+    .replace(/[^a-zA-Z0-9]/g, "")
+    .slice(0, 20);
+  // Kỳ báo cáo: YYYYMM (nếu từ-đến cùng tháng) hoặc YYYYMMDD-YYYYMMDD
   const fromShort = range.from.replace(/-/g, "");
   const toShort = range.to.replace(/-/g, "");
-  const modeLabel = mode === "full" ? "day-du" : "view";
-  return `bao-cao-${kind}-${modeLabel}-${fromShort}_${toShort}.xlsx`;
+  const period =
+    fromShort.slice(0, 6) === toShort.slice(0, 6)
+      ? fromShort.slice(0, 6)
+      : `${fromShort}-${toShort}`;
+  const today = new Date();
+  const exportDate = `${today.getFullYear()}${String(today.getMonth() + 1).padStart(2, "0")}${String(today.getDate()).padStart(2, "0")}`;
+  return `OneBiz_${kind}_${branchSafe}_${period}_${exportDate}.xlsx`;
+}
+
+// ============================================================
+// Helper: build "Sheet 0 — Thông tin báo cáo" (chuẩn MISA/KiotViet)
+// ============================================================
+
+export interface InfoSheetOptions {
+  /** Title chính (vd "BÁO CÁO BÁN HÀNG") */
+  title: string;
+  /** Subtitle/mô tả ngắn (vd "Tổng hợp doanh thu theo các chiều phân tích") */
+  description?: string;
+  range: DateRange;
+  branchName?: string;
+  tenantName?: string;
+  generatedAt?: Date;
+  generatedBy?: string;
+  /** Disclaimer (vd "Báo cáo quản trị — không thay thế BCTC theo TT200/133") */
+  disclaimer?: string;
+  /** Hướng dẫn đọc báo cáo (optional) — bullet list */
+  guide?: string[];
+}
+
+/**
+ * Tạo Sheet "Thông tin" — đặt làm sheet đầu tiên trong workbook để user
+ * biết file là gì, kỳ nào, chi nhánh nào, do ai xuất, có disclaimer gì.
+ */
+export function buildInfoSheet(opts: InfoSheetOptions): ExcelSheet {
+  const fmtDate = (iso: string) => {
+    const [y, m, d] = iso.split("-");
+    return `${d}/${m}/${y}`;
+  };
+  const at = opts.generatedAt ?? new Date();
+  const pad = (n: number) => String(n).padStart(2, "0");
+  const fmtDateTime = `${pad(at.getDate())}/${pad(at.getMonth() + 1)}/${at.getFullYear()} ${pad(at.getHours())}:${pad(at.getMinutes())}`;
+
+  const rows: Record<string, unknown>[] = [
+    { label: "Doanh nghiệp", value: opts.tenantName ?? "OneBiz" },
+    { label: "Báo cáo", value: opts.title },
+  ];
+  if (opts.description) {
+    rows.push({ label: "Mô tả", value: opts.description });
+  }
+  rows.push(
+    {
+      label: "Kỳ báo cáo",
+      value: `${fmtDate(opts.range.from)} → ${fmtDate(opts.range.to)}`,
+    },
+    { label: "Chi nhánh", value: opts.branchName ?? "Tất cả chi nhánh" },
+    { label: "Ngày xuất", value: fmtDateTime },
+  );
+  if (opts.generatedBy) {
+    rows.push({ label: "Người xuất", value: opts.generatedBy });
+  }
+  if (opts.disclaimer) {
+    rows.push({ label: "Lưu ý", value: opts.disclaimer });
+  }
+  if (opts.guide && opts.guide.length > 0) {
+    rows.push({ label: "Hướng dẫn", value: opts.guide.join("\n• ") });
+  }
+
+  return {
+    name: "Thông tin",
+    titleRows: [opts.title],
+    columns: [
+      { label: "Thông tin", key: "label", width: 22 },
+      { label: "Nội dung", key: "value", width: 60 },
+    ],
+    rows,
+  };
 }
 
 // ============================================================

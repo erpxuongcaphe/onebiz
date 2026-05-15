@@ -23,6 +23,7 @@ import { useBranchFilter, useAuth, useToast } from "@/lib/contexts";
 import {
   exportReportToExcel,
   buildReportTitleRows,
+  buildInfoSheet,
   type ExcelSheet,
 } from "@/lib/utils/excel-export";
 import {
@@ -152,7 +153,8 @@ interface FinanceKpis {
 
 export default function TaiChinhPage() {
   const { activeBranchId, isReady } = useBranchFilter();
-  const { branches } = useAuth();
+  const { branches, tenant } = useAuth();
+  const tenantName = tenant?.name;
   const { toast } = useToast();
   const { preset, range, setPreset, setCustomRange, viewMode, setViewMode } =
     useReportState({ defaultPreset: "thisYear", defaultViewMode: "chart" });
@@ -199,77 +201,230 @@ export default function TaiChinhPage() {
 
   const handleExportFull = useCallback(() => {
     try {
-      const title = buildReportTitleRows({
-        title: "BÁO CÁO TÀI CHÍNH — ĐẦY ĐỦ",
+      // CEO 14/05 (research MISA): báo cáo Tài chính = P&L kế toán focused.
+      // Bỏ Cash flow ra (đã có /luong-tien). Thêm disclaimer + signature
+      // block (chuẩn báo cáo kế toán VN).
+
+      const totalExpense = expenseBreakdownData.reduce(
+        (s, e) => s + e.value,
+        0,
+      );
+
+      // Sheet 0: Info + disclaimer
+      const infoSheet = buildInfoSheet({
+        title: "BÁO CÁO TÀI CHÍNH (P&L)",
+        description:
+          "Báo cáo kết quả kinh doanh — doanh thu, chi phí, lợi nhuận, biên lợi nhuận.",
         range,
         branchName: branchLabel,
+        tenantName,
         generatedAt: new Date(),
+        disclaimer:
+          "Báo cáo quản trị nội bộ — không thay thế Báo cáo tài chính theo Thông tư 200/133 do kế toán lập.",
       });
-      const sheets: ExcelSheet[] = [
-        {
-          name: "KPI",
-          titleRows: title,
-          columns: [
-            { label: "Chỉ tiêu", key: "metric", width: 28 },
-            { label: "Kỳ hiện tại", key: "current", width: 18, format: "currency" },
-            { label: "Kỳ trước", key: "prev", width: 18, format: "currency" },
-          ],
-          rows: [
-            { metric: "Doanh thu", current: kpis?.revenue ?? 0, prev: kpis?.prevRevenue ?? 0 },
-            { metric: "Chi phí", current: kpis?.expense ?? 0, prev: kpis?.prevExpense ?? 0 },
-            { metric: "Lợi nhuận", current: kpis?.profit ?? 0, prev: kpis?.prevProfit ?? 0 },
-          ],
+
+      const titleBase = {
+        title: "BÁO CÁO TÀI CHÍNH (P&L)",
+        range,
+        branchName: branchLabel,
+        tenantName,
+        generatedAt: new Date(),
+      };
+
+      // Sheet 1: P&L kỳ này — chuẩn lãi-lỗ
+      const profit = (kpis?.revenue ?? 0) - (kpis?.expense ?? 0);
+      const prevProfit = (kpis?.prevRevenue ?? 0) - (kpis?.prevExpense ?? 0);
+      const plSheet: ExcelSheet = {
+        name: "P&L kỳ này",
+        titleRows: buildReportTitleRows({
+          ...titleBase,
+          title: "BÁO CÁO KẾT QUẢ KINH DOANH",
+        }),
+        columns: [
+          { label: "STT", key: "stt", width: 6, align: "center" },
+          { label: "Chỉ tiêu", key: "metric", width: 36 },
+          {
+            label: "Kỳ này (VND)",
+            key: "current",
+            width: 20,
+            format: "currency",
+          },
+          { label: "Kỳ trước (VND)", key: "prev", width: 20, format: "currency" },
+          {
+            label: "Chênh lệch (VND)",
+            key: "diff",
+            width: 20,
+            format: "currency",
+          },
+          { label: "% thay đổi", key: "pct", width: 12, align: "right" },
+        ],
+        rows: [
+          {
+            stt: "1",
+            metric: "Doanh thu bán hàng",
+            current: kpis?.revenue ?? 0,
+            prev: kpis?.prevRevenue ?? 0,
+            diff: (kpis?.revenue ?? 0) - (kpis?.prevRevenue ?? 0),
+            pct: pctChange(kpis?.revenue ?? 0, kpis?.prevRevenue ?? 0),
+          },
+          {
+            stt: "2",
+            metric: "Tổng chi phí hoạt động",
+            current: kpis?.expense ?? 0,
+            prev: kpis?.prevExpense ?? 0,
+            diff: (kpis?.expense ?? 0) - (kpis?.prevExpense ?? 0),
+            pct: pctChange(kpis?.expense ?? 0, kpis?.prevExpense ?? 0),
+          },
+          {
+            stt: "3",
+            metric: "LỢI NHUẬN TRƯỚC THUẾ",
+            current: profit,
+            prev: prevProfit,
+            diff: profit - prevProfit,
+            pct: pctChange(profit, prevProfit),
+          },
+          {
+            stt: "4",
+            metric: "Biên lợi nhuận (%)",
+            current: kpis?.profitMargin ?? 0,
+            prev: kpis?.prevProfitMargin ?? 0,
+            diff:
+              (kpis?.profitMargin ?? 0) - (kpis?.prevProfitMargin ?? 0),
+            pct: "",
+          },
+        ],
+        withSignature: true,
+      };
+
+      // Sheet 2: Cơ cấu chi phí
+      const expenseSheet: ExcelSheet = {
+        name: "Cơ cấu chi phí",
+        titleRows: buildReportTitleRows({
+          ...titleBase,
+          title: "CƠ CẤU CHI PHÍ THEO LOẠI",
+        }),
+        columns: [
+          { label: "STT", key: "stt", width: 6, align: "center" },
+          { label: "Loại chi phí", key: "name", width: 32 },
+          { label: "Số tiền (VND)", key: "value", width: 22, format: "currency" },
+          { label: "Tỷ trọng (%)", key: "share", width: 14, format: "percent" },
+        ],
+        rows: expenseBreakdownData.map((e, i) => ({
+          stt: i + 1,
+          name: e.name,
+          value: e.value,
+          share: totalExpense > 0 ? (e.value / totalExpense) * 100 : 0,
+        })),
+        footer: {
+          stt: "",
+          name: "TỔNG CHI PHÍ",
+          value: totalExpense,
+          share: 100,
         },
-        {
-          name: "DT vs Chi phí",
-          titleRows: ["DOANH THU VS CHI PHÍ 12 THÁNG", ...title.slice(1)],
-          columns: [
-            { label: "Tháng", key: "label", width: 14 },
-            { label: "Doanh thu (VND)", key: "revenue", width: 18, format: "currency" },
-            { label: "Chi phí (VND)", key: "expense", width: 18, format: "currency" },
-          ],
-          rows: revenueVsExpenseData.map((p) => ({
+      };
+
+      // Sheet 3: Doanh thu vs Chi phí 12 tháng
+      const trendSheet: ExcelSheet = {
+        name: "Trend 12 tháng",
+        titleRows: buildReportTitleRows({
+          ...titleBase,
+          title: "XU HƯỚNG DOANH THU VS CHI PHÍ 12 THÁNG",
+        }),
+        columns: [
+          { label: "Tháng", key: "label", width: 14 },
+          { label: "Doanh thu (VND)", key: "revenue", width: 20, format: "currency" },
+          { label: "Chi phí (VND)", key: "expense", width: 20, format: "currency" },
+          {
+            label: "Lợi nhuận (VND)",
+            key: "profit",
+            width: 20,
+            format: "currency",
+          },
+        ],
+        rows: revenueVsExpenseData.map((p) => {
+          const rev = Number(p.revenue ?? 0);
+          const exp = Number(p.expense ?? 0);
+          return {
             label: p.label,
-            revenue: p.revenue ?? 0,
-            expense: p.expense ?? 0,
-          })),
+            revenue: rev,
+            expense: exp,
+            profit: rev - exp,
+          };
+        }),
+        footer: {
+          label: "TỔNG 12 THÁNG",
+          revenue: revenueVsExpenseData.reduce(
+            (s, p) => s + Number(p.revenue ?? 0),
+            0,
+          ),
+          expense: revenueVsExpenseData.reduce(
+            (s, p) => s + Number(p.expense ?? 0),
+            0,
+          ),
+          profit: revenueVsExpenseData.reduce(
+            (s, p) => s + (Number(p.revenue ?? 0) - Number(p.expense ?? 0)),
+            0,
+          ),
         },
-        {
-          name: "Cơ cấu chi phí",
-          titleRows: ["CƠ CẤU CHI PHÍ", ...title.slice(1)],
-          columns: [
-            { label: "Loại chi phí", key: "name", width: 24 },
-            { label: "Giá trị (VND)", key: "value", width: 18, format: "currency" },
-          ],
-          rows: expenseBreakdownData,
+      };
+
+      // Sheet 4: Lợi nhuận theo tháng
+      const profitTrendSheet: ExcelSheet = {
+        name: "LN theo tháng",
+        titleRows: buildReportTitleRows({
+          ...titleBase,
+          title: "LỢI NHUẬN THEO THÁNG",
+        }),
+        columns: [
+          { label: "Tháng", key: "label", width: 14 },
+          { label: "Lợi nhuận (VND)", key: "value", width: 20, format: "currency" },
+        ],
+        rows: monthlyProfitData.map((p) => ({
+          label: p.label,
+          value: p.value,
+        })),
+        footer: {
+          label: "TỔNG",
+          value: monthlyProfitData.reduce((s, p) => s + p.value, 0),
         },
-        {
-          name: "LN theo tháng",
-          titleRows: ["LỢI NHUẬN THEO THÁNG", ...title.slice(1)],
-          columns: [
-            { label: "Tháng", key: "label", width: 14 },
-            { label: "Lợi nhuận (VND)", key: "value", width: 18, format: "currency" },
-          ],
-          rows: monthlyProfitData.map((p) => ({ label: p.label, value: p.value })),
-        },
-        {
-          name: "Cash flow",
-          titleRows: ["LƯU CHUYỂN TIỀN", ...title.slice(1)],
-          columns: [
-            { label: "Tháng", key: "month", width: 14 },
-            { label: "Thu (VND)", key: "income", width: 18, format: "currency" },
-            { label: "Chi (VND)", key: "expense", width: 18, format: "currency" },
-            { label: "Số dư (VND)", key: "balance", width: 18, format: "currency" },
-          ],
-          rows: cashFlowData.map((r) => ({ ...r })),
-        },
-      ];
-      exportReportToExcel({ kind: "tai-chinh", mode: "full", range, branchName: branchLabel, sheets });
-      toast({ title: "Đã xuất Excel (đầy đủ)", variant: "success" });
+      };
+
+      exportReportToExcel({
+        kind: "tai-chinh",
+        mode: "full",
+        range,
+        branchName: branchLabel,
+        tenantName,
+        sheets: [
+          infoSheet,
+          plSheet,
+          expenseSheet,
+          trendSheet,
+          profitTrendSheet,
+        ],
+      });
+      toast({
+        title: "Đã xuất báo cáo tài chính",
+        description: "5 sheet: Info + P&L + Chi phí + Trend + LN tháng",
+        variant: "success",
+      });
     } catch (err) {
-      toast({ title: "Lỗi xuất Excel", description: err instanceof Error ? err.message : "", variant: "error" });
+      toast({
+        title: "Lỗi xuất Excel",
+        description: err instanceof Error ? err.message : "",
+        variant: "error",
+      });
     }
-  }, [kpis, revenueVsExpenseData, expenseBreakdownData, monthlyProfitData, cashFlowData, range, branchLabel, toast]);
+  }, [
+    kpis,
+    revenueVsExpenseData,
+    expenseBreakdownData,
+    monthlyProfitData,
+    range,
+    branchLabel,
+    tenantName,
+    toast,
+  ]);
 
   const fetchData = useCallback(async () => {
     try {
