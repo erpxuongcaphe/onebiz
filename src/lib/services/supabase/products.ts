@@ -1028,6 +1028,43 @@ export async function restoreProduct(id: string): Promise<void> {
 }
 
 // ============================================================
+// Verify password — re-prompt khi user thực hiện destructive action
+// (xoá hẳn / xoá triệt để). Pattern AWS console / Stripe / Apple Keychain.
+// CEO 17/05/2026: yêu cầu nhập mật khẩu để xác nhận trước khi xoá vĩnh viễn.
+//
+// Implementation: gọi REST API Supabase auth trực tiếp (KHÔNG dùng
+// supabase.auth.signInWithPassword) để tránh overwrite session hiện tại.
+// ============================================================
+
+export async function verifyCurrentUserPassword(
+  email: string,
+  password: string,
+): Promise<boolean> {
+  const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL;
+  const anonKey = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY;
+  if (!supabaseUrl || !anonKey) {
+    throw new Error("Thiếu NEXT_PUBLIC_SUPABASE_URL hoặc ANON_KEY env");
+  }
+
+  try {
+    const response = await fetch(
+      `${supabaseUrl}/auth/v1/token?grant_type=password`,
+      {
+        method: "POST",
+        headers: {
+          "apikey": anonKey,
+          "Content-Type": "application/json",
+        },
+        body: JSON.stringify({ email, password }),
+      },
+    );
+    return response.ok;
+  } catch {
+    return false;
+  }
+}
+
+// ============================================================
 // XOÁ HẲN (Hard Delete) — chỉ owner + chỉ SP đã ngừng KD + 0 refs
 // Migration 00092 (CEO 17/05/2026): force_delete_product_atomic
 // Pattern A — ERP best practice (SAP/Odoo/NetSuite):

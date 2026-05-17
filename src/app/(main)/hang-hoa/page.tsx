@@ -60,6 +60,7 @@ import {
   forceDeleteProduct,
   bulkForceDeleteProducts,
   bulkCleanupTestProducts,
+  verifyCurrentUserPassword,
 } from "@/lib/services";
 import { SummaryCard } from "@/components/shared/summary-card";
 import { useToast } from "@/lib/contexts";
@@ -315,6 +316,9 @@ export default function HangHoaPage() {
   const [bulkHardDeleteConfirmOpen, setBulkHardDeleteConfirmOpen] = useState(false);
   // Day 17/05/2026 (00093): Cleanup test data — bypass stock + active check
   const [bulkCleanupConfirmOpen, setBulkCleanupConfirmOpen] = useState(false);
+  // Password re-prompt — AWS/Stripe pattern cho destructive action
+  const [confirmPassword, setConfirmPassword] = useState("");
+  const [confirmPasswordError, setConfirmPasswordError] = useState("");
 
   // Bulk action state — phase 2: wire backend mutations
   const { toast } = useToast();
@@ -679,14 +683,32 @@ export default function HangHoaPage() {
   // Day 17/05/2026 (00092): Bulk Xoá HẲN — chỉ owner + filter inactive.
   // Mỗi SP đi qua force_delete_product_atomic riêng (pre-check 17 bảng FK).
   // Toast break-down: xoá hẳn được X, không xoá được Y (vì còn refs).
+  // Yêu cầu nhập mật khẩu (AWS pattern) trước khi gọi RPC.
   const handleConfirmBulkHardDelete = useCallback(async () => {
     const ids = selectedIdsForBulk.length > 0
       ? selectedIdsForBulk
       : selectedRowsForBulk.map((p) => p.id);
     if (ids.length === 0) return;
+    setConfirmPasswordError("");
+
+    if (!confirmPassword) {
+      setConfirmPasswordError("Vui lòng nhập mật khẩu để xác nhận.");
+      return;
+    }
+    if (!user?.email) {
+      setConfirmPasswordError("Không lấy được email tài khoản. Vui lòng đăng nhập lại.");
+      return;
+    }
     setBulkLoading(true);
     try {
+      const ok = await verifyCurrentUserPassword(user.email, confirmPassword);
+      if (!ok) {
+        setConfirmPasswordError("Sai mật khẩu — không xoá. Vui lòng nhập lại.");
+        setBulkLoading(false);
+        return;
+      }
       const result = await bulkForceDeleteProducts(ids);
+      setConfirmPassword("");
       setBulkHardDeleteConfirmOpen(false);
 
       if (result.failed.length === 0) {
@@ -731,18 +753,37 @@ export default function HangHoaPage() {
     } finally {
       setBulkLoading(false);
     }
-  }, [selectedRowsForBulk, selectedIdsForBulk, toast, finishBulkSuccess, finishBulkError]);
+  }, [selectedRowsForBulk, selectedIdsForBulk, confirmPassword, user, toast, finishBulkSuccess, finishBulkError]);
 
   // Day 17/05/2026 (00093): Bulk CLEANUP TEST DATA — bypass stock + active check.
   // SP có giao dịch thực (invoice_items, stock_movements, ...) vẫn bị skip.
+  // Yêu cầu nhập mật khẩu (AWS pattern) trước khi gọi RPC.
   const handleConfirmBulkCleanup = useCallback(async () => {
     const ids = selectedIdsForBulk.length > 0
       ? selectedIdsForBulk
       : selectedRowsForBulk.map((p) => p.id);
     if (ids.length === 0) return;
+    setConfirmPasswordError("");
+
+    // Verify password trước khi RPC — chống click nhầm + chống lạm dụng quyền
+    if (!confirmPassword) {
+      setConfirmPasswordError("Vui lòng nhập mật khẩu để xác nhận.");
+      return;
+    }
+    if (!user?.email) {
+      setConfirmPasswordError("Không lấy được email tài khoản. Vui lòng đăng nhập lại.");
+      return;
+    }
     setBulkLoading(true);
     try {
+      const ok = await verifyCurrentUserPassword(user.email, confirmPassword);
+      if (!ok) {
+        setConfirmPasswordError("Sai mật khẩu — không xoá. Vui lòng nhập lại.");
+        setBulkLoading(false);
+        return;
+      }
       const result = await bulkCleanupTestProducts(ids);
+      setConfirmPassword("");
       setBulkCleanupConfirmOpen(false);
 
       if (result.failed.length === 0) {
@@ -783,11 +824,11 @@ export default function HangHoaPage() {
         });
       }
     } catch (err) {
-      finishBulkError("Cleanup test data thất bại", err);
+      finishBulkError("Xoá triệt để thất bại", err);
     } finally {
       setBulkLoading(false);
     }
-  }, [selectedRowsForBulk, selectedIdsForBulk, toast, finishBulkSuccess, finishBulkError]);
+  }, [selectedRowsForBulk, selectedIdsForBulk, confirmPassword, user, toast, finishBulkSuccess, finishBulkError]);
 
   useEffect(() => {
     setPage(0);
@@ -1361,7 +1402,7 @@ export default function HangHoaPage() {
             ...(isOwner
               ? [
                   {
-                    label: "Cleanup test data",
+                    label: "Xoá triệt để",
                     icon: <Icon name="cleaning_services" size={16} />,
                     variant: "destructive" as const,
                     onClick: (rows: Product[], ids: string[]) => {
@@ -1645,18 +1686,22 @@ export default function HangHoaPage() {
         </DialogContent>
       </Dialog>
 
-      {/* --- Day 17/05/2026 (00092): Bulk Hard delete confirm dialog --- */}
+      {/* --- Day 17/05/2026 (00092): Bulk Hard delete + password verify --- */}
       <Dialog
         open={bulkHardDeleteConfirmOpen}
         onOpenChange={(o) => {
           if (bulkLoading) return;
           setBulkHardDeleteConfirmOpen(o);
+          if (!o) {
+            setConfirmPassword("");
+            setConfirmPasswordError("");
+          }
         }}
       >
         <DialogContent className="sm:max-w-md">
           <DialogHeader>
             <DialogTitle className="text-status-danger">
-              <Icon name="warning" size={20} className="inline-block mr-2 align-text-bottom" />
+              <Icon name="delete_forever" size={20} className="inline-block mr-2 align-text-bottom" />
               Xoá hẳn {bulkSelectedCount} sản phẩm khỏi database?
             </DialogTitle>
             <DialogDescription className="space-y-2">
@@ -1667,16 +1712,12 @@ export default function HangHoaPage() {
               </span>
               <span className="block rounded-md bg-status-danger/10 border border-status-danger/30 p-2.5 text-xs text-foreground">
                 <Icon name="info" size={14} className="inline-block mr-1 text-status-danger" />
-                Server tự kiểm tra 17 bảng FK cho từng SP. SP nào có giao dịch
-                (kho/hoá đơn/kiểm kê/SX) sẽ <b>tự động bị bỏ qua</b> để bảo
-                toàn lịch sử kế toán — không cần lo xoá nhầm.
-              </span>
-              <span className="block text-xs text-on-surface-variant">
-                Sau khi xoá, hệ thống báo: xoá được X / không xoá được Y SP (kèm lý do từng SP).
+                Server check 17 bảng FK cho từng SP. SP có giao dịch
+                (kho/hoá đơn/kiểm kê/SX) <b>tự bỏ qua</b> — bảo toàn kế toán.
               </span>
             </DialogDescription>
           </DialogHeader>
-          <div className="py-2 max-h-32 overflow-y-auto">
+          <div className="py-2 max-h-24 overflow-y-auto">
             <ul className="text-xs text-muted-foreground space-y-1">
               {selectedRowsForBulk.slice(0, 5).map((p) => (
                 <li key={p.id} className="truncate">
@@ -1690,64 +1731,98 @@ export default function HangHoaPage() {
               )}
             </ul>
           </div>
+          {/* Password re-prompt (AWS/Stripe pattern) */}
+          <div className="space-y-1.5 border-t border-border pt-3">
+            <label htmlFor="hard-delete-password" className="text-sm font-medium text-foreground">
+              Nhập mật khẩu để xác nhận
+            </label>
+            <input
+              id="hard-delete-password"
+              type="password"
+              autoComplete="current-password"
+              className="w-full h-10 rounded-lg border border-input bg-background px-3 text-sm focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
+              placeholder="Mật khẩu tài khoản của bạn"
+              value={confirmPassword}
+              disabled={bulkLoading}
+              onChange={(e) => {
+                setConfirmPassword(e.target.value);
+                if (confirmPasswordError) setConfirmPasswordError("");
+              }}
+              onKeyDown={(e) => {
+                if (e.key === "Enter" && confirmPassword && !bulkLoading) {
+                  handleConfirmBulkHardDelete();
+                }
+              }}
+            />
+            {confirmPasswordError && (
+              <p className="text-xs text-status-danger">
+                <Icon name="error" size={12} className="inline-block mr-1 align-text-bottom" />
+                {confirmPasswordError}
+              </p>
+            )}
+          </div>
           <DialogFooter>
             <Button
               variant="outline"
               disabled={bulkLoading}
-              onClick={() => setBulkHardDeleteConfirmOpen(false)}
+              onClick={() => {
+                setBulkHardDeleteConfirmOpen(false);
+                setConfirmPassword("");
+                setConfirmPasswordError("");
+              }}
             >
               Huỷ
             </Button>
             <Button
               variant="destructive"
-              disabled={bulkLoading}
+              disabled={bulkLoading || !confirmPassword}
               onClick={handleConfirmBulkHardDelete}
             >
               {bulkLoading
                 ? "Đang xoá..."
-                : `Xoá hẳn ${bulkSelectedCount} SP vĩnh viễn`}
+                : `Xoá hẳn ${bulkSelectedCount} SP`}
             </Button>
           </DialogFooter>
         </DialogContent>
       </Dialog>
 
-      {/* --- Day 17/05/2026 (00093): Bulk Cleanup test data dialog --- */}
+      {/* --- Day 17/05/2026 (00093): Xoá triệt để dialog + password verify --- */}
       <Dialog
         open={bulkCleanupConfirmOpen}
         onOpenChange={(o) => {
           if (bulkLoading) return;
           setBulkCleanupConfirmOpen(o);
+          if (!o) {
+            setConfirmPassword("");
+            setConfirmPasswordError("");
+          }
         }}
       >
         <DialogContent className="sm:max-w-md">
           <DialogHeader>
             <DialogTitle className="text-status-danger">
-              <Icon name="cleaning_services" size={20} className="inline-block mr-2 align-text-bottom" />
-              Cleanup {bulkSelectedCount} sản phẩm test/seed?
+              <Icon name="delete_forever" size={20} className="inline-block mr-2 align-text-bottom" />
+              Xoá triệt để {bulkSelectedCount} sản phẩm?
             </DialogTitle>
             <DialogDescription className="space-y-2">
               <span className="block">
                 <b>{bulkSelectedCount}</b> SP sẽ bị
                 <b className="text-status-danger"> xoá vĩnh viễn </b>
-                cùng với tồn kho.
+                cùng toàn bộ tồn kho. <b>Không thể khôi phục.</b>
               </span>
               <span className="block rounded-md bg-status-warning/10 border border-status-warning/30 p-2.5 text-xs text-foreground">
                 <Icon name="warning" size={14} className="inline-block mr-1 text-status-warning" />
-                <b>Khác với &quot;Xoá hẳn&quot;:</b> hành động này <b>BỎ QUA</b> kiểm tra
-                tồn kho — tồn ở các chi nhánh sẽ tự động reset về 0 (có audit log).
+                Hành động này <b>BỎ QUA</b> kiểm tra tồn kho. Tồn ở các chi nhánh
+                tự động reset về 0 (có audit log).
               </span>
               <span className="block rounded-md bg-primary/10 border border-primary/30 p-2.5 text-xs text-foreground">
                 <Icon name="shield" size={14} className="inline-block mr-1 text-primary" />
-                <b>Vẫn an toàn:</b> server check 17 bảng giao dịch thực (hoá đơn, kho,
-                kiểm kê, SX...). SP nào có giao dịch sẽ <b>tự skip</b> với lý do
-                &quot;có giao dịch thực&quot; — KHÔNG xoá data thật.
-              </span>
-              <span className="block text-xs text-on-surface-variant">
-                Chỉ dùng cho SP test / seed data / data khởi tạo nhầm.
+                Server check 15 bảng giao dịch thực (hoá đơn, đặt hàng, SX,...).
+                SP có giao dịch thực <b>tự skip</b> — KHÔNG xoá data thật.
               </span>
             </DialogDescription>
           </DialogHeader>
-          <div className="py-2 max-h-32 overflow-y-auto">
+          <div className="py-2 max-h-24 overflow-y-auto">
             <ul className="text-xs text-muted-foreground space-y-1">
               {selectedRowsForBulk.slice(0, 5).map((p) => (
                 <li key={p.id} className="truncate">
@@ -1761,22 +1836,56 @@ export default function HangHoaPage() {
               )}
             </ul>
           </div>
+          {/* Password re-prompt (AWS/Stripe pattern) */}
+          <div className="space-y-1.5 border-t border-border pt-3">
+            <label htmlFor="cleanup-password" className="text-sm font-medium text-foreground">
+              Nhập mật khẩu để xác nhận
+            </label>
+            <input
+              id="cleanup-password"
+              type="password"
+              autoComplete="current-password"
+              className="w-full h-10 rounded-lg border border-input bg-background px-3 text-sm focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
+              placeholder="Mật khẩu tài khoản của bạn"
+              value={confirmPassword}
+              disabled={bulkLoading}
+              onChange={(e) => {
+                setConfirmPassword(e.target.value);
+                if (confirmPasswordError) setConfirmPasswordError("");
+              }}
+              onKeyDown={(e) => {
+                if (e.key === "Enter" && confirmPassword && !bulkLoading) {
+                  handleConfirmBulkCleanup();
+                }
+              }}
+            />
+            {confirmPasswordError && (
+              <p className="text-xs text-status-danger">
+                <Icon name="error" size={12} className="inline-block mr-1 align-text-bottom" />
+                {confirmPasswordError}
+              </p>
+            )}
+          </div>
           <DialogFooter>
             <Button
               variant="outline"
               disabled={bulkLoading}
-              onClick={() => setBulkCleanupConfirmOpen(false)}
+              onClick={() => {
+                setBulkCleanupConfirmOpen(false);
+                setConfirmPassword("");
+                setConfirmPasswordError("");
+              }}
             >
               Huỷ
             </Button>
             <Button
               variant="destructive"
-              disabled={bulkLoading}
+              disabled={bulkLoading || !confirmPassword}
               onClick={handleConfirmBulkCleanup}
             >
               {bulkLoading
-                ? "Đang cleanup..."
-                : `Cleanup ${bulkSelectedCount} SP test`}
+                ? "Đang xoá..."
+                : `Xoá triệt để ${bulkSelectedCount} SP`}
             </Button>
           </DialogFooter>
         </DialogContent>
