@@ -58,6 +58,7 @@ import {
   moveProductSortOrder,
   restoreProduct,
   forceDeleteProduct,
+  bulkForceDeleteProducts,
 } from "@/lib/services";
 import { SummaryCard } from "@/components/shared/summary-card";
 import { useToast } from "@/lib/contexts";
@@ -309,6 +310,8 @@ export default function HangHoaPage() {
   const [hardDeleteConfirmOpen, setHardDeleteConfirmOpen] = useState(false);
   const [hardDeletingProduct, setHardDeletingProduct] = useState<Product | null>(null);
   const [hardDeleteLoading, setHardDeleteLoading] = useState(false);
+  // Bulk version — Xoá hẳn nhiều SP (owner only)
+  const [bulkHardDeleteConfirmOpen, setBulkHardDeleteConfirmOpen] = useState(false);
 
   // Bulk action state — phase 2: wire backend mutations
   const { toast } = useToast();
@@ -445,9 +448,14 @@ export default function HangHoaPage() {
   // ============================================================
   const finishBulkSuccess = useCallback(
     async (title: string, description?: string) => {
-      toast({ variant: "success", title, description });
+      // Day 17/05/2026: duration 8s — CEO báo toast "ngừng KD" đọc không kịp.
+      // Empty title/description skip toast (caller dùng để chỉ trigger refetch).
+      if (title || description) {
+        toast({ variant: "success", title, description, duration: 8000 });
+      }
       await fetchData();
       setSelectedRowsForBulk([]);
+      setSelectedIdsForBulk([]);
       setClearSelectionToken((n) => n + 1);
     },
     [toast, fetchData]
@@ -556,11 +564,13 @@ export default function HangHoaPage() {
       await deleteProduct(deletingProduct.id);
       setDeleteConfirmOpen(false);
       setDeletingProduct(null);
-      // Day 17/05/2026 (00091): soft delete — text rõ là "ngừng kinh doanh"
+      // Day 17/05/2026 (00091): soft delete — text rõ là "ngừng kinh doanh".
+      // Description rút gọn để đọc kịp, duration 8s.
       toast({
         variant: "success",
-        title: "Đã ngừng kinh doanh sản phẩm",
-        description: `${deletingProduct.code} — ${deletingProduct.name}. Lịch sử kế toán giữ nguyên. Có thể khôi phục trong tab "Đã ngừng KD".`,
+        title: `Đã ngừng kinh doanh: ${deletingProduct.code}`,
+        description: `Lịch sử kế toán giữ nguyên. Mở tab "Đã ngừng KD" để khôi phục.`,
+        duration: 8000,
       });
       await fetchData();
     } catch (err) {
@@ -577,8 +587,9 @@ export default function HangHoaPage() {
       await deleteProduct(otpTargetProduct.id, otpId);
       toast({
         variant: "success",
-        title: "Đã ngừng kinh doanh sản phẩm",
-        description: `${otpTargetProduct.code} — ${otpTargetProduct.name} (duyệt từ xa qua OTP). Lịch sử kế toán giữ nguyên.`,
+        title: `Đã ngừng kinh doanh: ${otpTargetProduct.code}`,
+        description: `Duyệt từ xa qua OTP. Lịch sử kế toán giữ nguyên.`,
+        duration: 8000,
       });
       await fetchData();
     } catch (err) {
@@ -618,9 +629,10 @@ export default function HangHoaPage() {
 
       const verb = "Đã ngừng kinh doanh";
       if (result.failed.length === 0) {
+        // Day 17/05/2026: rút gọn description (CEO báo toast đọc không kịp)
         await finishBulkSuccess(
-          verb + " sản phẩm",
-          `${verb} ${result.count}/${result.total} sản phẩm. Lịch sử kế toán giữ nguyên — có thể khôi phục bất kỳ lúc nào.`,
+          `${verb} ${result.count} SP`,
+          `Lịch sử kế toán giữ nguyên. Mở tab "Đã ngừng KD" để khôi phục.`,
         );
       } else if (result.count > 0) {
         const failedSummary = result.failed
@@ -660,6 +672,63 @@ export default function HangHoaPage() {
       setBulkLoading(false);
     }
   }, [selectedRowsForBulk, selectedIdsForBulk, canDeleteProduct, toast, finishBulkSuccess, finishBulkError]);
+
+  // Day 17/05/2026 (00092): Bulk Xoá HẲN — chỉ owner + filter inactive.
+  // Mỗi SP đi qua force_delete_product_atomic riêng (pre-check 17 bảng FK).
+  // Toast break-down: xoá hẳn được X, không xoá được Y (vì còn refs).
+  const handleConfirmBulkHardDelete = useCallback(async () => {
+    const ids = selectedIdsForBulk.length > 0
+      ? selectedIdsForBulk
+      : selectedRowsForBulk.map((p) => p.id);
+    if (ids.length === 0) return;
+    setBulkLoading(true);
+    try {
+      const result = await bulkForceDeleteProducts(ids);
+      setBulkHardDeleteConfirmOpen(false);
+
+      if (result.failed.length === 0) {
+        await finishBulkSuccess(
+          "Đã xoá hẳn",
+          `${result.count}/${result.total} SP bị xoá vĩnh viễn khỏi database.`,
+        );
+      } else if (result.count > 0) {
+        const failedSummary = result.failed
+          .slice(0, 5)
+          .map((f) => `• ${f.reason}`)
+          .join("\n");
+        const moreNote =
+          result.failed.length > 5
+            ? `\n…và ${result.failed.length - 5} SP khác`
+            : "";
+        toast({
+          variant: "warning",
+          title: `Xoá hẳn ${result.count}/${result.total} SP — ${result.failed.length} SP không xoá được`,
+          description: failedSummary + moreNote,
+          duration: 12000,
+        });
+        await finishBulkSuccess("", "");
+      } else {
+        const failedSummary = result.failed
+          .slice(0, 5)
+          .map((f) => `• ${f.reason}`)
+          .join("\n");
+        const moreNote =
+          result.failed.length > 5
+            ? `\n…và ${result.failed.length - 5} SP khác`
+            : "";
+        toast({
+          variant: "error",
+          title: "Không xoá hẳn được SP nào",
+          description: failedSummary + moreNote,
+          duration: 12000,
+        });
+      }
+    } catch (err) {
+      finishBulkError("Xoá hẳn sản phẩm thất bại", err);
+    } finally {
+      setBulkLoading(false);
+    }
+  }, [selectedRowsForBulk, selectedIdsForBulk, toast, finishBulkSuccess, finishBulkError]);
 
   useEffect(() => {
     setPage(0);
@@ -1200,13 +1269,29 @@ export default function HangHoaPage() {
             ...(canDeleteProduct
               ? [
                   {
-                    label: "Xóa",
-                    icon: <Icon name="delete" size={16} />,
+                    label: statusFilter === "inactive" ? "Xoá (idempotent)" : "Ngừng KD",
+                    icon: <Icon name="block" size={16} />,
                     variant: "destructive" as const,
                     onClick: (rows: Product[], ids: string[]) => {
                       setSelectedRowsForBulk(rows);
                       setSelectedIdsForBulk(ids);
                       setBulkDeleteConfirmOpen(true);
+                    },
+                  },
+                ]
+              : []),
+            // Day 17/05/2026 (00092): bulk "Xoá hẳn" — chỉ owner + chỉ khi đang
+            // xem filter "Đã ngừng KD" (cleanup deliberate, không xoá nhầm SP active)
+            ...(isOwner && statusFilter === "inactive"
+              ? [
+                  {
+                    label: "Xoá hẳn",
+                    icon: <Icon name="delete_forever" size={16} />,
+                    variant: "destructive" as const,
+                    onClick: (rows: Product[], ids: string[]) => {
+                      setSelectedRowsForBulk(rows);
+                      setSelectedIdsForBulk(ids);
+                      setBulkHardDeleteConfirmOpen(true);
                     },
                   },
                 ]
@@ -1479,6 +1564,72 @@ export default function HangHoaPage() {
               }}
             >
               {hardDeleteLoading ? "Đang xoá..." : "Xoá hẳn vĩnh viễn"}
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
+      {/* --- Day 17/05/2026 (00092): Bulk Hard delete confirm dialog --- */}
+      <Dialog
+        open={bulkHardDeleteConfirmOpen}
+        onOpenChange={(o) => {
+          if (bulkLoading) return;
+          setBulkHardDeleteConfirmOpen(o);
+        }}
+      >
+        <DialogContent className="sm:max-w-md">
+          <DialogHeader>
+            <DialogTitle className="text-status-danger">
+              <Icon name="warning" size={20} className="inline-block mr-2 align-text-bottom" />
+              Xoá hẳn {bulkSelectedCount} sản phẩm khỏi database?
+            </DialogTitle>
+            <DialogDescription className="space-y-2">
+              <span className="block">
+                <b>{bulkSelectedCount}</b> SP sẽ bị
+                <b className="text-status-danger"> xoá vĩnh viễn </b>
+                khỏi database. <b>Không thể khôi phục.</b>
+              </span>
+              <span className="block rounded-md bg-status-danger/10 border border-status-danger/30 p-2.5 text-xs text-foreground">
+                <Icon name="info" size={14} className="inline-block mr-1 text-status-danger" />
+                Server tự kiểm tra 17 bảng FK cho từng SP. SP nào có giao dịch
+                (kho/hoá đơn/kiểm kê/SX) sẽ <b>tự động bị bỏ qua</b> để bảo
+                toàn lịch sử kế toán — không cần lo xoá nhầm.
+              </span>
+              <span className="block text-xs text-on-surface-variant">
+                Sau khi xoá, hệ thống báo: xoá được X / không xoá được Y SP (kèm lý do từng SP).
+              </span>
+            </DialogDescription>
+          </DialogHeader>
+          <div className="py-2 max-h-32 overflow-y-auto">
+            <ul className="text-xs text-muted-foreground space-y-1">
+              {selectedRowsForBulk.slice(0, 5).map((p) => (
+                <li key={p.id} className="truncate">
+                  • {p.code} — {p.name}
+                </li>
+              ))}
+              {bulkSelectedCount > 5 && (
+                <li className="italic">
+                  …và {bulkSelectedCount - 5} sản phẩm khác
+                </li>
+              )}
+            </ul>
+          </div>
+          <DialogFooter>
+            <Button
+              variant="outline"
+              disabled={bulkLoading}
+              onClick={() => setBulkHardDeleteConfirmOpen(false)}
+            >
+              Huỷ
+            </Button>
+            <Button
+              variant="destructive"
+              disabled={bulkLoading}
+              onClick={handleConfirmBulkHardDelete}
+            >
+              {bulkLoading
+                ? "Đang xoá..."
+                : `Xoá hẳn ${bulkSelectedCount} SP vĩnh viễn`}
             </Button>
           </DialogFooter>
         </DialogContent>
