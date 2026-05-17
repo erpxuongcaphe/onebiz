@@ -769,7 +769,14 @@ export function DataTable<TData, TValue>({
               <button
                 type="button"
                 className="ml-auto inline-flex items-center gap-1 rounded-lg px-2 py-2 text-sm hover:bg-background/15 transition-colors text-background/70 hover:text-background"
-                onClick={() => table.toggleAllRowsSelected(false)}
+                onClick={() => {
+                  // Day 17/05/2026: phải reset cả rowSelection (kể cả IDs ngoài
+                  // page hiện tại từ "Chọn tất cả X SP khớp bộ lọc") +
+                  // allMatchingMode. table.toggleAllRowsSelected(false) chỉ
+                  // uncheck rows trong page hiện tại — bug khi cross-page.
+                  setRowSelection({});
+                  setAllMatchingMode(false);
+                }}
               >
                 <Icon name="close" size={16} />
                 <span className="hidden sm:inline">Bỏ chọn</span>
