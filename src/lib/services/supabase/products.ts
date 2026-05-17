@@ -1120,6 +1120,92 @@ export async function bulkForceDeleteProducts(
 }
 
 // ============================================================
+// CLEANUP TEST DATA — Owner-only bulk cleanup for seed/test products
+// Migration 00093 (CEO 17/05/2026): cleanup_test_product_atomic
+// KHÁC force_delete (00092):
+//   - BYPASS check tồn kho (auto delete branch_stock rows)
+//   - BYPASS check is_active (cleanup cả SP đang KD)
+//   - VẪN check 17 bảng FK thực — SP có giao dịch thực bị reject
+// ============================================================
+
+export interface BulkCleanupResult {
+  count: number;
+  total: number;
+  failed: BulkDeleteFailedItem[];
+}
+
+/**
+ * Cleanup test data — xoá HẲN SP test/seed kể cả còn tồn kho. Server:
+ * - User role = 'owner' (KHÔNG owner → reject)
+ * - Bỏ qua check stock > 0 (auto delete branch_stock rows + audit log)
+ * - Bỏ qua check is_active (cleanup cả SP đang KD)
+ * - Vẫn check 17 bảng FK — SP có giao dịch thực bị reject với PRODUCT_HAS_REAL_DATA
+ */
+export async function cleanupTestProduct(id: string): Promise<void> {
+  const supabase = getClient();
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  const { data, error } = await (supabase.rpc as any)(
+    "cleanup_test_product_atomic",
+    { p_product_id: id },
+  );
+
+  if (error) {
+    if (isRpcUnavailable(error)) {
+      throw new Error(
+        "Chưa có RPC cleanup_test_product_atomic. Vui lòng chạy migration 00093 trước.",
+      );
+    }
+    handleError(error, "cleanupTestProduct");
+  }
+
+  if (!data || !(data as { success?: boolean }).success) {
+    throw new Error("Server không trả kết quả cleanup hợp lệ.");
+  }
+}
+
+export async function bulkCleanupTestProducts(
+  ids: string[],
+): Promise<BulkCleanupResult> {
+  if (ids.length === 0) return { count: 0, total: 0, failed: [] };
+  const supabase = getClient();
+
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  const { data, error } = await (supabase.rpc as any)(
+    "bulk_cleanup_test_products_atomic",
+    { p_product_ids: ids },
+  );
+
+  if (error) {
+    if (isRpcUnavailable(error)) {
+      throw new Error(
+        "Chưa có RPC bulk_cleanup_test_products_atomic. Vui lòng chạy migration 00093 trước.",
+      );
+    }
+    handleError(error, "bulkCleanupTestProducts");
+  }
+
+  if (!data || !(data as { success?: boolean }).success) {
+    throw new Error("Server không trả kết quả cleanup hợp lệ.");
+  }
+
+  const result = data as {
+    success: boolean;
+    cleaned: number;
+    failed: Array<{ product_id: string; reason: string }>;
+    total: number;
+  };
+
+  return {
+    count: result.cleaned,
+    total: result.total,
+    failed: (result.failed ?? []).map((f) => ({
+      productId: f.product_id,
+      reason: f.reason,
+    })),
+  };
+}
+
+// ============================================================
 // Sao chép sản phẩm — clone existing product với code mới
 // Sprint UX-1 fix mockup (CEO 04/05/2026): trước đây "Nhân bản" chỉ
 // toast "Đang phát triển". Giờ tạo bản copy thật với code tự động

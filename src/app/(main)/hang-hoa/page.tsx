@@ -59,6 +59,7 @@ import {
   restoreProduct,
   forceDeleteProduct,
   bulkForceDeleteProducts,
+  bulkCleanupTestProducts,
 } from "@/lib/services";
 import { SummaryCard } from "@/components/shared/summary-card";
 import { useToast } from "@/lib/contexts";
@@ -312,6 +313,8 @@ export default function HangHoaPage() {
   const [hardDeleteLoading, setHardDeleteLoading] = useState(false);
   // Bulk version — Xoá hẳn nhiều SP (owner only)
   const [bulkHardDeleteConfirmOpen, setBulkHardDeleteConfirmOpen] = useState(false);
+  // Day 17/05/2026 (00093): Cleanup test data — bypass stock + active check
+  const [bulkCleanupConfirmOpen, setBulkCleanupConfirmOpen] = useState(false);
 
   // Bulk action state — phase 2: wire backend mutations
   const { toast } = useToast();
@@ -725,6 +728,62 @@ export default function HangHoaPage() {
       }
     } catch (err) {
       finishBulkError("Xoá hẳn sản phẩm thất bại", err);
+    } finally {
+      setBulkLoading(false);
+    }
+  }, [selectedRowsForBulk, selectedIdsForBulk, toast, finishBulkSuccess, finishBulkError]);
+
+  // Day 17/05/2026 (00093): Bulk CLEANUP TEST DATA — bypass stock + active check.
+  // SP có giao dịch thực (invoice_items, stock_movements, ...) vẫn bị skip.
+  const handleConfirmBulkCleanup = useCallback(async () => {
+    const ids = selectedIdsForBulk.length > 0
+      ? selectedIdsForBulk
+      : selectedRowsForBulk.map((p) => p.id);
+    if (ids.length === 0) return;
+    setBulkLoading(true);
+    try {
+      const result = await bulkCleanupTestProducts(ids);
+      setBulkCleanupConfirmOpen(false);
+
+      if (result.failed.length === 0) {
+        await finishBulkSuccess(
+          "Đã cleanup test data",
+          `${result.count}/${result.total} SP test bị xoá vĩnh viễn + reset tồn kho.`,
+        );
+      } else if (result.count > 0) {
+        const failedSummary = result.failed
+          .slice(0, 5)
+          .map((f) => `• ${f.reason}`)
+          .join("\n");
+        const moreNote =
+          result.failed.length > 5
+            ? `\n…và ${result.failed.length - 5} SP khác`
+            : "";
+        toast({
+          variant: "warning",
+          title: `Cleanup ${result.count}/${result.total} SP — ${result.failed.length} SP có giao dịch thực, không cleanup`,
+          description: failedSummary + moreNote,
+          duration: 12000,
+        });
+        await finishBulkSuccess("", "");
+      } else {
+        const failedSummary = result.failed
+          .slice(0, 5)
+          .map((f) => `• ${f.reason}`)
+          .join("\n");
+        const moreNote =
+          result.failed.length > 5
+            ? `\n…và ${result.failed.length - 5} SP khác`
+            : "";
+        toast({
+          variant: "error",
+          title: "Không cleanup được SP nào — tất cả có giao dịch thực",
+          description: failedSummary + moreNote,
+          duration: 12000,
+        });
+      }
+    } catch (err) {
+      finishBulkError("Cleanup test data thất bại", err);
     } finally {
       setBulkLoading(false);
     }
@@ -1296,6 +1355,23 @@ export default function HangHoaPage() {
                   },
                 ]
               : []),
+            // Day 17/05/2026 (00093): bulk "Cleanup test data" — chỉ owner.
+            // BYPASS check tồn kho + active. VẪN check 17 bảng FK thực.
+            // Available trên mọi filter (active/inactive/all) vì target là SP test.
+            ...(isOwner
+              ? [
+                  {
+                    label: "Cleanup test data",
+                    icon: <Icon name="cleaning_services" size={16} />,
+                    variant: "destructive" as const,
+                    onClick: (rows: Product[], ids: string[]) => {
+                      setSelectedRowsForBulk(rows);
+                      setSelectedIdsForBulk(ids);
+                      setBulkCleanupConfirmOpen(true);
+                    },
+                  },
+                ]
+              : []),
           ]}
           summaryRow={{
             stock: formatCurrency(totalStock),
@@ -1630,6 +1706,77 @@ export default function HangHoaPage() {
               {bulkLoading
                 ? "Đang xoá..."
                 : `Xoá hẳn ${bulkSelectedCount} SP vĩnh viễn`}
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
+      {/* --- Day 17/05/2026 (00093): Bulk Cleanup test data dialog --- */}
+      <Dialog
+        open={bulkCleanupConfirmOpen}
+        onOpenChange={(o) => {
+          if (bulkLoading) return;
+          setBulkCleanupConfirmOpen(o);
+        }}
+      >
+        <DialogContent className="sm:max-w-md">
+          <DialogHeader>
+            <DialogTitle className="text-status-danger">
+              <Icon name="cleaning_services" size={20} className="inline-block mr-2 align-text-bottom" />
+              Cleanup {bulkSelectedCount} sản phẩm test/seed?
+            </DialogTitle>
+            <DialogDescription className="space-y-2">
+              <span className="block">
+                <b>{bulkSelectedCount}</b> SP sẽ bị
+                <b className="text-status-danger"> xoá vĩnh viễn </b>
+                cùng với tồn kho.
+              </span>
+              <span className="block rounded-md bg-status-warning/10 border border-status-warning/30 p-2.5 text-xs text-foreground">
+                <Icon name="warning" size={14} className="inline-block mr-1 text-status-warning" />
+                <b>Khác với &quot;Xoá hẳn&quot;:</b> hành động này <b>BỎ QUA</b> kiểm tra
+                tồn kho — tồn ở các chi nhánh sẽ tự động reset về 0 (có audit log).
+              </span>
+              <span className="block rounded-md bg-primary/10 border border-primary/30 p-2.5 text-xs text-foreground">
+                <Icon name="shield" size={14} className="inline-block mr-1 text-primary" />
+                <b>Vẫn an toàn:</b> server check 17 bảng giao dịch thực (hoá đơn, kho,
+                kiểm kê, SX...). SP nào có giao dịch sẽ <b>tự skip</b> với lý do
+                &quot;có giao dịch thực&quot; — KHÔNG xoá data thật.
+              </span>
+              <span className="block text-xs text-on-surface-variant">
+                Chỉ dùng cho SP test / seed data / data khởi tạo nhầm.
+              </span>
+            </DialogDescription>
+          </DialogHeader>
+          <div className="py-2 max-h-32 overflow-y-auto">
+            <ul className="text-xs text-muted-foreground space-y-1">
+              {selectedRowsForBulk.slice(0, 5).map((p) => (
+                <li key={p.id} className="truncate">
+                  • {p.code} — {p.name}
+                </li>
+              ))}
+              {bulkSelectedCount > 5 && (
+                <li className="italic">
+                  …và {bulkSelectedCount - 5} sản phẩm khác
+                </li>
+              )}
+            </ul>
+          </div>
+          <DialogFooter>
+            <Button
+              variant="outline"
+              disabled={bulkLoading}
+              onClick={() => setBulkCleanupConfirmOpen(false)}
+            >
+              Huỷ
+            </Button>
+            <Button
+              variant="destructive"
+              disabled={bulkLoading}
+              onClick={handleConfirmBulkCleanup}
+            >
+              {bulkLoading
+                ? "Đang cleanup..."
+                : `Cleanup ${bulkSelectedCount} SP test`}
             </Button>
           </DialogFooter>
         </DialogContent>
