@@ -14,7 +14,9 @@ import {
   handleError,
   getCurrentTenantId,
 } from "./base";
+import { isRpcUnavailable } from "./rpc-utils";
 import { recordAuditLog } from "./audit";
+import { composeAddress as composeStructuredAddress } from "@/lib/data/vn-provinces";
 
 type SupplierInsert = Database["public"]["Tables"]["suppliers"]["Insert"];
 type SupplierUpdate = Database["public"]["Tables"]["suppliers"]["Update"];
@@ -82,6 +84,12 @@ export async function getSuppliers(params: QueryParams): Promise<QueryResult<Sup
     const end = new Date(params.filters.dateTo as string);
     end.setDate(end.getDate() + 1);
     query = query.lt("created_at", end.toISOString());
+  }
+
+  // Day 17/05/2026: filter Tỉnh/TP
+  if (params.filters?.province && params.filters.province !== "all") {
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    query = query.eq("province" as any, params.filters.province as string);
   }
 
   // Sort & paginate
@@ -176,6 +184,16 @@ export async function createSupplier(supplier: Partial<Supplier>): Promise<Suppl
   const supabase = getClient();
   const tenantId = await getCurrentTenantId();
 
+  // Day 17/05/2026: auto-compose address từ 5 fields structured nếu có
+  const composedAddress = composeStructuredAddress({
+    houseNumber: supplier.houseNumber,
+    quarter: supplier.quarter,
+    ward: supplier.ward,
+    province: supplier.province,
+    country: supplier.country,
+  });
+  const finalAddress = composedAddress || supplier.address || null;
+
   const { data, error } = await supabase
     .from("suppliers")
     .insert({
@@ -184,11 +202,21 @@ export async function createSupplier(supplier: Partial<Supplier>): Promise<Suppl
       name: supplier.name!,
       phone: supplier.phone || null,
       email: supplier.email || null,
-      address: supplier.address || null,
+      address: finalAddress,
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      house_number: supplier.houseNumber || null,
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      quarter: supplier.quarter || null,
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      ward: supplier.ward || null,
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      province: supplier.province || null,
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      country: supplier.country || null,
       tax_code: supplier.taxCode || null,
       note: supplier.note || null,
       is_active: true,
-    } satisfies SupplierInsert)
+    } as SupplierInsert)
     .select()
     .single();
 
@@ -224,7 +252,9 @@ export async function updateSupplier(id: string, updates: Partial<Supplier>): Pr
   try {
     const res = await supabase
       .from("suppliers")
-      .select("code, name, phone, email, address, tax_code, note")
+      .select(
+        "code, name, phone, email, address, tax_code, note, house_number, quarter, ward, province, country",
+      )
       .eq("tenant_id", tenantId)
       .eq("id", id)
       .maybeSingle();
@@ -233,12 +263,55 @@ export async function updateSupplier(id: string, updates: Partial<Supplier>): Pr
     /* snapshot optional */
   }
 
+  // Day 17/05/2026: auto-compose address khi có structured field thay đổi
+  const hasStructuredUpdate = [
+    updates.houseNumber,
+    updates.quarter,
+    updates.ward,
+    updates.province,
+    updates.country,
+  ].some((v) => v !== undefined);
+
   const payload: SupplierUpdate = {};
   if (updates.code !== undefined) payload.code = updates.code;
   if (updates.name !== undefined) payload.name = updates.name;
   if (updates.phone !== undefined) payload.phone = updates.phone || null;
   if (updates.email !== undefined) payload.email = updates.email || null;
-  if (updates.address !== undefined) payload.address = updates.address || null;
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  const p = payload as any;
+  if (updates.houseNumber !== undefined) p.house_number = updates.houseNumber || null;
+  if (updates.quarter !== undefined) p.quarter = updates.quarter || null;
+  if (updates.ward !== undefined) p.ward = updates.ward || null;
+  if (updates.province !== undefined) p.province = updates.province || null;
+  if (updates.country !== undefined) p.country = updates.country || null;
+  if (hasStructuredUpdate) {
+    const old = oldRow ?? {};
+    const composed = composeStructuredAddress({
+      houseNumber:
+        updates.houseNumber !== undefined
+          ? updates.houseNumber
+          : (old.house_number as string | null),
+      quarter:
+        updates.quarter !== undefined
+          ? updates.quarter
+          : (old.quarter as string | null),
+      ward:
+        updates.ward !== undefined
+          ? updates.ward
+          : (old.ward as string | null),
+      province:
+        updates.province !== undefined
+          ? updates.province
+          : (old.province as string | null),
+      country:
+        updates.country !== undefined
+          ? updates.country
+          : (old.country as string | null),
+    });
+    payload.address = composed || null;
+  } else if (updates.address !== undefined) {
+    payload.address = updates.address || null;
+  }
   if (updates.taxCode !== undefined) payload.tax_code = updates.taxCode || null;
   if (updates.note !== undefined) payload.note = updates.note || null;
 
@@ -264,40 +337,54 @@ export async function updateSupplier(id: string, updates: Partial<Supplier>): Pr
 }
 
 /**
- * Xóa nhà cung cấp. Filter tenant_id (defense-in-depth).
+ * Xoá nhà cung cấp ATOMIC (Day 2 16/05/2026).
+ *
+ * Migration 00075: gọi RPC `delete_supplier_atomic` để pre-check 3 bảng
+ * FK (purchase_orders / products / supplier_returns) trước khi DELETE +
+ * ghi audit log trong cùng 1 transaction.
+ *
+ * Lỗi user-friendly:
+ *   - SUPPLIER_HAS_PURCHASE_ORDERS: còn đơn nhập chưa xoá
+ *   - SUPPLIER_HAS_PRODUCTS: còn SP gắn NCC mặc định
+ *   - SUPPLIER_HAS_RETURNS: còn phiếu trả hàng
  */
 export async function deleteSupplier(id: string): Promise<void> {
   const supabase = getClient();
-  const tenantId = await getCurrentTenantId();
 
-  // Snapshot best-effort cho audit log delete (lưu lại tên/code đã xóa).
-  let oldRow: Record<string, unknown> | null = null;
-  try {
-    const res = await supabase
-      .from("suppliers")
-      .select("code, name, phone, email, tax_code")
-      .eq("tenant_id", tenantId)
-      .eq("id", id)
-      .maybeSingle();
-    oldRow = (res?.data as Record<string, unknown> | null) ?? null;
-  } catch {
-    /* snapshot optional */
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  const { data, error } = await (supabase.rpc as any)(
+    "delete_supplier_atomic",
+    { p_supplier_id: id },
+  );
+
+  if (error) {
+    if (isRpcUnavailable(error)) {
+      throw new Error(
+        "Chưa có RPC delete_supplier_atomic. Vui lòng chạy migration 00075 trước.",
+      );
+    }
+    // Bóc message từ Postgres exception cho UI hiển thị
+    const msg = (error.message ?? "").toString();
+    if (msg.includes("SUPPLIER_HAS_PURCHASE_ORDERS")) {
+      throw new Error(
+        msg.replace(/^[^:]*SUPPLIER_HAS_PURCHASE_ORDERS:\s*/, ""),
+      );
+    }
+    if (msg.includes("SUPPLIER_HAS_PRODUCTS")) {
+      throw new Error(msg.replace(/^[^:]*SUPPLIER_HAS_PRODUCTS:\s*/, ""));
+    }
+    if (msg.includes("SUPPLIER_HAS_RETURNS")) {
+      throw new Error(msg.replace(/^[^:]*SUPPLIER_HAS_RETURNS:\s*/, ""));
+    }
+    if (msg.includes("SUPPLIER_NOT_FOUND")) {
+      throw new Error("Không tìm thấy nhà cung cấp — có thể đã bị xoá trước đó.");
+    }
+    handleError(error, "deleteSupplier");
   }
 
-  const { error } = await supabase
-    .from("suppliers")
-    .delete()
-    .eq("tenant_id", tenantId)
-    .eq("id", id);
-
-  if (error) handleError(error, "deleteSupplier");
-
-  await recordAuditLog({
-    entityType: "supplier",
-    entityId: id,
-    action: "delete",
-    oldData: oldRow ?? null,
-  });
+  if (!data || !(data as { success?: boolean }).success) {
+    throw new Error("Server không trả kết quả xoá NCC hợp lệ.");
+  }
 }
 
 // --- Mapper ---
@@ -320,6 +407,12 @@ function mapSupplier(row: any, totalPurchases = 0): Supplier {
     phone: row.phone ?? "",
     email: row.email ?? undefined,
     address: row.address ?? undefined,
+    // Day 17/05/2026: structured address
+    houseNumber: row.house_number ?? undefined,
+    quarter: row.quarter ?? undefined,
+    ward: row.ward ?? undefined,
+    province: row.province ?? undefined,
+    country: row.country ?? undefined,
     taxCode: row.tax_code ?? undefined,
     note: row.note ?? undefined,
     currentDebt: row.debt,

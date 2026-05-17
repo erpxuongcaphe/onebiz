@@ -11,10 +11,18 @@ import {
 } from "@/components/ui/dialog";
 import { Input } from "@/components/ui/input";
 import { Button } from "@/components/ui/button";
+import {
+  Select,
+  SelectTrigger,
+  SelectValue,
+  SelectContent,
+  SelectItem,
+} from "@/components/ui/select";
 import { useToast } from "@/lib/contexts";
 import { createSupplier, updateSupplier } from "@/lib/services";
 import type { Supplier } from "@/lib/types";
 import { Icon } from "@/components/ui/icon";
+import { VN_PROVINCES, DEFAULT_COUNTRY } from "@/lib/data/vn-provinces";
 
 interface CreateSupplierDialogProps {
   open: boolean;
@@ -41,6 +49,12 @@ export function CreateSupplierDialog({
   const [phone, setPhone] = useState("");
   const [email, setEmail] = useState("");
   const [address, setAddress] = useState("");
+  // Day 17/05/2026: structured address — CEO yêu cầu tách
+  const [houseNumber, setHouseNumber] = useState("");
+  const [quarter, setQuarter] = useState("");
+  const [ward, setWard] = useState("");
+  const [province, setProvince] = useState("");
+  const [country, setCountry] = useState("");
   const [taxCode, setTaxCode] = useState("");
   const [note, setNote] = useState("");
   const [errors, setErrors] = useState<Record<string, string>>({});
@@ -54,6 +68,11 @@ export function CreateSupplierDialog({
         setPhone(initialData.phone || "");
         setEmail(initialData.email || "");
         setAddress(initialData.address || "");
+        setHouseNumber(initialData.houseNumber || "");
+        setQuarter(initialData.quarter || "");
+        setWard(initialData.ward || "");
+        setProvince(initialData.province || "");
+        setCountry(initialData.country || "");
         setTaxCode(initialData.taxCode || "");
         setNote(initialData.note || "");
       } else {
@@ -62,6 +81,11 @@ export function CreateSupplierDialog({
         setPhone("");
         setEmail("");
         setAddress("");
+        setHouseNumber("");
+        setQuarter("");
+        setWard("");
+        setProvince("");
+        setCountry(DEFAULT_COUNTRY);
         setTaxCode("");
         setNote("");
       }
@@ -85,7 +109,11 @@ export function CreateSupplierDialog({
           name,
           phone: phone || undefined,
           email: email || undefined,
-          address: address || undefined,
+          houseNumber: houseNumber,
+          quarter: quarter,
+          ward: ward,
+          province: province,
+          country: country,
           taxCode: taxCode || undefined,
           note: note || undefined,
         });
@@ -101,7 +129,11 @@ export function CreateSupplierDialog({
           name,
           phone: phone || undefined,
           email: email || undefined,
-          address: address || undefined,
+          houseNumber: houseNumber || undefined,
+          quarter: quarter || undefined,
+          ward: ward || undefined,
+          province: province || undefined,
+          country: country || undefined,
           taxCode: taxCode || undefined,
           note: note || undefined,
         });
@@ -175,13 +207,88 @@ export function CreateSupplierDialog({
             </div>
           </div>
 
-          <div className="space-y-2">
-            <label className="text-sm font-medium">Địa chỉ</label>
-            <Input
-              value={address}
-              onChange={(e) => setAddress(e.target.value)}
-              placeholder="Nhập địa chỉ"
-            />
+          {/* Day 17/05/2026: Địa chỉ structured 5 component */}
+          <div className="rounded-lg border border-border bg-surface-container-lowest p-3 space-y-3">
+            <div className="flex items-center gap-2">
+              <Icon name="location_on" size={16} className="text-primary" />
+              <span className="text-sm font-semibold">Địa chỉ</span>
+              {isEditing && address && !houseNumber && !ward && !province && (
+                <span className="text-[11px] text-status-warning">
+                  · Có địa chỉ cũ chưa tách — cập nhật để filter dễ hơn
+                </span>
+              )}
+            </div>
+
+            {isEditing && address && !houseNumber && !ward && !province && (
+              <div className="space-y-1">
+                <label className="text-[11px] text-muted-foreground">
+                  Địa chỉ cũ (text)
+                </label>
+                <Input
+                  value={address}
+                  readOnly
+                  className="bg-surface-container/50 text-muted-foreground"
+                />
+              </div>
+            )}
+
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
+              <div className="space-y-1">
+                <label className="text-[11px] text-muted-foreground">Số nhà / Đường</label>
+                <Input
+                  value={houseNumber}
+                  onChange={(e) => setHouseNumber(e.target.value)}
+                  placeholder="VD: 123 Lê Lợi"
+                />
+              </div>
+              <div className="space-y-1">
+                <label className="text-[11px] text-muted-foreground">Khu phố / Thôn</label>
+                <Input
+                  value={quarter}
+                  onChange={(e) => setQuarter(e.target.value)}
+                  placeholder="VD: Khu phố 5"
+                />
+              </div>
+              <div className="space-y-1">
+                <label className="text-[11px] text-muted-foreground">Phường / Xã</label>
+                <Input
+                  value={ward}
+                  onChange={(e) => setWard(e.target.value)}
+                  placeholder="VD: Phường Bến Nghé"
+                />
+              </div>
+              <div className="space-y-1">
+                <label className="text-[11px] text-muted-foreground">Tỉnh / Thành phố</label>
+                <Select
+                  value={province || "__none__"}
+                  onValueChange={(v) => setProvince(v === "__none__" ? "" : (v ?? ""))}
+                  items={[
+                    { value: "__none__", label: "— Chưa chọn —" },
+                    ...VN_PROVINCES.map((p) => ({ value: p.name, label: p.name })),
+                  ]}
+                >
+                  <SelectTrigger className="w-full">
+                    <SelectValue placeholder="Chọn tỉnh/thành" />
+                  </SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="__none__">— Chưa chọn —</SelectItem>
+                    {VN_PROVINCES.map((p) => (
+                      <SelectItem key={p.code} value={p.name}>
+                        {p.name}
+                      </SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+              </div>
+              <div className="space-y-1 sm:col-span-2">
+                <label className="text-[11px] text-muted-foreground">Quốc gia</label>
+                <Input
+                  value={country}
+                  onChange={(e) => setCountry(e.target.value)}
+                  placeholder={DEFAULT_COUNTRY}
+                />
+              </div>
+            </div>
           </div>
 
           <div className="space-y-2">

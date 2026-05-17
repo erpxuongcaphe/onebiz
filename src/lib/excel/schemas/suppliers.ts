@@ -9,7 +9,14 @@ export interface SupplierImportRow {
   name: string;
   phone?: string;
   email?: string;
+  /** Địa chỉ đầy đủ (legacy). */
   address?: string;
+  // Day 17/05/2026: structured address
+  houseNumber?: string;
+  quarter?: string;
+  ward?: string;
+  province?: string;
+  country?: string;
   taxCode?: string;
   note?: string;
   isActive?: boolean;
@@ -65,11 +72,55 @@ export const supplierExcelSchema: ExcelSchema<SupplierImportRow> = {
     },
     {
       key: "address",
-      header: "Địa chỉ",
+      header: "Địa chỉ (cũ — text)",
       type: "string",
       maxLength: 500,
+      description:
+        "Địa chỉ dạng text (legacy). Khuyến nghị nhập 5 trường structured bên dưới. Day 17/05/2026.",
       example: "456 Lê Lợi, Q1, TP.HCM",
-      width: 40,
+      width: 36,
+    },
+    // Day 17/05/2026: 5 cột structured address
+    {
+      key: "houseNumber",
+      header: "Số nhà / Đường",
+      type: "string",
+      maxLength: 200,
+      example: "456 Lê Lợi",
+      width: 22,
+    },
+    {
+      key: "quarter",
+      header: "Khu phố / Thôn",
+      type: "string",
+      maxLength: 100,
+      width: 18,
+    },
+    {
+      key: "ward",
+      header: "Phường / Xã",
+      type: "string",
+      maxLength: 100,
+      example: "Phường Bến Nghé",
+      width: 22,
+    },
+    {
+      key: "province",
+      header: "Tỉnh / Thành phố",
+      type: "string",
+      maxLength: 100,
+      description:
+        "1 trong 34 tỉnh/thành VN sau sáp nhập 2025.",
+      example: "TP. Hồ Chí Minh",
+      width: 22,
+    },
+    {
+      key: "country",
+      header: "Quốc gia",
+      type: "string",
+      maxLength: 100,
+      example: "Việt Nam",
+      width: 16,
     },
     {
       key: "taxCode",

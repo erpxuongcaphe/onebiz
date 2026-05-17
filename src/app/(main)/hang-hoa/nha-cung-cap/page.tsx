@@ -15,6 +15,7 @@ import {
   RangeFilter,
   type DatePresetValue,
 } from "@/components/shared/filter-sidebar";
+import { VN_PROVINCES } from "@/lib/data/vn-provinces";
 import {
   InlineDetailPanel,
   DetailTabs,
@@ -373,6 +374,8 @@ export default function NhaCungCapPage() {
     "active",
     "inactive",
   ]);
+  // Day 17/05/2026: filter Tỉnh/TP
+  const [provinceFilter, setProvinceFilter] = useState("all");
 
   /* ---- Columns ---- */
   const columns: ColumnDef<Supplier, unknown>[] = [
@@ -437,6 +440,8 @@ export default function NhaCungCapPage() {
         ...(debtTo && { debtTo }),
         ...(dateFrom && { dateFrom }),
         ...(dateTo && { dateTo }),
+        // Day 17/05: filter Tỉnh/TP
+        ...(provinceFilter !== "all" && { province: provinceFilter }),
       },
     });
     setData(result.data);
@@ -452,6 +457,7 @@ export default function NhaCungCapPage() {
     debtTo,
     dateFrom,
     dateTo,
+    provinceFilter,
   ]);
 
   useEffect(() => {
@@ -564,6 +570,22 @@ export default function NhaCungCapPage() {
                 onToChange={setDebtTo}
                 fromPlaceholder="Nhập giá trị"
                 toPlaceholder="Nhập giá trị"
+              />
+            </FilterGroup>
+
+            {/* Day 17/05/2026: filter Tỉnh/TP */}
+            <FilterGroup label="Tỉnh / Thành phố">
+              <SelectFilter
+                value={provinceFilter}
+                onChange={setProvinceFilter}
+                options={[
+                  { label: "Tất cả tỉnh/thành", value: "all" },
+                  ...VN_PROVINCES.map((p) => ({
+                    label: p.name,
+                    value: p.name,
+                  })),
+                ]}
+                placeholder="Chọn tỉnh/thành"
               />
             </FilterGroup>
 

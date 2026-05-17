@@ -13,7 +13,9 @@ import {
   DatePresetFilter,
   ChipToggleFilter,
   PersonFilter,
+  SelectFilter,
 } from "@/components/shared/filter-sidebar";
+import { VN_PROVINCES } from "@/lib/data/vn-provinces";
 import type { DatePresetValue } from "@/components/shared/filter-sidebar";
 import {
   InlineDetailPanel,
@@ -101,6 +103,8 @@ export default function KhachHangPage() {
   const [dateFrom, setDateFrom] = useState("");
   const [dateTo, setDateTo] = useState("");
   const [creatorFilter, setCreatorFilter] = useState("");
+  // Day 17/05/2026: filter theo Tỉnh/TP (34 tỉnh sau sáp nhập)
+  const [provinceFilter, setProvinceFilter] = useState("all");
 
   // Inline detail
   const [expandedRow, setExpandedRow] = useState<number | null>(null);
@@ -253,6 +257,8 @@ export default function KhachHangPage() {
         ...(creatorFilter && { createdBy: creatorFilter }),
         ...(dateFrom && { dateFrom }),
         ...(dateTo && { dateTo }),
+        // Day 17/05: filter Tỉnh/TP
+        ...(provinceFilter !== "all" && { province: provinceFilter }),
       },
     });
     setData(result.data);
@@ -269,6 +275,7 @@ export default function KhachHangPage() {
     creatorFilter,
     dateFrom,
     dateTo,
+    provinceFilter,
   ]);
 
   useEffect(() => {
@@ -291,6 +298,7 @@ export default function KhachHangPage() {
     creatorFilter,
     dateFrom,
     dateTo,
+    provinceFilter,
   ]);
 
   /* ---- Summaries ---- */
@@ -410,6 +418,22 @@ export default function KhachHangPage() {
                 onChange={setCreatorFilter}
                 placeholder="Chọn người tạo"
                 suggestions={profileSuggestions}
+              />
+            </FilterGroup>
+
+            {/* Day 17/05/2026: filter Tỉnh/TP */}
+            <FilterGroup label="Tỉnh / Thành phố">
+              <SelectFilter
+                value={provinceFilter}
+                onChange={setProvinceFilter}
+                options={[
+                  { label: "Tất cả tỉnh/thành", value: "all" },
+                  ...VN_PROVINCES.map((p) => ({
+                    label: p.name,
+                    value: p.name,
+                  })),
+                ]}
+                placeholder="Chọn tỉnh/thành"
               />
             </FilterGroup>
           </FilterSidebar>

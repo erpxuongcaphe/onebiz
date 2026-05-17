@@ -7,6 +7,7 @@ import type { Database } from "@/lib/supabase/types";
 import { getClient, getPaginationRange, handleError, getCurrentTenantId } from "./base";
 import { recordAuditLog } from "./audit";
 import { isRpcUnavailable } from "./rpc-utils";
+import { composeAddress as composeStructuredAddress } from "@/lib/data/vn-provinces";
 
 type CustomerInsert = Database["public"]["Tables"]["customers"]["Insert"];
 type CustomerUpdate = Database["public"]["Tables"]["customers"]["Update"];
@@ -70,6 +71,12 @@ export async function getCustomers(params: QueryParams): Promise<QueryResult<Cus
     const end = new Date(params.filters.dateTo as string);
     end.setDate(end.getDate() + 1);
     query = query.lt("created_at", end.toISOString());
+  }
+
+  // Day 17/05/2026: filter Tỉnh/TP — CEO yêu cầu lọc địa lý
+  if (params.filters?.province && params.filters.province !== "all") {
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    query = query.eq("province" as any, params.filters.province as string);
   }
 
   // Note: filter `createdBy` không support được vì schema `customers` không
@@ -199,6 +206,17 @@ export async function createCustomer(customer: Partial<Customer>): Promise<Custo
   const supabase = getClient();
   const tenantId = await getCurrentTenantId();
 
+  // Day 17/05/2026: auto-compose address từ 5 fields structured nếu cung cấp.
+  // Giữ address legacy nếu caller truyền trực tiếp (cho backward compat).
+  const composedAddress = composeStructuredAddress({
+    houseNumber: customer.houseNumber,
+    quarter: customer.quarter,
+    ward: customer.ward,
+    province: customer.province,
+    country: customer.country,
+  });
+  const finalAddress = composedAddress || customer.address || null;
+
   const { data, error } = await supabase
     .from("customers")
     .insert({
@@ -207,13 +225,23 @@ export async function createCustomer(customer: Partial<Customer>): Promise<Custo
       name: customer.name!,
       phone: customer.phone || null,
       email: customer.email || null,
-      address: customer.address || null,
+      address: finalAddress,
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      house_number: customer.houseNumber || null,
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      quarter: customer.quarter || null,
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      ward: customer.ward || null,
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      province: customer.province || null,
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      country: customer.country || null,
       group_id: customer.groupId || null,
       gender: customer.gender || null,
       customer_type: customer.type ?? "individual",
       price_tier_id: customer.priceTierId || null,
       is_active: true,
-    } satisfies CustomerInsert)
+    } as CustomerInsert)
     .select("*, customer_groups!customers_group_id_fkey(name, discount_percent), loyalty_tiers(name, discount_percent)")
     .single();
 
@@ -363,7 +391,9 @@ export async function updateCustomer(id: string, updates: Partial<Customer>): Pr
   try {
     const res = await supabase
       .from("customers")
-      .select("code, name, phone, email, group_id, customer_type, address")
+      .select(
+        "code, name, phone, email, group_id, customer_type, address, house_number, quarter, ward, province, country",
+      )
       .eq("tenant_id", tenantId)
       .eq("id", id)
       .maybeSingle();
@@ -372,12 +402,57 @@ export async function updateCustomer(id: string, updates: Partial<Customer>): Pr
     /* snapshot optional */
   }
 
+  // Day 17/05/2026: nếu có ít nhất 1 field structured được sửa →
+  // auto-compose address text từ 5 fields (kết hợp cả old data + new updates).
+  const hasStructuredUpdate = [
+    updates.houseNumber,
+    updates.quarter,
+    updates.ward,
+    updates.province,
+    updates.country,
+  ].some((v) => v !== undefined);
+
   const payload: CustomerUpdate = {};
   if (updates.code !== undefined) payload.code = updates.code;
   if (updates.name !== undefined) payload.name = updates.name;
   if (updates.phone !== undefined) payload.phone = updates.phone || null;
   if (updates.email !== undefined) payload.email = updates.email || null;
-  if (updates.address !== undefined) payload.address = updates.address || null;
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  const p = payload as any;
+  if (updates.houseNumber !== undefined) p.house_number = updates.houseNumber || null;
+  if (updates.quarter !== undefined) p.quarter = updates.quarter || null;
+  if (updates.ward !== undefined) p.ward = updates.ward || null;
+  if (updates.province !== undefined) p.province = updates.province || null;
+  if (updates.country !== undefined) p.country = updates.country || null;
+  if (hasStructuredUpdate) {
+    // Compose address từ kết hợp old + new (ưu tiên new)
+    const old = oldRow ?? {};
+    const composed = composeStructuredAddress({
+      houseNumber:
+        updates.houseNumber !== undefined
+          ? updates.houseNumber
+          : (old.house_number as string | null),
+      quarter:
+        updates.quarter !== undefined
+          ? updates.quarter
+          : (old.quarter as string | null),
+      ward:
+        updates.ward !== undefined
+          ? updates.ward
+          : (old.ward as string | null),
+      province:
+        updates.province !== undefined
+          ? updates.province
+          : (old.province as string | null),
+      country:
+        updates.country !== undefined
+          ? updates.country
+          : (old.country as string | null),
+    });
+    payload.address = composed || null;
+  } else if (updates.address !== undefined) {
+    payload.address = updates.address || null;
+  }
   if (updates.groupId !== undefined) payload.group_id = updates.groupId || null;
   if (updates.gender !== undefined) payload.gender = updates.gender || null;
   if (updates.type !== undefined) payload.customer_type = updates.type;
@@ -462,6 +537,12 @@ function mapCustomer(row: any, returnsTotal = 0): Customer {
     phone: row.phone ?? "",
     email: row.email ?? undefined,
     address: row.address ?? undefined,
+    // Day 17/05: structured address
+    houseNumber: row.house_number ?? undefined,
+    quarter: row.quarter ?? undefined,
+    ward: row.ward ?? undefined,
+    province: row.province ?? undefined,
+    country: row.country ?? undefined,
     currentDebt: row.debt,
     totalSales: totalSpent,
     totalSalesMinusReturns: netSales,

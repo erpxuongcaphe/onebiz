@@ -6,7 +6,14 @@ export interface Supplier {
   name: string;
   phone: string;
   email?: string;
+  /** Địa chỉ đầy đủ (legacy). Auto-compose từ 5 fields structured khi save. */
   address?: string;
+  // Day 17/05/2026: structured address (CEO yêu cầu tách để filter/quản lý)
+  houseNumber?: string;
+  quarter?: string;
+  ward?: string;
+  province?: string;
+  country?: string;
   taxCode?: string;
   note?: string;
   currentDebt: number;
