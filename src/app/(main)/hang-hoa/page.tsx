@@ -57,8 +57,8 @@ import {
   duplicateProduct,
   moveProductSortOrder,
   restoreProduct,
-  forceDeleteProduct,
-  bulkForceDeleteProducts,
+  bulkRestoreProducts,
+  cleanupTestProduct,
   bulkCleanupTestProducts,
   verifyCurrentUserPassword,
 } from "@/lib/services";
@@ -308,14 +308,12 @@ export default function HangHoaPage() {
   const [deletingProduct, setDeletingProduct] = useState<Product | null>(null);
   const [deleteLoading, setDeleteLoading] = useState(false);
 
-  // Day 17/05/2026 (00092): Hard delete state — chỉ owner, chỉ SP đã ngừng KD
-  const [hardDeleteConfirmOpen, setHardDeleteConfirmOpen] = useState(false);
-  const [hardDeletingProduct, setHardDeletingProduct] = useState<Product | null>(null);
-  const [hardDeleteLoading, setHardDeleteLoading] = useState(false);
-  // Bulk version — Xoá hẳn nhiều SP (owner only)
-  const [bulkHardDeleteConfirmOpen, setBulkHardDeleteConfirmOpen] = useState(false);
-  // Day 17/05/2026 (00093): Cleanup test data — bypass stock + active check
+  // Day 17/05/2026 (00094): "Xoá vĩnh viễn" — gộp logic cleanup_test_product
+  // (bypass stock + active check, vẫn check 15 bảng FK giao dịch thực).
+  // Bỏ "Xoá hẳn" (00092) vì duplicate UX — gộp 1 nút "Xoá vĩnh viễn".
   const [bulkCleanupConfirmOpen, setBulkCleanupConfirmOpen] = useState(false);
+  // Bulk "Khôi phục" trong tab "Đã ngừng KD" (thay "Xoá idempotent" vô nghĩa)
+  const [bulkRestoreConfirmOpen, setBulkRestoreConfirmOpen] = useState(false);
   // Password re-prompt — AWS/Stripe pattern cho destructive action
   const [confirmPassword, setConfirmPassword] = useState("");
   const [confirmPasswordError, setConfirmPasswordError] = useState("");
@@ -680,80 +678,44 @@ export default function HangHoaPage() {
     }
   }, [selectedRowsForBulk, selectedIdsForBulk, canDeleteProduct, toast, finishBulkSuccess, finishBulkError]);
 
-  // Day 17/05/2026 (00092): Bulk Xoá HẲN — chỉ owner + filter inactive.
-  // Mỗi SP đi qua force_delete_product_atomic riêng (pre-check 17 bảng FK).
-  // Toast break-down: xoá hẳn được X, không xoá được Y (vì còn refs).
-  // Yêu cầu nhập mật khẩu (AWS pattern) trước khi gọi RPC.
-  const handleConfirmBulkHardDelete = useCallback(async () => {
+  // Day 17/05/2026: Bulk KHÔI PHỤC nhiều SP đã ngừng KD.
+  // Thay bulk "Xoá (idempotent)" vô nghĩa trong tab "Đã ngừng KD".
+  const handleConfirmBulkRestore = useCallback(async () => {
     const ids = selectedIdsForBulk.length > 0
       ? selectedIdsForBulk
       : selectedRowsForBulk.map((p) => p.id);
     if (ids.length === 0) return;
-    setConfirmPasswordError("");
-
-    if (!confirmPassword) {
-      setConfirmPasswordError("Vui lòng nhập mật khẩu để xác nhận.");
-      return;
-    }
-    if (!user?.email) {
-      setConfirmPasswordError("Không lấy được email tài khoản. Vui lòng đăng nhập lại.");
-      return;
-    }
     setBulkLoading(true);
     try {
-      const ok = await verifyCurrentUserPassword(user.email, confirmPassword);
-      if (!ok) {
-        setConfirmPasswordError("Sai mật khẩu — không xoá. Vui lòng nhập lại.");
-        setBulkLoading(false);
-        return;
-      }
-      const result = await bulkForceDeleteProducts(ids);
-      setConfirmPassword("");
-      setBulkHardDeleteConfirmOpen(false);
-
+      const result = await bulkRestoreProducts(ids);
+      setBulkRestoreConfirmOpen(false);
       if (result.failed.length === 0) {
         await finishBulkSuccess(
-          "Đã xoá hẳn",
-          `${result.count}/${result.total} SP bị xoá vĩnh viễn khỏi database.`,
+          "Đã khôi phục",
+          `${result.count}/${result.total} SP đang kinh doanh trở lại.`,
         );
       } else if (result.count > 0) {
-        const failedSummary = result.failed
-          .slice(0, 5)
-          .map((f) => `• ${f.reason}`)
-          .join("\n");
-        const moreNote =
-          result.failed.length > 5
-            ? `\n…và ${result.failed.length - 5} SP khác`
-            : "";
         toast({
           variant: "warning",
-          title: `Xoá hẳn ${result.count}/${result.total} SP — ${result.failed.length} SP không xoá được`,
-          description: failedSummary + moreNote,
-          duration: 12000,
+          title: `Khôi phục ${result.count}/${result.total} SP — ${result.failed.length} SP fail`,
+          description: result.failed.slice(0, 5).map((f) => `• ${f.reason}`).join("\n"),
+          duration: 10000,
         });
         await finishBulkSuccess("", "");
       } else {
-        const failedSummary = result.failed
-          .slice(0, 5)
-          .map((f) => `• ${f.reason}`)
-          .join("\n");
-        const moreNote =
-          result.failed.length > 5
-            ? `\n…và ${result.failed.length - 5} SP khác`
-            : "";
         toast({
           variant: "error",
-          title: "Không xoá hẳn được SP nào",
-          description: failedSummary + moreNote,
-          duration: 12000,
+          title: "Không khôi phục được SP nào",
+          description: result.failed.slice(0, 5).map((f) => `• ${f.reason}`).join("\n"),
+          duration: 10000,
         });
       }
     } catch (err) {
-      finishBulkError("Xoá hẳn sản phẩm thất bại", err);
+      finishBulkError("Khôi phục sản phẩm thất bại", err);
     } finally {
       setBulkLoading(false);
     }
-  }, [selectedRowsForBulk, selectedIdsForBulk, confirmPassword, user, toast, finishBulkSuccess, finishBulkError]);
+  }, [selectedRowsForBulk, selectedIdsForBulk, toast, finishBulkSuccess, finishBulkError]);
 
   // Day 17/05/2026 (00093): Bulk CLEANUP TEST DATA — bypass stock + active check.
   // SP có giao dịch thực (invoice_items, stock_movements, ...) vẫn bị skip.
@@ -1365,11 +1327,12 @@ export default function HangHoaPage() {
                 setBulkChangePriceOpen(true);
               },
             },
-            // CEO 12/05: chỉ render bulk "Xoá" khi user có quyền products.delete.
-            ...(canDeleteProduct
+            // Day 17/05/2026 (CEO bảo gộp): tab "Đang KD" → "Ngừng KD";
+            // tab "Đã ngừng KD" → "Khôi phục" (bulk restore, thay "Xoá idempotent").
+            ...(canDeleteProduct && statusFilter !== "inactive"
               ? [
                   {
-                    label: statusFilter === "inactive" ? "Xoá (idempotent)" : "Ngừng KD",
+                    label: "Ngừng KD",
                     icon: <Icon name="block" size={16} />,
                     variant: "destructive" as const,
                     onClick: (rows: Product[], ids: string[]) => {
@@ -1380,30 +1343,27 @@ export default function HangHoaPage() {
                   },
                 ]
               : []),
-            // Day 17/05/2026 (00092): bulk "Xoá hẳn" — chỉ owner + chỉ khi đang
-            // xem filter "Đã ngừng KD" (cleanup deliberate, không xoá nhầm SP active)
-            ...(isOwner && statusFilter === "inactive"
+            ...(statusFilter === "inactive"
               ? [
                   {
-                    label: "Xoá hẳn",
-                    icon: <Icon name="delete_forever" size={16} />,
-                    variant: "destructive" as const,
+                    label: "Khôi phục",
+                    icon: <Icon name="restore" size={16} />,
                     onClick: (rows: Product[], ids: string[]) => {
                       setSelectedRowsForBulk(rows);
                       setSelectedIdsForBulk(ids);
-                      setBulkHardDeleteConfirmOpen(true);
+                      setBulkRestoreConfirmOpen(true);
                     },
                   },
                 ]
               : []),
-            // Day 17/05/2026 (00093): bulk "Cleanup test data" — chỉ owner.
-            // BYPASS check tồn kho + active. VẪN check 17 bảng FK thực.
-            // Available trên mọi filter (active/inactive/all) vì target là SP test.
+            // Day 17/05/2026 (CEO): gộp "Xoá hẳn" + "Xoá triệt để" thành 1 nút
+            // "Xoá vĩnh viễn". Logic dùng cleanup_test_product (bypass stock +
+            // active, vẫn check 15 bảng FK giao dịch thực). Password verify.
             ...(isOwner
               ? [
                   {
-                    label: "Xoá triệt để",
-                    icon: <Icon name="cleaning_services" size={16} />,
+                    label: "Xoá vĩnh viễn",
+                    icon: <Icon name="delete_forever" size={16} />,
                     variant: "destructive" as const,
                     onClick: (rows: Product[], ids: string[]) => {
                       setSelectedRowsForBulk(rows);
@@ -1502,15 +1462,16 @@ export default function HangHoaPage() {
                 },
                 separator: true,
               });
-              // Day 17/05/2026 (00092): nút "Xoá hẳn" chỉ hiện cho owner
-              // + chỉ trên SP đã ngừng KD. Pattern A — ERP best practice.
+              // Day 17/05/2026 (CEO gộp): row action "Xoá vĩnh viễn" — chỉ owner.
+              // Dùng cùng dialog bulkCleanup với 1 SP (đỡ duplicate code).
               if (isOwner) {
                 actions.push({
-                  label: "Xoá hẳn",
+                  label: "Xoá vĩnh viễn",
                   icon: <Icon name="delete_forever" size={16} />,
                   onClick: () => {
-                    setHardDeletingProduct(row);
-                    setHardDeleteConfirmOpen(true);
+                    setSelectedRowsForBulk([row]);
+                    setSelectedIdsForBulk([row.id]);
+                    setBulkCleanupConfirmOpen(true);
                   },
                   variant: "destructive" as const,
                 });
@@ -1597,124 +1558,23 @@ export default function HangHoaPage() {
         </DialogContent>
       </Dialog>
 
-      {/* --- Day 17/05/2026 (00092): Hard delete confirm dialog --- */}
-      {/* Chỉ owner thấy nút "Xoá hẳn" → dialog cảnh báo đỏ → RPC check
-          17 bảng FK → 0 refs → DELETE; có refs → reject tiếng Việt */}
+      {/* --- Day 17/05/2026 (CEO): Bulk Khôi phục dialog --- */}
       <Dialog
-        open={hardDeleteConfirmOpen}
-        onOpenChange={(o) => {
-          setHardDeleteConfirmOpen(o);
-          if (!o) setHardDeletingProduct(null);
-        }}
-      >
-        <DialogContent className="sm:max-w-md">
-          <DialogHeader>
-            <DialogTitle className="text-status-danger">
-              <Icon name="warning" size={20} className="inline-block mr-2 align-text-bottom" />
-              Xoá hẳn sản phẩm khỏi database?
-            </DialogTitle>
-            <DialogDescription className="space-y-2">
-              <span className="block">
-                Sản phẩm <strong>{hardDeletingProduct?.code}</strong> —{" "}
-                <strong>{hardDeletingProduct?.name}</strong> sẽ bị
-                <b className="text-status-danger"> xoá vĩnh viễn </b>
-                khỏi database. <b>Không thể khôi phục.</b>
-              </span>
-              <span className="block rounded-md bg-status-danger/10 border border-status-danger/30 p-2.5 text-xs text-foreground">
-                <Icon name="info" size={14} className="inline-block mr-1 text-status-danger" />
-                Hệ thống tự kiểm tra 17 bảng FK trước khi xoá. Nếu SP từng có{" "}
-                <b>giao dịch nào</b> (kho, hoá đơn, kiểm kê, SX, ...) → server sẽ{" "}
-                <b>chặn xoá</b> để bảo toàn lịch sử kế toán.
-              </span>
-              <span className="block text-xs text-on-surface-variant">
-                Chỉ nên dùng cho SP test / tạo nhầm / chưa từng dùng.
-              </span>
-            </DialogDescription>
-          </DialogHeader>
-          <DialogFooter>
-            <Button
-              variant="outline"
-              disabled={hardDeleteLoading}
-              onClick={() => {
-                setHardDeleteConfirmOpen(false);
-                setHardDeletingProduct(null);
-              }}
-            >
-              Huỷ
-            </Button>
-            <Button
-              variant="destructive"
-              disabled={hardDeleteLoading}
-              onClick={async () => {
-                if (!hardDeletingProduct) return;
-                const target = hardDeletingProduct;
-                setHardDeleteLoading(true);
-                try {
-                  await forceDeleteProduct(target.id);
-                  toast({
-                    variant: "success",
-                    title: "Đã xoá hẳn sản phẩm",
-                    description: `${target.code} — ${target.name} đã bị xoá vĩnh viễn khỏi database.`,
-                  });
-                  setHardDeleteConfirmOpen(false);
-                  setHardDeletingProduct(null);
-                  fetchData();
-                } catch (err) {
-                  const message = err instanceof Error ? err.message : "Lỗi không xác định";
-                  // Parse lỗi server thành tiếng Việt thân thiện
-                  let friendly = message;
-                  if (message.includes("PRODUCT_HAS_REFS")) {
-                    friendly = "SP còn lịch sử giao dịch (kho, hoá đơn, kiểm kê...). Không thể xoá hẳn — chỉ có thể giữ ngừng kinh doanh.";
-                  } else if (message.includes("PRODUCT_STILL_ACTIVE")) {
-                    friendly = "SP đang hoạt động. Vui lòng ngừng kinh doanh trước, sau đó mới xoá hẳn.";
-                  } else if (message.includes("PERMISSION_DENIED")) {
-                    friendly = "Chỉ chủ sở hữu (owner) mới được xoá hẳn sản phẩm.";
-                  }
-                  toast({
-                    variant: "error",
-                    title: "Không xoá hẳn được",
-                    description: friendly,
-                  });
-                } finally {
-                  setHardDeleteLoading(false);
-                }
-              }}
-            >
-              {hardDeleteLoading ? "Đang xoá..." : "Xoá hẳn vĩnh viễn"}
-            </Button>
-          </DialogFooter>
-        </DialogContent>
-      </Dialog>
-
-      {/* --- Day 17/05/2026 (00092): Bulk Hard delete + password verify --- */}
-      <Dialog
-        open={bulkHardDeleteConfirmOpen}
+        open={bulkRestoreConfirmOpen}
         onOpenChange={(o) => {
           if (bulkLoading) return;
-          setBulkHardDeleteConfirmOpen(o);
-          if (!o) {
-            setConfirmPassword("");
-            setConfirmPasswordError("");
-          }
+          setBulkRestoreConfirmOpen(o);
         }}
       >
         <DialogContent className="sm:max-w-md">
           <DialogHeader>
-            <DialogTitle className="text-status-danger">
-              <Icon name="delete_forever" size={20} className="inline-block mr-2 align-text-bottom" />
-              Xoá hẳn {bulkSelectedCount} sản phẩm khỏi database?
+            <DialogTitle>
+              <Icon name="restore" size={20} className="inline-block mr-2 align-text-bottom" />
+              Khôi phục {bulkSelectedCount} sản phẩm?
             </DialogTitle>
-            <DialogDescription className="space-y-2">
-              <span className="block">
-                <b>{bulkSelectedCount}</b> SP sẽ bị
-                <b className="text-status-danger"> xoá vĩnh viễn </b>
-                khỏi database. <b>Không thể khôi phục.</b>
-              </span>
-              <span className="block rounded-md bg-status-danger/10 border border-status-danger/30 p-2.5 text-xs text-foreground">
-                <Icon name="info" size={14} className="inline-block mr-1 text-status-danger" />
-                Server check 17 bảng FK cho từng SP. SP có giao dịch
-                (kho/hoá đơn/kiểm kê/SX) <b>tự bỏ qua</b> — bảo toàn kế toán.
-              </span>
+            <DialogDescription>
+              <b>{bulkSelectedCount}</b> SP sẽ chuyển trạng thái về
+              <b> đang kinh doanh</b> (hiện lại trong POS + danh sách).
             </DialogDescription>
           </DialogHeader>
           <div className="py-2 max-h-24 overflow-y-auto">
@@ -1725,68 +1585,29 @@ export default function HangHoaPage() {
                 </li>
               ))}
               {bulkSelectedCount > 5 && (
-                <li className="italic">
-                  …và {bulkSelectedCount - 5} sản phẩm khác
-                </li>
+                <li className="italic">…và {bulkSelectedCount - 5} sản phẩm khác</li>
               )}
             </ul>
-          </div>
-          {/* Password re-prompt (AWS/Stripe pattern) */}
-          <div className="space-y-1.5 border-t border-border pt-3">
-            <label htmlFor="hard-delete-password" className="text-sm font-medium text-foreground">
-              Nhập mật khẩu để xác nhận
-            </label>
-            <input
-              id="hard-delete-password"
-              type="password"
-              autoComplete="current-password"
-              className="w-full h-10 rounded-lg border border-input bg-background px-3 text-sm focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
-              placeholder="Mật khẩu tài khoản của bạn"
-              value={confirmPassword}
-              disabled={bulkLoading}
-              onChange={(e) => {
-                setConfirmPassword(e.target.value);
-                if (confirmPasswordError) setConfirmPasswordError("");
-              }}
-              onKeyDown={(e) => {
-                if (e.key === "Enter" && confirmPassword && !bulkLoading) {
-                  handleConfirmBulkHardDelete();
-                }
-              }}
-            />
-            {confirmPasswordError && (
-              <p className="text-xs text-status-danger">
-                <Icon name="error" size={12} className="inline-block mr-1 align-text-bottom" />
-                {confirmPasswordError}
-              </p>
-            )}
           </div>
           <DialogFooter>
             <Button
               variant="outline"
               disabled={bulkLoading}
-              onClick={() => {
-                setBulkHardDeleteConfirmOpen(false);
-                setConfirmPassword("");
-                setConfirmPasswordError("");
-              }}
+              onClick={() => setBulkRestoreConfirmOpen(false)}
             >
               Huỷ
             </Button>
             <Button
-              variant="destructive"
-              disabled={bulkLoading || !confirmPassword}
-              onClick={handleConfirmBulkHardDelete}
+              disabled={bulkLoading}
+              onClick={handleConfirmBulkRestore}
             >
-              {bulkLoading
-                ? "Đang xoá..."
-                : `Xoá hẳn ${bulkSelectedCount} SP`}
+              {bulkLoading ? "Đang khôi phục..." : `Khôi phục ${bulkSelectedCount} SP`}
             </Button>
           </DialogFooter>
         </DialogContent>
       </Dialog>
 
-      {/* --- Day 17/05/2026 (00093): Xoá triệt để dialog + password verify --- */}
+      {/* --- Day 17/05/2026 (CEO gộp): "Xoá vĩnh viễn" dialog + password verify --- */}
       <Dialog
         open={bulkCleanupConfirmOpen}
         onOpenChange={(o) => {
@@ -1802,7 +1623,7 @@ export default function HangHoaPage() {
           <DialogHeader>
             <DialogTitle className="text-status-danger">
               <Icon name="delete_forever" size={20} className="inline-block mr-2 align-text-bottom" />
-              Xoá triệt để {bulkSelectedCount} sản phẩm?
+              Xoá vĩnh viễn {bulkSelectedCount} sản phẩm?
             </DialogTitle>
             <DialogDescription className="space-y-2">
               <span className="block">
@@ -1885,7 +1706,7 @@ export default function HangHoaPage() {
             >
               {bulkLoading
                 ? "Đang xoá..."
-                : `Xoá triệt để ${bulkSelectedCount} SP`}
+                : `Xoá vĩnh viễn ${bulkSelectedCount} SP`}
             </Button>
           </DialogFooter>
         </DialogContent>

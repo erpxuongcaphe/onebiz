@@ -1002,6 +1002,34 @@ export async function bulkDeleteProducts(
 }
 
 /**
+ * Khôi phục bulk — loop từng SP qua restoreProduct.
+ * CEO 17/05/2026: thay thế bulk "Xoá (idempotent)" trong tab "Đã ngừng KD".
+ */
+export interface BulkRestoreResult {
+  count: number;
+  total: number;
+  failed: Array<{ productId: string; reason: string }>;
+}
+
+export async function bulkRestoreProducts(ids: string[]): Promise<BulkRestoreResult> {
+  if (ids.length === 0) return { count: 0, total: 0, failed: [] };
+  let count = 0;
+  const failed: BulkRestoreResult["failed"] = [];
+  for (const id of ids) {
+    try {
+      await restoreProduct(id);
+      count++;
+    } catch (err) {
+      failed.push({
+        productId: id,
+        reason: err instanceof Error ? err.message : "Lỗi không xác định",
+      });
+    }
+  }
+  return { count, total: ids.length, failed };
+}
+
+/**
  * Khôi phục SP đã ngừng kinh doanh (soft delete). CEO 17/05/2026.
  * Migration 00091: gọi RPC `restore_product_atomic` set is_active=true.
  */
