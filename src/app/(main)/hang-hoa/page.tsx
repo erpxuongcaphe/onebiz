@@ -1098,6 +1098,35 @@ export default function HangHoaPage() {
           />
         </div>
 
+        {/* Day 17/05/2026: Tab chip filter status — visible ngay, không cần
+            mở FilterSidebar. CEO báo không tìm thấy filter "Ngừng KD" ở sidebar. */}
+        <div className="flex flex-wrap items-center gap-2 px-4 pt-3 pb-2">
+          <span className="text-xs text-on-surface-variant mr-1">Trạng thái:</span>
+          {[
+            { label: "Đang kinh doanh", value: "active", icon: "check_circle" },
+            { label: "Đã ngừng KD", value: "inactive", icon: "block" },
+            { label: "Tất cả", value: "all", icon: "list" },
+          ].map((tab) => {
+            const isActive = statusFilter === tab.value;
+            return (
+              <button
+                key={tab.value}
+                type="button"
+                onClick={() => setStatusFilter(tab.value)}
+                className={
+                  "inline-flex items-center gap-1.5 px-3 py-1.5 rounded-full text-sm font-medium transition-colors border " +
+                  (isActive
+                    ? "bg-primary text-primary-foreground border-primary"
+                    : "bg-surface-variant text-on-surface-variant border-border hover:bg-surface-container")
+                }
+              >
+                <Icon name={tab.icon} size={14} />
+                {tab.label}
+              </button>
+            );
+          })}
+        </div>
+
         <DataTable
           columns={columns}
           data={data}
