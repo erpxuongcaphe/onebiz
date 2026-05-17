@@ -425,7 +425,7 @@ export default function DatHangPage() {
         >
           {orderVolume.length > 0 ? (
             <div className="h-48 md:h-72">
-              <ResponsiveContainer width="100%" height="100%">
+              <ResponsiveContainer width="100%" height="100%" minWidth={0} minHeight={0}>
                 <LineChart
                   data={orderVolume}
                   margin={{ top: 5, right: 10, left: 0, bottom: 0 }}
@@ -472,7 +472,7 @@ export default function DatHangPage() {
           >
             {orderStatus.length > 0 ? (
               <div className="h-64 md:h-80">
-                <ResponsiveContainer width="100%" height="100%">
+                <ResponsiveContainer width="100%" height="100%" minWidth={0} minHeight={0}>
                   <PieChart>
                     <Pie
                       data={orderStatus}

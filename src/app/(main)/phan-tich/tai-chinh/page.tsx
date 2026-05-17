@@ -548,7 +548,7 @@ export default function TaiChinhPage() {
             </p>
           ) : (
             <div className="h-72">
-              <ResponsiveContainer width="100%" height="100%">
+              <ResponsiveContainer width="100%" height="100%" minWidth={0} minHeight={0}>
                 <LineChart
                   data={revenueVsExpenseData}
                   margin={{ top: 5, right: 10, left: 0, bottom: 0 }}
@@ -607,7 +607,7 @@ export default function TaiChinhPage() {
               </p>
             ) : (
               <div className="h-72">
-                <ResponsiveContainer width="100%" height="100%">
+                <ResponsiveContainer width="100%" height="100%" minWidth={0} minHeight={0}>
                   <PieChart>
                     <Pie
                       data={expenseBreakdownData}
@@ -649,7 +649,7 @@ export default function TaiChinhPage() {
               </p>
             ) : (
               <div className="h-72">
-                <ResponsiveContainer width="100%" height="100%">
+                <ResponsiveContainer width="100%" height="100%" minWidth={0} minHeight={0}>
                   <BarChart
                     data={monthlyProfitData}
                     margin={{ top: 5, right: 10, left: 0, bottom: 0 }}

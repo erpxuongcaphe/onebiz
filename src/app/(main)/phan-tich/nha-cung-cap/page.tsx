@@ -379,7 +379,7 @@ export default function NhaCungCapPage() {
                   Chưa có dữ liệu mua hàng
                 </div>
               ) : (
-                <ResponsiveContainer width="100%" height="100%">
+                <ResponsiveContainer width="100%" height="100%" minWidth={0} minHeight={0}>
                   <LineChart
                     data={purchaseByMonth}
                     margin={{ top: 5, right: 10, left: 0, bottom: 0 }}
@@ -422,7 +422,7 @@ export default function NhaCungCapPage() {
                   Chưa có dữ liệu nhà cung cấp
                 </div>
               ) : (
-                <ResponsiveContainer width="100%" height="100%">
+                <ResponsiveContainer width="100%" height="100%" minWidth={0} minHeight={0}>
                   <BarChart
                     data={[...topSuppliers].reverse()}
                     layout="vertical"
@@ -466,7 +466,7 @@ export default function NhaCungCapPage() {
                 Chưa có dữ liệu thanh toán
               </div>
             ) : (
-              <ResponsiveContainer width="100%" height="100%">
+              <ResponsiveContainer width="100%" height="100%" minWidth={0} minHeight={0}>
                 <PieChart>
                   <Pie
                     data={paymentStatus}

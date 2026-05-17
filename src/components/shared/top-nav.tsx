@@ -541,6 +541,13 @@ export function TopNav() {
   const [importOpen, setImportOpen] = useState(false);
   const { posFnbUrl } = useFnbSubdomain();
 
+  // Day 7 16/05/2026: RBAC — kiểm tra quyền truy cập POS Retail / POS FnB.
+  // Owner/admin luôn thấy. Cashier chỉ thấy nếu có quyền checkout tương ứng.
+  const { hasPermission } = useAuth();
+  const canSeeRetailPos = hasPermission("pos_retail.checkout");
+  const canSeeFnbPos = hasPermission("pos_fnb.send_kitchen");
+  const canSeePosDropdown = canSeeRetailPos || canSeeFnbPos;
+
   // Bell badge — load số notification chưa đọc của user hiện tại.
   // Trước đây hardcode "3" → CEO mở thấy 3 dù không có notification thật.
   // Refresh khi tab focus + 60s interval (đủ live cho UX, chưa cần Realtime).
@@ -680,64 +687,73 @@ export function TopNav() {
 
             {/* POS dropdown — CEO 04/05/2026: tách POS Bán lẻ + POS F&B + KDS
                 khỏi sidebar admin. Dropdown để cashier chọn nhanh chế độ
-                front-of-house cần dùng. */}
-            <DropdownMenu>
-              <DropdownMenuTrigger
-                className={cn(
-                  "hidden sm:inline-flex items-center justify-center ml-2 gap-1",
-                  "h-10 px-4 rounded-xl text-sm font-semibold",
-                  "bg-primary text-primary-foreground hover:bg-primary/90",
-                  "ambient-shadow cursor-pointer outline-none transition-colors",
-                )}
-              >
-                <Icon name="point_of_sale" size={16} className="mr-1" />
-                POS
-                <Icon name="expand_more" size={16} />
-              </DropdownMenuTrigger>
-              <DropdownMenuContent align="end" className="min-w-[200px]">
-                <DropdownMenuLabel>Chế độ bán hàng</DropdownMenuLabel>
-                <DropdownMenuSeparator />
-                <DropdownMenuItem
-                  onClick={() => {
-                    window.location.href = "/pos";
-                  }}
+                front-of-house cần dùng.
+                Day 7 16/05/2026: ẩn entry nếu user không có permission POS. */}
+            {canSeePosDropdown && (
+              <DropdownMenu>
+                <DropdownMenuTrigger
+                  className={cn(
+                    "hidden sm:inline-flex items-center justify-center ml-2 gap-1",
+                    "h-10 px-4 rounded-xl text-sm font-semibold",
+                    "bg-primary text-primary-foreground hover:bg-primary/90",
+                    "ambient-shadow cursor-pointer outline-none transition-colors",
+                  )}
                 >
-                  <Icon name="shopping_cart" size={16} className="mr-2 text-primary" />
-                  <div className="flex-1">
-                    <div className="font-medium">POS Retail</div>
-                    <div className="text-[10px] text-muted-foreground">
-                      Hàng đóng gói, bán cho doanh nghiệp
-                    </div>
-                  </div>
-                </DropdownMenuItem>
-                <DropdownMenuItem
-                  onClick={() => {
-                    window.location.href = posFnbUrl();
-                  }}
-                >
-                  <Icon name="coffee" size={16} className="mr-2 text-status-warning" />
-                  <div className="flex-1">
-                    <div className="font-medium">POS FnB</div>
-                    <div className="text-[10px] text-muted-foreground">
-                      Pha chế tại quán
-                    </div>
-                  </div>
-                </DropdownMenuItem>
-                <DropdownMenuItem
-                  onClick={() => {
-                    window.location.href = posFnbUrl("/kds");
-                  }}
-                >
-                  <Icon name="restaurant" size={16} className="mr-2 text-status-success" />
-                  <div className="flex-1">
-                    <div className="font-medium">Màn hình bếp</div>
-                    <div className="text-[10px] text-muted-foreground">
-                      Đầu bếp xem đơn
-                    </div>
-                  </div>
-                </DropdownMenuItem>
-              </DropdownMenuContent>
-            </DropdownMenu>
+                  <Icon name="point_of_sale" size={16} className="mr-1" />
+                  POS
+                  <Icon name="expand_more" size={16} />
+                </DropdownMenuTrigger>
+                <DropdownMenuContent align="end" className="min-w-[200px]">
+                  <DropdownMenuLabel>Chế độ bán hàng</DropdownMenuLabel>
+                  <DropdownMenuSeparator />
+                  {canSeeRetailPos && (
+                    <DropdownMenuItem
+                      onClick={() => {
+                        window.location.href = "/pos";
+                      }}
+                    >
+                      <Icon name="shopping_cart" size={16} className="mr-2 text-primary" />
+                      <div className="flex-1">
+                        <div className="font-medium">POS Retail</div>
+                        <div className="text-[10px] text-muted-foreground">
+                          Hàng đóng gói, bán cho doanh nghiệp
+                        </div>
+                      </div>
+                    </DropdownMenuItem>
+                  )}
+                  {canSeeFnbPos && (
+                    <DropdownMenuItem
+                      onClick={() => {
+                        window.location.href = posFnbUrl();
+                      }}
+                    >
+                      <Icon name="coffee" size={16} className="mr-2 text-status-warning" />
+                      <div className="flex-1">
+                        <div className="font-medium">POS FnB</div>
+                        <div className="text-[10px] text-muted-foreground">
+                          Pha chế tại quán
+                        </div>
+                      </div>
+                    </DropdownMenuItem>
+                  )}
+                  {canSeeFnbPos && (
+                    <DropdownMenuItem
+                      onClick={() => {
+                        window.location.href = posFnbUrl("/kds");
+                      }}
+                    >
+                      <Icon name="restaurant" size={16} className="mr-2 text-status-success" />
+                      <div className="flex-1">
+                        <div className="font-medium">Màn hình bếp</div>
+                        <div className="text-[10px] text-muted-foreground">
+                          Đầu bếp xem đơn
+                        </div>
+                      </div>
+                    </DropdownMenuItem>
+                  )}
+                </DropdownMenuContent>
+              </DropdownMenu>
+            )}
           </div>
         </div>
       </header>

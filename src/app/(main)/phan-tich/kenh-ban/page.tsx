@@ -323,7 +323,7 @@ export default function KenhBanPage() {
           >
             {pieData.length > 0 ? (
               <div className="h-64 md:h-80">
-                <ResponsiveContainer width="100%" height="100%">
+                <ResponsiveContainer width="100%" height="100%" minWidth={0} minHeight={0}>
                   <PieChart>
                     <Pie
                       data={pieData}

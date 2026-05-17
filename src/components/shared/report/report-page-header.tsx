@@ -44,6 +44,9 @@ interface ReportPageHeaderProps {
   exportDisabled?: boolean;
   /** Extra actions slot bên phải Export */
   actions?: React.ReactNode;
+  /** Ẩn date range picker — dùng cho báo cáo snapshot (aging, công nợ aging).
+   *  Tránh user hiểu lầm chọn ngày nhưng số không đổi. CEO 16/05/2026. */
+  hideDateRange?: boolean;
 }
 
 export function ReportPageHeader({
@@ -59,6 +62,7 @@ export function ReportPageHeader({
   onExportFull,
   exportDisabled,
   actions,
+  hideDateRange,
 }: ReportPageHeaderProps) {
   const hasExport = !!(onExportView || onExportFull);
   const showSwitch = viewMode != null && onViewModeChange;
@@ -80,12 +84,14 @@ export function ReportPageHeader({
           {showSwitch && (
             <ChartTableSwitch value={viewMode} onChange={onViewModeChange} />
           )}
-          <ReportDateRangePicker
-            preset={preset}
-            range={range}
-            onPresetChange={onPresetChange}
-            onCustomRangeChange={onCustomRangeChange}
-          />
+          {!hideDateRange && (
+            <ReportDateRangePicker
+              preset={preset}
+              range={range}
+              onPresetChange={onPresetChange}
+              onCustomRangeChange={onCustomRangeChange}
+            />
+          )}
           {hasExport && (
             <DropdownMenu>
               <DropdownMenuTrigger

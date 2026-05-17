@@ -522,7 +522,7 @@ export default function KhachHangPage() {
           <ChartCard title="Khách hàng mới theo tháng" subtitle="6 tháng gần nhất">
             {newCustomersMonthly.length > 0 ? (
               <div className="h-64">
-                <ResponsiveContainer width="100%" height="100%">
+                <ResponsiveContainer width="100%" height="100%" minWidth={0} minHeight={0}>
                   <BarChart
                     data={newCustomersMonthly}
                     margin={{ top: 5, right: 10, left: 0, bottom: 0 }}
@@ -561,7 +561,7 @@ export default function KhachHangPage() {
           <ChartCard title="Phân loại khách hàng" subtitle="Theo nhóm khách hàng">
             {customerSegments.length > 0 ? (
               <div className="h-64">
-                <ResponsiveContainer width="100%" height="100%">
+                <ResponsiveContainer width="100%" height="100%" minWidth={0} minHeight={0}>
                   <PieChart>
                     <Pie
                       data={customerSegments}
@@ -638,7 +638,7 @@ export default function KhachHangPage() {
         <ChartCard title="Xếp hạng công nợ khách hàng" subtitle="Top 5 khách hàng có công nợ cao nhất">
           {topDebtors.length > 0 ? (
             <div className="h-64">
-              <ResponsiveContainer width="100%" height="100%">
+              <ResponsiveContainer width="100%" height="100%" minWidth={0} minHeight={0}>
                 <BarChart
                   data={[...topDebtors].reverse()}
                   layout="vertical"

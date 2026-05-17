@@ -2,6 +2,7 @@ import { TopNav } from "@/components/shared/top-nav";
 import { AppSidebar } from "@/components/shared/app-sidebar";
 import { CommandPaletteProvider } from "@/components/shared/command-palette";
 import { MobileBottomNav } from "@/components/shared/mobile-bottom-nav";
+import { DiscountAuditRetry } from "@/components/shared/discount-audit-retry";
 
 export default function MainLayout({
   children,
@@ -23,6 +24,8 @@ export default function MainLayout({
         </main>
       </div>
       <MobileBottomNav />
+      {/* Day 17/05: retry discount audit fail từ localStorage queue */}
+      <DiscountAuditRetry />
     </CommandPaletteProvider>
   );
 }

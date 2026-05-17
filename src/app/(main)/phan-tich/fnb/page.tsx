@@ -335,7 +335,7 @@ export default function FnbAnalyticsPage() {
           {/* Revenue by Hour */}
           <ChartCard title="Doanh thu theo giờ" subtitle="Phân bổ doanh thu trong ngày">
             <div className="h-64">
-              <ResponsiveContainer width="100%" height="100%">
+              <ResponsiveContainer width="100%" height="100%" minWidth={0} minHeight={0}>
                 <BarChart data={hourly.filter((h) => h.revenue > 0 || h.orders > 0)}>
                   <CartesianGrid strokeDasharray="3 3" vertical={false} />
                   <XAxis dataKey="label" tick={{ fontSize: 11 }} />
@@ -350,7 +350,7 @@ export default function FnbAnalyticsPage() {
           {/* Top Menu Items */}
           <ChartCard title="Top món bán chạy" subtitle="Theo doanh thu">
             <div className="h-64">
-              <ResponsiveContainer width="100%" height="100%">
+              <ResponsiveContainer width="100%" height="100%" minWidth={0} minHeight={0}>
                 <BarChart data={menuItems.slice(0, 10)} layout="vertical">
                   <CartesianGrid strokeDasharray="3 3" horizontal={false} />
                   <XAxis type="number" tickFormatter={formatChartCurrency} tick={{ fontSize: 11 }} />

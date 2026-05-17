@@ -811,7 +811,7 @@ export default function BaoCaoTaiChinhPage() {
               </p>
             ) : (
               <div className="h-72">
-                <ResponsiveContainer width="100%" height="100%">
+                <ResponsiveContainer width="100%" height="100%" minWidth={0} minHeight={0}>
                   <LineChart
                     data={marginTrend}
                     margin={{ top: 5, right: 10, left: 0, bottom: 0 }}
@@ -893,7 +893,7 @@ export default function BaoCaoTaiChinhPage() {
               </p>
             ) : (
               <div className="h-72">
-                <ResponsiveContainer width="100%" height="100%">
+                <ResponsiveContainer width="100%" height="100%" minWidth={0} minHeight={0}>
                   <BarChart
                     data={cogsItems.slice(0, 7)}
                     layout="vertical"

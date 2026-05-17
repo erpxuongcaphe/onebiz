@@ -74,7 +74,8 @@ export function SummaryCard({
   return (
     <div
       className={cn(
-        "border rounded-lg p-2.5 bg-white border-l-2 transition-colors",
+        // Day 8 16/05/2026: mobile fit — padding nhỏ hơn ở 360px, value bớt to để vừa 2 dòng
+        "border rounded-lg p-2 sm:p-2.5 bg-white border-l-2 transition-colors min-w-0",
         // Default tone: subtle primary accent border-l
         !isHighlight && !isDanger && !isWarning && "border-border border-l-primary/40",
         isHighlight && "border-primary/30 border-l-primary bg-primary/5",
@@ -83,18 +84,19 @@ export function SummaryCard({
         className,
       )}
     >
-      <div className="flex items-center gap-2 text-xs text-muted-foreground mb-0.5">
+      <div className="flex items-center gap-2 text-[11px] sm:text-xs text-muted-foreground mb-0.5">
         {iconNode}
         <span className="truncate">{label}</span>
         {typeof count === "number" && (
-          <span className="ml-auto text-xs font-medium text-muted-foreground tabular-nums">
+          <span className="ml-auto text-[11px] sm:text-xs font-medium text-muted-foreground tabular-nums">
             {formatNumber(count)}
           </span>
         )}
       </div>
       <div
         className={cn(
-          "text-lg font-bold tabular-nums",
+          // Day 8 16/05/2026: mobile = text-base, desktop = text-lg
+          "text-base sm:text-lg font-bold tabular-nums truncate",
           isHighlight && "text-primary",
           isDanger && "text-destructive",
           isWarning && "text-status-warning",
@@ -104,7 +106,11 @@ export function SummaryCard({
       >
         {value}
       </div>
-      {hint && <div className="text-xs text-muted-foreground mt-0.5">{hint}</div>}
+      {hint && (
+        <div className="text-[11px] sm:text-xs text-muted-foreground mt-0.5 truncate">
+          {hint}
+        </div>
+      )}
     </div>
   );
 }

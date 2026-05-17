@@ -405,7 +405,7 @@ export default function HangHoaPage() {
                   Chưa có dữ liệu doanh thu sản phẩm
                 </div>
               ) : (
-                <ResponsiveContainer width="100%" height="100%">
+                <ResponsiveContainer width="100%" height="100%" minWidth={0} minHeight={0}>
                   <BarChart
                     data={[...topProducts].reverse()}
                     layout="vertical"
@@ -451,7 +451,7 @@ export default function HangHoaPage() {
                   Chưa có dữ liệu nhóm hàng
                 </div>
               ) : (
-                <ResponsiveContainer width="100%" height="100%">
+                <ResponsiveContainer width="100%" height="100%" minWidth={0} minHeight={0}>
                   <PieChart>
                     <Pie
                       data={categories}
@@ -497,7 +497,7 @@ export default function HangHoaPage() {
                 Chưa có dữ liệu xuất nhập kho
               </div>
             ) : (
-              <ResponsiveContainer width="100%" height="100%">
+              <ResponsiveContainer width="100%" height="100%" minWidth={0} minHeight={0}>
                 <LineChart
                   data={movements}
                   margin={{ top: 5, right: 10, left: 0, bottom: 0 }}

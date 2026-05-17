@@ -27,7 +27,8 @@ const APPS: AppTile[] = [
   { label: "Mua hàng", href: "/hang-hoa/dat-hang-nhap", iconName: "add_box" },
   { label: "Sản phẩm", href: "/hang-hoa", iconName: "inventory_2" },
   { label: "Báo cáo", href: "/phan-tich", iconName: "analytics" },
-  { label: "Bán online", href: "/ban-online", iconName: "language" },
+  // Day 4 16/05/2026: ẩn "Bán online" — mock data, bật lại khi có nguồn thật
+  // { label: "Bán online", href: "/ban-online", iconName: "language" },
   { label: "POS", href: "/pos", iconName: "point_of_sale" },
   { label: "Cài đặt", href: "/cai-dat", iconName: "settings" },
 ];

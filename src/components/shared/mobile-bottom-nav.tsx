@@ -62,7 +62,8 @@ const MORE_ITEMS: {
       { label: "Sản phẩm", href: "/hang-hoa", icon: "inventory_2" },
       { label: "Khách hàng", href: "/khach-hang", icon: "group" },
       { label: "Mua hàng", href: "/hang-hoa/dat-hang-nhap", icon: "add_box" },
-      { label: "Bán online", href: "/ban-online", icon: "public" },
+      // Day 4 16/05/2026: ẩn "Bán online" — mock data
+      // { label: "Bán online", href: "/ban-online", icon: "public" },
     ],
   },
   {

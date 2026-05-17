@@ -225,8 +225,9 @@ export default function TongQuanPage() {
 
       {/* KPI Cards + Inventory Turnover — Stitch spec: rounded-xl, padding rộng,
           icon bg-primary-fixed text-primary, uppercase label widest tracking,
-          headline font + bold number. */}
-      <div className="grid grid-cols-2 lg:grid-cols-5 gap-3">
+          headline font + bold number.
+          Day 8 16/05/2026: mobile = 1 cột (360px chật cho 2 cột); sm+ = 2 cột; lg+ = 5 cột */}
+      <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-5 gap-3">
         {/* Skeleton khi kpis chưa load để UI không nhảy — 4 card + 1 turnover bên dưới. */}
         {kpiLoading && !kpis &&
           Array.from({ length: 4 }).map((_, i) => (
@@ -260,7 +261,7 @@ export default function TongQuanPage() {
                   <Icon name={kpi.icon} size={16} className="text-primary" />
                 </div>
               </div>
-              <p className="font-heading text-2xl font-extrabold text-foreground leading-tight">
+              <p className="font-heading text-xl sm:text-2xl font-extrabold text-foreground leading-tight truncate">
                 {kpi.isCurrency ? formatCurrency(kpi.value) : formatNumber(kpi.value)}
               </p>
               <p className="mt-1.5 text-xs text-muted-foreground">
