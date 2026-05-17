@@ -56,9 +56,12 @@ import {
   duplicateProduct,
   moveProductSortOrder,
   restoreProduct,
+  forceDeleteProduct,
 } from "@/lib/services";
 import { SummaryCard } from "@/components/shared/summary-card";
 import { useToast } from "@/lib/contexts";
+import { useAuth } from "@/lib/contexts/auth-context";
+import { isOwnerRole } from "@/lib/types/auth";
 import { usePermissions } from "@/lib/permissions/use-permission";
 import { PERMISSIONS } from "@/lib/permissions/constants";
 import { OtpApprovalDialog } from "@/components/shared/dialogs/otp-approval-dialog";
@@ -301,6 +304,11 @@ export default function HangHoaPage() {
   const [deletingProduct, setDeletingProduct] = useState<Product | null>(null);
   const [deleteLoading, setDeleteLoading] = useState(false);
 
+  // Day 17/05/2026 (00092): Hard delete state — chỉ owner, chỉ SP đã ngừng KD
+  const [hardDeleteConfirmOpen, setHardDeleteConfirmOpen] = useState(false);
+  const [hardDeletingProduct, setHardDeletingProduct] = useState<Product | null>(null);
+  const [hardDeleteLoading, setHardDeleteLoading] = useState(false);
+
   // Bulk action state — phase 2: wire backend mutations
   const { toast } = useToast();
 
@@ -314,6 +322,10 @@ export default function HangHoaPage() {
   // Sprint A.2 (CEO 12/05): cashier KHÔNG được thấy giá vốn / lợi nhuận
   // → leak business KPI. Gate cả column trong DataTable + detail panel.
   const canViewCost = hasPermission(PERMISSIONS.PRODUCTS_VIEW_COST);
+
+  // Day 17/05/2026 (00092): chỉ owner mới được xoá hẳn SP (hard delete)
+  const { user } = useAuth();
+  const isOwner = isOwnerRole(user?.role);
 
   // OTP delegation state — khi cashier không có quyền nhưng vẫn muốn xoá
   const [otpDialogOpen, setOtpDialogOpen] = useState(false);
@@ -1222,6 +1234,19 @@ export default function HangHoaPage() {
                 },
                 separator: true,
               });
+              // Day 17/05/2026 (00092): nút "Xoá hẳn" chỉ hiện cho owner
+              // + chỉ trên SP đã ngừng KD. Pattern A — ERP best practice.
+              if (isOwner) {
+                actions.push({
+                  label: "Xoá hẳn",
+                  icon: <Icon name="delete_forever" size={16} />,
+                  onClick: () => {
+                    setHardDeletingProduct(row);
+                    setHardDeleteConfirmOpen(true);
+                  },
+                  variant: "destructive" as const,
+                });
+              }
             } else {
               actions.push({
                 label: "Ngừng kinh doanh",
@@ -1299,6 +1324,95 @@ export default function HangHoaPage() {
                 : canDeleteProduct
                   ? "Ngừng kinh doanh"
                   : "Xin OTP duyệt"}
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
+      {/* --- Day 17/05/2026 (00092): Hard delete confirm dialog --- */}
+      {/* Chỉ owner thấy nút "Xoá hẳn" → dialog cảnh báo đỏ → RPC check
+          17 bảng FK → 0 refs → DELETE; có refs → reject tiếng Việt */}
+      <Dialog
+        open={hardDeleteConfirmOpen}
+        onOpenChange={(o) => {
+          setHardDeleteConfirmOpen(o);
+          if (!o) setHardDeletingProduct(null);
+        }}
+      >
+        <DialogContent className="sm:max-w-md">
+          <DialogHeader>
+            <DialogTitle className="text-status-danger">
+              <Icon name="warning" size={20} className="inline-block mr-2 align-text-bottom" />
+              Xoá hẳn sản phẩm khỏi database?
+            </DialogTitle>
+            <DialogDescription className="space-y-2">
+              <span className="block">
+                Sản phẩm <strong>{hardDeletingProduct?.code}</strong> —{" "}
+                <strong>{hardDeletingProduct?.name}</strong> sẽ bị
+                <b className="text-status-danger"> xoá vĩnh viễn </b>
+                khỏi database. <b>Không thể khôi phục.</b>
+              </span>
+              <span className="block rounded-md bg-status-danger/10 border border-status-danger/30 p-2.5 text-xs text-foreground">
+                <Icon name="info" size={14} className="inline-block mr-1 text-status-danger" />
+                Hệ thống tự kiểm tra 17 bảng FK trước khi xoá. Nếu SP từng có{" "}
+                <b>giao dịch nào</b> (kho, hoá đơn, kiểm kê, SX, ...) → server sẽ{" "}
+                <b>chặn xoá</b> để bảo toàn lịch sử kế toán.
+              </span>
+              <span className="block text-xs text-on-surface-variant">
+                Chỉ nên dùng cho SP test / tạo nhầm / chưa từng dùng.
+              </span>
+            </DialogDescription>
+          </DialogHeader>
+          <DialogFooter>
+            <Button
+              variant="outline"
+              disabled={hardDeleteLoading}
+              onClick={() => {
+                setHardDeleteConfirmOpen(false);
+                setHardDeletingProduct(null);
+              }}
+            >
+              Huỷ
+            </Button>
+            <Button
+              variant="destructive"
+              disabled={hardDeleteLoading}
+              onClick={async () => {
+                if (!hardDeletingProduct) return;
+                const target = hardDeletingProduct;
+                setHardDeleteLoading(true);
+                try {
+                  await forceDeleteProduct(target.id);
+                  toast({
+                    variant: "success",
+                    title: "Đã xoá hẳn sản phẩm",
+                    description: `${target.code} — ${target.name} đã bị xoá vĩnh viễn khỏi database.`,
+                  });
+                  setHardDeleteConfirmOpen(false);
+                  setHardDeletingProduct(null);
+                  fetchData();
+                } catch (err) {
+                  const message = err instanceof Error ? err.message : "Lỗi không xác định";
+                  // Parse lỗi server thành tiếng Việt thân thiện
+                  let friendly = message;
+                  if (message.includes("PRODUCT_HAS_REFS")) {
+                    friendly = "SP còn lịch sử giao dịch (kho, hoá đơn, kiểm kê...). Không thể xoá hẳn — chỉ có thể giữ ngừng kinh doanh.";
+                  } else if (message.includes("PRODUCT_STILL_ACTIVE")) {
+                    friendly = "SP đang hoạt động. Vui lòng ngừng kinh doanh trước, sau đó mới xoá hẳn.";
+                  } else if (message.includes("PERMISSION_DENIED")) {
+                    friendly = "Chỉ chủ sở hữu (owner) mới được xoá hẳn sản phẩm.";
+                  }
+                  toast({
+                    variant: "error",
+                    title: "Không xoá hẳn được",
+                    description: friendly,
+                  });
+                } finally {
+                  setHardDeleteLoading(false);
+                }
+              }}
+            >
+              {hardDeleteLoading ? "Đang xoá..." : "Xoá hẳn vĩnh viễn"}
             </Button>
           </DialogFooter>
         </DialogContent>

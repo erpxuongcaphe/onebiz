@@ -950,6 +950,98 @@ export async function restoreProduct(id: string): Promise<void> {
 }
 
 // ============================================================
+// XOÁ HẲN (Hard Delete) — chỉ owner + chỉ SP đã ngừng KD + 0 refs
+// Migration 00092 (CEO 17/05/2026): force_delete_product_atomic
+// Pattern A — ERP best practice (SAP/Odoo/NetSuite):
+//   1. Default mọi user: soft delete (an toàn)
+//   2. Owner only: xoá hẳn qua RPC này, check 17 bảng FK pre-flight
+// ============================================================
+
+/**
+ * Xoá HẲN 1 SP đã ngừng kinh doanh. Server check:
+ * - User role = 'owner'
+ * - SP có is_active = false (đã ngừng KD trước)
+ * - 0 refs trên 17 bảng FK (stock_movements, invoice_items, ...)
+ * Nếu fail bất kỳ điều kiện nào → throw lỗi tiếng Việt cụ thể.
+ */
+export async function forceDeleteProduct(id: string): Promise<void> {
+  const supabase = getClient();
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  const { data, error } = await (supabase.rpc as any)(
+    "force_delete_product_atomic",
+    { p_product_id: id },
+  );
+
+  if (error) {
+    if (isRpcUnavailable(error)) {
+      throw new Error(
+        "Chưa có RPC force_delete_product_atomic. Vui lòng chạy migration 00092 trước.",
+      );
+    }
+    handleError(error, "forceDeleteProduct");
+  }
+
+  if (!data || !(data as { success?: boolean }).success) {
+    throw new Error("Server không trả kết quả xoá hẳn SP hợp lệ.");
+  }
+}
+
+export interface BulkForceDeleteResult {
+  /** Số SP đã xoá hẳn thành công */
+  count: number;
+  /** Tổng yêu cầu */
+  total: number;
+  /** Các SP không xoá hẳn được + lý do */
+  failed: BulkDeleteFailedItem[];
+}
+
+/**
+ * Xoá HẲN nhiều SP cùng lúc. Mỗi SP đi qua force_delete_product_atomic riêng
+ * — giữ pre-check 17 bảng FK + audit log + permission check.
+ */
+export async function bulkForceDeleteProducts(
+  ids: string[],
+): Promise<BulkForceDeleteResult> {
+  if (ids.length === 0) return { count: 0, total: 0, failed: [] };
+  const supabase = getClient();
+
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  const { data, error } = await (supabase.rpc as any)(
+    "bulk_force_delete_products_atomic",
+    { p_product_ids: ids },
+  );
+
+  if (error) {
+    if (isRpcUnavailable(error)) {
+      throw new Error(
+        "Chưa có RPC bulk_force_delete_products_atomic. Vui lòng chạy migration 00092 trước.",
+      );
+    }
+    handleError(error, "bulkForceDeleteProducts");
+  }
+
+  if (!data || !(data as { success?: boolean }).success) {
+    throw new Error("Server không trả kết quả xoá hẳn SP hợp lệ.");
+  }
+
+  const result = data as {
+    success: boolean;
+    deleted: number;
+    failed: Array<{ product_id: string; reason: string }>;
+    total: number;
+  };
+
+  return {
+    count: result.deleted,
+    total: result.total,
+    failed: (result.failed ?? []).map((f) => ({
+      productId: f.product_id,
+      reason: f.reason,
+    })),
+  };
+}
+
+// ============================================================
 // Sao chép sản phẩm — clone existing product với code mới
 // Sprint UX-1 fix mockup (CEO 04/05/2026): trước đây "Nhân bản" chỉ
 // toast "Đang phát triển". Giờ tạo bản copy thật với code tự động
