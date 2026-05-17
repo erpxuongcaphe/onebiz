@@ -46,6 +46,7 @@ import { exportToExcelFromSchema } from "@/lib/excel";
 import type { ProductImportRow } from "@/lib/excel/schemas";
 import {
   getProducts,
+  getAllMatchingProductIds,
   getProductStats,
   getProductCategoriesAsync,
   getProductBrands,
@@ -334,6 +335,13 @@ export default function HangHoaPage() {
   const [bulkChangePriceOpen, setBulkChangePriceOpen] = useState(false);
   const [bulkDeleteConfirmOpen, setBulkDeleteConfirmOpen] = useState(false);
   const [selectedRowsForBulk, setSelectedRowsForBulk] = useState<Product[]>([]);
+  // Day 17/05/2026: IDs riêng — có thể nhiều hơn selectedRowsForBulk khi user
+  // dùng "Chọn tất cả X SP khớp bộ lọc" (cross-page).
+  const [selectedIdsForBulk, setSelectedIdsForBulk] = useState<string[]>([]);
+  // Derived: số SP thực sự sẽ áp dụng bulk action — ưu tiên ids (cross-page)
+  const bulkSelectedCount = selectedIdsForBulk.length > 0
+    ? selectedIdsForBulk.length
+    : selectedRowsForBulk.length;
   const [bulkLoading, setBulkLoading] = useState(false);
   const [clearSelectionToken, setClearSelectionToken] = useState(0);
 
@@ -463,7 +471,11 @@ export default function HangHoaPage() {
       });
       return;
     }
-    const ids = selectedRowsForBulk.map((p) => p.id);
+    // Day 17/05/2026: dùng selectedIdsForBulk (có thể cross-page) thay vì
+    // chỉ rows trong trang hiện tại.
+    const ids = selectedIdsForBulk.length > 0
+      ? selectedIdsForBulk
+      : selectedRowsForBulk.map((p) => p.id);
     setBulkLoading(true);
     try {
       const { count } = await bulkUpdateCategory(ids, bulkCategoryValue);
@@ -477,7 +489,7 @@ export default function HangHoaPage() {
     } finally {
       setBulkLoading(false);
     }
-  }, [bulkCategoryValue, selectedRowsForBulk, toast, finishBulkSuccess, finishBulkError]);
+  }, [bulkCategoryValue, selectedRowsForBulk, selectedIdsForBulk, toast, finishBulkSuccess, finishBulkError]);
 
   const handleConfirmBulkChangePrice = useCallback(async () => {
     const sell = bulkSellPriceValue.trim();
@@ -508,7 +520,9 @@ export default function HangHoaPage() {
       updates.costPrice = n;
     }
 
-    const ids = selectedRowsForBulk.map((p) => p.id);
+    const ids = selectedIdsForBulk.length > 0
+      ? selectedIdsForBulk
+      : selectedRowsForBulk.map((p) => p.id);
     setBulkLoading(true);
     try {
       const { count } = await bulkUpdatePrice(ids, updates);
@@ -522,7 +536,7 @@ export default function HangHoaPage() {
     } finally {
       setBulkLoading(false);
     }
-  }, [bulkSellPriceValue, bulkCostPriceValue, selectedRowsForBulk, toast, finishBulkSuccess, finishBulkError]);
+  }, [bulkSellPriceValue, bulkCostPriceValue, selectedRowsForBulk, selectedIdsForBulk, toast, finishBulkSuccess, finishBulkError]);
 
   const handleConfirmSingleDelete = useCallback(async () => {
     if (!deletingProduct) return;
@@ -576,7 +590,11 @@ export default function HangHoaPage() {
   }, [otpTargetProduct, toast, fetchData]);
 
   const handleConfirmBulkDelete = useCallback(async () => {
-    const ids = selectedRowsForBulk.map((p) => p.id);
+    // Day 17/05/2026: ưu tiên selectedIdsForBulk (cross-page) — nếu user dùng
+    // "Chọn tất cả X SP khớp bộ lọc" thì ids có thể >> rows trong trang.
+    const ids = selectedIdsForBulk.length > 0
+      ? selectedIdsForBulk
+      : selectedRowsForBulk.map((p) => p.id);
     if (ids.length === 0) return;
     // Bulk delete giữ permission gate cứng — không support OTP flow vì OTP
     // chỉ approve 1 thao tác, không phải N thao tác. Cashier cần xoá nhiều
@@ -641,7 +659,7 @@ export default function HangHoaPage() {
     } finally {
       setBulkLoading(false);
     }
-  }, [selectedRowsForBulk, canDeleteProduct, toast, finishBulkSuccess, finishBulkError]);
+  }, [selectedRowsForBulk, selectedIdsForBulk, canDeleteProduct, toast, finishBulkSuccess, finishBulkError]);
 
   useEffect(() => {
     setPage(0);
@@ -1143,20 +1161,38 @@ export default function HangHoaPage() {
           selectable
           getRowId={(row) => row.id}
           clearSelectionTrigger={clearSelectionToken}
+          onSelectAllMatching={async () => {
+            // Day 17/05/2026: fetch tất cả product IDs khớp filter hiện tại
+            // (kể cả các trang chưa load). Reuse filter logic của getProducts.
+            return getAllMatchingProductIds({
+              search,
+              page: 0,
+              pageSize: 5000,
+              filters: {
+                productType: scope,
+                ...(categoryFilter !== "all" && { category: [categoryFilter] }),
+                ...(stockFilter !== "all" && { stock: stockFilter }),
+                ...(statusFilter !== "all" && { status: statusFilter }),
+                ...(brandFilter !== "all" && { brand: brandFilter }),
+              },
+            });
+          }}
           bulkActions={[
             {
               label: "Đổi nhóm",
               icon: <Icon name="label" size={16} />,
-              onClick: (rows) => {
+              onClick: (rows, ids) => {
                 setSelectedRowsForBulk(rows);
+                setSelectedIdsForBulk(ids);
                 setBulkChangeCategoryOpen(true);
               },
             },
             {
               label: "Đổi giá",
               icon: <Icon name="attach_money" size={16} />,
-              onClick: (rows) => {
+              onClick: (rows, ids) => {
                 setSelectedRowsForBulk(rows);
+                setSelectedIdsForBulk(ids);
                 setBulkChangePriceOpen(true);
               },
             },
@@ -1167,8 +1203,9 @@ export default function HangHoaPage() {
                     label: "Xóa",
                     icon: <Icon name="delete" size={16} />,
                     variant: "destructive" as const,
-                    onClick: (rows: Product[]) => {
+                    onClick: (rows: Product[], ids: string[]) => {
                       setSelectedRowsForBulk(rows);
+                      setSelectedIdsForBulk(ids);
                       setBulkDeleteConfirmOpen(true);
                     },
                   },
@@ -1503,7 +1540,7 @@ export default function HangHoaPage() {
             <DialogTitle>Đổi nhóm hàng</DialogTitle>
             <DialogDescription>
               Bạn đang chọn{" "}
-              <strong>{selectedRowsForBulk.length}</strong> sản phẩm. Chọn
+              <strong>{bulkSelectedCount}</strong> sản phẩm. Chọn
               nhóm hàng mới để gán cho tất cả các sản phẩm này.
             </DialogDescription>
           </DialogHeader>
@@ -1554,7 +1591,7 @@ export default function HangHoaPage() {
           <DialogHeader>
             <DialogTitle>Đổi giá hàng loạt</DialogTitle>
             <DialogDescription>
-              Áp dụng cho <strong>{selectedRowsForBulk.length}</strong> sản
+              Áp dụng cho <strong>{bulkSelectedCount}</strong> sản
               phẩm đã chọn. Để trống ô nào thì giữ nguyên giá trị cũ.
             </DialogDescription>
           </DialogHeader>
@@ -1621,7 +1658,7 @@ export default function HangHoaPage() {
           <DialogHeader>
             <DialogTitle>Ngừng kinh doanh sản phẩm?</DialogTitle>
             <DialogDescription>
-              <strong>{selectedRowsForBulk.length}</strong> sản phẩm sẽ bị
+              <strong>{bulkSelectedCount}</strong> sản phẩm sẽ bị
               ẩn khỏi danh sách + POS + dropdown đặt hàng. <b>Lịch sử kế toán
               giữ nguyên</b> (HĐ, đơn nhập, lịch sử kho vẫn xem được). Có thể
               khôi phục lại bất kỳ lúc nào trong tab &quot;Đã ngừng KD&quot;.
@@ -1634,9 +1671,9 @@ export default function HangHoaPage() {
                   • {p.code} — {p.name}
                 </li>
               ))}
-              {selectedRowsForBulk.length > 8 && (
+              {bulkSelectedCount > 8 && (
                 <li className="text-xs italic">
-                  …và {selectedRowsForBulk.length - 8} sản phẩm khác
+                  …và {bulkSelectedCount - 8} sản phẩm khác
                 </li>
               )}
             </ul>
@@ -1656,7 +1693,7 @@ export default function HangHoaPage() {
             >
               {bulkLoading
                 ? "Đang xử lý..."
-                : `Ngừng kinh doanh ${selectedRowsForBulk.length} sản phẩm`}
+                : `Ngừng kinh doanh ${bulkSelectedCount} sản phẩm`}
             </Button>
           </DialogFooter>
         </DialogContent>

@@ -47,7 +47,17 @@ export interface RowAction<TData> {
 export interface BulkAction<TData> {
   label: string;
   icon?: ReactNode;
-  onClick: (selectedRows: TData[]) => void;
+  /**
+   * onClick — nhận:
+   *  - selectedRows: TData[]  — các row TRONG trang hiện tại đã chọn
+   *  - selectedIds: string[]  — TẤT CẢ row IDs đã chọn (kể cả ngoài trang hiện
+   *                             tại nếu user dùng "Chọn tất cả X SP khớp bộ lọc")
+   *
+   * Trường hợp bulk delete: nên dùng `selectedIds` (không bị giới hạn trang).
+   * Trường hợp cần data đầy đủ (vd: xuất Excel): nếu `selectedIds.length > selectedRows.length`
+   * → user đã chọn cross-page → callback cần tự fetch data theo IDs.
+   */
+  onClick: (selectedRows: TData[], selectedIds: string[]) => void;
   variant?: "default" | "destructive";
 }
 
@@ -87,6 +97,16 @@ interface DataTableProps<TData, TValue> {
    * cột ở tablet. Default `true` — opt-out nếu cell quá rộng / có dialog.
    */
   stickyFirstColumn?: boolean;
+  /**
+   * Day 17/05/2026: Select-all-matching pattern (Gmail/Drive/Stitch). Khi user
+   * tick header checkbox → chọn 15 SP của trang hiện tại + hiện banner "Chọn
+   * tất cả X SP khớp bộ lọc" → user click → callback này được gọi → trả về
+   * mảng IDs của TẤT CẢ SP khớp filter hiện tại (kể cả không có trong page).
+   *
+   * Nếu undefined → banner KHÔNG hiển thị, bulk action chỉ áp dụng cho rows
+   * trong trang hiện tại.
+   */
+  onSelectAllMatching?: () => Promise<string[]>;
 }
 
 /**
@@ -126,9 +146,14 @@ export function DataTable<TData, TValue>({
   getRowId,
   clearSelectionTrigger,
   stickyFirstColumn = true,
+  onSelectAllMatching,
 }: DataTableProps<TData, TValue>) {
   const [sorting, setSorting] = useState<SortingState>([]);
   const [rowSelection, setRowSelection] = useState<RowSelectionState>({});
+  // Day 17/05/2026: Select-all-matching mode — user đã click banner "Chọn tất
+  // cả X SP khớp bộ lọc" → rowSelection chứa cả IDs ngoài trang hiện tại
+  const [allMatchingMode, setAllMatchingMode] = useState(false);
+  const [allMatchingLoading, setAllMatchingLoading] = useState(false);
   const [columnVisibility, setColumnVisibility] = useState<VisibilityState>({});
   const [internalExpanded, setInternalExpanded] = useState<number | null>(null);
 
@@ -236,7 +261,8 @@ export function DataTable<TData, TValue>({
   // Reset selection externally — parent ↑ trigger sau khi bulk action xong
   useEffect(() => {
     if (clearSelectionTrigger === undefined) return;
-    table.toggleAllRowsSelected(false);
+    setRowSelection({});
+    setAllMatchingMode(false);
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [clearSelectionTrigger]);
 
@@ -276,9 +302,20 @@ export function DataTable<TData, TValue>({
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [rowSelection, data]);
 
-  const selectedCount = Object.keys(rowSelection).filter(
-    (key) => rowSelection[key]
-  ).length;
+  // Day 17/05/2026: tất cả IDs đã chọn (kể cả ngoài trang hiện tại nếu user
+  // dùng "Chọn tất cả X SP khớp bộ lọc"). Bulk delete nên ưu tiên dùng list này.
+  const selectedRowIds = useMemo(() => {
+    return Object.keys(rowSelection).filter((key) => rowSelection[key]);
+  }, [rowSelection]);
+
+  const selectedCount = selectedRowIds.length;
+
+  // Reset allMatchingMode khi user uncheck hết
+  useEffect(() => {
+    if (selectedCount === 0 && allMatchingMode) {
+      setAllMatchingMode(false);
+    }
+  }, [selectedCount, allMatchingMode]);
 
   // Toggleable columns (exclude select and actions)
   const toggleableColumns = table
@@ -325,6 +362,71 @@ export function DataTable<TData, TValue>({
               })}
             </DropdownMenuContent>
           </DropdownMenu>
+        </div>
+      )}
+
+      {/* Day 17/05/2026: Select-all-matching banner (Gmail pattern). Hiện khi
+          user tick header → chọn cả trang + tổng còn nhiều SP chưa chọn. */}
+      {selectable && onSelectAllMatching && selectedCount > 0 && total > data.length && (
+        <div className="mx-4 mt-2 mb-1 rounded-lg border border-primary/40 bg-primary/10 px-4 py-2.5 text-sm flex items-center gap-3 flex-wrap">
+          {!allMatchingMode ? (
+            <>
+              <Icon name="info" size={16} className="text-primary shrink-0" />
+              <span className="text-foreground">
+                Đã chọn <b>{selectedCount}</b> SP trên trang này.
+              </span>
+              <button
+                type="button"
+                disabled={allMatchingLoading}
+                className="inline-flex items-center gap-1 rounded-md bg-primary px-3 py-1.5 text-xs font-medium text-primary-foreground hover:bg-primary/90 disabled:opacity-50"
+                onClick={async () => {
+                  if (!onSelectAllMatching) return;
+                  setAllMatchingLoading(true);
+                  try {
+                    const allIds = await onSelectAllMatching();
+                    const newSelection: RowSelectionState = {};
+                    allIds.forEach((id) => {
+                      newSelection[id] = true;
+                    });
+                    setRowSelection(newSelection);
+                    setAllMatchingMode(true);
+                  } finally {
+                    setAllMatchingLoading(false);
+                  }
+                }}
+              >
+                {allMatchingLoading ? (
+                  <>
+                    <Icon name="progress_activity" size={14} className="animate-spin" />
+                    Đang tải...
+                  </>
+                ) : (
+                  <>
+                    <Icon name="done_all" size={14} />
+                    Chọn tất cả {total} SP khớp bộ lọc
+                  </>
+                )}
+              </button>
+            </>
+          ) : (
+            <>
+              <Icon name="done_all" size={16} className="text-primary shrink-0" />
+              <span className="text-foreground">
+                Đã chọn <b>tất cả {selectedCount} SP</b> khớp bộ lọc.
+              </span>
+              <button
+                type="button"
+                className="ml-auto inline-flex items-center gap-1 text-xs text-primary hover:underline"
+                onClick={() => {
+                  setRowSelection({});
+                  setAllMatchingMode(false);
+                }}
+              >
+                <Icon name="close" size={14} />
+                Bỏ chọn
+              </button>
+            </>
+          )}
         </div>
       )}
 
@@ -652,7 +754,7 @@ export function DataTable<TData, TValue>({
                         ? "bg-destructive text-destructive-foreground hover:bg-destructive/90"
                         : "bg-background/15 hover:bg-background/25 text-background"
                     )}
-                    onClick={() => action.onClick(selectedRows)}
+                    onClick={() => action.onClick(selectedRows, selectedRowIds)}
                   >
                     {action.icon && (
                       <span className="[&_svg]:h-4 [&_svg]:w-4">

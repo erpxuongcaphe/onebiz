@@ -100,6 +100,84 @@ export async function getProducts(params: QueryParams): Promise<QueryResult<Prod
 }
 
 /**
+ * Day 17/05/2026: Lấy TẤT CẢ product IDs khớp filter — phục vụ
+ * "Chọn tất cả X SP khớp bộ lọc" trong DataTable (Select-all-matching pattern).
+ *
+ * Reuse logic filter của getProducts nhưng:
+ *  - Chỉ select cột `id` (payload ~36 bytes × N rows)
+ *  - KHÔNG paginate (lấy hết)
+ *  - KHÔNG sort (không cần)
+ *
+ * Với 1000 SP: payload ~36KB — acceptable. Nếu CEO scale 10K+ SP nên thêm
+ * upper limit (`limit(5000)`) + warning UI.
+ */
+export async function getAllMatchingProductIds(params: QueryParams): Promise<string[]> {
+  const supabase = getClient();
+  const tenantId = await getCurrentTenantId();
+
+  let query = supabase
+    .from("products")
+    .select("id")
+    .eq("tenant_id", tenantId);
+
+  // Search
+  if (params.search) {
+    const esc = params.search.replace(/[%_]/g, "\\$&");
+    query = query.or(`name.ilike.%${esc}%,code.ilike.%${esc}%`);
+  }
+
+  // Filter: productType
+  if (params.filters?.productType && params.filters.productType !== "all") {
+    query = query.eq("product_type", params.filters.productType as string);
+  }
+
+  // Filter: channel
+  if (params.filters?.channel && params.filters.channel !== "all") {
+    query = query.eq("channel", params.filters.channel as string);
+  }
+
+  // Filter: category
+  if (params.filters?.category && params.filters.category !== "all") {
+    const cats = Array.isArray(params.filters.category)
+      ? params.filters.category
+      : [params.filters.category];
+    query = query.in("category_id", cats);
+  }
+
+  // Filter: stock
+  if (params.filters?.stock) {
+    const stockFilter = params.filters.stock as string;
+    if (stockFilter === "in_stock") query = query.gt("stock", 0);
+    else if (stockFilter === "out_of_stock") query = query.eq("stock", 0);
+    else if (stockFilter === "low_stock") query = query.gt("stock", 0).lte("stock", 5);
+  }
+
+  // Filter: status (active | inactive)
+  if (params.filters?.status && params.filters.status !== "all") {
+    const isActive = params.filters.status === "active";
+    query = query.eq("is_active", isActive);
+  }
+
+  // Filter: brand
+  if (params.filters?.brand && params.filters.brand !== "all") {
+    const brandFilter = params.filters.brand as string;
+    if (brandFilter === "__no_brand__") {
+      query = query.is("brand", null);
+    } else {
+      query = query.eq("brand", brandFilter);
+    }
+  }
+
+  // Cap 5000 để tránh fetch quá lớn — UI sẽ cảnh báo nếu thực sự > 5000
+  query = query.limit(5000);
+
+  const { data, error } = await query;
+  if (error) handleError(error, "getAllMatchingProductIds");
+
+  return (data ?? []).map((row) => row.id as string);
+}
+
+/**
  * Aggregate stats cho list page Hàng hoá — hiển thị 4 SummaryCard đầu trang.
  *
  * Trả về:
