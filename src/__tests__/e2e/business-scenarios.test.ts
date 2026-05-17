@@ -476,6 +476,16 @@ vi.mock("@/lib/services/supabase/base", () => ({
       if (fn === "increment_product_stock" || fn === "upsert_branch_stock") {
         return { data: null, error: null };
       }
+      // Migration 00074: atomic disposal + internal export
+      if (
+        fn === "apply_disposal_export_atomic" ||
+        fn === "apply_internal_export_atomic"
+      ) {
+        return {
+          data: { success: true, items_processed: 2 },
+          error: null,
+        };
+      }
       return { data: null, error: null };
     }),
   }),
@@ -1299,15 +1309,14 @@ describe("Warehouse Operations", () => {
 
     await completeDisposalExport("de-1");
 
-    // Stock OUT via applyManualStockMovement
-    expect(stockMovementCalls.length).toBe(1);
-    // eslint-disable-next-line @typescript-eslint/no-explicit-any
-    const inputs = (stockMovementCalls[0] as any[])[0];
-    expect(inputs.length).toBe(2);
-    expect(inputs[0].type).toBe("out");
-    expect(inputs[0].quantity).toBe(20);
-    expect(inputs[0].referenceType).toBe("disposal_export");
-    expect(inputs[1].quantity).toBe(50);
+    // Day 1 16/05/2026: refactor sang RPC atomic — assert RPC call
+    const atomicCall = rpcCalls.find(
+      (c) => c.fn === "apply_disposal_export_atomic",
+    );
+    expect(atomicCall).toBeDefined();
+    expect((atomicCall?.params as { p_disposal_id?: string })?.p_disposal_id).toBe(
+      "de-1",
+    );
   });
 
   it("W2: Internal export — stock OUT for internal use", async () => {
@@ -1330,11 +1339,14 @@ describe("Warehouse Operations", () => {
 
     await completeInternalExport("ie-1");
 
-    expect(stockMovementCalls.length).toBe(1);
-    // eslint-disable-next-line @typescript-eslint/no-explicit-any
-    const inputs = (stockMovementCalls[0] as any[])[0];
-    expect(inputs[0].type).toBe("out");
-    expect(inputs[0].referenceType).toBe("internal_export");
+    // Day 1 16/05/2026: refactor sang RPC atomic
+    const atomicCall = rpcCalls.find(
+      (c) => c.fn === "apply_internal_export_atomic",
+    );
+    expect(atomicCall).toBeDefined();
+    expect((atomicCall?.params as { p_export_id?: string })?.p_export_id).toBe(
+      "ie-1",
+    );
   });
 
   it("W3: Stock transfer — source OUT + target IN, net zero on company level", async () => {

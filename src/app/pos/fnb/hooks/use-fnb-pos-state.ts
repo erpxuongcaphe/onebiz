@@ -72,6 +72,8 @@ export interface UseFnbPosStateReturn {
 
   // Discount
   setOrderDiscount: (tabId: string, discount: FnbDiscountInput | undefined) => void;
+  /** Day 3 16/05: lưu otpId + reason cho audit log khi checkout. */
+  attachDiscountAudit: (tabId: string, ctx: { otpId: string; reason: string }) => void;
   orderDiscountAmount: number;
 
   // Sprint POS-FNB-EXT-1 (CEO 08/05): order metadata
@@ -318,11 +320,33 @@ export function useFnbPosState(branchId?: string): UseFnbPosStateReturn {
     (tabId: string, discount: FnbDiscountInput | undefined) => {
       setTabs((prev) =>
         prev.map((t) =>
-          t.id === tabId ? { ...t, orderDiscount: discount } : t
-        )
+          t.id === tabId
+            ? {
+                ...t,
+                orderDiscount: discount,
+                // Clear audit context khi xoá discount (set undefined hoặc value=0)
+                discountAuditCtx:
+                  !discount || discount.value === 0
+                    ? undefined
+                    : t.discountAuditCtx,
+              }
+            : t,
+        ),
       );
     },
-    []
+    [],
+  );
+
+  // Day 3 16/05/2026: lưu otpId + reason để service checkout ghi audit log
+  const attachDiscountAudit = useCallback(
+    (tabId: string, ctx: { otpId: string; reason: string }) => {
+      setTabs((prev) =>
+        prev.map((t) =>
+          t.id === tabId ? { ...t, discountAuditCtx: ctx } : t,
+        ),
+      );
+    },
+    [],
   );
 
   // ── Sprint POS-FNB-EXT-1: Order metadata (note + delivery) ──
@@ -413,6 +437,7 @@ export function useFnbPosState(branchId?: string): UseFnbPosStateReturn {
     removeLine,
     clearCart,
     setOrderDiscount,
+    attachDiscountAudit,
     orderDiscountAmount,
     setOrderNote,
     setDeliveryPlatform,

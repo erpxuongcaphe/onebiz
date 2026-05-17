@@ -164,6 +164,7 @@ export interface FnbRecentInvoice {
   tipAmount: number;
   paymentMethod: string;
   createdAt: string;
+  kitchenOrderId: string | null;
   kitchenOrderNumber: string | null;
   tableName: string | null;
   orderType: string;
@@ -207,10 +208,10 @@ export async function getFnbRecentInvoices(params: {
   // Lookup kitchen orders separately (kitchen_orders.invoice_id → invoices.id)
   const { data: kos } = await supabase
     .from("kitchen_orders")
-    .select("invoice_id, order_number, order_type, table_id, restaurant_tables!kitchen_orders_table_id_fkey(table_number)")
+    .select("id, invoice_id, order_number, order_type, table_id, restaurant_tables!kitchen_orders_table_id_fkey(table_number)")
     .in("invoice_id", invoiceIds);
 
-  const koMap = new Map<string, { orderNumber: string; orderType: string; tableName: string | null }>();
+  const koMap = new Map<string, { id: string; orderNumber: string; orderType: string; tableName: string | null }>();
   (kos ?? []).forEach((ko) => {
     // eslint-disable-next-line @typescript-eslint/no-explicit-any
     const k = ko as any;
@@ -218,6 +219,7 @@ export async function getFnbRecentInvoices(params: {
     const tbl = k.restaurant_tables;
     const tableNumber = Array.isArray(tbl) ? tbl[0]?.table_number : tbl?.table_number;
     koMap.set(k.invoice_id, {
+      id: k.id,
       orderNumber: k.order_number,
       orderType: k.order_type,
       tableName: tableNumber ? `Bàn ${tableNumber}` : null,
@@ -235,6 +237,7 @@ export async function getFnbRecentInvoices(params: {
       tipAmount: Number(row.tip_amount ?? 0),
       paymentMethod: row.payment_method ?? "cash",
       createdAt: row.created_at,
+      kitchenOrderId: ko?.id ?? null,
       kitchenOrderNumber: ko?.orderNumber ?? null,
       tableName: ko?.tableName ?? null,
       orderType: ko?.orderType ?? "takeaway",

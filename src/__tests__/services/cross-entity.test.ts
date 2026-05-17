@@ -84,6 +84,10 @@ vi.mock("@/lib/services/supabase/base", () => ({
       if (fn === "increment_product_stock" || fn === "upsert_branch_stock") {
         return { data: null, error: null };
       }
+      // Migration 00074: atomic disposal + internal export RPC trả { success: true }
+      if (fn === "apply_disposal_export_atomic" || fn === "apply_internal_export_atomic") {
+        return { data: { success: true, items_processed: 2 }, error: null };
+      }
       return { data: null, error: null };
     }),
   }),
@@ -240,35 +244,27 @@ describe("cancelSalesOrder", () => {
 // ========================================
 
 describe("completeDisposalExport", () => {
-  const mockDisposal = { id: "d1", code: "XH001" };
-  const mockDisposalItems = [
-    { id: "di1", product_id: "p1", product_name: "SP A", quantity: 10 },
-    { id: "di2", product_id: "p2", product_name: "SP B", quantity: 5 },
-  ];
-
-  it("applies stock-out for all disposal items", async () => {
-    tableMocks = {
-      disposal_exports: { data: mockDisposal, error: null },
-      disposal_export_items: { data: mockDisposalItems, error: null },
-    };
-
+  // Day 1 16/05/2026: refactor sang RPC apply_disposal_export_atomic
+  // (migration 00074) — test assert RPC được gọi đúng thay vì applyManualStockMovement.
+  it("calls apply_disposal_export_atomic RPC with disposal id", async () => {
     await completeDisposalExport("d1");
 
-    // Should call applyManualStockMovement
-    expect(stockMovementCalls.length).toBe(1);
-    // eslint-disable-next-line @typescript-eslint/no-explicit-any
-    const inputs = (stockMovementCalls[0] as any[])[0];
-    expect(inputs).toHaveLength(2);
-    expect(inputs[0].type).toBe("out");
-    expect(inputs[0].quantity).toBe(10);
-    expect(inputs[0].referenceType).toBe("disposal_export");
-    expect(inputs[1].type).toBe("out");
-    expect(inputs[1].quantity).toBe(5);
+    const atomicCall = rpcCalls.find((c) => c.fn === "apply_disposal_export_atomic");
+    expect(atomicCall).toBeDefined();
+    expect((atomicCall?.params as { p_disposal_id?: string })?.p_disposal_id).toBe("d1");
   });
 
-  it("throws when disposal is already completed", async () => {
-    tableMocks.disposal_exports = { data: null, error: null };
+  it("throws when RPC returns success=false", async () => {
+    // Override mock to return non-success → service throws
+    const baseMock = await import("@/lib/services/supabase/base");
+    const originalGetClient = (baseMock.getClient as unknown) as () => unknown;
+    (baseMock as unknown as { getClient: () => unknown }).getClient = () => ({
+      from: vi.fn(() => createChain({ data: null, error: null })),
+      rpc: vi.fn(() => ({ data: { success: false }, error: null })),
+    });
     await expect(completeDisposalExport("d1")).rejects.toThrow();
+    // Restore
+    (baseMock as unknown as { getClient: () => unknown }).getClient = originalGetClient;
   });
 });
 
@@ -277,31 +273,24 @@ describe("completeDisposalExport", () => {
 // ========================================
 
 describe("completeInternalExport", () => {
-  const mockExport = { id: "ie1", code: "XNB001" };
-  const mockExportItems = [
-    { id: "iei1", product_id: "p1", product_name: "SP A", quantity: 3 },
-  ];
-
-  it("applies stock-out for all internal export items", async () => {
-    tableMocks = {
-      internal_exports: { data: mockExport, error: null },
-      internal_export_items: { data: mockExportItems, error: null },
-    };
-
+  // Day 1 16/05/2026: refactor sang RPC apply_internal_export_atomic
+  it("calls apply_internal_export_atomic RPC with export id", async () => {
     await completeInternalExport("ie1");
 
-    expect(stockMovementCalls.length).toBe(1);
-    // eslint-disable-next-line @typescript-eslint/no-explicit-any
-    const inputs = (stockMovementCalls[0] as any[])[0];
-    expect(inputs).toHaveLength(1);
-    expect(inputs[0].type).toBe("out");
-    expect(inputs[0].quantity).toBe(3);
-    expect(inputs[0].referenceType).toBe("internal_export");
+    const atomicCall = rpcCalls.find((c) => c.fn === "apply_internal_export_atomic");
+    expect(atomicCall).toBeDefined();
+    expect((atomicCall?.params as { p_export_id?: string })?.p_export_id).toBe("ie1");
   });
 
-  it("throws when already completed", async () => {
-    tableMocks.internal_exports = { data: null, error: null };
+  it("throws when RPC returns success=false", async () => {
+    const baseMock = await import("@/lib/services/supabase/base");
+    const originalGetClient = (baseMock.getClient as unknown) as () => unknown;
+    (baseMock as unknown as { getClient: () => unknown }).getClient = () => ({
+      from: vi.fn(() => createChain({ data: null, error: null })),
+      rpc: vi.fn(() => ({ data: { success: false }, error: null })),
+    });
     await expect(completeInternalExport("ie1")).rejects.toThrow();
+    (baseMock as unknown as { getClient: () => unknown }).getClient = originalGetClient;
   });
 });
 

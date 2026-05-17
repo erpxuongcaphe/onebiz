@@ -9,6 +9,13 @@
       ]
     },
     {
+      "source": "/sw-manager.js",
+      "headers": [
+        { "key": "Cache-Control", "value": "no-cache" },
+        { "key": "Service-Worker-Allowed", "value": "/" }
+      ]
+    },
+    {
       "source": "/manifest-fnb.json",
       "headers": [
         { "key": "Cache-Control", "value": "public, max-age=3600" }
@@ -25,6 +32,16 @@
       "headers": [
         { "key": "Cache-Control", "value": "public, max-age=3600" }
       ]
+    }
+  ],
+  "crons": [
+    {
+      "path": "/api/cron/stock-reconciliation",
+      "schedule": "0 19 * * *"
+    },
+    {
+      "path": "/api/cron/end-of-day",
+      "schedule": "59 16 * * *"
     }
   ]
 }

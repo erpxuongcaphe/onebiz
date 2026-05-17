@@ -19,9 +19,12 @@ function createChain() {
 
 const mockChain = createChain();
 const mockFrom = vi.fn(() => mockChain);
+// Day 2 16/05/2026: deleteSupplier giờ gọi RPC delete_supplier_atomic
+// (migration 00075) — mock luôn trả success.
+const mockRpc = vi.fn();
 
 vi.mock("@/lib/services/supabase/base", () => ({
-  getClient: () => ({ from: mockFrom }),
+  getClient: () => ({ from: mockFrom, rpc: mockRpc }),
   getPaginationRange: (p: { page: number; pageSize: number }) => ({
     from: p.page * p.pageSize,
     to: p.page * p.pageSize + p.pageSize - 1,
@@ -91,20 +94,40 @@ describe("updateSupplier", () => {
 });
 
 describe("deleteSupplier", () => {
-  beforeEach(() => vi.clearAllMocks());
+  beforeEach(() => {
+    vi.clearAllMocks();
+  });
 
-  it("deletes a supplier by id", async () => {
-    // Service giờ chain 2 .eq() — tenant_id rồi id. Queue 2 returns:
-    // first eq trả chain (cho phép chain tiếp), second eq trả error null.
-    (mockChain.eq as ReturnType<typeof vi.fn>)
-      .mockReturnValueOnce(mockChain)
-      .mockReturnValueOnce({ error: null });
+  it("calls delete_supplier_atomic RPC", async () => {
+    mockRpc.mockResolvedValueOnce({ data: { success: true }, error: null });
 
     await deleteSupplier("s-1");
 
-    expect(mockFrom).toHaveBeenCalledWith("suppliers");
-    expect(mockChain.delete).toHaveBeenCalled();
-    expect(mockChain.eq).toHaveBeenCalledWith("tenant_id", "tenant-test-1");
-    expect(mockChain.eq).toHaveBeenCalledWith("id", "s-1");
+    expect(mockRpc).toHaveBeenCalledWith("delete_supplier_atomic", {
+      p_supplier_id: "s-1",
+    });
+  });
+
+  it("surfaces SUPPLIER_HAS_PURCHASE_ORDERS error with friendly message", async () => {
+    mockRpc.mockResolvedValueOnce({
+      data: null,
+      error: {
+        message:
+          'SUPPLIER_HAS_PURCHASE_ORDERS: NCC "X" có 3 đơn nhập liên quan — không thể xoá.',
+      },
+    });
+
+    await expect(deleteSupplier("s-1")).rejects.toThrow(/đơn nhập/);
+  });
+
+  it("surfaces SUPPLIER_HAS_PRODUCTS error", async () => {
+    mockRpc.mockResolvedValueOnce({
+      data: null,
+      error: {
+        message: 'SUPPLIER_HAS_PRODUCTS: NCC "X" đang là NCC mặc định của 2 sản phẩm',
+      },
+    });
+
+    await expect(deleteSupplier("s-1")).rejects.toThrow(/sản phẩm/);
   });
 });

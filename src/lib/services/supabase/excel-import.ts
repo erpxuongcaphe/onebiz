@@ -168,18 +168,41 @@ export async function bulkImportCustomers(
       groupId = found;
     }
 
+    // Day 17/05: auto-compose address từ 5 fields structured nếu có,
+    // fallback row.address (legacy text) nếu không nhập structured.
+    const composed = [
+      row.houseNumber,
+      row.quarter,
+      row.ward,
+      row.province,
+      row.country,
+    ]
+      .filter((s) => s && s.trim().length > 0)
+      .join(", ");
+
     const { error } = await supabase.from("customers").insert({
       tenant_id: tenantId,
       code: row.code,
       name: row.name,
       phone: row.phone ?? null,
       email: row.email ?? null,
-      address: row.address ?? null,
+      address: composed || row.address || null,
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      house_number: row.houseNumber ?? null,
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      quarter: row.quarter ?? null,
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      ward: row.ward ?? null,
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      province: row.province ?? null,
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      country: row.country ?? null,
       customer_type: row.customerType,
       gender: row.gender ?? null,
       group_id: groupId,
       is_active: row.isActive ?? true,
-    });
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    } as any);
     if (error) throw new Error(error.message);
   });
 }
@@ -195,17 +218,39 @@ export async function bulkImportSuppliers(
   const tenantId = await getCurrentTenantId();
 
   return runBulk(rows, async (row) => {
+    // Day 17/05: auto-compose address từ 5 fields structured
+    const composed = [
+      row.houseNumber,
+      row.quarter,
+      row.ward,
+      row.province,
+      row.country,
+    ]
+      .filter((s) => s && s.trim().length > 0)
+      .join(", ");
+
     const { error } = await supabase.from("suppliers").insert({
       tenant_id: tenantId,
       code: row.code,
       name: row.name,
       phone: row.phone ?? null,
       email: row.email ?? null,
-      address: row.address ?? null,
+      address: composed || row.address || null,
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      house_number: row.houseNumber ?? null,
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      quarter: row.quarter ?? null,
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      ward: row.ward ?? null,
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      province: row.province ?? null,
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      country: row.country ?? null,
       tax_code: row.taxCode ?? null,
       note: row.note ?? null,
       is_active: row.isActive ?? true,
-    });
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    } as any);
     if (error) throw new Error(error.message);
   });
 }

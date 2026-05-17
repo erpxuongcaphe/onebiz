@@ -250,6 +250,9 @@ export async function voidFnbInvoice(input: {
   branchId: string;
   /** Nếu hoá đơn void trong 1 ca đang mở → gắn phiếu chi hoàn tiền vào ca đó */
   shiftId?: string | null;
+  /** Day 17/05/2026: OTP duyệt — server verify trong RPC fnb_void_invoice_atomic.
+   *  Null = cashier có quyền pos_fnb.void_paid_bill / pos_fnb.void. */
+  otpId?: string | null;
 }): Promise<void> {
   const supabase = getClient();
 
@@ -265,6 +268,7 @@ export async function voidFnbInvoice(input: {
       p_tenant_id: input.tenantId,
       p_branch_id: input.branchId,
       p_shift_id: input.shiftId ?? null,
+      p_otp_id: input.otpId ?? null,
     },
   );
 

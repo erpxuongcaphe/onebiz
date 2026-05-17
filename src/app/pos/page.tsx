@@ -27,6 +27,7 @@ import {
   deleteDraftOrder,
   completeDraftOrder,
   getCurrentContext,
+  recordDiscountAudit,
   type PosCheckoutInput,
   type PosCheckoutItem,
   type DraftOrderSummary,
@@ -1472,6 +1473,32 @@ function PosPageInner() {
         isOfflineCheckout = !!result.isOffline;
       }
 
+      // Day 3 16/05/2026: audit log discount manual (sau OTP duyệt)
+      // Best-effort: nếu fail không block checkout. Skip offline (sync sau).
+      if (
+        !isOfflineCheckout &&
+        invoiceId &&
+        invoiceCode &&
+        state.discountAuditCtx &&
+        state.orderDiscountAmount > 0
+      ) {
+        const auditCtx = state.discountAuditCtx;
+        const subtotal = state.subtotal;
+        const percent =
+          subtotal > 0 ? (state.orderDiscountAmount / subtotal) * 100 : 0;
+        recordDiscountAudit({
+          invoiceId,
+          invoiceCode,
+          invoiceTotal: state.total,
+          discountAmount: state.orderDiscountAmount,
+          discountPercent: Math.round(percent * 100) / 100,
+          reason: auditCtx.reason,
+          otpId: auditCtx.otpId,
+        }).catch((err) => console.warn("[POS] recordDiscountAudit:", err));
+        // Reset context để discount tiếp theo cần xin OTP mới
+        state.setDiscountAuditCtx(null);
+      }
+
       // ─── Credit excess (CEO 04/05) ───
       // Nếu cashier chọn "Ghi công nợ" với tiền thừa → adjust customer.debt
       // -= excess. Sau invoice complete để có invoiceCode log audit.
@@ -2879,10 +2906,13 @@ function PosPageInner() {
         open={discountOtpOpen}
         onOpenChange={setDiscountOtpOpen}
         actionCode={OTP_ACTION_CODES.FNB_DISCOUNT_OVERRIDE}
+        requireReason
         contextLabel="Cashier yêu cầu giảm giá thủ công cho bill này"
-        onApproved={() => {
+        onApproved={(verified, reason) => {
           pendingApprovalRef.current?.();
           pendingApprovalRef.current = null;
+          // Day 3 16/05: lưu OTP context để recordDiscountAudit gắn vào audit log
+          state.setDiscountAuditCtx({ otpId: verified.otpId, reason });
           toast({
             title: "Đã duyệt qua OTP",
             description: "Giảm giá đã được áp dụng (audit log lưu manager duyệt).",

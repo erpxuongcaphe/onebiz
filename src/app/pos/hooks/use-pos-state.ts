@@ -123,6 +123,12 @@ export function usePosState() {
     mode: "amount",
     value: 0,
   });
+  // Day 3 16/05/2026: Track OTP context khi cashier xin duyệt discount manual.
+  // → service recordDiscountAudit ghi audit_log với link tới manager_otps row.
+  const [discountAuditCtx, setDiscountAuditCtx] = useState<{
+    otpId: string;
+    reason: string;
+  } | null>(null);
   const [paymentBreakdown, setPaymentBreakdown] = useState<PaymentBreakdownItem[]>([
     { method: "cash", amount: 0 },
     { method: "transfer", amount: 0 },
@@ -404,6 +410,8 @@ export function usePosState() {
     setPaid,
     setPaymentBreakdown,
     setOrderDiscount,
+    discountAuditCtx,
+    setDiscountAuditCtx,
     setNote,
     setSellingMode,
     setDeliveryInfo,

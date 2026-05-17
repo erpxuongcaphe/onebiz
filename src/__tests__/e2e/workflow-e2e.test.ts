@@ -378,6 +378,13 @@ vi.mock("@/lib/services/supabase/base", () => ({
       if (fn === "increment_product_stock" || fn === "upsert_branch_stock") {
         return { data: null, error: null };
       }
+      // Migration 00074: atomic disposal + internal export
+      if (
+        fn === "apply_disposal_export_atomic" ||
+        fn === "apply_internal_export_atomic"
+      ) {
+        return { data: { success: true, items_processed: 2 }, error: null };
+      }
       return { data: null, error: null };
     }),
   }),
@@ -945,13 +952,14 @@ describe("Flow E: Disposal & Internal Export → Stock OUT", () => {
 
     await completeDisposalExport("de-1");
 
-    expect(stockMovementCalls.length).toBe(1);
-    // eslint-disable-next-line @typescript-eslint/no-explicit-any
-    const inputs = (stockMovementCalls[0] as any[])[0];
-    expect(inputs).toHaveLength(2);
-    expect(inputs[0].type).toBe("out");
-    expect(inputs[0].referenceType).toBe("disposal_export");
-    expect(inputs[1].type).toBe("out");
+    // Day 1 16/05/2026: atomic RPC pattern
+    const atomicCall = rpcCalls.find(
+      (c) => c.fn === "apply_disposal_export_atomic",
+    );
+    expect(atomicCall).toBeDefined();
+    expect((atomicCall?.params as { p_disposal_id?: string })?.p_disposal_id).toBe(
+      "de-1",
+    );
   });
 
   it("internal export applies stock out", async () => {
@@ -974,11 +982,14 @@ describe("Flow E: Disposal & Internal Export → Stock OUT", () => {
 
     await completeInternalExport("ie-1");
 
-    expect(stockMovementCalls.length).toBe(1);
-    // eslint-disable-next-line @typescript-eslint/no-explicit-any
-    const inputs = (stockMovementCalls[0] as any[])[0];
-    expect(inputs[0].type).toBe("out");
-    expect(inputs[0].referenceType).toBe("internal_export");
+    // Day 1 16/05/2026: atomic RPC pattern
+    const atomicCall = rpcCalls.find(
+      (c) => c.fn === "apply_internal_export_atomic",
+    );
+    expect(atomicCall).toBeDefined();
+    expect((atomicCall?.params as { p_export_id?: string })?.p_export_id).toBe(
+      "ie-1",
+    );
   });
 });
 

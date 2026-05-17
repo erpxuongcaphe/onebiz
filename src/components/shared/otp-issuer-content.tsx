@@ -19,6 +19,7 @@ import { Badge } from "@/components/ui/badge";
 import { useAuth, useToast } from "@/lib/contexts";
 import { usePermissions } from "@/lib/permissions/use-permission";
 import { PERMISSIONS } from "@/lib/permissions/constants";
+import { formatDate } from "@/lib/format";
 import {
   issueManagerOtp,
   getRecentManagerOtps,
@@ -128,6 +129,11 @@ export function OtpIssuerContent({ maxWidth = "max-w-2xl" }: OtpIssuerContentPro
   const [selectedActionCode, setSelectedActionCode] = useState<OtpActionCode>(
     OTP_ACTION_CODES.FNB_CANCEL_UNPAID_BILL,
   );
+  // Day 17/05/2026: bind OTP với mã hoá đơn / mã đơn bếp cụ thể.
+  // Cashier đọc mã qua điện thoại → manager nhập trước khi cấp OTP.
+  // Server resolve mã → entity_id, RPC verify strict bind đúng target.
+  const [targetInvoiceCode, setTargetInvoiceCode] = useState("");
+  const [targetKitchenOrderNumber, setTargetKitchenOrderNumber] = useState("");
   const [issuedOtp, setIssuedOtp] = useState<IssuedOtp | null>(null);
   const [issuing, setIssuing] = useState(false);
   const [recent, setRecent] = useState<RecentManagerOtp[]>([]);
@@ -152,6 +158,23 @@ export function OtpIssuerContent({ maxWidth = "max-w-2xl" }: OtpIssuerContentPro
   const selectedAction = ACTION_CARDS.find((a) => a.code === selectedActionCode)!;
   const canIssueSelected = hasPermission(selectedAction.requiredPermission);
 
+  // Day 17/05: action nào cần input target để chống OTP "vạn năng"
+  const requiresInvoiceCode =
+    selectedActionCode === OTP_ACTION_CODES.FNB_VOID_PAID_BILL ||
+    selectedActionCode === OTP_ACTION_CODES.FNB_DISCOUNT_OVERRIDE;
+  const requiresKitchenOrderNumber =
+    selectedActionCode === OTP_ACTION_CODES.FNB_CANCEL_UNPAID_BILL ||
+    selectedActionCode === OTP_ACTION_CODES.FNB_CANCEL_UNPAID_ITEM ||
+    selectedActionCode === OTP_ACTION_CODES.FNB_EDIT_SENT_ORDER;
+
+  // Reset target inputs khi đổi action
+  const handleActionChange = (next: OtpActionCode) => {
+    setSelectedActionCode(next);
+    setTargetInvoiceCode("");
+    setTargetKitchenOrderNumber("");
+    setIssuedOtp(null);
+  };
+
   const handleIssue = async () => {
     if (!canIssueSelected) {
       toast({
@@ -161,9 +184,33 @@ export function OtpIssuerContent({ maxWidth = "max-w-2xl" }: OtpIssuerContentPro
       });
       return;
     }
+    if (requiresInvoiceCode && !targetInvoiceCode.trim()) {
+      toast({
+        variant: "warning",
+        title: "Cần nhập mã hoá đơn",
+        description: "Hỏi cashier mã hoá đơn (vd B-00123) trước khi cấp OTP.",
+      });
+      return;
+    }
+    if (requiresKitchenOrderNumber && !targetKitchenOrderNumber.trim()) {
+      toast({
+        variant: "warning",
+        title: "Cần nhập mã đơn bếp",
+        description: "Hỏi cashier mã đơn bếp (vd KB-0042) trước khi cấp OTP.",
+      });
+      return;
+    }
     setIssuing(true);
     try {
-      const otp = await issueManagerOtp({ actionCode: selectedActionCode });
+      const otp = await issueManagerOtp({
+        actionCode: selectedActionCode,
+        targetInvoiceCode: requiresInvoiceCode
+          ? targetInvoiceCode.trim()
+          : undefined,
+        targetKitchenOrderNumber: requiresKitchenOrderNumber
+          ? targetKitchenOrderNumber.trim()
+          : undefined,
+      });
       setIssuedOtp(otp);
       loadRecent();
     } catch (err) {
@@ -201,7 +248,7 @@ export function OtpIssuerContent({ maxWidth = "max-w-2xl" }: OtpIssuerContentPro
           <div className="mt-1.5 space-y-1.5">
             <select
               value={selectedActionCode}
-              onChange={(e) => setSelectedActionCode(e.target.value as OtpActionCode)}
+              onChange={(e) => handleActionChange(e.target.value as OtpActionCode)}
               disabled={issuing}
               className="w-full px-3 py-2.5 rounded-lg border border-border bg-surface text-sm font-medium focus:outline-none focus:ring-2 focus:ring-primary/40 disabled:opacity-60"
             >
@@ -234,6 +281,63 @@ export function OtpIssuerContent({ maxWidth = "max-w-2xl" }: OtpIssuerContentPro
               </div>
             </div>
           </div>
+
+          {/* Day 17/05: Target binding input cho 3 action sensitive */}
+          {(requiresInvoiceCode || requiresKitchenOrderNumber) && (
+            <div className="mt-3 p-3 rounded-lg bg-primary/5 border border-primary/20 space-y-2">
+              <div className="flex items-start gap-2">
+                <Icon
+                  name="info"
+                  size={14}
+                  className="text-primary shrink-0 mt-0.5"
+                />
+                <p className="text-[11px] text-foreground leading-relaxed">
+                  <b>Bảo mật:</b> hỏi cashier đọc mã để OTP chỉ dùng được cho đúng
+                  bill đó — chống reuse OTP cho bill khác.
+                </p>
+              </div>
+              {requiresInvoiceCode && (
+                <div>
+                  <label
+                    htmlFor="target-invoice-code"
+                    className="block text-[11px] font-medium mb-1"
+                  >
+                    Mã hoá đơn <span className="text-status-error">*</span>
+                  </label>
+                  <input
+                    id="target-invoice-code"
+                    type="text"
+                    value={targetInvoiceCode}
+                    onChange={(e) => setTargetInvoiceCode(e.target.value)}
+                    placeholder="VD: B-00123"
+                    disabled={issuing}
+                    className="w-full px-3 py-2 rounded-lg border border-border bg-surface text-sm font-mono focus:outline-none focus:ring-2 focus:ring-primary/40 disabled:opacity-60"
+                  />
+                </div>
+              )}
+              {requiresKitchenOrderNumber && (
+                <div>
+                  <label
+                    htmlFor="target-ko-number"
+                    className="block text-[11px] font-medium mb-1"
+                  >
+                    Mã đơn bếp <span className="text-status-error">*</span>
+                  </label>
+                  <input
+                    id="target-ko-number"
+                    type="text"
+                    value={targetKitchenOrderNumber}
+                    onChange={(e) =>
+                      setTargetKitchenOrderNumber(e.target.value)
+                    }
+                    placeholder="VD: KB-0042"
+                    disabled={issuing}
+                    className="w-full px-3 py-2 rounded-lg border border-border bg-surface text-sm font-mono focus:outline-none focus:ring-2 focus:ring-primary/40 disabled:opacity-60"
+                  />
+                </div>
+              )}
+            </div>
+          )}
 
           {/* Big issue button */}
           <Button
@@ -332,15 +436,14 @@ function RecentOtpRow({ otp }: { otp: RecentManagerOtp }) {
     : otp.isExpired
       ? "Hết hạn"
       : "Đang hiệu lực";
+  // Day 17/05: dùng helper formatDate (đã có time) thay vì toLocaleDateString vi-VN
+  // → đồng nhất Asia/Ho_Chi_Minh TZ + format DD/MM/YYYY HH:mm
   const time = new Date(otp.createdAt);
-  const timeLabel = time.toLocaleTimeString("vi-VN", {
-    hour: "2-digit",
-    minute: "2-digit",
-  });
-  const dateLabel = time.toLocaleDateString("vi-VN", {
-    day: "2-digit",
-    month: "2-digit",
-  });
+  const dt = formatDate(time);
+  // formatDate trả "DD/MM/YYYY HH:mm" → tách lại 2 phần để giữ layout 2 dòng
+  const parts = dt.split(" ");
+  const dateLabel = parts[0] ?? "—";
+  const timeLabel = parts[1] ?? "—";
 
   return (
     <div className="flex items-center gap-3 p-3 hover:bg-surface-container-low transition-colors">

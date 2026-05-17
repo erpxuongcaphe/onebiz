@@ -148,6 +148,12 @@ export interface FnbTabSnapshot {
   customerId?: string;
   customerName: string;
   orderDiscount?: FnbDiscountInput;
+  /**
+   * Day 3 16/05/2026: Khi cashier xin OTP duyệt giảm giá manual → lưu otpId
+   * + reason vào tab để khi checkout, service `recordDiscountAudit` ghi audit
+   * log với link tới manager_otps row chính xác (truy vết được ai duyệt).
+   */
+  discountAuditCtx?: { otpId: string; reason: string };
   lines: FnbOrderLine[];
   /**
    * Sprint POS-FNB-EXT-1 (CEO 08/05): Ghi chú đơn — ghi chú toàn bill

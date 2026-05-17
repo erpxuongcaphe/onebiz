@@ -27,7 +27,7 @@ import {
   verifyStockInvariants,
   type StockInvariantsResult,
 } from "@/lib/services";
-import { formatNumber } from "@/lib/format";
+import { formatNumber, formatDate } from "@/lib/format";
 import { cn } from "@/lib/utils";
 
 export default function StockIntegrityPage() {
@@ -156,7 +156,7 @@ export default function StockIntegrityPage() {
                 {result.allOk ? "Kho toàn vẹn ✅" : "Phát hiện drift ⚠️"}
               </CardTitle>
               <CardDescription>
-                Check vào lúc {new Date(result.verifiedAt).toLocaleString("vi-VN")}{" "}
+                Check vào lúc {formatDate(result.verifiedAt)}{" "}
                 — tolerance {result.tolerance}
               </CardDescription>
             </CardHeader>

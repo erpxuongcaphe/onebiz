@@ -344,3 +344,133 @@ export async function posCheckout(input: PosCheckoutInput): Promise<PosCheckoutR
 
   throw new Error("Server không trả kết quả thanh toán POS hợp lệ.");
 }
+
+// ============================================================
+// Day 3 16/05/2026: record_discount_audit — ghi audit log discount manual
+//
+// Gọi sau khi posCheckout trả invoice_id và discount_amount > 0 (manual giảm
+// giá đã qua OTP duyệt). RPC ghi audit_log.action='discount_applied' kèm:
+//   - invoice_code, invoice_total, discount_amount, discount_percent
+//   - reason (lý do từ OTP), otp_id (link manager_otps), applied_at
+//
+// Best-effort: nếu RPC fail thì log warn, không throw — không block checkout.
+// ============================================================
+
+export interface RecordDiscountAuditInput {
+  invoiceId: string;
+  invoiceCode: string;
+  invoiceTotal: number;
+  discountAmount: number;
+  /** % giảm (vd 10 cho 10%). 0 nếu là discount kiểu số tiền cố định. */
+  discountPercent?: number;
+  reason: string;
+  otpId?: string | null;
+}
+
+// Day 17/05/2026 P2.B: persistent retry queue trong localStorage.
+// Nếu RPC fail (mạng, RPC unavailable, server down) → lưu vào queue → retry
+// tự động khi mount app + mỗi 60s. Không miss audit nữa.
+const AUDIT_QUEUE_KEY = "onebiz-discount-audit-queue-v1";
+
+interface QueuedAudit extends RecordDiscountAuditInput {
+  queuedAt: string;
+  attempts: number;
+}
+
+function loadQueue(): QueuedAudit[] {
+  if (typeof window === "undefined") return [];
+  try {
+    const raw = localStorage.getItem(AUDIT_QUEUE_KEY);
+    return raw ? (JSON.parse(raw) as QueuedAudit[]) : [];
+  } catch {
+    return [];
+  }
+}
+
+function saveQueue(queue: QueuedAudit[]): void {
+  if (typeof window === "undefined") return;
+  try {
+    localStorage.setItem(AUDIT_QUEUE_KEY, JSON.stringify(queue));
+  } catch {
+    /* quota exceeded — skip */
+  }
+}
+
+function enqueueFailedAudit(input: RecordDiscountAuditInput): void {
+  const queue = loadQueue();
+  queue.push({ ...input, queuedAt: new Date().toISOString(), attempts: 1 });
+  saveQueue(queue);
+}
+
+async function postAuditOnce(input: RecordDiscountAuditInput): Promise<boolean> {
+  const supabase = getClient();
+  try {
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    const { error } = await (supabase.rpc as any)("record_discount_audit", {
+      p_invoice_id: input.invoiceId,
+      p_invoice_code: input.invoiceCode,
+      p_invoice_total: input.invoiceTotal,
+      p_discount_amount: input.discountAmount,
+      p_discount_percent: input.discountPercent ?? 0,
+      p_reason: input.reason,
+      p_otp_id: input.otpId ?? null,
+    });
+    if (error) {
+      if (isRpcUnavailable(error)) {
+        console.warn("[recordDiscountAudit] RPC chưa có — queue lại.");
+      } else {
+        console.warn("[recordDiscountAudit] RPC lỗi:", error.message);
+      }
+      return false;
+    }
+    return true;
+  } catch (err) {
+    console.warn("[recordDiscountAudit] exception:", err);
+    return false;
+  }
+}
+
+export async function recordDiscountAudit(
+  input: RecordDiscountAuditInput,
+): Promise<void> {
+  if (input.discountAmount <= 0) return;
+  const ok = await postAuditOnce(input);
+  if (!ok) {
+    enqueueFailedAudit(input);
+  }
+}
+
+/**
+ * Retry queue audit còn pending. Gọi khi app mount + sau khi mạng online lại.
+ * Tự skip item có attempts > 20 (coi như mất hẳn — admin xử lý thủ công).
+ */
+export async function retryFailedDiscountAudits(): Promise<{
+  succeeded: number;
+  remaining: number;
+}> {
+  const queue = loadQueue();
+  if (queue.length === 0) return { succeeded: 0, remaining: 0 };
+  const remaining: QueuedAudit[] = [];
+  let succeeded = 0;
+  for (const item of queue) {
+    if (item.attempts >= 20) {
+      // Drop sau 20 lần fail
+      console.warn(
+        `[recordDiscountAudit] drop sau 20 lần fail cho ${item.invoiceCode}`,
+      );
+      continue;
+    }
+    const ok = await postAuditOnce(item);
+    if (ok) {
+      succeeded += 1;
+    } else {
+      remaining.push({ ...item, attempts: item.attempts + 1 });
+    }
+  }
+  saveQueue(remaining);
+  return { succeeded, remaining: remaining.length };
+}
+
+export function getFailedDiscountAuditCount(): number {
+  return loadQueue().length;
+}

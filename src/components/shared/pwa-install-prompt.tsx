@@ -31,7 +31,19 @@ const APP_PROMPT = {
     title: "Cài ứng dụng Manager",
     description: "Theo dõi doanh số, tồn kho và cảnh báo nhanh trên điện thoại",
   },
+  // Day 6 16/05/2026: Toàn bộ ERP web (onebiz.com.vn) cũng installable.
+  // Khác manager mode (start_url=/manager) — main app start_url=/ → full ERP.
+  erp: {
+    dismissKey: "onebiz-erp-pwa-dismissed",
+    title: "Cài ứng dụng OneBiz",
+    description: "Mở nhanh ERP từ màn hình chính, nhận thông báo push",
+  },
 } as const;
+
+function isIos(): boolean {
+  if (typeof navigator === "undefined") return false;
+  return /iPhone|iPad|iPod/.test(navigator.userAgent);
+}
 
 export function PwaInstallPrompt() {
   const { isFnb } = useFnbSubdomain();
@@ -40,11 +52,18 @@ export function PwaInstallPrompt() {
   const [deferredPrompt, setDeferredPrompt] =
     useState<BeforeInstallPromptEvent | null>(null);
   const [visible, setVisible] = useState(false);
-  const promptConfig = isFnb
-    ? APP_PROMPT.fnb
-    : isManagerApp
-      ? APP_PROMPT.manager
-      : null;
+  const [iosHint, setIosHint] = useState(false);
+  // Day 6 16/05/2026: bật prompt cho mọi đường dẫn (kể cả ERP main),
+  // không chỉ /manager. Bỏ qua /dang-nhap để không ép user chưa login.
+  const isAuthRoute =
+    pathname.startsWith("/dang-nhap") || pathname.startsWith("/dang-ky");
+  const promptConfig = isAuthRoute
+    ? null
+    : isFnb
+      ? APP_PROMPT.fnb
+      : isManagerApp
+        ? APP_PROMPT.manager
+        : APP_PROMPT.erp;
 
   useEffect(() => {
     if (!promptConfig) return;
@@ -69,13 +88,28 @@ export function PwaInstallPrompt() {
     }
 
     window.addEventListener("beforeinstallprompt", onBeforeInstall);
-    return () =>
+
+    // Day 6 16/05/2026: iOS Safari không emit beforeinstallprompt
+    // → fallback hint sau 10s nếu user chưa cài.
+    let iosTimer: ReturnType<typeof setTimeout> | null = null;
+    if (isIos()) {
+      iosTimer = setTimeout(() => {
+        setIosHint(true);
+        setVisible(true);
+      }, 10_000);
+    }
+
+    return () => {
       window.removeEventListener("beforeinstallprompt", onBeforeInstall);
+      if (iosTimer) clearTimeout(iosTimer);
+    };
   }, [promptConfig]);
 
-  if (!promptConfig || !visible || !deferredPrompt) return null;
+  // Day 6 16/05/2026: chấp nhận hiển thị khi có iOS hint dù không có deferredPrompt.
+  if (!promptConfig || !visible || (!deferredPrompt && !iosHint)) return null;
 
   const handleInstall = async () => {
+    if (!deferredPrompt) return; // iOS hint mode → không có deferredPrompt
     try {
       await deferredPrompt.prompt();
       const choice = await deferredPrompt.userChoice;
@@ -112,17 +146,21 @@ export function PwaInstallPrompt() {
           {promptConfig.title}
         </p>
         <p className="text-xs text-muted-foreground mt-0.5">
-          {promptConfig.description}
+          {iosHint
+            ? "Trên iPhone/iPad: bấm Chia sẻ → Thêm vào màn hình chính"
+            : promptConfig.description}
         </p>
       </div>
       <div className="flex flex-col gap-1 shrink-0">
-        <button
-          type="button"
-          onClick={handleInstall}
-          className="press-scale-sm h-8 px-3 rounded-lg bg-primary text-on-primary text-xs font-semibold hover:bg-primary-hover transition-colors"
-        >
-          Cài đặt
-        </button>
+        {!iosHint && deferredPrompt && (
+          <button
+            type="button"
+            onClick={handleInstall}
+            className="press-scale-sm h-8 px-3 rounded-lg bg-primary text-on-primary text-xs font-semibold hover:bg-primary-hover transition-colors"
+          >
+            Cài đặt
+          </button>
+        )}
         <button
           type="button"
           onClick={handleDismiss}

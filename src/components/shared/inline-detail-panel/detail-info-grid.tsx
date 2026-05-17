@@ -17,10 +17,13 @@ interface DetailInfoGridProps {
   className?: string;
 }
 
+// Day 17/05/2026 (CEO): col 4 quá chật ở 1280px (~62px/col) → break sang
+// 4 cột chỉ khi viewport ≥ xl (1280px+) với main area đủ rộng. Mặc định ở
+// laptop 13" main area ~1040px → 3 cột readability ok.
 const colsClass = {
   2: "grid-cols-1 sm:grid-cols-2",
   3: "grid-cols-1 sm:grid-cols-2 lg:grid-cols-3",
-  4: "grid-cols-1 sm:grid-cols-2 lg:grid-cols-4",
+  4: "grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4",
 };
 
 export function DetailInfoGrid({
@@ -34,8 +37,8 @@ export function DetailInfoGrid({
         <div
           key={idx}
           className={cn(
-            "space-y-0.5",
-            field.fullWidth && "sm:col-span-2 lg:col-span-full"
+            "space-y-0.5 min-w-0",
+            field.fullWidth && "sm:col-span-2 lg:col-span-full",
           )}
         >
           <div className="text-xs text-muted-foreground">{field.label}</div>

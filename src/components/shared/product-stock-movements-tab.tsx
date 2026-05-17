@@ -94,8 +94,9 @@ export function ProductStockMovementsTab({ productId }: ProductStockMovementsTab
         <span>Tổng: {total}</span>
       </div>
 
-      <div className="rounded-lg border overflow-hidden">
-        <div className="grid grid-cols-[110px_1fr_90px_90px_140px] gap-2 px-3 py-2 bg-muted/50 text-xs font-medium text-muted-foreground">
+      {/* Day 17/05: overflow-x-auto cho laptop nhỏ */}
+      <div className="rounded-lg border overflow-x-auto">
+        <div className="grid grid-cols-[110px_220px_90px_90px_140px] gap-2 px-3 py-2 bg-muted/50 text-xs font-medium text-muted-foreground min-w-[650px]">
           <span>Ngày</span>
           <span>Loại</span>
           <span className="text-right">SL</span>
@@ -103,14 +104,14 @@ export function ProductStockMovementsTab({ productId }: ProductStockMovementsTab
           <span>Ghi chú</span>
         </div>
 
-        <ul className="divide-y">
+        <ul className="divide-y min-w-[650px]">
           {movements.map((m) => {
             const style = TYPE_STYLE[m.type] ?? TYPE_STYLE.import;
             const signed = m.type === "export" ? -Math.abs(m.quantity) : m.quantity;
             return (
               <li
                 key={m.id}
-                className="grid grid-cols-[110px_1fr_90px_90px_140px] gap-2 items-center px-3 py-2 text-sm"
+                className="grid grid-cols-[110px_220px_90px_90px_140px] gap-2 items-center px-3 py-2 text-sm"
               >
                 <span className="text-xs text-muted-foreground">
                   {formatDate(m.date)}

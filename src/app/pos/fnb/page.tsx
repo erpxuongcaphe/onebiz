@@ -21,6 +21,7 @@ import {
   calculateRedeemDiscount,
 } from "@/lib/services/supabase/loyalty";
 import { fnbPayment } from "@/lib/services/supabase/fnb-checkout";
+import { recordDiscountAudit } from "@/lib/services/supabase/pos-checkout";
 import { getTablesByBranch, markTableAvailable } from "@/lib/services/supabase/fnb-tables";
 import {
   useNetworkStatus,
@@ -240,6 +241,11 @@ function FnbPosPageInner() {
   const userId = user?.id ?? "";
   const canCancelUnpaidOrder =
     hasPermission(PERMISSIONS.POS_FNB_CANCEL_UNPAID_ORDER) ||
+    hasPermission(PERMISSIONS.POS_FNB_VOID);
+  // Day 1 16/05: Tách permission void bill ĐÃ thanh toán riêng — không gộp với
+  // "cancel_unpaid_order" vì void paid phải hoàn kho + tạo phiếu chi.
+  const canVoidPaidBill =
+    hasPermission(PERMISSIONS.POS_FNB_VOID_PAID_BILL) ||
     hasPermission(PERMISSIONS.POS_FNB_VOID);
 
   // ── Load data (cache-first, then network refresh) ──
@@ -1306,6 +1312,30 @@ function FnbPosPageInner() {
                 : t
             )
           );
+        }
+
+        // Day 3 16/05/2026: Audit log discount manual (sau OTP duyệt)
+        // Best-effort: nếu fail thì không block checkout (đã success)
+        if (
+          networkStatus.isOnline &&
+          tab?.discountAuditCtx &&
+          pos.orderDiscountAmount > 0 &&
+          payResult.invoiceId &&
+          payResult.invoiceCode
+        ) {
+          const auditCtx = tab.discountAuditCtx;
+          const subtotal = pos.subtotal;
+          const percent =
+            subtotal > 0 ? (pos.orderDiscountAmount / subtotal) * 100 : 0;
+          recordDiscountAudit({
+            invoiceId: payResult.invoiceId,
+            invoiceCode: payResult.invoiceCode,
+            invoiceTotal: pos.total,
+            discountAmount: pos.orderDiscountAmount,
+            discountPercent: Math.round(percent * 100) / 100,
+            reason: auditCtx.reason,
+            otpId: auditCtx.otpId,
+          }).catch((err) => console.warn("[FnB] recordDiscountAudit:", err));
         }
 
         // KM-2: Tăng usage_count atomic — chỉ khi online
@@ -2430,6 +2460,10 @@ function FnbPosPageInner() {
             open={orderHistoryOpen}
             onOpenChange={setOrderHistoryOpen}
             branchId={branchId}
+            tenantId={tenantId}
+            userId={userId}
+            shiftId={currentShift?.id ?? null}
+            canVoidPaidBill={canVoidPaidBill}
             cashierName={user?.fullName}
             paperSize={settings.print.paperSize === "58mm" ? "58mm" : "80mm"}
             storeName={settings.print.showStoreName ? settings.store.name : undefined}
@@ -2541,6 +2575,7 @@ function FnbPosPageInner() {
       />
 
       {/* CEO 13/05: OTP duyệt MỌI giảm giá manual (FnB) — không còn check ngưỡng */}
+      {/* Day 3 16/05/2026: lưu otpId + reason vào ref để ghi audit khi checkout */}
       <OtpApprovalDialog
         open={discountOtpOpen}
         onOpenChange={(o) => {
@@ -2548,10 +2583,18 @@ function FnbPosPageInner() {
           if (!o) pendingDiscountRef.current = null;
         }}
         actionCode={OTP_ACTION_CODES.FNB_DISCOUNT_OVERRIDE}
+        requireReason
         contextLabel={`Cashier yêu cầu giảm giá thủ công cho đơn ${pos.activeTab?.label ?? ""}`}
-        onApproved={() => {
+        onApproved={(verified, reason) => {
           pendingDiscountRef.current?.();
           pendingDiscountRef.current = null;
+          // Lưu otpId + reason vào activeTab để khi checkout sẽ ghi audit
+          if (pos.activeTabId) {
+            pos.attachDiscountAudit(pos.activeTabId, {
+              otpId: verified.otpId,
+              reason,
+            });
+          }
           toast({
             title: "Đã duyệt qua OTP",
             description: "Giảm giá đã được áp dụng (audit log lưu manager duyệt).",

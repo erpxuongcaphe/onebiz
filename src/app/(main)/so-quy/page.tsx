@@ -34,6 +34,11 @@ import { cashTransactionExcelSchema } from "@/lib/excel/schemas";
 import { bulkImportCashTransactions } from "@/lib/services/supabase/excel-import";
 import { formatCurrency, formatDate, formatUser } from "@/lib/format";
 import { exportToCsv } from "@/lib/utils/export";
+import {
+  exportReportToExcel,
+  buildInfoSheet,
+  type ExcelSheet,
+} from "@/lib/utils/excel-export";
 import { exportToExcelFromSchema } from "@/lib/excel";
 import type { CashTransactionImportRow } from "@/lib/excel/schemas";
 import {
@@ -353,19 +358,209 @@ export default function SoQuyPage() {
   const { totalReceipt, totalPayment, openingBalance } = summary;
   const closingBalance = openingBalance + totalReceipt - totalPayment;
 
+  // Day 2 16/05/2026: Excel sổ quỹ theo pattern focused-per-module
+  //   - Sheet 0: Thông tin (Doanh nghiệp / Kỳ / Chi nhánh / Disclaimer)
+  //   - Sheet 1: Sổ quỹ chi tiết (cột tiêu chuẩn KT — Mã / Ngày / Diễn giải /
+  //     Nhóm / Đối tác / Thu / Chi / Số dư chạy)
+  //   - Sheet 2: Tổng kết theo ngày (Thu / Chi / Tồn cuối ngày)
+  //   - Sheet 3: Tổng kết theo nhóm bút toán
+  //   - Có signature block (Người lập / Kế toán / Giám đốc)
   const handleExport = (type: "excel" | "csv") => {
     if (type === "excel") {
-      const rows: CashTransactionImportRow[] = data.map((e) => ({
-        code: e.code,
-        date: new Date(e.date),
-        type: e.type,
-        category: e.category,
-        amount: e.amount,
-        counterparty: e.counterparty,
-        paymentMethod: "cash",
-        note: e.note,
-      }));
-      exportToExcelFromSchema(rows, cashTransactionExcelSchema);
+      const range = presetToRange(datePreset);
+      const isoToYmd = (iso: string | undefined): string => {
+        if (!iso) return new Date().toISOString().slice(0, 10);
+        return iso.slice(0, 10);
+      };
+
+      // Sort data ascending by date for running balance
+      const sortedData = [...data].sort(
+        (a, b) => new Date(a.date).getTime() - new Date(b.date).getTime(),
+      );
+
+      // Sheet 1: Sổ quỹ chi tiết
+      let runningBalance = openingBalance;
+      const detailRows = sortedData.map((e) => {
+        const thu = e.type === "receipt" ? e.amount : 0;
+        const chi = e.type === "payment" ? e.amount : 0;
+        runningBalance = runningBalance + thu - chi;
+        return {
+          code: e.code,
+          date: formatDate(e.date),
+          category: e.category,
+          counterparty: e.counterparty ?? "",
+          note: e.note ?? "",
+          receipt: thu,
+          payment: chi,
+          balance: runningBalance,
+        };
+      });
+      const detailSheet: ExcelSheet = {
+        name: "Sổ quỹ chi tiết",
+        titleRows: [
+          "SỔ QUỸ CHI TIẾT",
+          `Số dư đầu kỳ: ${formatCurrency(openingBalance)}`,
+        ],
+        columns: [
+          { label: "Mã phiếu", key: "code", width: 14 },
+          { label: "Ngày", key: "date", width: 14, format: "text" },
+          { label: "Nhóm bút toán", key: "category", width: 22 },
+          { label: "Đối tác", key: "counterparty", width: 24 },
+          { label: "Diễn giải", key: "note", width: 32 },
+          { label: "Thu", key: "receipt", width: 16, format: "currency" },
+          { label: "Chi", key: "payment", width: 16, format: "currency" },
+          { label: "Số dư", key: "balance", width: 18, format: "currency" },
+        ],
+        rows: detailRows,
+        footer: {
+          code: "",
+          date: "",
+          category: "",
+          counterparty: "",
+          note: "TỔNG CỘNG",
+          receipt: totalReceipt,
+          payment: totalPayment,
+          balance: closingBalance,
+        },
+        footerLabel: `${detailRows.length} bút toán • Số dư cuối: ${formatCurrency(closingBalance)}`,
+        withSignature: true,
+      };
+
+      // Sheet 2: Tổng kết theo ngày
+      const dailyMap = new Map<
+        string,
+        { date: string; receipt: number; payment: number }
+      >();
+      for (const e of sortedData) {
+        const dayKey = new Date(e.date).toISOString().slice(0, 10);
+        const existing = dailyMap.get(dayKey) ?? {
+          date: dayKey,
+          receipt: 0,
+          payment: 0,
+        };
+        if (e.type === "receipt") existing.receipt += e.amount;
+        else existing.payment += e.amount;
+        dailyMap.set(dayKey, existing);
+      }
+      let dailyBalance = openingBalance;
+      const dailyRows = Array.from(dailyMap.values())
+        .sort((a, b) => a.date.localeCompare(b.date))
+        .map((r) => {
+          const balanceStart = dailyBalance;
+          dailyBalance = dailyBalance + r.receipt - r.payment;
+          return {
+            date: formatDate(r.date),
+            balanceStart,
+            receipt: r.receipt,
+            payment: r.payment,
+            balanceEnd: dailyBalance,
+          };
+        });
+      const dailySheet: ExcelSheet = {
+        name: "Tổng theo ngày",
+        titleRows: ["TỔNG KẾT THEO NGÀY"],
+        columns: [
+          { label: "Ngày", key: "date", width: 14, format: "text" },
+          { label: "Tồn đầu ngày", key: "balanceStart", width: 18, format: "currency" },
+          { label: "Tổng thu", key: "receipt", width: 16, format: "currency" },
+          { label: "Tổng chi", key: "payment", width: 16, format: "currency" },
+          { label: "Tồn cuối ngày", key: "balanceEnd", width: 18, format: "currency" },
+        ],
+        rows: dailyRows,
+        footer: {
+          date: "TỔNG",
+          balanceStart: openingBalance,
+          receipt: totalReceipt,
+          payment: totalPayment,
+          balanceEnd: closingBalance,
+        },
+      };
+
+      // Sheet 3: Tổng kết theo nhóm bút toán
+      const groupMap = new Map<
+        string,
+        { category: string; receipt: number; payment: number; count: number }
+      >();
+      for (const e of sortedData) {
+        const key = e.category ?? "(không phân loại)";
+        const existing = groupMap.get(key) ?? {
+          category: key,
+          receipt: 0,
+          payment: 0,
+          count: 0,
+        };
+        if (e.type === "receipt") existing.receipt += e.amount;
+        else existing.payment += e.amount;
+        existing.count += 1;
+        groupMap.set(key, existing);
+      }
+      const groupRows = Array.from(groupMap.values())
+        .sort((a, b) => b.receipt + b.payment - (a.receipt + a.payment))
+        .map((r) => ({
+          category: r.category,
+          count: r.count,
+          receipt: r.receipt,
+          payment: r.payment,
+          netFlow: r.receipt - r.payment,
+        }));
+      const groupSheet: ExcelSheet = {
+        name: "Tổng theo nhóm",
+        titleRows: ["TỔNG KẾT THEO NHÓM BÚT TOÁN"],
+        columns: [
+          { label: "Nhóm bút toán", key: "category", width: 28 },
+          { label: "Số bút toán", key: "count", width: 14, format: "number" },
+          { label: "Tổng thu", key: "receipt", width: 16, format: "currency" },
+          { label: "Tổng chi", key: "payment", width: 16, format: "currency" },
+          { label: "Dòng tiền ròng", key: "netFlow", width: 18, format: "currency" },
+        ],
+        rows: groupRows,
+        footer: {
+          category: "TỔNG",
+          count: detailRows.length,
+          receipt: totalReceipt,
+          payment: totalPayment,
+          netFlow: totalReceipt - totalPayment,
+        },
+      };
+
+      const infoSheet = buildInfoSheet({
+        title: "BÁO CÁO SỔ QUỸ",
+        description: "Sổ quỹ chi tiết + tổng kết theo ngày + theo nhóm bút toán",
+        range: {
+          from: isoToYmd(range.from),
+          to: isoToYmd(range.to),
+        },
+        branchName: activeBranchId ? "Chi nhánh đang chọn" : "Tất cả chi nhánh",
+        tenantName: "OneBiz",
+        generatedAt: new Date(),
+        disclaimer:
+          "Báo cáo quản trị nội bộ — không thay thế Báo cáo Tài chính theo TT200/133.",
+      });
+
+      try {
+        exportReportToExcel({
+          kind: "so-quy",
+          mode: "full",
+          range: {
+            from: isoToYmd(range.from),
+            to: isoToYmd(range.to),
+          },
+          branchName: activeBranchId ? "Chi nhánh đang chọn" : undefined,
+          tenantName: "OneBiz",
+          sheets: [infoSheet, detailSheet, dailySheet, groupSheet],
+        });
+        toast({
+          title: "Đã xuất Excel sổ quỹ",
+          description: `4 sheet: Info + Chi tiết (${detailRows.length}) + Theo ngày (${dailyRows.length}) + Theo nhóm (${groupRows.length})`,
+          variant: "success",
+        });
+      } catch (err) {
+        toast({
+          title: "Lỗi xuất Excel",
+          description: err instanceof Error ? err.message : "Vui lòng thử lại",
+          variant: "error",
+        });
+      }
       return;
     }
     const exportColumns = [

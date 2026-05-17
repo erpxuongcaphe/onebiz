@@ -40,13 +40,14 @@ export function PwaHead() {
       document.head.appendChild(meta);
     }
 
-    // Register service worker for FnB
-    if (isFnb && "serviceWorker" in navigator) {
-      navigator.serviceWorker
-        .register("/sw-fnb.js", { scope: "/" })
-        .catch(() => {
-          // Silent fail — SW registration is optional
-        });
+    // Register service worker
+    // - FnB subdomain → /sw-fnb.js (offline-first POS)
+    // - Main ERP web (incl. /manager) → /sw-manager.js (Day 6 16/05/2026)
+    if ("serviceWorker" in navigator) {
+      const swPath = isFnb ? "/sw-fnb.js" : "/sw-manager.js";
+      navigator.serviceWorker.register(swPath, { scope: "/" }).catch(() => {
+        // Silent fail — SW registration is optional
+      });
     }
   }, [isFnb, isManagerApp]);
 

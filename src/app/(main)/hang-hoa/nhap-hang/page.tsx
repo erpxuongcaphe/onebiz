@@ -32,6 +32,11 @@ import { buildGoodsReceiptPrintData } from "@/lib/print-templates";
 import { formatCurrency, formatDate, formatNumber, formatUser } from "@/lib/format";
 import { exportToExcel, exportToCsv } from "@/lib/utils/export";
 import {
+  exportReportToExcel,
+  buildInfoSheet,
+  type ExcelSheet,
+} from "@/lib/utils/excel-export";
+import {
   getPurchaseOrders,
   getPurchaseOrderStatuses,
   getPurchaseOrderStatusMeta,
@@ -39,6 +44,7 @@ import {
   canTransitionPurchaseStatus,
   getPurchaseOrderItems,
   getPaymentHistory,
+  closePurchaseOrderShort,
   type PurchaseOrderItemRow,
 } from "@/lib/services";
 import type { PurchaseOrder, PurchaseOrderStatus } from "@/lib/types";
@@ -46,6 +52,15 @@ import { CreatePurchaseOrderDialog } from "@/components/shared/dialogs";
 import { RecordPaymentDialog } from "@/components/shared/dialogs/record-payment-dialog";
 import { PartialReceiveDialog } from "@/components/shared/dialogs/partial-receive-dialog";
 import { AuditLogDialog } from "@/components/shared/audit-log-dialog";
+import {
+  Dialog,
+  DialogContent,
+  DialogHeader,
+  DialogTitle,
+  DialogDescription,
+  DialogFooter,
+} from "@/components/ui/dialog";
+import { Textarea } from "@/components/ui/textarea";
 import { buildTransactionRowActions } from "@/components/shared/transaction-row-actions";
 import { useTxRowPermissions } from "@/lib/permissions";
 import { Button } from "@/components/ui/button";
@@ -449,6 +464,10 @@ export default function NhapHangPage() {
   const [viewMode, setViewMode] = useState<ViewMode>("list");
   const [payingItem, setPayingItem] = useState<PurchaseOrder | null>(null);
   const [partialReceiveOrder, setPartialReceiveOrder] = useState<PurchaseOrder | null>(null);
+  // Day 2 16/05: Đóng đơn còn thiếu — partial/ordered → completed kèm reason
+  const [closeShortTarget, setCloseShortTarget] = useState<PurchaseOrder | null>(null);
+  const [closeShortReason, setCloseShortReason] = useState("");
+  const [closingShort, setClosingShort] = useState(false);
   // Sprint UX-1 Stage 4: Audit log dialog
   const [auditDialogTarget, setAuditDialogTarget] = useState<PurchaseOrder | null>(null);
 
@@ -572,24 +591,183 @@ export default function NhapHangPage() {
   /* ---- Summary ---- */
   const totalAmountOwed = data.reduce((sum, o) => sum + o.amountOwed, 0);
 
-  /* ---- Export ---- */
+  /* ---- Export — Day 3 16/05/2026: focused per-module pattern ---- */
   const handleExport = (type: "excel" | "csv") => {
-    const exportColumns = [
-      { header: "Mã nhập hàng", key: "code", width: 15 },
-      { header: "Mã đặt hàng nhập", key: "orderCode", width: 15 },
-      { header: "Thời gian", key: "date", width: 18, format: (v: string) => formatDate(v) },
-      { header: "Mã NCC", key: "supplierCode", width: 12 },
-      { header: "Nhà cung cấp", key: "supplierName", width: 25 },
-      { header: "Cần trả NCC", key: "amountOwed", width: 15, format: (v: number) => v },
-      {
-        header: "Trạng thái",
-        key: "status",
-        width: 15,
-        format: (v: PurchaseOrderStatus) => STATUS_META[v]?.label ?? v,
+    if (type === "csv") {
+      const exportColumns = [
+        { header: "Mã nhập hàng", key: "code", width: 15 },
+        { header: "Mã đặt hàng nhập", key: "orderCode", width: 15 },
+        { header: "Thời gian", key: "date", width: 18, format: (v: string) => formatDate(v) },
+        { header: "Mã NCC", key: "supplierCode", width: 12 },
+        { header: "Nhà cung cấp", key: "supplierName", width: 25 },
+        { header: "Cần trả NCC", key: "amountOwed", width: 15, format: (v: number) => v },
+        {
+          header: "Trạng thái",
+          key: "status",
+          width: 15,
+          format: (v: PurchaseOrderStatus) => STATUS_META[v]?.label ?? v,
+        },
+      ];
+      exportToCsv(data, exportColumns, "danh-sach-nhap-hang");
+      return;
+    }
+
+    // ---- Excel: Info + Chi tiết + Theo NCC + Theo trạng thái ----
+    const today = new Date().toISOString().slice(0, 10);
+    const dateFromIso = dateFrom || today;
+    const dateToIso = dateTo || today;
+
+    const detailRows = data.map((o) => ({
+      code: o.code,
+      date: formatDate(o.date),
+      supplierName: o.supplierName ?? "",
+      status: STATUS_META[o.status]?.label ?? o.status,
+      total: o.total,
+      paid: o.paid,
+      amountOwed: o.amountOwed,
+      tax: o.taxAmount,
+      createdByName: o.createdByName ?? "",
+    }));
+    const totalTotal = data.reduce((s, o) => s + (o.total ?? 0), 0);
+    const totalPaid = data.reduce((s, o) => s + (o.paid ?? 0), 0);
+    const totalTax = data.reduce((s, o) => s + (o.taxAmount ?? 0), 0);
+
+    const detailSheet: ExcelSheet = {
+      name: "Đơn nhập chi tiết",
+      titleRows: ["DANH SÁCH ĐƠN NHẬP HÀNG"],
+      columns: [
+        { label: "Mã đơn", key: "code", width: 14 },
+        { label: "Ngày", key: "date", width: 14, format: "text" },
+        { label: "Nhà cung cấp", key: "supplierName", width: 28 },
+        { label: "Trạng thái", key: "status", width: 14 },
+        { label: "Tổng tiền", key: "total", width: 16, format: "currency" },
+        { label: "Thuế", key: "tax", width: 14, format: "currency" },
+        { label: "Đã trả", key: "paid", width: 14, format: "currency" },
+        { label: "Còn nợ", key: "amountOwed", width: 14, format: "currency" },
+        { label: "Người lập", key: "createdByName", width: 18 },
+      ],
+      rows: detailRows,
+      footer: {
+        code: "",
+        date: "",
+        supplierName: "TỔNG CỘNG",
+        status: "",
+        total: totalTotal,
+        tax: totalTax,
+        paid: totalPaid,
+        amountOwed: totalAmountOwed,
+        createdByName: "",
       },
-    ];
-    if (type === "excel") exportToExcel(data, exportColumns, "danh-sach-nhap-hang");
-    else exportToCsv(data, exportColumns, "danh-sach-nhap-hang");
+      footerLabel: `${detailRows.length} đơn`,
+      withSignature: true,
+    };
+
+    // Pivot theo NCC
+    const bySupplier = new Map<
+      string,
+      { name: string; count: number; total: number; paid: number; debt: number }
+    >();
+    for (const o of data) {
+      const key = o.supplierName ?? "(không xác định)";
+      const ex = bySupplier.get(key) ?? {
+        name: key,
+        count: 0,
+        total: 0,
+        paid: 0,
+        debt: 0,
+      };
+      ex.count += 1;
+      ex.total += o.total ?? 0;
+      ex.paid += o.paid ?? 0;
+      ex.debt += o.amountOwed ?? 0;
+      bySupplier.set(key, ex);
+    }
+    const supplierRows = Array.from(bySupplier.values()).sort(
+      (a, b) => b.total - a.total,
+    );
+    const supplierSheet: ExcelSheet = {
+      name: "Theo NCC",
+      titleRows: ["NHẬP HÀNG THEO NHÀ CUNG CẤP"],
+      columns: [
+        { label: "Nhà cung cấp", key: "name", width: 28 },
+        { label: "Số đơn", key: "count", width: 12, format: "number" },
+        { label: "Tổng tiền", key: "total", width: 16, format: "currency" },
+        { label: "Đã trả", key: "paid", width: 16, format: "currency" },
+        { label: "Còn nợ", key: "debt", width: 16, format: "currency" },
+      ],
+      rows: supplierRows,
+      footer: {
+        name: "TỔNG",
+        count: detailRows.length,
+        total: totalTotal,
+        paid: totalPaid,
+        debt: totalAmountOwed,
+      },
+    };
+
+    // Pivot theo trạng thái
+    const byStatus = new Map<
+      string,
+      { label: string; count: number; total: number }
+    >();
+    for (const o of data) {
+      const k = STATUS_META[o.status]?.label ?? o.status;
+      const ex = byStatus.get(k) ?? { label: k, count: 0, total: 0 };
+      ex.count += 1;
+      ex.total += o.total ?? 0;
+      byStatus.set(k, ex);
+    }
+    const statusRows = Array.from(byStatus.values()).sort(
+      (a, b) => b.count - a.count,
+    );
+    const statusSheet: ExcelSheet = {
+      name: "Theo trạng thái",
+      titleRows: ["NHẬP HÀNG THEO TRẠNG THÁI"],
+      columns: [
+        { label: "Trạng thái", key: "label", width: 20 },
+        { label: "Số đơn", key: "count", width: 12, format: "number" },
+        { label: "Tổng tiền", key: "total", width: 16, format: "currency" },
+      ],
+      rows: statusRows,
+      footer: {
+        label: "TỔNG",
+        count: detailRows.length,
+        total: totalTotal,
+      },
+    };
+
+    const infoSheet = buildInfoSheet({
+      title: "BÁO CÁO NHẬP HÀNG",
+      description: "Danh sách đơn nhập + tổng theo NCC + theo trạng thái",
+      range: { from: dateFromIso, to: dateToIso },
+      branchName: activeBranchId ? "Chi nhánh đang chọn" : "Tất cả chi nhánh",
+      tenantName: "OneBiz",
+      generatedAt: new Date(),
+      disclaimer:
+        "Báo cáo quản trị nội bộ — không thay thế Báo cáo Tài chính theo TT200/133.",
+    });
+
+    try {
+      exportReportToExcel({
+        kind: "dat-hang",
+        mode: "full",
+        range: { from: dateFromIso, to: dateToIso },
+        branchName: activeBranchId ? "Chi nhánh đang chọn" : undefined,
+        tenantName: "OneBiz",
+        sheets: [infoSheet, detailSheet, supplierSheet, statusSheet],
+      });
+      toast({
+        title: "Đã xuất Excel đơn nhập",
+        description: `4 sheet: Info + Chi tiết (${detailRows.length}) + Theo NCC (${supplierRows.length}) + Theo trạng thái (${statusRows.length})`,
+        variant: "success",
+      });
+    } catch (err) {
+      toast({
+        title: "Lỗi xuất Excel",
+        description: err instanceof Error ? err.message : "Vui lòng thử lại",
+        variant: "error",
+      });
+    }
   };
 
   /* ---- Inline detail renderer ---- */
@@ -678,6 +856,42 @@ export default function NhapHangPage() {
         description: err instanceof Error ? err.message : "Vui lòng thử lại",
         variant: "error",
       });
+    }
+  };
+
+  // Day 2 16/05: Đóng đơn còn thiếu — RPC close_purchase_order_short
+  const handleConfirmCloseShort = async () => {
+    if (!closeShortTarget || closingShort) return;
+    if (closeShortReason.trim().length < 5) {
+      toast({
+        title: "Lý do tối thiểu 5 ký tự",
+        description: "Bắt buộc cho audit — VD: NCC hết hàng, đã đổi NCC khác.",
+        variant: "warning",
+      });
+      return;
+    }
+    setClosingShort(true);
+    try {
+      const result = await closePurchaseOrderShort(
+        closeShortTarget.id,
+        closeShortReason.trim(),
+      );
+      toast({
+        title: "Đã đóng đơn còn thiếu",
+        description: `${result.code} — nhận đủ ${result.itemsReceivedFully} dòng, đóng ${result.itemsRemaining} dòng còn thiếu.`,
+        variant: "success",
+      });
+      setCloseShortTarget(null);
+      setCloseShortReason("");
+      fetchData();
+    } catch (err) {
+      toast({
+        title: "Đóng đơn thất bại",
+        description: err instanceof Error ? err.message : "Lỗi không xác định",
+        variant: "error",
+      });
+    } finally {
+      setClosingShort(false);
     }
   };
 
@@ -997,11 +1211,27 @@ export default function NhapHangPage() {
               icon: <Icon name="arrow_forward" size={16} />,
               onClick: () => handleAdvanceStatus(row, "completed"),
             });
+            workflowActions.push({
+              label: "Đóng đơn (không nhận)",
+              icon: <Icon name="block" size={16} />,
+              onClick: () => {
+                setCloseShortTarget(row);
+                setCloseShortReason("");
+              },
+            });
           } else if (row.status === "partial") {
             workflowActions.push({
               label: "Hoàn thành nhập",
               icon: <Icon name="arrow_forward" size={16} />,
               onClick: () => handleAdvanceStatus(row, "completed"),
+            });
+            workflowActions.push({
+              label: "Đóng đơn còn thiếu",
+              icon: <Icon name="block" size={16} />,
+              onClick: () => {
+                setCloseShortTarget(row);
+                setCloseShortReason("");
+              },
             });
           }
 
@@ -1099,6 +1329,92 @@ export default function NhapHangPage() {
         onClose={() => setAuditDialogTarget(null)}
       />
     )}
+
+    {/* Day 2 16/05: Đóng đơn còn thiếu */}
+    <Dialog
+      open={!!closeShortTarget}
+      onOpenChange={(o) => {
+        if (!o) {
+          setCloseShortTarget(null);
+          setCloseShortReason("");
+        }
+      }}
+    >
+      <DialogContent className="max-w-md">
+        <DialogHeader>
+          <DialogTitle className="flex items-center gap-2">
+            <Icon name="block" size={16} />
+            Đóng đơn nhập còn thiếu
+          </DialogTitle>
+          <DialogDescription>
+            Thao tác sẽ chuyển đơn sang trạng thái <b>Hoàn thành</b> kèm marker{" "}
+            <code>closed_short=true</code>. Số lượng đã nhận vẫn giữ nguyên trong kho.
+            Không hoàn được — báo cáo sẽ phân biệt &quot;nhận đủ&quot; vs &quot;đóng còn
+            thiếu&quot;.
+          </DialogDescription>
+        </DialogHeader>
+
+        {closeShortTarget && (
+          <div className="space-y-3">
+            <div className="rounded-lg bg-surface-container-low p-3 text-sm">
+              <div className="font-semibold">{closeShortTarget.code}</div>
+              <div className="text-muted-foreground text-xs mt-1">
+                NCC: {closeShortTarget.supplierName} •{" "}
+                {STATUS_META[closeShortTarget.status as PurchaseOrderStatus]?.label}
+              </div>
+              <div className="mt-2 font-bold text-base tabular-nums text-primary">
+                {formatCurrency(closeShortTarget.total)}
+              </div>
+            </div>
+
+            <div>
+              <label className="text-sm font-medium block mb-1">
+                Lý do đóng đơn <span className="text-status-error">*</span>
+              </label>
+              <Textarea
+                value={closeShortReason}
+                onChange={(e) => setCloseShortReason(e.target.value)}
+                placeholder="VD: NCC hết hàng, đã đổi NCC khác, đơn nhỏ không đáng nhận tiếp..."
+                rows={3}
+                className="resize-none"
+              />
+              <div className="text-[11px] text-muted-foreground mt-1">
+                Tối thiểu 5 ký tự. Ghi vào audit log để báo cáo loss/short receipt.
+              </div>
+            </div>
+          </div>
+        )}
+
+        <DialogFooter>
+          <Button
+            variant="outline"
+            onClick={() => {
+              setCloseShortTarget(null);
+              setCloseShortReason("");
+            }}
+            disabled={closingShort}
+          >
+            Đóng
+          </Button>
+          <Button
+            onClick={handleConfirmCloseShort}
+            disabled={closingShort || closeShortReason.trim().length < 5}
+          >
+            {closingShort ? (
+              <>
+                <Icon name="progress_activity" size={14} className="animate-spin mr-1" />
+                Đang đóng...
+              </>
+            ) : (
+              <>
+                <Icon name="block" size={14} className="mr-1" />
+                Xác nhận đóng
+              </>
+            )}
+          </Button>
+        </DialogFooter>
+      </DialogContent>
+    </Dialog>
     </>
   );
 }

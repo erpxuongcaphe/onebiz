@@ -117,8 +117,9 @@ export function ProductBranchStockTab({ productId, unit }: ProductBranchStockTab
         </div>
       </div>
 
-      <div className="rounded-lg border overflow-hidden">
-        <div className="grid grid-cols-[1fr_90px_90px_90px_120px] gap-2 px-3 py-2 bg-muted/50 text-xs font-medium text-muted-foreground">
+      {/* Day 17/05: wrap overflow-x-auto cho laptop nhỏ — table fixed ~500px */}
+      <div className="rounded-lg border overflow-x-auto">
+        <div className="grid grid-cols-[200px_90px_90px_90px_120px] gap-2 px-3 py-2 bg-muted/50 text-xs font-medium text-muted-foreground min-w-[590px]">
           <span>Chi nhánh</span>
           <span className="text-right">Tồn</span>
           <span className="text-right">Giữ chỗ</span>
@@ -126,11 +127,11 @@ export function ProductBranchStockTab({ productId, unit }: ProductBranchStockTab
           <span>Cập nhật</span>
         </div>
 
-        <ul className="divide-y">
+        <ul className="divide-y min-w-[590px]">
           {rows.map((r) => (
             <li
               key={r.branchId}
-              className="grid grid-cols-[1fr_90px_90px_90px_120px] gap-2 items-center px-3 py-2 text-sm"
+              className="grid grid-cols-[200px_90px_90px_90px_120px] gap-2 items-center px-3 py-2 text-sm"
             >
               <span className="flex items-center gap-2 min-w-0">
                 <Icon

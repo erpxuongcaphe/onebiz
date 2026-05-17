@@ -58,6 +58,9 @@ const updateCalls: {
   filters: Record<string, unknown>;
 }[] = [];
 const rpcCalls: { fn: string; params: unknown }[] = [];
+// Day 1 16/05: per-test flag để test "DE-2: Xuất hủy đã hoàn thành"
+// có thể yêu cầu RPC apply_disposal_export_atomic trả success=false.
+let rpcShouldFailDisposal = false;
 const stockMovementCalls: unknown[] = [];
 let rpcCodeCounter = 0;
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
@@ -471,6 +474,25 @@ vi.mock("@/lib/services/supabase/base", () => ({
       }
       if (fn === "increment_product_stock" || fn === "upsert_branch_stock") {
         return { data: null, error: null };
+      }
+      // Migration 00074: atomic disposal + internal export
+      if (
+        fn === "apply_disposal_export_atomic" ||
+        fn === "apply_internal_export_atomic"
+      ) {
+        if (rpcShouldFailDisposal) {
+          return {
+            data: null,
+            error: {
+              message:
+                'INVALID_STATUS: phiếu xuất hủy đang ở trạng thái "completed"',
+            },
+          };
+        }
+        return {
+          data: { success: true, items_processed: 1 },
+          error: null,
+        };
       }
       if (fn === "complete_production_order") {
         return { data: "lot-new-1", error: null };
@@ -1402,13 +1424,14 @@ describe("XUẤT HỦY & NỘI BỘ — Disposal & Internal Export", () => {
     const { completeDisposalExport } = await import("@/lib/services/supabase/inventory");
     await completeDisposalExport("de-1");
 
-    expect(stockMovementCalls).toHaveLength(1);
-    const inputs = getStockMoveInputs(0);
-    expect(inputs).toHaveLength(1);
-    expect(inputs[0].type).toBe("out");
-    expect(inputs[0].quantity).toBe(20);
-    expect(inputs[0].productId).toBe("nvl-expired");
-    expect(inputs[0].referenceType).toBe("disposal_export");
+    // Day 1 16/05/2026: atomic RPC pattern — assert RPC call
+    const atomicCall = rpcCalls.find(
+      (c) => c.fn === "apply_disposal_export_atomic",
+    );
+    expect(atomicCall).toBeDefined();
+    expect((atomicCall?.params as { p_disposal_id?: string })?.p_disposal_id).toBe(
+      "de-1",
+    );
   });
 
   it("IE-1: Xuất nội bộ 15 SP — stock OUT 15, referenceType=internal_export", async () => {
@@ -1428,22 +1451,25 @@ describe("XUẤT HỦY & NỘI BỘ — Disposal & Internal Export", () => {
     const { completeInternalExport } = await import("@/lib/services/supabase/inventory");
     await completeInternalExport("ie-1");
 
-    expect(stockMovementCalls).toHaveLength(1);
-    const inputs = getStockMoveInputs(0);
-    expect(inputs).toHaveLength(1);
-    expect(inputs[0].type).toBe("out");
-    expect(inputs[0].quantity).toBe(15);
-    expect(inputs[0].productId).toBe("nvl-sample");
-    expect(inputs[0].referenceType).toBe("internal_export");
+    // Day 1 16/05/2026: atomic RPC pattern — assert RPC call
+    const atomicCall = rpcCalls.find(
+      (c) => c.fn === "apply_internal_export_atomic",
+    );
+    expect(atomicCall).toBeDefined();
+    expect((atomicCall?.params as { p_export_id?: string })?.p_export_id).toBe(
+      "ie-1",
+    );
   });
 
   it("DE-2: Xuất hủy đã hoàn thành — reject (double guard)", async () => {
-    tableMocks = {
-      disposal_exports: { data: null, error: null },
-    };
-
+    // Day 1 16/05/2026: Guard chuyển sang server (RPC apply_disposal_export_atomic
+    // raise INVALID_STATUS). Test này verify: nếu RPC trả success=false thì
+    // client service ném lỗi và KHÔNG có stock movement nào được apply.
+    // Set flag để rpc mock trả success=false thay vì true.
+    rpcShouldFailDisposal = true;
     const { completeDisposalExport } = await import("@/lib/services/supabase/inventory");
     await expect(completeDisposalExport("de-done")).rejects.toThrow();
+    rpcShouldFailDisposal = false;
     expect(stockMovementCalls).toHaveLength(0);
   });
 });

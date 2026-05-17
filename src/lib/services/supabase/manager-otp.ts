@@ -62,6 +62,12 @@ export interface IssueManagerOtpInput {
   actionCode: OtpActionCode | string;
   targetMeta?: Record<string, unknown>;
   branchId?: string;
+  /** Day 17/05/2026: bind OTP với hoá đơn cụ thể.
+   *  Manager nhập mã (cashier đọc qua điện thoại) — server resolve → entity_id.
+   *  Áp dụng cho fnb.void_paid_bill + fnb.discount_override. */
+  targetInvoiceCode?: string;
+  /** Day 17/05/2026: bind OTP với đơn bếp (cancel unpaid). */
+  targetKitchenOrderNumber?: string;
 }
 
 export interface IssuedOtp {
@@ -72,6 +78,8 @@ export interface IssuedOtp {
   expiresInSeconds: number;
   actionCode: string;
   issuedByName: string;
+  /** True nếu OTP đã gắn target entity (tăng độ an toàn). */
+  targetBound?: boolean;
 }
 
 export interface VerifyManagerOtpInput {
@@ -123,6 +131,8 @@ export async function issueManagerOtp(
     p_action_code: input.actionCode,
     p_target_meta: input.targetMeta ?? {},
     p_branch_id: input.branchId ?? null,
+    p_target_invoice_code: input.targetInvoiceCode ?? null,
+    p_target_kitchen_order_number: input.targetKitchenOrderNumber ?? null,
   });
 
   if (error) {
@@ -151,6 +161,7 @@ export async function issueManagerOtp(
     expiresInSeconds: Number(d.expires_in_seconds ?? 120),
     actionCode: String(d.action_code),
     issuedByName: String(d.issued_by_name ?? ""),
+    targetBound: Boolean(d.target_bound),
   };
 }
 

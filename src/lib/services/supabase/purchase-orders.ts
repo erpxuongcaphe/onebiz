@@ -26,6 +26,7 @@ import {
   getPaginationRange,
   handleError,
 } from "./base";
+import { isRpcUnavailable } from "./rpc-utils";
 
 /* ------------------------------------------------------------------ */
 /*  RPC response shape (receive_purchase_items_atomic)                 */
@@ -444,6 +445,85 @@ export async function duplicatePurchaseOrder(
   }
 
   return { orderId: po.id, orderCode: po.code };
+}
+
+/* ------------------------------------------------------------------ */
+/*  Day 2 16/05/2026: Đóng đơn nhập còn thiếu (won't receive)          */
+/* ------------------------------------------------------------------ */
+
+export interface ClosePurchaseOrderShortResult {
+  success: boolean;
+  orderId: string;
+  code: string;
+  itemsReceivedFully: number;
+  itemsRemaining: number;
+}
+
+/**
+ * Đóng đơn nhập ở trạng thái `partial` hoặc `ordered` mà KHÔNG nhận
+ * thêm hàng (VD: NCC hết hàng, đổi NCC khác). Sau khi đóng:
+ *   - status = "completed"
+ *   - closed_short = true
+ *   - close_reason = lý do (>= 5 ký tự)
+ *   - audit_log entry "close_short"
+ *
+ * Khác `cancelled`: vẫn giữ nguyên số đã nhận, KHÔNG hoàn kho. Khác
+ * `completed` thường: marker closed_short=true để báo cáo phân biệt được
+ * "nhận đủ" vs "đóng còn thiếu".
+ */
+export async function closePurchaseOrderShort(
+  orderId: string,
+  reason: string,
+): Promise<ClosePurchaseOrderShortResult> {
+  const supabase = getClient();
+
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  const { data, error } = await (supabase.rpc as any)(
+    "close_purchase_order_short",
+    { p_order_id: orderId, p_reason: reason },
+  );
+
+  if (error) {
+    if (isRpcUnavailable(error)) {
+      throw new Error(
+        "Chưa có RPC close_purchase_order_short. Vui lòng chạy migration 00075 trước.",
+      );
+    }
+    const msg = (error.message ?? "").toString();
+    if (msg.includes("INVALID_REASON")) {
+      throw new Error("Lý do đóng đơn tối thiểu 5 ký tự.");
+    }
+    if (msg.includes("PO_NOT_FOUND")) {
+      throw new Error("Không tìm thấy đơn nhập.");
+    }
+    if (msg.includes("INVALID_STATUS")) {
+      throw new Error(
+        msg.replace(/^[^:]*INVALID_STATUS:\s*/, "") ||
+          "Đơn nhập không ở trạng thái phù hợp để đóng còn thiếu.",
+      );
+    }
+    handleError(error, "closePurchaseOrderShort");
+  }
+
+  if (!data || !(data as { success?: boolean }).success) {
+    throw new Error("Server không trả kết quả đóng đơn hợp lệ.");
+  }
+
+  const result = data as {
+    success: boolean;
+    order_id: string;
+    code: string;
+    items_received_fully: number;
+    items_remaining: number;
+  };
+
+  return {
+    success: result.success,
+    orderId: result.order_id,
+    code: result.code,
+    itemsReceivedFully: result.items_received_fully,
+    itemsRemaining: result.items_remaining,
+  };
 }
 
 /* ------------------------------------------------------------------ */

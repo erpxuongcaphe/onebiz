@@ -15,6 +15,7 @@ import type { InventoryCheck, DisposalExport, InternalExport, QueryParams, Query
 import { getClient, getCurrentContext, getCurrentTenantId, getPaginationRange, handleError } from "./base";
 import { applyManualStockMovement, nextEntityCode } from "./stock-adjustments";
 import { recordAuditLog } from "./audit";
+import { isRpcUnavailable } from "./rpc-utils";
 
 // --- Disposal Exports / Xuất hủy (Supabase) ---
 
@@ -168,55 +169,27 @@ export function getInternalExportStatuses() {
  */
 export async function completeDisposalExport(disposalId: string): Promise<void> {
   const supabase = getClient();
-  const tenantId = await getCurrentTenantId();
+  // CEO 14/05 (migration 00074): gọi RPC atomic — status + stock 3 lớp +
+  // audit log trong 1 transaction Postgres. Tránh drift khi mạng đứt giữa
+  // step status update và stock movement.
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
-  const sb = supabase as any;
+  const { data, error } = await (supabase.rpc as any)(
+    "apply_disposal_export_atomic",
+    { p_disposal_id: disposalId },
+  );
 
-  // 1. ATOMIC claim
-  const { data: claimed, error: claimErr } = await sb
-    .from("disposal_exports")
-    .update({ status: "completed" })
-    .eq("tenant_id", tenantId)
-    .eq("id", disposalId)
-    .eq("status", "draft")
-    .select("id, code")
-    .maybeSingle();
-  if (claimErr) handleError(claimErr, "completeDisposalExport:claim");
-  if (!claimed) {
-    const { data: existing } = await sb
-      .from("disposal_exports")
-      .select("status")
-      .eq("tenant_id", tenantId)
-      .eq("id", disposalId)
-      .single();
-    if (!existing) throw new Error("Không tìm thấy phiếu xuất hủy");
-    throw new Error(
-      `Phiếu xuất hủy đã được xử lý (trạng thái: ${existing.status}). Không thể hoàn tất lại.`
-    );
+  if (error) {
+    if (isRpcUnavailable(error)) {
+      throw new Error(
+        "Chưa có RPC apply_disposal_export_atomic. Vui lòng chạy migration 00074 trước.",
+      );
+    }
+    handleError(error, "completeDisposalExport");
   }
 
-  // 2. Load items — scope qua disposal_id (đã verify ownership)
-  const { data: items, error: itemsErr } = await sb
-    .from("disposal_export_items")
-    .select("id, product_id, product_name, quantity")
-    .eq("disposal_id", disposalId);
-  if (itemsErr) handleError(itemsErr, "completeDisposalExport:items");
-  if (!items || items.length === 0) return;
-
-  // 3. Stock-out
-  const ctx = await getCurrentContext();
-  await applyManualStockMovement(
-    // eslint-disable-next-line @typescript-eslint/no-explicit-any
-    (items as any[]).map((it: any) => ({
-      productId: it.product_id,
-      quantity: Number(it.quantity ?? 0),
-      type: "out" as const,
-      referenceType: "disposal_export",
-      referenceId: disposalId,
-      note: `${claimed.code} - Xuất hủy - ${it.product_name} (-${it.quantity})`,
-    })),
-    { tenantId: ctx.tenantId, branchId: ctx.branchId, createdBy: ctx.userId }
-  );
+  if (!data || !(data as { success?: boolean }).success) {
+    throw new Error("Server không trả kết quả hoàn tất phiếu hợp lệ.");
+  }
 }
 
 /**
@@ -259,55 +232,25 @@ export async function cancelDisposalExport(disposalId: string): Promise<void> {
  */
 export async function completeInternalExport(exportId: string): Promise<void> {
   const supabase = getClient();
-  const tenantId = await getCurrentTenantId();
+  // CEO 14/05 (migration 00074): gọi RPC atomic — tương tự disposal.
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
-  const sb = supabase as any;
+  const { data, error } = await (supabase.rpc as any)(
+    "apply_internal_export_atomic",
+    { p_export_id: exportId },
+  );
 
-  // 1. ATOMIC claim
-  const { data: claimed, error: claimErr } = await sb
-    .from("internal_exports")
-    .update({ status: "completed" })
-    .eq("tenant_id", tenantId)
-    .eq("id", exportId)
-    .eq("status", "draft")
-    .select("id, code")
-    .maybeSingle();
-  if (claimErr) handleError(claimErr, "completeInternalExport:claim");
-  if (!claimed) {
-    const { data: existing } = await sb
-      .from("internal_exports")
-      .select("status")
-      .eq("tenant_id", tenantId)
-      .eq("id", exportId)
-      .single();
-    if (!existing) throw new Error("Không tìm thấy phiếu xuất nội bộ");
-    throw new Error(
-      `Phiếu xuất nội bộ đã được xử lý (trạng thái: ${existing.status}). Không thể hoàn tất lại.`
-    );
+  if (error) {
+    if (isRpcUnavailable(error)) {
+      throw new Error(
+        "Chưa có RPC apply_internal_export_atomic. Vui lòng chạy migration 00074 trước.",
+      );
+    }
+    handleError(error, "completeInternalExport");
   }
 
-  // 2. Load items — scope qua export_id (đã verify ownership)
-  const { data: items, error: itemsErr } = await sb
-    .from("internal_export_items")
-    .select("id, product_id, product_name, quantity")
-    .eq("export_id", exportId);
-  if (itemsErr) handleError(itemsErr, "completeInternalExport:items");
-  if (!items || items.length === 0) return;
-
-  // 3. Stock-out
-  const ctx = await getCurrentContext();
-  await applyManualStockMovement(
-    // eslint-disable-next-line @typescript-eslint/no-explicit-any
-    (items as any[]).map((it: any) => ({
-      productId: it.product_id,
-      quantity: Number(it.quantity ?? 0),
-      type: "out" as const,
-      referenceType: "internal_export",
-      referenceId: exportId,
-      note: `${claimed.code} - Xuất nội bộ - ${it.product_name} (-${it.quantity})`,
-    })),
-    { tenantId: ctx.tenantId, branchId: ctx.branchId, createdBy: ctx.userId }
-  );
+  if (!data || !(data as { success?: boolean }).success) {
+    throw new Error("Server không trả kết quả hoàn tất phiếu hợp lệ.");
+  }
 }
 
 /**

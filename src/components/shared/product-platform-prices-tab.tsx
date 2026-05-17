@@ -22,7 +22,7 @@ import { Input } from "@/components/ui/input";
 import { Button } from "@/components/ui/button";
 import { useToast } from "@/lib/contexts";
 import { cn } from "@/lib/utils";
-import { formatCurrency } from "@/lib/format";
+import { formatCurrency, formatNumber } from "@/lib/format";
 import {
   getPlatformPricesForProduct,
   upsertPlatformPrices,
@@ -248,7 +248,7 @@ export function ProductPlatformPricesTab({
                   <Input
                     type="text"
                     inputMode="numeric"
-                    value={value ? Number(value).toLocaleString("vi-VN") : ""}
+                    value={value ? formatNumber(Number(value)) : ""}
                     onChange={(e) => handleChange(p.code, e.target.value)}
                     placeholder={`Để trống = ${formatCurrency(basePrice)}`}
                     className="font-mono tabular-nums max-w-[180px]"

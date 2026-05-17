@@ -1,4 +1,4 @@
-export { getProducts, getProductStats, getProductCategories, getProductCategoriesAsync, getProductBrands, getProductById, getAllStockMovements, getStockMovements as getProductStockMovements, getSalesHistory, createProduct, updateProduct, deleteProduct, duplicateProduct, moveProductSortOrder, bulkUpdateCategory, bulkUpdatePrice, bulkDeleteProducts } from "./products";
+export { getProducts, getProductStats, getProductCategories, getProductCategoriesAsync, getProductBrands, getProductById, getAllStockMovements, getStockMovements as getProductStockMovements, getSalesHistory, createProduct, updateProduct, deleteProduct, duplicateProduct, moveProductSortOrder, bulkUpdateCategory, bulkUpdatePrice, bulkDeleteProducts, restoreProduct } from "./products";
 export type { AllStockMovementRow } from "./products";
 export { getCustomers, getCustomerGroups, getCustomerGroupsAsync, getCustomerById, createCustomer, updateCustomer, deleteCustomer, getOrCreateWalkInCustomer, adjustCustomerDebt } from "./customers";
 // Sprint UX-1 Stage 3: duplicate services for "Sao chép" row action
@@ -33,8 +33,13 @@ export {
   getPurchaseOrderItems,
   receivePurchaseOrderPartial,
   getPurchaseOrdersForSupplier,
+  closePurchaseOrderShort,
 } from "./purchase-orders";
-export type { PurchaseOrderItemRow, PartialReceiveLine } from "./purchase-orders";
+export type {
+  PurchaseOrderItemRow,
+  PartialReceiveLine,
+  ClosePurchaseOrderShortResult,
+} from "./purchase-orders";
 export {
   getOrders,
   getOrderStatuses,
@@ -72,6 +77,59 @@ export {
   getInternalExports, getInternalExportStatuses, completeInternalExport, cancelInternalExport,
 } from "./inventory";
 export type { InventoryCheckItemRow } from "./inventory";
+// Phase A 16/05/2026: báo cáo KHO chi tiết
+export {
+  getInventoryAgingReport,
+  getDisposalLossReport,
+  getInventoryVarianceReport,
+} from "./inventory-reports";
+export type {
+  InventoryAgingRow,
+  InventoryAgingReport,
+  DisposalLossRow,
+  DisposalLossReport,
+  InventoryVarianceRow,
+  InventoryVarianceReport,
+} from "./inventory-reports";
+// Phase B 16/05/2026: báo cáo BÁN HÀNG chi tiết
+export {
+  getSalesReturnReport,
+  getStaffRevenueReport,
+  getPlatformCommissionReport,
+} from "./sales-reports";
+export type {
+  SalesReturnRow,
+  SalesReturnReport,
+  StaffRevenueRow,
+  StaffRevenueReport,
+  PlatformCommissionRow,
+  PlatformCommissionSummary,
+  PlatformCommissionReport,
+} from "./sales-reports";
+// Phase C 16/05/2026: báo cáo Tài chính + Marketing chuyên sâu
+export {
+  getReceivableAgingReport,
+  getVatReport,
+  getRfmReport,
+  getFnbServeTimeReport,
+} from "./finance-marketing-reports";
+export type {
+  ReceivableAgingRow,
+  ReceivableAgingReport,
+  VatSummary,
+  VatInvoiceDetail,
+  VatPoDetail,
+  VatReport,
+  RfmSegment,
+  RfmRow,
+  RfmReport,
+  ServeTimeSummary,
+  ServeTimeByBranch,
+  ServeTimeByHour,
+  ServeTimeByProduct,
+  FnbServeTimeReport,
+  VatByRate,
+} from "./finance-marketing-reports";
 // Manufacturing handled by production.ts (getProductionOrders)
 export { getPurchaseOrderEntries, getPurchaseOrdersForExport, getPurchaseEntryStatuses, getPurchaseReturns, getPurchaseReturnStatuses, getInputInvoices, getInputInvoiceStatuses, deleteInputInvoice, cancelInputInvoice, recordInputInvoice, completeSupplierReturn, cancelPurchaseOrderEntry } from "./purchase-entries";
 export { recordInvoicePayment, recordPurchasePayment, getPaymentHistory } from "./payments";
@@ -125,8 +183,14 @@ export {
   // Finance
   getFinanceKpis, getRevenueVsExpense, getExpenseBreakdown, getMonthlyProfit, getCashFlow, getCashFlowDetailed,
 } from "./analytics";
-export { posCheckout } from "./pos-checkout";
-export type { PosCheckoutInput, PosCheckoutResult, PosCheckoutItem, PaymentBreakdownItem } from "./pos-checkout";
+export { posCheckout, recordDiscountAudit } from "./pos-checkout";
+export type {
+  PosCheckoutInput,
+  PosCheckoutResult,
+  PosCheckoutItem,
+  PaymentBreakdownItem,
+  RecordDiscountAuditInput,
+} from "./pos-checkout";
 
 // Manual stock adjustments (warehouse dialogs: internal export, disposal, return, manufacturing)
 export { applyManualStockMovement, nextEntityCode } from "./stock-adjustments";

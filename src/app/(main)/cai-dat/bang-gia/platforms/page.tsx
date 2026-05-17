@@ -25,7 +25,7 @@ import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { useToast } from "@/lib/contexts";
 import { cn } from "@/lib/utils";
-import { formatCurrency } from "@/lib/format";
+import { formatCurrency, formatNumber } from "@/lib/format";
 import {
   getProductsWithPlatformPrices,
   upsertPlatformPrices,
@@ -285,7 +285,7 @@ export default function PlatformPricesBulkEditorPage() {
             <Input
               type="text"
               inputMode="numeric"
-              value={quickAmount ? Number(quickAmount).toLocaleString("vi-VN") : ""}
+              value={quickAmount ? formatNumber(Number(quickAmount)) : ""}
               onChange={(e) => setQuickAmount(e.target.value.replace(/[^\d]/g, ""))}
               placeholder="vd 1000 (= +1.000đ)"
               className="h-9 max-w-[180px] font-mono tabular-nums"
@@ -406,7 +406,7 @@ export default function PlatformPricesBulkEditorPage() {
                           <Input
                             type="text"
                             inputMode="numeric"
-                            value={value ? Number(value).toLocaleString("vi-VN") : ""}
+                            value={value ? formatNumber(Number(value)) : ""}
                             onChange={(e) => setCellValue(p.productId, platform.code, e.target.value)}
                             placeholder={formatCurrency(p.basePrice)}
                             disabled={saving}
