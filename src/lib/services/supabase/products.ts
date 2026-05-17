@@ -839,25 +839,114 @@ export async function bulkUpdatePrice(
   return { count: data?.length ?? 0 };
 }
 
+export interface BulkDeleteFailedItem {
+  productId: string;
+  productCode?: string;
+  productName?: string;
+  reason: string;
+}
+
+export interface BulkDeleteProductsResult {
+  /** Số SP đã ngừng kinh doanh thành công (soft delete) */
+  count: number;
+  /** Các SP không ngừng được + lý do user-friendly */
+  failed: BulkDeleteFailedItem[];
+  /** Tổng số SP yêu cầu */
+  total: number;
+  /** Day 17/05/2026: thông báo cho UI biết đây là soft delete */
+  softDelete?: boolean;
+}
+
 /**
- * Xoá sản phẩm hàng loạt.
- * Lưu ý: nếu sản phẩm đang được tham chiếu bởi đơn hàng / kho / BOM,
- * Supabase sẽ trả về lỗi FK constraint — caller cần catch để hiển thị toast.
+ * Xoá nhiều SP ATOMIC (Day 17/05/2026 — fix FK violation).
+ *
+ * Migration 00088: gọi RPC `bulk_delete_products_atomic` pre-check 10 bảng FK
+ * (stock_movements, invoice_items, purchase_order_items, kitchen_order_items,
+ * inventory_check_items, return_items, product_lots, bom_items,
+ * production_orders, production_order_materials).
+ *
+ * SP có ràng buộc → vào `failed[]` với reason chi tiết. SP sạch → delete +
+ * cascade xoá các bảng on delete cascade (branch_stock, product_variants,
+ * product_prices, uom_conversions, platform_prices).
+ *
+ * Caller hiển thị toast danh sách `failed` + lý do, KHÔNG throw để tránh
+ * block toàn batch khi vài SP có ràng buộc.
  */
 export async function bulkDeleteProducts(
-  ids: string[]
-): Promise<{ count: number }> {
-  if (ids.length === 0) return { count: 0 };
+  ids: string[],
+): Promise<BulkDeleteProductsResult> {
+  if (ids.length === 0) return { count: 0, failed: [], total: 0 };
   const supabase = getClient();
 
-  const { data, error } = await supabase
-    .from("products")
-    .delete()
-    .in("id", ids)
-    .select("id");
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  const { data, error } = await (supabase.rpc as any)(
+    "bulk_delete_products_atomic",
+    { p_product_ids: ids },
+  );
 
-  if (error) handleError(error, "bulkDeleteProducts");
-  return { count: data?.length ?? 0 };
+  if (error) {
+    if (isRpcUnavailable(error)) {
+      throw new Error(
+        "Chưa có RPC bulk_delete_products_atomic. Vui lòng chạy migration 00088 trước.",
+      );
+    }
+    handleError(error, "bulkDeleteProducts");
+  }
+
+  if (!data || !(data as { success?: boolean }).success) {
+    throw new Error("Server không trả kết quả xoá SP hợp lệ.");
+  }
+
+  const result = data as {
+    success: boolean;
+    deleted: number;
+    failed: Array<{
+      product_id: string;
+      product_code?: string;
+      product_name?: string;
+      reason: string;
+    }>;
+    total: number;
+  };
+
+  return {
+    count: result.deleted,
+    failed: (result.failed ?? []).map((f) => ({
+      productId: f.product_id,
+      productCode: f.product_code,
+      productName: f.product_name,
+      reason: f.reason,
+    })),
+    total: result.total,
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    softDelete: Boolean((result as any).soft_delete),
+  };
+}
+
+/**
+ * Khôi phục SP đã ngừng kinh doanh (soft delete). CEO 17/05/2026.
+ * Migration 00091: gọi RPC `restore_product_atomic` set is_active=true.
+ */
+export async function restoreProduct(id: string): Promise<void> {
+  const supabase = getClient();
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  const { data, error } = await (supabase.rpc as any)(
+    "restore_product_atomic",
+    { p_product_id: id },
+  );
+
+  if (error) {
+    if (isRpcUnavailable(error)) {
+      throw new Error(
+        "Chưa có RPC restore_product_atomic. Vui lòng chạy migration 00091 trước.",
+      );
+    }
+    handleError(error, "restoreProduct");
+  }
+
+  if (!data || !(data as { success?: boolean }).success) {
+    throw new Error("Server không trả kết quả khôi phục SP hợp lệ.");
+  }
 }
 
 // ============================================================

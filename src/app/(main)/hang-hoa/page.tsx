@@ -55,6 +55,7 @@ import {
   deleteProduct,
   duplicateProduct,
   moveProductSortOrder,
+  restoreProduct,
 } from "@/lib/services";
 import { SummaryCard } from "@/components/shared/summary-card";
 import { useToast } from "@/lib/contexts";
@@ -343,7 +344,9 @@ export default function HangHoaPage() {
   // Filters
   const [categoryFilter, setCategoryFilter] = useState("all");
   const [stockFilter, setStockFilter] = useState("all");
-  const [statusFilter, setStatusFilter] = useState("all");
+  // Day 17/05/2026 (00091 soft delete): default chỉ hiện SP active. User
+  // chọn "Đã ngừng KD" để xem SP đã soft-delete + khôi phục.
+  const [statusFilter, setStatusFilter] = useState("active");
   const [brandFilter, setBrandFilter] = useState("all");
   const [expectedOutDate, setExpectedOutDate] =
     useState<DatePresetValue>("all");
@@ -527,11 +530,16 @@ export default function HangHoaPage() {
       await deleteProduct(deletingProduct.id);
       setDeleteConfirmOpen(false);
       setDeletingProduct(null);
-      toast({ variant: "success", title: "Đã xoá sản phẩm", description: `${deletingProduct.code} — ${deletingProduct.name}` });
+      // Day 17/05/2026 (00091): soft delete — text rõ là "ngừng kinh doanh"
+      toast({
+        variant: "success",
+        title: "Đã ngừng kinh doanh sản phẩm",
+        description: `${deletingProduct.code} — ${deletingProduct.name}. Lịch sử kế toán giữ nguyên. Có thể khôi phục trong tab "Đã ngừng KD".`,
+      });
       await fetchData();
     } catch (err) {
       const message = err instanceof Error ? err.message : "Vui lòng thử lại sau.";
-      toast({ variant: "error", title: "Xoá sản phẩm thất bại", description: message });
+      toast({ variant: "error", title: "Ngừng kinh doanh thất bại", description: message });
     } finally {
       setDeleteLoading(false);
     }
@@ -543,13 +551,13 @@ export default function HangHoaPage() {
       await deleteProduct(otpTargetProduct.id, otpId);
       toast({
         variant: "success",
-        title: "Đã xoá sản phẩm",
-        description: `${otpTargetProduct.code} — ${otpTargetProduct.name} (duyệt từ xa qua OTP)`,
+        title: "Đã ngừng kinh doanh sản phẩm",
+        description: `${otpTargetProduct.code} — ${otpTargetProduct.name} (duyệt từ xa qua OTP). Lịch sử kế toán giữ nguyên.`,
       });
       await fetchData();
     } catch (err) {
       const message = err instanceof Error ? err.message : "Vui lòng thử lại sau.";
-      toast({ variant: "error", title: "Xoá sản phẩm thất bại", description: message });
+      toast({ variant: "error", title: "Ngừng kinh doanh thất bại", description: message });
     } finally {
       setOtpTargetProduct(null);
     }
@@ -572,14 +580,52 @@ export default function HangHoaPage() {
     }
     setBulkLoading(true);
     try {
-      const { count } = await bulkDeleteProducts(ids);
+      // Day 17/05/2026 (00091): SOFT DELETE — set is_active=false thay vì xoá
+      // hẳn. SP biến mất khỏi danh sách + POS + dropdown nhưng lịch sử kế toán
+      // giữ nguyên. Tuân thủ TT200/133. Chỉ chặn nếu còn tồn kho > 0.
+      const result = await bulkDeleteProducts(ids);
       setBulkDeleteConfirmOpen(false);
-      await finishBulkSuccess(
-        "Đã xoá sản phẩm",
-        `Xoá thành công ${count}/${ids.length} sản phẩm.`
-      );
+
+      const verb = "Đã ngừng kinh doanh";
+      if (result.failed.length === 0) {
+        await finishBulkSuccess(
+          verb + " sản phẩm",
+          `${verb} ${result.count}/${result.total} sản phẩm. Lịch sử kế toán giữ nguyên — có thể khôi phục bất kỳ lúc nào.`,
+        );
+      } else if (result.count > 0) {
+        const failedSummary = result.failed
+          .slice(0, 5)
+          .map((f) => `• ${f.productCode ?? "—"} ${f.productName ?? ""}: ${f.reason}`)
+          .join("\n");
+        const moreNote =
+          result.failed.length > 5
+            ? `\n…và ${result.failed.length - 5} SP khác`
+            : "";
+        toast({
+          variant: "warning",
+          title: `${verb} ${result.count}/${result.total} SP — ${result.failed.length} SP chưa ngừng được`,
+          description: failedSummary + moreNote,
+          duration: 10000,
+        });
+        await finishBulkSuccess("", "");
+      } else {
+        const failedSummary = result.failed
+          .slice(0, 5)
+          .map((f) => `• ${f.productCode ?? "—"} ${f.productName ?? ""}: ${f.reason}`)
+          .join("\n");
+        const moreNote =
+          result.failed.length > 5
+            ? `\n…và ${result.failed.length - 5} SP khác`
+            : "";
+        toast({
+          variant: "error",
+          title: "Chưa ngừng kinh doanh được SP nào",
+          description: failedSummary + moreNote,
+          duration: 10000,
+        });
+      }
     } catch (err) {
-      finishBulkError("Xoá sản phẩm thất bại", err);
+      finishBulkError("Ngừng kinh doanh sản phẩm thất bại", err);
     } finally {
       setBulkLoading(false);
     }
@@ -926,15 +972,18 @@ export default function HangHoaPage() {
               />
             </FilterGroup>
 
-            <FilterGroup label="Trạng thái">
+            {/* Day 17/05/2026: default "active" — chỉ hiện SP đang KD. User
+                chọn "Đã ngừng KD" để xem + khôi phục SP đã soft delete. */}
+            <FilterGroup label="Trạng thái kinh doanh">
               <SelectFilter
                 options={[
-                  { label: "Đang bán", value: "active" },
-                  { label: "Ngừng bán", value: "inactive" },
+                  { label: "Đang kinh doanh", value: "active" },
+                  { label: "Đã ngừng KD (có thể khôi phục)", value: "inactive" },
+                  { label: "Tất cả", value: "all" },
                 ]}
                 value={statusFilter}
                 onChange={setStatusFilter}
-                placeholder="Tất cả"
+                placeholder="Đang kinh doanh"
               />
             </FilterGroup>
 
@@ -1108,50 +1157,86 @@ export default function HangHoaPage() {
               canViewCost={canViewCost}
             />
           )}
-          rowActions={(row) => [
-            {
-              label: "Sửa",
-              icon: <Icon name="edit" size={16} />,
-              onClick: () => {
-                setEditingProduct(row);
-                setCreateOpen(true);
+          rowActions={(row) => {
+            const isInactive = row.status === "inactive";
+            // Day 17/05/2026 (00091): SP inactive → menu "Khôi phục" thay vì
+            // "Ngừng KD". UX khác biệt rõ ràng cho user biết trạng thái.
+            const actions: Array<{
+              label: string;
+              icon: React.ReactNode;
+              onClick: () => void;
+              variant?: "destructive";
+              separator?: boolean;
+            }> = [
+              {
+                label: "Sửa",
+                icon: <Icon name="edit" size={16} />,
+                onClick: () => {
+                  setEditingProduct(row);
+                  setCreateOpen(true);
+                },
               },
-            },
-            {
-              label: "Nhân bản",
-              icon: <Icon name="content_copy" size={16} />,
-              onClick: async () => {
-                try {
-                  const copy = await duplicateProduct(row.id);
-                  toast({
-                    variant: "success",
-                    title: "Đã sao chép",
-                    description: `Bản sao mới: ${copy.code} — ${copy.name}`,
-                  });
-                  // Refresh list — fetch lại data
-                  fetchData();
-                } catch (err) {
-                  toast({
-                    variant: "error",
-                    title: "Không sao chép được",
-                    description: err instanceof Error ? err.message : "Lỗi không xác định",
-                  });
-                }
+              {
+                label: "Nhân bản",
+                icon: <Icon name="content_copy" size={16} />,
+                onClick: async () => {
+                  try {
+                    const copy = await duplicateProduct(row.id);
+                    toast({
+                      variant: "success",
+                      title: "Đã sao chép",
+                      description: `Bản sao mới: ${copy.code} — ${copy.name}`,
+                    });
+                    fetchData();
+                  } catch (err) {
+                    toast({
+                      variant: "error",
+                      title: "Không sao chép được",
+                      description: err instanceof Error ? err.message : "Lỗi không xác định",
+                    });
+                  }
+                },
               },
-            },
-            // Phase 3a: row action "Xoá" luôn hiện. Cashier không có quyền
-            // sẽ được chuyển sang OTP flow trong handleConfirmSingleDelete.
-            {
-              label: "Xóa",
-              icon: <Icon name="delete" size={16} />,
-              onClick: () => {
-                setDeletingProduct(row);
-                setDeleteConfirmOpen(true);
-              },
-              variant: "destructive" as const,
-              separator: true,
-            },
-          ]}
+            ];
+
+            if (isInactive) {
+              actions.push({
+                label: "Khôi phục",
+                icon: <Icon name="restore" size={16} />,
+                onClick: async () => {
+                  try {
+                    await restoreProduct(row.id);
+                    toast({
+                      variant: "success",
+                      title: "Đã khôi phục SP",
+                      description: `${row.code} — ${row.name} đang kinh doanh trở lại`,
+                    });
+                    fetchData();
+                  } catch (err) {
+                    toast({
+                      variant: "error",
+                      title: "Không khôi phục được",
+                      description: err instanceof Error ? err.message : "Lỗi không xác định",
+                    });
+                  }
+                },
+                separator: true,
+              });
+            } else {
+              actions.push({
+                label: "Ngừng kinh doanh",
+                icon: <Icon name="block" size={16} />,
+                onClick: () => {
+                  setDeletingProduct(row);
+                  setDeleteConfirmOpen(true);
+                },
+                variant: "destructive" as const,
+                separator: true,
+              });
+            }
+
+            return actions;
+          }}
         />
       </ListPageLayout>
 
@@ -1176,17 +1261,19 @@ export default function HangHoaPage() {
       >
         <DialogContent className="sm:max-w-md">
           <DialogHeader>
-            <DialogTitle>Xoá sản phẩm?</DialogTitle>
+            <DialogTitle>Ngừng kinh doanh sản phẩm?</DialogTitle>
             <DialogDescription className="space-y-2">
               <span className="block">
-                Bạn có chắc chắn muốn xoá sản phẩm{" "}
-                <strong>{deletingProduct?.code}</strong> —{" "}
-                <strong>{deletingProduct?.name}</strong>? Hành động này không thể hoàn tác.
+                Sản phẩm <strong>{deletingProduct?.code}</strong> —{" "}
+                <strong>{deletingProduct?.name}</strong> sẽ bị ẩn khỏi danh
+                sách + POS + dropdown đặt hàng. <b>Lịch sử kế toán giữ nguyên</b>
+                {" "}(hoá đơn, đơn nhập, lịch sử kho vẫn xem được). Có thể
+                khôi phục bất kỳ lúc nào.
               </span>
               {!canDeleteProduct && (
                 <span className="block rounded-md bg-status-warning/10 border border-status-warning/30 p-2.5 text-xs text-foreground">
                   <Icon name="pin" size={14} className="inline-block mr-1 text-status-warning" />
-                  Bạn không có quyền xoá. Sau khi xác nhận, hệ thống sẽ yêu cầu OTP từ quản lý.
+                  Bạn không có quyền. Sau khi xác nhận, hệ thống sẽ yêu cầu OTP từ quản lý.
                 </span>
               )}
             </DialogDescription>
@@ -1207,7 +1294,11 @@ export default function HangHoaPage() {
               disabled={deleteLoading}
               onClick={handleConfirmSingleDelete}
             >
-              {deleteLoading ? "Đang xoá..." : canDeleteProduct ? "Xoá" : "Xin OTP duyệt"}
+              {deleteLoading
+                ? "Đang xử lý..."
+                : canDeleteProduct
+                  ? "Ngừng kinh doanh"
+                  : "Xin OTP duyệt"}
             </Button>
           </DialogFooter>
         </DialogContent>
@@ -1375,7 +1466,7 @@ export default function HangHoaPage() {
         </DialogContent>
       </Dialog>
 
-      {/* — Xác nhận xoá — */}
+      {/* — Xác nhận ngừng kinh doanh (soft delete) — */}
       <Dialog
         open={bulkDeleteConfirmOpen}
         onOpenChange={(o) => {
@@ -1385,11 +1476,12 @@ export default function HangHoaPage() {
       >
         <DialogContent className="sm:max-w-md">
           <DialogHeader>
-            <DialogTitle>Xoá sản phẩm hàng loạt?</DialogTitle>
+            <DialogTitle>Ngừng kinh doanh sản phẩm?</DialogTitle>
             <DialogDescription>
-              Bạn sắp xoá{" "}
-              <strong>{selectedRowsForBulk.length}</strong> sản phẩm khỏi
-              danh sách. Hành động này không thể hoàn tác.
+              <strong>{selectedRowsForBulk.length}</strong> sản phẩm sẽ bị
+              ẩn khỏi danh sách + POS + dropdown đặt hàng. <b>Lịch sử kế toán
+              giữ nguyên</b> (HĐ, đơn nhập, lịch sử kho vẫn xem được). Có thể
+              khôi phục lại bất kỳ lúc nào trong tab &quot;Đã ngừng KD&quot;.
             </DialogDescription>
           </DialogHeader>
           <div className="py-2 max-h-40 overflow-y-auto">
@@ -1420,8 +1512,8 @@ export default function HangHoaPage() {
               onClick={handleConfirmBulkDelete}
             >
               {bulkLoading
-                ? "Đang xoá..."
-                : `Xoá ${selectedRowsForBulk.length} sản phẩm`}
+                ? "Đang xử lý..."
+                : `Ngừng kinh doanh ${selectedRowsForBulk.length} sản phẩm`}
             </Button>
           </DialogFooter>
         </DialogContent>
