@@ -73,9 +73,48 @@ export interface PosCheckoutInput {
   clientSessionId?: string | null;
 }
 
+/**
+ * Day 18/05/2026 (CEO): mỗi SKU có BOM được expand thành 1 BomConsumeResult
+ * sau khi RPC `pos_complete_checkout_atomic` / `fnb_complete_payment_atomic`
+ * trừ NVL theo công thức. UI dùng để hiển thị toast tiêu hao + warning âm tồn.
+ */
+export interface BomConsumedMaterial {
+  material_id: string;
+  material_code?: string;
+  material_name?: string;
+  qty: number;
+  unit?: string;
+}
+
+export interface BomConsumeWarning {
+  material_id?: string;
+  material_code?: string;
+  material_name?: string;
+  available?: number;
+  required?: number;
+  reason: string;
+}
+
+export interface BomConsumeResult {
+  product_id: string;
+  product_name?: string;
+  sale_qty: number;
+  topping?: boolean;
+  result: {
+    success: boolean;
+    bom_id: string | null;
+    bom_name?: string;
+    consumed: BomConsumedMaterial[];
+    warnings: BomConsumeWarning[];
+    allow_negative?: boolean;
+  };
+}
+
 export interface PosCheckoutResult {
   invoiceId: string;
   invoiceCode: string;
+  /** Day 18/05/2026 (CEO): BOM consume break-down — dùng cho toast */
+  bomConsumeResults?: BomConsumeResult[];
 }
 
 export interface StockDecrementContext {
@@ -325,11 +364,16 @@ export async function posCheckout(input: PosCheckoutInput): Promise<PosCheckoutR
   );
 
   if (!atomicError && atomicData) {
-    const result = atomicData as { invoice_id?: string; invoice_code?: string };
+    const result = atomicData as {
+      invoice_id?: string;
+      invoice_code?: string;
+      bom_consume_results?: BomConsumeResult[];
+    };
     if (result.invoice_id && result.invoice_code) {
       return {
         invoiceId: result.invoice_id,
         invoiceCode: result.invoice_code,
+        bomConsumeResults: result.bom_consume_results,
       };
     }
     throw new Error("Phản hồi thanh toán thiếu thông tin hoá đơn.");

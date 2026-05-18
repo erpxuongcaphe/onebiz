@@ -5,6 +5,12 @@ export interface BOM {
   tenantId: string;
   productId: string;
   variantId?: string;
+  /**
+   * Day 18/05/2026 (CEO): BOM theo chi nhánh
+   * - null  = BOM global default (áp dụng mọi chi nhánh)
+   * - <id>  = BOM override chỉ cho chi nhánh đó
+   */
+  branchId?: string | null;
   code?: string;
   name: string;
   version: number;
@@ -18,6 +24,7 @@ export interface BOM {
   // Joined
   productName?: string;
   productCode?: string;
+  branchName?: string;
   items?: BOMItem[];
   totalCost?: number;
 }

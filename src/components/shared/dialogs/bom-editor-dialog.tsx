@@ -19,6 +19,7 @@ import {
   SelectItem,
 } from "@/components/ui/select";
 import { useToast } from "@/lib/contexts";
+import { useAuth } from "@/lib/contexts/auth-context";
 import {
   createBOM,
   getBOMById,
@@ -57,6 +58,7 @@ export function BOMEditorDialog({
   onSuccess,
 }: BOMEditorDialogProps) {
   const { toast } = useToast();
+  const { branches } = useAuth();
 
   // Outputs (SKU choices)
   const [skuOptions, setSkuOptions] = useState<Product[]>([]);
@@ -64,6 +66,8 @@ export function BOMEditorDialog({
 
   // Form state
   const [productId, setProductId] = useState(initialProductId ?? "");
+  // Day 18/05/2026 (CEO): null = BOM global (3 quán dùng chung), có value = BOM riêng quán
+  const [branchId, setBranchId] = useState<string | null>(null);
   const [name, setName] = useState("");
   const [batchSize, setBatchSize] = useState("1");
   const [yieldQty, setYieldQty] = useState("1");
@@ -82,7 +86,10 @@ export function BOMEditorDialog({
   useEffect(() => {
     if (!open) return;
     (async () => {
-      const [skus, nvls] = await Promise.all([
+      // Day 18/05/2026 (CEO Pattern A): NVL trong BOM có thể là cả SKU
+      // (vd "Cà phê rang 1kg" — bán nội bộ ở kho tổng, làm NVL ở quán).
+      // → Material options = tất cả SP (NVL + SKU), trừ chính SKU đầu ra.
+      const [skus, all] = await Promise.all([
         getProducts({
           page: 0,
           pageSize: 200,
@@ -90,12 +97,12 @@ export function BOMEditorDialog({
         }),
         getProducts({
           page: 0,
-          pageSize: 500,
-          filters: { productType: "nvl" },
+          pageSize: 1000,
+          filters: {}, // tất cả SP
         }),
       ]);
       setSkuOptions(skus.data);
-      setNvlOptions(nvls.data);
+      setNvlOptions(all.data);
     })();
   }, [open]);
 
@@ -105,6 +112,7 @@ export function BOMEditorDialog({
     if (!bomId) {
       // Reset for create mode
       setProductId(initialProductId ?? "");
+      setBranchId(null);
       setName("");
       setBatchSize("1");
       setYieldQty("1");
@@ -118,6 +126,7 @@ export function BOMEditorDialog({
     (async () => {
       const bom = await getBOMById(bomId);
       setProductId(bom.productId);
+      setBranchId(bom.branchId ?? null);
       setName(bom.name);
       setBatchSize(String(bom.batchSize));
       setYieldQty(String(bom.yieldQty));
@@ -195,6 +204,7 @@ export function BOMEditorDialog({
     try {
       const created = await createBOM({
         productId,
+        branchId, // null = global, có giá trị = riêng quán
         name,
         batchSize: Number(batchSize) || 1,
         yieldQty: Number(yieldQty) || 1,
@@ -295,6 +305,48 @@ export function BOMEditorDialog({
               />
               {errors.name && <p className="text-xs text-destructive">{errors.name}</p>}
             </div>
+          </div>
+
+          {/* Day 18/05/2026 (CEO): Áp dụng cho chi nhánh */}
+          <div className="space-y-2">
+            <label className="text-sm font-medium">Áp dụng cho chi nhánh</label>
+            <Select
+              value={branchId ?? "__all__"}
+              onValueChange={(v) => setBranchId(v === "__all__" ? null : v)}
+              items={[
+                { value: "__all__", label: "Áp dụng tất cả chi nhánh (mặc định)" },
+                ...branches.map((b) => ({
+                  value: b.id,
+                  label: `${b.name}${b.branchType ? ` (${b.branchType})` : ""}`,
+                })),
+              ]}
+            >
+              <SelectTrigger className="w-full">
+                <SelectValue>
+                  {(v) => {
+                    if (!v || v === "__all__") return "Áp dụng tất cả chi nhánh (mặc định)";
+                    const match = branches.find((b) => b.id === v);
+                    return match ? match.name : v;
+                  }}
+                </SelectValue>
+              </SelectTrigger>
+              <SelectContent>
+                <SelectItem value="__all__">
+                  Áp dụng tất cả chi nhánh (mặc định)
+                </SelectItem>
+                {branches.map((b) => (
+                  <SelectItem key={b.id} value={b.id}>
+                    {b.name}
+                  </SelectItem>
+                ))}
+              </SelectContent>
+            </Select>
+            <p className="text-xs text-muted-foreground">
+              <Icon name="info" size={12} className="inline-block mr-1 align-text-bottom" />
+              {branchId
+                ? "BOM này CHỈ áp dụng cho chi nhánh được chọn (override BOM global)."
+                : "BOM global — mọi chi nhánh dùng chung công thức này. Có thể tạo BOM riêng cho từng quán sau."}
+            </p>
           </div>
 
           {/* Batch / Yield */}

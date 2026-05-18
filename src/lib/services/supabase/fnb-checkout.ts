@@ -85,6 +85,8 @@ export interface FnbPaymentInput {
 export interface FnbPaymentResult {
   invoiceId: string;
   invoiceCode: string;
+  /** Day 18/05/2026 (CEO): BOM consume break-down — dùng cho toast tiêu hao NVL */
+  bomConsumeResults?: import("./pos-checkout").BomConsumeResult[];
 }
 
 // ============================================================
@@ -203,8 +205,12 @@ export async function fnbPayment(input: FnbPaymentInput): Promise<FnbPaymentResu
   if (error) handleError(error, "fnbPayment:atomic_rpc");
   if (!data) throw new Error("Không nhận được phản hồi từ server khi thanh toán.");
 
-  // RPC returns jsonb { invoice_id, invoice_code, total, paid, debt }
-  const result = data as { invoice_id: string; invoice_code: string };
+  // RPC returns jsonb { invoice_id, invoice_code, total, paid, debt, bom_consume_results }
+  const result = data as {
+    invoice_id: string;
+    invoice_code: string;
+    bom_consume_results?: import("./pos-checkout").BomConsumeResult[];
+  };
   if (!result.invoice_id || !result.invoice_code) {
     throw new Error("Phản hồi thanh toán thiếu thông tin hoá đơn.");
   }
@@ -212,6 +218,7 @@ export async function fnbPayment(input: FnbPaymentInput): Promise<FnbPaymentResu
   return {
     invoiceId: result.invoice_id,
     invoiceCode: result.invoice_code,
+    bomConsumeResults: result.bom_consume_results,
   };
 }
 

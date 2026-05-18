@@ -165,3 +165,137 @@ export async function updateTenantBusinessInfo(
     invoiceFooter: updates.invoice_footer as string | undefined,
   };
 }
+
+// ============================================================
+// Day 18/05/2026 (CEO): Key-value settings table (migration 00095)
+// Phục vụ các flag config: allow_negative_stock, require_bom_for_sku,...
+// Khác với business_info ở trên — settings này lưu vào table tenant_settings
+// riêng (không phải tenants.settings jsonb).
+// ============================================================
+
+export type SettingValue =
+  | boolean
+  | string
+  | number
+  | Record<string, unknown>
+  | null;
+
+export interface TenantSettingRow {
+  key: string;
+  value: SettingValue;
+  description?: string;
+  updatedAt?: string;
+}
+
+/**
+ * Lấy 1 setting của tenant hiện tại. Trả về defaultValue nếu chưa có row.
+ */
+export async function getTenantSetting<T extends SettingValue>(
+  key: string,
+  defaultValue: T,
+): Promise<T> {
+  const supabase = getClient();
+  const tenantId = await getCurrentTenantId();
+
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  const { data, error } = await (supabase as any)
+    .from("tenant_settings")
+    .select("value")
+    .eq("tenant_id", tenantId)
+    .eq("key", key)
+    .maybeSingle();
+
+  if (error) {
+    // Schema chưa apply hoặc lỗi mạng → trả default thay vì throw
+    // để UI vẫn render được.
+    console.warn("[getTenantSetting] fallback default:", error.message);
+    return defaultValue;
+  }
+
+  if (!data) return defaultValue;
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  return ((data as any).value as T) ?? defaultValue;
+}
+
+/**
+ * Set 1 setting — gọi RPC `set_tenant_setting` (server check role owner/admin).
+ */
+export async function setTenantSetting(
+  key: string,
+  value: SettingValue,
+  description?: string,
+): Promise<void> {
+  const supabase = getClient();
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  const { data, error } = await (supabase.rpc as any)("set_tenant_setting", {
+    p_key: key,
+    p_value: value,
+    p_description: description ?? null,
+  });
+
+  if (error) handleError(error, "setTenantSetting");
+
+  if (!data || !(data as { success?: boolean }).success) {
+    throw new Error("Không cập nhật được cài đặt.");
+  }
+}
+
+/**
+ * Lấy tất cả settings (cho trang cài đặt hệ thống).
+ */
+export async function listTenantSettings(): Promise<TenantSettingRow[]> {
+  const supabase = getClient();
+  const tenantId = await getCurrentTenantId();
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  const { data, error } = await (supabase as any)
+    .from("tenant_settings")
+    .select("key, value, description, updated_at")
+    .eq("tenant_id", tenantId)
+    .order("key");
+
+  if (error) handleError(error, "listTenantSettings");
+
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  return ((data ?? []) as any[]).map((row) => ({
+    key: row.key as string,
+    value: row.value as SettingValue,
+    description: (row.description as string) ?? undefined,
+    updatedAt: (row.updated_at as string) ?? undefined,
+  }));
+}
+
+// ─── Typed wrappers cho các setting hay dùng ───
+
+/** Cho phép bán SKU có BOM kể cả khi NVL không đủ tồn. Default: true */
+export async function isAllowNegativeStock(): Promise<boolean> {
+  const v = await getTenantSetting<SettingValue>(
+    "allow_negative_stock",
+    true as SettingValue,
+  );
+  return Boolean(v);
+}
+
+export async function setAllowNegativeStock(value: boolean): Promise<void> {
+  return setTenantSetting(
+    "allow_negative_stock",
+    value,
+    "Cho phép bán SKU có BOM kể cả khi NVL không đủ tồn (admin tự cân đối kế toán)",
+  );
+}
+
+/** Bắt buộc SKU phải có BOM trước khi cho phép bán. Default: false */
+export async function isRequireBomForSku(): Promise<boolean> {
+  const v = await getTenantSetting<SettingValue>(
+    "require_bom_for_sku",
+    false as SettingValue,
+  );
+  return Boolean(v);
+}
+
+export async function setRequireBomForSku(value: boolean): Promise<void> {
+  return setTenantSetting(
+    "require_bom_for_sku",
+    value,
+    "Bắt buộc SKU phải có BOM trước khi cho phép bán (true = reject; false = chỉ cảnh báo)",
+  );
+}

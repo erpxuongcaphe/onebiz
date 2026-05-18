@@ -61,6 +61,7 @@ import {
   cleanupTestProduct,
   bulkCleanupTestProducts,
   verifyCurrentUserPassword,
+  getProductIdsWithActiveBom,
 } from "@/lib/services";
 import { SummaryCard } from "@/components/shared/summary-card";
 import { useToast } from "@/lib/contexts";
@@ -308,6 +309,10 @@ export default function HangHoaPage() {
   const [deletingProduct, setDeletingProduct] = useState<Product | null>(null);
   const [deleteLoading, setDeleteLoading] = useState(false);
 
+  // Day 18/05/2026 (CEO): Set product_ids có BOM active — populated sau fetchData
+  // dùng để hiển thị badge "Chưa có BOM" cho SKU có has_bom=true nhưng thiếu setup.
+  const [productsWithActiveBom, setProductsWithActiveBom] = useState<Set<string>>(new Set());
+
   // Day 17/05/2026 (00094): "Xoá vĩnh viễn" — gộp logic cleanup_test_product
   // (bypass stock + active check, vẫn check 15 bảng FK giao dịch thực).
   // Bỏ "Xoá hẳn" (00092) vì duplicate UX — gộp 1 nút "Xoá vĩnh viễn".
@@ -425,6 +430,26 @@ export default function HangHoaPage() {
     setData(result.data);
     setTotal(result.total);
     setLoading(false);
+
+    // Day 18/05/2026 (CEO): query BOM status cho SKU có has_bom=true
+    // → set state để badge "Chưa có BOM" hiển thị warning.
+    if (scope === "sku") {
+      const skuIdsWithBomFlag = result.data
+        .filter((p) => p.hasBom)
+        .map((p) => p.id);
+      if (skuIdsWithBomFlag.length > 0) {
+        try {
+          const idsWithActiveBom = await getProductIdsWithActiveBom(skuIdsWithBomFlag);
+          setProductsWithActiveBom(idsWithActiveBom);
+        } catch {
+          // silent — không block list nếu query BOM fail
+        }
+      } else {
+        setProductsWithActiveBom(new Set());
+      }
+    } else {
+      setProductsWithActiveBom(new Set());
+    }
   }, [page, pageSize, search, scope, categoryFilter, stockFilter, statusFilter, brandFilter]);
 
   useEffect(() => {
@@ -1025,15 +1050,29 @@ export default function HangHoaPage() {
     {
       id: "hasBom",
       header: "BOM",
-      size: 70,
-      cell: ({ row }) =>
-        row.original.hasBom ? (
+      size: 130,
+      cell: ({ row }) => {
+        if (!row.original.hasBom) {
+          return <span className="text-muted-foreground text-xs">Mua bán</span>;
+        }
+        // Day 18/05/2026 (CEO): SKU đánh dấu "có BOM" nhưng thực tế chưa setup
+        // → warning vàng để CEO biết bổ sung. Bán không trừ NVL đúng.
+        const hasActiveBom = productsWithActiveBom.has(row.original.id);
+        return hasActiveBom ? (
           <span className="inline-flex items-center rounded-full bg-primary/10 text-primary text-xs px-2 py-0.5">
-            Có
+            <Icon name="check_circle" size={12} className="mr-1" />
+            Có BOM
           </span>
         ) : (
-          <span className="text-muted-foreground text-xs">Mua bán</span>
-        ),
+          <span
+            className="inline-flex items-center rounded-full bg-status-warning/10 text-status-warning border border-status-warning/30 text-xs px-2 py-0.5"
+            title="SKU đã đánh dấu 'có BOM' nhưng chưa setup công thức. Vào /hang-hoa/cong-thuc để tạo BOM, nếu không POS sẽ không tự trừ NVL."
+          >
+            <Icon name="warning" size={12} className="mr-1" />
+            Chưa setup
+          </span>
+        );
+      },
     },
     {
       accessorKey: "sellPrice",

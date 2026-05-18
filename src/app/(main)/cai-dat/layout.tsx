@@ -20,6 +20,7 @@ const settingsNav: ModuleNavGroup[] = [
     label: "Bán hàng",
     items: [
       { label: "Bán hàng", href: "/cai-dat/ban-hang", icon: "shopping_cart" },
+      { label: "Kho & công thức", href: "/cai-dat/kho-hang", icon: "inventory_2" },
       { label: "Hóa đơn", href: "/cai-dat/hoa-don", icon: "description", badge: "Sắp ra mắt" },
       { label: "In ấn", href: "/cai-dat/in-an", icon: "print" },
       { label: "Thiết bị POS", href: "/cai-dat/thiet-bi-pos", icon: "lock" },

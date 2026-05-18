@@ -344,6 +344,9 @@ export const sidebarNavGroups: SidebarGroup[] = [
           { label: "Aging tồn kho / Dead-stock", href: "/phan-tich/aging", icon: "hourglass_top", badge: "Mới" },
           { label: "Tổn thất tồn kho", href: "/phan-tich/ton-that", icon: "delete_sweep", badge: "Mới" },
           { label: "Chênh lệch kiểm kê", href: "/phan-tich/chenh-lech-kiem-ke", icon: "balance", badge: "Mới" },
+          // Day 18/05/2026 (CEO): Sprint BOM-CONSUME Phase 2
+          { label: "Tiêu hao NVL theo chi nhánh", href: "/phan-tich/tieu-hao-nvl", icon: "science", badge: "Mới" },
+          { label: "COGS thực theo BOM", href: "/phan-tich/cogs-theo-bom", icon: "account_balance", badge: "Mới" },
         ],
       },
       {

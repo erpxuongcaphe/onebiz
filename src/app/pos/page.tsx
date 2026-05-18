@@ -1471,6 +1471,32 @@ function PosPageInner() {
         invoiceCode = result.invoiceCode;
         invoiceId = result.invoiceId;
         isOfflineCheckout = !!result.isOffline;
+
+        // Day 18/05/2026 (CEO): toast tiêu hao NVL theo BOM (chỉ online)
+        if (!isOfflineCheckout && result.bomConsumeResults && result.bomConsumeResults.length > 0) {
+          const lines: string[] = [];
+          let hasWarning = false;
+          for (const r of result.bomConsumeResults) {
+            for (const m of r.result.consumed) {
+              lines.push(
+                `• ${m.material_code ?? m.material_name ?? "NVL"}: ${m.qty}${m.unit ? ` ${m.unit}` : ""}`,
+              );
+            }
+            if (r.result.warnings && r.result.warnings.length > 0) hasWarning = true;
+          }
+          if (lines.length > 0) {
+            const head = lines.slice(0, 8).join("\n");
+            const tail = lines.length > 8 ? `\n…và ${lines.length - 8} NVL khác` : "";
+            toast({
+              variant: hasWarning ? "warning" : "success",
+              title: hasWarning
+                ? "Đã trừ NVL — có cảnh báo tồn kho âm"
+                : "Đã trừ NVL theo công thức",
+              description: head + tail,
+              duration: hasWarning ? 12000 : 6000,
+            });
+          }
+        }
       }
 
       // Day 3 16/05/2026: audit log discount manual (sau OTP duyệt)

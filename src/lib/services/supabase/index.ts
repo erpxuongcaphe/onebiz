@@ -219,7 +219,7 @@ export { getCategoriesByScope, getAllCategories, getCategoriesWithCounts, create
 export { getVariantsByProduct, createVariant, updateVariant, deleteVariant } from "./variants";
 
 // BOM (Production Formulas)
-export { getAllBOMs, getBOMsByProduct, getBOMById, createBOM, updateBOM, deleteBOM, calculateBOMCost, getBOMProductionHistory } from "./bom";
+export { getAllBOMs, getBOMsByProduct, getBOMById, createBOM, updateBOM, deleteBOM, calculateBOMCost, getBOMProductionHistory, getActiveBOMForBranch, cloneBOMForBranch, getProductIdsWithActiveBom } from "./bom";
 
 // Production Orders + Lot Tracking
 export {
@@ -289,8 +289,11 @@ export type { StockTransfer, StockTransferStatus, StockTransferItem, CreateStock
 
 // Audit Log (Lịch sử thao tác)
 export { getAuditLogs, getAuditLogsByEntity, recordAuditLog, getAuditStats, getActionOptions, getEntityTypeOptions, getProfilesForPersonFilter } from "./audit";
-export { getTenantBusinessInfo, updateTenantBusinessInfo } from "./tenant-settings";
-export type { TenantBusinessInfo } from "./tenant-settings";
+export { getTenantBusinessInfo, updateTenantBusinessInfo, getTenantSetting, setTenantSetting, listTenantSettings, isAllowNegativeStock, setAllowNegativeStock, isRequireBomForSku, setRequireBomForSku } from "./tenant-settings";
+export type { TenantBusinessInfo, TenantSettingRow, SettingValue } from "./tenant-settings";
+export type { BomConsumeResult, BomConsumedMaterial, BomConsumeWarning } from "./pos-checkout";
+export { getNvlConsumptionByBranch, getCogsByBom } from "./bom-reports";
+export type { NvlConsumptionRow, CogsByBomRow } from "./bom-reports";
 export {
   getNotifications,
   getUnreadNotificationCount,

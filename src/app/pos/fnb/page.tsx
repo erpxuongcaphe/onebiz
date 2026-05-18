@@ -1231,6 +1231,33 @@ function FnbPosPageInner() {
           tipAmount: payload.tipAmount,
         }, networkStatus.isOnline);
 
+        // Day 18/05/2026 (CEO): toast tiêu hao NVL theo BOM (FnB online)
+        const bomResults = (payResult as { bomConsumeResults?: import("@/lib/services").BomConsumeResult[] }).bomConsumeResults;
+        if (bomResults && bomResults.length > 0) {
+          const lines: string[] = [];
+          let hasWarning = false;
+          for (const r of bomResults) {
+            for (const m of r.result.consumed) {
+              lines.push(
+                `• ${m.material_code ?? m.material_name ?? "NVL"}: ${m.qty}${m.unit ? ` ${m.unit}` : ""}`,
+              );
+            }
+            if (r.result.warnings && r.result.warnings.length > 0) hasWarning = true;
+          }
+          if (lines.length > 0) {
+            const head = lines.slice(0, 8).join("\n");
+            const tail = lines.length > 8 ? `\n…và ${lines.length - 8} NVL khác` : "";
+            toast({
+              variant: hasWarning ? "warning" : "success",
+              title: hasWarning
+                ? "Đã trừ NVL — có cảnh báo tồn kho âm"
+                : "Đã trừ NVL theo BOM",
+              description: head + tail,
+              duration: hasWarning ? 12000 : 6000,
+            });
+          }
+        }
+
         // Auto-print receipt if enabled.
         // Bọc print trong try/catch riêng: lỗi in KHÔNG được làm hỏng
         // flow thanh toán (payment đã success → không được hiển thị "Thanh toán thất bại").

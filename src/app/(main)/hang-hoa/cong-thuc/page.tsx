@@ -29,7 +29,23 @@ import {
   calculateBOMCost,
   deleteBOM,
   getBranches,
+  cloneBOMForBranch,
 } from "@/lib/services";
+import {
+  Dialog,
+  DialogContent,
+  DialogHeader,
+  DialogTitle,
+  DialogDescription,
+  DialogFooter,
+} from "@/components/ui/dialog";
+import {
+  Select,
+  SelectTrigger,
+  SelectValue,
+  SelectContent,
+  SelectItem,
+} from "@/components/ui/select";
 import type { BranchDetail } from "@/lib/services/supabase";
 import { formatDate, formatCurrency, formatNumber } from "@/lib/format";
 import type { BOM, BOMCostBreakdown } from "@/lib/types";
@@ -288,6 +304,11 @@ export default function CongThucPage() {
 
   const [editorOpen, setEditorOpen] = useState(false);
   const [editingId, setEditingId] = useState<string | undefined>(undefined);
+  // Day 18/05/2026 (CEO): clone BOM global → riêng quán
+  const [cloneDialogOpen, setCloneDialogOpen] = useState(false);
+  const [cloneSourceBom, setCloneSourceBom] = useState<BOM | null>(null);
+  const [cloneTargetBranchId, setCloneTargetBranchId] = useState<string>("");
+  const [cloneLoading, setCloneLoading] = useState(false);
 
   const [branches, setBranches] = useState<BranchDetail[]>([]);
   const [branchFilter, setBranchFilter] = useState<string>("all");
@@ -402,6 +423,23 @@ export default function CongThucPage() {
           </span>
         </span>
       ),
+    },
+    {
+      id: "branchScope",
+      header: "Áp dụng",
+      size: 180,
+      cell: ({ row }) =>
+        row.original.branchId ? (
+          <Badge variant="secondary" className="bg-status-warning/10 text-status-warning border-status-warning/30">
+            <Icon name="storefront" size={12} className="mr-1" />
+            {row.original.branchName ?? "Chi nhánh"}
+          </Badge>
+        ) : (
+          <Badge variant="secondary" className="bg-primary/10 text-primary border-primary/30">
+            <Icon name="public" size={12} className="mr-1" />
+            Tất cả chi nhánh
+          </Badge>
+        ),
     },
     {
       accessorKey: "version",
@@ -534,23 +572,41 @@ export default function CongThucPage() {
                 onDelete={() => handleDelete(row.id, row.name)}
               />
             )}
-            rowActions={(row) => [
-              {
-                label: "Sửa",
-                icon: <Icon name="edit" size={16} />,
-                onClick: () => {
-                  setEditingId(row.id);
-                  setEditorOpen(true);
+            rowActions={(row) => {
+              // Day 18/05/2026 (CEO): row action "Tạo BOM riêng cho quán"
+              // chỉ hiển thị khi BOM hiện tại là global (branchId = null) và
+              // còn ít nhất 1 chi nhánh chưa có BOM riêng cho SP đó.
+              const isGlobal = !row.branchId;
+              return [
+                {
+                  label: "Sửa",
+                  icon: <Icon name="edit" size={16} />,
+                  onClick: () => {
+                    setEditingId(row.id);
+                    setEditorOpen(true);
+                  },
                 },
-              },
-              {
-                label: "Xóa",
-                icon: <Icon name="delete" size={16} />,
-                onClick: () => handleDelete(row.id, row.name),
-                variant: "destructive",
-                separator: true,
-              },
-            ]}
+                ...(isGlobal
+                  ? [
+                      {
+                        label: "Tạo BOM riêng cho quán",
+                        icon: <Icon name="content_copy" size={16} />,
+                        onClick: () => {
+                          setCloneSourceBom(row);
+                          setCloneDialogOpen(true);
+                        },
+                      },
+                    ]
+                  : []),
+                {
+                  label: "Xóa",
+                  icon: <Icon name="delete" size={16} />,
+                  onClick: () => handleDelete(row.id, row.name),
+                  variant: "destructive" as const,
+                  separator: true,
+                },
+              ];
+            }}
           />
         )}
       </ListPageLayout>
@@ -561,6 +617,108 @@ export default function CongThucPage() {
         bomId={editingId}
         onSuccess={fetchData}
       />
+
+      {/* Day 18/05/2026 (CEO): Dialog clone BOM global → riêng quán */}
+      <Dialog
+        open={cloneDialogOpen}
+        onOpenChange={(o) => {
+          if (cloneLoading) return;
+          setCloneDialogOpen(o);
+          if (!o) {
+            setCloneSourceBom(null);
+            setCloneTargetBranchId("");
+          }
+        }}
+      >
+        <DialogContent className="sm:max-w-md">
+          <DialogHeader>
+            <DialogTitle>
+              <Icon name="content_copy" size={20} className="inline-block mr-2 align-text-bottom" />
+              Tạo BOM riêng cho chi nhánh
+            </DialogTitle>
+            <DialogDescription className="space-y-2">
+              <span className="block">
+                Sao chép BOM <b>{cloneSourceBom?.name}</b> sang 1 chi nhánh
+                cụ thể. Chi nhánh đó sẽ dùng BOM mới (override BOM global).
+              </span>
+              <span className="block text-xs text-on-surface-variant">
+                BOM global gốc giữ nguyên, các chi nhánh khác vẫn dùng global.
+              </span>
+            </DialogDescription>
+          </DialogHeader>
+          <div className="py-3 space-y-2">
+            <label className="text-sm font-medium">Chọn chi nhánh đích</label>
+            <Select
+              value={cloneTargetBranchId || null}
+              onValueChange={(v) => setCloneTargetBranchId(v ?? "")}
+              items={branches.map((b) => ({
+                value: b.id,
+                label: `${b.name}${b.branchType ? ` (${b.branchType})` : ""}`,
+              }))}
+            >
+              <SelectTrigger className="w-full">
+                <SelectValue placeholder="Chọn chi nhánh...">
+                  {(v) => {
+                    const match = branches.find((b) => b.id === v);
+                    return match ? match.name : "Chọn chi nhánh...";
+                  }}
+                </SelectValue>
+              </SelectTrigger>
+              <SelectContent>
+                {branches.map((b) => (
+                  <SelectItem key={b.id} value={b.id}>
+                    {b.name}
+                  </SelectItem>
+                ))}
+              </SelectContent>
+            </Select>
+          </div>
+          <DialogFooter>
+            <Button
+              variant="outline"
+              disabled={cloneLoading}
+              onClick={() => setCloneDialogOpen(false)}
+            >
+              Huỷ
+            </Button>
+            <Button
+              disabled={cloneLoading || !cloneTargetBranchId}
+              onClick={async () => {
+                if (!cloneSourceBom || !cloneTargetBranchId) return;
+                setCloneLoading(true);
+                try {
+                  const cloned = await cloneBOMForBranch(
+                    cloneSourceBom.id,
+                    cloneTargetBranchId,
+                  );
+                  toast({
+                    variant: "success",
+                    title: "Đã tạo BOM riêng",
+                    description: `${cloned.name} — chi nhánh ${
+                      branches.find((b) => b.id === cloneTargetBranchId)?.name
+                    } sẽ dùng BOM này thay BOM global.`,
+                    duration: 8000,
+                  });
+                  setCloneDialogOpen(false);
+                  setCloneSourceBom(null);
+                  setCloneTargetBranchId("");
+                  await fetchData();
+                } catch (err) {
+                  toast({
+                    variant: "error",
+                    title: "Không sao chép được BOM",
+                    description: err instanceof Error ? err.message : "Lỗi không xác định",
+                  });
+                } finally {
+                  setCloneLoading(false);
+                }
+              }}
+            >
+              {cloneLoading ? "Đang sao chép..." : "Tạo BOM riêng"}
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
     </>
   );
 }
