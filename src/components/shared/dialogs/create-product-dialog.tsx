@@ -31,6 +31,7 @@ import {
 import { nextGroupCode, peekNextGroupCode } from "@/lib/services/supabase/base";
 import { Icon } from "@/components/ui/icon";
 import { ProductImageUpload } from "@/components/shared/product-image-upload";
+import { BOMEditorDialog } from "@/components/shared/dialogs/bom-editor-dialog";
 import type { Product } from "@/lib/types";
 import { formatNumber } from "@/lib/format";
 
@@ -108,6 +109,9 @@ export function CreateProductDialog({
   const [shelfLifeDays, setShelfLifeDays] = useState("");
   const [shelfLifeUnit, setShelfLifeUnit] = useState<ShelfLifeUnit>("day");
   const [hasBom, setHasBom] = useState(false);
+  // Day 18/05/2026 (CEO): sau khi tạo SKU có BOM → tự mở BOMEditorDialog
+  const [bomEditorOpen, setBomEditorOpen] = useState(false);
+  const [newProductIdForBom, setNewProductIdForBom] = useState<string | null>(null);
   // Kênh bán — chỉ áp dụng cho SKU. NVL luôn null.
   const [channel, setChannel] = useState<ProductChannel>("fnb");
   const [barcode, setBarcode] = useState("");
@@ -354,7 +358,7 @@ export function CreateProductDialog({
       const prefix = scope === "nvl" ? "NVL" : "SKU";
       const code = await nextGroupCode(prefix, selectedCategory!.code!);
 
-      await createProduct({
+      const created = await createProduct({
         ...commonPayload,
         code,
         productType: scope,
@@ -363,6 +367,21 @@ export function CreateProductDialog({
         groupCode: selectedCategory!.code,
         stock: Number(initialStock) || 0,
       });
+
+      // Day 18/05/2026 (CEO): nếu SKU có BOM → đóng dialog tạo SP, mở
+      // ngay BOMEditorDialog với product mới tạo để user nhập NVL luôn.
+      if (scope === "sku" && hasBom && created?.id) {
+        toast({
+          title: "Đã tạo SKU — mở form công thức",
+          description: `${name} (${code}) đã lưu. Tiếp tục nhập NVL trong công thức.`,
+          variant: "success",
+          duration: 6000,
+        });
+        setNewProductIdForBom(created.id);
+        setBomEditorOpen(true);
+        onSuccess?.();
+        return; // KHÔNG close dialog tạo SP ngay — sẽ tự close khi BOM xong
+      }
 
       onOpenChange(false);
       toast({
@@ -899,6 +918,14 @@ export function CreateProductDialog({
                 </label>
               </div>
             )}
+            {/* Day 18/05/2026 (CEO): hint khi tick BOM */}
+            {scope === "sku" && hasBom && !isEdit && (
+              <div className="mt-2 rounded-md border border-primary/30 bg-primary/5 p-2.5 text-xs text-foreground">
+                <Icon name="info" size={14} className="inline-block mr-1 text-primary align-text-bottom" />
+                Sau khi bấm <b>Lưu</b>, hệ thống tự mở form công thức (BOM) để
+                anh nhập NVL — không cần vào trang Công thức riêng.
+              </div>
+            )}
           </TabsContent>
         </Tabs>
         </div>
@@ -913,6 +940,26 @@ export function CreateProductDialog({
           </Button>
         </DialogFooter>
       </DialogContent>
+
+      {/* Day 18/05/2026 (CEO): khi tạo SKU có BOM → tự mở BOMEditorDialog
+          để user nhập NVL ngay, không phải đi qua trang /hang-hoa/cong-thuc */}
+      {newProductIdForBom && (
+        <BOMEditorDialog
+          open={bomEditorOpen}
+          onOpenChange={(o) => {
+            setBomEditorOpen(o);
+            if (!o) {
+              // Đóng BOM editor → đóng luôn dialog tạo SP + clear state
+              setNewProductIdForBom(null);
+              onOpenChange(false);
+            }
+          }}
+          productId={newProductIdForBom}
+          onSuccess={() => {
+            onSuccess?.();
+          }}
+        />
+      )}
     </Dialog>
   );
 }
