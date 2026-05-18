@@ -19,6 +19,8 @@ export interface CustomerImportRow {
   ward?: string;
   province?: string;
   country?: string;
+  /** Day 18/05/2026 (CEO): MST cho KH doanh nghiệp (migration 00103) */
+  taxCode?: string;
   customerType: "individual" | "company";
   gender?: "male" | "female";
   groupCode?: string;
@@ -133,6 +135,15 @@ export const customerExcelSchema: ExcelSchema<CustomerImportRow> = {
       type: "string",
       maxLength: 100,
       example: "Việt Nam",
+      width: 16,
+    },
+    {
+      key: "taxCode",
+      header: "Mã số thuế",
+      type: "string",
+      maxLength: 50,
+      description: "MST cho KH doanh nghiệp (xuất VAT). Không validate format.",
+      example: "0301234567",
       width: 16,
     },
     {

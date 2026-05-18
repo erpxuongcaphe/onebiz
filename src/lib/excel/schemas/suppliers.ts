@@ -24,7 +24,8 @@ export interface SupplierImportRow {
 }
 
 const PHONE_VN = /^(\+?84|0)(\d{9,10})$/;
-const TAX_CODE = /^\d{10}(-\d{3})?$/;
+// Day 18/05/2026 (CEO): bỏ regex chặn MST — cho phép nhập tự do (vd: NCC
+// nước ngoài, MST tạm, hoặc format không chuẩn).
 
 export const supplierExcelSchema: ExcelSchema<SupplierImportRow> = {
   name: "Nhà cung cấp",
@@ -135,9 +136,7 @@ export const supplierExcelSchema: ExcelSchema<SupplierImportRow> = {
       key: "taxCode",
       header: "Mã số thuế",
       type: "string",
-      maxLength: 20,
-      pattern: TAX_CODE,
-      patternMessage: "Mã số thuế phải là 10 chữ số (hoặc 10 số + '-' + 3 số)",
+      maxLength: 50,
       example: "0301234567",
       width: 16,
     },

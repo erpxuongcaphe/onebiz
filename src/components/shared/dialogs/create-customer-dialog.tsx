@@ -65,6 +65,8 @@ export function CreateCustomerDialog({
   const [ward, setWard] = useState("");
   const [province, setProvince] = useState("");
   const [country, setCountry] = useState("");
+  // Day 18/05/2026 (CEO): MST cho KH doanh nghiệp (migration 00103)
+  const [taxCode, setTaxCode] = useState("");
   const [group, setGroup] = useState("");
   const [type, setType] = useState<"individual" | "company">("individual");
   const [gender, setGender] = useState("");
@@ -112,6 +114,7 @@ export function CreateCustomerDialog({
         setWard(initialData.ward || "");
         setProvince(initialData.province || "");
         setCountry(initialData.country || "");
+        setTaxCode(initialData.taxCode || "");
         setGroup(initialData.groupId || "");
         setType(initialData.type || "individual");
         setGender(initialData.gender || "");
@@ -128,6 +131,7 @@ export function CreateCustomerDialog({
         setWard("");
         setProvince("");
         setCountry(DEFAULT_COUNTRY); // VN mặc định khi tạo mới
+        setTaxCode("");
         setGroup("");
         setType("individual");
         setGender("");
@@ -162,6 +166,7 @@ export function CreateCustomerDialog({
           ward: ward,
           province: province,
           country: country,
+          taxCode: taxCode || undefined,
           groupId: group || undefined,
           type,
           gender: (gender as "male" | "female") || undefined,
@@ -185,6 +190,7 @@ export function CreateCustomerDialog({
           ward: ward || undefined,
           province: province || undefined,
           country: country || undefined,
+          taxCode: taxCode || undefined,
           groupId: group || undefined,
           type,
           gender: (gender as "male" | "female") || undefined,
@@ -358,6 +364,21 @@ export function CreateCustomerDialog({
                 />
               </div>
             </div>
+          </div>
+
+          {/* Day 18/05/2026 (CEO): MST cho KH doanh nghiệp khi cần xuất VAT */}
+          <div className="space-y-2">
+            <label className="text-sm font-medium">
+              Mã số thuế
+              <span className="ml-1 text-xs font-normal text-muted-foreground">
+                (nếu KH doanh nghiệp cần xuất hoá đơn VAT)
+              </span>
+            </label>
+            <Input
+              value={taxCode}
+              onChange={(e) => setTaxCode(e.target.value)}
+              placeholder="VD: 0301234567 hoặc 0301234567-001"
+            />
           </div>
 
           <div className="space-y-2">

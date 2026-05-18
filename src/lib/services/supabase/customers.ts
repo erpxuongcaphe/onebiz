@@ -239,6 +239,9 @@ export async function createCustomer(customer: Partial<Customer>): Promise<Custo
       province: customer.province || null,
       // eslint-disable-next-line @typescript-eslint/no-explicit-any
       country: customer.country || null,
+      // Day 18/05/2026 (CEO): MST cho KH doanh nghiệp (migration 00103)
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      tax_code: customer.taxCode || null,
       group_id: customer.groupId || null,
       gender: customer.gender || null,
       customer_type: customer.type ?? "individual",
@@ -395,7 +398,7 @@ export async function updateCustomer(id: string, updates: Partial<Customer>): Pr
     const res = await supabase
       .from("customers")
       .select(
-        "code, name, phone, email, group_id, customer_type, address, house_number, street, quarter, ward, province, country",
+        "code, name, phone, email, group_id, customer_type, address, house_number, street, quarter, ward, province, country, tax_code",
       )
       .eq("tenant_id", tenantId)
       .eq("id", id)
@@ -429,6 +432,8 @@ export async function updateCustomer(id: string, updates: Partial<Customer>): Pr
   if (updates.ward !== undefined) p.ward = updates.ward || null;
   if (updates.province !== undefined) p.province = updates.province || null;
   if (updates.country !== undefined) p.country = updates.country || null;
+  // Day 18/05/2026: MST cho KH doanh nghiệp
+  if (updates.taxCode !== undefined) p.tax_code = updates.taxCode || null;
   if (hasStructuredUpdate) {
     // Compose address từ kết hợp old + new (ưu tiên new)
     const old = oldRow ?? {};
@@ -553,6 +558,8 @@ function mapCustomer(row: any, returnsTotal = 0): Customer {
     ward: row.ward ?? undefined,
     province: row.province ?? undefined,
     country: row.country ?? undefined,
+    // Day 18/05/2026: MST cho KH doanh nghiệp
+    taxCode: row.tax_code ?? undefined,
     currentDebt: row.debt,
     totalSales: totalSpent,
     totalSalesMinusReturns: netSales,

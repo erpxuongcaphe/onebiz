@@ -112,6 +112,67 @@ function getItemsSubtotal(items: LineItem[]) {
   return items.reduce((sum, item) => sum + lineSubtotal(item), 0);
 }
 
+/**
+ * Day 18/05/2026 (CEO): Badge số ngày còn lại trước HSD.
+ * Hiển thị ngay cạnh ô date HSD khi user nhập.
+ *   - Đã quá hạn:  badge đỏ "Đã quá hạn X ngày"
+ *   - 0-7 ngày:    badge đỏ "Còn X ngày — sắp hết!"
+ *   - 8-30 ngày:   badge cam "Còn X ngày"
+ *   - 31-90 ngày:  badge vàng "Còn X ngày"
+ *   - >90 ngày:    badge xanh "Còn X ngày"
+ */
+function ExpiryBadge({ dateStr }: { dateStr?: string | null }) {
+  if (!dateStr) return null;
+  const expiry = new Date(dateStr + "T00:00:00");
+  if (isNaN(expiry.getTime())) return null;
+
+  const today = new Date();
+  today.setHours(0, 0, 0, 0);
+  const diffMs = expiry.getTime() - today.getTime();
+  const diffDays = Math.round(diffMs / (1000 * 60 * 60 * 24));
+
+  if (diffDays < 0) {
+    return (
+      <span className="inline-flex items-center rounded-md bg-status-danger/15 text-status-danger border border-status-danger/30 px-1.5 py-0.5 text-[10px] font-medium whitespace-nowrap">
+        ⚠ Đã quá hạn {Math.abs(diffDays)} ngày
+      </span>
+    );
+  }
+  if (diffDays === 0) {
+    return (
+      <span className="inline-flex items-center rounded-md bg-status-danger/15 text-status-danger border border-status-danger/30 px-1.5 py-0.5 text-[10px] font-medium whitespace-nowrap">
+        ⚠ Hết hạn HÔM NAY
+      </span>
+    );
+  }
+  if (diffDays <= 7) {
+    return (
+      <span className="inline-flex items-center rounded-md bg-status-danger/15 text-status-danger border border-status-danger/30 px-1.5 py-0.5 text-[10px] font-medium whitespace-nowrap">
+        ⚠ Còn {diffDays} ngày — sắp hết!
+      </span>
+    );
+  }
+  if (diffDays <= 30) {
+    return (
+      <span className="inline-flex items-center rounded-md bg-status-warning/15 text-status-warning border border-status-warning/30 px-1.5 py-0.5 text-[10px] font-medium whitespace-nowrap">
+        Còn {diffDays} ngày
+      </span>
+    );
+  }
+  if (diffDays <= 90) {
+    return (
+      <span className="inline-flex items-center rounded-md bg-status-warning/10 text-status-warning border border-status-warning/20 px-1.5 py-0.5 text-[10px] font-medium whitespace-nowrap">
+        Còn {diffDays} ngày
+      </span>
+    );
+  }
+  return (
+    <span className="inline-flex items-center rounded-md bg-primary/10 text-primary border border-primary/20 px-1.5 py-0.5 text-[10px] font-medium whitespace-nowrap">
+      Còn {diffDays} ngày
+    </span>
+  );
+}
+
 function getItemsTax(items: LineItem[]) {
   return items.reduce((sum, item) => sum + lineTax(item), 0);
 }
@@ -647,6 +708,8 @@ export function CreatePurchaseOrderDialog({
                         className="h-7 w-36 rounded-md border border-input bg-background px-2 text-xs"
                         aria-label={`HSD ${item.productName}`}
                       />
+                      {/* Day 18/05/2026 (CEO): badge ngày còn lại sau ô HSD */}
+                      <ExpiryBadge dateStr={item.expiryDate} />
                       <label className="text-muted-foreground shrink-0 ml-2">Số lô:</label>
                       <input
                         type="text"

@@ -168,10 +168,13 @@ export async function bulkImportCustomers(
       groupId = found;
     }
 
-    // Day 17/05: auto-compose address từ 5 fields structured nếu có,
-    // fallback row.address (legacy text) nếu không nhập structured.
+    // Day 17/05 + 18/05: auto-compose address từ 6 fields (số nhà + đường
+    // tách rời) → join thành address text fallback.
+    const houseAndStreet = [row.houseNumber, row.street]
+      .filter((s) => s && s.trim().length > 0)
+      .join(" ");
     const composed = [
-      row.houseNumber,
+      houseAndStreet,
       row.quarter,
       row.ward,
       row.province,
@@ -190,6 +193,8 @@ export async function bulkImportCustomers(
       // eslint-disable-next-line @typescript-eslint/no-explicit-any
       house_number: row.houseNumber ?? null,
       // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      street: row.street ?? null,
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
       quarter: row.quarter ?? null,
       // eslint-disable-next-line @typescript-eslint/no-explicit-any
       ward: row.ward ?? null,
@@ -197,6 +202,9 @@ export async function bulkImportCustomers(
       province: row.province ?? null,
       // eslint-disable-next-line @typescript-eslint/no-explicit-any
       country: row.country ?? null,
+      // Day 18/05/2026: MST cho KH doanh nghiệp
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      tax_code: row.taxCode ?? null,
       customer_type: row.customerType,
       gender: row.gender ?? null,
       group_id: groupId,
@@ -218,9 +226,12 @@ export async function bulkImportSuppliers(
   const tenantId = await getCurrentTenantId();
 
   return runBulk(rows, async (row) => {
-    // Day 17/05: auto-compose address từ 5 fields structured
+    // Day 17/05 + 18/05: auto-compose address từ 6 fields (số nhà + đường tách)
+    const houseAndStreet = [row.houseNumber, row.street]
+      .filter((s) => s && s.trim().length > 0)
+      .join(" ");
     const composed = [
-      row.houseNumber,
+      houseAndStreet,
       row.quarter,
       row.ward,
       row.province,
@@ -238,6 +249,8 @@ export async function bulkImportSuppliers(
       address: composed || row.address || null,
       // eslint-disable-next-line @typescript-eslint/no-explicit-any
       house_number: row.houseNumber ?? null,
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      street: row.street ?? null,
       // eslint-disable-next-line @typescript-eslint/no-explicit-any
       quarter: row.quarter ?? null,
       // eslint-disable-next-line @typescript-eslint/no-explicit-any

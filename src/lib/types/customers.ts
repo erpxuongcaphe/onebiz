@@ -16,6 +16,8 @@ export interface Customer {
   ward?: string;
   province?: string;
   country?: string;
+  /** Day 18/05/2026 (CEO): MST cho KH doanh nghiệp khi cần xuất VAT */
+  taxCode?: string;
   currentDebt: number;
   totalSales: number;
   totalSalesMinusReturns: number;
