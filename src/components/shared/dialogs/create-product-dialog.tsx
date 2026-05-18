@@ -27,17 +27,36 @@ import {
   getProductCategoriesAsync,
   getSuppliers,
   getAllUnits,
+  getProducts,
 } from "@/lib/services";
 import { nextGroupCode, peekNextGroupCode } from "@/lib/services/supabase/base";
 import { Icon } from "@/components/ui/icon";
 import { ProductImageUpload } from "@/components/shared/product-image-upload";
-import { BOMEditorDialog } from "@/components/shared/dialogs/bom-editor-dialog";
-import type { Product } from "@/lib/types";
-import { formatNumber } from "@/lib/format";
+import {
+  createBOM,
+  getBOMsByProduct,
+  updateBOM,
+  deleteBOM,
+} from "@/lib/services";
+import { useAuth } from "@/lib/contexts/auth-context";
+import type { Product, BOMItem } from "@/lib/types";
+import { formatNumber, formatCurrency } from "@/lib/format";
 
 type ShelfLifeUnit = "day" | "month" | "year";
 type SupplierOption = { id: string; name: string; code?: string };
-type InnerTab = "info" | "pricing";
+type InnerTab = "info" | "pricing" | "bom";
+
+/** Item trong bảng BOM inline (gắn với SKU đang tạo/sửa) */
+interface InlineBomItem {
+  materialId: string;
+  materialCode: string;
+  materialName: string;
+  costPrice: number;
+  unit: string;
+  quantity: number;
+  wastePercent: number;
+  note?: string;
+}
 
 // VAT phổ biến ở VN: 0% (không chịu), 5% (giảm thuế hoặc nông sản), 8%
 // (giảm theo NĐ), 10% (chuẩn). User chọn "Khác..." để input tuỳ ý cho
@@ -109,9 +128,16 @@ export function CreateProductDialog({
   const [shelfLifeDays, setShelfLifeDays] = useState("");
   const [shelfLifeUnit, setShelfLifeUnit] = useState<ShelfLifeUnit>("day");
   const [hasBom, setHasBom] = useState(false);
-  // Day 18/05/2026 (CEO): sau khi tạo SKU có BOM → tự mở BOMEditorDialog
-  const [bomEditorOpen, setBomEditorOpen] = useState(false);
-  const [newProductIdForBom, setNewProductIdForBom] = useState<string | null>(null);
+  // Day 18/05/2026 (CEO refactor): BOM inline trong dialog SKU, không mở dialog riêng.
+  // Tab "Công thức (BOM)" chỉ hiện khi scope=sku && hasBom=true.
+  const [bomBranchId, setBomBranchId] = useState<string | null>(null); // null = global
+  const [bomName, setBomName] = useState("");
+  const [bomNote, setBomNote] = useState("");
+  const [bomItems, setBomItems] = useState<InlineBomItem[]>([]);
+  const [bomExistingId, setBomExistingId] = useState<string | null>(null); // edit mode
+  const [bomPickerOpen, setBomPickerOpen] = useState(false);
+  const [bomPickerMaterialId, setBomPickerMaterialId] = useState("");
+  const [bomConfirmDeleteOpen, setBomConfirmDeleteOpen] = useState(false);
   // Kênh bán — chỉ áp dụng cho SKU. NVL luôn null.
   const [channel, setChannel] = useState<ProductChannel>("fnb");
   const [barcode, setBarcode] = useState("");
@@ -138,6 +164,11 @@ export function CreateProductDialog({
   // NCC list cho picker. Load lúc open dialog để có sẵn cho edit mode prefill.
   const [suppliers, setSuppliers] = useState<SupplierOption[]>([]);
 
+  // Day 18/05/2026 (CEO): material options cho BOM picker — load tất cả SP
+  // (cả NVL lẫn SKU vì Pattern A đa vai trò) để chọn làm NVL trong công thức.
+  const [materialOptions, setMaterialOptions] = useState<Product[]>([]);
+  const { branches } = useAuth();
+
   // Existing units list — dùng để cảnh báo case-insensitive duplicate khi
   // user gõ "kg" mà tenant đã có "Kg" (CEO chốt: "không cho đặt giống nhau").
   const [existingUnits, setExistingUnits] = useState<string[]>([]);
@@ -163,6 +194,11 @@ export function CreateProductDialog({
       setShelfLifeDays(initialData.shelfLifeDays ? String(initialData.shelfLifeDays) : "");
       setShelfLifeUnit((initialData.shelfLifeUnit as ShelfLifeUnit) || "day");
       setHasBom(!!initialData.hasBom);
+      setBomItems([]);
+      setBomExistingId(null);
+      setBomName("");
+      setBomNote("");
+      setBomBranchId(null);
       setChannel((initialData.channel as ProductChannel) || "fnb");
       // Prefill các field mới để edit "sửa được toàn bộ" như CEO yêu cầu.
       setBarcode(initialData.barcode || "");
@@ -191,6 +227,11 @@ export function CreateProductDialog({
       setShelfLifeDays("");
       setShelfLifeUnit("day");
       setHasBom(false);
+      setBomItems([]);
+      setBomExistingId(null);
+      setBomName("");
+      setBomNote("");
+      setBomBranchId(null);
       setChannel("fnb");
       setBarcode("");
       setBrand("");
@@ -206,6 +247,50 @@ export function CreateProductDialog({
       setErrors({});
       setInnerTab("info");
     }
+  }, [open, initialData]);
+
+  // Day 18/05/2026 (CEO): load BOM existing khi edit SKU has_bom=true.
+  // Hiển thị form items prefilled để user sửa ngay trong tab "Công thức".
+  useEffect(() => {
+    if (!open || !initialData || initialData.productType !== "sku" || !initialData.hasBom) {
+      return;
+    }
+    let cancelled = false;
+    (async () => {
+      try {
+        // Lấy BOM active đầu tiên cho SP này (ưu tiên global, fallback per-branch)
+        const boms = await getBOMsByProduct(initialData.id);
+        if (cancelled || boms.length === 0) return;
+        // Ưu tiên BOM global (branch_id=null) — em load BOM đầu tiên
+        const bom = boms[0];
+        setBomExistingId(bom.id);
+        setBomName(bom.name);
+        setBomNote(bom.note ?? "");
+        setBomBranchId(bom.branchId ?? null);
+        // Items đã có trong bom.items (getBOMById return) nhưng getBOMsByProduct
+        // có thể không return items → cần fetch
+        // eslint-disable-next-line @typescript-eslint/no-explicit-any
+        const fullBom = await (await import("@/lib/services")).getBOMById(bom.id);
+        if (cancelled) return;
+        setBomItems(
+          (fullBom.items ?? []).map((it: BOMItem) => ({
+            materialId: it.materialId,
+            materialCode: it.materialCode ?? "",
+            materialName: it.materialName ?? "",
+            costPrice: it.materialCostPrice ?? 0,
+            unit: it.unit,
+            quantity: it.quantity,
+            wastePercent: it.wastePercent ?? 0,
+            note: it.note,
+          })),
+        );
+      } catch {
+        // fail silent — user vẫn có thể tạo BOM mới
+      }
+    })();
+    return () => {
+      cancelled = true;
+    };
   }, [open, initialData]);
 
   // Load existing units khi dialog mở — dùng cho case-insensitive duplicate
@@ -240,6 +325,15 @@ export function CreateProductDialog({
       })
       .catch(() => {
         /* suppliers optional — fail silent */
+      });
+    // Day 18/05/2026 (CEO): load material options cho BOM (tất cả SP)
+    getProducts({ page: 0, pageSize: 1000, filters: {} })
+      .then((res) => {
+        if (cancelled) return;
+        setMaterialOptions(res.data);
+      })
+      .catch(() => {
+        /* fail silent */
       });
     return () => {
       cancelled = true;
@@ -343,11 +437,66 @@ export function CreateProductDialog({
 
       if (isEdit && initialData) {
         // EDIT — giữ nguyên code/productType, không đổi groupCode.
-        await updateProduct(initialData.id, commonPayload);
+        await updateProduct(initialData.id, {
+          ...commonPayload,
+          // Day 18/05/2026: cho phép user TẮT hasBom trong edit — phải sync DB
+          hasBom: scope === "sku" ? hasBom : false,
+        });
+
+        // Day 18/05/2026 (CEO refactor): sync BOM khi edit SKU
+        if (scope === "sku") {
+          if (hasBom && bomItems.length > 0) {
+            // Có BOM items → tạo mới hoặc replace BOM existing
+            if (bomExistingId) {
+              // Replace: deactivate cũ + create mới (atomic-ish)
+              try {
+                await deleteBOM(bomExistingId); // soft delete (set is_active=false)
+              } catch {
+                // Ignore — BOM cũ có thể đã bị xoá
+              }
+            }
+            try {
+              await createBOM({
+                productId: initialData.id,
+                branchId: bomBranchId,
+                name: bomName || `Công thức cho ${name}`,
+                note: bomNote || undefined,
+                items: bomItems.map((it, idx) => ({
+                  materialId: it.materialId,
+                  quantity: it.quantity,
+                  unit: it.unit,
+                  wastePercent: it.wastePercent,
+                  sortOrder: idx,
+                  note: it.note,
+                })),
+              });
+            } catch (bomErr) {
+              toast({
+                variant: "warning",
+                title: "Cập nhật SKU OK nhưng BOM lỗi",
+                description: bomErr instanceof Error ? bomErr.message : "Lỗi không xác định",
+                duration: 10000,
+              });
+              onOpenChange(false);
+              onSuccess?.();
+              return;
+            }
+          } else if (!hasBom && bomExistingId) {
+            // User tắt hasBom + có BOM existing → deactivate
+            try {
+              await deleteBOM(bomExistingId);
+            } catch {
+              // Ignore
+            }
+          }
+        }
+
         onOpenChange(false);
         toast({
           title: "Cập nhật hàng hóa thành công",
-          description: `Đã lưu thay đổi ${name} (${initialData.code})`,
+          description: hasBom && bomItems.length > 0
+            ? `Đã lưu ${name} (${initialData.code}) + cập nhật BOM ${bomItems.length} NVL`
+            : `Đã lưu thay đổi ${name} (${initialData.code})`,
           variant: "success",
         });
         onSuccess?.();
@@ -368,25 +517,47 @@ export function CreateProductDialog({
         stock: Number(initialStock) || 0,
       });
 
-      // Day 18/05/2026 (CEO): nếu SKU có BOM → đóng dialog tạo SP, mở
-      // ngay BOMEditorDialog với product mới tạo để user nhập NVL luôn.
-      if (scope === "sku" && hasBom && created?.id) {
-        toast({
-          title: "Đã tạo SKU — mở form công thức",
-          description: `${name} (${code}) đã lưu. Tiếp tục nhập NVL trong công thức.`,
-          variant: "success",
-          duration: 6000,
-        });
-        setNewProductIdForBom(created.id);
-        setBomEditorOpen(true);
-        onSuccess?.();
-        return; // KHÔNG close dialog tạo SP ngay — sẽ tự close khi BOM xong
+      // Day 18/05/2026 (CEO refactor): nếu SKU có BOM + items → tạo BOM ngay
+      // sau khi tạo SP. Vẫn trong cùng dialog, không pop thêm dialog mới.
+      if (scope === "sku" && hasBom && created?.id && bomItems.length > 0) {
+        try {
+          await createBOM({
+            productId: created.id,
+            branchId: bomBranchId,
+            name: bomName || `Công thức cho ${name}`,
+            note: bomNote || undefined,
+            items: bomItems.map((it, idx) => ({
+              materialId: it.materialId,
+              quantity: it.quantity,
+              unit: it.unit,
+              wastePercent: it.wastePercent,
+              sortOrder: idx,
+              note: it.note,
+            })),
+          });
+        } catch (bomErr) {
+          // SP đã tạo nhưng BOM fail → toast warning, không rollback SP
+          toast({
+            variant: "warning",
+            title: "SP đã tạo nhưng BOM lỗi",
+            description: `${code} đã lưu. Lỗi BOM: ${
+              bomErr instanceof Error ? bomErr.message : "không xác định"
+            }. Vào /hang-hoa/cong-thuc tạo BOM thủ công.`,
+            duration: 10000,
+          });
+          onOpenChange(false);
+          onSuccess?.();
+          return;
+        }
       }
 
       onOpenChange(false);
       toast({
         title: "Tạo hàng hóa thành công",
-        description: `Đã thêm ${scope === "nvl" ? "NVL" : "SKU"} ${name} (${code})`,
+        description:
+          scope === "sku" && hasBom && bomItems.length > 0
+            ? `Đã thêm SKU ${name} (${code}) + công thức BOM với ${bomItems.length} NVL`
+            : `Đã thêm ${scope === "nvl" ? "NVL" : "SKU"} ${name} (${code})`,
         variant: "success",
       });
       onSuccess?.();
@@ -448,6 +619,16 @@ export function CreateProductDialog({
                 <span className="ml-1 inline-block h-1.5 w-1.5 rounded-full bg-destructive" />
               )}
             </TabsTrigger>
+            {/* Day 18/05/2026 (CEO refactor): Tab BOM chỉ hiện cho SKU có BOM */}
+            {scope === "sku" && hasBom && (
+              <TabsTrigger value="bom" className="flex-1">
+                <Icon name="science" size={14} className="mr-1" />
+                Công thức (BOM)
+                {bomItems.length === 0 && !isEdit && (
+                  <span className="ml-1 inline-block h-1.5 w-1.5 rounded-full bg-status-warning" />
+                )}
+              </TabsTrigger>
+            )}
           </TabsList>
 
           {/* ─────────── Tab 1: Thông tin ─────────── */}
@@ -918,16 +1099,274 @@ export function CreateProductDialog({
                 </label>
               </div>
             )}
-            {/* Day 18/05/2026 (CEO): hint khi tick BOM */}
-            {scope === "sku" && hasBom && !isEdit && (
+            {/* Day 18/05/2026 (CEO refactor): hint khi tick BOM */}
+            {scope === "sku" && hasBom && (
               <div className="mt-2 rounded-md border border-primary/30 bg-primary/5 p-2.5 text-xs text-foreground">
                 <Icon name="info" size={14} className="inline-block mr-1 text-primary align-text-bottom" />
-                Sau khi bấm <b>Lưu</b>, hệ thống tự mở form công thức (BOM) để
-                anh nhập NVL — không cần vào trang Công thức riêng.
+                Tab <b>&quot;Công thức (BOM)&quot;</b> đã bật. Click qua tab đó để cấu hình NVL.
               </div>
             )}
           </TabsContent>
+
+          {/* ─────────── Tab 3: Công thức BOM (chỉ SKU có BOM) ─────────── */}
+          {scope === "sku" && hasBom && (
+            <TabsContent value="bom" className="space-y-4 mt-0">
+              <div className="rounded-md border border-primary/20 bg-primary/5 p-3 text-xs">
+                <Icon name="info" size={14} className="inline-block mr-1 text-primary align-text-bottom" />
+                Định nghĩa NVL cần để tạo 1 đơn vị SKU. Khi bán SKU, hệ thống
+                tự trừ NVL theo công thức này.
+              </div>
+
+              {/* Branch áp dụng */}
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                <div className="space-y-1.5">
+                  <label className="text-sm font-medium">Áp dụng cho chi nhánh</label>
+                  <Select
+                    value={bomBranchId ?? "__all__"}
+                    onValueChange={(v) => setBomBranchId(v === "__all__" ? null : v)}
+                    items={[
+                      { value: "__all__", label: "Áp dụng tất cả chi nhánh (mặc định)" },
+                      ...branches.map((b) => ({ value: b.id, label: b.name })),
+                    ]}
+                  >
+                    <SelectTrigger className="w-full">
+                      <SelectValue>
+                        {(v) => {
+                          if (!v || v === "__all__") return "Áp dụng tất cả chi nhánh";
+                          const m = branches.find((b) => b.id === v);
+                          return m ? m.name : v;
+                        }}
+                      </SelectValue>
+                    </SelectTrigger>
+                    <SelectContent>
+                      <SelectItem value="__all__">Áp dụng tất cả chi nhánh (mặc định)</SelectItem>
+                      {branches.map((b) => (
+                        <SelectItem key={b.id} value={b.id}>{b.name}</SelectItem>
+                      ))}
+                    </SelectContent>
+                  </Select>
+                </div>
+                <div className="space-y-1.5">
+                  <label className="text-sm font-medium">Tên công thức</label>
+                  <Input
+                    value={bomName}
+                    onChange={(e) => setBomName(e.target.value)}
+                    placeholder={`Mặc định: Công thức cho ${name || "SKU"}`}
+                  />
+                </div>
+              </div>
+
+              {/* Items table */}
+              <div className="space-y-2">
+                <div className="flex items-center justify-between">
+                  <label className="text-sm font-medium">
+                    Nguyên vật liệu <span className="text-destructive">*</span>
+                  </label>
+                  <Button
+                    size="sm"
+                    variant="outline"
+                    type="button"
+                    onClick={() => setBomPickerOpen(true)}
+                  >
+                    <Icon name="add" size={14} className="mr-1" />
+                    Thêm NVL
+                  </Button>
+                </div>
+
+                {bomItems.length === 0 ? (
+                  <div className="rounded-lg border-2 border-dashed border-border p-6 text-center text-sm text-muted-foreground">
+                    Chưa có NVL nào. Click <b>&quot;Thêm NVL&quot;</b> để bắt đầu.
+                  </div>
+                ) : (
+                  <div className="rounded-lg border border-border overflow-hidden">
+                    <table className="w-full text-sm">
+                      <thead className="bg-surface-container-low text-xs text-muted-foreground">
+                        <tr>
+                          <th className="text-left px-3 py-2 font-semibold">NVL</th>
+                          <th className="text-right px-3 py-2 font-semibold w-24">SL</th>
+                          <th className="text-left px-3 py-2 font-semibold w-20">ĐVT</th>
+                          <th className="text-right px-3 py-2 font-semibold w-20">Hao %</th>
+                          <th className="text-right px-3 py-2 font-semibold w-28">Cost/SP</th>
+                          <th className="w-10"></th>
+                        </tr>
+                      </thead>
+                      <tbody>
+                        {bomItems.map((it, idx) => {
+                          const effQty = it.quantity * (1 + it.wastePercent / 100);
+                          const lineCost = effQty * it.costPrice;
+                          return (
+                            <tr key={`${it.materialId}-${idx}`} className="border-t border-border">
+                              <td className="px-3 py-2">
+                                <div className="font-medium">{it.materialName}</div>
+                                <div className="text-xs text-muted-foreground">{it.materialCode}</div>
+                              </td>
+                              <td className="px-3 py-2">
+                                <Input
+                                  type="number"
+                                  value={it.quantity}
+                                  step="0.0001"
+                                  min="0"
+                                  className="h-8 text-right text-xs"
+                                  onChange={(e) => {
+                                    const v = Number(e.target.value);
+                                    setBomItems((prev) =>
+                                      prev.map((p, i) => (i === idx ? { ...p, quantity: v } : p)),
+                                    );
+                                  }}
+                                />
+                              </td>
+                              <td className="px-3 py-2">
+                                <Input
+                                  value={it.unit}
+                                  className="h-8 text-xs"
+                                  onChange={(e) => {
+                                    setBomItems((prev) =>
+                                      prev.map((p, i) =>
+                                        i === idx ? { ...p, unit: e.target.value } : p,
+                                      ),
+                                    );
+                                  }}
+                                />
+                              </td>
+                              <td className="px-3 py-2">
+                                <Input
+                                  type="number"
+                                  value={it.wastePercent}
+                                  step="0.1"
+                                  min="0"
+                                  max="100"
+                                  className="h-8 text-right text-xs"
+                                  onChange={(e) => {
+                                    const v = Number(e.target.value);
+                                    setBomItems((prev) =>
+                                      prev.map((p, i) =>
+                                        i === idx ? { ...p, wastePercent: v } : p,
+                                      ),
+                                    );
+                                  }}
+                                />
+                              </td>
+                              <td className="px-3 py-2 text-right text-xs tabular-nums">
+                                {formatCurrency(lineCost)}
+                              </td>
+                              <td className="px-3 py-2">
+                                <button
+                                  type="button"
+                                  onClick={() => setBomItems((prev) => prev.filter((_, i) => i !== idx))}
+                                  className="text-muted-foreground hover:text-destructive"
+                                  aria-label="Xoá NVL"
+                                >
+                                  <Icon name="delete" size={14} />
+                                </button>
+                              </td>
+                            </tr>
+                          );
+                        })}
+                      </tbody>
+                      <tfoot className="bg-surface-container-low/50 border-t-2 border-border">
+                        <tr>
+                          <td colSpan={4} className="px-3 py-2 text-right font-semibold text-xs">
+                            Tổng giá vốn (theo BOM):
+                          </td>
+                          <td className="px-3 py-2 text-right font-bold text-primary">
+                            {formatCurrency(
+                              bomItems.reduce(
+                                (s, it) => s + it.quantity * (1 + it.wastePercent / 100) * it.costPrice,
+                                0,
+                              ),
+                            )}
+                          </td>
+                          <td></td>
+                        </tr>
+                      </tfoot>
+                    </table>
+                  </div>
+                )}
+              </div>
+
+              <div className="space-y-1.5">
+                <label className="text-sm font-medium">Ghi chú công thức</label>
+                <textarea
+                  className="flex min-h-[50px] w-full rounded-lg border border-input bg-transparent px-3 py-2 text-sm outline-none placeholder:text-muted-foreground focus-visible:border-ring focus-visible:ring-3 focus-visible:ring-ring/50"
+                  value={bomNote}
+                  onChange={(e) => setBomNote(e.target.value)}
+                  placeholder="Quy trình pha chế, lưu ý..."
+                  rows={2}
+                />
+              </div>
+            </TabsContent>
+          )}
         </Tabs>
+
+        {/* Day 18/05/2026 (CEO): Dialog picker thêm NVL vào BOM inline */}
+        <Dialog open={bomPickerOpen} onOpenChange={setBomPickerOpen}>
+          <DialogContent className="sm:max-w-md">
+            <DialogHeader>
+              <DialogTitle>Thêm NVL vào công thức</DialogTitle>
+              <DialogDescription>
+                Chọn NVL từ danh sách. Có thể chọn cả NVL gốc lẫn SKU khác
+                (vd: cà phê rang 1kg làm NVL cho ly bạc xỉu).
+              </DialogDescription>
+            </DialogHeader>
+            <div className="py-3 space-y-2">
+              <Select
+                value={bomPickerMaterialId || null}
+                onValueChange={(v) => setBomPickerMaterialId(v ?? "")}
+                items={materialOptions
+                  .filter((p) => !bomItems.some((it) => it.materialId === p.id))
+                  .filter((p) => !initialData || p.id !== initialData.id) // không self-reference
+                  .map((p) => ({ value: p.id, label: `${p.code} — ${p.name}` }))}
+              >
+                <SelectTrigger className="w-full">
+                  <SelectValue placeholder="Chọn NVL">
+                    {(v) => {
+                      const m = materialOptions.find((p) => p.id === v);
+                      return m ? `${m.code} — ${m.name}` : "Chọn NVL";
+                    }}
+                  </SelectValue>
+                </SelectTrigger>
+                <SelectContent>
+                  {materialOptions
+                    .filter((p) => !bomItems.some((it) => it.materialId === p.id))
+                    .filter((p) => !initialData || p.id !== initialData.id)
+                    .map((p) => (
+                      <SelectItem key={p.id} value={p.id}>
+                        {p.code} — {p.name}
+                      </SelectItem>
+                    ))}
+                </SelectContent>
+              </Select>
+            </div>
+            <DialogFooter>
+              <Button variant="outline" onClick={() => setBomPickerOpen(false)}>
+                Huỷ
+              </Button>
+              <Button
+                disabled={!bomPickerMaterialId}
+                onClick={() => {
+                  const m = materialOptions.find((p) => p.id === bomPickerMaterialId);
+                  if (!m) return;
+                  setBomItems((prev) => [
+                    ...prev,
+                    {
+                      materialId: m.id,
+                      materialCode: m.code,
+                      materialName: m.name,
+                      costPrice: m.costPrice ?? 0,
+                      unit: m.stockUnit || m.unit || "",
+                      quantity: 1,
+                      wastePercent: 0,
+                    },
+                  ]);
+                  setBomPickerMaterialId("");
+                  setBomPickerOpen(false);
+                }}
+              >
+                Thêm
+              </Button>
+            </DialogFooter>
+          </DialogContent>
+        </Dialog>
         </div>
 
         <DialogFooter>
@@ -940,26 +1379,6 @@ export function CreateProductDialog({
           </Button>
         </DialogFooter>
       </DialogContent>
-
-      {/* Day 18/05/2026 (CEO): khi tạo SKU có BOM → tự mở BOMEditorDialog
-          để user nhập NVL ngay, không phải đi qua trang /hang-hoa/cong-thuc */}
-      {newProductIdForBom && (
-        <BOMEditorDialog
-          open={bomEditorOpen}
-          onOpenChange={(o) => {
-            setBomEditorOpen(o);
-            if (!o) {
-              // Đóng BOM editor → đóng luôn dialog tạo SP + clear state
-              setNewProductIdForBom(null);
-              onOpenChange(false);
-            }
-          }}
-          productId={newProductIdForBom}
-          onSuccess={() => {
-            onSuccess?.();
-          }}
-        />
-      )}
     </Dialog>
   );
 }
