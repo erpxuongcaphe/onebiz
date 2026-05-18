@@ -75,8 +75,15 @@ export {
   getInventoryCheckItems,
   getDisposalExports, getDisposalStatuses, completeDisposalExport, cancelDisposalExport,
   getInternalExports, getInternalExportStatuses, completeInternalExport, cancelInternalExport,
+  getProductsWithBranchStock, bulkCreateAdjustmentLots,
 } from "./inventory";
-export type { InventoryCheckItemRow } from "./inventory";
+export type {
+  InventoryCheckItemRow,
+  ProductWithBranchStock,
+  BulkAdjustmentLotItem,
+  BulkAdjustmentLotFailure,
+  BulkAdjustmentLotsResult,
+} from "./inventory";
 // Phase A 16/05/2026: báo cáo KHO chi tiết
 export {
   getInventoryAgingReport,

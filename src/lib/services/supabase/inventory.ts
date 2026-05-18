@@ -687,3 +687,144 @@ function mapInventoryCheck(row: any): InventoryCheck {
     createdByName: profile?.full_name ?? "",
   };
 }
+
+// ============================================================
+// Bulk gắn HSD cho tồn cũ (CEO 18/05/2026, migration 00104)
+//
+// Khi setup data từ phần mềm cũ → 270 NVL có tồn nhưng không có HSD.
+// Bulk RPC tạo nhiều adjustment lots cùng lúc — atomic per item, owner/admin.
+// ============================================================
+
+export interface ProductWithBranchStock {
+  productId: string;
+  productCode: string;
+  productName: string;
+  productType: string;
+  stockUnit: string;
+  categoryId: string | null;
+  categoryName: string | null;
+  branchStock: number;
+  earliestLotExpiry: string | null; // YYYY-MM-DD or null nếu chưa có lot active
+  totalLotsActive: number;
+}
+
+export interface BulkAdjustmentLotItem {
+  productId: string;
+  branchId: string;
+  qty: number;
+  expiryDate: string; // YYYY-MM-DD
+  lotNumber?: string;
+  note?: string;
+}
+
+export interface BulkAdjustmentLotFailure {
+  product_id: string;
+  product_code?: string;
+  reason: string;
+}
+
+export interface BulkAdjustmentLotsResult {
+  success: boolean;
+  created: number;
+  failed: BulkAdjustmentLotFailure[];
+  failedCount: number;
+  total: number;
+}
+
+/**
+ * List SP có tồn > 0 ở chi nhánh kèm thông tin lot active sớm nhất.
+ * Dùng cho dialog "Gắn HSD cho tồn cũ" — filter theo nhóm / NCC / "chỉ chưa có lot".
+ */
+export async function getProductsWithBranchStock(
+  branchId: string,
+  opts?: {
+    categoryId?: string | null;
+    supplierId?: string | null;
+    onlyWithoutLots?: boolean;
+  },
+): Promise<ProductWithBranchStock[]> {
+  const supabase = getClient();
+
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  const { data, error } = await (supabase.rpc as any)(
+    "get_products_with_branch_stock",
+    {
+      p_branch_id: branchId,
+      p_category_id: opts?.categoryId ?? null,
+      p_supplier_id: opts?.supplierId ?? null,
+      p_only_without_lots: opts?.onlyWithoutLots ?? false,
+    },
+  );
+
+  if (error) {
+    if (isRpcUnavailable(error)) {
+      throw new Error(
+        "Chưa có RPC get_products_with_branch_stock. Vui lòng chạy migration 00104 trước.",
+      );
+    }
+    handleError(error, "getProductsWithBranchStock");
+  }
+
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  return (data ?? []).map((row: any) => ({
+    productId: row.product_id,
+    productCode: row.product_code,
+    productName: row.product_name,
+    productType: row.product_type,
+    stockUnit: row.stock_unit ?? "",
+    categoryId: row.category_id ?? null,
+    categoryName: row.category_name ?? null,
+    branchStock: Number(row.branch_stock ?? 0),
+    earliestLotExpiry: row.earliest_lot_expiry ?? null,
+    totalLotsActive: Number(row.total_lots_active ?? 0),
+  }));
+}
+
+/**
+ * Tạo nhiều adjustment lots cùng lúc — RPC server-side validate per item.
+ * Items hợp lệ → tạo lot + audit log. Items lỗi → push vào failed[] với reason.
+ * Return summary để UI hiển thị "đã tạo X / Y, lỗi Z dòng".
+ */
+export async function bulkCreateAdjustmentLots(
+  items: BulkAdjustmentLotItem[],
+  defaultNote?: string,
+): Promise<BulkAdjustmentLotsResult> {
+  const supabase = getClient();
+
+  const payload = items.map((it) => ({
+    product_id: it.productId,
+    branch_id: it.branchId,
+    qty: it.qty,
+    expiry_date: it.expiryDate,
+    lot_number: it.lotNumber ?? null,
+    note: it.note ?? null,
+  }));
+
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  const { data, error } = await (supabase.rpc as any)(
+    "bulk_create_adjustment_lots_atomic",
+    {
+      p_items: payload,
+      p_default_note: defaultNote ?? null,
+    },
+  );
+
+  if (error) {
+    if (isRpcUnavailable(error)) {
+      throw new Error(
+        "Chưa có RPC bulk_create_adjustment_lots_atomic. Vui lòng chạy migration 00104 trước.",
+      );
+    }
+    handleError(error, "bulkCreateAdjustmentLots");
+  }
+
+  const r = (data ?? {}) as Record<string, unknown>;
+  return {
+    success: Boolean(r.success),
+    created: Number(r.created ?? 0),
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    failed: ((r.failed as any) ?? []) as BulkAdjustmentLotFailure[],
+    failedCount: Number(r.failed_count ?? 0),
+    total: Number(r.total ?? 0),
+  };
+}
