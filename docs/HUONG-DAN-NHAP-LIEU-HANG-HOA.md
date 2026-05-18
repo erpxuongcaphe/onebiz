@@ -276,8 +276,9 @@ Khai báo NCC để liên kết với NVL → đặt hàng nhập nhanh.
 | Người liên hệ | | "Anh Hùng" |
 | SĐT | | `0901234567` |
 | Email | | `huong@daklak.vn` |
-| Địa chỉ chi tiết | | (5 cột tách rời sau migration 00089) |
-| - Số nhà | | "123" |
+| Địa chỉ chi tiết | | (6 cột tách rời sau migration 00089 + 00101) |
+| - Số nhà | | "123" hoặc "45/2A" |
+| - Tên đường | | "Lê Lợi", "Nguyễn Văn Cừ" |
 | - Khu phố | | "KP3" |
 | - Phường | | "P.Bến Thành" |
 | - Tỉnh/TP | | "TP HCM" (dropdown 34 tỉnh sau sáp nhập 2025) |

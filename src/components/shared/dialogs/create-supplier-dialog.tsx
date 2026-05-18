@@ -49,8 +49,9 @@ export function CreateSupplierDialog({
   const [phone, setPhone] = useState("");
   const [email, setEmail] = useState("");
   const [address, setAddress] = useState("");
-  // Day 17/05/2026: structured address — CEO yêu cầu tách
+  // Day 17/05 + 18/05/2026: structured address — CEO yêu cầu tách
   const [houseNumber, setHouseNumber] = useState("");
+  const [street, setStreet] = useState("");
   const [quarter, setQuarter] = useState("");
   const [ward, setWard] = useState("");
   const [province, setProvince] = useState("");
@@ -69,6 +70,7 @@ export function CreateSupplierDialog({
         setEmail(initialData.email || "");
         setAddress(initialData.address || "");
         setHouseNumber(initialData.houseNumber || "");
+        setStreet(initialData.street || "");
         setQuarter(initialData.quarter || "");
         setWard(initialData.ward || "");
         setProvince(initialData.province || "");
@@ -82,6 +84,7 @@ export function CreateSupplierDialog({
         setEmail("");
         setAddress("");
         setHouseNumber("");
+        setStreet("");
         setQuarter("");
         setWard("");
         setProvince("");
@@ -110,6 +113,7 @@ export function CreateSupplierDialog({
           phone: phone || undefined,
           email: email || undefined,
           houseNumber: houseNumber,
+          street: street,
           quarter: quarter,
           ward: ward,
           province: province,
@@ -130,6 +134,7 @@ export function CreateSupplierDialog({
           phone: phone || undefined,
           email: email || undefined,
           houseNumber: houseNumber || undefined,
+          street: street || undefined,
           quarter: quarter || undefined,
           ward: ward || undefined,
           province: province || undefined,
@@ -212,14 +217,14 @@ export function CreateSupplierDialog({
             <div className="flex items-center gap-2">
               <Icon name="location_on" size={16} className="text-primary" />
               <span className="text-sm font-semibold">Địa chỉ</span>
-              {isEditing && address && !houseNumber && !ward && !province && (
+              {isEditing && address && !houseNumber && !street && !ward && !province && (
                 <span className="text-[11px] text-status-warning">
                   · Có địa chỉ cũ chưa tách — cập nhật để filter dễ hơn
                 </span>
               )}
             </div>
 
-            {isEditing && address && !houseNumber && !ward && !province && (
+            {isEditing && address && !houseNumber && !street && !ward && !province && (
               <div className="space-y-1">
                 <label className="text-[11px] text-muted-foreground">
                   Địa chỉ cũ (text)
@@ -234,11 +239,19 @@ export function CreateSupplierDialog({
 
             <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
               <div className="space-y-1">
-                <label className="text-[11px] text-muted-foreground">Số nhà / Đường</label>
+                <label className="text-[11px] text-muted-foreground">Số nhà</label>
                 <Input
                   value={houseNumber}
                   onChange={(e) => setHouseNumber(e.target.value)}
-                  placeholder="VD: 123 Lê Lợi"
+                  placeholder="VD: 123, 45/2A"
+                />
+              </div>
+              <div className="space-y-1">
+                <label className="text-[11px] text-muted-foreground">Tên đường</label>
+                <Input
+                  value={street}
+                  onChange={(e) => setStreet(e.target.value)}
+                  placeholder="VD: Lê Lợi, Nguyễn Văn Cừ"
                 />
               </div>
               <div className="space-y-1">

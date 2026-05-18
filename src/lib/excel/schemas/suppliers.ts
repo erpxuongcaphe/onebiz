@@ -11,8 +11,9 @@ export interface SupplierImportRow {
   email?: string;
   /** Địa chỉ đầy đủ (legacy). */
   address?: string;
-  // Day 17/05/2026: structured address
+  // Day 17/05 + 18/05/2026: structured address
   houseNumber?: string;
+  street?: string;
   quarter?: string;
   ward?: string;
   province?: string;
@@ -80,13 +81,21 @@ export const supplierExcelSchema: ExcelSchema<SupplierImportRow> = {
       example: "456 Lê Lợi, Q1, TP.HCM",
       width: 36,
     },
-    // Day 17/05/2026: 5 cột structured address
+    // Day 17/05 + 18/05/2026: 6 cột structured address
     {
       key: "houseNumber",
-      header: "Số nhà / Đường",
+      header: "Số nhà",
+      type: "string",
+      maxLength: 50,
+      example: "456",
+      width: 12,
+    },
+    {
+      key: "street",
+      header: "Tên đường",
       type: "string",
       maxLength: 200,
-      example: "456 Lê Lợi",
+      example: "Lê Lợi",
       width: 22,
     },
     {

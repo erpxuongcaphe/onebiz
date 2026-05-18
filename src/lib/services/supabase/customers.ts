@@ -206,10 +206,11 @@ export async function createCustomer(customer: Partial<Customer>): Promise<Custo
   const supabase = getClient();
   const tenantId = await getCurrentTenantId();
 
-  // Day 17/05/2026: auto-compose address từ 5 fields structured nếu cung cấp.
-  // Giữ address legacy nếu caller truyền trực tiếp (cho backward compat).
+  // Day 17/05/2026 + 18/05/2026: auto-compose address từ 6 fields structured.
+  // CEO 18/05: thêm `street` tách khỏi `houseNumber`.
   const composedAddress = composeStructuredAddress({
     houseNumber: customer.houseNumber,
+    street: customer.street,
     quarter: customer.quarter,
     ward: customer.ward,
     province: customer.province,
@@ -228,6 +229,8 @@ export async function createCustomer(customer: Partial<Customer>): Promise<Custo
       address: finalAddress,
       // eslint-disable-next-line @typescript-eslint/no-explicit-any
       house_number: customer.houseNumber || null,
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      street: customer.street || null,
       // eslint-disable-next-line @typescript-eslint/no-explicit-any
       quarter: customer.quarter || null,
       // eslint-disable-next-line @typescript-eslint/no-explicit-any
@@ -392,7 +395,7 @@ export async function updateCustomer(id: string, updates: Partial<Customer>): Pr
     const res = await supabase
       .from("customers")
       .select(
-        "code, name, phone, email, group_id, customer_type, address, house_number, quarter, ward, province, country",
+        "code, name, phone, email, group_id, customer_type, address, house_number, street, quarter, ward, province, country",
       )
       .eq("tenant_id", tenantId)
       .eq("id", id)
@@ -402,10 +405,11 @@ export async function updateCustomer(id: string, updates: Partial<Customer>): Pr
     /* snapshot optional */
   }
 
-  // Day 17/05/2026: nếu có ít nhất 1 field structured được sửa →
-  // auto-compose address text từ 5 fields (kết hợp cả old data + new updates).
+  // Day 17/05/2026 + 18/05/2026: nếu có ít nhất 1 field structured được sửa →
+  // auto-compose address text từ 6 fields (kết hợp cả old data + new updates).
   const hasStructuredUpdate = [
     updates.houseNumber,
+    updates.street,
     updates.quarter,
     updates.ward,
     updates.province,
@@ -420,6 +424,7 @@ export async function updateCustomer(id: string, updates: Partial<Customer>): Pr
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
   const p = payload as any;
   if (updates.houseNumber !== undefined) p.house_number = updates.houseNumber || null;
+  if (updates.street !== undefined) p.street = updates.street || null;
   if (updates.quarter !== undefined) p.quarter = updates.quarter || null;
   if (updates.ward !== undefined) p.ward = updates.ward || null;
   if (updates.province !== undefined) p.province = updates.province || null;
@@ -432,6 +437,10 @@ export async function updateCustomer(id: string, updates: Partial<Customer>): Pr
         updates.houseNumber !== undefined
           ? updates.houseNumber
           : (old.house_number as string | null),
+      street:
+        updates.street !== undefined
+          ? updates.street
+          : (old.street as string | null),
       quarter:
         updates.quarter !== undefined
           ? updates.quarter
@@ -537,8 +546,9 @@ function mapCustomer(row: any, returnsTotal = 0): Customer {
     phone: row.phone ?? "",
     email: row.email ?? undefined,
     address: row.address ?? undefined,
-    // Day 17/05: structured address
+    // Day 17/05 + 18/05: structured address
     houseNumber: row.house_number ?? undefined,
+    street: row.street ?? undefined,
     quarter: row.quarter ?? undefined,
     ward: row.ward ?? undefined,
     province: row.province ?? undefined,

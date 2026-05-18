@@ -204,13 +204,23 @@ export function findProvinceCode(name: string | null | undefined): string | null
  */
 export function composeAddress(parts: {
   houseNumber?: string | null;
+  /** Day 18/05/2026 (CEO): tên đường tách riêng khỏi số nhà */
+  street?: string | null;
   quarter?: string | null;
   ward?: string | null;
   province?: string | null;
   country?: string | null;
 }): string {
-  const chunks = [
+  // Gộp "số nhà + tên đường" thành 1 chunk (vd "123 Lê Lợi")
+  const houseAndStreet = [
     parts.houseNumber?.trim(),
+    parts.street?.trim(),
+  ]
+    .filter((c): c is string => Boolean(c && c.length > 0))
+    .join(" ");
+
+  const chunks = [
+    houseAndStreet,
     parts.quarter?.trim(),
     parts.ward?.trim(),
     parts.province?.trim(),

@@ -10,6 +10,8 @@ export interface Supplier {
   address?: string;
   // Day 17/05/2026: structured address (CEO yêu cầu tách để filter/quản lý)
   houseNumber?: string;
+  /** Day 18/05/2026 (CEO): tên đường tách riêng khỏi số nhà */
+  street?: string;
   quarter?: string;
   ward?: string;
   province?: string;

@@ -184,9 +184,10 @@ export async function createSupplier(supplier: Partial<Supplier>): Promise<Suppl
   const supabase = getClient();
   const tenantId = await getCurrentTenantId();
 
-  // Day 17/05/2026: auto-compose address từ 5 fields structured nếu có
+  // Day 17/05 + 18/05/2026: auto-compose address từ 6 fields structured
   const composedAddress = composeStructuredAddress({
     houseNumber: supplier.houseNumber,
+    street: supplier.street,
     quarter: supplier.quarter,
     ward: supplier.ward,
     province: supplier.province,
@@ -205,6 +206,8 @@ export async function createSupplier(supplier: Partial<Supplier>): Promise<Suppl
       address: finalAddress,
       // eslint-disable-next-line @typescript-eslint/no-explicit-any
       house_number: supplier.houseNumber || null,
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      street: supplier.street || null,
       // eslint-disable-next-line @typescript-eslint/no-explicit-any
       quarter: supplier.quarter || null,
       // eslint-disable-next-line @typescript-eslint/no-explicit-any
@@ -253,7 +256,7 @@ export async function updateSupplier(id: string, updates: Partial<Supplier>): Pr
     const res = await supabase
       .from("suppliers")
       .select(
-        "code, name, phone, email, address, tax_code, note, house_number, quarter, ward, province, country",
+        "code, name, phone, email, address, tax_code, note, house_number, street, quarter, ward, province, country",
       )
       .eq("tenant_id", tenantId)
       .eq("id", id)
@@ -263,9 +266,10 @@ export async function updateSupplier(id: string, updates: Partial<Supplier>): Pr
     /* snapshot optional */
   }
 
-  // Day 17/05/2026: auto-compose address khi có structured field thay đổi
+  // Day 17/05 + 18/05/2026: auto-compose address từ 6 fields structured
   const hasStructuredUpdate = [
     updates.houseNumber,
+    updates.street,
     updates.quarter,
     updates.ward,
     updates.province,
@@ -280,6 +284,7 @@ export async function updateSupplier(id: string, updates: Partial<Supplier>): Pr
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
   const p = payload as any;
   if (updates.houseNumber !== undefined) p.house_number = updates.houseNumber || null;
+  if (updates.street !== undefined) p.street = updates.street || null;
   if (updates.quarter !== undefined) p.quarter = updates.quarter || null;
   if (updates.ward !== undefined) p.ward = updates.ward || null;
   if (updates.province !== undefined) p.province = updates.province || null;
@@ -291,6 +296,10 @@ export async function updateSupplier(id: string, updates: Partial<Supplier>): Pr
         updates.houseNumber !== undefined
           ? updates.houseNumber
           : (old.house_number as string | null),
+      street:
+        updates.street !== undefined
+          ? updates.street
+          : (old.street as string | null),
       quarter:
         updates.quarter !== undefined
           ? updates.quarter
@@ -407,8 +416,9 @@ function mapSupplier(row: any, totalPurchases = 0): Supplier {
     phone: row.phone ?? "",
     email: row.email ?? undefined,
     address: row.address ?? undefined,
-    // Day 17/05/2026: structured address
+    // Day 17/05 + 18/05/2026: structured address
     houseNumber: row.house_number ?? undefined,
+    street: row.street ?? undefined,
     quarter: row.quarter ?? undefined,
     ward: row.ward ?? undefined,
     province: row.province ?? undefined,
