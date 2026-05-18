@@ -166,16 +166,20 @@ export interface PurchaseOrderItemRow {
   remaining: number;
   unitPrice: number;
   lineTotal: number;
+  /** Day 18/05/2026 (CEO): HSD nhập tại phiếu nhập (migration 00102) */
+  expiryDate?: string | null;
+  lotNumber?: string | null;
 }
 
 export async function getPurchaseOrderItems(
   orderId: string,
 ): Promise<PurchaseOrderItemRow[]> {
   const supabase = getClient();
-  const { data, error } = await supabase
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  const { data, error } = await (supabase as any)
     .from("purchase_order_items")
     .select(
-      "id, product_id, product_name, quantity, received_quantity, unit_price, unit, products(code)",
+      "id, product_id, product_name, quantity, received_quantity, unit_price, unit, expiry_date, lot_number, products(code)",
     )
     .eq("purchase_order_id", orderId)
     .order("id", { ascending: true });
@@ -190,6 +194,8 @@ export async function getPurchaseOrderItems(
     received_quantity: number | string;
     unit_price: number | string;
     unit: string | null;
+    expiry_date: string | null;
+    lot_number: string | null;
     products: { code: string } | null;
   }>).map((row) => {
     const qty = Number(row.quantity ?? 0);
@@ -206,6 +212,8 @@ export async function getPurchaseOrderItems(
       remaining: Math.max(0, qty - received),
       unitPrice: price,
       lineTotal: qty * price,
+      expiryDate: row.expiry_date,
+      lotNumber: row.lot_number,
     };
   });
 }

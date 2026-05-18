@@ -52,6 +52,9 @@ interface LineItem {
   quantity: number;
   price: number;
   vatRate: number;
+  /** Day 18/05/2026 (CEO): HSD nhập tại phiếu nhập */
+  expiryDate?: string;
+  lotNumber?: string;
 }
 
 interface SearchProduct {
@@ -78,6 +81,8 @@ interface ExistingPurchaseOrderItemRecord {
   quantity: number;
   unit_price: number;
   vat_rate: number | null;
+  expiry_date?: string | null;
+  lot_number?: string | null;
   products: ProductCodeRelation;
 }
 
@@ -152,9 +157,10 @@ export function CreatePurchaseOrderDialog({
 
       (async () => {
         const supabase = getClient();
-        const { data } = await supabase
+        // eslint-disable-next-line @typescript-eslint/no-explicit-any
+        const { data } = await (supabase as any)
           .from("purchase_order_items")
-          .select("product_id, product_name, unit, quantity, unit_price, vat_rate, products(code)")
+          .select("product_id, product_name, unit, quantity, unit_price, vat_rate, expiry_date, lot_number, products(code)")
           .eq("purchase_order_id", editingPO.id);
 
         if (!data) return;
@@ -167,6 +173,8 @@ export function CreatePurchaseOrderDialog({
           quantity: Number(d.quantity ?? 0),
           price: Number(d.unit_price ?? 0),
           vatRate: Number(d.vat_rate ?? 0),
+          expiryDate: d.expiry_date ?? undefined,
+          lotNumber: d.lot_number ?? undefined,
         }));
         setItems(mappedItems);
 
@@ -355,7 +363,8 @@ export function CreatePurchaseOrderDialog({
       }
 
       if (items.length > 0) {
-        const { error: itemsErr } = await supabase
+        // eslint-disable-next-line @typescript-eslint/no-explicit-any
+        const { error: itemsErr } = await (supabase as any)
           .from("purchase_order_items")
           .insert(items.map((item) => {
             const lineBeforeTax = item.quantity * item.price;
@@ -372,7 +381,12 @@ export function CreatePurchaseOrderDialog({
               vat_rate: item.vatRate,
               vat_amount: vatAmt,
               total: lineBeforeTax,
-            } satisfies PurchaseOrderItemInsert;
+              // Day 18/05/2026 (CEO): HSD + lô từ form (cast vì
+              // Supabase types chưa regen sau migration 00102)
+              expiry_date: item.expiryDate || null,
+              lot_number: item.lotNumber || null,
+              // eslint-disable-next-line @typescript-eslint/no-explicit-any
+            } as PurchaseOrderItemInsert & { expiry_date: any; lot_number: any };
           }));
         if (itemsErr) throw new Error(itemsErr.message);
       }
@@ -565,9 +579,9 @@ export function CreatePurchaseOrderDialog({
               ) : (
                 <div className="divide-y">
                   {items.map((item) => (
+                    <div key={item.id} className="px-3 py-2.5 space-y-1.5">
                     <div
-                      key={item.id}
-                      className="grid gap-2 px-3 py-2.5 md:grid-cols-[minmax(300px,1fr)_90px_112px_150px_90px_150px_44px] md:items-center"
+                      className="grid gap-2 md:grid-cols-[minmax(300px,1fr)_90px_112px_150px_90px_150px_44px] md:items-center"
                     >
                       <div className="min-w-0">
                         <div className="truncate text-sm font-semibold">{item.productName}</div>
@@ -622,6 +636,30 @@ export function CreatePurchaseOrderDialog({
                       >
                         <Icon name="delete" size={14} />
                       </Button>
+                    </div>
+                    {/* Day 18/05/2026 (CEO): row con HSD + Số lô (NCC ghi trên bao bì) */}
+                    <div className="flex items-center gap-2 pl-1 text-xs">
+                      <label className="text-muted-foreground shrink-0">HSD:</label>
+                      <input
+                        type="date"
+                        value={item.expiryDate || ""}
+                        onChange={(e) => updateItem(item.id, "expiryDate", e.target.value)}
+                        className="h-7 w-36 rounded-md border border-input bg-background px-2 text-xs"
+                        aria-label={`HSD ${item.productName}`}
+                      />
+                      <label className="text-muted-foreground shrink-0 ml-2">Số lô:</label>
+                      <input
+                        type="text"
+                        value={item.lotNumber || ""}
+                        onChange={(e) => updateItem(item.id, "lotNumber", e.target.value)}
+                        placeholder="VD: LOT-2026-04-15"
+                        className="h-7 flex-1 max-w-[200px] rounded-md border border-input bg-background px-2 text-xs"
+                        aria-label={`Số lô ${item.productName}`}
+                      />
+                      <span className="text-muted-foreground italic ml-auto hidden md:inline">
+                        (NCC ghi trên bao bì — optional)
+                      </span>
+                    </div>
                     </div>
                   ))}
                 </div>
