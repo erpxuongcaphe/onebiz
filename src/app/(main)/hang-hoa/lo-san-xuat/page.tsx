@@ -21,6 +21,7 @@ import { getAllProductLots } from "@/lib/services";
 import type { ProductLot } from "@/lib/types";
 import { Icon } from "@/components/ui/icon";
 import { AuditLogDialog } from "@/components/shared/audit-log-dialog";
+import { AssignExpiryDialog } from "@/components/shared/dialogs/assign-expiry-existing-stock-dialog";
 import { buildTransactionRowActions } from "@/components/shared/transaction-row-actions";
 import { useTxRowPermissions } from "@/lib/permissions";
 
@@ -71,6 +72,8 @@ export default function LoSanXuatPage() {
   const [sourceFilter, setSourceFilter] = useState("all");
   // Sprint UX-1 Stage 4: Audit log shortcut (master data lot)
   const [auditDialogTarget, setAuditDialogTarget] = useState<LotRow | null>(null);
+  // Day 18/05/2026 (CEO): mockup dialog gắn HSD cho tồn cũ
+  const [assignExpiryOpen, setAssignExpiryOpen] = useState(false);
 
   const fetchData = useCallback(async () => {
     setLoading(true);
@@ -248,6 +251,14 @@ export default function LoSanXuatPage() {
         searchPlaceholder="Tìm theo số lô, tên sản phẩm..."
         searchValue={search}
         onSearchChange={setSearch}
+        actions={[
+          {
+            label: "Gắn HSD cho tồn cũ",
+            icon: <Icon name="event" size={16} />,
+            variant: "default",
+            onClick: () => setAssignExpiryOpen(true),
+          },
+        ]}
       />
 
       {/* Summary */}
@@ -349,6 +360,12 @@ export default function LoSanXuatPage() {
           onClose={() => setAuditDialogTarget(null)}
         />
       )}
+
+      {/* Day 18/05/2026 (CEO): Mockup dialog gắn HSD cho tồn cũ */}
+      <AssignExpiryDialog
+        open={assignExpiryOpen}
+        onOpenChange={setAssignExpiryOpen}
+      />
     </ListPageLayout>
   );
 }
