@@ -274,8 +274,13 @@ comment on function public.pos_complete_checkout_atomic is
   'Atomic retail POS checkout v3: invoice + items + stock + BOM consume + cash. CEO 18/05/2026.';
 
 -- ────────────────────────────────────────────────────────────────
--- 2. fnb_complete_payment_atomic v3 — thêm BOM consume cho FnB
+-- 2. fnb_complete_payment_atomic — DI CHUYỂN SANG migration 00100
+-- vì có nhiều overload cũ (9/10/11 params) → DROP trước rồi CREATE.
+-- Migration 00098 này CHỈ rewrite pos_complete_checkout_atomic.
+-- Phần dưới (#### DISABLED ####) giữ để reference, KHÔNG chạy.
 -- ────────────────────────────────────────────────────────────────
+
+/*
 create or replace function public.fnb_complete_payment_atomic(
   p_kitchen_order_id uuid,
   p_customer_id uuid,
@@ -585,7 +590,7 @@ begin
 end;
 $$;
 
-comment on function public.fnb_complete_payment_atomic is
-  'Atomic FnB payment v3: invoice + items + stock + BOM consume + toppings + cash. CEO 18/05/2026.';
+*/
+-- END DISABLED block — fnb_complete_payment_atomic xem migration 00100
 
 notify pgrst, 'reload schema';
