@@ -136,15 +136,19 @@ export function CreateProductDialog({
   const [bomItems, setBomItems] = useState<InlineBomItem[]>([]);
   const [bomExistingId, setBomExistingId] = useState<string | null>(null); // edit mode
   const [bomPickerOpen, setBomPickerOpen] = useState(false);
-  const [bomPickerMaterialId, setBomPickerMaterialId] = useState("");
-  // Day 19/05/2026 (CEO feedback): picker NVL có search + filter để dễ tìm
-  // trong 270+ SP. Type filter mặc định "all" (NVL + SKU) vì Pattern A —
-  // SKU cà phê pha có thể dùng SKU cà phê rang khác làm NVL.
+  // Day 19/05/2026 (CEO Phase A): multi-select picker — tick nhiều NVL,
+  // thêm 1 lần. State chuyển từ string đơn → Set<string>.
+  const [bomPickerSelected, setBomPickerSelected] = useState<Set<string>>(
+    new Set(),
+  );
   const [bomPickerSearch, setBomPickerSearch] = useState("");
   const [bomPickerTypeFilter, setBomPickerTypeFilter] = useState<
     "all" | "nvl" | "sku"
   >("all");
   const [bomPickerCategoryId, setBomPickerCategoryId] = useState<string>("");
+  // Day 19/05/2026 (CEO Phase A.2): nested dialog tạo NVL ngay từ picker
+  // khi list rỗng — tránh user phải đóng dialog đi sang trang khác.
+  const [nestedNvlOpen, setNestedNvlOpen] = useState(false);
   const [bomConfirmDeleteOpen, setBomConfirmDeleteOpen] = useState(false);
   // Kênh bán — chỉ áp dụng cho SKU. NVL luôn null.
   const [channel, setChannel] = useState<ProductChannel>("fnb");
@@ -1287,9 +1291,8 @@ export function CreateProductDialog({
           )}
         </Tabs>
 
-        {/* Day 19/05/2026 (CEO feedback): Picker NVL với search + filter để
-            tìm nhanh trong 270+ SP. Layout: Search bar + chip filter (NVL/SKU/
-            Tất cả) + Category dropdown + scrollable list. Click row → chọn. */}
+        {/* Day 19/05/2026 (CEO Phase A): Picker NVL multi-select. Tick nhiều
+            dòng + thêm 1 lần. Empty state có CTA tạo NVL ngay nested. */}
         <Dialog
           open={bomPickerOpen}
           onOpenChange={(o) => {
@@ -1298,7 +1301,7 @@ export function CreateProductDialog({
               setBomPickerSearch("");
               setBomPickerTypeFilter("all");
               setBomPickerCategoryId("");
-              setBomPickerMaterialId("");
+              setBomPickerSelected(new Set());
             }
           }}
         >
@@ -1395,11 +1398,14 @@ export function CreateProductDialog({
               </div>
             </div>
 
-            {/* Scrollable list */}
+            {/* Scrollable list + empty state CTA */}
             {(() => {
-              const filtered = materialOptions
+              // SP đã thêm vào BOM + chính SP đang sửa → loại khỏi list
+              const available = materialOptions
                 .filter((p) => !bomItems.some((it) => it.materialId === p.id))
-                .filter((p) => !initialData || p.id !== initialData.id)
+                .filter((p) => !initialData || p.id !== initialData.id);
+
+              const filtered = available
                 .filter((p) =>
                   bomPickerTypeFilter === "all"
                     ? true
@@ -1418,6 +1424,55 @@ export function CreateProductDialog({
                     p.name.toLowerCase().includes(q)
                   );
                 });
+
+              // Empty state thực sự: hệ thống chưa có SP nào để chọn
+              // (đã trừ những SP đã add). Show CTA tạo NVL ngay.
+              const isReallyEmpty = available.length === 0;
+
+              if (isReallyEmpty) {
+                return (
+                  <div className="flex-1 flex flex-col items-center justify-center py-10 px-6 text-center">
+                    <div className="inline-flex size-14 items-center justify-center rounded-full bg-muted mb-3">
+                      <Icon
+                        name="package_2"
+                        size={28}
+                        className="text-muted-foreground"
+                      />
+                    </div>
+                    <h4 className="font-semibold text-sm mb-1">
+                      Chưa có NVL nào để chọn
+                    </h4>
+                    <p className="text-xs text-muted-foreground mb-5 max-w-sm">
+                      Tạo NVL trước rồi mới gắn vào công thức được. Anh có thể
+                      tạo ngay đây — không cần đóng dialog này.
+                    </p>
+                    <div className="flex items-center gap-2">
+                      <Button
+                        size="sm"
+                        onClick={() => {
+                          setBomPickerOpen(false);
+                          setNestedNvlOpen(true);
+                        }}
+                      >
+                        <Icon name="add" size={14} className="mr-1" />
+                        Tạo NVL mới ngay
+                      </Button>
+                      <Button
+                        variant="outline"
+                        size="sm"
+                        onClick={() => setBomPickerOpen(false)}
+                      >
+                        Đóng
+                      </Button>
+                    </div>
+                  </div>
+                );
+              }
+
+              const allFilteredSelected =
+                filtered.length > 0 &&
+                filtered.every((p) => bomPickerSelected.has(p.id));
+
               return (
                 <>
                   <div className="flex items-center justify-between px-1 py-1.5 text-[11px] text-muted-foreground">
@@ -1425,18 +1480,11 @@ export function CreateProductDialog({
                       <b className="text-foreground">{filtered.length}</b> SP
                       phù hợp
                       {materialOptions.length > filtered.length &&
-                        ` (tổng ${materialOptions.length})`}
+                        ` · còn ${available.length} SP có thể thêm`}
                     </span>
-                    {bomPickerMaterialId && (
-                      <span className="text-primary">
-                        Đã chọn:{" "}
-                        <b>
-                          {
-                            materialOptions.find(
-                              (p) => p.id === bomPickerMaterialId,
-                            )?.code
-                          }
-                        </b>
+                    {bomPickerSelected.size > 0 && (
+                      <span className="text-primary font-medium">
+                        Đã tick <b>{bomPickerSelected.size}</b> NVL
                       </span>
                     )}
                   </div>
@@ -1448,82 +1496,80 @@ export function CreateProductDialog({
                           size={20}
                           className="inline-block mb-1"
                         />
-                        <div>Không tìm thấy SP nào phù hợp filter</div>
+                        <div>Không có SP nào phù hợp filter hiện tại</div>
                       </div>
                     ) : (
-                      <ul className="divide-y">
-                        {filtered.map((p) => {
-                          const isSelected = bomPickerMaterialId === p.id;
-                          return (
-                            <li key={p.id}>
-                              <button
-                                type="button"
-                                onClick={() => setBomPickerMaterialId(p.id)}
-                                onDoubleClick={() => {
-                                  // Double-click → chọn và thêm ngay
-                                  setBomItems((prev) => [
-                                    ...prev,
-                                    {
-                                      materialId: p.id,
-                                      materialCode: p.code,
-                                      materialName: p.name,
-                                      costPrice: p.costPrice ?? 0,
-                                      unit: p.stockUnit || p.unit || "",
-                                      quantity: 1,
-                                      wastePercent: 0,
-                                    },
-                                  ]);
-                                  setBomPickerMaterialId("");
-                                  setBomPickerOpen(false);
-                                }}
-                                className={`w-full text-left px-3 py-2 flex items-center gap-3 transition-colors ${
-                                  isSelected
-                                    ? "bg-primary/10 border-l-2 border-primary"
-                                    : "hover:bg-muted/50"
-                                }`}
-                              >
-                                <Icon
-                                  name={
-                                    isSelected
-                                      ? "radio_button_checked"
-                                      : "radio_button_unchecked"
+                      <>
+                        {/* Select-all header sticky */}
+                        <div className="sticky top-0 z-10 px-3 py-2 bg-muted/80 backdrop-blur border-b flex items-center gap-3 text-[11px] uppercase tracking-wider text-muted-foreground">
+                          <Checkbox
+                            checked={allFilteredSelected}
+                            onCheckedChange={(v) => {
+                              setBomPickerSelected((prev) => {
+                                const next = new Set(prev);
+                                if (v) {
+                                  filtered.forEach((p) => next.add(p.id));
+                                } else {
+                                  filtered.forEach((p) => next.delete(p.id));
+                                }
+                                return next;
+                              });
+                            }}
+                          />
+                          <span>Chọn tất cả ({filtered.length})</span>
+                        </div>
+                        <ul className="divide-y">
+                          {filtered.map((p) => {
+                            const isSelected = bomPickerSelected.has(p.id);
+                            return (
+                              <li key={p.id}>
+                                <button
+                                  type="button"
+                                  onClick={() =>
+                                    setBomPickerSelected((prev) => {
+                                      const next = new Set(prev);
+                                      if (next.has(p.id)) next.delete(p.id);
+                                      else next.add(p.id);
+                                      return next;
+                                    })
                                   }
-                                  size={16}
-                                  className={
+                                  className={`w-full text-left px-3 py-2 flex items-center gap-3 transition-colors ${
                                     isSelected
-                                      ? "text-primary"
-                                      : "text-muted-foreground"
-                                  }
-                                />
-                                <span className="font-mono text-[11px] text-muted-foreground min-w-[80px]">
-                                  {p.code}
-                                </span>
-                                <span className="flex-1 min-w-0">
-                                  <span className="block truncate font-medium text-sm">
-                                    {p.name}
+                                      ? "bg-primary/5"
+                                      : "hover:bg-muted/40"
+                                  }`}
+                                >
+                                  <Checkbox
+                                    checked={isSelected}
+                                    onCheckedChange={() => {}}
+                                  />
+                                  <span className="font-mono text-[11px] text-muted-foreground min-w-[80px]">
+                                    {p.code}
                                   </span>
-                                  <span className="text-[10px] text-muted-foreground">
-                                    {p.productType === "sku" ? "SKU" : "NVL"}
-                                    {p.categoryName && ` · ${p.categoryName}`}
-                                    {(p.stockUnit || p.unit) &&
-                                      ` · ĐVT ${p.stockUnit || p.unit}`}
+                                  <span className="flex-1 min-w-0">
+                                    <span className="block truncate font-medium text-sm">
+                                      {p.name}
+                                    </span>
+                                    <span className="text-[10px] text-muted-foreground">
+                                      {p.productType === "sku" ? "SKU" : "NVL"}
+                                      {p.categoryName && ` · ${p.categoryName}`}
+                                      {(p.stockUnit || p.unit) &&
+                                        ` · ĐVT ${p.stockUnit || p.unit}`}
+                                    </span>
                                   </span>
-                                </span>
-                                {p.costPrice ? (
-                                  <span className="text-[11px] text-muted-foreground whitespace-nowrap">
-                                    {formatCurrency(p.costPrice)}
-                                  </span>
-                                ) : null}
-                              </button>
-                            </li>
-                          );
-                        })}
-                      </ul>
+                                  {p.costPrice ? (
+                                    <span className="text-[11px] text-muted-foreground tabular-nums whitespace-nowrap">
+                                      {formatCurrency(p.costPrice)}
+                                    </span>
+                                  ) : null}
+                                </button>
+                              </li>
+                            );
+                          })}
+                        </ul>
+                      </>
                     )}
                   </div>
-                  <p className="text-[10px] text-muted-foreground px-1">
-                    Mẹo: bấm đôi (double-click) vào dòng để chọn và thêm ngay.
-                  </p>
                 </>
               );
             })()}
@@ -1533,15 +1579,16 @@ export function CreateProductDialog({
                 Huỷ
               </Button>
               <Button
-                disabled={!bomPickerMaterialId}
+                disabled={bomPickerSelected.size === 0}
                 onClick={() => {
-                  const m = materialOptions.find(
-                    (p) => p.id === bomPickerMaterialId,
-                  );
-                  if (!m) return;
+                  // Thêm tất cả NVL đã tick vào BOM
+                  const toAdd = Array.from(bomPickerSelected)
+                    .map((id) => materialOptions.find((p) => p.id === id))
+                    .filter((m): m is Product => !!m);
+                  if (toAdd.length === 0) return;
                   setBomItems((prev) => [
                     ...prev,
-                    {
+                    ...toAdd.map((m) => ({
                       materialId: m.id,
                       materialCode: m.code,
                       materialName: m.name,
@@ -1549,18 +1596,38 @@ export function CreateProductDialog({
                       unit: m.stockUnit || m.unit || "",
                       quantity: 1,
                       wastePercent: 0,
-                    },
+                    })),
                   ]);
-                  setBomPickerMaterialId("");
+                  setBomPickerSelected(new Set());
                   setBomPickerOpen(false);
                 }}
               >
                 <Icon name="add" size={14} className="mr-1" />
-                Thêm vào công thức
+                Thêm {bomPickerSelected.size > 0 ? bomPickerSelected.size : ""}{" "}
+                NVL vào công thức
               </Button>
             </DialogFooter>
           </DialogContent>
         </Dialog>
+
+        {/* Day 19/05/2026 (CEO Phase A.2): nested dialog tạo NVL ngay từ
+            empty state. Sau khi tạo xong, refetch materialOptions + tự
+            mở lại picker để user tiếp tục chọn. */}
+        <CreateProductDialog
+          open={nestedNvlOpen}
+          onOpenChange={setNestedNvlOpen}
+          onSuccess={() => {
+            // Re-fetch material options + mở lại picker
+            getProducts({ page: 0, pageSize: 1000, filters: {} })
+              .then((res) => {
+                setMaterialOptions(res.data);
+                setBomPickerOpen(true);
+              })
+              .catch(() => {
+                /* fail silent */
+              });
+          }}
+        />
         </div>
 
         <DialogFooter>
