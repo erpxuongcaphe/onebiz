@@ -214,7 +214,7 @@ export function CreateProductionOrderDialog({
         <DialogHeader>
           <DialogTitle>Tạo lệnh sản xuất</DialogTitle>
           <DialogDescription>
-            Chọn công thức (BOM) và số lượng cần sản xuất. Hệ thống tự động tính NVL cần dùng.
+            Chọn công thức sản xuất và số lượng cần sản xuất. Hệ thống tự động tính NVL cần dùng.
           </DialogDescription>
         </DialogHeader>
 
@@ -222,7 +222,7 @@ export function CreateProductionOrderDialog({
           <div className="grid grid-cols-2 gap-4">
             <div className="space-y-2">
               <label className="text-sm font-medium">
-                Công thức (BOM) <span className="text-destructive">*</span>
+                Công thức sản xuất <span className="text-destructive">*</span>
               </label>
               <Select
                 value={bomId || null}

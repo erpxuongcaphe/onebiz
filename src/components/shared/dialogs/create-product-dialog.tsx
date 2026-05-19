@@ -137,6 +137,14 @@ export function CreateProductDialog({
   const [bomExistingId, setBomExistingId] = useState<string | null>(null); // edit mode
   const [bomPickerOpen, setBomPickerOpen] = useState(false);
   const [bomPickerMaterialId, setBomPickerMaterialId] = useState("");
+  // Day 19/05/2026 (CEO feedback): picker NVL có search + filter để dễ tìm
+  // trong 270+ SP. Type filter mặc định "all" (NVL + SKU) vì Pattern A —
+  // SKU cà phê pha có thể dùng SKU cà phê rang khác làm NVL.
+  const [bomPickerSearch, setBomPickerSearch] = useState("");
+  const [bomPickerTypeFilter, setBomPickerTypeFilter] = useState<
+    "all" | "nvl" | "sku"
+  >("all");
+  const [bomPickerCategoryId, setBomPickerCategoryId] = useState<string>("");
   const [bomConfirmDeleteOpen, setBomConfirmDeleteOpen] = useState(false);
   // Kênh bán — chỉ áp dụng cho SKU. NVL luôn null.
   const [channel, setChannel] = useState<ProductChannel>("fnb");
@@ -556,7 +564,7 @@ export function CreateProductDialog({
         title: "Tạo hàng hóa thành công",
         description:
           scope === "sku" && hasBom && bomItems.length > 0
-            ? `Đã thêm SKU ${name} (${code}) + công thức BOM với ${bomItems.length} NVL`
+            ? `Đã thêm SKU ${name} (${code}) + công thức sản xuất với ${bomItems.length} NVL`
             : `Đã thêm ${scope === "nvl" ? "NVL" : "SKU"} ${name} (${code})`,
         variant: "success",
       });
@@ -623,7 +631,7 @@ export function CreateProductDialog({
             {scope === "sku" && hasBom && (
               <TabsTrigger value="bom" className="flex-1">
                 <Icon name="science" size={14} className="mr-1" />
-                Công thức (BOM)
+                Công thức sản xuất
                 {bomItems.length === 0 && !isEdit && (
                   <span className="ml-1 inline-block h-1.5 w-1.5 rounded-full bg-status-warning" />
                 )}
@@ -1103,7 +1111,7 @@ export function CreateProductDialog({
             {scope === "sku" && hasBom && (
               <div className="mt-2 rounded-md border border-primary/30 bg-primary/5 p-2.5 text-xs text-foreground">
                 <Icon name="info" size={14} className="inline-block mr-1 text-primary align-text-bottom" />
-                Tab <b>&quot;Công thức (BOM)&quot;</b> đã bật. Click qua tab đó để cấu hình NVL.
+                Tab <b>&quot;Công thức sản xuất&quot;</b> đã bật. Click qua tab đó để cấu hình NVL.
               </div>
             )}
           </TabsContent>
@@ -1298,53 +1306,257 @@ export function CreateProductDialog({
           )}
         </Tabs>
 
-        {/* Day 18/05/2026 (CEO): Dialog picker thêm NVL vào BOM inline */}
-        <Dialog open={bomPickerOpen} onOpenChange={setBomPickerOpen}>
-          <DialogContent className="sm:max-w-md">
+        {/* Day 19/05/2026 (CEO feedback): Picker NVL với search + filter để
+            tìm nhanh trong 270+ SP. Layout: Search bar + chip filter (NVL/SKU/
+            Tất cả) + Category dropdown + scrollable list. Click row → chọn. */}
+        <Dialog
+          open={bomPickerOpen}
+          onOpenChange={(o) => {
+            setBomPickerOpen(o);
+            if (!o) {
+              setBomPickerSearch("");
+              setBomPickerTypeFilter("all");
+              setBomPickerCategoryId("");
+              setBomPickerMaterialId("");
+            }
+          }}
+        >
+          <DialogContent className="sm:max-w-2xl max-h-[88vh] flex flex-col">
             <DialogHeader>
-              <DialogTitle>Thêm NVL vào công thức</DialogTitle>
+              <DialogTitle>Thêm NVL vào công thức sản xuất</DialogTitle>
               <DialogDescription>
-                Chọn NVL từ danh sách. Có thể chọn cả NVL gốc lẫn SKU khác
-                (vd: cà phê rang 1kg làm NVL cho ly bạc xỉu).
+                Chọn nguyên vật liệu hoặc SKU khác làm thành phần (vd: cà phê
+                rang 1kg làm NVL cho ly bạc xỉu).
               </DialogDescription>
             </DialogHeader>
-            <div className="py-3 space-y-2">
-              <Select
-                value={bomPickerMaterialId || null}
-                onValueChange={(v) => setBomPickerMaterialId(v ?? "")}
-                items={materialOptions
-                  .filter((p) => !bomItems.some((it) => it.materialId === p.id))
-                  .filter((p) => !initialData || p.id !== initialData.id) // không self-reference
-                  .map((p) => ({ value: p.id, label: `${p.code} — ${p.name}` }))}
-              >
-                <SelectTrigger className="w-full">
-                  <SelectValue placeholder="Chọn NVL">
-                    {(v) => {
-                      const m = materialOptions.find((p) => p.id === v);
-                      return m ? `${m.code} — ${m.name}` : "Chọn NVL";
-                    }}
-                  </SelectValue>
-                </SelectTrigger>
-                <SelectContent>
-                  {materialOptions
-                    .filter((p) => !bomItems.some((it) => it.materialId === p.id))
-                    .filter((p) => !initialData || p.id !== initialData.id)
-                    .map((p) => (
-                      <SelectItem key={p.id} value={p.id}>
-                        {p.code} — {p.name}
+
+            {/* Search + filter row */}
+            <div className="space-y-2 pt-2 pb-3 border-b">
+              <div className="relative">
+                <Icon
+                  name="search"
+                  size={16}
+                  className="absolute left-2.5 top-1/2 -translate-y-1/2 text-muted-foreground"
+                />
+                <Input
+                  value={bomPickerSearch}
+                  onChange={(e) => setBomPickerSearch(e.target.value)}
+                  placeholder="Tìm theo mã hoặc tên SP..."
+                  className="pl-8"
+                  autoFocus
+                />
+              </div>
+              <div className="flex flex-wrap items-center gap-2">
+                <div className="inline-flex rounded-md border p-0.5 text-xs">
+                  {(
+                    [
+                      { v: "all", l: "Tất cả" },
+                      { v: "nvl", l: "Chỉ NVL" },
+                      { v: "sku", l: "Chỉ SKU" },
+                    ] as const
+                  ).map((o) => (
+                    <button
+                      key={o.v}
+                      type="button"
+                      onClick={() => setBomPickerTypeFilter(o.v)}
+                      className={`px-2.5 py-1 rounded transition-colors ${
+                        bomPickerTypeFilter === o.v
+                          ? "bg-primary text-primary-foreground"
+                          : "text-muted-foreground hover:bg-muted"
+                      }`}
+                    >
+                      {o.l}
+                    </button>
+                  ))}
+                </div>
+                <Select
+                  value={bomPickerCategoryId || null}
+                  onValueChange={(v) => setBomPickerCategoryId(v ?? "")}
+                  items={[
+                    { value: "", label: "Tất cả nhóm" },
+                    ...categories.map((c) => ({ value: c.value, label: c.label })),
+                  ]}
+                >
+                  <SelectTrigger className="w-48 h-8 text-xs">
+                    <SelectValue placeholder="Tất cả nhóm">
+                      {(v) => {
+                        if (!v) return "Tất cả nhóm";
+                        const c = categories.find((x) => x.value === v);
+                        return c?.label ?? "Tất cả nhóm";
+                      }}
+                    </SelectValue>
+                  </SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="">Tất cả nhóm</SelectItem>
+                    {categories.map((c) => (
+                      <SelectItem key={c.value} value={c.value}>
+                        {c.label}
                       </SelectItem>
                     ))}
-                </SelectContent>
-              </Select>
+                  </SelectContent>
+                </Select>
+                {(bomPickerSearch ||
+                  bomPickerTypeFilter !== "all" ||
+                  bomPickerCategoryId) && (
+                  <button
+                    type="button"
+                    onClick={() => {
+                      setBomPickerSearch("");
+                      setBomPickerTypeFilter("all");
+                      setBomPickerCategoryId("");
+                    }}
+                    className="text-xs text-muted-foreground hover:text-foreground inline-flex items-center gap-1"
+                  >
+                    <Icon name="close" size={12} />
+                    Xoá filter
+                  </button>
+                )}
+              </div>
             </div>
-            <DialogFooter>
+
+            {/* Scrollable list */}
+            {(() => {
+              const filtered = materialOptions
+                .filter((p) => !bomItems.some((it) => it.materialId === p.id))
+                .filter((p) => !initialData || p.id !== initialData.id)
+                .filter((p) =>
+                  bomPickerTypeFilter === "all"
+                    ? true
+                    : p.productType === bomPickerTypeFilter,
+                )
+                .filter((p) =>
+                  bomPickerCategoryId
+                    ? p.categoryId === bomPickerCategoryId
+                    : true,
+                )
+                .filter((p) => {
+                  const q = bomPickerSearch.trim().toLowerCase();
+                  if (!q) return true;
+                  return (
+                    p.code.toLowerCase().includes(q) ||
+                    p.name.toLowerCase().includes(q)
+                  );
+                });
+              return (
+                <>
+                  <div className="flex items-center justify-between px-1 py-1.5 text-[11px] text-muted-foreground">
+                    <span>
+                      <b className="text-foreground">{filtered.length}</b> SP
+                      phù hợp
+                      {materialOptions.length > filtered.length &&
+                        ` (tổng ${materialOptions.length})`}
+                    </span>
+                    {bomPickerMaterialId && (
+                      <span className="text-primary">
+                        Đã chọn:{" "}
+                        <b>
+                          {
+                            materialOptions.find(
+                              (p) => p.id === bomPickerMaterialId,
+                            )?.code
+                          }
+                        </b>
+                      </span>
+                    )}
+                  </div>
+                  <div className="flex-1 overflow-y-auto border rounded-md min-h-[200px] max-h-[360px]">
+                    {filtered.length === 0 ? (
+                      <div className="p-6 text-center text-xs text-muted-foreground">
+                        <Icon
+                          name="search_off"
+                          size={20}
+                          className="inline-block mb-1"
+                        />
+                        <div>Không tìm thấy SP nào phù hợp filter</div>
+                      </div>
+                    ) : (
+                      <ul className="divide-y">
+                        {filtered.map((p) => {
+                          const isSelected = bomPickerMaterialId === p.id;
+                          return (
+                            <li key={p.id}>
+                              <button
+                                type="button"
+                                onClick={() => setBomPickerMaterialId(p.id)}
+                                onDoubleClick={() => {
+                                  // Double-click → chọn và thêm ngay
+                                  setBomItems((prev) => [
+                                    ...prev,
+                                    {
+                                      materialId: p.id,
+                                      materialCode: p.code,
+                                      materialName: p.name,
+                                      costPrice: p.costPrice ?? 0,
+                                      unit: p.stockUnit || p.unit || "",
+                                      quantity: 1,
+                                      wastePercent: 0,
+                                    },
+                                  ]);
+                                  setBomPickerMaterialId("");
+                                  setBomPickerOpen(false);
+                                }}
+                                className={`w-full text-left px-3 py-2 flex items-center gap-3 transition-colors ${
+                                  isSelected
+                                    ? "bg-primary/10 border-l-2 border-primary"
+                                    : "hover:bg-muted/50"
+                                }`}
+                              >
+                                <Icon
+                                  name={
+                                    isSelected
+                                      ? "radio_button_checked"
+                                      : "radio_button_unchecked"
+                                  }
+                                  size={16}
+                                  className={
+                                    isSelected
+                                      ? "text-primary"
+                                      : "text-muted-foreground"
+                                  }
+                                />
+                                <span className="font-mono text-[11px] text-muted-foreground min-w-[80px]">
+                                  {p.code}
+                                </span>
+                                <span className="flex-1 min-w-0">
+                                  <span className="block truncate font-medium text-sm">
+                                    {p.name}
+                                  </span>
+                                  <span className="text-[10px] text-muted-foreground">
+                                    {p.productType === "sku" ? "SKU" : "NVL"}
+                                    {p.categoryName && ` · ${p.categoryName}`}
+                                    {(p.stockUnit || p.unit) &&
+                                      ` · ĐVT ${p.stockUnit || p.unit}`}
+                                  </span>
+                                </span>
+                                {p.costPrice ? (
+                                  <span className="text-[11px] text-muted-foreground whitespace-nowrap">
+                                    {formatCurrency(p.costPrice)}
+                                  </span>
+                                ) : null}
+                              </button>
+                            </li>
+                          );
+                        })}
+                      </ul>
+                    )}
+                  </div>
+                  <p className="text-[10px] text-muted-foreground px-1">
+                    Mẹo: bấm đôi (double-click) vào dòng để chọn và thêm ngay.
+                  </p>
+                </>
+              );
+            })()}
+
+            <DialogFooter className="pt-2 border-t">
               <Button variant="outline" onClick={() => setBomPickerOpen(false)}>
                 Huỷ
               </Button>
               <Button
                 disabled={!bomPickerMaterialId}
                 onClick={() => {
-                  const m = materialOptions.find((p) => p.id === bomPickerMaterialId);
+                  const m = materialOptions.find(
+                    (p) => p.id === bomPickerMaterialId,
+                  );
                   if (!m) return;
                   setBomItems((prev) => [
                     ...prev,
@@ -1362,7 +1574,8 @@ export function CreateProductDialog({
                   setBomPickerOpen(false);
                 }}
               >
-                Thêm
+                <Icon name="add" size={14} className="mr-1" />
+                Thêm vào công thức
               </Button>
             </DialogFooter>
           </DialogContent>

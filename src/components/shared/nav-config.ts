@@ -36,7 +36,7 @@ export const mainNavItems: NavGroup[] = [
         groupLabel: "Sản xuất",
         items: [
           { label: "Lệnh sản xuất", href: "/hang-hoa/san-xuat" },
-          { label: "Công thức (BOM)", href: "/hang-hoa/cong-thuc" },
+          { label: "Công thức sản xuất", href: "/hang-hoa/cong-thuc" },
           { label: "Hạn sử dụng (HSD)", href: "/hang-hoa/hsd" },
         ],
       },
