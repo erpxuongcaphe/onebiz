@@ -110,15 +110,10 @@ export async function bulkImportProducts(
       categoryId = found;
     }
 
-    // Day 19/05/2026 (CEO): auto-fallback đơn vị khi user chỉ nhập 1 trong
-    // 4 cột (Đơn vị tính / ĐVT nhập / ĐVT kho / ĐVT bán). Validate đã đảm
-    // bảo ít nhất 1 cột có giá trị qua schema.validateRow.
-    const fallbackUnit =
-      row.unit?.trim() ||
-      row.stockUnit?.trim() ||
-      row.sellUnit?.trim() ||
-      row.purchaseUnit?.trim() ||
-      "Cái"; // edge case — schema đã ngăn, fallback an toàn
+    // Day 19/05/2026 (CEO Phương án D): Excel chỉ còn 1 cột "Đơn vị tính".
+    // Service auto-fill 4 cột DB (unit, purchase_unit, stock_unit, sell_unit)
+    // = unit chính để nhất quán + không break code đang đọc 3 cột phụ.
+    const finalUnit = row.unit?.trim() || "Cái";
 
     const { error } = await supabase.from("products").insert({
       tenant_id: tenantId,
@@ -127,7 +122,7 @@ export async function bulkImportProducts(
       product_type: row.productType,
       channel: row.productType === "sku" ? (row.channel ?? null) : null,
       category_id: categoryId,
-      unit: fallbackUnit,
+      unit: finalUnit,
       sell_price: row.sellPrice,
       cost_price: row.costPrice,
       stock: 0,
@@ -136,9 +131,9 @@ export async function bulkImportProducts(
       vat_rate: row.vatRate ?? 0,
       barcode: row.barcode ?? null,
       group_code: row.groupCode ?? null,
-      purchase_unit: row.purchaseUnit?.trim() || fallbackUnit,
-      stock_unit: row.stockUnit?.trim() || fallbackUnit,
-      sell_unit: row.sellUnit?.trim() || fallbackUnit,
+      purchase_unit: finalUnit,
+      stock_unit: finalUnit,
+      sell_unit: finalUnit,
       description: row.description ?? null,
       allow_sale: row.allowSale ?? true,
       is_active: row.isActive ?? true,

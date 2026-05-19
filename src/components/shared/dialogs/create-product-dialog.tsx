@@ -423,14 +423,18 @@ export function CreateProductDialog({
       // Common payload — dùng cho cả create và update. Gom hết field mà user
       // có thể sửa. CEO dặn "toàn bộ thông tin đều có thể thay đổi trừ mã",
       // nên edit mode gửi đủ tất cả field vào updateProduct.
+      // Day 19/05/2026 (CEO Phương án D): UI chỉ có 1 ô "Đơn vị tính"
+      // (state lưu trong `stockUnit`). Backend auto-fill 4 cột DB = unit
+      // chính → nhất quán, không break data cũ.
+      const finalUnit = stockUnit.trim() || initialData?.unit || "Cái";
       const commonPayload = {
         name,
         channel: scope === "sku" ? channel : undefined,
         categoryId,
-        unit: stockUnit || purchaseUnit || initialData?.unit || "Cái",
-        purchaseUnit: purchaseUnit || undefined,
-        stockUnit: stockUnit || undefined,
-        sellUnit: sellUnit || undefined,
+        unit: finalUnit,
+        purchaseUnit: finalUnit,
+        stockUnit: finalUnit,
+        sellUnit: finalUnit,
         shelfLifeDays: shelfLifeDays ? Number(shelfLifeDays) : undefined,
         shelfLifeUnit,
         barcode: barcode || undefined,
@@ -812,81 +816,37 @@ export function CreateProductDialog({
             </div>
           )}
 
-            {/* UOM 3 đơn vị — gom chung 1 row, NVL chỉ disable ĐVT bán.
-                Mỗi ô có cảnh báo case-insensitive dup: nếu user gõ "kg" mà
-                tenant đã có "Kg" → suggest click để dùng tên hiện có,
-                tránh tạo 2 đơn vị tương tự khác hoa/thường. */}
-            <div className="grid grid-cols-3 gap-4">
-              <div className="space-y-2">
-                <label className="text-sm font-medium">ĐVT mua</label>
-                <Input
-                  value={purchaseUnit}
-                  onChange={(e) => setPurchaseUnit(e.target.value)}
-                  placeholder="thùng, bao..."
-                />
-                {purchaseUnitDup && (
-                  <p className="text-xs text-status-warning flex items-center gap-1">
-                    <Icon name="warning" size={14} />
-                    Đã có{" "}
-                    <button
-                      type="button"
-                      onClick={() => setPurchaseUnit(purchaseUnitDup)}
-                      className="font-mono font-medium underline hover:text-foreground"
-                    >
-                      {purchaseUnitDup}
-                    </button>
-                    <span className="text-muted-foreground">— dùng tên đó?</span>
-                  </p>
-                )}
-              </div>
-              <div className="space-y-2">
-                <label className="text-sm font-medium">
-                  ĐVT kho{" "}
-                  <span className="text-muted-foreground">(chuẩn)</span>
-                </label>
-                <Input
-                  value={stockUnit}
-                  onChange={(e) => setStockUnit(e.target.value)}
-                  placeholder="lon, gói, kg..."
-                />
-                {stockUnitDup && (
-                  <p className="text-xs text-status-warning flex items-center gap-1">
-                    <Icon name="warning" size={14} />
-                    Đã có{" "}
-                    <button
-                      type="button"
-                      onClick={() => setStockUnit(stockUnitDup)}
-                      className="font-mono font-medium underline hover:text-foreground"
-                    >
-                      {stockUnitDup}
-                    </button>
-                    <span className="text-muted-foreground">— dùng tên đó?</span>
-                  </p>
-                )}
-              </div>
-              <div className="space-y-2">
-                <label className="text-sm font-medium">ĐVT bán</label>
-                <Input
-                  value={sellUnit}
-                  onChange={(e) => setSellUnit(e.target.value)}
-                  placeholder="thùng, lốc..."
-                  disabled={scope === "nvl"}
-                />
-                {sellUnitDup && scope === "sku" && (
-                  <p className="text-xs text-status-warning flex items-center gap-1">
-                    <Icon name="warning" size={14} />
-                    Đã có{" "}
-                    <button
-                      type="button"
-                      onClick={() => setSellUnit(sellUnitDup)}
-                      className="font-mono font-medium underline hover:text-foreground"
-                    >
-                      {sellUnitDup}
-                    </button>
-                    <span className="text-muted-foreground">— dùng tên đó?</span>
-                  </p>
-                )}
-              </div>
+            {/* Day 19/05/2026 (CEO Phương án D): chỉ 1 ô "Đơn vị tính".
+                Trước đây 3 ô (mua/kho/bán) gây rối + 99% redundant + KHÔNG có
+                conversion logic trong flow nhập/xuất → chỉ là text hiển thị.
+                Backend giữ 4 cột DB, service auto-fill purchase/stock/sell = unit. */}
+            <div className="space-y-2">
+              <label className="text-sm font-medium">
+                Đơn vị tính <span className="text-destructive">*</span>
+              </label>
+              <Input
+                value={stockUnit}
+                onChange={(e) => setStockUnit(e.target.value)}
+                placeholder="VD: ly, kg, cái, lon, chai, gói..."
+              />
+              {stockUnitDup && (
+                <p className="text-xs text-status-warning flex items-center gap-1">
+                  <Icon name="warning" size={14} />
+                  Đã có{" "}
+                  <button
+                    type="button"
+                    onClick={() => setStockUnit(stockUnitDup)}
+                    className="font-mono font-medium underline hover:text-foreground"
+                  >
+                    {stockUnitDup}
+                  </button>
+                  <span className="text-muted-foreground">— dùng tên đó?</span>
+                </p>
+              )}
+              <p className="text-xs text-muted-foreground">
+                Đơn vị nhỏ nhất khi bán lẻ (vd: 1 lon, 1 kg, 1 ly). Khi mua
+                gói lớn (vd thùng 24 lon) → tạo phiếu nhập với số lượng quy đổi.
+              </p>
             </div>
 
             <div className="space-y-2">

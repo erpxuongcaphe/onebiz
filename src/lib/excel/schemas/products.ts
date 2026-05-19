@@ -15,7 +15,7 @@ export interface ProductImportRow {
   productType: "nvl" | "sku";
   channel?: "fnb" | "retail";
   categoryCode?: string; // resolve → category_id ở service
-  unit?: string; // Optional — ít nhất 1 trong 4 cột đơn vị phải có (xem validateRow)
+  unit: string; // Bắt buộc — đơn vị nhỏ nhất khi bán lẻ (ly, kg, lon...)
   sellPrice: number;
   costPrice: number;
   stock?: number;
@@ -24,9 +24,6 @@ export interface ProductImportRow {
   vatRate?: number;
   barcode?: string;
   groupCode?: string;
-  purchaseUnit?: string;
-  stockUnit?: string;
-  sellUnit?: string;
   description?: string;
   allowSale?: boolean;
   isActive?: boolean;
@@ -36,7 +33,7 @@ export const productExcelSchema: ExcelSchema<ProductImportRow> = {
   name: "Sản phẩm",
   fileName: "San-pham",
   description:
-    "Danh sách sản phẩm. Mã SP phải duy nhất. 'Loại' = nvl (nguyên vật liệu) hoặc sku (hàng bán). 'Kênh bán' chỉ áp dụng cho sku. ĐƠN VỊ: có 4 cột (Đơn vị tính / ĐVT nhập / ĐVT kho / ĐVT bán) — CHỈ CẦN 1 cột có giá trị là OK, hệ thống tự fill các cột còn lại. Đa số SP chỉ cần điền 'Đơn vị tính' (ly, kg, cái...).",
+    "Danh sách sản phẩm. Mã SP phải duy nhất. 'Loại' = nvl (nguyên vật liệu) hoặc sku (hàng bán). 'Kênh bán' chỉ áp dụng cho sku. ĐƠN VỊ TÍNH: nhập đơn vị nhỏ nhất khi bán lẻ (ly, kg, lon, cái...). Khi mua gói lớn (vd thùng 24 lon) → tạo phiếu nhập với số lượng quy đổi (qty=24).",
   columns: [
     {
       key: "code",
@@ -102,11 +99,12 @@ export const productExcelSchema: ExcelSchema<ProductImportRow> = {
       key: "unit",
       header: "Đơn vị tính",
       type: "string",
+      required: true,
       maxLength: 20,
       example: "Ly",
       description:
-        "Đơn vị mặc định. Nếu để trống, hệ thống lấy từ 'ĐVT kho' → 'ĐVT bán' → 'ĐVT nhập' theo thứ tự ưu tiên.",
-      width: 12,
+        "Đơn vị nhỏ nhất khi bán lẻ (vd: ly, kg, lon, cái, chai, gói). Khi mua gói lớn → tạo phiếu nhập với số lượng quy đổi.",
+      width: 14,
     },
     {
       key: "sellPrice",
@@ -178,36 +176,9 @@ export const productExcelSchema: ExcelSchema<ProductImportRow> = {
       description: "Mã nhóm hàng tự do (VD 'Đồ uống nóng') để lọc/báo cáo",
       width: 16,
     },
-    {
-      key: "purchaseUnit",
-      header: "ĐVT nhập",
-      type: "string",
-      maxLength: 20,
-      example: "Thùng",
-      description:
-        "Đơn vị khi mua từ NCC (vd: Thùng, Bao, Lốc). Để trống = giống 'Đơn vị tính'. Đa số SP không cần điền cột này.",
-      width: 12,
-    },
-    {
-      key: "stockUnit",
-      header: "ĐVT kho",
-      type: "string",
-      maxLength: 20,
-      example: "Lon",
-      description:
-        "Đơn vị quy đổi khi kiểm kho (vd: Chai, Lon, Hộp). Để trống = giống 'Đơn vị tính'. Đa số SP không cần điền cột này.",
-      width: 12,
-    },
-    {
-      key: "sellUnit",
-      header: "ĐVT bán",
-      type: "string",
-      maxLength: 20,
-      example: "Ly",
-      description:
-        "Đơn vị khi bán cho khách (vd: Ly, Cái, Phần). Để trống = giống 'Đơn vị tính'. Đa số SP không cần điền cột này.",
-      width: 12,
-    },
+    // Day 19/05/2026 (CEO Phương án D): bỏ 3 cột ĐVT nhập/kho/bán khỏi
+    // Excel template. 99% redundant + không có logic conversion. Service
+    // auto-fill 3 trường DB = unit chính.
     {
       key: "description",
       header: "Mô tả",
@@ -248,16 +219,8 @@ export const productExcelSchema: ExcelSchema<ProductImportRow> = {
     ) {
       return "Tồn tối thiểu không được lớn hơn tồn tối đa";
     }
-    // Day 19/05/2026 (CEO): ĐVT — chỉ cần 1 trong 4 cột có giá trị
-    const hasAnyUnit = [
-      row.unit,
-      row.purchaseUnit,
-      row.stockUnit,
-      row.sellUnit,
-    ].some((u) => u && String(u).trim().length > 0);
-    if (!hasAnyUnit) {
-      return "Thiếu đơn vị tính — điền 1 trong 4 cột: 'Đơn vị tính', 'ĐVT nhập', 'ĐVT kho', hoặc 'ĐVT bán'";
-    }
+    // Day 19/05/2026 (CEO Phương án D): chỉ còn 1 cột "Đơn vị tính" required.
+    // Schema-level "required" đã check, không cần validate riêng ở đây.
     return null;
   },
 };

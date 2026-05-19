@@ -53,25 +53,26 @@ Hệ thống hỗ trợ **1 mã làm 2 vai trò** ở 2 nơi khác nhau:
 
 → Không cần tạo 2 mã riêng. Chỉ cần đánh dấu `has_bom=true` ở SKU bán và đưa vào BOM ở SP khác.
 
-### 1.3. 4 cột đơn vị tính (ĐVT) — chỉ cần điền 1
+### 1.3. Đơn vị tính (ĐVT) — chỉ 1 cột duy nhất
 
-**Đa số SP chỉ cần điền cột "Đơn vị tính"** (ly, kg, cái...). Hệ thống tự dùng cho mua/kho/bán.
+**Nguyên tắc**: nhập **đơn vị nhỏ nhất khi bán lẻ** — 1 lon, 1 kg, 1 ly, 1 cái...
 
-| Cột Excel | Khi nào điền | Ví dụ |
+| Cột Excel | Bắt buộc? | Ví dụ |
 |---|---|---|
-| **Đơn vị tính** | Mặc định cho cả mua/kho/bán | `Ly`, `Kg`, `Cái` |
-| **ĐVT nhập** | Chỉ điền khi mua khác đơn vị bán | `Thùng` (1 thùng = 24 lon) |
-| **ĐVT kho** | Chỉ điền khi kho khác đơn vị bán | `Lon`, `Chai` |
-| **ĐVT bán** | Chỉ điền khi bán khác đơn vị nhập | `Ly`, `Phần` |
+| **Đơn vị tính** | ✅ Có | `Ly`, `Kg`, `Lon`, `Cái`, `Chai`, `Gói` |
 
-**Quy tắc**: file Excel chỉ cần **1 trong 4 cột có giá trị**. Các cột còn lại trống → hệ thống tự fill bằng cột có giá trị (ưu tiên: Đơn vị tính → ĐVT kho → ĐVT bán → ĐVT nhập).
+**Ví dụ thực tế**:
+- SP "Cà phê đen đá" → **Đơn vị tính = `Ly`**
+- SP "Sữa Vinamilk lon" → **Đơn vị tính = `Lon`**
+- SP "Cà phê Robusta sống" → **Đơn vị tính = `Kg`**
 
-**Ví dụ**:
-- SP "Cà phê đen đá": chỉ điền **Đơn vị tính = `Ly`** → đủ
-- SP "Sữa Vinamilk": **Đơn vị tính = `Lon`**, **ĐVT nhập = `Thùng`** → mua thùng, bán lon
-- SP "Cà phê Robusta sống": **Đơn vị tính = `Kg`**, **ĐVT nhập = `Bao`** (1 bao = 60kg)
+#### Khi mua gói lớn (vd thùng 24 lon)?
 
-**Quy đổi giữa các ĐVT**: vào `/hang-hoa/[product]/detail` → tab "Quy đổi ĐVT" → khai báo `1 bao = 60 kg`. Hệ thống tự quy đổi khi nhập/xuất.
+Hệ thống KHÔNG có conversion tự động "1 thùng = 24 lon". User tự quy đổi khi tạo phiếu nhập:
+
+**Cách làm**: tạo SP "Sữa Vinamilk" với `Đơn vị tính = Lon`. Khi nhập 1 thùng → tạo phiếu nhập với **số lượng = 24** (vì 1 thùng = 24 lon). Tồn kho luôn tính theo `Lon`.
+
+> **Lưu ý**: trước đây có 4 cột (Đơn vị tính / ĐVT nhập / ĐVT kho / ĐVT bán) → đã rút gọn còn 1 cột (CEO 19/05/2026) vì các cột phụ không có giá trị nghiệp vụ thực sự (chỉ là text hiển thị, không có conversion logic).
 
 ### 1.4. BOM — Bill of Materials (Công thức)
 

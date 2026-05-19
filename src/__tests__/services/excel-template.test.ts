@@ -507,10 +507,12 @@ describe("real OneBiz schemas", () => {
   });
 
   // ============================================================
-  // CEO 19/05/2026: ĐVT linh hoạt — chỉ cần 1 trong 4 cột
+  // CEO 19/05/2026 (Phương án D): chỉ 1 cột "Đơn vị tính" bắt buộc.
+  // Bỏ 3 cột ĐVT nhập/kho/bán khỏi Excel template (redundant + không
+  // có conversion logic trong flow nhập/xuất hiện tại).
   // ============================================================
-  describe("Đơn vị tính — chỉ cần 1/4 cột (CEO 19/05/2026)", () => {
-    it("import OK khi chỉ có 'Đơn vị tính'", () => {
+  describe("Đơn vị tính — chỉ 1 cột bắt buộc (CEO Phương án D 19/05/2026)", () => {
+    it("import OK với 'Đơn vị tính' bắt buộc đầy đủ", () => {
       const wb = makeWb([
         ["Mã SP", "Tên sản phẩm", "Loại", "Kênh bán", "Đơn vị tính", "Giá bán", "Giá vốn"],
         ["SP001", "Cà phê đen", "sku", "fnb", "Ly", 35000, 15000],
@@ -521,84 +523,50 @@ describe("real OneBiz schemas", () => {
       expect(result.validRows[0].unit).toBe("Ly");
     });
 
-    it("import OK khi chỉ có 'ĐVT nhập' (case CEO báo lỗi)", () => {
+    it("import FAIL khi 'Đơn vị tính' để trống", () => {
       const wb = makeWb([
-        ["Mã SP", "Tên sản phẩm", "Loại", "Kênh bán", "ĐVT nhập", "Giá bán", "Giá vốn"],
-        ["SP001", "Cà phê đen", "sku", "fnb", "Thùng", 35000, 15000],
+        ["Mã SP", "Tên sản phẩm", "Loại", "Kênh bán", "Đơn vị tính", "Giá bán", "Giá vốn"],
+        ["SP001", "SP test", "sku", "fnb", "", 35000, 15000],
       ]);
       const result = parseWorkbook(wb, productExcelSchema);
-      expect(result.tableErrors).toEqual([]);
-      expect(result.errorRows).toEqual([]);
-      expect(result.validRows[0].purchaseUnit).toBe("Thùng");
-      // Service sẽ fallback unit từ purchaseUnit, schema không bắt buộc
+      expect(result.errorRows).toHaveLength(1);
+      expect(result.errorRows[0].errors.some((e) => e.includes("Đơn vị tính"))).toBe(
+        true,
+      );
     });
 
-    it("import OK khi chỉ có 'ĐVT kho'", () => {
-      const wb = makeWb([
-        ["Mã SP", "Tên sản phẩm", "Loại", "Kênh bán", "ĐVT kho", "Giá bán", "Giá vốn"],
-        ["SP001", "Sữa", "sku", "retail", "Lon", 12000, 8000],
-      ]);
-      const result = parseWorkbook(wb, productExcelSchema);
-      expect(result.tableErrors).toEqual([]);
-      expect(result.errorRows).toEqual([]);
-      expect(result.validRows[0].stockUnit).toBe("Lon");
-    });
-
-    it("import OK khi chỉ có 'ĐVT bán'", () => {
-      const wb = makeWb([
-        ["Mã SP", "Tên sản phẩm", "Loại", "Kênh bán", "ĐVT bán", "Giá bán", "Giá vốn"],
-        ["SP001", "Cà phê", "sku", "fnb", "Ly", 35000, 15000],
-      ]);
-      const result = parseWorkbook(wb, productExcelSchema);
-      expect(result.tableErrors).toEqual([]);
-      expect(result.errorRows).toEqual([]);
-      expect(result.validRows[0].sellUnit).toBe("Ly");
-    });
-
-    it("import FAIL khi KHÔNG có cột nào trong 4 ĐVT", () => {
+    it("import FAIL khi thiếu cột 'Đơn vị tính' trong header file", () => {
       const wb = makeWb([
         ["Mã SP", "Tên sản phẩm", "Loại", "Kênh bán", "Giá bán", "Giá vốn"],
         ["SP001", "SP test", "sku", "fnb", 35000, 15000],
       ]);
       const result = parseWorkbook(wb, productExcelSchema);
-      expect(result.errorRows).toHaveLength(1);
-      expect(result.errorRows[0].errors.some((e) => e.includes("đơn vị"))).toBe(
-        true,
-      );
+      expect(
+        result.tableErrors.some((e) => e.includes("Đơn vị tính")),
+      ).toBe(true);
     });
 
-    it("import OK với cả 4 cột ĐVT đều có giá trị khác nhau", () => {
+    it("schema KHÔNG còn cột ĐVT nhập / ĐVT kho / ĐVT bán", () => {
+      const headers = productExcelSchema.columns.map((c) => c.header);
+      expect(headers).not.toContain("ĐVT nhập");
+      expect(headers).not.toContain("ĐVT kho");
+      expect(headers).not.toContain("ĐVT bán");
+      // Vẫn còn cột "Đơn vị tính"
+      expect(headers).toContain("Đơn vị tính");
+    });
+
+    it("nhiều SP với ĐVT khác nhau (ly / kg / lon) đều import OK", () => {
       const wb = makeWb([
-        [
-          "Mã SP",
-          "Tên sản phẩm",
-          "Loại",
-          "Kênh bán",
-          "Đơn vị tính",
-          "ĐVT nhập",
-          "ĐVT kho",
-          "ĐVT bán",
-          "Giá bán",
-          "Giá vốn",
-        ],
-        [
-          "SP001",
-          "Cà phê Robusta",
-          "nvl",
-          "",
-          "Kg",
-          "Bao",
-          "Kg",
-          "Kg",
-          0,
-          145000,
-        ],
+        ["Mã SP", "Tên sản phẩm", "Loại", "Kênh bán", "Đơn vị tính", "Giá bán", "Giá vốn"],
+        ["CF001", "Cà phê đen", "sku", "fnb", "Ly", 35000, 15000],
+        ["CF-R", "Robusta sống", "nvl", "", "Kg", 0, 145000],
+        ["SUA-01", "Sữa Vinamilk", "sku", "retail", "Lon", 12000, 8000],
       ]);
       const result = parseWorkbook(wb, productExcelSchema);
       expect(result.tableErrors).toEqual([]);
       expect(result.errorRows).toEqual([]);
-      expect(result.validRows[0].unit).toBe("Kg");
-      expect(result.validRows[0].purchaseUnit).toBe("Bao");
+      expect(result.validRows).toHaveLength(3);
+      expect(result.validRows.map((r) => r.unit)).toEqual(["Ly", "Kg", "Lon"]);
     });
   });
 });
