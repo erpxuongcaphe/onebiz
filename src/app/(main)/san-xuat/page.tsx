@@ -467,7 +467,7 @@ export default function ProductionDashboardPage() {
         </Link>
         <Link href="/hang-hoa/cong-thuc">
           <Button variant="outline">
-            <Icon name="inventory_2" size={16} className="mr-2" /> Công thức sản xuất
+            <Icon name="inventory_2" size={16} className="mr-2" /> Công thức sản xuất (BOM)
           </Button>
         </Link>
         <Link href="/hang-hoa/lo-san-xuat">

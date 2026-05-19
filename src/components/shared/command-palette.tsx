@@ -212,7 +212,7 @@ function CommandPaletteDialog({
       {
         id: "action:new-bom",
         kind: "action",
-        label: "Tạo công thức sản xuất",
+        label: "Tạo công thức sản xuất (BOM)",
         description: "Sản xuất",
         keywords: "bom cong thuc san xuat formula",
         icon: <Icon name="add" size={16} className="text-primary" />,

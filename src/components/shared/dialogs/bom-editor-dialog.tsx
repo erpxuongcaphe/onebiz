@@ -251,7 +251,7 @@ export function BOMEditorDialog({
     <Dialog open={open} onOpenChange={onOpenChange}>
       <DialogContent className="md:max-w-2xl lg:max-w-3xl max-h-[90vh] overflow-y-auto">
         <DialogHeader>
-          <DialogTitle>{bomId ? "Sửa công thức sản xuất" : "Tạo công thức sản xuất"}</DialogTitle>
+          <DialogTitle>{bomId ? "Sửa công thức sản xuất (BOM)" : "Tạo công thức sản xuất (BOM)"}</DialogTitle>
           <DialogDescription>
             Định nghĩa NVL cần thiết để sản xuất 1 batch SKU. Giá vốn được tính tự động.
           </DialogDescription>

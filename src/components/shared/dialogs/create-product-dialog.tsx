@@ -564,7 +564,7 @@ export function CreateProductDialog({
         title: "Tạo hàng hóa thành công",
         description:
           scope === "sku" && hasBom && bomItems.length > 0
-            ? `Đã thêm SKU ${name} (${code}) + công thức sản xuất với ${bomItems.length} NVL`
+            ? `Đã thêm SKU ${name} (${code}) + công thức sản xuất (BOM) với ${bomItems.length} NVL`
             : `Đã thêm ${scope === "nvl" ? "NVL" : "SKU"} ${name} (${code})`,
         variant: "success",
       });
@@ -631,7 +631,7 @@ export function CreateProductDialog({
             {scope === "sku" && hasBom && (
               <TabsTrigger value="bom" className="flex-1">
                 <Icon name="science" size={14} className="mr-1" />
-                Công thức sản xuất
+                Công thức sản xuất (BOM)
                 {bomItems.length === 0 && !isEdit && (
                   <span className="ml-1 inline-block h-1.5 w-1.5 rounded-full bg-status-warning" />
                 )}
@@ -1111,7 +1111,7 @@ export function CreateProductDialog({
             {scope === "sku" && hasBom && (
               <div className="mt-2 rounded-md border border-primary/30 bg-primary/5 p-2.5 text-xs text-foreground">
                 <Icon name="info" size={14} className="inline-block mr-1 text-primary align-text-bottom" />
-                Tab <b>&quot;Công thức sản xuất&quot;</b> đã bật. Click qua tab đó để cấu hình NVL.
+                Tab <b>&quot;Công thức sản xuất (BOM)&quot;</b> đã bật. Click qua tab đó để cấu hình NVL.
               </div>
             )}
           </TabsContent>
@@ -1323,7 +1323,7 @@ export function CreateProductDialog({
         >
           <DialogContent className="sm:max-w-2xl max-h-[88vh] flex flex-col">
             <DialogHeader>
-              <DialogTitle>Thêm NVL vào công thức sản xuất</DialogTitle>
+              <DialogTitle>Thêm NVL vào công thức sản xuất (BOM)</DialogTitle>
               <DialogDescription>
                 Chọn nguyên vật liệu hoặc SKU khác làm thành phần (vd: cà phê
                 rang 1kg làm NVL cho ly bạc xỉu).

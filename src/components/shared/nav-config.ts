@@ -36,7 +36,7 @@ export const mainNavItems: NavGroup[] = [
         groupLabel: "Sản xuất",
         items: [
           { label: "Lệnh sản xuất", href: "/hang-hoa/san-xuat" },
-          { label: "Công thức sản xuất", href: "/hang-hoa/cong-thuc" },
+          { label: "Công thức sản xuất (BOM)", href: "/hang-hoa/cong-thuc" },
           { label: "Hạn sử dụng (HSD)", href: "/hang-hoa/hsd" },
         ],
       },
@@ -228,7 +228,7 @@ export const sidebarNavGroups: SidebarGroup[] = [
       // Day 7 16/05/2026: SX là module xưởng rang — cashier không cần thấy
       { label: "Dashboard Sản xuất", href: "/san-xuat", icon: "bar_chart", permission: "inventory.view" },
       { label: "Lệnh sản xuất", href: "/hang-hoa/san-xuat", icon: "factory", permission: "inventory.view" },
-      { label: "Công thức sản xuất", href: "/hang-hoa/cong-thuc", icon: "schema", permission: "inventory.view" },
+      { label: "Công thức sản xuất (BOM)", href: "/hang-hoa/cong-thuc", icon: "schema", permission: "inventory.view" },
       { label: "Lô sản xuất", href: "/hang-hoa/lo-san-xuat", icon: "inventory_2", permission: "inventory.view" },
     ],
   },

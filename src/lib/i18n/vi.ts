@@ -138,7 +138,7 @@ export const TERMS = {
   // ============================================================
   // Sản xuất
   // ============================================================
-  bom: "Công thức sản xuất",
+  bom: "Công thức sản xuất (BOM)",
   rawMaterial: "Nguyên vật liệu",
   finishedGoods: "Thành phẩm",
   productionLot: "Lô sản xuất",
