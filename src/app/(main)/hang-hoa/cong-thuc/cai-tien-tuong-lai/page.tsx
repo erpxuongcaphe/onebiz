@@ -1,8 +1,9 @@
 "use client";
 
 /**
- * Demo trực quan 4 cải tiến tương lai cho BOM picker (CEO 19/05/2026).
- * Chỉ là MOCKUP để CEO duyệt — chưa wire backend.
+ * Demo trực quan cải tiến BOM picker — rewrite v2 (CEO 19/05/2026).
+ * Triết lý design: less chrome, more whitespace, 1 idea per section, real
+ * "before vs after" comparison. Tham khảo Linear / Stripe / Vercel docs.
  */
 
 import { useState } from "react";
@@ -10,688 +11,558 @@ import { Icon } from "@/components/ui/icon";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Checkbox } from "@/components/ui/checkbox";
-import {
-  Select,
-  SelectTrigger,
-  SelectValue,
-  SelectContent,
-  SelectItem,
-} from "@/components/ui/select";
-import {
-  Card,
-  CardContent,
-  CardDescription,
-  CardHeader,
-  CardTitle,
-} from "@/components/ui/card";
 
 interface DemoMaterial {
   id: string;
   code: string;
   name: string;
-  type: "nvl" | "sku";
   category: string;
   unit: string;
   costPrice: number;
-  imageUrl?: string;
-  usageCount?: number; // số BOM khác đã dùng
-  lastUsed?: string;
 }
 
-const SAMPLE_MATERIALS: DemoMaterial[] = [
-  { id: "1", code: "NVL-CAF-001", name: "Cà phê Robusta sống Đắk Lắk", type: "nvl", category: "Cà phê", unit: "kg", costPrice: 145000, usageCount: 12, lastUsed: "Hôm nay" },
-  { id: "2", code: "NVL-CAF-002", name: "Cà phê Arabica sống Cầu Đất", type: "nvl", category: "Cà phê", unit: "kg", costPrice: 280000, usageCount: 8, lastUsed: "2 ngày trước" },
-  { id: "3", code: "SKU-CAF-R-001", name: "Cà phê Robusta rang 1kg", type: "sku", category: "Cà phê rang", unit: "kg", costPrice: 220000, usageCount: 18, lastUsed: "Hôm nay" },
-  { id: "4", code: "NVL-SUA-001", name: "Sữa đặc Ngôi Sao Phương Nam", type: "nvl", category: "Phụ liệu", unit: "lon", costPrice: 26000, usageCount: 15, lastUsed: "Hôm nay" },
-  { id: "5", code: "NVL-SUA-002", name: "Sữa tươi Vinamilk 1L", type: "nvl", category: "Phụ liệu", unit: "lít", costPrice: 32000, usageCount: 14, lastUsed: "Hôm nay" },
-  { id: "6", code: "NVL-DUO-001", name: "Đường mía RE Biên Hoà", type: "nvl", category: "Phụ liệu", unit: "kg", costPrice: 24000, usageCount: 22, lastUsed: "Hôm nay" },
-  { id: "7", code: "NVL-DUO-002", name: "Đường nâu organic", type: "nvl", category: "Phụ liệu", unit: "kg", costPrice: 58000, usageCount: 4, lastUsed: "3 ngày trước" },
-  { id: "8", code: "NVL-LY-001", name: "Ly nhựa 500ml có nắp", type: "nvl", category: "Bao bì", unit: "cái", costPrice: 1200, usageCount: 30, lastUsed: "Hôm nay" },
-  { id: "9", code: "NVL-ONG-001", name: "Ống hút giấy 6mm", type: "nvl", category: "Bao bì", unit: "cái", costPrice: 350, usageCount: 28, lastUsed: "Hôm nay" },
-  { id: "10", code: "NVL-DAI-001", name: "Đá viên (vận hành nội bộ)", type: "nvl", category: "Phụ liệu", unit: "kg", costPrice: 3000, usageCount: 25, lastUsed: "Hôm nay" },
+const SAMPLE: DemoMaterial[] = [
+  { id: "1", code: "NVL-CAF-001", name: "Cà phê Robusta sống Đắk Lắk", category: "Cà phê", unit: "kg", costPrice: 145000 },
+  { id: "2", code: "NVL-SUA-001", name: "Sữa đặc Ngôi Sao", category: "Phụ liệu", unit: "lon", costPrice: 26000 },
+  { id: "3", code: "NVL-SUA-002", name: "Sữa tươi Vinamilk 1L", category: "Phụ liệu", unit: "lít", costPrice: 32000 },
+  { id: "4", code: "NVL-DUO-001", name: "Đường mía RE Biên Hoà", category: "Phụ liệu", unit: "kg", costPrice: 24000 },
+  { id: "5", code: "NVL-LY-001", name: "Ly nhựa 500ml có nắp", category: "Bao bì", unit: "cái", costPrice: 1200 },
+  { id: "6", code: "NVL-ONG-001", name: "Ống hút giấy 6mm", category: "Bao bì", unit: "cái", costPrice: 350 },
+  { id: "7", code: "NVL-DAI-001", name: "Đá viên", category: "Phụ liệu", unit: "kg", costPrice: 3000 },
 ];
 
-const CATEGORIES = ["Tất cả nhóm", "Cà phê", "Cà phê rang", "Phụ liệu", "Bao bì"];
+/* ────────────────────────────────────────────────────────────────────── */
+/* Idea 1: Multi-select — chỉ là LIVE mockup, không animate                */
+/* ────────────────────────────────────────────────────────────────────── */
+function PickerMultiSelect({ checked }: { checked?: Set<string> }) {
+  const [sel, setSel] = useState<Set<string>>(checked ?? new Set());
 
-function MockupSection({
-  number,
-  title,
-  pain,
-  benefit,
-  effort,
-  children,
-}: {
-  number: number;
-  title: string;
-  pain: string;
-  benefit: string;
-  effort: string;
-  children: React.ReactNode;
-}) {
   return (
-    <Card className="overflow-hidden">
-      <CardHeader>
-        <div className="flex items-start gap-3">
-          <div className="flex size-9 items-center justify-center rounded-full bg-primary/15 text-primary font-bold">
-            {number}
-          </div>
-          <div className="flex-1 min-w-0">
-            <CardTitle className="text-lg">{title}</CardTitle>
-            <CardDescription className="mt-1">
-              <span className="text-status-warning font-medium">Vấn đề:</span>{" "}
-              {pain}
-            </CardDescription>
-            <CardDescription className="mt-1">
-              <span className="text-status-success font-medium">Lợi ích:</span>{" "}
-              {benefit}
-            </CardDescription>
-            <CardDescription className="mt-1 text-xs">
-              <span className="inline-flex items-center gap-1">
-                <Icon name="schedule" size={11} />
-                Ước lượng: <b>{effort}</b>
-              </span>
-            </CardDescription>
-          </div>
+    <div className="rounded-xl border bg-background shadow-sm overflow-hidden text-sm">
+      <div className="px-4 pt-3 pb-2 border-b">
+        <div className="font-medium">Thêm NVL vào công thức</div>
+      </div>
+      <div className="p-3 border-b">
+        <div className="relative">
+          <Icon
+            name="search"
+            size={14}
+            className="absolute left-2.5 top-1/2 -translate-y-1/2 text-muted-foreground"
+          />
+          <Input
+            placeholder="Tìm theo mã hoặc tên..."
+            className="pl-8 h-9"
+            defaultValue=""
+          />
         </div>
-      </CardHeader>
-      <CardContent className="bg-muted/30 border-t">{children}</CardContent>
-    </Card>
+      </div>
+      <ul className="max-h-[280px] overflow-y-auto divide-y">
+        {SAMPLE.map((m) => {
+          const isSel = sel.has(m.id);
+          return (
+            <li
+              key={m.id}
+              className={`px-4 py-2.5 flex items-center gap-3 cursor-pointer ${
+                isSel ? "bg-primary/5" : "hover:bg-muted/40"
+              }`}
+              onClick={() => {
+                const n = new Set(sel);
+                if (n.has(m.id)) n.delete(m.id);
+                else n.add(m.id);
+                setSel(n);
+              }}
+            >
+              <Checkbox checked={isSel} onCheckedChange={() => {}} />
+              <span className="flex-1 min-w-0">
+                <span className="block truncate">{m.name}</span>
+                <span className="text-[11px] text-muted-foreground">
+                  {m.code} · {m.category}
+                </span>
+              </span>
+              <span className="text-[11px] text-muted-foreground tabular-nums whitespace-nowrap">
+                {m.costPrice.toLocaleString("vi-VN")}đ/{m.unit}
+              </span>
+            </li>
+          );
+        })}
+      </ul>
+      <div className="px-4 py-3 border-t flex items-center justify-between bg-muted/20">
+        <span className="text-[11px] text-muted-foreground">
+          {sel.size > 0 ? (
+            <>
+              Đã chọn <b className="text-foreground">{sel.size}</b> NVL
+            </>
+          ) : (
+            "Chưa chọn NVL"
+          )}
+        </span>
+        <div className="flex gap-2">
+          <Button variant="outline" size="sm">
+            Huỷ
+          </Button>
+          <Button size="sm" disabled={sel.size === 0}>
+            Thêm {sel.size > 0 && sel.size} NVL
+          </Button>
+        </div>
+      </div>
+    </div>
   );
 }
 
-/** Idea 1: Multi-select picker. */
-function MockupMultiSelect() {
-  const [selected, setSelected] = useState<Set<string>>(new Set());
-  const [search, setSearch] = useState("");
-
-  const filtered = SAMPLE_MATERIALS.filter((m) =>
-    !search.trim()
-      ? true
-      : m.code.toLowerCase().includes(search.toLowerCase()) ||
-        m.name.toLowerCase().includes(search.toLowerCase()),
-  );
-
-  function toggle(id: string) {
-    setSelected((s) => {
-      const n = new Set(s);
-      if (n.has(id)) n.delete(id);
-      else n.add(id);
-      return n;
-    });
-  }
-
+function PickerSingleSelect() {
+  const [sel, setSel] = useState<string | null>(null);
   return (
-    <div className="bg-background border rounded-lg p-4 max-w-3xl mx-auto">
-      <div className="mb-3">
-        <h4 className="font-semibold text-base mb-0.5">
-          Thêm NVL vào công thức sản xuất (BOM)
-        </h4>
-        <p className="text-xs text-muted-foreground">
-          <b>Multi-select</b> — tick nhiều NVL rồi thêm 1 lần.
-        </p>
+    <div className="rounded-xl border bg-background shadow-sm overflow-hidden text-sm opacity-90">
+      <div className="px-4 pt-3 pb-2 border-b">
+        <div className="font-medium">Thêm NVL vào công thức</div>
       </div>
-
-      <div className="relative mb-3">
-        <Icon
-          name="search"
-          size={16}
-          className="absolute left-2.5 top-1/2 -translate-y-1/2 text-muted-foreground"
-        />
-        <Input
-          value={search}
-          onChange={(e) => setSearch(e.target.value)}
-          placeholder="Tìm theo mã hoặc tên SP..."
-          className="pl-8"
-        />
+      <div className="p-3 border-b">
+        <div className="relative">
+          <Icon
+            name="search"
+            size={14}
+            className="absolute left-2.5 top-1/2 -translate-y-1/2 text-muted-foreground"
+          />
+          <Input placeholder="Tìm..." className="pl-8 h-9" />
+        </div>
       </div>
-
-      <div className="text-[11px] text-muted-foreground mb-1.5 flex justify-between">
-        <span>
-          <b className="text-foreground">{filtered.length}</b> SP phù hợp
-        </span>
-        {selected.size > 0 && (
-          <span className="text-primary">
-            Đã tick <b>{selected.size}</b> NVL
-          </span>
-        )}
-      </div>
-
-      <div className="border rounded max-h-72 overflow-y-auto">
-        <ul className="divide-y">
-          <li className="px-3 py-2 bg-muted/50 sticky top-0 flex items-center gap-3 text-[11px] uppercase text-muted-foreground">
-            <Checkbox
-              checked={
-                filtered.length > 0 &&
-                filtered.every((m) => selected.has(m.id))
-              }
-              onCheckedChange={(v) => {
-                if (v) setSelected(new Set(filtered.map((m) => m.id)));
-                else setSelected(new Set());
-              }}
-            />
-            <span className="font-mono min-w-[100px]">Mã</span>
-            <span className="flex-1">Tên</span>
-            <span className="w-20 text-right">Giá vốn</span>
-          </li>
-          {filtered.map((m) => {
-            const isSel = selected.has(m.id);
-            return (
-              <li
-                key={m.id}
-                className={`px-3 py-2 flex items-center gap-3 cursor-pointer transition-colors ${
-                  isSel ? "bg-primary/10" : "hover:bg-muted/40"
-                }`}
-                onClick={() => toggle(m.id)}
-              >
-                <Checkbox checked={isSel} onCheckedChange={() => toggle(m.id)} />
-                <span className="font-mono text-[11px] text-muted-foreground min-w-[100px]">
-                  {m.code}
+      <ul className="max-h-[280px] overflow-y-auto divide-y">
+        {SAMPLE.map((m) => {
+          const isSel = sel === m.id;
+          return (
+            <li
+              key={m.id}
+              className={`px-4 py-2.5 flex items-center gap-3 cursor-pointer ${
+                isSel ? "bg-primary/5" : "hover:bg-muted/40"
+              }`}
+              onClick={() => setSel(m.id)}
+            >
+              <Icon
+                name={isSel ? "radio_button_checked" : "radio_button_unchecked"}
+                size={14}
+                className={isSel ? "text-primary" : "text-muted-foreground"}
+              />
+              <span className="flex-1 min-w-0">
+                <span className="block truncate">{m.name}</span>
+                <span className="text-[11px] text-muted-foreground">
+                  {m.code} · {m.category}
                 </span>
-                <span className="flex-1 min-w-0">
-                  <span className="block truncate text-sm font-medium">
-                    {m.name}
-                  </span>
-                  <span className="text-[10px] text-muted-foreground">
-                    {m.type === "sku" ? "SKU" : "NVL"} · {m.category} · ĐVT{" "}
-                    {m.unit}
-                  </span>
-                </span>
-                <span className="text-[11px] text-muted-foreground w-20 text-right whitespace-nowrap">
-                  {m.costPrice.toLocaleString("vi-VN")}đ
-                </span>
-              </li>
-            );
-          })}
-        </ul>
-      </div>
-
-      <div className="flex items-center justify-end gap-2 mt-3 pt-3 border-t">
+              </span>
+              <span className="text-[11px] text-muted-foreground tabular-nums whitespace-nowrap">
+                {m.costPrice.toLocaleString("vi-VN")}đ/{m.unit}
+              </span>
+            </li>
+          );
+        })}
+      </ul>
+      <div className="px-4 py-3 border-t flex items-center justify-end gap-2 bg-muted/20">
         <Button variant="outline" size="sm">
           Huỷ
         </Button>
-        <Button size="sm" disabled={selected.size === 0}>
-          <Icon name="add" size={14} className="mr-1" />
-          Thêm <b className="mx-1">{selected.size}</b> NVL vào công thức
+        <Button size="sm" disabled={!sel}>
+          Thêm
         </Button>
       </div>
-
-      <p className="text-[11px] text-muted-foreground mt-2 italic">
-        💡 Hiện tại CEO phải mở dialog → chọn 1 → "Thêm" → đóng → mở lại → chọn
-        cái nữa... <b>8 NVL = 8 vòng lặp</b>. Multi-select rút còn{" "}
-        <b>1 lần</b>.
-      </p>
     </div>
   );
 }
 
-/** Idea 2: Recent / Suggested NVL. */
-function MockupSuggested() {
-  const [search, setSearch] = useState("");
-  const suggested = SAMPLE_MATERIALS.filter((m) => (m.usageCount ?? 0) >= 15)
-    .slice(0, 4);
-  const all = SAMPLE_MATERIALS;
-
+/* ────────────────────────────────────────────────────────────────────── */
+/* Idea 2: Empty state CTA                                                 */
+/* ────────────────────────────────────────────────────────────────────── */
+function PickerEmptyOld() {
   return (
-    <div className="bg-background border rounded-lg p-4 max-w-3xl mx-auto">
-      <div className="mb-3">
-        <h4 className="font-semibold text-base mb-0.5">
-          Thêm NVL vào công thức sản xuất (BOM)
-        </h4>
-        <p className="text-xs text-muted-foreground">
-          <b>Gợi ý thông minh</b> — NVL dùng nhiều / gần đây hiện đầu tiên.
-        </p>
+    <div className="rounded-xl border bg-background shadow-sm overflow-hidden text-sm opacity-90">
+      <div className="px-4 pt-3 pb-2 border-b">
+        <div className="font-medium">Thêm NVL vào công thức</div>
       </div>
-
-      <div className="relative mb-3">
-        <Icon
-          name="search"
-          size={16}
-          className="absolute left-2.5 top-1/2 -translate-y-1/2 text-muted-foreground"
-        />
-        <Input
-          value={search}
-          onChange={(e) => setSearch(e.target.value)}
-          placeholder="Tìm theo mã hoặc tên SP..."
-          className="pl-8"
-        />
+      <div className="p-3 border-b">
+        <Input placeholder="Tìm..." className="h-9" />
       </div>
-
-      {/* Suggested section */}
-      <div className="mb-3 p-3 rounded-md border border-primary/30 bg-primary/5">
-        <div className="flex items-center gap-1.5 mb-2 text-xs font-medium text-primary">
-          <Icon name="auto_awesome" size={14} />
-          Gợi ý cho SKU &quot;Cà phê sữa đá&quot;
-          <span className="text-[10px] text-muted-foreground font-normal">
-            (top NVL dùng nhiều trong cùng nhóm Cà phê pha)
-          </span>
-        </div>
-        <div className="grid grid-cols-2 gap-2">
-          {suggested.map((m) => (
-            <button
-              key={m.id}
-              type="button"
-              className="text-left p-2 rounded border bg-background hover:border-primary/50 hover:bg-primary/5 transition-colors"
-            >
-              <div className="flex items-center justify-between">
-                <span className="font-mono text-[10px] text-muted-foreground">
-                  {m.code}
-                </span>
-                <span className="text-[10px] text-primary">
-                  <Icon name="trending_up" size={10} /> Dùng {m.usageCount} BOM
-                </span>
-              </div>
-              <div className="text-sm font-medium truncate">{m.name}</div>
-              <div className="text-[10px] text-muted-foreground">
-                {m.category} · {m.costPrice.toLocaleString("vi-VN")}đ/{m.unit}
-              </div>
-            </button>
-          ))}
-        </div>
+      <div className="px-4 py-16 text-center text-xs text-muted-foreground">
+        Không tìm thấy SP nào phù hợp filter
       </div>
-
-      <div className="text-[11px] text-muted-foreground mb-1.5 px-1">
-        Tất cả NVL ({all.length} mục)
+      <div className="px-4 py-3 border-t flex items-center justify-end gap-2 bg-muted/20">
+        <Button variant="outline" size="sm">
+          Huỷ
+        </Button>
+        <Button size="sm" disabled>
+          Thêm
+        </Button>
       </div>
-      <div className="border rounded max-h-48 overflow-y-auto">
-        <ul className="divide-y">
-          {all.slice(0, 4).map((m) => (
-            <li
-              key={m.id}
-              className="px-3 py-2 flex items-center gap-3 hover:bg-muted/40 cursor-pointer"
-            >
-              <Icon
-                name="radio_button_unchecked"
-                size={14}
-                className="text-muted-foreground"
-              />
-              <span className="font-mono text-[11px] text-muted-foreground min-w-[100px]">
-                {m.code}
-              </span>
-              <span className="flex-1 truncate text-sm">{m.name}</span>
-            </li>
-          ))}
-        </ul>
-      </div>
-
-      <p className="text-[11px] text-muted-foreground mt-2 italic">
-        💡 Khi tạo SKU &quot;Cà phê sữa đá&quot;, em tự suggest sữa, cà phê,
-        đường, đá. CEO bấm 1 nút thay vì tìm từng cái → setup BOM nhanh{" "}
-        <b>3x</b>.
-      </p>
     </div>
   );
 }
 
-/** Idea 3: Thumbnail in list. */
-function MockupThumbnail() {
-  const [search, setSearch] = useState("");
+function PickerEmptyNew() {
   return (
-    <div className="bg-background border rounded-lg p-4 max-w-3xl mx-auto">
-      <div className="mb-3">
-        <h4 className="font-semibold text-base mb-0.5">
-          Thêm NVL vào công thức sản xuất (BOM)
-        </h4>
-        <p className="text-xs text-muted-foreground">
-          <b>Thumbnail hình ảnh</b> — nhận diện SP bằng mắt thay vì đọc tên.
-        </p>
+    <div className="rounded-xl border bg-background shadow-sm overflow-hidden text-sm">
+      <div className="px-4 pt-3 pb-2 border-b">
+        <div className="font-medium">Thêm NVL vào công thức</div>
       </div>
-
-      <div className="relative mb-3">
-        <Icon
-          name="search"
-          size={16}
-          className="absolute left-2.5 top-1/2 -translate-y-1/2 text-muted-foreground"
-        />
-        <Input
-          value={search}
-          onChange={(e) => setSearch(e.target.value)}
-          placeholder="Tìm..."
-          className="pl-8"
-        />
+      <div className="p-3 border-b">
+        <Input placeholder="Tìm..." className="h-9" />
       </div>
-
-      <div className="border rounded max-h-72 overflow-y-auto">
-        <ul className="divide-y">
-          {SAMPLE_MATERIALS.slice(0, 6).map((m) => (
-            <li
-              key={m.id}
-              className="px-3 py-2 flex items-center gap-3 hover:bg-muted/40 cursor-pointer"
-            >
-              <Icon
-                name="radio_button_unchecked"
-                size={14}
-                className="text-muted-foreground shrink-0"
-              />
-              {/* Thumbnail mockup — dùng icon thay ảnh thật */}
-              <div className="size-10 rounded border bg-muted shrink-0 flex items-center justify-center text-muted-foreground">
-                <Icon
-                  name={
-                    m.category === "Cà phê"
-                      ? "coffee"
-                      : m.category === "Cà phê rang"
-                        ? "local_cafe"
-                        : m.category === "Phụ liệu"
-                          ? "kitchen"
-                          : "inventory_2"
-                  }
-                  size={20}
-                />
-              </div>
-              <span className="font-mono text-[11px] text-muted-foreground min-w-[100px]">
-                {m.code}
-              </span>
-              <span className="flex-1 min-w-0">
-                <span className="block truncate text-sm font-medium">
-                  {m.name}
-                </span>
-                <span className="text-[10px] text-muted-foreground">
-                  {m.type === "sku" ? "SKU" : "NVL"} · {m.category} · ĐVT{" "}
-                  {m.unit}
-                </span>
-              </span>
-              <span className="text-[11px] text-muted-foreground whitespace-nowrap">
-                {m.costPrice.toLocaleString("vi-VN")}đ
-              </span>
-            </li>
-          ))}
-        </ul>
-      </div>
-
-      <p className="text-[11px] text-muted-foreground mt-2 italic">
-        💡 Quán bận, nhân viên không kịp đọc tên — nhìn hình &quot;ly nhựa
-        500ml&quot; vs &quot;ly nhựa 700ml&quot; là phân biệt được ngay. Tiết
-        kiệm <b>2s/click</b> + chống nhầm.
-      </p>
-    </div>
-  );
-}
-
-/** Idea 4: Empty state with CTA. */
-function MockupEmptyStateCTA() {
-  return (
-    <div className="bg-background border rounded-lg p-4 max-w-3xl mx-auto">
-      <div className="mb-3">
-        <h4 className="font-semibold text-base mb-0.5">
-          Thêm NVL vào công thức sản xuất (BOM)
-        </h4>
-        <p className="text-xs text-muted-foreground">
-          <b>Empty state có CTA</b> — không bí ngõ cụt khi chưa có NVL.
-        </p>
-      </div>
-
-      <div className="relative mb-3">
-        <Icon
-          name="search"
-          size={16}
-          className="absolute left-2.5 top-1/2 -translate-y-1/2 text-muted-foreground"
-        />
-        <Input placeholder="Tìm theo mã hoặc tên SP..." className="pl-8" />
-      </div>
-
-      <div className="border rounded p-10 text-center">
-        <div className="inline-flex size-14 items-center justify-center rounded-full bg-muted mb-3">
-          <Icon name="package_2" size={28} className="text-muted-foreground" />
+      <div className="px-4 py-10 text-center">
+        <div className="inline-flex size-12 items-center justify-center rounded-full bg-muted mb-3">
+          <Icon name="package_2" size={24} className="text-muted-foreground" />
         </div>
-        <h5 className="font-semibold text-sm mb-1">
-          Bạn chưa có NVL nào trong hệ thống
-        </h5>
-        <p className="text-xs text-muted-foreground mb-4 max-w-md mx-auto">
-          Cần tạo NVL trước (đường, cà phê, sữa...) rồi mới gắn vào công thức
-          được. Tạo nhanh không cần đóng dialog này.
+        <div className="font-medium text-sm mb-1">Chưa có NVL trong hệ thống</div>
+        <p className="text-xs text-muted-foreground mb-4 max-w-xs mx-auto">
+          Tạo NVL trước rồi mới gắn vào công thức được. Bạn có thể tạo ngay đây
+          không cần đóng dialog.
         </p>
         <div className="flex items-center justify-center gap-2">
           <Button size="sm">
             <Icon name="add" size={14} className="mr-1" />
-            Tạo NVL mới ngay
+            Tạo NVL mới
           </Button>
           <Button variant="outline" size="sm">
             <Icon name="upload_file" size={14} className="mr-1" />
-            Import từ Excel
+            Import Excel
           </Button>
         </div>
       </div>
-
-      <p className="text-[11px] text-muted-foreground mt-2 italic">
-        💡 Hiện tại nếu chưa có NVL — dialog rỗng + CEO phải đóng + sang trang
-        khác + tạo NVL + quay lại tạo SKU. Empty state có CTA cho phép tạo NVL
-        nested ngay trong flow → liền mạch.
-      </p>
+      <div className="px-4 py-3 border-t flex items-center justify-end gap-2 bg-muted/20">
+        <Button variant="outline" size="sm">
+          Đóng
+        </Button>
+      </div>
     </div>
   );
 }
 
-/** Bonus idea 5: Drag-drop reorder BOM items. */
-function MockupDragDrop() {
-  const [items, setItems] = useState([
-    { code: "NVL-CAF-001", name: "Cà phê Robusta sống", qty: 0.018, unit: "kg" },
-    { code: "NVL-SUA-001", name: "Sữa đặc Ngôi Sao", qty: 30, unit: "ml" },
-    { code: "NVL-DUO-001", name: "Đường mía RE", qty: 10, unit: "g" },
-    { code: "NVL-DAI-001", name: "Đá viên", qty: 100, unit: "g" },
-    { code: "NVL-LY-001", name: "Ly nhựa 500ml", qty: 1, unit: "cái" },
-  ]);
-
+/* ────────────────────────────────────────────────────────────────────── */
+/* Idea 3: Bulk import Excel — preview comparison                          */
+/* ────────────────────────────────────────────────────────────────────── */
+function ImportNew() {
   return (
-    <div className="bg-background border rounded-lg p-4 max-w-3xl mx-auto">
-      <div className="mb-3">
-        <h4 className="font-semibold text-base mb-0.5">
-          Công thức Cà phê sữa đá
-        </h4>
-        <p className="text-xs text-muted-foreground">
-          <b>Kéo thả</b> để xếp lại thứ tự NVL (chính → phụ → topping).
-        </p>
+    <div className="rounded-xl border bg-background shadow-sm overflow-hidden text-sm">
+      <div className="px-4 pt-3 pb-2 border-b">
+        <div className="font-medium">Nhập công thức từ Excel</div>
       </div>
+      <div className="p-5">
+        <div className="grid grid-cols-2 gap-3 mb-4">
+          <button className="rounded-lg border-2 border-dashed py-6 text-center hover:border-primary hover:bg-primary/5 transition">
+            <Icon name="upload_file" size={24} className="text-primary mb-1" />
+            <div className="text-xs font-medium mt-1">Upload .xlsx / .csv</div>
+          </button>
+          <button className="rounded-lg border-2 border-dashed py-6 text-center hover:border-primary hover:bg-primary/5 transition">
+            <Icon name="content_paste" size={24} className="text-primary mb-1" />
+            <div className="text-xs font-medium mt-1">Dán Ctrl+V</div>
+          </button>
+        </div>
 
-      <div className="border rounded">
-        <ul className="divide-y">
-          {items.map((it, i) => (
-            <li
-              key={it.code}
-              className="px-3 py-2.5 flex items-center gap-3 hover:bg-muted/40 cursor-grab"
-            >
-              <Icon
-                name="drag_indicator"
-                size={16}
-                className="text-muted-foreground"
-              />
-              <span className="text-xs text-muted-foreground w-5">
-                {i + 1}.
-              </span>
-              <span className="font-mono text-[11px] text-muted-foreground min-w-[100px]">
-                {it.code}
-              </span>
-              <span className="flex-1 text-sm">{it.name}</span>
-              <span className="text-sm font-medium tabular-nums">
-                {it.qty} {it.unit}
-              </span>
-              <button className="text-muted-foreground hover:text-status-danger">
-                <Icon name="delete" size={14} />
-              </button>
-            </li>
-          ))}
-        </ul>
+        <div className="rounded-md bg-muted p-3 font-mono text-[11px] mb-3">
+          <div className="text-muted-foreground mb-1.5">
+            Mẫu (cột Excel | tab):
+          </div>
+          <div>NVL-CAF-001&nbsp;&nbsp;0.018&nbsp;&nbsp;kg</div>
+          <div>NVL-SUA-001&nbsp;&nbsp;30&nbsp;&nbsp;ml</div>
+          <div>NVL-DUO-001&nbsp;&nbsp;10&nbsp;&nbsp;g</div>
+        </div>
+
+        <div className="rounded-md border border-emerald-500/30 bg-emerald-500/5 p-2.5 text-xs flex items-center gap-2">
+          <Icon
+            name="check_circle"
+            size={14}
+            className="text-emerald-500 shrink-0"
+          />
+          <span>
+            <b>3/3</b> dòng hợp lệ — giá vốn:{" "}
+            <b className="tabular-nums">4.620đ</b> mỗi ly
+          </span>
+        </div>
       </div>
-
-      <p className="text-[11px] text-muted-foreground mt-2 italic">
-        💡 Hiện tại NVL hiện theo thứ tự thêm vào → lộn xộn. Kéo thả cho phép
-        sắp xếp logic (chính ở trên, topping ở dưới) → in công thức cho bếp dễ
-        đọc + đào tạo nhân viên mới nhanh.
-      </p>
+      <div className="px-4 py-3 border-t flex items-center justify-end gap-2 bg-muted/20">
+        <Button variant="outline" size="sm">
+          Huỷ
+        </Button>
+        <Button size="sm">Thêm 3 NVL vào công thức</Button>
+      </div>
     </div>
   );
 }
 
-/** Bonus idea 6: Bulk import from Excel/CSV. */
-function MockupBulkImport() {
+/* ────────────────────────────────────────────────────────────────────── */
+/* Layout helpers                                                          */
+/* ────────────────────────────────────────────────────────────────────── */
+function Section({
+  number,
+  title,
+  subtitle,
+  effort,
+  impact,
+  children,
+}: {
+  number: string;
+  title: string;
+  subtitle: string;
+  effort: string;
+  impact: string;
+  children: React.ReactNode;
+}) {
   return (
-    <div className="bg-background border rounded-lg p-4 max-w-3xl mx-auto">
-      <div className="mb-3">
-        <h4 className="font-semibold text-base mb-0.5">
-          Import công thức từ Excel
-        </h4>
-        <p className="text-xs text-muted-foreground">
-          <b>Dán dữ liệu</b> từ Excel hoặc upload CSV — setup 50 BOM trong 5
-          phút.
-        </p>
-      </div>
-
-      <div className="grid grid-cols-2 gap-3 mb-3">
-        <button className="border-2 border-dashed rounded-lg p-4 text-center hover:border-primary hover:bg-primary/5 transition-colors">
-          <Icon name="upload_file" size={28} className="text-primary mb-2" />
-          <div className="text-sm font-medium">Upload file CSV/Excel</div>
-          <div className="text-[10px] text-muted-foreground">.xlsx, .csv</div>
-        </button>
-        <button className="border-2 border-dashed rounded-lg p-4 text-center hover:border-primary hover:bg-primary/5 transition-colors">
-          <Icon name="content_paste" size={28} className="text-primary mb-2" />
-          <div className="text-sm font-medium">Dán từ clipboard</div>
-          <div className="text-[10px] text-muted-foreground">Ctrl+V</div>
-        </button>
-      </div>
-
-      <div className="rounded-md bg-muted p-3 font-mono text-[11px] mb-3 overflow-x-auto">
-        <div className="text-muted-foreground mb-1.5">
-          // Format mẫu (dán từ Excel):
-        </div>
-        <div>NVL-CAF-001&nbsp;&nbsp;0.018&nbsp;&nbsp;kg&nbsp;&nbsp;5</div>
-        <div>NVL-SUA-001&nbsp;&nbsp;30&nbsp;&nbsp;ml&nbsp;&nbsp;2</div>
-        <div>NVL-DUO-001&nbsp;&nbsp;10&nbsp;&nbsp;g&nbsp;&nbsp;0</div>
-        <div className="text-muted-foreground mt-1.5">
-          // Cột: mã | số lượng | đơn vị | % hao hụt
-        </div>
-      </div>
-
-      <div className="rounded-md border border-status-success/30 bg-status-success/5 p-2 text-xs flex items-center gap-2">
-        <Icon name="check_circle" size={14} className="text-status-success" />
-        <span>
-          <b>3/3</b> dòng hợp lệ — tổng giá vốn dự kiến:{" "}
-          <b>4.620đ / 1 ly</b>
+    <section className="border-t pt-12 pb-4">
+      <div className="flex items-baseline gap-3 mb-2">
+        <span className="text-2xl font-bold text-muted-foreground tabular-nums">
+          {number}
         </span>
+        <h2 className="text-2xl font-bold tracking-tight">{title}</h2>
       </div>
-
-      <p className="text-[11px] text-muted-foreground mt-3 italic">
-        💡 CEO setup 50 SKU FnB → mỗi SKU 5-10 NVL = 300-500 row → click từng
-        cái khoảng 1 giờ. Paste từ Excel xong → 5 phút. Cứu thời gian setup
-        ban đầu cực kỳ.
+      <p className="text-base text-muted-foreground mb-4 max-w-3xl">
+        {subtitle}
       </p>
+      <div className="flex flex-wrap gap-x-6 gap-y-1 text-xs mb-8">
+        <div>
+          <span className="text-muted-foreground">Công sức:</span>{" "}
+          <b className="text-foreground">{effort}</b>
+        </div>
+        <div>
+          <span className="text-muted-foreground">Ảnh hưởng:</span>{" "}
+          <b className="text-emerald-600 dark:text-emerald-400">{impact}</b>
+        </div>
+      </div>
+      {children}
+    </section>
+  );
+}
+
+function BeforeAfter({
+  beforeLabel,
+  afterLabel,
+  before,
+  after,
+}: {
+  beforeLabel: string;
+  afterLabel: string;
+  before: React.ReactNode;
+  after: React.ReactNode;
+}) {
+  return (
+    <div className="grid lg:grid-cols-2 gap-6 lg:gap-8">
+      <div>
+        <div className="flex items-center gap-2 mb-3 text-xs uppercase tracking-wider text-muted-foreground">
+          <span className="size-1.5 rounded-full bg-muted-foreground" />
+          {beforeLabel}
+        </div>
+        {before}
+      </div>
+      <div>
+        <div className="flex items-center gap-2 mb-3 text-xs uppercase tracking-wider text-primary">
+          <span className="size-1.5 rounded-full bg-primary" />
+          {afterLabel}
+        </div>
+        {after}
+      </div>
     </div>
   );
 }
 
 export default function BomFutureMockupPage() {
   return (
-    <div className="container mx-auto py-6 px-4 max-w-5xl">
+    <div className="container mx-auto py-12 px-6 max-w-6xl">
       {/* Hero */}
-      <div className="mb-8">
-        <div className="flex items-center gap-2 mb-2">
-          <span className="inline-flex items-center rounded-full bg-status-warning/15 text-status-warning border border-status-warning/30 px-2 py-0.5 text-[10px] font-semibold uppercase">
-            Mockup — chưa làm
-          </span>
-          <span className="text-xs text-muted-foreground">
-            CEO duyệt xong em mới ship
-          </span>
+      <header className="mb-16">
+        <div className="text-xs uppercase tracking-wider text-muted-foreground mb-3">
+          Đề xuất cải tiến · Mockup v2
         </div>
-        <h1 className="text-2xl font-bold mb-1">
-          6 cải tiến tương lai cho Công thức sản xuất (BOM)
+        <h1 className="text-4xl font-bold tracking-tight mb-3">
+          3 cải tiến đáng làm cho Công thức sản xuất (BOM)
         </h1>
-        <p className="text-sm text-muted-foreground">
-          Đây là <b>demo trực quan</b> để CEO quyết định cải tiến nào đáng làm
-          trước. Mỗi mockup có <b>vấn đề</b> + <b>lợi ích</b> + <b>ước lượng</b>{" "}
-          công sức. Em không tự chốt — anh chốt rồi em ship.
+        <p className="text-lg text-muted-foreground max-w-2xl leading-relaxed">
+          Em rút gọn còn 3 ý tưởng có ROI cao nhất sau khi research các pattern
+          của Linear, Stripe và Notion. Mỗi cái có{" "}
+          <b className="text-foreground">demo trước/sau</b> để CEO so sánh trực
+          quan.
         </p>
+        <div className="mt-6 flex flex-wrap gap-4 text-sm">
+          <a
+            href="#m1"
+            className="text-primary hover:underline underline-offset-4"
+          >
+            01 · Chọn nhiều cùng lúc
+          </a>
+          <span className="text-muted-foreground">·</span>
+          <a
+            href="#m2"
+            className="text-primary hover:underline underline-offset-4"
+          >
+            02 · Không bí ngõ cụt
+          </a>
+          <span className="text-muted-foreground">·</span>
+          <a
+            href="#m3"
+            className="text-primary hover:underline underline-offset-4"
+          >
+            03 · Nhập từ Excel
+          </a>
+        </div>
+      </header>
+
+      {/* Idea 1 */}
+      <div id="m1">
+        <Section
+          number="01"
+          title="Tick nhiều NVL, thêm 1 lần"
+          subtitle="Hiện tại mỗi NVL phải mở dialog → chọn → đóng → mở lại. Một SKU như 'Cà phê sữa đá' có 5-8 NVL nghĩa là 5-8 vòng lặp."
+          effort="0.5 ngày"
+          impact="Giảm 80% số click khi setup BOM"
+        >
+          <BeforeAfter
+            beforeLabel="Trước · Single select"
+            afterLabel="Sau · Multi select"
+            before={<PickerSingleSelect />}
+            after={<PickerMultiSelect checked={new Set(["1", "2", "4", "7"])} />}
+          />
+          <p className="mt-6 text-sm text-muted-foreground max-w-3xl leading-relaxed">
+            <b className="text-foreground">Pattern tham khảo:</b> Notion
+            multi-select tags, Linear bulk actions, Gmail multi-row checkbox.
+            Mỗi click chỉ thêm 1 state, không reload list. Quen thuộc với mọi
+            user.
+          </p>
+        </Section>
       </div>
 
-      <div className="space-y-6">
-        <MockupSection
-          number={1}
-          title="Multi-select picker — tick nhiều NVL, thêm 1 lần"
-          pain="Mỗi NVL phải mở-chọn-đóng dialog 1 vòng. SKU 'Cà phê sữa đá' có 5-8 NVL → 5-8 vòng lặp = mệt + chậm."
-          benefit="1 lần mở dialog → tick 8 NVL → click 'Thêm 8' → xong. Giảm 80% click khi setup BOM."
-          effort="0.5 ngày (đổi Select → Checkbox + state Set + handler bulk add)"
+      {/* Idea 2 */}
+      <div id="m2">
+        <Section
+          number="02"
+          title="Không bí ngõ cụt khi chưa có NVL"
+          subtitle="Tenant mới setup chưa có NVL → mở picker thì rỗng. Phải đóng dialog, sang trang khác tạo NVL, rồi quay lại tạo SKU. Mất context và rất dễ bỏ cuộc."
+          effort="0.75 ngày"
+          impact="Loại bỏ friction cho user mới onboarding"
         >
-          <MockupMultiSelect />
-        </MockupSection>
-
-        <MockupSection
-          number={2}
-          title="Gợi ý NVL thông minh — top-of-list"
-          pain="Khi tạo SKU 'Cà phê sữa đá' phải gõ tìm từng cái 'sữa', 'cà phê', 'đường', 'đá'... mặc dù 95% công thức cà phê đều có 4 NVL này."
-          benefit="Em phân tích các BOM cùng nhóm → suggest top 4-6 NVL phổ biến nhất ở trên cùng. Bấm 1 nút thay vì gõ tìm."
-          effort="1.5 ngày (cần RPC server-side aggregate BOM theo category + frequency)"
-        >
-          <MockupSuggested />
-        </MockupSection>
-
-        <MockupSection
-          number={3}
-          title="Thumbnail hình ảnh trong list — nhận diện bằng mắt"
-          pain="'Ly nhựa 500ml' vs 'Ly nhựa 700ml' vs 'Ly giấy 500ml' nhìn tên dễ nhầm. Quán bận, nhân viên không kịp đọc."
-          benefit="Avatar 40x40 ảnh thật mỗi SP → phân biệt bằng mắt 1 cái nhìn → đỡ nhầm + nhanh."
-          effort="0.5 ngày (chỉ render `<img>` từ field `imageUrl` có sẵn — nếu trống dùng icon fallback theo nhóm)"
-        >
-          <MockupThumbnail />
-        </MockupSection>
-
-        <MockupSection
-          number={4}
-          title="Empty state có CTA — không bí ngõ cụt"
-          pain="Mở picker, chưa có NVL → list trống + chỉ thấy chữ 'Không tìm thấy'. CEO phải đóng dialog → sang tab khác tạo NVL → quay lại tạo SKU. Mất context."
-          benefit="Empty state có 2 nút: 'Tạo NVL mới ngay' (mở dialog NVL nested) + 'Import từ Excel'. Làm xong tự refresh list."
-          effort="0.75 ngày (nested dialog + callback re-fetch + handle keyboard escape order)"
-        >
-          <MockupEmptyStateCTA />
-        </MockupSection>
-
-        <MockupSection
-          number={5}
-          title="Bonus: Kéo thả sắp xếp NVL trong công thức"
-          pain="Sau khi thêm 8 NVL, thứ tự lộn xộn theo lúc add. In công thức cho bếp đọc khó hiểu."
-          benefit="Kéo thả để sắp: chính → phụ → topping → bao bì. In công thức ra rõ ràng + đào tạo nhân viên mới nhanh."
-          effort="1 ngày (cần thư viện dnd-kit + lưu sort_order)"
-        >
-          <MockupDragDrop />
-        </MockupSection>
-
-        <MockupSection
-          number={6}
-          title="Bonus: Import BOM từ Excel — bulk paste"
-          pain="Setup 50 SKU FnB × 5-10 NVL = 300-500 row gõ tay → 1 giờ click chuột mỏi."
-          benefit="Copy từ Excel → Paste vào → validate → batch insert. 50 BOM xong trong 5 phút."
-          effort="2-3 ngày (cần parser CSV + validate code khớp DB + RPC bulk insert + UI hiển thị lỗi từng dòng)"
-        >
-          <MockupBulkImport />
-        </MockupSection>
+          <BeforeAfter
+            beforeLabel="Trước · Chỉ chữ 'không thấy'"
+            afterLabel="Sau · CTA tạo ngay tại chỗ"
+            before={<PickerEmptyOld />}
+            after={<PickerEmptyNew />}
+          />
+          <p className="mt-6 text-sm text-muted-foreground max-w-3xl leading-relaxed">
+            <b className="text-foreground">Pattern tham khảo:</b> Stripe (empty
+            states luôn có CTA), Linear (inline-create thay vì navigate),
+            Vercel (preserve user&apos;s flow context). Sau khi tạo xong, list
+            tự refresh và highlight NVL vừa tạo.
+          </p>
+        </Section>
       </div>
 
-      {/* Footer summary */}
-      <Card className="mt-8 border-primary/30 bg-primary/5">
-        <CardHeader>
-          <CardTitle className="text-base flex items-center gap-2">
-            <Icon name="lightbulb" size={18} className="text-primary" />
-            Em đề xuất thứ tự ưu tiên
-          </CardTitle>
-        </CardHeader>
-        <CardContent className="text-sm space-y-2">
-          <div>
-            <b>🔴 Cao (ROI lớn nhất)</b>: #1 Multi-select (0.5d) + #4 Empty CTA
-            (0.75d) — total <b>1.25 ngày</b>, fix pain hằng ngày.
+      {/* Idea 3 */}
+      <div id="m3">
+        <Section
+          number="03"
+          title="Nhập công thức hàng loạt từ Excel"
+          subtitle="Setup chuỗi cà phê: 50 SKU × 5-10 NVL = 300-500 dòng. Click thủ công sẽ mất nhiều giờ. Paste từ Excel xuống cách nhanh nhất."
+          effort="2-3 ngày"
+          impact="Tiết kiệm ~10 giờ setup ban đầu"
+        >
+          <div className="grid lg:grid-cols-[1fr_2fr] gap-6 lg:gap-8 items-start">
+            <div>
+              <div className="flex items-center gap-2 mb-3 text-xs uppercase tracking-wider text-muted-foreground">
+                <span className="size-1.5 rounded-full bg-muted-foreground" />
+                Bối cảnh thật
+              </div>
+              <div className="rounded-xl border bg-muted/30 p-5 text-sm leading-relaxed">
+                <p className="mb-3">
+                  Anh đang có file Excel với 50 SKU và công thức từng SKU.
+                </p>
+                <p className="mb-3 text-muted-foreground">
+                  Nếu click tay từng dòng:
+                </p>
+                <ul className="space-y-1 text-muted-foreground">
+                  <li>· Mở dialog SKU 1 → tab BOM</li>
+                  <li>· Click &quot;Thêm NVL&quot; 7 lần</li>
+                  <li>· Gõ số lượng 7 ô</li>
+                  <li>· Lưu → đóng → mở SKU 2</li>
+                  <li className="text-foreground font-medium">
+                    · Lặp lại 50 lần ≈ 10 giờ
+                  </li>
+                </ul>
+              </div>
+            </div>
+            <div>
+              <div className="flex items-center gap-2 mb-3 text-xs uppercase tracking-wider text-primary">
+                <span className="size-1.5 rounded-full bg-primary" />
+                Sau · Paste 5 phút
+              </div>
+              <ImportNew />
+            </div>
           </div>
-          <div>
-            <b>🟠 Trung bình</b>: #3 Thumbnail (0.5d) + #2 Suggested (1.5d) —
-            polish UX, cần data thực mới phát huy hết.
+          <p className="mt-6 text-sm text-muted-foreground max-w-3xl leading-relaxed">
+            <b className="text-foreground">Pattern tham khảo:</b> Airtable
+            paste-from-clipboard, Notion DB import, Linear CSV import. Validate
+            từng dòng (mã NVL có tồn tại? số lượng &gt; 0?) — lỗi hiển thị
+            inline với link sửa nhanh.
+          </p>
+        </Section>
+      </div>
+
+      {/* Decision section */}
+      <section className="border-t mt-16 pt-12">
+        <div className="rounded-2xl border bg-muted/30 p-8">
+          <div className="text-xs uppercase tracking-wider text-muted-foreground mb-2">
+            Tóm tắt để CEO quyết định
           </div>
-          <div>
-            <b>🟡 Sau setup</b>: #6 Bulk import (2-3d) — chỉ giá trị khi setup
-            ban đầu. Sau giai đoạn nhập data thì dùng ít.
+          <h2 className="text-2xl font-bold mb-6">Em đề xuất 2 phase</h2>
+          <div className="grid md:grid-cols-2 gap-6">
+            <div className="rounded-xl bg-background border p-5">
+              <div className="flex items-center gap-2 mb-2">
+                <span className="inline-flex size-6 items-center justify-center rounded-full bg-primary text-primary-foreground text-xs font-bold">
+                  A
+                </span>
+                <span className="font-semibold">Quick wins</span>
+                <span className="ml-auto text-xs text-muted-foreground">
+                  1.25 ngày
+                </span>
+              </div>
+              <ul className="text-sm space-y-1.5 mb-4">
+                <li className="flex items-baseline gap-2">
+                  <Icon name="check" size={14} className="text-primary" />
+                  <span>#01 Multi-select picker</span>
+                </li>
+                <li className="flex items-baseline gap-2">
+                  <Icon name="check" size={14} className="text-primary" />
+                  <span>#02 Empty state CTA</span>
+                </li>
+              </ul>
+              <p className="text-xs text-muted-foreground leading-relaxed">
+                Cứu pain hằng ngày của user đã có data. Ship được tuần này.
+              </p>
+            </div>
+            <div className="rounded-xl bg-background border p-5">
+              <div className="flex items-center gap-2 mb-2">
+                <span className="inline-flex size-6 items-center justify-center rounded-full bg-foreground text-background text-xs font-bold">
+                  B
+                </span>
+                <span className="font-semibold">Setup boost</span>
+                <span className="ml-auto text-xs text-muted-foreground">
+                  2-3 ngày
+                </span>
+              </div>
+              <ul className="text-sm space-y-1.5 mb-4">
+                <li className="flex items-baseline gap-2">
+                  <Icon name="check" size={14} className="text-foreground" />
+                  <span>#03 Bulk import Excel</span>
+                </li>
+              </ul>
+              <p className="text-xs text-muted-foreground leading-relaxed">
+                Critical khi đang setup data cũ (270 NVL × N công thức). Sau giai
+                đoạn setup thì dùng ít.
+              </p>
+            </div>
           </div>
-          <div>
-            <b>🟢 Polish cuối</b>: #5 Drag-drop (1d) — đẹp nhưng không cấp
-            thiết.
-          </div>
-          <div className="pt-2 border-t mt-3 text-xs text-muted-foreground">
-            Tổng nếu làm hết: ~<b>6-7 ngày work</b>. Anh chốt sprint nào em
-            khởi động.
-          </div>
-        </CardContent>
-      </Card>
+          <p className="mt-6 text-sm text-muted-foreground">
+            Anh chốt phase A trước hay đi cả A + B song song — em ship theo
+            quyết định của anh.
+          </p>
+        </div>
+      </section>
+
+      <footer className="text-center text-xs text-muted-foreground mt-16 pb-6">
+        Mockup này là demo trực quan · Chưa wire backend · Sẽ xoá sau khi quyết
+        định
+      </footer>
     </div>
   );
 }

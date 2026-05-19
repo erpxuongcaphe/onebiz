@@ -582,7 +582,7 @@ export function CreateProductDialog({
 
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
-      <DialogContent className="sm:max-w-2xl max-h-[90vh] overflow-y-auto">
+      <DialogContent className="sm:max-w-5xl max-h-[92vh] overflow-y-auto">
         <DialogHeader>
           <DialogTitle>{isEdit ? `Sửa hàng hóa ${initialData?.code ?? ""}` : "Thêm hàng hóa mới"}</DialogTitle>
           <DialogDescription>
@@ -1191,17 +1191,16 @@ export function CreateProductDialog({
                       <thead className="bg-surface-container-low text-xs text-muted-foreground">
                         <tr>
                           <th className="text-left px-3 py-2 font-semibold">NVL</th>
-                          <th className="text-right px-3 py-2 font-semibold w-24">SL</th>
-                          <th className="text-left px-3 py-2 font-semibold w-20">ĐVT</th>
-                          <th className="text-right px-3 py-2 font-semibold w-20">Hao %</th>
-                          <th className="text-right px-3 py-2 font-semibold w-28">Cost/SP</th>
+                          <th className="text-right px-3 py-2 font-semibold w-32">Số lượng</th>
+                          <th className="text-left px-3 py-2 font-semibold w-28">ĐVT</th>
+                          <th className="text-right px-3 py-2 font-semibold w-32">Cost/SP</th>
                           <th className="w-10"></th>
                         </tr>
                       </thead>
                       <tbody>
                         {bomItems.map((it, idx) => {
-                          const effQty = it.quantity * (1 + it.wastePercent / 100);
-                          const lineCost = effQty * it.costPrice;
+                          // CEO 19/05/2026: bỏ Hao % khỏi UI (chưa cần), giá vốn = SL × cost
+                          const lineCost = it.quantity * it.costPrice;
                           return (
                             <tr key={`${it.materialId}-${idx}`} className="border-t border-border">
                               <td className="px-3 py-2">
@@ -1214,7 +1213,7 @@ export function CreateProductDialog({
                                   value={it.quantity}
                                   step="0.0001"
                                   min="0"
-                                  className="h-8 text-right text-xs"
+                                  className="h-9 text-right text-sm"
                                   onChange={(e) => {
                                     const v = Number(e.target.value);
                                     setBomItems((prev) =>
@@ -1226,7 +1225,7 @@ export function CreateProductDialog({
                               <td className="px-3 py-2">
                                 <Input
                                   value={it.unit}
-                                  className="h-8 text-xs"
+                                  className="h-9 text-sm"
                                   onChange={(e) => {
                                     setBomItems((prev) =>
                                       prev.map((p, i) =>
@@ -1236,25 +1235,7 @@ export function CreateProductDialog({
                                   }}
                                 />
                               </td>
-                              <td className="px-3 py-2">
-                                <Input
-                                  type="number"
-                                  value={it.wastePercent}
-                                  step="0.1"
-                                  min="0"
-                                  max="100"
-                                  className="h-8 text-right text-xs"
-                                  onChange={(e) => {
-                                    const v = Number(e.target.value);
-                                    setBomItems((prev) =>
-                                      prev.map((p, i) =>
-                                        i === idx ? { ...p, wastePercent: v } : p,
-                                      ),
-                                    );
-                                  }}
-                                />
-                              </td>
-                              <td className="px-3 py-2 text-right text-xs tabular-nums">
+                              <td className="px-3 py-2 text-right text-sm tabular-nums">
                                 {formatCurrency(lineCost)}
                               </td>
                               <td className="px-3 py-2">
@@ -1273,13 +1254,13 @@ export function CreateProductDialog({
                       </tbody>
                       <tfoot className="bg-surface-container-low/50 border-t-2 border-border">
                         <tr>
-                          <td colSpan={4} className="px-3 py-2 text-right font-semibold text-xs">
+                          <td colSpan={3} className="px-3 py-2 text-right font-semibold text-sm">
                             Tổng giá vốn (theo BOM):
                           </td>
                           <td className="px-3 py-2 text-right font-bold text-primary">
                             {formatCurrency(
                               bomItems.reduce(
-                                (s, it) => s + it.quantity * (1 + it.wastePercent / 100) * it.costPrice,
+                                (s, it) => s + it.quantity * it.costPrice,
                                 0,
                               ),
                             )}
