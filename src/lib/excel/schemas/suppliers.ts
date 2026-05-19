@@ -31,7 +31,7 @@ export const supplierExcelSchema: ExcelSchema<SupplierImportRow> = {
   name: "Nhà cung cấp",
   fileName: "Nha-cung-cap",
   description:
-    "Danh sách nhà cung cấp. Mã NCC phải duy nhất. Mã số thuế (nếu có) phải đúng format 10 số hoặc 10-3.",
+    "Danh sách nhà cung cấp. Mã NCC phải duy nhất. Mã số thuế nhập tự do — không giới hạn format (NCC nước ngoài, MST tạm OK).",
   columns: [
     {
       key: "code",
@@ -138,6 +138,8 @@ export const supplierExcelSchema: ExcelSchema<SupplierImportRow> = {
       type: "string",
       maxLength: 50,
       example: "0301234567",
+      description:
+        "Nhập tự do — KHÔNG giới hạn format. Chấp nhận MST Việt Nam (10 số), MST có chi nhánh (10-3), MST nước ngoài, MST tạm.",
       width: 16,
     },
     {

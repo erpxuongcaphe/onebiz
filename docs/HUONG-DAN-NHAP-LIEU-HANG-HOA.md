@@ -53,13 +53,23 @@ Hệ thống hỗ trợ **1 mã làm 2 vai trò** ở 2 nơi khác nhau:
 
 → Không cần tạo 2 mã riêng. Chỉ cần đánh dấu `has_bom=true` ở SKU bán và đưa vào BOM ở SP khác.
 
-### 1.3. 3 đơn vị tính (ĐVT)
+### 1.3. 4 cột đơn vị tính (ĐVT) — chỉ cần điền 1
 
-| ĐVT | Dùng cho | Ví dụ "Cà phê hạt sống Robusta" |
+**Đa số SP chỉ cần điền cột "Đơn vị tính"** (ly, kg, cái...). Hệ thống tự dùng cho mua/kho/bán.
+
+| Cột Excel | Khi nào điền | Ví dụ |
 |---|---|---|
-| **ĐVT mua** | Đơn đặt hàng nhập từ NCC | `bao` (1 bao = 60kg) |
-| **ĐVT kho** (chuẩn) | Tính tồn kho, kiểm kê | `kg` |
-| **ĐVT bán** | Bán cho khách (chỉ có với SKU) | — (NVL không bán) |
+| **Đơn vị tính** | Mặc định cho cả mua/kho/bán | `Ly`, `Kg`, `Cái` |
+| **ĐVT nhập** | Chỉ điền khi mua khác đơn vị bán | `Thùng` (1 thùng = 24 lon) |
+| **ĐVT kho** | Chỉ điền khi kho khác đơn vị bán | `Lon`, `Chai` |
+| **ĐVT bán** | Chỉ điền khi bán khác đơn vị nhập | `Ly`, `Phần` |
+
+**Quy tắc**: file Excel chỉ cần **1 trong 4 cột có giá trị**. Các cột còn lại trống → hệ thống tự fill bằng cột có giá trị (ưu tiên: Đơn vị tính → ĐVT kho → ĐVT bán → ĐVT nhập).
+
+**Ví dụ**:
+- SP "Cà phê đen đá": chỉ điền **Đơn vị tính = `Ly`** → đủ
+- SP "Sữa Vinamilk": **Đơn vị tính = `Lon`**, **ĐVT nhập = `Thùng`** → mua thùng, bán lon
+- SP "Cà phê Robusta sống": **Đơn vị tính = `Kg`**, **ĐVT nhập = `Bao`** (1 bao = 60kg)
 
 **Quy đổi giữa các ĐVT**: vào `/hang-hoa/[product]/detail` → tab "Quy đổi ĐVT" → khai báo `1 bao = 60 kg`. Hệ thống tự quy đổi khi nhập/xuất.
 

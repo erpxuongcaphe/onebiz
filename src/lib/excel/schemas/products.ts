@@ -15,7 +15,7 @@ export interface ProductImportRow {
   productType: "nvl" | "sku";
   channel?: "fnb" | "retail";
   categoryCode?: string; // resolve → category_id ở service
-  unit: string;
+  unit?: string; // Optional — ít nhất 1 trong 4 cột đơn vị phải có (xem validateRow)
   sellPrice: number;
   costPrice: number;
   stock?: number;
@@ -36,7 +36,7 @@ export const productExcelSchema: ExcelSchema<ProductImportRow> = {
   name: "Sản phẩm",
   fileName: "San-pham",
   description:
-    "Danh sách sản phẩm. Mã SP phải duy nhất. 'Loại' = nvl (nguyên vật liệu) hoặc sku (hàng bán). 'Kênh bán' chỉ áp dụng cho sku (fnb = bán tại quán; retail = bán lẻ/sỉ).",
+    "Danh sách sản phẩm. Mã SP phải duy nhất. 'Loại' = nvl (nguyên vật liệu) hoặc sku (hàng bán). 'Kênh bán' chỉ áp dụng cho sku. ĐƠN VỊ: có 4 cột (Đơn vị tính / ĐVT nhập / ĐVT kho / ĐVT bán) — CHỈ CẦN 1 cột có giá trị là OK, hệ thống tự fill các cột còn lại. Đa số SP chỉ cần điền 'Đơn vị tính' (ly, kg, cái...).",
   columns: [
     {
       key: "code",
@@ -102,9 +102,10 @@ export const productExcelSchema: ExcelSchema<ProductImportRow> = {
       key: "unit",
       header: "Đơn vị tính",
       type: "string",
-      required: true,
       maxLength: 20,
       example: "Ly",
+      description:
+        "Đơn vị mặc định. Nếu để trống, hệ thống lấy từ 'ĐVT kho' → 'ĐVT bán' → 'ĐVT nhập' theo thứ tự ưu tiên.",
       width: 12,
     },
     {
@@ -182,7 +183,9 @@ export const productExcelSchema: ExcelSchema<ProductImportRow> = {
       header: "ĐVT nhập",
       type: "string",
       maxLength: 20,
-      description: "VD: Thùng, Bao (khác với ĐVT bán)",
+      example: "Thùng",
+      description:
+        "Đơn vị khi mua từ NCC (vd: Thùng, Bao, Lốc). Để trống = giống 'Đơn vị tính'. Đa số SP không cần điền cột này.",
       width: 12,
     },
     {
@@ -190,6 +193,9 @@ export const productExcelSchema: ExcelSchema<ProductImportRow> = {
       header: "ĐVT kho",
       type: "string",
       maxLength: 20,
+      example: "Lon",
+      description:
+        "Đơn vị quy đổi khi kiểm kho (vd: Chai, Lon, Hộp). Để trống = giống 'Đơn vị tính'. Đa số SP không cần điền cột này.",
       width: 12,
     },
     {
@@ -197,6 +203,9 @@ export const productExcelSchema: ExcelSchema<ProductImportRow> = {
       header: "ĐVT bán",
       type: "string",
       maxLength: 20,
+      example: "Ly",
+      description:
+        "Đơn vị khi bán cho khách (vd: Ly, Cái, Phần). Để trống = giống 'Đơn vị tính'. Đa số SP không cần điền cột này.",
       width: 12,
     },
     {
@@ -238,6 +247,16 @@ export const productExcelSchema: ExcelSchema<ProductImportRow> = {
       row.minStock > row.maxStock
     ) {
       return "Tồn tối thiểu không được lớn hơn tồn tối đa";
+    }
+    // Day 19/05/2026 (CEO): ĐVT — chỉ cần 1 trong 4 cột có giá trị
+    const hasAnyUnit = [
+      row.unit,
+      row.purchaseUnit,
+      row.stockUnit,
+      row.sellUnit,
+    ].some((u) => u && String(u).trim().length > 0);
+    if (!hasAnyUnit) {
+      return "Thiếu đơn vị tính — điền 1 trong 4 cột: 'Đơn vị tính', 'ĐVT nhập', 'ĐVT kho', hoặc 'ĐVT bán'";
     }
     return null;
   },
