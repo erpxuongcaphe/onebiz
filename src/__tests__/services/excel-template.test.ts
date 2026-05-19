@@ -452,4 +452,153 @@ describe("real OneBiz schemas", () => {
     expect(result.errorRows).toEqual([]);
     expect(result.validRows[0].note).toBe("Liên hệ anh Nam");
   });
+
+  // ============================================================
+  // CEO 19/05/2026: MST tự do — KHÔNG được validate format
+  // CEO báo lỗi mặc dù đã sửa hôm 18/5. Test này LOCK lại fix.
+  // ============================================================
+  describe("MST (Mã số thuế) — KHÔNG validate format (CEO 19/05/2026)", () => {
+    const MST_FORMATS_OK = [
+      ["0301234567", "MST chuẩn VN 10 số"],
+      ["0301234567-001", "MST có chi nhánh (10-3)"],
+      ["123", "MST ngắn (NCC tạm)"],
+      ["", "MST rỗng (NCC cá nhân)"],
+      ["VAT-DE-12345678901", "MST nước ngoài (Đức)"],
+      ["DOMESTIC-001", "MST tự đặt"],
+      ["TAX_PENDING_2026", "MST tạm chờ cấp"],
+      ["12345", "MST ngắn 5 số"],
+      ["999999999999999", "MST dài 15 số"],
+    ] as const;
+
+    for (const [mst, label] of MST_FORMATS_OK) {
+      it(`supplier import chấp nhận MST "${mst}" (${label})`, () => {
+        const wb = makeWb([
+          ["Mã NCC", "Tên NCC", "Mã số thuế"],
+          ["NCC001", "Test NCC", mst],
+        ]);
+        const result = parseWorkbook(wb, supplierExcelSchema);
+        expect(result.tableErrors).toEqual([]);
+        expect(result.errorRows).toEqual([]);
+        expect(result.validRows).toHaveLength(1);
+        expect(result.validRows[0].taxCode ?? "").toBe(mst);
+      });
+    }
+
+    it("supplier import KHÔNG báo lỗi 'phải là 10 chữ số' với MST bất kỳ", () => {
+      const wb = makeWb([
+        ["Mã NCC", "Tên NCC", "Mã số thuế"],
+        ["NCC001", "NCC A", "abc"],
+        ["NCC002", "NCC B", "12"],
+        ["NCC003", "NCC C", "không-phải-số"],
+      ]);
+      const result = parseWorkbook(wb, supplierExcelSchema);
+      expect(result.tableErrors).toEqual([]);
+      expect(result.errorRows).toEqual([]);
+      expect(result.validRows).toHaveLength(3);
+      // Verify không có error message nào chứa "10 chữ số" hoặc "10 số"
+      const allErrors = [
+        ...result.tableErrors,
+        ...result.errorRows.flatMap((r) => r.errors),
+      ].join(" | ");
+      expect(allErrors).not.toContain("10 chữ số");
+      expect(allErrors).not.toContain("10 số");
+      expect(allErrors).not.toContain("phải là 10");
+    });
+  });
+
+  // ============================================================
+  // CEO 19/05/2026: ĐVT linh hoạt — chỉ cần 1 trong 4 cột
+  // ============================================================
+  describe("Đơn vị tính — chỉ cần 1/4 cột (CEO 19/05/2026)", () => {
+    it("import OK khi chỉ có 'Đơn vị tính'", () => {
+      const wb = makeWb([
+        ["Mã SP", "Tên sản phẩm", "Loại", "Kênh bán", "Đơn vị tính", "Giá bán", "Giá vốn"],
+        ["SP001", "Cà phê đen", "sku", "fnb", "Ly", 35000, 15000],
+      ]);
+      const result = parseWorkbook(wb, productExcelSchema);
+      expect(result.tableErrors).toEqual([]);
+      expect(result.errorRows).toEqual([]);
+      expect(result.validRows[0].unit).toBe("Ly");
+    });
+
+    it("import OK khi chỉ có 'ĐVT nhập' (case CEO báo lỗi)", () => {
+      const wb = makeWb([
+        ["Mã SP", "Tên sản phẩm", "Loại", "Kênh bán", "ĐVT nhập", "Giá bán", "Giá vốn"],
+        ["SP001", "Cà phê đen", "sku", "fnb", "Thùng", 35000, 15000],
+      ]);
+      const result = parseWorkbook(wb, productExcelSchema);
+      expect(result.tableErrors).toEqual([]);
+      expect(result.errorRows).toEqual([]);
+      expect(result.validRows[0].purchaseUnit).toBe("Thùng");
+      // Service sẽ fallback unit từ purchaseUnit, schema không bắt buộc
+    });
+
+    it("import OK khi chỉ có 'ĐVT kho'", () => {
+      const wb = makeWb([
+        ["Mã SP", "Tên sản phẩm", "Loại", "Kênh bán", "ĐVT kho", "Giá bán", "Giá vốn"],
+        ["SP001", "Sữa", "sku", "retail", "Lon", 12000, 8000],
+      ]);
+      const result = parseWorkbook(wb, productExcelSchema);
+      expect(result.tableErrors).toEqual([]);
+      expect(result.errorRows).toEqual([]);
+      expect(result.validRows[0].stockUnit).toBe("Lon");
+    });
+
+    it("import OK khi chỉ có 'ĐVT bán'", () => {
+      const wb = makeWb([
+        ["Mã SP", "Tên sản phẩm", "Loại", "Kênh bán", "ĐVT bán", "Giá bán", "Giá vốn"],
+        ["SP001", "Cà phê", "sku", "fnb", "Ly", 35000, 15000],
+      ]);
+      const result = parseWorkbook(wb, productExcelSchema);
+      expect(result.tableErrors).toEqual([]);
+      expect(result.errorRows).toEqual([]);
+      expect(result.validRows[0].sellUnit).toBe("Ly");
+    });
+
+    it("import FAIL khi KHÔNG có cột nào trong 4 ĐVT", () => {
+      const wb = makeWb([
+        ["Mã SP", "Tên sản phẩm", "Loại", "Kênh bán", "Giá bán", "Giá vốn"],
+        ["SP001", "SP test", "sku", "fnb", 35000, 15000],
+      ]);
+      const result = parseWorkbook(wb, productExcelSchema);
+      expect(result.errorRows).toHaveLength(1);
+      expect(result.errorRows[0].errors.some((e) => e.includes("đơn vị"))).toBe(
+        true,
+      );
+    });
+
+    it("import OK với cả 4 cột ĐVT đều có giá trị khác nhau", () => {
+      const wb = makeWb([
+        [
+          "Mã SP",
+          "Tên sản phẩm",
+          "Loại",
+          "Kênh bán",
+          "Đơn vị tính",
+          "ĐVT nhập",
+          "ĐVT kho",
+          "ĐVT bán",
+          "Giá bán",
+          "Giá vốn",
+        ],
+        [
+          "SP001",
+          "Cà phê Robusta",
+          "nvl",
+          "",
+          "Kg",
+          "Bao",
+          "Kg",
+          "Kg",
+          0,
+          145000,
+        ],
+      ]);
+      const result = parseWorkbook(wb, productExcelSchema);
+      expect(result.tableErrors).toEqual([]);
+      expect(result.errorRows).toEqual([]);
+      expect(result.validRows[0].unit).toBe("Kg");
+      expect(result.validRows[0].purchaseUnit).toBe("Bao");
+    });
+  });
 });
