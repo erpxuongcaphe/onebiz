@@ -226,7 +226,7 @@ export { getCategoriesByScope, getAllCategories, getCategoriesWithCounts, create
 export { getVariantsByProduct, createVariant, updateVariant, deleteVariant } from "./variants";
 
 // BOM (Production Formulas)
-export { getAllBOMs, getBOMsByProduct, getBOMById, createBOM, updateBOM, deleteBOM, calculateBOMCost, getBOMProductionHistory, getActiveBOMForBranch, cloneBOMForBranch, getProductIdsWithActiveBom } from "./bom";
+export { getAllBOMs, getBOMByCode, getBOMsByProduct, getBOMById, createBOM, updateBOM, deleteBOM, calculateBOMCost, getBOMProductionHistory, getActiveBOMForBranch, cloneBOMForBranch, getProductIdsWithActiveBom } from "./bom";
 
 // Production Orders + Lot Tracking
 export {

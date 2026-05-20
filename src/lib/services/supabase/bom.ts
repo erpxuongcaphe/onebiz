@@ -78,19 +78,69 @@ export async function getBOMProductionHistory(
   }));
 }
 
-export async function getBOMsByProduct(productId: string): Promise<BOM[]> {
+/**
+ * Day 20/05/2026 (CEO Phase 2): Tìm BOM theo code (model BOM standalone).
+ * Trả về list BOM cùng code (có thể có nhiều: 1 global + nhiều theo chi nhánh).
+ * Dùng cho:
+ *   - Verify BOM tồn tại khi user nhập Mã BOM trong form/Excel SP
+ *   - Lookup khi tạo Production Order chọn BOM
+ */
+export async function getBOMByCode(code: string): Promise<BOM[]> {
+  if (!code || !code.trim()) return [];
   const tenantId = await getCurrentTenantId();
   const { data, error } = await supabase
     .from("bom")
+    .select("*, branches:branch_id(name), products:product_id(name, code)")
+    .eq("tenant_id", tenantId)
+    .eq("code", code.trim())
+    .eq("is_active", true)
+    .order("branch_id", { ascending: true, nullsFirst: true });
+
+  if (error) {
+    console.warn("[getBOMByCode]", error.message);
+    return [];
+  }
+  return (data ?? []).map((row) => mapBOM(row as Record<string, unknown>));
+}
+
+export async function getBOMsByProduct(productId: string): Promise<BOM[]> {
+  const tenantId = await getCurrentTenantId();
+  // Day 20/05/2026 (CEO Phase 2): support cả 2 model
+  //   - LEGACY: bom.product_id = productId
+  //   - NEW: products.bom_code → bom.code (BOM standalone share giữa SKU)
+  // Strategy: query union qua bom_code của SKU + product_id reference cũ.
+
+  // 1. Đọc bom_code của SKU (model mới)
+  const { data: sku } = await supabase
+    .from("products")
+    .select("bom_code")
+    .eq("tenant_id", tenantId)
+    .eq("id", productId)
+    .maybeSingle();
+
+  // 2. Query union: hoặc product_id match HOẶC code match bom_code SKU
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  let query = (supabase as any)
+    .from("bom")
     .select("*, branches:branch_id(name)")
     .eq("tenant_id", tenantId)
-    .eq("product_id", productId)
-    .eq("is_active", true)
+    .eq("is_active", true);
+
+  const bomCode = (sku as { bom_code?: string | null } | null)?.bom_code;
+  if (bomCode) {
+    // OR: product_id match HOẶC code match bom_code
+    query = query.or(`product_id.eq.${productId},code.eq.${bomCode}`);
+  } else {
+    query = query.eq("product_id", productId);
+  }
+
+  query = query
     .order("branch_id", { ascending: true, nullsFirst: true })
     .order("version", { ascending: false });
 
+  const { data, error } = await query;
   if (error) throw error;
-  return (data ?? []).map((row) => mapBOM(row as Record<string, unknown>));
+  return (data ?? []).map((row: Record<string, unknown>) => mapBOM(row));
 }
 
 /**
@@ -230,7 +280,12 @@ export async function getBOMById(id: string): Promise<BOM> {
 }
 
 export async function createBOM(bom: {
-  productId: string;
+  /**
+   * Day 20/05/2026 (CEO Phase 2): productId optional — cho phép BOM standalone.
+   * Khi tạo qua Excel BOM hoặc trang /hang-hoa/cong-thuc → để null.
+   * SKU gắn BOM sau qua products.bom_code = BOM.code.
+   */
+  productId?: string | null;
   variantId?: string;
   /** Day 18/05/2026: null = BOM global, có giá trị = BOM riêng chi nhánh */
   branchId?: string | null;
@@ -251,20 +306,19 @@ export async function createBOM(bom: {
 }): Promise<BOM> {
   const tenantId = await getCurrentTenantId();
   // Create BOM header
-  const { data, error } = await supabase
-    .from("bom")
-    .insert({
-      tenant_id: tenantId,
-      product_id: bom.productId,
-      variant_id: bom.variantId,
-      branch_id: bom.branchId ?? null,
-      code: bom.code,
-      name: bom.name,
-      batch_size: bom.batchSize ?? 1,
-      yield_qty: bom.yieldQty ?? 1,
-      yield_unit: bom.yieldUnit ?? "cái",
-      note: bom.note,
-    })
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  const { data, error } = await (supabase.from("bom").insert as any)({
+    tenant_id: tenantId,
+    product_id: bom.productId ?? null,
+    variant_id: bom.variantId,
+    branch_id: bom.branchId ?? null,
+    code: bom.code,
+    name: bom.name,
+    batch_size: bom.batchSize ?? 1,
+    yield_qty: bom.yieldQty ?? 1,
+    yield_unit: bom.yieldUnit ?? "cái",
+    note: bom.note,
+  })
     .select()
     .single();
 
