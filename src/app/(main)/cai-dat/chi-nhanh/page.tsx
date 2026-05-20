@@ -523,9 +523,11 @@ function BranchSettingsPageInner() {
       {/* Create/Edit Dialog */}
       <Dialog open={dialogOpen} onOpenChange={setDialogOpen}>
         {/* CEO 13/05: dialog 3xl — label dropdown "Cửa hàng" dài + form
-            2 cột (Mã + Loại) cần đủ chỗ. */}
-        <DialogContent className="max-w-3xl">
-          <DialogHeader>
+            2 cột (Mã + Loại) cần đủ chỗ.
+            CEO 20/05/2026: max-h + flex-col + overflow trên div nội dung
+            để form scroll được khi dài (có thông tin pháp nhân + bảng giá). */}
+        <DialogContent className="max-w-3xl max-h-[92vh] flex flex-col p-0">
+          <DialogHeader className="px-6 pt-6 pb-2 shrink-0">
             <DialogTitle>
               {editingId ? "Sửa chi nhánh" : "Thêm chi nhánh"}
             </DialogTitle>
@@ -534,7 +536,7 @@ function BranchSettingsPageInner() {
               xưởng) có flow riêng trong POS + kho.
             </DialogDescription>
           </DialogHeader>
-          <div className="space-y-4 py-2">
+          <div className="space-y-4 py-2 px-6 overflow-y-auto flex-1 min-h-0">
             <div className="grid gap-4 sm:grid-cols-2">
               <div className="space-y-2 sm:col-span-2">
                 <Label htmlFor="branch-name">
@@ -640,8 +642,9 @@ function BranchSettingsPageInner() {
               </div>
 
               {/* Day 20/05/2026 (CEO): section Thông tin pháp nhân — quản lý
-                  chi nhánh theo công ty / hộ kinh doanh / DNTN. Hiển thị trên
-                  hoá đơn VAT. Optional — chỉ điền khi cần. */}
+                  chi nhánh theo pháp nhân. Hiển thị trên hoá đơn VAT.
+                  CEO feedback 20/05 16:04: bỏ "Loại pháp nhân" + "Số ĐKKD"
+                  — gây rối, không cần. Chỉ giữ Tên pháp nhân + MST. */}
               <div className="sm:col-span-2 border-t pt-4 mt-2">
                 <div className="flex items-center gap-2 mb-3">
                   <Icon name="business" size={16} className="text-primary" />
@@ -653,71 +656,11 @@ function BranchSettingsPageInner() {
                   </h4>
                 </div>
                 <p className="text-xs text-muted-foreground mb-3">
-                  Khai báo pháp nhân của chi nhánh (công ty, hộ kinh doanh, DNTN).
-                  Dùng để in hoá đơn VAT + báo cáo thuế. CEO chuỗi có nhiều pháp
-                  nhân có thể phân định rõ chi nhánh nào thuộc đơn vị nào.
+                  Khai báo pháp nhân của chi nhánh để in hoá đơn VAT + báo cáo
+                  thuế. CEO chuỗi có nhiều pháp nhân (công ty, hộ KD) có thể
+                  phân định rõ chi nhánh nào thuộc đơn vị nào.
                 </p>
                 <div className="grid gap-3 sm:grid-cols-2">
-                  <div className="space-y-2">
-                    <Label htmlFor="legal-entity-type">Loại pháp nhân</Label>
-                    <Select
-                      value={form.legalEntityType || "__none__"}
-                      onValueChange={(val) =>
-                        setForm((f) => ({
-                          ...f,
-                          legalEntityType:
-                            val === "__none__"
-                              ? ""
-                              : (val as BranchFormState["legalEntityType"]),
-                        }))
-                      }
-                      items={[
-                        { value: "__none__", label: "Chưa khai báo" },
-                        { value: "company", label: "Công ty (TNHH/CP)" },
-                        { value: "household", label: "Hộ kinh doanh" },
-                        { value: "sole_proprietorship", label: "Doanh nghiệp tư nhân" },
-                        { value: "individual", label: "Cá nhân" },
-                      ]}
-                    >
-                      <SelectTrigger id="legal-entity-type" className="w-full">
-                        <SelectValue placeholder="Chưa khai báo">
-                          {(v) => {
-                            const labels: Record<string, string> = {
-                              __none__: "Chưa khai báo",
-                              company: "Công ty (TNHH/CP)",
-                              household: "Hộ kinh doanh",
-                              sole_proprietorship: "Doanh nghiệp tư nhân",
-                              individual: "Cá nhân",
-                            };
-                            return labels[v as string] ?? "Chưa khai báo";
-                          }}
-                        </SelectValue>
-                      </SelectTrigger>
-                      <SelectContent>
-                        <SelectItem value="__none__">Chưa khai báo</SelectItem>
-                        <SelectItem value="company">Công ty (TNHH/CP)</SelectItem>
-                        <SelectItem value="household">Hộ kinh doanh</SelectItem>
-                        <SelectItem value="sole_proprietorship">
-                          Doanh nghiệp tư nhân
-                        </SelectItem>
-                        <SelectItem value="individual">Cá nhân</SelectItem>
-                      </SelectContent>
-                    </Select>
-                  </div>
-                  <div className="space-y-2">
-                    <Label htmlFor="legal-tax-code">Mã số thuế pháp nhân</Label>
-                    <Input
-                      id="legal-tax-code"
-                      value={form.legalTaxCode}
-                      onChange={(e) =>
-                        setForm((f) => ({
-                          ...f,
-                          legalTaxCode: e.target.value,
-                        }))
-                      }
-                      placeholder="VD: 0301234567 hoặc 0301234567-001"
-                    />
-                  </div>
                   <div className="space-y-2 sm:col-span-2">
                     <Label htmlFor="legal-entity-name">Tên pháp nhân đầy đủ</Label>
                     <Input
@@ -729,27 +672,25 @@ function BranchSettingsPageInner() {
                           legalEntityName: e.target.value,
                         }))
                       }
-                      placeholder='VD: Công ty TNHH ONEBIZ Cà Phê'
+                      placeholder='VD: Công ty TNHH ONEBIZ Cà Phê / Hộ kinh doanh Quán Sài Gòn'
                     />
                     <p className="text-xs text-muted-foreground">
-                      Tên in trên hoá đơn VAT, hợp đồng. Nên ghi đầy đủ "Công ty
-                      TNHH..." / "Hộ kinh doanh...".
+                      Tên in trên hoá đơn VAT, hợp đồng. Ghi đầy đủ "Công ty
+                      TNHH..." / "Hộ kinh doanh..." / "DNTN...".
                     </p>
                   </div>
                   <div className="space-y-2 sm:col-span-2">
-                    <Label htmlFor="legal-registration-no">
-                      Số đăng ký kinh doanh
-                    </Label>
+                    <Label htmlFor="legal-tax-code">Mã số thuế pháp nhân</Label>
                     <Input
-                      id="legal-registration-no"
-                      value={form.legalRegistrationNo}
+                      id="legal-tax-code"
+                      value={form.legalTaxCode}
                       onChange={(e) =>
                         setForm((f) => ({
                           ...f,
-                          legalRegistrationNo: e.target.value,
+                          legalTaxCode: e.target.value,
                         }))
                       }
-                      placeholder="VD: 0312345678 (số GPKD/ĐKKD)"
+                      placeholder="VD: 0301234567 hoặc 0301234567-001"
                     />
                   </div>
                 </div>
@@ -867,7 +808,7 @@ function BranchSettingsPageInner() {
               )}
             </div>
           </div>
-          <DialogFooter>
+          <DialogFooter className="px-6 pb-6 pt-3 border-t shrink-0">
             <Button
               variant="outline"
               onClick={() => setDialogOpen(false)}
