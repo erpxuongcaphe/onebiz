@@ -87,7 +87,9 @@ Hệ thống KHÔNG có conversion tự động "1 thùng = 24 lon". User tự q
 - VD: "Hộp giấy A4" `Đơn vị tính = Hộp`, mua theo Thùng (1 thùng = 12 hộp)
 - Khi xem tồn kho **24 hộp**, muốn thấy thêm "**= 2 thùng**" → khai báo quy đổi `1 thùng = 12 hộp`
 
-#### Cách khai báo (UI có sẵn)
+#### Cách khai báo — 2 cách
+
+**Cách 1: UI trực tiếp** (khi đã có SP trong hệ thống)
 
 1. Vào **`/hang-hoa`** → click row SP cần khai báo
 2. Mở **tab "ĐVT quy đổi"** trong slide-over chi tiết
@@ -96,6 +98,30 @@ Hệ thống KHÔNG có conversion tự động "1 thùng = 24 lon". User tự q
    - **Sang ĐVT** (đơn vị nhỏ — khớp Đơn vị tính của SP): `Hộp`
    - **Hệ số** (1 lớn = ? nhỏ): `12`
 4. Bấm **"Lưu"** — preview tự hiện "1 thùng = 12 hộp"
+
+**Cách 2: Khai báo ngay khi import Excel** ⭐ tiện cho setup ban đầu
+
+File Excel mẫu (`/hang-hoa` → "Tải mẫu") có **2 cột optional**:
+
+| Cột Excel | Bắt buộc | Ví dụ |
+|---|---|---|
+| **Đóng gói (ĐVT lớn)** | Optional | `Thùng`, `Bao`, `Lốc` |
+| **Hệ số quy đổi** | Optional | `12` (= 1 Thùng có 12 Hộp) |
+
+**Quy tắc**:
+- Cả 2 cột để trống → SP **không có quy đổi** (đa số dùng cho SP đơn giản)
+- Cả 2 cột có giá trị → service tự tạo quy đổi trong tab "ĐVT quy đổi"
+- Chỉ 1 trong 2 → **lỗi**: phải khai cặp
+- "Đóng gói" trùng "Đơn vị tính" → **lỗi**
+
+**Ví dụ Excel hàng quy đổi**:
+
+| Mã SP | Đơn vị tính | Đóng gói (ĐVT lớn) | Hệ số quy đổi |
+|---|---|---|---|
+| VPP-HG-A4 | `Hộp` | `Thùng` | `12` |
+| CF-R | `Kg` | `Bao` | `60` |
+| SUA-01 | `Lon` | `Thùng` | `24` |
+| DUONG-01 | `Kg` | _(trống)_ | _(trống)_ |
 
 #### Cách hệ thống hiển thị quy đổi
 

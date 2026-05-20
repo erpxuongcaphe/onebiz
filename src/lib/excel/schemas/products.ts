@@ -16,6 +16,11 @@ export interface ProductImportRow {
   channel?: "fnb" | "retail";
   categoryCode?: string; // resolve → category_id ở service
   unit: string; // Bắt buộc — đơn vị nhỏ nhất khi bán lẻ (ly, kg, lon...)
+  // Day 19/05/2026 (CEO UOM Smart Hybrid): khai báo quy đổi đơn vị
+  // ngay khi import. Nếu cả 2 có giá trị → service tự tạo uom_conversion
+  // sau khi insert product. Hiển thị "24 hộp · 2 thùng" trên view tồn kho.
+  bulkUnit?: string; // Đơn vị lớn (Thùng, Bao, Lốc)
+  bulkFactor?: number; // 1 bulkUnit = factor × unit (vd: 12 hộp/thùng)
   sellPrice: number;
   costPrice: number;
   stock?: number;
@@ -33,7 +38,7 @@ export const productExcelSchema: ExcelSchema<ProductImportRow> = {
   name: "Sản phẩm",
   fileName: "San-pham",
   description:
-    "Danh sách sản phẩm. Mã SP phải duy nhất. 'Loại' = nvl (nguyên vật liệu) hoặc sku (hàng bán). 'Kênh bán' chỉ áp dụng cho sku. ĐƠN VỊ TÍNH: nhập đơn vị nhỏ nhất khi bán lẻ (ly, kg, lon, cái...). Khi mua gói lớn (vd thùng 24 lon) → tạo phiếu nhập với số lượng quy đổi (qty=24).",
+    "Danh sách sản phẩm. Mã SP phải duy nhất. 'Loại' = nvl/sku. 'Kênh bán' chỉ cho sku. ĐƠN VỊ TÍNH: đơn vị nhỏ nhất khi bán lẻ (ly, kg, lon, hộp...). QUY ĐỔI ĐƠN VỊ: optional — khai báo 'Đóng gói' + 'Hệ số quy đổi' nếu muốn xem tồn theo đơn vị lớn (vd 24 hộp · 2 thùng).",
   columns: [
     {
       key: "code",
@@ -101,9 +106,31 @@ export const productExcelSchema: ExcelSchema<ProductImportRow> = {
       type: "string",
       required: true,
       maxLength: 20,
-      example: "Ly",
+      example: "Hộp",
       description:
-        "Đơn vị nhỏ nhất khi bán lẻ (vd: ly, kg, lon, cái, chai, gói). Khi mua gói lớn → tạo phiếu nhập với số lượng quy đổi.",
+        "Đơn vị nhỏ nhất khi bán lẻ (vd: ly, kg, lon, cái, hộp). Tồn kho luôn tính theo đơn vị này.",
+      width: 14,
+    },
+    // Day 19/05/2026 (CEO UOM Smart Hybrid): 2 cột optional khai báo quy đổi
+    // ngay từ Excel. Service tự tạo uom_conversion sau khi insert product.
+    {
+      key: "bulkUnit",
+      header: "Đóng gói (ĐVT lớn)",
+      type: "string",
+      maxLength: 20,
+      example: "Thùng",
+      description:
+        "Optional. Đơn vị đóng gói lớn (vd: Thùng, Bao, Lốc). CHỈ điền khi muốn xem tồn theo nhiều đơn vị (vd '24 hộp · 2 thùng'). Phải đi cặp với 'Hệ số quy đổi'.",
+      width: 16,
+    },
+    {
+      key: "bulkFactor",
+      header: "Hệ số quy đổi",
+      type: "number",
+      min: 1,
+      example: 12,
+      description:
+        "Optional. Số đơn vị tính trong 1 đơn vị đóng gói (vd: 12 nghĩa là 1 Thùng = 12 Hộp). Phải đi cặp với 'Đóng gói'.",
       width: 14,
     },
     {
@@ -221,6 +248,20 @@ export const productExcelSchema: ExcelSchema<ProductImportRow> = {
     }
     // Day 19/05/2026 (CEO Phương án D): chỉ còn 1 cột "Đơn vị tính" required.
     // Schema-level "required" đã check, không cần validate riêng ở đây.
+
+    // Day 19/05/2026 (CEO UOM): quy đổi đi cặp — nếu khai 1, phải khai 2.
+    const hasBulkUnit = !!row.bulkUnit && row.bulkUnit.trim().length > 0;
+    const hasBulkFactor =
+      typeof row.bulkFactor === "number" && row.bulkFactor > 0;
+    if (hasBulkUnit && !hasBulkFactor) {
+      return "Quy đổi: đã khai 'Đóng gói' nhưng thiếu 'Hệ số quy đổi'";
+    }
+    if (hasBulkFactor && !hasBulkUnit) {
+      return "Quy đổi: đã khai 'Hệ số quy đổi' nhưng thiếu 'Đóng gói'";
+    }
+    if (hasBulkUnit && row.bulkUnit?.trim() === row.unit?.trim()) {
+      return "Quy đổi: 'Đóng gói' không được trùng 'Đơn vị tính'";
+    }
     return null;
   },
 };

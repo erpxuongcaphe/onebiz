@@ -115,30 +115,61 @@ export async function bulkImportProducts(
     // = unit chính để nhất quán + không break code đang đọc 3 cột phụ.
     const finalUnit = row.unit?.trim() || "Cái";
 
-    const { error } = await supabase.from("products").insert({
-      tenant_id: tenantId,
-      code: row.code,
-      name: row.name,
-      product_type: row.productType,
-      channel: row.productType === "sku" ? (row.channel ?? null) : null,
-      category_id: categoryId,
-      unit: finalUnit,
-      sell_price: row.sellPrice,
-      cost_price: row.costPrice,
-      stock: 0,
-      min_stock: row.minStock ?? 0,
-      max_stock: row.maxStock ?? 1000,
-      vat_rate: row.vatRate ?? 0,
-      barcode: row.barcode ?? null,
-      group_code: row.groupCode ?? null,
-      purchase_unit: finalUnit,
-      stock_unit: finalUnit,
-      sell_unit: finalUnit,
-      description: row.description ?? null,
-      allow_sale: row.allowSale ?? true,
-      is_active: row.isActive ?? true,
-    });
+    const { data: inserted, error } = await supabase
+      .from("products")
+      .insert({
+        tenant_id: tenantId,
+        code: row.code,
+        name: row.name,
+        product_type: row.productType,
+        channel: row.productType === "sku" ? (row.channel ?? null) : null,
+        category_id: categoryId,
+        unit: finalUnit,
+        sell_price: row.sellPrice,
+        cost_price: row.costPrice,
+        stock: 0,
+        min_stock: row.minStock ?? 0,
+        max_stock: row.maxStock ?? 1000,
+        vat_rate: row.vatRate ?? 0,
+        barcode: row.barcode ?? null,
+        group_code: row.groupCode ?? null,
+        purchase_unit: finalUnit,
+        stock_unit: finalUnit,
+        sell_unit: finalUnit,
+        description: row.description ?? null,
+        allow_sale: row.allowSale ?? true,
+        is_active: row.isActive ?? true,
+      })
+      .select("id")
+      .single();
     if (error) throw new Error(error.message);
+
+    // Day 19/05/2026 (CEO UOM Smart Hybrid): khai báo quy đổi đơn vị
+    // nếu Excel có "Đóng gói" + "Hệ số quy đổi". Validate đã đảm bảo cặp.
+    if (
+      inserted?.id &&
+      row.bulkUnit?.trim() &&
+      typeof row.bulkFactor === "number" &&
+      row.bulkFactor > 0
+    ) {
+      const { error: convError } = await supabase
+        .from("uom_conversions")
+        .insert({
+          tenant_id: tenantId,
+          product_id: inserted.id,
+          from_unit: row.bulkUnit.trim(),
+          to_unit: finalUnit,
+          factor: row.bulkFactor,
+          is_active: true,
+        });
+      if (convError) {
+        // Không rollback product — chỉ log warning. UOM conversion là optional
+        // metadata. User có thể thêm sau qua tab "ĐVT quy đổi".
+        console.warn(
+          `[bulkImportProducts] Quy đổi cho ${row.code} không lưu được: ${convError.message}`,
+        );
+      }
+    }
   });
 }
 

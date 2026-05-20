@@ -569,4 +569,92 @@ describe("real OneBiz schemas", () => {
       expect(result.validRows.map((r) => r.unit)).toEqual(["Ly", "Kg", "Lon"]);
     });
   });
+
+  // ============================================================
+  // CEO 19/05/2026 (UOM Smart Hybrid): 2 cột quy đổi optional
+  // ============================================================
+  describe("Quy đổi đơn vị — 2 cột Excel (CEO UOM Smart Hybrid)", () => {
+    const HEADERS = [
+      "Mã SP",
+      "Tên sản phẩm",
+      "Loại",
+      "Kênh bán",
+      "Đơn vị tính",
+      "Đóng gói (ĐVT lớn)",
+      "Hệ số quy đổi",
+      "Giá bán",
+      "Giá vốn",
+    ];
+
+    it("import OK khi điền cả 'Đóng gói' + 'Hệ số quy đổi'", () => {
+      const wb = makeWb([
+        HEADERS,
+        ["VPP-HG-A4", "Hộp giấy A4", "nvl", "", "Hộp", "Thùng", 12, 0, 50000],
+      ]);
+      const result = parseWorkbook(wb, productExcelSchema);
+      expect(result.tableErrors).toEqual([]);
+      expect(result.errorRows).toEqual([]);
+      expect(result.validRows[0].bulkUnit).toBe("Thùng");
+      expect(result.validRows[0].bulkFactor).toBe(12);
+    });
+
+    it("import OK khi không khai báo quy đổi (cả 2 cột trống)", () => {
+      const wb = makeWb([
+        HEADERS,
+        ["VPP-HG-A4", "Hộp giấy A4", "nvl", "", "Hộp", "", "", 0, 50000],
+      ]);
+      const result = parseWorkbook(wb, productExcelSchema);
+      expect(result.tableErrors).toEqual([]);
+      expect(result.errorRows).toEqual([]);
+      expect(result.validRows[0].bulkUnit).toBeUndefined();
+      expect(result.validRows[0].bulkFactor).toBeUndefined();
+    });
+
+    it("FAIL khi khai 'Đóng gói' nhưng thiếu 'Hệ số quy đổi'", () => {
+      const wb = makeWb([
+        HEADERS,
+        ["VPP-HG-A4", "Hộp giấy A4", "nvl", "", "Hộp", "Thùng", "", 0, 50000],
+      ]);
+      const result = parseWorkbook(wb, productExcelSchema);
+      expect(result.errorRows).toHaveLength(1);
+      expect(result.errorRows[0].errors.some((e) => e.includes("Hệ số quy đổi"))).toBe(true);
+    });
+
+    it("FAIL khi khai 'Hệ số quy đổi' nhưng thiếu 'Đóng gói'", () => {
+      const wb = makeWb([
+        HEADERS,
+        ["VPP-HG-A4", "Hộp giấy A4", "nvl", "", "Hộp", "", 12, 0, 50000],
+      ]);
+      const result = parseWorkbook(wb, productExcelSchema);
+      expect(result.errorRows).toHaveLength(1);
+      expect(result.errorRows[0].errors.some((e) => e.includes("Đóng gói"))).toBe(true);
+    });
+
+    it("FAIL khi 'Đóng gói' trùng 'Đơn vị tính'", () => {
+      const wb = makeWb([
+        HEADERS,
+        ["VPP-HG-A4", "Hộp giấy A4", "nvl", "", "Hộp", "Hộp", 12, 0, 50000],
+      ]);
+      const result = parseWorkbook(wb, productExcelSchema);
+      expect(result.errorRows).toHaveLength(1);
+      expect(result.errorRows[0].errors.some((e) => e.includes("trùng"))).toBe(true);
+    });
+
+    it("nhiều SP — mix quy đổi và không quy đổi", () => {
+      const wb = makeWb([
+        HEADERS,
+        ["CF-R", "Cà phê Robusta sống", "nvl", "", "Kg", "Bao", 60, 0, 145000],
+        ["SUA-01", "Sữa Vinamilk", "sku", "retail", "Lon", "Thùng", 24, 12000, 8000],
+        ["DUONG-01", "Đường mía", "nvl", "", "Kg", "", "", 0, 24000],
+      ]);
+      const result = parseWorkbook(wb, productExcelSchema);
+      expect(result.tableErrors).toEqual([]);
+      expect(result.errorRows).toEqual([]);
+      expect(result.validRows[0].bulkUnit).toBe("Bao");
+      expect(result.validRows[0].bulkFactor).toBe(60);
+      expect(result.validRows[1].bulkUnit).toBe("Thùng");
+      expect(result.validRows[1].bulkFactor).toBe(24);
+      expect(result.validRows[2].bulkUnit).toBeUndefined();
+    });
+  });
 });
