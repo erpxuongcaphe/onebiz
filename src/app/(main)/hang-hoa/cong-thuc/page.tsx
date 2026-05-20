@@ -19,6 +19,10 @@ import {
 } from "@/components/shared/inline-detail-panel";
 import { SummaryCard } from "@/components/shared/summary-card";
 import { BOMEditorDialog } from "@/components/shared/dialogs";
+import { ImportExcelDialog } from "@/components/shared/dialogs/import-excel-dialog";
+import { downloadTemplate, exportToExcelFromSchema } from "@/lib/excel";
+import { bomExcelSchema, type BOMImportRow } from "@/lib/excel/schemas";
+import { bulkImportBOMs } from "@/lib/services/supabase/excel-import";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { useToast, useBranchFilter } from "@/lib/contexts";
@@ -299,6 +303,8 @@ export default function CongThucPage() {
   const [data, setData] = useState<BOM[]>([]);
   const [loading, setLoading] = useState(true);
   const [search, setSearch] = useState("");
+  // Day 20/05/2026 (CEO Phase 3): Excel import/export cho BOM standalone
+  const [importOpen, setImportOpen] = useState(false);
   const [page, setPage] = useState(0);
   const [pageSize, setPageSize] = useState(15);
 
@@ -482,6 +488,63 @@ export default function CongThucPage() {
           searchPlaceholder="Theo tên công thức, SKU..."
           searchValue={search}
           onSearchChange={setSearch}
+          onExport={{
+            excel: () => {
+              // Day 20/05/2026 (CEO Phase 3): Xuất BOM hiện có ra Excel format
+              // chuẩn (1 sheet phẳng) — backup hoặc edit ngoài Excel.
+              const rows: BOMImportRow[] = [];
+              for (const b of data) {
+                const items = b.items ?? [];
+                if (items.length === 0) {
+                  // BOM rỗng — vẫn xuất 1 row master (items trống)
+                  rows.push({
+                    bomCode: b.code ?? "",
+                    bomName: b.name,
+                    branchCode: undefined,
+                    materialCode: "",
+                    quantity: 0,
+                    unit: "",
+                    yieldQty: b.yieldQty,
+                    yieldUnit: b.yieldUnit,
+                    note: b.note,
+                  });
+                } else {
+                  for (const it of items) {
+                    rows.push({
+                      bomCode: b.code ?? "",
+                      bomName: b.name,
+                      branchCode: undefined, // TODO: lookup branch code khi có
+                      materialCode: it.materialCode ?? "",
+                      quantity: it.quantity,
+                      unit: it.unit,
+                      yieldQty: b.yieldQty,
+                      yieldUnit: b.yieldUnit,
+                      note: it.note,
+                    });
+                  }
+                }
+              }
+              exportToExcelFromSchema(rows, bomExcelSchema);
+            },
+            csv: () => {
+              // CSV — chỉ export master info, không phẳng
+              const csvRows = data.map((b) => ({
+                code: b.code ?? "",
+                name: b.name,
+                items: b.items?.length ?? 0,
+                createdAt: b.createdAt,
+              }));
+              // eslint-disable-next-line @typescript-eslint/no-explicit-any
+              import("@/lib/utils/export").then((m) => {
+                m.exportToCsv(csvRows, [
+                  { header: "Mã BOM", key: "code", width: 18 },
+                  { header: "Tên BOM", key: "name", width: 30 },
+                  { header: "Số NVL", key: "items", width: 10 },
+                  { header: "Ngày tạo", key: "createdAt", width: 18 },
+                ], "danh-sach-bom");
+              });
+            },
+          }}
           actions={[
             {
               label: "Tạo công thức",
@@ -492,7 +555,35 @@ export default function CongThucPage() {
                 setEditorOpen(true);
               },
             },
+            {
+              label: "Tải mẫu",
+              icon: <Icon name="description" size={16} />,
+              variant: "ghost",
+              onClick: () => downloadTemplate(bomExcelSchema),
+            },
+            {
+              label: "Nhập Excel",
+              icon: <Icon name="upload" size={16} />,
+              onClick: () => setImportOpen(true),
+            },
           ]}
+        />
+
+        <ImportExcelDialog
+          open={importOpen}
+          onOpenChange={setImportOpen}
+          schema={bomExcelSchema}
+          onCommit={async (rows) => {
+            const result = await bulkImportBOMs(rows);
+            // Refresh list sau khi import
+            try {
+              const refreshed = await getAllBOMs();
+              setData(refreshed);
+            } catch {
+              /* fail silent */
+            }
+            return result;
+          }}
         />
 
         <div className="grid grid-cols-2 md:grid-cols-3 gap-3 px-4 pt-3 pb-1">

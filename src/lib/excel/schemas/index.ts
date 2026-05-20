@@ -43,3 +43,8 @@ export {
   internalSaleExcelSchema,
   type InternalSaleImportRow,
 } from "./internal-sales";
+
+export {
+  bomExcelSchema,
+  type BOMImportRow,
+} from "./bom";

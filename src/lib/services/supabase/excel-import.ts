@@ -13,6 +13,7 @@
  */
 
 import type {
+  BOMImportRow,
   CashTransactionImportRow,
   CustomerImportRow,
   DebtOpeningImportRow,
@@ -728,6 +729,186 @@ export async function bulkImportInternalSales(
       errors.push({
         rowIndex: excelRowIndex(groupRows[0], groupIdx),
         message: `Đơn "${code}": ${toVietnameseError(e)}`,
+      });
+    }
+  }
+
+  return {
+    successCount,
+    failureCount: errors.length,
+    errors,
+  };
+}
+
+// ---------------------------------------------------------------------------
+// BOMs (Công thức sản xuất) — CEO 20/05/2026 Phase 3
+//
+// File Excel BOM = 1 sheet phẳng (denormalized). Mỗi row = 1 NVL của 1 BOM.
+// Master info (bomCode + bomName + branchCode) lặp lại ở các row cùng 1 BOM.
+//
+// Logic import:
+//   1. Group rows theo bomCode
+//   2. Mỗi group → tạo 1 BOM master (lấy master info từ row đầu) +
+//      tạo N bom_items
+//   3. Validate:
+//      - Mã NVL phải tồn tại trong tenant
+//      - Mã chi nhánh (nếu có) phải tồn tại
+//      - Master info (bomName, branchCode) consistent trong cùng group
+//      - Mã BOM unique trong tenant (DB enforce)
+//   4. Atomic per BOM — 1 BOM lỗi không block BOM khác
+//
+// Standalone BOM: product_id = NULL. SKU gắn BOM sau qua products.bom_code.
+// ---------------------------------------------------------------------------
+
+export async function bulkImportBOMs(
+  rows: BOMImportRow[],
+): Promise<ImportBatchResult> {
+  const supabase = getClient();
+  const tenantId = await getCurrentTenantId();
+  const errors: ImportBatchResult["errors"] = [];
+  let successCount = 0;
+
+  // Preload: materials by code + branches by code
+  const { data: products } = await supabase
+    .from("products")
+    .select("id, code, unit")
+    .eq("tenant_id", tenantId);
+  const materialMap = new Map<string, { id: string; unit: string }>();
+  for (const p of products ?? []) {
+    if (p.code) {
+      materialMap.set(p.code, {
+        id: p.id as string,
+        unit: (p as { unit?: string }).unit ?? "",
+      });
+    }
+  }
+
+  const { data: branches } = await supabase
+    .from("branches")
+    .select("id, code")
+    .eq("tenant_id", tenantId);
+  const branchMap = new Map<string, string>();
+  for (const b of branches ?? []) {
+    if (b.code) branchMap.set(b.code, b.id as string);
+  }
+
+  // Group rows by bomCode (preserve order)
+  const groups = new Map<string, BOMImportRow[]>();
+  const groupOrder: string[] = [];
+  for (const row of rows) {
+    const key = row.bomCode?.trim();
+    if (!key) continue;
+    if (!groups.has(key)) {
+      groups.set(key, []);
+      groupOrder.push(key);
+    }
+    groups.get(key)!.push(row);
+  }
+
+  for (let groupIdx = 0; groupIdx < groupOrder.length; groupIdx++) {
+    const code = groupOrder[groupIdx];
+    const groupRows = groups.get(code)!;
+    const first = groupRows[0];
+    const firstRowIndex = excelRowIndex(first, groupIdx);
+
+    try {
+      // Validate master consistency trong cùng group
+      const inconsistent = groupRows.find(
+        (r) =>
+          (r.bomName ?? "").trim() !== (first.bomName ?? "").trim() ||
+          (r.branchCode ?? "").trim() !== (first.branchCode ?? "").trim(),
+      );
+      if (inconsistent) {
+        throw new Error(
+          `Các row cùng Mã BOM "${code}" phải có cùng "Tên BOM" và "Mã chi nhánh"`,
+        );
+      }
+
+      // Resolve branch
+      let branchId: string | null = null;
+      if (first.branchCode && first.branchCode.trim()) {
+        const found = branchMap.get(first.branchCode.trim());
+        if (!found) {
+          throw new Error(`Mã chi nhánh "${first.branchCode}" chưa tồn tại`);
+        }
+        branchId = found;
+      }
+
+      // Validate material codes
+      const itemsResolved = groupRows.map((r) => {
+        const mat = materialMap.get(r.materialCode);
+        if (!mat) {
+          throw new Error(
+            `Mã NVL "${r.materialCode}" chưa tồn tại trong hệ thống`,
+          );
+        }
+        return {
+          materialId: mat.id,
+          quantity: r.quantity,
+          unit: r.unit?.trim() || mat.unit || "cái",
+          note: r.note ?? null,
+        };
+      });
+
+      // Insert BOM header (product_id = NULL — standalone)
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      const { data: bomInserted, error: bomErr } = await (
+        supabase.from("bom").insert as any
+      )({
+        tenant_id: tenantId,
+        product_id: null,
+        variant_id: null,
+        branch_id: branchId,
+        code: code,
+        name: first.bomName,
+        version: 1,
+        is_active: true,
+        batch_size: 1,
+        yield_qty: first.yieldQty ?? 1,
+        yield_unit: first.yieldUnit?.trim() || "cái",
+        note: null,
+      })
+        .select("id")
+        .single();
+
+      if (bomErr) {
+        if (bomErr.message?.includes("idx_bom_code_branch_unique")) {
+          throw new Error(`Mã BOM "${code}" đã tồn tại trong tenant`);
+        }
+        throw bomErr;
+      }
+
+      const bomId = (bomInserted as { id: string } | null)?.id;
+      if (!bomId) {
+        throw new Error("Không lấy được ID BOM sau khi tạo");
+      }
+
+      // Insert bom_items
+      const itemsPayload = itemsResolved.map((it, idx) => ({
+        bom_id: bomId,
+        material_id: it.materialId,
+        quantity: it.quantity,
+        unit: it.unit,
+        waste_percent: 0,
+        sort_order: idx,
+        note: it.note,
+      }));
+
+      const { error: itemsErr } = await supabase
+        .from("bom_items")
+        .insert(itemsPayload);
+
+      if (itemsErr) {
+        // Rollback BOM master để không có BOM trống
+        await supabase.from("bom").delete().eq("id", bomId);
+        throw itemsErr;
+      }
+
+      successCount++;
+    } catch (e) {
+      errors.push({
+        rowIndex: firstRowIndex,
+        message: `BOM "${code}": ${toVietnameseError(e)}`,
       });
     }
   }
