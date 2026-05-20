@@ -4,7 +4,7 @@
 > Xưởng rang + Kho tổng + 3 quán FnB. Theo đúng thứ tự để tránh lỗi.
 >
 > Dành cho: CEO, kế toán kho, quản lý chi nhánh.
-> Cập nhật: 18/05/2026 (sau Sprint BOM-CONSUME).
+> Cập nhật: 19/05/2026 (sau Sprint UOM Smart Hybrid — quy đổi đơn vị hiển thị).
 
 ---
 
@@ -59,12 +59,13 @@ Hệ thống hỗ trợ **1 mã làm 2 vai trò** ở 2 nơi khác nhau:
 
 | Cột Excel | Bắt buộc? | Ví dụ |
 |---|---|---|
-| **Đơn vị tính** | ✅ Có | `Ly`, `Kg`, `Lon`, `Cái`, `Chai`, `Gói` |
+| **Đơn vị tính** | ✅ Có | `Ly`, `Kg`, `Lon`, `Cái`, `Chai`, `Gói`, `Hộp` |
 
 **Ví dụ thực tế**:
 - SP "Cà phê đen đá" → **Đơn vị tính = `Ly`**
 - SP "Sữa Vinamilk lon" → **Đơn vị tính = `Lon`**
 - SP "Cà phê Robusta sống" → **Đơn vị tính = `Kg`**
+- SP "Hộp giấy A4 Double A" → **Đơn vị tính = `Hộp`**
 
 #### Khi mua gói lớn (vd thùng 24 lon)?
 
@@ -72,9 +73,69 @@ Hệ thống KHÔNG có conversion tự động "1 thùng = 24 lon". User tự q
 
 **Cách làm**: tạo SP "Sữa Vinamilk" với `Đơn vị tính = Lon`. Khi nhập 1 thùng → tạo phiếu nhập với **số lượng = 24** (vì 1 thùng = 24 lon). Tồn kho luôn tính theo `Lon`.
 
-> **Lưu ý**: trước đây có 4 cột (Đơn vị tính / ĐVT nhập / ĐVT kho / ĐVT bán) → đã rút gọn còn 1 cột (CEO 19/05/2026) vì các cột phụ không có giá trị nghiệp vụ thực sự (chỉ là text hiển thị, không có conversion logic).
+**Nhưng**: nếu muốn **xem tồn kho biết "24 lon = 1 thùng"** (vd "24 hộp · 2 thùng") → khai báo **Quy đổi đơn vị** (xem mục 1.4 ngay dưới).
 
-### 1.4. BOM — Bill of Materials (Công thức)
+> **Lưu ý**: trước đây có 4 cột (Đơn vị tính / ĐVT nhập / ĐVT kho / ĐVT bán) → đã rút gọn còn 1 cột (CEO 19/05/2026) vì các cột phụ không có giá trị nghiệp vụ thực sự.
+
+### 1.4. Quy đổi đơn vị (UOM Conversions) — hiển thị tồn kho theo nhiều đơn vị
+
+> **CEO 19/05/2026**: tính năng mới — chỉ để **xem** tồn kho theo đơn vị lớn hơn (1 thùng = 12 hộp). KHÔNG ảnh hưởng nghiệp vụ nhập/xuất.
+
+#### Khi nào cần khai báo quy đổi?
+
+- SP mua/lưu kho theo **gói lớn** nhưng đơn vị tính là **đơn vị nhỏ**
+- VD: "Hộp giấy A4" `Đơn vị tính = Hộp`, mua theo Thùng (1 thùng = 12 hộp)
+- Khi xem tồn kho **24 hộp**, muốn thấy thêm "**= 2 thùng**" → khai báo quy đổi `1 thùng = 12 hộp`
+
+#### Cách khai báo (UI có sẵn)
+
+1. Vào **`/hang-hoa`** → click row SP cần khai báo
+2. Mở **tab "ĐVT quy đổi"** trong slide-over chi tiết
+3. Click **"Thêm quy đổi"** → điền:
+   - **Từ ĐVT** (đơn vị lớn): `Thùng`
+   - **Sang ĐVT** (đơn vị nhỏ — khớp Đơn vị tính của SP): `Hộp`
+   - **Hệ số** (1 lớn = ? nhỏ): `12`
+4. Bấm **"Lưu"** — preview tự hiện "1 thùng = 12 hộp"
+
+#### Cách hệ thống hiển thị quy đổi
+
+Sau khi khai báo, các view tồn kho **tự động** show quy đổi (KHÔNG cần config thêm):
+
+| Vị trí | Cách hiển thị |
+|---|---|
+| `/hang-hoa` (list SP), cột **TỒN KHO** | `24 hộp · 2 thùng` (1 dòng compact) |
+| `/hang-hoa/ton-kho` (list tồn kho), cột **TỒN** | `24 hộp · 2 thùng` |
+| Slide-over chi tiết tồn kho | `24 hộp` / `= 2 thùng (1 thùng = 12 hộp)` (2 dòng) |
+| Tab "Lịch sử xuất nhập" | `+24 hộp (2 thùng)` với màu xanh/đỏ |
+| Phiếu nhập/xuất chi tiết | Tương tự |
+
+#### Quy tắc xử lý số lẻ (Euclidean — phép chia có dư)
+
+Hệ thống **KHÔNG** dùng số thập phân — luôn render dưới dạng `<phần nguyên> + <phần dư>`:
+
+| Tồn thực | Hiển thị |
+|---|---|
+| 24 hộp | **2 thùng** |
+| 25 hộp | **2 thùng 1 lẻ** |
+| 31 hộp | **2 thùng 7 lẻ** |
+| 132 hộp | **11 thùng** |
+| **11 hộp** | _(ẩn quy đổi — chưa đủ 1 thùng)_ |
+| 0 hộp | _(ẩn quy đổi)_ |
+
+**Nguyên tắc**: chỉ hiện quy đổi khi qty ≥ factor. SP chưa đủ 1 đơn vị lớn → list sạch, không noise.
+
+#### Ví dụ thực tế cho chuỗi cà phê
+
+| SP | Đơn vị tính | Quy đổi khai báo | Tồn 60 → hiển thị |
+|---|---|---|---|
+| Cà phê Robusta sống | `Kg` | 1 Bao = 60 Kg | `60 kg · 1 bao` |
+| Sữa Vinamilk | `Lon` | 1 Thùng = 24 Lon | `48 lon · 2 thùng` |
+| Hộp giấy A4 | `Hộp` | 1 Thùng = 12 Hộp | `24 hộp · 2 thùng` |
+| Đường mía | `Kg` | _(không khai báo)_ | `60 kg` (không show quy đổi) |
+
+> **Lưu ý quan trọng**: quy đổi **CHỈ là hiển thị**. Khi tạo phiếu nhập/xuất, số lượng vẫn nhập theo **Đơn vị tính** (đơn vị nhỏ). VD nhập 1 thùng sữa → gõ `24` (lon), không phải `1` (thùng).
+
+### 1.5. BOM — Bill of Materials (Công thức)
 
 BOM định nghĩa **thành phần NVL** để tạo ra 1 SKU. Có thể:
 - **Global** (`branch_id = NULL`) — áp dụng tất cả chi nhánh
@@ -87,7 +148,7 @@ BOM định nghĩa **thành phần NVL** để tạo ra 1 SKU. Có thể:
 
 Khi quán FnB Q1 bán 1 ly Bạc xỉu → hệ thống TỰ ĐỘNG trừ NVL trên khỏi tồn kho Q1 (không phải Q2).
 
-### 1.5. Multi-level inventory: Kho tổng → Quán FnB
+### 1.6. Multi-level inventory: Kho tổng → Quán FnB
 
 ```
 NCC ──nhập──> Kho tổng (NVL: cà phê sống, sữa, đường)
