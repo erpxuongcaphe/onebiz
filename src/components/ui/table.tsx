@@ -12,7 +12,10 @@ function Table({ className, ...props }: React.ComponentProps<"table">) {
     >
       <table
         data-slot="table"
-        className={cn("w-full caption-bottom text-sm", className)}
+        // CEO 20/05/2026: min-w-full thay vì w-full —
+        //   - khi columns vừa container: bằng 100% (fit nice)
+        //   - khi columns vượt container: table grow → wrapper scroll-x
+        className={cn("min-w-full caption-bottom text-sm", className)}
         {...props}
       />
     </div>

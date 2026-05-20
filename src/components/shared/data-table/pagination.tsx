@@ -29,7 +29,7 @@ export function DataTablePagination({
   onPageSizeChange,
 }: DataTablePaginationProps) {
   return (
-    <div className="border-t bg-surface-container-lowest px-4 py-2 flex items-center justify-between gap-4 text-sm">
+    <div className="border-t bg-surface-container-lowest px-4 py-2 flex items-center justify-between gap-4 text-sm shrink-0 flex-wrap">
       {/* KiotViet style: "Hiển thị 15 dòng" */}
       <div className="flex items-center gap-2 text-muted-foreground">
         <span className="hidden sm:inline">Hiển thị</span>

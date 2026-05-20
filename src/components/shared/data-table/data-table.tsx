@@ -430,8 +430,10 @@ export function DataTable<TData, TValue>({
         </div>
       )}
 
-      {/* Desktop table */}
-      <div className="hidden md:block flex-1 overflow-auto">
+      {/* Desktop table — min-h-0 critical: cho flex-1 shrink đúng trong
+          flex-col parent → pagination footer luôn hiện. overflow-auto cho
+          cả ngang lẫn dọc khi columns vượt viewport. */}
+      <div className="hidden md:block flex-1 min-h-0 overflow-auto">
         <Table>
           <TableHeader className="sticky top-0 bg-surface-container-low z-10">
             {table.getHeaderGroups().map((headerGroup) => (
@@ -581,7 +583,7 @@ export function DataTable<TData, TValue>({
       </div>
 
       {/* Mobile card view */}
-      <div className="md:hidden flex-1 overflow-auto p-3 space-y-2">
+      <div className="md:hidden flex-1 min-h-0 overflow-auto p-3 space-y-2">
         {loading ? (
           Array.from({ length: 5 }).map((_, i) => (
             <div key={i} className="bg-card rounded-lg border p-3 space-y-2">
