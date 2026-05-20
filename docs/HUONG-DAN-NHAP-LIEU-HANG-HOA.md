@@ -563,6 +563,77 @@ Nếu quán Q2 muốn pha công thức KHÁC quán Q1 và Q3:
 - 1 SKU có thể có **nhiều BOM** (global + per-branch). Hệ thống ưu tiên branch-specific.
 - Sau khi tạo BOM → badge "Chưa setup" trong danh sách SKU sẽ đổi thành "Có BOM" ✓.
 
+### 🆕 Mô hình BOM mới (CEO 20/05/2026) — BOM tồn tại độc lập
+
+Sau Migration 00105 + 00106, mô hình BOM đã đổi:
+
+| Trước | Sau |
+|---|---|
+| 1 BOM = 1 SKU (1-1) | **1 BOM có thể share nhiều SKU** |
+| Tạo BOM phải gắn SKU ngay | **Tạo BOM trước, gắn SKU sau** |
+| Không có Excel import | **Có Excel BOM standalone** |
+
+**Cách hoạt động**:
+- Mỗi SKU có thể có cột `bom_code` trỏ về 1 BOM
+- POS bán SKU → đọc `bom_code` → tìm BOM → trừ NVL theo công thức
+- Sửa BOM 1 lần → mọi SKU dùng được update theo
+
+### 📥 Workflow mới — Excel BOM + Mã BOM ở Excel SP
+
+**Bước 1: Tạo BOM standalone qua Excel**
+1. Vào `/hang-hoa/cong-thuc` → bấm **"Tải mẫu"** → file Excel BOM
+2. Điền 1 sheet phẳng (1 row = 1 NVL của 1 BOM):
+
+| Mã BOM | Tên BOM | Mã chi nhánh | Mã NVL | Số lượng | ĐVT | Năng suất | ĐVT năng suất |
+|---|---|---|---|---|---|---|---|
+| `BOM-CFS-001` | Bạc xỉu chuẩn | _(trống = global)_ | NVL-CPH-001 | 18 | g | 1 | ly |
+| `BOM-CFS-001` | Bạc xỉu chuẩn | | NVL-SUA-001 | 80 | ml | 1 | ly |
+| `BOM-CFS-001` | Bạc xỉu chuẩn | | NVL-DUO-001 | 10 | g | 1 | ly |
+
+3. Bấm **"Nhập Excel"** → 1 BOM "Bạc xỉu chuẩn" tạo với 3 NVL, **chưa gắn SKU nào**
+
+**Bước 2: Gắn BOM vào SKU**
+
+Có **3 cách**:
+
+#### Cách A — Excel SP (cột "Mã BOM")
+
+File Excel SP thêm cột optional `Mã BOM`:
+
+| Mã SP | Tên SP | ... | Đơn vị tính | Mã BOM |
+|---|---|---|---|---|
+| SKU-CFS-001 | Cà phê sữa đá | ... | Ly | `BOM-CFS-001` |
+| SKU-CFS-002 | Bạc xỉu | ... | Ly | `BOM-CFS-001` ← SHARE cùng BOM |
+| NVL-001 | Sữa Vinamilk | ... | Lon | _(trống — NVL không có BOM)_ |
+
+→ Import xong: SKU-CFS-001 và SKU-CFS-002 đều **share BOM "Bạc xỉu chuẩn"**.
+
+#### Cách B — Form tạo/sửa SP
+
+1. Vào `/hang-hoa` → mở dialog tạo/sửa SKU
+2. Tick "Có công thức sản xuất (BOM)"
+3. Tab **"Công thức (BOM)"** → nhập **"Mã BOM"** (vd `BOM-CFS-001`)
+4. Hệ thống verify on-blur → ✓ nếu hợp lệ
+5. Lưu SP → SKU link với BOM đó
+
+#### Cách C — Tạo BOM mới inline trong form SP (legacy)
+
+Để **trống Mã BOM** + điền items inline trong Tab "Công thức" như cách cũ → hệ thống tạo BOM riêng cho SKU.
+
+### 🔄 Mã BOM — Format chuẩn
+
+```
+BOM-{NHÓM_SKU}-{NNN}
+```
+
+| Ví dụ | Giải thích |
+|---|---|
+| `BOM-CFS-001` | BOM nhóm Cà phê sữa số 001 (gắn SKU-CFS-001) |
+| `BOM-CFS-002` | BOM khác nhóm Cà phê sữa |
+| `BOM-CFR-001` | BOM nhóm Cà phê rang |
+
+→ Format đồng nhất với NVL/SKU code. User tự đặt (không auto-gen pattern khác).
+
 ---
 
 ## Bước 9 — Bảng giá & Giá kênh bán

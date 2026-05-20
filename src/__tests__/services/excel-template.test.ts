@@ -658,3 +658,152 @@ describe("real OneBiz schemas", () => {
     });
   });
 });
+
+// ============================================================
+// CEO 20/05/2026 (BOM Decouple Phase 4-5): cột "Mã BOM" trong Excel SP
+// ============================================================
+import { bomExcelSchema, type BOMImportRow } from "@/lib/excel/schemas";
+
+describe("Excel SP — cột 'Mã BOM' link với BOM (CEO BOM Decouple)", () => {
+  const HEADERS_WITH_BOM = [
+    "Mã SP",
+    "Tên sản phẩm",
+    "Loại",
+    "Kênh bán",
+    "Đơn vị tính",
+    "Mã BOM",
+    "Giá bán",
+    "Giá vốn",
+  ];
+
+  it("import OK khi điền Mã BOM cho SKU", () => {
+    const wb = makeWb([
+      HEADERS_WITH_BOM,
+      ["SKU-CFS-001", "Cà phê sữa đá", "sku", "fnb", "Ly", "BOM-CFS-001", 35000, 15000],
+    ]);
+    const result = parseWorkbook(wb, productExcelSchema);
+    expect(result.tableErrors).toEqual([]);
+    expect(result.errorRows).toEqual([]);
+    expect(result.validRows[0].bomCode).toBe("BOM-CFS-001");
+  });
+
+  it("import OK khi để trống Mã BOM", () => {
+    const wb = makeWb([
+      HEADERS_WITH_BOM,
+      ["SKU-CFS-002", "Bạc xỉu", "sku", "fnb", "Ly", "", 38000, 16000],
+    ]);
+    const result = parseWorkbook(wb, productExcelSchema);
+    expect(result.tableErrors).toEqual([]);
+    expect(result.errorRows).toEqual([]);
+    expect(result.validRows[0].bomCode).toBeUndefined();
+  });
+
+  it("FAIL khi NVL điền Mã BOM (chỉ SKU mới có BOM)", () => {
+    const wb = makeWb([
+      HEADERS_WITH_BOM,
+      ["NVL-CPH-001", "Robusta sống", "nvl", "", "Kg", "BOM-CFS-001", 0, 145000],
+    ]);
+    const result = parseWorkbook(wb, productExcelSchema);
+    expect(result.errorRows).toHaveLength(1);
+    expect(result.errorRows[0].errors.some((e) => e.includes("chỉ áp dụng cho SKU"))).toBe(
+      true,
+    );
+  });
+});
+
+// ============================================================
+// CEO 20/05/2026 (BOM Decouple Phase 3): Excel BOM standalone
+// ============================================================
+describe("Excel BOM — 1 sheet phẳng, standalone (CEO BOM Decouple)", () => {
+  const BOM_HEADERS = [
+    "Mã BOM",
+    "Tên BOM",
+    "Mã chi nhánh",
+    "Mã NVL",
+    "Số lượng",
+    "ĐVT",
+    "Năng suất",
+    "ĐVT năng suất",
+    "Ghi chú",
+  ];
+
+  it("parse 1 BOM với 3 NVL items", () => {
+    const wb = makeWb([
+      BOM_HEADERS,
+      ["BOM-CFS-001", "Bạc xỉu chuẩn", "", "NVL-CPH-001", 18, "g", 1, "ly", "Cà phê rang"],
+      ["BOM-CFS-001", "Bạc xỉu chuẩn", "", "NVL-SUA-001", 80, "ml", 1, "ly", "Sữa tươi"],
+      ["BOM-CFS-001", "Bạc xỉu chuẩn", "", "NVL-DUO-001", 10, "g", 1, "ly", "Đường"],
+    ]);
+    const result = parseWorkbook(wb, bomExcelSchema);
+    expect(result.tableErrors).toEqual([]);
+    expect(result.errorRows).toEqual([]);
+    expect(result.validRows).toHaveLength(3);
+    // Cùng Mã BOM repeat
+    expect(result.validRows.map((r) => r.bomCode)).toEqual([
+      "BOM-CFS-001",
+      "BOM-CFS-001",
+      "BOM-CFS-001",
+    ]);
+    expect(result.validRows.map((r) => r.materialCode)).toEqual([
+      "NVL-CPH-001",
+      "NVL-SUA-001",
+      "NVL-DUO-001",
+    ]);
+  });
+
+  it("parse nhiều BOM xen kẽ", () => {
+    const wb = makeWb([
+      BOM_HEADERS,
+      ["BOM-CFS-001", "Bạc xỉu", "", "NVL-CPH-001", 18, "g", 1, "ly", ""],
+      ["BOM-CFS-002", "Cà phê đen", "", "NVL-CPH-001", 20, "g", 1, "ly", ""],
+      ["BOM-CFS-002", "Cà phê đen", "", "NVL-DUO-001", 5, "g", 1, "ly", ""],
+    ]);
+    const result = parseWorkbook(wb, bomExcelSchema);
+    expect(result.errorRows).toEqual([]);
+    expect(result.validRows).toHaveLength(3);
+  });
+
+  it("FAIL khi quantity <= 0", () => {
+    const wb = makeWb([
+      BOM_HEADERS,
+      ["BOM-CFS-001", "Test", "", "NVL-CPH-001", 0, "g", 1, "ly", ""],
+    ]);
+    const result = parseWorkbook(wb, bomExcelSchema);
+    expect(result.errorRows).toHaveLength(1);
+    expect(result.errorRows[0].errors.some((e) => e.includes("> 0"))).toBe(true);
+  });
+
+  it("FAIL khi thiếu Mã BOM (required)", () => {
+    const wb = makeWb([
+      BOM_HEADERS,
+      ["", "Test", "", "NVL-CPH-001", 18, "g", 1, "ly", ""],
+    ]);
+    const result = parseWorkbook(wb, bomExcelSchema);
+    expect(result.errorRows).toHaveLength(1);
+  });
+
+  it("BOM với chi nhánh override (Mã chi nhánh có giá trị)", () => {
+    const wb = makeWb([
+      BOM_HEADERS,
+      ["BOM-CFS-001-Q1", "Bạc xỉu Q1", "Q1", "NVL-CPH-001", 20, "g", 1, "ly", ""],
+    ]);
+    const result = parseWorkbook(wb, bomExcelSchema);
+    expect(result.errorRows).toEqual([]);
+    expect(result.validRows[0].branchCode).toBe("Q1");
+  });
+
+  it("Schema có đủ 9 cột định nghĩa", () => {
+    const headers = bomExcelSchema.columns.map((c) => c.header);
+    expect(headers).toContain("Mã BOM");
+    expect(headers).toContain("Tên BOM");
+    expect(headers).toContain("Mã chi nhánh");
+    expect(headers).toContain("Mã NVL");
+    expect(headers).toContain("Số lượng");
+    expect(headers).toContain("ĐVT");
+    expect(headers).toContain("Năng suất");
+    expect(headers).toContain("ĐVT năng suất");
+    expect(headers).toContain("Ghi chú");
+    // KHÔNG có cột "Mã SKU" — BOM standalone
+    expect(headers).not.toContain("Mã SKU");
+  });
+});
