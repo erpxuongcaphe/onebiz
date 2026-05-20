@@ -20,6 +20,11 @@ export interface BranchDetail {
   isActive: boolean;
   /** Bảng giá mặc định cho POS FnB của chi nhánh này. NULL = giá niêm yết. */
   priceTierId?: string;
+  // Day 20/05/2026 (CEO): thông tin pháp nhân (Migration 00107)
+  legalEntityType?: "company" | "household" | "sole_proprietorship" | "individual";
+  legalEntityName?: string;
+  legalTaxCode?: string;
+  legalRegistrationNo?: string;
   createdAt: string;
   updatedAt: string;
 }
@@ -52,6 +57,11 @@ export async function createBranch(branch: {
    * null/undefined = dùng giá niêm yết (không áp tier).
    */
   priceTierId?: string | null;
+  // Day 20/05/2026 (CEO): thông tin pháp nhân optional
+  legalEntityType?: "company" | "household" | "sole_proprietorship" | "individual" | null;
+  legalEntityName?: string | null;
+  legalTaxCode?: string | null;
+  legalRegistrationNo?: string | null;
 }): Promise<BranchDetail> {
   if (!branch.tenantId) {
     throw new Error("Thiếu tenantId khi tạo chi nhánh");
@@ -65,19 +75,23 @@ export async function createBranch(branch: {
       .eq("tenant_id", branch.tenantId)
       .eq("is_default", true);
   }
-  const { data, error } = await supabase
-    .from("branches")
-    .insert({
-      tenant_id: branch.tenantId,
-      name: branch.name,
-      code: branch.code ?? null,
-      branch_type: branch.branchType ?? "store",
-      address: branch.address ?? null,
-      phone: branch.phone ?? null,
-      is_default: branch.isDefault ?? false,
-      // CEO 13/05: fix bug — trước đây bỏ qua tier user chọn lúc tạo mới
-      price_tier_id: branch.priceTierId ?? null,
-    })
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  const { data, error } = await (supabase.from("branches").insert as any)({
+    tenant_id: branch.tenantId,
+    name: branch.name,
+    code: branch.code ?? null,
+    branch_type: branch.branchType ?? "store",
+    address: branch.address ?? null,
+    phone: branch.phone ?? null,
+    is_default: branch.isDefault ?? false,
+    // CEO 13/05: fix bug — trước đây bỏ qua tier user chọn lúc tạo mới
+    price_tier_id: branch.priceTierId ?? null,
+    // CEO 20/05/2026: pháp nhân
+    legal_entity_type: branch.legalEntityType ?? null,
+    legal_entity_name: branch.legalEntityName ?? null,
+    legal_tax_code: branch.legalTaxCode ?? null,
+    legal_registration_no: branch.legalRegistrationNo ?? null,
+  })
     .select()
     .single();
 
@@ -132,6 +146,11 @@ export async function updateBranch(
     isActive: boolean;
     /** null để clear tier (về giá niêm yết) */
     priceTierId: string | null;
+    // Day 20/05/2026 (CEO): pháp nhân
+    legalEntityType: "company" | "household" | "sole_proprietorship" | "individual" | null;
+    legalEntityName: string | null;
+    legalTaxCode: string | null;
+    legalRegistrationNo: string | null;
   }>
 ) {
   const tenantId = await getCurrentTenantId();
@@ -152,6 +171,11 @@ export async function updateBranch(
   if (updates.phone !== undefined) updateObj.phone = updates.phone;
   if (updates.isActive !== undefined) updateObj.is_active = updates.isActive;
   if (updates.priceTierId !== undefined) updateObj.price_tier_id = updates.priceTierId;
+  // Day 20/05/2026 (CEO): pháp nhân
+  if (updates.legalEntityType !== undefined) updateObj.legal_entity_type = updates.legalEntityType;
+  if (updates.legalEntityName !== undefined) updateObj.legal_entity_name = updates.legalEntityName;
+  if (updates.legalTaxCode !== undefined) updateObj.legal_tax_code = updates.legalTaxCode;
+  if (updates.legalRegistrationNo !== undefined) updateObj.legal_registration_no = updates.legalRegistrationNo;
 
   const { error } = await supabase
     .from("branches")
@@ -298,6 +322,12 @@ function mapBranch(row: Record<string, unknown>): BranchDetail {
     isDefault: (row.is_default as boolean) ?? false,
     isActive: (row.is_active as boolean) ?? true,
     priceTierId: (row.price_tier_id as string) ?? undefined,
+    // Day 20/05/2026 (CEO): pháp nhân
+    legalEntityType:
+      (row.legal_entity_type as BranchDetail["legalEntityType"]) ?? undefined,
+    legalEntityName: (row.legal_entity_name as string) ?? undefined,
+    legalTaxCode: (row.legal_tax_code as string) ?? undefined,
+    legalRegistrationNo: (row.legal_registration_no as string) ?? undefined,
     createdAt: row.created_at as string,
     updatedAt: row.updated_at as string,
   };

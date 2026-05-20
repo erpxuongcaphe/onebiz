@@ -76,6 +76,11 @@ interface BranchFormState {
   isDefault: boolean;
   /** Bảng giá mặc định cho POS FnB của chi nhánh — empty = giá niêm yết */
   priceTierId: string;
+  // Day 20/05/2026 (CEO): thông tin pháp nhân
+  legalEntityType: "" | "company" | "household" | "sole_proprietorship" | "individual";
+  legalEntityName: string;
+  legalTaxCode: string;
+  legalRegistrationNo: string;
 }
 
 const EMPTY_FORM: BranchFormState = {
@@ -86,6 +91,10 @@ const EMPTY_FORM: BranchFormState = {
   phone: "",
   isDefault: false,
   priceTierId: "",
+  legalEntityType: "",
+  legalEntityName: "",
+  legalTaxCode: "",
+  legalRegistrationNo: "",
 };
 
 /** Validate VN phone nếu nhập (optional). */
@@ -181,6 +190,11 @@ function BranchSettingsPageInner() {
       branchType: branch.branchType,
       address: branch.address ?? "",
       phone: branch.phone ?? "",
+      // Day 20/05/2026 (CEO): pháp nhân
+      legalEntityType: branch.legalEntityType ?? "",
+      legalEntityName: branch.legalEntityName ?? "",
+      legalTaxCode: branch.legalTaxCode ?? "",
+      legalRegistrationNo: branch.legalRegistrationNo ?? "",
       isDefault: branch.isDefault,
       priceTierId: branch.priceTierId ?? "",
     });
@@ -227,6 +241,11 @@ function BranchSettingsPageInner() {
           phone: phoneCleaned,
           // null nếu user xoá → clear tier (về giá niêm yết)
           priceTierId: form.priceTierId || null,
+          // Day 20/05/2026 (CEO): pháp nhân
+          legalEntityType: form.legalEntityType || null,
+          legalEntityName: form.legalEntityName.trim() || null,
+          legalTaxCode: form.legalTaxCode.trim() || null,
+          legalRegistrationNo: form.legalRegistrationNo.trim() || null,
         });
         // Nếu bật isDefault (và chi nhánh chưa phải default) → set lại
         const current = branches.find((b) => b.id === editingId);
@@ -249,6 +268,11 @@ function BranchSettingsPageInner() {
           isDefault: form.isDefault,
           // CEO 13/05: fix bug — pass priceTierId xuống service
           priceTierId: form.priceTierId || null,
+          // Day 20/05/2026 (CEO): pháp nhân
+          legalEntityType: form.legalEntityType || null,
+          legalEntityName: form.legalEntityName.trim() || null,
+          legalTaxCode: form.legalTaxCode.trim() || null,
+          legalRegistrationNo: form.legalRegistrationNo.trim() || null,
         });
         toast({
           title: "Đã thêm chi nhánh",
@@ -613,6 +637,122 @@ function BranchSettingsPageInner() {
                   />
                   <span className="text-sm">Đặt làm mặc định</span>
                 </label>
+              </div>
+
+              {/* Day 20/05/2026 (CEO): section Thông tin pháp nhân — quản lý
+                  chi nhánh theo công ty / hộ kinh doanh / DNTN. Hiển thị trên
+                  hoá đơn VAT. Optional — chỉ điền khi cần. */}
+              <div className="sm:col-span-2 border-t pt-4 mt-2">
+                <div className="flex items-center gap-2 mb-3">
+                  <Icon name="business" size={16} className="text-primary" />
+                  <h4 className="text-sm font-semibold">
+                    Thông tin pháp nhân{" "}
+                    <span className="text-xs font-normal text-muted-foreground">
+                      · tuỳ chọn
+                    </span>
+                  </h4>
+                </div>
+                <p className="text-xs text-muted-foreground mb-3">
+                  Khai báo pháp nhân của chi nhánh (công ty, hộ kinh doanh, DNTN).
+                  Dùng để in hoá đơn VAT + báo cáo thuế. CEO chuỗi có nhiều pháp
+                  nhân có thể phân định rõ chi nhánh nào thuộc đơn vị nào.
+                </p>
+                <div className="grid gap-3 sm:grid-cols-2">
+                  <div className="space-y-2">
+                    <Label htmlFor="legal-entity-type">Loại pháp nhân</Label>
+                    <Select
+                      value={form.legalEntityType || "__none__"}
+                      onValueChange={(val) =>
+                        setForm((f) => ({
+                          ...f,
+                          legalEntityType:
+                            val === "__none__"
+                              ? ""
+                              : (val as BranchFormState["legalEntityType"]),
+                        }))
+                      }
+                      items={[
+                        { value: "__none__", label: "Chưa khai báo" },
+                        { value: "company", label: "Công ty (TNHH/CP)" },
+                        { value: "household", label: "Hộ kinh doanh" },
+                        { value: "sole_proprietorship", label: "Doanh nghiệp tư nhân" },
+                        { value: "individual", label: "Cá nhân" },
+                      ]}
+                    >
+                      <SelectTrigger id="legal-entity-type" className="w-full">
+                        <SelectValue placeholder="Chưa khai báo">
+                          {(v) => {
+                            const labels: Record<string, string> = {
+                              __none__: "Chưa khai báo",
+                              company: "Công ty (TNHH/CP)",
+                              household: "Hộ kinh doanh",
+                              sole_proprietorship: "Doanh nghiệp tư nhân",
+                              individual: "Cá nhân",
+                            };
+                            return labels[v as string] ?? "Chưa khai báo";
+                          }}
+                        </SelectValue>
+                      </SelectTrigger>
+                      <SelectContent>
+                        <SelectItem value="__none__">Chưa khai báo</SelectItem>
+                        <SelectItem value="company">Công ty (TNHH/CP)</SelectItem>
+                        <SelectItem value="household">Hộ kinh doanh</SelectItem>
+                        <SelectItem value="sole_proprietorship">
+                          Doanh nghiệp tư nhân
+                        </SelectItem>
+                        <SelectItem value="individual">Cá nhân</SelectItem>
+                      </SelectContent>
+                    </Select>
+                  </div>
+                  <div className="space-y-2">
+                    <Label htmlFor="legal-tax-code">Mã số thuế pháp nhân</Label>
+                    <Input
+                      id="legal-tax-code"
+                      value={form.legalTaxCode}
+                      onChange={(e) =>
+                        setForm((f) => ({
+                          ...f,
+                          legalTaxCode: e.target.value,
+                        }))
+                      }
+                      placeholder="VD: 0301234567 hoặc 0301234567-001"
+                    />
+                  </div>
+                  <div className="space-y-2 sm:col-span-2">
+                    <Label htmlFor="legal-entity-name">Tên pháp nhân đầy đủ</Label>
+                    <Input
+                      id="legal-entity-name"
+                      value={form.legalEntityName}
+                      onChange={(e) =>
+                        setForm((f) => ({
+                          ...f,
+                          legalEntityName: e.target.value,
+                        }))
+                      }
+                      placeholder='VD: Công ty TNHH ONEBIZ Cà Phê'
+                    />
+                    <p className="text-xs text-muted-foreground">
+                      Tên in trên hoá đơn VAT, hợp đồng. Nên ghi đầy đủ "Công ty
+                      TNHH..." / "Hộ kinh doanh...".
+                    </p>
+                  </div>
+                  <div className="space-y-2 sm:col-span-2">
+                    <Label htmlFor="legal-registration-no">
+                      Số đăng ký kinh doanh
+                    </Label>
+                    <Input
+                      id="legal-registration-no"
+                      value={form.legalRegistrationNo}
+                      onChange={(e) =>
+                        setForm((f) => ({
+                          ...f,
+                          legalRegistrationNo: e.target.value,
+                        }))
+                      }
+                      placeholder="VD: 0312345678 (số GPKD/ĐKKD)"
+                    />
+                  </div>
+                </div>
               </div>
 
               {/* Bảng giá mặc định cho POS FnB / Retail của chi nhánh.

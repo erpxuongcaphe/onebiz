@@ -67,6 +67,23 @@ export interface Tenant {
 //               điện nước HQ...). Không POS bán hàng nhưng có sổ quỹ + công nợ.
 export type BranchType = "store" | "warehouse" | "factory" | "office";
 
+/**
+ * Day 20/05/2026 (CEO): Loại pháp nhân của chi nhánh.
+ * Một CEO chuỗi cà phê có thể có nhiều pháp nhân khác nhau.
+ */
+export type LegalEntityType =
+  | "company"               // Công ty TNHH / CP
+  | "household"             // Hộ kinh doanh
+  | "sole_proprietorship"   // Doanh nghiệp tư nhân
+  | "individual";           // Cá nhân
+
+export const LEGAL_ENTITY_LABELS: Record<LegalEntityType, string> = {
+  company: "Công ty (TNHH/CP)",
+  household: "Hộ kinh doanh",
+  sole_proprietorship: "Doanh nghiệp tư nhân",
+  individual: "Cá nhân",
+};
+
 // Chi nhánh
 export interface Branch {
   id: string;
@@ -82,5 +99,10 @@ export interface Branch {
   address?: string;
   phone?: string;
   isDefault: boolean;
+  // Day 20/05/2026 (CEO): thông tin pháp nhân
+  legalEntityType?: LegalEntityType;
+  legalEntityName?: string;
+  legalTaxCode?: string;
+  legalRegistrationNo?: string;
   createdAt: string;
 }
