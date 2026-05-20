@@ -332,7 +332,13 @@ export function DataTable<TData, TValue>({
   };
 
   return (
-    <div className="relative flex flex-col h-full">
+    // CEO 20/05/2026: ListPageLayout inner = flex-col chứa PageHeader +
+    // SummaryCards + Status filter + DataTable. h-full cũ → DataTable cố
+    // chiếm 100% parent → sibling đẩy DataTable overflow → pagination ra
+    // ngoài viewport.
+    // Đổi sang flex-1 min-h-0 → DataTable fill RESIDUAL space → pagination
+    // luôn fit trong viewport.
+    <div className="relative flex flex-col flex-1 min-h-0">
       {/* Column visibility toggle */}
       {columnToggle && toggleableColumns.length > 0 && (
         <div className="flex justify-end px-4 py-2">
