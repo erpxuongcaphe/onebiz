@@ -32,9 +32,12 @@ import {
   getBranches,
   getProductStockBreakdown,
   getProductStockMovements,
+  getUOMConversions,
+  getUOMConversionsByProductIds,
 } from "@/lib/services";
 import type { BranchStockRow, BranchDetail } from "@/lib/services/supabase";
-import type { StockMovement } from "@/lib/types";
+import type { StockMovement, UOMConversion } from "@/lib/types";
+import { StockWithConversion } from "@/components/shared/stock-with-conversion";
 import { Icon } from "@/components/ui/icon";
 import { ImportExcelDialog } from "@/components/shared/dialogs/import-excel-dialog";
 import { downloadTemplate } from "@/lib/excel";
@@ -68,6 +71,7 @@ function StockRowDetail({
     }>
   >([]);
   const [movements, setMovements] = useState<StockMovement[]>([]);
+  const [conversions, setConversions] = useState<UOMConversion[]>([]);
   const [loadingBranches, setLoadingBranches] = useState(true);
   const [loadingMovements, setLoadingMovements] = useState(true);
 
@@ -96,6 +100,16 @@ function StockRowDetail({
         if (!cancelled) setMovements([]);
       } finally {
         if (!cancelled) setLoadingMovements(false);
+      }
+    })();
+    // Day 19/05/2026 (CEO Smart Hybrid): load UOM conversions để hiển thị
+    // quy đổi (vd "24 hộp = 2 thùng") trong detail panel + movements tab.
+    (async () => {
+      try {
+        const conv = await getUOMConversions(row.productId);
+        if (!cancelled) setConversions(conv);
+      } catch {
+        if (!cancelled) setConversions([]);
       }
     })();
     return () => {
@@ -127,26 +141,49 @@ function StockRowDetail({
                     {
                       label: "Tồn tại chi nhánh này",
                       value: (
-                        <span className="font-semibold">
-                          {row.quantity} {row.unit ?? ""}
-                        </span>
+                        <StockWithConversion
+                          quantity={row.quantity}
+                          unit={row.unit ?? ""}
+                          conversions={conversions}
+                          variant="inline"
+                        />
                       ),
                     },
                     {
                       label: "Đặt trước",
-                      value: `${row.reserved} ${row.unit ?? ""}`,
+                      value: (
+                        <StockWithConversion
+                          quantity={row.reserved}
+                          unit={row.unit ?? ""}
+                          conversions={conversions}
+                          variant="inline"
+                        />
+                      ),
                     },
                     {
                       label: "Khả dụng",
                       value: (
-                        <span className="font-semibold">
-                          {row.available} {row.unit ?? ""}
-                        </span>
+                        <StockWithConversion
+                          quantity={row.available}
+                          unit={row.unit ?? ""}
+                          conversions={conversions}
+                          variant="inline"
+                        />
                       ),
                     },
                     {
                       label: "Định mức",
-                      value: row.minStock !== undefined ? `${row.minStock} ${row.unit ?? ""}` : "—",
+                      value:
+                        row.minStock !== undefined ? (
+                          <StockWithConversion
+                            quantity={row.minStock}
+                            unit={row.unit ?? ""}
+                            conversions={conversions}
+                            variant="inline"
+                          />
+                        ) : (
+                          "—"
+                        ),
                     },
                     {
                       label: "Giá vốn",
@@ -198,14 +235,24 @@ function StockRowDetail({
                                 </div>
                               )}
                             </td>
-                            <td className="p-2 text-right tabular-nums font-semibold">
-                              {b.quantity}
+                            <td className="p-2 text-right">
+                              <StockWithConversion
+                                quantity={b.quantity}
+                                unit={row.unit ?? ""}
+                                conversions={conversions}
+                                variant="inline"
+                              />
                             </td>
                             <td className="p-2 text-right tabular-nums text-muted-foreground">
                               {b.reserved}
                             </td>
-                            <td className="p-2 text-right tabular-nums">
-                              {b.available}
+                            <td className="p-2 text-right">
+                              <StockWithConversion
+                                quantity={b.available}
+                                unit={row.unit ?? ""}
+                                conversions={conversions}
+                                variant="inline"
+                              />
                             </td>
                             <td className="p-2 text-right text-xs text-muted-foreground">
                               {formatDate(b.updatedAt)}
@@ -214,12 +261,24 @@ function StockRowDetail({
                         ))}
                         <tr className="border-t bg-muted/20 font-semibold">
                           <td className="p-2">Tổng toàn hệ thống</td>
-                          <td className="p-2 text-right tabular-nums">{totalQty}</td>
+                          <td className="p-2 text-right">
+                            <StockWithConversion
+                              quantity={totalQty}
+                              unit={row.unit ?? ""}
+                              conversions={conversions}
+                              variant="inline"
+                            />
+                          </td>
                           <td className="p-2 text-right tabular-nums">
                             {totalReserved}
                           </td>
-                          <td className="p-2 text-right tabular-nums">
-                            {totalQty - totalReserved}
+                          <td className="p-2 text-right">
+                            <StockWithConversion
+                              quantity={totalQty - totalReserved}
+                              unit={row.unit ?? ""}
+                              conversions={conversions}
+                              variant="inline"
+                            />
                           </td>
                           <td />
                         </tr>
@@ -266,17 +325,14 @@ function StockRowDetail({
                                 {m.typeName}
                               </Badge>
                             </td>
-                            <td
-                              className={`p-2 text-right tabular-nums font-medium ${
-                                m.type === "import"
-                                  ? "text-success"
-                                  : m.type === "export"
-                                    ? "text-destructive"
-                                    : ""
-                              }`}
-                            >
-                              {m.type === "export" ? "-" : m.type === "import" ? "+" : ""}
-                              {m.quantity}
+                            <td className="p-2 text-right">
+                              <StockWithConversion
+                                quantity={m.quantity}
+                                unit={row.unit ?? ""}
+                                conversions={conversions}
+                                variant="movement"
+                                isInflow={m.type !== "export"}
+                              />
                             </td>
                             <td className="p-2 text-xs">
                               {m.createdByName || "—"}
@@ -309,6 +365,11 @@ export default function TonKhoPage() {
   const [lowStockCount, setLowStockCount] = useState(0);
   const [branches, setBranches] = useState<BranchDetail[]>([]);
   const [loading, setLoading] = useState(true);
+  // Day 19/05/2026 (CEO Smart Hybrid Phase 2): batch UOM conversions cho
+  // list view. Load 1 query khi rows đổi, lookup map cho từng cell render.
+  const [conversionsMap, setConversionsMap] = useState<
+    Map<string, UOMConversion[]>
+  >(new Map());
   const [search, setSearch] = useState("");
   const [page, setPage] = useState(0);
   const [pageSize, setPageSize] = useState(20);
@@ -376,6 +437,27 @@ export default function TonKhoPage() {
     setExpandedRow(null);
   }, [search, branchFilter, typeFilter, lowStockOnly]);
 
+  // Day 19/05/2026 (CEO Smart Hybrid Phase 2): batch load UOM conversions
+  // cho các productId hiện ra trong page → hiển thị quy đổi cột "Tồn".
+  useEffect(() => {
+    if (rows.length === 0) {
+      setConversionsMap(new Map());
+      return;
+    }
+    const ids = Array.from(new Set(rows.map((r) => r.productId)));
+    let cancelled = false;
+    getUOMConversionsByProductIds(ids)
+      .then((m) => {
+        if (!cancelled) setConversionsMap(m);
+      })
+      .catch(() => {
+        if (!cancelled) setConversionsMap(new Map());
+      });
+    return () => {
+      cancelled = true;
+    };
+  }, [rows]);
+
   const columns: ColumnDef<BranchStockRow, unknown>[] = [
     {
       accessorKey: "productCode",
@@ -431,14 +513,19 @@ export default function TonKhoPage() {
     {
       accessorKey: "quantity",
       header: "Tồn",
-      size: 100,
+      size: 140,
       cell: ({ row }) => {
         const r = row.original;
         const isLow =
           r.minStock !== undefined && r.quantity <= (r.minStock ?? 0);
         return (
-          <span className={isLow ? "text-destructive font-semibold" : "font-medium"}>
-            {r.quantity} {r.unit ?? ""}
+          <span className={isLow ? "text-destructive" : ""}>
+            <StockWithConversion
+              quantity={r.quantity}
+              unit={r.unit ?? ""}
+              conversions={conversionsMap.get(r.productId) ?? null}
+              variant="inline"
+            />
           </span>
         );
       },
@@ -448,15 +535,22 @@ export default function TonKhoPage() {
       header: "Đặt trước",
       size: 90,
       cell: ({ row }) => (
-        <span className="text-muted-foreground">{row.original.reserved}</span>
+        <span className="text-muted-foreground tabular-nums">
+          {row.original.reserved}
+        </span>
       ),
     },
     {
       accessorKey: "available",
       header: "Khả dụng",
-      size: 100,
+      size: 140,
       cell: ({ row }) => (
-        <span className="font-medium">{row.original.available}</span>
+        <StockWithConversion
+          quantity={row.original.available}
+          unit={row.original.unit ?? ""}
+          conversions={conversionsMap.get(row.original.productId) ?? null}
+          variant="inline"
+        />
       ),
     },
     {

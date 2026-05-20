@@ -25,6 +25,36 @@ export async function getUOMConversions(
   return (data ?? []).map(mapConversion);
 }
 
+/**
+ * Day 19/05/2026 (CEO Smart Hybrid): batch load conversions cho nhiều SP.
+ * Dùng trong list view (tồn kho, danh sách SP) để tránh N+1 query.
+ * Trả về Map<productId, UOMConversion[]>.
+ */
+export async function getUOMConversionsByProductIds(
+  productIds: string[],
+): Promise<Map<string, UOMConversion[]>> {
+  const result = new Map<string, UOMConversion[]>();
+  if (productIds.length === 0) return result;
+
+  const tenantId = await getCurrentTenantId();
+  const { data, error } = await supabase
+    .from("uom_conversions")
+    .select("*")
+    .eq("tenant_id", tenantId)
+    .in("product_id", productIds)
+    .eq("is_active", true);
+
+  if (error) throw error;
+
+  for (const row of data ?? []) {
+    const conv = mapConversion(row);
+    const list = result.get(conv.productId) ?? [];
+    list.push(conv);
+    result.set(conv.productId, list);
+  }
+  return result;
+}
+
 export async function createUOMConversion(conversion: {
   productId: string;
   fromUnit: string;

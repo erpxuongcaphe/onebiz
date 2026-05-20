@@ -269,7 +269,7 @@ export { getCustomerCohortReport } from "./customer-cohort";
 export type { CohortRow, CohortReportResult } from "./customer-cohort";
 
 // UOM Conversions + Unit Name Management
-export { getUOMConversions, createUOMConversion, updateUOMConversion, deleteUOMConversion, convertQuantity, getAllUnits, renameUnit, mergeUnits, findSimilarUnit } from "./uom";
+export { getUOMConversions, getUOMConversionsByProductIds, createUOMConversion, updateUOMConversion, deleteUOMConversion, convertQuantity, getAllUnits, renameUnit, mergeUnits, findSimilarUnit } from "./uom";
 
 // Branch Stock
 export { getBranchStock, getBranchStockRows, getBranchStockPage, getBranchStockAggregates, getProductStockByBranch, getProductStockBreakdown } from "./branch-stock";

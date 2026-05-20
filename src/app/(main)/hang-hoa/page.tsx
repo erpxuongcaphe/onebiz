@@ -62,7 +62,9 @@ import {
   bulkCleanupTestProducts,
   verifyCurrentUserPassword,
   getProductIdsWithActiveBom,
+  getUOMConversionsByProductIds,
 } from "@/lib/services";
+import { StockWithConversion } from "@/components/shared/stock-with-conversion";
 import { SummaryCard } from "@/components/shared/summary-card";
 import { useToast } from "@/lib/contexts";
 import { useAuth } from "@/lib/contexts/auth-context";
@@ -71,7 +73,7 @@ import { usePermissions } from "@/lib/permissions/use-permission";
 import { PERMISSIONS } from "@/lib/permissions/constants";
 import { OtpApprovalDialog } from "@/components/shared/dialogs/otp-approval-dialog";
 import { OTP_ACTION_CODES } from "@/lib/services/supabase/manager-otp";
-import type { Product } from "@/lib/types";
+import type { Product, UOMConversion } from "@/lib/types";
 import { Icon } from "@/components/ui/icon";
 
 type ProductScope = "nvl" | "sku";
@@ -286,6 +288,11 @@ export default function HangHoaPage() {
   const [data, setData] = useState<Product[]>([]);
   const [total, setTotal] = useState(0);
   const [loading, setLoading] = useState(true);
+  // Day 19/05/2026 (CEO Smart Hybrid Phase 2): batch load UOM conversions
+  // cho list view → cell "Tồn kho" hiện "24 hộp · 2 thùng".
+  const [conversionsMap, setConversionsMap] = useState<
+    Map<string, UOMConversion[]>
+  >(new Map());
   const [stats, setStats] = useState<{
     totalCount: number;
     stockValue: number;
@@ -449,6 +456,20 @@ export default function HangHoaPage() {
       }
     } else {
       setProductsWithActiveBom(new Set());
+    }
+
+    // Day 19/05/2026 (CEO Smart Hybrid Phase 2): batch UOM conversions cho
+    // các SP hiện ra. Cell "Tồn kho" sẽ show "24 hộp · 2 thùng".
+    const productIds = Array.from(new Set(result.data.map((p) => p.id)));
+    if (productIds.length > 0) {
+      try {
+        const map = await getUOMConversionsByProductIds(productIds);
+        setConversionsMap(map);
+      } catch {
+        setConversionsMap(new Map());
+      }
+    } else {
+      setConversionsMap(new Map());
     }
   }, [page, pageSize, search, scope, categoryFilter, stockFilter, statusFilter, brandFilter]);
 
@@ -1028,11 +1049,25 @@ export default function HangHoaPage() {
     {
       accessorKey: "stock",
       header: "Tồn kho",
+      size: 150,
       cell: ({ row }) => {
         const stock = row.original.stock;
         return (
-          <span className={stock === 0 ? "text-destructive" : stock <= 5 ? "text-status-warning" : ""}>
-            {formatCurrency(stock)}
+          <span
+            className={
+              stock === 0
+                ? "text-destructive"
+                : stock <= 5
+                  ? "text-status-warning"
+                  : ""
+            }
+          >
+            <StockWithConversion
+              quantity={stock}
+              unit={row.original.unit ?? ""}
+              conversions={conversionsMap.get(row.original.id) ?? null}
+              variant="inline"
+            />
           </span>
         );
       },
@@ -1096,11 +1131,25 @@ export default function HangHoaPage() {
     {
       accessorKey: "stock",
       header: "Tồn kho",
+      size: 150,
       cell: ({ row }) => {
         const stock = row.original.stock;
         return (
-          <span className={stock === 0 ? "text-destructive" : stock <= 5 ? "text-status-warning" : ""}>
-            {formatCurrency(stock)}
+          <span
+            className={
+              stock === 0
+                ? "text-destructive"
+                : stock <= 5
+                  ? "text-status-warning"
+                  : ""
+            }
+          >
+            <StockWithConversion
+              quantity={stock}
+              unit={row.original.unit ?? ""}
+              conversions={conversionsMap.get(row.original.id) ?? null}
+              variant="inline"
+            />
           </span>
         );
       },
