@@ -55,7 +55,6 @@ import {
   bulkDeleteProducts,
   deleteProduct,
   duplicateProduct,
-  moveProductSortOrder,
   restoreProduct,
   bulkRestoreProducts,
   cleanupTestProduct,
@@ -304,8 +303,6 @@ export default function HangHoaPage() {
   const [pageSize, setPageSize] = useState(15);
   const [expandedRow, setExpandedRow] = useState<number | null>(null);
   const [starred, setStarred] = useState<Set<string>>(new Set());
-  // Sprint D — CEO 06/05: track SP đang được move sort để disable double click
-  const [movingProductId, setMovingProductId] = useState<string | null>(null);
 
   const [createOpen, setCreateOpen] = useState(false);
   const [editingProduct, setEditingProduct] = useState<Product | null>(null);
@@ -900,25 +897,8 @@ export default function HangHoaPage() {
     exportToCsv(data, exportColumns, "danh-sach-hang-hoa");
   };
 
-  // Sprint D — CEO 06/05: handler đổi sort_order SP với neighbor (cùng nhóm).
-  const handleMoveProduct = useCallback(
-    async (productId: string, direction: "up" | "down") => {
-      setMovingProductId(productId);
-      try {
-        const moved = await moveProductSortOrder(productId, direction);
-        if (moved) await fetchData();
-      } catch (err) {
-        toast({
-          variant: "error",
-          title: "Đổi vị trí sản phẩm thất bại",
-          description: err instanceof Error ? err.message : "Vui lòng thử lại",
-        });
-      } finally {
-        setMovingProductId(null);
-      }
-    },
-    [fetchData, toast],
-  );
+  // Day 20/05/2026 (CEO): bỏ tính năng arrow up/down move sort_order SP
+  // → bỏ luôn handler + state. Thay bằng column toggle dropdown.
 
   const baseColumns: ColumnDef<Product, unknown>[] = [
     {
@@ -934,48 +914,9 @@ export default function HangHoaPage() {
         />
       ),
     },
-    {
-      id: "sort",
-      header: "",
-      size: 70,
-      enableSorting: false,
-      enableHiding: false,
-      cell: ({ row }) => {
-        const isFirst = row.index === 0;
-        const isLast = row.index === data.length - 1;
-        const moving = movingProductId === row.original.id;
-        return (
-          <div className="flex items-center gap-0.5">
-            <Button
-              variant="ghost"
-              size="icon"
-              className="h-6 w-6 text-muted-foreground hover:text-foreground"
-              disabled={isFirst || moving}
-              onClick={(e) => {
-                e.stopPropagation();
-                handleMoveProduct(row.original.id, "up");
-              }}
-              title="Chuyển SP lên trên (trong cùng nhóm)"
-            >
-              <Icon name="arrow_upward" size={14} />
-            </Button>
-            <Button
-              variant="ghost"
-              size="icon"
-              className="h-6 w-6 text-muted-foreground hover:text-foreground"
-              disabled={isLast || moving}
-              onClick={(e) => {
-                e.stopPropagation();
-                handleMoveProduct(row.original.id, "down");
-              }}
-              title="Chuyển SP xuống dưới (trong cùng nhóm)"
-            >
-              <Icon name="arrow_downward" size={14} />
-            </Button>
-          </div>
-        );
-      },
-    },
+    // Day 20/05/2026 (CEO): bỏ cột "sort" (arrow up/down chuyển vị trí SP)
+    // — chiếm 70px ngang nhưng ít dùng. Thay bằng column toggle dropdown
+    // để user chọn cột muốn hiển thị (icon "tune" góc trên phải).
     {
       id: "image",
       header: "",
@@ -1001,6 +942,7 @@ export default function HangHoaPage() {
       accessorKey: "code",
       header: "Mã hàng",
       size: 130,
+      enableHiding: false,
       cell: ({ row }) => (
         <span className="font-medium text-primary">{row.original.code}</span>
       ),
@@ -1009,6 +951,7 @@ export default function HangHoaPage() {
       accessorKey: "name",
       header: "Tên hàng",
       size: 280,
+      enableHiding: false,
     },
     {
       accessorKey: "categoryName",
@@ -1399,6 +1342,7 @@ export default function HangHoaPage() {
             setPage(0);
           }}
           selectable
+          columnToggle
           getRowId={(row) => row.id}
           clearSelectionTrigger={clearSelectionToken}
           onSelectAllMatching={async () => {
