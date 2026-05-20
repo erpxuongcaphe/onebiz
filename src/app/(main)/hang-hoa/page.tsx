@@ -1022,17 +1022,38 @@ export default function HangHoaPage() {
 
   const nvlColumns: ColumnDef<Product, unknown>[] = [
     ...baseColumns,
+    // Day 20/05/2026 (CEO): Phương án D đã ship 1 ô "Đơn vị tính" duy nhất.
+    // 2 cột "ĐVT mua / ĐVT kho" trùng nhau (đều = unit chính) → bỏ.
+    // Thay bằng 1 cột "Đơn vị" + cột "Quy đổi" hiện khi SP có conversion.
     {
-      id: "purchaseUnit",
-      header: "ĐVT mua",
+      id: "unit",
+      header: "Đơn vị",
       size: 90,
-      cell: ({ row }) => row.original.purchaseUnit ?? row.original.unit ?? "—",
+      cell: ({ row }) => (
+        <span className="text-muted-foreground">
+          {row.original.unit ?? row.original.stockUnit ?? "—"}
+        </span>
+      ),
     },
     {
-      id: "stockUnit",
-      header: "ĐVT kho",
-      size: 90,
-      cell: ({ row }) => row.original.stockUnit ?? row.original.unit ?? "—",
+      id: "uom_conversion",
+      header: "Quy đổi",
+      size: 160,
+      cell: ({ row }) => {
+        const convs = conversionsMap.get(row.original.id);
+        if (!convs || convs.length === 0) {
+          return <span className="text-muted-foreground/40 text-xs">—</span>;
+        }
+        // Hiện conversion đầu tiên match toUnit === unit chính của SP
+        const unit = row.original.unit ?? row.original.stockUnit ?? "";
+        const match = convs.find((c) => c.toUnit === unit) ?? convs[0];
+        return (
+          <span className="text-xs text-muted-foreground tabular-nums">
+            1 <b className="text-foreground">{match.fromUnit}</b> = {match.factor}{" "}
+            {match.toUnit}
+          </span>
+        );
+      },
     },
     // Sprint A.2: column "Giá vốn" chỉ hiện khi user có products.view_cost
     ...(canViewCost
