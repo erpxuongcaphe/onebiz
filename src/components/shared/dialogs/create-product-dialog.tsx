@@ -37,6 +37,10 @@ import {
   getBOMsByProduct,
   updateBOM,
   deleteBOM,
+  getUOMConversions,
+  createUOMConversion,
+  updateUOMConversion,
+  deleteUOMConversion,
 } from "@/lib/services";
 import { useAuth } from "@/lib/contexts/auth-context";
 import type { Product, BOMItem } from "@/lib/types";
@@ -124,6 +128,11 @@ export function CreateProductDialog({
   const [initialStock, setInitialStock] = useState("");
   const [purchaseUnit, setPurchaseUnit] = useState("");
   const [stockUnit, setStockUnit] = useState("");
+  // Day 19/05/2026 (CEO UOM Smart Hybrid): quy đổi đơn vị inline trong form
+  // tạo SP — đỡ phải save → vào tab "ĐVT quy đổi" → thêm. Cặp 2 ô optional.
+  const [bulkUnit, setBulkUnit] = useState("");
+  const [bulkFactor, setBulkFactor] = useState("");
+  const [existingConversionId, setExistingConversionId] = useState<string | null>(null);
   const [sellUnit, setSellUnit] = useState("");
   const [shelfLifeDays, setShelfLifeDays] = useState("");
   const [shelfLifeUnit, setShelfLifeUnit] = useState<ShelfLifeUnit>("day");
@@ -203,6 +212,10 @@ export function CreateProductDialog({
       setPurchaseUnit(initialData.purchaseUnit || "");
       setStockUnit(initialData.stockUnit || initialData.unit || "");
       setSellUnit(initialData.sellUnit || "");
+      // Reset quy đổi — sẽ load qua getUOMConversions ở effect riêng
+      setBulkUnit("");
+      setBulkFactor("");
+      setExistingConversionId(null);
       setShelfLifeDays(initialData.shelfLifeDays ? String(initialData.shelfLifeDays) : "");
       setShelfLifeUnit((initialData.shelfLifeUnit as ShelfLifeUnit) || "day");
       setHasBom(!!initialData.hasBom);
@@ -236,6 +249,9 @@ export function CreateProductDialog({
       setPurchaseUnit("");
       setStockUnit("");
       setSellUnit("");
+      setBulkUnit("");
+      setBulkFactor("");
+      setExistingConversionId(null);
       setShelfLifeDays("");
       setShelfLifeUnit("day");
       setHasBom(false);
@@ -298,6 +314,33 @@ export function CreateProductDialog({
         );
       } catch {
         // fail silent — user vẫn có thể tạo BOM mới
+      }
+    })();
+    return () => {
+      cancelled = true;
+    };
+  }, [open, initialData]);
+
+  // Day 19/05/2026 (CEO UOM Smart Hybrid): load existing UOM conversion
+  // khi edit SP — prefill 2 ô "Đóng gói" + "Hệ số quy đổi".
+  useEffect(() => {
+    if (!open || !initialData) return;
+    let cancelled = false;
+    (async () => {
+      try {
+        const convs = await getUOMConversions(initialData.id);
+        if (cancelled) return;
+        const productUnit =
+          initialData.stockUnit || initialData.unit || "";
+        // Lấy conversion đầu tiên match toUnit === unit chính của SP
+        const match = convs.find((c) => c.toUnit === productUnit);
+        if (match) {
+          setBulkUnit(match.fromUnit);
+          setBulkFactor(String(match.factor));
+          setExistingConversionId(match.id);
+        }
+      } catch {
+        // fail silent
       }
     })();
     return () => {
@@ -451,6 +494,26 @@ export function CreateProductDialog({
         allowSale: scope === "sku" ? allowSale : false,
       };
 
+      // Day 19/05/2026 (CEO UOM Smart Hybrid): chuẩn hoá data quy đổi
+      // trước khi save. Validate client-side cặp ô.
+      const bulkUnitTrim = bulkUnit.trim();
+      const bulkFactorNum = Number(bulkFactor);
+      const hasBulkInput = bulkUnitTrim.length > 0 || bulkFactor.trim().length > 0;
+      const bulkValid =
+        bulkUnitTrim.length > 0 &&
+        bulkFactorNum > 0 &&
+        bulkUnitTrim !== (commonPayload.unit ?? "");
+      if (hasBulkInput && !bulkValid) {
+        toast({
+          variant: "error",
+          title: "Quy đổi đơn vị không hợp lệ",
+          description:
+            "Cần điền cả 'Đóng gói' và 'Hệ số quy đổi' (≥ 1), và không trùng 'Đơn vị tính'.",
+        });
+        setSaving(false);
+        return;
+      }
+
       if (isEdit && initialData) {
         // EDIT — giữ nguyên code/productType, không đổi groupCode.
         await updateProduct(initialData.id, {
@@ -458,6 +521,33 @@ export function CreateProductDialog({
           // Day 18/05/2026: cho phép user TẮT hasBom trong edit — phải sync DB
           hasBom: scope === "sku" ? hasBom : false,
         });
+
+        // Day 19/05/2026 (CEO UOM): sync quy đổi đơn vị (CRUD UOMConversion)
+        try {
+          if (bulkValid) {
+            if (existingConversionId) {
+              // Update conversion hiện có
+              await updateUOMConversion(existingConversionId, {
+                fromUnit: bulkUnitTrim,
+                toUnit: commonPayload.unit ?? "",
+                factor: bulkFactorNum,
+              });
+            } else {
+              // Tạo mới
+              await createUOMConversion({
+                productId: initialData.id,
+                fromUnit: bulkUnitTrim,
+                toUnit: commonPayload.unit ?? "",
+                factor: bulkFactorNum,
+              });
+            }
+          } else if (!hasBulkInput && existingConversionId) {
+            // User xoá cả 2 ô → xoá conversion (soft delete is_active=false)
+            await deleteUOMConversion(existingConversionId);
+          }
+        } catch (convErr) {
+          console.warn("[create-product-dialog] sync UOM conversion fail:", convErr);
+        }
 
         // Day 18/05/2026 (CEO refactor): sync BOM khi edit SKU
         if (scope === "sku") {
@@ -564,6 +654,24 @@ export function CreateProductDialog({
           onOpenChange(false);
           onSuccess?.();
           return;
+        }
+      }
+
+      // Day 19/05/2026 (CEO UOM): tạo conversion nếu user khai 2 ô.
+      // Tách try/catch riêng — conversion fail KHÔNG rollback SP.
+      if (created?.id && bulkValid) {
+        try {
+          await createUOMConversion({
+            productId: created.id,
+            fromUnit: bulkUnitTrim,
+            toUnit: commonPayload.unit ?? "",
+            factor: bulkFactorNum,
+          });
+        } catch (convErr) {
+          console.warn(
+            "[create-product-dialog] tạo UOM conversion fail:",
+            convErr,
+          );
         }
       }
 
@@ -844,9 +952,93 @@ export function CreateProductDialog({
                 </p>
               )}
               <p className="text-xs text-muted-foreground">
-                Đơn vị nhỏ nhất khi bán lẻ (vd: 1 lon, 1 kg, 1 ly). Khi mua
-                gói lớn (vd thùng 24 lon) → tạo phiếu nhập với số lượng quy đổi.
+                Đơn vị nhỏ nhất khi bán lẻ (vd: 1 lon, 1 kg, 1 ly).
               </p>
+            </div>
+
+            {/* Day 19/05/2026 (CEO UOM Smart Hybrid): 2 ô quy đổi optional.
+                Khi điền cả 2 → save xong tự tạo UOM conversion → tồn kho hiện
+                "24 hộp · 2 thùng". 1 ô trống = không có quy đổi. */}
+            <div className="rounded-lg border border-dashed bg-muted/20 p-3 space-y-3">
+              <div className="flex items-center justify-between">
+                <div className="text-sm font-medium">
+                  Quy đổi đơn vị{" "}
+                  <span className="text-xs text-muted-foreground font-normal">
+                    · tuỳ chọn
+                  </span>
+                </div>
+                {(bulkUnit || bulkFactor) && (
+                  <button
+                    type="button"
+                    onClick={() => {
+                      setBulkUnit("");
+                      setBulkFactor("");
+                    }}
+                    className="text-xs text-muted-foreground hover:text-foreground inline-flex items-center gap-1"
+                  >
+                    <Icon name="close" size={12} />
+                    Xoá quy đổi
+                  </button>
+                )}
+              </div>
+              <div className="grid grid-cols-2 gap-3">
+                <div className="space-y-1">
+                  <label className="text-xs text-muted-foreground">
+                    Đóng gói (ĐVT lớn)
+                  </label>
+                  <Input
+                    value={bulkUnit}
+                    onChange={(e) => setBulkUnit(e.target.value)}
+                    placeholder="VD: Thùng, Bao, Lốc"
+                  />
+                </div>
+                <div className="space-y-1">
+                  <label className="text-xs text-muted-foreground">
+                    Hệ số quy đổi
+                  </label>
+                  <Input
+                    type="number"
+                    min={1}
+                    step={1}
+                    value={bulkFactor}
+                    onChange={(e) => setBulkFactor(e.target.value)}
+                    placeholder="VD: 12"
+                  />
+                </div>
+              </div>
+              {bulkUnit.trim() &&
+              bulkFactor.trim() &&
+              Number(bulkFactor) > 0 &&
+              stockUnit.trim() &&
+              bulkUnit.trim() !== stockUnit.trim() ? (
+                <p className="text-xs text-primary">
+                  <Icon
+                    name="check_circle"
+                    size={12}
+                    className="inline-block mr-1 align-text-bottom"
+                  />
+                  1 {bulkUnit.trim()} = {bulkFactor} {stockUnit.trim()}
+                </p>
+              ) : (bulkUnit || bulkFactor) ? (
+                <p className="text-xs text-status-warning">
+                  <Icon
+                    name="warning"
+                    size={12}
+                    className="inline-block mr-1 align-text-bottom"
+                  />
+                  {!bulkUnit.trim()
+                    ? "Thiếu Đóng gói (ĐVT lớn)"
+                    : !bulkFactor.trim() || Number(bulkFactor) <= 0
+                      ? "Thiếu Hệ số quy đổi (số nguyên ≥ 1)"
+                      : bulkUnit.trim() === stockUnit.trim()
+                        ? "Đóng gói không được trùng Đơn vị tính"
+                        : ""}
+                </p>
+              ) : (
+                <p className="text-xs text-muted-foreground">
+                  Chỉ điền nếu muốn xem tồn kho theo đơn vị lớn (vd &quot;24 hộp · 2 thùng&quot;).
+                </p>
+              )}
             </div>
 
             <div className="space-y-2">
