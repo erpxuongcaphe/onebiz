@@ -97,6 +97,18 @@ export async function bulkImportProducts(
     if (c.code) catMap.set(c.code, c.id);
   }
 
+  // Day 20/05/2026 (CEO BOM decouple Phase 4): Preload Mã BOM trong tenant
+  // để verify khi user nhập cột "Mã BOM" trong Excel SP. Set lookup O(1).
+  const { data: bomRows } = await supabase
+    .from("bom")
+    .select("code")
+    .eq("tenant_id", tenantId)
+    .eq("is_active", true)
+    .not("code", "is", null);
+  const existingBomCodes = new Set<string>(
+    (bomRows ?? []).map((b) => (b as { code: string }).code),
+  );
+
   return runBulk(rows, async (row) => {
     if ((row.stock ?? 0) > 0) {
       throw new Error("File hàng hóa không ghi tồn kho; dùng mẫu Tồn kho đầu kỳ hoặc phiếu nhập");
@@ -116,31 +128,50 @@ export async function bulkImportProducts(
     // = unit chính để nhất quán + không break code đang đọc 3 cột phụ.
     const finalUnit = row.unit?.trim() || "Cái";
 
-    const { data: inserted, error } = await supabase
-      .from("products")
-      .insert({
-        tenant_id: tenantId,
-        code: row.code,
-        name: row.name,
-        product_type: row.productType,
-        channel: row.productType === "sku" ? (row.channel ?? null) : null,
-        category_id: categoryId,
-        unit: finalUnit,
-        sell_price: row.sellPrice,
-        cost_price: row.costPrice,
-        stock: 0,
-        min_stock: row.minStock ?? 0,
-        max_stock: row.maxStock ?? 1000,
-        vat_rate: row.vatRate ?? 0,
-        barcode: row.barcode ?? null,
-        group_code: row.groupCode ?? null,
-        purchase_unit: finalUnit,
-        stock_unit: finalUnit,
-        sell_unit: finalUnit,
-        description: row.description ?? null,
-        allow_sale: row.allowSale ?? true,
-        is_active: row.isActive ?? true,
-      })
+    // Day 20/05/2026 (CEO BOM Phase 4): verify Mã BOM trước khi insert SP.
+    // Yêu cầu: BOM phải tồn tại trong hệ thống (active). Set is_active flag.
+    let bomCode: string | null = null;
+    let bomHasFlag = false;
+    if (row.bomCode && row.bomCode.trim() && row.productType === "sku") {
+      const trimmed = row.bomCode.trim();
+      if (!existingBomCodes.has(trimmed)) {
+        throw new Error(
+          `Mã BOM "${trimmed}" chưa tồn tại trong hệ thống. Tạo BOM ở /hang-hoa/cong-thuc trước khi import SKU này.`,
+        );
+      }
+      bomCode = trimmed;
+      bomHasFlag = true;
+    }
+
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    const { data: inserted, error } = await (
+      supabase.from("products").insert as any
+    )({
+      tenant_id: tenantId,
+      code: row.code,
+      name: row.name,
+      product_type: row.productType,
+      channel: row.productType === "sku" ? (row.channel ?? null) : null,
+      category_id: categoryId,
+      unit: finalUnit,
+      sell_price: row.sellPrice,
+      cost_price: row.costPrice,
+      stock: 0,
+      min_stock: row.minStock ?? 0,
+      max_stock: row.maxStock ?? 1000,
+      vat_rate: row.vatRate ?? 0,
+      barcode: row.barcode ?? null,
+      group_code: row.groupCode ?? null,
+      purchase_unit: finalUnit,
+      stock_unit: finalUnit,
+      sell_unit: finalUnit,
+      description: row.description ?? null,
+      allow_sale: row.allowSale ?? true,
+      is_active: row.isActive ?? true,
+      // Day 20/05/2026 (CEO BOM): link SKU với BOM qua code
+      bom_code: bomCode,
+      has_bom: bomHasFlag,
+    })
       .select("id")
       .single();
     if (error) throw new Error(error.message);

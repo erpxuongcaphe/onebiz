@@ -659,6 +659,9 @@ export async function createProduct(product: Partial<Product & ProductDetail>): 
       // Kênh bán: chỉ gán cho SKU (fnb/retail). NVL giữ NULL.
       channel: product.productType === "sku" ? (product.channel ?? null) : null,
       has_bom: product.hasBom ?? false,
+      // Day 20/05/2026 (CEO BOM Phase 5): link với BOM standalone qua code
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      ...(product.bomCode ? { bom_code: product.bomCode } : {}) as any,
       group_code: product.groupCode,
       purchase_unit: product.purchaseUnit,
       stock_unit: product.stockUnit,
@@ -716,6 +719,11 @@ export async function updateProduct(id: string, updates: Partial<Product & Produ
   if (updates.shelfLifeDays !== undefined) payload.shelf_life_days = updates.shelfLifeDays ?? null;
   if (updates.shelfLifeUnit !== undefined) payload.shelf_life_unit = updates.shelfLifeUnit || "day";
   if (updates.hasBom !== undefined) payload.has_bom = updates.hasBom;
+  // Day 20/05/2026 (CEO BOM Phase 5): cho phép link/unlink BOM qua bom_code
+  if (updates.bomCode !== undefined) {
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    (payload as any).bom_code = updates.bomCode || null;
+  }
 
   const { data, error } = await supabase
     .from("products")

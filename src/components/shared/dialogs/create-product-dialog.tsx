@@ -143,6 +143,11 @@ export function CreateProductDialog({
   const [bomName, setBomName] = useState("");
   const [bomNote, setBomNote] = useState("");
   const [bomItems, setBomItems] = useState<InlineBomItem[]>([]);
+  // Day 20/05/2026 (CEO BOM Phase 5): Mã BOM link với BOM có sẵn (standalone).
+  // Khi user gõ Mã BOM → save sẽ verify + set products.bom_code (không tạo BOM
+  // mới). Khi gõ items inline → tạo BOM riêng cho SKU (legacy path).
+  const [bomCodeInput, setBomCodeInput] = useState("");
+  const [bomCodeValid, setBomCodeValid] = useState<boolean | null>(null); // null = chưa verify
   const [bomExistingId, setBomExistingId] = useState<string | null>(null); // edit mode
   const [bomPickerOpen, setBomPickerOpen] = useState(false);
   // Day 19/05/2026 (CEO Phase A): multi-select picker — tick nhiều NVL,
@@ -224,6 +229,9 @@ export function CreateProductDialog({
       setBomName("");
       setBomNote("");
       setBomBranchId(null);
+      // Day 20/05/2026 (CEO BOM Phase 5): prefill bomCode từ products.bom_code
+      setBomCodeInput(initialData.bomCode ?? "");
+      setBomCodeValid(initialData.bomCode ? true : null);
       setChannel((initialData.channel as ProductChannel) || "fnb");
       // Prefill các field mới để edit "sửa được toàn bộ" như CEO yêu cầu.
       setBarcode(initialData.barcode || "");
@@ -260,6 +268,8 @@ export function CreateProductDialog({
       setBomName("");
       setBomNote("");
       setBomBranchId(null);
+      setBomCodeInput("");
+      setBomCodeValid(null);
       setChannel("fnb");
       setBarcode("");
       setBrand("");
@@ -470,6 +480,12 @@ export function CreateProductDialog({
       // (state lưu trong `stockUnit`). Backend auto-fill 4 cột DB = unit
       // chính → nhất quán, không break data cũ.
       const finalUnit = stockUnit.trim() || initialData?.unit || "Cái";
+      // Day 20/05/2026 (CEO BOM Phase 5): xử lý link Mã BOM
+      // Nếu user nhập bomCode → set products.bom_code + has_bom=true
+      // Nếu trống → bomCode = null (giữ logic cũ với items inline)
+      const bomCodeTrim = bomCodeInput.trim();
+      const linkedBomCode = bomCodeTrim || undefined;
+
       const commonPayload = {
         name,
         channel: scope === "sku" ? channel : undefined,
@@ -492,6 +508,8 @@ export function CreateProductDialog({
         description: description || undefined,
         image: image ?? undefined,
         allowSale: scope === "sku" ? allowSale : false,
+        // Day 20/05/2026: link với BOM standalone qua code
+        bomCode: linkedBomCode,
       };
 
       // Day 19/05/2026 (CEO UOM Smart Hybrid): chuẩn hoá data quy đổi
@@ -1279,6 +1297,74 @@ export function CreateProductDialog({
                 <Icon name="info" size={14} className="inline-block mr-1 text-primary align-text-bottom" />
                 Định nghĩa NVL cần để tạo 1 đơn vị SKU. Khi bán SKU, hệ thống
                 tự trừ NVL theo công thức này.
+              </div>
+
+              {/* Day 20/05/2026 (CEO BOM Phase 5): input Mã BOM link với BOM
+                  có sẵn. Nếu user nhập Mã BOM → save sẽ verify + set
+                  products.bom_code (KHÔNG tạo BOM mới). Nếu để trống → user
+                  tạo BOM inline với items bên dưới như cách cũ. */}
+              <div className="rounded-lg border border-dashed bg-muted/20 p-3 space-y-2">
+                <div className="flex items-center justify-between">
+                  <label className="text-sm font-medium">
+                    Mã BOM (link với công thức có sẵn){" "}
+                    <span className="text-xs text-muted-foreground font-normal">
+                      · tuỳ chọn
+                    </span>
+                  </label>
+                  {bomCodeInput && (
+                    <button
+                      type="button"
+                      onClick={() => {
+                        setBomCodeInput("");
+                        setBomCodeValid(null);
+                      }}
+                      className="text-xs text-muted-foreground hover:text-foreground inline-flex items-center gap-1"
+                    >
+                      <Icon name="close" size={12} />
+                      Xoá link
+                    </button>
+                  )}
+                </div>
+                <Input
+                  value={bomCodeInput}
+                  onChange={(e) => {
+                    setBomCodeInput(e.target.value);
+                    setBomCodeValid(null);
+                  }}
+                  onBlur={async () => {
+                    const code = bomCodeInput.trim();
+                    if (!code) {
+                      setBomCodeValid(null);
+                      return;
+                    }
+                    try {
+                      const { getBOMByCode } = await import(
+                        "@/lib/services"
+                      );
+                      const found = await getBOMByCode(code);
+                      setBomCodeValid(found.length > 0);
+                    } catch {
+                      setBomCodeValid(false);
+                    }
+                  }}
+                  placeholder="VD: BOM-CFS-001 (phải đã tồn tại)"
+                />
+                {bomCodeValid === true && (
+                  <p className="text-xs text-primary flex items-center gap-1">
+                    <Icon name="check_circle" size={12} />
+                    Mã BOM hợp lệ — sẽ link SKU này với BOM khi lưu
+                  </p>
+                )}
+                {bomCodeValid === false && (
+                  <p className="text-xs text-status-warning flex items-center gap-1">
+                    <Icon name="warning" size={12} />
+                    Mã BOM chưa tồn tại. Tạo BOM ở /hang-hoa/cong-thuc trước.
+                  </p>
+                )}
+                <p className="text-xs text-muted-foreground">
+                  Để TRỐNG nếu muốn tạo công thức MỚI cho SKU này (điền items
+                  bên dưới). ĐIỀN nếu muốn dùng công thức đã có sẵn.
+                </p>
               </div>
 
               {/* Branch áp dụng */}

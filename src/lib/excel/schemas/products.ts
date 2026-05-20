@@ -21,6 +21,10 @@ export interface ProductImportRow {
   // sau khi insert product. Hiển thị "24 hộp · 2 thùng" trên view tồn kho.
   bulkUnit?: string; // Đơn vị lớn (Thùng, Bao, Lốc)
   bulkFactor?: number; // 1 bulkUnit = factor × unit (vd: 12 hộp/thùng)
+  // Day 20/05/2026 (CEO BOM decouple Phase 4): gắn SKU với BOM có sẵn
+  // qua Mã BOM. Service verify BOM tồn tại trong tenant → set products.bom_code.
+  // Optional. Chỉ SKU mới có BOM (NVL bỏ qua).
+  bomCode?: string;
   sellPrice: number;
   costPrice: number;
   stock?: number;
@@ -132,6 +136,17 @@ export const productExcelSchema: ExcelSchema<ProductImportRow> = {
       description:
         "Optional. Số đơn vị tính trong 1 đơn vị đóng gói (vd: 12 nghĩa là 1 Thùng = 12 Hộp). Phải đi cặp với 'Đóng gói'.",
       width: 14,
+    },
+    // Day 20/05/2026 (CEO BOM decouple Phase 4): cột gắn BOM cho SKU
+    {
+      key: "bomCode",
+      header: "Mã BOM",
+      type: "string",
+      maxLength: 50,
+      example: "BOM-CFS-001",
+      description:
+        "Optional. CHỈ áp dụng cho SKU. Mã BOM phải tồn tại trong hệ thống (tạo BOM ở trang Công thức sản xuất trước). Khi import, hệ thống verify Mã BOM + set products.bom_code → POS sẽ trừ NVL theo BOM này.",
+      width: 18,
     },
     {
       key: "sellPrice",
@@ -261,6 +276,10 @@ export const productExcelSchema: ExcelSchema<ProductImportRow> = {
     }
     if (hasBulkUnit && row.bulkUnit?.trim() === row.unit?.trim()) {
       return "Quy đổi: 'Đóng gói' không được trùng 'Đơn vị tính'";
+    }
+    // Day 20/05/2026 (CEO BOM): Mã BOM chỉ áp dụng cho SKU
+    if (row.bomCode && row.bomCode.trim() && row.productType !== "sku") {
+      return "Mã BOM chỉ áp dụng cho SKU (Hàng bán). NVL bỏ trống cột này.";
     }
     return null;
   },
