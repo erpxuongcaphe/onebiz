@@ -574,6 +574,9 @@ function mapProduct(row: any): Product {
     productType: row.product_type ?? "nvl",
     channel: row.channel ?? undefined,
     hasBom: row.has_bom ?? false,
+    // Day 20/05/2026 (CEO): bom_code text trỏ về bom.code, cho phép share
+    // 1 BOM giữa nhiều SKU. Migration 00105 backfill từ existing data.
+    bomCode: row.bom_code ?? undefined,
     // Map cột boolean `is_active` sang trường `status` (active|inactive) cho FE.
     // FE filter "Trạng thái" + badge "Đang bán/Ngừng bán" đọc từ trường này.
     status: row.is_active === false ? "inactive" : "active",

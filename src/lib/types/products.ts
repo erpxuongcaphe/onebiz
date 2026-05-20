@@ -19,6 +19,16 @@ export interface Product {
   /** Kênh bán (chỉ áp dụng cho SKU). Xem ProductChannel. */
   channel?: ProductChannel;
   hasBom: boolean;
+  /**
+   * Day 20/05/2026 (CEO): Mã BOM mà SKU này dùng (text reference đến bom.code).
+   * Khi POS bán SKU → đọc bom_code → lookup BOM → trừ NVL theo công thức.
+   *   - null = SKU không có BOM (mua bán đơn thuần)
+   *   - có giá trị = SKU dùng BOM với code đó
+   *
+   * Migration 00105 thêm cột này + backfill từ existing bom.product_id.
+   * Hàm get_active_bom_for_branch() ưu tiên đọc bom_code, fallback product_id.
+   */
+  bomCode?: string;
   /** Trạng thái kinh doanh — dùng cho filter "Đang bán / Ngừng bán" */
   status?: ProductStatus;
   sellPrice: number;
