@@ -107,6 +107,13 @@ interface DataTableProps<TData, TValue> {
    * trong trang hiện tại.
    */
   onSelectAllMatching?: () => Promise<string[]>;
+  /**
+   * Day 20/05/2026 (CEO): map columnId → visible (true/false) làm initial state.
+   * Cột không có trong map → default visible. Cho phép caller hide một số cột
+   * optional mặc định (vd Mã vạch, Thương hiệu) — user tick để hiện qua dropdown
+   * "Hiển thị cột".
+   */
+  defaultColumnVisibility?: Record<string, boolean>;
 }
 
 /**
@@ -147,6 +154,7 @@ export function DataTable<TData, TValue>({
   clearSelectionTrigger,
   stickyFirstColumn = true,
   onSelectAllMatching,
+  defaultColumnVisibility,
 }: DataTableProps<TData, TValue>) {
   const [sorting, setSorting] = useState<SortingState>([]);
   const [rowSelection, setRowSelection] = useState<RowSelectionState>({});
@@ -154,7 +162,11 @@ export function DataTable<TData, TValue>({
   // cả X SP khớp bộ lọc" → rowSelection chứa cả IDs ngoài trang hiện tại
   const [allMatchingMode, setAllMatchingMode] = useState(false);
   const [allMatchingLoading, setAllMatchingLoading] = useState(false);
-  const [columnVisibility, setColumnVisibility] = useState<VisibilityState>({});
+  // Day 20/05/2026 (CEO): init từ defaultColumnVisibility prop để hide một số
+  // cột optional mặc định. User tick qua dropdown "Hiển thị cột" để hiện.
+  const [columnVisibility, setColumnVisibility] = useState<VisibilityState>(
+    defaultColumnVisibility ?? {},
+  );
   const [internalExpanded, setInternalExpanded] = useState<number | null>(null);
 
   const expandedRowIdx =

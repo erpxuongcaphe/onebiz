@@ -1042,6 +1042,72 @@ export default function HangHoaPage() {
       size: 150,
       cell: ({ row }) => formatDate(row.original.createdAt),
     },
+    // Day 20/05/2026 (CEO): 7 cột optional ẩn mặc định — user tick qua
+    // dropdown "Hiển thị cột" để hiện khi cần.
+    {
+      id: "brand",
+      header: "Thương hiệu",
+      size: 130,
+      cell: ({ row }) => (
+        <span className="text-muted-foreground">{row.original.brand ?? "—"}</span>
+      ),
+    },
+    {
+      id: "supplier",
+      header: "Nhà cung cấp",
+      size: 160,
+      cell: ({ row }) => (
+        <span className="text-muted-foreground">
+          {row.original.supplierName ?? "—"}
+        </span>
+      ),
+    },
+    {
+      id: "barcode",
+      header: "Mã vạch",
+      size: 140,
+      cell: ({ row }) => (
+        <span className="font-mono text-xs text-muted-foreground">
+          {row.original.barcode ?? "—"}
+        </span>
+      ),
+    },
+    {
+      id: "shelfLife",
+      header: "HSD",
+      size: 100,
+      cell: ({ row }) => {
+        const d = row.original.shelfLifeDays;
+        const u = row.original.shelfLifeUnit;
+        if (!d) return <span className="text-muted-foreground">—</span>;
+        const label = u === "year" ? "năm" : u === "month" ? "tháng" : "ngày";
+        return (
+          <span className="text-muted-foreground tabular-nums">
+            {d} {label}
+          </span>
+        );
+      },
+    },
+    {
+      id: "minStock",
+      header: "Tồn min",
+      size: 90,
+      cell: ({ row }) => (
+        <span className="text-muted-foreground tabular-nums">
+          {row.original.minStock ?? "—"}
+        </span>
+      ),
+    },
+    {
+      id: "vatRate",
+      header: "VAT",
+      size: 70,
+      cell: ({ row }) => (
+        <span className="text-muted-foreground tabular-nums">
+          {row.original.vatRate}%
+        </span>
+      ),
+    },
   ];
 
   const skuColumns: ColumnDef<Product, unknown>[] = [
@@ -1135,6 +1201,86 @@ export default function HangHoaPage() {
       header: "Thời gian tạo",
       size: 150,
       cell: ({ row }) => formatDate(row.original.createdAt),
+    },
+    // Day 20/05/2026 (CEO): cột optional cho SKU (ẩn mặc định)
+    {
+      id: "channel",
+      header: "Kênh bán",
+      size: 100,
+      cell: ({ row }) => {
+        const c = row.original.channel;
+        if (!c) return <span className="text-muted-foreground">—</span>;
+        const label = c === "fnb" ? "FnB" : "Bán lẻ/sỉ";
+        return (
+          <span className="inline-flex items-center rounded bg-muted text-xs px-1.5 py-0.5">
+            {label}
+          </span>
+        );
+      },
+    },
+    {
+      id: "brand",
+      header: "Thương hiệu",
+      size: 130,
+      cell: ({ row }) => (
+        <span className="text-muted-foreground">{row.original.brand ?? "—"}</span>
+      ),
+    },
+    {
+      id: "supplier",
+      header: "Nhà cung cấp",
+      size: 160,
+      cell: ({ row }) => (
+        <span className="text-muted-foreground">
+          {row.original.supplierName ?? "—"}
+        </span>
+      ),
+    },
+    {
+      id: "barcode",
+      header: "Mã vạch",
+      size: 140,
+      cell: ({ row }) => (
+        <span className="font-mono text-xs text-muted-foreground">
+          {row.original.barcode ?? "—"}
+        </span>
+      ),
+    },
+    {
+      id: "shelfLife",
+      header: "HSD",
+      size: 100,
+      cell: ({ row }) => {
+        const d = row.original.shelfLifeDays;
+        const u = row.original.shelfLifeUnit;
+        if (!d) return <span className="text-muted-foreground">—</span>;
+        const label = u === "year" ? "năm" : u === "month" ? "tháng" : "ngày";
+        return (
+          <span className="text-muted-foreground tabular-nums">
+            {d} {label}
+          </span>
+        );
+      },
+    },
+    {
+      id: "minStock",
+      header: "Tồn min",
+      size: 90,
+      cell: ({ row }) => (
+        <span className="text-muted-foreground tabular-nums">
+          {row.original.minStock ?? "—"}
+        </span>
+      ),
+    },
+    {
+      id: "vatRate",
+      header: "VAT",
+      size: 70,
+      cell: ({ row }) => (
+        <span className="text-muted-foreground tabular-nums">
+          {row.original.vatRate}%
+        </span>
+      ),
     },
   ];
 
@@ -1343,6 +1489,19 @@ export default function HangHoaPage() {
           }}
           selectable
           columnToggle
+          // Day 20/05/2026 (CEO): các cột optional ẩn mặc định —
+          // user tick qua dropdown "Hiển thị cột" để hiện khi cần.
+          // Tránh bảng quá rộng + giữ view sạch cho 80% use case.
+          defaultColumnVisibility={{
+            brand: false,
+            supplier: false,
+            barcode: false,
+            shelfLife: false,
+            minStock: false,
+            vatRate: false,
+            channel: false,
+            uom_conversion: false,
+          }}
           getRowId={(row) => row.id}
           clearSelectionTrigger={clearSelectionToken}
           onSelectAllMatching={async () => {
