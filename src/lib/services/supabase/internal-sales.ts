@@ -216,6 +216,61 @@ export async function createInternalSale(
     throw new Error("Cần ít nhất 1 sản phẩm");
   }
 
+  // Day 20/05/2026 (CEO audit Fix #4): Validate channel consistency.
+  // VD: SKU channel='retail' chuyển sang Quán FnB (branchType='store') →
+  // sản phẩm sẽ treo ở quán (Quán không bán SP retail). Cảnh báo trước.
+  const itemProductIds = input.items.map((it) => it.productId);
+  if (itemProductIds.length > 0) {
+    const { data: prods } = await supabase
+      .from("products")
+      .select("id, code, name, channel, product_type")
+      .eq("tenant_id", ctx.tenantId)
+      .in("id", itemProductIds);
+    const { data: toBranch } = await supabase
+      .from("branches")
+      .select("branch_type, name")
+      .eq("tenant_id", ctx.tenantId)
+      .eq("id", input.toBranchId)
+      .single();
+
+    const toBranchType = (toBranch as { branch_type?: string } | null)
+      ?.branch_type;
+    // Quán FnB (store) chỉ nên nhận: NVL (null channel) hoặc SKU FnB
+    // Kho tổng (warehouse) chỉ nên nhận: SKU retail hoặc NVL
+    const conflictingSKUs: string[] = [];
+    for (const p of prods ?? []) {
+      const pr = p as {
+        id: string;
+        code: string;
+        name: string;
+        channel?: string;
+        product_type?: string;
+      };
+      if (pr.product_type !== "sku") continue; // NVL bỏ qua
+      if (toBranchType === "store" && pr.channel === "retail") {
+        conflictingSKUs.push(`${pr.code} — ${pr.name}`);
+      } else if (
+        toBranchType === "warehouse" &&
+        pr.channel === "fnb"
+      ) {
+        conflictingSKUs.push(`${pr.code} — ${pr.name}`);
+      }
+    }
+    if (conflictingSKUs.length > 0) {
+      const branchName =
+        (toBranch as { name?: string } | null)?.name ?? "chi nhánh đích";
+      const branchTypeLabel =
+        toBranchType === "store" ? "Quán FnB" : "Kho tổng";
+      throw new Error(
+        `Không thể chuyển các SKU sau sang ${branchTypeLabel} "${branchName}" vì khác kênh bán:\n` +
+          conflictingSKUs.map((s) => `  • ${s}`).join("\n") +
+          `\n\n${branchTypeLabel} chỉ bán ${
+            toBranchType === "store" ? "FnB (pha chế)" : "retail (đóng gói)"
+          }. Vui lòng bỏ các SP này khỏi phiếu.`,
+      );
+    }
+  }
+
   // ── Calculate totals ────────────────────
   const lines = input.items.map((it) => {
     const lineAmount = Math.round(it.quantity * it.unitPrice);

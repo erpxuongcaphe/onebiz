@@ -635,6 +635,19 @@ export async function createProduct(product: Partial<Product & ProductDetail>): 
   const { getCurrentTenantId } = await import("./base");
   const tenantId = await getCurrentTenantId();
 
+  // Day 20/05/2026 (CEO audit Fix #1): SKU BẮT BUỘC có channel (fnb/retail)
+  // Tránh SP "treo" trong DB (không hiện ở cả 2 POS).
+  if (product.productType === "sku" && !product.channel) {
+    throw new Error(
+      "SKU bắt buộc có Kênh bán (FnB hoặc Retail). Vui lòng chọn kênh trước khi lưu.",
+    );
+  }
+  if (product.productType === "nvl" && product.channel) {
+    throw new Error(
+      "NVL không được có Kênh bán — chỉ dùng cho hàng bán (SKU).",
+    );
+  }
+
   const { data, error } = await supabase
     .from("products")
     .insert({

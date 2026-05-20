@@ -33,6 +33,8 @@ import { Input } from "@/components/ui/input";
 import { formatDate, formatCurrency } from "@/lib/format";
 import {
   getCategoriesWithCounts,
+  getCategoriesWithChannelBreakdown,
+  type CategoryWithChannelBreakdown,
   createCategory,
   updateCategory,
   deleteCategory,
@@ -156,6 +158,14 @@ export default function NhomHangPage() {
   const { toast } = useToast();
   const [scope, setScope] = useState<CategoryScope>("nvl");
   const [data, setData] = useState<ProductCategory[]>([]);
+  // Day 20/05/2026 (CEO Fix #3): track channel breakdown cho SKU categories
+  // để badge auto + filter — KHÔNG đụng naming convention CEO tự quyết.
+  const [channelBreakdown, setChannelBreakdown] = useState<
+    Map<string, { retail: number; fnb: number }>
+  >(new Map());
+  const [channelFilter, setChannelFilter] = useState<"all" | "fnb" | "retail">(
+    "all",
+  );
   const [loading, setLoading] = useState(true);
   const [search, setSearch] = useState("");
   const [debouncedSearch, setDebouncedSearch] = useState("");
@@ -196,8 +206,21 @@ export default function NhomHangPage() {
   const fetchData = useCallback(async () => {
     setLoading(true);
     try {
-      const cats = await getCategoriesWithCounts(scope);
-      setData(cats);
+      // Day 20/05/2026 (CEO Fix #3): SKU dùng breakdown để có badge channel
+      if (scope === "sku") {
+        const cats: CategoryWithChannelBreakdown[] =
+          await getCategoriesWithChannelBreakdown();
+        const map = new Map<string, { retail: number; fnb: number }>();
+        for (const c of cats) {
+          map.set(c.id, { retail: c.retailCount, fnb: c.fnbCount });
+        }
+        setChannelBreakdown(map);
+        setData(cats);
+      } else {
+        const cats = await getCategoriesWithCounts(scope);
+        setChannelBreakdown(new Map());
+        setData(cats);
+      }
     } catch {
       toast({ variant: "error", title: "Lỗi tải nhóm hàng" });
     } finally {
@@ -209,12 +232,19 @@ export default function NhomHangPage() {
     fetchData();
   }, [fetchData]);
 
-  // Filter by debouncedSearch
-  const filtered = debouncedSearch.trim()
-    ? data.filter((c) =>
-        c.name.toLowerCase().includes(debouncedSearch.toLowerCase()),
-      )
-    : data;
+  // Filter by debouncedSearch + channelFilter (Day 20/05/2026 CEO Fix #3)
+  const filtered = data
+    .filter((c) =>
+      !debouncedSearch.trim()
+        ? true
+        : c.name.toLowerCase().includes(debouncedSearch.toLowerCase()),
+    )
+    .filter((c) => {
+      if (scope !== "sku" || channelFilter === "all") return true;
+      const slot = channelBreakdown.get(c.id);
+      if (!slot) return false;
+      return channelFilter === "fnb" ? slot.fnb > 0 : slot.retail > 0;
+    });
 
   // -----------------------------------------------------------------------
   // Create / Edit handlers
@@ -414,16 +444,69 @@ export default function NhomHangPage() {
     {
       id: "productCount",
       header: "Số sản phẩm",
-      size: 110,
+      size: 130,
       cell: ({ row }) => {
         const count = row.original.productCount ?? 0;
-        return (
-          <span className={count > 0 ? "font-medium" : "text-muted-foreground"}>
-            {count}
-          </span>
-        );
+        if (count === 0) {
+          // Day 20/05/2026 (CEO Fix #5): hint khi category chưa có SP
+          // → CEO biết category này sẽ ẩn khỏi POS đến khi add SP.
+          return (
+            <span
+              className="text-xs text-status-warning inline-flex items-center gap-1"
+              title="Category chưa có sản phẩm → sẽ ẨN khỏi POS đến khi thêm SP đầu tiên"
+            >
+              <Icon name="warning" size={12} />
+              0 — ẩn khỏi POS
+            </span>
+          );
+        }
+        return <span className="font-medium tabular-nums">{count}</span>;
       },
     },
+    // Day 20/05/2026 (CEO Fix #3): badge auto channel cho SKU categories.
+    // KHÔNG đụng naming convention — CEO tự đặt tên. Badge tự compute
+    // từ products → biết category có SP retail/FnB/cả 2.
+    ...(scope === "sku"
+      ? [
+          {
+            id: "channelBadge",
+            header: "Kênh áp dụng",
+            size: 130,
+            cell: ({ row }: { row: { original: ProductCategory } }) => {
+              const slot = channelBreakdown.get(row.original.id);
+              const hasRetail = (slot?.retail ?? 0) > 0;
+              const hasFnb = (slot?.fnb ?? 0) > 0;
+              if (!hasRetail && !hasFnb) {
+                return (
+                  <span className="text-xs text-muted-foreground/60">
+                    Chưa có SP
+                  </span>
+                );
+              }
+              return (
+                <div className="flex items-center gap-1.5">
+                  {hasRetail && (
+                    <span
+                      className="inline-flex items-center rounded bg-emerald-500/10 text-emerald-700 dark:text-emerald-300 border border-emerald-500/30 px-1.5 py-0.5 text-[10px] font-medium"
+                      title={`${slot?.retail} SP retail`}
+                    >
+                      Retail
+                    </span>
+                  )}
+                  {hasFnb && (
+                    <span
+                      className="inline-flex items-center rounded bg-orange-500/10 text-orange-700 dark:text-orange-300 border border-orange-500/30 px-1.5 py-0.5 text-[10px] font-medium"
+                      title={`${slot?.fnb} SP FnB`}
+                    >
+                      FnB
+                    </span>
+                  )}
+                </div>
+              );
+            },
+          } as ColumnDef<ProductCategory, unknown>,
+        ]
+      : []),
     {
       id: "createdAt",
       header: "Ngày tạo",
@@ -504,6 +587,41 @@ export default function NhomHangPage() {
             },
           ]}
         />
+
+        {/* Day 20/05/2026 (CEO Fix #3): chip filter "Kênh áp dụng" cho SKU
+            categories. CEO biết ngay category nào dùng retail/FnB mà không
+            cần ghi tay "(retail)/(FnB)" trong tên. */}
+        {scope === "sku" && (
+          <div className="flex flex-wrap items-center gap-2 px-4 pt-3 pb-1">
+            <span className="text-xs text-muted-foreground mr-1">
+              Kênh áp dụng:
+            </span>
+            {(
+              [
+                { v: "all", l: "Tất cả" },
+                { v: "retail", l: "Retail" },
+                { v: "fnb", l: "FnB" },
+              ] as const
+            ).map((tab) => {
+              const isActive = channelFilter === tab.v;
+              return (
+                <button
+                  key={tab.v}
+                  type="button"
+                  onClick={() => setChannelFilter(tab.v)}
+                  className={
+                    "inline-flex items-center gap-1.5 px-3 py-1 rounded-full text-xs font-medium transition-colors border " +
+                    (isActive
+                      ? "bg-primary text-primary-foreground border-primary"
+                      : "bg-surface-variant text-on-surface-variant border-border hover:bg-surface-container")
+                  }
+                >
+                  {tab.l}
+                </button>
+              );
+            })}
+          </div>
+        )}
 
         {isEmpty ? (
           <div className="flex flex-1 flex-col items-center justify-center text-center px-6 py-12">

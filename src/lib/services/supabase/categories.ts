@@ -294,6 +294,65 @@ export async function getCategoriesWithCounts(
   });
 }
 
+/**
+ * Day 20/05/2026 (CEO audit Fix #3): Categories với breakdown theo channel.
+ * Trả về số SP retail + FnB cho mỗi category → admin biết category nào
+ * dùng cho channel nào (badge auto, không cần CEO ghi tay "(retail)/(FnB)").
+ *
+ * Chỉ áp dụng cho scope='sku' (NVL không có channel).
+ */
+export interface CategoryWithChannelBreakdown extends ProductCategory {
+  retailCount: number;
+  fnbCount: number;
+}
+
+export async function getCategoriesWithChannelBreakdown(): Promise<
+  CategoryWithChannelBreakdown[]
+> {
+  const tenantId = await getCurrentTenantId();
+
+  // Load all SKU categories
+  const { data: cats, error: catsErr } = await supabase
+    .from("categories")
+    .select("*")
+    .eq("tenant_id", tenantId)
+    .eq("scope", "sku")
+    .order("sort_order");
+  if (catsErr) throw catsErr;
+
+  // Load products with channel + category_id
+  const { data: prods, error: prodsErr } = await supabase
+    .from("products")
+    .select("category_id, channel")
+    .eq("tenant_id", tenantId)
+    .eq("is_active", true)
+    .eq("product_type", "sku");
+  if (prodsErr) throw prodsErr;
+
+  // Group: category_id → {retail: N, fnb: N}
+  const counts = new Map<string, { retail: number; fnb: number }>();
+  for (const p of prods ?? []) {
+    const cid = (p as { category_id?: string }).category_id;
+    if (!cid) continue;
+    const ch = (p as { channel?: string }).channel;
+    const slot = counts.get(cid) ?? { retail: 0, fnb: 0 };
+    if (ch === "retail") slot.retail += 1;
+    else if (ch === "fnb") slot.fnb += 1;
+    counts.set(cid, slot);
+  }
+
+  return (cats ?? []).map((row: Record<string, unknown>) => {
+    const mapped = mapCategory(row);
+    const slot = counts.get(mapped.id) ?? { retail: 0, fnb: 0 };
+    return {
+      ...mapped,
+      productCount: slot.retail + slot.fnb,
+      retailCount: slot.retail,
+      fnbCount: slot.fnb,
+    };
+  });
+}
+
 function mapCategory(row: Record<string, unknown>): ProductCategory {
   return {
     id: row.id as string,

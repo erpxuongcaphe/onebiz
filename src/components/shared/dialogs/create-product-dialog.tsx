@@ -457,11 +457,15 @@ export function CreateProductDialog({
     if (scope === "sku") {
       if (!sellPrice.trim() || isNaN(Number(sellPrice)) || Number(sellPrice) <= 0)
         e.sellPrice = "Giá bán không hợp lệ";
+      // Day 20/05/2026 (CEO audit Fix #1): SKU BẮT BUỘC có channel
+      if (!channel || (channel !== "fnb" && channel !== "retail")) {
+        e.channel = "SKU bắt buộc có Kênh bán (FnB hoặc Retail)";
+      }
     }
     setErrors(e);
     // Auto-switch tab về tab có lỗi đầu tiên — UX: user không phải đoán
     // tab nào đang lỗi khi bấm Lưu.
-    if (e.name || e.category) {
+    if (e.name || e.category || e.channel) {
       setInnerTab("info");
     } else if (e.sellPrice) {
       setInnerTab("pricing");

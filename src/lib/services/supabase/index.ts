@@ -220,7 +220,8 @@ export {
 } from "./pipeline";
 
 // Categories (scoped: nvl, sku, customer, supplier)
-export { getCategoriesByScope, getAllCategories, getCategoriesWithCounts, createCategory, updateCategory, deleteCategory, moveCategorySortOrder, getProductsByCategoryId, suggestCategoryCode } from "./categories";
+export { getCategoriesByScope, getAllCategories, getCategoriesWithCounts, getCategoriesWithChannelBreakdown, createCategory, updateCategory, deleteCategory, moveCategorySortOrder, getProductsByCategoryId, suggestCategoryCode } from "./categories";
+export type { CategoryWithChannelBreakdown } from "./categories";
 
 // Packaging Variants
 export { getVariantsByProduct, createVariant, updateVariant, deleteVariant } from "./variants";
