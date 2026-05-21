@@ -40,6 +40,11 @@ interface FnbHeaderProps {
   viewMode?: "menu" | "floorplan";
   /** Sprint A: Mở sidenav drawer (☰ trigger). */
   onMenuClick?: () => void;
+  /**
+   * Day 21/05/2026 (CEO): Số đơn delivery hôm nay tại branch hiện tại.
+   * Hiển thị badge nhỏ trên header để cashier biết workload giao trong ngày.
+   */
+  deliveryCountToday?: number;
 }
 
 export function FnbHeader({
@@ -54,6 +59,7 @@ export function FnbHeader({
   onShiftClick,
   viewMode = "menu",
   onMenuClick,
+  deliveryCountToday,
 }: FnbHeaderProps) {
   const { isFnb, fnbPath } = useFnbSubdomain();
 
@@ -160,6 +166,18 @@ export function FnbHeader({
         <Icon name="search" size={16} />
         <span>Tìm món (F3)</span>
       </button>
+
+      {/* Day 21/05/2026 (CEO): Badge số đơn delivery hôm nay — cashier biết
+          khối lượng giao trong ngày luôn, không cần mở báo cáo. */}
+      {typeof deliveryCountToday === "number" && deliveryCountToday > 0 && (
+        <div
+          className="order-21 hidden lg:inline-flex items-center gap-1.5 px-2.5 py-1.5 bg-status-warning/10 text-status-warning rounded-xl text-xs font-semibold shrink-0"
+          title={`${deliveryCountToday} đơn giao hôm nay (đã chốt)`}
+        >
+          <Icon name="local_shipping" size={14} />
+          <span>Hôm nay: {deliveryCountToday} đơn giao</span>
+        </div>
+      )}
 
       {/* Filler giữa search và right actions — đẩy KDS/settings sang phải */}
       <div className="hidden md:block flex-1" />

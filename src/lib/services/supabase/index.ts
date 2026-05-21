@@ -446,8 +446,9 @@ export { splitByItems, splitEqually, areAllTableOrdersCompleted } from "./split-
 export {
   getFnbKpis, getRevenueByMenuItem, getRevenueByTable, getRevenueByHourFnb,
   getCashierPerformance, getTableTurnover,
-  // Day 21/05/2026 (CEO): delivery staff performance
+  // Day 21/05/2026 (CEO): delivery staff performance + count today
   getDeliveryStaffPerformance, getOrdersByDeliveryStaff,
+  getDeliveryCountToday,
 } from "./fnb-analytics";
 export type {
   DeliveryStaffPerformance, ShipperOrderRow,

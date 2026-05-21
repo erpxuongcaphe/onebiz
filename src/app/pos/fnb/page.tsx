@@ -418,21 +418,25 @@ function FnbPosPageInner() {
     };
   }, []);
 
-  // Day 21/05/2026 (CEO): load shipper list + delivery fee tiers cho branch
+  // Day 21/05/2026 (CEO): load shipper list + delivery fee tiers + count today
   const [shipperOptions, setShipperOptions] = useState<
     { id: string; name: string }[]
   >([]);
   const [deliveryTiers, setDeliveryTiers] = useState<
     { code: "near" | "mid" | "far"; label: string; fee: number }[]
   >([]);
+  const [deliveryCountToday, setDeliveryCountToday] = useState<number>(0);
+
   useEffect(() => {
     if (!branchId) return;
     let cancelled = false;
     void (async () => {
       try {
-        const [pinUsers, tiers] = await Promise.all([
-          (await import("@/lib/services")).listPosPinUsers(branchId),
-          (await import("@/lib/services")).getDeliveryFeeTiersForBranch(branchId),
+        const services = await import("@/lib/services");
+        const [pinUsers, tiers, count] = await Promise.all([
+          services.listPosPinUsers(branchId),
+          services.getDeliveryFeeTiersForBranch(branchId),
+          services.getDeliveryCountToday(branchId),
         ]);
         if (cancelled) return;
         setShipperOptions(
@@ -449,13 +453,31 @@ function FnbPosPageInner() {
               fee: t.fee,
             })),
         );
+        setDeliveryCountToday(count);
       } catch (err) {
-        console.warn("[FnbPOS] load shipper/tiers failed", err);
+        console.warn("[FnbPOS] load shipper/tiers/count failed", err);
       }
     })();
     return () => {
       cancelled = true;
     };
+  }, [branchId]);
+
+  // Refresh count delivery hôm nay mỗi 60s — không real-time critical
+  useEffect(() => {
+    if (!branchId) return;
+    const iv = setInterval(() => {
+      void (async () => {
+        try {
+          const services = await import("@/lib/services");
+          const count = await services.getDeliveryCountToday(branchId);
+          setDeliveryCountToday(count);
+        } catch {
+          /* silent */
+        }
+      })();
+    }, 60000);
+    return () => clearInterval(iv);
   }, [branchId]);
 
   // Sprint FIX-1 (CEO 07/05): Listen "fnb-print-failed" event từ print-fnb.ts
@@ -2084,6 +2106,7 @@ function FnbPosPageInner() {
         onShiftClick={handleShiftClick}
         viewMode={showFloorPlan ? "floorplan" : "menu"}
         onMenuClick={() => setSidenavOpen(true)}
+        deliveryCountToday={deliveryCountToday}
       />
 
       {/* Sprint A: Sidenav drawer (☰ → slide-in). */}

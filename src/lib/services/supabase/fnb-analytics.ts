@@ -486,6 +486,39 @@ export async function getTableTurnover(
     .sort((a, b) => a.avgMinutes - b.avgMinutes);
 }
 
+/**
+ * Day 21/05/2026 (CEO): Số đơn delivery hôm nay tại 1 branch.
+ * Dùng cho badge "Hôm nay: N đơn giao" trên header POS FnB.
+ *
+ * Logic: kitchen_orders.order_type='delivery' + created_at hôm nay (local timezone)
+ * + status != 'cancelled'.
+ */
+export async function getDeliveryCountToday(branchId: string): Promise<number> {
+  const supabase = getClient();
+  const tenantId = await getCurrentTenantId();
+
+  // Tính range "hôm nay" theo Asia/Ho_Chi_Minh (UTC+7)
+  const now = new Date();
+  const startLocal = new Date(now.getFullYear(), now.getMonth(), now.getDate());
+  const endLocal = new Date(now.getFullYear(), now.getMonth(), now.getDate() + 1);
+
+  const { count, error } = await supabase
+    .from("kitchen_orders")
+    .select("id", { count: "exact", head: true })
+    .eq("tenant_id", tenantId)
+    .eq("branch_id", branchId)
+    .eq("order_type", "delivery")
+    .not("status", "eq", "cancelled")
+    .gte("created_at", startLocal.toISOString())
+    .lt("created_at", endLocal.toISOString());
+
+  if (error) {
+    console.warn("[getDeliveryCountToday]", error.message);
+    return 0;
+  }
+  return count ?? 0;
+}
+
 // ============================================================
 // Delivery staff performance (CEO 21/05/2026 — migration 00108)
 // ============================================================

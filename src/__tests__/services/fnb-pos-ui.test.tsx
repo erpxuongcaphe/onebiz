@@ -451,9 +451,10 @@ describe("FnbCart — component", () => {
     onPayment: noop,
   };
 
-  it("hiện 'Chưa có món nào' khi cart trống", () => {
+  it("hiện empty hint khi cart trống", () => {
+    // Day 21/05/2026 (CEO): empty state compact mới — text rút gọn.
     render(<FnbCart {...baseProps} />);
-    expect(screen.getByText("Chưa có món nào")).toBeDefined();
+    expect(screen.getByText(/Chưa có món/)).toBeDefined();
   });
 
   it("hiện customer bar với tên khách", () => {

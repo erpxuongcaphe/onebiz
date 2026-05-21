@@ -551,23 +551,20 @@ export function FnbCart({
 
       {/* ── Cart lines ── */}
       {isEmpty ? (
-        <div className="flex-1 flex flex-col items-center justify-center text-muted-foreground gap-3 px-6 text-center">
-          <div className="size-16 rounded-2xl bg-surface-container-low flex items-center justify-center">
-            <Icon name="local_cafe" size={32} className="text-muted-foreground/60" />
-          </div>
-          <p className="text-sm font-medium">Chưa có món nào</p>
-          <p className="text-xs text-muted-foreground">
-            Chọn món từ thực đơn để thêm vào đơn
-          </p>
-          {/* Sprint POS-FNB-4: CTA shortcuts cho cashier mới
-              giúp tìm nhanh thay vì lóng ngóng. */}
-          <div className="flex items-center gap-1.5 mt-2 text-[11px] text-muted-foreground">
-            <kbd className="font-mono bg-surface-container-lowest border border-outline-variant/30 rounded px-1.5 py-0.5">
+        // Day 21/05/2026 (CEO): compact empty state — gọn hơn ~50% chiều
+        // cao so với bản cũ. Bỏ icon cup to + giảm padding + dồn shortcut
+        // F3/F4 vào cùng dòng. Tránh khoảng trống lớn khi section "Giao
+        // hàng" đã chiếm nhiều space ở trên.
+        <div className="flex-1 flex flex-col items-center justify-center text-muted-foreground gap-2 px-4 py-6 text-center">
+          <Icon name="local_cafe" size={20} className="text-muted-foreground/50" />
+          <p className="text-xs font-medium">Chưa có món — chọn từ thực đơn</p>
+          <div className="flex items-center gap-1 text-[10px] text-muted-foreground/80">
+            <kbd className="font-mono bg-surface-container-lowest border border-outline-variant/30 rounded px-1 py-0.5">
               F3
             </kbd>
             <span>tìm món</span>
             <span className="opacity-50">·</span>
-            <kbd className="font-mono bg-surface-container-lowest border border-outline-variant/30 rounded px-1.5 py-0.5">
+            <kbd className="font-mono bg-surface-container-lowest border border-outline-variant/30 rounded px-1 py-0.5">
               F4
             </kbd>
             <span>chọn khách</span>
