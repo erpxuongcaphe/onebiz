@@ -485,3 +485,195 @@ export async function getTableTurnover(
     }))
     .sort((a, b) => a.avgMinutes - b.avgMinutes);
 }
+
+// ============================================================
+// Delivery staff performance (CEO 21/05/2026 — migration 00108)
+// ============================================================
+
+export interface DeliveryStaffPerformance {
+  staffId: string;
+  staffName: string;
+  /** Số đơn đã giao trong kỳ (delivery_staff_id = staffId) */
+  totalOrders: number;
+  /** Tổng doanh thu các đơn shipper này giao (để tính commission nếu cần) */
+  totalRevenue: number;
+  /** Tổng phí giao thu hộ quán (delivery_fee cộng dồn) */
+  totalDeliveryFee: number;
+  /**
+   * Avg time (assigned_at → completed_at) tính bằng giây.
+   * 0 nếu không có đơn nào completed (chưa bấm "giao xong" trong UI).
+   */
+  avgDeliverySeconds: number;
+  /** Số đơn đã completed (có timestamp delivery_completed_at) */
+  completedCount: number;
+}
+
+export interface ShipperOrderRow {
+  kitchenOrderId: string;
+  orderNumber: string;
+  invoiceId: string | null;
+  invoiceCode: string | null;
+  customerName: string;
+  total: number;
+  deliveryFee: number;
+  deliveryTier: string | null;
+  assignedAt: string | null;
+  completedAt: string | null;
+  durationSeconds: number | null;
+  createdAt: string;
+}
+
+/**
+ * Hiệu suất shipper — top theo số đơn giao + doanh thu.
+ *
+ * Range filter dựa kitchen_orders.created_at (lúc đơn được tạo).
+ */
+export async function getDeliveryStaffPerformance(
+  branchId?: string,
+  range?: { from: string; to: string },
+): Promise<DeliveryStaffPerformance[]> {
+  const supabase = getClient();
+  const tenantId = await getCurrentTenantId();
+
+  // Cast as any vì Supabase generated types chưa reflect column delivery_*
+  // (migration 00108 chưa được codegen). Sau khi `pnpm gen-types` thì xoá cast.
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  let query: any = supabase
+    .from("kitchen_orders")
+    .select(
+      "delivery_staff_id, delivery_fee, delivery_assigned_at, delivery_completed_at, invoice_id, invoices(total), profiles!kitchen_orders_delivery_staff_id_fkey(full_name)",
+    )
+    .eq("tenant_id", tenantId)
+    .not("delivery_staff_id", "is", null);
+  if (branchId) query = query.eq("branch_id", branchId);
+  if (range) {
+    query = query
+      .gte("created_at", `${range.from}T00:00:00+07:00`)
+      .lte("created_at", `${range.to}T23:59:59.999+07:00`);
+  }
+
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  const { data: rows } = (await query) as { data: any[] | null };
+
+  const map = new Map<
+    string,
+    {
+      staffName: string;
+      totalOrders: number;
+      totalRevenue: number;
+      totalDeliveryFee: number;
+      totalSec: number;
+      completedCount: number;
+    }
+  >();
+  for (const row of rows ?? []) {
+    const staffId = row.delivery_staff_id as string;
+    if (!staffId) continue;
+    const profile = row.profiles as { full_name?: string } | null;
+    const name = profile?.full_name ?? "Không rõ";
+    const inv = row.invoices as { total?: number } | null;
+    const revenue = Number(inv?.total ?? 0);
+    const fee = Number(row.delivery_fee ?? 0);
+
+    const prev = map.get(staffId) ?? {
+      staffName: name,
+      totalOrders: 0,
+      totalRevenue: 0,
+      totalDeliveryFee: 0,
+      totalSec: 0,
+      completedCount: 0,
+    };
+    prev.totalOrders += 1;
+    prev.totalRevenue += revenue;
+    prev.totalDeliveryFee += fee;
+
+    if (row.delivery_assigned_at && row.delivery_completed_at) {
+      const sec =
+        (new Date(row.delivery_completed_at).getTime() -
+          new Date(row.delivery_assigned_at).getTime()) /
+        1000;
+      if (sec > 0) {
+        prev.totalSec += sec;
+        prev.completedCount += 1;
+      }
+    }
+    map.set(staffId, prev);
+  }
+
+  return Array.from(map.entries())
+    .map(([staffId, v]) => ({
+      staffId,
+      staffName: v.staffName,
+      totalOrders: v.totalOrders,
+      totalRevenue: v.totalRevenue,
+      totalDeliveryFee: v.totalDeliveryFee,
+      avgDeliverySeconds:
+        v.completedCount > 0 ? Math.round(v.totalSec / v.completedCount) : 0,
+      completedCount: v.completedCount,
+    }))
+    .sort((a, b) => b.totalOrders - a.totalOrders);
+}
+
+/**
+ * Drill-down: danh sách đơn của 1 shipper cụ thể.
+ */
+export async function getOrdersByDeliveryStaff(
+  staffId: string,
+  branchId?: string,
+  range?: { from: string; to: string },
+): Promise<ShipperOrderRow[]> {
+  const supabase = getClient();
+  const tenantId = await getCurrentTenantId();
+
+  // Cast as any vì Supabase generated types chưa reflect column delivery_*
+  // (migration 00108 chưa được codegen). Sau khi `pnpm gen-types` thì xoá cast.
+  /* eslint-disable @typescript-eslint/no-explicit-any */
+  let query: any = (supabase.from("kitchen_orders") as any)
+    .select(
+      "id, order_number, customer_name, delivery_fee, delivery_distance_tier, delivery_assigned_at, delivery_completed_at, created_at, invoice_id, invoices(id, code, total, customer_name)",
+    )
+    .eq("tenant_id", tenantId)
+    .eq("delivery_staff_id", staffId);
+  if (branchId) query = query.eq("branch_id", branchId);
+  if (range) {
+    query = query
+      .gte("created_at", `${range.from}T00:00:00+07:00`)
+      .lte("created_at", `${range.to}T23:59:59.999+07:00`);
+  }
+  query = query.order("created_at", { ascending: false });
+  /* eslint-enable @typescript-eslint/no-explicit-any */
+
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  const { data: rows } = (await query) as { data: any[] | null };
+
+  return (rows ?? []).map((row) => {
+    const inv = row.invoices as
+      | { id?: string; code?: string; total?: number; customer_name?: string }
+      | null;
+    const durationSec =
+      row.delivery_assigned_at && row.delivery_completed_at
+        ? Math.round(
+            (new Date(row.delivery_completed_at).getTime() -
+              new Date(row.delivery_assigned_at).getTime()) /
+              1000,
+          )
+        : null;
+    return {
+      kitchenOrderId: row.id as string,
+      orderNumber: row.order_number as string,
+      invoiceId: (inv?.id as string) ?? null,
+      invoiceCode: (inv?.code as string) ?? null,
+      customerName:
+        (inv?.customer_name as string) ??
+        (row.customer_name as string) ??
+        "Khách lẻ",
+      total: Number(inv?.total ?? 0),
+      deliveryFee: Number(row.delivery_fee ?? 0),
+      deliveryTier: (row.delivery_distance_tier as string) ?? null,
+      assignedAt: (row.delivery_assigned_at as string) ?? null,
+      completedAt: (row.delivery_completed_at as string) ?? null,
+      durationSeconds: durationSec,
+      createdAt: row.created_at as string,
+    };
+  });
+}

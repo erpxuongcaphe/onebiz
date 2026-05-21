@@ -339,8 +339,23 @@ export {
   updateOrderItemQty, removeOrderItem,
   cancelKitchenOrder, cancelUnpaidKitchenOrder, transferTable, mergeKitchenOrders,
   applyOrderDiscount, setDeliveryPlatform,
+  // Day 21/05/2026 (CEO): delivery staff tracking + tier picker
+  assignDeliveryStaff, unassignDeliveryStaff, completeDelivery, setDeliveryDistanceTier,
 } from "./kitchen-orders";
 export type { CreateKitchenOrderInput, CancelUnpaidKitchenOrderInput } from "./kitchen-orders";
+
+// F&B Delivery Fee Tiers (CEO 21/05/2026 — policy phí theo km)
+export {
+  getDeliveryFeeTiersForBranch,
+  getAllDeliveryFeeTiers,
+  updateDeliveryFeeTier,
+  upsertBranchTierOverride,
+  deleteBranchTierOverride,
+} from "./fnb-delivery-tiers";
+export type {
+  DeliveryFeeTier,
+  DeliveryTierCode,
+} from "./fnb-delivery-tiers";
 
 // F&B Checkout (2-step flow)
 export { sendToKitchen, fnbPayment, addItemsToExistingOrder, voidFnbInvoice } from "./fnb-checkout";
@@ -428,7 +443,15 @@ export { getOpenShift, getAnyOpenShift, openShift, closeShift, getShiftHistory }
 export { splitByItems, splitEqually, areAllTableOrdersCompleted } from "./split-bill";
 
 // F&B Analytics
-export { getFnbKpis, getRevenueByMenuItem, getRevenueByTable, getRevenueByHourFnb, getCashierPerformance, getTableTurnover } from "./fnb-analytics";
+export {
+  getFnbKpis, getRevenueByMenuItem, getRevenueByTable, getRevenueByHourFnb,
+  getCashierPerformance, getTableTurnover,
+  // Day 21/05/2026 (CEO): delivery staff performance
+  getDeliveryStaffPerformance, getOrdersByDeliveryStaff,
+} from "./fnb-analytics";
+export type {
+  DeliveryStaffPerformance, ShipperOrderRow,
+} from "./fnb-analytics";
 
 // Internal Sales (Bán hàng nội bộ giữa chi nhánh)
 export { getInternalSales, getInternalSaleById, getInternalSalesForExport, createInternalSale, cancelInternalSale } from "./internal-sales";

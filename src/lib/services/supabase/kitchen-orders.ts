@@ -762,3 +762,121 @@ export async function setDeliveryPlatform(
 
   if (error) handleError(error, "setDeliveryPlatform");
 }
+
+// ============================================================
+// Delivery staff tracking (CEO 21/05/2026 — migration 00108)
+// ============================================================
+
+/**
+ * Gán nhân viên đi giao cho 1 kitchen order. Có thể gọi lúc tạo đơn HOẶC
+ * sau khi đơn đã thanh toán (lúc đó RPC sẽ update luôn invoice).
+ *
+ * RPC `assign_delivery_staff_to_order` (SECURITY DEFINER) đảm bảo:
+ *   - Validate đơn tồn tại
+ *   - Set delivery_assigned_at = NOW() nếu chưa có
+ *   - Update invoice.delivery_staff_id nếu đơn đã thanh toán
+ */
+export async function assignDeliveryStaff(
+  kitchenOrderId: string,
+  staffId: string,
+): Promise<{ kitchen_order_id: string; delivery_staff_id: string; invoice_updated: boolean }> {
+  const supabase = getClient();
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  const { data, error } = await (supabase.rpc as any)("assign_delivery_staff_to_order", {
+    p_kitchen_order_id: kitchenOrderId,
+    p_staff_id: staffId,
+  });
+  if (error) handleError(error, "assignDeliveryStaff");
+  return data as {
+    kitchen_order_id: string;
+    delivery_staff_id: string;
+    invoice_updated: boolean;
+  };
+}
+
+/**
+ * Bỏ gán shipper (set delivery_staff_id = null).
+ */
+export async function unassignDeliveryStaff(kitchenOrderId: string): Promise<void> {
+  const supabase = getClient();
+  const tenantId = await getCurrentTenantId();
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  const { error } = await (supabase.from("kitchen_orders").update as any)({
+    delivery_staff_id: null,
+    delivery_assigned_at: null,
+    delivery_completed_at: null,
+  })
+    .eq("tenant_id", tenantId)
+    .eq("id", kitchenOrderId);
+  if (error) handleError(error, "unassignDeliveryStaff");
+}
+
+/**
+ * Đánh dấu shipper đã giao xong → set delivery_completed_at = NOW().
+ * Dùng để tính avg time (assigned_at → completed_at) trong báo cáo hiệu suất.
+ */
+export async function completeDelivery(
+  kitchenOrderId: string,
+): Promise<{ kitchen_order_id: string; completed_at: string; duration_seconds: number }> {
+  const supabase = getClient();
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  const { data, error } = await (supabase.rpc as any)("complete_delivery_for_order", {
+    p_kitchen_order_id: kitchenOrderId,
+  });
+  if (error) handleError(error, "completeDelivery");
+  return data as {
+    kitchen_order_id: string;
+    completed_at: string;
+    duration_seconds: number;
+  };
+}
+
+/**
+ * Set cấp ngưỡng km cho đơn (đồng thời tính lại delivery_fee từ bảng tiers).
+ * Nếu tier = 'custom' → giữ fee hiện tại (cashier nhập tay).
+ */
+export async function setDeliveryDistanceTier(
+  kitchenOrderId: string,
+  tier: "near" | "mid" | "far" | "custom",
+  customFee?: number,
+): Promise<void> {
+  const supabase = getClient();
+  const tenantId = await getCurrentTenantId();
+
+  const updatePayload: Record<string, unknown> = {
+    delivery_distance_tier: tier,
+  };
+
+  if (tier === "custom") {
+    if (typeof customFee === "number") {
+      updatePayload.delivery_fee = customFee;
+    }
+  } else {
+    // Tra cứu fee từ fnb_delivery_fee_tiers (ưu tiên branch-specific, fallback tenant)
+    // Cast as any vì bảng này mới (migration 00108) — chưa được codegen.
+    const { data: order } = await supabase
+      .from("kitchen_orders")
+      .select("branch_id, tenant_id")
+      .eq("id", kitchenOrderId)
+      .maybeSingle();
+    if (order?.tenant_id) {
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      const { data: tiersRaw } = await (supabase.from("fnb_delivery_fee_tiers") as any)
+        .select("branch_id, fee")
+        .eq("tenant_id", order.tenant_id)
+        .eq("tier_code", tier)
+        .eq("is_active", true);
+      const tiers = tiersRaw as { branch_id: string | null; fee: number }[] | null;
+      const matchBranch = tiers?.find((t) => t.branch_id === order.branch_id);
+      const matchTenant = tiers?.find((t) => t.branch_id === null);
+      const fee = matchBranch?.fee ?? matchTenant?.fee ?? 0;
+      updatePayload.delivery_fee = fee;
+    }
+  }
+
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  const { error } = await (supabase.from("kitchen_orders").update as any)(updatePayload)
+    .eq("tenant_id", tenantId)
+    .eq("id", kitchenOrderId);
+  if (error) handleError(error, "setDeliveryDistanceTier");
+}

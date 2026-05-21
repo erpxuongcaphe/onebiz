@@ -55,6 +55,26 @@ interface FnbCartProps {
   ) => void;
   onDeliveryFeeChange?: (fee: number) => void;
   onPlatformCommissionChange?: (percent: number) => void;
+  /**
+   * Day 21/05/2026 (CEO): chọn shipper (nhân viên quán đi giao).
+   * Khác cashier tạo đơn. Optional — có thể gán sau từ list đơn.
+   */
+  onDeliveryStaffChange?: (staffId: string | undefined) => void;
+  /**
+   * Day 21/05/2026 (CEO): chọn cấp ngưỡng km — auto-fill phí giao theo tier.
+   */
+  onDeliveryTierChange?: (
+    tier: "near" | "mid" | "far" | "custom",
+    fee?: number,
+  ) => void;
+  /** Day 21/05/2026: list shipper khả dụng (staff branch hiện tại). */
+  staffOptions?: { id: string; name: string }[];
+  /** Day 21/05/2026: list tier config từ fnb_delivery_fee_tiers. */
+  selfDeliveryTiers?: {
+    code: "near" | "mid" | "far";
+    label: string;
+    fee: number;
+  }[];
   /** Sprint POS-FNB-EXT-1: discount presets từ settings. */
   discountPresets?: { id: string; name: string; mode: "amount" | "percent"; value: number }[];
   /** Huỷ đơn bếp — chỉ hiển thị khi activeTab.kitchenOrderId tồn tại (đã gửi bếp). */
@@ -115,6 +135,10 @@ export function FnbCart({
   onDeliveryPlatformChange,
   onDeliveryFeeChange,
   onPlatformCommissionChange,
+  onDeliveryStaffChange,
+  onDeliveryTierChange,
+  staffOptions,
+  selfDeliveryTiers,
   discountPresets,
 }: FnbCartProps) {
   // Sprint POS-FNB-EXT-1: state cho note textarea expandable
@@ -407,6 +431,118 @@ export function FnbCart({
                       placeholder="0"
                     />
                   </div>
+                </div>
+              )}
+            </div>
+          )}
+
+        {/* Day 21/05/2026 (CEO): Self-delivery section — chỉ hiện khi
+            orderType="delivery" + platform="direct" (quán tự giao). Cho
+            phép chọn cấp ngưỡng km (auto-fill phí) + chọn nhân viên giao
+            (optional, có thể gán sau từ list đơn). */}
+        {activeTab?.orderType === "delivery" &&
+          (activeTab?.deliveryPlatform ?? "direct") === "direct" &&
+          !activeTab?.kitchenOrderId &&
+          (selfDeliveryTiers || staffOptions) && (
+            <div className="mt-3 p-3 rounded-lg bg-surface-container-low border border-outline-variant/20 space-y-3">
+              {/* Tier picker */}
+              {selfDeliveryTiers && selfDeliveryTiers.length > 0 && onDeliveryTierChange && (
+                <div className="space-y-1.5">
+                  <div className="flex items-center gap-1">
+                    <span className="text-[11px] uppercase font-bold text-on-surface-variant">
+                      Cấp ngưỡng km
+                    </span>
+                    <HelpTip>
+                      Chọn khoảng cách giao → tự áp phí theo cấu hình tại
+                      Cài đặt → Phí giao hàng. Chọn &quot;Tự nhập&quot; nếu
+                      muốn nhập tay con số khác.
+                    </HelpTip>
+                  </div>
+                  <div className="flex flex-wrap gap-1">
+                    {selfDeliveryTiers.map((tier) => {
+                      const isActive = activeTab.deliveryDistanceTier === tier.code;
+                      return (
+                        <button
+                          key={tier.code}
+                          type="button"
+                          onClick={() => onDeliveryTierChange(tier.code, tier.fee)}
+                          className={cn(
+                            "px-2.5 py-1 rounded-md text-[11px] font-semibold transition-colors",
+                            isActive
+                              ? "bg-primary text-on-primary"
+                              : "bg-surface-container text-on-surface-variant hover:bg-surface-container-high",
+                          )}
+                          title={`${tier.label} → ${formatCurrency(tier.fee)}`}
+                        >
+                          {tier.label}
+                          <span className="ml-1 opacity-75">
+                            ({formatCurrency(tier.fee)})
+                          </span>
+                        </button>
+                      );
+                    })}
+                    <button
+                      type="button"
+                      onClick={() => onDeliveryTierChange("custom")}
+                      className={cn(
+                        "px-2.5 py-1 rounded-md text-[11px] font-semibold transition-colors",
+                        activeTab.deliveryDistanceTier === "custom"
+                          ? "bg-primary text-on-primary"
+                          : "bg-surface-container text-on-surface-variant hover:bg-surface-container-high",
+                      )}
+                    >
+                      Tự nhập
+                    </button>
+                  </div>
+                  {/* Khi 'custom' → input fee tay */}
+                  {activeTab.deliveryDistanceTier === "custom" && onDeliveryFeeChange && (
+                    <div className="grid grid-cols-2 gap-2 pt-1">
+                      <label className="text-[10px] text-on-surface-variant col-span-2">
+                        Phí giao (VND)
+                      </label>
+                      <Input
+                        type="number"
+                        min={0}
+                        step={1000}
+                        value={activeTab.deliveryFee ?? 0}
+                        onChange={(e) =>
+                          onDeliveryFeeChange(parseInt(e.target.value) || 0)
+                        }
+                        className="h-8 text-xs"
+                        placeholder="0"
+                      />
+                    </div>
+                  )}
+                </div>
+              )}
+
+              {/* Shipper dropdown */}
+              {staffOptions && onDeliveryStaffChange && (
+                <div className="space-y-1.5">
+                  <div className="flex items-center gap-1">
+                    <span className="text-[11px] uppercase font-bold text-on-surface-variant">
+                      Nhân viên giao
+                    </span>
+                    <HelpTip>
+                      Chọn nhân viên quán đi giao đơn này. Có thể bỏ trống
+                      và gán sau từ danh sách đơn (vd lúc tạo chưa biết ai
+                      rảnh).
+                    </HelpTip>
+                  </div>
+                  <select
+                    value={activeTab.deliveryStaffId ?? ""}
+                    onChange={(e) =>
+                      onDeliveryStaffChange(e.target.value || undefined)
+                    }
+                    className="w-full h-8 px-2 text-xs rounded-md border bg-surface-container-lowest focus:outline-none focus:ring-2 focus:ring-primary/40"
+                  >
+                    <option value="">— Chưa gán (gán sau) —</option>
+                    {staffOptions.map((s) => (
+                      <option key={s.id} value={s.id}>
+                        {s.name}
+                      </option>
+                    ))}
+                  </select>
                 </div>
               )}
             </div>

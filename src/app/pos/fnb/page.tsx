@@ -418,6 +418,46 @@ function FnbPosPageInner() {
     };
   }, []);
 
+  // Day 21/05/2026 (CEO): load shipper list + delivery fee tiers cho branch
+  const [shipperOptions, setShipperOptions] = useState<
+    { id: string; name: string }[]
+  >([]);
+  const [deliveryTiers, setDeliveryTiers] = useState<
+    { code: "near" | "mid" | "far"; label: string; fee: number }[]
+  >([]);
+  useEffect(() => {
+    if (!branchId) return;
+    let cancelled = false;
+    void (async () => {
+      try {
+        const [pinUsers, tiers] = await Promise.all([
+          (await import("@/lib/services")).listPosPinUsers(branchId),
+          (await import("@/lib/services")).getDeliveryFeeTiersForBranch(branchId),
+        ]);
+        if (cancelled) return;
+        setShipperOptions(
+          pinUsers
+            .filter((u) => !u.isLocked)
+            .map((u) => ({ id: u.id, name: u.fullName })),
+        );
+        setDeliveryTiers(
+          tiers
+            .filter((t) => t.tierCode !== undefined)
+            .map((t) => ({
+              code: t.tierCode,
+              label: t.tierLabel,
+              fee: t.fee,
+            })),
+        );
+      } catch (err) {
+        console.warn("[FnbPOS] load shipper/tiers failed", err);
+      }
+    })();
+    return () => {
+      cancelled = true;
+    };
+  }, [branchId]);
+
   // Sprint FIX-1 (CEO 07/05): Listen "fnb-print-failed" event từ print-fnb.ts
   // → toast lỗi để user biết không in được. Toggle qua settings.print.notifyPrintFailure.
   useEffect(() => {
@@ -1019,6 +1059,9 @@ function FnbPosPageInner() {
         deliveryPlatform: tab.deliveryPlatform,
         deliveryFee: tab.deliveryFee,
         platformCommissionPercent: tab.platformCommissionPercent,
+        // Day 21/05/2026 (CEO): shipper + tier km
+        deliveryStaffId: tab.deliveryStaffId ?? null,
+        deliveryDistanceTier: tab.deliveryDistanceTier ?? null,
         items: mappedItems,
       }, networkStatus.isOnline);
 
@@ -2264,6 +2307,14 @@ function FnbPosPageInner() {
               );
             }
           }}
+          onDeliveryStaffChange={(staffId) =>
+            pos.setDeliveryStaff(pos.activeTabId, staffId)
+          }
+          onDeliveryTierChange={(tier, fee) =>
+            pos.setDeliveryTier(pos.activeTabId, tier, fee)
+          }
+          staffOptions={shipperOptions}
+          selfDeliveryTiers={deliveryTiers}
           discountPresets={discountPresets}
         />
       </div>
@@ -2421,6 +2472,14 @@ function FnbPosPageInner() {
               onPlatformCommissionChange={(pct) =>
                 pos.setPlatformCommissionPercent(pos.activeTabId, pct)
               }
+              onDeliveryStaffChange={(staffId) =>
+                pos.setDeliveryStaff(pos.activeTabId, staffId)
+              }
+              onDeliveryTierChange={(tier, fee) =>
+                pos.setDeliveryTier(pos.activeTabId, tier, fee)
+              }
+              staffOptions={shipperOptions}
+              selfDeliveryTiers={deliveryTiers}
               discountPresets={discountPresets}
               mobile
             />

@@ -18,6 +18,13 @@ import {
 import type { PaymentBreakdownItem } from "./pos-checkout";
 import type { ToppingAttachment, DeliveryPlatform } from "@/lib/types/fnb";
 
+/**
+ * Cấp ngưỡng km áp dụng phí giao hàng (CEO 21/05/2026).
+ * - near/mid/far: theo cấu hình `fnb_delivery_fee_tiers`
+ * - custom: cashier nhập tay (legacy)
+ */
+export type DeliveryDistanceTier = "near" | "mid" | "far" | "custom";
+
 // ============================================================
 // Types
 // ============================================================
@@ -47,6 +54,17 @@ export interface SendToKitchenInput {
    * để server dedup khi retry → không tạo đơn trùng.
    */
   idempotencyKey?: string;
+  /**
+   * Day 21/05/2026 (CEO): nhân viên QUÁN đi giao đơn delivery (khác cashier).
+   * Optional — có thể gán sau qua `assignDeliveryStaff` ở danh sách đơn.
+   */
+  deliveryStaffId?: string | null;
+  /**
+   * Day 21/05/2026 (CEO): cấp ngưỡng km áp dụng cho phí giao.
+   * Khi chọn near/mid/far → fee được lấy từ bảng `fnb_delivery_fee_tiers`.
+   * Khi 'custom' → cashier tự nhập tay (legacy).
+   */
+  deliveryDistanceTier?: DeliveryDistanceTier | null;
   items: {
     productId: string;
     productName: string;
@@ -153,6 +171,35 @@ export async function sendToKitchen(input: SendToKitchenInput): Promise<SendToKi
           console.error("sendToKitchen:setDeliveryPlatform persist failed", err);
         }
       }
+
+      // Day 21/05/2026 (CEO): nếu cashier giao quán thực hiện (direct) và
+      // chọn cấp ngưỡng km → persist tier + delivery_fee từ bảng tiers.
+      // Tier 'custom' chỉ persist fee (đã có sẵn ở `fee` ở trên qua setDeliveryPlatform).
+      const tier = input.deliveryDistanceTier;
+      if (input.orderType === "delivery" && (tier || input.deliveryStaffId)) {
+        try {
+          const supabaseClient = getClient();
+          const updatePayload: Record<string, unknown> = {};
+          if (tier) updatePayload.delivery_distance_tier = tier;
+          if (input.deliveryStaffId) {
+            updatePayload.delivery_staff_id = input.deliveryStaffId;
+            updatePayload.delivery_assigned_at = new Date().toISOString();
+          }
+          // Khi có fee được truyền vào (vd nội bộ tự giao = direct) → giữ luôn
+          if (
+            fee > 0 &&
+            (!platform || platform === "direct")
+          ) {
+            updatePayload.delivery_fee = fee;
+          }
+          // eslint-disable-next-line @typescript-eslint/no-explicit-any
+          await (supabaseClient.from("kitchen_orders").update as any)(updatePayload)
+            .eq("id", result.kitchen_order_id);
+        } catch (err) {
+          console.error("sendToKitchen:persist delivery_staff/tier failed", err);
+        }
+      }
+
       return {
         kitchenOrderId: result.kitchen_order_id,
         orderNumber: result.order_number,

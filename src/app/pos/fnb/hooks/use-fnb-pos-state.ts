@@ -89,6 +89,14 @@ export interface UseFnbPosStateReturn {
   setDeliveryFee: (tabId: string, fee: number) => void;
   /** Override % chiết khấu sàn (nếu khác mặc định). */
   setPlatformCommissionPercent: (tabId: string, percent: number) => void;
+  /** Day 21/05/2026 (CEO): chọn shipper (nhân viên đi giao). */
+  setDeliveryStaff: (tabId: string, staffId: string | undefined) => void;
+  /** Day 21/05/2026 (CEO): chọn cấp ngưỡng km — auto fill fee từ tier config. */
+  setDeliveryTier: (
+    tabId: string,
+    tier: "near" | "mid" | "far" | "custom",
+    fee?: number,
+  ) => void;
 
   // Totals
   subtotal: number;
@@ -406,6 +414,41 @@ export function useFnbPosState(branchId?: string): UseFnbPosStateReturn {
     [],
   );
 
+  // Day 21/05/2026 (CEO): delivery staff + tier
+  const setDeliveryStaff = useCallback(
+    (tabId: string, staffId: string | undefined) => {
+      setTabs((prev) =>
+        prev.map((t) =>
+          t.id === tabId ? { ...t, deliveryStaffId: staffId } : t,
+        ),
+      );
+    },
+    [],
+  );
+
+  const setDeliveryTier = useCallback(
+    (
+      tabId: string,
+      tier: "near" | "mid" | "far" | "custom",
+      fee?: number,
+    ) => {
+      setTabs((prev) =>
+        prev.map((t) =>
+          t.id === tabId
+            ? {
+                ...t,
+                deliveryDistanceTier: tier,
+                ...(typeof fee === "number"
+                  ? { deliveryFee: Math.max(0, fee) }
+                  : {}),
+              }
+            : t,
+        ),
+      );
+    },
+    [],
+  );
+
   // ── Totals ──
 
   const lines = activeTab?.lines ?? [];
@@ -443,6 +486,8 @@ export function useFnbPosState(branchId?: string): UseFnbPosStateReturn {
     setDeliveryPlatform,
     setDeliveryFee,
     setPlatformCommissionPercent,
+    setDeliveryStaff,
+    setDeliveryTier,
     subtotal,
     total,
     lineCount,

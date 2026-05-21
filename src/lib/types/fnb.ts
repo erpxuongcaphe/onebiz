@@ -174,4 +174,16 @@ export interface FnbTabSnapshot {
    * user override được tại cart. Vd Shopee Food default 25%.
    */
   platformCommissionPercent?: number;
+  /**
+   * Day 21/05/2026 (CEO): Nhân viên quán đi giao (KHÁC cashier tạo đơn).
+   * Optional — có thể gán sau qua dialog "Gán shipper" trên list đơn.
+   * Chỉ áp dụng khi orderType = "delivery" + platform = "direct" (tự giao).
+   */
+  deliveryStaffId?: string;
+  /**
+   * Day 21/05/2026 (CEO): Cấp ngưỡng km áp dụng phí giao.
+   * - "near" / "mid" / "far": lấy fee từ bảng fnb_delivery_fee_tiers
+   * - "custom": cashier nhập tay (legacy, vẫn cho phép)
+   */
+  deliveryDistanceTier?: "near" | "mid" | "far" | "custom";
 }
