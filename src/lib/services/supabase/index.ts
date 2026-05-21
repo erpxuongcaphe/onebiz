@@ -181,6 +181,8 @@ export {
   getInventoryKpis, getTopProductsByRevenue, getCategoryDistribution, getStockMovements, getLowStockProducts as getAnalyticsLowStock,
   // Channels
   getChannelRevenue, getChannelPerformance,
+  // Cross-channel roll-up (Retail vs FnB)
+  getCrossChannelKpis, getCrossChannelTrend, getCrossChannelTopProducts,
   // Customers
   getCustomerKpis, getNewCustomersMonthly, getCustomerSegments, getTopCustomersByRevenue, getTopDebtors,
   // CEO 14/05: Khách hàng × Sản phẩm (cross-table analytics)

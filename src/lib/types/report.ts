@@ -76,7 +76,8 @@ export type ReportKind =
   | "luong-tien"
   | "bao-cao-tai-chinh"
   | "canh-bao"
-  | "so-quy";
+  | "so-quy"
+  | "tong-hop-kenh";
 
 /**
  * Sub-mode XNT (Xuất-Nhập-Tồn).

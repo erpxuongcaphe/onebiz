@@ -1963,3 +1963,226 @@ export async function getCashFlowDetailed(months: number = 6, branchId?: string)
     return { month, receipts, payments, totalReceipt, totalPayment, net, cumulativeBalance };
   });
 }
+
+// ========================================
+// TỔNG HỢP KÊNH (Cross-Channel Roll-up) - /phan-tich/tong-hop-kenh
+// ========================================
+//
+// CEO 21/05: ERP có 2 mảng song song — Retail (bán lẻ cà phê đóng gói) và
+// FnB (quán phục vụ đồ uống). Mỗi mảng có nhóm danh mục riêng, kênh khác
+// nhau, POS khác nhau. Cần báo cáo tổng hợp để CEO thấy bức tranh chung:
+//   - Tỷ trọng Retail vs FnB trong tổng doanh thu
+//   - Trend theo thời gian (kênh nào tăng, kênh nào giảm)
+//   - Top SP từng kênh (so sánh head-to-head)
+//
+// Cách phân kênh: dựa `products.channel`:
+//   - 'retail' → mảng Retail
+//   - 'fnb'    → mảng FnB
+//   - null     → NVL (không có doanh thu — không tính vào báo cáo này)
+//
+// Nguồn dữ liệu: invoice_items.total JOIN products.channel JOIN invoices
+// (status='completed', đã chốt sổ).
+
+export interface ChannelRevenueSplit {
+  retailRevenue: number;
+  retailOrders: number;
+  fnbRevenue: number;
+  fnbOrders: number;
+  totalRevenue: number;
+  totalOrders: number;
+  retailPct: number;
+  fnbPct: number;
+}
+
+export interface ChannelTrendPoint {
+  date: string;
+  retail: number;
+  fnb: number;
+}
+
+export interface ChannelTopProduct {
+  productId: string;
+  name: string;
+  channel: "retail" | "fnb";
+  revenue: number;
+  quantity: number;
+}
+
+/**
+ * KPI tổng hợp kênh — Retail vs FnB. So sánh với kỳ trước nếu range custom.
+ */
+export async function getCrossChannelKpis(
+  branchId?: string,
+  range?: { from: string; to: string },
+): Promise<ChannelRevenueSplit & { prevRetailRevenue: number; prevFnbRevenue: number }> {
+  const supabase = getClient();
+  const tenantId = await getCurrentTenantId();
+  const cur = resolveRange(range, thisMonthRange());
+  const prev = range
+    ? previousRange(cur)
+    : (() => {
+        const now = new Date();
+        const ps = new Date(now.getFullYear(), now.getMonth() - 1, 1);
+        const pe = new Date(now.getFullYear(), now.getMonth(), 1);
+        return { start: ps.toISOString(), end: pe.toISOString() };
+      })();
+
+  async function fetchRange(r: { start: string; end: string }) {
+    let query = supabase
+      .from("invoice_items")
+      .select(
+        "total, invoice_id, products!inner(channel), invoices!inner(status, created_at, branch_id, tenant_id)",
+      )
+      .eq("invoices.tenant_id", tenantId)
+      .gte("invoices.created_at", r.start)
+      .lt("invoices.created_at", r.end)
+      .eq("invoices.status", "completed");
+    if (branchId) query = query.eq("invoices.branch_id", branchId);
+    const { data, error } = await query;
+    if (error) {
+      console.warn("[getCrossChannelKpis]", error.message);
+      return { retail: 0, fnb: 0, retailInvIds: new Set<string>(), fnbInvIds: new Set<string>() };
+    }
+    let retail = 0;
+    let fnb = 0;
+    const retailInvIds = new Set<string>();
+    const fnbInvIds = new Set<string>();
+    (data ?? []).forEach((row: Record<string, unknown>) => {
+      const product = row.products as { channel?: string | null } | null;
+      const ch = product?.channel ?? null;
+      const total = (row.total as number) ?? 0;
+      const invId = (row.invoice_id as string) ?? "";
+      if (ch === "retail") {
+        retail += total;
+        if (invId) retailInvIds.add(invId);
+      } else if (ch === "fnb") {
+        fnb += total;
+        if (invId) fnbInvIds.add(invId);
+      }
+    });
+    return { retail, fnb, retailInvIds, fnbInvIds };
+  }
+
+  const [curAgg, prevAgg] = await Promise.all([fetchRange(cur), fetchRange(prev)]);
+
+  const total = curAgg.retail + curAgg.fnb;
+  return {
+    retailRevenue: curAgg.retail,
+    retailOrders: curAgg.retailInvIds.size,
+    fnbRevenue: curAgg.fnb,
+    fnbOrders: curAgg.fnbInvIds.size,
+    totalRevenue: total,
+    totalOrders: curAgg.retailInvIds.size + curAgg.fnbInvIds.size,
+    retailPct: total > 0 ? (curAgg.retail / total) * 100 : 0,
+    fnbPct: total > 0 ? (curAgg.fnb / total) * 100 : 0,
+    prevRetailRevenue: prevAgg.retail,
+    prevFnbRevenue: prevAgg.fnb,
+  };
+}
+
+/**
+ * Trend theo ngày (line chart 2 series): Retail vs FnB.
+ */
+export async function getCrossChannelTrend(
+  branchId?: string,
+  range?: { from: string; to: string },
+): Promise<ChannelTrendPoint[]> {
+  const supabase = getClient();
+  const tenantId = await getCurrentTenantId();
+  const r = resolveRange(range, thisMonthRange());
+
+  let query = supabase
+    .from("invoice_items")
+    .select(
+      "total, products!inner(channel), invoices!inner(created_at, status, branch_id, tenant_id)",
+    )
+    .eq("invoices.tenant_id", tenantId)
+    .gte("invoices.created_at", r.start)
+    .lt("invoices.created_at", r.end)
+    .eq("invoices.status", "completed");
+  if (branchId) query = query.eq("invoices.branch_id", branchId);
+  const { data, error } = await query;
+  if (error) {
+    console.warn("[getCrossChannelTrend]", error.message);
+    return [];
+  }
+
+  // Group by date (YYYY-MM-DD)
+  const byDay = new Map<string, { retail: number; fnb: number }>();
+  (data ?? []).forEach((row: Record<string, unknown>) => {
+    const inv = row.invoices as { created_at?: string } | null;
+    const product = row.products as { channel?: string | null } | null;
+    if (!inv?.created_at) return;
+    const ch = product?.channel ?? null;
+    if (ch !== "retail" && ch !== "fnb") return;
+    const dayKey = inv.created_at.slice(0, 10);
+    const existing = byDay.get(dayKey) ?? { retail: 0, fnb: 0 };
+    if (ch === "retail") existing.retail += (row.total as number) ?? 0;
+    else existing.fnb += (row.total as number) ?? 0;
+    byDay.set(dayKey, existing);
+  });
+
+  return Array.from(byDay.entries())
+    .sort(([a], [b]) => a.localeCompare(b))
+    .map(([date, v]) => ({ date, retail: v.retail, fnb: v.fnb }));
+}
+
+/**
+ * Top N sản phẩm mỗi kênh (head-to-head). Trả 2 list: top retail + top fnb.
+ */
+export async function getCrossChannelTopProducts(
+  branchId?: string,
+  range?: { from: string; to: string },
+  topN: number = 10,
+): Promise<{ retail: ChannelTopProduct[]; fnb: ChannelTopProduct[] }> {
+  const supabase = getClient();
+  const tenantId = await getCurrentTenantId();
+  const r = resolveRange(range, thisMonthRange());
+
+  let query = supabase
+    .from("invoice_items")
+    .select(
+      "product_id, product_name, quantity, total, products!inner(channel, name), invoices!inner(status, created_at, branch_id, tenant_id)",
+    )
+    .eq("invoices.tenant_id", tenantId)
+    .gte("invoices.created_at", r.start)
+    .lt("invoices.created_at", r.end)
+    .eq("invoices.status", "completed");
+  if (branchId) query = query.eq("invoices.branch_id", branchId);
+  const { data, error } = await query;
+  if (error) {
+    console.warn("[getCrossChannelTopProducts]", error.message);
+    return { retail: [], fnb: [] };
+  }
+
+  const agg = new Map<string, ChannelTopProduct>();
+  (data ?? []).forEach((row: Record<string, unknown>) => {
+    const product = row.products as { channel?: string | null; name?: string } | null;
+    const ch = product?.channel ?? null;
+    if (ch !== "retail" && ch !== "fnb") return;
+    const pid = (row.product_id as string) ?? "";
+    if (!pid) return;
+    const key = `${ch}|${pid}`;
+    const existing = agg.get(key) ?? {
+      productId: pid,
+      name: product?.name ?? (row.product_name as string) ?? "—",
+      channel: ch as "retail" | "fnb",
+      revenue: 0,
+      quantity: 0,
+    };
+    existing.revenue += (row.total as number) ?? 0;
+    existing.quantity += (row.quantity as number) ?? 0;
+    agg.set(key, existing);
+  });
+
+  const all = Array.from(agg.values());
+  const retail = all
+    .filter((p) => p.channel === "retail")
+    .sort((a, b) => b.revenue - a.revenue)
+    .slice(0, topN);
+  const fnb = all
+    .filter((p) => p.channel === "fnb")
+    .sort((a, b) => b.revenue - a.revenue)
+    .slice(0, topN);
+  return { retail, fnb };
+}
