@@ -41,7 +41,7 @@ import {
   moveCategorySortOrder,
   getProductsByCategoryId,
   suggestCategoryCode,
-  checkCategoryCodeWarning,
+  previewProductCodeFromGroup,
 } from "@/lib/services";
 import { useToast } from "@/lib/contexts";
 import type { ProductCategory } from "@/lib/types";
@@ -274,12 +274,6 @@ export default function NhomHangPage() {
     const newErrors: typeof errors = {};
     if (!trimmedName) newErrors.name = "Tên nhóm là bắt buộc";
     if (!trimmedCode) newErrors.code = "Mã nhóm là bắt buộc";
-    // CEO 22/05/2026: Block save nếu mã nhóm bắt đầu bằng prefix scope —
-    // tránh tạo mã SP double prefix (NVL-NVL-CAFE-001, SKU-SKU-DCU-005...)
-    const codeWarning = checkCategoryCodeWarning(trimmedCode);
-    if (codeWarning) {
-      newErrors.code = codeWarning;
-    }
     if (Object.keys(newErrors).length > 0) {
       setErrors(newErrors);
       return;
@@ -714,51 +708,39 @@ export default function NhomHangPage() {
               <label className="text-sm font-medium">
                 Mã nhóm <span className="text-destructive">*</span>
                 <span className="ml-2 text-xs font-normal text-muted-foreground">
-                  (3 ký tự, viết hoa, KHÔNG có NVL/SKU)
+                  (tự do, vd CAFE, BAO, SKU-TEST...)
                 </span>
               </label>
               <Input
                 value={categoryCode}
                 onChange={(e) => {
                   codeManuallyEditedRef.current = true;
-                  // CEO 22/05/2026: Auto strip NVL-/SKU-/BOM-/FNB- prefix
-                  // khi user nhập tay — tránh tạo mã double prefix.
-                  let raw = e.target.value.toUpperCase();
-                  raw = raw.replace(/^(NVL|SKU|BOM|FNB|RETAIL|NCC)-+/, "");
-                  setCategoryCode(raw);
+                  setCategoryCode(e.target.value.toUpperCase());
                 }}
-                placeholder="Tự gợi ý từ tên (vd CAFE, BAO, DCU)"
-                maxLength={10}
+                placeholder="Tự gợi ý từ tên"
+                maxLength={20}
                 className="font-mono"
                 aria-invalid={!!errors.code}
                 onKeyDown={(e) => {
                   if (e.key === "Enter") handleSave();
                 }}
               />
-              {(() => {
-                if (errors.code) {
-                  return <p className="text-xs text-destructive">{errors.code}</p>;
-                }
-                if (!categoryCode) return null;
-                const warning = checkCategoryCodeWarning(categoryCode);
-                if (warning) {
-                  return (
-                    <p className="text-xs text-status-warning flex items-start gap-1">
-                      <Icon name="warning" size={12} className="shrink-0 mt-0.5" />
-                      <span>{warning}</span>
-                    </p>
-                  );
-                }
-                return (
+              {errors.code ? (
+                <p className="text-xs text-destructive">{errors.code}</p>
+              ) : (
+                categoryCode && (
                   <p className="text-xs text-muted-foreground">
                     Mã SP sẽ là:{" "}
                     <span className="font-mono font-medium text-foreground">
-                      {scope === "nvl" ? "NVL" : "SKU"}-{categoryCode}-001
+                      {previewProductCodeFromGroup(
+                        scope === "nvl" ? "NVL" : "SKU",
+                        categoryCode,
+                      )}
                     </span>
                     , 002, 003…
                   </p>
-                );
-              })()}
+                )
+              )}
             </div>
           </div>
 
