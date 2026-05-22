@@ -382,6 +382,9 @@ async function loadContext(): Promise<CurrentContext> {
 }
 
 /**
+ * @deprecated CEO 21/05/2026: bỏ groupCode khỏi mã. Dùng `nextSimpleCode`.
+ * Giữ lại cho backward-compat (vd script cũ).
+ *
  * Sinh mã code tiếp theo cho prefix + group, ví dụ: NVL-BAO-022.
  * LƯU Ý: Mỗi lần gọi sẽ tăng counter — chỉ gọi tại thời điểm insert.
  */
@@ -394,6 +397,27 @@ export async function nextGroupCode(prefix: string, groupCode: string): Promise<
     p_group_code: groupCode,
   });
   if (error) handleError(error, "nextGroupCode");
+  return data as string;
+}
+
+/**
+ * CEO 21/05/2026: Sinh mã đơn giản {PREFIX}-{NNNN} không kèm group_code.
+ *
+ * Dùng cho NVL/SKU/BOM mới — pattern gọn hơn nextGroupCode:
+ *   - TRƯỚC: nextGroupCode('NVL', 'BAO') → 'NVL-BAO-022'
+ *   - SAU:   nextSimpleCode('NVL')        → 'NVL-0001'
+ *
+ * Counter atomic per (tenant, prefix). Mỗi lần gọi tăng 1 — chỉ gọi khi insert.
+ */
+export async function nextSimpleCode(prefix: string): Promise<string> {
+  const supabase = getClient();
+  const tenantId = await getCurrentTenantId();
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  const { data, error } = await (supabase.rpc as any)("next_simple_code", {
+    p_tenant_id: tenantId,
+    p_prefix: prefix,
+  });
+  if (error) handleError(error, "nextSimpleCode");
   return data as string;
 }
 
@@ -515,5 +539,45 @@ export async function peekNextGroupCode(
   } catch (err) {
     console.warn("[peekNextGroupCode] failed:", err);
     return `${prefix}-${groupCode}-XXX`;
+  }
+}
+
+/**
+ * CEO 21/05/2026: Preview mã đơn giản tiếp theo (KHÔNG increment counter).
+ *
+ * Dùng cho UI tạo SP hiển thị mã thật (`NVL-0001`, `SKU-0042`) ngay khi
+ * user chọn loại SP — không phải placeholder. `nextSimpleCode()` chỉ gọi
+ * khi save thật sự.
+ *
+ * Có timeout 5s tránh block UI nếu RPC chưa migrate. Fallback `{prefix}-XXXX`.
+ */
+export async function peekNextSimpleCode(prefix: string): Promise<string> {
+  const supabase = getClient();
+  try {
+    const tenantId = await getCurrentTenantId();
+    const fallback = `${prefix}-XXXX`;
+
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    const rpcPromise = (supabase.rpc as any)("peek_next_simple_code", {
+      p_tenant_id: tenantId,
+      p_prefix: prefix,
+    }).then((res: { error: unknown; data: unknown }) => {
+      if (res.error || !res.data) return fallback;
+      return res.data as string;
+    });
+
+    const timeoutPromise = new Promise<string>((resolve) =>
+      setTimeout(() => {
+        console.warn(
+          `[peekNextSimpleCode] timeout after 5s for ${prefix} — fallback XXXX`,
+        );
+        resolve(fallback);
+      }, 5000),
+    );
+
+    return Promise.race([rpcPromise, timeoutPromise]);
+  } catch (err) {
+    console.warn("[peekNextSimpleCode] failed:", err);
+    return `${prefix}-XXXX`;
   }
 }
