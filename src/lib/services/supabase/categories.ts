@@ -242,6 +242,17 @@ export async function getProductsByCategoryId(
  * Không guarantee unique — service createCategory sẽ catch UNIQUE
  * constraint violation từ DB và yêu cầu user nhập tay.
  */
+/**
+ * CEO 22/05/2026: Các từ "reserved" đại diện cho prefix scope/channel —
+ * KHÔNG được dùng làm mã nhóm vì sẽ gây double prefix khi sinh mã SP.
+ * Vd: user nhập "SKU - Test" → mã nhóm "SKU-TEST" → mã SP sẽ là
+ * `NVL-SKU-TEST-001` (bị double "NVL" + "SKU"). Filter bỏ các từ này
+ * khỏi suggest, user vẫn nhập tay được nhưng sẽ bị warning ở dialog.
+ */
+const RESERVED_CODE_TOKENS = new Set([
+  "NVL", "SKU", "BOM", "FNB", "RETAIL", "NCC", "KH",
+]);
+
 export function suggestCategoryCode(name: string): string {
   const noDiacritic = name
     .normalize("NFD")
@@ -249,7 +260,14 @@ export function suggestCategoryCode(name: string): string {
     .replace(/đ/gi, "d");
 
   // Lấy chữ đầu mỗi từ (split by whitespace + non-alpha)
-  const words = noDiacritic.toUpperCase().split(/[^A-Z]+/).filter(Boolean);
+  let words = noDiacritic.toUpperCase().split(/[^A-Z]+/).filter(Boolean);
+
+  // Lọc bỏ token reserved (NVL/SKU/FNB/RETAIL/...) — tránh double prefix
+  // khi sinh mã SP. Vd "SKU - Test" → bỏ "SKU" → còn "TEST" → mã "TES"
+  const filtered = words.filter((w) => !RESERVED_CODE_TOKENS.has(w));
+  // Nếu lọc xong rỗng → fallback dùng nguyên list (user có thể đặt tên
+  // nhóm chính là "SKU" cũng được, miễn họ confirm).
+  if (filtered.length > 0) words = filtered;
 
   if (words.length === 0) return "";
 
@@ -263,6 +281,20 @@ export function suggestCategoryCode(name: string): string {
     .map((w) => w[0])
     .join("")
     .slice(0, 3);
+}
+
+/**
+ * Kiểm tra mã nhóm có bị "prefix double" không (NVL-XXX, SKU-XXX...).
+ * Trả về null nếu OK, hoặc string warning để hiển thị ở UI.
+ */
+export function checkCategoryCodeWarning(code: string): string | null {
+  const upper = code.toUpperCase().trim();
+  for (const token of RESERVED_CODE_TOKENS) {
+    if (upper.startsWith(`${token}-`) || upper === token) {
+      return `Mã nhóm KHÔNG nên bắt đầu bằng "${token}-" — hệ thống sẽ tự thêm prefix khi sinh mã SP, dẫn đến mã bị double (vd "${token}-${token}-XXX-001").`;
+    }
+  }
+  return null;
 }
 
 export async function deleteCategory(id: string) {

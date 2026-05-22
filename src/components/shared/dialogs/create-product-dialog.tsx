@@ -30,8 +30,8 @@ import {
   getProducts,
 } from "@/lib/services";
 import {
-  nextSimpleCode,
-  peekNextSimpleCode,
+  nextGroupCode,
+  peekNextGroupCode,
 } from "@/lib/services/supabase/base";
 import { Icon } from "@/components/ui/icon";
 import { ProductImageUpload } from "@/components/shared/product-image-upload";
@@ -426,24 +426,23 @@ export function CreateProductDialog({
   const stockUnitDup = findCaseInsensitiveDup(stockUnit, existingUnits);
   const sellUnitDup = findCaseInsensitiveDup(sellUnit, existingUnits);
 
-  // Preview mã SP tiếp theo khi mở dialog hoặc đổi scope (create mode).
-  // CEO 21/05/2026: Bỏ group_code khỏi mã. Pattern mới {PREFIX}-{NNNN}
-  // chỉ phụ thuộc scope (NVL/SKU), KHÔNG còn phụ thuộc category.
-  // Vẫn yêu cầu chọn category để phân loại — chỉ là không nhúng vào mã.
+  // Preview mã SP tiếp theo khi user chọn nhóm (create mode).
+  // peek_next_group_code RPC trả về mã thật như NVL-CPH-014 — không phải XXX.
+  // Edit mode: skip vì SP đã có code cố định, không sinh mới.
   useEffect(() => {
-    if (!open || isEdit) {
+    if (!open || isEdit || !selectedCategoryCode) {
       setPreviewCode("");
       return;
     }
     let cancelled = false;
     setLoadingPreview(true);
     const prefix = scope === "nvl" ? "NVL" : "SKU";
-    peekNextSimpleCode(prefix)
+    peekNextGroupCode(prefix, selectedCategoryCode)
       .then((code) => {
         if (!cancelled) setPreviewCode(code);
       })
       .catch(() => {
-        // Fallback đã handle trong peekNextSimpleCode → string {prefix}-XXXX
+        // Fallback đã handle trong peekNextGroupCode → string XXX
       })
       .finally(() => {
         if (!cancelled) setLoadingPreview(false);
@@ -451,15 +450,13 @@ export function CreateProductDialog({
     return () => {
       cancelled = true;
     };
-  }, [open, isEdit, scope]);
+  }, [open, isEdit, scope, selectedCategoryCode]);
 
   function validate(): boolean {
     const e: Record<string, string> = {};
     if (!name.trim()) e.name = "Tên hàng là bắt buộc";
     if (!categoryId) e.category = "Chọn nhóm hàng";
-    // CEO 21/05/2026: bỏ check "Nhóm hàng chưa có code" vì pattern mã
-    // mới ({PREFIX}-{NNNN}) không nhúng group_code. Category vẫn cần
-    // chọn để phân loại SP, nhưng không bắt buộc category phải có code.
+    if (!selectedCategory?.code) e.category = "Nhóm hàng chưa có code";
     if (scope === "sku") {
       if (!sellPrice.trim() || isNaN(Number(sellPrice)) || Number(sellPrice) <= 0)
         e.sellPrice = "Giá bán không hợp lệ";
@@ -637,11 +634,9 @@ export function CreateProductDialog({
         return;
       }
 
-      // CREATE — CEO 21/05/2026: sinh code đơn giản {PREFIX}-{NNNN}
-      // không kèm group_code. Vẫn lưu group_code field xuống DB (cho
-      // category) nhưng KHÔNG nhúng vào mã.
+      // CREATE — sinh code mới theo groupCode.
       const prefix = scope === "nvl" ? "NVL" : "SKU";
-      const code = await nextSimpleCode(prefix);
+      const code = await nextGroupCode(prefix, selectedCategory!.code!);
 
       const created = await createProduct({
         ...commonPayload,
@@ -649,9 +644,7 @@ export function CreateProductDialog({
         productType: scope,
         // NVL không có kênh bán (nội bộ). SKU bắt buộc fnb hoặc retail.
         hasBom: scope === "sku" ? hasBom : false,
-        // Giữ groupCode trong DB để query/filter theo category — chỉ là
-        // không nhúng vào mã code nữa (CEO 21/05/2026).
-        groupCode: selectedCategory?.code ?? undefined,
+        groupCode: selectedCategory!.code,
         stock: Number(initialStock) || 0,
       });
 
