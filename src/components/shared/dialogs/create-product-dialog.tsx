@@ -458,8 +458,15 @@ export function CreateProductDialog({
     if (!categoryId) e.category = "Chọn nhóm hàng";
     if (!selectedCategory?.code) e.category = "Nhóm hàng chưa có code";
     if (scope === "sku") {
-      if (!sellPrice.trim() || isNaN(Number(sellPrice)) || Number(sellPrice) <= 0)
-        e.sellPrice = "Giá bán không hợp lệ";
+      // CEO 22/05/2026: bỏ require giá bán. Workflow CEO mong muốn:
+      //   1. Tạo SKU rỗng (chưa biết giá)
+      //   2. Add BOM sau → giá vốn auto-compute
+      //   3. Set giá bán sau qua dialog edit hoặc Excel
+      // Trước đây bắt sellPrice > 0 → CEO không tạo được SKU placeholder.
+      // Chỉ check format hợp lệ nếu có nhập (không cho âm).
+      if (sellPrice.trim() && (isNaN(Number(sellPrice)) || Number(sellPrice) < 0)) {
+        e.sellPrice = "Giá bán không hợp lệ (phải ≥ 0)";
+      }
       // Day 20/05/2026 (CEO audit Fix #1): SKU BẮT BUỘC có channel
       if (!channel || (channel !== "fnb" && channel !== "retail")) {
         e.channel = "SKU bắt buộc có Kênh bán (FnB hoặc Retail)";
@@ -1106,8 +1113,12 @@ export function CreateProductDialog({
               <div className="space-y-2">
                 <label className="text-sm font-medium">
                   Giá bán (₫)
+                  {/* CEO 22/05/2026: bỏ * cho SKU — cho phép tạo SKU rỗng
+                      rồi cập nhật giá sau (sau khi add BOM/setup). */}
                   {scope === "sku" && (
-                    <span className="text-destructive"> *</span>
+                    <span className="text-xs font-normal text-muted-foreground ml-1">
+                      · có thể bổ sung sau
+                    </span>
                   )}
                 </label>
                 <Input

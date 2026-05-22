@@ -152,9 +152,13 @@ export const productExcelSchema: ExcelSchema<ProductImportRow> = {
       key: "sellPrice",
       header: "Giá bán",
       type: "number",
-      required: true,
+      // CEO 22/05/2026: bỏ required cho phép Excel import SKU rỗng giá
+      // → tạo placeholder, set giá sau qua dialog edit hoặc Excel khác.
+      // NVL không cần giá bán (nội bộ), SKU cũng để optional.
+      required: false,
       min: 0,
       example: 35000,
+      description: "Optional. SKU có thể tạo rỗng và cập nhật giá sau.",
       width: 14,
     },
     {
