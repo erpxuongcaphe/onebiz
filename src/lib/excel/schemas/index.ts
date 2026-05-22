@@ -48,3 +48,8 @@ export {
   bomExcelSchema,
   type BOMImportRow,
 } from "./bom";
+
+export {
+  categoriesExcelSchema,
+  type CategoryImportRow,
+} from "./categories";

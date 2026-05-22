@@ -87,20 +87,27 @@ export async function createCategory(category: {
   name: string;
   code: string;
   scope: "nvl" | "sku" | "customer" | "supplier";
+  /**
+   * Day 22/05/2026 (CEO): channel chỉ áp dụng scope='sku'. NVL/customer/supplier
+   * truyền null hoặc bỏ qua.
+   */
+  channel?: "fnb" | "retail" | null;
   parentId?: string;
   sortOrder?: number;
 }): Promise<ProductCategory> {
   const tenantId = await getCurrentTenantId();
-  const { data, error } = await supabase
-    .from("categories")
-    .insert({
-      tenant_id: tenantId,
-      name: category.name,
-      code: category.code,
-      scope: category.scope,
-      parent_id: category.parentId ?? null,
-      sort_order: category.sortOrder ?? 0,
-    })
+  // Cast as any vì Supabase generated types chưa reflect column channel
+  // (migration 00111 chưa được codegen). Xoá cast sau khi gen-types.
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  const { data, error } = await (supabase.from("categories").insert as any)({
+    tenant_id: tenantId,
+    name: category.name,
+    code: category.code,
+    scope: category.scope,
+    channel: category.scope === "sku" ? (category.channel ?? null) : null,
+    parent_id: category.parentId ?? null,
+    sort_order: category.sortOrder ?? 0,
+  })
     .select()
     .single();
 
@@ -110,16 +117,22 @@ export async function createCategory(category: {
 
 export async function updateCategory(
   id: string,
-  updates: Partial<{ name: string; code: string; sortOrder: number }>
+  updates: Partial<{
+    name: string;
+    code: string;
+    sortOrder: number;
+    /** Day 22/05/2026 (CEO): cho phép update channel. */
+    channel: "fnb" | "retail" | null;
+  }>
 ) {
   const updateObj: Record<string, unknown> = {};
   if (updates.name !== undefined) updateObj.name = updates.name;
   if (updates.code !== undefined) updateObj.code = updates.code;
   if (updates.sortOrder !== undefined) updateObj.sort_order = updates.sortOrder;
+  if (updates.channel !== undefined) updateObj.channel = updates.channel;
 
-  const { error } = await supabase
-    .from("categories")
-    .update(updateObj)
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  const { error } = await (supabase.from("categories").update as any)(updateObj)
     .eq("id", id);
 
   if (error) throw error;
@@ -382,6 +395,8 @@ function mapCategory(row: Record<string, unknown>): ProductCategory {
     name: row.name as string,
     code: (row.code as string) ?? undefined,
     scope: row.scope as ProductCategory["scope"],
+    // Day 22/05/2026 (CEO): channel field từ migration 00111
+    channel: (row.channel as ProductCategory["channel"]) ?? undefined,
     parentId: (row.parent_id as string) ?? undefined,
     sortOrder: (row.sort_order as number) ?? 0,
     createdAt: (row.created_at as string) ?? undefined,

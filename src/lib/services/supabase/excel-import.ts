@@ -15,6 +15,7 @@
 import type {
   BOMImportRow,
   CashTransactionImportRow,
+  CategoryImportRow,
   CustomerImportRow,
   DebtOpeningImportRow,
   InitialStockImportRow,
@@ -949,4 +950,76 @@ export async function bulkImportBOMs(
     failureCount: errors.length,
     errors,
   };
+}
+
+// ---------------------------------------------------------------------------
+// Categories — CEO 22/05/2026 (V3)
+// ---------------------------------------------------------------------------
+
+/**
+ * Bulk import nhóm hàng (categories). Upsert theo (scope, code):
+ *   - Mã trùng + cùng scope → cập nhật name + channel
+ *   - Mã mới → tạo nhóm mới
+ *
+ * Validate:
+ *   - SKU bắt buộc channel (đã check ở schema validateRow)
+ *   - NVL không được có channel (đã check ở schema)
+ *   - Code không strip prefix (RPC next_group_code dedupe khi sinh mã SP)
+ */
+export async function bulkImportCategories(
+  rows: CategoryImportRow[],
+): Promise<ImportBatchResult> {
+  const supabase = getClient();
+  const tenantId = await getCurrentTenantId();
+
+  // Preload existing categories per scope để biết upsert vs insert
+  const { data: existing } = await supabase
+    .from("categories")
+    .select("id, code, scope")
+    .eq("tenant_id", tenantId)
+    .in("scope", ["nvl", "sku"]);
+
+  const keyToId = new Map<string, string>();
+  for (const c of existing ?? []) {
+    if (c.code && c.scope) {
+      keyToId.set(`${c.scope}|${(c.code as string).toUpperCase()}`, c.id as string);
+    }
+  }
+
+  return runBulk(rows, async (row) => {
+    const code = row.code.trim().toUpperCase();
+    const key = `${row.scope}|${code}`;
+    const existingId = keyToId.get(key);
+
+    const payload: Record<string, unknown> = {
+      tenant_id: tenantId,
+      name: row.name.trim(),
+      code,
+      scope: row.scope,
+      channel: row.scope === "sku" ? (row.channel ?? null) : null,
+      sort_order: row.sortOrder ?? 0,
+    };
+
+    if (existingId) {
+      // Update: chỉ cần name + channel + sort_order
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      const { error } = await (supabase.from("categories").update as any)({
+        name: payload.name,
+        channel: payload.channel,
+        sort_order: payload.sort_order,
+      })
+        .eq("id", existingId)
+        .eq("tenant_id", tenantId);
+      if (error) throw error;
+    } else {
+      // Insert mới
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      const { error, data } = await (supabase.from("categories").insert as any)(payload)
+        .select("id")
+        .single();
+      if (error) throw error;
+      // Cache để các row sau cùng key không insert trùng
+      if (data?.id) keyToId.set(key, data.id);
+    }
+  });
 }

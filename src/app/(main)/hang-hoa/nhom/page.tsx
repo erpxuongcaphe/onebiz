@@ -46,6 +46,12 @@ import {
 import { useToast } from "@/lib/contexts";
 import type { ProductCategory } from "@/lib/types";
 import { Icon } from "@/components/ui/icon";
+// Day 22/05/2026 (CEO V3): Excel import/export categories
+import { ImportExcelDialog } from "@/components/shared/dialogs/import-excel-dialog";
+import { downloadTemplate, exportToExcelFromSchema } from "@/lib/excel";
+import { categoriesExcelSchema } from "@/lib/excel/schemas";
+import { bulkImportCategories } from "@/lib/services/supabase/excel-import";
+import { getAllCategories } from "@/lib/services";
 
 type CategoryScope = "nvl" | "sku";
 
@@ -185,11 +191,18 @@ export default function NhomHangPage() {
   const [editingCategory, setEditingCategory] = useState<ProductCategory | null>(null);
   const [categoryName, setCategoryName] = useState("");
   const [categoryCode, setCategoryCode] = useState("");
+  // Day 22/05/2026 (CEO V1): channel cho category scope='sku'. Mặc định 'fnb'
+  // (vì chuỗi coffee chain anh chủ yếu FnB). Edit mode prefill từ DB.
+  const [categoryChannel, setCategoryChannel] = useState<"fnb" | "retail">("fnb");
   // Track xem user đã edit code thủ công chưa — nếu rồi thì stop auto-suggest
   // khi họ tiếp tục gõ name (tôn trọng input của user).
   const codeManuallyEditedRef = useRef(false);
   const [saving, setSaving] = useState(false);
-  const [errors, setErrors] = useState<{ name?: string; code?: string }>({});
+  const [errors, setErrors] = useState<{
+    name?: string;
+    code?: string;
+    channel?: string;
+  }>({});
 
   // Auto-suggest code khi user nhập tên — chỉ khi chưa manual edit code +
   // đang ở create mode (edit mode KHÔNG đổi code khi đổi tên vì code cũ
@@ -203,6 +216,9 @@ export default function NhomHangPage() {
 
   // Sort move loading state — block multiple clicks while waiting.
   const [movingId, setMovingId] = useState<string | null>(null);
+
+  // Day 22/05/2026 (CEO V3): Import Excel dialog state
+  const [importOpen, setImportOpen] = useState(false);
 
   const fetchData = useCallback(async () => {
     setLoading(true);
@@ -254,6 +270,10 @@ export default function NhomHangPage() {
     setEditingCategory(null);
     setCategoryName("");
     setCategoryCode("");
+    // Day 22/05/2026: default channel theo filter hiện tại — nếu user đang
+    // xem tab "FnB" → mặc định fnb, ngược lại retail. UX hợp lý: thường
+    // user tạo nhóm cùng channel với tab đang xem.
+    setCategoryChannel(channelFilter === "retail" ? "retail" : "fnb");
     codeManuallyEditedRef.current = false;
     setErrors({});
     setDialogOpen(true);
@@ -263,6 +283,14 @@ export default function NhomHangPage() {
     setEditingCategory(cat);
     setCategoryName(cat.name);
     setCategoryCode(cat.code ?? "");
+    // Day 22/05/2026: prefill channel từ DB. Nếu DB null (legacy) → đoán
+    // dựa trên productCount breakdown (FnB nếu fnb > retail).
+    if (cat.channel) {
+      setCategoryChannel(cat.channel);
+    } else if (scope === "sku") {
+      const slot = channelBreakdown.get(cat.id);
+      setCategoryChannel(slot && slot.fnb > slot.retail ? "fnb" : "retail");
+    }
     codeManuallyEditedRef.current = true; // edit mode coi như đã manual
     setErrors({});
     setDialogOpen(true);
@@ -285,6 +313,8 @@ export default function NhomHangPage() {
         await updateCategory(editingCategory.id, {
           name: trimmedName,
           code: trimmedCode,
+          // CEO 22/05/2026: cập nhật channel nếu là SKU
+          ...(scope === "sku" ? { channel: categoryChannel } : {}),
         });
         toast({
           variant: "success",
@@ -296,6 +326,8 @@ export default function NhomHangPage() {
           name: trimmedName,
           code: trimmedCode,
           scope,
+          // CEO 22/05/2026: channel chỉ truyền khi scope=sku
+          ...(scope === "sku" ? { channel: categoryChannel } : {}),
         });
         toast({
           variant: "success",
@@ -586,6 +618,46 @@ export default function NhomHangPage() {
               variant: "default",
               onClick: openCreate,
             },
+            // Day 22/05/2026 (CEO V3): 3 nút Excel categories
+            {
+              label: "Tải mẫu",
+              icon: <Icon name="description" size={16} />,
+              variant: "ghost",
+              onClick: () => downloadTemplate(categoriesExcelSchema),
+            },
+            {
+              label: "Nhập Excel",
+              icon: <Icon name="upload" size={16} />,
+              variant: "ghost",
+              onClick: () => setImportOpen(true),
+            },
+            {
+              label: "Xuất file",
+              icon: <Icon name="download" size={16} />,
+              variant: "ghost",
+              onClick: async () => {
+                try {
+                  const all = await getAllCategories();
+                  // Filter chỉ scope nvl/sku (bỏ customer/supplier)
+                  const rows = all
+                    .filter((c) => c.scope === "nvl" || c.scope === "sku")
+                    .map((c) => ({
+                      scope: c.scope as "nvl" | "sku",
+                      name: c.name,
+                      code: c.code ?? "",
+                      channel: c.channel,
+                      sortOrder: c.sortOrder,
+                    }));
+                  exportToExcelFromSchema(rows, categoriesExcelSchema);
+                } catch (err) {
+                  toast({
+                    variant: "error",
+                    title: "Lỗi xuất file",
+                    description: err instanceof Error ? err.message : "",
+                  });
+                }
+              },
+            },
           ]}
         />
 
@@ -742,6 +814,48 @@ export default function NhomHangPage() {
                 )
               )}
             </div>
+
+            {/* Day 22/05/2026 (CEO V1): Channel picker chỉ cho SKU. NVL
+                không cần vì là nguyên liệu nội bộ. */}
+            {scope === "sku" && (
+              <div className="space-y-2">
+                <label className="text-sm font-medium">
+                  Kênh bán <span className="text-destructive">*</span>
+                  <span className="ml-2 text-xs font-normal text-muted-foreground">
+                    (SP trong nhóm này sẽ mặc định kênh này)
+                  </span>
+                </label>
+                <div className="flex gap-2">
+                  <button
+                    type="button"
+                    onClick={() => setCategoryChannel("fnb")}
+                    className={`flex-1 flex items-center justify-center gap-2 px-3 py-2.5 rounded-lg border text-sm font-medium transition-colors ${
+                      categoryChannel === "fnb"
+                        ? "border-status-warning bg-status-warning/10 text-status-warning"
+                        : "border-outline-variant bg-surface-container-lowest text-muted-foreground hover:bg-surface-container-low"
+                    }`}
+                  >
+                    <Icon name="local_cafe" size={16} />
+                    <span>FnB (pha chế tại quán)</span>
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => setCategoryChannel("retail")}
+                    className={`flex-1 flex items-center justify-center gap-2 px-3 py-2.5 rounded-lg border text-sm font-medium transition-colors ${
+                      categoryChannel === "retail"
+                        ? "border-status-info bg-status-info/10 text-status-info"
+                        : "border-outline-variant bg-surface-container-lowest text-muted-foreground hover:bg-surface-container-low"
+                    }`}
+                  >
+                    <Icon name="storefront" size={16} />
+                    <span>Retail (bán lẻ đóng gói)</span>
+                  </button>
+                </div>
+                {errors.channel && (
+                  <p className="text-xs text-destructive">{errors.channel}</p>
+                )}
+              </div>
+            )}
           </div>
 
           <DialogFooter>
@@ -765,6 +879,23 @@ export default function NhomHangPage() {
           </DialogFooter>
         </DialogContent>
       </Dialog>
+
+      {/* Day 22/05/2026 (CEO V3): Excel import dialog cho categories */}
+      <ImportExcelDialog
+        open={importOpen}
+        onOpenChange={setImportOpen}
+        schema={categoriesExcelSchema}
+        onCommit={async (rows) => {
+          const result = await bulkImportCategories(rows);
+          // Refresh list sau khi import
+          try {
+            await fetchData();
+          } catch {
+            /* fail silent */
+          }
+          return result;
+        }}
+      />
     </>
   );
 }

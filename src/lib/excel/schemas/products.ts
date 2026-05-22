@@ -161,9 +161,12 @@ export const productExcelSchema: ExcelSchema<ProductImportRow> = {
       key: "costPrice",
       header: "Giá vốn",
       type: "number",
-      required: true,
+      // Day 22/05/2026 (CEO V2): bỏ required. SKU có BOM thì giá vốn auto
+      // compute từ BOM cost; SKU/NVL chưa có nhập giá → để 0, cập nhật sau.
+      required: false,
       min: 0,
       example: 15000,
+      description: "Optional cho SKU có BOM (auto-compute). Có thể để trống.",
       width: 14,
     },
     {

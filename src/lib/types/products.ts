@@ -80,6 +80,14 @@ export interface ProductCategory {
   name: string;
   code?: string;
   scope?: 'nvl' | 'sku' | 'customer' | 'supplier';
+  /**
+   * Day 22/05/2026 (CEO): Channel cho category scope='sku'.
+   *   - 'fnb'    = nhóm pha chế tại quán (Cà phê pha máy, Trà sữa...)
+   *   - 'retail' = nhóm hàng đóng gói (Rang xay 250g, Hộp quà...)
+   *   - undefined = NVL hoặc customer/supplier (không cần channel)
+   * Migration 00111_categories_channel.sql.
+   */
+  channel?: 'fnb' | 'retail';
   parentId?: string;
   sortOrder: number;
   productCount?: number;
