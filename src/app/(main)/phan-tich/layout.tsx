@@ -112,7 +112,10 @@ export default function PhanTichLayout({
 }) {
   return (
     <ModuleSidebarLayout
-      title="Phân tích"
+      // CEO 22/05/2026 (UX P1 #3): đồng nhất tên module = "Báo cáo".
+      // Trước đây sidebar phụ nói "Phân tích" còn top-nav + drawer nói
+      // "Báo cáo" → user confuse module này tên gì.
+      title="Báo cáo"
       nav={analyticsNav}
       contentClassName="max-w-none"
       enableSearch

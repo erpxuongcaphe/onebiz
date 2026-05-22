@@ -448,8 +448,11 @@ export default function BanHangPage() {
           </div>
         ) : null}
 
-        {/* Daily Revenue Trend (chart mode) */}
-        {viewMode === "chart" && dailyRevenue.length > 0 && (
+        {/* Daily Revenue Trend (chart mode) — CEO 22/05/2026 (UX P1 #4):
+            check `some(revenue > 0)` thay vì chỉ `length > 0` để KHÔNG
+            render chart khi backend trả mảng rows toàn revenue=0 (vd kỳ
+            báo cáo chưa có giao dịch — vẫn có rows ngày nhưng số = 0). */}
+        {viewMode === "chart" && dailyRevenue.some((d) => d.revenue > 0) && (
           <ChartCard
             title="Xu hướng doanh thu trong kỳ"
             subtitle="Dữ liệu thực tế"
@@ -487,6 +490,18 @@ export default function BanHangPage() {
                   />
                 </LineChart>
               </ResponsiveContainer>
+            </div>
+          </ChartCard>
+        )}
+
+        {/* CEO 22/05/2026 (UX P1 #4): Empty state khi kỳ không có giao dịch.
+            Thay vì để chart trống với axis 1-4 vô nghĩa. */}
+        {viewMode === "chart" && !dailyRevenue.some((d) => d.revenue > 0) && (
+          <ChartCard title="Xu hướng doanh thu trong kỳ" subtitle="Dữ liệu thực tế">
+            <div className="h-56 md:h-72 flex flex-col items-center justify-center gap-2 text-muted-foreground">
+              <Icon name="show_chart" size={32} className="opacity-40" />
+              <p className="text-sm font-medium">Chưa có giao dịch trong kỳ</p>
+              <p className="text-xs">Đổi kỳ báo cáo hoặc chi nhánh để xem dữ liệu khác.</p>
             </div>
           </ChartCard>
         )}

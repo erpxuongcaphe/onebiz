@@ -145,13 +145,33 @@ export function ProductGrid({ searchQuery, onAddProduct }: ProductGridProps) {
             <Icon name="progress_activity" className="animate-spin text-primary" />
           </div>
         ) : displayProducts.length === 0 ? (
-          <div className="flex flex-col items-center justify-center h-32 text-muted-foreground">
-            <Icon name="inventory_2" size={32} className="mb-2" />
-            <p className="text-xs">
-              {searchQuery
-                ? "Không tìm thấy sản phẩm"
-                : "Danh mục trống"}
-            </p>
+          // CEO 22/05/2026 (UX P2 #5): Empty state có CTA setup SP khi
+          // chưa có data. Cashier mới onboard biết bước tiếp theo phải làm.
+          <div className="flex flex-col items-center justify-center h-full min-h-[200px] text-muted-foreground gap-3 px-6 text-center">
+            <Icon name="inventory_2" size={40} className="opacity-50" />
+            {searchQuery ? (
+              <p className="text-sm font-medium">
+                Không tìm thấy sản phẩm khớp &quot;{searchQuery}&quot;
+              </p>
+            ) : (
+              <>
+                <p className="text-sm font-medium text-foreground">
+                  Chưa có sản phẩm Retail nào
+                </p>
+                <p className="text-xs max-w-xs">
+                  Vào trang Hàng hoá để tạo sản phẩm bán lẻ, sau đó quay lại đây.
+                </p>
+                <a
+                  href="/hang-hoa"
+                  className="inline-flex items-center gap-1.5 px-3 py-1.5 mt-1 bg-primary text-on-primary text-xs font-semibold rounded-lg hover:bg-primary/90 transition-colors"
+                  target="_blank"
+                  rel="noopener noreferrer"
+                >
+                  <Icon name="add" size={14} />
+                  Tạo sản phẩm Retail
+                </a>
+              </>
+            )}
           </div>
         ) : (
           // Auto-fit grid: card C compact (thumb 40×40 + info bên phải), min

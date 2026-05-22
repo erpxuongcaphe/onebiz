@@ -99,7 +99,11 @@ export const mainNavItems: NavGroup[] = [
     ],
   },
   {
-    label: "Phân tích",
+    // CEO 22/05/2026 (UX P1 #3): chốt tên "Báo cáo" cho menu top-nav để
+    // đồng nhất với sidebar drawer (line 305) + app-switcher + mobile nav.
+    // Trước đây top-nav nói "Phân tích" còn các nơi khác nói "Báo cáo" →
+    // user confuse.
+    label: "Báo cáo",
     href: "/phan-tich",
   },
   // Day 4 16/05/2026: ẩn "Bán online" — chưa có data thật, đang là mock 15 đơn.

@@ -516,8 +516,10 @@ export function DataTable<TData, TValue>({
             ))}
           </TableHeader>
           <TableBody>
-            {/* Summary row */}
-            {summaryRow && (
+            {/* Summary row — CEO 22/05/2026 (UX P1 #1): chỉ hiện khi có data.
+                Trước đây khi table 0 rows vẫn hiện row "0 | 0 | 0" gây nhiễu
+                — user nghĩ là dòng SP rỗng cần xóa. */}
+            {summaryRow && data.length > 0 && (
               <TableRow className="bg-muted/30 font-semibold hover:bg-muted/30">
                 {table
                   .getHeaderGroups()[0]
