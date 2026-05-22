@@ -95,7 +95,13 @@ function BranchSelector() {
             currentBranch ? "text-primary" : "text-muted-foreground",
           )}
         />
-        <span className="truncate max-w-[180px] font-semibold">
+        {/* CEO 22/05/2026 (UX P0 #3): tăng max-w 180→280px + tooltip
+            full branch name. Trước đây tên dài bị cắt "Xưởng Cà Phê - X..."
+            → 2 quán đều giống nhau → CEO không biết đang ở quán nào. */}
+        <span
+          className="truncate max-w-[180px] sm:max-w-[220px] lg:max-w-[280px] font-semibold"
+          title={currentBranch?.name ?? "Tất cả chi nhánh"}
+        >
           {currentBranch?.name ?? "Tất cả chi nhánh"}
         </span>
         <Icon

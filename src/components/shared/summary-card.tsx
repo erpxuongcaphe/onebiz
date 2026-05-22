@@ -29,6 +29,12 @@ interface SummaryCardProps {
   className?: string;
   /** Override màu cho value — dùng khi cần color phụ (vd: lệch tăng = success, lệch giảm = error). */
   valueClassName?: string;
+  /**
+   * Day 22/05/2026 (CEO UX P0 #2): Hiển thị skeleton shimmer thay vì value
+   * khi data đang load. Caller pass `loading={true}` khi đang fetch → KPI
+   * không bị "—" mãi gây nghi ngờ "lỗi à?".
+   */
+  loading?: boolean;
 }
 
 /**
@@ -50,6 +56,7 @@ export function SummaryCard({
   tone,
   className,
   valueClassName,
+  loading,
 }: SummaryCardProps) {
   // Auto-wrap string icon thành <Icon /> component.
   // Bug từng có: caller pass `icon="group"` → render text "group" thay vì
@@ -93,20 +100,25 @@ export function SummaryCard({
           </span>
         )}
       </div>
-      <div
-        className={cn(
-          // Day 8 16/05/2026: mobile = text-base, desktop = text-lg
-          "text-base sm:text-lg font-bold tabular-nums truncate",
-          isHighlight && "text-primary",
-          isDanger && "text-destructive",
-          isWarning && "text-status-warning",
-          !isHighlight && !isDanger && !isWarning && "text-foreground",
-          valueClassName,
-        )}
-      >
-        {value}
-      </div>
-      {hint && (
+      {loading ? (
+        // Day 22/05/2026 (CEO UX P0 #2): skeleton shimmer khi loading
+        <div className="h-5 sm:h-6 w-16 bg-muted/60 rounded animate-pulse my-1" />
+      ) : (
+        <div
+          className={cn(
+            // Day 8 16/05/2026: mobile = text-base, desktop = text-lg
+            "text-base sm:text-lg font-bold tabular-nums truncate",
+            isHighlight && "text-primary",
+            isDanger && "text-destructive",
+            isWarning && "text-status-warning",
+            !isHighlight && !isDanger && !isWarning && "text-foreground",
+            valueClassName,
+          )}
+        >
+          {value}
+        </div>
+      )}
+      {hint && !loading && (
         <div className="text-[11px] sm:text-xs text-muted-foreground mt-0.5 truncate">
           {hint}
         </div>

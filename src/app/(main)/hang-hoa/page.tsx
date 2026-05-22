@@ -1420,27 +1420,33 @@ export default function HangHoaPage() {
         />
 
         <div className="grid grid-cols-2 md:grid-cols-4 gap-3 px-4 pt-3 pb-1">
+          {/* CEO 22/05/2026 (UX P0 #2): pass loading=true khi stats null →
+              skeleton shimmer thay vì "—" gây user nghi ngờ "lỗi à?" */}
           <SummaryCard
             icon={<Icon name="inventory_2" size={16} />}
             label={scope === "nvl" ? "Tổng NVL" : "Tổng hàng bán"}
-            value={stats ? formatNumber(stats.totalCount) : "—"}
+            value={stats ? formatNumber(stats.totalCount) : ""}
+            loading={!stats}
           />
           <SummaryCard
             icon={<Icon name="savings" size={16} />}
             label="Giá trị tồn kho"
-            value={stats ? formatCurrency(stats.stockValue) : "—"}
+            value={stats ? formatCurrency(stats.stockValue) : ""}
+            loading={!stats}
             highlight
           />
           <SummaryCard
             icon={<Icon name="remove_shopping_cart" size={16} />}
             label="Hết hàng"
-            value={stats ? formatNumber(stats.outOfStock) : "—"}
+            value={stats ? formatNumber(stats.outOfStock) : ""}
+            loading={!stats}
             danger={(stats?.outOfStock ?? 0) > 0}
           />
           <SummaryCard
             icon={<Icon name="warning" size={16} />}
             label="Sắp hết (≤ 5)"
-            value={stats ? formatNumber(stats.lowStock) : "—"}
+            value={stats ? formatNumber(stats.lowStock) : ""}
+            loading={!stats}
             danger={(stats?.lowStock ?? 0) > 0}
           />
         </div>
@@ -1478,6 +1484,18 @@ export default function HangHoaPage() {
           columns={columns}
           data={data}
           loading={loading}
+          // CEO 22/05/2026 (UX P0 #1): empty state context-aware
+          emptyIcon={scope === "nvl" ? "inventory_2" : "shopping_bag"}
+          emptyTitle={
+            scope === "nvl"
+              ? "Chưa có nguyên vật liệu nào"
+              : "Chưa có sản phẩm bán nào"
+          }
+          emptyDescription={
+            scope === "nvl"
+              ? 'Bấm "Tạo mới" để thêm NVL hoặc "Nhập Excel" để import batch.'
+              : 'Bấm "Tạo mới" để thêm SKU hoặc "Nhập Excel" để import batch.'
+          }
           total={total}
           pageIndex={page}
           pageSize={pageSize}

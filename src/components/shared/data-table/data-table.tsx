@@ -114,6 +114,18 @@ interface DataTableProps<TData, TValue> {
    * "Hiển thị cột".
    */
   defaultColumnVisibility?: Record<string, boolean>;
+  /**
+   * Day 22/05/2026 (CEO audit P0 #1): Custom empty state text khi data trống
+   * thay vì "Không tìm thấy giao dịch nào phù hợp" generic.
+   *   - emptyTitle: ưu tiên thay "Không tìm thấy kết quả"
+   *   - emptyDescription: thay "Không tìm thấy giao dịch nào phù hợp"
+   *   - emptyIcon: Material Symbols icon name (vd "person_add" cho khách hàng)
+   * Caller pass theo context: Khách hàng → "Chưa có khách nào", SP → "Chưa có
+   * sản phẩm", Đơn hàng → "Chưa có đơn".
+   */
+  emptyTitle?: string;
+  emptyDescription?: string;
+  emptyIcon?: string;
 }
 
 /**
@@ -155,6 +167,9 @@ export function DataTable<TData, TValue>({
   stickyFirstColumn = true,
   onSelectAllMatching,
   defaultColumnVisibility,
+  emptyTitle,
+  emptyDescription,
+  emptyIcon,
 }: DataTableProps<TData, TValue>) {
   const [sorting, setSorting] = useState<SortingState>([]);
   const [rowSelection, setRowSelection] = useState<RowSelectionState>({});
@@ -539,11 +554,17 @@ export function DataTable<TData, TValue>({
                 >
                   <div className="flex flex-col items-center gap-2">
                     <div className="h-16 w-16 rounded-full bg-primary-fixed flex items-center justify-center">
-                      <Icon name="inventory_2" size={28} className="text-primary/60" />
+                      <Icon
+                        name={emptyIcon ?? "inventory_2"}
+                        size={28}
+                        className="text-primary/60"
+                      />
                     </div>
-                    <p className="font-medium">Không tìm thấy kết quả</p>
+                    <p className="font-medium">
+                      {emptyTitle ?? "Chưa có dữ liệu"}
+                    </p>
                     <p className="text-xs">
-                      Không tìm thấy giao dịch nào phù hợp.
+                      {emptyDescription ?? "Hãy thêm mới hoặc thử bỏ bộ lọc."}
                     </p>
                   </div>
                 </TableCell>
@@ -614,9 +635,18 @@ export function DataTable<TData, TValue>({
           <div className="text-center text-muted-foreground py-12">
             <div className="flex flex-col items-center gap-2">
               <div className="h-16 w-16 rounded-full bg-primary-fixed flex items-center justify-center">
-                <Icon name="inventory_2" size={28} className="text-primary/60" />
+                <Icon
+                  name={emptyIcon ?? "inventory_2"}
+                  size={28}
+                  className="text-primary/60"
+                />
               </div>
-              <p className="font-medium">Không tìm thấy kết quả</p>
+              <p className="font-medium">
+                {emptyTitle ?? "Chưa có dữ liệu"}
+              </p>
+              {emptyDescription && (
+                <p className="text-xs">{emptyDescription}</p>
+              )}
             </div>
           </div>
         ) : (

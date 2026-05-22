@@ -509,6 +509,12 @@ export default function KhachHangPage() {
             setPageSize(size);
             setPage(0);
           }}
+          // CEO 22/05/2026 (UX P0 #1): empty state context-aware
+          emptyIcon="person_add"
+          emptyTitle="Chưa có khách hàng nào"
+          emptyDescription={
+            'Bấm "Tạo mới" để thêm khách, hoặc dùng "Nhập Excel" để import danh sách.'
+          }
           selectable
           bulkActions={[
             {
