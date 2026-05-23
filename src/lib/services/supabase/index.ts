@@ -469,6 +469,15 @@ export {
 } from "./roles";
 export type { DbRole, DbRoleDetail, CreateRoleInput, UpdateRoleInput } from "./roles";
 
+// CEO 22/05/2026 (Phase 2): per-user permission overrides
+export {
+  getUserPermissionOverrides,
+  setUserPermissionOverride,
+  deleteUserPermissionOverride,
+  getUserEffectivePermissions,
+} from "./permission-overrides";
+export type { PermissionOverride, OverrideType } from "./permission-overrides";
+
 // ============================================================
 // Phase Next — AI Agents (n8n integration)
 // ============================================================

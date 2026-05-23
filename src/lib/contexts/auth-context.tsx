@@ -14,6 +14,8 @@ import { createClient } from "@/lib/supabase/client";
 import type { UserProfile, Tenant, Branch } from "@/lib/types";
 import type { User } from "@supabase/supabase-js";
 import { getUserPermissions } from "@/lib/services/supabase/roles";
+// CEO 22/05/2026 (Phase 2): per-user permission overrides
+import { getUserEffectivePermissions } from "@/lib/services/supabase/permission-overrides";
 import { _seedProfileCache as seedProfileCache, _clearProfileCache as clearProfileCache } from "@/lib/services/supabase/base";
 import { readDeviceBinding } from "@/lib/hooks/use-device-binding";
 
@@ -104,11 +106,22 @@ export function AuthProvider({ children }: { children: ReactNode }) {
 
         // 2-4. Song song hoá tenant + branches + permissions — trước đây 3 call
         // tuần tự làm cold start 1.5-2s, blocking toàn bộ AuthProvider render.
-        // Owner skip getUserPermissions (có wildcard "*").
-        const permsPromise =
+        // Owner skip permission load (có wildcard "*").
+        //
+        // CEO 22/05/2026 (Phase 2): dùng getUserEffectivePermissions thay
+        // getUserPermissions để bao gồm per-user overrides (grants/revokes).
+        // RPC fallback về role permissions nếu user chưa có override.
+        const permsPromise: Promise<Set<string>> =
           profile.role === "owner"
-            ? Promise.resolve<Set<string>>(new Set(["*"]))
-            : getUserPermissions(profile.id).catch(() => new Set<string>());
+            ? Promise.resolve(new Set(["*"]))
+            : getUserEffectivePermissions(profile.id)
+                .then((codes) => new Set(codes))
+                .catch(async () => {
+                  // Fallback: RPC fail → dùng role permissions thuần
+                  return getUserPermissions(profile.id).catch(
+                    () => new Set<string>(),
+                  );
+                });
 
         const [tenantRes, branchRes, perms] = await Promise.all([
           supabase
