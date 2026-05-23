@@ -361,10 +361,13 @@ export default function LoSanXuatPage() {
         />
       )}
 
-      {/* Day 18/05/2026 (CEO): Mockup dialog gắn HSD cho tồn cũ */}
+      {/* Day 18/05/2026 (CEO): Mockup dialog gắn HSD cho tồn cũ
+          23/05/2026: onSaved={fetchData} để list lô refresh ngay sau khi
+          dialog tạo lot thành công — không cần F5. */}
       <AssignExpiryDialog
         open={assignExpiryOpen}
         onOpenChange={setAssignExpiryOpen}
+        onSaved={fetchData}
       />
     </ListPageLayout>
   );

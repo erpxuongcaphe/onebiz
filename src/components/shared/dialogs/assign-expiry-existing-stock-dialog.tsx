@@ -52,6 +52,12 @@ import type { ProductCategory, Supplier } from "@/lib/types";
 interface AssignExpiryDialogProps {
   open: boolean;
   onOpenChange: (open: boolean) => void;
+  /**
+   * Callback gọi sau khi save thành công (≥1 lot tạo). Parent dùng để
+   * refresh list lô bên ngoài dialog — đảm bảo data hiển thị liền ngay
+   * khi lưu, không phải F5. CEO 23/05/2026.
+   */
+  onSaved?: () => void;
 }
 
 /** Badge số ngày còn lại đến HSD — 5 mức màu. */
@@ -117,6 +123,7 @@ interface RowState {
 export function AssignExpiryDialog({
   open,
   onOpenChange,
+  onSaved,
 }: AssignExpiryDialogProps) {
   const { toast } = useToast();
   const { branches } = useAuth();
@@ -380,6 +387,9 @@ export function AssignExpiryDialog({
           }
           setRows(init);
         }
+        // CEO 23/05/2026: Refresh list lô của parent → hiển thị liền data
+        // mới mà không cần F5 / đóng-mở dialog.
+        onSaved?.();
       } else {
         toast({
           variant: "error",
