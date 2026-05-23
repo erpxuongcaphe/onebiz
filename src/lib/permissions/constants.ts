@@ -20,12 +20,19 @@ export const PERMISSIONS = {
   POS_FNB_MANAGE_TABLES: "pos_fnb.manage_tables",
   POS_FNB_SPLIT_BILL: "pos_fnb.split_bill",
   POS_FNB_TRANSFER_TABLE: "pos_fnb.transfer_table",
+  // CEO 22/05/2026 (Phase 1): cashier không được sửa đơn giá ad-hoc
+  // tại POS. Manager/Owner có quyền. Khuyến mãi/chiết khấu vẫn áp được
+  // qua POS_FNB_DISCOUNT — tách biệt 2 action.
+  POS_FNB_EDIT_PRICE: "pos_fnb.edit_price",
 
   // POS Retail
   POS_RETAIL_CHECKOUT: "pos_retail.checkout",
   POS_RETAIL_VOID: "pos_retail.void",
   POS_RETAIL_DISCOUNT: "pos_retail.discount",
   POS_RETAIL_SAVE_DRAFT: "pos_retail.save_draft",
+  // CEO 22/05/2026 (Phase 1): tương tự POS_FNB_EDIT_PRICE, tách biệt
+  // quyền sửa đơn giá với quyền chiết khấu.
+  POS_RETAIL_EDIT_PRICE: "pos_retail.edit_price",
 
   // Inventory / Warehouse
   INVENTORY_VIEW: "inventory.view",
@@ -129,6 +136,7 @@ export const PERMISSION_GROUPS: PermissionGroup[] = [
       { code: PERMISSIONS.POS_FNB_VOID_PAID_BILL, label: "Hủy bill đã thanh toán" },
       { code: PERMISSIONS.POS_FNB_EDIT_SENT_ORDER, label: "Sửa món đã gửi bếp" },
       { code: PERMISSIONS.POS_FNB_DISCOUNT, label: "Áp giảm giá" },
+      { code: PERMISSIONS.POS_FNB_EDIT_PRICE, label: "Sửa đơn giá (Nguy hiểm)" },
       { code: PERMISSIONS.POS_FNB_VIEW_ORDERS, label: "Xem đơn bếp" },
       { code: PERMISSIONS.POS_FNB_MANAGE_TABLES, label: "Quản lý bàn" },
       { code: PERMISSIONS.POS_FNB_SPLIT_BILL, label: "Tách bill" },
@@ -141,6 +149,7 @@ export const PERMISSION_GROUPS: PermissionGroup[] = [
       { code: PERMISSIONS.POS_RETAIL_CHECKOUT, label: "Thanh toán" },
       { code: PERMISSIONS.POS_RETAIL_VOID, label: "Hủy hóa đơn" },
       { code: PERMISSIONS.POS_RETAIL_DISCOUNT, label: "Áp giảm giá" },
+      { code: PERMISSIONS.POS_RETAIL_EDIT_PRICE, label: "Sửa đơn giá (Nguy hiểm)" },
       { code: PERMISSIONS.POS_RETAIL_SAVE_DRAFT, label: "Lưu nháp" },
     ],
   },

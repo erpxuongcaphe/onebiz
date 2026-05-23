@@ -3183,6 +3183,11 @@ function CartItem({
   const oversold = line.availableStock > 0 && line.quantity > line.availableStock;
   const [editingPrice, setEditingPrice] = useState(false);
   const [editingDiscount, setEditingDiscount] = useState(false);
+  // CEO 22/05/2026 (Phase 1): permission gate cho sửa đơn giá.
+  // Cashier không có quyền → button disable, không edit được.
+  // Owner/Manager có quyền → click sửa như cũ.
+  const { hasPermission } = useAuth();
+  const canEditPrice = hasPermission("pos_retail.edit_price");
 
   return (
     <div
@@ -3260,8 +3265,8 @@ function CartItem({
 
         <span className="text-[10px] text-muted-foreground/60 shrink-0">×</span>
 
-        {/* Price (click to edit) */}
-        {editingPrice ? (
+        {/* Price (click to edit) — CEO 22/05/2026: gate by permission */}
+        {editingPrice && canEditPrice ? (
           <input
             type="text"
             inputMode="decimal"
@@ -3279,7 +3284,7 @@ function CartItem({
             data-allow-hotkeys="true"
             className="w-20 h-6 px-1 text-right text-[11px] font-medium tabular-nums outline-none border border-primary rounded bg-white"
           />
-        ) : (
+        ) : canEditPrice ? (
           <button
             type="button"
             onClick={() => setEditingPrice(true)}
@@ -3288,6 +3293,14 @@ function CartItem({
           >
             {formatNumber(line.unitPrice)}
           </button>
+        ) : (
+          // Cashier không có quyền sửa giá → hiện static text, cursor not-allowed
+          <span
+            className="text-[11px] tabular-nums font-medium text-foreground cursor-not-allowed"
+            title="Bạn không có quyền sửa đơn giá. Liên hệ quản lý."
+          >
+            {formatNumber(line.unitPrice)}
+          </span>
         )}
 
         {/* Discount badge — hiện inline khi > 0, click để sửa */}
