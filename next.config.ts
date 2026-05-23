@@ -11,6 +11,27 @@ const nextConfig: NextConfig = {
     ];
   },
 
+  // CEO 23/05/2026: Disable browser bfcache để fix bug "F5 không hiện
+  // data mới". Pattern Cache-Control: no-store ngăn browser cache HTML
+  // → mỗi F5 force re-fetch fresh content. Trade-off: page load chậm
+  // hơn 100-200ms khi back-forward (acceptable cho ERP nội bộ, không
+  // phải public site cần snappy bfcache).
+  //
+  // Áp dụng cho tất cả route trừ static assets _next/static.
+  async headers() {
+    return [
+      {
+        source: "/((?!_next/static|_next/image|favicon.ico).*)",
+        headers: [
+          {
+            key: "Cache-Control",
+            value: "no-store, must-revalidate",
+          },
+        ],
+      },
+    ];
+  },
+
   // PERF F7: Tree-shake các barrel re-export nặng để initial bundle gọn.
   // Next.js sẽ rewrite `import { X } from "pkg"` thành deep-import
   // `import X from "pkg/X"` ở build time → chỉ bundle module thật sự dùng,

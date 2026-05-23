@@ -2,6 +2,7 @@
 
 import { useEffect, useState, useCallback } from "react";
 import { ColumnDef } from "@tanstack/react-table";
+import { useRevalidateOnFocus } from "@/lib/hooks/use-revalidate-on-focus";
 import { PageHeader } from "@/components/shared/page-header";
 import { ListPageLayout } from "@/components/shared/list-page-layout";
 import { DataTable } from "@/components/shared/data-table";
@@ -463,6 +464,9 @@ export default function NhaCungCapPage() {
   useEffect(() => {
     fetchData();
   }, [fetchData]);
+
+  // CEO 23/05/2026: refetch khi tab visible/focus lại → fix bug F5 stale
+  useRevalidateOnFocus(fetchData);
 
   useEffect(() => {
     setPage(0);

@@ -17,6 +17,7 @@
 
 import { useEffect, useState, useCallback, useRef } from "react";
 import { ColumnDef } from "@tanstack/react-table";
+import { useRevalidateOnFocus } from "@/lib/hooks/use-revalidate-on-focus";
 import { PageHeader } from "@/components/shared/page-header";
 import { DataTable } from "@/components/shared/data-table";
 import { Tabs, TabsList, TabsTrigger } from "@/components/ui/tabs";
@@ -248,6 +249,9 @@ export default function NhomHangPage() {
   useEffect(() => {
     fetchData();
   }, [fetchData]);
+
+  // CEO 23/05/2026: refetch khi tab visible/focus lại → fix bug F5 stale
+  useRevalidateOnFocus(fetchData);
 
   // Filter by debouncedSearch + channelFilter (Day 20/05/2026 CEO Fix #3)
   const filtered = data

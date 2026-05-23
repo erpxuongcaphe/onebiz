@@ -2,6 +2,7 @@
 
 import { useEffect, useState, useCallback } from "react";
 import { ColumnDef } from "@tanstack/react-table";
+import { useRevalidateOnFocus } from "@/lib/hooks/use-revalidate-on-focus";
 import { PageHeader } from "@/components/shared/page-header";
 import { ListPageLayout } from "@/components/shared/list-page-layout";
 import { DataTable, StarCell } from "@/components/shared/data-table";
@@ -473,6 +474,10 @@ export default function HangHoaPage() {
   useEffect(() => {
     fetchData();
   }, [fetchData]);
+
+  // CEO 23/05/2026: Fix bug F5 không hiện data mới — refetch khi tab
+  // quay lại visible hoặc bfcache restore. Pattern React Query / SWR.
+  useRevalidateOnFocus(fetchData);
 
   // Fetch stats KPI (totalCount, stockValue, outOfStock, lowStock) theo scope
   const fetchStats = useCallback(async () => {

@@ -1,6 +1,7 @@
 "use client";
 
 import { useEffect, useState, useCallback } from "react";
+import { useRevalidateOnFocus } from "@/lib/hooks/use-revalidate-on-focus";
 import { ColumnDef } from "@tanstack/react-table";
 import { Badge } from "@/components/ui/badge";
 import { PageHeader } from "@/components/shared/page-header";
@@ -290,6 +291,9 @@ export default function DatHangPage() {
   useEffect(() => {
     fetchData();
   }, [fetchData]);
+
+  // CEO 23/05/2026: refetch khi tab visible/focus lại → fix bug F5 stale
+  useRevalidateOnFocus(fetchData);
 
   useEffect(() => {
     setPage(0);
