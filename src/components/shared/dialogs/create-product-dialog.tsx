@@ -889,6 +889,13 @@ export function CreateProductDialog({
                 Nhóm hàng <span className="text-destructive">*</span>
               </label>
               <Select
+                // CEO 23/05/2026: key={scope} buộc Select REMOUNT khi user
+                // switch NVL ↔ SKU trong dialog tạo mới. Trước đây Base UI
+                // Select reuse cùng instance giữa 2 scope → state internal
+                // (popper position, items list) bị stale → click trigger
+                // không expand được dropdown ở scope thứ 2. Force remount
+                // = state fresh = dropdown sổ đúng mỗi lần.
+                key={`category-select-${scope}`}
                 value={categoryId || null}
                 onValueChange={(v) => setCategoryId(v ?? "")}
                 // items cho phép Base UI tự resolve UUID -> label, tránh trigger hiện UUID
