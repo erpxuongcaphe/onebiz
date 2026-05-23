@@ -33,7 +33,16 @@ import {
   getPurchaseEntryStatuses,
   cancelPurchaseOrderEntry,
 } from "@/lib/services";
-import { CreatePurchaseEntryDialog, ConfirmDialog } from "@/components/shared/dialogs";
+import { ConfirmDialog } from "@/components/shared/dialogs";
+// PERF (CEO 23/05/2026): Lazy-load CreatePurchaseEntryDialog (630 dòng).
+import dynamic from "next/dynamic";
+const CreatePurchaseEntryDialog = dynamic(
+  () =>
+    import("@/components/shared/dialogs/create-purchase-entry-dialog").then(
+      (m) => m.CreatePurchaseEntryDialog,
+    ),
+  { ssr: false },
+);
 import { ImportExcelDialog } from "@/components/shared/dialogs/import-excel-dialog";
 import { AuditLogDialog } from "@/components/shared/audit-log-dialog";
 import { buildTransactionRowActions } from "@/components/shared/transaction-row-actions";

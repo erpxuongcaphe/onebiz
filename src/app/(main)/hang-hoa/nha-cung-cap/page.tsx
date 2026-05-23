@@ -27,7 +27,16 @@ import {
 } from "@/components/shared/inline-detail-panel";
 import type { DetailTab } from "@/components/shared/inline-detail-panel";
 import { Badge } from "@/components/ui/badge";
-import { CreateSupplierDialog, ConfirmDialog } from "@/components/shared/dialogs";
+import { ConfirmDialog } from "@/components/shared/dialogs";
+// PERF (CEO 23/05/2026): Lazy-load CreateSupplierDialog.
+import dynamic from "next/dynamic";
+const CreateSupplierDialog = dynamic(
+  () =>
+    import("@/components/shared/dialogs/create-supplier-dialog").then(
+      (m) => m.CreateSupplierDialog,
+    ),
+  { ssr: false },
+);
 import { ImportExcelDialog } from "@/components/shared/dialogs/import-excel-dialog";
 import { downloadTemplate } from "@/lib/excel";
 import { supplierExcelSchema } from "@/lib/excel/schemas";

@@ -17,7 +17,16 @@ import {
 } from "@/lib/services";
 import type { Promotion, PromotionSettings } from "@/lib/types";
 import { useToast } from "@/lib/contexts";
-import { CreatePromotionDialog, ConfirmDialog } from "@/components/shared/dialogs";
+import { ConfirmDialog } from "@/components/shared/dialogs";
+// PERF (CEO 23/05/2026): Lazy-load CreatePromotionDialog (752 dòng).
+import dynamic from "next/dynamic";
+const CreatePromotionDialog = dynamic(
+  () =>
+    import("@/components/shared/dialogs/create-promotion-dialog").then(
+      (m) => m.CreatePromotionDialog,
+    ),
+  { ssr: false },
+);
 
 function Toggle({
   checked,

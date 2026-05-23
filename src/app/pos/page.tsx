@@ -74,7 +74,17 @@ import { usePosState, type OrderLine, type DiscountInput, type SellingMode, type
 import { ProductGrid } from "./components/product-grid";
 import { CustomerPicker } from "./components/customer-picker";
 import { VariantPickerDialog } from "./components/variant-picker-dialog";
-import { ConfirmDialog, CreateCustomerDialog } from "@/components/shared/dialogs";
+import { ConfirmDialog } from "@/components/shared/dialogs";
+// PERF (CEO 23/05/2026): Lazy-load CreateCustomerDialog (534 dòng).
+// POS load nhanh hơn ~80KB initial.
+import dynamic from "next/dynamic";
+const CreateCustomerDialog = dynamic(
+  () =>
+    import("@/components/shared/dialogs/create-customer-dialog").then(
+      (m) => m.CreateCustomerDialog,
+    ),
+  { ssr: false },
+);
 // Sprint B.6 (CEO 12/05): bỏ SupervisorPinDialog (1 PIN chung) →
 // dùng OtpApprovalDialog (OTP per-user TTL 2 phút)
 import { OtpApprovalDialog } from "@/components/shared/dialogs/otp-approval-dialog";

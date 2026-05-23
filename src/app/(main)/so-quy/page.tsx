@@ -25,7 +25,16 @@ import {
   DetailItemsTable,
   AuditHistoryTab,
 } from "@/components/shared/inline-detail-panel";
-import { CreateCashTransactionDialog, ConfirmDialog } from "@/components/shared/dialogs";
+import { ConfirmDialog } from "@/components/shared/dialogs";
+// PERF (CEO 23/05/2026): Lazy-load CreateCashTransactionDialog.
+import dynamic from "next/dynamic";
+const CreateCashTransactionDialog = dynamic(
+  () =>
+    import("@/components/shared/dialogs/create-cash-transaction-dialog").then(
+      (m) => m.CreateCashTransactionDialog,
+    ),
+  { ssr: false },
+);
 import { AuditLogDialog } from "@/components/shared/audit-log-dialog";
 import { buildTransactionRowActions } from "@/components/shared/transaction-row-actions";
 import { useTxRowPermissions } from "@/lib/permissions";

@@ -36,7 +36,16 @@ import {
   type SalesOrderItemRow,
 } from "@/lib/services";
 import type { SalesOrder } from "@/lib/types";
-import { CreateOrderDialog, ConfirmDialog } from "@/components/shared/dialogs";
+import { ConfirmDialog } from "@/components/shared/dialogs";
+// PERF (CEO 23/05/2026): Lazy-load CreateOrderDialog (562 dòng).
+import dynamic from "next/dynamic";
+const CreateOrderDialog = dynamic(
+  () =>
+    import("@/components/shared/dialogs/create-order-dialog").then(
+      (m) => m.CreateOrderDialog,
+    ),
+  { ssr: false },
+);
 import { AuditLogDialog } from "@/components/shared/audit-log-dialog";
 import { buildTransactionRowActions } from "@/components/shared/transaction-row-actions";
 import { useTxRowPermissions } from "@/lib/permissions";

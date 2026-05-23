@@ -48,9 +48,17 @@ import {
   type PurchaseOrderItemRow,
 } from "@/lib/services";
 import type { PurchaseOrder, PurchaseOrderStatus } from "@/lib/types";
-import { CreatePurchaseOrderDialog } from "@/components/shared/dialogs";
 import { RecordPaymentDialog } from "@/components/shared/dialogs/record-payment-dialog";
 import { PartialReceiveDialog } from "@/components/shared/dialogs/partial-receive-dialog";
+// PERF (CEO 23/05/2026): Lazy-load CreatePurchaseOrderDialog (819 dòng).
+import dynamic from "next/dynamic";
+const CreatePurchaseOrderDialog = dynamic(
+  () =>
+    import("@/components/shared/dialogs/create-purchase-order-dialog").then(
+      (m) => m.CreatePurchaseOrderDialog,
+    ),
+  { ssr: false },
+);
 import { AuditLogDialog } from "@/components/shared/audit-log-dialog";
 import {
   Dialog,

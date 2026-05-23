@@ -26,7 +26,16 @@ import { exportToExcel, exportToCsv } from "@/lib/utils/export";
 import { printDocument } from "@/lib/print-document";
 import { buildInputInvoicePrintData } from "@/lib/print-templates";
 import { getInputInvoices, getInputInvoiceStatuses, cancelInputInvoice, recordInputInvoice } from "@/lib/services";
-import { CreateInputInvoiceDialog, ConfirmDialog } from "@/components/shared/dialogs";
+import { ConfirmDialog } from "@/components/shared/dialogs";
+// PERF (CEO 23/05/2026): Lazy-load CreateInputInvoiceDialog (662 dòng).
+import dynamic from "next/dynamic";
+const CreateInputInvoiceDialog = dynamic(
+  () =>
+    import("@/components/shared/dialogs/create-input-invoice-dialog").then(
+      (m) => m.CreateInputInvoiceDialog,
+    ),
+  { ssr: false },
+);
 import {
   Dialog,
   DialogContent,

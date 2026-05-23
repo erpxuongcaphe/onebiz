@@ -35,7 +35,15 @@ import {
   type ReturnItemRow,
 } from "@/lib/services";
 import type { ReturnOrder } from "@/lib/types";
-import { CreateReturnDialog } from "@/components/shared/dialogs";
+// PERF (CEO 23/05/2026): Lazy-load CreateReturnDialog (556 dòng).
+import dynamic from "next/dynamic";
+const CreateReturnDialog = dynamic(
+  () =>
+    import("@/components/shared/dialogs/create-return-dialog").then(
+      (m) => m.CreateReturnDialog,
+    ),
+  { ssr: false },
+);
 import { AuditLogDialog } from "@/components/shared/audit-log-dialog";
 import { buildTransactionRowActions } from "@/components/shared/transaction-row-actions";
 import { useTxRowPermissions } from "@/lib/permissions";

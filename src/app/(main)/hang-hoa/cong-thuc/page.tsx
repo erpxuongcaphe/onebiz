@@ -18,7 +18,15 @@ import {
   AuditHistoryTab,
 } from "@/components/shared/inline-detail-panel";
 import { SummaryCard } from "@/components/shared/summary-card";
-import { BOMEditorDialog } from "@/components/shared/dialogs";
+// PERF (CEO 23/05/2026): Lazy-load BOMEditorDialog (572 dòng).
+import dynamic from "next/dynamic";
+const BOMEditorDialog = dynamic(
+  () =>
+    import("@/components/shared/dialogs/bom-editor-dialog").then(
+      (m) => m.BOMEditorDialog,
+    ),
+  { ssr: false },
+);
 import { ImportExcelDialog } from "@/components/shared/dialogs/import-excel-dialog";
 import { downloadTemplate, exportToExcelFromSchema } from "@/lib/excel";
 import { bomExcelSchema, type BOMImportRow } from "@/lib/excel/schemas";

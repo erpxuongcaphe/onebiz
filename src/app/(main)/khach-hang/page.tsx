@@ -28,7 +28,16 @@ import {
 } from "@/components/shared/inline-detail-panel";
 import type { DetailTab } from "@/components/shared/inline-detail-panel";
 import { Badge } from "@/components/ui/badge";
-import { CreateCustomerDialog, ConfirmDialog } from "@/components/shared/dialogs";
+import { ConfirmDialog } from "@/components/shared/dialogs";
+// PERF (CEO 23/05/2026): Lazy-load CreateCustomerDialog (534 dòng).
+import dynamic from "next/dynamic";
+const CreateCustomerDialog = dynamic(
+  () =>
+    import("@/components/shared/dialogs/create-customer-dialog").then(
+      (m) => m.CreateCustomerDialog,
+    ),
+  { ssr: false },
+);
 import { ImportExcelDialog } from "@/components/shared/dialogs/import-excel-dialog";
 import { downloadTemplate } from "@/lib/excel";
 import { customerExcelSchema } from "@/lib/excel/schemas";
