@@ -6,6 +6,7 @@
  */
 
 import { useEffect, useState, useCallback } from "react";
+import dynamic from "next/dynamic";
 import { ColumnDef } from "@tanstack/react-table";
 import { PageHeader } from "@/components/shared/page-header";
 import { ListPageLayout } from "@/components/shared/list-page-layout";
@@ -21,9 +22,18 @@ import { getAllProductLots } from "@/lib/services";
 import type { ProductLot } from "@/lib/types";
 import { Icon } from "@/components/ui/icon";
 import { AuditLogDialog } from "@/components/shared/audit-log-dialog";
-import { AssignExpiryDialog } from "@/components/shared/dialogs/assign-expiry-existing-stock-dialog";
 import { buildTransactionRowActions } from "@/components/shared/transaction-row-actions";
 import { useTxRowPermissions } from "@/lib/permissions";
+
+// PERF (CEO 23/05/2026): Lazy-load AssignExpiryDialog (818 dòng + 1 đống
+// service deps). Chỉ load khi user click "Gắn HSD cho tồn cũ".
+const AssignExpiryDialog = dynamic(
+  () =>
+    import(
+      "@/components/shared/dialogs/assign-expiry-existing-stock-dialog"
+    ).then((m) => m.AssignExpiryDialog),
+  { ssr: false },
+);
 
 type LotRow = ProductLot & { productName: string; productCode: string };
 

@@ -1,6 +1,7 @@
 "use client";
 
 import { useEffect, useState, useCallback } from "react";
+import dynamic from "next/dynamic";
 import { useRouter } from "next/navigation";
 import { ColumnDef } from "@tanstack/react-table";
 import { Badge } from "@/components/ui/badge";
@@ -23,8 +24,30 @@ import {
   DetailItemsTable,
   AuditHistoryTab,
 } from "@/components/shared/inline-detail-panel";
-import { CreateInvoiceDialog, EditInvoiceDialog, ConfirmDialog } from "@/components/shared/dialogs";
-import { RecordPaymentDialog } from "@/components/shared/dialogs/record-payment-dialog";
+import { ConfirmDialog } from "@/components/shared/dialogs";
+// PERF (CEO 23/05/2026): Lazy-load 3 dialog nặng — chỉ load khi user click
+// "Tạo hóa đơn" / "Sửa" / "Ghi nhận thanh toán". Save ~300KB initial.
+const CreateInvoiceDialog = dynamic(
+  () =>
+    import("@/components/shared/dialogs/create-invoice-dialog").then(
+      (m) => m.CreateInvoiceDialog,
+    ),
+  { ssr: false },
+);
+const EditInvoiceDialog = dynamic(
+  () =>
+    import("@/components/shared/dialogs/edit-invoice-dialog").then(
+      (m) => m.EditInvoiceDialog,
+    ),
+  { ssr: false },
+);
+const RecordPaymentDialog = dynamic(
+  () =>
+    import("@/components/shared/dialogs/record-payment-dialog").then(
+      (m) => m.RecordPaymentDialog,
+    ),
+  { ssr: false },
+);
 import { AuditLogDialog } from "@/components/shared/audit-log-dialog";
 import { buildTransactionRowActions } from "@/components/shared/transaction-row-actions";
 import { useTxRowPermissions } from "@/lib/permissions";

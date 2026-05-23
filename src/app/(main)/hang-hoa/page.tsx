@@ -1,6 +1,7 @@
 "use client";
 
 import { useEffect, useState, useCallback } from "react";
+import dynamic from "next/dynamic";
 import { ColumnDef } from "@tanstack/react-table";
 import { useRevalidateOnFocus } from "@/lib/hooks/use-revalidate-on-focus";
 import { PageHeader } from "@/components/shared/page-header";
@@ -21,8 +22,19 @@ import {
   DetailInfoGrid,
   AuditHistoryTab,
 } from "@/components/shared/inline-detail-panel";
-import { CreateProductDialog } from "@/components/shared/dialogs";
 import { ImportExcelDialog } from "@/components/shared/dialogs/import-excel-dialog";
+
+// PERF (CEO 23/05/2026): Lazy-load CreateProductDialog (1970 dòng + 1 đống
+// service deps) — chỉ load khi user click "Tạo mới". Save ~300KB initial.
+// (ImportExcelDialog không lazy-load được vì generic <T> bị mất khi qua
+//  next/dynamic; giữ direct import.)
+const CreateProductDialog = dynamic(
+  () =>
+    import("@/components/shared/dialogs/create-product-dialog").then(
+      (m) => m.CreateProductDialog,
+    ),
+  { ssr: false },
+);
 import { downloadTemplate } from "@/lib/excel";
 import { productExcelSchema } from "@/lib/excel/schemas";
 import { bulkImportProducts } from "@/lib/services/supabase/excel-import";
