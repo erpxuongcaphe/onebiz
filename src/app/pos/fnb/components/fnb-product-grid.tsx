@@ -172,28 +172,21 @@ function ProductCard({
   // Trước đây mặc định hiển thị overlay → CEO báo "hết hàng mờ căm không thấy gì"
   // do stock=0 toàn bộ SP FnB.
   const outOfStock = enforceStock && product.stock <= 0;
-  // CEO 22/05/2026 (Task #1 P0): SKU rỗng giá → disable click + warning
-  const noPriceSet = !product.sell_price || product.sell_price <= 0;
+  // CEO 22/05/2026: rollback POS guard — cho phép bán SP giá 0đ tự do
+  // (KM, tặng kèm, miễn phí intentional). Cashier tự chịu trách nhiệm.
   const [imageLoaded, setImageLoaded] = useState(false);
   const [imageError, setImageError] = useState(false);
 
   return (
     <button
       type="button"
-      onClick={noPriceSet ? undefined : onClick}
-      disabled={noPriceSet}
-      title={
-        noPriceSet
-          ? `${product.name} — Chưa set giá bán, liên hệ quản lý`
-          : product.name
-      }
+      onClick={onClick}
       className={cn(
         "group relative flex flex-col bg-surface-container-low rounded-xl overflow-hidden press-scale-sm transition-all duration-200 text-left h-full",
         // Sprint POS-FNB-1: dùng ambient-shadow-elevated cho hover (tier 2)
         // → depth rõ hơn, card "nổi" lên khi hover, đúng pattern Stitch.
         "hover:bg-surface-container-lowest hover:ambient-shadow-elevated border border-transparent hover:border-outline-variant/20",
         outOfStock && "opacity-50 pointer-events-none",
-        noPriceSet && "opacity-60 cursor-not-allowed hover:ambient-shadow-none",
       )}
     >
       {/* Image area — aspect-square với padding Stitch style */}
@@ -225,18 +218,10 @@ function ProductCard({
           </div>
         )}
 
-        {/* Price badge — Stitch glass style top-right.
-            CEO 22/05/2026: SKU chưa set giá → badge warning thay vì "0đ". */}
-        {noPriceSet ? (
-          <div className="absolute top-3 right-3 bg-status-warning/95 backdrop-blur-[20px] text-white text-[10px] font-bold px-2.5 py-1 rounded-full ambient-shadow inline-flex items-center gap-1">
-            <Icon name="warning" size={11} />
-            Chưa set giá
-          </div>
-        ) : (
-          <div className="absolute top-3 right-3 bg-primary/90 backdrop-blur-[20px] text-on-primary text-[11px] font-bold px-3 py-1 rounded-full ambient-shadow">
-            {formatCurrency(product.sell_price)}
-          </div>
-        )}
+        {/* Price badge — Stitch glass style top-right */}
+        <div className="absolute top-3 right-3 bg-primary/90 backdrop-blur-[20px] text-on-primary text-[11px] font-bold px-3 py-1 rounded-full ambient-shadow">
+          {formatCurrency(product.sell_price)}
+        </div>
 
         {/* Out of stock overlay */}
         {outOfStock && (
