@@ -52,6 +52,12 @@ if (SENTRY_DSN && process.env.NODE_ENV === "production") {
       "Load failed",
       // Browser extensions
       "Non-Error promise rejection captured",
+      // CEO 23/05/2026: @supabase/auth-js lock contention khi user mở
+      // nhiều tab cùng app. Transient, không break UX — chỉ noise Sentry.
+      // Đã có cached client + processLock ở src/lib/supabase/client.ts,
+      // nhưng cross-tab vẫn race vì localStorage shared.
+      "Acquiring process lock",
+      /lock:sb-.*-auth-token/,
     ],
 
     // Strip query params containing sensitive data

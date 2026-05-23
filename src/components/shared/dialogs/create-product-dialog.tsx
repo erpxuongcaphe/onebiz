@@ -424,11 +424,35 @@ export function CreateProductDialog({
   // Load categories mỗi khi scope đổi. Edit mode: KHÔNG reset categoryId (đã prefill).
   useEffect(() => {
     if (!open) return;
+    // CEO 23/05/2026: Fix race condition khi user switch tab NVL↔SKU nhanh.
+    // Trước đây thiếu cleanup → 2 fetch chồng → fetch cũ resolve sau ghi
+    // đè data fetch mới HOẶC auth-token lock timeout (Sentry log) →
+    // dropdown kẹt "Đang tải..." không click được.
+    //
+    // Fix: cancelled flag + reset trạng thái ngay khi unmount/scope đổi
+    // → fetch cũ không touch state nữa.
+    let cancelled = false;
     setLoadingCats(true);
     if (!isEdit) setCategoryId("");
     getProductCategoriesAsync(scope)
-      .then((cats) => setCategories(cats as CategoryOption[]))
-      .finally(() => setLoadingCats(false));
+      .then((cats) => {
+        if (cancelled) return;
+        setCategories(cats as CategoryOption[]);
+      })
+      .catch((err) => {
+        if (cancelled) return;
+        // Auth-token lock timeout hoặc network error → log + set empty
+        // thay vì để state stale gây UI kẹt.
+        console.warn("[create-product-dialog] load categories failed:", err);
+        setCategories([]);
+      })
+      .finally(() => {
+        if (cancelled) return;
+        setLoadingCats(false);
+      });
+    return () => {
+      cancelled = true;
+    };
   }, [open, scope, isEdit]);
 
   const selectedCategory = categories.find((c) => c.value === categoryId);
