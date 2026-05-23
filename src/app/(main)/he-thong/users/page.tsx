@@ -42,6 +42,8 @@ import {
 import type { DbRole } from "@/lib/services/supabase/roles";
 import { setUserPosPin, removeUserPosPin } from "@/lib/services/supabase/pos-pin";
 import { SetPinDialog } from "@/components/shared/dialogs";
+// CEO 23/05/2026 (Phase 2 UI): per-user permission override dialog
+import { PermissionOverrideDialog } from "@/components/shared/dialogs/permission-override-dialog";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { getClient } from "@/lib/services/supabase/base";
@@ -78,6 +80,10 @@ export default function UsersPage() {
   // Role assign dialog
   const [assignOpen, setAssignOpen] = useState(false);
   const [selectedUser, setSelectedUser] = useState<UserRow | null>(null);
+
+  // CEO 23/05/2026 (Phase 2): per-user permission override
+  const [overrideOpen, setOverrideOpen] = useState(false);
+  const [overrideUser, setOverrideUser] = useState<UserRow | null>(null);
   const [selectedRoleId, setSelectedRoleId] = useState<string>("");
 
   // Sprint B.4 (CEO 12/05): Set PIN POS dialog
@@ -430,6 +436,18 @@ export default function UsersPage() {
                           >
                             <Icon name="shield" size={16} className="mr-2" />
                             Gán vai trò
+                          </DropdownMenuItem>
+                          {/* CEO 23/05/2026 (Phase 2): override quyền per-user.
+                              Cho phép cấp thêm hoặc khoá bớt permission riêng
+                              cho user này (override role default). */}
+                          <DropdownMenuItem
+                            onSelect={() => {
+                              setOverrideUser(user);
+                              setOverrideOpen(true);
+                            }}
+                          >
+                            <Icon name="tune" size={16} className="mr-2 text-primary" />
+                            Quyền tuỳ chỉnh
                           </DropdownMenuItem>
                           {/* Sprint B.4 (CEO 12/05): đặt PIN POS cho nhân viên */}
                           <DropdownMenuItem onSelect={() => setSetPinUser(user)}>
@@ -893,6 +911,24 @@ export default function UsersPage() {
             throw err; // để SetPinDialog giữ open + hiện error inline
           }
         }}
+      />
+
+      {/* CEO 23/05/2026 (Phase 2): Per-user permission override dialog */}
+      <PermissionOverrideDialog
+        open={overrideOpen}
+        onOpenChange={(o) => {
+          setOverrideOpen(o);
+          if (!o) setOverrideUser(null);
+        }}
+        user={
+          overrideUser
+            ? {
+                id: overrideUser.id,
+                fullName: overrideUser.fullName,
+                roleName: overrideUser.roleName,
+              }
+            : null
+        }
       />
     </div>
   );
