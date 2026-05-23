@@ -110,7 +110,20 @@ interface CreateProductDialogProps {
 
 type ProductScope = "nvl" | "sku";
 type ProductChannel = "fnb" | "retail";
-type CategoryOption = { label: string; value: string; code?: string; count: number };
+type CategoryOption = {
+  label: string;
+  value: string;
+  code?: string;
+  count: number;
+  /** Day 22/05/2026 (CEO Task #3): channel field từ DB — dùng để biết
+   * nhóm SKU đã set channel chưa. Nếu chưa (undefined) + user tạo SP có
+   * channel → auto-set channel cho cả nhóm. */
+  channel?: "fnb" | "retail";
+};
+/**
+ * `id` alias = `value` để tương thích code Task #3. Em không đổi struct
+ * vì các nơi khác đang dùng `value` làm id.
+ */
 
 export function CreateProductDialog({
   open,
@@ -654,6 +667,31 @@ export function CreateProductDialog({
         groupCode: selectedCategory!.code,
         stock: Number(initialStock) || 0,
       });
+
+      // CEO 22/05/2026 (Task #3): Auto-set channel cho nhóm SKU nếu chưa
+      // có. Khi user tạo SP đầu tiên cho nhóm channel=NULL + chọn channel
+      // → silently update channel của nhóm = channel SP. Tránh phải edit
+      // từng nhóm tay sau migration 00111.
+      if (
+        scope === "sku" &&
+        channel &&
+        selectedCategory &&
+        !selectedCategory.channel
+      ) {
+        try {
+          const { updateCategory } = await import("@/lib/services");
+          // CategoryOption.value chính là category.id
+          await updateCategory(selectedCategory.value, {
+            channel: channel as "fnb" | "retail",
+          });
+        } catch (catErr) {
+          // Không block flow — chỉ log
+          console.warn(
+            "[create-product] auto-set category channel failed:",
+            catErr,
+          );
+        }
+      }
 
       // Day 18/05/2026 (CEO refactor): nếu SKU có BOM + items → tạo BOM ngay
       // sau khi tạo SP. Vẫn trong cùng dialog, không pop thêm dialog mới.

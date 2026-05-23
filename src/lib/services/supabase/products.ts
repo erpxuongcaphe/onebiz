@@ -270,9 +270,12 @@ export async function getProductCategoriesAsync(
   // đây CEO báo "Bao bì × 4" thực ra là 4 tenant khác nhau leak qua.
   const tenantId = await getCurrentTenantId();
 
-  let catQuery = supabase
-    .from("categories")
-    .select("id, name, code, scope")
+  // CEO 22/05/2026 (Task #3): cast as any vì Supabase generated types chưa
+  // reflect column channel (migration 00111 chưa được codegen). Xóa cast
+  // sau khi `pnpm gen-types`.
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  let catQuery: any = (supabase.from("categories") as any)
+    .select("id, name, code, scope, channel")
     .eq("tenant_id", tenantId)
     .order("sort_order", { ascending: true });
 
@@ -303,15 +306,17 @@ export async function getProductCategoriesAsync(
     countByCategoryId.set(cid, (countByCategoryId.get(cid) ?? 0) + 1);
   }
 
-  return (categories ?? [])
+  return ((categories ?? []) as Array<Record<string, unknown>>)
     // Khi có channel: chỉ giữ category có ít nhất 1 SP. Không có channel
     // → giữ all (admin xem full list).
-    .filter((cat) => !channel || countByCategoryId.has(cat.id))
+    .filter((cat) => !channel || countByCategoryId.has(cat.id as string))
     .map((cat) => ({
-      label: cat.name,
-      value: cat.id,
-      code: cat.code ?? undefined,
-      count: countByCategoryId.get(cat.id) ?? 0,
+      label: cat.name as string,
+      value: cat.id as string,
+      code: (cat.code as string) ?? undefined,
+      count: countByCategoryId.get(cat.id as string) ?? 0,
+      // CEO 22/05/2026 (Task #3): trả channel để dialog biết nhóm đã set chưa
+      channel: (cat.channel as "fnb" | "retail" | null) ?? undefined,
     }));
 }
 

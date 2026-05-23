@@ -1142,9 +1142,26 @@ export default function HangHoaPage() {
     {
       accessorKey: "sellPrice",
       header: "Giá bán",
-      cell: ({ row }) => (
-        <span className="text-right block">{formatCurrency(row.original.sellPrice)}</span>
-      ),
+      cell: ({ row }) => {
+        // CEO 22/05/2026 (Task #2): SKU chưa set giá → badge warning rõ
+        // ràng để admin biết cần update. NVL hiển thị "—" như cũ.
+        const price = row.original.sellPrice;
+        const isNvl = row.original.productType === "nvl";
+        if (isNvl) {
+          return <span className="text-right block text-muted-foreground">—</span>;
+        }
+        if (!price || price <= 0) {
+          return (
+            <span className="inline-flex items-center gap-1 text-xs font-semibold text-status-warning">
+              <Icon name="warning" size={12} />
+              Chưa set giá
+            </span>
+          );
+        }
+        return (
+          <span className="text-right block">{formatCurrency(price)}</span>
+        );
+      },
     },
     // Sprint A.2: column "Giá vốn" chỉ hiện khi user có products.view_cost
     ...(canViewCost

@@ -291,16 +291,26 @@ function ProductTile({
   const outOfStock = (product.stock ?? 0) <= 0;
   const stock = product.stock ?? 0;
   const showStockChip = outOfStock || stock <= 5;
+  // CEO 22/05/2026 (Task #1 P0): SKU rỗng giá → disable click + warning.
+  // Tránh cashier vô tình bán hóa đơn 0đ (mất doanh thu).
+  const noPriceSet = !product.sellPrice || product.sellPrice <= 0;
 
   return (
     <button
       type="button"
-      onClick={onClick}
-      title={product.name}
+      onClick={noPriceSet ? undefined : onClick}
+      disabled={noPriceSet}
+      title={
+        noPriceSet
+          ? `${product.name} — Chưa set giá bán, liên hệ quản lý`
+          : product.name
+      }
       className={cn(
         "flex items-center gap-2 bg-white rounded-lg border border-border p-2 text-left transition-all press-scale-sm min-h-[60px]",
         "hover:border-primary hover:shadow-sm",
         outOfStock && "opacity-60",
+        // Disabled state cho SP chưa set giá: nền xám + cursor not-allowed
+        noPriceSet && "opacity-70 cursor-not-allowed hover:border-border hover:shadow-none bg-surface-container-low",
       )}
     >
       {/* Thumb 40×40 vuông — image hoặc placeholder neutral (xám nhạt + icon). */}
@@ -323,9 +333,16 @@ function ProductTile({
           {product.name}
         </p>
         <div className="flex items-center justify-between gap-1">
-          <p className="text-[13px] font-bold text-primary tabular-nums">
-            {formatCurrency(product.sellPrice ?? 0)}
-          </p>
+          {noPriceSet ? (
+            <span className="inline-flex items-center gap-0.5 text-[11px] font-semibold text-status-warning">
+              <Icon name="warning" size={11} />
+              Chưa set giá
+            </span>
+          ) : (
+            <p className="text-[13px] font-bold text-primary tabular-nums">
+              {formatCurrency(product.sellPrice ?? 0)}
+            </p>
+          )}
           {outOfStock ? (
             <span className="text-[9px] font-semibold px-2 py-0.5 rounded-full bg-status-error/10 text-status-error border border-status-error/20 shrink-0">
               Hết
