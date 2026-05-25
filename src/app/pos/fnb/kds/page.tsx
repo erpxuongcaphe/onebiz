@@ -854,7 +854,12 @@ function KdsPageInner() {
       {/* ── KDS Board ── */}
       <div className="flex-1 overflow-auto bg-background p-3 md:p-5">
         {filter === "all" ? (
-          <div className="grid min-h-full grid-cols-1 gap-3 lg:grid-cols-3">
+          /* Responsive Sprint A4 (CEO 25/05/2026):
+             Trước đây grid-cols-1 (mobile) → lg:grid-cols-3 (desktop). Khoảng
+             768-1023px (iPad treo bếp) bị single-col → mỗi lane chiếm full
+             width, phải cuộn dọc 3+ lanes. Thêm md:grid-cols-2 cho tablet
+             + 2xl:grid-cols-5 cho TV bếp 1920px+ (4-5 lane 1 hàng đọc xa). */
+          <div className="grid min-h-full grid-cols-1 gap-3 md:grid-cols-2 lg:grid-cols-3 2xl:grid-cols-5">
             {KDS_LANES.map((lane) => (
               <KdsLane
                 key={lane.key}
@@ -1075,7 +1080,9 @@ function KdsOrderCard({
             <span className="block text-[10px] font-bold uppercase text-muted-foreground">
               Thời gian
             </span>
-            <span className={cn("font-heading text-xl font-bold tabular-nums md:text-2xl", timerTextClass)}>
+            {/* Responsive Sprint A3 (CEO 25/05/2026): tăng size để bếp đọc
+                xa 2-3m trên TV 24"+. xl: ~30px, 2xl: ~36px. */}
+            <span className={cn("font-heading text-xl font-bold tabular-nums md:text-2xl xl:text-3xl 2xl:text-4xl", timerTextClass)}>
               {formatElapsed(order.createdAt)}
             </span>
           </div>
@@ -1251,7 +1258,9 @@ function KdsItemRow({
         <div className="flex items-start gap-2">
           <span
             className={cn(
-              "font-heading text-sm font-bold leading-tight md:text-base",
+              // Responsive Sprint A3 (CEO 25/05/2026): tăng font item KDS
+              // để bếp đọc rõ trên TV/iPad treo bếp từ 1.5-3m.
+              "font-heading text-base font-bold leading-tight md:text-lg xl:text-xl",
               "text-foreground"
             )}
           >

@@ -600,7 +600,10 @@ export function AppSidebar() {
         "hidden md:flex flex-col bg-sidebar text-sidebar-foreground border-r border-sidebar-border shrink-0 transition-[width] duration-200",
         // w-56 (224px) thay vì w-64 (256px) — tiết kiệm 32px cho main content.
         // Collapsed w-16 (64px) — icon comfortable touch target + flyout đầy đủ.
-        collapsed ? "w-16" : "w-56"
+        // Responsive Sprint A9 (CEO 25/05/2026): trên laptop 13" (1280px viewport
+        // / xl: breakpoint) w-48 (192px) để main content có thêm 32px chỗ thở.
+        // 15.6" laptop (>=1536px / 2xl:) giữ w-56 như cũ. Collapsed luôn w-16.
+        collapsed ? "w-16" : "w-48 2xl:w-56"
       )}
     >
       {/* Stitch header — chỉ toggle button, logo đã có ở top-nav (tránh lặp brand)

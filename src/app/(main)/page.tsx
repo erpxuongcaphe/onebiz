@@ -226,8 +226,12 @@ export default function TongQuanPage() {
       {/* KPI Cards + Inventory Turnover — Stitch spec: rounded-xl, padding rộng,
           icon bg-primary-fixed text-primary, uppercase label widest tracking,
           headline font + bold number.
-          Day 8 16/05/2026: mobile = 1 cột (360px chật cho 2 cột); sm+ = 2 cột; lg+ = 5 cột */}
-      <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-5 gap-3">
+          Day 8 16/05/2026: mobile = 1 cột (360px chật cho 2 cột); sm+ = 2 cột; lg+ = 5 cột
+          Responsive Sprint A7 (CEO 25/05/2026): laptop 13" 1280px viewport
+          với sidebar 224px lấn → main 1056px / 5 col = 211px/card (quá chật).
+          Thêm xl: breakpoint (1280+) cho 5 col, lg: (1024-1279) chỉ 3 col
+          (4 KPI + 1 turnover = 5 cards thành 2 hàng 3+2). */}
+      <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-5 gap-3">
         {/* Skeleton khi kpis chưa load để UI không nhảy — 4 card + 1 turnover bên dưới. */}
         {kpiLoading && !kpis &&
           Array.from({ length: 4 }).map((_, i) => (
