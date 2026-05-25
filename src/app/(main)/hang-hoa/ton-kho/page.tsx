@@ -738,8 +738,10 @@ export default function TonKhoPage() {
         }}
       />
 
-      {/* Summary cards */}
-      <div className="grid grid-cols-[repeat(3,minmax(150px,1fr))] md:grid-cols-3 gap-3 px-4 pt-4 pb-1 overflow-x-auto scrollbar-none">
+      {/* Summary cards — Responsive Sprint B5 (CEO 25/05/2026):
+          Trước: grid-cols-[repeat(3,minmax(150px,1fr))] → mobile 3 col chật.
+          Sau: 1 col mobile, 2 col sm:, 3 col md:. */}
+      <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 gap-3 px-4 pt-4 pb-1">
         <SummaryCard
           icon={<Icon name="inventory" size={16} />}
           label="Tổng SP"

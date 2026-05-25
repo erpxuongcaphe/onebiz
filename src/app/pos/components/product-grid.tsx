@@ -114,9 +114,12 @@ export function ProductGrid({ searchQuery, onAddProduct }: ProductGridProps) {
               Square POS / KiotViet quen thuộc với cashier.
               Adaptive width: hơi rộng hơn để tên "Rang xay đóng gói" hiện đủ
               hoặc wrap 2 dòng (CEO 04/05 báo "Rang xay đó..." truncate). ── */}
+      {/* Responsive Sprint B9 (CEO 25/05/2026): tăng min width 132→160px
+          để label category đọc rõ trên laptop 13" 1280px (10vw=128px hit floor).
+          Max 200px cho monitor lớn. */}
       <aside
         className="hidden md:flex flex-col border-r bg-white shrink-0 overflow-y-auto"
-        style={{ width: "clamp(132px, 10vw, 180px)" }}
+        style={{ width: "clamp(160px, 12vw, 200px)" }}
       >
         <div className="px-3 py-2 text-[10px] font-semibold text-muted-foreground uppercase tracking-wider border-b sticky top-0 bg-white z-10">
           Danh mục

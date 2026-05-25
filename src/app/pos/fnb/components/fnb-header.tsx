@@ -65,7 +65,11 @@ export function FnbHeader({
 
   return (
     <>
-    <header className="min-h-14 bg-surface/95 backdrop-blur-md text-foreground flex flex-wrap md:flex-nowrap items-center px-2 sm:px-3 gap-2 py-2 md:h-16 md:py-0 shrink-0 border-b border-outline-variant/30">
+    {/* Responsive Sprint B2 (CEO 25/05/2026): đổi md:flex-nowrap → lg:flex-nowrap.
+        iPad landscape (1024px) trước đây bị wrap 2 hàng vì branch chip + search +
+        view-toggle quá rộng. Giờ chỉ no-wrap ở lg+ (1024+) cho desktop thật, tablet
+        landscape vẫn flex-wrap (chấp nhận 1-2 hàng) nhưng có space breathing room. */}
+    <header className="min-h-14 bg-surface/95 backdrop-blur-md text-foreground flex flex-wrap lg:flex-nowrap items-center px-2 sm:px-3 gap-2 py-2 lg:h-16 lg:py-0 shrink-0 border-b border-outline-variant/30">
       {/* ☰ Sidenav trigger */}
       {onMenuClick && (
         <button

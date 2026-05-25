@@ -41,10 +41,13 @@ const ROW_PADDING = 12; // px — p-3 wrapper
 // iPad portrait 768px - cart 280px = 488px container → 3 cols.
 // iPad landscape 1024px - cart 340px = 684px container → 4 cols.
 // Desktop 1440px - cart 360px = 1080px container → 5 cols.
+// Responsive Sprint B1 (CEO 25/05/2026): giảm breakpoint 720→680 vì
+// iPad landscape có container 684px (24-1024 - cart 340) bị fall xuống
+// 3 cols thay vì 4. Bây giờ 680+ = 4 cols → iPad landscape OK.
 const COLS_BREAKPOINTS = [
   { minWidth: 1280, cols: 6 }, // 1080+ container: 6 cột
   { minWidth: 1024, cols: 5 }, // 850+: 5 cột
-  { minWidth: 720, cols: 4 },  // 720+: 4 cột (lg landscape)
+  { minWidth: 680, cols: 4 },  // 680+: 4 cột (iPad landscape với cart)
   { minWidth: 480, cols: 3 },  // 480+: 3 cột (iPad portrait với cart)
   { minWidth: 320, cols: 2 },  // mobile: 2 cột
   { minWidth: 0, cols: 1 },    // very narrow: 1 cột
