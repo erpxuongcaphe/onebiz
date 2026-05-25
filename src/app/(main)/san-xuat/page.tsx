@@ -403,15 +403,20 @@ export default function ProductionDashboardPage() {
           </Link>
         }
       >
+        {/* Responsive Sprint B7 (CEO 25/05/2026): hide các cột không thiết
+            yếu trên mobile để table không bị scroll ngang khó dùng.
+            Mobile: Nguyên liệu + Tồn kho + Trạng thái.
+            sm+: thêm Chi nhánh + Tối thiểu.
+            md+: thêm Giá trị (cột rộng nhất). */}
         <div className="overflow-x-auto">
           <table className="w-full text-sm">
             <thead className="bg-surface-container-low">
               <tr>
                 <th className="text-left p-2 text-xs font-semibold text-muted-foreground uppercase tracking-wider">Nguyên liệu</th>
-                <th className="text-left p-2 text-xs font-semibold text-muted-foreground uppercase tracking-wider">Chi nhánh</th>
+                <th className="hidden sm:table-cell text-left p-2 text-xs font-semibold text-muted-foreground uppercase tracking-wider">Chi nhánh</th>
                 <th className="text-right p-2 text-xs font-semibold text-muted-foreground uppercase tracking-wider">Tồn kho</th>
-                <th className="text-right p-2 text-xs font-semibold text-muted-foreground uppercase tracking-wider">Tối thiểu</th>
-                <th className="text-right p-2 text-xs font-semibold text-muted-foreground uppercase tracking-wider">Giá trị</th>
+                <th className="hidden sm:table-cell text-right p-2 text-xs font-semibold text-muted-foreground uppercase tracking-wider">Tối thiểu</th>
+                <th className="hidden md:table-cell text-right p-2 text-xs font-semibold text-muted-foreground uppercase tracking-wider">Giá trị</th>
                 <th className="text-center p-2 text-xs font-semibold text-muted-foreground uppercase tracking-wider">Trạng thái</th>
               </tr>
             </thead>
@@ -422,10 +427,10 @@ export default function ProductionDashboardPage() {
                     <div className="font-medium">{r.productName}</div>
                     <div className="text-xs text-muted-foreground">{r.productCode} · {r.unit}</div>
                   </td>
-                  <td className="p-2 text-muted-foreground">{r.branchName}</td>
+                  <td className="hidden sm:table-cell p-2 text-muted-foreground">{r.branchName}</td>
                   <td className="p-2 text-right font-medium">{formatNumber(r.quantity)}</td>
-                  <td className="p-2 text-right text-muted-foreground">{formatNumber(r.minStock)}</td>
-                  <td className="p-2 text-right">{formatCurrency(r.stockValue)}</td>
+                  <td className="hidden sm:table-cell p-2 text-right text-muted-foreground">{formatNumber(r.minStock)}</td>
+                  <td className="hidden md:table-cell p-2 text-right">{formatCurrency(r.stockValue)}</td>
                   <td className="p-2 text-center">
                     {r.isOut ? (
                       <span className="inline-flex items-center gap-1 text-[10px] font-semibold px-2 py-0.5 rounded-full bg-status-error/10 text-status-error">
@@ -448,7 +453,13 @@ export default function ProductionDashboardPage() {
               ))}
               {nvl.length === 0 && (
                 <tr>
-                  <td colSpan={6} className="p-8 text-center text-muted-foreground">
+                  <td colSpan={3} className="sm:hidden p-8 text-center text-muted-foreground">
+                    Không có nguyên liệu trong kho
+                  </td>
+                  <td colSpan={5} className="hidden sm:table-cell md:hidden p-8 text-center text-muted-foreground">
+                    Không có nguyên liệu trong kho
+                  </td>
+                  <td colSpan={6} className="hidden md:table-cell p-8 text-center text-muted-foreground">
                     Không có nguyên liệu trong kho
                   </td>
                 </tr>

@@ -8,6 +8,21 @@ export interface ItemColumn<T> {
   accessor: keyof T | ((item: T) => ReactNode);
   align?: "left" | "center" | "right";
   className?: string;
+  /**
+   * Responsive Sprint B3 (CEO 25/05/2026): cho phép ẩn cột ở viewport nhỏ.
+   * - "mobile": ẩn dưới 640px (< sm:), hiện sm+
+   * - "tablet": ẩn dưới 1024px (< lg:), hiện lg+
+   * - "laptop13": ẩn dưới 1280px (< xl:), hiện xl+ (cho cột phụ chỉ
+   *   nên hiện trên laptop 15.6"+ hoặc desktop)
+   */
+  hideOn?: "mobile" | "tablet" | "laptop13";
+}
+
+function hideClassFor(hideOn?: ItemColumn<unknown>["hideOn"]): string {
+  if (hideOn === "mobile") return "hidden sm:table-cell";
+  if (hideOn === "tablet") return "hidden lg:table-cell";
+  if (hideOn === "laptop13") return "hidden xl:table-cell";
+  return "";
 }
 
 interface DetailItemsTableProps<T> {
@@ -41,6 +56,7 @@ export function DetailItemsTable<T>({
                 className={cn(
                   "px-3 py-2 text-xs font-semibold text-muted-foreground whitespace-nowrap",
                   alignClass[col.align || "left"],
+                  hideClassFor(col.hideOn),
                   col.className
                 )}
               >
@@ -63,6 +79,7 @@ export function DetailItemsTable<T>({
                     className={cn(
                       "px-3 py-2",
                       alignClass[col.align || "left"],
+                      hideClassFor(col.hideOn),
                       col.className
                     )}
                   >
