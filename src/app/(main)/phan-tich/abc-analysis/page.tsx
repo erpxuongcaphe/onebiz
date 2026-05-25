@@ -264,7 +264,7 @@ export default function AbcAnalysisPage() {
       <div className="flex-1 overflow-auto p-4 lg:p-6 space-y-4">
         {/* KPI cards */}
         {data && (
-          <div className="grid grid-cols-2 lg:grid-cols-4 gap-3">
+          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-3">
             <KpiCard
               label="Nhóm A — Sản phẩm chủ lực"
               value={String(data.classStats.A.count)}

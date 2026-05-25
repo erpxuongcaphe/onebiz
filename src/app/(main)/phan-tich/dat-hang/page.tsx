@@ -412,7 +412,7 @@ export default function DatHangPage() {
 
       <div className="flex-1 p-4 md:p-6 space-y-4">
         {/* KPI Cards */}
-        <div className="grid grid-cols-2 lg:grid-cols-4 gap-3">
+        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-3">
           {kpiCards.map((kpi) => (
             <KpiCard key={kpi.label} {...kpi} />
           ))}

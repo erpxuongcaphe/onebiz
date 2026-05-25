@@ -359,7 +359,7 @@ export default function TongQuanPage() {
 
       <div className="flex-1 overflow-auto p-4 lg:p-6 space-y-4">
         {/* KPI Cards */}
-        <div className="grid grid-cols-2 lg:grid-cols-4 gap-3">
+        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-3">
           <KpiCard
             label="Doanh thu"
             value={formatCurrency(kpis?.revenue ?? 0) + "đ"}

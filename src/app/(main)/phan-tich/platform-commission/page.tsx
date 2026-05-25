@@ -356,7 +356,7 @@ export default function PlatformCommissionReportPage() {
         exportDisabled={loading || rows.length === 0}
       />
 
-      <div className="grid grid-cols-2 lg:grid-cols-4 gap-3">
+      <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-3">
         <KpiCard
           label="Doanh thu Gross"
           value={formatCurrency(summary.totalGross) + " đ"}

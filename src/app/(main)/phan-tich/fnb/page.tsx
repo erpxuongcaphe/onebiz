@@ -294,7 +294,7 @@ export default function FnbAnalyticsPage() {
       />
 
       {/* KPI Cards */}
-      <div className="grid grid-cols-2 lg:grid-cols-4 gap-3 p-4">
+      <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-3 p-4">
         <KpiCard
           label="Tổng doanh thu F&B"
           value={formatCurrency(kpis?.totalRevenue ?? 0)}

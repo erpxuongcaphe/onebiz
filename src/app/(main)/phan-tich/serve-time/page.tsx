@@ -265,7 +265,7 @@ export default function FnbServeTimeReportPage() {
         exportDisabled={loading || !report}
       />
 
-      <div className="grid grid-cols-2 lg:grid-cols-4 gap-3">
+      <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-3">
         <KpiCard
           label="TB phục vụ"
           value={fmtMin(summary.avgMinutes)}

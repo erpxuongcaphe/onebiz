@@ -385,7 +385,7 @@ export default function AgingReportPage() {
       />
 
       {/* KPI Row */}
-      <div className="grid grid-cols-2 lg:grid-cols-4 gap-3">
+      <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-3">
         <KpiCard
           label="Tổng giá trị tồn"
           value={formatCurrency(kpis.totalValue) + " đ"}

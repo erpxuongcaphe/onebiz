@@ -231,7 +231,7 @@ export default function ProductionDashboardPage() {
       <PageHeader title={`Dashboard ${labels.title}`} />
 
       {/* KPI Row — Stitch: primary-fixed tint cho tile chính + semantic token cho status */}
-      <div className="grid grid-cols-2 lg:grid-cols-4 gap-3">
+      <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-3">
         <KpiCard
           label={`${labels.orderLabel} tháng này`}
           value={String(kpis?.ordersThisMonth ?? 0)}
