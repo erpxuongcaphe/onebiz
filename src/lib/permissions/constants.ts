@@ -43,6 +43,16 @@ export const PERMISSIONS = {
   INVENTORY_TRANSFER: "inventory.transfer",
   INVENTORY_CHECK: "inventory.check",
 
+  // Production / Sản xuất (CEO 25/05/2026: tách khỏi inventory để admin
+  // có thể grant/revoke quyền SX riêng. Trước đây dùng chung inventory.view
+  // gây confusion vì label UI là "Xem tồn kho" — admin không biết nó cũng
+  // unlock cả menu Sản xuất.)
+  PRODUCTION_VIEW: "production.view",
+  PRODUCTION_CREATE_ORDER: "production.create_order",
+  PRODUCTION_COMPLETE_ORDER: "production.complete_order",
+  PRODUCTION_CANCEL_ORDER: "production.cancel_order",
+  PRODUCTION_MANAGE_BOM: "production.manage_bom",
+
   // Finance
   FINANCE_VIEW_CASH_BOOK: "finance.view_cash_book",
   FINANCE_CREATE_TRANSACTION: "finance.create_transaction",
@@ -163,6 +173,16 @@ export const PERMISSION_GROUPS: PermissionGroup[] = [
       { code: PERMISSIONS.INVENTORY_INTERNAL_EXPORT, label: "Xuất nội bộ" },
       { code: PERMISSIONS.INVENTORY_TRANSFER, label: "Chuyển kho" },
       { code: PERMISSIONS.INVENTORY_CHECK, label: "Kiểm kho" },
+    ],
+  },
+  {
+    group: "Sản xuất",
+    permissions: [
+      { code: PERMISSIONS.PRODUCTION_VIEW, label: "Xem dashboard + lệnh + lô sản xuất" },
+      { code: PERMISSIONS.PRODUCTION_CREATE_ORDER, label: "Tạo lệnh sản xuất" },
+      { code: PERMISSIONS.PRODUCTION_COMPLETE_ORDER, label: "Hoàn thành SX (trừ NVL + nhập kho)" },
+      { code: PERMISSIONS.PRODUCTION_CANCEL_ORDER, label: "Huỷ lệnh sản xuất" },
+      { code: PERMISSIONS.PRODUCTION_MANAGE_BOM, label: "Quản lý công thức (BOM)" },
     ],
   },
   {
@@ -290,6 +310,8 @@ export const DEFAULT_ROLE_TEMPLATES: RoleTemplate[] = [
       ...ALL_PERMISSION_CODES.filter((c) => c.startsWith("pos_")),
       // Inventory full
       ...ALL_PERMISSION_CODES.filter((c) => c.startsWith("inventory.")),
+      // Production full (CEO 25/05/2026)
+      ...ALL_PERMISSION_CODES.filter((c) => c.startsWith("production.")),
       // Finance view + create
       PERMISSIONS.FINANCE_VIEW_CASH_BOOK,
       PERMISSIONS.FINANCE_CREATE_TRANSACTION,

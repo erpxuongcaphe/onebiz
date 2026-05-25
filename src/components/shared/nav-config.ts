@@ -230,10 +230,12 @@ export const sidebarNavGroups: SidebarGroup[] = [
     icon: "factory",
     items: [
       // Day 7 16/05/2026: SX là module xưởng rang — cashier không cần thấy
-      { label: "Dashboard Sản xuất", href: "/san-xuat", icon: "bar_chart", permission: "inventory.view" },
-      { label: "Lệnh sản xuất", href: "/hang-hoa/san-xuat", icon: "factory", permission: "inventory.view" },
-      { label: "Công thức sản xuất (BOM)", href: "/hang-hoa/cong-thuc", icon: "schema", permission: "inventory.view" },
-      { label: "Lô sản xuất", href: "/hang-hoa/lo-san-xuat", icon: "inventory_2", permission: "inventory.view" },
+      // CEO 25/05/2026: tách permission khỏi inventory.view → production.* riêng
+      // để admin có thể grant/revoke quyền SX độc lập với quyền kho.
+      { label: "Dashboard Sản xuất", href: "/san-xuat", icon: "bar_chart", permission: "production.view" },
+      { label: "Lệnh sản xuất", href: "/hang-hoa/san-xuat", icon: "factory", permission: "production.view" },
+      { label: "Công thức sản xuất (BOM)", href: "/hang-hoa/cong-thuc", icon: "schema", permission: "production.manage_bom" },
+      { label: "Lô sản xuất", href: "/hang-hoa/lo-san-xuat", icon: "inventory_2", permission: "production.view" },
     ],
   },
 
