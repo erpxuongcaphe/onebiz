@@ -1,0 +1,148 @@
+<!DOCTYPE html>
+<html lang="vi">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>ONEBIZ. — Đang kết nối lại…</title>
+  <link rel="icon" href="/icons/erp-192.png" />
+  <style>
+    *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+    html, body {
+      height: 100%;
+      font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto,
+        "Helvetica Neue", Arial, sans-serif;
+      background: linear-gradient(135deg, #f8fafc 0%, #e0f2fe 100%);
+      color: #1e293b;
+      -webkit-font-smoothing: antialiased;
+    }
+    body {
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      padding: 1.5rem;
+    }
+    .card {
+      max-width: 480px;
+      width: 100%;
+      background: white;
+      border-radius: 16px;
+      padding: 2.5rem 2rem;
+      box-shadow: 0 20px 60px rgba(15, 23, 42, 0.08);
+      text-align: center;
+    }
+    .icon-wrap {
+      width: 72px;
+      height: 72px;
+      background: #eff6ff;
+      border-radius: 50%;
+      display: inline-flex;
+      align-items: center;
+      justify-content: center;
+      margin-bottom: 1.25rem;
+      position: relative;
+    }
+    .icon-wrap::after {
+      content: '';
+      position: absolute;
+      inset: -6px;
+      border-radius: 50%;
+      border: 2px solid #3b82f6;
+      border-top-color: transparent;
+      animation: spin 1.2s linear infinite;
+    }
+    @keyframes spin {
+      to { transform: rotate(360deg); }
+    }
+    .icon-wrap svg {
+      width: 36px;
+      height: 36px;
+      color: #2563eb;
+    }
+    h1 {
+      font-size: 1.4rem;
+      font-weight: 700;
+      color: #0f172a;
+      margin-bottom: 0.5rem;
+    }
+    p {
+      font-size: 0.95rem;
+      color: #475569;
+      line-height: 1.55;
+      margin-bottom: 1.5rem;
+    }
+    .hint {
+      font-size: 0.8rem;
+      color: #94a3b8;
+      margin-top: 1rem;
+      padding-top: 1rem;
+      border-top: 1px solid #e2e8f0;
+    }
+    .btn {
+      display: inline-flex;
+      align-items: center;
+      justify-content: center;
+      gap: 0.5rem;
+      padding: 0.7rem 1.5rem;
+      background: #1e3a8a;
+      color: white;
+      border: none;
+      border-radius: 10px;
+      font-size: 0.95rem;
+      font-weight: 600;
+      cursor: pointer;
+      text-decoration: none;
+      transition: all 0.15s ease;
+    }
+    .btn:hover { background: #1e40af; transform: translateY(-1px); }
+    .btn:active { transform: translateY(0); }
+    .brand {
+      margin-top: 2rem;
+      font-size: 0.7rem;
+      color: #94a3b8;
+      letter-spacing: 0.1em;
+      text-transform: uppercase;
+      font-weight: 600;
+    }
+  </style>
+</head>
+<body>
+  <div class="card">
+    <div class="icon-wrap" aria-hidden="true">
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+        <path d="M5 12.55a11 11 0 0 1 14.08 0" />
+        <path d="M1.42 9a16 16 0 0 1 21.16 0" />
+        <path d="M8.53 16.11a6 6 0 0 1 6.95 0" />
+        <line x1="12" y1="20" x2="12.01" y2="20" />
+      </svg>
+    </div>
+    <h1>Đang kết nối lại với máy chủ…</h1>
+    <p>Có vẻ kết nối mạng hơi chập chờn. Hệ thống sẽ tự thử lại trong giây lát.</p>
+    <button class="btn" onclick="location.reload()">
+      <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round">
+        <polyline points="23 4 23 10 17 10" />
+        <path d="M20.49 15a9 9 0 1 1-2.12-9.36L23 10" />
+      </svg>
+      Tải lại trang
+    </button>
+    <p class="hint">
+      Nếu lỗi này lặp lại nhiều, có thể máy chủ DNS đang chậm. Anh đợi vài giây rồi tải lại — gần như chắc chắn sẽ vào được.
+    </p>
+    <div class="brand">ONEBIZ. ERP</div>
+  </div>
+
+  <script>
+    // Tự thử lại sau 5s — đa số lần network hiccup là rất ngắn
+    setTimeout(function() {
+      // Chỉ auto-reload nếu user còn ở page này (không scroll/click)
+      if (document.visibilityState === 'visible' && navigator.onLine !== false) {
+        location.reload();
+      }
+    }, 5000);
+
+    // Listen online event — reload ngay khi mạng quay lại
+    window.addEventListener('online', function() {
+      location.reload();
+    });
+  </script>
+</body>
+</html>
