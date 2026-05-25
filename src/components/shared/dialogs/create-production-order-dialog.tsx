@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import {
   Dialog,
   DialogContent,
@@ -22,6 +22,7 @@ import { useToast } from "@/lib/contexts";
 import {
   getAllBOMs,
   getBOMById,
+  getBOMsByProduct,
   getBranches,
   createProductionOrder,
   getProductById,
@@ -58,6 +59,10 @@ export function CreateProductionOrderDialog({
   const [boms, setBoms] = useState<BOM[]>([]);
   const [branches, setBranches] = useState<BranchDetail[]>([]);
 
+  // CEO 25/05/2026: Đổi UX — primary picker là Sản phẩm cần SX, BOM tự
+  // lookup theo SP. Nếu SP có nhiều BOM thì show sub-picker (rare case).
+  const [productId, setProductId] = useState("");
+  const [bomsOfProduct, setBomsOfProduct] = useState<BOM[]>([]);
   const [bomId, setBomId] = useState("");
   const [branchId, setBranchId] = useState("");
   const [plannedQty, setPlannedQty] = useState("1");
@@ -96,6 +101,8 @@ export function CreateProductionOrderDialog({
   // Reset on open
   useEffect(() => {
     if (open) {
+      setProductId("");
+      setBomsOfProduct([]);
       setBomId("");
       setPlannedQty("1");
       setPlannedStart("");
@@ -106,6 +113,60 @@ export function CreateProductionOrderDialog({
       setErrors({});
     }
   }, [open]);
+
+  // Khi user chọn SP → fetch BOMs của SP đó. Auto-select BOM đầu tiên
+  // nếu chỉ có 1 (common case). Nếu nhiều BOM → show sub-picker.
+  useEffect(() => {
+    if (!productId) {
+      setBomsOfProduct([]);
+      setBomId("");
+      return;
+    }
+    (async () => {
+      try {
+        const list = await getBOMsByProduct(productId);
+        const actives = list.filter((b) => b.isActive !== false);
+        setBomsOfProduct(actives);
+        if (actives.length === 1) {
+          setBomId(actives[0].id);
+        } else if (actives.length === 0) {
+          setBomId("");
+          toast({
+            title: "Sản phẩm chưa có công thức BOM",
+            description:
+              "Tạo BOM trong /hang-hoa/cong-thuc trước khi lên lệnh SX.",
+            variant: "warning",
+          });
+        } else {
+          // Nhiều BOM — để user chọn
+          setBomId("");
+        }
+      } catch (err) {
+        console.error("[CreateProductionOrder] load BOMs by product", err);
+        setBomsOfProduct([]);
+        setBomId("");
+      }
+    })();
+  }, [productId, toast]);
+
+  // Danh sách SP unique từ boms list (sản phẩm có ít nhất 1 BOM active).
+  const productOptions = useMemo(() => {
+    const map = new Map<string, { id: string; code: string; name: string }>();
+    for (const b of boms) {
+      if (!b.productId) continue;
+      if (b.isActive === false) continue;
+      if (!map.has(b.productId)) {
+        map.set(b.productId, {
+          id: b.productId,
+          code: b.productCode ?? "",
+          name: b.productName ?? "",
+        });
+      }
+    }
+    return Array.from(map.values()).sort((a, b) =>
+      (a.code || "").localeCompare(b.code || ""),
+    );
+  }, [boms]);
 
   // When BOM or qty changes → recompute material needs
   useEffect(() => {
@@ -164,7 +225,8 @@ export function CreateProductionOrderDialog({
 
   function validate(): boolean {
     const e: Record<string, string> = {};
-    if (!bomId) e.bomId = "Chọn công thức";
+    if (!productId) e.productId = "Chọn sản phẩm cần SX";
+    if (!bomId) e.bomId = "Sản phẩm chưa có BOM hợp lệ";
     if (!branchId) e.branchId = "Chọn chi nhánh";
     if (!plannedQty || Number(plannedQty) <= 0) e.plannedQty = "Số lượng phải > 0";
     setErrors(e);
@@ -214,7 +276,8 @@ export function CreateProductionOrderDialog({
         <DialogHeader>
           <DialogTitle>Tạo lệnh sản xuất</DialogTitle>
           <DialogDescription>
-            Chọn công thức sản xuất (BOM) và số lượng cần sản xuất. Hệ thống tự động tính NVL cần dùng.
+            Chọn sản phẩm cần sản xuất. Hệ thống tự động lấy công thức BOM
+            của sản phẩm + tính NVL cần dùng.
           </DialogDescription>
         </DialogHeader>
 
@@ -222,32 +285,77 @@ export function CreateProductionOrderDialog({
           <div className="grid grid-cols-2 gap-4">
             <div className="space-y-2">
               <label className="text-sm font-medium">
-                Công thức sản xuất (BOM) <span className="text-destructive">*</span>
+                Sản phẩm cần sản xuất <span className="text-destructive">*</span>
               </label>
               <Select
-                value={bomId || null}
-                onValueChange={(v) => setBomId(v ?? "")}
-                items={boms.map((b) => ({
-                  value: b.id,
-                  label: `${b.name} — ${b.productCode}`,
+                value={productId || null}
+                onValueChange={(v) => setProductId(v ?? "")}
+                items={productOptions.map((p) => ({
+                  value: p.id,
+                  label: `${p.code} — ${p.name}`,
                 }))}
               >
                 <SelectTrigger className="w-full">
-                  <SelectValue placeholder="Chọn công thức...">
+                  <SelectValue placeholder="Chọn sản phẩm...">
                     {(v) => {
-                      const match = boms.find((b) => b.id === v);
-                      return match ? `${match.name} — ${match.productCode}` : "Chọn công thức...";
+                      const match = productOptions.find((p) => p.id === v);
+                      return match
+                        ? `${match.code} — ${match.name}`
+                        : "Chọn sản phẩm...";
                     }}
                   </SelectValue>
                 </SelectTrigger>
                 <SelectContent>
-                  {boms.map((b) => (
-                    <SelectItem key={b.id} value={b.id}>
-                      {b.name} — {b.productCode}
+                  {productOptions.length === 0 && (
+                    <div className="px-2 py-3 text-xs text-muted-foreground">
+                      Chưa có SP nào có BOM. Tạo BOM ở /hang-hoa/cong-thuc trước.
+                    </div>
+                  )}
+                  {productOptions.map((p) => (
+                    <SelectItem key={p.id} value={p.id}>
+                      <span className="font-mono text-xs">{p.code}</span> — {p.name}
                     </SelectItem>
                   ))}
                 </SelectContent>
               </Select>
+              {/* Sub-picker BOM — chỉ hiện khi SP có nhiều BOM (rare) */}
+              {productId && bomsOfProduct.length > 1 && (
+                <div className="mt-1 space-y-1">
+                  <label className="text-[10px] uppercase text-muted-foreground">
+                    Sản phẩm có {bomsOfProduct.length} công thức — chọn 1
+                  </label>
+                  <Select
+                    value={bomId || null}
+                    onValueChange={(v) => setBomId(v ?? "")}
+                    items={bomsOfProduct.map((b) => ({
+                      value: b.id,
+                      label: b.name,
+                    }))}
+                  >
+                    <SelectTrigger className="w-full">
+                      <SelectValue placeholder="Chọn công thức...">
+                        {(v) => bomsOfProduct.find((b) => b.id === v)?.name ?? "Chọn công thức..."}
+                      </SelectValue>
+                    </SelectTrigger>
+                    <SelectContent>
+                      {bomsOfProduct.map((b) => (
+                        <SelectItem key={b.id} value={b.id}>
+                          {b.name}
+                        </SelectItem>
+                      ))}
+                    </SelectContent>
+                  </Select>
+                </div>
+              )}
+              {/* Hiển thị BOM auto-picked khi chỉ có 1 */}
+              {productId && bomsOfProduct.length === 1 && selectedBom && (
+                <div className="mt-1 flex items-center gap-1 text-[11px] text-muted-foreground">
+                  <Icon name="auto_awesome" size={12} className="text-primary" />
+                  Công thức áp dụng: <b>{selectedBom.name}</b> (1 mẻ ra{" "}
+                  {selectedBom.yieldQty} {selectedBom.yieldUnit})
+                </div>
+              )}
+              {errors.productId && <p className="text-xs text-destructive">{errors.productId}</p>}
               {errors.bomId && <p className="text-xs text-destructive">{errors.bomId}</p>}
             </div>
 

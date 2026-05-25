@@ -17,7 +17,6 @@ export { CreateInputInvoiceDialog } from "./create-input-invoice-dialog";
 export { CreatePurchaseReturnDialog } from "./create-purchase-return-dialog";
 export { CreateDisposalDialog } from "./create-disposal-dialog";
 export { CreateInternalExportDialog } from "./create-internal-export-dialog";
-export { CreateManufacturingOrderDialog } from "./create-manufacturing-order-dialog";
 export { BOMEditorDialog } from "./bom-editor-dialog";
 export { CreateProductionOrderDialog } from "./create-production-order-dialog";
 export { CompleteProductionOrderDialog } from "./complete-production-order-dialog";
