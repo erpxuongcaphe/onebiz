@@ -1070,7 +1070,7 @@ function KdsOrderCard({
               e.stopPropagation();
               onPrintTicket();
             }}
-            className="flex size-8 items-center justify-center rounded-lg border border-border bg-card text-muted-foreground transition-colors hover:bg-surface-container hover:text-foreground"
+            className="flex size-11 md:size-9 items-center justify-center rounded-lg border border-border bg-card text-muted-foreground transition-colors hover:bg-surface-container hover:text-foreground"
             title="In lại phiếu bếp"
             aria-label="In lại phiếu bếp"
           >

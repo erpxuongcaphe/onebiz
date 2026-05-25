@@ -201,7 +201,7 @@ export function FnbCart({
                 <button
                   type="button"
                   onClick={onTransferTable}
-                  className="h-8 w-8 rounded-full flex items-center justify-center text-on-surface-variant hover:bg-surface-container-high active:bg-surface-container transition-colors press-scale-sm"
+                  className="h-11 w-11 md:h-9 md:w-9 rounded-full flex items-center justify-center text-on-surface-variant hover:bg-surface-container-high active:bg-surface-container transition-colors press-scale-sm"
                   title="Chuyển bàn"
                   aria-label="Chuyển bàn"
                 >
@@ -212,7 +212,7 @@ export function FnbCart({
                 <button
                   type="button"
                   onClick={onVoidKitchenOrder}
-                  className="h-8 w-8 rounded-full flex items-center justify-center text-on-surface-variant hover:bg-status-error/10 hover:text-status-error active:bg-status-error/20 transition-colors press-scale-sm"
+                  className="h-11 w-11 md:h-9 md:w-9 rounded-full flex items-center justify-center text-on-surface-variant hover:bg-status-error/10 hover:text-status-error active:bg-status-error/20 transition-colors press-scale-sm"
                   title="Huỷ đơn bếp"
                   aria-label="Huỷ đơn bếp"
                 >
@@ -225,7 +225,7 @@ export function FnbCart({
             <button
               type="button"
               onClick={onOrderHistory}
-              className="h-8 w-8 rounded-full flex items-center justify-center text-on-surface-variant hover:bg-surface-container-high active:bg-surface-container transition-colors press-scale-sm shrink-0"
+              className="h-11 w-11 md:h-9 md:w-9 rounded-full flex items-center justify-center text-on-surface-variant hover:bg-surface-container-high active:bg-surface-container transition-colors press-scale-sm shrink-0"
               title="Lịch sử đơn — in lại hoá đơn"
               aria-label="Lịch sử đơn"
             >
@@ -1049,7 +1049,7 @@ function CartLineItem({
           <button
             type="button"
             onClick={() => onUpdateQty(line.quantity - 1)}
-            className="size-9 md:size-8 rounded-full flex items-center justify-center text-muted-foreground hover:bg-surface-container-high hover:text-foreground active:bg-surface-container transition-colors press-scale-sm"
+            className="size-11 md:size-9 rounded-full flex items-center justify-center text-muted-foreground hover:bg-surface-container-high hover:text-foreground active:bg-surface-container transition-colors press-scale-sm"
             aria-label="Giảm số lượng"
           >
             <Icon name="remove" size={16} />
@@ -1060,7 +1060,7 @@ function CartLineItem({
           <button
             type="button"
             onClick={() => onUpdateQty(line.quantity + 1)}
-            className="size-9 md:size-8 rounded-full flex items-center justify-center text-primary hover:bg-primary-fixed active:bg-primary-fixed/70 transition-colors press-scale-sm"
+            className="size-11 md:size-9 rounded-full flex items-center justify-center text-primary hover:bg-primary-fixed active:bg-primary-fixed/70 transition-colors press-scale-sm"
             aria-label="Tăng số lượng"
           >
             <Icon name="add" size={16} />
@@ -1070,7 +1070,7 @@ function CartLineItem({
         <button
           type="button"
           onClick={onRemove}
-          className="size-9 md:size-8 rounded-full flex items-center justify-center text-muted-foreground hover:text-status-error hover:bg-status-error/10 transition-colors opacity-60 md:opacity-0 md:group-hover:opacity-100 press-scale-sm"
+          className="size-11 md:size-9 rounded-full flex items-center justify-center text-muted-foreground hover:text-status-error hover:bg-status-error/10 transition-colors opacity-60 md:opacity-0 md:group-hover:opacity-100 press-scale-sm"
           title="Xoá"
           aria-label="Xoá món"
         >
