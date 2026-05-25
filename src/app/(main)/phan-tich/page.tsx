@@ -413,7 +413,7 @@ export default function TongQuanPage() {
                   Chưa có dữ liệu doanh thu theo ngày
                 </div>
               ) : (
-                <ResponsiveContainer width="100%" height={280}>
+                <ResponsiveContainer width="100%" height={280} minWidth={0}>
                   <LineChart data={dailyRevenue}>
                     <CartesianGrid strokeDasharray="3 3" stroke="#f0f0f0" />
                     <XAxis
@@ -449,7 +449,7 @@ export default function TongQuanPage() {
                   Chưa có dữ liệu doanh thu theo danh mục
                 </div>
               ) : (
-                <ResponsiveContainer width="100%" height={280}>
+                <ResponsiveContainer width="100%" height={280} minWidth={0}>
                   <BarChart data={categoryRevenue} layout="vertical">
                     <CartesianGrid strokeDasharray="3 3" stroke="#f0f0f0" />
                     <XAxis

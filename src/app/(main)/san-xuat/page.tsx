@@ -310,7 +310,7 @@ export default function ProductionDashboardPage() {
       <div className="grid lg:grid-cols-2 gap-4">
         {/* Trend chart */}
         <ChartCard title={labels.trendTitle} subtitle="6 tháng gần nhất">
-          <ResponsiveContainer width="100%" height={260}>
+          <ResponsiveContainer width="100%" height={260} minWidth={0}>
             <BarChart data={trend}>
               <CartesianGrid strokeDasharray="3 3" />
               <XAxis dataKey="month" fontSize={12} />

@@ -469,7 +469,7 @@ export default function CuoiNgayPage() {
               {/* Revenue by hour */}
               <ChartCard title="Doanh thu theo giờ" subtitle="Phân bổ doanh thu trong kỳ">
                 {hourChartData.length > 0 ? (
-                  <ResponsiveContainer width="100%" height={280}>
+                  <ResponsiveContainer width="100%" height={280} minWidth={0}>
                     <BarChart data={hourChartData}>
                       <CartesianGrid strokeDasharray="3 3" stroke="#f0f0f0" />
                       <XAxis dataKey="hour" tick={{ fontSize: 10 }} interval={2} />
@@ -497,7 +497,7 @@ export default function CuoiNgayPage() {
               {/* Payment method pie */}
               <ChartCard title="Phương thức thanh toán" subtitle="Tỷ lệ theo giá trị">
                 {totalRevenue > 0 ? (
-                  <ResponsiveContainer width="100%" height={280}>
+                  <ResponsiveContainer width="100%" height={280} minWidth={0}>
                     <PieChart>
                       <Pie
                         data={paymentMethods}
@@ -533,7 +533,7 @@ export default function CuoiNgayPage() {
             {/* Top 5 products */}
             <ChartCard title="Top 5 sản phẩm bán chạy" subtitle="Theo số lượng bán">
               {topProducts.length > 0 ? (
-                <ResponsiveContainer width="100%" height={280}>
+                <ResponsiveContainer width="100%" height={280} minWidth={0}>
                   <BarChart data={topProducts} layout="vertical">
                     <CartesianGrid strokeDasharray="3 3" stroke="#f0f0f0" />
                     <XAxis type="number" tick={{ fontSize: 11 }} />

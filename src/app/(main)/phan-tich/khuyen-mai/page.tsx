@@ -344,7 +344,7 @@ export default function KhuyenMaiAnalyticsPage() {
             <span>Chưa có đơn nào áp KM trong 30 ngày qua</span>
           </div>
         ) : (
-          <ResponsiveContainer width="100%" height={280}>
+          <ResponsiveContainer width="100%" height={280} minWidth={0}>
             <BarChart data={dailyTrend} margin={{ top: 8, right: 8, bottom: 8, left: 0 }}>
               <CartesianGrid strokeDasharray="3 3" stroke="hsl(var(--border))" />
               <XAxis
