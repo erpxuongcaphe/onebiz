@@ -62,6 +62,8 @@ export function CreateProductionOrderDialog({
   // CEO 25/05/2026: Đổi UX — primary picker là Sản phẩm cần SX, BOM tự
   // lookup theo SP. Nếu SP có nhiều BOM thì show sub-picker (rare case).
   const [productId, setProductId] = useState("");
+  const [productSearch, setProductSearch] = useState("");
+  const [showProductDropdown, setShowProductDropdown] = useState(false);
   const [bomsOfProduct, setBomsOfProduct] = useState<BOM[]>([]);
   const [bomId, setBomId] = useState("");
   const [branchId, setBranchId] = useState("");
@@ -102,6 +104,8 @@ export function CreateProductionOrderDialog({
   useEffect(() => {
     if (open) {
       setProductId("");
+      setProductSearch("");
+      setShowProductDropdown(false);
       setBomsOfProduct([]);
       setBomId("");
       setPlannedQty("1");
@@ -167,6 +171,23 @@ export function CreateProductionOrderDialog({
       (a.code || "").localeCompare(b.code || ""),
     );
   }, [boms]);
+
+  // Filter SP theo search query (CEO 25/05/2026): mã hoặc tên SP
+  const filteredProductOptions = useMemo(() => {
+    const q = productSearch.trim().toLowerCase();
+    if (!q) return productOptions;
+    return productOptions.filter(
+      (p) =>
+        p.code.toLowerCase().includes(q) ||
+        p.name.toLowerCase().includes(q),
+    );
+  }, [productOptions, productSearch]);
+
+  const selectedProductLabel = useMemo(() => {
+    if (!productId) return "";
+    const p = productOptions.find((x) => x.id === productId);
+    return p ? `${p.code} — ${p.name}` : "";
+  }, [productId, productOptions]);
 
   // When BOM or qty changes → recompute material needs
   useEffect(() => {
@@ -287,37 +308,80 @@ export function CreateProductionOrderDialog({
               <label className="text-sm font-medium">
                 Sản phẩm cần sản xuất <span className="text-destructive">*</span>
               </label>
-              <Select
-                value={productId || null}
-                onValueChange={(v) => setProductId(v ?? "")}
-                items={productOptions.map((p) => ({
-                  value: p.id,
-                  label: `${p.code} — ${p.name}`,
-                }))}
-              >
-                <SelectTrigger className="w-full">
-                  <SelectValue placeholder="Chọn sản phẩm...">
-                    {(v) => {
-                      const match = productOptions.find((p) => p.id === v);
-                      return match
-                        ? `${match.code} — ${match.name}`
-                        : "Chọn sản phẩm...";
+              {/* CEO 25/05/2026: thay Select bằng input search để gõ tìm SP
+                  nhanh (mã hoặc tên). Click input → show dropdown filtered. */}
+              <div className="relative">
+                <Icon
+                  name="search"
+                  size={16}
+                  className="pointer-events-none absolute left-2.5 top-1/2 -translate-y-1/2 text-muted-foreground"
+                />
+                <Input
+                  type="text"
+                  className="pl-8 pr-8"
+                  placeholder="Gõ mã hoặc tên sản phẩm..."
+                  value={productId ? selectedProductLabel : productSearch}
+                  onChange={(e) => {
+                    setProductSearch(e.target.value);
+                    setShowProductDropdown(true);
+                    if (productId) setProductId(""); // user gõ lại → clear chọn cũ
+                  }}
+                  onFocus={() => setShowProductDropdown(true)}
+                  onBlur={() => {
+                    // Delay để onClick item kịp chạy trước onBlur
+                    setTimeout(() => setShowProductDropdown(false), 150);
+                  }}
+                />
+                {productId && (
+                  <button
+                    type="button"
+                    onClick={() => {
+                      setProductId("");
+                      setProductSearch("");
                     }}
-                  </SelectValue>
-                </SelectTrigger>
-                <SelectContent>
-                  {productOptions.length === 0 && (
-                    <div className="px-2 py-3 text-xs text-muted-foreground">
-                      Chưa có SP nào có BOM. Tạo BOM ở /hang-hoa/cong-thuc trước.
-                    </div>
-                  )}
-                  {productOptions.map((p) => (
-                    <SelectItem key={p.id} value={p.id}>
-                      <span className="font-mono text-xs">{p.code}</span> — {p.name}
-                    </SelectItem>
-                  ))}
-                </SelectContent>
-              </Select>
+                    className="absolute right-2 top-1/2 -translate-y-1/2 rounded p-0.5 text-muted-foreground hover:bg-muted hover:text-foreground"
+                    aria-label="Xóa chọn"
+                  >
+                    <Icon name="close" size={14} />
+                  </button>
+                )}
+                {showProductDropdown && (
+                  <div className="absolute z-50 mt-1 w-full max-h-64 overflow-y-auto rounded-md border border-border bg-white shadow-lg">
+                    {productOptions.length === 0 && (
+                      <div className="px-3 py-2 text-xs text-muted-foreground">
+                        Chưa có SP nào có BOM. Tạo BOM ở{" "}
+                        <span className="font-mono">/hang-hoa/cong-thuc</span>{" "}
+                        trước.
+                      </div>
+                    )}
+                    {productOptions.length > 0 &&
+                      filteredProductOptions.length === 0 && (
+                        <div className="px-3 py-2 text-xs text-muted-foreground">
+                          Không tìm thấy SP &quot;{productSearch}&quot;
+                        </div>
+                      )}
+                    {filteredProductOptions.map((p) => (
+                      <button
+                        key={p.id}
+                        type="button"
+                        onMouseDown={(e) => e.preventDefault()}
+                        onClick={() => {
+                          setProductId(p.id);
+                          setProductSearch("");
+                          setShowProductDropdown(false);
+                        }}
+                        className="block w-full text-left px-3 py-2 text-sm hover:bg-muted"
+                      >
+                        <span className="font-mono text-xs text-primary">
+                          {p.code}
+                        </span>
+                        <span className="mx-1 text-muted-foreground">—</span>
+                        <span>{p.name}</span>
+                      </button>
+                    ))}
+                  </div>
+                )}
+              </div>
               {/* Sub-picker BOM — chỉ hiện khi SP có nhiều BOM (rare) */}
               {productId && bomsOfProduct.length > 1 && (
                 <div className="mt-1 space-y-1">
@@ -407,20 +471,30 @@ export function CreateProductionOrderDialog({
               )}
             </div>
             <div className="space-y-2">
-              <label className="text-sm font-medium">Bắt đầu dự kiến</label>
+              <label className="text-sm font-medium">
+                Ngày bắt đầu sản xuất
+              </label>
               <Input
                 type="date"
                 value={plannedStart}
                 onChange={(e) => setPlannedStart(e.target.value)}
               />
+              <p className="text-[10px] text-muted-foreground">
+                Khi nào bắt đầu làm? (để trống = bắt đầu ngay khi tạo lệnh)
+              </p>
             </div>
             <div className="space-y-2">
-              <label className="text-sm font-medium">Kết thúc dự kiến</label>
+              <label className="text-sm font-medium">
+                Ngày dự kiến hoàn thành
+              </label>
               <Input
                 type="date"
                 value={plannedEnd}
                 onChange={(e) => setPlannedEnd(e.target.value)}
               />
+              <p className="text-[10px] text-muted-foreground">
+                Khi nào làm xong? (để trống nếu chưa rõ — có thể cập nhật sau)
+              </p>
             </div>
           </div>
 
