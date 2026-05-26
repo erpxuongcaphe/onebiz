@@ -12,10 +12,17 @@ const nextConfig: NextConfig = {
   },
 
   // CEO 23/05/2026: Disable browser bfcache để fix bug "F5 không hiện
-  // data mới". Pattern Cache-Control: no-store ngăn browser cache HTML
-  // → mỗi F5 force re-fetch fresh content. Trade-off: page load chậm
-  // hơn 100-200ms khi back-forward (acceptable cho ERP nội bộ, không
-  // phải public site cần snappy bfcache).
+  // data mới".
+  //
+  // CEO 26/05/2026: Trade-off discovery — `no-store` ngăn cache HOÀN TOÀN
+  // → mỗi tab mới phải full DNS+TCP+TLS round-trip → đôi khi network
+  // hiccup → Edge show "Hmmm... can't reach this page" / ERR_FAILED.
+  // Web Vercel khác không bị vì có cache mặc định.
+  //
+  // Fix: thay `no-store` bằng `max-age=0, must-revalidate` (browser cache
+  // HTML nhưng luôn revalidate trước khi serve → vẫn fresh data sau F5).
+  // Plus `stale-if-error=86400` → nếu server unreachable, serve stale
+  // cache (lên đến 24h) thay vì show error page.
   //
   // Áp dụng cho tất cả route trừ static assets _next/static.
   async headers() {
@@ -25,7 +32,8 @@ const nextConfig: NextConfig = {
         headers: [
           {
             key: "Cache-Control",
-            value: "no-store, must-revalidate",
+            value:
+              "private, max-age=0, must-revalidate, stale-if-error=86400",
           },
         ],
       },
