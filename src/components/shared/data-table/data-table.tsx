@@ -140,7 +140,70 @@ declare module "@tanstack/react-table" {
     pinLeft?: boolean;
     /** Width fixed (px) cho cell sticky — cần để thân row không nhảy. */
     pinWidth?: number;
+    /**
+     * Responsive Sprint B8 (CEO 25/05/2026): tự động ẩn cột khi viewport
+     * nhỏ hơn breakpoint chỉ định. Giúp danh sách hàng-hoá / hóa-đơn /
+     * khách-hàng hiển thị gọn trên laptop 13" + tablet, không bị crush.
+     *
+     * - "sm": ẩn @ <640px (mobile only), hiện sm+
+     * - "lg": ẩn @ <1024px (mobile + tablet), hiện lg+
+     * - "xl": ẩn @ <1280px (mobile + tablet + laptop 13"-15.6"), hiện xl+
+     *
+     * Cột vẫn nằm trong column toggle dropdown để user override thủ công.
+     */
+    hideBelow?: "sm" | "lg" | "xl";
   }
+}
+
+// Helper hook track viewport breakpoint cho meta hideBelow
+function useBreakpointName():
+  | "xs"
+  | "sm"
+  | "md"
+  | "lg"
+  | "xl"
+  | "2xl" {
+  const [bp, setBp] = useState<"xs" | "sm" | "md" | "lg" | "xl" | "2xl">(
+    "2xl",
+  );
+  useEffect(() => {
+    const compute = () => {
+      const w = typeof window !== "undefined" ? window.innerWidth : 1536;
+      if (w < 640) setBp("xs");
+      else if (w < 768) setBp("sm");
+      else if (w < 1024) setBp("md");
+      else if (w < 1280) setBp("lg");
+      else if (w < 1536) setBp("xl");
+      else setBp("2xl");
+    };
+    compute();
+    window.addEventListener("resize", compute);
+    return () => window.removeEventListener("resize", compute);
+  }, []);
+  return bp;
+}
+
+// Compute auto-hide visibility map từ cols + current breakpoint.
+function computeBreakpointHidden<TData, TValue>(
+  cols: ColumnDef<TData, TValue>[],
+  currentBp: "xs" | "sm" | "md" | "lg" | "xl" | "2xl",
+): VisibilityState {
+  const order = ["xs", "sm", "md", "lg", "xl", "2xl"];
+  const currentIdx = order.indexOf(currentBp);
+  const result: VisibilityState = {};
+  for (const col of cols) {
+    const hideBelow = col.meta?.hideBelow;
+    if (!hideBelow) continue;
+    const thresholdIdx = order.indexOf(hideBelow);
+    if (currentIdx < thresholdIdx) {
+      const id =
+        col.id ??
+        (col as unknown as { accessorKey?: string }).accessorKey ??
+        "";
+      if (id) result[id] = false;
+    }
+  }
+  return result;
 }
 
 export function DataTable<TData, TValue>({
@@ -181,6 +244,19 @@ export function DataTable<TData, TValue>({
   // cột optional mặc định. User tick qua dropdown "Hiển thị cột" để hiện.
   const [columnVisibility, setColumnVisibility] = useState<VisibilityState>(
     defaultColumnVisibility ?? {},
+  );
+
+  // Responsive Sprint B8 (CEO 25/05/2026): auto-hide cols dựa trên viewport
+  // qua column meta.hideBelow. Merge với user-set columnVisibility (user
+  // override luôn ưu tiên).
+  const currentBp = useBreakpointName();
+  const breakpointHidden = useMemo(
+    () => computeBreakpointHidden(columns, currentBp),
+    [columns, currentBp],
+  );
+  const mergedVisibility = useMemo(
+    () => ({ ...breakpointHidden, ...columnVisibility }),
+    [breakpointHidden, columnVisibility],
   );
   const [internalExpanded, setInternalExpanded] = useState<number | null>(null);
 
@@ -279,7 +355,8 @@ export function DataTable<TData, TValue>({
     state: {
       sorting,
       rowSelection,
-      columnVisibility,
+      // Sprint B8: dùng mergedVisibility để auto-hide theo viewport breakpoint
+      columnVisibility: mergedVisibility,
       pagination: { pageIndex, pageSize },
     },
     ...(getRowId ? { getRowId: (row) => getRowId(row) } : {}),
