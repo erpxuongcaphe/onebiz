@@ -200,7 +200,7 @@ export function CreateInternalExportDialog({
 
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
-      <DialogContent className="flex h-[calc(100dvh-24px)] w-[calc(100vw-24px)] max-w-[1450px] flex-col gap-0 overflow-hidden p-0 sm:max-w-[min(1200px,calc(100vw-48px))] xl:sm:max-w-[1450px] sm:rounded-2xl">
+      <DialogContent className="flex h-[calc(100dvh-24px)] w-[calc(100vw-24px)] max-w-[1450px] flex-col gap-0 overflow-hidden p-0 sm:max-w-[min(1200px,calc(100vw-48px))] xl:max-w-[1450px] sm:rounded-2xl">
         <div className="shrink-0 border-b bg-white px-4 py-3 md:px-5">
           <DialogHeader className="gap-0 pr-14">
             <div className="flex flex-wrap items-center gap-3">
