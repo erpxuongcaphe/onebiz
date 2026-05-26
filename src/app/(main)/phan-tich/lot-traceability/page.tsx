@@ -91,7 +91,9 @@ export default function LotTraceabilityPage() {
           : null;
         return {
           id: anyLot.id,
-          lotCode: anyLot.lot_code ?? "—",
+          // CEO 26/05/2026: schema column là lot_number (migration 00104),
+          // không phải lot_code. Fallback giữ cho legacy data.
+          lotCode: anyLot.lot_number ?? anyLot.lot_code ?? "—",
           productCode: anyLot.productCode,
           productName: anyLot.productName,
           quantity: Number(anyLot.quantity ?? 0),

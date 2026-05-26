@@ -542,9 +542,12 @@ export async function getFinancialAlerts(branchId?: string): Promise<FinancialAl
         .eq("tenant_id", tenantId)
         .filter("is_active", "eq", true);
 
+  // CEO 26/05/2026: Fix column name `lot_code` → `lot_number` (đúng schema
+  // migration 00104). Query này từng trả về 400 → dashboard cảnh báo lot
+  // sắp hết hạn không hoạt động được.
   let lotQuery = (supabase as any)
     .from("product_lots")
-    .select("id, lot_code, product_id, expiry_date, current_qty, products(name)")
+    .select("id, lot_number, product_id, expiry_date, current_qty, products(name)")
     .eq("tenant_id", tenantId)
     .gt("current_qty", 0)
     .not("expiry_date", "is", null)
@@ -693,7 +696,7 @@ export async function getFinancialAlerts(branchId?: string): Promise<FinancialAl
         .slice(0, 3)
         .map((l) => {
           const product = l.products as { name: string } | null;
-          return `${product?.name ?? "SP"} (${l.lot_code})`;
+          return `${product?.name ?? "SP"} (${l.lot_number})`;
         })
         .join(", "),
       value: expiredLots.length,
@@ -716,7 +719,7 @@ export async function getFinancialAlerts(branchId?: string): Promise<FinancialAl
         .slice(0, 3)
         .map((l) => {
           const product = l.products as { name: string } | null;
-          return `${product?.name ?? "SP"} (${l.lot_code})`;
+          return `${product?.name ?? "SP"} (${l.lot_number})`;
         })
         .join(", "),
       value: soonExpiring.length,
