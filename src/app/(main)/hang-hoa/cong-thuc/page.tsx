@@ -328,11 +328,13 @@ export default function CongThucPage() {
   const [branchFilter, setBranchFilter] = useState<string>("all");
   const [expandedRow, setExpandedRow] = useState<number | null>(null);
 
-  // Sync branch filter với global activeBranchId khi user đổi chi nhánh ở header.
-  // Mặc định "all" (không filter) để tránh ẩn BOM mới (chưa có production order).
-  useEffect(() => {
-    if (activeBranchId) setBranchFilter(activeBranchId);
-  }, [activeBranchId]);
+  // CEO 26/05/2026: BỎ auto-sync branchFilter với activeBranchId vì gây
+  // bug: user nhân viên có activeBranchId = 1 chi nhánh cụ thể → auto set
+  // filter → CHỈ thấy BOM đã có production_order tại branch đó. BOM mới
+  // tạo (chưa SX lần nào) hoặc BOM global (branch_id = NULL) → bị ẩn hết.
+  //
+  // Comment cũ ghi rõ ý đồ "mặc định all" nhưng useEffect lại override.
+  // Giữ mặc định "all" — user tự pick branch trong filter nếu cần.
 
   useEffect(() => {
     getBranches()
