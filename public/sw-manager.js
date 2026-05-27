@@ -1,50 +1,43 @@
 /**
  * Service Worker for OneBiz Manager / ERP Web PWA
  *
- * Sprint LT-5 (CEO 25/05/2026): Improve để handle DNS PA Vietnam slow case.
- * Trước đây HTML pages chỉ stale-while-revalidate → khi cache rỗng + network
- * fail, fall through cho Edge show ERR_FAILED. Giờ:
- *   - Pre-cache HTML shells của TOP routes (trang chủ, hang-hoa, pos, so-quy,
- *     dang-nhap, /he-thong/users, /don-hang/*) → user vào trang nào cũng có
- *     cached shell sẵn.
- *   - Catch fetch failure → fall back tới /offline.html (page đẹp + auto-reload
- *     khi mạng quay lại) thay vì Edge native error.
- *   - Bump cache name v1 → v2 để force refresh cũ.
+ * Sprint LT-6 (CEO 27/05/2026): REWRITE strategy HTML để fix bug user bị đá
+ * khỏi tài khoản sau ~1h dùng web.
  *
- * Strategy:
+ * BUG TRƯỚC ĐÂY (Sprint LT-5 25/05):
+ *   - HTML pages stale-while-revalidate → SW serve cached HTML INSTANT,
+ *     bỏ qua Next.js middleware (`src/lib/supabase/middleware.ts`).
+ *   - Middleware là chỗ refresh Supabase auth token + rotate cookie.
+ *   - User click navigation → SW serve cache → cookie KHÔNG được rotate.
+ *   - Sau 1h (JWT default expiry) → Supabase API trả 401 → fire SIGNED_OUT
+ *     → auth-context redirect /dang-nhap. User bị đá oan.
+ *
+ * FIX (Sprint LT-6 27/05):
+ *   - HTML pages: NETWORK-FIRST (luôn fetch từ Vercel → middleware chạy →
+ *     cookie refresh OK). Cache HTML chỉ để FALLBACK khi network die.
+ *   - Bỏ pre-cache ROUTE_SHELLS — pre-cache làm cache đầy HTML không cookie,
+ *     lợi ích perf nhỏ không xứng với risk auth.
+ *   - Bump cache v2 → v3 để force clear cache HTML cũ.
+ *
+ * Strategy hiện tại:
  *   - Cache-first cho static assets (_next/static, icons, manifest)
- *   - Stale-while-revalidate cho HTML page shells + offline fallback
+ *   - NETWORK-FIRST cho HTML — middleware luôn chạy → cookie refresh đúng
+ *   - Fallback /offline.html chỉ khi network thật sự die (offline mode)
  *   - Bypass: auth routes, Supabase, /api/*, /monitoring (Sentry tunnel)
  */
 
-const CACHE_NAME = "onebiz-manager-v2";
+const CACHE_NAME = "onebiz-manager-v3";
 
-// Pre-cache top routes — đảm bảo user vào lần đầu các trang này
-// cũng có shell sẵn sau khi SW activated.
+// Pre-cache CHỈ static assets — KHÔNG pre-cache HTML routes nữa.
+// Sprint LT-6 27/05: HTML phải đi qua network để middleware refresh cookie.
+// Pre-cache HTML = user click → SW serve cached HTML → bỏ middleware → token
+// không refresh → 1h sau bị đá. Fix bằng cách KHÔNG pre-cache HTML.
 const STATIC_ASSETS = [
-  "/",
-  "/manager",
-  "/dang-nhap",
   "/offline.html",
   "/manifest.json",
   "/manifest-manager.json",
   "/icons/erp-192.png",
   "/icons/erp-512.png",
-];
-
-// Route shells để warm cache khi nhận thông báo PRECACHE_ROUTES từ client.
-const ROUTE_SHELLS = [
-  "/",
-  "/hang-hoa",
-  "/hang-hoa/nhom",
-  "/hang-hoa/lo-san-xuat",
-  "/hang-hoa/san-xuat",
-  "/pos",
-  "/so-quy",
-  "/don-hang/dat-hang",
-  "/don-hang/hoa-don",
-  "/khach-hang",
-  "/he-thong/users",
 ];
 
 self.addEventListener("install", (event) => {
@@ -60,51 +53,19 @@ self.addEventListener("install", (event) => {
 
 self.addEventListener("activate", (event) => {
   event.waitUntil(
-    Promise.all([
-      // Clean caches cũ
-      caches.keys().then((keys) =>
-        Promise.all(
-          keys.filter((key) => key !== CACHE_NAME).map((key) => caches.delete(key)),
-        ),
+    // Clean caches cũ (v1, v2) — buộc clear HTML đã cache sai trước đây.
+    caches.keys().then((keys) =>
+      Promise.all(
+        keys.filter((key) => key !== CACHE_NAME).map((key) => caches.delete(key)),
       ),
-      // Warm cache cho top routes — fetch background sau activation
-      caches.open(CACHE_NAME).then((cache) =>
-        Promise.all(
-          ROUTE_SHELLS.map((path) =>
-            fetch(path, { credentials: "same-origin" })
-              .then((resp) => {
-                if (resp && resp.status === 200) {
-                  return cache.put(path, resp);
-                }
-              })
-              .catch(() => {
-                // Bỏ qua nếu fetch fail
-              }),
-          ),
-        ),
-      ),
-    ]),
+    ),
   );
   self.clients.claim();
 });
 
-// Khi client message "PRECACHE_ROUTES" → warm thêm routes user thường vào.
-// Có thể trigger từ client side khi user idle.
-self.addEventListener("message", (event) => {
-  if (event.data?.type === "PRECACHE_ROUTES" && Array.isArray(event.data.routes)) {
-    event.waitUntil(
-      caches.open(CACHE_NAME).then((cache) =>
-        Promise.all(
-          event.data.routes.map((path) =>
-            fetch(path, { credentials: "same-origin" })
-              .then((resp) => resp.status === 200 && cache.put(path, resp))
-              .catch(() => {}),
-          ),
-        ),
-      ),
-    );
-  }
-});
+// Sprint LT-6: BỎ handler "PRECACHE_ROUTES". Không pre-cache HTML nữa vì
+// HTML cache làm cookie auth không refresh. Client side cũng đã bỏ message
+// PRECACHE_ROUTES tương ứng.
 
 self.addEventListener("fetch", (event) => {
   const url = new URL(event.request.url);
@@ -159,51 +120,51 @@ self.addEventListener("fetch", (event) => {
     return;
   }
 
-  // HTML pages: stale-while-revalidate + offline fallback
-  // CEO 25/05/2026: thêm fallback tới /offline.html nếu KHÔNG có cache
-  // và network fail (DNS PA Vietnam chậm) → user thấy page "Đang kết nối
-  // lại…" auto-reload thay vì Edge error.
+  // HTML pages: NETWORK-FIRST + offline.html fallback
+  //
+  // Sprint LT-6 27/05/2026: NETWORK-FIRST (KHÔNG dùng stale-while-revalidate).
+  // Lý do: middleware Next.js (src/lib/supabase/middleware.ts) chạy ở edge
+  // BẮT BUỘC cho mỗi HTML request để refresh Supabase auth token + rotate
+  // cookie. Nếu SW serve cached HTML → bỏ qua middleware → token không refresh
+  // → 1 tiếng sau Supabase API trả 401 → user bị đá khỏi tài khoản oan.
+  //
+  // Trade-off: page load lần navigate đầu chậm hơn ~100-200ms (phải đợi
+  // network roundtrip thay vì serve cache instant). Acceptable vì:
+  //   - Static assets vẫn cache-first (JS/CSS/font lớn nhất → vẫn nhanh)
+  //   - HTML response nhỏ (< 50KB gzip) → load nhanh
+  //   - Đổi lại: KHÔNG bao giờ bị đá tài khoản oan
   if (
     event.request.mode === "navigate" ||
     event.request.destination === "document"
   ) {
     event.respondWith(
-      caches.match(event.request).then((cached) => {
-        const networkPromise = fetch(event.request)
-          .then((resp) => {
-            if (resp && resp.status === 200) {
-              const clone = resp.clone();
-              caches
-                .open(CACHE_NAME)
-                .then((cache) => cache.put(event.request, clone));
-            }
-            return resp;
-          })
-          .catch(() => null);
-
-        // Stale-while-revalidate: cached → fast paint, network → update bg
-        if (cached) {
-          // Background update (không block response)
-          networkPromise.catch(() => {});
-          return cached;
-        }
-
-        // Không có cache cho exact URL → thử match shell '/' (cùng route group)
-        // hoặc cuối cùng fall back offline.html
-        return networkPromise.then((resp) => {
-          if (resp) return resp;
-          // Cố gắng serve shell '/' (đa số trang share layout chung)
-          return caches.match("/").then((rootCached) => {
-            if (rootCached) return rootCached;
-            // Cuối cùng: offline page
+      fetch(event.request)
+        .then((resp) => {
+          // Cache response thành công để fallback khi offline sau này.
+          // KHÔNG dùng cached version cho request hiện tại — luôn return
+          // fresh response từ network để middleware đã chạy (cookie refreshed).
+          if (resp && resp.status === 200) {
+            const clone = resp.clone();
+            caches
+              .open(CACHE_NAME)
+              .then((cache) => cache.put(event.request, clone))
+              .catch(() => {});
+          }
+          return resp;
+        })
+        .catch(() =>
+          // Network die thật sự (offline, DNS timeout) → fallback:
+          // 1) Cached HTML của exact URL (nếu user đã visit trước đó)
+          // 2) /offline.html (page "Đang kết nối lại…" auto-reload)
+          caches.match(event.request).then((cached) => {
+            if (cached) return cached;
             return caches.match("/offline.html").then(
               (offline) =>
                 offline ||
                 new Response("Offline", { status: 503, statusText: "Offline" }),
             );
-          });
-        });
-      }),
+          }),
+        ),
     );
     return;
   }

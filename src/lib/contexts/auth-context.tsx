@@ -51,6 +51,13 @@ interface AuthContextValue extends AuthState {
 
 const AuthContext = createContext<AuthContextValue | null>(null);
 
+// Sprint LT-6 (CEO 27/05/2026): 30-day HARD session timeout.
+// CEO yêu cầu user không bị đá khi đang dùng (giữ session) nhưng định
+// kỳ 30 ngày từ lần sign-in cuối cùng phải buộc đăng nhập lại để bảo mật.
+// Đặt ngoài component để useEffect dependency stable (React hook lint).
+const MAX_SESSION_AGE_MS = 30 * 24 * 60 * 60 * 1000; // 30 days
+const LOGIN_AT_KEY = "auth_login_at";
+
 export function AuthProvider({ children }: { children: ReactNode }) {
   const router = useRouter();
   const [supabase] = useState(() => createClient());
@@ -233,6 +240,29 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       });
     }, 10_000);
 
+    // Sprint LT-6 27/05: Check 30-day HARD timeout TRƯỚC khi getSession.
+    // Nếu user đã sign-in trên 30 ngày → force signOut + redirect, không
+    // load profile/tenant/branches để tránh waste RTT.
+    try {
+      const loginAtRaw = localStorage.getItem(LOGIN_AT_KEY);
+      const loginAt = loginAtRaw ? Number(loginAtRaw) : 0;
+      if (loginAt > 0 && Date.now() - loginAt > MAX_SESSION_AGE_MS) {
+        // Hết hạn 30 ngày → clear flag + signOut + redirect.
+        localStorage.removeItem(LOGIN_AT_KEY);
+        userLogoutRef.current = true; // suppress toast "session expired"
+        supabase.auth.signOut().finally(() => {
+          clearTimeout(initTimeoutId);
+          setIsLoading(false);
+          router.replace("/dang-nhap?reason=30d_expired");
+        });
+        return () => {
+          clearTimeout(initTimeoutId);
+        };
+      }
+    } catch {
+      // localStorage có thể bị block (private mode) — bỏ qua, fall through.
+    }
+
     // PERF F2: Dùng getSession() thay vì getUser() trên mount.
     // - getSession() đọc session từ cookie/localStorage → INSTANT (0 RTT).
     // - getUser() luôn revalidate qua HTTP với Supabase server (200-400ms VN
@@ -249,6 +279,16 @@ export function AuthProvider({ children }: { children: ReactNode }) {
         if (initialUser) {
           setAuthUser(initialUser);
           wasAuthenticatedRef.current = true;
+          // Sprint LT-6 27/05: Seed auth_login_at cho user đã login từ
+          // TRƯỚC khi feature 30-day deploy. Không có timestamp → không
+          // bao giờ bị check 30 ngày → bypass feature. Fix: seed với
+          // Date.now() (existing users có 30 ngày tính từ lần mount đầu
+          // sau deploy). Acceptable trade-off vs. force re-login toàn bộ.
+          try {
+            if (!localStorage.getItem(LOGIN_AT_KEY)) {
+              localStorage.setItem(LOGIN_AT_KEY, String(Date.now()));
+            }
+          } catch {}
           // PERF F13: Race condition fix — onAuthStateChange INITIAL_SESSION
           // có thể fire TRƯỚC getSession.then resolve (Supabase bắn event
           // ngay khi listener register nếu cookie hợp lệ). Trường hợp đó
@@ -285,6 +325,18 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       const sessionUser = session?.user ?? null;
       setAuthUser(sessionUser);
 
+      // Sprint LT-6 27/05: Set/refresh auth_login_at khi SIGNED_IN.
+      // KHÔNG set ở TOKEN_REFRESHED / USER_UPDATED vì sẽ reset đồng hồ 30
+      // ngày → đồng hồ trượt vô hạn, user không bao giờ bị logout. Chỉ
+      // SIGNED_IN (login mới) mới refresh đồng hồ.
+      if (event === "SIGNED_IN" && sessionUser) {
+        try {
+          localStorage.setItem(LOGIN_AT_KEY, String(Date.now()));
+        } catch {
+          // localStorage block (private mode) — bỏ qua, không block flow.
+        }
+      }
+
       if (sessionUser) {
         wasAuthenticatedRef.current = true;
         // DEDUP: chỉ loadUserData khi user.id THỰC SỰ đổi (signin/switch
@@ -317,12 +369,38 @@ export function AuthProvider({ children }: { children: ReactNode }) {
         userLogoutRef.current = false;
 
         if (wasAuthenticated && !userInitiated && event === "SIGNED_OUT") {
-          // Dispatch event — ToastProvider sibling sẽ show toast.
-          if (typeof window !== "undefined") {
-            window.dispatchEvent(new CustomEvent("auth:session-expired"));
-          }
-          // Redirect to login so user re-auths thay vì stuck silent 401.
-          router.replace("/dang-nhap");
+          // Sprint LT-6 27/05: TRY REFRESH TRƯỚC khi đá login.
+          // Supabase fire SIGNED_OUT trong nhiều case transient:
+          //   - Refresh token tạm fail (network blip, DNS hiccup)
+          //   - processLock contention multi-tab
+          //   - Token rotation race condition
+          // Trước đây mọi SIGNED_OUT đều redirect → user bị đá oan.
+          // Giờ thử refreshSession() 1 lần — nếu OK → giữ session, không
+          // redirect. Nếu refresh thật sự fail → mới đá ra.
+          supabase.auth
+            .refreshSession()
+            .then(({ data, error }) => {
+              if (!error && data?.session?.user) {
+                // Refresh thành công — Supabase sẽ fire SIGNED_IN event
+                // lần nữa → flow trên sẽ restore session. Không redirect.
+                wasAuthenticatedRef.current = true;
+                return;
+              }
+              // Refresh thật sự fail → đá ra như cũ.
+              if (typeof window !== "undefined") {
+                window.dispatchEvent(new CustomEvent("auth:session-expired"));
+              }
+              try { localStorage.removeItem(LOGIN_AT_KEY); } catch {}
+              router.replace("/dang-nhap");
+            })
+            .catch(() => {
+              // refreshSession throw (rất hiếm) → treat như fail.
+              if (typeof window !== "undefined") {
+                window.dispatchEvent(new CustomEvent("auth:session-expired"));
+              }
+              try { localStorage.removeItem(LOGIN_AT_KEY); } catch {}
+              router.replace("/dang-nhap");
+            });
         }
       }
     });
@@ -390,6 +468,10 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     // Flag để SIGNED_OUT handler biết đây là user-initiated, không show
     // toast "session expired".
     userLogoutRef.current = true;
+    // Sprint LT-6 27/05: Clear 30-day session timestamp khi user chủ động
+    // logout — tránh case user logout rồi login lại trong 30 ngày bị tính
+    // tiếp đồng hồ cũ.
+    try { localStorage.removeItem(LOGIN_AT_KEY); } catch {}
     await supabase.auth.signOut();
     router.push("/dang-nhap");
   }, [supabase, router]);
