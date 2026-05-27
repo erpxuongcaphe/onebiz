@@ -9,10 +9,11 @@
 // - Icons: Material Symbols (string names)
 //
 // Sprint LT-7 (CEO 27/05/2026): rewrite "Thêm" sheet để có ĐẦY ĐỦ chức năng
-// như sidebar desktop. Trước đây chỉ có 11 items / 3 sections cứng — CEO báo
+// như sidebar desktop, với style ĐẸP cũ giữ lại (grid 3 cột, card vuông
+// icon + label). Trước đây chỉ có 11 items / 3 sections cứng — CEO báo
 // "menu góc dưới click vô vẫn thiếu chức năng". Giờ render từ sidebarNavGroups
-// (10 groups, ~70 items), filter theo permission, có search bar + group
-// collapsible. Touch target h-11 (44px) chuẩn Apple HIG.
+// (10 groups, ~70 items), filter theo permission, có search bar. Touch
+// target h-11 (44px) chuẩn Apple HIG. Sheet 80vh (không full-screen).
 // ---------------------------------------------------------------------------
 
 import Link from "next/link";
@@ -69,14 +70,12 @@ const PRIMARY_TABS: TabItem[] = [
 ];
 
 /**
- * Flatten 1 group thành array {label, href, icon, permission} để search.
- * Bao gồm cả leaf trực tiếp + leaf trong subGroups.
+ * Flat leaf — flattened item từ sidebarNavGroups để render card grid.
  */
 interface FlatLeaf {
   label: string;
   href: string;
   icon: string;
-  permission?: string;
   groupLabel: string;
   subGroupLabel?: string;
   disabled?: boolean;
@@ -84,14 +83,17 @@ interface FlatLeaf {
   badge?: string;
 }
 
-function flattenGroup(group: SidebarGroup): FlatLeaf[] {
+function flattenGroup(
+  group: SidebarGroup,
+  hasPermission: (code: string) => boolean,
+): FlatLeaf[] {
   const out: FlatLeaf[] = [];
   group.items?.forEach((leaf) => {
+    if (leaf.permission && !hasPermission(leaf.permission)) return;
     out.push({
       label: leaf.label,
       href: leaf.href,
       icon: leaf.icon ?? "circle",
-      permission: leaf.permission,
       groupLabel: group.label,
       disabled: leaf.disabled,
       comingSoon: leaf.comingSoon,
@@ -100,11 +102,11 @@ function flattenGroup(group: SidebarGroup): FlatLeaf[] {
   });
   group.subGroups?.forEach((sg) => {
     sg.items.forEach((leaf) => {
+      if (leaf.permission && !hasPermission(leaf.permission)) return;
       out.push({
         label: leaf.label,
         href: leaf.href,
         icon: leaf.icon ?? "circle",
-        permission: leaf.permission,
         groupLabel: group.label,
         subGroupLabel: sg.label,
         disabled: leaf.disabled,
@@ -164,7 +166,7 @@ export function MobileBottomNav() {
                         POS
                       </span>
                     </SheetTrigger>
-                    <SheetContent side="bottom" className="p-0 rounded-t-lg" showCloseButton={false}>
+                    <SheetContent side="bottom" className="p-0 rounded-t-2xl" showCloseButton={false}>
                       <SheetTitle className="px-5 py-4 border-b font-semibold">Chọn chế độ POS</SheetTitle>
                       <div className="grid gap-3 p-4 pb-[calc(1rem+env(safe-area-inset-bottom))]">
                         <Link
@@ -245,7 +247,7 @@ export function MobileBottomNav() {
               <Icon name="more_horiz" size={20} />
               <span className="text-[11px] font-medium">Thêm</span>
             </SheetTrigger>
-            <SheetContent side="bottom" className="h-[88vh] p-0 rounded-t-xl flex flex-col">
+            <SheetContent side="bottom" className="h-[80vh] p-0 rounded-t-2xl flex flex-col">
               <MoreSheetContent
                 searchQuery={searchQuery}
                 setSearchQuery={setSearchQuery}
@@ -268,7 +270,7 @@ export function MobileBottomNav() {
 }
 
 // ============================================================
-// More Sheet — FULL menu sync với sidebar
+// More Sheet — FULL menu sync với sidebar, style grid 3 cột (đẹp cũ)
 // ============================================================
 
 function MoreSheetContent({
@@ -284,11 +286,11 @@ function MoreSheetContent({
   onClose: () => void;
   hasPermission: (code: string) => boolean;
 }) {
-  // Search: flatten all leaves, filter by permission, then match query.
+  // Flatten all leaves cho search
   const allLeaves = useMemo(() => {
     const out: FlatLeaf[] = [];
-    sidebarNavGroups.forEach((g) => out.push(...flattenGroup(g)));
-    return out.filter((l) => !l.permission || hasPermission(l.permission));
+    sidebarNavGroups.forEach((g) => out.push(...flattenGroup(g, hasPermission)));
+    return out;
   }, [hasPermission]);
 
   const searchResults = useMemo(() => {
@@ -304,9 +306,18 @@ function MoreSheetContent({
 
   return (
     <>
-      <SheetTitle className="px-4 py-3 border-b font-semibold text-base shrink-0">
-        Menu chức năng
-      </SheetTitle>
+      {/* Sheet title + close button area */}
+      <div className="flex items-center justify-between px-4 py-3 border-b shrink-0">
+        <SheetTitle className="font-semibold text-base">Menu chức năng</SheetTitle>
+        <button
+          type="button"
+          onClick={onClose}
+          className="w-8 h-8 flex items-center justify-center rounded-full text-muted-foreground hover:bg-surface-container-low"
+          aria-label="Đóng menu"
+        >
+          <Icon name="close" size={20} />
+        </button>
+      </div>
 
       {/* Search bar */}
       <div className="px-4 py-2 border-b shrink-0 bg-surface-container-lowest">
@@ -339,26 +350,26 @@ function MoreSheetContent({
 
       {/* Scrollable content */}
       <div
-        className="flex-1 overflow-y-auto px-4 py-3 space-y-4"
+        className="flex-1 overflow-y-auto px-4 py-3 space-y-5"
         style={{ paddingBottom: "calc(1rem + env(safe-area-inset-bottom))" }}
       >
         {searchResults ? (
-          // ── Search results ──
           searchResults.length > 0 ? (
-            <div className="space-y-1">
-              <div className="text-xs text-muted-foreground px-1 pb-1">
-                {searchResults.length} kết quả
+            <section>
+              <div className="text-[11px] text-muted-foreground px-1 pb-2">
+                {searchResults.length} kết quả cho &quot;{searchQuery}&quot;
               </div>
-              {searchResults.map((l) => (
-                <MenuLeafItem
-                  key={l.href}
-                  leaf={l}
-                  pathname={pathname}
-                  onClick={onClose}
-                  showBreadcrumb
-                />
-              ))}
-            </div>
+              <div className="grid grid-cols-3 gap-3">
+                {searchResults.map((l) => (
+                  <MenuCardItem
+                    key={l.href}
+                    leaf={l}
+                    pathname={pathname}
+                    onClick={onClose}
+                  />
+                ))}
+              </div>
+            </section>
           ) : (
             <div className="flex flex-col items-center justify-center py-12 text-center">
               <Icon name="search_off" size={48} className="text-muted-foreground/40" />
@@ -368,7 +379,7 @@ function MoreSheetContent({
             </div>
           )
         ) : (
-          // ── Default: render full menu groups ──
+          // Render full menu groups dạng grid 3 cột
           sidebarNavGroups.map((group) => (
             <MenuGroupSection
               key={group.label}
@@ -385,7 +396,9 @@ function MoreSheetContent({
 }
 
 // ============================================================
-// Menu group section — collapsible
+// Menu group section — GRID 3 cột (visual style cũ giữ lại)
+// Mỗi group là 1 section với header + grid 3 cột cards.
+// Flatten subGroup items vào parent group (mobile không cần nested hierarchy).
 // ============================================================
 
 function MenuGroupSection({
@@ -399,159 +412,90 @@ function MenuGroupSection({
   onClose: () => void;
   hasPermission: (code: string) => boolean;
 }) {
-  // Filter leaves by permission
-  const visibleLeaves =
-    group.items?.filter((l) => !l.permission || hasPermission(l.permission)) ?? [];
-  const visibleSubGroups =
-    group.subGroups
-      ?.map((sg) => ({
-        ...sg,
-        items: sg.items.filter((l) => !l.permission || hasPermission(l.permission)),
-      }))
-      .filter((sg) => sg.items.length > 0) ?? [];
+  const flatLeaves = flattenGroup(group, hasPermission);
+  if (flatLeaves.length === 0) return null;
 
-  // Auto-open nếu group chứa active leaf
-  // QUAN TRỌNG: useState phải gọi TRƯỚC any conditional return (React rules-of-hooks).
-  const hasActive =
-    visibleLeaves.some((l) => isHrefActive(pathname, l.href)) ||
-    visibleSubGroups.some((sg) =>
-      sg.items.some((l) => isHrefActive(pathname, l.href)),
-    );
-  const [open, setOpen] = useState(hasActive);
-
-  if (visibleLeaves.length === 0 && visibleSubGroups.length === 0) return null;
+  const hasActive = flatLeaves.some((l) => isHrefActive(pathname, l.href));
 
   return (
-    <div>
-      <button
-        type="button"
-        onClick={() => setOpen((v) => !v)}
-        className={cn(
-          "w-full flex items-center gap-2 h-11 px-2 rounded-lg text-sm font-semibold press-scale-sm",
-          hasActive
-            ? "text-primary"
-            : "text-foreground hover:bg-surface-container-low",
-        )}
-        aria-expanded={open}
-      >
+    <section>
+      {/* Section header — small + clean */}
+      <div className="flex items-center gap-2 px-1 pb-2">
         <Icon
           name={group.icon}
-          size={20}
+          size={16}
           fill={hasActive}
-          weight={hasActive ? 500 : 400}
-          className="shrink-0"
+          className={cn("shrink-0", hasActive ? "text-primary" : "text-muted-foreground")}
         />
-        <span className="flex-1 text-left">{group.label}</span>
-        <Icon
-          name="expand_more"
-          size={18}
+        <span
           className={cn(
-            "shrink-0 transition-transform duration-150 text-muted-foreground",
-            open ? "rotate-0" : "-rotate-90",
+            "text-[11px] font-semibold uppercase tracking-wide",
+            hasActive ? "text-primary" : "text-muted-foreground",
           )}
-        />
-      </button>
+        >
+          {group.label}
+        </span>
+        <span className="text-[10px] text-muted-foreground/70 font-normal normal-case">
+          · {flatLeaves.length}
+        </span>
+      </div>
 
-      {open && (
-        <div className="mt-1 ml-3 pl-3 border-l border-border/60 space-y-0.5">
-          {visibleLeaves.map((leaf) => (
-            <MenuLeafItem
-              key={leaf.href}
-              leaf={{
-                label: leaf.label,
-                href: leaf.href,
-                icon: leaf.icon ?? "circle",
-                groupLabel: group.label,
-                disabled: leaf.disabled,
-                comingSoon: leaf.comingSoon,
-                badge: leaf.badge,
-              }}
-              pathname={pathname}
-              onClick={onClose}
-            />
-          ))}
-          {visibleSubGroups.map((sg) => (
-            <div key={sg.label} className="mt-1">
-              <div className="px-2 pt-1 pb-0.5 text-[10px] font-semibold text-muted-foreground uppercase tracking-wide">
-                {sg.label}
-              </div>
-              {sg.items.map((leaf) => (
-                <MenuLeafItem
-                  key={leaf.href}
-                  leaf={{
-                    label: leaf.label,
-                    href: leaf.href,
-                    icon: leaf.icon ?? "circle",
-                    groupLabel: group.label,
-                    subGroupLabel: sg.label,
-                    disabled: leaf.disabled,
-                    comingSoon: leaf.comingSoon,
-                    badge: leaf.badge,
-                  }}
-                  pathname={pathname}
-                  onClick={onClose}
-                />
-              ))}
-            </div>
-          ))}
-        </div>
-      )}
-    </div>
+      {/* Grid 3 cột — card vuông icon + label (style cũ đẹp) */}
+      <div className="grid grid-cols-3 gap-3">
+        {flatLeaves.map((leaf) => (
+          <MenuCardItem
+            key={leaf.href}
+            leaf={leaf}
+            pathname={pathname}
+            onClick={onClose}
+          />
+        ))}
+      </div>
+    </section>
   );
 }
 
 // ============================================================
-// Menu leaf item — single link row
+// Menu card item — card vuông icon trên + label dưới (style cũ đẹp)
 // ============================================================
 
-function MenuLeafItem({
+function MenuCardItem({
   leaf,
   pathname,
   onClick,
-  showBreadcrumb = false,
 }: {
   leaf: FlatLeaf & Pick<SidebarLeaf, "disabled" | "comingSoon" | "badge">;
   pathname: string;
   onClick: () => void;
-  showBreadcrumb?: boolean;
 }) {
   const active = isHrefActive(pathname, leaf.href);
   const baseCls = cn(
-    "flex items-center gap-3 h-11 px-2 rounded-lg text-sm press-scale-sm",
+    "relative flex flex-col items-center justify-start gap-1.5 p-3 rounded-xl border press-scale-sm min-h-[84px]",
     active
-      ? "bg-primary-fixed text-primary font-semibold"
-      : "text-foreground hover:bg-surface-container-low",
+      ? "bg-primary-fixed border-primary/30 text-primary"
+      : "bg-surface-container-lowest hover:bg-surface-container-low border-border/50 text-foreground",
     leaf.disabled && "opacity-50 pointer-events-none",
   );
-
-  const breadcrumb = showBreadcrumb
-    ? `${leaf.groupLabel}${leaf.subGroupLabel ? " · " + leaf.subGroupLabel : ""}`
-    : null;
 
   const inner = (
     <>
       <Icon
         name={leaf.icon}
-        size={18}
+        size={22}
         fill={active}
         weight={active ? 500 : 400}
-        className={cn("shrink-0", active ? "text-primary" : "text-muted-foreground")}
+        className={cn("shrink-0 mt-0.5", active ? "text-primary" : "text-muted-foreground")}
       />
-      <span className="flex-1 min-w-0">
-        <span className="block truncate">{leaf.label}</span>
-        {breadcrumb && (
-          <span className="block text-[10px] text-muted-foreground truncate">
-            {breadcrumb}
-          </span>
-        )}
+      <span className="text-[11px] font-medium text-center leading-tight line-clamp-2">
+        {leaf.label}
       </span>
       {leaf.comingSoon && (
-        <span className="text-[9px] font-semibold uppercase rounded px-1.5 py-0.5 bg-status-warning/10 text-status-warning border border-status-warning/25 shrink-0">
+        <span className="absolute top-1 right-1 text-[8px] font-bold uppercase rounded-full px-1.5 py-0.5 bg-status-warning/15 text-status-warning border border-status-warning/30 leading-tight">
           Soon
         </span>
       )}
       {leaf.badge && !leaf.comingSoon && (
-        <span className="text-[9px] font-semibold uppercase rounded px-1.5 py-0.5 bg-primary/10 text-primary shrink-0">
+        <span className="absolute top-1 right-1 text-[8px] font-bold uppercase rounded-full px-1.5 py-0.5 bg-primary/15 text-primary border border-primary/30 leading-tight">
           {leaf.badge}
         </span>
       )}
