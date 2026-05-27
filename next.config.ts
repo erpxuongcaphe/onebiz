@@ -11,34 +11,28 @@ const nextConfig: NextConfig = {
     ];
   },
 
-  // CEO 23/05/2026: Disable browser bfcache để fix bug "F5 không hiện
-  // data mới".
+  // CEO 27/05/2026: HOÀN TOÀN REMOVE Cache-Control override.
   //
-  // CEO 26/05/2026: Trade-off discovery — `no-store` ngăn cache HOÀN TOÀN
-  // → mỗi tab mới phải full DNS+TCP+TLS round-trip → đôi khi network
-  // hiccup → Edge show "Hmmm... can't reach this page" / ERR_FAILED.
-  // Web Vercel khác không bị vì có cache mặc định.
+  // Lịch sử:
+  //   - 23/05 commit 14862f9: Thêm `Cache-Control: no-store, must-revalidate`
+  //     để fix bug "F5 không hiện data mới sau khi tạo SP/đơn".
+  //   - 24/05 trở đi: CEO báo flash ERR_FAILED "Hmmm... can't reach this page"
+  //     khi click navigation + F5 trong web. Web Vercel khác KHÔNG bị.
+  //   - 26/05 commit 8082a8e: Thay `no-store` → `max-age=0, must-revalidate
+  //     + stale-if-error=86400`. Giảm một phần nhưng vẫn bị navigation flash.
   //
-  // Fix: thay `no-store` bằng `max-age=0, must-revalidate` (browser cache
-  // HTML nhưng luôn revalidate trước khi serve → vẫn fresh data sau F5).
-  // Plus `stale-if-error=86400` → nếu server unreachable, serve stale
-  // cache (lên đến 24h) thay vì show error page.
+  // ROOT CAUSE: `max-age=0, must-revalidate` ép browser hit network mỗi
+  // navigation để revalidate HTML. Network hiccup ngắn (DNS PA Vietnam chậm,
+  // edge cold start) → Edge show ERR_FAILED page. Vercel default cache cho
+  // HTML aggressive hơn → click navigate dùng cache instant → KHÔNG bị.
   //
-  // Áp dụng cho tất cả route trừ static assets _next/static.
-  async headers() {
-    return [
-      {
-        source: "/((?!_next/static|_next/image|favicon.ico).*)",
-        headers: [
-          {
-            key: "Cache-Control",
-            value:
-              "private, max-age=0, must-revalidate, stale-if-error=86400",
-          },
-        ],
-      },
-    ];
-  },
+  // Trade-off accept: F5 stale data có thể quay lại trên 1 số trang chưa
+  // áp dụng `useRevalidateOnFocus`. Hook đã apply cho 6 trang chính. Các
+  // trang khác F5 vẫn re-fetch qua React useEffect (mount = fresh data).
+  // Back/forward navigation có thể dùng bfcache (stale) nhưng acceptable.
+  //
+  // KHÔNG override Cache-Control nữa → Vercel default (cho Next.js dynamic
+  // pages thường là `private, no-cache`) sẽ apply.
 
   // PERF F7: Tree-shake các barrel re-export nặng để initial bundle gọn.
   // Next.js sẽ rewrite `import { X } from "pkg"` thành deep-import
