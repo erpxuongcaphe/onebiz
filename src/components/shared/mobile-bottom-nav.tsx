@@ -18,7 +18,7 @@
 
 import Link from "next/link";
 import { usePathname } from "next/navigation";
-import { useState, useMemo } from "react";
+import { useState, useMemo, useEffect } from "react";
 import { Sheet, SheetContent, SheetTrigger, SheetTitle } from "@/components/ui/sheet";
 import { cn } from "@/lib/utils";
 import { Icon } from "@/components/ui/icon";
@@ -135,6 +135,38 @@ export function MobileBottomNav() {
   const { posFnbUrl } = useFnbSubdomain();
   const { hasPermission } = useAuth();
 
+  // CEO 27/05/2026: Đóng sheet khi pathname đổi (navigate qua menu item).
+  // Tránh trường hợp Link click → page chuyển → sheet vẫn open trong state.
+  // Disable rule: legitimate cross-cutting concern syncing với external nav.
+  useEffect(() => {
+    /* eslint-disable react-hooks/set-state-in-effect */
+    setMoreOpen(false);
+    setPosOpen(false);
+    setSearchQuery("");
+    /* eslint-enable react-hooks/set-state-in-effect */
+  }, [pathname]);
+
+  // CEO 27/05/2026: Browser back / hardware back → đóng sheet thay vì navigate.
+  // Khi sheet mở → pushState 1 history entry. User bấm back → popstate fire →
+  // ta đóng sheet. Nếu sheet đã đóng và user bấm back → navigate bình thường.
+  useEffect(() => {
+    const anyOpen = moreOpen || posOpen;
+    if (!anyOpen) return;
+    // Push placeholder history entry để bắt back button
+    const stateKey = "__mobileNavSheet";
+    if (typeof window !== "undefined") {
+      window.history.pushState({ [stateKey]: true }, "");
+    }
+    const handlePopstate = () => {
+      if (moreOpen) setMoreOpen(false);
+      if (posOpen) setPosOpen(false);
+    };
+    window.addEventListener("popstate", handlePopstate);
+    return () => {
+      window.removeEventListener("popstate", handlePopstate);
+    };
+  }, [moreOpen, posOpen]);
+
   // Ẩn trên trang POS (toàn màn hình)
   if (pathname.startsWith("/pos")) return null;
   // Ẩn trên trang login
@@ -166,9 +198,13 @@ export function MobileBottomNav() {
                         POS
                       </span>
                     </SheetTrigger>
-                    <SheetContent side="bottom" className="p-0 rounded-t-2xl" showCloseButton={false}>
-                      <SheetTitle className="px-5 py-4 border-b font-semibold">Chọn chế độ POS</SheetTitle>
-                      <div className="grid gap-3 p-4 pb-[calc(1rem+env(safe-area-inset-bottom))]">
+                    <SheetContent
+                      side="bottom"
+                      className="data-[side=bottom]:h-auto max-h-[80vh] p-0 rounded-t-2xl flex flex-col"
+                      showCloseButton={false}
+                    >
+                      <SheetTitle className="px-5 py-4 border-b font-semibold shrink-0">Chọn chế độ POS</SheetTitle>
+                      <div className="grid gap-3 p-4 pb-[calc(1rem+env(safe-area-inset-bottom))] overflow-y-auto">
                         <Link
                           href="/pos"
                           onClick={() => setPosOpen(false)}
@@ -247,7 +283,11 @@ export function MobileBottomNav() {
               <Icon name="more_horiz" size={20} />
               <span className="text-[11px] font-medium">Thêm</span>
             </SheetTrigger>
-            <SheetContent side="bottom" className="h-[80vh] p-0 rounded-t-2xl flex flex-col">
+            <SheetContent
+              side="bottom"
+              className="data-[side=bottom]:h-[80vh] p-0 rounded-t-2xl flex flex-col overflow-hidden"
+              showCloseButton={false}
+            >
               <MoreSheetContent
                 searchQuery={searchQuery}
                 setSearchQuery={setSearchQuery}
