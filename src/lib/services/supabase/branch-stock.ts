@@ -95,8 +95,11 @@ export async function getBranchStockPage(params: {
   const tenantId = await getCurrentTenantId();
   // Khi cần filter productType hoặc search: dùng inner join "products!inner"
   const needInnerJoin = Boolean(params.productType || params.search);
+  // CEO 28/05/2026 FIX: cú pháp embed PostgREST đúng là `alias:fk!inner`,
+  // KHÔNG phải `alias!inner:fk` (đặt !inner ở giữa → PGRST100 "failed to
+  // parse select parameter" → HTTP 400 → toast "Lỗi tải tồn kho" khi search).
   const productsRel = needInnerJoin
-    ? "products!inner:product_id ( id, code, name, product_type, unit, cost_price, min_stock, max_stock )"
+    ? "products:product_id!inner ( id, code, name, product_type, unit, cost_price, min_stock, max_stock )"
     : "products:product_id ( id, code, name, product_type, unit, cost_price, min_stock, max_stock )";
 
   let query = supabase
@@ -198,8 +201,9 @@ export async function getBranchStockAggregates(params: {
   lowStockCount: number;
 }> {
   const needInnerJoin = Boolean(params.productType || params.search);
+  // CEO 28/05/2026 FIX: cú pháp đúng `alias:fk!inner` (xem getBranchStockPage).
   const productsRel = needInnerJoin
-    ? "products!inner:product_id ( product_type, code, name, cost_price, min_stock )"
+    ? "products:product_id!inner ( product_type, code, name, cost_price, min_stock )"
     : "products:product_id ( product_type, code, name, cost_price, min_stock )";
 
   const tenantId = await getCurrentTenantId();
