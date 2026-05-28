@@ -23,7 +23,7 @@ import {
 } from "@/components/shared/inline-detail-panel";
 import { Badge } from "@/components/ui/badge";
 import { useToast, useBranchFilter } from "@/lib/contexts";
-import { formatCurrency, formatDate } from "@/lib/format";
+import { formatCurrency, formatDate, formatNumber } from "@/lib/format";
 import { exportToCsv } from "@/lib/utils/export";
 import {
   getBranchStockPage,
@@ -536,7 +536,7 @@ export default function TonKhoPage() {
       size: 90,
       cell: ({ row }) => (
         <span className="text-muted-foreground tabular-nums">
-          {row.original.reserved}
+          {formatNumber(row.original.reserved)}
         </span>
       ),
     },
@@ -775,7 +775,9 @@ export default function TonKhoPage() {
           setPage(0);
         }}
         summaryRow={{
-          quantity: `${totalQty}`,
+          // CEO 28/05/2026: format số tổng — phân ngàn + tối đa 2 thập phân
+          // (trước đây `${totalQty}` ra "26193.490000000005" do float JS).
+          quantity: formatNumber(totalQty),
           stockValue: formatCurrency(totalValue),
         }}
         getRowId={(r) => r.id}

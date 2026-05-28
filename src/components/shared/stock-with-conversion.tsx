@@ -20,6 +20,7 @@
 
 import type { UOMConversion } from "@/lib/types";
 import { getConversionText, pickBestConversion } from "@/lib/format-uom";
+import { formatNumber } from "@/lib/format";
 
 interface BaseProps {
   /** Số lượng theo đơn vị nhỏ (đơn vị chính trong products.unit) */
@@ -61,7 +62,7 @@ export function StockWithConversion(props: Props) {
     return (
       <div className={className}>
         <div className={`${primarySize} font-semibold tabular-nums`}>
-          {quantity}{" "}
+          {formatNumber(quantity)}{" "}
           <span className="text-base font-normal text-muted-foreground">
             {unit}
           </span>
@@ -88,7 +89,8 @@ export function StockWithConversion(props: Props) {
         className={`font-semibold whitespace-nowrap tabular-nums ${className ?? ""}`}
       >
         <span className={signClass}>{sign}</span>
-        {quantity} {unit}
+        {formatNumber(quantity)}{" "}
+        <span className="font-normal text-muted-foreground">{unit}</span>
         {convText && (
           <span className="text-muted-foreground font-normal text-xs ml-1">
             ({convText})
@@ -99,11 +101,14 @@ export function StockWithConversion(props: Props) {
   }
 
   // inline (default)
+  // CEO 28/05/2026: format số (phân ngàn + max 2 thập phân, bỏ đuôi float
+  // "0.4000001") + đơn vị mute màu để tách bạch với số lượng.
   return (
     <span
       className={`whitespace-nowrap font-semibold tabular-nums ${className ?? ""}`}
     >
-      {quantity} {unit}
+      {formatNumber(quantity)}{" "}
+      <span className="font-normal text-muted-foreground">{unit}</span>
       {convText && (
         <span className="text-muted-foreground font-normal">
           {" · "}
