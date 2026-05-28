@@ -494,6 +494,21 @@ export async function bulkImportInitialStock(
     if (b.code) branchMap.set(b.code, b.id);
   }
 
+  // CEO 28/05/2026: GHI ĐÈ thay vì cộng dồn (idempotent).
+  // Trước đây type:'in' → mỗi lần import CỘNG THÊM vào tồn cũ → nhập lại =
+  // nhân đôi. Và KHÔNG cập nhật giá vốn (lệch với ý đồ schema "giá vốn TB
+  // ban đầu"). Giờ: SET tồn = số trong file (tính delta so với hiện tại) +
+  // cập nhật giá vốn. Nhập lại bao nhiêu lần cũng cho ra đúng giá trị file
+  // → đúng nghĩa "tồn đầu kỳ" + cho phép "làm lại từ đầu".
+  const stockRes = await supabase
+    .from("branch_stock")
+    .select("product_id, branch_id, quantity")
+    .eq("tenant_id", ctx.tenantId);
+  const curStock = new Map<string, number>();
+  for (const s of stockRes.data ?? []) {
+    curStock.set(`${s.product_id}:${s.branch_id}`, Number(s.quantity ?? 0));
+  }
+
   return runBulk(rows, async (row) => {
     const productId = prodMap.get(row.productCode);
     if (!productId) throw new Error(`Mã SP "${row.productCode}" chưa tồn tại`);
@@ -502,20 +517,35 @@ export async function bulkImportInitialStock(
     if (!branchId)
       throw new Error(`Mã chi nhánh "${row.branchCode}" chưa tồn tại`);
 
-    // Insert stock movement qua helper để chốt products.stock + branch_stock
-    await applyManualStockMovement(
-      [
-        {
-          productId,
-          quantity: row.quantity,
-          type: "in",
-          referenceType: "initial_stock_import",
-          note:
-            row.note ?? `Tồn kho ban đầu (import Excel) — giá vốn ${row.costPrice}`,
-        },
-      ],
-      { tenantId: ctx.tenantId, branchId, createdBy: ctx.userId }
-    );
+    // GHI ĐÈ: set tồn = số trong file qua delta = file − hiện tại.
+    const current = curStock.get(`${productId}:${branchId}`) ?? 0;
+    const delta = row.quantity - current;
+    if (Math.abs(delta) > 1e-9) {
+      await applyManualStockMovement(
+        [
+          {
+            productId,
+            quantity: Math.abs(delta),
+            type: delta > 0 ? "in" : "out",
+            referenceType: "initial_stock_reset",
+            note:
+              row.note ??
+              `Nhập lại tồn đầu kỳ (ghi đè) — giá vốn ${row.costPrice}`,
+          },
+        ],
+        { tenantId: ctx.tenantId, branchId, createdBy: ctx.userId }
+      );
+    }
+
+    // Cập nhật giá vốn (giá vốn trung bình ban đầu) theo file.
+    if (typeof row.costPrice === "number" && row.costPrice >= 0) {
+      const { error: costErr } = await supabase
+        .from("products")
+        .update({ cost_price: row.costPrice })
+        .eq("id", productId)
+        .eq("tenant_id", ctx.tenantId);
+      if (costErr) throw costErr;
+    }
   });
 }
 

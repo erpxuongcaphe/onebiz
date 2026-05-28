@@ -21,7 +21,7 @@ export const initialStockExcelSchema: ExcelSchema<InitialStockImportRow> = {
   name: "Tồn kho ban đầu",
   fileName: "Ton-kho-ban-dau",
   description:
-    "Nhập tồn kho ban đầu khi khởi tạo chi nhánh mới hoặc kiểm kê tổng thể. Sản phẩm phải đã tồn tại. Giá vốn dùng làm giá vốn trung bình ban đầu.",
+    "Nhập/làm lại tồn kho đầu kỳ. GHI ĐÈ: tồn + giá vốn sẽ được set ĐÚNG BẰNG giá trị trong file (không cộng dồn) — nhập lại bao nhiêu lần cũng ra đúng số file. SP phải đã tồn tại. Dùng khi khởi tạo / migrate / làm lại từ đầu.",
   columns: [
     {
       key: "productCode",
