@@ -544,7 +544,12 @@ export function DataTable<TData, TValue>({
           flex-col parent → pagination footer luôn hiện. overflow-auto cho
           cả ngang lẫn dọc khi columns vượt viewport. */}
       <div className="hidden md:block flex-1 min-h-0 overflow-auto">
-        <Table>
+        {/* CEO 27/05/2026: containerClassName="overflow-visible" để wrapper
+            của <Table> KHÔNG tạo scroll context riêng. OUTER div này
+            (overflow-auto, height-constrained qua flex-1 min-h-0) handle CẢ
+            scroll ngang + dọc → thanh cuộn ngang dính đáy viewport, luôn
+            hiện không cần cuộn dọc xuống cuối. */}
+        <Table containerClassName="overflow-visible">
           <TableHeader className="sticky top-0 bg-surface-container-low z-10">
             {table.getHeaderGroups().map((headerGroup) => (
               <TableRow key={headerGroup.id}>

@@ -4,11 +4,21 @@ import * as React from "react"
 
 import { cn } from "@/lib/utils"
 
-function Table({ className, ...props }: React.ComponentProps<"table">) {
+function Table({
+  className,
+  containerClassName,
+  ...props
+}: React.ComponentProps<"table"> & { containerClassName?: string }) {
   return (
     <div
       data-slot="table-container"
-      className="relative w-full overflow-x-auto"
+      // CEO 27/05/2026: cho phép override overflow qua containerClassName.
+      // Mặc định `overflow-x-auto` cho standalone table. Khi đặt trong 1
+      // scroll container có height-constrained (vd DataTable), caller pass
+      // `overflow-visible` để OUTER container handle cả scroll ngang+dọc →
+      // thanh cuộn ngang dính đáy viewport (always visible) thay vì đáy
+      // content (phải cuộn dọc xuống mới thấy).
+      className={cn("relative w-full overflow-x-auto", containerClassName)}
     >
       <table
         data-slot="table"
