@@ -31,6 +31,12 @@ interface BaseProps {
   conversions?: UOMConversion[] | null;
   /** Class wrapper nếu caller cần override layout */
   className?: string;
+  /**
+   * CEO 28/05/2026: ẩn đơn vị chính (chỉ hiện số + quy đổi). Dùng khi đơn vị
+   * đã có ở cột ĐVT riêng (vd trang Tồn kho) → tránh lặp + tách bạch số/đơn vị.
+   * Chỉ áp dụng cho variant "inline".
+   */
+  hideUnit?: boolean;
 }
 
 interface InlineProps extends BaseProps {
@@ -103,12 +109,19 @@ export function StockWithConversion(props: Props) {
   // inline (default)
   // CEO 28/05/2026: format số (phân ngàn + max 2 thập phân, bỏ đuôi float
   // "0.4000001") + đơn vị mute màu để tách bạch với số lượng.
+  // hideUnit=true → bỏ đơn vị chính (đã có ở cột ĐVT riêng).
+  const hideUnit = (props as InlineProps).hideUnit ?? false;
   return (
     <span
       className={`whitespace-nowrap font-semibold tabular-nums ${className ?? ""}`}
     >
-      {formatNumber(quantity)}{" "}
-      <span className="font-normal text-muted-foreground">{unit}</span>
+      {formatNumber(quantity)}
+      {!hideUnit && (
+        <>
+          {" "}
+          <span className="font-normal text-muted-foreground">{unit}</span>
+        </>
+      )}
       {convText && (
         <span className="text-muted-foreground font-normal">
           {" · "}

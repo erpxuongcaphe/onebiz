@@ -794,9 +794,21 @@ export default function TonKhoPage() {
       size: 150,
     },
     {
+      // CEO 28/05/2026: tách ĐVT thành cột riêng → cột Tồn/Khả dụng chỉ còn
+      // số + quy đổi (hideUnit), không dính đơn vị.
+      accessorKey: "unit",
+      header: "ĐVT",
+      size: 70,
+      cell: ({ row }) => (
+        <span className="text-sm text-muted-foreground">
+          {row.original.unit ?? "—"}
+        </span>
+      ),
+    },
+    {
       accessorKey: "quantity",
-      header: "Tồn",
-      size: 140,
+      header: "Tồn kho",
+      size: 150,
       cell: ({ row }) => {
         const r = row.original;
         const isLow =
@@ -808,6 +820,7 @@ export default function TonKhoPage() {
               unit={r.unit ?? ""}
               conversions={conversionsMap.get(r.productId) ?? null}
               variant="inline"
+              hideUnit
             />
           </span>
         );
@@ -815,7 +828,7 @@ export default function TonKhoPage() {
     },
     {
       accessorKey: "reserved",
-      header: "Đặt trước",
+      header: "Đang giữ",
       size: 90,
       cell: ({ row }) => (
         <span className="text-muted-foreground tabular-nums">
@@ -826,22 +839,25 @@ export default function TonKhoPage() {
     {
       accessorKey: "available",
       header: "Khả dụng",
-      size: 140,
+      size: 150,
       cell: ({ row }) => (
         <StockWithConversion
           quantity={row.original.available}
           unit={row.original.unit ?? ""}
           conversions={conversionsMap.get(row.original.productId) ?? null}
           variant="inline"
+          hideUnit
         />
       ),
     },
     {
       accessorKey: "minStock",
-      header: "Định mức",
-      size: 90,
+      header: "Tồn tối thiểu",
+      size: 100,
       cell: ({ row }) =>
-        row.original.minStock !== undefined ? row.original.minStock : "—",
+        row.original.minStock !== undefined
+          ? formatNumber(row.original.minStock)
+          : "—",
     },
     {
       accessorKey: "stockValue",
@@ -1057,6 +1073,10 @@ export default function TonKhoPage() {
           setPageSize(size);
           setPage(0);
         }}
+        columnToggle
+        // CEO 28/05/2026: "Đang giữ" (reserved) + "Tồn tối thiểu" ít dùng →
+        // ẩn mặc định, user bật qua "Hiển thị cột" khi cần.
+        defaultColumnVisibility={{ reserved: false, minStock: false }}
         summaryRow={{
           // CEO 28/05/2026: format số tổng — phân ngàn + tối đa 2 thập phân
           // (trước đây `${totalQty}` ra "26193.490000000005" do float JS).
