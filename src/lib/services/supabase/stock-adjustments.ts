@@ -117,6 +117,43 @@ export async function applyManualStockMovement(
 }
 
 /**
+ * CEO 28/05/2026: Điều chỉnh tồn kho về 1 GIÁ TRỊ MỚI cho 1 SP tại 1 chi nhánh.
+ *
+ * Dùng cho nút "Điều chỉnh tồn" trong panel chi tiết trang Tồn kho. Tính
+ * delta = newQty − currentQty rồi ghi nhận qua applyManualStockMovement:
+ *   - delta > 0 → type 'in'  (nhập điều chỉnh)
+ *   - delta < 0 → type 'out' (xuất điều chỉnh)
+ *   - delta = 0 → no-op
+ *
+ * Tự động: ghi stock_movements (hiện ở tab "Lịch sử xuất nhập") + cập nhật
+ * products.stock + branch_stock + audit log — tất cả atomic qua RPC.
+ *
+ * referenceType = 'stock_adjustment' để phân biệt với nhập/xuất thường.
+ */
+export async function adjustStockToValue(params: {
+  productId: string;
+  branchId: string;
+  currentQty: number;
+  newQty: number;
+  reason: string;
+}): Promise<void> {
+  const delta = params.newQty - params.currentQty;
+  if (Math.abs(delta) < 1e-9) return; // không đổi → bỏ qua
+  await applyManualStockMovement(
+    [
+      {
+        productId: params.productId,
+        quantity: Math.abs(delta),
+        type: delta > 0 ? "in" : "out",
+        referenceType: "stock_adjustment",
+        note: params.reason,
+      },
+    ],
+    { branchId: params.branchId },
+  );
+}
+
+/**
  * Generate a sequenced code for a warehouse entity via the `next_code` RPC.
  * This is the fix for G4 — the legacy dialogs used `Math.random()`
  * which produced collisions across tenants and was not monotonic.

@@ -23,7 +23,16 @@ import {
   DetailInfoGrid,
 } from "@/components/shared/inline-detail-panel";
 import { Badge } from "@/components/ui/badge";
-import { useToast, useBranchFilter } from "@/lib/contexts";
+import { Button } from "@/components/ui/button";
+import { Input } from "@/components/ui/input";
+import {
+  Dialog,
+  DialogContent,
+  DialogHeader,
+  DialogTitle,
+  DialogFooter,
+} from "@/components/ui/dialog";
+import { useToast, useBranchFilter, useAuth } from "@/lib/contexts";
 import { formatCurrency, formatDate, formatNumber } from "@/lib/format";
 import { exportToCsv } from "@/lib/utils/export";
 import {
@@ -35,6 +44,7 @@ import {
   getProductStockMovements,
   getUOMConversions,
   getUOMConversionsByProductIds,
+  adjustStockToValue,
 } from "@/lib/services";
 import type { BranchStockRow, BranchDetail } from "@/lib/services/supabase";
 import type { StockMovement, UOMConversion } from "@/lib/types";
@@ -56,10 +66,17 @@ type ProductTypeFilter = "all" | "nvl" | "sku";
 function StockRowDetail({
   row,
   onClose,
+  onAdjusted,
 }: {
   row: BranchStockRow;
   onClose: () => void;
+  /** CEO 28/05/2026: gọi sau khi điều chỉnh tồn thành công → parent refetch list. */
+  onAdjusted?: () => void;
 }) {
+  const { toast } = useToast();
+  const { hasPermission } = useAuth();
+  const canAdjust = hasPermission("inventory.adjust");
+
   const [branches, setBranches] = useState<
     Array<{
       branchId: string;
@@ -75,6 +92,59 @@ function StockRowDetail({
   const [conversions, setConversions] = useState<UOMConversion[]>([]);
   const [loadingBranches, setLoadingBranches] = useState(true);
   const [loadingMovements, setLoadingMovements] = useState(true);
+
+  // CEO 28/05/2026: state cho dialog "Điều chỉnh tồn".
+  const [adjustOpen, setAdjustOpen] = useState(false);
+  const [newQtyInput, setNewQtyInput] = useState("");
+  const [adjustReason, setAdjustReason] = useState("");
+  const [adjustSaving, setAdjustSaving] = useState(false);
+
+  const handleOpenAdjust = () => {
+    setNewQtyInput(String(row.quantity));
+    setAdjustReason("");
+    setAdjustOpen(true);
+  };
+
+  const handleSaveAdjust = async () => {
+    const newQty = Number(newQtyInput.replace(/,/g, "."));
+    if (!Number.isFinite(newQty) || newQty < 0) {
+      toast({ title: "Số tồn không hợp lệ", description: "Nhập số ≥ 0.", variant: "error" });
+      return;
+    }
+    if (!adjustReason.trim()) {
+      toast({ title: "Thiếu lý do", description: "Nhập lý do điều chỉnh để lưu lịch sử.", variant: "error" });
+      return;
+    }
+    if (Math.abs(newQty - row.quantity) < 1e-9) {
+      toast({ title: "Không thay đổi", description: "Số tồn mới trùng số hiện tại.", variant: "default" });
+      return;
+    }
+    setAdjustSaving(true);
+    try {
+      await adjustStockToValue({
+        productId: row.productId,
+        branchId: row.branchId,
+        currentQty: row.quantity,
+        newQty,
+        reason: adjustReason.trim(),
+      });
+      toast({
+        title: "Đã điều chỉnh tồn",
+        description: `${row.productName}: ${formatNumber(row.quantity)} → ${formatNumber(newQty)} ${row.unit ?? ""}`,
+        variant: "success",
+      });
+      setAdjustOpen(false);
+      onAdjusted?.();
+    } catch (err) {
+      toast({
+        title: "Lỗi điều chỉnh tồn",
+        description: err instanceof Error ? err.message : "Vui lòng thử lại",
+        variant: "error",
+      });
+    } finally {
+      setAdjustSaving(false);
+    }
+  };
 
   useEffect(() => {
     let cancelled = false;
@@ -135,6 +205,22 @@ function StockRowDetail({
                   code={row.productCode}
                   subtitle={row.variantName ?? row.branchName}
                 />
+                {/* CEO 28/05/2026: nút điều chỉnh tồn nhanh — chỉ user có quyền
+                    inventory.adjust (owner luôn thấy). Sửa tồn về giá trị mới,
+                    có ghi lý do + lịch sử (tab "Lịch sử xuất nhập"). */}
+                {canAdjust && (
+                  <div className="flex justify-end">
+                    <Button
+                      size="sm"
+                      variant="outline"
+                      onClick={handleOpenAdjust}
+                      className="gap-1"
+                    >
+                      <Icon name="edit" size={14} />
+                      Điều chỉnh tồn
+                    </Button>
+                  </div>
+                )}
                 <DetailInfoGrid
                   fields={[
                     { label: "Loại", value: (row.productType ?? "—").toUpperCase() },
@@ -352,6 +438,94 @@ function StockRowDetail({
           },
         ]}
       />
+
+      {/* CEO 28/05/2026: Dialog điều chỉnh tồn nhanh */}
+      <Dialog open={adjustOpen} onOpenChange={setAdjustOpen}>
+        <DialogContent className="max-w-md">
+          <DialogHeader>
+            <DialogTitle>Điều chỉnh tồn — {row.productName}</DialogTitle>
+          </DialogHeader>
+          <div className="space-y-4 py-2">
+            <div className="rounded-lg bg-surface-container-low p-3 text-sm space-y-1">
+              <div className="flex justify-between">
+                <span className="text-muted-foreground">Chi nhánh</span>
+                <span className="font-medium">{row.branchName}</span>
+              </div>
+              <div className="flex justify-between">
+                <span className="text-muted-foreground">Tồn hiện tại</span>
+                <span className="font-semibold tabular-nums">
+                  {formatNumber(row.quantity)} {row.unit ?? ""}
+                </span>
+              </div>
+            </div>
+            <div className="space-y-1.5">
+              <label className="text-sm font-medium">
+                Tồn mới <span className="text-status-error">*</span>
+              </label>
+              <div className="flex items-center gap-2">
+                <Input
+                  type="text"
+                  inputMode="decimal"
+                  value={newQtyInput}
+                  onChange={(e) => setNewQtyInput(e.target.value)}
+                  placeholder="Nhập số tồn mới"
+                  className="flex-1"
+                  autoFocus
+                />
+                <span className="text-sm text-muted-foreground shrink-0">
+                  {row.unit ?? ""}
+                </span>
+              </div>
+              {Number.isFinite(Number(newQtyInput.replace(/,/g, "."))) &&
+                newQtyInput.trim() !== "" && (
+                  <p className="text-xs text-muted-foreground">
+                    Chênh lệch:{" "}
+                    <span
+                      className={
+                        Number(newQtyInput.replace(/,/g, ".")) - row.quantity >= 0
+                          ? "text-status-success font-medium"
+                          : "text-status-error font-medium"
+                      }
+                    >
+                      {Number(newQtyInput.replace(/,/g, ".")) - row.quantity >= 0 ? "+" : ""}
+                      {formatNumber(
+                        Number(newQtyInput.replace(/,/g, ".")) - row.quantity,
+                      )}{" "}
+                      {row.unit ?? ""}
+                    </span>
+                  </p>
+                )}
+            </div>
+            <div className="space-y-1.5">
+              <label className="text-sm font-medium">
+                Lý do điều chỉnh <span className="text-status-error">*</span>
+              </label>
+              <Input
+                type="text"
+                value={adjustReason}
+                onChange={(e) => setAdjustReason(e.target.value)}
+                placeholder="VD: Sửa sai migrate KG→Gram, kiểm kê thực tế..."
+              />
+            </div>
+            <p className="text-xs text-muted-foreground">
+              Thao tác này tạo bút toán điều chỉnh + lưu vào lịch sử xuất nhập
+              (ai sửa, khi nào, lý do).
+            </p>
+          </div>
+          <DialogFooter>
+            <Button
+              variant="ghost"
+              onClick={() => setAdjustOpen(false)}
+              disabled={adjustSaving}
+            >
+              Huỷ
+            </Button>
+            <Button onClick={handleSaveAdjust} disabled={adjustSaving}>
+              {adjustSaving ? "Đang lưu..." : "Lưu điều chỉnh"}
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
     </InlineDetailPanel>
   );
 }
@@ -798,7 +972,7 @@ export default function TonKhoPage() {
         expandedRow={expandedRow}
         onExpandedRowChange={setExpandedRow}
         renderDetail={(stockRow, onClose) => (
-          <StockRowDetail row={stockRow} onClose={onClose} />
+          <StockRowDetail row={stockRow} onClose={onClose} onAdjusted={fetchData} />
         )}
       />
 

@@ -202,7 +202,7 @@ export type {
 } from "./pos-checkout";
 
 // Manual stock adjustments (warehouse dialogs: internal export, disposal, return, manufacturing)
-export { applyManualStockMovement, nextEntityCode } from "./stock-adjustments";
+export { applyManualStockMovement, nextEntityCode, adjustStockToValue } from "./stock-adjustments";
 export type { ManualStockMovementInput, ManualStockMovementContext } from "./stock-adjustments";
 
 // Auth/tenant helpers (DEV + production)
