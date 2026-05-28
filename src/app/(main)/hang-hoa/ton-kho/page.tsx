@@ -93,19 +93,23 @@ function StockRowDetail({
   const [loadingBranches, setLoadingBranches] = useState(true);
   const [loadingMovements, setLoadingMovements] = useState(true);
 
-  // CEO 28/05/2026: state cho dialog "Điều chỉnh tồn".
+  // CEO 28/05/2026: state cho dialog "Điều chỉnh tồn" (2 bước: nhập → cảnh báo).
   const [adjustOpen, setAdjustOpen] = useState(false);
   const [newQtyInput, setNewQtyInput] = useState("");
   const [adjustReason, setAdjustReason] = useState("");
   const [adjustSaving, setAdjustSaving] = useState(false);
+  // CEO 28/05/2026: bước xác nhận — true = đang hiện popup cảnh báo hậu quả.
+  const [adjustConfirming, setAdjustConfirming] = useState(false);
 
   const handleOpenAdjust = () => {
     setNewQtyInput(String(row.quantity));
     setAdjustReason("");
+    setAdjustConfirming(false);
     setAdjustOpen(true);
   };
 
-  const handleSaveAdjust = async () => {
+  // Bước 1: validate input → chuyển sang bước cảnh báo (KHÔNG lưu ngay).
+  const handleProceedAdjust = () => {
     const newQty = Number(newQtyInput.replace(/,/g, "."));
     if (!Number.isFinite(newQty) || newQty < 0) {
       toast({ title: "Số tồn không hợp lệ", description: "Nhập số ≥ 0.", variant: "error" });
@@ -119,6 +123,12 @@ function StockRowDetail({
       toast({ title: "Không thay đổi", description: "Số tồn mới trùng số hiện tại.", variant: "default" });
       return;
     }
+    setAdjustConfirming(true);
+  };
+
+  // Bước 2: user đã đọc cảnh báo + bấm "Xác nhận cập nhật" → ghi thật.
+  const handleSaveAdjust = async () => {
+    const newQty = Number(newQtyInput.replace(/,/g, "."));
     setAdjustSaving(true);
     try {
       await adjustStockToValue({
@@ -134,6 +144,7 @@ function StockRowDetail({
         variant: "success",
       });
       setAdjustOpen(false);
+      setAdjustConfirming(false);
       onAdjusted?.();
     } catch (err) {
       toast({
@@ -443,87 +454,171 @@ function StockRowDetail({
       <Dialog open={adjustOpen} onOpenChange={setAdjustOpen}>
         <DialogContent className="max-w-md">
           <DialogHeader>
-            <DialogTitle>Điều chỉnh tồn — {row.productName}</DialogTitle>
+            <DialogTitle>
+              {adjustConfirming
+                ? "⚠️ Xác nhận điều chỉnh tồn"
+                : `Điều chỉnh tồn — ${row.productName}`}
+            </DialogTitle>
           </DialogHeader>
-          <div className="space-y-4 py-2">
-            <div className="rounded-lg bg-surface-container-low p-3 text-sm space-y-1">
-              <div className="flex justify-between">
-                <span className="text-muted-foreground">Chi nhánh</span>
-                <span className="font-medium">{row.branchName}</span>
-              </div>
-              <div className="flex justify-between">
-                <span className="text-muted-foreground">Tồn hiện tại</span>
-                <span className="font-semibold tabular-nums">
-                  {formatNumber(row.quantity)} {row.unit ?? ""}
-                </span>
-              </div>
-            </div>
-            <div className="space-y-1.5">
-              <label className="text-sm font-medium">
-                Tồn mới <span className="text-status-error">*</span>
-              </label>
-              <div className="flex items-center gap-2">
-                <Input
-                  type="text"
-                  inputMode="decimal"
-                  value={newQtyInput}
-                  onChange={(e) => setNewQtyInput(e.target.value)}
-                  placeholder="Nhập số tồn mới"
-                  className="flex-1"
-                  autoFocus
-                />
-                <span className="text-sm text-muted-foreground shrink-0">
-                  {row.unit ?? ""}
-                </span>
-              </div>
-              {Number.isFinite(Number(newQtyInput.replace(/,/g, "."))) &&
-                newQtyInput.trim() !== "" && (
-                  <p className="text-xs text-muted-foreground">
-                    Chênh lệch:{" "}
-                    <span
-                      className={
-                        Number(newQtyInput.replace(/,/g, ".")) - row.quantity >= 0
-                          ? "text-status-success font-medium"
-                          : "text-status-error font-medium"
-                      }
-                    >
-                      {Number(newQtyInput.replace(/,/g, ".")) - row.quantity >= 0 ? "+" : ""}
-                      {formatNumber(
-                        Number(newQtyInput.replace(/,/g, ".")) - row.quantity,
-                      )}{" "}
+
+          {!adjustConfirming ? (
+            // ───────── BƯỚC 1: Form nhập ─────────
+            <>
+              <div className="space-y-4 py-2">
+                <div className="rounded-lg bg-surface-container-low p-3 text-sm space-y-1">
+                  <div className="flex justify-between">
+                    <span className="text-muted-foreground">Chi nhánh</span>
+                    <span className="font-medium">{row.branchName}</span>
+                  </div>
+                  <div className="flex justify-between">
+                    <span className="text-muted-foreground">Tồn hiện tại</span>
+                    <span className="font-semibold tabular-nums">
+                      {formatNumber(row.quantity)} {row.unit ?? ""}
+                    </span>
+                  </div>
+                </div>
+                <div className="space-y-1.5">
+                  <label className="text-sm font-medium">
+                    Tồn mới <span className="text-status-error">*</span>
+                  </label>
+                  <div className="flex items-center gap-2">
+                    <Input
+                      type="text"
+                      inputMode="decimal"
+                      value={newQtyInput}
+                      onChange={(e) => setNewQtyInput(e.target.value)}
+                      placeholder="Nhập số tồn mới"
+                      className="flex-1"
+                      autoFocus
+                    />
+                    <span className="text-sm text-muted-foreground shrink-0">
                       {row.unit ?? ""}
                     </span>
-                  </p>
-                )}
-            </div>
-            <div className="space-y-1.5">
-              <label className="text-sm font-medium">
-                Lý do điều chỉnh <span className="text-status-error">*</span>
-              </label>
-              <Input
-                type="text"
-                value={adjustReason}
-                onChange={(e) => setAdjustReason(e.target.value)}
-                placeholder="VD: Sửa sai migrate KG→Gram, kiểm kê thực tế..."
-              />
-            </div>
-            <p className="text-xs text-muted-foreground">
-              Thao tác này tạo bút toán điều chỉnh + lưu vào lịch sử xuất nhập
-              (ai sửa, khi nào, lý do).
-            </p>
-          </div>
-          <DialogFooter>
-            <Button
-              variant="ghost"
-              onClick={() => setAdjustOpen(false)}
-              disabled={adjustSaving}
-            >
-              Huỷ
-            </Button>
-            <Button onClick={handleSaveAdjust} disabled={adjustSaving}>
-              {adjustSaving ? "Đang lưu..." : "Lưu điều chỉnh"}
-            </Button>
-          </DialogFooter>
+                  </div>
+                  {Number.isFinite(Number(newQtyInput.replace(/,/g, "."))) &&
+                    newQtyInput.trim() !== "" && (
+                      <p className="text-xs text-muted-foreground">
+                        Chênh lệch:{" "}
+                        <span
+                          className={
+                            Number(newQtyInput.replace(/,/g, ".")) - row.quantity >= 0
+                              ? "text-status-success font-medium"
+                              : "text-status-error font-medium"
+                          }
+                        >
+                          {Number(newQtyInput.replace(/,/g, ".")) - row.quantity >= 0 ? "+" : ""}
+                          {formatNumber(
+                            Number(newQtyInput.replace(/,/g, ".")) - row.quantity,
+                          )}{" "}
+                          {row.unit ?? ""}
+                        </span>
+                      </p>
+                    )}
+                </div>
+                <div className="space-y-1.5">
+                  <label className="text-sm font-medium">
+                    Lý do điều chỉnh <span className="text-status-error">*</span>
+                  </label>
+                  <Input
+                    type="text"
+                    value={adjustReason}
+                    onChange={(e) => setAdjustReason(e.target.value)}
+                    placeholder="VD: Sửa sai migrate KG→Gram, kiểm kê thực tế..."
+                  />
+                </div>
+              </div>
+              <DialogFooter>
+                <Button variant="ghost" onClick={() => setAdjustOpen(false)}>
+                  Huỷ
+                </Button>
+                <Button onClick={handleProceedAdjust}>Tiếp tục</Button>
+              </DialogFooter>
+            </>
+          ) : (
+            // ───────── BƯỚC 2: Popup cảnh báo hậu quả ─────────
+            (() => {
+              const newQty = Number(newQtyInput.replace(/,/g, "."));
+              const delta = newQty - row.quantity;
+              const isIncrease = delta > 0;
+              const oldValue = row.quantity * (row.costPrice ?? 0);
+              const newValue = newQty * (row.costPrice ?? 0);
+              const unit = row.unit ?? "";
+              return (
+                <>
+                  <div className="space-y-3 py-2 text-sm">
+                    {/* Banner cảnh báo */}
+                    <div className="flex items-start gap-2 rounded-lg border border-status-warning/40 bg-status-warning/10 p-3">
+                      <Icon name="warning" size={18} className="text-status-warning shrink-0 mt-0.5" />
+                      <p className="text-foreground">
+                        Khi bấm <b>Xác nhận cập nhật</b>, hệ thống sẽ thực hiện
+                        các thay đổi sau cho <b>{row.productName}</b> tại{" "}
+                        <b>{row.branchName}</b>:
+                      </p>
+                    </div>
+
+                    {/* Tóm tắt thay đổi */}
+                    <div className="rounded-lg bg-surface-container-low p-3 space-y-2">
+                      <div className="flex items-center justify-between">
+                        <span className="text-muted-foreground">Tồn kho</span>
+                        <span className="font-semibold tabular-nums">
+                          {formatNumber(row.quantity)} →{" "}
+                          <span className="text-primary">{formatNumber(newQty)}</span> {unit}{" "}
+                          <span className={isIncrease ? "text-status-success" : "text-status-error"}>
+                            ({isIncrease ? "+" : ""}{formatNumber(delta)})
+                          </span>
+                        </span>
+                      </div>
+                      <div className="flex items-center justify-between">
+                        <span className="text-muted-foreground">Giá trị tồn</span>
+                        <span className="font-semibold tabular-nums">
+                          {formatCurrency(oldValue)} →{" "}
+                          <span className="text-primary">{formatCurrency(newValue)}</span>
+                        </span>
+                      </div>
+                    </div>
+
+                    {/* Danh sách hậu quả */}
+                    <ul className="space-y-1.5">
+                      <li className="flex items-start gap-2">
+                        <Icon name="check_circle" size={16} className="text-status-success shrink-0 mt-0.5" />
+                        <span>Đặt tồn về <b>{formatNumber(newQty)} {unit}</b> (ghi đè số hiện tại).</span>
+                      </li>
+                      <li className="flex items-start gap-2">
+                        <Icon name="receipt_long" size={16} className="text-muted-foreground shrink-0 mt-0.5" />
+                        <span>Tạo 1 bút toán <b>{isIncrease ? "nhập" : "xuất"} điều chỉnh</b> {formatNumber(Math.abs(delta))} {unit} trong sổ kho.</span>
+                      </li>
+                      <li className="flex items-start gap-2">
+                        <Icon name="history" size={16} className="text-muted-foreground shrink-0 mt-0.5" />
+                        <span>Ghi vào <b>Lịch sử xuất nhập</b>: người sửa + thời gian + lý do.</span>
+                      </li>
+                      <li className="flex items-start gap-2">
+                        <Icon name="error" size={16} className="text-status-error shrink-0 mt-0.5" />
+                        <span className="text-status-error font-medium">KHÔNG tự hoàn tác được — nếu sai phải điều chỉnh lại lần nữa.</span>
+                      </li>
+                    </ul>
+
+                    {/* Lý do đã nhập */}
+                    <div className="rounded-lg border border-border p-2.5">
+                      <span className="text-xs text-muted-foreground">Lý do: </span>
+                      <span className="text-sm font-medium">{adjustReason.trim()}</span>
+                    </div>
+                  </div>
+                  <DialogFooter>
+                    <Button
+                      variant="ghost"
+                      onClick={() => setAdjustConfirming(false)}
+                      disabled={adjustSaving}
+                    >
+                      Quay lại
+                    </Button>
+                    <Button onClick={handleSaveAdjust} disabled={adjustSaving}>
+                      {adjustSaving ? "Đang lưu..." : "Xác nhận cập nhật"}
+                    </Button>
+                  </DialogFooter>
+                </>
+              );
+            })()
+          )}
         </DialogContent>
       </Dialog>
     </InlineDetailPanel>
