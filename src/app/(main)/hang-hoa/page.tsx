@@ -1,6 +1,7 @@
 "use client";
 
 import { useEffect, useState, useCallback } from "react";
+import { useDebounce } from "@/lib/utils/use-debounce";
 import dynamic from "next/dynamic";
 import { ColumnDef } from "@tanstack/react-table";
 import { useRevalidateOnFocus } from "@/lib/hooks/use-revalidate-on-focus";
@@ -312,6 +313,8 @@ export default function HangHoaPage() {
     lowStock: number;
   } | null>(null);
   const [search, setSearch] = useState("");
+  // CEO 28/05/2026: debounce search 300ms — tránh gọi getProducts mỗi keystroke.
+  const debouncedSearch = useDebounce(search, 300);
   const [page, setPage] = useState(0);
   const [pageSize, setPageSize] = useState(15);
   const [expandedRow, setExpandedRow] = useState<number | null>(null);
@@ -435,7 +438,7 @@ export default function HangHoaPage() {
     const result = await getProducts({
       page,
       pageSize,
-      search,
+      search: debouncedSearch,
       filters: {
         productType: scope,
         ...(categoryFilter !== "all" && { category: [categoryFilter] }),
@@ -481,7 +484,7 @@ export default function HangHoaPage() {
     } else {
       setConversionsMap(new Map());
     }
-  }, [page, pageSize, search, scope, categoryFilter, stockFilter, statusFilter, brandFilter]);
+  }, [page, pageSize, debouncedSearch, scope, categoryFilter, stockFilter, statusFilter, brandFilter]);
 
   useEffect(() => {
     fetchData();
@@ -855,7 +858,7 @@ export default function HangHoaPage() {
   useEffect(() => {
     setPage(0);
     setExpandedRow(null);
-  }, [search, scope, categoryFilter, stockFilter, statusFilter, brandFilter, expectedOutDate, createdDatePreset, supplierFilter]);
+  }, [debouncedSearch, scope, categoryFilter, stockFilter, statusFilter, brandFilter, expectedOutDate, createdDatePreset, supplierFilter]);
 
   // Reset category + brand filter when scope changes (pool khác nhau giữa NVL/SKU)
   useEffect(() => {

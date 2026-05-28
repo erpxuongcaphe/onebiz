@@ -1,6 +1,7 @@
 "use client";
 
 import { useEffect, useState, useCallback } from "react";
+import { useDebounce } from "@/lib/utils/use-debounce";
 import dynamic from "next/dynamic";
 import { useRouter } from "next/navigation";
 import { ColumnDef } from "@tanstack/react-table";
@@ -282,6 +283,8 @@ export default function HoaDonPage() {
   const [total, setTotal] = useState(0);
   const [loading, setLoading] = useState(true);
   const [search, setSearch] = useState("");
+  // CEO 28/05/2026: debounce search 300ms — tránh gọi server mỗi keystroke.
+  const debouncedSearch = useDebounce(search, 300);
   const [page, setPage] = useState(0);
   const [pageSize, setPageSize] = useState(15);
   const [expandedRow, setExpandedRow] = useState<number | null>(null);
@@ -362,14 +365,14 @@ export default function HoaDonPage() {
     const result = await getInvoices({
       page,
       pageSize,
-      search,
+      search: debouncedSearch,
       branchId: activeBranchId,
       filters,
     });
     setData(result.data);
     setTotal(result.total);
     setLoading(false);
-  }, [page, pageSize, search, selectedStatuses, activeBranchId, dateRange]);
+  }, [page, pageSize, debouncedSearch, selectedStatuses, activeBranchId, dateRange]);
 
   useEffect(() => {
     fetchData();
@@ -378,7 +381,7 @@ export default function HoaDonPage() {
   useEffect(() => {
     setPage(0);
     setExpandedRow(null);
-  }, [search, selectedStatuses, selectedTypes, datePreset]);
+  }, [debouncedSearch, selectedStatuses, selectedTypes, datePreset]);
 
   const toggleStar = (id: string) => {
     setStarred((prev) => {
