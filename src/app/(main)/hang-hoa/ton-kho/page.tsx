@@ -2,7 +2,8 @@
 
 // Tồn kho — xem tồn kho per chi nhánh, lọc theo NVL/SKU, sắp xếp & tổng giá trị tồn
 
-import { useEffect, useState, useCallback } from "react";
+import { useEffect, useState, useCallback, useRef } from "react";
+import { useDebounce } from "@/lib/utils/use-debounce";
 import { ColumnDef } from "@tanstack/react-table";
 import { PageHeader } from "@/components/shared/page-header";
 import { ListPageLayout } from "@/components/shared/list-page-layout";
@@ -371,8 +372,15 @@ export default function TonKhoPage() {
     Map<string, UOMConversion[]>
   >(new Map());
   const [search, setSearch] = useState("");
+  // CEO 28/05/2026: debounce search 300ms — trước đây mỗi keystroke gọi server
+  // (gõ "xưởng đặc biệt" = 14 request). Mạng PA chập chờn → vài request fail →
+  // spam toast "Lỗi tải tồn kho". Debounce → 1 request sau khi ngừng gõ.
+  const debouncedSearch = useDebounce(search, 300);
   const [page, setPage] = useState(0);
   const [pageSize, setPageSize] = useState(20);
+  // Request sequencing — bỏ kết quả/toast của request cũ khi đã có request mới
+  // (tránh race + dồn toast lỗi khi gõ nhanh).
+  const reqIdRef = useRef(0);
 
   // Default branch filter theo branch đang active của user.
   // User có thể override sang "all" qua dropdown nếu là owner/admin.
@@ -389,12 +397,13 @@ export default function TonKhoPage() {
   const [expandedRow, setExpandedRow] = useState<number | null>(null);
 
   const fetchData = useCallback(async () => {
+    const reqId = ++reqIdRef.current;
     setLoading(true);
     try {
       const filters = {
         branchId: branchFilter !== "all" ? branchFilter : undefined,
         productType: typeFilter !== "all" ? typeFilter : undefined,
-        search: search || undefined,
+        search: debouncedSearch || undefined,
       };
       // Parallel: page rows + aggregates (server-side)
       const [pageResult, aggregates] = await Promise.all([
@@ -406,21 +415,26 @@ export default function TonKhoPage() {
         }),
         getBranchStockAggregates(filters),
       ]);
+      // Bỏ qua nếu đã có request mới hơn (tránh flicker + ghi đè data mới).
+      if (reqId !== reqIdRef.current) return;
       setRows(pageResult.rows);
       setTotalRows(pageResult.total);
       setTotalQty(aggregates.totalQty);
       setTotalValue(aggregates.totalValue);
       setLowStockCount(aggregates.lowStockCount);
     } catch (err) {
+      // Chỉ toast cho request mới nhất → tránh spam 10+ toast khi gõ nhanh
+      // gặp mạng chập chờn.
+      if (reqId !== reqIdRef.current) return;
       toast({
         title: "Lỗi tải tồn kho",
         description: err instanceof Error ? err.message : "Vui lòng thử lại",
         variant: "error",
       });
     } finally {
-      setLoading(false);
+      if (reqId === reqIdRef.current) setLoading(false);
     }
-  }, [branchFilter, typeFilter, search, lowStockOnly, page, pageSize, toast]);
+  }, [branchFilter, typeFilter, debouncedSearch, lowStockOnly, page, pageSize, toast]);
 
   useEffect(() => {
     getBranches()
@@ -435,7 +449,7 @@ export default function TonKhoPage() {
   useEffect(() => {
     setPage(0);
     setExpandedRow(null);
-  }, [search, branchFilter, typeFilter, lowStockOnly]);
+  }, [debouncedSearch, branchFilter, typeFilter, lowStockOnly]);
 
   // Day 19/05/2026 (CEO Smart Hybrid Phase 2): batch load UOM conversions
   // cho các productId hiện ra trong page → hiển thị quy đổi cột "Tồn".
