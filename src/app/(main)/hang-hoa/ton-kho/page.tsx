@@ -45,6 +45,8 @@ import {
   getUOMConversions,
   getUOMConversionsByProductIds,
   adjustStockToValue,
+  isInventoryLocked,
+  setInventoryLocked,
 } from "@/lib/services";
 import type { BranchStockRow, BranchDetail } from "@/lib/services/supabase";
 import type { StockMovement, UOMConversion } from "@/lib/types";
@@ -67,11 +69,14 @@ function StockRowDetail({
   row,
   onClose,
   onAdjusted,
+  locked = false,
 }: {
   row: BranchStockRow;
   onClose: () => void;
   /** CEO 28/05/2026: gọi sau khi điều chỉnh tồn thành công → parent refetch list. */
   onAdjusted?: () => void;
+  /** CEO 28/05/2026: tồn kho đang khóa → disable nút điều chỉnh. */
+  locked?: boolean;
 }) {
   const { toast } = useToast();
   const { hasPermission } = useAuth();
@@ -220,14 +225,22 @@ function StockRowDetail({
                     inventory.adjust (owner luôn thấy). Sửa tồn về giá trị mới,
                     có ghi lý do + lịch sử (tab "Lịch sử xuất nhập"). */}
                 {canAdjust && (
-                  <div className="flex justify-end">
+                  <div className="flex justify-end items-center gap-2">
+                    {locked && (
+                      <span className="inline-flex items-center gap-1 text-xs text-status-warning">
+                        <Icon name="lock" size={13} />
+                        Tồn đã khóa
+                      </span>
+                    )}
                     <Button
                       size="sm"
                       variant="outline"
                       onClick={handleOpenAdjust}
+                      disabled={locked}
+                      title={locked ? "Tồn kho đang khóa — mở khóa để điều chỉnh" : undefined}
                       className="gap-1"
                     >
-                      <Icon name="edit" size={14} />
+                      <Icon name={locked ? "lock" : "edit"} size={14} />
                       Điều chỉnh tồn
                     </Button>
                   </div>
@@ -665,6 +678,49 @@ export default function TonKhoPage() {
   const [importOpen, setImportOpen] = useState(false);
   const [expandedRow, setExpandedRow] = useState<number | null>(null);
 
+  // CEO 28/05/2026: khóa cập nhật tồn kho đầu kỳ.
+  const { hasPermission } = useAuth();
+  const canLock = hasPermission("inventory.lock");
+  const [inventoryLocked, setInvLocked] = useState(false);
+  const [lockBusy, setLockBusy] = useState(false);
+  const [lockConfirmOpen, setLockConfirmOpen] = useState(false);
+
+  const loadLockState = useCallback(async () => {
+    try {
+      setInvLocked(await isInventoryLocked());
+    } catch {
+      /* fail-soft — coi như chưa khóa nếu lỗi đọc */
+    }
+  }, []);
+  useEffect(() => {
+    loadLockState();
+  }, [loadLockState]);
+
+  const handleToggleLock = async () => {
+    setLockBusy(true);
+    try {
+      const next = !inventoryLocked;
+      await setInventoryLocked(next);
+      setInvLocked(next);
+      setLockConfirmOpen(false);
+      toast({
+        title: next ? "Đã khóa tồn kho đầu kỳ" : "Đã mở khóa tồn kho",
+        description: next
+          ? "Nhập đầu kỳ + Điều chỉnh tồn đã bị khóa."
+          : "Có thể nhập/điều chỉnh tồn lại. Nhớ khóa lại sau khi xong.",
+        variant: "success",
+      });
+    } catch (err) {
+      toast({
+        title: "Lỗi khóa/mở tồn kho",
+        description: err instanceof Error ? err.message : "Vui lòng thử lại",
+        variant: "error",
+      });
+    } finally {
+      setLockBusy(false);
+    }
+  };
+
   const fetchData = useCallback(async () => {
     const reqId = ++reqIdRef.current;
     setLoading(true);
@@ -991,10 +1047,34 @@ export default function TonKhoPage() {
             onClick: () => downloadTemplate(initialStockExcelSchema),
           },
           {
-            label: "Nhập tồn kho đầu kỳ",
-            icon: <Icon name="upload" size={16} />,
+            // CEO 28/05/2026: disable khi tồn kho đã khóa.
+            label: inventoryLocked
+              ? "Nhập tồn đầu kỳ (đã khóa)"
+              : "Nhập tồn kho đầu kỳ",
+            icon: <Icon name={inventoryLocked ? "lock" : "upload"} size={16} />,
             onClick: () => setImportOpen(true),
+            disabled: inventoryLocked,
           },
+          // CEO 28/05/2026: nút Chốt & khóa / Mở khóa — chỉ ai có quyền inventory.lock.
+          ...(canLock
+            ? [
+                {
+                  label: inventoryLocked
+                    ? "Mở khóa tồn kho"
+                    : "Chốt & khóa tồn",
+                  icon: (
+                    <Icon
+                      name={inventoryLocked ? "lock_open" : "lock"}
+                      size={16}
+                    />
+                  ),
+                  variant: (inventoryLocked ? "outline" : "default") as
+                    | "outline"
+                    | "default",
+                  onClick: () => setLockConfirmOpen(true),
+                },
+              ]
+            : []),
         ]}
         onExport={{
           excel: async () => {
@@ -1060,6 +1140,19 @@ export default function TonKhoPage() {
         />
       </div>
 
+      {/* CEO 28/05/2026: banner trạng thái khóa — mọi người đều thấy. */}
+      {inventoryLocked && (
+        <div className="mx-4 mb-2 flex items-center gap-2 rounded-lg border border-status-warning/40 bg-status-warning/10 px-3 py-2 text-sm">
+          <Icon name="lock" size={16} className="text-status-warning shrink-0" />
+          <span className="text-foreground">
+            <b>Tồn kho đầu kỳ đã khóa.</b> Không thể nhập đầu kỳ / điều chỉnh tồn.
+            {canLock
+              ? " Bấm “Mở khóa tồn kho” để sửa."
+              : " Liên hệ người có quyền để mở khóa."}
+          </span>
+        </div>
+      )}
+
       <DataTable
         columns={columns}
         data={rows}
@@ -1087,7 +1180,12 @@ export default function TonKhoPage() {
         expandedRow={expandedRow}
         onExpandedRowChange={setExpandedRow}
         renderDetail={(stockRow, onClose) => (
-          <StockRowDetail row={stockRow} onClose={onClose} onAdjusted={fetchData} />
+          <StockRowDetail
+            row={stockRow}
+            onClose={onClose}
+            onAdjusted={fetchData}
+            locked={inventoryLocked}
+          />
         )}
       />
 
@@ -1106,6 +1204,75 @@ export default function TonKhoPage() {
           });
         }}
       />
+
+      {/* CEO 28/05/2026: Dialog xác nhận khóa / mở khóa tồn kho */}
+      <Dialog open={lockConfirmOpen} onOpenChange={setLockConfirmOpen}>
+        <DialogContent className="max-w-md">
+          <DialogHeader>
+            <DialogTitle>
+              {inventoryLocked
+                ? "Mở khóa tồn kho đầu kỳ?"
+                : "🔒 Chốt & khóa tồn kho đầu kỳ?"}
+            </DialogTitle>
+          </DialogHeader>
+          <div className="space-y-3 py-2 text-sm">
+            {inventoryLocked ? (
+              <>
+                <p>Khi mở khóa, sẽ cho phép lại:</p>
+                <ul className="space-y-1.5">
+                  <li className="flex items-start gap-2">
+                    <Icon name="lock_open" size={16} className="text-status-success shrink-0 mt-0.5" />
+                    <span>Nhập tồn kho đầu kỳ (ghi đè) + Điều chỉnh tồn.</span>
+                  </li>
+                  <li className="flex items-start gap-2">
+                    <Icon name="warning" size={16} className="text-status-warning shrink-0 mt-0.5" />
+                    <span className="text-status-warning font-medium">
+                      Nhớ <b>khóa lại</b> sau khi sửa xong để bảo vệ số liệu.
+                    </span>
+                  </li>
+                  <li className="flex items-start gap-2">
+                    <Icon name="history" size={16} className="text-muted-foreground shrink-0 mt-0.5" />
+                    <span>Ghi lịch sử: ai mở, khi nào.</span>
+                  </li>
+                </ul>
+              </>
+            ) : (
+              <>
+                <p>Khi khóa, hệ thống sẽ:</p>
+                <ul className="space-y-1.5">
+                  <li className="flex items-start gap-2">
+                    <Icon name="block" size={16} className="text-status-error shrink-0 mt-0.5" />
+                    <span><b>Chặn "Nhập tồn kho đầu kỳ"</b> (ghi đè).</span>
+                  </li>
+                  <li className="flex items-start gap-2">
+                    <Icon name="block" size={16} className="text-status-error shrink-0 mt-0.5" />
+                    <span><b>Chặn "Điều chỉnh tồn"</b> từng sản phẩm.</span>
+                  </li>
+                  <li className="flex items-start gap-2">
+                    <Icon name="lock" size={16} className="text-muted-foreground shrink-0 mt-0.5" />
+                    <span>Chỉ người có quyền mới mở khóa lại được. Ghi lịch sử ai khóa.</span>
+                  </li>
+                </ul>
+                <p className="text-xs text-muted-foreground">
+                  Mục đích: chốt số tồn đầu kỳ, tránh sửa nhầm sau khi đã cân đối.
+                </p>
+              </>
+            )}
+          </div>
+          <DialogFooter>
+            <Button variant="ghost" onClick={() => setLockConfirmOpen(false)} disabled={lockBusy}>
+              Huỷ
+            </Button>
+            <Button onClick={handleToggleLock} disabled={lockBusy}>
+              {lockBusy
+                ? "Đang xử lý..."
+                : inventoryLocked
+                  ? "Xác nhận mở khóa"
+                  : "Xác nhận khóa"}
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
     </ListPageLayout>
   );
 }

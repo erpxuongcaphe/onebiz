@@ -27,6 +27,7 @@ import type {
 import type { ImportBatchResult } from "@/lib/excel";
 import { getClient, getCurrentContext, getCurrentTenantId } from "./base";
 import { applyManualStockMovement } from "./stock-adjustments";
+import { isInventoryLocked } from "./tenant-settings";
 import { createInternalSale } from "./internal-sales";
 
 type RowWithExcelIndex = { __excelRowIndex?: number };
@@ -480,6 +481,12 @@ export async function bulkImportDebtOpening(
 export async function bulkImportInitialStock(
   rows: InitialStockImportRow[]
 ): Promise<ImportBatchResult> {
+  // CEO 28/05/2026: chặn nếu tồn kho đang khóa (defense-in-depth).
+  if (await isInventoryLocked()) {
+    throw new Error(
+      "Tồn kho đang khóa — cần mở khóa trước khi nhập tồn kho đầu kỳ.",
+    );
+  }
   const supabase = getClient();
   const ctx = await getCurrentContext();
 

@@ -22,6 +22,7 @@
 
 import { getClient, getCurrentContext, handleError } from "./base";
 import { recordAuditLog } from "./audit";
+import { isInventoryLocked } from "./tenant-settings";
 import type { Database } from "@/lib/supabase/types";
 
 type StockMovementInsert = Database["public"]["Tables"]["stock_movements"]["Insert"];
@@ -137,6 +138,11 @@ export async function adjustStockToValue(params: {
   newQty: number;
   reason: string;
 }): Promise<void> {
+  // CEO 28/05/2026: chặn nếu tồn kho đang khóa (defense-in-depth — kể cả
+  // gọi API trực tiếp). UI cũng đã disable nút nhưng service vẫn check.
+  if (await isInventoryLocked()) {
+    throw new Error("Tồn kho đang khóa — cần mở khóa trước khi điều chỉnh.");
+  }
   const delta = params.newQty - params.currentQty;
   if (Math.abs(delta) < 1e-9) return; // không đổi → bỏ qua
   await applyManualStockMovement(

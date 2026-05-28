@@ -42,6 +42,9 @@ export const PERMISSIONS = {
   INVENTORY_INTERNAL_EXPORT: "inventory.internal_export",
   INVENTORY_TRANSFER: "inventory.transfer",
   INVENTORY_CHECK: "inventory.check",
+  // CEO 28/05/2026: khóa/mở cập nhật tồn kho đầu kỳ. Chỉ owner hoặc người
+  // được cấp quyền này mới chốt-khóa hoặc mở khóa tồn (nhập đầu kỳ + điều chỉnh).
+  INVENTORY_LOCK: "inventory.lock",
 
   // Production / Sản xuất (CEO 25/05/2026: tách khỏi inventory để admin
   // có thể grant/revoke quyền SX riêng. Trước đây dùng chung inventory.view
@@ -173,6 +176,7 @@ export const PERMISSION_GROUPS: PermissionGroup[] = [
       { code: PERMISSIONS.INVENTORY_INTERNAL_EXPORT, label: "Xuất nội bộ" },
       { code: PERMISSIONS.INVENTORY_TRANSFER, label: "Chuyển kho" },
       { code: PERMISSIONS.INVENTORY_CHECK, label: "Kiểm kho" },
+      { code: PERMISSIONS.INVENTORY_LOCK, label: "Khóa/mở tồn kho đầu kỳ" },
     ],
   },
   {
@@ -308,8 +312,11 @@ export const DEFAULT_ROLE_TEMPLATES: RoleTemplate[] = [
     permissions: [
       // POS full
       ...ALL_PERMISSION_CODES.filter((c) => c.startsWith("pos_")),
-      // Inventory full
-      ...ALL_PERMISSION_CODES.filter((c) => c.startsWith("inventory.")),
+      // Inventory full — TRỪ inventory.lock (CEO 28/05/2026: khóa/mở tồn chỉ
+      // owner hoặc người được cấp riêng. Manager không có mặc định, phải cấp qua UI).
+      ...ALL_PERMISSION_CODES.filter(
+        (c) => c.startsWith("inventory.") && c !== PERMISSIONS.INVENTORY_LOCK,
+      ),
       // Production full (CEO 25/05/2026)
       ...ALL_PERMISSION_CODES.filter((c) => c.startsWith("production.")),
       // Finance view + create

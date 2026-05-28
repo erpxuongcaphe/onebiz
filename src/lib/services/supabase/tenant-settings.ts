@@ -10,7 +10,7 @@
  * → in hóa đơn không có MST, địa chỉ pháp lý → vi phạm quy định kế toán.
  */
 
-import { getClient, getCurrentTenantId, handleError } from "./base";
+import { getClient, getCurrentTenantId, getCurrentContext, handleError } from "./base";
 import { recordAuditLog } from "./audit";
 
 export interface TenantBusinessInfo {
@@ -298,4 +298,53 @@ export async function setRequireBomForSku(value: boolean): Promise<void> {
     value,
     "Bắt buộc SKU phải có BOM trước khi cho phép bán (true = reject; false = chỉ cảnh báo)",
   );
+}
+
+// ─── CEO 28/05/2026: Khóa cập nhật tồn kho đầu kỳ ───
+// Lưu 1 key JSON `inventory_lock` = { locked, at, by }. Khi locked=true:
+// chặn "Nhập tồn kho đầu kỳ" + "Điều chỉnh tồn" (ở UI + service). Chỉ owner
+// hoặc người được cấp quyền inventory.lock mới đổi (UI gate + RPC set_tenant_setting
+// gate role server-side). Default: chưa khóa.
+
+export interface InventoryLockState {
+  locked: boolean;
+  /** ISO — thời điểm khóa/mở gần nhất */
+  at?: string;
+  /** userId người thao tác gần nhất */
+  by?: string;
+}
+
+export async function getInventoryLockState(): Promise<InventoryLockState> {
+  const v = await getTenantSetting<SettingValue>("inventory_lock", null);
+  if (v && typeof v === "object" && !Array.isArray(v)) {
+    const o = v as Record<string, unknown>;
+    return {
+      locked: Boolean(o.locked),
+      at: typeof o.at === "string" ? o.at : undefined,
+      by: typeof o.by === "string" ? o.by : undefined,
+    };
+  }
+  return { locked: false };
+}
+
+/** Tiện ích: chỉ trả về true/false đang khóa hay không. */
+export async function isInventoryLocked(): Promise<boolean> {
+  return (await getInventoryLockState()).locked;
+}
+
+/** Khóa (true) hoặc mở khóa (false) tồn kho đầu kỳ. Ghi audit ai/khi nào. */
+export async function setInventoryLocked(locked: boolean): Promise<void> {
+  const ctx = await getCurrentContext();
+  const at = new Date().toISOString();
+  await setTenantSetting(
+    "inventory_lock",
+    { locked, at, by: ctx.userId },
+    "Khóa cập nhật tồn kho đầu kỳ (nhập đầu kỳ + điều chỉnh tồn)",
+  );
+  void recordAuditLog({
+    entityType: "inventory_lock",
+    entityId: ctx.tenantId,
+    action: "update",
+    newData: { locked, by: ctx.userId, at },
+  });
 }
