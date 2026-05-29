@@ -1,6 +1,7 @@
 export { getProducts, getAllMatchingProductIds, getProductStats, getProductCategories, getProductCategoriesAsync, getProductBrands, getProductById, getAllStockMovements, getStockMovements as getProductStockMovements, getSalesHistory, createProduct, updateProduct, deleteProduct, duplicateProduct, moveProductSortOrder, bulkUpdateCategory, bulkUpdatePrice, bulkDeleteProducts, restoreProduct, bulkRestoreProducts, forceDeleteProduct, bulkForceDeleteProducts, cleanupTestProduct, bulkCleanupTestProducts, verifyCurrentUserPassword } from "./products";
 export type { AllStockMovementRow } from "./products";
-export { getCustomers, getCustomerGroups, getCustomerGroupsAsync, getCustomerById, createCustomer, updateCustomer, deleteCustomer, getOrCreateWalkInCustomer, adjustCustomerDebt } from "./customers";
+export { getCustomers, getCustomerGroups, getCustomerGroupsAsync, getCustomerGroupsFull, createCustomerGroup, updateCustomerGroup, deleteCustomerGroup, getCustomerById, createCustomer, updateCustomer, deleteCustomer, getOrCreateWalkInCustomer, adjustCustomerDebt } from "./customers";
+export type { CustomerGroupFull } from "./customers";
 // Sprint UX-1 Stage 3: duplicate services for "Sao chép" row action
 export { duplicateInvoice } from "./orders";
 export { duplicatePurchaseOrder } from "./purchase-orders";

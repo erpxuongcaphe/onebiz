@@ -178,6 +178,82 @@ export async function getCustomerGroupsAsync() {
   }));
 }
 
+/* ------------------------------------------------------------------ */
+/*  Customer group CRUD (CEO 29/05/2026)                               */
+/*  Quản lý nhóm khách + chiết khấu mặc định (bảng customer_groups).   */
+/*  POS tự áp discount_percent của nhóm khi chọn khách.                */
+/* ------------------------------------------------------------------ */
+
+export interface CustomerGroupFull {
+  id: string;
+  name: string;
+  /** Chiết khấu mặc định (%) áp khi bán cho khách thuộc nhóm này. */
+  discountPercent: number;
+  note?: string;
+}
+
+export async function getCustomerGroupsFull(): Promise<CustomerGroupFull[]> {
+  const supabase = getClient();
+  const tenantId = await getCurrentTenantId();
+  const { data, error } = await supabase
+    .from("customer_groups")
+    .select("id, name, discount_percent, note")
+    .eq("tenant_id", tenantId)
+    .order("discount_percent", { ascending: false });
+  if (error) handleError(error, "getCustomerGroupsFull");
+  return (data ?? []).map((g) => ({
+    id: g.id as string,
+    name: g.name as string,
+    discountPercent: Number((g as { discount_percent?: number }).discount_percent ?? 0),
+    note: ((g as { note?: string | null }).note ?? undefined) || undefined,
+  }));
+}
+
+export async function createCustomerGroup(input: {
+  name: string;
+  discountPercent: number;
+  note?: string;
+}): Promise<void> {
+  const supabase = getClient();
+  const tenantId = await getCurrentTenantId();
+  const { error } = await supabase.from("customer_groups").insert({
+    tenant_id: tenantId,
+    name: input.name,
+    discount_percent: input.discountPercent,
+    note: input.note || null,
+  });
+  if (error) handleError(error, "createCustomerGroup");
+}
+
+export async function updateCustomerGroup(
+  id: string,
+  input: { name?: string; discountPercent?: number; note?: string },
+): Promise<void> {
+  const supabase = getClient();
+  const tenantId = await getCurrentTenantId();
+  const payload: { name?: string; discount_percent?: number; note?: string | null } = {};
+  if (input.name !== undefined) payload.name = input.name;
+  if (input.discountPercent !== undefined) payload.discount_percent = input.discountPercent;
+  if (input.note !== undefined) payload.note = input.note || null;
+  const { error } = await supabase
+    .from("customer_groups")
+    .update(payload)
+    .eq("tenant_id", tenantId)
+    .eq("id", id);
+  if (error) handleError(error, "updateCustomerGroup");
+}
+
+export async function deleteCustomerGroup(id: string): Promise<void> {
+  const supabase = getClient();
+  const tenantId = await getCurrentTenantId();
+  const { error } = await supabase
+    .from("customer_groups")
+    .delete()
+    .eq("tenant_id", tenantId)
+    .eq("id", id);
+  if (error) handleError(error, "deleteCustomerGroup");
+}
+
 export async function getCustomerById(id: string): Promise<Customer | null> {
   const supabase = getClient();
   const tenantId = await getCurrentTenantId();

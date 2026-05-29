@@ -1,7 +1,8 @@
 "use client";
 
-// Nhóm khách hàng — CRUD bằng dialog đơn giản
-// Dữ liệu lấy từ bảng categories với scope='customer'
+// Nhóm khách hàng — CRUD bảng customer_groups (CEO 29/05/2026).
+// Đây là bảng THẬT mà khách hàng link tới + POS đọc chiết khấu mặc định.
+// (Trước đây trang này sửa nhầm bảng categories scope=customer — bảng rỗng.)
 
 import { useEffect, useState, useCallback } from "react";
 import { ColumnDef } from "@tanstack/react-table";
@@ -16,28 +17,29 @@ import {
   DialogFooter,
 } from "@/components/ui/dialog";
 import { Input } from "@/components/ui/input";
+import { NumericInput } from "@/components/ui/numeric-input";
 import { useToast } from "@/lib/contexts";
 import {
-  getCategoriesByScope,
-  createCategory,
-  updateCategory,
-  deleteCategory,
+  getCustomerGroupsFull,
+  createCustomerGroup,
+  updateCustomerGroup,
+  deleteCustomerGroup,
+  type CustomerGroupFull,
 } from "@/lib/services";
-import type { ProductCategory } from "@/lib/types";
 import { Icon } from "@/components/ui/icon";
 
 export default function NhomKhachHangPage() {
   const { toast } = useToast();
-  const [data, setData] = useState<ProductCategory[]>([]);
+  const [data, setData] = useState<CustomerGroupFull[]>([]);
   const [loading, setLoading] = useState(true);
   const [search, setSearch] = useState("");
   const [dialogOpen, setDialogOpen] = useState(false);
-  const [editing, setEditing] = useState<ProductCategory | null>(null);
+  const [editing, setEditing] = useState<CustomerGroupFull | null>(null);
 
   const fetchData = useCallback(async () => {
     setLoading(true);
     try {
-      const result = await getCategoriesByScope("customer");
+      const result = await getCustomerGroupsFull();
       setData(result);
     } catch (err) {
       toast({
@@ -56,44 +58,33 @@ export default function NhomKhachHangPage() {
 
   const filtered = data.filter((g) => {
     if (!search) return true;
-    const q = search.toLowerCase();
-    return (
-      g.name.toLowerCase().includes(q) ||
-      (g.code ?? "").toLowerCase().includes(q)
-    );
+    return g.name.toLowerCase().includes(search.toLowerCase());
   });
 
-  async function handleDelete(group: ProductCategory) {
+  async function handleDelete(group: CustomerGroupFull) {
     if (
       !confirm(
-        `Xóa nhóm "${group.name}"? Khách hàng thuộc nhóm này sẽ bị bỏ liên kết.`
+        `Xóa nhóm "${group.name}"? Khách hàng thuộc nhóm này sẽ bị bỏ liên kết.`,
       )
     )
       return;
     try {
-      await deleteCategory(group.id);
+      await deleteCustomerGroup(group.id);
       toast({ title: "Đã xóa nhóm", variant: "success" });
       fetchData();
     } catch (err) {
       toast({
         title: "Lỗi xóa",
-        description: err instanceof Error ? err.message : "Vui lòng thử lại",
+        description:
+          err instanceof Error
+            ? err.message
+            : "Có thể còn khách hàng thuộc nhóm này. Vui lòng chuyển khách sang nhóm khác trước.",
         variant: "error",
       });
     }
   }
 
-  const columns: ColumnDef<ProductCategory, unknown>[] = [
-    {
-      accessorKey: "code",
-      header: "Mã nhóm",
-      size: 150,
-      cell: ({ row }) => (
-        <span className="font-mono text-primary font-medium">
-          {row.original.code ?? "—"}
-        </span>
-      ),
-    },
+  const columns: ColumnDef<CustomerGroupFull, unknown>[] = [
     {
       accessorKey: "name",
       header: "Tên nhóm",
@@ -106,10 +97,27 @@ export default function NhomKhachHangPage() {
       ),
     },
     {
-      accessorKey: "sortOrder",
-      header: "Thứ tự",
-      size: 100,
-      cell: ({ row }) => row.original.sortOrder ?? 0,
+      accessorKey: "discountPercent",
+      header: "Chiết khấu mặc định",
+      size: 180,
+      cell: ({ row }) => {
+        const pct = row.original.discountPercent;
+        return pct > 0 ? (
+          <span className="inline-flex items-center gap-1 rounded-full bg-status-success/10 px-2.5 py-0.5 text-sm font-semibold text-status-success">
+            <Icon name="sell" size={14} />
+            {pct}%
+          </span>
+        ) : (
+          <span className="text-sm text-muted-foreground">Không giảm</span>
+        );
+      },
+    },
+    {
+      accessorKey: "note",
+      header: "Ghi chú",
+      cell: ({ row }) => (
+        <span className="text-sm text-muted-foreground">{row.original.note ?? "—"}</span>
+      ),
     },
   ];
 
@@ -118,7 +126,7 @@ export default function NhomKhachHangPage() {
       <div className="flex flex-col h-[calc(100vh-64px)]">
         <PageHeader
           title="Nhóm khách hàng"
-          searchPlaceholder="Theo mã, tên nhóm..."
+          searchPlaceholder="Theo tên nhóm..."
           searchValue={search}
           onSearchChange={setSearch}
           actions={[
@@ -133,6 +141,12 @@ export default function NhomKhachHangPage() {
             },
           ]}
         />
+
+        <div className="px-4 pt-3">
+          <p className="text-xs text-muted-foreground">
+            Chiết khấu mặc định sẽ tự áp khi bán cho khách thuộc nhóm (nhân viên vẫn sửa tay được trên POS).
+          </p>
+        </div>
 
         <DataTable
           columns={columns}
@@ -187,20 +201,20 @@ function CustomerGroupDialog({
 }: {
   open: boolean;
   onOpenChange: (v: boolean) => void;
-  editing: ProductCategory | null;
+  editing: CustomerGroupFull | null;
   onSuccess: () => void;
 }) {
   const { toast } = useToast();
   const [name, setName] = useState("");
-  const [code, setCode] = useState("");
-  const [sortOrder, setSortOrder] = useState("0");
+  const [discountPercent, setDiscountPercent] = useState(0);
+  const [note, setNote] = useState("");
   const [saving, setSaving] = useState(false);
 
   useEffect(() => {
     if (!open) return;
     setName(editing?.name ?? "");
-    setCode(editing?.code ?? "");
-    setSortOrder(String(editing?.sortOrder ?? 0));
+    setDiscountPercent(editing?.discountPercent ?? 0);
+    setNote(editing?.note ?? "");
   }, [open, editing]);
 
   async function handleSave() {
@@ -208,30 +222,25 @@ function CustomerGroupDialog({
       toast({ title: "Vui lòng nhập tên nhóm", variant: "error" });
       return;
     }
-    if (!editing && !/^[A-Z]{3}$/.test(code.trim())) {
-      toast({
-        title: "Mã nhóm phải gồm 3 chữ cái IN HOA",
-        description: "VD: KSI, KLE, VLA",
-        variant: "error",
-      });
+    if (discountPercent < 0 || discountPercent > 100) {
+      toast({ title: "Chiết khấu phải từ 0 đến 100%", variant: "error" });
       return;
     }
 
     setSaving(true);
     try {
       if (editing) {
-        await updateCategory(editing.id, {
+        await updateCustomerGroup(editing.id, {
           name: name.trim(),
-          code: code.trim() || undefined,
-          sortOrder: Number(sortOrder) || 0,
+          discountPercent,
+          note: note.trim(),
         });
         toast({ title: "Đã cập nhật nhóm", variant: "success" });
       } else {
-        await createCategory({
+        await createCustomerGroup({
           name: name.trim(),
-          code: code.trim(),
-          scope: "customer",
-          sortOrder: Number(sortOrder) || 0,
+          discountPercent,
+          note: note.trim() || undefined,
         });
         toast({ title: "Đã thêm nhóm", variant: "success" });
       }
@@ -259,36 +268,34 @@ function CustomerGroupDialog({
 
         <div className="space-y-4 py-2">
           <div className="space-y-2">
-            <label className="text-sm font-medium">Mã nhóm (3 chữ cái) *</label>
-            <Input
-              value={code}
-              onChange={(e) => setCode(e.target.value.toUpperCase())}
-              placeholder="VD: KSI, KLE, VLA"
-              maxLength={3}
-              disabled={!!editing}
-            />
-            {!editing && (
-              <p className="text-xs text-muted-foreground">
-                Mã sẽ dùng để sinh mã KH theo format KHA-[mã]-001
-              </p>
-            )}
-          </div>
-
-          <div className="space-y-2">
             <label className="text-sm font-medium">Tên nhóm *</label>
             <Input
               value={name}
               onChange={(e) => setName(e.target.value)}
-              placeholder="VD: Khách sỉ, Khách lẻ, Khách vãng lai"
+              placeholder="VD: Khách sỉ, Khách lẻ, Khách doanh nghiệp"
             />
           </div>
 
           <div className="space-y-2">
-            <label className="text-sm font-medium">Thứ tự hiển thị</label>
+            <label className="text-sm font-medium">Chiết khấu mặc định (%)</label>
+            <NumericInput
+              value={discountPercent}
+              onChange={(v) => setDiscountPercent(Math.min(100, Math.max(0, v ?? 0)))}
+              min={0}
+              max={100}
+              decimals={2}
+            />
+            <p className="text-xs text-muted-foreground">
+              Tự giảm % này khi bán cho khách thuộc nhóm. Để 0 nếu không giảm.
+            </p>
+          </div>
+
+          <div className="space-y-2">
+            <label className="text-sm font-medium">Ghi chú</label>
             <Input
-              type="number"
-              value={sortOrder}
-              onChange={(e) => setSortOrder(e.target.value)}
+              value={note}
+              onChange={(e) => setNote(e.target.value)}
+              placeholder="Tùy chọn"
             />
           </div>
         </div>
