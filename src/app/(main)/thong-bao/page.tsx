@@ -14,6 +14,7 @@
 
 import { useEffect, useState, useCallback } from "react";
 import { useRouter } from "next/navigation";
+import { useFnbSubdomain } from "@/lib/hooks/use-fnb-subdomain";
 import { PageHeader } from "@/components/shared/page-header";
 import { Card } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
@@ -164,6 +165,7 @@ function timeAgo(iso: string): string {
 export default function ThongBaoPage() {
   const { toast } = useToast();
   const router = useRouter();
+  const { posFnbUrl } = useFnbSubdomain();
   const [notifications, setNotifications] = useState<NotificationRow[]>([]);
   const [loading, setLoading] = useState(true);
   const [activeTab, setActiveTab] = useState("all");
@@ -222,7 +224,14 @@ export default function ThongBaoPage() {
     // CEO 13/05: deep-link sang trang chi tiết (order/PO/stock/khách...)
     const link = getNotificationLink(n);
     if (link) {
-      router.push(link);
+      // CEO 29/05/2026: POS FnB chạy trên subdomain fnb.onebiz.com.vn — link
+      // /pos/fnb* phải điều hướng CROSS-DOMAIN (window.location), router.push
+      // sẽ kẹt ở domain chính → 404 / sai màn.
+      if (link === "/pos/fnb" || link.startsWith("/pos/fnb/")) {
+        window.location.href = posFnbUrl(link.replace("/pos/fnb", ""));
+      } else {
+        router.push(link);
+      }
     }
   };
 
