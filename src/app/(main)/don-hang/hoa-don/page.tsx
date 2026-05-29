@@ -58,6 +58,7 @@ import {
   getInvoices,
   getInvoiceStatuses,
   cancelInvoice,
+  voidCompletedInvoice,
   getInvoiceItems,
   getTenantBusinessInfo,
   duplicateInvoice,
@@ -69,6 +70,15 @@ import { buildInvoicePrintData } from "@/lib/print-templates";
 import { usePrintWithPicker } from "@/lib/hooks/use-print-with-picker";
 import type { Invoice } from "@/lib/types";
 import { Icon } from "@/components/ui/icon";
+import {
+  Dialog,
+  DialogContent,
+  DialogDescription,
+  DialogFooter,
+  DialogHeader,
+  DialogTitle,
+} from "@/components/ui/dialog";
+import { Button } from "@/components/ui/button";
 
 const statusMap: Record<
   Invoice["status"],
@@ -90,11 +100,13 @@ function InvoiceDetail({
   onClose,
   onEdit,
   onDelete,
+  deleteLabel = "Hủy",
 }: {
   invoice: Invoice;
   onClose: () => void;
   onEdit?: () => void;
   onDelete?: () => void;
+  deleteLabel?: string;
 }) {
   const status = statusMap[invoice.status];
 
@@ -128,7 +140,7 @@ function InvoiceDetail({
       onClose={onClose}
       onEdit={onEdit}
       onDelete={onDelete}
-      deleteLabel="Hủy"
+      deleteLabel={deleteLabel}
     >
       <DetailTabs
         tabs={[
@@ -273,6 +285,140 @@ function InvoiceDetail({
   );
 }
 
+/**
+ * VoidInvoiceDialog — Hủy + HOÀN TÁC hóa đơn ĐÃ HOÀN THÀNH (CEO 29/05/2026).
+ *
+ * Khác "Hủy" thường (chỉ áp dụng cho phiếu tạm/chưa hoàn thành — flip status),
+ * dialog này gọi RPC atomic đảo ngược TOÀN BỘ side-effect của hóa đơn đã chốt:
+ * hoàn kho (SKU + NVL theo BOM), hồi lô FIFO, ghi phiếu chi hoàn tiền, xóa công
+ * nợ HĐ, hoàn điểm tích lũy. Bản ghi hóa đơn được GIỮ LẠI (status='cancelled')
+ * để truy vết. Có ô nhập lý do (tùy chọn) ghi vào audit log.
+ */
+function VoidInvoiceDialog({
+  invoice,
+  onClose,
+  onSuccess,
+}: {
+  invoice: Invoice | null;
+  onClose: () => void;
+  onSuccess: () => void;
+}) {
+  const { toast } = useToast();
+  const [reason, setReason] = useState("");
+  const [loading, setLoading] = useState(false);
+
+  // Reset lý do mỗi lần mở cho hóa đơn khác.
+  useEffect(() => {
+    setReason("");
+  }, [invoice?.id]);
+
+  const handleConfirm = async () => {
+    if (!invoice) return;
+    setLoading(true);
+    try {
+      const res = await voidCompletedInvoice({
+        invoiceId: invoice.id,
+        reason: reason.trim(),
+      });
+      toast({
+        title: "Đã hủy & hoàn tác hóa đơn",
+        description: `${invoice.code}: hoàn ${res.reversedStockMovements} dòng kho, chi hoàn ${formatCurrency(res.reversedCash)}.`,
+        variant: "success",
+      });
+      onSuccess();
+      onClose();
+    } catch (err) {
+      toast({
+        title: "Lỗi hủy & hoàn tác",
+        description: err instanceof Error ? err.message : "Vui lòng thử lại",
+        variant: "error",
+      });
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  return (
+    <Dialog
+      open={!!invoice}
+      onOpenChange={(o) => {
+        if (!o && !loading) onClose();
+      }}
+    >
+      <DialogContent className="sm:max-w-md">
+        <DialogHeader>
+          <DialogTitle className="flex items-center gap-2">
+            <Icon name="warning" size={20} className="text-destructive" />
+            Hủy &amp; hoàn tác hóa đơn
+          </DialogTitle>
+          <DialogDescription>
+            Hóa đơn <strong>{invoice?.code}</strong>
+            {invoice ? ` (${formatCurrency(invoice.totalAmount)})` : ""} đã hoàn
+            thành. Hệ thống sẽ tự động hoàn tác toàn bộ tác động:
+          </DialogDescription>
+        </DialogHeader>
+
+        <div className="space-y-3 text-sm">
+          <div className="rounded-lg border border-status-warning/40 bg-status-warning/10 p-3 space-y-1.5">
+            <div className="flex items-center gap-2">
+              <Icon name="inventory_2" size={15} className="text-status-warning" />
+              Hoàn lại tồn kho đã trừ (SKU + nguyên vật liệu theo BOM)
+            </div>
+            <div className="flex items-center gap-2">
+              <Icon name="layers" size={15} className="text-status-warning" />
+              Hồi lại lô đã xuất (FIFO)
+            </div>
+            <div className="flex items-center gap-2">
+              <Icon name="payments" size={15} className="text-status-warning" />
+              Ghi phiếu chi hoàn lại số tiền đã thu
+            </div>
+            <div className="flex items-center gap-2">
+              <Icon name="account_balance_wallet" size={15} className="text-status-warning" />
+              Xóa công nợ của hóa đơn này
+            </div>
+            <div className="flex items-center gap-2">
+              <Icon name="loyalty" size={15} className="text-status-warning" />
+              Hoàn lại điểm tích lũy đã cộng (nếu có)
+            </div>
+          </div>
+
+          <p className="text-xs text-muted-foreground">
+            Bản ghi hóa đơn vẫn được <strong>giữ lại</strong> (trạng thái “Đã
+            hủy”) để truy vết. Thao tác này an toàn với dữ liệu và không thể đảo
+            ngược lần thứ hai.
+          </p>
+
+          <div>
+            <label className="block text-xs font-medium mb-1">
+              Lý do hủy (không bắt buộc)
+            </label>
+            <textarea
+              value={reason}
+              onChange={(e) => setReason(e.target.value)}
+              placeholder="Ví dụ: nhập sai khách, bán nhầm giá, đơn test..."
+              className="w-full text-sm border rounded-lg px-2 py-1.5 min-h-[60px] resize-none bg-white outline-none focus:border-primary"
+              disabled={loading}
+            />
+          </div>
+        </div>
+
+        <DialogFooter>
+          <Button variant="outline" disabled={loading} onClick={onClose}>
+            Đóng
+          </Button>
+          <Button
+            variant="destructive"
+            disabled={loading}
+            onClick={handleConfirm}
+          >
+            {loading ? "Đang hoàn tác..." : "Xác nhận hủy & hoàn tác"}
+          </Button>
+        </DialogFooter>
+      </DialogContent>
+    </Dialog>
+  );
+}
+
 export default function HoaDonPage() {
   const { toast } = useToast();
   const { activeBranchId } = useBranchFilter();
@@ -298,6 +444,8 @@ export default function HoaDonPage() {
   // Sprint UX-1 Stage 4: Audit log dialog + duplicating state
   const [auditDialogTarget, setAuditDialogTarget] = useState<Invoice | null>(null);
   const [duplicating, setDuplicating] = useState(false);
+  // CEO 29/05/2026: Hủy + hoàn tác hóa đơn ĐÃ HOÀN THÀNH (giữ bản ghi).
+  const [voidingItem, setVoidingItem] = useState<Invoice | null>(null);
 
   // Tenant business info — load 1 lần khi page mount để in hóa đơn có
   // MST + địa chỉ pháp lý (HT-2 wire).
@@ -738,9 +886,16 @@ export default function HoaDonPage() {
                   : undefined
               }
               onDelete={
-                invoice.status !== "completed" && invoice.status !== "cancelled"
-                  ? () => setCancellingItem(invoice)
-                  : undefined
+                invoice.status === "completed"
+                  ? txPerms.canCancel
+                    ? () => setVoidingItem(invoice)
+                    : undefined
+                  : invoice.status !== "cancelled"
+                    ? () => setCancellingItem(invoice)
+                    : undefined
+              }
+              deleteLabel={
+                invoice.status === "completed" ? "Hủy & hoàn tác" : "Hủy"
               }
             />
           )}
@@ -794,11 +949,25 @@ export default function HoaDonPage() {
               onPayment: row.debt > 0 ? () => setPayingItem(row) : undefined,
               // Audit log shortcut
               onAuditLog: () => setAuditDialogTarget(row),
-              // Hủy — chỉ chưa completed/cancelled
+              // Hủy — chỉ chưa completed/cancelled (flip status, không reverse)
               onCancel:
                 row.status !== "completed" && row.status !== "cancelled"
                   ? () => setCancellingItem(row)
                   : undefined,
+              // Hủy + HOÀN TÁC — chỉ HĐ đã hoàn thành (giữ bản ghi), gate quyền
+              // POS_RETAIL_VOID. Gọi RPC atomic đảo kho/lô/tiền/nợ/điểm.
+              extraActions:
+                row.status === "completed" && txPerms.canCancel
+                  ? [
+                      {
+                        label: "Hủy & hoàn tác",
+                        icon: <Icon name="cancel" size={16} />,
+                        variant: "destructive" as const,
+                        separator: true,
+                        onClick: () => setVoidingItem(row),
+                      },
+                    ]
+                  : [],
             })
           }
         />
@@ -873,6 +1042,13 @@ export default function HoaDonPage() {
             setCancellingItem(null);
           }
         }}
+      />
+
+      {/* CEO 29/05/2026: Hủy + hoàn tác HĐ đã hoàn thành (giữ bản ghi + audit) */}
+      <VoidInvoiceDialog
+        invoice={voidingItem}
+        onClose={() => setVoidingItem(null)}
+        onSuccess={fetchData}
       />
     </>
   );

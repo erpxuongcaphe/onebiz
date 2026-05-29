@@ -3,7 +3,7 @@
  */
 
 import type { Invoice, QueryParams, QueryResult } from "@/lib/types";
-import { getClient, getPaginationRange, handleError, getCurrentTenantId } from "./base";
+import { getClient, getPaginationRange, handleError, getCurrentTenantId, getCurrentContext } from "./base";
 import { recordAuditLog } from "./audit";
 
 export async function getInvoices(params: QueryParams): Promise<QueryResult<Invoice>> {
@@ -375,6 +375,73 @@ export async function cancelInvoice(id: string): Promise<void> {
     oldData: existing as Record<string, unknown>,
     newData: { status: "cancelled" },
   });
+}
+
+/**
+ * CEO 29/05/2026: Hủy + HOÀN TÁC hóa đơn ĐÃ HOÀN THÀNH (giữ bản ghi).
+ *
+ * Khác cancelInvoice (chỉ flip status cho draft/confirmed), hàm này gọi RPC
+ * atomic `void_completed_invoice_atomic` đảo ngược ĐÚNG side-effect của
+ * checkout: hoàn kho (SKU + NVL theo BOM, mirror bất đối xứng products.stock
+ * vs branch_stock), hồi lô FIFO, ghi phiếu chi hoàn tiền, đảo điểm loyalty,
+ * zero invoices.debt, set status='cancelled'. Tất cả trong 1 transaction —
+ * an toàn với dữ liệu đang chạy.
+ *
+ * Bản ghi invoice + invoice_items + movement gốc được GIỮ NGUYÊN cho audit;
+ * RPC chỉ thêm movement bù (reference_type='invoice_void').
+ */
+export async function voidCompletedInvoice(params: {
+  invoiceId: string;
+  reason: string;
+}): Promise<{
+  reversedCash: number;
+  reversedStockMovements: number;
+}> {
+  const supabase = getClient();
+  const ctx = await getCurrentContext();
+
+  // Snapshot trước để audit (oldData)
+  const { data: before } = await supabase
+    .from("invoices")
+    .select("status, code, customer_id, customer_name, total, paid, debt")
+    .eq("tenant_id", ctx.tenantId)
+    .eq("id", params.invoiceId)
+    .single();
+
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  const { data, error } = await (supabase.rpc as any)("void_completed_invoice_atomic", {
+    p_tenant_id: ctx.tenantId,
+    p_invoice_id: params.invoiceId,
+    p_actor: ctx.userId,
+    p_reason: params.reason,
+    // v1: không gắn phiếu chi hoàn tiền vào ca cụ thể (đây là điều chỉnh kế
+    // toán, không phải sự kiện ngăn kéo POS). Có thể nâng cấp sau nếu cần.
+    p_shift_id: null,
+  });
+  if (error) handleError(error, "voidCompletedInvoice");
+
+  const result = (data ?? {}) as {
+    reversed_cash?: number;
+    reversed_stock_movements?: number;
+  };
+
+  await recordAuditLog({
+    entityType: "invoice",
+    entityId: params.invoiceId,
+    action: "cancel",
+    oldData: (before ?? undefined) as Record<string, unknown> | undefined,
+    newData: {
+      status: "cancelled",
+      mode: "void_reverse",
+      reason: params.reason,
+      result: data,
+    },
+  });
+
+  return {
+    reversedCash: Number(result.reversed_cash ?? 0),
+    reversedStockMovements: Number(result.reversed_stock_movements ?? 0),
+  };
 }
 
 /**

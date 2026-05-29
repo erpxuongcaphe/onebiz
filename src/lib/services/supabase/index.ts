@@ -18,6 +18,7 @@ export {
   getInvoiceStatuses,
   getInvoiceItems,
   cancelInvoice,
+  voidCompletedInvoice,
   updateInvoice,
   getInvoicesForCustomer,
   getReturnsForCustomer,

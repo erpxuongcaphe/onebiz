@@ -146,7 +146,10 @@ function mapInBucket(referenceType: string | null): InBucket {
   )
     return "supplier";
   if (rt === "inventory_check" || rt === "stock_adjustment") return "check";
-  if (rt === "sales_return") return "return";
+  // CEO 29/05/2026: hoàn kho do HỦY hóa đơn completed (movement bù type='in').
+  // Gom vào "hàng trả lại" để tổng Nhập cân với Xuất gốc (net = 0), tránh
+  // lệch tồn đầu kỳ. Xem RPC void_completed_invoice_atomic (migration 00117).
+  if (rt === "sales_return" || rt === "invoice_void") return "return";
   if (rt === "transfer" || rt === "stock_transfer") return "transfer";
   if (rt === "production" || rt === "production_complete") return "production";
   return "other";
