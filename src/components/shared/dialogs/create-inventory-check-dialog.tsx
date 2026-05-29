@@ -11,6 +11,13 @@ import {
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { NumericInput } from "@/components/ui/numeric-input";
+import {
+  Select,
+  SelectTrigger,
+  SelectValue,
+  SelectContent,
+  SelectItem,
+} from "@/components/ui/select";
 import { useToast } from "@/lib/contexts";
 import { getClient, getCurrentContext } from "@/lib/services/supabase/base";
 import { nextEntityCode } from "@/lib/services/supabase/stock-adjustments";
@@ -43,16 +50,19 @@ interface InventoryCheckLine {
   convFactor: number | null;
   /** Tên đơn vị lớn (vd "Thùng"). */
   convBigUnit: string | null;
-  /** Input: số đơn vị lớn (thùng) — chỉ dùng khi có quy cách. */
-  actualBig: number;
-  /** Input: số lẻ (đơn vị nhỏ). */
-  actualSmall: number;
+  // CEO 29/05/2026 (Cách 2): nhập theo 1 đơn vị chọn ở ô thả xuống.
+  /** Đơn vị đang nhập: "base" = đơn vị chính (vd Hộp), "big" = đơn vị lớn (vd Thùng). */
+  inputUnit: "base" | "big";
+  /** Số người dùng gõ, hiểu theo inputUnit đang chọn. */
+  actualInput: number;
 }
 
 /** Tồn thực tế quy về đơn vị cơ bản (nguồn sự thật cho lệch + submit). */
 function lineActual(item: InventoryCheckLine): number {
   if (item.convFactor && item.convFactor > 0) {
-    return item.actualBig * item.convFactor + item.actualSmall;
+    return item.inputUnit === "big"
+      ? item.actualInput * item.convFactor
+      : item.actualInput;
   }
   return item.actualStock;
 }
@@ -156,9 +166,6 @@ export function CreateInventoryCheckDialog({
     const best = pickBestConversion(product.unit, conversions);
     const convFactor = best && best.factor > 0 ? best.factor : null;
     const convBigUnit = best ? best.fromUnit : null;
-    // Khởi tạo thùng/lẻ từ tồn hệ thống (mặc định thực tế = hệ thống).
-    const actualBig = convFactor ? Math.floor(systemStock / convFactor) : 0;
-    const actualSmall = convFactor ? systemStock - actualBig * convFactor : systemStock;
 
     setCheckItems((items) => [
       ...items,
@@ -173,8 +180,9 @@ export function CreateInventoryCheckDialog({
         conversions,
         convFactor,
         convBigUnit,
-        actualBig,
-        actualSmall,
+        // CEO 29/05/2026 (Cách 2): mặc định nhập theo đơn vị chính, số = tồn hệ thống.
+        inputUnit: "base",
+        actualInput: systemStock,
       },
     ]);
     setProductSearch("");
@@ -193,25 +201,30 @@ export function CreateInventoryCheckDialog({
     );
   }
 
-  // CEO 28/05/2026: cập nhật số đơn vị lớn (thùng) khi nhập theo quy cách.
-  function updateActualBig(productId: string, big: number) {
+  // CEO 29/05/2026 (Cách 2): cập nhật số nhập (hiểu theo đơn vị đang chọn).
+  function updateActualInput(productId: string, value: number) {
     setCheckItems((items) =>
       items.map((item) =>
         item.productId === productId
-          ? { ...item, actualBig: Number.isFinite(big) ? Math.max(0, big) : 0 }
+          ? { ...item, actualInput: Number.isFinite(value) ? Math.max(0, value) : 0 }
           : item,
       ),
     );
   }
 
-  // Cập nhật số lẻ (đơn vị nhỏ) khi nhập theo quy cách.
-  function updateActualSmall(productId: string, small: number) {
+  // Đổi đơn vị nhập (đơn vị chính ↔ đơn vị lớn) — tự quy số để TỒN THỰC TẾ
+  // không đổi, tránh nhầm data chỉ vì bấm đổi ô thả xuống.
+  function updateInputUnit(productId: string, nextUnit: "base" | "big") {
     setCheckItems((items) =>
-      items.map((item) =>
-        item.productId === productId
-          ? { ...item, actualSmall: Number.isFinite(small) ? Math.max(0, small) : 0 }
-          : item,
-      ),
+      items.map((item) => {
+        if (item.productId !== productId) return item;
+        if (!item.convFactor || item.convFactor <= 0) return item;
+        if (item.inputUnit === nextUnit) return item;
+        const baseQty =
+          item.inputUnit === "big" ? item.actualInput * item.convFactor : item.actualInput;
+        const nextInput = nextUnit === "big" ? baseQty / item.convFactor : baseQty;
+        return { ...item, inputUnit: nextUnit, actualInput: nextInput };
+      }),
     );
   }
 
@@ -414,7 +427,7 @@ export function CreateInventoryCheckDialog({
             </div>
 
             <div className="overflow-hidden rounded-xl border bg-white shadow-sm">
-              <div className="hidden grid-cols-[minmax(220px,1fr)_60px_148px_232px_120px_150px_40px] gap-2 border-b bg-muted/50 px-3 py-2 text-[11px] font-semibold uppercase tracking-wide text-muted-foreground md:grid">
+              <div className="hidden grid-cols-[minmax(220px,1fr)_60px_148px_268px_120px_150px_40px] gap-3 border-b bg-muted/50 px-3 py-2.5 text-[11px] font-semibold uppercase tracking-wide text-muted-foreground md:grid">
                 <span>Sản phẩm</span>
                 <span className="flex justify-center">ĐVT</span>
                 <span className="flex justify-end">Tồn kho</span>
@@ -449,7 +462,7 @@ export function CreateInventoryCheckDialog({
                     return (
                       <div
                         key={item.productId}
-                        className="grid gap-2 px-3 py-2.5 md:grid-cols-[minmax(220px,1fr)_60px_148px_232px_120px_150px_40px] md:items-center"
+                        className="grid gap-3 px-3 py-3 md:grid-cols-[minmax(220px,1fr)_60px_148px_268px_120px_150px_40px] md:items-center"
                       >
                         {/* Sản phẩm */}
                         <div className="min-w-0 pr-2">
@@ -481,34 +494,33 @@ export function CreateInventoryCheckDialog({
                             Thực tế (nhập)
                           </span>
                           {item.convFactor ? (
-                            <div className="space-y-1">
-                              <div className="grid grid-cols-2 gap-1.5">
-                                <div>
-                                  <NumericInput
-                                    value={item.actualBig}
-                                    onChange={(value) => updateActualBig(item.productId, value ?? 0)}
-                                    min={0}
-                                    decimals={0}
-                                    className="h-8 text-right"
-                                    aria-label={`Số ${item.convBigUnit} ${item.productName}`}
-                                  />
-                                  <div className="mt-0.5 text-center text-[10px] text-muted-foreground">
-                                    {item.convBigUnit}
-                                  </div>
-                                </div>
-                                <div>
-                                  <NumericInput
-                                    value={item.actualSmall}
-                                    onChange={(value) => updateActualSmall(item.productId, value ?? 0)}
-                                    min={0}
-                                    decimals={2}
-                                    className="h-8 text-right"
-                                    aria-label={`Số lẻ ${item.productName}`}
-                                  />
-                                  <div className="mt-0.5 text-center text-[10px] text-muted-foreground">
-                                    {item.unit}
-                                  </div>
-                                </div>
+                            <div className="space-y-1.5">
+                              <div className="grid grid-cols-[100px_minmax(0,1fr)] gap-2">
+                                <Select
+                                  value={item.inputUnit}
+                                  onValueChange={(v) =>
+                                    updateInputUnit(item.productId, v as "base" | "big")
+                                  }
+                                >
+                                  <SelectTrigger
+                                    className="h-9 text-xs"
+                                    aria-label={`Đơn vị nhập ${item.productName}`}
+                                  >
+                                    <SelectValue />
+                                  </SelectTrigger>
+                                  <SelectContent>
+                                    <SelectItem value="base">{item.unit}</SelectItem>
+                                    <SelectItem value="big">{item.convBigUnit}</SelectItem>
+                                  </SelectContent>
+                                </Select>
+                                <NumericInput
+                                  value={item.actualInput}
+                                  onChange={(value) => updateActualInput(item.productId, value ?? 0)}
+                                  min={0}
+                                  decimals={2}
+                                  className="h-9 text-right"
+                                  aria-label={`Thực tế ${item.productName}`}
+                                />
                               </div>
                               <div className="text-right text-[11px] text-muted-foreground">
                                 ={" "}
@@ -522,7 +534,7 @@ export function CreateInventoryCheckDialog({
                               onChange={(value) => updateActualStock(item.productId, value ?? 0)}
                               min={0}
                               decimals={2}
-                              className="h-8 text-right"
+                              className="h-9 text-right"
                               aria-label={`Tồn thực tế ${item.productName}`}
                             />
                           )}
