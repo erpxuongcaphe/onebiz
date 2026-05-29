@@ -26,15 +26,9 @@ import {
   AuditHistoryTab,
 } from "@/components/shared/inline-detail-panel";
 import { ConfirmDialog } from "@/components/shared/dialogs";
-// PERF (CEO 23/05/2026): Lazy-load 3 dialog nặng — chỉ load khi user click
-// "Tạo hóa đơn" / "Sửa" / "Ghi nhận thanh toán". Save ~300KB initial.
-const CreateInvoiceDialog = dynamic(
-  () =>
-    import("@/components/shared/dialogs/create-invoice-dialog").then(
-      (m) => m.CreateInvoiceDialog,
-    ),
-  { ssr: false },
-);
+// PERF (CEO 23/05/2026): Lazy-load 2 dialog nặng — chỉ load khi user click
+// "Sửa" / "Ghi nhận thanh toán". Save ~300KB initial.
+// CEO 29/05/2026: "Tạo mới" hóa đơn nay vào thẳng POS Retail (bỏ popup tạo tay).
 const EditInvoiceDialog = dynamic(
   () =>
     import("@/components/shared/dialogs/edit-invoice-dialog").then(
@@ -436,7 +430,6 @@ export default function HoaDonPage() {
   const [expandedRow, setExpandedRow] = useState<number | null>(null);
   const [starred, setStarred] = useState<Set<string>>(new Set());
 
-  const [createOpen, setCreateOpen] = useState(false);
   const [editingItem, setEditingItem] = useState<Invoice | null>(null);
   const [cancellingItem, setCancellingItem] = useState<Invoice | null>(null);
   const [cancelLoading, setCancelLoading] = useState(false);
@@ -726,9 +719,11 @@ export default function HoaDonPage() {
           actions={[
             {
               label: "Tạo mới",
-              icon: <Icon name="add" size={16} />,
+              icon: <Icon name="point_of_sale" size={16} />,
               variant: "default",
-              onClick: () => setCreateOpen(true),
+              // CEO 29/05/2026: tạo hóa đơn mới = vào thẳng POS Retail (đúng quy
+              // trình bán hàng), không mở popup tạo tay nữa.
+              onClick: () => router.push("/pos"),
             },
           ]}
         />
@@ -972,12 +967,6 @@ export default function HoaDonPage() {
           }
         />
       </ListPageLayout>
-
-      <CreateInvoiceDialog
-        open={createOpen}
-        onOpenChange={setCreateOpen}
-        onSuccess={fetchData}
-      />
 
       <EditInvoiceDialog
         open={!!editingItem}
