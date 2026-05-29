@@ -763,6 +763,37 @@ export async function getDraftOrderById(
  *  4. applyStockDecrement (stock_movements + products.stock)
  *  5. createAutoCashReceipt (if paid > 0)
  */
+/**
+ * CEO 29/05/2026: Tìm đơn nháp (status='draft') theo client_session_id.
+ * Dùng ở POS handleComplete: nếu loadedDraftId chưa kịp set (auto-save vừa tạo
+ * draft) → tra theo session để hoàn tất ĐÚNG đơn nháp đó (completeDraftOrder)
+ * thay vì posCheckout (server sẽ từ chối "still draft" → kẹt nháp).
+ * Best-effort: lỗi → trả null để checkout đi nhánh thường.
+ */
+export async function findDraftIdBySession(sessionId: string): Promise<string | null> {
+  if (!sessionId) return null;
+  try {
+    const supabase = getClient();
+    const tenantId = await getCurrentTenantId();
+    // client_session_id chưa có trong Supabase generated types (migration 00048
+    // chưa regen) → cast any cho query filter.
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    const { data, error } = await (supabase as any)
+      .from("invoices")
+      .select("id")
+      .eq("tenant_id", tenantId)
+      .eq("client_session_id", sessionId)
+      .eq("status", "draft")
+      .order("created_at", { ascending: false })
+      .limit(1)
+      .maybeSingle();
+    if (error) return null;
+    return (data?.id as string) ?? null;
+  } catch {
+    return null;
+  }
+}
+
 export async function completeDraftOrder(
   invoiceId: string,
   payment: {

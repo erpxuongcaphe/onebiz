@@ -949,10 +949,22 @@ export default function HoaDonPage() {
                 row.status !== "completed" && row.status !== "cancelled"
                   ? () => setCancellingItem(row)
                   : undefined,
+              // CEO 29/05/2026: HĐ nháp/đang xử lý → nút mở thẳng POS để hoàn
+              // tất đơn (POS load draft → loadedDraftId set → bấm Thanh toán
+              // là xong, không còn kẹt nháp).
               // Hủy + HOÀN TÁC — chỉ HĐ đã hoàn thành (giữ bản ghi), gate quyền
               // POS_RETAIL_VOID. Gọi RPC atomic đảo kho/lô/tiền/nợ/điểm.
-              extraActions:
-                row.status === "completed" && txPerms.canCancel
+              extraActions: [
+                ...(row.status === "processing"
+                  ? [
+                      {
+                        label: "Hoàn thành đơn (POS)",
+                        icon: <Icon name="point_of_sale" size={16} />,
+                        onClick: () => router.push(`/pos?draftId=${row.id}`),
+                      },
+                    ]
+                  : []),
+                ...(row.status === "completed" && txPerms.canCancel
                   ? [
                       {
                         label: "Hủy & hoàn tác",
@@ -962,7 +974,8 @@ export default function HoaDonPage() {
                         onClick: () => setVoidingItem(row),
                       },
                     ]
-                  : [],
+                  : []),
+              ],
             })
           }
         />

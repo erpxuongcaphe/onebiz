@@ -49,6 +49,7 @@ export {
   listDraftOrders,
   getDraftOrderById,
   completeDraftOrder,
+  findDraftIdBySession,
   deleteDraftOrder,
   completeSalesOrder,
   cancelSalesOrder,

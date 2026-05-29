@@ -26,6 +26,7 @@ import {
   getDraftOrderById,
   deleteDraftOrder,
   completeDraftOrder,
+  findDraftIdBySession,
   getCurrentContext,
   recordDiscountAudit,
   type PosCheckoutInput,
@@ -1438,7 +1439,16 @@ function PosPageInner() {
           ? state.paymentBreakdown.filter((b) => b.amount > 0)
           : undefined;
 
-      if (state.loadedDraftId) {
+      // CEO 29/05/2026: chống KẸT ĐƠN NHÁP. loadedDraftId có thể chưa kịp set
+      // (auto-save vừa tạo nháp trên server cho phiên này) → khi đó tra nháp
+      // theo clientSessionId để hoàn tất ĐÚNG nháp đó, tránh đi nhánh posCheckout
+      // bị server từ chối "still draft" làm đơn kẹt ở nháp.
+      let effectiveDraftId = state.loadedDraftId;
+      if (!effectiveDraftId && networkStatus.isOnline && clientSessionId) {
+        effectiveDraftId = await findDraftIdBySession(clientSessionId);
+      }
+
+      if (effectiveDraftId) {
         // Drafts live server-side already; block offline completion to avoid dupe.
         if (!networkStatus.isOnline) {
           throw new Error(
@@ -1446,7 +1456,7 @@ function PosPageInner() {
           );
         }
         // ── Completing an existing draft → update in-place (no new invoice) ──
-        const result = await completeDraftOrder(state.loadedDraftId, {
+        const result = await completeDraftOrder(effectiveDraftId, {
           method: state.paymentMethod,
           paid,
           tenantId: ctx.tenantId,
@@ -1455,7 +1465,7 @@ function PosPageInner() {
           paymentBreakdown: breakdown,
         });
         invoiceCode = result.invoiceCode;
-        invoiceId = state.loadedDraftId;
+        invoiceId = effectiveDraftId;
       } else {
         // ── Fresh checkout → create new completed invoice ──
         const input: PosCheckoutInput = {
