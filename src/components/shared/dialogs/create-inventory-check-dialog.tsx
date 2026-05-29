@@ -11,13 +11,6 @@ import {
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { NumericInput } from "@/components/ui/numeric-input";
-import {
-  Select,
-  SelectTrigger,
-  SelectValue,
-  SelectContent,
-  SelectItem,
-} from "@/components/ui/select";
 import { useToast } from "@/lib/contexts";
 import { getClient, getCurrentContext } from "@/lib/services/supabase/base";
 import { nextEntityCode } from "@/lib/services/supabase/stock-adjustments";
@@ -57,12 +50,16 @@ interface InventoryCheckLine {
   actualInput: number;
 }
 
-/** Tồn thực tế quy về đơn vị cơ bản (nguồn sự thật cho lệch + submit). */
+/** Tồn thực tế quy về đơn vị cơ bản (nguồn sự thật cho lệch + submit).
+ * Làm tròn 4 chữ số để khử sai số dấu phẩy động khi quy đổi qua lại
+ * (vd 224.58 ÷ 12 × 12 = 224.5799… → tránh lệch "-0" giả). */
 function lineActual(item: InventoryCheckLine): number {
   if (item.convFactor && item.convFactor > 0) {
-    return item.inputUnit === "big"
-      ? item.actualInput * item.convFactor
-      : item.actualInput;
+    const raw =
+      item.inputUnit === "big"
+        ? item.actualInput * item.convFactor
+        : item.actualInput;
+    return Math.round(raw * 10000) / 10000;
   }
   return item.actualStock;
 }
@@ -450,7 +447,9 @@ export function CreateInventoryCheckDialog({
               ) : (
                 <div className="divide-y">
                   {checkItems.map((item) => {
-                    const diff = lineActual(item) - item.systemStock;
+                    // Làm tròn + chuẩn hoá -0 → 0 (tránh hiện "-0" khi vừa đổi đơn vị).
+                    const diff =
+                      Math.round((lineActual(item) - item.systemStock) * 10000) / 10000 || 0;
                     const diffValue = diff * item.costPrice;
                     const diffColor =
                       diff === 0
@@ -496,23 +495,17 @@ export function CreateInventoryCheckDialog({
                           {item.convFactor ? (
                             <div className="space-y-1.5">
                               <div className="grid grid-cols-[100px_minmax(0,1fr)] gap-2">
-                                <Select
+                                <select
                                   value={item.inputUnit}
-                                  onValueChange={(v) =>
-                                    updateInputUnit(item.productId, v as "base" | "big")
+                                  onChange={(e) =>
+                                    updateInputUnit(item.productId, e.target.value as "base" | "big")
                                   }
+                                  aria-label={`Đơn vị nhập ${item.productName}`}
+                                  className="h-9 rounded-lg border border-input bg-white px-2 text-xs font-medium text-foreground outline-none focus-visible:border-ring focus-visible:ring-3 focus-visible:ring-ring/50"
                                 >
-                                  <SelectTrigger
-                                    className="h-9 text-xs"
-                                    aria-label={`Đơn vị nhập ${item.productName}`}
-                                  >
-                                    <SelectValue />
-                                  </SelectTrigger>
-                                  <SelectContent>
-                                    <SelectItem value="base">{item.unit}</SelectItem>
-                                    <SelectItem value="big">{item.convBigUnit}</SelectItem>
-                                  </SelectContent>
-                                </Select>
+                                  <option value="base">{item.unit}</option>
+                                  <option value="big">{item.convBigUnit}</option>
+                                </select>
                                 <NumericInput
                                   value={item.actualInput}
                                   onChange={(value) => updateActualInput(item.productId, value ?? 0)}
