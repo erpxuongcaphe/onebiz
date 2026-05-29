@@ -14,6 +14,10 @@ import { NumericInput } from "@/components/ui/numeric-input";
 import { useToast } from "@/lib/contexts";
 import { getClient, getCurrentContext } from "@/lib/services/supabase/base";
 import { nextEntityCode } from "@/lib/services/supabase/stock-adjustments";
+import { getUOMConversions } from "@/lib/services/supabase/uom";
+import { pickBestConversion } from "@/lib/format-uom";
+import { StockWithConversion } from "@/components/shared/stock-with-conversion";
+import type { UOMConversion } from "@/lib/types";
 import type { Database } from "@/lib/supabase/types";
 import { Icon } from "@/components/ui/icon";
 import { formatNumber } from "@/lib/format";
@@ -30,7 +34,26 @@ interface InventoryCheckLine {
   productName: string;
   unit: string;
   systemStock: number;
+  /** Tồn thực tế theo ĐƠN VỊ CƠ BẢN — dùng khi SP KHÔNG có quy cách. */
   actualStock: number;
+  // CEO 28/05/2026: quy cách (UOM). Nếu có → nhập theo thùng + lẻ.
+  conversions: UOMConversion[];
+  /** Số đơn vị nhỏ trong 1 đơn vị lớn (vd 1 Thùng = 12 Hộp → 12). null = không quy cách. */
+  convFactor: number | null;
+  /** Tên đơn vị lớn (vd "Thùng"). */
+  convBigUnit: string | null;
+  /** Input: số đơn vị lớn (thùng) — chỉ dùng khi có quy cách. */
+  actualBig: number;
+  /** Input: số lẻ (đơn vị nhỏ). */
+  actualSmall: number;
+}
+
+/** Tồn thực tế quy về đơn vị cơ bản (nguồn sự thật cho lệch + submit). */
+function lineActual(item: InventoryCheckLine): number {
+  if (item.convFactor && item.convFactor > 0) {
+    return item.actualBig * item.convFactor + item.actualSmall;
+  }
+  return item.actualStock;
 }
 
 interface CreateInventoryCheckDialogProps {
@@ -121,6 +144,21 @@ export function CreateInventoryCheckDialog({
     }
 
     const systemStock = Number(branchStock?.quantity ?? 0);
+
+    // CEO 28/05/2026: load quy cách để cho nhập theo thùng + lẻ.
+    let conversions: UOMConversion[] = [];
+    try {
+      conversions = await getUOMConversions(product.id);
+    } catch {
+      conversions = [];
+    }
+    const best = pickBestConversion(product.unit, conversions);
+    const convFactor = best && best.factor > 0 ? best.factor : null;
+    const convBigUnit = best ? best.fromUnit : null;
+    // Khởi tạo thùng/lẻ từ tồn hệ thống (mặc định thực tế = hệ thống).
+    const actualBig = convFactor ? Math.floor(systemStock / convFactor) : 0;
+    const actualSmall = convFactor ? systemStock - actualBig * convFactor : systemStock;
+
     setCheckItems((items) => [
       ...items,
       {
@@ -130,6 +168,11 @@ export function CreateInventoryCheckDialog({
         unit: product.unit,
         systemStock,
         actualStock: systemStock,
+        conversions,
+        convFactor,
+        convBigUnit,
+        actualBig,
+        actualSmall,
       },
     ]);
     setProductSearch("");
@@ -148,6 +191,28 @@ export function CreateInventoryCheckDialog({
     );
   }
 
+  // CEO 28/05/2026: cập nhật số đơn vị lớn (thùng) khi nhập theo quy cách.
+  function updateActualBig(productId: string, big: number) {
+    setCheckItems((items) =>
+      items.map((item) =>
+        item.productId === productId
+          ? { ...item, actualBig: Number.isFinite(big) ? Math.max(0, big) : 0 }
+          : item,
+      ),
+    );
+  }
+
+  // Cập nhật số lẻ (đơn vị nhỏ) khi nhập theo quy cách.
+  function updateActualSmall(productId: string, small: number) {
+    setCheckItems((items) =>
+      items.map((item) =>
+        item.productId === productId
+          ? { ...item, actualSmall: Number.isFinite(small) ? Math.max(0, small) : 0 }
+          : item,
+      ),
+    );
+  }
+
   function removeProduct(productId: string) {
     setCheckItems((items) => items.filter((item) => item.productId !== productId));
   }
@@ -158,21 +223,21 @@ export function CreateInventoryCheckDialog({
   );
 
   const totalActualStock = useMemo(
-    () => checkItems.reduce((sum, item) => sum + item.actualStock, 0),
+    () => checkItems.reduce((sum, item) => sum + lineActual(item), 0),
     [checkItems],
   );
 
   const totalDiff = totalActualStock - totalSystemStock;
 
-  const increaseLines = checkItems.filter((item) => item.actualStock > item.systemStock).length;
-  const decreaseLines = checkItems.filter((item) => item.actualStock < item.systemStock).length;
+  const increaseLines = checkItems.filter((item) => lineActual(item) > item.systemStock).length;
+  const decreaseLines = checkItems.filter((item) => lineActual(item) < item.systemStock).length;
 
   function validate(): boolean {
     const newErrors: Record<string, string> = {};
     if (checkItems.length === 0) {
       newErrors.items = "Vui lòng thêm ít nhất một sản phẩm kiểm kho";
     }
-    if (checkItems.some((item) => !Number.isFinite(item.actualStock) || item.actualStock < 0)) {
+    if (checkItems.some((item) => !Number.isFinite(lineActual(item)) || lineActual(item) < 0)) {
       newErrors.items = "Số thực tế phải là số không âm";
     }
     setErrors(newErrors);
@@ -206,14 +271,18 @@ export function CreateInventoryCheckDialog({
 
       if (checkErr) throw new Error(checkErr.message);
 
-      const itemsPayload = checkItems.map((item) => ({
-        check_id: checkRow.id,
-        product_id: item.productId,
-        product_name: item.productName,
-        system_stock: item.systemStock,
-        actual_stock: item.actualStock,
-        difference: item.actualStock - item.systemStock,
-      }));
+      const itemsPayload = checkItems.map((item) => {
+        // CEO 28/05/2026: tồn thực tế quy về đơn vị cơ bản (thùng×factor + lẻ).
+        const actual = lineActual(item);
+        return {
+          check_id: checkRow.id,
+          product_id: item.productId,
+          product_name: item.productName,
+          system_stock: item.systemStock,
+          actual_stock: actual,
+          difference: actual - item.systemStock,
+        };
+      });
 
       // eslint-disable-next-line @typescript-eslint/no-explicit-any
       const { error: itemsErr } = await (supabase as any)
@@ -335,11 +404,11 @@ export function CreateInventoryCheckDialog({
             </div>
 
             <div className="overflow-hidden rounded-xl border bg-white shadow-sm">
-              <div className="hidden grid-cols-[minmax(300px,1fr)_90px_120px_120px_120px_44px] gap-2 border-b bg-muted/50 px-3 py-2 text-xs font-semibold uppercase text-muted-foreground md:grid">
+              <div className="hidden grid-cols-[minmax(240px,1fr)_72px_160px_220px_110px_44px] gap-2 border-b bg-muted/50 px-3 py-2 text-xs font-semibold uppercase text-muted-foreground md:grid">
                 <span>Sản phẩm</span>
                 <span className="flex justify-center">ĐVT</span>
                 <span className="flex justify-end">Sổ kho</span>
-                <span className="flex justify-end">Thực tế</span>
+                <span className="flex justify-end">Thực tế (nhập)</span>
                 <span className="flex justify-end">Lệch</span>
                 <span />
               </div>
@@ -357,11 +426,11 @@ export function CreateInventoryCheckDialog({
               ) : (
                 <div className="divide-y">
                   {checkItems.map((item) => {
-                    const diff = item.actualStock - item.systemStock;
+                    const diff = lineActual(item) - item.systemStock;
                     return (
                       <div
                         key={item.productId}
-                        className="grid gap-2 px-3 py-2.5 md:grid-cols-[minmax(300px,1fr)_90px_120px_120px_120px_44px] md:items-center"
+                        className="grid gap-2 px-3 py-2.5 md:grid-cols-[minmax(240px,1fr)_72px_160px_220px_110px_44px] md:items-center"
                       >
                         <div className="min-w-0">
                           <div className="truncate text-sm font-semibold">{item.productName}</div>
@@ -373,16 +442,60 @@ export function CreateInventoryCheckDialog({
                           </span>
                         </div>
                         <div className="text-right text-sm tabular-nums text-muted-foreground">
-                          {formatNumber(item.systemStock)}
+                          <StockWithConversion
+                            quantity={item.systemStock}
+                            unit={item.unit}
+                            conversions={item.conversions}
+                            variant="inline"
+                            hideUnit
+                          />
                         </div>
-                        <NumericInput
-                          value={item.actualStock}
-                          onChange={(value) => updateActualStock(item.productId, value ?? 0)}
-                          min={0}
-                          decimals={2}
-                          className="h-8 text-right"
-                          aria-label={`Tồn thực tế ${item.productName}`}
-                        />
+                        {item.convFactor ? (
+                          <div className="space-y-1">
+                            <div className="flex items-center gap-1">
+                              <div className="flex flex-1 items-center gap-1">
+                                <NumericInput
+                                  value={item.actualBig}
+                                  onChange={(value) => updateActualBig(item.productId, value ?? 0)}
+                                  min={0}
+                                  decimals={0}
+                                  className="h-8 text-right"
+                                  aria-label={`Số ${item.convBigUnit} ${item.productName}`}
+                                />
+                                <span className="w-9 shrink-0 truncate text-[11px] text-muted-foreground">
+                                  {item.convBigUnit}
+                                </span>
+                              </div>
+                              <div className="flex flex-1 items-center gap-1">
+                                <NumericInput
+                                  value={item.actualSmall}
+                                  onChange={(value) => updateActualSmall(item.productId, value ?? 0)}
+                                  min={0}
+                                  decimals={2}
+                                  className="h-8 text-right"
+                                  aria-label={`Số lẻ ${item.productName}`}
+                                />
+                                <span className="w-9 shrink-0 truncate text-[11px] text-muted-foreground">
+                                  {item.unit}
+                                </span>
+                              </div>
+                            </div>
+                            <div className="text-right text-[11px] text-muted-foreground">
+                              ={" "}
+                              <b className="tabular-nums text-foreground">{formatNumber(lineActual(item))}</b>{" "}
+                              {item.unit}
+                            </div>
+                          </div>
+                        ) : (
+                          <NumericInput
+                            value={item.actualStock}
+                            onChange={(value) => updateActualStock(item.productId, value ?? 0)}
+                            min={0}
+                            decimals={2}
+                            className="h-8 text-right"
+                            aria-label={`Tồn thực tế ${item.productName}`}
+                          />
+                        )}
                         <div
                           className={`text-right text-sm font-bold tabular-nums ${
                             diff === 0
