@@ -21,6 +21,7 @@ import {
 import { formatCurrency, formatNumber } from "@/lib/format";
 import { useToast } from "@/lib/contexts";
 import { getClient, getCurrentContext } from "@/lib/services/supabase/base";
+import { receivePurchaseOrder } from "@/lib/services/supabase/purchase-orders";
 import type { Database } from "@/lib/supabase/types";
 import { Icon } from "@/components/ui/icon";
 
@@ -198,7 +199,10 @@ export function CreatePurchaseOrderDialog({
   const [otherCost, setOtherCost] = useState(0);
   const [notes, setNotes] = useState("");
   const [errors, setErrors] = useState<Record<string, string>>({});
-  const [saving, setSaving] = useState(false);
+  // CEO 29/05/2026: 2 nút lưu — "draft" (Lưu tạm) | "receive" (Nhập kho ngay).
+  // Lưu nút nào đang chạy để hiện spinner đúng chỗ.
+  const [savingMode, setSavingMode] = useState<"draft" | "receive" | null>(null);
+  const saving = savingMode !== null;
   const [currentTenantId, setCurrentTenantId] = useState<string | null>(null);
 
   useEffect(() => {
@@ -259,7 +263,7 @@ export function CreatePurchaseOrderDialog({
     setShowProductDropdown(false);
     setFilteredProducts([]);
     setErrors({});
-    setSaving(false);
+    setSavingMode(null);
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [open]);
 
@@ -370,9 +374,10 @@ export function CreatePurchaseOrderDialog({
     return Object.keys(newErrors).length === 0;
   }
 
-  async function handleSave() {
+  async function handleSave(mode: "draft" | "receive") {
     if (!validate()) return;
-    setSaving(true);
+    setSavingMode(mode);
+    let createdPoId: string | null = null;
     try {
       const supabase = getClient();
       const ctx = await getCurrentContext();
@@ -452,21 +457,57 @@ export function CreatePurchaseOrderDialog({
         if (itemsErr) throw new Error(itemsErr.message);
       }
 
+      // "Nhập kho ngay": phiếu + dòng hàng đã lưu xong (vẫn 'draft'), giờ nâng
+      // 'ordered' rồi gọi RPC atomic cộng tồn (đã test, all-or-nothing).
+      // Làm sau cùng → nếu lỗi nửa chừng, phiếu chỉ ở 'draft'/'ordered', KHÔNG sai tồn.
+      if (mode === "receive") {
+        createdPoId = poId; // phiếu đã tồn tại — dùng cho thông báo nếu cộng tồn lỗi
+        const { error: stErr } = await supabase
+          .from("purchase_orders")
+          .update({ status: "ordered" as const })
+          .eq("tenant_id", ctx.tenantId)
+          .eq("id", poId);
+        if (stErr) throw new Error(stErr.message);
+        await receivePurchaseOrder(poId);
+      }
+
       onOpenChange(false);
-      toast({
-        title: isEdit ? "Cập nhật phiếu nhập thành công" : "Tạo phiếu nhập hàng thành công",
-        description: isEdit ? `Đã cập nhật ${code}` : `Đã tạo phiếu nhập ${code}`,
-        variant: "success",
-      });
+      if (mode === "receive") {
+        toast({
+          title: "Đã nhập kho — đã cộng tồn",
+          description: `${code}: đã cộng tồn kho cho ${formatNumber(items.length)} mặt hàng.`,
+          variant: "success",
+        });
+      } else {
+        toast({
+          title: isEdit ? "Đã lưu thay đổi" : "Đã lưu phiếu tạm",
+          description: isEdit
+            ? `Đã cập nhật ${code} — phiếu vẫn ở dạng chờ, CHƯA cộng tồn.`
+            : `${code}: phiếu chờ, CHƯA cộng tồn kho.`,
+          variant: "success",
+        });
+      }
       onSuccess?.();
     } catch (err) {
-      toast({
-        title: isEdit ? "Lỗi cập nhật phiếu nhập" : "Lỗi tạo phiếu nhập hàng",
-        description: err instanceof Error ? err.message : "Vui lòng thử lại",
-        variant: "error",
-      });
+      // Phiếu đã tạo (ordered) nhưng RPC cộng tồn lỗi → phiếu nằm ở "Đã đặt hàng",
+      // KHÔNG mất data. Báo rõ để vào danh sách bấm "Hoàn thành nhập" thử lại.
+      if (mode === "receive" && createdPoId) {
+        onOpenChange(false);
+        onSuccess?.();
+        toast({
+          title: "Phiếu đã tạo nhưng CHƯA cộng tồn",
+          description: `${code} đang ở trạng thái "Đã đặt hàng". Vào danh sách → mở phiếu → bấm "Hoàn thành nhập" để cộng tồn. (${err instanceof Error ? err.message : "lỗi không xác định"})`,
+          variant: "error",
+        });
+      } else {
+        toast({
+          title: mode === "receive" ? "Lỗi nhập kho" : isEdit ? "Lỗi cập nhật phiếu" : "Lỗi lưu phiếu tạm",
+          description: err instanceof Error ? err.message : "Vui lòng thử lại",
+          variant: "error",
+        });
+      }
     } finally {
-      setSaving(false);
+      setSavingMode(null);
     }
   }
 
@@ -752,13 +793,38 @@ export function CreatePurchaseOrderDialog({
               <FooterMetric label="Chi phí" value={formatCurrency(purchaseCost)} />
               <FooterMetric label="Tổng cộng" value={formatCurrency(total)} strong />
             </div>
-            <div className="flex justify-end gap-2">
-              <Button variant="outline" onClick={() => onOpenChange(false)}>
+            <div className="flex flex-wrap items-center justify-end gap-2">
+              <Button variant="ghost" onClick={() => onOpenChange(false)} disabled={saving}>
                 Hủy
               </Button>
-              <Button onClick={handleSave} disabled={saving}>
-                {saving && <Icon name="progress_activity" size={16} className="mr-2 animate-spin" />}
-                {isEdit ? "Lưu thay đổi" : "Tạo phiếu nhập"}
+              {/* Lưu tạm — phiếu CHỜ, KHÔNG cộng tồn. Đặt NCC trước, hàng về sau. */}
+              <Button
+                variant="outline"
+                onClick={() => handleSave("draft")}
+                disabled={saving}
+                title="Giữ phiếu chờ — CHƯA cộng tồn kho. Dùng khi đặt nhà cung cấp trước, hàng về sau."
+                className="h-11 border-status-warning/60 px-4 font-semibold text-status-warning hover:bg-status-warning/10"
+              >
+                {savingMode === "draft" ? (
+                  <Icon name="progress_activity" size={18} className="mr-2 animate-spin" />
+                ) : (
+                  <Icon name="schedule" size={18} className="mr-2" />
+                )}
+                {isEdit ? "Lưu thay đổi (chờ)" : "Lưu tạm"}
+              </Button>
+              {/* Nhập kho ngay — tạo phiếu + CỘNG TỒN liền. Hàng đã về tới kho. */}
+              <Button
+                onClick={() => handleSave("receive")}
+                disabled={saving}
+                title="Tạo phiếu và CỘNG TỒN KHO ngay. Dùng khi hàng đã về tới kho."
+                className="h-11 bg-status-success px-5 font-semibold text-white shadow-sm hover:bg-status-success/90"
+              >
+                {savingMode === "receive" ? (
+                  <Icon name="progress_activity" size={18} className="mr-2 animate-spin" />
+                ) : (
+                  <Icon name="inventory_2" size={18} className="mr-2" />
+                )}
+                Nhập kho ngay
               </Button>
             </div>
           </div>
