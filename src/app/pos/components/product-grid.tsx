@@ -54,9 +54,9 @@ export function ProductGrid({ searchQuery, onAddProduct }: ProductGridProps) {
         if (catId !== "all") filters.category = catId;
         const result = await getProducts({
           page: 0,
-          // CEO 29/05/2026: nâng 50 → 500 để nhóm nhiều SKU (vd Dụng cụ 66 mã)
-          // không bị cắt mất phần dư trên lưới POS.
-          pageSize: 500,
+          // CEO 29/05/2026: KHÔNG giới hạn số SKU trên POS — nạp toàn bộ SP của
+          // nhóm (lưới có tab nhóm + ô tìm để cashier điều hướng nhanh).
+          pageSize: 100000,
           search: search || undefined,
           sortBy: "name",
           sortOrder: "asc",
