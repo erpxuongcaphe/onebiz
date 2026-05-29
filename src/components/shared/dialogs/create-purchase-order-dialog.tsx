@@ -299,12 +299,16 @@ export function CreatePurchaseOrderDialog({
     const timer = setTimeout(async () => {
       const supabase = getClient();
       const ctx = await getCurrentContext();
+      // CEO 29/05/2026: Nhập hàng (mua từ NCC ngoài) chỉ là NVL — KHÔNG hiện
+      // SKU (làm từ NVL, không mua ngoài). FnB lấy SKU từ Retail qua "Bán nội
+      // bộ", không qua phiếu nhập. `is not true` lấy NVL + hàng bán-lại (no BOM).
       const { data } = await supabase
         .from("products")
         .select("id, code, name, unit, cost_price, vat_rate")
         .or(`name.ilike.%${productSearch}%,code.ilike.%${productSearch}%`)
         .eq("tenant_id", currentTenantId ?? ctx.tenantId)
         .eq("is_active", true)
+        .not("has_bom", "is", true)
         .limit(10);
 
       setFilteredProducts((data ?? []).map((p) => ({
@@ -588,7 +592,10 @@ export function CreatePurchaseOrderDialog({
 
               <section className="rounded-xl border bg-white p-3 shadow-sm">
                 <div className="mb-2 flex items-center justify-between gap-2">
-                  <h3 className="text-sm font-semibold">Dòng hàng nhập</h3>
+                  <div>
+                    <h3 className="text-sm font-semibold">Dòng hàng nhập</h3>
+                    <p className="text-[11px] text-muted-foreground">Chỉ hiện NVL (mua ngoài) — SKU lấy từ Retail qua Bán nội bộ</p>
+                  </div>
                   <span className="text-xs text-muted-foreground">{formatNumber(items.length)} dòng</span>
                 </div>
                 <div className="relative">
@@ -610,7 +617,7 @@ export function CreatePurchaseOrderDialog({
                     <div className="absolute z-30 mt-1 max-h-56 w-full overflow-y-auto rounded-lg border bg-popover shadow-lg">
                       {filteredProducts.length === 0 ? (
                         <div className="px-3 py-2 text-sm text-muted-foreground">
-                          Không tìm thấy sản phẩm
+                          Không tìm thấy NVL (phiếu nhập chỉ mua NVL, không gồm SKU)
                         </div>
                       ) : (
                         filteredProducts.map((p) => (
