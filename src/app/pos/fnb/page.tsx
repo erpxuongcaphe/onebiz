@@ -985,9 +985,9 @@ function FnbPosPageInner() {
   // ── Send to kitchen (offline-aware) ──
   // - Nếu tab chưa có kitchenOrderId → tạo đơn bếp mới (sendToKitchen)
   // - Nếu tab đã có kitchenOrderId → gửi bổ sung (addItemsToExistingOrder)
-  const handleSendToKitchen = useCallback(async () => {
+  const handleSendToKitchen = useCallback(async (): Promise<string | null> => {
     const tab = pos.activeTab;
-    if (!tab || tab.lines.length === 0) return;
+    if (!tab || tab.lines.length === 0) return null;
 
     const mappedItems = tab.lines.map((l) => ({
       productId: l.productId,
@@ -1065,7 +1065,7 @@ function FnbPosPageInner() {
             variant: "success",
           });
         }
-        return;
+        return tab.kitchenOrderId ?? null;
       }
 
       // ── Tạo đơn bếp mới ──
@@ -1130,9 +1130,11 @@ function FnbPosPageInner() {
       } else {
         toast({ title: "Đã gửi bếp", description: `Đơn ${result.orderNumber ?? ""} đã gửi bếp thành công`, variant: "success" });
       }
+      return result.kitchenOrderId ?? null;
     } catch (err) {
       hapticError();
       toast({ title: "Gửi bếp thất bại", description: (err as Error).message, variant: "error" });
+      return null;
     }
   }, [pos, tenantId, branchId, userId, toast, settings, user, networkStatus.isOnline]);
 
@@ -1268,13 +1270,22 @@ function FnbPosPageInner() {
   const handlePayment = useCallback(
     async (payload: FnbPaymentConfirmPayload) => {
       const tab = pos.activeTab;
-      if (!tab?.kitchenOrderId && tab && tab.lines.length > 0) {
-        // Direct payment without sending to kitchen first — send now
-        await handleSendToKitchen();
+      // CEO 29/05/2026: lấy kitchenOrderId TRỰC TIẾP từ giá trị handleSendToKitchen
+      // trả về — KHÔNG đọc lại pos.activeTab (closure cũ chưa cập nhật state sau
+      // await → trước đây koId undefined → bấm Thanh toán đơ im lặng, mất đơn).
+      let koId = tab?.kitchenOrderId ?? null;
+      if (!koId && tab && tab.lines.length > 0) {
+        koId = await handleSendToKitchen();
       }
 
-      const koId = pos.activeTab?.kitchenOrderId;
-      if (!koId) return;
+      if (!koId) {
+        toast({
+          title: "Chưa thể thanh toán",
+          description: "Đơn chưa gửi được bếp hoặc chưa có món — vui lòng thử lại.",
+          variant: "error",
+        });
+        return;
+      }
 
       try {
         const tab = pos.activeTab;

@@ -106,22 +106,41 @@ function formatElapsed(createdAt: string): string {
 }
 
 function getOrderStage(order: KdsOrder): Exclude<FilterTab, "all"> {
+  // CEO 29/05/2026: ưu tiên TRẠNG THÁI MÓN (chi tiết) khi đơn có món — tránh
+  // đơn status='ready' nhưng còn món đang pha bị đẩy nhầm vào lane "Sẵn sàng"
+  // (nút Xong khoá → mâu thuẫn). Chỉ dùng order.status khi chưa có món nào động.
+  const items = order.items ?? [];
+  if (items.length > 0) {
+    if (items.every((item) => item.status === "ready")) return "ready";
+    if (items.some((item) => item.status === "preparing" || item.status === "ready")) {
+      return "preparing";
+    }
+  }
   if (order.status === "ready") return "ready";
   if (order.status === "preparing") return "preparing";
-  if (order.items.length > 0 && order.items.every((item) => item.status === "ready")) {
-    return "ready";
-  }
-  if (order.items.some((item) => item.status === "preparing" || item.status === "ready")) {
-    return "preparing";
-  }
   return "pending";
 }
 
 // ── Sound helper ──
+// CEO 29/05/2026: dùng 1 AudioContext dùng chung (lazy) thay vì tạo mới mỗi
+// lần beep — trước đây mỗi beep `new AudioContext()` → rò rỉ, trình duyệt chặn
+// sau ~6 context → chuông báo đơn mới CHẾT.
+let sharedAudioCtx: AudioContext | null = null;
+function getAudioCtx(): AudioContext | null {
+  try {
+    if (typeof AudioContext === "undefined") return null;
+    if (!sharedAudioCtx) sharedAudioCtx = new AudioContext();
+    if (sharedAudioCtx.state === "suspended") void sharedAudioCtx.resume().catch(() => {});
+    return sharedAudioCtx;
+  } catch {
+    return null;
+  }
+}
 
 function playBeep(freq = 880, duration = 0.15, gain = 0.3) {
   try {
-    const ctx = new AudioContext();
+    const ctx = getAudioCtx();
+    if (!ctx) return;
     const osc = ctx.createOscillator();
     const g = ctx.createGain();
     osc.connect(g);
@@ -380,8 +399,7 @@ function KdsPageInner() {
       if (next === item.status) return;
 
       hapticTap();
-      await updateKitchenItemStatus(item.id, next);
-
+      // Optimistic UI trước cho phản hồi tức thì.
       setOrders((prev) =>
         prev.map((o) =>
           o.id === item.kitchenOrderId
@@ -394,20 +412,43 @@ function KdsPageInner() {
             : o
         )
       );
+      // CEO 29/05/2026: bọc try/catch + rollback — mất mạng giữa chừng (wifi
+      // bếp hay rớt) trước đây làm UI lệch DB, 30s sau tự revert → tưởng mất tay.
+      try {
+        await updateKitchenItemStatus(item.id, next);
+      } catch (err) {
+        fetchOrders(); // rollback về đúng trạng thái server
+        toast({
+          title: "Không cập nhật được món",
+          description: err instanceof Error ? err.message : "Lỗi không xác định",
+          variant: "error",
+        });
+      }
     },
-    []
+    [fetchOrders, toast]
   );
 
   // ── Mark order served ──
   const handleServed = useCallback(async (orderId: string) => {
     hapticSuccess();
-    await updateKitchenOrderStatus(orderId, "served");
+    // Optimistic UI trước.
     setOrders((prev) =>
       prev.map((o) =>
         o.id === orderId ? { ...o, status: "served" as KitchenOrderStatus } : o
       )
     );
-  }, []);
+    // CEO 29/05/2026: bọc try/catch + rollback — mất mạng → UI lệch DB.
+    try {
+      await updateKitchenOrderStatus(orderId, "served");
+    } catch (err) {
+      fetchOrders();
+      toast({
+        title: "Không đánh dấu phục vụ được",
+        description: err instanceof Error ? err.message : "Lỗi không xác định",
+        variant: "error",
+      });
+    }
+  }, [fetchOrders, toast]);
 
   // ── Mark all items in an order as ready (bulk action) ──
   const handleMarkAllReady = useCallback(
@@ -853,7 +894,25 @@ function KdsPageInner() {
 
       {/* ── KDS Board ── */}
       <div className="flex-1 overflow-auto bg-background p-3 md:p-5">
-        {filter === "all" ? (
+        {filtered.length === 0 ? (
+          /* CEO 29/05/2026: empty-state TỔNG THỂ — 0 đơn thì hiện 1 trạng thái
+             "bếp rảnh" gọn giữa màn, thay vì để 3 ô rỗng gần giống nhau trông
+             như màn hình bị hỏng. Icon trung tính (không phải ✓ xanh gây hiểu
+             nhầm "đã xong hết"). */
+          <div className="flex h-full min-h-[60vh] flex-col items-center justify-center px-6 text-center">
+            <div className="flex size-20 items-center justify-center rounded-full bg-surface-container text-muted-foreground">
+              <Icon name="restaurant" size={44} />
+            </div>
+            <p className="mt-4 text-xl font-semibold text-foreground">
+              {filter === "all" ? "Bếp đang rảnh" : "Không có đơn ở luồng này"}
+            </p>
+            <p className="mt-1 text-sm text-muted-foreground">
+              {filter === "all"
+                ? "Chưa có đơn nào — đơn mới sẽ tự hiện ở đây."
+                : "Thử chọn luồng khác hoặc xem Tất cả."}
+            </p>
+          </div>
+        ) : filter === "all" ? (
           /* Responsive Sprint A4 (CEO 25/05/2026):
              Trước đây grid-cols-1 (mobile) → lg:grid-cols-3 (desktop). Khoảng
              768-1023px (iPad treo bếp) bị single-col → mỗi lane chiếm full
@@ -960,7 +1019,8 @@ function KdsLane({
       >
         {orders.length === 0 ? (
           <div className="flex min-h-[180px] flex-col items-center justify-center rounded-lg border border-dashed border-border bg-background/70 p-4 text-center">
-            <Icon name="check_circle" size={28} className="text-status-success" />
+            {/* CEO 29/05/2026: icon trung tính (không phải ✓ xanh gây hiểu nhầm "đã xong hết"). */}
+            <Icon name="inbox" size={28} className="text-muted-foreground" />
             <p className="mt-2 text-sm font-semibold text-foreground">Đang trống</p>
             <p className="mt-1 text-xs text-muted-foreground">Chưa có đơn trong luồng này.</p>
           </div>
