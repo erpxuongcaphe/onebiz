@@ -22,6 +22,7 @@ import { formatCurrency, formatNumber } from "@/lib/format";
 import { useToast } from "@/lib/contexts";
 import { getClient, getCurrentContext } from "@/lib/services/supabase/base";
 import { receivePurchaseOrder } from "@/lib/services/supabase/purchase-orders";
+import { nextEntityCode } from "@/lib/services/supabase/stock-adjustments";
 import type { Database } from "@/lib/supabase/types";
 import { Icon } from "@/components/ui/icon";
 
@@ -250,7 +251,12 @@ export function CreatePurchaseOrderDialog({
         }
       })();
     } else {
-      setCode(generatePurchaseOrderCode());
+      // CEO 29/05/2026: mã phiếu nhập chạy số tuần tự qua bộ đếm (prefix PO),
+      // thay cho random cũ. Fallback random chỉ khi RPC lỗi (hiếm).
+      setCode("Đang tạo mã...");
+      nextEntityCode("purchase_order")
+        .then((c) => setCode(c))
+        .catch(() => setCode(generatePurchaseOrderCode()));
       setSupplierSearch("");
       setSelectedSupplier(null);
       setItems([]);
