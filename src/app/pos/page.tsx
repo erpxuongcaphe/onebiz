@@ -340,6 +340,9 @@ function PosPageInner() {
     excess: number;
   }>({ open: false, excess: 0 });
 
+  // CEO 29/05/2026: popup xác nhận khi bán đơn 0đ (miễn phí / hàng mẫu).
+  const [zeroConfirmOpen, setZeroConfirmOpen] = useState(false);
+
   // ── Auto-save & recovery (Sprint POS-RECOVERY-1, CEO 04/05/2026) ──
   // clientSessionId: UUID idempotency key, regen mỗi khi clear cart.
   // - Auto-save background dùng key này để upsert draft trên server
@@ -1302,7 +1305,7 @@ function PosPageInner() {
    *   'refund'  → cashier chọn trả tiền thừa
    *   'credit'  → cashier chọn ghi công nợ
    */
-  const handleComplete = useCallback(async (intent?: "refund" | "credit") => {
+  const handleComplete = useCallback(async (intent?: "refund" | "credit", zeroConfirmed?: boolean) => {
     if (submitLockRef.current) return;
     // Bắt mở ca trước khi thanh toán — không có ca = không biết ghi nhận vào đâu.
     if (!currentShift) {
@@ -1314,18 +1317,33 @@ function PosPageInner() {
       setOpenShiftDialogOpen(true);
       return;
     }
-    // R1: Block đơn total ≤ 0 (sample/free) — trước đây F10 chỉ check
-    // `state.lines.length > 0` nên cashier set discount 100% có thể xuất
-    // hoá đơn 0đ → âm kho mà không thu tiền. Trừ trường hợp đặt cọc 0đ
-    // (chưa có flow), chặn cứng.
-    if (state.total <= 0) {
+    // CEO 29/05/2026: CHO PHÉP bán đơn 0đ (hàng mẫu, nội bộ, KM/giảm 100%)
+    // nhưng bắt XÁC NHẬN để tránh xuất nhầm — thay cho việc chặn cứng trước
+    // đây. Tổng âm vẫn chặn (đó là lỗi dữ liệu, không phải đơn miễn phí).
+    if (state.total < 0) {
       toast({
         title: "Đơn không hợp lệ",
-        description: `Tổng đơn = ${formatCurrency(state.total)} ₫. Kiểm tra giảm giá hoặc khuyến mãi đang áp.`,
+        description: `Tổng đơn = ${formatCurrency(state.total)} ₫ (âm). Kiểm tra giảm giá hoặc khuyến mãi đang áp.`,
         variant: "error",
         duration: 5000,
       });
       return;
+    }
+    if (state.total === 0) {
+      // Defense-in-depth: đừng tạo hoá đơn rỗng (caller đã chặn nhưng vẫn
+      // guard ở đây vì guard total<=0 cũ vô tình bắt luôn case giỏ trống).
+      if (state.lines.length === 0) {
+        toast({
+          title: "Giỏ hàng trống",
+          description: "Thêm sản phẩm trước khi thanh toán.",
+          variant: "warning",
+        });
+        return;
+      }
+      if (!zeroConfirmed) {
+        setZeroConfirmOpen(true);
+        return;
+      }
     }
 
     // Mixed payment validation — chặn checkout khi tổng các phương thức <
@@ -3051,6 +3069,64 @@ function PosPageInner() {
             >
               <Icon name="account_balance_wallet" size={16} className="mr-1" />
               Ghi công nợ {formatCurrency(changeDialog.excess)}đ
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
+      {/* CEO 29/05/2026 — Xác nhận bán đơn 0đ (miễn phí / hàng mẫu / nội bộ) */}
+      <Dialog open={zeroConfirmOpen} onOpenChange={setZeroConfirmOpen}>
+        <DialogContent className="sm:max-w-md">
+          <DialogHeader>
+            <DialogTitle className="flex items-center gap-2">
+              <Icon name="redeem" size={20} className="text-status-warning" />
+              Đơn 0đ — xác nhận bán miễn phí?
+            </DialogTitle>
+          </DialogHeader>
+          <div className="space-y-3 text-sm">
+            <div className="bg-surface-container-low rounded-lg p-3 space-y-2 tabular-nums">
+              <div className="flex justify-between text-xs text-muted-foreground">
+                <span>Khách hàng:</span>
+                <span className="font-medium text-foreground">
+                  {state.customer?.name ?? "Khách lẻ"}
+                </span>
+              </div>
+              <div className="flex justify-between text-xs text-muted-foreground">
+                <span>Số sản phẩm:</span>
+                <span className="font-medium text-foreground">
+                  {state.itemCount}
+                </span>
+              </div>
+              <div className="flex justify-between text-sm font-bold border-t border-border pt-2 mt-1">
+                <span>Tổng cộng:</span>
+                <span className="text-status-warning">0đ</span>
+              </div>
+            </div>
+            <p className="text-xs text-muted-foreground">
+              Hoá đơn này <span className="font-medium text-foreground">không thu tiền</span> nhưng
+              <span className="font-medium text-foreground"> vẫn trừ tồn kho</span> như bán thường.
+              Dùng cho hàng mẫu, khuyến mãi 100% hoặc xuất nội bộ.
+            </p>
+          </div>
+          <DialogFooter className="flex-col sm:flex-row gap-2">
+            <Button
+              type="button"
+              variant="outline"
+              className="w-full sm:w-auto"
+              onClick={() => setZeroConfirmOpen(false)}
+            >
+              Huỷ
+            </Button>
+            <Button
+              type="button"
+              className="w-full sm:flex-1"
+              onClick={() => {
+                setZeroConfirmOpen(false);
+                handleComplete(undefined, true);
+              }}
+            >
+              <Icon name="check" size={16} className="mr-1" />
+              Xác nhận bán 0đ
             </Button>
           </DialogFooter>
         </DialogContent>

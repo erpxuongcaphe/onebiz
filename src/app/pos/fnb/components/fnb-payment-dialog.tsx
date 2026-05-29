@@ -100,11 +100,13 @@ export function FnbPaymentDialog({
   const isFullyPaid = totalPaid >= total;
   // For mixed: each row must be ≥ 0 and at least one method used
   const mixedHasAnyAmount = method === "mixed" ? (cashAmount + transferAmount + cardAmount) > 0 : true;
-  // Allow confirm if: fully paid OR user explicitly ticked "Ghi nợ"
+  // CEO 29/05/2026: đơn 0đ (miễn phí / hàng mẫu / xuất nội bộ) → cho phép
+  // xác nhận mà không cần nhập tiền. Banner + nhãn nút làm bước xác nhận.
+  const isFreeOrder = total === 0;
+  // Allow confirm if: free order OR fully paid OR user explicitly ticked "Ghi nợ"
   const canConfirm =
-    mixedHasAnyAmount &&
-    totalPaid > 0 &&
-    (isFullyPaid || allowDebt);
+    isFreeOrder ||
+    (mixedHasAnyAmount && totalPaid > 0 && (isFullyPaid || allowDebt));
 
   const handleConfirm = () => {
     const payload: FnbPaymentConfirmPayload = {
@@ -160,6 +162,16 @@ export function FnbPaymentDialog({
               <span className="text-primary tabular-nums">{formatCurrency(total)}</span>
             </div>
           </div>
+
+          {isFreeOrder && (
+            <div className="rounded-lg border border-status-warning/40 bg-status-warning/10 px-3 py-2 text-xs text-status-warning flex items-start gap-2">
+              <Icon name="redeem" size={16} className="mt-0.5 shrink-0" />
+              <span>
+                <span className="font-semibold">Đơn 0đ — bán miễn phí.</span>{" "}
+                Không thu tiền nhưng vẫn trừ tồn kho. Dùng cho hàng mẫu, khuyến mãi 100% hoặc xuất nội bộ.
+              </span>
+            </div>
+          )}
 
           {/* Tip — quick buttons + custom input */}
           <div className="space-y-2">
@@ -345,7 +357,7 @@ export function FnbPaymentDialog({
 
         <DialogFooter>
           <Button className="w-full" disabled={!canConfirm} onClick={handleConfirm}>
-            Hoàn tất thanh toán — {formatCurrency(total)}đ
+            {isFreeOrder ? "Xác nhận bán 0đ (miễn phí)" : `Hoàn tất thanh toán — ${formatCurrency(total)}đ`}
           </Button>
         </DialogFooter>
       </DialogContent>
