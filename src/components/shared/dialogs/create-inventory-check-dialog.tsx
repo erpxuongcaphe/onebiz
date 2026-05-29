@@ -108,11 +108,15 @@ export function CreateInventoryCheckDialog({
     const timer = setTimeout(async () => {
       const supabase = getClient();
       const ctx = await getCurrentContext();
+      // CEO 29/05/2026: KHÔNG hiện SKU (has_bom=true) — SKU không giữ tồn,
+      // kiểm kê chỉ áp dụng cho NVL / hàng giữ tồn thật. `is not true` lấy cả
+      // has_bom=false lẫn null.
       const { data, error } = await supabase
         .from("products")
         .select("id, code, name, unit, cost_price")
         .eq("tenant_id", ctx.tenantId)
         .eq("is_active", true)
+        .not("has_bom", "is", true)
         .or(`code.ilike.%${term}%,name.ilike.%${term}%,barcode.ilike.%${term}%`)
         .limit(10);
 
@@ -358,7 +362,10 @@ export function CreateInventoryCheckDialog({
             <div className="grid gap-3 lg:grid-cols-[minmax(420px,1fr)_minmax(320px,0.75fr)]">
               <section className="rounded-xl border bg-white p-3 shadow-sm">
                 <div className="mb-2 flex items-center justify-between gap-2">
-                  <h3 className="text-sm font-semibold">Sản phẩm kiểm kho</h3>
+                  <div>
+                    <h3 className="text-sm font-semibold">Sản phẩm kiểm kho</h3>
+                    <p className="text-[11px] text-muted-foreground">Chỉ hiện NVL / hàng giữ tồn (không gồm SKU)</p>
+                  </div>
                   <span className="text-xs text-muted-foreground">{formatNumber(checkItems.length)} dòng</span>
                 </div>
                 <div className="relative">
@@ -378,7 +385,7 @@ export function CreateInventoryCheckDialog({
                     <div className="absolute z-30 mt-1 max-h-56 w-full overflow-y-auto rounded-lg border bg-popover shadow-lg">
                       {filteredProducts.length === 0 ? (
                         <div className="px-3 py-2 text-sm text-muted-foreground">
-                          Không tìm thấy sản phẩm
+                          Không tìm thấy NVL / hàng giữ tồn (SKU không kiểm kê)
                         </div>
                       ) : (
                         filteredProducts.map((product) => (
