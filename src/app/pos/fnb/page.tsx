@@ -143,6 +143,8 @@ function FnbPosPageInner() {
   const [voidConfirmOpen, setVoidConfirmOpen] = useState(false);
   // R5: Lý do huỷ — bắt buộc để audit & loss prevention.
   const [voidReason, setVoidReason] = useState("");
+  // Khi chọn "Khác" → bắt nhập chi tiết tự do để audit log có ngữ cảnh.
+  const [voidReasonOther, setVoidReasonOther] = useState("");
   // Sprint S2 Phase 3a (CEO 12/05): OTP delegation cho cashier không có quyền
   // pos_fnb.cancel_unpaid_order. Cashier xin OTP từ quản lý qua điện thoại
   // → nhập vào dialog → server check OTP issuer có quyền.
@@ -186,15 +188,20 @@ function FnbPosPageInner() {
   // switch + toast info. Tránh user bị stuck với cart trống không add món
   // được vì branch không match menu FnB.
   const { switchBranch: doSwitchBranch } = useAuth();
+  // Guard: chỉ auto-switch + toast MỘT lần/mount. Tránh bắn lặp khi
+  // currentBranch/branches đổi reference trước lúc switch hoàn tất.
+  const hasAutoSwitchedRef = useRef(false);
   useEffect(() => {
     if (authLoading) return;
     if (!currentBranch) return;
     if (currentBranch.branchType === "store") return;
+    if (hasAutoSwitchedRef.current) return;
     const firstStore = branches.find((b) => b.branchType === "store");
     if (!firstStore) {
       // Không có quán FnB nào → FnbEmptyBranch sẽ render
       return;
     }
+    hasAutoSwitchedRef.current = true;
     void doSwitchBranch(firstStore.id);
     toast({
       title: "Chuyển sang quán FnB",
@@ -206,7 +213,7 @@ function FnbPosPageInner() {
             : "văn phòng"
       } — POS FnB tự chuyển sang "${firstStore.name}". Bấm dropdown chi nhánh để đổi quán khác.`,
       variant: "info",
-      duration: 6000,
+      duration: 5000,
     });
   }, [authLoading, currentBranch, branches, doSwitchBranch, toast]);
   const [blockingLoadMs, setBlockingLoadMs] = useState(0);
@@ -1672,6 +1679,7 @@ function FnbPosPageInner() {
           variant: "success",
         });
         setVoidReason("");
+        setVoidReasonOther("");
         // Optimistic: release table trên UI ngay
         if (args.tableId) {
           setTables((prev) =>
@@ -1723,13 +1731,23 @@ function FnbPosPageInner() {
       });
       return;
     }
+    if (voidReason === "Khác" && !voidReasonOther.trim()) {
+      toast({
+        title: "Vui lòng ghi rõ lý do",
+        description: 'Bạn đã chọn "Khác" — hãy nhập chi tiết để lưu vào audit log.',
+        variant: "warning",
+      });
+      return;
+    }
+    const effectiveReason =
+      voidReason === "Khác" ? `Khác: ${voidReasonOther.trim()}` : voidReason.trim();
 
     // Phase 3a: cashier không có quyền → chuyển sang OTP delegation flow.
     if (!canCancelUnpaidOrder) {
       setVoidOtpContext({
         orderId: tab.kitchenOrderId,
         label: tab.label,
-        reasonCode: voidReason.trim(),
+        reasonCode: effectiveReason,
         tableId: tab.tableId ?? null,
       });
       setVoidConfirmOpen(false);
@@ -1749,6 +1767,7 @@ function FnbPosPageInner() {
     networkStatus.isOnline,
     toast,
     voidReason,
+    voidReasonOther,
     executeKitchenOrderCancel,
   ]);
 
@@ -2624,6 +2643,17 @@ function FnbPosPageInner() {
                 <option value="Lỗi đặt món">Lỗi đặt món (nhân viên)</option>
                 <option value="Khác">Khác</option>
               </select>
+              {voidReason === "Khác" && (
+                <input
+                  type="text"
+                  value={voidReasonOther}
+                  onChange={(e) => setVoidReasonOther(e.target.value)}
+                  autoFocus
+                  maxLength={120}
+                  placeholder="Nhập chi tiết lý do huỷ…"
+                  className="w-full px-3 py-2 text-sm rounded-lg border border-border bg-background"
+                />
+              )}
             </div>
             <p className="text-xs text-muted-foreground">
               Tip: Chỉ huỷ được đơn chưa thanh toán. Nếu đã in ticket, hãy thông báo
@@ -2642,6 +2672,7 @@ function FnbPosPageInner() {
               onClick={() => {
                 setVoidConfirmOpen(false);
                 setVoidReason("");
+                setVoidReasonOther("");
               }}
               className="px-4 py-2 rounded-lg text-sm border border-border hover:bg-muted"
             >

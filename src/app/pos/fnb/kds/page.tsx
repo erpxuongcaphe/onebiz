@@ -210,6 +210,21 @@ function KdsPageInner() {
   const overdueAlertedRef = useRef<Set<string>>(new Set());
   const fetchErrorShownRef = useRef(false);
 
+  // KDS thường treo tường, nhân viên hiếm khi chạm → trình duyệt chặn Web Audio
+  // tới khi có user gesture đầu tiên (autoplay policy). "Mồi" AudioContext ngay
+  // ở lần chạm/nhấn phím đầu để beep đơn mới không bị câm.
+  useEffect(() => {
+    const prime = () => {
+      getAudioCtx();
+    };
+    window.addEventListener("pointerdown", prime, { once: true });
+    window.addEventListener("keydown", prime, { once: true });
+    return () => {
+      window.removeEventListener("pointerdown", prime);
+      window.removeEventListener("keydown", prime);
+    };
+  }, []);
+
   // Clock
   const [wallClock, setWallClock] = useState<string>(() => {
     const d = new Date();
@@ -793,7 +808,16 @@ function KdsPageInner() {
               {wallClock}
             </div>
             <button
-              onClick={() => setSoundOn(!soundOn)}
+              onClick={() => {
+                const next = !soundOn;
+                setSoundOn(next);
+                // Bật âm = user gesture → unlock AudioContext + beep xác nhận
+                // để nhân viên biết loa hoạt động.
+                if (next) {
+                  getAudioCtx();
+                  playBeep(880, 0.12, 0.25);
+                }
+              }}
               className={cn(
                 "flex size-10 items-center justify-center rounded-lg border transition-colors press-scale-sm",
                 soundOn
