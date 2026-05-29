@@ -130,8 +130,13 @@ export interface StockDecrementContext {
 
 /**
  * Apply stock decrement for a given invoice.
- * - Inserts one `stock_movements` row per item (type='out', reference=invoice).
- * - Decrements `products.stock` with a basic re-fetch loop.
+ *
+ * CEO 29/05/2026: tôn trọng quy tắc "SKU có BOM không giữ tồn".
+ * - SP có `has_bom = true` (SKU ghép từ NVL) → KHÔNG trừ tồn SKU; gọi
+ *   `consume_bom_for_sale` để trừ NVL theo công thức (RPC tự ghi
+ *   stock_movements type='bom_consume' cho NVL).
+ * - SP thường (`has_bom = false`) → ghi 1 stock_movement 'out' + trừ tồn
+ *   chính nó (atomic SQL increment) như cũ.
  *
  * NOT atomic across items (a future RPC will harden this). For now we accept
  * the race-condition risk, which is acceptable for a single-cashier terminal.
@@ -145,44 +150,61 @@ export async function applyStockDecrement(
   items: PosCheckoutItem[],
   ctx: StockDecrementContext
 ): Promise<void> {
-  // 1. Insert stock_movements
+  // CEO 29/05/2026: phân loại SP theo has_bom (1 query) để quyết định trừ NVL
+  // hay trừ tồn chính nó.
+  const productIds = [...new Set(items.map((i) => i.productId))];
+  const hasBomMap = new Map<string, boolean>();
+  if (productIds.length > 0) {
+    const { data: prodRows, error: prodErr } = await supabase
+      .from("products")
+      .select("id, has_bom")
+      .in("id", productIds);
+    if (prodErr) handleError(prodErr, "applyStockDecrement:has_bom");
+    for (const p of prodRows ?? []) {
+      hasBomMap.set(p.id as string, Boolean((p as { has_bom?: boolean }).has_bom));
+    }
+  }
+
   // Convention: `quantity` is ALWAYS positive (magnitude). `type` carries the
-  // direction — 'in' adds, 'out' subtracts. Matches the production RPC and the
-  // 4 wholesale dialogs (manufacturing/internal/disposal/purchase-return).
-  // Aggregations should sum |quantity| filtered by type, never sum the raw
-  // signed value. The pre-F4 negative-quantity convention here was the only
-  // exception in the codebase and is now removed.
-  const stockMovements: StockMovementInsert[] = items.map((item) => ({
-    tenant_id: ctx.tenantId,
-    branch_id: ctx.branchId,
-    product_id: item.productId,
-    type: "out" as const,
-    quantity: item.quantity,
-    reference_type: "invoice",
-    reference_id: invoiceId,
-    note: `POS bán hàng - ${ctx.invoiceCode}`,
-    created_by: ctx.createdBy,
-  }));
-
-  const { error: stockError } = await supabase
-    .from("stock_movements")
-    .insert(stockMovements);
-  if (stockError) handleError(stockError, "applyStockDecrement:movements");
-
-  // 2. Decrement BOTH products.stock (company snapshot) AND branch_stock (per-branch).
-  //
-  // FIX: Use SQL atomic increment (`stock = stock + delta`) via RPCs to
-  // prevent race conditions when two concurrent POS sales decrement the
-  // same product. The old read-compute-write pattern could lose decrements
-  // when interleaved.
+  // direction — 'in' adds, 'out' subtracts.
   //
   // Stock CAN go negative — represents "owe to warehouse" / oversold state.
   // Frontend warns the cashier; backend records the truth so the ledger
   // (stock_movements) and both snapshot tables stay in sync.
   for (const item of items) {
+    // ─── SKU có BOM → chỉ trừ NVL theo công thức, KHÔNG trừ tồn SKU ───
+    if (hasBomMap.get(item.productId)) {
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      const { error: bomErr } = await (supabase.rpc as any)("consume_bom_for_sale", {
+        p_tenant_id: ctx.tenantId,
+        p_branch_id: ctx.branchId,
+        p_sku_id: item.productId,
+        p_qty: item.quantity,
+        p_invoice_id: invoiceId,
+        p_created_by: ctx.createdBy,
+        p_invoice_code: ctx.invoiceCode,
+      });
+      if (bomErr) handleError(bomErr, "applyStockDecrement:consume_bom");
+      continue;
+    }
+
+    // ─── SP thường → ghi stock_movement 'out' + trừ tồn chính nó ───
+    const { error: mvErr } = await supabase.from("stock_movements").insert({
+      tenant_id: ctx.tenantId,
+      branch_id: ctx.branchId,
+      product_id: item.productId,
+      type: "out" as const,
+      quantity: item.quantity,
+      reference_type: "invoice",
+      reference_id: invoiceId,
+      note: `POS bán hàng - ${ctx.invoiceCode}`,
+      created_by: ctx.createdBy,
+    } satisfies StockMovementInsert);
+    if (mvErr) handleError(mvErr, "applyStockDecrement:movements");
+
     const delta = -item.quantity; // POS sale always decrements
 
-    // 2a. products.stock — atomic SQL increment
+    // products.stock — atomic SQL increment
     // eslint-disable-next-line @typescript-eslint/no-explicit-any
     const { error: updErr } = await (supabase.rpc as any)("increment_product_stock", {
       p_product_id: item.productId,
@@ -190,7 +212,7 @@ export async function applyStockDecrement(
     });
     if (updErr) handleError(updErr, "applyStockDecrement:product_update");
 
-    // 2b. branch_stock — atomic upsert
+    // branch_stock — atomic upsert
     // eslint-disable-next-line @typescript-eslint/no-explicit-any
     const { error: bsErr } = await (supabase.rpc as any)("upsert_branch_stock", {
       p_tenant_id: ctx.tenantId,
@@ -200,7 +222,7 @@ export async function applyStockDecrement(
     });
     if (bsErr) handleError(bsErr, "applyStockDecrement:branch_stock");
 
-    // 2c. FIFO lot allocation — consume from earliest-expiry lots first.
+    // FIFO lot allocation — consume from earliest-expiry lots first.
     // Best-effort: if no lots exist for this product (non-lot-tracked item),
     // the RPC returns shortage = full qty and we continue silently.
     try {
