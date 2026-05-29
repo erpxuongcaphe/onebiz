@@ -15,17 +15,16 @@ import { useToast } from "@/lib/contexts";
 import { getClient, getCurrentContext } from "@/lib/services/supabase/base";
 import { nextEntityCode } from "@/lib/services/supabase/stock-adjustments";
 import { getUOMConversions } from "@/lib/services/supabase/uom";
-import { pickBestConversion } from "@/lib/format-uom";
-import { StockWithConversion } from "@/components/shared/stock-with-conversion";
+import { pickBestConversion, getConversionText } from "@/lib/format-uom";
 import type { UOMConversion } from "@/lib/types";
 import type { Database } from "@/lib/supabase/types";
 import { Icon } from "@/components/ui/icon";
-import { formatNumber } from "@/lib/format";
+import { formatNumber, formatCurrency } from "@/lib/format";
 
 type InventoryCheckInsert = Database["public"]["Tables"]["inventory_checks"]["Insert"];
 type ProductRow = Pick<
   Database["public"]["Tables"]["products"]["Row"],
-  "id" | "code" | "name" | "unit"
+  "id" | "code" | "name" | "unit" | "cost_price"
 >;
 
 interface InventoryCheckLine {
@@ -33,6 +32,8 @@ interface InventoryCheckLine {
   productCode: string;
   productName: string;
   unit: string;
+  /** Giá vốn 1 đơn vị cơ bản — để tính giá trị lệch (tiền). */
+  costPrice: number;
   systemStock: number;
   /** Tồn thực tế theo ĐƠN VỊ CƠ BẢN — dùng khi SP KHÔNG có quy cách. */
   actualStock: number;
@@ -105,7 +106,7 @@ export function CreateInventoryCheckDialog({
       const ctx = await getCurrentContext();
       const { data, error } = await supabase
         .from("products")
-        .select("id, code, name, unit")
+        .select("id, code, name, unit, cost_price")
         .eq("tenant_id", ctx.tenantId)
         .eq("is_active", true)
         .or(`code.ilike.%${term}%,name.ilike.%${term}%,barcode.ilike.%${term}%`)
@@ -166,6 +167,7 @@ export function CreateInventoryCheckDialog({
         productCode: product.code,
         productName: product.name,
         unit: product.unit,
+        costPrice: Number(product.cost_price ?? 0),
         systemStock,
         actualStock: systemStock,
         conversions,
@@ -217,17 +219,25 @@ export function CreateInventoryCheckDialog({
     setCheckItems((items) => items.filter((item) => item.productId !== productId));
   }
 
-  const totalSystemStock = useMemo(
-    () => checkItems.reduce((sum, item) => sum + item.systemStock, 0),
+  // KiotViet style: tổng theo TIỀN (giá trị lệch), KHÔNG cộng số lượng vì
+  // các SP khác đơn vị (Lon + Cái + Kg) cộng lại vô nghĩa.
+  const increaseValue = useMemo(
+    () =>
+      checkItems.reduce((sum, item) => {
+        const d = (lineActual(item) - item.systemStock) * item.costPrice;
+        return d > 0 ? sum + d : sum;
+      }, 0),
     [checkItems],
   );
-
-  const totalActualStock = useMemo(
-    () => checkItems.reduce((sum, item) => sum + lineActual(item), 0),
+  const decreaseValue = useMemo(
+    () =>
+      checkItems.reduce((sum, item) => {
+        const d = (lineActual(item) - item.systemStock) * item.costPrice;
+        return d < 0 ? sum + d : sum;
+      }, 0),
     [checkItems],
   );
-
-  const totalDiff = totalActualStock - totalSystemStock;
+  const netValue = increaseValue + decreaseValue;
 
   const increaseLines = checkItems.filter((item) => lineActual(item) > item.systemStock).length;
   const decreaseLines = checkItems.filter((item) => lineActual(item) < item.systemStock).length;
@@ -404,12 +414,13 @@ export function CreateInventoryCheckDialog({
             </div>
 
             <div className="overflow-hidden rounded-xl border bg-white shadow-sm">
-              <div className="hidden grid-cols-[minmax(240px,1fr)_72px_160px_220px_110px_44px] gap-2 border-b bg-muted/50 px-3 py-2 text-xs font-semibold uppercase text-muted-foreground md:grid">
+              <div className="hidden grid-cols-[minmax(220px,1fr)_60px_148px_232px_120px_150px_40px] gap-2 border-b bg-muted/50 px-3 py-2 text-[11px] font-semibold uppercase tracking-wide text-muted-foreground md:grid">
                 <span>Sản phẩm</span>
                 <span className="flex justify-center">ĐVT</span>
-                <span className="flex justify-end">Sổ kho</span>
+                <span className="flex justify-end">Tồn kho</span>
                 <span className="flex justify-end">Thực tế (nhập)</span>
-                <span className="flex justify-end">Lệch</span>
+                <span className="flex justify-end">SL lệch</span>
+                <span className="flex justify-end">Giá trị lệch</span>
                 <span />
               </div>
 
@@ -427,87 +438,119 @@ export function CreateInventoryCheckDialog({
                 <div className="divide-y">
                   {checkItems.map((item) => {
                     const diff = lineActual(item) - item.systemStock;
+                    const diffValue = diff * item.costPrice;
+                    const diffColor =
+                      diff === 0
+                        ? "text-muted-foreground"
+                        : diff > 0
+                          ? "text-status-success"
+                          : "text-destructive";
+                    const sysConvText = getConversionText(item.systemStock, item.unit, item.conversions);
                     return (
                       <div
                         key={item.productId}
-                        className="grid gap-2 px-3 py-2.5 md:grid-cols-[minmax(240px,1fr)_72px_160px_220px_110px_44px] md:items-center"
+                        className="grid gap-2 px-3 py-2.5 md:grid-cols-[minmax(220px,1fr)_60px_148px_232px_120px_150px_40px] md:items-center"
                       >
-                        <div className="min-w-0">
+                        {/* Sản phẩm */}
+                        <div className="min-w-0 pr-2">
                           <div className="truncate text-sm font-semibold">{item.productName}</div>
                           <div className="mt-0.5 truncate text-xs text-muted-foreground">{item.productCode}</div>
                         </div>
-                        <div className="flex justify-center">
-                          <span className="min-w-[64px] rounded-md bg-muted/50 px-2 py-1 text-center text-xs font-semibold text-muted-foreground">
+
+                        {/* ĐVT */}
+                        <div className="hidden justify-center md:flex">
+                          <span className="min-w-[44px] rounded-md bg-muted/50 px-2 py-1 text-center text-xs font-semibold text-muted-foreground">
                             {item.unit || "Cái"}
                           </span>
                         </div>
-                        <div className="text-right text-sm tabular-nums text-muted-foreground">
-                          <StockWithConversion
-                            quantity={item.systemStock}
-                            unit={item.unit}
-                            conversions={item.conversions}
-                            variant="inline"
-                            hideUnit
-                          />
-                        </div>
-                        {item.convFactor ? (
-                          <div className="space-y-1">
-                            <div className="flex items-center gap-1">
-                              <div className="flex flex-1 items-center gap-1">
-                                <NumericInput
-                                  value={item.actualBig}
-                                  onChange={(value) => updateActualBig(item.productId, value ?? 0)}
-                                  min={0}
-                                  decimals={0}
-                                  className="h-8 text-right"
-                                  aria-label={`Số ${item.convBigUnit} ${item.productName}`}
-                                />
-                                <span className="w-9 shrink-0 truncate text-[11px] text-muted-foreground">
-                                  {item.convBigUnit}
-                                </span>
-                              </div>
-                              <div className="flex flex-1 items-center gap-1">
-                                <NumericInput
-                                  value={item.actualSmall}
-                                  onChange={(value) => updateActualSmall(item.productId, value ?? 0)}
-                                  min={0}
-                                  decimals={2}
-                                  className="h-8 text-right"
-                                  aria-label={`Số lẻ ${item.productName}`}
-                                />
-                                <span className="w-9 shrink-0 truncate text-[11px] text-muted-foreground">
-                                  {item.unit}
-                                </span>
-                              </div>
-                            </div>
-                            <div className="text-right text-[11px] text-muted-foreground">
-                              ={" "}
-                              <b className="tabular-nums text-foreground">{formatNumber(lineActual(item))}</b>{" "}
-                              {item.unit}
-                            </div>
+
+                        {/* Tồn kho */}
+                        <div className="flex items-baseline justify-between gap-2 md:block md:text-right">
+                          <span className="text-[11px] font-medium uppercase text-muted-foreground md:hidden">Tồn kho</span>
+                          <div className="text-right">
+                            <div className="text-sm font-medium tabular-nums">{formatNumber(item.systemStock)}</div>
+                            {sysConvText && (
+                              <div className="text-[11px] tabular-nums text-muted-foreground">{sysConvText}</div>
+                            )}
                           </div>
-                        ) : (
-                          <NumericInput
-                            value={item.actualStock}
-                            onChange={(value) => updateActualStock(item.productId, value ?? 0)}
-                            min={0}
-                            decimals={2}
-                            className="h-8 text-right"
-                            aria-label={`Tồn thực tế ${item.productName}`}
-                          />
-                        )}
-                        <div
-                          className={`text-right text-sm font-bold tabular-nums ${
-                            diff === 0
-                              ? "text-muted-foreground"
-                              : diff > 0
-                                ? "text-status-success"
-                                : "text-destructive"
-                          }`}
-                        >
-                          {diff > 0 ? "+" : ""}
-                          {formatNumber(diff)}
                         </div>
+
+                        {/* Thực tế (nhập) */}
+                        <div className="md:block">
+                          <span className="mb-1 block text-[11px] font-medium uppercase text-muted-foreground md:hidden">
+                            Thực tế (nhập)
+                          </span>
+                          {item.convFactor ? (
+                            <div className="space-y-1">
+                              <div className="grid grid-cols-2 gap-1.5">
+                                <div>
+                                  <NumericInput
+                                    value={item.actualBig}
+                                    onChange={(value) => updateActualBig(item.productId, value ?? 0)}
+                                    min={0}
+                                    decimals={0}
+                                    className="h-8 text-right"
+                                    aria-label={`Số ${item.convBigUnit} ${item.productName}`}
+                                  />
+                                  <div className="mt-0.5 text-center text-[10px] text-muted-foreground">
+                                    {item.convBigUnit}
+                                  </div>
+                                </div>
+                                <div>
+                                  <NumericInput
+                                    value={item.actualSmall}
+                                    onChange={(value) => updateActualSmall(item.productId, value ?? 0)}
+                                    min={0}
+                                    decimals={2}
+                                    className="h-8 text-right"
+                                    aria-label={`Số lẻ ${item.productName}`}
+                                  />
+                                  <div className="mt-0.5 text-center text-[10px] text-muted-foreground">
+                                    {item.unit}
+                                  </div>
+                                </div>
+                              </div>
+                              <div className="text-right text-[11px] text-muted-foreground">
+                                ={" "}
+                                <b className="tabular-nums text-foreground">{formatNumber(lineActual(item))}</b>{" "}
+                                {item.unit}
+                              </div>
+                            </div>
+                          ) : (
+                            <NumericInput
+                              value={item.actualStock}
+                              onChange={(value) => updateActualStock(item.productId, value ?? 0)}
+                              min={0}
+                              decimals={2}
+                              className="h-8 text-right"
+                              aria-label={`Tồn thực tế ${item.productName}`}
+                            />
+                          )}
+                        </div>
+
+                        {/* SL lệch */}
+                        <div className="flex items-baseline justify-between gap-2 md:block md:text-right">
+                          <span className="text-[11px] font-medium uppercase text-muted-foreground md:hidden">SL lệch</span>
+                          <div className="text-right">
+                            <span className={`text-sm font-bold tabular-nums ${diffColor}`}>
+                              {diff > 0 ? "+" : ""}
+                              {formatNumber(diff)}
+                            </span>
+                            <span className="ml-1 text-[10px] text-muted-foreground">{item.unit}</span>
+                          </div>
+                        </div>
+
+                        {/* Giá trị lệch (tiền) */}
+                        <div className="flex items-baseline justify-between gap-2 md:block md:text-right">
+                          <span className="text-[11px] font-medium uppercase text-muted-foreground md:hidden">Giá trị lệch</span>
+                          <span
+                            className={`text-sm font-bold tabular-nums ${item.costPrice > 0 ? diffColor : "text-muted-foreground"}`}
+                          >
+                            {item.costPrice > 0 ? `${diff > 0 ? "+" : ""}${formatCurrency(diffValue)}` : "—"}
+                          </span>
+                        </div>
+
+                        {/* Xóa */}
                         <Button
                           type="button"
                           variant="ghost"
@@ -530,11 +573,19 @@ export function CreateInventoryCheckDialog({
         <DialogFooter className="mx-0 mb-0 shrink-0 rounded-none border-t bg-white px-4 py-3">
           <div className="mx-auto grid w-full max-w-[1380px] grid-cols-1 items-center gap-3 lg:grid-cols-[1fr_auto]">
             <div className="grid gap-2 text-sm sm:grid-cols-3 xl:grid-cols-5">
-              <FooterMetric label="Dòng" value={formatNumber(checkItems.length)} />
-              <FooterMetric label="Sổ kho" value={formatNumber(totalSystemStock)} />
-              <FooterMetric label="Thực tế" value={formatNumber(totalActualStock)} />
-              <FooterMetric label="Nhập/Xuất lệch" value={`${formatNumber(increaseLines)} / ${formatNumber(decreaseLines)}`} />
-              <FooterMetric label="Tổng lệch" value={`${totalDiff > 0 ? "+" : ""}${formatNumber(totalDiff)}`} strong />
+              <FooterMetric label="Mặt hàng" value={formatNumber(checkItems.length)} />
+              <FooterMetric
+                label="Dòng lệch"
+                value={`${formatNumber(increaseLines)} thừa · ${formatNumber(decreaseLines)} thiếu`}
+              />
+              <FooterMetric label="Giá trị thừa" value={formatCurrency(increaseValue)} tone="success" />
+              <FooterMetric label="Giá trị thiếu" value={formatCurrency(decreaseValue)} tone="destructive" />
+              <FooterMetric
+                label="Tổng chênh lệch"
+                value={`${netValue > 0 ? "+" : ""}${formatCurrency(netValue)}`}
+                strong
+                tone={netValue === 0 ? "default" : netValue > 0 ? "success" : "destructive"}
+              />
             </div>
             <div className="flex justify-end gap-2">
               <Button variant="outline" onClick={() => onOpenChange(false)}>
@@ -556,15 +607,25 @@ function FooterMetric({
   label,
   value,
   strong,
+  tone = "default",
 }: {
   label: string;
   value: string;
   strong?: boolean;
+  tone?: "default" | "success" | "destructive";
 }) {
+  const toneClass =
+    tone === "success"
+      ? "text-status-success"
+      : tone === "destructive"
+        ? "text-destructive"
+        : strong
+          ? "text-primary"
+          : "";
   return (
     <div className="rounded-lg border bg-surface-container-lowest px-3 py-2">
       <div className="text-[11px] font-semibold uppercase text-muted-foreground">{label}</div>
-      <div className={`mt-0.5 break-words font-bold leading-tight tabular-nums ${strong ? "text-lg text-primary" : ""}`}>
+      <div className={`mt-0.5 break-words font-bold leading-tight tabular-nums ${strong ? "text-lg" : ""} ${toneClass}`}>
         {value}
       </div>
     </div>
