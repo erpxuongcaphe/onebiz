@@ -1505,10 +1505,35 @@ function PosPageInner() {
           // 00048 idempotency — chống duplicate khi cashier ấn Thanh toán 2 lần
           clientSessionId,
         };
-        const result = await offlinePosCheckout(input, networkStatus.isOnline);
+        let result: Awaited<ReturnType<typeof offlinePosCheckout>>;
+        try {
+          result = await offlinePosCheckout(input, networkStatus.isOnline);
+        } catch (checkoutErr) {
+          // CEO 29/05/2026 — lớp dự phòng bulletproof: nếu server từ chối vì đã
+          // có đơn nháp cùng phiên ("still draft / resume the draft"), tra đúng
+          // nháp đó và HOÀN TẤT nó thay vì để thanh toán trượt → đơn kẹt nháp.
+          const msg = checkoutErr instanceof Error ? checkoutErr.message : "";
+          const draftId =
+            networkStatus.isOnline && /still draft|resume the draft/i.test(msg)
+              ? await findDraftIdBySession(clientSessionId)
+              : null;
+          if (!draftId) throw checkoutErr;
+          const r = await completeDraftOrder(draftId, {
+            method: state.paymentMethod,
+            paid,
+            tenantId: ctx.tenantId,
+            branchId: ctx.branchId,
+            createdBy: ctx.userId,
+            paymentBreakdown: breakdown,
+          });
+          result = {
+            invoiceId: draftId,
+            invoiceCode: r.invoiceCode,
+          } as Awaited<ReturnType<typeof offlinePosCheckout>>;
+        }
         invoiceCode = result.invoiceCode;
         invoiceId = result.invoiceId;
-        isOfflineCheckout = !!result.isOffline;
+        isOfflineCheckout = !!(result as { isOffline?: boolean }).isOffline;
 
         // Day 18/05/2026 (CEO): toast tiêu hao NVL theo BOM (chỉ online)
         if (!isOfflineCheckout && result.bomConsumeResults && result.bomConsumeResults.length > 0) {

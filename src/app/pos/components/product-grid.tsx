@@ -54,7 +54,9 @@ export function ProductGrid({ searchQuery, onAddProduct }: ProductGridProps) {
         if (catId !== "all") filters.category = catId;
         const result = await getProducts({
           page: 0,
-          pageSize: 50,
+          // CEO 29/05/2026: nâng 50 → 500 để nhóm nhiều SKU (vd Dụng cụ 66 mã)
+          // không bị cắt mất phần dư trên lưới POS.
+          pageSize: 500,
           search: search || undefined,
           sortBy: "name",
           sortOrder: "asc",
@@ -81,11 +83,10 @@ export function ProductGrid({ searchQuery, onAddProduct }: ProductGridProps) {
     };
   }, [selectedCategory, searchQuery, fetchProducts]);
 
-  // ---- Filter: only products with sell_price > 0 for POS ----
-  const displayProducts = useMemo(
-    () => products.filter((p) => (p.sellPrice ?? 0) > 0),
-    [products]
-  );
+  // CEO 29/05/2026: KHÔNG ẩn SP giá bán = 0 nữa. Nhiều SKU (vd nhóm Bao bì)
+  // chưa đặt giá bán vẫn cần hiện trên POS để bán / đặt giá tại quầy (bán 0đ
+  // đã có popup xác nhận riêng). Trước đây lọc sellPrice>0 làm ẩn mất chúng.
+  const displayProducts = products;
 
   return (
     <div className="flex flex-col md:flex-row h-full bg-surface-container-low">
