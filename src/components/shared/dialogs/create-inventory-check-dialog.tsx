@@ -43,11 +43,11 @@ interface InventoryCheckLine {
   convFactor: number | null;
   /** Tên đơn vị lớn (vd "Thùng"). */
   convBigUnit: string | null;
-  // CEO 29/05/2026 (Cách 2): nhập theo 1 đơn vị chọn ở ô thả xuống.
-  /** Đơn vị đang nhập: "base" = đơn vị chính (vd Hộp), "big" = đơn vị lớn (vd Thùng). */
-  inputUnit: "base" | "big";
-  /** Số người dùng gõ, hiểu theo inputUnit đang chọn. */
-  actualInput: number;
+  // CEO 29/05/2026: nhập theo 2 ô — số đơn vị lớn (Thùng) + số lẻ (đơn vị chính).
+  /** Input: số đơn vị lớn (thùng) — chỉ dùng khi có quy cách. */
+  actualBig: number;
+  /** Input: số lẻ (đơn vị nhỏ). */
+  actualSmall: number;
 }
 
 /** Tồn thực tế quy về đơn vị cơ bản (nguồn sự thật cho lệch + submit).
@@ -55,10 +55,7 @@ interface InventoryCheckLine {
  * (vd 224.58 ÷ 12 × 12 = 224.5799… → tránh lệch "-0" giả). */
 function lineActual(item: InventoryCheckLine): number {
   if (item.convFactor && item.convFactor > 0) {
-    const raw =
-      item.inputUnit === "big"
-        ? item.actualInput * item.convFactor
-        : item.actualInput;
+    const raw = item.actualBig * item.convFactor + item.actualSmall;
     return Math.round(raw * 10000) / 10000;
   }
   return item.actualStock;
@@ -163,6 +160,9 @@ export function CreateInventoryCheckDialog({
     const best = pickBestConversion(product.unit, conversions);
     const convFactor = best && best.factor > 0 ? best.factor : null;
     const convBigUnit = best ? best.fromUnit : null;
+    // CEO 29/05/2026: tách tồn hệ thống thành thùng nguyên + lẻ (mặc định thực tế = hệ thống).
+    const actualBig = convFactor ? Math.floor(systemStock / convFactor) : 0;
+    const actualSmall = convFactor ? systemStock - actualBig * convFactor : systemStock;
 
     setCheckItems((items) => [
       ...items,
@@ -177,9 +177,8 @@ export function CreateInventoryCheckDialog({
         conversions,
         convFactor,
         convBigUnit,
-        // CEO 29/05/2026 (Cách 2): mặc định nhập theo đơn vị chính, số = tồn hệ thống.
-        inputUnit: "base",
-        actualInput: systemStock,
+        actualBig,
+        actualSmall,
       },
     ]);
     setProductSearch("");
@@ -198,30 +197,25 @@ export function CreateInventoryCheckDialog({
     );
   }
 
-  // CEO 29/05/2026 (Cách 2): cập nhật số nhập (hiểu theo đơn vị đang chọn).
-  function updateActualInput(productId: string, value: number) {
+  // CEO 29/05/2026: cập nhật số đơn vị lớn (thùng).
+  function updateActualBig(productId: string, big: number) {
     setCheckItems((items) =>
       items.map((item) =>
         item.productId === productId
-          ? { ...item, actualInput: Number.isFinite(value) ? Math.max(0, value) : 0 }
+          ? { ...item, actualBig: Number.isFinite(big) ? Math.max(0, big) : 0 }
           : item,
       ),
     );
   }
 
-  // Đổi đơn vị nhập (đơn vị chính ↔ đơn vị lớn) — tự quy số để TỒN THỰC TẾ
-  // không đổi, tránh nhầm data chỉ vì bấm đổi ô thả xuống.
-  function updateInputUnit(productId: string, nextUnit: "base" | "big") {
+  // Cập nhật số lẻ (đơn vị nhỏ).
+  function updateActualSmall(productId: string, small: number) {
     setCheckItems((items) =>
-      items.map((item) => {
-        if (item.productId !== productId) return item;
-        if (!item.convFactor || item.convFactor <= 0) return item;
-        if (item.inputUnit === nextUnit) return item;
-        const baseQty =
-          item.inputUnit === "big" ? item.actualInput * item.convFactor : item.actualInput;
-        const nextInput = nextUnit === "big" ? baseQty / item.convFactor : baseQty;
-        return { ...item, inputUnit: nextUnit, actualInput: nextInput };
-      }),
+      items.map((item) =>
+        item.productId === productId
+          ? { ...item, actualSmall: Number.isFinite(small) ? Math.max(0, small) : 0 }
+          : item,
+      ),
     );
   }
 
@@ -494,26 +488,33 @@ export function CreateInventoryCheckDialog({
                           </span>
                           {item.convFactor ? (
                             <div className="space-y-1.5">
-                              <div className="grid grid-cols-[100px_minmax(0,1fr)] gap-2">
-                                <select
-                                  value={item.inputUnit}
-                                  onChange={(e) =>
-                                    updateInputUnit(item.productId, e.target.value as "base" | "big")
-                                  }
-                                  aria-label={`Đơn vị nhập ${item.productName}`}
-                                  className="h-9 rounded-lg border border-input bg-white px-2 text-xs font-medium text-foreground outline-none focus-visible:border-ring focus-visible:ring-3 focus-visible:ring-ring/50"
-                                >
-                                  <option value="base">{item.unit}</option>
-                                  <option value="big">{item.convBigUnit}</option>
-                                </select>
-                                <NumericInput
-                                  value={item.actualInput}
-                                  onChange={(value) => updateActualInput(item.productId, value ?? 0)}
-                                  min={0}
-                                  decimals={2}
-                                  className="h-9 text-right"
-                                  aria-label={`Thực tế ${item.productName}`}
-                                />
+                              <div className="grid grid-cols-2 gap-2">
+                                <div>
+                                  <NumericInput
+                                    value={item.actualBig}
+                                    onChange={(value) => updateActualBig(item.productId, value ?? 0)}
+                                    min={0}
+                                    decimals={0}
+                                    className="h-9 text-right"
+                                    aria-label={`Số ${item.convBigUnit} ${item.productName}`}
+                                  />
+                                  <div className="mt-1 text-center text-[10px] font-medium text-muted-foreground">
+                                    {item.convBigUnit}
+                                  </div>
+                                </div>
+                                <div>
+                                  <NumericInput
+                                    value={item.actualSmall}
+                                    onChange={(value) => updateActualSmall(item.productId, value ?? 0)}
+                                    min={0}
+                                    decimals={2}
+                                    className="h-9 text-right"
+                                    aria-label={`Số lẻ ${item.productName}`}
+                                  />
+                                  <div className="mt-1 text-center text-[10px] font-medium text-muted-foreground">
+                                    {item.unit} lẻ
+                                  </div>
+                                </div>
                               </div>
                               <div className="text-right text-[11px] text-muted-foreground">
                                 ={" "}
