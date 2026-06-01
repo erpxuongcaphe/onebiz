@@ -156,58 +156,58 @@ alter table public.category_modifier_groups enable row level security;
 
 -- Modifier groups: tenant scoped
 create policy modifier_groups_tenant_select on public.modifier_groups
-  for select using (tenant_id = (select public.current_tenant_id()));
+  for select using (tenant_id = (select public.get_user_tenant_id()));
 create policy modifier_groups_tenant_insert on public.modifier_groups
-  for insert with check (tenant_id = (select public.current_tenant_id()));
+  for insert with check (tenant_id = (select public.get_user_tenant_id()));
 create policy modifier_groups_tenant_update on public.modifier_groups
-  for update using (tenant_id = (select public.current_tenant_id()))
-  with check (tenant_id = (select public.current_tenant_id()));
+  for update using (tenant_id = (select public.get_user_tenant_id()))
+  with check (tenant_id = (select public.get_user_tenant_id()));
 create policy modifier_groups_tenant_delete on public.modifier_groups
-  for delete using (tenant_id = (select public.current_tenant_id()));
+  for delete using (tenant_id = (select public.get_user_tenant_id()));
 
 -- Modifier options: scoped via group → group.tenant_id
 create policy modifier_options_tenant_select on public.modifier_options
   for select using (
     exists (
       select 1 from public.modifier_groups g
-      where g.id = group_id and g.tenant_id = (select public.current_tenant_id())
+      where g.id = group_id and g.tenant_id = (select public.get_user_tenant_id())
     )
   );
 create policy modifier_options_tenant_insert on public.modifier_options
   for insert with check (
     exists (
       select 1 from public.modifier_groups g
-      where g.id = group_id and g.tenant_id = (select public.current_tenant_id())
+      where g.id = group_id and g.tenant_id = (select public.get_user_tenant_id())
     )
   );
 create policy modifier_options_tenant_update on public.modifier_options
   for update using (
     exists (
       select 1 from public.modifier_groups g
-      where g.id = group_id and g.tenant_id = (select public.current_tenant_id())
+      where g.id = group_id and g.tenant_id = (select public.get_user_tenant_id())
     )
   ) with check (
     exists (
       select 1 from public.modifier_groups g
-      where g.id = group_id and g.tenant_id = (select public.current_tenant_id())
+      where g.id = group_id and g.tenant_id = (select public.get_user_tenant_id())
     )
   );
 create policy modifier_options_tenant_delete on public.modifier_options
   for delete using (
     exists (
       select 1 from public.modifier_groups g
-      where g.id = group_id and g.tenant_id = (select public.current_tenant_id())
+      where g.id = group_id and g.tenant_id = (select public.get_user_tenant_id())
     )
   );
 
 -- Product modifier groups (junction)
 create policy product_modifier_groups_tenant_all on public.product_modifier_groups
-  for all using (tenant_id = (select public.current_tenant_id()))
-  with check (tenant_id = (select public.current_tenant_id()));
+  for all using (tenant_id = (select public.get_user_tenant_id()))
+  with check (tenant_id = (select public.get_user_tenant_id()));
 
 -- Category modifier groups (junction)
 create policy category_modifier_groups_tenant_all on public.category_modifier_groups
-  for all using (tenant_id = (select public.current_tenant_id()))
-  with check (tenant_id = (select public.current_tenant_id()));
+  for all using (tenant_id = (select public.get_user_tenant_id()))
+  with check (tenant_id = (select public.get_user_tenant_id()));
 
 notify pgrst, 'reload schema';
