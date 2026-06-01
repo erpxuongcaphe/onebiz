@@ -28,6 +28,18 @@ export interface FnbItemConfirmPayload {
   note?: string;
 }
 
+/**
+ * Phase 1A.2: payload pre-fill khi cashier bấm "Sửa" trên 1 dòng giỏ.
+ * Dialog sẽ tự parse `note` để khôi phục mức đường/đá vào pill, phần
+ * còn lại đẩy vào textarea ghi chú tự do.
+ */
+export interface FnbItemInitialSelection {
+  variantId?: string;
+  quantity?: number;
+  toppings?: Array<{ id: string; quantity: number }>;
+  note?: string;
+}
+
 interface FnbItemDialogProps {
   open: boolean;
   onOpenChange: (open: boolean) => void;
@@ -37,6 +49,13 @@ interface FnbItemDialogProps {
   variantsLoading?: boolean;
   toppings?: Topping[];
   onConfirm: (payload: FnbItemConfirmPayload) => void;
+  /**
+   * Phase 1A.2: nếu set → mở dialog ở chế độ "Sửa" với giá trị pre-fill.
+   * Undefined → chế độ thêm mới (defaults).
+   */
+  initialSelection?: FnbItemInitialSelection;
+  /** Phase 1A.2: nhãn nút confirm. Default "Thêm vào đơn". */
+  confirmLabel?: string;
 }
 
 // ── Component ──
@@ -46,8 +65,46 @@ interface FnbItemDialogProps {
 const SWEETNESS_OPTIONS = ["Không đường", "30%", "50%", "70%", "100%"] as const;
 const ICE_OPTIONS = ["Không đá", "Ít đá", "Vừa đá", "Nhiều đá"] as const;
 
+/**
+ * Phase 1A.2: parse composed note ngược lại sweetness/ice/free.
+ * Format khi confirm: `${ice}, ${sweet} đường — ${free}` (mỗi phần optional).
+ * Nếu không match modifier nào → trả nguyên note làm free-text.
+ */
+function parseStoredNote(note: string): { ice: string; sweet: string; free: string } {
+  if (!note) return { ice: "", sweet: "", free: "" };
+  const dashIdx = note.indexOf(" — ");
+  const modPart = dashIdx >= 0 ? note.slice(0, dashIdx) : note;
+  const freePart = dashIdx >= 0 ? note.slice(dashIdx + 3).trim() : "";
+
+  let ice = "";
+  let sweet = "";
+  const remaining: string[] = [];
+  const tokens = modPart.split(",").map((s) => s.trim()).filter(Boolean);
+  for (const tok of tokens) {
+    if ((ICE_OPTIONS as readonly string[]).includes(tok)) {
+      ice = tok;
+    } else if (tok.endsWith(" đường")) {
+      const sw = tok.slice(0, -" đường".length).trim();
+      if ((SWEETNESS_OPTIONS as readonly string[]).includes(sw)) {
+        sweet = sw;
+      } else {
+        remaining.push(tok);
+      }
+    } else {
+      remaining.push(tok);
+    }
+  }
+  // Không nhận diện được modifier nào → coi toàn bộ là free-text.
+  if (!ice && !sweet) {
+    return { ice: "", sweet: "", free: note };
+  }
+  const free = [remaining.join(", "), freePart].filter(Boolean).join(" — ");
+  return { ice, sweet, free };
+}
+
 export function FnbItemDialog({
   open, onOpenChange, product, variants, variantsLoading, toppings, onConfirm,
+  initialSelection, confirmLabel,
 }: FnbItemDialogProps) {
   const [selectedVariant, setSelectedVariant] = useState<Variant | null>(null);
   const [quantity, setQuantity] = useState(1);
@@ -61,14 +118,33 @@ export function FnbItemDialog({
 
   useEffect(() => {
     if (open) {
-      setSelectedVariant(variants?.[0] ?? null);
-      setQuantity(1);
-      setToppingQtys(new Map());
-      setNote("");
-      setSweetness("");
-      setIceLevel("");
+      // Phase 1A.2: pre-fill từ initialSelection (chế độ Sửa). Nếu undefined
+      // thì rơi về defaults (chế độ thêm mới — y nguyên hành vi cũ).
+      let initVariant: Variant | null = null;
+      if (initialSelection?.variantId) {
+        initVariant = variants?.find((v) => v.id === initialSelection.variantId) ?? null;
+      }
+      if (!initVariant) initVariant = variants?.[0] ?? null;
+      setSelectedVariant(initVariant);
+
+      setQuantity(Math.max(1, initialSelection?.quantity ?? 1));
+
+      if (initialSelection?.toppings && initialSelection.toppings.length > 0) {
+        const m = new Map<string, number>();
+        for (const t of initialSelection.toppings) {
+          if (t.quantity > 0) m.set(t.id, Math.min(t.quantity, 10));
+        }
+        setToppingQtys(m);
+      } else {
+        setToppingQtys(new Map());
+      }
+
+      const parsed = parseStoredNote(initialSelection?.note ?? "");
+      setNote(parsed.free);
+      setSweetness(parsed.sweet);
+      setIceLevel(parsed.ice);
     }
-  }, [open, variants]);
+  }, [open, variants, initialSelection]);
 
   const setToppingQty = useCallback((id: string, qty: number) => {
     setToppingQtys((prev) => {
@@ -290,7 +366,7 @@ export function FnbItemDialog({
 
         <DialogFooter>
           <Button className="w-full" onClick={handleConfirm}>
-            Thêm vào đơn — {formatCurrency(lineTotal)}đ
+            {confirmLabel ?? "Thêm vào đơn"} — {formatCurrency(lineTotal)}đ
           </Button>
         </DialogFooter>
       </DialogContent>

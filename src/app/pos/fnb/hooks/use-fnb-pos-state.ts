@@ -68,6 +68,13 @@ export interface UseFnbPosStateReturn {
   addLine: (line: Omit<FnbOrderLine, "id" | "lineTotal">) => void;
   updateLineQty: (lineId: string, qty: number) => void;
   removeLine: (lineId: string) => void;
+  /**
+   * Phase 1A.2: thay thế toàn bộ payload của 1 line (giữ nguyên lineId
+   * + vị trí trong giỏ). Dùng cho luồng "Sửa tuỳ chọn" — cashier mở
+   * lại item dialog với dữ liệu cũ, đổi size/đường/đá/topping/qty rồi
+   * confirm → cập nhật tại chỗ thay vì xoá-rồi-thêm-cuối.
+   */
+  updateLine: (lineId: string, line: Omit<FnbOrderLine, "id" | "lineTotal">) => void;
   clearCart: () => void;
 
   // Discount
@@ -318,6 +325,21 @@ export function useFnbPosState(branchId?: string): UseFnbPosStateReturn {
     [updateActiveTab]
   );
 
+  // Phase 1A.2: thay thế in-place 1 line (giữ id + vị trí). Dùng cho
+  // luồng "Sửa tuỳ chọn" trên dòng giỏ.
+  const updateLine = useCallback(
+    (lineId: string, input: Omit<FnbOrderLine, "id" | "lineTotal">) => {
+      updateActiveTab((lines) =>
+        lines.map((l) =>
+          l.id === lineId
+            ? { ...input, id: lineId, lineTotal: calcLineTotal(input) }
+            : l
+        )
+      );
+    },
+    [updateActiveTab]
+  );
+
   const clearCart = useCallback(() => {
     updateActiveTab(() => []);
   }, [updateActiveTab]);
@@ -478,6 +500,7 @@ export function useFnbPosState(branchId?: string): UseFnbPosStateReturn {
     addLine,
     updateLineQty,
     removeLine,
+    updateLine,
     clearCart,
     setOrderDiscount,
     attachDiscountAudit,

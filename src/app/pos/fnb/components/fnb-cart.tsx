@@ -77,6 +77,12 @@ interface FnbCartProps {
   }[];
   /** Sprint POS-FNB-EXT-1: discount presets từ settings. */
   discountPresets?: { id: string; name: string; mode: "amount" | "percent"; value: number }[];
+  /**
+   * Phase 1A.2: Sửa tuỳ chọn dòng giỏ — mở lại FnbItemDialog với
+   * dữ liệu pre-fill (size/đường/đá/topping/qty) để cashier chỉnh.
+   * Optional — không truyền thì nút "Sửa" sẽ không hiện trên line.
+   */
+  onEditLine?: (line: FnbOrderLine) => void;
   /** Huỷ đơn bếp — chỉ hiển thị khi activeTab.kitchenOrderId tồn tại (đã gửi bếp). */
   onVoidKitchenOrder?: () => void;
   /** Chuyển bàn — chỉ hiển thị khi dine_in + kitchenOrderId tồn tại. */
@@ -121,6 +127,7 @@ export function FnbCart({
   onCustomerClick,
   onDiscountChange,
   onPrintPreBill,
+  onEditLine,
   onVoidKitchenOrder,
   onTransferTable,
   onOrderHistory,
@@ -579,6 +586,7 @@ export function FnbCart({
                 line={line}
                 onUpdateQty={(qty) => updateLineQty(line.id, qty)}
                 onRemove={() => removeLine(line.id)}
+                onEdit={onEditLine ? () => onEditLine(line) : undefined}
               />
             ))}
           </div>
@@ -991,10 +999,13 @@ function CartLineItem({
   line,
   onUpdateQty,
   onRemove,
+  onEdit,
 }: {
   line: FnbOrderLine;
   onUpdateQty: (qty: number) => void;
   onRemove: () => void;
+  /** Phase 1A.2: optional. Khi có → render nút "Sửa" mở lại item dialog. */
+  onEdit?: () => void;
 }) {
   // Stitch FnB mockup cart line:
   // - Wrap card: bg-surface-container-low rounded-lg p-3
@@ -1067,15 +1078,28 @@ function CartLineItem({
           </button>
         </div>
 
-        <button
-          type="button"
-          onClick={onRemove}
-          className="size-11 md:size-9 rounded-full flex items-center justify-center text-muted-foreground hover:text-status-error hover:bg-status-error/10 transition-colors opacity-60 md:opacity-0 md:group-hover:opacity-100 press-scale-sm"
-          title="Xoá"
-          aria-label="Xoá món"
-        >
-          <Icon name="delete" size={16} />
-        </button>
+        <div className="flex items-center gap-1">
+          {onEdit && (
+            <button
+              type="button"
+              onClick={onEdit}
+              className="size-11 md:size-9 rounded-full flex items-center justify-center text-muted-foreground hover:text-primary hover:bg-primary-fixed transition-colors opacity-60 md:opacity-0 md:group-hover:opacity-100 press-scale-sm"
+              title="Sửa tuỳ chọn"
+              aria-label="Sửa tuỳ chọn"
+            >
+              <Icon name="tune" size={16} />
+            </button>
+          )}
+          <button
+            type="button"
+            onClick={onRemove}
+            className="size-11 md:size-9 rounded-full flex items-center justify-center text-muted-foreground hover:text-status-error hover:bg-status-error/10 transition-colors opacity-60 md:opacity-0 md:group-hover:opacity-100 press-scale-sm"
+            title="Xoá"
+            aria-label="Xoá món"
+          >
+            <Icon name="delete" size={16} />
+          </button>
+        </div>
       </div>
     </div>
   );

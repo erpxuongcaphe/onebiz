@@ -56,7 +56,7 @@ import { getClient } from "@/lib/services/supabase/base";
 import { printKitchenTicketV2, printPreBill, printFnbReceipt } from "@/lib/print-fnb";
 import { printKitchenTicketsByStation } from "./print-stations";
 import { printShiftReport } from "@/lib/print-shift-report";
-import type { RestaurantTable } from "@/lib/types/fnb";
+import type { RestaurantTable, FnbOrderLine } from "@/lib/types/fnb";
 import type { Shift } from "@/lib/types/shift";
 import type { Customer } from "@/lib/types";
 import { formatCurrency, formatNumber } from "@/lib/format";
@@ -75,7 +75,7 @@ import { PosPinSwitchDialog } from "@/components/shared/dialogs/pos-pin-switch-d
 import { FnbProductGrid, type FnbProduct } from "./components/fnb-product-grid";
 import { FnbSubcategoryPills } from "./components/fnb-subcategory-pills";
 import { FnbCart } from "./components/fnb-cart";
-import type { FnbItemConfirmPayload } from "./components/fnb-item-dialog";
+import type { FnbItemConfirmPayload, FnbItemInitialSelection } from "./components/fnb-item-dialog";
 import type { FnbPaymentConfirmPayload } from "./components/fnb-payment-dialog";
 import type { SplitItem } from "./components/split-bill-dialog";
 import { ConnectionStatusBar } from "./components/connection-status-bar";
@@ -122,6 +122,10 @@ function FnbPosPageInner() {
   // ── Dialog state ──
   const [selectedProduct, setSelectedProduct] = useState<FnbProduct | null>(null);
   const [itemDialogOpen, setItemDialogOpen] = useState(false);
+  // Phase 1A.2: nếu có giá trị → dialog đang ở chế độ Sửa của line này.
+  // Confirm sẽ updateLine thay vì addLine. Reset khi đóng dialog hoặc
+  // khi bắt đầu add mới (handleSelectProduct).
+  const [editingLineId, setEditingLineId] = useState<string | null>(null);
   const [itemVariants, setItemVariants] = useState<{ id: string; label: string; sell_price: number }[]>([]);
   // POS-FIX-C3: track loading state cho variant dialog — khi cache miss
   // mà network đang fetch, hiện skeleton thay vì empty (UX "tưởng đơ").
@@ -901,6 +905,9 @@ function FnbPosPageInner() {
   const handleSelectProduct = useCallback(
     async (product: FnbProduct) => {
       hapticTap();
+      // Phase 1A.2: clear edit-mode trước khi mở dialog cho add mới,
+      // tránh confirm rơi nhầm nhánh updateLine.
+      setEditingLineId(null);
       setSelectedProduct(product);
 
       // Helper: quick-add với product price chuẩn (không variant, không topping)
@@ -987,7 +994,7 @@ function FnbPosPageInner() {
   // ── Add to cart from item dialog ──
   const handleItemConfirm = useCallback(
     (payload: FnbItemConfirmPayload) => {
-      pos.addLine({
+      const linePayload = {
         productId: payload.productId,
         productName: payload.productName,
         variantId: payload.variantId,
@@ -996,11 +1003,76 @@ function FnbPosPageInner() {
         unitPrice: payload.unitPrice,
         toppings: payload.toppings,
         note: payload.note,
-      });
+      };
+      if (editingLineId) {
+        // Phase 1A.2: chế độ Sửa — cập nhật đúng vị trí, không xoá-thêm.
+        pos.updateLine(editingLineId, linePayload);
+        setEditingLineId(null);
+      } else {
+        pos.addLine(linePayload);
+      }
       setItemDialogOpen(false);
     },
-    [pos]
+    [pos, editingLineId]
   );
+
+  // Phase 1A.2: mở lại item dialog ở chế độ Sửa cho 1 line cụ thể.
+  // Tải variants từ cache (cùng cơ chế handleSelectProduct), set
+  // editingLineId để confirm rơi vào nhánh updateLine.
+  const handleEditLine = useCallback(
+    async (line: FnbOrderLine) => {
+      hapticTap();
+      const product = products.find((p) => p.id === line.productId);
+      if (!product) {
+        toast({
+          title: "Không tìm thấy món",
+          description: "Có thể món đã bị xoá khỏi thực đơn.",
+          variant: "warning",
+        });
+        return;
+      }
+      setEditingLineId(line.id);
+      setSelectedProduct(product);
+
+      const cached = variantCacheRef.get(line.productId);
+      if (cached) {
+        setItemVariants(cached);
+        setItemDialogOpen(true);
+        return;
+      }
+      setItemVariants([]);
+      setItemVariantsLoading(true);
+      setItemDialogOpen(true);
+      try {
+        const vs = await getVariantsByProduct(line.productId);
+        const mapped = vs.map((v) => ({
+          id: v.id,
+          label: v.name,
+          sell_price: v.sellPrice,
+        }));
+        variantCacheRef.set(line.productId, mapped);
+        setItemVariants(mapped);
+      } catch (err) {
+        console.error("getVariantsByProduct error (edit):", err);
+      } finally {
+        setItemVariantsLoading(false);
+      }
+    },
+    [products, toast, variantCacheRef]
+  );
+
+  // Compute initial selection for dialog when editing.
+  const dialogInitialSelection: FnbItemInitialSelection | undefined = useMemo(() => {
+    if (!editingLineId) return undefined;
+    const line = pos.activeTab?.lines.find((l) => l.id === editingLineId);
+    if (!line) return undefined;
+    return {
+      variantId: line.variantId,
+      quantity: line.quantity,
+      toppings: line.toppings.map((t) => ({ id: t.productId, quantity: t.quantity })),
+      note: line.note,
+    };
+  }, [editingLineId, pos.activeTab?.lines]);
 
   // ── Send to kitchen (offline-aware) ──
   // - Nếu tab chưa có kitchenOrderId → tạo đơn bếp mới (sendToKitchen)
@@ -2315,6 +2387,7 @@ function FnbPosPageInner() {
           lineCount={pos.lineCount}
           updateLineQty={pos.updateLineQty}
           removeLine={pos.removeLine}
+          onEditLine={handleEditLine}
           onSendToKitchen={handleSendToKitchen}
           onPayment={() => setPaymentOpen(true)}
           onSplitBill={handleOpenSplitBill}
@@ -2391,12 +2464,18 @@ function FnbPosPageInner() {
         <Suspense fallback={null}>
           <FnbItemDialog
             open={itemDialogOpen}
-            onOpenChange={setItemDialogOpen}
+            onOpenChange={(o) => {
+              setItemDialogOpen(o);
+              // Phase 1A.2: đóng dialog → clear edit-mode để add tiếp đúng nhánh.
+              if (!o) setEditingLineId(null);
+            }}
             product={selectedProduct}
             variants={itemVariants.length > 0 ? itemVariants : undefined}
             variantsLoading={itemVariantsLoading}
             toppings={toppingProducts.length > 0 ? toppingProducts : undefined}
             onConfirm={handleItemConfirm}
+            initialSelection={dialogInitialSelection}
+            confirmLabel={editingLineId ? "Cập nhật" : undefined}
           />
         </Suspense>
       )}
@@ -2514,6 +2593,7 @@ function FnbPosPageInner() {
               lineCount={pos.lineCount}
               updateLineQty={pos.updateLineQty}
               removeLine={pos.removeLine}
+              onEditLine={handleEditLine}
               onSendToKitchen={() => { handleSendToKitchen(); setMobileCartOpen(false); }}
               onPayment={() => { setPaymentOpen(true); setMobileCartOpen(false); }}
               onSplitBill={handleOpenSplitBill}
