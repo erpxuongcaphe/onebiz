@@ -468,6 +468,7 @@ export default function NhapHangPage() {
     total?: number;
     taxAmount?: number;
     note?: string;
+    paid?: number;
   } | null>(null);
   const [viewMode, setViewMode] = useState<ViewMode>("list");
   const [payingItem, setPayingItem] = useState<PurchaseOrder | null>(null);
@@ -794,6 +795,7 @@ export default function NhapHangPage() {
                 supplierName: order.supplierName,
                 total: order.total,
                 taxAmount: order.taxAmount,
+                paid: order.paid,
               });
               setCreateOpen(true);
             }
@@ -1258,6 +1260,7 @@ export default function NhapHangPage() {
                       supplierName: row.supplierName,
                       total: row.total,
                       taxAmount: row.taxAmount,
+                      paid: row.paid,
                     });
                     setCreateOpen(true);
                   }
