@@ -37,6 +37,7 @@ import {
   createModifierOption,
   updateModifierOption,
   deleteModifierOption,
+  seedFnbVnPreset,
   type ModifierGroup,
   type ModifierOption,
   type ModifierRule,
@@ -124,6 +125,45 @@ export default function ModifierFnbPage() {
   }
 
   // ── Handlers ──
+  const [seeding, setSeeding] = useState(false);
+
+  async function handleSeedPreset() {
+    if (
+      !window.confirm(
+        "Tạo sẵn 4 nhóm tuỳ chọn chuẩn FnB Việt:\n\n" +
+          "• Size (M / L / XL — bắt buộc)\n" +
+          "• Mức đường (0 / 30 / 50 / 70 / 100% — scale BOM)\n" +
+          "• Mức đá (Không / Ít / Vừa / Nhiều)\n" +
+          "• Topping (rỗng — anh tự thêm sau vì cần link NVL)\n\n" +
+          "Nhóm nào đã có sẽ được bỏ qua, không trùng.\n" +
+          "Anh có thể sửa/xoá sau khi tạo. Tiếp tục?",
+      )
+    )
+      return;
+    setSeeding(true);
+    try {
+      const result = await seedFnbVnPreset();
+      const parts: string[] = [];
+      if (result.groupsCreated > 0)
+        parts.push(`tạo ${result.groupsCreated} nhóm + ${result.optionsCreated} options`);
+      if (result.groupsSkipped > 0) parts.push(`bỏ qua ${result.groupsSkipped} nhóm đã có`);
+      toast({
+        variant: "success",
+        title: result.groupsCreated > 0 ? "Đã tạo preset" : "Không có gì mới",
+        description: parts.join(", ") || "Tất cả nhóm preset đã tồn tại",
+      });
+      await refresh();
+    } catch (err) {
+      toast({
+        variant: "error",
+        title: "Lỗi tạo preset",
+        description: err instanceof Error ? err.message : "Vui lòng thử lại",
+      });
+    } finally {
+      setSeeding(false);
+    }
+  }
+
   function openCreateGroup() {
     setGroupDialog({ open: true, editing: null });
   }
@@ -173,8 +213,15 @@ export default function ModifierFnbPage() {
     <div className="flex flex-col gap-4 p-4 md:p-6">
       <PageHeader
         title="Tuỳ chọn món FnB"
-        subtitle="Quản lý nhóm tuỳ chọn (Size, Mức đường, Mức đá, Topping...) — gắn vào SP để hiện trên POS FnB."
+        subtitle="Quản lý nhóm tuỳ chọn (Size, Mức đường, Mức đá, Topping...) — gắn vào nhóm SP hoặc SP riêng để hiện trên POS FnB."
         actions={[
+          {
+            label: seeding ? "Đang tạo..." : "Tạo preset FnB Việt",
+            icon: <Icon name="auto_awesome" size={18} />,
+            variant: "outline",
+            onClick: handleSeedPreset,
+            disabled: seeding,
+          },
           {
             label: "Tạo nhóm tuỳ chọn",
             icon: <Icon name="add" size={18} />,
@@ -182,6 +229,21 @@ export default function ModifierFnbPage() {
           },
         ]}
       />
+
+      {/* Empty state hint — gợi ý click preset */}
+      {!loading && groups.length === 0 && (
+        <div className="rounded-lg border border-status-info/30 bg-status-info/5 p-3 text-sm">
+          <div className="flex items-start gap-2">
+            <Icon name="lightbulb" size={18} className="text-status-info shrink-0 mt-0.5" />
+            <div className="space-y-1">
+              <p className="font-medium text-status-info">Mới setup quán cà phê?</p>
+              <p className="text-xs text-muted-foreground">
+                Bấm <span className="font-semibold">"Tạo preset FnB Việt"</span> ở góc trên để tự sinh sẵn 4 nhóm chuẩn (Size + Mức đường + Mức đá + Topping). Sau đó vào trang <a href="/hang-hoa/nhom" className="text-primary underline">Nhóm hàng</a> để gán cho từng nhóm SP — tất cả món trong nhóm sẽ tự thừa kế.
+              </p>
+            </div>
+          </div>
+        </div>
+      )}
 
       {loading ? (
         <div className="flex h-64 items-center justify-center text-muted-foreground">

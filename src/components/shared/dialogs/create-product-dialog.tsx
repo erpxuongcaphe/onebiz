@@ -48,10 +48,18 @@ import {
 import { useAuth } from "@/lib/contexts/auth-context";
 import type { Product, BOMItem } from "@/lib/types";
 import { formatNumber, formatCurrency } from "@/lib/format";
+// CEO 01/06/2026 — Sprint 2.2d: tab "Tuỳ chọn FnB" trong form SP.
+import {
+  listModifierGroups,
+  listCategoryModifierLinks,
+  listProductModifierLinks,
+  setProductModifierGroups,
+  type ModifierGroup,
+} from "@/lib/services/supabase/modifier-groups";
 
 type ShelfLifeUnit = "day" | "month" | "year";
 type SupplierOption = { id: string; name: string; code?: string };
-type InnerTab = "info" | "pricing" | "bom";
+type InnerTab = "info" | "pricing" | "bom" | "modifier";
 
 /** Item trong bảng BOM inline (gắn với SKU đang tạo/sửa) */
 interface InlineBomItem {
@@ -219,6 +227,24 @@ export function CreateProductDialog({
   // Edit mode hiện code thật của SP nên không cần preview.
   const [previewCode, setPreviewCode] = useState<string>("");
   const [loadingPreview, setLoadingPreview] = useState(false);
+
+  // CEO 01/06/2026 — Sprint 2.2d: Modifier picker cho SKU FnB.
+  // Pattern Toast inheritance:
+  //   - Mặc định: inherit từ category_modifier_groups của nhóm SP.
+  //   - User có thể bật "Override" → set product_modifier_groups riêng cho SP này.
+  const [availableFnbModifierGroups, setAvailableFnbModifierGroups] = useState<
+    ModifierGroup[]
+  >([]);
+  const [inheritedModifierGroups, setInheritedModifierGroups] = useState<
+    ModifierGroup[]
+  >([]);
+  const [productModifierGroupIds, setProductModifierGroupIds] = useState<
+    Set<string>
+  >(new Set());
+  const [modifierMode, setModifierMode] = useState<"inherit" | "override">(
+    "inherit",
+  );
+  const [loadingModifierPicker, setLoadingModifierPicker] = useState(false);
 
   // Reset form khi dialog mở. Nếu có initialData → prefill từ sản phẩm đang sửa.
   useEffect(() => {
@@ -391,6 +417,77 @@ export function CreateProductDialog({
       cancelled = true;
     };
   }, [open]);
+
+  // CEO 01/06/2026 — Sprint 2.2d: Load modifier picker khi dialog mở cho SKU FnB.
+  // Reset khi đóng / switch sang NVL / Retail.
+  useEffect(() => {
+    if (!open || scope !== "sku" || channel !== "fnb") {
+      setAvailableFnbModifierGroups([]);
+      setInheritedModifierGroups([]);
+      setProductModifierGroupIds(new Set());
+      setModifierMode("inherit");
+      return;
+    }
+    let cancelled = false;
+    setLoadingModifierPicker(true);
+    (async () => {
+      try {
+        // 1. Load available groups (channel=fnb hoặc all)
+        const all = await listModifierGroups();
+        const fnbGroups = all.filter(
+          (g) => g.channel === "fnb" || g.channel === "all",
+        );
+        if (cancelled) return;
+        setAvailableFnbModifierGroups(fnbGroups);
+
+        // 2. Load inherited từ category
+        if (categoryId) {
+          const links = await listCategoryModifierLinks(categoryId);
+          if (cancelled) return;
+          const inheritedIds = new Set(links.map((l) => l.modifierGroupId));
+          setInheritedModifierGroups(
+            fnbGroups.filter((g) => inheritedIds.has(g.id)),
+          );
+        } else {
+          setInheritedModifierGroups([]);
+        }
+
+        // 3. Load SP-level override (chỉ edit mode)
+        if (initialData) {
+          const productLinks = await listProductModifierLinks(initialData.id);
+          if (cancelled) return;
+          if (productLinks.length > 0) {
+            setModifierMode("override");
+            setProductModifierGroupIds(
+              new Set(productLinks.map((l) => l.modifierGroupId)),
+            );
+          } else {
+            setModifierMode("inherit");
+            setProductModifierGroupIds(new Set());
+          }
+        } else {
+          setModifierMode("inherit");
+          setProductModifierGroupIds(new Set());
+        }
+      } catch (err) {
+        console.warn("Load modifier picker failed:", err);
+      } finally {
+        if (!cancelled) setLoadingModifierPicker(false);
+      }
+    })();
+    return () => {
+      cancelled = true;
+    };
+  }, [open, scope, channel, categoryId, initialData]);
+
+  function toggleProductModifierGroup(groupId: string) {
+    setProductModifierGroupIds((prev) => {
+      const next = new Set(prev);
+      if (next.has(groupId)) next.delete(groupId);
+      else next.add(groupId);
+      return next;
+    });
+  }
 
   // Load NCC list 1 lần mỗi lần dialog mở. 500 NCC ~ 50KB payload — ok.
   // Nếu tenant scale >2k NCC sau này thì đổi sang async search combobox.
@@ -666,6 +763,29 @@ export function CreateProductDialog({
           }
         }
 
+        // CEO 01/06/2026 — Sprint 2.2d: Sync product_modifier_groups.
+        // - Mode "inherit"  → set [] để clear override (POS fallback inherit từ nhóm).
+        // - Mode "override" → set list tick.
+        if (scope === "sku" && channel === "fnb") {
+          try {
+            const ids =
+              modifierMode === "override"
+                ? Array.from(productModifierGroupIds)
+                : [];
+            await setProductModifierGroups(initialData.id, ids);
+          } catch (modErr) {
+            console.warn("Save product modifier links failed:", modErr);
+            toast({
+              variant: "warning",
+              title: "Đã lưu SP nhưng lỗi gán Tuỳ chọn",
+              description:
+                modErr instanceof Error
+                  ? modErr.message
+                  : "Anh có thể sửa lại sau từ form SP.",
+            });
+          }
+        }
+
         onOpenChange(false);
         toast({
           title: "Cập nhật hàng hóa thành công",
@@ -769,6 +889,28 @@ export function CreateProductDialog({
         }
       }
 
+      // CEO 01/06/2026 — Sprint 2.2d: Sync product_modifier_groups khi tạo
+      // SP FnB. Mode "override" → set list tick; "inherit" → bỏ qua (mặc định).
+      if (
+        created?.id &&
+        scope === "sku" &&
+        channel === "fnb" &&
+        modifierMode === "override" &&
+        productModifierGroupIds.size > 0
+      ) {
+        try {
+          await setProductModifierGroups(
+            created.id,
+            Array.from(productModifierGroupIds),
+          );
+        } catch (modErr) {
+          console.warn(
+            "[create-product-dialog] sync product modifier links failed:",
+            modErr,
+          );
+        }
+      }
+
       onOpenChange(false);
       toast({
         title: "Tạo hàng hóa thành công",
@@ -858,6 +1000,13 @@ export function CreateProductDialog({
                 {bomItems.length === 0 && !isEdit && (
                   <span className="ml-1 inline-block h-1.5 w-1.5 rounded-full bg-status-warning" />
                 )}
+              </TabsTrigger>
+            )}
+            {/* CEO 01/06/2026 — Sprint 2.2d: Tab Tuỳ chọn FnB cho SKU FnB */}
+            {scope === "sku" && channel === "fnb" && (
+              <TabsTrigger value="modifier" className="flex-1">
+                <Icon name="tune" size={14} className="mr-1" />
+                Tuỳ chọn FnB
               </TabsTrigger>
             )}
           </TabsList>
@@ -1625,6 +1774,162 @@ export function CreateProductDialog({
                   rows={2}
                 />
               </div>
+            </TabsContent>
+          )}
+
+          {/* ─────────── Tab 4: Tuỳ chọn FnB ───────────
+              CEO 01/06/2026 — Sprint 2.2d.
+              Pattern Toast inheritance:
+                - Default = inherit từ category_modifier_groups.
+                - User có thể "Override" → set product_modifier_groups riêng.
+              SP retail không thấy tab này. */}
+          {scope === "sku" && channel === "fnb" && (
+            <TabsContent value="modifier" className="space-y-4 mt-0">
+              {loadingModifierPicker ? (
+                <div className="flex h-32 items-center justify-center text-muted-foreground">
+                  <Icon name="progress_activity" size={20} className="mr-2 animate-spin" />
+                  Đang tải...
+                </div>
+              ) : (
+                <div className="space-y-4">
+                  {/* Section 1: Inherit từ nhóm (read-only) */}
+                  <div className="rounded-lg border bg-muted/30 p-3">
+                    <div className="flex items-start gap-2 mb-2">
+                      <Icon name="account_tree" size={16} className="text-muted-foreground shrink-0 mt-0.5" />
+                      <div className="flex-1">
+                        <p className="text-sm font-medium">Thừa kế từ nhóm hàng</p>
+                        <p className="text-xs text-muted-foreground">
+                          Các nhóm tuỳ chọn đã gán cho nhóm hàng chứa SP này. Sửa ở{" "}
+                          <a href="/hang-hoa/nhom" target="_blank" className="text-primary underline">
+                            Nhóm hàng
+                          </a>{" "}
+                          → form nhóm.
+                        </p>
+                      </div>
+                    </div>
+                    {!categoryId ? (
+                      <p className="text-xs text-muted-foreground italic py-2">
+                        Chọn nhóm hàng (tab Thông tin) để xem các tuỳ chọn thừa kế.
+                      </p>
+                    ) : inheritedModifierGroups.length === 0 ? (
+                      <p className="text-xs text-muted-foreground py-2">
+                        Nhóm hàng này chưa gán tuỳ chọn nào. Anh có thể:
+                        <br />
+                        1. Gán mặc định ở{" "}
+                        <a href="/hang-hoa/nhom" target="_blank" className="text-primary underline">
+                          Nhóm hàng
+                        </a>{" "}
+                        (áp cho cả nhóm), hoặc
+                        <br />
+                        2. Bật Override bên dưới để gán riêng cho SP này.
+                      </p>
+                    ) : (
+                      <div className="flex flex-wrap gap-1.5">
+                        {inheritedModifierGroups.map((g) => (
+                          <span
+                            key={g.id}
+                            className="inline-flex items-center gap-1 rounded-md bg-card border px-2 py-1 text-xs"
+                          >
+                            <Icon name="check_circle" size={12} className="text-status-success" />
+                            {g.name}
+                            {g.optionCount !== undefined && (
+                              <span className="text-muted-foreground">({g.optionCount})</span>
+                            )}
+                          </span>
+                        ))}
+                      </div>
+                    )}
+                  </div>
+
+                  {/* Section 2: Toggle inherit / override */}
+                  <div className="rounded-lg border p-3">
+                    <div className="flex items-start gap-2 mb-3">
+                      <Icon name="tune" size={16} className="text-status-warning shrink-0 mt-0.5" />
+                      <div className="flex-1">
+                        <p className="text-sm font-medium">Tuỳ chọn riêng cho SP này</p>
+                        <p className="text-xs text-muted-foreground">
+                          Mặc định SP dùng tuỳ chọn của nhóm. Bật Override khi SP cần khác (vd thêm Topping riêng).
+                        </p>
+                      </div>
+                    </div>
+
+                    <div className="flex gap-2 mb-3">
+                      <button
+                        type="button"
+                        onClick={() => setModifierMode("inherit")}
+                        className={`flex-1 rounded-md border px-3 py-2 text-sm transition-colors ${
+                          modifierMode === "inherit"
+                            ? "border-primary bg-primary/10 text-primary font-medium"
+                            : "border-border bg-card text-muted-foreground hover:bg-muted/50"
+                        }`}
+                      >
+                        <Icon name="account_tree" size={14} className="inline mr-1" />
+                        Thừa kế từ nhóm
+                      </button>
+                      <button
+                        type="button"
+                        onClick={() => setModifierMode("override")}
+                        className={`flex-1 rounded-md border px-3 py-2 text-sm transition-colors ${
+                          modifierMode === "override"
+                            ? "border-status-warning bg-status-warning/10 text-status-warning font-medium"
+                            : "border-border bg-card text-muted-foreground hover:bg-muted/50"
+                        }`}
+                      >
+                        <Icon name="edit" size={14} className="inline mr-1" />
+                        Override riêng
+                      </button>
+                    </div>
+
+                    {modifierMode === "override" && (
+                      <>
+                        {availableFnbModifierGroups.length === 0 ? (
+                          <p className="text-xs text-muted-foreground py-3 text-center">
+                            Chưa có nhóm tuỳ chọn nào. Vào{" "}
+                            <a href="/hang-hoa/tuy-chon-fnb" target="_blank" className="text-primary underline">
+                              Tuỳ chọn món FnB
+                            </a>{" "}
+                            để tạo.
+                          </p>
+                        ) : (
+                          <div className="grid grid-cols-2 gap-1.5">
+                            {availableFnbModifierGroups.map((g) => {
+                              const checked = productModifierGroupIds.has(g.id);
+                              return (
+                                <label
+                                  key={g.id}
+                                  className={`flex items-center gap-2 rounded-md border bg-card px-2.5 py-1.5 text-sm cursor-pointer transition-colors ${
+                                    checked
+                                      ? "border-status-warning bg-status-warning/10"
+                                      : "border-border hover:bg-muted/50"
+                                  }`}
+                                >
+                                  <input
+                                    type="checkbox"
+                                    checked={checked}
+                                    onChange={() => toggleProductModifierGroup(g.id)}
+                                    className="size-4"
+                                  />
+                                  <span className="truncate">{g.name}</span>
+                                  {g.optionCount !== undefined && g.optionCount > 0 && (
+                                    <span className="text-xs text-muted-foreground">
+                                      ({g.optionCount})
+                                    </span>
+                                  )}
+                                </label>
+                              );
+                            })}
+                          </div>
+                        )}
+                        {productModifierGroupIds.size > 0 && (
+                          <p className="text-xs text-status-warning mt-2">
+                            ⚠️ SP này sẽ dùng {productModifierGroupIds.size} nhóm trên — KHÔNG thừa kế nhóm hàng nữa.
+                          </p>
+                        )}
+                      </>
+                    )}
+                  </div>
+                </div>
+              )}
             </TabsContent>
           )}
         </Tabs>

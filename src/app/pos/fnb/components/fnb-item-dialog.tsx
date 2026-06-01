@@ -10,12 +10,28 @@ import { cn } from "@/lib/utils";
 import { formatCurrency } from "@/lib/format";
 import type { FnbCartTopping } from "@/lib/types/fnb";
 import { Icon } from "@/components/ui/icon";
+import type {
+  ModifierGroup,
+  ModifierOption,
+} from "@/lib/services/supabase/modifier-groups";
 
 // ── Types ──
 
 interface Variant { id: string; label: string; sell_price: number }
 interface Topping { id: string; name: string; price: number }
 interface Product { id: string; name: string; sell_price: number }
+
+/**
+ * CEO 01/06/2026 — Sprint 2.2e:
+ * Dynamic modifier groups load từ DB (Mức đường, Mức đá, Topping, Size...).
+ * Backward compat: nếu không có dynamic groups → fallback hardcoded R7
+ * (SWEETNESS_OPTIONS + ICE_OPTIONS) để cashier không bị mất UX cũ.
+ */
+export interface DynamicModifierData {
+  groups: ModifierGroup[];
+  /** Map<groupId, options[]> — preload toàn bộ options của các groups */
+  optionsByGroup: Map<string, ModifierOption[]>;
+}
 
 export interface FnbItemConfirmPayload {
   productId: string;
@@ -56,6 +72,12 @@ interface FnbItemDialogProps {
   initialSelection?: FnbItemInitialSelection;
   /** Phase 1A.2: nhãn nút confirm. Default "Thêm vào đơn". */
   confirmLabel?: string;
+  /**
+   * CEO 01/06/2026 — Sprint 2.2e: dynamic modifier groups + options.
+   * Nếu có → ẩn hardcoded sweetness/ice, render dynamic.
+   * Nếu không → giữ hardcoded fallback.
+   */
+  dynamicModifiers?: DynamicModifierData;
 }
 
 // ── Component ──
@@ -104,7 +126,7 @@ function parseStoredNote(note: string): { ice: string; sweet: string; free: stri
 
 export function FnbItemDialog({
   open, onOpenChange, product, variants, variantsLoading, toppings, onConfirm,
-  initialSelection, confirmLabel,
+  initialSelection, confirmLabel, dynamicModifiers,
 }: FnbItemDialogProps) {
   const [selectedVariant, setSelectedVariant] = useState<Variant | null>(null);
   const [quantity, setQuantity] = useState(1);
@@ -115,6 +137,16 @@ export function FnbItemDialog({
   // R7: Modifier preset (sweetness + ice). Empty = không nói gì (mặc định pha bình thường).
   const [sweetness, setSweetness] = useState<string>("");
   const [iceLevel, setIceLevel] = useState<string>("");
+
+  // CEO 01/06/2026 — Sprint 2.2e: Dynamic modifier choices.
+  // Map<groupId, Set<optionId>> — multi rule cho nhiều options, single rule
+  // sẽ tự kiểm tra trước khi add (clear set rồi add option mới).
+  const [dynamicChoices, setDynamicChoices] = useState<Map<string, Set<string>>>(
+    new Map(),
+  );
+
+  const hasDynamicModifiers =
+    dynamicModifiers && dynamicModifiers.groups.length > 0;
 
   useEffect(() => {
     if (open) {
@@ -143,8 +175,50 @@ export function FnbItemDialog({
       setNote(parsed.free);
       setSweetness(parsed.sweet);
       setIceLevel(parsed.ice);
+
+      // CEO 01/06/2026 — Sprint 2.2e: reset dynamic choices, prefill defaults.
+      if (dynamicModifiers && dynamicModifiers.groups.length > 0) {
+        const initChoices = new Map<string, Set<string>>();
+        for (const g of dynamicModifiers.groups) {
+          const opts = dynamicModifiers.optionsByGroup.get(g.id) ?? [];
+          const defaults = opts.filter((o) => o.isDefault).map((o) => o.id);
+          if (defaults.length > 0) {
+            initChoices.set(g.id, new Set(defaults));
+          }
+        }
+        setDynamicChoices(initChoices);
+      } else {
+        setDynamicChoices(new Map());
+      }
     }
-  }, [open, variants, initialSelection]);
+  }, [open, variants, initialSelection, dynamicModifiers]);
+
+  // CEO 01/06/2026 — Sprint 2.2e: toggle 1 option theo rule của group.
+  function toggleDynamicChoice(
+    group: ModifierGroup,
+    optionId: string,
+  ) {
+    setDynamicChoices((prev) => {
+      const next = new Map(prev);
+      const current = new Set(next.get(group.id) ?? []);
+      if (current.has(optionId)) {
+        // Click lại → toggle off (trừ khi single_required + đang chỉ có 1)
+        if (group.rule === "single_required" && current.size === 1) {
+          return prev; // không cho bỏ chọn nếu bắt buộc
+        }
+        current.delete(optionId);
+      } else {
+        // Single rule → clear hết, add 1 cái mới
+        if (group.rule === "single" || group.rule === "single_required") {
+          current.clear();
+        }
+        current.add(optionId);
+      }
+      if (current.size === 0) next.delete(group.id);
+      else next.set(group.id, current);
+      return next;
+    });
+  }
 
   const setToppingQty = useCallback((id: string, qty: number) => {
     setToppingQtys((prev) => {
@@ -163,7 +237,23 @@ export function FnbItemDialog({
       return s + t.price * q;
     }, 0);
   }, [toppings, toppingQtys]);
-  const lineTotal = (unitPrice + toppingTotal) * quantity;
+
+  // CEO 01/06/2026 — Sprint 2.2e: cộng dồn phí từ dynamic modifier options.
+  // Vd Trân châu +7k, Size L +5k được include vào unit price.
+  const dynamicModifierExtra = useMemo(() => {
+    if (!dynamicModifiers) return 0;
+    let total = 0;
+    for (const [groupId, optionIds] of dynamicChoices.entries()) {
+      const opts = dynamicModifiers.optionsByGroup.get(groupId) ?? [];
+      for (const optId of optionIds) {
+        const opt = opts.find((o) => o.id === optId);
+        if (opt) total += opt.priceDelta;
+      }
+    }
+    return total;
+  }, [dynamicChoices, dynamicModifiers]);
+
+  const lineTotal = (unitPrice + toppingTotal + dynamicModifierExtra) * quantity;
 
   const handleConfirm = () => {
     if (!product) return;
@@ -179,8 +269,26 @@ export function FnbItemDialog({
     // Build composite note: modifier presets + free-text. Bếp đọc 1 dòng:
     // vd "Ít đá, 70% đường — không cay nhé"
     const modifierTags: string[] = [];
-    if (iceLevel) modifierTags.push(iceLevel);
-    if (sweetness) modifierTags.push(sweetness + " đường");
+
+    // CEO 01/06/2026 — Sprint 2.2e: dynamic choices ghi đè hardcoded sweetness/ice.
+    if (hasDynamicModifiers && dynamicModifiers) {
+      for (const g of dynamicModifiers.groups) {
+        const choices = dynamicChoices.get(g.id);
+        if (!choices || choices.size === 0) continue;
+        const opts = dynamicModifiers.optionsByGroup.get(g.id) ?? [];
+        const labels = opts
+          .filter((o) => choices.has(o.id))
+          .map((o) => o.label);
+        if (labels.length > 0) {
+          modifierTags.push(`${g.name}: ${labels.join("/")}`);
+        }
+      }
+    } else {
+      // Backward compat: hardcoded R7
+      if (iceLevel) modifierTags.push(iceLevel);
+      if (sweetness) modifierTags.push(sweetness + " đường");
+    }
+
     const trimmedNote = note.trim();
     const composedNote = [
       modifierTags.join(", "),
@@ -192,7 +300,11 @@ export function FnbItemDialog({
     onConfirm({
       productId: product.id, productName: product.name,
       variantId: selectedVariant?.id, variantLabel: selectedVariant?.label,
-      quantity, unitPrice, toppings: cartToppings,
+      quantity,
+      // Sprint 2.2e: unit price include dynamic modifier extras để cashier
+      // thấy đúng giá đã chọn (vd Trân châu +7k).
+      unitPrice: unitPrice + dynamicModifierExtra,
+      toppings: cartToppings,
       note: composedNote || undefined,
     });
     onOpenChange(false);
@@ -311,48 +423,115 @@ export function FnbItemDialog({
             </div>
           )}
 
-          {/* R7: Modifier preset — Đường + Đá. Tap pill thay vì gõ note tay. */}
-          <div className="space-y-2">
-            <Label className="text-sm font-medium">Mức đường</Label>
-            <div className="flex flex-wrap gap-2">
-              {SWEETNESS_OPTIONS.map((s) => (
-                <button
-                  key={s}
-                  type="button"
-                  onClick={() => setSweetness(sweetness === s ? "" : s)}
-                  className={cn(
-                    "px-3 py-2 rounded-full border text-xs font-medium transition-colors",
-                    sweetness === s
-                      ? "bg-primary text-primary-foreground border-primary"
-                      : "border-border hover:border-primary/40",
-                  )}
-                >
-                  {s}
-                </button>
-              ))}
-            </div>
-          </div>
+          {/* CEO 01/06/2026 — Sprint 2.2e: Dynamic modifier groups từ DB.
+              Nếu SP có gán nhóm tuỳ chọn (qua category hoặc override) → render
+              ở đây. KHÔNG hiển thị hardcoded R7 nữa khi có dynamic. */}
+          {hasDynamicModifiers && dynamicModifiers && (
+            <>
+              {dynamicModifiers.groups.map((g) => {
+                const opts = dynamicModifiers.optionsByGroup.get(g.id) ?? [];
+                if (opts.length === 0) return null;
+                const choices = dynamicChoices.get(g.id) ?? new Set();
+                const ruleLabel =
+                  g.rule === "single_required"
+                    ? "Bắt buộc chọn 1"
+                    : g.rule === "single"
+                      ? "Chọn 1"
+                      : "Chọn nhiều";
+                return (
+                  <div key={g.id} className="space-y-2">
+                    <Label className="text-sm font-medium flex items-center gap-2">
+                      {g.name}
+                      <span
+                        className={cn(
+                          "text-[10px] px-1.5 py-0.5 rounded-full font-normal",
+                          g.rule === "single_required"
+                            ? "bg-status-error/10 text-status-error"
+                            : g.rule === "multi"
+                              ? "bg-status-success/10 text-status-success"
+                              : "bg-status-info/10 text-status-info",
+                        )}
+                      >
+                        {ruleLabel}
+                      </span>
+                    </Label>
+                    <div className="flex flex-wrap gap-2">
+                      {opts.map((o) => {
+                        const active = choices.has(o.id);
+                        return (
+                          <button
+                            key={o.id}
+                            type="button"
+                            onClick={() => toggleDynamicChoice(g, o.id)}
+                            className={cn(
+                              "px-3 py-2 rounded-full border text-xs font-medium transition-colors",
+                              active
+                                ? "bg-primary text-primary-foreground border-primary"
+                                : "border-border hover:border-primary/40",
+                            )}
+                          >
+                            {o.label}
+                            {o.priceDelta > 0 && (
+                              <span className={cn("ml-1", active ? "" : "text-status-success")}>
+                                +{formatCurrency(o.priceDelta)}
+                              </span>
+                            )}
+                          </button>
+                        );
+                      })}
+                    </div>
+                  </div>
+                );
+              })}
+            </>
+          )}
 
-          <div className="space-y-2">
-            <Label className="text-sm font-medium">Mức đá</Label>
-            <div className="flex flex-wrap gap-2">
-              {ICE_OPTIONS.map((i) => (
-                <button
-                  key={i}
-                  type="button"
-                  onClick={() => setIceLevel(iceLevel === i ? "" : i)}
-                  className={cn(
-                    "px-3 py-2 rounded-full border text-xs font-medium transition-colors",
-                    iceLevel === i
-                      ? "bg-primary text-primary-foreground border-primary"
-                      : "border-border hover:border-primary/40",
-                  )}
-                >
-                  {i}
-                </button>
-              ))}
-            </div>
-          </div>
+          {/* R7: Modifier preset (FALLBACK khi chưa setup dynamic modifier) */}
+          {!hasDynamicModifiers && (
+            <>
+              <div className="space-y-2">
+                <Label className="text-sm font-medium">Mức đường</Label>
+                <div className="flex flex-wrap gap-2">
+                  {SWEETNESS_OPTIONS.map((s) => (
+                    <button
+                      key={s}
+                      type="button"
+                      onClick={() => setSweetness(sweetness === s ? "" : s)}
+                      className={cn(
+                        "px-3 py-2 rounded-full border text-xs font-medium transition-colors",
+                        sweetness === s
+                          ? "bg-primary text-primary-foreground border-primary"
+                          : "border-border hover:border-primary/40",
+                      )}
+                    >
+                      {s}
+                    </button>
+                  ))}
+                </div>
+              </div>
+
+              <div className="space-y-2">
+                <Label className="text-sm font-medium">Mức đá</Label>
+                <div className="flex flex-wrap gap-2">
+                  {ICE_OPTIONS.map((i) => (
+                    <button
+                      key={i}
+                      type="button"
+                      onClick={() => setIceLevel(iceLevel === i ? "" : i)}
+                      className={cn(
+                        "px-3 py-2 rounded-full border text-xs font-medium transition-colors",
+                        iceLevel === i
+                          ? "bg-primary text-primary-foreground border-primary"
+                          : "border-border hover:border-primary/40",
+                      )}
+                    >
+                      {i}
+                    </button>
+                  ))}
+                </div>
+              </div>
+            </>
+          )}
 
           {/* Note tự do — chỉ dùng khi modifier preset không cover */}
           <div className="space-y-2">

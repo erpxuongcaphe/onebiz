@@ -53,6 +53,13 @@ import { downloadTemplate, exportToExcelFromSchema } from "@/lib/excel";
 import { categoriesExcelSchema } from "@/lib/excel/schemas";
 import { bulkImportCategories } from "@/lib/services/supabase/excel-import";
 import { getAllCategories } from "@/lib/services";
+// CEO 01/06/2026 — Sprint 2.2c: gán modifier groups cho cả nhóm SP FnB
+import {
+  listModifierGroups,
+  listCategoryModifierLinks,
+  setCategoryModifierGroups,
+  type ModifierGroup,
+} from "@/lib/services/supabase/modifier-groups";
 
 type CategoryScope = "nvl" | "sku";
 
@@ -221,6 +228,16 @@ export default function NhomHangPage() {
   // Day 22/05/2026 (CEO V3): Import Excel dialog state
   const [importOpen, setImportOpen] = useState(false);
 
+  // CEO 01/06/2026 — Sprint 2.2c: Modifier groups picker cho category FnB.
+  // Load list available + selected khi dialog mở. Save khi handleSave.
+  const [availableModifierGroups, setAvailableModifierGroups] = useState<
+    ModifierGroup[]
+  >([]);
+  const [selectedModifierGroupIds, setSelectedModifierGroupIds] = useState<
+    Set<string>
+  >(new Set());
+  const [loadingModifiers, setLoadingModifiers] = useState(false);
+
   const fetchData = useCallback(async () => {
     setLoading(true);
     try {
@@ -252,6 +269,57 @@ export default function NhomHangPage() {
 
   // CEO 23/05/2026: refetch khi tab visible/focus lại → fix bug F5 stale
   useRevalidateOnFocus(fetchData);
+
+  // CEO 01/06/2026 — Sprint 2.2c: Load modifier groups + existing links khi
+  // dialog mở cho category FnB. Pattern Toast: gán 1 lần ở nhóm → mọi SP
+  // trong nhóm thừa kế.
+  useEffect(() => {
+    if (!dialogOpen || scope !== "sku" || categoryChannel !== "fnb") {
+      setAvailableModifierGroups([]);
+      setSelectedModifierGroupIds(new Set());
+      return;
+    }
+    let cancelled = false;
+    setLoadingModifiers(true);
+    (async () => {
+      try {
+        const groups = await listModifierGroups();
+        const fnbGroups = groups.filter(
+          (g) => g.channel === "fnb" || g.channel === "all",
+        );
+        if (cancelled) return;
+        setAvailableModifierGroups(fnbGroups);
+
+        if (editingCategory) {
+          const links = await listCategoryModifierLinks(editingCategory.id);
+          if (cancelled) return;
+          setSelectedModifierGroupIds(
+            new Set(links.map((l) => l.modifierGroupId)),
+          );
+        } else {
+          setSelectedModifierGroupIds(new Set());
+        }
+      } catch (err) {
+        if (!cancelled) {
+          console.warn("Load modifier groups failed:", err);
+        }
+      } finally {
+        if (!cancelled) setLoadingModifiers(false);
+      }
+    })();
+    return () => {
+      cancelled = true;
+    };
+  }, [dialogOpen, scope, categoryChannel, editingCategory]);
+
+  function toggleModifierGroup(groupId: string) {
+    setSelectedModifierGroupIds((prev) => {
+      const next = new Set(prev);
+      if (next.has(groupId)) next.delete(groupId);
+      else next.add(groupId);
+      return next;
+    });
+  }
 
   // Filter by debouncedSearch + channelFilter (Day 20/05/2026 CEO Fix #3)
   const filtered = data
@@ -313,6 +381,7 @@ export default function NhomHangPage() {
     setErrors({});
     setSaving(true);
     try {
+      let savedCategoryId: string | null = null;
       if (editingCategory) {
         await updateCategory(editingCategory.id, {
           name: trimmedName,
@@ -320,25 +389,49 @@ export default function NhomHangPage() {
           // CEO 22/05/2026: cập nhật channel nếu là SKU
           ...(scope === "sku" ? { channel: categoryChannel } : {}),
         });
+        savedCategoryId = editingCategory.id;
         toast({
           variant: "success",
           title: "Cập nhật thành công",
           description: `Nhóm "${trimmedName}" đã được lưu.`,
         });
       } else {
-        await createCategory({
+        const created = await createCategory({
           name: trimmedName,
           code: trimmedCode,
           scope,
           // CEO 22/05/2026: channel chỉ truyền khi scope=sku
           ...(scope === "sku" ? { channel: categoryChannel } : {}),
         });
+        savedCategoryId = created.id;
         toast({
           variant: "success",
           title: "Tạo nhóm thành công",
           description: `Đã thêm nhóm "${trimmedName}" (${trimmedCode}).`,
         });
       }
+
+      // CEO 01/06/2026 — Sprint 2.2c: Lưu modifier groups gán cho nhóm FnB.
+      // Pattern Toast: gán 1 lần ở nhóm, mọi SP trong nhóm tự thừa kế.
+      if (savedCategoryId && scope === "sku" && categoryChannel === "fnb") {
+        try {
+          await setCategoryModifierGroups(
+            savedCategoryId,
+            Array.from(selectedModifierGroupIds),
+          );
+        } catch (modErr) {
+          console.warn("Save modifier groups failed:", modErr);
+          toast({
+            variant: "warning",
+            title: "Đã lưu nhóm nhưng lỗi gán tuỳ chọn",
+            description:
+              modErr instanceof Error
+                ? modErr.message
+                : "Anh có thể sửa lại sau từ Tuỳ chọn món FnB.",
+          });
+        }
+      }
+
       setDialogOpen(false);
       await fetchData();
     } catch (err) {
@@ -857,6 +950,70 @@ export default function NhomHangPage() {
                 </div>
                 {errors.channel && (
                   <p className="text-xs text-destructive">{errors.channel}</p>
+                )}
+              </div>
+            )}
+
+            {/* CEO 01/06/2026 — Sprint 2.2c: Tuỳ chọn mặc định cho nhóm SP FnB.
+                Pattern Toast: gán 1 lần ở nhóm, mọi SP trong nhóm tự thừa kế.
+                Chỉ hiện khi scope=sku + channel=fnb. */}
+            {scope === "sku" && categoryChannel === "fnb" && (
+              <div className="space-y-2 rounded-lg border bg-status-warning/5 p-3">
+                <div className="flex items-start gap-2">
+                  <Icon name="tune" size={16} className="text-status-warning shrink-0 mt-0.5" />
+                  <div className="flex-1">
+                    <label className="text-sm font-medium">
+                      Tuỳ chọn mặc định cho nhóm
+                    </label>
+                    <p className="text-xs text-muted-foreground mt-0.5">
+                      Mọi SP trong nhóm này sẽ tự thừa kế các nhóm tuỳ chọn anh tick. SP riêng có thể override sau ở form sửa SP.
+                    </p>
+                  </div>
+                </div>
+                {loadingModifiers ? (
+                  <p className="text-xs text-muted-foreground py-2">Đang tải...</p>
+                ) : availableModifierGroups.length === 0 ? (
+                  <p className="text-xs text-muted-foreground py-2">
+                    Chưa có nhóm tuỳ chọn nào. Vào{" "}
+                    <a href="/hang-hoa/tuy-chon-fnb" target="_blank" className="text-primary underline">
+                      Tuỳ chọn món FnB
+                    </a>{" "}
+                    để tạo (có nút "Tạo preset FnB Việt" sinh sẵn 4 nhóm).
+                  </p>
+                ) : (
+                  <div className="grid grid-cols-2 gap-1.5 mt-2">
+                    {availableModifierGroups.map((g) => {
+                      const checked = selectedModifierGroupIds.has(g.id);
+                      return (
+                        <label
+                          key={g.id}
+                          className={`flex items-center gap-2 rounded-md border bg-card px-2.5 py-1.5 text-sm cursor-pointer transition-colors ${
+                            checked
+                              ? "border-status-warning bg-status-warning/10"
+                              : "border-border hover:bg-muted/50"
+                          }`}
+                        >
+                          <input
+                            type="checkbox"
+                            checked={checked}
+                            onChange={() => toggleModifierGroup(g.id)}
+                            className="size-4"
+                          />
+                          <span className="truncate">{g.name}</span>
+                          {g.optionCount !== undefined && g.optionCount > 0 && (
+                            <span className="text-xs text-muted-foreground">
+                              ({g.optionCount})
+                            </span>
+                          )}
+                        </label>
+                      );
+                    })}
+                  </div>
+                )}
+                {selectedModifierGroupIds.size > 0 && (
+                  <p className="text-xs text-status-warning mt-1">
+                    Đã chọn {selectedModifierGroupIds.size} nhóm — tất cả SP trong nhóm này sẽ tự thừa kế.
+                  </p>
                 )}
               </div>
             )}

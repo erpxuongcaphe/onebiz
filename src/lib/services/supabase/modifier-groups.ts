@@ -203,6 +203,340 @@ export async function deleteModifierOption(id: string): Promise<void> {
 }
 
 // ────────────────────────────────────────────────────────────
+// PRESET — Seed 4 nhóm tuỳ chọn FnB Việt chuẩn (CEO 01/06/2026)
+// ────────────────────────────────────────────────────────────
+// Click 1 lần ở /hang-hoa/tuy-chon-fnb → tạo sẵn Size + Mức đường +
+// Mức đá + Topping (rỗng). Idempotent: nếu group đã tồn tại theo tên
+// (UNIQUE tenant_id+name) → skip để tránh duplicate.
+//
+// CEO 01/06/2026: KHÔNG POS lớn nào có preset VN — đây là gap OneBiz
+// lấp để cafe owner setup nhanh hơn KiotViet/Sapo/iPOS.
+
+export interface PresetSeedResult {
+  groupsCreated: number;
+  groupsSkipped: number;
+  optionsCreated: number;
+}
+
+export async function seedFnbVnPreset(): Promise<PresetSeedResult> {
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  const supabase = getClient() as any;
+  const tenantId = await getCurrentTenantId();
+
+  let groupsCreated = 0;
+  let groupsSkipped = 0;
+  let optionsCreated = 0;
+
+  // Load existing groups by name (tránh duplicate)
+  const { data: existing } = await supabase
+    .from("modifier_groups")
+    .select("id, name")
+    .eq("tenant_id", tenantId);
+  const existingByName = new Map<string, string>(
+    ((existing ?? []) as Array<{ id: string; name: string }>).map((g) => [g.name, g.id]),
+  );
+
+  // Định nghĩa 4 nhóm chuẩn
+  const presets: Array<{
+    name: string;
+    rule: ModifierRule;
+    sortOrder: number;
+    options: Array<{
+      label: string;
+      priceDelta?: number;
+      scaleFactor?: number | null;
+      isDefault?: boolean;
+      sortOrder: number;
+    }>;
+  }> = [
+    {
+      name: "Size",
+      rule: "single_required",
+      sortOrder: 1,
+      options: [
+        { label: "M", priceDelta: 0, isDefault: true, sortOrder: 1 },
+        { label: "L", priceDelta: 5000, sortOrder: 2 },
+        { label: "XL", priceDelta: 10000, sortOrder: 3 },
+      ],
+    },
+    {
+      name: "Mức đường",
+      rule: "single",
+      sortOrder: 2,
+      options: [
+        { label: "Không đường", scaleFactor: 0, sortOrder: 1 },
+        { label: "30%", scaleFactor: 0.3, sortOrder: 2 },
+        { label: "50%", scaleFactor: 0.5, sortOrder: 3 },
+        { label: "70%", scaleFactor: 0.7, isDefault: true, sortOrder: 4 },
+        { label: "100%", scaleFactor: 1.0, sortOrder: 5 },
+      ],
+    },
+    {
+      name: "Mức đá",
+      rule: "single",
+      sortOrder: 3,
+      options: [
+        { label: "Không đá", sortOrder: 1 },
+        { label: "Ít đá", sortOrder: 2 },
+        { label: "Vừa đá", isDefault: true, sortOrder: 3 },
+        { label: "Nhiều đá", sortOrder: 4 },
+      ],
+    },
+    {
+      name: "Topping",
+      rule: "multi",
+      sortOrder: 4,
+      options: [
+        // Rỗng — CEO tự thêm vì phải link NVL/SKU topping riêng của quán
+      ],
+    },
+  ];
+
+  for (const preset of presets) {
+    let groupId = existingByName.get(preset.name);
+    if (groupId) {
+      groupsSkipped++;
+      continue;
+    }
+    // Tạo group
+    const { data: newGroup, error: groupErr } = await supabase
+      .from("modifier_groups")
+      .insert({
+        tenant_id: tenantId,
+        name: preset.name,
+        rule: preset.rule,
+        channel: "fnb",
+        sort_order: preset.sortOrder,
+      })
+      .select("id")
+      .single();
+    if (groupErr) handleError(groupErr, "seedFnbVnPreset.createGroup");
+    groupId = (newGroup as { id: string }).id;
+    groupsCreated++;
+
+    // Insert options
+    if (preset.options.length > 0) {
+      const optionRows = preset.options.map((o) => ({
+        group_id: groupId,
+        label: o.label,
+        price_delta: o.priceDelta ?? 0,
+        scale_factor: o.scaleFactor ?? null,
+        is_default: o.isDefault ?? false,
+        sort_order: o.sortOrder,
+      }));
+      const { error: optErr } = await supabase
+        .from("modifier_options")
+        .insert(optionRows);
+      if (optErr) handleError(optErr, "seedFnbVnPreset.createOptions");
+      optionsCreated += preset.options.length;
+    }
+  }
+
+  return { groupsCreated, groupsSkipped, optionsCreated };
+}
+
+// ────────────────────────────────────────────────────────────
+// CATEGORY MODIFIER LINKS — gán modifier groups cho cả nhóm SP
+// ────────────────────────────────────────────────────────────
+// Pattern Toast: gán 1 lần cho category "Cà phê" → mọi SP trong nhóm
+// tự thừa kế. SP nào không override sẽ dùng list này.
+
+export interface CategoryModifierLink {
+  id: string;
+  categoryId: string;
+  modifierGroupId: string;
+  sortOrder: number;
+}
+
+export async function listCategoryModifierLinks(
+  categoryId: string,
+): Promise<CategoryModifierLink[]> {
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  const supabase = getClient() as any;
+  const { data, error } = await supabase
+    .from("category_modifier_groups")
+    .select("id, category_id, modifier_group_id, sort_order")
+    .eq("category_id", categoryId)
+    .order("sort_order", { ascending: true });
+  if (error) handleError(error, "listCategoryModifierLinks");
+  return ((data ?? []) as Array<{
+    id: string;
+    category_id: string;
+    modifier_group_id: string;
+    sort_order: number;
+  }>).map((r) => ({
+    id: r.id,
+    categoryId: r.category_id,
+    modifierGroupId: r.modifier_group_id,
+    sortOrder: r.sort_order,
+  }));
+}
+
+/**
+ * Set toàn bộ modifier groups cho category — replace pattern.
+ * Truyền array groupIds → service tự diff (insert mới, xoá cũ).
+ * Idempotent: gọi nhiều lần với cùng input → kết quả như nhau.
+ */
+export async function setCategoryModifierGroups(
+  categoryId: string,
+  groupIds: string[],
+): Promise<void> {
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  const supabase = getClient() as any;
+  const tenantId = await getCurrentTenantId();
+
+  const existing = await listCategoryModifierLinks(categoryId);
+  const existingIds = new Set(existing.map((l) => l.modifierGroupId));
+  const newIds = new Set(groupIds);
+
+  // Xoá những link không còn trong list mới
+  const toDelete = existing.filter((l) => !newIds.has(l.modifierGroupId));
+  if (toDelete.length > 0) {
+    const { error } = await supabase
+      .from("category_modifier_groups")
+      .delete()
+      .in(
+        "id",
+        toDelete.map((l) => l.id),
+      );
+    if (error) handleError(error, "setCategoryModifierGroups.delete");
+  }
+
+  // Thêm mới
+  const toInsert = groupIds
+    .filter((id) => !existingIds.has(id))
+    .map((id, idx) => ({
+      tenant_id: tenantId,
+      category_id: categoryId,
+      modifier_group_id: id,
+      sort_order: existing.length + idx,
+    }));
+  if (toInsert.length > 0) {
+    const { error } = await supabase
+      .from("category_modifier_groups")
+      .insert(toInsert);
+    if (error) handleError(error, "setCategoryModifierGroups.insert");
+  }
+}
+
+// ────────────────────────────────────────────────────────────
+// PRODUCT MODIFIER LINKS — override cho 1 SP cụ thể
+// ────────────────────────────────────────────────────────────
+// Khi SP cần khác nhóm (vd Bạc xỉu thêm Topping kem cheese mà nhóm
+// CFS không có), gán riêng ở đây. SP sẽ dùng list này thay vì inherit.
+
+export interface ProductModifierLink {
+  id: string;
+  productId: string;
+  modifierGroupId: string;
+  ruleOverride: ModifierRule | null;
+  sortOrder: number;
+}
+
+export async function listProductModifierLinks(
+  productId: string,
+): Promise<ProductModifierLink[]> {
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  const supabase = getClient() as any;
+  const { data, error } = await supabase
+    .from("product_modifier_groups")
+    .select("id, product_id, modifier_group_id, rule_override, sort_order")
+    .eq("product_id", productId)
+    .order("sort_order", { ascending: true });
+  if (error) handleError(error, "listProductModifierLinks");
+  return ((data ?? []) as Array<{
+    id: string;
+    product_id: string;
+    modifier_group_id: string;
+    rule_override: ModifierRule | null;
+    sort_order: number;
+  }>).map((r) => ({
+    id: r.id,
+    productId: r.product_id,
+    modifierGroupId: r.modifier_group_id,
+    ruleOverride: r.rule_override,
+    sortOrder: r.sort_order,
+  }));
+}
+
+export async function setProductModifierGroups(
+  productId: string,
+  groupIds: string[],
+): Promise<void> {
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  const supabase = getClient() as any;
+  const tenantId = await getCurrentTenantId();
+
+  const existing = await listProductModifierLinks(productId);
+  const existingIds = new Set(existing.map((l) => l.modifierGroupId));
+  const newIds = new Set(groupIds);
+
+  const toDelete = existing.filter((l) => !newIds.has(l.modifierGroupId));
+  if (toDelete.length > 0) {
+    const { error } = await supabase
+      .from("product_modifier_groups")
+      .delete()
+      .in(
+        "id",
+        toDelete.map((l) => l.id),
+      );
+    if (error) handleError(error, "setProductModifierGroups.delete");
+  }
+
+  const toInsert = groupIds
+    .filter((id) => !existingIds.has(id))
+    .map((id, idx) => ({
+      tenant_id: tenantId,
+      product_id: productId,
+      modifier_group_id: id,
+      sort_order: existing.length + idx,
+    }));
+  if (toInsert.length > 0) {
+    const { error } = await supabase
+      .from("product_modifier_groups")
+      .insert(toInsert);
+    if (error) handleError(error, "setProductModifierGroups.insert");
+  }
+}
+
+/**
+ * Resolve modifier groups effective cho 1 SP — pattern inheritance Toast.
+ *
+ * Quy tắc:
+ *   1. Nếu SP có product_modifier_groups → DÙNG (override).
+ *   2. Nếu không → INHERIT từ category_modifier_groups của nhóm SP đó.
+ *
+ * Đây là hàm POS FnB sẽ gọi khi cashier tap món để biết phải hiện
+ * tuỳ chọn nào.
+ */
+export async function getEffectiveModifierGroupsForProduct(
+  productId: string,
+  categoryId: string | null,
+): Promise<ModifierGroup[]> {
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  const supabase = getClient() as any;
+
+  // 1. Check SP-level override
+  const productLinks = await listProductModifierLinks(productId);
+  const groupIds = productLinks.length > 0
+    ? productLinks.map((l) => l.modifierGroupId)
+    : categoryId
+      ? (await listCategoryModifierLinks(categoryId)).map((l) => l.modifierGroupId)
+      : [];
+
+  if (groupIds.length === 0) return [];
+
+  const { data, error } = await supabase
+    .from("modifier_groups")
+    .select("*, modifier_options(count)")
+    .in("id", groupIds)
+    .eq("is_active", true)
+    .order("sort_order", { ascending: true });
+  if (error) handleError(error, "getEffectiveModifierGroupsForProduct");
+  return ((data ?? []) as RawGroup[]).map((row) => mapGroup(row));
+}
+
+// ────────────────────────────────────────────────────────────
 // Mappers
 // ────────────────────────────────────────────────────────────
 

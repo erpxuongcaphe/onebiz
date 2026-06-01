@@ -53,6 +53,14 @@ import {
   type DiscountPreset,
 } from "@/lib/services/supabase/fnb-platform-settings";
 import { getClient } from "@/lib/services/supabase/base";
+// CEO 01/06/2026 — Sprint 2.2e: dynamic modifier groups cho POS FnB
+import {
+  getEffectiveModifierGroupsForProduct,
+  listModifierOptions,
+  type ModifierGroup,
+  type ModifierOption,
+} from "@/lib/services/supabase/modifier-groups";
+import type { DynamicModifierData } from "./components/fnb-item-dialog";
 import { printKitchenTicketV2, printPreBill, printFnbReceipt } from "@/lib/print-fnb";
 import { printKitchenTicketsByStation } from "./print-stations";
 import { printShiftReport } from "@/lib/print-shift-report";
@@ -130,6 +138,11 @@ function FnbPosPageInner() {
   // POS-FIX-C3: track loading state cho variant dialog — khi cache miss
   // mà network đang fetch, hiện skeleton thay vì empty (UX "tưởng đơ").
   const [itemVariantsLoading, setItemVariantsLoading] = useState(false);
+  // CEO 01/06/2026 — Sprint 2.2e: Dynamic modifier groups cho SP đang mở dialog.
+  // Cache per-product để tránh re-fetch khi cashier quay lại cùng món.
+  const [itemModifierData, setItemModifierData] = useState<
+    DynamicModifierData | undefined
+  >(undefined);
   const [toppingProducts, setToppingProducts] = useState<{ id: string; name: string; price: number }[]>([]);
   const [paymentOpen, setPaymentOpen] = useState(false);
   const [showFloorPlan, setShowFloorPlan] = useState(false);
@@ -743,6 +756,49 @@ function FnbPosPageInner() {
     []
   );
 
+  // CEO 01/06/2026 — Sprint 2.2e: Cache modifier data per (productId, categoryId).
+  // Key dùng productId vì SP có thể có override (product-level) hoặc inherit
+  // (category-level). Cùng SP → cùng modifier (đến khi setup thay đổi).
+  // Empty array (no groups) cũng cache để tránh re-fetch SP không có modifier.
+  const modifierCacheRef = useMemo(
+    () => new Map<string, DynamicModifierData>(),
+    []
+  );
+
+  // Helper: load modifier groups + options effective cho SP.
+  // CACHE-FIRST: kiểm cache trước, miss thì fetch + lưu cache.
+  const loadModifierForProduct = useCallback(
+    async (productId: string, categoryId: string | null) => {
+      const cached = modifierCacheRef.get(productId);
+      if (cached) return cached;
+      try {
+        const groups = await getEffectiveModifierGroupsForProduct(
+          productId,
+          categoryId,
+        );
+        const optionsByGroup = new Map<string, ModifierOption[]>();
+        await Promise.all(
+          groups.map(async (g) => {
+            const opts = await listModifierOptions(g.id);
+            optionsByGroup.set(g.id, opts);
+          }),
+        );
+        const data: DynamicModifierData = { groups, optionsByGroup };
+        modifierCacheRef.set(productId, data);
+        return data;
+      } catch (err) {
+        console.warn("loadModifierForProduct error:", err);
+        const empty: DynamicModifierData = {
+          groups: [],
+          optionsByGroup: new Map(),
+        };
+        modifierCacheRef.set(productId, empty);
+        return empty;
+      }
+    },
+    [modifierCacheRef],
+  );
+
   // ── Warm variant cache từ IndexedDB ngay khi mount (cache-first).
   //    Chạy 1 lần, không chờ network. Nếu có data → dialog mở instant trên cold
   //    start + offline reload. Sau đó effect prefetch bên dưới sẽ refresh nếu
@@ -940,11 +996,27 @@ function FnbPosPageInner() {
         });
       };
 
+      // CEO 01/06/2026 — Sprint 2.2e: load modifier groups song song với variants.
+      // Cache-first → instant response cho SP đã mở trước. Cache miss thì fetch.
+      void loadModifierForProduct(product.id, product.category_id).then(
+        (data) => {
+          setItemModifierData(data);
+        },
+      );
+
       // 1. Cache hit — quyết định ngay không network
       const cached = variantCacheRef.get(product.id);
       if (cached) {
         if (cached.length === 0) {
-          // SP không có biến thể → quick-add, skip dialog
+          // SP không có biến thể NHƯNG có thể có modifier → check modifier cache
+          const modCached = modifierCacheRef.get(product.id);
+          if (modCached && modCached.groups.length > 0) {
+            // Có modifier → mở dialog dù không có size
+            setItemVariants([]);
+            setItemDialogOpen(true);
+            return;
+          }
+          // Không variant + không modifier → quick-add, skip dialog
           quickAdd();
           return;
         }
@@ -970,10 +1042,17 @@ function FnbPosPageInner() {
         variantCacheRef.set(product.id, mapped);
 
         if (mapped.length === 0) {
-          // Không có variant → đóng dialog + quick-add
-          setItemDialogOpen(false);
-          quickAdd();
-          return;
+          // Không có variant — chờ modifier load xong rồi quyết định:
+          // có modifier groups → giữ dialog mở; không có → quick-add.
+          const modData = await loadModifierForProduct(
+            product.id,
+            product.category_id,
+          );
+          if (modData.groups.length === 0) {
+            setItemDialogOpen(false);
+            quickAdd();
+            return;
+          }
         }
         setItemVariants(mapped);
       } catch (err) {
@@ -988,7 +1067,7 @@ function FnbPosPageInner() {
         setItemVariantsLoading(false);
       }
     },
-    [toast, variantCacheRef, pos],
+    [toast, variantCacheRef, modifierCacheRef, loadModifierForProduct, pos],
   );
 
   // ── Add to cart from item dialog ──
@@ -1034,6 +1113,13 @@ function FnbPosPageInner() {
       setEditingLineId(line.id);
       setSelectedProduct(product);
 
+      // CEO 01/06/2026 — Sprint 2.2e: load modifier khi sửa dòng giỏ.
+      void loadModifierForProduct(product.id, product.category_id).then(
+        (data) => {
+          setItemModifierData(data);
+        },
+      );
+
       const cached = variantCacheRef.get(line.productId);
       if (cached) {
         setItemVariants(cached);
@@ -1058,7 +1144,7 @@ function FnbPosPageInner() {
         setItemVariantsLoading(false);
       }
     },
-    [products, toast, variantCacheRef]
+    [products, toast, variantCacheRef, loadModifierForProduct]
   );
 
   // Compute initial selection for dialog when editing.
@@ -2467,7 +2553,10 @@ function FnbPosPageInner() {
             onOpenChange={(o) => {
               setItemDialogOpen(o);
               // Phase 1A.2: đóng dialog → clear edit-mode để add tiếp đúng nhánh.
-              if (!o) setEditingLineId(null);
+              if (!o) {
+                setEditingLineId(null);
+                setItemModifierData(undefined);
+              }
             }}
             product={selectedProduct}
             variants={itemVariants.length > 0 ? itemVariants : undefined}
@@ -2476,6 +2565,8 @@ function FnbPosPageInner() {
             onConfirm={handleItemConfirm}
             initialSelection={dialogInitialSelection}
             confirmLabel={editingLineId ? "Cập nhật" : undefined}
+            // CEO 01/06/2026 — Sprint 2.2e: dynamic modifier groups + options
+            dynamicModifiers={itemModifierData}
           />
         </Suspense>
       )}
