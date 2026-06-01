@@ -28,6 +28,13 @@ interface FnbProductGridProps {
    * Nếu tenant thực sự track stock NVL qua BOM thì bật lên.
    */
   enforceStock?: boolean;
+  /**
+   * Map productId → tổng số lượng đang trong giỏ. Khi >0 sẽ render
+   * badge nhỏ ở góc tile để cashier thấy ngay món nào đã chọn bao
+   * nhiêu (KiotViet/Toast pattern). Optional — không truyền thì
+   * không hiện gì.
+   */
+  cartQtyByProductId?: Record<string, number>;
 }
 
 // Grid config — responsive column count + fixed row height cho virtualizer.
@@ -64,6 +71,7 @@ export function FnbProductGrid({
   products,
   onSelectProduct,
   enforceStock = false,
+  cartQtyByProductId,
 }: FnbProductGridProps) {
   const parentRef = useRef<HTMLDivElement | null>(null);
   const [containerWidth, setContainerWidth] = useState<number>(0);
@@ -146,6 +154,7 @@ export function FnbProductGrid({
                   product={product}
                   onClick={() => onSelectProduct(product)}
                   enforceStock={enforceStock}
+                  cartQty={cartQtyByProductId?.[product.id] ?? 0}
                 />
               ))}
               {/* Fill empty slots để giữ grid alignment khi row cuối thiếu */}
@@ -165,10 +174,12 @@ function ProductCard({
   product,
   onClick,
   enforceStock,
+  cartQty,
 }: {
   product: FnbProduct;
   onClick: () => void;
   enforceStock: boolean;
+  cartQty: number;
 }) {
   // Chỉ coi "Hết hàng" khi enforceStock=true. POS FnB default FALSE vì SP
   // được làm theo đơn (nguyên liệu track ở NVL, không ở SP bán).
@@ -225,6 +236,18 @@ function ProductCard({
         <div className="absolute top-3 right-3 bg-primary/90 backdrop-blur-[20px] text-on-primary text-[11px] font-bold px-3 py-1 rounded-full ambient-shadow">
           {formatCurrency(product.sell_price)}
         </div>
+
+        {/* Qty-in-cart badge — top-left khi món đã trong giỏ. Giúp
+            cashier thấy ngay món nào đã chọn bao nhiêu (KiotViet/Toast
+            pattern). Pure additive, không đổi flow. */}
+        {cartQty > 0 && (
+          <div
+            className="absolute top-3 left-3 flex h-6 min-w-6 items-center justify-center rounded-full bg-status-success px-1.5 text-[11px] font-bold leading-none text-white ambient-shadow tabular-nums"
+            aria-label={`Đã thêm ${cartQty} vào giỏ`}
+          >
+            {cartQty}
+          </div>
+        )}
 
         {/* Out of stock overlay */}
         {outOfStock && (

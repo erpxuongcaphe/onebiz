@@ -683,6 +683,19 @@ function FnbPosPageInner() {
     return productsInCategory.filter((p) => p.brand === activeSubFilter);
   }, [productsInCategory, activeSubFilter]);
 
+  // Map productId → tổng qty đang trong giỏ của tab hiện tại. Pass xuống
+  // FnbProductGrid để render badge số lượng trên ô món (Phase 1A — additive,
+  // không đổi flow). Cộng dồn nhiều line cùng productId (vd món có topping
+  // khác ở line riêng) để cashier thấy tổng số đã chọn.
+  const cartQtyByProductId = useMemo(() => {
+    const map: Record<string, number> = {};
+    const lines = pos.activeTab?.lines ?? [];
+    for (const l of lines) {
+      map[l.productId] = (map[l.productId] ?? 0) + l.quantity;
+    }
+    return map;
+  }, [pos.activeTab?.lines]);
+
   // Map productId → brand cho sub-pills component (chỉ products trong category)
   const brandByProductId = useMemo(() => {
     const map = new Map<string, string | null>();
@@ -2286,6 +2299,7 @@ function FnbPosPageInner() {
                 <FnbProductGrid
                   products={filteredProducts}
                   onSelectProduct={handleSelectProduct}
+                  cartQtyByProductId={cartQtyByProductId}
                 />
               </div>
             </>
