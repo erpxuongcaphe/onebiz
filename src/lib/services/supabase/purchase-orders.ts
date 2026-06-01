@@ -364,6 +364,67 @@ export async function receivePurchaseOrder(orderId: string): Promise<void> {
 }
 
 // ============================================================
+// Phase 2 — Mở lại phiếu nhập đã nhập kho để sửa (CEO 01/06/2026)
+// ============================================================
+
+/**
+ * Atomic revert receive: trả phiếu đã nhập kho về 'draft' để user sửa
+ * items/qty/giá rồi nhập kho lại. Wrap RPC revert_received_purchase_order_atomic
+ * (migration 00120).
+ *
+ * Side effects (atomic):
+ * - Trừ products.stock + branch_stock theo received_quantity.
+ * - Insert stock_movements 'out' audit (reference_type='purchase_order_revert').
+ * - Xoá product_lots còn full, cancel lots đã consume một phần.
+ * - Xoá input_invoice (nếu chưa 'recorded' — nếu đã ghi sổ → throw).
+ * - Reset received_quantity về 0.
+ * - Set status='draft'.
+ *
+ * Guards (RPC sẽ raise):
+ * - Status phải ordered/partial/completed.
+ * - Sản phẩm đã bán bớt → tồn âm → throw "đã bán X, không thể revert Y".
+ * - Input_invoice đã ghi sổ → throw.
+ */
+export async function reopenPurchaseOrderForEdit(
+  orderId: string,
+): Promise<{
+  revertedLines: number;
+  revertedQtyTotal: number;
+  consumedLotsCancelled: number;
+  inputInvoiceDeleted: boolean;
+}> {
+  const supabase = getClient();
+  const ctx = await getCurrentContext();
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  const { data, error } = await (supabase.rpc as any)(
+    "revert_received_purchase_order_atomic",
+    {
+      p_order_id: orderId,
+      p_user_id: ctx.userId,
+    },
+  );
+  if (error) handleError(error, "reopenPurchaseOrderForEdit");
+
+  const res = data as {
+    success: boolean;
+    reverted_lines: number;
+    reverted_qty_total: number;
+    consumed_lots_cancelled: number;
+    input_invoice_deleted: boolean;
+    new_status: string;
+  } | null;
+  if (!res || !res.success) {
+    throw new Error("RPC revert_received_purchase_order_atomic không trả về kết quả");
+  }
+  return {
+    revertedLines: res.reverted_lines,
+    revertedQtyTotal: res.reverted_qty_total,
+    consumedLotsCancelled: res.consumed_lots_cancelled,
+    inputInvoiceDeleted: res.input_invoice_deleted,
+  };
+}
+
+// ============================================================
 // Duplicate purchase order — clone existing PO → create new draft
 // Sprint UX-1 Stage 3 (CEO 04/05/2026).
 // ============================================================

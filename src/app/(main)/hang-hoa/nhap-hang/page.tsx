@@ -45,6 +45,7 @@ import {
   getPurchaseOrderItems,
   getPaymentHistory,
   closePurchaseOrderShort,
+  reopenPurchaseOrderForEdit,
   type PurchaseOrderItemRow,
 } from "@/lib/services";
 import type { PurchaseOrder, PurchaseOrderStatus } from "@/lib/types";
@@ -1293,6 +1294,43 @@ export default function NhapHangPage() {
             onCancel:
               row.status !== "completed" && row.status !== "cancelled"
                 ? () => handleAdvanceStatus(row, "cancelled")
+                : undefined,
+            // Phase 2 (CEO 01/06/2026): Mở lại phiếu đã nhập kho để sửa items.
+            // RPC revert atomic — trừ tồn về tồn trước khi nhập + xoá lots +
+            // xoá input_invoice (chưa ghi sổ) + set status='draft'.
+            extraActions:
+              row.status === "ordered" ||
+              row.status === "partial" ||
+              row.status === "completed"
+                ? [
+                    {
+                      label: "Mở lại để sửa (revert tồn)",
+                      icon: <Icon name="restart_alt" size={16} />,
+                      onClick: async () => {
+                        const ok = window.confirm(
+                          `Phiếu ${row.code}: tồn kho đã cộng ${row.code}. Mở lại sẽ TRỪ tồn về như trước nhập, đưa phiếu về Nháp để sửa.\n\nKhông revert được nếu sản phẩm đã bán bớt khiến tồn âm.\n\nTiếp tục?`,
+                        );
+                        if (!ok) return;
+                        try {
+                          const res = await reopenPurchaseOrderForEdit(row.id);
+                          toast({
+                            variant: "success",
+                            title: "Đã mở lại phiếu để sửa",
+                            description: `Đã trả về Nháp · revert ${res.revertedLines} dòng (${res.revertedQtyTotal} đơn vị)${res.consumedLotsCancelled > 0 ? ` · ${res.consumedLotsCancelled} lô đã consume → cancel` : ""}${res.inputInvoiceDeleted ? ` · đã xoá hoá đơn đầu vào` : ""}.`,
+                          });
+                          // Reload list to reflect new status
+                          window.location.reload();
+                        } catch (err) {
+                          toast({
+                            variant: "error",
+                            title: "Không thể mở lại phiếu",
+                            description:
+                              err instanceof Error ? err.message : "Lỗi không xác định",
+                          });
+                        }
+                      },
+                    },
+                  ]
                 : undefined,
           });
         }}
