@@ -30,7 +30,6 @@ const settingsNav: ModuleNavGroup[] = [
       { label: "Mã giảm giá", href: "/cai-dat/ma-giam-gia", icon: "confirmation_number" },
       { label: "Tích điểm", href: "/cai-dat/tich-diem", icon: "star" },
       { label: "POS FnB nâng cao", href: "/cai-dat/fnb-presets", icon: "local_cafe" },
-      { label: "Tuỳ chọn món FnB", href: "/cai-dat/modifier-fnb", icon: "tune" },
       { label: "Phí giao hàng (km)", href: "/cai-dat/phi-giao-hang", icon: "local_shipping" },
     ],
   },

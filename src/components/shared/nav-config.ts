@@ -253,6 +253,7 @@ export const sidebarNavGroups: SidebarGroup[] = [
         items: [
           { label: "Danh sách sản phẩm", href: "/hang-hoa", icon: "inventory_2" },
           { label: "Nhóm hàng", href: "/hang-hoa/nhom", icon: "sell" },
+          { label: "Tuỳ chọn món FnB", href: "/hang-hoa/tuy-chon-fnb", icon: "tune" },
           { label: "Đơn vị tính", href: "/hang-hoa/don-vi-tinh", icon: "straighten" },
           { label: "Bảng giá", href: "/hang-hoa/thiet-lap-gia", icon: "attach_money" },
         ],
