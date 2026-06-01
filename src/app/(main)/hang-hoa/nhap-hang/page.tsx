@@ -469,6 +469,8 @@ export default function NhapHangPage() {
     taxAmount?: number;
     note?: string;
     paid?: number;
+    /** Phase 1.5 (CEO 01/06/2026): nếu 'ordered' → dialog chỉ cho sửa paid+note. */
+    status?: "draft" | "ordered" | "partial" | "completed" | "cancelled";
   } | null>(null);
   const [viewMode, setViewMode] = useState<ViewMode>("list");
   const [payingItem, setPayingItem] = useState<PurchaseOrder | null>(null);
@@ -786,7 +788,9 @@ export default function NhapHangPage() {
       onClose={onClose}
       onRequestPartialReceive={() => setPartialReceiveOrder(order)}
       onEdit={
-        order.status === "draft"
+        // Phase 1.5 (CEO 01/06/2026): cho sửa cả status='ordered' nhưng dialog
+        // chỉ enable paid + note (không đụng tồn). Items thay đổi → Huỷ phiếu.
+        order.status === "draft" || order.status === "ordered"
           ? () => {
               setEditingPO({
                 id: order.id,
@@ -796,6 +800,7 @@ export default function NhapHangPage() {
                 total: order.total,
                 taxAmount: order.taxAmount,
                 paid: order.paid,
+                status: order.status,
               });
               setCreateOpen(true);
             }
@@ -1249,9 +1254,10 @@ export default function NhapHangPage() {
             row,
             kind: "goods_receipt",
             permissions: txPerms,
-            // Sửa — chỉ status='draft'
+            // Phase 1.5 (CEO 01/06/2026): cho sửa cả draft + ordered. Dialog
+            // sẽ tự khoá items/qty khi status='ordered' (chỉ sửa paid+note).
             onEdit:
-              row.status === "draft"
+              row.status === "draft" || row.status === "ordered"
                 ? () => {
                     setEditingPO({
                       id: row.id,
@@ -1261,6 +1267,7 @@ export default function NhapHangPage() {
                       total: row.total,
                       taxAmount: row.taxAmount,
                       paid: row.paid,
+                      status: row.status,
                     });
                     setCreateOpen(true);
                   }

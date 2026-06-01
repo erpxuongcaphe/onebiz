@@ -39,6 +39,12 @@ interface EditingPO {
   note?: string;
   /** CEO 01/06/2026: số tiền NCC đã trả khi phiếu được tạo/sửa lần trước. */
   paid?: number;
+  /**
+   * Phase 1.5 (CEO 01/06/2026): trạng thái phiếu. Nếu 'ordered' (đã nhập kho)
+   * → dialog locks items/qty/giá/NCC; chỉ enable paid + note để không đụng tồn.
+   * Cần sửa items → Huỷ phiếu rồi tạo lại (sprint sau sẽ làm atomic RPC full).
+   */
+  status?: "draft" | "ordered" | "partial" | "completed" | "cancelled";
 }
 
 interface CreatePurchaseOrderDialogProps {
@@ -188,6 +194,8 @@ export function CreatePurchaseOrderDialog({
   editingPO,
 }: CreatePurchaseOrderDialogProps) {
   const isEdit = !!editingPO;
+  // Phase 1.5 (CEO 01/06/2026): edit phiếu đã nhập kho — locked items/qty.
+  const isOrderedLocked = isEdit && editingPO?.status === "ordered";
   const { toast } = useToast();
   const [code, setCode] = useState("");
   const [supplierSearch, setSupplierSearch] = useState("");
@@ -397,6 +405,32 @@ export function CreatePurchaseOrderDialog({
     try {
       const supabase = getClient();
       const ctx = await getCurrentContext();
+
+      // Phase 1.5 (CEO 01/06/2026): phiếu đã nhập kho — chỉ cập nhật
+      // paid/debt/note, KHÔNG đụng items/total/tồn. Items đã được khoá ở UI
+      // (fieldset disabled). Atomic full sẽ làm sprint riêng.
+      if (isOrderedLocked && editingPO) {
+        const baseTotal = editingPO.total ?? total;
+        const { error: ordErr } = await supabase
+          .from("purchase_orders")
+          .update({
+            paid: paidAmount,
+            debt: Math.max(0, baseTotal - paidAmount),
+            note: notes || null,
+          })
+          .eq("tenant_id", ctx.tenantId)
+          .eq("id", editingPO.id);
+        if (ordErr) throw new Error(ordErr.message);
+        toast({
+          title: "Đã cập nhật phiếu nhập",
+          description: `Cập nhật "Đã thanh toán NCC" + Ghi chú cho ${editingPO.code}. Tồn kho không đổi.`,
+          variant: "success",
+        });
+        onSuccess?.();
+        setSavingMode(null);
+        return;
+      }
+
       let poId: string;
 
       if (isEdit && editingPO) {
@@ -552,7 +586,19 @@ export function CreatePurchaseOrderDialog({
               Trước đây Chi phí + Đã thanh toán + buttons chen ở header/footer
               gây rối; giờ gom hết vào cột phải kiểu KiotViet (OneBiz style). */}
           <div className="mx-auto grid max-w-[1500px] gap-3 lg:grid-cols-[1fr_360px]">
-            <div className="flex min-w-0 flex-col gap-3">
+            {/* Phase 1.5: banner cảnh báo khi đang sửa phiếu đã nhập kho. */}
+            {isOrderedLocked && (
+              <div className="lg:col-span-2 flex items-start gap-3 rounded-xl border border-status-warning/40 bg-status-warning/10 p-3 text-sm">
+                <Icon name="warning" size={20} className="mt-0.5 shrink-0 text-status-warning" />
+                <div>
+                  <p className="font-semibold text-status-warning">Phiếu đã nhập kho — chỉ sửa được "Đã thanh toán NCC" và "Ghi chú".</p>
+                  <p className="mt-1 text-xs text-on-surface-variant">
+                    Tránh đụng tồn kho. Muốn đổi số lượng / giá / sản phẩm → <b>Huỷ phiếu</b> rồi tạo phiếu mới. Bản đầy đủ (atomic revert + re-add tồn) đang chờ sprint riêng.
+                  </p>
+                </div>
+              </div>
+            )}
+            <fieldset disabled={isOrderedLocked} className="flex min-w-0 flex-col gap-3 disabled:opacity-60">
             <div className="grid gap-3 xl:grid-cols-2">
               <section className="rounded-xl border bg-white p-3 shadow-sm">
                 <div className="mb-2 flex items-center justify-between gap-2">
@@ -784,7 +830,7 @@ export function CreatePurchaseOrderDialog({
                 rows={2}
               />
             </section>
-            </div>{/* close left main */}
+            </fieldset>{/* close left main */}
 
             {/* ── Right aside — Tóm tắt phiếu + Thanh toán + Buttons ── */}
             <aside className="flex flex-col gap-3 lg:sticky lg:top-0 lg:self-start">
