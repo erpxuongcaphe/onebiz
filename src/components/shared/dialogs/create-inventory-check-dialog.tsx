@@ -292,13 +292,16 @@ export function CreateInventoryCheckDialog({
       const itemsPayload = checkItems.map((item) => {
         // CEO 28/05/2026: tồn thực tế quy về đơn vị cơ bản (thùng×factor + lẻ).
         const actual = lineActual(item);
+        // Lưu ý: KHÔNG truyền `difference` — Migration 00031 đã đổi cột
+        // này thành GENERATED ALWAYS AS (actual_stock - system_stock) STORED
+        // để chống user sửa devtools. Truyền sẽ bị Postgres reject với
+        // "cannot insert a non-DEFAULT value into column difference".
         return {
           check_id: checkRow.id,
           product_id: item.productId,
           product_name: item.productName,
           system_stock: item.systemStock,
           actual_stock: actual,
-          difference: actual - item.systemStock,
         };
       });
 
