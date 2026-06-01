@@ -187,6 +187,16 @@ export default function PosFnbMockupPage() {
   const total = Math.max(0, subtotal - orderDiscountAmount);
   const lineCount = useMemo(() => lines.reduce((s, l) => s + l.quantity, 0), [lines]);
 
+  // Phase 1A.1: pass qty map xuống FnbProductGrid để demo badge số lượng
+  // trên ô món. Cùng prop sẽ chạy ở POS thật khi cashier thêm món.
+  const cartQtyByProductId = useMemo(() => {
+    const map: Record<string, number> = {};
+    for (const l of lines) {
+      map[l.productId] = (map[l.productId] ?? 0) + l.quantity;
+    }
+    return map;
+  }, [lines]);
+
   // Bấm món → thêm vào giỏ (gộp nếu đã có, không topping)
   function handleSelectProduct(p: FnbProduct) {
     setLines((prev) => {
@@ -310,6 +320,7 @@ export default function PosFnbMockupPage() {
             <FnbProductGrid
               products={filteredProducts}
               onSelectProduct={handleSelectProduct}
+              cartQtyByProductId={cartQtyByProductId}
             />
           </div>
         </div>
