@@ -1081,6 +1081,10 @@ function FnbPosPageInner() {
         quantity: payload.quantity,
         unitPrice: payload.unitPrice,
         toppings: payload.toppings,
+        // CEO 01/06/2026 — Sprint 2.3a: lưu snapshot modifier vào cart line.
+        // RPC checkout (Sprint 2.3b) sẽ đọc snapshot này để scale BOM + trừ
+        // tồn topping NVL.
+        modifierSelections: payload.modifierSelections,
         note: payload.note,
       };
       if (editingLineId) {
@@ -1156,6 +1160,8 @@ function FnbPosPageInner() {
       variantId: line.variantId,
       quantity: line.quantity,
       toppings: line.toppings.map((t) => ({ id: t.productId, quantity: t.quantity })),
+      // CEO 01/06/2026 — Sprint 2.3a: restore dynamic choices khi sửa line cũ.
+      modifierSelections: line.modifierSelections,
       note: line.note,
     };
   }, [editingLineId, pos.activeTab?.lines]);
@@ -1181,6 +1187,10 @@ function FnbPosPageInner() {
         quantity: t.quantity,
         price: t.price,
       })),
+      // CEO 01/06/2026 — Sprint 2.3a: snapshot modifier choices truyền xuống
+      // RPC. v1 RPC bỏ qua (backward compat), v2 (migration 00122) sẽ scale
+      // BOM + trừ tồn topping NVL theo data này.
+      modifierSelections: l.modifierSelections,
     }));
 
     try {

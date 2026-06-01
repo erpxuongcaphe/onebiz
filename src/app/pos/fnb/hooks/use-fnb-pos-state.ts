@@ -7,6 +7,7 @@ import type {
   FnbCartTopping,
   FnbDiscountInput,
   OrderType,
+  ModifierSelectionPayload,
 } from "@/lib/types/fnb";
 import {
   loadPersistedTabs,
@@ -46,6 +47,27 @@ function toppingSignature(toppings: FnbCartTopping[]): string {
   return [...toppings]
     .sort((a, b) => a.productId.localeCompare(b.productId))
     .map((t) => `${t.productId}:${t.quantity}`)
+    .join("|");
+}
+
+/**
+ * CEO 01/06/2026 — Sprint 2.3a: signature dynamic modifier choices để dedupe
+ * cart line. Cùng SP + cùng topping nhưng khác Mức đường (70% vs 100%) →
+ * 2 line riêng (bếp pha khác nhau, BOM scale khác nhau).
+ */
+function modifierSignature(
+  selections: ModifierSelectionPayload[] | undefined,
+): string {
+  if (!selections || selections.length === 0) return "";
+  return [...selections]
+    .sort((a, b) => a.groupId.localeCompare(b.groupId))
+    .map(
+      (s) =>
+        `${s.groupId}:${[...s.options]
+          .map((o) => o.optionId)
+          .sort()
+          .join(",")}`,
+    )
     .join("|");
 }
 
@@ -268,13 +290,15 @@ export function useFnbPosState(branchId?: string): UseFnbPosStateReturn {
       // order không guarantee → cùng món cùng topping bị thêm 2 line riêng,
       // bếp nhận 2 ticket, khách bill double).
       const inputToppingSig = toppingSignature(input.toppings);
+      const inputModifierSig = modifierSignature(input.modifierSelections);
       updateActiveTab((lines) => {
         const existing = lines.find(
           (l) =>
             l.productId === input.productId &&
             l.variantId === input.variantId &&
             (l.note ?? "") === (input.note ?? "") &&
-            toppingSignature(l.toppings) === inputToppingSig
+            toppingSignature(l.toppings) === inputToppingSig &&
+            modifierSignature(l.modifierSelections) === inputModifierSig
         );
         if (existing) {
           return lines.map((l) =>

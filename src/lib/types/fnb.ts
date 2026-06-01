@@ -48,6 +48,37 @@ export interface ToppingAttachment {
   price: number;
 }
 
+/**
+ * CEO 01/06/2026 — Sprint 2.3a: Snapshot lựa chọn modifier cho 1 dòng order.
+ *
+ * Lý do snapshot (NOT reference): modifier_groups + options có thể bị admin
+ * đổi tên / sửa scale sau ngày bán → báo cáo cũ vẫn show đúng label gốc.
+ * Pattern này giống cách lưu unitPrice trong invoice_items (snapshot price).
+ *
+ * RPC scale BOM (Sprint 2.3b) sẽ đọc `scaleFactor` + `linkedProductId` từ
+ * snapshot này để tính tồn NVL.
+ */
+export interface ModifierSelectionOption {
+  optionId: string;
+  label: string;
+  /** Tỷ lệ scale BOM ingredient (null cho topping/size). */
+  scaleFactor: number | null;
+  /** Phí cộng thêm (đã include vào unitPrice). Lưu lại để báo cáo. */
+  priceDelta: number;
+  /** Link tới NVL/SKU topping — RPC sẽ trừ tồn product này. */
+  linkedProductId: string | null;
+}
+
+export interface ModifierSelectionPayload {
+  groupId: string;
+  groupName: string;
+  /** Khi nào cần re-apply: nếu group thay rule, cashier có thể bị reset chọn. */
+  rule: "single_required" | "single" | "multi";
+  /** Group này scale BOM ingredient nào? Null nếu chỉ topping/size. */
+  scaleTargetGroupId?: string | null;
+  options: ModifierSelectionOption[];
+}
+
 // ── Kitchen order item ──
 
 export interface KitchenOrderItem {
@@ -129,6 +160,15 @@ export interface FnbOrderLine {
   quantity: number;
   unitPrice: number;
   toppings: FnbCartTopping[];
+  /**
+   * CEO 01/06/2026 — Sprint 2.3a: Lựa chọn dynamic modifier (Mức đường,
+   * Mức đá, Topping...) đã snapshot. Optional vì:
+   *  - SP không gán modifier → cart line không có field này.
+   *  - Cashier dùng hardcoded fallback → cũng không có (backward compat).
+   * RPC checkout Sprint 2.3b sẽ scale BOM theo scaleFactor + trừ tồn
+   * topping NVL theo linkedProductId.
+   */
+  modifierSelections?: ModifierSelectionPayload[];
   note?: string;
   /** Computed: unitPrice * quantity + sum(toppings) */
   lineTotal: number;

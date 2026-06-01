@@ -8,7 +8,7 @@ import { Textarea } from "@/components/ui/textarea";
 import { Badge } from "@/components/ui/badge";
 import { cn } from "@/lib/utils";
 import { formatCurrency } from "@/lib/format";
-import type { FnbCartTopping } from "@/lib/types/fnb";
+import type { FnbCartTopping, ModifierSelectionPayload } from "@/lib/types/fnb";
 import { Icon } from "@/components/ui/icon";
 import type {
   ModifierGroup,
@@ -41,6 +41,11 @@ export interface FnbItemConfirmPayload {
   quantity: number;
   unitPrice: number;
   toppings: FnbCartTopping[];
+  /**
+   * CEO 01/06/2026 — Sprint 2.3a: snapshot dynamic modifier choices.
+   * Optional — chỉ có khi SP đang dùng dynamic modifier groups.
+   */
+  modifierSelections?: ModifierSelectionPayload[];
   note?: string;
 }
 
@@ -54,6 +59,8 @@ export interface FnbItemInitialSelection {
   quantity?: number;
   toppings?: Array<{ id: string; quantity: number }>;
   note?: string;
+  /** Sprint 2.3a: prefill dynamic modifier choices khi sửa line cũ. */
+  modifierSelections?: ModifierSelectionPayload[];
 }
 
 interface FnbItemDialogProps {
@@ -176,14 +183,33 @@ export function FnbItemDialog({
       setSweetness(parsed.sweet);
       setIceLevel(parsed.ice);
 
-      // CEO 01/06/2026 — Sprint 2.2e: reset dynamic choices, prefill defaults.
+      // CEO 01/06/2026 — Sprint 2.2e + 2.3a: reset dynamic choices.
+      // Ưu tiên prefill từ initialSelection.modifierSelections (chế độ Sửa),
+      // fallback default options của mỗi group (chế độ Thêm mới).
       if (dynamicModifiers && dynamicModifiers.groups.length > 0) {
         const initChoices = new Map<string, Set<string>>();
+        const savedByGroup = new Map<string, Set<string>>();
+        if (initialSelection?.modifierSelections) {
+          for (const sel of initialSelection.modifierSelections) {
+            savedByGroup.set(
+              sel.groupId,
+              new Set(sel.options.map((o) => o.optionId)),
+            );
+          }
+        }
         for (const g of dynamicModifiers.groups) {
-          const opts = dynamicModifiers.optionsByGroup.get(g.id) ?? [];
-          const defaults = opts.filter((o) => o.isDefault).map((o) => o.id);
-          if (defaults.length > 0) {
-            initChoices.set(g.id, new Set(defaults));
+          const saved = savedByGroup.get(g.id);
+          if (saved && saved.size > 0) {
+            initChoices.set(g.id, saved);
+            continue;
+          }
+          // No saved → use defaults (only for "add new" mode)
+          if (!initialSelection?.modifierSelections) {
+            const opts = dynamicModifiers.optionsByGroup.get(g.id) ?? [];
+            const defaults = opts.filter((o) => o.isDefault).map((o) => o.id);
+            if (defaults.length > 0) {
+              initChoices.set(g.id, new Set(defaults));
+            }
           }
         }
         setDynamicChoices(initChoices);
@@ -297,6 +323,34 @@ export function FnbItemDialog({
       .filter(Boolean)
       .join(" — ");
 
+    // CEO 01/06/2026 — Sprint 2.3a: build modifierSelections snapshot từ
+    // dynamicChoices. RPC checkout (Sprint 2.3b) sẽ đọc snapshot này để
+    // scale BOM ingredient + trừ tồn topping NVL.
+    let modifierSelections: ModifierSelectionPayload[] | undefined;
+    if (hasDynamicModifiers && dynamicModifiers) {
+      const payload: ModifierSelectionPayload[] = [];
+      for (const g of dynamicModifiers.groups) {
+        const choices = dynamicChoices.get(g.id);
+        if (!choices || choices.size === 0) continue;
+        const opts = dynamicModifiers.optionsByGroup.get(g.id) ?? [];
+        const selectedOpts = opts.filter((o) => choices.has(o.id));
+        if (selectedOpts.length === 0) continue;
+        payload.push({
+          groupId: g.id,
+          groupName: g.name,
+          rule: g.rule,
+          options: selectedOpts.map((o) => ({
+            optionId: o.id,
+            label: o.label,
+            scaleFactor: o.scaleFactor,
+            priceDelta: o.priceDelta,
+            linkedProductId: o.linkedProductId,
+          })),
+        });
+      }
+      if (payload.length > 0) modifierSelections = payload;
+    }
+
     onConfirm({
       productId: product.id, productName: product.name,
       variantId: selectedVariant?.id, variantLabel: selectedVariant?.label,
@@ -305,6 +359,7 @@ export function FnbItemDialog({
       // thấy đúng giá đã chọn (vd Trân châu +7k).
       unitPrice: unitPrice + dynamicModifierExtra,
       toppings: cartToppings,
+      modifierSelections,
       note: composedNote || undefined,
     });
     onOpenChange(false);

@@ -16,7 +16,11 @@ import {
   setDeliveryPlatform,
 } from "./kitchen-orders";
 import type { PaymentBreakdownItem } from "./pos-checkout";
-import type { ToppingAttachment, DeliveryPlatform } from "@/lib/types/fnb";
+import type {
+  ToppingAttachment,
+  DeliveryPlatform,
+  ModifierSelectionPayload,
+} from "@/lib/types/fnb";
 
 /**
  * Cấp ngưỡng km áp dụng phí giao hàng (CEO 21/05/2026).
@@ -74,6 +78,13 @@ export interface SendToKitchenInput {
     unitPrice: number;
     note?: string;
     toppings?: ToppingAttachment[];
+    /**
+     * CEO 01/06/2026 — Sprint 2.3a: snapshot dynamic modifier choices.
+     * RPC fnb_send_to_kitchen_atomic v2 (Sprint 2.3b migration 00122) sẽ
+     * scale BOM ingredient theo scaleFactor + trừ tồn topping NVL theo
+     * linkedProductId. v1 RPC ignore field này → backward compat OK.
+     */
+    modifierSelections?: ModifierSelectionPayload[];
   }[];
 }
 
