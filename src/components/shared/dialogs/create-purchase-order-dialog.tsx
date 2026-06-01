@@ -548,8 +548,12 @@ export function CreatePurchaseOrderDialog({
         </div>
 
         <div className="min-h-0 flex-1 overflow-y-auto bg-surface-container-low p-3 md:p-4">
-          <div className="mx-auto flex max-w-[1420px] flex-col gap-3">
-            <div className="grid gap-3 xl:grid-cols-[minmax(340px,0.9fr)_minmax(380px,1.2fr)_minmax(300px,0.85fr)]">
+          {/* CEO 01/06/2026: 2-col layout — main left + sticky summary aside.
+              Trước đây Chi phí + Đã thanh toán + buttons chen ở header/footer
+              gây rối; giờ gom hết vào cột phải kiểu KiotViet (OneBiz style). */}
+          <div className="mx-auto grid max-w-[1500px] gap-3 lg:grid-cols-[1fr_360px]">
+            <div className="flex min-w-0 flex-col gap-3">
+            <div className="grid gap-3 xl:grid-cols-2">
               <section className="rounded-xl border bg-white p-3 shadow-sm">
                 <div className="mb-2 flex items-center justify-between gap-2">
                   <h3 className="text-sm font-semibold">Nhà cung cấp</h3>
@@ -655,26 +659,6 @@ export function CreatePurchaseOrderDialog({
                 {errors.items && <p className="mt-1 text-xs text-destructive">{errors.items}</p>}
               </section>
 
-              <section className="rounded-xl border bg-white p-3 shadow-sm">
-                <div className="mb-2 flex items-center justify-between gap-2">
-                  <h3 className="text-sm font-semibold">Chi phí mua hàng</h3>
-                  <span className="text-xs text-muted-foreground">Cộng vào phải trả</span>
-                </div>
-                <div className="grid gap-2 sm:grid-cols-2 xl:grid-cols-1 2xl:grid-cols-2">
-                  <CostInput
-                    label="Vận chuyển"
-                    icon="local_shipping"
-                    value={shippingFee}
-                    onChange={setShippingFee}
-                  />
-                  <CostInput
-                    label="Chi phí khác"
-                    icon="payments"
-                    value={otherCost}
-                    onChange={setOtherCost}
-                  />
-                </div>
-              </section>
             </div>
 
             <div className="overflow-hidden rounded-xl border bg-white shadow-sm">
@@ -800,84 +784,123 @@ export function CreatePurchaseOrderDialog({
                 rows={2}
               />
             </section>
-          </div>
+            </div>{/* close left main */}
+
+            {/* ── Right aside — Tóm tắt phiếu + Thanh toán + Buttons ── */}
+            <aside className="flex flex-col gap-3 lg:sticky lg:top-0 lg:self-start">
+              <section className="rounded-xl border bg-white p-3 shadow-sm">
+                <h3 className="mb-3 text-sm font-semibold">Tóm tắt phiếu</h3>
+
+                {/* Chi phí mua hàng */}
+                <div className="space-y-2">
+                  <CostInput
+                    label="Vận chuyển"
+                    icon="local_shipping"
+                    value={shippingFee}
+                    onChange={setShippingFee}
+                  />
+                  <CostInput
+                    label="Chi phí khác"
+                    icon="payments"
+                    value={otherCost}
+                    onChange={setOtherCost}
+                  />
+                </div>
+
+                {/* Tổng tiền */}
+                <div className="mt-3 space-y-1 border-t pt-3 text-sm">
+                  <div className="flex items-center justify-between">
+                    <span className="text-muted-foreground">Tiền hàng ({formatNumber(items.length)} dòng · SL {formatNumber(totalQuantity)})</span>
+                    <span className="font-medium tabular-nums">{formatCurrency(subtotal)}</span>
+                  </div>
+                  <div className="flex items-center justify-between">
+                    <span className="text-muted-foreground">VAT</span>
+                    <span className="font-medium tabular-nums">{formatCurrency(taxAmount)}</span>
+                  </div>
+                  <div className="flex items-center justify-between">
+                    <span className="text-muted-foreground">Chi phí mua</span>
+                    <span className="font-medium tabular-nums">{formatCurrency(purchaseCost)}</span>
+                  </div>
+                </div>
+
+                <div className="mt-3 flex items-end justify-between border-t pt-3">
+                  <span className="text-sm font-semibold">Tổng cộng</span>
+                  <span className="font-heading text-2xl font-black tabular-nums leading-none text-primary">
+                    {formatCurrency(total)}<span className="ml-1 text-base font-bold">đ</span>
+                  </span>
+                </div>
+
+                {/* Thanh toán */}
+                <div className="mt-4 space-y-2 border-t pt-3">
+                  <label htmlFor="po-paid-amount" className="text-sm font-medium">
+                    Đã thanh toán NCC
+                  </label>
+                  <input
+                    id="po-paid-amount"
+                    type="number"
+                    step="any"
+                    min={0}
+                    value={paidAmount || ""}
+                    onChange={(e) => {
+                      const n = parseFloat(e.target.value);
+                      setPaidAmount(Number.isFinite(n) && n > 0 ? n : 0);
+                    }}
+                    placeholder="Để trống = chưa trả"
+                    className="h-10 w-full rounded-md border border-border bg-background px-3 text-right tabular-nums outline-none focus:ring-2 focus:ring-primary/30"
+                  />
+                  <div className="flex items-center justify-between">
+                    <span className="text-sm text-muted-foreground">Còn nợ NCC</span>
+                    <span className="font-bold tabular-nums text-status-warning">
+                      {formatCurrency(Math.max(0, total - paidAmount))}
+                    </span>
+                  </div>
+                  {paidAmount > total && total > 0 && (
+                    <p className="text-xs text-status-error">
+                      (đã trả vượt tổng phiếu — phần dư sẽ ghi NCC trả lại sau)
+                    </p>
+                  )}
+                </div>
+              </section>
+
+              {/* Actions */}
+              <div className="flex flex-col gap-2">
+                <Button
+                  onClick={() => handleSave("receive")}
+                  disabled={saving}
+                  title="Tạo phiếu và CỘNG TỒN KHO ngay. Dùng khi hàng đã về tới kho."
+                  className="h-11 bg-status-success px-4 font-semibold text-white shadow-sm hover:bg-status-success/90"
+                >
+                  {savingMode === "receive" ? (
+                    <Icon name="progress_activity" size={18} className="mr-2 animate-spin" />
+                  ) : (
+                    <Icon name="inventory_2" size={18} className="mr-2" />
+                  )}
+                  Nhập kho ngay
+                </Button>
+                <Button
+                  variant="outline"
+                  onClick={() => handleSave("draft")}
+                  disabled={saving}
+                  title="Giữ phiếu chờ — CHƯA cộng tồn kho. Dùng khi đặt NCC trước, hàng về sau."
+                  className="h-11 border-status-warning/60 px-4 font-semibold text-status-warning hover:bg-status-warning/10"
+                >
+                  {savingMode === "draft" ? (
+                    <Icon name="progress_activity" size={18} className="mr-2 animate-spin" />
+                  ) : (
+                    <Icon name="schedule" size={18} className="mr-2" />
+                  )}
+                  {isEdit ? "Lưu thay đổi (chờ)" : "Lưu tạm"}
+                </Button>
+                <Button variant="ghost" onClick={() => onOpenChange(false)} disabled={saving}>
+                  Hủy
+                </Button>
+              </div>
+            </aside>
+          </div>{/* close grid wrapper */}
         </div>
 
-        <DialogFooter className="mx-0 mb-0 shrink-0 flex-col items-stretch gap-2 rounded-none border-t bg-white px-4 py-3">
-          {/* CEO 01/06/2026: row Thanh toán — anh nhập số đã trả NCC ngay khi
-              tạo phiếu (để trống = chưa trả → ghi nợ toàn bộ). Tự tính "Còn nợ". */}
-          <div className="mx-auto flex w-full max-w-[1420px] flex-wrap items-center gap-3 border-b pb-2 text-sm">
-            <label className="font-medium text-muted-foreground" htmlFor="po-paid-amount">
-              Đã thanh toán NCC:
-            </label>
-            <input
-              id="po-paid-amount"
-              type="number"
-              step="any"
-              min={0}
-              value={paidAmount || ""}
-              onChange={(e) => {
-                const n = parseFloat(e.target.value);
-                setPaidAmount(Number.isFinite(n) && n > 0 ? n : 0);
-              }}
-              placeholder="Để trống = chưa trả"
-              className="h-9 w-44 rounded-md border border-border bg-background px-3 text-right tabular-nums outline-none focus:ring-2 focus:ring-primary/30"
-            />
-            <span className="text-muted-foreground">→ Còn nợ NCC:</span>
-            <span className="font-bold tabular-nums text-status-warning">
-              {formatCurrency(Math.max(0, total - paidAmount))}
-            </span>
-            {paidAmount > total && total > 0 && (
-              <span className="text-xs text-status-error">
-                (đã trả vượt tổng phiếu — phần dư sẽ ghi NCC trả lại sau)
-              </span>
-            )}
-          </div>
-          <div className="mx-auto grid w-full max-w-[1420px] grid-cols-1 items-center gap-3 lg:grid-cols-[1fr_auto]">
-            <div className="grid gap-2 text-sm sm:grid-cols-3 xl:grid-cols-6">
-              <FooterMetric label="Dòng" value={formatNumber(items.length)} />
-              <FooterMetric label="Tổng SL" value={formatNumber(totalQuantity)} />
-              <FooterMetric label="Tiền hàng" value={formatCurrency(subtotal)} />
-              <FooterMetric label="VAT" value={formatCurrency(taxAmount)} />
-              <FooterMetric label="Chi phí" value={formatCurrency(purchaseCost)} />
-              <FooterMetric label="Tổng cộng" value={formatCurrency(total)} strong />
-            </div>
-            <div className="flex flex-wrap items-center justify-end gap-2">
-              <Button variant="ghost" onClick={() => onOpenChange(false)} disabled={saving}>
-                Hủy
-              </Button>
-              {/* Lưu tạm — phiếu CHỜ, KHÔNG cộng tồn. Đặt NCC trước, hàng về sau. */}
-              <Button
-                variant="outline"
-                onClick={() => handleSave("draft")}
-                disabled={saving}
-                title="Giữ phiếu chờ — CHƯA cộng tồn kho. Dùng khi đặt nhà cung cấp trước, hàng về sau."
-                className="h-11 border-status-warning/60 px-4 font-semibold text-status-warning hover:bg-status-warning/10"
-              >
-                {savingMode === "draft" ? (
-                  <Icon name="progress_activity" size={18} className="mr-2 animate-spin" />
-                ) : (
-                  <Icon name="schedule" size={18} className="mr-2" />
-                )}
-                {isEdit ? "Lưu thay đổi (chờ)" : "Lưu tạm"}
-              </Button>
-              {/* Nhập kho ngay — tạo phiếu + CỘNG TỒN liền. Hàng đã về tới kho. */}
-              <Button
-                onClick={() => handleSave("receive")}
-                disabled={saving}
-                title="Tạo phiếu và CỘNG TỒN KHO ngay. Dùng khi hàng đã về tới kho."
-                className="h-11 bg-status-success px-5 font-semibold text-white shadow-sm hover:bg-status-success/90"
-              >
-                {savingMode === "receive" ? (
-                  <Icon name="progress_activity" size={18} className="mr-2 animate-spin" />
-                ) : (
-                  <Icon name="inventory_2" size={18} className="mr-2" />
-                )}
-                Nhập kho ngay
-              </Button>
-            </div>
-          </div>
-        </DialogFooter>
+        {/* CEO 01/06/2026: DialogFooter đã bỏ — toàn bộ tóm tắt, thanh toán,
+            buttons đã chuyển sang aside bên phải (sticky, kiểu KiotViet). */}
       </DialogContent>
     </Dialog>
   );
