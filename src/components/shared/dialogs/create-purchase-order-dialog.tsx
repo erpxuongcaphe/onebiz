@@ -37,6 +37,8 @@ interface EditingPO {
   total?: number;
   taxAmount?: number;
   note?: string;
+  /** CEO 01/06/2026: số tiền NCC đã trả khi phiếu được tạo/sửa lần trước. */
+  paid?: number;
 }
 
 interface CreatePurchaseOrderDialogProps {
@@ -199,6 +201,9 @@ export function CreatePurchaseOrderDialog({
   const [shippingFee, setShippingFee] = useState(0);
   const [otherCost, setOtherCost] = useState(0);
   const [notes, setNotes] = useState("");
+  // CEO 01/06/2026: số tiền NCC đã thanh toán ngay khi tạo phiếu nhập.
+  // Để trống (=0) = chưa trả, ghi nợ toàn bộ. Nếu nhập > 0 → trừ vào debt.
+  const [paidAmount, setPaidAmount] = useState(0);
   const [errors, setErrors] = useState<Record<string, string>>({});
   // CEO 29/05/2026: 2 nút lưu — "draft" (Lưu tạm) | "receive" (Nhập kho ngay).
   // Lưu nút nào đang chạy để hiện spinner đúng chỗ.
@@ -220,6 +225,7 @@ export function CreatePurchaseOrderDialog({
       setSupplierSearch(editingPO.supplierName);
       setSelectedSupplier({ id: editingPO.supplierId, name: editingPO.supplierName });
       setNotes(editingPO.note ?? "");
+      setPaidAmount(editingPO.paid ?? 0);
 
       (async () => {
         const supabase = getClient();
@@ -403,7 +409,8 @@ export function CreatePurchaseOrderDialog({
             discount_amount: 0,
             tax_amount: taxAmount,
             total,
-            debt: total,
+            paid: paidAmount,
+            debt: Math.max(0, total - paidAmount),
             note: notes || null,
           })
           .eq("tenant_id", ctx.tenantId)
@@ -427,8 +434,8 @@ export function CreatePurchaseOrderDialog({
             discount_amount: 0,
             tax_amount: taxAmount,
             total,
-            paid: 0,
-            debt: total,
+            paid: paidAmount,
+            debt: Math.max(0, total - paidAmount),
             note: notes || null,
             created_by: user?.id ?? ctx.userId,
           } satisfies PurchaseOrderInsert)
@@ -796,7 +803,36 @@ export function CreatePurchaseOrderDialog({
           </div>
         </div>
 
-        <DialogFooter className="mx-0 mb-0 shrink-0 rounded-none border-t bg-white px-4 py-3">
+        <DialogFooter className="mx-0 mb-0 shrink-0 flex-col items-stretch gap-2 rounded-none border-t bg-white px-4 py-3">
+          {/* CEO 01/06/2026: row Thanh toán — anh nhập số đã trả NCC ngay khi
+              tạo phiếu (để trống = chưa trả → ghi nợ toàn bộ). Tự tính "Còn nợ". */}
+          <div className="mx-auto flex w-full max-w-[1420px] flex-wrap items-center gap-3 border-b pb-2 text-sm">
+            <label className="font-medium text-muted-foreground" htmlFor="po-paid-amount">
+              Đã thanh toán NCC:
+            </label>
+            <input
+              id="po-paid-amount"
+              type="number"
+              step="any"
+              min={0}
+              value={paidAmount || ""}
+              onChange={(e) => {
+                const n = parseFloat(e.target.value);
+                setPaidAmount(Number.isFinite(n) && n > 0 ? n : 0);
+              }}
+              placeholder="Để trống = chưa trả"
+              className="h-9 w-44 rounded-md border border-border bg-background px-3 text-right tabular-nums outline-none focus:ring-2 focus:ring-primary/30"
+            />
+            <span className="text-muted-foreground">→ Còn nợ NCC:</span>
+            <span className="font-bold tabular-nums text-status-warning">
+              {formatCurrency(Math.max(0, total - paidAmount))}
+            </span>
+            {paidAmount > total && total > 0 && (
+              <span className="text-xs text-status-error">
+                (đã trả vượt tổng phiếu — phần dư sẽ ghi NCC trả lại sau)
+              </span>
+            )}
+          </div>
           <div className="mx-auto grid w-full max-w-[1420px] grid-cols-1 items-center gap-3 lg:grid-cols-[1fr_auto]">
             <div className="grid gap-2 text-sm sm:grid-cols-3 xl:grid-cols-6">
               <FooterMetric label="Dòng" value={formatNumber(items.length)} />
