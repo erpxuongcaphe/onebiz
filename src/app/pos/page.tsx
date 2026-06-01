@@ -3369,13 +3369,15 @@ function CartItem({
           </button>
           <input
             type="number"
-            min={0.001}
             step="any"
             value={line.quantity}
             onChange={(e) => {
-              // Cho phép số thập phân (vd 0.5 kg). parseInt cắt mất phần lẻ.
+              // Cho phép số thập phân (vd 0.5 kg). parseInt cũ cắt phần lẻ.
+              // Chỉ fallback khi parse fail (chuỗi rỗng/không phải số) để tránh
+              // NaN phá math giá tiền. KHÔNG ép min hay clamp khác — cashier
+              // tự chịu trách nhiệm gõ đúng (theo dặn của CEO).
               const n = parseFloat(e.target.value);
-              onQtyChange(Number.isFinite(n) && n > 0 ? n : 1);
+              onQtyChange(Number.isFinite(n) ? n : 1);
             }}
             data-allow-hotkeys="true"
             className="w-12 h-6 text-center text-[11px] font-semibold tabular-nums outline-none bg-transparent"
