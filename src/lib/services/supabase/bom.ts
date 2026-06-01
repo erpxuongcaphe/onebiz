@@ -302,6 +302,11 @@ export async function createBOM(bom: {
     wastePercent?: number;
     sortOrder?: number;
     note?: string;
+    /**
+     * CEO 01/06/2026 — Sprint 2.3c: link 1 modifier_group → RPC checkout
+     * scale qty NVL theo scale_factor option đã chọn.
+     */
+    modifierScaleTarget?: string | null;
   }[];
 }): Promise<BOM> {
   const tenantId = await getCurrentTenantId();
@@ -326,7 +331,8 @@ export async function createBOM(bom: {
 
   // Create BOM items
   if (bom.items.length > 0) {
-    const { error: itemsError } = await supabase.from("bom_items").insert(
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    const { error: itemsError } = await (supabase.from("bom_items").insert as any)(
       bom.items.map((item, idx) => ({
         bom_id: data.id,
         material_id: item.materialId,
@@ -335,6 +341,8 @@ export async function createBOM(bom: {
         waste_percent: item.wastePercent ?? 0,
         sort_order: item.sortOrder ?? idx,
         note: item.note ?? null,
+        // CEO 01/06/2026 — Sprint 2.3c
+        modifier_scale_target: item.modifierScaleTarget ?? null,
       }))
     );
 
@@ -436,6 +444,8 @@ function mapBOMItem(row: Record<string, unknown>): BOMItem {
     wastePercent: (row.waste_percent as number) ?? 0,
     sortOrder: (row.sort_order as number) ?? 0,
     note: (row.note as string) ?? undefined,
+    // CEO 01/06/2026 — Sprint 2.3c
+    modifierScaleTarget: (row.modifier_scale_target as string) ?? null,
     materialName: material?.name as string | undefined,
     materialCode: material?.code as string | undefined,
     materialCostPrice: material?.cost_price as number | undefined,

@@ -38,6 +38,11 @@ export interface BOMItem {
   wastePercent: number;
   sortOrder: number;
   note?: string;
+  /**
+   * CEO 01/06/2026 — Sprint 2.3c: link với 1 modifier_group. RPC checkout
+   * scale qty NVL theo scale_factor option đã chọn. Null = không scale.
+   */
+  modifierScaleTarget?: string | null;
   // Joined
   materialName?: string;
   materialCode?: string;

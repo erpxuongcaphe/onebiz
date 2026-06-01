@@ -71,6 +71,14 @@ interface InlineBomItem {
   quantity: number;
   wastePercent: number;
   note?: string;
+  /**
+   * CEO 01/06/2026 — Sprint 2.3c: link với 1 modifier group.
+   * Khi cashier chọn option của group đó (vd "70%"), RPC scale
+   * qty NVL × scale_factor. Vd item "Đường" gán group "Mức đường" →
+   * 70% đường → trừ 7g thay vì 10g.
+   * Null = không scale theo modifier (default).
+   */
+  modifierScaleTarget?: string | null;
 }
 
 // VAT phổ biến ở VN: 0% (không chịu), 5% (giảm thuế hoặc nông sản), 8%
@@ -362,6 +370,8 @@ export function CreateProductDialog({
             quantity: it.quantity,
             wastePercent: it.wastePercent ?? 0,
             note: it.note,
+            // CEO 01/06/2026 — Sprint 2.3c
+            modifierScaleTarget: it.modifierScaleTarget ?? null,
           })),
         );
       } catch {
@@ -740,6 +750,8 @@ export function CreateProductDialog({
                   wastePercent: it.wastePercent,
                   sortOrder: idx,
                   note: it.note,
+                  // CEO 01/06/2026 — Sprint 2.3c
+                  modifierScaleTarget: it.modifierScaleTarget ?? null,
                 })),
               });
             } catch (bomErr) {
@@ -1682,9 +1694,18 @@ export function CreateProductDialog({
                       <thead className="bg-surface-container-low text-xs text-muted-foreground">
                         <tr>
                           <th className="text-left px-3 py-2 font-semibold">NVL</th>
-                          <th className="text-right px-3 py-2 font-semibold w-32">Số lượng</th>
-                          <th className="text-left px-3 py-2 font-semibold w-28">ĐVT</th>
-                          <th className="text-right px-3 py-2 font-semibold w-32">Cost/SP</th>
+                          <th className="text-right px-3 py-2 font-semibold w-28">Số lượng</th>
+                          <th className="text-left px-3 py-2 font-semibold w-20">ĐVT</th>
+                          {/* CEO 01/06/2026 — Sprint 2.3c: chỉ cho SKU FnB */}
+                          {channel === "fnb" && (
+                            <th
+                              className="text-left px-3 py-2 font-semibold w-40"
+                              title="Khi cashier chọn modifier của nhóm này, qty NVL sẽ × scale_factor của option"
+                            >
+                              Scale theo modifier
+                            </th>
+                          )}
+                          <th className="text-right px-3 py-2 font-semibold w-28">Cost/SP</th>
                           <th className="w-10"></th>
                         </tr>
                       </thead>
@@ -1726,6 +1747,35 @@ export function CreateProductDialog({
                                   }}
                                 />
                               </td>
+                              {/* CEO 01/06/2026 — Sprint 2.3c: cột Scale modifier (chỉ FnB) */}
+                              {channel === "fnb" && (
+                                <td className="px-3 py-2">
+                                  <select
+                                    value={it.modifierScaleTarget ?? ""}
+                                    onChange={(e) => {
+                                      const v = e.target.value || null;
+                                      setBomItems((prev) =>
+                                        prev.map((p, i) =>
+                                          i === idx ? { ...p, modifierScaleTarget: v } : p,
+                                        ),
+                                      );
+                                    }}
+                                    className="h-9 w-full rounded-md border border-input bg-transparent px-2 text-sm outline-none focus:border-ring"
+                                  >
+                                    <option value="">— Không scale —</option>
+                                    {availableFnbModifierGroups
+                                      .filter((g) =>
+                                        // Chỉ group có rule single/single_required và có scale_factor (vd Mức đường)
+                                        g.rule !== "multi",
+                                      )
+                                      .map((g) => (
+                                        <option key={g.id} value={g.id}>
+                                          {g.name}
+                                        </option>
+                                      ))}
+                                  </select>
+                                </td>
+                              )}
                               <td className="px-3 py-2 text-right text-sm tabular-nums">
                                 {formatCurrency(lineCost)}
                               </td>
@@ -1745,7 +1795,10 @@ export function CreateProductDialog({
                       </tbody>
                       <tfoot className="bg-surface-container-low/50 border-t-2 border-border">
                         <tr>
-                          <td colSpan={3} className="px-3 py-2 text-right font-semibold text-sm">
+                          <td
+                            colSpan={channel === "fnb" ? 4 : 3}
+                            className="px-3 py-2 text-right font-semibold text-sm"
+                          >
                             Tổng giá vốn (theo BOM):
                           </td>
                           <td className="px-3 py-2 text-right font-bold text-primary">
