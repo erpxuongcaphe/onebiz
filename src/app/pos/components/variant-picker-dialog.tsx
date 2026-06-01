@@ -180,10 +180,12 @@ export function VariantPickerDialog({
               </Button>
               <Input
                 type="number"
-                min={1}
+                min={0.001}
+                step="any"
                 value={quantity}
                 onChange={(e) => {
-                  const v = parseInt(e.target.value, 10);
+                  // Cho phép số thập phân (vd 0.5 kg). parseInt cắt mất phần lẻ.
+                  const v = parseFloat(e.target.value);
                   setQuantity(Number.isFinite(v) && v > 0 ? v : 1);
                 }}
                 className="h-8 w-16 text-center tabular-nums"

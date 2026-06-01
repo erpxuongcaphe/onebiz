@@ -3369,11 +3369,16 @@ function CartItem({
           </button>
           <input
             type="number"
-            min={1}
+            min={0.001}
+            step="any"
             value={line.quantity}
-            onChange={(e) => onQtyChange(parseInt(e.target.value) || 1)}
+            onChange={(e) => {
+              // Cho phép số thập phân (vd 0.5 kg). parseInt cắt mất phần lẻ.
+              const n = parseFloat(e.target.value);
+              onQtyChange(Number.isFinite(n) && n > 0 ? n : 1);
+            }}
             data-allow-hotkeys="true"
-            className="w-7 h-6 text-center text-[11px] font-semibold tabular-nums outline-none bg-transparent"
+            className="w-12 h-6 text-center text-[11px] font-semibold tabular-nums outline-none bg-transparent"
           />
           <button
             type="button"
