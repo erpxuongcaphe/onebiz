@@ -780,9 +780,22 @@ export function CreateProductDialog({
       });
       onSuccess?.();
     } catch (err) {
+      // CEO 01/06/2026: dịch lỗi Postgres phổ biến sang tiếng Việt dễ hiểu
+      // thay vì raw "[createProduct] duplicate key value violates ...".
+      const rawMsg = err instanceof Error ? err.message : String(err);
+      let friendly = rawMsg;
+      if (rawMsg.includes("products_tenant_id_code_key") || rawMsg.includes("duplicate key")) {
+        friendly = `Mã hàng đề xuất bị trùng với hàng đã có sẵn (vd do import từ phần mềm cũ). Hệ thống cần đồng bộ counter — anh báo dev apply migration 00119, hoặc thử "Lưu" lại sau vài giây.`;
+      } else if (rawMsg.toLowerCase().includes("not-null") || rawMsg.includes("23502")) {
+        friendly = `Còn thiếu trường bắt buộc trong form. Vui lòng điền đủ các ô có dấu (*).`;
+      } else if (rawMsg.toLowerCase().includes("foreign key") || rawMsg.includes("23503")) {
+        friendly = `Có ràng buộc liên kết bị vi phạm (vd nhóm hàng không tồn tại). Chọn lại nhóm hàng hợp lệ rồi thử lại.`;
+      } else if (rawMsg.toLowerCase().includes("network") || rawMsg.toLowerCase().includes("failed to fetch")) {
+        friendly = `Mất kết nối mạng. Kiểm tra wifi rồi thử lại.`;
+      }
       toast({
         title: isEdit ? "Lỗi cập nhật hàng hóa" : "Lỗi tạo hàng hóa",
-        description: err instanceof Error ? err.message : "Vui lòng thử lại",
+        description: friendly,
         variant: "error",
       });
     } finally {

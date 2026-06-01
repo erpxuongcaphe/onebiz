@@ -37,7 +37,7 @@ import {
   getOrCreateWalkInCustomer,
   adjustCustomerDebt,
 } from "@/lib/services/supabase";
-import { useAutoSaveDraft } from "./hooks/use-auto-save-draft";
+import { useAutoSaveDraft, loadLocalCart } from "./hooks/use-auto-save-draft";
 import { RecoveryDialog } from "./components/recovery-dialog";
 import { getClient } from "@/lib/services/supabase/base";
 import { useToast } from "@/lib/contexts";
@@ -522,6 +522,33 @@ function PosPageInner() {
           if (cancelled) return;
           console.warn("[POS] auto-load draft from URL failed:", err);
         });
+      return () => {
+        cancelled = true;
+      };
+    }
+
+    // Priority 1.5: localStorage backup (CEO 01/06/2026 — F5/cúp điện cứu giỏ).
+    // Auto-save DB có debounce 400ms; nếu F5 trong khoảng đó thì DB chưa có.
+    // LS được ghi sync mỗi keystroke → mở lại web khôi phục NGAY, không cần
+    // popup hỏi (đỡ thao tác cashier — giỏ vẫn đó như anh chưa F5).
+    const localBackup = loadLocalCart(tenant.id, branchSnapshot);
+    if (localBackup) {
+      state.restoreFromLocalBackup({
+        lines: localBackup.lines,
+        customer: localBackup.customer,
+        orderDiscount: localBackup.orderDiscount,
+        note: localBackup.note,
+        paymentMethod: localBackup.paymentMethod,
+      });
+      setClientSessionId(localBackup.sessionId);
+      toast({
+        title: "Đã khôi phục giỏ tự lưu",
+        description: `${localBackup.lines.length} sản phẩm — tiếp tục bán hoặc bấm "Huỷ đơn" để bỏ.`,
+        variant: "info",
+        duration: 4000,
+      });
+      // Không mở recovery dialog vì cart đã hồi phục — các draft khác trong
+      // /don-hang/hoa-don list cashier có thể vào riêng nếu muốn.
       return () => {
         cancelled = true;
       };

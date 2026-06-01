@@ -29,6 +29,83 @@ import {
 } from "@/lib/services/supabase";
 import type { OrderLine, DiscountInput, DeliveryInfo } from "./use-pos-state";
 
+// ════════════════════════════════════════════════════════════════════════════
+// Phase F5-Recovery (CEO 01/06/2026): localStorage backup
+// ════════════════════════════════════════════════════════════════════════════
+// Vấn đề: useAutoSaveDraft DB debounce 400ms — F5/cúp điện trong khoảng đó
+// thì DB chưa có gì → mở lại web mất giỏ.
+// Fix: ghi localStorage IMMEDIATELY mỗi keystroke (sync, không network). DB
+// save vẫn debounce cho performance. Trên mount POS, load LS trước nếu có.
+// LS giữ tối thiểu 7 ngày (auto-clear khi cart empty hoặc checkout xong).
+
+const LS_VERSION = "v1";
+const LS_PREFIX = "onebiz:pos:retail:cart";
+const LS_MAX_AGE_MS = 7 * 24 * 60 * 60 * 1000;
+
+function lsKey(tenantId: string, branchId: string): string {
+  return `${LS_PREFIX}:${LS_VERSION}:${tenantId}:${branchId}`;
+}
+
+export interface LocalCartBackup {
+  lines: OrderLine[];
+  /** Slim shape giống AutoSaveSnapshot — đủ để dựng lại tên hiển thị giỏ. */
+  customer: { id: string; name: string } | null;
+  orderDiscount: DiscountInput;
+  paymentMethod: "cash" | "transfer" | "card" | "mixed";
+  note?: string;
+  sessionId: string;
+  savedAt: number;
+}
+
+/** Ghi sync localStorage — best-effort, never throws. */
+export function saveLocalCart(
+  tenantId: string,
+  branchId: string,
+  data: Omit<LocalCartBackup, "savedAt">,
+): void {
+  if (typeof window === "undefined") return;
+  try {
+    const payload: LocalCartBackup = { ...data, savedAt: Date.now() };
+    localStorage.setItem(lsKey(tenantId, branchId), JSON.stringify(payload));
+  } catch {
+    // localStorage full/disabled — silent fail. DB save sẽ catch up.
+  }
+}
+
+/** Đọc localStorage. Trả null nếu không có, hết hạn, hoặc parse fail. */
+export function loadLocalCart(
+  tenantId: string,
+  branchId: string,
+): LocalCartBackup | null {
+  if (typeof window === "undefined") return null;
+  try {
+    const raw = localStorage.getItem(lsKey(tenantId, branchId));
+    if (!raw) return null;
+    const parsed = JSON.parse(raw) as LocalCartBackup;
+    if (!parsed.savedAt || Date.now() - parsed.savedAt > LS_MAX_AGE_MS) {
+      // Stale → tự xoá để khỏi chiếm chỗ.
+      localStorage.removeItem(lsKey(tenantId, branchId));
+      return null;
+    }
+    if (!Array.isArray(parsed.lines) || parsed.lines.length === 0) {
+      return null;
+    }
+    return parsed;
+  } catch {
+    return null;
+  }
+}
+
+/** Xoá localStorage — gọi sau khi checkout thành công hoặc cart trống. */
+export function clearLocalCart(tenantId: string, branchId: string): void {
+  if (typeof window === "undefined") return;
+  try {
+    localStorage.removeItem(lsKey(tenantId, branchId));
+  } catch {
+    // ignore
+  }
+}
+
 interface AutoSaveSnapshot {
   lines: OrderLine[];
   customer: { id: string; name: string } | null;
@@ -89,6 +166,21 @@ export function useAutoSaveDraft({
   useEffect(() => {
     if (!enabled || !sessionId || !ctx) return;
 
+    // ── 1. localStorage backup IMMEDIATELY (sync, không network) ──
+    // F5/cúp điện trong khoảng debounce vẫn cứu được vì LS đã có data.
+    if (snapshot.lines.length > 0) {
+      saveLocalCart(ctx.tenantId, ctx.branchId, {
+        lines: snapshot.lines,
+        customer: snapshot.customer,
+        orderDiscount: snapshot.orderDiscount,
+        paymentMethod: snapshot.paymentMethod,
+        note: snapshot.note,
+        sessionId,
+      });
+    } else {
+      clearLocalCart(ctx.tenantId, ctx.branchId);
+    }
+
     // Hash state để skip save khi không thay đổi
     const stateHash = computeStateHash(snapshot);
 
@@ -129,7 +221,7 @@ export function useAutoSaveDraft({
       } finally {
         inFlightRef.current = false;
       }
-    }, 1500);
+    }, 400); // CEO 01/06/2026: giảm từ 1500ms → 400ms để F5 sau ~0.4s đã có draft DB.
 
     return () => {
       if (debouncedRef.current) clearTimeout(debouncedRef.current);

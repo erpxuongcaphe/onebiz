@@ -362,6 +362,43 @@ export function usePosState() {
     deliveryInfo,
   }), [lines, customer, paymentMethod, paid, paymentBreakdown, orderDiscount, note, loadedDraftId, sellingMode, deliveryInfo]);
 
+  /**
+   * Phase F5-Recovery (CEO 01/06/2026): khôi phục giỏ từ localStorage backup
+   * sau F5/cúp điện. Chỉ set field cốt lõi (lines/customer/discount/note/
+   * paymentMethod). Các field khác giữ default. KHÔNG set loadedDraftId để
+   * handleComplete đi nhánh posCheckout an toàn (có fallback "still draft").
+   */
+  const restoreFromLocalBackup = useCallback((data: {
+    lines?: OrderLine[];
+    /** Slim shape — chỉ id+name; field còn lại default rỗng. */
+    customer?: { id: string; name: string } | null;
+    orderDiscount?: DiscountInput;
+    note?: string;
+    paymentMethod?: PaymentMethod;
+  }): void => {
+    if (data.lines) setLines(data.lines);
+    if (data.customer !== undefined) {
+      setCustomer(
+        data.customer
+          ? {
+              id: data.customer.id,
+              code: "",
+              name: data.customer.name,
+              phone: "",
+              currentDebt: 0,
+              totalSales: 0,
+              totalSalesMinusReturns: 0,
+              type: "individual",
+              createdAt: new Date().toISOString(),
+            }
+          : null,
+      );
+    }
+    if (data.orderDiscount) setOrderDiscount(data.orderDiscount);
+    if (data.note !== undefined) setNote(data.note);
+    if (data.paymentMethod) setPaymentMethod(data.paymentMethod);
+  }, []);
+
   const restoreSnapshot = useCallback((snap: PosSnapshot): void => {
     setLines(snap.lines);
     setCustomer(snap.customer);
@@ -430,6 +467,7 @@ export function usePosState() {
     updateLineDiscount,
     clearCart,
     loadDraft,
+    restoreFromLocalBackup,
 
     // Snapshot (multi-tab)
     getSnapshot,
