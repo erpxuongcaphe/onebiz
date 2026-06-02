@@ -565,13 +565,15 @@ export function CreateProductDialog({
     };
   }, [open, initialData]);
 
-  // Helper: add empty variant row
+  // Helper: add empty variant row.
+  // CEO 01/06/2026: tên để trống mặc định — placeholder gợi ý M/L/XL/250ml/...,
+  // anh tự đặt theo nhu cầu (không ép FnB Size, có thể là Retail "250g/500g/1kg").
   function addVariantRow() {
     setVariantItems((prev) => [
       ...prev,
       {
         id: null,
-        name: prev.length === 0 ? "M" : prev.length === 1 ? "L" : prev.length === 2 ? "XL" : "Size",
+        name: "",
         sellPrice: 0,
         costPrice: 0,
         bomCode: null,
@@ -2201,6 +2203,10 @@ export function CreateProductDialog({
                 <div className="rounded-lg border-2 border-dashed border-border p-6 text-center text-sm text-muted-foreground">
                   <Icon name="straighten" size={28} className="mx-auto mb-2 opacity-40" />
                   <p>Chưa có quy cách nào. SP sẽ bán với 1 giá duy nhất.</p>
+                  <p className="text-xs mt-1">
+                    Vd: <span className="font-mono">Size M/L/XL</span> (FnB) hoặc{" "}
+                    <span className="font-mono">250g/500g/1kg</span> (Retail).
+                  </p>
                   <Button
                     type="button"
                     variant="outline"
@@ -2209,7 +2215,7 @@ export function CreateProductDialog({
                     onClick={addVariantRow}
                   >
                     <Icon name="add" size={14} className="mr-1" />
-                    Thêm quy cách đầu tiên (Size M)
+                    Thêm quy cách
                   </Button>
                 </div>
               ) : (
@@ -2233,7 +2239,7 @@ export function CreateProductDialog({
                           <td className="px-3 py-2">
                             <Input
                               value={v.name}
-                              placeholder="M / L / XL"
+                              placeholder="VD: M, L, XL, 250g, 1kg..."
                               className="h-9 text-sm"
                               onChange={(e) => {
                                 const val = e.target.value;
