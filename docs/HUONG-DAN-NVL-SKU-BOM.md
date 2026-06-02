@@ -350,8 +350,73 @@ SELECT public.get_active_bom_for_branch('<sku-id>'::uuid, '<branch-id>'::uuid);
 
 ---
 
+## 🍹 Variant (Quy cách) + Modifier (Tuỳ chọn FnB) — Sprint 2 (CEO 01/06/2026)
+
+Phương án Toast Inheritance — chuẩn các POS FnB lớn (Toast, Square, Sapo, KiotViet):
+1 SKU + nhiều **Quy cách (Size M/L/XL)** + nhiều **Tuỳ chọn (Mức đường, Mức đá, Topping)**.
+
+### Variant (Quy cách)
+
+Bảng `product_variants` chứa các size của 1 SKU. Mỗi variant có:
+- Tên (M/L/XL, hoặc 250g/500g/1kg cho retail) — **tùy biến**, anh tự đặt.
+- Giá bán + Giá vốn riêng.
+- **Mã BOM riêng** (cho FnB) — vd Bạc xỉu M dùng BOM 18g cà phê, Bạc xỉu L dùng BOM 25g.
+- 1 variant `is_default=true` (auto force khi xoá default).
+
+**Setup**: Vào form SP scope=SKU → tab **"Quy cách"** → thêm các size + giá riêng.
+
+**POS hành xử**:
+- Cashier tap món có variant → dialog mở pick size → POS dùng giá + BOM của size đó.
+- SP không có variant → POS dùng giá gốc của SP.
+
+### Modifier (Tuỳ chọn món FnB) — Toast inheritance
+
+**3 bảng**:
+- `modifier_groups`: nhóm (Mức đường, Mức đá, Topping, Size).
+- `modifier_options`: option trong group (0%/30%/70%/100%, Trân châu...).
+- `category_modifier_groups` + `product_modifier_groups`: gán cho cả nhóm SP hoặc SP riêng.
+
+**Setup nhanh** (1 click):
+1. Vào `/hang-hoa/tuy-chon-fnb` → bấm **"Tạo preset FnB Việt"** → sinh sẵn 4 nhóm.
+2. Vào `/hang-hoa/nhom` → sửa nhóm "Cà phê" → tick các nhóm tuỳ chọn → Lưu. Mọi SP trong nhóm tự thừa kế.
+3. SP đặc biệt cần override → vào form SP → tab **"Tuỳ chọn FnB"** → bật Override.
+
+### Modifier scale BOM (POS trừ tồn NVL theo %)
+
+Mỗi BOM item có cột `modifier_scale_target` link tới 1 modifier group. Khi cashier chọn option, RPC checkout scale qty NVL × `scale_factor` của option đó.
+
+**Vd**: BOM "Bạc xỉu M" có NVL "Đường" 10g với `modifier_scale_target = Mức đường`. Cashier chọn 70% đường (`scale_factor = 0.7`) → POS trừ tồn 7g đường (thay vì 10g).
+
+**Setup**: Vào form SP → tab "Công thức (BOM)" → tick NVL "Đường" → dropdown **"Scale theo modifier"** → chọn "Mức đường" → Lưu.
+
+### Topping NVL trừ tồn
+
+Modifier option có thể link tới 1 NVL/SKU topping qua `linked_product_id`. Khi cashier chọn topping, RPC trừ tồn linked NVL × số ly.
+
+**Vd**: Option "Trân châu đen" có `linked_product_id = NVL-TPV-001` + `price_delta = 7000`. Khách order 2 ly Bạc xỉu + tick Trân châu → POS trừ 2 NVL-TPV-001 + +14k giá.
+
+### Báo cáo modifier
+
+Vào `/phan-tich/fnb-modifier` — anh xem được:
+- Tổng lượt chọn từng option.
+- % chia trong cùng nhóm (vd Mức đường: 70% chiếm 45%, 100% chiếm 30%).
+- Doanh thu phí cộng từ Topping.
+- Export Excel.
+
+Dùng để: quyết định bỏ option ít chọn, tăng giá topping bán chạy, biết khẩu vị khách quán.
+
+### KDS + Phiếu bếp
+
+KDS render thêm dòng modifier compact tone xanh: `▸ Mức đường: 70% • Mức đá: Ít • Topping: Trân châu`.
+
+Phiếu in bếp cũng có dòng modifier với background xanh nổi bật để bếp đọc nhanh, không phải parse note tự do.
+
+---
+
 ## 📚 Tài liệu liên quan
 
 - [`HUONG-DAN-NHAP-LIEU-HANG-HOA.md`](./HUONG-DAN-NHAP-LIEU-HANG-HOA.md) — Hướng dẫn nhập liệu chi tiết từng bước
 - `/hang-hoa/cong-thuc` — Trang quản lý BOM
+- `/hang-hoa/tuy-chon-fnb` — Quản lý nhóm tuỳ chọn FnB
+- `/phan-tich/fnb-modifier` — Báo cáo lựa chọn modifier
 - `/hang-hoa/cong-thuc/cai-tien-tuong-lai` — Mockup cải tiến tương lai
