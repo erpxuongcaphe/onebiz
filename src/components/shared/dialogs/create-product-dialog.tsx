@@ -45,6 +45,14 @@ import {
   updateUOMConversion,
   deleteUOMConversion,
 } from "@/lib/services";
+// CEO 01/06/2026 — Sprint 2.4a
+import {
+  getVariantsByProduct,
+  createVariant,
+  updateVariant,
+  deleteVariant,
+} from "@/lib/services/supabase/variants";
+import type { ProductVariant } from "@/lib/types";
 import { useAuth } from "@/lib/contexts/auth-context";
 import type { Product, BOMItem } from "@/lib/types";
 import { formatNumber, formatCurrency } from "@/lib/format";
@@ -59,7 +67,23 @@ import {
 
 type ShelfLifeUnit = "day" | "month" | "year";
 type SupplierOption = { id: string; name: string; code?: string };
-type InnerTab = "info" | "pricing" | "bom" | "modifier";
+type InnerTab = "info" | "pricing" | "bom" | "modifier" | "variants";
+
+/**
+ * CEO 01/06/2026 — Sprint 2.4a: Variant (Size M/L/XL) inline trong form SP.
+ * Pattern Toast: 1 SKU + multi variants, mỗi variant giá + BOM riêng.
+ * Cashier FnB pick size khi tap món → load variant.bom_code.
+ */
+interface InlineVariant {
+  /** UUID nếu đã có DB (edit). Null = newly added in this session. */
+  id: string | null;
+  name: string;
+  sellPrice: number;
+  costPrice: number;
+  bomCode: string | null;
+  isDefault: boolean;
+  sortOrder: number;
+}
 
 /** Item trong bảng BOM inline (gắn với SKU đang tạo/sửa) */
 interface InlineBomItem {
@@ -253,6 +277,15 @@ export function CreateProductDialog({
     "inherit",
   );
   const [loadingModifierPicker, setLoadingModifierPicker] = useState(false);
+
+  // CEO 01/06/2026 — Sprint 2.4a: Variants Size (M/L/XL) inline editor.
+  // Mỗi variant có giá riêng + BOM riêng (bom_code) — cho phép Size M dùng
+  // 18g cà phê, Size L dùng 25g.
+  const [variantItems, setVariantItems] = useState<InlineVariant[]>([]);
+  // Track ID variants đã có sẵn ở DB để diff khi save (cũ nhưng user xoá).
+  const [originalVariantIds, setOriginalVariantIds] = useState<Set<string>>(
+    new Set(),
+  );
 
   // Reset form khi dialog mở. Nếu có initialData → prefill từ sản phẩm đang sửa.
   useEffect(() => {
@@ -497,6 +530,117 @@ export function CreateProductDialog({
       else next.add(groupId);
       return next;
     });
+  }
+
+  // CEO 01/06/2026 — Sprint 2.4a: Load variants khi edit SKU.
+  useEffect(() => {
+    if (!open || !initialData || initialData.productType !== "sku") {
+      setVariantItems([]);
+      setOriginalVariantIds(new Set());
+      return;
+    }
+    let cancelled = false;
+    (async () => {
+      try {
+        const variants = await getVariantsByProduct(initialData.id);
+        if (cancelled) return;
+        setVariantItems(
+          variants.map((v: ProductVariant) => ({
+            id: v.id,
+            name: v.name,
+            sellPrice: v.sellPrice,
+            costPrice: v.costPrice,
+            bomCode: v.bomCode ?? null,
+            isDefault: v.isDefault,
+            sortOrder: v.sortOrder,
+          })),
+        );
+        setOriginalVariantIds(new Set(variants.map((v) => v.id)));
+      } catch (err) {
+        console.warn("Load variants failed:", err);
+      }
+    })();
+    return () => {
+      cancelled = true;
+    };
+  }, [open, initialData]);
+
+  // Helper: add empty variant row
+  function addVariantRow() {
+    setVariantItems((prev) => [
+      ...prev,
+      {
+        id: null,
+        name: prev.length === 0 ? "M" : prev.length === 1 ? "L" : prev.length === 2 ? "XL" : "Size",
+        sellPrice: 0,
+        costPrice: 0,
+        bomCode: null,
+        // Force first variant default
+        isDefault: prev.length === 0,
+        sortOrder: prev.length,
+      },
+    ]);
+  }
+
+  // Set 1 variant default → uncheck others
+  function setVariantDefault(idx: number) {
+    setVariantItems((prev) =>
+      prev.map((v, i) => ({ ...v, isDefault: i === idx })),
+    );
+  }
+
+  function removeVariantRow(idx: number) {
+    setVariantItems((prev) => {
+      const next = prev.filter((_, i) => i !== idx);
+      // Nếu xoá default → force first thành default
+      if (next.length > 0 && !next.some((v) => v.isDefault)) {
+        next[0].isDefault = true;
+      }
+      return next;
+    });
+  }
+
+  // CEO 01/06/2026 — Sprint 2.4a: sync variants với DB.
+  // Diff: old not in current → delete; current with id → update;
+  //       current without id → create.
+  async function syncVariants(productId: string): Promise<void> {
+    const currentIds = new Set(
+      variantItems.filter((v) => v.id).map((v) => v.id as string),
+    );
+    // 1. Delete old variants không còn trong list (soft delete)
+    for (const oldId of originalVariantIds) {
+      if (!currentIds.has(oldId)) {
+        try {
+          await deleteVariant(oldId);
+        } catch (err) {
+          console.warn("deleteVariant failed:", err);
+        }
+      }
+    }
+    // 2. Create or update current items
+    for (let i = 0; i < variantItems.length; i++) {
+      const v = variantItems[i];
+      if (v.id) {
+        await updateVariant(v.id, {
+          name: v.name.trim() || "Default",
+          sellPrice: v.sellPrice,
+          costPrice: v.costPrice,
+          bomCode: v.bomCode,
+          isDefault: v.isDefault,
+          sortOrder: i,
+        });
+      } else {
+        await createVariant({
+          productId,
+          name: v.name.trim() || "Default",
+          sellPrice: v.sellPrice,
+          costPrice: v.costPrice,
+          bomCode: v.bomCode,
+          isDefault: v.isDefault,
+          sortOrder: i,
+        });
+      }
+    }
   }
 
   // Load NCC list 1 lần mỗi lần dialog mở. 500 NCC ~ 50KB payload — ok.
@@ -798,6 +942,23 @@ export function CreateProductDialog({
           }
         }
 
+        // CEO 01/06/2026 — Sprint 2.4a: Sync variants (Size M/L/XL).
+        if (scope === "sku") {
+          try {
+            await syncVariants(initialData.id);
+          } catch (varErr) {
+            console.warn("Save variants failed:", varErr);
+            toast({
+              variant: "warning",
+              title: "Đã lưu SP nhưng lỗi Quy cách",
+              description:
+                varErr instanceof Error
+                  ? varErr.message
+                  : "Vui lòng vào lại form sửa Quy cách.",
+            });
+          }
+        }
+
         onOpenChange(false);
         toast({
           title: "Cập nhật hàng hóa thành công",
@@ -923,6 +1084,26 @@ export function CreateProductDialog({
         }
       }
 
+      // CEO 01/06/2026 — Sprint 2.4a: Sync variants khi tạo SKU.
+      if (created?.id && scope === "sku" && variantItems.length > 0) {
+        try {
+          await syncVariants(created.id);
+        } catch (varErr) {
+          console.warn(
+            "[create-product-dialog] sync variants failed:",
+            varErr,
+          );
+          toast({
+            variant: "warning",
+            title: "SP đã tạo nhưng lỗi Quy cách",
+            description:
+              varErr instanceof Error
+                ? varErr.message
+                : "Vui lòng vào lại form sửa Quy cách.",
+          });
+        }
+      }
+
       onOpenChange(false);
       toast({
         title: "Tạo hàng hóa thành công",
@@ -1019,6 +1200,18 @@ export function CreateProductDialog({
               <TabsTrigger value="modifier" className="flex-1">
                 <Icon name="tune" size={14} className="mr-1" />
                 Tuỳ chọn FnB
+              </TabsTrigger>
+            )}
+            {/* CEO 01/06/2026 — Sprint 2.4a: Tab Quy cách (Variants Size) cho SKU */}
+            {scope === "sku" && (
+              <TabsTrigger value="variants" className="flex-1">
+                <Icon name="straighten" size={14} className="mr-1" />
+                Quy cách
+                {variantItems.length > 0 && (
+                  <span className="ml-1 inline-flex items-center justify-center h-4 min-w-[16px] px-1 text-[10px] font-bold rounded-full bg-primary text-primary-foreground">
+                    {variantItems.length}
+                  </span>
+                )}
               </TabsTrigger>
             )}
           </TabsList>
@@ -1980,6 +2173,156 @@ export function CreateProductDialog({
                         )}
                       </>
                     )}
+                  </div>
+                </div>
+              )}
+            </TabsContent>
+          )}
+
+          {/* ─────────── Tab 5: Quy cách (Variants Size) ───────────
+              CEO 01/06/2026 — Sprint 2.4a.
+              Mỗi variant có giá riêng + bom_code riêng (cho FnB scale theo size).
+              Pattern Toast: 1 SKU + multi sizes, cashier pick size khi tap món. */}
+          {scope === "sku" && (
+            <TabsContent value="variants" className="space-y-3 mt-0">
+              <div className="rounded-lg border bg-status-info/5 p-3">
+                <div className="flex items-start gap-2">
+                  <Icon name="straighten" size={16} className="text-status-info shrink-0 mt-0.5" />
+                  <div className="flex-1">
+                    <p className="text-sm font-medium">Quy cách / Size (vd M, L, XL)</p>
+                    <p className="text-xs text-muted-foreground mt-0.5">
+                      Mỗi quy cách có giá bán + Mã BOM riêng. Cashier chọn size khi tap món → POS dùng giá + BOM của size đó. Để trống quy cách nếu SP chỉ có 1 loại.
+                    </p>
+                  </div>
+                </div>
+              </div>
+
+              {variantItems.length === 0 ? (
+                <div className="rounded-lg border-2 border-dashed border-border p-6 text-center text-sm text-muted-foreground">
+                  <Icon name="straighten" size={28} className="mx-auto mb-2 opacity-40" />
+                  <p>Chưa có quy cách nào. SP sẽ bán với 1 giá duy nhất.</p>
+                  <Button
+                    type="button"
+                    variant="outline"
+                    size="sm"
+                    className="mt-3"
+                    onClick={addVariantRow}
+                  >
+                    <Icon name="add" size={14} className="mr-1" />
+                    Thêm quy cách đầu tiên (Size M)
+                  </Button>
+                </div>
+              ) : (
+                <div className="rounded-lg border overflow-x-auto">
+                  <table className="w-full text-sm">
+                    <thead className="bg-surface-container-low text-xs text-muted-foreground">
+                      <tr>
+                        <th className="text-left px-3 py-2 font-semibold w-28">Tên</th>
+                        <th className="text-right px-3 py-2 font-semibold w-32">Giá bán (đ)</th>
+                        <th className="text-right px-3 py-2 font-semibold w-32">Giá vốn (đ)</th>
+                        {channel === "fnb" && (
+                          <th className="text-left px-3 py-2 font-semibold">Mã BOM riêng</th>
+                        )}
+                        <th className="text-center px-3 py-2 font-semibold w-20">Mặc định</th>
+                        <th className="w-10"></th>
+                      </tr>
+                    </thead>
+                    <tbody>
+                      {variantItems.map((v, idx) => (
+                        <tr key={v.id ?? `new-${idx}`} className="border-t border-border">
+                          <td className="px-3 py-2">
+                            <Input
+                              value={v.name}
+                              placeholder="M / L / XL"
+                              className="h-9 text-sm"
+                              onChange={(e) => {
+                                const val = e.target.value;
+                                setVariantItems((prev) =>
+                                  prev.map((p, i) => (i === idx ? { ...p, name: val } : p)),
+                                );
+                              }}
+                            />
+                          </td>
+                          <td className="px-3 py-2">
+                            <Input
+                              type="number"
+                              value={v.sellPrice || ""}
+                              className="h-9 text-right text-sm"
+                              onChange={(e) => {
+                                const n = parseFloat(e.target.value);
+                                setVariantItems((prev) =>
+                                  prev.map((p, i) =>
+                                    i === idx ? { ...p, sellPrice: Number.isFinite(n) ? n : 0 } : p,
+                                  ),
+                                );
+                              }}
+                            />
+                          </td>
+                          <td className="px-3 py-2">
+                            <Input
+                              type="number"
+                              value={v.costPrice || ""}
+                              className="h-9 text-right text-sm"
+                              onChange={(e) => {
+                                const n = parseFloat(e.target.value);
+                                setVariantItems((prev) =>
+                                  prev.map((p, i) =>
+                                    i === idx ? { ...p, costPrice: Number.isFinite(n) ? n : 0 } : p,
+                                  ),
+                                );
+                              }}
+                            />
+                          </td>
+                          {channel === "fnb" && (
+                            <td className="px-3 py-2">
+                              <Input
+                                value={v.bomCode ?? ""}
+                                placeholder="VD: BOM-CFS-002-M"
+                                className="h-9 text-sm font-mono"
+                                onChange={(e) => {
+                                  const val = e.target.value;
+                                  setVariantItems((prev) =>
+                                    prev.map((p, i) =>
+                                      i === idx ? { ...p, bomCode: val || null } : p,
+                                    ),
+                                  );
+                                }}
+                              />
+                            </td>
+                          )}
+                          <td className="px-3 py-2 text-center">
+                            <input
+                              type="radio"
+                              name="variant-default"
+                              checked={v.isDefault}
+                              onChange={() => setVariantDefault(idx)}
+                              className="size-4"
+                            />
+                          </td>
+                          <td className="px-3 py-2">
+                            <button
+                              type="button"
+                              onClick={() => removeVariantRow(idx)}
+                              className="text-muted-foreground hover:text-destructive"
+                              aria-label="Xoá quy cách"
+                            >
+                              <Icon name="delete" size={14} />
+                            </button>
+                          </td>
+                        </tr>
+                      ))}
+                    </tbody>
+                  </table>
+                  <div className="border-t bg-muted/20 px-3 py-2">
+                    <Button
+                      type="button"
+                      variant="outline"
+                      size="sm"
+                      onClick={addVariantRow}
+                    >
+                      <Icon name="add" size={14} className="mr-1" />
+                      Thêm quy cách
+                    </Button>
                   </div>
                 </div>
               )}

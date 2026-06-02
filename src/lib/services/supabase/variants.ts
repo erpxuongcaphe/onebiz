@@ -75,25 +75,27 @@ export async function createVariant(variant: {
   weight?: number;
   isDefault?: boolean;
   sortOrder?: number;
+  /** Sprint 2.4a: mã BOM riêng cho variant (vd "CFS-002-M") */
+  bomCode?: string | null;
 }): Promise<ProductVariant> {
   const tenantId = await getCurrentTenantId();
-  const { data, error } = await supabase
-    .from("product_variants")
-    .insert({
-      tenant_id: tenantId,
-      product_id: variant.productId,
-      name: variant.name,
-      sku: variant.sku ?? null,
-      packaging_type: variant.packagingType ?? null,
-      packaging_size: variant.packagingSize ?? null,
-      unit_count: variant.unitCount ?? 1,
-      barcode: variant.barcode ?? null,
-      sell_price: variant.sellPrice,
-      cost_price: variant.costPrice,
-      weight: variant.weight ?? null,
-      is_default: variant.isDefault ?? false,
-      sort_order: variant.sortOrder ?? 0,
-    })
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  const { data, error } = await (supabase.from("product_variants").insert as any)({
+    tenant_id: tenantId,
+    product_id: variant.productId,
+    name: variant.name,
+    sku: variant.sku ?? null,
+    packaging_type: variant.packagingType ?? null,
+    packaging_size: variant.packagingSize ?? null,
+    unit_count: variant.unitCount ?? 1,
+    barcode: variant.barcode ?? null,
+    sell_price: variant.sellPrice,
+    cost_price: variant.costPrice,
+    weight: variant.weight ?? null,
+    is_default: variant.isDefault ?? false,
+    sort_order: variant.sortOrder ?? 0,
+    bom_code: variant.bomCode ?? null,
+  })
     .select()
     .single();
 
@@ -116,6 +118,8 @@ export async function updateVariant(
     isDefault: boolean;
     isActive: boolean;
     sortOrder: number;
+    /** Sprint 2.4a */
+    bomCode: string | null;
   }>
 ) {
   const updateObj: Record<string, unknown> = {};
@@ -131,10 +135,10 @@ export async function updateVariant(
   if (updates.isDefault !== undefined) updateObj.is_default = updates.isDefault;
   if (updates.isActive !== undefined) updateObj.is_active = updates.isActive;
   if (updates.sortOrder !== undefined) updateObj.sort_order = updates.sortOrder;
+  if (updates.bomCode !== undefined) updateObj.bom_code = updates.bomCode;
 
-  const { error } = await supabase
-    .from("product_variants")
-    .update(updateObj)
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  const { error } = await (supabase.from("product_variants").update as any)(updateObj)
     .eq("id", id);
 
   if (error) throw error;
@@ -166,6 +170,7 @@ function mapVariant(row: Record<string, unknown>): ProductVariant {
     isDefault: (row.is_default as boolean) ?? false,
     isActive: (row.is_active as boolean) ?? true,
     sortOrder: (row.sort_order as number) ?? 0,
+    bomCode: (row.bom_code as string) ?? null,
     createdAt: row.created_at as string,
     updatedAt: row.updated_at as string,
   };

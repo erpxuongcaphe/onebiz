@@ -52,6 +52,13 @@ export interface ProductVariant {
   isDefault: boolean;
   isActive: boolean;
   sortOrder: number;
+  /**
+   * CEO 01/06/2026 — Sprint 2.1 (migration 00121) + Sprint 2.4a:
+   * Mã BOM riêng cho variant. Vd Bạc xỉu size M dùng BOM "CFS-002-M"
+   * (18g cà phê), size L dùng "CFS-002-L" (25g). Null = fallback BOM
+   * của product cha.
+   */
+  bomCode?: string | null;
   createdAt: string;
   updatedAt: string;
 }
