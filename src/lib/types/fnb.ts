@@ -92,6 +92,12 @@ export interface KitchenOrderItem {
   unitPrice: number;
   note: string | null;
   toppings: ToppingAttachment[];
+  /**
+   * CEO 01/06/2026 — Sprint 2.4b: snapshot modifier choices (Mức đường,
+   * Mức đá, Topping động) đã chọn lúc cashier tạo item. KDS đọc để in
+   * lên phiếu bếp + render trên màn KDS. RPC checkout đọc để scale BOM.
+   */
+  modifierSelections?: ModifierSelectionPayload[];
   status: KitchenItemStatus;
   startedAt: string | null;
   completedAt: string | null;

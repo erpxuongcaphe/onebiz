@@ -70,6 +70,11 @@ function mapKitchenItem(row: any): KitchenOrderItem {
     unitPrice: Number(row.unit_price ?? 0),
     note: row.note,
     toppings: (row.toppings ?? []) as ToppingAttachment[],
+    // CEO 01/06/2026 — Sprint 2.4b: snapshot modifier choices.
+    // Cột mới từ migration 00122. Null/undefined cho item cũ tạo trước migration.
+    modifierSelections: Array.isArray(row.modifier_selections)
+      ? row.modifier_selections
+      : undefined,
     status: row.status,
     startedAt: row.started_at,
     completedAt: row.completed_at,
@@ -202,6 +207,8 @@ export interface CreateKitchenOrderInput {
     unitPrice: number;
     note?: string;
     toppings?: ToppingAttachment[];
+    /** CEO 01/06/2026 — Sprint 2.4b: snapshot modifier choices */
+    modifierSelections?: import("@/lib/types/fnb").ModifierSelectionPayload[];
   }[];
 }
 
@@ -319,6 +326,8 @@ export async function addItemsToOrder(
     unitPrice: number;
     note?: string;
     toppings?: ToppingAttachment[];
+    /** CEO 01/06/2026 — Sprint 2.4b */
+    modifierSelections?: import("@/lib/types/fnb").ModifierSelectionPayload[];
   }[]
 ): Promise<void> {
   const supabase = getClient();
@@ -329,19 +338,23 @@ export async function addItemsToOrder(
     () => new Map<string, string | null>(),
   );
 
-  const itemsData: (KOItemInsert & { kitchen_station_id?: string | null })[] =
-    items.map((item) => ({
-      kitchen_order_id: orderId,
-      product_id: item.productId,
-      product_name: item.productName,
-      variant_id: item.variantId ?? null,
-      variant_label: item.variantLabel ?? null,
-      quantity: item.quantity,
-      unit_price: item.unitPrice,
-      note: item.note ?? null,
-      toppings: item.toppings ?? null,
-      kitchen_station_id: stationMap.get(item.productId) ?? null,
-    }));
+  const itemsData: (KOItemInsert & {
+    kitchen_station_id?: string | null;
+    modifier_selections?: unknown;
+  })[] = items.map((item) => ({
+    kitchen_order_id: orderId,
+    product_id: item.productId,
+    product_name: item.productName,
+    variant_id: item.variantId ?? null,
+    variant_label: item.variantLabel ?? null,
+    quantity: item.quantity,
+    unit_price: item.unitPrice,
+    note: item.note ?? null,
+    toppings: item.toppings ?? null,
+    // CEO 01/06/2026 — Sprint 2.4b
+    modifier_selections: item.modifierSelections ?? null,
+    kitchen_station_id: stationMap.get(item.productId) ?? null,
+  }));
 
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
   const { error } = await (supabase as any)

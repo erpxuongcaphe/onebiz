@@ -1290,6 +1290,14 @@ function KdsItemRow({
               ))}
             </div>
           )}
+          {/* Sprint 2.4b: modifier choices (completed view — line-through) */}
+          {item.modifierSelections && item.modifierSelections.length > 0 && (
+            <div className="mt-0.5 text-[11px] text-muted-foreground line-through">
+              {item.modifierSelections
+                .map((s) => `${s.groupName}: ${s.options.map((o) => o.label).join("/")}`)
+                .join(" • ")}
+            </div>
+          )}
           {item.quantity > 1 && (
             <span className="inline-flex items-center gap-0.5 mt-2 px-2 py-0.5 rounded-full bg-status-success/20 text-status-success text-[10px] font-bold">
               x{item.quantity}
@@ -1362,6 +1370,21 @@ function KdsItemRow({
             {item.toppings.map((t, i) => (
               <span key={i}>
                 {i > 0 && ", "}+{t.name}
+              </span>
+            ))}
+          </div>
+        )}
+        {/* CEO 01/06/2026 — Sprint 2.4b: Dynamic modifier choices.
+            Bếp đọc 1 dòng compact: "Mức đường: 70% • Mức đá: Ít • Topping: Trân châu" */}
+        {item.modifierSelections && item.modifierSelections.length > 0 && (
+          <div className="mt-1 flex flex-wrap gap-1">
+            {item.modifierSelections.map((sel, idx) => (
+              <span
+                key={idx}
+                className="inline-flex items-center gap-1 rounded-md bg-status-info/10 px-1.5 py-0.5 text-[11px] text-status-info font-medium"
+              >
+                <span className="opacity-70">{sel.groupName}:</span>
+                <span>{sel.options.map((o) => o.label).join("/")}</span>
               </span>
             ))}
           </div>

@@ -1219,6 +1219,10 @@ function FnbPosPageInner() {
                 quantity: t.quantity,
                 price: t.price,
               })),
+              // CEO 01/06/2026 — Sprint 2.4b: in modifier choices lên phiếu bếp.
+              modifierLabels: l.modifierSelections?.map(
+                (s) => `${s.groupName}: ${s.options.map((o) => o.label).join("/")}`,
+              ),
               note: l.note,
             })),
             {

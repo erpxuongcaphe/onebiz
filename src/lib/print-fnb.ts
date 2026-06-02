@@ -18,6 +18,12 @@ export interface FnbPrintItem {
   quantity: number;
   unitPrice: number;
   toppings?: { name: string; quantity: number; price: number }[];
+  /**
+   * CEO 01/06/2026 — Sprint 2.4b: in modifier choices lên phiếu bếp.
+   * Vd "Mức đường: 70% • Mức đá: Ít • Topping: Trân châu đen".
+   * Bếp đọc 1 dòng compact thay vì phải parse note tự do.
+   */
+  modifierLabels?: string[];
   note?: string;
 }
 
@@ -219,6 +225,11 @@ export function buildPreBillHtml(data: PreBillData): string {
           <td class="right" style="font-size:11px;color:#555">${formatCurrency(tTotal)}</td></tr>`;
       }
     }
+    // CEO 01/06/2026 — Sprint 2.4b: in modifier choices lên phiếu bếp
+    if (item.modifierLabels && item.modifierLabels.length > 0) {
+      const label = item.modifierLabels.join(" • ");
+      html += `<tr><td colspan="2" style="padding-left:12px;font-size:11px;color:#1976d2">▸ ${label}</td></tr>`;
+    }
     if (item.note) {
       html += `<tr><td colspan="2" style="padding-left:12px;font-size:11px;font-style:italic;color:#888">* ${item.note}</td></tr>`;
     }
@@ -351,6 +362,11 @@ export function buildFnbReceiptHtml(data: FnbReceiptData): string {
           html += `<tr><td style="padding-left:12px;font-size:11px;color:#555">+ ${t.name} x${t.quantity}</td>
             <td class="right" style="font-size:11px;color:#555">${formatCurrency(tTotal)}</td></tr>`;
         }
+      }
+      // Sprint 2.4b: receipt full style → modifier choices
+      if (style === "full" && item.modifierLabels && item.modifierLabels.length > 0) {
+        const label = item.modifierLabels.join(" • ");
+        html += `<tr><td colspan="2" style="padding-left:12px;font-size:11px;color:#1976d2">▸ ${label}</td></tr>`;
       }
       if (style === "full" && item.note) {
         html += `<tr><td colspan="2" style="padding-left:12px;font-size:11px;font-style:italic;color:#888">* ${item.note}</td></tr>`;
@@ -551,6 +567,11 @@ export function buildKitchenTicketHtml(data: KitchenTicketDataV2): string {
         html += `<div class="toppings">+ ${toppingTexts.join(", ")}</div>`;
       }
     }
+    // CEO 01/06/2026 — Sprint 2.4b: print modifier choices lên phiếu bếp.
+    // Format compact: "▸ Mức đường: 70% • Mức đá: Ít • Topping: Trân châu"
+    if (item.modifierLabels && item.modifierLabels.length > 0) {
+      html += `<div class="modifier">▸ ${item.modifierLabels.join(" • ")}</div>`;
+    }
     if (item.note) {
       html += `<div class="note">** ${item.note}</div>`;
     }
@@ -581,6 +602,7 @@ export function buildKitchenTicketHtml(data: KitchenTicketDataV2): string {
 .qty{font-size:${style === "compact" ? "16px" : "20px"};margin-right:4px}
 .variant{font-size:${style === "compact" ? "12px" : "14px"};font-weight:normal;color:#333}
 .toppings{font-size:14px;padding-left:24px;margin-top:2px}
+.modifier{font-size:14px;font-weight:bold;padding:3px 24px;margin-top:2px;background:#e3f2fd;border-left:4px solid #1976d2;color:#0d47a1}
 .note{font-size:16px;font-weight:bold;padding:4px 24px;margin-top:2px;background:#f0f0f0;border-left:4px solid #000}
 .price{font-size:12px;color:#555;padding-left:24px;margin-top:2px}
 .time{font-size:16px;font-weight:bold}
