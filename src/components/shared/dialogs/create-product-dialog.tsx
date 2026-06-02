@@ -463,6 +463,10 @@ export function CreateProductDialog({
 
   // CEO 01/06/2026 — Sprint 2.2d: Load modifier picker khi dialog mở cho SKU FnB.
   // Reset khi đóng / switch sang NVL / Retail.
+  // CEO 01/06/2026 — Bước 1 (perf): LAZY load — chỉ fetch khi user thực sự
+  // bấm vào tab "Tuỳ chọn FnB". Trước đây dialog mở là fetch ngay 8 API
+  // song song → renderer freeze trên máy chậm. Giờ tab Thông tin nhẹ, các
+  // tab khác fetch on-demand. Track loadedRef để khỏi re-fetch khi switch tab.
   useEffect(() => {
     if (!open || scope !== "sku" || channel !== "fnb") {
       setAvailableFnbModifierGroups([]);
@@ -471,6 +475,8 @@ export function CreateProductDialog({
       setModifierMode("inherit");
       return;
     }
+    // LAZY: chỉ fetch khi user đã bấm tab modifier ít nhất 1 lần.
+    if (innerTab !== "modifier") return;
     let cancelled = false;
     setLoadingModifierPicker(true);
     (async () => {
@@ -521,7 +527,7 @@ export function CreateProductDialog({
     return () => {
       cancelled = true;
     };
-  }, [open, scope, channel, categoryId, initialData]);
+  }, [open, scope, channel, categoryId, initialData, innerTab]);
 
   function toggleProductModifierGroup(groupId: string) {
     setProductModifierGroupIds((prev) => {
@@ -532,13 +538,15 @@ export function CreateProductDialog({
     });
   }
 
-  // CEO 01/06/2026 — Sprint 2.4a: Load variants khi edit SKU.
+  // CEO 01/06/2026 — Sprint 2.4a + Bước 1 (perf): LAZY load variants
+  // chỉ khi user bấm tab "Quy cách". Tránh fetch eager + dialog freeze.
   useEffect(() => {
     if (!open || !initialData || initialData.productType !== "sku") {
       setVariantItems([]);
       setOriginalVariantIds(new Set());
       return;
     }
+    if (innerTab !== "variants") return;
     let cancelled = false;
     (async () => {
       try {
@@ -563,7 +571,7 @@ export function CreateProductDialog({
     return () => {
       cancelled = true;
     };
-  }, [open, initialData]);
+  }, [open, initialData, innerTab]);
 
   // Helper: add empty variant row.
   // CEO 01/06/2026: tên để trống mặc định — placeholder gợi ý M/L/XL/250ml/...,
@@ -660,7 +668,18 @@ export function CreateProductDialog({
       .catch(() => {
         /* suppliers optional — fail silent */
       });
-    // Day 18/05/2026 (CEO): load material options cho BOM (tất cả SP)
+    return () => {
+      cancelled = true;
+    };
+  }, [open]);
+
+  // CEO 01/06/2026 — Bước 1 (perf): LAZY load material options (1000 SP, ~100KB)
+  // chỉ khi user bật hasBom + bấm tab "bom" (Công thức). Trước đây fetch eager
+  // mỗi lần mở dialog → dialog freeze. Giờ chỉ tab BOM mới fetch.
+  useEffect(() => {
+    if (!open || scope !== "sku" || !hasBom || innerTab !== "bom") return;
+    if (materialOptions.length > 0) return; // dedup — đã load
+    let cancelled = false;
     getProducts({ page: 0, pageSize: 1000, filters: {} })
       .then((res) => {
         if (cancelled) return;
@@ -672,7 +691,7 @@ export function CreateProductDialog({
     return () => {
       cancelled = true;
     };
-  }, [open]);
+  }, [open, scope, hasBom, innerTab, materialOptions.length]);
 
   // Load categories mỗi khi scope đổi. Edit mode: KHÔNG reset categoryId (đã prefill).
   useEffect(() => {
