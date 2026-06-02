@@ -647,6 +647,124 @@ export async function getDeliveryStaffPerformance(
     .sort((a, b) => b.totalOrders - a.totalOrders);
 }
 
+// ============================================================
+// Modifier analytics (CEO 01/06/2026 — Bước 2 Sprint 2.5)
+// ============================================================
+// Phân tích doanh thu theo modifier choices (Mức đường 70%, Topping Trân châu...).
+// Parse modifier_selections JSONB client-side vì hợp lệ cho data size hiện tại
+// (~1000 lines / ngày). Khi scale lên 50k+ lines → cần SQL function aggregate.
+
+export interface ModifierStatRow {
+  groupId: string;
+  groupName: string;
+  optionId: string;
+  optionLabel: string;
+  /** Số lần option này được chọn (= số line có chứa option này) */
+  count: number;
+  /** Tổng quantity (vd 1 line × qty 3 → +3) */
+  totalQuantity: number;
+  /** Doanh thu phí cộng (priceDelta × quantity) */
+  totalPriceDelta: number;
+  /** % count trong cùng group (tính sau ở UI) */
+  percentInGroup?: number;
+}
+
+/**
+ * Lấy thống kê chọn modifier theo branch + date range.
+ * Đọc kitchen_order_items.modifier_selections (JSONB) từ các đơn đã thanh toán.
+ */
+export async function getModifierStats(
+  branchId?: string,
+  range?: { from: string; to: string },
+): Promise<ModifierStatRow[]> {
+  const supabase = getClient();
+  const tenantId = await getCurrentTenantId();
+  const rangeStart = range ? `${range.from}T00:00:00+07:00` : null;
+  const rangeEnd = range ? `${range.to}T23:59:59.999+07:00` : null;
+
+  // 1. Lấy id đơn bếp đã completed (= đã thanh toán)
+  let koQuery = supabase
+    .from("kitchen_orders")
+    .select("id")
+    .eq("tenant_id", tenantId)
+    .eq("status", "completed");
+  if (branchId) koQuery = koQuery.eq("branch_id", branchId);
+  if (rangeStart && rangeEnd) {
+    koQuery = koQuery
+      .gte("created_at", rangeStart)
+      .lt("created_at", rangeEnd);
+  }
+  const { data: koRows } = await koQuery;
+  const koIds = (koRows ?? []).map((r) => r.id);
+  if (koIds.length === 0) return [];
+
+  // 2. Lấy kitchen_order_items với modifier_selections
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  const { data: items } = await (supabase
+    .from("kitchen_order_items")
+    .select("quantity, modifier_selections") as any)
+    .in("kitchen_order_id", koIds)
+    .not("modifier_selections", "is", null);
+
+  // 3. Aggregate client-side
+  const map = new Map<
+    string, // key = `${groupId}::${optionId}`
+    ModifierStatRow
+  >();
+
+  for (const item of (items ?? []) as Array<{
+    quantity: number;
+    modifier_selections: Array<{
+      groupId: string;
+      groupName: string;
+      options: Array<{
+        optionId: string;
+        label: string;
+        priceDelta: number;
+      }>;
+    }>;
+  }>) {
+    const qty = Number(item.quantity ?? 0);
+    if (qty <= 0 || !Array.isArray(item.modifier_selections)) continue;
+    for (const sel of item.modifier_selections) {
+      for (const opt of sel.options ?? []) {
+        const key = `${sel.groupId}::${opt.optionId}`;
+        const prev = map.get(key) ?? {
+          groupId: sel.groupId,
+          groupName: sel.groupName,
+          optionId: opt.optionId,
+          optionLabel: opt.label,
+          count: 0,
+          totalQuantity: 0,
+          totalPriceDelta: 0,
+        };
+        prev.count += 1;
+        prev.totalQuantity += qty;
+        prev.totalPriceDelta += Number(opt.priceDelta ?? 0) * qty;
+        map.set(key, prev);
+      }
+    }
+  }
+
+  // 4. Tính % count trong cùng group
+  const rows = Array.from(map.values());
+  const totalByGroup = new Map<string, number>();
+  for (const r of rows) {
+    totalByGroup.set(r.groupId, (totalByGroup.get(r.groupId) ?? 0) + r.count);
+  }
+  for (const r of rows) {
+    const tot = totalByGroup.get(r.groupId) ?? 0;
+    r.percentInGroup = tot > 0 ? Math.round((r.count / tot) * 100) : 0;
+  }
+
+  // Sort: group name asc, then count desc (option phổ biến nhất trên cùng)
+  return rows.sort((a, b) => {
+    if (a.groupName !== b.groupName)
+      return a.groupName.localeCompare(b.groupName, "vi");
+    return b.count - a.count;
+  });
+}
+
 /**
  * Drill-down: danh sách đơn của 1 shipper cụ thể.
  */
