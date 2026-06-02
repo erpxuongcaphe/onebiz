@@ -29,6 +29,14 @@ export interface BOMImportRow {
   yieldQty?: number;      // Năng suất BOM (default 1)
   yieldUnit?: string;     // ĐVT năng suất (default "cái")
   note?: string;          // Ghi chú riêng cho row item
+  /**
+   * CEO 01/06/2026 — Sprint 2: link NVL với 1 modifier group.
+   * Khi cashier chọn option (vd 70% đường), POS scale qty NVL × scale_factor.
+   * Vd item "Đường" gán "Mức đường" → 70% → trừ 7g thay vì 10g.
+   * Optional, để trống = NVL trừ qty cố định theo công thức.
+   * Service lookup tên modifier_group → id khi import.
+   */
+  modifierScaleTargetName?: string;
 }
 
 export const bomExcelSchema: ExcelSchema<BOMImportRow> = {
@@ -133,6 +141,16 @@ export const bomExcelSchema: ExcelSchema<BOMImportRow> = {
       description:
         "Ghi chú riêng cho row item này (vd 'Cà phê rang Robusta loại 1').",
       width: 32,
+    },
+    {
+      key: "modifierScaleTargetName",
+      header: "Scale theo modifier (Tên nhóm)",
+      type: "string",
+      maxLength: 80,
+      example: "Mức đường",
+      description:
+        "CEO 01/06/2026 — Sprint 2 FnB. Optional. Tên 1 nhóm tuỳ chọn (vd 'Mức đường'). Khi cashier chọn option của nhóm đó (vd 70%), POS sẽ scale qty NVL × scale_factor. Vd Đường 10g × 0.7 = 7g khi 70% đường. Để trống = NVL trừ cố định theo công thức.",
+      width: 22,
     },
   ],
   validateRow(row) {

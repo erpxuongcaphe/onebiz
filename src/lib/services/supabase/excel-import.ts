@@ -861,6 +861,19 @@ export async function bulkImportBOMs(
     if (b.code) branchMap.set(b.code, b.id as string);
   }
 
+  // CEO 01/06/2026 — Sprint 2: load modifier_groups để lookup
+  // modifierScaleTargetName → id.
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  const { data: modGroups } = await (supabase as any)
+    .from("modifier_groups")
+    .select("id, name")
+    .eq("tenant_id", tenantId)
+    .eq("is_active", true);
+  const modifierMap = new Map<string, string>();
+  for (const g of (modGroups ?? []) as Array<{ id: string; name: string }>) {
+    if (g.name) modifierMap.set(g.name.trim().toLowerCase(), g.id);
+  }
+
   // Group rows by bomCode (preserve order)
   const groups = new Map<string, BOMImportRow[]>();
   const groupOrder: string[] = [];
@@ -903,7 +916,7 @@ export async function bulkImportBOMs(
         branchId = found;
       }
 
-      // Validate material codes
+      // Validate material codes + modifier scale target (CEO 01/06/2026 Sprint 2)
       const itemsResolved = groupRows.map((r) => {
         const mat = materialMap.get(r.materialCode);
         if (!mat) {
@@ -911,11 +924,24 @@ export async function bulkImportBOMs(
             `Mã NVL "${r.materialCode}" chưa tồn tại trong hệ thống`,
           );
         }
+        // Lookup modifier group nếu user khai
+        let modifierScaleId: string | null = null;
+        if (r.modifierScaleTargetName && r.modifierScaleTargetName.trim()) {
+          const key = r.modifierScaleTargetName.trim().toLowerCase();
+          const found = modifierMap.get(key);
+          if (!found) {
+            throw new Error(
+              `Nhóm modifier "${r.modifierScaleTargetName}" chưa tồn tại. Tạo ở /hang-hoa/tuy-chon-fnb trước (hoặc bấm "Tạo preset FnB Việt").`,
+            );
+          }
+          modifierScaleId = found;
+        }
         return {
           materialId: mat.id,
           quantity: r.quantity,
           unit: r.unit?.trim() || mat.unit || "cái",
           note: r.note ?? null,
+          modifierScaleId,
         };
       });
 
@@ -961,11 +987,12 @@ export async function bulkImportBOMs(
         waste_percent: 0,
         sort_order: idx,
         note: it.note,
+        // CEO 01/06/2026 — Sprint 2
+        modifier_scale_target: it.modifierScaleId,
       }));
 
-      const { error: itemsErr } = await supabase
-        .from("bom_items")
-        .insert(itemsPayload);
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      const { error: itemsErr } = await (supabase.from("bom_items").insert as any)(itemsPayload);
 
       if (itemsErr) {
         // Rollback BOM master để không có BOM trống
@@ -1023,6 +1050,21 @@ export async function bulkImportCategories(
     }
   }
 
+  // CEO 01/06/2026 — Sprint 2: load modifier_groups để map name → id.
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  const { data: modGroups } = await (supabase as any)
+    .from("modifier_groups")
+    .select("id, name")
+    .eq("tenant_id", tenantId)
+    .eq("is_active", true);
+  const modifierMap = new Map<string, string>();
+  for (const g of (modGroups ?? []) as Array<{ id: string; name: string }>) {
+    if (g.name) modifierMap.set(g.name.trim().toLowerCase(), g.id);
+  }
+
+  // Lazy import setCategoryModifierGroups (avoid circular dep at module top).
+  const { setCategoryModifierGroups } = await import("./modifier-groups");
+
   return runBulk(rows, async (row) => {
     const code = row.code.trim().toUpperCase();
     const key = `${row.scope}|${code}`;
@@ -1037,6 +1079,7 @@ export async function bulkImportCategories(
       sort_order: row.sortOrder ?? 0,
     };
 
+    let savedCategoryId: string | null = null;
     if (existingId) {
       // Update: chỉ cần name + channel + sort_order
       // eslint-disable-next-line @typescript-eslint/no-explicit-any
@@ -1048,6 +1091,7 @@ export async function bulkImportCategories(
         .eq("id", existingId)
         .eq("tenant_id", tenantId);
       if (error) throw error;
+      savedCategoryId = existingId;
     } else {
       // Insert mới
       // eslint-disable-next-line @typescript-eslint/no-explicit-any
@@ -1056,7 +1100,39 @@ export async function bulkImportCategories(
         .single();
       if (error) throw error;
       // Cache để các row sau cùng key không insert trùng
-      if (data?.id) keyToId.set(key, data.id);
+      if (data?.id) {
+        keyToId.set(key, data.id);
+        savedCategoryId = data.id;
+      }
+    }
+
+    // CEO 01/06/2026 — Sprint 2: gán modifier_groups CSV cho nhóm SKU FnB.
+    // Chỉ apply nếu user khai cột + nhóm là SKU FnB. Tên trống → skip.
+    if (
+      savedCategoryId &&
+      row.scope === "sku" &&
+      row.channel === "fnb" &&
+      row.modifierGroupsCsv &&
+      row.modifierGroupsCsv.trim()
+    ) {
+      // Split bằng "," hoặc ";"
+      const names = row.modifierGroupsCsv
+        .split(/[,;]/)
+        .map((s) => s.trim())
+        .filter(Boolean);
+      const groupIds: string[] = [];
+      for (const name of names) {
+        const gid = modifierMap.get(name.toLowerCase());
+        if (!gid) {
+          throw new Error(
+            `Nhóm tuỳ chọn "${name}" chưa tồn tại. Tạo ở /hang-hoa/tuy-chon-fnb trước (hoặc bấm "Tạo preset FnB Việt").`,
+          );
+        }
+        groupIds.push(gid);
+      }
+      if (groupIds.length > 0) {
+        await setCategoryModifierGroups(savedCategoryId, groupIds);
+      }
     }
   });
 }

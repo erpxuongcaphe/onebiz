@@ -28,6 +28,14 @@ export interface CategoryImportRow {
   channel?: "fnb" | "retail";
   /** Optional: số thứ tự sắp xếp (mặc định 0 = cuối list) */
   sortOrder?: number;
+  /**
+   * CEO 01/06/2026 — Sprint 2 FnB: gán modifier groups mặc định cho cả nhóm.
+   * Mọi SP trong nhóm tự thừa kế (Toast pattern).
+   * Format: CSV tên các nhóm modifier, vd "Mức đường, Mức đá, Topping".
+   * Service lookup tên → ID khi import, gọi setCategoryModifierGroups().
+   * Optional, chỉ áp dụng nhóm SKU FnB.
+   */
+  modifierGroupsCsv?: string;
 }
 
 export const categoriesExcelSchema: ExcelSchema<CategoryImportRow> = {
@@ -110,6 +118,16 @@ export const categoriesExcelSchema: ExcelSchema<CategoryImportRow> = {
       description:
         "Optional. Số thứ tự sắp xếp trong list (số nhỏ hiện trước). Mặc định 0.",
       width: 8,
+    },
+    {
+      key: "modifierGroupsCsv",
+      header: "Nhóm tuỳ chọn FnB (CSV)",
+      type: "string",
+      maxLength: 500,
+      example: "Mức đường, Mức đá, Topping",
+      description:
+        "CEO 01/06/2026 — Sprint 2. Optional, chỉ nhóm SKU FnB. CSV tên các nhóm tuỳ chọn mặc định. Mọi SP trong nhóm tự thừa kế (cashier POS sẽ thấy). Để trống = không gán. Vd: 'Mức đường, Mức đá' (phân cách bằng dấu phẩy hoặc chấm phẩy). Tên phải khớp với nhóm đã tạo ở /hang-hoa/tuy-chon-fnb.",
+      width: 30,
     },
   ],
   validateRow(row) {
