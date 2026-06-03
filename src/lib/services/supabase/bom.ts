@@ -6,6 +6,55 @@ import type { BOM, BOMItem, BOMCostBreakdown } from "@/lib/types";
 
 const supabase = getClient();
 
+/**
+ * CEO 03/06/2026 — Sprint 3 (G3): Lấy khả dụng theo BOM cho list SKU has_bom=true
+ * tại branch production. Trả Map<sku_id, { available, bottleneck }>. SKU không
+ * cascade (outlet branch, hoặc has_bom=false) → không có entry.
+ *
+ * Dùng ở POS Retail để hiển thị "Còn 240 lon" trên SKU tile mà tồn SKU
+ * trực tiếp = 0 (vì SKU đóng gói, tồn thực ở NVL).
+ */
+export interface BomAvailabilityEntry {
+  available: number;
+  bottleneckMaterialId?: string;
+  bottleneckMaterialName?: string;
+}
+
+export async function getBomAvailabilityBatch(
+  skuIds: string[],
+  branchId: string,
+): Promise<Map<string, BomAvailabilityEntry>> {
+  const result = new Map<string, BomAvailabilityEntry>();
+  if (!skuIds.length || !branchId) return result;
+
+  const tenantId = await getCurrentTenantId();
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  const { data, error } = await (supabase as any).rpc(
+    "get_bom_availability_batch",
+    {
+      p_tenant_id: tenantId,
+      p_branch_id: branchId,
+      p_sku_ids: skuIds,
+    },
+  );
+  if (error) {
+    // Fail silent — frontend fallback dùng product.stock như cũ
+    console.warn("[getBomAvailabilityBatch] RPC error:", error);
+    return result;
+  }
+
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  for (const row of (data ?? []) as any[]) {
+    result.set(row.sku_id as string, {
+      available: Number(row.available ?? 0),
+      bottleneckMaterialId: (row.bottleneck_material_id as string) ?? undefined,
+      bottleneckMaterialName:
+        (row.bottleneck_material_name as string) ?? undefined,
+    });
+  }
+  return result;
+}
+
 export async function getAllBOMs(params?: {
   /** Filter: chỉ lấy BOM đã được sử dụng tại chi nhánh này (join production_orders). */
   usedAtBranchId?: string;

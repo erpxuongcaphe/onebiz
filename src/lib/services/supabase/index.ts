@@ -232,7 +232,8 @@ export type { CategoryWithChannelBreakdown } from "./categories";
 export { getVariantsByProduct, createVariant, updateVariant, deleteVariant } from "./variants";
 
 // BOM (Production Formulas)
-export { getAllBOMs, getBOMByCode, getBOMsByProduct, getBOMById, createBOM, updateBOM, deleteBOM, calculateBOMCost, getBOMProductionHistory, getActiveBOMForBranch, cloneBOMForBranch, getProductIdsWithActiveBom } from "./bom";
+export { getAllBOMs, getBOMByCode, getBOMsByProduct, getBOMById, createBOM, updateBOM, deleteBOM, calculateBOMCost, getBOMProductionHistory, getActiveBOMForBranch, cloneBOMForBranch, getProductIdsWithActiveBom, getBomAvailabilityBatch } from "./bom";
+export type { BomAvailabilityEntry } from "./bom";
 
 // Production Orders + Lot Tracking
 export {

@@ -407,21 +407,24 @@ export async function createInternalSale(
   }
 
   // ── 5. Stock OUT branch bán ──
-  await applyManualStockMovement(
-    lines.map((l) => ({
-      productId: l.productId,
-      quantity: l.quantity,
-      type: "out" as const,
-      referenceType: "internal_sale",
-      referenceId: invoice.id,
-      note: `Xuất nội bộ ${saleCode} - ${l.productName}`,
-    })),
-    {
-      tenantId: ctx.tenantId,
-      branchId: input.fromBranchId,
-      createdBy: ctx.userId,
-    },
-  );
+  // CEO 03/06/2026 — Sprint 3 (fix G1): dùng RPC internal_sale_apply_stock_out
+  // để cascade BOM khi source là production branch + SKU has_bom=true. Outlet
+  // branch / SP đơn giản → trừ tồn SKU trực tiếp như cũ. Atomic per item.
+  for (const l of lines) {
+    const { error: outErr } = await supabase.rpc(
+      "internal_sale_apply_stock_out" as unknown as never,
+      {
+        p_tenant_id: ctx.tenantId,
+        p_branch_id: input.fromBranchId,
+        p_product_id: l.productId,
+        p_quantity: l.quantity,
+        p_reference_id: invoice.id,
+        p_reference_code: saleCode,
+        p_created_by: ctx.userId,
+      } as unknown as never,
+    );
+    if (outErr) handleError(outErr, "createInternalSale:stockOut");
+  }
 
   // ── 6. Stock IN branch mua ──
   await applyManualStockMovement(

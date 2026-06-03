@@ -14,6 +14,8 @@ import { formatCurrency } from "@/lib/format";
 import type { Product, ProductCategory } from "@/lib/types";
 import { getProducts } from "@/lib/services/supabase/products";
 import { getCategoriesByScope } from "@/lib/services/supabase/categories";
+import { getBomAvailabilityBatch } from "@/lib/services/supabase/bom";
+import { useAuth } from "@/lib/contexts";
 import { Icon } from "@/components/ui/icon";
 
 interface ProductGridProps {
@@ -21,10 +23,22 @@ interface ProductGridProps {
   onAddProduct: (product: Product) => void;
 }
 
+/** CEO 03/06/2026 — Sprint 3 (G3): SKU has_bom tại branch production tính
+ *  khả dụng = min(NVL stock / qty BOM). Lưu Map để map sang tile. */
+interface BomAvailMap {
+  [skuId: string]: {
+    available: number;
+    bottleneckName?: string;
+  };
+}
+
 export function ProductGrid({ searchQuery, onAddProduct }: ProductGridProps) {
+  const { currentBranch } = useAuth();
+  const branchId = currentBranch?.id ?? "";
   const [categories, setCategories] = useState<ProductCategory[]>([]);
   const [selectedCategory, setSelectedCategory] = useState<string>("all");
   const [products, setProducts] = useState<Product[]>([]);
+  const [bomAvail, setBomAvail] = useState<BomAvailMap>({});
   const [loading, setLoading] = useState(true);
   const [totalProducts, setTotalProducts] = useState(0);
   const debounceRef = useRef<ReturnType<typeof setTimeout> | null>(null);
@@ -64,13 +78,38 @@ export function ProductGrid({ searchQuery, onAddProduct }: ProductGridProps) {
         });
         setProducts(result.data);
         setTotalProducts(result.total);
+
+        // CEO 03/06/2026 — Sprint 3 (G3): cho SKU has_bom=true, tính khả dụng
+        // theo BOM. Branch production sẽ trả số > 0, outlet trả empty (FE
+        // fallback dùng product.stock). Batch 1 RPC, không spam.
+        const skusWithBom = result.data
+          .filter((p) => p.hasBom && p.productType === "sku")
+          .map((p) => p.id);
+        if (skusWithBom.length > 0 && branchId) {
+          try {
+            const map = await getBomAvailabilityBatch(skusWithBom, branchId);
+            const next: BomAvailMap = {};
+            for (const [skuId, entry] of map.entries()) {
+              next[skuId] = {
+                available: entry.available,
+                bottleneckName: entry.bottleneckMaterialName,
+              };
+            }
+            setBomAvail(next);
+          } catch {
+            // fail silent — fallback dùng product.stock
+            setBomAvail({});
+          }
+        } else {
+          setBomAvail({});
+        }
       } catch {
         setProducts([]);
       } finally {
         setLoading(false);
       }
     },
-    []
+    [branchId]
   );
 
   useEffect(() => {
@@ -190,6 +229,8 @@ export function ProductGrid({ searchQuery, onAddProduct }: ProductGridProps) {
               <ProductTile
                 key={product.id}
                 product={product}
+                bomAvailable={bomAvail[product.id]?.available}
+                bomBottleneckName={bomAvail[product.id]?.bottleneckName}
                 onClick={() => onAddProduct(product)}
               />
             ))}
@@ -285,15 +326,26 @@ function CategoryPill({
 // ── Product tile card C — compact horizontal (thumb 40 + info) ──
 // CEO không thích gradient màu trên placeholder → dùng background xám
 // neutral với icon nhỏ. Card compact ~76px height thay vì 270px.
+//
+// CEO 03/06/2026 — Sprint 3 (G3): SKU has_bom tại branch production có
+// stock=0 nhưng thực tế bán được X đơn vị (tính từ NVL gốc). Prop
+// `bomAvailable` cho phép override hiển thị "Còn X" + tooltip "Tính từ NVL".
 function ProductTile({
   product,
+  bomAvailable,
+  bomBottleneckName,
   onClick,
 }: {
   product: Product;
+  bomAvailable?: number;
+  bomBottleneckName?: string;
   onClick: () => void;
 }) {
-  const outOfStock = (product.stock ?? 0) <= 0;
-  const stock = product.stock ?? 0;
+  // Use BOM availability nếu có (SKU has_bom tại branch production)
+  // Fallback dùng product.stock như cũ.
+  const useBomAvail = product.hasBom && typeof bomAvailable === "number";
+  const stock = useBomAvail ? bomAvailable! : (product.stock ?? 0);
+  const outOfStock = stock <= 0;
   const showStockChip = outOfStock || stock <= 5;
   // CEO 22/05/2026: rollback POS guard — cho phép bán SP giá 0đ tự do
   // (vì có thể là KM/free intentional). Cashier tự chịu trách nhiệm.
@@ -302,7 +354,11 @@ function ProductTile({
     <button
       type="button"
       onClick={onClick}
-      title={product.name}
+      title={
+        useBomAvail && bomBottleneckName
+          ? `${product.name}\nKhả dụng tính từ NVL "${bomBottleneckName}"`
+          : product.name
+      }
       className={cn(
         "flex items-center gap-2 bg-white rounded-lg border border-border p-2 text-left transition-all press-scale-sm min-h-[60px]",
         "hover:border-primary hover:shadow-sm",
@@ -337,8 +393,21 @@ function ProductTile({
               Hết
             </span>
           ) : showStockChip ? (
-            <span className="text-[9px] font-semibold px-2 py-0.5 rounded-full bg-status-warning/15 text-status-warning shrink-0">
-              Còn {stock}
+            <span
+              className={cn(
+                "text-[9px] font-semibold px-2 py-0.5 rounded-full shrink-0",
+                useBomAvail
+                  ? "bg-primary/10 text-primary border border-primary/20"
+                  : "bg-status-warning/15 text-status-warning",
+              )}
+            >
+              {useBomAvail ? `Còn ~${stock}` : `Còn ${stock}`}
+            </span>
+          ) : useBomAvail ? (
+            // Production branch + SKU has_bom: show "Khả dụng từ NVL" badge
+            // (số lớn, không cần warning màu vàng)
+            <span className="text-[9px] font-semibold px-2 py-0.5 rounded-full bg-primary/10 text-primary border border-primary/20 shrink-0">
+              ≈ {stock}
             </span>
           ) : product.code ? (
             <p className="text-[9px] text-muted-foreground/70 font-mono truncate max-w-[64px]">

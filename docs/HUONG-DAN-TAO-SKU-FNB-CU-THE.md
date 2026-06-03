@@ -450,3 +450,100 @@ Với cùng pattern, anh tạo các món:
 **Phiên bản**: 03/06/2026 — dựa data thực tenant **Xưởng Cà Phê - Kho Tổng**.
 **Tổng thời gian setup 1 món có 2 size + 3 modifier**: **~14 phút**.
 **Cho menu 30 món**: **~3-4 giờ**. Sau đó POS chạy production.
+
+---
+
+# 📌 BỔ SUNG 03/06/2026 — Pattern "Trung tâm phân phối" (Central Commissary)
+
+Phần này bổ sung sau khi CEO chốt rõ mô hình kinh doanh chuỗi cà phê đa chi nhánh. **Đọc nếu anh có ≥2 chi nhánh** (Kho tổng + ≥1 Quán).
+
+## 🧭 Mô hình anh đang dùng
+
+```
+KHO TỔNG (Retail)                     QUÁN FNB (Outlet)
+─────────────────                     ─────────────────
+NVL gốc (hạt sống, sữa NVL...)        SKU đóng gói (đã nhập từ Kho tổng)
+       ↓                                     ↓
+SKU đóng gói (Cà phê rang 1kg,        SKU món pha chế (Bạc xỉu, Cà phê sữa)
+              Sữa lon, gói bột...)            ↓ BOM tham chiếu SKU đóng gói
+       ↓                              POS FnB bán món → trừ SKU đóng gói
+POS Retail (bán khách ngoài) ─┐
+       ↓                       │
+   Cascade BOM → trừ NVL  ← Kho tổng quản lý tồn ở NVL gốc, SKU chỉ là "nhãn bán"
+       
+Internal Sale Kho tổng → Quán:
+   • Chuyển 5 lon SKU-SUA-001
+   • Leg-OUT Kho tổng: cascade BOM → trừ 5 lon NVL-SUA-001 ✅
+   • Leg-IN Quán A:    +5 lon SKU-SUA-001 tồn Quán
+```
+
+## ⚙️ Setup chế độ tồn kho (CỰC QUAN TRỌNG)
+
+Sau khi apply migration 00123, vào `/cai-dat/chi-nhanh` chỉnh **Chế độ tồn kho** cho mỗi chi nhánh:
+
+| Loại chi nhánh | Chế độ tồn kho | Hành vi khi bán SKU |
+|---|---|---|
+| 🏭 Kho tổng / Xưởng rang | **Kho/Xưởng sản xuất** | Cascade BOM → trừ NVL gốc theo công thức |
+| 🏪 Quán cà phê / Cửa hàng | **Quán/Outlet** | Trừ tồn SKU trực tiếp (đã nhập từ Kho tổng) |
+
+> ⚠️ **Auto-migrate**: Migration 00123 tự set `production` cho `warehouse` + `factory`, `outlet` cho `store` + `office`. Anh chỉ cần verify hoặc override nếu sai.
+
+## 📦 3 loại SKU Retail — setup khác nhau
+
+### Loại 1 — Production SKU *(chế biến thực sự)*
+**Vd**: Cà phê hạt sống → rang xay đóng gói.
+- **2 mã**: `NVL-CPH-001` "Hạt sống" + `SKU-CPH-001` "Rang xay 1kg".
+- SKU `has_bom=false`, có tồn riêng.
+- Mỗi đợt rang: Xuất NVL + Nhập SKU (2 phiếu).
+
+### Loại 2 — Repackaging SKU *(đóng gói lại từ NVL)*
+**Vd**: Sữa đặc Ông Thọ — 1 thùng = 24 lon, bán theo lon/thùng/pack.
+- **1 NVL + nhiều SKU**: `NVL-SUA-001` + `SKU-SUA-001` (1 lon) + `SKU-SUA-002` (thùng 24).
+- SKU `has_bom=true`, BOM: 1 SKU = X lon NVL.
+- POS Retail tại Kho tổng: cascade BOM → trừ NVL ✅
+- POS Retail tại Quán (takeaway): trừ tồn SKU trực tiếp ✅
+- Internal Sale Kho → Quán: leg-OUT cascade BOM, leg-IN tăng tồn SKU ✅
+
+### Loại 3 — Trade-only SKU *(mua nguyên bán nguyên)*
+**Vd**: Nước Lavie chai, snack, mì gói — NCC giao sẵn đóng gói, không chế biến.
+- **1 mã**: `SKU-XXX-001` `has_bom=false`, có tồn riêng.
+- POS Retail bán → trừ tồn SKU.
+
+## 📊 G3 — Khả dụng theo BOM trên POS Retail
+
+POS Retail tại Kho tổng (cascade_mode=production) bây giờ hiển thị:
+
+```
+┌─ Card SKU "Sữa đặc 1 lon" ──────┐
+│  💰 35,000đ                     │
+│  ≈ 240  ← tính từ NVL "Sữa đặc"  │
+└─────────────────────────────────┘
+```
+
+→ Cashier thấy ngay có thể bán được bao nhiêu, mặc dù `branch_stock(SKU) = 0`.
+
+Hover/title trên tile: *"Khả dụng tính từ NVL 'Sữa đặc Ông Thọ'"*.
+
+## 🔧 Fix bug G1 — Internal Sale cascade BOM
+
+**Trước**: chuyển 5 lon `SKU-SUA-001` cho Quán → tồn NVL Kho tổng KHÔNG giảm (số lệch).
+**Sau migration 00123**: leg-OUT tự cascade BOM → trừ NVL gốc đúng.
+
+## 🎯 Checklist sau khi apply migration 00123
+
+- [ ] Vào `/cai-dat/chi-nhanh` — kiểm tra cột "Chế độ tồn kho" đã đúng:
+  - Kho tổng = 🏭 Sản xuất
+  - Quán FnB = 🏪 Outlet
+- [ ] Test POS Retail tại Kho tổng: SKU `has_bom=true` hiện badge "≈ X" (số khả dụng).
+- [ ] Test Internal Sale Kho → Quán: số NVL Kho tổng giảm đúng theo BOM × số lượng.
+- [ ] Test POS FnB tại Quán bán Bạc xỉu: trừ SKU đóng gói thành phần (cần BOM branch-specific).
+- [ ] Test POS FnB tại Quán bán takeaway (vd 1 lon sữa): trừ tồn SKU trực tiếp, không cascade.
+
+## ❓ Nếu sai số liệu
+
+| Triệu chứng | Nguyên nhân | Cách fix |
+|---|---|---|
+| Bán SKU đóng gói tại Kho tổng mà NVL không giảm | Branch `cascade_mode='outlet'` sai | Vào `/cai-dat/chi-nhanh` chỉnh sang `production` |
+| Bán món Bạc xỉu tại Quán mà tồn SKU sữa không giảm | BOM Bạc xỉu chỉ ở `branch_id=NULL` (global) | Tạo BOM Bạc xỉu riêng cho branch_id Quán đó |
+| Quán bán SKU đóng gói (takeaway) báo "NVL hết hàng" | Branch `cascade_mode='production'` sai | Vào `/cai-dat/chi-nhanh` chỉnh sang `outlet` |
+

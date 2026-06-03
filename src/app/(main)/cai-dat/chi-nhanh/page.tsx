@@ -81,6 +81,8 @@ interface BranchFormState {
   legalEntityName: string;
   legalTaxCode: string;
   legalRegistrationNo: string;
+  // CEO 03/06/2026 — Sprint 3: chế độ tồn kho
+  cascadeMode: "production" | "outlet";
 }
 
 const EMPTY_FORM: BranchFormState = {
@@ -95,6 +97,7 @@ const EMPTY_FORM: BranchFormState = {
   legalEntityName: "",
   legalTaxCode: "",
   legalRegistrationNo: "",
+  cascadeMode: "outlet",
 };
 
 /** Validate VN phone nếu nhập (optional). */
@@ -197,6 +200,8 @@ function BranchSettingsPageInner() {
       legalRegistrationNo: branch.legalRegistrationNo ?? "",
       isDefault: branch.isDefault,
       priceTierId: branch.priceTierId ?? "",
+      // CEO 03/06/2026 — Sprint 3: prefill cascadeMode khi edit
+      cascadeMode: branch.cascadeMode ?? "outlet",
     });
     setDialogOpen(true);
   };
@@ -246,6 +251,8 @@ function BranchSettingsPageInner() {
           legalEntityName: form.legalEntityName.trim() || null,
           legalTaxCode: form.legalTaxCode.trim() || null,
           legalRegistrationNo: form.legalRegistrationNo.trim() || null,
+          // CEO 03/06/2026 — Sprint 3: cascade mode
+          cascadeMode: form.cascadeMode,
         });
         // Nếu bật isDefault (và chi nhánh chưa phải default) → set lại
         const current = branches.find((b) => b.id === editingId);
@@ -273,6 +280,8 @@ function BranchSettingsPageInner() {
           legalEntityName: form.legalEntityName.trim() || null,
           legalTaxCode: form.legalTaxCode.trim() || null,
           legalRegistrationNo: form.legalRegistrationNo.trim() || null,
+          // CEO 03/06/2026 — Sprint 3: cascade mode
+          cascadeMode: form.cascadeMode,
         });
         toast({
           title: "Đã thêm chi nhánh",
@@ -569,7 +578,26 @@ function BranchSettingsPageInner() {
                 <Select
                   value={form.branchType}
                   onValueChange={(val) =>
-                    setForm((f) => ({ ...f, branchType: val as BranchType }))
+                    setForm((f) => {
+                      const nextType = val as BranchType;
+                      // CEO 03/06/2026 — Sprint 3: auto-suggest cascade_mode
+                      // khi user đổi loại chi nhánh và CHƯA chỉnh tay
+                      // cascadeMode (giữ giá trị mặc định cũ của loại trước).
+                      const prevDefaultMode =
+                        f.branchType === "warehouse" || f.branchType === "factory"
+                          ? "production"
+                          : "outlet";
+                      const isAtPrevDefault = f.cascadeMode === prevDefaultMode;
+                      const nextDefaultMode =
+                        nextType === "warehouse" || nextType === "factory"
+                          ? "production"
+                          : "outlet";
+                      return {
+                        ...f,
+                        branchType: nextType,
+                        cascadeMode: isAtPrevDefault ? nextDefaultMode : f.cascadeMode,
+                      };
+                    })
                   }
                   items={[
                     { value: "store", label: "Cửa hàng FnB" },
@@ -607,6 +635,67 @@ function BranchSettingsPageInner() {
                   {form.branchType === "office" && "Văn phòng HQ — ghi nhận chi phí điều hành (lương, VPP, điện nước)"}
                 </p>
               </div>
+
+              {/* CEO 03/06/2026 — Sprint 3: Chế độ tồn kho.
+                  Phân biệt Kho/Xưởng sản xuất (cascade BOM trừ NVL gốc) vs
+                  Quán/Outlet (trừ tồn SKU trực tiếp). Auto-suggest theo
+                  branchType nhưng cho user override. */}
+              <div className="space-y-2 sm:col-span-2">
+                <Label htmlFor="branch-cascade-mode">
+                  Chế độ tồn kho
+                  <span className="text-xs font-normal text-muted-foreground ml-1">
+                    · bán SKU có công thức xử lý thế nào
+                  </span>
+                </Label>
+                <Select
+                  value={form.cascadeMode}
+                  onValueChange={(val) =>
+                    setForm((f) => ({ ...f, cascadeMode: val as "production" | "outlet" }))
+                  }
+                  items={[
+                    { value: "production", label: "🏭 Kho/Xưởng sản xuất" },
+                    { value: "outlet", label: "🏪 Quán/Outlet" },
+                  ]}
+                >
+                  <SelectTrigger id="branch-cascade-mode" className="w-full">
+                    <SelectValue placeholder="Chọn chế độ">
+                      {(v) => {
+                        if (v === "production") return "🏭 Kho/Xưởng sản xuất";
+                        if (v === "outlet") return "🏪 Quán/Outlet";
+                        return "Chọn chế độ";
+                      }}
+                    </SelectValue>
+                  </SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="production">
+                      🏭 Kho/Xưởng sản xuất — Bán SKU sẽ tự trừ NVL gốc theo công thức (BOM)
+                    </SelectItem>
+                    <SelectItem value="outlet">
+                      🏪 Quán/Outlet — Bán SKU thì trừ tồn SKU đã nhập sẵn, không đụng NVL
+                    </SelectItem>
+                  </SelectContent>
+                </Select>
+                <div className="rounded-md bg-muted/40 px-3 py-2 text-xs text-muted-foreground leading-relaxed">
+                  {form.cascadeMode === "production" ? (
+                    <>
+                      <strong>Áp dụng cho Kho tổng / Xưởng rang:</strong> nơi
+                      quản lý NVL gốc. Khi bán/xuất nội bộ SKU đóng gói (vd
+                      sữa lon, gói cà phê 1kg) → hệ thống tự đọc công thức
+                      BOM, trừ NVL gốc tương ứng. SKU đóng gói không cần giữ
+                      tồn riêng — tồn thực ở NVL.
+                    </>
+                  ) : (
+                    <>
+                      <strong>Áp dụng cho Quán/Cửa hàng:</strong> nơi nhận SKU
+                      từ Kho tổng để bán hoặc pha chế. Khi bán SKU → trừ tồn
+                      SKU đã nhập trực tiếp (không tìm về NVL gốc, vì NVL gốc
+                      không có ở Quán). Món pha chế (Bạc xỉu…) muốn cascade
+                      BOM trừ SKU thành phần → tạo BOM riêng cho Quán.
+                    </>
+                  )}
+                </div>
+              </div>
+
               <div className="space-y-2 sm:col-span-2">
                 <Label htmlFor="branch-address">Địa chỉ</Label>
                 <Input

@@ -25,6 +25,14 @@ export interface BranchDetail {
   legalEntityName?: string;
   legalTaxCode?: string;
   legalRegistrationNo?: string;
+  /**
+   * CEO 03/06/2026 — Sprint 3 (Migration 00123): chế độ tồn kho.
+   * - 'production' = Kho/Xưởng. Bán/xuất SKU has_bom=true → cascade BOM trừ NVL gốc.
+   * - 'outlet'     = Quán/Cửa hàng. Bán SKU has_bom=true mà BOM chỉ global →
+   *                  trừ tồn SKU trực tiếp (an toàn, không đụng NVL không tồn ở Quán).
+   * Default 'outlet'. Auto-set 'production' cho warehouse/factory khi migrate.
+   */
+  cascadeMode: "production" | "outlet";
   createdAt: string;
   updatedAt: string;
 }
@@ -62,6 +70,14 @@ export async function createBranch(branch: {
   legalEntityName?: string | null;
   legalTaxCode?: string | null;
   legalRegistrationNo?: string | null;
+  /**
+   * CEO 03/06/2026 — Sprint 3: chế độ tồn kho.
+   * - 'production' cho Kho/Xưởng (cascade BOM trừ NVL khi bán/xuất SKU).
+   * - 'outlet' cho Quán (trừ tồn SKU trực tiếp).
+   * Nếu không truyền: backend mặc định 'outlet'. UI có thể auto-suggest dựa
+   * vào branchType (warehouse/factory → production).
+   */
+  cascadeMode?: "production" | "outlet";
 }): Promise<BranchDetail> {
   if (!branch.tenantId) {
     throw new Error("Thiếu tenantId khi tạo chi nhánh");
@@ -91,6 +107,14 @@ export async function createBranch(branch: {
     legal_entity_name: branch.legalEntityName ?? null,
     legal_tax_code: branch.legalTaxCode ?? null,
     legal_registration_no: branch.legalRegistrationNo ?? null,
+    // CEO 03/06/2026: cascade_mode — nếu user không chọn, suy từ branchType.
+    // warehouse/factory → production, còn lại → outlet.
+    cascade_mode:
+      branch.cascadeMode ??
+      ((branch.branchType ?? "store") === "warehouse" ||
+      (branch.branchType ?? "store") === "factory"
+        ? "production"
+        : "outlet"),
   })
     .select()
     .single();
@@ -151,6 +175,8 @@ export async function updateBranch(
     legalEntityName: string | null;
     legalTaxCode: string | null;
     legalRegistrationNo: string | null;
+    // CEO 03/06/2026 — Sprint 3: cascade mode
+    cascadeMode: "production" | "outlet";
   }>
 ) {
   const tenantId = await getCurrentTenantId();
@@ -176,6 +202,8 @@ export async function updateBranch(
   if (updates.legalEntityName !== undefined) updateObj.legal_entity_name = updates.legalEntityName;
   if (updates.legalTaxCode !== undefined) updateObj.legal_tax_code = updates.legalTaxCode;
   if (updates.legalRegistrationNo !== undefined) updateObj.legal_registration_no = updates.legalRegistrationNo;
+  // CEO 03/06/2026 — Sprint 3: cascade mode
+  if (updates.cascadeMode !== undefined) updateObj.cascade_mode = updates.cascadeMode;
 
   const { error } = await supabase
     .from("branches")
@@ -328,6 +356,11 @@ function mapBranch(row: Record<string, unknown>): BranchDetail {
     legalEntityName: (row.legal_entity_name as string) ?? undefined,
     legalTaxCode: (row.legal_tax_code as string) ?? undefined,
     legalRegistrationNo: (row.legal_registration_no as string) ?? undefined,
+    // CEO 03/06/2026 — Sprint 3: cascade mode (default outlet nếu null)
+    cascadeMode:
+      ((row.cascade_mode as string) === "production"
+        ? "production"
+        : "outlet") as BranchDetail["cascadeMode"],
     createdAt: row.created_at as string,
     updatedAt: row.updated_at as string,
   };
