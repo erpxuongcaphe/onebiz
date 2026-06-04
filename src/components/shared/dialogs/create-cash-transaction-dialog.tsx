@@ -19,8 +19,21 @@ import {
   SelectItem,
 } from "@/components/ui/select";
 import { useToast } from "@/lib/contexts";
-import { createCashTransaction } from "@/lib/services";
+import {
+  createCashTransaction,
+  getCustomers,
+  getSuppliers,
+  getOpenInvoicesByCustomer,
+  getOpenPurchasesBySupplier,
+  recordInvoicePayment,
+  recordPurchasePayment,
+} from "@/lib/services";
+import type {
+  OpenInvoiceLine,
+  OpenPurchaseLine,
+} from "@/lib/services/supabase/payments";
 import { Icon } from "@/components/ui/icon";
+import { formatCurrency } from "@/lib/format";
 
 interface CreateCashTransactionDialogProps {
   open: boolean;
@@ -65,6 +78,17 @@ export function CreateCashTransactionDialog({
   const [errors, setErrors] = useState<Record<string, string>>({});
   const [saving, setSaving] = useState(false);
 
+  // CEO 03/06/2026 — Sprint 3 (E1): khi category là payment KH/NCC, mở thêm
+  // dropdown chọn party + reference doc để gọi recordInvoicePayment /
+  // recordPurchasePayment thay vì createCashTransaction → giúp update debt
+  // chính xác (không phải gõ counterparty tự do).
+  const [parties, setParties] = useState<{ id: string; code: string; name: string; debt: number }[]>([]);
+  const [selectedPartyId, setSelectedPartyId] = useState<string>("");
+  const [refDocs, setRefDocs] = useState<(OpenInvoiceLine | OpenPurchaseLine)[]>([]);
+  const [selectedRefId, setSelectedRefId] = useState<string>("");
+  const [loadingParties, setLoadingParties] = useState(false);
+  const [loadingRefs, setLoadingRefs] = useState(false);
+
   useEffect(() => {
     if (open) {
       setType(defaultType);
@@ -75,8 +99,76 @@ export function CreateCashTransactionDialog({
       setCategory("");
       setNote("");
       setErrors({});
+      setParties([]);
+      setSelectedPartyId("");
+      setRefDocs([]);
+      setSelectedRefId("");
     }
   }, [open, defaultType]);
+
+  // Load party list khi user chọn category payment
+  useEffect(() => {
+    if (!open) return;
+    if (category !== "customer_payment" && category !== "supplier_payment") {
+      setParties([]);
+      setSelectedPartyId("");
+      setRefDocs([]);
+      setSelectedRefId("");
+      return;
+    }
+    let cancelled = false;
+    setLoadingParties(true);
+    const fetcher =
+      category === "customer_payment"
+        ? getCustomers({ page: 0, pageSize: 1000, filters: { debt: "has_debt" } })
+        : getSuppliers({ page: 0, pageSize: 1000, filters: { debt: "has_debt" } });
+    fetcher
+      .then((res) => {
+        if (cancelled) return;
+        setParties(
+          res.data
+            .filter((p) => (p.currentDebt ?? 0) > 0)
+            .map((p) => ({
+              id: p.id,
+              code: p.code,
+              name: p.name,
+              debt: p.currentDebt ?? 0,
+            })),
+        );
+      })
+      .catch(() => !cancelled && setParties([]))
+      .finally(() => !cancelled && setLoadingParties(false));
+    return () => {
+      cancelled = true;
+    };
+  }, [open, category]);
+
+  // Khi chọn party → load chứng từ còn nợ + auto-fill counterparty
+  useEffect(() => {
+    if (!selectedPartyId) {
+      setRefDocs([]);
+      setSelectedRefId("");
+      return;
+    }
+    const party = parties.find((p) => p.id === selectedPartyId);
+    if (party) setCounterparty(party.name);
+    let cancelled = false;
+    setLoadingRefs(true);
+    const fetcher =
+      category === "customer_payment"
+        ? getOpenInvoicesByCustomer(selectedPartyId)
+        : getOpenPurchasesBySupplier(selectedPartyId);
+    fetcher
+      .then((rows) => {
+        if (cancelled) return;
+        setRefDocs(rows);
+      })
+      .catch(() => !cancelled && setRefDocs([]))
+      .finally(() => !cancelled && setLoadingRefs(false));
+    return () => {
+      cancelled = true;
+    };
+  }, [selectedPartyId, category, parties]);
 
   function handleTypeChange(newType: "receipt" | "payment") {
     setType(newType);
@@ -98,15 +190,43 @@ export function CreateCashTransactionDialog({
     if (!validate()) return;
     setSaving(true);
     try {
-      await createCashTransaction({
-        code,
-        type,
-        category: category || "other",
-        amount: Number(amount),
-        counterparty: counterparty || "",
-        paymentMethod: method as "cash" | "transfer" | "card",
-        note: note || undefined,
-      });
+      // CEO 03/06/2026 — Sprint 3 (E1): nếu user chọn category payment KH/NCC
+      // VÀ chọn 1 chứng từ cụ thể → gọi recordInvoicePayment/recordPurchasePayment
+      // (atomic, audit log, update debt). Còn lại fall back createCashTransaction
+      // (phiếu thu/chi không link reference — chỉ để ghi nhận thu/chi khác).
+      if (
+        category === "customer_payment" &&
+        selectedRefId &&
+        type === "receipt"
+      ) {
+        await recordInvoicePayment({
+          referenceId: selectedRefId,
+          amount: Number(amount),
+          paymentMethod: method as "cash" | "transfer" | "card" | "ewallet",
+          note: note || undefined,
+        });
+      } else if (
+        category === "supplier_payment" &&
+        selectedRefId &&
+        type === "payment"
+      ) {
+        await recordPurchasePayment({
+          referenceId: selectedRefId,
+          amount: Number(amount),
+          paymentMethod: method as "cash" | "transfer" | "card" | "ewallet",
+          note: note || undefined,
+        });
+      } else {
+        await createCashTransaction({
+          code,
+          type,
+          category: category || "other",
+          amount: Number(amount),
+          counterparty: counterparty || "",
+          paymentMethod: method as "cash" | "transfer" | "card",
+          note: note || undefined,
+        });
+      }
       onOpenChange(false);
       toast({
         title: type === "receipt" ? "Tạo phiếu thu thành công" : "Tạo phiếu chi thành công",
@@ -232,6 +352,83 @@ export function CreateCashTransactionDialog({
               </SelectContent>
             </Select>
           </div>
+
+          {/* CEO 03/06/2026 — Sprint 3 (E1): conditional party + ref dropdowns
+              khi category là payment KH/NCC. */}
+          {(category === "customer_payment" || category === "supplier_payment") && (
+            <>
+              <div className="space-y-2">
+                <label className="text-sm font-medium">
+                  {category === "customer_payment" ? "Khách hàng" : "Nhà cung cấp"}{" "}
+                  <span className="text-destructive">*</span>
+                </label>
+                <Select
+                  value={selectedPartyId}
+                  onValueChange={(v) => setSelectedPartyId(v ?? "")}
+                >
+                  <SelectTrigger className="w-full">
+                    <SelectValue
+                      placeholder={
+                        loadingParties
+                          ? "Đang tải..."
+                          : parties.length === 0
+                            ? "Không có đối tượng nào nợ"
+                            : `Chọn (${parties.length})`
+                      }
+                    />
+                  </SelectTrigger>
+                  <SelectContent>
+                    {parties.map((p) => (
+                      <SelectItem key={p.id} value={p.id}>
+                        <span className="font-medium">{p.name}</span>
+                        <span className="text-xs text-muted-foreground ml-2">
+                          {p.code} · nợ {formatCurrency(p.debt)}
+                        </span>
+                      </SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+              </div>
+
+              {selectedPartyId && (
+                <div className="space-y-2">
+                  <label className="text-sm font-medium">
+                    {category === "customer_payment" ? "Hoá đơn" : "Phiếu nhập"}
+                  </label>
+                  <Select
+                    value={selectedRefId}
+                    onValueChange={(v) => setSelectedRefId(v ?? "")}
+                  >
+                    <SelectTrigger className="w-full">
+                      <SelectValue
+                        placeholder={
+                          loadingRefs
+                            ? "Đang tải..."
+                            : refDocs.length === 0
+                              ? "Không có chứng từ nợ"
+                              : `Chọn (${refDocs.length})`
+                        }
+                      />
+                    </SelectTrigger>
+                    <SelectContent>
+                      {refDocs.map((d) => (
+                        <SelectItem key={d.id} value={d.id}>
+                          <span className="font-mono">{d.code}</span>
+                          <span className="text-xs text-muted-foreground ml-2">
+                            nợ {formatCurrency(d.debt)} · {d.ageDays}d
+                          </span>
+                        </SelectItem>
+                      ))}
+                    </SelectContent>
+                  </Select>
+                  <p className="text-xs text-muted-foreground">
+                    Chọn chứng từ để hệ thống tự cập nhật công nợ + ghi audit log.
+                    Không chọn → tạo phiếu thu/chi thường (không update debt).
+                  </p>
+                </div>
+              )}
+            </>
+          )}
 
           <div className="space-y-2">
             <label className="text-sm font-medium">Ghi chú</label>

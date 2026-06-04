@@ -25,6 +25,7 @@ import {
   DetailItemsTable,
   AuditHistoryTab,
 } from "@/components/shared/inline-detail-panel";
+import { PaymentHistoryTab } from "@/components/shared/payment-history-tab";
 import { ConfirmDialog } from "@/components/shared/dialogs";
 // PERF (CEO 23/05/2026): Lazy-load 2 dialog nặng — chỉ load khi user click
 // "Sửa" / "Ghi nhận thanh toán". Save ~300KB initial.
@@ -270,6 +271,11 @@ function InvoiceDetail({
           },
           {
             id: "payment_history",
+            label: "Thanh toán",
+            content: <PaymentHistoryTab referenceType="invoice" referenceId={invoice.id} />,
+          },
+          {
+            id: "audit_history",
             label: "Lịch sử",
             content: <AuditHistoryTab entityType="invoice" entityId={invoice.id} />,
           },

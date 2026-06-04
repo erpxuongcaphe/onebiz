@@ -280,7 +280,10 @@ function PosPageInner() {
           setTimeout(() => {
             cartScrollRef.current?.scrollTo({ top: cartScrollRef.current.scrollHeight, behavior: "smooth" });
           }, 50);
-          if ((product.stock ?? 0) <= 0) {
+          // CEO 03/06/2026 — Sprint 3 (P2 fix): SKU has_bom luôn product.stock=0
+          // (vì SKU không giữ tồn, chỉ NVL giữ). Toast "Hết hàng" sẽ false-positive.
+          // → Bỏ qua check cho has_bom (POS RPC v5 sẽ check khả dụng qua BOM thực).
+          if (!product.hasBom && (product.stock ?? 0) <= 0) {
             toast({ title: "Hết hàng", description: `"${product.name}" đã hết`, variant: "warning" });
           }
         } else {
@@ -864,7 +867,9 @@ function PosPageInner() {
               behavior: "smooth",
             });
           }, 50);
-          if ((product.stock ?? 0) <= 0) {
+          // CEO 03/06/2026 — Sprint 3 (P2): bỏ qua check cho has_bom (xem
+          // comment ở barcode quick-add). Tránh false-positive cho SKU đóng gói.
+          if (!product.hasBom && (product.stock ?? 0) <= 0) {
             toast({
               title: "Hết hàng",
               description: `"${product.name}" đã hết trong kho`,

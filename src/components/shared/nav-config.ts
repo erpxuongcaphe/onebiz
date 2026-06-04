@@ -70,7 +70,9 @@ export const mainNavItems: NavGroup[] = [
           { label: "Đặt hàng", href: "/don-hang/dat-hang" },
           { label: "Hóa đơn", href: "/don-hang/hoa-don" },
           { label: "Trả hàng", href: "/don-hang/tra-hang" },
-          { label: "Đối tác giao hàng", href: "/don-hang/doi-tac-giao-hang" },
+          // CEO 03/06/2026 — Sprint 3 (audit menu P0): hợp nhất route trùng,
+          // dùng /doi-tac/giao-hang (sidebar V2 canonical) thay vì legacy URL.
+          { label: "Đối tác giao hàng", href: "/doi-tac/giao-hang" },
           { label: "Vận đơn", href: "/don-hang/van-don" },
         ],
       },
@@ -179,6 +181,12 @@ export const sidebarNavGroups: SidebarGroup[] = [
     icon: "shopping_cart",
     items: [
       { label: "Hóa đơn", href: "/don-hang/hoa-don", icon: "receipt_long" },
+      // CEO 03/06/2026 — Sprint 3 (audit menu P0): Bán nội bộ là intercompany
+      // invoice (subtotal + tax + total), bản chất Sale chứ không phải Stock
+      // movement. SAP/Odoo/Misa đều xếp ở module Sales. Kế toán hợp nhất P&L
+      // chuỗi cần ở chung group Hoá đơn. Đổi tên "Bán nội bộ chuỗi" để CEO
+      // phân biệt rõ với "Chuyển kho" (movement) + "Xuất dùng nội bộ" (chi phí).
+      { label: "Bán nội bộ chuỗi", href: "/hang-hoa/ban-noi-bo", icon: "store" },
       { label: "Đơn đặt hàng", href: "/don-hang/dat-hang", icon: "description" },
       { label: "Trả hàng", href: "/don-hang/tra-hang", icon: "undo" },
       { label: "Vận đơn", href: "/don-hang/van-don", icon: "local_shipping" },
@@ -195,15 +203,30 @@ export const sidebarNavGroups: SidebarGroup[] = [
   {
     label: "Kho",
     icon: "warehouse",
-    items: [
-      { label: "Tồn kho", href: "/hang-hoa/ton-kho", icon: "warehouse" },
-      { label: "Lịch sử kho", href: "/hang-hoa/lich-su-kho", icon: "history" },
-      { label: "Kiểm kho", href: "/hang-hoa/kiem-kho", icon: "fact_check" },
-      { label: "Chuyển kho", href: "/hang-hoa/chuyen-kho", icon: "swap_horiz" },
-      { label: "Hạn sử dụng", href: "/hang-hoa/hsd", icon: "event_note" },
-      { label: "Xuất dùng nội bộ", href: "/hang-hoa/xuat-dung-noi-bo", icon: "inventory" },
-      { label: "Xuất hủy", href: "/hang-hoa/xuat-huy", icon: "delete" },
-      { label: "Bán nội bộ", href: "/hang-hoa/ban-noi-bo", icon: "store" },
+    // CEO 03/06/2026 — Sprint 3 (audit menu P1): chia 2 subGroup phân theo
+    // workflow user — thủ kho dùng "Vận hành" hằng ngày; quản lý quán + QC
+    // dùng "Xuất kho" theo ca / theo sự kiện.
+    subGroups: [
+      {
+        label: "Vận hành kho",
+        icon: "warehouse",
+        items: [
+          { label: "Tồn kho", href: "/hang-hoa/ton-kho", icon: "warehouse" },
+          { label: "Lịch sử kho", href: "/hang-hoa/lich-su-kho", icon: "history" },
+          { label: "Kiểm kho", href: "/hang-hoa/kiem-kho", icon: "fact_check" },
+          { label: "Hạn sử dụng", href: "/hang-hoa/hsd", icon: "event_note" },
+        ],
+      },
+      {
+        label: "Xuất kho",
+        icon: "outbox",
+        items: [
+          { label: "Chuyển kho", href: "/hang-hoa/chuyen-kho", icon: "swap_horiz" },
+          { label: "Xuất dùng nội bộ", href: "/hang-hoa/xuat-dung-noi-bo", icon: "inventory" },
+          { label: "Xuất hủy", href: "/hang-hoa/xuat-huy", icon: "delete" },
+          // NOTE: "Bán nội bộ" đã chuyển sang group "Bán hàng" (intercompany invoice).
+        ],
+      },
     ],
   },
 
@@ -278,8 +301,10 @@ export const sidebarNavGroups: SidebarGroup[] = [
   },
 
   // ============================================================
-  // 7. TÀI CHÍNH — sổ quỹ + công nợ
-  // Day 7 16/05/2026: gắn permission — cashier không thấy sổ quỹ tổng
+  // 7. TÀI CHÍNH — gộp Sổ quỹ + Công nợ + Báo cáo tài chính
+  // CEO 03/06/2026 — Sprint 3 (audit menu P1): trước đây "Tài chính" 2 items
+  // tách rời "Báo cáo > Tài chính" 4 items → kế toán hop 2 group cho cùng
+  // chủ đề. Gộp lại 1 group 6 items đầy đủ workflow.
   // ============================================================
   {
     label: "Tài chính",
@@ -287,6 +312,26 @@ export const sidebarNavGroups: SidebarGroup[] = [
     items: [
       { label: "Sổ quỹ", href: "/so-quy", icon: "payments", permission: "finance.view_cash_book" },
       { label: "Công nợ", href: "/tai-chinh/cong-no", icon: "credit_card", permission: "customers.view_debt" },
+      { label: "Công nợ aging", href: "/phan-tich/cong-no-aging", icon: "credit_card_off", badge: "Mới" },
+      { label: "Phân tích tài chính", href: "/phan-tich/tai-chinh", icon: "account_balance" },
+      { label: "Lưu chuyển tiền tệ", href: "/phan-tich/luong-tien", icon: "payments" },
+      { label: "VAT đầu vào / ra", href: "/phan-tich/vat", icon: "receipt", badge: "Mới" },
+    ],
+  },
+
+  // ============================================================
+  // 7b. KHUYẾN MÃI & MARKETING — CEO 03/06/2026 (audit menu P1)
+  // Chuỗi cà phê chạy promo theo quán/theo mùa thường xuyên. Trước đây các
+  // trang khuyến mãi nằm ẩn trong /cai-dat → CEO không tìm thấy.
+  // KiotViet + Sapo + MISA đều có group riêng cho Marketing.
+  // ============================================================
+  {
+    label: "Khuyến mãi",
+    icon: "local_offer",
+    items: [
+      { label: "Chương trình khuyến mãi", href: "/cai-dat/khuyen-mai", icon: "local_offer" },
+      { label: "Mã giảm giá", href: "/cai-dat/ma-giam-gia", icon: "qr_code_2" },
+      { label: "Báo cáo khuyến mãi", href: "/phan-tich/khuyen-mai", icon: "trending_up" },
     ],
   },
 
@@ -329,7 +374,7 @@ export const sidebarNavGroups: SidebarGroup[] = [
           { label: "Đặt hàng & xử lý", href: "/phan-tich/dat-hang", icon: "description" },
           { label: "Theo kênh bán", href: "/phan-tich/kenh-ban", icon: "storefront" },
           { label: "Báo cáo quán cà phê", href: "/phan-tich/fnb", icon: "coffee" },
-          { label: "Khuyến mãi", href: "/phan-tich/khuyen-mai", icon: "local_offer" },
+          // CEO 03/06/2026: "Khuyến mãi" chuyển sang group Khuyến mãi top-level.
           // Phase B 16/05/2026: báo cáo BÁN HÀNG chi tiết
           { label: "Trả hàng chi tiết", href: "/phan-tich/tra-hang", icon: "undo", badge: "Mới" },
           { label: "Doanh thu nhân viên", href: "/phan-tich/nhan-vien", icon: "badge", badge: "Mới" },
@@ -367,17 +412,9 @@ export const sidebarNavGroups: SidebarGroup[] = [
           { label: "Phân khúc RFM", href: "/phan-tich/rfm", icon: "diversity_3", badge: "Mới" },
         ],
       },
-      {
-        label: "Tài chính",
-        icon: "payments",
-        items: [
-          { label: "Phân tích tài chính", href: "/phan-tich/tai-chinh", icon: "account_balance" },
-          { label: "Lưu chuyển tiền tệ", href: "/phan-tich/luong-tien", icon: "payments" },
-          // Phase C 16/05/2026: CFO reports
-          { label: "Công nợ aging", href: "/phan-tich/cong-no-aging", icon: "credit_card_off", badge: "Mới" },
-          { label: "VAT đầu vào / ra", href: "/phan-tich/vat", icon: "receipt", badge: "Mới" },
-        ],
-      },
+      // CEO 03/06/2026 — Sprint 3 (audit menu P1): subGroup "Tài chính" đã
+      // được di chuyển sang group top-level "Tài chính" để gộp cùng Sổ quỹ +
+      // Công nợ. Tránh kế toán phải hop 2 group cho cùng workflow.
     ],
   },
 

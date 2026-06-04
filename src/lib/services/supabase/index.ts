@@ -142,8 +142,8 @@ export type {
 } from "./finance-marketing-reports";
 // Manufacturing handled by production.ts (getProductionOrders)
 export { getPurchaseOrderEntries, getPurchaseOrdersForExport, getPurchaseEntryStatuses, getPurchaseReturns, getPurchaseReturnStatuses, getInputInvoices, getInputInvoiceStatuses, deleteInputInvoice, cancelInputInvoice, recordInputInvoice, completeSupplierReturn, cancelPurchaseOrderEntry } from "./purchase-entries";
-export { recordInvoicePayment, recordPurchasePayment, getPaymentHistory } from "./payments";
-export type { RecordPaymentInput, RecordPaymentResult } from "./payments";
+export { recordInvoicePayment, recordPurchasePayment, getPaymentHistory, getOpenInvoicesByCustomer, getOpenPurchasesBySupplier } from "./payments";
+export type { RecordPaymentInput, RecordPaymentResult, OpenInvoiceLine, OpenPurchaseLine } from "./payments";
 export { getFavorites, isFavorite, toggleFavorite, getFavoriteIds } from "./favorites";
 export { getCoupons, getCouponById, createCoupon, updateCoupon, deleteCoupon, validateCoupon, getCouponUsages } from "./coupons";
 export {

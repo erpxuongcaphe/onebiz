@@ -29,8 +29,10 @@ import { getDebtAging, getTopDebtors, getDebtTotals } from "@/lib/services/supab
 import type { Customer, Supplier } from "@/lib/types";
 import type { DebtAgingReport, DebtorDetail } from "@/lib/services/supabase/debt";
 import { Icon } from "@/components/ui/icon";
+import { Button } from "@/components/ui/button";
 import { ImportExcelDialog } from "@/components/shared/dialogs/import-excel-dialog";
 import { AuditLogDialog } from "@/components/shared/audit-log-dialog";
+import { SettleDebtDialog } from "@/components/shared/dialogs/settle-debt-dialog";
 import { buildTransactionRowActions } from "@/components/shared/transaction-row-actions";
 import { downloadTemplate } from "@/lib/excel";
 import { debtOpeningExcelSchema } from "@/lib/excel/schemas";
@@ -84,6 +86,15 @@ export default function CongNoPage() {
     type: "customer" | "supplier";
     id: string;
     code: string;
+  } | null>(null);
+
+  // CEO 03/06/2026 — Sprint 3 (Công nợ C1+C2): Settle debt dialog per-row.
+  // Mỗi KH + mỗi NCC có nút "Thanh toán" → mở dialog auto-allocate FIFO.
+  const [settleTarget, setSettleTarget] = useState<{
+    mode: "customer" | "supplier";
+    partyId: string;
+    partyName: string;
+    estimatedDebt: number;
   } | null>(null);
 
   const fetchData = useCallback(async () => {
@@ -200,6 +211,37 @@ export default function CongNoPage() {
       size: 140,
       cell: ({ row }) => row.original.groupName ?? "—",
     },
+    // CEO 03/06/2026 — Sprint 3 (Công nợ C1): cột Action nút "Thanh toán" per row.
+    {
+      id: "actions",
+      header: "Thao tác",
+      size: 150,
+      enableSorting: false,
+      cell: ({ row }) => {
+        const debt = row.original.currentDebt ?? 0;
+        if (debt <= 0) {
+          return <span className="text-xs text-muted-foreground">Đã thanh toán</span>;
+        }
+        return (
+          <Button
+            size="sm"
+            variant="default"
+            className="h-7 px-2.5 text-xs gap-1"
+            onClick={() =>
+              setSettleTarget({
+                mode: "customer",
+                partyId: row.original.id,
+                partyName: row.original.name,
+                estimatedDebt: debt,
+              })
+            }
+          >
+            <Icon name="payments" size={14} />
+            Thanh toán
+          </Button>
+        );
+      },
+    },
   ];
 
   const supplierColumns: ColumnDef<Supplier, unknown>[] = [
@@ -241,6 +283,37 @@ export default function CongNoPage() {
       header: "Tổng đã nhập",
       size: 160,
       cell: ({ row }) => formatCurrency(row.original.totalPurchases ?? 0),
+    },
+    // CEO 03/06/2026 — Sprint 3 (Công nợ C2): cột Action nút "Trả nợ" per row.
+    {
+      id: "actions",
+      header: "Thao tác",
+      size: 150,
+      enableSorting: false,
+      cell: ({ row }) => {
+        const debt = row.original.currentDebt ?? 0;
+        if (debt <= 0) {
+          return <span className="text-xs text-muted-foreground">Đã thanh toán</span>;
+        }
+        return (
+          <Button
+            size="sm"
+            variant="default"
+            className="h-7 px-2.5 text-xs gap-1 bg-status-warning hover:bg-status-warning/90"
+            onClick={() =>
+              setSettleTarget({
+                mode: "supplier",
+                partyId: row.original.id,
+                partyName: row.original.name,
+                estimatedDebt: debt,
+              })
+            }
+          >
+            <Icon name="account_balance_wallet" size={14} />
+            Trả nợ
+          </Button>
+        );
+      },
     },
   ];
 
@@ -629,6 +702,23 @@ export default function CongNoPage() {
           entityId={auditDialogTarget.id}
           entityCode={auditDialogTarget.code}
           onClose={() => setAuditDialogTarget(null)}
+        />
+      )}
+
+      {/* CEO 03/06/2026 — Sprint 3 (Công nợ C1+C2): Dialog Thanh toán per-row.
+          Sau khi pay xong → refetch tổng + list cho KPI và bảng cập nhật. */}
+      {settleTarget && (
+        <SettleDebtDialog
+          open={!!settleTarget}
+          onOpenChange={(o) => !o && setSettleTarget(null)}
+          mode={settleTarget.mode}
+          partyId={settleTarget.partyId}
+          partyName={settleTarget.partyName}
+          estimatedDebt={settleTarget.estimatedDebt}
+          onSuccess={() => {
+            setSettleTarget(null);
+            fetchData();
+          }}
         />
       )}
     </div>

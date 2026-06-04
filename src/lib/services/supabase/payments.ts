@@ -373,6 +373,100 @@ export async function recordPurchasePayment(
 }
 
 /**
+ * CEO 03/06/2026 — Sprint 3 (Công nợ C1): Get all unpaid invoices for a customer.
+ * Dùng cho dialog "Thu tổng nợ KH" — list HĐ debt > 0, sort oldest first cho
+ * auto-allocate FIFO. Filter status != 'cancelled' để bỏ HĐ đã huỷ.
+ */
+export interface OpenInvoiceLine {
+  id: string;
+  code: string;
+  date: string;
+  total: number;
+  paid: number;
+  debt: number;
+  ageDays: number;
+}
+
+export async function getOpenInvoicesByCustomer(
+  customerId: string,
+): Promise<OpenInvoiceLine[]> {
+  const supabase = getClient();
+  const ctx = await getCurrentContext();
+
+  const { data, error } = await supabase
+    .from("invoices")
+    .select("id, code, created_at, total, paid, debt, status")
+    .eq("tenant_id", ctx.tenantId)
+    .eq("customer_id", customerId)
+    .gt("debt", 0)
+    .neq("status", "cancelled")
+    .order("created_at", { ascending: true });
+
+  if (error) handleError(error, "getOpenInvoicesByCustomer");
+
+  const now = Date.now();
+  return (data ?? []).map((row) => {
+    const created = new Date(row.created_at as string).getTime();
+    const ageDays = Math.max(0, Math.floor((now - created) / 86400000));
+    return {
+      id: row.id as string,
+      code: row.code as string,
+      date: row.created_at as string,
+      total: Number(row.total ?? 0),
+      paid: Number(row.paid ?? 0),
+      debt: Number(row.debt ?? 0),
+      ageDays,
+    };
+  });
+}
+
+/**
+ * Get all unpaid purchase orders for a supplier (dialog "Trả tổng nợ NCC").
+ */
+export interface OpenPurchaseLine {
+  id: string;
+  code: string;
+  date: string;
+  total: number;
+  paid: number;
+  debt: number;
+  ageDays: number;
+}
+
+export async function getOpenPurchasesBySupplier(
+  supplierId: string,
+): Promise<OpenPurchaseLine[]> {
+  const supabase = getClient();
+  const ctx = await getCurrentContext();
+
+  const { data, error } = await supabase
+    .from("purchase_orders")
+    .select("id, code, created_at, total, paid, debt, status")
+    .eq("tenant_id", ctx.tenantId)
+    .eq("supplier_id", supplierId)
+    .gt("debt", 0)
+    .neq("status", "cancelled")
+    .order("created_at", { ascending: true });
+
+  if (error) handleError(error, "getOpenPurchasesBySupplier");
+
+  const now = Date.now();
+  return (data ?? []).map((row) => {
+    const created = new Date(row.created_at as string).getTime();
+    const ageDays = Math.max(0, Math.floor((now - created) / 86400000));
+    return {
+      id: row.id as string,
+      code: row.code as string,
+      date: row.created_at as string,
+      total: Number(row.total ?? 0),
+      paid: Number(row.paid ?? 0),
+      debt: Number(row.debt ?? 0),
+      ageDays,
+    };
+  });
+}
+
+/**
  * Get payment history for an invoice or purchase order.
  */
 export async function getPaymentHistory(
