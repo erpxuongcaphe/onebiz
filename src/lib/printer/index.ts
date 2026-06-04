@@ -20,8 +20,14 @@ export {
   savePrinter,
   loadPrinter,
   clearPrinter,
+  // CEO 04/06/2026 — Sprint 5: multi-role printer API
+  savePrinterByRole,
+  loadPrinterByRole,
+  clearPrinterByRole,
+  isSamePrinterAcrossRoles,
   type ConnectedPrinter,
   type StoredPrinter,
+  type PrinterRole,
 } from "./webusb-printer";
 
 export {

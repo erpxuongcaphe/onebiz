@@ -23,8 +23,10 @@ import { EscPosBuilder, type PaperWidth } from "./escpos";
 import {
   isWebUsbSupported,
   loadPrinter,
+  loadPrinterByRole,
   sendToUsbPrinter,
   type StoredPrinter,
+  type PrinterRole,
 } from "./webusb-printer";
 import { formatNumber, formatDate } from "@/lib/format";
 
@@ -314,6 +316,18 @@ export interface PrinterServiceOptions {
   /** Nếu true, in raw HTML thay vì đi qua PrinterService format
    *  (dùng khi call site đã có HTML xịn như printFnbReceipt) */
   rawHtml?: string;
+  /**
+   * CEO 04/06/2026 — Sprint 5: chọn role máy in (cashier=thu ngân,
+   * kitchen=bếp). Mặc định "cashier". Nếu role không có printer riêng
+   * → tự fallback sang cashier slot.
+   */
+  role?: PrinterRole;
+}
+
+/** Helper: chọn printer theo role với fallback sang cashier. */
+function pickPrinter(role: PrinterRole | undefined): StoredPrinter | null {
+  const effectiveRole = role ?? "cashier";
+  return loadPrinterByRole(effectiveRole) ?? loadPrinter();
 }
 
 export class PrinterService {
@@ -328,8 +342,8 @@ export class PrinterService {
     return this.configuredBackend;
   }
 
-  getStoredPrinter(): StoredPrinter | null {
-    return loadPrinter();
+  getStoredPrinter(role: PrinterRole = "cashier"): StoredPrinter | null {
+    return loadPrinterByRole(role) ?? loadPrinter();
   }
 
   /**
@@ -363,7 +377,7 @@ export class PrinterService {
       );
     }
 
-    const printer = loadPrinter();
+    const printer = pickPrinter(options.role);
     if (!printer) {
       return this.fallbackToBrowser(
         payload,
@@ -411,6 +425,8 @@ export class PrinterService {
     escposBytes?: Uint8Array;
     backend?: PrinterBackend;
     openCashDrawer?: boolean;
+    /** CEO 04/06/2026 — Sprint 5: role để dispatch đúng printer slot. */
+    role?: PrinterRole;
   }): Promise<PrintResult> {
     const backend = args.backend ?? this.configuredBackend;
 
@@ -427,7 +443,7 @@ export class PrinterService {
     if (!isWebUsbSupported()) {
       return this.fallbackRawToBrowser(args.rawHtml, "Trình duyệt không hỗ trợ WebUSB — đã chuyển sang in qua trình duyệt");
     }
-    const printer = loadPrinter();
+    const printer = pickPrinter(args.role);
     if (!printer) {
       return this.fallbackRawToBrowser(args.rawHtml, "Chưa kết nối máy in USB — đã in qua trình duyệt");
     }
@@ -472,7 +488,7 @@ export class PrinterService {
       if (!isWebUsbSupported()) {
         return { success: false, backend: "escpos-usb", warning: "Trình duyệt không hỗ trợ WebUSB" };
       }
-      const printer = loadPrinter();
+      const printer = pickPrinter(options.role);
       if (!printer) {
         return { success: false, backend: "escpos-usb", warning: "Chưa kết nối máy in" };
       }

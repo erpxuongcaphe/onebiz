@@ -6,7 +6,7 @@
  */
 
 import { formatCurrency, formatTime as formatTimeHelper, formatShortDate } from "@/lib/format";
-import { printerService, type PrintReceiptPayload } from "@/lib/printer";
+import { printerService, type PrintReceiptPayload, type PrinterRole } from "@/lib/printer";
 
 // ============================================================
 // Types
@@ -525,7 +525,8 @@ export function printFnbReceipt(data: FnbReceiptData): void {
   }
 
   printerService.setBackend(backend);
-  void printerService.printReceipt(payload, { rawHtml: html, openCashDrawer });
+  // CEO 04/06/2026 — Sprint 5: receipt FnB luôn dùng role="cashier".
+  void printerService.printReceipt(payload, { rawHtml: html, openCashDrawer, role: "cashier" });
 }
 
 // ============================================================
@@ -648,5 +649,42 @@ ${itemsHtml}
 }
 
 export function printKitchenTicketV2(data: KitchenTicketDataV2): void {
-  openAndPrint(buildKitchenTicketHtml(data));
+  // CEO 04/06/2026 — Sprint 5 multi-printer: kitchen ticket dispatch theo
+  // backend + role="kitchen". Browser → window.open như cũ; ESC/POS USB →
+  // dùng printer config slot "kitchen" (user trỏ chung 1 máy hoặc khác máy).
+  const html = buildKitchenTicketHtml(data);
+  dispatchPrintByRole(html, "kitchen");
+}
+
+/**
+ * Dispatch print theo role. Đọc backend từ localStorage settings.print.backend.
+ *   - "browser"   → window.open + window.print (in qua dialog browser, user
+ *                    chọn máy in trong popup OS).
+ *   - "escpos-usb"→ printer-service.printRaw({rawHtml, role}). Service tự lookup
+ *                    printer config theo role (cashier/kitchen). Nếu role không
+ *                    có printer config riêng → fallback sang cashier slot.
+ *
+ * Khi anh trỏ 2 role vào cùng device → in 2 lần liên tục trên 1 máy in.
+ * Khi anh trỏ 2 device khác nhau → in tách biệt.
+ */
+function dispatchPrintByRole(html: string, role: PrinterRole): void {
+  let backend: "browser" | "escpos-usb" = "browser";
+  try {
+    const raw = typeof window !== "undefined" ? localStorage.getItem("onebiz_settings") : null;
+    if (raw) {
+      const parsed = JSON.parse(raw);
+      backend = parsed?.print?.backend === "escpos-usb" ? "escpos-usb" : "browser";
+    }
+  } catch {
+    /* keep default */
+  }
+
+  if (backend === "browser") {
+    openAndPrint(html);
+    return;
+  }
+
+  // ESC/POS USB — pass role để printer-service lookup đúng slot
+  printerService.setBackend("escpos-usb");
+  void printerService.printRaw({ rawHtml: html, role, backend: "escpos-usb" });
 }

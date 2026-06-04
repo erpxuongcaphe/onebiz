@@ -17,12 +17,14 @@ import { useEffect, useState, useCallback } from "react";
 import { Icon } from "@/components/ui/icon";
 import {
   requestPrinter,
-  savePrinter,
-  loadPrinter,
-  clearPrinter,
   isWebUsbSupported,
   testPrint,
+  loadPrinterByRole,
+  savePrinterByRole,
+  clearPrinterByRole,
+  isSamePrinterAcrossRoles,
   type StoredPrinter,
+  type PrinterRole,
 } from "@/lib/printer";
 import { useToast } from "@/lib/contexts/toast-context";
 import { HelpTip } from "@/components/shared/help-tip";
@@ -133,9 +135,13 @@ export default function PrintSettingsPage() {
   const { toast } = useToast();
   const [testStatus, setTestStatus] = useState<"idle" | "testing" | "success" | "error">("idle");
   const [testError, setTestError] = useState<string>("");
-  const [storedPrinter, setStoredPrinter] = useState<StoredPrinter | null>(null);
+  // CEO 04/06/2026 — Sprint 5 multi-printer: 2 slot riêng (cashier + kitchen).
+  // User có thể trỏ vào cùng 1 device (1 máy in chung) hoặc 2 device khác nhau.
+  const [storedCashier, setStoredCashier] = useState<StoredPrinter | null>(null);
+  const [storedKitchen, setStoredKitchen] = useState<StoredPrinter | null>(null);
   const [webusbSupported, setWebusbSupported] = useState(false);
-  const [connecting, setConnecting] = useState(false);
+  const [connecting, setConnecting] = useState<PrinterRole | null>(null);
+  const sameDevice = isSamePrinterAcrossRoles();
   // Sprint TEMPLATE-1: logo doanh nghiệp + footer hoá đơn — load + save qua
   // tenants.settings.business_info (cùng nguồn với /he-thong/thiet-lap).
   const [logoUrl, setLogoUrl] = useState<string | null>(null);
@@ -146,10 +152,11 @@ export default function PrintSettingsPage() {
     updateSettings("print", values);
   };
 
-  // Load stored printer + check WebUSB support on mount
+  // Load stored printers + check WebUSB support on mount
   useEffect(() => {
     setWebusbSupported(isWebUsbSupported());
-    setStoredPrinter(loadPrinter());
+    setStoredCashier(loadPrinterByRole("cashier"));
+    setStoredKitchen(loadPrinterByRole("kitchen"));
   }, []);
 
   // Sprint TEMPLATE-1: load logo + footer từ tenant settings
@@ -215,18 +222,21 @@ export default function PrintSettingsPage() {
     }
   }, [invoiceFooter, toast]);
 
-  const handleConnectUsbPrinter = async () => {
-    setConnecting(true);
+  const handleConnectUsbPrinter = async (role: PrinterRole) => {
+    setConnecting(role);
     try {
       const printer = await requestPrinter();
       if (printer) {
-        savePrinter(printer);
-        setStoredPrinter({
+        savePrinterByRole(printer, role);
+        const stored: StoredPrinter = {
           ...printer,
+          role,
           connectedAt: new Date().toISOString(),
-        });
+        };
+        if (role === "cashier") setStoredCashier(stored);
+        else setStoredKitchen(stored);
         toast({
-          title: "Đã kết nối máy in",
+          title: role === "cashier" ? "Đã kết nối máy in thu ngân" : "Đã kết nối máy in bếp",
           description: `${printer.manufacturer} — ${printer.name}`,
           variant: "success",
         });
@@ -239,16 +249,37 @@ export default function PrintSettingsPage() {
         variant: "error",
       });
     } finally {
-      setConnecting(false);
+      setConnecting(null);
     }
   };
 
-  const handleDisconnectUsbPrinter = () => {
-    clearPrinter();
-    setStoredPrinter(null);
+  const handleDisconnectUsbPrinter = (role: PrinterRole) => {
+    clearPrinterByRole(role);
+    if (role === "cashier") setStoredCashier(null);
+    else setStoredKitchen(null);
     toast({
-      title: "Đã ngắt kết nối máy in",
+      title: role === "cashier" ? "Đã ngắt máy in thu ngân" : "Đã ngắt máy in bếp",
       variant: "info",
+    });
+  };
+
+  /** Mirror cashier printer sang kitchen slot (dùng chung 1 máy). */
+  const handleMirrorCashierToKitchen = () => {
+    if (!storedCashier) return;
+    savePrinterByRole(
+      {
+        vendorId: storedCashier.vendorId,
+        productId: storedCashier.productId,
+        name: storedCashier.name,
+        manufacturer: storedCashier.manufacturer,
+      },
+      "kitchen",
+    );
+    setStoredKitchen({ ...storedCashier, role: "kitchen" });
+    toast({
+      title: "Đã dùng chung 1 máy in",
+      description: "Máy in thu ngân + bếp cùng 1 thiết bị. Phiếu thu ngân + phiếu bếp sẽ in lần lượt.",
+      variant: "success",
     });
   };
 
@@ -334,48 +365,65 @@ export default function PrintSettingsPage() {
             })}
           </div>
 
-          {/* USB Printer connection UI */}
+          {/* USB Printer connection UI — CEO 04/06/2026 Sprint 5: 2 slot */}
           {print.backend === "escpos-usb" && (
-            <div className="rounded-lg border bg-muted/30 p-4 space-y-3">
-              <div className="flex items-start justify-between gap-3">
-                <div>
-                  <h4 className="text-sm font-semibold">Máy in USB đã kết nối</h4>
-                  {storedPrinter ? (
-                    <div className="mt-1 text-sm">
-                      <p>
-                        <span className="text-muted-foreground">Hiệu:</span>{" "}
-                        <span className="font-medium">{storedPrinter.manufacturer}</span>
-                      </p>
-                      <p>
-                        <span className="text-muted-foreground">Tên:</span>{" "}
-                        <span className="font-medium">{storedPrinter.name}</span>
-                      </p>
-                      <p className="text-xs text-muted-foreground mt-1">
-                        Vendor ID: 0x{storedPrinter.vendorId.toString(16).padStart(4, "0")} · Product ID: 0x{storedPrinter.productId.toString(16).padStart(4, "0")}
-                      </p>
-                    </div>
-                  ) : (
-                    <p className="mt-1 text-sm text-muted-foreground">
-                      Chưa kết nối máy in nào. Bấm nút bên phải để chọn thiết bị.
-                    </p>
-                  )}
-                </div>
-                <div className="flex flex-col gap-2 shrink-0">
-                  <Button
-                    size="sm"
-                    onClick={handleConnectUsbPrinter}
-                    disabled={connecting || !webusbSupported}
-                  >
-                    <Icon name="usb" size={16} className="mr-1" />
-                    {connecting ? "Đang kết nối..." : storedPrinter ? "Đổi máy in" : "Kết nối máy in"}
-                  </Button>
-                  {storedPrinter && (
-                    <Button size="sm" variant="outline" onClick={handleDisconnectUsbPrinter}>
-                      Ngắt kết nối
-                    </Button>
-                  )}
-                </div>
+            <div className="rounded-lg border bg-muted/30 p-4 space-y-4">
+              {/* Tip banner */}
+              <div className="rounded-lg bg-status-info/10 border border-status-info/25 p-3 text-xs space-y-1">
+                <p className="font-semibold text-status-info">
+                  💡 Có 2 ô cài đặt máy in — anh có thể trỏ vào cùng 1 máy HOẶC 2 máy khác nhau
+                </p>
+                <p className="text-muted-foreground">
+                  <strong>Dùng chung 1 máy:</strong> hoá đơn thu ngân + phiếu bếp in lần lượt trên cùng 1 máy.
+                  Bếp xé giấy ra dán riêng.
+                  <br />
+                  <strong>Dùng 2 máy riêng:</strong> phiếu cho khách in ở quầy, phiếu bếp in thẳng tại bếp.
+                </p>
               </div>
+
+              {/* Slot 1: CASHIER */}
+              <PrinterSlotCard
+                role="cashier"
+                label="Máy in thu ngân"
+                sublabel="In hoá đơn cho khách (có giá, tổng tiền)"
+                icon="point_of_sale"
+                stored={storedCashier}
+                onConnect={() => handleConnectUsbPrinter("cashier")}
+                onDisconnect={() => handleDisconnectUsbPrinter("cashier")}
+                connecting={connecting === "cashier"}
+                webusbSupported={webusbSupported}
+              />
+
+              {/* Slot 2: KITCHEN */}
+              <PrinterSlotCard
+                role="kitchen"
+                label="Máy in bếp / bar"
+                sublabel="In phiếu pha chế (KHÔNG có giá, có modifier + ghi chú)"
+                icon="restaurant"
+                stored={storedKitchen}
+                onConnect={() => handleConnectUsbPrinter("kitchen")}
+                onDisconnect={() => handleDisconnectUsbPrinter("kitchen")}
+                connecting={connecting === "kitchen"}
+                webusbSupported={webusbSupported}
+                extraAction={
+                  storedCashier && !storedKitchen ? (
+                    <Button size="sm" variant="outline" onClick={handleMirrorCashierToKitchen}>
+                      <Icon name="content_copy" size={14} className="mr-1" />
+                      Dùng chung máy thu ngân
+                    </Button>
+                  ) : null
+                }
+              />
+
+              {/* Badge: 2 slot trỏ cùng 1 device */}
+              {sameDevice && (
+                <div className="rounded-lg bg-status-success/10 border border-status-success/25 p-2 text-xs flex items-center gap-2">
+                  <Icon name="info" size={14} className="text-status-success" />
+                  <span className="text-status-success font-medium">
+                    Đang dùng chung 1 máy in — sau thanh toán in 2 phiếu lần lượt (HĐ trước, phiếu bếp sau)
+                  </span>
+                </div>
+              )}
 
               <Separator />
 
@@ -383,7 +431,7 @@ export default function PrintSettingsPage() {
                 checked={print.openCashDrawer}
                 onCheckedChange={(v) => update({ openCashDrawer: v })}
                 label="Mở ngăn kéo tiền mặt"
-                description="Tự động mở ngăn kéo khi thanh toán tiền mặt (cần máy in có cổng RJ11/RJ12 kết nối drawer)"
+                description="Tự động mở ngăn kéo khi thanh toán tiền mặt (cần máy in thu ngân có cổng RJ11/RJ12 kết nối drawer)"
               />
 
               <div className="rounded-lg bg-amber-50 p-3 text-xs text-amber-900 dark:bg-amber-900/20 dark:text-amber-200">
@@ -880,6 +928,97 @@ export default function PrintSettingsPage() {
           />
         </CardContent>
       </Card>
+    </div>
+  );
+}
+
+// ── PrinterSlotCard — CEO 04/06/2026 Sprint 5 multi-printer ──
+function PrinterSlotCard({
+  role,
+  label,
+  sublabel,
+  icon,
+  stored,
+  onConnect,
+  onDisconnect,
+  connecting,
+  webusbSupported,
+  extraAction,
+}: {
+  role: PrinterRole;
+  label: string;
+  sublabel: string;
+  icon: string;
+  stored: StoredPrinter | null;
+  onConnect: () => void;
+  onDisconnect: () => void;
+  connecting: boolean;
+  webusbSupported: boolean;
+  extraAction?: React.ReactNode;
+}) {
+  return (
+    <div
+      className={cn(
+        "rounded-lg border p-3 bg-card",
+        stored ? "border-status-success/30" : "border-dashed border-border",
+      )}
+    >
+      <div className="flex items-start justify-between gap-3">
+        <div className="flex items-start gap-3 flex-1 min-w-0">
+          <div
+            className={cn(
+              "shrink-0 h-10 w-10 rounded-lg flex items-center justify-center",
+              role === "cashier"
+                ? "bg-primary/10 text-primary"
+                : "bg-status-warning/10 text-status-warning",
+            )}
+          >
+            <Icon name={icon} size={20} />
+          </div>
+          <div className="min-w-0 flex-1">
+            <h4 className="text-sm font-semibold">{label}</h4>
+            <p className="text-xs text-muted-foreground mt-0.5">{sublabel}</p>
+            {stored ? (
+              <div className="mt-2 text-xs space-y-0.5">
+                <p>
+                  <span className="text-muted-foreground">Hiệu:</span>{" "}
+                  <span className="font-medium">{stored.manufacturer}</span>
+                </p>
+                <p>
+                  <span className="text-muted-foreground">Tên:</span>{" "}
+                  <span className="font-medium">{stored.name}</span>
+                </p>
+                <p className="text-[11px] text-muted-foreground font-mono">
+                  VID: 0x{stored.vendorId.toString(16).padStart(4, "0")} · PID: 0x
+                  {stored.productId.toString(16).padStart(4, "0")}
+                </p>
+              </div>
+            ) : (
+              <p className="mt-2 text-xs text-muted-foreground italic">
+                Chưa kết nối — bấm bên phải để chọn thiết bị.
+              </p>
+            )}
+          </div>
+        </div>
+        <div className="flex flex-col gap-1.5 shrink-0">
+          <Button
+            size="sm"
+            onClick={onConnect}
+            disabled={connecting || !webusbSupported}
+            variant={stored ? "outline" : "default"}
+          >
+            <Icon name="usb" size={14} className="mr-1" />
+            {connecting ? "Đang kết nối..." : stored ? "Đổi máy" : "Kết nối"}
+          </Button>
+          {stored && (
+            <Button size="sm" variant="ghost" onClick={onDisconnect}>
+              <Icon name="link_off" size={14} className="mr-1" />
+              Ngắt
+            </Button>
+          )}
+          {extraAction}
+        </div>
+      </div>
     </div>
   );
 }

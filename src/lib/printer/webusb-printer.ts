@@ -228,8 +228,27 @@ export async function sendToUsbPrinter(
   }
 }
 
-/** Storage key cho localStorage */
+/** Storage key cho localStorage — legacy single printer slot */
 const PRINTER_STORAGE_KEY = "onebiz_usb_printer";
+
+/**
+ * CEO 04/06/2026 — Sprint 5 Printer multi-config:
+ * Hỗ trợ 2 vai trò printer riêng. User có thể trỏ cả 2 vào CÙNG device
+ * (in 2 lần trên 1 máy in chung) HOẶC trỏ 2 device khác nhau (2 máy in vật lý).
+ *
+ * Storage keys:
+ *   - onebiz_printer_cashier  → máy in receipt (thu ngân)
+ *   - onebiz_printer_kitchen  → máy in kitchen ticket (bếp / bar)
+ *
+ * Backward compat: nếu chỉ có key legacy `onebiz_usb_printer`,
+ * loadPrinterByRole("cashier") tự fallback sang đó + auto-migrate.
+ */
+export type PrinterRole = "cashier" | "kitchen";
+
+const PRINTER_STORAGE_KEY_BY_ROLE: Record<PrinterRole, string> = {
+  cashier: "onebiz_printer_cashier",
+  kitchen: "onebiz_printer_kitchen",
+};
 
 export interface StoredPrinter {
   vendorId: number;
@@ -237,37 +256,102 @@ export interface StoredPrinter {
   name: string;
   manufacturer: string;
   connectedAt: string;
+  /** CEO 04/06/2026: vai trò máy in. */
+  role?: PrinterRole;
 }
 
+/**
+ * Legacy: save printer vào slot cashier (mặc định).
+ * Mới: dùng savePrinterByRole.
+ */
 export function savePrinter(printer: ConnectedPrinter): void {
+  savePrinterByRole(printer, "cashier");
+}
+
+/**
+ * Legacy: load printer cashier (mặc định).
+ * Mới: dùng loadPrinterByRole.
+ */
+export function loadPrinter(): StoredPrinter | null {
+  return loadPrinterByRole("cashier");
+}
+
+export function clearPrinter(): void {
+  clearPrinterByRole("cashier");
+  clearPrinterByRole("kitchen");
+  // Cleanup legacy key
+  if (typeof window !== "undefined") {
+    try {
+      localStorage.removeItem(PRINTER_STORAGE_KEY);
+    } catch {
+      /* ignore */
+    }
+  }
+}
+
+// ─── Multi-role API (CEO 04/06/2026 Sprint 5) ───
+
+export function savePrinterByRole(
+  printer: ConnectedPrinter,
+  role: PrinterRole,
+): void {
   if (typeof window === "undefined") return;
   const stored: StoredPrinter = {
     ...printer,
+    role,
     connectedAt: new Date().toISOString(),
   };
   try {
-    localStorage.setItem(PRINTER_STORAGE_KEY, JSON.stringify(stored));
+    localStorage.setItem(PRINTER_STORAGE_KEY_BY_ROLE[role], JSON.stringify(stored));
+    // Legacy: cũng update key cũ cho backward compat code khác
+    if (role === "cashier") {
+      localStorage.setItem(PRINTER_STORAGE_KEY, JSON.stringify(stored));
+    }
   } catch {
     /* ignore */
   }
 }
 
-export function loadPrinter(): StoredPrinter | null {
+export function loadPrinterByRole(role: PrinterRole): StoredPrinter | null {
   if (typeof window === "undefined") return null;
   try {
-    const raw = localStorage.getItem(PRINTER_STORAGE_KEY);
-    if (!raw) return null;
-    return JSON.parse(raw) as StoredPrinter;
+    const raw = localStorage.getItem(PRINTER_STORAGE_KEY_BY_ROLE[role]);
+    if (raw) return JSON.parse(raw) as StoredPrinter;
+    // Backward compat: legacy key chỉ map vào cashier
+    if (role === "cashier") {
+      const legacy = localStorage.getItem(PRINTER_STORAGE_KEY);
+      if (legacy) {
+        const parsed = JSON.parse(legacy) as StoredPrinter;
+        // Auto-migrate sang key mới
+        savePrinterByRole(parsed, "cashier");
+        return parsed;
+      }
+    }
+    return null;
   } catch {
     return null;
   }
 }
 
-export function clearPrinter(): void {
+export function clearPrinterByRole(role: PrinterRole): void {
   if (typeof window === "undefined") return;
   try {
-    localStorage.removeItem(PRINTER_STORAGE_KEY);
+    localStorage.removeItem(PRINTER_STORAGE_KEY_BY_ROLE[role]);
   } catch {
     /* ignore */
   }
+}
+
+/**
+ * Tiện ích: 2 slot trỏ vào cùng 1 device hay không?
+ * → UI hiển thị badge "Dùng chung 1 máy" / "2 máy riêng".
+ */
+export function isSamePrinterAcrossRoles(): boolean {
+  const cashier = loadPrinterByRole("cashier");
+  const kitchen = loadPrinterByRole("kitchen");
+  if (!cashier || !kitchen) return false;
+  return (
+    cashier.vendorId === kitchen.vendorId &&
+    cashier.productId === kitchen.productId
+  );
 }
