@@ -350,6 +350,20 @@ export type {
   TableShape,
 } from "./floor-plan";
 
+// Floor Plan decorations (Phase B)
+export {
+  getDecorationsByZone,
+  createDecoration,
+  updateDecoration,
+  deleteDecoration,
+  uploadFloorPlanBackground,
+  removeFloorPlanBackground,
+} from "./floor-plan-decorations";
+export type {
+  FloorPlanDecoration,
+  DecorationKind,
+} from "./floor-plan-decorations";
+
 // Kitchen Orders
 export {
   getKitchenOrders, getKitchenOrderById,

@@ -10,7 +10,9 @@ import { Stage, Layer, Group, Rect, Circle, Text, Line, Image as KonvaImage, Tra
 import useImage from "use-image";
 import type Konva from "konva";
 import type { TableLayout, FloorPlanZone, TableShape } from "@/lib/services/supabase/floor-plan";
+import type { FloorPlanDecoration } from "@/lib/services/supabase/floor-plan-decorations";
 import { STATUS_COLOR } from "./floor-plan-shapes";
+import { getDecorationPreset } from "./decoration-shapes";
 
 export interface CanvasTable extends TableLayout {
   tableNumber?: number;
@@ -23,15 +25,22 @@ export interface CanvasTable extends TableLayout {
 interface FloorPlanCanvasProps {
   zone: FloorPlanZone;
   tables: CanvasTable[];
+  /** Đồ trang trí (Phase B). */
+  decorations?: FloorPlanDecoration[];
   /** Editor mode: cho phép drag + resize + rotate. View mode: chỉ tap. */
   mode: "edit" | "view";
   /** Tap bàn (view mode = chọn bàn ghi đơn). */
   onSelectTable?: (table: CanvasTable) => void;
   /** Editor: update layout 1 bàn (debounced). */
   onTableLayoutChange?: (id: string, patch: Partial<TableLayout>) => void;
+  /** Editor: update decoration. */
+  onDecorationChange?: (id: string, patch: Partial<FloorPlanDecoration>) => void;
   /** Editor: chọn bàn để show Transformer + thanh thuộc tính. */
   selectedTableId?: string | null;
   onSelectedTableIdChange?: (id: string | null) => void;
+  /** Editor: chọn decoration. */
+  selectedDecorationId?: string | null;
+  onSelectedDecorationIdChange?: (id: string | null) => void;
   /** Container width (responsive). Stage tự scale theo. */
   containerWidth?: number;
 }
@@ -39,11 +48,15 @@ interface FloorPlanCanvasProps {
 export function FloorPlanCanvas({
   zone,
   tables,
+  decorations = [],
   mode,
   onSelectTable,
   onTableLayoutChange,
+  onDecorationChange,
   selectedTableId,
   onSelectedTableIdChange,
+  selectedDecorationId,
+  onSelectedDecorationIdChange,
   containerWidth,
 }: FloorPlanCanvasProps) {
   const stageRef = useRef<Konva.Stage | null>(null);
@@ -57,20 +70,25 @@ export function FloorPlanCanvas({
   const stageW = zone.canvasWidth * scale;
   const stageH = zone.canvasHeight * scale;
 
-  // Gắn Transformer vào bàn đang chọn (chỉ edit mode)
+  // Gắn Transformer vào bàn/decoration đang chọn
   useEffect(() => {
     if (mode !== "edit") return;
     const tr = transformerRef.current;
     const stage = stageRef.current;
     if (!tr || !stage) return;
-    if (!selectedTableId) {
+    const targetId = selectedTableId
+      ? `#table-${selectedTableId}`
+      : selectedDecorationId
+        ? `#decor-${selectedDecorationId}`
+        : null;
+    if (!targetId) {
       tr.nodes([]);
       return;
     }
-    const node = stage.findOne(`#table-${selectedTableId}`);
+    const node = stage.findOne(targetId);
     if (node) tr.nodes([node]);
     else tr.nodes([]);
-  }, [selectedTableId, mode, tables]);
+  }, [selectedTableId, selectedDecorationId, mode, tables, decorations]);
 
   // Snap helper
   const snap = useCallback(
@@ -111,7 +129,34 @@ export function FloorPlanCanvas({
     // Click vào nền → bỏ chọn
     if (e.target === e.target.getStage()) {
       onSelectedTableIdChange?.(null);
+      onSelectedDecorationIdChange?.(null);
     }
+  };
+
+  const handleDecorDragEnd = (id: string, e: Konva.KonvaEventObject<DragEvent>) => {
+    const node = e.target;
+    const x = snap(node.x());
+    const y = snap(node.y());
+    node.x(x);
+    node.y(y);
+    onDecorationChange?.(id, { positionX: x, positionY: y });
+  };
+
+  const handleDecorTransformEnd = (id: string, e: Konva.KonvaEventObject<Event>) => {
+    const node = e.target;
+    const scaleX = node.scaleX();
+    const scaleY = node.scaleY();
+    const newWidth = Math.max(20, node.width() * scaleX);
+    const newHeight = Math.max(20, node.height() * scaleY);
+    node.scaleX(1);
+    node.scaleY(1);
+    onDecorationChange?.(id, {
+      width: newWidth,
+      height: newHeight,
+      rotation: node.rotation(),
+      positionX: snap(node.x()),
+      positionY: snap(node.y()),
+    });
   };
 
   return (
@@ -148,6 +193,26 @@ export function FloorPlanCanvas({
               opacity={0.1}
             />
           )}
+        </Layer>
+
+        {/* Layer 1.5: decorations (dưới bàn) */}
+        <Layer>
+          {decorations.map((d) => (
+            <DecorationNode
+              key={d.id}
+              decoration={d}
+              mode={mode}
+              isSelected={selectedDecorationId === d.id}
+              onSelect={() => {
+                if (mode === "edit") {
+                  onSelectedDecorationIdChange?.(d.id);
+                  onSelectedTableIdChange?.(null);
+                }
+              }}
+              onDragEnd={(e) => handleDecorDragEnd(d.id, e)}
+              onTransformEnd={(e) => handleDecorTransformEnd(d.id, e)}
+            />
+          ))}
         </Layer>
 
         {/* Layer 2: tables (interactive) */}
@@ -317,6 +382,68 @@ function ShapeRect({
 }
 
 // ─── Helpers ───
+
+// ─── Decoration node ───
+function DecorationNode({
+  decoration,
+  mode,
+  isSelected,
+  onSelect,
+  onDragEnd,
+  onTransformEnd,
+}: {
+  decoration: FloorPlanDecoration;
+  mode: "edit" | "view";
+  isSelected: boolean;
+  onSelect: () => void;
+  onDragEnd: (e: Konva.KonvaEventObject<DragEvent>) => void;
+  onTransformEnd: (e: Konva.KonvaEventObject<Event>) => void;
+}) {
+  const preset = getDecorationPreset(decoration.kind);
+  const fill = decoration.color ?? preset.color;
+  const stroke = isSelected ? "#1f2937" : darken(fill, 0.2);
+  const draggable = mode === "edit" && !decoration.locked;
+  const w = decoration.width;
+  const h = decoration.height;
+
+  return (
+    <Group
+      id={`decor-${decoration.id}`}
+      x={decoration.positionX}
+      y={decoration.positionY}
+      rotation={decoration.rotation}
+      draggable={draggable}
+      onClick={onSelect}
+      onTap={onSelect}
+      onDragEnd={onDragEnd}
+      onTransformEnd={onTransformEnd}
+      width={w}
+      height={h}
+    >
+      {/* Shape theo kind */}
+      {decoration.kind === "plant" ? (
+        <Circle x={w / 2} y={h / 2} radius={Math.min(w, h) / 2} fill={fill} stroke={stroke} strokeWidth={1.5} />
+      ) : decoration.kind === "door" || decoration.kind === "window" ? (
+        <Rect x={0} y={0} width={w} height={h} fill={fill} stroke={stroke} strokeWidth={1} cornerRadius={2} />
+      ) : (
+        <Rect x={0} y={0} width={w} height={h} fill={fill} stroke={stroke} strokeWidth={1.5} cornerRadius={4} opacity={0.85} />
+      )}
+      {/* Label */}
+      {decoration.label && (
+        <Text
+          text={decoration.label}
+          fontSize={11}
+          fill="#ffffff"
+          width={w}
+          height={h}
+          align="center"
+          verticalAlign="middle"
+          listening={false}
+        />
+      )}
+    </Group>
+  );
+}
 
 function darken(hex: string, amt: number): string {
   try {
