@@ -1899,14 +1899,16 @@ function PosPageInner() {
 
       {/* ═══════════ HEADER 40px ═══════════ */}
       <header className="h-10 bg-primary text-primary-foreground flex items-center px-3 shrink-0 gap-3">
-        {/* Back — chỉ icon, text Quay lại bỏ để header gọn */}
-        <Link
+        {/* CEO 04/06/2026: từ POS quay về trang chủ mở tab mới. */}
+        <a
           href="/"
+          target="_blank"
+          rel="noopener noreferrer"
           className="inline-flex items-center justify-center p-1.5 rounded hover:bg-white/10 transition-colors shrink-0"
-          title="Quay lại trang chủ"
+          title="Trang chủ (tab mới)"
         >
           <Icon name="arrow_back" size={16} />
-        </Link>
+        </a>
 
         {/* Branch selector + Title — prominent style: badge nổi bật để CEO/staff
             biết rõ chi nhánh đang ghi nhận đơn (CEO feedback 20/04).
@@ -2094,9 +2096,10 @@ function PosPageInner() {
                 )}
               </p>
             </div>
-            <DropdownMenuItem onSelect={() => router.push("/")}>
+            <DropdownMenuItem onSelect={() => window.open("/", "_blank", "noopener,noreferrer")}>
               <Icon name="home" size={16} className="mr-2" />
               Quay về trang chủ
+              <Icon name="open_in_new" size={12} className="ml-auto text-muted-foreground" />
             </DropdownMenuItem>
             <DropdownMenuItem
               onSelect={() => setShiftDrawerOpen(true)}

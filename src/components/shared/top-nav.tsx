@@ -712,15 +712,21 @@ export function TopNav() {
                 <DropdownMenuContent align="end" className="min-w-[200px]">
                   <DropdownMenuLabel>Chế độ bán hàng</DropdownMenuLabel>
                   <DropdownMenuSeparator />
+                  {/* CEO 04/06/2026: POS / KDS mở tab mới. Workflow của anh:
+                      1 tab admin + 1 tab POS + 1 tab KDS song song, không
+                      bị mất context khi switch giữa chúng. */}
                   {canSeeRetailPos && (
                     <DropdownMenuItem
                       onClick={() => {
-                        window.location.href = "/pos";
+                        window.open("/pos", "_blank", "noopener,noreferrer");
                       }}
                     >
                       <Icon name="shopping_cart" size={16} className="mr-2 text-primary" />
                       <div className="flex-1">
-                        <div className="font-medium">POS Retail</div>
+                        <div className="font-medium flex items-center gap-1">
+                          POS Retail
+                          <Icon name="open_in_new" size={11} className="text-muted-foreground" />
+                        </div>
                         <div className="text-[10px] text-muted-foreground">
                           Hàng đóng gói, bán cho doanh nghiệp
                         </div>
@@ -730,12 +736,15 @@ export function TopNav() {
                   {canSeeFnbPos && (
                     <DropdownMenuItem
                       onClick={() => {
-                        window.location.href = posFnbUrl();
+                        window.open(posFnbUrl(), "_blank", "noopener,noreferrer");
                       }}
                     >
                       <Icon name="coffee" size={16} className="mr-2 text-status-warning" />
                       <div className="flex-1">
-                        <div className="font-medium">POS FnB</div>
+                        <div className="font-medium flex items-center gap-1">
+                          POS FnB
+                          <Icon name="open_in_new" size={11} className="text-muted-foreground" />
+                        </div>
                         <div className="text-[10px] text-muted-foreground">
                           Pha chế tại quán
                         </div>
@@ -745,12 +754,15 @@ export function TopNav() {
                   {canSeeFnbPos && (
                     <DropdownMenuItem
                       onClick={() => {
-                        window.location.href = posFnbUrl("/kds");
+                        window.open(posFnbUrl("/kds"), "_blank", "noopener,noreferrer");
                       }}
                     >
                       <Icon name="restaurant" size={16} className="mr-2 text-status-success" />
                       <div className="flex-1">
-                        <div className="font-medium">Màn hình bếp</div>
+                        <div className="font-medium flex items-center gap-1">
+                          Màn hình bếp
+                          <Icon name="open_in_new" size={11} className="text-muted-foreground" />
+                        </div>
                         <div className="text-[10px] text-muted-foreground">
                           Đầu bếp xem đơn
                         </div>

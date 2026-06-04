@@ -205,8 +205,11 @@ export function MobileBottomNav() {
                     >
                       <SheetTitle className="px-5 py-4 border-b font-semibold shrink-0">Chọn chế độ POS</SheetTitle>
                       <div className="grid gap-3 p-4 pb-[calc(1rem+env(safe-area-inset-bottom))] overflow-y-auto">
-                        <Link
+                        {/* CEO 04/06/2026: mobile POS chooser cũng mở tab mới. */}
+                        <a
                           href="/pos"
+                          target="_blank"
+                          rel="noopener noreferrer"
                           onClick={() => setPosOpen(false)}
                           className="flex items-center gap-3 rounded-lg border border-border bg-surface-container-lowest p-4 hover:bg-surface-container-low"
                         >
@@ -214,13 +217,18 @@ export function MobileBottomNav() {
                             <Icon name="shopping_cart" size={20} />
                           </span>
                           <span className="min-w-0 flex-1">
-                            <span className="block text-sm font-semibold">POS Retail</span>
+                            <span className="block text-sm font-semibold flex items-center gap-1">
+                              POS Retail
+                              <Icon name="open_in_new" size={12} className="text-muted-foreground" />
+                            </span>
                             <span className="block text-xs text-muted-foreground">Hàng đóng gói, bán tại quầy</span>
                           </span>
                           <Icon name="chevron_right" size={18} className="text-muted-foreground" />
-                        </Link>
+                        </a>
                         <a
                           href={posFnbUrl()}
+                          target="_blank"
+                          rel="noopener noreferrer"
                           onClick={() => setPosOpen(false)}
                           className="flex items-center gap-3 rounded-lg border border-border bg-surface-container-lowest p-4 hover:bg-surface-container-low"
                         >
@@ -228,13 +236,18 @@ export function MobileBottomNav() {
                             <Icon name="coffee" size={20} />
                           </span>
                           <span className="min-w-0 flex-1">
-                            <span className="block text-sm font-semibold">POS FnB</span>
+                            <span className="block text-sm font-semibold flex items-center gap-1">
+                              POS FnB
+                              <Icon name="open_in_new" size={12} className="text-muted-foreground" />
+                            </span>
                             <span className="block text-xs text-muted-foreground">Quầy thu ngân quán cà phê</span>
                           </span>
                           <Icon name="chevron_right" size={18} className="text-muted-foreground" />
                         </a>
                         <a
                           href={posFnbUrl("/kds")}
+                          target="_blank"
+                          rel="noopener noreferrer"
                           onClick={() => setPosOpen(false)}
                           className="flex items-center gap-3 rounded-lg border border-border bg-surface-container-lowest p-4 hover:bg-surface-container-low"
                         >
@@ -242,7 +255,10 @@ export function MobileBottomNav() {
                             <Icon name="restaurant" size={20} />
                           </span>
                           <span className="min-w-0 flex-1">
-                            <span className="block text-sm font-semibold">Màn bếp KDS</span>
+                            <span className="block text-sm font-semibold flex items-center gap-1">
+                              Màn bếp KDS
+                              <Icon name="open_in_new" size={12} className="text-muted-foreground" />
+                            </span>
                             <span className="block text-xs text-muted-foreground">Theo dõi món đang chờ làm</span>
                           </span>
                           <Icon name="chevron_right" size={18} className="text-muted-foreground" />

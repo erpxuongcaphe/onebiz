@@ -86,19 +86,24 @@ export function FnbHeader({
         </button>
       )}
       {!onMenuClick && !isFnb && (
-        <Link
+        // CEO 04/06/2026: từ POS quay về trang chủ mở tab mới (workflow đa tab).
+        <a
           href="/"
+          target="_blank"
+          rel="noopener noreferrer"
           className="flex items-center gap-1 text-sm text-on-surface-variant hover:text-foreground transition-colors shrink-0"
         >
           <Icon name="arrow_back" size={18} />
-        </Link>
+        </a>
       )}
 
       {/* Logo OneBiz — chỉ icon 28px, không text vì branch chip đã chiếm space */}
-      <Link
-        href={isFnb ? "/" : "/"}
+      <a
+        href="/"
+        target="_blank"
+        rel="noopener noreferrer"
         className="hidden sm:flex items-center shrink-0 hover:opacity-80 transition-opacity"
-        title="Trang chủ OneBiz"
+        title="Trang chủ OneBiz (tab mới)"
       >
         <Image
           src="/onebiz-icon.svg"
@@ -108,7 +113,7 @@ export function FnbHeader({
           priority
           className="select-none"
         />
-      </Link>
+      </a>
 
       {/* POS FnB: CHỈ chọn quán (store). Light variant cho header trắng. */}
       <div className="order-1 min-w-0 flex-1 md:order-none md:flex-none">

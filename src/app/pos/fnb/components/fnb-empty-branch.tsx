@@ -64,13 +64,16 @@ export function FnbEmptyBranch({ onMenuClick, onSearch }: FnbEmptyBranchProps) {
               <Icon name="add_business" size={18} />
               Tạo chi nhánh FnB
             </Link>
-            <Link
+            <a
               href="/"
+              target="_blank"
+              rel="noopener noreferrer"
               className="inline-flex items-center justify-center gap-2 h-10 px-4 rounded-xl text-sm font-medium text-on-surface-variant hover:bg-surface-container transition-colors"
             >
               <Icon name="arrow_back" size={16} />
               Về trang chủ
-            </Link>
+              <Icon name="open_in_new" size={12} className="opacity-60" />
+            </a>
           </div>
 
           {/* Tip */}

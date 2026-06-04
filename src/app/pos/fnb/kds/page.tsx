@@ -712,13 +712,16 @@ function KdsPageInner() {
         <div className="flex flex-wrap items-center gap-3">
           {/* Left: title + status */}
           <div className="flex min-w-0 items-center gap-3">
-          <Link
+          {/* CEO 04/06/2026: KDS link sang POS / Trang chủ mở tab mới — workflow đa tab. */}
+          <a
             href={fnbPath("/pos/fnb")}
+            target="_blank"
+            rel="noopener noreferrer"
             className="shrink-0 rounded-lg border border-border bg-card p-2 text-muted-foreground transition-colors hover:bg-surface-container hover:text-foreground"
-            title="Quay về POS"
+            title="Mở POS (tab mới)"
           >
             <Icon name="arrow_back" size={16} />
-          </Link>
+          </a>
             <div className="flex size-10 shrink-0 items-center justify-center rounded-lg bg-primary-subtle text-primary">
               <Icon name="restaurant_menu" size={20} />
             </div>
