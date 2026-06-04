@@ -196,37 +196,25 @@ export const sidebarNavGroups: SidebarGroup[] = [
   },
 
   // ============================================================
-  // 3. KHO — tách top-level từ "Hàng hoá > Kho" cũ (CEO 04/05)
-  // Lý do: thủ kho dùng Tồn kho, Kiểm kho, Chuyển kho hằng ngày —
-  // không phải nest 2 lớp như trước.
+  // 3. KHO — flat 7 items, sort theo frequency (daily → rare)
+  // CEO 03/06/2026 (refined): không chia subGroup vì 7 items ≤ 8 vẫn fit
+  // 1 list. SubGroup làm tăng click expand không cần thiết.
+  // NOTE: "Bán nội bộ" đã chuyển sang group "Bán hàng" (intercompany invoice).
   // ============================================================
   {
     label: "Kho",
     icon: "warehouse",
-    // CEO 03/06/2026 — Sprint 3 (audit menu P1): chia 2 subGroup phân theo
-    // workflow user — thủ kho dùng "Vận hành" hằng ngày; quản lý quán + QC
-    // dùng "Xuất kho" theo ca / theo sự kiện.
-    subGroups: [
-      {
-        label: "Vận hành kho",
-        icon: "warehouse",
-        items: [
-          { label: "Tồn kho", href: "/hang-hoa/ton-kho", icon: "warehouse" },
-          { label: "Lịch sử kho", href: "/hang-hoa/lich-su-kho", icon: "history" },
-          { label: "Kiểm kho", href: "/hang-hoa/kiem-kho", icon: "fact_check" },
-          { label: "Hạn sử dụng", href: "/hang-hoa/hsd", icon: "event_note" },
-        ],
-      },
-      {
-        label: "Xuất kho",
-        icon: "outbox",
-        items: [
-          { label: "Chuyển kho", href: "/hang-hoa/chuyen-kho", icon: "swap_horiz" },
-          { label: "Xuất dùng nội bộ", href: "/hang-hoa/xuat-dung-noi-bo", icon: "inventory" },
-          { label: "Xuất hủy", href: "/hang-hoa/xuat-huy", icon: "delete" },
-          // NOTE: "Bán nội bộ" đã chuyển sang group "Bán hàng" (intercompany invoice).
-        ],
-      },
+    items: [
+      // ── Daily (thủ kho dùng hằng ngày) ──
+      { label: "Tồn kho", href: "/hang-hoa/ton-kho", icon: "warehouse" },
+      { label: "Lịch sử kho", href: "/hang-hoa/lich-su-kho", icon: "history" },
+      // ── Weekly ──
+      { label: "Kiểm kho", href: "/hang-hoa/kiem-kho", icon: "fact_check" },
+      { label: "Hạn sử dụng", href: "/hang-hoa/hsd", icon: "event_note" },
+      { label: "Chuyển kho", href: "/hang-hoa/chuyen-kho", icon: "swap_horiz" },
+      // ── Occasionally / Rare ──
+      { label: "Xuất dùng nội bộ", href: "/hang-hoa/xuat-dung-noi-bo", icon: "inventory" },
+      { label: "Xuất hủy", href: "/hang-hoa/xuat-huy", icon: "delete" },
     ],
   },
 
@@ -301,21 +289,34 @@ export const sidebarNavGroups: SidebarGroup[] = [
   },
 
   // ============================================================
-  // 7. TÀI CHÍNH — gộp Sổ quỹ + Công nợ + Báo cáo tài chính
-  // CEO 03/06/2026 — Sprint 3 (audit menu P1): trước đây "Tài chính" 2 items
-  // tách rời "Báo cáo > Tài chính" 4 items → kế toán hop 2 group cho cùng
-  // chủ đề. Gộp lại 1 group 6 items đầy đủ workflow.
+  // 7. TÀI CHÍNH — gộp tất cả nghiệp vụ tài chính 1 chỗ
+  // CEO 03/06/2026 — chia 2 subGroup theo "Action" vs "Report" để clearer
+  // mental model: kế toán biết ngay "tạo phiếu" vs "đọc báo cáo".
+  // Nguyên tắc: trang sinh giao dịch tài chính ở "Sổ sách & thu chi",
+  // trang đọc số ở "Báo cáo tài chính".
   // ============================================================
   {
     label: "Tài chính",
     icon: "payments",
-    items: [
-      { label: "Sổ quỹ", href: "/so-quy", icon: "payments", permission: "finance.view_cash_book" },
-      { label: "Công nợ", href: "/tai-chinh/cong-no", icon: "credit_card", permission: "customers.view_debt" },
-      { label: "Công nợ aging", href: "/phan-tich/cong-no-aging", icon: "credit_card_off", badge: "Mới" },
-      { label: "Phân tích tài chính", href: "/phan-tich/tai-chinh", icon: "account_balance" },
-      { label: "Lưu chuyển tiền tệ", href: "/phan-tich/luong-tien", icon: "payments" },
-      { label: "VAT đầu vào / ra", href: "/phan-tich/vat", icon: "receipt", badge: "Mới" },
+    subGroups: [
+      {
+        label: "Sổ sách & thu chi",
+        icon: "payments",
+        items: [
+          { label: "Sổ quỹ", href: "/so-quy", icon: "payments", permission: "finance.view_cash_book" },
+          { label: "Công nợ", href: "/tai-chinh/cong-no", icon: "credit_card", permission: "customers.view_debt" },
+        ],
+      },
+      {
+        label: "Báo cáo tài chính",
+        icon: "analytics",
+        items: [
+          { label: "Phân tích tài chính", href: "/phan-tich/tai-chinh", icon: "account_balance" },
+          { label: "Lưu chuyển tiền tệ", href: "/phan-tich/luong-tien", icon: "payments" },
+          { label: "Công nợ aging", href: "/phan-tich/cong-no-aging", icon: "credit_card_off", badge: "Mới" },
+          { label: "VAT đầu vào / ra", href: "/phan-tich/vat", icon: "receipt", badge: "Mới" },
+        ],
+      },
     ],
   },
 
