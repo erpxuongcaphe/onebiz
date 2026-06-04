@@ -334,6 +334,22 @@ export {
   getZonesByBranch, bulkCreateTables, renameZone, deleteZone,
 } from "./fnb-tables";
 
+// Floor Plan (CEO 04/06/2026 — Sprint 5)
+export {
+  getFloorPlanZones,
+  createFloorPlanZone,
+  updateFloorPlanZone,
+  deleteFloorPlanZone,
+  getTablesByZone,
+  updateTableLayout,
+  bulkSaveTableLayouts,
+} from "./floor-plan";
+export type {
+  FloorPlanZone,
+  TableLayout,
+  TableShape,
+} from "./floor-plan";
+
 // Kitchen Orders
 export {
   getKitchenOrders, getKitchenOrderById,

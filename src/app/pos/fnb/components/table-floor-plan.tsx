@@ -1,230 +1,296 @@
 "use client";
 
 /**
- * TableFloorPlan — Visual grid of restaurant tables grouped by zone.
- *
- * Color-coded by status:
- *   available  → green   (tap → create new order tab)
- *   occupied   → red     (tap → switch to existing order tab) + timer
- *   reserved   → orange  (tap → status toggle)
- *   cleaning   → gray    (tap → mark available)
+ * TableFloorPlan — sơ đồ bàn cho POS FnB.
+ * Ưu tiên render canvas tuỳ chỉnh (zones + position absolute).
+ * Backward compat: fallback grid nếu zone chưa setup.
  */
 
-import { useMemo } from "react";
+import dynamic from "next/dynamic";
+import { useEffect, useMemo, useState } from "react";
 import { cn } from "@/lib/utils";
 import type { RestaurantTable, TableStatus } from "@/lib/types/fnb";
 import { Icon } from "@/components/ui/icon";
+import {
+  getFloorPlanZones,
+  getTablesByZone,
+  type FloorPlanZone,
+} from "@/lib/services";
+import type { CanvasTable } from "@/components/shared/floor-plan/floor-plan-canvas";
+import { useAuth } from "@/lib/contexts";
+
+const FloorPlanCanvas = dynamic(
+  () => import("@/components/shared/floor-plan/floor-plan-canvas").then((m) => m.FloorPlanCanvas),
+  { ssr: false },
+);
 
 interface TableFloorPlanProps {
   tables: RestaurantTable[];
   onSelectTable: (table: RestaurantTable) => void;
-  /** Map of orderId → order createdAt ISO string, for timer display */
   orderTimestamps?: Record<string, string>;
 }
 
-// ── Status config ──
-//
-// Sprint POS-FNB-1 (CEO 06/05/2026): Sửa semantic màu cho đúng Stitch.
-// Trước: occupied = đỏ (như báo lỗi → cashier hiểu nhầm "có vấn đề").
-// Sau: occupied = primary blue (= "đang phục vụ", positive state).
-// Theo nguyên tắc UI: error/warning chỉ dùng cho TÌNH TRẠNG XẤU,
-// không phải trạng thái bình thường của business.
-
-const STATUS_CONFIG: Record<
-  TableStatus,
-  { bg: string; border: string; text: string; label: string; dot: string }
-> = {
-  available: {
-    bg: "bg-status-success/10 hover:bg-status-success/20",
-    border: "border-status-success/25",
-    text: "text-status-success",
-    label: "Trống",
-    dot: "bg-status-success",
-  },
-  occupied: {
-    // Đổi error red → primary blue (đang phục vụ, không phải lỗi)
-    bg: "bg-primary/10 hover:bg-primary/20",
-    border: "border-primary/30",
-    text: "text-primary",
-    label: "Đang phục vụ",
-    dot: "bg-primary",
-  },
-  reserved: {
-    // Giữ warning amber cho đặt trước (cảnh báo "đã giữ chỗ")
-    bg: "bg-status-warning/10 hover:bg-status-warning/20",
-    border: "border-status-warning/25",
-    text: "text-status-warning",
-    label: "Đặt trước",
-    dot: "bg-status-warning",
-  },
-  cleaning: {
-    bg: "bg-muted hover:bg-muted",
-    border: "border-border",
-    text: "text-muted-foreground",
-    label: "Đang dọn",
-    dot: "bg-status-neutral",
-  },
+const STATUS_CONFIG: Record<TableStatus, { label: string; dot: string }> = {
+  available: { label: "Trống", dot: "bg-status-success" },
+  occupied: { label: "Đang phục vụ", dot: "bg-primary" },
+  reserved: { label: "Đặt trước", dot: "bg-status-warning" },
+  cleaning: { label: "Đang dọn", dot: "bg-status-neutral" },
 };
 
-// ── Timer helper ──
-
-function formatElapsed(isoString: string): string {
-  const ms = Date.now() - new Date(isoString).getTime();
-  const totalMin = Math.floor(ms / 60_000);
-  if (totalMin < 1) return "<1'";
-  if (totalMin < 60) return `${totalMin}'`;
-  const h = Math.floor(totalMin / 60);
-  const m = totalMin % 60;
-  return `${h}h${m > 0 ? m + "'" : ""}`;
+function elapsedMinutes(iso: string): number {
+  return Math.max(0, Math.floor((Date.now() - new Date(iso).getTime()) / 60_000));
 }
-
-// ── Component ──
 
 export function TableFloorPlan({
   tables,
   onSelectTable,
   orderTimestamps,
 }: TableFloorPlanProps) {
-  // Group by zone
-  const zones = useMemo(() => {
-    const map = new Map<string, RestaurantTable[]>();
-    for (const t of tables) {
-      const zone = t.zone || "Khác";
-      if (!map.has(zone)) map.set(zone, []);
-      map.get(zone)!.push(t);
-    }
-    // Sort tables within each zone by sortOrder
-    for (const arr of map.values()) {
-      arr.sort((a, b) => a.sortOrder - b.sortOrder);
-    }
-    return Array.from(map.entries());
-  }, [tables]);
+  const { currentBranch } = useAuth();
+  const [zones, setZones] = useState<FloorPlanZone[]>([]);
+  const [activeZoneId, setActiveZoneId] = useState<string | null>(null);
+  const [zoneTables, setZoneTables] = useState<CanvasTable[]>([]);
 
-  // Summary counts
+  // Load zones (fallback gracefully nếu chưa setup)
+  useEffect(() => {
+    if (!currentBranch?.id) return;
+    let cancelled = false;
+    getFloorPlanZones(currentBranch.id)
+      .then((zs) => {
+        if (cancelled) return;
+        setZones(zs);
+        if (zs.length > 0 && !activeZoneId) setActiveZoneId(zs[0].id);
+      })
+      .catch(() => {
+        // Silent — fallback grid
+        if (!cancelled) setZones([]);
+      });
+    return () => {
+      cancelled = true;
+    };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [currentBranch?.id]);
+
+  // Build map từ tables prop (đã có status + currentOrderId) sang CanvasTable
+  useEffect(() => {
+    if (!activeZoneId) {
+      setZoneTables([]);
+      return;
+    }
+    getTablesByZone(activeZoneId)
+      .then((layoutTables) => {
+        const byId = new Map(tables.map((t) => [t.id, t]));
+        const merged: CanvasTable[] = layoutTables
+          .map((l) => {
+            const meta = byId.get(l.id);
+            if (!meta) return null;
+            const elapsed =
+              meta.status === "occupied" && meta.currentOrderId
+                ? orderTimestamps?.[meta.currentOrderId]
+                : undefined;
+            return {
+              ...l,
+              tableNumber: meta.tableNumber,
+              name: meta.name,
+              capacity: meta.capacity,
+              status: meta.status,
+              elapsedMinutes: elapsed ? elapsedMinutes(elapsed) : undefined,
+            } as CanvasTable;
+          })
+          .filter(Boolean) as CanvasTable[];
+        setZoneTables(merged);
+      })
+      .catch(() => setZoneTables([]));
+  }, [activeZoneId, tables, orderTimestamps]);
+
+  const activeZone = useMemo(
+    () => zones.find((z) => z.id === activeZoneId) ?? null,
+    [zones, activeZoneId],
+  );
+
   const counts = useMemo(() => {
     const c = { available: 0, occupied: 0, reserved: 0, cleaning: 0 };
     for (const t of tables) c[t.status]++;
     return c;
   }, [tables]);
 
+  // ─── Fallback grid khi chưa có zone ───
+  const useFallback = zones.length === 0;
+
   return (
     <div className="flex flex-col h-full">
-      {/* ── Legend ── */}
+      {/* Legend */}
       <div className="flex items-center gap-4 px-4 py-2 border-b bg-card shrink-0 flex-wrap">
-        {(["available", "occupied", "reserved", "cleaning"] as TableStatus[]).map(
-          (s) => (
-            <div key={s} className="flex items-center gap-2 text-xs text-foreground">
-              <span
-                className={cn("h-2.5 w-2.5 rounded-full", STATUS_CONFIG[s].dot)}
-              />
-              <span>
-                {STATUS_CONFIG[s].label} ({counts[s]})
-              </span>
-            </div>
-          )
-        )}
-      </div>
-
-      {/* ── Zone grids ── */}
-      <div className="flex-1 overflow-y-auto p-4 space-y-5">
-        {zones.map(([zoneName, zoneTables]) => (
-          <div key={zoneName}>
-            <h3 className="text-xs font-semibold text-muted-foreground uppercase tracking-wide mb-2">
-              {zoneName}
-            </h3>
-            <div className="grid grid-cols-3 sm:grid-cols-4 md:grid-cols-5 lg:grid-cols-4 xl:grid-cols-5 gap-3 md:gap-2">
-              {zoneTables.map((table) => (
-                <TableCard
-                  key={table.id}
-                  table={table}
-                  elapsed={
-                    table.status === "occupied" &&
-                    table.currentOrderId &&
-                    orderTimestamps?.[table.currentOrderId]
-                      ? formatElapsed(orderTimestamps[table.currentOrderId])
-                      : undefined
-                  }
-                  onSelect={() => onSelectTable(table)}
-                />
-              ))}
-            </div>
+        {(["available", "occupied", "reserved", "cleaning"] as TableStatus[]).map((s) => (
+          <div key={s} className="flex items-center gap-2 text-xs text-foreground">
+            <span className={cn("h-2.5 w-2.5 rounded-full", STATUS_CONFIG[s].dot)} />
+            <span>
+              {STATUS_CONFIG[s].label} ({counts[s]})
+            </span>
           </div>
         ))}
+      </div>
 
-        {tables.length === 0 && (
-          <div className="flex flex-col items-center justify-center py-16 text-muted-foreground">
-            <Icon name="group" size={40} className="mb-2" />
-            <p className="text-sm">Chưa có bàn nào</p>
-          </div>
+      {/* Zone tabs (chỉ khi có zone) */}
+      {!useFallback && zones.length > 0 && (
+        <div className="flex items-center gap-1 px-4 py-2 border-b overflow-x-auto shrink-0 bg-surface-container-lowest">
+          {zones.map((z) => (
+            <button
+              key={z.id}
+              onClick={() => setActiveZoneId(z.id)}
+              className={cn(
+                "px-3 py-1.5 rounded-lg text-xs font-medium whitespace-nowrap transition-colors",
+                activeZoneId === z.id
+                  ? "bg-primary text-primary-foreground"
+                  : "bg-card hover:bg-muted text-foreground",
+              )}
+            >
+              {z.name}
+            </button>
+          ))}
+        </div>
+      )}
+
+      {/* Canvas hoặc Grid fallback */}
+      <div className="flex-1 overflow-auto p-4">
+        {!useFallback && activeZone ? (
+          <CanvasView
+            zone={activeZone}
+            tables={zoneTables}
+            onSelect={(ct) => {
+              const original = tables.find((t) => t.id === ct.id);
+              if (original) onSelectTable(original);
+            }}
+          />
+        ) : (
+          <GridFallback tables={tables} onSelectTable={onSelectTable} orderTimestamps={orderTimestamps} />
         )}
       </div>
     </div>
   );
 }
 
-// ── Table card ──
-
-function TableCard({
-  table,
-  elapsed,
+// ─── Canvas wrapper với ResizeObserver ───
+function CanvasView({
+  zone,
+  tables,
   onSelect,
 }: {
-  table: RestaurantTable;
-  elapsed?: string;
-  onSelect: () => void;
+  zone: FloorPlanZone;
+  tables: CanvasTable[];
+  onSelect: (t: CanvasTable) => void;
 }) {
-  const cfg = STATUS_CONFIG[table.status];
+  const [width, setWidth] = useState(0);
+  const [ref, setRef] = useState<HTMLDivElement | null>(null);
+
+  useEffect(() => {
+    if (!ref) return;
+    const ro = new ResizeObserver((entries) => {
+      setWidth(entries[0]?.contentRect.width ?? 0);
+    });
+    ro.observe(ref);
+    return () => ro.disconnect();
+  }, [ref]);
 
   return (
-    <button
-      type="button"
-      onClick={onSelect}
-      className={cn(
-        "relative flex flex-col items-center justify-center rounded-lg border-2 p-3 md:p-3 transition-all cursor-pointer select-none active:scale-95",
-        "min-h-[96px] md:min-h-[80px]",
-        cfg.bg,
-        cfg.border
+    <div ref={setRef} className="flex justify-center">
+      {width > 0 && (
+        <FloorPlanCanvas
+          zone={zone}
+          tables={tables}
+          mode="view"
+          onSelectTable={onSelect}
+          containerWidth={width}
+        />
       )}
-    >
-      {/* Status dot */}
-      <span
-        className={cn(
-          "absolute top-1.5 right-1.5 h-2 w-2 rounded-full",
-          cfg.dot
-        )}
-      />
-
-      {/* Table number */}
-      <span className={cn("text-xl md:text-lg font-bold leading-none", cfg.text)}>
-        {table.tableNumber}
-      </span>
-
-      {/* Table name */}
-      <span className="text-xs md:text-[10px] text-muted-foreground mt-0.5 truncate max-w-full">
-        {table.name}
-      </span>
-
-      {/* Timer for occupied tables */}
-      {elapsed && (
-        <span className="flex items-center gap-0.5 text-[10px] text-status-error font-medium mt-1">
-          <Icon name="schedule" size={14} />
-          {elapsed}
-        </span>
-      )}
-
-      {/* Cleaning indicator */}
-      {table.status === "cleaning" && (
-        <span className="flex items-center gap-0.5 text-[10px] text-muted-foreground mt-1">
-          <Icon name="auto_awesome" size={14} />
-          Dọn
-        </span>
-      )}
-
-      {/* Capacity */}
-      <span className="flex items-center gap-0.5 text-[9px] text-muted-foreground mt-0.5">
-        <Icon name="group" size={14} />
-        {table.capacity}
-      </span>
-    </button>
+    </div>
   );
+}
+
+// ─── Grid fallback (giữ logic cũ) ───
+function GridFallback({
+  tables,
+  onSelectTable,
+  orderTimestamps,
+}: TableFloorPlanProps) {
+  const zonesGroup = useMemo(() => {
+    const map = new Map<string, RestaurantTable[]>();
+    for (const t of tables) {
+      const z = t.zone || "Khác";
+      if (!map.has(z)) map.set(z, []);
+      map.get(z)!.push(t);
+    }
+    return Array.from(map.entries());
+  }, [tables]);
+
+  if (tables.length === 0) {
+    return (
+      <div className="flex flex-col items-center justify-center py-16 text-muted-foreground">
+        <Icon name="group" size={40} className="mb-2" />
+        <p className="text-sm">Chưa có bàn nào</p>
+      </div>
+    );
+  }
+
+  return (
+    <div className="space-y-5">
+      {zonesGroup.map(([zoneName, list]) => (
+        <div key={zoneName}>
+          <h3 className="text-xs font-semibold text-muted-foreground uppercase tracking-wide mb-2">
+            {zoneName}
+          </h3>
+          <div className="grid grid-cols-3 sm:grid-cols-4 md:grid-cols-5 lg:grid-cols-4 xl:grid-cols-5 gap-3 md:gap-2">
+            {list.map((t) => {
+              const elapsed =
+                t.status === "occupied" && t.currentOrderId
+                  ? orderTimestamps?.[t.currentOrderId]
+                  : undefined;
+              return (
+                <button
+                  key={t.id}
+                  onClick={() => onSelectTable(t)}
+                  className={cn(
+                    "relative flex flex-col items-center justify-center rounded-lg border-2 p-3 transition-all active:scale-95 min-h-[96px]",
+                    bgFor(t.status),
+                  )}
+                >
+                  <span className="text-xl font-bold">{t.tableNumber}</span>
+                  <span className="text-xs text-muted-foreground mt-0.5 truncate max-w-full">
+                    {t.name}
+                  </span>
+                  {elapsed && (
+                    <span className="text-[10px] text-status-error mt-1">
+                      <Icon name="schedule" size={12} className="inline" /> {fmt(elapsed)}
+                    </span>
+                  )}
+                  <span className="text-[9px] text-muted-foreground mt-0.5">
+                    <Icon name="group" size={12} className="inline" /> {t.capacity}
+                  </span>
+                </button>
+              );
+            })}
+          </div>
+        </div>
+      ))}
+    </div>
+  );
+}
+
+function bgFor(s: TableStatus): string {
+  switch (s) {
+    case "available":
+      return "bg-status-success/10 border-status-success/25";
+    case "occupied":
+      return "bg-primary/10 border-primary/30";
+    case "reserved":
+      return "bg-status-warning/10 border-status-warning/25";
+    case "cleaning":
+      return "bg-muted border-border";
+  }
+}
+
+function fmt(iso: string): string {
+  const m = elapsedMinutes(iso);
+  if (m < 60) return `${m}'`;
+  return `${Math.floor(m / 60)}h${m % 60}'`;
 }
