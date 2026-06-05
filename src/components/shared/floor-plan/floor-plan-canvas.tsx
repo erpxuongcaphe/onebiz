@@ -194,6 +194,8 @@ export function FloorPlanCanvas({
               listening={false}
             />
           )}
+          {/* Nhãn tên khu vực — pill góc trên-trái, không tương tác */}
+          <ZoneLabel zone={zone} tableCount={tables.length} />
         </Layer>
 
         {/* Layer 1.5: decorations (dưới bàn) */}
@@ -260,6 +262,80 @@ function Grid({ width, height, step }: { width: number; height: number; step: nu
         <Line key={i} points={l.points} stroke="#e5e7eb" strokeWidth={0.5} listening={false} />
       ))}
     </>
+  );
+}
+
+// ─── Nhãn tên khu vực ───
+// Pill bo tròn góc trên-trái: tên đậm + subtitle "Trệt · N bàn".
+// Không listening → không cản click bàn/decoration phía dưới.
+function ZoneLabel({
+  zone,
+  tableCount,
+}: {
+  zone: FloorPlanZone;
+  tableCount: number;
+}) {
+  // Padding nội + style
+  const padX = 14;
+  const padY = 9;
+  const titleFontSize = 16;
+  const subFontSize = 11;
+  // Ước lượng độ rộng — Konva không có measureText sync trước render, nên dùng
+  // approximation 0.58×fontSize×length cho font Inter. Đủ chính xác cho pill.
+  const title = zone.name.trim() || "Khu vực";
+  const subtitle =
+    (zone.floorLevel === 1 ? "Trệt" : `Lầu ${zone.floorLevel - 1}`) +
+    ` · ${tableCount} bàn`;
+  const titleW = title.length * titleFontSize * 0.58;
+  const subW = subtitle.length * subFontSize * 0.55;
+  const innerW = Math.max(titleW, subW);
+  const totalW = innerW + padX * 2;
+  const totalH = titleFontSize + subFontSize + padY * 2 + 4;
+
+  return (
+    <Group x={16} y={16} listening={false}>
+      <Rect
+        x={0}
+        y={0}
+        width={totalW}
+        height={totalH}
+        fill="rgba(255, 255, 255, 0.94)"
+        stroke="rgba(15, 23, 42, 0.08)"
+        strokeWidth={1}
+        cornerRadius={10}
+        shadowColor="rgba(15, 23, 42, 0.10)"
+        shadowBlur={8}
+        shadowOffsetY={2}
+        shadowOpacity={1}
+      />
+      {/* Dải màu trái — match overlayColor zone hoặc xanh nhạt */}
+      <Rect
+        x={0}
+        y={0}
+        width={4}
+        height={totalH}
+        fill={zone.overlayColor ?? "#10b981"}
+        cornerRadius={[10, 0, 0, 10]}
+        opacity={0.8}
+      />
+      <Text
+        x={padX}
+        y={padY}
+        text={title}
+        fontSize={titleFontSize}
+        fontStyle="700"
+        fontFamily="Inter, system-ui, sans-serif"
+        fill="#0f172a"
+      />
+      <Text
+        x={padX}
+        y={padY + titleFontSize + 3}
+        text={subtitle}
+        fontSize={subFontSize}
+        fontFamily="Inter, system-ui, sans-serif"
+        fill="#64748b"
+      />
+    </Group>
   );
 }
 
