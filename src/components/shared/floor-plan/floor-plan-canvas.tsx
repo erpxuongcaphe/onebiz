@@ -5,7 +5,7 @@
  * Shared cho Editor (edit mode) + View (cashier xem).
  */
 
-import { useEffect, useRef, useCallback } from "react";
+import { useEffect, useRef, useCallback, useState } from "react";
 import { Stage, Layer, Group, Rect, Circle, Text, Line, Image as KonvaImage, Transformer, Shape } from "react-konva";
 import useImage from "use-image";
 import type Konva from "konva";
@@ -45,6 +45,11 @@ interface FloorPlanCanvasProps {
   onSelectedDecorationIdChange?: (id: string | null) => void;
   /** Container width (responsive). Stage tự scale theo. */
   containerWidth?: number;
+  /**
+   * Cho phép pinch zoom + 2-finger pan trên touch device.
+   * Mặc định bật ở mode view, tắt ở mode edit (đã có Transformer per object).
+   */
+  enableTouchZoom?: boolean;
 }
 
 export function FloorPlanCanvas({
@@ -60,17 +65,38 @@ export function FloorPlanCanvas({
   selectedDecorationId,
   onSelectedDecorationIdChange,
   containerWidth,
+  enableTouchZoom,
 }: FloorPlanCanvasProps) {
   const stageRef = useRef<Konva.Stage | null>(null);
   const transformerRef = useRef<Konva.Transformer | null>(null);
   const [bgImage] = useImage(zone.backgroundUrl ?? "", "anonymous");
 
-  // Scale stage theo containerWidth (responsive)
-  const scale = containerWidth
+  // Mặc định bật pinch zoom ở mode view (cashier xem trên iPad)
+  const touchEnabled = enableTouchZoom ?? mode === "view";
+
+  // Scale auto-fit theo container width (responsive)
+  const baseScale = containerWidth
     ? Math.min(1, containerWidth / zone.canvasWidth)
     : 1;
-  const stageW = zone.canvasWidth * scale;
-  const stageH = zone.canvasHeight * scale;
+
+  // User pinch zoom (chỉ áp dụng khi touchEnabled)
+  const [userScale, setUserScale] = useState(1);
+  const [pan, setPan] = useState({ x: 0, y: 0 });
+  const totalScale = baseScale * userScale;
+  // Stage container có kích thước cố định theo baseScale — không grow khi
+  // user zoom (overflow ẩn để zoom in/out ko đẩy layout).
+  const stageW = zone.canvasWidth * baseScale;
+  const stageH = zone.canvasHeight * baseScale;
+
+  // Touch tracking — pinch + pan
+  const lastTouchDistance = useRef<number | null>(null);
+  const lastTouchCenter = useRef<{ x: number; y: number } | null>(null);
+
+  // Reset zoom khi đổi zone
+  useEffect(() => {
+    setUserScale(1);
+    setPan({ x: 0, y: 0 });
+  }, [zone.id]);
 
   // Gắn Transformer vào bàn/decoration đang chọn
   useEffect(() => {
@@ -135,6 +161,59 @@ export function FloorPlanCanvas({
     }
   };
 
+  // ─── Touch handlers — pinch zoom + 2-finger pan (chỉ khi touchEnabled) ───
+  const getTouchDistance = (
+    t1: { clientX: number; clientY: number },
+    t2: { clientX: number; clientY: number },
+  ) =>
+    Math.sqrt(
+      (t1.clientX - t2.clientX) ** 2 + (t1.clientY - t2.clientY) ** 2,
+    );
+
+  const handleTouchMove = (e: Konva.KonvaEventObject<TouchEvent>) => {
+    if (!touchEnabled) return;
+    const touches = e.evt.touches;
+    if (touches.length !== 2) return;
+    e.evt.preventDefault();
+    const t1 = touches[0];
+    const t2 = touches[1];
+    const dist = getTouchDistance(t1, t2);
+    const center = {
+      x: (t1.clientX + t2.clientX) / 2,
+      y: (t1.clientY + t2.clientY) / 2,
+    };
+    if (
+      lastTouchDistance.current !== null &&
+      lastTouchCenter.current !== null
+    ) {
+      // Pinch zoom — kẹp 0.5x – 3x
+      const scaleChange = dist / lastTouchDistance.current;
+      setUserScale((prev) => Math.max(0.5, Math.min(3, prev * scaleChange)));
+      // 2-finger pan
+      const dx = center.x - lastTouchCenter.current.x;
+      const dy = center.y - lastTouchCenter.current.y;
+      setPan((prev) => ({ x: prev.x + dx, y: prev.y + dy }));
+    }
+    lastTouchDistance.current = dist;
+    lastTouchCenter.current = center;
+  };
+
+  const handleTouchEnd = () => {
+    lastTouchDistance.current = null;
+    lastTouchCenter.current = null;
+  };
+
+  // Reset zoom thủ công khi user double-tap canvas trống
+  const handleDoubleTap = (
+    e: Konva.KonvaEventObject<MouseEvent | TouchEvent>,
+  ) => {
+    if (!touchEnabled) return;
+    if (e.target === e.target.getStage()) {
+      setUserScale(1);
+      setPan({ x: 0, y: 0 });
+    }
+  };
+
   const handleDecorDragEnd = (id: string, e: Konva.KonvaEventObject<DragEvent>) => {
     const node = e.target;
     const x = snap(node.x());
@@ -162,15 +241,38 @@ export function FloorPlanCanvas({
   };
 
   return (
-    <div className="relative bg-surface-container-low rounded-lg overflow-hidden" style={{ width: stageW, height: stageH }}>
+    <div
+      className="relative bg-surface-container-low rounded-lg overflow-hidden touch-none"
+      style={{ width: stageW, height: stageH }}
+    >
+      {/* Nút reset zoom (chỉ hiện khi đã zoom) */}
+      {touchEnabled && (userScale !== 1 || pan.x !== 0 || pan.y !== 0) && (
+        <button
+          type="button"
+          onClick={() => {
+            setUserScale(1);
+            setPan({ x: 0, y: 0 });
+          }}
+          className="absolute z-10 top-3 right-3 bg-card border shadow-md rounded-full h-9 px-3 text-xs font-medium flex items-center gap-1.5 hover:bg-muted"
+          aria-label="Đặt lại zoom"
+        >
+          <span aria-hidden>↺</span> {Math.round(userScale * 100)}%
+        </button>
+      )}
       <Stage
         ref={stageRef}
-        width={stageW}
-        height={stageH}
-        scaleX={scale}
-        scaleY={scale}
+        width={zone.canvasWidth * baseScale}
+        height={zone.canvasHeight * baseScale}
+        scaleX={totalScale}
+        scaleY={totalScale}
+        x={pan.x}
+        y={pan.y}
         onMouseDown={handleStageClick}
         onTouchStart={handleStageClick}
+        onTouchMove={handleTouchMove}
+        onTouchEnd={handleTouchEnd}
+        onDblClick={handleDoubleTap}
+        onDblTap={handleDoubleTap}
       >
         {/* Layer 1: background image + grid + overlay */}
         <Layer listening={false}>

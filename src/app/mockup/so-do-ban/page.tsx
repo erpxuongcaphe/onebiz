@@ -6,7 +6,7 @@
  */
 
 import dynamic from "next/dynamic";
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import { Icon } from "@/components/ui/icon";
 import { cn } from "@/lib/utils";
 import type {
@@ -162,6 +162,14 @@ export default function MockupSoDoBanPage() {
   // Tap bàn → mở action sheet
   const [actionTable, setActionTable] = useState<CanvasTable | null>(null);
   const [toastMsg, setToastMsg] = useState<string | null>(null);
+  // Responsive width — tự cập nhật khi resize window
+  const [winWidth, setWinWidth] = useState(1200);
+  useEffect(() => {
+    const update = () => setWinWidth(window.innerWidth);
+    update();
+    window.addEventListener("resize", update);
+    return () => window.removeEventListener("resize", update);
+  }, []);
 
   const activeZone = mockZones.find((z) => z.id === activeZoneId)!;
   const { tables, decorations } = ZONE_DATA[activeZoneId];
@@ -281,7 +289,10 @@ export default function MockupSoDoBanPage() {
               decorations={decorations}
               mode="view"
               onSelectTable={(t) => setActionTable(t)}
-              containerWidth={Math.min(typeof window !== "undefined" ? window.innerWidth - 100 : 1000, activeZone.canvasWidth)}
+              containerWidth={Math.min(
+                Math.max(winWidth - 60, 320),
+                activeZone.canvasWidth,
+              )}
             />
           </div>
         ) : (

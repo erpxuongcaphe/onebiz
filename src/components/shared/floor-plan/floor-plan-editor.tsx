@@ -94,6 +94,15 @@ export function FloorPlanEditor({ branchId, branchName, scope }: FloorPlanEditor
   );
   const containerRef = useRef<HTMLDivElement | null>(null);
   const [containerWidth, setContainerWidth] = useState(0);
+  // Mobile phone detect — chỉ check client-side để tránh hydration mismatch
+  const [isMobilePhone, setIsMobilePhone] = useState(false);
+  useEffect(() => {
+    const mql = window.matchMedia("(max-width: 639px)");
+    const update = () => setIsMobilePhone(mql.matches);
+    update();
+    mql.addEventListener("change", update);
+    return () => mql.removeEventListener("change", update);
+  }, []);
 
   // ─── Load zones ───
   useEffect(() => {
@@ -400,6 +409,11 @@ export function FloorPlanEditor({ branchId, branchName, scope }: FloorPlanEditor
     window.print();
   };
 
+  // Mobile phone (<640px) — không cho phép sửa sơ đồ, hướng dẫn dùng iPad/PC
+  if (isMobilePhone) {
+    return <MobileEditLockScreen branchName={branchName} />;
+  }
+
   return (
     <div className="flex flex-col h-full bg-card">
       {/* Header */}
@@ -543,7 +557,7 @@ export function FloorPlanEditor({ branchId, branchName, scope }: FloorPlanEditor
 
       <div className="flex flex-1 min-h-0">
         {/* Palette mẫu bàn + đồ trang trí + ảnh nền */}
-        <aside className="w-36 md:w-44 border-r p-2 overflow-y-auto bg-surface-container-lowest space-y-3 shrink-0">
+        <aside className="w-32 sm:w-40 lg:w-52 border-r p-2 overflow-y-auto bg-surface-container-lowest space-y-3 shrink-0">
           {/* Bàn */}
           <p className="text-[10px] uppercase font-semibold text-muted-foreground tracking-wide">
             Mẫu bàn
@@ -723,6 +737,40 @@ function CanvasSkeleton() {
   return (
     <div className="flex items-center justify-center text-muted-foreground">
       <Icon name="progress_activity" className="animate-spin" size={20} />
+    </div>
+  );
+}
+
+/**
+ * Mobile phone (<640px) không hỗ trợ sửa sơ đồ — sửa trên màn 5 inch là
+ * tra tấn người dùng. Hướng dẫn chuyển sang iPad hoặc máy tính.
+ *
+ * Toast/OpenTable/iPOS đều áp dụng pattern này. Cashier vẫn XEM được
+ * sơ đồ trên phone qua POS FnB (fallback grid sẽ implement riêng).
+ */
+function MobileEditLockScreen({ branchName }: { branchName?: string }) {
+  return (
+    <div className="flex flex-col h-full items-center justify-center p-6 bg-card text-center">
+      <div className="h-16 w-16 rounded-full bg-primary/10 flex items-center justify-center mb-4">
+        <Icon name="tablet_mac" size={32} className="text-primary" />
+      </div>
+      <h2 className="text-lg font-bold mb-2">
+        Mở trên iPad hoặc máy tính để chỉnh sơ đồ
+      </h2>
+      <p className="text-sm text-muted-foreground max-w-xs mb-5">
+        Sửa sơ đồ bàn cần màn hình lớn để kéo thả chính xác.
+        {branchName ? ` Chi nhánh ${branchName}.` : ""}
+      </p>
+      <div className="flex flex-col gap-2 text-xs text-muted-foreground max-w-xs">
+        <div className="flex items-start gap-2 text-left">
+          <Icon name="check_circle" size={14} className="text-status-success mt-0.5 shrink-0" />
+          <span>Cashier vẫn xem được sơ đồ ở POS FnB</span>
+        </div>
+        <div className="flex items-start gap-2 text-left">
+          <Icon name="check_circle" size={14} className="text-status-success mt-0.5 shrink-0" />
+          <span>Tap bàn vẫn mở đơn / chuyển bàn được</span>
+        </div>
+      </div>
     </div>
   );
 }
