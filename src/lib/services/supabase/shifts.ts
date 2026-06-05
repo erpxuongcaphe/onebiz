@@ -151,6 +151,94 @@ export async function closeShift(input: CloseShiftInput): Promise<ShiftReport> {
   };
 }
 
+// ============================================================
+// PREVIEW close shift — read-only, dùng để show summary trên dialog
+// trước khi cashier xác nhận đóng ca thật (CEO 05/06/2026).
+// Logic giống RPC close_shift_atomic nhưng KHÔNG update gì.
+// ============================================================
+
+export interface ShiftPreview {
+  startingCash: number;
+  cashIn: number;
+  cashOut: number;
+  expectedCash: number;
+  totalSales: number;
+  totalOrders: number;
+  salesByMethod: Record<string, number>;
+}
+
+export async function previewShiftClose(shiftId: string): Promise<ShiftPreview> {
+  const supabase = getClient();
+  const tenantId = await getCurrentTenantId();
+
+  // 1. Lấy shift để biết startingCash
+  const { data: shift, error: shiftErr } = await supabase
+    .from("shifts")
+    .select("starting_cash")
+    .eq("tenant_id", tenantId)
+    .eq("id", shiftId)
+    .single();
+  if (shiftErr) handleError(shiftErr, "previewShiftClose:shift");
+  const startingCash = Number(shift?.starting_cash ?? 0);
+
+  // 2. Cash in/out — chỉ tiền mặt, status != cancelled
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  const { data: cashRows, error: cashErr } = await (supabase as any)
+    .from("cash_transactions")
+    .select("type, amount, payment_method, status, reference_type")
+    .eq("shift_id", shiftId);
+  if (cashErr) handleError(cashErr, "previewShiftClose:cash");
+
+  let cashIn = 0;
+  let cashOut = 0;
+  const salesByMethod: Record<string, number> = {};
+
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  (cashRows ?? []).forEach((r: any) => {
+    if ((r.status ?? "completed") === "cancelled") return;
+    const method = r.payment_method ?? "cash";
+    const amt = Number(r.amount ?? 0);
+
+    // Cash drawer reconciliation — chỉ method cash
+    if (method === "cash") {
+      if (r.type === "receipt") cashIn += amt;
+      else if (r.type === "payment") cashOut += amt;
+    }
+
+    // Sales by method — chỉ tính giao dịch liên quan đến bán hàng
+    if (r.reference_type === "invoice" || r.reference_type === "sales_return") {
+      const net = r.type === "receipt" ? amt : -amt;
+      salesByMethod[method] = (salesByMethod[method] ?? 0) + net;
+    }
+  });
+
+  const expectedCash = startingCash + cashIn - cashOut;
+
+  // 3. Đếm số hoá đơn completed
+  const { count: orderCount } = await supabase
+    .from("invoices")
+    .select("id", { count: "exact", head: true })
+    .eq("tenant_id", tenantId)
+    .eq("shift_id", shiftId)
+    .eq("status", "completed");
+
+  const totalSales = Object.values(salesByMethod).reduce((s, v) => s + v, 0);
+  // Lọc method có amount = 0
+  const cleanedMethods = Object.fromEntries(
+    Object.entries(salesByMethod).filter(([, v]) => v !== 0),
+  );
+
+  return {
+    startingCash,
+    cashIn,
+    cashOut,
+    expectedCash,
+    totalSales,
+    totalOrders: orderCount ?? 0,
+    salesByMethod: cleanedMethods,
+  };
+}
+
 /** Get shift history for a branch */
 export async function getShiftHistory(
   branchId: string,
