@@ -12,6 +12,10 @@ import { cn } from "@/lib/utils";
 import type {
   CanvasTable,
 } from "@/components/shared/floor-plan/floor-plan-canvas";
+import {
+  TableActionSheet,
+  type TableActionKind,
+} from "@/components/shared/floor-plan/table-action-sheet";
 import type {
   FloorPlanZone,
 } from "@/lib/services/supabase/floor-plan";
@@ -84,13 +88,13 @@ const mockZones: FloorPlanZone[] = [
 // Sảnh chính — 8 bàn + bar + cửa
 const tablesSanhChinh: CanvasTable[] = [
   { id: "t1", zoneId: "z1", shape: "round", width: 80, height: 80, rotation: 0, positionX: 80, positionY: 220, color: null, locked: false, tableNumber: 1, name: "Bàn 1", capacity: 4, status: "available" },
-  { id: "t2", zoneId: "z1", shape: "round", width: 80, height: 80, rotation: 0, positionX: 200, positionY: 220, color: null, locked: false, tableNumber: 2, name: "Bàn 2", capacity: 4, status: "occupied" },
+  { id: "t2", zoneId: "z1", shape: "round", width: 80, height: 80, rotation: 0, positionX: 200, positionY: 220, color: null, locked: false, tableNumber: 2, name: "Bàn 2", capacity: 4, status: "occupied", unpaidOrders: 1 },
   { id: "t3", zoneId: "z1", shape: "round", width: 100, height: 100, rotation: 0, positionX: 340, positionY: 210, color: null, locked: false, tableNumber: 3, name: "Bàn 3", capacity: 6, status: "available" },
   { id: "t4", zoneId: "z1", shape: "square", width: 70, height: 70, rotation: 0, positionX: 500, positionY: 220, color: null, locked: false, tableNumber: 4, name: "Bàn 4", capacity: 2, status: "reserved" },
   { id: "t5", zoneId: "z1", shape: "square", width: 70, height: 70, rotation: 0, positionX: 600, positionY: 220, color: null, locked: false, tableNumber: 5, name: "Bàn 5", capacity: 2, status: "available" },
-  { id: "t6", zoneId: "z1", shape: "rect", width: 160, height: 60, rotation: 0, positionX: 80, positionY: 360, color: null, locked: false, tableNumber: 6, name: "Bàn 6", capacity: 4, status: "occupied" },
+  { id: "t6", zoneId: "z1", shape: "rect", width: 160, height: 60, rotation: 0, positionX: 80, positionY: 360, color: null, locked: false, tableNumber: 6, name: "Bàn 6", capacity: 4, status: "occupied", unpaidOrders: 1 },
   { id: "t7", zoneId: "z1", shape: "rect", width: 160, height: 60, rotation: 0, positionX: 280, positionY: 360, color: null, locked: false, tableNumber: 7, name: "Bàn 7", capacity: 4, status: "available" },
-  { id: "t8", zoneId: "z1", shape: "sofa", width: 180, height: 120, rotation: 0, positionX: 670, positionY: 340, color: null, locked: false, tableNumber: 8, name: "VIP", capacity: 6, status: "occupied" },
+  { id: "t8", zoneId: "z1", shape: "sofa", width: 180, height: 120, rotation: 0, positionX: 670, positionY: 340, color: null, locked: false, tableNumber: 8, name: "VIP", capacity: 6, status: "occupied", unpaidOrders: 2 },
 ];
 
 const decorSanhChinh: FloorPlanDecoration[] = [
@@ -105,9 +109,9 @@ const decorSanhChinh: FloorPlanDecoration[] = [
 const tablesSanVuon: CanvasTable[] = [
   { id: "g1", zoneId: "z2", shape: "round", width: 80, height: 80, rotation: 0, positionX: 100, positionY: 100, color: null, locked: false, tableNumber: 9, name: "Vườn 1", capacity: 4, status: "available" },
   { id: "g2", zoneId: "z2", shape: "round", width: 80, height: 80, rotation: 0, positionX: 280, positionY: 100, color: null, locked: false, tableNumber: 10, name: "Vườn 2", capacity: 4, status: "available" },
-  { id: "g3", zoneId: "z2", shape: "round", width: 80, height: 80, rotation: 0, positionX: 460, positionY: 100, color: null, locked: false, tableNumber: 11, name: "Vườn 3", capacity: 4, status: "occupied" },
+  { id: "g3", zoneId: "z2", shape: "round", width: 80, height: 80, rotation: 0, positionX: 460, positionY: 100, color: null, locked: false, tableNumber: 11, name: "Vườn 3", capacity: 4, status: "occupied", unpaidOrders: 1 },
   { id: "g4", zoneId: "z2", shape: "round", width: 80, height: 80, rotation: 0, positionX: 640, positionY: 100, color: null, locked: false, tableNumber: 12, name: "Vườn 4", capacity: 4, status: "available" },
-  { id: "g5", zoneId: "z2", shape: "round", width: 100, height: 100, rotation: 0, positionX: 180, positionY: 270, color: null, locked: false, tableNumber: 13, name: "Vườn 5", capacity: 6, status: "occupied" },
+  { id: "g5", zoneId: "z2", shape: "round", width: 100, height: 100, rotation: 0, positionX: 180, positionY: 270, color: null, locked: false, tableNumber: 13, name: "Vườn 5", capacity: 6, status: "occupied", unpaidOrders: 1 },
   { id: "g6", zoneId: "z2", shape: "round", width: 100, height: 100, rotation: 0, positionX: 380, positionY: 270, color: null, locked: false, tableNumber: 14, name: "Vườn 6", capacity: 6, status: "available" },
   { id: "g7", zoneId: "z2", shape: "round", width: 100, height: 100, rotation: 0, positionX: 580, positionY: 270, color: null, locked: false, tableNumber: 15, name: "Vườn 7", capacity: 6, status: "reserved" },
   { id: "g8", zoneId: "z2", shape: "rect", width: 220, height: 70, rotation: 0, positionX: 320, positionY: 420, color: null, locked: false, tableNumber: 16, name: "Bàn dài", capacity: 8, status: "available" },
@@ -125,11 +129,11 @@ const decorSanVuon: FloorPlanDecoration[] = [
 
 // Tầng 2 — VIP, booth, sofa
 const tablesTang2: CanvasTable[] = [
-  { id: "v1", zoneId: "z3", shape: "sofa", width: 200, height: 140, rotation: 0, positionX: 80, positionY: 100, color: "#7c3aed", locked: false, tableNumber: 17, name: "VIP 1", capacity: 8, status: "occupied" },
+  { id: "v1", zoneId: "z3", shape: "sofa", width: 200, height: 140, rotation: 0, positionX: 80, positionY: 100, color: "#7c3aed", locked: false, tableNumber: 17, name: "VIP 1", capacity: 8, status: "occupied", unpaidOrders: 3 },
   { id: "v2", zoneId: "z3", shape: "sofa", width: 200, height: 140, rotation: 0, positionX: 320, positionY: 100, color: null, locked: false, tableNumber: 18, name: "VIP 2", capacity: 8, status: "available" },
   { id: "v3", zoneId: "z3", shape: "round", width: 100, height: 100, rotation: 0, positionX: 580, positionY: 110, color: null, locked: false, tableNumber: 19, name: "Bàn họp", capacity: 8, status: "reserved" },
   { id: "v4", zoneId: "z3", shape: "rect", width: 240, height: 80, rotation: 0, positionX: 80, positionY: 330, color: null, locked: false, tableNumber: 20, name: "Bàn dài 1", capacity: 6, status: "available" },
-  { id: "v5", zoneId: "z3", shape: "rect", width: 240, height: 80, rotation: 0, positionX: 360, positionY: 330, color: null, locked: false, tableNumber: 21, name: "Bàn dài 2", capacity: 6, status: "occupied" },
+  { id: "v5", zoneId: "z3", shape: "rect", width: 240, height: 80, rotation: 0, positionX: 360, positionY: 330, color: null, locked: false, tableNumber: 21, name: "Bàn dài 2", capacity: 6, status: "occupied", unpaidOrders: 1 },
   { id: "v6", zoneId: "z3", shape: "round", width: 80, height: 80, rotation: 0, positionX: 660, positionY: 330, color: null, locked: false, tableNumber: 22, name: "Bàn 22", capacity: 4, status: "available" },
 ];
 
@@ -155,9 +159,30 @@ const ZONE_DATA: Record<
 export default function MockupSoDoBanPage() {
   const [activeZoneId, setActiveZoneId] = useState("z1");
   const [comparisonMode, setComparisonMode] = useState<"after" | "before">("after");
+  // Tap bàn → mở action sheet
+  const [actionTable, setActionTable] = useState<CanvasTable | null>(null);
+  const [toastMsg, setToastMsg] = useState<string | null>(null);
 
   const activeZone = mockZones.find((z) => z.id === activeZoneId)!;
   const { tables, decorations } = ZONE_DATA[activeZoneId];
+
+  const showToast = (msg: string) => {
+    setToastMsg(msg);
+    setTimeout(() => setToastMsg(null), 2500);
+  };
+
+  const handleAction = (kind: TableActionKind, t: CanvasTable) => {
+    const label = {
+      open: "Mở đơn",
+      merge: "Gộp bàn",
+      transfer: "Chuyển bàn",
+      "cancel-reservation": "Hủy đặt",
+    }[kind];
+    showToast(
+      `${label} cho ${t.name || `Bàn ${t.tableNumber}`} — chức năng kết nối POS FnB thật sau.`,
+    );
+    setActionTable(null);
+  };
 
   const counts = tables.reduce(
     (c, t) => {
@@ -255,6 +280,7 @@ export default function MockupSoDoBanPage() {
               tables={tables}
               decorations={decorations}
               mode="view"
+              onSelectTable={(t) => setActionTable(t)}
               containerWidth={Math.min(typeof window !== "undefined" ? window.innerWidth - 100 : 1000, activeZone.canvasWidth)}
             />
           </div>
@@ -262,6 +288,24 @@ export default function MockupSoDoBanPage() {
           <BeforeGrid tables={tables} />
         )}
       </div>
+
+      {/* Action sheet khi tap bàn */}
+      <TableActionSheet
+        table={actionTable}
+        zoneName={actionTable ? activeZone.name : undefined}
+        onAction={handleAction}
+        onClose={() => setActionTable(null)}
+      />
+
+      {/* Toast nhẹ */}
+      {toastMsg && (
+        <div
+          role="status"
+          className="fixed bottom-6 left-1/2 -translate-x-1/2 z-[60] bg-foreground text-background px-4 py-2.5 rounded-lg shadow-2xl text-sm font-medium max-w-[90vw] text-center animate-in slide-in-from-bottom"
+        >
+          {toastMsg}
+        </div>
+      )}
 
       {/* Tính năng đã có */}
       <div className="grid grid-cols-1 md:grid-cols-3 gap-3">

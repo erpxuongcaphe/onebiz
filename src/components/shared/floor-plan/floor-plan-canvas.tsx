@@ -20,6 +20,8 @@ export interface CanvasTable extends TableLayout {
   capacity?: number;
   status?: "available" | "occupied" | "reserved" | "cleaning";
   elapsedMinutes?: number;
+  /** Số phiếu/đơn chưa thanh toán — hiển thị badge đỏ góc bàn (pattern KiotViet/Sapo). */
+  unpaidOrders?: number;
 }
 
 interface FloorPlanCanvasProps {
@@ -430,6 +432,62 @@ function TableNode({
           listening={false}
         />
       )}
+      {/* Badge số phiếu chưa thanh toán — pattern KiotViet/Sapo */}
+      {(table.unpaidOrders ?? 0) > 0 && (
+        <UnpaidBadge
+          count={table.unpaidOrders!}
+          tableWidth={table.width}
+          shape={table.shape}
+        />
+      )}
+    </Group>
+  );
+}
+
+/**
+ * Badge tròn đỏ góc trên-phải bàn — số phiếu chưa thanh toán.
+ * Đặt offset theo shape: round/sofa cần dịch vào trong hơn để khỏi rớt ngoài.
+ */
+function UnpaidBadge({
+  count,
+  tableWidth,
+  shape,
+}: {
+  count: number;
+  tableWidth: number;
+  shape: TableShape;
+}) {
+  const r = 11;
+  // Round/sofa: dịch xuống + vào trong để badge nằm trong vùng nhìn
+  const offsetX = shape === "round" ? tableWidth - r * 2 - 4 : tableWidth - r - 2;
+  const offsetY = shape === "round" ? r + 2 : -r + 4;
+  const label = count > 9 ? "9+" : String(count);
+  return (
+    <Group x={offsetX} y={offsetY} listening={false}>
+      <Circle
+        x={r}
+        y={r}
+        radius={r}
+        fill="#ef4444"
+        stroke="#ffffff"
+        strokeWidth={2}
+        shadowColor="rgba(0,0,0,0.25)"
+        shadowBlur={3}
+        shadowOffsetY={1}
+      />
+      <Text
+        text={label}
+        x={0}
+        y={0}
+        width={r * 2}
+        height={r * 2}
+        fontSize={12}
+        fontStyle="bold"
+        fontFamily="Inter, system-ui, sans-serif"
+        fill="#ffffff"
+        align="center"
+        verticalAlign="middle"
+      />
     </Group>
   );
 }
