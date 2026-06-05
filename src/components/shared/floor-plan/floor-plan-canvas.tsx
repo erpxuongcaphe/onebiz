@@ -5,13 +5,13 @@
  * Shared cho Editor (edit mode) + View (cashier xem).
  */
 
-import { useEffect, useRef, useState, useCallback } from "react";
-import { Stage, Layer, Group, Rect, Circle, Text, Line, Image as KonvaImage, Transformer } from "react-konva";
+import { useEffect, useRef, useCallback } from "react";
+import { Stage, Layer, Group, Rect, Circle, Text, Line, Image as KonvaImage, Transformer, Shape } from "react-konva";
 import useImage from "use-image";
 import type Konva from "konva";
 import type { TableLayout, FloorPlanZone, TableShape } from "@/lib/services/supabase/floor-plan";
 import type { FloorPlanDecoration } from "@/lib/services/supabase/floor-plan-decorations";
-import { STATUS_COLOR } from "./floor-plan-shapes";
+import { STATUS_COLOR, STATUS_STROKE } from "./floor-plan-shapes";
 import { getDecorationPreset } from "./decoration-shapes";
 
 export interface CanvasTable extends TableLayout {
@@ -190,7 +190,8 @@ export function FloorPlanCanvas({
               width={zone.canvasWidth}
               height={zone.canvasHeight}
               fill={zone.overlayColor}
-              opacity={0.1}
+              opacity={0.35}
+              listening={false}
             />
           )}
         </Layer>
@@ -280,8 +281,19 @@ function TableNode({
 }) {
   const draggable = mode === "edit" && !table.locked;
   const status = table.status ?? "available";
-  const fill = table.color ?? STATUS_COLOR[status];
-  const stroke = isSelected ? "#1f2937" : darken(fill, 0.2);
+  const fill = table.color ?? STATUS_COLOR[status] ?? STATUS_COLOR.available;
+  const stroke = isSelected
+    ? "#1f2937"
+    : STATUS_STROKE[status] ?? darken(fill, 0.18);
+
+  // Font số bàn: scale theo cạnh nhỏ — không nhồi chữ ngoài shape
+  const minSide = Math.min(table.width, table.height);
+  const numberFontSize = Math.max(14, Math.min(minSide / 2.5, 36));
+  // Nhãn phụ (tên bàn ngắn) chỉ hiện khi đủ chỗ
+  const showName =
+    !!table.name &&
+    table.name !== String(table.tableNumber ?? "") &&
+    minSide >= 70;
 
   return (
     <Group
@@ -297,41 +309,40 @@ function TableNode({
       width={table.width}
       height={table.height}
     >
-      <ShapeRect table={table} fill={fill} stroke={stroke} />
-      {/* Tên bàn */}
+      <ShapeRect
+        table={table}
+        fill={fill}
+        stroke={stroke}
+        status={status}
+      />
+      {/* Số bàn — to, đậm, giữa */}
       <Text
         text={String(table.tableNumber ?? "")}
-        fontSize={Math.min(table.width, table.height) / 3}
+        fontSize={numberFontSize}
         fontStyle="bold"
+        fontFamily="Inter, system-ui, sans-serif"
         fill="#ffffff"
         width={table.width}
         height={table.height}
         align="center"
         verticalAlign="middle"
         listening={false}
+        shadowColor="rgba(0,0,0,0.25)"
+        shadowBlur={2}
+        shadowOffsetY={1}
       />
-      {/* Capacity badge */}
-      {table.capacity ? (
+      {/* Tên ngắn dưới số bàn — chỉ khi đủ chỗ */}
+      {showName && (
         <Text
-          text={`${table.capacity} ghế`}
-          fontSize={10}
-          fill="#ffffff"
-          x={4}
-          y={table.height - 14}
+          text={table.name!}
+          fontSize={Math.max(9, minSide / 8)}
+          fill="rgba(255,255,255,0.92)"
+          width={table.width}
+          y={table.height / 2 + numberFontSize / 2 - 2}
+          align="center"
           listening={false}
         />
-      ) : null}
-      {/* Timer occupied */}
-      {table.status === "occupied" && table.elapsedMinutes !== undefined ? (
-        <Text
-          text={formatMin(table.elapsedMinutes)}
-          fontSize={10}
-          fill="#ffffff"
-          x={table.width - 32}
-          y={4}
-          listening={false}
-        />
-      ) : null}
+      )}
     </Group>
   );
 }
@@ -340,14 +351,25 @@ function ShapeRect({
   table,
   fill,
   stroke,
+  status,
 }: {
   table: CanvasTable;
   fill: string;
   stroke: string;
+  status: string;
 }) {
   const w = table.width;
   const h = table.height;
   const shape: TableShape = table.shape;
+  // Reserved → nét đứt cảnh báo (chuẩn OpenTable)
+  const dash = status === "reserved" ? [6, 4] : undefined;
+  // Shadow chung — nhẹ, đỡ cảm giác bàn cứng đơ
+  const shadowProps = {
+    shadowColor: "rgba(15, 23, 42, 0.18)",
+    shadowBlur: 6,
+    shadowOffsetY: 2,
+    shadowOpacity: 1,
+  } as const;
 
   if (shape === "round") {
     return (
@@ -358,26 +380,70 @@ function ShapeRect({
         fill={fill}
         stroke={stroke}
         strokeWidth={2}
+        dash={dash}
+        {...shadowProps}
       />
     );
   }
   if (shape === "sofa") {
-    // L-shape sofa: 2 rect ghép
+    // Sofa góc L-shape — vẽ custom với sceneFunc để có viền liền + lưng tựa
+    const back = Math.max(8, Math.min(w, h) * 0.18); // độ dày lưng tựa
     return (
-      <>
-        <Rect x={0} y={0} width={w} height={h * 0.45} fill={fill} stroke={stroke} strokeWidth={2} cornerRadius={8} />
-        <Rect x={0} y={h * 0.5} width={w * 0.55} height={h * 0.5} fill={fill} stroke={stroke} strokeWidth={2} cornerRadius={8} />
-      </>
+      <Shape
+        sceneFunc={(ctx, sh) => {
+          ctx.beginPath();
+          // L-shape outline: ngồi mặt L (chữ L ngược)
+          ctx.moveTo(0, 0);
+          ctx.lineTo(w, 0);
+          ctx.lineTo(w, h * 0.55);
+          ctx.lineTo(w * 0.55, h * 0.55);
+          ctx.lineTo(w * 0.55, h);
+          ctx.lineTo(0, h);
+          ctx.closePath();
+          ctx.fillStrokeShape(sh);
+          // Lưng tựa: 2 dải đậm hơn dọc theo cạnh ngoài
+          ctx.fillStyle = `rgba(0,0,0,0.18)`;
+          ctx.fillRect(0, 0, w, back); // lưng ngang trên
+          ctx.fillRect(0, 0, back, h); // lưng dọc trái
+        }}
+        fill={fill}
+        stroke={stroke}
+        strokeWidth={2}
+        dash={dash}
+        {...shadowProps}
+      />
     );
   }
   if (shape === "booth") {
     return (
-      <Rect x={0} y={0} width={w} height={h} fill={fill} stroke={stroke} strokeWidth={3} cornerRadius={[16, 16, 4, 4]} />
+      <Rect
+        x={0}
+        y={0}
+        width={w}
+        height={h}
+        fill={fill}
+        stroke={stroke}
+        strokeWidth={2}
+        cornerRadius={[16, 16, 4, 4]}
+        dash={dash}
+        {...shadowProps}
+      />
     );
   }
   // square / rect / bar-seat
   return (
-    <Rect x={0} y={0} width={w} height={h} fill={fill} stroke={stroke} strokeWidth={2} cornerRadius={6} />
+    <Rect
+      x={0}
+      y={0}
+      width={w}
+      height={h}
+      fill={fill}
+      stroke={stroke}
+      strokeWidth={2}
+      cornerRadius={8}
+      dash={dash}
+      {...shadowProps}
+    />
   );
 }
 
@@ -405,6 +471,11 @@ function DecorationNode({
   const draggable = mode === "edit" && !decoration.locked;
   const w = decoration.width;
   const h = decoration.height;
+  const minSide = Math.min(w, h);
+
+  // Label: chỉ hiện khi đủ chỗ (vd: tường + cửa sổ dài mỏng không nhồi text)
+  const showLabel = !!decoration.label && minSide >= 24;
+  const labelFontSize = Math.max(9, Math.min(minSide / 4, 12));
 
   return (
     <Group
@@ -420,28 +491,182 @@ function DecorationNode({
       width={w}
       height={h}
     >
-      {/* Shape theo kind */}
-      {decoration.kind === "plant" ? (
-        <Circle x={w / 2} y={h / 2} radius={Math.min(w, h) / 2} fill={fill} stroke={stroke} strokeWidth={1.5} />
-      ) : decoration.kind === "door" || decoration.kind === "window" ? (
-        <Rect x={0} y={0} width={w} height={h} fill={fill} stroke={stroke} strokeWidth={1} cornerRadius={2} />
-      ) : (
-        <Rect x={0} y={0} width={w} height={h} fill={fill} stroke={stroke} strokeWidth={1.5} cornerRadius={4} opacity={0.85} />
-      )}
-      {/* Label */}
-      {decoration.label && (
+      <DecorShape decoration={decoration} fill={fill} stroke={stroke} />
+      {showLabel && (
         <Text
-          text={decoration.label}
-          fontSize={11}
+          text={decoration.label!}
+          fontSize={labelFontSize}
+          fontStyle="600"
           fill="#ffffff"
           width={w}
           height={h}
           align="center"
           verticalAlign="middle"
           listening={false}
+          shadowColor="rgba(0,0,0,0.35)"
+          shadowBlur={2}
+          shadowOffsetY={1}
         />
       )}
     </Group>
+  );
+}
+
+/**
+ * Vẽ shape riêng cho từng loại đồ trang trí.
+ * — plant: chậu cây 3 lá + thân chậu (custom sceneFunc)
+ * — door: cánh cửa nâu + cung mở
+ * — window: khung kính trong suốt + 1 chia dọc
+ * — bar: bo góc + 2 đường gỗ
+ * — restroom: rect tròn góc lớn (ô vuông màu)
+ * — stairs: rect + 3 vạch ngang (bậc thang)
+ * — tv: dải đen mảnh
+ * — wall: dải đậm
+ */
+function DecorShape({
+  decoration,
+  fill,
+  stroke,
+}: {
+  decoration: FloorPlanDecoration;
+  fill: string;
+  stroke: string;
+}) {
+  const w = decoration.width;
+  const h = decoration.height;
+  const kind = decoration.kind;
+
+  if (kind === "plant") {
+    // 3 lá xanh + chậu nâu — vẽ bằng sceneFunc cho liền mạch
+    return (
+      <Shape
+        sceneFunc={(ctx, sh) => {
+          const cx = w / 2;
+          const cy = h / 2;
+          const r = Math.min(w, h) / 2;
+          // Chậu (1/3 dưới)
+          ctx.fillStyle = "#92400e";
+          ctx.fillRect(cx - r * 0.55, cy + r * 0.25, r * 1.1, r * 0.7);
+          // 3 lá hình ellipse xếp lệch — toạ độ tương đối
+          ctx.fillStyle = fill;
+          ctx.strokeStyle = stroke;
+          ctx.lineWidth = 1;
+          // Lá giữa to
+          ctx.beginPath();
+          ctx.ellipse(cx, cy - r * 0.15, r * 0.45, r * 0.7, 0, 0, Math.PI * 2);
+          ctx.fill();
+          ctx.stroke();
+          // Lá trái
+          ctx.beginPath();
+          ctx.ellipse(cx - r * 0.4, cy, r * 0.35, r * 0.55, -0.4, 0, Math.PI * 2);
+          ctx.fill();
+          ctx.stroke();
+          // Lá phải
+          ctx.beginPath();
+          ctx.ellipse(cx + r * 0.4, cy, r * 0.35, r * 0.55, 0.4, 0, Math.PI * 2);
+          ctx.fill();
+          ctx.stroke();
+          // Gân lá giữa
+          ctx.strokeStyle = "rgba(0,0,0,0.25)";
+          ctx.beginPath();
+          ctx.moveTo(cx, cy - r * 0.7);
+          ctx.lineTo(cx, cy + r * 0.45);
+          ctx.stroke();
+          sh.getLayer();
+        }}
+      />
+    );
+  }
+
+  if (kind === "door") {
+    // Cánh cửa + cung mở 90°
+    return (
+      <Shape
+        sceneFunc={(ctx, sh) => {
+          ctx.fillStyle = fill;
+          ctx.strokeStyle = stroke;
+          ctx.lineWidth = 1.5;
+          // Cánh cửa (thân chính)
+          ctx.beginPath();
+          ctx.rect(0, 0, w, h);
+          ctx.fill();
+          ctx.stroke();
+          // Cung mở (1/4 cung tròn)
+          ctx.strokeStyle = "rgba(0,0,0,0.4)";
+          ctx.setLineDash([3, 3]);
+          ctx.beginPath();
+          ctx.arc(0, h, Math.min(w, h * 3), -Math.PI / 2, 0);
+          ctx.stroke();
+          ctx.setLineDash([]);
+          sh.getLayer();
+        }}
+      />
+    );
+  }
+
+  if (kind === "window") {
+    // Khung kính: viền đậm + chia dọc giữa
+    return (
+      <Shape
+        sceneFunc={(ctx, sh) => {
+          ctx.fillStyle = fill;
+          ctx.strokeStyle = stroke;
+          ctx.lineWidth = 1.5;
+          ctx.beginPath();
+          ctx.rect(0, 0, w, h);
+          ctx.fill();
+          ctx.stroke();
+          // Chia dọc + ngang
+          ctx.beginPath();
+          ctx.moveTo(w / 2, 0);
+          ctx.lineTo(w / 2, h);
+          ctx.stroke();
+          sh.getLayer();
+        }}
+      />
+    );
+  }
+
+  if (kind === "stairs") {
+    // Khung + 4 vạch ngang (bậc)
+    return (
+      <Shape
+        sceneFunc={(ctx, sh) => {
+          ctx.fillStyle = fill;
+          ctx.strokeStyle = stroke;
+          ctx.lineWidth = 1.5;
+          ctx.beginPath();
+          ctx.rect(0, 0, w, h);
+          ctx.fill();
+          ctx.stroke();
+          ctx.strokeStyle = "rgba(255,255,255,0.55)";
+          ctx.lineWidth = 1;
+          for (let i = 1; i < 5; i++) {
+            ctx.beginPath();
+            ctx.moveTo(0, (h / 5) * i);
+            ctx.lineTo(w, (h / 5) * i);
+            ctx.stroke();
+          }
+          sh.getLayer();
+        }}
+      />
+    );
+  }
+
+  // Mặc định: rect bo góc (bar, restroom, tv, wall, custom)
+  const radius = kind === "wall" || kind === "tv" ? 2 : 6;
+  return (
+    <Rect
+      x={0}
+      y={0}
+      width={w}
+      height={h}
+      fill={fill}
+      stroke={stroke}
+      strokeWidth={1.5}
+      cornerRadius={radius}
+      opacity={0.92}
+    />
   );
 }
 
@@ -459,7 +684,3 @@ function darken(hex: string, amt: number): string {
   }
 }
 
-function formatMin(m: number): string {
-  if (m < 60) return `${m}'`;
-  return `${Math.floor(m / 60)}h${m % 60}'`;
-}

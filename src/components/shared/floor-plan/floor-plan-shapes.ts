@@ -23,17 +23,17 @@ export interface ShapePreset {
 }
 
 export const SHAPE_PRESETS: ShapePreset[] = [
-  // Tròn 2 / 4 / 6 ghế
+  // Tròn 2 / 4 / 6 ghế — chuẩn hoá size để khỏi to lệch nhau quá
   { key: "round-2", shape: "round", label: "Tròn 2", icon: "circle", width: 60, height: 60, seats: 2 },
-  { key: "round-4", shape: "round", label: "Tròn 4", icon: "circle", width: 90, height: 90, seats: 4 },
-  { key: "round-6", shape: "round", label: "Tròn 6", icon: "circle", width: 120, height: 120, seats: 6 },
+  { key: "round-4", shape: "round", label: "Tròn 4", icon: "circle", width: 80, height: 80, seats: 4 },
+  { key: "round-6", shape: "round", label: "Tròn 6", icon: "circle", width: 100, height: 100, seats: 6 },
   // Vuông
   { key: "square-2", shape: "square", label: "Vuông 2", icon: "square", width: 60, height: 60, seats: 2 },
-  { key: "square-4", shape: "square", label: "Vuông 4", icon: "square", width: 90, height: 90, seats: 4 },
+  { key: "square-4", shape: "square", label: "Vuông 4", icon: "square", width: 80, height: 80, seats: 4 },
   // Dài
   { key: "rect-4", shape: "rect", label: "Dài 4", icon: "rectangle", width: 140, height: 60, seats: 4 },
   { key: "rect-6", shape: "rect", label: "Dài 6", icon: "rectangle", width: 180, height: 70, seats: 6 },
-  // Sofa
+  // Sofa góc — L-shape
   { key: "sofa", shape: "sofa", label: "Sofa góc", icon: "weekend", width: 160, height: 120, seats: 6 },
 ];
 
@@ -54,10 +54,24 @@ export function getShapeDefaults(shape: TableShape): {
   };
 }
 
-/** Màu mặc định theo trạng thái (cho cả View + Editor). */
+/**
+ * Bảng màu trạng thái — chuẩn theo Toast / OpenTable.
+ * - available: xanh ngọc (đèn xanh = trống = mời vào)
+ * - occupied:  cam      (đang phục vụ — nổi bật)
+ * - reserved:  xanh dương + nét đứt (đã đặt trước, chưa tới)
+ * - cleaning:  xám      (đang dọn, không tiếp khách)
+ */
 export const STATUS_COLOR: Record<string, string> = {
   available: "#10b981",
-  occupied: "#3b82f6",
-  reserved: "#f59e0b",
+  occupied: "#f59e0b",
+  reserved: "#3b82f6",
   cleaning: "#9ca3af",
+};
+
+/** Viền tối hơn nền 1 chút — dùng cho border bàn. */
+export const STATUS_STROKE: Record<string, string> = {
+  available: "#059669",
+  occupied: "#d97706",
+  reserved: "#2563eb",
+  cleaning: "#6b7280",
 };

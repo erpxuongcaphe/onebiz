@@ -73,7 +73,7 @@ const mockZones: FloorPlanZone[] = [
     backgroundUrl: null,
     backgroundOpacity: 30,
     gridSize: 16,
-    overlayColor: null,
+    overlayColor: "#ede9fe", // tím nhạt — phân biệt với Trệt
     floorLevel: 2,
     isActive: true,
     createdAt: "",
@@ -84,13 +84,13 @@ const mockZones: FloorPlanZone[] = [
 // Sảnh chính — 8 bàn + bar + cửa
 const tablesSanhChinh: CanvasTable[] = [
   { id: "t1", zoneId: "z1", shape: "round", width: 80, height: 80, rotation: 0, positionX: 80, positionY: 220, color: null, locked: false, tableNumber: 1, name: "Bàn 1", capacity: 4, status: "available" },
-  { id: "t2", zoneId: "z1", shape: "round", width: 80, height: 80, rotation: 0, positionX: 200, positionY: 220, color: null, locked: false, tableNumber: 2, name: "Bàn 2", capacity: 4, status: "occupied", elapsedMinutes: 25 },
+  { id: "t2", zoneId: "z1", shape: "round", width: 80, height: 80, rotation: 0, positionX: 200, positionY: 220, color: null, locked: false, tableNumber: 2, name: "Bàn 2", capacity: 4, status: "occupied" },
   { id: "t3", zoneId: "z1", shape: "round", width: 100, height: 100, rotation: 0, positionX: 340, positionY: 210, color: null, locked: false, tableNumber: 3, name: "Bàn 3", capacity: 6, status: "available" },
   { id: "t4", zoneId: "z1", shape: "square", width: 70, height: 70, rotation: 0, positionX: 500, positionY: 220, color: null, locked: false, tableNumber: 4, name: "Bàn 4", capacity: 2, status: "reserved" },
   { id: "t5", zoneId: "z1", shape: "square", width: 70, height: 70, rotation: 0, positionX: 600, positionY: 220, color: null, locked: false, tableNumber: 5, name: "Bàn 5", capacity: 2, status: "available" },
-  { id: "t6", zoneId: "z1", shape: "rect", width: 160, height: 60, rotation: 0, positionX: 80, positionY: 360, color: null, locked: false, tableNumber: 6, name: "Bàn 6", capacity: 4, status: "occupied", elapsedMinutes: 12 },
+  { id: "t6", zoneId: "z1", shape: "rect", width: 160, height: 60, rotation: 0, positionX: 80, positionY: 360, color: null, locked: false, tableNumber: 6, name: "Bàn 6", capacity: 4, status: "occupied" },
   { id: "t7", zoneId: "z1", shape: "rect", width: 160, height: 60, rotation: 0, positionX: 280, positionY: 360, color: null, locked: false, tableNumber: 7, name: "Bàn 7", capacity: 4, status: "available" },
-  { id: "t8", zoneId: "z1", shape: "sofa", width: 180, height: 120, rotation: 0, positionX: 670, positionY: 340, color: null, locked: false, tableNumber: 8, name: "VIP", capacity: 6, status: "occupied", elapsedMinutes: 45 },
+  { id: "t8", zoneId: "z1", shape: "sofa", width: 180, height: 120, rotation: 0, positionX: 670, positionY: 340, color: null, locked: false, tableNumber: 8, name: "VIP", capacity: 6, status: "occupied" },
 ];
 
 const decorSanhChinh: FloorPlanDecoration[] = [
@@ -105,9 +105,9 @@ const decorSanhChinh: FloorPlanDecoration[] = [
 const tablesSanVuon: CanvasTable[] = [
   { id: "g1", zoneId: "z2", shape: "round", width: 80, height: 80, rotation: 0, positionX: 100, positionY: 100, color: null, locked: false, tableNumber: 9, name: "Vườn 1", capacity: 4, status: "available" },
   { id: "g2", zoneId: "z2", shape: "round", width: 80, height: 80, rotation: 0, positionX: 280, positionY: 100, color: null, locked: false, tableNumber: 10, name: "Vườn 2", capacity: 4, status: "available" },
-  { id: "g3", zoneId: "z2", shape: "round", width: 80, height: 80, rotation: 0, positionX: 460, positionY: 100, color: null, locked: false, tableNumber: 11, name: "Vườn 3", capacity: 4, status: "occupied", elapsedMinutes: 18 },
+  { id: "g3", zoneId: "z2", shape: "round", width: 80, height: 80, rotation: 0, positionX: 460, positionY: 100, color: null, locked: false, tableNumber: 11, name: "Vườn 3", capacity: 4, status: "occupied" },
   { id: "g4", zoneId: "z2", shape: "round", width: 80, height: 80, rotation: 0, positionX: 640, positionY: 100, color: null, locked: false, tableNumber: 12, name: "Vườn 4", capacity: 4, status: "cleaning" },
-  { id: "g5", zoneId: "z2", shape: "round", width: 100, height: 100, rotation: 0, positionX: 180, positionY: 270, color: null, locked: false, tableNumber: 13, name: "Vườn 5", capacity: 6, status: "occupied", elapsedMinutes: 32 },
+  { id: "g5", zoneId: "z2", shape: "round", width: 100, height: 100, rotation: 0, positionX: 180, positionY: 270, color: null, locked: false, tableNumber: 13, name: "Vườn 5", capacity: 6, status: "occupied" },
   { id: "g6", zoneId: "z2", shape: "round", width: 100, height: 100, rotation: 0, positionX: 380, positionY: 270, color: null, locked: false, tableNumber: 14, name: "Vườn 6", capacity: 6, status: "available" },
   { id: "g7", zoneId: "z2", shape: "round", width: 100, height: 100, rotation: 0, positionX: 580, positionY: 270, color: null, locked: false, tableNumber: 15, name: "Vườn 7", capacity: 6, status: "reserved" },
   { id: "g8", zoneId: "z2", shape: "rect", width: 220, height: 70, rotation: 0, positionX: 320, positionY: 420, color: null, locked: false, tableNumber: 16, name: "Bàn dài", capacity: 8, status: "available" },
@@ -125,12 +125,12 @@ const decorSanVuon: FloorPlanDecoration[] = [
 
 // Tầng 2 — VIP, booth, sofa
 const tablesTang2: CanvasTable[] = [
-  { id: "v1", zoneId: "z3", shape: "sofa", width: 200, height: 140, rotation: 0, positionX: 80, positionY: 100, color: "#7c3aed", locked: false, tableNumber: 17, name: "VIP 1", capacity: 8, status: "occupied", elapsedMinutes: 88 },
+  { id: "v1", zoneId: "z3", shape: "sofa", width: 200, height: 140, rotation: 0, positionX: 80, positionY: 100, color: "#7c3aed", locked: false, tableNumber: 17, name: "VIP 1", capacity: 8, status: "occupied" },
   { id: "v2", zoneId: "z3", shape: "sofa", width: 200, height: 140, rotation: 0, positionX: 320, positionY: 100, color: null, locked: false, tableNumber: 18, name: "VIP 2", capacity: 8, status: "available" },
-  { id: "v3", zoneId: "z3", shape: "round", width: 120, height: 120, rotation: 0, positionX: 580, positionY: 110, color: null, locked: false, tableNumber: 19, name: "Bàn họp", capacity: 8, status: "reserved" },
+  { id: "v3", zoneId: "z3", shape: "round", width: 100, height: 100, rotation: 0, positionX: 580, positionY: 110, color: null, locked: false, tableNumber: 19, name: "Bàn họp", capacity: 8, status: "reserved" },
   { id: "v4", zoneId: "z3", shape: "rect", width: 240, height: 80, rotation: 0, positionX: 80, positionY: 330, color: null, locked: false, tableNumber: 20, name: "Bàn dài 1", capacity: 6, status: "available" },
-  { id: "v5", zoneId: "z3", shape: "rect", width: 240, height: 80, rotation: 0, positionX: 360, positionY: 330, color: null, locked: false, tableNumber: 21, name: "Bàn dài 2", capacity: 6, status: "occupied", elapsedMinutes: 22 },
-  { id: "v6", zoneId: "z3", shape: "round", width: 90, height: 90, rotation: 0, positionX: 660, positionY: 330, color: null, locked: false, tableNumber: 22, name: "Bàn 22", capacity: 4, status: "available" },
+  { id: "v5", zoneId: "z3", shape: "rect", width: 240, height: 80, rotation: 0, positionX: 360, positionY: 330, color: null, locked: false, tableNumber: 21, name: "Bàn dài 2", capacity: 6, status: "occupied" },
+  { id: "v6", zoneId: "z3", shape: "round", width: 80, height: 80, rotation: 0, positionX: 660, positionY: 330, color: null, locked: false, tableNumber: 22, name: "Bàn 22", capacity: 4, status: "available" },
 ];
 
 const decorTang2: FloorPlanDecoration[] = [
@@ -235,12 +235,12 @@ export default function MockupSoDoBanPage() {
           ))}
       </div>
 
-      {/* Legend */}
+      {/* Legend — chuẩn ngành Toast/OpenTable: xanh = trống, cam = phục vụ, xanh dương = đặt trước, xám = đang dọn */}
       <div className="flex items-center gap-4 px-4 py-2 bg-card border rounded-lg flex-wrap text-xs">
-        <Legend color="bg-status-success" label="Trống" count={counts.available} />
-        <Legend color="bg-primary" label="Đang phục vụ" count={counts.occupied} />
-        <Legend color="bg-status-warning" label="Đặt trước" count={counts.reserved} />
-        <Legend color="bg-status-neutral" label="Đang dọn" count={counts.cleaning} />
+        <Legend hex="#10b981" label="Trống" count={counts.available} />
+        <Legend hex="#f59e0b" label="Đang phục vụ" count={counts.occupied} />
+        <Legend hex="#3b82f6" label="Đặt trước" count={counts.reserved} dashed />
+        <Legend hex="#9ca3af" label="Đang dọn" count={counts.cleaning} />
       </div>
 
       {/* Canvas / Grid */}
@@ -313,12 +313,29 @@ function Loader() {
   );
 }
 
-function Legend({ color, label, count }: { color: string; label: string; count: number }) {
+function Legend({
+  hex,
+  label,
+  count,
+  dashed,
+}: {
+  hex: string;
+  label: string;
+  count: number;
+  dashed?: boolean;
+}) {
   return (
     <div className="flex items-center gap-2">
-      <span className={cn("h-2.5 w-2.5 rounded-full", color)} />
+      <span
+        className="h-3 w-3 rounded-full inline-block"
+        style={{
+          backgroundColor: hex,
+          border: dashed ? `2px dashed ${hex}` : `2px solid ${hex}`,
+          backgroundClip: "padding-box",
+        }}
+      />
       <span>
-        {label} ({count})
+        {label} <span className="text-muted-foreground">({count})</span>
       </span>
     </div>
   );
