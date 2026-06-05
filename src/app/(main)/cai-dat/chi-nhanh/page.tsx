@@ -83,6 +83,8 @@ interface BranchFormState {
   legalRegistrationNo: string;
   // CEO 03/06/2026 — Sprint 3: chế độ tồn kho
   cascadeMode: "production" | "outlet";
+  // CEO 05/06/2026 — Sprint 6: giờ chốt ca (0-23, default 3h sáng)
+  shiftCutoffHour: number;
 }
 
 const EMPTY_FORM: BranchFormState = {
@@ -98,6 +100,7 @@ const EMPTY_FORM: BranchFormState = {
   legalTaxCode: "",
   legalRegistrationNo: "",
   cascadeMode: "outlet",
+  shiftCutoffHour: 3,
 };
 
 /** Validate VN phone nếu nhập (optional). */
@@ -202,6 +205,8 @@ function BranchSettingsPageInner() {
       priceTierId: branch.priceTierId ?? "",
       // CEO 03/06/2026 — Sprint 3: prefill cascadeMode khi edit
       cascadeMode: branch.cascadeMode ?? "outlet",
+      // CEO 05/06/2026: prefill shift_cutoff_hour
+      shiftCutoffHour: branch.shiftCutoffHour ?? 3,
     });
     setDialogOpen(true);
   };
@@ -253,6 +258,8 @@ function BranchSettingsPageInner() {
           legalRegistrationNo: form.legalRegistrationNo.trim() || null,
           // CEO 03/06/2026 — Sprint 3: cascade mode
           cascadeMode: form.cascadeMode,
+          // CEO 05/06/2026: giờ chốt ca
+          shiftCutoffHour: form.shiftCutoffHour,
         });
         // Nếu bật isDefault (và chi nhánh chưa phải default) → set lại
         const current = branches.find((b) => b.id === editingId);
@@ -282,6 +289,8 @@ function BranchSettingsPageInner() {
           legalRegistrationNo: form.legalRegistrationNo.trim() || null,
           // CEO 03/06/2026 — Sprint 3: cascade mode
           cascadeMode: form.cascadeMode,
+          // CEO 05/06/2026: giờ chốt ca
+          shiftCutoffHour: form.shiftCutoffHour,
         });
         toast({
           title: "Đã thêm chi nhánh",
@@ -693,6 +702,41 @@ function BranchSettingsPageInner() {
                       BOM trừ SKU thành phần → tạo BOM riêng cho Quán.
                     </>
                   )}
+                </div>
+              </div>
+
+              {/* CEO 05/06/2026: Giờ chốt ca — quá giờ này mà ca chưa đóng → auto pending */}
+              <div className="space-y-2 sm:col-span-2">
+                <Label htmlFor="branch-shift-cutoff">
+                  Giờ chốt ca làm việc
+                </Label>
+                <Select
+                  value={String(form.shiftCutoffHour)}
+                  onValueChange={(val) =>
+                    setForm((f) => ({ ...f, shiftCutoffHour: Number(val) }))
+                  }
+                >
+                  <SelectTrigger id="branch-shift-cutoff">
+                    <SelectValue placeholder="Chọn giờ chốt ca" />
+                  </SelectTrigger>
+                  <SelectContent>
+                    {Array.from({ length: 24 }, (_, h) => (
+                      <SelectItem key={h} value={String(h)}>
+                        {String(h).padStart(2, "0")}:00
+                        {h === 3 && " (mặc định)"}
+                      </SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+                <div className="rounded-md bg-muted/40 px-3 py-2 text-xs text-muted-foreground leading-relaxed">
+                  Nếu nhân viên quên đóng ca, ca sẽ tự chuyển "Chờ đối chiếu"
+                  khi qua giờ này. Quản lý phải đếm tiền mặt + ghi lý do để chốt
+                  số liệu vào báo cáo.
+                  <br />
+                  <strong>Gợi ý:</strong> Quán cà phê thường mở 6h-22h → chọn{" "}
+                  <strong>03:00</strong> (mặc định). Quán bar/khuya → chọn{" "}
+                  <strong>06:00</strong>. Văn phòng/kho → có thể chọn{" "}
+                  <strong>00:00</strong> để chốt theo ngày kế toán.
                 </div>
               </div>
 

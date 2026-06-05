@@ -120,6 +120,12 @@ export const PERMISSIONS = {
   REPORTS_FNB: "reports.fnb",
   REPORTS_EXPORT: "reports.export",
   REPORTS_VIEW_PROFIT: "reports.view_profit",        // ẩn báo cáo lợi nhuận khỏi cashier
+
+  // Shifts — CEO 05/06/2026: cho phép đối chiếu ca pending
+  // Owner/Admin = reconcile mọi chi nhánh
+  // Manager quán = reconcile chỉ chi nhánh mình quản lý (own_branch)
+  SHIFTS_RECONCILE_ANY: "shifts.reconcile_any",
+  SHIFTS_RECONCILE_OWN_BRANCH: "shifts.reconcile_own_branch",
 } as const;
 
 export type PermissionCode = (typeof PERMISSIONS)[keyof typeof PERMISSIONS];
@@ -275,6 +281,13 @@ export const PERMISSION_GROUPS: PermissionGroup[] = [
       { code: PERMISSIONS.REPORTS_FNB, label: "Báo cáo F&B" },
       { code: PERMISSIONS.REPORTS_VIEW_PROFIT, label: "Báo cáo lợi nhuận" },
       { code: PERMISSIONS.REPORTS_EXPORT, label: "Xuất báo cáo" },
+    ],
+  },
+  {
+    group: "Đối chiếu ca làm việc",
+    permissions: [
+      { code: PERMISSIONS.SHIFTS_RECONCILE_ANY, label: "Đối chiếu ca mọi chi nhánh (Admin)" },
+      { code: PERMISSIONS.SHIFTS_RECONCILE_OWN_BRANCH, label: "Đối chiếu ca chi nhánh mình (Quản lý quán)" },
     ],
   },
 ];

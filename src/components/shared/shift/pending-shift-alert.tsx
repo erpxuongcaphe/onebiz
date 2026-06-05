@@ -31,6 +31,7 @@ import { Icon } from "@/components/ui/icon";
 import { cn } from "@/lib/utils";
 import { formatCurrency } from "@/lib/format";
 import { useToast } from "@/lib/contexts";
+import { usePermissions } from "@/lib/permissions";
 import {
   getPendingShifts,
   markOverdueShiftsForBranch,
@@ -52,12 +53,21 @@ export function PendingShiftAlertSection({
 }: {
   branchId: string | null;
 }) {
-  const { pendings, refresh } = usePendingShiftAlert(branchId);
+  const { hasPermission } = usePermissions();
+  // Chỉ user có quyền reconcile mới load + thấy popup
+  // (cashier KHÔNG được reconcile ca của chính mình — xung đột lợi ích)
+  const canReconcile =
+    hasPermission("shifts.reconcile_any") ||
+    hasPermission("shifts.reconcile_own_branch");
+
+  const { pendings, refresh } = usePendingShiftAlert(
+    canReconcile ? branchId : null,
+  );
   const [dismissed, setDismissed] = useState<Set<string>>(new Set());
 
   const visible = pendings.filter((s) => !dismissed.has(s.id));
 
-  if (visible.length === 0) return null;
+  if (!canReconcile || visible.length === 0) return null;
 
   return (
     <PendingShiftAlertDialog

@@ -33,6 +33,12 @@ export interface BranchDetail {
    * Default 'outlet'. Auto-set 'production' cho warehouse/factory khi migrate.
    */
   cascadeMode: "production" | "outlet";
+  /**
+   * CEO 05/06/2026 — Migration 00127: giờ chốt ca (0-23).
+   * Ca mở quá cutoff hour của hôm nay → auto pending_reconcile.
+   * Default 3h sáng (đủ cho quán cà phê đóng cửa muộn 1-2h).
+   */
+  shiftCutoffHour: number;
   createdAt: string;
   updatedAt: string;
 }
@@ -78,6 +84,8 @@ export async function createBranch(branch: {
    * vào branchType (warehouse/factory → production).
    */
   cascadeMode?: "production" | "outlet";
+  /** CEO 05/06/2026: giờ chốt ca 0-23, default 3 */
+  shiftCutoffHour?: number;
 }): Promise<BranchDetail> {
   if (!branch.tenantId) {
     throw new Error("Thiếu tenantId khi tạo chi nhánh");
@@ -115,6 +123,11 @@ export async function createBranch(branch: {
       (branch.branchType ?? "store") === "factory"
         ? "production"
         : "outlet"),
+    // CEO 05/06/2026: giờ chốt ca (0-23), clamp ngoài range
+    shift_cutoff_hour:
+      typeof branch.shiftCutoffHour === "number"
+        ? Math.max(0, Math.min(23, Math.round(branch.shiftCutoffHour)))
+        : 3,
   })
     .select()
     .single();
@@ -177,6 +190,8 @@ export async function updateBranch(
     legalRegistrationNo: string | null;
     // CEO 03/06/2026 — Sprint 3: cascade mode
     cascadeMode: "production" | "outlet";
+    // CEO 05/06/2026: giờ chốt ca
+    shiftCutoffHour: number;
   }>
 ) {
   const tenantId = await getCurrentTenantId();
@@ -204,6 +219,10 @@ export async function updateBranch(
   if (updates.legalRegistrationNo !== undefined) updateObj.legal_registration_no = updates.legalRegistrationNo;
   // CEO 03/06/2026 — Sprint 3: cascade mode
   if (updates.cascadeMode !== undefined) updateObj.cascade_mode = updates.cascadeMode;
+  // CEO 05/06/2026: giờ chốt ca (0-23)
+  if (updates.shiftCutoffHour !== undefined) {
+    updateObj.shift_cutoff_hour = Math.max(0, Math.min(23, updates.shiftCutoffHour));
+  }
 
   const { error } = await supabase
     .from("branches")
@@ -361,6 +380,7 @@ function mapBranch(row: Record<string, unknown>): BranchDetail {
       ((row.cascade_mode as string) === "production"
         ? "production"
         : "outlet") as BranchDetail["cascadeMode"],
+    shiftCutoffHour: Number(row.shift_cutoff_hour ?? 3),
     createdAt: row.created_at as string,
     updatedAt: row.updated_at as string,
   };
