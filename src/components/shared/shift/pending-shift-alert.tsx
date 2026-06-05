@@ -32,7 +32,6 @@ import { cn } from "@/lib/utils";
 import { formatCurrency } from "@/lib/format";
 import { useAuth, useToast } from "@/lib/contexts";
 import { usePermissions } from "@/lib/permissions";
-import { isOwnerRole } from "@/lib/types/auth";
 import {
   getPendingShifts,
   markOverdueShiftsForBranch,
@@ -220,14 +219,11 @@ function ReconcileShiftDialog({
 }) {
   const { toast } = useToast();
   const { user } = useAuth();
-  // BUG FIX 1: cấm user tự reconcile ca chính mình (xung đột lợi ích)
-  // Admin Trang vừa làm cashier, vừa làm admin → nếu cho self-reconcile,
-  // có thể gian lận trừ tiền mặt. Chỉ user khác mới được đối chiếu.
-  //
-  // Exception: Owner (chủ shop solo) — quán nhỏ owner làm hết mọi vai,
-  // nên cho phép. Admin/Manager bắt buộc tách vai (separation of duties).
-  const isSelfReconcile =
-    user?.id === shift.cashierId && !isOwnerRole(user?.role);
+  // CEO 05/06/2026 chốt: quản lý chi nhánh chịu trách nhiệm chi nhánh
+  // của mình. KHÔNG block self-reconcile. Owner đối chiếu thu/doanh số
+  // qua báo cáo + audit log (reconciled_by, reason ghi đầy đủ).
+  // Chỉ hiện soft notice để user ý thức "đây là tự đối chiếu".
+  const isSelfReconcile = user?.id === shift.cashierId;
 
   const [preview, setPreview] = useState<ShiftPreview | null>(null);
   const [previewError, setPreviewError] = useState<string | null>(null);
@@ -306,25 +302,24 @@ function ReconcileShiftDialog({
           )}
 
           {preview && isSelfReconcile && (
-            <div className="rounded-lg border border-status-error/40 bg-status-error/10 p-3 text-sm">
+            <div className="rounded-lg border border-status-warning/40 bg-status-warning/10 p-3 text-sm">
               <div className="flex items-start gap-2">
-                <Icon name="block" size={18} className="text-status-error mt-0.5 shrink-0" />
+                <Icon name="info" size={18} className="text-status-warning mt-0.5 shrink-0" />
                 <div>
-                  <p className="font-semibold text-status-error">
-                    Bạn không thể tự đối chiếu ca của chính mình
+                  <p className="font-semibold text-status-warning">
+                    Tự đối chiếu — sẽ được ghi vào nhật ký
                   </p>
                   <p className="text-xs text-muted-foreground mt-1">
-                    Đây là ca do anh/chị mở. Vì nguyên tắc tách vai (phòng
-                    chống gian lận tiền mặt), ca phải được người khác — chủ
-                    quán hoặc một admin/quản lý khác — đếm tiền và đối chiếu.
-                    Hãy nhờ chủ shop hỗ trợ.
+                    Đây là ca do anh/chị mở. Hệ thống ghi nhận anh/chị tự
+                    đếm tiền và chốt ca, kèm lý do dưới đây. Chủ shop sẽ
+                    đối chiếu lại qua báo cáo doanh số.
                   </p>
                 </div>
               </div>
             </div>
           )}
 
-          {preview && !isSelfReconcile && (
+          {preview && (
             <div className="py-2 space-y-4">
               {/* Doanh thu theo phương thức */}
               <div className="border border-border rounded-lg p-3 space-y-2">
@@ -458,25 +453,23 @@ function ReconcileShiftDialog({
 
           <DialogFooter>
             <Button variant="outline" onClick={onClose} disabled={loading}>
-              {isSelfReconcile ? "Đóng" : "Để sau"}
+              Để sau
             </Button>
-            {!isSelfReconcile && (
-              <Button
-                onClick={() => setShowConfirm(true)}
-                // BUG FIX 2: cho phép nhập 0 (két trống thật) — check string ""
-                // thay vì !actualCash (truthy của "0" string là true rồi nhưng
-                // !"" là true; logic cần precise check). Plus reasonValid.
-                disabled={
-                  !preview ||
-                  actualCash === "" ||
-                  !reasonValid ||
-                  loading
-                }
-                className="bg-status-success text-on-success hover:bg-status-success/90"
-              >
-                Đối chiếu &amp; chốt ca
-              </Button>
-            )}
+            <Button
+              onClick={() => setShowConfirm(true)}
+              // BUG FIX 2: cho phép nhập 0 (két trống thật) — check string ""
+              // thay vì !actualCash (truthy của "0" string là true rồi nhưng
+              // !"" là true; logic cần precise check). Plus reasonValid.
+              disabled={
+                !preview ||
+                actualCash === "" ||
+                !reasonValid ||
+                loading
+              }
+              className="bg-status-success text-on-success hover:bg-status-success/90"
+            >
+              Đối chiếu &amp; chốt ca
+            </Button>
           </DialogFooter>
         </DialogContent>
       </Dialog>
