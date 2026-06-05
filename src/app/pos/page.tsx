@@ -3849,14 +3849,31 @@ function DraftListModal({
   const { toast } = useToast();
 
   // Fetch drafts when modal opens
+  // CEO 05/06/2026: bỏ silent catch — hiện lỗi rõ để debug khi DB có draft
+  // nhưng UI báo "Chưa có". Trước đây nuốt mọi lỗi → giả thuyết "empty"
+  // luôn thắng → CEO không biết lỗi RLS / query.
   useEffect(() => {
     if (!open) return;
     setLoading(true);
     listDraftOrders()
-      .then(setDrafts)
-      .catch(() => setDrafts([]))
+      .then((rows) => {
+        if (rows.length === 0) {
+          console.warn("[DraftListModal] listDraftOrders trả về 0 rows");
+        }
+        setDrafts(rows);
+      })
+      .catch((err: unknown) => {
+        const msg = err instanceof Error ? err.message : "Không tải được nháp";
+        console.error("[DraftListModal] listDraftOrders lỗi:", err);
+        toast({
+          title: "Không tải được đơn nháp",
+          description: msg,
+          variant: "error",
+        });
+        setDrafts([]);
+      })
       .finally(() => setLoading(false));
-  }, [open]);
+  }, [open, toast]);
 
   const handleLoad = useCallback(
     async (id: string) => {
