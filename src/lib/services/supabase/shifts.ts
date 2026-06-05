@@ -152,6 +152,113 @@ export async function closeShift(input: CloseShiftInput): Promise<ShiftReport> {
 }
 
 // ============================================================
+// PENDING RECONCILE — CEO 05/06/2026 — auto-mark + reconcile
+// Migration 00127. Cashier quên đóng ca → POS mount tự mark pending.
+// Manager đối chiếu sau qua reconcile_pending_shift RPC.
+// ============================================================
+
+/**
+ * Mark mọi ca open quá cutoff_hour của branch → pending_reconcile.
+ * Gọi MỘT LẦN khi POS mount (idempotent — 0 rows OK).
+ * Trả về số ca vừa mark (>0 nghĩa là cần hiển thị popup).
+ */
+export async function markOverdueShiftsForBranch(branchId: string): Promise<number> {
+  const supabase = getClient();
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  const { data, error } = await (supabase.rpc as any)(
+    "mark_overdue_shifts_for_branch",
+    { p_branch_id: branchId },
+  );
+  if (error) handleError(error, "markOverdueShiftsForBranch");
+  return Number(data ?? 0);
+}
+
+export interface PendingShift {
+  id: string;
+  branchId: string;
+  branchName: string;
+  cashierId: string;
+  cashierName: string;
+  openedAt: string;
+  autoMarkedPendingAt: string;
+  startingCash: number;
+  shiftDurationHours: number;
+}
+
+/**
+ * Get pending shifts cho 1 branch (filter cho POS popup) hoặc all (admin overview).
+ * Dùng view `pending_shifts_view` đã create ở migration 00127.
+ */
+export async function getPendingShifts(branchId?: string): Promise<PendingShift[]> {
+  const supabase = getClient();
+  const tenantId = await getCurrentTenantId();
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  let query = (supabase as any)
+    .from("pending_shifts_view")
+    .select("*")
+    .eq("tenant_id", tenantId)
+    .order("opened_at", { ascending: true });
+  if (branchId) query = query.eq("branch_id", branchId);
+
+  const { data, error } = await query;
+  if (error) handleError(error, "getPendingShifts");
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  return (data ?? []).map((row: any) => ({
+    id: row.id,
+    branchId: row.branch_id,
+    branchName: row.branch_name ?? "—",
+    cashierId: row.cashier_id,
+    cashierName: row.cashier_name ?? "—",
+    openedAt: row.opened_at,
+    autoMarkedPendingAt: row.auto_marked_pending_at,
+    startingCash: Number(row.starting_cash ?? 0),
+    shiftDurationHours: Number(row.shift_duration_hours ?? 0),
+  }));
+}
+
+/**
+ * Manager đối chiếu pending shift → chốt qua close_shift_atomic.
+ * Bắt buộc nhập `reason` (>= 3 ký tự).
+ */
+export async function reconcilePendingShift(input: {
+  shiftId: string;
+  actualCash: number;
+  reason: string;
+  note?: string;
+}): Promise<ShiftReport> {
+  const supabase = getClient();
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  const { data, error } = await (supabase.rpc as any)(
+    "reconcile_pending_shift",
+    {
+      p_shift_id: input.shiftId,
+      p_actual_cash: input.actualCash,
+      p_reason: input.reason,
+      p_note: input.note ?? null,
+    },
+  );
+  if (error) handleError(error, "reconcilePendingShift");
+  if (!data) throw new Error("Không đối chiếu được ca");
+
+  // Load full shift để return cùng shape với closeShift
+  const tenantId = await getCurrentTenantId();
+  const { data: shift } = await supabase
+    .from("shifts")
+    .select("*, profiles(full_name)")
+    .eq("tenant_id", tenantId)
+    .eq("id", input.shiftId)
+    .single();
+  const base = mapShift((shift ?? {}) as Record<string, unknown>);
+
+  const rpcResult = data as { cash_in?: number; cash_out?: number };
+  return {
+    ...base,
+    cashIn: Number(rpcResult.cash_in ?? 0),
+    cashOut: Number(rpcResult.cash_out ?? 0),
+  };
+}
+
+// ============================================================
 // PREVIEW close shift — read-only, dùng để show summary trên dialog
 // trước khi cashier xác nhận đóng ca thật (CEO 05/06/2026).
 // Logic giống RPC close_shift_atomic nhưng KHÔNG update gì.

@@ -62,6 +62,7 @@ import {
 import { getOpenShift, openShift, closeShift } from "@/lib/services/supabase/shifts";
 import type { Shift } from "@/lib/types/shift";
 import { OpenShiftDialog, CloseShiftDialog } from "./fnb/components/shift-dialog";
+import { PendingShiftAlertSection } from "@/components/shared/shift/pending-shift-alert";
 import {
   Dialog,
   DialogContent,
@@ -3095,6 +3096,10 @@ function PosPageInner() {
           onConfirm={handleCloseShift}
         />
       )}
+
+      {/* CEO 05/06/2026: cảnh báo ca pending (auto-mark khi quá cutoff) */}
+      <PendingShiftAlertSection branchId={currentBranch?.id ?? null} />
+
 
       {/* ── ChangeDialog (CEO 04/05): hỏi cashier khi tiền thừa > 0 ── */}
       <Dialog

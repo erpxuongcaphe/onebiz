@@ -102,6 +102,12 @@ const TableFloorPlan = lazy(() => import("./components/table-floor-plan").then(m
 const SplitBillDialog = lazy(() => import("./components/split-bill-dialog").then(m => ({ default: m.SplitBillDialog })));
 const OpenShiftDialog = lazy(() => import("./components/shift-dialog").then(m => ({ default: m.OpenShiftDialog })));
 const CloseShiftDialog = lazy(() => import("./components/shift-dialog").then(m => ({ default: m.CloseShiftDialog })));
+// CEO 05/06/2026: popup cảnh báo ca quên đóng — auto chuyển pending qua RPC.
+const PendingShiftAlertSection = lazy(() =>
+  import("@/components/shared/shift/pending-shift-alert").then((m) => ({
+    default: m.PendingShiftAlertSection,
+  })),
+);
 const FnbSearchModal = lazy(() => import("./components/fnb-search-modal").then(m => ({ default: m.FnbSearchModal })));
 const FnbCustomerPicker = lazy(() => import("./components/fnb-customer-picker").then(m => ({ default: m.FnbCustomerPicker })));
 const SyncQueueDrawer = lazy(() => import("./components/sync-queue-drawer").then(m => ({ default: m.SyncQueueDrawer })));
@@ -2634,6 +2640,12 @@ function FnbPosPageInner() {
           />
         </Suspense>
       )}
+
+      {/* CEO 05/06/2026: cảnh báo ca pending (auto-mark khi quá cutoff) */}
+      <Suspense fallback={null}>
+        <PendingShiftAlertSection branchId={currentBranch?.id ?? null} />
+      </Suspense>
+
 
       {/* Search modal (F3) — lazy loaded */}
       {searchModalOpen && (
