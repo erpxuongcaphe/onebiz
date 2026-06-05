@@ -29,13 +29,7 @@ import { formatCurrency } from "@/lib/format";
 import type { Shift } from "@/lib/types/shift";
 import { Icon } from "@/components/ui/icon";
 import { previewShiftClose, type ShiftPreview } from "@/lib/services/supabase/shifts";
-
-const METHOD_LABEL: Record<string, string> = {
-  cash: "Tiền mặt",
-  transfer: "Chuyển khoản",
-  card: "Thẻ",
-  wallet: "Ví điện tử",
-};
+import { formatPaymentMethod } from "@/lib/constants/payment-methods";
 
 // R4: Quick-pick denominations cho mở/đóng ca — VND tiền mặt phổ biến.
 // Cashier tap pill thay vì gõ số → ít sai sót khi mở ca vội buổi sáng.
@@ -249,7 +243,7 @@ export function CloseShiftDialog({
                     {Object.entries(preview.salesByMethod).map(([m, amt]) => (
                       <div key={m} className="flex justify-between text-sm">
                         <span className="text-muted-foreground">
-                          • {METHOD_LABEL[m] ?? m}
+                          • {formatPaymentMethod(m)}
                         </span>
                         <span className="font-medium tabular-nums">{formatCurrency(amt)}đ</span>
                       </div>
@@ -295,11 +289,12 @@ export function CloseShiftDialog({
                   <Input
                     type="number"
                     min={0}
+                    inputMode="numeric"
                     value={actualCash}
                     onChange={(e) => setActualCash(e.target.value)}
                     placeholder="Đếm tiền mặt thực tế và nhập vào đây..."
-                    className="pl-9 text-lg"
-                    autoFocus
+                    className="pl-9 text-lg h-11"
+                    /* autoFocus bỏ — mobile keyboard jump làm mất tóm tắt ca */
                   />
                 </div>
                 {/* Variance display — show ngay cả khi nhập 0 (két trống thật) */}
@@ -315,6 +310,7 @@ export function CloseShiftDialog({
                     )}
                   >
                     <Icon
+                      size={18}
                       name={
                         variance === 0
                           ? "check_circle"
@@ -322,7 +318,6 @@ export function CloseShiftDialog({
                             ? "add_circle"
                             : "remove_circle"
                       }
-                      size={16}
                     />
                     {variance === 0
                       ? "Khớp quỹ — không chênh lệch"

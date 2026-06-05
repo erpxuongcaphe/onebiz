@@ -107,7 +107,10 @@ export default function LichSuKhoPage() {
   useEffect(() => {
     getBranches()
       .then(setBranches)
-      .catch(() => setBranches([]));
+      .catch((err: unknown) => {
+        console.error("[lich-su-kho] load branches failed:", err);
+        setBranches([]);
+      });
   }, []);
 
   const fetchData = useCallback(async () => {

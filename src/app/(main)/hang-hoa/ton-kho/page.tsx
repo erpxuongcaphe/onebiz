@@ -764,7 +764,10 @@ export default function TonKhoPage() {
   useEffect(() => {
     getBranches()
       .then(setBranches)
-      .catch(() => setBranches([]));
+      .catch((err: unknown) => {
+        console.error("[ton-kho] load branches failed:", err);
+        setBranches([]);
+      });
   }, []);
 
   useEffect(() => {

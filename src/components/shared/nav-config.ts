@@ -365,6 +365,8 @@ export const sidebarNavGroups: SidebarGroup[] = [
           { label: "Phân tích tổng hợp", href: "/phan-tich", icon: "insights" },
           { label: "Báo cáo tài chính", href: "/phan-tich/bao-cao-tai-chinh", icon: "summarize" },
           { label: "Báo cáo cuối ngày", href: "/phan-tich/cuoi-ngay", icon: "today" },
+          // CEO 05/06/2026: theo dõi ca đối chiếu sau Pending Reconcile
+          { label: "Đối chiếu ca làm việc", href: "/phan-tich/doi-chieu-ca", icon: "fact_check", badge: "Mới" },
         ],
       },
       {

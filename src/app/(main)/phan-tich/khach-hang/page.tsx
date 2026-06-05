@@ -181,7 +181,10 @@ export default function KhachHangPage() {
   useEffect(() => {
     getCustomers({ page: 0, pageSize: 500, sortBy: "name", sortOrder: "asc" })
       .then((res) => setCustomerList(res.data))
-      .catch(() => setCustomerList([]));
+      .catch((err: unknown) => {
+        console.error("[phan-tich/khach-hang] load customers failed:", err);
+        setCustomerList([]);
+      });
   }, []);
 
   useEffect(() => {

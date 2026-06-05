@@ -719,7 +719,7 @@ function BranchSettingsPageInner() {
                   <SelectTrigger id="branch-shift-cutoff">
                     <SelectValue placeholder="Chọn giờ chốt ca" />
                   </SelectTrigger>
-                  <SelectContent>
+                  <SelectContent className="max-h-72 overflow-y-auto">
                     {Array.from({ length: 24 }, (_, h) => (
                       <SelectItem key={h} value={String(h)}>
                         {String(h).padStart(2, "0")}:00

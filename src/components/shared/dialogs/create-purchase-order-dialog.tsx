@@ -852,11 +852,12 @@ export function CreatePurchaseOrderDialog({
                       <div className="inline-flex rounded-md border bg-background overflow-hidden">
                         <button
                           type="button"
+                          aria-label="Chiết khấu theo phần trăm"
                           onClick={() =>
                             updateItem(item.id, "discountType", "percent")
                           }
                           className={cn(
-                            "px-2 py-1 text-xs font-medium transition-colors",
+                            "min-w-9 px-3 py-1.5 text-xs font-medium transition-colors",
                             (item.discountType ?? "percent") === "percent"
                               ? "bg-primary text-primary-foreground"
                               : "text-muted-foreground hover:bg-muted",
@@ -866,11 +867,12 @@ export function CreatePurchaseOrderDialog({
                         </button>
                         <button
                           type="button"
+                          aria-label="Chiết khấu theo số tiền"
                           onClick={() =>
                             updateItem(item.id, "discountType", "amount")
                           }
                           className={cn(
-                            "px-2 py-1 text-xs font-medium transition-colors border-l",
+                            "min-w-9 px-3 py-1.5 text-xs font-medium transition-colors border-l",
                             item.discountType === "amount"
                               ? "bg-primary text-primary-foreground"
                               : "text-muted-foreground hover:bg-muted",

@@ -346,6 +346,147 @@ export async function previewShiftClose(shiftId: string): Promise<ShiftPreview> 
   };
 }
 
+// ============================================================
+// BÁO CÁO ĐỐI CHIẾU CA — CEO 05/06/2026
+// Liệt kê ca đã reconcile (manual close hoặc reconcile_pending_shift).
+// CEO dùng để theo dõi: ai tự đối chiếu, variance bao nhiêu, lý do gì.
+// ============================================================
+
+export interface ReconciledShiftRow {
+  id: string;
+  branchId: string;
+  branchName: string;
+  cashierId: string;
+  cashierName: string;
+  /** uid của người đối chiếu — có thể trùng cashier (tự đối chiếu) hoặc khác (chiếu hộ). null nếu close trực tiếp (không qua reconcile_pending_shift) */
+  reconciledById: string | null;
+  reconciledByName: string | null;
+  openedAt: string;
+  closedAt: string | null;
+  reconciledAt: string | null;
+  /** Cờ ca cũ bị auto-mark pending (cashier quên đóng) */
+  wasAutoMarkedPending: boolean;
+  startingCash: number;
+  expectedCash: number;
+  actualCash: number;
+  /** actualCash - expectedCash. >0 thừa, <0 thiếu. */
+  variance: number;
+  totalSales: number;
+  totalOrders: number;
+  reason: string | null;
+  note: string | null;
+}
+
+export interface ReconciledShiftFilter {
+  branchId?: string;
+  dateFrom?: string; // ISO date
+  dateTo?: string; // ISO date
+  /** 'all' (mặc định) | 'self' (tự đối chiếu) | 'cross' (chiếu hộ) | 'big_variance' (variance > 5% expectedCash) */
+  type?: "all" | "self" | "cross" | "big_variance";
+}
+
+export async function getReconciledShifts(
+  filter: ReconciledShiftFilter = {},
+): Promise<ReconciledShiftRow[]> {
+  const supabase = getClient();
+  const tenantId = await getCurrentTenantId();
+
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  let query = (supabase as any)
+    .from("shifts")
+    .select(
+      "id, branch_id, cashier_id, reconciled_by, opened_at, closed_at, reconciled_at, auto_marked_pending_at, starting_cash, expected_cash, actual_cash, cash_difference, total_sales, total_orders, reconcile_reason, note, status, " +
+        "cashier:profiles!shifts_cashier_id_fkey(full_name), " +
+        "branch:branches(name)",
+    )
+    .eq("tenant_id", tenantId)
+    .eq("status", "closed")
+    .not("actual_cash", "is", null)
+    .order("closed_at", { ascending: false, nullsFirst: false });
+
+  if (filter.branchId) query = query.eq("branch_id", filter.branchId);
+  if (filter.dateFrom) query = query.gte("closed_at", filter.dateFrom);
+  if (filter.dateTo) query = query.lte("closed_at", filter.dateTo);
+
+  const { data, error } = await query;
+  if (error) handleError(error, "getReconciledShifts");
+
+  // Map + lấy tên người đối chiếu qua batch query (vì FK 2 hướng phức tạp với
+  // Supabase nested select — em làm tay cho rõ)
+  const rows: ReconciledShiftRow[] = (data ?? []).map(
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    (r: any) => {
+      const expectedCash = Number(r.expected_cash ?? 0);
+      const actualCash = Number(r.actual_cash ?? 0);
+      const variance =
+        r.cash_difference != null
+          ? Number(r.cash_difference)
+          : actualCash - expectedCash;
+      return {
+        id: r.id,
+        branchId: r.branch_id,
+        branchName: r.branch?.name ?? "—",
+        cashierId: r.cashier_id,
+        cashierName: r.cashier?.full_name ?? "—",
+        reconciledById: r.reconciled_by ?? null,
+        reconciledByName: null, // batch fill below
+        openedAt: r.opened_at,
+        closedAt: r.closed_at ?? null,
+        reconciledAt: r.reconciled_at ?? null,
+        wasAutoMarkedPending: r.auto_marked_pending_at != null,
+        startingCash: Number(r.starting_cash ?? 0),
+        expectedCash,
+        actualCash,
+        variance,
+        totalSales: Number(r.total_sales ?? 0),
+        totalOrders: Number(r.total_orders ?? 0),
+        reason: r.reconcile_reason ?? null,
+        note: r.note ?? null,
+      };
+    },
+  );
+
+  // Batch fetch reconciledByName
+  const reconcilerIds = Array.from(
+    new Set(rows.map((r) => r.reconciledById).filter(Boolean) as string[]),
+  );
+  if (reconcilerIds.length > 0) {
+    const { data: profiles } = await supabase
+      .from("profiles")
+      .select("id, full_name")
+      .in("id", reconcilerIds);
+    const nameMap = new Map(
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      (profiles ?? []).map((p: any) => [p.id, p.full_name as string]),
+    );
+    rows.forEach((r) => {
+      if (r.reconciledById) {
+        r.reconciledByName = nameMap.get(r.reconciledById) ?? "—";
+      }
+    });
+  }
+
+  // Filter type client-side (đơn giản, ít row)
+  let filtered = rows;
+  if (filter.type === "self") {
+    filtered = rows.filter(
+      (r) => r.reconciledById && r.reconciledById === r.cashierId,
+    );
+  } else if (filter.type === "cross") {
+    filtered = rows.filter(
+      (r) => r.reconciledById && r.reconciledById !== r.cashierId,
+    );
+  } else if (filter.type === "big_variance") {
+    filtered = rows.filter(
+      (r) =>
+        r.expectedCash > 0 &&
+        Math.abs(r.variance) / r.expectedCash > 0.05,
+    );
+  }
+
+  return filtered;
+}
+
 /** Get shift history for a branch */
 export async function getShiftHistory(
   branchId: string,

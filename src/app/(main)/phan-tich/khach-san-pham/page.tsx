@@ -160,7 +160,13 @@ export default function KhachSanPhamPage() {
       selectedCustomerId,
     )
       .then(setProductDetail)
-      .catch(() => setProductDetail([]))
+      .catch((err: unknown) => {
+        console.error(
+          "[phan-tich/khach-san-pham] load product detail failed:",
+          err,
+        );
+        setProductDetail([]);
+      })
       .finally(() => setLoadingDetail(false));
   }, [selectedCustomerId, activeBranchId, range, mode]);
 

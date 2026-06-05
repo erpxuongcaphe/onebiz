@@ -465,7 +465,12 @@ export default function HoaDonPage() {
   useEffect(() => {
     getTenantBusinessInfo()
       .then(setBusinessInfo)
-      .catch(() => setBusinessInfo(null));
+      .catch((err: unknown) => {
+        // Không block UI nhưng log để CEO biết — in hoá đơn sẽ thiếu
+        // header MST / địa chỉ pháp lý nếu fail.
+        console.error("[Invoices] load tenant business info failed:", err);
+        setBusinessInfo(null);
+      });
   }, []);
 
   // Filters

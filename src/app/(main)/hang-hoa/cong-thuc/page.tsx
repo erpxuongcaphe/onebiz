@@ -339,7 +339,10 @@ export default function CongThucPage() {
   useEffect(() => {
     getBranches()
       .then(setBranches)
-      .catch(() => setBranches([]));
+      .catch((err: unknown) => {
+        console.error("[cong-thuc] load branches failed:", err);
+        setBranches([]);
+      });
   }, []);
 
   const fetchData = useCallback(async () => {

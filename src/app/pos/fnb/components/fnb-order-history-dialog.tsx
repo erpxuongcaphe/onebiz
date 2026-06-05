@@ -96,7 +96,20 @@ export function FnbOrderHistoryDialog({
     if (!silent) setLoading(true);
     getFnbRecentInvoices({ branchId, limit: 50, search: search || undefined })
       .then(setInvoices)
-      .catch(() => setInvoices([]))
+      .catch((err: unknown) => {
+        console.error("[FnbOrderHistory] load invoices failed:", err);
+        setInvoices([]);
+        if (!silent) {
+          toast({
+            title: "Không tải được lịch sử đơn",
+            description:
+              err instanceof Error
+                ? err.message
+                : "Reload hoặc kiểm tra quyền truy cập",
+            variant: "error",
+          });
+        }
+      })
       .finally(() => {
         if (!silent) setLoading(false);
       });

@@ -92,9 +92,17 @@ export function TableFloorPlan({
         setZones(zs);
         if (zs.length > 0 && !activeZoneId) setActiveZoneId(zs[0].id);
       })
-      .catch(() => {
-        // Silent — fallback grid
-        if (!cancelled) setZones([]);
+      .catch((err: unknown) => {
+        if (cancelled) return;
+        console.error("[FloorPlan] load zones failed:", err);
+        // Fallback grid view (không có sơ đồ trực quan)
+        setZones([]);
+        toast({
+          title: "Không tải được khu vực sơ đồ",
+          description:
+            err instanceof Error ? err.message : "Hiển thị grid thay thế",
+          variant: "warning",
+        });
       });
     return () => {
       cancelled = true;
@@ -135,8 +143,19 @@ export function TableFloorPlan({
           .filter(Boolean) as CanvasTable[];
         setZoneTables(merged);
       })
-      .catch(() => setZoneTables([]));
-  }, [activeZoneId, tables, orderTimestamps]);
+      .catch((err: unknown) => {
+        console.error("[FloorPlan] load tables for zone failed:", err);
+        setZoneTables([]);
+        toast({
+          title: "Không tải được bàn trong khu vực",
+          description:
+            err instanceof Error
+              ? err.message
+              : "Thử chuyển khu vực khác hoặc reload",
+          variant: "error",
+        });
+      });
+  }, [activeZoneId, tables, orderTimestamps, toast]);
 
   const activeZone = useMemo(
     () => zones.find((z) => z.id === activeZoneId) ?? null,

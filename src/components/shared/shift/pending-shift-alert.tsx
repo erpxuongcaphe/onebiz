@@ -40,6 +40,7 @@ import {
   type PendingShift,
   type ShiftPreview,
 } from "@/lib/services/supabase/shifts";
+import { formatPaymentMethod } from "@/lib/constants/payment-methods";
 
 // ─── Wrapper: Section to mount in POS (Retail + FnB) ────────
 
@@ -340,7 +341,7 @@ function ReconcileShiftDialog({
                     {Object.entries(preview.salesByMethod).map(([m, amt]) => (
                       <div key={m} className="flex justify-between text-sm">
                         <span className="text-muted-foreground">
-                          • {m === "cash" ? "Tiền mặt" : m === "transfer" ? "Chuyển khoản" : m === "card" ? "Thẻ" : m}
+                          • {formatPaymentMethod(m)}
                         </span>
                         <span className="font-medium tabular-nums">
                           {formatCurrency(amt)}đ
@@ -391,11 +392,12 @@ function ReconcileShiftDialog({
                 <Input
                   type="number"
                   min={0}
+                  inputMode="numeric"
                   value={actualCash}
                   onChange={(e) => setActualCash(e.target.value)}
                   placeholder="Nhập số tiền đếm trong két..."
-                  className="mt-1 text-lg"
-                  autoFocus
+                  className="mt-1 text-lg h-11"
+                  /* autoFocus bỏ — mobile keyboard jump làm mất tóm tắt ca ở trên */
                 />
                 {actualCash !== "" && (
                   <div
@@ -410,7 +412,7 @@ function ReconcileShiftDialog({
                   >
                     <Icon
                       name={variance === 0 ? "check_circle" : variance > 0 ? "add_circle" : "remove_circle"}
-                      size={16}
+                      size={18}
                     />
                     {variance === 0
                       ? "Khớp quỹ — không chênh lệch"
