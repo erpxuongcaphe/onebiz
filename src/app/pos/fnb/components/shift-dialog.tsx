@@ -302,8 +302,8 @@ export function CloseShiftDialog({
                     autoFocus
                   />
                 </div>
-                {/* Variance display */}
-                {actualCash && (
+                {/* Variance display — show ngay cả khi nhập 0 (két trống thật) */}
+                {actualCash !== "" && (
                   <div
                     className={cn(
                       "mt-2 rounded-md px-3 py-2 text-sm font-medium flex items-center gap-2",
@@ -352,7 +352,9 @@ export function CloseShiftDialog({
             </Button>
             <Button
               onClick={() => setShowConfirm(true)}
-              disabled={loading || !preview || !actualCash}
+              // BUG FIX: cho phép nhập 0 (két trống thật) — string "" thay vì
+              // !actualCash (đề phòng JS coerce). Cashier có thể đếm ra 0đ.
+              disabled={loading || !preview || actualCash === ""}
               className="bg-status-success text-on-success hover:bg-status-success/90"
             >
               Đóng ca

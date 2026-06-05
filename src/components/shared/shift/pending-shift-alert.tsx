@@ -30,8 +30,9 @@ import {
 import { Icon } from "@/components/ui/icon";
 import { cn } from "@/lib/utils";
 import { formatCurrency } from "@/lib/format";
-import { useToast } from "@/lib/contexts";
+import { useAuth, useToast } from "@/lib/contexts";
 import { usePermissions } from "@/lib/permissions";
+import { isOwnerRole } from "@/lib/types/auth";
 import {
   getPendingShifts,
   markOverdueShiftsForBranch,
@@ -218,6 +219,16 @@ function ReconcileShiftDialog({
   onDone: () => void;
 }) {
   const { toast } = useToast();
+  const { user } = useAuth();
+  // BUG FIX 1: cấm user tự reconcile ca chính mình (xung đột lợi ích)
+  // Admin Trang vừa làm cashier, vừa làm admin → nếu cho self-reconcile,
+  // có thể gian lận trừ tiền mặt. Chỉ user khác mới được đối chiếu.
+  //
+  // Exception: Owner (chủ shop solo) — quán nhỏ owner làm hết mọi vai,
+  // nên cho phép. Admin/Manager bắt buộc tách vai (separation of duties).
+  const isSelfReconcile =
+    user?.id === shift.cashierId && !isOwnerRole(user?.role);
+
   const [preview, setPreview] = useState<ShiftPreview | null>(null);
   const [previewError, setPreviewError] = useState<string | null>(null);
   const [actualCash, setActualCash] = useState("");
@@ -294,7 +305,26 @@ function ReconcileShiftDialog({
             </div>
           )}
 
-          {preview && (
+          {preview && isSelfReconcile && (
+            <div className="rounded-lg border border-status-error/40 bg-status-error/10 p-3 text-sm">
+              <div className="flex items-start gap-2">
+                <Icon name="block" size={18} className="text-status-error mt-0.5 shrink-0" />
+                <div>
+                  <p className="font-semibold text-status-error">
+                    Bạn không thể tự đối chiếu ca của chính mình
+                  </p>
+                  <p className="text-xs text-muted-foreground mt-1">
+                    Đây là ca do anh/chị mở. Vì nguyên tắc tách vai (phòng
+                    chống gian lận tiền mặt), ca phải được người khác — chủ
+                    quán hoặc một admin/quản lý khác — đếm tiền và đối chiếu.
+                    Hãy nhờ chủ shop hỗ trợ.
+                  </p>
+                </div>
+              </div>
+            </div>
+          )}
+
+          {preview && !isSelfReconcile && (
             <div className="py-2 space-y-4">
               {/* Doanh thu theo phương thức */}
               <div className="border border-border rounded-lg p-3 space-y-2">
@@ -372,7 +402,7 @@ function ReconcileShiftDialog({
                   className="mt-1 text-lg"
                   autoFocus
                 />
-                {actualCash && (
+                {actualCash !== "" && (
                   <div
                     className={cn(
                       "mt-2 rounded-md px-3 py-2 text-sm font-medium flex items-center gap-2",
@@ -428,15 +458,25 @@ function ReconcileShiftDialog({
 
           <DialogFooter>
             <Button variant="outline" onClick={onClose} disabled={loading}>
-              Để sau
+              {isSelfReconcile ? "Đóng" : "Để sau"}
             </Button>
-            <Button
-              onClick={() => setShowConfirm(true)}
-              disabled={!preview || !actualCash || !reasonValid || loading}
-              className="bg-status-success text-on-success hover:bg-status-success/90"
-            >
-              Đối chiếu &amp; chốt ca
-            </Button>
+            {!isSelfReconcile && (
+              <Button
+                onClick={() => setShowConfirm(true)}
+                // BUG FIX 2: cho phép nhập 0 (két trống thật) — check string ""
+                // thay vì !actualCash (truthy của "0" string là true rồi nhưng
+                // !"" là true; logic cần precise check). Plus reasonValid.
+                disabled={
+                  !preview ||
+                  actualCash === "" ||
+                  !reasonValid ||
+                  loading
+                }
+                className="bg-status-success text-on-success hover:bg-status-success/90"
+              >
+                Đối chiếu &amp; chốt ca
+              </Button>
+            )}
           </DialogFooter>
         </DialogContent>
       </Dialog>
