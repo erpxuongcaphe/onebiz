@@ -895,8 +895,13 @@ export default function HoaDonPage() {
               invoice={invoice}
               onClose={onClose}
               onEdit={
+                // CEO 05/06/2026: bỏ EditInvoiceDialog (sửa được mỗi tên KH
+                // + giảm giá là vô nghĩa). Nút Sửa giờ mở thẳng POS Retail
+                // với cart đã load từ draft → cashier sửa được tất cả
+                // (dòng hàng, giá, số lượng, KH, KM) → checkout cập nhật
+                // in-place (không tạo HĐ mới).
                 invoice.status === "processing"
-                  ? () => setEditingItem(invoice)
+                  ? () => router.push(`/pos?draftId=${invoice.id}`)
                   : undefined
               }
               onDelete={
@@ -918,10 +923,10 @@ export default function HoaDonPage() {
               row,
               kind: "invoice",
               permissions: txPerms,
-              // Sửa — chỉ status processing
+              // Sửa — chỉ status processing → mở POS Retail (CEO 05/06/2026)
               onEdit:
                 row.status === "processing"
-                  ? () => setEditingItem(row)
+                  ? () => router.push(`/pos?draftId=${row.id}`)
                   : undefined,
               // Sao chép (CEO 04/05): tạo draft mới + redirect ngay vào
               // POS Retail với data pre-loaded → cashier sửa + thanh toán.
