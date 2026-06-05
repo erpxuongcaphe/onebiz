@@ -104,6 +104,7 @@ function InvoiceDetail({
   deleteLabel?: string;
 }) {
   const status = statusMap[invoice.status];
+  const { toast } = useToast();
 
   // Lazy fetch line items thay vì hardcode "Sản phẩm mẫu" (P0 audit fix).
   const [items, setItems] = useState<InvoiceItemRow[]>([]);
@@ -115,8 +116,20 @@ function InvoiceDetail({
       .then((rows) => {
         if (!cancelled) setItems(rows);
       })
-      .catch(() => {
-        if (!cancelled) setItems([]);
+      .catch((err: unknown) => {
+        // CEO 05/06/2026: bỏ silent catch — hiện toast lỗi rõ thay vì
+        // panel empty làm user tưởng "không xem được". Console log full
+        // error để debug RLS/network/permission.
+        const msg = err instanceof Error ? err.message : "Lỗi tải chi tiết";
+        console.error("[InvoiceDetail] getInvoiceItems lỗi:", err);
+        if (!cancelled) {
+          setItems([]);
+          toast({
+            title: "Không tải được chi tiết hoá đơn",
+            description: msg,
+            variant: "error",
+          });
+        }
       })
       .finally(() => {
         if (!cancelled) setItemsLoading(false);
@@ -124,7 +137,7 @@ function InvoiceDetail({
     return () => {
       cancelled = true;
     };
-  }, [invoice.id]);
+  }, [invoice.id, toast]);
 
   const subtotal = items.reduce((s, it) => s + it.unitPrice * it.quantity, 0);
   const itemDiscountSum = items.reduce((s, it) => s + it.discount, 0);

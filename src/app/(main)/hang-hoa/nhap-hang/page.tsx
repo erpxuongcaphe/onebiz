@@ -234,6 +234,7 @@ function PurchaseOrderDetail({
   onDelete?: () => void;
 }) {
   const status = STATUS_META[order.status];
+  const { toast } = useToast();
   const [items, setItems] = useState<PurchaseOrderItemRow[]>([]);
   const [loading, setLoading] = useState(true);
 
@@ -244,8 +245,19 @@ function PurchaseOrderDetail({
       .then((rows) => {
         if (!cancelled) setItems(rows);
       })
-      .catch(() => {
-        if (!cancelled) setItems([]);
+      .catch((err: unknown) => {
+        // CEO 05/06/2026: bỏ silent catch — hiện toast lỗi rõ thay vì
+        // panel empty làm user tưởng "không xem được chi tiết phiếu".
+        const msg = err instanceof Error ? err.message : "Lỗi tải chi tiết";
+        console.error("[POrderDetail] getPurchaseOrderItems lỗi:", err);
+        if (!cancelled) {
+          setItems([]);
+          toast({
+            title: "Không tải được chi tiết phiếu nhập",
+            description: msg,
+            variant: "error",
+          });
+        }
       })
       .finally(() => {
         if (!cancelled) setLoading(false);
@@ -253,7 +265,7 @@ function PurchaseOrderDetail({
     return () => {
       cancelled = true;
     };
-  }, [order.id]);
+  }, [order.id, toast]);
 
   const totalOrdered = items.reduce((s, i) => s + i.lineTotal, 0);
   const totalReceivedValue = items.reduce(
