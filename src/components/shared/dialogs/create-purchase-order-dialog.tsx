@@ -121,17 +121,23 @@ function lineEffectivePrice(item: LineItem) {
   return Math.max(0, item.price * (1 - d / 100));
 }
 
-/** Tổng số tiền chiết khấu của dòng — để lưu vào DB. */
-function lineDiscountTotal(item: LineItem) {
-  return Math.round((item.price - lineEffectivePrice(item)) * item.quantity);
+/**
+ * CEO 05/06/2026: làm tròn LÊN để khử thập phân. NCC quote 125833.33 ×
+ * 12 ra 1,509,999.96 — chuyển khoản phải tròn, không trả 0.96đ.
+ * Math.ceil(price * qty) đảm bảo tổng dòng luôn là số nguyên.
+ */
+function lineSubtotal(item: LineItem) {
+  return Math.ceil(lineEffectivePrice(item) * item.quantity);
 }
 
-function lineSubtotal(item: LineItem) {
-  return lineEffectivePrice(item) * item.quantity;
+/** Tổng số tiền chiết khấu của dòng (đã làm tròn). */
+function lineDiscountTotal(item: LineItem) {
+  const beforeDisc = Math.ceil(item.price * item.quantity);
+  return Math.max(0, beforeDisc - lineSubtotal(item));
 }
 
 function lineTax(item: LineItem) {
-  return Math.round((lineSubtotal(item) * item.vatRate) / 100);
+  return Math.ceil((lineSubtotal(item) * item.vatRate) / 100);
 }
 
 function lineTotal(item: LineItem) {
