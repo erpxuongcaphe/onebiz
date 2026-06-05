@@ -296,10 +296,16 @@ function TableNode({
   // Font số bàn: scale theo cạnh nhỏ — không nhồi chữ ngoài shape
   const minSide = Math.min(table.width, table.height);
   const numberFontSize = Math.max(14, Math.min(minSide / 2.5, 36));
-  // Nhãn phụ (tên bàn ngắn) chỉ hiện khi đủ chỗ + khác số
+  // Nhãn phụ (tên bàn ngắn) chỉ hiện khi:
+  //  1. Có tên
+  //  2. Tên KHÁC số bàn ("VIP", "Bàn họp" — không phải "Bàn 1" / "1")
+  //  3. Đủ chỗ (cạnh nhỏ ≥ 80px)
+  const tableNumStr = String(table.tableNumber ?? "");
   const showName =
     !!table.name &&
-    table.name !== String(table.tableNumber ?? "") &&
+    table.name !== tableNumStr &&
+    table.name !== `Bàn ${tableNumStr}` &&
+    table.name !== `Ban ${tableNumStr}` &&
     minSide >= 80;
 
   return (
