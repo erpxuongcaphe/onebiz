@@ -11,12 +11,17 @@ import { useEffect, useMemo, useState } from "react";
 import { cn } from "@/lib/utils";
 import type { RestaurantTable, TableStatus } from "@/lib/types/fnb";
 import { Icon } from "@/components/ui/icon";
+import { useToast } from "@/lib/contexts/toast-context";
 import {
   getFloorPlanZones,
   getTablesByZone,
   type FloorPlanZone,
 } from "@/lib/services";
 import type { CanvasTable } from "@/components/shared/floor-plan/floor-plan-canvas";
+import {
+  TableActionSheet,
+  type TableActionKind,
+} from "@/components/shared/floor-plan/table-action-sheet";
 import { useAuth } from "@/lib/contexts";
 
 const FloorPlanCanvas = dynamic(
@@ -47,9 +52,35 @@ export function TableFloorPlan({
   orderTimestamps,
 }: TableFloorPlanProps) {
   const { currentBranch } = useAuth();
+  const { toast } = useToast();
   const [zones, setZones] = useState<FloorPlanZone[]>([]);
   const [activeZoneId, setActiveZoneId] = useState<string | null>(null);
   const [zoneTables, setZoneTables] = useState<CanvasTable[]>([]);
+  // Action sheet — tap bàn ở chế độ canvas mở dialog Mở đơn / Chuyển / Gộp
+  const [actionTable, setActionTable] = useState<CanvasTable | null>(null);
+
+  // Đóng action sheet + chuyển hành động về parent
+  const handleAction = (kind: TableActionKind, ct: CanvasTable) => {
+    const original = tables.find((t) => t.id === ct.id);
+    setActionTable(null);
+    if (!original) return;
+    if (kind === "open") {
+      onSelectTable(original);
+      return;
+    }
+    // Chuyển/Gộp/Hủy đặt — UI scaffold, backend wire sẽ build sau
+    const labels: Record<Exclude<TableActionKind, "open">, string> = {
+      transfer: "Chuyển bàn",
+      merge: "Gộp bàn",
+      "cancel-reservation": "Hủy đặt trước",
+    };
+    toast({
+      title: `${labels[kind as Exclude<TableActionKind, "open">]} — đang phát triển`,
+      description:
+        "Em sẽ build dialog chọn bàn đích + cập nhật đơn ở phiên sau. Tạm thời anh thao tác ở dialog Đơn hiện tại nhé.",
+      variant: "info",
+    });
+  };
 
   // Load zones (fallback gracefully nếu chưa setup)
   useEffect(() => {
@@ -95,6 +126,10 @@ export function TableFloorPlan({
               capacity: meta.capacity,
               status: meta.status,
               elapsedMinutes: elapsed ? elapsedMinutes(elapsed) : undefined,
+              // 1 bàn = 1 đơn hiện tại theo schema FnB OneBiz. Có order chưa
+              // thanh toán → badge đỏ "1". Khi support split-bill nhiều đơn
+              // cùng lúc, đổi sang count thật từ orders.
+              unpaidOrders: meta.currentOrderId ? 1 : 0,
             } as CanvasTable;
           })
           .filter(Boolean) as CanvasTable[];
@@ -157,15 +192,47 @@ export function TableFloorPlan({
           <CanvasView
             zone={activeZone}
             tables={zoneTables}
-            onSelect={(ct) => {
-              const original = tables.find((t) => t.id === ct.id);
-              if (original) onSelectTable(original);
-            }}
+            onSelect={(ct) => setActionTable(ct)}
           />
         ) : (
-          <GridFallback tables={tables} onSelectTable={onSelectTable} orderTimestamps={orderTimestamps} />
+          <GridFallback
+            tables={tables}
+            onSelectTable={(t) => {
+              // Convert RestaurantTable → CanvasTable shape tối thiểu
+              setActionTable({
+                id: t.id,
+                zoneId: "",
+                shape: "square",
+                width: 60,
+                height: 60,
+                rotation: 0,
+                positionX: 0,
+                positionY: 0,
+                color: null,
+                locked: false,
+                tableNumber: t.tableNumber,
+                name: t.name,
+                capacity: t.capacity,
+                status: t.status,
+                unpaidOrders: t.currentOrderId ? 1 : 0,
+              });
+            }}
+            orderTimestamps={orderTimestamps}
+          />
         )}
       </div>
+
+      {/* Action sheet khi tap bàn — Mở đơn / Chuyển bàn / Gộp bàn */}
+      <TableActionSheet
+        table={actionTable}
+        zoneName={
+          actionTable
+            ? activeZone?.name ?? tables.find((t) => t.id === actionTable.id)?.zone ?? undefined
+            : undefined
+        }
+        onAction={handleAction}
+        onClose={() => setActionTable(null)}
+      />
     </div>
   );
 }
