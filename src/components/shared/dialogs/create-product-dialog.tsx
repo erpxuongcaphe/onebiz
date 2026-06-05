@@ -226,7 +226,9 @@ export function CreateProductDialog({
   const [brand, setBrand] = useState("");
   const [supplierId, setSupplierId] = useState<string>("");
   const [weight, setWeight] = useState("");
-  const [vatRate, setVatRate] = useState<string>("10");
+  // CEO 05/06/2026: default VAT = 0 — không tự áp thuế. Khi cần áp VAT cho
+  // SP cụ thể, anh chọn 5/8/10% trong form tạo SP. Tránh POS tự cộng thuế.
+  const [vatRate, setVatRate] = useState<string>("0");
   // Khi user chọn "Khác..." → bật input để nhập VAT tuỳ ý (8.5, 12, ...).
   // Tự động true nếu prefill 1 giá trị không nằm trong VAT_PRESETS.
   const [vatCustom, setVatCustom] = useState(false);
