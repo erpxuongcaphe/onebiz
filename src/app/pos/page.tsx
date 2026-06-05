@@ -225,6 +225,10 @@ function PosPageInner() {
   // Quick customer create — mở khi user click "+ Thêm KH mới" trong CustomerPicker
   const [createCustomerOpen, setCreateCustomerOpen] = useState(false);
   const [createCustomerInitial, setCreateCustomerInitial] = useState<string>("");
+  // CEO 05/06/2026: VAT đơn — dropdown 0/5/8/10%, mặc định 0% (KHÔNG tự áp).
+  // Cashier chọn khi cần xuất hoá đơn VAT cho khách. Áp cấp đơn (trên total
+  // sau discount + shipping) — khác taxAmount tính per-product.
+  const [orderVatRate, setOrderVatRate] = useState<number>(0);
   // Coupon apply state
   const [couponCode, setCouponCode] = useState("");
   const [couponApplying, setCouponApplying] = useState(false);
@@ -2535,6 +2539,30 @@ function PosPageInner() {
               </div>
             )}
 
+            {/* CEO 05/06/2026: VAT đơn — dropdown 0/5/8/10% áp cấp đơn */}
+            {state.sellingMode !== "fast" && (
+              <div className="flex items-center justify-between">
+                <span className="text-xs text-muted-foreground">VAT đơn</span>
+                <div className="inline-flex items-center gap-1.5">
+                  <select
+                    value={orderVatRate}
+                    onChange={(e) => setOrderVatRate(Number(e.target.value))}
+                    className="h-6 text-[11px] border border-border rounded px-1.5 bg-white outline-none cursor-pointer"
+                  >
+                    <option value={0}>0%</option>
+                    <option value={5}>5%</option>
+                    <option value={8}>8%</option>
+                    <option value={10}>10%</option>
+                  </select>
+                  {orderVatRate > 0 && (
+                    <span className="text-[11px] text-status-warning font-medium tabular-nums min-w-[64px] text-right">
+                      +{formatCurrency(Math.ceil((state.total) * orderVatRate / 100))}
+                    </span>
+                  )}
+                </div>
+              </div>
+            )}
+
             {/* VAT */}
             {state.taxAmount > 0 && (
               <div className="flex justify-between text-xs text-muted-foreground">
@@ -2545,11 +2573,14 @@ function PosPageInner() {
               </div>
             )}
 
-            {/* Total — Stitch font-heading extrabold primary */}
+            {/* Total — Stitch font-heading extrabold primary
+                CEO 05/06/2026: Cộng VAT đơn vào "Khách cần trả" cuối */}
             <div className="flex justify-between items-baseline pt-2 border-t border-outline-variant/20">
               <span className="text-sm font-semibold text-foreground">Khách cần trả</span>
               <span className="font-heading text-lg font-extrabold text-primary tabular-nums">
-                {formatCurrency(state.total)} ₫
+                {formatCurrency(
+                  state.total + Math.ceil((state.total) * orderVatRate / 100),
+                )} ₫
               </span>
             </div>
           </div>
