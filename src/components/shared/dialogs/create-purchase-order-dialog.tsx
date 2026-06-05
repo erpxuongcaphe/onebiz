@@ -19,6 +19,7 @@ import {
   SelectItem,
 } from "@/components/ui/select";
 import { formatCurrency, formatNumber } from "@/lib/format";
+import { cn } from "@/lib/utils";
 import { useToast } from "@/lib/contexts";
 import { getClient, getCurrentContext } from "@/lib/services/supabase/base";
 import { receivePurchaseOrder } from "@/lib/services/supabase/purchase-orders";
@@ -62,6 +63,9 @@ interface LineItem {
   quantity: number;
   price: number;
   vatRate: number;
+  /** Day 05/06/2026 (CEO): Chiết khấu từ NCC theo dòng — % hoặc số tiền/đơn vị */
+  discount?: number;
+  discountType?: "percent" | "amount";
   /** Day 18/05/2026 (CEO): HSD nhập tại phiếu nhập */
   expiryDate?: string;
   lotNumber?: string;
@@ -106,8 +110,24 @@ function getProductCode(products: ProductCodeRelation) {
   return products?.code ?? undefined;
 }
 
+/** Đơn giá sau chiết khấu (CEO 05/06/2026) — % hoặc số tiền/đơn vị. */
+function lineEffectivePrice(item: LineItem) {
+  const d = item.discount || 0;
+  if (d <= 0) return item.price;
+  if (item.discountType === "amount") {
+    return Math.max(0, item.price - d);
+  }
+  // Default percent
+  return Math.max(0, item.price * (1 - d / 100));
+}
+
+/** Tổng số tiền chiết khấu của dòng — để lưu vào DB. */
+function lineDiscountTotal(item: LineItem) {
+  return Math.round((item.price - lineEffectivePrice(item)) * item.quantity);
+}
+
 function lineSubtotal(item: LineItem) {
-  return item.quantity * item.price;
+  return lineEffectivePrice(item) * item.quantity;
 }
 
 function lineTax(item: LineItem) {
@@ -120,6 +140,10 @@ function lineTotal(item: LineItem) {
 
 function getItemsSubtotal(items: LineItem[]) {
   return items.reduce((sum, item) => sum + lineSubtotal(item), 0);
+}
+
+function getItemsDiscount(items: LineItem[]) {
+  return items.reduce((sum, item) => sum + lineDiscountTotal(item), 0);
 }
 
 /**
@@ -240,22 +264,33 @@ export function CreatePurchaseOrderDialog({
         // eslint-disable-next-line @typescript-eslint/no-explicit-any
         const { data } = await (supabase as any)
           .from("purchase_order_items")
-          .select("product_id, product_name, unit, quantity, unit_price, vat_rate, expiry_date, lot_number, products(code)")
+          .select("product_id, product_name, unit, quantity, unit_price, discount, vat_rate, expiry_date, lot_number, products(code)")
           .eq("purchase_order_id", editingPO.id);
 
         if (!data) return;
-        const rows = data as unknown as ExistingPurchaseOrderItemRecord[];
-        const mappedItems = rows.map((d) => ({
-          id: d.product_id,
-          productCode: getProductCode(d.products),
-          productName: d.product_name,
-          unit: d.unit || "Cái",
-          quantity: Number(d.quantity ?? 0),
-          price: Number(d.unit_price ?? 0),
-          vatRate: Number(d.vat_rate ?? 0),
-          expiryDate: d.expiry_date ?? undefined,
-          lotNumber: d.lot_number ?? undefined,
-        }));
+        // eslint-disable-next-line @typescript-eslint/no-explicit-any
+        const rows = data as any[];
+        const mappedItems: LineItem[] = rows.map((d) => {
+          const qty = Number(d.quantity ?? 0);
+          const discTotal = Number(d.discount ?? 0);
+          // DB chỉ lưu số tiền chiết khấu tổng dòng — quy về amount/đơn vị
+          // (mặc định discountType = "amount" khi reload, user đổi sang %
+          // nếu muốn). qty=0 thì discount = 0.
+          const discPerUnit = qty > 0 ? discTotal / qty : 0;
+          return {
+            id: d.product_id,
+            productCode: getProductCode(d.products),
+            productName: d.product_name,
+            unit: d.unit || "Cái",
+            quantity: qty,
+            price: Number(d.unit_price ?? 0),
+            vatRate: Number(d.vat_rate ?? 0),
+            discount: discPerUnit > 0 ? discPerUnit : undefined,
+            discountType: discPerUnit > 0 ? "amount" : undefined,
+            expiryDate: d.expiry_date ?? undefined,
+            lotNumber: d.lot_number ?? undefined,
+          };
+        });
         setItems(mappedItems);
 
         const baseTotal = getItemsSubtotal(mappedItems) + getItemsTax(mappedItems);
@@ -379,6 +414,7 @@ export function CreatePurchaseOrderDialog({
   }
 
   const subtotal = useMemo(() => getItemsSubtotal(items), [items]);
+  const totalDiscount = useMemo(() => getItemsDiscount(items), [items]);
 
   const totalQuantity = useMemo(
     () => items.reduce((sum, item) => sum + item.quantity, 0),
@@ -440,7 +476,7 @@ export function CreatePurchaseOrderDialog({
             supplier_id: selectedSupplier!.id,
             supplier_name: selectedSupplier!.name,
             subtotal,
-            discount_amount: 0,
+            discount_amount: totalDiscount,
             tax_amount: taxAmount,
             total,
             paid: paidAmount,
@@ -465,7 +501,7 @@ export function CreatePurchaseOrderDialog({
             supplier_name: selectedSupplier!.name,
             status: "draft" as const,
             subtotal,
-            discount_amount: 0,
+            discount_amount: totalDiscount,
             tax_amount: taxAmount,
             total,
             paid: paidAmount,
@@ -484,8 +520,10 @@ export function CreatePurchaseOrderDialog({
         const { error: itemsErr } = await (supabase as any)
           .from("purchase_order_items")
           .insert(items.map((item) => {
-            const lineBeforeTax = item.quantity * item.price;
-            const vatAmt = Math.round((lineBeforeTax * item.vatRate) / 100);
+            // Day 05/06/2026 (CEO): chiết khấu per-dòng → giá hiệu lực sau CK
+            const lineDisc = lineDiscountTotal(item);
+            const lineAfterDisc = lineSubtotal(item); // = effectivePrice * qty
+            const vatAmt = Math.round((lineAfterDisc * item.vatRate) / 100);
             return {
               purchase_order_id: poId,
               product_id: item.id,
@@ -494,10 +532,10 @@ export function CreatePurchaseOrderDialog({
               quantity: item.quantity,
               received_quantity: 0,
               unit_price: item.price,
-              discount: 0,
+              discount: lineDisc,
               vat_rate: item.vatRate,
               vat_amount: vatAmt,
-              total: lineBeforeTax,
+              total: lineAfterDisc,
               // Day 18/05/2026 (CEO): HSD + lô từ form (cast vì
               // Supabase types chưa regen sau migration 00102)
               expiry_date: item.expiryDate || null,
@@ -789,6 +827,64 @@ export function CreatePurchaseOrderDialog({
                         <Icon name="delete" size={14} />
                       </Button>
                     </div>
+                    {/* Day 05/06/2026 (CEO): row con Chiết khấu — % hoặc đ, hiện đơn giá sau CK */}
+                    <div className="flex items-center gap-2 pl-1 text-xs flex-wrap">
+                      <label className="text-muted-foreground shrink-0 flex items-center gap-1">
+                        <Icon name="local_offer" size={12} />
+                        Chiết khấu:
+                      </label>
+                      <NumericInput
+                        value={item.discount ?? 0}
+                        onChange={(v) =>
+                          updateItem(item.id, "discount", Math.max(0, v ?? 0))
+                        }
+                        min={0}
+                        decimals={2}
+                        className="h-7 w-20 text-right text-xs"
+                        aria-label={`Chiết khấu ${item.productName}`}
+                      />
+                      <div className="inline-flex rounded-md border bg-background overflow-hidden">
+                        <button
+                          type="button"
+                          onClick={() =>
+                            updateItem(item.id, "discountType", "percent")
+                          }
+                          className={cn(
+                            "px-2 py-1 text-xs font-medium transition-colors",
+                            (item.discountType ?? "percent") === "percent"
+                              ? "bg-primary text-primary-foreground"
+                              : "text-muted-foreground hover:bg-muted",
+                          )}
+                        >
+                          %
+                        </button>
+                        <button
+                          type="button"
+                          onClick={() =>
+                            updateItem(item.id, "discountType", "amount")
+                          }
+                          className={cn(
+                            "px-2 py-1 text-xs font-medium transition-colors border-l",
+                            item.discountType === "amount"
+                              ? "bg-primary text-primary-foreground"
+                              : "text-muted-foreground hover:bg-muted",
+                          )}
+                        >
+                          đ
+                        </button>
+                      </div>
+                      {(item.discount ?? 0) > 0 && (
+                        <span className="text-muted-foreground ml-1 flex items-center gap-1">
+                          <span>→ Đơn giá sau CK:</span>
+                          <span className="font-semibold text-status-success tabular-nums">
+                            {formatCurrency(lineEffectivePrice(item))}
+                          </span>
+                          <span className="italic">
+                            (giảm {formatCurrency(lineDiscountTotal(item))})
+                          </span>
+                        </span>
+                      )}
+                    </div>
                     {/* Day 18/05/2026 (CEO): row con HSD + Số lô (NCC ghi trên bao bì) */}
                     <div className="flex items-center gap-2 pl-1 text-xs">
                       <label className="text-muted-foreground shrink-0">HSD:</label>
@@ -859,6 +955,17 @@ export function CreatePurchaseOrderDialog({
                     <span className="text-muted-foreground">Tiền hàng ({formatNumber(items.length)} dòng · SL {formatNumber(totalQuantity)})</span>
                     <span className="font-medium tabular-nums">{formatCurrency(subtotal)}</span>
                   </div>
+                  {totalDiscount > 0 && (
+                    <div className="flex items-center justify-between">
+                      <span className="text-muted-foreground flex items-center gap-1">
+                        <Icon name="local_offer" size={12} className="text-status-success" />
+                        Chiết khấu từ NCC
+                      </span>
+                      <span className="font-medium tabular-nums text-status-success">
+                        −{formatCurrency(totalDiscount)}
+                      </span>
+                    </div>
+                  )}
                   <div className="flex items-center justify-between">
                     <span className="text-muted-foreground">VAT</span>
                     <span className="font-medium tabular-nums">{formatCurrency(taxAmount)}</span>
