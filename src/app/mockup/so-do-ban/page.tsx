@@ -106,7 +106,7 @@ const tablesSanVuon: CanvasTable[] = [
   { id: "g1", zoneId: "z2", shape: "round", width: 80, height: 80, rotation: 0, positionX: 100, positionY: 100, color: null, locked: false, tableNumber: 9, name: "Vườn 1", capacity: 4, status: "available" },
   { id: "g2", zoneId: "z2", shape: "round", width: 80, height: 80, rotation: 0, positionX: 280, positionY: 100, color: null, locked: false, tableNumber: 10, name: "Vườn 2", capacity: 4, status: "available" },
   { id: "g3", zoneId: "z2", shape: "round", width: 80, height: 80, rotation: 0, positionX: 460, positionY: 100, color: null, locked: false, tableNumber: 11, name: "Vườn 3", capacity: 4, status: "occupied" },
-  { id: "g4", zoneId: "z2", shape: "round", width: 80, height: 80, rotation: 0, positionX: 640, positionY: 100, color: null, locked: false, tableNumber: 12, name: "Vườn 4", capacity: 4, status: "cleaning" },
+  { id: "g4", zoneId: "z2", shape: "round", width: 80, height: 80, rotation: 0, positionX: 640, positionY: 100, color: null, locked: false, tableNumber: 12, name: "Vườn 4", capacity: 4, status: "available" },
   { id: "g5", zoneId: "z2", shape: "round", width: 100, height: 100, rotation: 0, positionX: 180, positionY: 270, color: null, locked: false, tableNumber: 13, name: "Vườn 5", capacity: 6, status: "occupied" },
   { id: "g6", zoneId: "z2", shape: "round", width: 100, height: 100, rotation: 0, positionX: 380, positionY: 270, color: null, locked: false, tableNumber: 14, name: "Vườn 6", capacity: 6, status: "available" },
   { id: "g7", zoneId: "z2", shape: "round", width: 100, height: 100, rotation: 0, positionX: 580, positionY: 270, color: null, locked: false, tableNumber: 15, name: "Vườn 7", capacity: 6, status: "reserved" },
@@ -161,10 +161,14 @@ export default function MockupSoDoBanPage() {
 
   const counts = tables.reduce(
     (c, t) => {
-      c[t.status as keyof typeof c]++;
+      // "cleaning" hoặc không khớp → đếm vào "available"
+      const key = (t.status === "occupied" || t.status === "reserved"
+        ? t.status
+        : "available") as keyof typeof c;
+      c[key]++;
       return c;
     },
-    { available: 0, occupied: 0, reserved: 0, cleaning: 0 },
+    { available: 0, occupied: 0, reserved: 0 },
   );
 
   return (
@@ -235,12 +239,11 @@ export default function MockupSoDoBanPage() {
           ))}
       </div>
 
-      {/* Legend — chuẩn ngành Toast/OpenTable: xanh = trống, cam = phục vụ, xanh dương = đặt trước, xám = đang dọn */}
-      <div className="flex items-center gap-4 px-4 py-2 bg-card border rounded-lg flex-wrap text-xs">
-        <Legend hex="#10b981" label="Trống" count={counts.available} />
-        <Legend hex="#f59e0b" label="Đang phục vụ" count={counts.occupied} />
-        <Legend hex="#3b82f6" label="Đặt trước" count={counts.reserved} dashed />
-        <Legend hex="#9ca3af" label="Đang dọn" count={counts.cleaning} />
+      {/* Legend — 3 trạng thái chuẩn: trống (viền xanh ngọc) / phục vụ (cam) / đặt trước (xanh dương nét đứt) */}
+      <div className="flex items-center gap-5 px-4 py-2 bg-card border rounded-lg flex-wrap text-xs">
+        <Legend variant="empty" label="Trống" count={counts.available} />
+        <Legend variant="occupied" label="Đang phục vụ" count={counts.occupied} />
+        <Legend variant="reserved" label="Đặt trước" count={counts.reserved} />
       </div>
 
       {/* Canvas / Grid */}
@@ -314,28 +317,41 @@ function Loader() {
 }
 
 function Legend({
-  hex,
+  variant,
   label,
   count,
-  dashed,
 }: {
-  hex: string;
+  variant: "empty" | "occupied" | "reserved";
   label: string;
   count: number;
-  dashed?: boolean;
 }) {
-  return (
-    <div className="flex items-center gap-2">
+  // Mỗi variant render đúng như bàn thật trên canvas
+  const swatch =
+    variant === "empty" ? (
       <span
-        className="h-3 w-3 rounded-full inline-block"
+        className="h-4 w-4 rounded-full inline-block bg-white"
+        style={{ border: "2px solid #10b981" }}
+      />
+    ) : variant === "occupied" ? (
+      <span
+        className="h-4 w-4 rounded-full inline-block"
+        style={{ backgroundColor: "#f59e0b", border: "2px solid #d97706" }}
+      />
+    ) : (
+      <span
+        className="h-4 w-4 rounded-full inline-block"
         style={{
-          backgroundColor: hex,
-          border: dashed ? `2px dashed ${hex}` : `2px solid ${hex}`,
-          backgroundClip: "padding-box",
+          backgroundColor: "#dbeafe",
+          border: "2px dashed #3b82f6",
         }}
       />
-      <span>
-        {label} <span className="text-muted-foreground">({count})</span>
+    );
+  return (
+    <div className="flex items-center gap-2">
+      {swatch}
+      <span className="font-medium">
+        {label}{" "}
+        <span className="text-muted-foreground font-normal">({count})</span>
       </span>
     </div>
   );

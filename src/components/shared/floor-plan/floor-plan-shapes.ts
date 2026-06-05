@@ -56,22 +56,45 @@ export function getShapeDefaults(shape: TableShape): {
 
 /**
  * Bảng màu trạng thái — chuẩn theo Toast / OpenTable.
- * - available: xanh ngọc (đèn xanh = trống = mời vào)
- * - occupied:  cam      (đang phục vụ — nổi bật)
- * - reserved:  xanh dương + nét đứt (đã đặt trước, chưa tới)
- * - cleaning:  xám      (đang dọn, không tiếp khách)
+ *
+ * Nguyên tắc: trống = default state = KHÔNG tô fill. Chỉ trạng thái
+ * "khác bình thường" mới tô màu nổi bật.
+ *
+ * - available: fill trắng, viền xanh ngọc — "im lặng" như background
+ * - occupied:  fill cam, viền cam đậm   — nổi bật nhất, cần chú ý
+ * - reserved:  fill xanh dương nhạt, viền xanh dương nét đứt — cảnh báo "sắp tới"
+ *
+ * "cleaning" giữ trong type để khỏi vỡ data có sẵn, nhưng UI render fallback
+ * sang "available" — cashier dọn xong tự đặt lại "Trống" là đủ.
  */
-export const STATUS_COLOR: Record<string, string> = {
-  available: "#10b981",
+export const STATUS_FILL: Record<string, string> = {
+  available: "#ffffff",
   occupied: "#f59e0b",
-  reserved: "#3b82f6",
-  cleaning: "#9ca3af",
+  reserved: "#dbeafe",
 };
 
-/** Viền tối hơn nền 1 chút — dùng cho border bàn. */
 export const STATUS_STROKE: Record<string, string> = {
-  available: "#059669",
+  available: "#10b981",
   occupied: "#d97706",
-  reserved: "#2563eb",
-  cleaning: "#6b7280",
+  reserved: "#3b82f6",
 };
+
+/** Màu chữ số bàn — chọn theo độ tương phản với fill. */
+export const STATUS_TEXT: Record<string, string> = {
+  available: "#1f2937",
+  occupied: "#ffffff",
+  reserved: "#1e40af",
+};
+
+/** Viền nét đứt cho trạng thái "đặt trước". */
+export const STATUS_DASH: Record<string, number[] | undefined> = {
+  available: undefined,
+  occupied: undefined,
+  reserved: [6, 4],
+};
+
+/**
+ * @deprecated Dùng STATUS_FILL + STATUS_STROKE + STATUS_TEXT.
+ * Giữ alias để không vỡ import cũ (POS FnB legacy).
+ */
+export const STATUS_COLOR: Record<string, string> = STATUS_FILL;

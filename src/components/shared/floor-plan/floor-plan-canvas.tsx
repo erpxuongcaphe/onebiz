@@ -11,7 +11,7 @@ import useImage from "use-image";
 import type Konva from "konva";
 import type { TableLayout, FloorPlanZone, TableShape } from "@/lib/services/supabase/floor-plan";
 import type { FloorPlanDecoration } from "@/lib/services/supabase/floor-plan-decorations";
-import { STATUS_COLOR, STATUS_STROKE } from "./floor-plan-shapes";
+import { STATUS_FILL, STATUS_STROKE, STATUS_TEXT, STATUS_DASH } from "./floor-plan-shapes";
 import { getDecorationPreset } from "./decoration-shapes";
 
 export interface CanvasTable extends TableLayout {
@@ -280,20 +280,27 @@ function TableNode({
   onTransformEnd: (e: Konva.KonvaEventObject<Event>) => void;
 }) {
   const draggable = mode === "edit" && !table.locked;
-  const status = table.status ?? "available";
-  const fill = table.color ?? STATUS_COLOR[status] ?? STATUS_COLOR.available;
-  const stroke = isSelected
-    ? "#1f2937"
-    : STATUS_STROKE[status] ?? darken(fill, 0.18);
+  // Normalize status: "cleaning" hoặc undefined → "available" (CEO chốt 3 trạng thái).
+  const rawStatus = table.status ?? "available";
+  const statusKey = (STATUS_FILL[rawStatus] !== undefined
+    ? rawStatus
+    : "available") as "available" | "occupied" | "reserved";
+
+  const fill = table.color ?? STATUS_FILL[statusKey];
+  const stroke = isSelected ? "#1f2937" : STATUS_STROKE[statusKey];
+  const textColor = STATUS_TEXT[statusKey];
+  const dash = STATUS_DASH[statusKey];
+  // Viền dày hơn cho "đặt trước" để chú ý hơn
+  const strokeWidth = statusKey === "reserved" ? 2.5 : 2;
 
   // Font số bàn: scale theo cạnh nhỏ — không nhồi chữ ngoài shape
   const minSide = Math.min(table.width, table.height);
   const numberFontSize = Math.max(14, Math.min(minSide / 2.5, 36));
-  // Nhãn phụ (tên bàn ngắn) chỉ hiện khi đủ chỗ
+  // Nhãn phụ (tên bàn ngắn) chỉ hiện khi đủ chỗ + khác số
   const showName =
     !!table.name &&
     table.name !== String(table.tableNumber ?? "") &&
-    minSide >= 70;
+    minSide >= 80;
 
   return (
     <Group
@@ -313,32 +320,30 @@ function TableNode({
         table={table}
         fill={fill}
         stroke={stroke}
-        status={status}
+        strokeWidth={strokeWidth}
+        dash={dash}
       />
-      {/* Số bàn — to, đậm, giữa */}
+      {/* Số bàn — to, đậm, giữa. Màu chữ đối lập với fill. */}
       <Text
         text={String(table.tableNumber ?? "")}
         fontSize={numberFontSize}
         fontStyle="bold"
         fontFamily="Inter, system-ui, sans-serif"
-        fill="#ffffff"
+        fill={textColor}
         width={table.width}
         height={table.height}
         align="center"
         verticalAlign="middle"
         listening={false}
-        shadowColor="rgba(0,0,0,0.25)"
-        shadowBlur={2}
-        shadowOffsetY={1}
       />
       {/* Tên ngắn dưới số bàn — chỉ khi đủ chỗ */}
       {showName && (
         <Text
           text={table.name!}
-          fontSize={Math.max(9, minSide / 8)}
-          fill="rgba(255,255,255,0.92)"
+          fontSize={Math.max(9, minSide / 9)}
+          fill={statusKey === "occupied" ? "rgba(255,255,255,0.85)" : "#6b7280"}
           width={table.width}
-          y={table.height / 2 + numberFontSize / 2 - 2}
+          y={table.height / 2 + numberFontSize / 2}
           align="center"
           listening={false}
         />
@@ -351,22 +356,22 @@ function ShapeRect({
   table,
   fill,
   stroke,
-  status,
+  strokeWidth,
+  dash,
 }: {
   table: CanvasTable;
   fill: string;
   stroke: string;
-  status: string;
+  strokeWidth: number;
+  dash: number[] | undefined;
 }) {
   const w = table.width;
   const h = table.height;
   const shape: TableShape = table.shape;
-  // Reserved → nét đứt cảnh báo (chuẩn OpenTable)
-  const dash = status === "reserved" ? [6, 4] : undefined;
-  // Shadow chung — nhẹ, đỡ cảm giác bàn cứng đơ
+  // Shadow nhẹ — bàn không cảm giác cứng đơ, nhưng không quá nặng làm nhiễu
   const shadowProps = {
-    shadowColor: "rgba(15, 23, 42, 0.18)",
-    shadowBlur: 6,
+    shadowColor: "rgba(15, 23, 42, 0.12)",
+    shadowBlur: 5,
     shadowOffsetY: 2,
     shadowOpacity: 1,
   } as const;
@@ -379,20 +384,19 @@ function ShapeRect({
         radius={Math.min(w, h) / 2}
         fill={fill}
         stroke={stroke}
-        strokeWidth={2}
+        strokeWidth={strokeWidth}
         dash={dash}
         {...shadowProps}
       />
     );
   }
   if (shape === "sofa") {
-    // Sofa góc L-shape — vẽ custom với sceneFunc để có viền liền + lưng tựa
-    const back = Math.max(8, Math.min(w, h) * 0.18); // độ dày lưng tựa
+    // Sofa góc L-shape — vẽ custom để có viền liền + lưng tựa rõ
+    const back = Math.max(8, Math.min(w, h) * 0.18);
     return (
       <Shape
         sceneFunc={(ctx, sh) => {
           ctx.beginPath();
-          // L-shape outline: ngồi mặt L (chữ L ngược)
           ctx.moveTo(0, 0);
           ctx.lineTo(w, 0);
           ctx.lineTo(w, h * 0.55);
@@ -401,14 +405,14 @@ function ShapeRect({
           ctx.lineTo(0, h);
           ctx.closePath();
           ctx.fillStrokeShape(sh);
-          // Lưng tựa: 2 dải đậm hơn dọc theo cạnh ngoài
-          ctx.fillStyle = `rgba(0,0,0,0.18)`;
-          ctx.fillRect(0, 0, w, back); // lưng ngang trên
-          ctx.fillRect(0, 0, back, h); // lưng dọc trái
+          // Lưng tựa — dải đậm hơn dọc theo cạnh ngoài
+          ctx.fillStyle = "rgba(0,0,0,0.12)";
+          ctx.fillRect(0, 0, w, back);
+          ctx.fillRect(0, 0, back, h);
         }}
         fill={fill}
         stroke={stroke}
-        strokeWidth={2}
+        strokeWidth={strokeWidth}
         dash={dash}
         {...shadowProps}
       />
@@ -423,7 +427,7 @@ function ShapeRect({
         height={h}
         fill={fill}
         stroke={stroke}
-        strokeWidth={2}
+        strokeWidth={strokeWidth}
         cornerRadius={[16, 16, 4, 4]}
         dash={dash}
         {...shadowProps}
@@ -439,7 +443,7 @@ function ShapeRect({
       height={h}
       fill={fill}
       stroke={stroke}
-      strokeWidth={2}
+      strokeWidth={strokeWidth}
       cornerRadius={8}
       dash={dash}
       {...shadowProps}
