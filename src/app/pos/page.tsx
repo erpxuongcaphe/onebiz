@@ -1499,6 +1499,9 @@ function PosPageInner() {
           branchId: ctx.branchId,
           createdBy: ctx.userId,
           paymentBreakdown: breakdown,
+          // CEO 05/06/2026 FIX KẾT CA 0Đ: link shift_id để close_shift_atomic
+          // match được giao dịch của ca này.
+          shiftId: currentShift?.id ?? null,
         });
         invoiceCode = result.invoiceCode;
         invoiceId = effectiveDraftId;

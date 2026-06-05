@@ -804,6 +804,15 @@ export async function completeDraftOrder(
     createdBy: string;
     /** Tách thanh toán hỗn hợp — truyền khi method="mixed" */
     paymentBreakdown?: import("./pos-checkout").PaymentBreakdownItem[];
+    /**
+     * CEO 05/06/2026 FIX BUG KẾT CA 0Đ:
+     * shiftId của ca cashier đang mở — PHẢI truyền để link vào:
+     *  - invoices.shift_id (nếu nháp tạo trước khi mở ca)
+     *  - cash_transactions.shift_id (qua createAutoCashReceipt)
+     * Nếu null → cash_transactions.shift_id=null → RPC close_shift_atomic
+     * filter `WHERE shift_id = p_shift_id` không match → tổng = 0đ.
+     */
+    shiftId?: string | null;
   }
 ): Promise<{ invoiceCode: string }> {
   const supabase = getClient();
@@ -811,6 +820,7 @@ export async function completeDraftOrder(
   // 1. ATOMIC status flip: UPDATE + WHERE status='draft' claims this invoice.
   //    If two concurrent calls race, only one matches and succeeds.
   const paid = payment.paid;
+  const shiftId = payment.shiftId ?? null;
 
   const { data: invoice, error: updErr } = await supabase
     .from("invoices")
@@ -819,6 +829,9 @@ export async function completeDraftOrder(
       paid,
       debt: 0, // placeholder — will recompute below
       payment_method: payment.method,
+      // Link shift_id vào invoice — nháp tạo trước khi mở ca cũng được claim
+      // bởi ca khi cashier hoàn tất. Nếu shiftId=null thì giữ giá trị cũ.
+      ...(shiftId ? { shift_id: shiftId } : {}),
     })
     .eq("tenant_id", payment.tenantId)
     .eq("id", invoiceId)
@@ -880,6 +893,7 @@ export async function completeDraftOrder(
   });
 
   // 5. Cash transaction — hỗ trợ tách thanh toán hỗn hợp
+  // CEO 05/06/2026 FIX KẾT CA 0Đ: truyền shiftId xuống → cash_transactions.shift_id
   await createAutoCashReceipt(
     supabase,
     invoiceId,
@@ -891,6 +905,7 @@ export async function completeDraftOrder(
       branchId: payment.branchId,
       createdBy: payment.createdBy,
       customerName: invoice.customer_name ?? "Khách lẻ",
+      shiftId,
     },
     payment.paymentBreakdown
   );
