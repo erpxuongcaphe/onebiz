@@ -3,12 +3,26 @@ import { Input } from "@/components/ui/input";
 import { cn } from "@/lib/utils";
 import { Icon } from "@/components/ui/icon";
 
+/**
+ * CEO 06/06/2026: mở rộng từ 7 → 12 value theo benchmark KiotViet/Sapo.
+ * Thêm: last_week, this_quarter, last_quarter, this_year, last_year.
+ *
+ * NOTE: page tự định nghĩa presetToRange() hiện chưa handle 5 preset mới.
+ * Dùng `computeListPresetRange()` từ `lib/utils/list-date-preset-range.ts`
+ * để chuẩn hoá. Page chưa migrate vẫn an toàn vì chúng truyền explicit
+ * `presets={...}` không hiển thị preset mới.
+ */
 export type DatePresetValue =
-  | "this_month"
   | "today"
   | "yesterday"
   | "this_week"
+  | "last_week"
+  | "this_month"
   | "last_month"
+  | "this_quarter"
+  | "last_quarter"
+  | "this_year"
+  | "last_year"
   | "all"
   | "custom";
 

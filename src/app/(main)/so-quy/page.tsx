@@ -127,42 +127,23 @@ function categoryLabel(c: string | undefined | null): string {
   return CATEGORY_LABELS[c] ?? c;
 }
 
-// Convert DatePresetValue → ISO date range để pass vào service.
-// Trả undefined cho "all" hoặc "custom" without dateFrom/dateTo.
-function presetToRange(preset: string): {
-  from: string | undefined;
-  to: string | undefined;
-} {
-  const now = new Date();
-  const today = new Date(now.getFullYear(), now.getMonth(), now.getDate());
-  const toISO = (d: Date) => d.toISOString();
-  switch (preset) {
-    case "today":
-      return { from: toISO(today), to: toISO(today) };
-    case "yesterday": {
-      const y = new Date(today);
-      y.setDate(y.getDate() - 1);
-      return { from: toISO(y), to: toISO(y) };
-    }
-    case "this_week": {
-      const dow = today.getDay() || 7; // CN=7
-      const start = new Date(today);
-      start.setDate(start.getDate() - dow + 1);
-      return { from: toISO(start), to: toISO(today) };
-    }
-    case "this_month": {
-      const start = new Date(today.getFullYear(), today.getMonth(), 1);
-      return { from: toISO(start), to: toISO(today) };
-    }
-    case "last_month": {
-      const start = new Date(today.getFullYear(), today.getMonth() - 1, 1);
-      const end = new Date(today.getFullYear(), today.getMonth(), 0);
-      return { from: toISO(start), to: toISO(end) };
-    }
-    default:
-      return { from: undefined, to: undefined };
-  }
-}
+// CEO 06/06/2026: chuyển sang utility chung computeListPresetRange()
+// để chuẩn hoá 11 preset (thêm last_week, this_quarter, last_quarter,
+// this_year, last_year). Function cũ inline chỉ handle 5 preset.
+import {
+  computeListPresetRange,
+  STANDARD_LIST_PRESETS,
+} from "@/lib/utils/list-date-preset-range";
+
+const presetToRange = (preset: DatePresetValue) => {
+  const range = computeListPresetRange(preset);
+  // Service so-quy filter dùng ISO full datetime; util trả YYYY-MM-DD
+  // → append T00:00:00 / T23:59:59 để bao trọn ngày.
+  return {
+    from: range.from ? `${range.from}T00:00:00.000Z` : undefined,
+    to: range.to ? `${range.to}T23:59:59.999Z` : undefined,
+  };
+};
 
 // === Inline Detail ===
 function TransactionDetail({
@@ -674,9 +655,12 @@ export default function SoQuyPage() {
             </FilterGroup>
 
             <FilterGroup label="Thời gian">
+              {/* CEO 06/06/2026: dùng STANDARD_LIST_PRESETS (11 option)
+                  thay default 2 option (Tháng này + Tùy chỉnh). */}
               <DatePresetFilter
                 value={datePreset}
                 onChange={setDatePreset}
+                presets={STANDARD_LIST_PRESETS}
               />
             </FilterGroup>
 

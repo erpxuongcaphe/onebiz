@@ -18,6 +18,10 @@ import {
   type DatePresetValue,
 } from "@/components/shared/filter-sidebar";
 import {
+  computeListPresetRange,
+  STANDARD_LIST_PRESETS,
+} from "@/lib/utils/list-date-preset-range";
+import {
   InlineDetailPanel,
   DetailTabs,
   DetailHeader,
@@ -486,38 +490,15 @@ export default function HoaDonPage() {
 
   const statuses = getInvoiceStatuses();
 
-  // Convert datePreset → ISO range để pass vào filters. Trước đây datePreset
-  // tồn tại trong UI nhưng không gửi xuống service → filter giả.
+  // CEO 06/06/2026: chuyển sang utility chung computeListPresetRange()
+  // để chuẩn hoá 11 preset (thêm last_week, this_quarter, last_quarter,
+  // this_year, last_year). Function inline cũ chỉ handle 5 preset.
   const dateRange = useCallback(() => {
-    const now = new Date();
-    const today = new Date(now.getFullYear(), now.getMonth(), now.getDate());
-    const toISO = (d: Date) => d.toISOString();
-    switch (datePreset) {
-      case "today":
-        return { from: toISO(today), to: toISO(today) };
-      case "yesterday": {
-        const y = new Date(today);
-        y.setDate(y.getDate() - 1);
-        return { from: toISO(y), to: toISO(y) };
-      }
-      case "this_week": {
-        const dow = today.getDay() || 7;
-        const start = new Date(today);
-        start.setDate(start.getDate() - dow + 1);
-        return { from: toISO(start), to: toISO(today) };
-      }
-      case "this_month": {
-        const start = new Date(today.getFullYear(), today.getMonth(), 1);
-        return { from: toISO(start), to: toISO(today) };
-      }
-      case "last_month": {
-        const start = new Date(today.getFullYear(), today.getMonth() - 1, 1);
-        const end = new Date(today.getFullYear(), today.getMonth(), 0);
-        return { from: toISO(start), to: toISO(end) };
-      }
-      default:
-        return { from: undefined, to: undefined };
-    }
+    const range = computeListPresetRange(datePreset);
+    return {
+      from: range.from ? `${range.from}T00:00:00.000Z` : undefined,
+      to: range.to ? `${range.to}T23:59:59.999Z` : undefined,
+    };
   }, [datePreset]);
 
   const fetchData = useCallback(async () => {
@@ -689,6 +670,7 @@ export default function HoaDonPage() {
               <DatePresetFilter
                 value={datePreset}
                 onChange={setDatePreset}
+                presets={STANDARD_LIST_PRESETS}
               />
             </FilterGroup>
 
