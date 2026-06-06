@@ -79,6 +79,35 @@ export async function getCustomers(params: QueryParams): Promise<QueryResult<Cus
     query = query.eq("province" as any, params.filters.province as string);
   }
 
+  // CEO 06/06/2026 (research Sapo + Square + Toast + HubSpot):
+  // Filter LTV (Tổng chi tiêu — Lifetime Value) — Top 4 filter của ngành.
+  // 4 tiers theo thực tế chuỗi cà phê VN:
+  //   tier_new       = total_spent < 1M
+  //   tier_regular   = 1M ≤ total_spent < 10M
+  //   tier_loyal     = 10M ≤ total_spent < 50M
+  //   tier_vip       = total_spent ≥ 50M
+  if (params.filters?.salesRange) {
+    const range = params.filters.salesRange as string;
+    if (range === "tier_new") query = query.lt("total_spent", 1_000_000);
+    else if (range === "tier_regular") {
+      query = query.gte("total_spent", 1_000_000).lt("total_spent", 10_000_000);
+    } else if (range === "tier_loyal") {
+      query = query.gte("total_spent", 10_000_000).lt("total_spent", 50_000_000);
+    } else if (range === "tier_vip") query = query.gte("total_spent", 50_000_000);
+  }
+
+  // CEO 06/06/2026: filter số lần mua (orders count).
+  // Square POS định nghĩa "Regulars" = 3+ purchases / 6 months.
+  // 4 tier: chưa mua / 1 lần / 2-5 lần / 6+ lần
+  if (params.filters?.ordersRange) {
+    const range = params.filters.ordersRange as string;
+    if (range === "no_purchase") query = query.eq("total_orders", 0);
+    else if (range === "first_time") query = query.eq("total_orders", 1);
+    else if (range === "occasional") {
+      query = query.gte("total_orders", 2).lte("total_orders", 5);
+    } else if (range === "frequent") query = query.gte("total_orders", 6);
+  }
+
   // Note: filter `createdBy` không support được vì schema `customers` không
   // có cột `created_by`. UI vẫn hiển thị PersonFilter cho consistency với
   // các module khác — sẽ chỉ tham gia query khi schema được mở rộng.

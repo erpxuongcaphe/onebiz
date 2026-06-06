@@ -115,6 +115,10 @@ export default function KhachHangPage() {
   const [creatorFilter, setCreatorFilter] = useState("");
   // Day 17/05/2026: filter theo Tỉnh/TP (34 tỉnh sau sáp nhập)
   const [provinceFilter, setProvinceFilter] = useState("all");
+  // CEO 06/06/2026 (research Sapo + Square + Toast + HubSpot):
+  // 4 filter mới chuẩn ngành FnB: LTV (tổng chi tiêu) + Tần suất (số lần mua)
+  const [salesRangeFilter, setSalesRangeFilter] = useState("all");
+  const [ordersRangeFilter, setOrdersRangeFilter] = useState("all");
 
   // Inline detail
   const [expandedRow, setExpandedRow] = useState<number | null>(null);
@@ -264,6 +268,8 @@ export default function KhachHangPage() {
         ...(typeFilter !== "all" && { type: typeFilter }),
         ...(genderFilter !== "all" && { gender: genderFilter }),
         ...(debtFilter !== "all" && { debt: debtFilter }),
+        ...(salesRangeFilter !== "all" && { salesRange: salesRangeFilter }),
+        ...(ordersRangeFilter !== "all" && { ordersRange: ordersRangeFilter }),
         ...(creatorFilter && { createdBy: creatorFilter }),
         ...(dateFrom && { dateFrom }),
         ...(dateTo && { dateTo }),
@@ -282,6 +288,8 @@ export default function KhachHangPage() {
     typeFilter,
     genderFilter,
     debtFilter,
+    salesRangeFilter,
+    ordersRangeFilter,
     creatorFilter,
     dateFrom,
     dateTo,
@@ -308,6 +316,8 @@ export default function KhachHangPage() {
     typeFilter,
     genderFilter,
     debtFilter,
+    salesRangeFilter,
+    ordersRangeFilter,
     creatorFilter,
     dateFrom,
     dateTo,
@@ -417,6 +427,39 @@ export default function KhachHangPage() {
                 ]}
                 value={debtFilter}
                 onChange={setDebtFilter}
+              />
+            </FilterGroup>
+
+            {/* CEO 06/06/2026 — Phase 1 sau research: Lifetime Value tiers.
+                Chuẩn Sapo + Square + Toast + HubSpot. 4 mức cho FnB VN. */}
+            <FilterGroup label="Tổng chi tiêu (VIP)">
+              <ChipToggleFilter
+                options={[
+                  { label: "Tất cả", value: "all" },
+                  { label: "Mới (<1M)", value: "tier_new" },
+                  { label: "Thường (1–10M)", value: "tier_regular" },
+                  { label: "Thân thiết (10–50M)", value: "tier_loyal" },
+                  { label: "VIP (≥50M)", value: "tier_vip" },
+                ]}
+                value={salesRangeFilter}
+                onChange={setSalesRangeFilter}
+              />
+            </FilterGroup>
+
+            {/* CEO 06/06/2026 — Phase 1: Tần suất mua.
+                Square POS định nghĩa "Regulars" = 3+ trong 6 tháng — em chia
+                4 tier theo total_orders để cashier dễ phân loại nhanh. */}
+            <FilterGroup label="Số lần mua">
+              <ChipToggleFilter
+                options={[
+                  { label: "Tất cả", value: "all" },
+                  { label: "Chưa mua", value: "no_purchase" },
+                  { label: "1 lần", value: "first_time" },
+                  { label: "2–5 lần", value: "occasional" },
+                  { label: "≥6 lần", value: "frequent" },
+                ]}
+                value={ordersRangeFilter}
+                onChange={setOrdersRangeFilter}
               />
             </FilterGroup>
 
