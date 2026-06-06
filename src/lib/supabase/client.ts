@@ -1,6 +1,7 @@
 import { createBrowserClient, type CookieOptions } from "@supabase/ssr";
 import { processLock } from "@supabase/auth-js";
 import type { Database } from "./types";
+import { getSharedCookieDomain } from "./cookie-domain";
 
 /**
  * Supabase client cho browser (Client Components).
@@ -29,6 +30,27 @@ let cachedClient: Client | null = null;
 
 export function createClient(): Client {
   if (cachedClient) return cachedClient;
+
+  // CEO 06/06/2026 — QC POS FnB phát hiện AuthApiError "Invalid Refresh
+  // Token" trên fnb.onebiz.com.vn. Server.ts/middleware.ts đã set cookie
+  // với domain `.onebiz.com.vn` (Sprint LT-6) nhưng client-side
+  // createBrowserClient KHÔNG có cookieOptions → khi browser set cookie
+  // mới (vd sau refresh token), default = host-only → race với cookie
+  // shared. Fix: pass cookieOptions.domain để client tự set đúng domain
+  // ngay từ browser-side, không phụ thuộc server response.
+  const hostname =
+    typeof window !== "undefined" ? window.location.hostname : "";
+  const sharedCookieDomain = getSharedCookieDomain(hostname);
+
+  const cookieOptions: CookieOptions | undefined = sharedCookieDomain
+    ? {
+        domain: sharedCookieDomain,
+        path: "/",
+        sameSite: "lax",
+        secure: typeof window !== "undefined" && window.location.protocol === "https:",
+      }
+    : undefined;
+
   cachedClient = createBrowserClient<Database>(
     process.env.NEXT_PUBLIC_SUPABASE_URL!,
     process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!,
@@ -38,10 +60,10 @@ export function createClient(): Client {
         // contention khi N service fire song song trên page mount.
         lock: processLock,
       },
+      // Cross-subdomain cookie sharing: onebiz.com.vn ↔ fnb.onebiz.com.vn
+      // cùng đọc 1 cookie `.onebiz.com.vn`. localhost → undefined → default.
+      ...(cookieOptions ? { cookieOptions } : {}),
     },
   );
   return cachedClient;
 }
-
-// eslint-disable-next-line @typescript-eslint/no-unused-vars
-type _CookieOptionsUnused = CookieOptions;
