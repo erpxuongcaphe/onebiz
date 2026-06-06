@@ -162,25 +162,13 @@ export async function recordInvoicePayment(
     .eq("id", inv.id);
   if (invUpd) handleError(invUpd, "recordInvoicePayment.invoice_update");
 
-  // 4. Update customer.debt if customer_id exists
-  if (inv.customer_id) {
-    const { data: cust, error: custFetch } = await supabase
-      .from("customers")
-      .select("debt")
-      .eq("tenant_id", ctx.tenantId)
-      .eq("id", inv.customer_id)
-      .single();
-
-    if (!custFetch && cust) {
-      const custNewDebt = Math.max(0, Number(cust.debt ?? 0) - input.amount);
-      const { error: custUpd } = await supabase
-        .from("customers")
-        .update({ debt: custNewDebt } as Record<string, unknown>)
-        .eq("tenant_id", ctx.tenantId)
-        .eq("id", inv.customer_id);
-      if (custUpd) handleError(custUpd, "recordInvoicePayment.customer_update");
-    }
-  }
+  // 4. customers.debt — KHÔNG cần update tay nữa.
+  //    CEO 06/06/2026 Phase 5 research (Odoo + SAP B1 + PostgreSQL best
+  //    practice): trigger 00130 trên invoices đã tự recompute
+  //    customers.debt = SUM(invoices.debt) WHERE status='completed' rồi.
+  //    App-side write ở đây + trigger = race condition → KH Xưởng
+  //    Premium BL bị ghi nhầm 280k thay vì 140k.
+  //    Single Source of Truth = trigger. Đây là pattern Odoo 17 chọn.
 
   // Audit log cho legacy path (RPC path đã audit ở trên).
   await recordAuditLog({
