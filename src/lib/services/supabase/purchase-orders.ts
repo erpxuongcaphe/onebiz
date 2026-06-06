@@ -602,14 +602,6 @@ export async function closePurchaseOrderShort(
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
 function mapPurchaseOrder(row: any): PurchaseOrder {
   const profile = row.profiles as { full_name: string } | null;
-  // CEO 06/06/2026: defensive recompute amountOwed từ Math.ceil(total) - paid
-  // Phiếu cũ (trước commit dcaefbe) có total lẻ thập phân → debt column trong
-  // DB sai. Recompute ở mapper đảm bảo DISPLAY luôn đúng kể cả khi DB chưa
-  // backfill. Math.max bảo vệ khỏi paid > total (đã trả dư).
-  const rawTotal = Number(row.total ?? 0);
-  const rawPaid = Number(row.paid ?? 0);
-  const ceilTotal = Math.ceil(rawTotal);
-  const computedDebt = Math.max(0, ceilTotal - rawPaid);
   return {
     id: row.id,
     code: row.code,
@@ -617,10 +609,10 @@ function mapPurchaseOrder(row: any): PurchaseOrder {
     supplierId: row.supplier_id,
     supplierCode: "",
     supplierName: row.supplier_name,
-    amountOwed: computedDebt,
+    amountOwed: Number(row.debt ?? 0),
     taxAmount: Number(row.tax_amount ?? 0),
-    total: ceilTotal,
-    paid: rawPaid,
+    total: Number(row.total ?? 0),
+    paid: Number(row.paid ?? 0),
     status: (row.status ?? "draft") as PurchaseOrderStatus,
     createdBy: row.created_by ?? "",
     createdByName: profile?.full_name ?? "",
