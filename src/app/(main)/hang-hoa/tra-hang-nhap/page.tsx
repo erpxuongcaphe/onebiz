@@ -11,8 +11,12 @@ import {
   FilterSidebar,
   FilterGroup,
   SelectFilter,
-  DateRangeFilter,
+  DatePresetFilter,
+  type DatePresetValue,
 } from "@/components/shared/filter-sidebar";
+// CEO 06/06/2026 Phase 4: migrate khỏi legacy DateRangeFilter sang
+// DatePresetFilter + STANDARD_LIST_PRESETS_WITH_ALL (12 option).
+import { STANDARD_LIST_PRESETS_WITH_ALL } from "@/lib/utils/list-date-preset-range";
 import {
   InlineDetailPanel,
   DetailTabs,
@@ -179,7 +183,7 @@ export default function TraHangNhapPage() {
 
   // Filters
   const [statusFilter, setStatusFilter] = useState("all");
-  const [datePreset, setDatePreset] = useState<"today" | "this_week" | "this_month" | "all" | "custom">("all");
+  const [datePreset, setDatePreset] = useState<DatePresetValue>("all");
 
   const fetchData = useCallback(async () => {
     setLoading(true);
@@ -220,9 +224,10 @@ export default function TraHangNhapPage() {
           </FilterGroup>
 
           <FilterGroup label="Thời gian">
-            <DateRangeFilter
-              preset={datePreset}
-              onPresetChange={setDatePreset}
+            <DatePresetFilter
+              value={datePreset}
+              onChange={setDatePreset}
+              presets={STANDARD_LIST_PRESETS_WITH_ALL}
             />
           </FilterGroup>
         </FilterSidebar>
