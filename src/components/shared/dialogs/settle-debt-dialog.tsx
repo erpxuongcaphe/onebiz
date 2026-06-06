@@ -369,47 +369,79 @@ export function SettleDebtDialog({
                 Không có {docLabel.toLowerCase()} nào còn nợ. Có thể đã được thanh toán hết.
               </div>
             ) : (
-              <div className="border rounded-lg divide-y overflow-hidden">
-                <div className="grid grid-cols-12 px-3 py-2 bg-muted/30 text-[11px] uppercase font-semibold text-muted-foreground">
-                  <div className="col-span-3">Mã {docLabel}</div>
-                  <div className="col-span-2 text-right">Tổng</div>
-                  <div className="col-span-2 text-right">Đã trả</div>
-                  <div className="col-span-2 text-right">Còn nợ</div>
-                  <div className="col-span-2 text-right">Phân bổ lần này</div>
-                  <div className="col-span-1 text-right">Tuổi</div>
-                </div>
+              /* CEO 06/06/2026: redesign từ table 6 cột dính nhau thành
+                 card list. Trên desktop giữ table; mobile/tablet card.
+                 Pattern Sapo/KiotViet — mỗi HD = 1 card có nhịp đọc rõ. */
+              <div className="space-y-2">
                 {allocatedDocs.map((d) => (
                   <div
                     key={d.id}
                     className={cn(
-                      "grid grid-cols-12 px-3 py-2 text-sm items-center transition-colors",
-                      d.allocate > 0 && "bg-status-success/5",
+                      "border rounded-lg p-3 space-y-2.5 transition-all",
+                      d.allocate > 0
+                        ? "border-status-success/40 bg-status-success/5 shadow-sm"
+                        : "border-border bg-card",
                     )}
                   >
-                    <div className="col-span-3 font-mono text-primary text-xs">
-                      {d.code}
+                    {/* Header: mã HD + tuổi */}
+                    <div className="flex items-center justify-between gap-2">
+                      <span className="font-mono text-primary font-bold text-sm">
+                        {d.code}
+                      </span>
+                      <span className="inline-flex items-center gap-1 text-[11px] font-medium text-muted-foreground bg-muted px-2 py-0.5 rounded-full">
+                        <Icon name="schedule" size={11} />
+                        {d.ageDays === 0
+                          ? "Hôm nay"
+                          : d.ageDays === 1
+                            ? "Hôm qua"
+                            : `${d.ageDays} ngày`}
+                      </span>
                     </div>
-                    <div className="col-span-2 text-right tabular-nums text-xs">
-                      {formatCurrency(d.total)}
+
+                    {/* Row info: 3 cột rõ ràng — không dính */}
+                    <div className="grid grid-cols-3 gap-2">
+                      <div className="space-y-0.5">
+                        <div className="text-[10px] uppercase font-medium text-muted-foreground tracking-wide">
+                          Tổng
+                        </div>
+                        <div className="text-xs font-medium tabular-nums">
+                          {formatCurrency(d.total)}đ
+                        </div>
+                      </div>
+                      <div className="space-y-0.5">
+                        <div className="text-[10px] uppercase font-medium text-muted-foreground tracking-wide">
+                          Đã trả
+                        </div>
+                        <div className="text-xs font-medium tabular-nums text-muted-foreground">
+                          {formatCurrency(d.paid)}đ
+                        </div>
+                      </div>
+                      <div className="space-y-0.5">
+                        <div className="text-[10px] uppercase font-medium text-muted-foreground tracking-wide">
+                          Còn nợ
+                        </div>
+                        <div className="text-xs font-bold tabular-nums text-status-error">
+                          {formatCurrency(d.debt)}đ
+                        </div>
+                      </div>
                     </div>
-                    <div className="col-span-2 text-right tabular-nums text-xs text-muted-foreground">
-                      {formatCurrency(d.paid)}
-                    </div>
-                    <div className="col-span-2 text-right tabular-nums font-semibold text-status-error">
-                      {formatCurrency(d.debt)}
-                    </div>
-                    <div className="col-span-2 text-right tabular-nums font-semibold">
-                      {d.allocate > 0 ? (
-                        <span className="text-status-success">
-                          {formatCurrency(d.allocate)}
+
+                    {/* Phân bổ lần này — highlight nếu có */}
+                    {d.allocate > 0 ? (
+                      <div className="flex items-center justify-between bg-status-success rounded-md px-3 py-2">
+                        <span className="text-xs font-semibold text-white flex items-center gap-1">
+                          <Icon name="arrow_downward" size={12} />
+                          {actionVerb} lần này
                         </span>
-                      ) : (
-                        <span className="text-muted-foreground">—</span>
-                      )}
-                    </div>
-                    <div className="col-span-1 text-right text-xs text-muted-foreground">
-                      {d.ageDays}d
-                    </div>
+                        <span className="text-sm font-bold tabular-nums text-white">
+                          {formatCurrency(d.allocate)}đ
+                        </span>
+                      </div>
+                    ) : (
+                      <div className="text-[11px] text-muted-foreground italic text-center py-1">
+                        Chưa phân bổ vào chứng từ này
+                      </div>
+                    )}
                   </div>
                 ))}
               </div>
