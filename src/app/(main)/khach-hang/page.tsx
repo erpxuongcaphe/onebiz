@@ -6,6 +6,8 @@ import { ColumnDef } from "@tanstack/react-table";
 import { PageHeader } from "@/components/shared/page-header";
 import { ListPageLayout } from "@/components/shared/list-page-layout";
 import { DataTable, StarCell } from "@/components/shared/data-table";
+import { SavedViewsTabs } from "@/components/shared/saved-views-tabs";
+import type { CustomerFilters } from "@/lib/services/supabase/customer-saved-views";
 import { SummaryCard } from "@/components/shared/summary-card";
 import {
   FilterSidebar,
@@ -662,6 +664,36 @@ export default function KhachHangPage() {
             hint={totalDebt > 0 ? "Cần thu hồi" : undefined}
           />
         </div>
+
+        {/* CEO 06/06/2026 — Phase 4 Saved Views (pattern Sapo/HubSpot) */}
+        <SavedViewsTabs
+          currentFilters={{
+            debt: debtFilter,
+            salesRange: salesRangeFilter,
+            ordersRange: ordersRangeFilter,
+            lastPurchase: lastPurchaseFilter,
+            birthdayMonth: birthdayMonthFilter,
+            tags: selectedTags,
+            type: typeFilter,
+            gender: genderFilter,
+            groups: selectedGroups,
+            province: provinceFilter,
+          }}
+          onApply={(f: CustomerFilters) => {
+            // Reset tất cả về "all" trước, sau đó apply các field từ view
+            setDebtFilter(f.debt ?? "all");
+            setSalesRangeFilter(f.salesRange ?? "all");
+            setOrdersRangeFilter(f.ordersRange ?? "all");
+            setLastPurchaseFilter(f.lastPurchase ?? "all");
+            setBirthdayMonthFilter(f.birthdayMonth ?? "all");
+            setSelectedTags(Array.isArray(f.tags) ? f.tags : []);
+            setTypeFilter(f.type ?? "all");
+            setGenderFilter(f.gender ?? "all");
+            setSelectedGroups(Array.isArray(f.groups) ? f.groups : []);
+            setProvinceFilter(f.province ?? "all");
+            setPage(0);
+          }}
+        />
 
         <DataTable
           columns={columns}
