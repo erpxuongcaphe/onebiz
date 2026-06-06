@@ -21,6 +21,10 @@ import {
 import { VN_PROVINCES } from "@/lib/data/vn-provinces";
 import type { DatePresetValue } from "@/components/shared/filter-sidebar";
 import {
+  computeListPresetRange,
+  STANDARD_LIST_PRESETS_WITH_ALL,
+} from "@/lib/utils/list-date-preset-range";
+import {
   InlineDetailPanel,
   DetailTabs,
   DetailHeader,
@@ -114,6 +118,16 @@ export default function KhachHangPage() {
   const [datePreset, setDatePreset] = useState<DatePresetValue>("all");
   const [dateFrom, setDateFrom] = useState("");
   const [dateTo, setDateTo] = useState("");
+
+  // CEO 06/06/2026 Phase 3: auto-set dateFrom/dateTo từ preset.
+  // Trước đây chỉ "Tùy chỉnh" mới filter — preset khác là decoration.
+  // Giờ chọn preset bất kỳ → fetchData tự pass range xuống service.
+  useEffect(() => {
+    if (datePreset === "custom") return; // user tự nhập date picker
+    const range = computeListPresetRange(datePreset);
+    setDateFrom(range.from ?? "");
+    setDateTo(range.to ?? "");
+  }, [datePreset]);
   const [creatorFilter, setCreatorFilter] = useState("");
   // Day 17/05/2026: filter theo Tỉnh/TP (34 tỉnh sau sáp nhập)
   const [provinceFilter, setProvinceFilter] = useState("all");
@@ -569,15 +583,7 @@ export default function KhachHangPage() {
                 to={dateTo}
                 onFromChange={setDateFrom}
                 onToChange={setDateTo}
-                presets={[
-                  { label: "Tất cả", value: "all" },
-                  { label: "Hôm nay", value: "today" },
-                  { label: "Hôm qua", value: "yesterday" },
-                  { label: "Tuần này", value: "this_week" },
-                  { label: "Tháng này", value: "this_month" },
-                  { label: "Tháng trước", value: "last_month" },
-                  { label: "Tùy chỉnh", value: "custom" },
-                ]}
+                presets={STANDARD_LIST_PRESETS_WITH_ALL}
               />
             </FilterGroup>
 

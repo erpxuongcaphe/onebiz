@@ -18,6 +18,8 @@ import {
   PersonFilter,
   type DatePresetValue,
 } from "@/components/shared/filter-sidebar";
+// CEO 06/06/2026 Phase 3: chuẩn hoá 11 preset thời gian
+import { STANDARD_LIST_PRESETS } from "@/lib/utils/list-date-preset-range";
 import {
   InlineDetailPanel,
   DetailTabs,
@@ -953,14 +955,7 @@ export default function NhapHangPage() {
               to={dateTo}
               onFromChange={setDateFrom}
               onToChange={setDateTo}
-              presets={[
-                { label: "Tháng này", value: "this_month" },
-                { label: "Hôm nay", value: "today" },
-                { label: "Hôm qua", value: "yesterday" },
-                { label: "Tuần này", value: "this_week" },
-                { label: "Tháng trước", value: "last_month" },
-                { label: "Tùy chỉnh", value: "custom" },
-              ]}
+              presets={STANDARD_LIST_PRESETS}
             />
           </FilterGroup>
 

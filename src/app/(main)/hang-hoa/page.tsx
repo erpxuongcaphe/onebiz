@@ -16,6 +16,7 @@ import {
   PersonFilter,
   type DatePresetValue,
 } from "@/components/shared/filter-sidebar";
+import { STANDARD_LIST_PRESETS } from "@/lib/utils/list-date-preset-range";
 import {
   InlineDetailPanel,
   DetailTabs,
@@ -1370,11 +1371,7 @@ export default function HangHoaPage() {
               <DatePresetFilter
                 value={expectedOutDate}
                 onChange={setExpectedOutDate}
-                presets={[
-                  { label: "Tháng này", value: "this_month" },
-                  { label: "Tuần này", value: "this_week" },
-                  { label: "Tùy chỉnh", value: "custom" },
-                ]}
+                presets={STANDARD_LIST_PRESETS}
               />
             </FilterGroup>
 
@@ -1382,11 +1379,7 @@ export default function HangHoaPage() {
               <DatePresetFilter
                 value={createdDatePreset}
                 onChange={setCreatedDatePreset}
-                presets={[
-                  { label: "Tháng này", value: "this_month" },
-                  { label: "Tuần này", value: "this_week" },
-                  { label: "Tùy chỉnh", value: "custom" },
-                ]}
+                presets={STANDARD_LIST_PRESETS}
               />
             </FilterGroup>
 

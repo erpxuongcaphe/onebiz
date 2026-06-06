@@ -15,6 +15,8 @@ import {
   type DatePresetValue,
   PersonFilter,
 } from "@/components/shared/filter-sidebar";
+// CEO 06/06/2026 Phase 3: chuẩn hoá 11 preset thời gian
+import { STANDARD_LIST_PRESETS } from "@/lib/utils/list-date-preset-range";
 import {
   InlineDetailPanel,
   DetailTabs,
@@ -403,6 +405,7 @@ export default function TraHangPage() {
             <DatePresetFilter
               value={datePreset}
               onChange={setDatePreset}
+              presets={STANDARD_LIST_PRESETS}
             />
           </FilterGroup>
 

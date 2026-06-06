@@ -16,6 +16,7 @@ import {
   RangeFilter,
   type DatePresetValue,
 } from "@/components/shared/filter-sidebar";
+import { STANDARD_LIST_PRESETS_WITH_ALL } from "@/lib/utils/list-date-preset-range";
 import { VN_PROVINCES } from "@/lib/data/vn-provinces";
 import {
   InlineDetailPanel,
@@ -563,15 +564,7 @@ export default function NhaCungCapPage() {
                 to={dateTo}
                 onFromChange={setDateFrom}
                 onToChange={setDateTo}
-                presets={[
-                  { label: "Tất cả", value: "all" },
-                  { label: "Hôm nay", value: "today" },
-                  { label: "Hôm qua", value: "yesterday" },
-                  { label: "Tuần này", value: "this_week" },
-                  { label: "Tháng này", value: "this_month" },
-                  { label: "Tháng trước", value: "last_month" },
-                  { label: "Tùy chỉnh", value: "custom" },
-                ]}
+                presets={STANDARD_LIST_PRESETS_WITH_ALL}
               />
             </FilterGroup>
 

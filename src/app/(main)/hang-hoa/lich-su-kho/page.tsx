@@ -63,15 +63,9 @@ const movementTypeOptions = [
 ];
 
 // === Date presets ===
-const datePresets: { label: string; value: DatePresetValue }[] = [
-  { label: "Hôm nay", value: "today" },
-  { label: "Hôm qua", value: "yesterday" },
-  { label: "Tuần này", value: "this_week" },
-  { label: "Tháng này", value: "this_month" },
-  { label: "Tháng trước", value: "last_month" },
-  { label: "Tất cả", value: "all" },
-  { label: "Tùy chỉnh", value: "custom" },
-];
+// CEO 06/06/2026 Phase 3: dùng STANDARD_LIST_PRESETS_WITH_ALL từ utility chung
+// thay vì define local (11 option chuẩn KiotViet).
+import { STANDARD_LIST_PRESETS_WITH_ALL as datePresets } from "@/lib/utils/list-date-preset-range";
 
 // === Reference type display ===
 const referenceTypeLabels: Record<string, string> = {

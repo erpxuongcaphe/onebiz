@@ -14,6 +14,11 @@ import {
   DatePresetFilter,
   type DatePresetValue,
 } from "@/components/shared/filter-sidebar";
+// CEO 06/06/2026 Phase 3: chuẩn hoá 11 preset thời gian
+import {
+  STANDARD_LIST_PRESETS,
+  STANDARD_LIST_PRESETS_WITH_ALL,
+} from "@/lib/utils/list-date-preset-range";
 import {
   InlineDetailPanel,
   DetailTabs,
@@ -526,6 +531,7 @@ export default function VanDonPage() {
             <DatePresetFilter
               value={createdDatePreset}
               onChange={setCreatedDatePreset}
+              presets={STANDARD_LIST_PRESETS}
             />
           </FilterGroup>
 
@@ -533,6 +539,7 @@ export default function VanDonPage() {
             <DatePresetFilter
               value={completedDatePreset}
               onChange={setCompletedDatePreset}
+              presets={STANDARD_LIST_PRESETS_WITH_ALL}
             />
           </FilterGroup>
 
