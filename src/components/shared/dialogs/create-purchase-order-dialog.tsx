@@ -780,9 +780,20 @@ export function CreatePurchaseOrderDialog({
                       className="grid gap-2 md:grid-cols-[minmax(300px,1fr)_90px_112px_150px_90px_150px_44px] md:items-center"
                     >
                       <div className="min-w-0">
-                        <div className="truncate text-sm font-semibold">{item.productName}</div>
+                        {/* CEO 06/06/2026 P0 #6: title tooltip tên + mã SP đầy đủ */}
+                        <div
+                          className="truncate text-sm font-semibold"
+                          title={item.productName}
+                        >
+                          {item.productName}
+                        </div>
                         {item.productCode && (
-                          <div className="mt-0.5 truncate text-xs text-muted-foreground">{item.productCode}</div>
+                          <div
+                            className="mt-0.5 truncate text-xs text-muted-foreground"
+                            title={item.productCode}
+                          >
+                            {item.productCode}
+                          </div>
                         )}
                       </div>
                       <div className="flex justify-center">

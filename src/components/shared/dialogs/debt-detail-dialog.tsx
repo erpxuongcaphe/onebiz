@@ -214,7 +214,12 @@ export function DebtDetailDialog({
                     {/* Header: mã + tuổi + arrow */}
                     <div className="flex items-center justify-between gap-2">
                       <div className="flex items-center gap-2 min-w-0">
-                        <span className="font-mono text-primary font-bold text-sm truncate">
+                        {/* CEO 06/06/2026 P0 #5: thêm title tooltip để CEO
+                            xem mã dài "CN-2024-00056789" qua hover */}
+                        <span
+                          className="font-mono text-primary font-bold text-sm truncate"
+                          title={d.code}
+                        >
                           {d.code}
                         </span>
                         <Badge

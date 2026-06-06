@@ -410,7 +410,13 @@ function ProductTile({
               ≈ {stock}
             </span>
           ) : product.code ? (
-            <p className="text-[9px] text-muted-foreground/70 font-mono truncate max-w-[64px]">
+            // CEO 06/06/2026 audit typography P0 #2: bỏ truncate max-w-[64px]
+            // — cashier mua nhầm SKU vì mã dài "SP-001234567" cắt còn "SP-0012...".
+            // Đổi sang min-w-0 + tooltip title đầy đủ + text-[10px] (tăng từ 9px).
+            <p
+              className="text-[10px] text-muted-foreground/70 font-mono min-w-0 break-all line-clamp-2"
+              title={product.code}
+            >
               {product.code}
             </p>
           ) : null}

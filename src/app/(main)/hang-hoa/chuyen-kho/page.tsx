@@ -223,11 +223,19 @@ export default function ChuyenKhoPage() {
       size: 280,
       cell: ({ row }) => (
         <div className="flex items-center gap-2 text-sm">
-          <span className="font-medium truncate max-w-[120px]">
+          {/* CEO 06/06/2026 P0 #4: thêm title tooltip để người duyệt thấy
+              tên chi nhánh đầy đủ "Chi nhánh Hà Nội Cầu Giấy" qua hover */}
+          <span
+            className="font-medium truncate max-w-[120px]"
+            title={row.original.fromBranchName}
+          >
             {row.original.fromBranchName}
           </span>
           <Icon name="arrow_forward" size={14} className="text-muted-foreground shrink-0" />
-          <span className="font-medium truncate max-w-[120px]">
+          <span
+            className="font-medium truncate max-w-[120px]"
+            title={row.original.toBranchName}
+          >
             {row.original.toBranchName}
           </span>
         </div>
