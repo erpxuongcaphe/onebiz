@@ -208,8 +208,9 @@ export function PendingShiftAlertDialog({
 }
 
 // ─── Sub-dialog: Reconcile 1 ca pending ─────────────────────
+// Export để trang /he-thong/ca-cho-doi-soat tái sử dụng cùng UI.
 
-function ReconcileShiftDialog({
+export function ReconcileShiftDialog({
   shift,
   onClose,
   onDone,

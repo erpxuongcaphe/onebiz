@@ -437,6 +437,7 @@ export const sidebarNavGroups: SidebarGroup[] = [
       { label: "Sơ đồ bàn", href: "/he-thong/so-do-ban", icon: "map", permission: "floor_plan.view" },
       { label: "Thiết lập chung", href: "/he-thong/thiet-lap", icon: "settings", permission: "system.manage_roles" },
       { label: "Tích hợp", href: "/he-thong/tich-hop", icon: "power", comingSoon: true, permission: "system.manage_roles" },
+      { label: "Ca chờ đối chiếu", href: "/he-thong/ca-cho-doi-soat", icon: "schedule", permission: "shifts.reconcile_own_branch" },
       { label: "Lịch sử thao tác", href: "/he-thong/audit", icon: "pending_actions", permission: "system.view_audit" },
       { label: "Toàn vẹn kho", href: "/he-thong/toan-ven-kho", icon: "fact_check", permission: "system.view_audit" },
     ],
