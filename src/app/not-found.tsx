@@ -19,10 +19,10 @@ export default function NotFound() {
             404
           </h1>
           <h2 className="text-xl font-semibold text-foreground">
-            Trang kh\u00f4ng t\u1ed3n t\u1ea1i
+            Trang không tồn tại
           </h2>
           <p className="text-muted-foreground">
-            Xin l\u1ed7i, trang b\u1ea1n \u0111ang t\u00ecm ki\u1ebfm kh\u00f4ng t\u1ed3n t\u1ea1i ho\u1eb7c \u0111\u00e3 b\u1ecb di chuy\u1ec3n.
+            Xin lỗi, trang bạn đang tìm kiếm không tồn tại hoặc đã bị di chuyển.
           </p>
         </div>
         <div className="flex items-center justify-center gap-3">
