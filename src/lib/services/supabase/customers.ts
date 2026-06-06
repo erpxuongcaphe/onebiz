@@ -108,6 +108,44 @@ export async function getCustomers(params: QueryParams): Promise<QueryResult<Cus
     } else if (range === "frequent") query = query.gte("total_orders", 6);
   }
 
+  // CEO 06/06/2026 Phase 3 (research Sapo+Square+Toast+HubSpot):
+  // Filter "Lần mua cuối" (Recency) — TOP 1 filter chuẩn ngành cho FnB.
+  // Phát hiện khách rời (churn) → trigger marketing/khuyến mãi.
+  // Schema: customers.last_purchase_at đã có (migration 00131).
+  if (params.filters?.lastPurchase) {
+    const range = params.filters.lastPurchase as string;
+    const now = Date.now();
+    const dayMs = 24 * 60 * 60 * 1000;
+    if (range === "never") {
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      query = query.is("last_purchase_at" as any, null);
+    } else if (range === "today") {
+      const startOfDay = new Date();
+      startOfDay.setHours(0, 0, 0, 0);
+      query = query.gte("last_purchase_at", startOfDay.toISOString());
+    } else if (range === "week") {
+      query = query.gte("last_purchase_at", new Date(now - 7 * dayMs).toISOString());
+    } else if (range === "month") {
+      query = query.gte("last_purchase_at", new Date(now - 30 * dayMs).toISOString());
+    } else if (range === "3months") {
+      query = query.gte("last_purchase_at", new Date(now - 90 * dayMs).toISOString());
+    } else if (range === "churned") {
+      // Square pattern: KH không mua > 90 ngày = at-risk
+      query = query.lt("last_purchase_at", new Date(now - 90 * dayMs).toISOString());
+    }
+  }
+
+  // CEO 06/06/2026 Phase 3: Filter Tags array contains.
+  // Sapo + HubSpot + Square pattern: tag mở (VIP, dị ứng sữa, KH Shopee...).
+  // params.filters.tags = string[] — KH phải chứa TẤT CẢ tags được chọn.
+  if (params.filters?.tags) {
+    const tags = params.filters.tags as unknown as string[];
+    if (Array.isArray(tags) && tags.length > 0) {
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      query = (query as any).contains("tags", tags);
+    }
+  }
+
   // Note: filter `createdBy` không support được vì schema `customers` không
   // có cột `created_by`. UI vẫn hiển thị PersonFilter cho consistency với
   // các module khác — sẽ chỉ tham gia query khi schema được mở rộng.
@@ -684,6 +722,10 @@ function mapCustomer(row: any, returnsTotal = 0): Customer {
       typeof row.loyalty_tiers?.discount_percent === "number"
         ? row.loyalty_tiers.discount_percent
         : undefined,
+    // CEO 06/06/2026 — Migration 00131
+    lastPurchaseAt: row.last_purchase_at ?? null,
+    birthday: row.birthday ?? null,
+    tags: Array.isArray(row.tags) ? row.tags : [],
     createdAt: row.created_at,
   };
 }

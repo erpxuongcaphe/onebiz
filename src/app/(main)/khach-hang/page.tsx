@@ -119,6 +119,10 @@ export default function KhachHangPage() {
   // 4 filter mới chuẩn ngành FnB: LTV (tổng chi tiêu) + Tần suất (số lần mua)
   const [salesRangeFilter, setSalesRangeFilter] = useState("all");
   const [ordersRangeFilter, setOrdersRangeFilter] = useState("all");
+  // CEO 06/06/2026 Phase 3 (sau migration 00131):
+  const [lastPurchaseFilter, setLastPurchaseFilter] = useState("all");
+  const [birthdayMonthFilter, setBirthdayMonthFilter] = useState("all");
+  const [selectedTags, setSelectedTags] = useState<string[]>([]);
 
   // Inline detail
   const [expandedRow, setExpandedRow] = useState<number | null>(null);
@@ -270,6 +274,8 @@ export default function KhachHangPage() {
         ...(debtFilter !== "all" && { debt: debtFilter }),
         ...(salesRangeFilter !== "all" && { salesRange: salesRangeFilter }),
         ...(ordersRangeFilter !== "all" && { ordersRange: ordersRangeFilter }),
+        ...(lastPurchaseFilter !== "all" && { lastPurchase: lastPurchaseFilter }),
+        ...(selectedTags.length > 0 && { tags: selectedTags as unknown as string }),
         ...(creatorFilter && { createdBy: creatorFilter }),
         ...(dateFrom && { dateFrom }),
         ...(dateTo && { dateTo }),
@@ -277,8 +283,23 @@ export default function KhachHangPage() {
         ...(provinceFilter !== "all" && { province: provinceFilter }),
       },
     });
-    setData(result.data);
-    setTotal(result.total);
+    // CEO 06/06/2026 Phase 3: filter sinh nhật theo tháng — client-side
+    // (Supabase JS không hỗ trợ EXTRACT(MONTH) trực tiếp; data nhỏ < 1000 KH).
+    let finalData = result.data;
+    let finalTotal = result.total;
+    if (birthdayMonthFilter !== "all") {
+      const month = Number(birthdayMonthFilter);
+      if (Number.isFinite(month) && month >= 1 && month <= 12) {
+        finalData = finalData.filter((c) => {
+          if (!c.birthday) return false;
+          const d = new Date(c.birthday);
+          return d.getMonth() + 1 === month;
+        });
+        finalTotal = finalData.length;
+      }
+    }
+    setData(finalData);
+    setTotal(finalTotal);
     setLoading(false);
   }, [
     page,
@@ -290,6 +311,9 @@ export default function KhachHangPage() {
     debtFilter,
     salesRangeFilter,
     ordersRangeFilter,
+    lastPurchaseFilter,
+    birthdayMonthFilter,
+    selectedTags,
     creatorFilter,
     dateFrom,
     dateTo,
@@ -318,6 +342,9 @@ export default function KhachHangPage() {
     debtFilter,
     salesRangeFilter,
     ordersRangeFilter,
+    lastPurchaseFilter,
+    birthdayMonthFilter,
+    selectedTags,
     creatorFilter,
     dateFrom,
     dateTo,
@@ -461,6 +488,75 @@ export default function KhachHangPage() {
                 value={ordersRangeFilter}
                 onChange={setOrdersRangeFilter}
               />
+            </FilterGroup>
+
+            {/* CEO 06/06/2026 — Phase 3 sau migration 00131:
+                Lần mua cuối (Recency) — TOP 1 filter ngành FnB cho churn.
+                Có ở Sapo, Square, Toast, HubSpot. */}
+            <FilterGroup label="Lần mua cuối">
+              <ChipToggleFilter
+                options={[
+                  { label: "Tất cả", value: "all" },
+                  { label: "Hôm nay", value: "today" },
+                  { label: "7 ngày", value: "week" },
+                  { label: "30 ngày", value: "month" },
+                  { label: "90 ngày", value: "3months" },
+                  { label: "Đã rời (>90 ngày)", value: "churned" },
+                  { label: "Chưa mua bao giờ", value: "never" },
+                ]}
+                value={lastPurchaseFilter}
+                onChange={setLastPurchaseFilter}
+              />
+            </FilterGroup>
+
+            {/* CEO 06/06/2026 — Phase 3: Sinh nhật theo tháng (Sapo).
+                Loyalty marketing chuỗi cà phê — gửi voucher tháng sinh nhật. */}
+            <FilterGroup label="Sinh nhật tháng">
+              <SelectFilter
+                value={birthdayMonthFilter}
+                onChange={setBirthdayMonthFilter}
+                options={[
+                  { label: "Tất cả", value: "all" },
+                  { label: "Tháng 1", value: "1" },
+                  { label: "Tháng 2", value: "2" },
+                  { label: "Tháng 3", value: "3" },
+                  { label: "Tháng 4", value: "4" },
+                  { label: "Tháng 5", value: "5" },
+                  { label: "Tháng 6", value: "6" },
+                  { label: "Tháng 7 ", value: "7" },
+                  { label: "Tháng 8", value: "8" },
+                  { label: "Tháng 9", value: "9" },
+                  { label: "Tháng 10", value: "10" },
+                  { label: "Tháng 11", value: "11" },
+                  { label: "Tháng 12", value: "12" },
+                ]}
+                placeholder="Chọn tháng sinh nhật"
+              />
+            </FilterGroup>
+
+            {/* CEO 06/06/2026 — Phase 3: Tags filter (Sapo/HubSpot/Square).
+                Multi-select đơn giản qua text input — cách nhau bằng dấu phẩy.
+                KH phải chứa TẤT CẢ tags được chọn (AND, không OR).
+                Sau Phase 4 sẽ có UI quản lý tags + suggest từ list. */}
+            <FilterGroup label="Tags">
+              <div className="space-y-1">
+                <input
+                  type="text"
+                  value={selectedTags.join(", ")}
+                  onChange={(e) => {
+                    const tags = e.target.value
+                      .split(",")
+                      .map((t) => t.trim())
+                      .filter(Boolean);
+                    setSelectedTags(tags);
+                  }}
+                  placeholder="VD: VIP, Shopee, dị ứng sữa"
+                  className="h-9 w-full rounded-md border border-border bg-background px-3 text-sm outline-none focus:ring-2 focus:ring-primary/30"
+                />
+                <p className="text-[11px] text-muted-foreground">
+                  Cách nhau bằng dấu phẩy. KH phải chứa TẤT CẢ tag.
+                </p>
+              </div>
             </FilterGroup>
 
             <FilterGroup label="Thời gian">

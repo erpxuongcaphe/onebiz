@@ -39,6 +39,14 @@ export interface Customer {
   loyaltyTierName?: string;
   /** % ưu đãi của hạng (cached từ loyalty_tiers.discount_percent). */
   loyaltyTierDiscount?: number;
+  /** CEO 06/06/2026 — Migration 00131. Ngày mua hàng cuối, auto-sync qua
+   *  trigger từ invoices.created_at WHERE status='completed'. */
+  lastPurchaseAt?: string | null;
+  /** CEO 06/06/2026 — Migration 00131. Sinh nhật cho loyalty marketing. */
+  birthday?: string | null;
+  /** CEO 06/06/2026 — Migration 00131. Tags tự do (VIP, dị ứng sữa,
+   *  KH Shopee...). Pattern Sapo/HubSpot/Square. */
+  tags?: string[];
   createdAt: string;
 }
 
