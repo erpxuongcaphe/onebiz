@@ -405,6 +405,21 @@ export default function KhachHangPage() {
               />
             </FilterGroup>
 
+            {/* CEO 06/06/2026: filter Công nợ — anh hỏi "lọc khách còn nợ".
+                Service đã hỗ trợ has_debt/no_debt sẵn (customers.ts:55-56),
+                trước đây thiếu UI nên CEO không thấy. */}
+            <FilterGroup label="Công nợ">
+              <ChipToggleFilter
+                options={[
+                  { label: "Tất cả", value: "all" },
+                  { label: "Còn nợ", value: "has_debt" },
+                  { label: "Đã trả đủ", value: "no_debt" },
+                ]}
+                value={debtFilter}
+                onChange={setDebtFilter}
+              />
+            </FilterGroup>
+
             <FilterGroup label="Thời gian">
               <DatePresetFilter
                 value={datePreset}
