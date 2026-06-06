@@ -991,7 +991,9 @@ export function CreatePurchaseOrderDialog({
                   </span>
                 </div>
 
-                {/* Thanh toán */}
+                {/* Thanh toán
+                    CEO 06/06/2026: thêm nút "Trả đủ" + cảnh báo nợ vặt
+                    để chống lặp lỗi gõ sai paid (vd 2,411,343 thay vì 2,411,350). */}
                 <div className="mt-4 space-y-2 border-t pt-3">
                   <label htmlFor="po-paid-amount" className="text-sm font-medium">
                     Đã thanh toán NCC
@@ -1009,15 +1011,102 @@ export function CreatePurchaseOrderDialog({
                     placeholder="Để trống = chưa trả"
                     className="h-10 w-full rounded-md border border-border bg-background px-3 text-right tabular-nums outline-none focus:ring-2 focus:ring-primary/30"
                   />
-                  <div className="flex items-center justify-between">
-                    <span className="text-sm text-muted-foreground">Còn nợ NCC</span>
-                    <span className="font-bold tabular-nums text-status-warning">
-                      {formatCurrency(Math.max(0, total - paidAmount))}
-                    </span>
-                  </div>
+
+                  {/* Quick actions: Trả đủ + Xóa
+                      Chỉ render khi total > 0. "Trả đủ" KHÔNG tự bấm —
+                      cashier phải chủ động click → không ghi data sai ngầm. */}
+                  {total > 0 && (
+                    <div className="flex items-center gap-2">
+                      <button
+                        type="button"
+                        onClick={() => setPaidAmount(total)}
+                        disabled={paidAmount === total}
+                        className="flex-1 h-8 rounded-md border border-status-success/40 bg-status-success/5 px-3 text-xs font-semibold text-status-success hover:bg-status-success/10 disabled:opacity-40 disabled:cursor-not-allowed transition-colors inline-flex items-center justify-center gap-1.5"
+                        title="Tự fill số tiền đã trả = tổng phiếu"
+                      >
+                        <Icon name="check_circle" size={14} />
+                        Trả đủ ({formatCurrency(total)}đ)
+                      </button>
+                      {paidAmount > 0 && (
+                        <button
+                          type="button"
+                          onClick={() => setPaidAmount(0)}
+                          className="h-8 px-3 rounded-md border border-border text-xs text-muted-foreground hover:bg-muted"
+                          title="Xóa số đã thanh toán"
+                        >
+                          Xóa
+                        </button>
+                      )}
+                    </div>
+                  )}
+
+                  {/* Hiển thị trạng thái thanh toán */}
+                  {(() => {
+                    const debt = total - paidAmount;
+                    const isFullyPaid = paidAmount > 0 && Math.abs(debt) < 0.5;
+                    const isSmallDebt = paidAmount > 0 && debt > 0 && debt < 1000;
+                    const isOverpaid = paidAmount > total && total > 0;
+
+                    if (isFullyPaid) {
+                      // Đã trả đủ — badge xanh
+                      return (
+                        <div className="flex items-center gap-2 rounded-md bg-status-success/10 border border-status-success/30 px-3 py-2 text-sm">
+                          <Icon name="check_circle" size={16} className="text-status-success shrink-0" />
+                          <span className="font-medium text-status-success">Đã thanh toán đủ</span>
+                        </div>
+                      );
+                    }
+                    if (isSmallDebt) {
+                      // Cảnh báo nợ vặt — có nút quick "Trả đủ" để fix nhanh
+                      return (
+                        <div className="rounded-md bg-status-warning/10 border border-status-warning/40 px-3 py-2.5 space-y-2">
+                          <div className="flex items-start gap-2 text-sm">
+                            <Icon name="warning" size={16} className="text-status-warning shrink-0 mt-0.5" />
+                            <div className="flex-1">
+                              <p className="font-semibold text-status-warning">
+                                Còn nợ {formatCurrency(debt)}đ — chênh lệch nhỏ
+                              </p>
+                              <p className="text-xs text-muted-foreground mt-0.5">
+                                Anh có quên gõ đủ không? Bấm <strong>Trả đủ</strong> để khớp tổng phiếu.
+                              </p>
+                            </div>
+                          </div>
+                          <div className="flex gap-2">
+                            <button
+                              type="button"
+                              onClick={() => setPaidAmount(total)}
+                              className="flex-1 h-8 rounded-md bg-status-success px-3 text-xs font-semibold text-white hover:bg-status-success/90"
+                            >
+                              Trả đủ luôn ({formatCurrency(total)}đ)
+                            </button>
+                            <button
+                              type="button"
+                              onClick={() => {
+                                // No-op — cashier confirm là nợ thật, giữ nguyên paidAmount
+                              }}
+                              className="h-8 px-3 rounded-md border border-border text-xs text-muted-foreground hover:bg-muted"
+                              title="Đúng vậy, vẫn còn nợ"
+                            >
+                              Đúng vậy
+                            </button>
+                          </div>
+                        </div>
+                      );
+                    }
+                    // Nợ bình thường (>= 1000đ) hoặc chưa trả
+                    return (
+                      <div className="flex items-center justify-between">
+                        <span className="text-sm text-muted-foreground">Còn nợ NCC</span>
+                        <span className="font-bold tabular-nums text-status-warning">
+                          {formatCurrency(Math.max(0, debt))}
+                        </span>
+                      </div>
+                    );
+                  })()}
+
                   {paidAmount > total && total > 0 && (
                     <p className="text-xs text-status-error">
-                      (đã trả vượt tổng phiếu — phần dư sẽ ghi NCC trả lại sau)
+                      (đã trả vượt tổng phiếu {formatCurrency(paidAmount - total)}đ — phần dư sẽ ghi NCC trả lại sau)
                     </p>
                   )}
                 </div>
