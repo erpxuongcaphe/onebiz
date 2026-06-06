@@ -1905,14 +1905,11 @@ function PosPageInner() {
         onClick={() => setSyncDrawerOpen(true)}
       />
 
-      {/* ═══════════ HEADER 48px — CEO 06/06/2026 audit UX/UI P0 #3:
-            Tăng từ h-10 (40px) → h-12 (48px) để đạt chuẩn touch Apple HIG
-            44px / Material 48px. CEO dùng iPad 13" cashier mỗi ngày —
-            header touch 28px tap khó.
-            Plus: đổi bg-primary (xanh chói) → bg-pos-chrome-bg (slate-900
-            always-dark) theo token POS chrome đã define ở globals.css —
-            đồng nhất chrome 3 POS (Retail + FnB + KDS). ═══════════ */}
-      <header className="h-12 bg-pos-chrome-bg text-pos-chrome-fg flex items-center px-3 shrink-0 gap-2">
+      {/* ═══════════ HEADER 48px — CEO 06/06/2026 audit UX/UI:
+            Tăng từ h-10 (40px) → h-12 (48px) đạt chuẩn touch Apple HIG
+            44px cho iPad 13".
+            CEO 06/06 chốt giữ bg-primary (xanh) — đẹp hơn slate-900. ═══════════ */}
+      <header className="h-12 bg-primary text-primary-foreground flex items-center px-3 shrink-0 gap-2">
         {/* CEO 04/06/2026: từ POS quay về trang chủ mở tab mới. */}
         <a
           href="/"
