@@ -33,6 +33,7 @@ import { Button } from "@/components/ui/button";
 import { ImportExcelDialog } from "@/components/shared/dialogs/import-excel-dialog";
 import { AuditLogDialog } from "@/components/shared/audit-log-dialog";
 import { SettleDebtDialog } from "@/components/shared/dialogs/settle-debt-dialog";
+import { DebtDetailDialog } from "@/components/shared/dialogs/debt-detail-dialog";
 import { buildTransactionRowActions } from "@/components/shared/transaction-row-actions";
 import { downloadTemplate } from "@/lib/excel";
 import { debtOpeningExcelSchema } from "@/lib/excel/schemas";
@@ -94,6 +95,15 @@ export default function CongNoPage() {
     mode: "customer" | "supplier";
     partyId: string;
     partyName: string;
+    estimatedDebt: number;
+  } | null>(null);
+  // CEO 06/06/2026 — sau khi anh báo "chưa xem được chi tiết đơn nợ":
+  // dialog read-only xem list HD/PO của KH/NCC đang nợ.
+  const [detailTarget, setDetailTarget] = useState<{
+    mode: "customer" | "supplier";
+    partyId: string;
+    partyName: string;
+    partyCode?: string;
     estimatedDebt: number;
   } | null>(null);
 
@@ -211,34 +221,56 @@ export default function CongNoPage() {
       size: 140,
       cell: ({ row }) => row.original.groupName ?? "—",
     },
-    // CEO 03/06/2026 — Sprint 3 (Công nợ C1): cột Action nút "Thanh toán" per row.
+    // CEO 03/06 — Công nợ C1: nút "Thanh toán". CEO 06/06 — thêm "Xem chi tiết"
+    // (anh báo: "chưa xem được chi tiết công nợ là khách đó đang nợ đơn gì").
     {
       id: "actions",
       header: "Thao tác",
-      size: 150,
+      size: 220,
       enableSorting: false,
       cell: ({ row }) => {
         const debt = row.original.currentDebt ?? 0;
-        if (debt <= 0) {
-          return <span className="text-xs text-muted-foreground">Đã thanh toán</span>;
-        }
         return (
-          <Button
-            size="sm"
-            variant="default"
-            className="h-7 px-2.5 text-xs gap-1"
-            onClick={() =>
-              setSettleTarget({
-                mode: "customer",
-                partyId: row.original.id,
-                partyName: row.original.name,
-                estimatedDebt: debt,
-              })
-            }
-          >
-            <Icon name="payments" size={14} />
-            Thanh toán
-          </Button>
+          <div className="flex items-center gap-1.5">
+            <Button
+              size="sm"
+              variant="outline"
+              className="h-7 px-2 text-xs gap-1"
+              onClick={() =>
+                setDetailTarget({
+                  mode: "customer",
+                  partyId: row.original.id,
+                  partyName: row.original.name,
+                  partyCode: row.original.code,
+                  estimatedDebt: debt,
+                })
+              }
+              title="Xem chi tiết HĐ đang nợ"
+            >
+              <Icon name="visibility" size={14} />
+              Xem
+            </Button>
+            {debt > 0 ? (
+              <Button
+                size="sm"
+                variant="default"
+                className="h-7 px-2 text-xs gap-1"
+                onClick={() =>
+                  setSettleTarget({
+                    mode: "customer",
+                    partyId: row.original.id,
+                    partyName: row.original.name,
+                    estimatedDebt: debt,
+                  })
+                }
+              >
+                <Icon name="payments" size={14} />
+                Thu
+              </Button>
+            ) : (
+              <span className="text-[11px] text-muted-foreground italic">đã trả đủ</span>
+            )}
+          </div>
         );
       },
     },
@@ -284,34 +316,55 @@ export default function CongNoPage() {
       size: 160,
       cell: ({ row }) => formatCurrency(row.original.totalPurchases ?? 0),
     },
-    // CEO 03/06/2026 — Sprint 3 (Công nợ C2): cột Action nút "Trả nợ" per row.
+    // CEO 03/06 — Trả nợ NCC. CEO 06/06 — thêm "Xem chi tiết PO đang nợ".
     {
       id: "actions",
       header: "Thao tác",
-      size: 150,
+      size: 220,
       enableSorting: false,
       cell: ({ row }) => {
         const debt = row.original.currentDebt ?? 0;
-        if (debt <= 0) {
-          return <span className="text-xs text-muted-foreground">Đã thanh toán</span>;
-        }
         return (
-          <Button
-            size="sm"
-            variant="default"
-            className="h-7 px-2.5 text-xs gap-1 bg-status-warning hover:bg-status-warning/90"
-            onClick={() =>
-              setSettleTarget({
-                mode: "supplier",
-                partyId: row.original.id,
-                partyName: row.original.name,
-                estimatedDebt: debt,
-              })
-            }
-          >
-            <Icon name="account_balance_wallet" size={14} />
-            Trả nợ
-          </Button>
+          <div className="flex items-center gap-1.5">
+            <Button
+              size="sm"
+              variant="outline"
+              className="h-7 px-2 text-xs gap-1"
+              onClick={() =>
+                setDetailTarget({
+                  mode: "supplier",
+                  partyId: row.original.id,
+                  partyName: row.original.name,
+                  partyCode: row.original.code,
+                  estimatedDebt: debt,
+                })
+              }
+              title="Xem chi tiết PO đang nợ"
+            >
+              <Icon name="visibility" size={14} />
+              Xem
+            </Button>
+            {debt > 0 ? (
+              <Button
+                size="sm"
+                variant="default"
+                className="h-7 px-2 text-xs gap-1 bg-status-warning hover:bg-status-warning/90"
+                onClick={() =>
+                  setSettleTarget({
+                    mode: "supplier",
+                    partyId: row.original.id,
+                    partyName: row.original.name,
+                    estimatedDebt: debt,
+                  })
+                }
+              >
+                <Icon name="account_balance_wallet" size={14} />
+                Trả
+              </Button>
+            ) : (
+              <span className="text-[11px] text-muted-foreground italic">đã trả đủ</span>
+            )}
+          </div>
         );
       },
     },
@@ -719,6 +772,19 @@ export default function CongNoPage() {
             setSettleTarget(null);
             fetchData();
           }}
+        />
+      )}
+
+      {/* CEO 06/06/2026: dialog "Xem chi tiết công nợ" read-only */}
+      {detailTarget && (
+        <DebtDetailDialog
+          open={!!detailTarget}
+          onOpenChange={(o) => !o && setDetailTarget(null)}
+          mode={detailTarget.mode}
+          partyId={detailTarget.partyId}
+          partyName={detailTarget.partyName}
+          partyCode={detailTarget.partyCode}
+          estimatedDebt={detailTarget.estimatedDebt}
         />
       )}
     </div>
