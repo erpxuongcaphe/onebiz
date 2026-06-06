@@ -424,6 +424,15 @@ export async function bulkImportDebtOpening(
     if (row.partyType === "customer") {
       const id = custMap.get(row.partyCode);
       if (!id) throw new Error(`Mã KH "${row.partyCode}" chưa tồn tại`);
+      // CEO 06/06/2026 — Plan A research note:
+      // Đây là TRƯỜNG HỢP RIÊNG cho opening balance (số dư đầu kỳ).
+      // Trigger 00130 chỉ tính từ invoices → KHÔNG bao gồm opening balance.
+      // Vì vậy write customers.debt trực tiếp ở đây OK với điều kiện:
+      //   1. KH chưa có invoice nào (mới setup tenant)
+      //   2. CEO không bán hàng cho KH này sau đó (vì trigger sẽ reset)
+      // TODO khi cần: tạo bảng customer_opening_balances + đổi formula
+      // trigger 00130 = SUM(invoices.debt) + opening_debt. Hiện chưa làm
+      // vì chuỗi cà phê 4 quán mới setup, chưa có data lịch sử cần import.
       const { error } = await supabase
         .from("customers")
         .update({ debt: row.openingDebt })

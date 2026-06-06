@@ -497,6 +497,13 @@ export async function adjustCustomerDebt(
   const supabase = getClient();
   const tenantId = await getCurrentTenantId();
 
+  // CEO 06/06/2026 — Plan A research warning:
+  // Hàm này hiện vẫn ghi đè customers.debt trực tiếp. Trigger 00130 sẽ
+  // RESET giá trị ngay khi KH có invoice tiếp theo update → mất adjustment.
+  // Hiện POS dùng hàm này cho "loyalty credit" (cộng/trừ điểm nợ).
+  // TODO bền vững: tạo bảng customer_debt_adjustments + cộng vào trigger
+  // 00130 formula. Hiện ghi note để CEO biết risk.
+
   // Read current
   const { data: cur, error: e1 } = await supabase
     .from("customers")

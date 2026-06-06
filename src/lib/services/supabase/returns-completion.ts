@@ -86,27 +86,16 @@ export async function completeReturn(input: CompleteReturnInput): Promise<void> 
   }
 
   // 3. Partial-refund: credit the delta against customer debt
-  const totalAmount = input.totalAmount ?? input.refundAmount;
-  const debtCredit = totalAmount - input.refundAmount;
-  if (debtCredit > 0 && input.customerId) {
-    // Best-effort: read current debt, decrement by debtCredit (floor at 0).
-    // Not wrapped in RPC — single-cashier workflow, race risk is negligible
-    // for sales returns and this matches the existing invoices.paid pattern.
-    // eslint-disable-next-line @typescript-eslint/no-explicit-any
-    const sb = supabase as any;
-    const { data: cust, error: readErr } = await sb
-      .from("customers")
-      .select("debt")
-      .eq("id", input.customerId)
-      .single();
-    if (!readErr && cust) {
-      const currentDebt = Number(cust.debt ?? 0);
-      const newDebt = Math.max(0, currentDebt - debtCredit);
-      const { error: updateErr } = await sb
-        .from("customers")
-        .update({ debt: newDebt })
-        .eq("id", input.customerId);
-      if (updateErr) handleError(updateErr, "completeReturn:customer_debt_credit");
-    }
-  }
+  //    CEO 06/06/2026 Plan A research: KHÔNG còn write customers.debt
+  //    trực tiếp ở đây nữa. Trigger 00130 fire khi invoices.debt update
+  //    sẽ recompute customers.debt = SUM(invoices.debt). Code cũ chạy
+  //    đua với trigger → bug Xưởng Premium BL 280k sai.
+  //
+  //    Nếu CEO refund < totalAmount → debtCredit > 0 nghĩa là KH đã trả
+  //    1 phần rồi và phiếu trả hàng giảm nợ. Khoản giảm này sẽ được
+  //    sales_returns flow update lên invoices.paid hoặc invoices.debt
+  //    (đường khác), trigger 00130 sẽ pick up.
+  //
+  //    Single Source of Truth = invoices.debt → trigger. Cấm app-side
+  //    write customers.debt từ đây trở đi.
 }
