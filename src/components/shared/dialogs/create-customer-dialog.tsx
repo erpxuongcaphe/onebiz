@@ -70,6 +70,10 @@ export function CreateCustomerDialog({
   const [group, setGroup] = useState("");
   const [type, setType] = useState<"individual" | "company">("individual");
   const [gender, setGender] = useState("");
+  // CEO 06/06/2026 — Migration 00131: marketing FnB loyalty
+  const [birthday, setBirthday] = useState("");
+  const [tags, setTags] = useState<string[]>([]);
+  const [tagInput, setTagInput] = useState("");
   // Bảng giá B2B mặc định cho KH này — empty = giá niêm yết
   const [priceTierId, setPriceTierId] = useState("");
   const [tiers, setTiers] = useState<PriceTier[]>([]);
@@ -118,6 +122,9 @@ export function CreateCustomerDialog({
         setGroup(initialData.groupId || "");
         setType(initialData.type || "individual");
         setGender(initialData.gender || "");
+        setBirthday(initialData.birthday || "");
+        setTags(Array.isArray(initialData.tags) ? initialData.tags : []);
+        setTagInput("");
         setPriceTierId(initialData.priceTierId || "");
       } else {
         setCode(generateCustomerCode());
@@ -135,6 +142,9 @@ export function CreateCustomerDialog({
         setGroup("");
         setType("individual");
         setGender("");
+        setBirthday("");
+        setTags([]);
+        setTagInput("");
         setPriceTierId("");
       }
       setErrors({});
@@ -170,6 +180,8 @@ export function CreateCustomerDialog({
           groupId: group || undefined,
           type,
           gender: (gender as "male" | "female") || undefined,
+          birthday: birthday || null,
+          tags,
           priceTierId: priceTierId || undefined,
         });
         onOpenChange(false);
@@ -194,6 +206,8 @@ export function CreateCustomerDialog({
           groupId: group || undefined,
           type,
           gender: (gender as "male" | "female") || undefined,
+          birthday: birthday || null,
+          tags,
           priceTierId: priceTierId || undefined,
         });
         onOpenChange(false);
@@ -475,6 +489,89 @@ export function CreateCustomerDialog({
               KH này dùng bảng giá khi check out POS Retail/sỉ. SP không có
               trong bảng giá → tự động dùng giá niêm yết.
             </p>
+          </div>
+
+          {/* CEO 06/06/2026 — Migration 00131: sinh nhật + tags
+              Hỗ trợ loyalty marketing (voucher sinh nhật, segment KH). */}
+          <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+            <div className="space-y-2">
+              <label htmlFor="cust-birthday" className="text-sm font-medium">
+                Sinh nhật{" "}
+                <span className="text-xs font-normal text-muted-foreground">
+                  (loyalty marketing)
+                </span>
+              </label>
+              <input
+                id="cust-birthday"
+                type="date"
+                value={birthday}
+                onChange={(e) => setBirthday(e.target.value)}
+                max={new Date().toISOString().slice(0, 10)}
+                className="h-10 w-full rounded-md border border-border bg-background px-3 text-sm outline-none focus:ring-2 focus:ring-primary/30"
+              />
+            </div>
+
+            <div className="space-y-2">
+              <label htmlFor="cust-tags" className="text-sm font-medium">
+                Tags{" "}
+                <span className="text-xs font-normal text-muted-foreground">
+                  (Enter để thêm)
+                </span>
+              </label>
+              <div className="rounded-md border border-border bg-background px-2 py-1.5 min-h-10 flex items-center gap-1 flex-wrap focus-within:ring-2 focus-within:ring-primary/30">
+                {tags.map((t) => (
+                  <span
+                    key={t}
+                    className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full bg-primary/10 text-primary text-xs font-medium"
+                  >
+                    {t}
+                    <button
+                      type="button"
+                      onClick={() => setTags(tags.filter((x) => x !== t))}
+                      className="hover:bg-primary/20 rounded-full w-3.5 h-3.5 flex items-center justify-center text-[10px] leading-none"
+                      title={`Xóa tag "${t}"`}
+                    >
+                      ×
+                    </button>
+                  </span>
+                ))}
+                <input
+                  id="cust-tags"
+                  type="text"
+                  value={tagInput}
+                  onChange={(e) => setTagInput(e.target.value)}
+                  onKeyDown={(e) => {
+                    if (e.key === "Enter" || e.key === ",") {
+                      e.preventDefault();
+                      const t = tagInput.trim();
+                      if (t && !tags.includes(t)) {
+                        setTags([...tags, t]);
+                      }
+                      setTagInput("");
+                    } else if (
+                      e.key === "Backspace" &&
+                      tagInput === "" &&
+                      tags.length > 0
+                    ) {
+                      setTags(tags.slice(0, -1));
+                    }
+                  }}
+                  onBlur={() => {
+                    const t = tagInput.trim();
+                    if (t && !tags.includes(t)) {
+                      setTags([...tags, t]);
+                      setTagInput("");
+                    }
+                  }}
+                  placeholder={tags.length === 0 ? "VIP, Shopee, dị ứng sữa..." : ""}
+                  className="flex-1 min-w-[100px] bg-transparent text-sm outline-none border-0 h-7"
+                />
+              </div>
+              <p className="text-[11px] text-muted-foreground">
+                Dùng để segment KH: VIP, Shopee, dị ứng sữa... Filter ở
+                Danh sách khách hàng.
+              </p>
+            </div>
           </div>
 
           <div className="space-y-2">

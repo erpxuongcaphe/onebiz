@@ -389,6 +389,11 @@ export async function createCustomer(customer: Partial<Customer>): Promise<Custo
       gender: customer.gender || null,
       customer_type: customer.type ?? "individual",
       price_tier_id: customer.priceTierId || null,
+      // CEO 06/06/2026 — Migration 00131
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      birthday: customer.birthday || null,
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      tags: Array.isArray(customer.tags) ? customer.tags : [],
       is_active: true,
     } as CustomerInsert)
     .select("*, customer_groups!customers_group_id_fkey(name, discount_percent), loyalty_tiers(name, discount_percent)")
@@ -622,6 +627,15 @@ export async function updateCustomer(id: string, updates: Partial<Customer>): Pr
   if (updates.type !== undefined) payload.customer_type = updates.type;
   if (updates.priceTierId !== undefined)
     payload.price_tier_id = updates.priceTierId || null;
+  // CEO 06/06/2026 — Migration 00131 (DB types regen sau, cast tạm)
+  if (updates.birthday !== undefined) {
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    (payload as any).birthday = updates.birthday || null;
+  }
+  if (updates.tags !== undefined) {
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    (payload as any).tags = Array.isArray(updates.tags) ? updates.tags : [];
+  }
 
   const { data, error } = await supabase
     .from("customers")
