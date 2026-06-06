@@ -1905,17 +1905,23 @@ function PosPageInner() {
         onClick={() => setSyncDrawerOpen(true)}
       />
 
-      {/* ═══════════ HEADER 40px ═══════════ */}
-      <header className="h-10 bg-primary text-primary-foreground flex items-center px-3 shrink-0 gap-3">
+      {/* ═══════════ HEADER 48px — CEO 06/06/2026 audit UX/UI P0 #3:
+            Tăng từ h-10 (40px) → h-12 (48px) để đạt chuẩn touch Apple HIG
+            44px / Material 48px. CEO dùng iPad 13" cashier mỗi ngày —
+            header touch 28px tap khó.
+            Plus: đổi bg-primary (xanh chói) → bg-pos-chrome-bg (slate-900
+            always-dark) theo token POS chrome đã define ở globals.css —
+            đồng nhất chrome 3 POS (Retail + FnB + KDS). ═══════════ */}
+      <header className="h-12 bg-pos-chrome-bg text-pos-chrome-fg flex items-center px-3 shrink-0 gap-2">
         {/* CEO 04/06/2026: từ POS quay về trang chủ mở tab mới. */}
         <a
           href="/"
           target="_blank"
           rel="noopener noreferrer"
-          className="inline-flex items-center justify-center p-1.5 rounded hover:bg-white/10 transition-colors shrink-0"
+          className="inline-flex items-center justify-center min-w-[44px] min-h-[44px] p-2.5 rounded-md hover:bg-white/10 transition-colors shrink-0"
           title="Trang chủ (tab mới)"
         >
-          <Icon name="arrow_back" size={16} />
+          <Icon name="arrow_back" size={18} />
         </a>
 
         {/* Branch selector + Title — prominent style: badge nổi bật để CEO/staff
@@ -1923,8 +1929,8 @@ function PosPageInner() {
             CEO 13/05: POS Retail = bán sỉ qua Kho tổng. Filter chỉ "warehouse"
             — FnB và Retail là 2 mảng riêng, Cửa hàng FnB không xuất hiện. */}
         <PosBranchSelector variant="dark" filter={["warehouse"]} showCode prominent />
-        <div className="h-4 w-px bg-white/20 shrink-0" />
-        <span className="text-[13px] font-bold shrink-0">
+        <div className="h-6 w-px bg-white/20 shrink-0" />
+        <span className="text-sm font-bold shrink-0">
           POS Retail
         </span>
 
@@ -1944,18 +1950,18 @@ function PosPageInner() {
                 setRedeemInput(String(state.customer?.loyaltyPoints ?? 0));
                 setRedeemDialogOpen(true);
               }}
-              className="hidden md:flex items-center gap-1 shrink-0 px-2 py-0.5 rounded-lg bg-white/10 hover:bg-white/20 text-white text-[11px] font-medium border border-white/20 transition-colors"
+              className="hidden md:flex items-center gap-1.5 shrink-0 px-3 min-h-[36px] rounded-lg bg-white/10 hover:bg-white/20 text-white text-xs font-medium border border-white/20 transition-colors"
               title={`KH có ${state.customer.loyaltyPoints} điểm`}
             >
-              <Icon name="star" size={14} />
+              <Icon name="star" size={16} />
               <span>Dùng điểm ({state.customer.loyaltyPoints})</span>
             </button>
           )}
 
-        {/* Search bar */}
+        {/* Search bar — touch ≥36px (input acceptable < 44px nhưng cao hơn cũ) */}
         <div className="flex-1 max-w-lg mx-auto">
           <div className="relative">
-            <Icon name="search" size={14} className="absolute left-2.5 top-1/2 -translate-y-1/2 text-white/50" />
+            <Icon name="search" size={16} className="absolute left-3 top-1/2 -translate-y-1/2 text-white/50" />
             <input
               ref={searchInputRef}
               type="text"
@@ -1969,7 +1975,7 @@ function PosPageInner() {
               }}
               placeholder="Tìm sản phẩm theo tên, mã, barcode..."
               data-allow-hotkeys="true"
-              className="w-full h-7 pl-8 pr-14 rounded bg-white/15 border border-white/20 text-white placeholder-white/50 text-xs outline-none focus:bg-white/25 focus:border-white/40 transition-colors"
+              className="w-full h-9 pl-9 pr-14 rounded-md bg-white/15 border border-white/20 text-white placeholder-white/50 text-sm outline-none focus:bg-white/25 focus:border-white/40 transition-colors"
             />
             {searchQuery && (
               <button
@@ -1978,53 +1984,53 @@ function PosPageInner() {
                   setSearchQuery("");
                   searchInputRef.current?.focus();
                 }}
-                className="absolute right-8 top-1/2 -translate-y-1/2 p-0.5 rounded hover:bg-white/20"
+                className="absolute right-10 top-1/2 -translate-y-1/2 min-w-[28px] min-h-[28px] p-1 rounded hover:bg-white/20 inline-flex items-center justify-center"
               >
                 <Icon name="close" size={14} className="text-white/60" />
               </button>
             )}
-            <kbd className="absolute right-2 top-1/2 -translate-y-1/2 font-mono text-[9px] bg-white/10 border border-white/20 rounded px-1 py-0.5 text-white/60">
+            <kbd className="absolute right-2 top-1/2 -translate-y-1/2 font-mono text-[10px] bg-white/10 border border-white/20 rounded px-1.5 py-0.5 text-white/60">
               F2
             </kbd>
           </div>
         </div>
 
-        {/* Shift button — status ca làm việc */}
+        {/* Shift button — status ca, min 36px touch */}
         <button
           type="button"
           onClick={handleShiftClick}
           className={cn(
-            "inline-flex items-center gap-1 px-2 py-1 rounded transition-colors shrink-0 text-[11px]",
+            "inline-flex items-center gap-1.5 px-3 min-h-[36px] rounded-md transition-colors shrink-0 text-xs font-medium",
             currentShift
               ? "bg-status-success/90 text-white hover:bg-status-success"
               : "bg-white/10 text-white/80 hover:bg-white/20"
           )}
           title={currentShift ? "Ca đang mở — click để đóng ca" : "Click để mở ca"}
         >
-          <Icon name={currentShift ? "schedule" : "play_circle"} size={14} />
+          <Icon name={currentShift ? "schedule" : "play_circle"} size={16} />
           <span className="hidden sm:inline">{currentShift ? "Đang mở ca" : "Mở ca"}</span>
         </button>
 
-        {/* Draft button — always visible */}
+        {/* Draft button — touch 36px tối thiểu cho iPad */}
         <button
           type="button"
           onClick={() => setDraftModalOpen(true)}
-          className="inline-flex items-center gap-1 px-2 py-1 rounded text-white/70 hover:bg-white/10 hover:text-white transition-colors shrink-0 text-[11px]"
+          className="inline-flex items-center gap-1.5 px-3 min-h-[36px] rounded-md text-white/70 hover:bg-white/10 hover:text-white transition-colors shrink-0 text-xs font-medium"
         >
-          <Icon name="save" size={14} />
+          <Icon name="save" size={16} />
           <span className="hidden sm:inline">Nháp</span>
-          <kbd className="hidden sm:inline font-mono text-[8px] bg-white/10 border border-white/20 rounded px-0.5 text-white/50">F3</kbd>
+          <kbd className="hidden sm:inline font-mono text-[9px] bg-white/10 border border-white/20 rounded px-1 py-0.5 text-white/50">F3</kbd>
         </button>
 
-        {/* Keyboard shortcuts — popover icon-only (desktop) */}
+        {/* Keyboard shortcuts — touch 36px */}
         <div className="hidden md:block relative shrink-0">
           <button
             type="button"
             onClick={() => setShowShortcuts(!showShortcuts)}
-            className="p-1 rounded text-white/60 hover:bg-white/10 hover:text-white transition-colors"
+            className="inline-flex items-center justify-center min-w-[36px] min-h-[36px] p-2 rounded-md text-white/60 hover:bg-white/10 hover:text-white transition-colors"
             title="Phím tắt"
           >
-            <Icon name="keyboard" size={14} />
+            <Icon name="keyboard" size={16} />
           </button>
           {showShortcuts && (
             <>
