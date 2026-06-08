@@ -1,13 +1,28 @@
 /**
  * Service Worker for OneBiz FnB PWA
- * Strategy: Cache-first for static assets, network-first for API/data
+ * Strategy: Cache-first for static assets, network-first for HTML/API.
+ *
+ * CEO 06/06/2026: BUMP v2→v3 + BỎ pre-cache HTML routes (`/`, `/pos/fnb`).
+ *
+ * BUG: nhiều user (CEO Saturday trên ĐT + nhân viên Trang) bấm "Đăng nhập"
+ * vẫn ở trang login, không qua được. Root cause: SW v2 cũ pre-cache HTML
+ * `/` và `/pos/fnb` lần đầu visit (KHÔNG có cookie). Sau khi user login,
+ * SW có thể serve cached HTML cũ (no cookie) cho navigate request → reload
+ * page nhưng middleware không thấy cookie → kick lại login. SW v2 cũ cũng
+ * KHÔNG có skip cho /auth + /dang-nhap (added line 51 sau commit nào đó).
+ *
+ * Fix:
+ *   - Bump CACHE_NAME → v3: activate handler tự clear v1/v2 caches cũ
+ *     (line 27-38) → force kick SW cũ cho mọi user.
+ *   - Bỏ pre-cache HTML `/` và `/pos/fnb`. Chỉ pre-cache manifest + icons.
+ *     HTML giờ luôn đi qua network → middleware refresh cookie OK.
+ *   - skipWaiting + clients.claim đã có sẵn → bump version apply ngay.
  */
 
-// Bump cache version mỗi lần thay đổi branding/icons.
-const CACHE_NAME = "onebiz-fnb-v2";
+const CACHE_NAME = "onebiz-fnb-v3";
 const STATIC_ASSETS = [
-  "/",
-  "/pos/fnb",
+  // BỎ pre-cache HTML `/` + `/pos/fnb` — chúng cần middleware chạy
+  // để refresh Supabase cookie. Pre-cache làm cache đầy HTML không cookie.
   "/manifest-fnb.json",
   "/icons/fnb-192.svg",
   "/icons/fnb-512.svg",
