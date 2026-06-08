@@ -63,6 +63,25 @@ function handleFnbSubdomain(
   const publicPaths = ["/dang-nhap", "/quen-mat-khau", "/dat-lai-mat-khau"];
   const isPublicPath = publicPaths.some((p) => pathname.startsWith(p));
 
+  // CEO 06/06/2026 — clear stale sb-* cookies trên /dang-nhap (xem comment
+  // ở main updateSession). Áp dụng cho FnB subdomain.
+  if (!user && isPublicPath) {
+    const staleCookies = request.cookies
+      .getAll()
+      .filter((c) => c.name.startsWith("sb-"))
+      .map((c) => c.name);
+    if (staleCookies.length > 0) {
+      const cookieDomain = getCookieDomain(request);
+      staleCookies.forEach((name) => {
+        supabaseResponse.cookies.set(name, "", {
+          maxAge: 0,
+          path: "/",
+          ...(cookieDomain ? { domain: cookieDomain } : {}),
+        });
+      });
+    }
+  }
+
   // Unauthenticated → login
   if (!user && !isPublicPath) {
     const url = request.nextUrl.clone();
@@ -222,6 +241,32 @@ export async function updateSession(request: NextRequest) {
     url.pathname = "/dang-nhap";
     url.searchParams.set("redirect", request.nextUrl.pathname);
     return NextResponse.redirect(url);
+  }
+
+  // CEO 06/06/2026 — clear stale sb-* cookies khi user vào /dang-nhap.
+  //
+  // Bug: 148 request POST /auth/v1/token?grant_type=refresh_token trả 400.
+  // Browser còn cookie `sb-*-auth-token` cũ với refresh_token expired/revoked.
+  // Supabase SDK autoRefreshToken → loop retry → block UI → "spin xong vẫn
+  // ở /dang-nhap". Cốc Cốc lifecycle khác Chrome → không loop nhiều như Chrome.
+  //
+  // Fix: middleware nhận GET /dang-nhap (user=null) → response cookies.delete()
+  // mọi cookie sb-* hết hạn. Browser xoá → SDK init fresh → không loop.
+  // Login form sau đó set lại cookie mới hợp lệ.
+  if (!user && isPublicPath) {
+    const staleCookies = request.cookies
+      .getAll()
+      .filter((c) => c.name.startsWith("sb-"))
+      .map((c) => c.name);
+    if (staleCookies.length > 0) {
+      staleCookies.forEach((name) => {
+        supabaseResponse.cookies.set(name, "", {
+          maxAge: 0,
+          path: "/",
+          ...(cookieDomain ? { domain: cookieDomain } : {}),
+        });
+      });
+    }
   }
 
   // Redirect authenticated users away from auth pages
