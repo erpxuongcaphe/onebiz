@@ -1,6 +1,6 @@
 "use client";
 
-import { Suspense, useState } from "react";
+import { Suspense, useState, type FormEvent } from "react";
 import { useSearchParams } from "next/navigation";
 import Link from "next/link";
 import { Button } from "@/components/ui/button";
@@ -46,9 +46,57 @@ function LoginForm() {
   const redirect = getSafeRedirect(searchParams.get("redirect"));
   const serverError = searchParams.get("error") ?? "";
 
-  function handleSubmit() {
+  /**
+   * CEO 06/06/2026: BUG Chrome fail nhưng Cốc Cốc OK.
+   *
+   * Trước: form HTML POST → server trả 303 redirect + Set-Cookie. Cốc Cốc
+   * (Chromium cũ) follow redirect đúng, cookie persisted. NHƯNG Chrome 127+
+   * (Privacy Sandbox rollout) đôi khi KHÔNG flush cookie trước khi browser
+   * follow 303 redirect → middleware không thấy cookie → kick lại /dang-nhap.
+   *
+   * Sau: fetch API + window.location.replace. Predictable cross-browser:
+   *   1. POST JSON tới /api/auth/sign-in
+   *   2. Server set cookie + trả 200 JSON {ok:true}
+   *   3. Browser flush cookie hoàn toàn (waitOnResponse)
+   *   4. JS gọi window.location.replace(redirect) → full page navigation
+   *   5. Browser gửi cookie kèm request mới → middleware OK
+   *
+   * KHÔNG dùng router.push (client-side routing không flush cookie state).
+   * KHÔNG đụng route /api/auth/sign-in — vẫn support cả JSON + form.
+   */
+  async function handleSubmit(e: FormEvent<HTMLFormElement>) {
+    e.preventDefault();
     setError("");
     setLoading(true);
+    try {
+      const res = await fetch(
+        `/api/auth/sign-in?redirect=${encodeURIComponent(redirect)}`,
+        {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          credentials: "include",
+          cache: "no-store",
+          body: JSON.stringify({ identifier, password }),
+        },
+      );
+      if (res.ok) {
+        // Force full navigation để browser flush cookie trước khi load /
+        window.location.replace(redirect);
+        return;
+      }
+      const data = (await res.json().catch(() => null)) as {
+        error?: string;
+      } | null;
+      setError(
+        data?.error ?? "Đăng nhập thất bại. Vui lòng thử lại.",
+      );
+    } catch {
+      setError(
+        "Mất kết nối. Kiểm tra mạng và thử lại.",
+      );
+    } finally {
+      setLoading(false);
+    }
   }
 
   return (
