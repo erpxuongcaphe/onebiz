@@ -1,10 +1,38 @@
 # ☕ Hướng dẫn Setup FnB — OneBiz ERP
 
-> **Phiên bản 2** · 06/06/2026 · Sửa lại theo CEO: bỏ Bước "Tạo NVL FnB" thừa.
+> **Phiên bản 2.2** · 09/06/2026 · Khảo sát data THẬT tenant Xưởng Cà Phê hôm nay.
 >
 > **Đối tượng**: CEO (đọc + duyệt) → giao quản lý quán làm.
 > **Thời gian**: ~2 giờ cho 30 món lần đầu. Lần sau thêm món chỉ 5 phút/món.
 > **Kèm theo**: `FNB-SETUP-MASTER.xlsx` (Excel mẫu) + `CHEAT-SHEET-NV-FNB.md`.
+
+---
+
+## 📊 HIỆN TRẠNG TENANT ANH HÔM NAY (09/06/2026)
+
+Em vừa khảo sát thực tế prod để viết hướng dẫn ĐÚNG, không chế:
+
+### ✅ Đã có sẵn (skip — không cần làm gì)
+
+| Mục | Số lượng | Chi tiết |
+|---|:---:|---|
+| **Chi nhánh** | 5 | 1 Kho Tổng + 1 VP + 3 cửa hàng FnB (XDX, XPR, XTB) |
+| **Nhóm NVL** | 13 nhóm | NVL-CPH, NVL-SUA, NVL-BOT, NVL-TOP, NVL-SST, NVL-TRA, NVL-LTT, NVL-BBI, NVL-TCA, NVL-DCU, NVL-DCV, NVL-VPP, NVL-KHO |
+| **NVL items** | 269 NVL | Cà phê hạt 7 · Sữa 2 · Bột/đường 10 · Syrup 20 · Trà 6 · Topping 5 · Ly/tách 33 · Bao bì 20 · Trái cây 16... |
+| **Nhóm SKU Retail** | 13 nhóm | SKU-CPH (25 SP), SKU-TRA (8), SKU-LTT (33)... — tổng 290 SP |
+| **SKU Retail** | 290 SP | Mỗi SP tự sinh 1 BOM (290 BOM 1:1) |
+| **Nhóm SKU FnB** | 8 nhóm | CPT, PCF, TSU, HTR, TOL, GKH, DXA, NEP — **đang rỗng, ẩn khỏi POS** |
+
+### ❌ Còn thiếu (anh sắp làm)
+
+| Mục | Trạng thái | Việc cần làm |
+|---|:---:|---|
+| **Modifier groups** | **0 nhóm** | Bấm "Tạo preset FnB Việt" → sinh 4 nhóm chuẩn |
+| **Modifier gán cho 8 nhóm FnB** | Chưa gán | Mở từng nhóm → tick modifier mặc định |
+| **SP món FnB** | 0 món | Tạo từng món vào 8 nhóm CPT/TSU/PCF... |
+| **BOM cho SP FnB** | 0 BOM | Khai công thức pha chế (reference NVL có sẵn) |
+
+> 🎯 **Khoá vấn đề**: 8 nhóm FnB đã có khung sẵn, 269 NVL đã sẵn — chỉ cần seed modifier + tạo SP + khai BOM. Hết.
 
 ---
 
@@ -427,15 +455,24 @@ Mỗi SP anh tạo trong các nhóm này từ giờ **TỰ THỪA KẾ** modifie
 URL: `onebiz.com.vn/hang-hoa/cong-thuc`
 Sidebar: **Danh mục → Sản xuất → Công thức (BOM)**.
 
-### Tra Mã SKU Retail (mở tab khác)
+### Tra Mã NVL CHÍNH XÁC từ tenant anh (mở tab khác)
 
-Mở tab khác `/hang-hoa` → tra trong danh sách Retail:
-- Cà phê hạt rang xay: mã `SKU-RTL-CFE-001`
-- Sữa đặc: `SKU-RTL-SUA-001`
-- Đường trắng: `SKU-RTL-DUO-001`
-- Ly nhựa size M: `SKU-RTL-BAO-001` / size L: `SKU-RTL-BAO-002`
+> 📌 **Quan trọng**: BOM FnB tham chiếu **NVL có sẵn** (anh đã có 269 NVL trong 13 nhóm). KHÔNG cần tạo SKU Retail riêng cho mỗi NVL.
 
-→ Ghi 4 mã ra giấy/notepad TRƯỚC khi sang bước tiếp.
+Mở tab khác `/hang-hoa` → tab **"Nguyên vật liệu"** → search/filter theo nhóm:
+
+| Loại NVL | Nhóm | Mã pattern | Ví dụ thực tế |
+|---|---|---|---|
+| Cà phê đã rang xay | NVL-CPH (7 SP) | `NVL-CPH-001..007` | Anh chọn loại phù hợp (Xưởng đặc biệt, Gu Việt...) |
+| Sữa đặc | NVL-SUA (2 SP) | `NVL-SUA-001`, `NVL-SUA-002` | |
+| Đường trắng/nâu | NVL-BOT (10 SP) | `NVL-BOT-001..010` | |
+| Đá viên | NVL-KHO (12 SP) | search "đá" trong NVL-KHO | |
+| Ly nhựa size M | NVL-LTT (33 SP) | `NVL-LTT-001..033` | `NVL-LTT-014` "Nắp cầu - phi 93 - ly size M" |
+| Ống hút | NVL-LTT | trong nhóm trên | |
+
+→ **Anh phải tra mã CHÍNH XÁC** trên trang `/hang-hoa` → tab Nguyên vật liệu → ghi ra giấy 4 mã trước khi sang bước tiếp.
+
+> ⚠️ Mã NVL của tenant anh do hệ thống auto-gen theo thứ tự nhập — em không tự đoán được mã chính xác cho "Cà phê hạt" mà anh muốn dùng cho công thức Cà phê sữa đá. Anh tra trên web.
 
 ### Tạo BOM Size M
 
@@ -449,14 +486,14 @@ Bấm **+ Tạo công thức** (góc phải trên, nút xanh).
 | Năng suất | `1` |
 | ĐVT năng suất | `ly` |
 
-Bấm **+ Thêm NVL** 4 lần:
+Bấm **+ Thêm NVL** 4 lần (mã NVL anh tra ở bước trên):
 
-| # | Mã SKU Retail | Số lượng | ĐVT | **Scale theo modifier** ⭐ |
+| # | Mã NVL | Số lượng | ĐVT | **Scale theo modifier** ⭐ |
 |---|---|---|---|---|
-| 1 | SKU-RTL-CFE-001 | `15` | g | *(trống)* |
-| 2 | SKU-RTL-SUA-001 | `25` | ml | *(trống)* |
-| 3 | **SKU-RTL-DUO-001** | **`10`** | **g** | **chọn "Mức đường"** ⭐ |
-| 4 | SKU-RTL-BAO-001 (Ly M) | `1` | cái | *(trống)* |
+| 1 | NVL-CPH-... (Cà phê hạt rang xay anh chọn) | `15` | g | *(trống)* |
+| 2 | NVL-SUA-001 hoặc 002 (Sữa đặc) | `25` | ml | *(trống)* |
+| 3 | **NVL-BOT-... (Đường)** | **`10`** | **g** | **chọn "Mức đường"** ⭐ |
+| 4 | NVL-LTT-... (Ly nhựa size M) | `1` | cái | *(trống)* |
 
 > ⭐ **KEY**: Dòng Đường → cột "Scale theo modifier" → chọn "Mức đường".
 > Khi khách chọn 30% đường → POS auto trừ 10g × 0.3 = 3g. Khi 100% → trừ đủ 10g.
@@ -467,12 +504,12 @@ Bấm **Lưu**.
 
 Mã: `BOM-CPT-001-L`. Tăng liều:
 
-| # | Mã SKU Retail | Số lượng | ĐVT | Scale |
+| # | Mã NVL | Số lượng | ĐVT | Scale |
 |---|---|---|---|---|
-| 1 | SKU-RTL-CFE-001 | `20` | g | (trống) |
-| 2 | SKU-RTL-SUA-001 | `40` | ml | (trống) |
-| 3 | **SKU-RTL-DUO-001** | **`15`** | **g** | **Mức đường** |
-| 4 | SKU-RTL-BAO-002 (Ly L) | `1` | cái | (trống) |
+| 1 | NVL-CPH-... (cùng cà phê size M) | `20` | g | (trống) |
+| 2 | NVL-SUA-... (cùng sữa size M) | `40` | ml | (trống) |
+| 3 | **NVL-BOT-...** | **`15`** | **g** | **Mức đường** |
+| 4 | NVL-LTT-... (Ly nhựa size L) | `1` | cái | (trống) |
 
 ### ✅ Check
 Vào `/hang-hoa/cong-thuc` → thấy 2 BOM `BOM-CPT-001-M` và `BOM-CPT-001-L`. Cả 2 có dòng Đường gắn cờ "Scale theo Mức đường".
@@ -559,7 +596,7 @@ Mức đá: Không / Ít / ● Vừa / Nhiều
 6. **Thanh toán** → tiền mặt → 30,000đ
 
 ### Verify tồn NVL
-Mở `/hang-hoa` → search SKU Retail "Đường":
+Mở `/hang-hoa` tab "Nguyên vật liệu" → search NVL Đường (NVL-BOT-...):
 - Trước bán: vd `1000g`
 - Sau bán: `985g` (= 1000 − 15g BOM L × 1.0 scale 100%)
 
@@ -586,7 +623,20 @@ Anh đã setup 1 món FnB hoàn chỉnh có size + modifier + BOM scale. Nhân r
 
 # 📎 PHỤ LỤC B — MÔ HÌNH "TRUNG TÂM PHÂN PHỐI"
 
-> **Đọc nếu anh có ≥2 chi nhánh** (Kho tổng + ≥1 Quán). Bỏ qua nếu chỉ 1 quán.
+> **Áp dụng cho tenant anh** (5 chi nhánh thực: 1 Kho Tổng + 3 cửa hàng FnB + 1 VP).
+> Bỏ qua phần này nếu setup tenant mới chỉ 1 quán.
+
+## 🏢 5 chi nhánh thực tế tenant anh (verify hôm nay)
+
+| Mã | Tên | Loại | cascade_mode |
+|---|---|---|---|
+| **BOF-002** | Xưởng Cà Phê - Kho Tổng (mặc định) | Kho tổng | **production** |
+| **BOF-001** | Xưởng Cà Phê - Văn phòng | Văn phòng | outlet |
+| **CNH-XDX** | Xưởng Cà Phê - Xưởng Đồng Xoài | Cửa hàng FnB | outlet |
+| **CNH-XPR** | Xưởng Cà Phê - Xưởng Premium | Cửa hàng FnB | outlet |
+| **CNH-XTB** | Xưởng Cà Phê - Xưởng Tư Búa | Cửa hàng FnB | outlet |
+
+> 📌 **cascade_mode**: em suy theo logic default (warehouse=production, store=outlet). Anh **verify lại** bằng cách vào `/he-thong/chi-nhanh` → click ✏️ từng chi nhánh → tab Tồn kho → cột "Chế độ trừ tồn".
 
 ## 🧭 Mô hình chuỗi cà phê đa chi nhánh
 
