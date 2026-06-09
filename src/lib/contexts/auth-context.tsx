@@ -318,6 +318,56 @@ export function AuthProvider({ children }: { children: ReactNode }) {
         setIsLoading(false);
       });
 
+    // CEO 06/06/2026: bắt "Invalid Refresh Token: Already Used" global.
+    //
+    // Bug Chrome: refresh_token cũ trong localStorage đã consumed bởi
+    // SDK retry trước đó. Supabase SDK loop refresh → 400 "Already Used"
+    // → lock contention 5s → init timeout 10s → RPC throw "Chưa đăng nhập"
+    // → user thấy trang loading mãi → bấm sidebar không vào được trang.
+    //
+    // Fix: listen onerror toàn cục, nếu thấy AuthApiError "Already Used"
+    // → force clear localStorage sb-* + signOut local + reload /dang-nhap.
+    // useEffect ở /dang-nhap (commit 0c67cd9) sẽ xoá localStorage tiếp →
+    // SDK init fresh → user login lại OK.
+    const handleAlreadyUsedError = (event: ErrorEvent | PromiseRejectionEvent) => {
+      const message =
+        ("reason" in event && event.reason instanceof Error
+          ? event.reason.message
+          : "error" in event && event.error instanceof Error
+            ? event.error.message
+            : "") || "";
+      if (
+        message.includes("Invalid Refresh Token") ||
+        message.includes("Already Used")
+      ) {
+        try {
+          // Clear toàn bộ sb-* trong localStorage + sessionStorage
+          const lsKeys: string[] = [];
+          for (let i = 0; i < localStorage.length; i++) {
+            const key = localStorage.key(i);
+            if (key && key.startsWith("sb-")) lsKeys.push(key);
+          }
+          lsKeys.forEach((k) => localStorage.removeItem(k));
+          const ssKeys: string[] = [];
+          for (let i = 0; i < sessionStorage.length; i++) {
+            const key = sessionStorage.key(i);
+            if (key && key.startsWith("sb-")) ssKeys.push(key);
+          }
+          ssKeys.forEach((k) => sessionStorage.removeItem(k));
+        } catch {
+          // ignore
+        }
+        // Force navigate /dang-nhap để useEffect ở trang đó tiếp tục clean
+        if (typeof window !== "undefined" && !window.location.pathname.startsWith("/dang-nhap")) {
+          window.location.replace("/dang-nhap?redirect=" + encodeURIComponent(window.location.pathname));
+        }
+      }
+    };
+    if (typeof window !== "undefined") {
+      window.addEventListener("error", handleAlreadyUsedError);
+      window.addEventListener("unhandledrejection", handleAlreadyUsedError);
+    }
+
     // Subscribe to auth changes
     const {
       data: { subscription },
@@ -408,6 +458,10 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     return () => {
       clearTimeout(initTimeoutId);
       subscription.unsubscribe();
+      if (typeof window !== "undefined") {
+        window.removeEventListener("error", handleAlreadyUsedError);
+        window.removeEventListener("unhandledrejection", handleAlreadyUsedError);
+      }
     };
   }, [supabase, loadUserData, router]);
 
