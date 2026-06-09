@@ -102,8 +102,6 @@ Em đã điền sẵn **10 nhóm phổ biến** quán cà phê Việt:
 2. Bấm **Nhập Excel** (góc phải)
 3. Chọn file → chọn sheet **"Nhóm FnB"** → Preview → **Lưu**
 
-![Trang Nhóm hàng — danh sách nhóm FnB sau khi import](./images/fnb-setup/01-nhom-hang.png)
-
 > ⚠️ **Lưu ý**: Cột `Kênh bán` PHẢI = `fnb` (không phải `retail`). Sai → SP không hiện trên POS FnB.
 
 ---
@@ -141,8 +139,6 @@ Hệ thống đã có **preset 5 modifier chuẩn ngành Việt Nam**:
 1. Vào `/hang-hoa/tuy-chon-fnb` (hoặc menu **Danh mục → Tuỳ chọn FnB**)
 2. Bấm nút **"Seed preset FnB Việt"** góc phải trên
 3. Hệ thống tạo NGAY 5 nhóm + ~20 option
-
-![Trang Modifier groups — sau khi seed preset](./images/fnb-setup/02-modifier-groups.png)
 
 ### 2.2 (Optional) Tinh chỉnh
 
@@ -190,8 +186,6 @@ Em đã điền sẵn **30 món phổ biến**. Cột quan trọng:
 1. Vào `/hang-hoa`
 2. Bấm **Nhập Excel**
 3. Chọn file → sheet **"SKU món FnB"** → Preview → **Lưu**
-
-![Trang Hàng hoá — danh sách SKU món FnB](./images/fnb-setup/03-sku-mon-fnb.png)
 
 ### 3.3 Verify nhanh
 
@@ -257,8 +251,6 @@ Cấu trúc Excel BOM (mỗi dòng = 1 NVL trong công thức):
    - 🔴 Đỏ = không tìm thấy mã → sửa Excel, import lại
 4. Bấm **Lưu**
 
-![Trang Công thức (BOM) — sau khi import](./images/fnb-setup/04-bom-cong-thuc.png)
-
 ### 4.3 Link BOM với SKU món FnB
 
 Vào `/hang-hoa` → mở từng SKU món FnB → tab **BOM** → chọn Mã BOM tương ứng → **Lưu**.
@@ -285,8 +277,6 @@ Hoặc nhanh hơn: Excel sheet **"SKU món FnB"** đã có cột `Mã BOM` — f
    - +Trân châu (5,000đ)
 3. Bấm **Thêm vào giỏ**
 4. Bấm **Thanh toán** → chọn Tiền mặt → **Hoàn tất**
-
-![POS FnB — Popup modifier khi click món](./images/fnb-setup/05-pos-fnb-modifier.png)
 
 ## 5.3 Verify trừ tồn
 
