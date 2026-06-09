@@ -1,6 +1,6 @@
 "use client";
 
-import { Suspense, useState, type FormEvent } from "react";
+import { Suspense, useEffect, useState, type FormEvent } from "react";
 import { useSearchParams } from "next/navigation";
 import Link from "next/link";
 import { Button } from "@/components/ui/button";
@@ -45,6 +45,38 @@ function LoginForm() {
   const [loading, setLoading] = useState(false);
   const redirect = getSafeRedirect(searchParams.get("redirect"));
   const serverError = searchParams.get("error") ?? "";
+
+  // CEO 06/06/2026: clear localStorage Supabase cũ khi vào trang login.
+  //
+  // Console log từ Chrome MCP cho thấy ROOT CAUSE:
+  //   "AuthApiError: Invalid Refresh Token: Already Used"
+  //   "Lock acquisition timed out after 5000ms"
+  //   "[AuthProvider] Init timeout 10s"
+  //
+  // Browser localStorage còn refresh token CŨ (đã consume) → SDK init →
+  // try refresh → 400 → retry → lock timeout → spinner stuck → form submit
+  // bị block. Middleware chỉ xoá được cookie, KHÔNG xoá được localStorage.
+  //
+  // Fix: useEffect chạy 1 lần khi mount → xoá mọi key `sb-*` trong localStorage
+  // + sessionStorage. SDK init lại fresh → không loop → form submit OK.
+  useEffect(() => {
+    try {
+      const sbKeys: string[] = [];
+      for (let i = 0; i < localStorage.length; i++) {
+        const key = localStorage.key(i);
+        if (key && key.startsWith("sb-")) sbKeys.push(key);
+      }
+      sbKeys.forEach((k) => localStorage.removeItem(k));
+      const ssKeys: string[] = [];
+      for (let i = 0; i < sessionStorage.length; i++) {
+        const key = sessionStorage.key(i);
+        if (key && key.startsWith("sb-")) ssKeys.push(key);
+      }
+      ssKeys.forEach((k) => sessionStorage.removeItem(k));
+    } catch {
+      // localStorage block (private mode, quota) — bỏ qua
+    }
+  }, []);
 
   /**
    * CEO 06/06/2026: BUG Chrome fail nhưng Cốc Cốc OK.
