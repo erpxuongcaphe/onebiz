@@ -368,6 +368,49 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       window.addEventListener("unhandledrejection", handleAlreadyUsedError);
     }
 
+    // CEO 06/06/2026 — monkey-patch fetch bắt POST 400 tới /auth/v1/token.
+    //
+    // Reason: SDK Supabase nuốt error response 400 trong internal retry,
+    // KHÔNG throw lên Promise rejection → window listener trên không bắt
+    // được. F12 CEO mở thấy POST 400 liên tục mà error listener im lặng.
+    //
+    // Fix: wrap window.fetch, detect URL chứa "/auth/v1/token" + status 400
+    // + body có "refresh_token_already_used" hoặc "Invalid Refresh Token"
+    // → trigger same cleanup flow.
+    let consecutiveAuthFails = 0;
+    const FAIL_THRESHOLD = 3;
+    const originalFetch = window.fetch;
+    const patchedFetch: typeof fetch = async (input, init) => {
+      const response = await originalFetch(input, init);
+      try {
+        const url =
+          typeof input === "string"
+            ? input
+            : input instanceof Request
+              ? input.url
+              : input.toString();
+        if (response.status === 400 && url.includes("/auth/v1/token")) {
+          consecutiveAuthFails += 1;
+          if (consecutiveAuthFails >= FAIL_THRESHOLD) {
+            consecutiveAuthFails = 0;
+            handleAlreadyUsedError(
+              new ErrorEvent("error", {
+                message: "Invalid Refresh Token: Already Used",
+              }),
+            );
+          }
+        } else if (response.ok && url.includes("/auth/v1/token")) {
+          consecutiveAuthFails = 0; // reset khi refresh thành công
+        }
+      } catch {
+        // ignore
+      }
+      return response;
+    };
+    if (typeof window !== "undefined") {
+      window.fetch = patchedFetch;
+    }
+
     // Subscribe to auth changes
     const {
       data: { subscription },
@@ -461,6 +504,10 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       if (typeof window !== "undefined") {
         window.removeEventListener("error", handleAlreadyUsedError);
         window.removeEventListener("unhandledrejection", handleAlreadyUsedError);
+        // Restore fetch nếu là instance của ta
+        if (window.fetch === patchedFetch) {
+          window.fetch = originalFetch;
+        }
       }
     };
   }, [supabase, loadUserData, router]);
