@@ -421,12 +421,22 @@ function StockRowDetail({
                           <th className="text-left p-2 font-medium">Thời gian</th>
                           <th className="text-left p-2 font-medium">Loại</th>
                           <th className="text-right p-2 font-medium">Số lượng</th>
+                          <th className="text-left p-2 font-medium">Đối tác</th>
                           <th className="text-left p-2 font-medium">Người tạo</th>
                           <th className="text-left p-2 font-medium">Ghi chú</th>
                         </tr>
                       </thead>
                       <tbody>
-                        {movements.map((m) => (
+                        {movements.map((m) => {
+                          // CEO 10/06/2026 — màu đối tác theo loại
+                          const partnerColor: Record<string, string> = {
+                            customer: "text-blue-600",
+                            supplier: "text-emerald-600",
+                            branch: "text-purple-600",
+                            system: "text-muted-foreground italic",
+                          };
+                          const pColor = m.partnerType ? partnerColor[m.partnerType] : "text-muted-foreground";
+                          return (
                           <tr key={m.id} className="border-t">
                             <td className="p-2 text-xs text-muted-foreground whitespace-nowrap">
                               {formatDate(m.date)}
@@ -445,6 +455,14 @@ function StockRowDetail({
                                 isInflow={m.type !== "export"}
                               />
                             </td>
+                            <td className={`p-2 text-xs max-w-[200px] truncate ${pColor}`} title={m.partner ?? ""}>
+                              {m.partner ?? "—"}
+                              {m.referenceCode && (
+                                <span className="ml-1 text-[10px] text-muted-foreground font-mono">
+                                  ({m.referenceCode})
+                                </span>
+                              )}
+                            </td>
                             <td className="p-2 text-xs">
                               {m.createdByName || "—"}
                             </td>
@@ -452,7 +470,7 @@ function StockRowDetail({
                               {m.note ?? "—"}
                             </td>
                           </tr>
-                        ))}
+                        );})}
                       </tbody>
                     </table>
                   </div>
