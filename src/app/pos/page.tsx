@@ -392,6 +392,31 @@ function PosPageInner() {
   // FnB / Xưởng / Văn phòng → auto-switch sang kho tổng đầu tiên. Tránh
   // user bị stuck với checkout không trừ stock đúng nơi.
   useEffect(() => {
+    // CEO 10/06/2026 — Nếu user vừa rời trang admin chọn "Tất cả chi nhánh"
+    // (__all__) → currentBranch=null → POS không có chi nhánh, mọi SP báo
+    // "Hết". Fallback: chi nhánh cụ thể gần nhất → profile.branch → Kho tổng
+    // đầu tiên → branches[0]. Kế thừa logic anh muốn: "đang ở admin Kho Tổng
+    // → POS phải hiện Kho Tổng".
+    if (!currentBranch && branches.length > 0) {
+      let fallbackId: string | null = null;
+      try { fallbackId = localStorage.getItem("last_specific_branch_id"); } catch {}
+      const fallback =
+        (fallbackId && branches.find((b) => b.id === fallbackId)) ||
+        (user?.branchId && branches.find((b) => b.id === user.branchId)) ||
+        branches.find((b) => b.branchType === "warehouse") ||
+        branches.find((b) => b.isDefault) ||
+        branches[0];
+      if (fallback) {
+        void switchBranch(fallback.id);
+        toast({
+          title: `POS đã chọn: ${fallback.name}`,
+          description: 'POS Retail cần 1 chi nhánh cụ thể. Đổi ở dropdown góc trên nếu muốn.',
+          variant: "info",
+          duration: 4000,
+        });
+      }
+      return;
+    }
     if (!currentBranch) return;
     if (currentBranch.branchType === "warehouse") return;
     const firstWarehouse = branches.find((b) => b.branchType === "warehouse");
@@ -409,7 +434,7 @@ function PosPageInner() {
       variant: "info",
       duration: 6000,
     });
-  }, [currentBranch, branches, switchBranch, toast]);
+  }, [currentBranch, branches, switchBranch, toast, user?.branchId]);
   const { settings, updateSettings } = useSettings();
   const [currentShift, setCurrentShift] = useState<Shift | null>(null);
   const [openShiftDialogOpen, setOpenShiftDialogOpen] = useState(false);

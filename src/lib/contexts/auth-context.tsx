@@ -200,6 +200,10 @@ export function AuthProvider({ children }: { children: ReactNode }) {
                 mappedBranches.find((b) => b.isDefault) ??
                 mappedBranches[0];
               setCurrentBranch(currentBr);
+              // Lưu init chi nhánh cụ thể để POS fallback (xem note 10/06/2026)
+              if (currentBr) {
+                try { localStorage.setItem("last_specific_branch_id", currentBr.id); } catch {}
+              }
             }
           }
         }
@@ -536,6 +540,10 @@ export function AuthProvider({ children }: { children: ReactNode }) {
             setCurrentBranch(branch);
             try {
               localStorage.setItem("active_branch_id", branchId);
+              // CEO 10/06/2026 — POS không thể "Tất cả chi nhánh". Lưu thêm
+              // chi nhánh CỤ THỂ gần nhất để POS fallback về đó khi user
+              // vừa rời trang admin chọn "Tất cả".
+              localStorage.setItem("last_specific_branch_id", branchId);
             } catch {
               /* idem */
             }

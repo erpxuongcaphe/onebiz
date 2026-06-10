@@ -216,6 +216,29 @@ function FnbPosPageInner() {
   const hasAutoSwitchedRef = useRef(false);
   useEffect(() => {
     if (authLoading) return;
+    // CEO 10/06/2026 — Fallback nếu currentBranch=null do "Tất cả CN" ở admin.
+    // POS FnB ưu tiên: last_specific → profile.branch → store đầu tiên.
+    if (!currentBranch && branches.length > 0 && !hasAutoSwitchedRef.current) {
+      let fallbackId: string | null = null;
+      try { fallbackId = localStorage.getItem("last_specific_branch_id"); } catch {}
+      const fallback =
+        (fallbackId && branches.find((b) => b.id === fallbackId)) ||
+        (user?.branchId && branches.find((b) => b.id === user.branchId)) ||
+        branches.find((b) => b.branchType === "store") ||
+        branches.find((b) => b.isDefault) ||
+        branches[0];
+      if (fallback) {
+        hasAutoSwitchedRef.current = true;
+        void doSwitchBranch(fallback.id);
+        toast({
+          title: `POS FnB đã chọn: ${fallback.name}`,
+          description: 'POS cần 1 chi nhánh cụ thể. Đổi ở dropdown nếu muốn.',
+          variant: "info",
+          duration: 4000,
+        });
+      }
+      return;
+    }
     if (!currentBranch) return;
     if (currentBranch.branchType === "store") return;
     if (hasAutoSwitchedRef.current) return;
@@ -238,7 +261,7 @@ function FnbPosPageInner() {
       variant: "info",
       duration: 5000,
     });
-  }, [authLoading, currentBranch, branches, doSwitchBranch, toast]);
+  }, [authLoading, currentBranch, branches, doSwitchBranch, toast, user?.branchId]);
   const [blockingLoadMs, setBlockingLoadMs] = useState(0);
 
   useEffect(() => {
