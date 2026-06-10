@@ -317,25 +317,12 @@ export async function recordPurchasePayment(
     .eq("id", po.id);
   if (poUpd) handleError(poUpd, "recordPurchasePayment.po_update");
 
-  // 4. Update supplier.debt if supplier_id exists
-  if (po.supplier_id) {
-    const { data: sup, error: supFetch } = await supabase
-      .from("suppliers")
-      .select("debt")
-      .eq("tenant_id", ctx.tenantId)
-      .eq("id", po.supplier_id)
-      .single();
-
-    if (!supFetch && sup) {
-      const supNewDebt = Math.max(0, Number(sup.debt ?? 0) - input.amount);
-      const { error: supUpd } = await supabase
-        .from("suppliers")
-        .update({ debt: supNewDebt } as Record<string, unknown>)
-        .eq("tenant_id", ctx.tenantId)
-        .eq("id", po.supplier_id);
-      if (supUpd) handleError(supUpd, "recordPurchasePayment.supplier_update");
-    }
-  }
+  // 4. suppliers.debt — KHÔNG cần update tay nữa (CEO 10/06/2026, audit P1).
+  //    Trigger trg_purchase_orders_sync_supplier_debt (migration 00130) đã
+  //    AFTER UPDATE OF debt trên purchase_orders → tự recompute
+  //    suppliers.debt = SUM(PO completed/partial) rồi. Trừ tay ở đây = trừ
+  //    2 lần (giống bug RPC 00046 đã fix ở 00134). Đồng bộ với customer side
+  //    (đã gỡ trước đó). Giữ fallback path "tinh khiết" — chỉ update PO.debt.
 
   // Audit log cho legacy path
   await recordAuditLog({
