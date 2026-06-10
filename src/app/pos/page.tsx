@@ -1318,7 +1318,24 @@ function PosPageInner() {
           : `sess-${Date.now()}-${Math.random().toString(36).slice(2)}`,
       );
     } catch (err: any) {
-      toast({ title: "Lưu nháp thất bại", description: err.message, variant: "error" });
+      // CEO 10/06/2026 — FIX mất đơn: lưu nháp thất bại (token lỗi/mạng rớt)
+      // trước đây chỉ toast thoáng 4s → cashier bỏ lỡ → tưởng đã lưu → mất đơn
+      // 10tr (Trang). Giờ:
+      //  1. KHÔNG xóa giỏ (giữ nguyên — đã đúng, clearCart chỉ chạy khi success).
+      //  2. Toast PERSISTENT (duration:0) — cashier PHẢI tự đóng, không thể bỏ lỡ.
+      //  3. Thông báo rõ: giỏ VẪN CÒN + cách xử lý.
+      //  4. Giỏ vẫn được backup localStorage mỗi keystroke → F5 không mất.
+      const msg = String(err?.message ?? "");
+      const isAuthErr =
+        /chưa đăng nhập|jwt|token|session|401|unauthorized|permission|refresh/i.test(msg);
+      toast({
+        title: "⚠️ CHƯA LƯU ĐƯỢC ĐƠN — GIỎ HÀNG VẪN CÒN",
+        description: isAuthErr
+          ? "Phiên đăng nhập có vấn đề. Giỏ hàng KHÔNG mất — vẫn còn trên màn hình. Hãy đăng nhập lại (mở tab mới), rồi quay lại bấm 'Lưu nháp' lần nữa. KHÔNG đóng/tải lại trang này."
+          : `Không lưu được (${msg}). Giỏ hàng KHÔNG mất — vẫn còn trên màn hình. Kiểm tra mạng rồi bấm 'Lưu nháp' lại. KHÔNG đóng trang.`,
+        variant: "error",
+        duration: 0, // PERSISTENT — cashier phải tự đóng, không tự biến mất
+      });
     } finally {
       setSubmitting(null);
       submitLockRef.current = false;
@@ -1775,7 +1792,25 @@ function PosPageInner() {
           : `sess-${Date.now()}-${Math.random().toString(36).slice(2)}`,
       );
     } catch (err: any) {
-      toast({ title: "Thanh toán thất bại", description: err.message, variant: "error" });
+      // CEO 10/06/2026 — FIX mất đơn: thanh toán thất bại trước đây chỉ toast
+      // thoáng 4s → cashier bỏ lỡ → tưởng xong → mất đơn. Giờ persistent +
+      // rõ ràng. Giỏ KHÔNG bị xóa (clearCart chỉ chạy khi success).
+      const msg = String(err?.message ?? "");
+      const isAuthErr =
+        /chưa đăng nhập|jwt|token|session|401|unauthorized|permission|refresh/i.test(msg);
+      const isProcessed = /đã được xử lý|đã xử lý|already processed/i.test(msg);
+      toast({
+        title: isProcessed
+          ? "⚠️ ĐƠN ĐÃ XỬ LÝ TRƯỚC ĐÓ"
+          : "⚠️ THANH TOÁN CHƯA XONG — GIỎ HÀNG VẪN CÒN",
+        description: isProcessed
+          ? `${msg} — Nếu đây là đơn mới chưa thanh toán, hãy F5 tải lại trang rồi thử lại; đơn vẫn an toàn trong mục 'Nháp' (F3).`
+          : isAuthErr
+            ? "Phiên đăng nhập có vấn đề. Giỏ hàng KHÔNG mất. Đăng nhập lại (tab mới) rồi quay lại bấm Thanh toán. KHÔNG đóng/tải lại trang."
+            : `Không hoàn tất được (${msg}). Giỏ hàng KHÔNG mất — vẫn còn trên màn hình. Kiểm tra mạng rồi thử lại. KHÔNG đóng trang.`,
+        variant: "error",
+        duration: 0, // PERSISTENT — cashier phải tự đóng
+      });
     } finally {
       setSubmitting(null);
       submitLockRef.current = false;
