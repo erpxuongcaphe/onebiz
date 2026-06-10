@@ -55,6 +55,98 @@ export default function RootLayout({
       suppressHydrationWarning
     >
       <head>
+        {/* CEO 09/06/2026 — FIX DỨT ĐIỂM bug "phải clear cache mới login được".
+            Inline script chạy NGAY trong <head>, TRƯỚC React mount, TRƯỚC
+            SDK Supabase init → đảm bảo cookie/localStorage cũ bị clear
+            TRƯỚC khi loop refresh_token xảy ra.
+
+            Tại sao fix trước (commit 0c67cd9, ff74776) chưa đủ:
+            - useEffect trong /dang-nhap chỉ chạy SAU khi React mount + page render
+            - SDK Supabase init NGAY khi page load → race với useEffect
+            - Mobile Safari + Chrome desktop trải qua loop 400 trước khi clear
+
+            Fix này:
+            1. Nếu URL = /dang-nhap → clear localStorage + sessionStorage + cookie sb-*
+               TRƯỚC khi SDK đọc storage cũ → SDK init fresh.
+            2. Monkey-patch fetch global: detect 3 lần POST /auth/v1/token 400
+               → auto clear all + redirect /dang-nhap.
+            Đảm bảo chạy trên MỌI trang, KHÔNG cần user clear cache thủ công.
+        */}
+        <script
+          dangerouslySetInnerHTML={{
+            __html: `
+(function(){
+  try {
+    var isLoginPage = location.pathname.indexOf('/dang-nhap') === 0;
+
+    // 1. Nếu vào /dang-nhap → clear ngay localStorage + sessionStorage + cookie sb-*
+    if (isLoginPage) {
+      var lsKeys = [];
+      for (var i = 0; i < localStorage.length; i++) {
+        var k = localStorage.key(i);
+        if (k && k.indexOf('sb-') === 0) lsKeys.push(k);
+      }
+      for (var j = 0; j < lsKeys.length; j++) localStorage.removeItem(lsKeys[j]);
+
+      var ssKeys = [];
+      for (var i = 0; i < sessionStorage.length; i++) {
+        var k = sessionStorage.key(i);
+        if (k && k.indexOf('sb-') === 0) ssKeys.push(k);
+      }
+      for (var j = 0; j < ssKeys.length; j++) sessionStorage.removeItem(ssKeys[j]);
+
+      // Clear cookie sb-* (chỉ non-httpOnly visible từ JS — đủ cho refresh_token cache)
+      var rootDomain = location.hostname.indexOf('.') > -1
+        ? '.' + location.hostname.split('.').slice(-3).join('.')
+        : location.hostname;
+      var cookies = document.cookie.split('; ');
+      for (var i = 0; i < cookies.length; i++) {
+        var name = cookies[i].split('=')[0];
+        if (name && name.indexOf('sb-') === 0) {
+          document.cookie = name + '=; expires=Thu, 01 Jan 1970 00:00:00 GMT; path=/; domain=' + rootDomain;
+          document.cookie = name + '=; expires=Thu, 01 Jan 1970 00:00:00 GMT; path=/';
+        }
+      }
+    }
+
+    // 2. Monkey-patch fetch GLOBAL — detect 3 lần POST /auth/v1/token 400
+    var origFetch = window.fetch;
+    var failCount = 0;
+    var THRESHOLD = 3;
+    window.fetch = function(input, init) {
+      return origFetch.apply(this, arguments).then(function(response) {
+        try {
+          var url = typeof input === 'string' ? input
+            : (input && input.url) ? input.url
+            : String(input);
+          if (response.status === 400 && url.indexOf('/auth/v1/token') !== -1) {
+            failCount++;
+            if (failCount >= THRESHOLD) {
+              failCount = 0;
+              // Clear all sb-* storage
+              var keys = [];
+              for (var i = 0; i < localStorage.length; i++) {
+                var k = localStorage.key(i);
+                if (k && k.indexOf('sb-') === 0) keys.push(k);
+              }
+              for (var j = 0; j < keys.length; j++) localStorage.removeItem(keys[j]);
+              // Redirect login (KHÔNG reload nếu đã ở /dang-nhap để tránh loop)
+              if (location.pathname.indexOf('/dang-nhap') !== 0) {
+                location.replace('/dang-nhap?redirect=' + encodeURIComponent(location.pathname));
+              }
+            }
+          } else if (response.ok && url.indexOf('/auth/v1/token') !== -1) {
+            failCount = 0;
+          }
+        } catch(e) {}
+        return response;
+      });
+    };
+  } catch(e) {}
+})();
+            `.trim(),
+          }}
+        />
         <PwaHead />
         {/* Material Symbols Outlined — icon system cho Stitch UI.
             Axes wght 100-700, FILL 0-1, opsz 20-48 cho phép tweak nét/fill
