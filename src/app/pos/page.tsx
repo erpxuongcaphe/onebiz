@@ -223,6 +223,9 @@ function PosPageInner() {
   // Modals
   const [customerModalOpen, setCustomerModalOpen] = useState(false);
   const [draftModalOpen, setDraftModalOpen] = useState(false);
+  // CEO 10/06/2026 — badge số nháp + trigger refresh sau save/delete
+  const [draftCount, setDraftCount] = useState<number>(0);
+  const [draftCountTrigger, setDraftCountTrigger] = useState(0);
   // Quick customer create — mở khi user click "+ Thêm KH mới" trong CustomerPicker
   const [createCustomerOpen, setCreateCustomerOpen] = useState(false);
   const [createCustomerInitial, setCreateCustomerInitial] = useState<string>("");
@@ -463,6 +466,24 @@ function PosPageInner() {
     }
     branchIdRef.current = nextBranchId;
   }, [currentBranch?.id, state, toast]);
+
+  // CEO 10/06/2026 — refresh badge số đếm nháp khi mount, đổi chi nhánh,
+  // sau khi lưu/xoá nháp (qua draftCountTrigger), hoặc khi mở/đóng dialog.
+  useEffect(() => {
+    if (!currentBranch?.id) {
+      setDraftCount(0);
+      return;
+    }
+    let cancelled = false;
+    listDraftOrders(currentBranch.id, 100)
+      .then((rows) => {
+        if (!cancelled) setDraftCount(rows.length);
+      })
+      .catch(() => {
+        if (!cancelled) setDraftCount(0);
+      });
+    return () => { cancelled = true; };
+  }, [currentBranch?.id, draftCountTrigger, draftModalOpen]);
 
   // Load ca đang mở khi branch/user sẵn sàng
   useEffect(() => {
@@ -1301,7 +1322,7 @@ function PosPageInner() {
       const ctx = await getCurrentContext();
       if (!ctx) throw new Error("Không xác định được chi nhánh");
 
-      await saveDraftOrder(
+      const saveResult = await saveDraftOrder(
         {
           tenantId: ctx.tenantId,
           branchId: ctx.branchId,
@@ -1333,9 +1354,20 @@ function PosPageInner() {
         },
       );
 
-      toast({ title: "Đã lưu nháp", variant: "success" });
+      // CEO 10/06/2026 — UX cải tiến: toast hiện rõ MÃ đơn vừa lưu + auto
+      // mở DraftListModal để cashier thấy ngay đơn vừa lưu trong list
+      // (verify trực quan, không phải tin mỗi toast). Trước đây cashier
+      // "không thấy lưu" vì toast tự tắt 4s + danh sách phải bấm F3 mới ra.
+      toast({
+        title: `✓ Đã lưu nháp ${saveResult.invoiceCode}`,
+        description: 'Mở mục "Nháp" (F3) để bán tiếp.',
+        variant: "success",
+        duration: 5000,
+      });
       state.clearCart();
       setMobileCartOpen(false);
+      // Auto bump draft count badge (lấy bên dưới qua useEffect refresh)
+      setDraftCountTrigger((t) => t + 1);
       // Regen sessionId — đơn nháp đã lưu, cashier mở cart mới = session mới
       setClientSessionId(
         typeof crypto !== "undefined" && crypto.randomUUID
@@ -2068,14 +2100,24 @@ function PosPageInner() {
           <span className="hidden sm:inline">{currentShift ? "Đang mở ca" : "Mở ca"}</span>
         </button>
 
-        {/* Draft button — touch 36px tối thiểu cho iPad */}
+        {/* Draft button — badge số đếm nháp (CEO 10/06/2026) */}
         <button
           type="button"
           onClick={() => setDraftModalOpen(true)}
-          className="inline-flex items-center gap-1.5 px-3 min-h-[36px] rounded-md text-white/70 hover:bg-white/10 hover:text-white transition-colors shrink-0 text-xs font-medium"
+          className={`relative inline-flex items-center gap-1.5 px-3 min-h-[36px] rounded-md transition-colors shrink-0 text-xs font-medium ${
+            draftCount > 0
+              ? "bg-amber-500/20 text-amber-100 hover:bg-amber-500/30"
+              : "text-white/70 hover:bg-white/10 hover:text-white"
+          }`}
+          title={draftCount > 0 ? `${draftCount} đơn nháp đang chờ` : "Đơn nháp"}
         >
           <Icon name="save" size={16} />
           <span className="hidden sm:inline">Nháp</span>
+          {draftCount > 0 && (
+            <span className="inline-flex items-center justify-center min-w-[18px] h-[18px] px-1 rounded-full bg-amber-500 text-white text-[10px] font-bold tabular-nums">
+              {draftCount > 99 ? "99+" : draftCount}
+            </span>
+          )}
           <kbd className="hidden sm:inline font-mono text-[9px] bg-white/10 border border-white/20 rounded px-1 py-0.5 text-white/50">F3</kbd>
         </button>
 
