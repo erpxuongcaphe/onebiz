@@ -31,6 +31,8 @@
 -- ============================================================
 
 -- ─── 1. Liệt kê SP dính (transparency) ─────────────────────
+-- FIX: PostgreSQL không cho COUNT(DISTINCT ...) trong window function.
+-- Dùng GROUP BY thay vì DISTINCT + window — đơn giản và đúng cú pháp.
 DO $$
 DECLARE
   r record;
@@ -38,8 +40,8 @@ DECLARE
 BEGIN
   RAISE NOTICE '=== SP dính self-BOM (chuẩn bị dọn) ===';
   FOR r IN
-    SELECT DISTINCT p.code, p.name, p.has_bom, p.bom_code,
-           COUNT(DISTINCT sm.id) OVER (PARTITION BY sm.product_id) AS so_phieu_rac
+    SELECT p.code, p.name, p.has_bom, p.bom_code,
+           COUNT(DISTINCT sm.id) AS so_phieu_rac
       FROM public.stock_movements sm
       JOIN public.invoices i      ON i.id = sm.reference_id
       JOIN public.invoice_items ii ON ii.invoice_id = i.id
@@ -47,6 +49,8 @@ BEGIN
       JOIN public.products p      ON p.id = sm.product_id
      WHERE sm.reference_type = 'bom_consume'
        AND sm.quantity > ii.quantity  -- bị nhân: phiếu trừ > số bán thật
+     GROUP BY p.id, p.code, p.name, p.has_bom, p.bom_code
+     ORDER BY p.code
   LOOP
     v_count := v_count + 1;
     RAISE NOTICE '  • % (%) — has_bom=%, bom_code=%, % phiếu rác',
