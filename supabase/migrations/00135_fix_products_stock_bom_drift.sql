@@ -1,34 +1,12 @@
 -- ============================================================
--- Migration 00135: FIX products.stock drift (BOM consume thiếu trừ cache tổng)
+-- Migration 00135 (v2): FIX consume_bom_for_sale
+--   (1) Thêm increment_product_stock → products.stock không drift nữa
+--   (2) GUARD chặn BOM tự-tham-chiếu (material = chính SKU) → không tự ăn
 -- ============================================================
---
--- CEO 10/06/2026 — phát hiện 2 trang hiện 2 số tồn khác nhau cho cùng SP:
---   /hang-hoa      (products.stock)  = 72   ← SAI (cache cũ)
---   /hang-hoa/ton-kho (branch_stock) = -504 ← ĐÚNG (khớp sổ cái stock_movements)
---   → 147 sản phẩm bị lệch kiểu này.
---
--- NGUYÊN NHÂN GỐC (đã verify đọc code 00124):
---   consume_bom_for_sale (chạy khi bán món FnB/Retail có BOM, internal sale
---   cascade, topping NVL) khi trừ NVL:
---     ✓ upsert_branch_stock(-qty)        → trừ branch_stock
---     ✓ insert stock_movements (out)     → ghi sổ cái
---     ✗ THIẾU increment_product_stock    → KHÔNG trừ products.stock
---   → vỡ invariant #1 (products.stock = SUM(branch_stock)) của verify_stock_invariants
---     (00073). branch_stock + sổ cái vẫn khớp nhau (#2 OK) nên branch_stock ĐÚNG.
---
---   So sánh: hàm ĐÚNG như apply_manual_stock_movement_atomic / pos non-BOM path
---   đều gọi CẢ increment_product_stock LẪN upsert_branch_stock.
---
--- FIX:
---   1. CREATE OR REPLACE consume_bom_for_sale — y hệt 00124, THÊM 2 dòng
---      increment_product_stock (cho NVL theo BOM + topping NVL).
---   2. Reconcile: products.stock = SUM(branch_stock) cho các SP đã lệch
---      (CHỈ SP có branch_stock row → an toàn, không zero-out SP khác).
---
--- AN TOÀN: branch_stock là nguồn đúng (khớp sổ cái). Reconcile chỉ kéo cache
---   tổng về khớp branch_stock. KHÔNG đụng sổ cái, KHÔNG xóa data.
---   Số tồn ÂM (-504) là vấn đề nghiệp vụ riêng (bán NVL nhiều hơn nhập) —
---   xử lý bằng kiểm kho/nhập bù, KHÔNG thuộc fix này.
+-- CEO 10/06/2026. ĐÃ BỎ phần reconcile products.stock=SUM(branch_stock) của
+-- bản v1 — vì state hiện hỗn hợp (SP thường: branch_stock đúng/products dư;
+-- Sting Chai: branch_stock RÁC do phiếu 576). Reconcile 1 chiều sẽ phá data.
+-- Dọn data làm riêng theo từng ca (Sting Chai → migration 00136).
 -- ============================================================
 
 create or replace function public.consume_bom_for_sale(
@@ -110,6 +88,13 @@ begin
       where bi.bom_id = v_bom_id
       order by bi.sort_order, bi.id
     loop
+      -- GUARD (CEO 10/06/2026): BOM TỰ-THAM-CHIẾU — material trùng chính SKU
+      -- đang bán → BỎ QUA, không tự ăn chính nó. Sự cố Sting Chai: SKU=NVL,
+      -- BOM 24× → bán 24 chai bị trừ 576. Chặn tại điểm tiêu hao (an toàn nhất).
+      if v_item.material_id = p_sku_id then
+        continue;
+      end if;
+
       -- ─── Apply modifier scale nếu BOM item có modifier_scale_target ───
       v_modifier_scale := 1;
       if v_item.modifier_scale_target is not null
@@ -171,8 +156,6 @@ begin
       perform public.upsert_branch_stock(
         p_tenant_id, p_branch_id, v_item.material_id, -v_consume_qty
       );
-      -- FIX 10/06/2026: trừ luôn products.stock (cache tổng) — trước đây THIẾU
-      -- dòng này → products.stock drift cao hơn thực tế (bug 2 trang lệch số).
       perform public.increment_product_stock(v_item.material_id, -v_consume_qty);
 
       insert into public.stock_movements (
@@ -234,7 +217,6 @@ begin
           perform public.upsert_branch_stock(
             p_tenant_id, p_branch_id, v_linked_id, -v_topping_qty
           );
-          -- FIX 10/06/2026: trừ luôn products.stock cho topping NVL.
           perform public.increment_product_stock(v_linked_id, -v_topping_qty);
 
           insert into public.stock_movements (
@@ -275,21 +257,3 @@ grant execute on function public.consume_bom_for_sale(uuid, uuid, uuid, numeric,
 
 comment on function public.consume_bom_for_sale is
   'v4 (CEO 03/06/2026 hotfix): consume BOM + apply modifier scale + topping NVL. Param p_skip_bom_consume=true để chỉ chạy topping (dùng cho outlet path).';
-
--- ============================================================
--- RECONCILE — kéo products.stock về khớp branch_stock cho SP đã lệch
--- ============================================================
--- Chỉ update SP CÓ branch_stock row (an toàn tuyệt đối: không zero-out SP
--- chỉ tồn ở products.stock như tồn đầu kỳ chưa gắn chi nhánh). branch_stock
--- là sự thật (khớp sổ cái stock_movements).
-UPDATE public.products p
-SET stock = sub.total
-FROM (
-  SELECT product_id, SUM(quantity) AS total
-  FROM public.branch_stock
-  GROUP BY product_id
-) sub
-WHERE p.id = sub.product_id
-  AND p.stock IS DISTINCT FROM sub.total;
-
--- Sau migration: chạy verify_stock_invariants() để confirm 0 SP lệch invariant #1.
