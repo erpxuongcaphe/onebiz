@@ -245,16 +245,34 @@ export default function LichSuKhoPage() {
       },
     },
     {
-      accessorKey: "referenceType",
-      header: "Tham chiếu",
-      size: 170,
+      accessorKey: "partner",
+      header: "Đối tác",
+      size: 220,
+      // CEO 10/06/2026 — đổi từ "Tham chiếu" (chỉ hiện type rỗng) sang
+      // "Đối tác" (KH/NCC/Chi nhánh thật, kèm mã phiếu).
       cell: ({ row }) => {
-        const refType = row.original.referenceType;
-        if (!refType) return <span className="text-muted-foreground">--</span>;
+        const p = row.original.partner;
+        const t = row.original.partnerType;
+        const code = row.original.referenceCode;
+        if (!p) return <span className="text-muted-foreground">--</span>;
+        const colorMap = {
+          customer: "text-blue-600",
+          supplier: "text-emerald-600",
+          branch: "text-purple-600",
+          system: "text-muted-foreground italic",
+        } as const;
+        const color = t ? colorMap[t] : "text-foreground";
         return (
-          <span className="text-sm">
-            {referenceTypeLabels[refType] ?? refType}
-          </span>
+          <div className="flex flex-col gap-0.5">
+            <span className={`text-sm font-medium truncate ${color}`} title={p}>
+              {p}
+            </span>
+            {code && (
+              <span className="text-[10px] font-mono text-muted-foreground">
+                {code}
+              </span>
+            )}
+          </div>
         );
       },
     },

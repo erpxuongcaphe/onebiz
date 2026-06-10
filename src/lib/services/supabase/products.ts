@@ -436,28 +436,153 @@ export async function getAllStockMovements(
     transfer: "Chuyển kho",
   };
 
-  const movements: AllStockMovementRow[] = (data ?? []).map((row: any) => ({
-    id: row.id,
-    code: row.reference_type
-      ? `${row.reference_type.toUpperCase().slice(0, 2)}${row.id.slice(0, 6)}`
-      : row.id.slice(0, 10),
-    type: mapMovementType(row.type),
-    typeName: typeNameMap[row.type] ?? row.type,
-    quantity: row.quantity,
-    costPrice: 0,
-    totalAmount: 0,
-    date: row.created_at,
-    note: row.note ?? undefined,
-    createdBy: row.created_by,
-    createdByName: (row.profiles as { full_name: string } | null)?.full_name ?? "",
-    productName: row.products?.name ?? "—",
-    productCode: row.products?.code ?? "—",
-    referenceType: row.reference_type ?? undefined,
-    referenceId: row.reference_id ?? undefined,
-    branchId: row.branch_id ?? undefined,
-  }));
+  // CEO 10/06/2026 — Batch load partner (KH/NCC/Chi nhánh) qua helper dùng chung.
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  const rows: any[] = data ?? [];
+  const resolvePartner = await buildMovementPartnerResolver(supabase, rows);
+
+  const movements: AllStockMovementRow[] = rows.map((row) => {
+    const p = resolvePartner(row);
+    return {
+      id: row.id,
+      code: row.reference_type
+        ? `${row.reference_type.toUpperCase().slice(0, 2)}${row.id.slice(0, 6)}`
+        : row.id.slice(0, 10),
+      type: mapMovementType(row.type),
+      typeName: typeNameMap[row.type] ?? row.type,
+      quantity: row.quantity,
+      costPrice: 0,
+      totalAmount: 0,
+      date: row.created_at,
+      note: row.note ?? undefined,
+      createdBy: row.created_by,
+      createdByName: (row.profiles as { full_name: string } | null)?.full_name ?? "",
+      productName: row.products?.name ?? "—",
+      productCode: row.products?.code ?? "—",
+      referenceType: row.reference_type ?? undefined,
+      referenceId: row.reference_id ?? undefined,
+      branchId: row.branch_id ?? undefined,
+      partner: p.partner,
+      partnerType: p.partnerType,
+      referenceCode: p.referenceCode,
+    };
+  });
 
   return { data: movements, total: count ?? 0 };
+}
+
+// --- Stock Movements Partner Resolver (CEO 10/06/2026) ───────────────
+// Polymorphic reference_type → đối tác (KH/NCC/Chi nhánh/Hệ thống).
+// Tách thành helper để getStockMovements (per-product) + getAllStockMovements
+// (cross-product) dùng chung. Batch query 4 bảng tránh N+1.
+
+interface PartnerInfo {
+  partner?: string;
+  partnerType?: "customer" | "supplier" | "branch" | "system";
+  referenceCode?: string;
+}
+
+async function buildMovementPartnerResolver(
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  supabase: any,
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  rows: any[],
+): Promise<(row: { reference_type: string | null; reference_id: string | null }) => PartnerInfo> {
+  const invoiceIds = new Set<string>();
+  const purchaseOrderIds = new Set<string>();
+  const inputInvoiceIds = new Set<string>();
+  const internalSaleIds = new Set<string>();
+  for (const r of rows) {
+    if (!r.reference_id) continue;
+    const t = r.reference_type;
+    if (t === "invoice" || t === "bom_consume" || t === "modifier_topping" || t === "invoice_void") {
+      invoiceIds.add(r.reference_id);
+    } else if (t === "purchase_order" || t === "po_receive") {
+      purchaseOrderIds.add(r.reference_id);
+    } else if (t === "input_invoice") {
+      inputInvoiceIds.add(r.reference_id);
+    } else if (t === "internal_sale") {
+      internalSaleIds.add(r.reference_id);
+    }
+  }
+
+  const invoiceMap = new Map<string, { code: string; customer_name: string | null }>();
+  const poMap = new Map<string, { code: string; supplier_name: string | null }>();
+  const inputInvMap = new Map<string, { code: string; supplier_name: string | null }>();
+  const internalSaleMap = new Map<string, { code: string; to_branch_name: string | null }>();
+
+  if (invoiceIds.size > 0) {
+    const { data: invs } = await supabase
+      .from("invoices")
+      .select("id, code, customer_name")
+      .in("id", Array.from(invoiceIds));
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    (invs ?? []).forEach((i: any) => invoiceMap.set(i.id, { code: i.code, customer_name: i.customer_name }));
+  }
+  if (purchaseOrderIds.size > 0) {
+    const { data: pos } = await supabase
+      .from("purchase_orders")
+      .select("id, code, supplier_name")
+      .in("id", Array.from(purchaseOrderIds));
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    (pos ?? []).forEach((p: any) => poMap.set(p.id, { code: p.code, supplier_name: p.supplier_name }));
+  }
+  if (inputInvoiceIds.size > 0) {
+    const { data: iis } = await supabase
+      .from("input_invoices")
+      .select("id, code, supplier_name")
+      .in("id", Array.from(inputInvoiceIds));
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    (iis ?? []).forEach((i: any) => inputInvMap.set(i.id, { code: i.code, supplier_name: i.supplier_name }));
+  }
+  if (internalSaleIds.size > 0) {
+    const { data: iss } = await supabase
+      .from("internal_sales")
+      .select("id, code, to_branch_id, branches!internal_sales_to_branch_id_fkey(name)")
+      .in("id", Array.from(internalSaleIds));
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    (iss ?? []).forEach((i: any) => internalSaleMap.set(i.id, {
+      code: i.code,
+      to_branch_name: (i.branches as { name?: string } | null)?.name ?? null,
+    }));
+  }
+
+  return function resolvePartner(row: { reference_type: string | null; reference_id: string | null }): PartnerInfo {
+    const t = row.reference_type;
+    const rid = row.reference_id;
+    if (!t || !rid) return {};
+    if (t === "invoice" || t === "bom_consume" || t === "modifier_topping" || t === "invoice_void") {
+      const inv = invoiceMap.get(rid);
+      if (!inv) return {};
+      return { partner: inv.customer_name || "Khách lẻ", partnerType: "customer", referenceCode: inv.code };
+    }
+    if (t === "purchase_order" || t === "po_receive") {
+      const po = poMap.get(rid);
+      if (!po) return {};
+      return { partner: po.supplier_name || "NCC", partnerType: "supplier", referenceCode: po.code };
+    }
+    if (t === "input_invoice") {
+      const ii = inputInvMap.get(rid);
+      if (!ii) return {};
+      return { partner: ii.supplier_name || "NCC", partnerType: "supplier", referenceCode: ii.code };
+    }
+    if (t === "internal_sale") {
+      const is = internalSaleMap.get(rid);
+      if (!is) return {};
+      return {
+        partner: is.to_branch_name ? `→ ${is.to_branch_name}` : "Chi nhánh khác",
+        partnerType: "branch",
+        referenceCode: is.code,
+      };
+    }
+    if (t === "inventory_check") return { partner: "Kiểm kho", partnerType: "system" };
+    if (t === "disposal_export") return { partner: "Xuất hủy", partnerType: "system" };
+    if (t === "internal_export") return { partner: "Xuất dùng nội bộ", partnerType: "system" };
+    if (t === "stock_transfer") return { partner: "Chuyển kho", partnerType: "system" };
+    if (t === "initial_stock_import") return { partner: "Tồn đầu kỳ (import)", partnerType: "system" };
+    if (t === "initial_stock_reset") return { partner: "Tồn đầu kỳ (ghi đè)", partnerType: "system" };
+    return {};
+  };
 }
 
 // --- Stock Movements (per product) ---
@@ -485,20 +610,30 @@ export async function getStockMovements(
     transfer: "Chuyển kho",
   };
 
+  // CEO 10/06/2026 — Batch load partner qua helper dùng chung.
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
-  const movements: StockMovement[] = (data ?? []).map((row: any) => ({
-    id: row.id,
-    code: row.reference_type ? `${row.reference_type.toUpperCase().slice(0, 2)}${row.id.slice(0, 6)}` : row.id.slice(0, 10),
-    type: mapMovementType(row.type),
-    typeName: typeNameMap[row.type] ?? row.type,
-    quantity: row.quantity,
-    costPrice: 0,
-    totalAmount: 0,
-    date: row.created_at,
-    note: row.note ?? undefined,
-    createdBy: row.created_by,
-    createdByName: (row.profiles as { full_name: string } | null)?.full_name ?? "",
-  }));
+  const rows: any[] = data ?? [];
+  const resolvePartner = await buildMovementPartnerResolver(supabase, rows);
+
+  const movements: StockMovement[] = rows.map((row) => {
+    const p = resolvePartner(row);
+    return {
+      id: row.id,
+      code: row.reference_type ? `${row.reference_type.toUpperCase().slice(0, 2)}${row.id.slice(0, 6)}` : row.id.slice(0, 10),
+      type: mapMovementType(row.type),
+      typeName: typeNameMap[row.type] ?? row.type,
+      quantity: row.quantity,
+      costPrice: 0,
+      totalAmount: 0,
+      date: row.created_at,
+      note: row.note ?? undefined,
+      createdBy: row.created_by,
+      createdByName: (row.profiles as { full_name: string } | null)?.full_name ?? "",
+      partner: p.partner,
+      partnerType: p.partnerType,
+      referenceCode: p.referenceCode,
+    };
+  });
 
   return { data: movements, total: count ?? 0 };
 }

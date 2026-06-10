@@ -108,6 +108,15 @@ export interface StockMovement {
   createdBy: string;
   createdByName?: string;
   supplierName?: string;
+  /** CEO 10/06/2026 — đối tác giao dịch hiển thị thẻ kho:
+   * - KH cho phiếu bán/BOM consume
+   * - NCC cho phiếu nhập/trả NCC
+   * - Chi nhánh cho chuyển/bán nội bộ
+   * - "Hệ thống" cho kiểm kho/xuất hủy/xuất dùng nội bộ. */
+  partner?: string;
+  partnerType?: "customer" | "supplier" | "branch" | "system";
+  /** Mã phiếu gốc (HD000123 / PO000045 / IS000007 …) — tham chiếu trực tiếp. */
+  referenceCode?: string;
 }
 
 // Lịch sử bán hàng của sản phẩm

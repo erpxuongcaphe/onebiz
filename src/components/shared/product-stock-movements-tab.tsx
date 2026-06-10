@@ -94,24 +94,33 @@ export function ProductStockMovementsTab({ productId }: ProductStockMovementsTab
         <span>Tổng: {total}</span>
       </div>
 
-      {/* Day 17/05: overflow-x-auto cho laptop nhỏ */}
+      {/* Day 17/05: overflow-x-auto cho laptop nhỏ.
+          CEO 10/06/2026: thay cột "Còn lại" (đang để "—") bằng "Đối tác"
+          (KH/NCC/Chi nhánh) — useful + thật. */}
       <div className="rounded-lg border overflow-x-auto">
-        <div className="grid grid-cols-[110px_220px_90px_90px_140px] gap-2 px-3 py-2 bg-muted/50 text-xs font-medium text-muted-foreground min-w-[650px]">
+        <div className="grid grid-cols-[110px_200px_80px_220px_180px] gap-2 px-3 py-2 bg-muted/50 text-xs font-medium text-muted-foreground min-w-[800px]">
           <span>Ngày</span>
           <span>Loại</span>
           <span className="text-right">SL</span>
-          <span className="text-right">Còn lại</span>
+          <span>Đối tác</span>
           <span>Ghi chú</span>
         </div>
 
-        <ul className="divide-y min-w-[650px]">
+        <ul className="divide-y min-w-[800px]">
           {movements.map((m) => {
             const style = TYPE_STYLE[m.type] ?? TYPE_STYLE.import;
             const signed = m.type === "export" ? -Math.abs(m.quantity) : m.quantity;
+            const partnerColor: Record<NonNullable<typeof m.partnerType>, string> = {
+              customer: "text-blue-600",
+              supplier: "text-emerald-600",
+              branch: "text-purple-600",
+              system: "text-muted-foreground italic",
+            };
+            const pColor = m.partnerType ? partnerColor[m.partnerType] : "text-muted-foreground";
             return (
               <li
                 key={m.id}
-                className="grid grid-cols-[110px_220px_90px_90px_140px] gap-2 items-center px-3 py-2 text-sm"
+                className="grid grid-cols-[110px_200px_80px_220px_180px] gap-2 items-center px-3 py-2 text-sm"
               >
                 <span className="text-xs text-muted-foreground">
                   {formatDate(m.date)}
@@ -128,8 +137,15 @@ export function ProductStockMovementsTab({ productId }: ProductStockMovementsTab
                   {signed > 0 ? "+" : ""}
                   {signed}
                 </span>
-                <span className="text-right text-xs text-muted-foreground">—</span>
-                <span className="text-xs text-muted-foreground truncate">
+                <span className={`text-xs truncate ${pColor}`} title={m.partner ?? ""}>
+                  {m.partner ?? "—"}
+                  {m.referenceCode && (
+                    <span className="ml-1 text-[10px] text-muted-foreground font-mono">
+                      ({m.referenceCode})
+                    </span>
+                  )}
+                </span>
+                <span className="text-xs text-muted-foreground truncate" title={m.note ?? ""}>
                   {m.note ?? ""}
                 </span>
               </li>
