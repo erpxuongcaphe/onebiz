@@ -190,6 +190,8 @@ export default function CuoiNgayPage() {
             { method: "Tiền mặt", amount: stats.cashAmount, pct: totalRev > 0 ? (stats.cashAmount / totalRev) * 100 : 0 },
             { method: "Chuyển khoản", amount: stats.transferAmount, pct: totalRev > 0 ? (stats.transferAmount / totalRev) * 100 : 0 },
             { method: "Thẻ", amount: stats.cardAmount, pct: totalRev > 0 ? (stats.cardAmount / totalRev) * 100 : 0 },
+            // P0-2 fix: thêm bucket Khác (hỗn hợp / ví điện tử) để tổng = totalRevenue
+            { method: "Khác (Hỗn hợp / Ví)", amount: stats.otherAmount, pct: totalRev > 0 ? (stats.otherAmount / totalRev) * 100 : 0 },
             { method: "Trả hàng (-)", amount: -stats.returnAmount, pct: totalRev > 0 ? (stats.returnAmount / totalRev) * 100 : 0 },
           ],
           footerLabel: "Doanh thu thực",
@@ -230,6 +232,7 @@ export default function CuoiNgayPage() {
             { label: "Tiền mặt", value: stats.cashAmount },
             { label: "Chuyển khoản", value: stats.transferAmount },
             { label: "Thẻ", value: stats.cardAmount },
+            { label: "Khác (Hỗn hợp / Ví)", value: stats.otherAmount },
             { label: "Trả hàng", value: stats.returnAmount },
             { label: "Doanh thu thực", value: stats.totalRevenue - stats.returnAmount },
             { label: "Doanh thu kỳ trước", value: stats.previousRevenue },
@@ -248,6 +251,7 @@ export default function CuoiNgayPage() {
             { method: "Tiền mặt", amount: stats.cashAmount, pct: totalRev > 0 ? (stats.cashAmount / totalRev) * 100 : 0 },
             { method: "Chuyển khoản", amount: stats.transferAmount, pct: totalRev > 0 ? (stats.transferAmount / totalRev) * 100 : 0 },
             { method: "Thẻ", amount: stats.cardAmount, pct: totalRev > 0 ? (stats.cardAmount / totalRev) * 100 : 0 },
+            { method: "Khác (Hỗn hợp / Ví)", amount: stats.otherAmount, pct: totalRev > 0 ? (stats.otherAmount / totalRev) * 100 : 0 },
           ],
           footerLabel: "Tổng cộng",
           footer: { amount: totalRev, pct: 100 },
@@ -310,6 +314,12 @@ export default function CuoiNgayPage() {
           method: "Thẻ",
           amount: stats.cardAmount,
           pct: totalRev > 0 ? (stats.cardAmount / totalRev) * 100 : 0,
+        },
+        // P0-2 fix 11/06/2026: thêm Khác (mixed + ewallet) để tổng = totalRevenue
+        {
+          method: "Khác (Hỗn hợp / Ví)",
+          amount: stats.otherAmount,
+          pct: totalRev > 0 ? (stats.otherAmount / totalRev) * 100 : 0,
         },
       ]
     : [];

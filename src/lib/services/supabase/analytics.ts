@@ -64,6 +64,8 @@ export interface EndOfDayStats {
   cashAmount: number;
   transferAmount: number;
   cardAmount: number;
+  /** P0-2 fix 11/06/2026: gộp mixed + ewallet để tổng 4 bucket = totalRevenue */
+  otherAmount: number;
   returnAmount: number;
   previousRevenue: number;
   previousOrders: number;
@@ -575,6 +577,13 @@ export async function getEndOfDayStats(
   const cashAmount = completed.filter(i => i.payment_method === "cash").reduce((s, i) => s + (i.total ?? 0), 0);
   const transferAmount = completed.filter(i => i.payment_method === "transfer").reduce((s, i) => s + (i.total ?? 0), 0);
   const cardAmount = completed.filter(i => i.payment_method === "card").reduce((s, i) => s + (i.total ?? 0), 0);
+  // CEO 11/06/2026 (P0-2 audit): trước đây 3 bucket cash/transfer/card BỎ QUA
+  // payment_method='mixed' (POS hỗn hợp) và 'ewallet' → tổng 3 < totalRevenue
+  // → Z-report cuối ngày KHÔNG khớp tiền mặt thực, cashier bị quy trách nhầm.
+  // Thêm bucket "otherAmount" gộp mixed+ewallet để cashier thấy đủ tổng.
+  const otherAmount = completed
+    .filter(i => i.payment_method !== "cash" && i.payment_method !== "transfer" && i.payment_method !== "card")
+    .reduce((s, i) => s + (i.total ?? 0), 0);
   const returnAmount = (todayReturns.data ?? []).reduce((s, i) => s + (i.refunded ?? 0), 0);
 
   return {
@@ -583,6 +592,7 @@ export async function getEndOfDayStats(
     cashAmount,
     transferAmount,
     cardAmount,
+    otherAmount,
     returnAmount,
     previousRevenue: prevCompleted.reduce((s, i) => s + (i.total ?? 0), 0),
     previousOrders: prevCompleted.length,
