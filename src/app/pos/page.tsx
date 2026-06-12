@@ -1477,6 +1477,28 @@ function PosPageInner() {
       }
     }
 
+    // CEO 11/06/2026 (P0-6 audit): chống "silent ghi nợ 100%" khi cashier quên
+    // gõ tiền. Trước đây paid=0 + total>0 + method khác mixed → handleComplete
+    // tiếp tục → tạo invoice ghi nợ TOÀN BỘ vào "Khách lẻ vãng lai" mà không
+    // có dialog xác nhận. Cashier quên gõ tiền = mất 1 đơn vào nợ ảo.
+    // Mixed payment đã có validation riêng (line 1465-1478) nên skip case đó.
+    if (
+      state.paid === 0 &&
+      state.total > 0 &&
+      state.paymentMethod !== "mixed" &&
+      intent !== "credit" &&
+      intent !== "refund"
+    ) {
+      const ok =
+        typeof window !== "undefined" &&
+        window.confirm(
+          `⚠️ ĐƠN NÀY KHÔNG CÓ TIỀN — GHI NỢ TOÀN BỘ ${formatCurrency(state.total)} ₫?\n\n` +
+            `Khách: ${state.customer?.name ?? "(Khách lẻ vãng lai)"}\n\n` +
+            `Bấm OK nếu thực sự ghi nợ. Hủy nếu anh/chị quên gõ tiền khách đưa.`,
+        );
+      if (!ok) return;
+    }
+
     // Oversell preflight — báo trước khi xuất hoá đơn nếu line nào vượt tồn.
     // Trước đây chỉ có badge UI vàng — cashier vẫn bấm F10 → âm kho.
     // Skip line từ draft loaded (availableStock=0 unknown) — sẽ check sau ở RPC.
