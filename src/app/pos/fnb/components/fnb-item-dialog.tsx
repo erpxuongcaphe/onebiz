@@ -281,8 +281,28 @@ export function FnbItemDialog({
 
   const lineTotal = (unitPrice + toppingTotal + dynamicModifierExtra) * quantity;
 
+  // CEO 11/06/2026 (P0-9 audit): validate single_required khi confirm.
+  // Trước đây quán đặt "Mức đường - bắt buộc 1" mà cashier không pick →
+  // snapshot rỗng → bếp pha mặc định → khách phàn nàn "không đúng mức yêu cầu".
+  const missingRequiredGroupIds = useMemo(() => {
+    if (!hasDynamicModifiers || !dynamicModifiers) return new Set<string>();
+    const missing = new Set<string>();
+    for (const g of dynamicModifiers.groups) {
+      if (g.rule !== "single_required") continue;
+      // Group có options? (nếu group rỗng coi như N/A)
+      const opts = dynamicModifiers.optionsByGroup.get(g.id) ?? [];
+      if (opts.length === 0) continue;
+      const choices = dynamicChoices.get(g.id);
+      if (!choices || choices.size === 0) missing.add(g.id);
+    }
+    return missing;
+  }, [hasDynamicModifiers, dynamicModifiers, dynamicChoices]);
+
+  const canConfirm = missingRequiredGroupIds.size === 0;
+
   const handleConfirm = () => {
     if (!product) return;
+    if (!canConfirm) return; // P0-9 guard
     const cartToppings: FnbCartTopping[] = (toppings ?? [])
       .filter((t) => (toppingQtys.get(t.id) ?? 0) > 0)
       .map((t) => ({
@@ -599,8 +619,15 @@ export function FnbItemDialog({
         </div>
 
         <DialogFooter>
-          <Button className="w-full" onClick={handleConfirm}>
-            {confirmLabel ?? "Thêm vào đơn"} — {formatCurrency(lineTotal)}đ
+          <Button
+            className="w-full"
+            onClick={handleConfirm}
+            disabled={!canConfirm}
+            title={!canConfirm ? "Vui lòng chọn các mục bắt buộc trước khi thêm" : undefined}
+          >
+            {!canConfirm
+              ? `⚠️ Còn ${missingRequiredGroupIds.size} mục BẮT BUỘC chưa chọn`
+              : `${confirmLabel ?? "Thêm vào đơn"} — ${formatCurrency(lineTotal)}đ`}
           </Button>
         </DialogFooter>
       </DialogContent>
