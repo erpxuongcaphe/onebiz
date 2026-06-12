@@ -169,7 +169,7 @@ export default function BanHangPage() {
     setLoading(true);
     try {
       const [kpisData, daily, weekday, hourly, invoices] = await Promise.all([
-        getSalesKpis(activeBranchId),
+        getSalesKpis(activeBranchId, range),
         getDailyRevenue(30, activeBranchId, range),
         getSalesRevenueByWeekday(activeBranchId),
         getSalesRevenueByHour(activeBranchId, range),

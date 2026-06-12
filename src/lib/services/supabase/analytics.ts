@@ -389,7 +389,10 @@ export async function getRevenueByCategory(
 // BÁN HÀNG (Sales) - /phan-tich/ban-hang
 // ========================================
 
-export async function getSalesKpis(branchId?: string): Promise<{
+export async function getSalesKpis(
+  branchId?: string,
+  range?: { from: string; to: string },
+): Promise<{
   netRevenue: number; prevNetRevenue: number;
   soldQty: number; prevSoldQty: number;
   avgOrderValue: number; prevAvgOrderValue: number;
@@ -397,10 +400,11 @@ export async function getSalesKpis(branchId?: string): Promise<{
 }> {
   const supabase = getClient();
   const tenantId = await getCurrentTenantId();
-  const thisMonth = thisMonthRange();
-  const now = new Date();
-  const prevStart = new Date(now.getFullYear(), now.getMonth() - 1, 1);
-  const prevEnd = new Date(now.getFullYear(), now.getMonth(), 1);
+  // CEO 11/06/2026 (P0-4 audit): nhận `range` param. Trước đây HARDCODE
+  // thisMonthRange → user đổi preset "Tháng trước"/custom → 4 KPI cards vẫn
+  // tháng này nhưng 2 chart đổi → mâu thuẫn trên cùng trang.
+  const current = resolveRange(range, thisMonthRange());
+  const prev = previousRange(current);
 
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
   function bq<T>(query: T): T { return branchId ? (query as any).eq("branch_id", branchId) : query; }
@@ -408,12 +412,12 @@ export async function getSalesKpis(branchId?: string): Promise<{
   function bqJoin<T>(query: T): T { return branchId ? (query as any).eq("invoices.branch_id", branchId) : query; }
 
   const [thisInv, prevInv, thisItems, prevItems, thisReturns, prevReturns] = await Promise.all([
-    bq(supabase.from("invoices").select("total, status").eq("tenant_id", tenantId).gte("created_at", thisMonth.start).lt("created_at", thisMonth.end)),
-    bq(supabase.from("invoices").select("total, status").eq("tenant_id", tenantId).gte("created_at", prevStart.toISOString()).lt("created_at", prevEnd.toISOString())),
-    bqJoin(supabase.from("invoice_items").select("quantity, invoices!inner(created_at, status, branch_id, tenant_id)").eq("invoices.tenant_id", tenantId).gte("invoices.created_at", thisMonth.start).eq("invoices.status", "completed")),
-    bqJoin(supabase.from("invoice_items").select("quantity, invoices!inner(created_at, status, branch_id, tenant_id)").eq("invoices.tenant_id", tenantId).gte("invoices.created_at", prevStart.toISOString()).lt("invoices.created_at", prevEnd.toISOString()).eq("invoices.status", "completed")),
-    bq(supabase.from("sales_returns").select("id", { count: "exact", head: true }).eq("tenant_id", tenantId).gte("created_at", thisMonth.start).lt("created_at", thisMonth.end)),
-    bq(supabase.from("sales_returns").select("id", { count: "exact", head: true }).eq("tenant_id", tenantId).gte("created_at", prevStart.toISOString()).lt("created_at", prevEnd.toISOString())),
+    bq(supabase.from("invoices").select("total, status").eq("tenant_id", tenantId).gte("created_at", current.start).lt("created_at", current.end)),
+    bq(supabase.from("invoices").select("total, status").eq("tenant_id", tenantId).gte("created_at", prev.start).lt("created_at", prev.end)),
+    bqJoin(supabase.from("invoice_items").select("quantity, invoices!inner(created_at, status, branch_id, tenant_id)").eq("invoices.tenant_id", tenantId).gte("invoices.created_at", current.start).lt("invoices.created_at", current.end).eq("invoices.status", "completed")),
+    bqJoin(supabase.from("invoice_items").select("quantity, invoices!inner(created_at, status, branch_id, tenant_id)").eq("invoices.tenant_id", tenantId).gte("invoices.created_at", prev.start).lt("invoices.created_at", prev.end).eq("invoices.status", "completed")),
+    bq(supabase.from("sales_returns").select("id", { count: "exact", head: true }).eq("tenant_id", tenantId).gte("created_at", current.start).lt("created_at", current.end)),
+    bq(supabase.from("sales_returns").select("id", { count: "exact", head: true }).eq("tenant_id", tenantId).gte("created_at", prev.start).lt("created_at", prev.end)),
   ]);
 
   const calcRev = (d: { total: number; status: string }[] | null) => (d ?? []).filter(i => i.status === "completed").reduce((s, i) => s + (i.total ?? 0), 0);
