@@ -69,6 +69,21 @@ export async function getCashBookEntries(params: QueryParams): Promise<QueryResu
     query = query.eq("branch_id", params.branchId);
   }
 
+  // CEO 11/06/2026 (P0-3 audit): filter theo status. UI sổ quỹ có state
+  // `selectedStatuses` (mặc định ['completed','pending']) nhưng trước đây
+  // KHÔNG truyền vào → phiếu CANCELLED vẫn hiện trong list + cộng vào tổng
+  // → tồn quỹ lệch số dư bank thực. Giờ:
+  // - Nếu UI truyền statuses (array) → filter .in
+  // - Nếu không truyền → MẶC ĐỊNH loại cancelled (giữ tương thích caller cũ)
+  const statuses = params.filters?.statuses as string[] | undefined;
+  if (Array.isArray(statuses) && statuses.length > 0) {
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    query = (query as any).in("status", statuses);
+  } else {
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    query = (query as any).neq("status", "cancelled");
+  }
+
   // Sort & paginate
   query = query
     .order("created_at", { ascending: false })
@@ -112,6 +127,7 @@ export async function getCashBookSummaryAsync(params?: {
   branchId?: string;
   dateFrom?: string;
   dateTo?: string;
+  statuses?: string[];
 }): Promise<{
   totalReceipt: number;
   totalPayment: number;
@@ -131,6 +147,15 @@ export async function getCashBookSummaryAsync(params?: {
     const end = new Date(params.dateTo);
     end.setDate(end.getDate() + 1);
     query = query.lt("created_at", end.toISOString());
+  }
+
+  // CEO 11/06/2026 (P0-3 audit): filter status — KHÔNG cộng phiếu cancelled.
+  if (params?.statuses && params.statuses.length > 0) {
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    query = (query as any).in("status", params.statuses);
+  } else {
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    query = (query as any).neq("status", "cancelled");
   }
 
   const { data, error } = await query;
@@ -154,6 +179,14 @@ export async function getCashBookSummaryAsync(params?: {
       .eq("tenant_id", tenantId)
       .lt("created_at", params.dateFrom);
     if (params?.branchId) openingQ = openingQ.eq("branch_id", params.branchId);
+    // P0-3: cũng phải loại cancelled cho opening balance
+    if (params?.statuses && params.statuses.length > 0) {
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      openingQ = (openingQ as any).in("status", params.statuses);
+    } else {
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      openingQ = (openingQ as any).neq("status", "cancelled");
+    }
     const { data: openingData } = await openingQ;
     openingBalance = (openingData ?? []).reduce((sum, e) => {
       const amt = Number(e.amount ?? 0);

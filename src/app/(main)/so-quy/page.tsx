@@ -297,6 +297,9 @@ export default function SoQuyPage() {
     if (thuChiCategory !== "all") filters.category = thuChiCategory;
     if (range.from) filters.dateFrom = range.from;
     if (range.to) filters.dateTo = range.to;
+    // CEO 11/06/2026 (P0-3): truyền selectedStatuses vào filter.
+    // Trước đây UI có state nhưng KHÔNG wire → phiếu cancelled vào tổng quỹ.
+    if (selectedStatuses.length > 0) filters.statuses = selectedStatuses;
 
     const [listResult, summaryResult] = await Promise.all([
       getCashBookEntries({
@@ -310,6 +313,7 @@ export default function SoQuyPage() {
         branchId: activeBranchId,
         dateFrom: range.from,
         dateTo: range.to,
+        statuses: selectedStatuses.length > 0 ? selectedStatuses : undefined,
       }).catch(() => ({ totalReceipt: 0, totalPayment: 0, openingBalance: 0 })),
     ]);
     setData(listResult.data);
@@ -319,6 +323,7 @@ export default function SoQuyPage() {
   }, [
     search,
     selectedDocTypes,
+    selectedStatuses,
     page,
     pageSize,
     activeBranchId,
