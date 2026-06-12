@@ -232,7 +232,8 @@ function PosPageInner() {
   // CEO 05/06/2026: VAT đơn — dropdown 0/5/8/10%, mặc định 0% (KHÔNG tự áp).
   // Cashier chọn khi cần xuất hoá đơn VAT cho khách. Áp cấp đơn (trên total
   // sau discount + shipping) — khác taxAmount tính per-product.
-  const [orderVatRate, setOrderVatRate] = useState<number>(0);
+  // P0-1 fix 12/06/2026: chuyển vào use-pos-state hook → state.orderVatRate
+  // tự động fold vào state.total để checkout payload đúng số khách trả.
   // Coupon apply state
   const [couponCode, setCouponCode] = useState("");
   const [couponApplying, setCouponApplying] = useState(false);
@@ -2676,8 +2677,8 @@ function PosPageInner() {
                 <span className="text-xs text-muted-foreground">VAT đơn</span>
                 <div className="inline-flex items-center gap-1.5">
                   <select
-                    value={orderVatRate}
-                    onChange={(e) => setOrderVatRate(Number(e.target.value))}
+                    value={state.orderVatRate}
+                    onChange={(e) => state.setOrderVatRate(Number(e.target.value))}
                     className="h-6 text-[11px] border border-border rounded px-1.5 bg-white outline-none cursor-pointer"
                   >
                     <option value={0}>0%</option>
@@ -2685,9 +2686,9 @@ function PosPageInner() {
                     <option value={8}>8%</option>
                     <option value={10}>10%</option>
                   </select>
-                  {orderVatRate > 0 && (
+                  {state.orderVatRate > 0 && (
                     <span className="text-[11px] text-status-warning font-medium tabular-nums min-w-[64px] text-right">
-                      +{formatCurrency(Math.ceil((state.total) * orderVatRate / 100))}
+                      +{formatCurrency(state.orderVatAmount)}
                     </span>
                   )}
                 </div>
@@ -2705,13 +2706,11 @@ function PosPageInner() {
             )}
 
             {/* Total — Stitch font-heading extrabold primary
-                CEO 05/06/2026: Cộng VAT đơn vào "Khách cần trả" cuối */}
+                P0-1 fix 12/06/2026: state.total đã fold orderVatAmount → hết duplicate render. */}
             <div className="flex justify-between items-baseline pt-2 border-t border-outline-variant/20">
               <span className="text-sm font-semibold text-foreground">Khách cần trả</span>
               <span className="font-heading text-lg font-extrabold text-primary tabular-nums">
-                {formatCurrency(
-                  state.total + Math.ceil((state.total) * orderVatRate / 100),
-                )} ₫
+                {formatCurrency(state.total)} ₫
               </span>
             </div>
           </div>

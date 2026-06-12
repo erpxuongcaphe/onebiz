@@ -38,6 +38,8 @@ export interface PosSnapshot {
   loadedDraftId: string | null;
   sellingMode: SellingMode;
   deliveryInfo: DeliveryInfo;
+  /** P0-1 fix 12/06/2026: VAT đơn cấp đơn (0/5/8/10). Multi-tab save/restore. */
+  orderVatRate?: number;
 }
 
 export type DiscountMode = "amount" | "percent";
@@ -137,6 +139,11 @@ export function usePosState() {
   const [note, setNote] = useState<string>("");
   const [loadedDraftId, setLoadedDraftId] = useState<string | null>(null);
   const [sellingMode, setSellingMode] = useState<SellingMode>("normal");
+  // P0-1 fix 12/06/2026: VAT đơn (0/5/8/10%) áp cấp đơn. Trước đây local-state ở
+  // pos/page.tsx, render cộng "+orderVatAmount" vào "Khách cần trả" NHƯNG không
+  // gắn vào state.total → invoice.total lưu DB THIẾU phần VAT đơn.
+  // Nay đưa vào hook + fold vào total → checkout payload truyền đủ.
+  const [orderVatRate, setOrderVatRate] = useState<number>(0);
   const [deliveryInfo, setDeliveryInfo] = useState<DeliveryInfo>({
     recipientName: "",
     recipientPhone: "",
@@ -239,6 +246,7 @@ export function usePosState() {
       { method: "card", amount: 0 },
     ]);
     setOrderDiscount({ mode: "amount", value: 0 });
+    setOrderVatRate(0);
     setNote("");
     setLoadedDraftId(null);
     setDeliveryInfo({
@@ -311,16 +319,24 @@ export function usePosState() {
     return Math.max(0, orderDiscount.value);
   }, [orderDiscount, afterLineDiscount]);
 
-  const taxAmount = useMemo(
-    () => lines.reduce((sum, l) => {
-      const lineBeforeTax = l.quantity * l.unitPrice - computeLineDiscount(l);
-      return sum + Math.round(lineBeforeTax * (l.vatRate ?? 0) / 100);
-    }, 0),
-    [lines]
-  );
+  // P0-14 fix 12/06/2026: VAT tính trên net (sau cả line discount + order discount).
+  // Trước: VAT = (qty*price - lineDisc) * vatRate → bỏ qua order discount → over-VAT
+  // Nay: scale theo (after - orderDisc)/after → đúng luật VAT VN (tính trên net).
+  const taxAmount = useMemo(() => {
+    if (afterLineDiscount <= 0) return 0;
+    const discScale = Math.max(0, (afterLineDiscount - orderDiscountAmount) / afterLineDiscount);
+    return lines.reduce((sum, l) => {
+      const lineNet = (l.quantity * l.unitPrice - computeLineDiscount(l)) * discScale;
+      return sum + Math.round(lineNet * (l.vatRate ?? 0) / 100);
+    }, 0);
+  }, [lines, afterLineDiscount, orderDiscountAmount]);
 
   const shippingFee = sellingMode === "delivery" ? deliveryInfo.shippingFee : 0;
-  const total = Math.max(0, afterLineDiscount - orderDiscountAmount + taxAmount + shippingFee);
+  // P0-1 fix: orderVatAmount = VAT cấp đơn trên (after - orderDisc + lineVAT + shipping)
+  // → fold vào total để checkout payload truyền đủ tiền khách trả.
+  const baseBeforeOrderVat = Math.max(0, afterLineDiscount - orderDiscountAmount + taxAmount + shippingFee);
+  const orderVatAmount = Math.ceil(baseBeforeOrderVat * orderVatRate / 100);
+  const total = baseBeforeOrderVat + orderVatAmount;
   const debt = Math.max(0, total - paid);
   const change = Math.max(0, paid - total);
   const itemCount = lines.reduce((sum, l) => sum + l.quantity, 0);
@@ -360,7 +376,8 @@ export function usePosState() {
     loadedDraftId,
     sellingMode,
     deliveryInfo,
-  }), [lines, customer, paymentMethod, paid, paymentBreakdown, orderDiscount, note, loadedDraftId, sellingMode, deliveryInfo]);
+    orderVatRate,
+  }), [lines, customer, paymentMethod, paid, paymentBreakdown, orderDiscount, note, loadedDraftId, sellingMode, deliveryInfo, orderVatRate]);
 
   /**
    * Phase F5-Recovery (CEO 01/06/2026): khôi phục giỏ từ localStorage backup
@@ -414,6 +431,7 @@ export function usePosState() {
     setLoadedDraftId(snap.loadedDraftId);
     setSellingMode(snap.sellingMode);
     setDeliveryInfo(snap.deliveryInfo);
+    setOrderVatRate(snap.orderVatRate ?? 0);
   }, []);
 
   return {
@@ -428,12 +446,14 @@ export function usePosState() {
     loadedDraftId,
     sellingMode,
     deliveryInfo,
+    orderVatRate,
 
     // Computed
     subtotal,
     lineDiscountTotal,
     orderDiscountAmount,
     taxAmount,
+    orderVatAmount,
     shippingFee,
     total,
     debt,
@@ -452,6 +472,7 @@ export function usePosState() {
     setNote,
     setSellingMode,
     setDeliveryInfo,
+    setOrderVatRate,
     // CEO 04/05 — auto-save callback set khi draft lên server thành công.
     // handleComplete dùng để biết → đi nhánh completeDraftOrder.
     setLoadedDraftId,
