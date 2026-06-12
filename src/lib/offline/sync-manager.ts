@@ -197,8 +197,10 @@ async function executeAction(
     case "fnbPayment":
       return fnbPayment(payload as FnbPaymentInput);
     case "addItems": {
-      const p = payload as { kitchenOrderId: string; items: SendToKitchenInput["items"] };
-      await addItemsToExistingOrder(p.kitchenOrderId, p.items);
+      // P0-8 fix 12/06/2026: forward batchId từ payload — DB UNIQUE INDEX
+      // (kitchen_order_id, batch_id) chặn nếu queue replay 2 lần cùng batch.
+      const p = payload as { kitchenOrderId: string; items: SendToKitchenInput["items"]; batchId?: string };
+      await addItemsToExistingOrder(p.kitchenOrderId, p.items, { batchId: p.batchId });
       return { success: true };
     }
     case "posCheckout":

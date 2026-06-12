@@ -158,11 +158,17 @@ export async function offlineFnbPayment(
 export async function offlineAddItemsToExistingOrder(
   kitchenOrderId: string,
   items: SendToKitchenInput["items"],
-  isOnline: boolean
+  isOnline: boolean,
+  options?: { batchId?: string },
 ): Promise<{ isOffline?: boolean }> {
+  // P0-8 fix 12/06/2026: batchId stable identify 1 lần ấn "Gửi thêm".
+  // Online lần đầu → DB nhận batchId, lưu vào kitchen_order_items.batch_id.
+  // Offline queue replay → cùng batchId → DB chặn dup nhờ UNIQUE INDEX.
+  const batchId = options?.batchId ?? (typeof crypto !== "undefined" && crypto.randomUUID ? crypto.randomUUID() : `b-${Date.now()}-${Math.random().toString(36).slice(2, 10)}`);
+
   // Online → call real service directly
   if (isOnline) {
-    await addItemsToExistingOrder(kitchenOrderId, items);
+    await addItemsToExistingOrder(kitchenOrderId, items, { batchId });
     return {};
   }
 
@@ -188,7 +194,7 @@ export async function offlineAddItemsToExistingOrder(
 
     await enqueue({
       action: "addItems",
-      payload: { kitchenOrderId, items },
+      payload: { kitchenOrderId, items, batchId },
       localId: kitchenOrderId,
       createdAt: new Date().toISOString(),
     });

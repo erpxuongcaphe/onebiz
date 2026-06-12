@@ -314,6 +314,11 @@ export async function createKitchenOrder(
 
 /**
  * Add items to an existing kitchen order (bổ sung món).
+ *
+ * P0-8 fix 12/06/2026: idempotency cho "Gửi thêm". batchId (UUID) generate
+ * khi cashier click "Gửi bếp" — tất cả items cùng batch chia sẻ batch_id.
+ * UNIQUE INDEX (kitchen_order_id, batch_id) chặn replay → bếp KHÔNG nhận
+ * món lặp khi network glitch / offline drain trùng / user F5 mid-flight.
  */
 export async function addItemsToOrder(
   orderId: string,
@@ -328,7 +333,11 @@ export async function addItemsToOrder(
     toppings?: ToppingAttachment[];
     /** CEO 01/06/2026 — Sprint 2.4b */
     modifierSelections?: import("@/lib/types/fnb").ModifierSelectionPayload[];
-  }[]
+  }[],
+  options?: {
+    /** P0-8: UUID identify 1 lần ấn "Gửi thêm" — replay cùng batchId sẽ bị DB chặn */
+    batchId?: string;
+  },
 ): Promise<void> {
   const supabase = getClient();
 
@@ -338,9 +347,12 @@ export async function addItemsToOrder(
     () => new Map<string, string | null>(),
   );
 
+  const batchId = options?.batchId ?? null;
+
   const itemsData: (KOItemInsert & {
     kitchen_station_id?: string | null;
     modifier_selections?: unknown;
+    batch_id?: string | null;
   })[] = items.map((item) => ({
     kitchen_order_id: orderId,
     product_id: item.productId,
@@ -354,6 +366,8 @@ export async function addItemsToOrder(
     // CEO 01/06/2026 — Sprint 2.4b
     modifier_selections: item.modifierSelections ?? null,
     kitchen_station_id: stationMap.get(item.productId) ?? null,
+    // P0-8 idempotency
+    batch_id: batchId,
   }));
 
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
@@ -361,7 +375,13 @@ export async function addItemsToOrder(
     .from("kitchen_order_items")
     .insert(itemsData);
 
-  if (error) handleError(error, "addItemsToOrder");
+  if (error) {
+    // P0-8: 23505 = unique_violation trên (kitchen_order_id, batch_id) → đã có batch này → coi như đã xử lý
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    const code = (error as any).code;
+    if (batchId && code === "23505") return;
+    handleError(error, "addItemsToOrder");
+  }
 }
 
 /**

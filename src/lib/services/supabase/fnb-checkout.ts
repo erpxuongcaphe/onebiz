@@ -287,12 +287,15 @@ export async function fnbPayment(input: FnbPaymentInput): Promise<FnbPaymentResu
 /**
  * Add more items to an existing kitchen order.
  * Wraps addItemsToOrder from kitchen-orders service.
+ *
+ * P0-8 fix 12/06/2026: forward batchId (UUID) cho idempotency replay-safe.
  */
 export async function addItemsToExistingOrder(
   kitchenOrderId: string,
-  items: SendToKitchenInput["items"]
+  items: SendToKitchenInput["items"],
+  options?: { batchId?: string },
 ): Promise<void> {
-  await addItemsToOrder(kitchenOrderId, items);
+  await addItemsToOrder(kitchenOrderId, items, options);
 }
 
 // ============================================================
