@@ -183,7 +183,7 @@ begin
 end;
 $$;
 
-comment on function public.get_vat_report is
+comment on function public.get_vat_report(timestamptz, timestamptz, uuid) is
   'Báo cáo VAT đầu vào / đầu ra theo kỳ. P0-13 fix (13/06/2026): EXCLUDE '
   'invoices.source=internal khỏi output + UNION input_invoices vào input '
   '(filter: NOT internal supplier + NOT purchase_order_id link).';
