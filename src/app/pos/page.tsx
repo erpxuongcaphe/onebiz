@@ -793,14 +793,20 @@ function PosPageInner() {
   // Trừ 1 case: d.value === 0 (xoá discount) → không cần OTP.
   const handleOrderDiscountChange = useCallback(
     (d: import("./hooks/use-pos-state").DiscountInput) => {
-      // Xoá discount (về 0) → không cần OTP
+      // Xoá discount (về 0) → không cần OTP. P4: cũng reset source để
+      // auto-promotion có thể chạy lại.
       if (d.value === 0) {
         state.setOrderDiscount(d);
+        setDiscountSource(null);
         return;
       }
 
       // Bất kỳ giảm giá manual > 0 → mở OTP dialog
-      pendingApprovalRef.current = () => state.setOrderDiscount(d);
+      pendingApprovalRef.current = () => {
+        state.setOrderDiscount(d);
+        // P4: tag source='manual' để auto-promotion KHÔNG ghi đè.
+        setDiscountSource("manual");
+      };
       setDiscountOtpOpen(true);
     },
     [state]
@@ -831,6 +837,8 @@ function PosPageInner() {
         return;
       }
       state.setOrderDiscount({ mode: "amount", value: amount });
+      // P4: coupon = source độc lập, KHÔNG cho auto-promotion ghi đè.
+      setDiscountSource("coupon");
       setCouponApplied(code);
       toast({
         title: `Đã áp mã ${code}`,
@@ -852,6 +860,8 @@ function PosPageInner() {
     setCouponApplied(null);
     setCouponCode("");
     state.setOrderDiscount({ mode: "amount", value: 0 });
+    // P4: clear source → auto-promotion được phép chạy lại từ đầu.
+    setDiscountSource(null);
   }, [state]);
 
   const handleOpenShift = useCallback(
@@ -993,6 +1003,10 @@ function PosPageInner() {
     if (pct <= 0) return;
     if (state.orderDiscount.value > 0) return; // respect manual override
     state.setOrderDiscount({ mode: "percent", value: pct });
+    // P4: tag 'auto' → vẫn bị overwrite bởi promotion engine (đúng UX), nhưng
+    // KHÔNG bị ghi đè bởi cashier nếu họ sửa tay (effect re-run skip nếu
+    // discountSource đã là 'manual' / 'coupon').
+    setDiscountSource("auto");
     toast({
       title: `Khách ${state.customer?.groupName ?? "VIP"}`,
       description: `Áp dụng chiết khấu ${pct}% theo nhóm khách`,
@@ -1098,6 +1112,18 @@ function PosPageInner() {
   // để clear thủ công (overrideClearedPromo = true → skip auto-resolve).
   const [appliedPromotion, setAppliedPromotion] = useState<AppliedPromotion | null>(null);
   const [promotionCleared, setPromotionCleared] = useState(false);
+  // P4 13/06/2026: track nguồn discount để chống auto-promotion ghi đè giá trị
+  // cashier vừa nhập tay hoặc coupon vừa áp.
+  //   - 'manual': cashier gõ ô "Chiết khấu đơn" (đã qua OTP duyệt)
+  //   - 'coupon': mã giảm giá thủ công
+  //   - 'auto': customer-group % auto-apply
+  //   - 'promotion': KM engine auto match
+  //   - 'redeem': đổi điểm loyalty
+  //   - null: orderDiscount=0 (clean state)
+  // Auto-promotion effect SKIP overwrite khi source = 'manual' | 'coupon'.
+  const [discountSource, setDiscountSource] = useState<
+    "manual" | "coupon" | "auto" | "promotion" | "redeem" | null
+  >(null);
 
   // Check tenant-wide setting "Tự động áp dụng KM tốt nhất" → cache trong state.
   // Resolver tự đọc settings nên ở đây không cần lưu — engine respect setting.
@@ -1109,6 +1135,16 @@ function PosPageInner() {
     // significantly (a new "session"). Heuristic: clearCart resets promotionCleared.
     if (promotionCleared) return;
 
+    // P4 GUARD 13/06/2026: KHÔNG đụng vào orderDiscount khi cashier đã đặt
+    // thủ công (manual qua OTP) hoặc đã áp coupon. Trước đây effect re-run
+    // mỗi khi thêm/sửa line → ghi đè giá trị cashier vừa nhập → sai tiền in
+    // hóa đơn mà cashier không hay biết.
+    if (discountSource === "manual" || discountSource === "coupon") {
+      // Skip auto-promotion entirely. Cashier vẫn có thể bấm X coupon /
+      // sửa lại discount để bật auto-resolve trở lại.
+      return;
+    }
+
     // Cart rỗng → không apply KM
     if (state.lines.length === 0) {
       if (appliedPromotion) {
@@ -1116,6 +1152,10 @@ function PosPageInner() {
         // Clear orderDiscount nếu trước đó là do KM set
         state.setOrderDiscount({ mode: "amount", value: 0 });
       }
+      // P4: reset source unconditionally khi cart rỗng (vd cashier "Huỷ đơn"
+      // làm clearCart → discount cũ về 0 nhưng source bị stale → block sai
+      // auto-promotion ở đơn mới).
+      setDiscountSource(null);
       return;
     }
 
@@ -1139,6 +1179,7 @@ function PosPageInner() {
           if (appliedPromotion) {
             setAppliedPromotion(null);
             state.setOrderDiscount({ mode: "amount", value: 0 });
+            setDiscountSource(null);
           }
           return;
         }
@@ -1146,6 +1187,7 @@ function PosPageInner() {
         if (appliedPromotion?.promotion.id !== best.promotion.id) {
           setAppliedPromotion(best);
           state.setOrderDiscount({ mode: "amount", value: best.discountAmount });
+          setDiscountSource("promotion");
           toast({
             title: `Áp dụng khuyến mãi: ${best.promotion.name}`,
             description: `${best.reasonLabel} — Giảm ${formatCurrency(best.discountAmount)}đ`,
@@ -1155,6 +1197,7 @@ function PosPageInner() {
           // Cùng promo, đổi discount (vd cart thay đổi qty)
           setAppliedPromotion(best);
           state.setOrderDiscount({ mode: "amount", value: best.discountAmount });
+          setDiscountSource("promotion");
         }
       })
       .catch(() => {
@@ -1162,19 +1205,22 @@ function PosPageInner() {
         if (appliedPromotion) {
           setAppliedPromotion(null);
           state.setOrderDiscount({ mode: "amount", value: 0 });
+          setDiscountSource(null);
         }
       });
     return () => {
       cancelled = true;
     };
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [state.lines.length, state.subtotal, state.customer?.id, currentBranch?.id, promotionCleared]);
+  }, [state.lines.length, state.subtotal, state.customer?.id, currentBranch?.id, promotionCleared, discountSource]);
 
   function clearAppliedPromotion() {
     setAppliedPromotion(null);
     setPromotionCleared(true);
     // Khi clear promotion, giữ redeem nếu có. setOrderDiscount = redeem only.
     state.setOrderDiscount({ mode: "amount", value: appliedRedeem?.discountAmount ?? 0 });
+    // P4: source = 'redeem' nếu còn redeem, null nếu không.
+    setDiscountSource(appliedRedeem ? "redeem" : null);
   }
 
   // ============================================================
