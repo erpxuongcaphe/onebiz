@@ -250,11 +250,19 @@ export function FnbHeader({
               tabIndex={0}
               onClick={(e) => {
                 e.stopPropagation();
-                // P1-3D-P2 12/06/2026: guard tab close khi có items hoặc đã gửi bếp.
-                // Trước đây click X = mất sạch local state + bàn vẫn occupied ở
-                // server → barista stuck không mở lại được để thanh toán.
+                // P1-3D-P2 12/06/2026 + R-6 13/06/2026 audit lần 2:
+                // - Tab dine_in ĐÃ gửi bếp → KHÓA hoàn toàn (bàn occupied ở
+                //   server, đóng tab sẽ stuck bàn — phải thanh toán trước).
+                // - Tab takeaway/delivery đã gửi bếp → confirm OK.
+                // - Tab có items chưa gửi → confirm.
                 const hasItems = (tab.lines?.length ?? 0) > 0;
                 const sentToKitchen = !!tab.kitchenOrderId;
+                if (sentToKitchen && tab.orderType === "dine_in" && typeof window !== "undefined") {
+                  window.alert(
+                    `"${tab.label}" đã gửi bếp — bàn đang occupied. Vui lòng "Thanh toán" hoặc "Hủy đơn" để giải phóng bàn trước khi đóng tab.`
+                  );
+                  return;
+                }
                 if ((hasItems || sentToKitchen) && typeof window !== "undefined") {
                   const msg = sentToKitchen
                     ? `"${tab.label}" đã gửi bếp. Đóng tab sẽ mất link local — đơn vẫn ở KDS. Tiếp tục?`
@@ -268,6 +276,12 @@ export function FnbHeader({
                   e.stopPropagation();
                   const hasItems = (tab.lines?.length ?? 0) > 0;
                   const sentToKitchen = !!tab.kitchenOrderId;
+                  if (sentToKitchen && tab.orderType === "dine_in" && typeof window !== "undefined") {
+                    window.alert(
+                      `"${tab.label}" đã gửi bếp — bàn đang occupied. Vui lòng "Thanh toán" hoặc "Hủy đơn" để giải phóng bàn trước khi đóng tab.`
+                    );
+                    return;
+                  }
                   if ((hasItems || sentToKitchen) && typeof window !== "undefined") {
                     const msg = sentToKitchen
                       ? `"${tab.label}" đã gửi bếp. Đóng tab sẽ mất link local — đơn vẫn ở KDS. Tiếp tục?`

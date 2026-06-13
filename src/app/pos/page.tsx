@@ -1212,7 +1212,12 @@ function PosPageInner() {
       cancelled = true;
     };
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [state.lines.length, state.subtotal, state.customer?.id, currentBranch?.id, promotionCleared, discountSource]);
+    // P4-R1 13/06/2026 audit lần 2: KHÔNG đưa discountSource vào deps. Nếu đưa,
+    // setDiscountSource("promotion") ở line ~1190 → trigger effect re-run →
+    // có thể overwrite redeem stack (effect 1281 chỉ sync khi appliedRedeem
+    // hoặc appliedPromotion đổi). discountSource chỉ ĐỌC trong guard, không
+    // cần reactive.
+  }, [state.lines.length, state.subtotal, state.customer?.id, currentBranch?.id, promotionCleared]);
 
   function clearAppliedPromotion() {
     setAppliedPromotion(null);
@@ -1930,6 +1935,11 @@ function PosPageInner() {
       setAppliedPromotion(null);
       setPromotionCleared(false);
       setAppliedRedeem(null);
+      // P4-R2 13/06/2026 audit lần 2: reset discountSource cho idempotent.
+      // Trước đây dựa vào effect 1131 fallthrough (state.lines.length===0)
+      // để reset — nếu race với regen sessionId hoặc promotionCleared=true
+      // → đơn tiếp theo stuck source='manual' block auto-promo silent.
+      setDiscountSource(null);
       setSearchQuery("");
       setMobileCartOpen(false);
       setChangeDialog({ open: false, excess: 0 });
