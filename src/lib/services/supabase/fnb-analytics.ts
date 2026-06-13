@@ -105,9 +105,13 @@ export async function getFnbKpis(
 export async function getRevenueByMenuItem(
   branchId?: string,
   limit = 15,
+  range?: { from: string; to: string },
 ): Promise<MenuItemRevenue[]> {
   const supabase = getClient();
   const tenantId = await getCurrentTenantId();
+  // P1-3B-R1 12/06/2026: thêm range — trước đây all-time mạo danh "kỳ này".
+  const rangeStart = range ? `${range.from}T00:00:00+07:00` : null;
+  const rangeEnd = range ? `${range.to}T23:59:59.999+07:00` : null;
 
   // Get completed kitchen order IDs
   let koQuery = supabase
@@ -116,6 +120,9 @@ export async function getRevenueByMenuItem(
     .eq("tenant_id", tenantId)
     .eq("status", "completed");
   if (branchId) koQuery = koQuery.eq("branch_id", branchId);
+  if (rangeStart && rangeEnd) {
+    koQuery = koQuery.gte("created_at", rangeStart).lt("created_at", rangeEnd);
+  }
 
   const { data: koRows } = await koQuery;
   const koIds = (koRows ?? []).map((r) => r.id);
@@ -148,9 +155,13 @@ export async function getRevenueByMenuItem(
  */
 export async function getRevenueByTable(
   branchId?: string,
+  range?: { from: string; to: string },
 ): Promise<TableRevenue[]> {
   const supabase = getClient();
   const tenantId = await getCurrentTenantId();
+  // P1-3B-R1: range filter.
+  const rangeStart = range ? `${range.from}T00:00:00+07:00` : null;
+  const rangeEnd = range ? `${range.to}T23:59:59.999+07:00` : null;
 
   let query = supabase
     .from("kitchen_orders")
@@ -159,6 +170,9 @@ export async function getRevenueByTable(
     .eq("status", "completed")
     .not("table_id", "is", null);
   if (branchId) query = query.eq("branch_id", branchId);
+  if (rangeStart && rangeEnd) {
+    query = query.gte("created_at", rangeStart).lt("created_at", rangeEnd);
+  }
 
   const { data: rows } = await query;
 
@@ -182,9 +196,13 @@ export async function getRevenueByTable(
  */
 export async function getRevenueByHourFnb(
   branchId?: string,
+  range?: { from: string; to: string },
 ): Promise<HourlyRevenue[]> {
   const supabase = getClient();
   const tenantId = await getCurrentTenantId();
+  // P1-3B-R1: range filter.
+  const rangeStart = range ? `${range.from}T00:00:00+07:00` : null;
+  const rangeEnd = range ? `${range.to}T23:59:59.999+07:00` : null;
 
   let query = supabase
     .from("invoices")
@@ -193,6 +211,9 @@ export async function getRevenueByHourFnb(
     .eq("source", "fnb")
     .not("status", "eq", "cancelled");
   if (branchId) query = query.eq("branch_id", branchId);
+  if (rangeStart && rangeEnd) {
+    query = query.gte("created_at", rangeStart).lt("created_at", rangeEnd);
+  }
 
   const { data: rows } = await query;
 
@@ -222,9 +243,13 @@ export async function getRevenueByHourFnb(
  */
 export async function getCashierPerformance(
   branchId?: string,
+  range?: { from: string; to: string },
 ): Promise<CashierPerformance[]> {
   const supabase = getClient();
   const tenantId = await getCurrentTenantId();
+  // P1-3B-R1: range filter.
+  const rangeStart = range ? `${range.from}T00:00:00+07:00` : null;
+  const rangeEnd = range ? `${range.to}T23:59:59.999+07:00` : null;
 
   let query = supabase
     .from("invoices")
@@ -233,6 +258,9 @@ export async function getCashierPerformance(
     .eq("source", "fnb")
     .not("status", "eq", "cancelled");
   if (branchId) query = query.eq("branch_id", branchId);
+  if (rangeStart && rangeEnd) {
+    query = query.gte("created_at", rangeStart).lt("created_at", rangeEnd);
+  }
 
   const { data: rows } = await query;
 

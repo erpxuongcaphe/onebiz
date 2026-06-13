@@ -171,9 +171,11 @@ export default function BanHangPage() {
       const [kpisData, daily, weekday, hourly, invoices] = await Promise.all([
         getSalesKpis(activeBranchId, range),
         getDailyRevenue(30, activeBranchId, range),
-        getSalesRevenueByWeekday(activeBranchId),
+        // P1-3B-R2 12/06/2026: truyền range để panel "Theo thứ" + "Top hóa đơn"
+        // đổi theo preset (trước cố định lastNDaysRange(30) + thisMonthRange).
+        getSalesRevenueByWeekday(activeBranchId, range),
         getSalesRevenueByHour(activeBranchId, range),
-        getTopInvoices(10, activeBranchId),
+        getTopInvoices(10, activeBranchId, range),
       ]);
       setKpis(kpisData);
       setDailyRevenue(daily);

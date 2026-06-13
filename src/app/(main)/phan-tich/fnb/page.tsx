@@ -91,12 +91,14 @@ export default function FnbAnalyticsPage() {
     (async () => {
       setLoading(true);
       try {
+        // P1-3B-R1 12/06/2026: truyền range vào 4 panel (top món, top bàn,
+        // theo giờ, cashier) — trước đây all-time mạo danh "kỳ này".
         const [k, m, t, h, c] = await Promise.all([
           getFnbKpis(activeBranchId, range),
-          getRevenueByMenuItem(activeBranchId),
-          getRevenueByTable(activeBranchId),
-          getRevenueByHourFnb(activeBranchId),
-          getCashierPerformance(activeBranchId),
+          getRevenueByMenuItem(activeBranchId, 15, range),
+          getRevenueByTable(activeBranchId, range),
+          getRevenueByHourFnb(activeBranchId, range),
+          getCashierPerformance(activeBranchId, range),
         ]);
         setKpis(k);
         setMenuItems(m);

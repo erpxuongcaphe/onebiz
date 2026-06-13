@@ -332,11 +332,14 @@ export async function getDailyRevenue(
 
   if (error) handleError(error, "getDailyRevenue");
 
+  // P1-3B-R3 12/06/2026: seed days theo RANGE đã chọn (không phải `now`).
+  // Trước đây nếu customRange = "Tháng trước" (vd 01/05-31/05), grouped vẫn
+  // seed key của 30 ngày gần nhất từ today → chart trộn key zero + key data
+  // sai → label vô nghĩa.
   const grouped = new Map<string, number>();
-  const now = new Date();
-  for (let i = days - 1; i >= 0; i--) {
-    const d = new Date(now);
-    d.setDate(d.getDate() - i);
+  const seedStart = new Date(range.start);
+  const seedEnd = new Date(range.end);
+  for (let d = new Date(seedStart); d < seedEnd; d.setDate(d.getDate() + 1)) {
     const key = `${String(d.getDate()).padStart(2, "0")}/${String(d.getMonth() + 1).padStart(2, "0")}`;
     grouped.set(key, 0);
   }
@@ -441,14 +444,19 @@ export async function getSalesKpis(
   };
 }
 
-export async function getRevenueByWeekday(branchId?: string): Promise<ChartPoint[]> {
+export async function getRevenueByWeekday(
+  branchId?: string,
+  range?: { from: string; to: string },
+): Promise<ChartPoint[]> {
   const supabase = getClient();
   const tenantId = await getCurrentTenantId();
-  const range = lastNDaysRange(30);
+  // P1-3B-R2 12/06/2026: nhận range — trước đây hardcode lastNDaysRange(30) →
+  // user đổi preset trên /phan-tich/ban-hang nhưng panel "Theo thứ" giữ nguyên.
+  const r = resolveRange(range, lastNDaysRange(30));
 
   let query = supabase
     .from("invoices").select("created_at, total").eq("tenant_id", tenantId).eq("status", "completed")
-    .gte("created_at", range.start).lt("created_at", range.end);
+    .gte("created_at", r.start).lt("created_at", r.end);
   if (branchId) query = query.eq("branch_id", branchId);
   const { data, error } = await query;
 
@@ -495,18 +503,23 @@ export async function getRevenueByHour(
   return hours;
 }
 
-export async function getTopInvoices(limit: number = 10, branchId?: string): Promise<TopInvoice[]> {
+export async function getTopInvoices(
+  limit: number = 10,
+  branchId?: string,
+  range?: { from: string; to: string },
+): Promise<TopInvoice[]> {
   const supabase = getClient();
   const tenantId = await getCurrentTenantId();
-  const range = thisMonthRange();
+  // P1-3B-R2: nhận range — trước đây hardcode thisMonthRange.
+  const r = resolveRange(range, thisMonthRange());
 
   let query = supabase
     .from("invoices")
     .select("code, total, created_at, customers(name)")
     .eq("tenant_id", tenantId)
     .eq("status", "completed")
-    .gte("created_at", range.start)
-    .lt("created_at", range.end)
+    .gte("created_at", r.start)
+    .lt("created_at", r.end)
     .order("total", { ascending: false })
     .limit(limit);
   if (branchId) query = query.eq("branch_id", branchId);
@@ -1057,11 +1070,14 @@ export async function getChannelRevenue(
 
   const posRevenue = (posData ?? []).reduce((s, i) => s + (i.total ?? 0), 0);
 
-  // Online orders by channel
+  // Online orders by channel — P1-3B-R5 12/06/2026: filter status=completed
+  // để cân với POS (chỉ completed) → kênh online không phồng giả vì
+  // pending/cancelled.
   let onlineQuery = supabase
     .from("online_orders")
     .select("channel_name, total_amount")
     .eq("tenant_id", tenantId)
+    .eq("status", "completed" as never)
     .gte("created_at", r.start)
     .lt("created_at", r.end);
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
@@ -1100,10 +1116,12 @@ export async function getChannelPerformance(
   const posRev = (posData ?? []).reduce((s, i) => s + (i.total ?? 0), 0);
   const posCount = posData?.length ?? 0;
 
+  // P1-3B-R5 12/06/2026: filter status=completed cho online_orders (cân với POS).
   let onlineQuery = supabase
     .from("online_orders")
     .select("channel_name, total_amount")
     .eq("tenant_id", tenantId)
+    .eq("status", "completed" as never)
     .gte("created_at", r.start)
     .lt("created_at", r.end);
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
@@ -1630,17 +1648,19 @@ export async function getPurchaseByMonth(months: number = 6, branchId?: string):
 
   if (error) handleError(error, "getPurchaseByMonth");
 
+  // P1-3B-R4 12/06/2026: key bao gồm year để khi months>=12 hoặc qua cuối năm
+  // không gộp T12/2025 vào T12/2026.
   const now = new Date();
   const grouped = new Map<string, number>();
   for (let i = months - 1; i >= 0; i--) {
     const d = new Date(now.getFullYear(), now.getMonth() - i, 1);
-    const key = `T${d.getMonth() + 1}`;
+    const key = `T${d.getMonth() + 1}/${d.getFullYear()}`;
     grouped.set(key, 0);
   }
 
   (data ?? []).forEach(po => {
     const d = new Date(po.created_at);
-    const key = `T${d.getMonth() + 1}`;
+    const key = `T${d.getMonth() + 1}/${d.getFullYear()}`;
     if (grouped.has(key)) grouped.set(key, (grouped.get(key) ?? 0) + ((po.total as number) ?? 0));
   });
 
@@ -1787,26 +1807,27 @@ export async function getRevenueVsExpense(months: number = 12, branchId?: string
     bq(supabase.from("cash_transactions").select("created_at, type, amount").eq("tenant_id", tenantId).gte("created_at", range.start).lt("created_at", range.end)),
   ]);
 
+  // P1-3B-R4: key kèm year để không merge T6/2025 và T6/2026.
   const now = new Date();
   const revMap = new Map<string, number>();
   const expMap = new Map<string, number>();
   for (let i = months - 1; i >= 0; i--) {
     const d = new Date(now.getFullYear(), now.getMonth() - i, 1);
-    const key = `T${d.getMonth() + 1}`;
+    const key = `T${d.getMonth() + 1}/${d.getFullYear()}`;
     revMap.set(key, 0);
     expMap.set(key, 0);
   }
 
   (invData.data ?? []).forEach(inv => {
     const d = new Date(inv.created_at);
-    const key = `T${d.getMonth() + 1}`;
+    const key = `T${d.getMonth() + 1}/${d.getFullYear()}`;
     if (revMap.has(key)) revMap.set(key, (revMap.get(key) ?? 0) + (inv.total ?? 0));
   });
 
   (cashData.data ?? []).forEach(c => {
     if (c.type === "payment") {
       const d = new Date(c.created_at);
-      const key = `T${d.getMonth() + 1}`;
+      const key = `T${d.getMonth() + 1}/${d.getFullYear()}`;
       if (expMap.has(key)) expMap.set(key, (expMap.get(key) ?? 0) + (c.amount ?? 0));
     }
   });
@@ -1873,19 +1894,20 @@ export async function getCashFlow(months: number = 6, branchId?: string): Promis
 
   if (error) handleError(error, "getCashFlow");
 
+  // P1-3B-R4: key kèm year (chống merge T6/2025 + T6/2026 → cumulativeBalance sai).
   const now = new Date();
   const thuMap = new Map<string, number>();
   const chiMap = new Map<string, number>();
   for (let i = months - 1; i >= 0; i--) {
     const d = new Date(now.getFullYear(), now.getMonth() - i, 1);
-    const key = `T${d.getMonth() + 1}`;
+    const key = `T${d.getMonth() + 1}/${d.getFullYear()}`;
     thuMap.set(key, 0);
     chiMap.set(key, 0);
   }
 
   (data ?? []).forEach(c => {
     const d = new Date(c.created_at);
-    const key = `T${d.getMonth() + 1}`;
+    const key = `T${d.getMonth() + 1}/${d.getFullYear()}`;
     if (c.type === "receipt") {
       thuMap.set(key, (thuMap.get(key) ?? 0) + (c.amount ?? 0));
     } else {
@@ -1935,11 +1957,12 @@ export async function getCashFlowDetailed(months: number = 6, branchId?: string)
 
   if (error) handleError(error, "getCashFlowDetailed");
 
+  // P1-3B-R4: key kèm year.
   const now = new Date();
   const monthKeys: string[] = [];
   for (let i = months - 1; i >= 0; i--) {
     const d = new Date(now.getFullYear(), now.getMonth() - i, 1);
-    monthKeys.push(`T${d.getMonth() + 1}`);
+    monthKeys.push(`T${d.getMonth() + 1}/${d.getFullYear()}`);
   }
 
   // Group by month → type → category
@@ -1951,7 +1974,7 @@ export async function getCashFlowDetailed(months: number = 6, branchId?: string)
 
   (data ?? []).forEach(c => {
     const d = new Date(c.created_at);
-    const mKey = `T${d.getMonth() + 1}`;
+    const mKey = `T${d.getMonth() + 1}/${d.getFullYear()}`;
     const type = c.type === "receipt" ? "receipt" : "payment";
     const cat = c.category ?? "Khác";
     const mapKey = `${mKey}_${type}`;
