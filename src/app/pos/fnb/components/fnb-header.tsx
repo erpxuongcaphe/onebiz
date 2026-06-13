@@ -250,11 +250,30 @@ export function FnbHeader({
               tabIndex={0}
               onClick={(e) => {
                 e.stopPropagation();
+                // P1-3D-P2 12/06/2026: guard tab close khi có items hoặc đã gửi bếp.
+                // Trước đây click X = mất sạch local state + bàn vẫn occupied ở
+                // server → barista stuck không mở lại được để thanh toán.
+                const hasItems = (tab.lines?.length ?? 0) > 0;
+                const sentToKitchen = !!tab.kitchenOrderId;
+                if ((hasItems || sentToKitchen) && typeof window !== "undefined") {
+                  const msg = sentToKitchen
+                    ? `"${tab.label}" đã gửi bếp. Đóng tab sẽ mất link local — đơn vẫn ở KDS. Tiếp tục?`
+                    : `"${tab.label}" có ${tab.lines.length} món chưa gửi bếp. Đóng tab sẽ mất sạch. Tiếp tục?`;
+                  if (!window.confirm(msg)) return;
+                }
                 closeTab(tab.id);
               }}
               onKeyDown={(e) => {
                 if (e.key === "Enter") {
                   e.stopPropagation();
+                  const hasItems = (tab.lines?.length ?? 0) > 0;
+                  const sentToKitchen = !!tab.kitchenOrderId;
+                  if ((hasItems || sentToKitchen) && typeof window !== "undefined") {
+                    const msg = sentToKitchen
+                      ? `"${tab.label}" đã gửi bếp. Đóng tab sẽ mất link local — đơn vẫn ở KDS. Tiếp tục?`
+                      : `"${tab.label}" có ${tab.lines.length} món chưa gửi bếp. Đóng tab sẽ mất sạch. Tiếp tục?`;
+                    if (!window.confirm(msg)) return;
+                  }
                   closeTab(tab.id);
                 }
               }}

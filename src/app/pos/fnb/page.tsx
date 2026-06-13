@@ -1487,9 +1487,23 @@ function FnbPosPageInner() {
     });
   }, [pos, settings, user]);
 
+  // P1-3D-P1 12/06/2026: submit-lock chống double-click / F9-spam tạo 2 kitchen
+  // order. POS Retail có submitLockRef nhưng FnB trước đây thiếu — dialog đóng
+  // sync ngay khi onConfirm, cashier có thể bấm Xác nhận 2 lần khi network chậm.
+  const fnbSubmitLockRef = useRef(false);
+
   // ── Payment ──
   const handlePayment = useCallback(
     async (payload: FnbPaymentConfirmPayload) => {
+      if (fnbSubmitLockRef.current) {
+        toast({
+          title: "Đang xử lý thanh toán...",
+          description: "Vui lòng đợi vài giây trước khi thử lại.",
+          variant: "info",
+        });
+        return;
+      }
+      fnbSubmitLockRef.current = true;
       const tab = pos.activeTab;
       // CEO 29/05/2026: lấy kitchenOrderId TRỰC TIẾP từ giá trị handleSendToKitchen
       // trả về — KHÔNG đọc lại pos.activeTab (closure cũ chưa cập nhật state sau
@@ -1500,6 +1514,7 @@ function FnbPosPageInner() {
       }
 
       if (!koId) {
+        fnbSubmitLockRef.current = false;
         toast({
           title: "Chưa thể thanh toán",
           description: "Đơn chưa gửi được bếp hoặc chưa có món — vui lòng thử lại.",
@@ -1737,6 +1752,9 @@ function FnbPosPageInner() {
       } catch (err) {
         hapticError();
         toast({ title: "Thanh toán thất bại", description: (err as Error).message, variant: "error" });
+      } finally {
+        // P1-3D-P1: release lock dù success/fail để cashier có thể retry.
+        fnbSubmitLockRef.current = false;
       }
     },
     [pos, tenantId, branchId, userId, handleSendToKitchen, toast, settings, user, networkStatus.isOnline, currentShift?.id, appliedPromotion]

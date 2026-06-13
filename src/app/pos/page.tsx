@@ -1979,11 +1979,21 @@ function PosPageInner() {
       }
       if (e.key === "F9" && !inInput) {
         e.preventDefault();
+        // P1-3D-P6 12/06/2026: nếu đang submit, toast info thay vì silent —
+        // tránh cashier tưởng máy đơ, bấm F12/F5 → mất giỏ (LS cứu nhưng tốn time).
+        if (submitting !== null) {
+          toast({ title: "Đang xử lý, vui lòng đợi…", variant: "info", duration: 2000 });
+          return;
+        }
         if (state.lines.length > 0) handleSaveDraft();
         return;
       }
       if (e.key === "F10" && !inInput) {
         e.preventDefault();
+        if (submitting !== null) {
+          toast({ title: "Đang xử lý, vui lòng đợi…", variant: "info", duration: 2000 });
+          return;
+        }
         if (state.lines.length > 0) handleComplete();
         return;
       }
@@ -2030,6 +2040,9 @@ function PosPageInner() {
     switchTab,
     addTab,
     closeTab,
+    // P1-3D-P6: re-bind handler khi submitting đổi để toast info đúng state.
+    submitting,
+    toast,
   ]);
 
   // ============================================================
