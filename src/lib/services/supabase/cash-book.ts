@@ -12,6 +12,7 @@ import {
   handleError,
 } from "./base";
 import { recordAuditLog } from "./audit";
+import { getOpenShift } from "./shifts";
 
 type CashTransactionInsert = Database["public"]["Tables"]["cash_transactions"]["Insert"];
 
@@ -206,6 +207,17 @@ export async function createCashTransaction(tx: Partial<CashTransaction>): Promi
   const supabase = getClient();
   const ctx = await getCurrentContext();
 
+  // P1-3A 12/06/2026: gắn shift_id nếu cashier đang mở ca → close_shift_atomic
+  // match được phiếu thu/chi vặt (tip, mua bánh shop). Trước đây null → expected_cash
+  // sai trong báo cáo X/Z.
+  let shiftId: string | null = null;
+  try {
+    const shift = await getOpenShift(ctx.branchId, ctx.userId);
+    shiftId = shift?.id ?? null;
+  } catch (err) {
+    console.warn("[createCashTransaction] getOpenShift failed:", err);
+  }
+
   const { data, error } = await supabase
     .from("cash_transactions")
     .insert({
@@ -221,6 +233,7 @@ export async function createCashTransaction(tx: Partial<CashTransaction>): Promi
       reference_id: tx.referenceId || null,
       note: tx.note || null,
       created_by: tx.createdBy || ctx.userId,
+      ...(shiftId ? { shift_id: shiftId } : {}),
     } satisfies CashTransactionInsert)
     .select()
     .single();

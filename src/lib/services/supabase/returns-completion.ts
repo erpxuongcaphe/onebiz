@@ -39,6 +39,12 @@ interface CompleteReturnInput {
   refundPaymentMethod?: RefundPaymentMethod;
   /** Grand total being returned — items × unitPrice sum. Used to derive debt credit. */
   totalAmount?: number;
+  /**
+   * P1-3A 12/06/2026 — shift_id để close_shift_atomic match được phiếu chi refund.
+   * Trước đây null → expected_cash của ca KHÔNG trừ refund → cashier báo "thừa tiền"
+   * (cùng pattern P0 kết-ca-0đ ở orders.ts).
+   */
+  shiftId?: string | null;
 }
 
 export async function completeReturn(input: CompleteReturnInput): Promise<void> {
@@ -79,7 +85,9 @@ export async function completeReturn(input: CompleteReturnInput): Promise<void> 
       reference_id: input.returnId,
       note: `Hoàn tiền phiếu trả hàng ${input.returnCode} (HĐ gốc: ${input.invoiceCode})`,
       created_by: ctx.userId,
-    };
+      // P1-3A: link shift_id để close_shift_atomic match refund.
+      ...(input.shiftId ? { shift_id: input.shiftId } : {}),
+    } as CashTransactionInsert;
 
     const { error } = await supabase.from("cash_transactions").insert(cashData);
     if (error) handleError(error, "completeReturn:cash_payment");

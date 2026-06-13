@@ -17,6 +17,7 @@ import { useToast } from "@/lib/contexts";
 import { getClient, getCurrentContext } from "@/lib/services/supabase/base";
 import { nextEntityCode } from "@/lib/services/supabase/stock-adjustments";
 import { completeReturn } from "@/lib/services/supabase/returns-completion";
+import { getOpenShift } from "@/lib/services/supabase/shifts";
 import type { Database } from "@/lib/supabase/types";
 import { Icon } from "@/components/ui/icon";
 
@@ -242,6 +243,16 @@ export function CreateReturnDialog({
           } satisfies ReturnItemInsert)));
         if (itemsErr) throw new Error(itemsErr.message);
 
+        // P1-3A 12/06/2026: fetch open shift để gắn shift_id vào phiếu chi hoàn tiền.
+        // Best-effort: nếu cashier chưa mở ca thì null (refund vẫn ghi sổ quỹ).
+        let openShiftId: string | null = null;
+        try {
+          const shift = await getOpenShift(ctx.branchId, ctx.userId);
+          openShiftId = shift?.id ?? null;
+        } catch (err) {
+          console.warn("[create-return] getOpenShift failed:", err);
+        }
+
         await completeReturn({
           returnId: salesReturn.id,
           returnCode,
@@ -257,6 +268,7 @@ export function CreateReturnDialog({
           refundAmount: effectiveRefund,
           refundPaymentMethod,
           totalAmount: returnTotal,
+          shiftId: openShiftId,
         });
       }
 

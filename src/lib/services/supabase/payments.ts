@@ -14,6 +14,7 @@
 import { getClient, getCurrentContext, handleError } from "./base";
 import { nextEntityCode } from "./stock-adjustments";
 import { recordAuditLog } from "./audit";
+import { getOpenShift } from "./shifts";
 import type { Database } from "@/lib/supabase/types";
 
 type CashTransactionInsert = Database["public"]["Tables"]["cash_transactions"]["Insert"];
@@ -129,6 +130,16 @@ export async function recordInvoicePayment(
   // 2. Create cash receipt (phiếu thu)
   const cashCode = await nextEntityCode("cash_receipt", { tenantId: ctx.tenantId });
 
+  // P1-3A 12/06/2026: legacy fallback path — vẫn gắn shift_id để cashier
+  // close-shift atomic match (cùng pattern với RPC path).
+  let legacyShiftId: string | null = null;
+  try {
+    const shift = await getOpenShift(ctx.branchId, ctx.userId);
+    legacyShiftId = shift?.id ?? null;
+  } catch (err) {
+    console.warn("[recordInvoicePayment.legacy] getOpenShift failed:", err);
+  }
+
   const cashData: CashTransactionInsert = {
     tenant_id: ctx.tenantId,
     branch_id: ctx.branchId,
@@ -145,6 +156,7 @@ export async function recordInvoicePayment(
     reference_id: inv.id,
     note: input.note || `Thu nợ hóa đơn ${inv.code}`,
     created_by: ctx.userId,
+    ...(legacyShiftId ? { shift_id: legacyShiftId } : {}),
   };
 
   const { data: cashRow, error: cashErr } = await supabase
@@ -284,6 +296,15 @@ export async function recordPurchasePayment(
   // 2. Create cash payment (phiếu chi — trả nợ NCC)
   const cashCode = await nextEntityCode("cash_payment", { tenantId: ctx.tenantId });
 
+  // P1-3A: legacy fallback PO payment — gắn shift_id (cùng pattern receipt path).
+  let legacyPoShiftId: string | null = null;
+  try {
+    const shift = await getOpenShift(ctx.branchId, ctx.userId);
+    legacyPoShiftId = shift?.id ?? null;
+  } catch (err) {
+    console.warn("[recordPurchasePayment.legacy] getOpenShift failed:", err);
+  }
+
   const cashData: CashTransactionInsert = {
     tenant_id: ctx.tenantId,
     branch_id: ctx.branchId,
@@ -300,6 +321,7 @@ export async function recordPurchasePayment(
     reference_id: po.id,
     note: input.note || `Trả nợ đơn nhập hàng ${po.code}`,
     created_by: ctx.userId,
+    ...(legacyPoShiftId ? { shift_id: legacyPoShiftId } : {}),
   };
 
   const { data: cashRow, error: cashErr } = await supabase
