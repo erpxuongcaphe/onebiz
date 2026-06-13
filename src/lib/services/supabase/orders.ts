@@ -20,6 +20,7 @@
 
 import type { SalesOrder, QueryParams, QueryResult } from "@/lib/types";
 import { getClient, getPaginationRange, handleError, getCurrentTenantId } from "./base";
+import { isRpcUnavailable } from "./rpc-utils";
 import {
   posCheckout,
   applyStockDecrement,
@@ -816,11 +817,55 @@ export async function completeDraftOrder(
   }
 ): Promise<{ invoiceCode: string }> {
   const supabase = getClient();
-
-  // 1. ATOMIC status flip: UPDATE + WHERE status='draft' claims this invoice.
-  //    If two concurrent calls race, only one matches and succeeds.
   const paid = payment.paid;
   const shiftId = payment.shiftId ?? null;
+
+  // P0-7 13/06/2026: Ưu tiên gọi RPC atomic. Nếu thành công → 5 op chạy
+  // trong 1 transaction PG → all-or-nothing → không có ghost invoice.
+  // Fallback xuống luồng cũ (5 op rời) nếu RPC chưa apply (migration 00139
+  // chưa chạy). Sau khi verify ngon 24-48h → xoá fallback.
+  try {
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    const { data: atomicData, error: atomicError } = await (supabase.rpc as any)(
+      "complete_draft_atomic",
+      {
+        p_invoice_id: invoiceId,
+        p_tenant_id: payment.tenantId,
+        p_branch_id: payment.branchId,
+        p_created_by: payment.createdBy,
+        p_method: payment.method,
+        p_paid: paid,
+        p_payment_breakdown: payment.paymentBreakdown ?? null,
+        p_shift_id: shiftId,
+      },
+    );
+    if (!atomicError && atomicData) {
+      const result = atomicData as { invoice_code?: string };
+      if (result.invoice_code) {
+        return { invoiceCode: result.invoice_code };
+      }
+    }
+    if (atomicError && !isRpcUnavailable(atomicError)) {
+      // RPC có nhưng raise exception (vd "Đơn này đã được xử lý...").
+      // Throw thẳng để cashier thấy lỗi rõ ràng, KHÔNG fallback (tránh
+      // double xử lý nếu RPC đã claim được status=completed).
+      handleError(atomicError, "completeDraftOrder:atomic_rpc");
+    }
+    // RPC unavailable (migration chưa chạy) → fallback xuống luồng cũ.
+    console.warn(
+      "[completeDraftOrder] RPC complete_draft_atomic chưa có (migration 00139), fallback 5-step legacy",
+    );
+  } catch (err) {
+    // RPC throw client-side (vd network) → throw lại để cashier biết.
+    if (err instanceof Error && /draft|đã được xử lý|status/i.test(err.message)) {
+      throw err;
+    }
+    console.warn("[completeDraftOrder] RPC exception, fallback legacy:", err);
+  }
+
+  // ─── LEGACY 5-step path (kept 24-48h sau khi apply migration 00139) ───
+  // 1. ATOMIC status flip: UPDATE + WHERE status='draft' claims this invoice.
+  //    If two concurrent calls race, only one matches and succeeds.
 
   const { data: invoice, error: updErr } = await supabase
     .from("invoices")
