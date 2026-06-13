@@ -58,6 +58,10 @@ export async function getInternalSales(params: {
   search?: string;
 }) {
   const supabase = getClient();
+  // P0-11 fix 12/06/2026: filter tenant_id để chống cross-tenant leak khi RLS
+  // bị bypass (multi-tenant SaaS). Trước đây query lấy bất kỳ internal_sales nào
+  // RLS cho phép — sai về nguyên tắc defense-in-depth.
+  const ctx = await getCurrentContext();
   const page = params.page ?? 1;
   const size = params.pageSize ?? 20;
   const from = (page - 1) * size;
@@ -69,6 +73,7 @@ export async function getInternalSales(params: {
       "*, from_branch:branches!internal_sales_from_branch_id_fkey(name), to_branch:branches!internal_sales_to_branch_id_fkey(name), creator:profiles!internal_sales_created_by_fkey(full_name)",
       { count: "exact" },
     )
+    .eq("tenant_id", ctx.tenantId)
     .order("created_at", { ascending: false })
     .range(from, to);
 
@@ -141,6 +146,8 @@ export async function getInternalSalesForExport(params: {
   branchId?: string;
 }): Promise<InternalSaleImportRow[]> {
   const supabase = getClient();
+  // P0-11 fix 12/06/2026: filter tenant_id (defense-in-depth ngoài RLS).
+  const ctx = await getCurrentContext();
 
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
   let headerQuery: any = supabase
@@ -148,6 +155,7 @@ export async function getInternalSalesForExport(params: {
     .select(
       "id, code, note, status, from_branch:branches!internal_sales_from_branch_id_fkey(code), to_branch:branches!internal_sales_to_branch_id_fkey(code)"
     )
+    .eq("tenant_id", ctx.tenantId)
     .order("created_at", { ascending: false });
 
   if (params.search) headerQuery = headerQuery.ilike("code", `%${params.search}%`);

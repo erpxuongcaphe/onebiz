@@ -36,6 +36,7 @@ import {
   getProducts,
   getOrCreateWalkInCustomer,
   adjustCustomerDebt,
+  getCustomerById,
 } from "@/lib/services/supabase";
 import { useAutoSaveDraft, loadLocalCart } from "./hooks/use-auto-save-draft";
 import { RecoveryDialog } from "./components/recovery-dialog";
@@ -602,6 +603,28 @@ function PosPageInner() {
         variant: "info",
         duration: 4000,
       });
+      // P0-5 fix 12/06/2026: backup chỉ lưu slim {id,name} của KH → currentDebt=0
+      // sau restore là RÁC. Re-fetch full customer từ DB để cashier thấy nợ cũ
+      // và bị cảnh báo nếu KH đang nợ. Best-effort: lỗi/offline thì skip silent.
+      const restoredCustomerId = localBackup.customer?.id;
+      if (restoredCustomerId) {
+        getCustomerById(restoredCustomerId)
+          .then((fresh) => {
+            if (cancelled || !fresh) return;
+            state.setCustomer(fresh);
+            if ((fresh.currentDebt ?? 0) > 0) {
+              toast({
+                title: `⚠️ ${fresh.name} đang nợ ${formatCurrency(fresh.currentDebt)} ₫`,
+                description: "Vui lòng đối chiếu công nợ cũ trước khi cho ghi nợ tiếp.",
+                variant: "warning",
+                duration: 6000,
+              });
+            }
+          })
+          .catch((err) => {
+            console.warn("[POS] re-fetch customer after F5 restore failed:", err);
+          });
+      }
       // Không mở recovery dialog vì cart đã hồi phục — các draft khác trong
       // /don-hang/hoa-don list cashier có thể vào riêng nếu muốn.
       return () => {
