@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useState, useCallback } from "react";
+import { useEffect, useState, useCallback, useMemo } from "react";
 import { useDebounce } from "@/lib/utils/use-debounce";
 import dynamic from "next/dynamic";
 import { useRouter } from "next/navigation";
@@ -538,8 +538,24 @@ export default function HoaDonPage() {
     });
   };
 
-  const totalAmount = data.reduce((sum, inv) => sum + inv.totalAmount, 0);
-  const totalDiscount = data.reduce((sum, inv) => sum + inv.discount, 0);
+  // P-7 13/06/2026 (audit lần 2): gộp 6 lần reduce/filter chạy mỗi render
+  // (totalAmount, totalDiscount, completed, delivery_failed × 3) vào 1 useMemo
+  // → chỉ tính lại khi `data` đổi. Giá trị y hệt, không đổi hành vi.
+  const kpis = useMemo(() => {
+    let totalAmount = 0;
+    let totalDiscount = 0;
+    let completedCount = 0;
+    let deliveryFailedCount = 0;
+    for (const inv of data) {
+      totalAmount += inv.totalAmount;
+      totalDiscount += inv.discount;
+      if (inv.status === "completed") completedCount += 1;
+      else if (inv.status === "delivery_failed") deliveryFailedCount += 1;
+    }
+    return { totalAmount, totalDiscount, completedCount, deliveryFailedCount };
+  }, [data]);
+  const totalAmount = kpis.totalAmount;
+  const totalDiscount = kpis.totalDiscount;
 
   const handleExport = (type: "excel" | "csv") => {
     const exportColumns = [
@@ -744,14 +760,14 @@ export default function HoaDonPage() {
           <SummaryCard
             icon={<Icon name="check_circle" size={16} />}
             label="Hoàn thành"
-            value={data.filter((r) => r.status === "completed").length.toString()}
+            value={kpis.completedCount.toString()}
           />
           <SummaryCard
             icon={<Icon name="warning" size={16} className="text-destructive" />}
             label="Giao thất bại"
-            value={data.filter((r) => r.status === "delivery_failed").length.toString()}
-            danger={data.filter((r) => r.status === "delivery_failed").length > 0}
-            hint={data.filter((r) => r.status === "delivery_failed").length > 0 ? "Cần xử lý" : undefined}
+            value={kpis.deliveryFailedCount.toString()}
+            danger={kpis.deliveryFailedCount > 0}
+            hint={kpis.deliveryFailedCount > 0 ? "Cần xử lý" : undefined}
           />
           <SummaryCard
             icon={<Icon name="payments" size={16} />}
