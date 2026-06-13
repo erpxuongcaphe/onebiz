@@ -162,8 +162,9 @@ export default function KhachHangPage() {
         getCustomerKpis(activeBranchId, range),
         getNewCustomersMonthly(6, activeBranchId),
         getCustomerSegments(),
-        getTopCustomersByRevenue(50, activeBranchId), // Tăng top 50 KH (research recommend)
-        getTopDebtors(50), // Tăng top 50 công nợ
+        // P1-3B-R6 13/06/2026: truyền range để top 50 KH theo đúng kỳ (trước đây lifetime).
+        getTopCustomersByRevenue(50, activeBranchId, range),
+        getTopDebtors(50), // Tăng top 50 công nợ (snapshot hiện tại — không cần range)
       ]);
       setKpis(kpiData);
       setNewCustomersMonthly(monthly);

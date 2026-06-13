@@ -1292,15 +1292,23 @@ export async function getCustomerSegments(): Promise<CustomerSegment[]> {
   return Array.from(counts.entries()).map(([name, value]) => ({ name, value }));
 }
 
-export async function getTopCustomersByRevenue(limit: number = 10, branchId?: string): Promise<TopCustomer[]> {
+export async function getTopCustomersByRevenue(
+  limit: number = 10,
+  branchId?: string,
+  range?: { from: string; to: string },
+): Promise<TopCustomer[]> {
   const supabase = getClient();
   const tenantId = await getCurrentTenantId();
+  // P1-3B-R6 13/06/2026: thêm range — trước đây lấy lifetime mạo danh "kỳ này".
+  const r = resolveRange(range, thisMonthRange());
 
   let query = supabase
     .from("invoices")
     .select("customer_id, total, customers(name)")
     .eq("tenant_id", tenantId)
     .eq("status", "completed")
+    .gte("created_at", r.start)
+    .lt("created_at", r.end)
     .not("customer_id", "is", null);
   if (branchId) query = query.eq("branch_id", branchId);
   const { data, error } = await query;
