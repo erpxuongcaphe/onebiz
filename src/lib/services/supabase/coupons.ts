@@ -268,6 +268,39 @@ export async function validateCoupon(
 }
 
 /**
+ * S-5 13/06/2026: atomic consume coupon sau khi checkout success.
+ * Best-effort: lỗi → log warn, KHÔNG throw (đơn đã thanh toán, không
+ * rollback chỉ vì coupon mất tracking).
+ *
+ * Migration 00143 phải apply trước. Nếu RPC chưa có → silent skip.
+ */
+export async function applyCouponAtomic(input: {
+  code: string;
+  invoiceId: string;
+  customerId?: string | null;
+  discountAmount: number;
+}): Promise<{ ok: boolean; reason?: string }> {
+  const supabase = getClient();
+  try {
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    const { data, error } = await (supabase.rpc as any)("apply_coupon_atomic", {
+      p_code: input.code,
+      p_invoice_id: input.invoiceId,
+      p_customer_id: input.customerId ?? null,
+      p_discount_amount: input.discountAmount,
+    });
+    if (error) {
+      console.warn("[applyCouponAtomic] RPC error:", error.message);
+      return { ok: false, reason: error.message };
+    }
+    return { ok: true, ...(data as object) };
+  } catch (err) {
+    console.warn("[applyCouponAtomic] exception:", err);
+    return { ok: false, reason: err instanceof Error ? err.message : String(err) };
+  }
+}
+
+/**
  * Lấy lịch sử sử dụng coupon.
  */
 export async function getCouponUsages(couponId: string): Promise<CouponUsage[]> {

@@ -93,7 +93,7 @@ const CreateCustomerDialog = dynamic(
 import { OtpApprovalDialog } from "@/components/shared/dialogs/otp-approval-dialog";
 import { OTP_ACTION_CODES } from "@/lib/services/supabase/manager-otp";
 import { getCustomers } from "@/lib/services/supabase/customers";
-import { validateCoupon } from "@/lib/services/supabase/coupons";
+import { validateCoupon, applyCouponAtomic } from "@/lib/services/supabase/coupons";
 import { Icon } from "@/components/ui/icon";
 import { getVariantsByProduct } from "@/lib/services/supabase/variants";
 import { resolveAppliedTier } from "@/lib/services/supabase/pricing";
@@ -1890,6 +1890,22 @@ function PosPageInner() {
         } catch (err) {
           console.warn("redeemLoyaltyPoints failed:", err);
         }
+      }
+
+      // S-5 13/06/2026: consume coupon atomic sau checkout success. Best-effort
+      // (try/catch trong applyCouponAtomic) — nếu RPC chưa apply migration
+      // 00143 hoặc race lost → log warn, KHÔNG rollback đơn đã thanh toán.
+      if (!isOfflineCheckout && couponApplied && invoiceId && state.orderDiscount.value > 0) {
+        applyCouponAtomic({
+          code: couponApplied,
+          invoiceId,
+          customerId: state.customer?.id ?? null,
+          discountAmount: state.orderDiscount.value,
+        }).then((r) => {
+          if (!r.ok) {
+            console.warn(`[POS] coupon ${couponApplied} consume failed:`, r.reason);
+          }
+        });
       }
 
       // L-2: Tích điểm cho KH có account — chỉ khi online + có customer.id +
