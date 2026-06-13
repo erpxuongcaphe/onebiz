@@ -251,16 +251,18 @@ export function FnbHeader({
               onClick={(e) => {
                 e.stopPropagation();
                 // P1-3D-P2 12/06/2026 + R-6 13/06/2026 audit lần 2:
-                // - Tab dine_in ĐÃ gửi bếp → KHÓA hoàn toàn (bàn occupied ở
-                //   server, đóng tab sẽ stuck bàn — phải thanh toán trước).
-                // - Tab takeaway/delivery đã gửi bếp → confirm OK.
+                // - Tab dine_in ĐÃ gửi bếp → confirm chặt chẽ (bàn vẫn occupied
+                //   ở server — đóng tab xong cashier có thể click lại bàn từ
+                //   Sơ đồ bàn để re-hydrate tab qua handleTableSelect).
+                // - Tab takeaway/delivery đã gửi bếp → confirm bình thường.
                 // - Tab có items chưa gửi → confirm.
                 const hasItems = (tab.lines?.length ?? 0) > 0;
                 const sentToKitchen = !!tab.kitchenOrderId;
                 if (sentToKitchen && tab.orderType === "dine_in" && typeof window !== "undefined") {
-                  window.alert(
-                    `"${tab.label}" đã gửi bếp — bàn đang occupied. Vui lòng "Thanh toán" hoặc "Hủy đơn" để giải phóng bàn trước khi đóng tab.`
-                  );
+                  if (!window.confirm(
+                    `"${tab.label}" đã gửi bếp + bàn vẫn occupied. Đóng tab sẽ giữ đơn ở KDS — để mở lại, click bàn từ Sơ đồ bàn. Tiếp tục?`
+                  )) return;
+                  closeTab(tab.id);
                   return;
                 }
                 if ((hasItems || sentToKitchen) && typeof window !== "undefined") {
@@ -277,9 +279,10 @@ export function FnbHeader({
                   const hasItems = (tab.lines?.length ?? 0) > 0;
                   const sentToKitchen = !!tab.kitchenOrderId;
                   if (sentToKitchen && tab.orderType === "dine_in" && typeof window !== "undefined") {
-                    window.alert(
-                      `"${tab.label}" đã gửi bếp — bàn đang occupied. Vui lòng "Thanh toán" hoặc "Hủy đơn" để giải phóng bàn trước khi đóng tab.`
-                    );
+                    if (!window.confirm(
+                      `"${tab.label}" đã gửi bếp + bàn vẫn occupied. Đóng tab sẽ giữ đơn ở KDS — để mở lại, click bàn từ Sơ đồ bàn. Tiếp tục?`
+                    )) return;
+                    closeTab(tab.id);
                     return;
                   }
                   if ((hasItems || sentToKitchen) && typeof window !== "undefined") {
