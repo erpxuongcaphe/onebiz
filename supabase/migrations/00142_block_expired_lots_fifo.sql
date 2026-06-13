@@ -1,21 +1,32 @@
 -- ============================================================
--- 00142: allocate_lots_fifo — chặn bán lô đã hết HSD
+-- 00142: allocate_lots_fifo — chặn bán lô đã hết HSD (defense-in-depth)
 -- (CEO BATCH 2.6 Tier 2 S-7, 13/06/2026)
 --
--- VẤN ĐỀ PHÁP LÝ:
+-- VẤN ĐỀ:
 --   RPC allocate_lots_fifo (migration 00072) chỉ filter status='active'
---   AND current_qty > 0 → POP cả lot có expiry_date < today.
---   Bán SP hết hạn = vi phạm Luật ATTP Việt Nam (Đ.8 Luật ATTP 2010 +
---   Nghị định 15/2018). Có thể phạt 30-50tr + đình chỉ kinh doanh.
+--   AND current_qty > 0 → POP cả lot có expiry_date < today nếu status
+--   chưa kịp được flip sang 'expired'.
+--
+-- IMPACT thực tế phụ thuộc:
+--   1. Quán có setup lot HSD trên SP nào không (cà phê hạt, sữa tươi, ...)
+--   2. Có job nightly tự flip status='active' → 'expired' chưa
+--
+-- Hiện chưa có job nightly → migration này là defense-in-depth để chặn
+-- ngay tại tầng allocation, không phụ thuộc job flip status.
 --
 -- FIX:
 --   Thêm filter `(expiry_date IS NULL OR expiry_date >= current_date)`
 --   → FIFO skip lot hết hạn, alloc lot khác.
---   Lot hết hạn KHÔNG bị mất qty (giữ current_qty cho audit) nhưng
---   không được pop → cần job riêng flip status='expired' (sprint sau).
+--   Lot hết hạn KHÔNG bị mất qty (giữ current_qty cho audit) — chỉ không
+--   được pop ra bán.
 --
 -- BACKWARD-COMPAT: SP không track expiry (expiry_date IS NULL) vẫn alloc
 -- bình thường — chỉ chặn SP có expiry_date đã qua.
+--
+-- LỢI ÍCH KINH DOANH:
+--   - Khách không bị giao SP gần / hết HSD → giữ uy tín.
+--   - Manager phát hiện lot tồn lâu → quyết định disposal sớm.
+--   - Audit tồn HSD chính xác (lot expired không bị "âm thầm tiêu thụ").
 -- ============================================================
 
 drop function if exists public.allocate_lots_fifo(uuid, uuid, uuid, numeric, text, uuid, uuid);
@@ -94,7 +105,8 @@ end;
 $$;
 
 comment on function public.allocate_lots_fifo(uuid, uuid, uuid, numeric, text, uuid, uuid) is
-  'FIFO lot allocation: oldest expiry first. S-7 fix (13/06/2026) chặn lot hết HSD '
-  '(expiry_date < current_date) khỏi pop → tuân thủ Luật ATTP Việt Nam.';
+  'FIFO lot allocation: oldest expiry first. S-7 fix (13/06/2026): chặn lot hết HSD '
+  '(expiry_date < current_date) khỏi pop — defense-in-depth giữ uy tín với khách + '
+  'tránh "âm thầm tiêu thụ" lot expired trước khi job flip status kịp chạy.';
 
 grant execute on function public.allocate_lots_fifo(uuid, uuid, uuid, numeric, text, uuid, uuid) to authenticated;
