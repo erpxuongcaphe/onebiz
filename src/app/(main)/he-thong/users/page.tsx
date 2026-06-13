@@ -40,6 +40,8 @@ import {
   assignRoleToUser,
 } from "@/lib/services/supabase/roles";
 import type { DbRole } from "@/lib/services/supabase/roles";
+import { PermissionPage } from "@/components/shared/permission-page";
+import { PERMISSIONS } from "@/lib/permissions";
 import { setUserPosPin, removeUserPosPin } from "@/lib/services/supabase/pos-pin";
 import { SetPinDialog } from "@/components/shared/dialogs";
 // CEO 23/05/2026 (Phase 2 UI): per-user permission override dialog
@@ -62,7 +64,18 @@ interface UserRow {
   createdAt: string;
 }
 
-export default function UsersPage() {
+// S-2 13/06/2026 audit lần 2: wrap PermissionPage. Trước đây cashier gõ
+// /he-thong/users vào browser → thấy list user toàn tenant + mở dialog mời
+// (chỉ checkbox owner bị ẩn). PermissionPage block deny clean.
+export default function UsersPageGuarded() {
+  return (
+    <PermissionPage requires={PERMISSIONS.SYSTEM_MANAGE_USERS}>
+      <UsersPage />
+    </PermissionPage>
+  );
+}
+
+function UsersPage() {
   const { tenant, branches, user } = useAuth();
   const { toast } = useToast();
   const tenantId = tenant?.id ?? "";

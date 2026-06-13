@@ -28,6 +28,8 @@ import {
 } from "@/lib/services/supabase/audit";
 import type { AuditLogEntry } from "@/lib/services/supabase/audit";
 import { Icon } from "@/components/ui/icon";
+import { PermissionPage } from "@/components/shared/permission-page";
+import { PERMISSIONS } from "@/lib/permissions";
 
 const PAGE_SIZE = 25;
 
@@ -42,7 +44,16 @@ const ACTION_COLORS: Record<string, string> = {
   transfer: "bg-cyan-100 text-cyan-800",
 };
 
-export default function AuditPage() {
+// S-2 13/06/2026 audit lần 2: wrap PermissionPage chống IDOR qua URL.
+export default function AuditPageGuarded() {
+  return (
+    <PermissionPage requires={PERMISSIONS.SYSTEM_VIEW_AUDIT}>
+      <AuditPage />
+    </PermissionPage>
+  );
+}
+
+function AuditPage() {
   const { toast } = useToast();
   const [data, setData] = useState<AuditLogEntry[]>([]);
   const [total, setTotal] = useState(0);

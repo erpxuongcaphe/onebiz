@@ -2,6 +2,14 @@ import { createServerClient, type CookieOptions } from "@supabase/ssr";
 import { NextResponse, type NextRequest } from "next/server";
 import type { Database } from "@/lib/supabase/types";
 import { getSharedCookieDomain } from "@/lib/supabase/cookie-domain";
+import { checkRateLimit } from "@/lib/rate-limit";
+
+function getClientIp(request: NextRequest): string {
+  // S-1 13/06/2026: lấy IP để rate limit. Vercel/Nginx forward qua x-forwarded-for.
+  const fwd = request.headers.get("x-forwarded-for");
+  if (fwd) return fwd.split(",")[0].trim();
+  return request.headers.get("x-real-ip") ?? "unknown";
+}
 
 function isPhoneNumber(input: string): boolean {
   const cleaned = input.replace(/[\s-]/g, "");
@@ -83,6 +91,23 @@ export async function POST(request: NextRequest) {
 
   if (!trimmedIdentifier || !rawPassword) {
     return fail(request, "Vui lòng nhập email/SĐT và mật khẩu.", 400, wantsJson);
+  }
+
+  // S-1 13/06/2026: rate limit theo IP + identifier (chống brute-force + user enum).
+  // 5 attempt / phút / IP+identifier. Hit → 429 + delay random chống timing leak.
+  const clientIp = getClientIp(request);
+  const rl = checkRateLimit(`sign-in:${clientIp}:${trimmedIdentifier.toLowerCase()}`, {
+    limit: 5,
+    windowMs: 60_000,
+  });
+  if (!rl.allowed) {
+    const secLeft = Math.ceil((rl.resetAt - Date.now()) / 1000);
+    return fail(
+      request,
+      `Quá nhiều lần đăng nhập sai. Vui lòng thử lại sau ${secLeft} giây.`,
+      429,
+      wantsJson,
+    );
   }
 
   const cookieDomain = getCookieDomain(request);
