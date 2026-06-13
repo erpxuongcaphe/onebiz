@@ -13,6 +13,7 @@
 import type { InternalSaleImportRow } from "@/lib/excel/schemas";
 import { getClient, getCurrentContext, handleError } from "./base";
 import { applyManualStockMovement } from "./stock-adjustments";
+import { isRpcUnavailable } from "./rpc-utils";
 
 // ────────────────────────────────────────────
 // Types
@@ -217,6 +218,9 @@ export async function createInternalSale(
   const ctx = await getCurrentContext();
 
   // ── Validate ────────────────────────────
+  // P0-10 13/06/2026: validate channel + resolve customer/supplier vẫn ở
+  // service vì cần error UX-friendly. Sau khi pre-flight OK → ưu tiên RPC
+  // atomic. Fallback luồng cũ nếu RPC chưa apply migration 00141.
   if (input.fromBranchId === input.toBranchId) {
     throw new Error("Chi nhánh bán và chi nhánh mua không được giống nhau");
   }
@@ -318,6 +322,64 @@ export async function createInternalSale(
     );
   }
 
+  // ── P0-10: Thử RPC atomic trước. Pre-flight (validate + resolve cust/supp)
+  // đã pass → service tin tưởng input. RPC wrap 10+ op trong 1 transaction
+  // → all-or-nothing, không có ghost data.
+  try {
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    const { data: atomicData, error: atomicError } = await (supabase.rpc as any)(
+      "create_internal_sale_atomic",
+      {
+        p_tenant_id: ctx.tenantId,
+        p_from_branch_id: input.fromBranchId,
+        p_to_branch_id: input.toBranchId,
+        p_created_by: ctx.userId,
+        p_int_customer_id: intCustomer.id,
+        p_int_customer_name: intCustomer.name,
+        p_int_supplier_id: intSupplier.id,
+        p_int_supplier_name: intSupplier.name,
+        p_items: input.items,
+        p_payment_method: input.paymentMethod ?? "transfer",
+        p_paid_full: (input.paymentMethod ?? "transfer") !== "debt",
+        p_note: input.note ?? null,
+      },
+    );
+    if (!atomicError && atomicData) {
+      const r = atomicData as {
+        internal_sale_id?: string;
+        code?: string;
+        invoice_id?: string;
+        invoice_code?: string;
+        input_invoice_id?: string;
+        input_invoice_code?: string;
+        total?: number;
+      };
+      if (r.internal_sale_id && r.code && r.invoice_id) {
+        return {
+          internalSaleId: r.internal_sale_id,
+          code: r.code,
+          invoiceId: r.invoice_id,
+          invoiceCode: r.invoice_code ?? "",
+          inputInvoiceId: r.input_invoice_id ?? "",
+          inputInvoiceCode: r.input_invoice_code ?? "",
+          total: Number(r.total ?? total),
+        };
+      }
+    }
+    if (atomicError && !isRpcUnavailable(atomicError)) {
+      handleError(atomicError, "createInternalSale:atomic_rpc");
+    }
+    console.warn(
+      "[createInternalSale] RPC create_internal_sale_atomic chưa có (migration 00141), fallback luồng cũ 10-step",
+    );
+  } catch (err) {
+    if (err instanceof Error && /(không|không tìm|invalid|chi nhánh)/i.test(err.message)) {
+      throw err;
+    }
+    console.warn("[createInternalSale] RPC exception, fallback legacy:", err);
+  }
+
+  // ─── LEGACY 10-step path (kept 24-48h sau khi apply migration 00141) ───
   // ── 2. Generate codes ──
   const [invoiceCodeRes, inputInvCodeRes, saleCodeRes] = await Promise.all([
     supabase.rpc("next_code", {
