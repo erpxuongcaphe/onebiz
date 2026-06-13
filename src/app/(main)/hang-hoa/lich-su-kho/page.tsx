@@ -110,12 +110,16 @@ export default function LichSuKhoPage() {
   const fetchData = useCallback(async () => {
     setLoading(true);
     try {
+      // P1-3C-K2 12/06/2026: truyền dateFrom/dateTo (trước đây state có nhưng
+      // không tới service → filter là UI giả).
       const result = await getAllStockMovements({
         page,
         pageSize,
         search: search || undefined,
         movementType: typeFilter !== "all" ? typeFilter : undefined,
         branchId: branchFilter !== "all" ? branchFilter : undefined,
+        dateFrom: dateFrom || undefined,
+        dateTo: dateTo || undefined,
       });
       setData(result.data);
       setTotal(result.total);
@@ -128,7 +132,7 @@ export default function LichSuKhoPage() {
     } finally {
       setLoading(false);
     }
-  }, [page, pageSize, search, typeFilter, branchFilter, toast]);
+  }, [page, pageSize, search, typeFilter, branchFilter, dateFrom, dateTo, toast]);
 
   useEffect(() => {
     fetchData();

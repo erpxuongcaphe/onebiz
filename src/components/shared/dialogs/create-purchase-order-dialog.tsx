@@ -436,6 +436,13 @@ export function CreatePurchaseOrderDialog({
     const newErrors: Record<string, string> = {};
     if (!selectedSupplier) newErrors.supplier = "Vui lòng chọn nhà cung cấp";
     if (items.length === 0) newErrors.items = "Chưa có sản phẩm nào";
+    // P1-3C-K3 12/06/2026: chặn qty <= 0 và giá < 0. Trước đây cashier xóa input
+    // qty (default = 0) hoặc gõ âm → vẫn "Nhập kho ngay" được → cộng 0 hoặc trừ
+    // âm tồn. RPC vẫn bảo vệ data, nhưng UX cho qua dễ tạo phiếu rỗng.
+    const badItem = items.find(it => it.quantity <= 0 || (it.price ?? 0) < 0);
+    if (badItem) {
+      newErrors.items = "Có dòng SL ≤ 0 hoặc giá âm. Vui lòng kiểm tra lại từng dòng.";
+    }
     setErrors(newErrors);
     return Object.keys(newErrors).length === 0;
   }

@@ -284,36 +284,52 @@ export async function getProductStockBreakdown(
   updatedAt: string;
 }>> {
   const tenantId = await getCurrentTenantId();
-  const { data, error } = await supabase
-    .from("branch_stock")
-    .select(
-      `
-      branch_id,
-      quantity,
-      reserved,
-      updated_at,
-      branches:branch_id ( id, name, code )
-      `,
-    )
-    .eq("tenant_id", tenantId)
-    .eq("product_id", productId)
-    .order("quantity", { ascending: false });
 
-  if (error) throw error;
+  // P1-3C-K6 12/06/2026: list TẤT CẢ chi nhánh active (kể cả qty=0 chưa từng
+  // nhập SP này). Trước đây chỉ trả branch_stock đã tồn tại → user thấy
+  // "có ở 3/5 CN" mà thực ra 2 CN còn lại là "chưa từng nhập" ≠ "hết hàng".
+  const [stockRes, branchRes] = await Promise.all([
+    supabase
+      .from("branch_stock")
+      .select("branch_id, quantity, reserved, updated_at")
+      .eq("tenant_id", tenantId)
+      .eq("product_id", productId),
+    supabase
+      .from("branches")
+      .select("id, name, code")
+      .eq("tenant_id", tenantId)
+      .eq("is_active", true),
+  ]);
+  if (stockRes.error) throw stockRes.error;
+  if (branchRes.error) throw branchRes.error;
 
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
-  return (data ?? []).map((row: any) => {
-    const qty = Number(row.quantity ?? 0);
-    const reserved = Number(row.reserved ?? 0);
-    const branch = row.branches ?? {};
+  const stockByBranch = new Map<string, any>();
+  for (const r of stockRes.data ?? []) {
+    stockByBranch.set((r as { branch_id: string }).branch_id, r);
+  }
+
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  const rows = (branchRes.data ?? []).map((b: any) => {
+    const s = stockByBranch.get(b.id);
+    const qty = Number(s?.quantity ?? 0);
+    const reserved = Number(s?.reserved ?? 0);
     return {
-      branchId: row.branch_id,
-      branchName: branch.name ?? "—",
-      branchCode: branch.code ?? undefined,
+      branchId: b.id as string,
+      branchName: (b.name as string) ?? "—",
+      branchCode: (b.code as string) ?? undefined,
       quantity: qty,
       reserved,
       available: qty - reserved,
-      updatedAt: row.updated_at,
+      updatedAt: (s?.updated_at as string) ?? "",
     };
   });
+
+  // Sort: branches có tồn lên trước, rồi alphabet.
+  rows.sort((a, b) => {
+    if ((b.quantity ?? 0) !== (a.quantity ?? 0)) return (b.quantity ?? 0) - (a.quantity ?? 0);
+    return a.branchName.localeCompare(b.branchName);
+  });
+
+  return rows;
 }

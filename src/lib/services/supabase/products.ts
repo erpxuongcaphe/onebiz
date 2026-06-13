@@ -394,14 +394,24 @@ export interface AllStockMovementRow extends StockMovement {
 // --- All Stock Movements (cross-product) ---
 
 export async function getAllStockMovements(
-  params: QueryParams & { movementType?: string; branchId?: string }
+  params: QueryParams & {
+    movementType?: string;
+    branchId?: string;
+    /** P1-3C-K2 12/06/2026: filter ngày — trang /hang-hoa/lich-su-kho có UI date preset nhưng trước đây service không nhận. */
+    dateFrom?: string;
+    dateTo?: string;
+  }
 ): Promise<QueryResult<AllStockMovementRow>> {
   const supabase = getClient();
+  // P1-3C-K1 12/06/2026: filter tenant_id để chống leak khi RLS bị tắt
+  // (defense-in-depth — pattern đã chuẩn ở getProducts).
+  const tenantId = await getCurrentTenantId();
   const { from, to } = getPaginationRange(params);
 
   let query = supabase
     .from("stock_movements")
-    .select("*, products!inner(name, code), profiles!stock_movements_created_by_fkey(full_name)", { count: "exact" });
+    .select("*, products!inner(name, code), profiles!stock_movements_created_by_fkey(full_name)", { count: "exact" })
+    .eq("tenant_id", tenantId);
 
   // Search by product name/code or note
   if (params.search) {
@@ -418,6 +428,13 @@ export async function getAllStockMovements(
   // Filter by branch
   if (params.branchId && params.branchId !== "all") {
     query = query.eq("branch_id", params.branchId);
+  }
+
+  // P1-3C-K2: filter date range — chỉ apply khi caller truyền cả 2.
+  if (params.dateFrom && params.dateTo) {
+    query = query
+      .gte("created_at", `${params.dateFrom}T00:00:00+07:00`)
+      .lt("created_at", `${params.dateTo}T23:59:59.999+07:00`);
   }
 
   // Sort
@@ -592,11 +609,14 @@ export async function getStockMovements(
   params: QueryParams
 ): Promise<QueryResult<StockMovement>> {
   const supabase = getClient();
+  // P1-3C-K1: filter tenant_id (defense-in-depth).
+  const tenantId = await getCurrentTenantId();
   const { from, to } = getPaginationRange(params);
 
   const { data, count, error } = await supabase
     .from("stock_movements")
     .select("*, profiles!stock_movements_created_by_fkey(full_name)", { count: "exact" })
+    .eq("tenant_id", tenantId)
     .eq("product_id", productId)
     .order("created_at", { ascending: false })
     .range(from, to);
