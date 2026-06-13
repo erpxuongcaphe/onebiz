@@ -1,6 +1,6 @@
 "use client";
 
-import { ReactNode, useRef } from "react";
+import { ReactNode, useRef, useState, useEffect } from "react";
 import { Input } from "@/components/ui/input";
 import { Button } from "@/components/ui/button";
 import {
@@ -317,6 +317,58 @@ function IconButton({
   );
 }
 
+/**
+ * P-3 13/06/2026 (audit lần 2): debounce nội bộ search input — fix 1 chỗ
+ * cho TOÀN BỘ list page dùng PageHeader.
+ *
+ * Trước đây ~30 list page truyền onSearchChange={setSearch} → mỗi keystroke
+ * = 1 query Supabase. Gõ "nguyen van" = 9 RPC. Chỉ ~5 page tự debounce.
+ *
+ * Pattern: local state cho INPUT (hiển thị tức thì, gõ không lag) +
+ * debounce callback onSearchChange (trigger query) 350ms. Sync ngược khi
+ * searchValue đổi từ ngoài (vd nút "Xóa lọc" reset về "").
+ */
+function DebouncedSearchInput({
+  value,
+  onChange,
+  placeholder,
+}: {
+  value: string | undefined;
+  onChange: (v: string) => void;
+  placeholder: string;
+}) {
+  const [local, setLocal] = useState(value ?? "");
+  // Sync khi parent đổi value từ ngoài (clear filter, load preset, ...).
+  // Chỉ sync khi giá trị thực sự khác để không phá debounce đang gõ dở.
+  useEffect(() => {
+    setLocal((prev) => (prev === (value ?? "") ? prev : value ?? ""));
+  }, [value]);
+
+  // Debounce: gọi onChange 350ms sau keystroke cuối.
+  const onChangeRef = useRef(onChange);
+  onChangeRef.current = onChange;
+  useEffect(() => {
+    // Nếu local === value hiện tại (vd vừa sync từ ngoài) → skip để không
+    // bắn lại query thừa.
+    if (local === (value ?? "")) return;
+    const t = setTimeout(() => onChangeRef.current(local), 350);
+    return () => clearTimeout(t);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [local]);
+
+  return (
+    <div className="relative w-full min-w-0 lg:max-w-md lg:flex-1">
+      <Icon name="search" size={16} className="absolute left-3 top-1/2 -translate-y-1/2 text-muted-foreground" />
+      <Input
+        value={local}
+        onChange={(e) => setLocal(e.target.value)}
+        placeholder={placeholder}
+        className="pl-9 h-8"
+      />
+    </div>
+  );
+}
+
 export function PageHeader({
   title,
   subtitle,
@@ -383,15 +435,11 @@ export function PageHeader({
               service `.or(...)` thay vì thêm popover chọn trường (giảm
               cognitive load cho nhân viên chưa training). */}
           {onSearchChange !== undefined && (
-            <div className="relative w-full min-w-0 lg:max-w-md lg:flex-1">
-              <Icon name="search" size={16} className="absolute left-3 top-1/2 -translate-y-1/2 text-muted-foreground" />
-              <Input
-                value={searchValue}
-                onChange={(e) => onSearchChange(e.target.value)}
-                placeholder={searchPlaceholder}
-                className="pl-9 h-8"
-              />
-            </div>
+            <DebouncedSearchInput
+              value={searchValue}
+              onChange={onSearchChange}
+              placeholder={searchPlaceholder}
+            />
           )}
 
           {/* Desktop actions */}
