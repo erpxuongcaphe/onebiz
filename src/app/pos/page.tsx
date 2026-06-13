@@ -1373,7 +1373,9 @@ function PosPageInner() {
         isOffline: false,
         isPreBill: true, // flag để print template hiện "TẠM TÍNH" header
       };
-      printReceiptDirect(receipt);
+      // P-4 13/06/2026 audit lần 2: đọc paperSize từ settings (cashier đổi giấy 58mm
+      // tại quầy, trước đây hardcode 80mm → mất chữ phải khi in 58mm).
+      printReceiptDirect(receipt, settings.print.paperSize === "58mm" ? "58mm" : "80mm");
       toast({
         title: "Đã in tạm tính",
         description: "Đây không phải hoá đơn chính thức.",
@@ -1847,7 +1849,8 @@ function PosPageInner() {
             paymentMethod: state.paymentMethod,
             isOffline: isOfflineCheckout,
           };
-          printReceiptDirect(receipt);
+          // P-4 13/06/2026 audit lần 2: đọc paperSize từ settings.
+          printReceiptDirect(receipt, settings.print.paperSize === "58mm" ? "58mm" : "80mm");
         } catch (err) {
           // Print failure không nên block checkout — đơn đã thanh toán xong.
           // Vẫn cần log để admin biết máy in lỗi (vd: hết giấy, mất kết nối).

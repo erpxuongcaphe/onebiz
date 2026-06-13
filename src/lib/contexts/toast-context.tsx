@@ -69,7 +69,23 @@ export function ToastProvider({ children }: { children: ReactNode }) {
         duration,
       };
 
-      setToasts((prev) => [...prev, newToast]);
+      // R-7 13/06/2026 audit lần 2: dedup + cap. Trước đây bấm action lỗi 5
+      // lần → 5 toast đè nhau che cả nút Đóng. Dedup theo title (cùng title
+      // = thay duration lùi lại) + cap 5 toast (drop oldest).
+      setToasts((prev) => {
+        const sameTitle = prev.findIndex(
+          (t) => t.title === options.title && t.variant === newToast.variant,
+        );
+        let next = prev;
+        if (sameTitle >= 0) {
+          // Bỏ toast cũ cùng title → toast mới hiện cuối
+          next = prev.filter((_, i) => i !== sameTitle);
+        }
+        next = [...next, newToast];
+        // Cap 5 toast — drop oldest nếu vượt
+        if (next.length > 5) next = next.slice(next.length - 5);
+        return next;
+      });
 
       // Auto-dismiss
       if (duration > 0) {
