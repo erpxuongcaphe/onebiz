@@ -21,7 +21,15 @@
 --     → Chống double với PO + exclude internal.
 --
 -- Không break service signature (vẫn trả jsonb cùng shape).
+--
+-- LƯU Ý 13/06/2026: DB có nhiều overload get_vat_report cũ → PG báo
+-- "function name not unique" khi CREATE OR REPLACE. DROP signature
+-- exact trước khi CREATE để đảm bảo idempotent.
 -- ============================================================
+
+-- Drop signature cũ exact (chỉ overload 3-arg). Các overload khác (nếu có)
+-- giữ nguyên — sẽ được PG dispatch theo arg list.
+drop function if exists public.get_vat_report(timestamptz, timestamptz, uuid);
 
 create or replace function public.get_vat_report(
   p_date_from timestamptz default null,
