@@ -29,8 +29,19 @@ import {
 } from "@/lib/services";
 import { formatNumber, formatDate } from "@/lib/format";
 import { cn } from "@/lib/utils";
+import { PermissionPage } from "@/components/shared/permission-page";
+import { PERMISSIONS } from "@/lib/permissions";
 
-export default function StockIntegrityPage() {
+// S-2 13/06/2026 audit lần 2: guard — permission khớp nav-config (view_audit).
+export default function StockIntegrityPageGuarded() {
+  return (
+    <PermissionPage requires={PERMISSIONS.SYSTEM_VIEW_AUDIT}>
+      <StockIntegrityPage />
+    </PermissionPage>
+  );
+}
+
+function StockIntegrityPage() {
   const { toast } = useToast();
   const [running, setRunning] = useState(false);
   const [result, setResult] = useState<StockInvariantsResult | null>(null);

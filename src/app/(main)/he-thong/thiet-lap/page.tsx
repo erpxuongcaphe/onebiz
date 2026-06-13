@@ -24,8 +24,19 @@ import { Label } from "@/components/ui/label";
 import { Icon } from "@/components/ui/icon";
 import { BusinessLogoUpload } from "@/components/shared/business-logo-upload";
 import { HelpTip } from "@/components/shared/help-tip";
+import { PermissionPage } from "@/components/shared/permission-page";
+import { PERMISSIONS } from "@/lib/permissions";
 
-export default function ThietLapPage() {
+// S-2 13/06/2026 audit lần 2: guard — permission khớp nav-config (manage_roles).
+export default function ThietLapPageGuarded() {
+  return (
+    <PermissionPage requires={PERMISSIONS.SYSTEM_MANAGE_ROLES}>
+      <ThietLapPage />
+    </PermissionPage>
+  );
+}
+
+function ThietLapPage() {
   const { toast } = useToast();
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);

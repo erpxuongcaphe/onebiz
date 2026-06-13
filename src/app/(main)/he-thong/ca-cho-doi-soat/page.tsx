@@ -21,15 +21,25 @@ import { Button } from "@/components/ui/button";
 import { Card, CardContent } from "@/components/ui/card";
 import { Icon } from "@/components/ui/icon";
 import { useToast } from "@/lib/contexts";
-import { usePermissions } from "@/lib/permissions";
+import { usePermissions, PERMISSIONS } from "@/lib/permissions";
 import { formatCurrency } from "@/lib/format";
 import {
   getPendingShifts,
   type PendingShift,
 } from "@/lib/services/supabase/shifts";
 import { ReconcileShiftDialog } from "@/components/shared/shift/pending-shift-alert";
+import { PermissionPage } from "@/components/shared/permission-page";
 
-export default function CaChoDoiSoatPage() {
+// S-2 13/06/2026 audit lần 2: guard — permission khớp nav-config (shifts.reconcile_own_branch).
+export default function CaChoDoiSoatPageGuarded() {
+  return (
+    <PermissionPage requires={PERMISSIONS.SHIFTS_RECONCILE_OWN_BRANCH}>
+      <CaChoDoiSoatPage />
+    </PermissionPage>
+  );
+}
+
+function CaChoDoiSoatPage() {
   const { toast } = useToast();
   const { hasPermission } = usePermissions();
   const [shifts, setShifts] = useState<PendingShift[]>([]);

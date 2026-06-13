@@ -47,6 +47,8 @@ import {
 import type { RestaurantTable } from "@/lib/types/fnb";
 import { Icon } from "@/components/ui/icon";
 import { FloorPlanEditor } from "./floor-plan-editor";
+import { PermissionPage } from "@/components/shared/permission-page";
+import { PERMISSIONS } from "@/lib/permissions";
 
 // ── Types ──
 
@@ -58,7 +60,16 @@ interface ZoneGroup {
 
 // ── Page ──
 
-export default function QuanLyBanPage() {
+// S-2 13/06/2026 audit lần 2: guard — permission khớp nav-config (manage_branches).
+export default function QuanLyBanPageGuarded() {
+  return (
+    <PermissionPage requires={PERMISSIONS.SYSTEM_MANAGE_BRANCHES}>
+      <QuanLyBanPage />
+    </PermissionPage>
+  );
+}
+
+function QuanLyBanPage() {
   const { tenant } = useAuth();
   const { activeBranchId } = useBranchFilter();
   const { toast } = useToast();
