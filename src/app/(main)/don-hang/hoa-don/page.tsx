@@ -609,9 +609,27 @@ export default function HoaDonPage() {
       accessorKey: "code",
       header: "Mã hóa đơn",
       size: 130,
-      cell: ({ row }) => (
-        <span className="font-medium text-primary">{row.original.code}</span>
-      ),
+      cell: ({ row }) => {
+        // BATCH 3R: badge trả hàng — suy từ returnedAmount vs totalAmount.
+        const returned = row.original.returnedAmount ?? 0;
+        const total = row.original.totalAmount ?? 0;
+        const returnBadge =
+          returned > 0
+            ? returned >= total
+              ? { label: "Đã trả toàn bộ", cls: "border-destructive/30 bg-destructive/10 text-destructive" }
+              : { label: "Đã trả 1 phần", cls: "border-status-warning/40 bg-status-warning/10 text-status-warning" }
+            : null;
+        return (
+          <div className="flex flex-col gap-0.5">
+            <span className="font-medium text-primary">{row.original.code}</span>
+            {returnBadge && (
+              <Badge variant="outline" className={`h-4 px-1.5 text-[10px] ${returnBadge.cls}`}>
+                {returnBadge.label}
+              </Badge>
+            )}
+          </div>
+        );
+      },
     },
     {
       accessorKey: "date",

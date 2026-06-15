@@ -15,6 +15,12 @@ export interface Invoice {
   paid: number;
   debt: number;
   status: "processing" | "completed" | "cancelled" | "delivery_failed";
+  /**
+   * BATCH 3R: tổng tiền đã trả hàng của HĐ này (SUM sales_returns.total,
+   * status='completed'). Dùng suy ra badge "Đã trả 1 phần"/"Đã trả toàn bộ"
+   * ngoài danh sách. undefined = chưa load / không có phiếu trả.
+   */
+  returnedAmount?: number;
   /** Tên chi nhánh ghi nhận hóa đơn (resolved từ branches.name). */
   branchName?: string;
   /** Branch UUID để filter / drill-down. */

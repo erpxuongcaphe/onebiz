@@ -70,6 +70,35 @@ export async function getInvoices(params: QueryParams): Promise<QueryResult<Invo
   if (error) handleError(error, "getInvoices");
 
   const invoices: Invoice[] = (data ?? []).map(mapInvoice);
+
+  // BATCH 3R: gắn tổng tiền đã trả per HĐ → badge "Đã trả 1 phần"/"toàn bộ".
+  //   1 query gộp cho cả trang (KHÔNG N+1): aggregate sales_returns theo
+  //   invoice_id của trang hiện tại. Fail-soft: lỗi chỉ log, badge không hiện.
+  const pageIds = invoices.map((i) => i.id);
+  if (pageIds.length > 0) {
+    const { data: retRows, error: retErr } = await supabase
+      .from("sales_returns")
+      .select("invoice_id, total")
+      .eq("tenant_id", tenantId)
+      .eq("status", "completed")
+      .in("invoice_id", pageIds);
+    if (retErr) {
+      console.warn("[getInvoices] aggregate sales_returns:", retErr.message);
+    } else {
+      const returnedMap = new Map<string, number>();
+      for (const r of retRows ?? []) {
+        const invId = (r as { invoice_id: string | null }).invoice_id;
+        if (!invId) continue;
+        const amt = Number((r as { total: number | null }).total ?? 0);
+        returnedMap.set(invId, (returnedMap.get(invId) ?? 0) + amt);
+      }
+      for (const inv of invoices) {
+        const returned = returnedMap.get(inv.id);
+        if (returned && returned > 0) inv.returnedAmount = returned;
+      }
+    }
+  }
+
   return { data: invoices, total: count ?? 0 };
 }
 
