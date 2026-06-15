@@ -25,12 +25,16 @@ interface ReturnItem {
   productName: string;
   quantity: number;  // always positive
   unitPrice: number;
+  /** BATCH 3R: id của invoice_items gốc → update returned_qty chính xác per line. */
+  invoiceItemId?: string;
 }
 
 interface CompleteReturnInput {
   returnId: string;
   returnCode: string;
   invoiceCode: string;
+  /** BATCH 3R: id HĐ gốc → fallback update returned_qty theo invoice+product nếu thiếu invoiceItemId. */
+  invoiceId?: string;
   customerId?: string | null;
   customerName: string;
   items: ReturnItem[];
@@ -51,21 +55,97 @@ export async function completeReturn(input: CompleteReturnInput): Promise<void> 
   const ctx = await getCurrentContext();
   const supabase = getClient();
 
-  // 1. Stock increment — type='in' adds stock back
-  const stockInputs: ManualStockMovementInput[] = input.items.map(item => ({
-    productId: item.productId,
-    quantity: item.quantity,
-    type: "in" as const,
-    referenceType: "sales_return",
-    referenceId: input.returnId,
-    note: `${input.returnCode} - Trả hàng - ${item.productName} (+${item.quantity})`,
-  }));
+  // ── 1. Stock revert — BATCH 3R 13/06/2026: BOM-AWARE.
+  //   Trước đây cộng tồn type='in' cho MỌI SKU → sai cho SKU has_bom (cộng tồn
+  //   ảo + không hồi NVL). Nay phân nhánh:
+  //     - SKU has_bom → restore_bom_for_return (hồi NVL theo BOM, KHÔNG cộng
+  //       tồn ảo SKU). Nếu has_bom nhưng chưa setup BOM tại branch
+  //       (bom_found=false) → fallback cộng tồn SKU để không mất hàng.
+  //     - SKU thường → cộng tồn SKU như cũ (đúng — hàng lên kệ lại).
+  const productIds = [...new Set(input.items.map((i) => i.productId))];
+  const hasBomMap = new Map<string, boolean>();
+  if (productIds.length > 0) {
+    const { data: prodRows, error: prodErr } = await supabase
+      .from("products")
+      .select("id, has_bom")
+      .eq("tenant_id", ctx.tenantId)
+      .in("id", productIds);
+    if (prodErr) handleError(prodErr, "completeReturn:has_bom");
+    for (const p of prodRows ?? []) {
+      hasBomMap.set(p.id as string, Boolean((p as { has_bom?: boolean }).has_bom));
+    }
+  }
 
-  await applyManualStockMovement(stockInputs, {
-    tenantId: ctx.tenantId,
-    branchId: ctx.branchId,
-    createdBy: ctx.userId,
-  });
+  const normalStockInputs: ManualStockMovementInput[] = [];
+  for (const item of input.items) {
+    if (hasBomMap.get(item.productId)) {
+      // SKU has_bom → hồi NVL theo BOM (mirror consume dấu dương).
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      const { data: restoreData, error: restoreErr } = await (supabase.rpc as any)(
+        "restore_bom_for_return",
+        {
+          p_tenant_id: ctx.tenantId,
+          p_branch_id: ctx.branchId,
+          p_sku_id: item.productId,
+          p_qty: item.quantity,
+          p_reference_id: input.returnId,
+          p_created_by: ctx.userId,
+          p_ref_code: input.returnCode,
+        },
+      );
+      if (restoreErr) handleError(restoreErr, "completeReturn:restore_bom");
+      const bomFound = (restoreData as { bom_found?: boolean } | null)?.bom_found;
+      if (bomFound === false) {
+        // has_bom nhưng chưa setup BOM tại branch → fallback cộng tồn SKU
+        // (giữ hàng, không mất). Hiếm gặp.
+        normalStockInputs.push({
+          productId: item.productId,
+          quantity: item.quantity,
+          type: "in" as const,
+          referenceType: "sales_return",
+          referenceId: input.returnId,
+          note: `${input.returnCode} - Trả hàng (SKU has_bom chưa setup BOM) - ${item.productName} (+${item.quantity})`,
+        });
+      }
+    } else {
+      // SKU thường → cộng tồn SKU như cũ.
+      normalStockInputs.push({
+        productId: item.productId,
+        quantity: item.quantity,
+        type: "in" as const,
+        referenceType: "sales_return",
+        referenceId: input.returnId,
+        note: `${input.returnCode} - Trả hàng - ${item.productName} (+${item.quantity})`,
+      });
+    }
+  }
+
+  if (normalStockInputs.length > 0) {
+    await applyManualStockMovement(normalStockInputs, {
+      tenantId: ctx.tenantId,
+      branchId: ctx.branchId,
+      createdBy: ctx.userId,
+    });
+  }
+
+  // ── 1b. Update invoice_items.returned_qty (over-refund guard + badge).
+  //   Best-effort: lỗi KHÔNG block (kho + tiền đã xử lý xong). Nếu RPC chưa
+  //   apply migration 00144 → log warn, returned_qty không cộng (UI vẫn clamp
+  //   theo lần sau khi migration có).
+  for (const item of input.items) {
+    if (!item.invoiceItemId) continue;
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    const { error: incErr } = await (supabase.rpc as any)("increment_returned_qty", {
+      p_invoice_item_id: item.invoiceItemId,
+      p_delta: item.quantity,
+    });
+    if (incErr) {
+      console.warn(
+        `[completeReturn] increment_returned_qty failed (item ${item.invoiceItemId}):`,
+        incErr.message,
+      );
+    }
+  }
 
   // 2. Cash payment (phiếu chi hoàn tiền) — only for the cashback portion
   if (input.refundAmount > 0) {

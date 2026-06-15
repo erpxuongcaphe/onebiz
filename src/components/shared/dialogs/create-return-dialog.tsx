@@ -47,6 +47,8 @@ interface InvoiceLineItem {
   total: number;
   selected: boolean;
   returnQty: number;
+  /** BATCH 3R: SL đã trả ở các phiếu trước → clamp trả ≤ (quantity - returnedQty). */
+  returnedQty: number;
 }
 
 type RefundPaymentMethod = "cash" | "transfer" | "card";
@@ -129,23 +131,33 @@ export function CreateReturnDialog({
 
   async function loadInvoiceItems(invoiceId: string) {
     const supabase = getClient();
-    const { data } = await supabase
+    // BATCH 3R: select thêm returned_qty (cột mới 00144) để clamp chống trả vượt.
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    const { data } = await (supabase as any)
       .from("invoice_items")
-      .select("id, product_id, product_name, unit, quantity, unit_price, total")
+      .select("id, product_id, product_name, unit, quantity, unit_price, total, returned_qty")
       .eq("invoice_id", invoiceId);
 
     setInvoiceItems(
-      (data ?? []).map((item) => ({
-        id: item.id,
-        product_id: item.product_id,
-        product_name: item.product_name,
-        unit: item.unit,
-        quantity: Number(item.quantity ?? 0),
-        unit_price: Number(item.unit_price ?? 0),
-        total: Number(item.total ?? 0),
-        selected: false,
-        returnQty: Number(item.quantity ?? 0),
-      })),
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      ((data ?? []) as any[]).map((item) => {
+        const qty = Number(item.quantity ?? 0);
+        const returnedQty = Number(item.returned_qty ?? 0);
+        const remaining = Math.max(0, qty - returnedQty);
+        return {
+          id: item.id,
+          product_id: item.product_id,
+          product_name: item.product_name,
+          unit: item.unit,
+          quantity: qty,
+          unit_price: Number(item.unit_price ?? 0),
+          total: Number(item.total ?? 0),
+          selected: false,
+          // Mặc định trả hết phần CÒN LẠI (không phải SL mua gốc).
+          returnQty: remaining,
+          returnedQty,
+        };
+      }),
     );
   }
 
@@ -161,7 +173,15 @@ export function CreateReturnDialog({
     setInvoiceItems(
       invoiceItems.map((item) =>
         item.id === id
-          ? { ...item, returnQty: Math.min(Math.max(0.01, qty), item.quantity) }
+          ? {
+              ...item,
+              // BATCH 3R: clamp theo SL CÒN LẠI (quantity - returnedQty), không
+              // phải SL mua gốc → chống trả vượt khi đã trả 1 phần ở phiếu trước.
+              returnQty: Math.min(
+                Math.max(0.01, qty),
+                Math.max(0, item.quantity - item.returnedQty),
+              ),
+            }
           : item,
       ),
     );
@@ -257,6 +277,9 @@ export function CreateReturnDialog({
           returnId: salesReturn.id,
           returnCode,
           invoiceCode: selectedInvoice!.code,
+          // BATCH 3R: truyền invoiceId + invoiceItemId → BOM-aware revert +
+          // cập nhật returned_qty chính xác per line (chống trả vượt).
+          invoiceId: selectedInvoice!.id,
           customerId: selectedInvoice!.customer_id,
           customerName: selectedInvoice!.customer_name,
           items: selectedItems.map((item) => ({
@@ -264,6 +287,7 @@ export function CreateReturnDialog({
             productName: item.product_name,
             quantity: item.returnQty,
             unitPrice: item.unit_price,
+            invoiceItemId: item.id,
           })),
           refundAmount: effectiveRefund,
           refundPaymentMethod,
@@ -463,10 +487,18 @@ export function CreateReturnDialog({
                       <Checkbox
                         checked={item.selected}
                         onCheckedChange={() => toggleItem(item.id)}
+                        // BATCH 3R: đã trả hết → không cho tick chọn trả tiếp.
+                        disabled={item.quantity - item.returnedQty <= 0}
                         aria-label={`Chọn ${item.product_name}`}
                       />
                       <div className="min-w-0">
                         <div className="truncate text-sm font-semibold">{item.product_name}</div>
+                        {/* BATCH 3R: cảnh báo nếu đã trả 1 phần ở phiếu trước. */}
+                        {item.returnedQty > 0 && (
+                          <div className="text-[11px] text-status-warning font-medium">
+                            Đã trả {formatNumber(item.returnedQty)} — còn {formatNumber(Math.max(0, item.quantity - item.returnedQty))} có thể trả
+                          </div>
+                        )}
                       </div>
                       <div className="flex justify-center">
                         <span className="min-w-[64px] rounded-md bg-muted/50 px-2 py-1 text-center text-xs font-semibold text-muted-foreground">
@@ -480,9 +512,11 @@ export function CreateReturnDialog({
                         value={item.returnQty}
                         onChange={(value) => updateReturnQty(item.id, value ?? 0.01)}
                         min={0.01}
-                        max={item.quantity}
+                        // BATCH 3R: max = SL còn lại (quantity - returnedQty), chống trả vượt.
+                        max={Math.max(0, item.quantity - item.returnedQty)}
                         decimals={2}
-                        disabled={!item.selected}
+                        // Đã trả hết → không cho chọn lại.
+                        disabled={!item.selected || item.quantity - item.returnedQty <= 0}
                         className="h-8 text-right"
                         aria-label={`Số lượng trả ${item.product_name}`}
                       />
