@@ -25,8 +25,17 @@ let productsResult: { data: Array<{ id: string; has_bom: boolean }>; error: unkn
 // Lỗi insert cash — set per test.
 let cashInsertError: unknown = null;
 // RPC handlers — set per test (mặc định thành công).
-const mockRestoreBom = vi.fn(async () => ({ data: { bom_found: true, restored: [] }, error: null }));
-const mockIncReturnedQty = vi.fn(async () => ({ error: null }));
+const mockRestoreBom = vi.fn(
+  async (
+    _args?: unknown,
+  ): Promise<{ data: { bom_found: boolean; restored: unknown[] } | null; error: unknown }> => ({
+    data: { bom_found: true, restored: [] },
+    error: null,
+  }),
+);
+const mockIncReturnedQty = vi.fn(
+  async (_args?: unknown): Promise<{ error: unknown }> => ({ error: null }),
+);
 
 function makeChain(result: unknown) {
   // eslint-disable-next-line @typescript-eslint/no-explicit-any

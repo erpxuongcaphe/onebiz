@@ -243,7 +243,7 @@ export default function TongQuanPage() {
               <CardContent className="p-4">
                 <div className="flex items-start justify-between mb-2">
                   <span className="h-3 w-20 rounded bg-muted/60 animate-pulse" />
-                  <div className="size-8 rounded-lg bg-muted/60 animate-pulse" />
+                  <div className="size-9 rounded-full bg-muted/60 animate-pulse" />
                 </div>
                 <div className="h-7 w-24 rounded bg-muted/60 animate-pulse" />
                 <div className="mt-1.5 h-3 w-20 rounded bg-muted/50 animate-pulse" />
@@ -261,19 +261,27 @@ export default function TongQuanPage() {
                 <span className="text-xs font-semibold uppercase text-muted-foreground">
                   {kpi.label}
                 </span>
-                <div className="flex size-8 shrink-0 items-center justify-center rounded-lg bg-primary-fixed">
-                  <Icon name={kpi.icon} size={16} className="text-primary" />
+                <div className="flex size-9 shrink-0 items-center justify-center rounded-full bg-primary-fixed">
+                  <Icon name={kpi.icon} size={17} className="text-primary" />
                 </div>
               </div>
               <p className="font-heading text-xl sm:text-2xl font-extrabold text-foreground leading-tight truncate">
                 {kpi.isCurrency ? formatCurrency(kpi.value) : formatNumber(kpi.value)}
               </p>
-              <p className="mt-1.5 text-xs text-muted-foreground">
-                <span className={cn("font-semibold", kpi.positive ? "text-status-success" : "text-status-error")}>
+              <div className="mt-2 flex items-center gap-1.5">
+                <span
+                  className={cn(
+                    "inline-flex items-center gap-0.5 rounded-md px-1.5 py-0.5 text-[11px] font-semibold",
+                    kpi.positive
+                      ? "bg-status-success/10 text-status-success"
+                      : "bg-status-error/10 text-status-error",
+                  )}
+                >
+                  <Icon name={kpi.positive ? "arrow_upward" : "arrow_downward"} size={11} />
                   {kpi.text}
-                </span>{" "}
-                {kpi.changeLabel}
-              </p>
+                </span>
+                <span className="text-xs text-muted-foreground">{kpi.changeLabel}</span>
+              </div>
               {"isCollection" in kpi && kpi.isCollection && kpis && (
                 <div className="mt-2 space-y-1.5 border-t border-border/60 pt-2">
                   <div className="grid grid-cols-2 gap-1 text-[10px] leading-tight">
@@ -307,8 +315,8 @@ export default function TongQuanPage() {
               <span className="text-xs font-semibold uppercase text-muted-foreground">
                 Vòng quay kho
               </span>
-              <div className="flex size-8 shrink-0 items-center justify-center rounded-lg bg-primary-fixed">
-                <Icon name="autorenew" size={16} className="text-primary" />
+              <div className="flex size-9 shrink-0 items-center justify-center rounded-full bg-primary-fixed">
+                <Icon name="autorenew" size={17} className="text-primary" />
               </div>
             </div>
             <p className="font-heading text-2xl font-extrabold text-foreground leading-tight">
