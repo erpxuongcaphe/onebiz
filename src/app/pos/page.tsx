@@ -1738,6 +1738,9 @@ function PosPageInner() {
             branchId: ctx.branchId,
             createdBy: ctx.userId,
             paymentBreakdown: breakdown,
+            // FIX 16/06/2026: nhánh phục hồi "still draft" cũng phải link shift_id
+            // (giống nhánh chính dòng ~1678) để close_shift_atomic không sót đơn → quỹ ca đúng.
+            shiftId: currentShift?.id ?? null,
           });
           result = {
             invoiceId: draftId,
