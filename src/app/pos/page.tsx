@@ -2181,10 +2181,11 @@ function PosPageInner() {
             </button>
           )}
 
-        {/* Search bar — touch ≥36px (input acceptable < 44px nhưng cao hơn cũ) */}
+        {/* Search bar — touch ≥44px (chuẩn HIG/Material; là đường bán nhanh
+            nhất khi nhiều mã nên làm cao & rõ hơn — Đợt UI polish 15/06/2026). */}
         <div className="flex-1 max-w-lg mx-auto">
           <div className="relative">
-            <Icon name="search" size={16} className="absolute left-3 top-1/2 -translate-y-1/2 text-white/50" />
+            <Icon name="search" size={18} className="absolute left-3 top-1/2 -translate-y-1/2 text-white/60" />
             <input
               ref={searchInputRef}
               type="text"
@@ -2198,7 +2199,7 @@ function PosPageInner() {
               }}
               placeholder="Tìm sản phẩm theo tên, mã, barcode..."
               data-allow-hotkeys="true"
-              className="w-full h-9 pl-9 pr-14 rounded-md bg-white/15 border border-white/20 text-white placeholder-white/50 text-sm outline-none focus:bg-white/25 focus:border-white/40 transition-colors"
+              className="w-full h-11 pl-10 pr-14 rounded-lg bg-white/15 border border-white/25 text-white placeholder-white/55 text-sm outline-none focus:bg-white/25 focus:border-white/45 transition-colors"
             />
             {searchQuery && (
               <button
@@ -2820,7 +2821,7 @@ function PosPageInner() {
                 P0-1 fix 12/06/2026: state.total đã fold orderVatAmount → hết duplicate render. */}
             <div className="flex justify-between items-baseline pt-2 border-t border-outline-variant/20">
               <span className="text-sm font-semibold text-foreground">Khách cần trả</span>
-              <span className="font-heading text-lg font-extrabold text-primary tabular-nums">
+              <span className="font-heading text-2xl font-extrabold text-primary tabular-nums leading-none">
                 {formatCurrency(state.total)} ₫
               </span>
             </div>
