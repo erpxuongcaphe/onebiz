@@ -2947,7 +2947,7 @@ function PosPageInner() {
                       placeholder={formatCurrency(state.total)}
                       data-allow-hotkeys="true"
                       className={cn(
-                        "w-full h-8 px-3 rounded border text-right text-sm font-bold outline-none focus:ring-2 focus:ring-primary/30 focus:border-primary tabular-nums transition-colors",
+                        "w-full h-10 px-3 rounded-lg border text-right text-base font-bold outline-none focus:ring-2 focus:ring-primary/50 focus:border-primary tabular-nums transition-colors",
                         state.paid > 0 && state.paid >= state.total
                           ? "border-status-success/25 bg-status-success/10"
                           : state.paid > 0 && state.paid < state.total
@@ -2964,7 +2964,7 @@ function PosPageInner() {
                         key={d.value}
                         type="button"
                         onClick={() => state.setPaid(d.value)}
-                        className="flex-1 h-8 rounded-lg bg-surface-container-low text-[10px] font-semibold text-on-surface-variant hover:bg-primary-fixed hover:text-primary transition-colors press-scale-sm"
+                        className="flex-1 h-10 rounded-lg bg-surface-container-low text-xs font-semibold text-on-surface-variant hover:bg-primary-fixed hover:text-primary transition-colors press-scale-sm"
                       >
                         {d.label}
                       </button>
@@ -2972,7 +2972,7 @@ function PosPageInner() {
                     <button
                       type="button"
                       onClick={() => state.setPaid(state.total)}
-                      className="flex-1 h-8 rounded-lg bg-primary-fixed text-[10px] font-bold text-primary hover:bg-primary-fixed/70 transition-colors press-scale-sm"
+                      className="flex-1 h-10 rounded-lg bg-primary-fixed text-xs font-bold text-primary hover:bg-primary-fixed/70 transition-colors press-scale-sm"
                     >
                       Đủ
                     </button>
@@ -3661,7 +3661,7 @@ function CartItem({
         <button
           type="button"
           onClick={onRemove}
-          className="shrink-0 -mt-0.5 p-0.5 rounded text-muted-foreground hover:text-status-error hover:bg-status-error/10 opacity-0 group-hover:opacity-100 transition-all"
+          className="shrink-0 -mt-0.5 p-1 rounded text-muted-foreground hover:text-status-error hover:bg-status-error/10 opacity-50 hover:opacity-100 transition-all"
           title="Xoá"
         >
           <Icon name="close" size={14} />
@@ -3671,11 +3671,11 @@ function CartItem({
       {/* ── Line 2: qty stepper · × · price · −GG · = total ── */}
       <div className="flex items-center gap-2 px-3 pb-2 pl-[26px] mt-1">
         {/* Qty stepper +/− */}
-        <div className="inline-flex items-center bg-surface-container-low rounded h-6 border border-border/40 overflow-hidden">
+        <div className="inline-flex items-center bg-surface-container-low rounded-md h-8 border border-border/40 overflow-hidden">
           <button
             type="button"
             onClick={() => onQtyChange(Math.max(1, line.quantity - 1))}
-            className="w-5 h-6 flex items-center justify-center text-muted-foreground hover:text-foreground hover:bg-muted active:bg-muted/80 transition-colors"
+            className="w-7 h-8 flex items-center justify-center text-muted-foreground hover:text-foreground hover:bg-muted active:bg-muted/80 transition-colors"
           >
             <Icon name="remove" size={14} />
           </button>
@@ -3692,12 +3692,12 @@ function CartItem({
               onQtyChange(Number.isFinite(n) ? n : 1);
             }}
             data-allow-hotkeys="true"
-            className="w-12 h-6 text-center text-[11px] font-semibold tabular-nums outline-none bg-transparent"
+            className="w-12 h-8 text-center text-xs font-semibold tabular-nums outline-none bg-transparent"
           />
           <button
             type="button"
             onClick={() => onQtyChange(line.quantity + 1)}
-            className="w-5 h-6 flex items-center justify-center text-muted-foreground hover:text-foreground hover:bg-muted active:bg-muted/80 transition-colors"
+            className="w-7 h-8 flex items-center justify-center text-muted-foreground hover:text-foreground hover:bg-muted active:bg-muted/80 transition-colors"
           >
             <Icon name="add" size={14} />
           </button>
@@ -3957,7 +3957,7 @@ function PaymentBtn({
       type="button"
       onClick={onClick}
       className={cn(
-        "h-8 rounded-lg text-[11px] font-semibold transition-all press-scale-sm inline-flex items-center justify-center gap-1 whitespace-nowrap px-1",
+        "h-10 rounded-lg text-[11px] font-semibold transition-all press-scale-sm inline-flex items-center justify-center gap-1 whitespace-nowrap px-1",
         active
           ? "bg-primary text-on-primary ambient-shadow"
           : "bg-surface-container-low text-on-surface-variant hover:bg-surface-container hover:text-foreground",
