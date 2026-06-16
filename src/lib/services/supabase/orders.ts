@@ -962,7 +962,10 @@ export async function completeDraftOrder(
 // Delete draft (cleanup only — never delete completed)
 // ============================================================
 
-export async function deleteDraftOrder(invoiceId: string): Promise<void> {
+export async function deleteDraftOrder(
+  invoiceId: string,
+  opts?: { onlyAutoSaved?: boolean },
+): Promise<void> {
   const supabase = getClient();
   const tenantId = await getCurrentTenantId();
 
@@ -970,12 +973,21 @@ export async function deleteDraftOrder(invoiceId: string): Promise<void> {
   // If a concurrent completeDraftOrder already flipped status to 'completed',
   // this delete matches 0 rows and we bail safely.
   // invoice_items have ON DELETE CASCADE from the FK, so they are auto-deleted.
-  const { data: deleted, error: invErr } = await supabase
+  let delQuery = supabase
     .from("invoices")
     .delete()
     .eq("tenant_id", tenantId)
     .eq("id", invoiceId)
-    .eq("status", "draft")
+    .eq("status", "draft");
+  // CEO 16/06/2026 — FIX MẤT NHÁP: auto-save cleanup (cart trống) chỉ được xoá
+  // nháp KỸ THUẬT (auto_saved=true). Nháp người dùng bấm "Nháp" tay đã được
+  // promote auto_saved=false (sticky) → KHÔNG được auto-xoá. Trước đây
+  // handleSaveDraft lưu tay xong clearCart → auto-save xoá luôn nháp vừa lưu
+  // → F3 trống dù toast báo "đã lưu". onlyAutoSaved guard chặn đúng ca này.
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  if (opts?.onlyAutoSaved) delQuery = (delQuery as any).eq("auto_saved", true);
+
+  const { data: deleted, error: invErr } = await delQuery
     .select("id")
     .maybeSingle();
   if (invErr) handleError(invErr, "deleteDraftOrder:invoice");

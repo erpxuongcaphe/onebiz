@@ -190,8 +190,11 @@ export function useAutoSaveDraft({
         const idToDelete = savedInvoiceIdRef.current;
         savedInvoiceIdRef.current = null;
         lastSavedHashRef.current = stateHash;
-        // Best-effort cleanup — không block UI
-        deleteDraftOrder(idToDelete).catch((err) => {
+        // Best-effort cleanup — không block UI.
+        // CEO 16/06/2026 — onlyAutoSaved: CHỈ xoá nháp kỹ thuật (auto_saved=true).
+        // Nếu user vừa bấm "Nháp" tay (promote auto_saved=false) rồi clearCart →
+        // KHÔNG được xoá nháp đó (trước đây xoá nhầm → F3 trống, mất nháp).
+        deleteDraftOrder(idToDelete, { onlyAutoSaved: true }).catch((err) => {
           console.warn("[useAutoSaveDraft] cleanup failed:", err);
         });
       }
