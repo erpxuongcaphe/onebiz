@@ -1142,10 +1142,10 @@ function KdsOrderCard({
             {typeLabelCaption}
           </span>
           <div className="space-y-1">
-            <span className="block truncate font-heading text-3xl font-extrabold leading-none text-foreground md:text-4xl">
+            <span className="block truncate font-heading text-4xl font-extrabold leading-none tracking-tight text-foreground md:text-5xl">
               {typeLabel}
             </span>
-            <span className="block text-xs font-semibold text-muted-foreground">
+            <span className="block text-sm font-bold tracking-wide text-muted-foreground">
               #{order.orderNumber}
             </span>
           </div>
@@ -1216,7 +1216,7 @@ function KdsOrderCard({
             onClick={onServed}
             disabled={!allReady}
             className={cn(
-              "flex w-full items-center justify-center gap-2 rounded-lg py-3 text-sm font-bold transition-all press-scale-sm",
+              "flex w-full items-center justify-center gap-2 rounded-lg py-4 text-base font-bold transition-all press-scale-sm",
               allReady
                 ? "bg-status-success text-white hover:bg-status-success/90 ambient-shadow"
                 : "cursor-not-allowed bg-surface-container text-muted-foreground opacity-75"
@@ -1224,7 +1224,7 @@ function KdsOrderCard({
           >
             <Icon
               name={allReady ? "check_circle" : "pending_actions"}
-              size={16}
+              size={18}
             />
             {allReady ? "Xong" : `Còn ${pendingCount} món`}
           </button>
@@ -1355,7 +1355,7 @@ function KdsItemRow({
             className={cn(
               // Responsive Sprint A3 (CEO 25/05/2026): tăng font item KDS
               // để bếp đọc rõ trên TV/iPad treo bếp từ 1.5-3m.
-              "font-heading text-base font-bold leading-tight md:text-lg xl:text-xl",
+              "font-heading text-lg font-bold leading-tight tracking-tight md:text-xl xl:text-2xl",
               "text-foreground"
             )}
           >

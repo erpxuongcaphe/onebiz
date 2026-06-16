@@ -772,8 +772,8 @@ export function FnbCart({
                 : "bg-surface-container-high text-on-surface hover:bg-surface-container disabled:opacity-40 disabled:pointer-events-none"
             )}
           >
-            <Icon name={activeTab?.kitchenOrderId ? "add_circle" : "notifications_active"} size={16} />
-            <span className="text-xs leading-none">
+            <Icon name={activeTab?.kitchenOrderId ? "add_circle" : "notifications_active"} size={18} />
+            <span className="text-sm font-semibold leading-tight">
               {activeTab?.kitchenOrderId ? "Gửi thêm (F10)" : "Bếp (F10)"}
             </span>
           </button>
@@ -786,8 +786,8 @@ export function FnbCart({
               "bg-primary text-on-primary hover:bg-primary-hover disabled:opacity-40 disabled:pointer-events-none"
             )}
           >
-            <Icon name="payments" size={16} />
-            <span className="text-xs leading-none">Thanh toán (F9)</span>
+            <Icon name="payments" size={18} />
+            <span className="text-sm font-bold leading-tight">Thanh toán (F9)</span>
           </button>
         </div>
       </div>
