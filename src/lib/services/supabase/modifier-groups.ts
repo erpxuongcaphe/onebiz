@@ -262,13 +262,19 @@ export async function seedFnbVnPreset(): Promise<PresetSeedResult> {
   let groupsSkipped = 0;
   let optionsCreated = 0;
 
-  // Load existing groups by name (tránh duplicate)
+  // Load existing groups by name + is_active (FIX 16/06/2026):
+  // xoá nhóm là XOÁ MỀM (is_active=false) nhưng dòng vẫn còn → bản cũ chỉ
+  // check theo tên rồi bỏ qua, khiến nhóm đã xoá KHÔNG được khôi phục mà
+  // cũng không tạo lại được (đụng unique tên). Giờ phân biệt active/đã-xoá.
   const { data: existing } = await supabase
     .from("modifier_groups")
-    .select("id, name")
+    .select("id, name, is_active")
     .eq("tenant_id", tenantId);
-  const existingByName = new Map<string, string>(
-    ((existing ?? []) as Array<{ id: string; name: string }>).map((g) => [g.name, g.id]),
+  const existingByName = new Map<string, { id: string; isActive: boolean }>(
+    ((existing ?? []) as Array<{ id: string; name: string; is_active: boolean }>).map((g) => [
+      g.name,
+      { id: g.id, isActive: g.is_active },
+    ]),
   );
 
   // Định nghĩa 4 nhóm chuẩn
@@ -328,42 +334,71 @@ export async function seedFnbVnPreset(): Promise<PresetSeedResult> {
   ];
 
   for (const preset of presets) {
-    let groupId = existingByName.get(preset.name);
-    if (groupId) {
+    const found = existingByName.get(preset.name);
+
+    // Nhóm đang dùng (active) → giữ nguyên, không đụng.
+    if (found && found.isActive) {
       groupsSkipped++;
       continue;
     }
-    // Tạo group
-    const { data: newGroup, error: groupErr } = await supabase
-      .from("modifier_groups")
-      .insert({
-        tenant_id: tenantId,
-        name: preset.name,
-        rule: preset.rule,
-        channel: "fnb",
-        sort_order: preset.sortOrder,
-      })
-      .select("id")
-      .single();
-    if (groupErr) handleError(groupErr, "seedFnbVnPreset.createGroup");
-    groupId = (newGroup as { id: string }).id;
+
+    let groupId: string;
+    if (found && !found.isActive) {
+      // Nhóm đã xoá-mềm → KÍCH HOẠT LẠI đúng dòng cũ (không tạo trùng tên).
+      const { error: reErr } = await supabase
+        .from("modifier_groups")
+        .update({
+          is_active: true,
+          rule: preset.rule,
+          channel: "fnb",
+          sort_order: preset.sortOrder,
+          updated_at: new Date().toISOString(),
+        })
+        .eq("id", found.id);
+      if (reErr) handleError(reErr, "seedFnbVnPreset.reactivate");
+      groupId = found.id;
+    } else {
+      // Chưa từng có → tạo mới.
+      const { data: newGroup, error: groupErr } = await supabase
+        .from("modifier_groups")
+        .insert({
+          tenant_id: tenantId,
+          name: preset.name,
+          rule: preset.rule,
+          channel: "fnb",
+          sort_order: preset.sortOrder,
+        })
+        .select("id")
+        .single();
+      if (groupErr) handleError(groupErr, "seedFnbVnPreset.createGroup");
+      groupId = (newGroup as { id: string }).id;
+    }
     groupsCreated++;
 
-    // Insert options
+    // Thêm options chuẩn — CHỈ khi nhóm hiện không còn option active nào.
+    // (Nhóm khôi phục thường đã giữ lại options cũ → không nhân đôi.)
     if (preset.options.length > 0) {
-      const optionRows = preset.options.map((o) => ({
-        group_id: groupId,
-        label: o.label,
-        price_delta: o.priceDelta ?? 0,
-        scale_factor: o.scaleFactor ?? null,
-        is_default: o.isDefault ?? false,
-        sort_order: o.sortOrder,
-      }));
-      const { error: optErr } = await supabase
+      const { data: liveOpts } = await supabase
         .from("modifier_options")
-        .insert(optionRows);
-      if (optErr) handleError(optErr, "seedFnbVnPreset.createOptions");
-      optionsCreated += preset.options.length;
+        .select("id")
+        .eq("group_id", groupId)
+        .eq("is_active", true)
+        .limit(1);
+      if (((liveOpts ?? []) as unknown[]).length === 0) {
+        const optionRows = preset.options.map((o) => ({
+          group_id: groupId,
+          label: o.label,
+          price_delta: o.priceDelta ?? 0,
+          scale_factor: o.scaleFactor ?? null,
+          is_default: o.isDefault ?? false,
+          sort_order: o.sortOrder,
+        }));
+        const { error: optErr } = await supabase
+          .from("modifier_options")
+          .insert(optionRows);
+        if (optErr) handleError(optErr, "seedFnbVnPreset.createOptions");
+        optionsCreated += preset.options.length;
+      }
     }
   }
 

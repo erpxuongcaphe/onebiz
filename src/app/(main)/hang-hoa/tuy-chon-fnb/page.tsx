@@ -144,8 +144,11 @@ export default function ModifierFnbPage() {
     try {
       const result = await seedFnbVnPreset();
       const parts: string[] = [];
-      if (result.groupsCreated > 0)
-        parts.push(`tạo ${result.groupsCreated} nhóm + ${result.optionsCreated} options`);
+      if (result.groupsCreated > 0) {
+        const optPart =
+          result.optionsCreated > 0 ? ` + ${result.optionsCreated} tuỳ chọn` : "";
+        parts.push(`tạo/khôi phục ${result.groupsCreated} nhóm${optPart}`);
+      }
       if (result.groupsSkipped > 0) parts.push(`bỏ qua ${result.groupsSkipped} nhóm đã có`);
       toast({
         variant: "success",
