@@ -149,14 +149,14 @@ export default function ModifierFnbPage() {
       if (result.groupsSkipped > 0) parts.push(`bỏ qua ${result.groupsSkipped} nhóm đã có`);
       toast({
         variant: "success",
-        title: result.groupsCreated > 0 ? "Đã tạo preset" : "Không có gì mới",
-        description: parts.join(", ") || "Tất cả nhóm preset đã tồn tại",
+        title: result.groupsCreated > 0 ? "Đã tạo bộ tuỳ chọn mẫu" : "Không có gì mới",
+        description: parts.join(", ") || "Tất cả nhóm tuỳ chọn mẫu đã tồn tại",
       });
       await refresh();
     } catch (err) {
       toast({
         variant: "error",
-        title: "Lỗi tạo preset",
+        title: "Lỗi tạo bộ tuỳ chọn mẫu",
         description: err instanceof Error ? err.message : "Vui lòng thử lại",
       });
     } finally {
@@ -216,7 +216,7 @@ export default function ModifierFnbPage() {
         subtitle="Quản lý nhóm tuỳ chọn (Size, Mức đường, Mức đá, Topping...) — gắn vào nhóm SP hoặc SP riêng để hiện trên POS FnB."
         actions={[
           {
-            label: seeding ? "Đang tạo..." : "Tạo preset FnB Việt",
+            label: seeding ? "Đang tạo..." : "Tạo bộ tuỳ chọn mẫu",
             icon: <Icon name="auto_awesome" size={18} />,
             variant: "outline",
             onClick: handleSeedPreset,
@@ -238,7 +238,7 @@ export default function ModifierFnbPage() {
             <div className="space-y-1">
               <p className="font-medium text-status-info">Mới setup quán cà phê?</p>
               <p className="text-xs text-muted-foreground">
-                Bấm <span className="font-semibold">"Tạo preset FnB Việt"</span> ở góc trên để tự sinh sẵn 4 nhóm chuẩn (Size + Mức đường + Mức đá + Topping). Sau đó vào trang <a href="/hang-hoa/nhom" className="text-primary underline">Nhóm hàng</a> để gán cho từng nhóm SP — tất cả món trong nhóm sẽ tự thừa kế.
+                Bấm <span className="font-semibold">"Tạo bộ tuỳ chọn mẫu"</span> ở góc trên để tự sinh sẵn 4 nhóm chuẩn (Size + Mức đường + Mức đá + Topping). Sau đó vào trang <a href="/hang-hoa/nhom" className="text-primary underline">Nhóm hàng</a> để gán cho từng nhóm SP — tất cả món trong nhóm sẽ tự thừa kế.
               </p>
             </div>
           </div>

@@ -377,7 +377,7 @@ Bảng `product_variants` chứa các size của 1 SKU. Mỗi variant có:
 - `category_modifier_groups` + `product_modifier_groups`: gán cho cả nhóm SP hoặc SP riêng.
 
 **Setup nhanh** (1 click):
-1. Vào `/hang-hoa/tuy-chon-fnb` → bấm **"Tạo preset FnB Việt"** → sinh sẵn 4 nhóm.
+1. Vào `/hang-hoa/tuy-chon-fnb` → bấm **"Tạo bộ tuỳ chọn mẫu"** → sinh sẵn 4 nhóm.
 2. Vào `/hang-hoa/nhom` → sửa nhóm "Cà phê" → tick các nhóm tuỳ chọn → Lưu. Mọi SP trong nhóm tự thừa kế.
 3. SP đặc biệt cần override → vào form SP → tab **"Tuỳ chọn FnB"** → bật Override.
 

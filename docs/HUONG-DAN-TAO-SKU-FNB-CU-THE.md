@@ -17,13 +17,13 @@ Em đã scan dữ liệu thực hôm nay:
 | NVL items | Đã có hàng trăm NVL trong các nhóm trên | Skip — chỉ dùng |
 | Nhóm SKU FnB | **8 nhóm rỗng**: Cà phê tươi (CPT), Trà Sữa (TSU), Giải khát (GKH), Premium Coffee (PCF), Đá xay (DXA), Hồng Trà (HTR), Trà Ô Lông (TOL), Nước ép (NEP) | Skip — chỉ gán modifier |
 | SKU FnB | **0 món** | ⬅️ Đây là việc anh sắp làm |
-| Modifier groups | Chỉ có **"Mức ngọt"** anh tạo tay (0 options) | Tạo preset mới + xoá cũ |
+| Modifier groups | Chỉ có **"Mức ngọt"** anh tạo tay (0 options) | Tạo bộ mẫu mới + xoá cũ |
 
 **→ Anh chỉ cần làm 5 bước dưới đây. Không cần tạo NVL hay nhóm hàng mới.**
 
 ---
 
-## 🚀 BƯỚC 1 — Tạo preset modifier *(1 lần dùng forever, ~30 giây)*
+## 🚀 BƯỚC 1 — Tạo bộ tuỳ chọn mẫu *(1 lần dùng forever, ~30 giây)*
 
 ### 1.1 Mở trang
 
@@ -41,7 +41,7 @@ Hoặc click sidebar trái: **Danh mục → Sản phẩm → Tuỳ chọn món 
 ┌─ Tuỳ chọn món FnB ─────────────────────────────────────┐
 │ Quản lý nhóm tuỳ chọn (Size, Mức đường, Mức đá,...)   │
 │                                                         │
-│                    [✨ Tạo preset FnB Việt]            │
+│                    [✨ Tạo bộ tuỳ chọn mẫu]            │
 │                    [+ Tạo nhóm tuỳ chọn]               │
 │                                                         │
 │ ▸ Mức ngọt   [Chọn 1]   0 options    [Sửa]  [🗑]      │
@@ -49,7 +49,7 @@ Hoặc click sidebar trái: **Danh mục → Sản phẩm → Tuỳ chọn món 
 └─────────────────────────────────────────────────────────┘
 ```
 
-### 1.3 Bấm "✨ Tạo preset FnB Việt"
+### 1.3 Bấm "✨ Tạo bộ tuỳ chọn mẫu"
 
 Vị trí: **góc trên phải**, nút viền (outline), có icon ngôi sao.
 

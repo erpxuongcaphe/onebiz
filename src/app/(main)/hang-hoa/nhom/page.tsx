@@ -978,7 +978,7 @@ export default function NhomHangPage() {
                     <a href="/hang-hoa/tuy-chon-fnb" target="_blank" className="text-primary underline">
                       Tuỳ chọn món FnB
                     </a>{" "}
-                    để tạo (có nút "Tạo preset FnB Việt" sinh sẵn 4 nhóm).
+                    để tạo (có nút "Tạo bộ tuỳ chọn mẫu" sinh sẵn 4 nhóm).
                   </p>
                 ) : (
                   <div className="grid grid-cols-2 gap-1.5 mt-2">

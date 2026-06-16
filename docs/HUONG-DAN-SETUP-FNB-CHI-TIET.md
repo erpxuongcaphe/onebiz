@@ -107,7 +107,7 @@ Modifier có cấu trúc phức tạp (option lồng group + scaleFactor + linke
 
 **2.1 Vào `/hang-hoa/tuy-chon-fnb`**
 
-**2.2 Cách nhanh nhất — Bấm "Preset FnB Việt"**
+**2.2 Cách nhanh nhất — Bấm "Tạo bộ tuỳ chọn mẫu"**
 
 Web có sẵn nút này — bấm 1 lần tạo 4 nhóm chuẩn:
 - ✅ Mức đường (5 options với scaleFactor 0 → 1.3).

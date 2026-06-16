@@ -10,7 +10,7 @@
 ```
 1. Mở file Excel mẫu        →  điền data theo cột (giữ format, thay tên)
 2. Vào web /hang-hoa/nhom   →  Nhập từ Excel → chọn Sheet 2 (Nhóm FnB)
-3. Vào web /hang-hoa/tuy-chon-fnb  →  Bấm "Preset FnB Việt" → có 4 nhóm modifier
+3. Vào web /hang-hoa/tuy-chon-fnb  →  Bấm "Tạo bộ tuỳ chọn mẫu" → có 4 nhóm modifier
 4. Vào web /hang-hoa       →  Nhập từ Excel → chọn Sheet 4 (NVL), rồi Sheet 5 (Món)
 5. Vào web /hang-hoa/cong-thuc  →  Nhập từ Excel → chọn Sheet 6 (BOM)
 ```
@@ -44,7 +44,7 @@
 
 **Cách nhanh nhất**:
 1. Vào **Danh mục → Sản phẩm → Tuỳ chọn FnB** (`/hang-hoa/tuy-chon-fnb`).
-2. Bấm nút **"Preset FnB Việt"** (góc phải).
+2. Bấm nút **"Tạo bộ tuỳ chọn mẫu"** (góc phải).
 3. Hệ thống tự tạo 4 nhóm: Mức đường (5 options), Mức đá (4 options), Topping (5 options), Size (3 options).
 
 ✅ Xong — refresh trang thấy 4 nhóm.

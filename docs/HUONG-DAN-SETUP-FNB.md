@@ -120,7 +120,7 @@ Phương án Toast inheritance — chuẩn POS quốc tế.
 
 ### 2.1 Tạo nhanh bằng PRESET (👈 99% case)
 
-Vào **`/hang-hoa/tuy-chon-fnb`** → bấm **"Tạo preset FnB Việt"** → confirm. Hệ thống sinh sẵn:
+Vào **`/hang-hoa/tuy-chon-fnb`** → bấm **"Tạo bộ tuỳ chọn mẫu"** → confirm. Hệ thống sinh sẵn:
 
 | Nhóm | Quy tắc | Options |
 |---|---|---|
@@ -259,7 +259,7 @@ Vào **`/kho`** check tồn NVL — nếu đúng = 🎉 SUCCESS.
 → Import BOM **TRƯỚC** Excel SP. Order: Categories → NVL → BOM → SKU.
 
 ### "Nhóm modifier chưa tồn tại" khi import BOM/Categories Excel
-→ Vào `/hang-hoa/tuy-chon-fnb` → bấm "Tạo preset FnB Việt" → có 4 nhóm chuẩn. Sau đó import lại.
+→ Vào `/hang-hoa/tuy-chon-fnb` → bấm "Tạo bộ tuỳ chọn mẫu" → có 4 nhóm chuẩn. Sau đó import lại.
 
 ### POS bán nhưng tồn NVL không trừ
 → Check `products.has_bom = true` + `products.bom_code` có link đúng BOM. Sửa SP → tab Công thức → verify Mã BOM.

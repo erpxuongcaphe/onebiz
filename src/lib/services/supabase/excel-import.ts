@@ -940,7 +940,7 @@ export async function bulkImportBOMs(
           const found = modifierMap.get(key);
           if (!found) {
             throw new Error(
-              `Nhóm modifier "${r.modifierScaleTargetName}" chưa tồn tại. Tạo ở /hang-hoa/tuy-chon-fnb trước (hoặc bấm "Tạo preset FnB Việt").`,
+              `Nhóm modifier "${r.modifierScaleTargetName}" chưa tồn tại. Tạo ở /hang-hoa/tuy-chon-fnb trước (hoặc bấm "Tạo bộ tuỳ chọn mẫu").`,
             );
           }
           modifierScaleId = found;
@@ -1134,7 +1134,7 @@ export async function bulkImportCategories(
         const gid = modifierMap.get(name.toLowerCase());
         if (!gid) {
           throw new Error(
-            `Nhóm tuỳ chọn "${name}" chưa tồn tại. Tạo ở /hang-hoa/tuy-chon-fnb trước (hoặc bấm "Tạo preset FnB Việt").`,
+            `Nhóm tuỳ chọn "${name}" chưa tồn tại. Tạo ở /hang-hoa/tuy-chon-fnb trước (hoặc bấm "Tạo bộ tuỳ chọn mẫu").`,
           );
         }
         groupIds.push(gid);

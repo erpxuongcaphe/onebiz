@@ -82,7 +82,7 @@ const modifierRows = [
   [""],
   ["📍 Đường dẫn: /hang-hoa/tuy-chon-fnb"],
   [""],
-  ["💡 Có sẵn nút 'Preset FnB Việt' — bấm 1 lần tạo 4 nhóm sau:"],
+  ["💡 Có sẵn nút 'Tạo bộ tuỳ chọn mẫu' — bấm 1 lần tạo 4 nhóm sau:"],
   [""],
   ["NHÓM 1: Mức đường", "Single choice", "Options: Không đường (×0), Ít đường (×0.5), 70% đường (×0.7), Bình thường (×1), Đường nhiều (×1.3)"],
   ["NHÓM 2: Mức đá", "Single choice", "Options: Không đá, Ít đá, Bình thường, Nhiều đá"],
