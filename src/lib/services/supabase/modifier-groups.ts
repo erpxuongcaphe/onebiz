@@ -81,11 +81,46 @@ export async function createModifierGroup(input: ModifierGroupInput): Promise<Mo
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
   const supabase = getClient() as any;
   const tenantId = await getCurrentTenantId();
+  const name = input.name.trim();
+
+  // FIX 16/06/2026 (CEO báo bug): deleteModifierGroup chỉ XOÁ MỀM (is_active=false)
+  // nhưng GIỮ lại dòng tên cũ → INSERT lại cùng tên đụng ràng buộc
+  // unique (tenant_id, name) → lỗi 23505. Xử lý: nếu đã có nhóm trùng tên:
+  //   - is_active=false (đã xoá)  → KÍCH HOẠT LẠI (khôi phục nhóm + option cũ).
+  //   - is_active=true  (đang dùng) → trùng thật → báo lỗi tiếng Việt rõ ràng.
+  const { data: existing } = await supabase
+    .from("modifier_groups")
+    .select("id, is_active")
+    .eq("tenant_id", tenantId)
+    .eq("name", name)
+    .maybeSingle();
+  if (existing) {
+    if (existing.is_active) {
+      throw new Error(
+        `Nhóm tuỳ chọn "${name}" đã tồn tại. Hãy đặt tên khác hoặc sửa nhóm cũ.`,
+      );
+    }
+    const { data: reactivated, error: reErr } = await supabase
+      .from("modifier_groups")
+      .update({
+        is_active: true,
+        rule: input.rule,
+        channel: input.channel ?? "fnb",
+        sort_order: input.sortOrder ?? 0,
+        updated_at: new Date().toISOString(),
+      })
+      .eq("id", existing.id)
+      .select("*")
+      .single();
+    if (reErr) handleError(reErr, "createModifierGroup:reactivate");
+    return mapGroup(reactivated);
+  }
+
   const { data, error } = await supabase
     .from("modifier_groups")
     .insert({
       tenant_id: tenantId,
-      name: input.name.trim(),
+      name,
       rule: input.rule,
       channel: input.channel ?? "fnb",
       sort_order: input.sortOrder ?? 0,
