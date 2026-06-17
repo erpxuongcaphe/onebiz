@@ -35,6 +35,7 @@ import {
 } from "@/lib/services/supabase/base";
 import { Icon } from "@/components/ui/icon";
 import { ProductImageUpload } from "@/components/shared/product-image-upload";
+import { PerSizeRecipeDialog } from "@/components/shared/dialogs/per-size-recipe-dialog";
 import {
   createBOM,
   getBOMsByProduct,
@@ -284,6 +285,8 @@ export function CreateProductDialog({
   // Mỗi variant có giá riêng + BOM riêng (bom_code) — cho phép Size M dùng
   // 18g cà phê, Size L dùng 25g.
   const [variantItems, setVariantItems] = useState<InlineVariant[]>([]);
+  // CEO 16/06/2026 — dialog nhập công thức theo từng size (per-size recipe).
+  const [perSizeRecipeOpen, setPerSizeRecipeOpen] = useState(false);
   // Track ID variants đã có sẵn ở DB để diff khi save (cũ nhưng user xoá).
   const [originalVariantIds, setOriginalVariantIds] = useState<Set<string>>(
     new Set(),
@@ -2219,6 +2222,38 @@ export function CreateProductDialog({
                   </div>
                 </div>
               </div>
+
+              {channel === "fnb" && (
+                <div className="flex flex-wrap items-center justify-between gap-2 rounded-lg border border-status-info/30 bg-status-info/5 px-3 py-2">
+                  <span className="text-xs text-muted-foreground">
+                    Nhập <b>lượng nguyên liệu riêng cho từng size</b> (cà phê/sữa/ly…) — bán size nào
+                    trừ kho đúng công thức size đó.
+                  </span>
+                  <Button
+                    type="button"
+                    variant="outline"
+                    size="sm"
+                    disabled={!initialData?.id}
+                    onClick={() => setPerSizeRecipeOpen(true)}
+                  >
+                    <Icon name="tune" size={14} className="mr-1" />
+                    {initialData?.id ? "Công thức theo size" : "Lưu SP trước"}
+                  </Button>
+                </div>
+              )}
+              <PerSizeRecipeDialog
+                open={perSizeRecipeOpen}
+                onClose={() => setPerSizeRecipeOpen(false)}
+                product={
+                  initialData?.id
+                    ? {
+                        id: initialData.id,
+                        code: initialData.code ?? "",
+                        name: initialData.name ?? "",
+                      }
+                    : null
+                }
+              />
 
               {variantItems.length === 0 ? (
                 <div className="rounded-lg border-2 border-dashed border-border p-6 text-center text-sm text-muted-foreground">
