@@ -69,7 +69,6 @@ const INITIAL: Ingredient[] = [
   { id: "cafe", name: "Cà phê cốt", unit: "ml", qty: { m: 30, l: 45, xl: 60 }, scaleBy: "none" },
   { id: "sua", name: "Sữa đặc", unit: "ml", qty: { m: 25, l: 30, xl: 35 }, scaleBy: "none" },
   { id: "duong", name: "Đường", unit: "g", qty: { m: 15, l: 20, xl: 25 }, scaleBy: "sugar" },
-  { id: "da", name: "Đá viên", unit: "g", qty: { m: 80, l: 120, xl: 150 }, scaleBy: "ice" },
   { id: "ly", name: "Ly nhựa", unit: "cái", qty: { m: 1, l: 1, xl: 1 }, scaleBy: "none", perSizeSku: true },
 ];
 
@@ -164,13 +163,13 @@ export default function CongThucTheoSizeMockup() {
           </p>
           <div className="mt-3 flex flex-wrap gap-2 text-xs">
             <span className="rounded-md bg-blue-50 px-2.5 py-1 text-blue-700">
-              Size → công thức riêng
-            </span>
-            <span className="rounded-md bg-emerald-50 px-2.5 py-1 text-emerald-700">
-              Mức đường / đá → nhân hệ số
+              Size → công thức (BOM) riêng
             </span>
             <span className="rounded-md bg-amber-50 px-2.5 py-1 text-amber-700">
-              Topping → cộng thêm
+              Đường / Topping → trừ kho
+            </span>
+            <span className="rounded-md bg-slate-100 px-2.5 py-1 text-slate-500">
+              Mức đá / ghi chú → KHÔNG trừ kho
             </span>
           </div>
         </div>
@@ -255,9 +254,9 @@ export default function CongThucTheoSizeMockup() {
             <p className="mt-3 flex items-start gap-1.5 text-xs text-slate-500">
               <Icon name="lightbulb" size={15} className="mt-0.5 shrink-0 text-amber-500" />
               <span>
-                Mỗi nguyên liệu tăng một tỉ lệ khác nhau (cà phê ×2, sữa ×1.4, đá ×1.9, ly đổi SKU) —
-                không thể dùng chung 1 hệ số. Đường &amp; đá nhập lượng ở mức 100%, POS tự nhân theo
-                lựa chọn của khách.
+                Lưới này <span className="text-slate-700">chính là Công thức (BOM) của từng size</span>{" "}
+                — nằm trong mục Công thức sẵn có, chỉ xem cạnh nhau cho dễ nhập. Mỗi NVL một tỉ lệ
+                khác nhau (cà phê ×2, sữa ×1.4, ly đổi SKU) — không thể dùng chung 1 hệ số.
               </span>
             </p>
 
@@ -408,6 +407,19 @@ export default function CongThucTheoSizeMockup() {
                   </div>
                 ))}
               </div>
+              <div className="mt-2 border-t border-dashed border-slate-300 pt-2">
+                <div className="mb-1 text-[11px] font-medium text-slate-400">
+                  Ghi chú pha chế — KHÔNG trừ kho
+                </div>
+                <div className="flex flex-wrap gap-1.5">
+                  <span className="rounded border border-slate-200 bg-white px-2 py-0.5 text-xs text-slate-500">
+                    Mức đá: {ICE[iceIdx].label}
+                  </span>
+                  <span className="rounded border border-slate-200 bg-white px-2 py-0.5 text-xs text-slate-400">
+                    (chỉ hiện cho pha chế / KDS)
+                  </span>
+                </div>
+              </div>
               <div className="mt-3 flex items-center justify-between border-t border-slate-200 pt-2">
                 <span className="text-sm text-slate-500">Khách trả</span>
                 <span className="text-lg font-semibold text-slate-900">{formatCurrency(total)}</span>
@@ -415,8 +427,9 @@ export default function CongThucTheoSizeMockup() {
             </div>
 
             <p className="mt-3 text-xs text-slate-400">
-              Đổi Size → cà phê/sữa/đá đổi theo công thức size đó. Đổi Mức đường/đá → chỉ NVL tương
-              ứng nhân hệ số. Topping → cộng NVL riêng. Đây đúng là cách RPC sẽ trừ kho.
+              Đổi Size → cà phê/sữa/đường đổi theo công thức (BOM) của size đó. Mức đường → nhân NVL
+              đường. Topping → cộng NVL riêng. <span className="text-slate-500">Mức đá = chỉ ghi chú
+              pha chế, KHÔNG trừ kho.</span> Đây đúng là cách RPC sẽ trừ kho.
             </p>
           </section>
         </div>
