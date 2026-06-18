@@ -35,7 +35,12 @@ import {
 } from "@/lib/services/supabase/base";
 import { Icon } from "@/components/ui/icon";
 import { ProductImageUpload } from "@/components/shared/product-image-upload";
-import { PerSizeRecipeDialog } from "@/components/shared/dialogs/per-size-recipe-dialog";
+import {
+  PerSizeRecipeMatrix,
+  newRecipeRow,
+  type RecipeRow,
+} from "@/components/shared/dialogs/per-size-recipe-matrix";
+import { getBOMByCode, getBOMById } from "@/lib/services/supabase/bom";
 import {
   createBOM,
   getBOMsByProduct,
@@ -76,6 +81,8 @@ type InnerTab = "info" | "pricing" | "bom" | "modifier" | "variants";
  * Cashier FnB pick size khi tap món → load variant.bom_code.
  */
 interface InlineVariant {
+  /** key ổn định client-side để gắn công thức theo size (kể cả variant chưa lưu). */
+  key: string;
   /** UUID nếu đã có DB (edit). Null = newly added in this session. */
   id: string | null;
   name: string;
@@ -111,6 +118,12 @@ interface InlineBomItem {
 // các trường hợp đặc biệt (8.5%, 12%, sản phẩm xuất khẩu, v.v.).
 const VAT_PRESETS = ["0", "5", "8", "10"];
 const VAT_CUSTOM = "__custom__";
+
+// CEO 17/06/2026 (Phương án B): key ổn định cho variant + sinh mã BOM theo size.
+let _vk = 0;
+const newVariantKey = () => `vk${++_vk}`;
+const sanitizeBomCode = (s: string) =>
+  s.trim().toUpperCase().replace(/\s+/g, "");
 
 // Tìm đơn vị tương tự (chỉ khác hoa/thường) trong list existing —
 // VD input "kg", existing có "Kg" → return "Kg" để suggest dùng tên cũ.
@@ -285,8 +298,10 @@ export function CreateProductDialog({
   // Mỗi variant có giá riêng + BOM riêng (bom_code) — cho phép Size M dùng
   // 18g cà phê, Size L dùng 25g.
   const [variantItems, setVariantItems] = useState<InlineVariant[]>([]);
-  // CEO 16/06/2026 — dialog nhập công thức theo từng size (per-size recipe).
-  const [perSizeRecipeOpen, setPerSizeRecipeOpen] = useState(false);
+  // CEO 17/06/2026 (Phương án B): công thức theo size gộp ngay trong tab Quy
+  // cách, lưu chung 1 lần. recipeRows = lưới NVL × size; recipeEnabled = toggle.
+  const [recipeRows, setRecipeRows] = useState<RecipeRow[]>([]);
+  const [recipeEnabled, setRecipeEnabled] = useState(false);
   // Track ID variants đã có sẵn ở DB để diff khi save (cũ nhưng user xoá).
   const [originalVariantIds, setOriginalVariantIds] = useState<Set<string>>(
     new Set(),
@@ -559,6 +574,7 @@ export function CreateProductDialog({
         if (cancelled) return;
         setVariantItems(
           variants.map((v: ProductVariant) => ({
+            key: v.id, // existing variant → key = id (ổn định)
             id: v.id,
             name: v.name,
             sellPrice: v.sellPrice,
@@ -569,6 +585,40 @@ export function CreateProductDialog({
           })),
         );
         setOriginalVariantIds(new Set(variants.map((v) => v.id)));
+
+        // CEO 17/06/2026 (Phương án B): nạp công thức theo size sẵn có vào lưới
+        // (chỉ FnB). Gộp item theo (NVL + scale-target); qty keyed theo variant id.
+        if (channel === "fnb") {
+          const rowMap = new Map<string, RecipeRow>();
+          for (const v of variants) {
+            if (!v.bomCode) continue;
+            try {
+              const boms = await getBOMByCode(v.bomCode);
+              const bom = boms.find((b) => !b.branchId) ?? boms[0];
+              if (!bom) continue;
+              const full = await getBOMById(bom.id);
+              for (const it of full.items ?? []) {
+                const sk = it.modifierScaleTarget ?? "";
+                const rkey = `${it.materialId}|${sk}`;
+                let row = rowMap.get(rkey);
+                if (!row) {
+                  row = newRecipeRow();
+                  row.materialId = it.materialId;
+                  row.unit = it.unit || "";
+                  row.scaleTarget = it.modifierScaleTarget ?? null;
+                  rowMap.set(rkey, row);
+                }
+                row.qty[v.id] = it.quantity;
+              }
+            } catch {
+              /* bỏ qua BOM lỗi 1 size, vẫn nạp các size khác */
+            }
+          }
+          if (cancelled) return;
+          const loaded = [...rowMap.values()];
+          setRecipeRows(loaded);
+          setRecipeEnabled(loaded.length > 0);
+        }
       } catch (err) {
         console.warn("Load variants failed:", err);
       }
@@ -576,7 +626,7 @@ export function CreateProductDialog({
     return () => {
       cancelled = true;
     };
-  }, [open, initialData, innerTab]);
+  }, [open, initialData, innerTab, channel]);
 
   // Helper: add empty variant row.
   // CEO 01/06/2026: tên để trống mặc định — placeholder gợi ý M/L/XL/250ml/...,
@@ -585,6 +635,7 @@ export function CreateProductDialog({
     setVariantItems((prev) => [
       ...prev,
       {
+        key: newVariantKey(),
         id: null,
         name: "",
         sellPrice: 0,
@@ -618,7 +669,12 @@ export function CreateProductDialog({
   // CEO 01/06/2026 — Sprint 2.4a: sync variants với DB.
   // Diff: old not in current → delete; current with id → update;
   //       current without id → create.
-  async function syncVariants(productId: string): Promise<void> {
+  // CEO 17/06/2026 (Phương án B): trả về map (variant.key → {id, bomCode}) để
+  // bước lưu công thức theo size gắn BOM đúng variant (kể cả variant vừa tạo).
+  async function syncVariants(
+    productId: string,
+  ): Promise<Map<string, { id: string; bomCode: string | null }>> {
+    const vmap = new Map<string, { id: string; bomCode: string | null }>();
     const currentIds = new Set(
       variantItems.filter((v) => v.id).map((v) => v.id as string),
     );
@@ -644,8 +700,9 @@ export function CreateProductDialog({
           isDefault: v.isDefault,
           sortOrder: i,
         });
+        vmap.set(v.key, { id: v.id, bomCode: v.bomCode });
       } else {
-        await createVariant({
+        const created = await createVariant({
           productId,
           name: v.name.trim() || "Default",
           sellPrice: v.sellPrice,
@@ -654,8 +711,69 @@ export function CreateProductDialog({
           isDefault: v.isDefault,
           sortOrder: i,
         });
+        if (created?.id) vmap.set(v.key, { id: created.id, bomCode: v.bomCode });
       }
     }
+    return vmap;
+  }
+
+  // CEO 17/06/2026 (Phương án B): lưu công thức theo size (CHỈ FnB) — mỗi variant
+  // 1 BOM riêng (code = bomCode cũ hoặc MãSP-Size). Mirror logic dialog cũ nhưng
+  // chạy chung trong handleSave để 1 nút Lưu là xong cả size + công thức.
+  async function syncPerSizeRecipes(
+    productId: string,
+    productCode: string,
+    vmap: Map<string, { id: string; bomCode: string | null }>,
+  ): Promise<void> {
+    const valid = recipeRows.filter((r) => r.materialId);
+    for (const v of variantItems) {
+      const persisted = vmap.get(v.key);
+      if (!persisted) continue;
+      const items = valid
+        .map((r) => ({
+          materialId: r.materialId,
+          quantity: r.qty[v.key] ?? 0,
+          unit: r.unit || "g",
+          modifierScaleTarget: r.scaleTarget,
+        }))
+        .filter((it) => it.quantity > 0);
+
+      const code =
+        persisted.bomCode?.trim() ||
+        `${productCode}-${sanitizeBomCode(v.name || "SIZE")}`;
+
+      // Thay công thức: xoá-mềm mọi BOM cùng code rồi tạo lại (lookup theo code).
+      try {
+        const existing = await getBOMByCode(code);
+        for (const b of existing) {
+          try {
+            await deleteBOM(b.id);
+          } catch {
+            /* bỏ qua */
+          }
+        }
+      } catch {
+        /* getBOMByCode lỗi → vẫn thử tạo mới */
+      }
+
+      if (items.length > 0) {
+        await createBOM({
+          productId,
+          variantId: persisted.id,
+          code,
+          name: `${name} ${v.name}`.trim(),
+          items,
+        });
+        if (persisted.bomCode !== code) {
+          await updateVariant(persisted.id, { bomCode: code });
+        }
+      } else if (persisted.bomCode) {
+        // Size không nhập gì → bỏ liên kết để kế thừa công thức cha.
+        await updateVariant(persisted.id, { bomCode: null });
+      }
+    }
+    // SP phải has_bom=true để khi bán mới trừ NVL theo công thức size.
+    await updateProduct(productId, { hasBom: true });
   }
 
   // Load NCC list 1 lần mỗi lần dialog mở. 500 NCC ~ 50KB payload — ok.
@@ -682,7 +800,11 @@ export function CreateProductDialog({
   // chỉ khi user bật hasBom + bấm tab "bom" (Công thức). Trước đây fetch eager
   // mỗi lần mở dialog → dialog freeze. Giờ chỉ tab BOM mới fetch.
   useEffect(() => {
-    if (!open || scope !== "sku" || !hasBom || innerTab !== "bom") return;
+    // Load NVL khi: (a) tab BOM + hasBom, HOẶC (b) tab Quy cách + FnB (cho lưới
+    // công thức theo size — Phương án B cần materials để chọn NVL + tính giá vốn).
+    const needForBom = hasBom && innerTab === "bom";
+    const needForRecipe = channel === "fnb" && innerTab === "variants";
+    if (!open || scope !== "sku" || (!needForBom && !needForRecipe)) return;
     if (materialOptions.length > 0) return; // dedup — đã load
     let cancelled = false;
     getProducts({ page: 0, pageSize: 1000, filters: {} })
@@ -696,7 +818,7 @@ export function CreateProductDialog({
     return () => {
       cancelled = true;
     };
-  }, [open, scope, hasBom, innerTab, materialOptions.length]);
+  }, [open, scope, hasBom, innerTab, materialOptions.length, channel]);
 
   // Load categories mỗi khi scope đổi. Edit mode: KHÔNG reset categoryId (đã prefill).
   useEffect(() => {
@@ -971,7 +1093,14 @@ export function CreateProductDialog({
         // CEO 01/06/2026 — Sprint 2.4a: Sync variants (Size M/L/XL).
         if (scope === "sku") {
           try {
-            await syncVariants(initialData.id);
+            const vmap = await syncVariants(initialData.id);
+            if (channel === "fnb" && recipeEnabled) {
+              await syncPerSizeRecipes(
+                initialData.id,
+                initialData.code ?? "",
+                vmap,
+              );
+            }
           } catch (varErr) {
             console.warn("Save variants failed:", varErr);
             toast({
@@ -1113,7 +1242,10 @@ export function CreateProductDialog({
       // CEO 01/06/2026 — Sprint 2.4a: Sync variants khi tạo SKU.
       if (created?.id && scope === "sku" && variantItems.length > 0) {
         try {
-          await syncVariants(created.id);
+          const vmap = await syncVariants(created.id);
+          if (channel === "fnb" && recipeEnabled) {
+            await syncPerSizeRecipes(created.id, code, vmap);
+          }
         } catch (varErr) {
           console.warn(
             "[create-product-dialog] sync variants failed:",
@@ -2223,37 +2355,8 @@ export function CreateProductDialog({
                 </div>
               </div>
 
-              {channel === "fnb" && (
-                <div className="flex flex-wrap items-center justify-between gap-2 rounded-lg border border-status-info/30 bg-status-info/5 px-3 py-2">
-                  <span className="text-xs text-muted-foreground">
-                    Nhập <b>lượng nguyên liệu riêng cho từng size</b> (cà phê/sữa/ly…) — bán size nào
-                    trừ kho đúng công thức size đó.
-                  </span>
-                  <Button
-                    type="button"
-                    variant="outline"
-                    size="sm"
-                    disabled={!initialData?.id}
-                    onClick={() => setPerSizeRecipeOpen(true)}
-                  >
-                    <Icon name="tune" size={14} className="mr-1" />
-                    {initialData?.id ? "Công thức theo size" : "Lưu SP trước"}
-                  </Button>
-                </div>
-              )}
-              <PerSizeRecipeDialog
-                open={perSizeRecipeOpen}
-                onClose={() => setPerSizeRecipeOpen(false)}
-                product={
-                  initialData?.id
-                    ? {
-                        id: initialData.id,
-                        code: initialData.code ?? "",
-                        name: initialData.name ?? "",
-                      }
-                    : null
-                }
-              />
+              {/* CEO 17/06/2026 (Phương án B): công thức theo size chuyển xuống
+                  DƯỚI bảng size + gộp vào nút Lưu (xem cuối tab). */}
 
               {variantItems.length === 0 ? (
                 <div className="rounded-lg border-2 border-dashed border-border p-6 text-center text-sm text-muted-foreground">
@@ -2281,9 +2384,8 @@ export function CreateProductDialog({
                       <tr>
                         <th className="text-left px-3 py-2 font-semibold w-28">Tên</th>
                         <th className="text-right px-3 py-2 font-semibold w-32">Giá bán (đ)</th>
-                        <th className="text-right px-3 py-2 font-semibold w-32">Giá vốn (đ)</th>
-                        {channel === "fnb" && (
-                          <th className="text-left px-3 py-2 font-semibold">Mã BOM riêng</th>
+                        {channel !== "fnb" && (
+                          <th className="text-right px-3 py-2 font-semibold w-32">Giá vốn (đ)</th>
                         )}
                         <th className="text-center px-3 py-2 font-semibold w-20">Mặc định</th>
                         <th className="w-10"></th>
@@ -2307,45 +2409,34 @@ export function CreateProductDialog({
                           </td>
                           <td className="px-3 py-2">
                             <Input
-                              type="number"
-                              value={v.sellPrice || ""}
+                              inputMode="numeric"
+                              value={v.sellPrice ? v.sellPrice.toLocaleString("vi-VN") : ""}
+                              placeholder="0"
                               className="h-9 text-right text-sm"
                               onChange={(e) => {
-                                const n = parseFloat(e.target.value);
+                                const digits = e.target.value.replace(/[^\d]/g, "");
+                                const n = digits ? parseInt(digits, 10) : 0;
                                 setVariantItems((prev) =>
                                   prev.map((p, i) =>
-                                    i === idx ? { ...p, sellPrice: Number.isFinite(n) ? n : 0 } : p,
+                                    i === idx ? { ...p, sellPrice: n } : p,
                                   ),
                                 );
                               }}
                             />
                           </td>
-                          <td className="px-3 py-2">
-                            <Input
-                              type="number"
-                              value={v.costPrice || ""}
-                              className="h-9 text-right text-sm"
-                              onChange={(e) => {
-                                const n = parseFloat(e.target.value);
-                                setVariantItems((prev) =>
-                                  prev.map((p, i) =>
-                                    i === idx ? { ...p, costPrice: Number.isFinite(n) ? n : 0 } : p,
-                                  ),
-                                );
-                              }}
-                            />
-                          </td>
-                          {channel === "fnb" && (
+                          {channel !== "fnb" && (
                             <td className="px-3 py-2">
                               <Input
-                                value={v.bomCode ?? ""}
-                                placeholder="VD: BOM-CFS-002-M"
-                                className="h-9 text-sm font-mono"
+                                inputMode="numeric"
+                                value={v.costPrice ? v.costPrice.toLocaleString("vi-VN") : ""}
+                                placeholder="0"
+                                className="h-9 text-right text-sm"
                                 onChange={(e) => {
-                                  const val = e.target.value;
+                                  const digits = e.target.value.replace(/[^\d]/g, "");
+                                  const n = digits ? parseInt(digits, 10) : 0;
                                   setVariantItems((prev) =>
                                     prev.map((p, i) =>
-                                      i === idx ? { ...p, bomCode: val || null } : p,
+                                      i === idx ? { ...p, costPrice: n } : p,
                                     ),
                                   );
                                 }}
@@ -2386,6 +2477,35 @@ export function CreateProductDialog({
                       Thêm quy cách
                     </Button>
                   </div>
+                </div>
+              )}
+
+              {/* CEO 17/06/2026 (Phương án B): lưới công thức theo size — gộp
+                  ngay đây, lưu chung 1 nút. Chỉ FnB + khi đã có ít nhất 1 size. */}
+              {channel === "fnb" && variantItems.length > 0 && (
+                <div className="space-y-3 rounded-lg border border-status-info/30 bg-status-info/5 p-3">
+                  <label className="flex flex-wrap items-center gap-2 text-sm font-medium cursor-pointer">
+                    <input
+                      type="checkbox"
+                      checked={recipeEnabled}
+                      onChange={(e) => setRecipeEnabled(e.target.checked)}
+                      className="size-4"
+                    />
+                    Trừ kho theo công thức từng size
+                    <span className="text-xs font-normal text-muted-foreground">
+                      (cà phê/sữa/ly… — bán size nào trừ đúng công thức size đó)
+                    </span>
+                  </label>
+                  {recipeEnabled && (
+                    <PerSizeRecipeMatrix
+                      sizes={variantItems.map((v) => ({ key: v.key, name: v.name }))}
+                      rows={recipeRows}
+                      onChange={setRecipeRows}
+                      materials={materialOptions}
+                      groups={availableFnbModifierGroups}
+                      loading={materialOptions.length === 0}
+                    />
+                  )}
                 </div>
               )}
             </TabsContent>

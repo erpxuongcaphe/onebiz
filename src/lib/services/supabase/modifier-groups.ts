@@ -277,7 +277,9 @@ export async function seedFnbVnPreset(): Promise<PresetSeedResult> {
     ]),
   );
 
-  // Định nghĩa 4 nhóm chuẩn
+  // Định nghĩa nhóm tuỳ chọn chuẩn. CEO 17/06/2026: BỎ nhóm "Size" khỏi preset —
+  // size giờ là QUY CÁCH (product_variants) + công thức theo size, KHÔNG phải
+  // modifier. Để cả hai sẽ ra 2 ô chọn size trên POS gây nhầm. Size = variant.
   const presets: Array<{
     name: string;
     rule: ModifierRule;
@@ -290,16 +292,6 @@ export async function seedFnbVnPreset(): Promise<PresetSeedResult> {
       sortOrder: number;
     }>;
   }> = [
-    {
-      name: "Size",
-      rule: "single_required",
-      sortOrder: 1,
-      options: [
-        { label: "M", priceDelta: 0, isDefault: true, sortOrder: 1 },
-        { label: "L", priceDelta: 5000, sortOrder: 2 },
-        { label: "XL", priceDelta: 10000, sortOrder: 3 },
-      ],
-    },
     {
       name: "Mức đường",
       rule: "single",
