@@ -2347,9 +2347,9 @@ export function CreateProductDialog({
                 <div className="flex items-start gap-2">
                   <Icon name="straighten" size={16} className="text-status-info shrink-0 mt-0.5" />
                   <div className="flex-1">
-                    <p className="text-sm font-medium">Quy cách / Size (vd M, L, XL)</p>
+                    <p className="text-sm font-medium">Quy cách / Cỡ (vd M, L, XL hoặc 250g, 500g)</p>
                     <p className="text-xs text-muted-foreground mt-0.5">
-                      Mỗi quy cách có giá bán + Mã BOM riêng. Cashier chọn size khi tap món → POS dùng giá + BOM của size đó. Để trống quy cách nếu SP chỉ có 1 loại.
+                      Mỗi cỡ có giá bán riêng và công thức riêng. Khi bán, nhân viên chọn cỡ → máy tính tiền dùng đúng giá + công thức của cỡ đó. Để trống nếu mặt hàng chỉ bán 1 loại.
                     </p>
                   </div>
                 </div>
@@ -2361,10 +2361,10 @@ export function CreateProductDialog({
               {variantItems.length === 0 ? (
                 <div className="rounded-lg border-2 border-dashed border-border p-6 text-center text-sm text-muted-foreground">
                   <Icon name="straighten" size={28} className="mx-auto mb-2 opacity-40" />
-                  <p>Chưa có quy cách nào. SP sẽ bán với 1 giá duy nhất.</p>
+                  <p>Chưa có cỡ nào. Mặt hàng sẽ bán với 1 giá duy nhất.</p>
                   <p className="text-xs mt-1">
-                    Vd: <span className="font-mono">Size M/L/XL</span> (FnB) hoặc{" "}
-                    <span className="font-mono">250g/500g/1kg</span> (Retail).
+                    Ví dụ: <span className="font-mono">M / L / XL</span>, hoặc{" "}
+                    <span className="font-mono">250g / 500g / 1kg</span>.
                   </p>
                   <Button
                     type="button"
@@ -2491,9 +2491,9 @@ export function CreateProductDialog({
                       onChange={(e) => setRecipeEnabled(e.target.checked)}
                       className="size-4"
                     />
-                    Trừ kho theo công thức từng size
+                    Trừ kho theo công thức từng cỡ
                     <span className="text-xs font-normal text-muted-foreground">
-                      (cà phê/sữa/ly… — bán size nào trừ đúng công thức size đó)
+                      (cà phê/sữa/ly… — bán cỡ nào trừ đúng công thức cỡ đó)
                     </span>
                   </label>
                   {recipeEnabled && (

@@ -135,7 +135,7 @@ export function PerSizeRecipeMatrix({
       w.push(
         `${emptySizes
           .map((s) => s.name || "?")
-          .join(", ")}: chưa nhập nguyên liệu → size này sẽ KẾ THỪA công thức SP cha`,
+          .join(", ")}: chưa nhập nguyên liệu — nhớ nhập đủ để bán cỡ này trừ kho đúng`,
       );
     const seen = new Set<string>();
     for (const r of valid) {
@@ -152,8 +152,7 @@ export function PerSizeRecipeMatrix({
   if (sizes.filter((s) => s.name.trim()).length === 0) {
     return (
       <div className="rounded-lg border border-status-warning/30 bg-status-warning/5 p-3 text-sm">
-        Thêm ít nhất 1 size (đặt tên ở mục 1 phía trên) rồi nhập công thức cho
-        từng size.
+        Thêm ít nhất 1 cỡ (đặt tên ở phần trên) rồi nhập công thức cho từng cỡ.
       </div>
     );
   }
@@ -168,7 +167,7 @@ export function PerSizeRecipeMatrix({
           className="flex items-center gap-1.5 rounded-md border px-2.5 py-1.5 text-xs font-medium hover:bg-muted/40 disabled:opacity-40"
         >
           <Icon name="auto_awesome" size={14} />
-          Gợi ý: copy size {sizes[0]?.name || ""} sang size khác
+          Gợi ý: chép lượng cỡ {sizes[0]?.name || ""} sang các cỡ khác
         </button>
         <Button type="button" variant="outline" size="sm" onClick={addRow}>
           <Icon name="add" size={14} className="mr-1" />
@@ -184,7 +183,7 @@ export function PerSizeRecipeMatrix({
                 Nguyên liệu (mã · tên)
               </th>
               <th className="px-2 py-2 text-left font-semibold w-28">
-                Theo modifier
+                Theo tùy chọn
               </th>
               <th className="px-2 py-2 text-left font-semibold w-14">ĐVT</th>
               {sizes.map((s) => (
@@ -224,10 +223,10 @@ export function PerSizeRecipeMatrix({
                       }))}
                     >
                       <SelectTrigger className="h-10 w-full">
-                        <SelectValue placeholder="— Tìm / chọn NVL —">
+                        <SelectValue placeholder="— Tìm / chọn nguyên liệu —">
                           {(v) => {
                             const m = matById.get(v as string);
-                            return m ? `${m.code} · ${m.name}` : "— Tìm / chọn NVL —";
+                            return m ? `${m.code} · ${m.name}` : "— Tìm / chọn nguyên liệu —";
                           }}
                         </SelectValue>
                       </SelectTrigger>
@@ -326,7 +325,7 @@ export function PerSizeRecipeMatrix({
                   colSpan={3}
                   className="px-2 py-2 text-right font-medium text-muted-foreground"
                 >
-                  Giá vốn / size (tự tính)
+                  Giá vốn / cỡ (tự tính)
                 </td>
                 {sizes.map((s) => (
                   <td
@@ -356,9 +355,9 @@ export function PerSizeRecipeMatrix({
 
       <p className="text-xs text-muted-foreground leading-relaxed">
         <Icon name="info" size={13} className="inline-block mr-1 align-text-bottom" />
-        Lượng nhập theo <b>ĐVT kho</b> của NVL (cột ĐVT tự lấy theo nguyên liệu, sửa
-        được). Nhận số lẻ (vd 0.5). Gắn “Theo modifier = Mức đường” cho NVL đường →
-        khách chọn 70% thì POS tự trừ 70%.
+        Lượng nhập theo <b>đơn vị kho</b> của nguyên liệu (cột ĐVT tự hiện, sửa được).
+        Cho phép số lẻ (vd 0,5). Với nguyên liệu đường, chọn “Theo tùy chọn = Mức đường”
+        để khi khách chọn 70% thì tự trừ 70%.
         {loading ? " · Đang tải nguyên liệu…" : ""}
       </p>
     </div>
