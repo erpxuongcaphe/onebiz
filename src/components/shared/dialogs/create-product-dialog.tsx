@@ -2349,7 +2349,7 @@ export function CreateProductDialog({
                   <div className="flex-1">
                     <p className="text-sm font-medium">Quy cách / Cỡ (vd M, L, XL hoặc 250g, 500g)</p>
                     <p className="text-xs text-muted-foreground mt-0.5">
-                      Mỗi cỡ có giá bán riêng và công thức riêng. Khi bán, nhân viên chọn cỡ → máy tính tiền dùng đúng giá + công thức của cỡ đó. Để trống nếu mặt hàng chỉ bán 1 loại.
+                      Mỗi cỡ có giá bán riêng và công thức riêng. Khi bán, nhân viên chọn cỡ → máy POS dùng đúng giá + công thức của cỡ đó. Để trống nếu mặt hàng chỉ bán 1 loại.
                     </p>
                   </div>
                 </div>
