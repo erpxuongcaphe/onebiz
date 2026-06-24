@@ -822,8 +822,8 @@ export default function NhapHangPage() {
           : undefined
       }
       onDelete={
-        order.status !== "completed" && order.status !== "cancelled"
-          ? () => handleAdvanceStatus(order, "cancelled")
+        order.status !== "cancelled"
+          ? () => handleCancelPO(order)
           : undefined
       }
     />
@@ -883,6 +883,45 @@ export default function NhapHangPage() {
     } catch (err) {
       toast({
         title: "Không thể chuyển trạng thái",
+        description: err instanceof Error ? err.message : "Vui lòng thử lại",
+        variant: "error",
+      });
+    }
+  };
+
+  // CEO 24/06/2026: Hủy phiếu nhập ở MỌI trạng thái (gate quyền canCancel).
+  // - Phiếu chưa nhận (draft/ordered): chỉ đổi trạng thái → 'cancelled'.
+  // - Phiếu ĐÃ nhận (partial/completed) đã cộng tồn → BẮT BUỘC revert tồn trước
+  //   (RPC revert_received_purchase_order_atomic, migration 00120) rồi mới set
+  //   'cancelled' — tránh sai tồn. RPC có chốt chặn: hàng đã bán bớt → tồn âm →
+  //   raise, không hủy; hoá đơn đầu vào đã ghi sổ → không xoá, raise.
+  const handleCancelPO = async (order: PurchaseOrder) => {
+    const received =
+      order.status === "completed" || order.status === "partial";
+    const ok = window.confirm(
+      received
+        ? `Hủy phiếu ${order.code}?\n\nPhiếu này đã nhập kho — hủy sẽ TRỪ LẠI tồn đã cộng + xoá hoá đơn đầu vào liên kết (nếu chưa ghi sổ), rồi đánh dấu Đã hủy.\n\nKhông hủy được nếu hàng đã bán bớt khiến tồn âm.\n\nTiếp tục?`
+        : `Hủy phiếu ${order.code}? Phiếu sẽ chuyển sang trạng thái Đã hủy.`,
+    );
+    if (!ok) return;
+    try {
+      if (received) {
+        // 1) revert tồn (đưa về Nháp) — atomic
+        await reopenPurchaseOrderForEdit(order.id);
+      }
+      // 2) đánh dấu Đã hủy
+      await updatePurchaseOrderStatus(order.id, "cancelled");
+      toast({
+        title: "Đã hủy phiếu",
+        description: received
+          ? `${order.code} · đã trừ lại tồn + đánh dấu Đã hủy`
+          : `${order.code} → Đã hủy`,
+        variant: "success",
+      });
+      fetchData();
+    } catch (err) {
+      toast({
+        title: "Không thể hủy phiếu",
         description: err instanceof Error ? err.message : "Vui lòng thử lại",
         variant: "error",
       });
@@ -1303,10 +1342,11 @@ export default function NhapHangPage() {
               row.amountOwed > 0 ? () => setPayingItem(row) : undefined,
             // Audit log shortcut
             onAuditLog: () => setAuditDialogTarget(row),
-            // Hủy — chỉ chưa completed/cancelled
+            // Hủy — mọi phiếu CHƯA hủy (gate quyền canCancel). Phiếu đã nhận
+            // (partial/completed) sẽ tự revert tồn trước khi cancel.
             onCancel:
-              row.status !== "completed" && row.status !== "cancelled"
-                ? () => handleAdvanceStatus(row, "cancelled")
+              row.status !== "cancelled"
+                ? () => handleCancelPO(row)
                 : undefined,
             // Phase 2 (CEO 01/06/2026): Mở lại phiếu đã nhập kho để sửa items.
             // RPC revert atomic — trừ tồn về tồn trước khi nhập + xoá lots +
