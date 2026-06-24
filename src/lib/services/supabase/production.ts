@@ -1,7 +1,7 @@
 // Production service — Production orders, lot tracking, FIFO allocation
 
 import { getClient } from "./base";
-import { getCurrentTenantId } from "./base";
+import { getCurrentTenantId, getCurrentContext } from "./base";
 import type {
   ProductionOrder,
   ProductLot,
@@ -91,7 +91,8 @@ export async function createProductionOrder(order: {
     unit: string;
   }[];
 }) {
-  const tenantId = await getCurrentTenantId();
+  const ctx = await getCurrentContext();
+  const tenantId = ctx.tenantId;
   // Generate code
   const { data: codeData } = await supabase.rpc("next_code", {
     p_tenant_id: tenantId,
@@ -111,6 +112,10 @@ export async function createProductionOrder(order: {
       planned_start: order.plannedStart ?? undefined,
       planned_end: order.plannedEnd ?? undefined,
       notes: order.notes ?? undefined,
+      // created_by BẮT BUỘC: consume_production_materials + complete_production_order
+      // ghi stock_movements.created_by = production_orders.created_by (NOT NULL).
+      // Trước đây thiếu field này → mọi lệnh SX có created_by=null → "Hoàn thành" lỗi.
+      created_by: ctx.userId,
     })
     .select()
     .single();

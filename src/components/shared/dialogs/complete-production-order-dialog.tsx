@@ -346,7 +346,7 @@ export function CompleteProductionOrderDialog({
           <div className="text-xs text-muted-foreground bg-surface-container-low rounded-lg p-3 flex items-start gap-2">
             <Icon name="info" size={14} className="mt-0.5 shrink-0 text-primary" />
             <span>
-              Khi xác nhận: NVL sẽ bị trừ kho, SKU sẽ được cộng vào kho và lô mới sẽ được tạo.
+              Khi xác nhận: NVL sẽ bị trừ kho, thành phẩm sẽ được cộng vào kho và lô mới sẽ được tạo.
             </span>
           </div>
         </div>
