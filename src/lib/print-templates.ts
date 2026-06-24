@@ -19,6 +19,8 @@ const formatCurrency = (n: number | null | undefined) => `${fmtNum(n)} đ`;
 
 /** Cột bảng hàng chuẩn cho chứng từ bán/nhập (Mã · Tên · SL · Đơn giá · Thành tiền). */
 const SALE_ITEM_COLUMNS = ["Mã hàng", "Tên hàng", "SL", "Đơn giá", "Thành tiền"];
+// Phiếu phía MUA (nhập/đặt NCC/HĐ đầu vào/trả NCC): "Đơn giá nhập" cho rõ ngữ cảnh.
+const PURCHASE_ITEM_COLUMNS = ["Mã hàng", "Tên hàng", "SL", "Đơn giá nhập", "Thành tiền"];
 
 /**
  * Chuẩn hoá các dòng hàng (đã nạp từ service) → DocumentLineItem để in.
@@ -166,7 +168,7 @@ export function buildGoodsReceiptPrintData(
       { label: "Mã đặt hàng nhập", value: row.orderCode || "—" },
       { label: "Người tạo", value: user },
     ],
-    ...(items && items.length ? { items, itemColumns: SALE_ITEM_COLUMNS } : {}),
+    ...(items && items.length ? { items, itemColumns: PURCHASE_ITEM_COLUMNS } : {}),
     summaryRows: [
       { label: "Tổng tiền hàng", value: formatCurrency(row.amountOwed) },
       { label: "Cần trả NCC", value: formatCurrency(row.amountOwed), bold: true },
@@ -209,7 +211,7 @@ export function buildPurchaseReturnPrintData(
       { label: "Trạng thái", value: row.statusName || row.status },
       { label: "Người tạo", value: user },
     ],
-    ...(items && items.length ? { items, itemColumns: SALE_ITEM_COLUMNS } : {}),
+    ...(items && items.length ? { items, itemColumns: PURCHASE_ITEM_COLUMNS } : {}),
     summaryRows: [
       { label: "Tổng tiền trả", value: formatCurrency(row.totalAmount), bold: true },
     ],
@@ -392,7 +394,7 @@ export function buildPurchaseEntryPrintData(
       { label: "Trạng thái", value: row.statusName || row.status },
       { label: "Người tạo", value: user },
     ],
-    ...(items && items.length ? { items, itemColumns: SALE_ITEM_COLUMNS } : {}),
+    ...(items && items.length ? { items, itemColumns: PURCHASE_ITEM_COLUMNS } : {}),
     summaryRows: [
       { label: "Tổng tiền", value: formatCurrency(row.totalAmount), bold: true },
     ],
@@ -414,7 +416,7 @@ export function buildInputInvoicePrintData(
       { label: "Trạng thái", value: row.statusName || row.status },
       { label: "Người tạo", value: user },
     ],
-    ...(items && items.length ? { items, itemColumns: SALE_ITEM_COLUMNS } : {}),
+    ...(items && items.length ? { items, itemColumns: PURCHASE_ITEM_COLUMNS } : {}),
     summaryRows: [
       { label: "Tiền hàng", value: formatCurrency(row.totalAmount) },
       { label: "Thuế", value: formatCurrency(row.taxAmount) },
