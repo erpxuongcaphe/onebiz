@@ -27,7 +27,7 @@ import {
 } from "@/components/shared/inline-detail-panel";
 import { useToast, useBranchFilter } from "@/lib/contexts";
 import { usePrintWithPicker } from "@/lib/hooks/use-print-with-picker";
-import { buildReturnPrintData } from "@/lib/print-templates";
+import { buildReturnPrintData, toPrintLines } from "@/lib/print-templates";
 import { formatCurrency, formatDate, formatUser } from "@/lib/format";
 import { exportToExcel, exportToCsv } from "@/lib/utils/export";
 import {
@@ -497,17 +497,22 @@ export default function TraHangPage() {
               const idx = data.findIndex((d) => d.id === row.id);
               setExpandedRow(expandedRow === idx ? null : idx);
             },
-            onPrint: () =>
+            onPrint: async () => {
+              const items = await getReturnItems(row.id);
               printWithPicker(
-                buildReturnPrintData({
-                  code: row.code,
-                  date: row.date,
-                  customerName: row.customerName,
-                  totalRefund: row.totalAmount,
-                  createdBy: row.createdBy,
-                }),
+                buildReturnPrintData(
+                  {
+                    code: row.code,
+                    date: row.date,
+                    customerName: row.customerName,
+                    totalRefund: row.totalAmount,
+                    createdBy: row.createdBy,
+                  },
+                  toPrintLines(items),
+                ),
                 "In phiếu trả hàng",
-              ),
+              );
+            },
             // Audit log shortcut
             onAuditLog: () => setAuditDialogTarget(row),
           })

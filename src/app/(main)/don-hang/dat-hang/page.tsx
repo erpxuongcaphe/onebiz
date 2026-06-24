@@ -31,7 +31,7 @@ import {
 } from "@/components/shared/inline-detail-panel";
 import { useToast, useBranchFilter } from "@/lib/contexts";
 import { usePrintWithPicker } from "@/lib/hooks/use-print-with-picker";
-import { buildSalesOrderPrintData } from "@/lib/print-templates";
+import { buildSalesOrderPrintData, toPrintLines } from "@/lib/print-templates";
 import { formatCurrency, formatDate, formatUser } from "@/lib/format";
 import { exportToExcel, exportToCsv } from "@/lib/utils/export";
 import {
@@ -578,13 +578,14 @@ export default function DatHangPage() {
           {
             label: "In hàng loạt",
             icon: <Icon name="print" size={16} />,
-            onClick: (selectedRows) => {
-              selectedRows.forEach((row) =>
+            onClick: async (selectedRows) => {
+              for (const row of selectedRows) {
+                const items = await getSalesOrderItems(row.id);
                 printWithPicker(
-                  buildSalesOrderPrintData(row),
+                  buildSalesOrderPrintData(row, toPrintLines(items)),
                   "In đơn đặt hàng",
-                ),
-              );
+                );
+              }
             },
           },
           {
@@ -651,8 +652,13 @@ export default function DatHangPage() {
             row,
             kind: "sales_order",
             permissions: txPerms,
-            onPrint: () =>
-              printWithPicker(buildSalesOrderPrintData(row), "In đơn đặt hàng"),
+            onPrint: async () => {
+              const items = await getSalesOrderItems(row.id);
+              printWithPicker(
+                buildSalesOrderPrintData(row, toPrintLines(items)),
+                "In đơn đặt hàng",
+              );
+            },
             // Audit log shortcut
             onAuditLog: () => setAuditDialogTarget(row),
             // Hủy — chỉ chưa completed/cancelled

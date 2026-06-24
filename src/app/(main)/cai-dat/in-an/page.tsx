@@ -3,13 +3,6 @@
 import { useSettings } from "@/lib/contexts/settings-context";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
-import {
-  Select,
-  SelectContent,
-  SelectItem,
-  SelectTrigger,
-  SelectValue,
-} from "@/components/ui/select";
 import { Input } from "@/components/ui/input";
 import { Separator } from "@/components/ui/separator";
 import { cn } from "@/lib/utils";
@@ -90,13 +83,6 @@ const templates = [
   { id: "80mm" as const, label: "80mm", desc: "Máy in bill tiêu chuẩn" },
   { id: "A4" as const, label: "A4", desc: "In giấy A4" },
   { id: "A5" as const, label: "A5", desc: "In giấy A5" },
-];
-
-// ── Connection types ──
-const connectionTypes = [
-  { id: "usb" as const, label: "USB / Cáp", icon: "usb" as const, desc: "Kết nối trực tiếp qua cáp USB" },
-  { id: "wifi" as const, label: "WiFi", icon: "wifi" as const, desc: "Kết nối qua mạng WiFi" },
-  { id: "lan" as const, label: "LAN", icon: "lan" as const, desc: "Kết nối qua cáp mạng LAN" },
 ];
 
 // ── Kitchen ticket styles ──
@@ -471,94 +457,6 @@ export default function PrintSettingsPage() {
         </CardContent>
       </Card>
 
-      {/* ── 1. Printer Connection (Legacy — chỉ hiển thị khi backend=browser để user chọn IP/Port nếu cần) ── */}
-      {print.backend === "browser" && (
-        <Card>
-          <CardHeader>
-            <CardTitle className="flex items-center gap-2">
-              <Icon name="cable" />
-              Thông tin máy in (tham khảo)
-            </CardTitle>
-          </CardHeader>
-          <CardContent className="space-y-4">
-            <p className="text-sm text-muted-foreground">
-              Với phương thức &quot;Qua trình duyệt&quot;, hệ thống sẽ hiện hộp thoại chọn máy in của hệ điều hành
-              — bạn không cần cấu hình IP. Các trường dưới đây chỉ để ghi chú.
-            </p>
-            <div className="grid gap-3 sm:grid-cols-3">
-              {connectionTypes.map((ct) => {
-                return (
-                  <button
-                    key={ct.id}
-                    type="button"
-                    onClick={() => update({ connectionType: ct.id })}
-                    className={cn(
-                      "flex flex-col items-center gap-2 rounded-lg border p-4 transition-colors",
-                      print.connectionType === ct.id
-                        ? "border-primary bg-primary/5 ring-2 ring-primary"
-                        : "border-border hover:border-primary/50"
-                    )}
-                  >
-                    <Icon
-                      name={ct.icon}
-                      size={24}
-                      className={cn(
-                        print.connectionType === ct.id
-                          ? "text-primary"
-                          : "text-muted-foreground",
-                      )}
-                    />
-                    <span className="text-sm font-medium">{ct.label}</span>
-                    <span className="text-xs text-muted-foreground text-center">{ct.desc}</span>
-                  </button>
-                );
-              })}
-            </div>
-
-            {print.connectionType === "usb" && (
-              <div className="space-y-2">
-                <label className="text-sm font-medium">Tên máy in (tuỳ chọn)</label>
-                <Input
-                  value={print.printerName}
-                  onChange={(e) => update({ printerName: e.target.value })}
-                  placeholder="VD: EPSON TM-T82, Xprinter XP-58..."
-                />
-              </div>
-            )}
-
-            {(print.connectionType === "wifi" || print.connectionType === "lan") && (
-              <div className="grid gap-4 sm:grid-cols-2">
-                <div className="space-y-2">
-                  <label className="text-sm font-medium">Địa chỉ IP máy in</label>
-                  <Input
-                    value={print.printerIp}
-                    onChange={(e) => update({ printerIp: e.target.value })}
-                    placeholder="VD: 192.168.1.100"
-                  />
-                </div>
-                <div className="space-y-2">
-                  <label className="text-sm font-medium">Cổng (Port)</label>
-                  <Input
-                    type="number"
-                    value={print.printerPort}
-                    onChange={(e) => update({ printerPort: parseInt(e.target.value) || 9100 })}
-                    placeholder="9100"
-                  />
-                </div>
-                <div className="space-y-2 sm:col-span-2">
-                  <label className="text-sm font-medium">Tên máy in (tuỳ chọn)</label>
-                  <Input
-                    value={print.printerName}
-                    onChange={(e) => update({ printerName: e.target.value })}
-                    placeholder="VD: EPSON TM-T82, Star TSP143..."
-                  />
-                </div>
-              </div>
-            )}
-          </CardContent>
-        </Card>
-      )}
-
       {/* ── 2. Paper Size ── */}
       <Card>
         <CardHeader>
@@ -591,27 +489,6 @@ export default function PrintSettingsPage() {
                 <span className="text-xs text-muted-foreground">{tpl.desc}</span>
               </button>
             ))}
-          </div>
-
-          <Separator className="my-4" />
-
-          <div className="space-y-2">
-            <h4 className="text-sm font-medium">Số bản in</h4>
-            <Select
-              value={String(print.copies)}
-              onValueChange={(v) => v && update({ copies: parseInt(v) })}
-            >
-              <SelectTrigger className="w-24">
-                <SelectValue placeholder="1 bản">
-                  {(v) => `${v ?? 1} bản`}
-                </SelectValue>
-              </SelectTrigger>
-              <SelectContent>
-                {[1, 2, 3].map((n) => (
-                  <SelectItem key={n} value={String(n)}>{n} bản</SelectItem>
-                ))}
-              </SelectContent>
-            </Select>
           </div>
         </CardContent>
       </Card>
@@ -782,13 +659,6 @@ export default function PrintSettingsPage() {
                 }
               />
               <Toggle
-                checked={print.autoPrintPreBill}
-                onCheckedChange={(v) => update({ autoPrintPreBill: v })}
-                label="Phiếu tạm tính"
-                description="In phiếu tạm khi khách yêu cầu tính tiền"
-                helpTip="Phiếu tạm tính = chưa thanh toán, để khách kiểm tra món + tổng tiền trước khi trả. Bật nếu quán có khách hay yêu cầu xem trước."
-              />
-              <Toggle
                 checked={print.autoPrintReceipt}
                 onCheckedChange={(v) => update({ autoPrintReceipt: v })}
                 label="Phiếu thanh toán"
@@ -825,8 +695,7 @@ export default function PrintSettingsPage() {
 
           <Separator />
 
-          {/* Auto-print toggles with HelpTip */}
-          <Separator />
+          {/* Thông báo lỗi máy in */}
           <div>
             <h4 className="text-sm font-semibold mb-2">
               Thông báo &amp; Lỗi máy in
@@ -850,20 +719,6 @@ export default function PrintSettingsPage() {
                     <br />
                     <strong>Tắt:</strong> Silent — phù hợp khi quán không có
                     máy in, dùng phần mềm để theo dõi đơn qua KDS thôi.
-                  </>
-                }
-              />
-              <Toggle
-                checked={print.confirmRetryOnFail}
-                onCheckedChange={(v) => update({ confirmRetryOnFail: v })}
-                label="Hỏi xác nhận khi in lại"
-                description="Bật để xác nhận trước khi retry — tránh in trùng"
-                helpTip={
-                  <>
-                    Khi máy in lỗi, hệ thống sẽ <em>hỏi</em> trước khi gửi lệnh
-                    in lại. Hữu ích nếu anh muốn kiểm tra giấy/kết nối thủ công
-                    trước. Mặc định <strong>tắt</strong> — retry tự động khi
-                    nhân viên bấm in lần kế.
                   </>
                 }
               />

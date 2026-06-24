@@ -2,12 +2,47 @@
  * Print template builders — each maps a domain entity to DocumentPrintData
  */
 
-import type { DocumentPrintData } from "./print-document";
+import type { DocumentPrintData, DocumentLineItem } from "./print-document";
 import type { InventoryCheck, DisposalExport, InternalExport, ManufacturingOrder } from "@/lib/types/products";
 import type { PurchaseOrder, Invoice, SalesOrder } from "@/lib/types/orders";
 import type { PurchaseReturn, PurchaseOrderEntry, InputInvoice } from "@/lib/types/suppliers";
 import type { CashBookEntry } from "@/lib/types/finance";
 import { formatCurrency, formatDate, formatUser } from "@/lib/format";
+
+/** Cột bảng hàng chuẩn cho chứng từ bán/nhập (Mã · Tên · SL · Đơn giá · Thành tiền). */
+const SALE_ITEM_COLUMNS = ["Mã hàng", "Tên hàng", "SL", "Đơn giá", "Thành tiền"];
+
+/**
+ * Chuẩn hoá các dòng hàng (đã nạp từ service) → DocumentLineItem để in.
+ * Nhận field tên kiểu nào cũng được (productCode/code, productName/name…).
+ * CHỦ ĐÍCH bỏ cột giảm-giá-dòng: giảm đã gộp vào "Thành tiền", giúp bảng in
+ * luôn đủ 5 cột thẳng hàng (template render ô giảm theo từng dòng → dễ lệch).
+ */
+export function toPrintLines(
+  rows: Array<{
+    productCode?: string;
+    code?: string;
+    productName?: string;
+    name?: string;
+    quantity: number;
+    unit?: string;
+    unitPrice?: number;
+    price?: number;
+    // thành tiền dòng — service đặt tên khác nhau: total / lineTotal / amount
+    total?: number;
+    lineTotal?: number;
+    amount?: number;
+  }>,
+): DocumentLineItem[] {
+  return rows.map((r) => ({
+    code: r.productCode ?? r.code ?? "",
+    name: r.productName ?? r.name ?? "",
+    quantity: r.quantity,
+    unit: r.unit,
+    unitPrice: r.unitPrice ?? r.price ?? 0,
+    total: r.total ?? r.lineTotal ?? r.amount ?? 0,
+  }));
+}
 
 export function buildInventoryCheckPrintData(row: InventoryCheck): DocumentPrintData {
   const user = formatUser(row.createdByName, row.createdBy);
@@ -67,7 +102,7 @@ export function buildInternalSalePrintData(row: {
   note?: string;
   createdBy?: string;
   createdByName?: string;
-}): DocumentPrintData {
+}, items?: DocumentLineItem[]): DocumentPrintData {
   const user = formatUser(row.createdByName, row.createdBy);
   return {
     documentType: "PHIẾU BÁN NỘI BỘ",
@@ -78,6 +113,7 @@ export function buildInternalSalePrintData(row: {
       { label: "Bên mua", value: row.toBranchName || "—" },
       { label: "Người tạo", value: user },
     ],
+    ...(items && items.length ? { items, itemColumns: SALE_ITEM_COLUMNS } : {}),
     summaryRows: [
       { label: "Tạm tính", value: formatCurrency(row.subtotal) },
       { label: "Thuế VAT", value: formatCurrency(row.taxAmount) },
@@ -107,7 +143,10 @@ export function buildInternalExportPrintData(row: InternalExport): DocumentPrint
   };
 }
 
-export function buildGoodsReceiptPrintData(row: PurchaseOrder): DocumentPrintData {
+export function buildGoodsReceiptPrintData(
+  row: PurchaseOrder,
+  items?: DocumentLineItem[],
+): DocumentPrintData {
   const user = formatUser(row.createdByName, row.createdBy);
   return {
     documentType: "PHIẾU NHẬP HÀNG",
@@ -119,6 +158,7 @@ export function buildGoodsReceiptPrintData(row: PurchaseOrder): DocumentPrintDat
       { label: "Mã đặt hàng nhập", value: row.orderCode || "—" },
       { label: "Người tạo", value: user },
     ],
+    ...(items && items.length ? { items, itemColumns: SALE_ITEM_COLUMNS } : {}),
     summaryRows: [
       { label: "Tổng tiền hàng", value: formatCurrency(row.amountOwed) },
       { label: "Cần trả NCC", value: formatCurrency(row.amountOwed), bold: true },
@@ -146,7 +186,10 @@ export function buildProductionOrderPrintData(row: ManufacturingOrder): Document
   };
 }
 
-export function buildPurchaseReturnPrintData(row: PurchaseReturn): DocumentPrintData {
+export function buildPurchaseReturnPrintData(
+  row: PurchaseReturn,
+  items?: DocumentLineItem[],
+): DocumentPrintData {
   const user = formatUser(row.createdByName, row.createdBy);
   return {
     documentType: "PHIẾU TRẢ HÀNG NHẬP",
@@ -158,6 +201,7 @@ export function buildPurchaseReturnPrintData(row: PurchaseReturn): DocumentPrint
       { label: "Trạng thái", value: row.statusName || row.status },
       { label: "Người tạo", value: user },
     ],
+    ...(items && items.length ? { items, itemColumns: SALE_ITEM_COLUMNS } : {}),
     summaryRows: [
       { label: "Tổng tiền trả", value: formatCurrency(row.totalAmount), bold: true },
     ],
@@ -168,6 +212,7 @@ export function buildPurchaseReturnPrintData(row: PurchaseReturn): DocumentPrint
 export function buildInvoicePrintData(
   row: Invoice,
   business?: TenantBusinessInfoForPrint,
+  items?: DocumentLineItem[],
 ): DocumentPrintData {
   // Invoice.createdBy already written as full_name by invoices.ts mapper
   const user = formatUser(undefined, row.createdBy);
@@ -188,6 +233,9 @@ export function buildInvoicePrintData(
       { label: "Mã KH", value: row.customerCode },
       { label: "Người tạo", value: user },
     ],
+    ...(items && items.length
+      ? { items, itemColumns: SALE_ITEM_COLUMNS }
+      : {}),
     summaryRows: [
       { label: "Tổng tiền hàng", value: formatCurrency(row.totalAmount) },
       { label: "Chiết khấu", value: formatCurrency(row.discount) },
@@ -210,7 +258,10 @@ export interface TenantBusinessInfoForPrint {
   invoiceFooter?: string;
 }
 
-export function buildSalesOrderPrintData(row: SalesOrder): DocumentPrintData {
+export function buildSalesOrderPrintData(
+  row: SalesOrder,
+  items?: DocumentLineItem[],
+): DocumentPrintData {
   const user = formatUser(row.createdByName, row.createdBy);
   return {
     documentType: "ĐƠN ĐẶT HÀNG",
@@ -222,6 +273,7 @@ export function buildSalesOrderPrintData(row: SalesOrder): DocumentPrintData {
       { label: "Trạng thái", value: row.statusName || row.status },
       { label: "Người tạo", value: user },
     ],
+    ...(items && items.length ? { items, itemColumns: SALE_ITEM_COLUMNS } : {}),
     summaryRows: [
       { label: "Tổng tiền", value: formatCurrency(row.totalAmount), bold: true },
     ],
@@ -249,7 +301,10 @@ export function buildCashTransactionPrintData(row: CashBookEntry): DocumentPrint
   };
 }
 
-export function buildPurchaseEntryPrintData(row: PurchaseOrderEntry): DocumentPrintData {
+export function buildPurchaseEntryPrintData(
+  row: PurchaseOrderEntry,
+  items?: DocumentLineItem[],
+): DocumentPrintData {
   const user = formatUser(row.createdByName, row.createdBy);
   return {
     documentType: "ĐƠN ĐẶT HÀNG NHẬP",
@@ -261,6 +316,7 @@ export function buildPurchaseEntryPrintData(row: PurchaseOrderEntry): DocumentPr
       { label: "Trạng thái", value: row.statusName || row.status },
       { label: "Người tạo", value: user },
     ],
+    ...(items && items.length ? { items, itemColumns: SALE_ITEM_COLUMNS } : {}),
     summaryRows: [
       { label: "Tổng tiền", value: formatCurrency(row.totalAmount), bold: true },
     ],
@@ -268,7 +324,10 @@ export function buildPurchaseEntryPrintData(row: PurchaseOrderEntry): DocumentPr
   };
 }
 
-export function buildInputInvoicePrintData(row: InputInvoice): DocumentPrintData {
+export function buildInputInvoicePrintData(
+  row: InputInvoice,
+  items?: DocumentLineItem[],
+): DocumentPrintData {
   const user = formatUser(row.createdByName, row.createdBy);
   return {
     documentType: "HOÁ ĐƠN ĐẦU VÀO",
@@ -279,6 +338,7 @@ export function buildInputInvoicePrintData(row: InputInvoice): DocumentPrintData
       { label: "Trạng thái", value: row.statusName || row.status },
       { label: "Người tạo", value: user },
     ],
+    ...(items && items.length ? { items, itemColumns: SALE_ITEM_COLUMNS } : {}),
     summaryRows: [
       { label: "Tiền hàng", value: formatCurrency(row.totalAmount) },
       { label: "Thuế", value: formatCurrency(row.taxAmount) },
@@ -288,7 +348,10 @@ export function buildInputInvoicePrintData(row: InputInvoice): DocumentPrintData
   };
 }
 
-export function buildReturnPrintData(row: { code: string; date: string; customerName?: string; sellerName?: string; totalRefund: number; createdBy: string }): DocumentPrintData {
+export function buildReturnPrintData(
+  row: { code: string; date: string; customerName?: string; sellerName?: string; totalRefund: number; createdBy: string },
+  items?: DocumentLineItem[],
+): DocumentPrintData {
   // row.createdBy already resolved to full_name by returns.ts mapper
   const user = formatUser(undefined, row.createdBy);
   return {
@@ -300,6 +363,7 @@ export function buildReturnPrintData(row: { code: string; date: string; customer
       { label: "Người bán", value: row.sellerName || "" },
       { label: "Người tạo", value: user },
     ],
+    ...(items && items.length ? { items, itemColumns: SALE_ITEM_COLUMNS } : {}),
     summaryRows: [
       { label: "Tổng tiền trả", value: formatCurrency(row.totalRefund), bold: true },
     ],

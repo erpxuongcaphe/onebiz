@@ -38,7 +38,7 @@ import { internalSaleExcelSchema } from "@/lib/excel/schemas";
 import { bulkImportInternalSales } from "@/lib/services/supabase/excel-import";
 import { exportToExcelFromSchema } from "@/lib/excel";
 import { printDocument } from "@/lib/print-document";
-import { buildInternalSalePrintData } from "@/lib/print-templates";
+import { buildInternalSalePrintData, toPrintLines } from "@/lib/print-templates";
 import { useToast, useBranchFilter } from "@/lib/contexts";
 import { Icon } from "@/components/ui/icon";
 
@@ -546,7 +546,14 @@ export default function InternalSalePage() {
                 setSelected(row);
               },
               // Anomaly fix Stage 5c: thêm In phiếu (trước đây thiếu)
-              onPrint: () => printDocument(buildInternalSalePrintData(row)),
+              // Nạp chi tiết hàng trước rồi mới in (item dùng field `amount`).
+              onPrint: async () => {
+                const detail = await getInternalSaleById(row.id);
+                const lines = toPrintLines(
+                  detail.items.map((it) => ({ ...it, total: it.amount })),
+                );
+                printDocument(buildInternalSalePrintData(row, lines));
+              },
               onAuditLog: () => setAuditDialogTarget(row),
               onCancel:
                 row.status !== "completed" && row.status !== "cancelled"

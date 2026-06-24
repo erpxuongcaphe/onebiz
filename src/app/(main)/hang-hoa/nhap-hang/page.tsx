@@ -30,7 +30,7 @@ import {
 import type { DetailTab } from "@/components/shared/inline-detail-panel";
 import { useToast, useBranchFilter } from "@/lib/contexts";
 import { usePrintWithPicker } from "@/lib/hooks/use-print-with-picker";
-import { buildGoodsReceiptPrintData } from "@/lib/print-templates";
+import { buildGoodsReceiptPrintData, toPrintLines } from "@/lib/print-templates";
 import { formatCurrency, formatDate, formatNumber, formatUser } from "@/lib/format";
 import { exportToExcel, exportToCsv } from "@/lib/utils/export";
 import {
@@ -1153,13 +1153,14 @@ export default function NhapHangPage() {
           {
             label: "In hàng loạt",
             icon: <Icon name="print" size={16} />,
-            onClick: (selectedRows) => {
-              selectedRows.forEach((row) =>
+            onClick: async (selectedRows) => {
+              for (const row of selectedRows) {
+                const items = await getPurchaseOrderItems(row.id);
                 printWithPicker(
-                  buildGoodsReceiptPrintData(row),
+                  buildGoodsReceiptPrintData(row, toPrintLines(items)),
                   "In phiếu nhập",
-                ),
-              );
+                );
+              }
             },
           },
           {
@@ -1280,8 +1281,13 @@ export default function NhapHangPage() {
                     setCreateOpen(true);
                   }
                 : undefined,
-            onPrint: () =>
-              printWithPicker(buildGoodsReceiptPrintData(row), "In phiếu nhập"),
+            onPrint: async () => {
+              const items = await getPurchaseOrderItems(row.id);
+              printWithPicker(
+                buildGoodsReceiptPrintData(row, toPrintLines(items)),
+                "In phiếu nhập",
+              );
+            },
             workflowActions,
             // Trả hàng nhập (redirect)
             onReturn: () => {

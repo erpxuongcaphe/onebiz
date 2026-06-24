@@ -65,7 +65,7 @@ import {
   type TenantBusinessInfo,
 } from "@/lib/services";
 import { useToast, useBranchFilter } from "@/lib/contexts";
-import { buildInvoicePrintData } from "@/lib/print-templates";
+import { buildInvoicePrintData, toPrintLines } from "@/lib/print-templates";
 import { usePrintWithPicker } from "@/lib/hooks/use-print-with-picker";
 import type { Invoice } from "@/lib/types";
 import { Icon } from "@/components/ui/icon";
@@ -853,13 +853,18 @@ export default function HoaDonPage() {
             {
               label: "In hàng loạt",
               icon: <Icon name="print" size={16} />,
-              onClick: (selectedRows) => {
-                selectedRows.forEach((row) =>
+              onClick: async (selectedRows) => {
+                for (const row of selectedRows) {
+                  const items = await getInvoiceItems(row.id);
                   printWithPicker(
-                    buildInvoicePrintData(row, businessInfo ?? undefined),
+                    buildInvoicePrintData(
+                      row,
+                      businessInfo ?? undefined,
+                      toPrintLines(items),
+                    ),
                     "In hóa đơn",
-                  ),
-                );
+                  );
+                }
               },
             },
             {
@@ -974,12 +979,19 @@ export default function HoaDonPage() {
                   setDuplicating(false);
                 }
               },
-              // In phiếu
-              onPrint: () =>
+              // In phiếu — nạp chi tiết hàng trước rồi mới in (nếu thiếu sẽ
+              // chỉ in phần đầu, không có dòng mặt hàng).
+              onPrint: async () => {
+                const items = await getInvoiceItems(row.id);
                 printWithPicker(
-                  buildInvoicePrintData(row, businessInfo ?? undefined),
+                  buildInvoicePrintData(
+                    row,
+                    businessInfo ?? undefined,
+                    toPrintLines(items),
+                  ),
                   "In hóa đơn",
-                ),
+                );
+              },
               // Trả hàng (redirect)
               onReturn: () => {
                 toast({ variant: "info", title: "Chuyển đến trang trả hàng" });
