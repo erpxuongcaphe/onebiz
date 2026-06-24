@@ -152,6 +152,14 @@ const backends = [
   },
 ];
 
+// ── In Pha 3 Item 5: 3 tab theo kênh ──
+type PrintTab = "chung" | "retail" | "fnb";
+const PRINT_TABS: { id: PrintTab; label: string; icon: string; desc: string }[] = [
+  { id: "chung", label: "Chung", icon: "tune", desc: "Máy in, khổ giấy, logo — áp dụng mọi kênh" },
+  { id: "retail", label: "Bán lẻ & Sỉ", icon: "receipt_long", desc: "Phiếu bán / hoá đơn admin (Retail)" },
+  { id: "fnb", label: "Quán F&B", icon: "restaurant", desc: "POS FnB: phiếu thanh toán + phiếu bếp" },
+];
+
 export default function PrintSettingsPage() {
   const { settings, updateSettings } = useSettings();
   const print = settings.print;
@@ -172,6 +180,8 @@ export default function PrintSettingsPage() {
   const [invoiceTitle, setInvoiceTitle] = useState<string>("");
   const [invoiceFields, setInvoiceFields] = useState<InvoiceFieldFlags>({});
   const [logoSaving, setLogoSaving] = useState(false);
+  // In Pha 3 Item 5 (CEO 24/06): gom cài đặt theo kênh để rõ "đang setup cho ai".
+  const [tab, setTab] = useState<PrintTab>("chung");
 
   const update = (values: Partial<typeof print>) => {
     updateSettings("print", values);
@@ -387,6 +397,39 @@ export default function PrintSettingsPage() {
         </p>
       </div>
 
+      {/* ── In Pha 3 Item 5: tab theo kênh ── */}
+      <div className="flex flex-col gap-2 sm:flex-row sm:items-stretch">
+        {PRINT_TABS.map((t) => {
+          const active = tab === t.id;
+          return (
+            <button
+              key={t.id}
+              type="button"
+              onClick={() => setTab(t.id)}
+              className={cn(
+                "flex flex-1 items-start gap-3 rounded-xl border p-3 text-left transition-colors",
+                active
+                  ? "border-primary bg-primary/5 ring-2 ring-primary"
+                  : "border-border hover:border-primary/50",
+              )}
+            >
+              <Icon
+                name={t.icon}
+                size={22}
+                className={active ? "text-primary" : "text-muted-foreground"}
+              />
+              <div className="min-w-0">
+                <div className={cn("text-sm font-semibold", active && "text-primary")}>
+                  {t.label}
+                </div>
+                <p className="text-xs text-muted-foreground mt-0.5">{t.desc}</p>
+              </div>
+            </button>
+          );
+        })}
+      </div>
+
+      {tab === "chung" && (<>
       {/* ── 0. Print Backend (MỚI) ── */}
       <Card>
         <CardHeader>
@@ -573,7 +616,9 @@ export default function PrintSettingsPage() {
           </div>
         </CardContent>
       </Card>
+      </>)}
 
+      {tab === "retail" && (<>
       {/* ── Tiêu đề phiếu bán hàng (CEO 24/06) — đặt tên chứng từ ── */}
       <Card>
         <CardHeader>
@@ -660,7 +705,9 @@ export default function PrintSettingsPage() {
           </Button>
         </CardContent>
       </Card>
+      </>)}
 
+      {tab === "chung" && (<>
       {/* ── Sprint TEMPLATE-1: Logo + Lời cảm ơn (CEO 07/05) ── */}
       <Card>
         <CardHeader>
@@ -731,10 +778,14 @@ export default function PrintSettingsPage() {
           </div>
         </CardContent>
       </Card>
+      </>)}
 
+      {tab === "fnb" && (<>
       {/* ── Sprint KITCHEN-1: Trạm chế biến (CEO 07/05) ── */}
       <KitchenStationsCard />
+      </>)}
 
+      {tab === "chung" && (<>
       {/* ── 3. Receipt Content ── */}
       <Card>
         <CardHeader>
@@ -796,7 +847,9 @@ export default function PrintSettingsPage() {
           </div>
         </CardContent>
       </Card>
+      </>)}
 
+      {tab === "fnb" && (<>
       {/* ── 4. FnB Print Styles ── */}
       <Card>
         <CardHeader>
@@ -917,7 +970,9 @@ export default function PrintSettingsPage() {
           </div>
         </CardContent>
       </Card>
+      </>)}
 
+      {tab === "chung" && (<>
       {/* ── 5. Preview live (CEO 13/05) ── */}
       <Card>
         <CardHeader>
@@ -951,6 +1006,7 @@ export default function PrintSettingsPage() {
           />
         </CardContent>
       </Card>
+      </>)}
     </div>
   );
 }
