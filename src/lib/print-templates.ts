@@ -7,7 +7,15 @@ import type { InventoryCheck, DisposalExport, InternalExport, ManufacturingOrder
 import type { PurchaseOrder, Invoice, SalesOrder } from "@/lib/types/orders";
 import type { PurchaseReturn, PurchaseOrderEntry, InputInvoice } from "@/lib/types/suppliers";
 import type { CashBookEntry } from "@/lib/types/finance";
-import { formatCurrency, formatDate, formatUser } from "@/lib/format";
+import { formatCurrency as fmtNum, formatDate, formatUser } from "@/lib/format";
+
+/**
+ * Tiền hiển thị trên phiếu in: số có phân tách nghìn + hậu tố " đ".
+ * Dùng ASCII "đ" (U+0111) — máy in nhiệt nào cũng có font, KHÔNG dùng ₫ (U+20AB).
+ * Wrap đè tên `formatCurrency` để mọi dòng tiền (summaryRows) tự kèm "đ";
+ * các ô đếm số lượng dùng String(...) nên không bị ảnh hưởng.
+ */
+const formatCurrency = (n: number | null | undefined) => `${fmtNum(n)} đ`;
 
 /** Cột bảng hàng chuẩn cho chứng từ bán/nhập (Mã · Tên · SL · Đơn giá · Thành tiền). */
 const SALE_ITEM_COLUMNS = ["Mã hàng", "Tên hàng", "SL", "Đơn giá", "Thành tiền"];
@@ -216,31 +224,70 @@ export function buildInvoicePrintData(
 ): DocumentPrintData {
   // Invoice.createdBy already written as full_name by invoices.ts mapper
   const user = formatUser(undefined, row.createdBy);
+  // CEO 24/06: bật/tắt từng dòng. undefined = bật (mặc định, tương thích cũ).
+  const f = business?.invoiceFields ?? {};
+  const on = (v?: boolean) => v !== false;
+
+  // Bên mua — mỗi dòng theo cờ + chỉ thêm khi có dữ liệu.
+  const headerFields: { label: string; value: string }[] = [];
+  if (on(f.customerName))
+    headerFields.push({ label: "Khách hàng", value: row.customerName });
+  if (on(f.customerCode))
+    headerFields.push({ label: "Mã KH", value: row.customerCode });
+  if (on(f.customerPhone) && row.customerPhone)
+    headerFields.push({ label: "Điện thoại", value: row.customerPhone });
+  if (on(f.customerAddress) && row.customerAddress)
+    headerFields.push({ label: "Địa chỉ", value: row.customerAddress });
+  if (on(f.createdBy)) headerFields.push({ label: "Người tạo", value: user });
+
+  // Khối tổng tiền + công nợ.
+  const due = row.totalAmount - row.discount; // phải trả của RIÊNG hoá đơn này
+  const currentDebt = row.customerCurrentDebt; // dư nợ hiện tại (thời gian thực)
+  const oldDebt = currentDebt != null ? currentDebt - row.debt : 0; // nợ trước HĐ này
+  // Chỉ in khối nợ khi bật cờ + khách công nợ/bán sỉ (có gắn KH + có dư nợ).
+  const showDebt =
+    on(f.debt) &&
+    !!row.customerId &&
+    currentDebt != null &&
+    (currentDebt > 0 || oldDebt > 0);
+
+  const summaryRows: { label: string; value: string; bold?: boolean }[] = [
+    { label: "Tổng tiền hàng", value: formatCurrency(row.totalAmount) },
+  ];
+  if (row.discount > 0)
+    summaryRows.push({ label: "Chiết khấu", value: formatCurrency(row.discount) });
+  summaryRows.push({ label: "Tổng cộng", value: formatCurrency(due), bold: true });
+  if (showDebt || row.paid > 0)
+    summaryRows.push({ label: "Khách thanh toán", value: formatCurrency(row.paid) });
+  if (showDebt) {
+    summaryRows.push({ label: "Nợ cũ", value: formatCurrency(oldDebt) });
+    summaryRows.push({
+      label: "Còn nợ",
+      value: formatCurrency(currentDebt ?? 0),
+      bold: true,
+    });
+  }
+
   return {
-    documentType: "HOÁ ĐƠN BÁN HÀNG",
+    // CEO 24/06: tiêu đề đặt ở cài đặt; mặc định "PHIẾU THANH TOÁN" (đây là
+    // chứng từ nội bộ, KHÔNG phải hoá đơn GTGT/hoá đơn đỏ).
+    documentType: business?.invoiceTitle || "PHIẾU THANH TOÁN",
     documentCode: row.code,
     date: row.date,
-    branchName: row.branchName,
-    // Tenant business info (HT-2): MST, địa chỉ, logo, footer cho VAT.
-    businessName: business?.businessName,
-    businessTaxCode: business?.taxCode,
-    businessAddress: business?.address,
-    businessPhone: business?.phone,
-    businessLogoUrl: business?.logoUrl,
-    businessFooter: business?.invoiceFooter,
-    headerFields: [
-      { label: "Khách hàng", value: row.customerName },
-      { label: "Mã KH", value: row.customerCode },
-      { label: "Người tạo", value: user },
-    ],
+    // Bên bán — mỗi dòng theo cờ bật/tắt (tắt = không truyền → template ẩn).
+    branchName: on(f.branch) ? row.branchName : undefined,
+    businessName: on(f.businessName) ? business?.businessName : undefined,
+    businessTaxCode: on(f.taxCode) ? business?.taxCode : undefined,
+    businessAddress: on(f.address) ? business?.address : undefined,
+    businessPhone: on(f.phone) ? business?.phone : undefined,
+    businessLogoUrl: on(f.logo) ? business?.logoUrl : undefined,
+    businessFooter: on(f.footer) ? business?.invoiceFooter : undefined,
+    headerFields,
     ...(items && items.length
       ? { items, itemColumns: SALE_ITEM_COLUMNS }
       : {}),
-    summaryRows: [
-      { label: "Tổng tiền hàng", value: formatCurrency(row.totalAmount) },
-      { label: "Chiết khấu", value: formatCurrency(row.discount) },
-      { label: "Thanh toán", value: formatCurrency(row.totalAmount - row.discount), bold: true },
-    ],
+    summaryRows,
+    showSignature: on(f.signature),
     createdBy: user,
   };
 }
@@ -256,6 +303,35 @@ export interface TenantBusinessInfoForPrint {
   phone?: string;
   logoUrl?: string;
   invoiceFooter?: string;
+  /** Tiêu đề phiếu (vd "PHIẾU THANH TOÁN"). Trống → mặc định trong builder. */
+  invoiceTitle?: string;
+  /** Bật/tắt từng dòng thông tin trên phiếu bán (CEO toàn quyền). */
+  invoiceFields?: InvoiceFieldFlags;
+}
+
+/**
+ * Cờ bật/tắt từng dòng thông tin trên phiếu bán hàng.
+ * undefined / không set = BẬT (mặc định, giữ nguyên hành vi cũ).
+ * Chỉ ẩn khi giá trị === false.
+ */
+export interface InvoiceFieldFlags {
+  // ── Bên bán ──
+  logo?: boolean;
+  businessName?: boolean;
+  taxCode?: boolean;
+  address?: boolean;
+  phone?: boolean;
+  branch?: boolean;
+  // ── Bên mua ──
+  customerName?: boolean;
+  customerCode?: boolean;
+  customerPhone?: boolean;
+  customerAddress?: boolean;
+  // ── Khác ──
+  createdBy?: boolean;
+  signature?: boolean;
+  debt?: boolean;
+  footer?: boolean;
 }
 
 export function buildSalesOrderPrintData(

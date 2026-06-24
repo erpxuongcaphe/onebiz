@@ -14,7 +14,7 @@ export async function getInvoices(params: QueryParams): Promise<QueryResult<Invo
   let query = supabase
     .from("invoices")
     .select(
-      "*, profiles!invoices_created_by_fkey(full_name), branches!invoices_branch_id_fkey(name), customers!invoices_customer_id_fkey(code, phone)",
+      "*, profiles!invoices_created_by_fkey(full_name), branches!invoices_branch_id_fkey(name), customers!invoices_customer_id_fkey(code, phone, address, debt)",
       { count: "exact" },
     )
     .eq("tenant_id", tenantId);
@@ -616,7 +616,12 @@ function mapInvoice(row: any): Invoice {
   };
 
   const branch = row.branches as { name: string } | null;
-  const customer = row.customers as { code: string; phone: string } | null;
+  const customer = row.customers as {
+    code: string;
+    phone: string | null;
+    address: string | null;
+    debt: number | string | null;
+  } | null;
 
   return {
     id: row.id,
@@ -627,6 +632,11 @@ function mapInvoice(row: any): Invoice {
     // luôn hiện "—" dù KH có code thật).
     customerCode: customer?.code ?? "",
     customerName: row.customer_name,
+    // SĐT / địa chỉ / dư nợ hiện tại — phục vụ in phiếu (địa chỉ + khối công nợ).
+    customerPhone: customer?.phone ?? undefined,
+    customerAddress: customer?.address ?? undefined,
+    customerCurrentDebt:
+      customer?.debt != null ? Number(customer.debt) : undefined,
     totalAmount: row.total,
     discount: row.discount_amount,
     taxAmount: Number(row.tax_amount ?? 0),

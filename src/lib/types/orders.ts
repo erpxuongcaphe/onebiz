@@ -9,6 +9,16 @@ export interface Invoice {
   customerId: string;
   customerCode: string;
   customerName: string;
+  /** SĐT khách (join customers.phone) — in trên phiếu nếu có. */
+  customerPhone?: string;
+  /** Địa chỉ khách (join customers.address) — in trên phiếu nếu có. */
+  customerAddress?: string;
+  /**
+   * Dư nợ HIỆN TẠI của khách (join customers.debt, thời gian thực).
+   * Dùng in khối công nợ: Nợ cũ = currentDebt − debt(HĐ này); Còn nợ = currentDebt.
+   * undefined khi đơn không gắn khách (khách lẻ).
+   */
+  customerCurrentDebt?: number;
   totalAmount: number;
   discount: number;
   taxAmount: number;

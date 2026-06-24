@@ -12,6 +12,7 @@
 
 import { getClient, getCurrentTenantId, getCurrentContext, handleError } from "./base";
 import { recordAuditLog } from "./audit";
+import type { InvoiceFieldFlags } from "@/lib/print-templates";
 
 export interface TenantBusinessInfo {
   /** Tên giao dịch / tên trên hóa đơn (khác tenant.name là tên hệ thống). */
@@ -42,6 +43,14 @@ export interface TenantBusinessInfo {
   vietQrEnabled?: boolean;
   /** Footer hóa đơn (chính sách đổi/trả, ghi chú cảm ơn,...). */
   invoiceFooter?: string;
+  /**
+   * Tiêu đề in trên phiếu bán hàng admin (vd "PHIẾU THANH TOÁN",
+   * "PHIẾU BÁN HÀNG", "HOÁ ĐƠN"). Trống → mặc định "PHIẾU THANH TOÁN".
+   * LƯU Ý: đây là chứng từ nội bộ, KHÔNG phải hoá đơn GTGT (hoá đơn đỏ).
+   */
+  invoiceTitle?: string;
+  /** Bật/tắt từng dòng thông tin bên bán + bên mua trên phiếu bán. */
+  invoiceFields?: InvoiceFieldFlags;
 }
 
 /**
@@ -81,6 +90,8 @@ export async function getTenantBusinessInfo(): Promise<TenantBusinessInfo> {
     bankHolder: business.bank_holder as string | undefined,
     vietQrEnabled: business.vietqr_enabled as boolean | undefined,
     invoiceFooter: business.invoice_footer as string | undefined,
+    invoiceTitle: business.invoice_title as string | undefined,
+    invoiceFields: business.invoice_fields as InvoiceFieldFlags | undefined,
   };
 }
 
@@ -125,6 +136,8 @@ export async function updateTenantBusinessInfo(
   if (patch.bankHolder !== undefined) updates.bank_holder = patch.bankHolder;
   if (patch.vietQrEnabled !== undefined) updates.vietqr_enabled = patch.vietQrEnabled;
   if (patch.invoiceFooter !== undefined) updates.invoice_footer = patch.invoiceFooter;
+  if (patch.invoiceTitle !== undefined) updates.invoice_title = patch.invoiceTitle;
+  if (patch.invoiceFields !== undefined) updates.invoice_fields = patch.invoiceFields;
 
   const newSettings = {
     ...currentSettings,
@@ -163,6 +176,8 @@ export async function updateTenantBusinessInfo(
     bankHolder: updates.bank_holder as string | undefined,
     vietQrEnabled: updates.vietqr_enabled as boolean | undefined,
     invoiceFooter: updates.invoice_footer as string | undefined,
+    invoiceTitle: updates.invoice_title as string | undefined,
+    invoiceFields: updates.invoice_fields as InvoiceFieldFlags | undefined,
   };
 }
 

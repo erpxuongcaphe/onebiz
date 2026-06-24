@@ -28,7 +28,44 @@ import {
   getTenantBusinessInfo,
   updateTenantBusinessInfo,
 } from "@/lib/services";
+import type { InvoiceFieldFlags } from "@/lib/print-templates";
 import Link from "next/link";
+
+// ── Bật/tắt từng dòng thông tin trên phiếu bán (CEO 24/06) ──
+const INVOICE_FIELD_GROUPS: {
+  title: string;
+  items: { key: keyof InvoiceFieldFlags; label: string }[];
+}[] = [
+  {
+    title: "Bên bán (xưởng / cửa hàng)",
+    items: [
+      { key: "logo", label: "Logo" },
+      { key: "businessName", label: "Tên doanh nghiệp" },
+      { key: "taxCode", label: "Mã số thuế (MST)" },
+      { key: "address", label: "Địa chỉ" },
+      { key: "phone", label: "Điện thoại" },
+      { key: "branch", label: "Chi nhánh" },
+    ],
+  },
+  {
+    title: "Bên mua (khách hàng)",
+    items: [
+      { key: "customerName", label: "Tên khách hàng" },
+      { key: "customerCode", label: "Mã khách hàng" },
+      { key: "customerPhone", label: "Điện thoại khách" },
+      { key: "customerAddress", label: "Địa chỉ khách" },
+    ],
+  },
+  {
+    title: "Khác",
+    items: [
+      { key: "createdBy", label: "Người tạo phiếu" },
+      { key: "signature", label: "Ô chữ ký (Người lập / Người duyệt)" },
+      { key: "debt", label: "Khối công nợ (Nợ cũ / Còn nợ)" },
+      { key: "footer", label: "Lời cảm ơn / chân phiếu" },
+    ],
+  },
+];
 
 // ── Toggle component ──
 function Toggle({
@@ -132,6 +169,8 @@ export default function PrintSettingsPage() {
   // tenants.settings.business_info (cùng nguồn với /he-thong/thiet-lap).
   const [logoUrl, setLogoUrl] = useState<string | null>(null);
   const [invoiceFooter, setInvoiceFooter] = useState<string>("");
+  const [invoiceTitle, setInvoiceTitle] = useState<string>("");
+  const [invoiceFields, setInvoiceFields] = useState<InvoiceFieldFlags>({});
   const [logoSaving, setLogoSaving] = useState(false);
 
   const update = (values: Partial<typeof print>) => {
@@ -153,6 +192,8 @@ export default function PrintSettingsPage() {
         if (cancelled) return;
         setLogoUrl(info.logoUrl ?? null);
         setInvoiceFooter(info.invoiceFooter ?? "");
+        setInvoiceTitle(info.invoiceTitle ?? "");
+        setInvoiceFields(info.invoiceFields ?? {});
       })
       .catch(() => {
         // Silent — UI vẫn render với defaults
@@ -207,6 +248,46 @@ export default function PrintSettingsPage() {
       setLogoSaving(false);
     }
   }, [invoiceFooter, toast]);
+
+  const handleTitleSave = useCallback(async () => {
+    setLogoSaving(true);
+    try {
+      await updateTenantBusinessInfo({ invoiceTitle: invoiceTitle.trim() });
+      toast({
+        variant: "success",
+        title: "Đã lưu tiêu đề phiếu",
+        description: `Phiếu bán sẽ in tiêu đề "${invoiceTitle.trim() || "PHIẾU THANH TOÁN"}"`,
+      });
+    } catch (err) {
+      toast({
+        variant: "error",
+        title: "Lỗi lưu tiêu đề",
+        description: err instanceof Error ? err.message : "Vui lòng thử lại",
+      });
+    } finally {
+      setLogoSaving(false);
+    }
+  }, [invoiceTitle, toast]);
+
+  const handleFieldsSave = useCallback(async () => {
+    setLogoSaving(true);
+    try {
+      await updateTenantBusinessInfo({ invoiceFields });
+      toast({
+        variant: "success",
+        title: "Đã lưu hiển thị phiếu",
+        description: "Phiếu bán sẽ in đúng các dòng anh bật/tắt",
+      });
+    } catch (err) {
+      toast({
+        variant: "error",
+        title: "Lỗi lưu hiển thị",
+        description: err instanceof Error ? err.message : "Vui lòng thử lại",
+      });
+    } finally {
+      setLogoSaving(false);
+    }
+  }, [invoiceFields, toast]);
 
   const handleConnectUsbPrinter = async (role: PrinterRole) => {
     setConnecting(role);
@@ -490,6 +571,93 @@ export default function PrintSettingsPage() {
               </button>
             ))}
           </div>
+        </CardContent>
+      </Card>
+
+      {/* ── Tiêu đề phiếu bán hàng (CEO 24/06) — đặt tên chứng từ ── */}
+      <Card>
+        <CardHeader>
+          <CardTitle className="flex items-center gap-2">
+            <Icon name="receipt_long" />
+            Tiêu đề phiếu bán hàng
+            <HelpTip>
+              Tên in to ở đầu phiếu bán (mặc định &quot;PHIẾU THANH TOÁN&quot;).
+              Đây là chứng từ nội bộ, KHÔNG phải hoá đơn GTGT (hoá đơn đỏ) — nên
+              tránh đặt &quot;HOÁ ĐƠN GTGT&quot;.
+            </HelpTip>
+          </CardTitle>
+        </CardHeader>
+        <CardContent className="space-y-3">
+          <div className="flex flex-wrap gap-2">
+            {["PHIẾU THANH TOÁN", "PHIẾU BÁN HÀNG", "HOÁ ĐƠN"].map((t) => (
+              <button
+                key={t}
+                type="button"
+                onClick={() => setInvoiceTitle(t)}
+                className={cn(
+                  "rounded-md border px-3 py-1.5 text-sm font-medium transition-colors",
+                  (invoiceTitle || "PHIẾU THANH TOÁN") === t
+                    ? "border-primary bg-primary/5 ring-2 ring-primary"
+                    : "border-border hover:border-primary/50",
+                )}
+              >
+                {t}
+              </button>
+            ))}
+          </div>
+          <div className="flex items-center gap-2">
+            <Input
+              value={invoiceTitle}
+              onChange={(e) => setInvoiceTitle(e.target.value)}
+              placeholder="PHIẾU THANH TOÁN"
+              maxLength={40}
+              className="max-w-xs"
+            />
+            <Button size="sm" onClick={handleTitleSave} disabled={logoSaving}>
+              Lưu tiêu đề
+            </Button>
+          </div>
+          <p className="text-xs text-muted-foreground">
+            Áp dụng cho phiếu in từ danh sách Hoá đơn. Để trống = &quot;PHIẾU
+            THANH TOÁN&quot;.
+          </p>
+        </CardContent>
+      </Card>
+
+      {/* ── Hiển thị trên phiếu bán (CEO 24/06) — bật/tắt từng dòng ── */}
+      <Card>
+        <CardHeader>
+          <CardTitle className="flex items-center gap-2">
+            <Icon name="visibility" />
+            Hiển thị trên phiếu bán
+            <HelpTip>
+              Bật/tắt từng dòng thông tin BÊN BÁN + BÊN MUA in trên phiếu bán
+              hàng. Tắt dòng nào thì phiếu in ẩn dòng đó. Mặc định bật hết.
+              Áp dụng cho phiếu in từ danh sách Hoá đơn.
+            </HelpTip>
+          </CardTitle>
+        </CardHeader>
+        <CardContent className="space-y-4">
+          {INVOICE_FIELD_GROUPS.map((g) => (
+            <div key={g.title}>
+              <h4 className="text-sm font-semibold mb-1">{g.title}</h4>
+              <div className="divide-y">
+                {g.items.map((it) => (
+                  <Toggle
+                    key={it.key}
+                    checked={invoiceFields[it.key] !== false}
+                    onCheckedChange={(v) =>
+                      setInvoiceFields((prev) => ({ ...prev, [it.key]: v }))
+                    }
+                    label={it.label}
+                  />
+                ))}
+              </div>
+            </div>
+          ))}
+          <Button size="sm" onClick={handleFieldsSave} disabled={logoSaving}>
+            Lưu hiển thị
+          </Button>
         </CardContent>
       </Card>
 
