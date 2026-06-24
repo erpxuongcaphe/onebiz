@@ -250,6 +250,43 @@ export function getPurchaseReturnStatuses() {
   ];
 }
 
+/** Dòng hàng chuẩn để in chứng từ (khớp `toPrintLines`). */
+export interface PrintItemRow {
+  productCode?: string;
+  productName: string;
+  unit?: string;
+  quantity: number;
+  unitPrice: number;
+  total: number;
+}
+
+/**
+ * Nạp dòng hàng của phiếu TRẢ HÀNG NHẬP (supplier_return_items) — để in chứng từ
+ * hiện mặt hàng (In Pha 3 Item 1). Trả shape camelCase cho `toPrintLines`.
+ */
+export async function getPurchaseReturnItems(returnId: string): Promise<PrintItemRow[]> {
+  const supabase = getClient();
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  const { data, error } = await (supabase as any)
+    .from("supplier_return_items")
+    .select("product_name, unit, quantity, unit_price, total")
+    .eq("return_id", returnId)
+    .order("id", { ascending: true });
+  if (error) handleError(error, "getPurchaseReturnItems");
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  return ((data ?? []) as any[]).map((r) => {
+    const qty = Number(r.quantity ?? 0);
+    const price = Number(r.unit_price ?? 0);
+    return {
+      productName: r.product_name ?? "",
+      unit: r.unit ?? undefined,
+      quantity: qty,
+      unitPrice: price,
+      total: Number(r.total ?? qty * price),
+    };
+  });
+}
+
 // ==================== Input Invoices (Hóa đơn đầu vào) ====================
 
 export async function getInputInvoices(
@@ -306,6 +343,44 @@ export function getInputInvoiceStatuses() {
     { value: "recorded", label: "Đã ghi sổ" },
     { value: "unrecorded", label: "Chưa ghi sổ" },
   ];
+}
+
+/**
+ * Nạp dòng hàng của HÓA ĐƠN ĐẦU VÀO để in (In Pha 3 Item 1).
+ * HĐ đầu vào auto-tạo từ phiếu nhập → lấy items từ purchase_order gốc.
+ */
+export async function getInputInvoiceItems(invoiceId: string): Promise<PrintItemRow[]> {
+  const supabase = getClient();
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  const sb = supabase as any;
+  const { data: inv, error: invErr } = await sb
+    .from("input_invoices")
+    .select("purchase_order_id")
+    .eq("id", invoiceId)
+    .single();
+  if (invErr) handleError(invErr, "getInputInvoiceItems:invoice");
+  const poId = inv?.purchase_order_id;
+  if (!poId) return [];
+
+  const { data, error } = await sb
+    .from("purchase_order_items")
+    .select("product_name, quantity, unit_price, unit, products(code)")
+    .eq("purchase_order_id", poId)
+    .order("id", { ascending: true });
+  if (error) handleError(error, "getInputInvoiceItems:items");
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  return ((data ?? []) as any[]).map((r) => {
+    const qty = Number(r.quantity ?? 0);
+    const price = Number(r.unit_price ?? 0);
+    return {
+      productCode: r.products?.code ?? "",
+      productName: r.product_name ?? "",
+      unit: r.unit ?? undefined,
+      quantity: qty,
+      unitPrice: price,
+      total: qty * price,
+    };
+  });
 }
 
 /**

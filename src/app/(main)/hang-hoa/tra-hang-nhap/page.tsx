@@ -26,7 +26,7 @@ import {
 } from "@/components/shared/inline-detail-panel";
 import type { DetailTab } from "@/components/shared/inline-detail-panel";
 import { formatCurrency, formatDate, formatUser } from "@/lib/format";
-import { getPurchaseReturns, getPurchaseReturnStatuses } from "@/lib/services";
+import { getPurchaseReturns, getPurchaseReturnStatuses, getPurchaseReturnItems } from "@/lib/services";
 import type { PurchaseReturn } from "@/lib/types";
 import { CreatePurchaseReturnDialog } from "@/components/shared/dialogs";
 import { AuditLogDialog } from "@/components/shared/audit-log-dialog";
@@ -34,7 +34,7 @@ import { buildTransactionRowActions } from "@/components/shared/transaction-row-
 import { useTxRowPermissions } from "@/lib/permissions";
 import { useToast, useBranchFilter } from "@/lib/contexts";
 import { printDocument } from "@/lib/print-document";
-import { buildPurchaseReturnPrintData } from "@/lib/print-templates";
+import { buildPurchaseReturnPrintData, toPrintLines } from "@/lib/print-templates";
 import { Icon } from "@/components/ui/icon";
 
 // === Status config ===
@@ -298,7 +298,10 @@ export default function TraHangNhapPage() {
               const idx = data.findIndex((d) => d.id === row.id);
               setExpandedRow(expandedRow === idx ? null : idx);
             },
-            onPrint: () => printDocument(buildPurchaseReturnPrintData(row)),
+            onPrint: async () => {
+              const items = await getPurchaseReturnItems(row.id);
+              printDocument(buildPurchaseReturnPrintData(row, toPrintLines(items)));
+            },
             // Audit log shortcut
             onAuditLog: () => setAuditDialogTarget(row),
           })

@@ -27,8 +27,8 @@ import type { DetailTab } from "@/components/shared/inline-detail-panel";
 import { formatCurrency, formatDate, formatUser } from "@/lib/format";
 import { exportToExcel, exportToCsv } from "@/lib/utils/export";
 import { printDocument } from "@/lib/print-document";
-import { buildInputInvoicePrintData } from "@/lib/print-templates";
-import { getInputInvoices, getInputInvoiceStatuses, cancelInputInvoice, recordInputInvoice } from "@/lib/services";
+import { buildInputInvoicePrintData, toPrintLines } from "@/lib/print-templates";
+import { getInputInvoices, getInputInvoiceStatuses, cancelInputInvoice, recordInputInvoice, getInputInvoiceItems } from "@/lib/services";
 import { ConfirmDialog } from "@/components/shared/dialogs";
 // PERF (CEO 23/05/2026): Lazy-load CreateInputInvoiceDialog (662 dòng).
 import dynamic from "next/dynamic";
@@ -366,7 +366,10 @@ export default function HoaDonDauVaoPage() {
               const idx = data.findIndex((d) => d.id === row.id);
               setExpandedRow(expandedRow === idx ? null : idx);
             },
-            onPrint: () => printDocument(buildInputInvoicePrintData(row)),
+            onPrint: async () => {
+              const items = await getInputInvoiceItems(row.id);
+              printDocument(buildInputInvoicePrintData(row, toPrintLines(items)));
+            },
             // Workflow: "Ghi nhận" cho HĐ chưa ghi sổ
             workflowActions:
               row.status === "unrecorded"

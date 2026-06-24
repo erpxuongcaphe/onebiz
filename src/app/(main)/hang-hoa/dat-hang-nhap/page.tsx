@@ -29,12 +29,13 @@ import { formatCurrency, formatDate, formatUser } from "@/lib/format";
 import { exportToCsv } from "@/lib/utils/export";
 import { exportToExcelFromSchema } from "@/lib/excel";
 import { printDocument } from "@/lib/print-document";
-import { buildPurchaseEntryPrintData } from "@/lib/print-templates";
+import { buildPurchaseEntryPrintData, toPrintLines } from "@/lib/print-templates";
 import {
   getPurchaseOrderEntries,
   getPurchaseOrdersForExport,
   getPurchaseEntryStatuses,
   cancelPurchaseOrderEntry,
+  getPurchaseOrderItems,
 } from "@/lib/services";
 import { ConfirmDialog } from "@/components/shared/dialogs";
 // PERF (CEO 23/05/2026): Lazy-load CreatePurchaseEntryDialog (630 dòng).
@@ -398,10 +399,13 @@ export default function DatHangNhapPage() {
           {
             label: "In hàng loạt",
             icon: <Icon name="print" size={16} />,
-            onClick: (selectedRows) => {
-              selectedRows.forEach((row) =>
-                printDocument(buildPurchaseEntryPrintData(row)),
-              );
+            onClick: async (selectedRows) => {
+              for (const row of selectedRows) {
+                const items = await getPurchaseOrderItems(row.id);
+                printDocument(
+                  buildPurchaseEntryPrintData(row, toPrintLines(items)),
+                );
+              }
             },
           },
           {
@@ -469,7 +473,12 @@ export default function DatHangNhapPage() {
               const idx = data.findIndex((d) => d.id === row.id);
               setExpandedRow(expandedRow === idx ? null : idx);
             },
-            onPrint: () => printDocument(buildPurchaseEntryPrintData(row)),
+            onPrint: async () => {
+              const items = await getPurchaseOrderItems(row.id);
+              printDocument(
+                buildPurchaseEntryPrintData(row, toPrintLines(items)),
+              );
+            },
             // Workflow: chuyển sang nhập hàng
             workflowActions: [
               {
