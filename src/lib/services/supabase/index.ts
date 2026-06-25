@@ -235,6 +235,17 @@ export { getVariantsByProduct, createVariant, updateVariant, deleteVariant } fro
 export { getAllBOMs, getBOMByCode, getBOMsByProduct, getBOMById, createBOM, updateBOM, deleteBOM, calculateBOMCost, getBOMProductionHistory, getActiveBOMForBranch, cloneBOMForBranch, getProductIdsWithActiveBom, getBomAvailabilityBatch } from "./bom";
 export type { BomAvailabilityEntry } from "./bom";
 
+// Print Template Engine (Cài đặt In V3 — GĐ3)
+export {
+  listPrintTemplates, listTemplatesForMatrix, getPrintTemplate, createPrintTemplate,
+  updatePrintTemplate, setDefaultPrintTemplate, deletePrintTemplate, duplicatePrintTemplate,
+  setBranchPrintBrand, getResolvedBrand, resolvePrintTemplate,
+} from "./print-templates-engine";
+export type {
+  PrintChannel, PrintDocType, PrintPaperSize, PrintTemplateConfig, PrintTemplate,
+  ResolvedBrand, ResolvedPrint,
+} from "./print-templates-engine";
+
 // Production Orders + Lot Tracking
 export {
   getProductionOrders, getProductionOrderById, createProductionOrder, completeProductionOrder, consumeProductionMaterials,
