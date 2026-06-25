@@ -83,6 +83,19 @@ function paperWorldLabel(channel: PrintChannel): string {
   return channel === "fnb" ? "Khổ bill nhiệt (máy in bill)" : "Khổ chứng từ (máy in A4/A5)";
 }
 
+// ── 2 THẾ GIỚI IN (CEO 25/06): chọn thế giới TRƯỚC, rồi mới tới mảng/loại ──
+type PrintWorld = "document" | "thermal";
+const WORLD_META: Record<PrintWorld, { label: string; sub: string; icon: string }> = {
+  document: { label: "In chứng từ", sub: "A4 / A5 · bán lẻ · sỉ · kho · xưởng", icon: "description" },
+  thermal: { label: "In bill nhiệt", sub: "80 / 58mm · quán F&B", icon: "receipt_long" },
+};
+function worldForChannel(c: PrintChannel): PrintWorld {
+  return c === "fnb" ? "thermal" : "document";
+}
+function channelsForWorld(w: PrintWorld): PrintChannel[] {
+  return w === "thermal" ? ["fnb"] : ["retail", "wholesale", "backoffice"];
+}
+
 const SALES_DOC_TYPES: PrintDocType[] = [
   "sale_invoice",
   "sales_order",
@@ -271,6 +284,12 @@ export function PrintTemplateManager() {
   const [editId, setEditId] = useState<string | null>(null);
 
   const availableDocTypes = useMemo(() => docTypesForChannel(channel), [channel]);
+  // Thế giới in suy ra từ mảng (F&B = bill nhiệt; còn lại = chứng từ).
+  const world = worldForChannel(channel);
+  const channelOptionsForWorld = useMemo(
+    () => CHANNEL_OPTIONS.filter((c) => channelsForWorld(world).includes(c.value)),
+    [world],
+  );
 
   // Khi đổi mảng: nếu docType hiện tại không còn hợp lệ → reset về cái đầu.
   useEffect(() => {
@@ -389,6 +408,45 @@ export function PrintTemplateManager() {
           </CardTitle>
         </CardHeader>
         <CardContent>
+          {/* CHỌN THẾ GIỚI IN TRƯỚC — 2 thế giới tách hẳn (CEO 25/06) */}
+          <div className="grid grid-cols-2 gap-2 mb-4">
+            {(["document", "thermal"] as PrintWorld[]).map((w) => {
+              const active = world === w;
+              const meta = WORLD_META[w];
+              return (
+                <button
+                  key={w}
+                  type="button"
+                  onClick={() => {
+                    if (w !== world) setChannel(channelsForWorld(w)[0]);
+                  }}
+                  className={cn(
+                    "flex items-start gap-3 rounded-lg border p-3 text-left transition-colors",
+                    active
+                      ? "border-primary bg-primary/5 ring-2 ring-primary"
+                      : "border-border hover:border-primary/50",
+                  )}
+                >
+                  <Icon
+                    name={meta.icon}
+                    className={active ? "text-primary" : "text-muted-foreground"}
+                  />
+                  <div>
+                    <div
+                      className={cn(
+                        "text-sm font-semibold",
+                        active && "text-primary",
+                      )}
+                    >
+                      {meta.label}
+                    </div>
+                    <div className="text-xs text-muted-foreground">{meta.sub}</div>
+                  </div>
+                </button>
+              );
+            })}
+          </div>
+
           <div className="grid gap-3 sm:grid-cols-3">
             {/* Mảng */}
             <div className="space-y-1.5">
@@ -396,7 +454,7 @@ export function PrintTemplateManager() {
               <Select
                 value={channel}
                 onValueChange={(v) => v && setChannel(v as PrintChannel)}
-                items={CHANNEL_OPTIONS.map((c) => ({ value: c.value, label: c.label }))}
+                items={channelOptionsForWorld.map((c) => ({ value: c.value, label: c.label }))}
               >
                 <SelectTrigger className="w-full">
                   <SelectValue>
@@ -406,7 +464,7 @@ export function PrintTemplateManager() {
                   </SelectValue>
                 </SelectTrigger>
                 <SelectContent>
-                  {CHANNEL_OPTIONS.map((c) => (
+                  {channelOptionsForWorld.map((c) => (
                     <SelectItem key={c.value} value={c.value}>
                       {c.label}
                     </SelectItem>
