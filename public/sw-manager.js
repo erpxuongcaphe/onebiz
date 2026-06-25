@@ -26,7 +26,7 @@
  *   - Bypass: auth routes, Supabase, /api/*, /monitoring (Sentry tunnel)
  */
 
-const CACHE_NAME = "onebiz-manager-v3";
+const CACHE_NAME = "onebiz-manager-v4";
 
 // Pre-cache CHỈ static assets — KHÔNG pre-cache HTML routes nữa.
 // Sprint LT-6 27/05: HTML phải đi qua network để middleware refresh cookie.
@@ -137,34 +137,27 @@ self.addEventListener("fetch", (event) => {
     event.request.mode === "navigate" ||
     event.request.destination === "document"
   ) {
+    // BUG FIX 24/06/2026 — trang render ĐÔI (h1 ×2, nút ×2) trên MỌI trang:
+    //   Trước đây handler clone() response HTML + cache.put() → "tee" luồng
+    //   stream. Việc chẻ đôi stream phá cơ chế STREAMING SSR của Next.js App
+    //   Router (segment `<div hidden id="S:0">` + script reconcile) → script
+    //   dọn placeholder không chạy hết → bản stream `div#S:0` nằm lại song song
+    //   bản hydrate trong <main> → nhân đôi toàn trang. Xác minh qua Chrome:
+    //   2 nhánh h1 (main + div#S:0), SW đang control, console KHÔNG lỗi.
+    //
+    //   FIX: PASSTHROUGH thuần cho HTML — trả thẳng fetch(request), KHÔNG đụng
+    //   body stream (không clone, không cache). Middleware Next.js VẪN chạy vì
+    //   vẫn là network fetch → cookie auth vẫn refresh đúng (giữ fix LT-6).
+    //   Đổi lại: không cache HTML offline per-URL → khi offline rơi về
+    //   /offline.html (đã pre-cache). Chấp nhận được cho ERP online.
     event.respondWith(
-      fetch(event.request)
-        .then((resp) => {
-          // Cache response thành công để fallback khi offline sau này.
-          // KHÔNG dùng cached version cho request hiện tại — luôn return
-          // fresh response từ network để middleware đã chạy (cookie refreshed).
-          if (resp && resp.status === 200) {
-            const clone = resp.clone();
-            caches
-              .open(CACHE_NAME)
-              .then((cache) => cache.put(event.request, clone))
-              .catch(() => {});
-          }
-          return resp;
-        })
-        .catch(() =>
-          // Network die thật sự (offline, DNS timeout) → fallback:
-          // 1) Cached HTML của exact URL (nếu user đã visit trước đó)
-          // 2) /offline.html (page "Đang kết nối lại…" auto-reload)
-          caches.match(event.request).then((cached) => {
-            if (cached) return cached;
-            return caches.match("/offline.html").then(
-              (offline) =>
-                offline ||
-                new Response("Offline", { status: 503, statusText: "Offline" }),
-            );
-          }),
+      fetch(event.request).catch(() =>
+        caches.match("/offline.html").then(
+          (offline) =>
+            offline ||
+            new Response("Offline", { status: 503, statusText: "Offline" }),
         ),
+      ),
     );
     return;
   }
