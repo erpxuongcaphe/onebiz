@@ -85,13 +85,14 @@ applyTemplateToDocData(base: DocumentPrintData, resolved): DocumentPrintData
 ```
 
 ## PHASES (tracker — tick khi xong)
-- [ ] **P1. Migration 00153** — bảng `print_templates` + `branches.print_brand` + RLS + index + trigger. (CEO chạy)
-- [ ] **P2. Service** `print-templates-engine.ts` — types + CRUD + `resolvePrintTemplate` + `listForMatrix` + `duplicateTemplate`. Export ở services/index.
-- [ ] **P3. UI Tab "Thương hiệu chung"** — editor brand tenant + override per-branch (logo/MST/địa chỉ/QR/footer).
-- [ ] **P4. UI Tab "Mẫu in"** — bộ chọn ngữ cảnh (Mảng→Chi nhánh→Loại) + danh sách mẫu + editor nhóm-toggle + khổ giấy + **preview sống** (tái dùng ReceiptPreviewPanel mở rộng).
-- [ ] **P5. UI Ma trận gán + Nhân bản** — bảng (doc_type × chi nhánh) → mẫu nào; nút Duplicate, Đặt mặc định.
-- [ ] **P6. Resolver wiring + Token** — chèn `resolvePrintTemplate` vào các điểm gọi `printDocument`; `print-document.ts`/`print-templates.ts` honor config (cột, fontSize, toggle); engine thay token.
-- [ ] **P7. Test + deploy + verify + doc** — TS check, E2E từng doc_type, deploy, verify live, cập nhật memory + doc.
+- [x] **P1. Migration 00153** — bảng `print_templates` + `branches.print_brand` + RLS + index + trigger. ✅ CEO chạy 25/06; smoke-test pass.
+- [x] **P2. Service** `print-templates-engine.ts` — types + CRUD + `resolvePrintTemplate` + `listForMatrix` + `duplicateTemplate`. ✅ live `d7008d9`.
+- [ ] **P3. UI Tab "Thương hiệu chung"** — editor brand tenant + override per-branch (logo/MST/địa chỉ/QR/footer qua `setBranchPrintBrand`). *(brand đã CHẠY ở backend P6a; còn thiếu UI nhập per-branch)*
+- [x] **P4. UI Tab "Mẫu in"** — bộ chọn ngữ cảnh + danh sách mẫu + editor nhóm-toggle + khổ giấy + preview. ✅ live `0711b0b` (`print-template-manager.tsx`).
+- [ ] **P5. UI Ma trận gán + Nhân bản** — bảng (doc_type × chi nhánh) → mẫu nào. *(Nhân bản + Đặt mặc định ĐÃ có trong P4; còn thiếu view ma trận tổng)*
+- [x] **P6a. Resolver wiring + Token (map sạch)** — `print-apply-template.ts` (applyTokens + applyTemplateToDocData + printDocumentWithTemplate) + hook templateCtx; wire 13 file/21 điểm in. ✅ live `c27cfa9`. ZERO-REGRESSION (0 mẫu → in y cũ).
+- [ ] **P6b. Resolver wiring nâng cao** — mở rộng `print-document.ts`: `items.fontSize` + `payment.showQr` + `customer.*` granular (cần thêm field DocumentPrintData + render).
+- [ ] **P7. Test + doc** — E2E từng doc_type khi CÓ mẫu, cập nhật doc/memory.
 
 ## Điểm rủi ro / lưu ý
 - KHÔNG seed mẫu trong migration → tránh đụng luồng in cũ. Engine chỉ override khi user tạo mẫu.
