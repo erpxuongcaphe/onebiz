@@ -24,6 +24,7 @@ import { HelpTip } from "@/components/shared/help-tip";
 import { BusinessLogoUpload } from "@/components/shared/business-logo-upload";
 import { KitchenStationsCard } from "@/components/shared/kitchen-stations-card";
 import { ReceiptPreviewPanel } from "@/components/shared/receipt-preview-panel";
+import { PrintTemplateManager } from "@/components/shared/print-template-manager";
 import {
   getTenantBusinessInfo,
   updateTenantBusinessInfo,
@@ -153,9 +154,10 @@ const backends = [
 ];
 
 // ── In Pha 3 Item 5: 3 tab theo kênh ──
-type PrintTab = "chung" | "retail" | "fnb";
+type PrintTab = "chung" | "mau-in" | "retail" | "fnb";
 const PRINT_TABS: { id: PrintTab; label: string; icon: string; desc: string }[] = [
   { id: "chung", label: "Chung", icon: "tune", desc: "Máy in, khổ giấy, logo — áp dụng mọi kênh" },
+  { id: "mau-in", label: "Mẫu in", icon: "description", desc: "Tạo mẫu in riêng theo mảng × loại chứng từ × chi nhánh" },
   { id: "retail", label: "Bán lẻ & Sỉ", icon: "receipt_long", desc: "Phiếu bán / hoá đơn admin (Retail)" },
   { id: "fnb", label: "Quán F&B", icon: "restaurant", desc: "POS FnB: phiếu thanh toán + phiếu bếp" },
 ];
@@ -428,6 +430,9 @@ export default function PrintSettingsPage() {
           );
         })}
       </div>
+
+      {/* ── Tab Mẫu in (V3 — engine nhiều mẫu) ── */}
+      {tab === "mau-in" && <PrintTemplateManager />}
 
       {tab === "chung" && (<>
       {/* ── 0. Print Backend (MỚI) ── */}
