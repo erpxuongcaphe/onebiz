@@ -185,7 +185,11 @@ export async function printDocumentWithTemplate(
   }
 
   if (!resolved) {
-    printDocument(opts.base, { paperSize: opts.fallbackPaperSize });
+    // Chưa có mẫu → khổ giấy mặc định THEO MẢNG (2 thế giới tách biệt):
+    // F&B = bill nhiệt 80mm; còn lại (bán lẻ/sỉ/kho/xưởng) = chứng từ A4.
+    const fallback: PaperSize =
+      opts.fallbackPaperSize ?? (opts.channel === "fnb" ? "80mm" : "A4");
+    printDocument(opts.base, { paperSize: fallback });
     return;
   }
 

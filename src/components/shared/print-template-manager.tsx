@@ -69,7 +69,19 @@ const DOC_TYPE_LABELS: Record<PrintDocType, string> = {
   cash_voucher: "Phiếu thu / chi",
 };
 
-const PAPER_SIZES: PrintPaperSize[] = ["58mm", "80mm", "A5", "A4"];
+// 2 THẾ GIỚI GIẤY tách biệt (CEO 25/06): F&B = bill nhiệt 80/58mm (máy in bill);
+// Bán lẻ / Sỉ / Kho / Xưởng / Tài chính = chứng từ A4/A5 (máy in laser/phun).
+// Khổ giấy gắn theo MẢNG, KHÔNG cho chọn lung tung giữa 2 thế giới.
+function paperSizesForChannel(channel: PrintChannel): PrintPaperSize[] {
+  return channel === "fnb" ? ["80mm", "58mm"] : ["A4", "A5"];
+}
+function defaultPaperForChannel(channel: PrintChannel): PrintPaperSize {
+  return channel === "fnb" ? "80mm" : "A4";
+}
+/** Nhãn thế giới giấy để hiển thị rõ "đang in cho ai". */
+function paperWorldLabel(channel: PrintChannel): string {
+  return channel === "fnb" ? "Khổ bill nhiệt (máy in bill)" : "Khổ chứng từ (máy in A4/A5)";
+}
 
 const SALES_DOC_TYPES: PrintDocType[] = [
   "sale_invoice",
@@ -598,7 +610,9 @@ function TemplateEditorDialog({
 
   // ── Form state ──
   const [name, setName] = useState("");
-  const [paperSize, setPaperSize] = useState<PrintPaperSize>("80mm");
+  const [paperSize, setPaperSize] = useState<PrintPaperSize>(
+    defaultPaperForChannel(channel),
+  );
   const [title, setTitle] = useState("");
   const [config, setConfig] = useState<PrintTemplateConfig>({});
   const [saving, setSaving] = useState(false);
@@ -614,7 +628,7 @@ function TemplateEditorDialog({
       setConfig(existing.config ?? {});
     } else {
       setName("");
-      setPaperSize("80mm");
+      setPaperSize(defaultPaperForChannel(channel));
       setTitle("");
       // Mặc định bật các trường phổ biến cho mẫu mới.
       setConfig({
@@ -637,7 +651,7 @@ function TemplateEditorDialog({
       });
     }
     setNameError(false);
-  }, [open, existing, docType, showItems, columnOptions]);
+  }, [open, existing, docType, channel, showItems, columnOptions]);
 
   // ── Helpers cập nhật cờ lồng nhau ──
   const setHeaderFlag = useCallback(
@@ -756,11 +770,16 @@ function TemplateEditorDialog({
               )}
             </div>
 
-            {/* Khổ giấy */}
+            {/* Khổ giấy — gắn theo MẢNG (2 thế giới tách biệt) */}
             <div className="space-y-1.5">
-              <label className="text-sm font-medium">Khổ giấy</label>
-              <div className="grid grid-cols-4 gap-2">
-                {PAPER_SIZES.map((p) => (
+              <label className="text-sm font-medium">{paperWorldLabel(channel)}</label>
+              <p className="text-xs text-muted-foreground">
+                {channel === "fnb"
+                  ? "Quán F&B in bill nhiệt — chỉ 80mm hoặc 58mm."
+                  : "Bán lẻ / sỉ / kho / xưởng in chứng từ — chỉ A4 hoặc A5."}
+              </p>
+              <div className="grid grid-cols-2 gap-2">
+                {paperSizesForChannel(channel).map((p) => (
                   <button
                     key={p}
                     type="button"
