@@ -239,11 +239,11 @@ export type { BomAvailabilityEntry } from "./bom";
 export {
   listPrintTemplates, listTemplatesForMatrix, getPrintTemplate, createPrintTemplate,
   updatePrintTemplate, setDefaultPrintTemplate, deletePrintTemplate, duplicatePrintTemplate,
-  setBranchPrintBrand, getResolvedBrand, resolvePrintTemplate,
+  setBranchPrintBrand, getBranchPrintInfo, getResolvedBrand, resolvePrintTemplate,
 } from "./print-templates-engine";
 export type {
   PrintChannel, PrintDocType, PrintPaperSize, PrintTemplateConfig, PrintTemplate,
-  ResolvedBrand, ResolvedPrint,
+  ResolvedBrand, ResolvedPrint, BranchPrintInfo,
 } from "./print-templates-engine";
 
 // Production Orders + Lot Tracking

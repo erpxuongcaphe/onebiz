@@ -269,16 +269,52 @@ export async function duplicatePrintTemplate(
 }
 
 // ── Thương hiệu chung (brand) ──────────────────────────────
-async function getBranchPrintBrand(branchId: string): Promise<Partial<ResolvedBrand> | null> {
+interface BranchPrintRecord {
+  name?: string;
+  address?: string;
+  phone?: string;
+  override: Partial<ResolvedBrand> | null;
+}
+/** Đọc hồ sơ chi nhánh: tên + địa chỉ + SĐT THẬT + override print_brand. */
+async function getBranchRecord(branchId: string): Promise<BranchPrintRecord | null> {
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
   const { data, error } = await (supabase as any)
     .from("branches")
-    .select("print_brand")
+    .select("name, address, phone, print_brand")
     .eq("id", branchId)
     .maybeSingle();
   if (error) throw error;
-  const pb = data?.print_brand as Partial<ResolvedBrand> | null | undefined;
-  return pb ?? null;
+  if (!data) return null;
+  return {
+    name: (data.name as string) ?? undefined,
+    address: (data.address as string) ?? undefined,
+    phone: (data.phone as string) ?? undefined,
+    override: (data.print_brand as Partial<ResolvedBrand> | null) ?? null,
+  };
+}
+
+/** Thông tin in của 1 chi nhánh — cho UI hiển thị/sửa (TẦNG chi nhánh). */
+export interface BranchPrintInfo {
+  /** Tên chi nhánh (từ hồ sơ chi nhánh). */
+  branchName?: string;
+  /** Địa chỉ sẽ IN ra (override print riêng ?? địa chỉ hồ sơ chi nhánh). */
+  address?: string;
+  /** SĐT sẽ in ra. */
+  phone?: string;
+  /** Override in riêng (logo/QR/địa chỉ in khác hồ sơ) — null nếu chưa đặt. */
+  override: Partial<ResolvedBrand> | null;
+}
+export async function getBranchPrintInfo(branchId: string): Promise<BranchPrintInfo> {
+  const rec = await getBranchRecord(branchId);
+  const ov = rec?.override ?? null;
+  const ovAddr = ov?.address && ov.address !== "" ? ov.address : undefined;
+  const ovPhone = ov?.phone && ov.phone !== "" ? ov.phone : undefined;
+  return {
+    branchName: rec?.name,
+    address: ovAddr ?? rec?.address,
+    phone: ovPhone ?? rec?.phone,
+    override: ov,
+  };
 }
 
 /** Ghi override brand cho 1 chi nhánh (null = xoá override → kế thừa tenant). */
@@ -310,13 +346,19 @@ export async function getResolvedBrand(branchId?: string | null): Promise<Resolv
     vietQrEnabled: t.vietQrEnabled,
   };
   if (!branchId) return base;
-  const override = await getBranchPrintBrand(branchId);
-  if (!override) return base;
-  // Chỉ ghi đè field có giá trị trong override.
+  const rec = await getBranchRecord(branchId);
+  if (!rec) return base;
   const merged: ResolvedBrand = { ...base };
-  for (const [k, v] of Object.entries(override)) {
-    if (v !== undefined && v !== null && v !== "") {
-      (merged as Record<string, unknown>)[k] = v;
+  // Tầng chi nhánh: ĐỊA CHỈ + SĐT thật của chi nhánh đè lên của công ty
+  // (in ra đúng địa chỉ chi nhánh đang in — CEO 25/06). Tên DN + MST vẫn cấp công ty.
+  if (rec.address) merged.address = rec.address;
+  if (rec.phone) merged.phone = rec.phone;
+  // Override in riêng (print_brand) đè trên cùng: logo/QR/footer/địa chỉ in khác.
+  if (rec.override) {
+    for (const [k, v] of Object.entries(rec.override)) {
+      if (v !== undefined && v !== null && v !== "") {
+        (merged as Record<string, unknown>)[k] = v;
+      }
     }
   }
   return merged;

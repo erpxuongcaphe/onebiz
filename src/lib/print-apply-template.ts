@@ -10,8 +10,8 @@
 
 import type { DocumentPrintData, DocumentLineItem, PaperSize } from "./print-document";
 import { printDocument } from "./print-document";
-import { resolvePrintTemplate } from "./services";
-import type { PrintChannel, PrintDocType, ResolvedPrint } from "./services";
+import { resolvePrintTemplate, getResolvedBrand } from "./services";
+import type { PrintChannel, PrintDocType, ResolvedPrint, ResolvedBrand } from "./services";
 
 /** Ngữ cảnh thay token cho tiêu đề / customText. */
 interface TokenContext {
@@ -155,6 +155,24 @@ export function applyTemplateToDocData(
   return data;
 }
 
+/**
+ * Áp riêng THƯƠNG HIỆU (gồm địa chỉ/SĐT chi nhánh) lên base — dùng khi CHƯA có
+ * mẫu riêng nhưng vẫn muốn in đúng địa chỉ chi nhánh. Chỉ đè field brand có giá trị.
+ */
+export function applyBrandToDocData(
+  base: DocumentPrintData,
+  brand: ResolvedBrand,
+): DocumentPrintData {
+  const data: DocumentPrintData = { ...base };
+  if (brand.businessName) data.businessName = brand.businessName;
+  if (brand.taxCode) data.businessTaxCode = brand.taxCode;
+  if (brand.address) data.businessAddress = brand.address;
+  if (brand.phone) data.businessPhone = brand.phone;
+  if (brand.logoUrl) data.businessLogoUrl = brand.logoUrl;
+  if (brand.footer) data.businessFooter = brand.footer;
+  return data;
+}
+
 export interface PrintWithTemplateOptions {
   channel: PrintChannel;
   docType: PrintDocType;
@@ -189,7 +207,13 @@ export async function printDocumentWithTemplate(
     // F&B = bill nhiệt 80mm; còn lại (bán lẻ/sỉ/kho/xưởng) = chứng từ A4.
     const fallback: PaperSize =
       opts.fallbackPaperSize ?? (opts.channel === "fnb" ? "80mm" : "A4");
-    printDocument(opts.base, { paperSize: fallback });
+    // VẪN áp thương hiệu chi nhánh (in ĐÚNG địa chỉ/SĐT chi nhánh) dù chưa có mẫu riêng.
+    try {
+      const brand = await getResolvedBrand(opts.branchId ?? null);
+      printDocument(applyBrandToDocData(opts.base, brand), { paperSize: fallback });
+    } catch {
+      printDocument(opts.base, { paperSize: fallback });
+    }
     return;
   }
 
