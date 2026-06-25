@@ -22,6 +22,7 @@ import { useToast } from "@/lib/contexts";
 import { useAuth } from "@/lib/contexts/auth-context";
 import {
   createBOM,
+  updateBOM,
   getBOMById,
   getProducts,
   calculateBOMCost,
@@ -201,42 +202,62 @@ export function BOMEditorDialog({
   async function handleSave() {
     if (!validate()) return;
     setSaving(true);
+    const isEdit = Boolean(bomId);
     try {
-      const created = await createBOM({
-        productId,
-        branchId, // null = global, có giá trị = riêng quán
-        name,
-        batchSize: Number(batchSize) || 1,
-        yieldQty: Number(yieldQty) || 1,
-        yieldUnit,
-        note: note || undefined,
-        items: items.map((it, idx) => ({
-          materialId: it.materialId,
-          quantity: Number(it.quantity) || 0,
-          unit: it.unit,
-          wastePercent: Number(it.wastePercent) || 0,
-          sortOrder: idx,
-        })),
-      });
+      const itemsPayload = items.map((it, idx) => ({
+        materialId: it.materialId,
+        quantity: Number(it.quantity) || 0,
+        unit: it.unit,
+        wastePercent: Number(it.wastePercent) || 0,
+        sortOrder: idx,
+      }));
+
+      let savedBomId: string;
+      if (isEdit && bomId) {
+        // SỬA: update tại chỗ (KHÔNG insert mới — sẽ đụng unique
+        // idx_bom_product_branch_unique vì BOM cũ vẫn active cùng SP+chi nhánh).
+        await updateBOM(bomId, {
+          name,
+          branchId, // null = global, có giá trị = riêng quán
+          batchSize: Number(batchSize) || 1,
+          yieldQty: Number(yieldQty) || 1,
+          yieldUnit,
+          note: note || undefined,
+          items: itemsPayload, // replace bom_items (bảo toàn modifier_scale_target theo material_id)
+        });
+        savedBomId = bomId;
+      } else {
+        const created = await createBOM({
+          productId,
+          branchId, // null = global, có giá trị = riêng quán
+          name,
+          batchSize: Number(batchSize) || 1,
+          yieldQty: Number(yieldQty) || 1,
+          yieldUnit,
+          note: note || undefined,
+          items: itemsPayload,
+        });
+        savedBomId = created.id;
+      }
 
       // Optionally fetch official cost from RPC
       try {
-        const cost = await calculateBOMCost(created.id);
+        const cost = await calculateBOMCost(savedBomId);
         setCostPreview(cost);
       } catch {
         // ignore — preview will fall back to client estimate
       }
 
       toast({
-        title: "Lưu công thức thành công",
-        description: `BOM "${name}" đã được tạo`,
+        title: isEdit ? "Cập nhật công thức thành công" : "Lưu công thức thành công",
+        description: `BOM "${name}" đã được ${isEdit ? "cập nhật" : "tạo"}`,
         variant: "success",
       });
       onSuccess?.();
       onOpenChange(false);
     } catch (err) {
       toast({
-        title: "Lỗi lưu công thức",
+        title: isEdit ? "Lỗi cập nhật công thức" : "Lỗi lưu công thức",
         description: err instanceof Error ? err.message : "Vui lòng thử lại",
         variant: "error",
       });

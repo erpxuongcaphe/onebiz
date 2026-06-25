@@ -317,10 +317,11 @@ export async function getBOMById(id: string): Promise<BOM> {
   if (error) throw error;
   const bom = mapBOM(data as Record<string, unknown>);
 
-  // Get items separately — scope qua bom_id (đã verify ownership)
+  // Get items separately — scope qua bom_id (đã verify ownership).
+  // Join products để mapBOMItem có tên/mã/giá vốn NVL (nếu không sẽ hiện rỗng + 0).
   const { data: items } = await supabase
     .from("bom_items")
-    .select("*")
+    .select("*, products!bom_items_material_id_fkey(name, code, cost_price)")
     .eq("bom_id", id)
     .order("sort_order");
 
@@ -405,24 +406,81 @@ export async function updateBOM(
   id: string,
   updates: Partial<{
     name: string;
+    /** null = BOM global, có giá trị = riêng chi nhánh */
+    branchId: string | null;
     batchSize: number;
     yieldQty: number;
     yieldUnit: string;
     note: string;
     isActive: boolean;
+    /**
+     * Khi truyền → REPLACE toàn bộ bom_items (xoá cũ + chèn mới).
+     * Tự bảo toàn modifier_scale_target theo material_id (không mất link
+     * topping-scale FnB của NVL còn giữ lại). NVL mới thêm → scale = null.
+     */
+    items: {
+      materialId: string;
+      quantity: number;
+      unit: string;
+      wastePercent?: number;
+      sortOrder?: number;
+    }[];
   }>
 ) {
+  const tenantId = await getCurrentTenantId();
+
+  // 1) Update header (chỉ set field được truyền)
   const updateObj: Record<string, unknown> = {};
   if (updates.name !== undefined) updateObj.name = updates.name;
+  if (updates.branchId !== undefined) updateObj.branch_id = updates.branchId;
   if (updates.batchSize !== undefined) updateObj.batch_size = updates.batchSize;
   if (updates.yieldQty !== undefined) updateObj.yield_qty = updates.yieldQty;
   if (updates.yieldUnit !== undefined) updateObj.yield_unit = updates.yieldUnit;
   if (updates.note !== undefined) updateObj.note = updates.note;
   if (updates.isActive !== undefined) updateObj.is_active = updates.isActive;
 
-  const tenantId = await getCurrentTenantId();
-  const { error } = await supabase.from("bom").update(updateObj).eq("tenant_id", tenantId).eq("id", id);
-  if (error) throw error;
+  if (Object.keys(updateObj).length > 0) {
+    const { error } = await supabase.from("bom").update(updateObj).eq("tenant_id", tenantId).eq("id", id);
+    if (error) throw error;
+  }
+
+  // 2) Replace items (nếu có truyền) — bảo toàn modifier_scale_target
+  if (updates.items !== undefined) {
+    // Map material_id → modifier_scale_target cũ (đừng để mất link topping FnB).
+    // select("*") để né validation type generated cũ (chưa biết cột modifier_scale_target).
+    const { data: existing } = await supabase
+      .from("bom_items")
+      .select("*")
+      .eq("bom_id", id);
+    const scaleByMaterial = new Map<string, string>();
+    for (const row of existing ?? []) {
+      const r = row as Record<string, unknown>;
+      const mid = r.material_id as string;
+      const tgt = r.modifier_scale_target as string | null;
+      if (mid && tgt) scaleByMaterial.set(mid, tgt);
+    }
+
+    // Xoá items cũ
+    const { error: delErr } = await supabase.from("bom_items").delete().eq("bom_id", id);
+    if (delErr) throw delErr;
+
+    // Chèn items mới, mang theo modifier_scale_target nếu material giữ nguyên
+    if (updates.items.length > 0) {
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      const { error: insErr } = await (supabase.from("bom_items").insert as any)(
+        updates.items.map((item, idx) => ({
+          bom_id: id,
+          material_id: item.materialId,
+          quantity: item.quantity,
+          unit: item.unit,
+          waste_percent: item.wastePercent ?? 0,
+          sort_order: item.sortOrder ?? idx,
+          modifier_scale_target: scaleByMaterial.get(item.materialId) ?? null,
+        }))
+      );
+      if (insErr) throw insErr;
+    }
+  }
 }
 
 export async function deleteBOM(id: string) {
