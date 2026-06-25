@@ -30,7 +30,7 @@ import { useTxRowPermissions } from "@/lib/permissions";
 import { PipelineStatusBadge } from "@/components/shared/pipeline";
 import { Button } from "@/components/ui/button";
 import { useToast, useBranchFilter } from "@/lib/contexts";
-import { printDocument } from "@/lib/print-document";
+import { printDocumentWithTemplate } from "@/lib/print-apply-template";
 import { buildProductionOrderPrintData } from "@/lib/print-templates";
 import { formatCurrency, formatDate } from "@/lib/format";
 import {
@@ -544,8 +544,11 @@ export default function SanXuatPage() {
                 kind: "production",
                 permissions: txPerms,
                 onPrint: () =>
-                  printDocument(
-                    buildProductionOrderPrintData({
+                  printDocumentWithTemplate({
+                    channel: "backoffice",
+                    docType: "production_order",
+                    branchId: activeBranchId ?? null,
+                    base: buildProductionOrderPrintData({
                       id: row.id,
                       code: row.code,
                       date: row.createdAt,
@@ -560,7 +563,7 @@ export default function SanXuatPage() {
                       costAmount: 0,
                       createdBy: row.createdBy ?? "",
                     }),
-                  ),
+                  }),
                 // Workflow: "Hoàn thành" specific cho production
                 workflowActions:
                   row.status !== "completed" && row.status !== "cancelled"

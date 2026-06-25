@@ -511,6 +511,7 @@ export default function TraHangPage() {
                   toPrintLines(items),
                 ),
                 "In phiếu trả hàng",
+                { channel: "retail", docType: "sale_return", branchId: activeBranchId },
               );
             },
             // Audit log shortcut

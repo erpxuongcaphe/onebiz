@@ -2,7 +2,7 @@
 
 import { useEffect, useState, useCallback } from "react";
 import { useToast, useBranchFilter } from "@/lib/contexts";
-import { printDocument } from "@/lib/print-document";
+import { printDocumentWithTemplate } from "@/lib/print-apply-template";
 import { buildDisposalPrintData } from "@/lib/print-templates";
 import { ColumnDef } from "@tanstack/react-table";
 import { Badge } from "@/components/ui/badge";
@@ -441,10 +441,15 @@ export default function XuatHuyPage() {
           {
             label: "In hàng loạt",
             icon: <Icon name="print" size={16} />,
-            onClick: (selectedRows) => {
-              selectedRows.forEach((row) =>
-                printDocument(buildDisposalPrintData(row)),
-              );
+            onClick: async (selectedRows) => {
+              for (const row of selectedRows) {
+                await printDocumentWithTemplate({
+                  channel: "backoffice",
+                  docType: "disposal",
+                  branchId: activeBranchId ?? null,
+                  base: buildDisposalPrintData(row),
+                });
+              }
             },
           },
           {
@@ -498,7 +503,13 @@ export default function XuatHuyPage() {
             row,
             kind: "disposal",
             permissions: txPerms,
-            onPrint: () => printDocument(buildDisposalPrintData(row)),
+            onPrint: () =>
+              printDocumentWithTemplate({
+                channel: "backoffice",
+                docType: "disposal",
+                branchId: activeBranchId ?? null,
+                base: buildDisposalPrintData(row),
+              }),
             onAuditLog: () => setAuditDialogTarget(row),
             onCancel:
               row.status === "draft"

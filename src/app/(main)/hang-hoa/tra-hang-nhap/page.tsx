@@ -33,7 +33,7 @@ import { AuditLogDialog } from "@/components/shared/audit-log-dialog";
 import { buildTransactionRowActions } from "@/components/shared/transaction-row-actions";
 import { useTxRowPermissions } from "@/lib/permissions";
 import { useToast, useBranchFilter } from "@/lib/contexts";
-import { printDocument } from "@/lib/print-document";
+import { printDocumentWithTemplate } from "@/lib/print-apply-template";
 import { buildPurchaseReturnPrintData, toPrintLines } from "@/lib/print-templates";
 import { Icon } from "@/components/ui/icon";
 
@@ -300,7 +300,12 @@ export default function TraHangNhapPage() {
             },
             onPrint: async () => {
               const items = await getPurchaseReturnItems(row.id);
-              printDocument(buildPurchaseReturnPrintData(row, toPrintLines(items)));
+              await printDocumentWithTemplate({
+                channel: "backoffice",
+                docType: "purchase_return",
+                branchId: activeBranchId ?? null,
+                base: buildPurchaseReturnPrintData(row, toPrintLines(items)),
+              });
             },
             // Audit log shortcut
             onAuditLog: () => setAuditDialogTarget(row),

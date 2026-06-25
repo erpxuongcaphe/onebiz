@@ -863,6 +863,7 @@ export default function HoaDonPage() {
                       toPrintLines(items),
                     ),
                     "In hóa đơn",
+                    { channel: "retail", docType: "sale_invoice", branchId: activeBranchId },
                   );
                 }
               },
@@ -990,6 +991,7 @@ export default function HoaDonPage() {
                     toPrintLines(items),
                   ),
                   "In hóa đơn",
+                  { channel: "retail", docType: "sale_invoice", branchId: activeBranchId },
                 );
               },
               // Trả hàng (redirect)

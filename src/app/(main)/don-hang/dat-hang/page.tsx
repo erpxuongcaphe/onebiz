@@ -584,6 +584,7 @@ export default function DatHangPage() {
                 printWithPicker(
                   buildSalesOrderPrintData(row, toPrintLines(items)),
                   "In đơn đặt hàng",
+                  { channel: "retail", docType: "sales_order", branchId: activeBranchId },
                 );
               }
             },
@@ -657,6 +658,7 @@ export default function DatHangPage() {
               printWithPicker(
                 buildSalesOrderPrintData(row, toPrintLines(items)),
                 "In đơn đặt hàng",
+                { channel: "retail", docType: "sales_order", branchId: activeBranchId },
               );
             },
             // Audit log shortcut

@@ -33,7 +33,7 @@ import { AuditLogDialog } from "@/components/shared/audit-log-dialog";
 import { buildTransactionRowActions } from "@/components/shared/transaction-row-actions";
 import { useTxRowPermissions } from "@/lib/permissions";
 import { useToast, useBranchFilter } from "@/lib/contexts";
-import { printDocument } from "@/lib/print-document";
+import { printDocumentWithTemplate } from "@/lib/print-apply-template";
 import { buildInternalExportPrintData } from "@/lib/print-templates";
 import { Icon } from "@/components/ui/icon";
 
@@ -420,10 +420,15 @@ export default function XuatDungNoiBoPage() {
           {
             label: "In hàng loạt",
             icon: <Icon name="print" size={16} />,
-            onClick: (selectedRows) => {
-              selectedRows.forEach((row) =>
-                printDocument(buildInternalExportPrintData(row)),
-              );
+            onClick: async (selectedRows) => {
+              for (const row of selectedRows) {
+                await printDocumentWithTemplate({
+                  channel: "backoffice",
+                  docType: "internal_export",
+                  branchId: activeBranchId ?? null,
+                  base: buildInternalExportPrintData(row),
+                });
+              }
             },
           },
           {
@@ -477,7 +482,13 @@ export default function XuatDungNoiBoPage() {
             row,
             kind: "internal_export",
             permissions: txPerms,
-            onPrint: () => printDocument(buildInternalExportPrintData(row)),
+            onPrint: () =>
+              printDocumentWithTemplate({
+                channel: "backoffice",
+                docType: "internal_export",
+                branchId: activeBranchId ?? null,
+                base: buildInternalExportPrintData(row),
+              }),
             onAuditLog: () => setAuditDialogTarget(row),
             onCancel:
               row.status === "draft"

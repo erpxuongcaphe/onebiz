@@ -37,7 +37,7 @@ import { ImportExcelDialog } from "@/components/shared/dialogs/import-excel-dial
 import { internalSaleExcelSchema } from "@/lib/excel/schemas";
 import { bulkImportInternalSales } from "@/lib/services/supabase/excel-import";
 import { exportToExcelFromSchema } from "@/lib/excel";
-import { printDocument } from "@/lib/print-document";
+import { printDocumentWithTemplate } from "@/lib/print-apply-template";
 import { buildInternalSalePrintData, toPrintLines } from "@/lib/print-templates";
 import { useToast, useBranchFilter } from "@/lib/contexts";
 import { Icon } from "@/components/ui/icon";
@@ -552,7 +552,12 @@ export default function InternalSalePage() {
                 const lines = toPrintLines(
                   detail.items.map((it) => ({ ...it, total: it.amount })),
                 );
-                printDocument(buildInternalSalePrintData(row, lines));
+                await printDocumentWithTemplate({
+                  channel: "backoffice",
+                  docType: "internal_sale",
+                  branchId: activeBranchId ?? null,
+                  base: buildInternalSalePrintData(row, lines),
+                });
               },
               onAuditLog: () => setAuditDialogTarget(row),
               onCancel:

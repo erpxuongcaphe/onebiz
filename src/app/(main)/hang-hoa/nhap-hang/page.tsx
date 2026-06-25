@@ -1198,6 +1198,7 @@ export default function NhapHangPage() {
                 printWithPicker(
                   buildGoodsReceiptPrintData(row, toPrintLines(items)),
                   "In phiếu nhập",
+                  { channel: "backoffice", docType: "goods_receipt", branchId: activeBranchId },
                 );
               }
             },
@@ -1325,6 +1326,7 @@ export default function NhapHangPage() {
               printWithPicker(
                 buildGoodsReceiptPrintData(row, toPrintLines(items)),
                 "In phiếu nhập",
+                { channel: "backoffice", docType: "goods_receipt", branchId: activeBranchId },
               );
             },
             workflowActions,

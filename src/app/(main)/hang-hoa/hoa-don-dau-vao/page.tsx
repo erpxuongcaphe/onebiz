@@ -26,7 +26,7 @@ import {
 import type { DetailTab } from "@/components/shared/inline-detail-panel";
 import { formatCurrency, formatDate, formatUser } from "@/lib/format";
 import { exportToExcel, exportToCsv } from "@/lib/utils/export";
-import { printDocument } from "@/lib/print-document";
+import { printDocumentWithTemplate } from "@/lib/print-apply-template";
 import { buildInputInvoicePrintData, toPrintLines } from "@/lib/print-templates";
 import { getInputInvoices, getInputInvoiceStatuses, cancelInputInvoice, recordInputInvoice, getInputInvoiceItems } from "@/lib/services";
 import { ConfirmDialog } from "@/components/shared/dialogs";
@@ -368,7 +368,12 @@ export default function HoaDonDauVaoPage() {
             },
             onPrint: async () => {
               const items = await getInputInvoiceItems(row.id);
-              printDocument(buildInputInvoicePrintData(row, toPrintLines(items)));
+              await printDocumentWithTemplate({
+                channel: "backoffice",
+                docType: "input_invoice",
+                branchId: activeBranchId ?? null,
+                base: buildInputInvoicePrintData(row, toPrintLines(items)),
+              });
             },
             // Workflow: "Ghi nhận" cho HĐ chưa ghi sổ
             workflowActions:

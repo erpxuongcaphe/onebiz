@@ -757,6 +757,7 @@ export default function KiemKhoPage() {
                 printWithPicker(
                   buildInventoryCheckPrintData(row),
                   "In phiếu kiểm kho",
+                  { channel: "backoffice", docType: "inventory_check", branchId: activeBranchId },
                 ),
               );
             },
@@ -823,7 +824,11 @@ export default function KiemKhoPage() {
             kind: "inventory_check",
             permissions: txPerms,
             onPrint: () =>
-              printWithPicker(buildInventoryCheckPrintData(row), "In phiếu kiểm kho"),
+              printWithPicker(buildInventoryCheckPrintData(row), "In phiếu kiểm kho", {
+                channel: "backoffice",
+                docType: "inventory_check",
+                branchId: activeBranchId,
+              }),
             workflowActions,
             // Audit log shortcut
             onAuditLog: () => setAuditDialogTarget(row),

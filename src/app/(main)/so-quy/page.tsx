@@ -57,7 +57,7 @@ import {
   cancelCashTransaction,
 } from "@/lib/services";
 import { useToast, useBranchFilter } from "@/lib/contexts";
-import { printDocument } from "@/lib/print-document";
+import { printDocumentWithTemplate } from "@/lib/print-apply-template";
 import { buildCashTransactionPrintData } from "@/lib/print-templates";
 import type { CashBookEntry } from "@/lib/types";
 import { Icon } from "@/components/ui/icon";
@@ -807,10 +807,15 @@ export default function SoQuyPage() {
             {
               label: "In hàng loạt",
               icon: <Icon name="print" size={16} />,
-              onClick: (selectedRows) => {
-                selectedRows.forEach((row) =>
-                  printDocument(buildCashTransactionPrintData(row)),
-                );
+              onClick: async (selectedRows) => {
+                for (const row of selectedRows) {
+                  await printDocumentWithTemplate({
+                    channel: "backoffice",
+                    docType: "cash_voucher",
+                    branchId: activeBranchId ?? null,
+                    base: buildCashTransactionPrintData(row),
+                  });
+                }
               },
             },
             {
@@ -864,7 +869,13 @@ export default function SoQuyPage() {
                 const idx = data.findIndex((d) => d.id === row.id);
                 setExpandedRow(expandedRow === idx ? null : idx);
               },
-              onPrint: () => printDocument(buildCashTransactionPrintData(row)),
+              onPrint: () =>
+                printDocumentWithTemplate({
+                  channel: "backoffice",
+                  docType: "cash_voucher",
+                  branchId: activeBranchId ?? null,
+                  base: buildCashTransactionPrintData(row),
+                }),
               onAuditLog: () => setAuditDialogTarget(row),
               // Stage 5b: đổi "Xóa" → "Hủy" (phiếu thu/chi đã chốt không
               // xoá cứng — dùng cancelCashTransaction với reason + audit log).

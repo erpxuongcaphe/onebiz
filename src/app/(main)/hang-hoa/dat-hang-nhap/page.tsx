@@ -28,7 +28,7 @@ import type { DetailTab } from "@/components/shared/inline-detail-panel";
 import { formatCurrency, formatDate, formatUser } from "@/lib/format";
 import { exportToCsv } from "@/lib/utils/export";
 import { exportToExcelFromSchema } from "@/lib/excel";
-import { printDocument } from "@/lib/print-document";
+import { printDocumentWithTemplate } from "@/lib/print-apply-template";
 import { buildPurchaseEntryPrintData, toPrintLines } from "@/lib/print-templates";
 import {
   getPurchaseOrderEntries,
@@ -402,9 +402,12 @@ export default function DatHangNhapPage() {
             onClick: async (selectedRows) => {
               for (const row of selectedRows) {
                 const items = await getPurchaseOrderItems(row.id);
-                printDocument(
-                  buildPurchaseEntryPrintData(row, toPrintLines(items)),
-                );
+                await printDocumentWithTemplate({
+                  channel: "backoffice",
+                  docType: "purchase_order",
+                  branchId: null, // đặt hàng NCC không gắn chi nhánh ở trang này
+                  base: buildPurchaseEntryPrintData(row, toPrintLines(items)),
+                });
               }
             },
           },
@@ -475,9 +478,12 @@ export default function DatHangNhapPage() {
             },
             onPrint: async () => {
               const items = await getPurchaseOrderItems(row.id);
-              printDocument(
-                buildPurchaseEntryPrintData(row, toPrintLines(items)),
-              );
+              await printDocumentWithTemplate({
+                channel: "backoffice",
+                docType: "purchase_order",
+                branchId: null, // đặt hàng NCC không gắn chi nhánh ở trang này
+                base: buildPurchaseEntryPrintData(row, toPrintLines(items)),
+              });
             },
             // Workflow: chuyển sang nhập hàng
             workflowActions: [
