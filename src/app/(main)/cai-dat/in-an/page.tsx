@@ -22,6 +22,7 @@ import {
 import { useToast } from "@/lib/contexts/toast-context";
 import { HelpTip } from "@/components/shared/help-tip";
 import { BusinessLogoUpload } from "@/components/shared/business-logo-upload";
+import { BranchPrintInfoCard } from "@/components/shared/branch-print-info-card";
 import { KitchenStationsCard } from "@/components/shared/kitchen-stations-card";
 import { ReceiptPreviewPanel } from "@/components/shared/receipt-preview-panel";
 import { PrintTemplateManager } from "@/components/shared/print-template-manager";
@@ -783,6 +784,9 @@ export default function PrintSettingsPage() {
           </div>
         </CardContent>
       </Card>
+
+      {/* ── Tầng chi nhánh: địa chỉ/SĐT in riêng từng chi nhánh (CEO 25/06) ── */}
+      <BranchPrintInfoCard />
       </>)}
 
       {tab === "fnb" && (<>
