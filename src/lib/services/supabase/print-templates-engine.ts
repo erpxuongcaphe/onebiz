@@ -273,14 +273,16 @@ interface BranchPrintRecord {
   name?: string;
   address?: string;
   phone?: string;
+  /** MST của chi nhánh (đơn vị phụ thuộc) — VN mỗi chi nhánh 1 MST riêng. */
+  taxCode?: string;
   override: Partial<ResolvedBrand> | null;
 }
-/** Đọc hồ sơ chi nhánh: tên + địa chỉ + SĐT THẬT + override print_brand. */
+/** Đọc hồ sơ chi nhánh: tên + địa chỉ + SĐT + MST THẬT + override print_brand. */
 async function getBranchRecord(branchId: string): Promise<BranchPrintRecord | null> {
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
   const { data, error } = await (supabase as any)
     .from("branches")
-    .select("name, address, phone, print_brand")
+    .select("name, address, phone, legal_tax_code, print_brand")
     .eq("id", branchId)
     .maybeSingle();
   if (error) throw error;
@@ -289,6 +291,7 @@ async function getBranchRecord(branchId: string): Promise<BranchPrintRecord | nu
     name: (data.name as string) ?? undefined,
     address: (data.address as string) ?? undefined,
     phone: (data.phone as string) ?? undefined,
+    taxCode: (data.legal_tax_code as string) ?? undefined,
     override: (data.print_brand as Partial<ResolvedBrand> | null) ?? null,
   };
 }
@@ -301,6 +304,8 @@ export interface BranchPrintInfo {
   address?: string;
   /** SĐT sẽ in ra. */
   phone?: string;
+  /** MST sẽ in ra (đơn vị phụ thuộc của chi nhánh). */
+  taxCode?: string;
   /** Override in riêng (logo/QR/địa chỉ in khác hồ sơ) — null nếu chưa đặt. */
   override: Partial<ResolvedBrand> | null;
 }
@@ -309,10 +314,12 @@ export async function getBranchPrintInfo(branchId: string): Promise<BranchPrintI
   const ov = rec?.override ?? null;
   const ovAddr = ov?.address && ov.address !== "" ? ov.address : undefined;
   const ovPhone = ov?.phone && ov.phone !== "" ? ov.phone : undefined;
+  const ovTax = ov?.taxCode && ov.taxCode !== "" ? ov.taxCode : undefined;
   return {
     branchName: rec?.name,
     address: ovAddr ?? rec?.address,
     phone: ovPhone ?? rec?.phone,
+    taxCode: ovTax ?? rec?.taxCode,
     override: ov,
   };
 }
@@ -349,10 +356,11 @@ export async function getResolvedBrand(branchId?: string | null): Promise<Resolv
   const rec = await getBranchRecord(branchId);
   if (!rec) return base;
   const merged: ResolvedBrand = { ...base };
-  // Tầng chi nhánh: ĐỊA CHỈ + SĐT thật của chi nhánh đè lên của công ty
-  // (in ra đúng địa chỉ chi nhánh đang in — CEO 25/06). Tên DN + MST vẫn cấp công ty.
+  // Tầng chi nhánh: ĐỊA CHỈ + SĐT + MST thật của chi nhánh đè lên của công ty
+  // (in ra đúng địa chỉ + MST đơn vị phụ thuộc của chi nhánh đang in — CEO 25/06).
   if (rec.address) merged.address = rec.address;
   if (rec.phone) merged.phone = rec.phone;
+  if (rec.taxCode) merged.taxCode = rec.taxCode;
   // Override in riêng (print_brand) đè trên cùng: logo/QR/footer/địa chỉ in khác.
   if (rec.override) {
     for (const [k, v] of Object.entries(rec.override)) {
