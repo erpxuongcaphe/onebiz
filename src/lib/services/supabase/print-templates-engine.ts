@@ -78,6 +78,8 @@ export interface ResolvedBrand {
   bankBin?: string;
   bankCode?: string;
   bankHolder?: string;
+  /** Số tài khoản ngân hàng — cần để build URL QR thanh toán (VietQR). */
+  bankAccount?: string;
   vietQrEnabled?: boolean;
 }
 
@@ -350,6 +352,7 @@ export async function getResolvedBrand(branchId?: string | null): Promise<Resolv
     bankBin: t.bankBin,
     bankCode: t.bankCode,
     bankHolder: t.bankHolder,
+    bankAccount: t.bankAccount,
     vietQrEnabled: t.vietQrEnabled,
   };
   if (!branchId) return base;

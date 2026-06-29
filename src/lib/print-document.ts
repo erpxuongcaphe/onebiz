@@ -47,6 +47,17 @@ export interface DocumentPrintData {
   createdBy?: string;
   /** Ẩn khối chữ ký (Người lập / Người duyệt) khi = false. Mặc định hiện. */
   showSignature?: boolean;
+
+  /**
+   * Cỡ chữ bảng mặt hàng (chỉ ảnh hưởng bảng items):
+   * - "sm" ≈ 11px, "lg" ≈ 14px (đè cứng), "md" = GIỮ NGUYÊN cỡ hiện tại theo khổ giấy.
+   * - undefined → KHÔNG đổi gì (dùng nguyên cỡ hiện tại) — bắt buộc zero-regression.
+   */
+  itemFontSize?: "sm" | "md" | "lg";
+  /** URL ảnh QR thanh toán (VietQR). Có giá trị → render khối QR gần summary/footer. */
+  qrImageUrl?: string;
+  /** Chú thích nhỏ căn giữa dưới ảnh QR (optional). */
+  qrLabel?: string;
 }
 
 /**
@@ -143,6 +154,22 @@ function generateDocumentHtml(d: DocumentPrintData, paperSize: PaperSize): strin
   const isThermal = paperSize === "80mm" || paperSize === "58mm";
   const isA5 = paperSize === "A5";
   const money = (n: number) => `${fmtVnd(n)} đ`;
+
+  // Cỡ chữ bảng mặt hàng: mặc định = cỡ hiện tại theo khổ giấy (ps.itemsFontSize).
+  // "md" cũng giữ nguyên cỡ hiện tại. CHỈ "sm"/"lg" đè cứng. undefined → byte-identical.
+  const itemsFontSize =
+    d.itemFontSize === "sm"
+      ? "11px"
+      : d.itemFontSize === "lg"
+        ? "14px"
+        : ps.itemsFontSize;
+
+  // Khối QR thanh toán: chỉ render khi có qrImageUrl. undefined → chuỗi rỗng (0 thay đổi).
+  // Khổ nhiệt (58/80mm) QR nhỏ hơn cho vừa giấy.
+  const qrSize = isThermal ? 100 : 128;
+  const qrBlock = d.qrImageUrl
+    ? `<div class="qr-pay"><img src="${esc(d.qrImageUrl)}" alt="QR thanh toán" style="width:${qrSize}px;height:${qrSize}px;object-fit:contain" />${d.qrLabel ? `<div class="qr-label">${esc(d.qrLabel)}</div>` : ""}</div>`
+    : "";
 
   // Khối khách hàng / thông tin (key-value) — escape an toàn.
   const headerFieldsHtml = (d.headerFields ?? [])
@@ -254,8 +281,8 @@ function generateDocumentHtml(d: DocumentPrintData, paperSize: PaperSize): strin
   .items col.c-stt { width: 34px; }
   .items col.c-code { width: 13%; }
   .items col.c-num { width: 15%; }
-  .items th { border: none; border-bottom: 2px solid #333; padding: ${isA5 ? "5px 7px" : "7px 10px"}; text-align: left; font-size: ${ps.itemsFontSize}; font-weight: 700; line-height: 1.35; }
-  .items td { border: none; border-bottom: 1px solid #eee; padding: ${isA5 ? "5px 7px" : "7px 10px"}; font-size: ${ps.itemsFontSize}; line-height: 1.35; vertical-align: top; word-wrap: break-word; }
+  .items th { border: none; border-bottom: 2px solid #333; padding: ${isA5 ? "5px 7px" : "7px 10px"}; text-align: left; font-size: ${itemsFontSize}; font-weight: 700; line-height: 1.35; }
+  .items td { border: none; border-bottom: 1px solid #eee; padding: ${isA5 ? "5px 7px" : "7px 10px"}; font-size: ${itemsFontSize}; line-height: 1.35; vertical-align: top; word-wrap: break-word; }
   .items th.right, .items td.right { text-align: right; }
   .items th.center, .items td.center { text-align: center; }
   .items tbody tr:nth-child(even) td { background: #fafafa; }
@@ -268,7 +295,18 @@ function generateDocumentHtml(d: DocumentPrintData, paperSize: PaperSize): strin
   .t-name { font-weight: 600; }
   .t-line { display: flex; justify-content: space-between; gap: 8px; }
   .t-total { font-weight: 600; }
-  .sep { border: none; border-top: 1px dashed #000; margin: 6px 0; }
+  .sep { border: none; border-top: 1px dashed #000; margin: 6px 0; }${
+    // CHỈ phát CSS khi itemFontSize được set (sm/lg) — undefined/md → không phát gì
+    // (giữ byte-identical). Thermal dùng .t-name/.t-line, không dùng bảng .items.
+    isThermal && (d.itemFontSize === "sm" || d.itemFontSize === "lg")
+      ? `\n  .t-name, .t-line { font-size: ${itemsFontSize}; }`
+      : ""
+  }${
+    // QR CSS chỉ phát khi có ảnh QR — không có QR → không phát gì (byte-identical).
+    d.qrImageUrl
+      ? `\n  .qr-pay { text-align: center; margin-top: ${isThermal ? "10px" : "16px"}; }\n  .qr-pay .qr-label { font-size: ${isThermal ? "9px" : "11px"}; color: ${isThermal ? "#000" : "#555"}; margin-top: 4px; }`
+      : ""
+  }
 
   .summary { width: ${isThermal ? "100%" : "55%"}; margin-left: auto; margin-top: 10px; border-collapse: collapse; }
   .summary td { padding: 4px ${isThermal ? "0" : "10px"}; font-size: ${ps.summaryFontSize}; }
@@ -326,7 +364,7 @@ ${isThermal && itemsBlock ? `<hr class="sep" />` : ""}
 ${itemsBlock}
 ${isThermal && summaryHtml ? `<hr class="sep" />` : ""}
 ${summaryHtml ? `<table class="summary">${summaryHtml}</table>` : ""}
-${d.note ? `<div class="note"><strong>Ghi chú:</strong> ${esc(d.note)}</div>` : ""}
+${d.note ? `<div class="note"><strong>Ghi chú:</strong> ${esc(d.note)}</div>` : ""}${qrBlock}
 
 <div class="footer">
   <div class="col">

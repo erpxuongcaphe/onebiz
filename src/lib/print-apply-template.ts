@@ -12,6 +12,7 @@ import type { DocumentPrintData, DocumentLineItem, PaperSize } from "./print-doc
 import { printDocument } from "./print-document";
 import { resolvePrintTemplate, getResolvedBrand } from "./services";
 import type { PrintChannel, PrintDocType, ResolvedPrint, ResolvedBrand } from "./services";
+import { buildVietQrUrl } from "./vietqr";
 
 /** Ngữ cảnh thay token cho tiêu đề / customText. */
 interface TokenContext {
@@ -149,8 +150,39 @@ export function applyTemplateToDocData(
     data.itemColumns = headers;
   }
 
-  // KHÔNG đụng: config.items.fontSize, config.payment.*, config.customer.*
-  // (để P6b — pipeline chưa có field tương ứng).
+  // ── Cỡ chữ bảng mặt hàng (P6b) ──────────────────────────────
+  // CHỈ set khi config có fontSize. Bỏ trống → không set → giữ cỡ hiện tại.
+  if (config.items?.fontSize) {
+    data.itemFontSize = config.items.fontSize;
+  }
+
+  // ── QR thanh toán (P6b) ─────────────────────────────────────
+  // Chỉ build khi mẫu bật showQr === true VÀ brand đủ thông tin ngân hàng.
+  if (config.payment?.showQr === true) {
+    const qrBrand = resolved.brand;
+    const bank = qrBrand.bankBin || qrBrand.bankCode;
+    const enough =
+      qrBrand.vietQrEnabled !== false && Boolean(bank) && Boolean(qrBrand.bankAccount);
+    if (enough) {
+      // Ngân hàng không nằm trong danh sách hỗ trợ → buildVietQrUrl ném lỗi →
+      // bỏ qua QR, KHÔNG chặn in (try/catch).
+      try {
+        data.qrImageUrl = buildVietQrUrl({
+          bank: qrBrand.bankBin || qrBrand.bankCode || "",
+          accountNumber: qrBrand.bankAccount!,
+          accountHolder: qrBrand.bankHolder,
+          addInfo: base.documentCode,
+          template: "print",
+        });
+        data.qrLabel = "Quét QR để thanh toán";
+      } catch {
+        /* bank không hỗ trợ → bỏ qua QR, không ném lỗi */
+      }
+    }
+    // Chưa cấu hình ngân hàng → KHÔNG set qr (im lặng, không lỗi).
+  }
+
+  // KHÔNG đụng: config.customer.* (để pha sau — pipeline chưa có field tương ứng).
 
   return data;
 }
