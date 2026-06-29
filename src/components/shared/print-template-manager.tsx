@@ -399,6 +399,17 @@ export function PrintTemplateManager() {
 
   return (
     <div className="space-y-4">
+      {/* Banner: làm rõ mẫu in là TÙY CHỌN nâng cao (PM 25/06) — giảm áp lực nhân viên */}
+      <div className="flex items-start gap-2 rounded-lg border border-blue-500/30 bg-blue-500/5 p-3 text-sm">
+        <Icon name="info" className="mt-0.5 shrink-0 text-blue-500" size={18} />
+        <p className="text-muted-foreground">
+          <span className="font-medium text-foreground">Mẫu in là tùy chọn nâng cao.</span>{" "}
+          Đa số trường hợp chỉ cần điền <span className="font-medium">Thông tin in</span> + chọn{" "}
+          <span className="font-medium">Máy in</span> là hệ thống đã in đẹp sẵn. Chỉ tạo mẫu khi
+          muốn tùy biến riêng (đổi tiêu đề, ẩn/hiện cột, khổ giấy đặc biệt…).
+        </p>
+      </div>
+
       {/* ── Bộ chọn ngữ cảnh ── */}
       <Card>
         <CardHeader>
