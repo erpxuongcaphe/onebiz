@@ -23,6 +23,7 @@ import { useToast } from "@/lib/contexts/toast-context";
 import { HelpTip } from "@/components/shared/help-tip";
 import { BusinessLogoUpload } from "@/components/shared/business-logo-upload";
 import { BranchPrintInfoCard } from "@/components/shared/branch-print-info-card";
+import { PrintSetupChecklist } from "@/components/shared/print-setup-checklist";
 import { KitchenStationsCard } from "@/components/shared/kitchen-stations-card";
 import { ReceiptPreviewPanel } from "@/components/shared/receipt-preview-panel";
 import { PrintTemplateManager } from "@/components/shared/print-template-manager";
@@ -624,6 +625,8 @@ export default function PrintSettingsPage() {
       </>)}
 
       {tab === "thong-tin" && (<>
+      {/* ── Hoàn thiện thông tin in (PM 25/06): chủ động nhắc điền đủ logo/MST ── */}
+      <PrintSetupChecklist />
       {/* ── Tiêu đề phiếu bán hàng (CEO 24/06) — đặt tên chứng từ ── */}
       <Card>
         <CardHeader>
