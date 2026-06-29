@@ -154,13 +154,12 @@ const backends = [
   },
 ];
 
-// ── In Pha 3 Item 5: 3 tab theo kênh ──
-type PrintTab = "chung" | "mau-in" | "retail" | "fnb";
+// ── In Pha 3: 3 tab theo blueprint (Thông tin in / Mẫu in / Máy in) ──
+type PrintTab = "thong-tin" | "mau-in" | "may-in";
 const PRINT_TABS: { id: PrintTab; label: string; icon: string; desc: string }[] = [
-  { id: "chung", label: "Chung", icon: "tune", desc: "Máy in, khổ giấy, logo — áp dụng mọi kênh" },
-  { id: "mau-in", label: "Mẫu in", icon: "description", desc: "Tạo mẫu in riêng theo mảng × loại chứng từ × chi nhánh" },
-  { id: "retail", label: "Bán lẻ & Sỉ", icon: "receipt_long", desc: "Phiếu bán / hoá đơn admin (Retail)" },
-  { id: "fnb", label: "Quán F&B", icon: "restaurant", desc: "POS FnB: phiếu thanh toán + phiếu bếp" },
+  { id: "thong-tin", label: "Thông tin in", icon: "badge", desc: "Công ty + chi nhánh + nội dung phiếu" },
+  { id: "mau-in", label: "Mẫu in", icon: "description", desc: "Mẫu theo mảng × loại chứng từ × chi nhánh" },
+  { id: "may-in", label: "Máy in & thiết bị", icon: "print", desc: "Máy in, khổ giấy, trạm bếp, tự động in" },
 ];
 
 export default function PrintSettingsPage() {
@@ -184,7 +183,7 @@ export default function PrintSettingsPage() {
   const [invoiceFields, setInvoiceFields] = useState<InvoiceFieldFlags>({});
   const [logoSaving, setLogoSaving] = useState(false);
   // In Pha 3 Item 5 (CEO 24/06): gom cài đặt theo kênh để rõ "đang setup cho ai".
-  const [tab, setTab] = useState<PrintTab>("chung");
+  const [tab, setTab] = useState<PrintTab>("thong-tin");
 
   const update = (values: Partial<typeof print>) => {
     updateSettings("print", values);
@@ -435,7 +434,7 @@ export default function PrintSettingsPage() {
       {/* ── Tab Mẫu in (V3 — engine nhiều mẫu) ── */}
       {tab === "mau-in" && <PrintTemplateManager />}
 
-      {tab === "chung" && (<>
+      {tab === "may-in" && (<>
       {/* ── 0. Print Backend (MỚI) ── */}
       <Card>
         <CardHeader>
@@ -624,7 +623,7 @@ export default function PrintSettingsPage() {
       </Card>
       </>)}
 
-      {tab === "retail" && (<>
+      {tab === "thong-tin" && (<>
       {/* ── Tiêu đề phiếu bán hàng (CEO 24/06) — đặt tên chứng từ ── */}
       <Card>
         <CardHeader>
@@ -713,7 +712,7 @@ export default function PrintSettingsPage() {
       </Card>
       </>)}
 
-      {tab === "chung" && (<>
+      {tab === "thong-tin" && (<>
       {/* ── Sprint TEMPLATE-1: Logo + Lời cảm ơn (CEO 07/05) ── */}
       <Card>
         <CardHeader>
@@ -789,12 +788,12 @@ export default function PrintSettingsPage() {
       <BranchPrintInfoCard />
       </>)}
 
-      {tab === "fnb" && (<>
+      {tab === "may-in" && (<>
       {/* ── Sprint KITCHEN-1: Trạm chế biến (CEO 07/05) ── */}
       <KitchenStationsCard />
       </>)}
 
-      {tab === "chung" && (<>
+      {tab === "thong-tin" && (<>
       {/* ── 3. Receipt Content ── */}
       <Card>
         <CardHeader>
@@ -858,7 +857,7 @@ export default function PrintSettingsPage() {
       </Card>
       </>)}
 
-      {tab === "fnb" && (<>
+      {tab === "may-in" && (<>
       {/* ── 4. FnB Print Styles ── */}
       <Card>
         <CardHeader>
@@ -981,7 +980,7 @@ export default function PrintSettingsPage() {
       </Card>
       </>)}
 
-      {tab === "chung" && (<>
+      {tab === "may-in" && (<>
       {/* ── 5. Preview live (CEO 13/05) ── */}
       <Card>
         <CardHeader>

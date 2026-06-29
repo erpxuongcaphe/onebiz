@@ -16,7 +16,7 @@ import type { BranchPrintInfo } from "@/lib/services";
  *
  * Mỗi bản in tự lấy ĐỊA CHỈ + SĐT của chi nhánh đang in (kế thừa từ hồ sơ
  * chi nhánh). Card này cho phép xem địa chỉ/SĐT sẽ in cho từng chi nhánh và
- * — nếu cần — đặt override in RIÊNG (địa chỉ in / SĐT in / logo riêng) khác
+ * — nếu cần — đặt override in RIÊNG (địa chỉ in / SĐT in / MST in riêng) khác
  * với hồ sơ chi nhánh.
  *
  * Service:
@@ -28,7 +28,7 @@ import type { BranchPrintInfo } from "@/lib/services";
 interface DraftForm {
   address: string;
   phone: string;
-  logoUrl: string;
+  taxCode: string;
 }
 
 function draftFromInfo(info: BranchPrintInfo | undefined): DraftForm {
@@ -37,7 +37,7 @@ function draftFromInfo(info: BranchPrintInfo | undefined): DraftForm {
   return {
     address: ov?.address ?? "",
     phone: ov?.phone ?? "",
-    logoUrl: ov?.logoUrl ?? "",
+    taxCode: ov?.taxCode ?? "",
   };
 }
 
@@ -121,12 +121,12 @@ export function BranchPrintInfoCard() {
       const draft = drafts[branchId] ?? draftFromInfo(undefined);
       const address = draft.address.trim();
       const phone = draft.phone.trim();
-      const logoUrl = draft.logoUrl.trim();
+      const taxCode = draft.taxCode.trim();
 
-      const brand: { address?: string; phone?: string; logoUrl?: string } = {};
+      const brand: { address?: string; phone?: string; taxCode?: string } = {};
       if (address) brand.address = address;
       if (phone) brand.phone = phone;
-      if (logoUrl) brand.logoUrl = logoUrl;
+      if (taxCode) brand.taxCode = taxCode;
       const isEmpty = Object.keys(brand).length === 0;
 
       setSavingId(branchId);
@@ -218,6 +218,10 @@ export function BranchPrintInfoCard() {
                           <span className="font-medium text-foreground">ĐT:</span>{" "}
                           {phone || "—"}
                         </p>
+                        <p>
+                          <span className="font-medium text-foreground">MST:</span>{" "}
+                          {info?.taxCode || "—"}
+                        </p>
                       </div>
                     </div>
                     <Button
@@ -265,11 +269,11 @@ export function BranchPrintInfoCard() {
                       </div>
 
                       <div className="space-y-1">
-                        <label className="text-sm font-medium">Logo URL riêng</label>
+                        <label className="text-sm font-medium">MST in riêng</label>
                         <Input
-                          value={draft.logoUrl}
+                          value={draft.taxCode}
                           onChange={(e) =>
-                            updateDraft(branch.id, { logoUrl: e.target.value })
+                            updateDraft(branch.id, { taxCode: e.target.value })
                           }
                           placeholder="Để trống = dùng của hồ sơ chi nhánh"
                         />
