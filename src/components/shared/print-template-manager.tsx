@@ -33,6 +33,7 @@ import {
   setDefaultPrintTemplate,
   deletePrintTemplate,
   duplicatePrintTemplate,
+  getResolvedBrand,
 } from "@/lib/services";
 import type {
   PrintChannel,
@@ -40,7 +41,9 @@ import type {
   PrintPaperSize,
   PrintTemplateConfig,
   PrintTemplate,
+  ResolvedBrand,
 } from "@/lib/services";
+import { buildVietQrUrl } from "@/lib/vietqr";
 
 // ──────────────────────────────────────────────────────────────
 // Hằng số nhãn (Tiếng Việt có dấu)
@@ -687,6 +690,35 @@ function TemplateEditorDialog({
   const [saving, setSaving] = useState(false);
   const [nameError, setNameError] = useState(false);
 
+  // ── Thông tin thật DN + chi nhánh (chỉ ĐỌC) để xem trước sát bản in thật ──
+  const [brand, setBrand] = useState<ResolvedBrand | null>(null);
+  const [brandLoading, setBrandLoading] = useState(false);
+
+  // Khi mở dialog: nạp thương hiệu đã resolve (tenant ← override chi nhánh).
+  // Chỉ đọc — không set/update/save. Tránh setState sau khi dialog đóng.
+  useEffect(() => {
+    if (!open) {
+      setBrand(null);
+      return;
+    }
+    let alive = true;
+    setBrandLoading(true);
+    void getResolvedBrand(branchId)
+      .then((b) => {
+        if (alive) setBrand(b);
+      })
+      .catch(() => {
+        // Không chặn editor nếu nạp thương hiệu lỗi — preview tự fallback.
+        if (alive) setBrand(null);
+      })
+      .finally(() => {
+        if (alive) setBrandLoading(false);
+      });
+    return () => {
+      alive = false;
+    };
+  }, [open, branchId]);
+
   // Khởi tạo form khi mở dialog (prefill từ existing nếu edit).
   useEffect(() => {
     if (!open) return;
@@ -1009,9 +1041,12 @@ function TemplateEditorDialog({
               showCustomer={showCustomer}
               columnOptions={columnOptions}
               selectedColumns={selectedColumns}
+              brand={brand}
+              brandLoading={brandLoading}
             />
             <p className="mt-2 text-xs text-muted-foreground">
-              Minh họa khổ 80mm — chỉ phản ánh bật/tắt, không phải bản in cuối.
+              Minh họa khổ 80mm — đầu trang lấy thông tin thật của doanh nghiệp/chi nhánh,
+              chỉ phản ánh bật/tắt, không phải bản in cuối.
             </p>
           </div>
         </div>
@@ -1071,12 +1106,16 @@ function BillPreview({
   showCustomer,
   columnOptions,
   selectedColumns,
+  brand,
+  brandLoading,
 }: {
   title: string;
   config: PrintTemplateConfig;
   showCustomer: boolean;
   columnOptions: ColumnOption[];
   selectedColumns: string[];
+  brand: ResolvedBrand | null;
+  brandLoading: boolean;
 }) {
   const header = config.header ?? {};
   const customer = config.customer ?? {};
@@ -1086,6 +1125,36 @@ function BillPreview({
 
   const cols = columnOptions.filter((c) => selectedColumns.includes(c.key));
   const hasItemsTable = columnOptions.length > 0;
+
+  // ── Nguồn dữ liệu THẬT cho đầu trang (fallback khi chưa có/đang nạp) ──
+  const businessName = brand?.businessName?.trim() || "(Chưa đặt tên doanh nghiệp)";
+  const taxCode = brand?.taxCode?.trim() || "";
+  const address = brand?.address?.trim() || "(chưa có địa chỉ)";
+  const phone = brand?.phone?.trim() || "";
+  const logoUrl = brand?.logoUrl?.trim() || "";
+
+  // ── QR thật: chỉ in khi đủ cấu hình ngân hàng (mirror logic engine in) ──
+  const bankId = brand?.bankBin || brand?.bankCode || "";
+  const bankEnough =
+    !!brand &&
+    brand.vietQrEnabled !== false &&
+    Boolean(bankId) &&
+    Boolean(brand.bankAccount);
+  let qrImageUrl = "";
+  if (bankEnough && brand) {
+    try {
+      qrImageUrl = buildVietQrUrl({
+        bank: bankId,
+        accountNumber: brand.bankAccount as string,
+        accountHolder: brand.bankHolder,
+        addInfo: "PB-0001",
+        template: "print",
+      });
+    } catch {
+      // Ngân hàng không hỗ trợ → bỏ ảnh QR, vẫn coi như "đã cấu hình".
+      qrImageUrl = "";
+    }
+  }
 
   const itemTextSize =
     fontSize === "sm" ? "text-[10px]" : fontSize === "lg" ? "text-[13px]" : "text-[11px]";
@@ -1127,20 +1196,31 @@ function BillPreview({
 
   return (
     <div className="mx-auto w-full max-w-[260px] rounded-md border bg-white p-3 font-mono text-[11px] leading-tight text-black shadow-sm">
-      {/* Đầu trang */}
+      {/* Đầu trang — dùng THÔNG TIN THẬT của DN/chi nhánh (chỉ đọc) */}
       <div className="text-center">
-        {header.logo && (
-          <div className="mx-auto mb-1 flex h-8 w-8 items-center justify-center rounded bg-gray-200 text-[8px] text-gray-500">
-            LOGO
+        {header.logo &&
+          (logoUrl ? (
+            // eslint-disable-next-line @next/next/no-img-element
+            <img
+              src={logoUrl}
+              alt="Logo"
+              className="mx-auto mb-1 h-8 w-auto max-w-[60px] object-contain"
+            />
+          ) : (
+            <div className="mx-auto mb-1 flex h-8 w-8 items-center justify-center rounded bg-gray-200 text-[8px] text-gray-500">
+              LOGO
+            </div>
+          ))}
+        {header.businessName && (
+          <div className="text-[12px] font-bold uppercase">
+            {brandLoading && !brand ? "…" : businessName}
           </div>
         )}
-        {header.businessName && (
-          <div className="text-[12px] font-bold uppercase">Xưởng Cà Phê OneBiz</div>
-        )}
-        {header.taxCode && <div>MST: 0312345678</div>}
-        {header.address && <div>123 Hai Bà Trưng, Q.1</div>}
+        {header.taxCode &&
+          (taxCode ? <div>MST: {taxCode}</div> : <div className="text-gray-400">(chưa có MST)</div>)}
+        {header.address && <div>{address}</div>}
         {header.branch && <div>CN: Quán Hai Bà Trưng</div>}
-        {header.phone && <div>ĐT: 0909 123 456</div>}
+        {header.phone && phone && <div>ĐT: {phone}</div>}
       </div>
 
       <div className="my-1.5 border-t border-dashed border-gray-400" />
@@ -1230,14 +1310,28 @@ function BillPreview({
         )}
       </div>
 
-      {payment.showQr && (
-        <div className="mt-2 flex flex-col items-center">
-          <div className="flex h-14 w-14 items-center justify-center rounded bg-gray-200 text-[8px] text-gray-500">
-            QR
+      {payment.showQr &&
+        (bankEnough ? (
+          <div className="mt-2 flex flex-col items-center">
+            {qrImageUrl ? (
+              // eslint-disable-next-line @next/next/no-img-element
+              <img
+                src={qrImageUrl}
+                alt="QR thanh toán"
+                className="h-16 w-16 object-contain"
+              />
+            ) : (
+              <div className="flex h-14 w-14 items-center justify-center rounded bg-gray-200 text-[8px] text-gray-500">
+                QR
+              </div>
+            )}
+            <div className="text-[9px] text-gray-500">QR thanh toán (đã cấu hình ngân hàng)</div>
           </div>
-          <div className="text-[9px] text-gray-500">Quét QR chuyển khoản</div>
-        </div>
-      )}
+        ) : (
+          <div className="mt-2 rounded border border-amber-400 bg-amber-50 px-2 py-1.5 text-[9px] leading-snug text-amber-700">
+            Bật QR nhưng chưa cấu hình ngân hàng — QR sẽ KHÔNG in. Vào Cài đặt → Thanh toán để thêm.
+          </div>
+        ))}
 
       {/* Chân trang */}
       {(footer.signature || footer.thankYou || footer.customText) && (
