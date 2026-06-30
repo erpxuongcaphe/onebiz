@@ -149,7 +149,7 @@ function getPageStyles(paperSize: PaperSize): {
   }
 }
 
-function generateDocumentHtml(d: DocumentPrintData, paperSize: PaperSize): string {
+export function generateDocumentHtml(d: DocumentPrintData, paperSize: PaperSize): string {
   const ps = getPageStyles(paperSize);
   const isThermal = paperSize === "80mm" || paperSize === "58mm";
   const isA5 = paperSize === "A5";
@@ -195,7 +195,12 @@ function generateDocumentHtml(d: DocumentPrintData, paperSize: PaperSize): strin
     "Thành tiền",
   ];
   const hasCode = colHeaders.includes("Mã hàng");
-  const NUMERIC = ["SL", "Số lượng", "Đơn giá", "Giảm", "Giảm giá", "Thành tiền"];
+  // Ô Đơn giá / Giảm giá render THEO CỘT HEADER, KHÔNG theo giá trị từng dòng.
+  // Nếu theo giá trị (vd discount > 0), dòng giảm 0 sẽ thiếu ô → các ô dồn trái →
+  // lệch cột (Thành tiền nhảy sang Giảm giá). Lỗi phát hiện ở HD001328 (30/06).
+  const hasPriceCol = colHeaders.includes("Đơn giá") || colHeaders.includes("Đơn giá nhập");
+  const hasDiscountCol = colHeaders.includes("Giảm giá") || colHeaders.includes("Giảm");
+  const NUMERIC = ["SL", "Số lượng", "Đơn giá", "Đơn giá nhập", "Giảm", "Giảm giá", "Thành tiền"];
 
   // Dòng hàng — thermal: 2 dòng/món (như bill); A4/A5: bảng sổ cái có cột.
   let itemsBlock = "";
@@ -235,8 +240,8 @@ function generateDocumentHtml(d: DocumentPrintData, paperSize: PaperSize): strin
         ${hasCode ? `<td>${esc(it.code ?? "")}</td>` : ""}
         <td>${esc(it.name)}</td>
         <td class="right tnum">${it.quantity}${it.unit ? `<span class="unit"> ${esc(it.unit)}</span>` : ""}</td>
-        ${it.unitPrice !== undefined ? `<td class="right tnum">${money(it.unitPrice)}</td>` : ""}
-        ${it.discount !== undefined && it.discount > 0 ? `<td class="right tnum">${money(it.discount)}</td>` : ""}
+        ${hasPriceCol ? `<td class="right tnum">${money(it.unitPrice ?? 0)}</td>` : ""}
+        ${hasDiscountCol ? `<td class="right tnum">${it.discount && it.discount > 0 ? money(it.discount) : "0"}</td>` : ""}
         <td class="right tnum">${money(it.total)}</td>
       </tr>`,
         )
