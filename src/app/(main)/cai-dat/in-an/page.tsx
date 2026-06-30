@@ -32,6 +32,7 @@ import {
   updateTenantBusinessInfo,
 } from "@/lib/services";
 import type { InvoiceFieldFlags } from "@/lib/print-templates";
+import type { PrintChannel, PrintDocType } from "@/lib/services";
 import Link from "next/link";
 
 // ── Bật/tắt từng dòng thông tin trên phiếu bán (CEO 24/06) ──
@@ -155,13 +156,68 @@ const backends = [
   },
 ];
 
-// ── In Pha 3: 3 tab theo blueprint (Thông tin in / Mẫu in / Máy in) ──
-type PrintTab = "thong-tin" | "mau-in" | "may-in";
-const PRINT_TABS: { id: PrintTab; label: string; icon: string; desc: string }[] = [
-  { id: "thong-tin", label: "Thông tin in", icon: "badge", desc: "Công ty + chi nhánh + nội dung phiếu" },
-  { id: "mau-in", label: "Mẫu in", icon: "description", desc: "Mẫu theo mảng × loại chứng từ × chi nhánh" },
-  { id: "may-in", label: "Máy in & thiết bị", icon: "print", desc: "Máy in, khổ giấy, trạm bếp, tự động in" },
+// ── Cài đặt In V3 — master–detail kiểu KiotViet (CEO 30/06) ──
+// Nav trái = danh sách nhóm + mục; nội dung phải đổi theo `selected`.
+// Mục có channel+docType → render <PrintTemplateManager> ngữ cảnh cố định.
+type NavItem = {
+  id: string;
+  label: string;
+  icon: string;
+  channel?: PrintChannel;
+  docType?: PrintDocType;
+};
+type NavGroup = {
+  label: string;
+  /** Icon + màu nhấn cho cả nhóm (gắn vào icon từng mục để phân biệt mảng). */
+  accent?: "info" | "amber";
+  items: NavItem[];
+};
+
+const PRINT_NAV: NavGroup[] = [
+  {
+    label: "Thông tin chung",
+    items: [
+      { id: "doanh-nghiep", label: "Doanh nghiệp", icon: "store" },
+      { id: "chi-nhanh", label: "Thông tin chi nhánh", icon: "location_on" },
+    ],
+  },
+  {
+    label: "In chứng từ — Bán lẻ / Sỉ / Kho (A4/A5)",
+    accent: "info",
+    items: [
+      { id: "ret-sale_invoice", label: "Hóa đơn bán", icon: "description", channel: "retail", docType: "sale_invoice" },
+      { id: "ret-sales_order", label: "Đơn đặt hàng", icon: "description", channel: "retail", docType: "sales_order" },
+      { id: "ret-sale_return", label: "Phiếu trả hàng bán", icon: "description", channel: "retail", docType: "sale_return" },
+      { id: "bo-goods_receipt", label: "Phiếu nhập hàng", icon: "description", channel: "backoffice", docType: "goods_receipt" },
+      { id: "bo-input_invoice", label: "Hóa đơn đầu vào", icon: "description", channel: "backoffice", docType: "input_invoice" },
+      { id: "bo-purchase_order", label: "Đơn đặt hàng nhập", icon: "description", channel: "backoffice", docType: "purchase_order" },
+      { id: "bo-purchase_return", label: "Phiếu trả hàng nhập", icon: "description", channel: "backoffice", docType: "purchase_return" },
+      { id: "bo-inventory_check", label: "Phiếu kiểm kho", icon: "description", channel: "backoffice", docType: "inventory_check" },
+      { id: "bo-disposal", label: "Phiếu xuất hủy", icon: "description", channel: "backoffice", docType: "disposal" },
+      { id: "bo-production_order", label: "Lệnh sản xuất", icon: "description", channel: "backoffice", docType: "production_order" },
+      { id: "bo-internal_sale", label: "Phiếu bán nội bộ", icon: "description", channel: "backoffice", docType: "internal_sale" },
+      { id: "bo-internal_export", label: "Phiếu xuất nội bộ", icon: "description", channel: "backoffice", docType: "internal_export" },
+      { id: "bo-cash_voucher", label: "Phiếu thu / chi", icon: "description", channel: "backoffice", docType: "cash_voucher" },
+    ],
+  },
+  {
+    label: "In quán F&B (bill nhiệt 80/58)",
+    accent: "amber",
+    items: [
+      { id: "fnb-sale_invoice", label: "Bill thanh toán", icon: "receipt", channel: "fnb", docType: "sale_invoice" },
+      { id: "fnb-kitchen_ticket", label: "Phiếu chế biến", icon: "receipt", channel: "fnb", docType: "kitchen_ticket" },
+    ],
+  },
+  {
+    label: "Thiết bị",
+    items: [{ id: "may-in", label: "Máy in & vận hành", icon: "print" }],
+  },
 ];
+
+// Tra cứu nhanh mục theo id (để render đúng nội dung phải + nhãn breadcrumb).
+const NAV_ITEM_BY_ID: Record<string, NavItem> = Object.fromEntries(
+  PRINT_NAV.flatMap((g) => g.items).map((it) => [it.id, it]),
+);
 
 export default function PrintSettingsPage() {
   const { settings, updateSettings } = useSettings();
@@ -183,8 +239,11 @@ export default function PrintSettingsPage() {
   const [invoiceTitle, setInvoiceTitle] = useState<string>("");
   const [invoiceFields, setInvoiceFields] = useState<InvoiceFieldFlags>({});
   const [logoSaving, setLogoSaving] = useState(false);
-  // In Pha 3 Item 5 (CEO 24/06): gom cài đặt theo kênh để rõ "đang setup cho ai".
-  const [tab, setTab] = useState<PrintTab>("thong-tin");
+  // Cài đặt In V3 (CEO 30/06): master–detail — `selected` = id mục nav đang chọn.
+  const [selected, setSelected] = useState<string>("doanh-nghiep");
+  // Mobile: nav trái thu lại thành accordion → cờ mở/đóng.
+  const [navOpen, setNavOpen] = useState(false);
+  const selectedItem = NAV_ITEM_BY_ID[selected] ?? PRINT_NAV[0].items[0];
 
   const update = (values: Partial<typeof print>) => {
     updateSettings("print", values);
@@ -400,42 +459,33 @@ export default function PrintSettingsPage() {
         </p>
       </div>
 
-      {/* ── In Pha 3 Item 5: tab theo kênh ── */}
-      <div className="flex flex-col gap-2 sm:flex-row sm:items-stretch">
-        {PRINT_TABS.map((t) => {
-          const active = tab === t.id;
-          return (
-            <button
-              key={t.id}
-              type="button"
-              onClick={() => setTab(t.id)}
-              className={cn(
-                "flex flex-1 items-start gap-3 rounded-xl border p-3 text-left transition-colors",
-                active
-                  ? "border-primary bg-primary/5 ring-2 ring-primary"
-                  : "border-border hover:border-primary/50",
-              )}
-            >
-              <Icon
-                name={t.icon}
-                size={22}
-                className={active ? "text-primary" : "text-muted-foreground"}
-              />
-              <div className="min-w-0">
-                <div className={cn("text-sm font-semibold", active && "text-primary")}>
-                  {t.label}
-                </div>
-                <p className="text-xs text-muted-foreground mt-0.5">{t.desc}</p>
-              </div>
-            </button>
-          );
-        })}
-      </div>
+      {/* ── Master–detail (CEO 30/06): nav trái + khung sửa/xem trước phải ── */}
+      <div className="flex flex-col gap-4 lg:flex-row lg:items-start">
+        {/* CỘT TRÁI — nav danh sách (sticky desktop, accordion mobile) */}
+        <PrintSettingsNav
+          selected={selected}
+          onSelect={(id) => {
+            setSelected(id);
+            setNavOpen(false);
+          }}
+          navOpen={navOpen}
+          onToggleNav={() => setNavOpen((v) => !v)}
+          selectedItem={selectedItem}
+        />
 
-      {/* ── Tab Mẫu in (V3 — engine nhiều mẫu) ── */}
-      {tab === "mau-in" && <PrintTemplateManager />}
+        {/* CỘT PHẢI — nội dung của mục đang chọn */}
+        <div className="min-w-0 flex-1 space-y-6">
 
-      {tab === "may-in" && (<>
+      {/* ── Mục có channel + docType → quản lý mẫu in ngữ cảnh cố định ── */}
+      {selectedItem.channel && selectedItem.docType && (
+        <PrintTemplateManager
+          key={selectedItem.id}
+          fixedChannel={selectedItem.channel}
+          fixedDocType={selectedItem.docType}
+        />
+      )}
+
+      {selected === "may-in" && (<>
       {/* ── 0. Print Backend (MỚI) ── */}
       <Card>
         <CardHeader>
@@ -624,7 +674,7 @@ export default function PrintSettingsPage() {
       </Card>
       </>)}
 
-      {tab === "thong-tin" && (<>
+      {selected === "doanh-nghiep" && (<>
       {/* ── Hoàn thiện thông tin in (PM 25/06): chủ động nhắc điền đủ logo/MST ── */}
       <PrintSetupChecklist />
       {/* ── Tiêu đề phiếu bán hàng (CEO 24/06) — đặt tên chứng từ ── */}
@@ -715,7 +765,7 @@ export default function PrintSettingsPage() {
       </Card>
       </>)}
 
-      {tab === "thong-tin" && (<>
+      {selected === "doanh-nghiep" && (<>
       {/* ── Sprint TEMPLATE-1: Logo + Lời cảm ơn (CEO 07/05) ── */}
       <Card>
         <CardHeader>
@@ -786,17 +836,20 @@ export default function PrintSettingsPage() {
           </div>
         </CardContent>
       </Card>
-
-      {/* ── Tầng chi nhánh: địa chỉ/SĐT in riêng từng chi nhánh (CEO 25/06) ── */}
-      <BranchPrintInfoCard />
       </>)}
 
-      {tab === "may-in" && (<>
+      {/* ── Trang con: Thông tin chi nhánh ── */}
+      {selected === "chi-nhanh" && (
+      /* Tầng chi nhánh: địa chỉ/SĐT in riêng từng chi nhánh (CEO 25/06) */
+      <BranchPrintInfoCard />
+      )}
+
+      {selected === "may-in" && (<>
       {/* ── Sprint KITCHEN-1: Trạm chế biến (CEO 07/05) ── */}
       <KitchenStationsCard />
       </>)}
 
-      {tab === "thong-tin" && (<>
+      {selected === "doanh-nghiep" && (<>
       {/* ── 3. Receipt Content ── */}
       <Card>
         <CardHeader>
@@ -860,7 +913,7 @@ export default function PrintSettingsPage() {
       </Card>
       </>)}
 
-      {tab === "may-in" && (<>
+      {selected === "may-in" && (<>
       {/* ── 4. FnB Print Styles ── */}
       <Card>
         <CardHeader>
@@ -983,7 +1036,7 @@ export default function PrintSettingsPage() {
       </Card>
       </>)}
 
-      {tab === "may-in" && (<>
+      {selected === "may-in" && (<>
       {/* ── 5. Preview live (CEO 13/05) ── */}
       <Card>
         <CardHeader>
@@ -1018,7 +1071,102 @@ export default function PrintSettingsPage() {
         </CardContent>
       </Card>
       </>)}
+
+        </div>{/* /CỘT PHẢI */}
+      </div>{/* /master–detail */}
     </div>
+  );
+}
+
+// ──────────────────────────────────────────────────────────────
+// CỘT TRÁI — nav danh sách kiểu KiotViet (master của master–detail)
+// Desktop: cột sticky ~210px, border phải. Mobile: accordion gọn phía trên.
+// ──────────────────────────────────────────────────────────────
+function PrintSettingsNav({
+  selected,
+  onSelect,
+  navOpen,
+  onToggleNav,
+  selectedItem,
+}: {
+  selected: string;
+  onSelect: (id: string) => void;
+  navOpen: boolean;
+  onToggleNav: () => void;
+  selectedItem: NavItem;
+}) {
+  const accentClass = (accent: NavGroup["accent"], active: boolean): string => {
+    if (active) return "text-primary";
+    if (accent === "info") return "text-status-info";
+    if (accent === "amber") return "text-status-warning";
+    return "text-muted-foreground";
+  };
+
+  const list = (
+    <nav className="space-y-4">
+      {PRINT_NAV.map((group) => (
+        <div key={group.label} className="space-y-1">
+          <p className="px-2 text-[11px] font-semibold uppercase tracking-wide text-muted-foreground">
+            {group.label}
+          </p>
+          <div className="space-y-0.5">
+            {group.items.map((item) => {
+              const active = selected === item.id;
+              return (
+                <button
+                  key={item.id}
+                  type="button"
+                  onClick={() => onSelect(item.id)}
+                  className={cn(
+                    "flex w-full items-center gap-2 rounded-lg px-2 py-1.5 text-left text-sm transition-colors",
+                    active
+                      ? "bg-primary/10 font-medium text-primary"
+                      : "text-foreground hover:bg-muted",
+                  )}
+                >
+                  <Icon
+                    name={item.icon}
+                    size={18}
+                    className={cn("shrink-0", accentClass(group.accent, active))}
+                  />
+                  <span className="min-w-0 truncate">{item.label}</span>
+                </button>
+              );
+            })}
+          </div>
+        </div>
+      ))}
+    </nav>
+  );
+
+  return (
+    <>
+      {/* Mobile: nút mở accordion hiện mục đang chọn */}
+      <div className="lg:hidden">
+        <button
+          type="button"
+          onClick={onToggleNav}
+          className="flex w-full items-center justify-between rounded-xl border border-border bg-card px-3 py-2.5 text-left"
+          aria-expanded={navOpen}
+        >
+          <span className="flex items-center gap-2 min-w-0">
+            <Icon name={selectedItem.icon} size={18} className="shrink-0 text-primary" />
+            <span className="truncate text-sm font-medium">{selectedItem.label}</span>
+          </span>
+          <Icon name={navOpen ? "expand_less" : "expand_more"} size={20} className="shrink-0 text-muted-foreground" />
+        </button>
+        {navOpen && (
+          <div className="mt-2 rounded-xl border border-border bg-card p-2">
+            {list}
+          </div>
+        )}
+      </div>
+
+      {/* Desktop: cột sticky cố định */}
+      <aside className="hidden lg:block lg:w-[210px] lg:shrink-0 lg:self-start lg:sticky lg:top-4 lg:border-r lg:pr-3">
+        {list}
+      </aside>
+    </>
   );
 }
 

@@ -269,14 +269,42 @@ function Toggle({
 // ──────────────────────────────────────────────────────────────
 // Component chính
 // ──────────────────────────────────────────────────────────────
-export function PrintTemplateManager() {
+/**
+ * Quản lý mẫu in.
+ *
+ * - KHÔNG truyền props → giữ hành vi cũ: tự cho chọn thế giới + mảng + loại
+ *   chứng từ + chi nhánh (backward compat).
+ * - Truyền `fixedChannel` + `fixedDocType` → ngữ cảnh CỐ ĐỊNH (đã chọn ở nav
+ *   master–detail bên trái). Khi đó ẨN bộ chọn "thế giới" + dropdown "Mảng" +
+ *   dropdown "Loại chứng từ", chỉ còn dropdown "Chi nhánh" + danh sách + editor.
+ */
+export function PrintTemplateManager(props?: {
+  fixedChannel?: PrintChannel;
+  fixedDocType?: PrintDocType;
+}) {
   const { branches } = useAuth();
   const { toast } = useToast();
 
+  // Ngữ cảnh cố định khi cả mảng + loại chứng từ được truyền từ nav trái.
+  const fixedContext =
+    props?.fixedChannel != null && props?.fixedDocType != null;
+
   // ── Bộ chọn ngữ cảnh ──
-  const [channel, setChannel] = useState<PrintChannel>("retail");
+  const [channel, setChannel] = useState<PrintChannel>(
+    props?.fixedChannel ?? "retail",
+  );
   const [branchId, setBranchId] = useState<string | null>(null);
-  const [docType, setDocType] = useState<PrintDocType>("sale_invoice");
+  const [docType, setDocType] = useState<PrintDocType>(
+    props?.fixedDocType ?? "sale_invoice",
+  );
+
+  // Khi nav trái đổi mục (channel/docType cố định đổi) → đồng bộ state nội bộ.
+  useEffect(() => {
+    if (props?.fixedChannel != null) setChannel(props.fixedChannel);
+  }, [props?.fixedChannel]);
+  useEffect(() => {
+    if (props?.fixedDocType != null) setDocType(props.fixedDocType);
+  }, [props?.fixedDocType]);
 
   // ── Danh sách mẫu ──
   const [templates, setTemplates] = useState<PrintTemplate[]>([]);
@@ -295,11 +323,13 @@ export function PrintTemplateManager() {
   );
 
   // Khi đổi mảng: nếu docType hiện tại không còn hợp lệ → reset về cái đầu.
+  // Ngữ cảnh cố định (nav master–detail) tự quản channel/docType → bỏ qua.
   useEffect(() => {
+    if (fixedContext) return;
     if (!availableDocTypes.includes(docType)) {
       setDocType(availableDocTypes[0]);
     }
-  }, [availableDocTypes, docType]);
+  }, [availableDocTypes, docType, fixedContext]);
 
   // ── Load danh sách mẫu theo ngữ cảnh ──
   const reloadList = useCallback(async () => {
@@ -413,7 +443,60 @@ export function PrintTemplateManager() {
         </p>
       </div>
 
-      {/* ── Bộ chọn ngữ cảnh ── */}
+      {/* ── Bộ chọn ngữ cảnh ──
+          Ngữ cảnh cố định (nav master–detail): ẨN thế giới + Mảng + Loại,
+          chỉ còn dropdown Chi nhánh. Ngược lại: giữ nguyên bộ chọn đầy đủ. */}
+      {fixedContext ? (
+        <Card>
+          <CardHeader>
+            <CardTitle className="flex items-center gap-2">
+              <Icon name="storefront" />
+              Chi nhánh áp dụng
+            </CardTitle>
+          </CardHeader>
+          <CardContent>
+            <div className="grid gap-3 sm:max-w-xs">
+              <div className="space-y-1.5">
+                <label className="text-sm font-medium">Chi nhánh</label>
+                <Select
+                  value={branchId ?? ALL_BRANCHES}
+                  onValueChange={(v) => setBranchId(v === ALL_BRANCHES ? null : (v ?? null))}
+                  items={[
+                    { value: ALL_BRANCHES, label: "Tất cả chi nhánh" },
+                    ...branches.map((b) => ({ value: b.id, label: b.name })),
+                  ]}
+                >
+                  <SelectTrigger className="w-full">
+                    <SelectValue>
+                      {(v) =>
+                        !v || v === ALL_BRANCHES
+                          ? "Tất cả chi nhánh"
+                          : branches.find((b) => b.id === v)?.name ?? "Chọn chi nhánh"
+                      }
+                    </SelectValue>
+                  </SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value={ALL_BRANCHES}>Tất cả chi nhánh</SelectItem>
+                    {branches.map((b) => (
+                      <SelectItem key={b.id} value={b.id}>
+                        {b.name}
+                      </SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+              </div>
+            </div>
+            <p className="mt-3 text-xs text-muted-foreground">
+              <Icon name="info" size={12} className="inline-block mr-1 align-text-bottom" />
+              Mẫu áp dụng cho: <strong>{CHANNEL_OPTIONS.find((c) => c.value === channel)?.label}</strong>
+              {" · "}
+              {branchLabel(branchId)}
+              {" · "}
+              {DOC_TYPE_LABELS[docType]}
+            </p>
+          </CardContent>
+        </Card>
+      ) : (
       <Card>
         <CardHeader>
           <CardTitle className="flex items-center gap-2">
@@ -556,6 +639,7 @@ export function PrintTemplateManager() {
           </p>
         </CardContent>
       </Card>
+      )}
 
       {/* ── Danh sách mẫu ── */}
       <Card>
