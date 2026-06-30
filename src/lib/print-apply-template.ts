@@ -182,7 +182,22 @@ export function applyTemplateToDocData(
     // Chưa cấu hình ngân hàng → KHÔNG set qr (im lặng, không lỗi).
   }
 
-  // KHÔNG đụng: config.customer.* (để pha sau — pipeline chưa có field tương ứng).
+  // ── Khách hàng: lọc dòng trong headerFields theo toggle (P6b) ──
+  // headerFields là khối key-value chung dưới tiêu đề; nhãn khách map 1-1 với cờ
+  // config.customer (xem print-templates.ts: "Khách hàng" / "Mã KH" / "Điện thoại"
+  // / "Địa chỉ"). CHỈ ẩn khi cờ === false; true/undefined → giữ nguyên (zero-regression).
+  // config.customer chỉ tồn tại ở chứng từ bán (showCustomer) nên không đụng phiếu NCC/kho.
+  const cust = config.customer;
+  if (cust && Array.isArray(base.headerFields) && base.headerFields.length) {
+    const hideLabels = new Set<string>();
+    if (cust.name === false) hideLabels.add("Khách hàng");
+    if (cust.code === false) hideLabels.add("Mã KH");
+    if (cust.phone === false) hideLabels.add("Điện thoại");
+    if (cust.address === false) hideLabels.add("Địa chỉ");
+    if (hideLabels.size > 0) {
+      data.headerFields = base.headerFields.filter((f) => !hideLabels.has(f.label));
+    }
+  }
 
   return data;
 }
