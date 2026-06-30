@@ -286,12 +286,11 @@ export function generateDocumentHtml(d: DocumentPrintData, paperSize: PaperSize)
   .items col.c-stt { width: 34px; }
   .items col.c-code { width: 13%; }
   .items col.c-num { width: 15%; }
-  .items th { border: none; border-bottom: 2px solid #333; padding: ${isA5 ? "5px 7px" : "7px 10px"}; text-align: left; font-size: ${itemsFontSize}; font-weight: 700; line-height: 1.35; }
-  .items td { border: none; border-bottom: 1px solid #eee; padding: ${isA5 ? "5px 7px" : "7px 10px"}; font-size: ${itemsFontSize}; line-height: 1.35; vertical-align: top; word-wrap: break-word; }
+  .items th { border: 1px solid #bdbdbd; border-bottom: 2px solid #333; padding: ${isA5 ? "5px 7px" : "7px 10px"}; text-align: left; font-size: ${itemsFontSize}; font-weight: 700; line-height: 1.35; background: #f3f3f3; }
+  .items td { border: 1px solid #bdbdbd; padding: ${isA5 ? "5px 7px" : "7px 10px"}; font-size: ${itemsFontSize}; line-height: 1.35; vertical-align: top; word-wrap: break-word; }
   .items th.right, .items td.right { text-align: right; }
   .items th.center, .items td.center { text-align: center; }
   .items tbody tr:nth-child(even) td { background: #fafafa; }
-  .items tbody tr:last-child td { border-bottom: none; }
   .items td .unit { color: #888; font-weight: 400; }
 
   /* Thermal items — 2 dòng/món */
