@@ -812,7 +812,7 @@ export default function SoQuyPage() {
                   await printDocumentWithTemplate({
                     channel: "backoffice",
                     docType: "cash_voucher",
-                    branchId: activeBranchId ?? null,
+                    branchId: row.branchId ?? activeBranchId ?? null,
                     base: buildCashTransactionPrintData(row),
                   });
                 }
@@ -873,7 +873,7 @@ export default function SoQuyPage() {
                 printDocumentWithTemplate({
                   channel: "backoffice",
                   docType: "cash_voucher",
-                  branchId: activeBranchId ?? null,
+                  branchId: row.branchId ?? activeBranchId ?? null,
                   base: buildCashTransactionPrintData(row),
                 }),
               onAuditLog: () => setAuditDialogTarget(row),

@@ -303,7 +303,7 @@ export default function TraHangNhapPage() {
               await printDocumentWithTemplate({
                 channel: "backoffice",
                 docType: "purchase_return",
-                branchId: activeBranchId ?? null,
+                branchId: row.branchId ?? activeBranchId ?? null,
                 base: buildPurchaseReturnPrintData(row, toPrintLines(items)),
               });
             },
