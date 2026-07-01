@@ -277,7 +277,9 @@ export function buildInvoicePrintData(
     documentCode: row.code,
     date: row.date,
     // Bên bán — mỗi dòng theo cờ bật/tắt (tắt = không truyền → template ẩn).
-    branchName: on(f.branch) ? row.branchName : undefined,
+    // branchName: LUÔN truyền — mẫu in (header.branch) tự quyết ẩn/hiện, không
+    // phụ thuộc cờ invoiceFields cũ (CEO 30/06: bật chi nhánh trong mẫu mà không in ra).
+    branchName: row.branchName,
     businessName: on(f.businessName) ? business?.businessName : undefined,
     businessTaxCode: on(f.taxCode) ? business?.taxCode : undefined,
     businessAddress: on(f.address) ? business?.address : undefined,

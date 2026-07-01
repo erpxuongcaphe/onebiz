@@ -268,6 +268,14 @@ export function generateDocumentHtml(d: DocumentPrintData, paperSize: PaperSize)
   .head-c .line { font-size: 9px; color: #000; }
   .head-c .doc-type { font-size: ${ps.headerDocFontSize}; font-weight: 700; margin-top: 6px; }
   .head-c .doc-code { font-size: 10px; color: #000; }
+  /* A4/A5: tiêu đề GIỮA TRÊN CÙNG (chuyên nghiệp) + khối đơn vị căn giữa dưới */
+  .doc-title-band { text-align: center; border-bottom: 2.5px solid #1a1a1a; padding-bottom: 9px; margin-bottom: 9px; }
+  .doc-title-band .logo { display: block; margin: 0 auto 6px; }
+  .doc-title-band .doc-type { font-size: ${isA5 ? "18px" : "22px"}; font-weight: 700; text-transform: uppercase; letter-spacing: 0.5px; color: #111; line-height: 1.2; }
+  .doc-title-band .doc-sub { font-size: ${ps.bodyFontSize}; color: #555; margin-top: 3px; }
+  .seller-band { text-align: center; margin-bottom: 14px; line-height: 1.5; }
+  .seller-band .store { font-size: ${isA5 ? "14px" : "16px"}; font-weight: 700; color: #111; }
+  .seller-band .line { display: block; font-size: ${ps.bodyFontSize}; color: #555; }
   .masthead { display: flex; justify-content: space-between; align-items: flex-start; gap: 16px; border-bottom: 2px solid #222; padding-bottom: 10px; margin-bottom: 14px; }
   .masthead .seller { text-align: left; }
   .masthead .store { font-size: ${isA5 ? "13px" : "16px"}; font-weight: 700; line-height: 1.25; }
@@ -346,20 +354,17 @@ ${
   <div class="doc-type">${esc(d.documentType)}</div>
   <div class="doc-code">${esc(d.documentCode)} — ${formatDate(d.date)}</div>
 </div>`
-    : `<div class="masthead">
-  <div class="seller">
-    ${d.businessLogoUrl ? `<img class="logo" src="${esc(d.businessLogoUrl)}" alt="logo" />` : ""}
-    ${d.businessName ? `<div class="store">${esc(d.businessName)}</div>` : d.storeName ? `<div class="store">${esc(d.storeName)}</div>` : ""}
-    ${d.businessTaxCode ? `<div class="line">MST: ${esc(d.businessTaxCode)}</div>` : ""}
-    ${d.businessAddress ? `<div class="line">${esc(d.businessAddress)}</div>` : ""}
-    ${d.businessPhone ? `<div class="line">ĐT: ${esc(d.businessPhone)}</div>` : ""}
-    ${d.branchName ? `<div class="line" style="font-style:italic;">Chi nhánh: ${esc(d.branchName)}</div>` : ""}
-  </div>
-  <div class="docmeta">
-    <div class="doc-type">${esc(d.documentType)}</div>
-    <div class="doc-line">Số: <b>${esc(d.documentCode)}</b></div>
-    <div class="doc-line">Ngày: ${formatShortDate(d.date)}</div>
-  </div>
+    : `<div class="doc-title-band">
+  ${d.businessLogoUrl ? `<img class="logo" src="${esc(d.businessLogoUrl)}" alt="logo" />` : ""}
+  <div class="doc-type">${esc(d.documentType)}</div>
+  <div class="doc-sub">Số: <b>${esc(d.documentCode)}</b> &nbsp;·&nbsp; Ngày: ${formatShortDate(d.date)}</div>
+</div>
+<div class="seller-band">
+  ${d.businessName ? `<div class="store">${esc(d.businessName)}</div>` : d.storeName ? `<div class="store">${esc(d.storeName)}</div>` : ""}
+  ${d.businessTaxCode ? `<span class="line">MST: ${esc(d.businessTaxCode)}</span>` : ""}
+  ${d.businessAddress ? `<span class="line">${esc(d.businessAddress)}</span>` : ""}
+  ${d.businessPhone ? `<span class="line">ĐT: ${esc(d.businessPhone)}</span>` : ""}
+  ${d.branchName ? `<span class="line" style="font-style:italic;">Chi nhánh: ${esc(d.branchName)}</span>` : ""}
 </div>`
 }
 
