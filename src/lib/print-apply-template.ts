@@ -120,6 +120,15 @@ export function applyTemplateToDocData(
     }
   }
 
+  // ── Ô ký tùy biến ───────────────────────────────────────────
+  // config.signatures set → dùng danh sách đó (lọc ô rỗng). Bỏ trống → giữ mặc định.
+  if (Array.isArray(config.signatures)) {
+    const sigs = config.signatures
+      .filter((s) => s && typeof s.label === "string" && s.label.trim() !== "")
+      .map((s) => ({ label: s.label.trim() }));
+    if (sigs.length) data.signatures = sigs;
+  }
+
   // ── Items: toggle cột (phần AN TOÀN — chỉ ẩn field item) ─────
   // CHỈ làm khi config.items.columns được truyền. Bỏ trống → giữ nguyên.
   const cols = config.items?.columns;

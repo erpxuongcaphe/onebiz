@@ -832,7 +832,8 @@ function TemplateEditorDialog({
           ? { fontSize: "md", columns: columnOptions.map((c) => c.key) }
           : undefined,
         payment: { showQr: true, showDiscount: true, showDebt: false },
-        footer: { signature: false, thankYou: true, customText: "" },
+        footer: { signature: true, thankYou: true, customText: "" },
+        signatures: [{ label: "Người lập phiếu" }, { label: "Người duyệt" }],
       });
     }
     setNameError(false);
@@ -876,6 +877,30 @@ function TemplateEditorDialog({
         ? Array.from(new Set([...current, key]))
         : current.filter((c) => c !== key);
       return { ...prev, items: { ...prev.items, columns: next } };
+    });
+  }, []);
+  // ── Ô ký tùy biến ──
+  const sigList = (c: PrintTemplateConfig): { label: string }[] =>
+    c.signatures ?? [{ label: "Người lập phiếu" }, { label: "Người duyệt" }];
+  const addSignature = useCallback(() => {
+    setConfig((prev) => ({ ...prev, signatures: [...sigList(prev), { label: "Ô ký mới" }] }));
+  }, []);
+  const removeSignature = useCallback((idx: number) => {
+    setConfig((prev) => ({ ...prev, signatures: sigList(prev).filter((_, i) => i !== idx) }));
+  }, []);
+  const setSignatureLabel = useCallback((idx: number, label: string) => {
+    setConfig((prev) => ({
+      ...prev,
+      signatures: sigList(prev).map((s, i) => (i === idx ? { label } : s)),
+    }));
+  }, []);
+  const moveSignature = useCallback((idx: number, dir: -1 | 1) => {
+    setConfig((prev) => {
+      const arr = [...sigList(prev)];
+      const j = idx + dir;
+      if (j < 0 || j >= arr.length) return prev;
+      [arr[idx], arr[j]] = [arr[j], arr[idx]];
+      return { ...prev, signatures: arr };
     });
   }, []);
 
@@ -1112,6 +1137,63 @@ function TemplateEditorDialog({
                     rows={2}
                   />
                 </div>
+
+                {/* Ô ký tùy biến — hiện khi bật "Ô chữ ký" */}
+                {config.footer?.signature && (
+                  <div className="space-y-1.5 rounded-lg border p-2.5">
+                    <div className="flex items-center justify-between">
+                      <label className="text-sm font-medium">Ô ký cuối phiếu</label>
+                      <Button type="button" size="sm" variant="outline" onClick={addSignature}>
+                        <Icon name="add" size={14} className="mr-1" />
+                        Thêm ô ký
+                      </Button>
+                    </div>
+                    <div className="space-y-1.5">
+                      {(config.signatures ?? [
+                        { label: "Người lập phiếu" },
+                        { label: "Người duyệt" },
+                      ]).map((s, i, arr) => (
+                        <div key={i} className="flex items-center gap-1">
+                          <Input
+                            value={s.label}
+                            onChange={(e) => setSignatureLabel(i, e.target.value)}
+                            placeholder="VD: Thủ kho, Kế toán, Khách hàng…"
+                            className="flex-1"
+                          />
+                          <button
+                            type="button"
+                            disabled={i === 0}
+                            onClick={() => moveSignature(i, -1)}
+                            className="shrink-0 rounded p-1 text-muted-foreground hover:bg-muted disabled:opacity-30"
+                            aria-label="Lên"
+                          >
+                            <Icon name="keyboard_arrow_up" size={16} />
+                          </button>
+                          <button
+                            type="button"
+                            disabled={i === arr.length - 1}
+                            onClick={() => moveSignature(i, 1)}
+                            className="shrink-0 rounded p-1 text-muted-foreground hover:bg-muted disabled:opacity-30"
+                            aria-label="Xuống"
+                          >
+                            <Icon name="keyboard_arrow_down" size={16} />
+                          </button>
+                          <button
+                            type="button"
+                            onClick={() => removeSignature(i)}
+                            className="shrink-0 rounded p-1 text-destructive hover:bg-destructive/10"
+                            aria-label="Xoá ô ký"
+                          >
+                            <Icon name="close" size={16} />
+                          </button>
+                        </div>
+                      ))}
+                    </div>
+                    <p className="text-xs text-muted-foreground">
+                      Ô đầu tiên tự điền tên người lập phiếu khi in. Kéo lên/xuống để đổi thứ tự.
+                    </p>
+                  </div>
+                )}
               </div>
             </ToggleGroupBox>
           </div>
@@ -1422,15 +1504,15 @@ function BillPreview({
         <div className="my-1.5 border-t border-dashed border-gray-400" />
       )}
       {footer.signature && (
-        <div className="mt-1 flex justify-between text-[9px] text-gray-600">
-          <div className="text-center">
-            <div>Người lập</div>
-            <div className="mt-4">______</div>
-          </div>
-          <div className="text-center">
-            <div>Người nhận</div>
-            <div className="mt-4">______</div>
-          </div>
+        <div className="mt-1 flex flex-wrap justify-around gap-x-2 gap-y-1 text-[9px] text-gray-600">
+          {(config.signatures ?? [{ label: "Người lập phiếu" }, { label: "Người duyệt" }]).map(
+            (s, i) => (
+              <div key={i} className="text-center">
+                <div>{s.label || "(trống)"}</div>
+                <div className="mt-4">______</div>
+              </div>
+            ),
+          )}
         </div>
       )}
       {footer.customText && (

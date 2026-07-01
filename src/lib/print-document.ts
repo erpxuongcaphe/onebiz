@@ -47,6 +47,11 @@ export interface DocumentPrintData {
   createdBy?: string;
   /** Ẩn khối chữ ký (Người lập / Người duyệt) khi = false. Mặc định hiện. */
   showSignature?: boolean;
+  /**
+   * Các ô ký cuối phiếu (tùy biến). undefined → mặc định [Người lập phiếu, Người duyệt].
+   * Ô đầu tiên tự điền tên người lập (createdBy). Áp cho A4/A5; thermal không dùng.
+   */
+  signatures?: { label: string }[];
 
   /**
    * Cỡ chữ bảng mặt hàng (chỉ ảnh hưởng bảng items):
@@ -329,7 +334,7 @@ export function generateDocumentHtml(d: DocumentPrintData, paperSize: PaperSize)
   .note { margin-top: ${isThermal ? "8px" : "16px"}; font-size: ${isThermal ? "9px" : "12px"}; color: ${isThermal ? "#000" : "#555"}; }
 
   .footer { margin-top: 32px; display: ${isThermal || d.showSignature === false ? "none" : "flex"}; justify-content: space-around; }
-  .footer .col { text-align: center; width: 42%; }
+  .footer .col { text-align: center; flex: 1; padding: 0 6px; }
   .footer .col .title { font-weight: 700; }
   .footer .col .cap { font-size: 10px; font-style: italic; color: #888; margin-bottom: 50px; }
 
@@ -375,18 +380,21 @@ ${isThermal && summaryHtml ? `<hr class="sep" />` : ""}
 ${summaryHtml ? `<table class="summary">${summaryHtml}</table>` : ""}
 ${d.note ? `<div class="note"><strong>Ghi chú:</strong> ${esc(d.note)}</div>` : ""}${qrBlock}
 
-<div class="footer">
-  <div class="col">
-    <div class="title">Người lập phiếu</div>
+${
+  d.showSignature === false
+    ? ""
+    : `<div class="footer">${(d.signatures && d.signatures.length
+        ? d.signatures
+        : [{ label: "Người lập phiếu" }, { label: "Người duyệt" }])
+        .map(
+          (s, i) => `<div class="col">
+    <div class="title">${esc(s.label)}</div>
     <div class="cap">(Ký, ghi rõ họ tên)</div>
-    <div>${esc(d.createdBy ?? "")}</div>
-  </div>
-  <div class="col">
-    <div class="title">Người duyệt</div>
-    <div class="cap">(Ký, ghi rõ họ tên)</div>
-    <div></div>
-  </div>
-</div>
+    <div>${i === 0 ? esc(d.createdBy ?? "") : ""}</div>
+  </div>`,
+        )
+        .join("")}</div>`
+}
 
 ${
   d.businessFooter

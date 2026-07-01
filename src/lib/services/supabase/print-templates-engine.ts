@@ -49,6 +49,8 @@ export interface PrintTemplateConfig {
   items?: { fontSize?: "sm" | "md" | "lg"; columns?: string[] };
   payment?: { showQr?: boolean; showDiscount?: boolean; showDebt?: boolean };
   footer?: { signature?: boolean; thankYou?: boolean; customText?: string };
+  /** Ô ký tùy biến cuối phiếu. undefined → mặc định [Người lập phiếu, Người duyệt]. */
+  signatures?: { label: string }[];
 }
 
 export interface PrintTemplate {
