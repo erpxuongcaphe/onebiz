@@ -259,8 +259,20 @@ export function buildInvoicePrintData(
   if (row.discount > 0)
     summaryRows.push({ label: "Chiết khấu", value: formatCurrency(row.discount) });
   summaryRows.push({ label: "Tổng cộng", value: formatCurrency(due), bold: true });
+  // CEO 03/07: "Khách thanh toán" dễ hiểu lầm là số PHẢI trả → đổi "Khách đã
+  // thanh toán" (= cột paid, số đã thu). Kèm 2 dòng bịt lỗ hiểu lầm:
+  // - paid > tổng → "Tiền thối lại" (khách đưa dư).
+  // - 0 < paid < tổng mà khối công nợ KHÔNG in → "Còn lại" (kẻo phiếu như đã thu đủ).
   if (showDebt || row.paid > 0)
-    summaryRows.push({ label: "Khách thanh toán", value: formatCurrency(row.paid) });
+    summaryRows.push({ label: "Khách đã thanh toán", value: formatCurrency(row.paid) });
+  if (row.paid > due)
+    summaryRows.push({ label: "Tiền thối lại", value: formatCurrency(row.paid - due) });
+  if (!showDebt && row.paid > 0 && row.paid < due)
+    summaryRows.push({
+      label: "Còn lại",
+      value: formatCurrency(due - row.paid),
+      bold: true,
+    });
   if (showDebt) {
     summaryRows.push({ label: "Nợ cũ", value: formatCurrency(oldDebt) });
     summaryRows.push({
