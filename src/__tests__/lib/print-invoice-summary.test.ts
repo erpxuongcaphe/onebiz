@@ -59,11 +59,9 @@ describe("buildInvoicePrintData — khối tổng tiền đối xứng, rõ ngh�
     expect(labels(d)).not.toContain("Còn lại");
   });
 
-  it("khách đưa dư (paid > tổng) → 'Khách còn phải trả' = 0 đ + thêm 'Tiền thối lại' đúng số", () => {
+  it("khách đưa dư (paid > tổng) → CHỈ 'Tiền thối lại', KHÔNG dòng 'Khách còn phải trả' thừa", () => {
     const d = buildInvoicePrintData(row({ paid: 400000 } as Partial<InvoiceRow>));
-    const con = find(d, "Khách còn phải trả");
-    expect(con?.value).toBe("0 đ");
-    expect(con?.tone).toBe("success");
+    expect(labels(d)).not.toContain("Khách còn phải trả");
     expect(find(d, "Tiền thối lại")?.value).toContain("50"); // 400.000 - 350.000
   });
 

@@ -275,15 +275,17 @@ export function buildInvoicePrintData(
       value: formatCurrency(currentDebt ?? 0),
       bold: true,
     });
+  } else if (row.paid > due) {
+    // Đưa dư: chỉ "Tiền thối lại" (đã ngầm báo trả đủ) — không thêm "Còn phải trả 0đ" thừa.
+    summaryRows.push({ label: "Tiền thối lại", value: formatCurrency(row.paid - due) });
   } else {
-    const remaining = Math.max(due - row.paid, 0);
+    // Trả đủ → "Khách còn phải trả" 0đ (xanh); trả thiếu → số dương (đỏ).
+    const remaining = due - row.paid;
     summaryRows.push({
       label: "Khách còn phải trả",
       value: formatCurrency(remaining),
       tone: remaining > 0 ? "danger" : "success",
     });
-    if (row.paid > due)
-      summaryRows.push({ label: "Tiền thối lại", value: formatCurrency(row.paid - due) });
   }
 
   return {
