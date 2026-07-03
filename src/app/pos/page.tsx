@@ -46,6 +46,10 @@ import { formatCurrency, formatNumber, formatDecimal, parseNumberInput, formatDa
 import { cn } from "@/lib/utils";
 import { printReceiptDirect, type ReceiptData } from "@/components/shared/print-receipt";
 import { printShiftReport } from "@/lib/print-shift-report";
+// CEO 03/07: POS in hóa đơn THEO MẪU chi nhánh (giống trang Hóa đơn admin).
+import { resolvePrintTemplate } from "@/lib/services";
+import { applyTemplateToDocData } from "@/lib/print-apply-template";
+import { printDocument, type DocumentPrintData } from "@/lib/print-document";
 import { PosBranchSelector } from "@/components/shared/pos-branch-selector";
 import { useNetworkStatus, offlinePosCheckout } from "@/lib/offline";
 import { useBarcodeScanner } from "@/lib/hooks/use-barcode-scanner";
@@ -1828,42 +1832,88 @@ function PosPageInner() {
       }
 
       if (autoPrint && invoiceCode) {
+        const receipt: ReceiptData = {
+          invoiceCode,
+          date: new Date().toISOString(),
+          customerName: resolvedCustomerName,
+          items: state.lines.map((l) => ({
+            name: l.productName,
+            quantity: l.quantity,
+            unitPrice: l.unitPrice,
+            discount: l.discount.mode === "percent"
+              ? Math.round((l.quantity * l.unitPrice * l.discount.value) / 100)
+              : l.discount.value,
+            total: state.computeLineTotal(l),
+          })),
+          subtotal: state.subtotal,
+          discountAmount: state.orderDiscountAmount + state.lineDiscountTotal,
+          total: state.total,
+          // Receipt hiển thị số khách đưa THỰC (paidEntered) — không phải
+          // paid clean trong invoice. Cashier check khớp tiền cầm tay.
+          paid: paidEntered,
+          change: Math.max(0, paidEntered - state.total),
+          paymentMethod: state.paymentMethod,
+          isOffline: isOfflineCheckout,
+        };
         try {
-          const receipt: ReceiptData = {
-            invoiceCode,
-            date: new Date().toISOString(),
-            customerName: resolvedCustomerName,
-            items: state.lines.map((l) => ({
-              name: l.productName,
-              quantity: l.quantity,
-              unitPrice: l.unitPrice,
-              discount: l.discount.mode === "percent"
-                ? Math.round((l.quantity * l.unitPrice * l.discount.value) / 100)
-                : l.discount.value,
-              total: state.computeLineTotal(l),
-            })),
-            subtotal: state.subtotal,
-            discountAmount: state.orderDiscountAmount + state.lineDiscountTotal,
-            total: state.total,
-            // Receipt hiển thị số khách đưa THỰC (paidEntered) — không phải
-            // paid clean trong invoice. Cashier check khớp tiền cầm tay.
-            paid: paidEntered,
-            change: Math.max(0, paidEntered - state.total),
-            paymentMethod: state.paymentMethod,
-            isOffline: isOfflineCheckout,
-          };
-          // P-4 13/06/2026 audit lần 2: đọc paperSize từ settings.
-          printReceiptDirect(receipt, settings.print.paperSize === "58mm" ? "58mm" : "80mm");
+          // CEO 03/07: in THEO MẪU IN chi nhánh (retail × hóa đơn bán) — GIỐNG
+          // HỆT trang Hóa đơn admin. Offline hoặc chưa có mẫu → bill nhiệt cũ.
+          const resolved = isOfflineCheckout
+            ? null
+            : await resolvePrintTemplate(
+                "retail",
+                "sale_invoice",
+                currentBranch?.id ?? null,
+              );
+          if (resolved) {
+            const change = Math.max(0, paidEntered - state.total);
+            const money = (n: number) => `${formatCurrency(n)} đ`;
+            const base: DocumentPrintData = {
+              documentType: "PHIẾU THANH TOÁN", // mẫu in sẽ đè tiêu đề
+              documentCode: invoiceCode,
+              date: new Date().toISOString(),
+              branchName: currentBranch?.name,
+              headerFields: [
+                { label: "Khách hàng", value: resolvedCustomerName },
+              ],
+              items: receipt.items,
+              itemColumns: ["Tên hàng", "SL", "Đơn giá", "Giảm giá", "Thành tiền"],
+              summaryRows: [
+                { label: "Tổng tiền hàng", value: money(receipt.subtotal) },
+                ...(receipt.discountAmount > 0
+                  ? [{ label: "Giảm giá", value: money(receipt.discountAmount) }]
+                  : []),
+                { label: "Tổng cộng", value: money(receipt.total), bold: true },
+                { label: "Khách đã thanh toán", value: money(paidEntered) },
+                ...(change > 0
+                  ? [{ label: "Tiền thối lại", value: money(change) }]
+                  : []),
+              ],
+              createdBy: user?.fullName,
+            };
+            printDocument(applyTemplateToDocData(base, resolved), {
+              paperSize: resolved.paperSize,
+            });
+          } else {
+            // P-4 13/06/2026 audit lần 2: đọc paperSize từ settings.
+            printReceiptDirect(receipt, settings.print.paperSize === "58mm" ? "58mm" : "80mm");
+          }
         } catch (err) {
-          // Print failure không nên block checkout — đơn đã thanh toán xong.
-          // Vẫn cần log để admin biết máy in lỗi (vd: hết giấy, mất kết nối).
-          console.error("[POS] Auto-print receipt failed:", err);
-          toast({
-            title: "Không in được hoá đơn",
-            description: `Đơn ${invoiceCode} đã lưu thành công. Vui lòng in lại từ Lịch sử đơn.`,
-            variant: "warning",
-            duration: 6000,
-          });
+          // Lỗi resolve/áp mẫu → RỚT VỀ bill nhiệt cũ, không kẹt quầy.
+          console.error("[POS] Print via template failed, fallback receipt:", err);
+          try {
+            printReceiptDirect(receipt, settings.print.paperSize === "58mm" ? "58mm" : "80mm");
+          } catch (err2) {
+            // Print failure không nên block checkout — đơn đã thanh toán xong.
+            // Vẫn cần log để admin biết máy in lỗi (vd: hết giấy, mất kết nối).
+            console.error("[POS] Auto-print receipt failed:", err2);
+            toast({
+              title: "Không in được hoá đơn",
+              description: `Đơn ${invoiceCode} đã lưu thành công. Vui lòng in lại từ Lịch sử đơn.`,
+              variant: "warning",
+              duration: 6000,
+            });
+          }
         }
       }
 

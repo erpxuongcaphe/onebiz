@@ -24,6 +24,9 @@ import { EmptyState } from "@/components/shared/empty-state";
 import { formatCurrency, formatTime } from "@/lib/format";
 import { getInvoices, getInvoiceItems } from "@/lib/services/supabase/invoices";
 import { printReceiptDirect, type ReceiptData } from "@/components/shared/print-receipt";
+// CEO 03/07: in lại dùng ĐÚNG đường in của trang Hóa đơn (mẫu theo chi nhánh).
+import { buildInvoicePrintData, toPrintLines } from "@/lib/print-templates";
+import { printDocumentWithTemplate } from "@/lib/print-apply-template";
 import { useToast } from "@/lib/contexts";
 import { cn } from "@/lib/utils";
 import type { Invoice } from "@/lib/types";
@@ -90,26 +93,38 @@ export function ShiftInvoiceDrawer({
         (s, it) => s + it.quantity * it.unitPrice,
         0,
       );
-      const receipt: ReceiptData = {
-        invoiceCode: inv.code,
-        date: inv.date,
-        customerName: inv.customerName ?? "Khách lẻ",
-        items: items.map((line) => ({
-          name: line.productName,
-          quantity: line.quantity,
-          unitPrice: line.unitPrice,
-          discount: line.discount,
-          total: line.total,
-        })),
-        subtotal,
-        discountAmount: inv.discount ?? 0,
-        total: inv.totalAmount,
-        paid: inv.paid ?? inv.totalAmount,
-        change: Math.max(0, (inv.paid ?? 0) - inv.totalAmount),
-        paymentMethod: "cash", // không có trong list view; bản in lại không quan trọng
-        isOffline: false,
-      };
-      printReceiptDirect(receipt);
+      // CEO 03/07: in lại qua ENGINE MẪU IN theo chi nhánh của hóa đơn —
+      // GIỐNG HỆT nút In ở trang Bán hàng → Hóa đơn. Lỗi → bill nhiệt cũ.
+      try {
+        await printDocumentWithTemplate({
+          channel: "retail",
+          docType: "sale_invoice",
+          branchId: inv.branchId ?? branchId ?? null,
+          base: buildInvoicePrintData(inv, undefined, toPrintLines(items)),
+        });
+      } catch (engineErr) {
+        console.error("[POS] reprint via template failed, fallback receipt:", engineErr);
+        const receipt: ReceiptData = {
+          invoiceCode: inv.code,
+          date: inv.date,
+          customerName: inv.customerName ?? "Khách lẻ",
+          items: items.map((line) => ({
+            name: line.productName,
+            quantity: line.quantity,
+            unitPrice: line.unitPrice,
+            discount: line.discount,
+            total: line.total,
+          })),
+          subtotal,
+          discountAmount: inv.discount ?? 0,
+          total: inv.totalAmount,
+          paid: inv.paid ?? inv.totalAmount,
+          change: Math.max(0, (inv.paid ?? 0) - inv.totalAmount),
+          paymentMethod: "cash", // không có trong list view; bản in lại không quan trọng
+          isOffline: false,
+        };
+        printReceiptDirect(receipt);
+      }
       toast({
         title: `Đã in lại ${inv.code}`,
         variant: "success",
