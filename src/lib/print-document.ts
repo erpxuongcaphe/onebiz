@@ -39,8 +39,14 @@ export interface DocumentPrintData {
   items?: DocumentLineItem[];
   itemColumns?: string[];     // e.g. ["Mã hàng", "Tên hàng", "SL", "Đơn giá", "Thành tiền"]
 
-  // Summary rows at bottom
-  summaryRows?: { label: string; value: string; bold?: boolean }[];
+  // Summary rows at bottom. tone: nhấn màu dòng "Khách còn phải trả"
+  // (danger = còn nợ, success = đã đủ) — preview + máy in màu thấy màu.
+  summaryRows?: {
+    label: string;
+    value: string;
+    bold?: boolean;
+    tone?: "danger" | "success";
+  }[];
 
   // Footer note
   note?: string;
@@ -186,10 +192,17 @@ export function generateDocumentHtml(d: DocumentPrintData, paperSize: PaperSize)
 
   // Bảng tổng — value đã format sẵn (kèm " đ") ở builder.
   const summaryHtml = (d.summaryRows ?? [])
-    .map(
-      (r) =>
-        `<tr class="${r.bold ? "bold" : ""}"><td>${esc(r.label)}</td><td class="right tnum">${esc(r.value)}</td></tr>`,
-    )
+    .map((r) => {
+      // tone: đỏ khi còn phải trả > 0, xanh khi đã đủ. In đen-trắng vẫn đọc rõ
+      // nhờ nhãn + số; chỉ preview/máy in màu mới thấy màu.
+      const toneStyle =
+        r.tone === "danger"
+          ? ' style="color:#c0392b;font-weight:700"'
+          : r.tone === "success"
+            ? ' style="color:#1a7a43"'
+            : "";
+      return `<tr class="${r.bold ? "bold" : ""}"${toneStyle}><td>${esc(r.label)}</td><td class="right tnum">${esc(r.value)}</td></tr>`;
+    })
     .join("");
 
   const colHeaders = d.itemColumns ?? [

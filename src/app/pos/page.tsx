@@ -1885,6 +1885,12 @@ function PosPageInner() {
                   : []),
                 { label: "Tổng cộng", value: money(receipt.total), bold: true },
                 { label: "Khách đã thanh toán", value: money(paidEntered) },
+                {
+                  label: "Khách còn phải trả",
+                  value: money(Math.max(receipt.total - paidEntered, 0)),
+                  tone:
+                    receipt.total - paidEntered > 0 ? "danger" : "success",
+                },
                 ...(change > 0
                   ? [{ label: "Tiền thối lại", value: money(change) }]
                   : []),

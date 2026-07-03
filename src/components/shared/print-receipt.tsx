@@ -182,6 +182,13 @@ export function PrintReceipt({ data, width = "80mm" }: PrintReceiptProps) {
           <span>Khach dua:</span>
           <span>{formatCurrency(data.paid)}</span>
         </div>
+        <div
+          className="row"
+          style={data.paid < data.total ? { fontWeight: 700 } : undefined}
+        >
+          <span>Con phai tra:</span>
+          <span>{formatCurrency(Math.max(data.total - data.paid, 0))}</span>
+        </div>
         {data.change > 0 && (
           <div className="row">
             <span>Tien thua:</span>
@@ -282,6 +289,7 @@ ${data.discountAmount > 0 ? `<div class="row"><span>Giam gia</span><span>-${form
 <div class="line"></div>
 <div class="row"><span>Phuong thuc:</span><span>${paymentLabel}</span></div>
 <div class="row"><span>Khach dua:</span><span>${formatCurrency(data.paid)}</span></div>
+<div class="row"${data.paid < data.total ? ' style="font-weight:bold"' : ""}><span>Con phai tra:</span><span>${formatCurrency(Math.max(data.total - data.paid, 0))}</span></div>
 ${data.change > 0 ? `<div class="row"><span>Tien thua:</span><span>${formatCurrency(data.change)}</span></div>` : ""}
 ${data.note ? `<div class="line"></div><div style="font-size:10px">Ghi chu: ${data.note}</div>` : ""}
 <div class="line"></div>

@@ -3,7 +3,7 @@ import { buildInvoicePrintData } from "@/lib/print-templates";
 
 type InvoiceRow = Parameters<typeof buildInvoicePrintData>[0];
 
-/** Hoá đơn tối thiểu cho khối tổng tiền (CEO 03/07: nhãn Khách đã thanh toán). */
+/** Hoá đơn tối thiểu cho khối tổng tiền (CEO 03/07: cặp đối xứng đã trả / còn phải trả). */
 function row(over: Partial<InvoiceRow> = {}): InvoiceRow {
   return {
     id: "x",
@@ -26,30 +26,48 @@ function row(over: Partial<InvoiceRow> = {}): InvoiceRow {
 
 const labels = (d: { summaryRows?: { label: string }[] }) =>
   (d.summaryRows ?? []).map((r) => r.label);
+const find = (
+  d: { summaryRows?: { label: string; value: string; tone?: string }[] },
+  label: string,
+) => (d.summaryRows ?? []).find((r) => r.label === label);
 
-describe("buildInvoicePrintData — khối tổng tiền rõ nghĩa", () => {
-  it("đã trả đủ → 'Khách đã thanh toán', KHÔNG còn nhãn cũ, không thối/còn lại", () => {
+describe("buildInvoicePrintData — khối tổng tiền đối xứng, rõ nghĩa", () => {
+  it("trả đủ → 'Khách còn phải trả' = 0 đ (tone success), không thối lại, không nhãn cũ", () => {
     const d = buildInvoicePrintData(row());
     expect(labels(d)).toContain("Khách đã thanh toán");
-    expect(labels(d)).not.toContain("Khách thanh toán");
+    const con = find(d, "Khách còn phải trả");
+    expect(con?.value).toBe("0 đ");
+    expect(con?.tone).toBe("success");
+    expect(labels(d)).not.toContain("Khách thanh toán"); // nhãn cũ mơ hồ
+    expect(labels(d)).not.toContain("Còn lại"); // nhãn cũ
     expect(labels(d)).not.toContain("Tiền thối lại");
+  });
+
+  it("chưa trả đồng nào → 'Khách đã thanh toán' = 0 đ + 'Khách còn phải trả' = tổng (tone danger)", () => {
+    const d = buildInvoicePrintData(row({ paid: 0 } as Partial<InvoiceRow>));
+    expect(find(d, "Khách đã thanh toán")?.value).toBe("0 đ");
+    const con = find(d, "Khách còn phải trả");
+    expect(con?.value).toContain("350"); // 350.000 đ
+    expect(con?.tone).toBe("danger");
+  });
+
+  it("trả thiếu → 'Khách còn phải trả' đúng số (tone danger), KHÔNG dùng nhãn cũ 'Còn lại'", () => {
+    const d = buildInvoicePrintData(row({ paid: 200000 } as Partial<InvoiceRow>));
+    const con = find(d, "Khách còn phải trả");
+    expect(con?.value).toContain("150"); // 350.000 - 200.000
+    expect(con?.tone).toBe("danger");
     expect(labels(d)).not.toContain("Còn lại");
   });
 
-  it("khách đưa dư (paid > tổng) → thêm 'Tiền thối lại' đúng số", () => {
+  it("khách đưa dư (paid > tổng) → 'Khách còn phải trả' = 0 đ + thêm 'Tiền thối lại' đúng số", () => {
     const d = buildInvoicePrintData(row({ paid: 400000 } as Partial<InvoiceRow>));
-    const thoi = d.summaryRows?.find((r) => r.label === "Tiền thối lại");
-    expect(thoi?.value).toContain("50"); // 400.000 - 350.000 = 50.000
+    const con = find(d, "Khách còn phải trả");
+    expect(con?.value).toBe("0 đ");
+    expect(con?.tone).toBe("success");
+    expect(find(d, "Tiền thối lại")?.value).toContain("50"); // 400.000 - 350.000
   });
 
-  it("trả thiếu + KHÔNG in khối nợ → thêm 'Còn lại' (kẻo tưởng thu đủ)", () => {
-    const d = buildInvoicePrintData(row({ paid: 200000 } as Partial<InvoiceRow>));
-    const conLai = d.summaryRows?.find((r) => r.label === "Còn lại");
-    expect(conLai).toBeTruthy();
-    expect(conLai?.value).toContain("150"); // 350.000 - 200.000
-  });
-
-  it("khách công nợ (khối nợ in) → giữ 'Nợ cũ' + 'Còn nợ', KHÔNG thêm 'Còn lại' trùng", () => {
+  it("khách công nợ (khối nợ in) → giữ 'Nợ cũ' + 'Còn nợ', KHÔNG thêm 'Khách còn phải trả' trùng", () => {
     const d = buildInvoicePrintData(
       row({
         paid: 200000,
@@ -60,6 +78,7 @@ describe("buildInvoicePrintData — khối tổng tiền rõ nghĩa", () => {
     );
     expect(labels(d)).toContain("Nợ cũ");
     expect(labels(d)).toContain("Còn nợ");
+    expect(labels(d)).not.toContain("Khách còn phải trả");
     expect(labels(d)).not.toContain("Còn lại");
   });
 });

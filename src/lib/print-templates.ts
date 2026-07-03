@@ -253,26 +253,21 @@ export function buildInvoicePrintData(
     currentDebt != null &&
     (currentDebt > 0 || oldDebt > 0);
 
-  const summaryRows: { label: string; value: string; bold?: boolean }[] = [
-    { label: "Tổng tiền hàng", value: formatCurrency(row.totalAmount) },
-  ];
+  const summaryRows: {
+    label: string;
+    value: string;
+    bold?: boolean;
+    tone?: "danger" | "success";
+  }[] = [{ label: "Tổng tiền hàng", value: formatCurrency(row.totalAmount) }];
   if (row.discount > 0)
     summaryRows.push({ label: "Chiết khấu", value: formatCurrency(row.discount) });
   summaryRows.push({ label: "Tổng cộng", value: formatCurrency(due), bold: true });
-  // CEO 03/07: "Khách thanh toán" dễ hiểu lầm là số PHẢI trả → đổi "Khách đã
-  // thanh toán" (= cột paid, số đã thu). Kèm 2 dòng bịt lỗ hiểu lầm:
-  // - paid > tổng → "Tiền thối lại" (khách đưa dư).
-  // - 0 < paid < tổng mà khối công nợ KHÔNG in → "Còn lại" (kẻo phiếu như đã thu đủ).
-  if (showDebt || row.paid > 0)
-    summaryRows.push({ label: "Khách đã thanh toán", value: formatCurrency(row.paid) });
-  if (row.paid > due)
-    summaryRows.push({ label: "Tiền thối lại", value: formatCurrency(row.paid - due) });
-  if (!showDebt && row.paid > 0 && row.paid < due)
-    summaryRows.push({
-      label: "Còn lại",
-      value: formatCurrency(due - row.paid),
-      bold: true,
-    });
+  // CEO 03/07: khối tổng tiền đối xứng, rõ nghĩa —
+  // "Khách đã thanh toán" (= cột paid, số đã thu) + "Khách còn phải trả" LUÔN
+  // hiện (0 đ hoặc số dương) nên nhìn phát biết đã thu đủ chưa, không phải tự
+  // nhẩm. Đưa dư thêm "Tiền thối lại". Khách công nợ giữ khối "Nợ cũ / Còn nợ"
+  // (không thêm dòng, kẻo trùng nghĩa với dư nợ tích luỹ).
+  summaryRows.push({ label: "Khách đã thanh toán", value: formatCurrency(row.paid) });
   if (showDebt) {
     summaryRows.push({ label: "Nợ cũ", value: formatCurrency(oldDebt) });
     summaryRows.push({
@@ -280,6 +275,15 @@ export function buildInvoicePrintData(
       value: formatCurrency(currentDebt ?? 0),
       bold: true,
     });
+  } else {
+    const remaining = Math.max(due - row.paid, 0);
+    summaryRows.push({
+      label: "Khách còn phải trả",
+      value: formatCurrency(remaining),
+      tone: remaining > 0 ? "danger" : "success",
+    });
+    if (row.paid > due)
+      summaryRows.push({ label: "Tiền thối lại", value: formatCurrency(row.paid - due) });
   }
 
   return {
