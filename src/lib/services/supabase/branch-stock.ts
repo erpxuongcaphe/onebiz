@@ -31,6 +31,46 @@ export interface BranchStockRow {
   updatedAt: string;
 }
 
+
+function logicalBranchStockKey(row: Pick<BranchStockRow, "branchId" | "productId" | "variantId">): string {
+  return `${row.branchId}:${row.productId}:${row.variantId ?? "__base__"}`;
+}
+
+function latestIso(a: string | undefined, b: string | undefined): string {
+  if (!a) return b ?? "";
+  if (!b) return a;
+  return a >= b ? a : b;
+}
+
+function mergeBranchStockRows(rows: BranchStockRow[]): BranchStockRow[] {
+  const merged = new Map<string, BranchStockRow>();
+
+  for (const row of rows) {
+    const key = logicalBranchStockKey(row);
+    const existing = merged.get(key);
+
+    if (!existing) {
+      merged.set(key, { ...row });
+      continue;
+    }
+
+    const quantity = existing.quantity + row.quantity;
+    const reserved = existing.reserved + row.reserved;
+    const cost = existing.costPrice ?? row.costPrice ?? 0;
+
+    merged.set(key, {
+      ...existing,
+      quantity,
+      reserved,
+      available: quantity - reserved,
+      costPrice: cost,
+      stockValue: quantity * cost,
+      updatedAt: latestIso(existing.updatedAt, row.updatedAt),
+    });
+  }
+
+  return Array.from(merged.values());
+}
 export async function getBranchStock(params?: {
   branchId?: string;
   productId?: string;
@@ -143,7 +183,7 @@ export async function getBranchStockPage(params: {
   if (error) throw error;
 
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
-  const rows: BranchStockRow[] = (data ?? []).map((row: any) => {
+  const rawRows: BranchStockRow[] = (data ?? []).map((row: any) => {
     const product = row.products ?? {};
     const branch = row.branches ?? {};
     const variant = row.product_variants ?? null;
@@ -174,6 +214,8 @@ export async function getBranchStockPage(params: {
     };
   });
 
+  const rows = mergeBranchStockRows(rawRows);
+
   // Client-side filter (lowStockOnly — cross-column comparison)
   let filtered = rows;
   if (params.lowStockOnly) {
@@ -182,7 +224,8 @@ export async function getBranchStockPage(params: {
     );
   }
 
-  return { rows: filtered, total: count ?? filtered.length };
+  const total = rawRows.length !== rows.length || params.lowStockOnly ? filtered.length : count ?? filtered.length;
+  return { rows: filtered, total };
 }
 
 /**
@@ -211,6 +254,9 @@ export async function getBranchStockAggregates(params: {
     .from("branch_stock")
     .select(
       `
+      branch_id,
+      product_id,
+      variant_id,
       quantity,
       ${productsRel}
       `,
@@ -231,24 +277,33 @@ export async function getBranchStockAggregates(params: {
   const { data, error, count } = await query;
   if (error) throw error;
 
+  const grouped = new Map<string, { quantity: number; cost: number; minStock?: number | null }>();
+
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  for (const row of (data ?? []) as any[]) {
+    const key = `${row.branch_id}:${row.product_id}:${row.variant_id ?? "__base__"}`;
+    const current = grouped.get(key) ?? { quantity: 0, cost: 0, minStock: null };
+    const product = row.products ?? {};
+    grouped.set(key, {
+      quantity: current.quantity + Number(row.quantity ?? 0),
+      cost: Number(product.cost_price ?? current.cost ?? 0),
+      minStock: product.min_stock ?? current.minStock,
+    });
+  }
+
   let totalQty = 0;
   let totalValue = 0;
   let lowStockCount = 0;
-  // eslint-disable-next-line @typescript-eslint/no-explicit-any
-  for (const row of (data ?? []) as any[]) {
-    const quantity = Number(row.quantity ?? 0);
-    const product = row.products ?? {};
-    const cost = Number(product.cost_price ?? 0);
-    const minStock = product.min_stock;
-    totalQty += quantity;
-    totalValue += quantity * cost;
-    if (minStock !== undefined && minStock !== null && quantity <= Number(minStock)) {
+  for (const row of grouped.values()) {
+    totalQty += row.quantity;
+    totalValue += row.quantity * row.cost;
+    if (row.minStock !== undefined && row.minStock !== null && row.quantity <= Number(row.minStock)) {
       lowStockCount += 1;
     }
   }
 
   return {
-    totalRows: count ?? 0,
+    totalRows: grouped.size,
     totalQty,
     totalValue,
     lowStockCount,
@@ -303,10 +358,15 @@ export async function getProductStockBreakdown(
   if (stockRes.error) throw stockRes.error;
   if (branchRes.error) throw branchRes.error;
 
-  // eslint-disable-next-line @typescript-eslint/no-explicit-any
-  const stockByBranch = new Map<string, any>();
+  const stockByBranch = new Map<string, { quantity: number; reserved: number; updated_at: string }>();
   for (const r of stockRes.data ?? []) {
-    stockByBranch.set((r as { branch_id: string }).branch_id, r);
+    const row = r as { branch_id: string; quantity?: number; reserved?: number; updated_at?: string };
+    const current = stockByBranch.get(row.branch_id) ?? { quantity: 0, reserved: 0, updated_at: "" };
+    stockByBranch.set(row.branch_id, {
+      quantity: current.quantity + Number(row.quantity ?? 0),
+      reserved: current.reserved + Number(row.reserved ?? 0),
+      updated_at: latestIso(current.updated_at, row.updated_at),
+    });
   }
 
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
@@ -321,7 +381,7 @@ export async function getProductStockBreakdown(
       quantity: qty,
       reserved,
       available: qty - reserved,
-      updatedAt: (s?.updated_at as string) ?? "",
+      updatedAt: s?.updated_at ?? "",
     };
   });
 

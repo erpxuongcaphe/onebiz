@@ -522,7 +522,8 @@ export async function bulkImportInitialStock(
     .eq("tenant_id", ctx.tenantId);
   const curStock = new Map<string, number>();
   for (const s of stockRes.data ?? []) {
-    curStock.set(`${s.product_id}:${s.branch_id}`, Number(s.quantity ?? 0));
+    const key = `${s.product_id}:${s.branch_id}`;
+    curStock.set(key, (curStock.get(key) ?? 0) + Number(s.quantity ?? 0));
   }
 
   return runBulk(rows, async (row) => {

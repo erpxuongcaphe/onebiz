@@ -14,7 +14,7 @@ import {
   PersonFilter,
   type DatePresetValue,
 } from "@/components/shared/filter-sidebar";
-import { computeListPresetRange, STANDARD_LIST_PRESETS } from "@/lib/utils/list-date-preset-range";
+import { computeListPresetRange, STANDARD_LIST_PRESETS_WITH_ALL } from "@/lib/utils/list-date-preset-range";
 import {
   InlineDetailPanel,
   DetailTabs,
@@ -414,7 +414,7 @@ export default function KiemKhoPage() {
     "in_progress",
     "balanced",
   ]);
-  const [datePreset, setDatePreset] = useState<DatePresetValue>("this_month");
+  const [datePreset, setDatePreset] = useState<DatePresetValue>("all");
   const [dateFrom, setDateFrom] = useState("");
   const [dateTo, setDateTo] = useState("");
   const [creatorFilter, setCreatorFilter] = useState("");
@@ -614,7 +614,7 @@ export default function KiemKhoPage() {
               to={dateTo}
               onFromChange={setDateFrom}
               onToChange={setDateTo}
-              presets={STANDARD_LIST_PRESETS}
+              presets={STANDARD_LIST_PRESETS_WITH_ALL}
             />
           </FilterGroup>
 
