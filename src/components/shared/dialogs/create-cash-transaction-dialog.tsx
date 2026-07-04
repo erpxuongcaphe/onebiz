@@ -21,6 +21,7 @@ import {
 import { useToast } from "@/lib/contexts";
 import {
   createCashTransaction,
+  nextEntityCode,
   getCustomers,
   getSuppliers,
   getOpenInvoicesByCustomer,
@@ -55,11 +56,9 @@ const paymentCategories = [
   { label: "Chi phí khác", value: "other_expense" },
 ];
 
-function generateTransactionCode(type: "receipt" | "payment") {
-  const prefix = type === "receipt" ? "PT" : "PC";
-  const num = Math.floor(Math.random() * 99999) + 1;
-  return `${prefix}${String(num).padStart(5, "0")}`;
-}
+// CEO 04/07/2026 (00155): BỎ Math.random — random 5 số là nguồn trùng mã
+// (unique tenant_id+code → 23505). Ô mã để TRỐNG = tự sinh PT/PC nối tiếp
+// qua next_cash_code (RPC next_code delegate) ngay lúc lưu; vẫn cho gõ tay.
 
 export function CreateCashTransactionDialog({
   open,
@@ -92,7 +91,7 @@ export function CreateCashTransactionDialog({
   useEffect(() => {
     if (open) {
       setType(defaultType);
-      setCode(generateTransactionCode(defaultType));
+      setCode("");
       setAmount("");
       setCounterparty("");
       setMethod("cash");
@@ -172,7 +171,7 @@ export function CreateCashTransactionDialog({
 
   function handleTypeChange(newType: "receipt" | "payment") {
     setType(newType);
-    setCode(generateTransactionCode(newType));
+    setCode(""); // đổi loại → đổi dải PT/PC, để trống cho tự sinh
     setCategory("");
   }
 
@@ -217,8 +216,20 @@ export function CreateCashTransactionDialog({
           note: note || undefined,
         });
       } else {
+        // Mã trống → tự sinh nối tiếp qua cửa chống trùng (00155). Lỗi RPC
+        // (offline/migration chưa chạy) → fallback epoch, không trùng dải số.
+        let finalCode = code.trim();
+        if (!finalCode) {
+          try {
+            finalCode = await nextEntityCode(
+              type === "receipt" ? "cash_receipt" : "cash_payment",
+            );
+          } catch {
+            finalCode = `${type === "receipt" ? "PT" : "PC"}${Date.now()}`;
+          }
+        }
         await createCashTransaction({
-          code,
+          code: finalCode,
           type,
           category: category || "other",
           amount: Number(amount),
@@ -226,11 +237,12 @@ export function CreateCashTransactionDialog({
           paymentMethod: method as "cash" | "transfer" | "card",
           note: note || undefined,
         });
+        setCode(finalCode); // toast dưới hiện đúng mã đã lưu
       }
       onOpenChange(false);
       toast({
         title: type === "receipt" ? "Tạo phiếu thu thành công" : "Tạo phiếu chi thành công",
-        description: `Đã tạo ${type === "receipt" ? "phiếu thu" : "phiếu chi"} ${code}`,
+        description: `Đã tạo ${type === "receipt" ? "phiếu thu" : "phiếu chi"} thành công`,
         variant: "success",
       });
       onSuccess?.();
@@ -289,7 +301,11 @@ export function CreateCashTransactionDialog({
 
           <div className="space-y-2">
             <label className="text-sm font-medium">Mã phiếu</label>
-            <Input value={code} onChange={(e) => setCode(e.target.value)} />
+            <Input
+              value={code}
+              onChange={(e) => setCode(e.target.value)}
+              placeholder={`Tự động (${type === "receipt" ? "PT" : "PC"}…) — để trống`}
+            />
           </div>
 
           <div className="space-y-2">
