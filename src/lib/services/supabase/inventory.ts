@@ -25,6 +25,34 @@ const disposalStatusNameMap: Record<string, string> = {
   cancelled: "Đã hủy",
 };
 
+// QueryParams.filters accepts both a single value and a checkbox array.
+// Inventory list pages use checkbox filters, so an array must be translated
+// to PostgREST `.in(...)`; `.eq(...)` with an array returns no rows.
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
+function applyStatusFilter(query: any, statusFilter: string | string[] | undefined) {
+  if (Array.isArray(statusFilter)) {
+    const statuses = statusFilter.filter((s) => s && s !== "all");
+    return statuses.length > 0 ? query.in("status", statuses) : query;
+  }
+
+  if (statusFilter && statusFilter !== "all" && statusFilter !== "") {
+    return query.eq("status", statusFilter);
+  }
+
+  return query;
+}
+
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
+function applyCreatedAtRange(query: any, filters: QueryParams["filters"] | undefined) {
+  const dateFrom = typeof filters?.dateFrom === "string" ? filters.dateFrom : undefined;
+  const dateTo = typeof filters?.dateTo === "string" ? filters.dateTo : undefined;
+
+  if (dateFrom) query = query.gte("created_at", dateFrom);
+  if (dateTo) query = query.lte("created_at", dateTo);
+
+  return query;
+}
+
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
 function mapDisposalExport(row: any): DisposalExport {
   const profile = row.profiles as { full_name: string } | null;
@@ -58,10 +86,8 @@ export async function getDisposalExports(params: QueryParams): Promise<QueryResu
     query = query.ilike("code", `%${params.search}%`);
   }
 
-  // Filter: status
-  if (params.filters?.status && params.filters.status !== "all" && params.filters.status !== "") {
-    query = query.eq("status", params.filters.status);
-  }
+  query = applyStatusFilter(query, params.filters?.status);
+  query = applyCreatedAtRange(query, params.filters);
 
   // Filter: branch
   if (params.branchId) {
@@ -129,10 +155,8 @@ export async function getInternalExports(params: QueryParams): Promise<QueryResu
     query = query.ilike("code", `%${params.search}%`);
   }
 
-  // Filter: status
-  if (params.filters?.status && params.filters.status !== "all" && params.filters.status !== "") {
-    query = query.eq("status", params.filters.status);
-  }
+  query = applyStatusFilter(query, params.filters?.status);
+  query = applyCreatedAtRange(query, params.filters);
 
   // Filter: branch
   if (params.branchId) {
@@ -499,11 +523,8 @@ export async function getInventoryChecks(params: QueryParams): Promise<QueryResu
     query = query.ilike("code", `%${params.search}%`);
   }
 
-  // Filter: status
-  if (params.filters?.status && params.filters.status !== "all" && params.filters.status !== "") {
-    // eslint-disable-next-line @typescript-eslint/no-explicit-any
-    query = query.eq("status", params.filters.status as any);
-  }
+  query = applyStatusFilter(query, params.filters?.status);
+  query = applyCreatedAtRange(query, params.filters);
 
   // Filter: branch
   if (params.branchId) {

@@ -18,7 +18,7 @@ import {
   PersonFilter,
   type DatePresetValue,
 } from "@/components/shared/filter-sidebar";
-import { STANDARD_LIST_PRESETS } from "@/lib/utils/list-date-preset-range";
+import { computeListPresetRange, STANDARD_LIST_PRESETS } from "@/lib/utils/list-date-preset-range";
 import {
   InlineDetailPanel,
   DetailTabs,
@@ -249,6 +249,9 @@ export default function XuatHuyPage() {
   /* ---- Fetch data ---- */
   const fetchData = useCallback(async () => {
     setLoading(true);
+    const presetRange = computeListPresetRange(datePreset);
+    const effectiveDateFrom = datePreset === "custom" ? dateFrom : presetRange.from;
+    const effectiveDateTo = datePreset === "custom" ? dateTo : presetRange.to;
     const result = await getDisposalExports({
       page,
       pageSize,
@@ -256,13 +259,15 @@ export default function XuatHuyPage() {
       branchId: activeBranchId,
       filters: {
         ...(selectedStatuses.length > 0 && { status: selectedStatuses }),
+        ...(effectiveDateFrom && { dateFrom: `${effectiveDateFrom}T00:00:00.000Z` }),
+        ...(effectiveDateTo && { dateTo: `${effectiveDateTo}T23:59:59.999Z` }),
         ...(creatorFilter && { createdBy: creatorFilter }),
       },
     });
     setData(result.data);
     setTotal(result.total);
     setLoading(false);
-  }, [page, pageSize, search, selectedStatuses, creatorFilter, activeBranchId]);
+  }, [page, pageSize, search, selectedStatuses, datePreset, dateFrom, dateTo, creatorFilter, activeBranchId]);
 
   useEffect(() => {
     fetchData();
@@ -271,7 +276,7 @@ export default function XuatHuyPage() {
   useEffect(() => {
     setPage(0);
     setExpandedRow(null);
-  }, [search, selectedStatuses, datePreset, creatorFilter]);
+  }, [search, selectedStatuses, datePreset, dateFrom, dateTo, creatorFilter]);
 
   /* ---- Export ---- */
   const handleExport = (type: "excel" | "csv") => {

@@ -11,6 +11,11 @@ function createChain() {
   chain.update = vi.fn(self);
   chain.eq = vi.fn(self);
   chain.in = vi.fn(self);
+  chain.gte = vi.fn(self);
+  chain.lte = vi.fn(self);
+  chain.ilike = vi.fn(self);
+  chain.order = vi.fn(self);
+  chain.range = vi.fn(() => Promise.resolve({ data: [], count: 0, error: null }));
   chain.single = mockResult;
   chain.maybeSingle = mockResult;
   return chain;
@@ -51,8 +56,58 @@ vi.mock("@/lib/services/mock/inventory", () => ({
   getInternalExportStatuses: vi.fn(),
 }));
 
-import { applyInventoryCheck, cancelInventoryCheck } from "@/lib/services/supabase/inventory";
+import { applyInventoryCheck, cancelInventoryCheck, getDisposalExports, getInternalExports, getInventoryChecks } from "@/lib/services/supabase/inventory";
 
+describe("inventory list status filters", () => {
+  beforeEach(() => {
+    vi.clearAllMocks();
+    rpcCalls.length = 0;
+    rpcResponse = { data: { ok: true }, error: null };
+  });
+
+  it("uses .in() when disposal status filter has multiple checked values", async () => {
+    await getDisposalExports({
+      page: 0,
+      pageSize: 15,
+      filters: { status: ["draft", "completed"] },
+    });
+
+    expect(mockFrom).toHaveBeenCalledWith("disposal_exports");
+    expect(mockChain.in).toHaveBeenCalledWith("status", ["draft", "completed"]);
+    expect(mockChain.eq).not.toHaveBeenCalledWith("status", ["draft", "completed"]);
+  });
+
+  it("keeps the same multi-status behavior for internal exports and inventory checks", async () => {
+    await getInternalExports({
+      page: 0,
+      pageSize: 15,
+      filters: { status: ["draft", "completed"] },
+    });
+    await getInventoryChecks({
+      page: 0,
+      pageSize: 15,
+      filters: { status: ["draft", "in_progress"] },
+    });
+
+    expect(mockChain.in).toHaveBeenCalledWith("status", ["draft", "completed"]);
+    expect(mockChain.in).toHaveBeenCalledWith("status", ["draft", "in_progress"]);
+  });
+
+  it("applies created_at range filters for disposal lists", async () => {
+    await getDisposalExports({
+      page: 0,
+      pageSize: 15,
+      filters: {
+        status: ["completed"],
+        dateFrom: "2026-07-01T00:00:00.000Z",
+        dateTo: "2026-07-04T23:59:59.999Z",
+      },
+    });
+
+    expect(mockChain.gte).toHaveBeenCalledWith("created_at", "2026-07-01T00:00:00.000Z");
+    expect(mockChain.lte).toHaveBeenCalledWith("created_at", "2026-07-04T23:59:59.999Z");
+  });
+});
 describe("cancelInventoryCheck", () => {
   beforeEach(() => {
     vi.clearAllMocks();

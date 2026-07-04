@@ -135,13 +135,14 @@ export function CreateInventoryCheckDialog({
 
     const supabase = getClient();
     const ctx = await getCurrentContext();
-    const { data: branchStock, error: stockErr } = await supabase
+    // branch_stock can have multiple base rows when variant_id is NULL; sum rows instead of maybeSingle().
+    const { data: branchStockRows, error: stockErr } = await supabase
       .from("branch_stock")
       .select("quantity")
       .eq("tenant_id", ctx.tenantId)
       .eq("branch_id", ctx.branchId)
       .eq("product_id", product.id)
-      .maybeSingle();
+      .is("variant_id", null);
 
     if (stockErr) {
       toast({
@@ -152,7 +153,10 @@ export function CreateInventoryCheckDialog({
       return;
     }
 
-    const systemStock = Number(branchStock?.quantity ?? 0);
+    const systemStock = (branchStockRows ?? []).reduce(
+      (sum, row) => sum + Number(row.quantity ?? 0),
+      0,
+    );
 
     // CEO 28/05/2026: load quy cách để cho nhập theo thùng + lẻ.
     let conversions: UOMConversion[] = [];
