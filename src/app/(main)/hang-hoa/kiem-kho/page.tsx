@@ -769,6 +769,50 @@ export default function KiemKhoPage() {
             },
           },
           {
+            // CEO 04/07: áp dụng (cân bằng kho) nhiều phiếu kiểm 1 lần — mượn
+            // luồng hủy-hàng-loạt. Chỉ đụng phiếu còn nháp (processing); mỗi
+            // phiếu đi qua RPC atomic applyInventoryCheck như nút áp từng dòng.
+            label: "Áp dụng hàng loạt",
+            icon: <Icon name="check_circle" size={16} />,
+            onClick: async (selectedRows) => {
+              const applicable = selectedRows.filter(
+                (r) => r.status === "processing",
+              );
+              if (applicable.length === 0) {
+                toast({
+                  title: "Không có phiếu nào để áp dụng",
+                  description:
+                    "Chỉ áp dụng được phiếu ở trạng thái Phiếu tạm (chưa cân bằng).",
+                  variant: "info",
+                });
+                return;
+              }
+              if (
+                !window.confirm(
+                  `Áp dụng (cân bằng kho) ${applicable.length} phiếu kiểm kho? Tồn kho sẽ được điều chỉnh theo số đã đếm.`,
+                )
+              )
+                return;
+              const results = await Promise.allSettled(
+                applicable.map((r) => applyInventoryCheck(r.id)),
+              );
+              const ok = results.filter((x) => x.status === "fulfilled").length;
+              const fail = results.length - ok;
+              toast({
+                title:
+                  fail === 0
+                    ? `Đã cân bằng ${ok} phiếu`
+                    : `Cân bằng ${ok}/${results.length} phiếu`,
+                description:
+                  fail > 0
+                    ? `${fail} phiếu lỗi — mở từng phiếu để xem chi tiết.`
+                    : undefined,
+                variant: fail === 0 ? "success" : "error",
+              });
+              await fetchData();
+            },
+          },
+          {
             label: "Hủy hàng loạt",
             icon: <Icon name="cancel" size={16} />,
             variant: "destructive",
