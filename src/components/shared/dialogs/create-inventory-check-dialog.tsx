@@ -450,7 +450,8 @@ export function CreateInventoryCheckDialog({
                 </div>
               ) : (
                 <div className="divide-y">
-                  {checkItems.map((item) => {
+                  {/* CEO 04/07: NVL mới thêm hiện TRÊN CÙNG — chỉ đảo hiển thị, data giữ cũ→mới. */}
+                  {[...checkItems].reverse().map((item) => {
                     // Làm tròn + chuẩn hoá -0 → 0 (tránh hiện "-0" khi vừa đổi đơn vị).
                     const diff =
                       Math.round((lineActual(item) - item.systemStock) * 10000) / 10000 || 0;

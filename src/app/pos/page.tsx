@@ -290,9 +290,9 @@ function PosPageInner() {
           addLineWithTier(product);
           setSearchQuery("");
           searchInputRef.current?.focus();
-          // Auto-scroll cart to bottom
+          // Auto-scroll cart LÊN ĐẦU — dòng mới nằm trên cùng (CEO 04/07)
           setTimeout(() => {
-            cartScrollRef.current?.scrollTo({ top: cartScrollRef.current.scrollHeight, behavior: "smooth" });
+            cartScrollRef.current?.scrollTo({ top: 0, behavior: "smooth" });
           }, 50);
           // CEO 03/06/2026 — Sprint 3 (P2 fix): SKU has_bom luôn product.stock=0
           // (vì SKU không giữ tồn, chỉ NVL giữ). Toast "Hết hàng" sẽ false-positive.
@@ -951,10 +951,8 @@ function PosPageInner() {
           // No variants → add base product directly
           addLineWithTier(product);
           setTimeout(() => {
-            cartScrollRef.current?.scrollTo({
-              top: cartScrollRef.current.scrollHeight,
-              behavior: "smooth",
-            });
+            // Dòng mới nằm TRÊN CÙNG → cuộn lên đầu (CEO 04/07)
+            cartScrollRef.current?.scrollTo({ top: 0, behavior: "smooth" });
           }, 50);
           // CEO 03/06/2026 — Sprint 3 (P2): bỏ qua check cho has_bom (xem
           // comment ở barcode quick-add). Tránh false-positive cho SKU đóng gói.
@@ -2621,10 +2619,16 @@ function PosPageInner() {
               </div>
             ) : (
               <div className="divide-y divide-border">
-                {state.lines.map((line, idx) => (
+                {/* CEO 04/07: dòng MỚI hiện TRÊN CÙNG — chỉ đảo hiển thị, data
+                    giữ cũ→mới (lưu/in/nháp không đổi). STT giữ theo thứ tự
+                    thêm để khớp phiếu in; dòng đã có +SL đứng yên tại chỗ. */}
+                {state.lines
+                  .map((line, idx) => ({ line, stt: idx + 1 }))
+                  .reverse()
+                  .map(({ line, stt }) => (
                   <CartItem
                     key={line.lineId}
-                    index={idx + 1}
+                    index={stt}
                     line={line}
                     lineTotal={state.computeLineTotal(line)}
                     onQtyChange={(qty) => state.updateLineQty(line.lineId, qty)}
@@ -3326,10 +3330,8 @@ function PosPageInner() {
             quantity: payload.quantity,
           });
           setTimeout(() => {
-            cartScrollRef.current?.scrollTo({
-              top: cartScrollRef.current.scrollHeight,
-              behavior: "smooth",
-            });
+            // Dòng mới nằm TRÊN CÙNG → cuộn lên đầu (CEO 04/07)
+            cartScrollRef.current?.scrollTo({ top: 0, behavior: "smooth" });
           }, 50);
           toast({
             title: `Đã thêm ${variantPickerProduct.name}`,

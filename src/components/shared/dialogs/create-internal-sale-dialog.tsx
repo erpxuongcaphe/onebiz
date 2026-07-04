@@ -340,7 +340,8 @@ export function CreateInternalSaleDialog({
                 </tr>
               </thead>
               <tbody>
-                {items.map((item) => (
+                {/* CEO 04/07: dòng mới thêm hiện TRÊN CÙNG — chỉ đảo hiển thị, data giữ cũ→mới. */}
+                {[...items].reverse().map((item) => (
                   <tr key={item.productId} className="border-t">
                     <td className="p-2">
                       <div className="font-medium">{item.productName}</div>

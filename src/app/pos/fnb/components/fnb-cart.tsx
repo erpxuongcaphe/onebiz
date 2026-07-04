@@ -580,7 +580,9 @@ export function FnbCart({
       ) : (
         <ScrollArea className="flex-1">
           <div className="p-3 flex flex-col gap-2">
-            {lines.map((line) => (
+            {/* CEO 04/07: món MỚI thêm hiện TRÊN CÙNG — chỉ đảo hiển thị,
+                data giữ cũ→mới nên lưu đơn/in bill/KDS không đổi. */}
+            {[...lines].reverse().map((line) => (
               <CartLineItem
                 key={line.id}
                 line={line}

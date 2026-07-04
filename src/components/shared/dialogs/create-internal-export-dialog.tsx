@@ -302,7 +302,8 @@ export function CreateInternalExportDialog({
                 </div>
               ) : (
                 <div className="divide-y">
-                  {items.map((item) => (
+                  {/* CEO 04/07: dòng mới thêm hiện TRÊN CÙNG — chỉ đảo hiển thị, data giữ cũ→mới. */}
+                  {[...items].reverse().map((item) => (
                     <div
                       key={item.product_id}
                       className="grid gap-2 px-3 py-2.5 md:grid-cols-[minmax(300px,1fr)_90px_110px_120px_140px_150px_44px] md:items-center"
