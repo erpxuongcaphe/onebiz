@@ -4,6 +4,12 @@ export interface QueryParams {
   page: number;
   pageSize: number;
   search?: string;
+  /**
+   * CEO 04/07/2026: giới hạn tìm kiếm vào 1 cột cụ thể (vd "code" | "name" |
+   * "phone" | "customer_name"). Không set / "all" → giữ OR nhiều cột như cũ.
+   * Mỗi service tự map giá trị hợp lệ; giá trị lạ → fallback OR (an toàn).
+   */
+  searchField?: string;
   sortBy?: string;
   sortOrder?: "asc" | "desc";
   filters?: Record<string, string | string[]>;

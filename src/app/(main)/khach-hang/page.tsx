@@ -107,6 +107,8 @@ export default function KhachHangPage() {
   const [total, setTotal] = useState(0);
   const [loading, setLoading] = useState(true);
   const [search, setSearch] = useState("");
+  // CEO 04/07: ô "Tìm theo" — "all" = gộp mã+tên+SĐT như cũ.
+  const [searchField, setSearchField] = useState("all");
   const [page, setPage] = useState(0);
   const [pageSize, setPageSize] = useState(15);
 
@@ -283,6 +285,7 @@ export default function KhachHangPage() {
       page,
       pageSize,
       search,
+      searchField,
       filters: {
         ...(selectedGroups.length > 0 && { group: selectedGroups }),
         ...(typeFilter !== "all" && { type: typeFilter }),
@@ -321,6 +324,7 @@ export default function KhachHangPage() {
     page,
     pageSize,
     search,
+    searchField,
     selectedGroups,
     typeFilter,
     genderFilter,
@@ -619,6 +623,17 @@ export default function KhachHangPage() {
           searchPlaceholder="Theo mã, tên, SĐT"
           searchValue={search}
           onSearchChange={setSearch}
+          searchFields={[
+            { value: "all", label: "Tất cả" },
+            { value: "code", label: "Mã KH" },
+            { value: "name", label: "Tên" },
+            { value: "phone", label: "SĐT" },
+          ]}
+          searchField={searchField}
+          onSearchFieldChange={(v) => {
+            setSearchField(v);
+            setPage(0);
+          }}
           onExport={{
             excel: () => handleExport("excel"),
             csv: () => handleExport("csv"),

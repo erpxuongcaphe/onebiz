@@ -30,9 +30,14 @@ export async function getCustomers(params: QueryParams): Promise<QueryResult<Cus
   // Search — escape % wildcard
   if (params.search) {
     const esc = params.search.replace(/[%_]/g, "\\$&");
-    query = query.or(
-      `name.ilike.%${esc}%,code.ilike.%${esc}%,phone.ilike.%${esc}%`,
-    );
+    // CEO 04/07: tìm theo cột chọn — "all"/lạ → OR tên+mã+SĐT như cũ.
+    if (params.searchField === "code") query = query.ilike("code", `%${esc}%`);
+    else if (params.searchField === "name") query = query.ilike("name", `%${esc}%`);
+    else if (params.searchField === "phone") query = query.ilike("phone", `%${esc}%`);
+    else
+      query = query.or(
+        `name.ilike.%${esc}%,code.ilike.%${esc}%,phone.ilike.%${esc}%`,
+      );
   }
 
   // Filter: type

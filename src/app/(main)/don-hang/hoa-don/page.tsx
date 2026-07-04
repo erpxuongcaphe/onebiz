@@ -448,6 +448,8 @@ export default function HoaDonPage() {
   const [search, setSearch] = useState("");
   // CEO 28/05/2026: debounce search 300ms — tránh gọi server mỗi keystroke.
   const debouncedSearch = useDebounce(search, 300);
+  // CEO 04/07: ô "Tìm theo" — "all" = gộp mã+tên KH như cũ.
+  const [searchField, setSearchField] = useState("all");
   const [page, setPage] = useState(0);
   const [pageSize, setPageSize] = useState(15);
   const [expandedRow, setExpandedRow] = useState<number | null>(null);
@@ -512,13 +514,14 @@ export default function HoaDonPage() {
       page,
       pageSize,
       search: debouncedSearch,
+      searchField,
       branchId: activeBranchId,
       filters,
     });
     setData(result.data);
     setTotal(result.total);
     setLoading(false);
-  }, [page, pageSize, debouncedSearch, selectedStatuses, activeBranchId, dateRange]);
+  }, [page, pageSize, debouncedSearch, searchField, selectedStatuses, activeBranchId, dateRange]);
 
   useEffect(() => {
     fetchData();
@@ -752,6 +755,16 @@ export default function HoaDonPage() {
           searchPlaceholder="Theo mã hóa đơn"
           searchValue={search}
           onSearchChange={setSearch}
+          searchFields={[
+            { value: "all", label: "Tất cả" },
+            { value: "code", label: "Mã HĐ" },
+            { value: "customer_name", label: "Khách hàng" },
+          ]}
+          searchField={searchField}
+          onSearchFieldChange={(v) => {
+            setSearchField(v);
+            setPage(0);
+          }}
           onExport={{
             excel: () => handleExport("excel"),
             csv: () => handleExport("csv"),

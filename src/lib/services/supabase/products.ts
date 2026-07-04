@@ -54,7 +54,10 @@ export async function getProducts(params: QueryParams): Promise<QueryResult<Prod
   // unaccent extension nếu CEO muốn search không dấu.
   if (params.search) {
     const esc = params.search.replace(/[%_]/g, "\\$&");
-    query = query.or(`name.ilike.%${esc}%,code.ilike.%${esc}%`);
+    // CEO 04/07: tìm theo cột chọn — "all"/lạ → OR mã+tên như cũ.
+    if (params.searchField === "code") query = query.ilike("code", `%${esc}%`);
+    else if (params.searchField === "name") query = query.ilike("name", `%${esc}%`);
+    else query = query.or(`name.ilike.%${esc}%,code.ilike.%${esc}%`);
   }
 
   // Filter: product_type (nvl | sku)
@@ -141,10 +144,12 @@ export async function getAllMatchingProductIds(params: QueryParams): Promise<str
     .select("id")
     .eq("tenant_id", tenantId);
 
-  // Search
+  // Search — CEO 04/07: khớp getProducts để "chọn tất cả khớp lọc" đúng cột.
   if (params.search) {
     const esc = params.search.replace(/[%_]/g, "\\$&");
-    query = query.or(`name.ilike.%${esc}%,code.ilike.%${esc}%`);
+    if (params.searchField === "code") query = query.ilike("code", `%${esc}%`);
+    else if (params.searchField === "name") query = query.ilike("name", `%${esc}%`);
+    else query = query.or(`name.ilike.%${esc}%,code.ilike.%${esc}%`);
   }
 
   // Filter: productType

@@ -10,6 +10,13 @@ import {
   DropdownMenuItem,
   DropdownMenuSeparator,
 } from "@/components/ui/dropdown-menu";
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from "@/components/ui/select";
 import { cn } from "@/lib/utils";
 import { Icon } from "@/components/ui/icon";
 
@@ -47,6 +54,13 @@ interface PageHeaderProps {
   searchPlaceholder?: string;
   searchValue?: string;
   onSearchChange?: (value: string) => void;
+  /**
+   * CEO 04/07: ô "Tìm theo" — khai danh sách cột tìm được (nên có mục
+   * {value:"all",label:"Tất cả"} đầu tiên). KHÔNG truyền → ô tìm gộp như cũ.
+   */
+  searchFields?: { value: string; label: string }[];
+  searchField?: string;
+  onSearchFieldChange?: (value: string) => void;
   actions?: PageAction[];
   onExport?: ExportHandlers;
   onImport?: (file: File) => void;
@@ -332,10 +346,16 @@ function DebouncedSearchInput({
   value,
   onChange,
   placeholder,
+  fields,
+  field,
+  onFieldChange,
 }: {
   value: string | undefined;
   onChange: (v: string) => void;
   placeholder: string;
+  fields?: { value: string; label: string }[];
+  field?: string;
+  onFieldChange?: (v: string) => void;
 }) {
   const [local, setLocal] = useState(value ?? "");
   // Sync khi parent đổi value từ ngoài (clear filter, load preset, ...).
@@ -356,15 +376,37 @@ function DebouncedSearchInput({
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [local]);
 
+  // CEO 04/07: ô "Tìm theo" — chỉ hiện khi page khai `fields` (opt-in).
+  const hasFields = !!(fields && fields.length > 0 && onFieldChange);
+
   return (
-    <div className="relative w-full min-w-0 lg:max-w-md lg:flex-1">
-      <Icon name="search" size={16} className="absolute left-3 top-1/2 -translate-y-1/2 text-muted-foreground" />
-      <Input
-        value={local}
-        onChange={(e) => setLocal(e.target.value)}
-        placeholder={placeholder}
-        className="pl-9 h-8"
-      />
+    <div className="flex items-stretch w-full min-w-0 lg:max-w-md lg:flex-1">
+      {hasFields && (
+        <Select
+          value={field ?? fields![0].value}
+          onValueChange={(v) => v && onFieldChange!(v)}
+        >
+          <SelectTrigger className="h-8 w-auto shrink-0 rounded-r-none border-r-0 gap-1 px-2.5 text-xs text-muted-foreground whitespace-nowrap">
+            <SelectValue />
+          </SelectTrigger>
+          <SelectContent>
+            {fields!.map((f) => (
+              <SelectItem key={f.value} value={f.value} className="text-xs">
+                {f.label}
+              </SelectItem>
+            ))}
+          </SelectContent>
+        </Select>
+      )}
+      <div className="relative flex-1 min-w-0">
+        <Icon name="search" size={16} className="absolute left-3 top-1/2 -translate-y-1/2 text-muted-foreground" />
+        <Input
+          value={local}
+          onChange={(e) => setLocal(e.target.value)}
+          placeholder={placeholder}
+          className={cn("pl-9 h-8", hasFields && "rounded-l-none")}
+        />
+      </div>
     </div>
   );
 }
@@ -377,6 +419,9 @@ export function PageHeader({
   searchPlaceholder = "Tìm kiếm...",
   searchValue,
   onSearchChange,
+  searchFields,
+  searchField,
+  onSearchFieldChange,
   actions = [],
   onExport,
   onImport,
@@ -439,6 +484,9 @@ export function PageHeader({
               value={searchValue}
               onChange={onSearchChange}
               placeholder={searchPlaceholder}
+              fields={searchFields}
+              field={searchField}
+              onFieldChange={onSearchFieldChange}
             />
           )}
 

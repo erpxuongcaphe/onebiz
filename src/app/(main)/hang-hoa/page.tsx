@@ -316,6 +316,8 @@ export default function HangHoaPage() {
   const [search, setSearch] = useState("");
   // CEO 28/05/2026: debounce search 300ms — tránh gọi getProducts mỗi keystroke.
   const debouncedSearch = useDebounce(search, 300);
+  // CEO 04/07: ô "Tìm theo" — "all" = tìm gộp mã+tên như cũ.
+  const [searchField, setSearchField] = useState("all");
   const [page, setPage] = useState(0);
   const [pageSize, setPageSize] = useState(15);
   const [expandedRow, setExpandedRow] = useState<number | null>(null);
@@ -447,6 +449,7 @@ export default function HangHoaPage() {
       page,
       pageSize,
       search: debouncedSearch,
+      searchField,
       filters: {
         productType: scope,
         ...(categoryFilter !== "all" && { category: [categoryFilter] }),
@@ -494,7 +497,7 @@ export default function HangHoaPage() {
     } else {
       setConversionsMap(new Map());
     }
-  }, [page, pageSize, debouncedSearch, scope, categoryFilter, stockFilter, statusFilter, brandFilter, createdDatePreset, createdDateFrom, createdDateTo]);
+  }, [page, pageSize, debouncedSearch, searchField, scope, categoryFilter, stockFilter, statusFilter, brandFilter, createdDatePreset, createdDateFrom, createdDateTo]);
 
   useEffect(() => {
     fetchData();
@@ -1420,6 +1423,16 @@ export default function HangHoaPage() {
           searchPlaceholder={scope === "nvl" ? "Theo mã, tên NVL" : "Theo mã, tên SKU"}
           searchValue={search}
           onSearchChange={setSearch}
+          searchFields={[
+            { value: "all", label: "Tất cả" },
+            { value: "code", label: "Mã hàng" },
+            { value: "name", label: "Tên hàng" },
+          ]}
+          searchField={searchField}
+          onSearchFieldChange={(v) => {
+            setSearchField(v);
+            setPage(0);
+          }}
           onExport={{
             excel: () => handleExport("excel"),
             csv: () => handleExport("csv"),
