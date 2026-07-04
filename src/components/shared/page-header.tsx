@@ -15,7 +15,6 @@ import {
   SelectContent,
   SelectItem,
   SelectTrigger,
-  SelectValue,
 } from "@/components/ui/select";
 import { cn } from "@/lib/utils";
 import { Icon } from "@/components/ui/icon";
@@ -387,7 +386,11 @@ function DebouncedSearchInput({
           onValueChange={(v) => v && onFieldChange!(v)}
         >
           <SelectTrigger className="h-8 w-auto shrink-0 rounded-r-none border-r-0 gap-1 px-2.5 text-xs text-muted-foreground whitespace-nowrap">
-            <SelectValue />
+            {/* Base UI SelectValue hiện value thô → render nhãn thẳng. */}
+            <span>
+              {fields!.find((f) => f.value === (field ?? fields![0].value))
+                ?.label ?? fields![0].label}
+            </span>
           </SelectTrigger>
           <SelectContent>
             {fields!.map((f) => (
