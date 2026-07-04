@@ -16,7 +16,7 @@ import {
   type DatePresetValue,
 } from "@/components/shared/filter-sidebar";
 // CEO 06/06/2026 Phase 4: migrate khỏi legacy DateRangeFilter
-import { STANDARD_LIST_PRESETS_WITH_ALL } from "@/lib/utils/list-date-preset-range";
+import { computeListPresetRange, STANDARD_LIST_PRESETS_WITH_ALL } from "@/lib/utils/list-date-preset-range";
 import {
   InlineDetailPanel,
   DetailTabs,
@@ -211,21 +211,28 @@ export default function DatHangNhapPage() {
   // Filters
   const [statusFilter, setStatusFilter] = useState("all");
   const [datePreset, setDatePreset] = useState<DatePresetValue>("all");
+  const [dateFrom, setDateFrom] = useState("");
+  const [dateTo, setDateTo] = useState("");
 
   const fetchData = useCallback(async () => {
     setLoading(true);
+    const presetRange = computeListPresetRange(datePreset);
+    const effectiveDateFrom = datePreset === "custom" ? dateFrom : presetRange.from;
+    const effectiveDateTo = datePreset === "custom" ? dateTo : presetRange.to;
     const result = await getPurchaseOrderEntries({
       page,
       pageSize,
       search,
       filters: {
         ...(statusFilter !== "all" && { status: statusFilter }),
+        ...(effectiveDateFrom && { dateFrom: effectiveDateFrom }),
+        ...(effectiveDateTo && { dateTo: effectiveDateTo }),
       },
     });
     setData(result.data);
     setTotal(result.total);
     setLoading(false);
-  }, [page, pageSize, search, statusFilter]);
+  }, [page, pageSize, search, statusFilter, datePreset, dateFrom, dateTo]);
 
   useEffect(() => {
     fetchData();
@@ -234,7 +241,7 @@ export default function DatHangNhapPage() {
   useEffect(() => {
     setPage(0);
     setExpandedRow(null);
-  }, [search, statusFilter]);
+  }, [search, statusFilter, datePreset, dateFrom, dateTo]);
 
   /* ---- KPI row (outstanding orders = CEO attention) ---- */
   const kpiOutstanding = data.filter(
@@ -263,6 +270,10 @@ export default function DatHangNhapPage() {
             <DatePresetFilter
               value={datePreset}
               onChange={setDatePreset}
+              from={dateFrom}
+              to={dateTo}
+              onFromChange={setDateFrom}
+              onToChange={setDateTo}
               presets={STANDARD_LIST_PRESETS_WITH_ALL}
             />
           </FilterGroup>

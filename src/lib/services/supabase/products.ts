@@ -10,6 +10,25 @@ import { isRpcUnavailable } from "./rpc-utils";
 type ProductInsert = Database["public"]["Tables"]["products"]["Insert"];
 type ProductUpdate = Database["public"]["Tables"]["products"]["Update"];
 
+function dateStart(value: string): string {
+  return value.includes("T") ? value : `${value}T00:00:00.000Z`;
+}
+
+function dateEnd(value: string): string {
+  return value.includes("T") ? value : `${value}T23:59:59.999Z`;
+}
+
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
+function applyCreatedAtRange(query: any, filters: QueryParams["filters"] | undefined) {
+  const dateFrom = typeof filters?.dateFrom === "string" ? filters.dateFrom : undefined;
+  const dateTo = typeof filters?.dateTo === "string" ? filters.dateTo : undefined;
+
+  if (dateFrom) query = query.gte("created_at", dateStart(dateFrom));
+  if (dateTo) query = query.lte("created_at", dateEnd(dateTo));
+
+  return query;
+}
+
 // --- Products ---
 
 export async function getProducts(params: QueryParams): Promise<QueryResult<Product>> {
@@ -82,6 +101,8 @@ export async function getProducts(params: QueryParams): Promise<QueryResult<Prod
       query = query.eq("brand", brandFilter);
     }
   }
+
+  query = applyCreatedAtRange(query, params.filters);
 
   // Sort
   const sortBy = params.sortBy ?? "created_at";
@@ -169,8 +190,9 @@ export async function getAllMatchingProductIds(params: QueryParams): Promise<str
   }
 
   // Cap 5000 để tránh fetch quá lớn — UI sẽ cảnh báo nếu thực sự > 5000
-  query = query.limit(5000);
+  query = applyCreatedAtRange(query, params.filters);
 
+  query = query.limit(5000);
   const { data, error } = await query;
   if (error) handleError(error, "getAllMatchingProductIds");
 

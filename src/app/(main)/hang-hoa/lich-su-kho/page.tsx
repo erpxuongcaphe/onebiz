@@ -65,7 +65,10 @@ const movementTypeOptions = [
 // === Date presets ===
 // CEO 06/06/2026 Phase 3: dùng STANDARD_LIST_PRESETS_WITH_ALL từ utility chung
 // thay vì define local (11 option chuẩn KiotViet).
-import { STANDARD_LIST_PRESETS_WITH_ALL as datePresets } from "@/lib/utils/list-date-preset-range";
+import {
+  computeListPresetRange,
+  STANDARD_LIST_PRESETS_WITH_ALL as datePresets,
+} from "@/lib/utils/list-date-preset-range";
 
 // === Reference type display ===
 const referenceTypeLabels: Record<string, string> = {
@@ -112,14 +115,20 @@ export default function LichSuKhoPage() {
     try {
       // P1-3C-K2 12/06/2026: truyền dateFrom/dateTo (trước đây state có nhưng
       // không tới service → filter là UI giả).
+      const presetRange = computeListPresetRange(datePreset);
+      const effectiveDateFrom =
+        datePreset === "custom" ? dateFrom : presetRange.from;
+      const effectiveDateTo =
+        datePreset === "custom" ? dateTo : presetRange.to;
+
       const result = await getAllStockMovements({
         page,
         pageSize,
         search: search || undefined,
         movementType: typeFilter !== "all" ? typeFilter : undefined,
         branchId: branchFilter !== "all" ? branchFilter : undefined,
-        dateFrom: dateFrom || undefined,
-        dateTo: dateTo || undefined,
+        dateFrom: effectiveDateFrom || undefined,
+        dateTo: effectiveDateTo || undefined,
       });
       setData(result.data);
       setTotal(result.total);
@@ -132,7 +141,7 @@ export default function LichSuKhoPage() {
     } finally {
       setLoading(false);
     }
-  }, [page, pageSize, search, typeFilter, branchFilter, dateFrom, dateTo, toast]);
+  }, [page, pageSize, search, typeFilter, branchFilter, datePreset, dateFrom, dateTo, toast]);
 
   useEffect(() => {
     fetchData();
@@ -141,7 +150,7 @@ export default function LichSuKhoPage() {
   // Reset page when filters change
   useEffect(() => {
     setPage(0);
-  }, [search, typeFilter, branchFilter, datePreset]);
+  }, [search, typeFilter, branchFilter, datePreset, dateFrom, dateTo]);
 
   // === Summary stats ===
   const totalIn = useMemo(

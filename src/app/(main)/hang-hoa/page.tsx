@@ -16,7 +16,7 @@ import {
   PersonFilter,
   type DatePresetValue,
 } from "@/components/shared/filter-sidebar";
-import { STANDARD_LIST_PRESETS } from "@/lib/utils/list-date-preset-range";
+import { computeListPresetRange, STANDARD_LIST_PRESETS } from "@/lib/utils/list-date-preset-range";
 import {
   InlineDetailPanel,
   DetailTabs,
@@ -406,6 +406,8 @@ export default function HangHoaPage() {
     useState<DatePresetValue>("all");
   const [createdDatePreset, setCreatedDatePreset] =
     useState<DatePresetValue>("all");
+  const [createdDateFrom, setCreatedDateFrom] = useState("");
+  const [createdDateTo, setCreatedDateTo] = useState("");
   const [supplierFilter, setSupplierFilter] = useState("");
 
   const [categories, setCategories] = useState<
@@ -436,6 +438,11 @@ export default function HangHoaPage() {
 
   const fetchData = useCallback(async () => {
     setLoading(true);
+    const createdRange = computeListPresetRange(createdDatePreset);
+    const effectiveCreatedFrom =
+      createdDatePreset === "custom" ? createdDateFrom : createdRange.from;
+    const effectiveCreatedTo =
+      createdDatePreset === "custom" ? createdDateTo : createdRange.to;
     const result = await getProducts({
       page,
       pageSize,
@@ -446,6 +453,8 @@ export default function HangHoaPage() {
         ...(stockFilter !== "all" && { stock: stockFilter }),
         ...(statusFilter !== "all" && { status: statusFilter }),
         ...(brandFilter !== "all" && { brand: brandFilter }),
+        ...(effectiveCreatedFrom && { dateFrom: effectiveCreatedFrom }),
+        ...(effectiveCreatedTo && { dateTo: effectiveCreatedTo }),
       },
     });
     setData(result.data);
@@ -485,7 +494,7 @@ export default function HangHoaPage() {
     } else {
       setConversionsMap(new Map());
     }
-  }, [page, pageSize, debouncedSearch, scope, categoryFilter, stockFilter, statusFilter, brandFilter]);
+  }, [page, pageSize, debouncedSearch, scope, categoryFilter, stockFilter, statusFilter, brandFilter, createdDatePreset, createdDateFrom, createdDateTo]);
 
   useEffect(() => {
     fetchData();
@@ -859,7 +868,7 @@ export default function HangHoaPage() {
   useEffect(() => {
     setPage(0);
     setExpandedRow(null);
-  }, [debouncedSearch, scope, categoryFilter, stockFilter, statusFilter, brandFilter, expectedOutDate, createdDatePreset, supplierFilter]);
+  }, [debouncedSearch, scope, categoryFilter, stockFilter, statusFilter, brandFilter, expectedOutDate, createdDatePreset, createdDateFrom, createdDateTo, supplierFilter]);
 
   // Reset category + brand filter when scope changes (pool khác nhau giữa NVL/SKU)
   useEffect(() => {
@@ -1379,6 +1388,10 @@ export default function HangHoaPage() {
               <DatePresetFilter
                 value={createdDatePreset}
                 onChange={setCreatedDatePreset}
+                from={createdDateFrom}
+                to={createdDateTo}
+                onFromChange={setCreatedDateFrom}
+                onToChange={setCreatedDateTo}
                 presets={STANDARD_LIST_PRESETS}
               />
             </FilterGroup>
@@ -1538,6 +1551,11 @@ export default function HangHoaPage() {
           onSelectAllMatching={async () => {
             // Day 17/05/2026: fetch tất cả product IDs khớp filter hiện tại
             // (kể cả các trang chưa load). Reuse filter logic của getProducts.
+            const createdRange = computeListPresetRange(createdDatePreset);
+            const effectiveCreatedFrom =
+              createdDatePreset === "custom" ? createdDateFrom : createdRange.from;
+            const effectiveCreatedTo =
+              createdDatePreset === "custom" ? createdDateTo : createdRange.to;
             return getAllMatchingProductIds({
               search,
               page: 0,
@@ -1548,6 +1566,8 @@ export default function HangHoaPage() {
                 ...(stockFilter !== "all" && { stock: stockFilter }),
                 ...(statusFilter !== "all" && { status: statusFilter }),
                 ...(brandFilter !== "all" && { brand: brandFilter }),
+                ...(effectiveCreatedFrom && { dateFrom: effectiveCreatedFrom }),
+                ...(effectiveCreatedTo && { dateTo: effectiveCreatedTo }),
               },
             });
           }}

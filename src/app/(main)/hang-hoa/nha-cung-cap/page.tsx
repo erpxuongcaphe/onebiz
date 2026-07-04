@@ -16,7 +16,7 @@ import {
   RangeFilter,
   type DatePresetValue,
 } from "@/components/shared/filter-sidebar";
-import { STANDARD_LIST_PRESETS_WITH_ALL } from "@/lib/utils/list-date-preset-range";
+import { computeListPresetRange, STANDARD_LIST_PRESETS_WITH_ALL } from "@/lib/utils/list-date-preset-range";
 import { VN_PROVINCES } from "@/lib/data/vn-provinces";
 import {
   InlineDetailPanel,
@@ -440,6 +440,9 @@ export default function NhaCungCapPage() {
   /* ---- Fetch data ---- */
   const fetchData = useCallback(async () => {
     setLoading(true);
+    const presetRange = computeListPresetRange(datePreset);
+    const effectiveDateFrom = datePreset === "custom" ? dateFrom : presetRange.from;
+    const effectiveDateTo = datePreset === "custom" ? dateTo : presetRange.to;
     const result = await getSuppliers({
       page,
       pageSize,
@@ -449,8 +452,8 @@ export default function NhaCungCapPage() {
         ...(selectedStatuses.length > 0 && { status: selectedStatuses }),
         ...(debtFrom && { debtFrom }),
         ...(debtTo && { debtTo }),
-        ...(dateFrom && { dateFrom }),
-        ...(dateTo && { dateTo }),
+        ...(effectiveDateFrom && { dateFrom: effectiveDateFrom }),
+        ...(effectiveDateTo && { dateTo: effectiveDateTo }),
         // Day 17/05: filter Tỉnh/TP
         ...(provinceFilter !== "all" && { province: provinceFilter }),
       },
@@ -466,6 +469,7 @@ export default function NhaCungCapPage() {
     selectedStatuses,
     debtFrom,
     debtTo,
+    datePreset,
     dateFrom,
     dateTo,
     provinceFilter,
@@ -481,7 +485,7 @@ export default function NhaCungCapPage() {
   useEffect(() => {
     setPage(0);
     setExpandedRow(null);
-  }, [search, supplierGroupFilter, selectedStatuses, datePreset, totalBuyFrom, totalBuyTo, debtFrom, debtTo]);
+  }, [search, supplierGroupFilter, selectedStatuses, datePreset, dateFrom, dateTo, totalBuyFrom, totalBuyTo, debtFrom, debtTo]);
 
   /* ---- Summary ---- */
   const totalDebt = data.reduce((sum, s) => sum + s.currentDebt, 0);

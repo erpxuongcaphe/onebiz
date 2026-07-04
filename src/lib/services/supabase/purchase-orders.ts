@@ -58,6 +58,25 @@ export function canTransitionPurchaseStatus(from: string, to: string): boolean {
   return allowed.includes(to as PurchaseOrderStatus);
 }
 
+function dateStart(value: string): string {
+  return value.includes("T") ? value : `${value}T00:00:00.000Z`;
+}
+
+function dateEnd(value: string): string {
+  return value.includes("T") ? value : `${value}T23:59:59.999Z`;
+}
+
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
+function applyCreatedAtRange(query: any, filters: QueryParams["filters"] | undefined) {
+  const dateFrom = typeof filters?.dateFrom === "string" ? filters.dateFrom : undefined;
+  const dateTo = typeof filters?.dateTo === "string" ? filters.dateTo : undefined;
+
+  if (dateFrom) query = query.gte("created_at", dateStart(dateFrom));
+  if (dateTo) query = query.lte("created_at", dateEnd(dateTo));
+
+  return query;
+}
+
 export function getPurchaseOrderStatusMeta(): Record<
   PurchaseOrderStatus,
   { label: string; color: string }
@@ -106,6 +125,8 @@ export async function getPurchaseOrders(
     // eslint-disable-next-line @typescript-eslint/no-explicit-any
     query = query.eq("supplier_name", params.filters.supplier as any);
   }
+
+  query = applyCreatedAtRange(query, params.filters);
 
   // Filter: branch
   if (params.branchId) {

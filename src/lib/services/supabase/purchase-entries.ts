@@ -22,6 +22,25 @@ import { recordAuditLog } from "./audit";
 type CashTransactionInsert = Database["public"]["Tables"]["cash_transactions"]["Insert"];
 type SupplierReturnPaymentMethod = "cash" | "transfer" | "card";
 
+function dateStart(value: string): string {
+  return value.includes("T") ? value : `${value}T00:00:00.000Z`;
+}
+
+function dateEnd(value: string): string {
+  return value.includes("T") ? value : `${value}T23:59:59.999Z`;
+}
+
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
+function applyCreatedAtRange(query: any, filters: QueryParams["filters"] | undefined) {
+  const dateFrom = typeof filters?.dateFrom === "string" ? filters.dateFrom : undefined;
+  const dateTo = typeof filters?.dateTo === "string" ? filters.dateTo : undefined;
+
+  if (dateFrom) query = query.gte("created_at", dateStart(dateFrom));
+  if (dateTo) query = query.lte("created_at", dateEnd(dateTo));
+
+  return query;
+}
+
 // ==================== Purchase Order Entries (Đặt hàng nhập) ====================
 
 export async function getPurchaseOrderEntries(
@@ -56,6 +75,8 @@ export async function getPurchaseOrderEntries(
       query = query.eq("status", feStatus as any);
     }
   }
+
+  query = applyCreatedAtRange(query, params.filters);
 
   // Sort & paginate
   query = query
@@ -230,6 +251,8 @@ export async function getPurchaseReturns(
     query = query.eq("branch_id", params.filters.branchId as any);
   }
 
+  query = applyCreatedAtRange(query, params.filters);
+
   // Sort & paginate
   query = query
     .order("created_at", { ascending: false })
@@ -324,6 +347,8 @@ export async function getInputInvoices(
     // eslint-disable-next-line @typescript-eslint/no-explicit-any
     query = query.eq("branch_id", params.filters.branchId as any);
   }
+
+  query = applyCreatedAtRange(query, params.filters);
 
   // Sort & paginate
   query = query

@@ -410,7 +410,8 @@ export default function KiemKhoPage() {
 
   // Filters
   const [selectedStatuses, setSelectedStatuses] = useState<string[]>([
-    "processing",
+    "draft",
+    "in_progress",
     "balanced",
   ]);
   const [datePreset, setDatePreset] = useState<DatePresetValue>("this_month");

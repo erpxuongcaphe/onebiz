@@ -16,7 +16,7 @@ import {
 } from "@/components/shared/filter-sidebar";
 // CEO 06/06/2026 Phase 4: migrate khỏi legacy DateRangeFilter sang
 // DatePresetFilter + STANDARD_LIST_PRESETS_WITH_ALL (12 option).
-import { STANDARD_LIST_PRESETS_WITH_ALL } from "@/lib/utils/list-date-preset-range";
+import { computeListPresetRange, STANDARD_LIST_PRESETS_WITH_ALL } from "@/lib/utils/list-date-preset-range";
 import {
   InlineDetailPanel,
   DetailTabs,
@@ -184,9 +184,14 @@ export default function TraHangNhapPage() {
   // Filters
   const [statusFilter, setStatusFilter] = useState("all");
   const [datePreset, setDatePreset] = useState<DatePresetValue>("all");
+  const [dateFrom, setDateFrom] = useState("");
+  const [dateTo, setDateTo] = useState("");
 
   const fetchData = useCallback(async () => {
     setLoading(true);
+    const presetRange = computeListPresetRange(datePreset);
+    const effectiveDateFrom = datePreset === "custom" ? dateFrom : presetRange.from;
+    const effectiveDateTo = datePreset === "custom" ? dateTo : presetRange.to;
     const result = await getPurchaseReturns({
       page,
       pageSize,
@@ -194,12 +199,14 @@ export default function TraHangNhapPage() {
       filters: {
         ...(statusFilter !== "all" && { status: statusFilter }),
         ...(activeBranchId && { branchId: activeBranchId }),
+        ...(effectiveDateFrom && { dateFrom: effectiveDateFrom }),
+        ...(effectiveDateTo && { dateTo: effectiveDateTo }),
       },
     });
     setData(result.data);
     setTotal(result.total);
     setLoading(false);
-  }, [page, pageSize, search, statusFilter, activeBranchId]);
+  }, [page, pageSize, search, statusFilter, activeBranchId, datePreset, dateFrom, dateTo]);
 
   useEffect(() => {
     fetchData();
@@ -208,7 +215,7 @@ export default function TraHangNhapPage() {
   useEffect(() => {
     setPage(0);
     setExpandedRow(null);
-  }, [search, statusFilter, activeBranchId]);
+  }, [search, statusFilter, activeBranchId, datePreset, dateFrom, dateTo]);
 
   return (
     <ListPageLayout
@@ -227,6 +234,10 @@ export default function TraHangNhapPage() {
             <DatePresetFilter
               value={datePreset}
               onChange={setDatePreset}
+              from={dateFrom}
+              to={dateTo}
+              onFromChange={setDateFrom}
+              onToChange={setDateTo}
               presets={STANDARD_LIST_PRESETS_WITH_ALL}
             />
           </FilterGroup>

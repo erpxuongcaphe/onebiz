@@ -19,7 +19,7 @@ import {
   type DatePresetValue,
 } from "@/components/shared/filter-sidebar";
 // CEO 06/06/2026 Phase 3: chuẩn hoá 11 preset thời gian
-import { STANDARD_LIST_PRESETS } from "@/lib/utils/list-date-preset-range";
+import { computeListPresetRange, STANDARD_LIST_PRESETS } from "@/lib/utils/list-date-preset-range";
 import {
   InlineDetailPanel,
   DetailTabs,
@@ -588,6 +588,9 @@ export default function NhapHangPage() {
   /* ---- Fetch data ---- */
   const fetchData = useCallback(async () => {
     setLoading(true);
+    const presetRange = computeListPresetRange(datePreset);
+    const effectiveDateFrom = datePreset === "custom" ? dateFrom : presetRange.from;
+    const effectiveDateTo = datePreset === "custom" ? dateTo : presetRange.to;
     const result = await getPurchaseOrders({
       page,
       pageSize,
@@ -598,12 +601,14 @@ export default function NhapHangPage() {
         ...(creatorFilter && { createdBy: creatorFilter }),
         ...(importerFilter && { importedBy: importerFilter }),
         ...(costReturnFilter !== "all" && { costReturn: costReturnFilter }),
+        ...(effectiveDateFrom && { dateFrom: effectiveDateFrom }),
+        ...(effectiveDateTo && { dateTo: effectiveDateTo }),
       },
     });
     setData(result.data);
     setTotal(result.total);
     setLoading(false);
-  }, [page, pageSize, search, selectedStatuses, creatorFilter, importerFilter, costReturnFilter, activeBranchId]);
+  }, [page, pageSize, search, selectedStatuses, creatorFilter, importerFilter, costReturnFilter, activeBranchId, datePreset, dateFrom, dateTo]);
 
   useEffect(() => {
     fetchData();
@@ -612,7 +617,7 @@ export default function NhapHangPage() {
   useEffect(() => {
     setPage(0);
     setExpandedRow(null);
-  }, [search, selectedStatuses, datePreset, creatorFilter, importerFilter, costReturnFilter]);
+  }, [search, selectedStatuses, datePreset, dateFrom, dateTo, creatorFilter, importerFilter, costReturnFilter]);
 
   /* ---- Summary ---- */
   const totalAmountOwed = data.reduce((sum, o) => sum + o.amountOwed, 0);

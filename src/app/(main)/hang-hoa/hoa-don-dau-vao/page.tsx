@@ -15,7 +15,7 @@ import {
   type DatePresetValue,
 } from "@/components/shared/filter-sidebar";
 // CEO 06/06/2026 Phase 4: migrate khỏi legacy DateRangeFilter
-import { STANDARD_LIST_PRESETS_WITH_ALL } from "@/lib/utils/list-date-preset-range";
+import { computeListPresetRange, STANDARD_LIST_PRESETS_WITH_ALL } from "@/lib/utils/list-date-preset-range";
 import {
   InlineDetailPanel,
   DetailTabs,
@@ -217,9 +217,14 @@ export default function HoaDonDauVaoPage() {
   // Filters
   const [statusFilter, setStatusFilter] = useState("all");
   const [datePreset, setDatePreset] = useState<DatePresetValue>("all");
+  const [dateFrom, setDateFrom] = useState("");
+  const [dateTo, setDateTo] = useState("");
 
   const fetchData = useCallback(async () => {
     setLoading(true);
+    const presetRange = computeListPresetRange(datePreset);
+    const effectiveDateFrom = datePreset === "custom" ? dateFrom : presetRange.from;
+    const effectiveDateTo = datePreset === "custom" ? dateTo : presetRange.to;
     const result = await getInputInvoices({
       page,
       pageSize,
@@ -227,12 +232,14 @@ export default function HoaDonDauVaoPage() {
       filters: {
         ...(statusFilter !== "all" && { status: statusFilter }),
         ...(activeBranchId && { branchId: activeBranchId }),
+        ...(effectiveDateFrom && { dateFrom: effectiveDateFrom }),
+        ...(effectiveDateTo && { dateTo: effectiveDateTo }),
       },
     });
     setData(result.data);
     setTotal(result.total);
     setLoading(false);
-  }, [page, pageSize, search, statusFilter, activeBranchId]);
+  }, [page, pageSize, search, statusFilter, activeBranchId, datePreset, dateFrom, dateTo]);
 
   useEffect(() => {
     fetchData();
@@ -241,7 +248,7 @@ export default function HoaDonDauVaoPage() {
   useEffect(() => {
     setPage(0);
     setExpandedRow(null);
-  }, [search, statusFilter, activeBranchId]);
+  }, [search, statusFilter, activeBranchId, datePreset, dateFrom, dateTo]);
 
   return (
     <ListPageLayout
@@ -260,6 +267,10 @@ export default function HoaDonDauVaoPage() {
             <DatePresetFilter
               value={datePreset}
               onChange={setDatePreset}
+              from={dateFrom}
+              to={dateTo}
+              onFromChange={setDateFrom}
+              onToChange={setDateTo}
               presets={STANDARD_LIST_PRESETS_WITH_ALL}
             />
           </FilterGroup>
