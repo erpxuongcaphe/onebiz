@@ -152,6 +152,7 @@ export interface InventoryCheck {
   id: string;
   code: string;
   date: string;
+  updatedAt?: string;
   status: "balanced" | "unbalanced" | "processing";
   statusName: string;
   totalProducts: number;

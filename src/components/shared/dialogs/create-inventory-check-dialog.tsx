@@ -13,6 +13,7 @@ import { Input } from "@/components/ui/input";
 import { NumericInput } from "@/components/ui/numeric-input";
 import { useToast } from "@/lib/contexts";
 import { getClient, getCurrentContext } from "@/lib/services/supabase/base";
+import { applyInventoryCheck } from "@/lib/services/supabase/inventory";
 import { nextEntityCode } from "@/lib/services/supabase/stock-adjustments";
 import { getUOMConversions } from "@/lib/services/supabase/uom";
 import { pickBestConversion, getConversionText } from "@/lib/format-uom";
@@ -328,17 +329,27 @@ export function CreateInventoryCheckDialog({
         throw new Error(itemsErr.message);
       }
 
+      try {
+        await applyInventoryCheck(checkRow.id);
+      } catch (applyErr) {
+        const message =
+          applyErr instanceof Error ? applyErr.message : "Vui lòng thử áp dụng lại trong danh sách phiếu";
+        throw new Error(`Đã lưu phiếu ${realCode} nhưng chưa cân bằng được: ${message}`);
+      }
+
       onOpenChange(false);
       toast({
-        title: "Tạo phiếu kiểm kho thành công",
-        description: `Đã tạo ${realCode} với ${formatNumber(checkItems.length)} sản phẩm. Chênh lệch sẽ được điều chỉnh khi cân bằng phiếu.`,
+        title: "Hoàn thành kiểm kho thành công",
+        description: `Đã cân bằng ${realCode} với ${formatNumber(checkItems.length)} mặt hàng.`,
         variant: "success",
       });
       onSuccess?.();
     } catch (err) {
+      const message = err instanceof Error ? err.message : "Vui lòng thử lại";
+      const isPartialSave = message.startsWith("Đã lưu phiếu");
       toast({
-        title: "Lỗi tạo phiếu kiểm kho",
-        description: err instanceof Error ? err.message : "Vui lòng thử lại",
+        title: isPartialSave ? "Phiếu đã lưu nhưng chưa cân bằng" : "Lỗi hoàn thành kiểm kho",
+        description: message,
         variant: "error",
       });
     } finally {
@@ -355,7 +366,7 @@ export function CreateInventoryCheckDialog({
             <div className="flex flex-wrap items-center gap-3">
               <DialogTitle className="text-xl">Tạo phiếu kiểm kho</DialogTitle>
               <span className="rounded-full bg-blue-50 px-2.5 py-1 text-xs font-semibold text-blue-700">
-                Cân bằng sau kiểm
+                {"Cân bằng khi lưu"}
               </span>
               <span className="ml-auto mr-8 max-w-none whitespace-nowrap rounded-lg border bg-primary/5 px-3 py-1.5 text-sm font-bold text-primary sm:text-base">
                 {code}
@@ -614,7 +625,7 @@ export function CreateInventoryCheckDialog({
               </Button>
               <Button onClick={handleSave} disabled={saving}>
                 {saving && <Icon name="progress_activity" size={16} className="mr-2 animate-spin" />}
-                Tạo phiếu kiểm kho
+                {"Hoàn thành kiểm kho"}
               </Button>
             </div>
           </div>

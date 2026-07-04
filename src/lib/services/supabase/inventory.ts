@@ -515,7 +515,7 @@ export async function getInventoryChecks(params: QueryParams): Promise<QueryResu
 
   let query = supabase
     .from("inventory_checks")
-    .select("*, profiles!inventory_checks_created_by_fkey(full_name)", { count: "exact" })
+    .select("*, profiles!inventory_checks_created_by_fkey(full_name), inventory_check_items(id, system_stock, actual_stock, difference, products(cost_price))", { count: "exact" })
     .eq("tenant_id", tenantId);
 
   // Search
@@ -689,26 +689,66 @@ const checkStatusMap: Record<string, InventoryCheck["status"]> = {
   cancelled: "unbalanced",
 };
 
+function toNumber(value: unknown): number {
+  const parsed = Number(value ?? 0);
+  return Number.isFinite(parsed) ? parsed : 0;
+}
+
+function relationCostPrice(relation: unknown): number {
+  const value = Array.isArray(relation) ? relation[0] : relation;
+  if (!value || typeof value !== "object") return 0;
+  return toNumber((value as { cost_price?: unknown }).cost_price);
+}
+
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
 function mapInventoryCheck(row: any): InventoryCheck {
   const profile = row.profiles as { full_name: string } | null;
+  const items = Array.isArray(row.inventory_check_items)
+    ? (row.inventory_check_items as Array<{
+        system_stock?: unknown;
+        actual_stock?: unknown;
+        difference?: unknown;
+        products?: unknown;
+      }>)
+    : [];
+
+  let increaseQty = 0;
+  let decreaseQty = 0;
+  let increaseAmount = 0;
+  let decreaseAmount = 0;
+
+  for (const item of items) {
+    const diff = item.difference == null
+      ? toNumber(item.actual_stock) - toNumber(item.system_stock)
+      : toNumber(item.difference);
+    const valueImpact = Math.abs(diff) * relationCostPrice(item.products);
+
+    if (diff > 0) {
+      increaseQty += diff;
+      increaseAmount += valueImpact;
+    } else if (diff < 0) {
+      decreaseQty += Math.abs(diff);
+      decreaseAmount += valueImpact;
+    }
+  }
+
   return {
     id: row.id,
     code: row.code,
     date: row.created_at,
+    updatedAt: row.updated_at ?? row.created_at,
     status: checkStatusMap[row.status] ?? "processing",
     statusName: checkStatusNameMap[row.status] ?? row.status,
-    totalProducts: 0, // Would need aggregation from inventory_check_items
-    increaseQty: 0,
-    decreaseQty: 0,
-    increaseAmount: 0,
-    decreaseAmount: 0,
+    totalProducts: items.length,
+    increaseQty,
+    decreaseQty,
+    increaseAmount,
+    decreaseAmount,
     note: row.note ?? undefined,
     createdBy: row.created_by,
     createdByName: profile?.full_name ?? "",
   };
 }
-
 // ============================================================
 // Bulk gắn HSD cho tồn cũ (CEO 18/05/2026, migration 00104)
 //

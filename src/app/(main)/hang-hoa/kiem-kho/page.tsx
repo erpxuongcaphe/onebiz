@@ -456,7 +456,7 @@ export default function KiemKhoPage() {
       size: 150,
       cell: ({ row }) =>
         row.original.status === "balanced"
-          ? formatDate(row.original.date)
+          ? formatDate(row.original.updatedAt ?? row.original.date)
           : "—",
     },
     {
