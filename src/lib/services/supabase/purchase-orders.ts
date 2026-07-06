@@ -107,9 +107,15 @@ export async function getPurchaseOrders(
     .eq("tenant_id", tenantId);
 
   if (params.search) {
-    query = query.or(
-      `code.ilike.%${params.search}%,supplier_name.ilike.%${params.search}%`
-    );
+    const esc = params.search.replace(/[%_]/g, "\\$&");
+    // CEO 05/07: tìm theo cột chọn — "all"/lạ → OR mã+NCC như cũ.
+    if (params.searchField === "code") query = query.ilike("code", `%${esc}%`);
+    else if (params.searchField === "supplier_name")
+      query = query.ilike("supplier_name", `%${esc}%`);
+    else
+      query = query.or(
+        `code.ilike.%${esc}%,supplier_name.ilike.%${esc}%`
+      );
   }
 
   const statusFilter = params.filters?.status;
@@ -637,5 +643,6 @@ function mapPurchaseOrder(row: any): PurchaseOrder {
     status: (row.status ?? "draft") as PurchaseOrderStatus,
     createdBy: row.created_by ?? "",
     createdByName: profile?.full_name ?? "",
+    branchId: row.branch_id ?? undefined,
   };
 }

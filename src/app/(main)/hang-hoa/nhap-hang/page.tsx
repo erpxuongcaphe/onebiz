@@ -472,6 +472,8 @@ export default function NhapHangPage() {
   const [total, setTotal] = useState(0);
   const [loading, setLoading] = useState(true);
   const [search, setSearch] = useState("");
+  // CEO 05/07: ô "Tìm theo" — "all" = gộp mã phiếu+NCC như cũ.
+  const [searchField, setSearchField] = useState("all");
   const [page, setPage] = useState(0);
   const [pageSize, setPageSize] = useState(15);
   const [createOpen, setCreateOpen] = useState(false);
@@ -595,6 +597,7 @@ export default function NhapHangPage() {
       page,
       pageSize,
       search,
+      searchField,
       branchId: activeBranchId,
       filters: {
         ...(selectedStatuses.length > 0 && { status: selectedStatuses }),
@@ -608,7 +611,7 @@ export default function NhapHangPage() {
     setData(result.data);
     setTotal(result.total);
     setLoading(false);
-  }, [page, pageSize, search, selectedStatuses, creatorFilter, importerFilter, costReturnFilter, activeBranchId, datePreset, dateFrom, dateTo]);
+  }, [page, pageSize, search, searchField, selectedStatuses, creatorFilter, importerFilter, costReturnFilter, activeBranchId, datePreset, dateFrom, dateTo]);
 
   useEffect(() => {
     fetchData();
@@ -1046,6 +1049,16 @@ export default function NhapHangPage() {
         searchPlaceholder="Theo mã phiếu nhập, mã NCC, tên NCC"
         searchValue={search}
         onSearchChange={setSearch}
+        searchFields={[
+          { value: "all", label: "Tất cả" },
+          { value: "code", label: "Mã phiếu" },
+          { value: "supplier_name", label: "NCC" },
+        ]}
+        searchField={searchField}
+        onSearchFieldChange={(v) => {
+          setSearchField(v);
+          setPage(0);
+        }}
         onExport={{
           excel: () => handleExport("excel"),
           csv: () => handleExport("csv"),
@@ -1203,7 +1216,8 @@ export default function NhapHangPage() {
                 printWithPicker(
                   buildGoodsReceiptPrintData(row, toPrintLines(items)),
                   "In phiếu nhập",
-                  { channel: "backoffice", docType: "goods_receipt", branchId: activeBranchId },
+                  // CEO 05/07: mẫu in theo chi nhánh CỦA PHIẾU, không theo filter
+                  { channel: "backoffice", docType: "goods_receipt", branchId: row.branchId ?? activeBranchId },
                 );
               }
             },
@@ -1331,7 +1345,7 @@ export default function NhapHangPage() {
               printWithPicker(
                 buildGoodsReceiptPrintData(row, toPrintLines(items)),
                 "In phiếu nhập",
-                { channel: "backoffice", docType: "goods_receipt", branchId: activeBranchId },
+                { channel: "backoffice", docType: "goods_receipt", branchId: row.branchId ?? activeBranchId },
               );
             },
             workflowActions,

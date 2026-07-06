@@ -247,6 +247,8 @@ export default function SoQuyPage() {
   const [page, setPage] = useState(0);
   const [pageSize, setPageSize] = useState(15);
   const [search, setSearch] = useState("");
+  // CEO 05/07: ô "Tìm theo" — "all" = gộp mã phiếu+đối tượng như cũ.
+  const [searchField, setSearchField] = useState("all");
   const [expandedRow, setExpandedRow] = useState<number | null>(null);
   const [starred, setStarred] = useState<Set<string>>(new Set());
 
@@ -306,6 +308,7 @@ export default function SoQuyPage() {
         page,
         pageSize,
         search,
+        searchField,
         branchId: activeBranchId,
         filters,
       }),
@@ -322,6 +325,7 @@ export default function SoQuyPage() {
     setLoading(false);
   }, [
     search,
+    searchField,
     selectedDocTypes,
     selectedStatuses,
     page,
@@ -701,6 +705,16 @@ export default function SoQuyPage() {
           searchPlaceholder="Theo mã phiếu, người nộp/nhận"
           searchValue={search}
           onSearchChange={setSearch}
+          searchFields={[
+            { value: "all", label: "Tất cả" },
+            { value: "code", label: "Mã phiếu" },
+            { value: "counterparty", label: "Người nộp/nhận" },
+          ]}
+          searchField={searchField}
+          onSearchFieldChange={(v) => {
+            setSearchField(v);
+            setPage(0);
+          }}
           onExport={{
             excel: () => handleExport("excel"),
             csv: () => handleExport("csv"),

@@ -430,7 +430,8 @@ export default function XuatDungNoiBoPage() {
                 await printDocumentWithTemplate({
                   channel: "backoffice",
                   docType: "internal_export",
-                  branchId: activeBranchId ?? null,
+                  // CEO 05/07: mẫu in theo chi nhánh CỦA PHIẾU, không theo filter
+                  branchId: row.branchId ?? activeBranchId ?? null,
                   base: buildInternalExportPrintData(row),
                 });
               }
@@ -491,7 +492,7 @@ export default function XuatDungNoiBoPage() {
               printDocumentWithTemplate({
                 channel: "backoffice",
                 docType: "internal_export",
-                branchId: activeBranchId ?? null,
+                branchId: row.branchId ?? activeBranchId ?? null,
                 base: buildInternalExportPrintData(row),
               }),
             onAuditLog: () => setAuditDialogTarget(row),

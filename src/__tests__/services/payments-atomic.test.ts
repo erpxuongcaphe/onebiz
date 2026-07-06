@@ -49,6 +49,12 @@ vi.mock("@/lib/services/supabase/stock-adjustments", () => ({
   nextEntityCode: vi.fn().mockResolvedValue("PT000123"),
 }));
 
+// P1-3A 12/06: legacy path gắn shift_id qua getOpenShift — mock để không
+// tiêu mockResult trong chuỗi (test drift: expect cash id nhận nhầm shift row).
+vi.mock("@/lib/services/supabase/shifts", () => ({
+  getOpenShift: vi.fn().mockResolvedValue(null),
+}));
+
 import { recordInvoicePayment } from "@/lib/services/supabase/payments";
 
 describe("recordInvoicePayment — atomic RPC path", () => {
@@ -128,11 +134,9 @@ describe("recordInvoicePayment — atomic RPC path", () => {
     });
     // 3. Update invoice — eq().eq() returns chain (default), no error from chain destructure
     // Default chain.eq returns chain, await chain → chain (no error). OK.
-    // 4. Fetch customer
-    mockResult.mockResolvedValueOnce({
-      data: { debt: 200000 },
-      error: null,
-    });
+    // 4. customers.debt: KHÔNG fetch/update tay nữa (00133/00134 — trigger
+    //    recompute là Single Source of Truth) → không mock thêm, kẻo once
+    //    thừa tràn sang test sau (vi.clearAllMocks không xoá once-queue).
 
     const result = await recordInvoicePayment({
       referenceId: "inv-uuid-001",

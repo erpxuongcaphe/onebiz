@@ -67,6 +67,7 @@ function mapDisposalExport(row: any): DisposalExport {
     statusName: disposalStatusNameMap[row.status] ?? row.status,
     createdBy: row.created_by ?? "",
     createdByName: profile?.full_name ?? "",
+    branchId: row.branch_id ?? undefined,
   };
 }
 
@@ -136,6 +137,7 @@ function mapInternalExport(row: any): InternalExport {
     note: row.note ?? undefined,
     createdBy: row.created_by ?? "",
     createdByName: profile?.full_name ?? "",
+    branchId: row.branch_id ?? undefined,
   };
 }
 

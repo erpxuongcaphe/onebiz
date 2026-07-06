@@ -451,7 +451,8 @@ export default function XuatHuyPage() {
                 await printDocumentWithTemplate({
                   channel: "backoffice",
                   docType: "disposal",
-                  branchId: activeBranchId ?? null,
+                  // CEO 05/07: mẫu in theo chi nhánh CỦA PHIẾU, không theo filter
+                  branchId: row.branchId ?? activeBranchId ?? null,
                   base: buildDisposalPrintData(row),
                 });
               }
@@ -512,7 +513,7 @@ export default function XuatHuyPage() {
               printDocumentWithTemplate({
                 channel: "backoffice",
                 docType: "disposal",
-                branchId: activeBranchId ?? null,
+                branchId: row.branchId ?? activeBranchId ?? null,
                 base: buildDisposalPrintData(row),
               }),
             onAuditLog: () => setAuditDialogTarget(row),

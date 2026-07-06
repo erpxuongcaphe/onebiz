@@ -192,6 +192,8 @@ export interface DisposalExport {
   statusName: string;
   createdBy: string;
   createdByName?: string;
+  /** Chi nhánh của phiếu — resolve mẫu in theo chi nhánh (CEO 05/07). */
+  branchId?: string;
 }
 
 // Xuất nội bộ
@@ -206,4 +208,6 @@ export interface InternalExport {
   note?: string;
   createdBy: string;
   createdByName?: string;
+  /** Chi nhánh của phiếu — resolve mẫu in theo chi nhánh (CEO 05/07). */
+  branchId?: string;
 }

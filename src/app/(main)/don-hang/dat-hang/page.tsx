@@ -264,6 +264,8 @@ export default function DatHangPage() {
   const [total, setTotal] = useState(0);
   const [loading, setLoading] = useState(true);
   const [search, setSearch] = useState("");
+  // CEO 05/07: ô "Tìm theo" — "all" = gộp mã+tên+SĐT như cũ.
+  const [searchField, setSearchField] = useState("all");
   const [page, setPage] = useState(0);
   const [pageSize, setPageSize] = useState(15);
   const [expandedRow, setExpandedRow] = useState<number | null>(null);
@@ -292,6 +294,7 @@ export default function DatHangPage() {
       page,
       pageSize,
       search,
+      searchField,
       branchId: activeBranchId,
       filters: {
         ...(selectedStatuses.length > 0 && { status: selectedStatuses }),
@@ -300,7 +303,7 @@ export default function DatHangPage() {
     setData(result.data);
     setTotal(result.total);
     setLoading(false);
-  }, [page, pageSize, search, selectedStatuses, activeBranchId]);
+  }, [page, pageSize, search, searchField, selectedStatuses, activeBranchId]);
 
   useEffect(() => {
     fetchData();
@@ -477,6 +480,17 @@ export default function DatHangPage() {
         searchPlaceholder="Theo mã đơn, khách hàng"
         searchValue={search}
         onSearchChange={setSearch}
+        searchFields={[
+          { value: "all", label: "Tất cả" },
+          { value: "code", label: "Mã đơn" },
+          { value: "customer_name", label: "Khách hàng" },
+          { value: "customer_phone", label: "SĐT" },
+        ]}
+        searchField={searchField}
+        onSearchFieldChange={(v) => {
+          setSearchField(v);
+          setPage(0);
+        }}
         onExport={{
           excel: () => handleExport("excel"),
           csv: () => handleExport("csv"),

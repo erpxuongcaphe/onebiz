@@ -32,10 +32,13 @@ export async function getCashBookEntries(params: QueryParams): Promise<QueryResu
     // của tenant khác khi RLS tạm tắt.
     .eq("tenant_id", tenantId);
 
-  // Search
+  // Search — CEO 05/07: tìm theo cột chọn; "all"/lạ → OR mã+đối tượng như cũ.
   if (params.search) {
     const esc = params.search.replace(/[%_]/g, "\\$&");
-    query = query.or(`code.ilike.%${esc}%,counterparty.ilike.%${esc}%`);
+    if (params.searchField === "code") query = query.ilike("code", `%${esc}%`);
+    else if (params.searchField === "counterparty")
+      query = query.ilike("counterparty", `%${esc}%`);
+    else query = query.or(`code.ilike.%${esc}%,counterparty.ilike.%${esc}%`);
   }
 
   // Filter: type (receipt | payment)

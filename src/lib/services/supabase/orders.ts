@@ -66,9 +66,16 @@ export async function getOrders(
   // Search by code or customer_name. Escape % để tránh wildcard injection.
   if (params.search) {
     const esc = params.search.replace(/[%_]/g, "\\$&");
-    query = query.or(
-      `code.ilike.%${esc}%,customer_name.ilike.%${esc}%,customer_phone.ilike.%${esc}%`,
-    );
+    // CEO 05/07: tìm theo cột chọn — "all"/lạ → OR mã+tên+SĐT như cũ.
+    if (params.searchField === "code") query = query.ilike("code", `%${esc}%`);
+    else if (params.searchField === "customer_name")
+      query = query.ilike("customer_name", `%${esc}%`);
+    else if (params.searchField === "customer_phone")
+      query = query.ilike("customer_phone", `%${esc}%`);
+    else
+      query = query.or(
+        `code.ilike.%${esc}%,customer_name.ilike.%${esc}%,customer_phone.ilike.%${esc}%`,
+      );
   }
 
   // Filter: status

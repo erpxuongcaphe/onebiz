@@ -98,6 +98,8 @@ export interface PurchaseOrder {
   createdBy: string;
   createdByName?: string;
   importedBy?: string;
+  /** Chi nhánh của phiếu — dùng resolve mẫu in theo chi nhánh (CEO 05/07). */
+  branchId?: string;
 }
 
 // Dòng sản phẩm trong đơn nhập hàng

@@ -1209,9 +1209,10 @@ function TemplateEditorDialog({
               selectedColumns={selectedColumns}
               brand={brand}
               brandLoading={brandLoading}
+              paperSize={paperSize}
             />
             <p className="mt-2 text-xs text-muted-foreground">
-              Minh họa khổ 80mm — đầu trang lấy thông tin thật của doanh nghiệp/chi nhánh,
+              Minh họa khổ {paperSize} — đầu trang lấy thông tin thật của doanh nghiệp/chi nhánh,
               chỉ phản ánh bật/tắt, không phải bản in cuối.
             </p>
           </div>
@@ -1274,6 +1275,7 @@ function BillPreview({
   selectedColumns,
   brand,
   brandLoading,
+  paperSize = "80mm",
 }: {
   title: string;
   config: PrintTemplateConfig;
@@ -1282,7 +1284,19 @@ function BillPreview({
   selectedColumns: string[];
   brand: ResolvedBrand | null;
   brandLoading: boolean;
+  paperSize?: PrintPaperSize;
 }) {
+  // CEO 05/07: preview theo ĐÚNG khổ đã chọn — trước đây luôn 80mm.
+  // Bill nhiệt giữ font-mono hẹp; A4/A5 rộng hơn + font sans như bản in thật.
+  const isThermal = paperSize === "80mm" || paperSize === "58mm";
+  const widthClass =
+    paperSize === "58mm"
+      ? "max-w-[210px]"
+      : paperSize === "80mm"
+        ? "max-w-[260px]"
+        : paperSize === "A5"
+          ? "max-w-[400px]"
+          : "max-w-[560px]";
   const header = config.header ?? {};
   const customer = config.customer ?? {};
   const payment = config.payment ?? {};
@@ -1361,7 +1375,11 @@ function BillPreview({
     );
 
   return (
-    <div className="mx-auto w-full max-w-[260px] rounded-md border bg-white p-3 font-mono text-[11px] leading-tight text-black shadow-sm">
+    <div
+      className={`mx-auto w-full ${widthClass} rounded-md border bg-white p-3 ${
+        isThermal ? "font-mono text-[11px]" : "font-sans text-[12px]"
+      } leading-tight text-black shadow-sm`}
+    >
       {/* Đầu trang — dùng THÔNG TIN THẬT của DN/chi nhánh (chỉ đọc) */}
       <div className="text-center">
         {header.logo &&
