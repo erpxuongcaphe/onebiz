@@ -33,6 +33,8 @@ import {
 } from "@/lib/services/supabase/invoices";
 import { voidFnbInvoice } from "@/lib/services/supabase/fnb-checkout";
 import { printFnbReceipt } from "@/lib/print-fnb";
+// CEO 05/07: in lại đi qua ENGINE MẪU IN — chưa có mẫu/lỗi → bill nhiệt cũ.
+import { printFnbBillWithTemplate } from "@/lib/print-fnb-template";
 import { OtpApprovalDialog } from "@/components/shared/dialogs/otp-approval-dialog";
 import { OTP_ACTION_CODES } from "@/lib/services/supabase/manager-otp";
 
@@ -135,6 +137,34 @@ export function FnbOrderHistoryDialog({
       const subtotalForReprint = isPlatformOrder
         ? detail.total + detail.platformCommissionAmount - detail.tipAmount + detail.discountAmount
         : detail.total - detail.tipAmount + detail.discountAmount;
+      const printedViaTemplate = await printFnbBillWithTemplate({
+        branchId,
+        invoiceCode: detail.invoiceCode,
+        tableName: detail.tableName ?? detail.orderNumber,
+        orderType: detail.orderType as "dine_in" | "takeaway" | "delivery",
+        items: detail.items.map((it) => ({
+          name: it.name,
+          quantity: it.quantity,
+          unitPrice: it.unitPrice,
+        })),
+        subtotal: subtotalForReprint,
+        discountAmount: detail.discountAmount,
+        tipAmount: detail.tipAmount,
+        total: detail.total,
+        paid: detail.paid,
+        customerName: detail.customerName,
+        cashierName,
+        createdAt: detail.createdAt,
+        deliveryPlatform: detail.deliveryPlatform,
+        platformCommissionPercent: isPlatformOrder
+          ? detail.platformCommissionPercent
+          : undefined,
+        platformCommissionAmount: isPlatformOrder
+          ? detail.platformCommissionAmount
+          : undefined,
+        note: "*** IN LẠI ***",
+      });
+      if (!printedViaTemplate)
       printFnbReceipt({
         invoiceCode: detail.invoiceCode,
         orderNumber: detail.orderNumber,

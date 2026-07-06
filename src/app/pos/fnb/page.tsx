@@ -62,6 +62,9 @@ import {
 } from "@/lib/services/supabase/modifier-groups";
 import type { DynamicModifierData } from "./components/fnb-item-dialog";
 import { printKitchenTicketV2, printPreBill, printFnbReceipt } from "@/lib/print-fnb";
+// CEO 05/07: bill thanh toán đi qua ENGINE MẪU IN (fnb×sale_invoice×chi nhánh)
+// giống POS Retail; chưa có mẫu/lỗi → rớt về printFnbReceipt bill nhiệt cũ.
+import { printFnbBillWithTemplate } from "@/lib/print-fnb-template";
 import { printKitchenTicketsByStation } from "./print-stations";
 import { printShiftReport } from "@/lib/print-shift-report";
 import type { RestaurantTable, FnbOrderLine } from "@/lib/types/fnb";
@@ -1588,6 +1591,39 @@ function FnbPosPageInner() {
               ? Math.round((pos.total * commissionPercent) / 100)
               : 0;
             const netWithTip = grossWithTip - commissionAmount;
+            const printedViaTemplate = await printFnbBillWithTemplate({
+              branchId,
+              invoiceCode: payResult.invoiceCode,
+              tableName: tab.label,
+              orderType: tab.orderType,
+              items: tab.lines.map((l) => ({
+                name: l.productName,
+                variant: l.variantLabel,
+                quantity: l.quantity,
+                unitPrice: l.unitPrice,
+                toppings: l.toppings.map((t) => ({
+                  name: t.name,
+                  quantity: t.quantity,
+                  price: t.price,
+                })),
+                note: l.note,
+              })),
+              subtotal: pos.subtotal,
+              discountAmount: pos.orderDiscountAmount,
+              tipAmount,
+              total: netWithTip,
+              paid: payload.paid,
+              customerName: payload.customerName,
+              cashierName: user?.fullName,
+              deliveryPlatform: tab.deliveryPlatform,
+              platformCommissionPercent: isPlatformOrderPrint
+                ? commissionPercent
+                : undefined,
+              platformCommissionAmount: isPlatformOrderPrint
+                ? commissionAmount
+                : undefined,
+            });
+            if (!printedViaTemplate)
             printFnbReceipt({
               invoiceCode: payResult.invoiceCode,
               orderNumber: tab.label,
