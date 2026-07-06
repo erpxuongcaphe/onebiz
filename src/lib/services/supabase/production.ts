@@ -306,7 +306,26 @@ export async function completeProductionAtomic(
     p_expiry_date: expiryDate,
   });
 
-  if (error) throw error;
+  if (error) {
+    // Fallback an toàn: nếu migration 00159 CHƯA được áp (RPC chưa tồn tại) →
+    // quay về luồng 2 bước cũ để không kẹt quầy. Khi 00159 chạy xong, tự dùng
+    // bản nguyên tử. PGRST202 = PostgREST không tìm thấy hàm.
+    const msg = (error as { message?: string }).message ?? "";
+    const rpcMissing =
+      (error as { code?: string }).code === "PGRST202" ||
+      /complete_production_atomic/.test(msg);
+    if (rpcMissing) {
+      await consumeProductionMaterials(productionOrderId);
+      return await completeProductionOrder(
+        productionOrderId,
+        completedQty,
+        lotNumber,
+        manufacturedDate,
+        expiryDate
+      );
+    }
+    throw error;
+  }
   return data as string; // lot_id
 }
 
