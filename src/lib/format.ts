@@ -107,6 +107,20 @@ export function formatShortDate(date: string | Date | null | undefined): string 
 }
 
 /**
+ * Format a date for native `<input type="date">` using Vietnam business date.
+ * This avoids UTC `toISOString().slice(0, 10)` drifting one day around midnight.
+ */
+export function formatDateInputValue(
+  date: string | Date | null | undefined = new Date(),
+): string {
+  if (date == null || date === "") return "";
+  const d = date instanceof Date ? date : new Date(date);
+  if (isNaN(d.getTime())) return "";
+  const p = getDateParts(d);
+  return `${p.year}-${p.month}-${p.day}`;
+}
+
+/**
  * Format chỉ giờ:phút (no date), Asia/Ho_Chi_Minh.
  * Dùng cho cart timestamp, KDS timer, log entries.
  */

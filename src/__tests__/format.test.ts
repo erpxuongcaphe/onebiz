@@ -2,6 +2,7 @@ import { describe, expect, it } from "vitest";
 
 import {
   formatDate,
+  formatDateInputValue,
   formatNumber,
   formatShortDate,
   parseDateInput,
@@ -27,6 +28,10 @@ describe("format conventions", () => {
     expect(formatDate(date)).toMatch(/^09\/05\/2026 \d{2}:21$/);
   });
 
+  it("formats native date inputs with Vietnam business day", () => {
+    expect(formatDateInputValue("2026-07-03T18:30:00.000Z")).toBe("2026-07-04");
+    expect(formatDateInputValue("bad-date")).toBe("");
+  });
   it("parses DD/MM/YYYY dates and rejects ISO input", () => {
     expect(parseDateInput("09/05/2026")).toBeInstanceOf(Date);
     expect(parseDateInput("09/05/2026 08:21")).toBeInstanceOf(Date);

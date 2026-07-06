@@ -307,21 +307,12 @@ export async function completeProductionAtomic(
   });
 
   if (error) {
-    // Fallback an toàn: nếu migration 00159 CHƯA được áp (RPC chưa tồn tại) →
-    // quay về luồng 2 bước cũ để không kẹt quầy. Khi 00159 chạy xong, tự dùng
-    // bản nguyên tử. PGRST202 = PostgREST không tìm thấy hàm.
-    const msg = (error as { message?: string }).message ?? "";
-    const rpcMissing =
-      (error as { code?: string }).code === "PGRST202" ||
-      /complete_production_atomic/.test(msg);
+    const code = (error as { code?: string }).code;
+    const message = (error as { message?: string }).message ?? "";
+    const rpcMissing = code === "PGRST202" || /complete_production_atomic/i.test(message);
     if (rpcMissing) {
-      await consumeProductionMaterials(productionOrderId);
-      return await completeProductionOrder(
-        productionOrderId,
-        completedQty,
-        lotNumber,
-        manufacturedDate,
-        expiryDate
+      throw new Error(
+        "RPC complete_production_atomic chưa sẵn sàng. Vui lòng chạy migration 00159 và reload schema trước khi hoàn thành sản xuất để tránh lệch kho.",
       );
     }
     throw error;

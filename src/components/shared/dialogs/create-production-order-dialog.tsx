@@ -29,7 +29,7 @@ import {
   checkMaterialsAvailability,
   getProductById,
 } from "@/lib/services";
-import { formatCurrency, formatNumber } from "@/lib/format";
+import { formatDateInputValue, formatNumber } from "@/lib/format";
 import type { BOM } from "@/lib/types";
 import type { BranchDetail } from "@/lib/services/supabase/branches";
 import { Icon } from "@/components/ui/icon";
@@ -123,7 +123,7 @@ export function CreateProductionOrderDialog({
       setMaterials([]);
       setErrors({});
       setLotNumber("");
-      setManufacturedDate(new Date().toISOString().split("T")[0]);
+      setManufacturedDate(formatDateInputValue());
       setExpiryDate("");
     }
   }, [open]);
@@ -312,7 +312,7 @@ export function CreateProductionOrderDialog({
 
       const createdCode = (created as { code?: string })?.code ?? "";
       const createdId = (created as { id: string }).id;
-      const today = new Date().toISOString().split("T")[0];
+      const today = formatDateInputValue();
       const lot =
         lotNumber.trim() ||
         (createdCode ? `${createdCode}-${today.replace(/-/g, "")}` : undefined);
@@ -330,12 +330,11 @@ export function CreateProductionOrderDialog({
           variant: "success",
         });
       } catch (err) {
-        // Atomic: hoàn thành lỗi (vd thiếu NVL) = KHÔNG trừ gì cả; lệnh nằm lại
-        // danh sách Lệnh SX để nhập NVL rồi bấm Hoàn thành sau. Đây là fallback
-        // tự nhiên khi thiếu NVL, KHÔNG phải "bước lên kế hoạch" chủ động.
+        // Atomic fail (vd thiếu NVL hoặc thiếu RPC) = không ghi nhận kho từ bước
+        // hoàn thành. Lệnh nằm lại danh sách để xử lý điều kiện rồi hoàn thành lại.
         toast({
           title: "Đã tạo lệnh nhưng chưa nhập kho được",
-          description: `${createdCode}: kho CHƯA bị trừ. ${err instanceof Error ? err.message : "Lỗi không rõ"}. Nhập đủ NVL rồi vào Lệnh sản xuất bấm Hoàn thành.`,
+          description: `${createdCode}: lệnh đã tạo, kho chưa ghi nhận trừ NVL/nhập thành phẩm. ${err instanceof Error ? err.message : "Lỗi không rõ"}. Kiểm tra migration/RPC hoặc nhập đủ NVL rồi hoàn thành lại.`,
           variant: "warning",
           duration: 9000,
         });
@@ -624,7 +623,7 @@ export function CreateProductionOrderDialog({
                             <div className="text-xs text-muted-foreground">{m.productCode}</div>
                           </td>
                           <td className="p-2 text-right">
-                            <span className="font-medium">{formatCurrency(m.needed)}</span>{" "}
+                            <span className="font-medium">{formatNumber(m.needed)}</span>{" "}
                             <span className="text-xs text-muted-foreground">{m.unit}</span>
                           </td>
                           <td className="p-2 text-right">
@@ -633,7 +632,7 @@ export function CreateProductionOrderDialog({
                                 m.shortage ? "text-destructive font-medium" : "text-foreground"
                               }
                             >
-                              {formatCurrency(m.available)}
+                              {formatNumber(m.available)}
                             </span>{" "}
                             <span className="text-xs text-muted-foreground">{m.unit}</span>
                           </td>
