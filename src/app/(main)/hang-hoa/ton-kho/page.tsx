@@ -355,7 +355,7 @@ function StockRowDetail({
                               />
                             </td>
                             <td className="p-2 text-right tabular-nums text-muted-foreground">
-                              {b.reserved}
+                              {formatNumber(b.reserved)}
                             </td>
                             <td className="p-2 text-right">
                               <StockWithConversion
@@ -381,7 +381,7 @@ function StockRowDetail({
                             />
                           </td>
                           <td className="p-2 text-right tabular-nums">
-                            {totalReserved}
+                            {formatNumber(totalReserved)}
                           </td>
                           <td className="p-2 text-right">
                             <StockWithConversion

@@ -78,7 +78,7 @@ export function StockWithConversion(props: Props) {
             ={" "}
             <b className="text-foreground tabular-nums">{convText}</b>{" "}
             <span className="opacity-70">
-              (1 {conv.fromUnit} = {conv.factor} {conv.toUnit})
+              (1 {conv.fromUnit} = {formatNumber(conv.factor)} {conv.toUnit})
             </span>
           </div>
         )}

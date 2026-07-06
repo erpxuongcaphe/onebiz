@@ -17,6 +17,7 @@ import {
 import { isRpcUnavailable } from "./rpc-utils";
 import { recordAuditLog } from "./audit";
 import { composeAddress as composeStructuredAddress } from "@/lib/data/vn-provinces";
+import { applyCreatedAtRangeFilter } from "@/lib/utils/list-date-preset-range";
 
 type SupplierInsert = Database["public"]["Tables"]["suppliers"]["Insert"];
 type SupplierUpdate = Database["public"]["Tables"]["suppliers"]["Update"];
@@ -50,7 +51,6 @@ export async function getSuppliers(params: QueryParams): Promise<QueryResult<Sup
         `name.ilike.%${esc}%,code.ilike.%${esc}%,phone.ilike.%${esc}%`,
       );
   }
-
   // Filter: debt has/no
   if (params.filters?.debt) {
     const debtFilter = params.filters.debt as string;
@@ -58,9 +58,7 @@ export async function getSuppliers(params: QueryParams): Promise<QueryResult<Sup
     else if (debtFilter === "no_debt") query = query.eq("debt", 0);
   }
 
-  // Filter: trạng thái (active/inactive). Page truyền selectedStatuses
-  // dạng string[]. Khi user check cả 2 → không filter (giữ tất cả).
-  // Khi chỉ active → is_active=true, chỉ inactive → is_active=false.
+  // Filter: status active/inactive
   if (params.filters?.status) {
     const statuses = Array.isArray(params.filters.status)
       ? params.filters.status
@@ -70,7 +68,7 @@ export async function getSuppliers(params: QueryParams): Promise<QueryResult<Sup
     }
   }
 
-  // Filter: khoảng nợ tuỳ chỉnh (debt from/to)
+  // Filter: custom debt range
   if (params.filters?.debtFrom) {
     const v = Number(params.filters.debtFrom);
     if (!isNaN(v)) query = query.gte("debt", v);
@@ -79,18 +77,7 @@ export async function getSuppliers(params: QueryParams): Promise<QueryResult<Sup
     const v = Number(params.filters.debtTo);
     if (!isNaN(v)) query = query.lte("debt", v);
   }
-
-  // Filter: ngày tạo (from/to)
-  if (params.filters?.dateFrom) {
-    query = query.gte("created_at", params.filters.dateFrom as string);
-  }
-  if (params.filters?.dateTo) {
-    // Cộng 1 ngày để bao gồm hết ngày được chọn (lt ngày kế)
-    const end = new Date(params.filters.dateTo as string);
-    end.setDate(end.getDate() + 1);
-    query = query.lt("created_at", end.toISOString());
-  }
-
+  query = applyCreatedAtRangeFilter(query, params.filters);
   // Day 17/05/2026: filter Tỉnh/TP
   if (params.filters?.province && params.filters.province !== "all") {
     // eslint-disable-next-line @typescript-eslint/no-explicit-any

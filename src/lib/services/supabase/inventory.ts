@@ -16,6 +16,8 @@ import { getClient, getCurrentContext, getCurrentTenantId, getPaginationRange, h
 import { applyManualStockMovement, nextEntityCode } from "./stock-adjustments";
 import { recordAuditLog } from "./audit";
 import { isRpcUnavailable } from "./rpc-utils";
+import { roundDecimals } from "@/lib/format";
+import { applyCreatedAtRangeFilter } from "@/lib/utils/list-date-preset-range";
 
 // --- Disposal Exports / Xuất hủy (Supabase) ---
 
@@ -44,13 +46,7 @@ function applyStatusFilter(query: any, statusFilter: string | string[] | undefin
 
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
 function applyCreatedAtRange(query: any, filters: QueryParams["filters"] | undefined) {
-  const dateFrom = typeof filters?.dateFrom === "string" ? filters.dateFrom : undefined;
-  const dateTo = typeof filters?.dateTo === "string" ? filters.dateTo : undefined;
-
-  if (dateFrom) query = query.gte("created_at", dateFrom);
-  if (dateTo) query = query.lte("created_at", dateTo);
-
-  return query;
+  return applyCreatedAtRangeFilter(query, filters);
 }
 
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
@@ -742,10 +738,10 @@ function mapInventoryCheck(row: any): InventoryCheck {
     status: checkStatusMap[row.status] ?? "processing",
     statusName: checkStatusNameMap[row.status] ?? row.status,
     totalProducts: items.length,
-    increaseQty,
-    decreaseQty,
-    increaseAmount,
-    decreaseAmount,
+    increaseQty: roundDecimals(increaseQty),
+    decreaseQty: roundDecimals(decreaseQty),
+    increaseAmount: roundDecimals(increaseAmount),
+    decreaseAmount: roundDecimals(decreaseAmount),
     note: row.note ?? undefined,
     createdBy: row.created_by,
     createdByName: profile?.full_name ?? "",

@@ -7,7 +7,7 @@
 
 import { useEffect, useState } from "react";
 import { getProductStockMovements } from "@/lib/services";
-import { formatDate } from "@/lib/format";
+import { formatDate, formatNumber } from "@/lib/format";
 import type { StockMovement } from "@/lib/types";
 import { Icon } from "@/components/ui/icon";
 
@@ -91,7 +91,7 @@ export function ProductStockMovementsTab({ productId }: ProductStockMovementsTab
     <div className="space-y-3">
       <div className="flex items-center justify-between text-xs text-muted-foreground px-1">
         <span>Hiển thị {movements.length} giao dịch gần nhất</span>
-        <span>Tổng: {total}</span>
+        <span>Tổng: {formatNumber(total)}</span>
       </div>
 
       {/* Day 17/05: overflow-x-auto cho laptop nhỏ.
@@ -135,7 +135,7 @@ export function ProductStockMovementsTab({ productId }: ProductStockMovementsTab
                   }`}
                 >
                   {signed > 0 ? "+" : ""}
-                  {signed}
+                  {formatNumber(signed)}
                 </span>
                 <span className={`text-xs truncate ${pColor}`} title={m.partner ?? ""}>
                   {m.partner ?? "—"}

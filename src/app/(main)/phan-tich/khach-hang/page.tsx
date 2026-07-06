@@ -20,6 +20,7 @@ import {
   formatCurrency,
   formatChartCurrency,
   formatChartTooltipCurrency,
+  formatNumber,
 } from "@/lib/format";
 import {
   getCustomerKpis,
@@ -65,7 +66,7 @@ function NewCustomerTooltip({
     <div className="rounded-lg border bg-background p-3 shadow-md">
       <p className="text-xs text-muted-foreground mb-1">{label}</p>
       <p className="text-sm font-bold text-primary">
-        {payload[0].value} khách mới
+        {formatNumber(payload[0].value)} khách mới
       </p>
     </div>
   );
@@ -82,7 +83,7 @@ function SegmentTooltip({
   return (
     <div className="rounded-lg border bg-background p-3 shadow-md">
       <p className="text-xs text-muted-foreground mb-1">{payload[0].name}</p>
-      <p className="text-sm font-bold">{payload[0].value} khách hàng</p>
+      <p className="text-sm font-bold">{formatNumber(payload[0].value)} khách hàng</p>
     </div>
   );
 }

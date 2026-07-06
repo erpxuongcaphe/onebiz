@@ -88,7 +88,7 @@ function MarginTooltip({
           {p.name}:{" "}
           <span className="font-bold">
             {p.dataKey === "grossMargin"
-              ? `${p.value}%`
+              ? `${formatNumber(p.value)}%`
               : formatChartTooltipCurrency(p.value)}
           </span>
         </p>

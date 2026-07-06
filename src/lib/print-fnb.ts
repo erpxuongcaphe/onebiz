@@ -5,7 +5,7 @@
  * Dùng window.open() + window.print() (browser-native).
  */
 
-import { formatCurrency, formatTime as formatTimeHelper, formatShortDate } from "@/lib/format";
+import { formatCurrency, formatNumber, formatTime as formatTimeHelper, formatShortDate } from "@/lib/format";
 import { printerService, type PrintReceiptPayload, type PrinterRole } from "@/lib/printer";
 
 // ============================================================
@@ -213,7 +213,7 @@ export function buildPreBillHtml(data: PreBillData): string {
   const itemsHtml = data.items.map((item) => {
     const itemTotal = item.quantity * item.unitPrice;
     let html = `<tr>
-      <td style="width:50%">${item.quantity}x ${item.name}${item.variant ? ` (${item.variant})` : ""}</td>
+      <td style="width:50%">${formatNumber(item.quantity)}x ${item.name}${item.variant ? ` (${item.variant})` : ""}</td>
       <td class="right">${formatCurrency(itemTotal)}</td>
     </tr>`;
 
@@ -221,7 +221,7 @@ export function buildPreBillHtml(data: PreBillData): string {
       for (const t of item.toppings) {
         if (t.quantity <= 0) continue;
         const tTotal = t.quantity * item.quantity * t.price;
-        html += `<tr><td style="padding-left:12px;font-size:11px;color:#555">+ ${t.name} x${t.quantity}</td>
+        html += `<tr><td style="padding-left:12px;font-size:11px;color:#555">+ ${t.name} x${formatNumber(t.quantity)}</td>
           <td class="right" style="font-size:11px;color:#555">${formatCurrency(tTotal)}</td></tr>`;
       }
     }
@@ -351,7 +351,7 @@ export function buildFnbReceiptHtml(data: FnbReceiptData): string {
     itemsHtml = data.items.map((item) => {
       const itemTotal = item.quantity * item.unitPrice;
       let html = `<tr>
-        <td>${item.quantity}x ${item.name}${item.variant ? ` (${item.variant})` : ""}</td>
+        <td>${formatNumber(item.quantity)}x ${item.name}${item.variant ? ` (${item.variant})` : ""}</td>
         <td class="right">${formatCurrency(itemTotal)}</td>
       </tr>`;
 
@@ -359,7 +359,7 @@ export function buildFnbReceiptHtml(data: FnbReceiptData): string {
         for (const t of item.toppings) {
           if (t.quantity <= 0) continue;
           const tTotal = t.quantity * item.quantity * t.price;
-          html += `<tr><td style="padding-left:12px;font-size:11px;color:#555">+ ${t.name} x${t.quantity}</td>
+          html += `<tr><td style="padding-left:12px;font-size:11px;color:#555">+ ${t.name} x${formatNumber(t.quantity)}</td>
             <td class="right" style="font-size:11px;color:#555">${formatCurrency(tTotal)}</td></tr>`;
         }
       }
@@ -548,14 +548,14 @@ export function buildKitchenTicketHtml(data: KitchenTicketDataV2): string {
   const itemsHtml = data.items.map((item) => {
     if (style === "compact") {
       return `<div class="item">
-        <span class="qty">${item.quantity}x</span> ${item.name}${item.variant ? ` (${item.variant})` : ""}
+        <span class="qty">${formatNumber(item.quantity)}x</span> ${item.name}${item.variant ? ` (${item.variant})` : ""}
       </div>`;
     }
 
     // Standard + Detailed
     let html = `<div class="item">
       <div class="item-name">
-        <span class="qty">${item.quantity}x</span>
+        <span class="qty">${formatNumber(item.quantity)}x</span>
         ${item.name}
         ${item.variant ? `<span class="variant">(${item.variant})</span>` : ""}
       </div>`;
@@ -563,7 +563,7 @@ export function buildKitchenTicketHtml(data: KitchenTicketDataV2): string {
     if (item.toppings && item.toppings.length > 0) {
       const toppingTexts = item.toppings
         .filter(t => t.quantity > 0)
-        .map(t => `${t.name} x${t.quantity}`);
+        .map(t => `${t.name} x${formatNumber(t.quantity)}`);
       if (toppingTexts.length > 0) {
         html += `<div class="toppings">+ ${toppingTexts.join(", ")}</div>`;
       }

@@ -10,12 +10,20 @@
  * đã có loading state nên không block UX.
  */
 
+import { roundDecimals } from "@/lib/format";
+
 interface ExportColumn {
   header: string;
   key: string;
   width?: number;
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
   format?: (value: any) => string | number;
+}
+
+function normalizeExportValue(value: string | number | null | undefined) {
+  if (typeof value !== "number") return value ?? "";
+  if (!Number.isFinite(value)) return 0;
+  return roundDecimals(value);
 }
 
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
@@ -35,7 +43,7 @@ export async function exportToExcel<T extends Record<string, any>>(
     columns.reduce(
       (acc, col) => {
         const value = item[col.key];
-        acc[col.header] = col.format ? col.format(value) : value;
+        acc[col.header] = normalizeExportValue(col.format ? col.format(value) : value);
         return acc;
       },
       // eslint-disable-next-line @typescript-eslint/no-explicit-any
@@ -73,7 +81,7 @@ export async function exportToCsv<T extends Record<string, any>>(
     columns.reduce(
       (acc, col) => {
         const value = item[col.key];
-        acc[col.header] = col.format ? col.format(value) : value;
+        acc[col.header] = normalizeExportValue(col.format ? col.format(value) : value);
         return acc;
       },
       // eslint-disable-next-line @typescript-eslint/no-explicit-any

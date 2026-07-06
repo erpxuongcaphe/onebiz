@@ -12,7 +12,7 @@ import {
 import { Input } from "@/components/ui/input";
 import { useToast } from "@/lib/contexts";
 import { getExpiringLots } from "@/lib/services";
-import { formatDate, formatCurrency } from "@/lib/format";
+import { formatDate, formatNumber } from "@/lib/format";
 import type { ExpiringLot } from "@/lib/types";
 import { Icon } from "@/components/ui/icon";
 
@@ -88,7 +88,7 @@ export default function HSDPage() {
       header: "Tồn lô",
       size: 120,
       cell: ({ row }) => (
-        <span className="font-medium">{formatCurrency(row.original.currentQty)}</span>
+        <span className="font-medium">{formatNumber(row.original.currentQty)}</span>
       ),
     },
     {
@@ -163,7 +163,7 @@ export default function HSDPage() {
               <Icon name="event" size={16} />
             </span>
             <div>
-              <div className="text-2xl font-bold text-primary leading-tight">{total}</div>
+              <div className="text-2xl font-bold text-primary leading-tight">{formatNumber(total)}</div>
               <div className="text-xs text-muted-foreground">Tổng lô cần chú ý</div>
             </div>
           </div>

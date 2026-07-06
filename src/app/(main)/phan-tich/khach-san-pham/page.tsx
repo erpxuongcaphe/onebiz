@@ -27,7 +27,7 @@ import { ChartCard } from "../_components";
 import { ReportPageHeader } from "@/components/shared/report";
 import { useReportState } from "@/lib/hooks/use-report-state";
 import { useBranchFilter, useAuth, useToast } from "@/lib/contexts";
-import { formatCurrency } from "@/lib/format";
+import { formatCurrency, formatNumber } from "@/lib/format";
 import {
   getRevenueByCustomerAndCategory,
   getRevenueByCustomerAndProduct,
@@ -699,7 +699,7 @@ export default function KhachSanPhamPage() {
                               {p.categoryName ?? "—"}
                             </td>
                             <td className="py-1.5 px-3 text-right tabular-nums">
-                              {p.quantity}
+                              {formatNumber(p.quantity)}
                             </td>
                             <td className="py-1.5 px-3 text-right font-medium tabular-nums">
                               {formatCurrency(p.revenue)}đ
@@ -719,7 +719,7 @@ export default function KhachSanPhamPage() {
                           TỔNG
                         </td>
                         <td className="py-2 px-3 text-right tabular-nums">
-                          {productDetail.reduce((s, p) => s + p.quantity, 0)}
+                          {formatNumber(productDetail.reduce((s, p) => s + p.quantity, 0))}
                         </td>
                         <td className="py-2 px-3 text-right text-primary tabular-nums">
                           {formatCurrency(

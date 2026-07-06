@@ -1390,7 +1390,7 @@ export default function NhapHangPage() {
                           toast({
                             variant: "success",
                             title: "Đã mở lại phiếu để sửa",
-                            description: `Đã trả về Nháp · revert ${res.revertedLines} dòng (${res.revertedQtyTotal} đơn vị)${res.consumedLotsCancelled > 0 ? ` · ${res.consumedLotsCancelled} lô đã consume → cancel` : ""}${res.inputInvoiceDeleted ? ` · đã xoá hoá đơn đầu vào` : ""}.`,
+                            description: `Đã trả về Nháp · revert ${res.revertedLines} dòng (${formatNumber(res.revertedQtyTotal)} đơn vị)${res.consumedLotsCancelled > 0 ? ` · ${formatNumber(res.consumedLotsCancelled)} lô đã consume → cancel` : ""}${res.inputInvoiceDeleted ? ` · đã xoá hoá đơn đầu vào` : ""}.`,
                           });
                           // Reload list to reflect new status
                           window.location.reload();

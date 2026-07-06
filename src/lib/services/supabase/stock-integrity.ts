@@ -58,6 +58,19 @@ export interface StockInvariantsResult {
   };
 }
 
+export const STOCK_LEDGER_POLICY = {
+  sourceOfTruth: "stock_movements",
+  snapshots: ["branch_stock", "products.stock"],
+  mutationRule:
+    "All stock-changing operations must write stock_movements and refresh snapshots in the same atomic service/RPC transaction.",
+  reconciliationRule:
+    "branch_stock and products.stock are read models; if they drift, rebuild/repair them from stock_movements, not the other way around.",
+} as const;
+
+export function getStockLedgerPolicy() {
+  return STOCK_LEDGER_POLICY;
+}
+
 /**
  * Verify 3 invariant kho — trả về list product/branch nào drift.
  *

@@ -25,9 +25,11 @@ import {
   getBOMsByProduct,
   getBranches,
   createProductionOrder,
+  completeProductionAtomic,
+  checkMaterialsAvailability,
   getProductById,
 } from "@/lib/services";
-import { formatCurrency } from "@/lib/format";
+import { formatCurrency, formatNumber } from "@/lib/format";
 import type { BOM } from "@/lib/types";
 import type { BranchDetail } from "@/lib/services/supabase/branches";
 import { Icon } from "@/components/ui/icon";
@@ -71,6 +73,11 @@ export function CreateProductionOrderDialog({
   const [plannedStart, setPlannedStart] = useState("");
   const [plannedEnd, setPlannedEnd] = useState("");
   const [notes, setNotes] = useState("");
+  // CEO 06/07/2026: BỎ HẲN bước lên kế hoạch — tạo lệnh = trừ NVL + nhập thành
+  // phẩm vào kho LUÔN (1 nút). Mẻ làm xong ngoài đời mới bấm, khỏi 2 lần.
+  const [lotNumber, setLotNumber] = useState("");
+  const [manufacturedDate, setManufacturedDate] = useState("");
+  const [expiryDate, setExpiryDate] = useState("");
 
   const [selectedBom, setSelectedBom] = useState<BOM | null>(null);
   const [materials, setMaterials] = useState<MaterialNeed[]>([]);
@@ -115,6 +122,9 @@ export function CreateProductionOrderDialog({
       setSelectedBom(null);
       setMaterials([]);
       setErrors({});
+      setLotNumber("");
+      setManufacturedDate(new Date().toISOString().split("T")[0]);
+      setExpiryDate("");
     }
   }, [open]);
 
@@ -205,30 +215,52 @@ export function CreateProductionOrderDialog({
         const qty = Number(plannedQty) || 0;
         const batches = bom.yieldQty > 0 ? qty / bom.yieldQty : 0;
 
-        const needs: MaterialNeed[] = await Promise.all(
-          (bom.items ?? []).map(async (item) => {
-            const perBatch = item.quantity * (1 + (item.wastePercent ?? 0) / 100);
-            const needed = perBatch * batches;
-            // Fetch current stock
-            let available = 0;
-            try {
-              const prod = await getProductById(item.materialId);
-              available = prod?.stock ?? 0;
-            } catch {
-              // ignore
-            }
-            return {
-              productId: item.materialId,
-              productCode: item.materialCode ?? "",
-              productName: item.materialName ?? "",
-              unit: item.unit,
-              perBatch,
-              needed,
-              available,
-              shortage: available < needed,
-            };
-          })
-        );
+        const baseNeeds = (bom.items ?? []).map((item) => {
+          const perBatch = item.quantity * (1 + (item.wastePercent ?? 0) / 100);
+          return {
+            productId: item.materialId,
+            productCode: item.materialCode ?? "",
+            productName: item.materialName ?? "",
+            unit: item.unit,
+            perBatch,
+            needed: perBatch * batches,
+          };
+        });
+
+        // CEO 06/07: tồn NVL phải đo tại CHI NHÁNH SX (branch_stock) — trước
+        // đây so products.stock toàn công ty nên dialog nói "Đủ" mà RPC hoàn
+        // thành vẫn chặn vì kho chi nhánh thiếu. Batch 1 query, hết N+1.
+        let needs: MaterialNeed[];
+        if (branchId) {
+          const checks = await checkMaterialsAvailability(
+            branchId,
+            baseNeeds.map((n) => ({
+              productId: n.productId,
+              productName: n.productName,
+              plannedQty: n.needed,
+              unit: n.unit,
+            })),
+          );
+          const availOf = new Map(checks.map((c) => [c.productId, c.available]));
+          needs = baseNeeds.map((n) => {
+            const available = availOf.get(n.productId) ?? 0;
+            return { ...n, available, shortage: available < n.needed };
+          });
+        } else {
+          // Chưa chọn chi nhánh (hiếm) — fallback tồn tổng như cũ.
+          needs = await Promise.all(
+            baseNeeds.map(async (n) => {
+              let available = 0;
+              try {
+                const prod = await getProductById(n.productId);
+                available = prod?.stock ?? 0;
+              } catch {
+                // ignore
+              }
+              return { ...n, available, shortage: available < n.needed };
+            }),
+          );
+        }
         setMaterials(needs);
       } catch (err) {
         toast({
@@ -240,7 +272,7 @@ export function CreateProductionOrderDialog({
         setComputing(false);
       }
     })();
-  }, [bomId, plannedQty, toast]);
+  }, [bomId, plannedQty, branchId, toast]);
 
   const hasShortage = materials.some((m) => m.shortage);
 
@@ -254,12 +286,16 @@ export function CreateProductionOrderDialog({
     return Object.keys(e).length === 0;
   }
 
+  // CEO 06/07/2026: tạo lệnh = HOÀN THÀNH LUÔN (bỏ bước lên kế hoạch). Tạo lệnh
+  // → trừ NVL + nhập thành phẩm + tạo lô qua RPC nguyên tử 00159, trong 1 phát.
   async function handleSave() {
     if (!validate()) return;
     if (!selectedBom) return;
+    if (saving) return;
+
     setSaving(true);
     try {
-      await createProductionOrder({
+      const created = await createProductionOrder({
         branchId,
         bomId,
         productId: selectedBom.productId,
@@ -273,11 +309,38 @@ export function CreateProductionOrderDialog({
           unit: m.unit,
         })),
       });
-      toast({
-        title: "Tạo lệnh sản xuất thành công",
-        description: `${plannedQty} ${selectedBom.yieldUnit} ${selectedBom.productName ?? ""}`,
-        variant: "success",
-      });
+
+      const createdCode = (created as { code?: string })?.code ?? "";
+      const createdId = (created as { id: string }).id;
+      const today = new Date().toISOString().split("T")[0];
+      const lot =
+        lotNumber.trim() ||
+        (createdCode ? `${createdCode}-${today.replace(/-/g, "")}` : undefined);
+      try {
+        await completeProductionAtomic(
+          createdId,
+          Number(plannedQty),
+          lot,
+          manufacturedDate || today,
+          expiryDate || undefined,
+        );
+        toast({
+          title: "Sản xuất hoàn thành",
+          description: `${createdCode}: +${formatNumber(Number(plannedQty) || 0)} ${selectedBom.yieldUnit} ${selectedBom.productName ?? ""} vào kho — NVL đã trừ, lô ${lot ?? "tự sinh"}.`,
+          variant: "success",
+        });
+      } catch (err) {
+        // Atomic: hoàn thành lỗi (vd thiếu NVL) = KHÔNG trừ gì cả; lệnh nằm lại
+        // danh sách Lệnh SX để nhập NVL rồi bấm Hoàn thành sau. Đây là fallback
+        // tự nhiên khi thiếu NVL, KHÔNG phải "bước lên kế hoạch" chủ động.
+        toast({
+          title: "Đã tạo lệnh nhưng chưa nhập kho được",
+          description: `${createdCode}: kho CHƯA bị trừ. ${err instanceof Error ? err.message : "Lỗi không rõ"}. Nhập đủ NVL rồi vào Lệnh sản xuất bấm Hoàn thành.`,
+          variant: "warning",
+          duration: 9000,
+        });
+      }
+
       onOpenChange(false);
       onSuccess?.();
     } catch (err) {
@@ -295,10 +358,10 @@ export function CreateProductionOrderDialog({
     <Dialog open={open} onOpenChange={onOpenChange}>
       <DialogContent className="md:max-w-2xl lg:max-w-3xl max-h-[90vh] overflow-y-auto">
         <DialogHeader>
-          <DialogTitle>Tạo lệnh sản xuất</DialogTitle>
+          <DialogTitle>Sản xuất &amp; nhập kho</DialogTitle>
           <DialogDescription>
-            Chọn sản phẩm cần sản xuất. Hệ thống tự động lấy công thức BOM
-            của sản phẩm + tính NVL cần dùng.
+            Chọn sản phẩm + số lượng mẻ đã làm xong. Bấm <b>Hoàn thành</b> là trừ
+            NVL và nhập thành phẩm vào kho ngay (không còn bước lên kế hoạch).
           </DialogDescription>
         </DialogHeader>
 
@@ -498,6 +561,40 @@ export function CreateProductionOrderDialog({
             </div>
           </div>
 
+          {/* CEO 06/07: thông tin lô thành phẩm nhập kho */}
+          <div className="rounded-xl border border-border p-3 space-y-2 bg-surface-container-lowest">
+            <div className="flex items-center gap-2 text-sm font-medium">
+              <Icon name="package_2" size={16} className="text-primary" />
+              Lô thành phẩm nhập kho
+            </div>
+            <div className="grid grid-cols-3 gap-3">
+              <div className="space-y-1">
+                <label className="text-xs text-muted-foreground">Số lô</label>
+                <Input
+                  value={lotNumber}
+                  onChange={(e) => setLotNumber(e.target.value)}
+                  placeholder="Để trống = tự sinh theo mã lệnh"
+                />
+              </div>
+              <div className="space-y-1">
+                <label className="text-xs text-muted-foreground">NSX</label>
+                <Input
+                  type="date"
+                  value={manufacturedDate}
+                  onChange={(e) => setManufacturedDate(e.target.value)}
+                />
+              </div>
+              <div className="space-y-1">
+                <label className="text-xs text-muted-foreground">HSD</label>
+                <Input
+                  type="date"
+                  value={expiryDate}
+                  onChange={(e) => setExpiryDate(e.target.value)}
+                />
+              </div>
+            </div>
+          </div>
+
           {/* Material needs */}
           {bomId && (
             <div className="space-y-2">
@@ -584,9 +681,12 @@ export function CreateProductionOrderDialog({
           <Button variant="outline" onClick={() => onOpenChange(false)}>
             Hủy
           </Button>
-          <Button onClick={handleSave} disabled={saving || computing}>
-            {saving && <Icon name="progress_activity" size={16} className="mr-2 animate-spin" />}
-            Tạo lệnh sản xuất
+          {/* CEO 06/07: 1 nút duy nhất — tạo lệnh = hoàn thành + nhập kho luôn */}
+          <Button onClick={() => handleSave()} disabled={saving || computing}>
+            {saving && (
+              <Icon name="progress_activity" size={16} className="mr-2 animate-spin" />
+            )}
+            Hoàn thành sản xuất &amp; nhập kho
           </Button>
         </DialogFooter>
       </DialogContent>

@@ -19,6 +19,7 @@ const mockInternalSupplier = {
 let codeCounter = 0;
 let insertedTables: Record<string, unknown[]> = {};
 let stockMovements: Array<{ type: string; productId: string; quantity: number; branchId: string }> = [];
+let stockOutRpcCalls: Array<{ productId: string; quantity: number; branchId: string }> = [];
 
 // === Chain mock builder ===
 
@@ -60,7 +61,7 @@ vi.mock("@/lib/services/supabase/base", () => ({
       }
       return createChain({ data: [], error: null });
     }),
-    rpc: vi.fn((funcName: string) => {
+    rpc: vi.fn((funcName: string, params?: any) => {
       if (funcName === "next_code") {
         codeCounter++;
         return Promise.resolve({ data: `CODE-${codeCounter}`, error: null });
@@ -72,6 +73,14 @@ vi.mock("@/lib/services/supabase/base", () => ({
         return Promise.resolve({ data: null, error: null });
       }
       if (funcName === "upsert_branch_stock") {
+        return Promise.resolve({ data: null, error: null });
+      }
+      if (funcName === "internal_sale_apply_stock_out") {
+        stockOutRpcCalls.push({
+          productId: params?.p_product_id,
+          quantity: params?.p_quantity,
+          branchId: params?.p_branch_id,
+        });
         return Promise.resolve({ data: null, error: null });
       }
       return Promise.resolve({ data: null, error: null });
@@ -116,6 +125,7 @@ beforeEach(() => {
   codeCounter = 0;
   insertedTables = {};
   stockMovements = [];
+  stockOutRpcCalls = [];
   vi.clearAllMocks();
 
   // Setup table handlers
@@ -213,23 +223,21 @@ describe("createInternalSale", () => {
     expect(result.total).toBe(2_250_000 + 180_000);
   });
 
-  it("calls applyManualStockMovement for both branches", async () => {
+  it("uses atomic RPC for outbound stock and helper for inbound stock", async () => {
     await createInternalSale(validInput);
 
-    expect(applyManualStockMovement).toHaveBeenCalledTimes(2);
+    expect(applyManualStockMovement).toHaveBeenCalledTimes(1);
 
-    // First call: stock OUT for seller
-    const call1 = (applyManualStockMovement as any).mock.calls[0];
-    expect(call1[0]).toHaveLength(2);
-    expect(call1[0][0].type).toBe("out");
-    expect(call1[0][0].quantity).toBe(10);
-    expect(call1[1].branchId).toBe(FROM_BRANCH);
+    const inCall = (applyManualStockMovement as any).mock.calls[0];
+    expect(inCall[0]).toHaveLength(2);
+    expect(inCall[0][0].type).toBe("in");
+    expect(inCall[0][0].quantity).toBe(10);
+    expect(inCall[1].branchId).toBe(TO_BRANCH);
 
-    // Second call: stock IN for buyer
-    const call2 = (applyManualStockMovement as any).mock.calls[1];
-    expect(call2[0][0].type).toBe("in");
-    expect(call2[0][0].quantity).toBe(10);
-    expect(call2[1].branchId).toBe(TO_BRANCH);
+    expect(stockOutRpcCalls).toEqual([
+      { productId: "prod-001", quantity: 10, branchId: FROM_BRANCH },
+      { productId: "prod-002", quantity: 5, branchId: FROM_BRANCH },
+    ]);
   });
 
   it("returns result with total matching calculation", async () => {
@@ -246,21 +254,15 @@ describe("createInternalSale", () => {
   it("tracks stock movements correctly per branch", async () => {
     await createInternalSale(validInput);
 
-    // Should have 4 movements: 2 out (from seller), 2 in (to buyer)
-    const outMoves = stockMovements.filter((m) => m.type === "out");
     const inMoves = stockMovements.filter((m) => m.type === "in");
 
-    expect(outMoves).toHaveLength(2);
+    expect(stockOutRpcCalls).toHaveLength(2);
+    expect(stockOutRpcCalls.every((m) => m.branchId === FROM_BRANCH)).toBe(true);
     expect(inMoves).toHaveLength(2);
-
-    // All OUTs from seller branch
-    expect(outMoves.every((m) => m.branchId === FROM_BRANCH)).toBe(true);
-    // All INs to buyer branch
     expect(inMoves.every((m) => m.branchId === TO_BRANCH)).toBe(true);
 
-    // Quantities match
-    expect(outMoves[0].quantity).toBe(10);
-    expect(outMoves[1].quantity).toBe(5);
+    expect(stockOutRpcCalls[0].quantity).toBe(10);
+    expect(stockOutRpcCalls[1].quantity).toBe(5);
     expect(inMoves[0].quantity).toBe(10);
     expect(inMoves[1].quantity).toBe(5);
   });

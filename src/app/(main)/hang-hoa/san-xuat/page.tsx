@@ -32,7 +32,7 @@ import { Button } from "@/components/ui/button";
 import { useToast, useBranchFilter } from "@/lib/contexts";
 import { printDocumentWithTemplate } from "@/lib/print-apply-template";
 import { buildProductionOrderPrintData } from "@/lib/print-templates";
-import { formatCurrency, formatDate } from "@/lib/format";
+import { formatCurrency, formatDate, formatNumber } from "@/lib/format";
 import {
   getProductionOrders,
   getProductionOrderById,
@@ -130,11 +130,11 @@ function ProductionOrderDetail({
                     },
                     {
                       label: "Số lượng kế hoạch",
-                      value: <span className="font-semibold">{order.plannedQty}</span>,
+                      value: <span className="font-semibold">{formatNumber(order.plannedQty)}</span>,
                     },
                     {
                       label: "Đã hoàn thành",
-                      value: <span className="font-semibold">{order.completedQty}</span>,
+                      value: <span className="font-semibold">{formatNumber(order.completedQty)}</span>,
                     },
                     {
                       label: "Bắt đầu KH",
@@ -370,8 +370,8 @@ export default function SanXuatPage() {
       size: 130,
       cell: ({ row }) => (
         <span>
-          <span className="font-medium">{row.original.completedQty}</span>
-          <span className="text-muted-foreground"> / {row.original.plannedQty}</span>
+          <span className="font-medium">{formatNumber(row.original.completedQty)}</span>
+          <span className="text-muted-foreground"> / {formatNumber(row.original.plannedQty)}</span>
         </span>
       ),
     },
@@ -503,7 +503,7 @@ export default function SanXuatPage() {
                       SL kế hoạch
                     </span>
                     <span className="text-xs font-semibold">
-                      {order.completedQty} / {order.plannedQty}
+                      {formatNumber(order.completedQty)} / {formatNumber(order.plannedQty)}
                     </span>
                   </div>
                 </div>
@@ -623,7 +623,7 @@ export default function SanXuatPage() {
             );
             const revertNote =
               result.revertedMaterialsQty > 0
-                ? ` Đã hoàn ${result.revertedMaterialsQty} đơn vị NVL về kho.`
+                ? ` Đã hoàn ${formatNumber(result.revertedMaterialsQty)} đơn vị NVL về kho.`
                 : "";
             toast({
               title: "Đã hủy lệnh sản xuất",

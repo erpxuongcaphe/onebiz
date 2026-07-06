@@ -3,7 +3,7 @@
  * and triggers the browser's print dialog.
  */
 
-import { formatCurrency, formatDate, formatShortDate } from "@/lib/format";
+import { formatCurrency, formatDate, formatNumber, formatShortDate } from "@/lib/format";
 
 export interface DocumentLineItem {
   name: string;
@@ -228,7 +228,7 @@ export function generateDocumentHtml(d: DocumentPrintData, paperSize: PaperSize)
         .map(
           (it) => `<div class="t-item">
         <div class="t-name">${esc(it.name)}</div>
-        <div class="t-line"><span>${it.quantity}${it.unit ? ` ${esc(it.unit)}` : ""} × ${money(it.unitPrice ?? 0)}</span><span class="t-total tnum">${money(it.total)}</span></div>
+        <div class="t-line"><span>${formatNumber(it.quantity)}${it.unit ? ` ${esc(it.unit)}` : ""} × ${money(it.unitPrice ?? 0)}</span><span class="t-total tnum">${money(it.total)}</span></div>
       </div>`,
         )
         .join("");
@@ -257,7 +257,7 @@ export function generateDocumentHtml(d: DocumentPrintData, paperSize: PaperSize)
         <td class="center">${i + 1}</td>
         ${hasCode ? `<td>${esc(it.code ?? "")}</td>` : ""}
         <td>${esc(it.name)}</td>
-        <td class="right tnum">${it.quantity}${it.unit ? `<span class="unit"> ${esc(it.unit)}</span>` : ""}</td>
+        <td class="right tnum">${formatNumber(it.quantity)}${it.unit ? `<span class="unit"> ${esc(it.unit)}</span>` : ""}</td>
         ${hasPriceCol ? `<td class="right tnum">${money(it.unitPrice ?? 0)}</td>` : ""}
         ${hasDiscountCol ? `<td class="right tnum">${it.discount && it.discount > 0 ? money(it.discount) : "0"}</td>` : ""}
         <td class="right tnum">${money(it.total)}</td>

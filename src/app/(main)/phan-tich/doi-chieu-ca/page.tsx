@@ -39,7 +39,7 @@ import {
 } from "@/lib/services/supabase/shifts";
 import { getBranches } from "@/lib/services/supabase/branches";
 import type { Branch } from "@/lib/types";
-import { formatCurrency } from "@/lib/format";
+import { formatCurrency, formatDate } from "@/lib/format";
 import { cn } from "@/lib/utils";
 import { KpiCard } from "../_components";
 
@@ -52,14 +52,7 @@ function todayIso(offsetDays = 0): string {
 }
 
 function formatDateTime(iso: string | null): string {
-  if (!iso) return "—";
-  return new Date(iso).toLocaleString("vi-VN", {
-    day: "2-digit",
-    month: "2-digit",
-    year: "numeric",
-    hour: "2-digit",
-    minute: "2-digit",
-  });
+  return formatDate(iso);
 }
 
 function isSelfReconcile(r: ReconciledShiftRow): boolean {
@@ -177,8 +170,8 @@ export default function ReconciledShiftReportPage() {
     try {
       const data = await getReconciledShifts({
         branchId: branchId !== "all" ? branchId : undefined,
-        dateFrom: dateFrom ? `${dateFrom}T00:00:00.000Z` : undefined,
-        dateTo: dateTo ? `${dateTo}T23:59:59.999Z` : undefined,
+        dateFrom: dateFrom || undefined,
+        dateTo: dateTo || undefined,
         type,
       });
       setRows(data);

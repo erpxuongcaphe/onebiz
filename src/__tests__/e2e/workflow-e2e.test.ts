@@ -478,7 +478,7 @@ describe("Flow A: POS Direct Sale", () => {
     );
     expect(itemInserts.length).toBe(1);
 
-    // 3. Stock movements created (1 insert per call with array)
+    // 3. Stock movements created in one batched ledger insert
     const smInserts = insertCalls.filter(
       (c) => c.table === "stock_movements"
     );
@@ -660,11 +660,11 @@ describe("Flow B: Draft → Complete with Mixed Payment", () => {
       ],
     });
 
-    // Stock movements applied
+    // Stock movements applied per item for ledger traceability
     const smInserts = insertCalls.filter(
       (c) => c.table === "stock_movements"
     );
-    expect(smInserts.length).toBe(1);
+    expect(smInserts.length).toBe(2);
 
     // Stock RPCs called: 2 items × 2 RPCs each = 4
     const stockRpcs = rpcCalls.filter(
@@ -877,11 +877,11 @@ describe("Flow D: Sales Order Completion", () => {
 
     await completeSalesOrder("so-1");
 
-    // Stock movements: 1 insert with 2 items
+    // Stock movements: one ledger insert per item
     const smInserts = insertCalls.filter(
       (c) => c.table === "stock_movements"
     );
-    expect(smInserts.length).toBe(1);
+    expect(smInserts.length).toBe(2);
 
     // RPCs: 2 items × 2 RPCs = 4
     const stockRpcs = rpcCalls.filter(

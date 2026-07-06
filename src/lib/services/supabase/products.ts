@@ -4,29 +4,17 @@
 
 import type { Product, ProductDetail, StockMovement, SalesHistory, QueryParams, QueryResult } from "@/lib/types";
 import type { Database } from "@/lib/supabase/types";
+import { applyCreatedAtRangeFilter } from "@/lib/utils/list-date-preset-range";
 import { getClient, getPaginationRange, handleError, getCurrentTenantId } from "./base";
 import { isRpcUnavailable } from "./rpc-utils";
 
 type ProductInsert = Database["public"]["Tables"]["products"]["Insert"];
 type ProductUpdate = Database["public"]["Tables"]["products"]["Update"];
 
-function dateStart(value: string): string {
-  return value.includes("T") ? value : `${value}T00:00:00.000Z`;
-}
-
-function dateEnd(value: string): string {
-  return value.includes("T") ? value : `${value}T23:59:59.999Z`;
-}
 
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
 function applyCreatedAtRange(query: any, filters: QueryParams["filters"] | undefined) {
-  const dateFrom = typeof filters?.dateFrom === "string" ? filters.dateFrom : undefined;
-  const dateTo = typeof filters?.dateTo === "string" ? filters.dateTo : undefined;
-
-  if (dateFrom) query = query.gte("created_at", dateStart(dateFrom));
-  if (dateTo) query = query.lte("created_at", dateEnd(dateTo));
-
-  return query;
+  return applyCreatedAtRangeFilter(query, filters);
 }
 
 // --- Products ---
@@ -457,12 +445,8 @@ export async function getAllStockMovements(
     query = query.eq("branch_id", params.branchId);
   }
 
-  // P1-3C-K2: filter date range — chỉ apply khi caller truyền cả 2.
-  if (params.dateFrom && params.dateTo) {
-    query = query
-      .gte("created_at", `${params.dateFrom}T00:00:00+07:00`)
-      .lt("created_at", `${params.dateTo}T23:59:59.999+07:00`);
-  }
+  // Date range uses the shared Vietnam-day, end-exclusive helper.
+  query = applyCreatedAtRangeFilter(query, params);
 
   // Sort
   query = query.order("created_at", { ascending: false });

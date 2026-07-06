@@ -47,7 +47,7 @@ import { AuditLogDialog } from "@/components/shared/audit-log-dialog";
 import { buildTransactionRowActions } from "@/components/shared/transaction-row-actions";
 import { useTxRowPermissions } from "@/lib/permissions";
 import { useToast, useBranchFilter } from "@/lib/contexts";
-import { formatDate } from "@/lib/format";
+import { formatDate, formatNumber } from "@/lib/format";
 import { getBranches, getBranchStockRows } from "@/lib/services";
 import {
   getStockTransfers,
@@ -641,7 +641,7 @@ function TransferDetail({
                                 </div>
                               </td>
                               <td className="p-2 text-right tabular-nums">
-                                {it.quantity} {it.unit ?? ""}
+                                {formatNumber(it.quantity)} {it.unit ?? ""}
                               </td>
                             </tr>
                           ))}
@@ -929,7 +929,7 @@ function CreateTransferDialog({
                       </span>
                     </div>
                     <span className="text-xs text-muted-foreground">
-                      Tồn: {prod.stock} {prod.unit ?? ""}
+                      Tồn: {formatNumber(prod.stock)} {prod.unit ?? ""}
                     </span>
                   </button>
                 ))}
@@ -979,7 +979,7 @@ function CreateTransferDialog({
                         <td
                           className={`text-center text-xs ${overStock ? "text-status-error font-medium" : "text-muted-foreground"}`}
                         >
-                          {item.stock} {item.unit ?? ""}
+                          {formatNumber(item.stock)} {item.unit ?? ""}
                         </td>
                         <td className="text-center px-2">
                           <Input

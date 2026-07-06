@@ -186,9 +186,9 @@ describe("completeSalesOrder", () => {
   it("decrements stock via applyStockDecrement (stock_movements + RPCs)", async () => {
     await completeSalesOrder("so1");
 
-    // Stock movements inserted
+    // Stock movements inserted per item for ledger traceability
     const smInserts = insertCalls.filter((c) => c.table === "stock_movements");
-    expect(smInserts.length).toBe(1);
+    expect(smInserts.length).toBe(2);
 
     // RPCs for stock decrement (2 items × 2 RPCs each = 4)
     // + 2 next_code calls (invoice + cash)

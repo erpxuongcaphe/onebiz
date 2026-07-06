@@ -154,9 +154,9 @@ function BOMDetail({
                     },
                     {
                       label: "Sản lượng / batch",
-                      value: `${bom.yieldQty} ${bom.yieldUnit}`,
+                      value: `${formatNumber(bom.yieldQty)} ${bom.yieldUnit}`,
                     },
-                    { label: "Batch size", value: `${bom.batchSize}` },
+                    { label: "Batch size", value: formatNumber(bom.batchSize) },
                     {
                       label: "Tổng giá vốn NVL",
                       value: cost
@@ -217,10 +217,10 @@ function BOMDetail({
                                 </div>
                               </td>
                               <td className="p-2 text-right tabular-nums">
-                                {item.quantity} {item.unit}
+                                {formatNumber(item.quantity)} {item.unit}
                               </td>
                               <td className="p-2 text-right tabular-nums text-muted-foreground">
-                                {item.wastePercent}%
+                                {formatNumber(item.wastePercent)}%
                               </td>
                               <td className="p-2 text-right tabular-nums">
                                 {costItem ? formatCurrency(costItem.costPrice) : "—"}
@@ -275,7 +275,7 @@ function BOMDetail({
                             <td className="p-2 font-medium text-primary">{h.code}</td>
                             <td className="p-2 text-xs">{h.branchName ?? "—"}</td>
                             <td className="p-2 text-right tabular-nums">
-                              {h.plannedQty} / {h.completedQty}
+                              {formatNumber(h.plannedQty)} / {formatNumber(h.completedQty)}
                             </td>
                             <td className="p-2">
                               <Badge variant="outline" className="text-xs capitalize">
@@ -435,10 +435,10 @@ export default function CongThucPage() {
       size: 140,
       cell: ({ row }) => (
         <span>
-          {row.original.yieldQty} {row.original.yieldUnit}
+          {formatNumber(row.original.yieldQty)} {row.original.yieldUnit}
           <span className="text-xs text-muted-foreground">
             {" "}
-            / batch {row.original.batchSize}
+            / batch {formatNumber(row.original.batchSize)}
           </span>
         </span>
       ),

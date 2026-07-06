@@ -454,11 +454,11 @@ export default function TongQuanPage() {
                     <div className="flex-1 min-w-0">
                       <p className="text-sm truncate">{product.name}</p>
                       <p className="text-xs text-muted-foreground">
-                        Cảnh báo: dưới {product.minStock}
+                        Cảnh báo: dưới {formatNumber(product.minStock)}
                       </p>
                     </div>
                     <Badge variant="destructive" className="text-xs shrink-0 ml-2">
-                      Còn {product.stock}
+                      Còn {formatNumber(product.stock)}
                     </Badge>
                   </div>
                 ))}

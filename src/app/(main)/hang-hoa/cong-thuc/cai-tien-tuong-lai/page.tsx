@@ -1,5 +1,6 @@
 "use client";
 
+import { formatCurrency } from "@/lib/format";
 /**
  * Demo trực quan cải tiến BOM picker — rewrite v2 (CEO 19/05/2026).
  * Triết lý design: less chrome, more whitespace, 1 idea per section, real
@@ -80,7 +81,7 @@ function PickerMultiSelect({ checked }: { checked?: Set<string> }) {
                 </span>
               </span>
               <span className="text-[11px] text-muted-foreground tabular-nums whitespace-nowrap">
-                {m.costPrice.toLocaleString("vi-VN")}đ/{m.unit}
+                {formatCurrency(m.costPrice)}đ/{m.unit}
               </span>
             </li>
           );
@@ -149,7 +150,7 @@ function PickerSingleSelect() {
                 </span>
               </span>
               <span className="text-[11px] text-muted-foreground tabular-nums whitespace-nowrap">
-                {m.costPrice.toLocaleString("vi-VN")}đ/{m.unit}
+                {formatCurrency(m.costPrice)}đ/{m.unit}
               </span>
             </li>
           );

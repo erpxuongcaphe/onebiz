@@ -1,3 +1,4 @@
+import { applyCreatedAtRangeFilter } from "@/lib/utils/list-date-preset-range";
 /**
  * Supabase service: Purchase Orders (Đặt hàng / Nhập hàng)
  *
@@ -58,23 +59,9 @@ export function canTransitionPurchaseStatus(from: string, to: string): boolean {
   return allowed.includes(to as PurchaseOrderStatus);
 }
 
-function dateStart(value: string): string {
-  return value.includes("T") ? value : `${value}T00:00:00.000Z`;
-}
-
-function dateEnd(value: string): string {
-  return value.includes("T") ? value : `${value}T23:59:59.999Z`;
-}
-
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
 function applyCreatedAtRange(query: any, filters: QueryParams["filters"] | undefined) {
-  const dateFrom = typeof filters?.dateFrom === "string" ? filters.dateFrom : undefined;
-  const dateTo = typeof filters?.dateTo === "string" ? filters.dateTo : undefined;
-
-  if (dateFrom) query = query.gte("created_at", dateStart(dateFrom));
-  if (dateTo) query = query.lte("created_at", dateEnd(dateTo));
-
-  return query;
+  return applyCreatedAtRangeFilter(query, filters);
 }
 
 export function getPurchaseOrderStatusMeta(): Record<

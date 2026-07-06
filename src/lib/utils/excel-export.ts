@@ -25,6 +25,7 @@
 import * as XLSX from "xlsx-js-style";
 import { saveAs } from "file-saver";
 import type { DateRange, ReportKind } from "@/lib/types/report";
+import { roundDecimals } from "@/lib/format";
 
 // ============================================================
 // Style constants — đồng bộ với theme OneBiz (#004AC6 primary)
@@ -324,7 +325,7 @@ function formatCell(value: unknown, col: ExcelColumn): XLSX.CellObject {
   if (format === "currency") {
     const n = typeof value === "number" ? value : Number(value);
     return {
-      v: Number.isFinite(n) ? n : 0,
+      v: Number.isFinite(n) ? roundDecimals(n) : 0,
       t: "n",
       z: "#,##0",
       s: STYLE_DATA_NUMBER,
@@ -334,7 +335,7 @@ function formatCell(value: unknown, col: ExcelColumn): XLSX.CellObject {
   if (format === "number") {
     const n = typeof value === "number" ? value : Number(value);
     return {
-      v: Number.isFinite(n) ? n : 0,
+      v: Number.isFinite(n) ? roundDecimals(n) : 0,
       t: "n",
       z: "#,##0.##",
       s: STYLE_DATA_NUMBER,

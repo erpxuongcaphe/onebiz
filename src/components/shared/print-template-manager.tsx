@@ -1,5 +1,7 @@
 "use client";
 
+import { formatNumber } from "@/lib/format";
+
 import { useCallback, useEffect, useMemo, useState } from "react";
 import {
   Dialog,
@@ -1264,7 +1266,7 @@ const SAMPLE_ITEMS: {
 ];
 
 function fmt(n: number): string {
-  return n.toLocaleString("vi-VN");
+  return formatNumber(n);
 }
 
 function BillPreview({

@@ -174,7 +174,7 @@ export default function LoSanXuatPage() {
       accessorKey: "initialQty",
       header: "SL ban đầu",
       size: 100,
-      cell: ({ row }) => <span className="text-xs tabular-nums">{row.original.initialQty}</span>,
+      cell: ({ row }) => <span className="text-xs tabular-nums">{formatNumber(row.original.initialQty)}</span>,
     },
     {
       accessorKey: "currentQty",
@@ -184,7 +184,7 @@ export default function LoSanXuatPage() {
         const pct = row.original.initialQty > 0 ? (row.original.currentQty / row.original.initialQty) * 100 : 0;
         return (
           <div className="flex items-center gap-2">
-            <span className="text-xs font-bold tabular-nums">{row.original.currentQty}</span>
+            <span className="text-xs font-bold tabular-nums">{formatNumber(row.original.currentQty)}</span>
             <div className="w-12 h-1.5 bg-surface-container-high rounded-full overflow-hidden">
               <div className="h-full bg-primary rounded-full" style={{ width: `${Math.min(100, pct)}%` }} />
             </div>

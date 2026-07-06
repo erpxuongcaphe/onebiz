@@ -6,7 +6,7 @@
 
 import { useEffect, useState } from "react";
 import { getProductLots } from "@/lib/services";
-import { formatCurrency, formatDate } from "@/lib/format";
+import { formatDate, formatNumber } from "@/lib/format";
 import type { ProductLot } from "@/lib/types";
 import { Icon } from "@/components/ui/icon";
 
@@ -84,7 +84,7 @@ export function ProductLotsTab({ productId, branchId }: ProductLotsTabProps) {
       <div className="grid grid-cols-3 gap-2">
         <SummaryCard
           label="Tổng tồn"
-          value={formatCurrency(totalStock)}
+          value={formatNumber(totalStock)}
           tone="default"
         />
         <SummaryCard
@@ -123,10 +123,10 @@ export function ProductLotsTab({ productId, branchId }: ProductLotsTabProps) {
                 </td>
                 <td className="p-2 text-muted-foreground">{lot.branchName ?? "—"}</td>
                 <td className="p-2 text-right">
-                  <span className="font-medium">{formatCurrency(lot.currentQty)}</span>
+                  <span className="font-medium">{formatNumber(lot.currentQty)}</span>
                   {lot.initialQty > lot.currentQty && (
                     <span className="block text-xs text-muted-foreground">
-                      / {formatCurrency(lot.initialQty)}
+                      / {formatNumber(lot.initialQty)}
                     </span>
                   )}
                 </td>

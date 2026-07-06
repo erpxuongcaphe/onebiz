@@ -22,7 +22,7 @@ import { Card, CardContent } from "@/components/ui/card";
 import { Icon } from "@/components/ui/icon";
 import { useToast } from "@/lib/contexts";
 import { usePermissions, PERMISSIONS } from "@/lib/permissions";
-import { formatCurrency } from "@/lib/format";
+import { formatCurrency, formatDate } from "@/lib/format";
 import {
   getPendingShifts,
   type PendingShift,
@@ -163,12 +163,7 @@ function CaChoDoiSoatPage() {
                   <div className="flex justify-between">
                     <span className="text-muted-foreground">Mở ca:</span>
                     <span className="font-medium">
-                      {new Date(s.openedAt).toLocaleString("vi-VN", {
-                        day: "2-digit",
-                        month: "2-digit",
-                        hour: "2-digit",
-                        minute: "2-digit",
-                      })}
+                      {formatDate(s.openedAt)}
                     </span>
                   </div>
                   <div className="flex justify-between">
@@ -188,12 +183,7 @@ function CaChoDoiSoatPage() {
                   <div className="flex justify-between">
                     <span className="text-muted-foreground">Tự pending:</span>
                     <span className="font-medium text-xs">
-                      {new Date(s.autoMarkedPendingAt).toLocaleString("vi-VN", {
-                        day: "2-digit",
-                        month: "2-digit",
-                        hour: "2-digit",
-                        minute: "2-digit",
-                      })}
+                      {formatDate(s.autoMarkedPendingAt)}
                     </span>
                   </div>
                 </div>

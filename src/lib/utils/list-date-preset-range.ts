@@ -35,6 +35,105 @@ export interface PresetRange {
   to: string | undefined;
 }
 
+export interface CreatedAtRange {
+  from: string | undefined;
+  toExclusive: string | undefined;
+}
+
+export interface CreatedAtWindow {
+  start: string;
+  end: string;
+}
+
+const VIETNAM_OFFSET_MINUTES = 7 * 60;
+
+function parseDateOnly(value: string): { year: number; month: number; day: number } | null {
+  const match = value.match(/^(\d{4})-(\d{2})-(\d{2})$/);
+  if (!match) return null;
+  const year = Number(match[1]);
+  const month = Number(match[2]);
+  const day = Number(match[3]);
+  if (!year || month < 1 || month > 12 || day < 1 || day > 31) return null;
+
+  const check = new Date(Date.UTC(year, month - 1, day));
+  if (
+    check.getUTCFullYear() !== year ||
+    check.getUTCMonth() !== month - 1 ||
+    check.getUTCDate() !== day
+  ) {
+    return null;
+  }
+
+  return { year, month, day };
+}
+
+function vietnamDateOnlyToUtcIso(
+  value: string,
+  addDays: number = 0,
+): string {
+  const parsed = parseDateOnly(value);
+  if (!parsed) return value;
+
+  const utcMs =
+    Date.UTC(parsed.year, parsed.month - 1, parsed.day + addDays, 0, 0, 0, 0) -
+    VIETNAM_OFFSET_MINUTES * 60_000;
+  return new Date(utcMs).toISOString();
+}
+
+export function toCreatedAtStartIso(value: string | undefined): string | undefined {
+  if (!value) return undefined;
+  return parseDateOnly(value) ? vietnamDateOnlyToUtcIso(value) : value;
+}
+
+export function toCreatedAtEndExclusiveIso(
+  value: string | undefined,
+): string | undefined {
+  if (!value) return undefined;
+  return parseDateOnly(value) ? vietnamDateOnlyToUtcIso(value, 1) : value;
+}
+
+export function normalizeCreatedAtRange(filters?: {
+  dateFrom?: unknown;
+  dateTo?: unknown;
+}): CreatedAtRange {
+  const dateFrom = typeof filters?.dateFrom === "string" ? filters.dateFrom : undefined;
+  const dateTo = typeof filters?.dateTo === "string" ? filters.dateTo : undefined;
+
+  return {
+    from: toCreatedAtStartIso(dateFrom),
+    toExclusive: toCreatedAtEndExclusiveIso(dateTo),
+  };
+}
+
+export function toCreatedAtRangeWindow(range?: {
+  from?: string;
+  to?: string;
+}): CreatedAtWindow | undefined {
+  const start = toCreatedAtStartIso(range?.from);
+  const end = toCreatedAtEndExclusiveIso(range?.to);
+  return start && end ? { start, end } : undefined;
+}
+
+export function applyDateRangeFilter<TQuery>(
+  query: TQuery,
+  column: string,
+  filters?: { dateFrom?: unknown; dateTo?: unknown },
+): TQuery {
+  const { from, toExclusive } = normalizeCreatedAtRange(filters);
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  let q = query as any;
+  if (from) q = q.gte(column, from);
+  if (toExclusive) q = q.lt(column, toExclusive);
+  return q as TQuery;
+}
+
+export function applyCreatedAtRangeFilter<TQuery>(
+  query: TQuery,
+  filters?: { dateFrom?: unknown; dateTo?: unknown },
+): TQuery {
+  return applyDateRangeFilter(query, "created_at", filters);
+}
+
 export function computeListPresetRange(
   preset: DatePresetValue,
   now: Date = new Date(),

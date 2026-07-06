@@ -1,5 +1,6 @@
 "use client";
 
+import { formatCurrency } from "@/lib/format";
 /**
  * MOCKUP xem trước — POS Retail "wow" + RESPONSIVE 3 cỡ màn (CEO 15/06/2026).
  * Trang ĐỘC LẬP, dữ liệu mẫu, KHÔNG đụng POS thật / không gọi service.
@@ -39,7 +40,7 @@ const PRODUCTS: Prod[] = [
 const CATS = ["Tất cả", "Cà phê", "Trà", "Nước ngọt", "Bánh"];
 const QUICK = [50000, 100000, 200000, 500000];
 
-const vnd = (n: number) => new Intl.NumberFormat("vi-VN").format(n) + "đ";
+const vnd = (n: number) => `${formatCurrency(n)}\u0111`;
 
 export default function PosRetailWowMockup() {
   const [cat, setCat] = useState("Tất cả");

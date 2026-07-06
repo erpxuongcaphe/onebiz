@@ -24,6 +24,7 @@ import {
 } from "@/components/ui/select";
 import type { Product } from "@/lib/types";
 import type { ModifierGroup } from "@/lib/services/supabase/modifier-groups";
+import { formatNumber } from "@/lib/format";
 
 export interface SizeCol {
   /** key ổn định để gắn lượng theo cột (kể cả size chưa lưu DB) */
@@ -51,7 +52,7 @@ export const newRecipeRow = (): RecipeRow => ({
 });
 
 const FIXED = "__fixed__";
-const fmtMoney = (n: number) => Math.round(n || 0).toLocaleString("vi-VN");
+const fmtMoney = (n: number) => formatNumber(Math.round(n || 0));
 
 interface Props {
   sizes: SizeCol[];

@@ -16,6 +16,7 @@
 
 import { getClient, getCurrentTenantId, handleError } from "./base";
 import type { DateRange } from "@/lib/types/report";
+import { toCreatedAtRangeWindow } from "@/lib/utils/list-date-preset-range";
 
 export type AbcClass = "A" | "B" | "C" | "slow";
 
@@ -73,8 +74,8 @@ export async function getAbcReport(options: AbcOptions): Promise<AbcReportResult
   const thresholdA = options.thresholdA ?? 80;
   const thresholdB = options.thresholdB ?? 95;
 
-  const fromIso = `${range.from}T00:00:00+07:00`;
-  const toIso = `${range.to}T23:59:59+07:00`;
+  const rangeWindow = toCreatedAtRangeWindow(range);
+  if (!rangeWindow) throw new Error("Invalid report date range");
 
   // 1. Fetch all active products
   const { data: products, error: pErr } = await supabase
@@ -93,8 +94,8 @@ export async function getAbcReport(options: AbcOptions): Promise<AbcReportResult
     )
     .eq("invoices.tenant_id", tenantId)
     .eq("invoices.status", "completed")
-    .gte("invoices.created_at", fromIso)
-    .lte("invoices.created_at", toIso);
+    .gte("invoices.created_at", rangeWindow.start)
+    .lt("invoices.created_at", rangeWindow.end);
   if (branchId) itemsQuery = itemsQuery.eq("invoices.branch_id", branchId);
   const { data: items, error: iErr } = await itemsQuery;
   if (iErr) handleError(iErr, "getAbcReport.items");

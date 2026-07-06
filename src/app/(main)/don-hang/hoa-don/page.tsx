@@ -495,13 +495,7 @@ export default function HoaDonPage() {
   // CEO 06/06/2026: chuyển sang utility chung computeListPresetRange()
   // để chuẩn hoá 11 preset (thêm last_week, this_quarter, last_quarter,
   // this_year, last_year). Function inline cũ chỉ handle 5 preset.
-  const dateRange = useCallback(() => {
-    const range = computeListPresetRange(datePreset);
-    return {
-      from: range.from ? `${range.from}T00:00:00.000Z` : undefined,
-      to: range.to ? `${range.to}T23:59:59.999Z` : undefined,
-    };
-  }, [datePreset]);
+  const dateRange = useCallback(() => computeListPresetRange(datePreset), [datePreset]);
 
   const fetchData = useCallback(async () => {
     setLoading(true);

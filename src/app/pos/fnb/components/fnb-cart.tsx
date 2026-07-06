@@ -9,7 +9,7 @@ import { ScrollArea } from "@/components/ui/scroll-area";
 import { Input } from "@/components/ui/input";
 import { Textarea } from "@/components/ui/textarea";
 import { cn } from "@/lib/utils";
-import { formatCurrency } from "@/lib/format";
+import { formatCurrency, formatNumber } from "@/lib/format";
 import type {
   FnbTabSnapshot,
   FnbOrderLine,
@@ -617,7 +617,7 @@ export function FnbCart({
                   >
                     <span className="truncate text-foreground">
                       {name}{" "}
-                      <span className="text-muted-foreground">× {free.quantity}</span>
+                      <span className="text-muted-foreground">× {formatNumber(free.quantity)}</span>
                     </span>
                     {free.unitPrice > 0 && (
                       <span className="text-muted-foreground tabular-nums shrink-0 ml-2">
@@ -982,7 +982,7 @@ function DiscountRow({
                       <span className="truncate">{p.name}</span>
                       <span className="font-semibold text-primary tabular-nums shrink-0 ml-2">
                         {p.mode === "percent"
-                          ? `${p.value}%`
+                          ? `${formatNumber(p.value)}%`
                           : `${formatCurrency(p.value)}`}
                       </span>
                     </button>
@@ -1040,7 +1040,7 @@ function CartLineItem({
         <div className="mt-2 space-y-0.5">
           {line.toppings.map((t, i) => (
             <p key={i} className="text-[11px] text-muted-foreground">
-              + {t.name} x{t.quantity}{" "}
+              + {t.name} x{formatNumber(t.quantity)}{" "}
               <span className="text-muted-foreground/80 tabular-nums">
                 {formatCurrency(t.price)}
               </span>
@@ -1068,7 +1068,7 @@ function CartLineItem({
             <Icon name="remove" size={16} />
           </button>
           <span className="text-sm font-semibold w-7 text-center tabular-nums text-foreground">
-            {line.quantity}
+            {formatNumber(line.quantity)}
           </span>
           <button
             type="button"

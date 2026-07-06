@@ -5,6 +5,7 @@
 
 import { getClient, getCurrentTenantId } from "./base";
 import { formatShortDate } from "@/lib/format";
+import { toCreatedAtRangeWindow } from "@/lib/utils/list-date-preset-range";
 
 // === Types ===
 
@@ -52,8 +53,7 @@ export async function getFnbKpis(
 ): Promise<FnbKpis> {
   const supabase = getClient();
   const tenantId = await getCurrentTenantId();
-  const rangeStart = range ? `${range.from}T00:00:00+07:00` : null;
-  const rangeEnd = range ? `${range.to}T23:59:59.999+07:00` : null;
+  const rangeWindow = toCreatedAtRangeWindow(range);
 
   let query = supabase
     .from("invoices")
@@ -63,8 +63,8 @@ export async function getFnbKpis(
     .not("status", "eq", "cancelled");
 
   if (branchId) query = query.eq("branch_id", branchId);
-  if (rangeStart && rangeEnd) {
-    query = query.gte("created_at", rangeStart).lt("created_at", rangeEnd);
+  if (rangeWindow) {
+    query = query.gte("created_at", rangeWindow.start).lt("created_at", rangeWindow.end);
   }
 
   const { data: invoices } = await query;
@@ -82,8 +82,8 @@ export async function getFnbKpis(
     .eq("status", "completed")
     .not("table_id", "is", null);
   if (branchId) koQuery = koQuery.eq("branch_id", branchId);
-  if (rangeStart && rangeEnd) {
-    koQuery = koQuery.gte("created_at", rangeStart).lt("created_at", rangeEnd);
+  if (rangeWindow) {
+    koQuery = koQuery.gte("created_at", rangeWindow.start).lt("created_at", rangeWindow.end);
   }
 
   const { data: koRows } = await koQuery;
@@ -110,8 +110,7 @@ export async function getRevenueByMenuItem(
   const supabase = getClient();
   const tenantId = await getCurrentTenantId();
   // P1-3B-R1 12/06/2026: thêm range — trước đây all-time mạo danh "kỳ này".
-  const rangeStart = range ? `${range.from}T00:00:00+07:00` : null;
-  const rangeEnd = range ? `${range.to}T23:59:59.999+07:00` : null;
+  const rangeWindow = toCreatedAtRangeWindow(range);
 
   // Get completed kitchen order IDs
   let koQuery = supabase
@@ -120,8 +119,8 @@ export async function getRevenueByMenuItem(
     .eq("tenant_id", tenantId)
     .eq("status", "completed");
   if (branchId) koQuery = koQuery.eq("branch_id", branchId);
-  if (rangeStart && rangeEnd) {
-    koQuery = koQuery.gte("created_at", rangeStart).lt("created_at", rangeEnd);
+  if (rangeWindow) {
+    koQuery = koQuery.gte("created_at", rangeWindow.start).lt("created_at", rangeWindow.end);
   }
 
   const { data: koRows } = await koQuery;
@@ -160,8 +159,7 @@ export async function getRevenueByTable(
   const supabase = getClient();
   const tenantId = await getCurrentTenantId();
   // P1-3B-R1: range filter.
-  const rangeStart = range ? `${range.from}T00:00:00+07:00` : null;
-  const rangeEnd = range ? `${range.to}T23:59:59.999+07:00` : null;
+  const rangeWindow = toCreatedAtRangeWindow(range);
 
   let query = supabase
     .from("kitchen_orders")
@@ -170,8 +168,8 @@ export async function getRevenueByTable(
     .eq("status", "completed")
     .not("table_id", "is", null);
   if (branchId) query = query.eq("branch_id", branchId);
-  if (rangeStart && rangeEnd) {
-    query = query.gte("created_at", rangeStart).lt("created_at", rangeEnd);
+  if (rangeWindow) {
+    query = query.gte("created_at", rangeWindow.start).lt("created_at", rangeWindow.end);
   }
 
   const { data: rows } = await query;
@@ -201,8 +199,7 @@ export async function getRevenueByHourFnb(
   const supabase = getClient();
   const tenantId = await getCurrentTenantId();
   // P1-3B-R1: range filter.
-  const rangeStart = range ? `${range.from}T00:00:00+07:00` : null;
-  const rangeEnd = range ? `${range.to}T23:59:59.999+07:00` : null;
+  const rangeWindow = toCreatedAtRangeWindow(range);
 
   let query = supabase
     .from("invoices")
@@ -211,8 +208,8 @@ export async function getRevenueByHourFnb(
     .eq("source", "fnb")
     .not("status", "eq", "cancelled");
   if (branchId) query = query.eq("branch_id", branchId);
-  if (rangeStart && rangeEnd) {
-    query = query.gte("created_at", rangeStart).lt("created_at", rangeEnd);
+  if (rangeWindow) {
+    query = query.gte("created_at", rangeWindow.start).lt("created_at", rangeWindow.end);
   }
 
   const { data: rows } = await query;
@@ -248,8 +245,7 @@ export async function getCashierPerformance(
   const supabase = getClient();
   const tenantId = await getCurrentTenantId();
   // P1-3B-R1: range filter.
-  const rangeStart = range ? `${range.from}T00:00:00+07:00` : null;
-  const rangeEnd = range ? `${range.to}T23:59:59.999+07:00` : null;
+  const rangeWindow = toCreatedAtRangeWindow(range);
 
   let query = supabase
     .from("invoices")
@@ -258,8 +254,8 @@ export async function getCashierPerformance(
     .eq("source", "fnb")
     .not("status", "eq", "cancelled");
   if (branchId) query = query.eq("branch_id", branchId);
-  if (rangeStart && rangeEnd) {
-    query = query.gte("created_at", rangeStart).lt("created_at", rangeEnd);
+  if (rangeWindow) {
+    query = query.gte("created_at", rangeWindow.start).lt("created_at", rangeWindow.end);
   }
 
   const { data: rows } = await query;
@@ -607,10 +603,11 @@ export async function getDeliveryStaffPerformance(
     .eq("tenant_id", tenantId)
     .not("delivery_staff_id", "is", null);
   if (branchId) query = query.eq("branch_id", branchId);
-  if (range) {
+  const rangeWindow = toCreatedAtRangeWindow(range);
+  if (rangeWindow) {
     query = query
-      .gte("created_at", `${range.from}T00:00:00+07:00`)
-      .lte("created_at", `${range.to}T23:59:59.999+07:00`);
+      .gte("created_at", rangeWindow.start)
+      .lt("created_at", rangeWindow.end);
   }
 
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
@@ -707,8 +704,7 @@ export async function getModifierStats(
 ): Promise<ModifierStatRow[]> {
   const supabase = getClient();
   const tenantId = await getCurrentTenantId();
-  const rangeStart = range ? `${range.from}T00:00:00+07:00` : null;
-  const rangeEnd = range ? `${range.to}T23:59:59.999+07:00` : null;
+  const rangeWindow = toCreatedAtRangeWindow(range);
 
   // 1. Lấy id đơn bếp đã completed (= đã thanh toán)
   let koQuery = supabase
@@ -717,10 +713,10 @@ export async function getModifierStats(
     .eq("tenant_id", tenantId)
     .eq("status", "completed");
   if (branchId) koQuery = koQuery.eq("branch_id", branchId);
-  if (rangeStart && rangeEnd) {
+  if (rangeWindow) {
     koQuery = koQuery
-      .gte("created_at", rangeStart)
-      .lt("created_at", rangeEnd);
+      .gte("created_at", rangeWindow.start)
+      .lt("created_at", rangeWindow.end);
   }
   const { data: koRows } = await koQuery;
   const koIds = (koRows ?? []).map((r) => r.id);
@@ -814,10 +810,11 @@ export async function getOrdersByDeliveryStaff(
     .eq("tenant_id", tenantId)
     .eq("delivery_staff_id", staffId);
   if (branchId) query = query.eq("branch_id", branchId);
-  if (range) {
+  const rangeWindow = toCreatedAtRangeWindow(range);
+  if (rangeWindow) {
     query = query
-      .gte("created_at", `${range.from}T00:00:00+07:00`)
-      .lte("created_at", `${range.to}T23:59:59.999+07:00`);
+      .gte("created_at", rangeWindow.start)
+      .lt("created_at", rangeWindow.end);
   }
   query = query.order("created_at", { ascending: false });
   /* eslint-enable @typescript-eslint/no-explicit-any */

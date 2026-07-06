@@ -30,8 +30,17 @@ vi.mock("@/lib/services/supabase/rpc-utils", () => ({
   },
 }));
 
-import { verifyStockInvariants } from "@/lib/services/supabase/stock-integrity";
+import { getStockLedgerPolicy, verifyStockInvariants } from "@/lib/services/supabase/stock-integrity";
 
+describe("stock ledger policy", () => {
+  it("declares stock_movements as the source of truth", () => {
+    const policy = getStockLedgerPolicy();
+    expect(policy.sourceOfTruth).toBe("stock_movements");
+    expect(policy.snapshots).toEqual(["branch_stock", "products.stock"]);
+    expect(policy.mutationRule).toContain("atomic");
+    expect(policy.reconciliationRule).toContain("stock_movements");
+  });
+});
 describe("verifyStockInvariants", () => {
   beforeEach(() => {
     vi.clearAllMocks();

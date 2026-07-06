@@ -4,6 +4,7 @@
  */
 
 import { getClient, handleError, getCurrentTenantId } from "./base";
+import { toCreatedAtRangeWindow } from "@/lib/utils/list-date-preset-range";
 
 // === Shared Types ===
 
@@ -192,13 +193,7 @@ function resolveRange(
   range: { from: string; to: string } | undefined,
   fallback: { start: string; end: string },
 ): { start: string; end: string } {
-  if (range) {
-    return {
-      start: `${range.from}T00:00:00+07:00`,
-      end: `${range.to}T23:59:59.999+07:00`,
-    };
-  }
-  return fallback;
+  return toCreatedAtRangeWindow(range) ?? fallback;
 }
 
 /**
@@ -313,12 +308,7 @@ export async function getDailyRevenue(
 ): Promise<MonthlyRevenuePoint[]> {
   const supabase = getClient();
   const tenantId = await getCurrentTenantId();
-  const range = customRange
-    ? {
-        start: `${customRange.from}T00:00:00+07:00`,
-        end: `${customRange.to}T23:59:59.999+07:00`,
-      }
-    : lastNDaysRange(days);
+  const range = toCreatedAtRangeWindow(customRange) ?? lastNDaysRange(days);
 
   let query = supabase
     .from("invoices")
@@ -480,12 +470,7 @@ export async function getRevenueByHour(
 ): Promise<ChartPoint[]> {
   const supabase = getClient();
   const tenantId = await getCurrentTenantId();
-  const r = range
-    ? {
-        start: `${range.from}T00:00:00+07:00`,
-        end: `${range.to}T23:59:59.999+07:00`,
-      }
-    : todayRange();
+  const r = toCreatedAtRangeWindow(range) ?? todayRange();
 
   let query = supabase
     .from("invoices").select("created_at, total").eq("tenant_id", tenantId).eq("status", "completed")
@@ -559,14 +544,15 @@ export async function getEndOfDayStats(
   let current: { start: string; end: string };
   let previous: { start: string; end: string };
   if (range) {
-    const fromIso = `${range.from}T00:00:00+07:00`;
-    const toIso = `${range.to}T23:59:59.999+07:00`;
-    current = { start: fromIso, end: toIso };
-    // Previous = same length backward
-    const fromDate = new Date(`${range.from}T00:00:00+07:00`);
-    const toDate = new Date(`${range.to}T23:59:59.999+07:00`);
+    const rangeWindow = toCreatedAtRangeWindow(range);
+    if (!rangeWindow) throw new Error("Invalid report date range");
+    current = rangeWindow;
+
+    // Previous = same length backward, end-exclusive.
+    const fromDate = new Date(rangeWindow.start);
+    const toDate = new Date(rangeWindow.end);
     const lengthMs = toDate.getTime() - fromDate.getTime();
-    const prevTo = new Date(fromDate.getTime() - 1);
+    const prevTo = fromDate;
     const prevFrom = new Date(prevTo.getTime() - lengthMs);
     previous = { start: prevFrom.toISOString(), end: prevTo.toISOString() };
   } else {
@@ -619,12 +605,7 @@ export async function getTodayTopProducts(
 ): Promise<{ name: string; qty: number }[]> {
   const supabase = getClient();
   const tenantId = await getCurrentTenantId();
-  const r = range
-    ? {
-        start: `${range.from}T00:00:00+07:00`,
-        end: `${range.to}T23:59:59.999+07:00`,
-      }
-    : todayRange();
+  const r = toCreatedAtRangeWindow(range) ?? todayRange();
 
   let query = supabase
     .from("invoice_items")

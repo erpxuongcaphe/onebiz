@@ -31,6 +31,7 @@
 
 import { getClient, getCurrentTenantId, handleError } from "./base";
 import type { DateRange } from "@/lib/types/report";
+import { toCreatedAtRangeWindow } from "@/lib/utils/list-date-preset-range";
 
 // ============================================================
 // Types
@@ -193,11 +194,8 @@ export async function getXntReport(
   const tenantId = await getCurrentTenantId();
   const { range, branchId, search } = options;
 
-  // Convert range to ISO timestamps with timezone HCM
-  // from = "YYYY-MM-DD" → "YYYY-MM-DDT00:00:00+07:00"
-  // to   = "YYYY-MM-DD" → "YYYY-MM-DDT23:59:59+07:00"
-  const fromIso = `${range.from}T00:00:00+07:00`;
-  const toIso = `${range.to}T23:59:59+07:00`;
+  const rangeWindow = toCreatedAtRangeWindow(range);
+  if (!rangeWindow) throw new Error("Invalid report date range");
 
   // 1. Fetch products (filter by search if provided)
   let productsQuery = supabase
@@ -236,8 +234,8 @@ export async function getXntReport(
     .from("stock_movements")
     .select("product_id, type, quantity, reference_type, branch_id, created_at")
     .eq("tenant_id", tenantId)
-    .gte("created_at", fromIso)
-    .lte("created_at", toIso);
+    .gte("created_at", rangeWindow.start)
+    .lt("created_at", rangeWindow.end);
 
   if (branchId) movementsQuery = movementsQuery.eq("branch_id", branchId);
 

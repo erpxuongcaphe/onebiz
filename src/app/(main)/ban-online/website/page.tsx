@@ -4,7 +4,7 @@ import { useState } from "react";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
-import { formatCurrency } from "@/lib/format";
+import { formatCurrency, formatNumber } from "@/lib/format";
 import { cn } from "@/lib/utils";
 import { Icon } from "@/components/ui/icon";
 
@@ -208,7 +208,7 @@ export default function WebsitePage() {
                         {formatCurrency(product.price)}đ
                       </p>
                       <p className="text-xs text-muted-foreground mt-0.5">
-                        Tồn kho: {product.stock}
+                        Tồn kho: {formatNumber(product.stock)}
                       </p>
                     </div>
                   </div>

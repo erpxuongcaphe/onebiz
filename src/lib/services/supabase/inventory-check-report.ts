@@ -11,6 +11,7 @@
 
 import { getClient, getCurrentTenantId, handleError } from "./base";
 import type { DateRange } from "@/lib/types/report";
+import { toCreatedAtRangeWindow } from "@/lib/utils/list-date-preset-range";
 
 export interface InventoryCheckReportRow {
   id: string;
@@ -64,14 +65,14 @@ export async function getInventoryCheckReport(
   const tenantId = await getCurrentTenantId();
   const { range, branchId } = options;
 
-  const fromIso = `${range.from}T00:00:00+07:00`;
-  const toIso = `${range.to}T23:59:59+07:00`;
+  const rangeWindow = toCreatedAtRangeWindow(range);
+  if (!rangeWindow) throw new Error("Invalid report date range");
 
-  // Previous period (same length backward)
-  const fromDate = new Date(fromIso);
-  const toDate = new Date(toIso);
+  // Previous period (same length backward), end-exclusive.
+  const fromDate = new Date(rangeWindow.start);
+  const toDate = new Date(rangeWindow.end);
   const lengthMs = toDate.getTime() - fromDate.getTime();
-  const prevTo = new Date(fromDate.getTime() - 1);
+  const prevTo = fromDate;
   const prevFrom = new Date(prevTo.getTime() - lengthMs);
 
   // 1. Fetch checks current period
@@ -82,8 +83,8 @@ export async function getInventoryCheckReport(
       "id, code, created_at, branch_id, status, profiles!inventory_checks_created_by_fkey(full_name), branches(name), inventory_check_items(id, difference, products(cost_price))",
     )
     .eq("tenant_id", tenantId)
-    .gte("created_at", fromIso)
-    .lte("created_at", toIso);
+    .gte("created_at", rangeWindow.start)
+    .lt("created_at", rangeWindow.end);
   if (branchId) query = query.eq("branch_id", branchId);
   const { data: checks, error } = await query;
   if (error) handleError(error, "getInventoryCheckReport.checks");

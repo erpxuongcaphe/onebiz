@@ -253,8 +253,8 @@ export default function XuatDungNoiBoPage() {
       branchId: activeBranchId,
       filters: {
         ...(selectedStatuses.length > 0 && { status: selectedStatuses }),
-        ...(effectiveDateFrom && { dateFrom: `${effectiveDateFrom}T00:00:00.000Z` }),
-        ...(effectiveDateTo && { dateTo: `${effectiveDateTo}T23:59:59.999Z` }),
+        ...(effectiveDateFrom && { dateFrom: effectiveDateFrom }),
+        ...(effectiveDateTo && { dateTo: effectiveDateTo }),
         ...(creatorFilter && { createdBy: creatorFilter }),
       },
     });

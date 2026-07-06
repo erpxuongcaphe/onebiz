@@ -4,6 +4,7 @@
  */
 
 import { getClient, handleError, getCurrentTenantId } from "./base";
+import { formatNumber } from "@/lib/format";
 
 // === Types ===
 
@@ -638,7 +639,7 @@ export async function getFinancialAlerts(branchId?: string): Promise<FinancialAl
         .slice(0, 3)
         .map(
           (p: { name: string; stock: number; unit: string }) =>
-            `${p.name}: còn ${p.stock} ${p.unit}`
+            `${p.name}: còn ${formatNumber(p.stock)} ${p.unit}`
         )
         .join(", "),
       value: lowItems.length,
@@ -661,7 +662,7 @@ export async function getFinancialAlerts(branchId?: string): Promise<FinancialAl
         .slice(0, 3)
         .map(
           (p: { name: string; stock: number; maxStock: number; unit: string }) =>
-            `${p.name}: tồn ${p.stock}/${p.maxStock} ${p.unit}`
+            `${p.name}: tồn ${formatNumber(p.stock)}/${formatNumber(p.maxStock)} ${p.unit}`
         )
         .join(", "),
       value: overStockItems.length,

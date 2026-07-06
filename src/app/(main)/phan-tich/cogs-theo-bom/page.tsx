@@ -16,7 +16,7 @@ import { useEffect, useState, useCallback } from "react";
 import { PageHeader } from "@/components/shared/page-header";
 import { useToast, useBranchFilter } from "@/lib/contexts";
 import { Icon } from "@/components/ui/icon";
-import { formatCurrency, formatNumber } from "@/lib/format";
+import { formatCurrency, formatDate, formatNumber } from "@/lib/format";
 import { SummaryCard } from "@/components/shared/summary-card";
 import { getCogsByBom, type CogsByBomRow } from "@/lib/services";
 
@@ -25,13 +25,7 @@ function formatYmd(d: Date): string {
 }
 
 function formatDateTime(iso: string): string {
-  return new Date(iso).toLocaleString("vi-VN", {
-    day: "2-digit",
-    month: "2-digit",
-    year: "numeric",
-    hour: "2-digit",
-    minute: "2-digit",
-  });
+  return formatDate(iso);
 }
 
 export default function CogsTheoBomPage() {

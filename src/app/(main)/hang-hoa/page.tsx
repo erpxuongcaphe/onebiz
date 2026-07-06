@@ -1127,7 +1127,7 @@ export default function HangHoaPage() {
       size: 90,
       cell: ({ row }) => (
         <span className="text-muted-foreground tabular-nums">
-          {row.original.minStock ?? "—"}
+          {row.original.minStock == null ? "—" : formatNumber(row.original.minStock)}
         </span>
       ),
     },
@@ -1301,7 +1301,7 @@ export default function HangHoaPage() {
       size: 90,
       cell: ({ row }) => (
         <span className="text-muted-foreground tabular-nums">
-          {row.original.minStock ?? "—"}
+          {row.original.minStock == null ? "—" : formatNumber(row.original.minStock)}
         </span>
       ),
     },

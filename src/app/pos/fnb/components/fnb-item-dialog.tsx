@@ -7,7 +7,7 @@ import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
 import { Badge } from "@/components/ui/badge";
 import { cn } from "@/lib/utils";
-import { formatCurrency } from "@/lib/format";
+import { formatCurrency, formatNumber } from "@/lib/format";
 import type { FnbCartTopping, ModifierSelectionPayload } from "@/lib/types/fnb";
 import { Icon } from "@/components/ui/icon";
 import type {
@@ -438,7 +438,7 @@ export function FnbItemDialog({
                 onClick={() => setQuantity((q) => Math.max(1, q - 1))}>
                 <Icon name="remove" size={16} />
               </Button>
-              <span className="w-10 text-center text-lg sm:text-base font-semibold tabular-nums">{quantity}</span>
+              <span className="w-10 text-center text-lg sm:text-base font-semibold tabular-nums">{formatNumber(quantity)}</span>
               <Button variant="outline" size="icon" className="h-10 w-10 sm:h-8 sm:w-8"
                 onClick={() => setQuantity((q) => q + 1)}>
                 <Icon name="add" size={16} />
@@ -480,7 +480,7 @@ export function FnbItemDialog({
                           <Icon name="remove" size={16} />
                         </button>
                         <span className="w-7 text-center text-sm font-semibold tabular-nums">
-                          {qty}
+                          {formatNumber(qty)}
                         </span>
                         <button
                           type="button"

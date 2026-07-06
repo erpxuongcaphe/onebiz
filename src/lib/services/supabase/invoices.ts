@@ -3,6 +3,7 @@
  */
 
 import type { Invoice, QueryParams, QueryResult } from "@/lib/types";
+import { applyCreatedAtRangeFilter } from "@/lib/utils/list-date-preset-range";
 import { getClient, getPaginationRange, handleError, getCurrentTenantId, getCurrentContext } from "./base";
 import { recordAuditLog } from "./audit";
 
@@ -34,12 +35,9 @@ export async function getInvoices(params: QueryParams): Promise<QueryResult<Invo
         `code.ilike.%${esc}%,customer_name.ilike.%${esc}%`,
       );
   }
-
-  // Filter: status (single value hoặc array)
+  // Filter: status (single value or array)
   if (params.filters?.status && params.filters.status !== "all") {
     if (Array.isArray(params.filters.status)) {
-      // Multi-select từ CheckboxFilter — UI gửi processing/completed/cancelled.
-      // Map "processing" → DB statuses ['draft','confirmed'] để match.
       const dbStatuses = (params.filters.status as string[]).flatMap((s) =>
         s === "processing" ? ["draft", "confirmed"] : [s],
       );
@@ -50,17 +48,7 @@ export async function getInvoices(params: QueryParams): Promise<QueryResult<Invo
       query = query.eq("status", params.filters.status as any);
     }
   }
-
-  // Filter: ngày tạo (from/to)
-  if (params.filters?.dateFrom) {
-    query = query.gte("created_at", params.filters.dateFrom as string);
-  }
-  if (params.filters?.dateTo) {
-    const end = new Date(params.filters.dateTo as string);
-    end.setDate(end.getDate() + 1);
-    query = query.lt("created_at", end.toISOString());
-  }
-
+  query = applyCreatedAtRangeFilter(query, params.filters);
   // Filter: branch
   if (params.branchId) {
     query = query.eq("branch_id", params.branchId);

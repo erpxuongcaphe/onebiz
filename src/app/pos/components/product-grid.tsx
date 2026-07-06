@@ -10,7 +10,7 @@
 
 import { useCallback, useEffect, useRef, useState } from "react";
 import { cn } from "@/lib/utils";
-import { formatCurrency } from "@/lib/format";
+import { formatCurrency, formatNumber } from "@/lib/format";
 import type { Product, ProductCategory } from "@/lib/types";
 import { getProducts } from "@/lib/services/supabase/products";
 import { getCategoriesByScope } from "@/lib/services/supabase/categories";
@@ -401,13 +401,13 @@ function ProductTile({
                   : "bg-status-warning/15 text-status-warning",
               )}
             >
-              {useBomAvail ? `Còn ~${stock}` : `Còn ${stock}`}
+              {useBomAvail ? `Còn ~${formatNumber(stock)}` : `Còn ${formatNumber(stock)}`}
             </span>
           ) : useBomAvail ? (
             // Production branch + SKU has_bom: show "Khả dụng từ NVL" badge
             // (số lớn, không cần warning màu vàng)
             <span className="text-[9px] font-semibold px-2 py-0.5 rounded-full bg-primary/10 text-primary border border-primary/20 shrink-0">
-              ≈ {stock}
+              ≈ {formatNumber(stock)}
             </span>
           ) : product.code ? (
             // CEO 06/06/2026 audit typography P0 #2: bỏ truncate max-w-[64px]

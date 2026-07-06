@@ -8,6 +8,7 @@ import { getClient, getPaginationRange, handleError, getCurrentTenantId } from "
 import { recordAuditLog } from "./audit";
 import { isRpcUnavailable } from "./rpc-utils";
 import { composeAddress as composeStructuredAddress } from "@/lib/data/vn-provinces";
+import { applyCreatedAtRangeFilter } from "@/lib/utils/list-date-preset-range";
 
 type CustomerInsert = Database["public"]["Tables"]["customers"]["Insert"];
 type CustomerUpdate = Database["public"]["Tables"]["customers"]["Update"];
@@ -39,7 +40,6 @@ export async function getCustomers(params: QueryParams): Promise<QueryResult<Cus
         `name.ilike.%${esc}%,code.ilike.%${esc}%,phone.ilike.%${esc}%`,
       );
   }
-
   // Filter: type
   if (params.filters?.type && params.filters.type !== "all") {
     // eslint-disable-next-line @typescript-eslint/no-explicit-any
@@ -61,23 +61,12 @@ export async function getCustomers(params: QueryParams): Promise<QueryResult<Cus
     else if (debtFilter === "no_debt") query = query.eq("debt", 0);
   }
 
-  // Filter: gender (page truyền `gender` từ ChipToggle, trước đây service
-  // bỏ qua → UI giả-filter)
+  // Filter: gender
   if (params.filters?.gender && params.filters.gender !== "all") {
     // eslint-disable-next-line @typescript-eslint/no-explicit-any
     query = query.eq("gender", params.filters.gender as any);
   }
-
-  // Filter: ngày tạo (from/to)
-  if (params.filters?.dateFrom) {
-    query = query.gte("created_at", params.filters.dateFrom as string);
-  }
-  if (params.filters?.dateTo) {
-    const end = new Date(params.filters.dateTo as string);
-    end.setDate(end.getDate() + 1);
-    query = query.lt("created_at", end.toISOString());
-  }
-
+  query = applyCreatedAtRangeFilter(query, params.filters);
   // Day 17/05/2026: filter Tỉnh/TP — CEO yêu cầu lọc địa lý
   if (params.filters?.province && params.filters.province !== "all") {
     // eslint-disable-next-line @typescript-eslint/no-explicit-any

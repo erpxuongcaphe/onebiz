@@ -16,7 +16,7 @@ import {
 } from "@/components/shared/filter-sidebar";
 import { Badge } from "@/components/ui/badge";
 import { useToast } from "@/lib/contexts";
-import { formatDate } from "@/lib/format";
+import { formatDate, formatNumber } from "@/lib/format";
 import { exportToExcel, exportToCsv } from "@/lib/utils/export";
 import { getAllStockMovements, getBranches } from "@/lib/services";
 import type { AllStockMovementRow } from "@/lib/services/supabase";
@@ -252,7 +252,7 @@ export default function LichSuKhoPage() {
         return (
           <span className={`font-semibold ${color}`}>
             {prefix}
-            {Math.abs(qty)}
+            {formatNumber(Math.abs(qty))}
           </span>
         );
       },
@@ -371,13 +371,13 @@ export default function LichSuKhoPage() {
         <SummaryCard
           icon={<Icon name="arrow_circle_down" size={16} className="text-status-success" />}
           label="Tổng nhập"
-          value={`+${totalIn}`}
+          value={`+${formatNumber(totalIn)}`}
           highlight
         />
         <SummaryCard
           icon={<Icon name="arrow_circle_up" size={16} className="text-status-error" />}
           label="Tổng xuất"
-          value={`-${totalOut}`}
+          value={`-${formatNumber(totalOut)}`}
           danger={totalOut > 0}
         />
       </div>

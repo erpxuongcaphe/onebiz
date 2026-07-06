@@ -24,6 +24,7 @@ import {
   handleError,
 } from "./base";
 import { recordAuditLog } from "./audit";
+import { formatNumber } from "@/lib/format";
 
 /* ------------------------------------------------------------------ */
 /*  Types                                                              */
@@ -280,7 +281,7 @@ export async function createStockTransfer(
     const avail = availableMap.get(it.productId) ?? 0;
     if (it.quantity > avail) {
       violations.push(
-        `${it.productName} (cần ${it.quantity}${it.unit ? " " + it.unit : ""}, còn ${avail}${it.unit ? " " + it.unit : ""})`,
+        `${it.productName} (cần ${formatNumber(it.quantity)}${it.unit ? " " + it.unit : ""}, còn ${formatNumber(avail)}${it.unit ? " " + it.unit : ""})`,
       );
     }
   }

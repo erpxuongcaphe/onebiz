@@ -29,7 +29,7 @@ import {
 } from "@/components/ui/dialog";
 import { Icon } from "@/components/ui/icon";
 import { cn } from "@/lib/utils";
-import { formatCurrency } from "@/lib/format";
+import { formatCurrency, formatDate } from "@/lib/format";
 import { useAuth, useToast } from "@/lib/contexts";
 import { usePermissions } from "@/lib/permissions";
 import {
@@ -161,7 +161,7 @@ export function PendingShiftAlertDialog({
                     <p className="font-semibold text-sm">{s.cashierName}</p>
                     <p className="text-xs text-muted-foreground mt-0.5 truncate">
                       {s.branchName} · Mở lúc{" "}
-                      {new Date(s.openedAt).toLocaleString("vi-VN")}
+                      {formatDate(s.openedAt)}
                     </p>
                     <p className="text-xs text-status-warning mt-1">
                       ⏱ Kéo dài {Math.round(s.shiftDurationHours)}h
@@ -286,7 +286,7 @@ export function ReconcileShiftDialog({
             </DialogTitle>
             <DialogDescription>
               {shift.branchName} · Mở lúc{" "}
-              {new Date(shift.openedAt).toLocaleString("vi-VN")}
+              {formatDate(shift.openedAt)}
             </DialogDescription>
           </DialogHeader>
 

@@ -8,7 +8,7 @@
 
 import { useEffect, useState } from "react";
 import { Icon } from "@/components/ui/icon";
-import { formatCurrency } from "@/lib/format";
+import { formatCurrency, formatShortDate } from "@/lib/format";
 import { getPaymentHistory } from "@/lib/services/supabase/payments";
 
 interface PaymentHistoryTabProps {
@@ -126,7 +126,7 @@ export function PaymentHistoryTab({
               {formatCurrency(Number(r.amount ?? 0))}
             </div>
             <div className="col-span-2 text-right text-xs text-muted-foreground">
-              {new Date(r.date).toLocaleDateString("vi-VN")}
+              {formatShortDate(r.date)}
             </div>
             {r.note && (
               <div className="col-span-12 mt-1 text-xs text-muted-foreground italic">

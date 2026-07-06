@@ -23,7 +23,7 @@ import {
   AuditHistoryTab,
 } from "@/components/shared/inline-detail-panel";
 import type { DetailTab } from "@/components/shared/inline-detail-panel";
-import { formatCurrency, formatDate, formatUser } from "@/lib/format";
+import { formatCurrency, formatDate, formatNumber, formatUser } from "@/lib/format";
 import { exportToExcel, exportToCsv } from "@/lib/utils/export";
 import { getInventoryChecks, getInventoryCheckStatuses, applyInventoryCheck, cancelInventoryCheck, getInventoryCheckItems } from "@/lib/services";
 import type { InventoryCheckItemRow } from "@/lib/services";
@@ -224,16 +224,16 @@ function VarianceTab({ checkId }: { checkId: string }) {
                     )}
                   </td>
                   <td className="text-right px-3 py-2 font-mono text-muted-foreground">
-                    {r.systemStock}
+                    {formatNumber(r.systemStock)}
                     {r.unit ? ` ${r.unit}` : ""}
                   </td>
                   <td className="text-right px-3 py-2 font-mono font-medium">
-                    {r.actualStock}
+                    {formatNumber(r.actualStock)}
                     {r.unit ? ` ${r.unit}` : ""}
                   </td>
                   <td className={`text-right px-3 py-2 font-mono font-bold ${diffColor}`}>
                     {sign}
-                    {r.difference}
+                    {formatNumber(r.difference)}
                   </td>
                   <td
                     className={`text-right px-3 py-2 font-mono ${
@@ -315,14 +315,14 @@ function InventoryCheckDetail({
                 label: "SL lệch tăng",
                 value: (
                   <span className="text-status-success">
-                    {item.increaseQty}
+                    {formatNumber(item.increaseQty)}
                   </span>
                 ),
               },
               {
                 label: "SL lệch giảm",
                 value: (
-                  <span className="text-status-error">{item.decreaseQty}</span>
+                  <span className="text-status-error">{formatNumber(item.decreaseQty)}</span>
                 ),
               },
               {
@@ -492,7 +492,7 @@ export default function KiemKhoPage() {
       header: "SL lệch tăng",
       size: 100,
       cell: ({ row }) => (
-        <span className="text-status-success">{row.original.increaseQty}</span>
+        <span className="text-status-success">{formatNumber(row.original.increaseQty)}</span>
       ),
     },
     {
@@ -500,7 +500,7 @@ export default function KiemKhoPage() {
       header: "SL lệch giảm",
       size: 100,
       cell: ({ row }) => (
-        <span className="text-status-error">{row.original.decreaseQty}</span>
+        <span className="text-status-error">{formatNumber(row.original.decreaseQty)}</span>
       ),
     },
   ];
@@ -518,8 +518,8 @@ export default function KiemKhoPage() {
       branchId: activeBranchId,
       filters: {
         ...(selectedStatuses.length > 0 && { status: selectedStatuses }),
-        ...(effectiveDateFrom && { dateFrom: `${effectiveDateFrom}T00:00:00.000Z` }),
-        ...(effectiveDateTo && { dateTo: `${effectiveDateTo}T23:59:59.999Z` }),
+        ...(effectiveDateFrom && { dateFrom: effectiveDateFrom }),
+        ...(effectiveDateTo && { dateTo: effectiveDateTo }),
         ...(creatorFilter && { createdBy: creatorFilter }),
       },
     });

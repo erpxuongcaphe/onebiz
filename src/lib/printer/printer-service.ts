@@ -163,7 +163,7 @@ function buildReceiptBytes(payload: PrintReceiptPayload): Uint8Array {
   for (const item of payload.items) {
     const name = item.variant ? `${item.name} (${item.variant})` : item.name;
     builder.text(name);
-    const qtyPrice = `${item.quantity} x ${formatVnd(item.unitPrice)}`;
+    const qtyPrice = `${formatNumber(item.quantity)} x ${formatVnd(item.unitPrice)}`;
     builder.textTwoColumns(`  ${qtyPrice}`, formatVnd(item.total));
   }
 
@@ -234,7 +234,7 @@ function buildReceiptHtml(payload: PrintReceiptPayload): string {
       return `
         <tr><td colspan="2">${escapeHtml(name)}</td></tr>
         <tr>
-          <td style="padding-left:8px">${it.quantity} x ${formatVnd(it.unitPrice)}</td>
+          <td style="padding-left:8px">${formatNumber(it.quantity)} x ${formatVnd(it.unitPrice)}</td>
           <td class="right">${formatVnd(it.total)}</td>
         </tr>`;
     })

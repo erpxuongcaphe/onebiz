@@ -135,15 +135,7 @@ import {
   STANDARD_LIST_PRESETS,
 } from "@/lib/utils/list-date-preset-range";
 
-const presetToRange = (preset: DatePresetValue) => {
-  const range = computeListPresetRange(preset);
-  // Service so-quy filter dùng ISO full datetime; util trả YYYY-MM-DD
-  // → append T00:00:00 / T23:59:59 để bao trọn ngày.
-  return {
-    from: range.from ? `${range.from}T00:00:00.000Z` : undefined,
-    to: range.to ? `${range.to}T23:59:59.999Z` : undefined,
-  };
-};
+const presetToRange = (preset: DatePresetValue) => computeListPresetRange(preset);
 
 // === Inline Detail ===
 function TransactionDetail({

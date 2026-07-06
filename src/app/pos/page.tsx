@@ -41,6 +41,8 @@ import {
 import { useAutoSaveDraft, loadLocalCart } from "./hooks/use-auto-save-draft";
 import { RecoveryDialog } from "./components/recovery-dialog";
 import { getClient } from "@/lib/services/supabase/base";
+// CEO 06/07: cảnh báo mềm bán vượt tồn thành phẩm cho SKU có công thức (G3 batch).
+import { getBomAvailabilityBatch } from "@/lib/services/supabase/bom";
 import { useToast } from "@/lib/contexts";
 import { formatCurrency, formatNumber, formatDecimal, parseNumberInput, formatDate } from "@/lib/format";
 import { cn } from "@/lib/utils";
@@ -1587,7 +1589,7 @@ function PosPageInner() {
     if (oversoldLines.length > 0) {
       const first = oversoldLines[0];
       toast({
-        title: `${first.productName}: cần ${first.quantity}, còn ${first.availableStock}`,
+        title: `${first.productName}: cần ${formatNumber(first.quantity)}, còn ${formatNumber(first.availableStock)}`,
         description:
           oversoldLines.length > 1
             ? `Và ${oversoldLines.length - 1} sản phẩm khác vượt tồn. Vui lòng giảm SL hoặc kiểm kho.`
@@ -1622,6 +1624,59 @@ function PosPageInner() {
     try {
       const ctx = await getCurrentContext();
       if (!ctx) throw new Error("Không xác định được chi nhánh");
+
+      // CEO 06/07 — CẢNH BÁO MỀM bán vượt tồn thành phẩm cho SKU có công thức.
+      // Vụ Yaourt: bán 7 khi thành phẩm còn 2 → âm -5 mà cashier không hay.
+      // Guard tồn phía trên đo availableStock = tồn SKU (has_bom luôn 0) nên
+      // bỏ sót. Ở đây đọc khả dụng theo BOM (tái dùng batch RPC của G3): vượt
+      // → confirm để cashier QUYẾT (bán trước–SX sau là hợp lệ), KHÔNG chặn
+      // cứng. Service lỗi / offline → cho qua (fail-open). Đặt SAU submitLock
+      // nên không mở cửa double-click; bấm Hủy → return → finally nhả khoá.
+      // Review 06/07 vá 2 lỗ: (1) KHÔNG loại theo intent — "refund" ở đây là
+      // "trả tiền thừa" (vẫn là đơn bán trừ kho, ca tiền mặt phổ biến nhất),
+      // trả hàng thật không đi qua handleComplete; ChangeDialog return TRƯỚC
+      // submitLock nên check chỉ chạy 1 lần ở lượt re-entry, không hỏi 2 lần.
+      // (2) Gửi TOÀN BỘ productId trong giỏ (không filter l.hasBom — line load
+      // từ nháp F3 không có hasBom): RPC chỉ trả entry cho SKU có BOM, Map tự
+      // lọc → đơn nháp cũng được cảnh báo.
+      if (state.lines.length > 0 && networkStatus.isOnline) {
+        try {
+          const needByProduct = new Map<string, number>();
+          for (const l of state.lines) {
+            needByProduct.set(l.productId, (needByProduct.get(l.productId) ?? 0) + l.quantity);
+          }
+          const availMap = await getBomAvailabilityBatch(
+            [...needByProduct.keys()],
+            ctx.branchId,
+          );
+          const shortages: string[] = [];
+          for (const [productId, needQty] of needByProduct) {
+            const entry = availMap.get(productId);
+            if (!entry) continue; // SP không có BOM tại chi nhánh → bỏ qua
+            // epsilon chống false-positive do numeric làm tròn (6.9999... vs 7)
+            if (needQty > entry.available + 0.001) {
+              const name =
+                state.lines.find((l) => l.productId === productId)?.productName ?? "";
+              shortages.push(
+                `• ${name}: cần ${formatNumber(needQty)}, khả dụng ~${formatNumber(Math.max(0, entry.available))}` +
+                  (entry.bottleneckMaterialName ? ` (thiếu ${entry.bottleneckMaterialName})` : ""),
+              );
+            }
+          }
+          if (shortages.length > 0) {
+            const ok =
+              typeof window !== "undefined" &&
+              window.confirm(
+                `⚠️ BÁN VƯỢT TỒN — kho sẽ bị ghi ÂM:\n\n${shortages.join("\n")}\n\n` +
+                  `Bấm OK nếu hàng thực tế CÓ (mẻ mới làm xong, chưa kịp hoàn thành lệnh SX/nhập kho).\n` +
+                  `Bấm Hủy để kiểm lại trước khi xuất bill.`,
+              );
+            if (!ok) return;
+          }
+        } catch {
+          // fail-open: không vì check cảnh báo mà chặn thanh toán
+        }
+      }
 
       // Auto-link walk-in customer khi cần track debt/credit mà cashier
       // chưa chọn customer thật. Lazy create — chỉ tạo lần đầu mỗi tenant.
@@ -1760,7 +1815,7 @@ function PosPageInner() {
           for (const r of result.bomConsumeResults) {
             for (const m of r.result.consumed) {
               lines.push(
-                `• ${m.material_code ?? m.material_name ?? "NVL"}: ${m.qty}${m.unit ? ` ${m.unit}` : ""}`,
+                `• ${m.material_code ?? m.material_name ?? "NVL"}: ${formatNumber(m.qty)}${m.unit ? ` ${m.unit}` : ""}`,
               );
             }
             if (r.result.warnings && r.result.warnings.length > 0) hasWarning = true;
@@ -2737,7 +2792,7 @@ function PosPageInner() {
                       className="flex items-center justify-between text-[11px]"
                     >
                       <span className="truncate text-foreground">
-                        {name} <span className="text-muted-foreground">× {free.quantity}</span>
+                        {name} <span className="text-muted-foreground">× {formatNumber(free.quantity)}</span>
                       </span>
                       {free.unitPrice > 0 && (
                         <span className="text-muted-foreground tabular-nums shrink-0 ml-2">
@@ -3335,7 +3390,7 @@ function PosPageInner() {
           }, 50);
           toast({
             title: `Đã thêm ${variantPickerProduct.name}`,
-            description: `${payload.variantLabel} × ${payload.quantity}`,
+            description: `${payload.variantLabel} × ${formatNumber(payload.quantity)}`,
             variant: "success",
           });
         }}
@@ -3716,7 +3771,7 @@ function CartItem({
               {line.unit && <span className="ml-1">({line.unit})</span>}
               {oversold && (
                 <span className="text-status-warning ml-1 font-sans">
-                  · Tồn: {line.availableStock}
+                  · Tồn: {formatNumber(line.availableStock)}
                 </span>
               )}
             </p>

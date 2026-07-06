@@ -6,6 +6,7 @@ import { useFnbPosState } from "@/app/pos/fnb/hooks/use-fnb-pos-state";
 // ── Mock formatCurrency (en-US convention to match real helper) ──
 vi.mock("@/lib/format", () => ({
   formatCurrency: (v: number) => v.toLocaleString("en-US"),
+  formatNumber: (v: number) => v.toLocaleString("en-US"),
 }));
 
 // ── Helper: build a line input ──

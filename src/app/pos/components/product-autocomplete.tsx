@@ -11,7 +11,7 @@ import { useCallback, useEffect, useRef, useState } from "react";
 import { getProducts } from "@/lib/services/supabase";
 import type { Product } from "@/lib/types";
 import { useDebounce } from "@/lib/utils/use-debounce";
-import { formatCurrency } from "@/lib/format";
+import { formatCurrency, formatNumber } from "@/lib/format";
 import { cn } from "@/lib/utils";
 import { Icon } from "@/components/ui/icon";
 
@@ -201,7 +201,7 @@ export function ProductAutocomplete({
                           : "text-muted-foreground"
                     )}
                   >
-                    Tồn: {p.stock} {p.sellUnit ?? p.unit ?? ""}
+                    Tồn: {formatNumber(p.stock)} {p.sellUnit ?? p.unit ?? ""}
                   </div>
                 </div>
               </li>

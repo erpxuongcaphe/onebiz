@@ -38,6 +38,7 @@ import {
 import { useToast } from "@/lib/contexts";
 import { useAuth } from "@/lib/contexts/auth-context";
 import { Icon } from "@/components/ui/icon";
+import { formatNumber } from "@/lib/format";
 import {
   getProductsWithBranchStock,
   bulkCreateAdjustmentLots,
@@ -689,7 +690,7 @@ export function AssignExpiryDialog({
                         )}
                       </td>
                       <td className="p-2 text-right whitespace-nowrap">
-                        <b>{p.branchStock}</b>{" "}
+                        <b>{formatNumber(p.branchStock)}</b>{" "}
                         <span className="text-[10px] text-muted-foreground">
                           {p.stockUnit}
                         </span>

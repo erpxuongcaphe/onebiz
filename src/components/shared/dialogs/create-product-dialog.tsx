@@ -1643,7 +1643,7 @@ export function CreateProductDialog({
                     size={12}
                     className="inline-block mr-1 align-text-bottom"
                   />
-                  1 {bulkUnit.trim()} = {bulkFactor} {stockUnit.trim()}
+                  1 {bulkUnit.trim()} = {formatNumber(Number(bulkFactor))} {stockUnit.trim()}
                 </p>
               ) : (bulkUnit || bulkFactor) ? (
                 <p className="text-xs text-status-warning">
@@ -2410,7 +2410,7 @@ export function CreateProductDialog({
                           <td className="px-3 py-2">
                             <Input
                               inputMode="numeric"
-                              value={v.sellPrice ? v.sellPrice.toLocaleString("vi-VN") : ""}
+                              value={v.sellPrice ? formatNumber(v.sellPrice) : ""}
                               placeholder="0"
                               className="h-9 text-right text-sm"
                               onChange={(e) => {
@@ -2428,7 +2428,7 @@ export function CreateProductDialog({
                             <td className="px-3 py-2">
                               <Input
                                 inputMode="numeric"
-                                value={v.costPrice ? v.costPrice.toLocaleString("vi-VN") : ""}
+                                value={v.costPrice ? formatNumber(v.costPrice) : ""}
                                 placeholder="0"
                                 className="h-9 text-right text-sm"
                                 onChange={(e) => {

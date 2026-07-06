@@ -15,7 +15,7 @@ import { KpiCard, ChartCard } from "../_components";
 import { ReportPageHeader } from "@/components/shared/report";
 import { useReportState } from "@/lib/hooks/use-report-state";
 import { useBranchFilter, useAuth, useToast } from "@/lib/contexts";
-import { formatCurrency, formatChartCurrency, formatChartTooltipCurrency } from "@/lib/format";
+import { formatCurrency, formatChartCurrency, formatChartTooltipCurrency, formatNumber } from "@/lib/format";
 import {
   getFnbKpis,
   getRevenueByMenuItem,
@@ -56,7 +56,7 @@ function HourTooltip({
         <p key={p.dataKey} className="text-sm font-bold text-primary">
           {p.dataKey === "revenue"
             ? formatChartTooltipCurrency(p.value)
-            : `${p.value} đơn`}
+            : `${formatNumber(p.value)} đơn`}
         </p>
       ))}
     </div>
@@ -506,7 +506,7 @@ export default function FnbAnalyticsPage() {
                       <tr key={idx} className="border-b last:border-0 hover:bg-surface-container-low">
                         <td className="py-1.5 px-3 text-muted-foreground text-xs tabular-nums">{idx + 1}</td>
                         <td className="py-1.5 px-3 font-medium">{m.productName}</td>
-                        <td className="py-1.5 px-3 text-right tabular-nums">{m.quantity}</td>
+                        <td className="py-1.5 px-3 text-right tabular-nums">{formatNumber(m.quantity)}</td>
                         <td className="py-1.5 px-3 text-right font-medium tabular-nums">
                           {formatCurrency(m.revenue)}đ
                         </td>
@@ -517,7 +517,7 @@ export default function FnbAnalyticsPage() {
                     <tr className="border-t-2 border-foreground/20 font-bold">
                       <td colSpan={2} className="py-2 px-3">TỔNG</td>
                       <td className="py-2 px-3 text-right tabular-nums">
-                        {menuItems.reduce((s, m) => s + m.quantity, 0)}
+                        {formatNumber(menuItems.reduce((s, m) => s + m.quantity, 0))}
                       </td>
                       <td className="py-2 px-3 text-right text-primary tabular-nums">
                         {formatCurrency(menuItems.reduce((s, m) => s + m.revenue, 0))}đ

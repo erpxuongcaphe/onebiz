@@ -28,7 +28,7 @@ import {
 } from "recharts";
 import { KpiCard, ChartCard } from "../_components";
 import { useBranchFilter, useAuth, useToast } from "@/lib/contexts";
-import { formatCurrency } from "@/lib/format";
+import { formatCurrency, formatNumber } from "@/lib/format";
 import {
   exportReportToExcel,
   buildReportTitleRows,
@@ -89,7 +89,7 @@ function DailyTrendTooltip({
           <span className="font-semibold">
             {p.dataKey === "totalDiscount"
               ? formatCurrency(p.value)
-              : `${p.value} đơn`}
+              : `${formatNumber(p.value)} đơn`}
           </span>
         </p>
       ))}

@@ -8,6 +8,7 @@
  */
 
 import type { QueryParams, QueryResult } from "@/lib/types";
+import { applyCreatedAtRangeFilter } from "@/lib/utils/list-date-preset-range";
 import {
   getClient,
   getPaginationRange,
@@ -172,16 +173,7 @@ export async function getAuditLogs(
   if (filters?.entityType && filters.entityType !== "all") {
     query = query.eq("entity_type", filters.entityType);
   }
-  if (filters?.dateFrom) {
-    query = query.gte("created_at", filters.dateFrom);
-  }
-  if (filters?.dateTo) {
-    // Add 1 day to include the full day
-    const endDate = new Date(filters.dateTo);
-    endDate.setDate(endDate.getDate() + 1);
-    query = query.lt("created_at", endDate.toISOString());
-  }
-
+  query = applyCreatedAtRangeFilter(query, filters);
   // Search — by entity_id or user name
   if (params.search) {
     query = query.or(

@@ -1554,7 +1554,7 @@ function FnbPosPageInner() {
           for (const r of bomResults) {
             for (const m of r.result.consumed) {
               lines.push(
-                `• ${m.material_code ?? m.material_name ?? "NVL"}: ${m.qty}${m.unit ? ` ${m.unit}` : ""}`,
+                `• ${m.material_code ?? m.material_name ?? "NVL"}: ${formatNumber(m.qty)}${m.unit ? ` ${m.unit}` : ""}`,
               );
             }
             if (r.result.warnings && r.result.warnings.length > 0) hasWarning = true;

@@ -6,6 +6,7 @@
 
 import { getClient, handleError, getCurrentTenantId } from "./base";
 import type { Shift, OpenShiftInput, CloseShiftInput } from "@/lib/types/shift";
+import { applyDateRangeFilter } from "@/lib/utils/list-date-preset-range";
 
 // ── Mappers ──
 
@@ -405,8 +406,7 @@ export async function getReconciledShifts(
     .order("closed_at", { ascending: false, nullsFirst: false });
 
   if (filter.branchId) query = query.eq("branch_id", filter.branchId);
-  if (filter.dateFrom) query = query.gte("closed_at", filter.dateFrom);
-  if (filter.dateTo) query = query.lte("closed_at", filter.dateTo);
+  query = applyDateRangeFilter(query, "closed_at", filter);
 
   const { data, error } = await query;
   if (error) handleError(error, "getReconciledShifts");

@@ -8,7 +8,7 @@
  * - Table/order info
  */
 
-import { formatTime, formatShortDate } from "@/lib/format";
+import { formatTime, formatShortDate, formatNumber } from "@/lib/format";
 
 export interface KitchenTicketData {
   orderNumber: string;
@@ -43,7 +43,7 @@ export function printKitchenTicket(data: KitchenTicketData) {
       let html = `
         <div class="item">
           <div class="item-name">
-            <span class="qty">${item.quantity}x</span>
+            <span class="qty">${formatNumber(item.quantity)}x</span>
             ${item.name}
             ${item.variant ? `<span class="variant">(${item.variant})</span>` : ""}
           </div>`;

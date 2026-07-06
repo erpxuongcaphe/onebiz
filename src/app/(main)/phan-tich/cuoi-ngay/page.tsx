@@ -27,6 +27,7 @@ import {
   formatChartCurrency,
   formatChartTooltipCurrency,
   formatDate,
+  formatNumber,
 } from "@/lib/format";
 import { KpiCard, ChartCard } from "../_components";
 import { useBranchFilter, useToast } from "@/lib/contexts";
@@ -82,7 +83,7 @@ function PieTooltip({ active, payload }: any) {
     <div className="bg-white border rounded-lg shadow-lg p-3 text-xs">
       <p className="font-semibold text-foreground mb-1">{d.name}</p>
       <p style={{ color: d.payload.color }}>
-        {formatChartTooltipCurrency(d.value)} ({total > 0 ? ((d.value / total) * 100).toFixed(1) : 0}%)
+        {formatChartTooltipCurrency(d.value)} ({total > 0 ? formatNumber((d.value / total) * 100) : 0}%)
       </p>
     </div>
   );
@@ -95,7 +96,7 @@ function ProductTooltip({ active, payload, label }: any) {
     <div className="bg-white border rounded-lg shadow-lg p-3 text-xs">
       <p className="font-semibold text-foreground mb-1">{label}</p>
       <p style={{ color: payload[0].color }}>
-        Số lượng: {payload[0].value}
+        Số lượng: {formatNumber(payload[0].value)}
       </p>
     </div>
   );

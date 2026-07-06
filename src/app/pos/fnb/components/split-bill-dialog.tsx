@@ -18,7 +18,7 @@ import {
   DialogFooter,
 } from "@/components/ui/dialog";
 import { cn } from "@/lib/utils";
-import { formatCurrency } from "@/lib/format";
+import { formatCurrency, formatNumber } from "@/lib/format";
 import { Icon } from "@/components/ui/icon";
 
 export interface SplitItem {
@@ -147,7 +147,7 @@ export function SplitBillDialog({
                       onChange={() => toggleItem(item.id)}
                       className="rounded"
                     />
-                    <span className="flex-1 text-sm font-medium">{item.quantity}x {item.name}</span>
+                    <span className="flex-1 text-sm font-medium">{formatNumber(item.quantity)}x {item.name}</span>
                     <span className="text-sm text-muted-foreground">
                       {formatCurrency(item.unitPrice * item.quantity)}
                     </span>

@@ -7,7 +7,7 @@ import type { InventoryCheck, DisposalExport, InternalExport, ManufacturingOrder
 import type { PurchaseOrder, Invoice, SalesOrder } from "@/lib/types/orders";
 import type { PurchaseReturn, PurchaseOrderEntry, InputInvoice } from "@/lib/types/suppliers";
 import type { CashBookEntry } from "@/lib/types/finance";
-import { formatCurrency as fmtNum, formatDate, formatUser } from "@/lib/format";
+import { formatCurrency as fmtNum, formatDate, formatNumber, formatUser } from "@/lib/format";
 
 /**
  * Tiền hiển thị trên phiếu in: số có phân tách nghìn + hậu tố " đ".
@@ -66,8 +66,8 @@ export function buildInventoryCheckPrintData(row: InventoryCheck): DocumentPrint
       { label: "Tổng sản phẩm", value: String(row.totalProducts) },
     ],
     summaryRows: [
-      { label: "SL lệch tăng", value: String(row.increaseQty) },
-      { label: "SL lệch giảm", value: String(row.decreaseQty) },
+      { label: "SL lệch tăng", value: formatNumber(row.increaseQty) },
+      { label: "SL lệch giảm", value: formatNumber(row.decreaseQty) },
       { label: "GT tăng", value: formatCurrency(row.increaseAmount) },
       { label: "GT giảm", value: formatCurrency(row.decreaseAmount) },
       { label: "Tổng chênh lệch", value: formatCurrency(row.increaseAmount - row.decreaseAmount), bold: true },

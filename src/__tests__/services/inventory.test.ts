@@ -13,6 +13,7 @@ function createChain() {
   chain.in = vi.fn(self);
   chain.gte = vi.fn(self);
   chain.lte = vi.fn(self);
+  chain.lt = vi.fn(self);
   chain.ilike = vi.fn(self);
   chain.order = vi.fn(self);
   chain.range = vi.fn(() => Promise.resolve({ data: [], count: 0, error: null }));
@@ -99,13 +100,13 @@ describe("inventory list status filters", () => {
       pageSize: 15,
       filters: {
         status: ["completed"],
-        dateFrom: "2026-07-01T00:00:00.000Z",
-        dateTo: "2026-07-04T23:59:59.999Z",
+        dateFrom: "2026-07-01",
+        dateTo: "2026-07-04",
       },
     });
 
-    expect(mockChain.gte).toHaveBeenCalledWith("created_at", "2026-07-01T00:00:00.000Z");
-    expect(mockChain.lte).toHaveBeenCalledWith("created_at", "2026-07-04T23:59:59.999Z");
+    expect(mockChain.gte).toHaveBeenCalledWith("created_at", "2026-06-30T17:00:00.000Z");
+    expect(mockChain.lt).toHaveBeenCalledWith("created_at", "2026-07-04T17:00:00.000Z");
   });
 });
 describe("cancelInventoryCheck", () => {

@@ -1,7 +1,7 @@
 "use client";
 
 import { useRef, useCallback } from "react";
-import { formatCurrency } from "@/lib/format";
+import { formatCurrency, formatNumber } from "@/lib/format";
 import { printerService, type PrintReceiptPayload } from "@/lib/printer";
 
 export interface ReceiptData {
@@ -142,7 +142,7 @@ export function PrintReceipt({ data, width = "80mm" }: PrintReceiptProps) {
             <div className="item-name">{item.name}</div>
             <div className="item-detail row">
               <span>
-                {item.quantity} x {formatCurrency(item.unitPrice)}
+                {formatNumber(item.quantity)} x {formatCurrency(item.unitPrice)}
               </span>
               <span>{formatCurrency(item.total)}</span>
             </div>
@@ -248,7 +248,7 @@ export function printReceiptDirect(data: ReceiptData, width: "58mm" | "80mm" = "
       (item) => `
       <div class="item-name">${item.name}</div>
       <div class="item-detail row">
-        <span>${item.quantity} x ${formatCurrency(item.unitPrice)}</span>
+        <span>${formatNumber(item.quantity)} x ${formatCurrency(item.unitPrice)}</span>
         <span>${formatCurrency(item.total)}</span>
       </div>
       ${item.discount > 0 ? `<div class="item-detail row"><span>Giam gia</span><span>-${formatCurrency(item.discount)}</span></div>` : ""}

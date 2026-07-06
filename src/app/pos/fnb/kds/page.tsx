@@ -39,6 +39,7 @@ import type {
   KitchenItemStatus,
 } from "@/lib/types/fnb";
 import { Icon } from "@/components/ui/icon";
+import { formatNumber } from "@/lib/format";
 
 // ── Constants ──
 
@@ -1303,7 +1304,7 @@ function KdsItemRow({
           )}
           {item.quantity > 1 && (
             <span className="inline-flex items-center gap-0.5 mt-2 px-2 py-0.5 rounded-full bg-status-success/20 text-status-success text-[10px] font-bold">
-              x{item.quantity}
+              x{formatNumber(item.quantity)}
             </span>
           )}
         </div>
@@ -1402,7 +1403,7 @@ function KdsItemRow({
         {/* Quantity badge */}
         {item.quantity > 1 && (
           <span className="inline-flex items-center gap-0.5 mt-2 px-2 py-0.5 rounded-full bg-status-info/20 text-status-info text-[10px] font-bold">
-            x{item.quantity}
+            x{formatNumber(item.quantity)}
           </span>
         )}
       </div>

@@ -174,7 +174,7 @@ export default function AgingReportPage() {
       label: "Tồn ngày",
       key: "daysInStock",
       align: "right",
-      cell: (r) => (r.daysInStock !== null ? `${r.daysInStock}d` : "—"),
+      cell: (r) => (r.daysInStock !== null ? `${formatNumber(r.daysInStock)}d` : "—"),
     },
     {
       label: "Bán cuối",

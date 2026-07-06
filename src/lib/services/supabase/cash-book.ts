@@ -4,6 +4,7 @@
 
 import type { CashBookEntry, CashTransaction, QueryParams, QueryResult } from "@/lib/types";
 import type { Database } from "@/lib/supabase/types";
+import { applyCreatedAtRangeFilter, toCreatedAtStartIso } from "@/lib/utils/list-date-preset-range";
 import {
   getClient,
   getCurrentContext,
@@ -40,7 +41,6 @@ export async function getCashBookEntries(params: QueryParams): Promise<QueryResu
       query = query.ilike("counterparty", `%${esc}%`);
     else query = query.or(`code.ilike.%${esc}%,counterparty.ilike.%${esc}%`);
   }
-
   // Filter: type (receipt | payment)
   if (params.filters?.type && params.filters.type !== "all") {
     // eslint-disable-next-line @typescript-eslint/no-explicit-any
@@ -57,17 +57,7 @@ export async function getCashBookEntries(params: QueryParams): Promise<QueryResu
   if (params.filters?.category && params.filters.category !== "all") {
     query = query.eq("category", params.filters.category as string);
   }
-
-  // Filter: ngày tạo (from/to)
-  if (params.filters?.dateFrom) {
-    query = query.gte("created_at", params.filters.dateFrom as string);
-  }
-  if (params.filters?.dateTo) {
-    const end = new Date(params.filters.dateTo as string);
-    end.setDate(end.getDate() + 1);
-    query = query.lt("created_at", end.toISOString());
-  }
-
+  query = applyCreatedAtRangeFilter(query, params.filters);
   // Filter: branch
   if (params.branchId) {
     query = query.eq("branch_id", params.branchId);
@@ -146,13 +136,7 @@ export async function getCashBookSummaryAsync(params?: {
     .eq("tenant_id", tenantId);
 
   if (params?.branchId) query = query.eq("branch_id", params.branchId);
-  if (params?.dateFrom) query = query.gte("created_at", params.dateFrom);
-  if (params?.dateTo) {
-    const end = new Date(params.dateTo);
-    end.setDate(end.getDate() + 1);
-    query = query.lt("created_at", end.toISOString());
-  }
-
+  query = applyCreatedAtRangeFilter(query, params);
   // CEO 11/06/2026 (P0-3 audit): filter status — KHÔNG cộng phiếu cancelled.
   if (params?.statuses && params.statuses.length > 0) {
     // eslint-disable-next-line @typescript-eslint/no-explicit-any
@@ -181,7 +165,7 @@ export async function getCashBookSummaryAsync(params?: {
       .from("cash_transactions")
       .select("type, amount")
       .eq("tenant_id", tenantId)
-      .lt("created_at", params.dateFrom);
+      .lt("created_at", toCreatedAtStartIso(params.dateFrom) ?? params.dateFrom);
     if (params?.branchId) openingQ = openingQ.eq("branch_id", params.branchId);
     // P0-3: cũng phải loại cancelled cho opening balance
     if (params?.statuses && params.statuses.length > 0) {

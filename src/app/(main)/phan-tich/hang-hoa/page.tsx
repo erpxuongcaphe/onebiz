@@ -29,6 +29,7 @@ import {
   formatCurrency,
   formatChartCurrency,
   formatChartTooltipCurrency,
+  formatNumber,
 } from "@/lib/format";
 import {
   getInventoryKpis,
@@ -86,7 +87,7 @@ function PieCategoryTooltip({
   return (
     <div className="rounded-lg border bg-background p-3 shadow-md">
       <p className="text-xs text-muted-foreground mb-1">{payload[0].name}</p>
-      <p className="text-sm font-bold">{payload[0].value} sản phẩm</p>
+      <p className="text-sm font-bold">{formatNumber(payload[0].value)} sản phẩm</p>
     </div>
   );
 }
@@ -110,7 +111,7 @@ function StockMovementTooltip({
           className="text-sm font-bold"
           style={{ color: p.color }}
         >
-          {p.dataKey === "nhap" ? "Nhập" : "Xuất"}: {p.value} sản phẩm
+          {p.dataKey === "nhap" ? "Nhập" : "Xuất"}: {formatNumber(p.value)} sản phẩm
         </p>
       ))}
     </div>
@@ -366,7 +367,7 @@ export default function HangHoaPage() {
           <KpiCard
             label="Hàng bán chạy"
             value={kpis?.bestSeller.name ?? "—"}
-            change={kpis?.bestSeller.qty ? `${kpis.bestSeller.qty} sản phẩm trong tháng` : undefined}
+            change={kpis?.bestSeller.qty ? `${formatNumber(kpis.bestSeller.qty)} sản phẩm trong tháng` : undefined}
             positive
             icon="star"
             bg="bg-status-success/10"
@@ -588,7 +589,7 @@ export default function HangHoaPage() {
                                 : "text-status-warning font-medium"
                             }
                           >
-                            {item.stock}
+                            {formatNumber(item.stock)}
                           </span>{" "}
                           <span className="text-muted-foreground text-xs">
                             {item.unit}

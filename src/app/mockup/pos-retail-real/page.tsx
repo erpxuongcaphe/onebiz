@@ -1,5 +1,6 @@
 "use client";
 
+import { formatCurrency } from "@/lib/format";
 /**
  * MOCKUP "GẦN THẬT" — POS Retail (CEO 15/06/2026, Cách 1).
  * Bám ĐÚNG field/luồng POS Retail thật (src/app/pos/page.tsx): nhiều đơn,
@@ -40,7 +41,7 @@ const PRODUCTS: Prod[] = [
 
 const CATS = ["Tất cả", "Cà phê", "Trà", "Nước ngọt", "Bánh"];
 const DENOMS = [50000, 100000, 200000, 500000];
-const vnd = (n: number) => new Intl.NumberFormat("vi-VN").format(Math.round(n));
+const vnd = (n: number) => formatCurrency(Math.round(n));
 
 type Inv = { id: number; cart: Record<string, number>; customer: string };
 

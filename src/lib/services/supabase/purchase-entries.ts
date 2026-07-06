@@ -15,6 +15,7 @@ import type {
 } from "@/lib/types";
 import type { Database } from "@/lib/supabase/types";
 import type { PurchaseOrderImportRow } from "@/lib/excel/schemas";
+import { applyCreatedAtRangeFilter } from "@/lib/utils/list-date-preset-range";
 import { getClient, getCurrentContext, getCurrentTenantId, getPaginationRange, handleError } from "./base";
 import { applyManualStockMovement, nextEntityCode } from "./stock-adjustments";
 import { recordAuditLog } from "./audit";
@@ -22,23 +23,10 @@ import { recordAuditLog } from "./audit";
 type CashTransactionInsert = Database["public"]["Tables"]["cash_transactions"]["Insert"];
 type SupplierReturnPaymentMethod = "cash" | "transfer" | "card";
 
-function dateStart(value: string): string {
-  return value.includes("T") ? value : `${value}T00:00:00.000Z`;
-}
-
-function dateEnd(value: string): string {
-  return value.includes("T") ? value : `${value}T23:59:59.999Z`;
-}
 
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
 function applyCreatedAtRange(query: any, filters: QueryParams["filters"] | undefined) {
-  const dateFrom = typeof filters?.dateFrom === "string" ? filters.dateFrom : undefined;
-  const dateTo = typeof filters?.dateTo === "string" ? filters.dateTo : undefined;
-
-  if (dateFrom) query = query.gte("created_at", dateStart(dateFrom));
-  if (dateTo) query = query.lte("created_at", dateEnd(dateTo));
-
-  return query;
+  return applyCreatedAtRangeFilter(query, filters);
 }
 
 // ==================== Purchase Order Entries (Đặt hàng nhập) ====================

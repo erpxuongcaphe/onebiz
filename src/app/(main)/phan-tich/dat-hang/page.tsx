@@ -99,7 +99,7 @@ function OrderVolumeTooltip({
     <div className="rounded-lg border bg-background p-3 shadow-md">
       <p className="text-xs text-muted-foreground mb-1">Ngày {label}</p>
       <p className="text-sm font-bold text-primary">
-        {payload[0].value} đơn hàng
+        {formatNumber(payload[0].value)} đơn hàng
       </p>
     </div>
   );
@@ -116,7 +116,7 @@ function StatusPieTooltip({
   return (
     <div className="rounded-lg border bg-background p-3 shadow-md">
       <p className="text-xs text-muted-foreground mb-1">{payload[0].name}</p>
-      <p className="text-sm font-bold">{payload[0].value} đơn</p>
+      <p className="text-sm font-bold">{formatNumber(payload[0].value)} đơn</p>
     </div>
   );
 }
