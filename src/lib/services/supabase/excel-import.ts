@@ -519,7 +519,12 @@ export async function bulkImportInitialStock(
   const stockRes = await supabase
     .from("branch_stock")
     .select("product_id, branch_id, quantity")
-    .eq("tenant_id", ctx.tenantId);
+    .eq("tenant_id", ctx.tenantId)
+    // Audit 06/07: chỉ đọc dòng BASE (variant_id NULL) — applyManualStockMovement
+    // chỉ ghi dòng base, nên "current" phải so với base thôi. Nếu SP có dòng
+    // variant, cộng gộp cả variant vào current → delta sai → drift dòng base
+    // (chưa xảy ra vì hiện 0 dòng variant, nhưng chặn trước khi có SKU biến thể).
+    .is("variant_id", null);
   const curStock = new Map<string, number>();
   for (const s of stockRes.data ?? []) {
     const key = `${s.product_id}:${s.branch_id}`;
