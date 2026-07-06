@@ -249,6 +249,7 @@ export type {
 // Production Orders + Lot Tracking
 export {
   getProductionOrders, getProductionOrderById, createProductionOrder, completeProductionOrder, consumeProductionMaterials,
+  completeProductionAtomic,
   cancelProductionOrder,
   updateProductionStatus, canTransitionProductionStatus,
   checkMaterialsAvailability,

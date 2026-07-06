@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useEffect } from "react";
+import { useState, useEffect, useRef } from "react";
 import {
   Dialog,
   DialogContent,
@@ -14,8 +14,7 @@ import { Button } from "@/components/ui/button";
 import { Checkbox } from "@/components/ui/checkbox";
 import { useToast, useAuth } from "@/lib/contexts";
 import {
-  completeProductionOrder,
-  consumeProductionMaterials,
+  completeProductionAtomic,
   checkMaterialsAvailability,
   getBranches,
   createInternalSale,
@@ -47,6 +46,9 @@ export function CompleteProductionOrderDialog({
   const [manufacturedDate, setManufacturedDate] = useState("");
   const [expiryDate, setExpiryDate] = useState("");
   const [saving, setSaving] = useState(false);
+  // CEO 06/07: chống double-submit CỨNG — disabled={saving} dựa trên state async
+  // có thể trễ 1 nhịp render, không chặn được 2 click cực nhanh. Ref chặn tức thì.
+  const submittingRef = useRef(false);
 
   // Material check state — dùng shared helper checkMaterialsAvailability
   const [materialChecks, setMaterialChecks] = useState<MaterialCheckResult[]>([]);
@@ -116,6 +118,8 @@ export function CompleteProductionOrderDialog({
       toast({ title: "Số lượng phải > 0", variant: "warning" });
       return;
     }
+    // Chốt chống bấm trùng tức thì (trước cả setSaving async).
+    if (submittingRef.current) return;
 
     // Warn if material shortage (allow override)
     if (hasShortage) {
@@ -125,12 +129,13 @@ export function CompleteProductionOrderDialog({
       if (!confirmed) return;
     }
 
+    submittingRef.current = true;
     setSaving(true);
     try {
-      // Step 1: consume materials (deducts NVL stock)
-      await consumeProductionMaterials(order.id);
-      // Step 2: complete order (creates SKU lot + adds stock)
-      await completeProductionOrder(
+      // CEO 06/07: 1 RPC NGUYÊN TỬ — trừ NVL + nhập thành phẩm trong cùng 1 giao
+      // dịch. Lỗi giữa chừng tự rollback CẢ HAI → không còn cảnh trừ NVL mà không
+      // ra thành phẩm, và bấm lại không trừ kép (thay 2 lời gọi rời trước đây).
+      await completeProductionAtomic(
         order.id,
         Number(completedQty),
         lotNumber || undefined,
@@ -176,7 +181,7 @@ export function CompleteProductionOrderDialog({
 
           toast({
             title: "Đã chuyển thành phẩm",
-            description: `${completedQty} ${product?.unit ?? "sp"} → ${warehouses.find((w) => w.id === targetBranchId)?.name ?? "kho"}`,
+            description: `${formatNumber(Number(completedQty))} ${product?.unit ?? "sp"} → ${warehouses.find((w) => w.id === targetBranchId)?.name ?? "kho"}`,
             variant: "success",
           });
         } catch (err) {
@@ -191,7 +196,7 @@ export function CompleteProductionOrderDialog({
 
       toast({
         title: "Hoàn thành lệnh sản xuất",
-        description: `Đã tạo lô ${lotNumber} với ${completedQty} đơn vị`,
+        description: `Đã tạo lô ${lotNumber} với ${formatNumber(Number(completedQty))} đơn vị`,
         variant: "success",
       });
       onOpenChange(false);
@@ -204,6 +209,7 @@ export function CompleteProductionOrderDialog({
       });
     } finally {
       setSaving(false);
+      submittingRef.current = false;
     }
   }
 

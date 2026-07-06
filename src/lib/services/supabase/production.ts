@@ -283,6 +283,33 @@ export async function consumeProductionMaterials(productionOrderId: string) {
   if (error) throw error;
 }
 
+/**
+ * CEO 06/07/2026 — Hoàn thành lệnh SX NGUYÊN TỬ: gộp trừ NVL + nhập thành phẩm
+ * trong 1 giao dịch (RPC 00159). Lỗi giữa chừng tự rollback CẢ HAI → không bao
+ * giờ còn cảnh "trừ NVL mà không ra thành phẩm" + bấm lại trừ kép. Thay cho việc
+ * gọi consumeProductionMaterials rồi completeProductionOrder rời nhau.
+ */
+export async function completeProductionAtomic(
+  productionOrderId: string,
+  completedQty: number,
+  lotNumber?: string,
+  manufacturedDate?: string,
+  expiryDate?: string
+) {
+  // RPC 00159 chưa có trong types sinh tự động (giống create_internal_sale_atomic).
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  const { data, error } = await (supabase.rpc as any)("complete_production_atomic", {
+    p_production_order_id: productionOrderId,
+    p_completed_qty: completedQty,
+    p_lot_number: lotNumber,
+    p_manufactured_date: manufacturedDate,
+    p_expiry_date: expiryDate,
+  });
+
+  if (error) throw error;
+  return data as string; // lot_id
+}
+
 // ============================================================
 // Material Availability Check
 // ============================================================
