@@ -574,15 +574,76 @@ export async function completeSupplierReturn(input: CompleteSupplierReturnInput)
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
   const sb = supabase as any;
 
+  // ─── D2 (CEO 07/07/2026) — 3 chốt chặn hư-data + auto nợ/thu ───
+  // 0. Lấy phiếu nhập GỐC: chi nhánh + công nợ NCC. Trừ kho phải theo chi nhánh
+  //    của PHIẾU NHẬP (không phải ctx.branchId của user → trước đây trừ nhầm kho).
+  const { data: po, error: poErr } = await sb
+    .from("purchase_orders")
+    .select("id, branch_id, debt")
+    .eq("tenant_id", ctx.tenantId)
+    .eq("id", input.purchaseOrderId)
+    .single();
+  if (poErr || !po) {
+    handleError(poErr ?? new Error("PO not found"), "completeSupplierReturn:po");
+    throw new Error("Không tìm thấy phiếu nhập gốc để trả hàng");
+  }
+  const branchId: string = po.branch_id;
+
+  // 1. Số ĐÃ NHẬN thật per SP (received_quantity — không phải SL đặt).
+  const { data: poItems } = await sb
+    .from("purchase_order_items")
+    .select("product_id, received_quantity")
+    .eq("purchase_order_id", input.purchaseOrderId);
+  const receivedMap = new Map<string, number>();
+  for (const it of poItems ?? []) {
+    receivedMap.set(it.product_id, Number(it.received_quantity ?? 0));
+  }
+
+  // 2. Số ĐÃ TRẢ trước đó per SP (các phiếu trả completed cùng phiếu nhập) —
+  //    chống trả LẶP nhiều phiếu cùng PO.
+  const { data: priorReturns } = await sb
+    .from("supplier_returns")
+    .select("id")
+    .eq("tenant_id", ctx.tenantId)
+    .eq("purchase_order_id", input.purchaseOrderId)
+    .eq("status", "completed");
+  const priorIds = (priorReturns ?? []).map((r: { id: string }) => r.id);
+  const returnedMap = new Map<string, number>();
+  if (priorIds.length > 0) {
+    const { data: priorItems } = await sb
+      .from("supplier_return_items")
+      .select("product_id, quantity")
+      .in("return_id", priorIds);
+    for (const ri of priorItems ?? []) {
+      returnedMap.set(
+        ri.product_id,
+        (returnedMap.get(ri.product_id) ?? 0) + Number(ri.quantity ?? 0),
+      );
+    }
+  }
+
+  // 3. VALIDATE: mỗi SP trả ≤ (đã nhận − đã trả). Chặn trả VƯỢT + trả LẶP → âm kho.
+  for (const item of input.items) {
+    const received = receivedMap.get(item.productId) ?? 0;
+    const alreadyReturned = returnedMap.get(item.productId) ?? 0;
+    const returnable = received - alreadyReturned;
+    if (item.quantity > returnable + 1e-6) {
+      throw new Error(
+        `"${item.productName}": chỉ được trả tối đa ${returnable} ` +
+          `(đã nhận ${received}, đã trả ${alreadyReturned}). Bạn nhập ${item.quantity}.`,
+      );
+    }
+  }
+
   const returnCode = await nextEntityCode("purchase_return", { tenantId: ctx.tenantId });
   const returnTotal = input.items.reduce((sum, i) => sum + i.quantity * i.unitPrice, 0);
 
-  // 1. Insert supplier_returns record
+  // 4. Insert supplier_returns (branch_id = chi nhánh PHIẾU NHẬP gốc).
   const { data: returnRow, error: returnErr } = await sb
     .from("supplier_returns")
     .insert({
       tenant_id: ctx.tenantId,
-      branch_id: ctx.branchId,
+      branch_id: branchId,
       code: returnCode,
       purchase_order_id: input.purchaseOrderId,
       import_code: input.purchaseOrderCode,
@@ -599,7 +660,7 @@ export async function completeSupplierReturn(input: CompleteSupplierReturnInput)
   if (returnErr) handleError(returnErr, "completeSupplierReturn:insert_return");
   const returnId: string = returnRow.id;
 
-  // 2. Insert supplier_return_items
+  // 5. Insert supplier_return_items
   const { error: itemsErr } = await sb
     .from("supplier_return_items")
     .insert(
@@ -615,7 +676,7 @@ export async function completeSupplierReturn(input: CompleteSupplierReturnInput)
     );
   if (itemsErr) handleError(itemsErr, "completeSupplierReturn:insert_items");
 
-  // 3. Stock OUT — trả hàng cho NCC → trừ kho
+  // 6. Stock OUT — trả hàng cho NCC → trừ kho tại CHI NHÁNH PHIẾU NHẬP gốc.
   await applyManualStockMovement(
     input.items.map((item) => ({
       productId: item.productId,
@@ -625,30 +686,44 @@ export async function completeSupplierReturn(input: CompleteSupplierReturnInput)
       referenceId: returnId,
       note: `${returnCode} - Trả hàng nhập ${input.purchaseOrderCode} - ${item.productName} (-${item.quantity})`,
     })),
-    { tenantId: ctx.tenantId, branchId: ctx.branchId, createdBy: ctx.userId }
+    { tenantId: ctx.tenantId, branchId, createdBy: ctx.userId }
   );
 
-  // 4. Cash receipt (phiếu thu — NCC hoàn tiền cho mình)
+  // 7. Auto nợ/thu (CEO chốt 07/07): CÒN NỢ NCC → GIẢM công nợ phiếu nhập; phần
+  //    vượt (đã trả đủ NCC) → xuất PHIẾU THU (NCC hoàn tiền mặt).
   if (returnTotal > 0) {
-    const cashCode = await nextEntityCode("cash_receipt", { tenantId: ctx.tenantId });
+    const debt = Number(po.debt ?? 0);
+    const debtReduce = Math.min(debt, returnTotal);
+    const cashRefund = returnTotal - debtReduce;
 
-    const cashData: CashTransactionInsert = {
-      tenant_id: ctx.tenantId,
-      branch_id: ctx.branchId,
-      code: cashCode,
-      type: "receipt",
-      category: "Trả hàng nhập",
-      amount: returnTotal,
-      counterparty: input.supplierName,
-      payment_method: input.paymentMethod ?? "cash",
-      reference_type: "supplier_return",
-      reference_id: returnId,
-      note: `Hoàn tiền trả hàng nhập ${returnCode} (ĐN gốc: ${input.purchaseOrderCode})`,
-      created_by: ctx.userId,
-    };
+    if (debtReduce > 0) {
+      const { error: debtErr } = await sb
+        .from("purchase_orders")
+        .update({ debt: Math.max(0, debt - debtReduce) })
+        .eq("tenant_id", ctx.tenantId)
+        .eq("id", input.purchaseOrderId);
+      if (debtErr) handleError(debtErr, "completeSupplierReturn:reduce_debt");
+    }
 
-    const { error: cashErr } = await supabase.from("cash_transactions").insert(cashData);
-    if (cashErr) handleError(cashErr, "completeSupplierReturn:cash_receipt");
+    if (cashRefund > 0) {
+      const cashCode = await nextEntityCode("cash_receipt", { tenantId: ctx.tenantId });
+      const cashData: CashTransactionInsert = {
+        tenant_id: ctx.tenantId,
+        branch_id: branchId,
+        code: cashCode,
+        type: "receipt",
+        category: "Trả hàng nhập",
+        amount: cashRefund,
+        counterparty: input.supplierName,
+        payment_method: input.paymentMethod ?? "cash",
+        reference_type: "supplier_return",
+        reference_id: returnId,
+        note: `Hoàn tiền trả hàng nhập ${returnCode} (ĐN gốc: ${input.purchaseOrderCode})`,
+        created_by: ctx.userId,
+      };
+      const { error: cashErr } = await supabase.from("cash_transactions").insert(cashData);
+      if (cashErr) handleError(cashErr, "completeSupplierReturn:cash_receipt");
+    }
   }
 
   return { returnId, returnCode };

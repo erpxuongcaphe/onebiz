@@ -37,6 +37,8 @@ interface POLineItem {
   product_name: string;
   unit: string;
   quantity: number;
+  /** SL đã NHẬN thật (received_quantity) — trần cho phép trả. */
+  received: number;
   unit_price: number;
   total: number;
   selected: boolean;
@@ -124,21 +126,28 @@ export function CreatePurchaseReturnDialog({
     const supabase = getClient();
     const { data } = await supabase
       .from("purchase_order_items")
-      .select("id, product_id, product_name, unit, quantity, unit_price, total")
+      .select("id, product_id, product_name, unit, quantity, received_quantity, unit_price, total")
       .eq("purchase_order_id", poId);
 
     setPOItems(
-      (data ?? []).map((item) => ({
-        id: item.id,
-        product_id: item.product_id,
-        product_name: item.product_name,
-        unit: item.unit,
-        quantity: Number(item.quantity ?? 0),
-        unit_price: Number(item.unit_price ?? 0),
-        total: Number(item.total ?? 0),
-        selected: false,
-        returnQty: Number(item.quantity ?? 0),
-      })),
+      (data ?? []).map((item) => {
+        // CEO 07/07: trần trả = SL ĐÃ NHẬN (received_quantity), không phải SL đặt.
+        const received = Number(
+          (item as { received_quantity?: number }).received_quantity ?? 0,
+        );
+        return {
+          id: item.id,
+          product_id: item.product_id,
+          product_name: item.product_name,
+          unit: item.unit,
+          quantity: Number(item.quantity ?? 0),
+          received,
+          unit_price: Number(item.unit_price ?? 0),
+          total: Number(item.total ?? 0),
+          selected: false,
+          returnQty: received,
+        };
+      }),
     );
   }
 
@@ -154,7 +163,7 @@ export function CreatePurchaseReturnDialog({
     setPOItems(
       poItems.map((item) =>
         item.id === id
-          ? { ...item, returnQty: Math.min(Math.max(0.01, qty), item.quantity) }
+          ? { ...item, returnQty: Math.min(Math.max(0.01, qty), item.received) }
           : item,
       ),
     );
