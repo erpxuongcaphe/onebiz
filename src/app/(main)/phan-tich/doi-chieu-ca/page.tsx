@@ -39,7 +39,7 @@ import {
 } from "@/lib/services/supabase/shifts";
 import { getBranches } from "@/lib/services/supabase/branches";
 import type { Branch } from "@/lib/types";
-import { formatCurrency, formatDate } from "@/lib/format";
+import { formatCurrency, formatDate, formatDateInputValue } from "@/lib/format";
 import { cn } from "@/lib/utils";
 import { KpiCard } from "../_components";
 
@@ -48,7 +48,7 @@ import { KpiCard } from "../_components";
 function todayIso(offsetDays = 0): string {
   const d = new Date();
   d.setDate(d.getDate() + offsetDays);
-  return d.toISOString().slice(0, 10);
+  return formatDateInputValue(d);
 }
 
 function formatDateTime(iso: string | null): string {

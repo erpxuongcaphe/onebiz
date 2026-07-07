@@ -32,7 +32,7 @@ import { Button } from "@/components/ui/button";
 import { useToast, useBranchFilter } from "@/lib/contexts";
 import { printDocumentWithTemplate } from "@/lib/print-apply-template";
 import { buildProductionOrderPrintData } from "@/lib/print-templates";
-import { formatCurrency, formatDate, formatNumber } from "@/lib/format";
+import { formatCurrency, formatDate, formatNumber, formatDateInputValue } from "@/lib/format";
 import {
   getProductionOrders,
   getProductionOrderById,
@@ -292,7 +292,7 @@ export default function SanXuatPage() {
   const pagedData = filtered.slice(page * pageSize, (page + 1) * pageSize);
 
   // KPI stats — tính từ toàn bộ data (chưa filter) để luôn đồng nhất
-  const statsToday = new Date().toISOString().split("T")[0];
+  const statsToday = formatDateInputValue(new Date());
   const kpi = {
     total: data.length,
     inProgress: data.filter(

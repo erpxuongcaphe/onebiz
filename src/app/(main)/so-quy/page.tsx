@@ -42,7 +42,7 @@ import { ImportExcelDialog } from "@/components/shared/dialogs/import-excel-dial
 import { downloadTemplate } from "@/lib/excel";
 import { cashTransactionExcelSchema } from "@/lib/excel/schemas";
 import { bulkImportCashTransactions } from "@/lib/services/supabase/excel-import";
-import { formatCurrency, formatDate, formatUser } from "@/lib/format";
+import { formatCurrency, formatDate, formatUser, formatDateInputValue } from "@/lib/format";
 import { exportToCsv } from "@/lib/utils/export";
 import {
   exportReportToExcel,
@@ -364,7 +364,7 @@ export default function SoQuyPage() {
     if (type === "excel") {
       const range = presetToRange(datePreset);
       const isoToYmd = (iso: string | undefined): string => {
-        if (!iso) return new Date().toISOString().slice(0, 10);
+        if (!iso) return formatDateInputValue(new Date());
         return iso.slice(0, 10);
       };
 
@@ -427,7 +427,7 @@ export default function SoQuyPage() {
         { date: string; receipt: number; payment: number }
       >();
       for (const e of sortedData) {
-        const dayKey = new Date(e.date).toISOString().slice(0, 10);
+        const dayKey = formatDateInputValue(new Date(e.date));
         const existing = dailyMap.get(dayKey) ?? {
           date: dayKey,
           receipt: 0,

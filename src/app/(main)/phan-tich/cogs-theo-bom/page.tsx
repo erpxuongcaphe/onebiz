@@ -16,12 +16,12 @@ import { useEffect, useState, useCallback } from "react";
 import { PageHeader } from "@/components/shared/page-header";
 import { useToast, useBranchFilter } from "@/lib/contexts";
 import { Icon } from "@/components/ui/icon";
-import { formatCurrency, formatDate, formatNumber } from "@/lib/format";
+import { formatCurrency, formatDate, formatNumber, formatDateInputValue } from "@/lib/format";
 import { SummaryCard } from "@/components/shared/summary-card";
 import { getCogsByBom, type CogsByBomRow } from "@/lib/services";
 
 function formatYmd(d: Date): string {
-  return d.toISOString().slice(0, 10);
+  return formatDateInputValue(d);
 }
 
 function formatDateTime(iso: string): string {

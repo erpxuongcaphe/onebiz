@@ -16,7 +16,7 @@ import { useEffect, useState, useCallback } from "react";
 import { PageHeader } from "@/components/shared/page-header";
 import { useToast, useBranchFilter } from "@/lib/contexts";
 import { Icon } from "@/components/ui/icon";
-import { formatCurrency, formatNumber } from "@/lib/format";
+import { formatCurrency, formatNumber, formatDateInputValue } from "@/lib/format";
 import { SummaryCard } from "@/components/shared/summary-card";
 import {
   getNvlConsumptionByBranch,
@@ -24,7 +24,7 @@ import {
 } from "@/lib/services";
 
 function formatYmd(d: Date): string {
-  return d.toISOString().slice(0, 10);
+  return formatDateInputValue(d);
 }
 
 export default function TieuHaoNvlPage() {
