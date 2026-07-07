@@ -7,6 +7,7 @@ import type {
   ProductLot,
   ExpiringLot,
 } from "@/lib/types";
+import { formatDateInputValue } from "@/lib/format";
 
 const supabase = getClient();
 
@@ -564,7 +565,9 @@ export async function createPurchaseLot(lot: {
       supplier_id: lot.supplierId,
       manufactured_date: lot.manufacturedDate,
       expiry_date: lot.expiryDate,
-      received_date: new Date().toISOString().split("T")[0],
+      // E (07/07): dùng helper an toàn múi giờ — trước 7h sáng VN, toISOString()
+      // lùi 1 ngày (UTC) → sai ngày nhập lô (ảnh hưởng HSD/FIFO).
+      received_date: formatDateInputValue(new Date()),
       initial_qty: lot.quantity,
       current_qty: lot.quantity,
       branch_id: lot.branchId,
