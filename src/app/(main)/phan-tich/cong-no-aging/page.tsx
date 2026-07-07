@@ -10,7 +10,7 @@
 import { useEffect, useMemo, useState, useCallback } from "react";
 import { useBranchFilter, useToast } from "@/lib/contexts";
 import { Icon } from "@/components/ui/icon";
-import { formatNumber, formatCurrency, formatDate } from "@/lib/format";
+import { formatNumber, formatCurrency, formatDate, formatDateInputValue } from "@/lib/format";
 import { cn } from "@/lib/utils";
 import {
   ReportPageHeader,
@@ -156,7 +156,7 @@ export default function ReceivableAgingReportPage() {
       return;
     }
     try {
-      const today = new Date().toISOString().slice(0, 10);
+      const today = formatDateInputValue(new Date());
       const infoSheet = buildInfoSheet({
         title: "BÁO CÁO CÔNG NỢ AGING",
         description: "Phân tích công nợ phải thu theo độ tuổi (snapshot hiện tại)",

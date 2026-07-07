@@ -23,7 +23,7 @@ import {
 import type { ProductionOrder } from "@/lib/types";
 import type { BranchDetail, MaterialCheckResult } from "@/lib/services";
 import { getClient, getCurrentContext } from "@/lib/services/supabase/base";
-import { formatNumber } from "@/lib/format";
+import { formatNumber, formatDateInputValue } from "@/lib/format";
 import { Icon } from "@/components/ui/icon";
 
 interface CompleteProductionOrderDialogProps {
@@ -62,7 +62,7 @@ export function CompleteProductionOrderDialog({
   useEffect(() => {
     if (open && order) {
       setCompletedQty(String(order.plannedQty));
-      const today = new Date().toISOString().split("T")[0];
+      const today = formatDateInputValue(new Date());
       setManufacturedDate(today);
       setLotNumber(`${order.code}-${today.replace(/-/g, "")}`);
       setExpiryDate("");

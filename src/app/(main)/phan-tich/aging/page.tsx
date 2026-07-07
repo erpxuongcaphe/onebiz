@@ -28,7 +28,7 @@ import {
 } from "recharts";
 import { useBranchFilter, useToast } from "@/lib/contexts";
 import { Icon } from "@/components/ui/icon";
-import { formatNumber, formatCurrency, formatDate } from "@/lib/format";
+import { formatNumber, formatCurrency, formatDate, formatDateInputValue } from "@/lib/format";
 import { cn } from "@/lib/utils";
 import {
   ReportPageHeader,
@@ -226,7 +226,7 @@ export default function AgingReportPage() {
     }
     try {
       const branchLabel = activeBranchId ? "Chi nhánh đang chọn" : "Tất cả chi nhánh";
-      const today = new Date().toISOString().slice(0, 10);
+      const today = formatDateInputValue(new Date());
       const dateRange = { from: today, to: today };
 
       // Sheet 0: Info

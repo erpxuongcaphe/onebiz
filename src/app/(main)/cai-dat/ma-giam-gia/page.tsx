@@ -32,7 +32,7 @@ import {
 } from "@/components/ui/select";
 import { Icon } from "@/components/ui/icon";
 import { cn } from "@/lib/utils";
-import { formatCurrency, formatDate } from "@/lib/format";
+import { formatCurrency, formatDate, formatDateInputValue } from "@/lib/format";
 import { useToast } from "@/lib/contexts";
 import {
   getCoupons,
@@ -106,7 +106,7 @@ function CouponDialog({ open, onOpenChange, initial, onSaved }: CouponDialogProp
       setMaxDiscountAmount("");
       setMaxUses("");
       setMaxUsesPerCustomer("1");
-      const today = new Date().toISOString().slice(0, 10);
+      const today = formatDateInputValue(new Date());
       setStartDate(today);
       setEndDate("");
       setIsActive(true);
