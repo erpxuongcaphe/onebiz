@@ -164,6 +164,9 @@ export async function getBranchStockPage(params: {
 
   if (params.branchId) query = query.eq("branch_id", params.branchId);
   if (params.productType) query = query.eq("products.product_type", params.productType);
+  // A2 (07/07): khi lọc theo loại/tìm kiếm (inner join), bỏ món menu F&B —
+  // không giữ tồn nên không thuộc danh sách tồn kho.
+  if (needInnerJoin) query = query.neq("products.inventory_role", "fnb_menu_item");
   if (params.search) {
     const esc = params.search.replace(/[%_]/g, "\\$&");
     query = query.or(
@@ -266,6 +269,9 @@ export async function getBranchStockAggregates(params: {
 
   if (params.branchId) query = query.eq("branch_id", params.branchId);
   if (params.productType) query = query.eq("products.product_type", params.productType);
+  // A2 (07/07): khi lọc theo loại/tìm kiếm (inner join), bỏ món menu F&B —
+  // không giữ tồn nên không thuộc danh sách tồn kho.
+  if (needInnerJoin) query = query.neq("products.inventory_role", "fnb_menu_item");
   if (params.search) {
     const esc = params.search.replace(/[%_]/g, "\\$&");
     query = query.or(

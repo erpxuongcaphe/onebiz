@@ -213,9 +213,11 @@ export async function getProductStats(scope: "nvl" | "sku" | "all" = "all"): Pro
 }> {
   const supabase = getClient();
   const tenantId = await getCurrentTenantId();
-  let query = supabase
+  // inventory_role (00164) chưa có trong generated types → cast any.
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  let query = (supabase as any)
     .from("products")
-    .select("stock, cost_price", { count: "exact" })
+    .select("stock, cost_price, inventory_role", { count: "exact" })
     .eq("tenant_id", tenantId)
     .eq("is_active", true);
 
@@ -231,6 +233,12 @@ export async function getProductStats(scope: "nvl" | "sku" | "all" = "all"): Pro
   let lowStock = 0;
 
   for (const row of data ?? []) {
+    // A2 (07/07): món menu F&B (fnb_menu_item) KHÔNG giữ tồn → bỏ khỏi giá trị
+    // tồn + đếm hết/sắp hết (nếu không, món menu stock=0 luôn bị tính "hết hàng"
+    // làm phồng KPI). "Tổng SP" (count) vẫn giữ cả món menu để khớp danh sách.
+    if ((row as { inventory_role?: string }).inventory_role === "fnb_menu_item") {
+      continue;
+    }
     const stock = Number((row as { stock: number | null }).stock ?? 0);
     const cost = Number((row as { cost_price: number | null }).cost_price ?? 0);
     stockValue += stock * cost;

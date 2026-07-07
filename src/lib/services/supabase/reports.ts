@@ -194,11 +194,20 @@ export async function getProfitAndLoss(branchId?: string): Promise<{
     prevInvIds
   );
 
-  // Calculate OpEx (exclude purchase-related categories)
-  const purchaseCategories = ["Nhập hàng", "Mua hàng nội bộ"];
+  // Calculate OpEx (exclude purchase + refund categories)
+  // A4 (07/07): loại thêm 'Hoàn tiền hủy đơn' (void HĐ completed 00117/00161) và
+  // 'Hoàn trả' (void bill POS/F&B 00055/00086/00162). Đây là phiếu CHI hoàn tiền
+  // — đảo ngược doanh thu, KHÔNG phải chi phí vận hành. Trước đây bị tính vào
+  // OpEx → OpEx phồng, lãi ròng thấp giả.
+  const excludeFromOpEx = [
+    "Nhập hàng",
+    "Mua hàng nội bộ",
+    "Hoàn tiền hủy đơn",
+    "Hoàn trả",
+  ];
   const calcOpEx = (data: { category: string | null; amount: number }[]): number => {
     return data
-      .filter((c) => !purchaseCategories.includes(c.category ?? ""))
+      .filter((c) => !excludeFromOpEx.includes(c.category ?? ""))
       .reduce((sum, c) => sum + ((c.amount as number) ?? 0), 0);
   };
 

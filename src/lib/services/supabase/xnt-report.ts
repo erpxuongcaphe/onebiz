@@ -63,6 +63,8 @@ export interface XntRow {
   outTransfer: number; // Chuyển đi
   outProduction: number; // SX xuất (nguyên liệu)
   outInternal: number; // Xuất nội bộ (gộp vào "Xuất khác")
+  inOther: number; // A3: Nhập khác (initial_stock_import...) — để tổng Nhập không hụt
+  outOther: number; // A3: Xuất khác (bom_consume/modifier_topping...) — để tổng Xuất không hụt
 
   // Tổng hợp
   totalIn: number;
@@ -152,7 +154,7 @@ function mapInBucket(referenceType: string | null): InBucket {
   // lệch tồn đầu kỳ. Xem RPC void_completed_invoice_atomic (migration 00117).
   if (rt === "sales_return" || rt === "invoice_void") return "return";
   if (rt === "transfer" || rt === "stock_transfer") return "transfer";
-  if (rt === "production" || rt === "production_complete") return "production";
+  if (rt.startsWith("production")) return "production"; // production_order/complete/reconcile
   return "other";
 }
 
@@ -165,7 +167,7 @@ function mapOutBucket(referenceType: string | null): OutBucket {
     return "supplier_return";
   if (rt === "inventory_check" || rt === "stock_adjustment") return "check";
   if (rt === "transfer" || rt === "stock_transfer") return "transfer";
-  if (rt === "production" || rt === "production_consume") return "production";
+  if (rt.startsWith("production")) return "production"; // production_consume/order/reconcile
   if (rt === "internal_export" || rt === "internal_sale" || rt === "input_invoice")
     return "internal";
   return "other";
@@ -198,10 +200,14 @@ export async function getXntReport(
   if (!rangeWindow) throw new Error("Invalid report date range");
 
   // 1. Fetch products (filter by search if provided)
-  let productsQuery = supabase
+  // inventory_role (00164) chưa có trong generated types → cast any.
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  let productsQuery = (supabase as any)
     .from("products")
     .select("id, code, name, unit, stock, cost_price, category_id")
     .eq("tenant_id", tenantId)
+    // A2 (07/07): XNT không liệt kê món menu F&B (không giữ tồn → dòng rỗng)
+    .neq("inventory_role", "fnb_menu_item")
     .order("name");
 
   if (search && search.trim()) {
@@ -215,7 +221,7 @@ export async function getXntReport(
   // 2. Fetch product_categories for category names
   const categoryIds = Array.from(
     new Set(
-      (products ?? []).map((p) => (p as { category_id?: string }).category_id).filter(Boolean),
+      (products ?? []).map((p: { category_id?: string | null }) => p.category_id).filter(Boolean),
     ),
   ) as string[];
   let categoryMap = new Map<string, string>();
@@ -267,6 +273,7 @@ export async function getXntReport(
       inReturn: number;
       inTransfer: number;
       inProduction: number;
+      inOther: number;
       outSale: number;
       outDisposal: number;
       outSupplierReturn: number;
@@ -274,6 +281,7 @@ export async function getXntReport(
       outTransfer: number;
       outProduction: number;
       outInternal: number;
+      outOther: number;
     }
   >();
 
@@ -287,6 +295,7 @@ export async function getXntReport(
         inReturn: 0,
         inTransfer: 0,
         inProduction: 0,
+        inOther: 0,
         outSale: 0,
         outDisposal: 0,
         outSupplierReturn: 0,
@@ -294,6 +303,7 @@ export async function getXntReport(
         outTransfer: 0,
         outProduction: 0,
         outInternal: 0,
+        outOther: 0,
       };
       aggMap.set(pid, agg);
     }
@@ -315,6 +325,9 @@ export async function getXntReport(
           break;
         case "production":
           agg.inProduction += qty;
+          break;
+        case "other":
+          agg.inOther += qty;
           break;
       }
     } else if (m.type === "out") {
@@ -340,6 +353,9 @@ export async function getXntReport(
           break;
         case "internal":
           agg.outInternal += qty;
+          break;
+        case "other":
+          agg.outOther += qty;
           break;
       }
     } else if (m.type === "adjust") {
@@ -381,6 +397,7 @@ export async function getXntReport(
       inReturn: 0,
       inTransfer: 0,
       inProduction: 0,
+      inOther: 0,
       outSale: 0,
       outDisposal: 0,
       outSupplierReturn: 0,
@@ -388,13 +405,15 @@ export async function getXntReport(
       outTransfer: 0,
       outProduction: 0,
       outInternal: 0,
+      outOther: 0,
     };
     const totalIn =
       agg.inSupplier +
       agg.inCheck +
       agg.inReturn +
       agg.inTransfer +
-      agg.inProduction;
+      agg.inProduction +
+      agg.inOther;
     const totalOut =
       agg.outSale +
       agg.outDisposal +
@@ -402,7 +421,8 @@ export async function getXntReport(
       agg.outCheck +
       agg.outTransfer +
       agg.outProduction +
-      agg.outInternal;
+      agg.outInternal +
+      agg.outOther;
 
     const closingQty = branchId
       ? branchClosingStock.get(p.id) ?? 0
@@ -432,6 +452,8 @@ export async function getXntReport(
       outTransfer: agg.outTransfer,
       outProduction: agg.outProduction,
       outInternal: agg.outInternal,
+      inOther: agg.inOther,
+      outOther: agg.outOther,
       totalIn,
       totalOut,
       inValue: totalIn * cost,

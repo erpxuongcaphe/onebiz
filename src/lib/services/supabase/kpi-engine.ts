@@ -663,23 +663,30 @@ async function computeActualForKpi(
       // eslint-disable-next-line @typescript-eslint/no-explicit-any
       const { data, error } = await (supabase as any)
         .from("branch_stock")
-        .select("quantity, products(cost_price)")
+        .select("quantity, products(cost_price, inventory_role)")
         .eq("tenant_id", tenantId)
         .eq("branch_id", branchId);
       if (error) throw new Error(error.message);
       return ((data ?? []) as Array<{
         quantity: number;
-        products: { cost_price: number } | null;
+        products: { cost_price: number; inventory_role?: string } | null;
       }>).reduce(
+        // A2 (07/07): bỏ món menu F&B khỏi giá trị tồn (không giữ tồn thật)
         (s, r) =>
-          s + Number(r.quantity ?? 0) * Number(r.products?.cost_price ?? 0),
+          r.products?.inventory_role === "fnb_menu_item"
+            ? s
+            : s + Number(r.quantity ?? 0) * Number(r.products?.cost_price ?? 0),
         0,
       );
     }
-    const { data, error } = await supabase
+    // inventory_role (00164) chưa có trong generated types → cast any.
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    const { data, error } = await (supabase as any)
       .from("products")
       .select("stock, cost_price")
-      .eq("tenant_id", tenantId);
+      .eq("tenant_id", tenantId)
+      // A2 (07/07): bỏ món menu F&B (không giữ tồn thật) khỏi giá trị tồn
+      .neq("inventory_role", "fnb_menu_item");
     if (error) throw new Error(error.message);
     return ((data ?? []) as Array<{ stock: number; cost_price: number }>).reduce(
       (s, r) => s + Number(r.stock ?? 0) * Number(r.cost_price ?? 0),

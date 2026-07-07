@@ -83,6 +83,10 @@ export async function getInventoryCheckReport(
       "id, code, created_at, branch_id, status, profiles!inventory_checks_created_by_fkey(full_name), branches(name), inventory_check_items(id, difference, products(cost_price))",
     )
     .eq("tenant_id", tenantId)
+    // A5 (07/07): chỉ tính phiếu ĐÃ CÂN BẰNG (balanced) — bỏ draft/in_progress/
+    // cancelled (chưa áp hoặc đã hủy, KHÔNG ảnh hưởng tồn thật). Khớp comment
+    // strategy + RPC 00079/00085. Trước đây cộng hết → tổng lệch/phồng.
+    .eq("status", "balanced")
     .gte("created_at", rangeWindow.start)
     .lt("created_at", rangeWindow.end);
   if (branchId) query = query.eq("branch_id", branchId);
