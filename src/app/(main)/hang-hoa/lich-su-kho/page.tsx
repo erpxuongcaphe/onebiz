@@ -81,6 +81,23 @@ const referenceTypeLabels: Record<string, string> = {
   transfer: "Chuyển kho",
   return: "Trả hàng",
   pos: "POS Retail",
+  // E (07/07): bổ sung nhãn còn thiếu — trước hiện mã thô (vd "bom_consume").
+  bom_consume: "Tiêu hao công thức",
+  modifier_topping: "Topping (tùy chọn)",
+  invoice_void: "Hủy HĐ (hoàn kho)",
+  sales_return: "Trả hàng bán",
+  supplier_return: "Trả hàng nhập (NCC)",
+  purchase_return: "Trả hàng nhập (NCC)",
+  internal_sale: "Bán nội bộ",
+  input_invoice: "Hóa đơn đầu vào",
+  initial_stock_import: "Nhập tồn đầu kỳ",
+  production_reconcile: "Đối soát sản xuất",
+  production_complete: "Nhập kho sản xuất",
+  production_consume: "Tiêu hao sản xuất",
+  return_bom_restore: "Hồi NVL trả hàng",
+  stock_adjustment: "Điều chỉnh tồn",
+  purchase_entry: "Phiếu nhập hàng",
+  goods_receipt: "Nhập hàng",
 };
 
 export default function LichSuKhoPage() {
