@@ -500,14 +500,42 @@ export async function bulkImportInitialStock(
   const ctx = await getCurrentContext();
 
   const [prodRes, branchRes] = await Promise.all([
-    supabase.from("products").select("id, code").eq("tenant_id", ctx.tenantId),
-    supabase.from("branches").select("id, code").eq("tenant_id", ctx.tenantId),
+    supabase
+      .from("products")
+      .select("id, code, product_type, channel, has_bom")
+      .eq("tenant_id", ctx.tenantId),
+    supabase
+      .from("branches")
+      .select("id, code, cascade_mode")
+      .eq("tenant_id", ctx.tenantId),
   ]);
-  const prodMap = new Map<string, string>();
-  for (const p of prodRes.data ?? []) prodMap.set(p.code, p.id);
-  const branchMap = new Map<string, string>();
+  type ProdInfo = {
+    id: string;
+    productType?: string | null;
+    channel?: string | null;
+    hasBom?: boolean | null;
+  };
+  const prodMap = new Map<string, ProdInfo>();
+  for (const p of prodRes.data ?? []) {
+    const row = p as {
+      id: string;
+      code: string;
+      product_type?: string | null;
+      channel?: string | null;
+      has_bom?: boolean | null;
+    };
+    prodMap.set(row.code, {
+      id: row.id,
+      productType: row.product_type,
+      channel: row.channel,
+      hasBom: row.has_bom,
+    });
+  }
+  const branchMap = new Map<string, { id: string; cascadeMode?: string | null }>();
   for (const b of branchRes.data ?? []) {
-    if (b.code) branchMap.set(b.code, b.id);
+    // cascade_mode (00123) chưa có trong generated types — cast qua unknown.
+    const row = b as unknown as { id: string; code?: string | null; cascade_mode?: string | null };
+    if (row.code) branchMap.set(row.code, { id: row.id, cascadeMode: row.cascade_mode });
   }
 
   // CEO 28/05/2026: GHI ĐÈ thay vì cộng dồn (idempotent).
@@ -532,12 +560,31 @@ export async function bulkImportInitialStock(
   }
 
   return runBulk(rows, async (row) => {
-    const productId = prodMap.get(row.productCode);
-    if (!productId) throw new Error(`Mã SP "${row.productCode}" chưa tồn tại`);
+    const prod = prodMap.get(row.productCode);
+    if (!prod) throw new Error(`Mã SP "${row.productCode}" chưa tồn tại`);
+    const productId = prod.id;
 
-    const branchId = branchMap.get(row.branchCode);
-    if (!branchId)
+    const branch = branchMap.get(row.branchCode);
+    if (!branch)
       throw new Error(`Mã chi nhánh "${row.branchCode}" chưa tồn tại`);
+    const branchId = branch.id;
+
+    // CEO 07/07/2026 — luật mô hình mã hàng (Cách B):
+    // (a) MÓN MENU F&B (MỌI sku + channel=fnb — khớp inventory_role='fnb_menu_item',
+    //     KHÔNG suy từ has_bom) KHÔNG giữ tồn ở bất kỳ đâu → chặn nhập tồn.
+    // (b) SKU 2-mã (has_bom) tại chi nhánh SẢN XUẤT (Kho/Xưởng, cascade_mode=
+    //     'production'): tồn thật nằm ở mã NVL thành phần — nhập vào mã NVL.
+    //     Tại QUÁN (outlet) thì SKU thành phần GIỮ TỒN THẬT → cho nhập bình thường.
+    if (prod.productType === "sku" && prod.channel === "fnb") {
+      throw new Error(
+        `"${row.productCode}" là MÓN MENU F&B (bán theo công thức, không giữ tồn) — không nhập tồn đầu kỳ cho món. Nhập tồn vào các mã THÀNH PHẦN của công thức.`,
+      );
+    }
+    if (prod.hasBom === true && branch.cascadeMode === "production") {
+      throw new Error(
+        `"${row.productCode}" là SKU 2-mã (có công thức) — tại Kho/Xưởng tồn thật nằm ở mã NVL thành phần. Nhập tồn vào mã NVL tương ứng thay vì mã SKU.`,
+      );
+    }
 
     // GHI ĐÈ: set tồn = số trong file qua delta = file − hiện tại.
     const current = curStock.get(`${productId}:${branchId}`) ?? 0;

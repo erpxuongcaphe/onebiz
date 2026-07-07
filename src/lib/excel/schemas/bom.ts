@@ -81,6 +81,9 @@ export const bomExcelSchema: ExcelSchema<BOMImportRow> = {
     },
     {
       key: "materialCode",
+      // CEO 07/07/2026 (mô hình Cách B): GIỮ header "Mã NVL" để file Excel cũ
+      // vẫn import được (parser map theo header text). Nhưng thành phần có thể
+      // là NVL HOẶC SKU Retail (vd món quán F&B trừ sữa lon SKU Retail).
       header: "Mã NVL",
       type: "string",
       required: true,
@@ -88,7 +91,7 @@ export const bomExcelSchema: ExcelSchema<BOMImportRow> = {
       maxLength: 50,
       example: "NVL-CPH-001",
       description:
-        "Mã nguyên vật liệu trong công thức. Phải tồn tại trong hệ thống (tạo ở trang Hàng hoá trước).",
+        "Mã THÀNH PHẦN trừ kho khi bán/sản xuất — có thể là mã NVL hoặc mã SKU Retail (vd món F&B ở quán trừ SKU sữa lon Retail). Phải tồn tại trong hệ thống (tạo ở trang Hàng hoá trước).",
       width: 18,
     },
     {

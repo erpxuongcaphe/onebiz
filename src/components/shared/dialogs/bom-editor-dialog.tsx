@@ -161,7 +161,7 @@ export function BOMEditorDialog({
     if (!mat) return;
     if (items.some((it) => it.materialId === mat.id)) {
       toast({
-        title: "NVL đã có trong công thức",
+        title: "Thành phần đã có trong công thức",
         variant: "warning",
       });
       return;
@@ -194,7 +194,7 @@ export function BOMEditorDialog({
     const e: Record<string, string> = {};
     if (!productId) e.productId = "Chọn SKU đầu ra";
     if (!name.trim()) e.name = "Nhập tên công thức";
-    if (items.length === 0) e.items = "Thêm ít nhất 1 NVL";
+    if (items.length === 0) e.items = "Thêm ít nhất 1 thành phần";
     setErrors(e);
     return Object.keys(e).length === 0;
   }
@@ -274,7 +274,9 @@ export function BOMEditorDialog({
         <DialogHeader>
           <DialogTitle>{bomId ? "Sửa công thức sản xuất (BOM)" : "Tạo công thức sản xuất (BOM)"}</DialogTitle>
           <DialogDescription>
-            Định nghĩa NVL cần thiết để sản xuất 1 batch SKU. Giá vốn được tính tự động.
+            Định nghĩa thành phần trừ kho khi bán/sản xuất 1 đơn vị SKU — thành
+            phần có thể là NVL hoặc SKU Retail (vd quán F&amp;B pha chế từ sữa lon
+            Retail). Giá vốn được tính tự động.
           </DialogDescription>
         </DialogHeader>
 
@@ -409,13 +411,13 @@ export function BOMEditorDialog({
                 type="button"
               >
                 <Icon name="add" size={14} className="mr-1" />
-                Thêm NVL
+                Thêm thành phần
               </Button>
             </div>
 
             {items.length === 0 && (
               <div className="text-sm text-muted-foreground text-center py-6 border-2 border-dashed rounded-lg">
-                Chưa có NVL — nhấn &quot;Thêm NVL&quot; để bắt đầu
+                Chưa có thành phần — nhấn &quot;Thêm thành phần&quot; để bắt đầu
               </div>
             )}
             {errors.items && <p className="text-xs text-destructive">{errors.items}</p>}
@@ -425,7 +427,7 @@ export function BOMEditorDialog({
                 <table className="w-full text-sm">
                   <thead className="bg-muted/30">
                     <tr>
-                      <th className="text-left p-2 font-medium">NVL</th>
+                      <th className="text-left p-2 font-medium">Thành phần</th>
                       <th className="text-right p-2 font-medium w-24">Số lượng</th>
                       <th className="text-left p-2 font-medium w-20">ĐVT</th>
                       <th className="text-right p-2 font-medium w-20">Hao hụt %</th>
@@ -550,7 +552,7 @@ export function BOMEditorDialog({
       <Dialog open={pickerOpen} onOpenChange={setPickerOpen}>
         <DialogContent className="sm:max-w-md">
           <DialogHeader>
-            <DialogTitle>Chọn nguyên vật liệu</DialogTitle>
+            <DialogTitle>Chọn thành phần (NVL hoặc SKU)</DialogTitle>
           </DialogHeader>
           <div className="space-y-2">
             <Select
@@ -562,10 +564,10 @@ export function BOMEditorDialog({
               }))}
             >
               <SelectTrigger className="w-full">
-                <SelectValue placeholder="Chọn NVL từ danh mục...">
+                <SelectValue placeholder="Chọn thành phần từ danh mục...">
                   {(v) => {
                     const match = nvlOptions.find((p) => p.id === v);
-                    return match ? `${match.code} — ${match.name}` : "Chọn NVL từ danh mục...";
+                    return match ? `${match.code} — ${match.name}` : "Chọn thành phần từ danh mục...";
                   }}
                 </SelectValue>
               </SelectTrigger>

@@ -85,6 +85,9 @@ export function CreateInventoryCheckDialog({
   const [errors, setErrors] = useState<Record<string, string>>({});
   const [saving, setSaving] = useState(false);
   const saveLockRef = useRef(false);
+  // CEO 07/07/2026 (Cách B): cascade_mode của chi nhánh kiểm — quyết định có cho
+  // đếm SKU Retail thành phần (outlet) hay chỉ NVL (production).
+  const [branchCascadeMode, setBranchCascadeMode] = useState<string | null>(null);
 
   useEffect(() => {
     if (!open) return;
@@ -99,6 +102,24 @@ export function CreateInventoryCheckDialog({
     setSaving(false);
   }, [open]);
 
+  // CEO 07/07/2026: lấy cascade_mode chi nhánh kiểm để lọc SP theo vai trò.
+  useEffect(() => {
+    if (!open) return;
+    (async () => {
+      const supabase = getClient();
+      const ctx = await getCurrentContext();
+      // cascade_mode (00123) chưa có trong generated types → cast any.
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      const { data } = await (supabase as any)
+        .from("branches")
+        .select("cascade_mode")
+        .eq("tenant_id", ctx.tenantId)
+        .eq("id", ctx.branchId)
+        .maybeSingle();
+      setBranchCascadeMode((data?.cascade_mode as string | null) ?? null);
+    })();
+  }, [open]);
+
   useEffect(() => {
     const term = productSearch.trim();
     if (!term) {
@@ -109,23 +130,34 @@ export function CreateInventoryCheckDialog({
     const timer = setTimeout(async () => {
       const supabase = getClient();
       const ctx = await getCurrentContext();
-      // CEO 29/05/2026: KHÔNG hiện SKU (has_bom=true) — SKU không giữ tồn,
-      // kiểm kê chỉ áp dụng cho NVL / hàng giữ tồn thật. `is not true` lấy cả
-      // has_bom=false lẫn null.
-      const { data, error } = await supabase
+      // CEO 07/07/2026 (Cách B) — lọc SP kiểm kho theo VAI TRÒ + CHI NHÁNH:
+      //  • LUÔN loại món menu F&B (fnb_menu_item) — không giữ tồn ở đâu.
+      //  • Chi nhánh SẢN XUẤT (Kho/Xưởng): loại thêm has_bom (tồn nằm ở NVL) →
+      //    chỉ đếm NVL / hàng giữ tồn trực tiếp (giữ hành vi cũ 29/05).
+      //  • QUÁN (outlet): GIỮ SKU Retail has_bom (thành phần giữ tồn thật tại
+      //    quán) → cho đếm sữa lon / ly / cà phê rang xay.
+      // inventory_role/cascade_mode chưa có trong generated types → cast any.
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      let q: any = (supabase as any)
         .from("products")
         .select("id, code, name, unit, cost_price")
         .eq("tenant_id", ctx.tenantId)
         .eq("is_active", true)
-        .not("has_bom", "is", true)
+        .neq("inventory_role", "fnb_menu_item");
+      if (branchCascadeMode !== "outlet") {
+        // production hoặc chưa xác định → an toàn: loại SKU cascade (tồn ở NVL).
+        q = q.not("has_bom", "is", true);
+      }
+      q = q
         .or(`code.ilike.%${term}%,name.ilike.%${term}%,barcode.ilike.%${term}%`)
         .limit(10);
+      const { data, error } = await q;
 
       if (!error) setFilteredProducts((data ?? []) as ProductRow[]);
     }, 250);
 
     return () => clearTimeout(timer);
-  }, [productSearch]);
+  }, [productSearch, branchCascadeMode]);
 
   async function addProduct(product: ProductRow) {
     if (checkItems.some((item) => item.productId === product.id)) {

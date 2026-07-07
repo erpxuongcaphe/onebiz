@@ -231,54 +231,40 @@ export async function createInternalSale(
   // Day 20/05/2026 (CEO audit Fix #4): Validate channel consistency.
   // VD: SKU channel='retail' chuyển sang Quán FnB (branchType='store') →
   // sản phẩm sẽ treo ở quán (Quán không bán SP retail). Cảnh báo trước.
+  // CEO 07/07/2026 — CHỐT MÔ HÌNH (Cách B, khớp thiết kế 00123): Quán FnB nhận
+  // SKU Retail làm HÀNG THÀNH PHẦN (sữa lon, cà phê rang xay, syrup, ly...) qua
+  // bán nội bộ — đây là LUỒNG CHÍNH THỨC. Rule cũ chặn "SKU retail → store" là
+  // tàn dư thiết kế trước Sprint 3 → GỠ.
+  // Chặn ĐÚNG duy nhất: MÓN MENU F&B (mọi mã sku + channel='fnb', KHÔNG suy từ
+  // has_bom — khớp inventory_role='fnb_menu_item'). Món chưa gắn công thức vẫn là
+  // menu, KHÔNG giữ tồn → không có gì để chuyển đi.
   const itemProductIds = input.items.map((it) => it.productId);
   if (itemProductIds.length > 0) {
     const { data: prods } = await supabase
       .from("products")
-      .select("id, code, name, channel, product_type")
+      .select("id, code, name, channel, product_type, has_bom")
       .eq("tenant_id", ctx.tenantId)
       .in("id", itemProductIds);
-    const { data: toBranch } = await supabase
-      .from("branches")
-      .select("branch_type, name")
-      .eq("tenant_id", ctx.tenantId)
-      .eq("id", input.toBranchId)
-      .single();
 
-    const toBranchType = (toBranch as { branch_type?: string } | null)
-      ?.branch_type;
-    // Quán FnB (store) chỉ nên nhận: NVL (null channel) hoặc SKU FnB
-    // Kho tổng (warehouse) chỉ nên nhận: SKU retail hoặc NVL
-    const conflictingSKUs: string[] = [];
+    const menuItems: string[] = [];
     for (const p of prods ?? []) {
       const pr = p as {
-        id: string;
         code: string;
         name: string;
-        channel?: string;
+        channel?: string | null;
         product_type?: string;
+        has_bom?: boolean | null;
       };
-      if (pr.product_type !== "sku") continue; // NVL bỏ qua
-      if (toBranchType === "store" && pr.channel === "retail") {
-        conflictingSKUs.push(`${pr.code} — ${pr.name}`);
-      } else if (
-        toBranchType === "warehouse" &&
-        pr.channel === "fnb"
-      ) {
-        conflictingSKUs.push(`${pr.code} — ${pr.name}`);
+      if (pr.product_type === "sku" && pr.channel === "fnb") {
+        menuItems.push(`${pr.code} — ${pr.name}`);
       }
     }
-    if (conflictingSKUs.length > 0) {
-      const branchName =
-        (toBranch as { name?: string } | null)?.name ?? "chi nhánh đích";
-      const branchTypeLabel =
-        toBranchType === "store" ? "Quán FnB" : "Kho tổng";
+    if (menuItems.length > 0) {
       throw new Error(
-        `Không thể chuyển các SKU sau sang ${branchTypeLabel} "${branchName}" vì khác kênh bán:\n` +
-          conflictingSKUs.map((s) => `  • ${s}`).join("\n") +
-          `\n\n${branchTypeLabel} chỉ bán ${
-            toBranchType === "store" ? "FnB (pha chế)" : "retail (đóng gói)"
-          }. Vui lòng bỏ các SP này khỏi phiếu.`,
+        `Không thể đưa MÓN MENU F&B vào phiếu bán nội bộ:\n` +
+          menuItems.map((s) => `  • ${s}`).join("\n") +
+          `\n\nMón menu bán theo công thức, không giữ tồn kho — không có hàng để chuyển. ` +
+          `Hãy chuyển các HÀNG THÀNH PHẦN (NVL hoặc SKU Retail) mà công thức món sử dụng.`,
       );
     }
   }
