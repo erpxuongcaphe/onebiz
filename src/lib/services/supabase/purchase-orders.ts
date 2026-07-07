@@ -322,6 +322,21 @@ export async function updatePurchaseOrderStatus(
   if (!current) throw new Error("Không tìm thấy đơn nhập hàng");
 
   const fromStatus = current.status as PurchaseOrderStatus;
+
+  // D3 (CEO 07/07/2026): CHẶN lật-cờ 'partial'/'completed' → 'cancelled'. Đơn đã
+  // nhận hàng (một phần/toàn bộ) có TỒN THẬT + công nợ NCC; huỷ suông sẽ để lại
+  // TỒN MA + công nợ mồ côi. Phải "Hoàn nhập" (revert_received_purchase_order_atomic)
+  // để đảo tồn kho + công nợ. Chốt tập trung → mọi đường gọi (huỷ đơn lẻ + huỷ
+  // hàng loạt ở nhap-hang) đều an toàn.
+  if (
+    newStatus === "cancelled" &&
+    (fromStatus === "partial" || fromStatus === "completed")
+  ) {
+    throw new Error(
+      'Đơn đã nhận hàng (một phần/toàn bộ) — không thể huỷ trực tiếp. Dùng "Hoàn nhập" để đảo tồn kho + công nợ.',
+    );
+  }
+
   if (!canTransitionPurchaseStatus(fromStatus, newStatus)) {
     throw new Error(
       `Không thể chuyển từ "${fromStatus}" sang "${newStatus}"`

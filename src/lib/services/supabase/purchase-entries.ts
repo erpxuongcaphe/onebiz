@@ -109,13 +109,17 @@ export async function cancelPurchaseOrderEntry(id: string, reason?: string): Pro
     })
     .eq("tenant_id", tenantId)
     .eq("id", id)
+    // D3 (CEO 07/07/2026): CHỈ cho huỷ-lật-cờ đơn CHƯA nhận hàng (draft/ordered).
+    // Đơn 'partial'/'completed' ĐÃ nhận (một phần/toàn bộ) → có TỒN THẬT + công
+    // nợ → phải "Hoàn nhập" (revert_received_purchase_order_atomic) để đảo tồn +
+    // công nợ. Lật cờ suông sẽ để lại TỒN MA + công nợ mồ côi.
     // eslint-disable-next-line @typescript-eslint/no-explicit-any
-    .in("status", ["draft", "ordered", "partial"] as any)
+    .in("status", ["draft", "ordered"] as any)
     .select("id")
     .maybeSingle();
 
   if (error) handleError(error, "cancelPurchaseOrderEntry");
-  if (!row) throw new Error("Không thể huỷ — đơn đã hoàn thành hoặc đã huỷ trước đó");
+  if (!row) throw new Error("Không thể huỷ trực tiếp — đơn đã nhận hàng (một phần/toàn bộ) hoặc đã huỷ. Với đơn đã nhận, dùng \"Hoàn nhập\" để đảo tồn kho + công nợ.");
 }
 
 /**
