@@ -44,6 +44,8 @@ import {
 } from "@/lib/services";
 import type { SalesOrder, ShippingOrder } from "@/lib/types";
 import { ConfirmDialog } from "@/components/shared/dialogs";
+import { CreateShipmentDialog } from "@/components/shared/dialogs/create-shipment-dialog";
+import { Button } from "@/components/ui/button";
 // PERF (CEO 23/05/2026): Lazy-load CreateOrderDialog (562 dòng).
 import dynamic from "next/dynamic";
 const CreateOrderDialog = dynamic(
@@ -91,11 +93,14 @@ function OrderDetail({
   onClose,
   onEdit,
   onDelete,
+  onDataChanged,
 }: {
   order: SalesOrder;
   onClose: () => void;
   onEdit?: () => void;
   onDelete?: () => void;
+  /** Gọi khi data đơn đổi (gắn vận đơn làm tổng tiền đổi) → refetch list. */
+  onDataChanged?: () => void;
 }) {
   const status = statusMap[order.status] ?? {
     label: order.statusName,
@@ -105,8 +110,14 @@ function OrderDetail({
   // Lazy fetch line items thật (P0 audit fix — trước hardcode "SP001").
   const [items, setItems] = useState<SalesOrderItemRow[]>([]);
   const [itemsLoading, setItemsLoading] = useState(true);
-  // CEO 08/07: vận đơn gắn đơn — khối "Giao hàng" trong chi tiết.
+  // CEO 08/07: vận đơn gắn đơn — khối "Giao hàng" + nút "Tạo vận đơn" khi chưa có.
   const [shipment, setShipment] = useState<ShippingOrder | null>(null);
+  const [shipDialogOpen, setShipDialogOpen] = useState(false);
+  const loadShipment = useCallback(() => {
+    getShippingOrderByInvoice(order.id)
+      .then(setShipment)
+      .catch(() => setShipment(null));
+  }, [order.id]);
   useEffect(() => {
     let cancelled = false;
     setItemsLoading(true);
@@ -114,11 +125,9 @@ function OrderDetail({
       .then((rows) => { if (!cancelled) setItems(rows); })
       .catch(() => { if (!cancelled) setItems([]); })
       .finally(() => { if (!cancelled) setItemsLoading(false); });
-    getShippingOrderByInvoice(order.id)
-      .then((s) => { if (!cancelled) setShipment(s); })
-      .catch(() => { if (!cancelled) setShipment(null); });
+    loadShipment();
     return () => { cancelled = true; };
-  }, [order.id]);
+  }, [order.id, loadShipment]);
 
   const subtotal = items.reduce((s, it) => s + it.unitPrice * it.quantity, 0);
   const itemDiscountSum = items.reduce((s, it) => s + it.discount, 0);
@@ -177,7 +186,7 @@ function OrderDetail({
                 />
 
                 {/* CEO 08/07: khối Giao hàng — vận đơn gắn đơn (như KiotViet) */}
-                {shipment && (
+                {shipment ? (
                   <div className="rounded-lg border bg-muted/20 p-3">
                     <div className="mb-2 flex items-center gap-2 text-sm font-semibold">
                       <Icon name="local_shipping" size={16} />
@@ -203,7 +212,33 @@ function OrderDetail({
                       </div>
                     </div>
                   </div>
-                )}
+                ) : order.status !== "cancelled" ? (
+                  <div>
+                    <Button
+                      variant="outline"
+                      size="sm"
+                      onClick={() => setShipDialogOpen(true)}
+                    >
+                      <Icon name="local_shipping" size={16} className="mr-1" />
+                      Tạo vận đơn
+                    </Button>
+                  </div>
+                ) : null}
+
+                <CreateShipmentDialog
+                  open={shipDialogOpen}
+                  onOpenChange={setShipDialogOpen}
+                  invoiceId={order.id}
+                  invoiceCode={order.code}
+                  defaultReceiverName={order.customerName}
+                  defaultReceiverPhone={order.customerPhone}
+                  currentTotal={order.totalAmount}
+                  currentFee={order.shippingFee ?? 0}
+                  onSuccess={() => {
+                    loadShipment();
+                    onDataChanged?.();
+                  }}
+                />
 
                 {itemsLoading ? (
                   <div className="text-sm text-muted-foreground py-4 text-center">
@@ -726,6 +761,7 @@ export default function DatHangPage() {
           <OrderDetail
             order={order}
             onClose={onClose}
+            onDataChanged={fetchData}
             onDelete={
               order.status !== "completed" && order.status !== "cancelled"
                 ? () => setCancellingItem(order)

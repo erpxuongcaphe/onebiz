@@ -32,6 +32,7 @@ import {
 } from "@/components/shared/inline-detail-panel";
 import { PaymentHistoryTab } from "@/components/shared/payment-history-tab";
 import { ConfirmDialog } from "@/components/shared/dialogs";
+import { CreateShipmentDialog } from "@/components/shared/dialogs/create-shipment-dialog";
 // PERF (CEO 23/05/2026): Lazy-load 2 dialog nặng — chỉ load khi user click
 // "Sửa" / "Ghi nhận thanh toán". Save ~300KB initial.
 // CEO 29/05/2026: "Tạo mới" hóa đơn nay vào thẳng POS Retail (bỏ popup tạo tay).
@@ -102,12 +103,15 @@ function InvoiceDetail({
   onEdit,
   onDelete,
   deleteLabel = "Hủy",
+  onDataChanged,
 }: {
   invoice: Invoice;
   onClose: () => void;
   onEdit?: () => void;
   onDelete?: () => void;
   deleteLabel?: string;
+  /** Gọi khi data hóa đơn đổi (vd gắn vận đơn làm tổng tiền đổi) → refetch list. */
+  onDataChanged?: () => void;
 }) {
   const status = statusMap[invoice.status];
   const { toast } = useToast();
@@ -115,15 +119,18 @@ function InvoiceDetail({
   // Lazy fetch line items thay vì hardcode "Sản phẩm mẫu" (P0 audit fix).
   const [items, setItems] = useState<InvoiceItemRow[]>([]);
   const [itemsLoading, setItemsLoading] = useState(true);
-  // CEO 08/07: vận đơn gắn hóa đơn — khối "Giao hàng" trong chi tiết.
+  // CEO 08/07: vận đơn gắn hóa đơn — khối "Giao hàng" trong chi tiết + nút
+  // "Tạo vận đơn" cho đơn CHƯA có (kể cả completed cũ, như KiotViet).
   const [shipment, setShipment] = useState<ShippingOrder | null>(null);
-  useEffect(() => {
-    let cancelled = false;
+  const [shipDialogOpen, setShipDialogOpen] = useState(false);
+  const loadShipment = useCallback(() => {
     getShippingOrderByInvoice(invoice.id)
-      .then((s) => { if (!cancelled) setShipment(s); })
-      .catch(() => { if (!cancelled) setShipment(null); });
-    return () => { cancelled = true; };
+      .then(setShipment)
+      .catch(() => setShipment(null));
   }, [invoice.id]);
+  useEffect(() => {
+    loadShipment();
+  }, [loadShipment]);
   useEffect(() => {
     let cancelled = false;
     setItemsLoading(true);
@@ -204,7 +211,7 @@ function InvoiceDetail({
                 />
 
                 {/* CEO 08/07: khối Giao hàng — vận đơn gắn hóa đơn */}
-                {shipment && (
+                {shipment ? (
                   <div className="rounded-lg border bg-muted/20 p-3">
                     <div className="mb-2 flex items-center gap-2 text-sm font-semibold">
                       <Icon name="local_shipping" size={16} />
@@ -230,7 +237,33 @@ function InvoiceDetail({
                       </div>
                     </div>
                   </div>
-                )}
+                ) : invoice.status !== "cancelled" ? (
+                  <div>
+                    <Button
+                      variant="outline"
+                      size="sm"
+                      onClick={() => setShipDialogOpen(true)}
+                    >
+                      <Icon name="local_shipping" size={16} className="mr-1" />
+                      Tạo vận đơn
+                    </Button>
+                  </div>
+                ) : null}
+
+                <CreateShipmentDialog
+                  open={shipDialogOpen}
+                  onOpenChange={setShipDialogOpen}
+                  invoiceId={invoice.id}
+                  invoiceCode={invoice.code}
+                  defaultReceiverName={invoice.customerName}
+                  defaultReceiverPhone={invoice.customerPhone}
+                  currentTotal={invoice.totalAmount}
+                  currentFee={invoice.shippingFee}
+                  onSuccess={() => {
+                    loadShipment();
+                    onDataChanged?.();
+                  }}
+                />
 
                 {itemsLoading ? (
                   <div className="text-sm text-muted-foreground py-4 text-center">
@@ -1011,6 +1044,7 @@ export default function HoaDonPage() {
             <InvoiceDetail
               invoice={invoice}
               onClose={onClose}
+              onDataChanged={fetchData}
               onEdit={
                 // CEO 05/06/2026: bỏ EditInvoiceDialog (sửa được mỗi tên KH
                 // + giảm giá là vô nghĩa). Nút Sửa giờ mở thẳng POS Retail

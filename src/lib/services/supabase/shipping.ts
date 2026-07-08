@@ -109,6 +109,145 @@ export async function getShippingOrderByInvoice(
   return data ? mapShippingOrder(data) : null;
 }
 
+// --- Tạo vận đơn cho hóa đơn có sẵn (CEO 08/07 — như KiotViet) ---
+
+export interface CreateShipmentInput {
+  invoiceId: string;
+  fee: number; // phí giao hàng thu khách
+  receiverName: string;
+  receiverPhone: string;
+  receiverAddress: string;
+  partnerId?: string | null;
+  note?: string | null;
+}
+
+/**
+ * Gắn VẬN ĐƠN vào hóa đơn/đơn đặt hàng CÓ SẴN (kể cả completed — đơn cũ tạo
+ * trước khi có tính năng phí giao). Cập nhật đủ sổ:
+ *   - invoices: delivery_fee = fee, total += diff, debt += diff
+ *     (diff = fee − delivery_fee cũ; total ĐÃ gồm phí theo quy ước FnB RPC)
+ *   - customers.debt += diff CHỈ khi hóa đơn 'completed' (đơn nháp chưa cộng
+ *     nợ KH — verify DB 08/07: draft debt KH = 0, completed mới cộng)
+ *   - shipping_orders: mã VD (next_code), cod = total mới − paid
+ * Chặn: hóa đơn cancelled, hoặc đã có vận đơn chưa hủy (1 đơn 1 vận đơn).
+ */
+export async function createShipmentForInvoice(
+  input: CreateShipmentInput,
+): Promise<ShippingOrder> {
+  const supabase = getClient();
+  const ctx = await getCurrentContext();
+  const fee = Math.max(0, Number(input.fee) || 0);
+  if (!input.receiverName.trim() || !input.receiverPhone.trim() || !input.receiverAddress.trim()) {
+    throw new Error("Cần đủ người nhận + SĐT + địa chỉ giao hàng");
+  }
+
+  // 1. Load hóa đơn
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  const { data: inv, error: invErr } = await (supabase as any)
+    .from("invoices")
+    .select("id, code, status, delivery_fee, total, paid, debt, customer_id")
+    .eq("tenant_id", ctx.tenantId)
+    .eq("id", input.invoiceId)
+    .single();
+  if (invErr) handleError(invErr, "createShipmentForInvoice.load");
+  if (!inv) throw new Error("Không tìm thấy hóa đơn");
+  if (inv.status === "cancelled") {
+    throw new Error("Hóa đơn đã hủy — không thể tạo vận đơn");
+  }
+
+  // 2. Chặn vận đơn trùng (còn hiệu lực)
+  const { data: existing } = await supabase
+    .from("shipping_orders")
+    .select("id, code, status")
+    .eq("tenant_id", ctx.tenantId)
+    .eq("invoice_id", input.invoiceId)
+    .not("status", "in", "(cancelled,returned)")
+    .limit(1)
+    .maybeSingle();
+  if (existing) {
+    throw new Error(`Đơn này đã có vận đơn ${existing.code} — hủy vận đơn cũ trước khi tạo mới`);
+  }
+
+  // 3. Cập nhật tiền hóa đơn (diff phí giao)
+  const oldFee = Number(inv.delivery_fee ?? 0);
+  const diff = fee - oldFee;
+  const newTotal = Number(inv.total ?? 0) + diff;
+  const newDebt = Number(inv.debt ?? 0) + diff;
+  if (diff !== 0) {
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    const { error: updErr } = await (supabase as any)
+      .from("invoices")
+      .update({ delivery_fee: fee, total: newTotal, debt: newDebt })
+      .eq("tenant_id", ctx.tenantId)
+      .eq("id", input.invoiceId);
+    if (updErr) handleError(updErr, "createShipmentForInvoice.updateInvoice");
+
+    // Nợ KH: chỉ hóa đơn completed mới đã cộng vào customers.debt
+    if (inv.status === "completed" && inv.customer_id) {
+      const { data: kh } = await supabase
+        .from("customers")
+        .select("debt")
+        .eq("tenant_id", ctx.tenantId)
+        .eq("id", inv.customer_id)
+        .single();
+      if (kh) {
+        // eslint-disable-next-line @typescript-eslint/no-explicit-any
+        const { error: khErr } = await (supabase as any)
+          .from("customers")
+          .update({ debt: Number(kh.debt ?? 0) + diff })
+          .eq("tenant_id", ctx.tenantId)
+          .eq("id", inv.customer_id);
+        if (khErr) handleError(khErr, "createShipmentForInvoice.updateCustomerDebt");
+      }
+    }
+  }
+
+  // 4. Sinh mã + tạo vận đơn (COD = số còn phải thu)
+  const { data: shipCode, error: codeErr } = await supabase.rpc("next_code", {
+    p_tenant_id: ctx.tenantId,
+    p_entity_type: "shipping_order",
+  });
+  if (codeErr) handleError(codeErr, "createShipmentForInvoice.code");
+
+  const { data: created, error: shipErr } = await supabase
+    .from("shipping_orders")
+    .insert({
+      tenant_id: ctx.tenantId,
+      invoice_id: input.invoiceId,
+      partner_id: input.partnerId || null,
+      code: (shipCode as string) ?? `VD${Math.floor(performance.now())}`,
+      status: "pending" as const,
+      shipping_fee: fee,
+      cod_amount: Math.max(0, newTotal - Number(inv.paid ?? 0)),
+      receiver_name: input.receiverName.trim(),
+      receiver_phone: input.receiverPhone.trim(),
+      receiver_address: input.receiverAddress.trim(),
+      note: input.note || null,
+    })
+    .select(
+      `*, invoices!shipping_orders_invoice_id_fkey(code), delivery_partners!shipping_orders_partner_id_fkey(name)`,
+    )
+    .single();
+  if (shipErr) handleError(shipErr, "createShipmentForInvoice.insert");
+
+  // 5. Audit — best-effort
+  try {
+    await supabase.from("audit_log").insert({
+      tenant_id: ctx.tenantId,
+      user_id: ctx.userId,
+      action: "attach_shipment",
+      entity_type: "invoice",
+      entity_id: input.invoiceId,
+      old_data: { delivery_fee: oldFee, total: inv.total, debt: inv.debt },
+      new_data: { delivery_fee: fee, total: newTotal, debt: newDebt, shipment: created?.code },
+    });
+  } catch (err) {
+    console.warn("createShipmentForInvoice: audit_log failed", err);
+  }
+
+  return mapShippingOrder(created);
+}
+
 // --- Delivery Partners ---
 
 export async function getDeliveryPartners(params: QueryParams): Promise<QueryResult<DeliveryPartner>> {
