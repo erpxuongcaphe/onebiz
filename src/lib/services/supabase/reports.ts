@@ -10,7 +10,12 @@ import { formatNumber } from "@/lib/format";
 
 export interface ProfitAndLoss {
   period: string;
+  /** Tổng doanh thu = hàng hóa + phí giao hàng thu hộ (SUM(invoices.total)). GIỮ nguyên nghĩa cũ. */
   revenue: number;
+  /** Doanh thu hàng hóa = revenue − deliveryFee (đã tách phí giao hàng). */
+  goodsRevenue: number;
+  /** Phí giao hàng thu hộ = SUM(invoices.delivery_fee) hóa đơn completed. */
+  deliveryFee: number;
   cogs: number;
   grossProfit: number;
   grossMargin: number;
@@ -111,14 +116,14 @@ export async function getProfitAndLoss(branchId?: string): Promise<{
   const [thisInv, prevInv, thisCash, prevCash] = await Promise.all([
     branchFilter(supabase
       .from("invoices")
-      .select("id, total")
+      .select("id, total, delivery_fee")
       .eq("tenant_id", tenantId)
       .eq("status", "completed")
       .gte("created_at", thisMonth.start)
       .lt("created_at", thisMonth.end)),
     branchFilter(supabase
       .from("invoices")
-      .select("id, total")
+      .select("id, total, delivery_fee")
       .eq("tenant_id", tenantId)
       .eq("status", "completed")
       .gte("created_at", prevMonth.start)
@@ -170,6 +175,16 @@ export async function getProfitAndLoss(branchId?: string): Promise<{
     0
   );
 
+  // Phí giao hàng thu hộ = SUM(delivery_fee) — tách khỏi doanh thu hàng hóa.
+  const thisDeliveryFee = (thisInv.data ?? []).reduce(
+    (s: number, i: any) => s + ((i.delivery_fee as number) ?? 0),
+    0
+  );
+  const prevDeliveryFee = (prevInv.data ?? []).reduce(
+    (s: number, i: any) => s + ((i.delivery_fee as number) ?? 0),
+    0
+  );
+
   // Calculate COGS = SUM(qty * cost_price) for completed invoices
   const calcCOGS = (
     items: Record<string, unknown>[],
@@ -218,8 +233,8 @@ export async function getProfitAndLoss(branchId?: string): Promise<{
   const prevMonthLabel = `T${now.getMonth() === 0 ? 12 : now.getMonth()}/${now.getMonth() === 0 ? now.getFullYear() - 1 : now.getFullYear()}`;
 
   return {
-    current: buildPnL(currentMonth, thisRevenue, thisCOGS, thisOpEx),
-    previous: buildPnL(prevMonthLabel, prevRevenue, prevCOGS, prevOpEx),
+    current: buildPnL(currentMonth, thisRevenue, thisCOGS, thisOpEx, thisDeliveryFee),
+    previous: buildPnL(prevMonthLabel, prevRevenue, prevCOGS, prevOpEx, prevDeliveryFee),
   };
 }
 
@@ -227,13 +242,17 @@ function buildPnL(
   period: string,
   revenue: number,
   cogs: number,
-  opEx: number
+  opEx: number,
+  deliveryFee: number = 0
 ): ProfitAndLoss {
   const grossProfit = revenue - cogs;
   const netProfit = grossProfit - opEx;
   return {
     period,
     revenue,
+    // Phí giao hàng thu hộ tách khỏi doanh thu hàng hóa; total (revenue) GIỮ gồm phí giao.
+    goodsRevenue: revenue - deliveryFee,
+    deliveryFee,
     cogs,
     grossProfit,
     grossMargin: revenue > 0 ? Math.round((grossProfit / revenue) * 1000) / 10 : 0,
@@ -812,13 +831,13 @@ export async function getConsolidatedPnL(): Promise<{
   // Phase 1: Fetch invoices (all + internal) + cash in parallel
   const [thisInv, prevInv, thisInternal, prevInternal, thisCash, prevCash] =
     await Promise.all([
-      supabase.from("invoices").select("id, total, source").eq("tenant_id", tenantId).eq("status", "completed")
+      supabase.from("invoices").select("id, total, delivery_fee, source").eq("tenant_id", tenantId).eq("status", "completed")
         .gte("created_at", thisMonth.start).lt("created_at", thisMonth.end),
-      supabase.from("invoices").select("id, total, source").eq("tenant_id", tenantId).eq("status", "completed")
+      supabase.from("invoices").select("id, total, delivery_fee, source").eq("tenant_id", tenantId).eq("status", "completed")
         .gte("created_at", prevMonth.start).lt("created_at", prevMonth.end),
-      supabase.from("invoices").select("id, total").eq("tenant_id", tenantId).eq("status", "completed").eq("source", "internal")
+      supabase.from("invoices").select("id, total, delivery_fee").eq("tenant_id", tenantId).eq("status", "completed").eq("source", "internal")
         .gte("created_at", thisMonth.start).lt("created_at", thisMonth.end),
-      supabase.from("invoices").select("id, total").eq("tenant_id", tenantId).eq("status", "completed").eq("source", "internal")
+      supabase.from("invoices").select("id, total, delivery_fee").eq("tenant_id", tenantId).eq("status", "completed").eq("source", "internal")
         .gte("created_at", prevMonth.start).lt("created_at", prevMonth.end),
       supabase.from("cash_transactions").select("category, amount").eq("tenant_id", tenantId).eq("type", "payment")
         .gte("created_at", thisMonth.start).lt("created_at", thisMonth.end),
@@ -850,6 +869,14 @@ export async function getConsolidatedPnL(): Promise<{
   const internalRevThis = (thisInternal.data ?? []).reduce((s: number, i: any) => s + Number(i.total ?? 0), 0);
   const internalRevPrev = (prevInternal.data ?? []).reduce((s: number, i: any) => s + Number(i.total ?? 0), 0);
 
+  // Phí giao hàng thu hộ (loại trừ nội bộ như doanh thu) = ship ngoài − ship nội bộ.
+  const deliveryThis =
+    (thisInv.data ?? []).reduce((s: number, i: any) => s + Number(i.delivery_fee ?? 0), 0) -
+    (thisInternal.data ?? []).reduce((s: number, i: any) => s + Number(i.delivery_fee ?? 0), 0);
+  const deliveryPrev =
+    (prevInv.data ?? []).reduce((s: number, i: any) => s + Number(i.delivery_fee ?? 0), 0) -
+    (prevInternal.data ?? []).reduce((s: number, i: any) => s + Number(i.delivery_fee ?? 0), 0);
+
   // Calculate COGS excluding internal invoices (intercompany COGS elimination)
   const calcConsolidatedCOGS = (items: Record<string, unknown>[], internalIds: Set<string>): number =>
     items.reduce((sum, item) => {
@@ -877,11 +904,11 @@ export async function getConsolidatedPnL(): Promise<{
 
   return {
     current: {
-      ...buildPnL(currentMonth, totalRevThis - internalRevThis, thisCOGS, thisOpEx),
+      ...buildPnL(currentMonth, totalRevThis - internalRevThis, thisCOGS, thisOpEx, deliveryThis),
       internalRevenue: internalRevThis,
     },
     previous: {
-      ...buildPnL(prevMonthLabel, totalRevPrev - internalRevPrev, prevCOGS, prevOpEx),
+      ...buildPnL(prevMonthLabel, totalRevPrev - internalRevPrev, prevCOGS, prevOpEx, deliveryPrev),
       internalRevenue: internalRevPrev,
     },
   };

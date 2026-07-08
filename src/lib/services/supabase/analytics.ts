@@ -389,6 +389,10 @@ export async function getSalesKpis(
   range?: { from: string; to: string },
 ): Promise<{
   netRevenue: number; prevNetRevenue: number;
+  /** Doanh thu hàng hóa = netRevenue − deliveryFee (đã tách phí giao hàng). */
+  goodsRevenue: number; prevGoodsRevenue: number;
+  /** Phí giao hàng thu hộ = SUM(invoices.delivery_fee) hóa đơn completed. */
+  deliveryFee: number; prevDeliveryFee: number;
   soldQty: number; prevSoldQty: number;
   avgOrderValue: number; prevAvgOrderValue: number;
   returnRate: number; prevReturnRate: number;
@@ -407,8 +411,8 @@ export async function getSalesKpis(
   function bqJoin<T>(query: T): T { return branchId ? (query as any).eq("invoices.branch_id", branchId) : query; }
 
   const [thisInv, prevInv, thisItems, prevItems, thisReturns, prevReturns] = await Promise.all([
-    bq(supabase.from("invoices").select("total, status").eq("tenant_id", tenantId).gte("created_at", current.start).lt("created_at", current.end)),
-    bq(supabase.from("invoices").select("total, status").eq("tenant_id", tenantId).gte("created_at", prev.start).lt("created_at", prev.end)),
+    bq(supabase.from("invoices").select("total, delivery_fee, status").eq("tenant_id", tenantId).gte("created_at", current.start).lt("created_at", current.end)),
+    bq(supabase.from("invoices").select("total, delivery_fee, status").eq("tenant_id", tenantId).gte("created_at", prev.start).lt("created_at", prev.end)),
     bqJoin(supabase.from("invoice_items").select("quantity, invoices!inner(created_at, status, branch_id, tenant_id)").eq("invoices.tenant_id", tenantId).gte("invoices.created_at", current.start).lt("invoices.created_at", current.end).eq("invoices.status", "completed")),
     bqJoin(supabase.from("invoice_items").select("quantity, invoices!inner(created_at, status, branch_id, tenant_id)").eq("invoices.tenant_id", tenantId).gte("invoices.created_at", prev.start).lt("invoices.created_at", prev.end).eq("invoices.status", "completed")),
     bq(supabase.from("sales_returns").select("id", { count: "exact", head: true }).eq("tenant_id", tenantId).gte("created_at", current.start).lt("created_at", current.end)),
@@ -416,16 +420,22 @@ export async function getSalesKpis(
   ]);
 
   const calcRev = (d: { total: number; status: string }[] | null) => (d ?? []).filter(i => i.status === "completed").reduce((s, i) => s + (i.total ?? 0), 0);
+  // Phí giao hàng thu hộ = SUM(delivery_fee) hóa đơn completed; hàng hóa = rev − ship.
+  const calcDelivery = (d: { delivery_fee?: number; status: string }[] | null) => (d ?? []).filter(i => i.status === "completed").reduce((s, i) => s + ((i.delivery_fee as number) ?? 0), 0);
   const calcCount = (d: { status: string }[] | null) => (d ?? []).filter(i => i.status === "completed").length;
   const calcQty = (d: { quantity: number }[] | null) => (d ?? []).reduce((s, i) => s + ((i.quantity as number) ?? 0), 0);
 
   const thisRev = calcRev(thisInv.data);
   const prevRev = calcRev(prevInv.data);
+  const thisDelivery = calcDelivery(thisInv.data);
+  const prevDelivery = calcDelivery(prevInv.data);
   const thisCount = calcCount(thisInv.data);
   const prevCount = calcCount(prevInv.data);
 
   return {
     netRevenue: thisRev, prevNetRevenue: prevRev,
+    goodsRevenue: thisRev - thisDelivery, prevGoodsRevenue: prevRev - prevDelivery,
+    deliveryFee: thisDelivery, prevDeliveryFee: prevDelivery,
     soldQty: calcQty(thisItems.data), prevSoldQty: calcQty(prevItems.data),
     avgOrderValue: thisCount > 0 ? Math.round(thisRev / thisCount) : 0,
     prevAvgOrderValue: prevCount > 0 ? Math.round(prevRev / prevCount) : 0,

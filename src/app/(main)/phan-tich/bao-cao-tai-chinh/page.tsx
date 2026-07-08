@@ -247,7 +247,9 @@ export default function BaoCaoTaiChinhPage() {
               { label: prev.period, key: "previous", width: 18, format: "currency" },
             ],
             rows: [
-              { label: "Doanh thu", current: cur.revenue, previous: prev.revenue },
+              { label: "Doanh thu hàng hóa", current: cur.goodsRevenue, previous: prev.goodsRevenue },
+              { label: "Phí giao hàng thu hộ", current: cur.deliveryFee, previous: prev.deliveryFee },
+              { label: "= Tổng doanh thu", current: cur.revenue, previous: prev.revenue },
               { label: "(-) Giá vốn hàng bán (COGS)", current: cur.cogs, previous: prev.cogs },
               { label: "= Lãi gộp", current: cur.grossProfit, previous: prev.grossProfit },
               { label: "   Biên LN gộp (%)", current: cur.grossMargin, previous: prev.grossMargin },
@@ -291,7 +293,9 @@ export default function BaoCaoTaiChinhPage() {
 
       // Sheet 1: P&L summary
       const pnlRows = [
-        { "Khoản mục": "Doanh thu", [cur.period]: cur.revenue, [prev.period]: prev.revenue },
+        { "Khoản mục": "Doanh thu hàng hóa", [cur.period]: cur.goodsRevenue, [prev.period]: prev.goodsRevenue },
+        { "Khoản mục": "Phí giao hàng thu hộ", [cur.period]: cur.deliveryFee, [prev.period]: prev.deliveryFee },
+        { "Khoản mục": "= Tổng doanh thu", [cur.period]: cur.revenue, [prev.period]: prev.revenue },
         { "Khoản mục": "(-) Giá vốn hàng bán (COGS)", [cur.period]: cur.cogs, [prev.period]: prev.cogs },
         { "Khoản mục": "= Lãi gộp", [cur.period]: cur.grossProfit, [prev.period]: prev.grossProfit },
         { "Khoản mục": "   Biên LN gộp (%)", [cur.period]: cur.grossMargin, [prev.period]: prev.grossMargin },
@@ -712,7 +716,17 @@ export default function BaoCaoTaiChinhPage() {
               <tbody>
                 {[
                   {
-                    label: "Doanh thu",
+                    label: "Doanh thu hàng hóa",
+                    cur: cur?.goodsRevenue ?? 0,
+                    prev: prev?.goodsRevenue ?? 0,
+                  },
+                  {
+                    label: "Phí giao hàng thu hộ",
+                    cur: cur?.deliveryFee ?? 0,
+                    prev: prev?.deliveryFee ?? 0,
+                  },
+                  {
+                    label: "= Tổng doanh thu",
                     cur: cur?.revenue ?? 0,
                     prev: prev?.revenue ?? 0,
                     bold: true,

@@ -1,5 +1,6 @@
 "use client";
 
+import type { ReactNode } from "react";
 import { cn } from "@/lib/utils";
 import { Icon as MSIcon } from "@/components/ui/icon";
 
@@ -13,6 +14,11 @@ interface KpiCardProps {
   bg: string;
   iconColor: string;
   valueColor: string;
+  /**
+   * Dòng phụ tùy chọn hiển thị ngay dưới value (vd tách "Hàng hóa · Phí giao").
+   * Optional để 100% backward-compat với mọi call site cũ.
+   */
+  subValue?: ReactNode;
 }
 
 /**
@@ -33,6 +39,7 @@ export function KpiCard({
   bg,
   iconColor,
   valueColor,
+  subValue,
 }: KpiCardProps) {
   return (
     <div className="bg-surface-container-lowest rounded-xl ambient-shadow p-4 lg:p-5">
@@ -49,6 +56,9 @@ export function KpiCard({
           >
             {value}
           </p>
+          {subValue && (
+            <div className="mt-1 text-[11px] text-muted-foreground">{subValue}</div>
+          )}
           {change && (
             <span
               className={cn(

@@ -139,6 +139,10 @@ function HourlyTooltip({
 interface SalesKpisData {
   netRevenue: number;
   prevNetRevenue: number;
+  goodsRevenue: number;
+  prevGoodsRevenue: number;
+  deliveryFee: number;
+  prevDeliveryFee: number;
   soldQty: number;
   prevSoldQty: number;
   avgOrderValue: number;
@@ -226,7 +230,9 @@ export default function BanHangPage() {
             { label: "Kỳ trước", key: "previous", width: 18, format: "currency" },
           ],
           rows: [
-            { label: "Doanh thu thuần", current: kpis.netRevenue, previous: kpis.prevNetRevenue },
+            { label: "Doanh thu hàng hóa", current: kpis.goodsRevenue, previous: kpis.prevGoodsRevenue },
+            { label: "Phí giao hàng thu hộ", current: kpis.deliveryFee, previous: kpis.prevDeliveryFee },
+            { label: "Tổng thu (gồm phí giao)", current: kpis.netRevenue, previous: kpis.prevNetRevenue },
             { label: "Số lượng bán", current: kpis.soldQty, previous: kpis.prevSoldQty },
             { label: "Giá trị trung bình mỗi đơn", current: kpis.avgOrderValue, previous: kpis.prevAvgOrderValue },
             { label: "Tỷ lệ trả hàng (%)", current: kpis.returnRate, previous: kpis.prevReturnRate },
@@ -260,7 +266,9 @@ export default function BanHangPage() {
             { label: "Kỳ trước", key: "previous", width: 18, format: "currency" },
           ],
           rows: [
-            { label: "Doanh thu thuần", current: kpis.netRevenue, previous: kpis.prevNetRevenue },
+            { label: "Doanh thu hàng hóa", current: kpis.goodsRevenue, previous: kpis.prevGoodsRevenue },
+            { label: "Phí giao hàng thu hộ", current: kpis.deliveryFee, previous: kpis.prevDeliveryFee },
+            { label: "Tổng thu (gồm phí giao)", current: kpis.netRevenue, previous: kpis.prevNetRevenue },
             { label: "Số lượng bán", current: kpis.soldQty, previous: kpis.prevSoldQty },
             { label: "Giá trị trung bình mỗi đơn", current: kpis.avgOrderValue, previous: kpis.prevAvgOrderValue },
             { label: "Tỷ lệ trả hàng (%)", current: kpis.returnRate, previous: kpis.prevReturnRate },
@@ -363,7 +371,7 @@ export default function BanHangPage() {
   }
 
   const revenueChange = kpis
-    ? calcChangePct(kpis.netRevenue, kpis.prevNetRevenue)
+    ? calcChangePct(kpis.goodsRevenue, kpis.prevGoodsRevenue)
     : { text: "0%", positive: true };
   const qtyChange = kpis
     ? calcChangePct(kpis.soldQty, kpis.prevSoldQty)
@@ -394,14 +402,23 @@ export default function BanHangPage() {
         {/* KPI Cards */}
         <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-3">
           <KpiCard
-            label="Doanh thu thuần"
-            value={formatCurrency(kpis?.netRevenue ?? 0) + "đ"}
+            label="Doanh thu hàng hóa"
+            value={formatCurrency(kpis?.goodsRevenue ?? 0) + "đ"}
             change={`${revenueChange.text} so với tháng trước`}
             positive={revenueChange.positive}
             icon="trending_up"
             bg="bg-primary-fixed"
             iconColor="text-primary"
             valueColor="text-foreground"
+            subValue={
+              // Tách phí giao hàng khỏi doanh thu hàng hóa; Tổng thu = hàng hóa + phí giao.
+              <span className="flex flex-wrap gap-x-2 gap-y-0.5">
+                <span>Tổng thu {formatCurrency(kpis?.netRevenue ?? 0)}đ</span>
+                {(kpis?.deliveryFee ?? 0) > 0 && (
+                  <span>· Phí giao {formatCurrency(kpis?.deliveryFee ?? 0)}đ</span>
+                )}
+              </span>
+            }
           />
           <KpiCard
             label="Số lượng bán"

@@ -9,6 +9,13 @@ import { getClient, handleError, getCurrentTenantId } from "./base";
 
 export interface DashboardKpis {
   todayRevenue: number;
+  /**
+   * Doanh thu hàng hóa = todayRevenue − todayDeliveryFee (đã tách phí giao hàng).
+   * `todayRevenue` GIỮ nguyên = SUM(total) = hàng hóa + phí giao (để đối chiếu + tính lãi).
+   */
+  todayGoodsRevenue: number;
+  /** Phí giao hàng thu hộ = SUM(invoices.delivery_fee) hôm nay (completed). */
+  todayDeliveryFee: number;
   todayCollected: number;
   todayCash: number;
   todayTransfer: number;
@@ -100,13 +107,13 @@ export async function getDashboardKpis(branchId?: string): Promise<DashboardKpis
   const [todayInvoices, yesterdayInvoices, todayCustomers, yesterdayCustomers, todayCash, yesterdayCash] = await Promise.all([
     bq(supabase
       .from("invoices")
-      .select("total, discount_amount, status")
+      .select("total, delivery_fee, discount_amount, status")
       .eq("tenant_id", tenantId)
       .gte("created_at", today.start)
       .lt("created_at", today.end)),
     bq(supabase
       .from("invoices")
-      .select("total, discount_amount, status")
+      .select("total, delivery_fee, discount_amount, status")
       .eq("tenant_id", tenantId)
       .gte("created_at", yesterday.start)
       .lt("created_at", yesterday.end)),
@@ -142,6 +149,13 @@ export async function getDashboardKpis(branchId?: string): Promise<DashboardKpis
     (data ?? [])
       .filter((inv) => inv.status === "completed")
       .reduce((sum, inv) => sum + (inv.total ?? 0), 0);
+
+  // Phí giao hàng thu hộ = SUM(delivery_fee) hóa đơn completed.
+  // Doanh thu hàng hóa = revenue − deliveryFee (total ĐÃ gồm phí giao).
+  const calcDeliveryFee = (data: { delivery_fee?: number; status: string }[] | null) =>
+    (data ?? [])
+      .filter((inv) => inv.status === "completed")
+      .reduce((sum, inv) => sum + (inv.delivery_fee ?? 0), 0);
 
   const calcDiscounts = (data: { discount_amount?: number; status: string }[] | null) =>
     (data ?? [])
@@ -203,6 +217,7 @@ export async function getDashboardKpis(branchId?: string): Promise<DashboardKpis
   // Profit = Revenue - Expenses (real calculation from cash_transactions)
   const todayRev = calcRevenue(todayInvoices.data);
   const yesterdayRev = calcRevenue(yesterdayInvoices.data);
+  const todayDeliveryFee = calcDeliveryFee(todayInvoices.data);
   const todayExp = calcExpenses(todayCash.data);
   const yesterdayExp = calcExpenses(yesterdayCash.data);
   const todayCollection = calcSalesCollection(todayCash.data);
@@ -210,6 +225,8 @@ export async function getDashboardKpis(branchId?: string): Promise<DashboardKpis
 
   return {
     todayRevenue: todayRev,
+    todayGoodsRevenue: todayRev - todayDeliveryFee,
+    todayDeliveryFee,
     todayCollected: todayCollection.net,
     todayCash: todayCollection.cash,
     todayTransfer: todayCollection.transfer,

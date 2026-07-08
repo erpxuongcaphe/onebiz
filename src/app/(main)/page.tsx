@@ -302,6 +302,13 @@ export default function TongQuanPage() {
                     <span>Thẻ {formatChartCurrency(kpis.todayCard)}</span>
                     <span>Giảm trừ {formatChartCurrency(kpis.todayDiscounts)}</span>
                   </div>
+                  {/* Tách phí giao hàng khỏi doanh thu hàng hóa (chỉ hiện khi có ship). */}
+                  {kpis.todayDeliveryFee > 0 && (
+                    <div className="flex items-center justify-between gap-2 text-[11px] text-muted-foreground">
+                      <span>Hàng hóa {formatChartCurrency(kpis.todayGoodsRevenue)}</span>
+                      <span>Phí giao {formatChartCurrency(kpis.todayDeliveryFee)}</span>
+                    </div>
+                  )}
                 </div>
               )}
             </CardContent>
