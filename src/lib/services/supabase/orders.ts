@@ -41,12 +41,22 @@ type InvoiceItemInsert = Database["public"]["Tables"]["invoice_items"]["Insert"]
 // ============================================================
 
 const STATUS_LABEL: Record<string, string> = {
+  draft: "Chờ xử lý",
   new: "Mới",
   confirmed: "Đã xác nhận",
   delivering: "Đang giao",
   completed: "Hoàn thành",
   cancelled: "Đã hủy",
 };
+
+/** Các trạng thái invoices hợp lệ để lọc từ UI (chặn giá trị lạ). */
+const VALID_ORDER_STATUSES = new Set([
+  "draft",
+  "confirmed",
+  "delivering",
+  "completed",
+  "cancelled",
+]);
 
 export async function getOrders(
   params: QueryParams
@@ -55,10 +65,11 @@ export async function getOrders(
   const tenantId = await getCurrentTenantId();
   const { from, to } = getPaginationRange(params);
 
-  // CEO 08/07/2026: "Đơn đặt hàng" = hóa đơn NHÁP (invoices status='draft').
-  // Đúng với nút "Tạo đơn đặt hàng" (create-order-dialog ghi draft invoice).
-  // Bảng sales_orders là hệ CŨ (0 dữ liệu, không nút nào ghi vào). Hoàn tất đơn
-  // (thu tiền/xuất hàng) → status='completed' → tự chuyển sang trang Hóa đơn.
+  // CEO 08/07/2026: "Đơn đặt hàng" = hóa đơn có source='order' (marker do
+  // create-order-dialog gắn). GIỮ đơn qua MỌI trạng thái (Chờ xử lý → Hoàn
+  // thành → Đã hủy) như KiotViet — trước đây lọc status='draft' nên đơn hoàn
+  // tất rớt khỏi list. Đơn hoàn thành vẫn hiện ở CẢ trang Hóa đơn (chủ đích).
+  // Bảng sales_orders là hệ CŨ (0 dữ liệu, không nút nào ghi vào).
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
   let query = (supabase as any)
     .from("invoices")
@@ -67,7 +78,16 @@ export async function getOrders(
       { count: "exact" },
     )
     .eq("tenant_id", tenantId)
-    .eq("status", "draft");
+    .eq("source", "order");
+
+  // Lọc trạng thái (tùy chọn) — UI truyền mảng qua filters.status. Chỉ nhận
+  // giá trị hợp lệ; rỗng/không hợp lệ → không lọc (hiện tất cả trạng thái).
+  const statusFilter = params.filters?.status;
+  if (statusFilter) {
+    const statuses = (Array.isArray(statusFilter) ? statusFilter : [statusFilter])
+      .filter((s) => VALID_ORDER_STATUSES.has(s));
+    if (statuses.length > 0) query = query.in("status", statuses);
+  }
 
   // Search by mã hoặc tên khách. Escape % để tránh wildcard injection.
   if (params.search) {
@@ -109,8 +129,12 @@ export async function getOrders(
       totalAmount: row.total ?? 0,
       // Phí giao = cột delivery_fee (invoices KHÔNG có shipping_fee).
       shippingFee: Number(row.delivery_fee ?? 0),
+      // Số đã thu / còn phải thu — để thẻ "Tổng cần thu" tính đúng theo trạng
+      // thái (đơn hoàn thành đã trả → debt=0 → không cộng vào cần thu).
+      paid: Number(row.paid ?? 0),
+      debt: Number(row.debt ?? 0),
       status: row.status,
-      statusName: STATUS_LABEL[row.status] ?? "Phiếu tạm",
+      statusName: STATUS_LABEL[row.status] ?? row.status ?? "",
       createdBy: row.created_by ?? "",
       createdByName: profile?.full_name ?? "",
       branchId: row.branch_id ?? undefined,

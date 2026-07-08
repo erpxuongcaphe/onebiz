@@ -157,7 +157,11 @@ export interface SalesOrder {
    * totalAmount đã gộp ship (= tiền hàng + phí giao). undefined/0 = không có ship.
    */
   shippingFee?: number;
-  status: "new" | "confirmed" | "delivering" | "completed" | "cancelled";
+  /** Số khách đã trả (invoices.paid). Đơn hoàn thành = đã trả đủ. */
+  paid?: number;
+  /** Số còn phải thu (invoices.debt). Dùng cho thẻ "Tổng cần thu". */
+  debt?: number;
+  status: "draft" | "new" | "confirmed" | "delivering" | "completed" | "cancelled";
   statusName: string;
   createdBy: string;
   createdByName?: string;

@@ -16,6 +16,7 @@ import {
   DatePresetFilter,
   type DatePresetValue,
   SelectFilter,
+  CheckboxFilter,
 } from "@/components/shared/filter-sidebar";
 // CEO 06/06/2026 Phase 3: chuẩn hoá 11 preset thời gian
 import {
@@ -67,12 +68,20 @@ const statusMap: Record<
   string,
   { label: string; variant: "default" | "secondary" | "destructive" | "outline" }
 > = {
+  draft: { label: "Chờ xử lý", variant: "secondary" },
   new: { label: "Phiếu tạm", variant: "secondary" },
   confirmed: { label: "Đã xác nhận", variant: "default" },
   delivering: { label: "Đang giao hàng", variant: "outline" },
   completed: { label: "Hoàn thành", variant: "default" },
   cancelled: { label: "Đã hủy", variant: "destructive" },
 };
+
+// Bộ lọc trạng thái cho sidebar — chỉ 3 mốc chính người dùng quan tâm.
+const statusFilterOptions = [
+  { label: "Chờ xử lý", value: "draft" },
+  { label: "Hoàn thành", value: "completed" },
+  { label: "Đã hủy", value: "cancelled" },
+];
 
 const deliveryPartnerOptions = [
   { label: "Giao Hàng Nhanh", value: "ghn" },
@@ -353,6 +362,8 @@ export default function DatHangPage() {
 
   // Filters
   const [datePreset, setDatePreset] = useState<DatePresetValue>("this_month");
+  // CEO 08/07: lọc trạng thái — rỗng = tất cả (đơn đã giữ đủ mọi trạng thái).
+  const [selectedStatuses, setSelectedStatuses] = useState<string[]>([]);
   const [deliveryPartner, setDeliveryPartner] = useState("all");
   const [deliveryDatePreset, setDeliveryDatePreset] =
     useState<DatePresetValue>("all");
@@ -370,9 +381,10 @@ export default function DatHangPage() {
     // FIX (CEO 08/07): áp ô "Thời gian" (trước đây không lọc ngày). getOrders
     // đọc hóa đơn nháp — bỏ lọc status cũ (mọi đơn đều là nháp/chờ xử lý).
     const presetRange = computeListPresetRange(datePreset);
-    const commonFilters = {
+    const commonFilters: Record<string, string | string[]> = {
       ...(presetRange.from && { dateFrom: presetRange.from }),
       ...(presetRange.to && { dateTo: presetRange.to }),
+      ...(selectedStatuses.length > 0 && { status: selectedStatuses }),
     };
     const branchScope = viewAllBranches ? undefined : activeBranchId;
     const result = await getOrders({
@@ -401,7 +413,7 @@ export default function DatHangPage() {
       setOtherBranchCount(0);
     }
     setLoading(false);
-  }, [page, pageSize, search, searchField, datePreset, activeBranchId, viewAllBranches]);
+  }, [page, pageSize, search, searchField, datePreset, selectedStatuses, activeBranchId, viewAllBranches]);
 
   useEffect(() => {
     fetchData();
@@ -413,7 +425,7 @@ export default function DatHangPage() {
   useEffect(() => {
     setPage(0);
     setExpandedRow(null);
-  }, [search, datePreset, deliveryPartner, deliveryDatePreset, deliveryArea]);
+  }, [search, datePreset, selectedStatuses, deliveryPartner, deliveryDatePreset, deliveryArea]);
 
   const toggleStar = (id: string) => {
     setStarred((prev) => {
@@ -507,8 +519,10 @@ export default function DatHangPage() {
     {
       id: "paidAmount",
       header: "Khách đã trả",
-      cell: () => (
-        <span className="text-right block">{formatCurrency(0)}</span>
+      cell: ({ row }) => (
+        <span className="text-right block">
+          {formatCurrency(row.original.paid ?? 0)}
+        </span>
       ),
     },
     {
@@ -537,8 +551,17 @@ export default function DatHangPage() {
             />
           </FilterGroup>
 
-          {/* CEO 08/07: bỏ lọc "Trạng thái" — mọi đơn đặt hàng đều là nháp
-              (chờ xử lý) nên lọc trạng thái không còn ý nghĩa. */}
+          {/* CEO 08/07: lọc "Trạng thái" — đơn đặt hàng nay GIỮ qua mọi trạng
+              thái (Chờ xử lý → Hoàn thành → Đã hủy) nên lọc lại có ý nghĩa.
+              Rỗng = tất cả. */}
+          <FilterGroup label="Trạng thái">
+            <CheckboxFilter
+              options={statusFilterOptions}
+              selected={selectedStatuses}
+              onChange={setSelectedStatuses}
+            />
+          </FilterGroup>
+
           <FilterGroup label="Đối tác giao hàng">
             <SelectFilter
               options={deliveryPartnerOptions}
@@ -614,24 +637,30 @@ export default function DatHangPage() {
           icon={<Icon name="shopping_bag" size={16} />}
           label="Tổng tiền hàng"
           value={formatCurrency(
-            data.reduce(
-              (sum, r) => sum + ((r.totalAmount ?? 0) - (r.shippingFee ?? 0)),
-              0,
-            ),
+            data
+              .filter((r) => r.status !== "cancelled")
+              .reduce(
+                (sum, r) => sum + ((r.totalAmount ?? 0) - (r.shippingFee ?? 0)),
+                0,
+              ),
           )}
         />
         <SummaryCard
           icon={<Icon name="local_shipping" size={16} />}
           label="Tổng phí giao"
           value={formatCurrency(
-            data.reduce((sum, r) => sum + (r.shippingFee ?? 0), 0),
+            data
+              .filter((r) => r.status !== "cancelled")
+              .reduce((sum, r) => sum + (r.shippingFee ?? 0), 0),
           )}
         />
         <SummaryCard
           icon={<Icon name="payments" size={16} />}
           label="Tổng cần thu"
           value={formatCurrency(
-            data.reduce((sum, r) => sum + (r.totalAmount ?? 0), 0),
+            data
+              .filter((r) => r.status !== "cancelled")
+              .reduce((sum, r) => sum + (r.debt ?? 0), 0),
           )}
         />
       </div>

@@ -256,6 +256,13 @@ export function CreateOrderDialog({
         customer_id: selectedCustomer?.id || null,
         customer_name: selectedCustomer?.name ?? "Khách lẻ",
         status: "draft" as const,
+        // CEO 08/07: marker "đơn đặt hàng" để trang Đặt hàng giữ đơn qua MỌI
+        // trạng thái (chờ xử lý → hoàn thành → hủy) như KiotViet. getOrders đọc
+        // theo source='order' (không lọc status nữa). Cột invoices.source là text
+        // tự do (không CHECK) — báo cáo chỉ lọc 'fnb'/'internal' nên thêm 'order'
+        // an toàn. Cast vì Supabase generated types chưa liệt kê 'order'.
+        // eslint-disable-next-line @typescript-eslint/no-explicit-any
+        source: "order" as any,
         subtotal: total,
         discount_amount: 0,
         delivery_fee: shippingFee,
