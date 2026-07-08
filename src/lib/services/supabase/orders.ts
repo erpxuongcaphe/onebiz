@@ -804,6 +804,37 @@ export async function getDraftOrderById(
   };
 }
 
+/**
+ * CEO 08/07/2026 — VÁ BUG TRÙNG ĐƠN + NỢ ẢO.
+ *
+ * Đơn nháp tạo từ dialog "Đặt hàng" (Đơn đặt hàng) KHÔNG có `client_session_id`
+ * (không qua phiên POS). Khi nhân viên mở đơn đó trong POS (?draftId) để chuyển
+ * thành hóa đơn rồi SỬA → `useAutoSaveDraft` chạy `saveDraftOrder` với session
+ * POS mới → KHÔNG khớp `client_session_id` của đơn → TẠO NHÁP MỚI (mã mới) →
+ * `setLoadedDraftId` trỏ sang nháp mới → Thanh toán hoàn tất NHÁP MỚI, đơn gốc
+ * KẸT "phiếu tạm" → 2 đơn trùng + nợ ảo (đơn gốc vẫn cộng nợ KH qua trigger 00130).
+ *
+ * Fix: khi mở 1 đơn nháp CHƯA có session vào POS → GẮN session hiện tại vào đơn
+ * → auto-save UPDATE đúng đơn này, completeDraftOrder hoàn tất đúng đơn này (giữ
+ * nguyên mã). Chỉ set khi status còn 'draft' (không đụng hóa đơn đã hoàn tất).
+ */
+export async function adoptDraftSession(
+  invoiceId: string,
+  sessionId: string,
+): Promise<void> {
+  if (!invoiceId || !sessionId) return;
+  const supabase = getClient();
+  const tenantId = await getCurrentTenantId();
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  const { error } = await (supabase as any)
+    .from("invoices")
+    .update({ client_session_id: sessionId })
+    .eq("tenant_id", tenantId)
+    .eq("id", invoiceId)
+    .eq("status", "draft");
+  if (error) handleError(error, "adoptDraftSession");
+}
+
 // ============================================================
 // F10 on a draft — convert draft → completed
 // ============================================================

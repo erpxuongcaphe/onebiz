@@ -48,6 +48,7 @@ export {
   saveDraftOrder,
   listDraftOrders,
   getDraftOrderById,
+  adoptDraftSession,
   completeDraftOrder,
   findDraftIdBySession,
   deleteDraftOrder,

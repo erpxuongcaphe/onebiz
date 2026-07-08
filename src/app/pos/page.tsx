@@ -24,6 +24,7 @@ import {
   saveDraftOrder,
   listDraftOrders,
   getDraftOrderById,
+  adoptDraftSession,
   deleteDraftOrder,
   completeDraftOrder,
   findDraftIdBySession,
@@ -558,7 +559,7 @@ function PosPageInner() {
     // Priority 1: nếu URL có ?draftId → load thẳng draft đó
     if (urlDraftId) {
       getDraftOrderById(urlDraftId)
-        .then((detail) => {
+        .then(async (detail) => {
           if (cancelled || branchSnapshot !== currentBranch?.id) return;
           if (!detail) {
             toast({
@@ -568,10 +569,18 @@ function PosPageInner() {
             });
             return;
           }
-          state.loadDraft(detail);
+          // Session TRƯỚC loadDraft: dán session vào đơn TRƯỚC khi populate giỏ,
+          // để auto-save (debounce sau khi giỏ đổi) tìm ĐÚNG đơn đã dán, tránh
+          // race đẻ nháp mới. CEO 08/07 — vá bug trùng đơn + nợ ảo.
           if (detail.clientSessionId) {
             setClientSessionId(detail.clientSessionId);
+          } else {
+            // Đơn nháp KHÔNG có session (tạo từ dialog "Đặt hàng") → GẮN session
+            // POS hiện tại vào đơn → auto-save UPDATE đúng đơn, KHÔNG tạo nháp mới
+            // (mồ côi + nợ ảo + hoá đơn trùng). completeDraftOrder giữ nguyên mã.
+            await adoptDraftSession(detail.id, clientSessionId);
           }
+          state.loadDraft(detail);
           toast({
             title: `Đã mở đơn nháp ${detail.code}`,
             description: `${detail.itemCount} sản phẩm · Tổng: ${formatNumber(detail.total)}đ. Sửa lại rồi bấm Thanh toán.`,
@@ -730,21 +739,24 @@ function PosPageInner() {
           setRecoveryDrafts((prev) => prev.filter((d) => d.id !== draft.id));
           return;
         }
-        // Load state từ detail (loadDraft sẵn có nhận DraftOrderDetail)
-        state.loadDraft(detail);
-        // Adopt session_id của draft để tiếp tục auto-save vào row đó.
-        // Quan trọng: nếu đổi sessionId, useAutoSaveDraft sẽ upsert đúng
-        // row server thay vì tạo row mới.
+        // Adopt session_id TRƯỚC loadDraft: nếu đổi sessionId, useAutoSaveDraft
+        // sẽ upsert đúng row server thay vì tạo row mới. Dán session trước khi
+        // populate giỏ để tránh race auto-save đẻ nháp mới. CEO 08/07.
         if (detail.clientSessionId) {
           setClientSessionId(detail.clientSessionId);
         } else {
-          // Draft cũ pre-migration không có session_id → gán mới
+          // Draft không có session_id (pre-migration / tạo từ dialog "Đặt hàng")
+          // → gán mới VÀ dán vào đơn (adoptDraftSession) để auto-save UPDATE đúng
+          // đơn này, KHÔNG tạo nháp mới (mồ côi + nợ ảo).
           const newId =
             typeof crypto !== "undefined" && crypto.randomUUID
               ? crypto.randomUUID()
               : `sess-${Date.now()}`;
           setClientSessionId(newId);
+          await adoptDraftSession(detail.id, newId);
         }
+        // Load state từ detail (loadDraft sẵn có nhận DraftOrderDetail)
+        state.loadDraft(detail);
         setRecoveryOpen(false);
         toast({
           title: `Đã khôi phục đơn ${detail.code}`,

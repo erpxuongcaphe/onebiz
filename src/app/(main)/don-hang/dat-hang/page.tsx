@@ -1,6 +1,7 @@
 "use client";
 
 import { useEffect, useState, useCallback } from "react";
+import { useRouter } from "next/navigation";
 import { useRevalidateOnFocus } from "@/lib/hooks/use-revalidate-on-focus";
 import { ColumnDef } from "@tanstack/react-table";
 import { Badge } from "@/components/ui/badge";
@@ -330,6 +331,7 @@ function OrderDetail({
 
 export default function DatHangPage() {
   const { toast } = useToast();
+  const router = useRouter();
   const { activeBranchId, currentBranch } = useBranchFilter();
   const { printWithPicker, printerDialog } = usePrintWithPicker();
   const txPerms = useTxRowPermissions("sales_order");
@@ -762,6 +764,14 @@ export default function DatHangPage() {
             order={order}
             onClose={onClose}
             onDataChanged={fetchData}
+            onEdit={
+              // CEO 08/07: "Chuyển thành hóa đơn" — mở đơn trong POS để sửa +
+              // thanh toán. POS gắn session (adoptDraftSession) → hoàn tất ĐÚNG
+              // đơn này (giữ mã), KHÔNG tạo hóa đơn trùng. Chỉ cho đơn chưa hủy/tất toán.
+              order.status !== "completed" && order.status !== "cancelled"
+                ? () => router.push(`/pos?draftId=${order.id}`)
+                : undefined
+            }
             onDelete={
               order.status !== "completed" && order.status !== "cancelled"
                 ? () => setCancellingItem(order)
