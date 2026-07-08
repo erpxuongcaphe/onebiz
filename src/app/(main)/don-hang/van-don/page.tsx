@@ -6,7 +6,6 @@ import { Badge } from "@/components/ui/badge";
 import { PageHeader } from "@/components/shared/page-header";
 import { ListPageLayout } from "@/components/shared/list-page-layout";
 import { DataTable, StarCell } from "@/components/shared/data-table";
-import { AllBranchesBanner } from "@/components/shared/all-branches-banner";
 import { SummaryCard } from "@/components/shared/summary-card";
 import {
   FilterSidebar,
@@ -49,7 +48,7 @@ import { AuditLogDialog } from "@/components/shared/audit-log-dialog";
 import { buildTransactionRowActions } from "@/components/shared/transaction-row-actions";
 import { useTxRowPermissions } from "@/lib/permissions";
 import type { ShippingOrder, ShippingStatus } from "@/lib/types";
-import { useBranchFilter, useToast } from "@/lib/contexts";
+import { useToast } from "@/lib/contexts";
 import { Icon } from "@/components/ui/icon";
 
 // --- Status config ---
@@ -353,7 +352,6 @@ function ShippingOrderDetail({
 /* ------------------------------------------------------------------ */
 export default function VanDonPage() {
   const { toast } = useToast();
-  const { activeBranchId, currentBranch } = useBranchFilter();
   const txPerms = useTxRowPermissions("shipping");
   const [data, setData] = useState<ShippingOrder[]>([]);
   const [total, setTotal] = useState(0);
@@ -380,47 +378,25 @@ export default function VanDonPage() {
   const [createdDatePreset, setCreatedDatePreset] = useState<DatePresetValue>("all");
   const [completedDatePreset, setCompletedDatePreset] = useState<DatePresetValue>("all");
   const [regionFilter, setRegionFilter] = useState("all");
-  // CEO 08/07: xem tất cả chi nhánh (cục bộ) khi bảng trống vì lọc chi nhánh.
-  const [viewAllBranches, setViewAllBranches] = useState(false);
-  const [otherBranchCount, setOtherBranchCount] = useState(0);
-  // Đổi chi nhánh ở global switcher → về lại chế độ lọc theo chi nhánh.
-  useEffect(() => {
-    setViewAllBranches(false);
-  }, [activeBranchId]);
 
   const fetchData = useCallback(async () => {
     setLoading(true);
-    const commonFilters = {
-      ...(statusFilter !== "all" && { status: statusFilter }),
-      ...(partnerFilter !== "all" && { partner: partnerFilter }),
-      ...(regionFilter !== "all" && { region: regionFilter }),
-    };
-    const branchScope = viewAllBranches ? undefined : activeBranchId;
+    // CEO 08/07 (verify DB): shipping_orders KHÔNG có branch_id — vận đơn xem
+    // toàn tenant, KHÔNG lọc theo chi nhánh (filter cũ làm query lỗi).
     const result = await getShippingOrders({
       page,
       pageSize,
       search,
-      branchId: branchScope,
-      filters: commonFilters,
+      filters: {
+        ...(statusFilter !== "all" && { status: statusFilter }),
+        ...(partnerFilter !== "all" && { partner: partnerFilter }),
+        ...(regionFilter !== "all" && { region: regionFilter }),
+      },
     });
     setData(result.data);
     setTotal(result.total);
-    // Bảng trống vì lọc chi nhánh? Đếm vận đơn ở chi nhánh khác để gợi ý (cùng
-    // bộ lọc, bỏ branch). Chỉ khi đang lọc theo 1 chi nhánh cụ thể.
-    if (result.data.length === 0 && !viewAllBranches && activeBranchId) {
-      const all = await getShippingOrders({
-        page: 0,
-        pageSize: 1,
-        search,
-        branchId: undefined,
-        filters: commonFilters,
-      });
-      setOtherBranchCount(all.total);
-    } else {
-      setOtherBranchCount(0);
-    }
     setLoading(false);
-  }, [page, pageSize, search, statusFilter, partnerFilter, regionFilter, activeBranchId, viewAllBranches]);
+  }, [page, pageSize, search, statusFilter, partnerFilter, regionFilter]);
 
   useEffect(() => {
     fetchData();
@@ -629,23 +605,11 @@ export default function VanDonPage() {
         />
       </div>
 
-      {viewAllBranches && (
-        <AllBranchesBanner
-          branchName={currentBranch?.name}
-          onBackToBranch={() => setViewAllBranches(false)}
-        />
-      )}
-
       <DataTable
         columns={columns}
         data={data}
         loading={loading}
         total={total}
-        emptyBranchHint={{
-          otherBranchCount,
-          onViewAllBranches: () => setViewAllBranches(true),
-          entityLabel: "vận đơn",
-        }}
         pageIndex={page}
         pageSize={pageSize}
         pageCount={Math.ceil(total / pageSize)}

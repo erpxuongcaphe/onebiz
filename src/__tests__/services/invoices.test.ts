@@ -1,8 +1,9 @@
 import { describe, it, expect, vi, beforeEach } from "vitest";
 
-// cancelInvoice does two separate from() calls:
+// cancelInvoice does three separate from() calls (CEO 08/07: thêm hủy vận đơn kèm):
 // 1. from("invoices").select("status").eq("id", id).single()
-// 2. from("invoices").update({status:"cancelled"}).eq("id", id)
+// 2. from("invoices").update({status:"cancelled"}).eq(tenant).eq(id)
+// 3. from("shipping_orders").update({status:"cancelled"}).eq(tenant).eq(invoice_id).eq("pending")
 // We need mockFrom to return different chains for each call.
 
 const mockFetchSingle = vi.fn();
@@ -32,6 +33,16 @@ function createUpdateChain() {
   return chain;
 }
 
+// Chain cho update shipping_orders — .update().eq().eq().eq(), mọi eq trả
+// chính chain (await plain object = resolve ngay, code bọc try/catch).
+function createShipCancelChain() {
+  const chain: Record<string, unknown> = {};
+  const self = () => chain;
+  chain.update = vi.fn(self);
+  chain.eq = vi.fn(self);
+  return chain;
+}
+
 const mockFrom = vi.fn();
 
 vi.mock("@/lib/services/supabase/base", () => ({
@@ -51,13 +62,14 @@ import { cancelInvoice } from "@/lib/services/supabase/invoices";
 describe("cancelInvoice", () => {
   beforeEach(() => {
     vi.resetAllMocks();
-    // Default: first from() → fetch chain, second from() → update chain
+    // Default: fetch chain → update invoice chain → cancel shipping chain
     mockFrom
       .mockReturnValueOnce(createFetchChain())
-      .mockReturnValueOnce(createUpdateChain());
+      .mockReturnValueOnce(createUpdateChain())
+      .mockReturnValueOnce(createShipCancelChain());
   });
 
-  it("cancels a draft invoice", async () => {
+  it("cancels a draft invoice (+ hủy vận đơn pending kèm theo)", async () => {
     mockFetchSingle.mockResolvedValueOnce({
       data: { status: "draft" },
       error: null,
@@ -66,10 +78,11 @@ describe("cancelInvoice", () => {
 
     await cancelInvoice("inv-1");
 
-    expect(mockFrom).toHaveBeenCalledTimes(2);
+    expect(mockFrom).toHaveBeenCalledTimes(3);
+    expect(mockFrom).toHaveBeenNthCalledWith(3, "shipping_orders");
   });
 
-  it("cancels a confirmed invoice", async () => {
+  it("cancels a confirmed invoice (+ hủy vận đơn pending kèm theo)", async () => {
     mockFetchSingle.mockResolvedValueOnce({
       data: { status: "confirmed" },
       error: null,
@@ -78,7 +91,8 @@ describe("cancelInvoice", () => {
 
     await cancelInvoice("inv-2");
 
-    expect(mockFrom).toHaveBeenCalledTimes(2);
+    expect(mockFrom).toHaveBeenCalledTimes(3);
+    expect(mockFrom).toHaveBeenNthCalledWith(3, "shipping_orders");
   });
 
   it("throws when invoice is already completed", async () => {

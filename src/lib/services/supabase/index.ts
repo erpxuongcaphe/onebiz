@@ -62,6 +62,7 @@ export type { ReturnItemRow } from "./returns";
 export { completeReturn } from "./returns-completion";
 export {
   getShippingOrders,
+  getShippingOrderByInvoice,
   getShippingStatuses,
   getDeliveryPartners,
   getPartnerOptions,

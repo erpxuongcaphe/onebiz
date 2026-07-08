@@ -49,11 +49,9 @@ export async function getShippingOrders(params: QueryParams): Promise<QueryResul
     query = query.eq("partner_id", params.filters.partner as any);
   }
 
-  // Filter: branch
-  if (params.branchId) {
-    // eslint-disable-next-line @typescript-eslint/no-explicit-any
-    query = (query as any).eq("branch_id", params.branchId);
-  }
+  // CEO 08/07 (verify DB): bảng shipping_orders KHÔNG có cột branch_id —
+  // filter .eq("branch_id") cũ làm query LỖI khi chọn 1 chi nhánh (bug ẩn vì
+  // 0 vận đơn). Vận đơn xem toàn tenant; chi nhánh suy từ hóa đơn gắn kèm.
 
   // Sort & paginate
   query = query
@@ -82,6 +80,33 @@ export function getShippingStatuses() {
     { value: "returned", label: "Đã hoàn" },
     { value: "cancelled", label: "Đã hủy" },
   ];
+}
+
+/**
+ * CEO 08/07: vận đơn gắn 1 hóa đơn/đơn đặt hàng — cho khối "Giao hàng" ở
+ * panel chi tiết. Trả null nếu đơn không có vận đơn.
+ */
+export async function getShippingOrderByInvoice(
+  invoiceId: string,
+): Promise<ShippingOrder | null> {
+  const supabase = getClient();
+  const tenantId = await getCurrentTenantId();
+
+  const { data, error } = await supabase
+    .from("shipping_orders")
+    .select(
+      `*, invoices!shipping_orders_invoice_id_fkey(code), delivery_partners!shipping_orders_partner_id_fkey(name)`,
+    )
+    .eq("tenant_id", tenantId)
+    .eq("invoice_id", invoiceId)
+    .order("created_at", { ascending: false })
+    .limit(1)
+    .maybeSingle();
+  if (error) {
+    console.warn("[getShippingOrderByInvoice]", error.message);
+    return null;
+  }
+  return data ? mapShippingOrder(data) : null;
 }
 
 // --- Delivery Partners ---

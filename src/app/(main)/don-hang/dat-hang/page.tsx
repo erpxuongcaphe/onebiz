@@ -39,9 +39,10 @@ import {
   getOrders,
   cancelInvoice,
   getDraftOrderItems,
+  getShippingOrderByInvoice,
   type SalesOrderItemRow,
 } from "@/lib/services";
-import type { SalesOrder } from "@/lib/types";
+import type { SalesOrder, ShippingOrder } from "@/lib/types";
 import { ConfirmDialog } from "@/components/shared/dialogs";
 // PERF (CEO 23/05/2026): Lazy-load CreateOrderDialog (562 dòng).
 import dynamic from "next/dynamic";
@@ -104,6 +105,8 @@ function OrderDetail({
   // Lazy fetch line items thật (P0 audit fix — trước hardcode "SP001").
   const [items, setItems] = useState<SalesOrderItemRow[]>([]);
   const [itemsLoading, setItemsLoading] = useState(true);
+  // CEO 08/07: vận đơn gắn đơn — khối "Giao hàng" trong chi tiết.
+  const [shipment, setShipment] = useState<ShippingOrder | null>(null);
   useEffect(() => {
     let cancelled = false;
     setItemsLoading(true);
@@ -111,6 +114,9 @@ function OrderDetail({
       .then((rows) => { if (!cancelled) setItems(rows); })
       .catch(() => { if (!cancelled) setItems([]); })
       .finally(() => { if (!cancelled) setItemsLoading(false); });
+    getShippingOrderByInvoice(order.id)
+      .then((s) => { if (!cancelled) setShipment(s); })
+      .catch(() => { if (!cancelled) setShipment(null); });
     return () => { cancelled = true; };
   }, [order.id]);
 
@@ -169,6 +175,35 @@ function OrderDetail({
                     },
                   ]}
                 />
+
+                {/* CEO 08/07: khối Giao hàng — vận đơn gắn đơn (như KiotViet) */}
+                {shipment && (
+                  <div className="rounded-lg border bg-muted/20 p-3">
+                    <div className="mb-2 flex items-center gap-2 text-sm font-semibold">
+                      <Icon name="local_shipping" size={16} />
+                      Giao hàng — {shipment.code}
+                      <Badge variant="outline">{shipment.statusName}</Badge>
+                    </div>
+                    <div className="grid gap-1 text-sm sm:grid-cols-2">
+                      <div>
+                        Người nhận: <strong>{shipment.customerName}</strong>
+                        {shipment.customerPhone ? ` — ${shipment.customerPhone}` : ""}
+                      </div>
+                      <div>
+                        Đối tác giao: <strong>{shipment.deliveryPartner}</strong>
+                      </div>
+                      <div className="sm:col-span-2">
+                        Địa chỉ: {shipment.address}
+                      </div>
+                      <div>
+                        Phí giao hàng: <strong>{formatCurrency(shipment.fee ?? 0)}</strong>
+                      </div>
+                      <div>
+                        Thu hộ (COD): <strong>{formatCurrency(shipment.cod ?? 0)}</strong>
+                      </div>
+                    </div>
+                  </div>
+                )}
 
                 {itemsLoading ? (
                   <div className="text-sm text-muted-foreground py-4 text-center">

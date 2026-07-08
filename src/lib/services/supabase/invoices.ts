@@ -390,6 +390,21 @@ export async function cancelInvoice(id: string): Promise<void> {
 
   if (error) handleError(error, "cancelInvoice.update");
 
+  // CEO 08/07: hủy đơn → hủy kèm vận đơn CHƯA lấy hàng (pending) gắn đơn này,
+  // tránh vận đơn mồ côi chờ giao cho đơn đã hủy. Vận đơn đã lấy/đang giao thì
+  // giữ nguyên (xử lý tay theo thực tế). Best-effort — không chặn việc hủy đơn.
+  try {
+    await supabase
+      .from("shipping_orders")
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      .update({ status: "cancelled" as any })
+      .eq("tenant_id", tenantId)
+      .eq("invoice_id", id)
+      .eq("status", "pending");
+  } catch (err) {
+    console.warn("cancelInvoice: hủy vận đơn kèm theo thất bại", err);
+  }
+
   await recordAuditLog({
     entityType: "invoice",
     entityId: id,
@@ -632,7 +647,9 @@ function mapInvoice(row: any): Invoice {
       customer?.debt != null ? Number(customer.debt) : undefined,
     totalAmount: row.total,
     discount: row.discount_amount,
-    shippingFee: Number(row.shipping_fee ?? 0),
+    // Phí giao hàng = cột delivery_fee (00018; FnB RPC cũng ghi cột này,
+    // total ĐÃ gồm phí). invoices KHÔNG có cột shipping_fee (verify DB 08/07).
+    shippingFee: Number(row.delivery_fee ?? 0),
     taxAmount: Number(row.tax_amount ?? 0),
     paid: Number(row.paid ?? 0),
     debt: Number(row.debt ?? 0),

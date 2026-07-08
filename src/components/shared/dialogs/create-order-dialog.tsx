@@ -84,6 +84,10 @@ export function CreateOrderDialog({
   const [deliveryPartners, setDeliveryPartners] = useState<DeliveryPartner[]>([]);
   const [selectedPartner, setSelectedPartner] = useState("");
   const [shippingFee, setShippingFee] = useState(0);
+  // CEO 08/07: thông tin người nhận — đủ 3 ô → tự tạo VẬN ĐƠN gắn đơn.
+  const [receiverName, setReceiverName] = useState("");
+  const [receiverPhone, setReceiverPhone] = useState("");
+  const [receiverAddress, setReceiverAddress] = useState("");
   const [notes, setNotes] = useState("");
   const [errors, setErrors] = useState<Record<string, string>>({});
   const [saving, setSaving] = useState(false);
@@ -105,6 +109,9 @@ export function CreateOrderDialog({
     setItems([]);
     setSelectedPartner("");
     setShippingFee(0);
+    setReceiverName("");
+    setReceiverPhone("");
+    setReceiverAddress("");
     setNotes("");
     setErrors({});
     setSaving(false);
@@ -239,11 +246,10 @@ export function CreateOrderDialog({
       const ctx = await getCurrentContext();
 
       // Khách cần trả = tiền hàng − chiết khấu(0) + phí giao hàng (dùng lại memo).
-      // shipping_fee: cột DB có sẵn (numeric default 0) nhưng generated types
-      // chưa gen → build object as any rồi cast InvoiceInsert (theo pattern
-      // saveDraftOrder). Các field còn lại vẫn khớp InvoiceInsert.
-      // eslint-disable-next-line @typescript-eslint/no-explicit-any
-      const invoiceData: any = {
+      // CEO 08/07 (verify DB thật): cột phí giao trên invoices là `delivery_fee`
+      // (migration 00018 — FnB RPC cũng ghi cột này, total đã gồm phí). KHÔNG có
+      // cột invoices.shipping_fee (đó là cột của shipping_orders/online_orders).
+      const invoiceData: InvoiceInsert = {
         tenant_id: ctx.tenantId,
         branch_id: ctx.branchId,
         code,
@@ -252,7 +258,7 @@ export function CreateOrderDialog({
         status: "draft" as const,
         subtotal: total,
         discount_amount: 0,
-        shipping_fee: shippingFee,
+        delivery_fee: shippingFee,
         total: grandTotal,
         paid: 0,
         debt: grandTotal,
@@ -263,7 +269,7 @@ export function CreateOrderDialog({
 
       const { data: invoice, error: invoiceErr } = await supabase
         .from("invoices")
-        .insert(invoiceData as InvoiceInsert)
+        .insert(invoiceData)
         .select("id")
         .single();
 
@@ -285,12 +291,54 @@ export function CreateOrderDialog({
         if (itemsErr) throw new Error(itemsErr.message);
       }
 
+      // CEO 08/07: đơn GIAO HÀNG → tạo VẬN ĐƠN gắn hóa đơn (như KiotViet).
+      // Điều kiện: đủ người nhận + SĐT + địa chỉ (cột NOT NULL của
+      // shipping_orders). Thiếu thông tin nhận → vẫn lưu phí giao trên đơn,
+      // chỉ bỏ qua vận đơn. COD = toàn bộ Khách cần trả (đơn nháp chưa thu).
+      let shipWarn: string | null = null;
+      const wantShipment =
+        receiverName.trim() && receiverPhone.trim() && receiverAddress.trim();
+      if (invoice && wantShipment) {
+        try {
+          const shipCode = await nextEntityCode("shipping_order");
+          const { error: shipErr } = await supabase
+            .from("shipping_orders")
+            .insert({
+              tenant_id: ctx.tenantId,
+              invoice_id: invoice.id,
+              partner_id: selectedPartner || null,
+              code: shipCode,
+              status: "pending" as const,
+              shipping_fee: shippingFee,
+              cod_amount: grandTotal,
+              receiver_name: receiverName.trim(),
+              receiver_phone: receiverPhone.trim(),
+              receiver_address: receiverAddress.trim(),
+              note: notes || null,
+            });
+          if (shipErr) throw new Error(shipErr.message);
+        } catch (err) {
+          // Đơn đã tạo OK — vận đơn lỗi thì báo rõ, không nuốt lặng.
+          shipWarn = err instanceof Error ? err.message : "Không tạo được vận đơn";
+        }
+      }
+
       onOpenChange(false);
-      toast({
-        title: "Tạo đơn đặt hàng thành công",
-        description: `Đã tạo đơn đặt hàng ${code}`,
-        variant: "success",
-      });
+      if (shipWarn) {
+        toast({
+          title: `Đã tạo đơn ${code} nhưng LỖI tạo vận đơn`,
+          description: `${shipWarn}. Vào Đơn hàng → Vận đơn tạo lại.`,
+          variant: "error",
+        });
+      } else {
+        toast({
+          title: "Tạo đơn đặt hàng thành công",
+          description: wantShipment
+            ? `Đã tạo đơn ${code} + vận đơn giao hàng`
+            : `Đã tạo đơn đặt hàng ${code}`,
+          variant: "success",
+        });
+      }
       onSuccess?.();
     } catch (err) {
       toast({
@@ -362,6 +410,9 @@ export function CreateOrderDialog({
                               setSelectedCustomer({ id: c.id, name: c.name });
                               setCustomerSearch(c.name);
                               setShowCustomerDropdown(false);
+                              // Prefill người nhận từ khách (chỉ khi ô còn trống)
+                              setReceiverName((v) => v || c.name);
+                              setReceiverPhone((v) => v || c.phone || "");
                             }}
                           >
                             <span className="truncate font-medium">{c.name}</span>
@@ -457,6 +508,33 @@ export function CreateOrderDialog({
                     aria-label="Phí giao hàng"
                   />
                 </div>
+                {/* CEO 08/07: đủ 3 ô dưới → tự tạo VẬN ĐƠN gắn đơn khi lưu */}
+                <div className="mt-3 grid grid-cols-2 gap-2">
+                  <Input
+                    value={receiverName}
+                    onChange={(e) => setReceiverName(e.target.value)}
+                    placeholder="Người nhận"
+                    aria-label="Người nhận"
+                  />
+                  <Input
+                    value={receiverPhone}
+                    onChange={(e) => setReceiverPhone(e.target.value)}
+                    placeholder="SĐT người nhận"
+                    aria-label="SĐT người nhận"
+                  />
+                </div>
+                <div className="mt-2">
+                  <Input
+                    value={receiverAddress}
+                    onChange={(e) => setReceiverAddress(e.target.value)}
+                    placeholder="Địa chỉ giao hàng"
+                    aria-label="Địa chỉ giao hàng"
+                  />
+                </div>
+                <p className="mt-1.5 text-[11px] text-muted-foreground">
+                  Điền đủ người nhận + SĐT + địa chỉ → hệ thống tự tạo vận đơn
+                  kèm đơn này.
+                </p>
               </section>
             </div>
 
