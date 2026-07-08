@@ -243,7 +243,11 @@ export function buildInvoicePrintData(
   if (on(f.createdBy)) headerFields.push({ label: "Người tạo", value: user });
 
   // Khối tổng tiền + công nợ.
-  const due = row.totalAmount - row.discount; // phải trả của RIÊNG hoá đơn này
+  // CEO 08/07: totalAmount (= invoices.total) ĐÃ gộp phí giao hàng. KHÔNG cộng
+  // ship lần nữa vào "due" (tránh tính 2 lần). Chỉ TÁCH hiển thị: "Tổng tiền
+  // hàng" = tổng − ship, "+ Phí giao hàng", "Tổng cộng" = tổng − chiết khấu.
+  const shippingFee = row.shippingFee ?? 0;
+  const due = row.totalAmount - row.discount; // Khách phải trả (tổng đã gồm ship)
   const currentDebt = row.customerCurrentDebt; // dư nợ hiện tại (thời gian thực)
   const oldDebt = currentDebt != null ? currentDebt - row.debt : 0; // nợ trước HĐ này
   // Chỉ in khối nợ khi bật cờ + khách công nợ/bán sỉ (có gắn KH + có dư nợ).
@@ -258,9 +262,16 @@ export function buildInvoicePrintData(
     value: string;
     bold?: boolean;
     tone?: "danger" | "success";
-  }[] = [{ label: "Tổng tiền hàng", value: formatCurrency(row.totalAmount) }];
+  }[] = [
+    {
+      label: "Tổng tiền hàng",
+      value: formatCurrency(row.totalAmount - shippingFee),
+    },
+  ];
   if (row.discount > 0)
     summaryRows.push({ label: "Chiết khấu", value: formatCurrency(row.discount) });
+  if (shippingFee > 0)
+    summaryRows.push({ label: "Phí giao hàng", value: formatCurrency(shippingFee) });
   summaryRows.push({ label: "Tổng cộng", value: formatCurrency(due), bold: true });
   // CEO 03/07: khối tổng tiền đối xứng, rõ nghĩa —
   // "Khách đã thanh toán" (= cột paid, số đã thu) + "Khách còn phải trả" LUÔN
@@ -361,6 +372,20 @@ export function buildSalesOrderPrintData(
   items?: DocumentLineItem[],
 ): DocumentPrintData {
   const user = formatUser(row.createdByName, row.createdBy);
+
+  // Đơn đặt hàng = hóa đơn nháp: totalAmount ĐÃ gộp phí giao hàng. Khi có ship,
+  // tách "Tiền hàng" (= tổng − ship) + "Phí giao hàng" + "Khách cần trả" (= tổng)
+  // để khách thấy rõ. Không ship → giữ nguyên 1 dòng "Tổng tiền" như cũ.
+  const shippingFee = row.shippingFee ?? 0;
+  const summaryRows =
+    shippingFee > 0
+      ? [
+          { label: "Tiền hàng", value: formatCurrency(row.totalAmount - shippingFee) },
+          { label: "Phí giao hàng", value: formatCurrency(shippingFee) },
+          { label: "Khách cần trả", value: formatCurrency(row.totalAmount), bold: true },
+        ]
+      : [{ label: "Tổng tiền", value: formatCurrency(row.totalAmount), bold: true }];
+
   return {
     documentType: "ĐƠN ĐẶT HÀNG",
     documentCode: row.code,
@@ -372,9 +397,7 @@ export function buildSalesOrderPrintData(
       { label: "Người tạo", value: user },
     ],
     ...(items && items.length ? { items, itemColumns: SALE_ITEM_COLUMNS } : {}),
-    summaryRows: [
-      { label: "Tổng tiền", value: formatCurrency(row.totalAmount), bold: true },
-    ],
+    summaryRows,
     createdBy: user,
   };
 }

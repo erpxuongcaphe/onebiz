@@ -632,6 +632,7 @@ function mapInvoice(row: any): Invoice {
       customer?.debt != null ? Number(customer.debt) : undefined,
     totalAmount: row.total,
     discount: row.discount_amount,
+    shippingFee: Number(row.shipping_fee ?? 0),
     taxAmount: Number(row.tax_amount ?? 0),
     paid: Number(row.paid ?? 0),
     debt: Number(row.debt ?? 0),

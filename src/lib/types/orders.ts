@@ -21,6 +21,8 @@ export interface Invoice {
   customerCurrentDebt?: number;
   totalAmount: number;
   discount: number;
+  /** Phí giao hàng (invoices.shipping_fee). Đã gộp trong totalAmount = grand total. */
+  shippingFee: number;
   taxAmount: number;
   paid: number;
   debt: number;
@@ -150,6 +152,11 @@ export interface SalesOrder {
   customerName: string;
   customerPhone: string;
   totalAmount: number;
+  /**
+   * Phí giao hàng (invoices.shipping_fee). Đơn đặt hàng = hóa đơn nháp nên
+   * totalAmount đã gộp ship (= tiền hàng + phí giao). undefined/0 = không có ship.
+   */
+  shippingFee?: number;
   status: "new" | "confirmed" | "delivering" | "completed" | "cancelled";
   statusName: string;
   createdBy: string;

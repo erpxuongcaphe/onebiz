@@ -83,6 +83,7 @@ export function CreateOrderDialog({
   const [items, setItems] = useState<OrderLineItem[]>([]);
   const [deliveryPartners, setDeliveryPartners] = useState<DeliveryPartner[]>([]);
   const [selectedPartner, setSelectedPartner] = useState("");
+  const [shippingFee, setShippingFee] = useState(0);
   const [notes, setNotes] = useState("");
   const [errors, setErrors] = useState<Record<string, string>>({});
   const [saving, setSaving] = useState(false);
@@ -103,6 +104,7 @@ export function CreateOrderDialog({
     setFilteredProducts([]);
     setItems([]);
     setSelectedPartner("");
+    setShippingFee(0);
     setNotes("");
     setErrors({});
     setSaving(false);
@@ -214,6 +216,9 @@ export function CreateOrderDialog({
     [items],
   );
 
+  // Khách cần trả = tiền hàng + phí giao hàng (discount = 0 ở dialog này).
+  const grandTotal = useMemo(() => total + shippingFee, [total, shippingFee]);
+
   const totalQuantity = useMemo(
     () => items.reduce((sum, item) => sum + item.quantity, 0),
     [items],
@@ -233,24 +238,32 @@ export function CreateOrderDialog({
       const supabase = getClient();
       const ctx = await getCurrentContext();
 
+      // Khách cần trả = tiền hàng − chiết khấu(0) + phí giao hàng (dùng lại memo).
+      // shipping_fee: cột DB có sẵn (numeric default 0) nhưng generated types
+      // chưa gen → build object as any rồi cast InvoiceInsert (theo pattern
+      // saveDraftOrder). Các field còn lại vẫn khớp InvoiceInsert.
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      const invoiceData: any = {
+        tenant_id: ctx.tenantId,
+        branch_id: ctx.branchId,
+        code,
+        customer_id: selectedCustomer?.id || null,
+        customer_name: selectedCustomer?.name ?? "Khách lẻ",
+        status: "draft" as const,
+        subtotal: total,
+        discount_amount: 0,
+        shipping_fee: shippingFee,
+        total: grandTotal,
+        paid: 0,
+        debt: grandTotal,
+        payment_method: "cash" as const,
+        note: notes || null,
+        created_by: ctx.userId,
+      };
+
       const { data: invoice, error: invoiceErr } = await supabase
         .from("invoices")
-        .insert({
-          tenant_id: ctx.tenantId,
-          branch_id: ctx.branchId,
-          code,
-          customer_id: selectedCustomer?.id || null,
-          customer_name: selectedCustomer?.name ?? "Khách lẻ",
-          status: "draft" as const,
-          subtotal: total,
-          discount_amount: 0,
-          total,
-          paid: 0,
-          debt: total,
-          payment_method: "cash" as const,
-          note: notes || null,
-          created_by: ctx.userId,
-        } satisfies InvoiceInsert)
+        .insert(invoiceData as InvoiceInsert)
         .select("id")
         .single();
 
@@ -430,6 +443,20 @@ export function CreateOrderDialog({
                     ))}
                   </SelectContent>
                 </Select>
+                <div className="mt-3">
+                  <label className="mb-1 block text-xs font-medium text-muted-foreground">
+                    Phí giao hàng
+                  </label>
+                  <NumericInput
+                    value={shippingFee}
+                    onChange={(v) => setShippingFee(Math.max(0, v ?? 0))}
+                    min={0}
+                    decimals={0}
+                    className="text-right"
+                    placeholder="0"
+                    aria-label="Phí giao hàng"
+                  />
+                </div>
               </section>
             </div>
 
@@ -520,11 +547,14 @@ export function CreateOrderDialog({
 
         <DialogFooter className="mx-0 mb-0 shrink-0 rounded-none border-t bg-white px-4 py-3">
           <div className="mx-auto grid w-full max-w-[1380px] grid-cols-1 items-center gap-3 lg:grid-cols-[1fr_auto]">
-            <div className="grid gap-2 text-sm sm:grid-cols-3 xl:grid-cols-4">
+            <div className="grid gap-2 text-sm sm:grid-cols-3 xl:grid-cols-5">
               <FooterMetric label="Dòng" value={formatNumber(items.length)} />
               <FooterMetric label="Tổng SL" value={formatNumber(totalQuantity)} />
-              <FooterMetric label="Tổng cộng" value={formatCurrency(total)} strong />
-              <FooterMetric label="Trạng thái" value="Nháp" />
+              <FooterMetric label="Tiền hàng" value={formatCurrency(total)} />
+              {shippingFee > 0 && (
+                <FooterMetric label="Phí giao hàng" value={formatCurrency(shippingFee)} />
+              )}
+              <FooterMetric label="Khách cần trả" value={formatCurrency(grandTotal)} strong />
             </div>
             <div className="flex justify-end gap-2">
               <Button variant="outline" onClick={() => onOpenChange(false)}>

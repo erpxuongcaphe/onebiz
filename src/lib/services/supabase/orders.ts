@@ -107,6 +107,7 @@ export async function getOrders(
       customerName: row.customer_name ?? "",
       customerPhone: row.customer_phone ?? "",
       totalAmount: row.total ?? 0,
+      shippingFee: Number(row.shipping_fee ?? 0),
       status: row.status,
       statusName: STATUS_LABEL[row.status] ?? "Phiếu tạm",
       createdBy: row.created_by ?? "",

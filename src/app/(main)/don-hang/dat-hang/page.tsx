@@ -12,7 +12,6 @@ import { SummaryCard } from "@/components/shared/summary-card";
 import {
   FilterSidebar,
   FilterGroup,
-  CheckboxFilter,
   DatePresetFilter,
   type DatePresetValue,
   SelectFilter,
@@ -70,12 +69,6 @@ const statusMap: Record<
   completed: { label: "Hoàn thành", variant: "default" },
   cancelled: { label: "Đã hủy", variant: "destructive" },
 };
-
-const statusFilterOptions = [
-  { label: "Phiếu tạm", value: "new" },
-  { label: "Đang giao hàng", value: "delivering" },
-  { label: "Hoàn thành", value: "completed" },
-];
 
 const deliveryPartnerOptions = [
   { label: "Giao Hàng Nhanh", value: "ghn" },
@@ -226,8 +219,16 @@ function OrderDetail({
                             },
                           ]
                         : []),
+                      ...((order.shippingFee ?? 0) > 0
+                        ? [
+                            {
+                              label: "Phí giao hàng",
+                              value: formatCurrency(order.shippingFee ?? 0),
+                            },
+                          ]
+                        : []),
                       {
-                        label: "Tổng đơn",
+                        label: "Khách cần trả",
                         value: formatCurrency(order.totalAmount),
                         className: "font-bold text-base",
                       },
@@ -279,11 +280,6 @@ export default function DatHangPage() {
   const [auditDialogTarget, setAuditDialogTarget] = useState<SalesOrder | null>(null);
 
   // Filters
-  const [selectedStatuses, setSelectedStatuses] = useState<string[]>([
-    "new",
-    "delivering",
-    "completed",
-  ]);
   const [datePreset, setDatePreset] = useState<DatePresetValue>("this_month");
   const [deliveryPartner, setDeliveryPartner] = useState("all");
   const [deliveryDatePreset, setDeliveryDatePreset] =
@@ -345,7 +341,7 @@ export default function DatHangPage() {
   useEffect(() => {
     setPage(0);
     setExpandedRow(null);
-  }, [search, selectedStatuses, datePreset, deliveryPartner, deliveryDatePreset, deliveryArea]);
+  }, [search, datePreset, deliveryPartner, deliveryDatePreset, deliveryArea]);
 
   const toggleStar = (id: string) => {
     setStarred((prev) => {
@@ -469,14 +465,8 @@ export default function DatHangPage() {
             />
           </FilterGroup>
 
-          <FilterGroup label="Trạng thái">
-            <CheckboxFilter
-              options={statusFilterOptions}
-              selected={selectedStatuses}
-              onChange={setSelectedStatuses}
-            />
-          </FilterGroup>
-
+          {/* CEO 08/07: bỏ lọc "Trạng thái" — mọi đơn đặt hàng đều là nháp
+              (chờ xử lý) nên lọc trạng thái không còn ý nghĩa. */}
           <FilterGroup label="Đối tác giao hàng">
             <SelectFilter
               options={deliveryPartnerOptions}
@@ -549,23 +539,27 @@ export default function DatHangPage() {
           value={total.toString()}
         />
         <SummaryCard
-          icon={<Icon name="edit_note" size={16} />}
-          label="Phiếu tạm"
-          value={data.filter((r) => r.status === "new").length.toString()}
-          highlight={data.filter((r) => r.status === "new").length > 0}
+          icon={<Icon name="shopping_bag" size={16} />}
+          label="Tổng tiền hàng"
+          value={formatCurrency(
+            data.reduce(
+              (sum, r) => sum + ((r.totalAmount ?? 0) - (r.shippingFee ?? 0)),
+              0,
+            ),
+          )}
         />
         <SummaryCard
           icon={<Icon name="local_shipping" size={16} />}
-          label="Đang giao"
-          value={data.filter((r) => r.status === "delivering").length.toString()}
+          label="Tổng phí giao"
+          value={formatCurrency(
+            data.reduce((sum, r) => sum + (r.shippingFee ?? 0), 0),
+          )}
         />
         <SummaryCard
           icon={<Icon name="payments" size={16} />}
-          label="Tổng doanh thu"
+          label="Tổng cần thu"
           value={formatCurrency(
-            data
-              .filter((r) => r.status !== "cancelled")
-              .reduce((sum, r) => sum + (r.totalAmount ?? 0), 0),
+            data.reduce((sum, r) => sum + (r.totalAmount ?? 0), 0),
           )}
         />
       </div>

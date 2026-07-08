@@ -252,6 +252,14 @@ function InvoiceDetail({
                         label: "Giảm giá hóa đơn",
                         value: formatCurrency(invoice.discount),
                       },
+                      ...((invoice.shippingFee ?? 0) > 0
+                        ? [
+                            {
+                              label: "Phí giao hàng",
+                              value: formatCurrency(invoice.shippingFee),
+                            },
+                          ]
+                        : []),
                       {
                         label: "Khách cần trả",
                         value: formatCurrency(invoice.totalAmount),

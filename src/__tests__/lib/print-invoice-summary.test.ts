@@ -79,4 +79,32 @@ describe("buildInvoicePrintData — khối tổng tiền đối xứng, rõ ngh�
     expect(labels(d)).not.toContain("Khách còn phải trả");
     expect(labels(d)).not.toContain("Còn lại");
   });
+
+  it("không phí giao hàng → KHÔNG có dòng 'Phí giao hàng' (giữ hành vi cũ)", () => {
+    const d = buildInvoicePrintData(row());
+    expect(labels(d)).not.toContain("Phí giao hàng");
+    // Tổng cộng = tiền hàng (350k), ship = 0
+    expect(find(d, "Tổng cộng")?.value).toContain("350");
+  });
+
+  it("có phí giao hàng → thêm dòng 'Phí giao hàng', tách 'Tổng tiền hàng' = tổng − ship, KHÔNG cộng ship 2 lần", () => {
+    // totalAmount = TỔNG đã gồm ship = 370k (350k hàng + 20k ship). paid 370k → còn 0.
+    const d = buildInvoicePrintData(
+      row({ totalAmount: 370000, shippingFee: 20000, paid: 370000 } as Partial<InvoiceRow>),
+    );
+    expect(find(d, "Tổng tiền hàng")?.value).toContain("350"); // 370k − 20k ship
+    expect(find(d, "Phí giao hàng")?.value).toContain("20"); // 20.000 đ
+    expect(find(d, "Tổng cộng")?.value).toContain("370"); // = totalAmount (KHÔNG cộng ship thêm)
+    expect(find(d, "Khách còn phải trả")?.value).toBe("0 đ");
+    expect(find(d, "Khách còn phải trả")?.tone).toBe("success");
+  });
+
+  it("phí giao hàng + chưa trả → 'Khách còn phải trả' = tổng gồm ship (tone danger)", () => {
+    const d = buildInvoicePrintData(
+      row({ totalAmount: 370000, shippingFee: 20000, paid: 0 } as Partial<InvoiceRow>),
+    );
+    const con = find(d, "Khách còn phải trả");
+    expect(con?.value).toContain("370"); // tổng đã gồm ship
+    expect(con?.tone).toBe("danger");
+  });
 });
