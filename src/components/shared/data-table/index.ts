@@ -1,4 +1,4 @@
 export { DataTable } from "./data-table";
-export type { RowAction, BulkAction } from "./data-table";
+export type { RowAction, BulkAction, EmptyBranchHint } from "./data-table";
 export { DataTablePagination } from "./pagination";
 export { StarCell } from "./star-column";

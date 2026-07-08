@@ -6,6 +6,7 @@ import { Badge } from "@/components/ui/badge";
 import { PageHeader } from "@/components/shared/page-header";
 import { ListPageLayout } from "@/components/shared/list-page-layout";
 import { DataTable, StarCell } from "@/components/shared/data-table";
+import { AllBranchesBanner } from "@/components/shared/all-branches-banner";
 import { SummaryCard } from "@/components/shared/summary-card";
 import {
   FilterSidebar,
@@ -152,7 +153,7 @@ function InternalExportDetail({
 /* ------------------------------------------------------------------ */
 export default function XuatDungNoiBoPage() {
   const { toast } = useToast();
-  const { activeBranchId } = useBranchFilter();
+  const { activeBranchId, currentBranch } = useBranchFilter();
   const txPerms = useTxRowPermissions("internal_export");
   const [data, setData] = useState<InternalExport[]>([]);
   const [total, setTotal] = useState(0);
@@ -181,6 +182,13 @@ export default function XuatDungNoiBoPage() {
   const [dateFrom, setDateFrom] = useState("");
   const [dateTo, setDateTo] = useState("");
   const [creatorFilter, setCreatorFilter] = useState("");
+  // CEO 08/07: xem tất cả chi nhánh (cục bộ) khi bảng trống vì lọc chi nhánh.
+  const [viewAllBranches, setViewAllBranches] = useState(false);
+  const [otherBranchCount, setOtherBranchCount] = useState(0);
+  // Đổi chi nhánh ở global switcher → về lại chế độ lọc theo chi nhánh.
+  useEffect(() => {
+    setViewAllBranches(false);
+  }, [activeBranchId]);
 
   const statuses = getInternalExportStatuses();
 
@@ -246,22 +254,38 @@ export default function XuatDungNoiBoPage() {
     const presetRange = computeListPresetRange(datePreset);
     const effectiveDateFrom = datePreset === "custom" ? dateFrom : presetRange.from;
     const effectiveDateTo = datePreset === "custom" ? dateTo : presetRange.to;
+    const commonFilters = {
+      ...(selectedStatuses.length > 0 && { status: selectedStatuses }),
+      ...(effectiveDateFrom && { dateFrom: effectiveDateFrom }),
+      ...(effectiveDateTo && { dateTo: effectiveDateTo }),
+      ...(creatorFilter && { createdBy: creatorFilter }),
+    };
+    const branchScope = viewAllBranches ? undefined : activeBranchId;
     const result = await getInternalExports({
       page,
       pageSize,
       search,
-      branchId: activeBranchId,
-      filters: {
-        ...(selectedStatuses.length > 0 && { status: selectedStatuses }),
-        ...(effectiveDateFrom && { dateFrom: effectiveDateFrom }),
-        ...(effectiveDateTo && { dateTo: effectiveDateTo }),
-        ...(creatorFilter && { createdBy: creatorFilter }),
-      },
+      branchId: branchScope,
+      filters: commonFilters,
     });
     setData(result.data);
     setTotal(result.total);
+    // Bảng trống vì lọc chi nhánh? Đếm phiếu ở chi nhánh khác để gợi ý (cùng bộ
+    // lọc, bỏ branch). Chỉ khi đang lọc theo 1 chi nhánh cụ thể.
+    if (result.data.length === 0 && !viewAllBranches && activeBranchId) {
+      const all = await getInternalExports({
+        page: 0,
+        pageSize: 1,
+        search,
+        branchId: undefined,
+        filters: commonFilters,
+      });
+      setOtherBranchCount(all.total);
+    } else {
+      setOtherBranchCount(0);
+    }
     setLoading(false);
-  }, [page, pageSize, search, selectedStatuses, datePreset, dateFrom, dateTo, creatorFilter, activeBranchId]);
+  }, [page, pageSize, search, selectedStatuses, datePreset, dateFrom, dateTo, creatorFilter, activeBranchId, viewAllBranches]);
 
   useEffect(() => {
     fetchData();
@@ -372,11 +396,23 @@ export default function XuatDungNoiBoPage() {
         />
       </div>
 
+      {viewAllBranches && (
+        <AllBranchesBanner
+          branchName={currentBranch?.name}
+          onBackToBranch={() => setViewAllBranches(false)}
+        />
+      )}
+
       <DataTable
         columns={columns}
         data={data}
         loading={loading}
         total={total}
+        emptyBranchHint={{
+          otherBranchCount,
+          onViewAllBranches: () => setViewAllBranches(true),
+          entityLabel: "phiếu xuất dùng",
+        }}
         pageIndex={page}
         pageSize={pageSize}
         pageCount={Math.ceil(total / pageSize)}

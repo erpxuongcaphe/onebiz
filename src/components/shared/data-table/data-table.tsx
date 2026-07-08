@@ -126,6 +126,46 @@ interface DataTableProps<TData, TValue> {
   emptyTitle?: string;
   emptyDescription?: string;
   emptyIcon?: string;
+  /**
+   * CEO 08/07/2026: Khi bảng TRỐNG vì đang lọc theo 1 chi nhánh, nhưng chi
+   * nhánh KHÁC vẫn có phiếu → báo rõ + nút "Xem tất cả chi nhánh" (thay vì để
+   * user tưởng phiếu bị mất). Chỉ hiện khi `otherBranchCount > 0`.
+   * Callback `onViewAllBranches` do trang tự xử (bỏ lọc chi nhánh cục bộ trong
+   * màn đó — KHÔNG đổi chi nhánh toàn hệ thống).
+   */
+  emptyBranchHint?: EmptyBranchHint;
+}
+
+export interface EmptyBranchHint {
+  /** Số phiếu tồn tại ở các chi nhánh khác (đã đếm khi bảng trống). */
+  otherBranchCount: number;
+  /** Bỏ lọc chi nhánh trong màn này để xem tất cả. */
+  onViewAllBranches: () => void;
+  /** Nhãn loại chứng từ, vd "phiếu nhập", "phiếu kiểm kho". Mặc định "phiếu". */
+  entityLabel?: string;
+}
+
+/** Khối gợi ý "phiếu đang ở chi nhánh khác" trong empty-state (desktop + mobile). */
+function EmptyBranchHintBlock({ hint }: { hint: EmptyBranchHint }) {
+  if (!hint.otherBranchCount || hint.otherBranchCount <= 0) return null;
+  const label = hint.entityLabel ?? "phiếu";
+  return (
+    <div className="mt-1 flex flex-col items-center gap-2">
+      <p className="text-xs text-muted-foreground">
+        Chi nhánh này chưa có {label} nào. Có{" "}
+        <b className="text-foreground">{hint.otherBranchCount}</b> {label} ở chi
+        nhánh khác.
+      </p>
+      <button
+        type="button"
+        onClick={hint.onViewAllBranches}
+        className="inline-flex items-center gap-1.5 rounded-lg bg-primary px-3 py-1.5 text-xs font-medium text-primary-foreground hover:bg-primary/90 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
+      >
+        <Icon name="apartment" size={14} />
+        Xem tất cả chi nhánh
+      </button>
+    </div>
+  );
 }
 
 /**
@@ -233,6 +273,7 @@ export function DataTable<TData, TValue>({
   emptyTitle,
   emptyDescription,
   emptyIcon,
+  emptyBranchHint,
 }: DataTableProps<TData, TValue>) {
   const [sorting, setSorting] = useState<SortingState>([]);
   const [rowSelection, setRowSelection] = useState<RowSelectionState>({});
@@ -647,9 +688,13 @@ export function DataTable<TData, TValue>({
                     <p className="font-medium">
                       {emptyTitle ?? "Chưa có dữ liệu"}
                     </p>
-                    <p className="text-xs">
-                      {emptyDescription ?? "Hãy thêm mới hoặc thử bỏ bộ lọc."}
-                    </p>
+                    {emptyBranchHint && emptyBranchHint.otherBranchCount > 0 ? (
+                      <EmptyBranchHintBlock hint={emptyBranchHint} />
+                    ) : (
+                      <p className="text-xs">
+                        {emptyDescription ?? "Hãy thêm mới hoặc thử bỏ bộ lọc."}
+                      </p>
+                    )}
                   </div>
                 </TableCell>
               </TableRow>
@@ -728,8 +773,12 @@ export function DataTable<TData, TValue>({
               <p className="font-medium">
                 {emptyTitle ?? "Chưa có dữ liệu"}
               </p>
-              {emptyDescription && (
-                <p className="text-xs">{emptyDescription}</p>
+              {emptyBranchHint && emptyBranchHint.otherBranchCount > 0 ? (
+                <EmptyBranchHintBlock hint={emptyBranchHint} />
+              ) : (
+                emptyDescription && (
+                  <p className="text-xs">{emptyDescription}</p>
+                )
               )}
             </div>
           </div>

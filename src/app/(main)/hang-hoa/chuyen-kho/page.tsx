@@ -14,6 +14,7 @@ import { ColumnDef } from "@tanstack/react-table";
 import { PageHeader } from "@/components/shared/page-header";
 import { ListPageLayout } from "@/components/shared/list-page-layout";
 import { DataTable } from "@/components/shared/data-table";
+import { AllBranchesBanner } from "@/components/shared/all-branches-banner";
 import { SummaryCard } from "@/components/shared/summary-card";
 import { FilterSidebar, FilterGroup } from "@/components/shared/filter-sidebar";
 import {
@@ -72,7 +73,7 @@ const PAGE_SIZE = 25;
 
 export default function ChuyenKhoPage() {
   const { toast } = useToast();
-  const { activeBranchId } = useBranchFilter();
+  const { activeBranchId, currentBranch } = useBranchFilter();
   const txPerms = useTxRowPermissions("stock_transfer");
   const [data, setData] = useState<StockTransfer[]>([]);
   const [total, setTotal] = useState(0);
@@ -81,6 +82,15 @@ export default function ChuyenKhoPage() {
   const [page, setPage] = useState(0);
   const [statusFilter, setStatusFilter] = useState("all");
   const [expandedRow, setExpandedRow] = useState<number | null>(null);
+  // CEO 08/07: xem tất cả chi nhánh (cục bộ) khi bảng trống vì lọc chi nhánh.
+  // Phiếu chuyển kho có 2 chi nhánh (from/to) — service lọc bằng
+  // .or(from_branch_id.eq, to_branch_id.eq); bỏ branchId = bỏ điều kiện .or → tất cả.
+  const [viewAllBranches, setViewAllBranches] = useState(false);
+  const [otherBranchCount, setOtherBranchCount] = useState(0);
+  // Đổi chi nhánh ở global switcher → về lại chế độ lọc theo chi nhánh.
+  useEffect(() => {
+    setViewAllBranches(false);
+  }, [activeBranchId]);
 
   // Branches for dialog
   const [branches, setBranches] = useState<BranchDetail[]>([]);
@@ -103,23 +113,39 @@ export default function ChuyenKhoPage() {
   const fetchData = useCallback(async () => {
     setLoading(true);
     try {
+      // viewAllBranches (cục bộ) → bỏ điều kiện chi nhánh (.or from/to) → tất cả.
+      const branchScope = viewAllBranches ? undefined : activeBranchId || undefined;
+      const commonFilters = { status: statusFilter };
       const result = await getStockTransfers({
         page,
         pageSize: PAGE_SIZE,
         search,
         filters: {
-          status: statusFilter,
-          ...(activeBranchId && { branchId: activeBranchId }),
+          ...commonFilters,
+          ...(branchScope && { branchId: branchScope }),
         },
       });
       setData(result.data);
       setTotal(result.total);
+      // Bảng trống vì lọc chi nhánh? Đếm phiếu ở chi nhánh khác (cùng bộ lọc, bỏ
+      // branch) để gợi ý. Chỉ khi đang lọc theo 1 chi nhánh cụ thể.
+      if (result.data.length === 0 && !viewAllBranches && activeBranchId) {
+        const all = await getStockTransfers({
+          page: 0,
+          pageSize: 1,
+          search,
+          filters: commonFilters,
+        });
+        setOtherBranchCount(all.total);
+      } else {
+        setOtherBranchCount(0);
+      }
     } catch {
       toast({ variant: "error", title: "Lỗi tải dữ liệu chuyển kho" });
     } finally {
       setLoading(false);
     }
-  }, [search, page, statusFilter, activeBranchId, toast]);
+  }, [search, page, statusFilter, activeBranchId, viewAllBranches, toast]);
 
   useEffect(() => {
     fetchData();
@@ -398,12 +424,24 @@ export default function ChuyenKhoPage() {
         />
       </div>
 
+      {viewAllBranches && (
+        <AllBranchesBanner
+          branchName={currentBranch?.name}
+          onBackToBranch={() => setViewAllBranches(false)}
+        />
+      )}
+
       <div className="flex-1 min-h-0 px-4 pt-2 pb-4">
         <DataTable
           columns={columns}
           data={data}
           loading={loading}
           total={total}
+          emptyBranchHint={{
+            otherBranchCount,
+            onViewAllBranches: () => setViewAllBranches(true),
+            entityLabel: "phiếu chuyển kho",
+          }}
           pageIndex={page}
           pageSize={PAGE_SIZE}
           pageCount={pageCount}

@@ -7,6 +7,7 @@ import { Card } from "@/components/ui/card";
 import { PageHeader } from "@/components/shared/page-header";
 import { ListPageLayout } from "@/components/shared/list-page-layout";
 import { DataTable } from "@/components/shared/data-table";
+import { AllBranchesBanner } from "@/components/shared/all-branches-banner";
 import {
   FilterSidebar,
   FilterGroup,
@@ -270,7 +271,7 @@ function InternalSaleDetail({
 
 export default function InternalSalePage() {
   const { toast } = useToast();
-  const { activeBranchId } = useBranchFilter();
+  const { activeBranchId, currentBranch } = useBranchFilter();
   const txPerms = useTxRowPermissions("internal_sale");
   const [data, setData] = useState<InternalSaleRow[]>([]);
   const [total, setTotal] = useState(0);
@@ -286,25 +287,49 @@ export default function InternalSalePage() {
   const [cancelLoading, setCancelLoading] = useState(false);
   // Sprint UX-1 Stage 4: Audit log shortcut + In phiếu (anomaly fix)
   const [auditDialogTarget, setAuditDialogTarget] = useState<InternalSaleRow | null>(null);
+  // CEO 08/07: xem tất cả chi nhánh (cục bộ) khi bảng trống vì lọc chi nhánh.
+  const [viewAllBranches, setViewAllBranches] = useState(false);
+  const [otherBranchCount, setOtherBranchCount] = useState(0);
+  // Đổi chi nhánh ở global switcher → về lại chế độ lọc theo chi nhánh.
+  useEffect(() => {
+    setViewAllBranches(false);
+  }, [activeBranchId]);
 
   const fetchData = useCallback(async () => {
     setLoading(true);
     try {
+      const commonFilters = {
+        search: search || undefined,
+        status: statusFilter.length === 1 ? statusFilter[0] : undefined,
+      };
+      const branchScope = viewAllBranches ? undefined : activeBranchId || undefined;
       const result = await getInternalSales({
         page,
         pageSize: PAGE_SIZE,
-        search: search || undefined,
-        status: statusFilter.length === 1 ? statusFilter[0] : undefined,
-        branchId: activeBranchId || undefined,
+        ...commonFilters,
+        branchId: branchScope,
       });
       setData(result.data as InternalSaleRow[]);
       setTotal(result.total);
+      // Bảng trống vì lọc chi nhánh? Đếm phiếu ở chi nhánh khác để gợi ý (cùng bộ
+      // lọc, bỏ branch). Chỉ khi đang lọc theo 1 chi nhánh cụ thể.
+      if (result.data.length === 0 && !viewAllBranches && activeBranchId) {
+        const all = await getInternalSales({
+          page: 1,
+          pageSize: 1,
+          ...commonFilters,
+          branchId: undefined,
+        });
+        setOtherBranchCount(all.total);
+      } else {
+        setOtherBranchCount(0);
+      }
     } catch {
       toast({ title: "Lỗi tải dữ liệu", variant: "error" });
     } finally {
       setLoading(false);
     }
-  }, [page, search, statusFilter, activeBranchId, toast]);
+  }, [page, search, statusFilter, activeBranchId, viewAllBranches, toast]);
 
   useEffect(() => {
     fetchData();
@@ -512,11 +537,23 @@ export default function InternalSalePage() {
           </FilterSidebar>
         }
       >
+        {viewAllBranches && (
+          <AllBranchesBanner
+            branchName={currentBranch?.name}
+            onBackToBranch={() => setViewAllBranches(false)}
+          />
+        )}
+
         <DataTable
           columns={columns}
           data={data}
           loading={loading}
           total={total}
+          emptyBranchHint={{
+            otherBranchCount,
+            onViewAllBranches: () => setViewAllBranches(true),
+            entityLabel: "phiếu bán nội bộ",
+          }}
           pageSize={PAGE_SIZE}
           pageIndex={page - 1}
           pageCount={Math.ceil(total / PAGE_SIZE)}

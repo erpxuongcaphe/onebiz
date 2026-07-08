@@ -5,6 +5,7 @@ import { ColumnDef } from "@tanstack/react-table";
 import { PageHeader } from "@/components/shared/page-header";
 import { ListPageLayout } from "@/components/shared/list-page-layout";
 import { DataTable } from "@/components/shared/data-table";
+import { AllBranchesBanner } from "@/components/shared/all-branches-banner";
 import { SummaryCard } from "@/components/shared/summary-card";
 import { KanbanBoard, type KanbanColumn } from "@/components/shared/kanban-board";
 import {
@@ -225,7 +226,7 @@ function ProductionOrderDetail({
 
 export default function SanXuatPage() {
   const { toast } = useToast();
-  const { activeBranchId } = useBranchFilter();
+  const { activeBranchId, currentBranch } = useBranchFilter();
   const txPerms = useTxRowPermissions("production");
   const [data, setData] = useState<ProductionOrder[]>([]);
   const [total, setTotal] = useState(0);
@@ -252,17 +253,50 @@ export default function SanXuatPage() {
     "completed",
   ]);
 
+  // CEO 08/07: xem tất cả chi nhánh (cục bộ) khi bảng trống vì lọc chi nhánh.
+  const [viewAllBranches, setViewAllBranches] = useState(false);
+  const [otherBranchCount, setOtherBranchCount] = useState(0);
+  // Đổi chi nhánh ở global switcher → về lại chế độ lọc theo chi nhánh.
+  useEffect(() => {
+    setViewAllBranches(false);
+  }, [activeBranchId]);
+
   const fetchData = useCallback(async () => {
     setLoading(true);
     try {
       // Branch-aware: chỉ lấy production orders của chi nhánh đang active
       // (Xưởng rang → coffee orders, Kho tổng → yaourt/siro orders).
+      // viewAllBranches (cục bộ) → bỏ lọc chi nhánh, xem tất cả.
+      const branchScope = viewAllBranches ? undefined : activeBranchId || undefined;
       const result = await getProductionOrders({
         limit: 200,
-        branchId: activeBranchId || undefined,
+        branchId: branchScope,
       });
       setData(result.data);
       setTotal(result.total);
+      // Danh sách lọc client-side (search + trạng thái). Nếu SAU khi lọc mà rỗng
+      // vì đang bó theo 1 chi nhánh → đếm lệnh khớp bộ lọc ở các chi nhánh khác.
+      if (!viewAllBranches && activeBranchId) {
+        const q = search.trim().toLowerCase();
+        const matchesLocalFilters = (o: ProductionOrder) => {
+          if (statusFilters.length > 0 && !statusFilters.includes(o.status)) return false;
+          if (!q) return true;
+          return (
+            (o.code?.toLowerCase().includes(q) ?? false) ||
+            (o.productName?.toLowerCase().includes(q) ?? false) ||
+            (o.productCode?.toLowerCase().includes(q) ?? false)
+          );
+        };
+        const visibleCount = result.data.filter(matchesLocalFilters).length;
+        if (visibleCount === 0) {
+          const all = await getProductionOrders({ limit: 200, branchId: undefined });
+          setOtherBranchCount(all.data.filter(matchesLocalFilters).length);
+        } else {
+          setOtherBranchCount(0);
+        }
+      } else {
+        setOtherBranchCount(0);
+      }
     } catch (err) {
       toast({
         title: "Lỗi tải lệnh sản xuất",
@@ -272,7 +306,7 @@ export default function SanXuatPage() {
     } finally {
       setLoading(false);
     }
-  }, [toast, activeBranchId]);
+  }, [toast, activeBranchId, viewAllBranches, search, statusFilters]);
 
   useEffect(() => {
     fetchData();
@@ -463,7 +497,16 @@ export default function SanXuatPage() {
           </div>
         )}
 
-        {!loading && filtered.length === 0 ? (
+        {viewAllBranches && (
+          <AllBranchesBanner
+            branchName={currentBranch?.name}
+            onBackToBranch={() => setViewAllBranches(false)}
+          />
+        )}
+
+        {/* Empty-state mặc định — nhường chỗ cho DataTable (emptyBranchHint) khi
+            trống vì lọc chi nhánh mà chi nhánh khác có lệnh, để hiện gợi ý. */}
+        {!loading && filtered.length === 0 && otherBranchCount === 0 ? (
           <div className="flex flex-col items-center justify-center py-20 text-muted-foreground">
             <Icon name="factory" size={48} className="mb-3 opacity-30" />
             <p className="text-sm">Chưa có lệnh sản xuất nào</p>
@@ -516,6 +559,11 @@ export default function SanXuatPage() {
             data={pagedData}
             loading={loading}
             total={filtered.length}
+            emptyBranchHint={{
+              otherBranchCount,
+              onViewAllBranches: () => setViewAllBranches(true),
+              entityLabel: "lệnh sản xuất",
+            }}
             pageIndex={page}
             pageSize={pageSize}
             pageCount={Math.ceil(filtered.length / pageSize)}

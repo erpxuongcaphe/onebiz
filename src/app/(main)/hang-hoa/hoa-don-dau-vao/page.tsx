@@ -6,6 +6,7 @@ import { Badge } from "@/components/ui/badge";
 import { PageHeader } from "@/components/shared/page-header";
 import { ListPageLayout } from "@/components/shared/list-page-layout";
 import { DataTable } from "@/components/shared/data-table";
+import { AllBranchesBanner } from "@/components/shared/all-branches-banner";
 import { SummaryCard } from "@/components/shared/summary-card";
 import {
   FilterSidebar,
@@ -189,7 +190,7 @@ const columns: ColumnDef<InputInvoice, unknown>[] = [
 
 export default function HoaDonDauVaoPage() {
   const { toast } = useToast();
-  const { activeBranchId } = useBranchFilter();
+  const { activeBranchId, currentBranch } = useBranchFilter();
   const txPerms = useTxRowPermissions("input_invoice");
   const [data, setData] = useState<InputInvoice[]>([]);
   const [total, setTotal] = useState(0);
@@ -219,27 +220,54 @@ export default function HoaDonDauVaoPage() {
   const [datePreset, setDatePreset] = useState<DatePresetValue>("all");
   const [dateFrom, setDateFrom] = useState("");
   const [dateTo, setDateTo] = useState("");
+  // CEO 08/07: xem tất cả chi nhánh (cục bộ) khi bảng trống vì lọc chi nhánh.
+  const [viewAllBranches, setViewAllBranches] = useState(false);
+  const [otherBranchCount, setOtherBranchCount] = useState(0);
+  // Đổi chi nhánh ở global switcher → về lại chế độ lọc theo chi nhánh.
+  useEffect(() => {
+    setViewAllBranches(false);
+  }, [activeBranchId]);
 
   const fetchData = useCallback(async () => {
     setLoading(true);
     const presetRange = computeListPresetRange(datePreset);
     const effectiveDateFrom = datePreset === "custom" ? dateFrom : presetRange.from;
     const effectiveDateTo = datePreset === "custom" ? dateTo : presetRange.to;
+    // Lọc chung (không kèm chi nhánh) — dùng lại cho cả lời gọi chính lẫn probe
+    // "đếm hóa đơn ở chi nhánh khác". Service này nhận chi nhánh qua filters.branchId,
+    // falsy/"all" → tất cả chi nhánh.
+    const commonFilters = {
+      ...(statusFilter !== "all" && { status: statusFilter }),
+      ...(effectiveDateFrom && { dateFrom: effectiveDateFrom }),
+      ...(effectiveDateTo && { dateTo: effectiveDateTo }),
+    };
+    const branchScope = viewAllBranches ? undefined : activeBranchId;
     const result = await getInputInvoices({
       page,
       pageSize,
       search,
       filters: {
-        ...(statusFilter !== "all" && { status: statusFilter }),
-        ...(activeBranchId && { branchId: activeBranchId }),
-        ...(effectiveDateFrom && { dateFrom: effectiveDateFrom }),
-        ...(effectiveDateTo && { dateTo: effectiveDateTo }),
+        ...commonFilters,
+        ...(branchScope && { branchId: branchScope }),
       },
     });
     setData(result.data);
     setTotal(result.total);
+    // Bảng trống vì lọc chi nhánh? Đếm hóa đơn ở chi nhánh khác để gợi ý (cùng bộ
+    // lọc, bỏ branch). Chỉ khi đang lọc theo 1 chi nhánh cụ thể.
+    if (result.data.length === 0 && !viewAllBranches && activeBranchId) {
+      const all = await getInputInvoices({
+        page: 0,
+        pageSize: 1,
+        search,
+        filters: commonFilters,
+      });
+      setOtherBranchCount(all.total);
+    } else {
+      setOtherBranchCount(0);
+    }
     setLoading(false);
-  }, [page, pageSize, search, statusFilter, activeBranchId, datePreset, dateFrom, dateTo]);
+  }, [page, pageSize, search, statusFilter, activeBranchId, datePreset, dateFrom, dateTo, viewAllBranches]);
 
   useEffect(() => {
     fetchData();
@@ -345,11 +373,23 @@ export default function HoaDonDauVaoPage() {
         />
       </div>
 
+      {viewAllBranches && (
+        <AllBranchesBanner
+          branchName={currentBranch?.name}
+          onBackToBranch={() => setViewAllBranches(false)}
+        />
+      )}
+
       <DataTable
         columns={columns}
         data={data}
         loading={loading}
         total={total}
+        emptyBranchHint={{
+          otherBranchCount,
+          onViewAllBranches: () => setViewAllBranches(true),
+          entityLabel: "hóa đơn",
+        }}
         pageIndex={page}
         pageSize={pageSize}
         pageCount={Math.ceil(total / pageSize)}
