@@ -245,20 +245,23 @@ function buildPnL(
   opEx: number,
   deliveryFee: number = 0
 ): ProfitAndLoss {
-  const grossProfit = revenue - cogs;
+  // CEO 08/07: lãi gộp/biên tính trên doanh thu HÀNG HÓA (ship thu hộ, không vào lãi).
+  // Phí giao hàng là khoản THU HỘ đơn vị vận chuyển → tách khỏi doanh thu hàng hóa
+  // trước khi tính lãi. revenue (tổng, gồm ship) GIỮ để hiển thị "Tổng doanh thu".
+  const goodsRevenue = revenue - deliveryFee;
+  const grossProfit = goodsRevenue - cogs;
   const netProfit = grossProfit - opEx;
   return {
     period,
     revenue,
-    // Phí giao hàng thu hộ tách khỏi doanh thu hàng hóa; total (revenue) GIỮ gồm phí giao.
-    goodsRevenue: revenue - deliveryFee,
+    goodsRevenue,
     deliveryFee,
     cogs,
     grossProfit,
-    grossMargin: revenue > 0 ? Math.round((grossProfit / revenue) * 1000) / 10 : 0,
+    grossMargin: goodsRevenue > 0 ? Math.round((grossProfit / goodsRevenue) * 1000) / 10 : 0,
     operatingExpense: opEx,
     netProfit,
-    netMargin: revenue > 0 ? Math.round((netProfit / revenue) * 1000) / 10 : 0,
+    netMargin: goodsRevenue > 0 ? Math.round((netProfit / goodsRevenue) * 1000) / 10 : 0,
   };
 }
 

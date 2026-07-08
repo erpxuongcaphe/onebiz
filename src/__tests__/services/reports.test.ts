@@ -140,6 +140,66 @@ describe("getProfitAndLoss", () => {
     // Net margin = (2M / 15M) * 100 = 13.3%
     expect(result.current.netMargin).toBe(13.3);
   });
+
+  // CEO 08/07: phí giao hàng là THU HỘ → tách khỏi lãi gộp/biên.
+  //   Kịch bản: revenue=1.000.000 (gồm ship 50.000), cogs=600.000, opEx=100.000.
+  //   goodsRevenue = 1.000.000 − 50.000 = 950.000
+  //   grossProfit  = 950.000 − 600.000 = 350.000  (KHÔNG phải 400.000)
+  //   netProfit    = 350.000 − 100.000 = 250.000
+  it("lãi gộp tính trên doanh thu HÀNG HÓA (ship thu hộ không vào lãi)", async () => {
+    tableDataMap = {
+      ...defaultTableData(),
+      // 1 hóa đơn: total=1.000.000 (đã gồm phí giao 50.000).
+      invoices: {
+        data: [
+          {
+            id: "inv-ship",
+            total: 1_000_000,
+            delivery_fee: 50_000,
+            status: "completed",
+            created_at: new Date().toISOString(),
+          },
+        ],
+        error: null,
+      },
+      // COGS = 600.000 (1 dòng qty=1 * cost 600.000).
+      invoice_items: {
+        data: [
+          { invoice_id: "inv-ship", quantity: 1, product_name: "SP X", products: { cost_price: 600_000 } },
+        ],
+        error: null,
+      },
+      // OpEx = 100.000 (category không thuộc excludeFromOpEx).
+      cash_transactions: {
+        data: [{ type: "payment", category: "Vận hành", amount: 100_000 }],
+        error: null,
+      },
+    };
+
+    const result = await getProfitAndLoss();
+    const pnl = result.current;
+
+    expect(pnl.revenue).toBe(1_000_000); // tổng doanh thu GIỮ gồm ship
+    expect(pnl.deliveryFee).toBe(50_000);
+    expect(pnl.goodsRevenue).toBe(950_000);
+    expect(pnl.cogs).toBe(600_000);
+    expect(pnl.grossProfit).toBe(350_000); // 950k − 600k, KHÔNG phải 400k
+    expect(pnl.operatingExpense).toBe(100_000);
+    expect(pnl.netProfit).toBe(250_000);
+    // grossMargin = 350k / 950k = 36.8% (chia doanh thu hàng hóa, không phải tổng)
+    expect(pnl.grossMargin).toBe(36.8);
+    // netMargin = 250k / 950k = 26.3%
+    expect(pnl.netMargin).toBe(26.3);
+  });
+
+  it("goodsRevenue = revenue khi không có phí giao hàng", async () => {
+    // Mock mặc định: invoices không có delivery_fee → deliveryFee = 0.
+    const result = await getProfitAndLoss();
+    expect(result.current.deliveryFee).toBe(0);
+    expect(result.current.goodsRevenue).toBe(result.current.revenue);
+    // grossProfit không đổi so với công thức cũ khi ship = 0.
+    expect(result.current.grossProfit).toBe(5_000_000);
+  });
 });
 
 describe("getCOGSBreakdown", () => {

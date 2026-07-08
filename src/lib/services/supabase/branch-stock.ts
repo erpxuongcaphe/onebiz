@@ -133,14 +133,18 @@ export async function getBranchStockPage(params: {
   offset?: number;
 }): Promise<{ rows: BranchStockRow[]; total: number }> {
   const tenantId = await getCurrentTenantId();
-  // Khi cần filter productType hoặc search: dùng inner join "products!inner"
-  const needInnerJoin = Boolean(params.productType || params.search);
-  // CEO 28/05/2026 FIX: cú pháp embed PostgREST đúng là `alias:fk!inner`,
-  // KHÔNG phải `alias!inner:fk` (đặt !inner ở giữa → PGRST100 "failed to
-  // parse select parameter" → HTTP 400 → toast "Lỗi tải tồn kho" khi search).
-  const productsRel = needInnerJoin
-    ? "products:product_id!inner ( id, code, name, product_type, unit, cost_price, min_stock, max_stock )"
-    : "products:product_id ( id, code, name, product_type, unit, cost_price, min_stock, max_stock )";
+  // A2 08/07/2026 (Cách B): LUÔN inner join products để loại được món menu F&B
+  // trong MỌI trường hợp (kể cả khi không filter/search). An toàn vì
+  // branch_stock.product_id là NOT NULL + FK ON DELETE RESTRICT (migration 00049)
+  // → mọi dòng branch_stock LUÔN có product khớp, không có orphan → inner join
+  // KHÔNG làm rớt dòng hợp lệ nào của hàng KHÔNG phải menu (NVL/SKU Retail).
+  // Trước đây chỉ inner khi có filter → không filter thì món menu vẫn lọt vào
+  // danh sách tồn (bug Cách B).
+  // CEO 28/05/2026: cú pháp embed PostgREST đúng là `alias:fk!inner`, KHÔNG phải
+  // `alias!inner:fk` (đặt !inner ở giữa → PGRST100 "failed to parse select
+  // parameter" → HTTP 400 → toast "Lỗi tải tồn kho").
+  const productsRel =
+    "products:product_id!inner ( id, code, name, product_type, unit, cost_price, min_stock, max_stock )";
 
   let query = supabase
     .from("branch_stock")
@@ -164,9 +168,9 @@ export async function getBranchStockPage(params: {
 
   if (params.branchId) query = query.eq("branch_id", params.branchId);
   if (params.productType) query = query.eq("products.product_type", params.productType);
-  // A2 (07/07): khi lọc theo loại/tìm kiếm (inner join), bỏ món menu F&B —
-  // không giữ tồn nên không thuộc danh sách tồn kho.
-  if (needInnerJoin) query = query.neq("products.inventory_role", "fnb_menu_item");
+  // A2 08/07 (Cách B): loại món menu F&B (không giữ tồn) khỏi danh sách tồn kho —
+  // áp LUÔN nhờ inner join cố định ở trên (không còn phụ thuộc có filter hay không).
+  query = query.neq("products.inventory_role", "fnb_menu_item");
   if (params.search) {
     const esc = params.search.replace(/[%_]/g, "\\$&");
     query = query.or(
@@ -246,11 +250,14 @@ export async function getBranchStockAggregates(params: {
   totalValue: number;
   lowStockCount: number;
 }> {
-  const needInnerJoin = Boolean(params.productType || params.search);
-  // CEO 28/05/2026 FIX: cú pháp đúng `alias:fk!inner` (xem getBranchStockPage).
-  const productsRel = needInnerJoin
-    ? "products:product_id!inner ( product_type, code, name, cost_price, min_stock )"
-    : "products:product_id ( product_type, code, name, cost_price, min_stock )";
+  // A2 08/07/2026 (Cách B): LUÔN inner join products để loại món menu F&B khỏi
+  // số liệu tổng (tổng dòng/tổng tồn/giá trị/low-stock) trong MỌI trường hợp —
+  // khớp getBranchStockPage. An toàn vì branch_stock.product_id NOT NULL + FK
+  // RESTRICT (không orphan). Trước đây chỉ inner khi có filter → summary card
+  // không filter vẫn cộng cả món menu vào giá trị tồn (giá vốn) → phồng số.
+  // CEO 28/05/2026: cú pháp đúng `alias:fk!inner` (xem getBranchStockPage).
+  const productsRel =
+    "products:product_id!inner ( product_type, code, name, cost_price, min_stock )";
 
   const tenantId = await getCurrentTenantId();
   let query = supabase
@@ -269,9 +276,9 @@ export async function getBranchStockAggregates(params: {
 
   if (params.branchId) query = query.eq("branch_id", params.branchId);
   if (params.productType) query = query.eq("products.product_type", params.productType);
-  // A2 (07/07): khi lọc theo loại/tìm kiếm (inner join), bỏ món menu F&B —
-  // không giữ tồn nên không thuộc danh sách tồn kho.
-  if (needInnerJoin) query = query.neq("products.inventory_role", "fnb_menu_item");
+  // A2 08/07 (Cách B): loại món menu F&B khỏi số liệu tổng — áp LUÔN nhờ inner join
+  // cố định ở trên (không còn phụ thuộc có filter hay không).
+  query = query.neq("products.inventory_role", "fnb_menu_item");
   if (params.search) {
     const esc = params.search.replace(/[%_]/g, "\\$&");
     query = query.or(

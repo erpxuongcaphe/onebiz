@@ -56,30 +56,67 @@ export async function completeReturn(input: CompleteReturnInput): Promise<void> 
   const supabase = getClient();
 
   // ── 1. Stock revert — BATCH 3R 13/06/2026: BOM-AWARE.
-  //   Trước đây cộng tồn type='in' cho MỌI SKU → sai cho SKU has_bom (cộng tồn
-  //   ảo + không hồi NVL). Nay phân nhánh:
-  //     - SKU has_bom → restore_bom_for_return (hồi NVL theo BOM, KHÔNG cộng
-  //       tồn ảo SKU). Nếu has_bom nhưng chưa setup BOM tại branch
-  //       (bom_found=false) → fallback cộng tồn SKU để không mất hàng.
-  //     - SKU thường → cộng tồn SKU như cũ (đúng — hàng lên kệ lại).
+  //   A2 08/07/2026 (Cách B): thêm inventory_role để tách MÓN MENU F&B ra khỏi
+  //   nhánh Retail 2-mã. Phân nhánh theo vai trò:
+  //     - MÓN MENU F&B (inventory_role='fnb_menu_item'): KHÔNG BAO GIỜ giữ tồn.
+  //       Trả hàng → chỉ hồi THÀNH PHẦN theo công thức qua restore_bom_for_return.
+  //       Nếu bom_found=false (chưa gắn công thức) → TUYỆT ĐỐI KHÔNG cộng tồn SKU
+  //       (mã món không có kho — cộng vào là tồn ảo). Chỉ bỏ qua + log cảnh báo.
+  //       Đây là điểm khác biệt mấu chốt với nhánh Retail has_bom bên dưới.
+  //     - SKU Retail 2-mã (has_bom nhưng KHÔNG phải menu F&B):
+  //       restore_bom_for_return (hồi NVL theo BOM, KHÔNG cộng tồn ảo SKU). Nếu
+  //       has_bom nhưng chưa setup BOM tại branch (bom_found=false) → fallback
+  //       cộng tồn SKU để không mất hàng (ĐÚNG cho Retail — SKU này có giữ tồn).
+  //     - SKU thường (Retail không BOM) → cộng tồn SKU như cũ (hàng lên kệ lại).
   const productIds = [...new Set(input.items.map((i) => i.productId))];
   const hasBomMap = new Map<string, boolean>();
+  const roleMap = new Map<string, string | null>();
   if (productIds.length > 0) {
     const { data: prodRows, error: prodErr } = await supabase
       .from("products")
-      .select("id, has_bom")
+      .select("id, has_bom, inventory_role")
       .eq("tenant_id", ctx.tenantId)
       .in("id", productIds);
     if (prodErr) handleError(prodErr, "completeReturn:has_bom");
     for (const p of prodRows ?? []) {
       hasBomMap.set(p.id as string, Boolean((p as { has_bom?: boolean }).has_bom));
+      roleMap.set(
+        p.id as string,
+        ((p as { inventory_role?: string | null }).inventory_role) ?? null,
+      );
     }
   }
 
   const normalStockInputs: ManualStockMovementInput[] = [];
   for (const item of input.items) {
-    if (hasBomMap.get(item.productId)) {
-      // SKU has_bom → hồi NVL theo BOM (mirror consume dấu dương).
+    const isFnbMenu = roleMap.get(item.productId) === "fnb_menu_item";
+    if (isFnbMenu) {
+      // MÓN MENU F&B → chỉ hồi thành phần theo công thức, KHÔNG giữ tồn mã món.
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      const { data: restoreData, error: restoreErr } = await (supabase.rpc as any)(
+        "restore_bom_for_return",
+        {
+          p_tenant_id: ctx.tenantId,
+          p_branch_id: ctx.branchId,
+          p_sku_id: item.productId,
+          p_qty: item.quantity,
+          p_reference_id: input.returnId,
+          p_created_by: ctx.userId,
+          p_ref_code: input.returnCode,
+        },
+      );
+      if (restoreErr) handleError(restoreErr, "completeReturn:restore_bom");
+      const bomFound = (restoreData as { bom_found?: boolean } | null)?.bom_found;
+      if (bomFound === false) {
+        // Cách B: mã món menu KHÔNG có tồn → KHÔNG fallback cộng tồn SKU (tránh
+        // tồn ảo). Chỉ cảnh báo — thành phần sẽ được đối soát khi món gắn công thức.
+        console.warn(
+          `[completeReturn] Món menu F&B chưa có công thức (bom_found=false) → ` +
+            `bỏ qua hồi kho, KHÔNG cộng tồn ảo: ${item.productName} (${item.productId})`,
+        );
+      }
+    } else if (hasBomMap.get(item.productId)) {
+      // SKU Retail 2-mã (has_bom, không phải menu) → hồi NVL theo BOM (mirror consume).
       // eslint-disable-next-line @typescript-eslint/no-explicit-any
       const { data: restoreData, error: restoreErr } = await (supabase.rpc as any)(
         "restore_bom_for_return",
@@ -97,7 +134,7 @@ export async function completeReturn(input: CompleteReturnInput): Promise<void> 
       const bomFound = (restoreData as { bom_found?: boolean } | null)?.bom_found;
       if (bomFound === false) {
         // has_bom nhưng chưa setup BOM tại branch → fallback cộng tồn SKU
-        // (giữ hàng, không mất). Hiếm gặp.
+        // (giữ hàng, không mất). Đúng cho Retail vì SKU này CÓ giữ tồn. Hiếm gặp.
         normalStockInputs.push({
           productId: item.productId,
           quantity: item.quantity,
