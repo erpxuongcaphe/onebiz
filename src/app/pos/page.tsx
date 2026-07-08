@@ -37,6 +37,7 @@ import {
   getOrCreateWalkInCustomer,
   adjustCustomerDebt,
   getCustomerById,
+  attachDeliveryToInvoice,
 } from "@/lib/services/supabase";
 import { useAutoSaveDraft, loadLocalCart } from "./hooks/use-auto-save-draft";
 import { RecoveryDialog } from "./components/recovery-dialog";
@@ -1370,6 +1371,7 @@ function PosPageInner() {
         })),
         subtotal: state.subtotal,
         discountAmount: state.orderDiscountAmount + state.lineDiscountTotal,
+        shippingFee: state.shippingFee,
         total: state.total,
         paid: 0,
         change: 0,
@@ -1835,6 +1837,56 @@ function PosPageInner() {
         }
       }
 
+      // CEO 08/07/2026: đơn "Bán giao hàng" → gắn phí ship + VẬN ĐƠN vào HĐ vừa
+      // tạo. total đã gồm ship (page truyền state.total); hàm này set cột
+      // delivery_fee + reconcile total/debt (nhánh nháp có thể lưu thiếu ship do
+      // hash auto-save bỏ ship) + tạo shipping_order (cod = tổng − đã thu).
+      // Best-effort: lỗi → toast hướng dẫn tạo vận đơn tay, KHÔNG block (đã thu tiền).
+      if (
+        state.sellingMode === "delivery" &&
+        invoiceId &&
+        !isOfflineCheckout &&
+        networkStatus.isOnline
+      ) {
+        const di = state.deliveryInfo;
+        const hasReceiver =
+          !!di.recipientName.trim() &&
+          !!di.recipientPhone.trim() &&
+          !!di.address.trim();
+        if (state.shippingFee > 0 || hasReceiver) {
+          try {
+            const r = await attachDeliveryToInvoice({
+              invoiceId,
+              deliveryFee: state.shippingFee,
+              authoritativeTotal: state.total,
+              paid,
+              receiverName: di.recipientName,
+              receiverPhone: di.recipientPhone,
+              receiverAddress: [di.address, di.ward, di.district]
+                .map((s) => s.trim())
+                .filter(Boolean)
+                .join(", "),
+              note: di.deliveryNote || null,
+            });
+            if (r.shipmentCode) {
+              toast({
+                title: `Đã tạo vận đơn ${r.shipmentCode}`,
+                description: `Phí giao ${formatCurrency(state.shippingFee)} · thu hộ ${formatCurrency(Math.max(0, state.total - paid))}`,
+                variant: "success",
+              });
+            }
+          } catch (err) {
+            console.error("[POS] attachDeliveryToInvoice:", err);
+            toast({
+              title: "Đã lưu hoá đơn nhưng chưa gắn được vận đơn",
+              description: `Đơn ${invoiceCode} OK. Vào Đơn hàng → Hóa đơn, mở đơn này bấm "Tạo vận đơn".`,
+              variant: "warning",
+              duration: 8000,
+            });
+          }
+        }
+      }
+
       // Day 3 16/05/2026: audit log discount manual (sau OTP duyệt)
       // Best-effort: nếu fail không block checkout. Skip offline (sync sau).
       if (
@@ -1900,6 +1952,7 @@ function PosPageInner() {
           })),
           subtotal: state.subtotal,
           discountAmount: state.orderDiscountAmount + state.lineDiscountTotal,
+          shippingFee: state.shippingFee,
           total: state.total,
           // Receipt hiển thị số khách đưa THỰC (paidEntered) — không phải
           // paid clean trong invoice. Cashier check khớp tiền cầm tay.
@@ -1935,6 +1988,10 @@ function PosPageInner() {
                 { label: "Tổng tiền hàng", value: money(receipt.subtotal) },
                 ...(receipt.discountAmount > 0
                   ? [{ label: "Giảm giá", value: money(receipt.discountAmount) }]
+                  : []),
+                // CEO 08/07: đơn Bán giao hàng — hiện phí ship (total đã gồm).
+                ...(state.shippingFee > 0
+                  ? [{ label: "Phí giao hàng", value: money(state.shippingFee) }]
                   : []),
                 { label: "Tổng cộng", value: money(receipt.total), bold: true },
                 { label: "Khách đã thanh toán", value: money(paidEntered) },

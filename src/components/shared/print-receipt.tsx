@@ -20,6 +20,8 @@ export interface ReceiptData {
   }[];
   subtotal: number;
   discountAmount: number;
+  /** CEO 08/07: phí giao hàng (đơn Bán giao hàng). total ĐÃ gồm khoản này. */
+  shippingFee?: number;
   total: number;
   paid: number;
   change: number;
@@ -167,6 +169,12 @@ export function PrintReceipt({ data, width = "80mm" }: PrintReceiptProps) {
             <span>-{formatCurrency(data.discountAmount)}</span>
           </div>
         )}
+        {(data.shippingFee ?? 0) > 0 && (
+          <div className="row">
+            <span>Phi giao hang</span>
+            <span>{formatCurrency(data.shippingFee ?? 0)}</span>
+          </div>
+        )}
         <div className="row total-row">
           <span>TONG CONG</span>
           <span>{formatCurrency(data.total)}</span>
@@ -286,6 +294,7 @@ ${itemsHtml}
 <div class="line"></div>
 <div class="row"><span>Tong tien hang</span><span>${formatCurrency(data.subtotal)}</span></div>
 ${data.discountAmount > 0 ? `<div class="row"><span>Giam gia</span><span>-${formatCurrency(data.discountAmount)}</span></div>` : ""}
+${(data.shippingFee ?? 0) > 0 ? `<div class="row"><span>Phi giao hang</span><span>${formatCurrency(data.shippingFee ?? 0)}</span></div>` : ""}
 <div class="row total-row"><span>TONG CONG</span><span>${formatCurrency(data.total)}</span></div>
 <div class="line"></div>
 <div class="row"><span>Phuong thuc:</span><span>${paymentLabel}</span></div>
@@ -316,6 +325,7 @@ ${data.note ? `<div class="line"></div><div style="font-size:10px">Ghi chu: ${da
     })),
     subtotal: data.subtotal,
     discountAmount: data.discountAmount,
+    deliveryFee: data.shippingFee, // CEO 08/07: phí ship → bill nhiệt ESC/POS
     total: data.total,
     paid: data.paid,
     change: data.change,

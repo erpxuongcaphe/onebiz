@@ -248,6 +248,97 @@ export async function createShipmentForInvoice(
   return mapShippingOrder(created);
 }
 
+export interface AttachDeliveryInput {
+  invoiceId: string;
+  /** Phí giao hàng thu khách (state.shippingFee). */
+  deliveryFee: number;
+  /** Tổng ĐÚNG đã gồm ship (state.total). Reconcile khi nhánh nháp lưu thiếu. */
+  authoritativeTotal: number;
+  /** Số đã thu tại quầy (COD → thường 0). */
+  paid: number;
+  receiverName?: string;
+  receiverPhone?: string;
+  receiverAddress?: string;
+  partnerId?: string | null;
+  note?: string | null;
+}
+
+/**
+ * CEO 08/07: sau khi POS Retail thanh toán đơn "Bán giao hàng" → gắn phí ship +
+ * vận đơn vào hóa đơn VỪA TẠO. Cả 2 nhánh (posCheckout tươi / completeDraftOrder)
+ * đều ghi `invoices.total` GỒM ship (page truyền `state.total`) nhưng KHÔNG set
+ * cột `delivery_fee`; riêng nhánh nháp: hash auto-save bỏ phí ship → nếu cashier
+ * nhập ship SAU khi sửa hàng, nháp lưu total CŨ THIẾU ship. Hàm này:
+ *   1. set `delivery_fee` + RECONCILE `total`/`debt` về đúng (state.total).
+ *      Trigger 00130 tự đồng bộ `customers.debt` từ SUM(invoices.debt) → không
+ *      cần chỉnh nợ KH tay, không recursion.
+ *   2. tạo `shipping_order` (cod = tổng − đã thu) nếu đủ người nhận/SĐT/địa chỉ.
+ * Best-effort: lỗi ném ra để page toast; KHÔNG rollback hóa đơn (đã thu tiền).
+ */
+export async function attachDeliveryToInvoice(
+  input: AttachDeliveryInput,
+): Promise<{ shipmentCode: string | null }> {
+  const supabase = getClient();
+  const ctx = await getCurrentContext();
+  const fee = Math.max(0, Number(input.deliveryFee) || 0);
+  const total = Math.max(0, Number(input.authoritativeTotal) || 0);
+  const paid = Math.max(0, Number(input.paid) || 0);
+  const newDebt = Math.max(0, total - paid);
+
+  // 1. Set delivery_fee + reconcile total/debt (nhánh nháp total có thể thiếu ship).
+  //    Trigger 00130 tự recompute customers.debt.
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  const { error: updErr } = await (supabase as any)
+    .from("invoices")
+    .update({ delivery_fee: fee, total, debt: newDebt })
+    .eq("tenant_id", ctx.tenantId)
+    .eq("id", input.invoiceId);
+  if (updErr) handleError(updErr, "attachDeliveryToInvoice.updateInvoice");
+
+  // 2. Tạo vận đơn — chỉ khi đủ người nhận (cột NOT NULL của shipping_orders).
+  const rName = (input.receiverName ?? "").trim();
+  const rPhone = (input.receiverPhone ?? "").trim();
+  const rAddr = (input.receiverAddress ?? "").trim();
+  if (!rName || !rPhone || !rAddr) return { shipmentCode: null };
+
+  // Chặn trùng (đã có vận đơn còn hiệu lực — vd double checkout).
+  const { data: existing } = await supabase
+    .from("shipping_orders")
+    .select("code")
+    .eq("tenant_id", ctx.tenantId)
+    .eq("invoice_id", input.invoiceId)
+    .not("status", "in", "(cancelled,returned)")
+    .limit(1)
+    .maybeSingle();
+  if (existing) return { shipmentCode: (existing as { code: string }).code };
+
+  const { data: shipCode, error: codeErr } = await supabase.rpc("next_code", {
+    p_tenant_id: ctx.tenantId,
+    p_entity_type: "shipping_order",
+  });
+  if (codeErr) handleError(codeErr, "attachDeliveryToInvoice.code");
+
+  const { data: created, error: shipErr } = await supabase
+    .from("shipping_orders")
+    .insert({
+      tenant_id: ctx.tenantId,
+      invoice_id: input.invoiceId,
+      partner_id: input.partnerId || null,
+      code: (shipCode as string) ?? `VD${Math.floor(performance.now())}`,
+      status: "pending" as const,
+      shipping_fee: fee,
+      cod_amount: newDebt, // COD = số còn phải thu khi giao
+      receiver_name: rName,
+      receiver_phone: rPhone,
+      receiver_address: rAddr,
+      note: input.note || null,
+    })
+    .select("code")
+    .single();
+  if (shipErr) handleError(shipErr, "attachDeliveryToInvoice.insertShipment");
+  return { shipmentCode: (created as { code: string } | null)?.code ?? null };
+}
+
 // --- Delivery Partners ---
 
 export async function getDeliveryPartners(params: QueryParams): Promise<QueryResult<DeliveryPartner>> {
