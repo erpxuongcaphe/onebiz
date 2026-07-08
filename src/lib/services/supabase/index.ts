@@ -54,6 +54,7 @@ export {
   completeSalesOrder,
   cancelSalesOrder,
   getSalesOrderItems,
+  getDraftOrderItems,
 } from "./orders";
 export type { DraftOrderSummary, DraftOrderDetail, SalesOrderItemRow } from "./orders";
 export { getReturns, getReturnStatuses, getReturnItems } from "./returns";

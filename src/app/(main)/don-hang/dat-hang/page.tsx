@@ -35,10 +35,11 @@ import { usePrintWithPicker } from "@/lib/hooks/use-print-with-picker";
 import { buildSalesOrderPrintData, toPrintLines } from "@/lib/print-templates";
 import { formatCurrency, formatDate, formatUser } from "@/lib/format";
 import { exportToExcel, exportToCsv } from "@/lib/utils/export";
+import { computeListPresetRange } from "@/lib/utils/list-date-preset-range";
 import {
   getOrders,
-  cancelSalesOrder,
-  getSalesOrderItems,
+  cancelInvoice,
+  getDraftOrderItems,
   type SalesOrderItemRow,
 } from "@/lib/services";
 import type { SalesOrder } from "@/lib/types";
@@ -113,7 +114,7 @@ function OrderDetail({
   useEffect(() => {
     let cancelled = false;
     setItemsLoading(true);
-    getSalesOrderItems(order.id)
+    getDraftOrderItems(order.id)
       .then((rows) => { if (!cancelled) setItems(rows); })
       .catch(() => { if (!cancelled) setItems([]); })
       .finally(() => { if (!cancelled) setItemsLoading(false); });
@@ -298,8 +299,12 @@ export default function DatHangPage() {
 
   const fetchData = useCallback(async () => {
     setLoading(true);
+    // FIX (CEO 08/07): áp ô "Thời gian" (trước đây không lọc ngày). getOrders
+    // đọc hóa đơn nháp — bỏ lọc status cũ (mọi đơn đều là nháp/chờ xử lý).
+    const presetRange = computeListPresetRange(datePreset);
     const commonFilters = {
-      ...(selectedStatuses.length > 0 && { status: selectedStatuses }),
+      ...(presetRange.from && { dateFrom: presetRange.from }),
+      ...(presetRange.to && { dateTo: presetRange.to }),
     };
     const branchScope = viewAllBranches ? undefined : activeBranchId;
     const result = await getOrders({
@@ -328,7 +333,7 @@ export default function DatHangPage() {
       setOtherBranchCount(0);
     }
     setLoading(false);
-  }, [page, pageSize, search, searchField, selectedStatuses, activeBranchId, viewAllBranches]);
+  }, [page, pageSize, search, searchField, datePreset, activeBranchId, viewAllBranches]);
 
   useEffect(() => {
     fetchData();
@@ -631,7 +636,7 @@ export default function DatHangPage() {
             icon: <Icon name="print" size={16} />,
             onClick: async (selectedRows) => {
               for (const row of selectedRows) {
-                const items = await getSalesOrderItems(row.id);
+                const items = await getDraftOrderItems(row.id);
                 printWithPicker(
                   buildSalesOrderPrintData(row, toPrintLines(items)),
                   "In đơn đặt hàng",
@@ -665,7 +670,7 @@ export default function DatHangPage() {
                 return;
               try {
                 await Promise.all(
-                  cancellable.map((r) => cancelSalesOrder(r.id)),
+                  cancellable.map((r) => cancelInvoice(r.id)),
                 );
                 toast({
                   title: `Đã hủy ${cancellable.length} đơn`,
@@ -705,7 +710,7 @@ export default function DatHangPage() {
             kind: "sales_order",
             permissions: txPerms,
             onPrint: async () => {
-              const items = await getSalesOrderItems(row.id);
+              const items = await getDraftOrderItems(row.id);
               printWithPicker(
                 buildSalesOrderPrintData(row, toPrintLines(items)),
                 "In đơn đặt hàng",
@@ -745,7 +750,7 @@ export default function DatHangPage() {
         try {
           // Wire DB cancel thật. Trước đây chỉ toast success → user bấm
           // hủy nhưng đơn vẫn live (mock).
-          await cancelSalesOrder(cancellingItem.id);
+          await cancelInvoice(cancellingItem.id);
           toast({
             title: "Đã hủy đơn đặt hàng",
             description: `Đơn ${cancellingItem.code} đã được hủy.`,

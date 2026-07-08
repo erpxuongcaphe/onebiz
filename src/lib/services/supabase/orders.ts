@@ -30,6 +30,7 @@ import {
   type PosCheckoutItem,
 } from "./pos-checkout";
 import { recordAuditLog } from "./audit";
+import { applyCreatedAtRangeFilter } from "@/lib/utils/list-date-preset-range";
 import type { Database } from "@/lib/supabase/types";
 
 type InvoiceInsert = Database["public"]["Tables"]["invoices"]["Insert"];
@@ -54,39 +55,35 @@ export async function getOrders(
   const tenantId = await getCurrentTenantId();
   const { from, to } = getPaginationRange(params);
 
+  // CEO 08/07/2026: "Đơn đặt hàng" = hóa đơn NHÁP (invoices status='draft').
+  // Đúng với nút "Tạo đơn đặt hàng" (create-order-dialog ghi draft invoice).
+  // Bảng sales_orders là hệ CŨ (0 dữ liệu, không nút nào ghi vào). Hoàn tất đơn
+  // (thu tiền/xuất hàng) → status='completed' → tự chuyển sang trang Hóa đơn.
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
   let query = (supabase as any)
-    .from("sales_orders")
+    .from("invoices")
     .select(
-      "*, profiles!sales_orders_created_by_fkey(full_name), branches!sales_orders_branch_id_fkey(name)",
+      "*, profiles!invoices_created_by_fkey(full_name), branches!invoices_branch_id_fkey(name)",
       { count: "exact" },
     )
-    .eq("tenant_id", tenantId);
+    .eq("tenant_id", tenantId)
+    .eq("status", "draft");
 
-  // Search by code or customer_name. Escape % để tránh wildcard injection.
+  // Search by mã hoặc tên khách. Escape % để tránh wildcard injection.
   if (params.search) {
     const esc = params.search.replace(/[%_]/g, "\\$&");
-    // CEO 05/07: tìm theo cột chọn — "all"/lạ → OR mã+tên+SĐT như cũ.
     if (params.searchField === "code") query = query.ilike("code", `%${esc}%`);
     else if (params.searchField === "customer_name")
       query = query.ilike("customer_name", `%${esc}%`);
-    else if (params.searchField === "customer_phone")
-      query = query.ilike("customer_phone", `%${esc}%`);
     else
-      query = query.or(
-        `code.ilike.%${esc}%,customer_name.ilike.%${esc}%,customer_phone.ilike.%${esc}%`,
-      );
+      query = query.or(`code.ilike.%${esc}%,customer_name.ilike.%${esc}%`);
   }
 
-  // Filter: status — hỗ trợ cả mảng (nhiều trạng thái) lẫn 1 giá trị.
-  // BUG cũ: .eq với mảng → so sánh status = cả mảng → khớp 0 dòng → ẩn sạch.
-  if (params.filters?.status && params.filters.status !== "all") {
-    // eslint-disable-next-line @typescript-eslint/no-explicit-any
-    const st = params.filters.status as any;
-    query = Array.isArray(st) ? query.in("status", st) : query.eq("status", st);
-  }
+  // Filter: khoảng ngày (created_at) — timezone-safe. FIX (CEO 08/07): trang có
+  // ô "Thời gian" nhưng trước đây KHÔNG áp ngày; nay truyền dateFrom/dateTo.
+  query = applyCreatedAtRangeFilter(query, params.filters);
 
-  // Filter: branch
+  // Filter: branch (falsy = tất cả chi nhánh).
   if (params.branchId) {
     query = query.eq("branch_id", params.branchId);
   }
@@ -111,7 +108,7 @@ export async function getOrders(
       customerPhone: row.customer_phone ?? "",
       totalAmount: row.total ?? 0,
       status: row.status,
-      statusName: STATUS_LABEL[row.status] ?? row.status,
+      statusName: STATUS_LABEL[row.status] ?? "Phiếu tạm",
       createdBy: row.created_by ?? "",
       createdByName: profile?.full_name ?? "",
       branchId: row.branch_id ?? undefined,
@@ -379,6 +376,50 @@ export async function getSalesOrderItems(
   return (data ?? []).map((row: any) => ({
     id: row.id,
     productCode: row.products?.code ?? "",
+    productName: row.product_name ?? "",
+    unit: row.unit ?? "",
+    quantity: Number(row.quantity ?? 0),
+    unitPrice: Number(row.unit_price ?? 0),
+    discount: Number(row.discount ?? 0),
+    total: Number(row.total ?? 0),
+  }));
+}
+
+/**
+ * CEO 08/07/2026: Item của 1 "đơn đặt hàng" = invoice_items (vì đơn = hóa đơn
+ * nháp). Dùng cho panel chi tiết + in đơn ở trang Đơn đặt hàng.
+ */
+export async function getDraftOrderItems(
+  invoiceId: string,
+): Promise<SalesOrderItemRow[]> {
+  const supabase = getClient();
+  const tenantId = await getCurrentTenantId();
+
+  // Verify hóa đơn thuộc tenant trước (defense-in-depth)
+  const { data: inv } = await supabase
+    .from("invoices")
+    .select("id")
+    .eq("tenant_id", tenantId)
+    .eq("id", invoiceId)
+    .maybeSingle();
+  if (!inv) return [];
+
+  const { data, error } = await supabase
+    .from("invoice_items")
+    .select(
+      "id, product_id, product_name, unit, quantity, unit_price, discount, total",
+    )
+    .eq("invoice_id", invoiceId);
+
+  if (error) {
+    console.warn("[getDraftOrderItems]", error.message);
+    return [];
+  }
+
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  return (data ?? []).map((row: any) => ({
+    id: row.id,
+    productCode: "",
     productName: row.product_name ?? "",
     unit: row.unit ?? "",
     quantity: Number(row.quantity ?? 0),
