@@ -24,10 +24,12 @@ export async function getReturns(params: QueryParams): Promise<QueryResult<Retur
     query = query.or(`code.ilike.%${esc}%`);
   }
 
-  // Filter: status
+  // Filter: status — hỗ trợ cả mảng (nhiều trạng thái) lẫn 1 giá trị.
+  // BUG cũ: .eq với mảng → so sánh status = cả mảng → khớp 0 dòng → ẩn sạch.
   if (params.filters?.status && params.filters.status !== "all") {
     // eslint-disable-next-line @typescript-eslint/no-explicit-any
-    query = query.eq("status", params.filters.status as any);
+    const st = params.filters.status as any;
+    query = Array.isArray(st) ? query.in("status", st) : query.eq("status", st);
   }
 
   // Filter: branch

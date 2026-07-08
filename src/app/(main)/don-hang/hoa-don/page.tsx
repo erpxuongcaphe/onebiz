@@ -9,6 +9,7 @@ import { Badge } from "@/components/ui/badge";
 import { PageHeader } from "@/components/shared/page-header";
 import { ListPageLayout } from "@/components/shared/list-page-layout";
 import { DataTable, StarCell } from "@/components/shared/data-table";
+import { AllBranchesBanner } from "@/components/shared/all-branches-banner";
 import { SummaryCard } from "@/components/shared/summary-card";
 import {
   FilterSidebar,
@@ -438,7 +439,7 @@ function VoidInvoiceDialog({
 
 export default function HoaDonPage() {
   const { toast } = useToast();
-  const { activeBranchId } = useBranchFilter();
+  const { activeBranchId, currentBranch } = useBranchFilter();
   const router = useRouter();
   const { printWithPicker, printerDialog } = usePrintWithPicker();
   const txPerms = useTxRowPermissions("invoice");
@@ -489,6 +490,13 @@ export default function HoaDonPage() {
     "delivery",
   ]);
   const [datePreset, setDatePreset] = useState<DatePresetValue>("this_month");
+  // CEO 08/07: xem tất cả chi nhánh (cục bộ) khi bảng trống vì lọc chi nhánh.
+  const [viewAllBranches, setViewAllBranches] = useState(false);
+  const [otherBranchCount, setOtherBranchCount] = useState(0);
+  // Đổi chi nhánh ở global switcher → về lại chế độ lọc theo chi nhánh.
+  useEffect(() => {
+    setViewAllBranches(false);
+  }, [activeBranchId]);
 
   const statuses = getInvoiceStatuses();
 
@@ -500,22 +508,38 @@ export default function HoaDonPage() {
   const fetchData = useCallback(async () => {
     setLoading(true);
     const range = dateRange();
-    const filters: Record<string, string | string[]> = {};
-    if (selectedStatuses.length > 0) filters.status = selectedStatuses;
-    if (range.from) filters.dateFrom = range.from;
-    if (range.to) filters.dateTo = range.to;
+    const commonFilters: Record<string, string | string[]> = {};
+    if (selectedStatuses.length > 0) commonFilters.status = selectedStatuses;
+    if (range.from) commonFilters.dateFrom = range.from;
+    if (range.to) commonFilters.dateTo = range.to;
+    const branchScope = viewAllBranches ? undefined : activeBranchId;
     const result = await getInvoices({
       page,
       pageSize,
       search: debouncedSearch,
       searchField,
-      branchId: activeBranchId,
-      filters,
+      branchId: branchScope,
+      filters: commonFilters,
     });
     setData(result.data);
     setTotal(result.total);
+    // Bảng trống vì lọc chi nhánh? Đếm hóa đơn ở chi nhánh khác để gợi ý (cùng
+    // bộ lọc, bỏ branch). Chỉ khi đang lọc theo 1 chi nhánh cụ thể.
+    if (result.data.length === 0 && !viewAllBranches && activeBranchId) {
+      const all = await getInvoices({
+        page: 0,
+        pageSize: 1,
+        search: debouncedSearch,
+        searchField,
+        branchId: undefined,
+        filters: commonFilters,
+      });
+      setOtherBranchCount(all.total);
+    } else {
+      setOtherBranchCount(0);
+    }
     setLoading(false);
-  }, [page, pageSize, debouncedSearch, searchField, selectedStatuses, activeBranchId, dateRange]);
+  }, [page, pageSize, debouncedSearch, searchField, selectedStatuses, activeBranchId, dateRange, viewAllBranches]);
 
   useEffect(() => {
     fetchData();
@@ -801,11 +825,23 @@ export default function HoaDonPage() {
           />
         </div>
 
+        {viewAllBranches && (
+          <AllBranchesBanner
+            branchName={currentBranch?.name}
+            onBackToBranch={() => setViewAllBranches(false)}
+          />
+        )}
+
         <DataTable
           columns={columns}
           data={data}
           loading={loading}
           total={total}
+          emptyBranchHint={{
+            otherBranchCount,
+            onViewAllBranches: () => setViewAllBranches(true),
+            entityLabel: "hóa đơn",
+          }}
           pageIndex={page}
           pageSize={pageSize}
           pageCount={Math.ceil(total / pageSize)}
