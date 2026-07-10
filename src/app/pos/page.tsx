@@ -956,15 +956,22 @@ function PosPageInner() {
 
   // Handle product click — if variants exist, open picker; else add directly
   const handleAddProduct = useCallback(
-    async (product: Product) => {
+    // CEO 08/07: availableStock = khả dụng BOM-aware lưới đã tính (truyền lên khi
+    // bấm ô SP) → giỏ tô đỏ ô số lượng ĐÚNG cho hàng hết (kể cả SKU có công thức
+    // mà NVL cũng hết). undefined (barcode/nơi khác) → dùng product.stock.
+    async (product: Product, availableStock?: number) => {
       if (variantPickerLoading) return; // guard against double-tap
+      const stockOpt =
+        availableStock !== undefined
+          ? { availableStock, stockKnown: true as const }
+          : undefined;
 
       setVariantPickerLoading(true);
       try {
         const variants = await getVariantsByProduct(product.id);
         if (variants.length === 0) {
           // No variants → add base product directly
-          addLineWithTier(product);
+          addLineWithTier(product, stockOpt);
           setTimeout(() => {
             // Dòng mới nằm TRÊN CÙNG → cuộn lên đầu (CEO 04/07)
             cartScrollRef.current?.scrollTo({ top: 0, behavior: "smooth" });
@@ -985,7 +992,7 @@ function PosPageInner() {
         }
       } catch (err) {
         // Fallback to base product on error (network issue etc.)
-        addLineWithTier(product);
+        addLineWithTier(product, stockOpt);
         toast({
           title: "Không tải được biến thể",
           description: err instanceof Error ? err.message : "Đã thêm sản phẩm gốc vào giỏ.",
@@ -1051,7 +1058,7 @@ function PosPageInner() {
   const addLineWithTier = useCallback(
     (
       product: Product,
-      options?: { variantId?: string; variantLabel?: string; unitPrice?: number; quantity?: number },
+      options?: { variantId?: string; variantLabel?: string; unitPrice?: number; quantity?: number; availableStock?: number; stockKnown?: boolean },
     ) => {
       const tierPrice = appliedTier?.priceMap.get(product.id);
       // Nếu caller đã pass unitPrice (variant pricing) → giữ nguyên,
@@ -3861,10 +3868,11 @@ function CartItem({
   onRemove: () => void;
 }) {
   const oversold = line.availableStock > 0 && line.quantity > line.availableStock;
-  // CEO 08/07 (như KiotViet): HẾT HÀNG → tô đỏ ô số lượng. Chỉ tô khi BIẾT CHẮC:
-  // hasBom === false (SP thường — không phải SKU công thức có khả dụng từ NVL,
-  // không phải dòng nháp hasBom=undefined chưa rõ tồn). Vẫn cho bán (không chặn).
-  const outOfStock = line.hasBom === false && line.availableStock <= 0;
+  // CEO 08/07 (như KiotViet): HẾT HÀNG → tô đỏ ô số lượng. Tô khi BIẾT CHẮC khả
+  // dụng (stockKnown): availableStock là số lưới đã tính BOM-aware — nên SKU có
+  // công thức mà NVL cũng hết (vd "Bao tay cao su" khả dụng 0) VẪN đỏ đúng, còn
+  // món khả dụng-từ-NVL (>0) không đỏ oan. Dòng nháp (stockKnown=false) không tô.
+  const outOfStock = line.stockKnown === true && line.availableStock <= 0;
   const stockIssue = outOfStock || oversold;
   const [editingPrice, setEditingPrice] = useState(false);
   const [editingDiscount, setEditingDiscount] = useState(false);

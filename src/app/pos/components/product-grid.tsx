@@ -20,7 +20,9 @@ import { Icon } from "@/components/ui/icon";
 
 interface ProductGridProps {
   searchQuery: string;
-  onAddProduct: (product: Product) => void;
+  /** CEO 08/07: truyền kèm khả dụng THẬT (BOM-aware) mà lưới đã tính → giỏ tô
+   *  đỏ ô số lượng đúng cho hàng hết (kể cả SKU công thức mà NVL cũng hết). */
+  onAddProduct: (product: Product, availableStock?: number) => void;
 }
 
 /** CEO 03/06/2026 — Sprint 3 (G3): SKU has_bom tại branch production tính
@@ -231,7 +233,7 @@ export function ProductGrid({ searchQuery, onAddProduct }: ProductGridProps) {
                 product={product}
                 bomAvailable={bomAvail[product.id]?.available}
                 bomBottleneckName={bomAvail[product.id]?.bottleneckName}
-                onClick={() => onAddProduct(product)}
+                onClick={(avail) => onAddProduct(product, avail)}
               />
             ))}
           </div>
@@ -339,7 +341,8 @@ function ProductTile({
   product: Product;
   bomAvailable?: number;
   bomBottleneckName?: string;
-  onClick: () => void;
+  /** CEO 08/07: nhận khả dụng THẬT (BOM-aware) để giỏ tô đỏ đúng khi hết. */
+  onClick: (availableStock: number) => void;
 }) {
   // Use BOM availability nếu có (SKU has_bom tại branch production)
   // Fallback dùng product.stock như cũ.
@@ -353,7 +356,7 @@ function ProductTile({
   return (
     <button
       type="button"
-      onClick={onClick}
+      onClick={() => onClick(stock)}
       title={
         useBomAvail && bomBottleneckName
           ? `${product.name}\nKhả dụng tính từ NVL "${bomBottleneckName}"`

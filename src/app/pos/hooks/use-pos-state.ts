@@ -57,11 +57,15 @@ export interface OrderLine {
   productName: string;
   productImage?: string;
   unit: string;
+  /** Khả dụng THẬT lúc thêm — BOM-aware: bằng ĐÚNG số lưới hiển thị
+   *  (bomAvailable nếu SP có công thức, product.stock nếu không). */
   availableStock: number;
-  /** CEO 08/07: SP có công thức (has_bom) — tồn SKU luôn 0 nhưng khả dụng tính
-   *  từ NVL → KHÔNG được coi availableStock<=0 là "hết hàng" khi tô đỏ ô SL.
-   *  undefined = không rõ (dòng load từ nháp) → cũng không tô đỏ. */
   hasBom?: boolean;
+  /** CEO 08/07: chỉ tô ĐỎ ô số lượng khi BIẾT CHẮC availableStock. true = số từ
+   *  lưới (BOM-aware) hoặc SP thường (product.stock là tồn thật). false/undefined
+   *  = chưa rõ (nháp, hoặc SP có công thức thêm không qua lưới) → KHÔNG tô đỏ
+   *  (tránh đỏ oan món khả dụng-từ-NVL như "Bột frappe ≈8"). */
+  stockKnown?: boolean;
   quantity: number;
   unitPrice: number;
   vatRate: number;
@@ -79,6 +83,10 @@ export interface AddLineOptions {
   unitPrice?: number;
   /** Quantity to add (default 1). */
   quantity?: number;
+  /** Khả dụng THẬT (BOM-aware) từ lưới — để giỏ tô đỏ ĐÚNG khi hết hàng. */
+  availableStock?: number;
+  /** TRUE khi availableStock đáng tin (lưới tính BOM-aware) → cho phép tô đỏ. */
+  stockKnown?: boolean;
 }
 
 export type PaymentMethod = "cash" | "transfer" | "card" | "mixed";
@@ -196,8 +204,12 @@ export function usePosState() {
             productName: product.name,
             productImage: product.image,
             unit: product.sellUnit ?? product.unit ?? "Cái",
-            availableStock: product.stock ?? 0,
+            // Ưu tiên khả dụng BOM-aware từ lưới; fallback product.stock.
+            availableStock: options?.availableStock ?? (product.stock ?? 0),
             hasBom: product.hasBom ?? false,
+            // SP thường → tồn thật, biết chắc. SP có công thức mà KHÔNG có số từ
+            // lưới → chưa rõ khả dụng (không tô đỏ). Lưới truyền stockKnown=true.
+            stockKnown: options?.stockKnown ?? !(product.hasBom ?? false),
             quantity: qtyDelta,
             unitPrice: options?.unitPrice ?? product.sellPrice ?? 0,
             vatRate: product.vatRate ?? 0,
