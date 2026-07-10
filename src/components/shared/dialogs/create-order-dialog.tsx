@@ -95,7 +95,9 @@ export function CreateOrderDialog({
   useEffect(() => {
     if (!open) return;
 
-    nextEntityCode("invoice")
+    // CEO 10/07: đơn đặt hàng lấy dãy 'order' (DH...), KHÔNG lấy 'invoice' (HD).
+    // Số HD chỉ cấp khi thanh toán (complete_draft_atomic v2 gán HD + order_code).
+    nextEntityCode("order")
       .then((c) => setCode(c))
       .catch(() => setCode(`DH${Date.now()}`));
 

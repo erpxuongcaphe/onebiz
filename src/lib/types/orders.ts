@@ -4,6 +4,8 @@ import type { BaseLineItem, StatusChange } from "./common";
 export interface Invoice {
   id: string;
   code: string;
+  /** Mã đơn gốc (DH đặt hàng / NH nháp) trước khi hoàn tất — truy vết (00169). */
+  orderCode?: string;
   date: string;
   returnCode?: string;
   customerId: string;
@@ -149,7 +151,10 @@ export interface PurchaseOrderDetail {
 // Mục trong danh sách đơn bán hàng
 export interface SalesOrder {
   id: string;
+  /** Mã ĐƠN gốc hiển thị (DH — giữ nguyên cả sau khi hoàn tất). */
   code: string;
+  /** Mã hóa đơn thật (HD) khi đơn đã hoàn tất — để đối chiếu/mở hóa đơn. */
+  invoiceCode?: string;
   date: string;
   customerName: string;
   customerPhone: string;

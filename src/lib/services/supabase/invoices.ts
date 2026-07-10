@@ -634,6 +634,8 @@ function mapInvoice(row: any): Invoice {
   return {
     id: row.id,
     code: row.code,
+    // Mã đơn gốc DH/NH trước khi hoàn tất → HD (00169) — truy vết ở trang Hóa đơn.
+    orderCode: row.order_code ?? undefined,
     date: row.created_at,
     customerId: row.customer_id ?? "",
     // Lấy mã KH từ join customers (trước hardcode "" → cột "Mã KH" UI

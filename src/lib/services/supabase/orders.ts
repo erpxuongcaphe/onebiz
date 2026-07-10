@@ -122,7 +122,11 @@ export async function getOrders(
     const branch = row.branches as { name: string } | null;
     return {
       id: row.id,
-      code: row.code,
+      // CEO 10/07: hiện MÃ ĐƠN gốc (DH). Trước hoàn tất code=DH; sau hoàn tất
+      // code=HD nhưng order_code giữ DH → luôn hiện DH ở trang Đơn đặt hàng.
+      code: row.order_code ?? row.code,
+      // Mã hóa đơn thật (HD) khi đã hoàn tất — để đối chiếu / mở hóa đơn.
+      invoiceCode: row.order_code ? row.code : undefined,
       date: row.created_at,
       customerName: row.customer_name ?? "",
       customerPhone: row.customer_phone ?? "",
@@ -553,13 +557,15 @@ export async function saveDraftOrder(
   }
 
   // ── Insert path (mới) ──
-  // 1. Generate invoice code
+  // 1. CEO 10/07: nháp POS lấy dãy 'pos_draft' (NH...), KHÔNG lấy 'invoice' (HD)
+  //    nữa — số HD chỉ cấp khi THANH TOÁN (complete_draft_atomic v2). Nhờ vậy
+  //    nháp hủy không làm lỗ số hóa đơn hoàn thành.
   const { data: code, error: codeErr } = await supabase.rpc("next_code", {
     p_tenant_id: input.tenantId,
-    p_entity_type: "invoice",
+    p_entity_type: "pos_draft",
   });
   if (codeErr) handleError(codeErr, "saveDraftOrder:next_code");
-  const invoiceCode = code ?? `HD${Date.now()}`;
+  const invoiceCode = code ?? `NH${Date.now()}`;
 
   // 2. Insert draft invoice
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
