@@ -39,6 +39,15 @@ begin
     raise exception 'No tenant found. Create at least one OneBiz tenant/profile first.';
   end if;
 
+  -- Content Pillars P1..P4 (idempotent) — dùng cho Kanban/lịch/báo cáo.
+  insert into public.mkt_content_pillars (tenant_id, code, name, color, sort_order)
+  values
+    (v_tenant_id, 'P1', 'Cà phê tươi', '#8B5A2B', 1),
+    (v_tenant_id, 'P2', 'Không gian & Vibe', '#2E8B57', 2),
+    (v_tenant_id, 'P3', 'Trải nghiệm', '#D2691E', 3),
+    (v_tenant_id, 'P4', 'Vận hành chỉn chu', '#708090', 4)
+  on conflict (tenant_id, code) do nothing;
+
   select b.id
     into v_branch_id
   from public.branches b
@@ -318,10 +327,10 @@ begin
       title, message, deep_link_path, dedupe_key
     ) values
       (v_tenant_id, 'mkt_task_assigned', v_executor_id, 'mkt_task', v_shooting_task_id,
-       'Task MKT moi', 'Shoot TikTok Oolong Spark', '/mkt?task=' || v_shooting_task_id::text,
+       'Task MKT mới', 'Shoot TikTok Oolong Spark', '/mkt/tasks?task=' || v_shooting_task_id::text,
        'seed:mkt_task_assigned:' || v_shooting_task_id::text),
       (v_tenant_id, 'mkt_content_pending_review', v_reviewer_id, 'mkt_content_item', v_content_id,
-       'Noi dung cho duyet', 'Video T07 - Oolong Spark', '/mkt?content=' || v_content_id::text,
+       'Nội dung chờ duyệt', 'Video T07 - Oolong Spark', '/mkt/approvals?content=' || v_content_id::text,
        'seed:mkt_content_pending_review:' || v_content_id::text)
     on conflict (dedupe_key) where dedupe_key is not null do nothing;
 
