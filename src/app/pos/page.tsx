@@ -1355,7 +1355,7 @@ function PosPageInner() {
   // R9: Pre-bill — in tạm tính trước khi khách quyết định trả tiền.
   // Build receipt từ state cart hiện tại với invoiceCode "TT-<timestamp>"
   // để rõ KHÔNG phải hoá đơn chính thức. KHÔNG commit gì.
-  const handlePrintPreBill = useCallback(() => {
+  const handlePrintPreBill = useCallback(async () => {
     if (state.lines.length === 0) {
       toast({
         title: "Giỏ hàng trống",
@@ -1391,9 +1391,57 @@ function PosPageInner() {
         isOffline: false,
         isPreBill: true, // flag để print template hiện "TẠM TÍNH" header
       };
-      // P-4 13/06/2026 audit lần 2: đọc paperSize từ settings (cashier đổi giấy 58mm
-      // tại quầy, trước đây hardcode 80mm → mất chữ phải khi in 58mm).
-      printReceiptDirect(receipt, settings.print.paperSize === "58mm" ? "58mm" : "80mm");
+      // CEO 08/07: tạm tính in CÙNG MẪU hóa đơn chính thức (resolver retail ×
+      // sale_invoice × chi nhánh — giống hệt luồng auto-print sau thanh toán),
+      // CHỈ KHÁC tiêu đề "TẠM TÍNH". Mẫu có thể set title riêng (config.title
+      // đè documentType) → ép lại SAU applyTemplateToDocData. Offline / chưa
+      // có mẫu / lỗi resolve → rớt về bill nhiệt cũ (isPreBill), không kẹt quầy.
+      let printedViaTemplate = false;
+      if (networkStatus.isOnline) {
+        try {
+          const resolved = await resolvePrintTemplate(
+            "retail",
+            "sale_invoice",
+            currentBranch?.id ?? null,
+          );
+          if (resolved) {
+            const money = (n: number) => `${formatCurrency(n)} đ`;
+            const base: DocumentPrintData = {
+              documentType: "TẠM TÍNH",
+              documentCode: tempCode,
+              date: new Date().toISOString(),
+              branchName: currentBranch?.name,
+              headerFields: [
+                { label: "Khách hàng", value: receipt.customerName },
+              ],
+              items: receipt.items,
+              itemColumns: ["Tên hàng", "SL", "Đơn giá", "Giảm giá", "Thành tiền"],
+              summaryRows: [
+                { label: "Tổng tiền hàng", value: money(receipt.subtotal) },
+                ...(receipt.discountAmount > 0
+                  ? [{ label: "Giảm giá", value: money(receipt.discountAmount) }]
+                  : []),
+                ...(state.shippingFee > 0
+                  ? [{ label: "Phí giao hàng", value: money(state.shippingFee) }]
+                  : []),
+                { label: "Tổng cộng", value: money(receipt.total), bold: true },
+                { label: "Khách cần trả", value: money(receipt.total), bold: true },
+              ],
+              createdBy: user?.fullName,
+            };
+            const doc = applyTemplateToDocData(base, resolved);
+            doc.documentType = "TẠM TÍNH"; // ép lại — không để mẫu đè thành tiêu đề hóa đơn
+            printDocument(doc, { paperSize: resolved.paperSize });
+            printedViaTemplate = true;
+          }
+        } catch (err) {
+          console.error("[POS] Pre-bill via template failed, fallback receipt:", err);
+        }
+      }
+      if (!printedViaTemplate) {
+        // P-4 13/06/2026: đọc paperSize từ settings (58mm tại quầy).
+        printReceiptDirect(receipt, settings.print.paperSize === "58mm" ? "58mm" : "80mm");
+      }
       toast({
         title: "Đã in tạm tính",
         description: "Đây không phải hoá đơn chính thức.",
@@ -1407,7 +1455,7 @@ function PosPageInner() {
         variant: "error",
       });
     }
-  }, [state.lines, state.customer, state.subtotal, state.orderDiscountAmount, state.lineDiscountTotal, state.total, state.computeLineTotal, toast]);
+  }, [state.lines, state.customer, state.subtotal, state.orderDiscountAmount, state.lineDiscountTotal, state.total, state.shippingFee, state.computeLineTotal, toast, networkStatus.isOnline, currentBranch, user, settings.print.paperSize]);
 
   const handleSaveDraft = useCallback(async () => {
     if (submitLockRef.current) return;
