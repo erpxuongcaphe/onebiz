@@ -11,17 +11,24 @@ type NavItem = {
   icon: string;
   /** Hiện với mọi người có mkt.view khi undefined; nếu có, chỉ hiện khi cờ = true */
   requires?: keyof MktContext;
+  /** Hiện trên bottom-tabs mobile (không gian hẹp, chỉ mục cốt lõi) */
+  mobile?: boolean;
 };
 
-// Danh sách đầy đủ theo prototype. Các trang được bổ sung dần qua Đợt 4;
-// mục nào chưa có trang sẽ được thêm vào đây khi trang sẵn sàng.
+// Danh sách đầy đủ theo prototype. Sidebar desktop hiện tất cả; bottom-tabs
+// mobile chỉ hiện các mục cốt lõi (mobile:true) cho gọn.
 const NAV_ITEMS: NavItem[] = [
-  { href: "/mkt", label: "Tổng quan", icon: "dashboard" },
-  { href: "/mkt/tasks", label: "Việc của tôi", icon: "checklist" },
-  { href: "/mkt/campaigns", label: "Chiến dịch", icon: "campaign" },
-  { href: "/mkt/approvals", label: "Duyệt nội dung", icon: "rate_review", requires: "canReview" },
+  { href: "/mkt", label: "Tổng quan", icon: "dashboard", mobile: true },
+  { href: "/mkt/tasks", label: "Việc của tôi", icon: "checklist", mobile: true },
+  { href: "/mkt/campaigns", label: "Chiến dịch", icon: "campaign", mobile: true },
+  { href: "/mkt/kanban", label: "Kanban", icon: "view_kanban" },
+  { href: "/mkt/calendar", label: "Lịch", icon: "calendar_month" },
+  { href: "/mkt/approvals", label: "Duyệt nội dung", icon: "rate_review", requires: "canReview", mobile: true },
   { href: "/mkt/leader-queue", label: "Cần Leader xử lý", icon: "manage_accounts", requires: "isLead" },
-  { href: "/mkt/settings", label: "Cài đặt", icon: "settings" },
+  { href: "/mkt/team", label: "Nhân sự", icon: "groups", requires: "isLead" },
+  { href: "/mkt/media", label: "Thư viện", icon: "photo_library" },
+  { href: "/mkt/reports", label: "Báo cáo", icon: "bar_chart" },
+  { href: "/mkt/settings", label: "Cài đặt", icon: "settings", mobile: true },
 ];
 
 function isActive(pathname: string, href: string): boolean {
@@ -60,9 +67,11 @@ export function MktNav({ ctx }: { ctx: MktContext }) {
         </ul>
       </nav>
 
-      {/* Bottom tabs mobile */}
+      {/* Bottom tabs mobile — chỉ mục cốt lõi cho gọn */}
       <nav className="fixed inset-x-0 bottom-0 z-20 flex border-t border-outline-variant bg-background lg:hidden">
-        {items.map((item) => {
+        {items
+          .filter((item) => item.mobile)
+          .map((item) => {
           const active = isActive(pathname, item.href);
           return (
             <Link

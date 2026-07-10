@@ -1,7 +1,9 @@
 import type { Metadata } from "next";
 import { createServerSupabaseClient } from "@/lib/supabase/server";
 import { getMktDatabaseClient } from "@/lib/mkt/supabase";
+import { getMktContext, getPillars } from "@/lib/mkt/read-models";
 import { TelegramLinkCard } from "@/components/mkt/telegram-link-card";
+import { PillarManager } from "@/components/mkt/pillar-manager";
 
 export const dynamic = "force-dynamic";
 
@@ -20,11 +22,15 @@ export default async function MktSettingsPage() {
   const db = getMktDatabaseClient(supabase);
 
   // RLS chỉ cho đọc bản ghi của chính mình.
-  const { data: account } = await db
-    .from<TelegramAccountRow>("mkt_telegram_accounts")
-    .select("username, status, linked_at")
-    .eq("status", "linked")
-    .maybeSingle();
+  const [{ data: account }, ctx, pillars] = await Promise.all([
+    db
+      .from<TelegramAccountRow>("mkt_telegram_accounts")
+      .select("username, status, linked_at")
+      .eq("status", "linked")
+      .maybeSingle(),
+    getMktContext(supabase),
+    getPillars(supabase),
+  ]);
 
   const linked = Boolean(account?.status === "linked");
 
@@ -39,6 +45,8 @@ export default async function MktSettingsPage() {
         </div>
 
         <TelegramLinkCard linked={linked} username={account?.username ?? null} />
+
+        {ctx.canManageCampaigns ? <PillarManager pillars={pillars} /> : null}
       </div>
     </div>
   );

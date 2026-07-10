@@ -299,6 +299,144 @@ export async function getApprovals(supabase: MktSupabaseClient): Promise<MktAppr
   }));
 }
 
+export type MktWorkspaceTask = {
+  id: string;
+  title: string;
+  assigneeId: string | null;
+  assigneeName: string | null;
+  acceptanceStatus: string;
+  taskStatus: string;
+  taskType: string | null;
+  workloadPoints: number;
+  campaignId: string | null;
+  campaignName: string | null;
+  dueAt: string | null;
+};
+
+/** Toàn bộ task người dùng được phép thấy (RLS: lead → tất cả; executor → của mình). */
+export async function getWorkspaceTasks(
+  supabase: MktSupabaseClient,
+): Promise<MktWorkspaceTask[]> {
+  const db = getMktDatabaseClient(supabase);
+  type Row = {
+    id: string;
+    title: string;
+    assignee_id: string | null;
+    acceptance_status: string;
+    task_status: string;
+    task_type: string | null;
+    workload_points: number | null;
+    campaign_id: string | null;
+    due_at: string | null;
+  };
+  const { data } = await db
+    .from<Row>("mkt_tasks")
+    .select(
+      "id, title, assignee_id, acceptance_status, task_status, task_type, workload_points, campaign_id, due_at",
+    )
+    .is("deleted_at", null)
+    .order("due_at", { ascending: true, nullsFirst: false })
+    .limit(500);
+  const rows = data ?? [];
+
+  const assigneeIds = Array.from(new Set(rows.map((r) => r.assignee_id).filter(Boolean) as string[]));
+  const campaignIds = Array.from(new Set(rows.map((r) => r.campaign_id).filter(Boolean) as string[]));
+  const names = new Map<string, string>();
+  const campaignNames = new Map<string, string>();
+  await Promise.all([
+    assigneeIds.length > 0
+      ? db
+          .from<{ id: string; full_name: string | null; email: string | null }>("profiles")
+          .select("id, full_name, email")
+          .in("id", assigneeIds)
+          .then(({ data: d }) =>
+            (d ?? []).forEach((p) => names.set(p.id, p.full_name || p.email || "Chưa gán tên")),
+          )
+      : Promise.resolve(),
+    campaignIds.length > 0
+      ? db
+          .from<{ id: string; name: string }>("mkt_campaigns")
+          .select("id, name")
+          .in("id", campaignIds)
+          .then(({ data: d }) => (d ?? []).forEach((c) => campaignNames.set(c.id, c.name)))
+      : Promise.resolve(),
+  ]);
+
+  return rows.map((r) => ({
+    id: r.id,
+    title: r.title,
+    assigneeId: r.assignee_id,
+    assigneeName: r.assignee_id ? names.get(r.assignee_id) ?? "Chưa gán tên" : null,
+    acceptanceStatus: r.acceptance_status,
+    taskStatus: r.task_status,
+    taskType: r.task_type,
+    workloadPoints: r.workload_points ?? 1,
+    campaignId: r.campaign_id,
+    campaignName: r.campaign_id ? campaignNames.get(r.campaign_id) ?? null : null,
+    dueAt: r.due_at,
+  }));
+}
+
+export type MktPillar = {
+  id: string;
+  code: string;
+  name: string;
+  color: string;
+  sortOrder: number;
+};
+
+export async function getPillars(supabase: MktSupabaseClient): Promise<MktPillar[]> {
+  const db = getMktDatabaseClient(supabase);
+  const { data } = await db
+    .from<{ id: string; code: string; name: string; color: string; sort_order: number }>(
+      "mkt_content_pillars",
+    )
+    .select("id, code, name, color, sort_order")
+    .is("deleted_at", null)
+    .order("sort_order", { ascending: true });
+  return (data ?? []).map((p) => ({
+    id: p.id,
+    code: p.code,
+    name: p.name,
+    color: p.color,
+    sortOrder: p.sort_order,
+  }));
+}
+
+export type MktMediaAsset = {
+  id: string;
+  fileName: string;
+  kind: string;
+  status: string;
+  storagePath: string;
+  createdAt: string | null;
+};
+
+export async function getMediaAssets(supabase: MktSupabaseClient): Promise<MktMediaAsset[]> {
+  const db = getMktDatabaseClient(supabase);
+  const { data } = await db
+    .from<{
+      id: string;
+      file_name: string;
+      kind: string;
+      status: string;
+      storage_path: string;
+      created_at: string | null;
+    }>("mkt_media_assets")
+    .select("id, file_name, kind, status, storage_path, created_at")
+    .is("deleted_at", null)
+    .order("created_at", { ascending: false })
+    .limit(100);
+  return (data ?? []).map((m) => ({
+    id: m.id,
+    fileName: m.file_name,
+    kind: m.kind,
+    status: m.status,
+    storagePath: m.storage_path,
+    createdAt: m.created_at,
+  }));
+}
+
 export type MktCampaignDetail = {
   campaign: MktCampaign | null;
   workPackages: Array<{
