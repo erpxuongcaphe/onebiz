@@ -994,7 +994,7 @@ begin
   );
   if v_required_role = 'ceo'
      and not public.user_has_permission(v_actor, 'mkt.override_campaign') then
-    raise exception 'INSUFFICIENT_ROLE: Nội dung rủi ro cao — cần cấp duyệt CEO' using errcode = 'P0001';
+    raise exception 'INSUFFICIENT_ROLE: Noi dung rui ro cao, can cap duyet CEO' using errcode = 'P0001';
   end if;
 
   if p_content_version_id is null then
