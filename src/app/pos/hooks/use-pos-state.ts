@@ -58,6 +58,10 @@ export interface OrderLine {
   productImage?: string;
   unit: string;
   availableStock: number;
+  /** CEO 08/07: SP có công thức (has_bom) — tồn SKU luôn 0 nhưng khả dụng tính
+   *  từ NVL → KHÔNG được coi availableStock<=0 là "hết hàng" khi tô đỏ ô SL.
+   *  undefined = không rõ (dòng load từ nháp) → cũng không tô đỏ. */
+  hasBom?: boolean;
   quantity: number;
   unitPrice: number;
   vatRate: number;
@@ -193,6 +197,7 @@ export function usePosState() {
             productImage: product.image,
             unit: product.sellUnit ?? product.unit ?? "Cái",
             availableStock: product.stock ?? 0,
+            hasBom: product.hasBom ?? false,
             quantity: qtyDelta,
             unitPrice: options?.unitPrice ?? product.sellPrice ?? 0,
             vatRate: product.vatRate ?? 0,

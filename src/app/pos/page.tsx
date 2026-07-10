@@ -3802,6 +3802,11 @@ function CartItem({
   onRemove: () => void;
 }) {
   const oversold = line.availableStock > 0 && line.quantity > line.availableStock;
+  // CEO 08/07 (như KiotViet): HẾT HÀNG → tô đỏ ô số lượng. Chỉ tô khi BIẾT CHẮC:
+  // hasBom === false (SP thường — không phải SKU công thức có khả dụng từ NVL,
+  // không phải dòng nháp hasBom=undefined chưa rõ tồn). Vẫn cho bán (không chặn).
+  const outOfStock = line.hasBom === false && line.availableStock <= 0;
+  const stockIssue = outOfStock || oversold;
   const [editingPrice, setEditingPrice] = useState(false);
   const [editingDiscount, setEditingDiscount] = useState(false);
   // CEO 22/05/2026 (Phase 1): permission gate cho sửa đơn giá.
@@ -3834,13 +3839,18 @@ function CartItem({
               </span>
             )}
           </p>
-          {(line.productCode || line.unit || oversold) && (
+          {(line.productCode || line.unit || stockIssue) && (
             <p className="text-[9.5px] text-muted-foreground/80 font-mono leading-tight truncate">
               {line.productCode && <span>{line.productCode}</span>}
               {line.unit && <span className="ml-1">({line.unit})</span>}
-              {oversold && (
-                <span className="text-status-warning ml-1 font-sans">
-                  · Tồn: {formatNumber(line.availableStock)}
+              {stockIssue && (
+                <span
+                  className={cn(
+                    "ml-1 font-sans font-semibold",
+                    outOfStock ? "text-status-error" : "text-status-warning",
+                  )}
+                >
+                  · Tồn: {formatNumber(Math.max(0, line.availableStock))}
                 </span>
               )}
             </p>
@@ -3858,8 +3868,17 @@ function CartItem({
 
       {/* ── Line 2: qty stepper · × · price · −GG · = total ── */}
       <div className="flex items-center gap-2 px-3 pb-2 pl-[26px] mt-1">
-        {/* Qty stepper +/− */}
-        <div className="inline-flex items-center bg-surface-container-low rounded-md h-8 border border-border/40 overflow-hidden">
+        {/* Qty stepper +/− — CEO 08/07: hết tồn/bán vượt → ô SL viền+chữ ĐỎ
+            (như KiotViet), tooltip báo tồn. Vẫn thao tác bình thường. */}
+        <div
+          className={cn(
+            "inline-flex items-center rounded-md h-8 border overflow-hidden",
+            stockIssue
+              ? "bg-status-error/10 border-status-error/60"
+              : "bg-surface-container-low border-border/40",
+          )}
+          title={stockIssue ? `Tồn: ${formatNumber(Math.max(0, line.availableStock))}` : undefined}
+        >
           <button
             type="button"
             onClick={() => onQtyChange(Math.max(1, line.quantity - 1))}
@@ -3880,7 +3899,10 @@ function CartItem({
               onQtyChange(Number.isFinite(n) ? n : 1);
             }}
             data-allow-hotkeys="true"
-            className="w-12 h-8 text-center text-xs font-semibold tabular-nums outline-none bg-transparent"
+            className={cn(
+              "w-12 h-8 text-center text-xs font-semibold tabular-nums outline-none bg-transparent",
+              stockIssue && "text-status-error",
+            )}
           />
           <button
             type="button"
