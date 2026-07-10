@@ -31,3 +31,6 @@ supabase/_migrations_phase1.sql
 
 # Database backups (chứa sample/production data, KHÔNG commit lên git)
 backups/
+
+# Tài liệu handover/working nội bộ (rar/docx/prototype tham khảo, không đưa lên repo)
+Working/

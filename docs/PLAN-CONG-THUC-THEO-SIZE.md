@@ -6,6 +6,8 @@
 
 Ngày lập: 16/06/2026 · Trạng thái: **chờ CEO duyệt**
 
+> **Nguyên tắc thực thi (CEO 16/06):** làm **TRỌN VẸN 1 lát cắt dọc** (migration → RPC → trả hàng → màn nhập + cảnh báo → POS/KDS) đã test xong mới go-live — **KHÔNG ship nửa chừng** (khó test + khó cho nhân viên làm việc). **UX/UI nhập liệu + logic dữ liệu là ưu tiên số 1.** "Pilot" chỉ áp cho *dữ liệu* (nhập công thức vài món để kiểm), KHÔNG phải build code nửa vời.
+
 ---
 
 ## 1. Vì sao cần (đã verify)
@@ -16,11 +18,14 @@ Ngày lập: 16/06/2026 · Trạng thái: **chờ CEO duyệt**
 
 ## 2. Mô hình đã chốt
 
-| Loại tùy chọn | Cơ chế | Ví dụ |
-|---|---|---|
-| **Size** | **Variant — mỗi size 1 công thức (BOM) riêng** | M: cà phê 18g · L: 25g (khác hẳn, không nhân hệ số) |
-| **Mức đường / Mức đá** | **Modifier `scale_factor`** (chỉ scale đúng 1 NVL được gắn) | 70% đường → đường ×0.7 |
-| **Topping** | **Modifier cộng thêm** (`linked_product_id`, không scale) | +Trân châu → trừ NVL trân châu, +7.000đ |
+| Loại tùy chọn | Trừ kho? | Cơ chế | Ví dụ |
+|---|---|---|---|
+| **Size** | ✅ | **Variant — mỗi size 1 công thức (BOM) riêng** (nằm trong BOM sẵn có, không bảng mới) | M cà phê 18g · L 25g (khác hẳn) |
+| **Mức đường** | ✅ *(nếu đường là NVL tách riêng)* | Modifier `scale_factor` nhân đúng 1 NVL | 70% → đường ×0.7 |
+| **Topping** | ✅ | Modifier cộng thêm (`linked_product_id`) | +Trân châu → trừ NVL trân châu |
+| **Mức đá / Nóng-Đá / ít ngọt / mang đi** | ❌ **Không** | Modifier không gắn NVL & không hệ số → **chỉ ghi chú pha chế** (hiện ở POS + KDS) | "Ít đá" chỉ để pha chế biết |
+
+> **Quy tắc (CEO 16/06):** không phải tùy chọn nào cũng trừ kho. Tùy chọn nào *không gắn NVL* và *không hệ số* thì hệ tự coi là **ghi chú pha chế** — không đụng kho. Hệ thống **đã hỗ trợ sẵn** (modifier_option không scale_target + không linked_product = chỉ hiển thị).
 
 ## 3. Quyết định kỹ thuật
 

@@ -1,0 +1,364 @@
+<!DOCTYPE html>
+<html xmlns="http://www.w3.org/1999/xhtml" lang="" xml:lang="">
+<head>
+  <meta charset="utf-8" />
+  <meta name="generator" content="pandoc" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=yes" />
+  <title>Hướng dẫn pha chế theo kích cỡ</title>
+  <style>
+    /* Default styles provided by pandoc.
+    ** See https://pandoc.org/MANUAL.html#variables-for-html for config info.
+    */
+    html {
+      color: #1a1a1a;
+      background-color: #fdfdfd;
+    }
+    body {
+      margin: 0 auto;
+      max-width: 36em;
+      padding-left: 50px;
+      padding-right: 50px;
+      padding-top: 50px;
+      padding-bottom: 50px;
+      hyphens: auto;
+      overflow-wrap: break-word;
+      text-rendering: optimizeLegibility;
+      font-kerning: normal;
+    }
+    @media (max-width: 600px) {
+      body {
+        font-size: 0.9em;
+        padding: 12px;
+      }
+      h1 {
+        font-size: 1.8em;
+      }
+    }
+    @media print {
+      html {
+        background-color: white;
+      }
+      body {
+        background-color: transparent;
+        color: black;
+        font-size: 12pt;
+      }
+      p, h2, h3 {
+        orphans: 3;
+        widows: 3;
+      }
+      h2, h3, h4 {
+        page-break-after: avoid;
+      }
+    }
+    p {
+      margin: 1em 0;
+    }
+    a {
+      color: #1a1a1a;
+    }
+    a:visited {
+      color: #1a1a1a;
+    }
+    img {
+      max-width: 100%;
+    }
+    svg {
+      height: auto;
+      max-width: 100%;
+    }
+    h1, h2, h3, h4, h5, h6 {
+      margin-top: 1.4em;
+    }
+    h5, h6 {
+      font-size: 1em;
+      font-style: italic;
+    }
+    h6 {
+      font-weight: normal;
+    }
+    ol, ul {
+      padding-left: 1.7em;
+      margin-top: 1em;
+    }
+    li > ol, li > ul {
+      margin-top: 0;
+    }
+    blockquote {
+      margin: 1em 0 1em 1.7em;
+      padding-left: 1em;
+      border-left: 2px solid #e6e6e6;
+      color: #606060;
+    }
+    code {
+      font-family: Menlo, Monaco, Consolas, 'Lucida Console', monospace;
+      font-size: 85%;
+      margin: 0;
+      hyphens: manual;
+    }
+    pre {
+      margin: 1em 0;
+      overflow: auto;
+    }
+    pre code {
+      padding: 0;
+      overflow: visible;
+      overflow-wrap: normal;
+    }
+    .sourceCode {
+     background-color: transparent;
+     overflow: visible;
+    }
+    hr {
+      border: none;
+      border-top: 1px solid #1a1a1a;
+      height: 1px;
+      margin: 1em 0;
+    }
+    table {
+      margin: 1em 0;
+      border-collapse: collapse;
+      width: 100%;
+      overflow-x: auto;
+      display: block;
+      font-variant-numeric: lining-nums tabular-nums;
+    }
+    table caption {
+      margin-bottom: 0.75em;
+    }
+    tbody {
+      margin-top: 0.5em;
+      border-top: 1px solid #1a1a1a;
+      border-bottom: 1px solid #1a1a1a;
+    }
+    th {
+      border-top: 1px solid #1a1a1a;
+      padding: 0.25em 0.5em 0.25em 0.5em;
+    }
+    td {
+      padding: 0.125em 0.5em 0.25em 0.5em;
+    }
+    header {
+      margin-bottom: 4em;
+      text-align: center;
+    }
+    #TOC li {
+      list-style: none;
+    }
+    #TOC ul {
+      padding-left: 1.3em;
+    }
+    #TOC > ul {
+      padding-left: 0;
+    }
+    #TOC a:not(:hover) {
+      text-decoration: none;
+    }
+    code{white-space: pre-wrap;}
+    span.smallcaps{font-variant: small-caps;}
+    div.columns{display: flex; gap: min(4vw, 1.5em);}
+    div.column{flex: auto; overflow-x: auto;}
+    div.hanging-indent{margin-left: 1.5em; text-indent: -1.5em;}
+    /* The extra [class] is a hack that increases specificity enough to
+       override a similar rule in reveal.js */
+    ul.task-list[class]{list-style: none;}
+    ul.task-list li input[type="checkbox"] {
+      font-size: inherit;
+      width: 0.8em;
+      margin: 0 0.8em 0.2em -1.6em;
+      vertical-align: middle;
+    }
+    .display.math{display: block; text-align: center; margin: 0.5rem auto;}
+  </style>
+</head>
+<body>
+<header id="title-block-header">
+<h1 class="title">Hướng dẫn pha chế theo kích cỡ</h1>
+</header>
+<h1 id="hướng-dẫn-pha-chế-theo-kích-cỡ">Hướng dẫn pha chế theo kích
+cỡ</h1>
+<p><strong>Dành cho nhân viên — quán cà phê OneBiz</strong></p>
+<p>Chào bạn! Bài hướng dẫn này sẽ giúp bạn khai báo cho phần mềm biết
+<strong>mỗi cỡ ly cần bao nhiêu nguyên liệu</strong>, để khi bán hàng,
+phần mềm tự động trừ kho cho thật chính xác. Bạn cứ đọc thong thả, vừa
+đọc vừa làm theo là được, không có gì khó đâu.</p>
+<hr />
+<h2 id="vì-sao-mình-cần-làm-việc-này">1. Vì sao mình cần làm việc
+này?</h2>
+<p>Bạn hãy hình dung quán mình bán món cà phê sữa, có hai cỡ ly:
+<strong>cỡ vừa (M)</strong> và <strong>cỡ lớn (L)</strong>.</p>
+<p>Hai cỡ này không chỉ khác nhau ở cái ly, mà còn khác cả lượng nguyên
+liệu bên trong: ly lớn thì đương nhiên nhiều cà phê hơn, nhiều sữa hơn.
+Vậy nên nếu mình chỉ khai một công thức chung cho cả hai cỡ, kho sẽ bị
+tính sai — bán ly lớn mà chỉ trừ như ly nhỏ, lâu dần số liệu lệch
+hết.</p>
+<svg viewBox="0 0 640 300" width="640" xmlns="http://www.w3.org/2000/svg" font-family="Arial, Helvetica, sans-serif">
+<rect x="0" y="0" width="640" height="300" fill="#ffffff"/>
+<text x="320" y="32" text-anchor="middle" font-size="18" font-weight="bold" fill="#1e3a5f">Cùng
+một món, mỗi cỡ một công thức riêng</text>
+<rect x="40" y="58" width="255" height="200" rx="14" fill="#f1f7ff" stroke="#bcd7f5" stroke-width="1.5"/>
+<path d="M 108 92 L 182 92 L 174 150 L 116 150 Z" fill="#cfa07a" stroke="#8a5a3b" stroke-width="2"/>
+<path d="M 116 150 L 174 150 L 171 168 L 119 168 Z" fill="#8a5a3b"/>
+<text x="167" y="120" text-anchor="middle" font-size="13" fill="#3b2a1d">M</text>
+<text x="167" y="192" text-anchor="middle" font-size="15" font-weight="bold" fill="#1e3a5f">Cỡ
+M (vừa)</text> <text x="64" y="216" font-size="13" fill="#374151">• Cà
+phê: 18 g</text> <text x="64" y="236" font-size="13" fill="#374151">•
+Sữa: 80 ml</text> <text x="64" y="256" font-size="13" fill="#374151">•
+Ly nhỏ: 1 cái</text>
+<rect x="345" y="58" width="255" height="200" rx="14" fill="#eafaf1" stroke="#a8e0c2" stroke-width="1.5"/>
+<path d="M 405 84 L 495 84 L 485 152 L 415 152 Z" fill="#cfa07a" stroke="#8a5a3b" stroke-width="2"/>
+<path d="M 415 152 L 485 152 L 482 172 L 418 172 Z" fill="#8a5a3b"/>
+<text x="475" y="118" text-anchor="middle" font-size="14" fill="#3b2a1d">L</text>
+<text x="472" y="196" text-anchor="middle" font-size="15" font-weight="bold" fill="#136f43">Cỡ
+L (lớn)</text> <text x="369" y="220" font-size="13" fill="#374151">• Cà
+phê: 25 g</text> <text x="369" y="240" font-size="13" fill="#374151">•
+Sữa: 120 ml</text> <text x="369" y="260" font-size="13" fill="#374151">•
+Ly lớn: 1 cái</text>
+<text x="320" y="288" text-anchor="middle" font-size="13" fill="#6b7280">Bán
+cỡ nào, phần mềm tự trừ kho đúng cỡ đó.</text>
+</svg>
+<p>Cách làm đúng là: <strong>mỗi cỡ ly, mình ghi một công thức
+riêng.</strong> Khi thu ngân bán một ly cỡ nào, phần mềm sẽ nhìn đúng
+công thức của cỡ đó mà trừ kho. Nghe thì có vẻ phức tạp, nhưng bạn sẽ
+thấy làm rất nhanh thôi.</p>
+<hr />
+<h2 id="năm-bước-thực-hiện">2. Năm bước thực hiện</h2>
+<p>Toàn bộ công việc gói gọn trong năm bước, và điều dễ chịu nhất là:
+<strong>chỉ cần bấm Lưu một lần duy nhất</strong> ở cuối.</p>
+<svg viewBox="0 0 680 150" width="680" xmlns="http://www.w3.org/2000/svg" font-family="Arial, Helvetica, sans-serif">
+<defs>
+<marker id="ar" markerWidth="9" markerHeight="9" refX="6" refY="3" orient="auto">
+<path d="M0,0 L6,3 L0,6 Z" fill="#9aa7b8"/> </marker> </defs>
+<rect width="680" height="150" fill="#ffffff"/>
+<line x1="86"  y1="48" x2="172" y2="48" stroke="#9aa7b8" stroke-width="2" marker-end="url(#ar)"/>
+<line x1="222" y1="48" x2="308" y2="48" stroke="#9aa7b8" stroke-width="2" marker-end="url(#ar)"/>
+<line x1="358" y1="48" x2="444" y2="48" stroke="#9aa7b8" stroke-width="2" marker-end="url(#ar)"/>
+<line x1="494" y1="48" x2="580" y2="48" stroke="#9aa7b8" stroke-width="2" marker-end="url(#ar)"/>
+<circle cx="60"  cy="48" r="26" fill="#2563eb"/><text x="60"  y="55" text-anchor="middle" font-size="18" font-weight="bold" fill="#ffffff">1</text>
+<circle cx="197" cy="48" r="26" fill="#2563eb"/><text x="197" y="55" text-anchor="middle" font-size="18" font-weight="bold" fill="#ffffff">2</text>
+<circle cx="334" cy="48" r="26" fill="#2563eb"/><text x="334" y="55" text-anchor="middle" font-size="18" font-weight="bold" fill="#ffffff">3</text>
+<circle cx="471" cy="48" r="26" fill="#2563eb"/><text x="471" y="55" text-anchor="middle" font-size="18" font-weight="bold" fill="#ffffff">4</text>
+<circle cx="608" cy="48" r="26" fill="#16a34a"/><text x="608" y="55" text-anchor="middle" font-size="18" font-weight="bold" fill="#ffffff">5</text>
+<text x="60"  y="100" text-anchor="middle" font-size="13" fill="#374151">Mở
+món</text>
+<text x="197" y="100" text-anchor="middle" font-size="13" fill="#374151">Thêm
+các cỡ</text>
+<text x="334" y="100" text-anchor="middle" font-size="13" fill="#374151">Bật
+công thức</text>
+<text x="471" y="100" text-anchor="middle" font-size="13" fill="#374151">Điền
+bảng</text>
+<text x="608" y="100" text-anchor="middle" font-size="13" font-weight="bold" fill="#16803d">Bấm
+Lưu</text>
+<text x="608" y="120" text-anchor="middle" font-size="11" fill="#6b7280">(một
+lần)</text>
+</svg>
+<h3 id="bước-1-mở-món-cần-khai-báo">Bước 1 — Mở món cần khai báo</h3>
+<p>Bạn vào mục <strong>Hàng hóa</strong>, tìm tên món của mình, rồi bấm
+nút <strong>Sửa</strong> để mở món lên.</p>
+<p>Nếu món đang để ngừng bán mà bạn không thấy nó trong danh sách, hãy
+chọn bộ lọc trạng thái thành <strong>“Tất cả”</strong>, món sẽ hiện ra
+ngay.</p>
+<h3 id="bước-2-khai-báo-các-cỡ-ly">Bước 2 — Khai báo các cỡ ly</h3>
+<p>Bạn bấm sang thẻ <strong>Quy cách</strong>, rồi bấm <strong>Thêm quy
+cách</strong>. Mỗi cỡ ly là một dòng:</p>
+<ul>
+<li>Ô <strong>Tên</strong>: gõ tên cỡ, ví dụ M, L, hay XL.</li>
+<li>Ô <strong>Giá bán</strong>: gõ giá của cỡ đó (phần mềm tự thêm dấu
+chấm ngăn cách hàng nghìn cho bạn dễ nhìn).</li>
+</ul>
+<p>Cứ thêm cho đủ các cỡ mà món có. Cỡ nào hay bán nhất thì bạn đánh dấu
+<strong>Mặc định</strong>.</p>
+<h3 id="bước-3-bật-phần-công-thức">Bước 3 — Bật phần công thức</h3>
+<p>Ngay bên dưới danh sách cỡ ly, bạn sẽ thấy một ô tích nhỏ:
+<strong>“Trừ kho theo công thức từng size”</strong>. Bạn tích vào đó.
+Lập tức một cái bảng hiện ra để bạn điền công thức.</p>
+<h3 id="bước-4-điền-công-thức-cho-từng-cỡ">Bước 4 — Điền công thức cho
+từng cỡ</h3>
+<p>Đây là phần chính, nhưng rất trực quan. Bảng có một cột ghi tên
+nguyên liệu, một cột đơn vị, và <strong>mỗi cỡ ly một cột
+riêng</strong>.</p>
+<p>Với mỗi nguyên liệu, bạn làm ba việc nhỏ:</p>
+<ol type="1">
+<li>Ở cột <strong>Nguyên liệu</strong>, bạn gõ vài chữ để tìm rồi chọn
+(ví dụ gõ “sữa” là phần mềm lọc ra cho bạn chọn cho nhanh).</li>
+<li>Phần mềm <strong>tự điền sẵn đơn vị</strong> của nguyên liệu đó, bạn
+không phải nhớ.</li>
+<li>Sau đó, ở cột của từng cỡ, bạn gõ <strong>lượng cần dùng</strong>
+cho cỡ đó. Lượng được phép có số lẻ, ví dụ 0,5.</li>
+</ol>
+<p>Một mẹo nhỏ giúp bạn nhanh hơn: nếu các cỡ chỉ khác nhau chút ít, bạn
+điền cho cỡ đầu tiên trước, rồi bấm nút <strong>“Gợi ý: copy cỡ M sang
+cỡ khác”</strong> để phần mềm điền sẵn, sau đó bạn chỉnh lại vài chỗ là
+xong.</p>
+<p>Khi điền xong, ở cuối bảng phần mềm còn <strong>tự tính giá vốn cho
+từng cỡ</strong> giúp bạn — rất tiện để biết mỗi ly tốn bao nhiêu tiền
+nguyên liệu.</p>
+<h3 id="bước-5-bấm-lưu-một-lần">Bước 5 — Bấm Lưu một lần</h3>
+<p>Cuối cùng, bạn bấm nút <strong>Lưu</strong> ở góc dưới. Chỉ một lần
+bấm này thôi là <strong>cả các cỡ ly lẫn công thức đều được lưu cùng
+lúc</strong> — không phải lưu hai lần như trước nữa.</p>
+<h3 id="còn-khi-bán-hàng-thì-sao">Còn khi bán hàng thì sao?</h3>
+<p>Lúc bán, thu ngân chỉ việc chọn cỡ ly khách muốn. Phần mềm tự nhìn
+công thức của đúng cỡ đó để trừ kho. Bạn không phải làm gì thêm cả.</p>
+<hr />
+<h2 id="một-ví-dụ-cho-dễ-hình-dung">3. Một ví dụ cho dễ hình dung</h2>
+<p>Giả sử món “Cà phê sữa” của mình có hai cỡ, công thức như sau:</p>
+<table>
+<thead>
+<tr>
+<th>Nguyên liệu</th>
+<th style="text-align: center;">Cỡ M</th>
+<th style="text-align: center;">Cỡ L</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>Cà phê</td>
+<td style="text-align: center;">18 g</td>
+<td style="text-align: center;">25 g</td>
+</tr>
+<tr>
+<td>Sữa tươi</td>
+<td style="text-align: center;">80 ml</td>
+<td style="text-align: center;">120 ml</td>
+</tr>
+<tr>
+<td>Ly nhỏ</td>
+<td style="text-align: center;">1 cái</td>
+<td style="text-align: center;">—</td>
+</tr>
+<tr>
+<td>Ly lớn</td>
+<td style="text-align: center;">—</td>
+<td style="text-align: center;">1 cái</td>
+</tr>
+</tbody>
+</table>
+<p>Đọc bảng này, ta hiểu: bán một ly <strong>cỡ M</strong> thì trừ 18 g
+cà phê, 80 ml sữa và một ly nhỏ; còn ly <strong>cỡ L</strong> thì trừ 25
+g cà phê, 120 ml sữa và một ly lớn.</p>
+<p>Bạn để ý dòng cái ly nhé: cỡ M dùng ly nhỏ, cỡ L dùng ly lớn — đó
+chính là lý do vì sao mỗi cỡ phải có công thức riêng, chứ không thể lấy
+cỡ này nhân lên thành cỡ kia được.</p>
+<hr />
+<h2 id="vài-điều-cần-nhớ">4. Vài điều cần nhớ</h2>
+<ul>
+<li><p><strong>Đá thì không khai vào đây.</strong> Đá chỉ là ghi chú để
+mình pha cho đúng, không tính vào kho. Phần đá, mức đường hay topping
+nằm ở mục Tùy chọn riêng, không thuộc bảng công thức này.</p></li>
+<li><p><strong>Đừng để trống cỡ nào.</strong> Nếu một cỡ chưa điền
+nguyên liệu, khi bán cỡ đó phần mềm sẽ không biết trừ gì cả. Nhớ điền đủ
+cho mọi cỡ.</p></li>
+<li><p><strong>Nếu sau này cần sửa</strong>, bạn chỉ việc mở món lên
+lại, vào đúng thẻ Quy cách — các con số cũ vẫn còn nguyên đó, bạn chỉnh
+rồi bấm Lưu lại là được.</p></li>
+<li><p><strong>Trường hợp món có loại nóng và loại đá mà công thức khác
+hẳn nhau</strong> (ví dụ bản đá tốn nhiều cà phê và đá hơn): bạn cứ coi
+“Nóng” và “Đá” như hai cỡ riêng — đặt tên cỡ là Nóng và Đá, rồi điền
+công thức cho mỗi loại, y như cách làm với cỡ M và L vậy.</p></li>
+</ul>
+<hr />
+<p>Vậy là xong rồi! Chúc bạn khai báo thật trơn tru. Chỗ nào chưa rõ,
+bạn cứ hỏi quản lý nhé.</p>
+</body>
+</html>
