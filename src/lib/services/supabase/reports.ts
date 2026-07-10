@@ -925,7 +925,11 @@ export interface BranchPnLRow {
   branchId: string;
   branchName: string;
   branchType: string;
+  /** Backward-compatible display revenue: goods revenue, excluding delivery fee. */
   revenue: number;
+  totalRevenue: number;
+  deliveryFee: number;
+  goodsRevenue: number;
   cogs: number;
   grossProfit: number;
   grossMargin: number;
@@ -954,7 +958,7 @@ export async function getBranchPnLComparison(): Promise<BranchPnLRow[]> {
 
   // Phase 1: Fetch invoices + cash this month
   const [invData, cashData] = await Promise.all([
-    supabase.from("invoices").select("id, branch_id, total")
+    supabase.from("invoices").select("id, branch_id, total, delivery_fee")
       .eq("tenant_id", tenantId)
       .eq("status", "completed")
       .gte("created_at", range.start).lt("created_at", range.end),
@@ -966,14 +970,16 @@ export async function getBranchPnLComparison(): Promise<BranchPnLRow[]> {
 
   // Build invoice → branch map
   const invBranchMap = new Map<string, string>();
-  const branchRevenue = new Map<string, number>();
+  const branchTotalRevenue = new Map<string, number>();
+  const branchDeliveryFee = new Map<string, number>();
   const invIdArr: string[] = [];
 
   for (const inv of (invData.data ?? []) as Record<string, unknown>[]) {
     const bid = inv.branch_id as string;
     invBranchMap.set(inv.id as string, bid);
     invIdArr.push(inv.id as string);
-    branchRevenue.set(bid, (branchRevenue.get(bid) ?? 0) + Number(inv.total ?? 0));
+    branchTotalRevenue.set(bid, (branchTotalRevenue.get(bid) ?? 0) + Number(inv.total ?? 0));
+    branchDeliveryFee.set(bid, (branchDeliveryFee.get(bid) ?? 0) + Number(inv.delivery_fee ?? 0));
   }
 
   // Phase 2: Fetch invoice items by invoice IDs (no created_at on invoice_items)
@@ -1003,22 +1009,27 @@ export async function getBranchPnLComparison(): Promise<BranchPnLRow[]> {
   }
 
   return branches.map((b) => {
-    const rev = branchRevenue.get(b.id) ?? 0;
+    const totalRevenue = branchTotalRevenue.get(b.id) ?? 0;
+    const deliveryFee = branchDeliveryFee.get(b.id) ?? 0;
+    const goodsRevenue = totalRevenue - deliveryFee;
     const cogs = branchCogs.get(b.id) ?? 0;
     const opEx = branchOpEx.get(b.id) ?? 0;
-    const grossProfit = rev - cogs;
+    const grossProfit = goodsRevenue - cogs;
     const netProfit = grossProfit - opEx;
     return {
       branchId: b.id,
       branchName: b.name,
       branchType: b.branch_type ?? "store",
-      revenue: rev,
+      revenue: goodsRevenue,
+      totalRevenue,
+      deliveryFee,
+      goodsRevenue,
       cogs,
       grossProfit,
-      grossMargin: rev > 0 ? Math.round((grossProfit / rev) * 1000) / 10 : 0,
+      grossMargin: goodsRevenue > 0 ? Math.round((grossProfit / goodsRevenue) * 1000) / 10 : 0,
       opEx,
       netProfit,
-      netMargin: rev > 0 ? Math.round((netProfit / rev) * 1000) / 10 : 0,
+      netMargin: goodsRevenue > 0 ? Math.round((netProfit / goodsRevenue) * 1000) / 10 : 0,
     };
   });
 }

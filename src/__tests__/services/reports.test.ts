@@ -99,6 +99,7 @@ vi.mock("@/lib/services/supabase/base", () => ({
 
 import {
   getProfitAndLoss,
+  getBranchPnLComparison,
   getCOGSBreakdown,
   getInventoryTurnover,
   getDSO,
@@ -199,6 +200,39 @@ describe("getProfitAndLoss", () => {
     expect(result.current.goodsRevenue).toBe(result.current.revenue);
     // grossProfit không đổi so với công thức cũ khi ship = 0.
     expect(result.current.grossProfit).toBe(5_000_000);
+  });
+});
+describe("getBranchPnLComparison", () => {
+  it("uses goods revenue excluding delivery fee for branch margins", async () => {
+    tableDataMap = {
+      branches: {
+        data: [{ id: "b1", name: "CN 1", branch_type: "store", is_active: true }],
+        error: null,
+      },
+      invoices: {
+        data: [{ id: "inv-ship", branch_id: "b1", total: 1_000_000, delivery_fee: 50_000 }],
+        error: null,
+      },
+      invoice_items: {
+        data: [{ invoice_id: "inv-ship", quantity: 1, products: { cost_price: 600_000 } }],
+        error: null,
+      },
+      cash_transactions: {
+        data: [{ branch_id: "b1", type: "payment", category: "Van hanh", amount: 100_000 }],
+        error: null,
+      },
+    };
+
+    const rows = await getBranchPnLComparison();
+    expect(rows).toHaveLength(1);
+    expect(rows[0].totalRevenue).toBe(1_000_000);
+    expect(rows[0].deliveryFee).toBe(50_000);
+    expect(rows[0].goodsRevenue).toBe(950_000);
+    expect(rows[0].revenue).toBe(950_000);
+    expect(rows[0].grossProfit).toBe(350_000);
+    expect(rows[0].netProfit).toBe(250_000);
+    expect(rows[0].grossMargin).toBe(36.8);
+    expect(rows[0].netMargin).toBe(26.3);
   });
 });
 
