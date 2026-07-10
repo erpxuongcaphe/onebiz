@@ -330,6 +330,7 @@ export const sidebarNavGroups: SidebarGroup[] = [
     label: "Khuyến mãi",
     icon: "local_offer",
     items: [
+      { label: "MKT Hub", href: "/mkt", icon: "campaign", permission: "mkt.view" },
       { label: "Chương trình khuyến mãi", href: "/cai-dat/khuyen-mai", icon: "local_offer" },
       { label: "Mã giảm giá", href: "/cai-dat/ma-giam-gia", icon: "qr_code_2" },
       { label: "Báo cáo khuyến mãi", href: "/phan-tich/khuyen-mai", icon: "trending_up" },

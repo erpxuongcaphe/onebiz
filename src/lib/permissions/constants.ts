@@ -126,6 +126,16 @@ export const PERMISSIONS = {
   // Manager quán = reconcile chỉ chi nhánh mình quản lý (own_branch)
   SHIFTS_RECONCILE_ANY: "shifts.reconcile_any",
   SHIFTS_RECONCILE_OWN_BRANCH: "shifts.reconcile_own_branch",
+
+  // MKT Hub
+  MKT_VIEW: "mkt.view",
+  MKT_MANAGE_CAMPAIGNS: "mkt.manage_campaigns",
+  MKT_SPLIT_WORK_PACKAGES: "mkt.split_work_packages",
+  MKT_REVIEW_CONTENT: "mkt.review_content",
+  MKT_OVERRIDE_CAMPAIGN: "mkt.override_campaign",
+  MKT_MANAGE_TEAM: "mkt.manage_team",
+  MKT_VIEW_AUDIT: "mkt.view_audit",
+  MKT_TELEGRAM_MANAGE: "mkt.telegram_manage",
 } as const;
 
 export type PermissionCode = (typeof PERMISSIONS)[keyof typeof PERMISSIONS];
@@ -284,6 +294,19 @@ export const PERMISSION_GROUPS: PermissionGroup[] = [
     ],
   },
   {
+    group: "MKT Hub",
+    permissions: [
+      { code: PERMISSIONS.MKT_VIEW, label: "Xem MKT Hub" },
+      { code: PERMISSIONS.MKT_MANAGE_CAMPAIGNS, label: "Quản lý chiến dịch" },
+      { code: PERMISSIONS.MKT_SPLIT_WORK_PACKAGES, label: "Tách gói việc" },
+      { code: PERMISSIONS.MKT_REVIEW_CONTENT, label: "Duyệt nội dung" },
+      { code: PERMISSIONS.MKT_OVERRIDE_CAMPAIGN, label: "Override readiness" },
+      { code: PERMISSIONS.MKT_MANAGE_TEAM, label: "Quản lý team" },
+      { code: PERMISSIONS.MKT_VIEW_AUDIT, label: "Xem audit MKT" },
+      { code: PERMISSIONS.MKT_TELEGRAM_MANAGE, label: "Quản lý Telegram" },
+    ],
+  },
+  {
     group: "Đối chiếu ca làm việc",
     permissions: [
       { code: PERMISSIONS.SHIFTS_RECONCILE_ANY, label: "Đối chiếu ca mọi chi nhánh (Admin)" },
@@ -352,6 +375,8 @@ export const DEFAULT_ROLE_TEMPLATES: RoleTemplate[] = [
       PERMISSIONS.REPORTS_FNB,
       PERMISSIONS.REPORTS_VIEW_PROFIT,
       PERMISSIONS.REPORTS_EXPORT,
+      // MKT Hub foundation
+      ...ALL_PERMISSION_CODES.filter((c) => c.startsWith("mkt.")),
       // System: cấp OTP + xem audit
       PERMISSIONS.SYSTEM_VIEW_AUDIT,
       PERMISSIONS.SYSTEM_ISSUE_OTP,

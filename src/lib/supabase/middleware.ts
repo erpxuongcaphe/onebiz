@@ -25,6 +25,15 @@ function isFnbSubdomain(request: NextRequest): boolean {
   return host.startsWith("fnb.") || host.startsWith("fnb-");
 }
 
+/**
+ * Kiểm tra request có đến từ MKT Hub subdomain không.
+ * Hỗ trợ: mkthub.onebiz.com.vn, mkthub.localhost, mkthub-xxx.vercel.app.
+ */
+function isMktSubdomain(request: NextRequest): boolean {
+  const host = request.headers.get("host") ?? "";
+  return host.startsWith("mkthub.") || host.startsWith("mkthub-");
+}
+
 function getFnbPublicPath(pathname: string): string {
   if (pathname === "/pos/fnb" || pathname === "/pos/fnb/") return "/";
   if (pathname.startsWith("/pos/fnb/")) {
@@ -44,6 +53,21 @@ function getFnbAuthRedirect(request: NextRequest): string {
   return getFnbPublicPath(redirect);
 }
 
+function getMktPublicPath(pathname: string): string {
+  if (pathname === "/mkt" || pathname === "/mkt/") return "/";
+  if (pathname.startsWith("/mkt/")) {
+    return pathname.replace("/mkt", "") || "/";
+  }
+  return pathname || "/";
+}
+
+function getMktAuthRedirect(request: NextRequest): string {
+  const redirect = request.nextUrl.searchParams.get("redirect");
+  if (!redirect || !redirect.startsWith("/") || redirect.startsWith("//")) {
+    return "/";
+  }
+  return getMktPublicPath(redirect);
+}
 /**
  * FnB subdomain routing:
  * - fnb.onebiz.com.vn/            → rewrite /pos/fnb
@@ -130,6 +154,69 @@ function handleFnbSubdomain(
   return NextResponse.redirect(url);
 }
 
+
+/**
+ * MKT Hub subdomain routing:
+ * - mkthub.onebiz.com.vn/          -> rewrite /mkt
+ * - mkthub.onebiz.com.vn/tasks/... -> rewrite /mkt/tasks/...
+ * - mkthub.onebiz.com.vn/dang-nhap -> allow shared auth
+ * - /api, /_next and assets pass through.
+ */
+function handleMktSubdomain(
+  request: NextRequest,
+  supabaseResponse: NextResponse,
+  user: unknown,
+): NextResponse {
+  const { pathname } = request.nextUrl;
+
+  const publicPaths = ["/dang-nhap", "/quen-mat-khau", "/dat-lai-mat-khau"];
+  const isPublicPath = publicPaths.some((p) => pathname.startsWith(p));
+
+  if (!user && !isPublicPath) {
+    const url = request.nextUrl.clone();
+    url.pathname = "/dang-nhap";
+    url.searchParams.set("redirect", getMktPublicPath(pathname));
+    return NextResponse.redirect(url);
+  }
+
+  if (user && isPublicPath) {
+    const url = request.nextUrl.clone();
+    url.pathname = getMktAuthRedirect(request);
+    url.search = "";
+    return NextResponse.redirect(url);
+  }
+
+  if (isPublicPath) return supabaseResponse;
+
+  if (pathname.startsWith("/api") || pathname.startsWith("/_next")) {
+    return supabaseResponse;
+  }
+
+  if (pathname === "/manifest.json" || pathname === "/sw.js") {
+    return supabaseResponse;
+  }
+
+  if (pathname === "/" || pathname === "") {
+    const url = request.nextUrl.clone();
+    url.pathname = "/mkt";
+    const response = NextResponse.rewrite(url);
+    copySetCookies(supabaseResponse, response);
+    response.headers.set("x-mkt-subdomain", "1");
+    return response;
+  }
+
+  if (pathname.startsWith("/mkt")) {
+    supabaseResponse.headers.set("x-mkt-subdomain", "1");
+    return supabaseResponse;
+  }
+
+  const url = request.nextUrl.clone();
+  url.pathname = `/mkt${pathname}`;
+  const response = NextResponse.rewrite(url);
+  copySetCookies(supabaseResponse, response);
+  response.headers.set("x-mkt-subdomain", "1");
+  return response;
+}
 /** Copy set-cookie headers from Supabase auth response to rewrite response */
 function copySetCookies(from: NextResponse, to: NextResponse): void {
   from.cookies.getAll().forEach((cookie) => {
@@ -168,6 +255,19 @@ export async function updateSession(request: NextRequest) {
       if (pathname === "/kds" || pathname.startsWith("/kds/")) {
         const url = request.nextUrl.clone();
         url.pathname = `/pos/fnb${pathname}`;
+        return NextResponse.rewrite(url);
+      }
+    }
+    if (isMktSubdomain(request)) {
+      const { pathname } = request.nextUrl;
+      if (pathname === "/" || pathname === "") {
+        const url = request.nextUrl.clone();
+        url.pathname = "/mkt";
+        return NextResponse.rewrite(url);
+      }
+      if (!pathname.startsWith("/mkt") && !pathname.startsWith("/api")) {
+        const url = request.nextUrl.clone();
+        url.pathname = `/mkt${pathname}`;
         return NextResponse.rewrite(url);
       }
     }
@@ -213,6 +313,11 @@ export async function updateSession(request: NextRequest) {
   // ── FnB subdomain routing ──
   if (isFnbSubdomain(request)) {
     return handleFnbSubdomain(request, supabaseResponse, user);
+  }
+
+  // ── MKT Hub subdomain routing ──
+  if (isMktSubdomain(request)) {
+    return handleMktSubdomain(request, supabaseResponse, user);
   }
 
   // ── Standard ERP routing ──
