@@ -17,6 +17,10 @@ type NavItem = {
 // mục nào chưa có trang sẽ được thêm vào đây khi trang sẵn sàng.
 const NAV_ITEMS: NavItem[] = [
   { href: "/mkt", label: "Tổng quan", icon: "dashboard" },
+  { href: "/mkt/tasks", label: "Việc của tôi", icon: "checklist" },
+  { href: "/mkt/campaigns", label: "Chiến dịch", icon: "campaign" },
+  { href: "/mkt/approvals", label: "Duyệt nội dung", icon: "rate_review", requires: "canReview" },
+  { href: "/mkt/leader-queue", label: "Cần Leader xử lý", icon: "manage_accounts", requires: "isLead" },
   { href: "/mkt/settings", label: "Cài đặt", icon: "settings" },
 ];
 
