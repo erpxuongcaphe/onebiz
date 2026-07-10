@@ -33,3 +33,10 @@ jobs:
 
       - name: Build
         run: npm run build
+        # CEO 10/07: next build cần biến Supabase để khởi tạo @supabase/ssr
+        # (chỉ KHỞI TẠO client, KHÔNG kết nối DB lúc build) → placeholder cho CI.
+        # Vercel dùng biến THẬT khi deploy production.
+        env:
+          NEXT_PUBLIC_SUPABASE_URL: https://placeholder.supabase.co
+          NEXT_PUBLIC_SUPABASE_ANON_KEY: placeholder-anon-key-for-ci-build
+          SUPABASE_SERVICE_ROLE_KEY: placeholder-service-role-key-for-ci-build
