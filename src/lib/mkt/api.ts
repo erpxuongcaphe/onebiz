@@ -46,6 +46,31 @@ export async function readJsonBody<T extends object>(
   return (await request.json().catch(() => ({}))) as Partial<T>;
 }
 
+/**
+ * Kiểm tra các field bắt buộc trong body. Trả về NextResponse 400 (message
+ * tiếng Việt có dấu) nếu thiếu — đỡ 1 vòng gọi DB; trả null nếu đủ.
+ */
+export function requireFields(
+  body: Record<string, unknown>,
+  fields: readonly string[],
+): NextResponse | null {
+  const missing = fields.filter((f) => {
+    const v = body[f];
+    return v === undefined || v === null || (typeof v === "string" && v.trim() === "");
+  });
+  if (missing.length === 0) return null;
+  return NextResponse.json(
+    {
+      success: false,
+      error: {
+        code: "INVALID_STATE",
+        message: `Thiếu thông tin bắt buộc: ${missing.join(", ")}`,
+      },
+    },
+    { status: 400 },
+  );
+}
+
 export function mktErrorResponse(error: unknown) {
   const message =
     typeof error === "object" && error && "message" in error
