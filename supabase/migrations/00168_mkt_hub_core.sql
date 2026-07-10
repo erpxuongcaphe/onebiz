@@ -234,6 +234,10 @@ create index if not exists idx_mkt_content_campaign on public.mkt_content_items(
 create index if not exists idx_mkt_tasks_assignee on public.mkt_tasks(tenant_id, assignee_id, acceptance_status, task_status) where deleted_at is null;
 create index if not exists idx_mkt_tasks_work_package on public.mkt_tasks(tenant_id, work_package_id, task_status) where deleted_at is null;
 create index if not exists idx_mkt_tasks_dependency on public.mkt_tasks(tenant_id, dependency_task_id) where deleted_at is null;
+-- Hỗ trợ EXISTS trong RLS visibility (executor thấy campaign/package/content của việc mình)
+create index if not exists idx_mkt_tasks_reviewer on public.mkt_tasks(tenant_id, reviewer_id) where deleted_at is null;
+create index if not exists idx_mkt_tasks_content_item on public.mkt_tasks(tenant_id, content_item_id) where deleted_at is null;
+create index if not exists idx_mkt_tasks_campaign_assignee on public.mkt_tasks(campaign_id, assignee_id) where deleted_at is null;
 create index if not exists idx_mkt_outbox_pending on public.mkt_outbox_events(status, next_attempt_at, created_at) where status = 'pending';
 create unique index if not exists idx_mkt_outbox_dedupe on public.mkt_outbox_events(dedupe_key) where dedupe_key is not null;
 
@@ -274,22 +278,153 @@ alter table public.mkt_telegram_accounts enable row level security;
 alter table public.mkt_telegram_link_tokens enable row level security;
 alter table public.mkt_outbox_events enable row level security;
 
+-- ────────────────────────────────────────────────────────────────
+-- RLS visibility helpers (theo Developer Handover v1.0.3):
+--   - "Toàn cảnh" (Lead/CEO) = mkt.manage_campaigns HOẶC mkt.manage_team
+--   - Executor CHỈ thấy việc mình được giao (assignee/reviewer) + nội dung liên quan
+-- Dùng SECURITY DEFINER + stable để gọi (select public.mkt_is_lead())
+-- trong policy → Postgres cache 1 lần/câu lệnh (InitPlan), không chạy per-row.
+-- ────────────────────────────────────────────────────────────────
+create or replace function public.mkt_is_lead()
+returns boolean language sql stable security definer set search_path = public as $$
+  select public.user_has_permission(auth.uid(), 'mkt.manage_campaigns')
+      or public.user_has_permission(auth.uid(), 'mkt.manage_team');
+$$;
+
+create or replace function public.mkt_can_review()
+returns boolean language sql stable security definer set search_path = public as $$
+  select public.user_has_permission(auth.uid(), 'mkt.manage_campaigns')
+      or public.user_has_permission(auth.uid(), 'mkt.manage_team')
+      or public.user_has_permission(auth.uid(), 'mkt.review_content');
+$$;
+
+-- Người được giao xác nhận readiness (Ops/Finance/CEO/Kho/Store) thấy đúng item của mình.
+-- Cùng logic role-match với mkt_confirm_readiness_item để tránh lệch quyền.
+create or replace function public.mkt_matches_readiness_role(p_required_role text)
+returns boolean language sql stable security definer set search_path = public as $$
+  select p_required_role is not null and (
+    lower(coalesce((select p.role from public.profiles p where p.id = auth.uid()), '')) = lower(p_required_role)
+    or (p_required_role = 'finance' and public.user_has_permission(auth.uid(), 'finance.view_cash_book'))
+    or (p_required_role in ('ops', 'warehouse') and public.user_has_permission(auth.uid(), 'inventory.view'))
+  );
+$$;
+
+revoke all on function public.mkt_is_lead() from public;
+revoke all on function public.mkt_can_review() from public;
+revoke all on function public.mkt_matches_readiness_role(text) from public;
+grant execute on function public.mkt_is_lead() to authenticated;
+grant execute on function public.mkt_can_review() to authenticated;
+grant execute on function public.mkt_matches_readiness_role(text) to authenticated;
+
+-- Campaign: Lead toàn cảnh · owner · người có task trong campaign
 drop policy if exists "mkt_campaigns_select" on public.mkt_campaigns;
-create policy "mkt_campaigns_select" on public.mkt_campaigns for select using (tenant_id = public.get_user_tenant_id());
+create policy "mkt_campaigns_select" on public.mkt_campaigns for select using (
+  tenant_id = public.get_user_tenant_id()
+  and (
+    (select public.mkt_is_lead())
+    or owner_id = auth.uid()
+    or exists (
+      select 1 from public.mkt_tasks t
+      where t.campaign_id = mkt_campaigns.id
+        and t.deleted_at is null
+        and (t.assignee_id = auth.uid() or t.reviewer_id = auth.uid())
+    )
+  )
+);
+
+-- Readiness: Lead/override toàn cảnh · người được giao xác nhận (role-match)
 drop policy if exists "mkt_readiness_select" on public.mkt_campaign_readiness_items;
-create policy "mkt_readiness_select" on public.mkt_campaign_readiness_items for select using (tenant_id = public.get_user_tenant_id());
+create policy "mkt_readiness_select" on public.mkt_campaign_readiness_items for select using (
+  tenant_id = public.get_user_tenant_id()
+  and (
+    (select public.mkt_is_lead())
+    or (select public.user_has_permission(auth.uid(), 'mkt.override_campaign'))
+    or public.mkt_matches_readiness_role(required_role)
+  )
+);
+
+-- Workflow template: cấu hình không nhạy cảm, cần cho dialog split → mkt.view
 drop policy if exists "mkt_templates_select" on public.mkt_workflow_templates;
-create policy "mkt_templates_select" on public.mkt_workflow_templates for select using (tenant_id = public.get_user_tenant_id());
+create policy "mkt_templates_select" on public.mkt_workflow_templates for select using (
+  tenant_id = public.get_user_tenant_id()
+  and (select public.user_has_permission(auth.uid(), 'mkt.view'))
+);
+
+-- Work package: Lead/split toàn cảnh · owner/reviewer · người có task trong package
 drop policy if exists "mkt_work_packages_select" on public.mkt_channel_work_packages;
-create policy "mkt_work_packages_select" on public.mkt_channel_work_packages for select using (tenant_id = public.get_user_tenant_id());
-drop policy if exists "mkt_content_items_select" on public.mkt_content_items;
-create policy "mkt_content_items_select" on public.mkt_content_items for select using (tenant_id = public.get_user_tenant_id());
+create policy "mkt_work_packages_select" on public.mkt_channel_work_packages for select using (
+  tenant_id = public.get_user_tenant_id()
+  and (
+    (select public.mkt_is_lead())
+    or (select public.user_has_permission(auth.uid(), 'mkt.split_work_packages'))
+    or owner_id = auth.uid()
+    or reviewer_id = auth.uid()
+    or exists (
+      select 1 from public.mkt_tasks t
+      where t.work_package_id = mkt_channel_work_packages.id
+        and t.deleted_at is null
+        and (t.assignee_id = auth.uid() or t.reviewer_id = auth.uid())
+    )
+  )
+);
+
+-- Task: assignee · reviewer · Lead toàn cảnh (No accept-on-behalf → executor chỉ thấy việc mình)
 drop policy if exists "mkt_tasks_select" on public.mkt_tasks;
-create policy "mkt_tasks_select" on public.mkt_tasks for select using (tenant_id = public.get_user_tenant_id());
+create policy "mkt_tasks_select" on public.mkt_tasks for select using (
+  tenant_id = public.get_user_tenant_id()
+  and (
+    assignee_id = auth.uid()
+    or reviewer_id = auth.uid()
+    or (select public.mkt_is_lead())
+  )
+);
+
+-- Content item: Lead/reviewer toàn cảnh · người tạo · người có task trên content
+drop policy if exists "mkt_content_items_select" on public.mkt_content_items;
+create policy "mkt_content_items_select" on public.mkt_content_items for select using (
+  tenant_id = public.get_user_tenant_id()
+  and (
+    (select public.mkt_can_review())
+    or created_by = auth.uid()
+    or exists (
+      select 1 from public.mkt_tasks t
+      where t.content_item_id = mkt_content_items.id
+        and t.deleted_at is null
+        and (t.assignee_id = auth.uid() or t.reviewer_id = auth.uid())
+    )
+  )
+);
+
 drop policy if exists "mkt_content_versions_select" on public.mkt_content_versions;
-create policy "mkt_content_versions_select" on public.mkt_content_versions for select using (tenant_id = public.get_user_tenant_id());
+create policy "mkt_content_versions_select" on public.mkt_content_versions for select using (
+  tenant_id = public.get_user_tenant_id()
+  and (
+    submitted_by = auth.uid()
+    or (select public.mkt_can_review())
+    or exists (
+      select 1 from public.mkt_tasks t
+      where t.content_item_id = mkt_content_versions.content_item_id
+        and t.deleted_at is null
+        and (t.assignee_id = auth.uid() or t.reviewer_id = auth.uid())
+    )
+  )
+);
+
 drop policy if exists "mkt_content_reviews_select" on public.mkt_content_reviews;
-create policy "mkt_content_reviews_select" on public.mkt_content_reviews for select using (tenant_id = public.get_user_tenant_id());
+create policy "mkt_content_reviews_select" on public.mkt_content_reviews for select using (
+  tenant_id = public.get_user_tenant_id()
+  and (
+    reviewer_id = auth.uid()
+    or (select public.mkt_can_review())
+    or exists (
+      select 1 from public.mkt_tasks t
+      where t.content_item_id = mkt_content_reviews.content_item_id
+        and t.deleted_at is null
+        and (t.assignee_id = auth.uid() or t.reviewer_id = auth.uid())
+    )
+  )
+);
+
 drop policy if exists "mkt_telegram_accounts_select_own" on public.mkt_telegram_accounts;
 create policy "mkt_telegram_accounts_select_own" on public.mkt_telegram_accounts for select using (tenant_id = public.get_user_tenant_id() and user_id = auth.uid());
 drop policy if exists "mkt_telegram_link_tokens_select_own" on public.mkt_telegram_link_tokens;
@@ -318,9 +453,12 @@ begin
     return 0;
   end if;
 
+  -- User đã đăng nhập chỉ đọc được score trong tenant của mình (chống dò cross-tenant).
+  -- Anon bị chặn ở tầng REST bằng `revoke execute ... from anon, public` (cuối file);
+  -- internal call (service_role / RPC definer, auth.uid() null) tính bình thường để
+  -- seed + recalc score chạy đúng.
   if auth.uid() is not null
-     and public.get_user_tenant_id() is not null
-     and public.get_user_tenant_id() <> v_tenant_id then
+     and public.get_user_tenant_id() is distinct from v_tenant_id then
     return 0;
   end if;
 
@@ -469,6 +607,14 @@ begin
       v_actor, v_actor
     );
     v_count := v_count + 1;
+
+    -- Báo cho người được giao biết có task mới (Assignee accountability — phải nhận việc).
+    perform public.mkt_enqueue_notification(
+      v_package.tenant_id, (v_task->>'assigneeId')::uuid,
+      'mkt_task_assigned', 'Task MKT mới', v_task->>'title',
+      'mkt_task', v_task_id, '/mkt/tasks?task=' || v_task_id::text,
+      '{}'::jsonb, 'mkt_task_assigned:' || v_task_id::text
+    );
   end loop;
 
   update public.mkt_channel_work_packages
@@ -542,7 +688,7 @@ begin
 
   select owner_id into v_owner from public.mkt_channel_work_packages where id = v_task.work_package_id;
   if v_owner is not null then
-    perform public.mkt_enqueue_notification(v_task.tenant_id, v_owner, 'mkt_task_rejected', 'Task MKT bị từ chối', v_task.title, 'mkt_task', v_task.id, '/mkt?queue=leader');
+    perform public.mkt_enqueue_notification(v_task.tenant_id, v_owner, 'mkt_task_rejected', 'Task MKT bị từ chối', v_task.title, 'mkt_task', v_task.id, '/mkt/leader-queue');
   end if;
   perform public.mkt_record_audit(v_task.tenant_id, v_actor, 'mkt_task_rejected', 'mkt_task', v_task.id, null, jsonb_build_object('reason', p_reason));
   return jsonb_build_object('success', true, 'task', to_jsonb(v_task));
@@ -573,7 +719,7 @@ begin
 
   select owner_id into v_owner from public.mkt_channel_work_packages where id = v_task.work_package_id;
   if v_owner is not null then
-    perform public.mkt_enqueue_notification(v_task.tenant_id, v_owner, 'mkt_task_need_discussion', 'Task MKT cần trao đổi', v_task.title, 'mkt_task', v_task.id, '/mkt?queue=leader');
+    perform public.mkt_enqueue_notification(v_task.tenant_id, v_owner, 'mkt_task_need_discussion', 'Task MKT cần trao đổi', v_task.title, 'mkt_task', v_task.id, '/mkt/leader-queue');
   end if;
   perform public.mkt_record_audit(v_task.tenant_id, v_actor, 'mkt_task_need_discussion', 'mkt_task', v_task.id, null, jsonb_build_object('reason', p_reason));
   return jsonb_build_object('success', true, 'task', to_jsonb(v_task));
@@ -731,7 +877,7 @@ begin
   where id = p_task_id
   returning * into v_task;
 
-  perform public.mkt_enqueue_notification(v_task.tenant_id, p_new_assignee_id, 'mkt_task_assigned', 'Task MKT mới', v_task.title, 'mkt_task', v_task.id, '/mkt?task=' || v_task.id::text);
+  perform public.mkt_enqueue_notification(v_task.tenant_id, p_new_assignee_id, 'mkt_task_assigned', 'Task MKT mới', v_task.title, 'mkt_task', v_task.id, '/mkt/tasks?task=' || v_task.id::text);
   perform public.mkt_record_audit(v_task.tenant_id, v_actor, 'mkt_task_reassigned', 'mkt_task', v_task.id, null, jsonb_build_object('reason', p_reason, 'new_assignee_id', p_new_assignee_id));
   return jsonb_build_object('success', true, 'task', to_jsonb(v_task));
 end;
@@ -806,7 +952,7 @@ begin
   where id = p_task_id;
 
   if v_task.reviewer_id is not null then
-    perform public.mkt_enqueue_notification(v_task.tenant_id, v_task.reviewer_id, 'mkt_content_pending_review', 'Nội dung chờ duyệt', v_content.title, 'mkt_content_item', p_content_item_id, '/mkt?content=' || p_content_item_id::text);
+    perform public.mkt_enqueue_notification(v_task.tenant_id, v_task.reviewer_id, 'mkt_content_pending_review', 'Nội dung chờ duyệt', v_content.title, 'mkt_content_item', p_content_item_id, '/mkt/approvals?content=' || p_content_item_id::text);
   end if;
 
   perform public.mkt_record_audit(v_task.tenant_id, v_actor, 'mkt_content_submitted_review', 'mkt_content_item', p_content_item_id, null, to_jsonb(v_version));
@@ -830,6 +976,7 @@ declare
   v_version record;
   v_review record;
   v_revision_count integer;
+  v_required_role text;
 begin
   if v_actor is null then raise exception 'UNAUTHENTICATED' using errcode = 'P0001'; end if;
   if not public.user_has_permission(v_actor, 'mkt.review_content') then raise exception 'INSUFFICIENT_ROLE' using errcode = 'P0001'; end if;
@@ -837,6 +984,18 @@ begin
 
   select * into v_content from public.mkt_content_items where id = p_content_id and deleted_at is null for update;
   if not found or v_content.tenant_id <> public.get_user_tenant_id() then raise exception 'NOT_FOUND' using errcode = 'P0001'; end if;
+
+  -- Duyệt theo mức rủi ro (Handover: Lead duyệt Low/Medium, CEO duyệt High/Critical).
+  -- required_approver_role suy từ content; 'ceo' đòi thêm quyền override_campaign
+  -- (quyền "vượt rào" cao nhất trong bộ mkt.*) — owner bypass sẵn qua user_has_permission.
+  v_required_role := coalesce(
+    nullif(v_content.required_approver_role, ''),
+    case when v_content.risk_level in ('high', 'critical') then 'ceo' else 'mkt_lead' end
+  );
+  if v_required_role = 'ceo'
+     and not public.user_has_permission(v_actor, 'mkt.override_campaign') then
+    raise exception 'INSUFFICIENT_ROLE: Nội dung rủi ro cao — cần cấp duyệt CEO' using errcode = 'P0001';
+  end if;
 
   if p_content_version_id is null then
     select * into v_version
@@ -884,7 +1043,7 @@ begin
   end if;
 
   if v_version.submitted_by is not null then
-    perform public.mkt_enqueue_notification(v_content.tenant_id, v_version.submitted_by, 'mkt_content_reviewed', 'Nội dung đã được phản hồi', v_content.title, 'mkt_content_item', p_content_id, '/mkt?content=' || p_content_id::text);
+    perform public.mkt_enqueue_notification(v_content.tenant_id, v_version.submitted_by, 'mkt_content_reviewed', 'Nội dung đã được phản hồi', v_content.title, 'mkt_content_item', p_content_id, '/mkt/approvals?content=' || p_content_id::text);
   end if;
 
   perform public.mkt_record_audit(v_content.tenant_id, v_actor, 'mkt_content_reviewed', 'mkt_content_item', p_content_id, null, jsonb_build_object('action', p_action, 'comment', p_comment, 'review_id', v_review.id));
@@ -985,6 +1144,7 @@ $$;
 create or replace view public.mkt_leader_queue_view
 with (security_invoker = true)
 as
+-- Task bị từ chối
 select t.tenant_id, c.branch_id, c.id as campaign_id, c.name as campaign_name,
        t.id as task_id, t.title as task_title, t.assignee_id, t.work_package_id,
        t.content_item_id, 'TASK_REJECTED'::text as issue_type, t.reject_reason as issue_note, t.created_at
@@ -992,18 +1152,30 @@ from public.mkt_tasks t
 left join public.mkt_campaigns c on c.id = t.campaign_id
 where t.deleted_at is null and t.acceptance_status = 'rejected'
 union all
+-- Task cần trao đổi
 select t.tenant_id, c.branch_id, c.id, c.name, t.id, t.title, t.assignee_id, t.work_package_id,
        t.content_item_id, 'NEED_DISCUSSION'::text, t.discussion_reason, t.created_at
 from public.mkt_tasks t
 left join public.mkt_campaigns c on c.id = t.campaign_id
 where t.deleted_at is null and t.acceptance_status = 'need_discussion'
 union all
+-- Task kẹt phụ thuộc QUÁ 2 NGÀY (Handover mục 8) — không đưa task vừa split vào queue
 select t.tenant_id, c.branch_id, c.id, c.name, t.id, t.title, t.assignee_id, t.work_package_id,
        t.content_item_id, 'BLOCKED_DEPENDENCY'::text, t.blocked_reason, t.created_at
 from public.mkt_tasks t
 left join public.mkt_campaigns c on c.id = t.campaign_id
 where t.deleted_at is null and t.task_status = 'blocked' and t.dependency_task_id is not null
+  and t.created_at < (now() - interval '2 days')
 union all
+-- Cờ cần leader xử lý (vd revision >=3 gắn vào task) — loại trùng với 2 nguồn trên
+select t.tenant_id, c.branch_id, c.id, c.name, t.id, t.title, t.assignee_id, t.work_package_id,
+       t.content_item_id, 'LEADER_ACTION'::text, t.blocked_reason, t.created_at
+from public.mkt_tasks t
+left join public.mkt_campaigns c on c.id = t.campaign_id
+where t.deleted_at is null and t.requires_leader_action = true
+  and t.acceptance_status not in ('rejected', 'need_discussion')
+union all
+-- Content vượt ngưỡng sửa (>=3 lần)
 select ci.tenant_id, c.branch_id, c.id, c.name, null::uuid, ci.title, null::uuid, ci.work_package_id,
        ci.id, 'REVISION_OVER_LIMIT'::text, ('revision_count=' || ci.revision_count::text), ci.created_at
 from public.mkt_content_items ci
@@ -1039,6 +1211,7 @@ begin
 end;
 $$;
 
+-- Bảng: grant SELECT cho authenticated; RLS ở trên quyết định thấy dòng nào.
 grant select on public.mkt_campaigns to authenticated;
 grant select on public.mkt_campaign_readiness_items to authenticated;
 grant select on public.mkt_workflow_templates to authenticated;
@@ -1050,7 +1223,35 @@ grant select on public.mkt_content_reviews to authenticated;
 grant select on public.mkt_telegram_accounts to authenticated;
 grant select on public.mkt_telegram_link_tokens to authenticated;
 grant select on public.mkt_outbox_events to authenticated;
-grant select on public.mkt_leader_queue_view to authenticated;
+
+-- Leader queue view: KHÔNG mở SELECT trực tiếp — chỉ qua RPC mkt_get_leader_queue (đã gate quyền).
+revoke all on public.mkt_leader_queue_view from public;
+revoke select on public.mkt_leader_queue_view from anon, authenticated;
+
+-- ────────────────────────────────────────────────────────────────
+-- Khóa quyền EXECUTE: Postgres mặc định grant EXECUTE cho PUBLIC khi
+-- CREATE FUNCTION → phải REVOKE để anon không gọi được RPC qua PostgREST.
+-- RPC nghiệp vụ: chỉ authenticated. 2 helper (audit/notification): chỉ
+-- gọi nội bộ từ definer RPC → thu hồi khỏi cả authenticated.
+-- ────────────────────────────────────────────────────────────────
+revoke all on function public.mkt_record_audit(uuid, uuid, text, text, uuid, jsonb, jsonb) from public, anon, authenticated;
+revoke all on function public.mkt_enqueue_notification(uuid, uuid, text, text, text, text, uuid, text, jsonb, text) from public, anon, authenticated;
+
+revoke all on function public.get_mkt_campaign_readiness_score(uuid) from public, anon;
+revoke all on function public.mkt_split_work_package(uuid, jsonb, text) from public, anon;
+revoke all on function public.mkt_accept_task(uuid) from public, anon;
+revoke all on function public.mkt_reject_task(uuid, text) from public, anon;
+revoke all on function public.mkt_need_discussion_task(uuid, text) from public, anon;
+revoke all on function public.mkt_start_task(uuid) from public, anon;
+revoke all on function public.mkt_mark_task_done(uuid) from public, anon;
+revoke all on function public.mkt_force_task_done(uuid, text) from public, anon;
+revoke all on function public.mkt_reassign_task(uuid, uuid, text) from public, anon;
+revoke all on function public.mkt_cancel_task(uuid, text) from public, anon;
+revoke all on function public.mkt_submit_task_review(uuid, uuid, text, text) from public, anon;
+revoke all on function public.mkt_review_content(uuid, uuid, text, text) from public, anon;
+revoke all on function public.mkt_confirm_readiness_item(uuid, uuid, text) from public, anon;
+revoke all on function public.mkt_change_campaign_status(uuid, text, text) from public, anon;
+revoke all on function public.mkt_get_leader_queue(uuid, integer, integer) from public, anon;
 
 grant execute on function public.get_mkt_campaign_readiness_score(uuid) to authenticated;
 grant execute on function public.mkt_split_work_package(uuid, jsonb, text) to authenticated;
