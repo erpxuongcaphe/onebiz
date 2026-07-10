@@ -370,12 +370,12 @@ ${
   ${d.businessPhone ? `<div class="line">ĐT: ${esc(d.businessPhone)}</div>` : ""}
   ${d.branchName ? `<div class="line" style="font-style:italic;">Chi nhánh: ${esc(d.branchName)}</div>` : ""}
   <div class="doc-type">${esc(d.documentType)}</div>
-  <div class="doc-code">${esc(d.documentCode)} — ${formatDate(d.date)}</div>
+  <div class="doc-code">${d.documentCode ? `${esc(d.documentCode)} — ` : ""}${formatDate(d.date)}</div>
 </div>`
     : `<div class="doc-title-band">
   ${d.businessLogoUrl ? `<img class="logo" src="${esc(d.businessLogoUrl)}" alt="logo" />` : ""}
   <div class="doc-type">${esc(d.documentType)}</div>
-  <div class="doc-sub">Số: <b>${esc(d.documentCode)}</b> &nbsp;·&nbsp; Ngày: ${formatShortDate(d.date)}</div>
+  <div class="doc-sub">${d.documentCode ? `Số: <b>${esc(d.documentCode)}</b> &nbsp;·&nbsp; ` : ""}Ngày: ${formatShortDate(d.date)}</div>
 </div>
 <div class="seller-band">
   ${d.businessName ? `<div class="store">${esc(d.businessName)}</div>` : d.storeName ? `<div class="store">${esc(d.storeName)}</div>` : ""}

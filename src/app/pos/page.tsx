@@ -1365,10 +1365,21 @@ function PosPageInner() {
       return;
     }
     try {
-      const now = new Date();
-      const tempCode = `TT-${String(now.getHours()).padStart(2, "0")}${String(now.getMinutes()).padStart(2, "0")}${String(now.getSeconds()).padStart(2, "0")}`;
+      // CEO 08/07: KHÔNG chế số. Tạm tính in MÃ ĐƠN THẬT nếu giỏ đã là đơn nháp
+      // (loadedDraftId) → truy xuất/quản lý/báo cáo được, và TRÙNG mã hóa đơn khi
+      // thanh toán (truy vết đầu-cuối). Giỏ CHƯA lưu → KHÔNG số (CEO chốt) — chỉ
+      // "PHIẾU TẠM TÍNH" + ngày. Bỏ hẳn TT-giờphútgiây tự sinh (không truy xuất).
+      let draftCode = "";
+      if (state.loadedDraftId) {
+        try {
+          const d = await getDraftOrderById(state.loadedDraftId);
+          draftCode = d?.code ?? "";
+        } catch {
+          draftCode = "";
+        }
+      }
       const receipt: ReceiptData = {
-        invoiceCode: tempCode,
+        invoiceCode: draftCode,
         date: new Date().toISOString(),
         customerName: state.customer?.name ?? "Khách lẻ",
         items: state.lines.map((l) => ({
@@ -1393,9 +1404,9 @@ function PosPageInner() {
       };
       // CEO 08/07: tạm tính in CÙNG MẪU hóa đơn chính thức (resolver retail ×
       // sale_invoice × chi nhánh — giống hệt luồng auto-print sau thanh toán),
-      // CHỈ KHÁC tiêu đề "TẠM TÍNH". Mẫu có thể set title riêng (config.title
-      // đè documentType) → ép lại SAU applyTemplateToDocData. Offline / chưa
-      // có mẫu / lỗi resolve → rớt về bill nhiệt cũ (isPreBill), không kẹt quầy.
+      // CHỈ KHÁC tiêu đề "PHIẾU TẠM TÍNH". Mẫu có thể set title riêng
+      // (config.title đè documentType) → ép lại SAU applyTemplateToDocData.
+      // Offline / chưa có mẫu / lỗi resolve → rớt về bill nhiệt cũ (isPreBill).
       let printedViaTemplate = false;
       if (networkStatus.isOnline) {
         try {
@@ -1407,8 +1418,8 @@ function PosPageInner() {
           if (resolved) {
             const money = (n: number) => `${formatCurrency(n)} đ`;
             const base: DocumentPrintData = {
-              documentType: "TẠM TÍNH",
-              documentCode: tempCode,
+              documentType: "PHIẾU TẠM TÍNH",
+              documentCode: draftCode, // rỗng nếu giỏ chưa lưu → mẫu ẩn "Số:"
               date: new Date().toISOString(),
               branchName: currentBranch?.name,
               headerFields: [
@@ -1430,7 +1441,7 @@ function PosPageInner() {
               createdBy: user?.fullName,
             };
             const doc = applyTemplateToDocData(base, resolved);
-            doc.documentType = "TẠM TÍNH"; // ép lại — không để mẫu đè thành tiêu đề hóa đơn
+            doc.documentType = "PHIẾU TẠM TÍNH"; // ép lại — không để mẫu đè thành tiêu đề hóa đơn
             printDocument(doc, { paperSize: resolved.paperSize });
             printedViaTemplate = true;
           }
