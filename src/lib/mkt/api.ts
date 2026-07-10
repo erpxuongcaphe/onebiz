@@ -1,6 +1,7 @@
-import { NextResponse, type NextRequest } from "next/server";
+import { NextResponse, type NextRequest, after } from "next/server";
 import { createServerSupabaseClient } from "@/lib/supabase/server";
 import { getMktDatabaseClient } from "@/lib/mkt/supabase";
+import { processPendingOutbox } from "@/lib/mkt/outbox";
 
 export const MKT_ERROR_STATUS: Record<string, number> = {
   UNAUTHENTICATED: 401,
@@ -31,7 +32,7 @@ export async function requireMktSession() {
       supabase,
       user: null,
       response: NextResponse.json(
-        { success: false, error: { code: "UNAUTHENTICATED", message: "Chua dang nhap" } },
+        { success: false, error: { code: "UNAUTHENTICATED", message: "Chưa đăng nhập" } },
         { status: 401 },
       ),
     };
@@ -92,11 +93,19 @@ export async function callMktRpc(
   supabase: MktSupabaseClient,
   rpcName: string,
   args: Record<string, unknown>,
+  opts?: { notifyAfter?: boolean },
 ) {
   const { data, error } = await getMktDatabaseClient(supabase).rpc(
     rpcName,
     args,
   );
   if (error) return mktErrorResponse(error);
+
+  // Gửi Telegram tức thời SAU khi trả response (không chặn user). Cron sweeper
+  // vẫn là lưới an toàn nếu after() không chạy (môi trường không hỗ trợ).
+  if (opts?.notifyAfter) {
+    after(() => processPendingOutbox(5).catch(() => {}));
+  }
+
   return NextResponse.json(data ?? { success: true });
 }

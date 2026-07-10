@@ -1,9 +1,10 @@
 import { randomBytes } from "node:crypto";
-import { NextResponse } from "next/server";
+import { NextResponse, type NextRequest } from "next/server";
 import { getAdminClient } from "@/lib/supabase/admin";
 import { createServerSupabaseClient } from "@/lib/supabase/server";
 import { hashTelegramLinkToken } from "@/lib/mkt/telegram";
 import { getMktDatabaseClient } from "@/lib/mkt/supabase";
+import { checkRateLimit, getClientIp } from "@/lib/rate-limit";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
@@ -12,7 +13,7 @@ type ProfileTenantRow = {
   tenant_id: string | null;
 };
 
-export async function POST() {
+export async function POST(request: NextRequest) {
   const supabase = await createServerSupabaseClient();
   const db = getMktDatabaseClient(supabase);
   const {
@@ -22,8 +23,20 @@ export async function POST() {
 
   if (error || !user) {
     return NextResponse.json(
-      { success: false, error: { code: "UNAUTHENTICATED", message: "Chua dang nhap" } },
+      { success: false, error: { code: "UNAUTHENTICATED", message: "Chưa đăng nhập" } },
       { status: 401 },
+    );
+  }
+
+  // Chặn spam sinh token liên kết: tối đa 5 lần / phút / người dùng.
+  const rate = checkRateLimit(`mkt-link-token:${getClientIp(request)}:${user.id}`, {
+    limit: 5,
+    windowMs: 60_000,
+  });
+  if (!rate.allowed) {
+    return NextResponse.json(
+      { success: false, error: { code: "RATE_LIMITED", message: "Thao tác quá nhanh, thử lại sau ít phút" } },
+      { status: 429 },
     );
   }
 
@@ -35,7 +48,7 @@ export async function POST() {
 
   if (profileError || !profile?.tenant_id) {
     return NextResponse.json(
-      { success: false, error: { code: "NOT_FOUND", message: "Khong tim thay profile" } },
+      { success: false, error: { code: "NOT_FOUND", message: "Không tìm thấy hồ sơ người dùng" } },
       { status: 404 },
     );
   }

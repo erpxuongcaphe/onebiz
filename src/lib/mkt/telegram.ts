@@ -21,7 +21,7 @@ export async function sendTelegramMessage(params: {
 }) {
   const text = [params.title, params.message].filter(Boolean).join("\n\n");
   const replyMarkup = params.deepLinkPath
-    ? { inline_keyboard: [[{ text: "Open MKT Hub", url: getMktHubUrl(params.deepLinkPath) }]] }
+    ? { inline_keyboard: [[{ text: "Mở MKT Hub", url: getMktHubUrl(params.deepLinkPath) }]] }
     : undefined;
 
   const response = await fetch(

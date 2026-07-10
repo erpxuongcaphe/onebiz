@@ -13,8 +13,13 @@ export async function POST(
 
   const { campaignId, itemId } = await context.params;
 
-  return callMktRpc(supabase, "mkt_remind_readiness_item", {
-    p_campaign_id: campaignId,
-    p_item_id: itemId,
-  });
+  return callMktRpc(
+    supabase,
+    "mkt_remind_readiness_item",
+    {
+      p_campaign_id: campaignId,
+      p_item_id: itemId,
+    },
+    { notifyAfter: true },
+  );
 }

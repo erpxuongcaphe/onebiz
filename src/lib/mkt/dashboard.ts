@@ -205,7 +205,7 @@ function buildProfileMap(profiles: ProfileRow[]) {
   return new Map(
     profiles.map((profile) => [
       profile.id,
-      profile.full_name || profile.email || "Chua gan ten",
+      profile.full_name || profile.email || "Chưa gán tên",
     ]),
   );
 }
@@ -222,22 +222,22 @@ function buildMetrics(
 ): MktMetric[] {
   return [
     {
-      label: "Campaign dang chay",
+      label: "Chiến dịch đang chạy",
       value: padCount(campaigns.filter((item) => item.status === "running").length),
       tone: "border-emerald-200 bg-emerald-50 text-emerald-700",
     },
     {
-      label: "Task can nhan",
+      label: "Cần nhận việc",
       value: padCount(tasks.filter((item) => item.acceptance_status === "pending").length),
       tone: "border-sky-200 bg-sky-50 text-sky-700",
     },
     {
-      label: "Cho duyet content",
+      label: "Chờ duyệt nội dung",
       value: padCount(contents.filter((item) => item.content_status === "pending_review").length),
       tone: "border-amber-200 bg-amber-50 text-amber-700",
     },
     {
-      label: "Leader queue",
+      label: "Cần Leader xử lý",
       value: padCount(leaderQueue.length),
       tone: "border-rose-200 bg-rose-50 text-rose-700",
     },
@@ -255,7 +255,7 @@ export async function getMktDashboardData(
   } = await supabase.auth.getUser();
 
   if (userError || !user) {
-    return emptyDashboardData(null, ["auth: Chua dang nhap"]);
+    return emptyDashboardData(null, ["auth: Chưa đăng nhập"]);
   }
 
   const profile = await safeMaybe<ProfileRow>(
@@ -271,7 +271,7 @@ export async function getMktDashboardData(
   if (!profile?.tenant_id) {
     return emptyDashboardData(null, [
       ...warnings,
-      "profiles: Khong tim thay tenant cho user hien tai",
+      "profiles: Không tìm thấy tenant cho người dùng hiện tại",
     ]);
   }
 
@@ -332,15 +332,23 @@ export async function getMktDashboardData(
             .limit(20),
         )
       : Promise.resolve([]),
-    safeArray<LeaderQueueRow>(
-      warnings,
-      "mkt_get_leader_queue",
-      db.rpc<LeaderQueueRow[]>("mkt_get_leader_queue", {
+    // Leader queue chỉ dành cho Lead/CEO. Executor gọi sẽ bị INSUFFICIENT_ROLE
+    // — đó là bình thường, KHÔNG đẩy vào warnings (tránh banner cảnh báo vô cớ).
+    (async (): Promise<LeaderQueueRow[]> => {
+      const { data, error } = await db.rpc<LeaderQueueRow[]>("mkt_get_leader_queue", {
         p_branch_id: null,
         p_limit: 20,
         p_offset: 0,
-      }),
-    ),
+      });
+      if (error) {
+        const msg = describeError(error).toUpperCase();
+        if (!msg.includes("INSUFFICIENT_ROLE") && !msg.includes("UNAUTHENTICATED")) {
+          warnings.push(`mkt_get_leader_queue: ${describeError(error)}`);
+        }
+        return [];
+      }
+      return Array.isArray(data) ? data : [];
+    })(),
   ]);
 
   const assigneeIds = Array.from(
@@ -382,8 +390,8 @@ export async function getMktDashboardData(
       id: task.id,
       title: task.title,
       owner: task.assignee_id
-        ? profileMap.get(task.assignee_id) ?? "Chua gan ten"
-        : "Chua gan nguoi phu trach",
+        ? profileMap.get(task.assignee_id) ?? "Chưa gán tên"
+        : "Chưa gán người phụ trách",
       acceptanceStatus: task.acceptance_status,
       taskStatus: task.task_status,
       taskType: task.task_type,
@@ -409,10 +417,10 @@ export async function getMktDashboardData(
     leaderQueue: leaderQueue.map((item) => ({
       taskId: item.task_id,
       title: item.task_title,
-      campaignName: item.campaign_name ?? "Chua gan campaign",
+      campaignName: item.campaign_name ?? "Chưa gán chiến dịch",
       assigneeName: item.assignee_id
-        ? profileMap.get(item.assignee_id) ?? "Chua gan ten"
-        : "Chua gan ten",
+        ? profileMap.get(item.assignee_id) ?? "Chưa gán tên"
+        : "Chưa gán tên",
       acceptanceStatus: item.issue_type.toLowerCase(),
       taskStatus: item.issue_note ?? "needs_action",
       dueAt: item.created_at,

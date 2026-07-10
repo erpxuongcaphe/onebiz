@@ -60,7 +60,7 @@ export async function POST(request: NextRequest) {
       await sendTelegramMessage({
         botToken: process.env.TELEGRAM_BOT_TOKEN,
         chatId: String(chatId),
-        title: "Lien ket MKT Hub khong hop le hoac da het han.",
+        title: "Liên kết MKT Hub không hợp lệ hoặc đã hết hạn.",
       }).catch(() => null);
     }
     return NextResponse.json({ success: true, linked: false });
@@ -90,7 +90,7 @@ export async function POST(request: NextRequest) {
     await sendTelegramMessage({
       botToken: process.env.TELEGRAM_BOT_TOKEN,
       chatId: String(chatId),
-      title: "Da lien ket Telegram voi MKT Hub.",
+      title: "Đã liên kết Telegram với MKT Hub.",
       deepLinkPath: "/mkt",
     }).catch(() => null);
   }

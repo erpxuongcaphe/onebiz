@@ -24,15 +24,20 @@ export async function POST(request: NextRequest) {
   const invalid = requireFields(body, ["title"]);
   if (invalid) return invalid;
 
-  return callMktRpc(supabase, "mkt_create_manual_task", {
-    p_title: body.title,
-    p_description: body.description ?? null,
-    p_campaign_id: body.campaignId || null,
-    p_work_package_id: body.workPackageId || null,
-    p_assignee_id: body.assigneeId || null,
-    p_reviewer_id: body.reviewerId || null,
-    p_task_type: body.taskType ?? "other",
-    p_due_at: body.dueAt || null,
-    p_workload_points: body.workloadPoints ?? 1,
-  });
+  return callMktRpc(
+    supabase,
+    "mkt_create_manual_task",
+    {
+      p_title: body.title,
+      p_description: body.description ?? null,
+      p_campaign_id: body.campaignId || null,
+      p_work_package_id: body.workPackageId || null,
+      p_assignee_id: body.assigneeId || null,
+      p_reviewer_id: body.reviewerId || null,
+      p_task_type: body.taskType ?? "other",
+      p_due_at: body.dueAt || null,
+      p_workload_points: body.workloadPoints ?? 1,
+    },
+    { notifyAfter: true },
+  );
 }
