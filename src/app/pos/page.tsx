@@ -1408,6 +1408,8 @@ function PosPageInner() {
         paymentMethod: "cash",
         isOffline: false,
         isPreBill: true, // flag để print template hiện "TẠM TÍNH" header
+        // CEO 08/07: in ghi chú người bán trên phiếu (như phiếu nhập/xuất).
+        note: state.note || undefined,
       };
       // CEO 08/07: tạm tính in CÙNG MẪU hóa đơn chính thức (resolver retail ×
       // sale_invoice × chi nhánh — giống hệt luồng auto-print sau thanh toán),
@@ -1429,6 +1431,7 @@ function PosPageInner() {
               documentCode: draftCode, // rỗng nếu giỏ chưa lưu → mẫu ẩn "Số:"
               date: new Date().toISOString(),
               branchName: currentBranch?.name,
+              note: state.note || undefined,
               headerFields: [
                 { label: "Khách hàng", value: receipt.customerName },
               ],
@@ -2038,6 +2041,8 @@ function PosPageInner() {
           change: Math.max(0, paidEntered - state.total),
           paymentMethod: state.paymentMethod,
           isOffline: isOfflineCheckout,
+          // CEO 08/07: in ghi chú người bán trên hóa đơn (như phiếu nhập/xuất).
+          note: state.note || undefined,
         };
         try {
           // CEO 03/07: in THEO MẪU IN chi nhánh (retail × hóa đơn bán) — GIỐNG
@@ -2057,6 +2062,7 @@ function PosPageInner() {
               documentCode: invoiceCode,
               date: new Date().toISOString(),
               branchName: currentBranch?.name,
+              note: state.note || undefined,
               headerFields: [
                 { label: "Khách hàng", value: resolvedCustomerName },
               ],
@@ -3874,6 +3880,13 @@ function CartItem({
   // món khả dụng-từ-NVL (>0) không đỏ oan. Dòng nháp (stockKnown=false) không tô.
   const outOfStock = line.stockKnown === true && line.availableStock <= 0;
   const stockIssue = outOfStock || oversold;
+  // CEO 08/07 (lần 2): SẮP HẾT (còn ≤5, khớp ngưỡng chip vàng ở lưới) → ô SL
+  // VÀNG nhẹ + "Tồn: X" vàng. Không tính khi đã đỏ (hết/vượt).
+  const lowStock =
+    !stockIssue &&
+    line.stockKnown === true &&
+    line.availableStock > 0 &&
+    line.availableStock <= 5;
   const [editingPrice, setEditingPrice] = useState(false);
   const [editingDiscount, setEditingDiscount] = useState(false);
   // CEO 22/05/2026 (Phase 1): permission gate cho sửa đơn giá.
@@ -3906,11 +3919,11 @@ function CartItem({
               </span>
             )}
           </p>
-          {(line.productCode || line.unit || stockIssue) && (
+          {(line.productCode || line.unit || stockIssue || lowStock) && (
             <p className="text-[9.5px] text-muted-foreground/80 font-mono leading-tight truncate">
               {line.productCode && <span>{line.productCode}</span>}
               {line.unit && <span className="ml-1">({line.unit})</span>}
-              {stockIssue && (
+              {(stockIssue || lowStock) && (
                 <span
                   className={cn(
                     "ml-1 font-sans font-semibold",
@@ -3942,9 +3955,15 @@ function CartItem({
             "inline-flex items-center rounded-md h-8 border overflow-hidden",
             stockIssue
               ? "bg-status-error/10 border-status-error/60"
-              : "bg-surface-container-low border-border/40",
+              : lowStock
+                ? "bg-status-warning/10 border-status-warning/50"
+                : "bg-surface-container-low border-border/40",
           )}
-          title={stockIssue ? `Tồn: ${formatNumber(Math.max(0, line.availableStock))}` : undefined}
+          title={
+            stockIssue || lowStock
+              ? `Tồn: ${formatNumber(Math.max(0, line.availableStock))}`
+              : undefined
+          }
         >
           <button
             type="button"
@@ -3969,6 +3988,7 @@ function CartItem({
             className={cn(
               "w-12 h-8 text-center text-xs font-semibold tabular-nums outline-none bg-transparent",
               stockIssue && "text-status-error",
+              lowStock && "text-status-warning",
             )}
           />
           <button

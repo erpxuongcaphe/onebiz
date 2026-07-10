@@ -362,15 +362,9 @@ function ProductTile({
           ? `${product.name}\nKhả dụng tính từ NVL "${bomBottleneckName}"`
           : product.name
       }
-      className={cn(
-        "flex items-center gap-2 rounded-lg border p-2 text-left transition-all press-scale-sm min-h-[60px]",
-        outOfStock
-          // CEO 08/07: hết hàng → tô ĐỎ rõ (nền + viền + tên + chip) để soi nhanh
-          // như KiotViet. Bỏ opacity-60 (làm mờ trông như disable). Vẫn bấm được
-          // (cho phép bán vượt tồn / đặt hàng) — chỉ là báo hiệu trực quan.
-          ? "bg-status-error/5 border-status-error/40 hover:border-status-error"
-          : "bg-white border-border hover:border-primary hover:shadow-sm",
-      )}
+      // CEO 08/07 (lần 2): KHÔNG tô nền/viền đỏ cả ô — rối mắt khi nhiều hàng hết.
+      // Chip "Hết" đỏ đặc là đủ tín hiệu; ô giữ nền trắng bình thường, vẫn bấm được.
+      className="flex items-center gap-2 bg-white rounded-lg border border-border p-2 text-left transition-all press-scale-sm min-h-[60px] hover:border-primary hover:shadow-sm"
     >
       {/* Thumb 40×40 vuông — image hoặc placeholder neutral (xám nhạt + icon). */}
       <div className="relative h-10 w-10 shrink-0 rounded-lg bg-surface-container-low flex items-center justify-center overflow-hidden">
@@ -388,12 +382,7 @@ function ProductTile({
 
       {/* Info: tên (line-clamp-2) → price + (code|stock chip) */}
       <div className="flex-1 min-w-0">
-        <p
-          className={cn(
-            "text-[12.5px] font-medium line-clamp-2 leading-tight mb-0.5",
-            outOfStock ? "text-status-error" : "text-foreground",
-          )}
-        >
+        <p className="text-[12.5px] font-medium text-foreground line-clamp-2 leading-tight mb-0.5">
           {product.name}
         </p>
         <div className="flex items-center justify-between gap-1">

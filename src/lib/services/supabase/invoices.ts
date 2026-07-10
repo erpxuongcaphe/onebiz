@@ -657,6 +657,8 @@ function mapInvoice(row: any): Invoice {
     branchId: row.branch_id ?? undefined,
     branchName: branch?.name ?? undefined,
     deliveryType: "no_delivery", // Would need join to shipping_orders
+    // CEO 08/07: ghi chú người bán — để in trên hóa đơn (print-templates).
+    note: row.note ?? undefined,
     createdBy: (row.profiles as { full_name: string } | null)?.full_name ?? "---",
   };
 }

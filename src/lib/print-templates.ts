@@ -320,6 +320,8 @@ export function buildInvoicePrintData(
       ? { items, itemColumns: SALE_ITEM_COLUMNS }
       : {}),
     summaryRows,
+    // CEO 08/07: in ghi chú người bán trên hóa đơn (như phiếu nhập/xuất).
+    note: row.note,
     showSignature: on(f.signature),
     createdBy: user,
   };
@@ -398,6 +400,7 @@ export function buildSalesOrderPrintData(
     ],
     ...(items && items.length ? { items, itemColumns: SALE_ITEM_COLUMNS } : {}),
     summaryRows,
+    note: row.note,
     createdBy: user,
   };
 }

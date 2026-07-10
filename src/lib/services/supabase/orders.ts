@@ -135,6 +135,8 @@ export async function getOrders(
       debt: Number(row.debt ?? 0),
       status: row.status,
       statusName: STATUS_LABEL[row.status] ?? row.status ?? "",
+      // Ghi chú người bán — in trên phiếu đặt hàng (CEO 08/07).
+      note: row.note ?? undefined,
       createdBy: row.created_by ?? "",
       createdByName: profile?.full_name ?? "",
       branchId: row.branch_id ?? undefined,

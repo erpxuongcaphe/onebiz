@@ -49,6 +49,8 @@ export interface Invoice {
     | "delivered"
     | "returned"
     | "cancelled";
+  /** Ghi chú người bán (invoices.note) — in trên hóa đơn (CEO 08/07). */
+  note?: string;
   createdBy: string;
 }
 
@@ -163,6 +165,8 @@ export interface SalesOrder {
   debt?: number;
   status: "draft" | "new" | "confirmed" | "delivering" | "completed" | "cancelled";
   statusName: string;
+  /** Ghi chú người bán (invoices.note) — in trên phiếu đặt hàng (CEO 08/07). */
+  note?: string;
   createdBy: string;
   createdByName?: string;
   /** Chi nhánh ghi nhận đơn (resolved từ branches.name). */
