@@ -360,9 +360,13 @@ function ProductTile({
           : product.name
       }
       className={cn(
-        "flex items-center gap-2 bg-white rounded-lg border border-border p-2 text-left transition-all press-scale-sm min-h-[60px]",
-        "hover:border-primary hover:shadow-sm",
-        outOfStock && "opacity-60",
+        "flex items-center gap-2 rounded-lg border p-2 text-left transition-all press-scale-sm min-h-[60px]",
+        outOfStock
+          // CEO 08/07: hết hàng → tô ĐỎ rõ (nền + viền + tên + chip) để soi nhanh
+          // như KiotViet. Bỏ opacity-60 (làm mờ trông như disable). Vẫn bấm được
+          // (cho phép bán vượt tồn / đặt hàng) — chỉ là báo hiệu trực quan.
+          ? "bg-status-error/5 border-status-error/40 hover:border-status-error"
+          : "bg-white border-border hover:border-primary hover:shadow-sm",
       )}
     >
       {/* Thumb 40×40 vuông — image hoặc placeholder neutral (xám nhạt + icon). */}
@@ -381,7 +385,12 @@ function ProductTile({
 
       {/* Info: tên (line-clamp-2) → price + (code|stock chip) */}
       <div className="flex-1 min-w-0">
-        <p className="text-[12.5px] font-medium text-foreground line-clamp-2 leading-tight mb-0.5">
+        <p
+          className={cn(
+            "text-[12.5px] font-medium line-clamp-2 leading-tight mb-0.5",
+            outOfStock ? "text-status-error" : "text-foreground",
+          )}
+        >
           {product.name}
         </p>
         <div className="flex items-center justify-between gap-1">
@@ -389,7 +398,7 @@ function ProductTile({
             {formatCurrency(product.sellPrice ?? 0)}
           </p>
           {outOfStock ? (
-            <span className="text-[9px] font-semibold px-2 py-0.5 rounded-full bg-status-error/10 text-status-error border border-status-error/20 shrink-0">
+            <span className="text-[9px] font-bold px-2 py-0.5 rounded-full bg-status-error text-white shrink-0">
               Hết
             </span>
           ) : showStockChip ? (
