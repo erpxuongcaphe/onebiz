@@ -15,9 +15,9 @@ Làm **tuần tự**. Mỗi bước xong mới sang bước sau. Project Vercel:
 ```bash
 supabase link --project-ref <PROD_REF>
 supabase migration list            # đối chiếu các migration chưa apply
-supabase db push                   # apply theo thứ tự: 00168, 00170, 00171, 00172, 00173
+supabase db push                   # apply theo thứ tự: 00168, 00170, 00171, 00172, 00174
 ```
-- [ ] Xác nhận các migration MKT 00168, 00170, 00171, 00172 và 00173 apply thành công; 00169 là migration ERP độc lập.
+- [ ] Xác nhận các migration MKT 00168, 00170, 00171, 00172 và 00174 apply thành công; 00169 (order_code) và 00173 (invoice soft-delete) là migration ERP độc lập.
 - [ ] Chạy `supabase/verify_mkt_hub_security.sql` (Phần A + B) trên SQL Editor prod — mọi `pass = true`.
 - [ ] KHÔNG chạy seed staging trên production.
 

@@ -3,7 +3,8 @@ import { resolve } from "node:path";
 import { describe, expect, it } from "vitest";
 
 const migration = readFileSync(
-  resolve("supabase/migrations/00173_mkt_hub_workflow_hardening.sql"),
+  // 00174: đổi số từ 00173 vì trùng với 00173_invoice_soft_delete (PR #7)
+  resolve("supabase/migrations/00174_mkt_hub_workflow_hardening.sql"),
   "utf8",
 );
 
