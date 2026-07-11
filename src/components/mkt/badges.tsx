@@ -49,7 +49,10 @@ const READINESS: Record<string, { label: string; cls: string }> = {
 
 const FALLBACK = { cls: "border-slate-200 bg-slate-50 text-slate-700" };
 
-export function AcceptanceBadge({ value }: { value: string }) {
+export function AcceptanceBadge({ value, taskStatus }: { value: string; taskStatus?: string }) {
+  // Task đã Done/Huỷ mà chưa qua bước nhận việc (hệ thống tự hoàn tất — VD task
+  // Duyệt tự Done khi nội dung được duyệt): nhãn "Pending Acceptance" gây hiểu lầm.
+  if (value === "pending" && (taskStatus === "done" || taskStatus === "canceled")) return null;
   const m = ACCEPTANCE[value] ?? { label: value, ...FALLBACK };
   return <Pill label={m.label} cls={m.cls} />;
 }

@@ -331,7 +331,7 @@ export default async function CampaignDetailPage({
                     </div>
                   </div>
                   <div className="flex flex-wrap items-center gap-1.5">
-                    <AcceptanceBadge value={t.acceptanceStatus} />
+                    <AcceptanceBadge value={t.acceptanceStatus} taskStatus={t.taskStatus} />
                     <TaskStatusBadge value={t.taskStatus} />
                   </div>
                 </article>

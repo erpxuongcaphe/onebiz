@@ -170,7 +170,7 @@ export default async function MktHubPage() {
                               <div>{formatDate(task.dueAt)}</div>
                             </div>
                             <div className="flex flex-wrap justify-end gap-1">
-                              <AcceptanceBadge value={task.acceptanceStatus} />
+                              <AcceptanceBadge value={task.acceptanceStatus} taskStatus={task.taskStatus} />
                               <TaskStatusBadge value={task.taskStatus} />
                             </div>
                           </div>

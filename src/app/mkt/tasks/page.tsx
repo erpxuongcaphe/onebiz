@@ -128,8 +128,13 @@ export default async function MyTasksPage({
       ["todo", "doing"].includes(t.taskStatus) &&
       !dueSoonIds.has(t.id),
   );
+  // Chỉ việc ĐÃ NHẬN mới vào cột chờ — việc chưa nhận đã nằm ở cột "Chờ tôi xác nhận",
+  // không hiện trùng 2 cột.
   const waiting = active.filter(
-    (t) => ["reviewing", "blocked"].includes(t.taskStatus) && !dueSoonIds.has(t.id),
+    (t) =>
+      t.acceptanceStatus === "accepted" &&
+      ["reviewing", "blocked"].includes(t.taskStatus) &&
+      !dueSoonIds.has(t.id),
   );
 
   return (
