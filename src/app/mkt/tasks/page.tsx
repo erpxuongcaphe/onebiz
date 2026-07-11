@@ -87,16 +87,34 @@ export default async function MyTasksPage() {
   const supabase = await createServerSupabaseClient();
   const tasks = await getMyTasks(supabase);
 
-  const active = tasks.filter((t) => t.taskStatus !== "canceled");
+  const active = tasks.filter((t) => !["canceled", "done"].includes(t.taskStatus));
   const pending = active.filter((t) => t.acceptanceStatus === "pending");
-  const doing = active.filter(
-    (t) => t.acceptanceStatus === "accepted" && ["todo", "doing"].includes(t.taskStatus),
+
+  // Cột "Deadline gần (24-48h)" theo prototype: việc đã nhận, sắp tới hạn
+  // trong 48 giờ (kể cả quá hạn) — để ưu tiên trước tiên.
+  const isDueSoon = (t: (typeof active)[number]) => {
+    if (!t.dueAt) return false;
+    const hours = (new Date(t.dueAt).getTime() - Date.now()) / 36e5;
+    return hours <= 48;
+  };
+  const dueSoon = active.filter(
+    (t) => t.acceptanceStatus === "accepted" && isDueSoon(t),
   );
-  const waiting = active.filter((t) => ["reviewing", "blocked"].includes(t.taskStatus));
+  const dueSoonIds = new Set(dueSoon.map((t) => t.id));
+
+  const doing = active.filter(
+    (t) =>
+      t.acceptanceStatus === "accepted" &&
+      ["todo", "doing"].includes(t.taskStatus) &&
+      !dueSoonIds.has(t.id),
+  );
+  const waiting = active.filter(
+    (t) => ["reviewing", "blocked"].includes(t.taskStatus) && !dueSoonIds.has(t.id),
+  );
 
   return (
     <div className="px-4 py-4 sm:px-5 lg:px-6">
-      <div className="mx-auto flex max-w-[1500px] flex-col gap-5">
+      <div className="mx-auto flex max-w-[1600px] flex-col gap-5">
         <div className="flex flex-col gap-1 pb-1">
           <h1 className="font-heading text-2xl font-bold tracking-normal sm:text-3xl">
             Lịch Cá Nhân (My Tasks)
@@ -106,7 +124,7 @@ export default async function MyTasksPage() {
           </p>
         </div>
 
-        <div className="grid gap-3 lg:grid-cols-3">
+        <div className="grid gap-3 md:grid-cols-2 xl:grid-cols-4">
           <Column
             title="Chờ tôi xác nhận"
             icon="assignment_ind"
@@ -114,13 +132,19 @@ export default async function MyTasksPage() {
             emptyLabel="Không có việc chờ nhận"
           />
           <Column
-            title="Đang làm"
+            title="Deadline gần (24-48h)"
+            icon="alarm"
+            tasks={dueSoon}
+            emptyLabel="Không có việc sát hạn"
+          />
+          <Column
+            title="Hôm nay làm gì"
             icon="timer"
             tasks={doing}
             emptyLabel="Chưa có việc đang làm"
           />
           <Column
-            title="Đang chờ (Duyệt / Kẹt)"
+            title="Việc đang chờ (Duyệt / Kẹt)"
             icon="hourglass_empty"
             tasks={waiting}
             emptyLabel="Không có việc đang chờ"

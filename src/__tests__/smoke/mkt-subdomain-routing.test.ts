@@ -72,6 +72,31 @@ describe("MKT Hub subdomain routing", () => {
     expect(response.headers.get("x-mkt-subdomain")).toBe("1");
   });
 
+  // CEO 11/07: URL trên subdomain phải sạch — /mkt/... redirect về path bỏ prefix
+  it("redirects /mkt on the subdomain to the clean root URL", async () => {
+    supabaseState.user = { id: "user-1" };
+    const { updateSession } = await import("@/lib/supabase/middleware");
+
+    const response = await updateSession(makeRequest("https://mkthub.onebiz.com.vn/mkt"));
+
+    expect(response.status).toBe(308);
+    expect(response.headers.get("location")).toBe("https://mkthub.onebiz.com.vn/");
+  });
+
+  it("redirects /mkt deep paths on the subdomain to clean URLs (keeping query)", async () => {
+    supabaseState.user = { id: "user-1" };
+    const { updateSession } = await import("@/lib/supabase/middleware");
+
+    const response = await updateSession(
+      makeRequest("https://mkthub.onebiz.com.vn/mkt/tasks?task=abc"),
+    );
+
+    expect(response.status).toBe(308);
+    expect(response.headers.get("location")).toBe(
+      "https://mkthub.onebiz.com.vn/tasks?task=abc",
+    );
+  });
+
   it("does not change the main OneBiz login destination", async () => {
     supabaseState.user = { id: "user-1" };
     const { updateSession } = await import("@/lib/supabase/middleware");

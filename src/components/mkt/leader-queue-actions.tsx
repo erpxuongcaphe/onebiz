@@ -108,7 +108,7 @@ export function LeaderQueueActions({
   );
 }
 
-function ReassignDialog({
+export function ReassignDialog({
   open,
   onOpenChange,
   members,

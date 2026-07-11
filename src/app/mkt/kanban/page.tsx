@@ -1,11 +1,18 @@
 import type { Metadata } from "next";
 import { Icon } from "@/components/ui/icon";
 import { createServerSupabaseClient } from "@/lib/supabase/server";
-import { getWorkspaceTasks, type MktWorkspaceTask } from "@/lib/mkt/read-models";
+import {
+  getCampaignList,
+  getMktMembers,
+  getPillars,
+  getWorkspaceTasks,
+  type MktWorkspaceTask,
+} from "@/lib/mkt/read-models";
+import { KanbanFilters } from "@/components/mkt/kanban-filters";
 
 export const dynamic = "force-dynamic";
 
-export const metadata: Metadata = { title: "MKT Hub — Bảng Kanban" };
+export const metadata: Metadata = { title: "MKT Hub — Bảng tiến độ" };
 
 const COLUMNS: Array<{
   title: string;
@@ -45,21 +52,41 @@ const COLUMNS: Array<{
   },
 ];
 
-export default async function KanbanPage() {
+export default async function KanbanPage({
+  searchParams,
+}: {
+  searchParams: Promise<{ campaign?: string; assignee?: string }>;
+}) {
+  const { campaign, assignee } = await searchParams;
   const supabase = await createServerSupabaseClient();
-  const tasks = (await getWorkspaceTasks(supabase)).filter((t) => t.taskStatus !== "canceled");
+  const [allTasks, members, campaigns, pillars] = await Promise.all([
+    getWorkspaceTasks(supabase),
+    getMktMembers(supabase),
+    getCampaignList(supabase),
+    getPillars(supabase),
+  ]);
+
+  let tasks = allTasks.filter((t) => t.taskStatus !== "canceled");
+  if (campaign) tasks = tasks.filter((t) => t.campaignId === campaign);
+  if (assignee) tasks = tasks.filter((t) => t.assigneeId === assignee);
 
   return (
     <div className="px-4 py-4 sm:px-5 lg:px-6">
-      <div className="mx-auto flex max-w-[1600px] flex-col gap-5">
+      <div className="mx-auto flex max-w-[1600px] flex-col gap-4">
         <div className="flex flex-col gap-1 pb-1">
           <h1 className="font-heading text-2xl font-bold tracking-normal sm:text-3xl">
-            Bảng Quản Trị Content
+            Bảng tiến độ nội dung
           </h1>
           <p className="text-sm text-on-surface-variant">
-            Phải nhận việc (Pending Acceptance) trước khi bắt tay vào làm.
+            Việc chạy từ trái sang phải: nhận việc → sản xuất → chờ duyệt → đã đăng.
           </p>
         </div>
+
+        <KanbanFilters
+          members={members}
+          campaigns={campaigns.map((c) => ({ id: c.id, name: c.name }))}
+          pillars={pillars}
+        />
 
         <div className="flex gap-3 overflow-x-auto pb-2">
           {COLUMNS.map((col) => {

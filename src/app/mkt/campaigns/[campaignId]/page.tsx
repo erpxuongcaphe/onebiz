@@ -3,7 +3,14 @@ import Link from "next/link";
 import { notFound } from "next/navigation";
 import { Icon } from "@/components/ui/icon";
 import { createServerSupabaseClient } from "@/lib/supabase/server";
-import { getCampaignDetail, getMktContext, getMktMembers } from "@/lib/mkt/read-models";
+import {
+  getCampaignDetail,
+  getExceptionLog,
+  getLeaderQueue,
+  getMktContext,
+  getMktMembers,
+} from "@/lib/mkt/read-models";
+import { LeaderQueueActions } from "@/components/mkt/leader-queue-actions";
 import {
   AcceptanceBadge,
   ContentStatusBadge,
@@ -49,6 +56,13 @@ const TABS = [
   { key: "readiness", label: "Mức độ Sẵn sàng" },
 ];
 
+// Nhãn tiếng Việt cho hành vi ngoại lệ trong Exception Log
+const EXCEPTION_LABEL: Record<string, string> = {
+  mkt_campaign_override: "Vượt rào chạy chiến dịch",
+  mkt_readiness_waived: "Miễn mục sẵn sàng",
+  mkt_task_force_done: "Ép hoàn tất việc",
+};
+
 export default async function CampaignDetailPage({
   params,
   searchParams,
@@ -71,6 +85,19 @@ export default async function CampaignDetailPage({
   const c = detail.campaign;
   const canManage = Boolean(ctx.canManageCampaigns);
   const contentOptions = detail.contents.map((x) => ({ id: x.id, title: x.title }));
+
+  // Khối "Cần Leader xử lý" trong campaign (prototype đặt ngay trong tab công việc)
+  // + Exception Log (minh bạch mọi lần vượt rào) — chỉ tải khi có quyền.
+  const [campaignQueue, exceptions] = await Promise.all([
+    ctx.isLead
+      ? getLeaderQueue(supabase).then((items) =>
+          items.filter((i) => i.campaignId === campaignId),
+        )
+      : Promise.resolve([]),
+    ctx.canViewAudit ? getExceptionLog(supabase, campaignId) : Promise.resolve([]),
+  ]);
+
+  const readinessDone = detail.readiness.filter((r) => r.status !== "pending").length;
 
   return (
     <div className="px-4 py-4 sm:px-5 lg:px-6">
@@ -174,8 +201,14 @@ export default async function CampaignDetailPage({
                           {w.targetOutput ? (
                             <div className="text-sm text-on-surface-variant">{w.targetOutput}</div>
                           ) : null}
-                          <div className="mt-1 text-xs text-on-surface-variant">
-                            Owner: {w.ownerName ?? "—"} · Reviewer: {w.reviewerName ?? "—"}
+                          <div className="mt-1 flex flex-wrap items-center gap-x-3 gap-y-0.5 text-xs text-on-surface-variant">
+                            <span>Owner: {w.ownerName ?? "—"}</span>
+                            <span>Reviewer: {w.reviewerName ?? "—"}</span>
+                            {w.workloadPoints > 0 ? (
+                              <span className="inline-flex items-center gap-1 font-medium">
+                                <Icon name="weight" size={13} /> {w.workloadPoints} điểm khối lượng
+                              </span>
+                            ) : null}
                           </div>
                         </div>
                         {needsSplit && (canManage || ctx.canSplit) ? (
@@ -198,7 +231,39 @@ export default async function CampaignDetailPage({
 
         {/* Bảng công việc */}
         {activeTab === "tasks" ? (
-          <section className="space-y-2">
+          <section className="space-y-3">
+            {ctx.isLead && campaignQueue.length > 0 ? (
+              <div className="rounded-lg border border-amber-200 bg-amber-50/50 p-3">
+                <div className="mb-2 flex items-center gap-2 font-semibold text-amber-800">
+                  <Icon name="manage_accounts" size={18} />
+                  Cần Leader xử lý ({campaignQueue.length})
+                </div>
+                <div className="space-y-2">
+                  {campaignQueue.map((item, idx) => (
+                    <article
+                      key={(item.taskId ?? item.contentItemId ?? "x") + idx}
+                      className="grid gap-2 rounded-lg border border-outline-variant bg-background p-2.5 lg:grid-cols-[1fr_auto] lg:items-center"
+                    >
+                      <div className="min-w-0">
+                        <div className="text-sm font-semibold">{item.title}</div>
+                        <div className="text-xs text-on-surface-variant">
+                          {item.assigneeName ?? "Chưa gán"}
+                          {item.issueNote ? ` · ${item.issueNote}` : ""}
+                        </div>
+                      </div>
+                      <div className="lg:justify-self-end">
+                        <LeaderQueueActions
+                          taskId={item.taskId}
+                          contentItemId={item.contentItemId}
+                          issueType={item.issueType}
+                          members={members}
+                        />
+                      </div>
+                    </article>
+                  ))}
+                </div>
+              </div>
+            ) : null}
             {detail.tasks.length > 0 ? (
               detail.tasks.map((t) => (
                 <article
@@ -259,7 +324,24 @@ export default async function CampaignDetailPage({
 
         {/* Readiness */}
         {activeTab === "readiness" ? (
-          <section className="space-y-2">
+          <section className="space-y-3">
+            <div className="flex items-center justify-between rounded-lg border border-outline-variant bg-background p-3">
+              <div className="text-sm font-semibold">
+                Mức độ Sẵn sàng: {readinessDone}/{detail.readiness.length} mục
+              </div>
+              <div className="flex items-center gap-2">
+                <div className="h-2.5 w-32 rounded-full bg-surface-container">
+                  <div
+                    className={
+                      "h-2.5 rounded-full " +
+                      (c.readinessScore >= 100 ? "bg-emerald-500" : "bg-amber-400")
+                    }
+                    style={{ width: c.readinessScore + "%" }}
+                  />
+                </div>
+                <span className="font-heading text-lg font-bold">{c.readinessScore}%</span>
+              </div>
+            </div>
             {detail.readiness.length > 0 ? (
               detail.readiness.map((r) => (
                 <article
@@ -288,6 +370,51 @@ export default async function CampaignDetailPage({
             ) : (
               <EmptyTab label="Chưa có checklist sẵn sàng. Không có checklist thì mức sẵn sàng = 0%." />
             )}
+
+            {/* Exception Log — minh bạch mọi lần vượt rào (override/miễn/ép hoàn tất) */}
+            {ctx.canViewAudit ? (
+              <div className="rounded-lg border border-outline-variant bg-background p-3">
+                <div className="mb-2 flex items-center gap-2 font-semibold">
+                  <Icon name="history_edu" size={18} />
+                  Nhật ký ngoại lệ (Exception Log)
+                </div>
+                {exceptions.length > 0 ? (
+                  <div className="space-y-1.5">
+                    {exceptions.map((e) => (
+                      <div
+                        key={e.id}
+                        className="rounded-lg border border-rose-100 bg-rose-50/50 px-3 py-2 text-sm"
+                      >
+                        <div className="flex flex-wrap items-center gap-2">
+                          <span className="font-medium">{EXCEPTION_LABEL[e.action] ?? e.action}</span>
+                          <span className="text-xs text-on-surface-variant">
+                            {e.userName ?? "—"}
+                            {e.createdAt
+                              ? " · " +
+                                new Intl.DateTimeFormat("vi-VN", {
+                                  day: "2-digit",
+                                  month: "2-digit",
+                                  hour: "2-digit",
+                                  minute: "2-digit",
+                                }).format(new Date(e.createdAt))
+                              : ""}
+                          </span>
+                        </div>
+                        {e.reason ? (
+                          <div className="mt-0.5 text-xs text-on-surface-variant">
+                            Lý do: {e.reason}
+                          </div>
+                        ) : null}
+                      </div>
+                    ))}
+                  </div>
+                ) : (
+                  <p className="text-sm text-on-surface-variant">
+                    Chưa có ngoại lệ nào — chiến dịch đang tuân thủ quy trình. ✅
+                  </p>
+                )}
+              </div>
+            ) : null}
           </section>
         ) : null}
       </div>

@@ -21,7 +21,7 @@ const NAV_ITEMS: NavItem[] = [
   { href: "/mkt", label: "Tổng quan", icon: "dashboard", mobile: true },
   { href: "/mkt/tasks", label: "Việc của tôi", icon: "checklist", mobile: true },
   { href: "/mkt/campaigns", label: "Chiến dịch", icon: "campaign", mobile: true },
-  { href: "/mkt/kanban", label: "Kanban", icon: "view_kanban" },
+  { href: "/mkt/kanban", label: "Bảng tiến độ", icon: "view_kanban" },
   { href: "/mkt/calendar", label: "Lịch", icon: "calendar_month" },
   { href: "/mkt/approvals", label: "Duyệt nội dung", icon: "rate_review", requires: "canReview", mobile: true },
   { href: "/mkt/leader-queue", label: "Cần Leader xử lý", icon: "manage_accounts", requires: "isLead" },

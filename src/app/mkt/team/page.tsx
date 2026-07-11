@@ -1,7 +1,8 @@
 import type { Metadata } from "next";
 import { Icon } from "@/components/ui/icon";
 import { createServerSupabaseClient } from "@/lib/supabase/server";
-import { getMktContext, getWorkspaceTasks } from "@/lib/mkt/read-models";
+import { getMktContext, getMktMembers, getWorkspaceTasks } from "@/lib/mkt/read-models";
+import { TeamMemberActions } from "@/components/mkt/team-actions";
 
 export const dynamic = "force-dynamic";
 
@@ -24,24 +25,28 @@ export default async function TeamPage() {
     );
   }
 
-  const tasks = await getWorkspaceTasks(supabase);
+  const [tasks, allMembers] = await Promise.all([
+    getWorkspaceTasks(supabase),
+    getMktMembers(supabase),
+  ]);
   const active = tasks.filter((t) => !["done", "canceled"].includes(t.taskStatus));
 
   const byPerson = new Map<
     string,
-    { name: string; points: number; count: number; doingTitles: string[] }
+    { id: string; name: string; points: number; count: number; tasks: Array<{ id: string; title: string }> }
   >();
   for (const t of active) {
     if (!t.assigneeId) continue;
     const cur = byPerson.get(t.assigneeId) ?? {
+      id: t.assigneeId,
       name: t.assigneeName ?? "Chưa gán tên",
       points: 0,
       count: 0,
-      doingTitles: [],
+      tasks: [],
     };
     cur.points += t.workloadPoints;
     cur.count += 1;
-    if (cur.doingTitles.length < 3) cur.doingTitles.push(t.title);
+    cur.tasks.push({ id: t.id, title: t.title });
     byPerson.set(t.assigneeId, cur);
   }
   const members = Array.from(byPerson.values()).sort((a, b) => b.points - a.points);
@@ -65,7 +70,7 @@ export default async function TeamPage() {
               const burnout = pct >= 85;
               return (
                 <div
-                  key={m.name}
+                  key={m.id}
                   className={
                     "rounded-lg border bg-background p-4 " +
                     (burnout ? "border-rose-300 ring-1 ring-rose-200" : "border-outline-variant")
@@ -92,12 +97,13 @@ export default async function TeamPage() {
                     {m.count} việc · {m.points} điểm
                   </div>
                   <ul className="mt-2 space-y-0.5 text-xs text-on-surface-variant">
-                    {m.doingTitles.map((t, i) => (
-                      <li key={i} className="truncate">
-                        • {t}
+                    {m.tasks.slice(0, 3).map((t) => (
+                      <li key={t.id} className="truncate">
+                        • {t.title}
                       </li>
                     ))}
                   </ul>
+                  <TeamMemberActions memberId={m.id} tasks={m.tasks} members={allMembers} />
                 </div>
               );
             })}

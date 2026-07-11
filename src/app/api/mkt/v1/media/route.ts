@@ -5,8 +5,11 @@ export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
 
 type RegisterMediaBody = {
-  storagePath?: string;
   fileName?: string;
+  sourceType?: string; // upload | drive | youtube | tiktok | other
+  storagePath?: string;
+  externalUrl?: string;
+  externalId?: string;
   mimeType?: string;
   sizeBytes?: number;
   kind?: string;
@@ -14,18 +17,22 @@ type RegisterMediaBody = {
   contentItemId?: string;
 };
 
-// Ghi record media sau khi client đã upload file lên Storage qua signed URL.
+// Ghi record media: sau upload Storage (sourceType=upload) HOẶC thêm từ link
+// ngoài (Drive/YouTube/TikTok — file thật nằm bên đó, web chỉ giữ metadata).
 export async function POST(request: NextRequest) {
   const { supabase, response } = await requireMktSession();
   if (response) return response;
 
   const body = await readJsonBody<RegisterMediaBody>(request);
-  const invalid = requireFields(body, ["storagePath", "fileName"]);
+  const invalid = requireFields(body, ["fileName"]);
   if (invalid) return invalid;
 
   return callMktRpc(supabase, "mkt_media_register", {
-    p_storage_path: body.storagePath,
     p_file_name: body.fileName,
+    p_source_type: body.sourceType ?? "upload",
+    p_storage_path: body.storagePath ?? null,
+    p_external_url: body.externalUrl ?? null,
+    p_external_id: body.externalId ?? null,
     p_mime_type: body.mimeType ?? null,
     p_size_bytes: body.sizeBytes ?? null,
     p_kind: body.kind ?? "image",
