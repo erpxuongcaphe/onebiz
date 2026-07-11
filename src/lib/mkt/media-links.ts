@@ -9,7 +9,7 @@
  */
 
 export type ParsedMediaLink = {
-  sourceType: "drive" | "youtube" | "tiktok" | "other";
+  sourceType: "drive" | "onedrive" | "youtube" | "tiktok" | "other";
   externalId: string | null;
   /** URL nhúng iframe xem trực tiếp; null nếu không nhúng được (mở tab ngoài) */
   embedUrl: string | null;
@@ -18,7 +18,12 @@ export type ParsedMediaLink = {
 };
 
 export function parseMediaLink(rawUrl: string): ParsedMediaLink {
-  const url = rawUrl.trim();
+  let url = rawUrl.trim();
+
+  // Người dùng dán nguyên mã nhúng <iframe src="..."> (OneDrive/Drive sinh ra)
+  // → rút URL trong src rồi parse tiếp.
+  const iframeSrc = url.match(/src\s*=\s*["']([^"']+)["']/i);
+  if (iframeSrc) url = iframeSrc[1];
 
   // Google Drive: /file/d/<ID>/..., open?id=<ID>, uc?id=<ID>
   const driveMatch =
@@ -61,6 +66,15 @@ export function parseMediaLink(rawUrl: string): ParsedMediaLink {
     };
   }
 
+  // OneDrive: chỉ link NHÚNG (onedrive.live.com/embed?...) xem trực tiếp được;
+  // link chia sẻ thường (1drv.ms, sharepoint) → mở tab ngoài.
+  if (/onedrive\.live\.com\/embed\?/i.test(url)) {
+    return { sourceType: "onedrive", externalId: null, embedUrl: url, thumbnailUrl: null };
+  }
+  if (/1drv\.ms\/|onedrive\.live\.com\/|sharepoint\.com\//i.test(url)) {
+    return { sourceType: "onedrive", externalId: null, embedUrl: null, thumbnailUrl: null };
+  }
+
   return { sourceType: "other", externalId: null, embedUrl: null, thumbnailUrl: null };
 }
 
@@ -84,6 +98,11 @@ export function buildMediaUrls(
   }
   if (sourceType === "tiktok" && externalId) {
     return { embedUrl: `https://www.tiktok.com/player/v1/${externalId}`, thumbnailUrl: null };
+  }
+  if (sourceType === "onedrive" && externalUrl) {
+    // Chỉ link nhúng OneDrive mới hiển thị trong iframe được
+    const embeddable = /onedrive\.live\.com\/embed\?/i.test(externalUrl);
+    return { embedUrl: embeddable ? externalUrl : null, thumbnailUrl: null };
   }
   if (externalUrl) {
     // Nguồn khác: không nhúng, chỉ mở tab ngoài
