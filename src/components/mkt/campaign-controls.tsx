@@ -77,11 +77,18 @@ export function CampaignStatusControl({
   }
 
   function handleRun() {
-    if (readinessScore < 100) {
-      setOverrideOpen(true);
-    } else {
+    if (readinessScore >= 100) {
       setStatus("running");
+      return;
     }
+    if (!canOverride) {
+      // Không có quyền vượt rào → chỉ dẫn, không mở dialog vô ích
+      setErr(
+        `Mức sẵn sàng mới ${readinessScore}% — cần xác nhận đủ 100% checklist hoặc nhờ CEO vượt rào.`,
+      );
+      return;
+    }
+    setOverrideOpen(true);
   }
 
   const btn = "inline-flex h-9 items-center gap-1.5 rounded-lg px-3 text-sm font-medium disabled:opacity-50";
@@ -117,11 +124,7 @@ export function CampaignStatusControl({
         open={overrideOpen}
         onOpenChange={setOverrideOpen}
         title="Chạy khi chưa đủ sẵn sàng?"
-        description={
-          canOverride
-            ? `Mức sẵn sàng mới ${readinessScore}%. Vượt rào cần nêu lý do (ghi vào Exception Log).`
-            : "Chưa đủ 100% sẵn sàng và bạn không có quyền vượt rào. Hãy xác nhận đủ readiness hoặc nhờ CEO."
-        }
+        description={`Mức sẵn sàng mới ${readinessScore}%. Vượt rào cần nêu lý do (ghi vào Nhật ký ngoại lệ).`}
         confirmLabel="Vẫn chạy (Override)"
         onSubmit={(reason) => setStatus("running", reason)}
       />
@@ -338,10 +341,12 @@ export function ContentForm({ campaignId }: { campaignId: string }) {
 // ── Nút "Chia Task Ngay" cho work package needs_split ──
 export function WorkPackageSplitButton({
   workPackageId,
+  campaignId,
   members,
   contents,
 }: {
   workPackageId: string;
+  campaignId: string;
   members: MktMember[];
   contents: Array<{ id: string; title: string }>;
 }) {
@@ -349,7 +354,7 @@ export function WorkPackageSplitButton({
   return (
     <>
       <button
-        className="inline-flex h-8 items-center gap-1.5 rounded-lg bg-rose-600 px-3 text-xs font-medium text-white hover:bg-rose-700"
+        className="inline-flex h-8 items-center gap-1.5 rounded-lg bg-primary px-3 text-xs font-medium text-primary-foreground hover:bg-primary-hover"
         onClick={() => setOpen(true)}
       >
         <Icon name="call_split" size={15} /> Chia Task Ngay
@@ -358,6 +363,7 @@ export function WorkPackageSplitButton({
         open={open}
         onOpenChange={setOpen}
         workPackageId={workPackageId}
+        campaignId={campaignId}
         members={members}
         contents={contents}
       />

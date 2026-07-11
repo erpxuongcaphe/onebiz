@@ -9,7 +9,12 @@ export const dynamic = "force-dynamic";
 
 export const metadata: Metadata = { title: "MKT Hub — Duyệt nội dung" };
 
-export default async function ApprovalsPage() {
+export default async function ApprovalsPage({
+  searchParams,
+}: {
+  searchParams: Promise<{ content?: string }>;
+}) {
+  const { content: highlightId } = await searchParams;
   const supabase = await createServerSupabaseClient();
   const ctx = await getMktContext(supabase);
 
@@ -24,7 +29,11 @@ export default async function ApprovalsPage() {
     );
   }
 
-  const items = await getApprovals(supabase);
+  const allItems = await getApprovals(supabase);
+  // Nội dung được deep-link từ Telegram: ghim lên đầu + viền nổi bật
+  const items = highlightId
+    ? [...allItems].sort((a, b) => (a.id === highlightId ? -1 : b.id === highlightId ? 1 : 0))
+    : allItems;
 
   return (
     <div className="px-4 py-4 sm:px-5 lg:px-6">
@@ -44,7 +53,12 @@ export default async function ApprovalsPage() {
               <article
                 key={item.id}
                 id={`content-${item.id}`}
-                className="rounded-lg border border-outline-variant bg-background p-4"
+                className={
+                  "rounded-lg border bg-background p-4 " +
+                  (item.id === highlightId
+                    ? "border-primary ring-2 ring-primary/40"
+                    : "border-outline-variant")
+                }
               >
                 <div className="flex flex-wrap items-start justify-between gap-3">
                   <div className="min-w-0">

@@ -124,12 +124,7 @@ export default async function MktHubPage() {
               className="rounded-lg border border-outline-variant bg-background p-4 ambient-shadow"
             >
               <div className="text-sm font-medium text-on-surface-variant">{item.label}</div>
-              <div className="mt-3 flex items-end justify-between gap-3">
-                <div className="font-heading text-3xl font-bold">{item.value}</div>
-                <span className={"rounded-full border px-2 py-1 text-xs font-semibold " + item.tone}>
-                  Trực tiếp
-                </span>
-              </div>
+              <div className="mt-3 font-heading text-3xl font-bold">{item.value}</div>
             </div>
           ))}
         </section>
