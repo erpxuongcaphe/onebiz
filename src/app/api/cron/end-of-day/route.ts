@@ -11,6 +11,7 @@
 
 import { NextRequest, NextResponse } from "next/server";
 import { createClient } from "@supabase/supabase-js";
+import { processPendingOutbox } from "@/lib/mkt/outbox";
 
 export const dynamic = "force-dynamic";
 export const runtime = "nodejs";
@@ -117,11 +118,22 @@ export async function GET(req: NextRequest) {
       // Hiện chỉ ghi notification để user vào trang Thông báo xem.
     }
 
+    // MKT Hub sweeper: Vercel Hobby chỉ cho 2 cron nên gộp việc quét sót +
+    // retry Telegram vào đây (gửi chính đã đi qua after() sau mỗi mutation).
+    // Bọc riêng để lỗi MKT không phá tổng kết doanh số ngày.
+    let mktOutbox: { checked: number; sent: number; failed: number } | null = null;
+    try {
+      mktOutbox = await processPendingOutbox(100);
+    } catch (mktErr) {
+      console.error("[cron/end-of-day] mkt outbox sweep failed:", mktErr);
+    }
+
     return NextResponse.json({
       success: true,
       tenantsProcessed: tenants.length,
       notificationsSent: totalNotificationsSent,
       day: ictDay,
+      mktOutbox,
     });
   } catch (err) {
     console.error("[cron/end-of-day] exception:", err);

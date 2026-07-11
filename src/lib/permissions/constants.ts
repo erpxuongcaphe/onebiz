@@ -437,4 +437,43 @@ export const DEFAULT_ROLE_TEMPLATES: RoleTemplate[] = [
       PERMISSIONS.SUPPLIERS_VIEW,
     ],
   },
+  {
+    name: "MKT Lead",
+    description: "Điều phối chiến dịch MKT: tạo campaign, chia việc, duyệt nội dung, quản lý team",
+    legacyRole: "staff",
+    color: "bg-pink-500",
+    permissions: [
+      PERMISSIONS.MKT_VIEW,
+      PERMISSIONS.MKT_MANAGE_CAMPAIGNS,
+      PERMISSIONS.MKT_SPLIT_WORK_PACKAGES,
+      PERMISSIONS.MKT_REVIEW_CONTENT,
+      PERMISSIONS.MKT_MANAGE_TEAM,
+      PERMISSIONS.MKT_VIEW_AUDIT,
+      PERMISSIONS.MKT_TELEGRAM_MANAGE,
+      // KHÔNG có MKT_OVERRIDE_CAMPAIGN: vượt readiness + duyệt nội dung
+      // rủi ro cao (High/Critical) dành cho CEO (owner) — đúng Handover.
+      PERMISSIONS.PRODUCTS_VIEW,
+    ],
+  },
+  {
+    name: "MKT Executor",
+    description: "Nhân sự thực thi MKT: nhận việc, sản xuất, nộp duyệt (chỉ thấy việc của mình)",
+    legacyRole: "staff",
+    color: "bg-sky-500",
+    permissions: [
+      PERMISSIONS.MKT_VIEW,
+      PERMISSIONS.PRODUCTS_VIEW,
+    ],
+  },
+  {
+    name: "MKT Reviewer",
+    description: "Duyệt nội dung MKT rủi ro thấp/trung bình",
+    legacyRole: "staff",
+    color: "bg-amber-500",
+    permissions: [
+      PERMISSIONS.MKT_VIEW,
+      PERMISSIONS.MKT_REVIEW_CONTENT,
+      PERMISSIONS.PRODUCTS_VIEW,
+    ],
+  },
 ];

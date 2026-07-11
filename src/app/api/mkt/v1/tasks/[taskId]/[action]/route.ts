@@ -24,50 +24,48 @@ export async function POST(
   const { taskId, action } = await context.params;
   const body = await readJsonBody<TaskBody>(request);
 
-  switch (action) {
-    case "accept":
-      return callMktRpc(supabase, "mkt_accept_task", { p_task_id: taskId });
-    case "reject":
-      return callMktRpc(supabase, "mkt_reject_task", {
-        p_task_id: taskId,
-        p_reason: body.reason ?? null,
-      });
-    case "need-discussion":
-      return callMktRpc(supabase, "mkt_need_discussion_task", {
-        p_task_id: taskId,
-        p_reason: body.reason ?? null,
-      });
-    case "start":
-      return callMktRpc(supabase, "mkt_start_task", { p_task_id: taskId });
-    case "submit-review":
-      return callMktRpc(supabase, "mkt_submit_task_review", {
+  // Ánh xạ action → (RPC, tham số). Mọi mutation task đều flush outbox sau khi
+  // trả response (notifyAfter) để Telegram đến ngay khi có sự kiện phát sinh.
+  const map: Record<string, { rpc: string; args: Record<string, unknown> }> = {
+    accept: { rpc: "mkt_accept_task", args: { p_task_id: taskId } },
+    reject: { rpc: "mkt_reject_task", args: { p_task_id: taskId, p_reason: body.reason ?? null } },
+    "need-discussion": {
+      rpc: "mkt_need_discussion_task",
+      args: { p_task_id: taskId, p_reason: body.reason ?? null },
+    },
+    start: { rpc: "mkt_start_task", args: { p_task_id: taskId } },
+    "submit-review": {
+      rpc: "mkt_submit_task_review",
+      args: {
         p_task_id: taskId,
         p_content_item_id: body.contentItemId ?? null,
         p_content_url: body.contentUrl ?? null,
         p_note: body.note ?? null,
-      });
-    case "mark-done":
-      return callMktRpc(supabase, "mkt_mark_task_done", { p_task_id: taskId });
-    case "force-done":
-      return callMktRpc(supabase, "mkt_force_task_done", {
-        p_task_id: taskId,
-        p_reason: body.reason ?? null,
-      });
-    case "reassign":
-      return callMktRpc(supabase, "mkt_reassign_task", {
+      },
+    },
+    "mark-done": { rpc: "mkt_mark_task_done", args: { p_task_id: taskId } },
+    "force-done": {
+      rpc: "mkt_force_task_done",
+      args: { p_task_id: taskId, p_reason: body.reason ?? null },
+    },
+    reassign: {
+      rpc: "mkt_reassign_task",
+      args: {
         p_task_id: taskId,
         p_new_assignee_id: body.newAssigneeId ?? null,
         p_reason: body.reason ?? null,
-      });
-    case "cancel":
-      return callMktRpc(supabase, "mkt_cancel_task", {
-        p_task_id: taskId,
-        p_reason: body.reason ?? null,
-      });
-    default:
-      return NextResponse.json(
-        { success: false, error: { code: "NOT_FOUND", message: "Unknown task action" } },
-        { status: 404 },
-      );
+      },
+    },
+    cancel: { rpc: "mkt_cancel_task", args: { p_task_id: taskId, p_reason: body.reason ?? null } },
+  };
+
+  const entry = map[action];
+  if (!entry) {
+    return NextResponse.json(
+      { success: false, error: { code: "NOT_FOUND", message: "Hành động task không hợp lệ" } },
+      { status: 404 },
+    );
   }
+
+  return callMktRpc(supabase, entry.rpc, entry.args, { notifyAfter: true });
 }

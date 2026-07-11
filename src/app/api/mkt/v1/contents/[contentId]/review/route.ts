@@ -22,10 +22,15 @@ export async function POST(
   const { contentId } = await context.params;
   const body = await readJsonBody<ReviewBody>(request);
 
-  return callMktRpc(supabase, "mkt_review_content", {
-    p_content_id: contentId,
-    p_content_version_id: body.contentVersionId ?? null,
-    p_action: body.action ?? "approve",
-    p_comment: body.comment ?? null,
-  });
+  return callMktRpc(
+    supabase,
+    "mkt_review_content",
+    {
+      p_content_id: contentId,
+      p_content_version_id: body.contentVersionId ?? null,
+      p_action: body.action ?? "approve",
+      p_comment: body.comment ?? null,
+    },
+    { notifyAfter: true },
+  );
 }

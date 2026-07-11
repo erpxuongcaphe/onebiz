@@ -42,10 +42,6 @@
     {
       "path": "/api/cron/end-of-day",
       "schedule": "59 16 * * *"
-    },
-    {
-      "path": "/api/cron/mkt-notifications",
-      "schedule": "0 1 * * *"
     }
   ]
 }

@@ -1,20 +1,18 @@
 import type { Metadata } from "next";
-import Link from "next/link";
+import { redirect } from "next/navigation";
 import { Icon } from "@/components/ui/icon";
 import { getMktDashboardData, type MktTaskSummary } from "@/lib/mkt/dashboard";
+import { getMktContext } from "@/lib/mkt/read-models";
 import { createServerSupabaseClient } from "@/lib/supabase/server";
 
 export const dynamic = "force-dynamic";
 
 export const metadata: Metadata = {
-  title: "MKT Hub",
+  title: "MKT Hub — Tổng quan",
 };
 
-type StatusBadgeProps = {
-  value: string;
-};
-
-function StatusBadge({ value }: StatusBadgeProps) {
+// Badge trạng thái giữ nhãn ngắn theo prototype; màu theo quy ước.
+function StatusBadge({ value }: { value: string }) {
   const styles: Record<string, string> = {
     pending: "border-sky-200 bg-sky-50 text-sky-700",
     accepted: "border-emerald-200 bg-emerald-50 text-emerald-700",
@@ -23,14 +21,13 @@ function StatusBadge({ value }: StatusBadgeProps) {
     task_rejected: "border-rose-200 bg-rose-50 text-rose-700",
     blocked_dependency: "border-rose-200 bg-rose-50 text-rose-700",
     revision_over_limit: "border-amber-200 bg-amber-50 text-amber-700",
-    dependency_blocked: "border-rose-200 bg-rose-50 text-rose-700",
+    leader_action: "border-amber-200 bg-amber-50 text-amber-700",
     needs_action: "border-amber-200 bg-amber-50 text-amber-700",
     todo: "border-slate-200 bg-slate-50 text-slate-700",
     blocked: "border-rose-200 bg-rose-50 text-rose-700",
     doing: "border-indigo-200 bg-indigo-50 text-indigo-700",
     reviewing: "border-amber-200 bg-amber-50 text-amber-700",
     done: "border-emerald-200 bg-emerald-50 text-emerald-700",
-    cancelled: "border-slate-200 bg-slate-50 text-slate-700",
     pending_review: "border-amber-200 bg-amber-50 text-amber-700",
     revision_required: "border-rose-200 bg-rose-50 text-rose-700",
     approved: "border-emerald-200 bg-emerald-50 text-emerald-700",
@@ -38,6 +35,7 @@ function StatusBadge({ value }: StatusBadgeProps) {
     confirmed: "border-emerald-200 bg-emerald-50 text-emerald-700",
     waived: "border-indigo-200 bg-indigo-50 text-indigo-700",
     high: "border-rose-200 bg-rose-50 text-rose-700",
+    critical: "border-rose-200 bg-rose-50 text-rose-700",
     medium: "border-amber-200 bg-amber-50 text-amber-700",
     low: "border-emerald-200 bg-emerald-50 text-emerald-700",
   };
@@ -63,25 +61,21 @@ function EmptyBlock({ label }: { label: string }) {
 }
 
 function formatDate(value: string | null) {
-  if (!value) return "Chua co han";
+  if (!value) return "Chưa có hạn";
   const parsed = new Date(value);
-  if (Number.isNaN(parsed.getTime())) return "Chua co han";
-
-  return new Intl.DateTimeFormat("vi-VN", {
-    day: "2-digit",
-    month: "2-digit",
-  }).format(parsed);
+  if (Number.isNaN(parsed.getTime())) return "Chưa có hạn";
+  return new Intl.DateTimeFormat("vi-VN", { day: "2-digit", month: "2-digit" }).format(parsed);
 }
 
 function buildKanbanColumns(tasks: MktTaskSummary[]) {
   return [
     {
-      title: "Can nhan",
+      title: "Cần nhận",
       icon: "assignment_ind",
       tasks: tasks.filter((task) => task.acceptanceStatus === "pending").slice(0, 6),
     },
     {
-      title: "Dang lam",
+      title: "Đang làm",
       icon: "timer",
       tasks: tasks
         .filter((task) => ["accepted", "need_discussion"].includes(task.acceptanceStatus))
@@ -89,17 +83,23 @@ function buildKanbanColumns(tasks: MktTaskSummary[]) {
         .slice(0, 6),
     },
     {
-      title: "Cho duyet",
+      title: "Chờ duyệt",
       icon: "rate_review",
-      tasks: tasks
-        .filter((task) => ["reviewing", "blocked"].includes(task.taskStatus))
-        .slice(0, 6),
+      tasks: tasks.filter((task) => ["reviewing"].includes(task.taskStatus)).slice(0, 6),
     },
   ];
 }
 
 export default async function MktHubPage() {
   const supabase = await createServerSupabaseClient();
+
+  // Executor (không phải Lead/Reviewer) vào thẳng "Việc của tôi" — như prototype
+  // (manager mở portfolio, còn lại mở daily).
+  const ctx = await getMktContext(supabase);
+  if (!ctx.isLead && !ctx.canReview) {
+    redirect("/mkt/tasks");
+  }
+
   const data = await getMktDashboardData(supabase);
   const activeCampaign = data.campaigns[0] ?? null;
   const kanbanColumns = buildKanbanColumns(data.tasks);
@@ -107,8 +107,7 @@ export default async function MktHubPage() {
   const revisionAverage =
     data.contents.length > 0
       ? (
-          data.contents.reduce((sum, item) => sum + item.revisionCount, 0) /
-          data.contents.length
+          data.contents.reduce((sum, item) => sum + item.revisionCount, 0) / data.contents.length
         ).toFixed(1)
       : "0.0";
   const doneTasks = data.tasks.filter((task) => task.taskStatus === "done").length;
@@ -118,41 +117,20 @@ export default async function MktHubPage() {
     data.campaigns.length > 0 || data.tasks.length > 0 || data.contents.length > 0;
 
   return (
-    <div className="min-h-full bg-surface-container-low px-4 py-4 text-on-surface sm:px-5 lg:px-6">
+    <div className="px-4 py-4 sm:px-5 lg:px-6">
       <div className="mx-auto flex max-w-[1500px] flex-col gap-5">
-        <header className="flex flex-col gap-3 border-b border-outline-variant pb-4 lg:flex-row lg:items-center lg:justify-between">
-          <div>
-            <div className="flex items-center gap-2 text-sm font-medium text-on-surface-variant">
-              <Icon name="campaign" size={18} />
-              <span>mkthub.onebiz.com.vn</span>
-            </div>
-            <h1 className="mt-1 font-heading text-2xl font-bold tracking-normal text-on-surface sm:text-3xl">
-              MKT Hub
-            </h1>
-          </div>
-          <div className="flex flex-wrap items-center gap-2">
-            <Link
-              className="inline-flex h-9 items-center gap-2 rounded-lg border border-outline-variant bg-background px-3 text-sm font-medium hover:bg-surface-container"
-              href="/mkt?view=my-tasks"
-            >
-              <Icon name="checklist" size={18} />
-              My Tasks
-            </Link>
-            <Link
-              className="inline-flex h-9 items-center gap-2 rounded-lg bg-primary px-3 text-sm font-medium text-primary-foreground hover:bg-primary-hover"
-              href="/mkt?view=campaigns"
-            >
-              <Icon name="add" size={18} />
-              Campaign
-            </Link>
-          </div>
-        </header>
+        <div className="flex flex-col gap-1 pb-1">
+          <h1 className="font-heading text-2xl font-bold tracking-normal sm:text-3xl">
+            Tổng quan
+          </h1>
+          <p className="text-sm text-on-surface-variant">
+            {activeCampaign?.name ?? "Chưa có chiến dịch nào"}
+          </p>
+        </div>
 
-        {data.warnings.length > 0 ? (
+        {data.warnings.length > 0 && !data.isConfigured ? (
           <div className="rounded-lg border border-amber-200 bg-amber-50 px-4 py-3 text-sm font-medium text-amber-800">
-            {data.isConfigured
-              ? "MKT Hub dang doc du lieu voi mot so canh bao he thong."
-              : "MKT Hub can apply migration staging truoc khi co du lieu that."}
+            MKT Hub cần chạy migration (staging) trước khi có dữ liệu thật.
           </div>
         ) : null}
 
@@ -162,15 +140,11 @@ export default async function MktHubPage() {
               key={item.label}
               className="rounded-lg border border-outline-variant bg-background p-4 ambient-shadow"
             >
-              <div className="text-sm font-medium text-on-surface-variant">
-                {item.label}
-              </div>
+              <div className="text-sm font-medium text-on-surface-variant">{item.label}</div>
               <div className="mt-3 flex items-end justify-between gap-3">
-                <div className="font-heading text-3xl font-bold text-on-surface">
-                  {item.value}
-                </div>
+                <div className="font-heading text-3xl font-bold">{item.value}</div>
                 <span className={"rounded-full border px-2 py-1 text-xs font-semibold " + item.tone}>
-                  Live
+                  Trực tiếp
                 </span>
               </div>
             </div>
@@ -178,15 +152,15 @@ export default async function MktHubPage() {
         </section>
 
         {!hasAnyData ? (
-          <EmptyBlock label="Chua co campaign MKT trong tenant hien tai" />
+          <EmptyBlock label="Chưa có chiến dịch MKT nào trong phạm vi của bạn" />
         ) : null}
 
         <section className="grid gap-5 xl:grid-cols-[1.5fr_1fr]">
           <div className="space-y-3">
             <div className="flex items-center justify-between gap-3">
-              <h2 className="font-heading text-lg font-semibold">Kanban campaign</h2>
+              <h2 className="font-heading text-lg font-semibold">Bảng công việc</h2>
               <span className="text-sm text-on-surface-variant">
-                {activeCampaign?.name ?? "Chua co campaign"}
+                {activeCampaign?.name ?? "Chưa có chiến dịch"}
               </span>
             </div>
             <div className="grid gap-3 lg:grid-cols-3">
@@ -211,9 +185,7 @@ export default async function MktHubPage() {
                           key={task.id}
                           className="rounded-lg border border-outline-variant bg-background p-3"
                         >
-                          <div className="text-sm font-semibold leading-snug">
-                            {task.title}
-                          </div>
+                          <div className="text-sm font-semibold leading-snug">{task.title}</div>
                           <div className="mt-2 flex items-start justify-between gap-2 text-xs text-on-surface-variant">
                             <div className="min-w-0">
                               <div className="truncate">{task.owner}</div>
@@ -227,7 +199,7 @@ export default async function MktHubPage() {
                         </article>
                       ))
                     ) : (
-                      <EmptyBlock label="Trong" />
+                      <EmptyBlock label="Trống" />
                     )}
                   </div>
                 </div>
@@ -236,16 +208,14 @@ export default async function MktHubPage() {
           </div>
 
           <div className="space-y-3">
-            <h2 className="font-heading text-lg font-semibold">Readiness</h2>
+            <h2 className="font-heading text-lg font-semibold">Mức độ Sẵn sàng (Readiness)</h2>
             <div className="rounded-lg border border-outline-variant bg-background p-4">
               <div className="flex items-center justify-between gap-4">
                 <div>
                   <div className="text-sm font-medium text-on-surface-variant">
-                    {activeCampaign?.name ?? "Chua co campaign"}
+                    {activeCampaign?.name ?? "Chưa có chiến dịch"}
                   </div>
-                  <div className="mt-1 font-heading text-3xl font-bold">
-                    {data.readinessScore}%
-                  </div>
+                  <div className="mt-1 font-heading text-3xl font-bold">{data.readinessScore}%</div>
                 </div>
                 <div className="h-3 w-28 rounded-full bg-surface-container">
                   <div
@@ -266,7 +236,7 @@ export default async function MktHubPage() {
                     </div>
                   ))
                 ) : (
-                  <EmptyBlock label="Chua co checklist readiness" />
+                  <EmptyBlock label="Chưa có checklist readiness" />
                 )}
               </div>
             </div>
@@ -275,7 +245,7 @@ export default async function MktHubPage() {
 
         <section className="grid gap-5 xl:grid-cols-[1fr_1fr]">
           <div className="space-y-3">
-            <h2 className="font-heading text-lg font-semibold">Approval</h2>
+            <h2 className="font-heading text-lg font-semibold">Phê duyệt Nội dung</h2>
             <div className="grid gap-2">
               {data.contents.length > 0 ? (
                 data.contents.map((item) => (
@@ -288,25 +258,25 @@ export default async function MktHubPage() {
                       <div className="mt-1 flex flex-wrap items-center gap-2 text-sm text-on-surface-variant">
                         <span>{item.version}</span>
                         <StatusBadge value={item.riskLevel} />
-                        <span>{item.revisionCount} revision</span>
+                        <span>{item.revisionCount} lần sửa</span>
                       </div>
                     </div>
                     <StatusBadge value={item.status} />
                   </article>
                 ))
               ) : (
-                <EmptyBlock label="Chua co content can duyet" />
+                <EmptyBlock label="Chưa có nội dung cần duyệt" />
               )}
             </div>
           </div>
 
           <div className="space-y-3">
-            <h2 className="font-heading text-lg font-semibold">Report</h2>
+            <h2 className="font-heading text-lg font-semibold">Báo cáo nhanh</h2>
             <div className="grid gap-3 sm:grid-cols-3">
               {[
-                { label: "Output", value: String(totalOutputs), unit: "assets" },
-                { label: "Revision TB", value: revisionAverage, unit: "lan" },
-                { label: "Hoan tat", value: String(onTimeRate), unit: "%" },
+                { label: "Sản phẩm", value: String(totalOutputs), unit: "nội dung" },
+                { label: "Số lần sửa TB", value: revisionAverage, unit: "lần" },
+                { label: "Hoàn tất", value: String(onTimeRate), unit: "%" },
               ].map((item) => (
                 <div key={item.label} className="rounded-lg border border-outline-variant bg-background p-4">
                   <div className="text-sm text-on-surface-variant">{item.label}</div>
@@ -318,7 +288,7 @@ export default async function MktHubPage() {
             <div className="rounded-lg border border-outline-variant bg-background p-4">
               <div className="mb-3 flex items-center gap-2 font-semibold">
                 <Icon name="manage_accounts" size={18} />
-                Leader queue
+                Cần Leader xử lý
               </div>
               <div className="space-y-2">
                 {data.leaderQueue.length > 0 ? (
@@ -330,17 +300,16 @@ export default async function MktHubPage() {
                       <div>
                         <div className="text-sm font-semibold">{item.title}</div>
                         <div className="text-xs text-on-surface-variant">
-                          {item.campaignName} - {item.assigneeName}
+                          {item.campaignName} · {item.assigneeName}
                         </div>
                       </div>
                       <div className="flex flex-wrap gap-1 sm:justify-end">
                         <StatusBadge value={item.acceptanceStatus} />
-                        <StatusBadge value={item.taskStatus} />
                       </div>
                     </article>
                   ))
                 ) : (
-                  <EmptyBlock label="Khong co task can leader xu ly" />
+                  <EmptyBlock label="Không có việc cần Leader xử lý" />
                 )}
               </div>
             </div>

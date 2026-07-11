@@ -21,9 +21,14 @@ export async function POST(
   const { id } = await context.params;
   const body = await readJsonBody<SplitBody>(request);
 
-  return callMktRpc(supabase, "mkt_split_work_package", {
-    p_work_package_id: id,
-    p_template_code: body.templateCode ?? null,
-    p_tasks: Array.isArray(body.tasks) ? body.tasks : [],
-  });
+  return callMktRpc(
+    supabase,
+    "mkt_split_work_package",
+    {
+      p_work_package_id: id,
+      p_template_code: body.templateCode ?? null,
+      p_tasks: Array.isArray(body.tasks) ? body.tasks : [],
+    },
+    { notifyAfter: true },
+  );
 }
