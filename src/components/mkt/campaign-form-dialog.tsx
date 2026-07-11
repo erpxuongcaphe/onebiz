@@ -39,7 +39,9 @@ export function CampaignFormDialog() {
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
-  const valid = name.trim().length > 1;
+  const dateInvalid = Boolean(start && end && end < start);
+  const budgetInvalid = budget !== "" && Number(budget) < 0;
+  const valid = name.trim().length > 1 && !dateInvalid && !budgetInvalid;
 
   function reset() {
     setName("");
@@ -56,19 +58,27 @@ export function CampaignFormDialog() {
     setLoading(true);
     setError(null);
     try {
-      await mktPost("/api/mkt/v1/campaigns", {
-        name: name.trim(),
-        objective: objective.trim() || undefined,
-        timeframeStart: start || undefined,
-        timeframeEnd: end || undefined,
-        budget: budget ? Number(budget) : 0,
-        readinessItems: items
-          .filter((i) => i.title.trim())
-          .map((i) => ({ title: i.title.trim(), requiredRole: i.requiredRole })),
-      });
+      const res = await mktPost<{ success: boolean; campaignId?: string }>(
+        "/api/mkt/v1/campaigns",
+        {
+          name: name.trim(),
+          objective: objective.trim() || undefined,
+          timeframeStart: start || undefined,
+          timeframeEnd: end || undefined,
+          budget: budget ? Number(budget) : 0,
+          readinessItems: items
+            .filter((i) => i.title.trim())
+            .map((i) => ({ title: i.title.trim(), requiredRole: i.requiredRole })),
+        },
+      );
       reset();
       setOpen(false);
-      router.refresh();
+      // Đưa thẳng vào trang chi tiết để làm bước tiếp theo (thêm kênh, chia việc)
+      if (res.campaignId) {
+        router.push(`/mkt/campaigns/${res.campaignId}`);
+      } else {
+        router.refresh();
+      }
     } catch (e) {
       setError(e instanceof Error ? e.message : "Không tạo được chiến dịch");
     } finally {
@@ -119,11 +129,20 @@ export function CampaignFormDialog() {
             <Input
               id="c-budget"
               type="number"
+              min={0}
               value={budget}
               onChange={(e) => setBudget(e.target.value)}
               placeholder="0"
             />
           </div>
+          {dateInvalid ? (
+            <p className="text-sm font-medium text-rose-600">
+              Ngày kết thúc phải sau hoặc bằng ngày bắt đầu.
+            </p>
+          ) : null}
+          {budgetInvalid ? (
+            <p className="text-sm font-medium text-rose-600">Ngân sách không được âm.</p>
+          ) : null}
 
           <div className="space-y-2 rounded-lg border border-outline-variant bg-surface-container-lowest p-3">
             <div className="flex items-center justify-between">

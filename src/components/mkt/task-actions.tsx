@@ -80,6 +80,12 @@ export function TaskActions({ task }: { task: MktMyTask }) {
             <Link className={outline} href={`/mkt/approvals?content=${task.contentItemId}`}>
               <Icon name="rate_review" size={15} /> Mở màn duyệt
             </Link>
+          ) : task.taskType === "publish" ? (
+            // Việc "Đăng bài": nội dung ĐÃ duyệt xong mới bắt đầu được (blocker
+            // backend) → hoàn tất = đã đăng, không nộp duyệt lại.
+            <button className={primary} disabled={busy} onClick={() => run("mark-done")}>
+              <Icon name="publish" size={15} /> Đã đăng bài
+            </button>
           ) : task.contentItemId ? (
             <button className={primary} disabled={busy} onClick={() => setDialog("submit")}>
               <Icon name="upload" size={15} /> Nộp duyệt

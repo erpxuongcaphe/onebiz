@@ -23,10 +23,17 @@ function dueLabel(value: string | null): { text: string; urgent: boolean } {
   return { text, urgent: hours <= 48 };
 }
 
-function TaskCard({ task }: { task: MktMyTask }) {
+function TaskCard({ task, highlighted }: { task: MktMyTask; highlighted?: boolean }) {
   const due = dueLabel(task.dueAt);
   return (
-    <article className="rounded-lg border border-outline-variant bg-background p-3">
+    <article
+      className={
+        "rounded-lg border bg-background p-3 " +
+        (highlighted
+          ? "border-primary ring-2 ring-primary/40"
+          : "border-outline-variant")
+      }
+    >
       <div className="text-sm font-semibold leading-snug">{task.title}</div>
       <div className="mt-1 text-xs text-on-surface-variant">
         {task.campaignName ?? "Không thuộc chiến dịch"}
@@ -55,12 +62,18 @@ function Column({
   icon,
   tasks,
   emptyLabel,
+  highlightId,
 }: {
   title: string;
   icon: string;
   tasks: MktMyTask[];
   emptyLabel: string;
+  highlightId?: string;
 }) {
+  // Task được deep-link từ Telegram: ghim lên đầu cột + viền nổi bật
+  const ordered = highlightId
+    ? [...tasks].sort((a, b) => (a.id === highlightId ? -1 : b.id === highlightId ? 1 : 0))
+    : tasks;
   return (
     <div className="min-w-0 rounded-lg border border-outline-variant bg-surface-container-lowest p-3">
       <div className="mb-3 flex items-center justify-between">
@@ -71,8 +84,10 @@ function Column({
         <span className="text-xs font-medium text-on-surface-variant">{tasks.length}</span>
       </div>
       <div className="space-y-2">
-        {tasks.length > 0 ? (
-          tasks.map((t) => <TaskCard key={t.id} task={t} />)
+        {ordered.length > 0 ? (
+          ordered.map((t) => (
+            <TaskCard key={t.id} task={t} highlighted={t.id === highlightId} />
+          ))
         ) : (
           <div className="rounded-lg border border-dashed border-outline-variant bg-background p-4 text-sm font-medium text-on-surface-variant">
             {emptyLabel}
@@ -83,7 +98,12 @@ function Column({
   );
 }
 
-export default async function MyTasksPage() {
+export default async function MyTasksPage({
+  searchParams,
+}: {
+  searchParams: Promise<{ task?: string }>;
+}) {
+  const { task: highlightId } = await searchParams;
   const supabase = await createServerSupabaseClient();
   const tasks = await getMyTasks(supabase);
 
@@ -130,24 +150,28 @@ export default async function MyTasksPage() {
             icon="assignment_ind"
             tasks={pending}
             emptyLabel="Không có việc chờ nhận"
+            highlightId={highlightId}
           />
           <Column
             title="Deadline gần (24-48h)"
             icon="alarm"
             tasks={dueSoon}
             emptyLabel="Không có việc sát hạn"
+            highlightId={highlightId}
           />
           <Column
             title="Hôm nay làm gì"
             icon="timer"
             tasks={doing}
             emptyLabel="Chưa có việc đang làm"
+            highlightId={highlightId}
           />
           <Column
             title="Việc đang chờ (Duyệt / Kẹt)"
             icon="hourglass_empty"
             tasks={waiting}
             emptyLabel="Không có việc đang chờ"
+            highlightId={highlightId}
           />
         </div>
       </div>

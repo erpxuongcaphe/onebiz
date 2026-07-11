@@ -12,6 +12,7 @@ import {
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Icon } from "@/components/ui/icon";
+import { Label } from "@/components/ui/label";
 import { mktPost } from "@/lib/mkt/client";
 import type { MktMember } from "@/lib/mkt/read-models";
 
@@ -70,12 +71,14 @@ export function SplitDialog({
   open,
   onOpenChange,
   workPackageId,
+  campaignId,
   members,
   contents,
 }: {
   open: boolean;
   onOpenChange: (open: boolean) => void;
   workPackageId: string;
+  campaignId: string;
   members: MktMember[];
   contents: ContentOption[];
 }) {
@@ -83,9 +86,43 @@ export function SplitDialog({
   const [rows, setRows] = useState<Row[]>(defaultRows);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  // Nội dung có thể được tạo nhanh ngay trong dialog — giữ danh sách cục bộ
+  const [localContents, setLocalContents] = useState<ContentOption[]>(contents);
+  const [quickName, setQuickName] = useState("");
+  const [quickRisk, setQuickRisk] = useState("low");
+  const [quickBusy, setQuickBusy] = useState(false);
 
   function patch(idx: number, p: Partial<Row>) {
     setRows((v) => v.map((r, i) => (i === idx ? { ...r, ...p } : r)));
+  }
+
+  async function quickCreateContent() {
+    if (!quickName.trim()) return;
+    setQuickBusy(true);
+    setError(null);
+    try {
+      const res = await mktPost<{ success: boolean; contentItemId?: string }>(
+        "/api/mkt/v1/contents",
+        { campaignId, title: quickName.trim(), riskLevel: quickRisk },
+      );
+      if (res.contentItemId) {
+        const created = { id: res.contentItemId, title: quickName.trim() };
+        setLocalContents((v) => [...v, created]);
+        // Tự gán cho các dòng Duyệt/Đăng đang trống
+        setRows((v) =>
+          v.map((r) =>
+            (r.taskType === "review" || r.taskType === "publish") && !r.contentItemId
+              ? { ...r, contentItemId: created.id }
+              : r,
+          ),
+        );
+        setQuickName("");
+      }
+    } catch (e) {
+      setError(e instanceof Error ? e.message : "Không tạo được nội dung");
+    } finally {
+      setQuickBusy(false);
+    }
   }
 
   const filled = rows.filter((r) => r.title.trim() && r.assigneeId);
@@ -171,10 +208,13 @@ export function SplitDialog({
                     <select
                       value={r.contentItemId}
                       onChange={(e) => patch(idx, { contentItemId: e.target.value })}
-                      className="h-8 flex-1 rounded-lg border border-rose-200 bg-background px-2 text-xs"
+                      className={
+                        "h-8 flex-1 rounded-lg border bg-background px-2 text-xs " +
+                        (r.contentItemId ? "border-outline-variant" : "border-rose-300")
+                      }
                     >
                       <option value="">— Chọn nội dung —</option>
-                      {contents.map((c) => (
+                      {localContents.map((c) => (
                         <option key={c.id} value={c.id}>
                           {c.title}
                         </option>
@@ -213,9 +253,31 @@ export function SplitDialog({
             <Icon name="add" size={14} /> Thêm công đoạn
           </button>
           {needsContent ? (
-            <p className="text-xs font-medium text-rose-600">
-              Công đoạn Duyệt/Đăng phải chọn nội dung (tạo nội dung ở tab “Media & Nội dung” trước).
-            </p>
+            <div className="space-y-2 rounded-lg border border-amber-200 bg-amber-50/60 p-3">
+              <Label className="text-xs font-semibold text-amber-800">
+                Công đoạn Duyệt/Đăng cần gắn nội dung — tạo nhanh tại đây:
+              </Label>
+              <div className="flex flex-wrap items-center gap-2">
+                <Input
+                  value={quickName}
+                  onChange={(e) => setQuickName(e.target.value)}
+                  placeholder="Tên nội dung (VD: Video Oolong T7)…"
+                  className="h-8 min-w-[180px] flex-1"
+                />
+                <select
+                  value={quickRisk}
+                  onChange={(e) => setQuickRisk(e.target.value)}
+                  className="h-8 rounded-lg border border-outline-variant bg-background px-2 text-xs"
+                >
+                  <option value="low">Rủi ro thấp (Lead duyệt)</option>
+                  <option value="medium">Trung bình (Lead duyệt)</option>
+                  <option value="high">Cao (CEO duyệt)</option>
+                </select>
+                <Button size="sm" disabled={quickBusy || !quickName.trim()} onClick={quickCreateContent}>
+                  {quickBusy ? "Đang tạo…" : "Tạo & gắn"}
+                </Button>
+              </div>
+            </div>
           ) : null}
           {error ? <p className="text-sm font-medium text-rose-600">{error}</p> : null}
         </div>

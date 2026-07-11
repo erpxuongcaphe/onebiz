@@ -11,6 +11,7 @@ import {
   getMktMembers,
 } from "@/lib/mkt/read-models";
 import { LeaderQueueActions } from "@/components/mkt/leader-queue-actions";
+import { AddReadinessButton } from "@/components/mkt/add-readiness-button";
 import {
   AcceptanceBadge,
   ContentStatusBadge,
@@ -140,6 +141,58 @@ export default async function CampaignDetailPage({
           </div>
         </div>
 
+        {/* Các bước triển khai — dẫn đường khi đang lên kế hoạch */}
+        {canManage && c.status === "planning" ? (
+          <div className="rounded-lg border border-outline-variant bg-surface-container-lowest p-3">
+            <div className="mb-2 text-xs font-semibold uppercase tracking-wide text-on-surface-variant">
+              Các bước triển khai
+            </div>
+            <div className="grid gap-1.5 sm:grid-cols-2 lg:grid-cols-5">
+              {[
+                {
+                  label: "1. Thêm kênh",
+                  done: detail.workPackages.length > 0,
+                  href: `/mkt/campaigns/${c.id}?tab=channels`,
+                },
+                {
+                  label: "2. Thêm nội dung",
+                  done: detail.contents.length > 0,
+                  href: `/mkt/campaigns/${c.id}?tab=content`,
+                },
+                {
+                  label: "3. Chia việc",
+                  done: detail.tasks.length > 0,
+                  href: `/mkt/campaigns/${c.id}?tab=channels`,
+                },
+                {
+                  label: "4. Sẵn sàng 100%",
+                  done: c.readinessScore >= 100,
+                  href: `/mkt/campaigns/${c.id}?tab=readiness`,
+                },
+                {
+                  label: "5. Chạy chiến dịch",
+                  done: false,
+                  href: `/mkt/campaigns/${c.id}?tab=readiness`,
+                },
+              ].map((step) => (
+                <Link
+                  key={step.label}
+                  href={step.href}
+                  className={
+                    "flex items-center gap-2 rounded-lg border px-2.5 py-2 text-xs font-medium " +
+                    (step.done
+                      ? "border-emerald-200 bg-emerald-50 text-emerald-700"
+                      : "border-outline-variant bg-background text-on-surface-variant hover:bg-surface-container")
+                  }
+                >
+                  <Icon name={step.done ? "check_circle" : "radio_button_unchecked"} size={16} />
+                  {step.label}
+                </Link>
+              ))}
+            </div>
+          </div>
+        ) : null}
+
         {/* Tab nav */}
         <div className="flex gap-1 overflow-x-auto border-b border-outline-variant">
           {TABS.map((t) => {
@@ -214,6 +267,7 @@ export default async function CampaignDetailPage({
                         {needsSplit && (canManage || ctx.canSplit) ? (
                           <WorkPackageSplitButton
                             workPackageId={w.id}
+                            campaignId={c.id}
                             members={members}
                             contents={contentOptions}
                           />
@@ -325,6 +379,11 @@ export default async function CampaignDetailPage({
         {/* Readiness */}
         {activeTab === "readiness" ? (
           <section className="space-y-3">
+            {canManage ? (
+              <div className="flex justify-end">
+                <AddReadinessButton campaignId={c.id} />
+              </div>
+            ) : null}
             <div className="flex items-center justify-between rounded-lg border border-outline-variant bg-background p-3">
               <div className="text-sm font-semibold">
                 Mức độ Sẵn sàng: {readinessDone}/{detail.readiness.length} mục

@@ -13,7 +13,6 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Icon } from "@/components/ui/icon";
-import { MediaUploader } from "@/components/mkt/media-uploader";
 import { parseMediaLink, buildMediaUrls } from "@/lib/mkt/media-links";
 import { mktDelete, mktPost } from "@/lib/mkt/client";
 import type { MktMediaAsset } from "@/lib/mkt/read-models";
@@ -159,17 +158,17 @@ export function MediaLibrary({
         </div>
 
         <div className="ml-auto flex items-center gap-2">
-          <Button variant="outline" size="sm" onClick={() => setAddOpen(true)}>
+          {/* CEO 11/07: tạm KHÓA tải lên trực tiếp (tốn dung lượng server) —
+              buộc thêm từ nguồn lưu trữ ngoài. Mở lại: bỏ comment <MediaUploader/>. */}
+          <Button size="sm" onClick={() => setAddOpen(true)}>
             <Icon name="add_link" size={16} /> Thêm từ link
           </Button>
-          <MediaUploader />
         </div>
       </div>
 
       <p className="text-xs text-on-surface-variant">
-        💡 Video và ảnh gốc dung lượng lớn: để trên Google Drive/YouTube rồi{" "}
-        <b>Thêm từ link</b> — xem trực tiếp tại đây, web không tốn dung lượng. Nút "Tải lên" chỉ
-        dành cho ảnh nhỏ.
+        💡 File lưu trên Google Drive / OneDrive / YouTube — bấm <b>Thêm từ link</b> để đưa vào thư
+        viện và xem trực tiếp tại đây. Web không lưu file nên không giới hạn dung lượng.
       </p>
 
       {/* Lưới media */}
@@ -226,7 +225,7 @@ export function MediaLibrary({
       ) : (
         <div className="rounded-lg border border-dashed border-outline-variant bg-background p-8 text-center text-sm font-medium text-on-surface-variant">
           {items.length === 0
-            ? "Chưa có media nào. Bấm [Thêm từ link] (Drive/YouTube) hoặc [Tải lên]."
+            ? "Chưa có media nào. Bấm [Thêm từ link] để đưa file Drive/OneDrive/YouTube vào thư viện."
             : "Không có media khớp bộ lọc."}
         </div>
       )}
