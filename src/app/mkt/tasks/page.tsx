@@ -23,6 +23,11 @@ function dueLabel(value: string | null): { text: string; urgent: boolean } {
   return { text, urgent: hours <= 48 };
 }
 
+function isDueSoonTask(task: MktMyTask): boolean {
+  if (!task.dueAt) return false;
+  return (new Date(task.dueAt).getTime() - Date.now()) / 36e5 <= 48;
+}
+
 function TaskCard({ task, highlighted }: { task: MktMyTask; highlighted?: boolean }) {
   const due = dueLabel(task.dueAt);
   return (
@@ -112,13 +117,8 @@ export default async function MyTasksPage({
 
   // Cột "Deadline gần (24-48h)" theo prototype: việc đã nhận, sắp tới hạn
   // trong 48 giờ (kể cả quá hạn) — để ưu tiên trước tiên.
-  const isDueSoon = (t: (typeof active)[number]) => {
-    if (!t.dueAt) return false;
-    const hours = (new Date(t.dueAt).getTime() - Date.now()) / 36e5;
-    return hours <= 48;
-  };
   const dueSoon = active.filter(
-    (t) => t.acceptanceStatus === "accepted" && isDueSoon(t),
+    (t) => t.acceptanceStatus === "accepted" && isDueSoonTask(t),
   );
   const dueSoonIds = new Set(dueSoon.map((t) => t.id));
 

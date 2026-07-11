@@ -6,14 +6,6 @@ import { getMktDatabaseClient } from "@/lib/mkt/supabase";
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
 
-type TelegramLinkTokenRow = {
-  id: string;
-  tenant_id: string;
-  user_id: string;
-  expires_at: string;
-  used_at: string | null;
-};
-
 type TelegramUpdate = {
   update_id?: number;
   message?: {
@@ -23,8 +15,17 @@ type TelegramUpdate = {
   };
 };
 
+type ConsumeResult = {
+  success?: boolean;
+  duplicate?: boolean;
+  linked?: boolean;
+};
+
 function unauthorized() {
-  return NextResponse.json({ success: false, error: "Unauthorized" }, { status: 401 });
+  return NextResponse.json(
+    { success: false, error: "Unauthorized" },
+    { status: 401 },
+  );
 }
 
 export async function POST(request: NextRequest) {
@@ -38,24 +39,41 @@ export async function POST(request: NextRequest) {
   const telegramUserId = update?.message?.from?.id;
   const username = update?.message?.from?.username ?? null;
 
-  if (!text.startsWith("/start link_") || !chatId || !telegramUserId) {
+  if (
+    !text.startsWith("/start link_") ||
+    update?.update_id === undefined ||
+    !chatId ||
+    !telegramUserId
+  ) {
     return NextResponse.json({ success: true, ignored: true });
   }
 
   const token = text.replace("/start link_", "").trim();
-  const tokenHash = hashTelegramLinkToken(token);
   const admin = getAdminClient();
   const db = getMktDatabaseClient(admin);
+  const { data, error } = await db.rpc<ConsumeResult>(
+    "mkt_consume_telegram_link_token",
+    {
+      p_update_id: update.update_id,
+      p_token_hash: hashTelegramLinkToken(token),
+      p_telegram_user_id: String(telegramUserId),
+      p_chat_id: String(chatId),
+      p_username: username,
+    },
+  );
 
-  const { data: linkToken, error } = await db
-    .from<TelegramLinkTokenRow>("mkt_telegram_link_tokens")
-    .select("id, tenant_id, user_id, expires_at, used_at")
-    .eq("token_hash", tokenHash)
-    .is("used_at", null)
-    .gt("expires_at", new Date().toISOString())
-    .single();
+  if (error) {
+    return NextResponse.json(
+      { success: false, error: "Telegram link processing failed" },
+      { status: 500 },
+    );
+  }
 
-  if (error || !linkToken) {
+  if (data?.duplicate) {
+    return NextResponse.json({ success: true, duplicate: true });
+  }
+
+  if (!data?.linked) {
     if (process.env.TELEGRAM_BOT_TOKEN) {
       await sendTelegramMessage({
         botToken: process.env.TELEGRAM_BOT_TOKEN,
@@ -66,32 +84,12 @@ export async function POST(request: NextRequest) {
     return NextResponse.json({ success: true, linked: false });
   }
 
-  await db
-    .from("mkt_telegram_accounts")
-    .upsert(
-      {
-        tenant_id: linkToken.tenant_id,
-        user_id: linkToken.user_id,
-        telegram_user_id: String(telegramUserId),
-        chat_id: String(chatId),
-        username,
-        status: "linked",
-        linked_at: new Date().toISOString(),
-      },
-      { onConflict: "tenant_id,user_id" },
-    );
-
-  await db
-    .from("mkt_telegram_link_tokens")
-    .update({ used_at: new Date().toISOString() })
-    .eq("id", linkToken.id);
-
   if (process.env.TELEGRAM_BOT_TOKEN) {
     await sendTelegramMessage({
       botToken: process.env.TELEGRAM_BOT_TOKEN,
       chatId: String(chatId),
       title: "Đã liên kết Telegram với MKT Hub.",
-      deepLinkPath: "/mkt",
+      deepLinkPath: "/",
     }).catch(() => null);
   }
 

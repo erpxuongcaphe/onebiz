@@ -8,6 +8,8 @@ import type { MktContext } from "@/lib/mkt/context";
 
 export const dynamic = "force-dynamic";
 
+const ONEBIZ_URL = process.env.ONEBIZ_BASE_URL || "https://onebiz.com.vn";
+
 async function loadContext(): Promise<{ signedIn: boolean; ctx: MktContext }> {
   const supabase = await createServerSupabaseClient();
   const {
@@ -16,7 +18,8 @@ async function loadContext(): Promise<{ signedIn: boolean; ctx: MktContext }> {
   if (!user) return { signedIn: false, ctx: { canView: false } };
 
   const db = getMktDatabaseClient(supabase);
-  const { data } = await db.rpc<MktContext>("mkt_get_my_context", {});
+  const { data, error } = await db.rpc<MktContext>("mkt_get_my_context", {});
+  if (error) throw new Error(`MKT_READ_FAILED:layout_context:${error.message}`);
   return { signedIn: true, ctx: (data as MktContext) ?? { canView: false } };
 }
 
@@ -36,7 +39,7 @@ function AccessNotice({ signedIn }: { signedIn: boolean }) {
       </div>
       <div className="flex items-center gap-2">
         <Link
-          href="/"
+          href={ONEBIZ_URL}
           className="inline-flex h-10 items-center gap-2 rounded-lg border border-outline-variant bg-background px-4 text-sm font-medium hover:bg-surface-container"
         >
           <Icon name="arrow_back" size={18} />
@@ -68,7 +71,7 @@ export default async function MktLayout({ children }: { children: React.ReactNod
         </Link>
         <div className="flex items-center gap-2">
           <Link
-            href="/"
+            href={ONEBIZ_URL}
             className="inline-flex h-9 items-center gap-2 rounded-lg border border-outline-variant bg-background px-3 text-sm font-medium hover:bg-surface-container"
           >
             <Icon name="grid_view" size={18} />

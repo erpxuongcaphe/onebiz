@@ -15,9 +15,9 @@ Làm **tuần tự**. Mỗi bước xong mới sang bước sau. Project Vercel:
 ```bash
 supabase link --project-ref <PROD_REF>
 supabase migration list            # đối chiếu các migration chưa apply
-supabase db push                   # apply theo thứ tự: 00167, 00168, 00169(order_code), 00170(mkt crud)
+supabase db push                   # apply theo thứ tự: 00168, 00170, 00171, 00172, 00173
 ```
-- [ ] Xác nhận các migration MKT (00168 core, 00170 crud) apply thành công (00169 order_code là việc riêng, apply chung cũng được).
+- [ ] Xác nhận các migration MKT 00168, 00170, 00171, 00172 và 00173 apply thành công; 00169 là migration ERP độc lập.
 - [ ] Chạy `supabase/verify_mkt_hub_security.sql` (Phần A + B) trên SQL Editor prod — mọi `pass = true`.
 - [ ] KHÔNG chạy seed staging trên production.
 
@@ -27,6 +27,7 @@ Thêm/ý xác nhận đã có:
 - [ ] `TELEGRAM_BOT_USERNAME` = username bot (không có @)
 - [ ] `TELEGRAM_WEBHOOK_SECRET` = chuỗi bí mật tự đặt
 - [ ] `MKT_HUB_BASE_URL` = `https://mkthub.onebiz.com.vn`
+- [ ] `ONEBIZ_BASE_URL` = `https://onebiz.com.vn`
 - [ ] `CRON_SECRET` = (đã có — xác nhận)
 - [ ] `SUPABASE_SERVICE_ROLE_KEY` = (đã có — xác nhận)
 > Lưu ý: KHÔNG có `NEXT_PUBLIC_BYPASS_AUTH`. `BYPASS_AUTH` phải để trống/false trên production.

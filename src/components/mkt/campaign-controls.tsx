@@ -16,7 +16,7 @@ import { Label } from "@/components/ui/label";
 import { Icon } from "@/components/ui/icon";
 import { ReasonDialog } from "@/components/mkt/reason-dialog";
 import { SplitDialog } from "@/components/mkt/split-dialog";
-import { mktPost, mktPatch } from "@/lib/mkt/client";
+import { mktPost } from "@/lib/mkt/client";
 import type { MktMember } from "@/lib/mkt/read-models";
 
 const CHANNELS = [

@@ -1,6 +1,11 @@
 import { NextRequest } from "next/server";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 
+vi.mock("next/server", async (importOriginal) => {
+  const actual = await importOriginal<typeof import("next/server")>();
+  return { ...actual, after: vi.fn() };
+});
+
 // Mock Supabase server client cho toàn bộ API MKT.
 const state = vi.hoisted(() => ({
   user: { id: "user-1" } as { id: string } | null,
@@ -109,6 +114,57 @@ describe("MKT API routes — validate + ánh xạ RPC", () => {
     expect(state.rpc).toHaveBeenCalledWith(
       "mkt_waive_readiness_item",
       expect.objectContaining({ p_campaign_id: "c1", p_item_id: "i1" }),
+    );
+  });
+  it("review thiếu action bị chặn, không mặc định approve", async () => {
+    const { POST } = await import(
+      "@/app/api/mkt/v1/contents/[contentId]/review/route"
+    );
+    const res = await POST(jsonRequest({}), {
+      params: Promise.resolve({ contentId: "content-1" }),
+    });
+    expect(res.status).toBe(400);
+    expect(state.rpc).not.toHaveBeenCalled();
+  });
+
+  it("review action không hợp lệ bị chặn", async () => {
+    const { POST } = await import(
+      "@/app/api/mkt/v1/contents/[contentId]/review/route"
+    );
+    const res = await POST(jsonRequest({ action: "publish" }), {
+      params: Promise.resolve({ contentId: "content-1" }),
+    });
+    expect(res.status).toBe(400);
+    expect(state.rpc).not.toHaveBeenCalled();
+  });
+
+  it("review hợp lệ gọi RPC với action tường minh", async () => {
+    const { POST } = await import(
+      "@/app/api/mkt/v1/contents/[contentId]/review/route"
+    );
+    const res = await POST(jsonRequest({ action: "approve" }), {
+      params: Promise.resolve({ contentId: "content-1" }),
+    });
+    expect(res.status).toBe(200);
+    expect(state.rpc).toHaveBeenCalledWith(
+      "mkt_review_content",
+      expect.objectContaining({ p_content_id: "content-1", p_action: "approve" }),
+    );
+  });
+  it("team ping thiếu người nhận bị chặn", async () => {
+    const { POST } = await import("@/app/api/mkt/v1/team/ping/route");
+    const res = await POST(jsonRequest({}));
+    expect(res.status).toBe(400);
+    expect(state.rpc).not.toHaveBeenCalled();
+  });
+
+  it("team ping chỉ chuyển userId vào RPC tenant-safe", async () => {
+    const { POST } = await import("@/app/api/mkt/v1/team/ping/route");
+    const res = await POST(jsonRequest({ userId: "member-1", message: "Cập nhật nhé" }));
+    expect(res.status).toBe(200);
+    expect(state.rpc).toHaveBeenCalledWith(
+      "mkt_ping_team_member",
+      { p_user_id: "member-1", p_message: "Cập nhật nhé" },
     );
   });
 });

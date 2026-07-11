@@ -1,3 +1,4 @@
+import { randomUUID } from "node:crypto";
 import { getAdminClient } from "@/lib/supabase/admin";
 import { sendTelegramMessage } from "@/lib/mkt/telegram";
 import { getMktDatabaseClient } from "@/lib/mkt/supabase";
@@ -22,40 +23,33 @@ export type OutboxResult = {
   failed: number;
 };
 
+const MAX_ATTEMPTS = 5;
+
 /**
- * Quét outbox MKT và gửi Telegram cho các sự kiện pending đến hạn.
- * Dùng CHUNG cho 2 nhịp:
- *   1. Sau mỗi mutation API → gọi qua after() (gửi tức thời, không chặn response)
- *   2. Cron sweeper hằng ngày → nhặt sót + retry (backoff luỹ tiến)
- * Best-effort: nuốt lỗi từng sự kiện, không ném ra ngoài (trừ khi thiếu cấu hình).
+ * Atomically claims pending events before contacting Telegram. Concurrent
+ * after() workers and the cron sweeper cannot process the same event.
  */
 export async function processPendingOutbox(limit = 20): Promise<OutboxResult> {
   const botToken = process.env.TELEGRAM_BOT_TOKEN;
-  if (!botToken) {
-    // Không cấu hình bot → coi như không có gì để gửi (không phá luồng gọi).
-    return { checked: 0, sent: 0, failed: 0 };
-  }
+  if (!botToken) return { checked: 0, sent: 0, failed: 0 };
 
   const admin = getAdminClient();
   const db = getMktDatabaseClient(admin);
-
-  const { data: events, error } = await db
-    .from<OutboxEvent>("mkt_outbox_events")
-    .select("id, tenant_id, recipient_user_id, title, message, deep_link_path, attempts")
-    .eq("status", "pending")
-    .lte("next_attempt_at", new Date().toISOString())
-    .contains("channels", ["telegram"])
-    .order("created_at", { ascending: true })
-    .limit(limit);
+  const workerId = randomUUID();
+  const { data: events, error } = await db.rpc<OutboxEvent[]>(
+    "mkt_claim_outbox_events",
+    { p_limit: limit, p_worker_id: workerId },
+  );
 
   if (error) {
-    return { checked: 0, sent: 0, failed: 0 };
+    throw new Error("MKT_OUTBOX_CLAIM_FAILED: " + error.message);
   }
+  if (!Array.isArray(events)) return { checked: 0, sent: 0, failed: 0 };
 
   let sent = 0;
   let failed = 0;
 
-  for (const event of (events ?? []) as OutboxEvent[]) {
+  for (const event of events) {
     const { data: account } = await db
       .from<TelegramAccountRow>("mkt_telegram_accounts")
       .select("chat_id")
@@ -65,7 +59,6 @@ export async function processPendingOutbox(limit = 20): Promise<OutboxResult> {
       .single();
 
     if (!account?.chat_id) {
-      // Người nhận chưa liên kết Telegram → đánh dấu failed, không retry vô hạn.
       failed += 1;
       await db
         .from("mkt_outbox_events")
@@ -73,8 +66,12 @@ export async function processPendingOutbox(limit = 20): Promise<OutboxResult> {
           status: "failed",
           attempts: event.attempts + 1,
           last_error: "telegram account not linked",
+          locked_at: null,
+          locked_by: null,
         })
-        .eq("id", event.id);
+        .eq("id", event.id)
+        .eq("status", "processing")
+        .eq("locked_by", workerId);
       continue;
     }
 
@@ -89,22 +86,39 @@ export async function processPendingOutbox(limit = 20): Promise<OutboxResult> {
       sent += 1;
       await db
         .from("mkt_outbox_events")
-        .update({ status: "sent", sent_at: new Date().toISOString(), last_error: null })
-        .eq("id", event.id);
+        .update({
+          status: "sent",
+          sent_at: new Date().toISOString(),
+          last_error: null,
+          locked_at: null,
+          locked_by: null,
+        })
+        .eq("id", event.id)
+        .eq("status", "processing")
+        .eq("locked_by", workerId);
     } catch (err) {
       failed += 1;
       const attempts = event.attempts + 1;
+      const terminal = attempts >= MAX_ATTEMPTS;
       const delayMinutes = Math.min(60, attempts * 5);
       await db
         .from("mkt_outbox_events")
         .update({
+          status: terminal ? "failed" : "pending",
           attempts,
-          next_attempt_at: new Date(Date.now() + delayMinutes * 60 * 1000).toISOString(),
-          last_error: err instanceof Error ? err.message : "Unknown Telegram error",
+          next_attempt_at: new Date(
+            Date.now() + delayMinutes * 60 * 1000,
+          ).toISOString(),
+          last_error:
+            err instanceof Error ? err.message : "Unknown Telegram error",
+          locked_at: null,
+          locked_by: null,
         })
-        .eq("id", event.id);
+        .eq("id", event.id)
+        .eq("status", "processing")
+        .eq("locked_by", workerId);
     }
   }
 
-  return { checked: events?.length ?? 0, sent, failed };
+  return { checked: events.length, sent, failed };
 }

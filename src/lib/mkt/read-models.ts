@@ -7,11 +7,21 @@ import type { MktContext } from "@/lib/mkt/context";
 // là chốt chặn thật — read-model chỉ tiện query + định hình dữ liệu.
 // ────────────────────────────────────────────────────────────
 
+function requireRows<T>(
+  data: T[] | null,
+  error: { message: string } | null,
+  label: string,
+): T[] {
+  if (error) throw new Error(`MKT_READ_FAILED:${label}:${error.message}`);
+  return data ?? [];
+}
+
 export type MktMember = { id: string; name: string; role: string | null };
 
 export async function getMktContext(supabase: MktSupabaseClient): Promise<MktContext> {
   const db = getMktDatabaseClient(supabase);
-  const { data } = await db.rpc<MktContext>("mkt_get_my_context", {});
+  const { data, error } = await db.rpc<MktContext>("mkt_get_my_context", {});
+  if (error) throw new Error(`MKT_READ_FAILED:context:${error.message}`);
   return (data as MktContext) ?? { canView: false };
 }
 
@@ -28,10 +38,11 @@ export async function getMktMembers(supabase: MktSupabaseClient): Promise<MktMem
     .select("tenant_id")
     .eq("id", user.id)
     .maybeSingle();
+  if (profile.error) throw new Error(`MKT_READ_FAILED:member_profile:${profile.error.message}`);
   const tenantId = profile.data?.tenant_id;
   if (!tenantId) return [];
 
-  const { data } = await db
+  const { data, error } = await db
     .from<{ id: string; full_name: string | null; email: string | null; role: string | null }>(
       "profiles",
     )
@@ -40,7 +51,7 @@ export async function getMktMembers(supabase: MktSupabaseClient): Promise<MktMem
     .eq("is_active", true)
     .order("full_name", { ascending: true });
 
-  return (data ?? []).map((p) => ({
+  return requireRows(data, error, "members").map((p) => ({
     id: p.id,
     name: p.full_name || p.email || "Chưa gán tên",
     role: p.role,
@@ -85,7 +96,7 @@ export async function getMyTasks(supabase: MktSupabaseClient): Promise<MktMyTask
     assignee_id: string | null;
   };
 
-  const { data } = await db
+  const { data, error } = await db
     .from<Row>("mkt_tasks")
     .select(
       "id, title, description, task_type, acceptance_status, task_status, due_at, campaign_id, content_item_id, workload_points, blocked_reason, assignee_id",
@@ -95,7 +106,7 @@ export async function getMyTasks(supabase: MktSupabaseClient): Promise<MktMyTask
     .order("due_at", { ascending: true, nullsFirst: false })
     .limit(200);
 
-  const rows = data ?? [];
+  const rows = requireRows(data, error, "my_tasks");
   const campaignIds = Array.from(
     new Set(rows.map((r) => r.campaign_id).filter(Boolean) as string[]),
   );
@@ -147,13 +158,13 @@ export async function getCampaignList(supabase: MktSupabaseClient): Promise<MktC
     timeframe_start: string | null;
     timeframe_end: string | null;
   };
-  const { data } = await db
+  const { data, error } = await db
     .from<Row>("mkt_campaigns")
     .select("id, name, objective, status, readiness_score, budget_amount, timeframe_start, timeframe_end")
     .is("deleted_at", null)
     .order("created_at", { ascending: false })
     .limit(100);
-  return (data ?? []).map((c) => ({
+  return requireRows(data, error, "campaigns").map((c) => ({
     id: c.id,
     name: c.name,
     objective: c.objective,
@@ -198,7 +209,8 @@ export async function getLeaderQueue(
     p_limit: 100,
     p_offset: 0,
   });
-  if (error || !Array.isArray(data)) return [];
+  if (error) throw new Error(`MKT_READ_FAILED:leader_queue:${error.message}`);
+  if (!Array.isArray(data)) return [];
 
   const assigneeIds = Array.from(
     new Set(data.map((r) => r.assignee_id).filter(Boolean) as string[]),
@@ -269,7 +281,7 @@ export async function getApprovals(supabase: MktSupabaseClient): Promise<MktAppr
     revision_count: number | null;
     required_approver_role: string | null;
   };
-  const { data } = await db
+  const { data, error } = await db
     .from<Row>("mkt_content_items")
     .select(
       "id, title, campaign_id, content_status, risk_level, current_version, revision_count, required_approver_role",
@@ -279,7 +291,7 @@ export async function getApprovals(supabase: MktSupabaseClient): Promise<MktAppr
     .order("updated_at", { ascending: false })
     .limit(50);
 
-  const rows = data ?? [];
+  const rows = requireRows(data, error, "approvals");
   const campaignIds = Array.from(new Set(rows.map((r) => r.campaign_id).filter(Boolean) as string[]));
   const campaignNames = new Map<string, string>();
   if (campaignIds.length > 0) {
@@ -414,7 +426,7 @@ export async function getWorkspaceTasks(
     due_at: string | null;
     completed_at: string | null;
   };
-  const { data } = await db
+  const { data, error } = await db
     .from<Row>("mkt_tasks")
     .select(
       "id, title, assignee_id, acceptance_status, task_status, task_type, workload_points, campaign_id, due_at, completed_at",
@@ -422,7 +434,7 @@ export async function getWorkspaceTasks(
     .is("deleted_at", null)
     .order("due_at", { ascending: true, nullsFirst: false })
     .limit(500);
-  const rows = data ?? [];
+  const rows = requireRows(data, error, "workspace_tasks");
 
   const assigneeIds = Array.from(new Set(rows.map((r) => r.assignee_id).filter(Boolean) as string[]));
   const campaignIds = Array.from(new Set(rows.map((r) => r.campaign_id).filter(Boolean) as string[]));
@@ -473,14 +485,14 @@ export type MktPillar = {
 
 export async function getPillars(supabase: MktSupabaseClient): Promise<MktPillar[]> {
   const db = getMktDatabaseClient(supabase);
-  const { data } = await db
+  const { data, error } = await db
     .from<{ id: string; code: string; name: string; color: string; sort_order: number }>(
       "mkt_content_pillars",
     )
     .select("id, code, name, color, sort_order")
     .is("deleted_at", null)
     .order("sort_order", { ascending: true });
-  return (data ?? []).map((p) => ({
+  return requireRows(data, error, "pillars").map((p) => ({
     id: p.id,
     code: p.code,
     name: p.name,
@@ -504,7 +516,7 @@ export type MktMediaAsset = {
 
 export async function getMediaAssets(supabase: MktSupabaseClient): Promise<MktMediaAsset[]> {
   const db = getMktDatabaseClient(supabase);
-  const { data } = await db
+  const { data, error } = await db
     .from<{
       id: string;
       file_name: string;
@@ -523,7 +535,7 @@ export async function getMediaAssets(supabase: MktSupabaseClient): Promise<MktMe
     .is("deleted_at", null)
     .order("created_at", { ascending: false })
     .limit(200);
-  return (data ?? []).map((m) => ({
+  return requireRows(data, error, "media").map((m) => ({
     id: m.id,
     fileName: m.file_name,
     kind: m.kind,
@@ -568,7 +580,8 @@ export async function getExceptionLog(
     p_campaign_id: campaignId ?? null,
     p_limit: 50,
   });
-  if (error || !data || !Array.isArray((data as RpcResult).entries)) return [];
+  if (error) throw new Error(`MKT_READ_FAILED:exceptions:${error.message}`);
+  if (!data || !Array.isArray((data as RpcResult).entries)) return [];
   const entries = (data as RpcResult).entries;
 
   const userIds = Array.from(new Set(entries.map((e) => e.user_id).filter(Boolean) as string[]));
@@ -655,6 +668,9 @@ export async function getCampaignDetail(
     .is("deleted_at", null)
     .maybeSingle();
 
+  if (campaignRow.error) {
+    throw new Error(`MKT_READ_FAILED:campaign_detail:${campaignRow.error.message}`);
+  }
   if (!campaignRow.data) {
     return { campaign: null, workPackages: [], readiness: [], contents: [], tasks: [] };
   }
@@ -721,10 +737,10 @@ export async function getCampaignDetail(
       .order("created_at", { ascending: true }),
   ]);
 
-  const wp = wpRes.data ?? [];
-  const rd = rdRes.data ?? [];
-  const ct = ctRes.data ?? [];
-  const tk = tkRes.data ?? [];
+  const wp = requireRows(wpRes.data, wpRes.error, "campaign_work_packages");
+  const rd = requireRows(rdRes.data, rdRes.error, "campaign_readiness");
+  const ct = requireRows(ctRes.data, ctRes.error, "campaign_contents");
+  const tk = requireRows(tkRes.data, tkRes.error, "campaign_tasks");
 
   // Tên người: gom mọi id cần tra.
   const ids = new Set<string>();
