@@ -14,10 +14,10 @@ Làm **tuần tự**. Mỗi bước xong mới sang bước sau. Project Vercel:
 ## 2. Apply migration (một người chạy)
 ```bash
 supabase link --project-ref <PROD_REF>
-supabase migration list            # đối chiếu: 00167, 00168, 00169 đang "local only"
-supabase db push                   # apply 00167 → 00168 → 00169 theo thứ tự
+supabase migration list            # đối chiếu các migration chưa apply
+supabase db push                   # apply theo thứ tự: 00167, 00168, 00169(order_code), 00170(mkt crud)
 ```
-- [ ] Xác nhận cả 3 migration apply thành công.
+- [ ] Xác nhận các migration MKT (00168 core, 00170 crud) apply thành công (00169 order_code là việc riêng, apply chung cũng được).
 - [ ] Chạy `supabase/verify_mkt_hub_security.sql` (Phần A + B) trên SQL Editor prod — mọi `pass = true`.
 - [ ] KHÔNG chạy seed staging trên production.
 

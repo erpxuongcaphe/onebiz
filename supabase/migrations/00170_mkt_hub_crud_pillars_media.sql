@@ -1,6 +1,7 @@
 -- ============================================================
--- 00169: MKT Hub — CRUD (Sprint 1 Foundation) + Content Pillars + Media
--- Bổ sung lên 00168_mkt_hub_core. Mọi RPC: actor từ auth.uid(), tenant từ
+-- 00170: MKT Hub — CRUD (Sprint 1 Foundation) + Content Pillars + Media
+-- Bổ sung lên 00168_mkt_hub_core (00169 là order_code_split, độc lập).
+-- Mọi RPC: actor từ auth.uid(), tenant từ
 -- get_user_tenant_id(), check quyền qua user_has_permission, ghi audit,
 -- revoke public/anon + grant authenticated.
 -- ============================================================

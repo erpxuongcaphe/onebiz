@@ -1,7 +1,7 @@
 # UAT MKT Hub — Kịch bản nghiệm thu (chạy trên STAGING)
 
 Mục tiêu: xác minh toàn bộ quy trình + guardrail trước khi rollout production.
-Chạy sau khi đã apply migration `00167 → 00168 → 00169` và `seed_mkt_hub_staging.sql`
+Chạy sau khi đã apply migration `00167 → 00168 → 00169 → 00170` và `seed_mkt_hub_staging.sql`
 lên Supabase **staging**. Đánh dấu ✅/❌ từng mục.
 
 ## Chuẩn bị

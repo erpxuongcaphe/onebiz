@@ -1,5 +1,5 @@
 -- ============================================================
--- VERIFY: Bảo mật MKT Hub sau migration 00168 (+ 00169)
+-- VERIFY: Bảo mật MKT Hub sau migration 00168 (+ 00170)
 -- Chạy trên STAGING (Supabase SQL Editor) SAU khi apply migration.
 -- Mỗi phần trả 1 bảng kết quả có cột "pass" — tất cả phải TRUE.
 -- Không thay đổi dữ liệu (toàn read-only + transaction rollback).
