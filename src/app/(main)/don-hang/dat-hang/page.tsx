@@ -143,7 +143,17 @@ function OrderDetail({
   const itemDiscountSum = items.reduce((s, it) => s + it.discount, 0);
 
   return (
-    <InlineDetailPanel open onClose={onClose} onEdit={onEdit} onDelete={onDelete}>
+    <InlineDetailPanel
+      open
+      onClose={onClose}
+      onEdit={onEdit}
+      onDelete={onDelete}
+      // CEO 11/07: nút "Sửa" thực chất là "Chuyển thành hóa đơn" (mở đơn trong
+      // POS để thanh toán). Đổi nhãn cho đúng nghĩa — chỉ hiện khi đơn chưa
+      // hoàn tất/hủy (onEdit != null).
+      editLabel="Chuyển thành hóa đơn"
+      deleteLabel="Hủy đơn"
+    >
       <DetailTabs
         tabs={[
           {
