@@ -103,18 +103,16 @@ export function SplitDialog({
     try {
       const res = await mktPost<{ success: boolean; contentItemId?: string }>(
         "/api/mkt/v1/contents",
-        { campaignId, title: quickName.trim(), riskLevel: quickRisk },
+        // Gắn luôn vào gói việc — nội dung sinh ra trong ngữ cảnh chia việc của gói
+        { campaignId, workPackageId, title: quickName.trim(), riskLevel: quickRisk },
       );
       if (res.contentItemId) {
         const created = { id: res.contentItemId, title: quickName.trim() };
         setLocalContents((v) => [...v, created]);
-        // Tự gán cho các dòng Duyệt/Đăng đang trống
+        // Tự gán cho MỌI dòng đang trống — công đoạn sản xuất (Quay/Dựng) cần gắn
+        // nội dung thì người làm mới có nút "Nộp duyệt" trên task của mình.
         setRows((v) =>
-          v.map((r) =>
-            (r.taskType === "review" || r.taskType === "publish") && !r.contentItemId
-              ? { ...r, contentItemId: created.id }
-              : r,
-          ),
+          v.map((r) => (!r.contentItemId ? { ...r, contentItemId: created.id } : r)),
         );
         setQuickName("");
       }
@@ -204,23 +202,29 @@ export function SplitDialog({
                       </option>
                     ))}
                   </select>
-                  {r.taskType === "review" || r.taskType === "publish" ? (
-                    <select
-                      value={r.contentItemId}
-                      onChange={(e) => patch(idx, { contentItemId: e.target.value })}
-                      className={
-                        "h-8 flex-1 rounded-lg border bg-background px-2 text-xs " +
-                        (r.contentItemId ? "border-outline-variant" : "border-rose-300")
-                      }
-                    >
-                      <option value="">— Chọn nội dung —</option>
-                      {localContents.map((c) => (
-                        <option key={c.id} value={c.id}>
-                          {c.title}
-                        </option>
-                      ))}
-                    </select>
-                  ) : null}
+                  {/* Duyệt/Đăng BẮT BUỘC gắn nội dung; công đoạn sản xuất gắn để
+                      người làm có nút "Nộp duyệt" ngay trên task của mình */}
+                  <select
+                    value={r.contentItemId}
+                    onChange={(e) => patch(idx, { contentItemId: e.target.value })}
+                    className={
+                      "h-8 flex-1 rounded-lg border bg-background px-2 text-xs " +
+                      (!r.contentItemId && (r.taskType === "review" || r.taskType === "publish")
+                        ? "border-rose-300"
+                        : "border-outline-variant")
+                    }
+                  >
+                    <option value="">
+                      {r.taskType === "review" || r.taskType === "publish"
+                        ? "— Chọn nội dung —"
+                        : "— Gắn nội dung (tuỳ chọn) —"}
+                    </option>
+                    {localContents.map((c) => (
+                      <option key={c.id} value={c.id}>
+                        {c.title}
+                      </option>
+                    ))}
+                  </select>
                   <Input
                     type="date"
                     value={r.dueAt}
