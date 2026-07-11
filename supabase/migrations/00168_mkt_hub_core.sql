@@ -571,7 +571,9 @@ begin
   for v_task in select * from jsonb_array_elements(p_tasks) loop
     v_key := nullif(v_task->>'key', '');
     if v_key is not null then
-      v_task_id := uuid_generate_v4();
+      -- gen_random_uuid: built-in, an toàn với search_path=public (uuid_generate_v4
+      -- nằm ở schema extensions trên Supabase — không thấy được lúc chạy)
+      v_task_id := gen_random_uuid();
       v_generated_ids := jsonb_set(v_generated_ids, array[v_key], to_jsonb(v_task_id::text), true);
     end if;
   end loop;
@@ -579,7 +581,7 @@ begin
   for v_task in select * from jsonb_array_elements(p_tasks) loop
     v_key := nullif(v_task->>'key', '');
     v_dep_key := nullif(v_task->>'dependencyKey', '');
-    v_task_id := coalesce(nullif(v_generated_ids->>coalesce(v_key, ''), '')::uuid, uuid_generate_v4());
+    v_task_id := coalesce(nullif(v_generated_ids->>coalesce(v_key, ''), '')::uuid, gen_random_uuid());
     v_dependency_id := coalesce(nullif(v_task->>'dependencyTaskId', '')::uuid, nullif(v_generated_ids->>coalesce(v_dep_key, ''), '')::uuid);
 
     if nullif(v_task->>'title', '') is null or nullif(v_task->>'assigneeId', '') is null then
