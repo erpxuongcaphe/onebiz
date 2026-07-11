@@ -1,5 +1,6 @@
--- Local-only regression checks for migration 00173.
+-- Local-only regression checks for migration 00174 (mkt_hub_workflow_hardening).
 -- Run against `supabase start`; the transaction is always rolled back.
+-- ⚠️ CHỈ chạy trên Supabase LOCAL — KHÔNG paste vào SQL Editor production.
 begin;
 
 do $test$
