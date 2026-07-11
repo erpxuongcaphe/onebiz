@@ -4,6 +4,13 @@ import { Icon } from "@/components/ui/icon";
 import { getMktDashboardData, type MktTaskSummary } from "@/lib/mkt/dashboard";
 import { getMktContext } from "@/lib/mkt/read-models";
 import { createServerSupabaseClient } from "@/lib/supabase/server";
+import {
+  AcceptanceBadge,
+  ContentStatusBadge,
+  ReadinessBadge,
+  RiskBadge,
+  TaskStatusBadge,
+} from "@/components/mkt/badges";
 
 export const dynamic = "force-dynamic";
 
@@ -11,43 +18,19 @@ export const metadata: Metadata = {
   title: "MKT Hub — Tổng quan",
 };
 
-// Badge trạng thái giữ nhãn ngắn theo prototype; màu theo quy ước.
-function StatusBadge({ value }: { value: string }) {
-  const styles: Record<string, string> = {
-    pending: "border-sky-200 bg-sky-50 text-sky-700",
-    accepted: "border-emerald-200 bg-emerald-50 text-emerald-700",
-    need_discussion: "border-amber-200 bg-amber-50 text-amber-700",
-    rejected: "border-rose-200 bg-rose-50 text-rose-700",
-    task_rejected: "border-rose-200 bg-rose-50 text-rose-700",
-    blocked_dependency: "border-rose-200 bg-rose-50 text-rose-700",
-    revision_over_limit: "border-amber-200 bg-amber-50 text-amber-700",
-    leader_action: "border-amber-200 bg-amber-50 text-amber-700",
-    needs_action: "border-amber-200 bg-amber-50 text-amber-700",
-    todo: "border-slate-200 bg-slate-50 text-slate-700",
-    blocked: "border-rose-200 bg-rose-50 text-rose-700",
-    doing: "border-indigo-200 bg-indigo-50 text-indigo-700",
-    reviewing: "border-amber-200 bg-amber-50 text-amber-700",
-    done: "border-emerald-200 bg-emerald-50 text-emerald-700",
-    pending_review: "border-amber-200 bg-amber-50 text-amber-700",
-    revision_required: "border-rose-200 bg-rose-50 text-rose-700",
-    approved: "border-emerald-200 bg-emerald-50 text-emerald-700",
-    draft: "border-slate-200 bg-slate-50 text-slate-700",
-    confirmed: "border-emerald-200 bg-emerald-50 text-emerald-700",
-    waived: "border-indigo-200 bg-indigo-50 text-indigo-700",
-    high: "border-rose-200 bg-rose-50 text-rose-700",
-    critical: "border-rose-200 bg-rose-50 text-rose-700",
-    medium: "border-amber-200 bg-amber-50 text-amber-700",
-    low: "border-emerald-200 bg-emerald-50 text-emerald-700",
-  };
+// Nhãn cho các loại vấn đề Leader Queue (issue_type viết thường từ view)
+const ISSUE_LABEL: Record<string, string> = {
+  task_rejected: "Bị từ chối",
+  need_discussion: "Cần trao đổi",
+  blocked_dependency: "Kẹt phụ thuộc",
+  leader_action: "Cần xử lý",
+  revision_over_limit: "Sửa quá 3 lần",
+};
 
+function IssueBadge({ value }: { value: string }) {
   return (
-    <span
-      className={
-        "inline-flex h-6 max-w-full items-center rounded-full border px-2 text-xs font-medium " +
-        (styles[value] ?? "border-slate-200 bg-slate-50 text-slate-700")
-      }
-    >
-      {value.replaceAll("_", " ")}
+    <span className="inline-flex h-6 items-center rounded-full border border-amber-200 bg-amber-50 px-2 text-xs font-medium text-amber-700">
+      {ISSUE_LABEL[value] ?? value}
     </span>
   );
 }
@@ -192,8 +175,8 @@ export default async function MktHubPage() {
                               <div>{formatDate(task.dueAt)}</div>
                             </div>
                             <div className="flex flex-wrap justify-end gap-1">
-                              <StatusBadge value={task.acceptanceStatus} />
-                              <StatusBadge value={task.taskStatus} />
+                              <AcceptanceBadge value={task.acceptanceStatus} />
+                              <TaskStatusBadge value={task.taskStatus} />
                             </div>
                           </div>
                         </article>
@@ -232,7 +215,7 @@ export default async function MktHubPage() {
                       className="flex items-center justify-between gap-3 border-t border-outline-variant pt-2 text-sm first:border-t-0 first:pt-0"
                     >
                       <span>{item.title}</span>
-                      <StatusBadge value={item.status} />
+                      <ReadinessBadge value={item.status} />
                     </div>
                   ))
                 ) : (
@@ -257,11 +240,11 @@ export default async function MktHubPage() {
                       <div className="font-semibold">{item.title}</div>
                       <div className="mt-1 flex flex-wrap items-center gap-2 text-sm text-on-surface-variant">
                         <span>{item.version}</span>
-                        <StatusBadge value={item.riskLevel} />
+                        <RiskBadge value={item.riskLevel} />
                         <span>{item.revisionCount} lần sửa</span>
                       </div>
                     </div>
-                    <StatusBadge value={item.status} />
+                    <ContentStatusBadge value={item.status} />
                   </article>
                 ))
               ) : (
@@ -304,7 +287,7 @@ export default async function MktHubPage() {
                         </div>
                       </div>
                       <div className="flex flex-wrap gap-1 sm:justify-end">
-                        <StatusBadge value={item.acceptanceStatus} />
+                        <IssueBadge value={item.acceptanceStatus} />
                       </div>
                     </article>
                   ))

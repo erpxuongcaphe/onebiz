@@ -205,9 +205,18 @@ function handleMktSubdomain(
     return response;
   }
 
-  if (pathname.startsWith("/mkt")) {
-    supabaseResponse.headers.set("x-mkt-subdomain", "1");
-    return supabaseResponse;
+  // CEO 11/07: URL trên subdomain phải SẠCH — không lộ /mkt.
+  // Link nội bộ trỏ /mkt/... → redirect về path bỏ prefix (giữ nguyên query),
+  // request mới rơi vào nhánh rewrite bên dưới. mkthub.x/mkt/tasks → mkthub.x/tasks.
+  if (pathname === "/mkt" || pathname === "/mkt/") {
+    const url = request.nextUrl.clone();
+    url.pathname = "/";
+    return NextResponse.redirect(url, 308);
+  }
+  if (pathname.startsWith("/mkt/")) {
+    const url = request.nextUrl.clone();
+    url.pathname = pathname.slice("/mkt".length) || "/";
+    return NextResponse.redirect(url, 308);
   }
 
   const url = request.nextUrl.clone();
@@ -265,7 +274,18 @@ export async function updateSession(request: NextRequest) {
         url.pathname = "/mkt";
         return NextResponse.rewrite(url);
       }
-      if (!pathname.startsWith("/mkt") && !pathname.startsWith("/api")) {
+      // URL sạch như production: /mkt/... → redirect bỏ prefix
+      if (pathname === "/mkt" || pathname === "/mkt/") {
+        const url = request.nextUrl.clone();
+        url.pathname = "/";
+        return NextResponse.redirect(url, 308);
+      }
+      if (pathname.startsWith("/mkt/")) {
+        const url = request.nextUrl.clone();
+        url.pathname = pathname.slice("/mkt".length) || "/";
+        return NextResponse.redirect(url, 308);
+      }
+      if (!pathname.startsWith("/api")) {
         const url = request.nextUrl.clone();
         url.pathname = `/mkt${pathname}`;
         return NextResponse.rewrite(url);

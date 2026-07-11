@@ -53,11 +53,15 @@ function newRow(partial?: Partial<Row>): Row {
   };
 }
 
+// Đủ 6 công đoạn như prototype (Ý tưởng → Quay → Dựng → Duyệt → Đăng → Báo cáo).
+// Duyệt/Đăng bắt buộc gắn nội dung (blocker); nếu chưa cần thì xoá dòng.
 function defaultRows(): Row[] {
   return [
     newRow({ title: "Ý tưởng & Kịch bản", taskType: "idea", workloadPoints: "5" }),
     newRow({ title: "Quay", taskType: "shooting", workloadPoints: "15" }),
     newRow({ title: "Dựng", taskType: "editing", workloadPoints: "15" }),
+    newRow({ title: "Duyệt nội dung", taskType: "review", workloadPoints: "2" }),
+    newRow({ title: "Đăng bài", taskType: "publish", workloadPoints: "3" }),
     newRow({ title: "Báo cáo", taskType: "report", workloadPoints: "3" }),
   ];
 }

@@ -225,6 +225,21 @@ export async function getLeaderQueue(
   }));
 }
 
+export type MktApprovalVersion = {
+  versionNumber: number;
+  url: string | null;
+  note: string | null;
+  status: string;
+  submittedAt: string | null;
+};
+
+export type MktApprovalReview = {
+  action: string;
+  comment: string | null;
+  reviewerName: string | null;
+  createdAt: string | null;
+};
+
 export type MktApprovalItem = {
   id: string;
   title: string;
@@ -236,6 +251,10 @@ export type MktApprovalItem = {
   requiredApproverRole: string | null;
   latestUrl: string | null;
   latestNote: string | null;
+  /** Lịch sử các bản nộp (mới nhất trước) */
+  versions: MktApprovalVersion[];
+  /** Lịch sử phản hồi duyệt (mới nhất trước) */
+  reviews: MktApprovalReview[];
 };
 
 export async function getApprovals(supabase: MktSupabaseClient): Promise<MktApprovalItem[]> {
@@ -271,32 +290,96 @@ export async function getApprovals(supabase: MktSupabaseClient): Promise<MktAppr
     (camps ?? []).forEach((c) => campaignNames.set(c.id, c.name));
   }
 
-  // Bản version mới nhất của từng content (để reviewer xem link).
-  const latest = new Map<string, { url: string | null; note: string | null }>();
+  // Lịch sử bản nộp + phản hồi duyệt (timeline cho reviewer soi bối cảnh).
+  type VersionRow = {
+    content_item_id: string;
+    version_number: number;
+    content_url: string | null;
+    note: string | null;
+    status: string;
+    submitted_at: string | null;
+  };
+  type ReviewRow = {
+    content_item_id: string;
+    action: string;
+    comment: string | null;
+    reviewer_id: string | null;
+    created_at: string | null;
+  };
+  const versionsByContent = new Map<string, MktApprovalVersion[]>();
+  const reviewsByContent = new Map<string, MktApprovalReview[]>();
   if (rows.length > 0) {
-    const { data: versions } = await db
-      .from<{ content_item_id: string; version_number: number; content_url: string | null; note: string | null }>(
-        "mkt_content_versions",
-      )
-      .select("content_item_id, version_number, content_url, note")
-      .in("content_item_id", rows.map((r) => r.id));
-    (versions ?? [])
-      .sort((a, b) => a.version_number - b.version_number)
-      .forEach((v) => latest.set(v.content_item_id, { url: v.content_url, note: v.note }));
+    const ids = rows.map((r) => r.id);
+    const [versionsRes, reviewsRes] = await Promise.all([
+      db
+        .from<VersionRow>("mkt_content_versions")
+        .select("content_item_id, version_number, content_url, note, status, submitted_at")
+        .in("content_item_id", ids),
+      db
+        .from<ReviewRow>("mkt_content_reviews")
+        .select("content_item_id, action, comment, reviewer_id, created_at")
+        .in("content_item_id", ids),
+    ]);
+
+    const reviewerIds = Array.from(
+      new Set((reviewsRes.data ?? []).map((r) => r.reviewer_id).filter(Boolean) as string[]),
+    );
+    const reviewerNames = new Map<string, string>();
+    if (reviewerIds.length > 0) {
+      const { data: profs } = await db
+        .from<{ id: string; full_name: string | null; email: string | null }>("profiles")
+        .select("id, full_name, email")
+        .in("id", reviewerIds);
+      (profs ?? []).forEach((p) =>
+        reviewerNames.set(p.id, p.full_name || p.email || "Chưa gán tên"),
+      );
+    }
+
+    (versionsRes.data ?? [])
+      .sort((a, b) => b.version_number - a.version_number)
+      .forEach((v) => {
+        const arr = versionsByContent.get(v.content_item_id) ?? [];
+        arr.push({
+          versionNumber: v.version_number,
+          url: v.content_url,
+          note: v.note,
+          status: v.status,
+          submittedAt: v.submitted_at,
+        });
+        versionsByContent.set(v.content_item_id, arr);
+      });
+
+    (reviewsRes.data ?? [])
+      .sort((a, b) => (b.created_at ?? "").localeCompare(a.created_at ?? ""))
+      .forEach((r) => {
+        const arr = reviewsByContent.get(r.content_item_id) ?? [];
+        arr.push({
+          action: r.action,
+          comment: r.comment,
+          reviewerName: r.reviewer_id ? reviewerNames.get(r.reviewer_id) ?? "Chưa gán tên" : null,
+          createdAt: r.created_at,
+        });
+        reviewsByContent.set(r.content_item_id, arr);
+      });
   }
 
-  return rows.map((r) => ({
-    id: r.id,
-    title: r.title,
-    campaignName: r.campaign_id ? campaignNames.get(r.campaign_id) ?? null : null,
-    contentStatus: r.content_status,
-    riskLevel: r.risk_level ?? "low",
-    currentVersion: r.current_version ?? 0,
-    revisionCount: r.revision_count ?? 0,
-    requiredApproverRole: r.required_approver_role,
-    latestUrl: latest.get(r.id)?.url ?? null,
-    latestNote: latest.get(r.id)?.note ?? null,
-  }));
+  return rows.map((r) => {
+    const versions = versionsByContent.get(r.id) ?? [];
+    return {
+      id: r.id,
+      title: r.title,
+      campaignName: r.campaign_id ? campaignNames.get(r.campaign_id) ?? null : null,
+      contentStatus: r.content_status,
+      riskLevel: r.risk_level ?? "low",
+      currentVersion: r.current_version ?? 0,
+      revisionCount: r.revision_count ?? 0,
+      requiredApproverRole: r.required_approver_role,
+      latestUrl: versions[0]?.url ?? null,
+      latestNote: versions[0]?.note ?? null,
+      versions,
+      reviews: reviewsByContent.get(r.id) ?? [],
+    };
+  });
 }
 
 export type MktWorkspaceTask = {
@@ -311,6 +394,7 @@ export type MktWorkspaceTask = {
   campaignId: string | null;
   campaignName: string | null;
   dueAt: string | null;
+  completedAt: string | null;
 };
 
 /** Toàn bộ task người dùng được phép thấy (RLS: lead → tất cả; executor → của mình). */
@@ -328,11 +412,12 @@ export async function getWorkspaceTasks(
     workload_points: number | null;
     campaign_id: string | null;
     due_at: string | null;
+    completed_at: string | null;
   };
   const { data } = await db
     .from<Row>("mkt_tasks")
     .select(
-      "id, title, assignee_id, acceptance_status, task_status, task_type, workload_points, campaign_id, due_at",
+      "id, title, assignee_id, acceptance_status, task_status, task_type, workload_points, campaign_id, due_at, completed_at",
     )
     .is("deleted_at", null)
     .order("due_at", { ascending: true, nullsFirst: false })
@@ -374,6 +459,7 @@ export async function getWorkspaceTasks(
     campaignId: r.campaign_id,
     campaignName: r.campaign_id ? campaignNames.get(r.campaign_id) ?? null : null,
     dueAt: r.due_at,
+    completedAt: r.completed_at,
   }));
 }
 
@@ -408,7 +494,11 @@ export type MktMediaAsset = {
   fileName: string;
   kind: string;
   status: string;
-  storagePath: string;
+  sourceType: string;
+  storagePath: string | null;
+  externalUrl: string | null;
+  externalId: string | null;
+  campaignId: string | null;
   createdAt: string | null;
 };
 
@@ -420,20 +510,87 @@ export async function getMediaAssets(supabase: MktSupabaseClient): Promise<MktMe
       file_name: string;
       kind: string;
       status: string;
-      storage_path: string;
+      source_type: string | null;
+      storage_path: string | null;
+      external_url: string | null;
+      external_id: string | null;
+      campaign_id: string | null;
       created_at: string | null;
     }>("mkt_media_assets")
-    .select("id, file_name, kind, status, storage_path, created_at")
+    .select(
+      "id, file_name, kind, status, source_type, storage_path, external_url, external_id, campaign_id, created_at",
+    )
     .is("deleted_at", null)
     .order("created_at", { ascending: false })
-    .limit(100);
+    .limit(200);
   return (data ?? []).map((m) => ({
     id: m.id,
     fileName: m.file_name,
     kind: m.kind,
     status: m.status,
+    sourceType: m.source_type ?? "upload",
     storagePath: m.storage_path,
+    externalUrl: m.external_url,
+    externalId: m.external_id,
+    campaignId: m.campaign_id,
     createdAt: m.created_at,
+  }));
+}
+
+export type MktExceptionEntry = {
+  id: string;
+  action: string;
+  entityType: string;
+  userName: string | null;
+  reason: string | null;
+  createdAt: string | null;
+};
+
+/** Exception Log — các hành vi vượt rào (override/miễn/ép hoàn tất). Cần mkt.view_audit. */
+export async function getExceptionLog(
+  supabase: MktSupabaseClient,
+  campaignId?: string | null,
+): Promise<MktExceptionEntry[]> {
+  const db = getMktDatabaseClient(supabase);
+  type RpcResult = {
+    success: boolean;
+    entries: Array<{
+      id: string;
+      action: string;
+      entity_type: string;
+      entity_id: string | null;
+      user_id: string | null;
+      new_data: Record<string, unknown> | null;
+      created_at: string | null;
+    }>;
+  };
+  const { data, error } = await db.rpc<RpcResult>("mkt_get_exception_log", {
+    p_campaign_id: campaignId ?? null,
+    p_limit: 50,
+  });
+  if (error || !data || !Array.isArray((data as RpcResult).entries)) return [];
+  const entries = (data as RpcResult).entries;
+
+  const userIds = Array.from(new Set(entries.map((e) => e.user_id).filter(Boolean) as string[]));
+  const names = new Map<string, string>();
+  if (userIds.length > 0) {
+    const { data: profs } = await db
+      .from<{ id: string; full_name: string | null; email: string | null }>("profiles")
+      .select("id, full_name, email")
+      .in("id", userIds);
+    (profs ?? []).forEach((p) => names.set(p.id, p.full_name || p.email || "Chưa gán tên"));
+  }
+
+  return entries.map((e) => ({
+    id: e.id,
+    action: e.action,
+    entityType: e.entity_type,
+    userName: e.user_id ? names.get(e.user_id) ?? "Chưa gán tên" : null,
+    reason:
+      (e.new_data?.["reason"] as string | undefined) ??
+      (e.new_data?.["override_reason"] as string | undefined) ??
+      null,
+    createdAt: e.created_at,
   }));
 }
 
@@ -447,6 +604,7 @@ export type MktCampaignDetail = {
     ownerName: string | null;
     reviewerName: string | null;
     status: string;
+    workloadPoints: number;
   }>;
   readiness: Array<{
     id: string;
@@ -552,8 +710,12 @@ export async function getCampaignDetail(
         acceptance_status: string;
         task_status: string;
         task_type: string | null;
+        work_package_id: string | null;
+        workload_points: number | null;
       }>("mkt_tasks")
-      .select("id, title, assignee_id, acceptance_status, task_status, task_type")
+      .select(
+        "id, title, assignee_id, acceptance_status, task_status, task_type, work_package_id, workload_points",
+      )
       .eq("campaign_id", campaignId)
       .is("deleted_at", null)
       .order("created_at", { ascending: true }),
@@ -601,6 +763,10 @@ export async function getCampaignDetail(
       ownerName: nm(w.owner_id),
       reviewerName: nm(w.reviewer_id),
       status: w.status,
+      // Tổng điểm khối lượng của các task trong gói (đúng "Workload pts" prototype)
+      workloadPoints: tk
+        .filter((t) => t.work_package_id === w.id)
+        .reduce((sum, t) => sum + (t.workload_points ?? 1), 0),
     })),
     readiness: rd.map((r) => ({
       id: r.id,

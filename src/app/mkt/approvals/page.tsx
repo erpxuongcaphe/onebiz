@@ -73,11 +73,68 @@ export default async function ApprovalsPage() {
                     rel="noopener noreferrer"
                     className="mt-3 inline-flex items-center gap-1.5 text-sm font-medium text-primary hover:underline"
                   >
-                    <Icon name="link" size={15} /> Xem bản nộp
+                    <Icon name="link" size={15} /> Xem bản nộp mới nhất (v{item.currentVersion})
                   </a>
                 ) : null}
                 {item.latestNote ? (
                   <p className="mt-1 text-sm text-on-surface-variant">Ghi chú: {item.latestNote}</p>
+                ) : null}
+
+                {/* Lịch sử bản nộp + phản hồi duyệt — bối cảnh cho người duyệt */}
+                {item.versions.length > 1 || item.reviews.length > 0 ? (
+                  <details className="mt-3 rounded-lg border border-outline-variant bg-surface-container-lowest p-3">
+                    <summary className="cursor-pointer text-sm font-medium text-on-surface-variant">
+                      Lịch sử ({item.versions.length} bản nộp · {item.reviews.length} phản hồi)
+                    </summary>
+                    <div className="mt-2 space-y-1.5">
+                      {item.versions.map((v) => (
+                        <div key={"v" + v.versionNumber} className="flex flex-wrap items-center gap-2 text-sm">
+                          <span className="font-medium">v{v.versionNumber}</span>
+                          <ContentStatusBadge value={v.status} />
+                          {v.url ? (
+                            <a
+                              href={v.url}
+                              target="_blank"
+                              rel="noopener noreferrer"
+                              className="text-primary hover:underline"
+                            >
+                              xem bản này
+                            </a>
+                          ) : null}
+                          {v.note ? (
+                            <span className="text-xs text-on-surface-variant">— {v.note}</span>
+                          ) : null}
+                        </div>
+                      ))}
+                      {item.reviews.map((rv, i) => (
+                        <div key={"r" + i} className="border-t border-outline-variant pt-1.5 text-sm">
+                          <span className="font-medium">
+                            {rv.action === "approve"
+                              ? "✅ Duyệt"
+                              : rv.action === "revision"
+                                ? "✏️ Yêu cầu sửa"
+                                : "❌ Từ chối"}
+                          </span>
+                          <span className="text-xs text-on-surface-variant">
+                            {" "}
+                            · {rv.reviewerName ?? "—"}
+                            {rv.createdAt
+                              ? " · " +
+                                new Intl.DateTimeFormat("vi-VN", {
+                                  day: "2-digit",
+                                  month: "2-digit",
+                                  hour: "2-digit",
+                                  minute: "2-digit",
+                                }).format(new Date(rv.createdAt))
+                              : ""}
+                          </span>
+                          {rv.comment ? (
+                            <div className="text-xs text-on-surface-variant">“{rv.comment}”</div>
+                          ) : null}
+                        </div>
+                      ))}
+                    </div>
+                  </details>
                 ) : null}
 
                 <div className="mt-4 border-t border-outline-variant pt-3">
