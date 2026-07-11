@@ -3,6 +3,7 @@ import { NextResponse, type NextRequest } from "next/server";
 import { getAdminClient } from "@/lib/supabase/admin";
 import { createServerSupabaseClient } from "@/lib/supabase/server";
 import { getMktDatabaseClient } from "@/lib/mkt/supabase";
+import { getMktContext } from "@/lib/mkt/read-models";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
@@ -23,6 +24,14 @@ export async function POST(request: NextRequest) {
     return NextResponse.json(
       { success: false, error: { code: "UNAUTHENTICATED", message: "Chưa đăng nhập" } },
       { status: 401 },
+    );
+  }
+
+  const mktContext = await getMktContext(supabase);
+  if (!mktContext.canView) {
+    return NextResponse.json(
+      { success: false, error: { code: "INSUFFICIENT_ROLE", message: "Chưa được cấp quyền MKT Hub" } },
+      { status: 403 },
     );
   }
 

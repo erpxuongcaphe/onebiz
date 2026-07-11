@@ -1,5 +1,5 @@
-import { type NextRequest } from "next/server";
-import { callMktRpc, readJsonBody, requireMktSession } from "@/lib/mkt/api";
+import { NextResponse, type NextRequest } from "next/server";
+import { callMktRpc, readJsonBody, requireFields, requireMktSession } from "@/lib/mkt/api";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
@@ -21,6 +21,14 @@ export async function POST(
 
   const { contentId } = await context.params;
   const body = await readJsonBody<ReviewBody>(request);
+  const invalid = requireFields(body, ["action"]);
+  if (invalid) return invalid;
+  if (!body.action || !["approve", "revision", "reject"].includes(body.action)) {
+    return NextResponse.json(
+      { success: false, error: { code: "INVALID_STATE", message: "Hành động duyệt không hợp lệ" } },
+      { status: 400 },
+    );
+  }
 
   return callMktRpc(
     supabase,
@@ -28,7 +36,7 @@ export async function POST(
     {
       p_content_id: contentId,
       p_content_version_id: body.contentVersionId ?? null,
-      p_action: body.action ?? "approve",
+      p_action: body.action,
       p_comment: body.comment ?? null,
     },
     { notifyAfter: true },

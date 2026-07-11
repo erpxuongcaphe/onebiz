@@ -31,6 +31,14 @@ function isOnTime(t: MktWorkspaceTask): boolean {
   return new Date(t.completedAt).getTime() <= new Date(t.dueAt).getTime();
 }
 
+function isOpenAndOverdue(task: MktWorkspaceTask): boolean {
+  return (
+    task.taskStatus !== "done" &&
+    Boolean(task.dueAt) &&
+    new Date(task.dueAt as string).getTime() < Date.now()
+  );
+}
+
 export default async function ReportsPage() {
   const supabase = await createServerSupabaseClient();
   const ctx = await getMktContext(supabase);
@@ -44,10 +52,7 @@ export default async function ReportsPage() {
   const total = real.length;
   const done = real.filter((t) => t.taskStatus === "done");
   const onTime = done.filter(isOnTime).length;
-  const overdueOpen = real.filter(
-    (t) =>
-      t.taskStatus !== "done" && t.dueAt && new Date(t.dueAt).getTime() < Date.now(),
-  ).length;
+  const overdueOpen = real.filter(isOpenAndOverdue).length;
   const donePct = total > 0 ? Math.round((done.length / total) * 100) : 0;
   const onTimePct = done.length > 0 ? Math.round((onTime / done.length) * 100) : 0;
   const runningCampaigns = campaigns.filter((c) => c.status === "running").length;
@@ -80,7 +85,7 @@ export default async function ReportsPage() {
       if (isOnTime(t)) cur.onTime += 1;
       cur.points += t.workloadPoints;
     }
-    if (t.taskStatus !== "done" && t.dueAt && new Date(t.dueAt).getTime() < Date.now()) {
+    if (isOpenAndOverdue(t)) {
       cur.overdue += 1;
     }
     byPerson.set(t.assigneeId, cur);

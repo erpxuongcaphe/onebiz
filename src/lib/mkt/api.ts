@@ -16,6 +16,11 @@ export const MKT_ERROR_STATUS: Record<string, number> = {
   CONTENT_NOT_APPROVED: 400,
   REVIEW_TASK_REQUIRES_REVIEW_API: 400,
   MISSING_SOURCE_ID: 400,
+  INVALID_SOURCE_REFERENCE: 400,
+  INVALID_CONTENT_LINK: 400,
+  INVALID_CONTENT_URL: 400,
+  STALE_CONTENT_VERSION: 409,
+  CROSS_TENANT_REFERENCE: 403,
 };
 
 export type MktSupabaseClient = Awaited<ReturnType<typeof createServerSupabaseClient>>;

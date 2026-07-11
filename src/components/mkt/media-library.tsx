@@ -65,6 +65,7 @@ export function MediaLibrary({
   const [sort, setSort] = useState<"newest" | "name">("newest");
   const [preview, setPreview] = useState<MediaViewItem | null>(null);
   const [addOpen, setAddOpen] = useState(false);
+  const [actionError, setActionError] = useState<string | null>(null);
 
   const filtered = useMemo(() => {
     let list = items;
@@ -88,16 +89,26 @@ export function MediaLibrary({
       : "border-outline-variant bg-background text-on-surface-variant hover:bg-surface-container");
 
   async function remove(item: MediaViewItem) {
-    await mktDelete(`/api/mkt/v1/media/${item.id}`).catch(() => {});
-    setPreview(null);
-    router.refresh();
+    setActionError(null);
+    try {
+      await mktDelete(`/api/mkt/v1/media/${item.id}`);
+      setPreview(null);
+      router.refresh();
+    } catch (error) {
+      setActionError(error instanceof Error ? error.message : "Không xoá được media");
+    }
   }
 
   async function toggleStatus(item: MediaViewItem) {
     const next = item.status === "used" ? "available" : "used";
-    await mktPost(`/api/mkt/v1/media/${item.id}/status`, { status: next }).catch(() => {});
-    setPreview(null);
-    router.refresh();
+    setActionError(null);
+    try {
+      await mktPost(`/api/mkt/v1/media/${item.id}/status`, { status: next });
+      setPreview(null);
+      router.refresh();
+    } catch (error) {
+      setActionError(error instanceof Error ? error.message : "Không đổi được trạng thái media");
+    }
   }
 
   return (
@@ -165,6 +176,10 @@ export function MediaLibrary({
           </Button>
         </div>
       </div>
+
+      {actionError ? (
+        <p className="text-sm font-medium text-rose-600">{actionError}</p>
+      ) : null}
 
       <p className="text-xs text-on-surface-variant">
         💡 File lưu trên Google Drive / OneDrive / YouTube — bấm <b>Thêm từ link</b> để đưa vào thư
@@ -378,7 +393,7 @@ function AddFromLinkDialog({
             ) : null}
             {parsed?.sourceType === "drive" ? (
               <p className="text-xs text-amber-700">
-                Nhớ bật chia sẻ "Bất kỳ ai có link — Người xem" cho file/thư mục Drive.
+                Nhớ bật chia sẻ &quot;Bất kỳ ai có link — Người xem&quot; cho file/thư mục Drive.
               </p>
             ) : null}
             {parsed?.sourceType === "onedrive" && !parsed.embedUrl ? (
