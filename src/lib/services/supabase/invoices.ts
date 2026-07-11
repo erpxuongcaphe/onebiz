@@ -12,13 +12,16 @@ export async function getInvoices(params: QueryParams): Promise<QueryResult<Invo
   const tenantId = await getCurrentTenantId();
   const { from, to } = getPaginationRange(params);
 
-  let query = supabase
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  let query = (supabase as any)
     .from("invoices")
     .select(
       "*, profiles!invoices_created_by_fkey(full_name), branches!invoices_branch_id_fkey(name), customers!invoices_customer_id_fkey(code, phone, address, debt)",
       { count: "exact" },
     )
-    .eq("tenant_id", tenantId);
+    .eq("tenant_id", tenantId)
+    // 00173: ẩn đơn nháp đã xóa mềm khỏi list Hóa đơn.
+    .is("deleted_at", null);
 
   // Search — escape % wildcard.
   // Note: search by SĐT KH cần subquery customers.phone — chưa wire vì

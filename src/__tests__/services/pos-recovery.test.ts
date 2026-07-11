@@ -68,6 +68,9 @@ function makeChain(table: string): unknown {
   });
   chain.gte = vi.fn(self);
   chain.lt = vi.fn(self);
+  // 00173: soft-delete filter + source guard dùng .is()/.or() → mock trả self.
+  chain.is = vi.fn(self);
+  chain.or = vi.fn(self);
 
   // Resolve helper — lookup mockSelectByFilter by filter signature
   function resolve(): MockResult {
