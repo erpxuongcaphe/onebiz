@@ -78,7 +78,9 @@ export async function getOrders(
       { count: "exact" },
     )
     .eq("tenant_id", tenantId)
-    .eq("source", "order");
+    .eq("source", "order")
+    // 00173: ẩn đơn đã xóa mềm (đơn đặt hàng vốn KHÔNG bị xóa — guard cho chắc).
+    .is("deleted_at", null);
 
   // Lọc trạng thái (tùy chọn) — UI truyền mảng qua filters.status. Chỉ nhận
   // giá trị hợp lệ; rỗng/không hợp lệ → không lọc (hiện tất cả trạng thái).
@@ -539,9 +541,11 @@ export async function saveDraftOrder(
     // eslint-disable-next-line @typescript-eslint/no-explicit-any
     const { data: existing } = await (supabase as any)
       .from("invoices")
-      .select("id, code, status")
+      .select("id, code, status, source")
       .eq("tenant_id", input.tenantId)
       .eq("client_session_id", options.sessionId)
+      // 00173: bỏ qua row đã xóa mềm → coi như chưa có → INSERT mới (không hồi sinh).
+      .is("deleted_at", null)
       .maybeSingle();
 
     if (existing) {
@@ -551,8 +555,9 @@ export async function saveDraftOrder(
         // Client coi như success, return existing → tránh tạo dup.
         return { invoiceId: existing.id, invoiceCode: existing.code };
       }
-      // Status='draft' → UPDATE fields + replace items
-      return await updateDraftOrderInternal(existing.id, input, autoSaved);
+      // Status='draft' → UPDATE fields + replace items. Truyền source để
+      // updateDraftOrderInternal KHÔNG lật auto_saved cho đơn đặt hàng (00173).
+      return await updateDraftOrderInternal(existing.id, input, autoSaved, existing.source);
     }
   }
 
@@ -606,13 +611,13 @@ export async function saveDraftOrder(
         // eslint-disable-next-line @typescript-eslint/no-explicit-any
         const { data: raced } = await (supabase as any)
           .from("invoices")
-          .select("id, code, status")
+          .select("id, code, status, source")
           .eq("tenant_id", input.tenantId)
           .eq("client_session_id", options.sessionId)
           .single();
         if (raced && raced.status === "draft") {
           // Race lost — UPDATE row của winner thay vì INSERT
-          return await updateDraftOrderInternal(raced.id, input, autoSaved);
+          return await updateDraftOrderInternal(raced.id, input, autoSaved, raced.source);
         }
         if (raced) {
           // Đã completed → return existing
@@ -660,6 +665,7 @@ async function updateDraftOrderInternal(
   invoiceId: string,
   input: PosCheckoutInput,
   autoSaved: boolean,
+  existingSource?: string | null,
 ): Promise<{ invoiceId: string; invoiceCode: string }> {
   const supabase = getClient();
 
@@ -675,15 +681,22 @@ async function updateDraftOrderInternal(
     debt: input.total,
     payment_method: input.paymentMethod,
     note: input.note ?? null,
-    auto_saved: autoSaved,
   };
+  // 00173 — FIX MẤT ĐƠN: chỉ đơn NHÁP POS mới gắn auto_saved (để cleanup dọn).
+  // Đơn ĐẶT HÀNG (source='order') KHÔNG được lật auto_saved=true — nếu lật thì
+  // dọn-giỏ-trống + cleanup 30 ngày sẽ ăn mất đơn thật. Giữ nguyên cột cũ.
+  if (existingSource !== "order") {
+    updatePayload.auto_saved = autoSaved;
+  }
 
-  const { data: updated, error: updErr } = await supabase
+  const { data: updated, error: updErr } = await (supabase as any)
     .from("invoices")
     .update(updatePayload)
     .eq("tenant_id", input.tenantId)
     .eq("id", invoiceId)
     .eq("status", "draft")
+    // 00173: không cập nhật row đã xóa mềm.
+    .is("deleted_at", null)
     .select("id, code")
     .maybeSingle();
   if (updErr) handleError(updErr, "updateDraftOrderInternal:update");
@@ -741,13 +754,19 @@ export async function listDraftOrders(
 
   // Sort by updated_at DESC để recovery dialog hiện nháp mới nhất lên đầu
   // (auto-save liên tục refresh updated_at qua trigger handle_updated_at).
-  let query = supabase
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  let query = (supabase as any)
     .from("invoices")
     .select(
       "id, code, customer_id, customer_name, total, subtotal, discount_amount, note, created_at, updated_at, auto_saved, client_session_id, created_by, profiles!invoices_created_by_fkey(full_name), invoice_items(product_name)",
     )
     .eq("tenant_id", tenantId)
     .eq("status", "draft")
+    // 00173: ẩn đơn xóa mềm + KHÔNG trộn đơn đặt hàng (source='order') vào list
+    // nháp POS — tránh xóa nhầm; đơn đặt hàng quản ở trang Đặt hàng. source có
+    // thể NULL (nháp cũ) nên dùng (is null OR neq order).
+    .is("deleted_at", null)
+    .or("source.is.null,source.neq.order")
     .order("updated_at", { ascending: false })
     .limit(limit);
 
@@ -794,13 +813,16 @@ export async function getDraftOrderById(
   const supabase = getClient();
   const tenantId = await getCurrentTenantId();
 
-  const { data, error } = await supabase
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  const { data, error } = await (supabase as any)
     .from("invoices")
     .select(
       "id, code, branch_id, customer_id, customer_name, subtotal, discount_amount, total, note, created_at, updated_at, status, auto_saved, client_session_id, invoice_items(*)",
     )
     .eq("tenant_id", tenantId)
     .eq("id", invoiceId)
+    // 00173: không mở lại đơn đã xóa mềm.
+    .is("deleted_at", null)
     .single();
   if (error) handleError(error, "getDraftOrderById");
   if (!data) return null;
@@ -900,6 +922,8 @@ export async function findDraftIdBySession(sessionId: string): Promise<string | 
       .eq("tenant_id", tenantId)
       .eq("client_session_id", sessionId)
       .eq("status", "draft")
+      // 00173: bỏ qua đơn đã xóa mềm.
+      .is("deleted_at", null)
       .order("created_at", { ascending: false })
       .limit(1)
       .maybeSingle();
@@ -1074,7 +1098,7 @@ export async function completeDraftOrder(
 }
 
 // ============================================================
-// Delete draft (cleanup only — never delete completed)
+// Delete draft (SOFT-delete — 00173; never touches completed or đơn đặt hàng)
 // ============================================================
 
 export async function deleteDraftOrder(
@@ -1084,23 +1108,27 @@ export async function deleteDraftOrder(
   const supabase = getClient();
   const tenantId = await getCurrentTenantId();
 
-  // ATOMIC: Delete invoice WHERE status='draft' FIRST to claim it.
-  // If a concurrent completeDraftOrder already flipped status to 'completed',
-  // this delete matches 0 rows and we bail safely.
-  // invoice_items have ON DELETE CASCADE from the FK, so they are auto-deleted.
-  let delQuery = supabase
+  // 00173 SOFT-DELETE: KHÔNG xóa cứng nữa — SET deleted_at (khôi phục được bằng
+  // cách set NULL lại). Claim WHERE status='draft'; nếu completeDraftOrder đã
+  // flip 'completed' thì khớp 0 dòng, bail an toàn.
+  // GUARD TRIỆT ĐỂ chống mất đơn đặt hàng:
+  //  - KHÔNG BAO GIỜ đụng source='order' (đơn đặt hàng chỉ được "Hủy" ở trang
+  //    Đặt hàng, giữ bản ghi) — kể cả khi nó lỡ bị auto-save lật auto_saved.
+  //    source có thể NULL (nháp POS cũ) → dùng (is null OR neq order).
+  //  - chưa bị xóa mềm (deleted_at IS NULL) → idempotent.
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  let delQuery = (supabase as any)
     .from("invoices")
-    .delete()
+    .update({ deleted_at: new Date().toISOString() })
     .eq("tenant_id", tenantId)
     .eq("id", invoiceId)
-    .eq("status", "draft");
-  // CEO 16/06/2026 — FIX MẤT NHÁP: auto-save cleanup (cart trống) chỉ được xoá
-  // nháp KỸ THUẬT (auto_saved=true). Nháp người dùng bấm "Nháp" tay đã được
-  // promote auto_saved=false (sticky) → KHÔNG được auto-xoá. Trước đây
-  // handleSaveDraft lưu tay xong clearCart → auto-save xoá luôn nháp vừa lưu
-  // → F3 trống dù toast báo "đã lưu". onlyAutoSaved guard chặn đúng ca này.
-  // eslint-disable-next-line @typescript-eslint/no-explicit-any
-  if (opts?.onlyAutoSaved) delQuery = (delQuery as any).eq("auto_saved", true);
+    .eq("status", "draft")
+    .is("deleted_at", null)
+    .or("source.is.null,source.neq.order");
+  // CEO 16/06/2026 — onlyAutoSaved: dọn-giỏ-trống chỉ được xóa nháp KỸ THUẬT
+  // (auto_saved=true). Nháp bấm "Nháp" tay (auto_saved=false, sticky) KHÔNG bị
+  // auto-xóa. Guard này vẫn giữ nguyên tác dụng.
+  if (opts?.onlyAutoSaved) delQuery = delQuery.eq("auto_saved", true);
 
   const { data: deleted, error: invErr } = await delQuery
     .select("id")
