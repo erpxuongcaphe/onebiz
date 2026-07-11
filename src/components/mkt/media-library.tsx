@@ -28,6 +28,7 @@ type CampaignOption = { id: string; name: string };
 const SOURCE_LABEL: Record<string, string> = {
   upload: "Tải lên",
   drive: "Google Drive",
+  onedrive: "OneDrive",
   youtube: "YouTube",
   tiktok: "TikTok",
   other: "Link khác",
@@ -89,6 +90,13 @@ export function MediaLibrary({
 
   async function remove(item: MediaViewItem) {
     await mktDelete(`/api/mkt/v1/media/${item.id}`).catch(() => {});
+    setPreview(null);
+    router.refresh();
+  }
+
+  async function toggleStatus(item: MediaViewItem) {
+    const next = item.status === "used" ? "available" : "used";
+    await mktPost(`/api/mkt/v1/media/${item.id}/status`, { status: next }).catch(() => {});
     setPreview(null);
     router.refresh();
   }
@@ -160,7 +168,7 @@ export function MediaLibrary({
 
       <p className="text-xs text-on-surface-variant">
         💡 Video và ảnh gốc dung lượng lớn: để trên Google Drive/YouTube rồi{" "}
-        <b>Thêm từ link</b> — xem trực tiếp tại đây, web không tốn dung lượng. Nút “Tải lên” chỉ
+        <b>Thêm từ link</b> — xem trực tiếp tại đây, web không tốn dung lượng. Nút "Tải lên" chỉ
         dành cho ảnh nhỏ.
       </p>
 
@@ -218,7 +226,7 @@ export function MediaLibrary({
       ) : (
         <div className="rounded-lg border border-dashed border-outline-variant bg-background p-8 text-center text-sm font-medium text-on-surface-variant">
           {items.length === 0
-            ? "Chưa có media nào. Bấm “Thêm từ link” (Drive/YouTube) hoặc “Tải lên”."
+            ? "Chưa có media nào. Bấm [Thêm từ link] (Drive/YouTube) hoặc [Tải lên]."
             : "Không có media khớp bộ lọc."}
         </div>
       )}
@@ -277,6 +285,10 @@ export function MediaLibrary({
                     </a>
                   </>
                 ) : null}
+                <Button variant="outline" onClick={() => toggleStatus(preview)}>
+                  <Icon name={preview.status === "used" ? "restart_alt" : "task_alt"} size={16} />
+                  {preview.status === "used" ? "Đánh dấu sẵn dùng" : "Đánh dấu đã dùng"}
+                </Button>
                 <Button variant="outline" className="text-rose-600" onClick={() => remove(preview)}>
                   <Icon name="delete" size={16} /> Xoá khỏi thư viện
                 </Button>
@@ -350,7 +362,7 @@ function AddFromLinkDialog({
         </DialogHeader>
         <div className="space-y-3">
           <div className="space-y-1.5">
-            <Label htmlFor="m-url">Link Google Drive / YouTube / TikTok</Label>
+            <Label htmlFor="m-url">Link Google Drive / OneDrive / YouTube / TikTok</Label>
             <Input
               id="m-url"
               value={url}
@@ -367,7 +379,13 @@ function AddFromLinkDialog({
             ) : null}
             {parsed?.sourceType === "drive" ? (
               <p className="text-xs text-amber-700">
-                Nhớ bật chia sẻ “Bất kỳ ai có link — Người xem” cho file/thư mục Drive.
+                Nhớ bật chia sẻ "Bất kỳ ai có link — Người xem" cho file/thư mục Drive.
+              </p>
+            ) : null}
+            {parsed?.sourceType === "onedrive" && !parsed.embedUrl ? (
+              <p className="text-xs text-amber-700">
+                Link OneDrive này chỉ mở được tab ngoài. Muốn xem trực tiếp tại đây: mở OneDrive →
+                chọn file → <b>Nhúng (Embed)</b> → dán nguyên mã hoặc link embed vào ô trên.
               </p>
             ) : null}
           </div>
