@@ -1,5 +1,9 @@
 # Hướng dẫn dùng MKT Hub
 
+> **Bản đầy đủ có hình minh hoạ từng bước:** mở file `docs/HUONG-DAN-MKT-HUB.html`
+> bằng trình duyệt — gồm cả phần CEO tạo vai trò + tài khoản cho nhân viên marketing.
+> File này là bản tóm tắt chữ.
+
 MKT Hub là nơi cả đội marketing cùng làm việc: lên chiến dịch, chia việc, làm nội dung,
 duyệt và theo dõi tiến độ. Nguyên tắc xuyên suốt: **giao việc chưa phải là đã nhận việc —
 chỉ đúng người được giao mới bấm nhận, và mọi ngoại lệ đều được ghi lại.**
@@ -61,7 +65,7 @@ sửa quá 3 lần. Tại đây bạn **Giao lại** cho người khác (kèm l�
 > Nhắc: Leader không "nhận việc thay" người khác — muốn đổi người thì dùng **Giao lại**.
 
 ### Theo dõi
-- **Kanban** — nhìn toàn cảnh việc đang ở công đoạn nào.
+- **Bảng tiến độ** — nhìn toàn cảnh việc đang ở công đoạn nào.
 - **Nhân sự** — ai đang quá tải (đỏ khi ≥ 85%) để san sẻ việc.
 - **Báo cáo** — tiến độ tổng.
 
