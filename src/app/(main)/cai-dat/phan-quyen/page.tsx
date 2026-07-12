@@ -27,6 +27,13 @@ import {
   DialogTitle,
   DialogFooter,
 } from "@/components/ui/dialog";
+import {
+  DropdownMenu,
+  DropdownMenuTrigger,
+  DropdownMenuContent,
+  DropdownMenuItem,
+  DropdownMenuLabel,
+} from "@/components/ui/dropdown-menu";
 import { cn } from "@/lib/utils";
 import { useAuth, useToast } from "@/lib/contexts";
 import { ConfirmDialog } from "@/components/shared/dialogs/confirm-dialog";
@@ -174,21 +181,25 @@ export default function PermissionSettingsPage() {
     }
   };
 
-  // Seed default roles
-  const handleSeedDefaults = async () => {
+  // Tạo 1 vai trò từ mẫu có sẵn (kèm đủ bộ quyền của mẫu). Trước đây chỉ có
+  // nút seed toàn bộ khi tenant CHƯA có vai trò nào — tenant đang chạy không
+  // thể thêm mẫu mới (VD 3 vai trò MKT) mà không tick tay từng quyền.
+  const missingTemplates = DEFAULT_ROLE_TEMPLATES.filter(
+    (t) => !roles.some((r) => r.name === t.name),
+  );
+
+  const handleCreateFromTemplate = async (
+    template: (typeof DEFAULT_ROLE_TEMPLATES)[number],
+  ) => {
     try {
-      for (const template of DEFAULT_ROLE_TEMPLATES) {
-        const existing = roles.find((r) => r.name === template.name);
-        if (existing) continue;
-        await createRole({
-          tenantId,
-          name: template.name,
-          description: template.description,
-          color: template.color,
-          permissions: template.permissions as PermissionCode[],
-        });
-      }
-      toast({ title: "Đã tạo vai trò mặc định", variant: "success" });
+      await createRole({
+        tenantId,
+        name: template.name,
+        description: template.description,
+        color: template.color,
+        permissions: template.permissions as PermissionCode[],
+      });
+      toast({ title: "Đã tạo vai trò từ mẫu", description: template.name, variant: "success" });
       load();
     } catch (err) {
       toast({ title: "Lỗi", description: (err as Error).message, variant: "error" });
@@ -213,10 +224,22 @@ export default function PermissionSettingsPage() {
           </p>
         </div>
         <div className="flex items-center gap-2">
-          {roles.length === 0 && (
-            <Button variant="outline" onClick={handleSeedDefaults}>
-              Tạo vai trò mặc định
-            </Button>
+          {missingTemplates.length > 0 && (
+            <DropdownMenu>
+              <DropdownMenuTrigger className="inline-flex h-9 items-center gap-1 rounded-lg border border-input bg-background px-3 text-sm font-medium transition-colors hover:bg-muted">
+                <Icon name="library_add" size={16} />
+                Thêm từ mẫu
+              </DropdownMenuTrigger>
+              <DropdownMenuContent align="end">
+                <DropdownMenuLabel>Vai trò mẫu chưa tạo</DropdownMenuLabel>
+                {missingTemplates.map((t) => (
+                  <DropdownMenuItem key={t.name} onSelect={() => handleCreateFromTemplate(t)}>
+                    <span className={cn("mr-2 h-2.5 w-2.5 rounded-full", t.color)} />
+                    {t.name}
+                  </DropdownMenuItem>
+                ))}
+              </DropdownMenuContent>
+            </DropdownMenu>
           )}
           <Button onClick={() => setCreateOpen(true)}>
             <Icon name="add" size={16} className="mr-1" />
