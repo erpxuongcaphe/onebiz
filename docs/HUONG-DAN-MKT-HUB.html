@@ -118,6 +118,7 @@
     border-radius: 7px; padding: 1px 9px; font-weight: 600; font-size: 14.5px; white-space: nowrap;
   }
   .btn-name { font-weight: 700; color: var(--primary); }
+  .lg { display:inline-block; font-size:12px; font-weight:600; padding:2px 9px; border-radius:999px; white-space:nowrap; line-height:1.55; }
 
   .note, .warn, .good {
     border-radius: 10px; padding: 13px 16px; margin: 16px 0; font-size: 15px; max-width: none;
@@ -157,12 +158,19 @@
     font-size: 13.5px; color: var(--ink-soft);
   }
 
+  @page { size: A4; margin: 15mm 14mm 16mm; }
   @media print {
-    body { font-size: 12.5pt; }
+    html { -webkit-print-color-adjust: exact; print-color-adjust: exact; background:#fff; }
+    body { font-size: 10.8pt; color:#1c2430; }
     .wrap { max-width: none; padding: 0; }
-    h2 { page-break-after: avoid; }
-    figure, .note, .warn, .good, table.roles { page-break-inside: avoid; }
-    nav.toc { display: none; }
+    a { text-decoration: none; }
+    h1 { font-size: 22pt; }
+    h2 { font-size: 15pt; break-after: avoid; break-before: auto; }
+    h3 { break-after: avoid; }
+    p, li { orphans: 2; widows: 2; }
+    figure, .note, .warn, .good, table.roles, ol.steps > li, .faq dt { break-inside: avoid; }
+    nav.toc { break-inside: avoid; }
+    .fig-card { background:#fff; }
   }
 </style>
 
@@ -184,12 +192,13 @@
   <ol>
     <li><a href="#nguyen-tac">Ba nguyên tắc của MKT Hub</a></li>
     <li><a href="#phan-1">Dành cho CEO — chuẩn bị tài khoản (làm một lần)</a></li>
-    <li><a href="#phan-2">Dành cho mọi thành viên — vào Hub lần đầu</a></li>
+    <li><a href="#phan-2">Vào Hub lần đầu &amp; làm quen giao diện</a></li>
     <li><a href="#phan-3">Dành cho người thực thi — nhận việc và làm việc</a></li>
     <li><a href="#phan-4">Dành cho người duyệt — duyệt nội dung</a></li>
     <li><a href="#phan-5">Dành cho Leader — vận hành chiến dịch</a></li>
     <li><a href="#phan-6">Thư viện media — cất file một nơi, xem tại chỗ</a></li>
     <li><a href="#phan-7">Cơ chế hoạt động — để hiểu vì sao Hub làm vậy</a></li>
+    <li><a href="#phan-8">Bảng chú giải — nhãn trạng thái &amp; thuật ngữ</a></li>
     <li><a href="#faq">Câu hỏi thường gặp</a></li>
   </ol>
 </nav>
@@ -360,10 +369,38 @@
   <p>• Tick "Tất cả chi nhánh" → nhân viên thấy dữ liệu kho, quán không liên quan. Marketing chỉ cần <b>Văn phòng</b>.</p>
 </div>
 
-<h2 id="phan-2"><span class="phan">Phần 2 · Mỗi người làm một lần</span>Dành cho mọi thành viên — vào Hub lần đầu</h2>
+<h2 id="phan-2"><span class="phan">Phần 2 · Mỗi người làm một lần</span>Vào Hub lần đầu &amp; làm quen giao diện</h2>
 
-<h3>Đăng nhập</h3>
-<p>Mở trình duyệt (điện thoại hay máy tính đều được), gõ <b>mkthub.onebiz.com.vn</b>, đăng nhập bằng email + mật khẩu được cấp. Màn hình MKT Hub có thanh menu riêng: Tổng quan, Việc của tôi, Chiến dịch, Bảng tiến độ, Lịch, Duyệt nội dung, Thư viện, Báo cáo… Trên điện thoại, các mục chính nằm ở dãy nút dưới đáy màn hình.</p>
+<h3>Đăng nhập — từng bước</h3>
+<ol class="steps">
+  <li><b>Mở trình duyệt</b>Điện thoại hay máy tính đều được (Chrome, Safari, Cốc Cốc…).</li>
+  <li><b>Gõ địa chỉ</b>Vào thanh địa chỉ gõ <span class="path">mkthub.onebiz.com.vn</span> rồi Enter. Nên lưu vào Bookmark / thêm ra màn hình chính điện thoại để lần sau vào nhanh.</li>
+  <li><b>Nhập email &amp; mật khẩu</b>Dùng đúng email + mật khẩu CEO cấp cho bạn. Bấm <span class="btn-name">Đăng nhập</span>.</li>
+  <li><b>Xong</b>Bạn vào thẳng MKT Hub. Đăng nhập một lần, lần sau máy nhớ — trừ khi bạn tự Đăng xuất.</li>
+</ol>
+<div class="note">
+  <p><b>Quên hoặc muốn đổi mật khẩu?</b> Báo CEO đặt lại giúp (Hệ thống → Người dùng &amp; phân quyền → dấu ⋯ → Chỉnh sửa thông tin → Đặt lại mật khẩu). Không có nút "quên mật khẩu" tự phục hồi — để tránh người lạ chiếm tài khoản.</p>
+</div>
+
+<h3>Làm quen màn hình</h3>
+<p>Trên máy tính, menu nằm dọc bên trái; trên điện thoại, các mục chính nằm ở <b>dãy nút dưới đáy</b>, còn lại gộp trong nút <span class="btn-name">Thêm</span>. Ý nghĩa từng mục:</p>
+<div class="table-scroll">
+<table class="roles">
+  <tr><th style="width:32%">Mục menu</th><th>Để làm gì</th></tr>
+  <tr><td><b>Tổng quan</b></td><td>Trang chủ — nhìn nhanh tình hình (Leader/CEO thấy toàn cảnh; người thực thi được đưa thẳng vào "Việc của tôi").</td></tr>
+  <tr><td><b>Việc của tôi</b></td><td>Nơi bạn làm việc mỗi ngày: nhận việc, bắt đầu, nộp duyệt, hoàn tất.</td></tr>
+  <tr><td><b>Chiến dịch</b></td><td>Danh sách chiến dịch marketing; mở vào để thấy kênh, công việc, nội dung, mức sẵn sàng.</td></tr>
+  <tr><td><b>Bảng tiến độ</b></td><td>Nhìn toàn bộ việc đang nằm ở công đoạn nào (5 cột), lọc theo kênh/người/trụ nội dung.</td></tr>
+  <tr><td><b>Lịch</b></td><td>Lịch tháng — việc nào đến hạn ngày nào.</td></tr>
+  <tr><td><b>Duyệt nội dung</b></td><td>Hàng chờ duyệt (dành cho người có quyền duyệt).</td></tr>
+  <tr><td><b>Cần Leader xử lý</b></td><td>Gom việc vướng cần Leader ra tay (Leader dùng).</td></tr>
+  <tr><td><b>Nhân sự</b></td><td>Tải việc từng người, ai quá tải (Leader dùng).</td></tr>
+  <tr><td><b>Thư viện</b></td><td>Kho ảnh/video của đội (link Drive, YouTube, TikTok…).</td></tr>
+  <tr><td><b>Báo cáo</b></td><td>Số liệu tiến độ, đúng hạn, điểm hoàn thành.</td></tr>
+  <tr><td><b>Cài đặt</b></td><td>Kết nối Telegram; Leader còn quản lý Trụ nội dung tại đây.</td></tr>
+</table>
+</div>
+<p>Trên cùng bên phải có: nút <span class="path">OneBiz ERP</span> (quay về hệ thống chính), tên tài khoản của bạn, và nút <span class="btn-name">Đăng xuất</span>.</p>
 
 <h3>Kết nối Telegram (rất nên làm ngay)</h3>
 <p>Kết nối xong, mọi diễn biến liên quan đến bạn — được giao việc mới, nội dung được duyệt hay bị yêu cầu sửa, đến hạn — sẽ báo thẳng vào Telegram, kèm nút bấm mở đúng màn hình cần xử lý.</p>
@@ -591,6 +628,16 @@
   <li><span class="path">Báo cáo</span> — tiến độ, tỉ lệ đúng hạn, điểm hoàn thành theo người / chiến dịch / công đoạn, và Nhật ký ngoại lệ. Dùng số liệu này đánh giá nhân sự cuối tháng.</li>
 </ul>
 
+<h3>Bảng tiến độ &amp; Lịch — nhìn toàn cảnh</h3>
+<p><span class="path">Bảng tiến độ</span> xếp mọi việc vào 5 cột theo giai đoạn: <b>Pending Acceptance</b> (chờ nhận) → <b>Brief / Idea</b> (ý tưởng) → <b>Đang Sản Xuất</b> → <b>Chờ Duyệt</b> → <b>Đã Đăng</b>. Có bộ lọc theo chi nhánh, kênh, người, trụ nội dung để nhìn nhanh. <span class="path">Lịch</span> trải việc theo ngày đến hạn trong tháng — để thấy tuần nào dồn việc mà giãn bớt.</p>
+
+<h3>Trụ nội dung (Content Pillars) — phân loại chủ đề</h3>
+<p>Trụ nội dung là các <b>nhóm chủ đề</b> bạn muốn nội dung xoay quanh — ví dụ P1 "Cà phê tươi", P2 "Không gian quán", P3 "Khuyến mãi", P4 "Hậu trường". Gắn nhãn trụ cho nội dung giúp Bảng tiến độ, Lịch và Báo cáo tô màu + thống kê xem đội đang dồn vào chủ đề nào, thiếu chủ đề nào.</p>
+<ol class="steps">
+  <li><b>Tạo trụ nội dung</b>Vào <span class="path">Cài đặt</span> → khối <b>Content Pillars</b> → nhập <b>Mã</b> (P1, P2…), <b>Tên</b>, chọn <b>màu</b> → bấm <span class="btn-name">Thêm</span>.</li>
+  <li><b>Dùng</b>Khi tạo nội dung, chọn trụ tương ứng. Về sau nhìn Báo cáo "theo trụ" là biết cơ cấu chủ đề.</li>
+</ol>
+
 <h2 id="phan-6"><span class="phan">Phần 6 · Kho tư liệu</span>Thư viện media — cất file một nơi, xem tại chỗ</h2>
 <p>Nguyên tắc: <b>file nặng không nằm trong Hub</b>. Video, ảnh gốc để trên Google Drive, OneDrive, YouTube/TikTok, hoặc một đường link ảnh/video trực tiếp — Hub chỉ giữ đường link (không tốn dung lượng máy chủ). Nhưng khi thêm link vào, thư viện <b>tự dựng ảnh xem trước (thumbnail)</b> hiện ngay ngoài lưới, và bấm vào thì <b>phát video / mở ảnh ngay trong cửa sổ nổi</b>, không phải rời web.</p>
 <ol class="steps">
@@ -680,7 +727,68 @@
 <h3>Thư viện media hoạt động thế nào</h3>
 <p>Hub không lưu file nặng. Khi bạn dán một đường link, hệ thống nhận diện nguồn rồi làm hai việc: dựng một <b>ảnh xem trước</b> để hiện ngoài lưới, và một <b>khung nhúng</b> để phát/mở trong cửa sổ nổi khi bấm vào (mức hỗ trợ theo bảng tra ở Phần 6). File thật vẫn nằm nguyên trên Drive/YouTube…; “Xóa khỏi thư viện” chỉ gỡ đường link khỏi Hub, <b>không đụng file gốc</b>.</p>
 
-<h2 id="faq"><span class="phan">Phần 8</span>Câu hỏi thường gặp</h2>
+<h2 id="phan-8"><span class="phan">Phần 8 · Tra cứu</span>Bảng chú giải — nhãn trạng thái &amp; thuật ngữ</h2>
+<p>Trên các thẻ việc có những nhãn nhỏ bằng tiếng Anh (theo chuẩn phần mềm). Dưới đây là nghĩa tiếng Việt của từng nhãn — tra khi thấy chưa quen.</p>
+
+<h3>Nhãn "nhận việc" của một task</h3>
+<div class="table-scroll">
+<table class="roles">
+  <tr><th style="width:34%">Nhãn</th><th>Nghĩa</th></tr>
+  <tr><td><span class="lg" style="background:#fff4e5;color:#b45309">Pending Acceptance</span></td><td>Chờ bạn xác nhận nhận việc.</td></tr>
+  <tr><td><span class="lg" style="background:#e2f5ee;color:#0e9a6c">Accepted</span></td><td>Đã nhận — bạn cam kết làm.</td></tr>
+  <tr><td><span class="lg" style="background:#fef3c7;color:#a16207">Need Discussion</span></td><td>Cần trao đổi thêm với Leader.</td></tr>
+  <tr><td><span class="lg" style="background:#fbe8ed;color:#ce2b4f">Rejected</span></td><td>Từ chối (đã ghi lý do) — về bàn Leader.</td></tr>
+</table>
+</div>
+
+<h3>Nhãn "tiến độ" của một task</h3>
+<div class="table-scroll">
+<table class="roles">
+  <tr><th style="width:34%">Nhãn</th><th>Nghĩa</th></tr>
+  <tr><td><span class="lg" style="background:#f1f5f9;color:#64748b">To Do</span></td><td>Chưa làm — sẵn sàng bắt đầu.</td></tr>
+  <tr><td><span class="lg" style="background:#e8eafb;color:#4f46e5">Doing</span></td><td>Đang làm.</td></tr>
+  <tr><td><span class="lg" style="background:#fef3c7;color:#a16207">Reviewing</span></td><td>Đã nộp, đang chờ duyệt.</td></tr>
+  <tr><td><span class="lg" style="background:#fbe8ed;color:#ce2b4f">Blocked</span></td><td>Đang kẹt — chờ việc trước xong mới mở.</td></tr>
+  <tr><td><span class="lg" style="background:#e2f5ee;color:#0e9a6c">Done</span></td><td>Xong.</td></tr>
+  <tr><td><span class="lg" style="background:#f1f5f9;color:#94a3b8">Canceled</span></td><td>Đã huỷ.</td></tr>
+</table>
+</div>
+
+<h3>Nhãn của một nội dung</h3>
+<div class="table-scroll">
+<table class="roles">
+  <tr><th style="width:34%">Nhãn</th><th>Nghĩa</th></tr>
+  <tr><td><span class="lg" style="background:#f1f5f9;color:#64748b">Draft</span></td><td>Nháp — chưa nộp duyệt.</td></tr>
+  <tr><td><span class="lg" style="background:#fef3c7;color:#a16207">Pending Review</span></td><td>Đang chờ duyệt.</td></tr>
+  <tr><td><span class="lg" style="background:#fff4e5;color:#b45309">Revision Required</span></td><td>Bị yêu cầu sửa.</td></tr>
+  <tr><td><span class="lg" style="background:#e2f5ee;color:#0e9a6c">Approved</span></td><td>Đã duyệt.</td></tr>
+  <tr><td><span class="lg" style="background:#e0f2fe;color:#0369a1">Published</span></td><td>Đã đăng.</td></tr>
+</table>
+</div>
+
+<h3>Mức rủi ro &amp; mức sẵn sàng</h3>
+<div class="table-scroll">
+<table class="roles">
+  <tr><th style="width:34%">Nhãn</th><th>Nghĩa</th></tr>
+  <tr><td><span class="lg" style="background:#e2f5ee;color:#0e9a6c">Rủi ro thấp</span> / <span class="lg" style="background:#fef3c7;color:#a16207">Rủi ro TB</span></td><td>Lead hoặc Reviewer duyệt được.</td></tr>
+  <tr><td><span class="lg" style="background:#fbe8ed;color:#ce2b4f">Rủi ro cao</span> / <span class="lg" style="background:#f9d6de;color:#a01236">Nghiêm trọng</span></td><td>Chỉ CEO duyệt.</td></tr>
+  <tr><td><span class="lg" style="background:#fef3c7;color:#a16207">Chờ xác nhận</span> · <span class="lg" style="background:#e2f5ee;color:#0e9a6c">Đã xác nhận</span> · <span class="lg" style="background:#e8eafb;color:#4f46e5">Đã miễn</span></td><td>Trạng thái từng mục sẵn sàng của chiến dịch.</td></tr>
+</table>
+</div>
+
+<h3>Thuật ngữ nhanh</h3>
+<dl class="faq">
+  <dt>Chiến dịch (Campaign)</dt><dd>Một đợt marketing có mục tiêu, thời gian, ngân sách rõ ràng.</dd>
+  <dt>Kênh triển khai</dt><dd>Nơi sẽ đăng — TikTok, Facebook, Instagram… Mỗi kênh được chia thành các công đoạn.</dd>
+  <dt>Công đoạn / Task</dt><dd>Một đầu việc cụ thể giao cho một người (Ý tưởng, Quay, Dựng, Duyệt, Đăng, Báo cáo).</dd>
+  <dt>Nội dung (Content)</dt><dd>Sản phẩm sẽ đăng (bài viết, video…) — có phiên bản khi nộp lại và có mức rủi ro.</dd>
+  <dt>Mức sẵn sàng (Readiness)</dt><dd>Danh sách việc phải xác nhận đủ trước khi chiến dịch được phép chạy.</dd>
+  <dt>Trụ nội dung (Content Pillar)</dt><dd>Nhóm chủ đề để phân loại nội dung (P1–P4), dùng cho thống kê.</dd>
+  <dt>Điểm khối lượng</dt><dd>Con số ước lượng công sức một việc, để đo tải công việc từng người.</dd>
+  <dt>Nhật ký ngoại lệ (Exception Log)</dt><dd>Nơi ghi lại mọi lần phá lệ quy trình kèm lý do.</dd>
+</dl>
+
+<h2 id="faq"><span class="phan">Phần 9</span>Câu hỏi thường gặp</h2>
 <dl class="faq">
   <dt>Tôi đăng nhập được nhưng Hub báo "Bạn chưa được cấp quyền vào MKT Hub"?</dt>
   <dd>Tài khoản chưa được gán vai trò MKT. Báo CEO vào Hệ thống → Người dùng &amp; phân quyền → dấu ⋯ cuối dòng tên bạn → Gán vai trò.</dd>
