@@ -189,6 +189,7 @@
     <li><a href="#phan-4">Dành cho người duyệt — duyệt nội dung</a></li>
     <li><a href="#phan-5">Dành cho Leader — vận hành chiến dịch</a></li>
     <li><a href="#phan-6">Thư viện media — cất file một nơi, xem tại chỗ</a></li>
+    <li><a href="#phan-7">Cơ chế hoạt động — để hiểu vì sao Hub làm vậy</a></li>
     <li><a href="#faq">Câu hỏi thường gặp</a></li>
   </ol>
 </nav>
@@ -591,9 +592,9 @@
 </ul>
 
 <h2 id="phan-6"><span class="phan">Phần 6 · Kho tư liệu</span>Thư viện media — cất file một nơi, xem tại chỗ</h2>
-<p>Nguyên tắc: <b>file nặng không nằm trong Hub</b>. Video, ảnh gốc để trên Google Drive, OneDrive hoặc đã đăng YouTube/TikTok — Hub chỉ giữ đường link, nhưng cho xem trực tiếp ngay trong web bằng cửa sổ nổi.</p>
+<p>Nguyên tắc: <b>file nặng không nằm trong Hub</b>. Video, ảnh gốc để trên Google Drive, OneDrive, YouTube/TikTok, hoặc một đường link ảnh/video trực tiếp — Hub chỉ giữ đường link (không tốn dung lượng máy chủ). Nhưng khi thêm link vào, thư viện <b>tự dựng ảnh xem trước (thumbnail)</b> hiện ngay ngoài lưới, và bấm vào thì <b>phát video / mở ảnh ngay trong cửa sổ nổi</b>, không phải rời web.</p>
 <ol class="steps">
-  <li><b>Thêm media</b>Menu <span class="path">Thư viện</span> → <span class="btn-name">Thêm từ link</span> → dán link → đặt tên dễ tìm → chọn chiến dịch (nếu có) → <b>Thêm vào thư viện</b>.</li>
+  <li><b>Thêm media</b>Menu <span class="path">Thư viện</span> → <span class="btn-name">Thêm từ link</span> → dán link → đặt tên dễ tìm → chọn chiến dịch (nếu có) → <b>Thêm vào thư viện</b>. Hub tự nhận diện link là ảnh hay video.</li>
   <li><b>Riêng file Google Drive</b>Nhớ bật chia sẻ <b>"Bất kỳ ai có link — Người xem"</b> thì cả đội mới xem được.</li>
   <li><b>Xem và dùng</b>Bấm vào thẻ media → cửa sổ nổi phát video/hiện ảnh tại chỗ, kèm nút Copy link, Mở gốc, Đánh dấu đã dùng, Xóa. Bộ lọc phía trên giúp tìm theo loại, trạng thái, chiến dịch, tên.</li>
 </ol>
@@ -635,7 +636,51 @@
   <figcaption><b>Hình 9.</b> Thẻ media trong thư viện (trái) và cửa sổ xem trực tiếp khi bấm vào (phải) — video phát ngay trong web, không cần rời Hub.</figcaption>
 </figure>
 
-<h2 id="faq"><span class="phan">Phần 7</span>Câu hỏi thường gặp</h2>
+<h3>Nguồn nào xem trực tiếp được — bảng tra nhanh</h3>
+<p>Mỗi nguồn hỗ trợ khác nhau. Với đội, <b>Google Drive và YouTube là chắc chắn nhất</b> (đủ cả ảnh xem trước lẫn phát trong popup):</p>
+<div class="table-scroll">
+<table class="roles">
+  <tr><th style="width:30%">Nguồn</th><th>Ảnh xem trước (ngoài lưới)</th><th>Xem/phát trong popup</th></tr>
+  <tr><td><b>YouTube</b></td><td>✅ có</td><td>✅ phát video ngay</td></tr>
+  <tr><td><b>Google Drive</b> (video/ảnh/PDF)</td><td>✅ có</td><td>✅ — nhớ bật chia sẻ “ai có link đều xem”</td></tr>
+  <tr><td><b>Link ảnh trực tiếp</b> (.jpg/.png…)</td><td>✅ hiện luôn ảnh</td><td>✅ phóng to ảnh</td></tr>
+  <tr><td><b>Link video trực tiếp</b> (.mp4…)</td><td>Icon phim (không ảnh tĩnh)</td><td>✅ phát video ngay</td></tr>
+  <tr><td><b>TikTok</b></td><td>✅ lấy tự động (đôi khi TikTok chặn → icon)</td><td>✅ phát trong khung TikTok</td></tr>
+  <tr><td><b>OneDrive</b></td><td>Icon</td><td>Chỉ link “Nhúng/Embed”; link chia sẻ thường → mở tab ngoài</td></tr>
+</table>
+</div>
+
+<h2 id="phan-7"><span class="phan">Phần 7 · Hiểu sâu</span>Cơ chế hoạt động — để hiểu vì sao Hub làm vậy</h2>
+<p>Phần này giải thích cách các chức năng hoạt động bên trong, để khi dùng bạn hiểu “vì sao nó làm thế” chứ không chỉ “bấm nút nào”.</p>
+
+<h3>Một việc có hai trạng thái — vì sao mỗi task có hai nhãn màu</h3>
+<p>Mỗi task luôn đeo hai nhãn: <b>nhãn nhận việc</b> (Chờ nhận / Đã nhận / Từ chối / Cần trao đổi) cho biết người được giao đã đồng ý làm chưa; và <b>nhãn tiến độ</b> (Chưa làm / Đang làm / Chờ duyệt / Xong / Kẹt) cho biết việc chạy tới đâu. Tách hai nhãn để phân biệt “chưa ai nhận trách nhiệm” với “đã nhận nhưng chưa bắt tay” — hai tình huống cần xử lý khác nhau.</p>
+
+<h3>Vì sao “Bắt đầu” đôi khi chưa bấm được — dây chuyền phụ thuộc</h3>
+<p>Khi chia việc, các công đoạn được nối thành chuỗi: Quay → Dựng → Duyệt → Đăng. Việc sau bị khóa (nhãn “Kẹt”) cho tới khi việc trước chuyển “Xong”. Đúng lúc đó Hub tự mở khóa việc sau và bắn Telegram cho người phụ trách. Nhờ vậy không ai phải đi hỏi “xong chưa để tôi làm tiếp”.</p>
+
+<h3>Ai được duyệt nội dung nào — duyệt theo mức rủi ro</h3>
+<p>Mỗi nội dung có một mức rủi ro (thấp / trung bình / cao). Nội dung rủi ro thấp–trung bình: Lead hoặc Reviewer duyệt. Nội dung rủi ro cao — công bố giá, khuyến mãi lớn, phát ngôn thương hiệu — <b>chỉ CEO duyệt</b>. Người không đủ quyền vẫn mở xem được nhưng nút Duyệt bị khóa; đây là chốt chặn để nội dung nhạy cảm không lọt ra ngoài.</p>
+
+<h3>Mức sẵn sàng — chốt chặn không cho chạy ẩu</h3>
+<p>Trước khi một chiến dịch “chạy”, nó phải đạt <b>100%</b> các mục sẵn sàng do Leader đặt ra (kho đủ đồ, kế toán duyệt ngân sách, CEO chốt thông điệp…). Chưa đủ mà bấm chạy sẽ bị chặn; chỉ CEO vượt được và bắt buộc ghi lý do. Đây là cách hệ thống buộc mọi người chuẩn bị đủ trước khi tiêu tiền quảng cáo.</p>
+
+<h3>Nhật ký ngoại lệ — mọi “phá lệ” đều để lại dấu</h3>
+<p>Bất cứ khi nào ai đó đi tắt quy trình — CEO vượt rào cho chạy khi chưa đủ 100%, Leader ép hoàn tất một việc đang kẹt, hay miễn một mục sẵn sàng — hệ thống ghi việc đó cùng lý do vào <b>Nhật ký ngoại lệ</b> của chiến dịch. Không phải để bắt lỗi, mà để sau này nhìn lại biết vì sao đã quyết như vậy.</p>
+
+<h3>Ai thấy gì — quyền xem theo vai trò</h3>
+<p>Người thực thi (Executor) <b>chỉ thấy việc được giao cho chính mình</b>, không thấy việc người khác — để mỗi người tập trung phần của mình. Leader và CEO thấy toàn cảnh: mọi chiến dịch, mọi việc, mọi báo cáo. Đây là quy tắc cứng ở tầng dữ liệu (không phải chỉ ẩn nút) — nên kể cả gõ thẳng địa chỉ cũng không xem lén được việc người khác.</p>
+
+<h3>Thông báo đến bằng hai đường — chuông và Telegram</h3>
+<p>Khi có việc liên quan đến bạn (được giao, nội dung được duyệt hoặc trả sửa, đến hạn, bị nhắc), Hub tạo một thông báo. Thông báo hiện ở <b>chuông</b> trong web, đồng thời — nếu bạn đã nối Telegram — bắn một tin nhắn Telegram kèm nút mở thẳng màn hình cần xử lý. Tin thường đến trong vài giây.</p>
+
+<h3>Số liệu báo cáo lấy từ đâu</h3>
+<p>Trang Báo cáo tính trực tiếp từ chính các việc trong Hub: đếm việc đã xong trên tổng, so hạn hoàn tất thực tế với hạn đặt ra để ra tỉ lệ đúng hạn, cộng điểm khối lượng theo người. <b>Không có số nào nhập tay</b> — nên báo cáo luôn khớp thực tế. Riêng chỉ số Reach/Engagement/Chi phí Ads của TikTok/Meta cần nối API nền tảng, sẽ bổ sung ở giai đoạn sau.</p>
+
+<h3>Thư viện media hoạt động thế nào</h3>
+<p>Hub không lưu file nặng. Khi bạn dán một đường link, hệ thống nhận diện nguồn rồi làm hai việc: dựng một <b>ảnh xem trước</b> để hiện ngoài lưới, và một <b>khung nhúng</b> để phát/mở trong cửa sổ nổi khi bấm vào (mức hỗ trợ theo bảng tra ở Phần 6). File thật vẫn nằm nguyên trên Drive/YouTube…; “Xóa khỏi thư viện” chỉ gỡ đường link khỏi Hub, <b>không đụng file gốc</b>.</p>
+
+<h2 id="faq"><span class="phan">Phần 8</span>Câu hỏi thường gặp</h2>
 <dl class="faq">
   <dt>Tôi đăng nhập được nhưng Hub báo "Bạn chưa được cấp quyền vào MKT Hub"?</dt>
   <dd>Tài khoản chưa được gán vai trò MKT. Báo CEO vào Hệ thống → Người dùng &amp; phân quyền → dấu ⋯ cuối dòng tên bạn → Gán vai trò.</dd>
@@ -651,6 +696,8 @@
   <dd>Leader vào "Cần Leader xử lý" hoặc màn Nhân sự → Giao lại / San sẻ việc — có ghi vết, người mới nhận Telegram ngay.</dd>
   <dt>File video nặng quá, tải lên đâu?</dt>
   <dd>Không tải lên Hub. Để file trên Google Drive/OneDrive (bật chia sẻ "ai có link xem được") rồi Thêm từ link vào Thư viện.</dd>
+  <dt>Dán link vào thư viện nhưng không hiện ảnh xem trước, chỉ thấy icon?</dt>
+  <dd>Tùy nguồn — xem bảng tra ở Phần 6. Chắc ăn nhất là Google Drive (nhớ bật chia sẻ “ai có link đều xem”) và YouTube. TikTok đôi khi bị chặn ảnh đại diện; OneDrive link chia sẻ thường chỉ mở tab ngoài, muốn xem tại chỗ thì dán link “Nhúng/Embed”.</dd>
 </dl>
 
 <footer class="doc">

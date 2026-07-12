@@ -510,6 +510,7 @@ export type MktMediaAsset = {
   storagePath: string | null;
   externalUrl: string | null;
   externalId: string | null;
+  thumbnailUrl: string | null;
   campaignId: string | null;
   createdAt: string | null;
 };
@@ -526,11 +527,12 @@ export async function getMediaAssets(supabase: MktSupabaseClient): Promise<MktMe
       storage_path: string | null;
       external_url: string | null;
       external_id: string | null;
+      thumbnail_url: string | null;
       campaign_id: string | null;
       created_at: string | null;
     }>("mkt_media_assets")
     .select(
-      "id, file_name, kind, status, source_type, storage_path, external_url, external_id, campaign_id, created_at",
+      "id, file_name, kind, status, source_type, storage_path, external_url, external_id, thumbnail_url, campaign_id, created_at",
     )
     .is("deleted_at", null)
     .order("created_at", { ascending: false })
@@ -544,6 +546,7 @@ export async function getMediaAssets(supabase: MktSupabaseClient): Promise<MktMe
     storagePath: m.storage_path,
     externalUrl: m.external_url,
     externalId: m.external_id,
+    thumbnailUrl: m.thumbnail_url,
     campaignId: m.campaign_id,
     createdAt: m.created_at,
   }));

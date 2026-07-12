@@ -6,7 +6,7 @@ export const dynamic = "force-dynamic";
 
 type RegisterMediaBody = {
   fileName?: string;
-  sourceType?: string; // upload | drive | youtube | tiktok | other
+  sourceType?: string; // upload | drive | onedrive | youtube | tiktok | image | video | other
   storagePath?: string;
   externalUrl?: string;
   externalId?: string;
@@ -15,7 +15,25 @@ type RegisterMediaBody = {
   kind?: string;
   campaignId?: string;
   contentItemId?: string;
+  thumbnailUrl?: string;
 };
+
+// TikTok không có URL thumbnail suy ra được từ ID (khác YouTube). oEmbed là
+// endpoint công khai của TikTok trả về ảnh đại diện — gọi phía server để né
+// CORS, có timeout + nuốt lỗi (thất bại thì lưới chỉ hiện icon, không chặn thêm).
+async function fetchTikTokThumbnail(videoUrl: string): Promise<string | null> {
+  try {
+    const res = await fetch(
+      `https://www.tiktok.com/oembed?url=${encodeURIComponent(videoUrl)}`,
+      { signal: AbortSignal.timeout(5000) },
+    );
+    if (!res.ok) return null;
+    const data = (await res.json()) as { thumbnail_url?: unknown };
+    return typeof data.thumbnail_url === "string" ? data.thumbnail_url : null;
+  } catch {
+    return null;
+  }
+}
 
 // Ghi record media: sau upload Storage (sourceType=upload) HOẶC thêm từ link
 // ngoài (Drive/YouTube/TikTok — file thật nằm bên đó, web chỉ giữ metadata).
@@ -26,6 +44,12 @@ export async function POST(request: NextRequest) {
   const body = await readJsonBody<RegisterMediaBody>(request);
   const invalid = requireFields(body, ["fileName"]);
   if (invalid) return invalid;
+
+  // TikTok: lấy ảnh đại diện lúc thêm link để lưới hiện xem trước (không chỉ icon).
+  let thumbnailUrl = body.thumbnailUrl ?? null;
+  if (!thumbnailUrl && body.sourceType === "tiktok" && body.externalUrl) {
+    thumbnailUrl = await fetchTikTokThumbnail(body.externalUrl);
+  }
 
   return callMktRpc(supabase, "mkt_media_register", {
     p_file_name: body.fileName,
@@ -38,5 +62,6 @@ export async function POST(request: NextRequest) {
     p_kind: body.kind ?? "image",
     p_campaign_id: body.campaignId || null,
     p_content_item_id: body.contentItemId || null,
+    p_thumbnail_url: thumbnailUrl,
   });
 }

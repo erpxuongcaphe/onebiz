@@ -53,8 +53,24 @@ describe("parseMediaLink", () => {
     expect(r.embedUrl).toContain("onedrive.live.com/embed");
   });
 
-  it("link lạ → other, không embed", () => {
-    const r = parseMediaLink("https://example.com/video.mp4");
+  it("link ẢNH trực tiếp → image, xem trước bằng chính URL", () => {
+    const r = parseMediaLink("https://cdn.example.com/anh/oolong.jpg?v=2");
+    expect(r.sourceType).toBe("image");
+    expect(r.kind).toBe("image");
+    expect(r.embedUrl).toBe("https://cdn.example.com/anh/oolong.jpg?v=2");
+    expect(r.thumbnailUrl).toBe("https://cdn.example.com/anh/oolong.jpg?v=2");
+  });
+
+  it("link VIDEO trực tiếp → video, phát bằng thẻ video", () => {
+    const r = parseMediaLink("https://cdn.example.com/clip/quay.mp4");
+    expect(r.sourceType).toBe("video");
+    expect(r.kind).toBe("video");
+    expect(r.embedUrl).toBe("https://cdn.example.com/clip/quay.mp4");
+    expect(r.thumbnailUrl).toBeNull();
+  });
+
+  it("link lạ không phải media → other, không embed", () => {
+    const r = parseMediaLink("https://example.com/bai-viet");
     expect(r.sourceType).toBe("other");
     expect(r.embedUrl).toBeNull();
   });
@@ -68,6 +84,15 @@ describe("buildMediaUrls", () => {
       buildMediaUrls("onedrive", null, "https://onedrive.live.com/embed?resid=X").embedUrl,
     ).toContain("embed");
     expect(buildMediaUrls("onedrive", null, "https://1drv.ms/v/xxx").embedUrl).toBeNull();
-    expect(buildMediaUrls("other", null, "https://x.com/a.mp4").embedUrl).toBeNull();
+    expect(buildMediaUrls("other", null, "https://x.com/bai-viet").embedUrl).toBeNull();
+  });
+
+  it("dựng lại ảnh/video trực tiếp từ external_url", () => {
+    const img = buildMediaUrls("image", null, "https://x.com/a.png");
+    expect(img.embedUrl).toBe("https://x.com/a.png");
+    expect(img.thumbnailUrl).toBe("https://x.com/a.png");
+    const vid = buildMediaUrls("video", null, "https://x.com/a.mp4");
+    expect(vid.embedUrl).toBe("https://x.com/a.mp4");
+    expect(vid.thumbnailUrl).toBeNull();
   });
 });
