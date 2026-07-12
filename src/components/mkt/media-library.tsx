@@ -30,6 +30,8 @@ const SOURCE_LABEL: Record<string, string> = {
   onedrive: "OneDrive",
   youtube: "YouTube",
   tiktok: "TikTok",
+  image: "Ảnh (link)",
+  video: "Video (link)",
   other: "Link khác",
 };
 
@@ -37,12 +39,23 @@ function thumbOf(item: MediaViewItem): string | null {
   if (item.sourceType === "upload") {
     return item.kind === "image" ? item.signedUrl : null;
   }
+  // Ưu tiên thumbnail đã lưu (TikTok lấy qua oEmbed, hoặc ảnh đại diện tuỳ nguồn)
+  if (item.thumbnailUrl) return item.thumbnailUrl;
   return buildMediaUrls(item.sourceType, item.externalId, item.externalUrl).thumbnailUrl;
 }
 
 function embedOf(item: MediaViewItem): string | null {
   if (item.sourceType === "upload") return item.signedUrl;
   return buildMediaUrls(item.sourceType, item.externalId, item.externalUrl).embedUrl;
+}
+
+// Cách hiển thị trong popup: ảnh dùng <img>, video trực tiếp/upload dùng <video>,
+// còn lại (Drive/YouTube/TikTok/OneDrive) nhúng bằng <iframe>.
+function previewMode(item: MediaViewItem): "image" | "video" | "iframe" {
+  if (item.sourceType === "image") return "image";
+  if (item.sourceType === "video") return "video";
+  if (item.sourceType === "upload") return item.kind === "image" ? "image" : "video";
+  return "iframe";
 }
 
 function openUrlOf(item: MediaViewItem): string | null {
@@ -199,20 +212,21 @@ export function MediaLibrary({
                 className="group rounded-lg border border-outline-variant bg-background p-2.5 text-left transition hover:border-primary/40"
               >
                 <div className="relative flex aspect-square items-center justify-center overflow-hidden rounded-md bg-surface-container text-on-surface-variant">
+                  {/* Icon làm nền — nếu ảnh thumbnail lỗi/bị chặn (VD TikTok 403)
+                      thì lộ icon thay vì ô trống. */}
+                  <Icon name={item.kind === "video" ? "movie" : "image"} size={32} />
                   {thumb ? (
                     // eslint-disable-next-line @next/next/no-img-element
                     <img
                       src={thumb}
                       alt={item.fileName}
                       loading="lazy"
-                      className="h-full w-full object-cover"
+                      className="absolute inset-0 h-full w-full object-cover"
                       onError={(e) => {
                         (e.target as HTMLImageElement).style.display = "none";
                       }}
                     />
-                  ) : (
-                    <Icon name={item.kind === "video" ? "movie" : "image"} size={32} />
-                  )}
+                  ) : null}
                   <span className="absolute left-1.5 top-1.5 rounded bg-black/55 px-1.5 py-0.5 text-[10px] font-medium text-white">
                     {SOURCE_LABEL[item.sourceType] ?? item.sourceType}
                   </span>
@@ -255,12 +269,18 @@ export function MediaLibrary({
               </DialogHeader>
               <div className="overflow-hidden rounded-lg bg-black/5">
                 {embedOf(preview) ? (
-                  preview.sourceType === "upload" && preview.kind === "image" ? (
+                  previewMode(preview) === "image" ? (
                     // eslint-disable-next-line @next/next/no-img-element
                     <img
                       src={embedOf(preview) as string}
                       alt={preview.fileName}
                       className="max-h-[65vh] w-full object-contain"
+                    />
+                  ) : previewMode(preview) === "video" ? (
+                    <video
+                      src={embedOf(preview) as string}
+                      controls
+                      className="max-h-[65vh] w-full bg-black"
                     />
                   ) : (
                     <iframe
@@ -348,12 +368,18 @@ function AddFromLinkDialog({
     setLoading(true);
     setError(null);
     try {
+      // Loại media: ưu tiên nhận diện tự động (ảnh/video trực tiếp, YouTube/TikTok
+      // luôn là video); còn lại theo ô người dùng chọn.
+      const resolvedKind =
+        parsed.kind ??
+        (parsed.sourceType === "youtube" || parsed.sourceType === "tiktok" ? "video" : kind);
       await mktPost("/api/mkt/v1/media", {
         fileName: name.trim(),
         sourceType: parsed.sourceType,
         externalUrl: url.trim(),
         externalId: parsed.externalId,
-        kind: parsed.sourceType === "youtube" || parsed.sourceType === "tiktok" ? "video" : kind,
+        kind: resolvedKind,
+        thumbnailUrl: parsed.thumbnailUrl ?? undefined,
         campaignId: campaignId || undefined,
       });
       setUrl("");

@@ -9,13 +9,19 @@
  */
 
 export type ParsedMediaLink = {
-  sourceType: "drive" | "onedrive" | "youtube" | "tiktok" | "other";
+  sourceType: "drive" | "onedrive" | "youtube" | "tiktok" | "image" | "video" | "other";
   externalId: string | null;
   /** URL nhúng iframe xem trực tiếp; null nếu không nhúng được (mở tab ngoài) */
   embedUrl: string | null;
   /** URL ảnh thumbnail cho lưới; null nếu không có */
   thumbnailUrl: string | null;
+  /** Gợi ý loại media để form tự chọn đúng (ảnh/video) */
+  kind?: "image" | "video";
 };
+
+// Đuôi file media trực tiếp (bỏ qua ?query hoặc #fragment phía sau)
+const IMAGE_EXT = /\.(jpe?g|png|gif|webp|avif|bmp|svg)(?:[?#].*)?$/i;
+const VIDEO_EXT = /\.(mp4|webm|mov|m4v|ogv)(?:[?#].*)?$/i;
 
 export function parseMediaLink(rawUrl: string): ParsedMediaLink {
   let url = rawUrl.trim();
@@ -75,6 +81,16 @@ export function parseMediaLink(rawUrl: string): ParsedMediaLink {
     return { sourceType: "onedrive", externalId: null, embedUrl: null, thumbnailUrl: null };
   }
 
+  // Link ẢNH trực tiếp (.jpg/.png…): dùng luôn URL làm thumbnail + xem trong popup.
+  if (IMAGE_EXT.test(url)) {
+    return { sourceType: "image", externalId: null, embedUrl: url, thumbnailUrl: url, kind: "image" };
+  }
+  // Link VIDEO trực tiếp (.mp4/.webm…): phát bằng thẻ <video> trong popup.
+  // Không có ảnh tĩnh đại diện nên thumbnailUrl để null (lưới hiện icon phim).
+  if (VIDEO_EXT.test(url)) {
+    return { sourceType: "video", externalId: null, embedUrl: url, thumbnailUrl: null, kind: "video" };
+  }
+
   return { sourceType: "other", externalId: null, embedUrl: null, thumbnailUrl: null };
 }
 
@@ -97,7 +113,17 @@ export function buildMediaUrls(
     };
   }
   if (sourceType === "tiktok" && externalId) {
+    // thumbnail TikTok không suy ra được từ ID — lấy qua oEmbed, lưu ở cột
+    // thumbnail_url (ưu tiên ở tầng hiển thị), nên ở đây để null.
     return { embedUrl: `https://www.tiktok.com/player/v1/${externalId}`, thumbnailUrl: null };
+  }
+  if (sourceType === "image" && externalUrl) {
+    // Ảnh trực tiếp: chính URL là cả thumbnail lẫn ảnh xem trong popup.
+    return { embedUrl: externalUrl, thumbnailUrl: externalUrl };
+  }
+  if (sourceType === "video" && externalUrl) {
+    // Video trực tiếp: phát bằng thẻ <video>; không có ảnh tĩnh đại diện.
+    return { embedUrl: externalUrl, thumbnailUrl: null };
   }
   if (sourceType === "onedrive" && externalUrl) {
     // Chỉ link nhúng OneDrive mới hiển thị trong iframe được
