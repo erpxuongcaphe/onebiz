@@ -225,11 +225,9 @@ export function PlanEditorButton({
 
   const filled = rows.filter((r) => r.title.trim());
 
-  async function save() {
-    setLoading(true);
-    setError(null);
-    try {
-      const items = filled.map((r, i) => ({
+  function payload() {
+    return {
+      items: filled.map((r, i) => ({
         id: r.id,
         title: r.title.trim(),
         taskType: r.taskType,
@@ -241,21 +239,42 @@ export function PlanEditorButton({
         dueAt: r.dueAt || undefined,
         sequence: i,
         dependsOnId: r.dependsOnId || undefined,
-      }));
-      await mktPost(`/api/mkt/v1/plans/${plan.id}/items`, {
-        items,
-        header: {
-          objective: objective.trim(),
-          keyMessage: keyMessage.trim(),
-          mandatoryDeliverables: mandatory.trim(),
-          deadline: deadline || undefined,
-        },
-        expectedVersion: plan.versionNumber,
-      });
+      })),
+      header: {
+        objective: objective.trim(),
+        keyMessage: keyMessage.trim(),
+        mandatoryDeliverables: mandatory.trim(),
+        deadline: deadline || undefined,
+      },
+      expectedVersion: plan.versionNumber,
+    };
+  }
+
+  async function save() {
+    setLoading(true);
+    setError(null);
+    try {
+      await mktPost(`/api/mkt/v1/plans/${plan.id}/items`, payload());
       setSaved(true);
       router.refresh();
     } catch (e) {
       setError(e instanceof Error ? e.message : "Không lưu được kế hoạch");
+    } finally {
+      setLoading(false);
+    }
+  }
+
+  async function submitPlan() {
+    setLoading(true);
+    setError(null);
+    try {
+      // Lưu bản mới nhất rồi nộp (backend validate rồi tạo phiên bản).
+      await mktPost(`/api/mkt/v1/plans/${plan.id}/items`, payload());
+      await mktPost(`/api/mkt/v1/plans/${plan.id}/submit`, { expectedVersion: plan.versionNumber });
+      setOpen(false);
+      router.refresh();
+    } catch (e) {
+      setError(e instanceof Error ? e.message : "Không nộp được kế hoạch");
     } finally {
       setLoading(false);
     }
@@ -355,10 +374,144 @@ export function PlanEditorButton({
           <DialogFooter>
             <Button variant="outline" disabled={loading} onClick={() => setOpen(false)}>Đóng</Button>
             {editable ? (
-              <Button disabled={loading} onClick={save}>
-                {loading ? "Đang lưu…" : `Lưu nháp (${filled.length})`}
-              </Button>
+              <>
+                <Button variant="outline" disabled={loading} onClick={save}>
+                  {loading ? "Đang lưu…" : `Lưu nháp (${filled.length})`}
+                </Button>
+                <Button disabled={loading || filled.length === 0} onClick={submitPlan}>
+                  {loading ? "Đang xử lý…" : "Nộp kế hoạch"}
+                </Button>
+              </>
             ) : null}
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+    </>
+  );
+}
+
+// ══════════════════════════════════════════════════════════════
+// Leader: duyệt kế hoạch (Approve tự sinh task / Yêu cầu sửa / Từ chối)
+// ══════════════════════════════════════════════════════════════
+export function PlanReviewButton({
+  plan,
+  members,
+}: {
+  plan: MktPlanInboxEntry;
+  members: MktMember[];
+}) {
+  const [open, setOpen] = useState(false);
+  const router = useRouter();
+  const [comment, setComment] = useState("");
+  const [loading, setLoading] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+
+  const memberName = (id: string | null) =>
+    id ? members.find((m) => m.id === id)?.name ?? "—" : "— chưa gán —";
+  const totalWorkload = plan.items.reduce((s, i) => s + (i.workloadPoints || 0), 0);
+
+  const byPerson = new Map<string, number>();
+  plan.items.forEach((i) => {
+    const key = i.suggestedAssigneeId ?? "—";
+    byPerson.set(key, (byPerson.get(key) ?? 0) + (i.workloadPoints || 0));
+  });
+
+  async function review(action: "approve" | "request_revision" | "reject") {
+    if ((action === "request_revision" || action === "reject") && !comment.trim()) {
+      setError("Nhập nhận xét/lý do trước khi yêu cầu sửa hoặc từ chối.");
+      return;
+    }
+    setLoading(true);
+    setError(null);
+    try {
+      await mktPost(`/api/mkt/v1/plans/${plan.id}/review`, {
+        versionId: plan.currentVersionId,
+        action,
+        comment: comment.trim() || undefined,
+      });
+      setOpen(false);
+      router.refresh();
+    } catch (e) {
+      setError(e instanceof Error ? e.message : "Không duyệt được kế hoạch");
+    } finally {
+      setLoading(false);
+    }
+  }
+
+  return (
+    <>
+      <Button size="sm" onClick={() => setOpen(true)}>Duyệt kế hoạch</Button>
+      <Dialog open={open} onOpenChange={(o) => (loading ? null : setOpen(o))}>
+        <DialogContent className="max-h-[92vh] overflow-y-auto sm:max-w-2xl">
+          <DialogHeader>
+            <DialogTitle>Duyệt kế hoạch — {plan.channelTitle ?? "Gói việc"}</DialogTitle>
+          </DialogHeader>
+          <div className="space-y-3">
+            <div className="grid grid-cols-3 gap-2 text-center">
+              <div className="rounded-lg border border-outline-variant bg-surface-container-lowest p-2">
+                <div className="text-lg font-bold">{plan.items.length}</div>
+                <div className="text-xs text-on-surface-variant">công đoạn</div>
+              </div>
+              <div className="rounded-lg border border-outline-variant bg-surface-container-lowest p-2">
+                <div className="text-lg font-bold">{totalWorkload}</div>
+                <div className="text-xs text-on-surface-variant">điểm khối lượng</div>
+              </div>
+              <div className="rounded-lg border border-outline-variant bg-surface-container-lowest p-2">
+                <div className="text-lg font-bold">{byPerson.size}</div>
+                <div className="text-xs text-on-surface-variant">người tham gia</div>
+              </div>
+            </div>
+
+            {plan.objective ? (
+              <p className="text-sm"><b>Mục tiêu:</b> {plan.objective}</p>
+            ) : null}
+
+            <div className="space-y-1.5">
+              {plan.items.map((it, i) => (
+                <div key={it.id} className="flex flex-wrap items-center justify-between gap-2 rounded-lg border border-outline-variant bg-background p-2 text-sm">
+                  <div className="min-w-0">
+                    <span className="font-medium">{i + 1}. {it.title}</span>
+                    <span className="ml-2 text-xs text-on-surface-variant">
+                      {memberName(it.suggestedAssigneeId)}
+                      {it.dependsOnId ? " · phụ thuộc công đoạn trước" : ""}
+                    </span>
+                  </div>
+                  <span className="text-xs font-medium text-on-surface-variant">{it.workloadPoints} điểm</span>
+                </div>
+              ))}
+            </div>
+
+            <div className="rounded-lg border border-outline-variant bg-surface-container-lowest p-2 text-xs">
+              <div className="mb-1 font-semibold text-on-surface-variant">Tải theo người:</div>
+              <div className="flex flex-wrap gap-x-4 gap-y-1">
+                {Array.from(byPerson.entries()).map(([id, pts]) => (
+                  <span key={id}>{memberName(id === "—" ? null : id)}: <b>{pts}</b> điểm</span>
+                ))}
+              </div>
+            </div>
+
+            <div className="space-y-1">
+              <Label className="text-xs">Nhận xét (bắt buộc khi Yêu cầu sửa / Từ chối)</Label>
+              <textarea
+                value={comment}
+                onChange={(e) => setComment(e.target.value)}
+                rows={2}
+                placeholder="VD: Thiếu công đoạn báo cáo; dời hạn quay sớm hơn…"
+                className="w-full rounded-lg border border-outline-variant bg-background px-2 py-1.5 text-sm"
+              />
+            </div>
+            {error ? <p className="text-sm font-medium text-rose-600">{error}</p> : null}
+          </div>
+          <DialogFooter className="flex-wrap">
+            <Button variant="outline" className="text-rose-600" disabled={loading} onClick={() => review("reject")}>
+              Từ chối
+            </Button>
+            <Button variant="outline" className="text-amber-700" disabled={loading} onClick={() => review("request_revision")}>
+              Yêu cầu sửa
+            </Button>
+            <Button disabled={loading} onClick={() => review("approve")}>
+              {loading ? "Đang xử lý…" : "Duyệt & sinh việc"}
+            </Button>
           </DialogFooter>
         </DialogContent>
       </Dialog>

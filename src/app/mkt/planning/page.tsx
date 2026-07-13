@@ -1,9 +1,9 @@
 import type { Metadata } from "next";
 import { Icon } from "@/components/ui/icon";
 import { createServerSupabaseClient } from "@/lib/supabase/server";
-import { getPlanInbox, getMktMembers } from "@/lib/mkt/read-models";
+import { getPlanInbox, getMktMembers, getMktContext } from "@/lib/mkt/read-models";
 import { PlanStatusBadge } from "@/components/mkt/badges";
-import { PlanEditorButton } from "@/components/mkt/plan-controls";
+import { PlanEditorButton, PlanReviewButton } from "@/components/mkt/plan-controls";
 
 export const dynamic = "force-dynamic";
 export const metadata: Metadata = { title: "MKT Hub — Lập kế hoạch" };
@@ -17,7 +17,12 @@ function fmtDate(value: string | null): string | null {
 
 export default async function PlanningPage() {
   const supabase = await createServerSupabaseClient();
-  const [plans, members] = await Promise.all([getPlanInbox(supabase), getMktMembers(supabase)]);
+  const [plans, members, ctx] = await Promise.all([
+    getPlanInbox(supabase),
+    getMktMembers(supabase),
+    getMktContext(supabase),
+  ]);
+  const isLead = Boolean(ctx.isLead);
 
   return (
     <div className="px-4 py-4 sm:px-5 lg:px-6">
@@ -56,8 +61,11 @@ export default async function PlanningPage() {
                     <span>bản v{p.versionNumber}</span>
                     {deadline ? <span className="inline-flex items-center gap-1"><Icon name="schedule" size={13} /> {deadline}</span> : null}
                   </div>
-                  <div className="mt-auto flex justify-end pt-1">
+                  <div className="mt-auto flex flex-wrap justify-end gap-2 pt-1">
                     <PlanEditorButton plan={p} members={members} />
+                    {isLead && p.status === "submitted" ? (
+                      <PlanReviewButton plan={p} members={members} />
+                    ) : null}
                   </div>
                 </article>
               );
