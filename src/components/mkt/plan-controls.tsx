@@ -518,3 +518,71 @@ export function PlanReviewButton({
     </>
   );
 }
+
+// ══════════════════════════════════════════════════════════════
+// Đổi kế hoạch (Change Request) — mở lại kế hoạch đã duyệt để sửa.
+// Đợt 3 chỉ cho khi mọi việc còn chưa ai nhận.
+// ══════════════════════════════════════════════════════════════
+export function ChangeRequestButton({ plan }: { plan: MktPlanInboxEntry }) {
+  const [open, setOpen] = useState(false);
+  const router = useRouter();
+  const [reason, setReason] = useState("");
+  const [loading, setLoading] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+
+  async function submit() {
+    if (!reason.trim()) {
+      setError("Nhập lý do đổi kế hoạch.");
+      return;
+    }
+    setLoading(true);
+    setError(null);
+    try {
+      await mktPost(`/api/mkt/v1/plans/${plan.id}/change-request`, { reason: reason.trim() });
+      setOpen(false);
+      router.refresh();
+    } catch (e) {
+      const raw = e instanceof Error ? e.message : "";
+      setError(
+        raw.includes("PLAN_TASKS_IN_PROGRESS")
+          ? "Có việc đã được nhận hoặc đang chạy — chưa đổi được ở đây. (Sửa kế hoạch khi việc đã chạy sẽ có ở bản kế tiếp.)"
+          : raw || "Không mở lại được kế hoạch",
+      );
+    } finally {
+      setLoading(false);
+    }
+  }
+
+  return (
+    <>
+      <Button size="sm" variant="outline" onClick={() => setOpen(true)}>Đổi kế hoạch</Button>
+      <Dialog open={open} onOpenChange={(o) => (loading ? null : setOpen(o))}>
+        <DialogContent className="sm:max-w-md">
+          <DialogHeader>
+            <DialogTitle>Đổi kế hoạch — {plan.channelTitle ?? "Gói việc"}</DialogTitle>
+          </DialogHeader>
+          <div className="space-y-3">
+            <p className="text-xs text-on-surface-variant">
+              Mở lại kế hoạch để chỉnh sửa rồi trình duyệt lại. Chỉ làm được khi <b>chưa ai nhận việc</b> —
+              các việc đang chờ sẽ được thu hồi và sinh lại sau khi duyệt bản mới.
+            </p>
+            <textarea
+              value={reason}
+              onChange={(e) => setReason(e.target.value)}
+              rows={2}
+              placeholder="Lý do đổi (VD: đổi hướng nội dung, dời lịch…)"
+              className="w-full rounded-lg border border-outline-variant bg-background px-2 py-1.5 text-sm"
+            />
+            {error ? <p className="text-sm font-medium text-rose-600">{error}</p> : null}
+          </div>
+          <DialogFooter>
+            <Button variant="outline" disabled={loading} onClick={() => setOpen(false)}>Huỷ</Button>
+            <Button disabled={loading || !reason.trim()} onClick={submit}>
+              {loading ? "Đang mở lại…" : "Mở lại để sửa"}
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+    </>
+  );
+}
