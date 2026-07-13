@@ -617,6 +617,8 @@ export type MktCampaignDetail = {
     channelType: string;
     title: string;
     targetOutput: string | null;
+    ownerId: string | null;
+    reviewerId: string | null;
     ownerName: string | null;
     reviewerName: string | null;
     status: string;
@@ -779,6 +781,8 @@ export async function getCampaignDetail(
       channelType: w.channel_type,
       title: w.title,
       targetOutput: w.target_output,
+      ownerId: w.owner_id,
+      reviewerId: w.reviewer_id,
       ownerName: nm(w.owner_id),
       reviewerName: nm(w.reviewer_id),
       status: w.status,
@@ -813,4 +817,171 @@ export async function getCampaignDetail(
       taskType: t.task_type,
     })),
   };
+}
+
+// ── Bottom-Up Channel Planning ──────────────────────────────────
+export type MktPlanItem = {
+  id: string;
+  title: string;
+  taskType: string;
+  description: string | null;
+  contentAngle: string | null;
+  deliverable: string | null;
+  suggestedAssigneeId: string | null;
+  reviewerId: string | null;
+  contentItemId: string | null;
+  workloadPoints: number;
+  dueAt: string | null;
+  sequence: number;
+  isMandatory: boolean;
+  dependsOnId: string | null;
+};
+
+export type MktPlanInboxEntry = {
+  id: string;
+  workPackageId: string;
+  campaignId: string;
+  campaignName: string | null;
+  channelTitle: string | null;
+  status: string;
+  versionNumber: number;
+  objective: string | null;
+  keyMessage: string | null;
+  mandatoryDeliverables: string | null;
+  riskNotes: string | null;
+  deadline: string | null;
+  ownerId: string | null;
+  ownerName: string | null;
+  reviewerId: string | null;
+  reviewerName: string | null;
+  submittedAt: string | null;
+  updatedAt: string | null;
+  items: MktPlanItem[];
+};
+
+// Hộp thư kế hoạch: RLS tự lọc — Owner thấy plan của mình, Leader thấy tất cả.
+export async function getPlanInbox(supabase: MktSupabaseClient): Promise<MktPlanInboxEntry[]> {
+  const db = getMktDatabaseClient(supabase);
+  const plansRes = await db
+    .from<{
+      id: string;
+      work_package_id: string;
+      campaign_id: string;
+      owner_id: string | null;
+      reviewer_id: string | null;
+      status: string;
+      version_number: number;
+      objective: string | null;
+      key_message: string | null;
+      mandatory_deliverables: string | null;
+      risk_notes: string | null;
+      deadline: string | null;
+      submitted_at: string | null;
+      updated_at: string | null;
+    }>("mkt_channel_plans")
+    .select(
+      "id, work_package_id, campaign_id, owner_id, reviewer_id, status, version_number, objective, key_message, mandatory_deliverables, risk_notes, deadline, submitted_at, updated_at",
+    )
+    .is("deleted_at", null)
+    .in("status", ["planning", "submitted", "revision_required", "approved", "in_execution"])
+    .order("updated_at", { ascending: false });
+  const plans = requireRows(plansRes.data, plansRes.error, "plan_inbox");
+  if (plans.length === 0) return [];
+
+  const planIds = plans.map((p) => p.id);
+  const wpIds = Array.from(new Set(plans.map((p) => p.work_package_id)));
+  const campIds = Array.from(new Set(plans.map((p) => p.campaign_id)));
+
+  const [itemsRes, wpRes, campRes] = await Promise.all([
+    db
+      .from<{
+        id: string;
+        plan_id: string;
+        title: string;
+        task_type: string;
+        description: string | null;
+        content_angle: string | null;
+        deliverable: string | null;
+        suggested_assignee_id: string | null;
+        reviewer_id: string | null;
+        content_item_id: string | null;
+        workload_points: number | null;
+        due_at: string | null;
+        sequence: number | null;
+        is_mandatory: boolean | null;
+        depends_on_item_id: string | null;
+      }>("mkt_channel_plan_items")
+      .select(
+        "id, plan_id, title, task_type, description, content_angle, deliverable, suggested_assignee_id, reviewer_id, content_item_id, workload_points, due_at, sequence, is_mandatory, depends_on_item_id",
+      )
+      .in("plan_id", planIds)
+      .order("sequence", { ascending: true }),
+    db
+      .from<{ id: string; title: string }>("mkt_channel_work_packages")
+      .select("id, title")
+      .in("id", wpIds),
+    db.from<{ id: string; name: string }>("mkt_campaigns").select("id, name").in("id", campIds),
+  ]);
+
+  const wpTitle = new Map((wpRes.data ?? []).map((w) => [w.id, w.title] as const));
+  const campName = new Map((campRes.data ?? []).map((c) => [c.id, c.name] as const));
+
+  const pids = new Set<string>();
+  plans.forEach((p) => {
+    if (p.owner_id) pids.add(p.owner_id);
+    if (p.reviewer_id) pids.add(p.reviewer_id);
+  });
+  const names = new Map<string, string>();
+  if (pids.size > 0) {
+    const { data: profs } = await db
+      .from<{ id: string; full_name: string | null; email: string | null }>("profiles")
+      .select("id, full_name, email")
+      .in("id", Array.from(pids));
+    (profs ?? []).forEach((p) => names.set(p.id, p.full_name || p.email || "Chưa gán tên"));
+  }
+  const nm = (id: string | null) => (id ? names.get(id) ?? "Chưa gán tên" : null);
+
+  const itemsByPlan = new Map<string, MktPlanItem[]>();
+  (itemsRes.data ?? []).forEach((it) => {
+    const arr = itemsByPlan.get(it.plan_id) ?? [];
+    arr.push({
+      id: it.id,
+      title: it.title,
+      taskType: it.task_type,
+      description: it.description,
+      contentAngle: it.content_angle,
+      deliverable: it.deliverable,
+      suggestedAssigneeId: it.suggested_assignee_id,
+      reviewerId: it.reviewer_id,
+      contentItemId: it.content_item_id,
+      workloadPoints: it.workload_points ?? 1,
+      dueAt: it.due_at,
+      sequence: it.sequence ?? 0,
+      isMandatory: it.is_mandatory ?? false,
+      dependsOnId: it.depends_on_item_id,
+    });
+    itemsByPlan.set(it.plan_id, arr);
+  });
+
+  return plans.map((p) => ({
+    id: p.id,
+    workPackageId: p.work_package_id,
+    campaignId: p.campaign_id,
+    campaignName: campName.get(p.campaign_id) ?? null,
+    channelTitle: wpTitle.get(p.work_package_id) ?? null,
+    status: p.status,
+    versionNumber: p.version_number,
+    objective: p.objective,
+    keyMessage: p.key_message,
+    mandatoryDeliverables: p.mandatory_deliverables,
+    riskNotes: p.risk_notes,
+    deadline: p.deadline,
+    ownerId: p.owner_id,
+    ownerName: nm(p.owner_id),
+    reviewerId: p.reviewer_id,
+    reviewerName: nm(p.reviewer_id),
+    submittedAt: p.submitted_at,
+    updatedAt: p.updated_at,
+    items: itemsByPlan.get(p.id) ?? [],
+  }));
 }
