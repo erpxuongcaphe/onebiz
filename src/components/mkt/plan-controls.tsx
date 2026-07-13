@@ -14,6 +14,7 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Icon } from "@/components/ui/icon";
 import { mktPost } from "@/lib/mkt/client";
+import { AcceptanceBadge, TaskStatusBadge } from "@/components/mkt/badges";
 import type { MktMember, MktPlanInboxEntry, MktPlanItem } from "@/lib/mkt/read-models";
 
 const TASK_TYPES = [
@@ -580,6 +581,110 @@ export function ChangeRequestButton({ plan }: { plan: MktPlanInboxEntry }) {
             <Button disabled={loading || !reason.trim()} onClick={submit}>
               {loading ? "Đang mở lại…" : "Mở lại để sửa"}
             </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+    </>
+  );
+}
+
+// ══════════════════════════════════════════════════════════════
+// Leader: điều chỉnh việc đã chạy (giữ / huỷ / đổi người từng việc)
+// ══════════════════════════════════════════════════════════════
+export function PlanReconcileButton({
+  plan,
+  members,
+}: {
+  plan: MktPlanInboxEntry;
+  members: MktMember[];
+}) {
+  const [open, setOpen] = useState(false);
+  const router = useRouter();
+  const [busyId, setBusyId] = useState<string | null>(null);
+  const [error, setError] = useState<string | null>(null);
+  const [reassignFor, setReassignFor] = useState<string | null>(null);
+  const [reassignTo, setReassignTo] = useState("");
+
+  async function act(taskId: string, decision: "cancel" | "reassign", newAssigneeId?: string) {
+    setBusyId(taskId);
+    setError(null);
+    try {
+      await mktPost(`/api/mkt/v1/plans/${plan.id}/reconcile-task`, { taskId, decision, newAssigneeId });
+      setReassignFor(null);
+      setReassignTo("");
+      router.refresh();
+    } catch (e) {
+      setError(e instanceof Error ? e.message : "Không điều chỉnh được việc");
+    } finally {
+      setBusyId(null);
+    }
+  }
+
+  return (
+    <>
+      <Button size="sm" variant="outline" onClick={() => setOpen(true)}>Điều chỉnh việc</Button>
+      <Dialog open={open} onOpenChange={(o) => (busyId ? null : setOpen(o))}>
+        <DialogContent className="max-h-[92vh] overflow-y-auto sm:max-w-2xl">
+          <DialogHeader>
+            <DialogTitle>Điều chỉnh việc đang chạy — {plan.channelTitle ?? "Gói việc"}</DialogTitle>
+          </DialogHeader>
+          <div className="space-y-2">
+            <p className="text-xs text-on-surface-variant">
+              Khi cần đổi kế hoạch mà việc đã có người nhận: <b>giữ</b>, <b>huỷ</b>, hoặc <b>đổi người</b> từng việc.
+              Muốn thêm việc mới thì dùng chức năng tạo việc tay ở gói việc. Việc đã Xong không đổi được.
+            </p>
+            {plan.tasks.length === 0 ? (
+              <p className="text-sm text-on-surface-variant">Chưa có việc nào.</p>
+            ) : (
+              plan.tasks.map((t) => {
+                const locked = t.taskStatus === "done" || t.taskStatus === "canceled";
+                return (
+                  <div key={t.id} className="rounded-lg border border-outline-variant bg-background p-2.5">
+                    <div className="flex flex-wrap items-center justify-between gap-2">
+                      <div className="min-w-0">
+                        <div className="text-sm font-medium">{t.title}</div>
+                        <div className="mt-0.5 text-xs text-on-surface-variant">{t.assigneeName ?? "— chưa gán —"}</div>
+                      </div>
+                      <div className="flex flex-wrap items-center gap-1.5">
+                        <AcceptanceBadge value={t.acceptanceStatus} taskStatus={t.taskStatus} />
+                        <TaskStatusBadge value={t.taskStatus} />
+                      </div>
+                    </div>
+                    {!locked ? (
+                      reassignFor === t.id ? (
+                        <div className="mt-2 flex flex-wrap items-center gap-2">
+                          <select value={reassignTo} onChange={(e) => setReassignTo(e.target.value)} className={selectCls + " flex-1"}>
+                            <option value="">— Chọn người mới —</option>
+                            {members.map((m) => <option key={m.id} value={m.id}>{m.name}</option>)}
+                          </select>
+                          <Button size="sm" disabled={!reassignTo || busyId === t.id} onClick={() => act(t.id, "reassign", reassignTo)}>
+                            {busyId === t.id ? "…" : "Xác nhận"}
+                          </Button>
+                          <Button size="sm" variant="outline" disabled={busyId === t.id} onClick={() => { setReassignFor(null); setReassignTo(""); }}>Huỷ</Button>
+                        </div>
+                      ) : (
+                        <div className="mt-2 flex flex-wrap gap-2">
+                          <Button size="sm" variant="outline" disabled={busyId === t.id} onClick={() => { setReassignFor(t.id); setReassignTo(""); }}>
+                            Đổi người
+                          </Button>
+                          <Button size="sm" variant="outline" className="text-rose-600" disabled={busyId === t.id} onClick={() => act(t.id, "cancel")}>
+                            {busyId === t.id ? "…" : "Huỷ việc"}
+                          </Button>
+                        </div>
+                      )
+                    ) : (
+                      <div className="mt-1 text-xs text-on-surface-variant">
+                        {t.taskStatus === "done" ? "Đã xong — giữ nguyên." : "Đã huỷ."}
+                      </div>
+                    )}
+                  </div>
+                );
+              })
+            )}
+            {error ? <p className="text-sm font-medium text-rose-600">{error}</p> : null}
+          </div>
+          <DialogFooter>
+            <Button variant="outline" disabled={Boolean(busyId)} onClick={() => setOpen(false)}>Đóng</Button>
           </DialogFooter>
         </DialogContent>
       </Dialog>
