@@ -664,6 +664,32 @@ function mapInvoice(row: any): Invoice {
     deliveryType: "no_delivery", // Would need join to shipping_orders
     // CEO 08/07: ghi chú người bán — để in trên hóa đơn (print-templates).
     note: row.note ?? undefined,
+    // 00179: tiền khách đưa thực tế tại POS — in lại tái hiện Khách đưa/Thối.
+    amountTendered:
+      row.amount_tendered != null ? Number(row.amount_tendered) : undefined,
     createdBy: (row.profiles as { full_name: string } | null)?.full_name ?? "---",
   };
+}
+
+/**
+ * 00179 (CEO 13/07): lưu "tiền khách đưa" sau khi POS thanh toán xong —
+ * best-effort, nuốt lỗi (cột chưa có nếu 00179 chưa chạy / mất mạng).
+ * KHÔNG được block checkout — tiền đã thu xong.
+ */
+export async function setInvoiceAmountTendered(
+  invoiceId: string,
+  amount: number,
+): Promise<void> {
+  try {
+    const supabase = getClient();
+    const tenantId = await getCurrentTenantId();
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    await (supabase as any)
+      .from("invoices")
+      .update({ amount_tendered: amount })
+      .eq("tenant_id", tenantId)
+      .eq("id", invoiceId);
+  } catch {
+    /* best-effort */
+  }
 }

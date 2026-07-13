@@ -23,6 +23,7 @@ export {
   updateInvoice,
   getInvoicesForCustomer,
   getReturnsForCustomer,
+  setInvoiceAmountTendered,
 } from "./invoices";
 export type { CustomerReturn, UpdateInvoicePatch, InvoiceItemRow } from "./invoices";
 export {
@@ -186,6 +187,7 @@ export {
   getEndOfDayStats, getTodayTopProducts,
   // Orders
   getOrdersKpis, getDailyOrderVolume, getOrderStatusDistribution, getRecentOrders,
+  getOrderProductBreakdown,
   // Inventory
   getInventoryKpis, getTopProductsByRevenue, getCategoryDistribution, getStockMovements, getLowStockProducts as getAnalyticsLowStock,
   // Channels

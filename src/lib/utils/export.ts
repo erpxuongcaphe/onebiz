@@ -26,6 +26,27 @@ function normalizeExportValue(value: string | number | null | undefined) {
   return roundDecimals(value);
 }
 
+/**
+ * FIX (CEO 13/07 — nút "Xuất file" bấm không ra file): bản ESM `xlsx.mjs`
+ * (Next bundle theo field `module`) KHÔNG có `export default` — chỉ có named
+ * exports (utils, write…). Destructure `{ default: XLSX }` → undefined →
+ * `XLSX.utils` ném TypeError ngầm trong onClick → không file, không báo lỗi.
+ * Fix: dùng namespace, fallback `.default` cho trường hợp resolve bản CJS.
+ */
+async function loadXlsxAndSaver() {
+  const [xlsxMod, saverMod] = await Promise.all([
+    import("xlsx"),
+    import("file-saver"),
+  ]);
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  const xm = xlsxMod as any;
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  const sm = saverMod as any;
+  const XLSX = xm.utils ? xm : xm.default;
+  const saveAs = sm.saveAs ?? sm.default;
+  return { XLSX, saveAs };
+}
+
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
 export async function exportToExcel<T extends Record<string, any>>(
   data: T[],
@@ -33,10 +54,7 @@ export async function exportToExcel<T extends Record<string, any>>(
   fileName: string,
 ): Promise<void> {
   // Lazy import — xlsx chỉ tải khi function thực sự được gọi.
-  const [{ default: XLSX }, { saveAs }] = await Promise.all([
-    import("xlsx"),
-    import("file-saver"),
-  ]);
+  const { XLSX, saveAs } = await loadXlsxAndSaver();
 
   // Map data to rows using column definitions
   const rows = data.map((item) =>
@@ -72,10 +90,7 @@ export async function exportToCsv<T extends Record<string, any>>(
   columns: ExportColumn[],
   fileName: string,
 ): Promise<void> {
-  const [{ default: XLSX }, { saveAs }] = await Promise.all([
-    import("xlsx"),
-    import("file-saver"),
-  ]);
+  const { XLSX, saveAs } = await loadXlsxAndSaver();
 
   const rows = data.map((item) =>
     columns.reduce(
