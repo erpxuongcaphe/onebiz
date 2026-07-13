@@ -21,6 +21,8 @@ export const MKT_ERROR_STATUS: Record<string, number> = {
   INVALID_CONTENT_URL: 400,
   STALE_CONTENT_VERSION: 409,
   CROSS_TENANT_REFERENCE: 403,
+  PLAN_VERSION_CONFLICT: 409,
+  PLAN_VALIDATION_FAILED: 400,
 };
 
 export type MktSupabaseClient = Awaited<ReturnType<typeof createServerSupabaseClient>>;
