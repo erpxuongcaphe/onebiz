@@ -845,6 +845,7 @@ export type MktPlanInboxEntry = {
   channelTitle: string | null;
   status: string;
   versionNumber: number;
+  currentVersionId: string | null;
   objective: string | null;
   keyMessage: string | null;
   mandatoryDeliverables: string | null;
@@ -871,6 +872,7 @@ export async function getPlanInbox(supabase: MktSupabaseClient): Promise<MktPlan
       reviewer_id: string | null;
       status: string;
       version_number: number;
+      current_version_id: string | null;
       objective: string | null;
       key_message: string | null;
       mandatory_deliverables: string | null;
@@ -880,7 +882,7 @@ export async function getPlanInbox(supabase: MktSupabaseClient): Promise<MktPlan
       updated_at: string | null;
     }>("mkt_channel_plans")
     .select(
-      "id, work_package_id, campaign_id, owner_id, reviewer_id, status, version_number, objective, key_message, mandatory_deliverables, risk_notes, deadline, submitted_at, updated_at",
+      "id, work_package_id, campaign_id, owner_id, reviewer_id, status, version_number, current_version_id, objective, key_message, mandatory_deliverables, risk_notes, deadline, submitted_at, updated_at",
     )
     .is("deleted_at", null)
     .in("status", ["planning", "submitted", "revision_required", "approved", "in_execution"])
@@ -971,6 +973,7 @@ export async function getPlanInbox(supabase: MktSupabaseClient): Promise<MktPlan
     channelTitle: wpTitle.get(p.work_package_id) ?? null,
     status: p.status,
     versionNumber: p.version_number,
+    currentVersionId: p.current_version_id,
     objective: p.objective,
     keyMessage: p.key_message,
     mandatoryDeliverables: p.mandatory_deliverables,
