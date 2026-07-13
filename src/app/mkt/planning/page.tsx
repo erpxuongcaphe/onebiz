@@ -3,7 +3,12 @@ import { Icon } from "@/components/ui/icon";
 import { createServerSupabaseClient } from "@/lib/supabase/server";
 import { getPlanInbox, getMktMembers, getMktContext } from "@/lib/mkt/read-models";
 import { PlanStatusBadge } from "@/components/mkt/badges";
-import { PlanEditorButton, PlanReviewButton, ChangeRequestButton } from "@/components/mkt/plan-controls";
+import {
+  PlanEditorButton,
+  PlanReviewButton,
+  ChangeRequestButton,
+  PlanReconcileButton,
+} from "@/components/mkt/plan-controls";
 
 const VERSION_OUTCOME: Record<string, string> = {
   approve: "duyệt",
@@ -83,6 +88,9 @@ export default async function PlanningPage() {
                       <PlanReviewButton plan={p} members={members} />
                     ) : null}
                     {p.status === "in_execution" ? <ChangeRequestButton plan={p} /> : null}
+                    {isLead && p.status === "in_execution" ? (
+                      <PlanReconcileButton plan={p} members={members} />
+                    ) : null}
                   </div>
                 </article>
               );

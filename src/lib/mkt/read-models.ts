@@ -866,6 +866,15 @@ export type MktPlanInboxEntry = {
     submittedAt: string | null;
     reviewedAt: string | null;
   }>;
+  tasks: Array<{
+    id: string;
+    title: string;
+    assigneeId: string | null;
+    assigneeName: string | null;
+    acceptanceStatus: string;
+    taskStatus: string;
+    taskType: string | null;
+  }>;
 };
 
 // Hộp thư kế hoạch: RLS tự lọc — Owner thấy plan của mình, Leader thấy tất cả.
@@ -902,7 +911,7 @@ export async function getPlanInbox(supabase: MktSupabaseClient): Promise<MktPlan
   const wpIds = Array.from(new Set(plans.map((p) => p.work_package_id)));
   const campIds = Array.from(new Set(plans.map((p) => p.campaign_id)));
 
-  const [itemsRes, wpRes, campRes, verRes] = await Promise.all([
+  const [itemsRes, wpRes, campRes, verRes, tasksRes] = await Promise.all([
     db
       .from<{
         id: string;
@@ -944,6 +953,20 @@ export async function getPlanInbox(supabase: MktSupabaseClient): Promise<MktPlan
       .select("plan_id, version_number, status, review_action, review_comment, submitted_at, reviewed_at")
       .in("plan_id", planIds)
       .order("version_number", { ascending: true }),
+    db
+      .from<{
+        id: string;
+        channel_plan_id: string | null;
+        title: string;
+        assignee_id: string | null;
+        acceptance_status: string;
+        task_status: string;
+        task_type: string | null;
+      }>("mkt_tasks")
+      .select("id, channel_plan_id, title, assignee_id, acceptance_status, task_status, task_type")
+      .in("channel_plan_id", planIds)
+      .is("deleted_at", null)
+      .order("created_at", { ascending: true }),
   ]);
 
   const wpTitle = new Map((wpRes.data ?? []).map((w) => [w.id, w.title] as const));
@@ -953,6 +976,9 @@ export async function getPlanInbox(supabase: MktSupabaseClient): Promise<MktPlan
   plans.forEach((p) => {
     if (p.owner_id) pids.add(p.owner_id);
     if (p.reviewer_id) pids.add(p.reviewer_id);
+  });
+  (tasksRes.data ?? []).forEach((t) => {
+    if (t.assignee_id) pids.add(t.assignee_id);
   });
   const names = new Map<string, string>();
   if (pids.size > 0) {
@@ -1000,6 +1026,22 @@ export async function getPlanInbox(supabase: MktSupabaseClient): Promise<MktPlan
     itemsByPlan.set(it.plan_id, arr);
   });
 
+  const tasksByPlan = new Map<string, MktPlanInboxEntry["tasks"]>();
+  (tasksRes.data ?? []).forEach((t) => {
+    if (!t.channel_plan_id) return;
+    const arr = tasksByPlan.get(t.channel_plan_id) ?? [];
+    arr.push({
+      id: t.id,
+      title: t.title,
+      assigneeId: t.assignee_id,
+      assigneeName: nm(t.assignee_id),
+      acceptanceStatus: t.acceptance_status,
+      taskStatus: t.task_status,
+      taskType: t.task_type,
+    });
+    tasksByPlan.set(t.channel_plan_id, arr);
+  });
+
   return plans.map((p) => ({
     id: p.id,
     workPackageId: p.work_package_id,
@@ -1022,5 +1064,6 @@ export async function getPlanInbox(supabase: MktSupabaseClient): Promise<MktPlan
     updatedAt: p.updated_at,
     items: itemsByPlan.get(p.id) ?? [],
     versions: versionsByPlan.get(p.id) ?? [],
+    tasks: tasksByPlan.get(p.id) ?? [],
   }));
 }
