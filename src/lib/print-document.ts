@@ -55,7 +55,7 @@ export interface DocumentPrintData {
   showSignature?: boolean;
   /**
    * Các ô ký cuối phiếu (tùy biến). undefined → mặc định [Người lập phiếu, Người duyệt].
-   * Ô đầu tiên tự điền tên người lập (createdBy). Áp cho A4/A5; thermal không dùng.
+   * CEO 13/07: ô ký LUÔN để trống (ký tay), KHÔNG tự điền tên người lập. Áp cho A4/A5; thermal không dùng.
    */
   signatures?: { label: string }[];
 
@@ -403,7 +403,7 @@ ${
           (s, i) => `<div class="col">
     <div class="title">${esc(s.label)}</div>
     <div class="cap">(Ký, ghi rõ họ tên)</div>
-    <div>${i === 0 ? esc(d.createdBy ?? "") : ""}</div>
+    <div></div>
   </div>`,
         )
         .join("")}</div>`

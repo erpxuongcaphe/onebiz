@@ -39,6 +39,7 @@ import {
   adjustCustomerDebt,
   getCustomerById,
   attachDeliveryToInvoice,
+  getTenantBusinessInfo,
 } from "@/lib/services/supabase";
 import { useAutoSaveDraft, loadLocalCart } from "./hooks/use-auto-save-draft";
 import { RecoveryDialog } from "./components/recovery-dialog";
@@ -54,6 +55,8 @@ import { printShiftReport } from "@/lib/print-shift-report";
 import { resolvePrintTemplate } from "@/lib/services";
 import { applyTemplateToDocData } from "@/lib/print-apply-template";
 import { printDocument, type DocumentPrintData } from "@/lib/print-document";
+// CEO 13/07: dựng khối khách trên phiếu POS qua CÙNG helper với trang Hóa đơn.
+import { buildBuyerHeaderFields, type InvoiceFieldFlags } from "@/lib/print-templates";
 import { PosBranchSelector } from "@/components/shared/pos-branch-selector";
 import { useNetworkStatus, offlinePosCheckout } from "@/lib/offline";
 import { useBarcodeScanner } from "@/lib/hooks/use-barcode-scanner";
@@ -1051,6 +1054,20 @@ function PosPageInner() {
     tierCode: string;
     priceMap: Map<string, number>;
   } | null>(null);
+
+  // CEO 13/07: nạp cờ bật/tắt dòng in (invoiceFields) 1 lần khi mở POS → phiếu
+  // in lúc thanh toán dựng khối khách qua CÙNG helper với trang Hóa đơn (in theo
+  // mẫu, 2 phiếu khớp nhau). Best-effort: lỗi → undefined → helper hiện mặc định.
+  const invoiceFieldsRef = useRef<InvoiceFieldFlags | undefined>(undefined);
+  useEffect(() => {
+    getTenantBusinessInfo()
+      .then((info) => {
+        invoiceFieldsRef.current = info?.invoiceFields;
+      })
+      .catch(() => {
+        /* giữ undefined → helper dùng mặc định (hiện đủ dòng có dữ liệu) */
+      });
+  }, []);
 
   // Wrapper addLine — inject tier price nếu có. Mọi nơi gọi state.addLine
   // trong page này phải qua addLineWithTier để giá tier được áp dụng cho
@@ -2063,9 +2080,18 @@ function PosPageInner() {
               date: new Date().toISOString(),
               branchName: currentBranch?.name,
               note: state.note || undefined,
-              headerFields: [
-                { label: "Khách hàng", value: resolvedCustomerName },
-              ],
+              // CEO 13/07: khối khách dựng qua CÙNG helper với trang Hóa đơn —
+              // gồm SĐT / địa chỉ / mã KH / người tạo theo đúng cài đặt in.
+              headerFields: buildBuyerHeaderFields(
+                {
+                  customerName: resolvedCustomerName,
+                  customerCode: state.customer?.code,
+                  customerPhone: state.customer?.phone,
+                  customerAddress: state.customer?.address,
+                  createdByName: user?.fullName,
+                },
+                invoiceFieldsRef.current,
+              ),
               items: receipt.items,
               itemColumns: ["Tên hàng", "SL", "Đơn giá", "Giảm giá", "Thành tiền"],
               summaryRows: [
