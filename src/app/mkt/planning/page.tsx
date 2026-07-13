@@ -3,7 +3,15 @@ import { Icon } from "@/components/ui/icon";
 import { createServerSupabaseClient } from "@/lib/supabase/server";
 import { getPlanInbox, getMktMembers, getMktContext } from "@/lib/mkt/read-models";
 import { PlanStatusBadge } from "@/components/mkt/badges";
-import { PlanEditorButton, PlanReviewButton } from "@/components/mkt/plan-controls";
+import { PlanEditorButton, PlanReviewButton, ChangeRequestButton } from "@/components/mkt/plan-controls";
+
+const VERSION_OUTCOME: Record<string, string> = {
+  approve: "duyệt",
+  request_revision: "y/c sửa",
+  reject: "từ chối",
+  submitted: "đã nộp",
+  superseded: "thay thế",
+};
 
 export const dynamic = "force-dynamic";
 export const metadata: Metadata = { title: "MKT Hub — Lập kế hoạch" };
@@ -61,11 +69,20 @@ export default async function PlanningPage() {
                     <span>bản v{p.versionNumber}</span>
                     {deadline ? <span className="inline-flex items-center gap-1"><Icon name="schedule" size={13} /> {deadline}</span> : null}
                   </div>
+                  {p.versions.length > 1 || p.versions.some((v) => v.reviewAction) ? (
+                    <div className="text-xs text-on-surface-variant">
+                      Lịch sử:{" "}
+                      {p.versions
+                        .map((v) => `v${v.versionNumber} (${VERSION_OUTCOME[v.reviewAction ?? v.status] ?? v.status})`)
+                        .join(" · ")}
+                    </div>
+                  ) : null}
                   <div className="mt-auto flex flex-wrap justify-end gap-2 pt-1">
                     <PlanEditorButton plan={p} members={members} />
                     {isLead && p.status === "submitted" ? (
                       <PlanReviewButton plan={p} members={members} />
                     ) : null}
+                    {p.status === "in_execution" ? <ChangeRequestButton plan={p} /> : null}
                   </div>
                 </article>
               );

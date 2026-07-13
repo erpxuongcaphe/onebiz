@@ -858,6 +858,14 @@ export type MktPlanInboxEntry = {
   submittedAt: string | null;
   updatedAt: string | null;
   items: MktPlanItem[];
+  versions: Array<{
+    versionNumber: number;
+    status: string;
+    reviewAction: string | null;
+    reviewComment: string | null;
+    submittedAt: string | null;
+    reviewedAt: string | null;
+  }>;
 };
 
 // Hộp thư kế hoạch: RLS tự lọc — Owner thấy plan của mình, Leader thấy tất cả.
@@ -894,7 +902,7 @@ export async function getPlanInbox(supabase: MktSupabaseClient): Promise<MktPlan
   const wpIds = Array.from(new Set(plans.map((p) => p.work_package_id)));
   const campIds = Array.from(new Set(plans.map((p) => p.campaign_id)));
 
-  const [itemsRes, wpRes, campRes] = await Promise.all([
+  const [itemsRes, wpRes, campRes, verRes] = await Promise.all([
     db
       .from<{
         id: string;
@@ -923,6 +931,19 @@ export async function getPlanInbox(supabase: MktSupabaseClient): Promise<MktPlan
       .select("id, title")
       .in("id", wpIds),
     db.from<{ id: string; name: string }>("mkt_campaigns").select("id, name").in("id", campIds),
+    db
+      .from<{
+        plan_id: string;
+        version_number: number;
+        status: string;
+        review_action: string | null;
+        review_comment: string | null;
+        submitted_at: string | null;
+        reviewed_at: string | null;
+      }>("mkt_channel_plan_versions")
+      .select("plan_id, version_number, status, review_action, review_comment, submitted_at, reviewed_at")
+      .in("plan_id", planIds)
+      .order("version_number", { ascending: true }),
   ]);
 
   const wpTitle = new Map((wpRes.data ?? []).map((w) => [w.id, w.title] as const));
@@ -942,6 +963,20 @@ export async function getPlanInbox(supabase: MktSupabaseClient): Promise<MktPlan
     (profs ?? []).forEach((p) => names.set(p.id, p.full_name || p.email || "Chưa gán tên"));
   }
   const nm = (id: string | null) => (id ? names.get(id) ?? "Chưa gán tên" : null);
+
+  const versionsByPlan = new Map<string, MktPlanInboxEntry["versions"]>();
+  (verRes.data ?? []).forEach((v) => {
+    const arr = versionsByPlan.get(v.plan_id) ?? [];
+    arr.push({
+      versionNumber: v.version_number,
+      status: v.status,
+      reviewAction: v.review_action,
+      reviewComment: v.review_comment,
+      submittedAt: v.submitted_at,
+      reviewedAt: v.reviewed_at,
+    });
+    versionsByPlan.set(v.plan_id, arr);
+  });
 
   const itemsByPlan = new Map<string, MktPlanItem[]>();
   (itemsRes.data ?? []).forEach((it) => {
@@ -986,5 +1021,6 @@ export async function getPlanInbox(supabase: MktSupabaseClient): Promise<MktPlan
     submittedAt: p.submitted_at,
     updatedAt: p.updated_at,
     items: itemsByPlan.get(p.id) ?? [],
+    versions: versionsByPlan.get(p.id) ?? [],
   }));
 }

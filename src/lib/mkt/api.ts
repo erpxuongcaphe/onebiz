@@ -23,6 +23,7 @@ export const MKT_ERROR_STATUS: Record<string, number> = {
   CROSS_TENANT_REFERENCE: 403,
   PLAN_VERSION_CONFLICT: 409,
   PLAN_VALIDATION_FAILED: 400,
+  PLAN_TASKS_IN_PROGRESS: 409,
 };
 
 export type MktSupabaseClient = Awaited<ReturnType<typeof createServerSupabaseClient>>;
