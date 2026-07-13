@@ -80,8 +80,9 @@ import {
 } from "@/lib/services";
 import { StockWithConversion } from "@/components/shared/stock-with-conversion";
 import { SummaryCard } from "@/components/shared/summary-card";
-import { useToast } from "@/lib/contexts";
+import { useToast, useBranchFilter } from "@/lib/contexts";
 import { useAuth } from "@/lib/contexts/auth-context";
+import { AllBranchesBanner } from "@/components/shared/all-branches-banner";
 import { isOwnerRole } from "@/lib/types/auth";
 import { usePermissions } from "@/lib/permissions/use-permission";
 import { PERMISSIONS } from "@/lib/permissions/constants";
@@ -348,6 +349,12 @@ export default function HangHoaPage() {
 
   // Bulk action state — phase 2: wire backend mutations
   const { toast } = useToast();
+  // Branch-scope danh sách SP (CEO 13/07): mặc định hiện theo chi nhánh đang
+  // chọn (cột "Tồn" = tồn CN đó, chỉ SP có ở CN); toggle "Toàn chuỗi" xem hết.
+  const { activeBranchId, currentBranch } = useBranchFilter();
+  const [viewAllBranches, setViewAllBranches] = useState(false);
+  const [otherBranchCount, setOtherBranchCount] = useState(0);
+  const branchStockView = !viewAllBranches && !!activeBranchId;
 
   // Sprint S2 Phase 1 + 3a (CEO 12/05): defense-in-depth permission cho xoá SP.
   //   - canDeleteProduct = true  → bấm Xoá → ConfirmDialog → service trực tiếp
@@ -445,23 +452,43 @@ export default function HangHoaPage() {
       createdDatePreset === "custom" ? createdDateFrom : createdRange.from;
     const effectiveCreatedTo =
       createdDatePreset === "custom" ? createdDateTo : createdRange.to;
+    const listFilters = {
+      productType: scope,
+      ...(categoryFilter !== "all" && { category: [categoryFilter] }),
+      ...(stockFilter !== "all" && { stock: stockFilter }),
+      ...(statusFilter !== "all" && { status: statusFilter }),
+      ...(brandFilter !== "all" && { brand: brandFilter }),
+      ...(effectiveCreatedFrom && { dateFrom: effectiveCreatedFrom }),
+      ...(effectiveCreatedTo && { dateTo: effectiveCreatedTo }),
+    };
     const result = await getProducts({
       page,
       pageSize,
       search: debouncedSearch,
       searchField,
-      filters: {
-        productType: scope,
-        ...(categoryFilter !== "all" && { category: [categoryFilter] }),
-        ...(stockFilter !== "all" && { stock: stockFilter }),
-        ...(statusFilter !== "all" && { status: statusFilter }),
-        ...(brandFilter !== "all" && { brand: brandFilter }),
-        ...(effectiveCreatedFrom && { dateFrom: effectiveCreatedFrom }),
-        ...(effectiveCreatedTo && { dateTo: effectiveCreatedTo }),
-      },
+      // Branch-scope: mặc định theo CN đang chọn; "Toàn chuỗi" → undefined.
+      branchId: viewAllBranches ? undefined : activeBranchId,
+      filters: listFilters,
     });
     setData(result.data);
     setTotal(result.total);
+    // Trống vì đang lọc theo chi nhánh? Đếm SP toàn chuỗi (cùng bộ lọc) để gợi ý.
+    if (result.data.length === 0 && !viewAllBranches && activeBranchId) {
+      try {
+        const all = await getProducts({
+          page: 0,
+          pageSize: 1,
+          search: debouncedSearch,
+          searchField,
+          filters: listFilters,
+        });
+        setOtherBranchCount(all.total);
+      } catch {
+        setOtherBranchCount(0);
+      }
+    } else {
+      setOtherBranchCount(0);
+    }
     setLoading(false);
 
     // Day 18/05/2026 (CEO): query BOM status cho SKU có has_bom=true
@@ -497,7 +524,12 @@ export default function HangHoaPage() {
     } else {
       setConversionsMap(new Map());
     }
-  }, [page, pageSize, debouncedSearch, searchField, scope, categoryFilter, stockFilter, statusFilter, brandFilter, createdDatePreset, createdDateFrom, createdDateTo]);
+  }, [page, pageSize, debouncedSearch, searchField, scope, categoryFilter, stockFilter, statusFilter, brandFilter, createdDatePreset, createdDateFrom, createdDateTo, activeBranchId, viewAllBranches]);
+
+  // Đổi chi nhánh / bật-tắt "Toàn chuỗi" → về trang 1.
+  useEffect(() => {
+    setPage(0);
+  }, [activeBranchId, viewAllBranches]);
 
   useEffect(() => {
     fetchData();
@@ -1048,7 +1080,10 @@ export default function HangHoaPage() {
       header: "Tồn kho",
       size: 150,
       cell: ({ row }) => {
-        const stock = row.original.stock;
+        // Branch-scope: hiện tồn của chi nhánh đang chọn; toàn chuỗi → tồn tổng.
+        const stock = branchStockView
+          ? row.original.branchStock ?? 0
+          : row.original.stock;
         return (
           <span
             className={
@@ -1196,7 +1231,10 @@ export default function HangHoaPage() {
       header: "Tồn kho",
       size: 150,
       cell: ({ row }) => {
-        const stock = row.original.stock;
+        // Branch-scope: hiện tồn của chi nhánh đang chọn; toàn chuỗi → tồn tổng.
+        const stock = branchStockView
+          ? row.original.branchStock ?? 0
+          : row.original.stock;
         return (
           <span
             className={
@@ -1519,6 +1557,32 @@ export default function HangHoaPage() {
           })}
         </div>
 
+        {/* Branch-scope (CEO 13/07): xem toàn chuỗi → banner "về chi nhánh";
+            xem theo CN → nhắc + nút "Xem toàn chuỗi" luôn hiện. */}
+        {activeBranchId &&
+          (viewAllBranches ? (
+            <AllBranchesBanner
+              branchName={currentBranch?.name}
+              onBackToBranch={() => setViewAllBranches(false)}
+            />
+          ) : (
+            <div className="flex items-center justify-end gap-2 mb-2 text-sm">
+              <span className="text-muted-foreground">
+                Tồn hiển thị theo:{" "}
+                <b className="text-on-surface">
+                  {currentBranch?.name ?? "chi nhánh đang chọn"}
+                </b>
+              </span>
+              <button
+                type="button"
+                onClick={() => setViewAllBranches(true)}
+                className="text-primary hover:underline font-medium"
+              >
+                Xem toàn chuỗi
+              </button>
+            </div>
+          ))}
+
         <DataTable
           columns={columns}
           data={data}
@@ -1534,6 +1598,15 @@ export default function HangHoaPage() {
             scope === "nvl"
               ? 'Bấm "Tạo mới" để thêm NVL hoặc "Nhập Excel" để import batch.'
               : 'Bấm "Tạo mới" để thêm SKU hoặc "Nhập Excel" để import batch.'
+          }
+          // Branch-scope: bảng trống vì lọc CN → gợi ý xem toàn chuỗi.
+          emptyBranchHint={
+            branchStockView && otherBranchCount > 0
+              ? {
+                  otherBranchCount,
+                  onViewAllBranches: () => setViewAllBranches(true),
+                }
+              : undefined
           }
           total={total}
           pageIndex={page}
@@ -1573,6 +1646,7 @@ export default function HangHoaPage() {
               search,
               page: 0,
               pageSize: 5000,
+              branchId: viewAllBranches ? undefined : activeBranchId,
               filters: {
                 productType: scope,
                 ...(categoryFilter !== "all" && { category: [categoryFilter] }),

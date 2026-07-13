@@ -28,13 +28,26 @@ export async function getProducts(params: QueryParams): Promise<QueryResult<Prod
   // 4 tenant khác nhau (1 row hiện nhóm "Bao bì" lạ vì cross-tenant).
   const tenantId = await getCurrentTenantId();
 
-  let query = supabase
+  // Branch-scope (CEO 13/07): khi truyền branchId → CHỈ SP có dòng branch_stock
+  // (base variant_id IS NULL) ở CN đó (kể cả tồn 0 = hàng đã từng nhập/nhận), và
+  // lấy tồn CN đó vào cột "Tồn". Không truyền → toàn chuỗi, tồn tổng products.stock.
+  const branchId =
+    params.branchId && params.branchId !== "all" ? params.branchId : undefined;
+  const selectCols =
+    "*, categories!products_category_id_fkey(name, code), suppliers!products_supplier_id_fkey(name)" +
+    (branchId ? ", branch_stock!inner(quantity)" : "");
+
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  let query = (supabase as any)
     .from("products")
-    .select(
-      "*, categories!products_category_id_fkey(name, code), suppliers!products_supplier_id_fkey(name)",
-      { count: "exact" },
-    )
+    .select(selectCols, { count: "exact" })
     .eq("tenant_id", tenantId);
+
+  if (branchId) {
+    query = query
+      .eq("branch_stock.branch_id", branchId)
+      .is("branch_stock.variant_id", null);
+  }
 
   // Search — dùng `or` với escape `%` để search ký tự đặc biệt OK.
   // Postgres `ilike` là case-insensitive nhưng diacritic-sensitive: search
@@ -67,12 +80,14 @@ export async function getProducts(params: QueryParams): Promise<QueryResult<Prod
     query = query.in("category_id", cats);
   }
 
-  // Filter: stock
+  // Filter: stock — branch-scope thì lọc theo TỒN CHI NHÁNH (branch_stock.quantity),
+  // ngược lại theo tồn tổng (products.stock).
   if (params.filters?.stock) {
     const stockFilter = params.filters.stock as string;
-    if (stockFilter === "in_stock") query = query.gt("stock", 0);
-    else if (stockFilter === "out_of_stock") query = query.eq("stock", 0);
-    else if (stockFilter === "low_stock") query = query.gt("stock", 0).lte("stock", 5);
+    const col = branchId ? "branch_stock.quantity" : "stock";
+    if (stockFilter === "in_stock") query = query.gt(col, 0);
+    else if (stockFilter === "out_of_stock") query = query.eq(col, 0);
+    else if (stockFilter === "low_stock") query = query.gt(col, 0).lte(col, 5);
   }
 
   // Filter: status (active | inactive) — map sang cột is_active boolean
@@ -106,7 +121,8 @@ export async function getProducts(params: QueryParams): Promise<QueryResult<Prod
   const { data, count, error } = await query;
   if (error) handleError(error, "getProducts");
 
-  const products: Product[] = (data ?? []).map((row) => mapProduct(row));
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  const products: Product[] = (data ?? []).map((row: any) => mapProduct(row));
 
   return { data: products, total: count ?? 0 };
 }
@@ -126,11 +142,20 @@ export async function getProducts(params: QueryParams): Promise<QueryResult<Prod
 export async function getAllMatchingProductIds(params: QueryParams): Promise<string[]> {
   const supabase = getClient();
   const tenantId = await getCurrentTenantId();
+  // Branch-scope khớp getProducts để "chọn tất cả khớp lọc" đúng phạm vi CN.
+  const branchId =
+    params.branchId && params.branchId !== "all" ? params.branchId : undefined;
 
-  let query = supabase
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  let query = (supabase as any)
     .from("products")
-    .select("id")
+    .select(branchId ? "id, branch_stock!inner(quantity)" : "id")
     .eq("tenant_id", tenantId);
+  if (branchId) {
+    query = query
+      .eq("branch_stock.branch_id", branchId)
+      .is("branch_stock.variant_id", null);
+  }
 
   // Search — CEO 04/07: khớp getProducts để "chọn tất cả khớp lọc" đúng cột.
   if (params.search) {
@@ -158,12 +183,14 @@ export async function getAllMatchingProductIds(params: QueryParams): Promise<str
     query = query.in("category_id", cats);
   }
 
-  // Filter: stock
+  // Filter: stock — branch-scope thì lọc theo TỒN CHI NHÁNH (branch_stock.quantity),
+  // ngược lại theo tồn tổng (products.stock).
   if (params.filters?.stock) {
     const stockFilter = params.filters.stock as string;
-    if (stockFilter === "in_stock") query = query.gt("stock", 0);
-    else if (stockFilter === "out_of_stock") query = query.eq("stock", 0);
-    else if (stockFilter === "low_stock") query = query.gt("stock", 0).lte("stock", 5);
+    const col = branchId ? "branch_stock.quantity" : "stock";
+    if (stockFilter === "in_stock") query = query.gt(col, 0);
+    else if (stockFilter === "out_of_stock") query = query.eq(col, 0);
+    else if (stockFilter === "low_stock") query = query.gt(col, 0).lte(col, 5);
   }
 
   // Filter: status (active | inactive)
@@ -189,7 +216,8 @@ export async function getAllMatchingProductIds(params: QueryParams): Promise<str
   const { data, error } = await query;
   if (error) handleError(error, "getAllMatchingProductIds");
 
-  return (data ?? []).map((row) => row.id as string);
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  return (data ?? []).map((row: any) => row.id as string);
 }
 
 /**
@@ -745,6 +773,12 @@ function mapProduct(row: any): Product {
     sellPrice: row.sell_price,
     costPrice: row.cost_price,
     stock: row.stock,
+    // Branch-scope: tồn của chi nhánh đang chọn (từ embed branch_stock!inner).
+    // undefined khi xem toàn chuỗi (không join) → cột "Tồn" fallback về stock.
+    branchStock:
+      row.branch_stock?.[0]?.quantity != null
+        ? Number(row.branch_stock[0].quantity)
+        : undefined,
     ordered: 0, // Calculated field - would need aggregation
     categoryId: row.category_id ?? "",
     categoryName: row.categories?.name ?? "Chưa phân loại",

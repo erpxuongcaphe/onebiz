@@ -34,6 +34,8 @@ export interface Product {
   sellPrice: number;
   costPrice: number;
   stock: number;
+  /** Tồn của chi nhánh đang chọn (branch-scope). undefined = xem toàn chuỗi. */
+  branchStock?: number;
   ordered: number;
   categoryId: string;
   categoryName: string;
