@@ -15,6 +15,7 @@ import { AddReadinessButton } from "@/components/mkt/add-readiness-button";
 import {
   AcceptanceBadge,
   ContentStatusBadge,
+  PlanStatusBadge,
   ReadinessBadge,
   RiskBadge,
   TaskStatusBadge,
@@ -26,6 +27,7 @@ import {
   WorkPackageForm,
   WorkPackageSplitButton,
 } from "@/components/mkt/campaign-controls";
+import { AssignPlanningButton } from "@/components/mkt/plan-controls";
 
 export const dynamic = "force-dynamic";
 
@@ -244,6 +246,8 @@ export default async function CampaignDetailPage({
                               <span className="rounded-full border border-rose-200 bg-rose-50 px-2 py-0.5 text-xs font-medium text-rose-700">
                                 Cần chia việc (Needs Split)
                               </span>
+                            ) : w.status === "planning" ? (
+                              <PlanStatusBadge value="planning" />
                             ) : (
                               <span className="rounded-full border border-slate-200 bg-slate-50 px-2 py-0.5 text-xs font-medium text-slate-600">
                                 {w.status}
@@ -264,13 +268,28 @@ export default async function CampaignDetailPage({
                             ) : null}
                           </div>
                         </div>
-                        {needsSplit && (canManage || ctx.canSplit) ? (
-                          <WorkPackageSplitButton
-                            workPackageId={w.id}
-                            campaignId={c.id}
-                            members={members}
-                            contents={contentOptions}
-                          />
+                        {needsSplit ? (
+                          <div className="flex flex-col items-end gap-1.5">
+                            {canManage || ctx.canSplit ? (
+                              <WorkPackageSplitButton
+                                workPackageId={w.id}
+                                campaignId={c.id}
+                                members={members}
+                                contents={contentOptions}
+                              />
+                            ) : null}
+                            {canManage ? (
+                              <AssignPlanningButton
+                                workPackageId={w.id}
+                                workPackageTitle={w.title}
+                                members={members}
+                              />
+                            ) : null}
+                          </div>
+                        ) : w.status === "planning" ? (
+                          <span className="max-w-[12rem] text-right text-xs text-on-surface-variant">
+                            Owner đang soạn kế hoạch ở mục “Lập kế hoạch”.
+                          </span>
                         ) : null}
                       </div>
                     </article>

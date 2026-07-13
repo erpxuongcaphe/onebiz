@@ -47,6 +47,16 @@ const READINESS: Record<string, { label: string; cls: string }> = {
   waived: { label: "Đã miễn", cls: "border-indigo-200 bg-indigo-50 text-indigo-700" },
 };
 
+const PLAN_STATUS: Record<string, { label: string; cls: string }> = {
+  planning: { label: "Đang lập kế hoạch", cls: "border-indigo-200 bg-indigo-50 text-indigo-700" },
+  submitted: { label: "Chờ duyệt kế hoạch", cls: "border-amber-200 bg-amber-50 text-amber-700" },
+  revision_required: { label: "Cần sửa kế hoạch", cls: "border-orange-200 bg-orange-50 text-orange-700" },
+  approved: { label: "Kế hoạch đã duyệt", cls: "border-emerald-200 bg-emerald-50 text-emerald-700" },
+  in_execution: { label: "Đang thực thi", cls: "border-sky-200 bg-sky-50 text-sky-700" },
+  superseded: { label: "Đã thay thế", cls: "border-slate-200 bg-slate-100 text-slate-500" },
+  canceled: { label: "Đã huỷ", cls: "border-slate-200 bg-slate-100 text-slate-500" },
+};
+
 const FALLBACK = { cls: "border-slate-200 bg-slate-50 text-slate-700" };
 
 export function AcceptanceBadge({ value, taskStatus }: { value: string; taskStatus?: string }) {
@@ -70,5 +80,9 @@ export function RiskBadge({ value }: { value: string }) {
 }
 export function ReadinessBadge({ value }: { value: string }) {
   const m = READINESS[value] ?? { label: value, ...FALLBACK };
+  return <Pill label={m.label} cls={m.cls} />;
+}
+export function PlanStatusBadge({ value }: { value: string }) {
+  const m = PLAN_STATUS[value] ?? { label: value, ...FALLBACK };
   return <Pill label={m.label} cls={m.cls} />;
 }
