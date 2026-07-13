@@ -40,11 +40,12 @@ describe("generateDocumentHtml — ô ký tùy biến", () => {
     expect(footerCols(html)).toContain("Khách hàng");
   });
 
-  it("ô ĐẦU TIÊN tự điền tên người lập (createdBy)", () => {
+  it("ô ký KHÔNG tự điền tên người lập — giữ tiêu đề, để trống ký tay (CEO 13/07)", () => {
     const html = generateDocumentHtml(doc({ createdBy: "Trần Thị B" }), "A4");
-    const footer = html.match(/<div class="footer">([\s\S]*?)<\/div>\s*<\/div>/)?.[1] ?? html;
-    // Tên xuất hiện trong khối chữ ký, ở cột đầu
-    expect(html).toContain("Trần Thị B");
+    // Giữ tiêu đề "Người lập phiếu"…
+    expect(footerCols(html)).toContain("Người lập phiếu");
+    // …nhưng KHÔNG in tên người lập tự điền (để trống cho ký tay).
+    expect(html).not.toContain("Trần Thị B");
   });
 
   it("showSignature=false → KHÔNG render khối chữ ký", () => {

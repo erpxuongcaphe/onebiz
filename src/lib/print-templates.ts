@@ -219,6 +219,37 @@ export function buildPurchaseReturnPrintData(
   };
 }
 
+/**
+ * Khối thông tin BÊN MUA (khách) cho phiếu in — dùng CHUNG cho cả "in lại Hóa
+ * đơn" và "in ở POS lúc thanh toán", để 2 phiếu LUÔN khớp và cùng nghe theo cờ
+ * bật/tắt (invoiceFields). Chỉ thêm dòng khi cờ bật + có dữ liệu.
+ */
+export function buildBuyerHeaderFields(
+  c: {
+    customerName?: string | null;
+    customerCode?: string | null;
+    customerPhone?: string | null;
+    customerAddress?: string | null;
+    createdByName?: string | null;
+  },
+  invoiceFields?: InvoiceFieldFlags,
+): { label: string; value: string }[] {
+  const f = invoiceFields ?? {};
+  const on = (v?: boolean) => v !== false;
+  const out: { label: string; value: string }[] = [];
+  if (on(f.customerName))
+    out.push({ label: "Khách hàng", value: c.customerName || "Khách lẻ" });
+  if (on(f.customerCode) && c.customerCode)
+    out.push({ label: "Mã KH", value: c.customerCode });
+  if (on(f.customerPhone) && c.customerPhone)
+    out.push({ label: "Điện thoại", value: c.customerPhone });
+  if (on(f.customerAddress) && c.customerAddress)
+    out.push({ label: "Địa chỉ", value: c.customerAddress });
+  if (on(f.createdBy) && c.createdByName)
+    out.push({ label: "Người tạo", value: c.createdByName });
+  return out;
+}
+
 export function buildInvoicePrintData(
   row: Invoice,
   business?: TenantBusinessInfoForPrint,
@@ -230,17 +261,17 @@ export function buildInvoicePrintData(
   const f = business?.invoiceFields ?? {};
   const on = (v?: boolean) => v !== false;
 
-  // Bên mua — mỗi dòng theo cờ + chỉ thêm khi có dữ liệu.
-  const headerFields: { label: string; value: string }[] = [];
-  if (on(f.customerName))
-    headerFields.push({ label: "Khách hàng", value: row.customerName });
-  if (on(f.customerCode))
-    headerFields.push({ label: "Mã KH", value: row.customerCode });
-  if (on(f.customerPhone) && row.customerPhone)
-    headerFields.push({ label: "Điện thoại", value: row.customerPhone });
-  if (on(f.customerAddress) && row.customerAddress)
-    headerFields.push({ label: "Địa chỉ", value: row.customerAddress });
-  if (on(f.createdBy)) headerFields.push({ label: "Người tạo", value: user });
+  // Bên mua — dùng helper CHUNG với POS để 2 đường in luôn khớp.
+  const headerFields = buildBuyerHeaderFields(
+    {
+      customerName: row.customerName,
+      customerCode: row.customerCode,
+      customerPhone: row.customerPhone,
+      customerAddress: row.customerAddress,
+      createdByName: user,
+    },
+    f,
+  );
 
   // Khối tổng tiền + công nợ.
   // CEO 08/07: totalAmount (= invoices.total) ĐÃ gộp phí giao hàng. KHÔNG cộng
