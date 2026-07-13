@@ -70,8 +70,14 @@ function branchTypeIcon(type?: string): string {
 }
 
 function BranchSelector() {
-  const { tenant: _tenant, branches, currentBranch, switchBranch, user } = useAuth();
-  const canViewAll = user?.role === "owner" || user?.role === "admin";
+  const { tenant: _tenant, branches, currentBranch, switchBranch, user, hasPermission } = useAuth();
+  // CEO 13/07: nút "Tất cả chi nhánh" trước chỉ xem ô vai trò CŨ (profiles.role)
+  // owner/admin → vai trò RBAC như "Chủ cửa hàng" bị bỏ sót dù được cấp quyền.
+  // Giờ mở theo quyền RBAC `system.manage_branches` (chỉ Chủ cửa hàng + Admin có).
+  const canViewAll =
+    user?.role === "owner" ||
+    user?.role === "admin" ||
+    hasPermission("system.manage_branches");
 
   const triggerIcon = currentBranch
     ? branchTypeIcon(currentBranch.branchType)
@@ -457,9 +463,14 @@ function MobileGroupAccordion({
 
 function MobileNav() {
   const pathname = usePathname();
-  const { branches, currentBranch, switchBranch, user } = useAuth();
+  const { branches, currentBranch, switchBranch, user, hasPermission } = useAuth();
   const [open, setOpen] = useState(false);
-  const canViewAll = user?.role === "owner" || user?.role === "admin";
+  // CEO 13/07: đồng bộ với BranchSelector — mở "Tất cả chi nhánh" theo quyền
+  // RBAC `system.manage_branches` (Chủ cửa hàng + Admin), không chỉ vai trò cũ.
+  const canViewAll =
+    user?.role === "owner" ||
+    user?.role === "admin" ||
+    hasPermission("system.manage_branches");
 
   return (
     <Sheet open={open} onOpenChange={setOpen}>
