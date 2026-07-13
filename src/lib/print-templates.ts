@@ -309,7 +309,14 @@ export function buildInvoicePrintData(
   // hiện (0 đ hoặc số dương) nên nhìn phát biết đã thu đủ chưa, không phải tự
   // nhẩm. Đưa dư thêm "Tiền thối lại". Khách công nợ giữ khối "Nợ cũ / Còn nợ"
   // (không thêm dòng, kẻo trùng nghĩa với dư nợ tích luỹ).
-  summaryRows.push({ label: "Khách đã thanh toán", value: formatCurrency(row.paid) });
+  // 00179 (CEO 13/07): nếu có ghi nhận "tiền khách đưa" (amountTendered) thì
+  // in lại hiện đúng số khách ĐƯA + "Tiền thối lại" — KHỚP phiếu POS lúc bán.
+  // Không có (đơn cũ/CK/công nợ) → dùng paid như cũ, không bịa số.
+  const paidDisplay =
+    row.amountTendered != null && row.amountTendered > row.paid
+      ? row.amountTendered
+      : row.paid;
+  summaryRows.push({ label: "Khách đã thanh toán", value: formatCurrency(paidDisplay) });
   if (showDebt) {
     summaryRows.push({ label: "Nợ cũ", value: formatCurrency(oldDebt) });
     summaryRows.push({
@@ -317,9 +324,9 @@ export function buildInvoicePrintData(
       value: formatCurrency(currentDebt ?? 0),
       bold: true,
     });
-  } else if (row.paid > due) {
+  } else if (paidDisplay > due) {
     // Đưa dư: chỉ "Tiền thối lại" (đã ngầm báo trả đủ) — không thêm "Còn phải trả 0đ" thừa.
-    summaryRows.push({ label: "Tiền thối lại", value: formatCurrency(row.paid - due) });
+    summaryRows.push({ label: "Tiền thối lại", value: formatCurrency(paidDisplay - due) });
   } else {
     // Trả đủ → "Khách còn phải trả" 0đ (xanh); trả thiếu → số dương (đỏ).
     const remaining = due - row.paid;

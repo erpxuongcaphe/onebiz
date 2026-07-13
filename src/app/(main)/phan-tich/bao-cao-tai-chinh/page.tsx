@@ -284,10 +284,16 @@ export default function BaoCaoTaiChinhPage() {
     setExporting(true);
     try {
       // Lazy-import xlsx + file-saver — chỉ load khi user thực sự bấm Export.
-      const [{ default: XLSX }, { saveAs }] = await Promise.all([
+      // FIX 13/07: xlsx.mjs (ESM) KHÔNG có default export → destructure
+      // `{ default: XLSX }` ra undefined → bấm không ra file. Dùng namespace.
+      const [xlsxMod, saverMod] = await Promise.all([
         import("xlsx"),
         import("file-saver"),
       ]);
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      const XLSX = (xlsxMod as any).utils ? (xlsxMod as any) : (xlsxMod as any).default;
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      const saveAs = (saverMod as any).saveAs ?? (saverMod as any).default;
 
       const wb = XLSX.utils.book_new();
 

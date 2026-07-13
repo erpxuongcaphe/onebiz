@@ -27,6 +27,8 @@ export interface Invoice {
   shippingFee: number;
   taxAmount: number;
   paid: number;
+  /** 00179: tiền khách đưa thực tế tại POS (>= paid khi có thối). undefined = không ghi nhận. */
+  amountTendered?: number;
   debt: number;
   status: "processing" | "completed" | "cancelled" | "delivery_failed";
   /**

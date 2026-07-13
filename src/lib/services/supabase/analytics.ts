@@ -334,7 +334,7 @@ export async function getDailyRevenue(
     grouped.set(key, 0);
   }
 
-  (data ?? []).forEach((inv) => {
+  (data ?? []).forEach((inv: { created_at: string; total: number | null }) => {
     const d = new Date(inv.created_at);
     const key = `${String(d.getDate()).padStart(2, "0")}/${String(d.getMonth() + 1).padStart(2, "0")}`;
     grouped.set(key, (grouped.get(key) ?? 0) + (inv.total ?? 0));
@@ -666,10 +666,15 @@ export async function getOrdersKpis(
         return { start: ps.toISOString(), end: pe.toISOString() };
       })();
 
-  let query = supabase
+  // FIX (CEO 13/07): "Phân tích đặt hàng" phải đếm ĐƠN ĐẶT HÀNG (source='order')
+  // — trước đây đếm MỌI hóa đơn (lẫn bán POS) nên số sai bản chất.
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  let query = (supabase as any)
     .from("invoices")
     .select("status")
     .eq("tenant_id", tenantId)
+    .eq("source", "order")
+    .is("deleted_at", null)
     .gte("created_at", r.start)
     .lt("created_at", r.end);
   if (branchId) query = query.eq("branch_id", branchId);
@@ -677,20 +682,23 @@ export async function getOrdersKpis(
 
   if (error) handleError(error, "getOrdersKpis");
 
-  let prevQuery = supabase
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  let prevQuery = (supabase as any)
     .from("invoices")
     .select("id", { count: "exact", head: true })
     .eq("tenant_id", tenantId)
+    .eq("source", "order")
+    .is("deleted_at", null)
     .gte("created_at", prev.start)
     .lt("created_at", prev.end);
   if (branchId) prevQuery = prevQuery.eq("branch_id", branchId);
   const { count: prevTotal } = await prevQuery;
 
-  const all = data ?? [];
+  const all: { status: string }[] = data ?? [];
   const total = all.length;
-  const completed = all.filter(i => i.status === "completed").length;
-  const cancelled = all.filter(i => i.status === "cancelled").length;
-  const inTransit = all.filter(i => i.status === "confirmed" || i.status === "draft").length;
+  const completed = all.filter((i) => i.status === "completed").length;
+  const cancelled = all.filter((i) => i.status === "cancelled").length;
+  const inTransit = all.filter((i) => i.status === "confirmed" || i.status === "draft").length;
 
   return {
     total, prevTotal: prevTotal ?? 0,
@@ -709,10 +717,14 @@ export async function getDailyOrderVolume(
   const tenantId = await getCurrentTenantId();
   const range = resolveRange(customRange, lastNDaysRange(days));
 
-  let query = supabase
+  // FIX 13/07: chỉ đếm đơn đặt hàng (source='order'), loại đơn xóa mềm.
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  let query = (supabase as any)
     .from("invoices")
     .select("created_at")
     .eq("tenant_id", tenantId)
+    .eq("source", "order")
+    .is("deleted_at", null)
     .gte("created_at", range.start)
     .lt("created_at", range.end);
   if (branchId) query = query.eq("branch_id", branchId);
@@ -729,7 +741,7 @@ export async function getDailyOrderVolume(
     grouped.set(key, 0);
   }
 
-  (data ?? []).forEach((inv) => {
+  (data ?? []).forEach((inv: { created_at: string }) => {
     const d = new Date(inv.created_at);
     const key = `${String(d.getDate()).padStart(2, "0")}/${String(d.getMonth() + 1).padStart(2, "0")}`;
     grouped.set(key, (grouped.get(key) ?? 0) + 1);
@@ -746,10 +758,14 @@ export async function getOrderStatusDistribution(
   const tenantId = await getCurrentTenantId();
   const r = resolveRange(range, thisMonthRange());
 
-  let query = supabase
+  // FIX 13/07: chỉ đơn đặt hàng (source='order'), loại xóa mềm.
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  let query = (supabase as any)
     .from("invoices")
     .select("status")
     .eq("tenant_id", tenantId)
+    .eq("source", "order")
+    .is("deleted_at", null)
     .gte("created_at", r.start)
     .lt("created_at", r.end);
   if (branchId) query = query.eq("branch_id", branchId);
@@ -765,7 +781,7 @@ export async function getOrderStatusDistribution(
   };
 
   const counts = new Map<string, number>();
-  (data ?? []).forEach(i => {
+  (data ?? []).forEach((i: { status: string }) => {
     const name = statusMap[i.status] ?? i.status;
     counts.set(name, (counts.get(name) ?? 0) + 1);
   });
@@ -781,10 +797,15 @@ export async function getRecentOrders(
   const supabase = getClient();
   const tenantId = await getCurrentTenantId();
 
-  let query = supabase
+  // FIX 13/07: chỉ đơn đặt hàng (source='order'), loại xóa mềm. Hiện mã đơn
+  // gốc (order_code=DH…) nếu đơn đã hoàn tất chuyển mã HD.
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  let query = (supabase as any)
     .from("invoices")
-    .select("id, code, total, status, created_at, customers(name)")
+    .select("id, code, order_code, total, status, created_at, customers(name)")
     .eq("tenant_id", tenantId)
+    .eq("source", "order")
+    .is("deleted_at", null)
     .order("created_at", { ascending: false })
     .limit(limit);
   if (branchId) query = query.eq("branch_id", branchId);
@@ -807,13 +828,107 @@ export async function getRecentOrders(
     };
     return {
       id: inv.id as string,
-      code: inv.code as string,
+      // Đơn đã hoàn tất: code=HD, order_code giữ mã DH gốc → hiện DH cho khớp
+      // trang Đơn đặt hàng.
+      code: (inv.order_code as string | null) ?? (inv.code as string),
       customer: customer?.name ?? "Khách lẻ",
       status: statusMap[inv.status as string] ?? (inv.status as string),
       value: inv.total as number,
       date: `${String(d.getDate()).padStart(2, "0")}/${String(d.getMonth() + 1).padStart(2, "0")}/${d.getFullYear()}`,
     };
   });
+}
+
+// ── Đặt hàng theo hàng hóa (CEO 13/07, chuẩn KiotViet) ──────────────────
+// Gom invoice_items của các ĐƠN ĐẶT HÀNG (source='order', loại hủy + xóa mềm)
+// trong khoảng ngày → mỗi sản phẩm 1 dòng: SL đặt, giá trị, số đơn xuất hiện.
+
+export interface OrderProductBreakdownRow {
+  productId: string | null;
+  productCode: string;
+  productName: string;
+  unit: string;
+  quantity: number;
+  amount: number;
+  orderCount: number;
+}
+
+export async function getOrderProductBreakdown(
+  branchId?: string,
+  range?: { from: string; to: string },
+): Promise<OrderProductBreakdownRow[]> {
+  const supabase = getClient();
+  const tenantId = await getCurrentTenantId();
+  const r = resolveRange(range, thisMonthRange());
+
+  // 1) Đơn đặt hàng trong khoảng (mọi trạng thái TRỪ đã hủy; loại xóa mềm).
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  let invQuery = (supabase as any)
+    .from("invoices")
+    .select("id")
+    .eq("tenant_id", tenantId)
+    .eq("source", "order")
+    .neq("status", "cancelled")
+    .is("deleted_at", null)
+    .gte("created_at", r.start)
+    .lt("created_at", r.end);
+  if (branchId) invQuery = invQuery.eq("branch_id", branchId);
+  const { data: invs, error } = await invQuery;
+  if (error) handleError(error, "getOrderProductBreakdown");
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  const ids: string[] = (invs ?? []).map((x: any) => x.id);
+  if (ids.length === 0) return [];
+
+  // 2) Items của các đơn đó — chunk 200 id/lần tránh URL quá dài.
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  const items: any[] = [];
+  for (let i = 0; i < ids.length; i += 200) {
+    const { data: chunk, error: itemErr } = await supabase
+      .from("invoice_items")
+      .select("invoice_id, product_id, product_name, unit, quantity, total")
+      .in("invoice_id", ids.slice(i, i + 200));
+    if (itemErr) handleError(itemErr, "getOrderProductBreakdown:items");
+    items.push(...(chunk ?? []));
+  }
+  if (items.length === 0) return [];
+
+  // 3) Mã hàng: tra products theo product_id (không join FK để khỏi phụ thuộc
+  // tên constraint) — 1 query IN cho các id distinct.
+  const productIds = [...new Set(items.map((it) => it.product_id).filter(Boolean))] as string[];
+  const codeMap = new Map<string, string>();
+  for (let i = 0; i < productIds.length; i += 200) {
+    const { data: prods } = await supabase
+      .from("products")
+      .select("id, code")
+      .in("id", productIds.slice(i, i + 200));
+    for (const p of prods ?? []) codeMap.set(p.id as string, (p.code as string) ?? "");
+  }
+
+  // 4) Gom theo sản phẩm.
+  const map = new Map<string, OrderProductBreakdownRow & { orderIds: Set<string> }>();
+  for (const it of items) {
+    const key = (it.product_id as string) ?? `name:${it.product_name}`;
+    let row = map.get(key);
+    if (!row) {
+      row = {
+        productId: it.product_id ?? null,
+        productCode: it.product_id ? codeMap.get(it.product_id) ?? "" : "",
+        productName: it.product_name ?? "",
+        unit: it.unit ?? "",
+        quantity: 0,
+        amount: 0,
+        orderCount: 0,
+        orderIds: new Set<string>(),
+      };
+      map.set(key, row);
+    }
+    row.quantity += Number(it.quantity ?? 0);
+    row.amount += Number(it.total ?? 0);
+    row.orderIds.add(it.invoice_id as string);
+  }
+  return [...map.values()]
+    .map(({ orderIds, ...rest }) => ({ ...rest, orderCount: orderIds.size }))
+    .sort((a, b) => b.amount - a.amount);
 }
 
 // ========================================

@@ -24,11 +24,13 @@ import {
   getDailyOrderVolume,
   getOrderStatusDistribution,
   getRecentOrders,
+  getOrderProductBreakdown,
 } from "@/lib/services";
 import type {
   ChartPoint,
   OrderStatusItem,
   RecentOrder,
+  OrderProductBreakdownRow,
 } from "@/lib/services/supabase/analytics";
 import {
   exportReportToExcel,
@@ -163,6 +165,8 @@ export default function DatHangPage() {
   const [orderVolume, setOrderVolume] = useState<ChartPoint[]>([]);
   const [orderStatus, setOrderStatus] = useState<OrderStatusItem[]>([]);
   const [recentOrdersList, setRecentOrdersList] = useState<RecentOrder[]>([]);
+  // CEO 13/07 (chuẩn KiotViet): đặt hàng theo hàng hóa — mỗi SP 1 dòng.
+  const [productRows, setProductRows] = useState<OrderProductBreakdownRow[]>([]);
 
   const branchLabel = activeBranchId
     ? branches.find((b) => b.id === activeBranchId)?.name ?? "Chi nhánh đang chọn"
@@ -268,6 +272,31 @@ export default function DatHangPage() {
           rows: orderStatus.map((s) => ({ name: s.name, value: s.value })),
         },
         {
+          name: "Theo hàng hóa",
+          titleRows: ["ĐẶT HÀNG THEO HÀNG HÓA", ...title.slice(1)],
+          columns: [
+            { label: "Mã hàng", key: "code", width: 16 },
+            { label: "Tên hàng", key: "name", width: 32 },
+            { label: "ĐVT", key: "unit", width: 10 },
+            { label: "SL đặt", key: "qty", width: 12, format: "number" },
+            { label: "Số đơn", key: "orders", width: 10, format: "number" },
+            { label: "Giá trị (VND)", key: "amount", width: 16, format: "currency" },
+          ],
+          rows: productRows.map((r) => ({
+            code: r.productCode,
+            name: r.productName,
+            unit: r.unit,
+            qty: r.quantity,
+            orders: r.orderCount,
+            amount: r.amount,
+          })),
+          footer: {
+            code: "TỔNG",
+            qty: productRows.reduce((s, r) => s + r.quantity, 0),
+            amount: productRows.reduce((s, r) => s + r.amount, 0),
+          },
+        },
+        {
           name: "Đơn gần đây",
           titleRows: ["10 ĐƠN GẦN NHẤT", ...title.slice(1)],
           columns: [
@@ -305,7 +334,7 @@ export default function DatHangPage() {
         variant: "error",
       });
     }
-  }, [kpis, orderVolume, orderStatus, recentOrdersList, range, branchLabel, toast]);
+  }, [kpis, orderVolume, orderStatus, recentOrdersList, productRows, range, branchLabel, toast]);
 
   const reportHeader = (
     <ReportPageHeader
@@ -326,16 +355,19 @@ export default function DatHangPage() {
   const fetchData = useCallback(async () => {
     try {
       setLoading(true);
-      const [kpisData, volumeData, statusData, ordersData] = await Promise.all([
-        getOrdersKpis(activeBranchId, range),
-        getDailyOrderVolume(30, activeBranchId, range),
-        getOrderStatusDistribution(activeBranchId, range),
-        getRecentOrders(10, activeBranchId, range),
-      ]);
+      const [kpisData, volumeData, statusData, ordersData, productData] =
+        await Promise.all([
+          getOrdersKpis(activeBranchId, range),
+          getDailyOrderVolume(30, activeBranchId, range),
+          getOrderStatusDistribution(activeBranchId, range),
+          getRecentOrders(10, activeBranchId, range),
+          getOrderProductBreakdown(activeBranchId, range),
+        ]);
       setKpis(kpisData);
       setOrderVolume(volumeData);
       setOrderStatus(statusData);
       setRecentOrdersList(ordersData);
+      setProductRows(productData);
     } catch (err) {
       console.error("Failed to fetch order analytics:", err);
     } finally {
@@ -522,6 +554,65 @@ export default function DatHangPage() {
             </div>
           </ChartCard>
         </div>
+
+        {/* CEO 13/07 — Đặt hàng theo hàng hóa (chuẩn KiotViet) */}
+        <ChartCard
+          title="Đặt hàng theo hàng hóa"
+          subtitle={`SL mặt hàng: ${productRows.length} · Tổng giá trị: ${formatCurrency(productRows.reduce((s, r) => s + r.amount, 0))}`}
+        >
+          {productRows.length > 0 ? (
+            <div className="overflow-x-auto">
+              <table className="w-full text-sm">
+                <thead>
+                  <tr className="border-b text-muted-foreground">
+                    <th className="text-left py-2 pr-4 font-medium">Mã hàng</th>
+                    <th className="text-left py-2 pr-4 font-medium">Tên hàng</th>
+                    <th className="text-left py-2 pr-4 font-medium">ĐVT</th>
+                    <th className="text-right py-2 pr-4 font-medium">SL đặt</th>
+                    <th className="text-right py-2 pr-4 font-medium">Số đơn</th>
+                    <th className="text-right py-2 font-medium">Giá trị hàng đặt</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {productRows.map((r) => (
+                    <tr key={`${r.productId ?? r.productName}`} className="border-b last:border-0">
+                      <td className="py-2.5 pr-4 font-mono text-xs font-medium text-primary">
+                        {r.productCode || "—"}
+                      </td>
+                      <td className="py-2.5 pr-4">{r.productName}</td>
+                      <td className="py-2.5 pr-4 text-muted-foreground">{r.unit}</td>
+                      <td className="py-2.5 pr-4 text-right font-medium">
+                        {formatNumber(r.quantity)}
+                      </td>
+                      <td className="py-2.5 pr-4 text-right text-muted-foreground">
+                        {formatNumber(r.orderCount)}
+                      </td>
+                      <td className="py-2.5 text-right font-medium">
+                        {formatCurrency(r.amount)}
+                      </td>
+                    </tr>
+                  ))}
+                </tbody>
+                <tfoot>
+                  <tr className="font-bold">
+                    <td className="py-2.5 pr-4" colSpan={3}>TỔNG</td>
+                    <td className="py-2.5 pr-4 text-right">
+                      {formatNumber(productRows.reduce((s, r) => s + r.quantity, 0))}
+                    </td>
+                    <td className="py-2.5 pr-4" />
+                    <td className="py-2.5 text-right">
+                      {formatCurrency(productRows.reduce((s, r) => s + r.amount, 0))}
+                    </td>
+                  </tr>
+                </tfoot>
+              </table>
+            </div>
+          ) : (
+            <div className="py-12 text-center text-muted-foreground text-sm">
+              Chưa có mặt hàng nào được đặt trong khoảng thời gian này
+            </div>
+          )}
+        </ChartCard>
 
         {/* Recent orders table */}
         <ChartCard title="Đơn hàng gần đây" subtitle="10 đơn mới nhất">

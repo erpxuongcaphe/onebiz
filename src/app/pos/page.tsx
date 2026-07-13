@@ -40,6 +40,7 @@ import {
   getCustomerById,
   attachDeliveryToInvoice,
   getTenantBusinessInfo,
+  setInvoiceAmountTendered,
 } from "@/lib/services/supabase";
 import { useAutoSaveDraft, loadLocalCart } from "./hooks/use-auto-save-draft";
 import { RecoveryDialog } from "./components/recovery-dialog";
@@ -1933,6 +1934,13 @@ function PosPageInner() {
             });
           }
         }
+      }
+
+      // 00179 (CEO 13/07): lưu "tiền khách đưa" khi có thối — để in lại hóa đơn
+      // tái hiện đúng "Khách đã thanh toán / Tiền thối lại" như phiếu POS.
+      // Best-effort: cột chưa có (00179 chưa chạy) → service tự nuốt lỗi.
+      if (invoiceId && !isOfflineCheckout && paidEntered > paid) {
+        void setInvoiceAmountTendered(invoiceId, paidEntered);
       }
 
       // CEO 08/07/2026: đơn "Bán giao hàng" → gắn phí ship + VẬN ĐƠN vào HĐ vừa
