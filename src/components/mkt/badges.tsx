@@ -57,6 +57,14 @@ const PLAN_STATUS: Record<string, { label: string; cls: string }> = {
   canceled: { label: "Đã huỷ", cls: "border-slate-200 bg-slate-100 text-slate-500" },
 };
 
+const CAMPAIGN_STATUS: Record<string, { label: string; cls: string }> = {
+  planning: { label: "Đang lên kế hoạch", cls: "border-indigo-200 bg-indigo-50 text-indigo-700" },
+  running: { label: "Đang chạy", cls: "border-emerald-200 bg-emerald-50 text-emerald-700" },
+  paused: { label: "Tạm dừng", cls: "border-amber-200 bg-amber-50 text-amber-700" },
+  completed: { label: "Hoàn thành", cls: "border-sky-200 bg-sky-50 text-sky-700" },
+  canceled: { label: "Đã huỷ", cls: "border-slate-200 bg-slate-100 text-slate-500" },
+};
+
 const FALLBACK = { cls: "border-slate-200 bg-slate-50 text-slate-700" };
 
 export function AcceptanceBadge({ value, taskStatus }: { value: string; taskStatus?: string }) {
@@ -84,5 +92,9 @@ export function ReadinessBadge({ value }: { value: string }) {
 }
 export function PlanStatusBadge({ value }: { value: string }) {
   const m = PLAN_STATUS[value] ?? { label: value, ...FALLBACK };
+  return <Pill label={m.label} cls={m.cls} />;
+}
+export function CampaignStatusBadge({ value }: { value: string }) {
+  const m = CAMPAIGN_STATUS[value] ?? { label: value, ...FALLBACK };
   return <Pill label={m.label} cls={m.cls} />;
 }
