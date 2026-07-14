@@ -226,6 +226,8 @@ export const sidebarNavGroups: SidebarGroup[] = [
     icon: "add_box",
     items: [
       // Day 7 16/05/2026: Mua hàng — quản lý + admin xem; cashier không cần
+      // CEO 14/07: Dự kiến mua hàng (MRP) — từ đơn đặt hàng nổ BOM ra NVL cần mua.
+      { label: "Dự kiến mua hàng", href: "/mua-hang/du-kien-mua-hang", icon: "insights", permission: "inventory.create_po" },
       { label: "Đặt hàng nhập", href: "/hang-hoa/dat-hang-nhap", icon: "description", permission: "inventory.create_po" },
       { label: "Nhập hàng", href: "/hang-hoa/nhap-hang", icon: "add_box", permission: "inventory.create_po" },
       { label: "Trả hàng nhập", href: "/hang-hoa/tra-hang-nhap", icon: "undo", permission: "inventory.create_po" },
