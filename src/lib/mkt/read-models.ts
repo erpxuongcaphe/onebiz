@@ -481,15 +481,16 @@ export type MktPillar = {
   name: string;
   color: string;
   sortOrder: number;
+  description: string | null;
 };
 
 export async function getPillars(supabase: MktSupabaseClient): Promise<MktPillar[]> {
   const db = getMktDatabaseClient(supabase);
   const { data, error } = await db
-    .from<{ id: string; code: string; name: string; color: string; sort_order: number }>(
+    .from<{ id: string; code: string; name: string; color: string; sort_order: number; description: string | null }>(
       "mkt_content_pillars",
     )
-    .select("id, code, name, color, sort_order")
+    .select("id, code, name, color, sort_order, description")
     .is("deleted_at", null)
     .order("sort_order", { ascending: true });
   return requireRows(data, error, "pillars").map((p) => ({
@@ -498,6 +499,50 @@ export async function getPillars(supabase: MktSupabaseClient): Promise<MktPillar
     name: p.name,
     color: p.color,
     sortOrder: p.sort_order,
+    description: p.description ?? null,
+  }));
+}
+
+export type MktPillarAngle = {
+  id: string;
+  pillarId: string;
+  title: string;
+  description: string | null;
+  funnel: string | null;
+  guideline: string | null;
+  channels: string | null;
+  format: string | null;
+  sortOrder: number;
+};
+
+/** Toàn bộ Angle (góc nội dung) — page tự gom theo pillar. RLS lọc tenant + mkt.view. */
+export async function getPillarAngles(supabase: MktSupabaseClient): Promise<MktPillarAngle[]> {
+  const db = getMktDatabaseClient(supabase);
+  const { data, error } = await db
+    .from<{
+      id: string;
+      pillar_id: string;
+      title: string;
+      description: string | null;
+      funnel: string | null;
+      guideline: string | null;
+      channels: string | null;
+      format: string | null;
+      sort_order: number;
+    }>("mkt_content_pillar_angles")
+    .select("id, pillar_id, title, description, funnel, guideline, channels, format, sort_order")
+    .is("deleted_at", null)
+    .order("sort_order", { ascending: true });
+  return requireRows(data, error, "pillar_angles").map((a) => ({
+    id: a.id,
+    pillarId: a.pillar_id,
+    title: a.title,
+    description: a.description ?? null,
+    funnel: a.funnel ?? null,
+    guideline: a.guideline ?? null,
+    channels: a.channels ?? null,
+    format: a.format ?? null,
+    sortOrder: a.sort_order,
   }));
 }
 

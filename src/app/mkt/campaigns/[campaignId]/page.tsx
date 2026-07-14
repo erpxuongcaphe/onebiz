@@ -24,6 +24,7 @@ import { ReadinessActions } from "@/components/mkt/readiness-actions";
 import {
   CampaignStatusControl,
   ContentForm,
+  EditCampaignButton,
   WorkPackageForm,
   WorkPackageSplitButton,
 } from "@/components/mkt/campaign-controls";
@@ -121,12 +122,26 @@ export default async function CampaignDetailPage({
               ) : null}
             </div>
             {canManage ? (
-              <CampaignStatusControl
-                campaignId={c.id}
-                status={c.status}
-                readinessScore={c.readinessScore}
-                canOverride={Boolean(ctx.canOverride)}
-              />
+              <div className="flex flex-wrap items-center gap-2">
+                {c.status !== "completed" && c.status !== "canceled" ? (
+                  <EditCampaignButton
+                    campaign={{
+                      id: c.id,
+                      name: c.name,
+                      objective: c.objective,
+                      budget: c.budget,
+                      timeframeStart: c.timeframeStart,
+                      timeframeEnd: c.timeframeEnd,
+                    }}
+                  />
+                ) : null}
+                <CampaignStatusControl
+                  campaignId={c.id}
+                  status={c.status}
+                  readinessScore={c.readinessScore}
+                  canOverride={Boolean(ctx.canOverride)}
+                />
+              </div>
             ) : null}
           </div>
 
