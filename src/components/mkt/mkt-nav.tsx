@@ -28,7 +28,8 @@ const NAV_ITEMS: NavItem[] = [
   { href: "/mkt/approvals", label: "Duyệt nội dung", icon: "rate_review", requires: "canReview", mobile: true },
   { href: "/mkt/leader-queue", label: "Cần Leader xử lý", icon: "manage_accounts", requires: "isLead" },
   { href: "/mkt/team", label: "Nhân sự", icon: "groups", requires: "isLead" },
-  { href: "/mkt/media", label: "Thư viện", icon: "photo_library" },
+  { href: "/mkt/media", label: "Thư viện media", icon: "photo_library" },
+  { href: "/mkt/documents", label: "Thư viện tài liệu", icon: "folder_open" },
   { href: "/mkt/reports", label: "Báo cáo", icon: "bar_chart" },
   { href: "/mkt/settings", label: "Cài đặt", icon: "settings" },
 ];
