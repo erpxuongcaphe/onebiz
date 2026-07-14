@@ -1,9 +1,10 @@
 import type { Metadata } from "next";
+import Link from "next/link";
 import { createServerSupabaseClient } from "@/lib/supabase/server";
 import { getMktDatabaseClient } from "@/lib/mkt/supabase";
-import { getMktContext, getPillars } from "@/lib/mkt/read-models";
+import { getMktContext } from "@/lib/mkt/read-models";
+import { Icon } from "@/components/ui/icon";
 import { TelegramLinkCard } from "@/components/mkt/telegram-link-card";
-import { PillarManager } from "@/components/mkt/pillar-manager";
 
 export const dynamic = "force-dynamic";
 
@@ -22,14 +23,13 @@ export default async function MktSettingsPage() {
   const db = getMktDatabaseClient(supabase);
 
   // RLS chỉ cho đọc bản ghi của chính mình.
-  const [{ data: account }, ctx, pillars] = await Promise.all([
+  const [{ data: account }, ctx] = await Promise.all([
     db
       .from<TelegramAccountRow>("mkt_telegram_accounts")
       .select("username, status, linked_at")
       .eq("status", "linked")
       .maybeSingle(),
     getMktContext(supabase),
-    getPillars(supabase),
   ]);
 
   const linked = Boolean(account?.status === "linked");
@@ -46,7 +46,25 @@ export default async function MktSettingsPage() {
 
         <TelegramLinkCard linked={linked} username={account?.username ?? null} />
 
-        {ctx.canManageCampaigns ? <PillarManager pillars={pillars} /> : null}
+        {/* Content Pillars đã tách ra mục riêng "Định hướng nội dung" */}
+        {ctx.canManageCampaigns ? (
+          <Link
+            href="/mkt/pillars"
+            className="flex items-center gap-3 rounded-lg border border-outline-variant bg-background p-4 transition hover:border-primary/40"
+          >
+            <span className="flex h-10 w-10 shrink-0 items-center justify-center rounded-lg bg-primary/10 text-primary">
+              <Icon name="category" size={22} />
+            </span>
+            <div className="min-w-0 flex-1">
+              <div className="font-heading text-base font-semibold">Định hướng nội dung</div>
+              <p className="text-sm text-on-surface-variant">
+                Content Pillars &amp; Angles đã chuyển thành mục riêng — bấm để quản lý trụ &amp; góc
+                nội dung chi tiết.
+              </p>
+            </div>
+            <Icon name="chevron_right" size={20} className="shrink-0 text-on-surface-variant" />
+          </Link>
+        ) : null}
       </div>
     </div>
   );

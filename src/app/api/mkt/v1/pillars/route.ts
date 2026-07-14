@@ -10,6 +10,7 @@ type PillarBody = {
   name?: string;
   color?: string;
   sortOrder?: number;
+  description?: string;
 };
 
 export async function POST(request: NextRequest) {
@@ -26,5 +27,6 @@ export async function POST(request: NextRequest) {
     p_name: body.name,
     p_color: body.color ?? "#708090",
     p_sort_order: body.sortOrder ?? 0,
+    p_description: body.description ?? null,
   });
 }

@@ -12,11 +12,12 @@ import {
 } from "@/components/ui/dialog";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
+import { Textarea } from "@/components/ui/textarea";
 import { Label } from "@/components/ui/label";
 import { Icon } from "@/components/ui/icon";
 import { ReasonDialog } from "@/components/mkt/reason-dialog";
 import { SplitDialog } from "@/components/mkt/split-dialog";
-import { mktPost } from "@/lib/mkt/client";
+import { mktPatch, mktPost } from "@/lib/mkt/client";
 import type { MktMember } from "@/lib/mkt/read-models";
 
 const CHANNELS = [
@@ -129,6 +130,139 @@ export function CampaignStatusControl({
         onSubmit={(reason) => setStatus("running", reason)}
       />
     </div>
+  );
+}
+
+// ── Nút "Chỉnh sửa" chiến dịch (tên, mục tiêu, thời gian, ngân sách) ──
+export function EditCampaignButton({
+  campaign,
+}: {
+  campaign: {
+    id: string;
+    name: string;
+    objective: string | null;
+    budget: number;
+    timeframeStart: string | null;
+    timeframeEnd: string | null;
+  };
+}) {
+  const router = useRouter();
+  const [open, setOpen] = useState(false);
+  const [name, setName] = useState(campaign.name);
+  const [objective, setObjective] = useState(campaign.objective ?? "");
+  const [start, setStart] = useState(campaign.timeframeStart ?? "");
+  const [end, setEnd] = useState(campaign.timeframeEnd ?? "");
+  const [budget, setBudget] = useState(campaign.budget ? String(campaign.budget) : "");
+  const [loading, setLoading] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+
+  const dateInvalid = Boolean(start && end && end < start);
+  const budgetInvalid = budget !== "" && Number(budget) < 0;
+
+  // Mở lại dialog → nạp lại giá trị mới nhất từ server (tránh giữ bản nháp cũ)
+  function openDialog() {
+    setName(campaign.name);
+    setObjective(campaign.objective ?? "");
+    setStart(campaign.timeframeStart ?? "");
+    setEnd(campaign.timeframeEnd ?? "");
+    setBudget(campaign.budget ? String(campaign.budget) : "");
+    setError(null);
+    setOpen(true);
+  }
+
+  async function save() {
+    // Nút bấm được luôn — thiếu/sai thì báo rõ tại chỗ.
+    if (name.trim().length < 2) {
+      setError("Tên chiến dịch cần ít nhất 2 ký tự.");
+      return;
+    }
+    if (dateInvalid) {
+      setError("Ngày kết thúc phải sau hoặc bằng ngày bắt đầu.");
+      return;
+    }
+    if (budgetInvalid) {
+      setError("Ngân sách không được âm.");
+      return;
+    }
+    setLoading(true);
+    setError(null);
+    try {
+      await mktPatch(`/api/mkt/v1/campaigns/${campaign.id}`, {
+        name: name.trim(),
+        objective: objective.trim(),
+        timeframeStart: start || undefined,
+        timeframeEnd: end || undefined,
+        budget: budget ? Number(budget) : 0,
+      });
+      setOpen(false);
+      router.refresh();
+    } catch (e) {
+      setError(e instanceof Error ? e.message : "Không lưu được chiến dịch");
+    } finally {
+      setLoading(false);
+    }
+  }
+
+  return (
+    <Dialog open={open} onOpenChange={(o) => (loading ? null : o ? openDialog() : setOpen(false))}>
+      <DialogTrigger
+        render={
+          <Button variant="outline">
+            <Icon name="edit" size={16} /> Chỉnh sửa
+          </Button>
+        }
+      />
+      <DialogContent className="max-h-[90vh] overflow-y-auto sm:max-w-lg">
+        <DialogHeader>
+          <DialogTitle>Chỉnh sửa chiến dịch</DialogTitle>
+        </DialogHeader>
+        <div className="space-y-3">
+          <div className="space-y-1.5">
+            <Label htmlFor="ec-name">Tên chiến dịch</Label>
+            <Input id="ec-name" value={name} onChange={(e) => setName(e.target.value)} autoFocus />
+          </div>
+          <div className="space-y-1.5">
+            <Label htmlFor="ec-obj">Mục tiêu</Label>
+            <Textarea
+              id="ec-obj"
+              value={objective}
+              onChange={(e) => setObjective(e.target.value)}
+              rows={3}
+            />
+          </div>
+          <div className="grid grid-cols-2 gap-3">
+            <div className="space-y-1.5">
+              <Label htmlFor="ec-start">Bắt đầu</Label>
+              <Input id="ec-start" type="date" value={start} onChange={(e) => setStart(e.target.value)} />
+            </div>
+            <div className="space-y-1.5">
+              <Label htmlFor="ec-end">Kết thúc</Label>
+              <Input id="ec-end" type="date" value={end} onChange={(e) => setEnd(e.target.value)} />
+            </div>
+          </div>
+          <div className="space-y-1.5">
+            <Label htmlFor="ec-budget">Ngân sách (đ)</Label>
+            <Input
+              id="ec-budget"
+              type="number"
+              min={0}
+              value={budget}
+              onChange={(e) => setBudget(e.target.value)}
+              placeholder="0"
+            />
+          </div>
+          {error ? <p className="text-sm font-medium text-rose-600">{error}</p> : null}
+        </div>
+        <DialogFooter>
+          <Button variant="outline" disabled={loading} onClick={() => setOpen(false)}>
+            Huỷ
+          </Button>
+          <Button disabled={loading} onClick={save}>
+            {loading ? "Đang lưu…" : "Lưu thay đổi"}
+          </Button>
+        </DialogFooter>
+      </DialogContent>
+    </Dialog>
   );
 }
 
