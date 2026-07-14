@@ -743,6 +743,8 @@ export type MktCampaignDetail = {
     riskLevel: string;
     currentVersion: number;
     revisionCount: number;
+    pillarName: string | null;
+    pillarColor: string | null;
   }>;
   tasks: Array<{
     id: string;
@@ -821,8 +823,9 @@ export async function getCampaignDetail(
         risk_level: string | null;
         current_version: number | null;
         revision_count: number | null;
+        pillar_id: string | null;
       }>("mkt_content_items")
-      .select("id, title, content_status, risk_level, current_version, revision_count")
+      .select("id, title, content_status, risk_level, current_version, revision_count, pillar_id")
       .eq("campaign_id", campaignId)
       .is("deleted_at", null)
       .order("created_at", { ascending: false }),
@@ -849,6 +852,17 @@ export async function getCampaignDetail(
   const rd = requireRows(rdRes.data, rdRes.error, "campaign_readiness");
   const ct = requireRows(ctRes.data, ctRes.error, "campaign_contents");
   const tk = requireRows(tkRes.data, tkRes.error, "campaign_tasks");
+
+  // Trụ nội dung (pillar) của từng content — để hiện rõ content thuộc trụ nào.
+  const pillarIds = Array.from(new Set(ct.map((x) => x.pillar_id).filter(Boolean))) as string[];
+  const pillarMap = new Map<string, { name: string; color: string }>();
+  if (pillarIds.length > 0) {
+    const { data: prs } = await db
+      .from<{ id: string; name: string; color: string }>("mkt_content_pillars")
+      .select("id, name, color")
+      .in("id", pillarIds);
+    (prs ?? []).forEach((p) => pillarMap.set(p.id, { name: p.name, color: p.color }));
+  }
 
   // Tên người: gom mọi id cần tra.
   const ids = new Set<string>();
@@ -910,6 +924,8 @@ export async function getCampaignDetail(
       riskLevel: x.risk_level ?? "low",
       currentVersion: x.current_version ?? 0,
       revisionCount: x.revision_count ?? 0,
+      pillarName: x.pillar_id ? pillarMap.get(x.pillar_id)?.name ?? null : null,
+      pillarColor: x.pillar_id ? pillarMap.get(x.pillar_id)?.color ?? null : null,
     })),
     tasks: tk.map((t) => ({
       id: t.id,
