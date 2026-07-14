@@ -127,10 +127,17 @@ export function SplitDialog({
   const needsContent = rows.some(
     (r) => (r.taskType === "review" || r.taskType === "publish") && r.title.trim() && !r.contentItemId,
   );
-  const valid = filled.length > 0 && !needsContent;
 
   async function handleSubmit() {
-    if (!valid) return;
+    // Không để nút "mờ" khó hiểu — bấm được luôn, thiếu thì báo rõ tại đây.
+    if (filled.length === 0) {
+      setError("Hãy điền ít nhất 1 công đoạn có tên và người phụ trách.");
+      return;
+    }
+    if (needsContent) {
+      setError("Công đoạn Duyệt/Đăng cần gắn nội dung — tạo nhanh ở khối bên dưới.");
+      return;
+    }
     setLoading(true);
     setError(null);
     try {
@@ -289,7 +296,7 @@ export function SplitDialog({
           <Button variant="outline" disabled={loading} onClick={() => onOpenChange(false)}>
             Huỷ
           </Button>
-          <Button disabled={loading || !valid} onClick={handleSubmit}>
+          <Button disabled={loading} onClick={handleSubmit}>
             {loading ? "Đang chia…" : `Chia ${filled.length} việc`}
           </Button>
         </DialogFooter>

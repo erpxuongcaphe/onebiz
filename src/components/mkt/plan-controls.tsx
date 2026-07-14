@@ -141,7 +141,7 @@ export function AssignPlanningButton({
           </div>
           <DialogFooter>
             <Button variant="outline" disabled={loading} onClick={() => setOpen(false)}>Huỷ</Button>
-            <Button disabled={loading || !ownerId} onClick={submit}>
+            <Button disabled={loading} onClick={submit}>
               {loading ? "Đang giao…" : "Giao lập kế hoạch"}
             </Button>
           </DialogFooter>
@@ -266,10 +266,15 @@ export function PlanEditorButton({
   }
 
   async function submitPlan() {
+    // Không để nút "mờ" khó hiểu — bấm được luôn, thiếu thì báo rõ tại đây.
+    if (filled.length === 0) {
+      setError("Hãy thêm ít nhất 1 công đoạn (có tên) rồi mới nộp được.");
+      return;
+    }
     setLoading(true);
     setError(null);
     try {
-      // Lưu bản mới nhất rồi nộp (backend validate rồi tạo phiên bản).
+      // Bấm Nộp = tự lưu bản mới nhất RỒI nộp (không cần bấm Lưu nháp trước).
       await mktPost(`/api/mkt/v1/plans/${plan.id}/items`, payload());
       await mktPost(`/api/mkt/v1/plans/${plan.id}/submit`, { expectedVersion: plan.versionNumber });
       setOpen(false);
@@ -379,7 +384,7 @@ export function PlanEditorButton({
                 <Button variant="outline" disabled={loading} onClick={save}>
                   {loading ? "Đang lưu…" : `Lưu nháp (${filled.length})`}
                 </Button>
-                <Button disabled={loading || filled.length === 0} onClick={submitPlan}>
+                <Button disabled={loading} onClick={submitPlan}>
                   {loading ? "Đang xử lý…" : "Nộp kế hoạch"}
                 </Button>
               </>
@@ -578,7 +583,7 @@ export function ChangeRequestButton({ plan }: { plan: MktPlanInboxEntry }) {
           </div>
           <DialogFooter>
             <Button variant="outline" disabled={loading} onClick={() => setOpen(false)}>Huỷ</Button>
-            <Button disabled={loading || !reason.trim()} onClick={submit}>
+            <Button disabled={loading} onClick={submit}>
               {loading ? "Đang mở lại…" : "Mở lại để sửa"}
             </Button>
           </DialogFooter>
