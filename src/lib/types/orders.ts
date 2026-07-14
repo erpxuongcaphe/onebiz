@@ -172,6 +172,14 @@ export interface SalesOrder {
   debt?: number;
   status: "draft" | "new" | "confirmed" | "delivering" | "completed" | "cancelled";
   statusName: string;
+  /**
+   * CEO 14/07: đơn đã được xuất thành hóa đơn RIÊNG này (bug "Xử lý đặt hàng"
+   * hoặc ca đơn≠hóa đơn). Có giá trị ⇒ hiện "Đã xuất hóa đơn", KHÔNG tính là
+   * lần bán riêng (giữ status cũ nên báo cáo đếm 'completed' bỏ qua).
+   */
+  fulfilledById?: string;
+  /** Mã hóa đơn đã xuất (HD…) để hiện + đối chiếu. */
+  fulfilledInvoiceCode?: string;
   /** Ghi chú người bán (invoices.note) — in trên phiếu đặt hàng (CEO 08/07). */
   note?: string;
   createdBy: string;

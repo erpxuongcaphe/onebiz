@@ -91,6 +91,13 @@ export async function getOrders(
     if (statuses.length > 0) query = query.in("status", statuses);
   }
 
+  // CEO 14/07: đơn đã xuất hóa đơn (fulfilled_by_id) KHÔNG còn là đơn "chưa xử
+  // lý" — POS "Xử lý đặt hàng" truyền excludeFulfilled để không nạp lại đơn đã
+  // bán (chống xử lý trùng). Trang Đơn đặt hàng KHÔNG truyền → vẫn hiện (badge).
+  if (params.filters?.excludeFulfilled) {
+    query = query.is("fulfilled_by_id", null);
+  }
+
   // Search by mã hoặc tên khách. Escape % để tránh wildcard injection.
   if (params.search) {
     const esc = params.search.replace(/[%_]/g, "\\$&");
@@ -141,6 +148,8 @@ export async function getOrders(
       debt: Number(row.debt ?? 0),
       status: row.status,
       statusName: STATUS_LABEL[row.status] ?? row.status ?? "",
+      // CEO 14/07: link tới hóa đơn đã xuất (nếu có) — hiện "Đã xuất hóa đơn".
+      fulfilledById: row.fulfilled_by_id ?? undefined,
       // Ghi chú người bán — in trên phiếu đặt hàng (CEO 08/07).
       note: row.note ?? undefined,
       createdBy: row.created_by ?? "",
@@ -149,6 +158,27 @@ export async function getOrders(
       branchName: branch?.name ?? undefined,
     };
   });
+
+  // CEO 14/07: lấy mã HĐ đã xuất cho các đơn fulfilled (hiện trên badge "Đã
+  // xuất hóa đơn"). Chỉ query khi thực sự có đơn fulfilled (hiếm).
+  const fulfilledIds = [
+    ...new Set(orders.map((o) => o.fulfilledById).filter(Boolean)),
+  ] as string[];
+  if (fulfilledIds.length > 0) {
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    const { data: hd } = await (supabase as any)
+      .from("invoices")
+      .select("id, code")
+      .in("id", fulfilledIds);
+    const codeById = new Map<string, string>(
+      (hd ?? []).map((r: { id: string; code: string }) => [r.id, r.code]),
+    );
+    for (const o of orders) {
+      if (o.fulfilledById) {
+        o.fulfilledInvoiceCode = codeById.get(o.fulfilledById) ?? undefined;
+      }
+    }
+  }
 
   return { data: orders, total: count ?? 0 };
 }

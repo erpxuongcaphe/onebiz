@@ -4595,9 +4595,11 @@ function ProcessOrderModal({
         search: search.trim() || undefined,
         searchField,
         branchId: branchId ?? undefined,
+        // CEO 14/07: LUÔN loại đơn đã xuất hóa đơn (fulfilled) khỏi màn xử lý —
+        // đơn đã bán rồi thì không cho xử lý/thanh toán lần nữa (chống trùng).
         filters: onlyPending
-          ? { status: ["draft", "confirmed", "delivering"] }
-          : undefined,
+          ? { status: ["draft", "confirmed", "delivering"], excludeFulfilled: "1" }
+          : { excludeFulfilled: "1" },
       })
         .then((r) => {
           if (!cancelled) setOrders(r.data);

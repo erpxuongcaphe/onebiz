@@ -112,10 +112,19 @@ function OrderDetail({
   /** Gọi khi data đơn đổi (gắn vận đơn làm tổng tiền đổi) → refetch list. */
   onDataChanged?: () => void;
 }) {
-  const status = statusMap[order.status] ?? {
-    label: order.statusName,
-    variant: "secondary" as const,
-  };
+  // CEO 14/07: đơn đã xuất hóa đơn RIÊNG → hiện "Đã xuất hóa đơn" ở mọi nơi
+  // trong chi tiết (không phải trạng thái bán, số bán thật ở hóa đơn kia).
+  const status = order.fulfilledById
+    ? {
+        label: order.fulfilledInvoiceCode
+          ? `Đã xuất hóa đơn · ${order.fulfilledInvoiceCode}`
+          : "Đã xuất hóa đơn",
+        variant: "default" as const,
+      }
+    : statusMap[order.status] ?? {
+        label: order.statusName,
+        variant: "secondary" as const,
+      };
 
   // Lazy fetch line items thật (P0 audit fix — trước hardcode "SP001").
   const [items, setItems] = useState<SalesOrderItemRow[]>([]);
@@ -539,6 +548,21 @@ export default function DatHangPage() {
       accessorKey: "status",
       header: "Trạng thái",
       cell: ({ row }) => {
+        // CEO 14/07: đơn đã xuất thành hóa đơn RIÊNG → badge "Đã xuất hóa đơn"
+        // (không phải một lần bán riêng; số bán thật ở hóa đơn kia).
+        if (row.original.fulfilledById) {
+          return (
+            <Badge
+              variant="default"
+              className="bg-status-success/10 text-status-success border-status-success/25"
+            >
+              Đã xuất hóa đơn
+              {row.original.fulfilledInvoiceCode
+                ? ` · ${row.original.fulfilledInvoiceCode}`
+                : ""}
+            </Badge>
+          );
+        }
         const s = statusMap[row.original.status] ?? {
           label: row.original.statusName,
           variant: "secondary" as const,
@@ -648,7 +672,7 @@ export default function DatHangPage() {
           label="Tổng tiền hàng"
           value={formatCurrency(
             data
-              .filter((r) => r.status !== "cancelled")
+              .filter((r) => r.status !== "cancelled" && !r.fulfilledById)
               .reduce(
                 (sum, r) => sum + ((r.totalAmount ?? 0) - (r.shippingFee ?? 0)),
                 0,
@@ -660,7 +684,7 @@ export default function DatHangPage() {
           label="Tổng phí giao"
           value={formatCurrency(
             data
-              .filter((r) => r.status !== "cancelled")
+              .filter((r) => r.status !== "cancelled" && !r.fulfilledById)
               .reduce((sum, r) => sum + (r.shippingFee ?? 0), 0),
           )}
         />
@@ -669,7 +693,7 @@ export default function DatHangPage() {
           label="Tổng cần thu"
           value={formatCurrency(
             data
-              .filter((r) => r.status !== "cancelled")
+              .filter((r) => r.status !== "cancelled" && !r.fulfilledById)
               .reduce((sum, r) => sum + (r.debt ?? 0), 0),
           )}
         />
@@ -756,7 +780,10 @@ export default function DatHangPage() {
             variant: "destructive",
             onClick: async (selectedRows) => {
               const cancellable = selectedRows.filter(
-                (r) => r.status !== "completed" && r.status !== "cancelled",
+                (r) =>
+                  r.status !== "completed" &&
+                  r.status !== "cancelled" &&
+                  !r.fulfilledById, // đơn đã xuất hóa đơn: đã bán rồi, không hủy
               );
               if (cancellable.length === 0) {
                 toast({
