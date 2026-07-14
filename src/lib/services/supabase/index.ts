@@ -204,6 +204,12 @@ export {
   // Finance
   getFinanceKpis, getRevenueVsExpense, getExpenseBreakdown, getMonthlyProfit, getCashFlow, getCashFlowDetailed,
 } from "./analytics";
+export { getPurchaseForecast } from "./purchase-forecast";
+export type {
+  PurchaseForecastResult,
+  ForecastSkuRow,
+  ForecastMaterialRow,
+} from "./purchase-forecast";
 export { posCheckout, recordDiscountAudit } from "./pos-checkout";
 export type {
   PosCheckoutInput,
