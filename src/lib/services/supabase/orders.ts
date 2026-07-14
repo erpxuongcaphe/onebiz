@@ -91,12 +91,11 @@ export async function getOrders(
     if (statuses.length > 0) query = query.in("status", statuses);
   }
 
-  // CEO 14/07: đơn đã xuất hóa đơn (fulfilled_by_id) KHÔNG còn là đơn "chưa xử
-  // lý" — POS "Xử lý đặt hàng" truyền excludeFulfilled để không nạp lại đơn đã
-  // bán (chống xử lý trùng). Trang Đơn đặt hàng KHÔNG truyền → vẫn hiện (badge).
-  if (params.filters?.excludeFulfilled) {
-    query = query.is("fulfilled_by_id", null);
-  }
+  // CEO 14/07: đơn đã xuất hóa đơn (fulfilled_by_id) không còn là "chưa xử lý".
+  // KHÔNG lọc ở query (cột thêm ở 00188 — lọc server .is() sẽ LỖI nếu migration
+  // chưa chạy). POS "Xử lý đặt hàng" lọc client-side theo o.fulfilledById cho an
+  // toàn cả trước/sau migration (trước: cột thiếu → fulfilledById undefined →
+  // không loại gì, cũng đúng vì chưa có đơn nào fulfilled).
 
   // Search by mã hoặc tên khách. Escape % để tránh wildcard injection.
   if (params.search) {

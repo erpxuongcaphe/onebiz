@@ -4595,14 +4595,16 @@ function ProcessOrderModal({
         search: search.trim() || undefined,
         searchField,
         branchId: branchId ?? undefined,
-        // CEO 14/07: LUÔN loại đơn đã xuất hóa đơn (fulfilled) khỏi màn xử lý —
-        // đơn đã bán rồi thì không cho xử lý/thanh toán lần nữa (chống trùng).
         filters: onlyPending
-          ? { status: ["draft", "confirmed", "delivering"], excludeFulfilled: "1" }
-          : { excludeFulfilled: "1" },
+          ? { status: ["draft", "confirmed", "delivering"] }
+          : undefined,
       })
         .then((r) => {
-          if (!cancelled) setOrders(r.data);
+          // CEO 14/07: LUÔN loại đơn đã xuất hóa đơn (fulfilled) khỏi màn xử lý —
+          // đã bán rồi thì không cho xử lý/thu tiền lần nữa. Lọc CLIENT-SIDE cho
+          // an toàn cả khi cột fulfilled_by_id chưa có (pre-00188 → undefined →
+          // không loại gì, đúng vì lúc đó chưa đơn nào fulfilled).
+          if (!cancelled) setOrders(r.data.filter((o) => !o.fulfilledById));
         })
         .catch((e: unknown) => {
           if (!cancelled)
