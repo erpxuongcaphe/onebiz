@@ -3606,6 +3606,22 @@ function PosPageInner() {
               });
               return;
             }
+            // CEO 14/07/2026 FIX MỒ CÔI ĐƠN: adopt session_id TRƯỚC loadDraft
+            // (y hệt handleRecoverySelect / ?draftId=). Nếu bỏ bước này,
+            // useAutoSaveDraft chạy theo clientSessionId hiện tại → ĐẺ NHÁP MỚI,
+            // rồi setLoadedDraftId ghi đè sang nháp mồ côi đó → khi Thanh toán,
+            // completeDraftOrder hoàn tất NHÁP MỚI, còn ĐƠN ĐẶT HÀNG gốc (DH)
+            // KHÔNG bao giờ flip 'completed' → đơn cứ hiện "chưa hoàn thành".
+            if (detail.clientSessionId) {
+              setClientSessionId(detail.clientSessionId);
+            } else {
+              const newId =
+                typeof crypto !== "undefined" && crypto.randomUUID
+                  ? crypto.randomUUID()
+                  : `sess-${Date.now()}`;
+              setClientSessionId(newId);
+              await adoptDraftSession(detail.id, newId);
+            }
             state.loadDraft(detail);
             setProcessOrderOpen(false);
             toast({
