@@ -238,6 +238,11 @@ export function CreatePurchaseOrderDialog({
   const [items, setItems] = useState<LineItem[]>([]);
   const [shippingFee, setShippingFee] = useState(0);
   const [otherCost, setOtherCost] = useState(0);
+  // CEO 14/07/2026: chiết khấu theo TỔNG tiền đơn (ngoài chiết khấu từng dòng).
+  // Nhập % hoặc số tiền. Chỉ giảm tổng phải trả / công nợ NCC — KHÔNG đụng giá
+  // vốn (WAC nhận hàng tính theo unit_price từng dòng, giống chiết khấu dòng).
+  const [orderDiscount, setOrderDiscount] = useState(0);
+  const [orderDiscountType, setOrderDiscountType] = useState<"percent" | "amount">("amount");
   const [notes, setNotes] = useState("");
   // CEO 01/06/2026: số tiền NCC đã thanh toán ngay khi tạo phiếu nhập.
   // Để trống (=0) = chưa trả, ghi nợ toàn bộ. Nếu nhập > 0 → trừ vào debt.
@@ -254,6 +259,8 @@ export function CreatePurchaseOrderDialog({
 
     setShippingFee(0);
     setOtherCost(0);
+    setOrderDiscount(0);
+    setOrderDiscountType("amount");
     getCurrentContext()
       .then((ctx) => setCurrentTenantId(ctx.tenantId))
       .catch(() => setCurrentTenantId(null));
@@ -299,8 +306,24 @@ export function CreatePurchaseOrderDialog({
         });
         setItems(mappedItems);
 
+        // CEO 14/07/2026: reload chiết khấu cả đơn (cột order_discount, 00187).
+        // Nếu migration chưa chạy → undefined → 0 (không lỗi, tiền vẫn khớp).
+        const orderDisc = Math.max(
+          0,
+          Number((editingPO as { order_discount?: number | null }).order_discount ?? 0),
+        );
+        if (orderDisc > 0) {
+          setOrderDiscount(orderDisc);
+          setOrderDiscountType("amount");
+        }
+
         const baseTotal = getItemsSubtotal(mappedItems) + getItemsTax(mappedItems);
-        const existingCost = Math.max(0, Number(editingPO.total ?? 0) - baseTotal);
+        // total lưu = baseTotal + chi phí mua − chiết khấu đơn ⇒ cộng lại orderDisc
+        // để tách đúng "chi phí mua" khi reload (nếu không total sẽ lệch).
+        const existingCost = Math.max(
+          0,
+          Number(editingPO.total ?? 0) - baseTotal + orderDisc,
+        );
         if (existingCost > 0) {
           setOtherCost(existingCost);
         }
@@ -360,16 +383,18 @@ export function CreatePurchaseOrderDialog({
     const timer = setTimeout(async () => {
       const supabase = getClient();
       const ctx = await getCurrentContext();
-      // CEO 29/05/2026: Nhập hàng (mua từ NCC ngoài) chỉ là NVL — KHÔNG hiện
-      // SKU (làm từ NVL, không mua ngoài). FnB lấy SKU từ Retail qua "Bán nội
-      // bộ", không qua phiếu nhập. `is not true` lấy NVL + hàng bán-lại (no BOM).
+      // CEO 29/05/2026 + 14/07/2026: Nhập hàng (mua từ NCC ngoài) chỉ là NVL —
+      // KHÔNG hiện SKU (SKU làm từ NVL qua BOM, hoặc là mã bán, không mua ngoài).
+      // FnB lấy SKU từ Retail qua "Bán nội bộ", không qua phiếu nhập.
+      // ⚠️ Cũ dùng `has_bom is not true` → LEAK 147 SKU chưa gắn BOM (retail + fnb)
+      // vào picker. Nay lọc thẳng `product_type='nvl'` — đúng ý CEO: nhập = chỉ NVL.
       const { data } = await supabase
         .from("products")
         .select("id, code, name, unit, cost_price, vat_rate")
         .or(`name.ilike.%${productSearch}%,code.ilike.%${productSearch}%`)
         .eq("tenant_id", currentTenantId ?? ctx.tenantId)
         .eq("is_active", true)
-        .not("has_bom", "is", true)
+        .eq("product_type", "nvl")
         .limit(10);
 
       setFilteredProducts((data ?? []).map((p) => ({
@@ -430,7 +455,18 @@ export function CreatePurchaseOrderDialog({
   const taxAmount = useMemo(() => getItemsTax(items), [items]);
 
   const purchaseCost = shippingFee + otherCost;
-  const total = subtotal + taxAmount + purchaseCost;
+  // Tổng đơn TRƯỚC chiết khấu cả đơn (dùng làm gốc tính %).
+  const totalBeforeOrderDiscount = subtotal + taxAmount + purchaseCost;
+  // CEO 14/07/2026: chiết khấu cả đơn — % thì tính trên tổng đơn, đ thì số tiền
+  // thẳng; luôn kẹp trong [0, tổng đơn] để không âm.
+  const orderDiscountAmount = useMemo(() => {
+    const raw =
+      orderDiscountType === "percent"
+        ? (totalBeforeOrderDiscount * (orderDiscount || 0)) / 100
+        : orderDiscount || 0;
+    return Math.min(Math.max(0, Math.round(raw)), Math.max(0, totalBeforeOrderDiscount));
+  }, [orderDiscount, orderDiscountType, totalBeforeOrderDiscount]);
+  const total = Math.max(0, totalBeforeOrderDiscount - orderDiscountAmount);
 
   function validate(): boolean {
     const newErrors: Record<string, string> = {};
@@ -527,6 +563,17 @@ export function CreatePurchaseOrderDialog({
         if (poErr) throw new Error(poErr.message);
         poId = po!.id;
       }
+
+      // CEO 14/07/2026: lưu chiết khấu cả đơn. Best-effort — cột order_discount
+      // thêm ở migration 00187; nếu CEO chưa chạy migration thì UPDATE này báo
+      // lỗi cột-không-tồn-tại và được BỎ QUA (total/debt đã trừ đúng ở trên,
+      // tiền không sai). Sau khi chạy 00187 thì giá trị này lưu để reload/đối soát.
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      await (supabase as any)
+        .from("purchase_orders")
+        .update({ order_discount: orderDiscountAmount })
+        .eq("tenant_id", ctx.tenantId)
+        .eq("id", poId);
 
       if (items.length > 0) {
         // eslint-disable-next-line @typescript-eslint/no-explicit-any
@@ -974,6 +1021,50 @@ export function CreatePurchaseOrderDialog({
                     value={otherCost}
                     onChange={setOtherCost}
                   />
+                  {/* CEO 14/07/2026: Chiết khấu cả đơn — % trên tổng, hoặc số đ.
+                      Giảm thẳng tổng phải trả NCC. */}
+                  <div className="flex items-center gap-2">
+                    <label className="flex min-w-0 flex-1 items-center gap-1.5 text-sm text-muted-foreground">
+                      <Icon name="sell" size={14} className="text-status-success" />
+                      Chiết khấu cả đơn
+                    </label>
+                    <NumericInput
+                      value={orderDiscount}
+                      onChange={(v) => setOrderDiscount(Math.max(0, v ?? 0))}
+                      min={0}
+                      decimals={2}
+                      className="h-8 w-24 text-right text-sm"
+                      aria-label="Chiết khấu cả đơn"
+                    />
+                    <div className="inline-flex overflow-hidden rounded-md border bg-background">
+                      <button
+                        type="button"
+                        aria-label="Chiết khấu cả đơn theo phần trăm"
+                        onClick={() => setOrderDiscountType("percent")}
+                        className={cn(
+                          "min-w-8 px-2.5 py-1.5 text-xs font-medium transition-colors",
+                          orderDiscountType === "percent"
+                            ? "bg-primary text-primary-foreground"
+                            : "text-muted-foreground hover:bg-muted",
+                        )}
+                      >
+                        %
+                      </button>
+                      <button
+                        type="button"
+                        aria-label="Chiết khấu cả đơn theo số tiền"
+                        onClick={() => setOrderDiscountType("amount")}
+                        className={cn(
+                          "min-w-8 border-l px-2.5 py-1.5 text-xs font-medium transition-colors",
+                          orderDiscountType === "amount"
+                            ? "bg-primary text-primary-foreground"
+                            : "text-muted-foreground hover:bg-muted",
+                        )}
+                      >
+                        đ
+                      </button>
+                    </div>
+                  </div>
                 </div>
 
                 {/* Tổng tiền */}
@@ -1001,6 +1092,20 @@ export function CreatePurchaseOrderDialog({
                     <span className="text-muted-foreground">Chi phí mua</span>
                     <span className="font-medium tabular-nums">{formatCurrency(purchaseCost)}</span>
                   </div>
+                  {orderDiscountAmount > 0 && (
+                    <div className="flex items-center justify-between">
+                      <span className="flex items-center gap-1 text-muted-foreground">
+                        <Icon name="sell" size={12} className="text-status-success" />
+                        Chiết khấu cả đơn
+                        {orderDiscountType === "percent" && orderDiscount > 0 && (
+                          <span className="italic">({formatNumber(orderDiscount)}%)</span>
+                        )}
+                      </span>
+                      <span className="font-medium tabular-nums text-status-success">
+                        −{formatCurrency(orderDiscountAmount)}
+                      </span>
+                    </div>
+                  )}
                 </div>
 
                 <div className="mt-3 flex items-end justify-between border-t pt-3">

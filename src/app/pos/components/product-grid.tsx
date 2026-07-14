@@ -63,9 +63,12 @@ export function ProductGrid({ searchQuery, onAddProduct }: ProductGridProps) {
       try {
         // Retail POS chỉ hiển thị SKU channel='retail' (hàng đóng gói bán lẻ/sỉ).
         // Món FnB pha chế tại quán (channel='fnb') được POS FnB xử lý riêng.
+        // CEO 14/07/2026: khoá thêm product_type='sku' — chỉ SKU là mã BÁN,
+        // NVL (đầu vào mua hàng) tuyệt đối không lên đơn đặt hàng bán.
         const filters: Record<string, string | string[]> = {
           status: "active",
           channel: "retail",
+          productType: "sku",
         };
         if (catId !== "all") filters.category = catId;
         const result = await getProducts({

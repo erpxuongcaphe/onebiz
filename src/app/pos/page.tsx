@@ -301,8 +301,9 @@ function PosPageInner() {
           search: q,
           sortBy: "code",
           sortOrder: "asc",
-          // Barcode quick-add ở POS Retail chỉ quét SKU channel='retail'.
-          filters: { status: "active", channel: "retail" },
+          // Barcode quick-add ở POS Retail chỉ quét SKU channel='retail'
+          // (CEO 14/07: khoá product_type='sku' — không quét trúng NVL).
+          filters: { status: "active", channel: "retail", productType: "sku" },
         });
         if (result.data.length > 0) {
           const product = result.data[0];
