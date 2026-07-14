@@ -24,6 +24,7 @@ export {
   getInvoicesForCustomer,
   getReturnsForCustomer,
   setInvoiceAmountTendered,
+  getInvoiceById,
 } from "./invoices";
 export type { CustomerReturn, UpdateInvoicePatch, InvoiceItemRow } from "./invoices";
 export {

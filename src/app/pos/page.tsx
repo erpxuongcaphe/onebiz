@@ -41,6 +41,9 @@ import {
   attachDeliveryToInvoice,
   getTenantBusinessInfo,
   setInvoiceAmountTendered,
+  getInvoiceById,
+  getInvoiceItems,
+  type TenantBusinessInfo,
 } from "@/lib/services/supabase";
 import { useAutoSaveDraft, loadLocalCart } from "./hooks/use-auto-save-draft";
 import { RecoveryDialog } from "./components/recovery-dialog";
@@ -57,7 +60,12 @@ import { resolvePrintTemplate } from "@/lib/services";
 import { applyTemplateToDocData } from "@/lib/print-apply-template";
 import { printDocument, type DocumentPrintData } from "@/lib/print-document";
 // CEO 13/07: dựng khối khách trên phiếu POS qua CÙNG helper với trang Hóa đơn.
-import { buildBuyerHeaderFields, type InvoiceFieldFlags } from "@/lib/print-templates";
+import {
+  buildBuyerHeaderFields,
+  buildInvoicePrintData,
+  toPrintLines,
+  type InvoiceFieldFlags,
+} from "@/lib/print-templates";
 import { PosBranchSelector } from "@/components/shared/pos-branch-selector";
 import { useNetworkStatus, offlinePosCheckout } from "@/lib/offline";
 import { useBarcodeScanner } from "@/lib/hooks/use-barcode-scanner";
@@ -120,7 +128,7 @@ import {
   redeemLoyaltyPoints,
   calculateRedeemDiscount,
 } from "@/lib/services/supabase/loyalty";
-import type { LoyaltySettings } from "@/lib/types";
+import type { LoyaltySettings, Invoice } from "@/lib/types";
 import type { Product, ProductVariant } from "@/lib/types";
 
 // Reuse FnB offline bar/drawer — both are generic over NetworkStatus.
@@ -1060,10 +1068,14 @@ function PosPageInner() {
   // in lúc thanh toán dựng khối khách qua CÙNG helper với trang Hóa đơn (in theo
   // mẫu, 2 phiếu khớp nhau). Best-effort: lỗi → undefined → helper hiện mặc định.
   const invoiceFieldsRef = useRef<InvoiceFieldFlags | undefined>(undefined);
+  // CEO 14/07: giữ FULL businessInfo → in phiếu sau checkout dựng qua CHÍNH
+  // buildInvoicePrintData (như trang Hóa đơn) cần đủ tên/MST/địa chỉ/logo bên bán.
+  const businessInfoRef = useRef<TenantBusinessInfo | undefined>(undefined);
   useEffect(() => {
     getTenantBusinessInfo()
       .then((info) => {
         invoiceFieldsRef.current = info?.invoiceFields;
+        businessInfoRef.current = info ?? undefined;
       })
       .catch(() => {
         /* giữ undefined → helper dùng mặc định (hiện đủ dòng có dữ liệu) */
@@ -1443,31 +1455,47 @@ function PosPageInner() {
             currentBranch?.id ?? null,
           );
           if (resolved) {
-            const money = (n: number) => `${formatCurrency(n)} đ`;
-            const base: DocumentPrintData = {
-              documentType: "PHIẾU TẠM TÍNH",
-              documentCode: draftCode, // rỗng nếu giỏ chưa lưu → mẫu ẩn "Số:"
+            // CEO 14/07 (V3): tạm tính dựng qua CHÍNH buildInvoicePrintData như
+            // hóa đơn → cùng cột (Mã hàng/Tên/SL/Đơn giá/Thành tiền) + nhãn
+            // "Chiết khấu". CHỈ khác tiêu đề "PHIẾU TẠM TÍNH". Chưa thanh toán →
+            // paid=0. Mô hình số HĐ: due = total − discount → totalAmount ép
+            // = state.total + chiết khấu đơn (đã verify DB). Không khối công nợ
+            // (customerCurrentDebt undefined) vì phiếu tạm chưa ghi nợ.
+            const preInvoice: Invoice = {
+              id: "",
+              code: draftCode, // rỗng nếu giỏ chưa lưu → mẫu ẩn "Số:"
               date: new Date().toISOString(),
+              customerId: state.customer?.id ?? "",
+              customerCode: state.customer?.code ?? "",
+              customerName: receipt.customerName,
+              customerPhone: state.customer?.phone,
+              customerAddress: state.customer?.address,
+              totalAmount: state.total + state.orderDiscountAmount,
+              discount: state.orderDiscountAmount,
+              shippingFee: state.shippingFee,
+              taxAmount: 0,
+              paid: 0,
+              debt: 0,
+              status: "processing",
               branchName: currentBranch?.name,
+              branchId: currentBranch?.id,
+              deliveryType: state.shippingFee > 0 ? "delivery" : "no_delivery",
               note: state.note || undefined,
-              headerFields: [
-                { label: "Khách hàng", value: receipt.customerName },
-              ],
-              items: receipt.items,
-              itemColumns: ["Tên hàng", "SL", "Đơn giá", "Giảm giá", "Thành tiền"],
-              summaryRows: [
-                { label: "Tổng tiền hàng", value: money(receipt.subtotal) },
-                ...(receipt.discountAmount > 0
-                  ? [{ label: "Giảm giá", value: money(receipt.discountAmount) }]
-                  : []),
-                ...(state.shippingFee > 0
-                  ? [{ label: "Phí giao hàng", value: money(state.shippingFee) }]
-                  : []),
-                { label: "Tổng cộng", value: money(receipt.total), bold: true },
-                { label: "Khách cần trả", value: money(receipt.total), bold: true },
-              ],
-              createdBy: user?.fullName,
+              createdBy: user?.fullName ?? "",
             };
+            const preLines = toPrintLines(
+              state.lines.map((l) => ({
+                name: l.productName,
+                quantity: l.quantity,
+                unitPrice: l.unitPrice,
+                total: state.computeLineTotal(l),
+              })),
+            );
+            const base = buildInvoicePrintData(
+              preInvoice,
+              businessInfoRef.current ?? undefined,
+              preLines,
+            );
             const doc = applyTemplateToDocData(base, resolved);
             doc.documentType = "PHIẾU TẠM TÍNH"; // ép lại — không để mẫu đè thành tiêu đề hóa đơn
             printDocument(doc, { paperSize: resolved.paperSize });
@@ -2080,55 +2108,79 @@ function PosPageInner() {
                 currentBranch?.id ?? null,
               );
           if (resolved) {
-            const change = Math.max(0, paidEntered - state.total);
-            const money = (n: number) => `${formatCurrency(n)} đ`;
-            const base: DocumentPrintData = {
-              documentType: "PHIẾU THANH TOÁN", // mẫu in sẽ đè tiêu đề
-              documentCode: invoiceCode,
-              date: new Date().toISOString(),
-              branchName: currentBranch?.name,
-              note: state.note || undefined,
-              // CEO 13/07: khối khách dựng qua CÙNG helper với trang Hóa đơn —
-              // gồm SĐT / địa chỉ / mã KH / người tạo theo đúng cài đặt in.
-              headerFields: buildBuyerHeaderFields(
-                {
-                  customerName: resolvedCustomerName,
-                  customerCode: state.customer?.code,
-                  customerPhone: state.customer?.phone,
-                  customerAddress: state.customer?.address,
-                  createdByName: user?.fullName,
-                },
-                invoiceFieldsRef.current,
-              ),
-              items: receipt.items,
-              itemColumns: ["Tên hàng", "SL", "Đơn giá", "Giảm giá", "Thành tiền"],
-              summaryRows: [
-                { label: "Tổng tiền hàng", value: money(receipt.subtotal) },
-                ...(receipt.discountAmount > 0
-                  ? [{ label: "Giảm giá", value: money(receipt.discountAmount) }]
-                  : []),
-                // CEO 08/07: đơn Bán giao hàng — hiện phí ship (total đã gồm).
-                ...(state.shippingFee > 0
-                  ? [{ label: "Phí giao hàng", value: money(state.shippingFee) }]
-                  : []),
-                { label: "Tổng cộng", value: money(receipt.total), bold: true },
-                { label: "Khách đã thanh toán", value: money(paidEntered) },
-                // Đưa dư → chỉ "Tiền thối lại"; còn lại → "Khách còn phải trả".
-                ...(change > 0
-                  ? [{ label: "Tiền thối lại", value: money(change) }]
-                  : [
-                      {
-                        label: "Khách còn phải trả",
-                        value: money(receipt.total - paidEntered),
-                        tone: (receipt.total - paidEntered > 0
-                          ? "danger"
-                          : "success") as "danger" | "success",
-                      },
-                    ]),
-              ],
-              createdBy: user?.fullName,
-            };
-            printDocument(applyTemplateToDocData(base, resolved), {
+            // CEO 14/07 (V3): in CHÍNH hóa đơn vừa lưu qua buildInvoicePrintData
+            // → GIỐNG HỆT trang Hóa đơn in lại (cột "Mã hàng", nhãn "Chiết khấu",
+            // khối "Nợ cũ/Còn nợ" đọc công nợ KH thời gian thực). Fetch lỗi/null
+            // → RỚT VỀ phiếu dựng tay (không kẹt quầy).
+            let doc: DocumentPrintData | null = null;
+            if (invoiceId) {
+              try {
+                const [inv, itemRows] = await Promise.all([
+                  getInvoiceById(invoiceId),
+                  getInvoiceItems(invoiceId),
+                ]);
+                if (inv) {
+                  doc = buildInvoicePrintData(
+                    inv,
+                    businessInfoRef.current ?? undefined,
+                    toPrintLines(itemRows),
+                  );
+                }
+              } catch (fetchErr) {
+                console.warn(
+                  "[POS] fetch invoice for receipt print failed, fallback dựng tay:",
+                  fetchErr,
+                );
+              }
+            }
+            if (!doc) {
+              // Fallback dựng tay (offline / fetch lỗi) — giữ logic cũ.
+              const change = Math.max(0, paidEntered - state.total);
+              const money = (n: number) => `${formatCurrency(n)} đ`;
+              doc = {
+                documentType: "PHIẾU THANH TOÁN", // mẫu in sẽ đè tiêu đề
+                documentCode: invoiceCode,
+                date: new Date().toISOString(),
+                branchName: currentBranch?.name,
+                note: state.note || undefined,
+                headerFields: buildBuyerHeaderFields(
+                  {
+                    customerName: resolvedCustomerName,
+                    customerCode: state.customer?.code,
+                    customerPhone: state.customer?.phone,
+                    customerAddress: state.customer?.address,
+                    createdByName: user?.fullName,
+                  },
+                  invoiceFieldsRef.current,
+                ),
+                items: receipt.items,
+                itemColumns: ["Tên hàng", "SL", "Đơn giá", "Giảm giá", "Thành tiền"],
+                summaryRows: [
+                  { label: "Tổng tiền hàng", value: money(receipt.subtotal) },
+                  ...(receipt.discountAmount > 0
+                    ? [{ label: "Giảm giá", value: money(receipt.discountAmount) }]
+                    : []),
+                  ...(state.shippingFee > 0
+                    ? [{ label: "Phí giao hàng", value: money(state.shippingFee) }]
+                    : []),
+                  { label: "Tổng cộng", value: money(receipt.total), bold: true },
+                  { label: "Khách đã thanh toán", value: money(paidEntered) },
+                  ...(change > 0
+                    ? [{ label: "Tiền thối lại", value: money(change) }]
+                    : [
+                        {
+                          label: "Khách còn phải trả",
+                          value: money(receipt.total - paidEntered),
+                          tone: (receipt.total - paidEntered > 0
+                            ? "danger"
+                            : "success") as "danger" | "success",
+                        },
+                      ]),
+                ],
+                createdBy: user?.fullName,
+              };
+            }
+            printDocument(applyTemplateToDocData(doc, resolved), {
               paperSize: resolved.paperSize,
             });
           } else {

@@ -98,6 +98,29 @@ export async function getInvoices(params: QueryParams): Promise<QueryResult<Invo
   return { data: invoices, total: count ?? 0 };
 }
 
+/**
+ * Lấy 1 hóa đơn theo id — CÙNG select (join công nợ KH) + mapInvoice như
+ * getInvoices. CEO 14/07: POS in phiếu sau checkout đọc chính HĐ vừa lưu rồi
+ * in QUA CÙNG buildInvoicePrintData như trang Hóa đơn → khớp 100% (kể cả khối
+ * "Nợ cũ/Còn nợ" đọc công nợ KH thời gian thực). Trả null nếu không thấy.
+ */
+export async function getInvoiceById(id: string): Promise<Invoice | null> {
+  const supabase = getClient();
+  const tenantId = await getCurrentTenantId();
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  const { data, error } = await (supabase as any)
+    .from("invoices")
+    .select(
+      "*, profiles!invoices_created_by_fkey(full_name), branches!invoices_branch_id_fkey(name), customers!invoices_customer_id_fkey(code, phone, address, debt)",
+    )
+    .eq("tenant_id", tenantId)
+    .eq("id", id)
+    .is("deleted_at", null)
+    .maybeSingle();
+  if (error) handleError(error, "getInvoiceById");
+  return data ? mapInvoice(data) : null;
+}
+
 export function getInvoiceStatuses() {
   // Static statuses - could be enhanced with counts from DB
   return [
