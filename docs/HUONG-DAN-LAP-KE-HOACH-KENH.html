@@ -1,0 +1,475 @@
+<!DOCTYPE html>
+<html lang="vi">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1.0" />
+<title>Hướng dẫn: Lập kế hoạch kênh — MKT Hub</title>
+</head>
+<body>
+<style>
+  :root {
+    --ink: #1c2430; --ink-soft: #5b6472; --paper: #ffffff; --soft: #f4f6fa;
+    --line: #d9dfe9; --primary: #2b4fce; --primary-soft: #e8edfb;
+    --green: #0e9a6c; --green-soft: #e2f5ee; --amber: #b45309; --amber-soft: #fdf0dd;
+    --rose: #ce2b4f; --rose-soft: #fbe8ed; --sky: #0369a1; --sky-soft: #e0f2fe;
+    --pink: #be185d; --pink-soft: #fce7f3; --indigo: #4f46e5; --indigo-soft: #e8eafb;
+    --slate: #64748b; --slate-soft: #f1f5f9;
+  }
+  @media (prefers-color-scheme: dark) {
+    :root {
+      --ink: #e8ebf0; --ink-soft: #9aa4b2; --paper: #14181f; --soft: #1c222c;
+      --line: #323a47; --primary: #7c95ec; --primary-soft: #232c45;
+      --green: #34c799; --green-soft: #17352b; --amber: #e5a04c; --amber-soft: #3a2c17;
+      --rose: #ec7c95; --rose-soft: #451f2a; --sky: #67c3f3; --sky-soft: #14303f;
+      --pink: #f18ab8; --pink-soft: #3d1a2c; --indigo: #a5b4fc; --indigo-soft: #24263f;
+      --slate: #94a3b8; --slate-soft: #232c34;
+    }
+  }
+  :root[data-theme="light"] {
+    --ink: #1c2430; --ink-soft: #5b6472; --paper: #ffffff; --soft: #f4f6fa;
+    --line: #d9dfe9; --primary: #2b4fce; --primary-soft: #e8edfb;
+    --green: #0e9a6c; --green-soft: #e2f5ee; --amber: #b45309; --amber-soft: #fdf0dd;
+    --rose: #ce2b4f; --rose-soft: #fbe8ed; --sky: #0369a1; --sky-soft: #e0f2fe;
+    --pink: #be185d; --pink-soft: #fce7f3; --indigo: #4f46e5; --indigo-soft: #e8eafb;
+    --slate: #64748b; --slate-soft: #f1f5f9;
+  }
+  :root[data-theme="dark"] {
+    --ink: #e8ebf0; --ink-soft: #9aa4b2; --paper: #14181f; --soft: #1c222c;
+    --line: #323a47; --primary: #7c95ec; --primary-soft: #232c45;
+    --green: #34c799; --green-soft: #17352b; --amber: #e5a04c; --amber-soft: #3a2c17;
+    --rose: #ec7c95; --rose-soft: #451f2a; --sky: #67c3f3; --sky-soft: #14303f;
+    --pink: #f18ab8; --pink-soft: #3d1a2c; --indigo: #a5b4fc; --indigo-soft: #24263f;
+    --slate: #94a3b8; --slate-soft: #232c34;
+  }
+
+  * { box-sizing: border-box; }
+  body { margin: 0; background: var(--paper); color: var(--ink);
+    font-family: "Segoe UI", system-ui, -apple-system, Roboto, "Helvetica Neue", Arial, sans-serif;
+    line-height: 1.65; font-size: 16px; }
+  .wrap { max-width: 800px; margin: 0 auto; padding: 40px 22px 80px; }
+
+  header.doc { border-bottom: 3px solid var(--primary); padding-bottom: 22px; margin-bottom: 30px; }
+  .eyebrow { font-size: 12px; font-weight: 700; letter-spacing: .14em; text-transform: uppercase; color: var(--primary); margin: 0 0 8px; }
+  h1 { font-size: 33px; line-height: 1.2; margin: 0 0 10px; letter-spacing: -.01em; text-wrap: balance; }
+  .lede { color: var(--ink-soft); font-size: 17px; margin: 0; max-width: 64ch; }
+  .meta { margin-top: 14px; font-size: 13.5px; color: var(--ink-soft); display: flex; flex-wrap: wrap; gap: 6px 18px; }
+  .meta b { color: var(--ink); font-weight: 600; }
+
+  nav.toc { background: var(--soft); border: 1px solid var(--line); border-radius: 10px; padding: 18px 22px; margin: 26px 0 8px; }
+  nav.toc p { margin: 0 0 8px; font-size: 12px; font-weight: 700; letter-spacing: .12em; text-transform: uppercase; color: var(--ink-soft); }
+  nav.toc ol { margin: 0; padding-left: 22px; }
+  nav.toc li { margin: 3px 0; }
+  nav.toc a { color: var(--ink); text-decoration: none; border-bottom: 1px dotted var(--line); }
+  nav.toc a:hover, nav.toc a:focus-visible { color: var(--primary); border-bottom-color: var(--primary); }
+
+  h2 { font-size: 23px; margin: 54px 0 6px; padding-top: 18px; letter-spacing: -.01em; border-top: 1px solid var(--line); text-wrap: balance; }
+  h2 .phan { display: block; font-size: 12px; font-weight: 700; letter-spacing: .14em; text-transform: uppercase; color: var(--primary); margin-bottom: 4px; }
+  h3 { font-size: 17.5px; margin: 30px 0 8px; }
+  p { margin: 10px 0; max-width: 70ch; }
+  ul, ol { max-width: 68ch; padding-left: 24px; }
+  li { margin: 5px 0; }
+  a { color: var(--primary); }
+
+  .chip { display: inline-block; font-size: 12.5px; font-weight: 700; padding: 2px 10px; border-radius: 999px; vertical-align: 2px; margin-left: 8px; }
+  .chip.lead { background: var(--pink-soft); color: var(--pink); }
+  .chip.exec { background: var(--sky-soft); color: var(--sky); }
+  .chip.ceo { background: var(--primary-soft); color: var(--primary); }
+
+  .path { display: inline-block; background: var(--soft); border: 1px solid var(--line); border-radius: 7px; padding: 1px 9px; font-weight: 600; font-size: 14.5px; white-space: nowrap; }
+  .btn-name { font-weight: 700; color: var(--primary); }
+  .lg { display:inline-block; font-size:12px; font-weight:600; padding:2px 9px; border-radius:999px; white-space:nowrap; line-height:1.55; }
+
+  .note, .warn, .good { border-radius: 10px; padding: 13px 16px; margin: 16px 0; font-size: 15px; max-width: none; }
+  .note { background: var(--primary-soft); border-left: 4px solid var(--primary); }
+  .warn { background: var(--amber-soft); border-left: 4px solid var(--amber); }
+  .good { background: var(--green-soft); border-left: 4px solid var(--green); }
+  .note p, .warn p, .good p { margin: 4px 0; }
+
+  figure { margin: 20px 0 26px; }
+  .fig-card { border: 1px solid var(--line); border-radius: 12px; padding: 16px; background: var(--paper); overflow-x: auto; }
+  figure svg { display: block; width: 100%; height: auto; font-family: inherit; }
+  figcaption { font-size: 13.5px; color: var(--ink-soft); margin-top: 8px; padding-left: 2px; }
+  figcaption b { color: var(--ink); }
+
+  table.roles { border-collapse: collapse; width: 100%; margin: 16px 0; font-size: 14.5px; }
+  table.roles th, table.roles td { border: 1px solid var(--line); padding: 9px 12px; text-align: left; vertical-align: top; }
+  table.roles th { background: var(--soft); font-size: 13px; letter-spacing: .04em; text-transform: uppercase; }
+  .table-scroll { overflow-x: auto; }
+
+  ol.steps { counter-reset: step; list-style: none; padding-left: 0; max-width: none; }
+  ol.steps > li { counter-increment: step; position: relative; padding-left: 46px; margin: 14px 0; }
+  ol.steps > li::before { content: counter(step); position: absolute; left: 0; top: 1px;
+    width: 30px; height: 30px; border-radius: 999px; background: var(--primary); color: #fff;
+    font-weight: 700; font-size: 15px; display: flex; align-items: center; justify-content: center; }
+  ol.steps > li > b:first-child { display: block; margin-bottom: 2px; font-size: 16px; }
+
+  .faq dt { font-weight: 700; margin-top: 18px; }
+  .faq dd { margin: 4px 0 0 0; color: var(--ink-soft); max-width: 70ch; }
+
+  footer.doc { margin-top: 60px; padding-top: 18px; border-top: 1px solid var(--line); font-size: 13.5px; color: var(--ink-soft); }
+
+  @page { size: A4; margin: 15mm 14mm 16mm; }
+  @media print {
+    html { -webkit-print-color-adjust: exact; print-color-adjust: exact; background:#fff; }
+    body { font-size: 10.8pt; color:#1c2430; }
+    .wrap { max-width: none; padding: 0; }
+    a { text-decoration: none; }
+    h1 { font-size: 22pt; }
+    h2 { font-size: 15pt; break-after: avoid; }
+    h3 { break-after: avoid; }
+    p, li { orphans: 2; widows: 2; }
+    figure, .note, .warn, .good, table.roles, ol.steps > li, .faq dt { break-inside: avoid; }
+    nav.toc { break-inside: avoid; }
+    .fig-card { background:#fff; }
+  }
+</style>
+
+<div class="wrap">
+
+<header class="doc">
+  <p class="eyebrow">OneBiz · MKT Hub · Tài liệu nội bộ</p>
+  <h1>Hướng dẫn: Lập kế hoạch kênh</h1>
+  <p class="lede">Một cách chia việc mới trong MKT Hub: thay vì Leader tự chia từng công đoạn, Leader <b>giao</b> cho người phụ trách kênh tự lập kế hoạch, rồi <b>duyệt</b> trước khi hệ thống sinh việc. Giúp Leader đỡ gánh, mà vẫn kiểm soát chặt.</p>
+  <div class="meta">
+    <span>Địa chỉ: <b>mkthub.onebiz.com.vn</b> → mục <b>Lập kế hoạch</b></span>
+    <span>Áp dụng từ: <b>tháng 7/2026</b></span>
+  </div>
+</header>
+
+<nav class="toc">
+  <p>Nội dung</p>
+  <ol>
+    <li><a href="#y-tuong">Ý tưởng: hai cách chia việc</a></li>
+    <li><a href="#vai-tro">Ai làm gì — ba vai trò</a></li>
+    <li><a href="#giao">Bước 1 · Leader giao lập kế hoạch</a></li>
+    <li><a href="#soan">Bước 2 · Chủ kênh soạn kế hoạch</a></li>
+    <li><a href="#nop">Bước 3 · Nộp kế hoạch</a></li>
+    <li><a href="#duyet">Bước 4 · Leader duyệt kế hoạch</a></li>
+    <li><a href="#sinh-viec">Bước 5 · Việc tự sinh</a></li>
+    <li><a href="#sua">Sửa kế hoạch sau khi đã duyệt</a></li>
+    <li><a href="#trang-thai">Bảng chú giải trạng thái kế hoạch</a></li>
+    <li><a href="#faq">Câu hỏi thường gặp</a></li>
+  </ol>
+</nav>
+
+<h2 id="y-tuong"><span class="phan">Bắt đầu</span>Ý tưởng: hai cách chia việc</h2>
+<p>Trong MKT Hub, mỗi <b>gói việc</b> (một kênh cần triển khai — TikTok, Facebook…) có <b>hai cách</b> biến thành các đầu việc cụ thể. Leader chọn một trong hai cho từng gói:</p>
+
+<figure>
+  <div class="fig-card">
+  <svg viewBox="0 0 760 210" role="img" aria-label="Hai cách chia việc từ một gói việc">
+    <rect x="300" y="14" width="160" height="42" rx="10" fill="var(--soft)" stroke="var(--line)"/>
+    <text x="380" y="34" font-size="13" font-weight="700" text-anchor="middle" fill="var(--ink)">Một gói việc</text>
+    <text x="380" y="49" font-size="11" text-anchor="middle" fill="var(--ink-soft)">(VD: kênh TikTok)</text>
+    <g stroke="var(--ink-soft)" stroke-width="1.6" fill="none">
+      <path d="M380 56 380 74 190 74 190 96"/><path d="M380 56 380 74 570 74 570 96" />
+    </g>
+    <path d="M186 96 190 104 194 96 Z" fill="var(--ink-soft)"/>
+    <path d="M566 96 570 104 574 96 Z" fill="var(--ink-soft)"/>
+    <rect x="40" y="104" width="300" height="90" rx="11" fill="var(--primary-soft)" stroke="var(--primary)"/>
+    <text x="190" y="128" font-size="14" font-weight="700" text-anchor="middle" fill="var(--primary)">Chia Task Ngay</text>
+    <text x="190" y="150" font-size="12" text-anchor="middle" fill="var(--ink)">Leader tự chia từng công đoạn</text>
+    <text x="190" y="168" font-size="12" text-anchor="middle" fill="var(--ink-soft)">Nhanh · việc gấp · gói đơn giản</text>
+    <text x="190" y="184" font-size="11" text-anchor="middle" fill="var(--ink-soft)">(chức năng cũ, vẫn giữ nguyên)</text>
+    <rect x="420" y="104" width="300" height="90" rx="11" fill="var(--sky-soft)" stroke="var(--sky)"/>
+    <text x="570" y="128" font-size="14" font-weight="700" text-anchor="middle" fill="var(--sky)">Giao lập kế hoạch</text>
+    <text x="570" y="150" font-size="12" text-anchor="middle" fill="var(--ink)">Giao người phụ trách tự lập → Leader duyệt</text>
+    <text x="570" y="168" font-size="12" text-anchor="middle" fill="var(--ink-soft)">Phân quyền · gói lớn · cần kiểm soát</text>
+    <text x="570" y="184" font-size="11" text-anchor="middle" fill="var(--ink-soft)">(chức năng MỚI — tài liệu này)</text>
+  </svg>
+  </div>
+  <figcaption><b>Hình 1.</b> Hai cách sống song song. Chọn "Giao lập kế hoạch" cho một gói việc thì "Chia Task Ngay" của gói đó tự ẩn (và ngược lại) — không bao giờ lẫn.</figcaption>
+</figure>
+
+<p>Tài liệu này hướng dẫn cách thứ hai — <b>Giao lập kế hoạch</b> — theo đúng 5 bước, đi từ chi tiết nhỏ nhất.</p>
+
+<figure>
+  <div class="fig-card">
+  <svg viewBox="0 0 760 96" role="img" aria-label="Năm bước của luồng lập kế hoạch">
+    <g font-size="12.5" font-weight="600" text-anchor="middle">
+      <rect x="6" y="30" width="128" height="40" rx="9" fill="var(--pink-soft)" stroke="var(--pink)"/>
+      <text x="70" y="47" fill="var(--pink)">1. Leader giao</text>
+      <text x="70" y="61" font-size="10" fill="var(--ink-soft)">gói → chủ kênh</text>
+      <rect x="158" y="30" width="128" height="40" rx="9" fill="var(--sky-soft)" stroke="var(--sky)"/>
+      <text x="222" y="47" fill="var(--sky)">2. Chủ kênh soạn</text>
+      <text x="222" y="61" font-size="10" fill="var(--ink-soft)">các công đoạn</text>
+      <rect x="310" y="30" width="120" height="40" rx="9" fill="var(--sky-soft)" stroke="var(--sky)"/>
+      <text x="370" y="52" fill="var(--sky)">3. Nộp</text>
+      <rect x="454" y="30" width="128" height="40" rx="9" fill="var(--amber-soft)" stroke="var(--amber)"/>
+      <text x="518" y="47" fill="var(--amber)">4. Leader duyệt</text>
+      <text x="518" y="61" font-size="10" fill="var(--ink-soft)">xem tóm tắt</text>
+      <rect x="606" y="30" width="148" height="40" rx="9" fill="var(--green-soft)" stroke="var(--green)"/>
+      <text x="680" y="47" fill="var(--green)">5. Việc tự sinh</text>
+      <text x="680" y="61" font-size="10" fill="var(--ink-soft)">chạy như thường</text>
+    </g>
+    <g stroke="var(--ink-soft)" stroke-width="1.6" fill="var(--ink-soft)">
+      <line x1="134" y1="50" x2="152" y2="50"/><path d="M152 46 160 50 152 54 Z"/>
+      <line x1="286" y1="50" x2="304" y2="50"/><path d="M304 46 312 50 304 54 Z"/>
+      <line x1="430" y1="50" x2="448" y2="50"/><path d="M448 46 456 50 448 54 Z"/>
+      <line x1="582" y1="50" x2="600" y2="50"/><path d="M600 46 608 50 600 54 Z"/>
+    </g>
+  </svg>
+  </div>
+  <figcaption><b>Hình 2.</b> Năm bước. Điểm cốt lõi: <b>chỉ khi Leader duyệt xong, hệ thống mới sinh việc thật</b> — trước đó chỉ là kế hoạch dự kiến.</figcaption>
+</figure>
+
+<h2 id="vai-tro"><span class="phan">Khái niệm</span>Ai làm gì — ba vai trò</h2>
+<div class="table-scroll">
+<table class="roles">
+  <tr><th style="width:26%">Vai trò</th><th>Làm gì trong luồng này</th></tr>
+  <tr><td><b>Leader</b> <span class="chip lead">giao &amp; duyệt</span></td><td>Giao gói việc cho chủ kênh; đặt mục tiêu/thông điệp; duyệt hoặc yêu cầu sửa kế hoạch; điều chỉnh việc khi cần.</td></tr>
+  <tr><td><b>Chủ kênh</b> <span class="chip exec">lập kế hoạch</span></td><td>Người phụ trách một kênh (một nhân viên MKT được Leader giao). Tự soạn các công đoạn, đề xuất người làm, hạn, rồi nộp. <b>Không</b> tự sinh việc được.</td></tr>
+  <tr><td><b>Người làm</b> <span class="chip">thực thi</span></td><td>Người được đề xuất trong kế hoạch. Chỉ nhận việc <b>sau khi</b> Leader duyệt — việc hiện ở "Việc của tôi" như bình thường.</td></tr>
+</table>
+</div>
+<div class="note">
+  <p><b>Nguyên tắc vàng:</b> lúc lập kế hoạch, các công đoạn <b>chưa phải là việc thật</b> — chưa báo ai, chưa vào "Việc của tôi", sửa/xóa thoải mái. Chỉ khi Leader bấm <b>Duyệt</b>, chúng mới biến thành việc thật giao cho người làm.</p>
+</div>
+
+<h2 id="giao"><span class="phan">Bước 1</span>Leader giao lập kế hoạch <span class="chip lead">Leader</span></h2>
+<ol class="steps">
+  <li><b>Mở gói việc</b>Vào <span class="path">Chiến dịch</span> → mở một chiến dịch → tab <span class="path">Kênh triển khai</span>. Mỗi kênh là một "gói việc". (Chưa có kênh thì bấm <span class="btn-name">Thêm kênh</span> để tạo.)</li>
+  <li><b>Bấm "Giao lập kế hoạch"</b>Trên thẻ gói việc còn "Cần chia việc", có <b>hai nút</b>: "Chia Task Ngay" (cũ) và <span class="btn-name">Giao lập kế hoạch</span> (mới). Bấm nút mới.</li>
+  <li><b>Chọn người phụ trách + đặt mục tiêu</b>Trong hộp thoại: chọn <b>Người phụ trách kênh</b> (bắt buộc), người duyệt nội dung (tuỳ chọn), rồi điền <b>Mục tiêu</b>, <b>Thông điệp chính</b>, sản phẩm bắt buộc, hạn. Bấm <span class="btn-name">Giao lập kế hoạch</span>.</li>
+</ol>
+
+<figure>
+  <div class="fig-card">
+  <svg viewBox="0 0 760 250" role="img" aria-label="Thẻ gói việc với hai nút và hộp thoại giao kế hoạch">
+    <rect x="8" y="14" width="360" height="92" rx="11" fill="var(--paper)" stroke="var(--rose)"/>
+    <rect x="24" y="28" width="52" height="18" rx="9" fill="var(--soft)" stroke="var(--line)"/>
+    <text x="50" y="41" font-size="10" font-weight="600" text-anchor="middle" fill="var(--ink)">TikTok</text>
+    <rect x="82" y="28" width="150" height="18" rx="9" fill="var(--rose-soft)"/>
+    <text x="90" y="41" font-size="10" font-weight="700" fill="var(--rose)">Cần chia việc</text>
+    <text x="24" y="66" font-size="13" font-weight="700" fill="var(--ink)">TikTok — Video Oolong</text>
+    <text x="24" y="84" font-size="11" fill="var(--ink-soft)">Owner: — · Reviewer: —</text>
+    <rect x="250" y="58" width="104" height="20" rx="6" fill="var(--primary)"/>
+    <text x="302" y="72" font-size="10.5" font-weight="600" text-anchor="middle" fill="#fff">Chia Task Ngay</text>
+    <rect x="250" y="82" width="104" height="20" rx="6" fill="var(--paper)" stroke="var(--line)"/>
+    <text x="302" y="96" font-size="10.5" font-weight="600" text-anchor="middle" fill="var(--ink)">Giao lập kế hoạch</text>
+    <g stroke="var(--ink-soft)" stroke-width="1.6" fill="var(--ink-soft)"><line x1="372" y1="92" x2="392" y2="92"/><path d="M392 88 400 92 392 96 Z"/></g>
+    <rect x="404" y="8" width="348" height="234" rx="13" fill="var(--paper)" stroke="var(--line)"/>
+    <text x="424" y="34" font-size="14" font-weight="700" fill="var(--ink)">Giao lập kế hoạch</text>
+    <text x="424" y="58" font-size="11" fill="var(--ink-soft)">Người phụ trách kênh *</text>
+    <rect x="424" y="64" width="308" height="28" rx="7" fill="var(--soft)" stroke="var(--primary)" stroke-width="1.5"/>
+    <text x="436" y="82" font-size="12" font-weight="600" fill="var(--ink)">MKT Executive ▾</text>
+    <text x="424" y="112" font-size="11" fill="var(--ink-soft)">Mục tiêu kênh</text>
+    <rect x="424" y="118" width="308" height="26" rx="7" fill="var(--soft)" stroke="var(--line)"/>
+    <text x="436" y="135" font-size="11" fill="var(--ink)">8 video Oolong, 200k lượt xem</text>
+    <text x="424" y="164" font-size="11" fill="var(--ink-soft)">Thông điệp chính bắt buộc</text>
+    <rect x="424" y="170" width="308" height="26" rx="7" fill="var(--soft)" stroke="var(--line)"/>
+    <text x="436" y="187" font-size="11" fill="var(--ink)">Cà phê tươi rang mỗi ngày</text>
+    <rect x="612" y="206" width="120" height="26" rx="7" fill="var(--primary)"/>
+    <text x="672" y="223" font-size="12" font-weight="600" text-anchor="middle" fill="#fff">Giao lập kế hoạch</text>
+  </svg>
+  </div>
+  <figcaption><b>Hình 3–4.</b> Thẻ gói việc (trái) có hai nút; bấm "Giao lập kế hoạch" mở hộp thoại (phải) để chọn người phụ trách + đặt mục tiêu.</figcaption>
+</figure>
+
+<div class="good">
+  <p>Giao xong: thẻ gói việc đổi nhãn thành <b>"Đang lập kế hoạch"</b>, nút "Chia Task Ngay" biến mất, và người phụ trách nhận thông báo (kèm Telegram nếu đã kết nối).</p>
+</div>
+
+<h2 id="soan"><span class="phan">Bước 2</span>Chủ kênh soạn kế hoạch <span class="chip exec">Chủ kênh</span></h2>
+<ol class="steps">
+  <li><b>Mở mục "Lập kế hoạch"</b>Người phụ trách vào menu <span class="path">Lập kế hoạch</span> (bên trái). Kế hoạch được giao hiện ở đây, nhãn "Đang lập kế hoạch". Bấm <span class="btn-name">Lập kế hoạch</span>.</li>
+  <li><b>Thêm từng công đoạn</b>Mỗi dòng là một công đoạn. Điền <b>tên</b>, chọn <b>loại</b> (Quay/Dựng/Duyệt/Đăng…), <b>người làm đề xuất</b>, <b>hạn</b>, <b>điểm khối lượng</b>. Bấm <span class="btn-name">Thêm công đoạn</span> để có dòng tiếp theo.</li>
+  <li><b>Nối phụ thuộc (nếu cần)</b>Ô "Phụ thuộc" cho chọn công đoạn phải xong trước. VD "Dựng" phụ thuộc "Quay" — hệ thống sẽ khoá "Dựng" cho tới khi "Quay" xong.</li>
+  <li><b>Lưu nháp</b>Bấm <span class="btn-name">Lưu nháp</span> bất cứ lúc nào để giữ lại, làm tiếp sau. Chưa ai bị báo, chưa việc nào được tạo.</li>
+</ol>
+
+<figure>
+  <div class="fig-card">
+  <svg viewBox="0 0 760 214" role="img" aria-label="Trình soạn kế hoạch với các công đoạn">
+    <rect x="8" y="8" width="744" height="198" rx="12" fill="var(--paper)" stroke="var(--line)"/>
+    <text x="28" y="34" font-size="14" font-weight="700" fill="var(--ink)">Kế hoạch kênh — TikTok Video Oolong</text>
+    <rect x="28" y="46" width="696" height="22" rx="6" fill="var(--amber-soft)"/>
+    <text x="40" y="61" font-size="11" fill="var(--amber)">Đây là kế hoạch dự kiến — chưa phải việc thật, chưa báo ai.</text>
+    <rect x="28" y="78" width="696" height="52" rx="9" fill="var(--soft)" stroke="var(--line)"/>
+    <text x="40" y="98" font-size="12" font-weight="600" fill="var(--ink)">Quay video Oolong</text>
+    <text x="300" y="98" font-size="11" fill="var(--ink-soft)">Quay · MKT Executive · 25/07 · 15 điểm</text>
+    <text x="40" y="118" font-size="10.5" fill="var(--ink-soft)">Phụ thuộc: — không phụ thuộc —</text>
+    <rect x="28" y="136" width="696" height="52" rx="9" fill="var(--soft)" stroke="var(--line)"/>
+    <text x="40" y="156" font-size="12" font-weight="600" fill="var(--ink)">Dựng video</text>
+    <text x="300" y="156" font-size="11" fill="var(--ink-soft)">Dựng · MKT Executive · 28/07 · 15 điểm</text>
+    <text x="40" y="176" font-size="10.5" font-weight="600" fill="var(--sky)">Phụ thuộc: Sau "Quay video Oolong"</text>
+  </svg>
+  </div>
+  <figcaption><b>Hình 5.</b> Trình soạn kế hoạch. Mỗi dòng một công đoạn với người làm, hạn, điểm; công đoạn "Dựng" được nối phụ thuộc "Quay".</figcaption>
+</figure>
+
+<div class="note">
+  <p>Công đoạn loại <b>Duyệt</b> hoặc <b>Đăng</b> phải gắn một nội dung (bài/video) thì mới nộp được — vì hai loại này thao tác trên một nội dung cụ thể.</p>
+</div>
+
+<h2 id="nop"><span class="phan">Bước 3</span>Nộp kế hoạch <span class="chip exec">Chủ kênh</span></h2>
+<p>Soạn xong, bấm <span class="btn-name">Nộp kế hoạch</span>. Hệ thống <b>tự kiểm</b> trước khi cho nộp — nếu thiếu sẽ báo đỏ ngay:</p>
+<ul>
+  <li>Có <b>ít nhất một</b> công đoạn.</li>
+  <li>Mỗi công đoạn có <b>tên</b>, <b>người làm</b>, <b>hạn</b>.</li>
+  <li>Công đoạn Duyệt/Đăng đã gắn <b>nội dung</b>.</li>
+  <li>Không có <b>phụ thuộc vòng lặp</b> (A chờ B, B lại chờ A).</li>
+  <li>Người làm còn <b>đang hoạt động</b> (chưa bị khoá tài khoản).</li>
+</ul>
+<p>Nộp xong, kế hoạch chuyển nhãn <b>"Chờ duyệt kế hoạch"</b> và Leader nhận thông báo. Từ lúc này chủ kênh <b>không sửa trực tiếp</b> được nữa (muốn sửa phải chờ Leader trả lại).</p>
+
+<h2 id="duyet"><span class="phan">Bước 4</span>Leader duyệt kế hoạch <span class="chip lead">Leader</span></h2>
+<ol class="steps">
+  <li><b>Mở kế hoạch chờ duyệt</b>Leader vào <span class="path">Lập kế hoạch</span>, thấy kế hoạch nhãn "Chờ duyệt kế hoạch" có nút <span class="btn-name">Duyệt kế hoạch</span>. Bấm vào.</li>
+  <li><b>Xem bảng tóm tắt</b>Hệ thống hiện: tổng số công đoạn, tổng điểm khối lượng, số người tham gia, <b>tải theo từng người</b>, và danh sách công đoạn. Nhìn nhanh là biết kế hoạch có hợp lý không, ai bị dồn việc.</li>
+  <li><b>Ra quyết định</b>Ba nút: <span class="btn-name">Duyệt &amp; sinh việc</span> (đồng ý — sinh việc ngay), <b>Yêu cầu sửa</b> (trả lại cho chủ kênh, <b>bắt buộc ghi nhận xét</b>), <b>Từ chối</b> (huỷ, mở lại gói việc — cũng bắt buộc ghi lý do).</li>
+</ol>
+
+<figure>
+  <div class="fig-card">
+  <svg viewBox="0 0 760 232" role="img" aria-label="Hộp thoại duyệt kế hoạch với bảng tóm tắt">
+    <rect x="60" y="8" width="640" height="216" rx="13" fill="var(--paper)" stroke="var(--line)"/>
+    <text x="84" y="34" font-size="14" font-weight="700" fill="var(--ink)">Duyệt kế hoạch — TikTok Video Oolong</text>
+    <g text-anchor="middle">
+      <rect x="84" y="48" width="196" height="44" rx="9" fill="var(--soft)" stroke="var(--line)"/>
+      <text x="182" y="72" font-size="18" font-weight="700" fill="var(--ink)">2</text>
+      <text x="182" y="86" font-size="10.5" fill="var(--ink-soft)">công đoạn</text>
+      <rect x="290" y="48" width="196" height="44" rx="9" fill="var(--soft)" stroke="var(--line)"/>
+      <text x="388" y="72" font-size="18" font-weight="700" fill="var(--ink)">30</text>
+      <text x="388" y="86" font-size="10.5" fill="var(--ink-soft)">điểm khối lượng</text>
+      <rect x="496" y="48" width="180" height="44" rx="9" fill="var(--soft)" stroke="var(--line)"/>
+      <text x="586" y="72" font-size="18" font-weight="700" fill="var(--ink)">1</text>
+      <text x="586" y="86" font-size="10.5" fill="var(--ink-soft)">người tham gia</text>
+    </g>
+    <rect x="84" y="104" width="592" height="26" rx="7" fill="var(--paper)" stroke="var(--line)"/>
+    <text x="96" y="121" font-size="11.5" fill="var(--ink)"><tspan font-weight="700">1. Quay video Oolong</tspan>  ·  MKT Executive</text>
+    <text x="640" y="121" font-size="11" text-anchor="end" fill="var(--ink-soft)">15 điểm</text>
+    <rect x="84" y="134" width="592" height="26" rx="7" fill="var(--paper)" stroke="var(--line)"/>
+    <text x="96" y="151" font-size="11.5" fill="var(--ink)"><tspan font-weight="700">2. Dựng video</tspan>  ·  MKT Executive · phụ thuộc</text>
+    <text x="640" y="151" font-size="11" text-anchor="end" fill="var(--ink-soft)">15 điểm</text>
+    <g font-size="11.5" font-weight="600" text-anchor="middle">
+      <rect x="84" y="184" width="96" height="30" rx="7" fill="var(--paper)" stroke="var(--rose)"/>
+      <text x="132" y="203" fill="var(--rose)">Từ chối</text>
+      <rect x="188" y="184" width="120" height="30" rx="7" fill="var(--paper)" stroke="var(--amber)"/>
+      <text x="248" y="203" fill="var(--amber)">Yêu cầu sửa</text>
+      <rect x="520" y="184" width="156" height="30" rx="7" fill="var(--primary)"/>
+      <text x="598" y="203" fill="#fff">Duyệt &amp; sinh việc</text>
+    </g>
+  </svg>
+  </div>
+  <figcaption><b>Hình 6.</b> Bảng tóm tắt duyệt: nhìn một lượt thấy khối lượng, tải theo người, và danh sách công đoạn — không phải đọc từng dòng rời rạc.</figcaption>
+</figure>
+
+<h2 id="sinh-viec"><span class="phan">Bước 5</span>Việc tự sinh — kế hoạch thành hành động</h2>
+<p>Ngay khi Leader bấm <b>Duyệt &amp; sinh việc</b>, hệ thống tạo các việc thật từ kế hoạch:</p>
+<ul>
+  <li>Mỗi công đoạn thành một <b>việc</b>, giao đúng người đã đề xuất, ở trạng thái <b>Chờ nhận việc (Pending Acceptance)</b>.</li>
+  <li>Việc <b>không phụ thuộc</b> ai → <b>Chưa làm (To Do)</b>, bắt đầu được ngay.</li>
+  <li>Việc <b>có phụ thuộc</b> → <b>Đang kẹt (Blocked)</b>, tự mở khoá khi việc trước xong.</li>
+  <li>Người được giao thấy việc ở "Việc của tôi" + nhận thông báo — từ đây chạy đúng quy trình MKT Hub bình thường.</li>
+</ul>
+
+<figure>
+  <div class="fig-card">
+  <svg viewBox="0 0 760 150" role="img" aria-label="Hai việc được sinh ra với trạng thái">
+    <rect x="120" y="18" width="520" height="52" rx="10" fill="var(--paper)" stroke="var(--line)"/>
+    <text x="140" y="40" font-size="13" font-weight="600" fill="var(--ink)">Quay video Oolong</text>
+    <text x="140" y="58" font-size="11" fill="var(--ink-soft)">Nguyễn Hoàng Thanh</text>
+    <rect x="452" y="34" width="130" height="20" rx="9" fill="var(--amber-soft)"/>
+    <text x="460" y="48" font-size="10" font-weight="700" fill="var(--amber)">Pending Acceptance</text>
+    <rect x="590" y="34" width="42" height="20" rx="9" fill="var(--slate-soft)"/>
+    <text x="598" y="48" font-size="10" font-weight="700" fill="var(--slate)">To Do</text>
+    <rect x="120" y="82" width="520" height="52" rx="10" fill="var(--paper)" stroke="var(--line)"/>
+    <text x="140" y="104" font-size="13" font-weight="600" fill="var(--ink)">Dựng video</text>
+    <text x="140" y="122" font-size="11" fill="var(--ink-soft)">MKT Executive · phụ thuộc "Quay"</text>
+    <rect x="452" y="98" width="130" height="20" rx="9" fill="var(--amber-soft)"/>
+    <text x="460" y="112" font-size="10" font-weight="700" fill="var(--amber)">Pending Acceptance</text>
+    <rect x="588" y="98" width="46" height="20" rx="9" fill="var(--rose-soft)"/>
+    <text x="596" y="112" font-size="10" font-weight="700" fill="var(--rose)">Blocked</text>
+  </svg>
+  </div>
+  <figcaption><b>Hình 7.</b> Kết quả thật khi duyệt: "Quay" = Chưa làm (bắt đầu ngay được), "Dựng" = Đang kẹt (chờ "Quay" xong) — dây chuyền tự khóa đúng.</figcaption>
+</figure>
+
+<div class="good">
+  <p>Kế hoạch giờ mang nhãn <b>"Đang thực thi"</b>, và lưu <b>lịch sử phiên bản</b> ("v1 · duyệt"). Mọi bước đều được ghi vết để sau này truy lại.</p>
+</div>
+
+<h2 id="sua"><span class="phan">Tình huống</span>Sửa kế hoạch sau khi đã duyệt</h2>
+<p>Kế hoạch đã duyệt <b>không sửa trực tiếp</b> được (để giữ đúng cái đã chốt). Có hai cách điều chỉnh, tuỳ việc đã chạy tới đâu:</p>
+
+<h3>A. Đổi kế hoạch — khi chưa ai nhận việc</h3>
+<p>Nếu tất cả việc vừa sinh <b>chưa ai bấm nhận</b>, Leader (hoặc chủ kênh) bấm <span class="btn-name">Đổi kế hoạch</span>, ghi lý do → hệ thống thu hồi các việc đó, mở kế hoạch lại để sửa (tạo <b>phiên bản mới</b>), rồi nộp/duyệt lại như thường. Sạch sẽ, không ảnh hưởng ai.</p>
+
+<h3>B. Điều chỉnh việc — khi việc đã có người nhận/đang chạy</h3>
+<p>Nếu đã có người nhận việc, không thể thu hồi hàng loạt. Leader bấm <span class="btn-name">Điều chỉnh việc</span> để xử lý <b>từng việc</b>:</p>
+<div class="table-scroll">
+<table class="roles">
+  <tr><th style="width:22%">Lựa chọn</th><th>Ý nghĩa</th></tr>
+  <tr><td><b>Giữ</b></td><td>Để nguyên việc đó (không đụng).</td></tr>
+  <tr><td><b>Đổi người</b></td><td>Giao lại cho người khác — việc quay về "Chờ nhận việc" cho người mới.</td></tr>
+  <tr><td><b>Huỷ việc</b></td><td>Bỏ việc đó (không huỷ được việc đã Xong).</td></tr>
+</table>
+</div>
+
+<figure>
+  <div class="fig-card">
+  <svg viewBox="0 0 760 150" role="img" aria-label="Hộp thoại điều chỉnh việc từng dòng">
+    <rect x="90" y="8" width="580" height="134" rx="12" fill="var(--paper)" stroke="var(--line)"/>
+    <text x="112" y="32" font-size="13.5" font-weight="700" fill="var(--ink)">Điều chỉnh việc đang chạy</text>
+    <rect x="112" y="44" width="536" height="40" rx="9" fill="var(--soft)" stroke="var(--line)"/>
+    <text x="126" y="62" font-size="12" font-weight="600" fill="var(--ink)">Quay video Oolong</text>
+    <text x="126" y="77" font-size="10.5" fill="var(--ink-soft)">Nguyễn Hoàng Thanh</text>
+    <g font-size="10.5" font-weight="600" text-anchor="middle">
+      <rect x="470" y="54" width="76" height="22" rx="6" fill="var(--paper)" stroke="var(--line)"/>
+      <text x="508" y="69" fill="var(--ink)">Đổi người</text>
+      <rect x="554" y="54" width="78" height="22" rx="6" fill="var(--paper)" stroke="var(--rose)"/>
+      <text x="593" y="69" fill="var(--rose)">Huỷ việc</text>
+    </g>
+    <rect x="112" y="92" width="536" height="40" rx="9" fill="var(--soft)" stroke="var(--line)"/>
+    <text x="126" y="110" font-size="12" font-weight="600" fill="var(--ink)">Dựng video</text>
+    <text x="126" y="125" font-size="10.5" fill="var(--ink-soft)">MKT Executive</text>
+    <g font-size="10.5" font-weight="600" text-anchor="middle">
+      <rect x="470" y="102" width="76" height="22" rx="6" fill="var(--paper)" stroke="var(--line)"/>
+      <text x="508" y="117" fill="var(--ink)">Đổi người</text>
+      <rect x="554" y="102" width="78" height="22" rx="6" fill="var(--paper)" stroke="var(--rose)"/>
+      <text x="593" y="117" fill="var(--rose)">Huỷ việc</text>
+    </g>
+  </svg>
+  </div>
+  <figcaption><b>Hình 8.</b> Điều chỉnh từng việc: mỗi việc có "Đổi người" và "Huỷ việc". Muốn thêm việc mới thì tạo việc tay ở gói việc.</figcaption>
+</figure>
+
+<h2 id="trang-thai"><span class="phan">Tra cứu</span>Bảng chú giải trạng thái kế hoạch</h2>
+<p>Nhãn màu trên mỗi kế hoạch (ở mục "Lập kế hoạch"):</p>
+<div class="table-scroll">
+<table class="roles">
+  <tr><th style="width:38%">Nhãn</th><th>Nghĩa</th></tr>
+  <tr><td><span class="lg" style="background:#e8eafb;color:#4f46e5">Đang lập kế hoạch</span></td><td>Chủ kênh đang soạn (hoặc vừa được giao).</td></tr>
+  <tr><td><span class="lg" style="background:#fdf0dd;color:#b45309">Chờ duyệt kế hoạch</span></td><td>Đã nộp, chờ Leader duyệt.</td></tr>
+  <tr><td><span class="lg" style="background:#fff4e5;color:#b45309">Cần sửa kế hoạch</span></td><td>Leader trả lại, chủ kênh sửa rồi nộp lại.</td></tr>
+  <tr><td><span class="lg" style="background:#e2f5ee;color:#0e9a6c">Kế hoạch đã duyệt</span></td><td>Vừa duyệt (thoáng qua trước khi sinh việc).</td></tr>
+  <tr><td><span class="lg" style="background:#e0f2fe;color:#0369a1">Đang thực thi</span></td><td>Đã sinh việc, đang chạy.</td></tr>
+  <tr><td><span class="lg" style="background:#f1f5f9;color:#64748b">Đã thay thế / Đã huỷ</span></td><td>Bản cũ bị thay bằng phiên bản mới, hoặc bị từ chối.</td></tr>
+</table>
+</div>
+
+<h2 id="faq"><span class="phan">Hỏi đáp</span>Câu hỏi thường gặp</h2>
+<dl class="faq">
+  <dt>Tôi là nhân viên, không thấy mục "Lập kế hoạch" có kế hoạch nào?</dt>
+  <dd>Bạn chỉ thấy kế hoạch của gói việc mà bạn <b>được giao phụ trách</b>. Chưa được Leader giao thì mục này trống — điều đó bình thường.</dd>
+  <dt>Lập kế hoạch xong có phải việc đã giao cho mọi người chưa?</dt>
+  <dd>Chưa. Công đoạn trong kế hoạch chỉ là <b>dự kiến</b> — chưa báo ai. Chỉ khi Leader <b>Duyệt</b> mới thành việc thật.</dd>
+  <dt>Nộp kế hoạch bị báo đỏ "chưa có người làm / chưa có hạn"?</dt>
+  <dd>Mỗi công đoạn phải có đủ người làm và hạn mới nộp được. Điền nốt ô còn thiếu rồi nộp lại.</dd>
+  <dt>Leader "Yêu cầu sửa" thì sao?</dt>
+  <dd>Kế hoạch quay về "Cần sửa kế hoạch", bạn mở lại, chỉnh theo nhận xét của Leader, rồi Nộp lại. Hệ thống đếm số lần sửa.</dd>
+  <dt>Đã duyệt rồi mới thấy sai, sửa được không?</dt>
+  <dd>Được. Nếu chưa ai nhận việc → bấm <b>Đổi kế hoạch</b> (mở lại sửa). Nếu đã có người nhận → bấm <b>Điều chỉnh việc</b> để đổi người / huỷ từng việc.</dd>
+  <dt>Khác gì với "Chia Task Ngay"?</dt>
+  <dd>"Chia Task Ngay" là Leader tự chia, nhanh, không qua duyệt. "Giao lập kế hoạch" là giao người khác lập rồi Leader duyệt — chậm hơn một nhịp nhưng phân quyền và kiểm soát tốt hơn. Cả hai vẫn còn, chọn theo từng gói việc.</dd>
+</dl>
+
+<footer class="doc">
+  <p>Tài liệu nội bộ OneBiz — MKT Hub · Lập kế hoạch kênh · mkthub.onebiz.com.vn · Bản tháng 7/2026. Thắc mắc ngoài tài liệu, hỏi Leader hoặc CEO.</p>
+</footer>
+
+</div>
+
+</body>
+</html>
