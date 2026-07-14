@@ -81,7 +81,7 @@ curl -X POST "https://api.telegram.org/bot<TOKEN>/setWebhook" \
 - [ ] User không có quyền `mkt.view` → không thấy menu MKT Hub, vào /mkt báo "chưa được cấp quyền".
 
 ## 8. Gán quyền thật
-- [ ] Cài đặt → Phân quyền: tạo vai trò từ template **MKT Lead / MKT Executor / MKT Reviewer**, gán nhân sự.
+- [ ] Cài đặt → Phân quyền: tạo vai trò từ template **MKT Lead / MKT Executive / MKT Reviewer**, gán nhân sự.
 - [ ] Quyền duyệt nội dung **rủi ro cao (High/Critical)** = `mkt.override_campaign` → chỉ CEO/owner giữ.
 
 ## Rollback (nếu cần)
