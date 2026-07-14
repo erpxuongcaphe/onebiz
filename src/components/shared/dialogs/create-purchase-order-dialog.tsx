@@ -660,8 +660,39 @@ export function CreatePurchaseOrderDialog({
     }
   }
 
+  // CEO 14/07/2026: chống MẤT phiếu do lỡ bấm ra ngoài / Esc. Khi đang nhập dở
+  // (đã chọn NCC / có dòng hàng / có tiền), CHẶN đóng do bấm-ngoài·Esc·back —
+  // giữ nguyên phiếu, nhắc dùng ✕ hoặc Hủy. Nút ✕/Hủy (đóng có chủ đích) vẫn
+  // đóng bình thường. Phiếu đã khoá (đã nhập kho) không chặn.
+  function handleDialogOpenChange(nextOpen: boolean, details?: { reason?: string }) {
+    if (!nextOpen) {
+      const reason = details?.reason;
+      const accidental =
+        reason === "outside-press" ||
+        reason === "escape-key" ||
+        reason === "close-watcher";
+      const hasEntry =
+        !isOrderedLocked &&
+        (items.length > 0 ||
+          !!selectedSupplier ||
+          paidAmount > 0 ||
+          shippingFee > 0 ||
+          otherCost > 0 ||
+          orderDiscount > 0 ||
+          notes.trim().length > 0);
+      if (accidental && hasEntry) {
+        toast({
+          title: "Đã giữ phiếu nhập",
+          description: "Bấm ✕ hoặc nút Hủy để đóng — tránh mất dữ liệu đang nhập.",
+        });
+        return;
+      }
+    }
+    onOpenChange(nextOpen);
+  }
+
   return (
-    <Dialog open={open} onOpenChange={onOpenChange}>
+    <Dialog open={open} onOpenChange={handleDialogOpenChange}>
       <DialogContent className="flex h-[calc(100dvh-24px)] w-[calc(100vw-24px)] max-w-[1500px] flex-col gap-0 overflow-hidden p-0 sm:max-w-[min(1200px,calc(100vw-48px))] xl:max-w-[1500px] sm:rounded-2xl">
         <div className="shrink-0 border-b bg-white px-4 py-3 md:px-5">
           <DialogHeader className="gap-0 pr-10">
