@@ -14,6 +14,7 @@ import { LeaderQueueActions } from "@/components/mkt/leader-queue-actions";
 import { AddReadinessButton } from "@/components/mkt/add-readiness-button";
 import {
   AcceptanceBadge,
+  CampaignStatusBadge,
   ContentStatusBadge,
   PlanStatusBadge,
   ReadinessBadge,
@@ -67,6 +68,16 @@ const EXCEPTION_LABEL: Record<string, string> = {
   mkt_task_force_done: "Ép hoàn tất việc",
 };
 
+function fmtDate(d: string | null): string | null {
+  if (!d) return null;
+  return new Intl.DateTimeFormat("vi-VN", { day: "2-digit", month: "2-digit", year: "numeric" }).format(
+    new Date(d),
+  );
+}
+function fmtBudget(n: number): string {
+  return new Intl.NumberFormat("vi-VN").format(n) + " đ";
+}
+
 export default async function CampaignDetailPage({
   params,
   searchParams,
@@ -103,6 +114,12 @@ export default async function CampaignDetailPage({
 
   const readinessDone = detail.readiness.filter((r) => r.status !== "pending").length;
 
+  // Khoảng thời gian chạy chiến dịch (chip thông tin trên header)
+  const tfStart = fmtDate(c.timeframeStart);
+  const tfEnd = fmtDate(c.timeframeEnd);
+  const timeframe =
+    tfStart && tfEnd ? `${tfStart} – ${tfEnd}` : tfStart ? `Từ ${tfStart}` : tfEnd ? `Đến ${tfEnd}` : null;
+
   return (
     <div className="px-4 py-4 sm:px-5 lg:px-6">
       <div className="mx-auto flex max-w-[1500px] flex-col gap-4">
@@ -114,47 +131,76 @@ export default async function CampaignDetailPage({
           >
             <Icon name="arrow_back" size={16} /> Chiến dịch
           </Link>
-          <div className="mt-2 flex flex-col gap-3 lg:flex-row lg:items-start lg:justify-between">
-            <div className="min-w-0">
-              <h1 className="font-heading text-2xl font-bold tracking-normal sm:text-3xl">{c.name}</h1>
-              {c.objective ? (
-                <p className="mt-1 max-w-2xl text-sm text-on-surface-variant">{c.objective}</p>
+
+          <div className="mt-2 rounded-xl border border-outline-variant bg-background p-4 sm:p-5">
+            {/* Tên + trạng thái (trái) — hành động (phải) */}
+            <div className="flex flex-col gap-3 lg:flex-row lg:items-start lg:justify-between">
+              <div className="min-w-0">
+                <div className="flex flex-wrap items-center gap-x-2.5 gap-y-1.5">
+                  <h1 className="font-heading text-2xl font-bold tracking-normal sm:text-3xl">{c.name}</h1>
+                  <CampaignStatusBadge value={c.status} />
+                </div>
+                {timeframe || c.budget > 0 ? (
+                  <div className="mt-2 flex flex-wrap items-center gap-x-4 gap-y-1 text-xs font-medium text-on-surface-variant">
+                    {timeframe ? (
+                      <span className="inline-flex items-center gap-1">
+                        <Icon name="calendar_month" size={14} /> {timeframe}
+                      </span>
+                    ) : null}
+                    {c.budget > 0 ? (
+                      <span className="inline-flex items-center gap-1">
+                        <Icon name="payments" size={14} /> {fmtBudget(c.budget)}
+                      </span>
+                    ) : null}
+                  </div>
+                ) : null}
+              </div>
+              {canManage ? (
+                <div className="flex shrink-0 flex-wrap items-center gap-2">
+                  {c.status !== "completed" && c.status !== "canceled" ? (
+                    <EditCampaignButton
+                      campaign={{
+                        id: c.id,
+                        name: c.name,
+                        objective: c.objective,
+                        budget: c.budget,
+                        timeframeStart: c.timeframeStart,
+                        timeframeEnd: c.timeframeEnd,
+                      }}
+                    />
+                  ) : null}
+                  <CampaignStatusControl
+                    campaignId={c.id}
+                    status={c.status}
+                    readinessScore={c.readinessScore}
+                    canOverride={Boolean(ctx.canOverride)}
+                  />
+                </div>
               ) : null}
             </div>
-            {canManage ? (
-              <div className="flex flex-wrap items-center gap-2">
-                {c.status !== "completed" && c.status !== "canceled" ? (
-                  <EditCampaignButton
-                    campaign={{
-                      id: c.id,
-                      name: c.name,
-                      objective: c.objective,
-                      budget: c.budget,
-                      timeframeStart: c.timeframeStart,
-                      timeframeEnd: c.timeframeEnd,
-                    }}
-                  />
-                ) : null}
-                <CampaignStatusControl
-                  campaignId={c.id}
-                  status={c.status}
-                  readinessScore={c.readinessScore}
-                  canOverride={Boolean(ctx.canOverride)}
-                />
+
+            {/* Mục tiêu — giữ NGUYÊN xuống dòng người dùng nhập (whitespace-pre-line) */}
+            {c.objective ? (
+              <div className="mt-4 rounded-lg border border-outline-variant/70 bg-surface-container-lowest p-3">
+                <div className="mb-1 flex items-center gap-1.5 text-xs font-semibold uppercase tracking-wide text-on-surface-variant">
+                  <Icon name="flag" size={14} /> Mục tiêu
+                </div>
+                <p className="whitespace-pre-line text-sm leading-relaxed text-on-surface">{c.objective}</p>
               </div>
             ) : null}
-          </div>
 
-          <div className="mt-3 flex items-center gap-3">
-            <div className="h-2 w-40 rounded-full bg-surface-container">
-              <div
-                className={"h-2 rounded-full " + (c.readinessScore >= 100 ? "bg-emerald-500" : "bg-amber-400")}
-                style={{ width: c.readinessScore + "%" }}
-              />
+            {/* Mức độ sẵn sàng */}
+            <div className="mt-4 flex items-center gap-3">
+              <div className="h-2 w-40 max-w-[45vw] rounded-full bg-surface-container">
+                <div
+                  className={"h-2 rounded-full " + (c.readinessScore >= 100 ? "bg-emerald-500" : "bg-amber-400")}
+                  style={{ width: c.readinessScore + "%" }}
+                />
+              </div>
+              <span className="text-xs font-semibold text-on-surface-variant">
+                Sẵn sàng {c.readinessScore}%
+              </span>
             </div>
-            <span className="text-xs font-semibold text-on-surface-variant">
-              Sẵn sàng {c.readinessScore}%
-            </span>
           </div>
         </div>
 
