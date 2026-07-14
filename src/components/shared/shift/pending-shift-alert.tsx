@@ -55,7 +55,7 @@ export function PendingShiftAlertSection({
   branchId: string | null;
 }) {
   const { hasPermission } = usePermissions();
-  // Chỉ user có quyền reconcile mới load + thấy popup
+  // Chỉ user có quyền reconcile mới load + thấy cảnh báo
   // (cashier KHÔNG được reconcile ca của chính mình — xung đột lợi ích)
   const canReconcile =
     hasPermission("shifts.reconcile_any") ||
@@ -64,24 +64,35 @@ export function PendingShiftAlertSection({
   const { pendings, refresh } = usePendingShiftAlert(
     canReconcile ? branchId : null,
   );
-  const [dismissed, setDismissed] = useState<Set<string>>(new Set());
+  // CEO 14/07: TRƯỚC đây popup CHẶN tự bung mỗi lần mở POS ("Để sau" chỉ nhớ
+  // trong phiên → mở lại là nhảy tiếp → phiền). GIỜ hiện 1 CHIP nhỏ không chặn
+  // ở góc; bấm mới mở dialog đối chiếu. Chip tự biến mất khi đã đối chiếu hết.
+  const [open, setOpen] = useState(false);
 
-  const visible = pendings.filter((s) => !dismissed.has(s.id));
-
-  if (!canReconcile || visible.length === 0) return null;
+  if (!canReconcile || pendings.length === 0) return null;
 
   return (
-    <PendingShiftAlertDialog
-      pendings={visible}
-      onClose={() => {
-        // "Để sau" — dismiss session, ca vẫn còn pending trong DB
-        setDismissed(new Set(visible.map((s) => s.id)));
-      }}
-      onReconciled={() => {
-        // Reconcile xong → refresh list để loại bỏ ca đã reconcile
-        void refresh();
-      }}
-    />
+    <>
+      <button
+        type="button"
+        onClick={() => setOpen(true)}
+        className="fixed bottom-4 left-4 z-40 flex items-center gap-2 rounded-full border border-status-warning/40 bg-status-warning/15 px-4 py-2 text-sm font-semibold text-status-warning shadow-lg backdrop-blur transition-colors hover:bg-status-warning/25 press-scale-sm"
+        title="Có ca chưa đối chiếu — bấm để chốt số liệu"
+      >
+        <Icon name="warning" size={18} />
+        {pendings.length} ca chưa đối chiếu
+      </button>
+      {open && (
+        <PendingShiftAlertDialog
+          pendings={pendings}
+          onClose={() => setOpen(false)}
+          onReconciled={() => {
+            // Reconcile xong → refresh list; hết ca thì chip tự ẩn.
+            void refresh();
+          }}
+        />
+      )}
+    </>
   );
 }
 
