@@ -552,6 +552,64 @@ export async function getMediaAssets(supabase: MktSupabaseClient): Promise<MktMe
   }));
 }
 
+export type MktDocument = {
+  id: string;
+  title: string;
+  description: string | null;
+  category: string;
+  status: string;
+  sourceType: string;
+  externalUrl: string | null;
+  externalId: string | null;
+  thumbnailUrl: string | null;
+  mimeType: string | null;
+  storagePath: string | null;
+  campaignId: string | null;
+  createdAt: string | null;
+};
+
+/** Thư viện Tài liệu (xlsx/docx/pdf…) — RLS lọc theo tenant + mkt.view. */
+export async function getDocuments(supabase: MktSupabaseClient): Promise<MktDocument[]> {
+  const db = getMktDatabaseClient(supabase);
+  const { data, error } = await db
+    .from<{
+      id: string;
+      title: string;
+      description: string | null;
+      category: string;
+      status: string;
+      source_type: string | null;
+      external_url: string | null;
+      external_id: string | null;
+      thumbnail_url: string | null;
+      mime_type: string | null;
+      storage_path: string | null;
+      campaign_id: string | null;
+      created_at: string | null;
+    }>("mkt_documents")
+    .select(
+      "id, title, description, category, status, source_type, external_url, external_id, thumbnail_url, mime_type, storage_path, campaign_id, created_at",
+    )
+    .is("deleted_at", null)
+    .order("created_at", { ascending: false })
+    .limit(300);
+  return requireRows(data, error, "documents").map((d) => ({
+    id: d.id,
+    title: d.title,
+    description: d.description,
+    category: d.category,
+    status: d.status,
+    sourceType: d.source_type ?? "other",
+    externalUrl: d.external_url,
+    externalId: d.external_id,
+    thumbnailUrl: d.thumbnail_url,
+    mimeType: d.mime_type,
+    storagePath: d.storage_path,
+    campaignId: d.campaign_id,
+    createdAt: d.created_at,
+  }));
+}
+
 export type MktExceptionEntry = {
   id: string;
   action: string;
