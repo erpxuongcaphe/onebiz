@@ -24,6 +24,7 @@ import {
   saveDraftOrder,
   listDraftOrders,
   getDraftOrderById,
+  getOrders,
   adoptDraftSession,
   deleteDraftOrder,
   completeDraftOrder,
@@ -128,7 +129,7 @@ import {
   redeemLoyaltyPoints,
   calculateRedeemDiscount,
 } from "@/lib/services/supabase/loyalty";
-import type { LoyaltySettings, Invoice } from "@/lib/types";
+import type { LoyaltySettings, Invoice, SalesOrder } from "@/lib/types";
 import type { Product, ProductVariant } from "@/lib/types";
 
 // Reuse FnB offline bar/drawer — both are generic over NetworkStatus.
@@ -244,6 +245,8 @@ function PosPageInner() {
   // Modals
   const [customerModalOpen, setCustomerModalOpen] = useState(false);
   const [draftModalOpen, setDraftModalOpen] = useState(false);
+  // CEO 14/07: "Xử lý đặt hàng" — chọn đơn đặt hàng (DH) nạp vào POS.
+  const [processOrderOpen, setProcessOrderOpen] = useState(false);
   // CEO 10/06/2026 — badge số nháp + trigger refresh sau save/delete
   const [draftCount, setDraftCount] = useState<number>(0);
   const [draftCountTrigger, setDraftCountTrigger] = useState(0);
@@ -2577,6 +2580,17 @@ function PosPageInner() {
           <span className="hidden sm:inline">{currentShift ? "Đang mở ca" : "Mở ca"}</span>
         </button>
 
+        {/* CEO 14/07: Xử lý đặt hàng — nạp đơn đặt hàng (DH) vào POS */}
+        <button
+          type="button"
+          onClick={() => setProcessOrderOpen(true)}
+          className="relative inline-flex items-center gap-1.5 px-3 min-h-[36px] rounded-md transition-colors shrink-0 text-xs font-medium text-white/70 hover:bg-white/10 hover:text-white"
+          title="Chọn đơn đặt hàng đã tạo để xử lý"
+        >
+          <Icon name="receipt_long" size={16} />
+          <span className="hidden sm:inline">Xử lý đặt hàng</span>
+        </button>
+
         {/* Draft button — badge số đếm nháp (CEO 10/06/2026) */}
         <button
           type="button"
@@ -3574,6 +3588,39 @@ function PosPageInner() {
           toast({ title: `Đã tải nháp ${draft.code || ""}`, variant: "success" });
         }}
       />
+      {/* CEO 14/07: Xử lý đặt hàng — chọn đơn DH → nạp vào giỏ qua CÙNG đường
+          state.loadDraft (như mở nháp / ?draftId= — đã kiểm, không lệch số). */}
+      <ProcessOrderModal
+        open={processOrderOpen}
+        onClose={() => setProcessOrderOpen(false)}
+        branchId={currentBranch?.id ?? null}
+        onPick={async (orderId) => {
+          try {
+            const detail = await getDraftOrderById(orderId);
+            if (!detail) {
+              toast({
+                title: "Không mở được đơn",
+                description: "Đơn có thể đã bị xóa hoặc đổi trạng thái.",
+                variant: "error",
+              });
+              return;
+            }
+            state.loadDraft(detail);
+            setProcessOrderOpen(false);
+            toast({
+              title: `Đã nạp đơn ${detail.code || ""}`,
+              description: "Kiểm tra giỏ hàng rồi thanh toán.",
+              variant: "success",
+            });
+          } catch (err) {
+            toast({
+              title: "Không mở được đơn",
+              description: err instanceof Error ? err.message : "Lỗi",
+              variant: "error",
+            });
+          }
+        }}
+      />
 
       {/* Xác nhận hành động huỷ (xoá giỏ / huỷ nháp) — dùng chung */}
       <ConfirmDialog
@@ -4490,6 +4537,190 @@ function DeliveryForm({
         className="w-full h-7 px-2 rounded border border-border text-[11px] outline-none focus:border-primary bg-white"
       />
     </div>
+  );
+}
+
+/**
+ * Xử lý đặt hàng (CEO 14/07) — chọn ĐƠN ĐẶT HÀNG (DH, source='order') để nạp
+ * vào POS xử lý/thanh toán, ngay trong màn bán (không phải qua trang Đơn đặt
+ * hàng). Hơn KiotViet: mặc định chỉ "đơn chưa xử lý", hiện SĐT + tổng tiền,
+ * bấm cả dòng để chọn. Tái dùng getOrders + state.loadDraft (đường đã kiểm).
+ */
+function ProcessOrderModal({
+  open,
+  onClose,
+  branchId,
+  onPick,
+}: {
+  open: boolean;
+  onClose: () => void;
+  branchId: string | null;
+  onPick: (orderId: string) => void;
+}) {
+  const [orders, setOrders] = useState<SalesOrder[]>([]);
+  const [loading, setLoading] = useState(false);
+  const [search, setSearch] = useState("");
+  const [searchField, setSearchField] = useState<"all" | "code" | "customer_name">(
+    "all",
+  );
+  const [onlyPending, setOnlyPending] = useState(true);
+  const { toast } = useToast();
+
+  useEffect(() => {
+    if (!open) return;
+    let cancelled = false;
+    setLoading(true);
+    // Debounce search 250ms — tránh gọi server mỗi keystroke.
+    const t = setTimeout(() => {
+      getOrders({
+        page: 0,
+        pageSize: 50,
+        search: search.trim() || undefined,
+        searchField,
+        branchId: branchId ?? undefined,
+        filters: onlyPending
+          ? { status: ["draft", "confirmed", "delivering"] }
+          : undefined,
+      })
+        .then((r) => {
+          if (!cancelled) setOrders(r.data);
+        })
+        .catch((e: unknown) => {
+          if (!cancelled)
+            toast({
+              title: "Không tải được đơn đặt hàng",
+              description: e instanceof Error ? e.message : "Lỗi",
+              variant: "error",
+            });
+        })
+        .finally(() => {
+          if (!cancelled) setLoading(false);
+        });
+    }, 250);
+    return () => {
+      cancelled = true;
+      clearTimeout(t);
+    };
+  }, [open, search, searchField, onlyPending, branchId, toast]);
+
+  if (!open) return null;
+
+  const statusTone: Record<string, string> = {
+    draft: "bg-status-warning/15 text-status-warning",
+    confirmed: "bg-primary/15 text-primary",
+    delivering: "bg-indigo-500/15 text-indigo-600",
+    completed: "bg-status-success/15 text-status-success",
+    cancelled: "bg-status-error/15 text-status-error",
+  };
+
+  return (
+    <Dialog open={open} onOpenChange={(o) => !o && onClose()}>
+      <DialogContent className="sm:max-w-2xl max-h-[85vh] flex flex-col">
+        <DialogHeader>
+          <DialogTitle className="flex items-center gap-2">
+            <Icon name="receipt_long" className="text-primary" />
+            Xử lý đặt hàng
+          </DialogTitle>
+          <p className="text-sm text-muted-foreground">
+            Chọn đơn đặt hàng đã tạo để nạp vào màn bán và thanh toán.
+          </p>
+        </DialogHeader>
+
+        <div className="flex flex-wrap items-center gap-2">
+          <div className="relative flex-1 min-w-[180px]">
+            <Icon
+              name="search"
+              size={16}
+              className="absolute left-2.5 top-1/2 -translate-y-1/2 text-muted-foreground"
+            />
+            <input
+              value={search}
+              onChange={(e) => setSearch(e.target.value)}
+              placeholder="Tìm mã đơn / khách hàng..."
+              className="h-9 w-full rounded-md border border-border bg-background pl-8 pr-2 text-sm focus:outline-none focus:ring-2 focus:ring-primary/40"
+              autoFocus
+            />
+          </div>
+          <select
+            value={searchField}
+            onChange={(e) =>
+              setSearchField(e.target.value as typeof searchField)
+            }
+            className="h-9 rounded-md border border-border bg-background px-2 text-sm"
+          >
+            <option value="all">Tất cả</option>
+            <option value="code">Mã đơn</option>
+            <option value="customer_name">Khách hàng</option>
+          </select>
+          <label className="flex items-center gap-1.5 text-sm cursor-pointer select-none whitespace-nowrap">
+            <input
+              type="checkbox"
+              checked={onlyPending}
+              onChange={(e) => setOnlyPending(e.target.checked)}
+            />
+            Chỉ đơn chưa xử lý
+          </label>
+        </div>
+
+        <div className="flex-1 overflow-y-auto -mx-1 px-1 space-y-1.5 min-h-[220px]">
+          {loading ? (
+            <div className="flex items-center justify-center py-12 text-sm text-muted-foreground">
+              <Icon name="progress_activity" className="animate-spin mr-2" />{" "}
+              Đang tải...
+            </div>
+          ) : orders.length === 0 ? (
+            <div className="py-12 text-center text-sm text-muted-foreground">
+              {search
+                ? "Không tìm thấy đơn phù hợp"
+                : "Chưa có đơn đặt hàng nào"}
+            </div>
+          ) : (
+            orders.map((o) => (
+              <button
+                key={o.id}
+                type="button"
+                onClick={() => onPick(o.id)}
+                className="w-full text-left rounded-lg border bg-card p-3 hover:border-primary hover:bg-primary/5 transition-colors flex items-center gap-3 press-scale-sm"
+              >
+                <div className="min-w-0 flex-1">
+                  <div className="flex items-center gap-2">
+                    <span className="font-bold text-primary font-mono text-sm">
+                      {o.code}
+                    </span>
+                    <span
+                      className={cn(
+                        "text-[11px] font-semibold px-1.5 py-0.5 rounded",
+                        statusTone[o.status] ?? "bg-muted",
+                      )}
+                    >
+                      {o.statusName}
+                    </span>
+                  </div>
+                  <div className="text-xs text-muted-foreground mt-0.5 truncate">
+                    {new Date(o.date).toLocaleString("vi-VN", {
+                      hour: "2-digit",
+                      minute: "2-digit",
+                      day: "2-digit",
+                      month: "2-digit",
+                    })}
+                    {o.customerName ? <> · {o.customerName}</> : null}
+                    {o.customerPhone ? <> · {o.customerPhone}</> : null}
+                  </div>
+                </div>
+                <div className="text-right shrink-0">
+                  <div className="font-bold tabular-nums text-sm">
+                    {formatCurrency(o.totalAmount)}đ
+                  </div>
+                  <div className="text-[11px] text-primary font-medium">
+                    Chọn →
+                  </div>
+                </div>
+              </button>
+            ))
+          )}
+        </div>
+      </DialogContent>
+    </Dialog>
   );
 }
 
