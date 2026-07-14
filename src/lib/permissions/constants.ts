@@ -456,7 +456,7 @@ export const DEFAULT_ROLE_TEMPLATES: RoleTemplate[] = [
     ],
   },
   {
-    name: "MKT Executor",
+    name: "MKT Executive",
     description: "Nhân sự thực thi MKT: nhận việc, sản xuất, nộp duyệt (chỉ thấy việc của mình)",
     legacyRole: "staff",
     color: "bg-sky-500",

@@ -7,7 +7,7 @@ lên Supabase **staging**. Đánh dấu ✅/❌ từng mục.
 ## Chuẩn bị
 - [ ] Apply 3 migration + seed lên staging.
 - [ ] Chạy `supabase/verify_mkt_hub_security.sql` (Phần A + B) — tất cả cột `pass = true`.
-- [ ] Gán quyền: 1 user **MKT Lead** (role template), 1 user **MKT Executor**, CEO = owner.
+- [ ] Gán quyền: 1 user **MKT Lead** (role template), 1 user **MKT Executive**, CEO = owner.
 - [ ] Truy cập `https://<staging-host>/mkt` hoặc subdomain `mkthub.<staging>`.
 
 ## Kịch bản nghiệp vụ (đăng nhập bằng Lead trừ khi ghi rõ)
@@ -20,13 +20,13 @@ lên Supabase **staging**. Đánh dấu ✅/❌ từng mục.
        - CEO (owner) nhập lý do → chạy được; kiểm tra **Exception Log** có dòng `is_exception`.
 4. [ ] Tab **Kênh triển khai** → Thêm kênh → **Chia Task Ngay** (builder công đoạn).
        Task nối tuần tự: task sau ở trạng thái **Blocked** cho tới khi task trước Done.
-5. [ ] Đăng nhập **Executor** → **Việc của tôi**: thấy task được giao ở "Chờ tôi xác nhận".
+5. [ ] Đăng nhập **Executive** → **Việc của tôi**: thấy task được giao ở "Chờ tôi xác nhận".
        - **Nhận việc** đúng người → chuyển To Do.
-       - (Kiểm tra chéo) Executor **KHÔNG** thấy task của người khác ở mọi màn.
-6. [ ] Executor **Từ chối** / **Cần trao đổi** (bắt buộc lý do) → task lên **Leader Queue**
+       - (Kiểm tra chéo) Executive **KHÔNG** thấy task của người khác ở mọi màn.
+6. [ ] Executive **Từ chối** / **Cần trao đổi** (bắt buộc lý do) → task lên **Leader Queue**
        + Lead nhận **thông báo Telegram trong vài giây** (nếu đã liên kết).
 7. [ ] Task có phụ thuộc: **Bắt đầu** bị chặn khi task trước chưa Done; xong task trước → mở khoá.
-8. [ ] Executor **Nộp duyệt** (nhập link) → tạo version mới, nội dung sang **Pending Review**,
+8. [ ] Executive **Nộp duyệt** (nhập link) → tạo version mới, nội dung sang **Pending Review**,
        reviewer nhận Telegram.
 9. [ ] **Duyệt nội dung**: yêu cầu sửa 3 lần → nội dung xuất hiện ở Leader Queue (**REVISION_OVER_LIMIT**).
 10. [ ] Nội dung **rủi ro cao (High/Critical)**: user chỉ có `review_content` bấm Duyệt → **403**;
@@ -39,8 +39,8 @@ lên Supabase **staging**. Đánh dấu ✅/❌ từng mục.
         Token dùng 1 lần (bấm liên kết cũ lần 2 → không hợp lệ). Ngắt liên kết được.
 
 ## Bảo mật (SQL Editor staging)
-- [ ] `verify_mkt_hub_security.sql` Phần C1: Executor `set request.jwt.claims` → chỉ thấy task của mình.
-- [ ] Phần C2: Executor gọi `mkt_record_audit(...)` → **permission denied**.
+- [ ] `verify_mkt_hub_security.sql` Phần C1: Executive `set request.jwt.claims` → chỉ thấy task của mình.
+- [ ] Phần C2: Executive gọi `mkt_record_audit(...)` → **permission denied**.
 - [ ] Phần C3: role `anon` gọi `get_mkt_campaign_readiness_score` → **permission denied**.
 
 ## Kết luận
