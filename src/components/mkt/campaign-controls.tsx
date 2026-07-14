@@ -18,7 +18,7 @@ import { Icon } from "@/components/ui/icon";
 import { ReasonDialog } from "@/components/mkt/reason-dialog";
 import { SplitDialog } from "@/components/mkt/split-dialog";
 import { mktPatch, mktPost } from "@/lib/mkt/client";
-import type { MktMember } from "@/lib/mkt/read-models";
+import type { MktMember, MktPillar } from "@/lib/mkt/read-models";
 
 const CHANNELS = [
   { value: "tiktok", label: "TikTok" },
@@ -386,17 +386,27 @@ export function WorkPackageForm({
 }
 
 // ── Dialog tạo Content Item ──
-export function ContentForm({ campaignId }: { campaignId: string }) {
+// Bắt buộc chọn Trụ nội dung (Pillar) — mọi nội dung phải chỉ rõ thuộc trụ nào.
+export function ContentForm({ campaignId, pillars }: { campaignId: string; pillars: MktPillar[] }) {
   const router = useRouter();
   const [open, setOpen] = useState(false);
   const [title, setTitle] = useState("");
   const [channelType, setChannelType] = useState("tiktok");
   const [riskLevel, setRiskLevel] = useState("low");
+  const [pillarId, setPillarId] = useState("");
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
   async function submit() {
-    if (!title.trim()) return;
+    // Nút bấm được luôn — thiếu thì báo rõ tại chỗ.
+    if (!title.trim()) {
+      setError("Hãy nhập tiêu đề nội dung.");
+      return;
+    }
+    if (!pillarId) {
+      setError("Hãy chọn Trụ nội dung (Pillar) — nội dung phải chỉ rõ thuộc trụ nào.");
+      return;
+    }
     setLoading(true);
     setError(null);
     try {
@@ -405,9 +415,11 @@ export function ContentForm({ campaignId }: { campaignId: string }) {
         title: title.trim(),
         channelType,
         riskLevel,
+        pillarId,
       });
       setTitle("");
       setRiskLevel("low");
+      setPillarId("");
       setOpen(false);
       router.refresh();
     } catch (e) {
@@ -434,6 +446,26 @@ export function ContentForm({ campaignId }: { campaignId: string }) {
           <div className="space-y-1.5">
             <Label htmlFor="ct-title">Tiêu đề</Label>
             <Input id="ct-title" value={title} onChange={(e) => setTitle(e.target.value)} autoFocus />
+          </div>
+          {/* Trụ nội dung — BẮT BUỘC */}
+          <div className="space-y-1.5">
+            <Label>
+              Trụ nội dung (Pillar) <span className="text-rose-600">*</span>
+            </Label>
+            {pillars.length > 0 ? (
+              <select value={pillarId} onChange={(e) => setPillarId(e.target.value)} className={selectCls}>
+                <option value="">— Chọn trụ —</option>
+                {pillars.map((p) => (
+                  <option key={p.id} value={p.id}>
+                    {p.code} · {p.name}
+                  </option>
+                ))}
+              </select>
+            ) : (
+              <p className="rounded-lg border border-amber-200 bg-amber-50/60 px-2.5 py-2 text-xs text-amber-800">
+                Chưa có trụ nội dung. Vào mục <b>Định hướng nội dung</b> tạo trụ trước rồi mới thêm nội dung.
+              </p>
+            )}
           </div>
           <div className="grid grid-cols-2 gap-3">
             <div className="space-y-1.5">
@@ -463,7 +495,7 @@ export function ContentForm({ campaignId }: { campaignId: string }) {
           <Button variant="outline" disabled={loading} onClick={() => setOpen(false)}>
             Huỷ
           </Button>
-          <Button disabled={loading || !title.trim()} onClick={submit}>
+          <Button disabled={loading} onClick={submit}>
             {loading ? "Đang tạo…" : "Tạo nội dung"}
           </Button>
         </DialogFooter>
@@ -478,11 +510,13 @@ export function WorkPackageSplitButton({
   campaignId,
   members,
   contents,
+  pillars,
 }: {
   workPackageId: string;
   campaignId: string;
   members: MktMember[];
   contents: Array<{ id: string; title: string }>;
+  pillars: MktPillar[];
 }) {
   const [open, setOpen] = useState(false);
   return (
@@ -500,6 +534,7 @@ export function WorkPackageSplitButton({
         campaignId={campaignId}
         members={members}
         contents={contents}
+        pillars={pillars}
       />
     </>
   );

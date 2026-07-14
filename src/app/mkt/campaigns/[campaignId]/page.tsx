@@ -9,6 +9,7 @@ import {
   getLeaderQueue,
   getMktContext,
   getMktMembers,
+  getPillars,
 } from "@/lib/mkt/read-models";
 import { LeaderQueueActions } from "@/components/mkt/leader-queue-actions";
 import { AddReadinessButton } from "@/components/mkt/add-readiness-button";
@@ -90,10 +91,11 @@ export default async function CampaignDetailPage({
   const activeTab = TABS.some((t) => t.key === tab) ? (tab as string) : "channels";
 
   const supabase = await createServerSupabaseClient();
-  const [ctx, detail, members] = await Promise.all([
+  const [ctx, detail, members, pillars] = await Promise.all([
     getMktContext(supabase),
     getCampaignDetail(supabase, campaignId),
     getMktMembers(supabase),
+    getPillars(supabase),
   ]);
 
   if (!detail.campaign) notFound();
@@ -337,6 +339,7 @@ export default async function CampaignDetailPage({
                                 campaignId={c.id}
                                 members={members}
                                 contents={contentOptions}
+                                pillars={pillars}
                               />
                             ) : null}
                             {canManage ? (
@@ -427,7 +430,7 @@ export default async function CampaignDetailPage({
           <section className="space-y-3">
             {canManage || ctx.canSplit ? (
               <div className="flex justify-end">
-                <ContentForm campaignId={c.id} />
+                <ContentForm campaignId={c.id} pillars={pillars} />
               </div>
             ) : null}
             {detail.contents.length > 0 ? (
@@ -444,6 +447,19 @@ export default async function CampaignDetailPage({
                       </div>
                     </div>
                     <div className="flex flex-wrap items-center gap-1.5">
+                      {x.pillarName ? (
+                        <span className="inline-flex items-center gap-1.5 rounded-full border border-outline-variant px-2 py-0.5 text-xs font-medium">
+                          <span
+                            className="h-2 w-2 shrink-0 rounded-full"
+                            style={{ backgroundColor: x.pillarColor ?? "#708090" }}
+                          />
+                          {x.pillarName}
+                        </span>
+                      ) : (
+                        <span className="rounded-full border border-amber-200 bg-amber-50 px-2 py-0.5 text-xs font-medium text-amber-700">
+                          Chưa gắn trụ
+                        </span>
+                      )}
                       <ContentStatusBadge value={x.contentStatus} />
                       <RiskBadge value={x.riskLevel} />
                     </div>

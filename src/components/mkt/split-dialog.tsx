@@ -14,7 +14,7 @@ import { Input } from "@/components/ui/input";
 import { Icon } from "@/components/ui/icon";
 import { Label } from "@/components/ui/label";
 import { mktPost } from "@/lib/mkt/client";
-import type { MktMember } from "@/lib/mkt/read-models";
+import type { MktMember, MktPillar } from "@/lib/mkt/read-models";
 
 const TASK_TYPES = [
   { value: "idea", label: "Ý tưởng / Kịch bản" },
@@ -74,6 +74,7 @@ export function SplitDialog({
   campaignId,
   members,
   contents,
+  pillars,
 }: {
   open: boolean;
   onOpenChange: (open: boolean) => void;
@@ -81,6 +82,7 @@ export function SplitDialog({
   campaignId: string;
   members: MktMember[];
   contents: ContentOption[];
+  pillars: MktPillar[];
 }) {
   const router = useRouter();
   const [rows, setRows] = useState<Row[]>(defaultRows);
@@ -90,6 +92,7 @@ export function SplitDialog({
   const [localContents, setLocalContents] = useState<ContentOption[]>(contents);
   const [quickName, setQuickName] = useState("");
   const [quickRisk, setQuickRisk] = useState("low");
+  const [quickPillarId, setQuickPillarId] = useState("");
   const [quickBusy, setQuickBusy] = useState(false);
 
   function patch(idx: number, p: Partial<Row>) {
@@ -97,14 +100,21 @@ export function SplitDialog({
   }
 
   async function quickCreateContent() {
-    if (!quickName.trim()) return;
+    if (!quickName.trim()) {
+      setError("Hãy nhập tên nội dung mới.");
+      return;
+    }
+    if (!quickPillarId) {
+      setError("Hãy chọn Trụ nội dung (Pillar) cho nội dung mới — nội dung phải chỉ rõ thuộc trụ nào.");
+      return;
+    }
     setQuickBusy(true);
     setError(null);
     try {
       const res = await mktPost<{ success: boolean; contentItemId?: string }>(
         "/api/mkt/v1/contents",
         // Gắn luôn vào gói việc — nội dung sinh ra trong ngữ cảnh chia việc của gói
-        { campaignId, workPackageId, title: quickName.trim(), riskLevel: quickRisk },
+        { campaignId, workPackageId, title: quickName.trim(), riskLevel: quickRisk, pillarId: quickPillarId },
       );
       if (res.contentItemId) {
         const created = { id: res.contentItemId, title: quickName.trim() };
@@ -275,6 +285,20 @@ export function SplitDialog({
                   placeholder="Tên nội dung (VD: Video Oolong T7)…"
                   className="h-8 min-w-[180px] flex-1"
                 />
+                {pillars.length > 0 ? (
+                  <select
+                    value={quickPillarId}
+                    onChange={(e) => setQuickPillarId(e.target.value)}
+                    className="h-8 rounded-lg border border-outline-variant bg-background px-2 text-xs"
+                  >
+                    <option value="">— Trụ nội dung * —</option>
+                    {pillars.map((p) => (
+                      <option key={p.id} value={p.id}>
+                        {p.code} · {p.name}
+                      </option>
+                    ))}
+                  </select>
+                ) : null}
                 <select
                   value={quickRisk}
                   onChange={(e) => setQuickRisk(e.target.value)}
@@ -284,10 +308,15 @@ export function SplitDialog({
                   <option value="medium">Trung bình (Lead duyệt)</option>
                   <option value="high">Cao (CEO duyệt)</option>
                 </select>
-                <Button size="sm" disabled={quickBusy || !quickName.trim()} onClick={quickCreateContent}>
+                <Button size="sm" disabled={quickBusy} onClick={quickCreateContent}>
                   {quickBusy ? "Đang tạo…" : "Tạo & gắn"}
                 </Button>
               </div>
+              {pillars.length === 0 ? (
+                <p className="text-xs font-medium text-amber-800">
+                  Chưa có trụ nội dung — vào mục &quot;Định hướng nội dung&quot; tạo trụ trước.
+                </p>
+              ) : null}
             </div>
           ) : null}
           {error ? <p className="text-sm font-medium text-rose-600">{error}</p> : null}
