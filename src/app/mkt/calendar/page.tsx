@@ -1,7 +1,7 @@
 import type { Metadata } from "next";
 import Link from "next/link";
 import { Icon } from "@/components/ui/icon";
-import { createServerSupabaseClient } from "@/lib/supabase/server";
+import { getMktRequestContext } from "@/lib/mkt/request-context";
 import { getWorkspaceTasks, type MktWorkspaceTask } from "@/lib/mkt/read-models";
 
 export const dynamic = "force-dynamic";
@@ -39,7 +39,7 @@ export default async function CalendarPage({
   const nextKey = monthKeyOf(new Date(year, monthIdx + 1, 1));
   const monthLabel = new Intl.DateTimeFormat("vi-VN", { month: "long", year: "numeric" }).format(first);
 
-  const supabase = await createServerSupabaseClient();
+  const { supabase } = await getMktRequestContext();
   const tasks = (await getWorkspaceTasks(supabase)).filter(
     (t) => t.dueAt && t.taskStatus !== "canceled",
   );

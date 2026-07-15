@@ -1,10 +1,9 @@
 import type { Metadata } from "next";
 import { Icon } from "@/components/ui/icon";
-import { createServerSupabaseClient } from "@/lib/supabase/server";
+import { getMktRequestContext } from "@/lib/mkt/request-context";
 import {
   getCampaignList,
   getExceptionLog,
-  getMktContext,
   getWorkspaceTasks,
   type MktWorkspaceTask,
 } from "@/lib/mkt/read-models";
@@ -40,8 +39,7 @@ function isOpenAndOverdue(task: MktWorkspaceTask): boolean {
 }
 
 export default async function ReportsPage() {
-  const supabase = await createServerSupabaseClient();
-  const ctx = await getMktContext(supabase);
+  const { supabase, ctx } = await getMktRequestContext();
   const [tasks, campaigns, exceptions] = await Promise.all([
     getWorkspaceTasks(supabase),
     getCampaignList(supabase),

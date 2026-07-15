@@ -1,6 +1,6 @@
 import type { Metadata } from "next";
 import { Icon } from "@/components/ui/icon";
-import { createServerSupabaseClient } from "@/lib/supabase/server";
+import { getMktRequestContext } from "@/lib/mkt/request-context";
 import {
   getCampaignList,
   getMktMembers,
@@ -58,10 +58,10 @@ export default async function KanbanPage({
   searchParams: Promise<{ campaign?: string; assignee?: string }>;
 }) {
   const { campaign, assignee } = await searchParams;
-  const supabase = await createServerSupabaseClient();
+  const { supabase, ctx } = await getMktRequestContext();
   const [allTasks, members, campaigns, pillars] = await Promise.all([
     getWorkspaceTasks(supabase),
-    getMktMembers(supabase),
+    getMktMembers(supabase, ctx.tenantId ?? undefined),
     getCampaignList(supabase),
     getPillars(supabase),
   ]);

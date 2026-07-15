@@ -20,10 +20,17 @@ export const MKT_ERROR_STATUS: Record<string, number> = {
   INVALID_CONTENT_LINK: 400,
   INVALID_CONTENT_URL: 400,
   STALE_CONTENT_VERSION: 409,
+  CONTENT_DELETE_LOCKED: 409,
+  CONTENT_HAS_ACTIVE_TASKS: 409,
   CROSS_TENANT_REFERENCE: 403,
   PLAN_VERSION_CONFLICT: 409,
   PLAN_VALIDATION_FAILED: 400,
   PLAN_TASKS_IN_PROGRESS: 409,
+};
+
+const MKT_ERROR_MESSAGE: Record<string, string> = {
+  CONTENT_DELETE_LOCKED: "Nội dung đang chờ duyệt, đã duyệt hoặc đã đăng nên không thể xoá.",
+  CONTENT_HAS_ACTIVE_TASKS: "Nội dung đang có công việc liên quan. Hãy huỷ công việc trước khi xoá.",
 };
 
 export type MktSupabaseClient = Awaited<ReturnType<typeof createServerSupabaseClient>>;
@@ -92,7 +99,7 @@ export function mktErrorResponse(error: unknown) {
     ) ?? "INVALID_STATE";
 
   return NextResponse.json(
-    { success: false, error: { code, message } },
+    { success: false, error: { code, message: MKT_ERROR_MESSAGE[code] ?? message } },
     { status: MKT_ERROR_STATUS[code] ?? 400 },
   );
 }

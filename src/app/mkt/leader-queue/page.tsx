@@ -1,8 +1,8 @@
 import type { Metadata } from "next";
 import Link from "next/link";
 import { Icon } from "@/components/ui/icon";
-import { createServerSupabaseClient } from "@/lib/supabase/server";
-import { getLeaderQueue, getMktContext, getMktMembers } from "@/lib/mkt/read-models";
+import { getMktRequestContext } from "@/lib/mkt/request-context";
+import { getLeaderQueue, getMktMembers } from "@/lib/mkt/read-models";
 import { LeaderQueueActions } from "@/components/mkt/leader-queue-actions";
 
 export const dynamic = "force-dynamic";
@@ -18,8 +18,7 @@ const ISSUE: Record<string, { label: string; cls: string; icon: string }> = {
 };
 
 export default async function LeaderQueuePage() {
-  const supabase = await createServerSupabaseClient();
-  const ctx = await getMktContext(supabase);
+  const { supabase, ctx } = await getMktRequestContext();
 
   if (!ctx.isLead) {
     return (
@@ -32,7 +31,10 @@ export default async function LeaderQueuePage() {
     );
   }
 
-  const [items, members] = await Promise.all([getLeaderQueue(supabase), getMktMembers(supabase)]);
+  const [items, members] = await Promise.all([
+    getLeaderQueue(supabase),
+    getMktMembers(supabase, ctx.tenantId ?? undefined),
+  ]);
 
   return (
     <div className="px-4 py-4 sm:px-5 lg:px-6">

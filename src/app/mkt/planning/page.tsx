@@ -1,7 +1,7 @@
 import type { Metadata } from "next";
 import { Icon } from "@/components/ui/icon";
-import { createServerSupabaseClient } from "@/lib/supabase/server";
-import { getPlanInbox, getMktMembers, getMktContext } from "@/lib/mkt/read-models";
+import { getMktRequestContext } from "@/lib/mkt/request-context";
+import { getPlanInbox, getMktMembers } from "@/lib/mkt/read-models";
 import { PlanStatusBadge } from "@/components/mkt/badges";
 import {
   PlanEditorButton,
@@ -29,11 +29,10 @@ function fmtDate(value: string | null): string | null {
 }
 
 export default async function PlanningPage() {
-  const supabase = await createServerSupabaseClient();
-  const [plans, members, ctx] = await Promise.all([
+  const { supabase, ctx } = await getMktRequestContext();
+  const [plans, members] = await Promise.all([
     getPlanInbox(supabase),
-    getMktMembers(supabase),
-    getMktContext(supabase),
+    getMktMembers(supabase, ctx.tenantId ?? undefined),
   ]);
   const isLead = Boolean(ctx.isLead);
 

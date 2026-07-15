@@ -26,22 +26,29 @@ export async function getMktContext(supabase: MktSupabaseClient): Promise<MktCon
 }
 
 /** Danh sách nhân sự cùng tenant để chọn assignee/owner/reviewer. */
-export async function getMktMembers(supabase: MktSupabaseClient): Promise<MktMember[]> {
+export async function getMktMembers(
+  supabase: MktSupabaseClient,
+  knownTenantId?: string,
+): Promise<MktMember[]> {
   const db = getMktDatabaseClient(supabase);
-  const {
-    data: { user },
-  } = await supabase.auth.getUser();
-  if (!user) return [];
+  let tenantId = knownTenantId;
 
-  const profile = await db
-    .from<{ tenant_id: string | null }>("profiles")
-    .select("tenant_id")
-    .eq("id", user.id)
-    .maybeSingle();
-  if (profile.error) throw new Error(`MKT_READ_FAILED:member_profile:${profile.error.message}`);
-  const tenantId = profile.data?.tenant_id;
+  if (!tenantId) {
+    const {
+      data: { user },
+    } = await supabase.auth.getUser();
+    if (!user) return [];
+
+    const profile = await db
+      .from<{ tenant_id: string | null }>("profiles")
+      .select("tenant_id")
+      .eq("id", user.id)
+      .maybeSingle();
+    if (profile.error) throw new Error(`MKT_READ_FAILED:member_profile:${profile.error.message}`);
+    tenantId = profile.data?.tenant_id ?? undefined;
+  }
+
   if (!tenantId) return [];
-
   const { data, error } = await db
     .from<{ id: string; full_name: string | null; email: string | null; role: string | null }>(
       "profiles",
@@ -74,13 +81,21 @@ export type MktMyTask = {
 };
 
 /** Task của chính user hiện tại (RLS lọc: assignee hoặc reviewer). */
-export async function getMyTasks(supabase: MktSupabaseClient): Promise<MktMyTask[]> {
+export async function getMyTasks(
+  supabase: MktSupabaseClient,
+  knownUserId?: string | null,
+): Promise<MktMyTask[]> {
   const db = getMktDatabaseClient(supabase);
-  const {
-    data: { user },
-  } = await supabase.auth.getUser();
-  if (!user) return [];
+  let userId = knownUserId ?? null;
 
+  if (!userId) {
+    const {
+      data: { user },
+    } = await supabase.auth.getUser();
+    userId = user?.id ?? null;
+  }
+
+  if (!userId) return [];
   type Row = {
     id: string;
     title: string;
@@ -101,7 +116,7 @@ export async function getMyTasks(supabase: MktSupabaseClient): Promise<MktMyTask
     .select(
       "id, title, description, task_type, acceptance_status, task_status, due_at, campaign_id, content_item_id, workload_points, blocked_reason, assignee_id",
     )
-    .eq("assignee_id", user.id)
+    .eq("assignee_id", userId)
     .is("deleted_at", null)
     .order("due_at", { ascending: true, nullsFirst: false })
     .limit(200);
@@ -763,31 +778,24 @@ export async function getCampaignDetail(
 ): Promise<MktCampaignDetail> {
   const db = getMktDatabaseClient(supabase);
 
-  const campaignRow = await db
-    .from<{
-      id: string;
-      name: string;
-      objective: string | null;
-      status: string;
-      readiness_score: number | null;
-      budget_amount: number | null;
-      timeframe_start: string | null;
-      timeframe_end: string | null;
-    }>("mkt_campaigns")
-    .select("id, name, objective, status, readiness_score, budget_amount, timeframe_start, timeframe_end")
-    .eq("id", campaignId)
-    .is("deleted_at", null)
-    .maybeSingle();
-
-  if (campaignRow.error) {
-    throw new Error(`MKT_READ_FAILED:campaign_detail:${campaignRow.error.message}`);
-  }
-  if (!campaignRow.data) {
-    return { campaign: null, workPackages: [], readiness: [], contents: [], tasks: [] };
-  }
-  const c = campaignRow.data;
-
-  const [wpRes, rdRes, ctRes, tkRes] = await Promise.all([
+  const [campaignRow, wpRes, rdRes, ctRes, tkRes] = await Promise.all([
+    db
+      .from<{
+        id: string;
+        name: string;
+        objective: string | null;
+        status: string;
+        readiness_score: number | null;
+        budget_amount: number | null;
+        timeframe_start: string | null;
+        timeframe_end: string | null;
+      }>("mkt_campaigns")
+      .select(
+        "id, name, objective, status, readiness_score, budget_amount, timeframe_start, timeframe_end",
+      )
+      .eq("id", campaignId)
+      .is("deleted_at", null)
+      .maybeSingle(),
     db
       .from<{
         id: string;
@@ -850,40 +858,65 @@ export async function getCampaignDetail(
       .order("created_at", { ascending: true }),
   ]);
 
+  if (campaignRow.error) {
+    throw new Error(`MKT_READ_FAILED:campaign_detail:${campaignRow.error.message}`);
+  }
+  if (!campaignRow.data) {
+    return { campaign: null, workPackages: [], readiness: [], contents: [], tasks: [] };
+  }
+  const c = campaignRow.data;
+
   const wp = requireRows(wpRes.data, wpRes.error, "campaign_work_packages");
   const rd = requireRows(rdRes.data, rdRes.error, "campaign_readiness");
   const ct = requireRows(ctRes.data, ctRes.error, "campaign_contents");
   const tk = requireRows(tkRes.data, tkRes.error, "campaign_tasks");
 
-  // Trụ nội dung (pillar) của từng content — để hiện rõ content thuộc trụ nào.
-  const pillarIds = Array.from(new Set(ct.map((x) => x.pillar_id).filter(Boolean))) as string[];
-  const pillarMap = new Map<string, { name: string; color: string }>();
-  if (pillarIds.length > 0) {
-    const { data: prs } = await db
-      .from<{ id: string; name: string; color: string }>("mkt_content_pillars")
-      .select("id, name, color")
-      .in("id", pillarIds);
-    (prs ?? []).forEach((p) => pillarMap.set(p.id, { name: p.name, color: p.color }));
-  }
-
-  // Tên người: gom mọi id cần tra.
-  const ids = new Set<string>();
-  wp.forEach((w) => {
-    if (w.owner_id) ids.add(w.owner_id);
-    if (w.reviewer_id) ids.add(w.reviewer_id);
+  const pillarIds = Array.from(new Set(ct.map((item) => item.pillar_id).filter(Boolean))) as string[];
+  const profileIds = new Set<string>();
+  wp.forEach((item) => {
+    if (item.owner_id) profileIds.add(item.owner_id);
+    if (item.reviewer_id) profileIds.add(item.reviewer_id);
   });
-  rd.forEach((r) => r.confirmed_by && ids.add(r.confirmed_by));
-  tk.forEach((t) => t.assignee_id && ids.add(t.assignee_id));
-  const names = new Map<string, string>();
-  if (ids.size > 0) {
-    const { data: profs } = await db
-      .from<{ id: string; full_name: string | null; email: string | null }>("profiles")
-      .select("id, full_name, email")
-      .in("id", Array.from(ids));
-    (profs ?? []).forEach((p) => names.set(p.id, p.full_name || p.email || "Chưa gán tên"));
-  }
-  const nm = (id: string | null) => (id ? names.get(id) ?? "Chưa gán tên" : null);
+  rd.forEach((item) => item.confirmed_by && profileIds.add(item.confirmed_by));
+  tk.forEach((item) => item.assignee_id && profileIds.add(item.assignee_id));
 
+  const [pillars, profiles] = await Promise.all([
+    (async () => {
+      if (pillarIds.length === 0) return [];
+      const { data, error } = await db
+        .from<{ id: string; name: string; color: string }>("mkt_content_pillars")
+        .select("id, name, color")
+        .in("id", pillarIds);
+      return requireRows(data, error, "campaign_content_pillars");
+    })(),
+    (async () => {
+      if (profileIds.size === 0) return [];
+      const { data, error } = await db
+        .from<{ id: string; full_name: string | null; email: string | null }>("profiles")
+        .select("id, full_name, email")
+        .in("id", Array.from(profileIds));
+      return requireRows(data, error, "campaign_profiles");
+    })(),
+  ]);
+
+  const pillarMap = new Map(
+    pillars.map((pillar) => [pillar.id, { name: pillar.name, color: pillar.color }]),
+  );
+  const names = new Map(
+    profiles.map((profile) => [
+      profile.id,
+      profile.full_name || profile.email || "Chưa gán tên",
+    ]),
+  );
+  const workloadByPackage = new Map<string, number>();
+  tk.forEach((task) => {
+    if (!task.work_package_id) return;
+    workloadByPackage.set(
+      task.work_package_id,
+      (workloadByPackage.get(task.work_package_id) ?? 0) + (task.workload_points ?? 1),
+    );
+  });
+  const nm = (id: string | null) => (id ? names.get(id) ?? "Chưa gán tên" : null);
   return {
     campaign: {
       id: c.id,
@@ -906,9 +939,7 @@ export async function getCampaignDetail(
       reviewerName: nm(w.reviewer_id),
       status: w.status,
       // Tổng điểm khối lượng của các task trong gói (đúng "Workload pts" prototype)
-      workloadPoints: tk
-        .filter((t) => t.work_package_id === w.id)
-        .reduce((sum, t) => sum + (t.workload_points ?? 1), 0),
+      workloadPoints: workloadByPackage.get(w.id) ?? 0,
     })),
     readiness: rd.map((r) => ({
       id: r.id,

@@ -1,7 +1,7 @@
 import type { Metadata } from "next";
 import { Icon } from "@/components/ui/icon";
-import { createServerSupabaseClient } from "@/lib/supabase/server";
-import { getApprovals, getMktContext } from "@/lib/mkt/read-models";
+import { getMktRequestContext } from "@/lib/mkt/request-context";
+import { getApprovals } from "@/lib/mkt/read-models";
 import { ContentStatusBadge, RiskBadge } from "@/components/mkt/badges";
 import { ReviewActions } from "@/components/mkt/review-actions";
 
@@ -15,8 +15,7 @@ export default async function ApprovalsPage({
   searchParams: Promise<{ content?: string }>;
 }) {
   const { content: highlightId } = await searchParams;
-  const supabase = await createServerSupabaseClient();
-  const ctx = await getMktContext(supabase);
+  const { supabase, ctx } = await getMktRequestContext();
 
   if (!ctx.canReview) {
     return (

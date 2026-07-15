@@ -1,6 +1,6 @@
 import type { Metadata } from "next";
 import { Icon } from "@/components/ui/icon";
-import { createServerSupabaseClient } from "@/lib/supabase/server";
+import { getMktRequestContext } from "@/lib/mkt/request-context";
 import { getMyTasks, type MktMyTask } from "@/lib/mkt/read-models";
 import { AcceptanceBadge, TaskStatusBadge } from "@/components/mkt/badges";
 import { TaskActions } from "@/components/mkt/task-actions";
@@ -109,8 +109,8 @@ export default async function MyTasksPage({
   searchParams: Promise<{ task?: string }>;
 }) {
   const { task: highlightId } = await searchParams;
-  const supabase = await createServerSupabaseClient();
-  const tasks = await getMyTasks(supabase);
+  const { supabase, userId } = await getMktRequestContext();
+  const tasks = await getMyTasks(supabase, userId);
 
   const active = tasks.filter((t) => !["canceled", "done"].includes(t.taskStatus));
   const pending = active.filter((t) => t.acceptanceStatus === "pending");

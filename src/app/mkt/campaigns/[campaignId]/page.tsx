@@ -2,12 +2,11 @@ import type { Metadata } from "next";
 import Link from "next/link";
 import { notFound } from "next/navigation";
 import { Icon } from "@/components/ui/icon";
-import { createServerSupabaseClient } from "@/lib/supabase/server";
+import { getMktRequestContext } from "@/lib/mkt/request-context";
 import {
   getCampaignDetail,
   getExceptionLog,
   getLeaderQueue,
-  getMktContext,
   getMktMembers,
   getPillars,
 } from "@/lib/mkt/read-models";
@@ -26,6 +25,7 @@ import { ReadinessActions } from "@/components/mkt/readiness-actions";
 import {
   CampaignStatusControl,
   ContentForm,
+  DeleteContentButton,
   EditCampaignButton,
   WorkPackageForm,
   WorkPackageSplitButton,
@@ -91,30 +91,23 @@ export default async function CampaignDetailPage({
   const { tab } = await searchParams;
   const activeTab = TABS.some((t) => t.key === tab) ? (tab as string) : "channels";
 
-  const supabase = await createServerSupabaseClient();
-  const [ctx, detail, members, pillars] = await Promise.all([
-    getMktContext(supabase),
+  const { supabase, ctx } = await getMktRequestContext();
+  const [detail, members, pillars, campaignQueue, exceptions] = await Promise.all([
     getCampaignDetail(supabase, campaignId),
-    getMktMembers(supabase),
+    getMktMembers(supabase, ctx.tenantId ?? undefined),
     getPillars(supabase),
-  ]);
-
-  if (!detail.campaign) notFound();
-  const c = detail.campaign;
-  const canManage = Boolean(ctx.canManageCampaigns);
-  const contentOptions = detail.contents.map((x) => ({ id: x.id, title: x.title }));
-
-  // Khối "Cần Leader xử lý" trong campaign (prototype đặt ngay trong tab công việc)
-  // + Exception Log (minh bạch mọi lần vượt rào) — chỉ tải khi có quyền.
-  const [campaignQueue, exceptions] = await Promise.all([
     ctx.isLead
       ? getLeaderQueue(supabase).then((items) =>
-          items.filter((i) => i.campaignId === campaignId),
+          items.filter((item) => item.campaignId === campaignId),
         )
       : Promise.resolve([]),
     ctx.canViewAudit ? getExceptionLog(supabase, campaignId) : Promise.resolve([]),
   ]);
 
+  if (!detail.campaign) notFound();
+  const c = detail.campaign;
+  const canManage = Boolean(ctx.canManageCampaigns);
+  const contentOptions = detail.contents.map((item) => ({ id: item.id, title: item.title }));
   const readinessDone = detail.readiness.filter((r) => r.status !== "pending").length;
 
   // Khoảng thời gian chạy chiến dịch (chip thông tin trên header)
@@ -463,6 +456,9 @@ export default async function CampaignDetailPage({
                       )}
                       <ContentStatusBadge value={x.contentStatus} />
                       <RiskBadge value={x.riskLevel} />
+                      {canManage || ctx.canSplit ? (
+                        <DeleteContentButton contentId={x.id} title={x.title} />
+                      ) : null}
                     </div>
                   </article>
                 ))}

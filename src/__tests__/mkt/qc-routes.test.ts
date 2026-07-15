@@ -159,3 +159,39 @@ describe("MKT hardening API routes", () => {
     expect(state.signedUpload).not.toHaveBeenCalled();
   });
 });
+
+describe("MKT content deletion API", () => {
+  it("maps DELETE to the tenant-safe content RPC", async () => {
+    const { DELETE } = await import("@/app/api/mkt/v1/contents/[contentId]/route");
+    const response = await DELETE(
+      new NextRequest("https://mkthub.onebiz.com.vn/api/mkt/v1/contents/content-1", {
+        method: "DELETE",
+      }),
+      { params: Promise.resolve({ contentId: "content-1" }) },
+    );
+
+    expect(response.status).toBe(200);
+    expect(state.rpc).toHaveBeenCalledWith("mkt_delete_content_item", {
+      p_content_id: "content-1",
+    });
+  });
+
+  it("returns a clear conflict when workflow history protects the content", async () => {
+    state.rpc.mockResolvedValue({
+      data: null,
+      error: { message: "CONTENT_DELETE_LOCKED" },
+    });
+    const { DELETE } = await import("@/app/api/mkt/v1/contents/[contentId]/route");
+    const response = await DELETE(
+      new NextRequest("https://mkthub.onebiz.com.vn/api/mkt/v1/contents/content-1", {
+        method: "DELETE",
+      }),
+      { params: Promise.resolve({ contentId: "content-1" }) },
+    );
+    const body = await response.json();
+
+    expect(response.status).toBe(409);
+    expect(body.error.code).toBe("CONTENT_DELETE_LOCKED");
+    expect(body.error.message).toContain("không thể xoá");
+  });
+});
