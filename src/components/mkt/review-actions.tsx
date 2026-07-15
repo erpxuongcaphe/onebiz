@@ -1,10 +1,10 @@
 "use client";
 
 import { useState } from "react";
-import { useRouter } from "next/navigation";
 import { Icon } from "@/components/ui/icon";
 import { ReasonDialog } from "@/components/mkt/reason-dialog";
 import { mktPost } from "@/lib/mkt/client";
+import { useMktRefresh } from "@/lib/mkt/use-mkt-refresh";
 
 export function ReviewActions({
   contentId,
@@ -15,8 +15,9 @@ export function ReviewActions({
   riskLevel: string;
   canOverride: boolean;
 }) {
-  const router = useRouter();
-  const [busy, setBusy] = useState(false);
+  const { refresh, refreshing } = useMktRefresh();
+  const [running, setRunning] = useState(false);
+  const busy = running || refreshing;
   const [err, setErr] = useState<string | null>(null);
   const [dialog, setDialog] = useState<null | "revision" | "reject">(null);
 
@@ -24,17 +25,17 @@ export function ReviewActions({
   const canApprove = !highRisk || canOverride;
 
   async function run(action: string, body?: unknown) {
-    setBusy(true);
+    setRunning(true);
     setErr(null);
     try {
       await mktPost(`/api/mkt/v1/contents/${contentId}/review`, { action, ...(body ?? {}) });
-      router.refresh();
+      refresh();
       return true;
     } catch (e) {
       setErr(e instanceof Error ? e.message : "Thao tác thất bại");
       return false;
     } finally {
-      setBusy(false);
+      setRunning(false);
     }
   }
 

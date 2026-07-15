@@ -1,11 +1,11 @@
 "use client";
 
 import { useRef, useState } from "react";
-import { useRouter } from "next/navigation";
 import { Button } from "@/components/ui/button";
 import { Icon } from "@/components/ui/icon";
 import { createClient } from "@/lib/supabase/client";
 import { mktPost } from "@/lib/mkt/client";
+import { useMktRefresh } from "@/lib/mkt/use-mkt-refresh";
 
 const BUCKET = "mkt-media";
 
@@ -16,13 +16,14 @@ function kindOf(file: File): string {
 }
 
 export function MediaUploader() {
-  const router = useRouter();
+  const { refresh, refreshing } = useMktRefresh();
   const inputRef = useRef<HTMLInputElement>(null);
-  const [busy, setBusy] = useState(false);
+  const [running, setRunning] = useState(false);
+  const busy = running || refreshing;
   const [error, setError] = useState<string | null>(null);
 
   async function handleFile(file: File) {
-    setBusy(true);
+    setRunning(true);
     setError(null);
     try {
       // 1. Xin signed upload URL (server, service role)
@@ -42,11 +43,11 @@ export function MediaUploader() {
         sizeBytes: file.size,
         kind: kindOf(file),
       });
-      router.refresh();
+      refresh();
     } catch (e) {
       setError(e instanceof Error ? e.message : "Tải lên thất bại");
     } finally {
-      setBusy(false);
+      setRunning(false);
       if (inputRef.current) inputRef.current.value = "";
     }
   }

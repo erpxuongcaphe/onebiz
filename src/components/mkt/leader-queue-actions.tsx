@@ -1,7 +1,6 @@
 "use client";
 
-import { useState } from "react";
-import { useRouter } from "next/navigation";
+import { useEffect, useState } from "react";
 import {
   Dialog,
   DialogContent,
@@ -17,6 +16,7 @@ import { ReasonDialog } from "@/components/mkt/reason-dialog";
 import { mktPost } from "@/lib/mkt/client";
 import type { MktMember } from "@/lib/mkt/read-models";
 import { MktLink } from "@/components/mkt/mkt-routing";
+import { useMktRefresh } from "@/lib/mkt/use-mkt-refresh";
 
 type Kind = null | "reassign" | "cancel" | "force";
 
@@ -31,24 +31,25 @@ export function LeaderQueueActions({
   issueType: string;
   members: MktMember[];
 }) {
-  const router = useRouter();
-  const [busy, setBusy] = useState(false);
+  const { refresh, refreshing } = useMktRefresh();
+  const [running, setRunning] = useState(false);
+  const busy = running || refreshing;
   const [err, setErr] = useState<string | null>(null);
   const [dialog, setDialog] = useState<Kind>(null);
 
-  async function run(action: string, body?: unknown) {
+  async function run(action: string, body?: unknown, after?: () => void) {
     if (!taskId) return false;
-    setBusy(true);
+    setRunning(true);
     setErr(null);
     try {
       await mktPost(`/api/mkt/v1/tasks/${taskId}/${action}`, body);
-      router.refresh();
+      refresh(after);
       return true;
     } catch (e) {
       setErr(e instanceof Error ? e.message : "Thao tác thất bại");
       return false;
     } finally {
-      setBusy(false);
+      setRunning(false);
     }
   }
 
@@ -87,7 +88,10 @@ export function LeaderQueueActions({
         open={dialog === "reassign"}
         onOpenChange={(o) => setDialog(o ? "reassign" : null)}
         members={members}
-        onSubmit={(newAssigneeId, reason) => run("reassign", { newAssigneeId, reason })}
+        busy={refreshing}
+        onSubmit={(newAssigneeId, reason) =>
+          run("reassign", { newAssigneeId, reason }, () => setDialog(null))
+        }
       />
       <ReasonDialog
         open={dialog === "cancel"}
@@ -110,40 +114,54 @@ export function LeaderQueueActions({
   );
 }
 
+/**
+ * `busy` = cha đang tải lại màn hình sau khi ghi xong. Hộp thoại này KHÔNG tự
+ * gọi máy chủ (cha gọi qua `onSubmit`) nên phải nhận cờ đó từ cha, nếu không
+ * nút sẽ hết quay trước lúc danh sách kịp đổi — xem use-mkt-refresh.ts.
+ */
 export function ReassignDialog({
   open,
   onOpenChange,
   members,
   onSubmit,
+  busy = false,
 }: {
   open: boolean;
   onOpenChange: (open: boolean) => void;
   members: MktMember[];
   onSubmit: (newAssigneeId: string, reason: string) => Promise<void | boolean>;
+  busy?: boolean;
 }) {
   const [assignee, setAssignee] = useState("");
   const [reason, setReason] = useState("");
-  const [loading, setLoading] = useState(false);
+  const [saving, setSaving] = useState(false);
+  const loading = saving || busy;
   const [error, setError] = useState<string | null>(null);
   const valid = Boolean(assignee) && reason.trim().length >= 3;
 
+  // Cha đóng hộp thoại (cùng nhịp với dữ liệu mới) → dọn form khi nó đóng.
+  useEffect(() => {
+    if (!open) {
+      setAssignee("");
+      setReason("");
+      setError(null);
+    }
+  }, [open]);
+
   async function handleConfirm() {
     if (!valid) return;
-    setLoading(true);
+    setSaving(true);
     setError(null);
     try {
       const succeeded = await onSubmit(assignee, reason.trim());
       if (succeeded === false) {
         setError("Thao t\u00e1c th\u1ea5t b\u1ea1i. Vui l\u00f2ng ki\u1ec3m tra l\u1ed7i v\u00e0 th\u1eed l\u1ea1i.");
-        return;
       }
-      setAssignee("");
-      setReason("");
-      onOpenChange(false);
+      // Kh\u00f4ng t\u1ef1 \u0111\u00f3ng: cha \u0111\u00f3ng khi m\u00e0n h\u00ecnh \u0111\u00e3 d\u1ef1ng xong d\u1eef li\u1ec7u m\u1edbi.
     } catch (e) {
       setError(e instanceof Error ? e.message : "Có lỗi xảy ra");
     } finally {
-      setLoading(false);
+      setSaving(false);
     }
   }
 

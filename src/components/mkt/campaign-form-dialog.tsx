@@ -17,6 +17,7 @@ import { Label } from "@/components/ui/label";
 import { Icon } from "@/components/ui/icon";
 import { mktPost } from "@/lib/mkt/client";
 import { useMktHref } from "@/components/mkt/mkt-routing";
+import { useMktRefresh } from "@/lib/mkt/use-mkt-refresh";
 
 const READINESS_ROLES = [
   { value: "owner", label: "CEO / Chủ" },
@@ -30,6 +31,7 @@ type ReadinessRow = { title: string; requiredRole: string };
 
 export function CampaignFormDialog() {
   const router = useRouter();
+  const { refresh, refreshing } = useMktRefresh();
   const toMktHref = useMktHref();
   const [open, setOpen] = useState(false);
   const [name, setName] = useState("");
@@ -38,7 +40,8 @@ export function CampaignFormDialog() {
   const [end, setEnd] = useState("");
   const [budget, setBudget] = useState("");
   const [items, setItems] = useState<ReadinessRow[]>([]);
-  const [loading, setLoading] = useState(false);
+  const [saving, setSaving] = useState(false);
+  const loading = saving || refreshing;
   const [error, setError] = useState<string | null>(null);
 
   const dateInvalid = Boolean(start && end && end < start);
@@ -57,7 +60,7 @@ export function CampaignFormDialog() {
 
   async function handleSubmit() {
     if (!valid) return;
-    setLoading(true);
+    setSaving(true);
     setError(null);
     try {
       const res = await mktPost<{ success: boolean; campaignId?: string }>(
@@ -79,12 +82,12 @@ export function CampaignFormDialog() {
       if (res.campaignId) {
         router.push(toMktHref(`/mkt/campaigns/${res.campaignId}`));
       } else {
-        router.refresh();
+        refresh();
       }
     } catch (e) {
       setError(e instanceof Error ? e.message : "Không tạo được chiến dịch");
     } finally {
-      setLoading(false);
+      setSaving(false);
     }
   }
 

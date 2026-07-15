@@ -1,10 +1,10 @@
 "use client";
 
 import { useState } from "react";
-import { useRouter } from "next/navigation";
 import { Icon } from "@/components/ui/icon";
 import { ReasonDialog } from "@/components/mkt/reason-dialog";
 import { mktPost } from "@/lib/mkt/client";
+import { useMktRefresh } from "@/lib/mkt/use-mkt-refresh";
 
 export function ReadinessActions({
   campaignId,
@@ -19,25 +19,26 @@ export function ReadinessActions({
   canManage: boolean;
   canConfirm: boolean;
 }) {
-  const router = useRouter();
-  const [busy, setBusy] = useState(false);
+  const { refresh, refreshing } = useMktRefresh();
+  const [running, setRunning] = useState(false);
+  const busy = running || refreshing;
   const [err, setErr] = useState<string | null>(null);
   const [waiveOpen, setWaiveOpen] = useState(false);
 
   const base = `/api/mkt/v1/campaigns/${campaignId}/readiness/${itemId}`;
 
   async function run(url: string, body?: unknown) {
-    setBusy(true);
+    setRunning(true);
     setErr(null);
     try {
       await mktPost(url, body);
-      router.refresh();
+      refresh();
       return true;
     } catch (e) {
       setErr(e instanceof Error ? e.message : "Thao tác thất bại");
       return false;
     } finally {
-      setBusy(false);
+      setRunning(false);
     }
   }
 

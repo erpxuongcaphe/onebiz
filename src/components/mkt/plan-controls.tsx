@@ -1,7 +1,6 @@
 "use client";
 
 import { useState } from "react";
-import { useRouter } from "next/navigation";
 import {
   Dialog,
   DialogContent,
@@ -15,6 +14,7 @@ import { Label } from "@/components/ui/label";
 import { Icon } from "@/components/ui/icon";
 import { mktPost } from "@/lib/mkt/client";
 import { AcceptanceBadge, TaskStatusBadge } from "@/components/mkt/badges";
+import { useMktRefresh } from "@/lib/mkt/use-mkt-refresh";
 import type {
   MktMember,
   MktPillar,
@@ -49,14 +49,15 @@ export function AssignPlanningButton({
   members: MktMember[];
 }) {
   const [open, setOpen] = useState(false);
-  const router = useRouter();
+  const { refresh, refreshing } = useMktRefresh();
   const [ownerId, setOwnerId] = useState("");
   const [reviewerId, setReviewerId] = useState("");
   const [objective, setObjective] = useState("");
   const [keyMessage, setKeyMessage] = useState("");
   const [mandatory, setMandatory] = useState("");
   const [deadline, setDeadline] = useState("");
-  const [loading, setLoading] = useState(false);
+  const [saving, setSaving] = useState(false);
+  const loading = saving || refreshing;
   const [error, setError] = useState<string | null>(null);
 
   async function submit() {
@@ -64,7 +65,7 @@ export function AssignPlanningButton({
       setError("Chọn người phụ trách kênh (Channel Owner) trước.");
       return;
     }
-    setLoading(true);
+    setSaving(true);
     setError(null);
     try {
       await mktPost(`/api/mkt/v1/work-packages/${workPackageId}/assign-planning`, {
@@ -78,11 +79,11 @@ export function AssignPlanningButton({
         },
       });
       setOpen(false);
-      router.refresh();
+      refresh();
     } catch (e) {
       setError(e instanceof Error ? e.message : "Không giao được kế hoạch");
     } finally {
-      setLoading(false);
+      setSaving(false);
     }
   }
 
@@ -217,7 +218,7 @@ export function PlanEditorButton({
   pillars: MktPillar[];
 }) {
   const [open, setOpen] = useState(false);
-  const router = useRouter();
+  const { refresh, refreshing } = useMktRefresh();
   const editable = plan.status === "planning" || plan.status === "revision_required";
 
   const [rows, setRows] = useState<Row[]>(() =>
@@ -227,7 +228,8 @@ export function PlanEditorButton({
   const [keyMessage, setKeyMessage] = useState(plan.keyMessage ?? "");
   const [mandatory, setMandatory] = useState(plan.mandatoryDeliverables ?? "");
   const [deadline, setDeadline] = useState(plan.deadline ? plan.deadline.slice(0, 10) : "");
-  const [loading, setLoading] = useState(false);
+  const [saving, setSaving] = useState(false);
+  const loading = saving || refreshing;
   const [error, setError] = useState<string | null>(null);
   const [saved, setSaved] = useState(false);
   // Nội dung có thể tạo nhanh ngay tại đây — lúc lập kế hoạch nội dung thường
@@ -317,16 +319,16 @@ export function PlanEditorButton({
   }
 
   async function save() {
-    setLoading(true);
+    setSaving(true);
     setError(null);
     try {
       await mktPost(`/api/mkt/v1/plans/${plan.id}/items`, payload());
       setSaved(true);
-      router.refresh();
+      refresh();
     } catch (e) {
       setError(e instanceof Error ? e.message : "Không lưu được kế hoạch");
     } finally {
-      setLoading(false);
+      setSaving(false);
     }
   }
 
@@ -336,18 +338,18 @@ export function PlanEditorButton({
       setError("Hãy thêm ít nhất 1 công đoạn (có tên) rồi mới nộp được.");
       return;
     }
-    setLoading(true);
+    setSaving(true);
     setError(null);
     try {
       // Bấm Nộp = tự lưu bản mới nhất RỒI nộp (không cần bấm Lưu nháp trước).
       await mktPost(`/api/mkt/v1/plans/${plan.id}/items`, payload());
       await mktPost(`/api/mkt/v1/plans/${plan.id}/submit`, { expectedVersion: plan.versionNumber });
       setOpen(false);
-      router.refresh();
+      refresh();
     } catch (e) {
       setError(e instanceof Error ? e.message : "Không nộp được kế hoạch");
     } finally {
-      setLoading(false);
+      setSaving(false);
     }
   }
 
@@ -527,9 +529,10 @@ export function PlanReviewButton({
   members: MktMember[];
 }) {
   const [open, setOpen] = useState(false);
-  const router = useRouter();
+  const { refresh, refreshing } = useMktRefresh();
   const [comment, setComment] = useState("");
-  const [loading, setLoading] = useState(false);
+  const [saving, setSaving] = useState(false);
+  const loading = saving || refreshing;
   const [error, setError] = useState<string | null>(null);
 
   const memberName = (id: string | null) =>
@@ -547,7 +550,7 @@ export function PlanReviewButton({
       setError("Nhập nhận xét/lý do trước khi yêu cầu sửa hoặc từ chối.");
       return;
     }
-    setLoading(true);
+    setSaving(true);
     setError(null);
     try {
       await mktPost(`/api/mkt/v1/plans/${plan.id}/review`, {
@@ -556,11 +559,11 @@ export function PlanReviewButton({
         comment: comment.trim() || undefined,
       });
       setOpen(false);
-      router.refresh();
+      refresh();
     } catch (e) {
       setError(e instanceof Error ? e.message : "Không duyệt được kế hoạch");
     } finally {
-      setLoading(false);
+      setSaving(false);
     }
   }
 
@@ -651,9 +654,10 @@ export function PlanReviewButton({
 // ══════════════════════════════════════════════════════════════
 export function ChangeRequestButton({ plan }: { plan: MktPlanInboxEntry }) {
   const [open, setOpen] = useState(false);
-  const router = useRouter();
+  const { refresh, refreshing } = useMktRefresh();
   const [reason, setReason] = useState("");
-  const [loading, setLoading] = useState(false);
+  const [saving, setSaving] = useState(false);
+  const loading = saving || refreshing;
   const [error, setError] = useState<string | null>(null);
 
   async function submit() {
@@ -661,12 +665,12 @@ export function ChangeRequestButton({ plan }: { plan: MktPlanInboxEntry }) {
       setError("Nhập lý do đổi kế hoạch.");
       return;
     }
-    setLoading(true);
+    setSaving(true);
     setError(null);
     try {
       await mktPost(`/api/mkt/v1/plans/${plan.id}/change-request`, { reason: reason.trim() });
       setOpen(false);
-      router.refresh();
+      refresh();
     } catch (e) {
       const raw = e instanceof Error ? e.message : "";
       setError(
@@ -675,7 +679,7 @@ export function ChangeRequestButton({ plan }: { plan: MktPlanInboxEntry }) {
           : raw || "Không mở lại được kế hoạch",
       );
     } finally {
-      setLoading(false);
+      setSaving(false);
     }
   }
 
@@ -724,7 +728,7 @@ export function PlanReconcileButton({
   members: MktMember[];
 }) {
   const [open, setOpen] = useState(false);
-  const router = useRouter();
+  const { refresh, refreshing } = useMktRefresh();
   const [busyId, setBusyId] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [reassignFor, setReassignFor] = useState<string | null>(null);
@@ -742,7 +746,7 @@ export function PlanReconcileButton({
       await mktPost(`/api/mkt/v1/plans/${plan.id}/reconcile-task`, { taskId, decision, newAssigneeId, reason: reason.trim() });
       setReassignFor(null);
       setReassignTo("");
-      router.refresh();
+      refresh();
       setReason("");
     } catch (e) {
       setError(e instanceof Error ? e.message : "Không điều chỉnh được việc");
