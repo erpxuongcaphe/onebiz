@@ -989,6 +989,33 @@ export type MktPlanItem = {
   dependsOnId: string | null;
 };
 
+export type MktContentOption = { id: string; title: string; campaignId: string | null };
+
+/**
+ * Danh sách nội dung của các chiến dịch — để gắn vào công đoạn Duyệt/Đăng khi
+ * lập kế hoạch. Bắt buộc: task 'publish' không gắn nội dung sẽ KHÔNG bấm
+ * "Bắt đầu" được (mkt_start_task chặn), nên phải chọn được ở màn lập kế hoạch.
+ */
+export async function getContentOptions(
+  supabase: MktSupabaseClient,
+  campaignIds: string[],
+): Promise<MktContentOption[]> {
+  if (campaignIds.length === 0) return [];
+  const db = getMktDatabaseClient(supabase);
+  const { data, error } = await db
+    .from<{ id: string; title: string; campaign_id: string | null }>("mkt_content_items")
+    .select("id, title, campaign_id")
+    .in("campaign_id", campaignIds)
+    .is("deleted_at", null)
+    .order("created_at", { ascending: false })
+    .limit(500);
+  return requireRows(data, error, "content_options").map((c) => ({
+    id: c.id,
+    title: c.title,
+    campaignId: c.campaign_id,
+  }));
+}
+
 export type MktPlanInboxEntry = {
   id: string;
   workPackageId: string;

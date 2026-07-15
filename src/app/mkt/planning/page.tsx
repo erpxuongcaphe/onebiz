@@ -1,7 +1,12 @@
 import type { Metadata } from "next";
 import { Icon } from "@/components/ui/icon";
 import { getMktRequestContext } from "@/lib/mkt/request-context";
-import { getPlanInbox, getMktMembers } from "@/lib/mkt/read-models";
+import {
+  getPlanInbox,
+  getMktMembers,
+  getContentOptions,
+  getPillars,
+} from "@/lib/mkt/read-models";
 import { PlanStatusBadge } from "@/components/mkt/badges";
 import {
   PlanEditorButton,
@@ -33,6 +38,12 @@ export default async function PlanningPage() {
   const [plans, members] = await Promise.all([
     getPlanInbox(supabase),
     getMktMembers(supabase, ctx.tenantId ?? undefined),
+  ]);
+  // Nội dung + trụ để gắn vào công đoạn Duyệt/Đăng ngay trong màn lập kế hoạch.
+  const campaignIds = Array.from(new Set(plans.map((p) => p.campaignId).filter(Boolean)));
+  const [contents, pillars] = await Promise.all([
+    getContentOptions(supabase, campaignIds),
+    getPillars(supabase),
   ]);
   const isLead = Boolean(ctx.isLead);
 
@@ -82,7 +93,12 @@ export default async function PlanningPage() {
                     </div>
                   ) : null}
                   <div className="mt-auto flex flex-wrap justify-end gap-2 pt-1">
-                    <PlanEditorButton plan={p} members={members} />
+                    <PlanEditorButton
+                      plan={p}
+                      members={members}
+                      pillars={pillars}
+                      contents={contents.filter((c) => c.campaignId === p.campaignId)}
+                    />
                     {isLead && p.status === "submitted" ? (
                       <PlanReviewButton plan={p} members={members} />
                     ) : null}
