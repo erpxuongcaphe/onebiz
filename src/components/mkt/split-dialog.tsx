@@ -157,7 +157,8 @@ export function SplitDialog({
         taskType: r.taskType,
         dependencyKey: i > 0 ? filled[i - 1].key : undefined,
         dueAt: r.dueAt || undefined,
-        workloadPoints: r.workloadPoints ? Number(r.workloadPoints) : 1,
+        // Chặn 0 / âm / rác — xem chú thích cùng chỗ ở plan-controls.tsx.
+        workloadPoints: Math.max(1, Math.floor(Number(r.workloadPoints)) || 1),
         contentItemId: r.contentItemId || undefined,
       }));
       await mktPost(`/api/mkt/v1/work-packages/${workPackageId}/split`, { tasks: payload });
@@ -243,6 +244,8 @@ export function SplitDialog({
                   />
                   <Input
                     type="number"
+                    min={1}
+                    step={1}
                     value={r.workloadPoints}
                     onChange={(e) => patch(idx, { workloadPoints: e.target.value })}
                     className="h-8 w-16"

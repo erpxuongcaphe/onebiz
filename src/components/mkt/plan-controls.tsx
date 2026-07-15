@@ -299,7 +299,9 @@ export function PlanEditorButton({
         contentItemId: r.contentItemId || undefined,
         contentAngle: r.contentAngle.trim() || undefined,
         deliverable: r.deliverable.trim() || undefined,
-        workloadPoints: r.workloadPoints ? Number(r.workloadPoints) : 1,
+        // Chặn 0 / âm / rác: bảng có ràng buộc workload_points > 0, để lọt xuống
+        // là người dùng lãnh nguyên lỗi tiếng Anh khó hiểu.
+        workloadPoints: Math.max(1, Math.floor(Number(r.workloadPoints)) || 1),
         dueAt: r.dueAt || undefined,
         sequence: i,
         dependsOnId: r.dependsOnId || undefined,
@@ -410,7 +412,7 @@ export function PlanEditorButton({
                         {members.map((m) => <option key={m.id} value={m.id}>{m.name}</option>)}
                       </select>
                       <Input type="date" value={r.dueAt} disabled={!editable} onChange={(e) => patch(idx, { dueAt: e.target.value })} className="h-8 w-36" />
-                      <Input type="number" value={r.workloadPoints} disabled={!editable} onChange={(e) => patch(idx, { workloadPoints: e.target.value })} className="h-8 w-16" title="Điểm khối lượng" />
+                      <Input type="number" min={1} step={1} value={r.workloadPoints} disabled={!editable} onChange={(e) => patch(idx, { workloadPoints: e.target.value })} className="h-8 w-16" title="Điểm khối lượng" />
                       <select value={r.dependsOnId} disabled={!editable} onChange={(e) => patch(idx, { dependsOnId: e.target.value })} className={selectCls} title="Phụ thuộc công đoạn">
                         <option value="">— Không phụ thuộc —</option>
                         {rows.filter((o) => o.id !== r.id && o.title.trim()).map((o, oi) => (
