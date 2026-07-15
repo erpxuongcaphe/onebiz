@@ -244,10 +244,6 @@ export function PlanEditorButton({
   }
 
   const filled = rows.filter((r) => r.title.trim());
-  // Công đoạn Duyệt/Đăng CHƯA gắn nội dung → nộp sẽ bị máy chủ chặn.
-  const needsContent = rows.some(
-    (r) => (r.taskType === "review" || r.taskType === "publish") && r.title.trim() && !r.contentItemId,
-  );
 
   async function quickCreateContent() {
     if (!quickName.trim()) {
@@ -338,14 +334,6 @@ export function PlanEditorButton({
       setError("Hãy thêm ít nhất 1 công đoạn (có tên) rồi mới nộp được.");
       return;
     }
-    // Báo ngay tại chỗ thay vì để máy chủ trả mã lỗi khó hiểu.
-    if (needsContent) {
-      setError(
-        "Công đoạn Duyệt/Đăng phải gắn nội dung (ô “Chọn nội dung” ở dòng đó). " +
-          "Chưa có nội dung thì tạo nhanh ở khối màu vàng bên dưới.",
-      );
-      return;
-    }
     setLoading(true);
     setError(null);
     try {
@@ -431,23 +419,19 @@ export function PlanEditorButton({
                       </select>
                     </div>
                     <div className="flex flex-wrap gap-2">
-                      {/* Công đoạn Duyệt/Đăng BẮT BUỘC gắn nội dung — task 'publish'
-                          không gắn nội dung sẽ không bấm "Bắt đầu" được. */}
+                      {/* Gắn nội dung LUÔN tuỳ chọn (00193): lúc lập kế hoạch nội dung
+                          thường chưa tồn tại. Có gắn → khi Đăng sẽ bị soi "nội dung đã
+                          duyệt chưa"; không gắn → là việc thường, không rào. */}
                       <select
                         value={r.contentItemId}
                         disabled={!editable}
                         onChange={(e) => patch(idx, { contentItemId: e.target.value })}
-                        className={
-                          "h-8 flex-1 rounded-lg border bg-background px-2 text-xs " +
-                          (!r.contentItemId && (r.taskType === "review" || r.taskType === "publish")
-                            ? "border-rose-300"
-                            : "border-outline-variant")
-                        }
+                        className="h-8 flex-1 rounded-lg border border-outline-variant bg-background px-2 text-xs"
                       >
                         <option value="">
-                          {r.taskType === "review" || r.taskType === "publish"
-                            ? "— Chọn nội dung (bắt buộc) —"
-                            : "— Gắn nội dung (tuỳ chọn) —"}
+                          {localContents.length
+                            ? "— Gắn nội dung (tuỳ chọn) —"
+                            : "— Chưa có nội dung nào —"}
                         </option>
                         {localContents.map((c) => (
                           <option key={c.id} value={c.id}>{c.title}</option>
@@ -470,32 +454,31 @@ export function PlanEditorButton({
                 </button>
               ) : null}
 
-              {/* Lập kế hoạch là việc TƯƠNG LAI — nội dung thường chưa tồn tại.
-                  Cho tạo nhanh ngay tại đây để không bị kẹt không nộp được. */}
-              {editable && needsContent ? (
-                <div className="space-y-2 rounded-lg border border-amber-200 bg-amber-50/60 p-3">
-                  <Label className="text-xs font-semibold text-amber-800">
-                    Công đoạn Duyệt/Đăng cần gắn nội dung — chọn ở ô trên, hoặc tạo nhanh tại đây:
-                  </Label>
-                  <div className="flex flex-wrap items-center gap-2">
+              {/* Tạo nhanh nội dung — TUỲ CHỌN, chỉ dùng khi muốn quy trình chặt
+                  (gắn nội dung → công đoạn Đăng sẽ soi "đã duyệt chưa"). Không
+                  gắn cũng nộp được bình thường. */}
+              {editable && pillars.length > 0 ? (
+                <details className="rounded-lg border border-outline-variant bg-surface-container-lowest p-2">
+                  <summary className="cursor-pointer text-xs font-medium text-on-surface-variant">
+                    Muốn gắn nội dung nhưng chưa có? Tạo nhanh tại đây (không bắt buộc)
+                  </summary>
+                  <div className="mt-2 flex flex-wrap items-center gap-2">
                     <Input
                       value={quickName}
                       onChange={(e) => setQuickName(e.target.value)}
                       placeholder="Tên nội dung (VD: Bài SEO trang kiến thức)…"
                       className="h-8 min-w-[180px] flex-1"
                     />
-                    {pillars.length > 0 ? (
-                      <select
-                        value={quickPillarId}
-                        onChange={(e) => setQuickPillarId(e.target.value)}
-                        className={selectCls}
-                      >
-                        <option value="">— Trụ nội dung * —</option>
-                        {pillars.map((p) => (
-                          <option key={p.id} value={p.id}>{p.code} · {p.name}</option>
-                        ))}
-                      </select>
-                    ) : null}
+                    <select
+                      value={quickPillarId}
+                      onChange={(e) => setQuickPillarId(e.target.value)}
+                      className={selectCls}
+                    >
+                      <option value="">— Trụ nội dung * —</option>
+                      {pillars.map((p) => (
+                        <option key={p.id} value={p.id}>{p.code} · {p.name}</option>
+                      ))}
+                    </select>
                     <select value={quickRisk} onChange={(e) => setQuickRisk(e.target.value)} className={selectCls}>
                       <option value="low">Rủi ro thấp (Lead duyệt)</option>
                       <option value="medium">Trung bình (Lead duyệt)</option>
@@ -505,13 +488,7 @@ export function PlanEditorButton({
                       {quickBusy ? "Đang tạo…" : "Tạo & gắn"}
                     </Button>
                   </div>
-                  {pillars.length === 0 ? (
-                    <p className="text-xs font-medium text-amber-800">
-                      Chưa có trụ nội dung — vào mục &quot;Định hướng nội dung&quot; tạo trụ trước, rồi
-                      quay lại tạo nội dung ở đây.
-                    </p>
-                  ) : null}
-                </div>
+                </details>
               ) : null}
             </div>
 
