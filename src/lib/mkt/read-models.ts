@@ -759,8 +759,7 @@ export type MktCampaignDetail = {
     riskLevel: string;
     currentVersion: number;
     revisionCount: number;
-    pillarName: string | null;
-    pillarColor: string | null;
+    pillarId: string | null;
   }>;
   tasks: Array<{
     id: string;
@@ -772,9 +771,12 @@ export type MktCampaignDetail = {
   }>;
 };
 
+export type MktCampaignDetailTab = "channels" | "tasks" | "content" | "readiness";
+
 export async function getCampaignDetail(
   supabase: MktSupabaseClient,
   campaignId: string,
+  activeTab: MktCampaignDetailTab,
 ): Promise<MktCampaignDetail> {
   const db = getMktDatabaseClient(supabase);
 
@@ -809,7 +811,8 @@ export async function getCampaignDetail(
       .select("id, channel_type, title, target_output, owner_id, reviewer_id, status")
       .eq("campaign_id", campaignId)
       .is("deleted_at", null)
-      .order("created_at", { ascending: true }),
+      .order("created_at", { ascending: true })
+      .limit(activeTab === "channels" ? 500 : 1),
     db
       .from<{
         id: string;
@@ -824,7 +827,8 @@ export async function getCampaignDetail(
       .select("id, title, required_role, required_branch_id, status, confirmed_by, due_at, note")
       .eq("campaign_id", campaignId)
       .is("deleted_at", null)
-      .order("created_at", { ascending: true }),
+      .order("created_at", { ascending: true })
+      .limit(activeTab === "readiness" ? 500 : 0),
     db
       .from<{
         id: string;
@@ -838,7 +842,8 @@ export async function getCampaignDetail(
       .select("id, title, content_status, risk_level, current_version, revision_count, pillar_id")
       .eq("campaign_id", campaignId)
       .is("deleted_at", null)
-      .order("created_at", { ascending: false }),
+      .order("created_at", { ascending: false })
+      .limit(activeTab === "channels" || activeTab === "content" ? 500 : 1),
     db
       .from<{
         id: string;
@@ -855,7 +860,11 @@ export async function getCampaignDetail(
       )
       .eq("campaign_id", campaignId)
       .is("deleted_at", null)
-      .order("created_at", { ascending: true }),
+      .order("created_at", { ascending: true })
+      // Tab khác vẫn lấy 1 dòng: bước "3. Chia việc" ở stepper kiểm tra
+      // tasks.length > 0 — lấy 0 sẽ báo chưa chia việc dù đã chia
+      // (giống cách workPackages/contents dùng limit 1).
+      .limit(activeTab === "channels" || activeTab === "tasks" ? 1000 : 1),
   ]);
 
   if (campaignRow.error) {
@@ -871,37 +880,28 @@ export async function getCampaignDetail(
   const ct = requireRows(ctRes.data, ctRes.error, "campaign_contents");
   const tk = requireRows(tkRes.data, tkRes.error, "campaign_tasks");
 
-  const pillarIds = Array.from(new Set(ct.map((item) => item.pillar_id).filter(Boolean))) as string[];
   const profileIds = new Set<string>();
-  wp.forEach((item) => {
-    if (item.owner_id) profileIds.add(item.owner_id);
-    if (item.reviewer_id) profileIds.add(item.reviewer_id);
-  });
-  rd.forEach((item) => item.confirmed_by && profileIds.add(item.confirmed_by));
-  tk.forEach((item) => item.assignee_id && profileIds.add(item.assignee_id));
+  if (activeTab === "channels") {
+    wp.forEach((item) => {
+      if (item.owner_id) profileIds.add(item.owner_id);
+      if (item.reviewer_id) profileIds.add(item.reviewer_id);
+    });
+  }
+  if (activeTab === "readiness") {
+    rd.forEach((item) => item.confirmed_by && profileIds.add(item.confirmed_by));
+  }
+  if (activeTab === "tasks") {
+    tk.forEach((item) => item.assignee_id && profileIds.add(item.assignee_id));
+  }
 
-  const [pillars, profiles] = await Promise.all([
-    (async () => {
-      if (pillarIds.length === 0) return [];
-      const { data, error } = await db
-        .from<{ id: string; name: string; color: string }>("mkt_content_pillars")
-        .select("id, name, color")
-        .in("id", pillarIds);
-      return requireRows(data, error, "campaign_content_pillars");
-    })(),
-    (async () => {
-      if (profileIds.size === 0) return [];
-      const { data, error } = await db
-        .from<{ id: string; full_name: string | null; email: string | null }>("profiles")
-        .select("id, full_name, email")
-        .in("id", Array.from(profileIds));
-      return requireRows(data, error, "campaign_profiles");
-    })(),
-  ]);
-
-  const pillarMap = new Map(
-    pillars.map((pillar) => [pillar.id, { name: pillar.name, color: pillar.color }]),
-  );
+  const profiles = await (async () => {
+    if (profileIds.size === 0) return [];
+    const { data, error } = await db
+      .from<{ id: string; full_name: string | null; email: string | null }>("profiles")
+      .select("id, full_name, email")
+      .in("id", Array.from(profileIds));
+    return requireRows(data, error, "campaign_profiles");
+  })();
   const names = new Map(
     profiles.map((profile) => [
       profile.id,
@@ -958,8 +958,7 @@ export async function getCampaignDetail(
       riskLevel: x.risk_level ?? "low",
       currentVersion: x.current_version ?? 0,
       revisionCount: x.revision_count ?? 0,
-      pillarName: x.pillar_id ? pillarMap.get(x.pillar_id)?.name ?? null : null,
-      pillarColor: x.pillar_id ? pillarMap.get(x.pillar_id)?.color ?? null : null,
+      pillarId: x.pillar_id,
     })),
     tasks: tk.map((t) => ({
       id: t.id,

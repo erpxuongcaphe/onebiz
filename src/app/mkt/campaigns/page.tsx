@@ -1,5 +1,5 @@
 import type { Metadata } from "next";
-import Link from "next/link";
+import { MktLink } from "@/components/mkt/mkt-routing";
 import { Icon } from "@/components/ui/icon";
 import { getMktRequestContext } from "@/lib/mkt/request-context";
 import { getCampaignList, type MktCampaign } from "@/lib/mkt/read-models";
@@ -24,7 +24,7 @@ function money(n: number) {
 function CampaignCard({ c }: { c: MktCampaign }) {
   const st = STATUS[c.status] ?? { label: c.status, cls: "border-slate-200 bg-slate-50 text-slate-700" };
   return (
-    <Link
+    <MktLink
       href={`/mkt/campaigns/${c.id}`}
       className="block rounded-lg border border-outline-variant bg-background p-4 transition hover:border-primary/40 hover:bg-surface-container"
     >
@@ -71,7 +71,7 @@ function CampaignCard({ c }: { c: MktCampaign }) {
           </span>
         ) : null}
       </div>
-    </Link>
+    </MktLink>
   );
 }
 

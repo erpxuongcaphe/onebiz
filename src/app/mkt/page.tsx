@@ -3,6 +3,8 @@ import { redirect } from "next/navigation";
 import { Icon } from "@/components/ui/icon";
 import { getMktDashboardData, type MktTaskSummary } from "@/lib/mkt/dashboard";
 import { getMktRequestContext } from "@/lib/mkt/request-context";
+import { resolveMktHref } from "@/lib/mkt/routing";
+import { getMktBasePath } from "@/lib/mkt/server-routing";
 import {
   AcceptanceBadge,
   ContentStatusBadge,
@@ -78,10 +80,14 @@ export default async function MktHubPage() {
   // Executor (không phải Lead/Reviewer) vào thẳng "Việc của tôi" — như prototype
   // (manager mở portfolio, còn lại mở daily).
   if (!ctx.isLead && !ctx.canReview) {
-    redirect("/mkt/tasks");
+    redirect(resolveMktHref("/mkt/tasks", await getMktBasePath()));
   }
 
-  const data = await getMktDashboardData(supabase, { userId, tenantId: ctx.tenantId });
+  const data = await getMktDashboardData(supabase, {
+    userId,
+    tenantId: ctx.tenantId,
+    isLead: Boolean(ctx.isLead),
+  });
   const activeCampaign = data.campaigns[0] ?? null;
   const kanbanColumns = buildKanbanColumns(data.tasks);
   const totalOutputs = data.contents.length;

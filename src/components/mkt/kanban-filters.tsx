@@ -2,6 +2,7 @@
 
 import { useRouter, useSearchParams } from "next/navigation";
 import type { MktMember, MktPillar } from "@/lib/mkt/read-models";
+import { useMktHref } from "@/components/mkt/mkt-routing";
 
 type CampaignOption = { id: string; name: string };
 
@@ -16,13 +17,14 @@ export function KanbanFilters({
   pillars: MktPillar[];
 }) {
   const router = useRouter();
+  const toMktHref = useMktHref();
   const params = useSearchParams();
 
   function setParam(key: string, value: string) {
     const next = new URLSearchParams(params.toString());
     if (value) next.set(key, value);
     else next.delete(key);
-    router.push("/mkt/kanban" + (next.toString() ? "?" + next.toString() : ""));
+    router.push(toMktHref("/mkt/kanban" + (next.toString() ? "?" + next.toString() : "")));
   }
 
   const selectCls =

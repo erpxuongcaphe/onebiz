@@ -1,5 +1,5 @@
 import type { Metadata } from "next";
-import Link from "next/link";
+import { MktLink } from "@/components/mkt/mkt-routing";
 import { getMktRequestContext } from "@/lib/mkt/request-context";
 import { getMktDatabaseClient } from "@/lib/mkt/supabase";
 import { Icon } from "@/components/ui/icon";
@@ -44,7 +44,7 @@ export default async function MktSettingsPage() {
 
         {/* Content Pillars đã tách ra mục riêng "Định hướng nội dung" */}
         {ctx.canManageCampaigns ? (
-          <Link
+          <MktLink
             href="/mkt/pillars"
             className="flex items-center gap-3 rounded-lg border border-outline-variant bg-background p-4 transition hover:border-primary/40"
           >
@@ -59,7 +59,7 @@ export default async function MktSettingsPage() {
               </p>
             </div>
             <Icon name="chevron_right" size={20} className="shrink-0 text-on-surface-variant" />
-          </Link>
+          </MktLink>
         ) : null}
       </div>
     </div>

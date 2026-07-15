@@ -29,3 +29,20 @@ export async function PATCH(
     p_patch: body,
   });
 }
+
+// Xoá mềm chiến dịch + toàn bộ cây con (gói việc/nội dung/task/sẵn sàng).
+// Chặn khi đang chạy → RPC trả CAMPAIGN_RUNNING.
+export async function DELETE(
+  _request: NextRequest,
+  context: { params: Promise<{ campaignId: string }> },
+) {
+  const { supabase, response } = await requireMktSession();
+  if (response) return response;
+
+  const { campaignId } = await context.params;
+
+  return callMktRpc(supabase, "mkt_delete_campaign", {
+    p_campaign_id: campaignId,
+    p_reason: null,
+  });
+}
