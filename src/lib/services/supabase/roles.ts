@@ -361,7 +361,7 @@ export async function getTenantUsers(tenantId: string): Promise<{
   return (data ?? []).map((p) => ({
     id: p.id,
     fullName: p.full_name,
-    email: p.email,
+    email: p.email ?? "",
     phone: p.phone,
     role: p.role,
     roleId: p.role_id,

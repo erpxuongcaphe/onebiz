@@ -3,6 +3,7 @@
 import { useState } from "react";
 import Link from "next/link";
 import { createClient } from "@/lib/supabase/client";
+import { isInternalAuthEmail } from "@/lib/auth/user-identifiers";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import {
@@ -53,6 +54,12 @@ export default function ForgotPasswordPage() {
         return;
       }
       email = foundEmail as string;
+    }
+
+    if (isInternalAuthEmail(email)) {
+      setError("Tài khoản này không có email. Liên hệ quản lý để đặt lại mật khẩu.");
+      setLoading(false);
+      return;
     }
 
     const { error: authError } = await supabase.auth.resetPasswordForEmail(

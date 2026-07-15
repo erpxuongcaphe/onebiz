@@ -97,7 +97,7 @@ export interface Database {
           branch_id: string | null;
           role_id: string | null;
           full_name: string;
-          email: string;
+          email: string | null;
           phone: string | null;
           avatar_url: string | null;
           role: "owner" | "admin" | "manager" | "staff" | "cashier";
@@ -111,7 +111,7 @@ export interface Database {
           branch_id?: string | null;
           role_id?: string | null;
           full_name: string;
-          email: string;
+          email?: string | null;
           phone?: string | null;
           avatar_url?: string | null;
           role?: "owner" | "admin" | "manager" | "staff" | "cashier";
@@ -120,6 +120,7 @@ export interface Database {
         Update: {
           branch_id?: string | null;
           role_id?: string | null;
+          email?: string | null;
           full_name?: string;
           phone?: string | null;
           avatar_url?: string | null;

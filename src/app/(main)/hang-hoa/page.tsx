@@ -840,13 +840,9 @@ export default function HangHoaPage() {
       setConfirmPasswordError("Vui lòng nhập mật khẩu để xác nhận.");
       return;
     }
-    if (!user?.email) {
-      setConfirmPasswordError("Không lấy được email tài khoản. Vui lòng đăng nhập lại.");
-      return;
-    }
     setBulkLoading(true);
     try {
-      const ok = await verifyCurrentUserPassword(user.email, confirmPassword);
+      const ok = await verifyCurrentUserPassword(confirmPassword);
       if (!ok) {
         setConfirmPasswordError("Sai mật khẩu — không xoá. Vui lòng nhập lại.");
         setBulkLoading(false);
@@ -898,7 +894,7 @@ export default function HangHoaPage() {
     } finally {
       setBulkLoading(false);
     }
-  }, [selectedRowsForBulk, selectedIdsForBulk, confirmPassword, user, toast, finishBulkSuccess, finishBulkError]);
+  }, [selectedRowsForBulk, selectedIdsForBulk, confirmPassword, toast, finishBulkSuccess, finishBulkError]);
 
   useEffect(() => {
     setPage(0);
