@@ -277,20 +277,24 @@ export default function HoSoPage() {
 
     setSavingPassword(true);
     try {
-      // Verify mật khẩu cũ bằng signInWithPassword. Supabase cho phép gọi
-      // lại với credentials hiện tại — không làm mất session. Yêu cầu user
-      // có email (user SĐT-only sẽ bỏ flow này qua nhánh reset riêng).
-      if (!safeEmail) {
+      // Dùng email Auth thật để xác minh. Tài khoản chỉ có SĐT vẫn có một
+      // định danh nội bộ, nhưng định danh đó không hiển thị như email liên hệ.
+      const {
+        data: { user: authIdentity },
+        error: identityError,
+      } = await supabase.auth.getUser();
+      const authEmail = authIdentity?.email ?? safeEmail;
+      if (identityError || !authEmail) {
         toast({
-          title: "Tài khoản không có email",
-          description: "Dùng 'Quên mật khẩu' để đặt lại thay vì đổi tại đây.",
+          title: "Không xác minh được tài khoản",
+          description: "Vui lòng đăng nhập lại rồi thử đổi mật khẩu.",
           variant: "error",
         });
         setSavingPassword(false);
         return;
       }
       const { error: verifyError } = await supabase.auth.signInWithPassword({
-        email: safeEmail,
+        email: authEmail,
         password: currentPassword,
       });
       if (verifyError) {

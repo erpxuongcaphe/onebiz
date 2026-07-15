@@ -2,7 +2,7 @@
  * POST /api/admin/create-user
  *
  * Sprint USER-MGMT (CEO 06/05/2026):
- *   - Owner / admin tự tạo user mới (email + password)
+ *   - Owner / admin tự tạo user mới (email hoặc SĐT + password)
  *   - KHÔNG dùng invite link / signInWithOtp
  *   - User mới có thể được scope theo nhiều chi nhánh (user_branches)
  *
@@ -13,7 +13,7 @@
  *
  * Body:
  *   {
- *     email: string,
+ *     email?: string,         // optional nếu có phone
  *     password: string,
  *     fullName: string,
  *     phone?: string,
@@ -27,14 +27,21 @@
  * Response: { success, userId, message }
  */
 
+import { randomUUID } from "node:crypto";
 import { NextRequest, NextResponse } from "next/server";
 import { createServerSupabaseClient } from "@/lib/supabase/server";
 import { getAdminClient } from "@/lib/supabase/admin";
+import {
+  INTERNAL_AUTH_EMAIL_DOMAIN,
+  isInternalAuthEmail,
+  isValidVnPhone,
+  normalizeVnPhone,
+} from "@/lib/auth/user-identifiers";
 
 export const runtime = "nodejs"; // service-role key chỉ dùng được trong Node runtime
 
 interface CreateUserBody {
-  email: string;
+  email?: string;
   password: string;
   fullName: string;
   phone?: string;
@@ -104,13 +111,37 @@ export async function POST(req: NextRequest) {
     // 3. Validate body
     // ========================================
     const body = (await req.json()) as CreateUserBody;
-    if (!body.email || !body.password || !body.fullName) {
+    const email = typeof body.email === "string" ? body.email.trim().toLowerCase() : "";
+    const rawPhone = typeof body.phone === "string" ? body.phone.trim() : "";
+    const phone = rawPhone ? normalizeVnPhone(rawPhone) : "";
+    const fullName = typeof body.fullName === "string" ? body.fullName.trim() : "";
+    const password = typeof body.password === "string" ? body.password : "";
+
+    if (!password || !fullName) {
       return NextResponse.json(
-        { success: false, message: "Thiếu email, password hoặc tên đầy đủ" },
+        { success: false, message: "Thiếu mật khẩu hoặc tên đầy đủ" },
         { status: 400 },
       );
     }
-    if (body.password.length < 8) {
+    if (!email && !phone) {
+      return NextResponse.json(
+        { success: false, message: "Cần nhập email hoặc số điện thoại" },
+        { status: 400 },
+      );
+    }
+    if (email && (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email) || isInternalAuthEmail(email))) {
+      return NextResponse.json(
+        { success: false, message: "Email không hợp lệ" },
+        { status: 400 },
+      );
+    }
+    if (rawPhone && !isValidVnPhone(rawPhone)) {
+      return NextResponse.json(
+        { success: false, message: "Số điện thoại không đúng định dạng Việt Nam" },
+        { status: 400 },
+      );
+    }
+    if (password.length < 8) {
       return NextResponse.json(
         { success: false, message: "Mật khẩu phải có ít nhất 8 ký tự" },
         { status: 400 },
@@ -121,13 +152,16 @@ export async function POST(req: NextRequest) {
     // 4. Tạo user qua admin API
     // ========================================
     const admin = getAdminClient();
+    const authEmail = email || `staff-${randomUUID()}@${INTERNAL_AUTH_EMAIL_DOMAIN}`;
     const { data: created, error: createErr } = await admin.auth.admin.createUser({
-      email: body.email,
-      password: body.password,
+      email: authEmail,
+      password,
       email_confirm: true, // skip email verification
       user_metadata: {
-        full_name: body.fullName,
-        phone: body.phone ?? null,
+        full_name: fullName,
+        phone: phone || null,
+        contact_email: email || null,
+        internal_login_email: !email,
         invited_tenant_id: tenantId,
         invited_role_id: body.roleId ?? null,
         invited_role: "staff", // default staff (không phải owner)
@@ -152,7 +186,7 @@ export async function POST(req: NextRequest) {
     //    → upsert profile cho chắc
     // ========================================
     // eslint-disable-next-line @typescript-eslint/no-explicit-any
-    await (admin as any)
+    const { error: profileError } = await (admin as any)
       .from("profiles")
       .upsert(
         {
@@ -160,12 +194,20 @@ export async function POST(req: NextRequest) {
           tenant_id: tenantId,
           role_id: body.roleId ?? null,
           role: "staff",
-          full_name: body.fullName,
-          email: body.email,
-          phone: body.phone ?? null,
+          full_name: fullName,
+          email: email || null,
+          phone: phone || null,
         },
         { onConflict: "id" },
       );
+
+    if (profileError) {
+      await admin.auth.admin.deleteUser(newUserId);
+      return NextResponse.json(
+        { success: false, message: `Không tạo được hồ sơ nhân viên: ${profileError.message}` },
+        { status: 500 },
+      );
+    }
 
     // ========================================
     // 6. Gán chi nhánh
@@ -213,7 +255,7 @@ export async function POST(req: NextRequest) {
     return NextResponse.json({
       success: true,
       userId: newUserId,
-      message: `Đã tạo tài khoản ${body.email} thành công`,
+      message: `Đã tạo tài khoản ${email || phone} thành công`,
     });
   } catch (err) {
     return NextResponse.json(

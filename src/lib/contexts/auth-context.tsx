@@ -18,6 +18,7 @@ import { getUserPermissions } from "@/lib/services/supabase/roles";
 import { getUserEffectivePermissions } from "@/lib/services/supabase/permission-overrides";
 import { _seedProfileCache as seedProfileCache, _clearProfileCache as clearProfileCache } from "@/lib/services/supabase/base";
 import { readDeviceBinding } from "@/lib/hooks/use-device-binding";
+import { isInternalAuthEmail } from "@/lib/auth/user-identifiers";
 
 // --- Types ---
 
@@ -93,7 +94,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
           branchId: profile.branch_id ?? undefined,
           roleId: profile.role_id ?? undefined,
           fullName: profile.full_name,
-          email: profile.email,
+          email: profile.email ?? "",
           phone: profile.phone ?? undefined,
           role: profile.role,
           isActive: profile.is_active,
@@ -638,11 +639,12 @@ export function useAuth() {
  */
 function buildFallbackProfile(authUser: User): UserProfile {
   const meta = authUser.user_metadata ?? {};
+  const authEmail = isInternalAuthEmail(authUser.email) ? "" : (authUser.email ?? "");
   return {
     id: authUser.id,
     tenantId: "",
-    fullName: meta.full_name ?? authUser.email?.split("@")[0] ?? "User",
-    email: authUser.email ?? "",
+    fullName: meta.full_name ?? (authEmail ? authEmail.split("@")[0] : "User"),
+    email: authEmail,
     phone: meta.phone ?? undefined,
     role: "staff",
     isActive: false,

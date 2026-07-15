@@ -1302,9 +1302,16 @@ export async function restoreProduct(id: string): Promise<void> {
 // ============================================================
 
 export async function verifyCurrentUserPassword(
-  email: string,
   password: string,
 ): Promise<boolean> {
+  const supabase = getClient();
+  const {
+    data: { user },
+    error: userError,
+  } = await supabase.auth.getUser();
+  const authEmail = user?.email;
+  if (userError || !authEmail) return false;
+
   const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL;
   const anonKey = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY;
   if (!supabaseUrl || !anonKey) {
@@ -1320,7 +1327,7 @@ export async function verifyCurrentUserPassword(
           "apikey": anonKey,
           "Content-Type": "application/json",
         },
-        body: JSON.stringify({ email, password }),
+        body: JSON.stringify({ email: authEmail, password }),
       },
     );
     return response.ok;

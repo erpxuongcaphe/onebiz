@@ -190,10 +190,12 @@ function UsersPage() {
     });
 
   const handleCreateUser = async () => {
-    if (!createForm.email || !createForm.password || !createForm.fullName) {
+    const email = createForm.email.trim();
+    const phone = createForm.phone.trim();
+    if (!createForm.password || !createForm.fullName.trim() || (!email && !phone)) {
       toast({
         title: "Thiếu thông tin",
-        description: "Vui lòng nhập đầy đủ email, mật khẩu, họ tên",
+        description: "Vui lòng nhập họ tên, mật khẩu và ít nhất email hoặc số điện thoại",
         variant: "error",
       });
       return;
@@ -220,10 +222,10 @@ function UsersPage() {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
-          email: createForm.email.trim(),
+          email: email || undefined,
           password: createForm.password,
           fullName: createForm.fullName.trim(),
-          phone: createForm.phone.trim() || undefined,
+          phone: phone || undefined,
           roleId: createForm.roleId || undefined,
           branchIds: createForm.allBranches ? [] : createForm.branchIds,
           allBranches: createForm.allBranches,
@@ -236,7 +238,7 @@ function UsersPage() {
 
       toast({
         title: "Đã tạo tài khoản",
-        description: `${createForm.email} có thể đăng nhập bằng mật khẩu vừa đặt. Nhân viên tự đặt PIN POS qua trang Hồ sơ.`,
+        description: `${email || phone} có thể đăng nhập bằng mật khẩu vừa đặt. Nhân viên tự đặt PIN POS qua trang Hồ sơ.`,
         variant: "success",
         duration: 8000,
       });
@@ -391,7 +393,7 @@ function UsersPage() {
                 {users.map((user) => (
                   <tr key={user.id} className="border-b last:border-0">
                     <td className="py-3 font-medium">{user.fullName}</td>
-                    <td className="py-3 text-muted-foreground">{user.email}</td>
+                    <td className="py-3 text-muted-foreground">{user.email || "—"}</td>
                     <td className="py-3 hidden md:table-cell">{getBranchName(user.branchId)}</td>
                     <td className="py-3">
                       {user.roleName ? (
@@ -551,7 +553,7 @@ function UsersPage() {
           <div className="space-y-4 py-2">
             <div className="space-y-1">
               <Label>Email (không sửa được)</Label>
-              <Input value={editTarget?.email ?? ""} disabled className="bg-muted" />
+              <Input value={editTarget?.email ?? ""} placeholder="Không có email" disabled className="bg-muted" />
             </div>
 
             <div className="space-y-1">
@@ -722,7 +724,7 @@ function UsersPage() {
           <div className="space-y-4 py-2">
             <div className="grid grid-cols-2 gap-3">
               <div className="space-y-1">
-                <Label htmlFor="create-email">Email *</Label>
+                <Label htmlFor="create-email">Email</Label>
                 <Input
                   id="create-email"
                   type="email"
@@ -762,7 +764,7 @@ function UsersPage() {
             </div>
 
             <div className="space-y-1">
-              <Label htmlFor="create-phone">Số điện thoại</Label>
+              <Label htmlFor="create-phone">Số điện thoại * nếu không có email</Label>
               <Input
                 id="create-phone"
                 value={createForm.phone}
@@ -859,7 +861,7 @@ function UsersPage() {
 
             <div className="rounded-lg bg-status-info/5 border border-status-info/20 p-3 text-xs text-status-info">
               <Icon name="info" size={14} className="inline mr-1 align-text-bottom" />
-              Sau khi tạo, đưa email + mật khẩu cho nhân viên. Nhân viên tự
+              Sau khi tạo, đưa email hoặc SĐT cùng mật khẩu cho nhân viên. Nhân viên tự
               vào <strong>Hồ sơ → Đổi PIN POS</strong> để đặt PIN 6 số riêng
               (chủ cửa hàng không biết PIN này). Khi NV quên PIN → reset qua
               dropdown ⋯ → &quot;Đặt PIN POS&quot;.
