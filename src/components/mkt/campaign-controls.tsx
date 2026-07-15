@@ -70,8 +70,10 @@ export function CampaignStatusControl({
         if (!res.ok || d?.success === false) throw new Error(d?.error?.message ?? "Thất bại");
       });
       router.refresh();
+      return true;
     } catch (e) {
       setErr(e instanceof Error ? e.message : "Thao tác thất bại");
+      return false;
     } finally {
       setBusy(false);
     }

@@ -38,8 +38,8 @@ const linkUpdate = {
   update_id: 1001,
   message: {
     text: "/start link_raw-token",
-    chat: { id: 123 },
-    from: { id: 456, username: "tester" },
+    chat: { id: 123, type: "private" },
+    from: { id: 123, username: "tester" },
   },
 };
 
@@ -67,6 +67,23 @@ describe("Telegram webhook security and idempotency", () => {
       makeRequest({ "x-telegram-bot-api-secret-token": "wrong" }),
     );
     expect(response.status).toBe(401);
+  });
+
+  it("ignores link commands from group chats", async () => {
+    const { POST } = await import("@/app/api/telegram/webhook/route");
+    const response = await POST(
+      makeRequest(validHeaders, {
+        update_id: 1002,
+        message: {
+          text: "/start link_raw-token",
+          chat: { id: -100123, type: "supergroup" },
+          from: { id: 123, username: "tester" },
+        },
+      }),
+    );
+    expect(response.status).toBe(200);
+    expect(state.rpc).not.toHaveBeenCalled();
+    expect(state.send).not.toHaveBeenCalled();
   });
 
   it("ignores duplicate update without sending another message", async () => {

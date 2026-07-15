@@ -65,9 +65,11 @@ function thumbOf(item: MktDocument): string | null {
 export function DocumentLibrary({
   items,
   campaigns,
+  canManageAssets,
 }: {
   items: MktDocument[];
   campaigns: CampaignOption[];
+  canManageAssets: boolean;
 }) {
   const router = useRouter();
   const [categoryFilter, setCategoryFilter] = useState<string>("all");
@@ -188,7 +190,7 @@ export function DocumentLibrary({
         </div>
 
         <div className="ml-auto flex items-center gap-2">
-          <Button size="sm" onClick={() => setAddOpen(true)}>
+          <Button hidden={!canManageAssets} size="sm" onClick={() => setAddOpen(true)}>
             <Icon name="add_link" size={16} /> Thêm tài liệu
           </Button>
         </div>
@@ -309,11 +311,11 @@ export function DocumentLibrary({
                     </a>
                   </>
                 ) : null}
-                <Button variant="outline" onClick={() => toggleStatus(preview)}>
+                <Button hidden={!canManageAssets} variant="outline" onClick={() => toggleStatus(preview)}>
                   <Icon name={preview.status === "archived" ? "unarchive" : "archive"} size={16} />
                   {preview.status === "archived" ? "Bỏ lưu trữ" : "Lưu trữ"}
                 </Button>
-                <Button variant="outline" className="text-rose-600" onClick={() => remove(preview)}>
+                <Button hidden={!canManageAssets} variant="outline" className="text-rose-600" onClick={() => remove(preview)}>
                   <Icon name="delete" size={16} /> Xoá khỏi thư viện
                 </Button>
               </DialogFooter>

@@ -28,6 +28,7 @@ export async function sendTelegramMessage(params: {
     "https://api.telegram.org/bot" + params.botToken + "/sendMessage",
     {
       method: "POST",
+      signal: AbortSignal.timeout(8000),
       headers: { "content-type": "application/json" },
       body: JSON.stringify({
         chat_id: params.chatId,

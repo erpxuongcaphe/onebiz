@@ -731,6 +731,7 @@ export type MktCampaignDetail = {
     id: string;
     title: string;
     requiredRole: string | null;
+    requiredBranchId: string | null;
     status: string;
     confirmedByName: string | null;
     dueAt: string | null;
@@ -806,12 +807,13 @@ export async function getCampaignDetail(
         id: string;
         title: string;
         required_role: string | null;
+        required_branch_id: string | null;
         status: string;
         confirmed_by: string | null;
         due_at: string | null;
         note: string | null;
       }>("mkt_campaign_readiness_items")
-      .select("id, title, required_role, status, confirmed_by, due_at, note")
+      .select("id, title, required_role, required_branch_id, status, confirmed_by, due_at, note")
       .eq("campaign_id", campaignId)
       .is("deleted_at", null)
       .order("created_at", { ascending: true }),
@@ -912,6 +914,7 @@ export async function getCampaignDetail(
       id: r.id,
       title: r.title,
       requiredRole: r.required_role,
+      requiredBranchId: r.required_branch_id,
       status: r.status,
       confirmedByName: nm(r.confirmed_by),
       dueAt: r.due_at,

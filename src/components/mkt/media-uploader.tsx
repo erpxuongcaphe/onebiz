@@ -28,7 +28,7 @@ export function MediaUploader() {
       // 1. Xin signed upload URL (server, service role)
       const { path, token } = await mktPost<{ path: string; token: string }>(
         "/api/mkt/v1/media/upload-url",
-        { fileName: file.name },
+        { fileName: file.name, mimeType: file.type, sizeBytes: file.size },
       );
       // 2. Tải file thẳng lên Storage qua signed URL
       const supabase = createClient();

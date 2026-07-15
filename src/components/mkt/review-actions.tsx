@@ -29,8 +29,10 @@ export function ReviewActions({
     try {
       await mktPost(`/api/mkt/v1/contents/${contentId}/review`, { action, ...(body ?? {}) });
       router.refresh();
+      return true;
     } catch (e) {
       setErr(e instanceof Error ? e.message : "Thao tác thất bại");
+      return false;
     } finally {
       setBusy(false);
     }

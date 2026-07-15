@@ -11,11 +11,13 @@ export function ReadinessActions({
   itemId,
   status,
   canManage,
+  canConfirm,
 }: {
   campaignId: string;
   itemId: string;
   status: string;
   canManage: boolean;
+  canConfirm: boolean;
 }) {
   const router = useRouter();
   const [busy, setBusy] = useState(false);
@@ -30,8 +32,10 @@ export function ReadinessActions({
     try {
       await mktPost(url, body);
       router.refresh();
+      return true;
     } catch (e) {
       setErr(e instanceof Error ? e.message : "Thao tác thất bại");
+      return false;
     } finally {
       setBusy(false);
     }
@@ -46,7 +50,7 @@ export function ReadinessActions({
 
   return (
     <div className="flex flex-wrap items-center gap-1.5">
-      <button className={btn + " text-emerald-700"} disabled={busy} onClick={() => run(`${base}/confirm`, {})}>
+      <button hidden={!canConfirm} className={btn + " text-emerald-700"} disabled={busy} onClick={() => run(`${base}/confirm`, {})}>
         <Icon name="check" size={14} /> Xác nhận
       </button>
       {canManage ? (

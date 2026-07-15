@@ -18,7 +18,7 @@ export async function POST(request: NextRequest) {
   if (response) return response;
 
   const body = await readJsonBody<CreateContentBody>(request);
-  const invalid = requireFields(body, ["campaignId", "title"]);
+  const invalid = requireFields(body, ["campaignId", "title", "pillarId"]);
   if (invalid) return invalid;
 
   return callMktRpc(supabase, "mkt_create_content_item", {
