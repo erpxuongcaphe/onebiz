@@ -9,6 +9,18 @@ export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
 
 const BUCKET = "mkt-media";
+const MAX_UPLOAD_BYTES = 25 * 1024 * 1024;
+const ALLOWED_MIME_TYPES = new Set([
+  "image/jpeg",
+  "image/png",
+  "image/webp",
+  "image/gif",
+  "image/avif",
+  "video/mp4",
+  "video/webm",
+  "video/quicktime",
+]);
+
 
 function safeName(name: string): string {
   return name.replace(/[^a-zA-Z0-9._-]/g, "_").slice(-80);
@@ -28,7 +40,7 @@ export async function POST(request: NextRequest) {
   }
 
   const mktContext = await getMktContext(supabase);
-  if (!mktContext.canView) {
+  if (!mktContext.canManageAssets) {
     return NextResponse.json(
       { success: false, error: { code: "INSUFFICIENT_ROLE", message: "Chưa được cấp quyền MKT Hub" } },
       { status: 403 },
@@ -48,8 +60,26 @@ export async function POST(request: NextRequest) {
     );
   }
 
-  const body = (await request.json().catch(() => ({}))) as { fileName?: string };
-  const fileName = safeName(body.fileName ?? "file");
+  const body = (await request.json().catch(() => ({}))) as {
+    fileName?: string;
+    mimeType?: string;
+    sizeBytes?: number;
+  };
+  const fileName = safeName(body.fileName?.trim() ?? "");
+  const mimeType = body.mimeType?.toLowerCase() ?? "";
+  const sizeBytes = Number(body.sizeBytes);
+  if (
+    !fileName ||
+    !ALLOWED_MIME_TYPES.has(mimeType) ||
+    !Number.isSafeInteger(sizeBytes) ||
+    sizeBytes < 1 ||
+    sizeBytes > MAX_UPLOAD_BYTES
+  ) {
+    return NextResponse.json(
+      { success: false, error: { code: "INVALID_MEDIA_UPLOAD", message: "File kh\u00f4ng h\u1ee3p l\u1ec7 ho\u1eb7c v\u01b0\u1ee3t qu\u00e1 25 MB" } },
+      { status: 400 },
+    );
+  }
   const path = `${profile.tenant_id}/${randomUUID()}-${fileName}`;
 
   const admin = getAdminClient();

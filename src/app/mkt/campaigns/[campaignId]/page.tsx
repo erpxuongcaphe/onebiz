@@ -31,6 +31,7 @@ import {
   WorkPackageSplitButton,
 } from "@/components/mkt/campaign-controls";
 import { AssignPlanningButton } from "@/components/mkt/plan-controls";
+import { canConfirmReadiness } from "@/lib/mkt/readiness";
 
 export const dynamic = "force-dynamic";
 
@@ -518,6 +519,7 @@ export default async function CampaignDetailPage({
                       itemId={r.id}
                       status={r.status}
                       canManage={canManage}
+                      canConfirm={canConfirmReadiness(ctx, r.requiredRole, r.requiredBranchId)}
                     />
                   </div>
                 </article>

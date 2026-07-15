@@ -136,6 +136,12 @@ export const PERMISSIONS = {
   MKT_MANAGE_TEAM: "mkt.manage_team",
   MKT_VIEW_AUDIT: "mkt.view_audit",
   MKT_TELEGRAM_MANAGE: "mkt.telegram_manage",
+  MKT_MANAGE_ASSETS: "mkt.manage_assets",
+  MKT_READINESS_FINANCE: "mkt.readiness.finance",
+  MKT_READINESS_OPS: "mkt.readiness.ops",
+  MKT_READINESS_WAREHOUSE: "mkt.readiness.warehouse",
+  MKT_READINESS_STORE: "mkt.readiness.store",
+  MKT_READINESS_CEO: "mkt.readiness.ceo",
 } as const;
 
 export type PermissionCode = (typeof PERMISSIONS)[keyof typeof PERMISSIONS];
@@ -304,6 +310,12 @@ export const PERMISSION_GROUPS: PermissionGroup[] = [
       { code: PERMISSIONS.MKT_MANAGE_TEAM, label: "Quản lý team" },
       { code: PERMISSIONS.MKT_VIEW_AUDIT, label: "Xem audit MKT" },
       { code: PERMISSIONS.MKT_TELEGRAM_MANAGE, label: "Quản lý Telegram" },
+      { code: PERMISSIONS.MKT_MANAGE_ASSETS, label: "Qu\u1ea3n l\u00fd media v\u00e0 t\u00e0i li\u1ec7u" },
+      { code: PERMISSIONS.MKT_READINESS_FINANCE, label: "X\u00e1c nh\u1eadn readiness - K\u1ebf to\u00e1n" },
+      { code: PERMISSIONS.MKT_READINESS_OPS, label: "X\u00e1c nh\u1eadn readiness - V\u1eadn h\u00e0nh" },
+      { code: PERMISSIONS.MKT_READINESS_WAREHOUSE, label: "X\u00e1c nh\u1eadn readiness - Kho" },
+      { code: PERMISSIONS.MKT_READINESS_STORE, label: "X\u00e1c nh\u1eadn readiness - C\u1eeda h\u00e0ng" },
+      { code: PERMISSIONS.MKT_READINESS_CEO, label: "X\u00e1c nh\u1eadn readiness - CEO" },
     ],
   },
   {
@@ -375,8 +387,6 @@ export const DEFAULT_ROLE_TEMPLATES: RoleTemplate[] = [
       PERMISSIONS.REPORTS_FNB,
       PERMISSIONS.REPORTS_VIEW_PROFIT,
       PERMISSIONS.REPORTS_EXPORT,
-      // MKT Hub foundation
-      ...ALL_PERMISSION_CODES.filter((c) => c.startsWith("mkt.")),
       // System: cấp OTP + xem audit
       PERMISSIONS.SYSTEM_VIEW_AUDIT,
       PERMISSIONS.SYSTEM_ISSUE_OTP,
@@ -449,6 +459,7 @@ export const DEFAULT_ROLE_TEMPLATES: RoleTemplate[] = [
       PERMISSIONS.MKT_REVIEW_CONTENT,
       PERMISSIONS.MKT_MANAGE_TEAM,
       PERMISSIONS.MKT_VIEW_AUDIT,
+      PERMISSIONS.MKT_MANAGE_ASSETS,
       PERMISSIONS.MKT_TELEGRAM_MANAGE,
       // KHÔNG có MKT_OVERRIDE_CAMPAIGN: vượt readiness + duyệt nội dung
       // rủi ro cao (High/Critical) dành cho CEO (owner) — đúng Handover.

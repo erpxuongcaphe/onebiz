@@ -38,7 +38,7 @@ export function ReasonDialog({
   confirmLabel?: string;
   variant?: "default" | "destructive";
   minLength?: number;
-  onSubmit: (reason: string) => Promise<void>;
+  onSubmit: (reason: string) => Promise<void | boolean>;
 }) {
   const [reason, setReason] = useState("");
   const [loading, setLoading] = useState(false);
@@ -51,7 +51,11 @@ export function ReasonDialog({
     setLoading(true);
     setError(null);
     try {
-      await onSubmit(reason.trim());
+      const succeeded = await onSubmit(reason.trim());
+      if (succeeded === false) {
+        setError("Thao t\u00e1c th\u1ea5t b\u1ea1i. Vui l\u00f2ng ki\u1ec3m tra l\u1ed7i v\u00e0 th\u1eed l\u1ea1i.");
+        return;
+      }
       setReason("");
       onOpenChange(false);
     } catch (e) {

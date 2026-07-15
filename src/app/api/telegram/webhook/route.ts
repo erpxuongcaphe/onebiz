@@ -10,7 +10,7 @@ type TelegramUpdate = {
   update_id?: number;
   message?: {
     text?: string;
-    chat?: { id?: number | string };
+    chat?: { id?: number | string; type?: string };
     from?: { id?: number | string; username?: string };
   };
 };
@@ -34,6 +34,7 @@ export async function POST(request: NextRequest) {
   if (!expected || actual !== expected) return unauthorized();
 
   const update = (await request.json().catch(() => null)) as TelegramUpdate | null;
+  const chatType = update?.message?.chat?.type;
   const text = update?.message?.text?.trim() ?? "";
   const chatId = update?.message?.chat?.id;
   const telegramUserId = update?.message?.from?.id;
@@ -42,6 +43,8 @@ export async function POST(request: NextRequest) {
   if (
     !text.startsWith("/start link_") ||
     update?.update_id === undefined ||
+    chatType !== "private" ||
+    String(chatId) !== String(telegramUserId) ||
     !chatId ||
     !telegramUserId
   ) {

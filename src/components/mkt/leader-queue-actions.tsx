@@ -37,14 +37,16 @@ export function LeaderQueueActions({
   const [dialog, setDialog] = useState<Kind>(null);
 
   async function run(action: string, body?: unknown) {
-    if (!taskId) return;
+    if (!taskId) return false;
     setBusy(true);
     setErr(null);
     try {
       await mktPost(`/api/mkt/v1/tasks/${taskId}/${action}`, body);
       router.refresh();
+      return true;
     } catch (e) {
       setErr(e instanceof Error ? e.message : "Thao tác thất bại");
+      return false;
     } finally {
       setBusy(false);
     }
@@ -117,7 +119,7 @@ export function ReassignDialog({
   open: boolean;
   onOpenChange: (open: boolean) => void;
   members: MktMember[];
-  onSubmit: (newAssigneeId: string, reason: string) => Promise<void>;
+  onSubmit: (newAssigneeId: string, reason: string) => Promise<void | boolean>;
 }) {
   const [assignee, setAssignee] = useState("");
   const [reason, setReason] = useState("");
@@ -130,7 +132,11 @@ export function ReassignDialog({
     setLoading(true);
     setError(null);
     try {
-      await onSubmit(assignee, reason.trim());
+      const succeeded = await onSubmit(assignee, reason.trim());
+      if (succeeded === false) {
+        setError("Thao t\u00e1c th\u1ea5t b\u1ea1i. Vui l\u00f2ng ki\u1ec3m tra l\u1ed7i v\u00e0 th\u1eed l\u1ea1i.");
+        return;
+      }
       setAssignee("");
       setReason("");
       onOpenChange(false);

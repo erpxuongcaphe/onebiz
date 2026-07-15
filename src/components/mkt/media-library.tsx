@@ -66,9 +66,11 @@ function openUrlOf(item: MediaViewItem): string | null {
 export function MediaLibrary({
   items,
   campaigns,
+  canManageAssets,
 }: {
   items: MediaViewItem[];
   campaigns: CampaignOption[];
+  canManageAssets: boolean;
 }) {
   const router = useRouter();
   const [kindFilter, setKindFilter] = useState<"all" | "image" | "video">("all");
@@ -184,7 +186,7 @@ export function MediaLibrary({
         <div className="ml-auto flex items-center gap-2">
           {/* CEO 11/07: tạm KHÓA tải lên trực tiếp (tốn dung lượng server) —
               buộc thêm từ nguồn lưu trữ ngoài. Mở lại: bỏ comment <MediaUploader/>. */}
-          <Button size="sm" onClick={() => setAddOpen(true)}>
+          <Button hidden={!canManageAssets} size="sm" onClick={() => setAddOpen(true)}>
             <Icon name="add_link" size={16} /> Thêm từ link
           </Button>
         </div>
@@ -319,11 +321,11 @@ export function MediaLibrary({
                     </a>
                   </>
                 ) : null}
-                <Button variant="outline" onClick={() => toggleStatus(preview)}>
+                <Button hidden={!canManageAssets} variant="outline" onClick={() => toggleStatus(preview)}>
                   <Icon name={preview.status === "used" ? "restart_alt" : "task_alt"} size={16} />
                   {preview.status === "used" ? "Đánh dấu sẵn dùng" : "Đánh dấu đã dùng"}
                 </Button>
-                <Button variant="outline" className="text-rose-600" onClick={() => remove(preview)}>
+                <Button hidden={!canManageAssets} variant="outline" className="text-rose-600" onClick={() => remove(preview)}>
                   <Icon name="delete" size={16} /> Xoá khỏi thư viện
                 </Button>
               </DialogFooter>

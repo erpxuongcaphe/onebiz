@@ -609,15 +609,21 @@ export function PlanReconcileButton({
   const [error, setError] = useState<string | null>(null);
   const [reassignFor, setReassignFor] = useState<string | null>(null);
   const [reassignTo, setReassignTo] = useState("");
+  const [reason, setReason] = useState("");
 
   async function act(taskId: string, decision: "cancel" | "reassign", newAssigneeId?: string) {
+    if (!reason.trim()) {
+      setError("Vui l\u00f2ng nh\u1eadp l\u00fd do thay \u0111\u1ed5i.");
+      return;
+    }
     setBusyId(taskId);
     setError(null);
     try {
-      await mktPost(`/api/mkt/v1/plans/${plan.id}/reconcile-task`, { taskId, decision, newAssigneeId });
+      await mktPost(`/api/mkt/v1/plans/${plan.id}/reconcile-task`, { taskId, decision, newAssigneeId, reason: reason.trim() });
       setReassignFor(null);
       setReassignTo("");
       router.refresh();
+      setReason("");
     } catch (e) {
       setError(e instanceof Error ? e.message : "Không điều chỉnh được việc");
     } finally {
@@ -638,6 +644,13 @@ export function PlanReconcileButton({
               Khi cần đổi kế hoạch mà việc đã có người nhận: <b>giữ</b>, <b>huỷ</b>, hoặc <b>đổi người</b> từng việc.
               Muốn thêm việc mới thì dùng chức năng tạo việc tay ở gói việc. Việc đã Xong không đổi được.
             </p>
+            <textarea
+              value={reason}
+              onChange={(event) => setReason(event.target.value)}
+              rows={2}
+              placeholder={"L\u00fd do h\u1ee7y ho\u1eb7c \u0111\u1ed5i ng\u01b0\u1eddi ph\u1ee5 tr\u00e1ch"}
+              className="w-full rounded-lg border border-outline-variant bg-background px-2 py-1.5 text-sm"
+            />
             {plan.tasks.length === 0 ? (
               <p className="text-sm text-on-surface-variant">Chưa có việc nào.</p>
             ) : (
@@ -662,7 +675,7 @@ export function PlanReconcileButton({
                             <option value="">— Chọn người mới —</option>
                             {members.map((m) => <option key={m.id} value={m.id}>{m.name}</option>)}
                           </select>
-                          <Button size="sm" disabled={!reassignTo || busyId === t.id} onClick={() => act(t.id, "reassign", reassignTo)}>
+                          <Button size="sm" disabled={!reassignTo || !reason.trim() || busyId === t.id} onClick={() => act(t.id, "reassign", reassignTo)}>
                             {busyId === t.id ? "…" : "Xác nhận"}
                           </Button>
                           <Button size="sm" variant="outline" disabled={busyId === t.id} onClick={() => { setReassignFor(null); setReassignTo(""); }}>Huỷ</Button>
@@ -672,7 +685,7 @@ export function PlanReconcileButton({
                           <Button size="sm" variant="outline" disabled={busyId === t.id} onClick={() => { setReassignFor(t.id); setReassignTo(""); }}>
                             Đổi người
                           </Button>
-                          <Button size="sm" variant="outline" className="text-rose-600" disabled={busyId === t.id} onClick={() => act(t.id, "cancel")}>
+                          <Button size="sm" variant="outline" className="text-rose-600" disabled={!reason.trim() || busyId === t.id} onClick={() => act(t.id, "cancel")}>
                             {busyId === t.id ? "…" : "Huỷ việc"}
                           </Button>
                         </div>

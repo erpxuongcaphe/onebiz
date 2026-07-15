@@ -1,7 +1,7 @@
 import type { Metadata } from "next";
 import { createServerSupabaseClient } from "@/lib/supabase/server";
 import { getAdminClient } from "@/lib/supabase/admin";
-import { getCampaignList, getMediaAssets } from "@/lib/mkt/read-models";
+import { getCampaignList, getMediaAssets, getMktContext } from "@/lib/mkt/read-models";
 import { MediaLibrary, type MediaViewItem } from "@/components/mkt/media-library";
 
 export const dynamic = "force-dynamic";
@@ -12,15 +12,20 @@ const BUCKET = "mkt-media";
 
 export default async function MediaPage() {
   const supabase = await createServerSupabaseClient();
-  const [assets, campaigns] = await Promise.all([
+  const [assets, campaigns, ctx] = await Promise.all([
     getMediaAssets(supabase),
     getCampaignList(supabase),
+    getMktContext(supabase),
   ]);
 
   // Signed URL (1 giờ) cho các file upload trên Storage — bucket private,
   // chỉ server (service role) cấp link đọc tạm thời.
   const uploadPaths = assets
-    .filter((a) => a.sourceType === "upload" && a.storagePath)
+    .filter(
+      (a) =>
+        a.sourceType === "upload" &&
+        a.storagePath?.startsWith(`${ctx.tenantId}/`),
+    )
     .map((a) => a.storagePath as string);
 
   const signedByPath = new Map<string, string>();
@@ -51,6 +56,7 @@ export default async function MediaPage() {
 
         <MediaLibrary
           items={items}
+          canManageAssets={Boolean(ctx.canManageAssets)}
           campaigns={campaigns.map((c) => ({ id: c.id, name: c.name }))}
         />
       </div>

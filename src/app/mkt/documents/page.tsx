@@ -1,6 +1,6 @@
 import type { Metadata } from "next";
 import { createServerSupabaseClient } from "@/lib/supabase/server";
-import { getCampaignList, getDocuments } from "@/lib/mkt/read-models";
+import { getCampaignList, getDocuments, getMktContext } from "@/lib/mkt/read-models";
 import { DocumentLibrary } from "@/components/mkt/document-library";
 
 export const dynamic = "force-dynamic";
@@ -9,9 +9,10 @@ export const metadata: Metadata = { title: "MKT Hub — Thư viện Tài liệu"
 
 export default async function DocumentsPage() {
   const supabase = await createServerSupabaseClient();
-  const [documents, campaigns] = await Promise.all([
+  const [documents, campaigns, ctx] = await Promise.all([
     getDocuments(supabase),
     getCampaignList(supabase),
+    getMktContext(supabase),
   ]);
 
   return (
@@ -29,6 +30,7 @@ export default async function DocumentsPage() {
         <DocumentLibrary
           items={documents}
           campaigns={campaigns.map((c) => ({ id: c.id, name: c.name }))}
+          canManageAssets={Boolean(ctx.canManageAssets)}
         />
       </div>
     </div>

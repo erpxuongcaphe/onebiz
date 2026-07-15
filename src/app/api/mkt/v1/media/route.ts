@@ -1,5 +1,6 @@
-import { type NextRequest } from "next/server";
+import { NextResponse, type NextRequest } from "next/server";
 import { callMktRpc, readJsonBody, requireFields, requireMktSession } from "@/lib/mkt/api";
+import { getMktContext } from "@/lib/mkt/read-models";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
@@ -40,6 +41,16 @@ async function fetchTikTokThumbnail(videoUrl: string): Promise<string | null> {
 export async function POST(request: NextRequest) {
   const { supabase, response } = await requireMktSession();
   if (response) return response;
+  const context = await getMktContext(supabase);
+  if (!context.canManageAssets) {
+    return NextResponse.json(
+      {
+        success: false,
+        error: { code: "INSUFFICIENT_ROLE", message: "Missing mkt.manage_assets permission" },
+      },
+      { status: 403 },
+    );
+  }
 
   const body = await readJsonBody<RegisterMediaBody>(request);
   const invalid = requireFields(body, ["fileName"]);

@@ -33,8 +33,10 @@ export function TaskActions({ task }: { task: MktMyTask }) {
     try {
       await mktPost(`/api/mkt/v1/tasks/${task.id}/${action}`, body);
       router.refresh();
+      return true;
     } catch (e) {
       setErr(e instanceof Error ? e.message : "Thao tác thất bại");
+      return false;
     } finally {
       setBusy(false);
     }
@@ -148,7 +150,7 @@ function SubmitReviewDialog({
   open: boolean;
   onOpenChange: (open: boolean) => void;
   contentItemId: string | null;
-  onSubmit: (contentUrl: string, note: string) => Promise<void>;
+  onSubmit: (contentUrl: string, note: string) => Promise<void | boolean>;
 }) {
   const [url, setUrl] = useState("");
   const [note, setNote] = useState("");
@@ -161,7 +163,11 @@ function SubmitReviewDialog({
     setLoading(true);
     setError(null);
     try {
-      await onSubmit(url.trim(), note.trim());
+      const succeeded = await onSubmit(url.trim(), note.trim());
+      if (succeeded === false) {
+        setError("Thao t\u00e1c th\u1ea5t b\u1ea1i. Vui l\u00f2ng ki\u1ec3m tra l\u1ed7i v\u00e0 th\u1eed l\u1ea1i.");
+        return;
+      }
       setUrl("");
       setNote("");
       onOpenChange(false);
