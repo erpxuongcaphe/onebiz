@@ -204,12 +204,49 @@ function previousRange(current: {
   start: string;
   end: string;
 }): { start: string; end: string } {
-  const startDate = new Date(current.start);
-  const endDate = new Date(current.end);
-  const lengthMs = endDate.getTime() - startDate.getTime();
-  const prevEnd = new Date(startDate.getTime() - 1);
-  const prevStart = new Date(prevEnd.getTime() - lengthMs);
-  return { start: prevStart.toISOString(), end: prevEnd.toISOString() };
+  const startMs = new Date(current.start).getTime();
+  const endMs = new Date(current.end).getTime();
+  const lengthMs = endMs - startMs;
+  return {
+    start: new Date(startMs - lengthMs).toISOString(),
+    end: current.start,
+  };
+}
+
+const POSTGREST_PAGE_SIZE = 1000;
+
+interface PagedQuery<T> {
+  range(
+    from: number,
+    to: number,
+  ): PromiseLike<{
+    data: T[] | null;
+    error: { message: string } | null;
+  }>;
+}
+
+async function fetchAllPostgrestRows<T>(
+  buildQuery: () => PagedQuery<T>,
+  context: string,
+): Promise<T[]> {
+  const rows: T[] = [];
+
+  for (let from = 0; ; from += POSTGREST_PAGE_SIZE) {
+    const { data, error } = await buildQuery().range(
+      from,
+      from + POSTGREST_PAGE_SIZE - 1,
+    );
+    if (error) {
+      console.warn(context, error.message);
+      return [];
+    }
+
+    const page = data ?? [];
+    rows.push(...page);
+    if (page.length < POSTGREST_PAGE_SIZE) break;
+  }
+
+  return rows;
 }
 
 // ========================================
@@ -278,7 +315,7 @@ export async function getOverviewKpis(
         .eq("tenant_id", tenantId)
         .gte("created_at", prevStart.toISOString())
         .lt("created_at", prevEnd.toISOString()),
-      getProfitAndLoss(branchId).catch(() => ({
+      getProfitAndLoss(branchId, range).catch(() => ({
         current: { netProfit: 0 },
         previous: { netProfit: 0 },
       })),
@@ -1484,30 +1521,29 @@ export interface CustomerProductCell {
 export async function getRevenueByCustomerAndCategory(
   branchId?: string,
   range?: { from: string; to: string },
-  topN: number = 50,
+  topN: number | null = 50,
 ): Promise<CustomerCategoryCell[]> {
   const supabase = getClient();
   const tenantId = await getCurrentTenantId();
   const r = resolveRange(range, thisMonthRange());
 
-  let query = supabase
-    .from("invoice_items")
-    .select(
-      "quantity, total, product_id, products!inner(category_id, categories(name)), invoices!inner(customer_id, customer_name, customers(name), created_at, status, branch_id, tenant_id)",
-    )
-    .eq("invoices.tenant_id", tenantId)
-    .gte("invoices.created_at", r.start)
-    .lt("invoices.created_at", r.end)
-    .eq("invoices.status", "completed")
-    .not("invoices.customer_id", "is", null);
-  if (branchId) query = query.eq("invoices.branch_id", branchId);
-  const { data, error } = await query;
-
-  if (error) {
-    console.warn("[getRevenueByCustomerAndCategory]", error.message);
-    return [];
-  }
-
+  const data = await fetchAllPostgrestRows<Record<string, unknown>>(
+    () => {
+      let query = supabase
+        .from("invoice_items")
+        .select(
+          "quantity, total, product_id, products!inner(category_id, categories(name)), invoices!inner(customer_id, customer_name, customers(name), created_at, status, branch_id, tenant_id)",
+        )
+        .eq("invoices.tenant_id", tenantId)
+        .gte("invoices.created_at", r.start)
+        .lt("invoices.created_at", r.end)
+        .eq("invoices.status", "completed")
+        .not("invoices.customer_id", "is", null);
+      if (branchId) query = query.eq("invoices.branch_id", branchId);
+      return query as unknown as PagedQuery<Record<string, unknown>>;
+    },
+    "[getRevenueByCustomerAndCategory]",
+  );
   // Aggregate (customer_id × category_id) → revenue + qty
   type AggKey = string; // `${custId}|${catId ?? 'null'}`
   const map = new Map<
@@ -1553,7 +1589,7 @@ export async function getRevenueByCustomerAndCategory(
   const topCustIds = new Set(
     Array.from(custTotals.entries())
       .sort((a, b) => b[1] - a[1])
-      .slice(0, topN)
+      .slice(0, topN ?? undefined)
       .map(([id]) => id),
   );
 
@@ -1573,31 +1609,30 @@ export async function getRevenueByCustomerAndProduct(
   branchId?: string,
   range?: { from: string; to: string },
   customerId?: string,
-  topN: number = 100,
+  topN: number | null = 100,
 ): Promise<CustomerProductCell[]> {
   const supabase = getClient();
   const tenantId = await getCurrentTenantId();
   const r = resolveRange(range, thisMonthRange());
 
-  let query = supabase
-    .from("invoice_items")
-    .select(
-      "product_id, product_name, quantity, total, products(categories(name)), invoices!inner(customer_id, customer_name, customers(name), created_at, status, branch_id, tenant_id)",
-    )
-    .eq("invoices.tenant_id", tenantId)
-    .gte("invoices.created_at", r.start)
-    .lt("invoices.created_at", r.end)
-    .eq("invoices.status", "completed")
-    .not("invoices.customer_id", "is", null);
-  if (branchId) query = query.eq("invoices.branch_id", branchId);
-  if (customerId) query = query.eq("invoices.customer_id", customerId);
-  const { data, error } = await query;
-
-  if (error) {
-    console.warn("[getRevenueByCustomerAndProduct]", error.message);
-    return [];
-  }
-
+  const data = await fetchAllPostgrestRows<Record<string, unknown>>(
+    () => {
+      let query = supabase
+        .from("invoice_items")
+        .select(
+          "product_id, product_name, quantity, total, products(categories(name)), invoices!inner(customer_id, customer_name, customers(name), created_at, status, branch_id, tenant_id)",
+        )
+        .eq("invoices.tenant_id", tenantId)
+        .gte("invoices.created_at", r.start)
+        .lt("invoices.created_at", r.end)
+        .eq("invoices.status", "completed")
+        .not("invoices.customer_id", "is", null);
+      if (branchId) query = query.eq("invoices.branch_id", branchId);
+      if (customerId) query = query.eq("invoices.customer_id", customerId);
+      return query as unknown as PagedQuery<Record<string, unknown>>;
+    },
+    "[getRevenueByCustomerAndProduct]",
+  );
   // Aggregate (customer × product)
   type AggKey = string;
   const map = new Map<AggKey, CustomerProductCell>();
@@ -1640,7 +1675,7 @@ export async function getRevenueByCustomerAndProduct(
   // Nếu customerId pass → trả full SP của khách đó (giữ toàn bộ)
   // Nếu không → cap topN cell để tránh payload to
   if (customerId) return rows;
-  return rows.slice(0, topN);
+  return topN == null ? rows : rows.slice(0, topN);
 }
 
 export async function getTopDebtors(limit: number = 5): Promise<TopDebtor[]> {

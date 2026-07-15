@@ -5,6 +5,7 @@
 
 import { getClient, handleError, getCurrentTenantId } from "./base";
 import { formatNumber } from "@/lib/format";
+import { toCreatedAtRangeWindow } from "@/lib/utils/list-date-preset-range";
 
 // === Types ===
 
@@ -85,6 +86,30 @@ function prevMonthRange(): { start: string; end: string } {
   return { start: start.toISOString(), end: end.toISOString() };
 }
 
+export function resolveComparisonPeriods(range?: {
+  from: string;
+  to: string;
+}): {
+  current: { start: string; end: string };
+  previous: { start: string; end: string };
+} {
+  const current = toCreatedAtRangeWindow(range) ?? thisMonthRange();
+  if (!range) {
+    return { current, previous: prevMonthRange() };
+  }
+
+  const startMs = new Date(current.start).getTime();
+  const endMs = new Date(current.end).getTime();
+  const durationMs = endMs - startMs;
+  return {
+    current,
+    previous: {
+      start: new Date(startMs - durationMs).toISOString(),
+      end: current.start,
+    },
+  };
+}
+
 // ========================================
 // P&L — Profit & Loss (Báo cáo Lãi/Lỗ)
 // ========================================
@@ -97,14 +122,17 @@ function prevMonthRange(): { start: string; end: string } {
  * - OpEx = SUM(cash_transactions.amount) where type=payment (loại trừ category 'Nhập hàng')
  * - Net Profit = Gross Profit - OpEx
  */
-export async function getProfitAndLoss(branchId?: string): Promise<{
+export async function getProfitAndLoss(
+  branchId?: string,
+  range?: { from: string; to: string },
+): Promise<{
   current: ProfitAndLoss;
   previous: ProfitAndLoss;
 }> {
   const supabase = getClient();
   const tenantId = await getCurrentTenantId();
-  const thisMonth = thisMonthRange();
-  const prevMonth = prevMonthRange();
+  const { current: thisMonth, previous: prevMonth } =
+    resolveComparisonPeriods(range);
   const now = new Date();
 
   // Helper: apply optional branch filter
@@ -229,8 +257,13 @@ export async function getProfitAndLoss(branchId?: string): Promise<{
   const thisOpEx = calcOpEx((thisCash.data ?? []) as { category: string | null; amount: number }[]);
   const prevOpEx = calcOpEx((prevCash.data ?? []) as { category: string | null; amount: number }[]);
 
-  const currentMonth = `T${now.getMonth() + 1}/${now.getFullYear()}`;
-  const prevMonthLabel = `T${now.getMonth() === 0 ? 12 : now.getMonth()}/${now.getMonth() === 0 ? now.getFullYear() - 1 : now.getFullYear()}`;
+  const currentMonth = range
+    ? "Kỳ đã chọn"
+    : "T" + (now.getMonth() + 1) + "/" + now.getFullYear();
+  const prevMonthLabel = range
+    ? "Kỳ trước"
+    : "T" + (now.getMonth() === 0 ? 12 : now.getMonth()) + "/" +
+      (now.getMonth() === 0 ? now.getFullYear() - 1 : now.getFullYear());
 
   return {
     current: buildPnL(currentMonth, thisRevenue, thisCOGS, thisOpEx, thisDeliveryFee),
@@ -275,10 +308,11 @@ function buildPnL(
 export async function getCOGSBreakdown(
   limit: number = 10,
   branchId?: string,
+  dateRange?: { from: string; to: string },
 ): Promise<COGSItem[]> {
   const supabase = getClient();
   const tenantId = await getCurrentTenantId();
-  const range = thisMonthRange();
+  const range = toCreatedAtRangeWindow(dateRange) ?? thisMonthRange();
 
   // Get completed invoice IDs this month
   let invQuery = supabase
@@ -821,14 +855,16 @@ export interface ConsolidatedPnL extends ProfitAndLoss {
  * P&L consolidated: tổng doanh thu trừ doanh thu nội bộ (source='internal').
  * CEO thấy số thật sau loại trừ intercompany.
  */
-export async function getConsolidatedPnL(): Promise<{
+export async function getConsolidatedPnL(
+  range?: { from: string; to: string },
+): Promise<{
   current: ConsolidatedPnL;
   previous: ConsolidatedPnL;
 }> {
   const supabase = getClient();
   const tenantId = await getCurrentTenantId();
-  const thisMonth = thisMonthRange();
-  const prevMonth = prevMonthRange();
+  const { current: thisMonth, previous: prevMonth } =
+    resolveComparisonPeriods(range);
   const now = new Date();
 
   // Phase 1: Fetch invoices (all + internal) + cash in parallel
@@ -902,8 +938,13 @@ export async function getConsolidatedPnL(): Promise<{
     .filter((c: any) => !purchaseCats.includes(c.category ?? ""))
     .reduce((s: number, c: any) => s + Number(c.amount ?? 0), 0);
 
-  const currentMonth = `T${now.getMonth() + 1}/${now.getFullYear()}`;
-  const prevMonthLabel = `T${now.getMonth() === 0 ? 12 : now.getMonth()}/${now.getMonth() === 0 ? now.getFullYear() - 1 : now.getFullYear()}`;
+  const currentMonth = range
+    ? "Kỳ đã chọn"
+    : "T" + (now.getMonth() + 1) + "/" + now.getFullYear();
+  const prevMonthLabel = range
+    ? "Kỳ trước"
+    : "T" + (now.getMonth() === 0 ? 12 : now.getMonth()) + "/" +
+      (now.getMonth() === 0 ? now.getFullYear() - 1 : now.getFullYear());
 
   return {
     current: {
@@ -941,10 +982,12 @@ export interface BranchPnLRow {
 /**
  * Tính P&L cho từng branch, trả về danh sách để CEO so sánh.
  */
-export async function getBranchPnLComparison(): Promise<BranchPnLRow[]> {
+export async function getBranchPnLComparison(
+  dateRange?: { from: string; to: string },
+): Promise<BranchPnLRow[]> {
   const supabase = getClient();
   const tenantId = await getCurrentTenantId();
-  const range = thisMonthRange();
+  const range = toCreatedAtRangeWindow(dateRange) ?? thisMonthRange();
 
   // Get branches
   const { data: branches } = await supabase

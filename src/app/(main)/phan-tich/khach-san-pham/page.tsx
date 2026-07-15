@@ -114,8 +114,8 @@ export default function KhachSanPhamPage() {
 
   const [mode, setMode] = useState<Mode>("pivot");
   const [loading, setLoading] = useState(true);
+  const [exporting, setExporting] = useState(false);
   const [categoryCells, setCategoryCells] = useState<CustomerCategoryCell[]>([]);
-  const [productCells, setProductCells] = useState<CustomerProductCell[]>([]);
 
   // Drill-down state
   const [selectedCustomerId, setSelectedCustomerId] = useState<string | null>(
@@ -132,14 +132,12 @@ export default function KhachSanPhamPage() {
   // ── Load primary data ──
   useEffect(() => {
     setLoading(true);
-    Promise.all([
-      getRevenueByCustomerAndCategory(activeBranchId ?? undefined, range, 50),
-      getRevenueByCustomerAndProduct(activeBranchId ?? undefined, range, undefined, 200),
-    ])
-      .then(([cats, prods]) => {
-        setCategoryCells(cats);
-        setProductCells(prods);
-      })
+    getRevenueByCustomerAndCategory(
+      activeBranchId ?? undefined,
+      range,
+      50,
+    )
+      .then(setCategoryCells)
       .catch((err) => {
         toast({
           title: "Lỗi tải dữ liệu",
@@ -149,7 +147,6 @@ export default function KhachSanPhamPage() {
       })
       .finally(() => setLoading(false));
   }, [activeBranchId, range, toast]);
-
   // ── Drill-down: load chi tiết SP của 1 KH ──
   useEffect(() => {
     if (!selectedCustomerId || mode !== "drilldown") return;
@@ -311,8 +308,15 @@ export default function KhachSanPhamPage() {
     toast,
   ]);
 
-  const handleExportFull = useCallback(() => {
+  const handleExportFull = useCallback(async () => {
+    setExporting(true);
     try {
+      const productCells = await getRevenueByCustomerAndProduct(
+        activeBranchId ?? undefined,
+        range,
+        undefined,
+        null,
+      );
       const title = buildReportTitleRows({
         title: "BÁO CÁO KHÁCH HÀNG × SẢN PHẨM — ĐẦY ĐỦ",
         range,
@@ -401,8 +405,10 @@ export default function KhachSanPhamPage() {
         description: err instanceof Error ? err.message : "",
         variant: "error",
       });
+    } finally {
+      setExporting(false);
     }
-  }, [pivot, productCells, range, branchLabel, toast]);
+  }, [activeBranchId, pivot, range, branchLabel, toast]);
 
   return (
     <div className="flex flex-col h-full">
@@ -415,7 +421,7 @@ export default function KhachSanPhamPage() {
         onCustomRangeChange={setCustomRange}
         onExportView={handleExportView}
         onExportFull={handleExportFull}
-        exportDisabled={loading || categoryCells.length === 0}
+        exportDisabled={exporting || loading || categoryCells.length === 0}
       />
 
       <div className="flex-1 overflow-auto p-4 lg:p-6 space-y-4">
@@ -500,7 +506,7 @@ export default function KhachSanPhamPage() {
                       </th>
                     ))}
                     <th
-                      className="text-right text-xs font-bold text-primary py-2.5 px-3 bg-primary/5 sticky right-0 z-10"
+                      className="sticky right-0 z-30 border-l border-outline-variant/30 bg-surface-container-low px-3 py-2.5 text-right text-xs font-bold text-primary shadow-[-8px_0_12px_-12px_rgba(0,0,0,0.35)]"
                       style={{ minWidth: 140 }}
                     >
                       TỔNG
@@ -533,7 +539,7 @@ export default function KhachSanPhamPage() {
                             </td>
                           );
                         })}
-                        <td className="text-right text-sm font-bold text-primary tabular-nums py-2 px-3 bg-primary/5 sticky right-0">
+                        <td className="sticky right-0 z-10 border-l border-outline-variant/30 bg-surface-container-lowest px-3 py-2 text-right text-sm font-bold tabular-nums text-primary shadow-[-8px_0_12px_-12px_rgba(0,0,0,0.35)]">
                           {formatCurrency(cust.total)}
                         </td>
                       </tr>
@@ -553,7 +559,7 @@ export default function KhachSanPhamPage() {
                         {formatCurrency(pivot.colTotals.get(cat.id) ?? 0)}
                       </td>
                     ))}
-                    <td className="text-right tabular-nums py-2.5 px-3 text-primary bg-primary/10 sticky right-0">
+                    <td className="sticky right-0 z-10 border-l border-outline-variant/30 bg-surface-container-low px-3 py-2.5 text-right font-bold tabular-nums text-primary shadow-[-8px_0_12px_-12px_rgba(0,0,0,0.35)]">
                       {formatCurrency(pivot.grandTotal)}
                     </td>
                   </tr>

@@ -18,6 +18,14 @@ import { Icon } from "@/components/ui/icon";
 
 const COLLAPSED_KEY = "onebiz.sidebar.collapsed";
 
+function canViewLeaf(
+  leaf: SidebarLeaf,
+  filterPerm?: (code: string) => boolean,
+): boolean {
+  const permissions = leaf.permissions ?? (leaf.permission ? [leaf.permission] : []);
+  return permissions.length === 0 || !filterPerm || permissions.some(filterPerm);
+}
+
 // ============================================================
 // Hooks
 // ============================================================
@@ -76,7 +84,7 @@ function LeafLink({
           className={cn("shrink-0", active ? "text-sidebar-primary" : "text-sidebar-foreground/65")}
         />
       )}
-      <span className="truncate flex-1">{leaf.label}</span>
+      <span className="min-w-0 flex-1 break-words leading-5">{leaf.label}</span>
       {leaf.comingSoon && (
         <span className="text-[9px] font-semibold uppercase rounded px-2 py-0.5 bg-status-warning/10 text-status-warning border border-status-warning/25">
           Soon
@@ -106,7 +114,7 @@ function LeafLink({
   // - press-scale từ globals cho tactile feedback khi click
   const baseClass = cn(
     "group press-scale-sm flex items-center gap-3 rounded-lg text-sm",
-    "h-8 pr-3",
+    "min-h-8 py-1 pr-3",
     active
       ? "bg-sidebar-accent text-sidebar-accent-foreground font-semibold border-r-4 border-sidebar-primary"
       : "text-sidebar-foreground/78 hover:bg-sidebar-accent/75 hover:text-sidebar-accent-foreground",
@@ -165,8 +173,8 @@ function SubGroupSection({
   filterPerm?: (code: string) => boolean;
   alwaysOpen?: boolean;
 }) {
-  const visibleItems = subGroup.items.filter(
-    (l) => !l.permission || !filterPerm || filterPerm(l.permission),
+  const visibleItems = subGroup.items.filter((leaf) =>
+    canViewLeaf(leaf, filterPerm),
   );
 
   // Auto-open khi subgroup chứa active leaf — UX expectation chuẩn.
@@ -267,7 +275,7 @@ function GroupExpanded({
         type="button"
         onClick={onToggle}
         className={cn(
-          "w-full press-scale-sm flex items-center gap-3 h-10 px-3 rounded-lg text-sm font-medium transition-colors",
+          "w-full press-scale-sm flex min-h-10 items-center gap-3 rounded-lg px-3 py-2 text-sm font-medium transition-colors",
           active
             ? "text-sidebar-accent-foreground font-semibold bg-sidebar-accent"
             : "text-sidebar-foreground/84 hover:bg-sidebar-accent/70 hover:text-sidebar-accent-foreground",
@@ -280,7 +288,7 @@ function GroupExpanded({
           weight={active ? 500 : 400}
           className={cn("shrink-0", active && "text-sidebar-primary")}
         />
-        <span className="flex-1 text-left truncate">{group.label}</span>
+        <span className="min-w-0 flex-1 break-words text-left leading-5">{group.label}</span>
         <Icon
           name="expand_more"
           size={16}
@@ -294,7 +302,7 @@ function GroupExpanded({
 
       {open && (
         <div className="mt-0.5 mb-1 space-y-0.5 pl-1 stitch-fade-in">
-          {group.items?.filter((l) => !l.permission || !filterPerm || filterPerm(l.permission)).map((leaf) => (
+          {group.items?.filter((leaf) => canViewLeaf(leaf, filterPerm)).map((leaf) => (
             <LeafLink key={leaf.href} leaf={leaf} pathname={pathname} indent={1} />
           ))}
           {group.subGroups?.map((sg) => (
@@ -313,9 +321,11 @@ function GroupExpanded({
 function GroupCollapsed({
   group,
   pathname,
+  filterPerm,
 }: {
   group: SidebarGroup;
   pathname: string;
+  filterPerm?: (code: string) => boolean;
 }) {
   const [open, setOpen] = useState(false);
   // Sprint UI-FIX (CEO 08/05): pos kèm `triggerTop` để render bridge zone
@@ -483,12 +493,12 @@ function GroupCollapsed({
             onMouseEnter={cancelClose}
             onMouseLeave={scheduleClose}
           >
-            <div className="bg-sidebar text-sidebar-foreground rounded-lg ambient-shadow-lg min-w-[240px] max-w-[280px] py-2 max-h-[calc(100vh-32px)] flex flex-col border border-sidebar-border">
+            <div className="bg-sidebar text-sidebar-foreground rounded-lg ambient-shadow-lg min-w-[240px] max-w-[320px] py-2 max-h-[calc(100vh-32px)] flex flex-col border border-sidebar-border">
               <div className="px-3 py-2 text-xs font-semibold text-sidebar-foreground/55 uppercase border-b border-sidebar-border mb-1 shrink-0">
                 {group.label}
               </div>
               <div className="px-1 space-y-0.5 overflow-y-auto flex-1">
-                {group.items?.map((leaf) => (
+                {group.items?.filter((leaf) => canViewLeaf(leaf, filterPerm)).map((leaf) => (
                   <LeafLink
                     key={leaf.href}
                     leaf={leaf}
@@ -501,6 +511,7 @@ function GroupCollapsed({
                     key={sg.label}
                     subGroup={sg}
                     pathname={pathname}
+                    filterPerm={filterPerm}
                     alwaysOpen
                   />
                 ))}
@@ -603,7 +614,7 @@ export function AppSidebar() {
         // Responsive Sprint A9 (CEO 25/05/2026): trên laptop 13" (1280px viewport
         // / xl: breakpoint) w-48 (192px) để main content có thêm 32px chỗ thở.
         // 15.6" laptop (>=1536px / 2xl:) giữ w-56 như cũ. Collapsed luôn w-16.
-        collapsed ? "w-16" : "w-48 2xl:w-56"
+        collapsed ? "w-16" : "w-56 2xl:w-64"
       )}
     >
       {/* Stitch header — chỉ toggle button, logo đã có ở top-nav (tránh lặp brand)
@@ -639,7 +650,7 @@ export function AppSidebar() {
         <div className="space-y-0.5">
           {topGroups.map((g) =>
             collapsed ? (
-              <GroupCollapsed key={g.label} group={g} pathname={pathname} />
+              <GroupCollapsed key={g.label} group={g} pathname={pathname} filterPerm={hasPermission} />
             ) : (
               <GroupExpanded
                 key={g.label}
@@ -659,7 +670,7 @@ export function AppSidebar() {
         <div className="space-y-0.5">
           {bottomGroups.map((g) =>
             collapsed ? (
-              <GroupCollapsed key={g.label} group={g} pathname={pathname} />
+              <GroupCollapsed key={g.label} group={g} pathname={pathname} filterPerm={hasPermission} />
             ) : (
               <GroupExpanded
                 key={g.label}
