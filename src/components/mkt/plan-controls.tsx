@@ -15,7 +15,12 @@ import { Label } from "@/components/ui/label";
 import { Icon } from "@/components/ui/icon";
 import { mktPost } from "@/lib/mkt/client";
 import { AcceptanceBadge, TaskStatusBadge } from "@/components/mkt/badges";
-import type { MktMember, MktPlanInboxEntry, MktPlanItem } from "@/lib/mkt/read-models";
+import type {
+  MktMember,
+  MktPillar,
+  MktPlanInboxEntry,
+  MktPlanItem,
+} from "@/lib/mkt/read-models";
 
 const TASK_TYPES = [
   { value: "idea", label: "Ý tưởng / Kịch bản" },
@@ -160,6 +165,7 @@ type Row = {
   taskType: string;
   suggestedAssigneeId: string;
   reviewerId: string;
+  contentItemId: string;
   contentAngle: string;
   deliverable: string;
   workloadPoints: string;
@@ -174,6 +180,7 @@ function toRow(it: MktPlanItem): Row {
     taskType: it.taskType,
     suggestedAssigneeId: it.suggestedAssigneeId ?? "",
     reviewerId: it.reviewerId ?? "",
+    contentItemId: it.contentItemId ?? "",
     contentAngle: it.contentAngle ?? "",
     deliverable: it.deliverable ?? "",
     workloadPoints: String(it.workloadPoints ?? 1),
@@ -189,6 +196,7 @@ function newRow(): Row {
     taskType: "idea",
     suggestedAssigneeId: "",
     reviewerId: "",
+    contentItemId: "",
     contentAngle: "",
     deliverable: "",
     workloadPoints: "5",
@@ -200,9 +208,13 @@ function newRow(): Row {
 export function PlanEditorButton({
   plan,
   members,
+  contents,
+  pillars,
 }: {
   plan: MktPlanInboxEntry;
   members: MktMember[];
+  contents: Array<{ id: string; title: string }>;
+  pillars: MktPillar[];
 }) {
   const [open, setOpen] = useState(false);
   const router = useRouter();
@@ -218,6 +230,13 @@ export function PlanEditorButton({
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [saved, setSaved] = useState(false);
+  // Nội dung có thể tạo nhanh ngay tại đây — lúc lập kế hoạch nội dung thường
+  // chưa tồn tại, mà công đoạn Duyệt/Đăng lại bắt buộc phải gắn.
+  const [localContents, setLocalContents] = useState(contents);
+  const [quickName, setQuickName] = useState("");
+  const [quickRisk, setQuickRisk] = useState("low");
+  const [quickPillarId, setQuickPillarId] = useState("");
+  const [quickBusy, setQuickBusy] = useState(false);
 
   function patch(idx: number, p: Partial<Row>) {
     setRows((v) => v.map((r, i) => (i === idx ? { ...r, ...p } : r)));
@@ -225,6 +244,53 @@ export function PlanEditorButton({
   }
 
   const filled = rows.filter((r) => r.title.trim());
+  // Công đoạn Duyệt/Đăng CHƯA gắn nội dung → nộp sẽ bị máy chủ chặn.
+  const needsContent = rows.some(
+    (r) => (r.taskType === "review" || r.taskType === "publish") && r.title.trim() && !r.contentItemId,
+  );
+
+  async function quickCreateContent() {
+    if (!quickName.trim()) {
+      setError("Hãy nhập tên nội dung mới.");
+      return;
+    }
+    if (!quickPillarId) {
+      setError("Hãy chọn Trụ nội dung cho nội dung mới.");
+      return;
+    }
+    setQuickBusy(true);
+    setError(null);
+    try {
+      const res = await mktPost<{ success: boolean; contentItemId?: string }>(
+        "/api/mkt/v1/contents",
+        {
+          campaignId: plan.campaignId,
+          workPackageId: plan.workPackageId,
+          title: quickName.trim(),
+          riskLevel: quickRisk,
+          pillarId: quickPillarId,
+        },
+      );
+      if (res.contentItemId) {
+        const created = { id: res.contentItemId, title: quickName.trim() };
+        setLocalContents((v) => [...v, created]);
+        // Gắn luôn cho mọi công đoạn Duyệt/Đăng đang trống
+        setRows((v) =>
+          v.map((r) =>
+            !r.contentItemId && (r.taskType === "review" || r.taskType === "publish")
+              ? { ...r, contentItemId: created.id }
+              : r,
+          ),
+        );
+        setQuickName("");
+        setSaved(false);
+      }
+    } catch (e) {
+      setError(e instanceof Error ? e.message : "Không tạo được nội dung");
+    } finally {
+      setQuickBusy(false);
+    }
+  }
 
   function payload() {
     return {
@@ -234,6 +300,7 @@ export function PlanEditorButton({
         taskType: r.taskType,
         suggestedAssigneeId: r.suggestedAssigneeId || undefined,
         reviewerId: r.reviewerId || undefined,
+        contentItemId: r.contentItemId || undefined,
         contentAngle: r.contentAngle.trim() || undefined,
         deliverable: r.deliverable.trim() || undefined,
         workloadPoints: r.workloadPoints ? Number(r.workloadPoints) : 1,
@@ -269,6 +336,14 @@ export function PlanEditorButton({
     // Không để nút "mờ" khó hiểu — bấm được luôn, thiếu thì báo rõ tại đây.
     if (filled.length === 0) {
       setError("Hãy thêm ít nhất 1 công đoạn (có tên) rồi mới nộp được.");
+      return;
+    }
+    // Báo ngay tại chỗ thay vì để máy chủ trả mã lỗi khó hiểu.
+    if (needsContent) {
+      setError(
+        "Công đoạn Duyệt/Đăng phải gắn nội dung (ô “Chọn nội dung” ở dòng đó). " +
+          "Chưa có nội dung thì tạo nhanh ở khối màu vàng bên dưới.",
+      );
       return;
     }
     setLoading(true);
@@ -356,6 +431,28 @@ export function PlanEditorButton({
                       </select>
                     </div>
                     <div className="flex flex-wrap gap-2">
+                      {/* Công đoạn Duyệt/Đăng BẮT BUỘC gắn nội dung — task 'publish'
+                          không gắn nội dung sẽ không bấm "Bắt đầu" được. */}
+                      <select
+                        value={r.contentItemId}
+                        disabled={!editable}
+                        onChange={(e) => patch(idx, { contentItemId: e.target.value })}
+                        className={
+                          "h-8 flex-1 rounded-lg border bg-background px-2 text-xs " +
+                          (!r.contentItemId && (r.taskType === "review" || r.taskType === "publish")
+                            ? "border-rose-300"
+                            : "border-outline-variant")
+                        }
+                      >
+                        <option value="">
+                          {r.taskType === "review" || r.taskType === "publish"
+                            ? "— Chọn nội dung (bắt buộc) —"
+                            : "— Gắn nội dung (tuỳ chọn) —"}
+                        </option>
+                        {localContents.map((c) => (
+                          <option key={c.id} value={c.id}>{c.title}</option>
+                        ))}
+                      </select>
                       <Input value={r.contentAngle} disabled={!editable} onChange={(e) => patch(idx, { contentAngle: e.target.value })} placeholder="Góc nội dung (tuỳ chọn)" className="h-8 flex-1 text-xs" />
                       <Input value={r.deliverable} disabled={!editable} onChange={(e) => patch(idx, { deliverable: e.target.value })} placeholder="Sản phẩm bàn giao (tuỳ chọn)" className="h-8 flex-1 text-xs" />
                     </div>
@@ -371,6 +468,50 @@ export function PlanEditorButton({
                 <button type="button" className="inline-flex items-center gap-1 text-xs font-medium text-primary" onClick={() => setRows((v) => [...v, newRow()])}>
                   <Icon name="add" size={14} /> Thêm công đoạn
                 </button>
+              ) : null}
+
+              {/* Lập kế hoạch là việc TƯƠNG LAI — nội dung thường chưa tồn tại.
+                  Cho tạo nhanh ngay tại đây để không bị kẹt không nộp được. */}
+              {editable && needsContent ? (
+                <div className="space-y-2 rounded-lg border border-amber-200 bg-amber-50/60 p-3">
+                  <Label className="text-xs font-semibold text-amber-800">
+                    Công đoạn Duyệt/Đăng cần gắn nội dung — chọn ở ô trên, hoặc tạo nhanh tại đây:
+                  </Label>
+                  <div className="flex flex-wrap items-center gap-2">
+                    <Input
+                      value={quickName}
+                      onChange={(e) => setQuickName(e.target.value)}
+                      placeholder="Tên nội dung (VD: Bài SEO trang kiến thức)…"
+                      className="h-8 min-w-[180px] flex-1"
+                    />
+                    {pillars.length > 0 ? (
+                      <select
+                        value={quickPillarId}
+                        onChange={(e) => setQuickPillarId(e.target.value)}
+                        className={selectCls}
+                      >
+                        <option value="">— Trụ nội dung * —</option>
+                        {pillars.map((p) => (
+                          <option key={p.id} value={p.id}>{p.code} · {p.name}</option>
+                        ))}
+                      </select>
+                    ) : null}
+                    <select value={quickRisk} onChange={(e) => setQuickRisk(e.target.value)} className={selectCls}>
+                      <option value="low">Rủi ro thấp (Lead duyệt)</option>
+                      <option value="medium">Trung bình (Lead duyệt)</option>
+                      <option value="high">Cao (CEO duyệt)</option>
+                    </select>
+                    <Button size="sm" disabled={quickBusy} onClick={quickCreateContent}>
+                      {quickBusy ? "Đang tạo…" : "Tạo & gắn"}
+                    </Button>
+                  </div>
+                  {pillars.length === 0 ? (
+                    <p className="text-xs font-medium text-amber-800">
+                      Chưa có trụ nội dung — vào mục &quot;Định hướng nội dung&quot; tạo trụ trước, rồi
+                      quay lại tạo nội dung ở đây.
+                    </p>
+                  ) : null}
+                </div>
               ) : null}
             </div>
 
