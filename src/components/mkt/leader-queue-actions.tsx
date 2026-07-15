@@ -2,7 +2,6 @@
 
 import { useState } from "react";
 import { useRouter } from "next/navigation";
-import Link from "next/link";
 import {
   Dialog,
   DialogContent,
@@ -17,6 +16,7 @@ import { Icon } from "@/components/ui/icon";
 import { ReasonDialog } from "@/components/mkt/reason-dialog";
 import { mktPost } from "@/lib/mkt/client";
 import type { MktMember } from "@/lib/mkt/read-models";
+import { MktLink } from "@/components/mkt/mkt-routing";
 
 type Kind = null | "reassign" | "cancel" | "force";
 
@@ -58,9 +58,9 @@ export function LeaderQueueActions({
   return (
     <div className="flex flex-wrap items-center gap-2">
       {issueType === "REVISION_OVER_LIMIT" && contentItemId ? (
-        <Link className={outline} href={`/mkt/approvals?content=${contentItemId}`}>
+        <MktLink className={outline} href={`/mkt/approvals?content=${contentItemId}`}>
           <Icon name="rate_review" size={15} /> Mở nội dung
-        </Link>
+        </MktLink>
       ) : null}
 
       {taskId && (issueType === "TASK_REJECTED" || issueType === "NEED_DISCUSSION") ? (

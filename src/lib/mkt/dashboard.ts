@@ -246,7 +246,7 @@ function buildMetrics(
 
 export async function getMktDashboardData(
   supabase: MktSupabaseClient,
-  identity?: { userId?: string | null; tenantId?: string | null },
+  identity?: { userId?: string | null; tenantId?: string | null; isLead?: boolean },
 ): Promise<MktDashboardData> {
   const warnings: string[] = [];
   const db = getMktDatabaseClient(supabase);
@@ -284,7 +284,7 @@ export async function getMktDashboardData(
       "profiles: Không tìm thấy tenant cho người dùng hiện tại",
     ]);
   }
-  const campaigns = await safeArray<CampaignRow>(
+  const campaignsPromise = safeArray<CampaignRow>(
     warnings,
     "mkt_campaigns",
     db
@@ -296,9 +296,9 @@ export async function getMktDashboardData(
       .limit(6),
   );
 
-  const latestCampaign = campaigns[0] ?? null;
 
-  const [tasks, contents, readiness, leaderQueue] = await Promise.all([
+  const [campaigns, tasks, contents, leaderQueue] = await Promise.all([
+    campaignsPromise,
     safeArray<TaskRow>(
       warnings,
       "mkt_tasks",
@@ -326,22 +326,9 @@ export async function getMktDashboardData(
         .order("updated_at", { ascending: false })
         .limit(8),
     ),
-    latestCampaign
-      ? safeArray<ReadinessRow>(
-          warnings,
-          "mkt_campaign_readiness_items",
-          db
-            .from<ReadinessRow>("mkt_campaign_readiness_items")
-            .select("id, title, status, required_role, confirmed_at")
-            .eq("tenant_id", tenantId)
-            .eq("campaign_id", latestCampaign.id)
-            .order("created_at", { ascending: true })
-            .limit(20),
-        )
-      : Promise.resolve([]),
     // Leader queue chỉ dành cho Lead/CEO. Executor gọi sẽ bị INSUFFICIENT_ROLE
     // — đó là bình thường, KHÔNG đẩy vào warnings (tránh banner cảnh báo vô cớ).
-    (async (): Promise<LeaderQueueRow[]> => {
+    identity?.isLead ? (async (): Promise<LeaderQueueRow[]> => {
       const { data, error } = await db.rpc<LeaderQueueRow[]>("mkt_get_leader_queue", {
         p_branch_id: null,
         p_limit: 20,
@@ -355,9 +342,11 @@ export async function getMktDashboardData(
         return [];
       }
       return Array.isArray(data) ? data : [];
-    })(),
+    })() : Promise.resolve([]),
   ]);
 
+
+  const latestCampaign = campaigns[0] ?? null;
   const assigneeIds = Array.from(
     new Set(
       [
@@ -366,9 +355,22 @@ export async function getMktDashboardData(
       ].filter(Boolean) as string[],
     ),
   );
-  const profiles =
+  const [readiness, profiles] = await Promise.all([
+    latestCampaign
+      ? safeArray<ReadinessRow>(
+          warnings,
+          "mkt_campaign_readiness_items",
+          db
+            .from<ReadinessRow>("mkt_campaign_readiness_items")
+            .select("id, title, status, required_role, confirmed_at")
+            .eq("tenant_id", tenantId)
+            .eq("campaign_id", latestCampaign.id)
+            .order("created_at", { ascending: true })
+            .limit(20),
+        )
+      : Promise.resolve([]),
     assigneeIds.length > 0
-      ? await safeArray<ProfileRow>(
+      ? safeArray<ProfileRow>(
           warnings,
           "profiles assignees",
           db
@@ -377,7 +379,8 @@ export async function getMktDashboardData(
             .eq("tenant_id", tenantId)
             .in("id", assigneeIds),
         )
-      : [];
+      : Promise.resolve([]),
+  ]);
   const profileMap = buildProfileMap(profiles);
 
   const dashboardData: MktDashboardData = {

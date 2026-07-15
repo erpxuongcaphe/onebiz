@@ -3,6 +3,8 @@ import { Icon } from "@/components/ui/icon";
 import { getMktRequestContext } from "@/lib/mkt/request-context";
 import { MktNav } from "@/components/mkt/mkt-nav";
 import { MktUserMenu } from "@/components/mkt/mkt-user-menu";
+import { MktLink, MktRoutingProvider } from "@/components/mkt/mkt-routing";
+import { getMktBasePath } from "@/lib/mkt/server-routing";
 
 export const dynamic = "force-dynamic";
 
@@ -37,7 +39,10 @@ function AccessNotice({ signedIn }: { signedIn: boolean }) {
 }
 
 export default async function MktLayout({ children }: { children: React.ReactNode }) {
-  const { signedIn, ctx } = await getMktRequestContext();
+  const [{ signedIn, ctx }, basePath] = await Promise.all([
+    getMktRequestContext(),
+    getMktBasePath(),
+  ]);
 
   if (!ctx.canView) {
     return (
@@ -48,12 +53,13 @@ export default async function MktLayout({ children }: { children: React.ReactNod
   }
 
   return (
-    <div className="flex min-h-screen flex-col bg-surface-container-low text-on-surface">
+    <MktRoutingProvider basePath={basePath}>
+      <div className="flex min-h-screen flex-col bg-surface-container-low text-on-surface">
       <header className="sticky top-0 z-20 flex h-14 items-center justify-between gap-3 border-b border-outline-variant bg-background px-4 sm:px-6">
-        <Link href="/mkt" className="flex items-center gap-2 font-heading text-base font-bold">
+        <MktLink href="/mkt" className="flex items-center gap-2 font-heading text-base font-bold">
           <Icon name="campaign" size={22} className="text-primary" />
           MKT Hub
-        </Link>
+        </MktLink>
         <div className="flex items-center gap-2">
           <Link
             href={ONEBIZ_URL}
@@ -70,6 +76,7 @@ export default async function MktLayout({ children }: { children: React.ReactNod
         <MktNav ctx={ctx} />
         <main className="min-w-0 flex-1 pb-20 lg:pb-0">{children}</main>
       </div>
-    </div>
+      </div>
+    </MktRoutingProvider>
   );
 }

@@ -1,10 +1,10 @@
 "use client";
 
 import { useState } from "react";
-import Link from "next/link";
 import { usePathname } from "next/navigation";
 import { Icon } from "@/components/ui/icon";
 import type { MktContext } from "@/lib/mkt/context";
+import { MktLink } from "@/components/mkt/mkt-routing";
 
 type NavItem = {
   href: string;
@@ -55,7 +55,7 @@ export function MktNav({ ctx }: { ctx: MktContext }) {
             const active = isActive(pathname, item.href);
             return (
               <li key={item.href}>
-                <Link
+                <MktLink
                   href={item.href}
                   className={
                     "flex items-center gap-3 rounded-lg px-3 py-2 text-sm font-medium " +
@@ -66,7 +66,7 @@ export function MktNav({ ctx }: { ctx: MktContext }) {
                 >
                   <Icon name={item.icon} size={20} />
                   {item.label}
-                </Link>
+                </MktLink>
               </li>
             );
           })}
@@ -86,7 +86,7 @@ export function MktNav({ ctx }: { ctx: MktContext }) {
               {items.map((item) => {
                 const active = isActive(pathname, item.href);
                 return (
-                  <Link
+                  <MktLink
                     key={item.href}
                     href={item.href}
                     onClick={() => setMoreOpen(false)}
@@ -99,7 +99,7 @@ export function MktNav({ ctx }: { ctx: MktContext }) {
                   >
                     <Icon name={item.icon} size={24} />
                     {item.label}
-                  </Link>
+                  </MktLink>
                 );
               })}
             </div>
@@ -112,7 +112,7 @@ export function MktNav({ ctx }: { ctx: MktContext }) {
         {mobileItems.map((item) => {
           const active = isActive(pathname, item.href);
           return (
-            <Link
+            <MktLink
               key={item.href}
               href={item.href}
               onClick={() => setMoreOpen(false)}
@@ -123,7 +123,7 @@ export function MktNav({ ctx }: { ctx: MktContext }) {
             >
               <Icon name={item.icon} size={22} />
               {item.label}
-            </Link>
+            </MktLink>
           );
         })}
         <button

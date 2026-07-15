@@ -26,11 +26,14 @@ export const MKT_ERROR_STATUS: Record<string, number> = {
   PLAN_VERSION_CONFLICT: 409,
   PLAN_VALIDATION_FAILED: 400,
   PLAN_TASKS_IN_PROGRESS: 409,
+  CAMPAIGN_RUNNING: 409,
 };
 
 const MKT_ERROR_MESSAGE: Record<string, string> = {
   CONTENT_DELETE_LOCKED: "Nội dung đang chờ duyệt, đã duyệt hoặc đã đăng nên không thể xoá.",
   CONTENT_HAS_ACTIVE_TASKS: "Nội dung đang có công việc liên quan. Hãy huỷ công việc trước khi xoá.",
+  CAMPAIGN_RUNNING:
+    "Chiến dịch đang chạy nên không xoá được. Hãy Tạm dừng hoặc Hoàn thành chiến dịch trước, rồi xoá.",
 };
 
 export type MktSupabaseClient = Awaited<ReturnType<typeof createServerSupabaseClient>>;

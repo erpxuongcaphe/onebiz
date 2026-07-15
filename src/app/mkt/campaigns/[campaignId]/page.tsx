@@ -1,5 +1,5 @@
 import type { Metadata } from "next";
-import Link from "next/link";
+import { MktLink } from "@/components/mkt/mkt-routing";
 import { notFound } from "next/navigation";
 import { Icon } from "@/components/ui/icon";
 import { getMktRequestContext } from "@/lib/mkt/request-context";
@@ -9,6 +9,7 @@ import {
   getLeaderQueue,
   getMktMembers,
   getPillars,
+  type MktCampaignDetailTab,
 } from "@/lib/mkt/read-models";
 import { LeaderQueueActions } from "@/components/mkt/leader-queue-actions";
 import { AddReadinessButton } from "@/components/mkt/add-readiness-button";
@@ -31,6 +32,7 @@ import {
   WorkPackageSplitButton,
 } from "@/components/mkt/campaign-controls";
 import { AssignPlanningButton } from "@/components/mkt/plan-controls";
+import { MktDeleteButton } from "@/components/mkt/delete-button";
 import { canConfirmReadiness } from "@/lib/mkt/readiness";
 
 export const dynamic = "force-dynamic";
@@ -89,24 +91,38 @@ export default async function CampaignDetailPage({
 }) {
   const { campaignId } = await params;
   const { tab } = await searchParams;
-  const activeTab = TABS.some((t) => t.key === tab) ? (tab as string) : "channels";
+  const activeTab: MktCampaignDetailTab = TABS.some((t) => t.key === tab)
+    ? (tab as MktCampaignDetailTab)
+    : "channels";
 
   const { supabase, ctx } = await getMktRequestContext();
+  const canManage = Boolean(ctx.canManageCampaigns);
+  const canSplit = Boolean(ctx.canSplit);
+  const needsMembers =
+    (activeTab === "channels" && (canManage || canSplit)) ||
+    (activeTab === "tasks" && Boolean(ctx.isLead));
+  const needsPillars =
+    activeTab === "content" ||
+    (activeTab === "channels" && (canManage || canSplit));
   const [detail, members, pillars, campaignQueue, exceptions] = await Promise.all([
-    getCampaignDetail(supabase, campaignId),
-    getMktMembers(supabase, ctx.tenantId ?? undefined),
-    getPillars(supabase),
-    ctx.isLead
+    getCampaignDetail(supabase, campaignId, activeTab),
+    needsMembers
+      ? getMktMembers(supabase, ctx.tenantId ?? undefined)
+      : Promise.resolve([]),
+    needsPillars ? getPillars(supabase) : Promise.resolve([]),
+    activeTab === "tasks" && ctx.isLead
       ? getLeaderQueue(supabase).then((items) =>
           items.filter((item) => item.campaignId === campaignId),
         )
       : Promise.resolve([]),
-    ctx.canViewAudit ? getExceptionLog(supabase, campaignId) : Promise.resolve([]),
+    activeTab === "readiness" && ctx.canViewAudit
+      ? getExceptionLog(supabase, campaignId)
+      : Promise.resolve([]),
   ]);
 
   if (!detail.campaign) notFound();
   const c = detail.campaign;
-  const canManage = Boolean(ctx.canManageCampaigns);
+  const pillarById = new Map(pillars.map((pillar) => [pillar.id, pillar]));
   const contentOptions = detail.contents.map((item) => ({ id: item.id, title: item.title }));
   const readinessDone = detail.readiness.filter((r) => r.status !== "pending").length;
 
@@ -121,12 +137,12 @@ export default async function CampaignDetailPage({
       <div className="mx-auto flex max-w-[1500px] flex-col gap-4">
         {/* Header */}
         <div>
-          <Link
+          <MktLink
             href="/mkt/campaigns"
             className="inline-flex items-center gap-1 text-sm font-medium text-on-surface-variant hover:text-on-surface"
           >
             <Icon name="arrow_back" size={16} /> Chiến dịch
-          </Link>
+          </MktLink>
 
           <div className="mt-2 rounded-xl border border-outline-variant bg-background p-4 sm:p-5">
             {/* Tên + trạng thái (trái) — hành động (phải) */}
@@ -171,6 +187,15 @@ export default async function CampaignDetailPage({
                     readinessScore={c.readinessScore}
                     canOverride={Boolean(ctx.canOverride)}
                   />
+                  <MktDeleteButton
+                    url={`/api/mkt/v1/campaigns/${c.id}`}
+                    label="Xoá chiến dịch"
+                    redirectTo="/mkt/campaigns"
+                    errorFallback="Không xoá được chiến dịch"
+                    confirmMessage={`Xoá chiến dịch "${c.name}"?\n\nToàn bộ kênh triển khai, nội dung, công việc và checklist sẵn sàng bên trong cũng sẽ bị ẩn theo.`}
+                  >
+                    Xoá
+                  </MktDeleteButton>
                 </div>
               ) : null}
             </div>
@@ -234,7 +259,7 @@ export default async function CampaignDetailPage({
                   href: `/mkt/campaigns/${c.id}?tab=readiness`,
                 },
               ].map((step) => (
-                <Link
+                <MktLink
                   key={step.label}
                   href={step.href}
                   className={
@@ -246,7 +271,7 @@ export default async function CampaignDetailPage({
                 >
                   <Icon name={step.done ? "check_circle" : "radio_button_unchecked"} size={16} />
                   {step.label}
-                </Link>
+                </MktLink>
               ))}
             </div>
           </div>
@@ -257,7 +282,7 @@ export default async function CampaignDetailPage({
           {TABS.map((t) => {
             const active = t.key === activeTab;
             return (
-              <Link
+              <MktLink
                 key={t.key}
                 href={`/mkt/campaigns/${c.id}?tab=${t.key}`}
                 className={
@@ -268,7 +293,7 @@ export default async function CampaignDetailPage({
                 }
               >
                 {t.label}
-              </Link>
+              </MktLink>
             );
           })}
         </div>
@@ -325,30 +350,40 @@ export default async function CampaignDetailPage({
                             ) : null}
                           </div>
                         </div>
-                        {needsSplit ? (
-                          <div className="flex flex-col items-end gap-1.5">
-                            {canManage || ctx.canSplit ? (
-                              <WorkPackageSplitButton
-                                workPackageId={w.id}
-                                campaignId={c.id}
-                                members={members}
-                                contents={contentOptions}
-                                pillars={pillars}
-                              />
-                            ) : null}
-                            {canManage ? (
-                              <AssignPlanningButton
-                                workPackageId={w.id}
-                                workPackageTitle={w.title}
-                                members={members}
-                              />
-                            ) : null}
-                          </div>
-                        ) : w.status === "planning" ? (
-                          <span className="max-w-[12rem] text-right text-xs text-on-surface-variant">
-                            Owner đang soạn kế hoạch ở mục “Lập kế hoạch”.
-                          </span>
-                        ) : null}
+                        <div className="flex shrink-0 flex-col items-end gap-1.5">
+                          {needsSplit ? (
+                            <>
+                              {canManage || ctx.canSplit ? (
+                                <WorkPackageSplitButton
+                                  workPackageId={w.id}
+                                  campaignId={c.id}
+                                  members={members}
+                                  contents={contentOptions}
+                                  pillars={pillars}
+                                />
+                              ) : null}
+                              {canManage ? (
+                                <AssignPlanningButton
+                                  workPackageId={w.id}
+                                  workPackageTitle={w.title}
+                                  members={members}
+                                />
+                              ) : null}
+                            </>
+                          ) : w.status === "planning" ? (
+                            <span className="max-w-[12rem] text-right text-xs text-on-surface-variant">
+                              Owner đang soạn kế hoạch ở mục “Lập kế hoạch”.
+                            </span>
+                          ) : null}
+                          {canManage ? (
+                            <MktDeleteButton
+                              url={`/api/mkt/v1/work-packages/${w.id}`}
+                              label="Xoá kênh triển khai"
+                              errorFallback="Không xoá được kênh"
+                              confirmMessage={`Xoá kênh "${w.title}"?\n\nCác công việc và kế hoạch bên trong kênh này cũng sẽ bị ẩn theo.`}
+                            />
+                          ) : null}
+                        </div>
                       </div>
                     </article>
                   );
@@ -410,6 +445,14 @@ export default async function CampaignDetailPage({
                   <div className="flex flex-wrap items-center gap-1.5">
                     <AcceptanceBadge value={t.acceptanceStatus} taskStatus={t.taskStatus} />
                     <TaskStatusBadge value={t.taskStatus} />
+                    {canManage ? (
+                      <MktDeleteButton
+                        url={`/api/mkt/v1/tasks/${t.id}`}
+                        label="Xoá công việc"
+                        errorFallback="Không xoá được công việc"
+                        confirmMessage={`Xoá công việc "${t.title}"?\n\nViệc đứng sau đang chờ việc này sẽ được nối tiếp sang việc liền trước.`}
+                      />
+                    ) : null}
                   </div>
                 </article>
               ))
@@ -441,13 +484,13 @@ export default async function CampaignDetailPage({
                       </div>
                     </div>
                     <div className="flex flex-wrap items-center gap-1.5">
-                      {x.pillarName ? (
+                      {x.pillarId && pillarById.has(x.pillarId) ? (
                         <span className="inline-flex items-center gap-1.5 rounded-full border border-outline-variant px-2 py-0.5 text-xs font-medium">
                           <span
                             className="h-2 w-2 shrink-0 rounded-full"
-                            style={{ backgroundColor: x.pillarColor ?? "#708090" }}
+                            style={{ backgroundColor: pillarById.get(x.pillarId)?.color ?? "#708090" }}
                           />
-                          {x.pillarName}
+                          {pillarById.get(x.pillarId)?.name}
                         </span>
                       ) : (
                         <span className="rounded-full border border-amber-200 bg-amber-50 px-2 py-0.5 text-xs font-medium text-amber-700">
@@ -517,6 +560,14 @@ export default async function CampaignDetailPage({
                       canManage={canManage}
                       canConfirm={canConfirmReadiness(ctx, r.requiredRole, r.requiredBranchId)}
                     />
+                    {canManage ? (
+                      <MktDeleteButton
+                        url={`/api/mkt/v1/campaigns/${c.id}/readiness/${r.id}`}
+                        label="Xoá mục sẵn sàng"
+                        errorFallback="Không xoá được mục này"
+                        confirmMessage={`Xoá mục "${r.title}" khỏi checklist sẵn sàng?\n\nMức sẵn sàng % sẽ được tính lại.`}
+                      />
+                    ) : null}
                   </div>
                 </article>
               ))

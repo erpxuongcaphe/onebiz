@@ -10,12 +10,10 @@ import type { MktContext } from "@/lib/mkt/context";
  */
 export const getMktRequestContext = cache(async () => {
   const supabase = await createServerSupabaseClient();
-  const {
-    data: { user },
-    error,
-  } = await supabase.auth.getUser();
+  const { data, error } = await supabase.auth.getClaims();
+  const userId = typeof data?.claims?.sub === "string" ? data.claims.sub : null;
 
-  if (error || !user) {
+  if (error || !userId) {
     return {
       supabase,
       signedIn: false,
@@ -27,7 +25,7 @@ export const getMktRequestContext = cache(async () => {
   return {
     supabase,
     signedIn: true,
-    userId: user.id,
+    userId,
     ctx: await getMktContext(supabase),
   };
 });

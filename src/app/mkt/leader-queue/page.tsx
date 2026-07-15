@@ -1,5 +1,5 @@
 import type { Metadata } from "next";
-import Link from "next/link";
+import { MktLink } from "@/components/mkt/mkt-routing";
 import { Icon } from "@/components/ui/icon";
 import { getMktRequestContext } from "@/lib/mkt/request-context";
 import { getLeaderQueue, getMktMembers } from "@/lib/mkt/read-models";
@@ -67,12 +67,12 @@ export default async function LeaderQueuePage() {
                         <Icon name={meta.icon} size={13} /> {meta.label}
                       </span>
                       {item.campaignId ? (
-                        <Link
+                        <MktLink
                           href={`/mkt/campaigns/${item.campaignId}`}
                           className="text-xs font-medium text-primary hover:underline"
                         >
                           {item.campaignName ?? "Chiến dịch"}
-                        </Link>
+                        </MktLink>
                       ) : null}
                     </div>
                     <div className="mt-1 text-sm font-semibold">{item.title}</div>

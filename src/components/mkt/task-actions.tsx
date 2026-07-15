@@ -2,7 +2,6 @@
 
 import { useState } from "react";
 import { useRouter } from "next/navigation";
-import Link from "next/link";
 import {
   Dialog,
   DialogContent,
@@ -18,6 +17,7 @@ import { Icon } from "@/components/ui/icon";
 import { ReasonDialog } from "@/components/mkt/reason-dialog";
 import { mktPost } from "@/lib/mkt/client";
 import type { MktMyTask } from "@/lib/mkt/read-models";
+import { MktLink } from "@/components/mkt/mkt-routing";
 
 type DialogKind = null | "reject" | "discuss" | "submit";
 
@@ -79,9 +79,9 @@ export function TaskActions({ task }: { task: MktMyTask }) {
       {task.acceptanceStatus === "accepted" && task.taskStatus === "doing" ? (
         <>
           {task.taskType === "review" && task.contentItemId ? (
-            <Link className={outline} href={`/mkt/approvals?content=${task.contentItemId}`}>
+            <MktLink className={outline} href={`/mkt/approvals?content=${task.contentItemId}`}>
               <Icon name="rate_review" size={15} /> Mở màn duyệt
-            </Link>
+            </MktLink>
           ) : task.taskType === "publish" ? (
             // Việc "Đăng bài": nội dung ĐÃ duyệt xong mới bắt đầu được (blocker
             // backend) → hoàn tất = đã đăng, không nộp duyệt lại.

@@ -16,6 +16,7 @@ import { Textarea } from "@/components/ui/textarea";
 import { Label } from "@/components/ui/label";
 import { Icon } from "@/components/ui/icon";
 import { mktPost } from "@/lib/mkt/client";
+import { useMktHref } from "@/components/mkt/mkt-routing";
 
 const READINESS_ROLES = [
   { value: "owner", label: "CEO / Chủ" },
@@ -29,6 +30,7 @@ type ReadinessRow = { title: string; requiredRole: string };
 
 export function CampaignFormDialog() {
   const router = useRouter();
+  const toMktHref = useMktHref();
   const [open, setOpen] = useState(false);
   const [name, setName] = useState("");
   const [objective, setObjective] = useState("");
@@ -75,7 +77,7 @@ export function CampaignFormDialog() {
       setOpen(false);
       // Đưa thẳng vào trang chi tiết để làm bước tiếp theo (thêm kênh, chia việc)
       if (res.campaignId) {
-        router.push(`/mkt/campaigns/${res.campaignId}`);
+        router.push(toMktHref(`/mkt/campaigns/${res.campaignId}`));
       } else {
         router.refresh();
       }

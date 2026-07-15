@@ -44,14 +44,24 @@ describe("MKT read performance", () => {
   it("deduplicates auth and permission reads per server request", () => {
     expect(requestContext).toContain('import { cache } from "react"');
     expect(requestContext).toContain("cache(async () =>");
+    expect(requestContext).toContain("supabase.auth.getClaims()");
+    expect(requestContext).not.toContain("supabase.auth.getUser()");
     expect(requestContext).toContain("getMktContext(supabase)");
   });
 
-  it("loads independent campaign detail queries in parallel", () => {
+  it("loads campaign detail in parallel and limits inactive tabs", () => {
     expect(readModels).toContain(
       "const [campaignRow, wpRes, rdRes, ctRes, tkRes] = await Promise.all([",
     );
-    expect(readModels).toContain("const [pillars, profiles] = await Promise.all([");
+    expect(readModels).toContain('activeTab === "readiness" ? 500 : 0');
+    // Task ở tab khác vẫn phải lấy 1 dòng (không phải 0): bước "3. Chia việc"
+    // của stepper kiểm tra detail.tasks.length > 0 — lấy 0 sẽ báo sai là
+    // "chưa chia việc" dù đã chia (giống workPackages/contents dùng limit 1).
+    expect(readModels).toContain('activeTab === "channels" || activeTab === "tasks" ? 1000 : 1');
     expect(readModels).toContain("workloadByPackage");
+    expect(campaignPage).toContain('activeTab === "tasks" && ctx.isLead');
+    expect(campaignPage).toContain('activeTab === "readiness" && ctx.canViewAudit');
+    expect(campaignPage).toContain("needsMembers");
+    expect(campaignPage).toContain("needsPillars");
   });
 });

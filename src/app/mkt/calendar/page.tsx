@@ -1,5 +1,5 @@
 import type { Metadata } from "next";
-import Link from "next/link";
+import { MktLink } from "@/components/mkt/mkt-routing";
 import { Icon } from "@/components/ui/icon";
 import { getMktRequestContext } from "@/lib/mkt/request-context";
 import { getWorkspaceTasks, type MktWorkspaceTask } from "@/lib/mkt/read-models";
@@ -75,21 +75,21 @@ export default async function CalendarPage({
             </p>
           </div>
           <div className="flex items-center gap-2">
-            <Link
+            <MktLink
               href={`/mkt/calendar?month=${prevKey}`}
               className="inline-flex h-9 w-9 items-center justify-center rounded-lg border border-outline-variant bg-background hover:bg-surface-container"
             >
               <Icon name="chevron_left" size={20} />
-            </Link>
+            </MktLink>
             <span className="min-w-[140px] text-center font-heading text-base font-semibold capitalize">
               {monthLabel}
             </span>
-            <Link
+            <MktLink
               href={`/mkt/calendar?month=${nextKey}`}
               className="inline-flex h-9 w-9 items-center justify-center rounded-lg border border-outline-variant bg-background hover:bg-surface-container"
             >
               <Icon name="chevron_right" size={20} />
-            </Link>
+            </MktLink>
           </div>
         </div>
 
