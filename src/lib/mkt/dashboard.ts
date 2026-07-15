@@ -246,37 +246,44 @@ function buildMetrics(
 
 export async function getMktDashboardData(
   supabase: MktSupabaseClient,
+  identity?: { userId?: string | null; tenantId?: string | null },
 ): Promise<MktDashboardData> {
   const warnings: string[] = [];
   const db = getMktDatabaseClient(supabase);
-  const {
-    data: { user },
-    error: userError,
-  } = await supabase.auth.getUser();
+  let userId = identity?.userId ?? null;
+  let tenantId = identity?.tenantId ?? null;
 
-  if (userError || !user) {
-    return emptyDashboardData(null, ["auth: Chưa đăng nhập"]);
+  if (!userId) {
+    const {
+      data: { user },
+      error: userError,
+    } = await supabase.auth.getUser();
+
+    if (userError || !user) {
+      return emptyDashboardData(null, ["auth: Chưa đăng nhập"]);
+    }
+    userId = user.id;
   }
 
-  const profile = await safeMaybe<ProfileRow>(
-    warnings,
-    "profiles",
-    db
-      .from<ProfileRow>("profiles")
-      .select("id, tenant_id, full_name, email")
-      .eq("id", user.id)
-      .maybeSingle(),
-  );
+  if (!tenantId) {
+    const profile = await safeMaybe<ProfileRow>(
+      warnings,
+      "profiles",
+      db
+        .from<ProfileRow>("profiles")
+        .select("id, tenant_id, full_name, email")
+        .eq("id", userId)
+        .maybeSingle(),
+    );
+    tenantId = profile?.tenant_id ?? null;
+  }
 
-  if (!profile?.tenant_id) {
+  if (!tenantId) {
     return emptyDashboardData(null, [
       ...warnings,
       "profiles: Không tìm thấy tenant cho người dùng hiện tại",
     ]);
   }
-
-  const tenantId = profile.tenant_id;
-
   const campaigns = await safeArray<CampaignRow>(
     warnings,
     "mkt_campaigns",

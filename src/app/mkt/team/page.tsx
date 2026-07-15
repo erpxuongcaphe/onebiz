@@ -1,7 +1,7 @@
 import type { Metadata } from "next";
 import { Icon } from "@/components/ui/icon";
-import { createServerSupabaseClient } from "@/lib/supabase/server";
-import { getMktContext, getMktMembers, getWorkspaceTasks } from "@/lib/mkt/read-models";
+import { getMktRequestContext } from "@/lib/mkt/request-context";
+import { getMktMembers, getWorkspaceTasks } from "@/lib/mkt/read-models";
 import { TeamMemberActions } from "@/components/mkt/team-actions";
 
 export const dynamic = "force-dynamic";
@@ -11,8 +11,7 @@ export const metadata: Metadata = { title: "MKT Hub — Nhân sự & Phân công
 const CAPACITY = 40; // điểm khối lượng "đầy tải" mỗi người (ước lượng)
 
 export default async function TeamPage() {
-  const supabase = await createServerSupabaseClient();
-  const ctx = await getMktContext(supabase);
+  const { supabase, ctx } = await getMktRequestContext();
 
   if (!ctx.isLead) {
     return (
@@ -27,7 +26,7 @@ export default async function TeamPage() {
 
   const [tasks, allMembers] = await Promise.all([
     getWorkspaceTasks(supabase),
-    getMktMembers(supabase),
+    getMktMembers(supabase, ctx.tenantId ?? undefined),
   ]);
   const active = tasks.filter((t) => !["done", "canceled"].includes(t.taskStatus));
 

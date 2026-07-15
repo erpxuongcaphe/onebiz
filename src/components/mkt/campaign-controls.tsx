@@ -17,7 +17,7 @@ import { Label } from "@/components/ui/label";
 import { Icon } from "@/components/ui/icon";
 import { ReasonDialog } from "@/components/mkt/reason-dialog";
 import { SplitDialog } from "@/components/mkt/split-dialog";
-import { mktPatch, mktPost } from "@/lib/mkt/client";
+import { mktDelete, mktPatch, mktPost } from "@/lib/mkt/client";
 import type { MktMember, MktPillar } from "@/lib/mkt/read-models";
 
 const CHANNELS = [
@@ -503,6 +503,46 @@ export function ContentForm({ campaignId, pillars }: { campaignId: string; pilla
         </DialogFooter>
       </DialogContent>
     </Dialog>
+  );
+}
+
+export function DeleteContentButton({ contentId, title }: { contentId: string; title: string }) {
+  const router = useRouter();
+  const [loading, setLoading] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+
+  async function remove() {
+    if (!confirm(`Xoá nội dung "${title}"? Nội dung sẽ được ẩn khỏi MKT Hub.`)) return;
+
+    setLoading(true);
+    setError(null);
+    try {
+      await mktDelete(`/api/mkt/v1/contents/${contentId}`);
+      router.refresh();
+    } catch (e) {
+      setError(e instanceof Error ? e.message : "Không xoá được nội dung");
+    } finally {
+      setLoading(false);
+    }
+  }
+
+  return (
+    <div className="flex items-center gap-1">
+      {error ? (
+        <span className="max-w-48 text-right text-xs font-medium text-rose-600">{error}</span>
+      ) : null}
+      <Button
+        type="button"
+        variant="destructive"
+        size="icon-sm"
+        disabled={loading}
+        onClick={remove}
+        aria-label={`Xoá nội dung ${title}`}
+        title="Xoá nội dung"
+      >
+        <Icon name={loading ? "progress_activity" : "delete"} size={16} />
+      </Button>
+    </div>
   );
 }
 

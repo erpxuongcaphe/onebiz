@@ -1,27 +1,12 @@
 import Link from "next/link";
 import { Icon } from "@/components/ui/icon";
-import { createServerSupabaseClient } from "@/lib/supabase/server";
-import { getMktDatabaseClient } from "@/lib/mkt/supabase";
+import { getMktRequestContext } from "@/lib/mkt/request-context";
 import { MktNav } from "@/components/mkt/mkt-nav";
 import { MktUserMenu } from "@/components/mkt/mkt-user-menu";
-import type { MktContext } from "@/lib/mkt/context";
 
 export const dynamic = "force-dynamic";
 
 const ONEBIZ_URL = process.env.ONEBIZ_BASE_URL || "https://onebiz.com.vn";
-
-async function loadContext(): Promise<{ signedIn: boolean; ctx: MktContext }> {
-  const supabase = await createServerSupabaseClient();
-  const {
-    data: { user },
-  } = await supabase.auth.getUser();
-  if (!user) return { signedIn: false, ctx: { canView: false } };
-
-  const db = getMktDatabaseClient(supabase);
-  const { data, error } = await db.rpc<MktContext>("mkt_get_my_context", {});
-  if (error) throw new Error(`MKT_READ_FAILED:layout_context:${error.message}`);
-  return { signedIn: true, ctx: (data as MktContext) ?? { canView: false } };
-}
 
 function AccessNotice({ signedIn }: { signedIn: boolean }) {
   return (
@@ -52,7 +37,7 @@ function AccessNotice({ signedIn }: { signedIn: boolean }) {
 }
 
 export default async function MktLayout({ children }: { children: React.ReactNode }) {
-  const { signedIn, ctx } = await loadContext();
+  const { signedIn, ctx } = await getMktRequestContext();
 
   if (!ctx.canView) {
     return (

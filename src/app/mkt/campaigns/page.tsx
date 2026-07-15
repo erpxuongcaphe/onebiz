@@ -1,8 +1,8 @@
 import type { Metadata } from "next";
 import Link from "next/link";
 import { Icon } from "@/components/ui/icon";
-import { createServerSupabaseClient } from "@/lib/supabase/server";
-import { getCampaignList, getMktContext, type MktCampaign } from "@/lib/mkt/read-models";
+import { getMktRequestContext } from "@/lib/mkt/request-context";
+import { getCampaignList, type MktCampaign } from "@/lib/mkt/read-models";
 import { CampaignFormDialog } from "@/components/mkt/campaign-form-dialog";
 
 export const dynamic = "force-dynamic";
@@ -76,11 +76,8 @@ function CampaignCard({ c }: { c: MktCampaign }) {
 }
 
 export default async function CampaignsPage() {
-  const supabase = await createServerSupabaseClient();
-  const [ctx, campaigns] = await Promise.all([
-    getMktContext(supabase),
-    getCampaignList(supabase),
-  ]);
+  const { supabase, ctx } = await getMktRequestContext();
+  const campaigns = await getCampaignList(supabase);
 
   return (
     <div className="px-4 py-4 sm:px-5 lg:px-6">

@@ -1,6 +1,6 @@
 import type { Metadata } from "next";
-import { createServerSupabaseClient } from "@/lib/supabase/server";
-import { getMktContext, getPillars, getPillarAngles } from "@/lib/mkt/read-models";
+import { getMktRequestContext } from "@/lib/mkt/request-context";
+import { getPillars, getPillarAngles } from "@/lib/mkt/read-models";
 import { PillarBoard } from "@/components/mkt/pillar-board";
 
 export const dynamic = "force-dynamic";
@@ -8,9 +8,8 @@ export const dynamic = "force-dynamic";
 export const metadata: Metadata = { title: "MKT Hub — Định hướng nội dung" };
 
 export default async function PillarsPage() {
-  const supabase = await createServerSupabaseClient();
-  const [ctx, pillars, angles] = await Promise.all([
-    getMktContext(supabase),
+  const { supabase, ctx } = await getMktRequestContext();
+  const [pillars, angles] = await Promise.all([
     getPillars(supabase),
     getPillarAngles(supabase),
   ]);

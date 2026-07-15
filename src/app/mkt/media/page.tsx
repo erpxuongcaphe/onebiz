@@ -1,7 +1,7 @@
 import type { Metadata } from "next";
-import { createServerSupabaseClient } from "@/lib/supabase/server";
+import { getMktRequestContext } from "@/lib/mkt/request-context";
 import { getAdminClient } from "@/lib/supabase/admin";
-import { getCampaignList, getMediaAssets, getMktContext } from "@/lib/mkt/read-models";
+import { getCampaignList, getMediaAssets } from "@/lib/mkt/read-models";
 import { MediaLibrary, type MediaViewItem } from "@/components/mkt/media-library";
 
 export const dynamic = "force-dynamic";
@@ -11,11 +11,10 @@ export const metadata: Metadata = { title: "MKT Hub — Thư viện Media" };
 const BUCKET = "mkt-media";
 
 export default async function MediaPage() {
-  const supabase = await createServerSupabaseClient();
-  const [assets, campaigns, ctx] = await Promise.all([
+  const { supabase, ctx } = await getMktRequestContext();
+  const [assets, campaigns] = await Promise.all([
     getMediaAssets(supabase),
     getCampaignList(supabase),
-    getMktContext(supabase),
   ]);
 
   // Signed URL (1 giờ) cho các file upload trên Storage — bucket private,

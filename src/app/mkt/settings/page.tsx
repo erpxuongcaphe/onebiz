@@ -1,8 +1,7 @@
 import type { Metadata } from "next";
 import Link from "next/link";
-import { createServerSupabaseClient } from "@/lib/supabase/server";
+import { getMktRequestContext } from "@/lib/mkt/request-context";
 import { getMktDatabaseClient } from "@/lib/mkt/supabase";
-import { getMktContext } from "@/lib/mkt/read-models";
 import { Icon } from "@/components/ui/icon";
 import { TelegramLinkCard } from "@/components/mkt/telegram-link-card";
 
@@ -19,18 +18,15 @@ type TelegramAccountRow = {
 };
 
 export default async function MktSettingsPage() {
-  const supabase = await createServerSupabaseClient();
+  const { supabase, ctx } = await getMktRequestContext();
   const db = getMktDatabaseClient(supabase);
 
   // RLS chỉ cho đọc bản ghi của chính mình.
-  const [{ data: account }, ctx] = await Promise.all([
-    db
-      .from<TelegramAccountRow>("mkt_telegram_accounts")
-      .select("username, status, linked_at")
-      .eq("status", "linked")
-      .maybeSingle(),
-    getMktContext(supabase),
-  ]);
+  const { data: account } = await db
+    .from<TelegramAccountRow>("mkt_telegram_accounts")
+    .select("username, status, linked_at")
+    .eq("status", "linked")
+    .maybeSingle();
 
   const linked = Boolean(account?.status === "linked");
 
