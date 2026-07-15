@@ -1,7 +1,6 @@
 "use client";
 
-import { useMemo, useState } from "react";
-import { useRouter } from "next/navigation";
+import { useEffect, useMemo, useState } from "react";
 import {
   Dialog,
   DialogContent,
@@ -16,6 +15,7 @@ import { Icon } from "@/components/ui/icon";
 import { parseMediaLink, buildMediaUrls } from "@/lib/mkt/media-links";
 import { mktDelete, mktPost } from "@/lib/mkt/client";
 import type { MktMediaAsset } from "@/lib/mkt/read-models";
+import { useMktRefresh } from "@/lib/mkt/use-mkt-refresh";
 
 export type MediaViewItem = MktMediaAsset & {
   /** Signed URL (1h) cho file upload trên Supabase Storage — server cấp */
@@ -72,7 +72,7 @@ export function MediaLibrary({
   campaigns: CampaignOption[];
   canManageAssets: boolean;
 }) {
-  const router = useRouter();
+  const { refresh, refreshing } = useMktRefresh();
   const [kindFilter, setKindFilter] = useState<"all" | "image" | "video">("all");
   const [statusFilter, setStatusFilter] = useState<"all" | "available" | "used">("all");
   const [campaignFilter, setCampaignFilter] = useState("");
@@ -108,7 +108,7 @@ export function MediaLibrary({
     try {
       await mktDelete(`/api/mkt/v1/media/${item.id}`);
       setPreview(null);
-      router.refresh();
+      refresh();
     } catch (error) {
       setActionError(error instanceof Error ? error.message : "Không xoá được media");
     }
@@ -120,7 +120,7 @@ export function MediaLibrary({
     try {
       await mktPost(`/api/mkt/v1/media/${item.id}/status`, { status: next });
       setPreview(null);
-      router.refresh();
+      refresh();
     } catch (error) {
       setActionError(error instanceof Error ? error.message : "Không đổi được trạng thái media");
     }
@@ -338,7 +338,8 @@ export function MediaLibrary({
         open={addOpen}
         onOpenChange={setAddOpen}
         campaigns={campaigns}
-        onAdded={() => router.refresh()}
+        busy={refreshing}
+        onAdded={() => refresh(() => setAddOpen(false))}
       />
     </div>
   );
@@ -349,17 +350,25 @@ function AddFromLinkDialog({
   onOpenChange,
   campaigns,
   onAdded,
+  busy = false,
 }: {
   open: boolean;
   onOpenChange: (o: boolean) => void;
   campaigns: CampaignOption[];
   onAdded: () => void;
+  busy?: boolean;
 }) {
   const [url, setUrl] = useState("");
   const [name, setName] = useState("");
   const [kind, setKind] = useState<"image" | "video">("video");
   const [campaignId, setCampaignId] = useState("");
-  const [loading, setLoading] = useState(false);
+  const [saving, setSaving] = useState(false);
+  const loading = saving || busy;
+  // Cha đóng hộp thoại (cùng nhịp với dữ liệu mới) → dọn form khi nó đóng.
+  useEffect(() => {
+    if (!open) setError(null);
+  }, [open]);
+
   const [error, setError] = useState<string | null>(null);
 
   const parsed = url.trim() ? parseMediaLink(url) : null;
@@ -367,7 +376,7 @@ function AddFromLinkDialog({
 
   async function submit() {
     if (!valid || !parsed) return;
-    setLoading(true);
+    setSaving(true);
     setError(null);
     try {
       // Loại media: ưu tiên nhận diện tự động (ảnh/video trực tiếp, YouTube/TikTok
@@ -387,12 +396,11 @@ function AddFromLinkDialog({
       setUrl("");
       setName("");
       setCampaignId("");
-      onOpenChange(false);
-      onAdded();
+      onAdded(); // cha đóng hộp thoại khi màn hình đã dựng xong dữ liệu mới
     } catch (e) {
       setError(e instanceof Error ? e.message : "Không thêm được media");
     } finally {
-      setLoading(false);
+      setSaving(false);
     }
   }
 

@@ -1,7 +1,6 @@
 "use client";
 
 import { useState } from "react";
-import { useRouter } from "next/navigation";
 import {
   Dialog,
   DialogContent,
@@ -15,6 +14,7 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Icon } from "@/components/ui/icon";
 import { mktPost } from "@/lib/mkt/client";
+import { useMktRefresh } from "@/lib/mkt/use-mkt-refresh";
 
 const ROLES = [
   { value: "owner", label: "CEO / Chủ" },
@@ -25,16 +25,17 @@ const ROLES = [
 ];
 
 export function AddReadinessButton({ campaignId }: { campaignId: string }) {
-  const router = useRouter();
+  const { refresh, refreshing } = useMktRefresh();
   const [open, setOpen] = useState(false);
   const [title, setTitle] = useState("");
   const [role, setRole] = useState("owner");
-  const [loading, setLoading] = useState(false);
+  const [saving, setSaving] = useState(false);
+  const loading = saving || refreshing;
   const [error, setError] = useState<string | null>(null);
 
   async function submit() {
     if (!title.trim()) return;
-    setLoading(true);
+    setSaving(true);
     setError(null);
     try {
       await mktPost(`/api/mkt/v1/campaigns/${campaignId}/readiness`, {
@@ -43,11 +44,11 @@ export function AddReadinessButton({ campaignId }: { campaignId: string }) {
       });
       setTitle("");
       setOpen(false);
-      router.refresh();
+      refresh();
     } catch (e) {
       setError(e instanceof Error ? e.message : "Không thêm được mục");
     } finally {
-      setLoading(false);
+      setSaving(false);
     }
   }
 

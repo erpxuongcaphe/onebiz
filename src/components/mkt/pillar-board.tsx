@@ -1,7 +1,6 @@
 "use client";
 
-import { useMemo, useState } from "react";
-import { useRouter } from "next/navigation";
+import { useEffect, useMemo, useState } from "react";
 import {
   Dialog,
   DialogContent,
@@ -16,6 +15,7 @@ import { Label } from "@/components/ui/label";
 import { Icon } from "@/components/ui/icon";
 import { mktDelete, mktPost } from "@/lib/mkt/client";
 import type { MktPillar, MktPillarAngle } from "@/lib/mkt/read-models";
+import { useMktRefresh } from "@/lib/mkt/use-mkt-refresh";
 
 const COLORS = ["#8B5A2B", "#2E8B57", "#D2691E", "#708090", "#1877F2", "#C13584"];
 
@@ -41,7 +41,7 @@ export function PillarBoard({
   angles: MktPillarAngle[];
   canManage: boolean;
 }) {
-  const router = useRouter();
+  const { refresh, refreshing } = useMktRefresh();
   const [expanded, setExpanded] = useState<Set<string>>(new Set());
   const [pillarDialog, setPillarDialog] = useState<{ open: boolean; edit: MktPillar | null }>({
     open: false,
@@ -78,7 +78,7 @@ export function PillarBoard({
     setError(null);
     try {
       await mktDelete(`/api/mkt/v1/pillars/${p.id}`);
-      router.refresh();
+      refresh();
     } catch (e) {
       setError(e instanceof Error ? e.message : "Không xoá được");
     }
@@ -89,7 +89,7 @@ export function PillarBoard({
     setError(null);
     try {
       await mktDelete(`/api/mkt/v1/pillar-angles/${a.id}`);
-      router.refresh();
+      refresh();
     } catch (e) {
       setError(e instanceof Error ? e.message : "Không xoá được");
     }
@@ -249,14 +249,16 @@ export function PillarBoard({
       <PillarDialog
         state={pillarDialog}
         pillarCount={pillars.length}
+        busy={refreshing}
         onClose={() => setPillarDialog({ open: false, edit: null })}
-        onSaved={() => router.refresh()}
+        onSaved={() => refresh(() => setPillarDialog({ open: false, edit: null }))}
       />
       <AngleDialog
         state={angleDialog}
         angleCount={angleDialog.pillarId ? (anglesByPillar.get(angleDialog.pillarId)?.length ?? 0) : 0}
+        busy={refreshing}
         onClose={() => setAngleDialog({ open: false, pillarId: "", edit: null })}
-        onSaved={() => router.refresh()}
+        onSaved={() => refresh(() => setAngleDialog({ open: false, pillarId: "", edit: null }))}
       />
     </div>
   );
@@ -268,18 +270,21 @@ function PillarDialog({
   pillarCount,
   onClose,
   onSaved,
+  busy = false,
 }: {
   state: { open: boolean; edit: MktPillar | null };
   pillarCount: number;
   onClose: () => void;
   onSaved: () => void;
+  busy?: boolean;
 }) {
   const edit = state.edit;
   const [code, setCode] = useState("");
   const [name, setName] = useState("");
   const [description, setDescription] = useState("");
   const [color, setColor] = useState(COLORS[0]);
-  const [loading, setLoading] = useState(false);
+  const [saving, setSaving] = useState(false);
+  const loading = saving || busy;
   const [error, setError] = useState<string | null>(null);
   const [key, setKey] = useState("");
 
@@ -299,7 +304,7 @@ function PillarDialog({
       setError("Cần nhập Mã và Tên trụ.");
       return;
     }
-    setLoading(true);
+    setSaving(true);
     setError(null);
     try {
       await mktPost("/api/mkt/v1/pillars", {
@@ -310,12 +315,11 @@ function PillarDialog({
         color,
         sortOrder: edit?.sortOrder ?? pillarCount,
       });
-      onClose();
-      onSaved();
+      onSaved(); // cha đóng hộp thoại khi màn hình đã dựng xong dữ liệu mới
     } catch (e) {
       setError(e instanceof Error ? e.message : "Không lưu được");
     } finally {
-      setLoading(false);
+      setSaving(false);
     }
   }
 
@@ -387,11 +391,13 @@ function AngleDialog({
   angleCount,
   onClose,
   onSaved,
+  busy = false,
 }: {
   state: { open: boolean; pillarId: string; edit: MktPillarAngle | null };
   angleCount: number;
   onClose: () => void;
   onSaved: () => void;
+  busy?: boolean;
 }) {
   const edit = state.edit;
   const [title, setTitle] = useState("");
@@ -400,7 +406,8 @@ function AngleDialog({
   const [guideline, setGuideline] = useState("");
   const [channels, setChannels] = useState("");
   const [format, setFormat] = useState("");
-  const [loading, setLoading] = useState(false);
+  const [saving, setSaving] = useState(false);
+  const loading = saving || busy;
   const [error, setError] = useState<string | null>(null);
   const [key, setKey] = useState("");
 
@@ -421,7 +428,7 @@ function AngleDialog({
       setError("Cần nhập tên góc nội dung.");
       return;
     }
-    setLoading(true);
+    setSaving(true);
     setError(null);
     try {
       await mktPost("/api/mkt/v1/pillar-angles", {
@@ -435,12 +442,11 @@ function AngleDialog({
         format: format.trim() || undefined,
         sortOrder: edit?.sortOrder ?? angleCount,
       });
-      onClose();
-      onSaved();
+      onSaved(); // cha đóng hộp thoại khi màn hình đã dựng xong dữ liệu mới
     } catch (e) {
       setError(e instanceof Error ? e.message : "Không lưu được");
     } finally {
-      setLoading(false);
+      setSaving(false);
     }
   }
 

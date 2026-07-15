@@ -1,8 +1,8 @@
 "use client";
 
 import { useState } from "react";
-import { useRouter } from "next/navigation";
 import { Icon } from "@/components/ui/icon";
+import { useMktRefresh } from "@/lib/mkt/use-mkt-refresh";
 
 type LinkTokenResponse = {
   success: boolean;
@@ -19,15 +19,16 @@ export function TelegramLinkCard({
   linked: boolean;
   username: string | null;
 }) {
-  const router = useRouter();
-  const [loading, setLoading] = useState(false);
+  const { refresh, refreshing } = useMktRefresh();
+  const [saving, setSaving] = useState(false);
+  const loading = saving || refreshing;
   const [error, setError] = useState<string | null>(null);
   const [payload, setPayload] = useState<{ botUrl: string | null; startPayload: string } | null>(
     null,
   );
 
   async function handleConnect() {
-    setLoading(true);
+    setSaving(true);
     setError(null);
     try {
       const res = await fetch("/api/mkt/v1/telegram/link-token", { method: "POST" });
@@ -41,20 +42,20 @@ export function TelegramLinkCard({
     } catch {
       setError("Lỗi kết nối, thử lại sau");
     } finally {
-      setLoading(false);
+      setSaving(false);
     }
   }
 
   async function handleUnlink() {
-    setLoading(true);
+    setSaving(true);
     setError(null);
     try {
       await fetch("/api/mkt/v1/telegram/unlink", { method: "POST" });
-      router.refresh();
+      refresh();
     } catch {
       setError("Không ngắt được liên kết, thử lại sau");
     } finally {
-      setLoading(false);
+      setSaving(false);
     }
   }
 

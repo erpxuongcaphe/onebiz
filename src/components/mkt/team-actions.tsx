@@ -1,11 +1,11 @@
 "use client";
 
 import { useState } from "react";
-import { useRouter } from "next/navigation";
 import { Icon } from "@/components/ui/icon";
 import { ReassignDialog } from "@/components/mkt/leader-queue-actions";
 import { mktPost } from "@/lib/mkt/client";
 import type { MktMember } from "@/lib/mkt/read-models";
+import { useMktRefresh } from "@/lib/mkt/use-mkt-refresh";
 
 /** Hành động điều phối trên card thành viên: Ping nhắc nhở + San sẻ task. */
 export function TeamMemberActions({
@@ -17,14 +17,15 @@ export function TeamMemberActions({
   tasks: Array<{ id: string; title: string }>;
   members: MktMember[];
 }) {
-  const router = useRouter();
-  const [busy, setBusy] = useState(false);
+  const { refresh, refreshing } = useMktRefresh();
+  const [running, setRunning] = useState(false);
+  const busy = running || refreshing;
   const [pinged, setPinged] = useState(false);
   const [err, setErr] = useState<string | null>(null);
   const [reassignTask, setReassignTask] = useState<{ id: string; title: string } | null>(null);
 
   async function ping() {
-    setBusy(true);
+    setRunning(true);
     setErr(null);
     try {
       await mktPost("/api/mkt/v1/team/ping", { userId: memberId });
@@ -32,7 +33,7 @@ export function TeamMemberActions({
     } catch (e) {
       setErr(e instanceof Error ? e.message : "Không gửi được nhắc nhở");
     } finally {
-      setBusy(false);
+      setRunning(false);
     }
   }
 
@@ -77,7 +78,7 @@ export function TeamMemberActions({
               reason,
             });
             setReassignTask(null);
-            router.refresh();
+            refresh();
           }}
         />
       ) : null}

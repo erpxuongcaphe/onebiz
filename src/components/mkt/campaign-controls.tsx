@@ -1,7 +1,6 @@
 "use client";
 
 import { useState } from "react";
-import { useRouter } from "next/navigation";
 import {
   Dialog,
   DialogContent,
@@ -19,6 +18,7 @@ import { ReasonDialog } from "@/components/mkt/reason-dialog";
 import { SplitDialog } from "@/components/mkt/split-dialog";
 import { mktDelete, mktPatch, mktPost } from "@/lib/mkt/client";
 import type { MktMember, MktPillar } from "@/lib/mkt/read-models";
+import { useMktRefresh } from "@/lib/mkt/use-mkt-refresh";
 
 const CHANNELS = [
   { value: "tiktok", label: "TikTok" },
@@ -52,13 +52,14 @@ export function CampaignStatusControl({
   readinessScore: number;
   canOverride: boolean;
 }) {
-  const router = useRouter();
-  const [busy, setBusy] = useState(false);
+  const { refresh, refreshing } = useMktRefresh();
+  const [running, setRunning] = useState(false);
+  const busy = running || refreshing;
   const [err, setErr] = useState<string | null>(null);
   const [overrideOpen, setOverrideOpen] = useState(false);
 
   async function setStatus(next: string, overrideReason?: string) {
-    setBusy(true);
+    setRunning(true);
     setErr(null);
     try {
       await fetch(`/api/mkt/v1/campaigns/${campaignId}/status`, {
@@ -69,13 +70,13 @@ export function CampaignStatusControl({
         const d = await res.json().catch(() => ({}));
         if (!res.ok || d?.success === false) throw new Error(d?.error?.message ?? "Thất bại");
       });
-      router.refresh();
+      refresh();
       return true;
     } catch (e) {
       setErr(e instanceof Error ? e.message : "Thao tác thất bại");
       return false;
     } finally {
-      setBusy(false);
+      setRunning(false);
     }
   }
 
@@ -148,14 +149,15 @@ export function EditCampaignButton({
     timeframeEnd: string | null;
   };
 }) {
-  const router = useRouter();
+  const { refresh, refreshing } = useMktRefresh();
   const [open, setOpen] = useState(false);
   const [name, setName] = useState(campaign.name);
   const [objective, setObjective] = useState(campaign.objective ?? "");
   const [start, setStart] = useState(campaign.timeframeStart ?? "");
   const [end, setEnd] = useState(campaign.timeframeEnd ?? "");
   const [budget, setBudget] = useState(campaign.budget ? String(campaign.budget) : "");
-  const [loading, setLoading] = useState(false);
+  const [saving, setSaving] = useState(false);
+  const loading = saving || refreshing;
   const [error, setError] = useState<string | null>(null);
 
   const dateInvalid = Boolean(start && end && end < start);
@@ -186,7 +188,7 @@ export function EditCampaignButton({
       setError("Ngân sách không được âm.");
       return;
     }
-    setLoading(true);
+    setSaving(true);
     setError(null);
     try {
       await mktPatch(`/api/mkt/v1/campaigns/${campaign.id}`, {
@@ -197,11 +199,11 @@ export function EditCampaignButton({
         budget: budget ? Number(budget) : 0,
       });
       setOpen(false);
-      router.refresh();
+      refresh();
     } catch (e) {
       setError(e instanceof Error ? e.message : "Không lưu được chiến dịch");
     } finally {
-      setLoading(false);
+      setSaving(false);
     }
   }
 
@@ -276,19 +278,20 @@ export function WorkPackageForm({
   campaignId: string;
   members: MktMember[];
 }) {
-  const router = useRouter();
+  const { refresh, refreshing } = useMktRefresh();
   const [open, setOpen] = useState(false);
   const [channelType, setChannelType] = useState("tiktok");
   const [title, setTitle] = useState("");
   const [targetOutput, setTargetOutput] = useState("");
   const [ownerId, setOwnerId] = useState("");
   const [reviewerId, setReviewerId] = useState("");
-  const [loading, setLoading] = useState(false);
+  const [saving, setSaving] = useState(false);
+  const loading = saving || refreshing;
   const [error, setError] = useState<string | null>(null);
 
   async function submit() {
     if (!title.trim()) return;
-    setLoading(true);
+    setSaving(true);
     setError(null);
     try {
       await mktPost(`/api/mkt/v1/campaigns/${campaignId}/work-packages`, {
@@ -303,11 +306,11 @@ export function WorkPackageForm({
       setOwnerId("");
       setReviewerId("");
       setOpen(false);
-      router.refresh();
+      refresh();
     } catch (e) {
       setError(e instanceof Error ? e.message : "Không tạo được kênh");
     } finally {
-      setLoading(false);
+      setSaving(false);
     }
   }
 
@@ -390,13 +393,14 @@ export function WorkPackageForm({
 // ── Dialog tạo Content Item ──
 // Bắt buộc chọn Trụ nội dung (Pillar) — mọi nội dung phải chỉ rõ thuộc trụ nào.
 export function ContentForm({ campaignId, pillars }: { campaignId: string; pillars: MktPillar[] }) {
-  const router = useRouter();
+  const { refresh, refreshing } = useMktRefresh();
   const [open, setOpen] = useState(false);
   const [title, setTitle] = useState("");
   const [channelType, setChannelType] = useState("tiktok");
   const [riskLevel, setRiskLevel] = useState("low");
   const [pillarId, setPillarId] = useState("");
-  const [loading, setLoading] = useState(false);
+  const [saving, setSaving] = useState(false);
+  const loading = saving || refreshing;
   const [error, setError] = useState<string | null>(null);
 
   async function submit() {
@@ -409,7 +413,7 @@ export function ContentForm({ campaignId, pillars }: { campaignId: string; pilla
       setError("Hãy chọn Trụ nội dung (Pillar) — nội dung phải chỉ rõ thuộc trụ nào.");
       return;
     }
-    setLoading(true);
+    setSaving(true);
     setError(null);
     try {
       await mktPost("/api/mkt/v1/contents", {
@@ -423,11 +427,11 @@ export function ContentForm({ campaignId, pillars }: { campaignId: string; pilla
       setRiskLevel("low");
       setPillarId("");
       setOpen(false);
-      router.refresh();
+      refresh();
     } catch (e) {
       setError(e instanceof Error ? e.message : "Không tạo được nội dung");
     } finally {
-      setLoading(false);
+      setSaving(false);
     }
   }
 
@@ -507,22 +511,23 @@ export function ContentForm({ campaignId, pillars }: { campaignId: string; pilla
 }
 
 export function DeleteContentButton({ contentId, title }: { contentId: string; title: string }) {
-  const router = useRouter();
-  const [loading, setLoading] = useState(false);
+  const { refresh, refreshing } = useMktRefresh();
+  const [saving, setSaving] = useState(false);
+  const loading = saving || refreshing;
   const [error, setError] = useState<string | null>(null);
 
   async function remove() {
     if (!confirm(`Xoá nội dung "${title}"? Nội dung sẽ được ẩn khỏi MKT Hub.`)) return;
 
-    setLoading(true);
+    setSaving(true);
     setError(null);
     try {
       await mktDelete(`/api/mkt/v1/contents/${contentId}`);
-      router.refresh();
+      refresh();
     } catch (e) {
       setError(e instanceof Error ? e.message : "Không xoá được nội dung");
     } finally {
-      setLoading(false);
+      setSaving(false);
     }
   }
 

@@ -1,7 +1,6 @@
 "use client";
 
 import { useState } from "react";
-import { useRouter } from "next/navigation";
 import {
   Dialog,
   DialogContent,
@@ -18,27 +17,29 @@ import { ReasonDialog } from "@/components/mkt/reason-dialog";
 import { mktPost } from "@/lib/mkt/client";
 import type { MktMyTask } from "@/lib/mkt/read-models";
 import { MktLink } from "@/components/mkt/mkt-routing";
+import { useMktRefresh } from "@/lib/mkt/use-mkt-refresh";
 
 type DialogKind = null | "reject" | "discuss" | "submit";
 
 export function TaskActions({ task }: { task: MktMyTask }) {
-  const router = useRouter();
-  const [busy, setBusy] = useState(false);
+  const { refresh, refreshing } = useMktRefresh();
+  const [running, setRunning] = useState(false);
   const [err, setErr] = useState<string | null>(null);
   const [dialog, setDialog] = useState<DialogKind>(null);
+  const busy = running || refreshing;
 
   async function run(action: string, body?: unknown) {
-    setBusy(true);
+    setRunning(true);
     setErr(null);
     try {
       await mktPost(`/api/mkt/v1/tasks/${task.id}/${action}`, body);
-      router.refresh();
+      refresh();
       return true;
     } catch (e) {
       setErr(e instanceof Error ? e.message : "Thao tác thất bại");
       return false;
     } finally {
-      setBusy(false);
+      setRunning(false);
     }
   }
 

@@ -1,7 +1,6 @@
 "use client";
 
-import { useMemo, useState } from "react";
-import { useRouter } from "next/navigation";
+import { useEffect, useMemo, useState } from "react";
 import {
   Dialog,
   DialogContent,
@@ -16,6 +15,7 @@ import { Icon } from "@/components/ui/icon";
 import { parseDocumentLink, buildDocumentUrls } from "@/lib/mkt/document-links";
 import { mktDelete, mktPost } from "@/lib/mkt/client";
 import type { MktDocument } from "@/lib/mkt/read-models";
+import { useMktRefresh } from "@/lib/mkt/use-mkt-refresh";
 
 type CampaignOption = { id: string; name: string };
 
@@ -71,7 +71,7 @@ export function DocumentLibrary({
   campaigns: CampaignOption[];
   canManageAssets: boolean;
 }) {
-  const router = useRouter();
+  const { refresh, refreshing } = useMktRefresh();
   const [categoryFilter, setCategoryFilter] = useState<string>("all");
   const [statusFilter, setStatusFilter] = useState<"all" | "available" | "archived">("available");
   const [campaignFilter, setCampaignFilter] = useState("");
@@ -111,7 +111,7 @@ export function DocumentLibrary({
     try {
       await mktDelete(`/api/mkt/v1/documents/${item.id}`);
       setPreview(null);
-      router.refresh();
+      refresh();
     } catch (error) {
       setActionError(error instanceof Error ? error.message : "Không xoá được tài liệu");
     }
@@ -123,7 +123,7 @@ export function DocumentLibrary({
     try {
       await mktPost(`/api/mkt/v1/documents/${item.id}/status`, { status: next });
       setPreview(null);
-      router.refresh();
+      refresh();
     } catch (error) {
       setActionError(error instanceof Error ? error.message : "Không đổi được trạng thái");
     }
@@ -328,7 +328,8 @@ export function DocumentLibrary({
         open={addOpen}
         onOpenChange={setAddOpen}
         campaigns={campaigns}
-        onAdded={() => router.refresh()}
+        busy={refreshing}
+        onAdded={() => refresh(() => setAddOpen(false))}
       />
     </div>
   );
@@ -339,18 +340,26 @@ function AddDocumentDialog({
   onOpenChange,
   campaigns,
   onAdded,
+  busy = false,
 }: {
   open: boolean;
   onOpenChange: (o: boolean) => void;
   campaigns: CampaignOption[];
   onAdded: () => void;
+  busy?: boolean;
 }) {
   const [url, setUrl] = useState("");
   const [title, setTitle] = useState("");
   const [category, setCategory] = useState<string>("brief");
   const [description, setDescription] = useState("");
   const [campaignId, setCampaignId] = useState("");
-  const [loading, setLoading] = useState(false);
+  const [saving, setSaving] = useState(false);
+  const loading = saving || busy;
+  // Cha đóng hộp thoại (cùng nhịp với dữ liệu mới) → dọn form khi nó đóng.
+  useEffect(() => {
+    if (!open) setError(null);
+  }, [open]);
+
   const [error, setError] = useState<string | null>(null);
 
   const parsed = url.trim() ? parseDocumentLink(url) : null;
@@ -366,7 +375,7 @@ function AddDocumentDialog({
       return;
     }
     if (!parsed) return;
-    setLoading(true);
+    setSaving(true);
     setError(null);
     try {
       await mktPost("/api/mkt/v1/documents", {
@@ -383,12 +392,11 @@ function AddDocumentDialog({
       setTitle("");
       setDescription("");
       setCampaignId("");
-      onOpenChange(false);
-      onAdded();
+      onAdded(); // cha đóng hộp thoại khi màn hình đã dựng xong dữ liệu mới
     } catch (e) {
       setError(e instanceof Error ? e.message : "Không thêm được tài liệu");
     } finally {
-      setLoading(false);
+      setSaving(false);
     }
   }
 

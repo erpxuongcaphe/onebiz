@@ -6,6 +6,7 @@ import { Button } from "@/components/ui/button";
 import { Icon } from "@/components/ui/icon";
 import { useMktHref } from "@/components/mkt/mkt-routing";
 import { mktDelete } from "@/lib/mkt/client";
+import { useMktRefresh } from "@/lib/mkt/use-mkt-refresh";
 
 /**
  * Nút xoá dùng chung cho MKT Hub (khuôn theo DeleteContentButton).
@@ -33,8 +34,10 @@ export function MktDeleteButton({
 }) {
   const router = useRouter();
   const toMktHref = useMktHref();
+  const { refresh, refreshing } = useMktRefresh();
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const busy = loading || refreshing;
 
   async function remove() {
     if (!confirm(confirmMessage)) return;
@@ -42,12 +45,7 @@ export function MktDeleteButton({
     setError(null);
     try {
       await mktDelete(url);
-      if (redirectTo) {
-        router.push(toMktHref(redirectTo));
-        router.refresh();
-      } else {
-        router.refresh();
-      }
+      refresh(redirectTo ? () => router.push(toMktHref(redirectTo)) : undefined);
     } catch (e) {
       setError(e instanceof Error ? e.message : errorFallback);
     } finally {
@@ -64,12 +62,12 @@ export function MktDeleteButton({
         type="button"
         variant="destructive"
         size={children ? "sm" : "icon-sm"}
-        disabled={loading}
+        disabled={busy}
         onClick={remove}
         aria-label={label}
         title={label}
       >
-        <Icon name={loading ? "progress_activity" : "delete"} size={16} />
+        <Icon name={busy ? "progress_activity" : "delete"} size={16} />
         {children}
       </Button>
     </div>

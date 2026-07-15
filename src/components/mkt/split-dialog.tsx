@@ -1,7 +1,6 @@
 "use client";
 
 import { useState } from "react";
-import { useRouter } from "next/navigation";
 import {
   Dialog,
   DialogContent,
@@ -15,6 +14,7 @@ import { Icon } from "@/components/ui/icon";
 import { Label } from "@/components/ui/label";
 import { mktPost } from "@/lib/mkt/client";
 import type { MktMember, MktPillar } from "@/lib/mkt/read-models";
+import { useMktRefresh } from "@/lib/mkt/use-mkt-refresh";
 
 const TASK_TYPES = [
   { value: "idea", label: "Ý tưởng / Kịch bản" },
@@ -84,9 +84,10 @@ export function SplitDialog({
   contents: ContentOption[];
   pillars: MktPillar[];
 }) {
-  const router = useRouter();
+  const { refresh, refreshing } = useMktRefresh();
   const [rows, setRows] = useState<Row[]>(defaultRows);
-  const [loading, setLoading] = useState(false);
+  const [saving, setSaving] = useState(false);
+  const loading = saving || refreshing;
   const [error, setError] = useState<string | null>(null);
   // Nội dung có thể được tạo nhanh ngay trong dialog — giữ danh sách cục bộ
   const [localContents, setLocalContents] = useState<ContentOption[]>(contents);
@@ -146,7 +147,7 @@ export function SplitDialog({
       setError("Hãy điền ít nhất 1 công đoạn có tên và người phụ trách.");
       return;
     }
-    setLoading(true);
+    setSaving(true);
     setError(null);
     try {
       // Nối tuần tự: mỗi công đoạn phụ thuộc công đoạn liền trước (đã điền).
@@ -164,11 +165,11 @@ export function SplitDialog({
       await mktPost(`/api/mkt/v1/work-packages/${workPackageId}/split`, { tasks: payload });
       onOpenChange(false);
       setRows(defaultRows());
-      router.refresh();
+      refresh();
     } catch (e) {
       setError(e instanceof Error ? e.message : "Không chia được việc");
     } finally {
-      setLoading(false);
+      setSaving(false);
     }
   }
 
